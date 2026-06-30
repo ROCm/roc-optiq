@@ -253,9 +253,39 @@ StickyNote::Render(ImDrawList* draw_list, const ImVec2& window_position,
     float  y          = ResolveAnchorY(layout);
     ImVec2 anchor_pos = ImVec2(window_position.x + x, window_position.y + y);
 
-    // The anchor marker is always shown so the note's timeline location stays
-    // visible even when expanded.
-    bool marker_hovered = RenderAnchorMarker(draw_list, anchor_pos);
+    // Clip the anchor to its track's vertical span so a shrunk track cuts the
+    // marker off (or hides it) instead of letting it spill onto another track.
+    // While dragging the marker follows the cursor freely, so skip clipping.
+    bool   use_clip            = false;
+    bool   marker_fully_hidden = false;
+    ImVec2 clip_min;
+    ImVec2 clip_max;
+    float  track_top    = 0.0f;
+    float  track_height = 0.0f;
+    if(!m_dragging && m_track_id != INVALID_TRACK_ID && layout.top_of &&
+       layout.height_of && layout.top_of(m_track_id, track_top) &&
+       layout.height_of(m_track_id, track_height) && draw_list)
+    {
+        const ImVec2 draw_clip_min = draw_list->GetClipRectMin();
+        const ImVec2 draw_clip_max = draw_list->GetClipRectMax();
+        clip_min = ImVec2(draw_clip_min.x,
+                          std::max(draw_clip_min.y, window_position.y + track_top));
+        clip_max = ImVec2(
+            draw_clip_max.x,
+            std::min(draw_clip_max.y, window_position.y + track_top + track_height));
+        use_clip            = true;
+        marker_fully_hidden = clip_min.y >= clip_max.y || anchor_pos.y >= clip_max.y;
+    }
+
+    // Shown unless the track shrank below the anchor; the expanded window floats
+    // independently and stays regardless.
+    bool marker_hovered = false;
+    if(!marker_fully_hidden)
+    {
+        marker_hovered = RenderAnchorMarker(draw_list, anchor_pos,
+                                            use_clip ? &clip_min : nullptr,
+                                            use_clip ? &clip_max : nullptr);
+    }
 
     bool window_hovered = false;
     if(!m_is_minimized)
@@ -276,7 +306,8 @@ StickyNote::Render(ImDrawList* draw_list, const ImVec2& window_position,
 }
 
 bool
-StickyNote::RenderAnchorMarker(ImDrawList* draw_list, const ImVec2& marker_pos)
+StickyNote::RenderAnchorMarker(ImDrawList* draw_list, const ImVec2& marker_pos,
+                               const ImVec2* clip_min, const ImVec2* clip_max)
 {
     SettingsManager& settings     = SettingsManager::GetInstance();
     ImU32            bg_color     = settings.GetColor(Colors::kStickyNoteBg);
@@ -301,6 +332,14 @@ StickyNote::RenderAnchorMarker(ImDrawList* draw_list, const ImVec2& marker_pos)
     const float btn_size =
         std::max(icon_size.x + padding.x * 2.0f, icon_size.y + padding.y * 2.0f);
     ImVec2 btn_max = ImVec2(marker_pos.x + btn_size, marker_pos.y + btn_size);
+
+    // Clip the draw list (marker background) and ImGui (button hover/click).
+    const bool clipped = clip_min && clip_max;
+    if(clipped)
+    {
+        if(draw_list) draw_list->PushClipRect(*clip_min, *clip_max, true);
+        ImGui::PushClipRect(*clip_min, *clip_max, true);
+    }
 
     if(draw_list)
     {
@@ -336,6 +375,12 @@ StickyNote::RenderAnchorMarker(ImDrawList* draw_list, const ImVec2& marker_pos)
     }
     ImGui::PopStyleColor(4);
     ImGui::PopFont();
+
+    if(clipped)
+    {
+        ImGui::PopClipRect();
+        if(draw_list) draw_list->PopClipRect();
+    }
     ImGui::EndChild();
 
     return hovered;
@@ -649,8 +694,23 @@ StickyNote::HandleDrag(const ImVec2&                       window_position,
     const bool timeline_hovered =
         ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows);
 
+    // A shrunk track cuts its anchor off, so don't let a marker that no longer
+    // fits within its track's bounds start a drag.
+    bool  anchor_in_track = true;
+    float track_top       = 0.0f;
+    float track_height    = 0.0f;
+    if(m_track_id != INVALID_TRACK_ID && layout.top_of && layout.height_of &&
+       layout.top_of(m_track_id, track_top) &&
+       layout.height_of(m_track_id, track_height))
+    {
+        const float top    = window_position.y + track_top;
+        const float bottom = top + track_height;
+        anchor_in_track    = mouse_pos.y >= top && mouse_pos.y < bottom;
+    }
+
     if((dragged_id == INVALID_STICKY_ID || dragged_id == m_id) && !m_dragging &&
-       timeline_hovered && ImGui::IsMouseHoveringRect(icon_pos, drag_max) &&
+       anchor_in_track && timeline_hovered &&
+       ImGui::IsMouseHoveringRect(icon_pos, drag_max) &&
        ImGui::IsMouseClicked(ImGuiMouseButton_Left) &&
        !HotkeyManager::GetInstance().IsActionHeld(HotkeyActionId::kRegionSelect))
     {

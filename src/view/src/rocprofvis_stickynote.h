@@ -28,6 +28,10 @@ struct TrackLayout
 {
     std::function<bool(uint64_t track_id, float& out_top_y)> top_of;
 
+    // Current height of a track, used to cut off / hide an anchor whose offset
+    // no longer fits after the track is shrunk.
+    std::function<bool(uint64_t track_id, float& out_height)> height_of;
+
     // track_at clamps to the first/last track so notes stay draggable anywhere.
     std::function<bool(float abs_y, uint64_t& out_track_id, float& out_top_y)>
         track_at;
@@ -98,8 +102,10 @@ private:
                              const ImVec2&                       window_position,
                              std::shared_ptr<TimePixelTransform> tpt) const;
 
-    // Always-visible timeline anchor. Returns true if hovered.
-    bool RenderAnchorMarker(ImDrawList* draw_list, const ImVec2& marker_pos);
+    // Always-visible timeline anchor; clipped to clip rect when non-null.
+    // Returns true if hovered.
+    bool RenderAnchorMarker(ImDrawList* draw_list, const ImVec2& marker_pos,
+                            const ImVec2* clip_min, const ImVec2* clip_max);
 
     // Floating expanded window. Returns true if hovered.
     bool RenderExpandedWindow(const ImVec2& anchor_pos);

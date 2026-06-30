@@ -250,6 +250,19 @@ TimelineView::BuildTrackLayout()
         return true;
     };
 
+    layout.height_of = [this](uint64_t track_id, float& out_height) -> bool {
+        if(!m_graphs) return false;
+        for(const TrackGraph& graph : *m_graphs)
+        {
+            if(graph.chart && graph.chart->GetID() == track_id)
+            {
+                out_height = graph.chart->GetTrackHeight();
+                return true;
+            }
+        }
+        return false;
+    };
+
     layout.track_at = [this](float abs_y, uint64_t& out_track_id,
                              float& out_top_y) -> bool {
         if(!m_graphs || m_graphs->empty()) return false;

@@ -5,6 +5,7 @@
 
 #include "rocprofvis_controller_handle.h"
 #include "rocprofvis_c_interface_types.h"
+#include "rocprofvis_controller_pc_sampling.h"
 #include <string>
 
 namespace RocProfVis
@@ -23,6 +24,7 @@ public:
 
     rocprofvis_result_t GetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t* value) final;
     rocprofvis_result_t GetString(rocprofvis_property_t property, uint64_t index, char* value, uint32_t* length) final;
+    rocprofvis_result_t GetObject(rocprofvis_property_t property, uint64_t index, rocprofvis_handle_t** value) final;
 
     rocprofvis_result_t SetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t value) final;
     rocprofvis_result_t SetString(rocprofvis_property_t property, uint64_t index, char const* value) final;
@@ -38,6 +40,7 @@ private:
     uint32_t m_duration_max;
     uint32_t m_duration_median;
     uint32_t m_duration_mean;
+    PcSampling m_pc_sampling_data;
 };
 
 }

@@ -23,6 +23,7 @@ class Future;
 class Workload;
 class MetricsContainer;
 class MetricID;
+class PcSampling;
 class Table;
 class ComputePivotTable;
 
@@ -44,6 +45,7 @@ public:
 
     rocprofvis_result_t AsyncFetch(Arguments& args, Future& future, MetricsContainer& output);
     rocprofvis_result_t AsyncFetch(Table& table, Arguments& args, Future& future, Array& array);
+    rocprofvis_result_t AsyncFetchPcSampling(Arguments& args, Future& future, PcSampling& output);
 
 private:
     class MetricID
@@ -71,6 +73,15 @@ private:
     typedef std::function<void(const QueryDataStore&)> QueryCallback;
 
     rocprofvis_result_t LoadRocpd(Future* future);
+
+    void FetchCodeObjectsAndIsaLines(rocprofvis_dm_database_t db, Future* future,
+                                     uint64_t kernel_id, PcSampling& output);
+    void FetchIsaLineDepsAndStalls(rocprofvis_dm_database_t db, Future* future,
+                                   PcSampling& output);
+    void FetchStallReasonCounts(rocprofvis_dm_database_t db, Future* future,
+                                PcSampling& output);
+    void FetchSourceFileAndLines(rocprofvis_dm_database_t db, Future* future,
+                                 uint64_t source_file_id, PcSampling& output);
     
     rocprofvis_result_t    SetObjectProperty(rocprofvis_handle_t*  object,
                                              rocprofvis_property_t property, uint64_t index,

@@ -47,6 +47,7 @@ list(APPEND rocprofvis_controller_source_files
     src/compute/rocprofvis_controller_trace_compute.cpp
     src/compute/rocprofvis_controller_workload.cpp
     src/compute/rocprofvis_controller_kernel.cpp
+    src/compute/rocprofvis_controller_pc_sampling.cpp
     src/compute/rocprofvis_controller_metrics_container.cpp
     src/compute/rocprofvis_controller_roofline.cpp
     src/compute/rocprofvis_controller_table_compute_pivot.cpp

@@ -354,21 +354,87 @@ private:
 #ifdef COMPUTE_UI_SUPPORT
 public:
     ComputeDataModel& ComputeModel();
-    
+
     bool FetchMetrics(const MetricsRequestParams& metrics_params);
     bool FetchMetricPivotTable(const ComputeTableRequestParams& params);
+    bool FetchPcSampling(const PcSamplingRequestParams& params);
 
     void SetFetchMetricsCallback(
         const std::function<void(const std::string&, uint64_t, bool)>& callback);
+    void SetFetchPcSamplingCallback(
+        const std::function<void(const std::string&, uint32_t, uint32_t, bool)>& callback);
 
 private:
     void ProcessLoadComputeTrace(RequestInfo& req);
+    inline void LoadWorkload(uint64_t workload_index);
+    inline void LoadSystemInfo(WorkloadInfo&        workload,
+                               rocprofvis_handle_t* workload_handle);
+    inline void LoadProfilingConfig(WorkloadInfo&        workload,
+                                    rocprofvis_handle_t* workload_handle);
+    inline void LoadMetricList(WorkloadInfo&        workload,
+                                    rocprofvis_handle_t* workload_handle);
+    inline void LoadValueNames(WorkloadInfo&        workload,
+                               rocprofvis_handle_t* workload_handle);
+    inline void LoadKernels(WorkloadInfo&        workload,
+                               rocprofvis_handle_t* workload_handle);
+    inline void LoadPcSamplingData(KernelInfo&          kernel,
+                                   rocprofvis_handle_t* kernel_handle);
+    inline void LoadPcSamplingCodeObjects(KernelInfo&          kernel,
+                                          rocprofvis_handle_t* pc_handle);
+    inline void LoadPcSamplingSourceFiles(KernelInfo&          kernel,
+                                          rocprofvis_handle_t* pc_handle);
+    inline void LoadPcSamplingIsaLine(IsaLine&             isa_line,
+                                      rocprofvis_handle_t* pc_handle,
+                                      uint64_t             index);
+    inline void LoadPcSamplingSourceLine(SourceLine&          source_line,
+                                         rocprofvis_handle_t* pc_handle,
+                                         uint64_t             index);
+    inline void LoadPcSamplingJunctions(KernelInfo&          kernel,
+                                        rocprofvis_handle_t* pc_handle);
+    inline void LoadPcSamplingStallRecords(KernelInfo&          kernel,
+                                           rocprofvis_handle_t* pc_handle);
+    inline void LoadPcSamplingStallReasonCounts(KernelInfo&          kernel,
+                                                rocprofvis_handle_t* pc_handle);
+    inline void LoadRoofLine(WorkloadInfo& workload, rocprofvis_handle_t* workload_handle);
+
+    using compute_ridge_map = std::unordered_map<
+        rocprofvis_controller_roofline_ceiling_compute_type_t,
+        std::unordered_map<rocprofvis_controller_roofline_ceiling_bandwidth_type_t,
+                           Point>>;
+
+    using bandwidth_ridge_map = std::unordered_map<
+        rocprofvis_controller_roofline_ceiling_bandwidth_type_t,
+        std::unordered_map<rocprofvis_controller_roofline_ceiling_compute_type_t, Point>>;
+        
+    
+    inline void LoadRoofLineCeilingsRidge(WorkloadInfo&        workload,
+                                          rocprofvis_handle_t* roofline_handle,
+                                          compute_ridge_map&   compute_ridge,
+                                          bandwidth_ridge_map& bandwidth_ridge);
+
+    inline void LoadRoofLineCeilingsCompute(WorkloadInfo&        workload,
+                                            rocprofvis_handle_t* roofline_handle,
+                                            compute_ridge_map&   compute_ridge,
+                                            bandwidth_ridge_map& bandwidth_ridge);
+
+    inline void LoadRoofLineCeilingsBandwidth(WorkloadInfo&        workload,
+                                              rocprofvis_handle_t* roofline_handle,
+                                              compute_ridge_map&   compute_ridge,
+                                              bandwidth_ridge_map& bandwidth_ridge);
+
+    inline void LoadRoofLineNumKernels(WorkloadInfo&        workload,
+                                       rocprofvis_handle_t* roofline_handle,
+                                       compute_ridge_map&   compute_ridge,
+                                       bandwidth_ridge_map& bandwidth_ridge);
+
     void ProcessMetricsRequest(RequestInfo& req);
     void ProcessMetricPivotTable(RequestInfo& req);
+    void ProcessPcSamplingRequest(RequestInfo& req);
 
     ComputeDataModel m_compute_model;
 
     std::function<void(const std::string&, uint64_t, bool)> m_metrics_fetch_callback;
+    std::function<void(const std::string&, uint32_t, uint32_t, bool)> m_pc_sampling_fetch_callback;
 
 #endif
 };

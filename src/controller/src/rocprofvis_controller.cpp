@@ -22,6 +22,7 @@
 #ifdef COMPUTE_UI_SUPPORT
 #include "compute/rocprofvis_controller_metrics_container.h"
 #include "compute/rocprofvis_controller_trace_compute.h"
+#include "compute/rocprofvis_controller_pc_sampling.h"
 #endif
 #include "rocprofvis_c_interface.h"
 
@@ -46,6 +47,7 @@ typedef Reference<rocprofvis_controller_summary_metrics_t, SummaryMetrics, kRPVC
 #ifdef COMPUTE_UI_SUPPORT
 typedef Reference<rocprofvis_controller_t, ComputeTrace, kRPVControllerObjectTypeControllerCompute> ComputeTraceRef;
 typedef Reference<rocprofvis_controller_t, MetricsContainer, kRPVControllerObjectTypeMetricsContainer> MetricsContainerRef;
+typedef Reference<rocprofvis_handle_t, PcSampling, kRPVControllerObjectTypePCSampling> PcSamplingRef;
 #endif
 }
 }
@@ -461,7 +463,7 @@ void rocprofvis_controller_metrics_container_free(rocprofvis_controller_metrics_
 }
 
 rocprofvis_result_t rocprofvis_controller_metric_fetch_async(
-    rocprofvis_controller_t* controller, rocprofvis_controller_arguments_t* args, 
+    rocprofvis_controller_t* controller, rocprofvis_controller_arguments_t* args,
     rocprofvis_controller_future_t* result, rocprofvis_controller_metrics_container_t* output)
 {
     rocprofvis_result_t error = kRocProfVisResultInvalidArgument;
@@ -472,6 +474,22 @@ rocprofvis_result_t rocprofvis_controller_metric_fetch_async(
     if(trace.IsValid() && args_ref.IsValid() && future.IsValid() && container.IsValid())
     {
         error = trace->AsyncFetch(*args_ref, *future, *container);
+    }
+    return error;
+}
+
+rocprofvis_result_t rocprofvis_controller_pc_sampling_fetch_async(
+    rocprofvis_controller_t* controller, rocprofvis_controller_arguments_t* args,
+    rocprofvis_controller_future_t* result, rocprofvis_handle_t* output)
+{
+    rocprofvis_result_t error = kRocProfVisResultInvalidArgument;
+    RocProfVis::Controller::ComputeTraceRef trace(controller);
+    RocProfVis::Controller::ArgumentsRef args_ref(args);
+    RocProfVis::Controller::FutureRef future(result);
+    RocProfVis::Controller::PcSamplingRef pc_sampling(output);
+    if(trace.IsValid() && args_ref.IsValid() && future.IsValid() && pc_sampling.IsValid())
+    {
+        error = trace->AsyncFetchPcSampling(*args_ref, *future, *pc_sampling);
     }
     return error;
 }

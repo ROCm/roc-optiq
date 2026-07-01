@@ -20,7 +20,15 @@ namespace DataModel
 		{kRPVComputeFetchMetricValues, "Fetch kernel aggregated values of metrics"},
 		{kRPVComputeFetchKernelMetricsMatrix, "Fetch kernel metrics matrix with pivoted metric columns"},
 		{kRPVComputeFetchWorkloadMetricValueNames, "Fetch distinct value names per metric in a workload"},
-		{kRPVComputeFetchMetricValuesByWorkload, "Fetch workload aggregated values of metrics"}
+		{kRPVComputeFetchMetricValuesByWorkload, "Fetch workload aggregated values of metrics"},
+		{kRPVComputeFetchKernelSourceFiles, "Fetch source files for a kernel"},
+		{kRPVComputeFetchSourceFileSourceLines, "Fetch source lines for a source file"},
+		{kRPVComputeFetchKernelCodeObjects, "Fetch code objects for a kernel"},
+		{kRPVComputeFetchCodeObjectIsaLines, "Fetch ISA lines for a code object"},
+		{kRPVComputeFetchIsaLineIsaLineDeps, "Fetch ISA-to-ISA dependency edges for an ISA line"},
+		{kRPVComputeFetchIsaLineSourceLineDeps, "Fetch ISA-to-source-line mapping for an ISA line"},
+		{kRPVComputeFetchIsaLineStallRecord, "Fetch stall record for an ISA line"},
+		{kRPVComputeFetchStallRecordReasonCounts, "Fetch stall reason counts for a stall record"}
 	};
 
 	static const std::unordered_map<std::string, rocprofvis_db_compute_column_enum_t> ColumnNameToEnum {
@@ -54,6 +62,36 @@ namespace DataModel
 		{"value", kRPVComputeColumnMetricValue},
 		{"unit", kRPVComputeColumnMetricUnit},
 		{"__id", kRPVComputeColumnDynamicKernelUUID},
+		{"id", kRPVComputeColumnPcSamplingSourceFileId},
+		{"file_path", kRPVComputeColumnPcSamplingSourceFilePath},
+		{"content_checksum", kRPVComputeColumnPcSamplingSourceFileChecksum},
+		{"source_line_id", kRPVComputeColumnPcSamplingSourceLineId},
+		{"source_file_id", kRPVComputeColumnPcSamplingSourceLineFileId},
+		{"line_number", kRPVComputeColumnPcSamplingSourceLineNumber},
+		{"content", kRPVComputeColumnPcSamplingSourceLineContent},
+		{"code_object_id", kRPVComputeColumnPcSamplingCodeObjectId},
+		{"uri", kRPVComputeColumnPcSamplingCodeObjectUri},
+		{"code_object_checksum", kRPVComputeColumnPcSamplingCodeObjectChecksum},
+		{"isa_line_id", kRPVComputeColumnPcSamplingIsaLineId},
+		{"isa_code_object_id", kRPVComputeColumnPcSamplingIsaLineCodeObjectId},
+		{"code_object_offset", kRPVComputeColumnPcSamplingIsaLineCodeObjectOffset},
+		{"instruction_type_id", kRPVComputeColumnPcSamplingIsaLineInstructionTypeId},
+		{"instruction", kRPVComputeColumnPcSamplingIsaLineInstruction},
+		{"comment", kRPVComputeColumnPcSamplingIsaLineComment},
+		{"dependent_isa_line_id", kRPVComputeColumnPcSamplingIsaToIsaDependentIsaLineId},
+		{"dependency_isa_line_id", kRPVComputeColumnPcSamplingIsaToIsaDependencyIsaLineId},
+		{"isa_to_source_isa_line_id", kRPVComputeColumnPcSamplingIsaToSourceIsaLineId},
+		{"isa_to_source_source_line_id", kRPVComputeColumnPcSamplingIsaToSourceSourceLineId},
+		{"depth", kRPVComputeColumnPcSamplingIsaToSourceDepth},
+		{"stall_record_id", kRPVComputeColumnPcSamplingStallRecordId},
+		{"stall_isa_line_id", kRPVComputeColumnPcSamplingStallRecordIsaLineId},
+		{"dispatch_id", kRPVComputeColumnPcSamplingStallRecordDispatchId},
+		{"avg_active_lanes", kRPVComputeColumnPcSamplingStallRecordAvgActiveLanes},
+		{"wave_issued_count", kRPVComputeColumnPcSamplingStallRecordWaveIssuedCount},
+		{"total_sample_count", kRPVComputeColumnPcSamplingStallRecordTotalSampleCount},
+		{"stall_reason_record_id", kRPVComputeColumnPcSamplingStallReasonRecordId},
+		{"stall_reason_type_id", kRPVComputeColumnPcSamplingStallReasonTypeId},
+		{"stall_reason_count", kRPVComputeColumnPcSamplingStallReasonCount},
 	};
 
 	static const std::unordered_map<std::string, rocprofvis_db_compute_column_enum_t> RooflineBenchParamToEnum{
@@ -213,6 +251,114 @@ namespace DataModel
 			}
 			query += " INNER JOIN AVG_D ON CRD.kernel_uuid = AVG_D.kernel_uuid ";
 			query += " INNER JOIN compute_kernel K ON AVG_D.kernel_uuid = K.kernel_uuid";	
+		}
+		return query;
+	}
+
+	std::string ComputeQueryFactory::GetComputeKernelSourceFiles(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params) {
+		std::string query;
+		if (num == 1 && params != nullptr && params[0].param_type == kRPVComputeParamKernelId)
+		{
+			query =
+				"SELECT id, file_path, content_checksum "
+				"FROM source_files "
+				"WHERE kernel_id = ";
+			query += params[0].param_str;
+		}
+		return query;
+	}
+
+	std::string ComputeQueryFactory::GetComputeSourceFileSourceLines(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params) {
+		std::string query;
+		if (num == 1 && params != nullptr && params[0].param_type == kRPVComputeParamSourceFileId)
+		{
+			query =
+				"SELECT id AS source_line_id, source_file_id, line_number, content "
+				"FROM source_lines "
+				"WHERE source_file_id = ";
+			query += params[0].param_str;
+		}
+		return query;
+	}
+
+	std::string ComputeQueryFactory::GetComputeKernelCodeObjects(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params) {
+		std::string query;
+		if (num == 1 && params != nullptr && params[0].param_type == kRPVComputeParamKernelId)
+		{
+			query =
+				"SELECT id AS code_object_id, uri, content_checksum AS code_object_checksum "
+				"FROM code_objects "
+				"WHERE kernel_id = ";
+			query += params[0].param_str;
+		}
+		return query;
+	}
+
+	std::string ComputeQueryFactory::GetComputeCodeObjectIsaLines(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params) {
+		std::string query;
+		if (num == 1 && params != nullptr && params[0].param_type == kRPVComputeParamCodeObjectId)
+		{
+			query =
+				"SELECT id AS isa_line_id, code_object_id AS isa_code_object_id, "
+				"code_object_offset, instruction_type_id, instruction, comment "
+				"FROM isa_lines "
+				"WHERE code_object_id = ";
+			query += params[0].param_str;
+		}
+		return query;
+	}
+
+	std::string ComputeQueryFactory::GetComputeIsaLineIsaLineDeps(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params) {
+		std::string query;
+		if (num == 1 && params != nullptr && params[0].param_type == kRPVComputeParamIsaLineId)
+		{
+			query =
+				"SELECT dependent_isa_line_id, dependency_isa_line_id "
+				"FROM isa_line_to_isa_line_junction "
+				"WHERE dependent_isa_line_id = ";
+			query += params[0].param_str;
+		}
+		return query;
+	}
+
+	std::string ComputeQueryFactory::GetComputeIsaLineSourceLineDeps(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params) {
+		std::string query;
+		if (num == 1 && params != nullptr && params[0].param_type == kRPVComputeParamIsaLineId)
+		{
+			query =
+				"SELECT isa_line_id AS isa_to_source_isa_line_id, "
+				"source_line_id AS isa_to_source_source_line_id, depth "
+				"FROM isa_line_to_source_line_junction "
+				"WHERE isa_line_id = ";
+			query += params[0].param_str;
+		}
+		return query;
+	}
+
+	std::string ComputeQueryFactory::GetComputeIsaLineStallRecord(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params) {
+		std::string query;
+		if (num == 1 && params != nullptr && params[0].param_type == kRPVComputeParamIsaLineId)
+		{
+			query =
+				"SELECT id AS stall_record_id, isa_line AS stall_isa_line_id, "
+				"dispatch_id, avg_active_lanes, wave_issued_count, total_sample_count "
+				"FROM pc_sampling_stall_record "
+				"WHERE isa_line = ";
+			query += params[0].param_str;
+		}
+		return query;
+	}
+
+	std::string ComputeQueryFactory::GetComputeStallRecordReasonCounts(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params) {
+		std::string query;
+		if (num == 1 && params != nullptr && params[0].param_type == kRPVComputeParamStallRecordId)
+		{
+			query =
+				"SELECT pc_sampling_record_id AS stall_reason_record_id, "
+				"stall_reason_type_id, count AS stall_reason_count "
+				"FROM pc_sampling_stall_reason_counts "
+				"WHERE pc_sampling_record_id = ";
+			query += params[0].param_str;
 		}
 		return query;
 	}
@@ -714,6 +860,30 @@ void ComputeQueryFactory::ParseMetricParam(std::string metric_str, uint32_t work
 			case kRPVComputeFetchWorkloadMetricValueNames:
 				query = m_query_factory.GetComputeWorkloadMetricValueNames(num, params);
 				break;
+			case kRPVComputeFetchKernelSourceFiles:
+				query = m_query_factory.GetComputeKernelSourceFiles(num, params);
+				break;
+			case kRPVComputeFetchSourceFileSourceLines:
+				query = m_query_factory.GetComputeSourceFileSourceLines(num, params);
+				break;
+			case kRPVComputeFetchKernelCodeObjects:
+				query = m_query_factory.GetComputeKernelCodeObjects(num, params);
+				break;
+			case kRPVComputeFetchCodeObjectIsaLines:
+				query = m_query_factory.GetComputeCodeObjectIsaLines(num, params);
+				break;
+			case kRPVComputeFetchIsaLineIsaLineDeps:
+				query = m_query_factory.GetComputeIsaLineIsaLineDeps(num, params);
+				break;
+			case kRPVComputeFetchIsaLineSourceLineDeps:
+				query = m_query_factory.GetComputeIsaLineSourceLineDeps(num, params);
+				break;
+			case kRPVComputeFetchIsaLineStallRecord:
+				query = m_query_factory.GetComputeIsaLineStallRecord(num, params);
+				break;
+			case kRPVComputeFetchStallRecordReasonCounts:
+				query = m_query_factory.GetComputeStallRecordReasonCounts(num, params);
+				break;
 			default:
 				return kRocProfVisDmResultInvalidParameter;
 			}
@@ -770,6 +940,14 @@ void ComputeQueryFactory::ParseMetricParam(std::string metric_str, uint32_t work
 				case kRPVComputeFetchMetricValues:
 				case kRPVComputeFetchMetricValuesByWorkload:
 				case kRPVComputeFetchWorkloadMetricValueNames:
+				case kRPVComputeFetchKernelSourceFiles:
+				case kRPVComputeFetchSourceFileSourceLines:
+				case kRPVComputeFetchKernelCodeObjects:
+				case kRPVComputeFetchCodeObjectIsaLines:
+				case kRPVComputeFetchIsaLineIsaLineDeps:
+				case kRPVComputeFetchIsaLineSourceLineDeps:
+				case kRPVComputeFetchIsaLineStallRecord:
+				case kRPVComputeFetchStallRecordReasonCounts:
 					callback = CallbackGetComputeGeneric;
 					break;
 				case kRPVComputeFetchWorkloadRooflineCeiling:

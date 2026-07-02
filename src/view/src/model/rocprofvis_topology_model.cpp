@@ -126,16 +126,16 @@ TopologyDataModel::ClearSampledThreads()
 
 // Queue access
 const QueueInfo*
-TopologyDataModel::GetQueue(uint64_t queue_id) const
+TopologyDataModel::GetQueue(uint64_t queue_id, uint64_t device_id) const
 {
-    auto it = m_queues.find(queue_id);
+    auto it = m_queues.find({ queue_id,device_id });
     return (it != m_queues.end()) ? &it->second : nullptr;
 }
 
 void
 TopologyDataModel::AddQueue(uint64_t queue_id, QueueInfo&& queue)
 {
-    m_queues[queue_id] = std::move(queue);
+    m_queues[{queue_id, queue.device_id}] = std::move(queue);
 }
 
 void
@@ -198,89 +198,6 @@ TopologyDataModel::Clear()
     ClearCounters();
 }
 
-uint64_t
-TopologyDataModel::GetDeviceIdByInfoId(uint64_t             info_id,
-                                       TrackInfo::TrackType track_type) const
-{
-    uint64_t device_id = INVALID_UINT64_INDEX;
-
-    switch(track_type)
-    {
-        case TrackInfo::TrackType::Counter:
-        {
-            const CounterInfo* counter_info = GetCounter(info_id);
-            if(counter_info)
-            {
-                device_id = counter_info->device_id;
-            }
-        }
-        break;
-        case TrackInfo::TrackType::Queue:
-        {
-            const QueueInfo* queue_info = GetQueue(info_id);
-            if(queue_info)
-            {
-                device_id = queue_info->device_id;
-            }
-        }
-        break;
-        case TrackInfo::TrackType::Stream:
-        {
-            const StreamInfo* stream_info = GetStream(info_id);
-            if(stream_info)
-            {
-                device_id = stream_info->processors[0].id;
-            }
-        }
-        break;
-        default: break;
-    }
-    return device_id;
-}
-
-const DeviceInfo*
-TopologyDataModel::GetDeviceByInfoId(uint64_t             info_id,
-                                     TrackInfo::TrackType track_type) const
-{
-    const DeviceInfo* device_info = nullptr;
-    uint64_t          device_id   = GetDeviceIdByInfoId(info_id, track_type);
-
-    if(device_id != INVALID_UINT64_INDEX)
-    {
-        device_info = GetDevice(device_id);
-    }
-    return device_info;
-}
-
-std::string
-TopologyDataModel::GetDeviceTypeLabelByInfoId(uint64_t             info_id,
-                                              TrackInfo::TrackType track_type,
-                                              std::string_view default_label) const
-{
-    const DeviceInfo* device_info = GetDeviceByInfoId(info_id, track_type);
-    if(device_info)
-    {
-        std::string label;
-        if(GetDeviceTypeLabel(*device_info, label))
-        {
-            return label;
-        }
-    }
-    return std::string(default_label);
-}
-
-std::string
-TopologyDataModel::GetDeviceProductLabelByInfoId(uint64_t             info_id,
-                                                 TrackInfo::TrackType track_type,
-                                                std::string_view default_label) const
-{
-    const DeviceInfo* device_info = GetDeviceByInfoId(info_id, track_type);
-    if(device_info)
-    {
-        return device_info->product_name;
-    }
-    return std::string(default_label);
-}
 
 bool
 TopologyDataModel::GetDeviceTypeLabel(const DeviceInfo& device_info,
@@ -332,7 +249,7 @@ TopologyDataModel::TopologyToString()
             ss << indent(level) << "Queues: " << devInfo->queue_ids.size() << std::endl;
             for(const uint64_t& d : devInfo->queue_ids)
             {
-                const QueueInfo* queueInfo = GetQueue(d);
+                const QueueInfo* queueInfo = GetQueue(d, devInfo->id.value);
                 ss << QueueInfoToString(queueInfo, level+1) << std::endl;                       
             }
 

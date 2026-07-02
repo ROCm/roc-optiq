@@ -6,6 +6,7 @@
 #include "rocprofvis_model_types.h"
 
 #include <unordered_map>
+#include <map>
 #include <vector>
 
 namespace RocProfVis
@@ -58,7 +59,7 @@ public:
     size_t SampledThreadCount() const { return m_sampled_threads.size(); }
 
     // Queue access
-    const QueueInfo* GetQueue(uint64_t queue_id) const;
+    const QueueInfo* GetQueue(uint64_t queue_id, uint64_t device_id) const;
     void AddQueue(uint64_t queue_id, QueueInfo&& queue);
     void ClearQueues();
     size_t QueueCount() const { return m_queues.size(); }
@@ -80,29 +81,6 @@ public:
 
     // Helpers
 
-    /* Gets the device ID associated with a given topology info ID and track type
-        @param info_id - id of the topology item ex: TrackInfo::topology.id
-        @param track_type - type of the topology item ex: TrackInfo::topology.type
-        @return device ID if found, INVALID_UINT64_INDEX otherwise
-    */
-    uint64_t GetDeviceIdByInfoId(uint64_t info_id, TrackInfo::TrackType track_type) const;
-
-    /* Gets the device info associated with a given topology info ID and track type
-        @param info_id - id of the topology item ex: TrackInfo::topology.id
-        @param track_type - type of the topology item ex: TrackInfo::topology.type
-        @return a pointer to the device info if found, nullptr otherwise
-    */
-    const DeviceInfo* GetDeviceByInfoId(uint64_t             info_id,
-                                        TrackInfo::TrackType track_type) const;
-
-    std::string GetDeviceTypeLabelByInfoId(
-        uint64_t info_id, TrackInfo::TrackType track_type,
-        std::string_view default_label = "Unknown Device") const;
-
-    std::string GetDeviceProductLabelByInfoId(
-        uint64_t info_id, TrackInfo::TrackType track_type,
-        std::string_view default_label = "Unknown") const;
-
     bool GetDeviceTypeLabel(const DeviceInfo& device_info, std::string& label_out) const;
 
     // Debug
@@ -120,7 +98,7 @@ private:
     std::unordered_map<uint64_t, ProcessInfo> m_processes;
     std::unordered_map<uint64_t, ThreadInfo>  m_instrumented_threads;
     std::unordered_map<uint64_t, ThreadInfo>  m_sampled_threads;
-    std::unordered_map<uint64_t, QueueInfo>   m_queues;
+    std::map<std::pair<uint64_t,uint64_t>, QueueInfo>   m_queues;
     std::unordered_map<uint64_t, StreamInfo>  m_streams;
     std::unordered_map<uint64_t, CounterInfo> m_counters;
 };

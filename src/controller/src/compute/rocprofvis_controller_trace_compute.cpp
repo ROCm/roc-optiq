@@ -347,11 +347,17 @@ rocprofvis_result_t ComputeTrace::AsyncFetchPcSampling(Arguments& args, Future& 
         rocprofvis_dm_database_t db = rocprofvis_dm_get_property_as_handle(m_dm_handle, kRPVDMDatabaseHandle, 0);
 
         FetchCodeObjectsAndIsaLines(db, future, kernel_id, output);
-        FetchIsaLineDepsAndStalls(db, future, output);
-        FetchSourceFileAndLines(db, future, source_file_id, output);
-
         if(future->IsCancelled())
             return kRocProfVisResultCancelled;
+
+        FetchIsaLineDepsAndStalls(db, future, output);
+        if(future->IsCancelled())
+            return kRocProfVisResultCancelled;
+
+        FetchSourceFileAndLines(db, future, kernel_id, source_file_id, output);
+        if(future->IsCancelled())
+            return kRocProfVisResultCancelled;
+
         return kRocProfVisResultSuccess;
     }, &future));
 
@@ -528,9 +534,9 @@ ComputeTrace::FetchStallReasonCounts(rocprofvis_dm_database_t db, Future* future
 
 void
 ComputeTrace::FetchSourceFileAndLines(rocprofvis_dm_database_t db, Future* future,
-                                      uint64_t source_file_id, PcSampling& output)
+                                      uint64_t kernel_id, uint64_t source_file_id, PcSampling& output)
 {
-    QueryArgumentStore query_args = { {kRPVComputeParamSourceFileId, std::to_string(source_file_id)} };
+    QueryArgumentStore query_args = { {kRPVComputeParamKernelId, std::to_string(kernel_id)} };
     QueryDataStore query_out = {
         {
             { kRPVComputeColumnPcSamplingSourceFileId,       std::nullopt },

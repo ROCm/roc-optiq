@@ -4381,28 +4381,15 @@ DataProvider::FetchPcSampling(const PcSamplingRequestParams& params)
         return false;
     }
 
-    rocprofvis_controller_future_t*    future = rocprofvis_controller_future_alloc();
-    rocprofvis_controller_arguments_t* args   = rocprofvis_controller_arguments_alloc();
-
-    rocprofvis_handle_t* workload_handle = nullptr;
-    rocprofvis_handle_t* kernel_handle   = nullptr;
-    rocprofvis_handle_t* pc_handle       = nullptr;
-
-    rocprofvis_controller_get_object(
-        m_trace_controller, kRPVControllerWorkloadById, params.m_workload_id, &workload_handle);
-
-    if(workload_handle)
-        rocprofvis_controller_get_object(
-            workload_handle, kRPVControllerWorkloadKernelById, params.m_kernel_id, &kernel_handle);
-
-    if(kernel_handle)
-        rocprofvis_controller_get_object(
-            kernel_handle, kRPVControllerKernelPcSampling, 0, &pc_handle);
+    rocprofvis_controller_future_t*    future    = rocprofvis_controller_future_alloc();
+    rocprofvis_controller_arguments_t* args      = rocprofvis_controller_arguments_alloc();
+    rocprofvis_handle_t*               pc_handle = rocprofvis_controller_pc_sampling_alloc();
 
     if(!future || !args || !pc_handle)
     {
-        if(future) rocprofvis_controller_future_free(future);
-        if(args)   rocprofvis_controller_arguments_free(args);
+        if(future)    rocprofvis_controller_future_free(future);
+        if(args)      rocprofvis_controller_arguments_free(args);
+        if(pc_handle) rocprofvis_controller_pc_sampling_free(pc_handle);
         return false;
     }
 
@@ -5325,34 +5312,32 @@ DataProvider::ProcessPcSamplingRequest(RequestInfo& req)
     if(!params)
         return;
 
-    const bool success = (req.response_code == kRocProfVisResultSuccess);
+    const bool success       = (req.response_code == kRocProfVisResultSuccess);
+    rocprofvis_handle_t* pc_handle = req.request_obj_handle;
 
-    if(success)
+    if(success && pc_handle)
     {
-        // The PcSampling handle (req.request_obj_handle) was written to by the async job.
-        // Now read the data out of it and populate the KernelInfo in the model.
-        rocprofvis_handle_t* pc_handle = req.request_obj_handle;
-        if(pc_handle)
+        KernelInfo* kernel = m_compute_model.GetKernelInfoMutable(
+            params->m_workload_id, params->m_kernel_id);
+        if(kernel)
         {
-            uint32_t workload_id = params->m_workload_id;
-            uint32_t kernel_id   = params->m_kernel_id;
-
-            KernelInfo* kernel = m_compute_model.GetKernelInfoMutable(workload_id, kernel_id);
-            if(kernel)
-            {
-                kernel->pc_sampling_data = {};
-                LoadPcSamplingCodeObjects(*kernel, pc_handle);
-                LoadPcSamplingJunctions(*kernel, pc_handle);
-                LoadPcSamplingStallRecords(*kernel, pc_handle);
-                LoadPcSamplingStallReasonCounts(*kernel, pc_handle);
-                LoadPcSamplingSourceFiles(*kernel, pc_handle);
-            }
+            kernel->pc_sampling_data = {};
+            LoadPcSamplingCodeObjects(*kernel, pc_handle);
+            LoadPcSamplingJunctions(*kernel, pc_handle);
+            LoadPcSamplingStallRecords(*kernel, pc_handle);
+            LoadPcSamplingStallReasonCounts(*kernel, pc_handle);
+            LoadPcSamplingSourceFiles(*kernel, pc_handle);
         }
     }
-    else
+    else if(!success)
     {
         spdlog::debug("PC sampling request failed with code {}", req.response_code);
     }
+
+    // Free the private scratch object allocated in FetchPcSampling — always.
+    if(pc_handle)
+        rocprofvis_controller_pc_sampling_free(pc_handle);
+    req.request_obj_handle = nullptr;
 
     if(m_pc_sampling_fetch_callback)
     {
@@ -5361,8 +5346,6 @@ DataProvider::ProcessPcSamplingRequest(RequestInfo& req)
                                      params->m_source_file_id,
                                      success);
     }
-
-    req.request_obj_handle = nullptr;
 }
 
 #endif

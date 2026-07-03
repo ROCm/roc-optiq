@@ -330,6 +330,22 @@ rocprofvis_result_t Workload::GetObject(rocprofvis_property_t property, uint64_t
                 }
                 break;
             }
+            case kRPVControllerWorkloadKernelById:
+            {
+                result = kRocProfVisResultOutOfRange;
+                for(Kernel* kernel : m_kernels)
+                {
+                    uint64_t id = 0;
+                    if(kernel->GetUInt64(kRPVControllerKernelId, 0, &id) == kRocProfVisResultSuccess
+                       && id == index)
+                    {
+                        *value = (rocprofvis_handle_t*)kernel;
+                        result = kRocProfVisResultSuccess;
+                        break;
+                    }
+                }
+                break;
+            }
             case kRPVControllerWorkloadRoofline:
             {
                 *value = (rocprofvis_handle_t*)m_roofline;

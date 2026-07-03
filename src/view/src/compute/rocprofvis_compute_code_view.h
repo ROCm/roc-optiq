@@ -117,9 +117,9 @@ private:
 
     struct SourceRow
     {
-        uint32_t    id;
         std::string content;
-        float       metadata;
+        uint32_t    id                = 0;
+        float       summarised_stalls = 0.0f;
     };
 
     std::vector<SourceRow> m_lines;
@@ -139,11 +139,13 @@ private:
 
     struct IsaRow
     {
-        uint32_t    id;
-        uint32_t    source_line_id;
         std::string instruction;
         std::string comment;
-        float       stall;
+        uint32_t    id                  = 0;
+        uint32_t    source_line_id      = 0;
+        uint32_t    wave_issued_count   = 0;
+        uint32_t    total_sample_count  = 0;
+        float       avg_active_lanes    = 0.0f;
     };
 
     bool                m_show_comments = false;

@@ -4370,24 +4370,15 @@ DataProvider::FetchPcSampling(const PcSamplingRequestParams& params)
         return false;
     }
 
-    // Use kernel_id + source_file_id as the unique request key.
-    uint64_t request_id = RequestIdBuilder::MakeClientRequestId(
+    const uint64_t request_id = RequestIdBuilder::MakeClientRequestId(
         RequestType::kFetchPcSampling,
         (static_cast<uint64_t>(params.m_kernel_id) << 32) | params.m_source_file_id);
 
-    // Cancel any in-flight request for the same kernel (different source file selection).
-    for(auto it = m_requests.begin(); it != m_requests.end(); )
+    if(m_requests.find(request_id) != m_requests.end())
     {
-        if(it->second.request_type == RequestType::kFetchPcSampling)
-        {
-            if(it->second.request_future)
-                rocprofvis_controller_future_cancel(it->second.request_future);
-            it = m_requests.erase(it);
-        }
-        else
-        {
-            ++it;
-        }
+        spdlog::debug("PC sampling request already pending for kernel {} file {}",
+                      params.m_kernel_id, params.m_source_file_id);
+        return false;
     }
 
     rocprofvis_controller_future_t*    future = rocprofvis_controller_future_alloc();

@@ -99,8 +99,18 @@ ComputeCodeView::FetchPcSamplingForCurrentFile()
 {
     if(m_current_kernel_id == 0 || m_current_source_file_id == 0)
         return;
-    m_data_provider.FetchPcSampling(
-        PcSamplingRequestParams(m_current_workload_id, m_current_kernel_id, m_current_source_file_id));
+
+    const PcSamplingRequestParams params(
+        m_current_workload_id, m_current_kernel_id, m_current_source_file_id);
+
+    const uint64_t request_id = RequestIdBuilder::MakeClientRequestId(
+        RequestType::kFetchPcSampling,
+        (static_cast<uint64_t>(params.m_kernel_id) << 32) | params.m_source_file_id);
+
+    if(m_data_provider.IsRequestPending(request_id))
+        m_data_provider.CancelRequest(request_id);
+    else
+        m_data_provider.FetchPcSampling(params);
 }
 
 void

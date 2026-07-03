@@ -276,7 +276,7 @@ TrackTopology::UpdateTopology()
                             m_topology.nodes[i].processors[j].queue_lut[queue_ids[k]] =
                                 &m_topology.nodes[i].processors[j].queues[k];
                             const QueueInfo* queue_info =
-                                topology_data.GetQueue(queue_ids[k]);
+                                topology_data.GetQueue(queue_ids[k], processor_info->id.value);
                             if(queue_info)
                             {
                                 const DeviceInfo* device_info =
@@ -388,9 +388,9 @@ TrackTopology::UpdateTopology()
                                     
                                 for (int processor_index = 0; processor_index < stream_processors.size(); processor_index++)
                                 {
-                                    stream->processor_lut[processor_ids[processor_index]] = &stream->processors[processor_index];
+                                    stream->processor_lut[stream_processors[processor_index].id] = &stream->processors[processor_index];
                                     const DeviceInfo* processor_info =
-                                        topology_data.GetDevice(processor_ids[processor_index]);
+                                        topology_data.GetDevice(stream_processors[processor_index].id);
                                     if (processor_info)
                                     {
                                         stream->processors[processor_index].info       = processor_info;
@@ -413,7 +413,7 @@ TrackTopology::UpdateTopology()
                                             stream->processors[processor_index].queue_lut[queue_ids[queue_index]] =
                                                 &stream->processors[processor_index].queues[queue_index];
                                             const QueueInfo* queue_info =
-                                                topology_data.GetQueue(queue_ids[queue_index]);
+                                                topology_data.GetQueue(queue_ids[queue_index],processor_info->id.value);
                                             if(queue_info)
                                             {
                                                 const DeviceInfo* device_info =

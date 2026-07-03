@@ -157,6 +157,22 @@ rocprofvis_result_t ComputeTrace::GetObject(rocprofvis_property_t property, uint
                 }
                 break;
             }
+            case kRPVControllerWorkloadById:
+            {
+                result = kRocProfVisResultOutOfRange;
+                for(Workload* workload : m_workloads)
+                {
+                    uint64_t id = 0;
+                    if(workload->GetUInt64(kRPVControllerWorkloadId, 0, &id) == kRocProfVisResultSuccess
+                       && id == index)
+                    {
+                        *value = (rocprofvis_handle_t*)workload;
+                        result = kRocProfVisResultSuccess;
+                        break;
+                    }
+                }
+                break;
+            }
             case kRPVControllerKernelMetricTable:
             {
                 *value = (rocprofvis_handle_t*)m_kernel_metric_table;
@@ -165,7 +181,7 @@ rocprofvis_result_t ComputeTrace::GetObject(rocprofvis_property_t property, uint
             }
             default:
             {
-                result = UnhandledProperty(property);               
+                result = UnhandledProperty(property);
                 break;
             }
         }

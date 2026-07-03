@@ -4384,38 +4384,20 @@ DataProvider::FetchPcSampling(const PcSamplingRequestParams& params)
     rocprofvis_controller_future_t*    future = rocprofvis_controller_future_alloc();
     rocprofvis_controller_arguments_t* args   = rocprofvis_controller_arguments_alloc();
 
-    // Get the PcSampling handle for this kernel by iterating workloads on the controller.
-    rocprofvis_handle_t* pc_handle = nullptr;
-    {
-        uint64_t num_workloads = 0;
-        rocprofvis_controller_get_uint64(m_trace_controller, kRPVControllerNumWorkloads, 0, &num_workloads);
-        for(uint64_t wi = 0; wi < num_workloads && !pc_handle; wi++)
-        {
-            rocprofvis_handle_t* workload_handle = nullptr;
-            rocprofvis_controller_get_object(m_trace_controller, kRPVControllerWorkloadIndexed, wi, &workload_handle);
-            if(!workload_handle) continue;
+    rocprofvis_handle_t* workload_handle = nullptr;
+    rocprofvis_handle_t* kernel_handle   = nullptr;
+    rocprofvis_handle_t* pc_handle       = nullptr;
 
-            uint64_t workload_id = 0;
-            rocprofvis_controller_get_uint64(workload_handle, kRPVControllerWorkloadId, 0, &workload_id);
-            if(static_cast<uint32_t>(workload_id) != params.m_workload_id) continue;
+    rocprofvis_controller_get_object(
+        m_trace_controller, kRPVControllerWorkloadById, params.m_workload_id, &workload_handle);
 
-            uint64_t num_kernels = 0;
-            rocprofvis_controller_get_uint64(workload_handle, kRPVControllerWorkloadNumKernels, 0, &num_kernels);
-            for(uint64_t ki = 0; ki < num_kernels; ki++)
-            {
-                rocprofvis_handle_t* kernel_handle = nullptr;
-                rocprofvis_controller_get_object(workload_handle, kRPVControllerWorkloadKernelIndexed, ki, &kernel_handle);
-                if(!kernel_handle) continue;
+    if(workload_handle)
+        rocprofvis_controller_get_object(
+            workload_handle, kRPVControllerWorkloadKernelById, params.m_kernel_id, &kernel_handle);
 
-                uint64_t kernel_id = 0;
-                rocprofvis_controller_get_uint64(kernel_handle, kRPVControllerKernelId, 0, &kernel_id);
-                if(static_cast<uint32_t>(kernel_id) != params.m_kernel_id) continue;
-
-                rocprofvis_controller_get_object(kernel_handle, kRPVControllerKernelPcSampling, 0, &pc_handle);
-                break;
-            }
-        }
-    }
+    if(kernel_handle)
+        rocprofvis_controller_get_object(
+            kernel_handle, kRPVControllerKernelPcSampling, 0, &pc_handle);
 
     if(!future || !args || !pc_handle)
     {

@@ -63,6 +63,7 @@ namespace DataModel
             kRocOptiqTableVersionRegionSampleLevel = kRocOptiqTableVersionForLevelCalculation,
             kRocOptiqTableVersionMemoryAllocLevel = kRocOptiqTableVersionForLevelCalculation,
             kRocOptiqTableVersionMemoryCopyLevel = kRocOptiqTableVersionForLevelCalculation,
+            kRocOptiqTableVersionKfdLevel = kRocOptiqTableVersionForLevelCalculation,
             kRocOptiqTableVersionHistogram = 0x0001,
             kRocOptiqTableVersionTrackInfo = 0x0003,
         };
@@ -119,6 +120,7 @@ namespace DataModel
             kRocOptiqTableRegionSampleLevel,
             kRocOptiqTableMemoryAllocLevel,
             kRocOptiqTableMemoryCopyLevel,
+            kRocOptiqTableKfdLevel,
             kRocOptiqTableHistogram,
 
             kRocOptiqNumTables
@@ -138,12 +140,14 @@ namespace DataModel
             kRocOptiqTableDependentOnRegionSampleLevel = 1 << kRocOptiqTableRegionSampleLevel,
             kRocOptiqTableDependentOnMemoryAllocLevel = 1 << kRocOptiqTableMemoryAllocLevel,
             kRocOptiqTableDependentOnMemoryCopyLevel = 1 << kRocOptiqTableMemoryCopyLevel,
+            kRocOptiqTableDependentOnKfdLevel = 1 << kRocOptiqTableKfdLevel,
             kRocOptiqTableDependentOnAllLevelTables = 
             kRocOptiqTableDependentOnKernelDispatchLevel | 
             kRocOptiqTableDependentOnRegionLevel | 
             kRocOptiqTableDependentOnRegionSampleLevel | 
             kRocOptiqTableDependentOnMemoryAllocLevel | 
             kRocOptiqTableDependentOnMemoryCopyLevel | 
+            kRocOptiqTableDependentOnKfdLevel | 
             kRocOptiqTableDependentOnTrackInfo,
             kRocOptiqTableDependentOnHistogram = 1 << kRocOptiqTableHistogram,
 
@@ -154,7 +158,8 @@ namespace DataModel
                 MustRebuild(file_node_id, kRocOptiqTableRegionLevel) ||
                 MustRebuild(file_node_id, kRocOptiqTableRegionSampleLevel) ||
                 MustRebuild(file_node_id, kRocOptiqTableMemoryAllocLevel) ||
-                MustRebuild(file_node_id, kRocOptiqTableMemoryCopyLevel);
+                MustRebuild(file_node_id, kRocOptiqTableMemoryCopyLevel) ||
+                MustRebuild(file_node_id, kRocOptiqTableKfdLevel);
         }
         const char* GetHistogramTableName() override { return GetTableName(kRocOptiqTableHistogram); };
         const char* GetTrackInfoTableName() override { return GetTableName(kRocOptiqTableTrackInfo); };

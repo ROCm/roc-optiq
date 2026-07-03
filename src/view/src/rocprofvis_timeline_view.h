@@ -91,7 +91,7 @@ public:
     void                                             MakeGraphView();
     void                                             ResetView();
     void                                             DestroyGraphs();
-    std::shared_ptr<std::vector<TrackGraph>> GetGraphs();
+    std::shared_ptr<std::vector<TrackItem*>>         GetTracks();
     void                                             RenderInteractiveUI();
     void ScrollToTrack(const uint64_t& track_id);
     void SetViewableRangeNS(double start_ns, double end_ns);
@@ -158,7 +158,7 @@ private:
                      ImVec2 container_size);
     bool IsRequestDataNeeded();
     void RequestDataIfEmpty(TrackItem* track_item, bool request_data);
-    void RenderNormalTrack(TrackGraph& track_graph, int track_index, ImGuiWindowFlags window_flags,
+    void RenderNormalTrack(TrackItem* track_item, int track_index, ImGuiWindowFlags window_flags,
                    bool is_reordering);
     void RenderTimeRangeSelectionFill(ImDrawList* draw_list, ImVec2 lane_min,
                                       ImVec2 lane_max);
@@ -209,7 +209,7 @@ private:
     bool                                m_pseudo_focus;
     bool                                m_histogram_pseudo_focus;
     float                               m_max_meta_scale_area_size;
-    std::shared_ptr<std::vector<TrackGraph>> m_graphs;
+    std::shared_ptr<std::vector<TrackItem*>>          m_tracks;
     std::shared_ptr<TimePixelTransform>               m_tpt;
     struct
     {

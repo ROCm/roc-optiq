@@ -115,7 +115,6 @@ private:
     void HandleTabSelectionChanged(std::shared_ptr<RocEvent> e);
     void HandleFontChanged();
     void HandleOpenFile();
-    void HandleOpenRecentFile(const std::string& file_path);
     void HandleSaveAsFile();
     void ConfigureFileDialogBackend();
     void BeginAppShutdown();

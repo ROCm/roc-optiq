@@ -30,7 +30,7 @@ constexpr const char*     TRACK_COPY_MENU_POPUP_NAME     = "TrackCopyMenu";
 
 float TrackItem::s_metadata_width = 400.0f;
 
-TrackItem::TrackItem(DataProvider& dp, uint64_t id,
+TrackItem::TrackItem(DataProvider& dp, uint64_t id, bool display,
                      std::shared_ptr<TimePixelTransform> tpt,
                      std::shared_ptr<TimelineSelection>  timeline_selection)
 : m_track_metadata(nullptr)
@@ -51,13 +51,15 @@ TrackItem::TrackItem(DataProvider& dp, uint64_t id,
 , m_meta_area_clicked(false)
 , m_meta_area_scale_width(0.0f)
 , m_max_meta_area_scale_width(0.0f)
-, m_selected(false)
+, m_display(display)
 , m_reorder_grip_width(DEFAULT_GRIP_WIDTH)
 , m_tpt(tpt)
 , m_timeline_selection(timeline_selection)
 , m_chunk_duration_ns(DEFAULT_CHUNK_DURATION)
 , m_group_id_counter(0)
 , m_meta_area_label("")
+, m_selected(false)
+, m_selected_changed_token(EventManager::InvalidSubscriptionToken)
 , m_track_project_settings(m_data_provider.GetTraceFilePath(), *this)
 {
     if(m_track_project_settings.Valid())
@@ -77,6 +79,28 @@ TrackItem::TrackItem(DataProvider& dp, uint64_t id,
     m_name = m_data_provider.DataModel().BuildTrackName(m_track_id);
     SetMetaAreaLabel(track_info);
     SetDefaultPillLabel(track_info);
+
+    EventManager::EventHandler selected_changed_handler =
+        [this](std::shared_ptr<RocEvent> e) {
+            std::shared_ptr<TrackSelectionChangedEvent> evt =
+                std::dynamic_pointer_cast<TrackSelectionChangedEvent>(e);
+            if(evt && evt->GetSourceId() == m_data_provider.GetTraceFilePath() &&
+               (evt->GetTrackID() == m_track_id ||
+                evt->GetTrackID() == TimelineSelection::INVALID_SELECTION_ID))
+            {
+                m_selected = evt->TrackSelected();
+            }
+        };
+    m_selected_changed_token = EventManager::GetInstance()->Subscribe(
+        static_cast<int>(RocEvents::kTimelineTrackSelectionChanged),
+        selected_changed_handler);
+}
+
+TrackItem::~TrackItem()
+{
+    EventManager::GetInstance()->Unsubscribe(
+        static_cast<int>(RocEvents::kTimelineTrackSelectionChanged),
+        m_selected_changed_token);
 }
 
 bool
@@ -88,7 +112,7 @@ TrackItem::TrackHeightChanged()
 }
 
 float
-TrackItem::GetTrackHeight()
+TrackItem::GetTrackHeight() const
 {
     return m_track_height;
 }
@@ -100,7 +124,7 @@ TrackItem::GetName()
 }
 
 uint64_t
-TrackItem::GetID()
+TrackItem::GetID() const
 {
     return m_track_id;
 }
@@ -112,7 +136,7 @@ TrackItem::SetSidebarSize(float sidebar_size)
 }
 
 bool
-TrackItem::IsInViewVertical()
+TrackItem::IsInViewVertical() const
 {
     return m_is_in_view_vertical;
 }
@@ -124,7 +148,7 @@ TrackItem::SetDistanceToView(float distance)
 }
 
 float
-TrackItem::GetDistanceToView()
+TrackItem::GetDistanceToView() const
 {
     return m_distance_to_view_y;
 }
@@ -141,19 +165,27 @@ TrackItem::SetID(uint64_t id)
     m_track_id = id;
 }
 
-
 bool
 TrackItem::IsSelected() const
 {
     return m_selected;
 }
 
-void
-TrackItem::SetSelected(bool selected)
+bool
+TrackItem::IsDisplayed() const
 {
-    m_selected = selected;
+    return m_display;
 }
 
+void
+TrackItem::SetDisplay(bool display)
+{
+    if(display != m_display)
+    {
+        m_display              = display;
+        m_track_height_changed = true;
+    }
+}
 
 void
 TrackItem::Render(float width)
@@ -212,7 +244,7 @@ void
 TrackItem::RenderMetaArea()
 {
     ImVec2 outer_container_size = ImGui::GetContentRegionAvail();
-    m_track_content_height      = m_track_height;
+    m_track_content_height      = m_track_height - 0.5f * m_resize_grip_thickness;
 
     ImVec2 name_label_min(0.0f, 0.0f);
     ImVec2 name_label_max(0.0f, 0.0f);
@@ -232,12 +264,10 @@ TrackItem::RenderMetaArea()
                               : (m_request_state == TrackDataRequestState::kError
                                      ? m_settings.GetColor(Colors::kGridRed)
                                      : m_settings.GetColor(Colors::kMetaDataColor)));
-    ImGui::SetCursorPos(ImVec2(0.0f, 0.0f));
-    if(ImGui::BeginChild("MetaData Area",
-                         ImVec2(s_metadata_width, outer_container_size.y),
-                         ImGuiChildFlags_None,
-                         ImGuiWindowFlags_NoScrollbar |
-                             ImGuiWindowFlags_NoScrollWithMouse))
+    if(ImGui::BeginChild(
+           "MetaData Area", ImVec2(s_metadata_width, outer_container_size.y),
+           ImGuiChildFlags_None,
+           ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse))
     {
         ImVec2 content_size = ImGui::GetContentRegionAvail();
 
@@ -323,16 +353,12 @@ TrackItem::RenderMetaArea()
         RenderMetaAreaScale();
         RenderMetaAreaExpand();
         RenderPills(ImVec2(available_for_text, content_size.y));
+        ImGui::GetWindowDrawList()->AddLine(
+            ImGui::GetWindowPos() + ImVec2(0.0f, ImGui::GetWindowSize().y),
+            ImGui::GetWindowPos() + ImGui::GetWindowSize(),
+            m_settings.GetColor(Colors::kMetaDataSeparator), m_resize_grip_thickness);
     }
     ImGui::EndChild();  // end metadata area
-
-    ImVec2      meta_min = ImGui::GetItemRectMin();
-    ImVec2      meta_max = ImGui::GetItemRectMax();
-    ImDrawList* dl       = ImGui::GetWindowDrawList();
-    dl->AddLine(ImVec2(meta_max.x - 1.0f, meta_min.y),
-                ImVec2(meta_max.x - 1.0f, meta_max.y),
-                m_settings.GetColor(Colors::kMetaDataSeparator), 1.0f);
-
     ImGui::PopStyleColor();
     ImGui::PopStyleVar(5);
     if(ImGui::IsItemClicked(ImGuiMouseButton_Left))
@@ -404,12 +430,13 @@ TrackItem::RenderResizeBar(const ImVec2& parent_size)
     ImGui::PushStyleColor(ImGuiCol_ChildBg, m_settings.GetColor(Colors::kTransparent));
     ImGui::BeginChild("Resize Bar", ImVec2(parent_size.x, m_resize_grip_thickness),
                       false);
-
-    ImGui::Selectable(("##MovePositionLine" + std::to_string(m_track_id)).c_str(), false,
-                      ImGuiSelectableFlags_AllowDoubleClick,
-                      ImVec2(0, m_resize_grip_thickness));
-    if(ImGui::IsItemHovered())
+    ImGui::InvisibleButton("##MovePositionLine", ImVec2(0, m_resize_grip_thickness));
+    if(ImGui::IsItemHovered() || ImGui::IsItemActive())
     {
+        ImGui::GetWindowDrawList()->AddLine(
+            ImGui::GetItemRectMin(),
+            ImVec2(ImGui::GetItemRectMax().x, ImGui::GetItemRectMin().y),
+            m_settings.GetColor(Colors::kAccent), m_resize_grip_thickness);
         ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeNS);
     }
 

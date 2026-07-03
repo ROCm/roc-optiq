@@ -159,7 +159,7 @@ AppWindow::Init()
 
     m_welcome_page = std::make_unique<WelcomePage>(
         [this]() { HandleOpenFile(); },
-        [this](const std::string& file_path) { HandleOpenRecentFile(file_path); });
+        [this](const std::string& file_path) { OpenFile(file_path); });
 
     constexpr float initial_status_bar_height = 30.0f;
     LayoutItem status_bar_item(-1, initial_status_bar_height);
@@ -838,20 +838,6 @@ AppWindow::OpenFile(std::string file_path)
 }
 
 void
-AppWindow::HandleOpenRecentFile(const std::string& file_path)
-{
-    if(!std::filesystem::exists(file_path))
-    {
-        SettingsManager::GetInstance().RemoveRecentFile(file_path);
-        ShowMessageDialog("Recent File Not Found",
-                          "This recent file could not be found and was removed from the list:\n\n" +
-                              file_path);
-        return;
-    }
-    OpenFile(file_path);
-}
-
-void
 AppWindow::RenderDisableScreen()
 {
     if(m_shutdown_requested)
@@ -964,7 +950,7 @@ AppWindow::RenderFileMenu(Project* project)
             {
                 if(ImGui::MenuItem(file.c_str(), nullptr))
                 {
-                    HandleOpenRecentFile(file);
+                    OpenFile(file);
                     break;
                 }
             }

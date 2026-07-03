@@ -46,11 +46,11 @@ FlameTrackItem::CalculateMaxEventLabelWidth()
     s_max_event_label_width = ImGui::CalcTextSize("W").x * MAX_CHARACTERS_PER_LINE;
 }
 
-FlameTrackItem::FlameTrackItem(DataProvider&                          dp,
-                               std::shared_ptr<TimelineSelection>     timeline_selection,
-                               std::shared_ptr<MeasurementController> measurement,
-                               uint64_t track_id, std::shared_ptr<TimePixelTransform> tpt)
-: TrackItem(dp, track_id, tpt, timeline_selection)
+FlameTrackItem::FlameTrackItem(DataProvider& dp, uint64_t track_id, bool display,
+                               std::shared_ptr<TimePixelTransform>    tpt,
+                               std::shared_ptr<TimelineSelection>     timeline_selection,                               
+                               std::shared_ptr<MeasurementController> measurement)
+: TrackItem(dp, track_id, display, tpt, timeline_selection)
 , m_text_padding(SettingsManager::GetInstance().GetDefaultIMGUIStyle().FramePadding)
 , m_level_height(SettingsManager::GetInstance().GetEventLevelHeight())
 , m_measurement(measurement)

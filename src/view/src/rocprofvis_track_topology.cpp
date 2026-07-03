@@ -323,13 +323,10 @@ TrackTopology::UpdateTopology()
                                         { { InfoTable::Cell{ "Description", false },
                                         InfoTable::Cell{ counter_info->description,
                                         false } },
-                                        { InfoTable::Cell{ "Units", false },
-                                        InfoTable::Cell{ counter_info->units,
-                                        false } },
                                         { InfoTable::Cell{ "Value Type", false },
                                         InfoTable::Cell{ counter_info->value_type,
                                         false } } }
-                                };
+                                    };
                             }
                         }
                     }

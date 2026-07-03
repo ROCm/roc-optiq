@@ -11,6 +11,7 @@
 #include "rocprofvis_events_view.h"
 #include "rocprofvis_flame_track_item.h"
 #include "rocprofvis_minimap.h"
+#include "rocprofvis_summary_view.h"
 #include "rocprofvis_timeline_view.h"
 #include "rocprofvis_trace_view.h"
 #include "compute/rocprofvis_compute_view.h"
@@ -140,11 +141,39 @@ struct TraceViewTestPeer
     TimelineView* TimelineViewPtr() const { return v.m_timeline_view.get(); }
     Minimap*      MinimapPtr() const { return v.m_minimap.get(); }
     EventSearch*  EventSearchPtr() const { return v.m_event_search.get(); }
+    SummaryView*  SummaryViewPtr() const { return v.m_summary_view.get(); }
     size_t        BookmarkCount() const { return v.m_bookmarks.size(); }
     void          ClearBookmarks() { v.m_bookmarks.clear(); }
     void          ClearEventSelection()
     {
         if(v.m_timeline_selection) v.m_timeline_selection->UnselectAllEvents();
+    }
+};
+
+struct SummaryViewTestPeer
+{
+    const SummaryView& v;
+    TopKernels* TopKernelsPtr() const { return v.m_top_kernels.get(); }
+};
+
+// TopKernels drives the pie/bar/table kernel selection. The pie is ImPlot-canvas
+// drawn (no ImGui widget ID), so tests drive the model path (ToggleSelectKernel)
+// rather than clicking a wedge, and assert on m_selected_idx.
+struct TopKernelsTestPeer
+{
+    TopKernels& v;
+    // KernelCount() is 0 when m_kernels is null (pre-load) or empty; one check covers both.
+    size_t                KernelCount() const { return v.m_kernels ? v.m_kernels->size() : 0; }
+    std::optional<size_t> SelectedIdx() const { return v.m_selected_idx; }
+    // The synthetic "Others" bucket, if present. ToggleSelectKernel treats it as a
+    // deselect, so tests must avoid selecting it.
+    std::optional<size_t> PaddedIdx() const { return v.m_padded_idx; }
+    // Toggles idx; on a cleared baseline (SelectedIdx()==nullopt) that is a select.
+    // Caller must ClearSelection() first and avoid the padded index.
+    void                  Select(size_t idx) { v.ToggleSelectKernel(idx); }
+    void                  ClearSelection()
+    {
+        if(v.m_selected_idx.has_value()) v.ToggleSelectKernel(v.m_selected_idx.value());
     }
 };
 

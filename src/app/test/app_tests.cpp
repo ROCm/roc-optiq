@@ -12,6 +12,7 @@
 #include "rocprofvis_flame_track_item.h"
 #include "rocprofvis_minimap.h"
 #include "rocprofvis_event_search.h"
+#include "rocprofvis_summary_view.h"
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_utils.h"
 #include "rocprofvis_data_provider.h"
@@ -983,5 +984,59 @@ void RegisterAppTests(ImGuiTestEngine* e)
 
         es->Clear();
         ctx->Yield(2);
+    };
+
+    t = IM_REGISTER_TEST(e, "app", "summary_pie_kernel_select");
+    t->TestFunc = [](ImGuiTestContext* ctx)
+    {
+        AppWindow* app = AppWindow::GetInstance();
+        Project* project = app->GetCurrentProject();
+        IM_CHECK(project != nullptr);
+        if (project == nullptr) return;
+        TraceView* tv = dynamic_cast<TraceView*>(project->GetView().get());
+        if (tv == nullptr)
+        {
+            ctx->LogWarning("SKIP: no trace view loaded (open a system/trace profile to exercise this)");
+            return;
+        }
+        SummaryView* sv = TraceViewTestPeer{*tv}.SummaryViewPtr();
+        IM_CHECK(sv != nullptr);
+        if (sv == nullptr) return;
+        TopKernels* tk = SummaryViewTestPeer{*sv}.TopKernelsPtr();
+        IM_CHECK(tk != nullptr);
+        if (tk == nullptr) return;
+
+        // Summary data loads asynchronously; let Update() populate the kernel list.
+        // KernelCount() is 0 while m_kernels is still null.
+        TopKernelsTestPeer peer{*tk};
+        for (int i = 0; i < 60 && peer.KernelCount() == 0; i++) ctx->Yield(2);
+
+        // Pick a real kernel index, skipping the synthetic "Others" bucket (which
+        // ToggleSelectKernel treats as a deselect). Bail if there's nothing else.
+        size_t target = 0;
+        if (peer.PaddedIdx() == target) target = 1;
+        if (peer.KernelCount() <= target)
+        {
+            ctx->LogWarning("SKIP: summary has no selectable top kernel for this trace");
+            return;
+        }
+
+        // This drives the model (ToggleSelectKernel) and asserts selection state.
+        // The pie is ImPlot-canvas drawn with no widget ID, so the click-to-index
+        // hit-test is out of scope here; only the selection wiring is covered.
+
+        // Clear to a known baseline (the harness reuses one process interactively).
+        peer.ClearSelection();
+        ctx->Yield(2);
+        IM_CHECK(peer.SelectedIdx() == std::nullopt);
+
+        peer.Select(target);
+        ctx->Yield(2);
+        IM_CHECK(peer.SelectedIdx().has_value());
+        IM_CHECK(peer.SelectedIdx().value() == target);
+
+        peer.ClearSelection();
+        ctx->Yield(2);
+        IM_CHECK(peer.SelectedIdx() == std::nullopt);
     };
 }

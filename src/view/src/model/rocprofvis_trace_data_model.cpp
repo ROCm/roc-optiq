@@ -12,6 +12,18 @@ TraceDataModel::TraceDataModel()
 : m_analysis(m_topology)
 {}
 
+void
+TraceDataModel::SetCompareSources(const std::vector<CompareSourceInfo>& sources)
+{
+    m_compare_sources = sources;
+}
+
+const CompareSourceInfo*
+TraceDataModel::GetCompareSource(size_t index) const
+{
+    return index < m_compare_sources.size() ? &m_compare_sources[index] : nullptr;
+}
+
 std::string
 TraceDataModel::BuildTrackName(uint64_t track_id) const
 {
@@ -104,6 +116,7 @@ TraceDataModel::Clear()
     m_events.ClearEvents();
     m_analysis.Clear();
     m_trace_file_path.clear();
+    m_compare_sources.clear();
 }
 
 }  // namespace View

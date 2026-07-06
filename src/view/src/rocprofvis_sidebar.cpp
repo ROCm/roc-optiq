@@ -137,7 +137,9 @@ SideBar::RenderTrackItem(const uint64_t& index, bool show_eye_button)
         return;
     }
 
-    TrackItem& track = *(*m_tracks)[index];
+    TrackItem&       track = *(*m_tracks)[index];
+    const TrackInfo* track_info =
+        m_data_provider.DataModel().GetTimeline().GetTrack(track.GetID());
 
     ImGui::PushID(static_cast<int>(track.GetID()));
     ImGui::PushStyleColor(ImGuiCol_Button, m_settings.GetColor(Colors::kTransparent));
@@ -177,6 +179,12 @@ SideBar::RenderTrackItem(const uint64_t& index, bool show_eye_button)
     ImGui::PopStyleColor(3);
     if(show_eye_button)
     {
+        ImGui::SameLine();
+    }
+
+    if(track_info && !track_info->compare_source.id.empty())
+    {
+        RenderCompareSourceBadge(track_info, m_settings);
         ImGui::SameLine();
     }
 

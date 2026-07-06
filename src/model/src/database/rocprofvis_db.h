@@ -255,6 +255,7 @@ class Database
        rocprofvis_dm_size_t            NumTracks() { return m_track_properties.size(); }
        // returns pointer to track properties structure. Takes index of track as a parameter 
        rocprofvis_dm_track_params_t*   TrackPropertiesAt(rocprofvis_dm_index_t index) { return m_track_properties[index].get(); }
+       void CreateTracksOrderRanking();
 
        bool IsTrackIndexValid(rocprofvis_dm_index_t index) { return index < m_track_properties.size(); }
 

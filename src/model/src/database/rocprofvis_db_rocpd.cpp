@@ -301,6 +301,9 @@ rocprofvis_dm_result_t  RocpdDatabase::ReadTraceMetadata(Future* future)
             },
                         &CallBackAddTrack, &CallBackLoadTrack)) break;
 
+        // Create track rankings based on load_id and db instance
+        CreateTracksOrderRanking();
+
         ShowProgress(20, "Loading strings", kRPVDbBusy, future );
         if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, DbInstancePtrAt(0),"SELECT string, GROUP_CONCAT(id) AS ids FROM rocpd_string GROUP BY string;", &CallBackAddString)) break;
 

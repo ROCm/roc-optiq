@@ -136,6 +136,53 @@ rocprofvis_dm_database_t rocprofvis_db_open_database(
 }
 
 /****************************************************************************************************
+* @brief Opens several trace files as a single combined (multinode) database.
+*
+* Skips the manifest-based detection in rocprofvis_db_open_database and constructs a
+* multinode rocprof database directly from the provided file list. Each file becomes a
+* database instance whose instance index matches its position in the array.
+*
+* @param filenames array of database file paths
+* @param count number of entries in filenames
+*
+***************************************************************************************************/
+rocprofvis_dm_database_t rocprofvis_db_open_database_multi(
+                                        rocprofvis_db_filename_t const* filenames,
+                                        rocprofvis_dm_size_t count){
+    PROFILE;
+    if (filenames == nullptr || count == 0)
+    {
+        spdlog::debug("No database files provided!");
+        return nullptr;
+    }
+    std::vector<std::string> files;
+    files.reserve(count);
+    for (rocprofvis_dm_size_t i = 0; i < count; i++)
+    {
+        ROCPROFVIS_ASSERT_MSG_RETURN(filenames[i],
+                                     RocProfVis::DataModel::ERROR_DATABASE_CANNOT_BE_NULL,
+                                     nullptr);
+        files.push_back(filenames[i]);
+    }
+    try {
+        RocProfVis::DataModel::Database* db =
+            new RocProfVis::DataModel::RocprofDatabase(files.front().c_str(), files);
+        if (kRocProfVisDmResultSuccess == db->Open()) {
+            return db;
+        }
+        else {
+            ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN("Error! Failed to open combined database!",
+                                                nullptr);
+        }
+    }
+    catch (std::exception ex)
+    {
+        ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN(
+            RocProfVis::DataModel::ERROR_MEMORY_ALLOCATION_FAILURE, nullptr);
+    }
+}
+
+/****************************************************************************************************
  * @brief Calculates size of memory used by database object
  * 
  * @param database database handle

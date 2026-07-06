@@ -280,6 +280,9 @@ private:
     bool ParseStreamData(rocprofvis_handle_t* stream_handle, StreamInfo& stream_info);
 
     void HandleLoadTrackMetaData();
+    // Reorders the timeline so compared traces' counterpart tracks (A, B, ...) sit
+    // adjacent, using the data model's track order ranking. No-op for non-compare traces.
+    void ApplyTrackOrderRanking();
     void HandleRequests();
     void UpdateRequestProgress(RequestInfo& req);
 

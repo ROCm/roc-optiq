@@ -11,6 +11,19 @@ namespace View
 {
 
 void
+apply_app_window_class_hints()
+{
+#ifdef __linux__
+    // Must match the base name of the installed roc-optiq.desktop entry and its
+    // StartupWMClass so GNOME can pick the installed hicolor icon.
+    constexpr const char* kAppWmClass = "roc-optiq";
+    // On X11 these map to the two ICCCM WM_CLASS strings; ignored on non-X11.
+    glfwWindowHintString(GLFW_X11_CLASS_NAME, kAppWmClass);
+    glfwWindowHintString(GLFW_X11_INSTANCE_NAME, kAppWmClass);
+#endif
+}
+
+void
 init_fullscreen_state(GLFWwindow* window, FullscreenState& state)
 {
     if(!window)

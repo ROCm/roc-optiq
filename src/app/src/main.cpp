@@ -319,6 +319,7 @@ main(int argc, char** argv)
 #if defined(GLFW_SCALE_TO_MONITOR)  // GLFW 3.3+
         glfwWindowHint(GLFW_SCALE_TO_MONITOR, GLFW_TRUE);
 #endif
+        RocProfVis::View::apply_app_window_class_hints();
         GLFWwindow* window = glfwCreateWindow(RocProfVis::View::DEFAULT_WINDOWED_WIDTH,
                                               RocProfVis::View::DEFAULT_WINDOWED_HEIGHT,
                                               APP_NAME, nullptr, nullptr);

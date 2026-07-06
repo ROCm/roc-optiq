@@ -3,6 +3,7 @@
 
 #include "rocprofvis_imgui_backend.h"
 #include "rocprofvis_view_module.h"
+#include "glfw_util.h"
 #include "spdlog/spdlog.h"
 #include <GLFW/glfw3.h>
 #include <stdio.h>
@@ -37,6 +38,10 @@ setup_opengl_window_and_backend(rocprofvis_imgui_backend_t* backend, GLFWwindow*
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
 #endif
+
+    // Re-apply after glfwDefaultWindowHints() above cleared it, so the
+    // recreated (OpenGL) window keeps the WM_CLASS that matches roc-optiq.desktop.
+    RocProfVis::View::apply_app_window_class_hints();
 
     *window = glfwCreateWindow(width, height, title, nullptr, nullptr);
     if(!*window)

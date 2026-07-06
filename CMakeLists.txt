@@ -480,6 +480,20 @@ else()
             COMPONENT ${RUNTIME_COMP_TYPE} )
 endif()
 
+# Linux desktop integration: install the .desktop entry and hicolor icon theme
+# so the desktop shell (GNOME/KDE/XFCE) shows the app icon in the launcher,
+# dock, and Alt-Tab instead of a generic fallback. These flow into the DEB/RPM
+# via CPack and into a local `make install`. Icons resolve from both /usr and
+# /usr/local prefixes since both share/ trees are on the default XDG_DATA_DIRS.
+if(UNIX AND NOT APPLE)
+    install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/resources/linux/roc-optiq.desktop"
+            DESTINATION ${CMAKE_INSTALL_DATADIR}/applications
+            COMPONENT ${RUNTIME_COMP_TYPE})
+    install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/resources/linux/icons/hicolor"
+            DESTINATION ${CMAKE_INSTALL_DATADIR}/icons
+            COMPONENT ${RUNTIME_COMP_TYPE})
+endif()
+
 # Debian package specific variables
 set(CPACK_COMPONENTS_ALL RV_RUNTIME)
 set(CPACK_DEB_COMPONENT_INSTALL ON)

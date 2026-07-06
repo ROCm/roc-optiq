@@ -18,6 +18,13 @@ constexpr int DEFAULT_WINDOWED_YPOS = 100;
 constexpr int DEFAULT_WINDOWED_WIDTH = 1280;
 constexpr int DEFAULT_WINDOWED_HEIGHT = 720;
 
+// Apply the X11 class/instance name window hints so the created window carries a
+// WM_CLASS that matches the installed desktop entry (roc-optiq.desktop). This is
+// what lets Linux desktop shells such as GNOME associate the window with its
+// installed icon instead of a generic one. No-op off Linux/X11. Must be called
+// after glfwInit()/glfwDefaultWindowHints() and before glfwCreateWindow().
+void apply_app_window_class_hints();
+
 // Structure to track fullscreen state
 struct FullscreenState
 {

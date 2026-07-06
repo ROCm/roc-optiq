@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=ROCm Optiq
+GenericName=ROCm Profiler Visualizer
+Comment=A visualizer for the ROCm Profiler Tools
+Exec=roc-optiq --file %f
+Icon=roc-optiq
+Terminal=false
+Categories=Development;Profiling;
+Keywords=ROCm;profiler;trace;GPU;AMD;rocprof;
+StartupNotify=true
+StartupWMClass=roc-optiq

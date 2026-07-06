@@ -82,7 +82,7 @@ public:
     void ChangeStallVisibility(bool show) { m_show_stall = show; };
 
 protected:
-    void CalcutlateLineNumberWidth(uint32_t count);
+    void CalculateLineNumberWidth(uint32_t count);
     void PushStyles();
 
     bool m_show_stall = false;

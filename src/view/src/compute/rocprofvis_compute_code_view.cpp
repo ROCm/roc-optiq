@@ -161,6 +161,11 @@ ComputeCodeView::Render()
 void
 ComputeCodeView::RenderControlPanel()
 {
+    constexpr const char* hide_isa_str = "Hide ISA";
+    constexpr const char* show_isa_str = "Show ISA";
+    constexpr const char* show_stalls_str = "Show Stalls";
+    constexpr const char* hide_stalls_str = "SHide Stalls";
+
     const float fallbackHeight =
         ImGui::GetFrameHeight() +
         ImGui::GetStyle().WindowPadding.y * 2.0f;
@@ -177,8 +182,8 @@ ComputeCodeView::RenderControlPanel()
 
     RenderSourceFileDropdown();
 
-    const float button_isa_width      = ImGui::CalcTextSize("Hide ISA").x      + ImGui::GetStyle().FramePadding.x * 2.0f; //TODO: thing how can avoid dublication of strings
-    const float button_stall_width = ImGui::CalcTextSize("Show Stalls").x + ImGui::GetStyle().FramePadding.x * 2.0f;
+    const float button_isa_width   = ImGui::CalcTextSize(hide_isa_str).x      + ImGui::GetStyle().FramePadding.x * 2.0f;
+    const float button_stall_width = ImGui::CalcTextSize(show_stalls_str).x + ImGui::GetStyle().FramePadding.x * 2.0f;
 
     const float                      button_comments_width =
         m_isa_layout_item->m_visible ?
@@ -190,12 +195,12 @@ ComputeCodeView::RenderControlPanel()
 
     ImGui::SameLine(ImGui::GetContentRegionAvail().x + ImGui::GetCursorPosX() - buttons_width);
 
-    if(ImGui::Button(m_isa_layout_item->m_visible ? "Hide ISA" : "Show ISA"))
+    if(ImGui::Button(m_isa_layout_item->m_visible ? hide_isa_str : show_isa_str))
         m_isa_layout_item->m_visible = !m_isa_layout_item->m_visible;
 
     ImGui::SameLine();
     static bool show_metadata_enabled = false;
-    if(ImGui::Button(show_metadata_enabled ? "Hide Stalls" : "Show Stalls"))
+    if(ImGui::Button(show_metadata_enabled ? hide_stalls_str : show_stalls_str))
     {
         show_metadata_enabled = !show_metadata_enabled;
         m_source_code->ChangeStallVisibility(show_metadata_enabled);
@@ -213,7 +218,6 @@ ComputeCodeView::RenderControlPanel()
         }
     }
 
-
     ImGui::EndGroup();
 
     ImVec2 end = ImGui::GetCursorPos();
@@ -224,7 +228,6 @@ ComputeCodeView::RenderControlPanel()
         ImGui::GetStyle().WindowPadding.y * 2.0f;
 
     ImGui::EndChild();
-
 }
 
 void
@@ -288,7 +291,7 @@ BaseCodeWidget::BaseCodeWidget(LineSelection& selection)
 }
 
 void
-BaseCodeWidget::CalcutlateLineNumberWidth(uint32_t count)
+BaseCodeWidget::CalculateLineNumberWidth(uint32_t count)
 {
     for(uint32_t number = count; number >= 10; number /= 10)
         m_line_num_digits++;
@@ -367,7 +370,7 @@ SourceCodeWidget::Load(const PcSamplingData& data, uint32_t source_file_id)
         m_lines.push_back({ source_line.id, source_line.content, stall });
     }
 
-    CalcutlateLineNumberWidth(m_lines.size());
+    CalculateLineNumberWidth(m_lines.size());
 }
 
 void
@@ -506,7 +509,7 @@ IsaCodeWidget::Load(const PcSamplingData& data, uint32_t code_object_id)
         m_entries.push_back({il.id, source_line_id, il.instruction, il.comment, metadata});
     }
 
-    CalcutlateLineNumberWidth(m_entries.size());
+    CalculateLineNumberWidth(m_entries.size());
 }
 
 void

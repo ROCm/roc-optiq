@@ -28,16 +28,14 @@ struct TrackLayout
 {
     std::function<bool(uint64_t track_id, float& out_top_y)> top_of;
 
-    // Current height of a track, used to cut off / hide an anchor whose offset
-    // no longer fits after the track is shrunk.
+    // Track height; used to hide an anchor once its track shrinks past it.
     std::function<bool(uint64_t track_id, float& out_height)> height_of;
 
     // track_at clamps to the first/last track so notes stay draggable anywhere.
     std::function<bool(float abs_y, uint64_t& out_track_id, float& out_top_y)>
         track_at;
 
-    // Visible track viewport in content-space Y; a dragged anchor is clamped to
-    // this range so it stays on-screen (auto-scroll reveals the rest).
+    // Visible track viewport (content-space Y); clamps a dragged anchor on-screen.
     float view_min_y = 0.0f;
     float view_max_y = 0.0f;
 };
@@ -97,15 +95,21 @@ private:
     // Absolute Y from the bound track top plus offset (raw offset if unbound).
     float ResolveAnchorY(const TrackLayout& layout) const;
 
+    // Whether the marker still overlaps its bound track's vertical span (always
+    // true when unbound). window_top_y is the timeline content origin.
+    bool IsMarkerOnTrack(const ImVec2& marker_pos, float marker_size,
+                         float window_top_y, const TrackLayout& layout) const;
+
+    // Square side length of the anchor marker (icon plus frame padding).
+    static float MarkerSize();
+
     // Vertical guide at the note's time, spanning the graph height.
     void RenderTimeIndicator(ImDrawList*                         draw_list,
                              const ImVec2&                       window_position,
                              std::shared_ptr<TimePixelTransform> tpt) const;
 
-    // Always-visible timeline anchor; clipped to clip rect when non-null.
-    // Returns true if hovered.
-    bool RenderAnchorMarker(ImDrawList* draw_list, const ImVec2& marker_pos,
-                            const ImVec2* clip_min, const ImVec2* clip_max);
+    // Always-visible timeline anchor. Returns true if hovered.
+    bool RenderAnchorMarker(ImDrawList* draw_list, const ImVec2& marker_pos);
 
     // Floating expanded window. Returns true if hovered.
     bool RenderExpandedWindow(const ImVec2& anchor_pos);
@@ -123,10 +127,11 @@ private:
     ImVec2      m_size;
     std::string m_text;
     std::string m_title;
-    bool        m_dragging     = false;
-    bool        m_track_hidden = false;
-    float       m_drag_abs_y   = 0.0f;  // Anchor Y during a drag; bound on drop.
-    ImVec2      m_drag_offset  = ImVec2(0, 0);
+    bool        m_dragging       = false;
+    bool        m_track_hidden   = false;
+    bool        m_marker_hovered = false;  // Hovered last frame; drives drag-start.
+    float       m_drag_abs_y     = 0.0f;   // Anchor Y during a drag; bound on drop.
+    ImVec2      m_drag_offset    = ImVec2(0, 0);
     bool        m_is_visible;
     double      m_v_min_x;
     double      m_v_max_x;

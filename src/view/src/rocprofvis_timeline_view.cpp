@@ -250,17 +250,24 @@ TimelineView::BuildTrackLayout()
         return true;
     };
 
-    layout.height_of = [this](uint64_t track_id, float& out_height) -> bool {
-        if(!m_graphs) return false;
+    // Snapshot heights once so per-note lookups are O(1), not a per-note rescan.
+    std::unordered_map<uint64_t, float> track_heights;
+    if(m_graphs)
+    {
         for(const TrackGraph& graph : *m_graphs)
         {
-            if(graph.chart && graph.chart->GetID() == track_id)
+            if(graph.chart)
             {
-                out_height = graph.chart->GetTrackHeight();
-                return true;
+                track_heights[graph.chart->GetID()] = graph.chart->GetTrackHeight();
             }
         }
-        return false;
+    }
+    layout.height_of = [heights = std::move(track_heights)](
+                           uint64_t track_id, float& out_height) -> bool {
+        auto it = heights.find(track_id);
+        if(it == heights.end()) return false;
+        out_height = it->second;
+        return true;
     };
 
     layout.track_at = [this](float abs_y, uint64_t& out_track_id,

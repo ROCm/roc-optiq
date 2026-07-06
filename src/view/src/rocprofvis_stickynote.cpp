@@ -38,9 +38,10 @@ constexpr float kMarkerShadowOffsetX  = 2.0f;
 constexpr float kMarkerShadowOffsetY  = 3.0f;
 constexpr float kUnplacedCoord        = -1.0f;
 constexpr float kTitleInputPadX       = 4.0f;
+constexpr float kTimeIndicatorWidth   = 1.5f;
+constexpr float kTimeIndicatorAlpha   = 0.85f;
 
-// Grows the backing std::string on demand so ImGui input fields can edit it in
-// place without a fixed char buffer.
+// Grows the backing std::string so ImGui can edit it in place.
 int
 GrowStringCallback(ImGuiInputTextCallbackData* data)
 {
@@ -138,6 +139,37 @@ StickyNote::ResolveAnchorY(const TrackLayout& layout) const
     return m_y_offset;
 }
 
+float
+StickyNote::MarkerSize()
+{
+    SettingsManager& settings   = SettingsManager::GetInstance();
+    ImFont*          icon_font  = settings.GetFontManager().GetFont(FontType::kIcon);
+    ImGui::PushFont(icon_font);
+    ImVec2 icon_size = ImGui::CalcTextSize(ICON_STICKY_NOTE);
+    ImGui::PopFont();
+    ImVec2 padding = ImGui::GetStyle().FramePadding;
+    return std::max(icon_size.x + padding.x * 2.0f, icon_size.y + padding.y * 2.0f);
+}
+
+bool
+StickyNote::IsMarkerOnTrack(const ImVec2& marker_pos, float marker_size,
+                            float window_top_y, const TrackLayout& layout) const
+{
+    float track_top    = 0.0f;
+    float track_height = 0.0f;
+    if(m_track_id == INVALID_TRACK_ID || !layout.top_of || !layout.height_of ||
+       !layout.top_of(m_track_id, track_top) ||
+       !layout.height_of(m_track_id, track_height))
+    {
+        return true;
+    }
+
+    // Visible while the badge overlaps the track band; gone once shrunk past it.
+    const float top    = window_top_y + track_top;
+    const float bottom = top + track_height;
+    return marker_pos.y < bottom && marker_pos.y + marker_size > top;
+}
+
 void
 StickyNote::RenderTimeIndicator(ImDrawList*                         draw_list,
                                 const ImVec2&                       window_position,
@@ -145,20 +177,16 @@ StickyNote::RenderTimeIndicator(ImDrawList*                         draw_list,
 {
     if(!draw_list || !tpt) return;
 
-    constexpr float kLineThickness = 1.5f;
-    constexpr float kLineAlpha     = 0.85f;
-
     SettingsManager& settings = SettingsManager::GetInstance();
     ImU32            color =
-        ApplyAlpha(settings.GetColor(Colors::kStickyNoteAccent), kLineAlpha);
+        ApplyAlpha(settings.GetColor(Colors::kStickyNoteAccent), kTimeIndicatorAlpha);
 
-    // Span the full visible track area (the draw list's clip rect) rather than
-    // keying off the scrolled content origin, which only covers the top sliver.
+    // Use the clip rect so the line spans the full visible track area.
     const float  line_x   = window_position.x + tpt->TimeToPixel(m_time_ns);
     const ImVec2 clip_min = draw_list->GetClipRectMin();
     const ImVec2 clip_max = draw_list->GetClipRectMax();
     draw_list->AddLine(ImVec2(line_x, clip_min.y), ImVec2(line_x, clip_max.y), color,
-                       kLineThickness);
+                       kTimeIndicatorWidth);
 }
 
 double
@@ -243,8 +271,7 @@ StickyNote::Render(ImDrawList* draw_list, const ImVec2& window_position,
 {
     if(!tpt)
     {
-        spdlog::error(
-            "StickyNote::Render: conversion_manager shared_ptr is null, cannot render");
+        spdlog::error("StickyNote::Render: tpt shared_ptr is null");
         return false;
     }
     EnsureBound(layout);
@@ -253,39 +280,19 @@ StickyNote::Render(ImDrawList* draw_list, const ImVec2& window_position,
     float  y          = ResolveAnchorY(layout);
     ImVec2 anchor_pos = ImVec2(window_position.x + x, window_position.y + y);
 
-    // Clip the anchor to its track's vertical span so a shrunk track cuts the
-    // marker off (or hides it) instead of letting it spill onto another track.
-    // While dragging the marker follows the cursor freely, so skip clipping.
-    bool   use_clip            = false;
-    bool   marker_fully_hidden = false;
-    ImVec2 clip_min;
-    ImVec2 clip_max;
-    float  track_top    = 0.0f;
-    float  track_height = 0.0f;
-    if(!m_dragging && m_track_id != INVALID_TRACK_ID && layout.top_of &&
-       layout.height_of && layout.top_of(m_track_id, track_top) &&
-       layout.height_of(m_track_id, track_height) && draw_list)
-    {
-        const ImVec2 draw_clip_min = draw_list->GetClipRectMin();
-        const ImVec2 draw_clip_max = draw_list->GetClipRectMax();
-        clip_min = ImVec2(draw_clip_min.x,
-                          std::max(draw_clip_min.y, window_position.y + track_top));
-        clip_max = ImVec2(
-            draw_clip_max.x,
-            std::min(draw_clip_max.y, window_position.y + track_top + track_height));
-        use_clip            = true;
-        marker_fully_hidden = clip_min.y >= clip_max.y || anchor_pos.y >= clip_max.y;
-    }
+    // Hide a minimized anchor once its track shrinks past it so it can't strand
+    // on a neighbour; expanded or dragging notes always keep it.
+    bool marker_hidden = m_is_minimized && !m_dragging &&
+                         !IsMarkerOnTrack(anchor_pos, MarkerSize(), window_position.y,
+                                          layout);
 
-    // Shown unless the track shrank below the anchor; the expanded window floats
-    // independently and stays regardless.
     bool marker_hovered = false;
-    if(!marker_fully_hidden)
+    if(!marker_hidden)
     {
-        marker_hovered = RenderAnchorMarker(draw_list, anchor_pos,
-                                            use_clip ? &clip_min : nullptr,
-                                            use_clip ? &clip_max : nullptr);
+        marker_hovered = RenderAnchorMarker(draw_list, anchor_pos);
     }
+    // Cached for next frame's HandleDrag (which runs before this render pass).
+    m_marker_hovered = marker_hovered;
 
     bool window_hovered = false;
     if(!m_is_minimized)
@@ -306,8 +313,7 @@ StickyNote::Render(ImDrawList* draw_list, const ImVec2& window_position,
 }
 
 bool
-StickyNote::RenderAnchorMarker(ImDrawList* draw_list, const ImVec2& marker_pos,
-                               const ImVec2* clip_min, const ImVec2* clip_max)
+StickyNote::RenderAnchorMarker(ImDrawList* draw_list, const ImVec2& marker_pos)
 {
     SettingsManager& settings     = SettingsManager::GetInstance();
     ImU32            bg_color     = settings.GetColor(Colors::kStickyNoteBg);
@@ -320,26 +326,16 @@ StickyNote::RenderAnchorMarker(ImDrawList* draw_list, const ImVec2& marker_pos,
         ApplyAlpha(settings.GetColor(Colors::kStickyNoteText), kIconActiveAlpha);
     const float rounding =
         settings.GetDefaultStyle().ChildRounding * kMarkerRoundingScale;
+    const float  btn_size = MarkerSize();
+    const ImVec2 btn_max  = ImVec2(marker_pos.x + btn_size, marker_pos.y + btn_size);
 
+    // Marker-sized child (no padding) so it doesn't block track resize below it.
     ImGui::SetCursorScreenPos(marker_pos);
     std::string child_id = "StickyButtonArea##" + std::to_string(m_id);
-    ImGui::BeginChild(child_id.c_str(), m_size, false, ImGuiWindowFlags_None);
-
-    ImFont* icon_font = settings.GetFontManager().GetFont(FontType::kIcon);
-    ImGui::PushFont(icon_font);
-    ImVec2      icon_size = ImGui::CalcTextSize(ICON_STICKY_NOTE);
-    ImVec2      padding   = ImGui::GetStyle().FramePadding;
-    const float btn_size =
-        std::max(icon_size.x + padding.x * 2.0f, icon_size.y + padding.y * 2.0f);
-    ImVec2 btn_max = ImVec2(marker_pos.x + btn_size, marker_pos.y + btn_size);
-
-    // Clip the draw list (marker background) and ImGui (button hover/click).
-    const bool clipped = clip_min && clip_max;
-    if(clipped)
-    {
-        if(draw_list) draw_list->PushClipRect(*clip_min, *clip_max, true);
-        ImGui::PushClipRect(*clip_min, *clip_max, true);
-    }
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+    ImGui::BeginChild(child_id.c_str(), ImVec2(btn_size, btn_size), false,
+                      ImGuiWindowFlags_None);
+    ImGui::PopStyleVar();
 
     if(draw_list)
     {
@@ -352,6 +348,7 @@ StickyNote::RenderAnchorMarker(ImDrawList* draw_list, const ImVec2& marker_pos,
         draw_list->AddRect(marker_pos, btn_max, border_color, rounding);
     }
 
+    ImGui::PushFont(settings.GetFontManager().GetFont(FontType::kIcon));
     ImGui::PushStyleColor(ImGuiCol_Button, settings.GetColor(Colors::kTransparent));
     ImGui::PushStyleColor(ImGuiCol_ButtonHovered, icon_hover_color);
     ImGui::PushStyleColor(ImGuiCol_ButtonActive, icon_active_color);
@@ -361,26 +358,18 @@ StickyNote::RenderAnchorMarker(ImDrawList* draw_list, const ImVec2& marker_pos,
     // IsItemHovered respects z-order, so a covered marker won't show the time line.
     bool hovered = ImGui::IsItemHovered();
     // Clicking a minimized marker expands the note; re-seed its window position.
-    if(m_is_minimized && ImGui::IsItemHovered() &&
-       IsMouseReleasedWithDragCheck(ImGuiMouseButton_Left))
+    if(m_is_minimized && hovered && IsMouseReleasedWithDragCheck(ImGuiMouseButton_Left))
     {
         m_expanded_screen_pos = ImVec2(kUnplacedCoord, kUnplacedCoord);
         m_is_minimized        = false;
     }
-    // Pressing an expanded note's marker steals window focus on mouse-down;
-    // request refocus while held so the empty-note auto-discard doesn't fire.
+    // Marker press steals focus; request refocus so auto-discard doesn't fire.
     if(!m_is_minimized && ImGui::IsItemActive())
     {
         m_request_focus = true;
     }
     ImGui::PopStyleColor(4);
     ImGui::PopFont();
-
-    if(clipped)
-    {
-        ImGui::PopClipRect();
-        if(draw_list) draw_list->PopClipRect();
-    }
     ImGui::EndChild();
 
     return hovered;
@@ -416,8 +405,7 @@ StickyNote::RenderExpandedWindow(const ImVec2& anchor_pos)
         m_expanded_screen_pos = anchor;
     }
 
-    // A pending focus request (e.g. clicking the note's own anchor) refocuses
-    // the window next frame, so it must not count as abandoning the note.
+    // A pending refocus (e.g. clicking the anchor) isn't abandoning the note.
     const bool refocusing = m_request_focus;
     if(m_request_focus)
     {
@@ -472,8 +460,7 @@ StickyNote::RenderExpandedWindow(const ImVec2& anchor_pos)
              trash_icon_size.x + kHeaderButtonPadding});
         const float action_btn_y = (kExpandedHeaderHeight - action_btn_size) * 0.5f;
 
-        // The title is plain text by default so the header stays draggable;
-        // a click (not a drag) on it switches to an inline input.
+        // Title is plain text so the header stays draggable; click to edit.
         const float buttons_width = action_btn_size * 2.0f + kHeaderButtonGap;
         const float title_width   = std::max(
             0.0f, win_size.x - buttons_width - kHeaderButtonGap - kNoteMargin * 2.0f);
@@ -527,9 +514,7 @@ StickyNote::RenderExpandedWindow(const ImVec2& anchor_pos)
         }
         ImGui::PopStyleColor();
 
-        // Glyph color for the header buttons; IconButton handles the (transparent)
-        // frame and hover/active backgrounds, with zero frame padding so the icon
-        // stays centered as the font scales.
+        // Header buttons: set glyph color; IconButton draws the frame and hover.
         ImGui::PushStyleColor(ImGuiCol_Text, muted_text_color);
         const ImU32 transparent = settings.GetColor(Colors::kTransparent);
         const ImVec2 action_btn(action_btn_size, action_btn_size);
@@ -562,7 +547,6 @@ StickyNote::RenderExpandedWindow(const ImVec2& anchor_pos)
         }
         ImGui::PopStyleColor();
 
-        // Inline-editable body filling the remaining space.
         const float body_y      = kExpandedHeaderHeight + kNoteMargin;
         const float body_height = std::max(0.0f, win_size.y - body_y - kNoteMargin);
         ImGui::SetCursorPos(ImVec2(kNoteMargin, body_y));
@@ -576,7 +560,6 @@ StickyNote::RenderExpandedWindow(const ImVec2& anchor_pos)
         PopPlainTextInputStyle();
         ImGui::PopStyleColor();
 
-        // Placeholder hint while the body is empty and not being edited.
         if(m_text.empty() && !body_active)
         {
             note_draw_list->AddText(
@@ -587,8 +570,7 @@ StickyNote::RenderExpandedWindow(const ImVec2& anchor_pos)
 
         hovered = ImGui::IsWindowHovered(ImGuiHoveredFlags_RootAndChildWindows);
 
-        // A provisional (just-created) note commits once anything is typed, and
-        // is discarded if the user clicks away while it is still empty.
+        // Provisional note commits on first input, discarded if abandoned empty.
         if(m_provisional)
         {
             bool focused = ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows);
@@ -637,10 +619,8 @@ StickyNote::RenderDragGhost(ImDrawList* draw_list, const ImVec2& screen_pos) con
     float  icon_font_size = ImGui::GetFontSize();
     ImGui::PopFont();
 
-    ImVec2      padding = ImGui::GetStyle().FramePadding;
-    const float btn_size =
-        std::max(icon_size.x + padding.x * 2.0f, icon_size.y + padding.y * 2.0f);
-    ImVec2 box_max = ImVec2(screen_pos.x + btn_size, screen_pos.y + btn_size);
+    const float  btn_size = MarkerSize();
+    const ImVec2 box_max  = ImVec2(screen_pos.x + btn_size, screen_pos.y + btn_size);
 
     draw_list->AddRectFilled(
         ImVec2(screen_pos.x + kMarkerShadowOffsetX, screen_pos.y + kMarkerShadowOffsetY),
@@ -665,53 +645,23 @@ StickyNote::HandleDrag(const ImVec2&                       window_position,
         spdlog::error("StickyNote::HandleDrag: conversion_manager shared_ptr is null");
         return false;
     }
-    // The anchor marker can be dragged whether the note is minimized or expanded;
-    // it moves the note's timeline position, independent of the expanded window's
-    // own screen position.
+    // Dragging the anchor moves the note's timeline position, not the window's.
     EnsureBound(layout);
 
     float x = conversion_manager->TimeToPixel(m_time_ns);
     float y = ResolveAnchorY(layout);
 
-    ImVec2  icon_pos  = ImVec2(window_position.x + x, window_position.y + y);
-    ImFont* icon_font =
-        SettingsManager::GetInstance().GetFontManager().GetFont(FontType::kIcon);
-    ImGui::PushFont(icon_font, 0.0f);
-    ImVec2 icon_size = ImGui::CalcTextSize(ICON_STICKY_NOTE);
-    ImGui::PopFont();
+    ImVec2 icon_pos = ImVec2(window_position.x + x, window_position.y + y);
 
-    ImVec2 padding  = ImGui::GetStyle().FramePadding;
-    float  drag_w   = icon_size.x + padding.x * 2.0f;
-    float  drag_h   = icon_size.y + padding.y * 2.0f;
-    ImVec2 drag_max = ImVec2(icon_pos.x + drag_w, icon_pos.y + drag_h);
+    const float marker_size    = MarkerSize();
+    ImVec2      mouse_pos      = ImGui::GetMousePos();
+    bool        mouse_down     = ImGui::IsMouseDown(ImGuiMouseButton_Left);
+    bool        mouse_released = ImGui::IsMouseReleased(ImGuiMouseButton_Left);
 
-    ImVec2 mouse_pos      = ImGui::GetMousePos();
-    bool   mouse_down     = ImGui::IsMouseDown(ImGuiMouseButton_Left);
-    bool   mouse_released = ImGui::IsMouseReleased(ImGuiMouseButton_Left);
-
-    // The anchor draws to the timeline draw list, so gate it on the timeline
-    // being hovered; this is false when a window or popup covers the cursor.
-    const bool timeline_hovered =
-        ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows);
-
-    // A shrunk track cuts its anchor off, so don't let a marker that no longer
-    // fits within its track's bounds start a drag.
-    bool  anchor_in_track = true;
-    float track_top       = 0.0f;
-    float track_height    = 0.0f;
-    if(m_track_id != INVALID_TRACK_ID && layout.top_of && layout.height_of &&
-       layout.top_of(m_track_id, track_top) &&
-       layout.height_of(m_track_id, track_height))
-    {
-        const float top    = window_position.y + track_top;
-        const float bottom = top + track_height;
-        anchor_in_track    = mouse_pos.y >= top && mouse_pos.y < bottom;
-    }
-
+    // Drag-start uses the marker's own hover (last frame), which respects z-order
+    // and popups; an anchor overhanging onto a neighbour track still grabs.
     if((dragged_id == INVALID_STICKY_ID || dragged_id == m_id) && !m_dragging &&
-       anchor_in_track && timeline_hovered &&
-       ImGui::IsMouseHoveringRect(icon_pos, drag_max) &&
-       ImGui::IsMouseClicked(ImGuiMouseButton_Left) &&
+       m_marker_hovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left) &&
        !HotkeyManager::GetInstance().IsActionHeld(HotkeyActionId::kRegionSelect))
     {
         m_dragging    = true;
@@ -726,16 +676,15 @@ StickyNote::HandleDrag(const ImVec2&                       window_position,
         float  new_x       = mouse_pos.x - window_position.x - m_drag_offset.x;
         float  new_y       = mouse_pos.y - window_position.y - m_drag_offset.y;
         ImVec2 window_size = ImGui::GetWindowSize();
-        new_x = std::clamp(new_x, 0.0f, window_size.x - drag_w);
+        new_x = std::clamp(new_x, 0.0f, window_size.x - marker_size);
 
-        // Keep the anchor inside the visible track viewport so it cannot be
-        // dragged off-screen; the timeline auto-scrolls to reveal more instead.
+        // Clamp to the visible viewport; auto-scroll reveals the rest.
         float min_y = 0.0f;
-        float max_y = window_size.y - drag_h;
+        float max_y = window_size.y - marker_size;
         if(layout.view_max_y > layout.view_min_y)
         {
             min_y = layout.view_min_y;
-            max_y = layout.view_max_y - drag_h;
+            max_y = layout.view_max_y - marker_size;
         }
         new_y = std::clamp(new_y, min_y, std::max(min_y, max_y));
 

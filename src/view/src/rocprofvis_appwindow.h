@@ -125,7 +125,6 @@ private:
     void HandleOpenFile();
     void HandleCompareFiles();
     void HandleCompareFileBrowse(CompareFilesDialog::FileSlot slot);
-    void HandleOpenRecentFile(const std::string& file_path);
     void HandleSaveAsFile();
     void ConfigureFileDialogBackend();
     void BeginAppShutdown();

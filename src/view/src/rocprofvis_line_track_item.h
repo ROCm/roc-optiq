@@ -77,7 +77,7 @@ class LineTrackItem : public TrackItem
     };
 
 public:
-    LineTrackItem(DataProvider& dp, uint64_t track_id,
+    LineTrackItem(DataProvider& dp, uint64_t track_id, bool display,
                   std::shared_ptr<TimePixelTransform> time_to_pixel_manager,
                   std::shared_ptr<TimelineSelection>  timeline_selection);
     ~LineTrackItem();

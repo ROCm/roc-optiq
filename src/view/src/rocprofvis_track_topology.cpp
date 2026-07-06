@@ -223,7 +223,6 @@ TrackTopology::UpdateTopology()
         m_topology.node_lut.clear();
         std::vector<const NodeInfo*> node_infos = topology_data.GetNodeList();
         m_topology.nodes.resize(node_infos.size());
-        std::vector<std::vector<TrackGraph*>> graph_categories(node_infos.size());
         m_topology.node_header = "Nodes (" + std::to_string(node_infos.size()) + ")";
         for(int i = 0; i < node_infos.size(); i++)
         {
@@ -276,7 +275,7 @@ TrackTopology::UpdateTopology()
                             m_topology.nodes[i].processors[j].queue_lut[queue_ids[k]] =
                                 &m_topology.nodes[i].processors[j].queues[k];
                             const QueueInfo* queue_info =
-                                topology_data.GetQueue(queue_ids[k]);
+                                topology_data.GetQueue(queue_ids[k], processor_info->id.value);
                             if(queue_info)
                             {
                                 const DeviceInfo* device_info =
@@ -323,13 +322,10 @@ TrackTopology::UpdateTopology()
                                         { { InfoTable::Cell{ "Description", false },
                                         InfoTable::Cell{ counter_info->description,
                                         false } },
-                                        { InfoTable::Cell{ "Units", false },
-                                        InfoTable::Cell{ counter_info->units,
-                                        false } },
                                         { InfoTable::Cell{ "Value Type", false },
                                         InfoTable::Cell{ counter_info->value_type,
                                         false } } }
-                                };
+                                    };
                             }
                         }
                     }
@@ -388,9 +384,9 @@ TrackTopology::UpdateTopology()
                                     
                                 for (int processor_index = 0; processor_index < stream_processors.size(); processor_index++)
                                 {
-                                    stream->processor_lut[processor_ids[processor_index]] = &stream->processors[processor_index];
+                                    stream->processor_lut[stream_processors[processor_index].id] = &stream->processors[processor_index];
                                     const DeviceInfo* processor_info =
-                                        topology_data.GetDevice(processor_ids[processor_index]);
+                                        topology_data.GetDevice(stream_processors[processor_index].id);
                                     if (processor_info)
                                     {
                                         stream->processors[processor_index].info       = processor_info;
@@ -413,7 +409,7 @@ TrackTopology::UpdateTopology()
                                             stream->processors[processor_index].queue_lut[queue_ids[queue_index]] =
                                                 &stream->processors[processor_index].queues[queue_index];
                                             const QueueInfo* queue_info =
-                                                topology_data.GetQueue(queue_ids[queue_index]);
+                                                topology_data.GetQueue(queue_ids[queue_index],processor_info->id.value);
                                             if(queue_info)
                                             {
                                                 const DeviceInfo* device_info =

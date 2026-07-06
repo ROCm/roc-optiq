@@ -49,6 +49,8 @@ constexpr const char* JSON_KEY_SELECTION_ID         = "id";
 constexpr const char* JSON_KEY_SELECTION_NAME       = "name";
 constexpr const char* JSON_KEY_SELECTION_VALUE_NAME = "value";
 
+constexpr const char* CELL_CONTEXT_MENU_ID = "##kernel_table_cell_menu";
+
 KernelMetricTable::KernelMetricTable(DataProvider&                     data_provider,
                                      std::shared_ptr<ComputeSelection> compute_selection)
 : RocWidget()
@@ -545,6 +547,8 @@ KernelMetricTable::Render()
                     ImGui::BeginDisabled();
                 }
 
+                bool open_menu = false;
+
                 ImGuiListClipper clipper;
                 clipper.Begin(static_cast<int>(data.size()));
                 while(clipper.Step())
@@ -668,6 +672,16 @@ KernelMetricTable::Render()
                                 ImGui::PopTextWrapPos();
                                 EndTooltipStyled();
                             }
+
+                            // Resolve the column from the cell rect; the row-spanning
+                            // selectable and frozen column make item hover unreliable.
+                            if(cell_hovered &&
+                               ImGui::IsMouseClicked(ImGuiMouseButton_Right))
+                            {
+                                m_cell_menu.row    = row;
+                                m_cell_menu.column = col;
+                                open_menu          = true;
+                            }
                         }
                         ImGui::PopID();  // Pop row ID
                     }
@@ -676,6 +690,43 @@ KernelMetricTable::Render()
                 if(request_pending)
                 {
                     ImGui::EndDisabled();
+                }
+
+                if(open_menu)
+                {
+                    ImGui::OpenPopup(CELL_CONTEXT_MENU_ID);
+                }
+                if(BeginCellContextMenu(CELL_CONTEXT_MENU_ID))
+                {
+                    if(m_cell_menu.row >= 0 &&
+                       m_cell_menu.row < static_cast<int>(data.size()))
+                    {
+                        const std::vector<std::string>& menu_row = data[m_cell_menu.row];
+                        std::vector<std::string>        row_cells;
+                        row_cells.reserve(header.size());
+                        // Hidden columns have a header name starting with '_'. Remap
+                        // the data-column index to its visible-list position.
+                        int cell_index = 0;
+                        for(int col = 0; col < static_cast<int>(header.size()) &&
+                                         col < static_cast<int>(menu_row.size());
+                            col++)
+                        {
+                            if(!header[col].empty() && header[col][0] == '_')
+                            {
+                                continue;
+                            }
+                            if(col == m_cell_menu.column)
+                            {
+                                cell_index = static_cast<int>(row_cells.size());
+                            }
+                            row_cells.push_back(menu_row[col].empty() ? "N/A"
+                                                                      : menu_row[col]);
+                        }
+                        AddCopyRowCellMenuItems(row_cells.data(),
+                                                static_cast<int>(row_cells.size()),
+                                                cell_index);
+                    }
+                    EndCellContextMenu();
                 }
 
                 ImGui::PopStyleColor(3);

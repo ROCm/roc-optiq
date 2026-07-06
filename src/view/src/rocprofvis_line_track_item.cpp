@@ -20,10 +20,10 @@ namespace View
 constexpr float DEFAULT_VERTICAL_PADDING = 2.0f;
 constexpr float DEFAULT_LINE_THICKNESS   = 1.0f;
 
-LineTrackItem::LineTrackItem(DataProvider& dp, uint64_t track_id,
+LineTrackItem::LineTrackItem(DataProvider& dp, uint64_t track_id, bool display,
                              std::shared_ptr<TimePixelTransform> tpt,
                              std::shared_ptr<TimelineSelection>  timeline_selection)
-: TrackItem(dp, track_id, tpt, timeline_selection)
+: TrackItem(dp, track_id, display, tpt, timeline_selection)
 , m_data({})
 , m_min_y("edit_min")
 , m_max_y("edit_max")

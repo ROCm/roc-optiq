@@ -37,6 +37,7 @@ static RocProfVis::View::FullscreenState g_fullscreen_state = {};
 // deferred event dispatch settle, then sleep until the next event when idle.
 static int       g_frames_to_render        = 1;
 constexpr int    RENDER_FRAMES_AFTER_INPUT = 4;
+constexpr double IDLE_WAIT_TIMEOUT_SECONDS = 1.0;
 
 static void
 drop_callback(GLFWwindow* window, int count, const char* paths[])
@@ -414,8 +415,10 @@ main(int argc, char** argv)
                     }
                     else
                     {
-                        // Idle: sleep until an OS event, then render a few frames.
-                        glfwWaitEvents();
+                        // Idle: sleep until an OS event or a short timeout, then
+                        // render a few frames. The timeout lets pending
+                        // multi-frame layout settle without user input.
+                        glfwWaitEventsTimeout(IDLE_WAIT_TIMEOUT_SECONDS);
                         g_frames_to_render = RENDER_FRAMES_AFTER_INPUT;
                     }
 

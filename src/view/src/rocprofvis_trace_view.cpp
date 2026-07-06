@@ -290,7 +290,7 @@ TraceView::CreateView()
 
     auto sidebar =
         std::make_shared<SideBar>(m_track_topology, m_timeline_selection,
-                                  m_timeline_view->GetGraphs(), m_data_provider);
+                                  m_timeline_view->GetTracks(), m_data_provider);
     auto analysis = std::make_shared<AnalysisView>(m_data_provider, m_track_topology,
                                                    m_timeline_selection, m_annotations);
 
@@ -610,11 +610,7 @@ TraceView::RenderEditMenuOptions()
     {
         if(m_timeline_selection)
         {
-            std::shared_ptr<std::vector<TrackGraph>> graphs = m_timeline_view->GetGraphs();
-            if(graphs)
-            {
-                m_timeline_selection->UnselectAllTracks(*graphs);
-            }
+            m_timeline_selection->UnselectAllTracks();
         }
     }
     if(ImGui::MenuItem("Unselect All Events", nullptr, false,

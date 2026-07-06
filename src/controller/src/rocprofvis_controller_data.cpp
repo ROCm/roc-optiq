@@ -59,7 +59,7 @@ Data::Data(Data const& other)
     operator=(other);
 }
 
-Data::Data(Data&& other)
+Data::Data(Data&& other) noexcept
 : m_type(other.m_type)
 {
     m_uint64 = 0;
@@ -105,7 +105,7 @@ Data& Data::operator=(Data const& other)
     return *this;
 }
 
-Data& Data::operator=(Data&& other)
+Data& Data::operator=(Data&& other) noexcept
 {
     if (this == &other)
     {

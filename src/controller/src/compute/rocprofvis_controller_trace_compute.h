@@ -81,7 +81,7 @@ private:
     void FetchStallReasonCounts(rocprofvis_dm_database_t db, Future* future,
                                 PcSampling& output);
     void FetchSourceFileAndLines(rocprofvis_dm_database_t db, Future* future,
-                                 uint64_t source_file_id, PcSampling& output);
+                                 uint64_t kernel_id, uint64_t source_file_id, PcSampling& output);
     
     rocprofvis_result_t    SetObjectProperty(rocprofvis_handle_t*  object,
                                              rocprofvis_property_t property, uint64_t index,

@@ -850,6 +850,7 @@ typedef enum rocprofvis_controller_compute_properties_t : uint32_t
     kRPVControllerComputeId = __kRPVControllerComputePropertiesFirst,
     kRPVControllerNumWorkloads,
     kRPVControllerWorkloadIndexed,
+    kRPVControllerWorkloadById,
     kRPVControllerKernelMetricTable,
     __kRPVControllerComputePropertiesLast
 } rocprofvis_controller_compute_properties_t;
@@ -883,6 +884,7 @@ typedef enum rocprofvis_controller_workload_properties_t : uint32_t
     kRPVControllerWorkloadRoofline,
     kRPVControllerWorkloadNumKernels,
     kRPVControllerWorkloadKernelIndexed,
+    kRPVControllerWorkloadKernelById,
     __kRPVControllerWorkloadPropertiesLast
 } rocprofvis_controller_workload_properties_t;
 

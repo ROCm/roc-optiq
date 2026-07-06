@@ -453,6 +453,18 @@ rocprofvis_controller_metrics_container_t* rocprofvis_controller_metrics_contain
     return container;
 }
 
+rocprofvis_handle_t* rocprofvis_controller_pc_sampling_alloc(void)
+{
+    return (rocprofvis_handle_t*)new RocProfVis::Controller::PcSampling();
+}
+
+void rocprofvis_controller_pc_sampling_free(rocprofvis_handle_t* object)
+{
+    RocProfVis::Controller::PcSamplingRef ref(object);
+    if(ref.IsValid())
+        delete ref.Get();
+}
+
 void rocprofvis_controller_metrics_container_free(rocprofvis_controller_metrics_container_t* object)
 {
     RocProfVis::Controller::MetricsContainerRef container(object);

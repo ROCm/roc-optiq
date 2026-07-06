@@ -194,8 +194,7 @@ public:
 
     bool FetchSummary();
 
-    bool FetchAnalysisQueueUtilization(
-        const AnalysisQueueUtilizationRequestParams& params);
+    bool FetchAnalysisTrackStatistics(const AnalysisTrackStatisticsRequestParams& params);
 
     bool IsRequestPending(uint64_t request_id) const;
 
@@ -281,6 +280,9 @@ private:
     bool ParseStreamData(rocprofvis_handle_t* stream_handle, StreamInfo& stream_info);
 
     void HandleLoadTrackMetaData();
+    // Reorders the timeline so compared traces' counterpart tracks (A, B, ...) sit
+    // adjacent, using the data model's track order ranking. No-op for non-compare traces.
+    void ApplyTrackOrderRanking();
     void HandleRequests();
     void UpdateRequestProgress(RequestInfo& req);
 
@@ -296,7 +298,7 @@ private:
     void ProcessSaveTrimmedTraceRequest(RequestInfo& req);
     void ProcessCleanupDatabaseRequest(RequestInfo& req);
     void ProcessSummaryRequest(RequestInfo& req);
-    void ProcessAnalysisQueueUtilizationRequest(RequestInfo& req);
+    void ProcessAnalysisTrackStatisticsRequest(RequestInfo& req);
 
     bool SetupCommonTableArguments(rocprofvis_controller_arguments_t* args,
                                    const TableRequestParams&          table_params);

@@ -54,6 +54,10 @@ EditableTextField::DrawPlainText()
     SettingsManager& settings = SettingsManager::GetInstance();
     if(m_show_reset_button)
     {
+        ImGui::SetCursorPosX(ImGui::GetContentRegionMax().x - ButtonSize() -
+                             ImGui::GetStyle().ItemSpacing.x -
+                             ImGui::CalcTextSize(m_text.c_str()).x -
+                             ImGui::GetStyle().WindowPadding.x);
         if(IconButton(ICON_ARROWS_CYCLE,
                       settings.GetFontManager().GetFont(FontType::kIcon)))
         {
@@ -63,16 +67,18 @@ EditableTextField::DrawPlainText()
             SetTooltipStyled("Revert To Default\n%s", m_reset_tooltip.c_str());
         ImGui::SameLine();
     }
+    else
+    {
+        ImGui::SetCursorPosX(ImGui::GetContentRegionMax().x -
+                             ImGui::CalcTextSize(m_text.c_str()).x -
+                             ImGui::GetStyle().WindowPadding.x);
+    }
     // Draw the text as a button to avoid the background
     // and prevent clicks from being registered.
     ImGui::PushStyleColor(ImGuiCol_Button, 0);
     ImGui::PushStyleColor(ImGuiCol_ButtonHovered, 0);
     ImGui::PushStyleColor(ImGuiCol_ButtonActive, 0);
     ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(0, 0));
-
-    ImGui::SetCursorPosX(ImGui::GetContentRegionMax().x -
-                         ImGui::CalcTextSize(m_text.c_str()).x -
-                         ImGui::GetStyle().WindowPadding.x);
     if(ImGui::Button(m_text.c_str()))
     {
         m_editing_mode           = true;
@@ -151,11 +157,15 @@ EditableTextField::SetText(std::string text, std::string tooltip, std::string re
 float
 EditableTextField::ButtonSize() const
 {
-    ImFont* icon_font =
-        SettingsManager::GetInstance().GetFontManager().GetFont(FontType::kIcon);
-    ImGui::PushFont(icon_font, 0.0f);
-    float size = ImGui::CalcTextSize(ICON_ARROWS_CYCLE).x;
-    ImGui::PopFont();
+    float size = 0.0f;
+    if(m_show_reset_button)
+    {
+        ImFont* icon_font =
+            SettingsManager::GetInstance().GetFontManager().GetFont(FontType::kIcon);
+        ImGui::PushFont(icon_font);
+        size = ImGui::CalcTextSize(ICON_ARROWS_CYCLE).x;
+        ImGui::PopFont();
+    }
     return size;
 }
 

@@ -16,6 +16,29 @@ extern "C"
 #endif
 
 /*
+* Duration-weighted statistics for a counter track over a time range.
+*/
+typedef struct rocprofvis_analysis_counter_statistics_t
+{
+    double min_value;   // minimum counter value over the range
+    double max_value;   // maximum counter value over the range
+    double mean_value;  // duration-weighted mean counter value over the range
+    double std_dev;     // duration-weighted standard deviation over the range
+} rocprofvis_analysis_counter_statistics_t;
+
+/*
+* Calculates duration-weighted statistics for the specified counter track within the given time range.
+* @param controller The system trace controller instance.
+* @param track The handle track to analyze.
+* @param start_time The start time in ns of the analysis range.
+* @param end_time The end time in ns of the analysis range.
+* @param result The future object to store the result.
+* @param output The output struct to write the counter statistics.
+* @returns kRocProfVisResultSuccess or an error code.
+*/
+rocprofvis_result_t rocprofvis_analysis_fetch_counter_statistics(rocprofvis_controller_t* controller, rocprofvis_controller_track_t* track, double start_time, double end_time, rocprofvis_controller_future_t* result, rocprofvis_analysis_counter_statistics_t* output);
+
+/*
 * Calculates the queue utilization for the specified track within the given time range.
 * @param controller The system trace controller instance.
 * @param track The handle track to analyze.
@@ -122,6 +145,8 @@ public:
     rocprofvis_result_t AsyncTableExportCSV(SystemTrace* trace, Table& table, Arguments& args, Future& future, const char* path) const;
 
     rocprofvis_result_t AsyncFetchQueueUtilization(SystemTrace* trace, Track* track, double start, double end, double* output, Future* future) const;
+
+    rocprofvis_result_t AsyncFetchCounterStatistics(SystemTrace* trace, Track* track, double start, double end, rocprofvis_analysis_counter_statistics_t* output, Future* future) const;
 
     rocprofvis_result_t GetInstrumentedThreadEventsTable(SystemTrace* trace, rocprofvis_handle_t** table);
     rocprofvis_result_t GetDispatchEventsTable(SystemTrace* trace, rocprofvis_handle_t** table);

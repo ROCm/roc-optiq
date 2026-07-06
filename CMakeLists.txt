@@ -8,9 +8,9 @@ project(${TARGET_NAME})
 
 # Define the version numbers
 set(PROJECT_VERSION_MAJOR 0)
-set(PROJECT_VERSION_MINOR 4)
+set(PROJECT_VERSION_MINOR 5)
 set(PROJECT_VERSION_PATCH 0)
-set(PROJECT_VERSION_BUILD 3)
+set(PROJECT_VERSION_BUILD 0)
 
 # Name and path of the icon font header
 set(ICON_HEADER ${CMAKE_SOURCE_DIR}/src/view/src/icons/rocprofvis_icon_data.h)
@@ -64,6 +64,8 @@ find_package(Vulkan REQUIRED)
 set(VIEW_FILES
     src/view/src/rocprofvis_appwindow.cpp
     src/view/src/rocprofvis_appwindow.h
+    src/view/src/rocprofvis_compare_files_dialog.cpp
+    src/view/src/rocprofvis_compare_files_dialog.h
     src/view/src/welcome/rocprofvis_welcome_page.cpp
     src/view/src/welcome/rocprofvis_welcome_page.h
     src/view/src/rocprofvis_annotation_view.cpp
@@ -296,25 +298,29 @@ Auto-detected from the Vulkan SDK / Homebrew when empty.")
         BUILD_RPATH "@executable_path/../Frameworks;/usr/local/lib;/opt/homebrew/lib"
         INSTALL_RPATH "@executable_path/../Frameworks;/usr/local/lib;/opt/homebrew/lib"
     )
-    add_custom_command(
-        TARGET ${TARGET_NAME} POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E create_symlink
-            "$<TARGET_FILE_NAME:glfw>"
-            "$<TARGET_FILE_DIR:glfw>/libglfw.3.dylib"
-        COMMENT "Creating GLFW soname symlink for macOS runtime lookup"
-    )
-    add_custom_command(
-        TARGET ${TARGET_NAME} POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E make_directory
-            "$<TARGET_BUNDLE_DIR:${TARGET_NAME}>/Contents/Frameworks"
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            "$<TARGET_FILE:glfw>"
-            "$<TARGET_BUNDLE_DIR:${TARGET_NAME}>/Contents/Frameworks"
-        COMMAND ${CMAKE_COMMAND} -E create_symlink
-            "$<TARGET_FILE_NAME:glfw>"
-            "$<TARGET_BUNDLE_DIR:${TARGET_NAME}>/Contents/Frameworks/libglfw.3.dylib"
-        COMMENT "Staging GLFW dylib into the app bundle"
-    )
+    # When static, glfw is libglfw3.a and is already linked into the binary,
+    # so don't stage it. The stray .a breaks codesign --deep --strict.
+    if(NOT GLFW_LINK_STATIC)
+        add_custom_command(
+            TARGET ${TARGET_NAME} POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E create_symlink
+                "$<TARGET_FILE_NAME:glfw>"
+                "$<TARGET_FILE_DIR:glfw>/libglfw.3.dylib"
+            COMMENT "Creating GLFW soname symlink for macOS runtime lookup"
+        )
+        add_custom_command(
+            TARGET ${TARGET_NAME} POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E make_directory
+                "$<TARGET_BUNDLE_DIR:${TARGET_NAME}>/Contents/Frameworks"
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "$<TARGET_FILE:glfw>"
+                "$<TARGET_BUNDLE_DIR:${TARGET_NAME}>/Contents/Frameworks"
+            COMMAND ${CMAKE_COMMAND} -E create_symlink
+                "$<TARGET_FILE_NAME:glfw>"
+                "$<TARGET_BUNDLE_DIR:${TARGET_NAME}>/Contents/Frameworks/libglfw.3.dylib"
+            COMMENT "Staging GLFW dylib into the app bundle"
+        )
+    endif()
     if(ROCPROFVIS_BUNDLE_VULKAN)
         add_custom_command(
             TARGET ${TARGET_NAME} POST_BUILD

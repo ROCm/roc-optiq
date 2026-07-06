@@ -41,6 +41,19 @@ rocprofvis_result_t rocprofvis_analysis_fetch_queue_utilization(rocprofvis_contr
     return error;
 }
 
+rocprofvis_result_t rocprofvis_analysis_fetch_counter_statistics(rocprofvis_controller_t* controller, rocprofvis_controller_track_t* track, double start_time, double end_time, rocprofvis_controller_future_t* result, rocprofvis_analysis_counter_statistics_t* output)
+{
+    rocprofvis_result_t error = kRocProfVisResultInvalidArgument;
+    RocProfVis::Controller::SystemTraceRef trace(controller);
+    RocProfVis::Controller::TrackRef track_ref(track);
+    RocProfVis::Controller::FutureRef future(result);
+    if(trace.IsValid() && future.IsValid() && track_ref.IsValid() && output)
+    {
+        error = RocProfVis::Controller::Analysis::GetInstance().AsyncFetchCounterStatistics(trace.Get(), track_ref.Get(), start_time, end_time, output, future.Get());
+    }
+    return error;
+}
+
 rocprofvis_result_t rocprofvis_analysis_get_instrumented_events_table(rocprofvis_controller_t* controller, rocprofvis_handle_t** table)
 {
     rocprofvis_result_t error = kRocProfVisResultInvalidArgument;
@@ -205,11 +218,11 @@ rocprofvis_result_t Analysis::AsyncFetchQueueUtilization(SystemTrace* trace, Tra
             ROCPROFVIS_ASSERT(dm_result == kRocProfVisDmResultSuccess);
             future->AddDependentFuture(object2wait);
             dm_result = rocprofvis_db_future_wait(object2wait, UINT64_MAX);
-            ROCPROFVIS_ASSERT(dm_result == kRocProfVisDmResultSuccess);
+            ROCPROFVIS_ASSERT(dm_result == kRocProfVisDmResultSuccess || dm_result == kRocProfVisDmResultDbAbort);
             rocprofvis_dm_slice_t slice = rocprofvis_dm_get_property_as_handle(dm_track, kRPVDMSliceHandleTimed, rocprofvis_dm_hash_combine_timestamp(range_start, range_end, kRocProfVisDmHashedTimestampTagAnalysis));
-            ROCPROFVIS_ASSERT(slice);
-            if(slice && !future->IsCancelled())
+            if(!future->IsCancelled())
             {
+                ROCPROFVIS_ASSERT(slice);
                 uint64_t num_records = rocprofvis_dm_get_property_as_uint64(slice, kRPVDMNumberOfRecordsUInt64, 0);
                 uint64_t busy_duration = 0;
                 uint64_t busy_start = 0;
@@ -264,10 +277,118 @@ rocprofvis_result_t Analysis::AsyncFetchQueueUtilization(SystemTrace* trace, Tra
                 else
                 {
                     *output = (double)busy_duration / (double)(range_end - range_start) * 100.0;
-                }
+                }           
             }
             dm_result = rocprofvis_dm_delete_time_slice_handle(trace->GetDMHandle(), track_id, slice);
+            if(!future->IsCancelled())
+            {
+                ROCPROFVIS_ASSERT(dm_result == kRocProfVisDmResultSuccess);
+            }
+            future->RemoveDependentFuture(object2wait);
+            rocprofvis_db_future_free(object2wait);
+        }
+        return future->IsCancelled() ? kRocProfVisResultCancelled : result;
+    }, future));
+    if(future->IsValid())
+    {
+        result = kRocProfVisResultSuccess;
+    }
+    return result;
+}
+
+rocprofvis_result_t Analysis::AsyncFetchCounterStatistics(SystemTrace* trace, Track* track, double start, double end, rocprofvis_analysis_counter_statistics_t* output, Future* future) const
+{
+    rocprofvis_result_t result = kRocProfVisResultUnknownError;
+    future->Set(JobSystem::Get().IssueJob([this, trace, track, start, end, output](Future* future) -> rocprofvis_result_t {
+        rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
+        rocprofvis_handle_t* counter_handle = nullptr;
+        result = track->GetObject(kRPVControllerTrackCounter, 0, &counter_handle);
+        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+        if(counter_handle)
+        {
+            rocprofvis_dm_result_t dm_result = kRocProfVisDmResultUnknownError;
+            uint64_t track_id = 0;
+            result = track->GetUInt64(kRPVControllerTrackId, 0, &track_id);
+            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+            rocprofvis_dm_track_t dm_track = track->GetDmHandle();
+            rocprofvis_dm_database_t db = rocprofvis_dm_get_property_as_handle(dm_track, kRPVDMTrackDatabaseHandle, 0);
+            ROCPROFVIS_ASSERT(db);
+            rocprofvis_db_future_t object2wait = rocprofvis_db_future_alloc(nullptr);
+            ROCPROFVIS_ASSERT(object2wait);
+            uint64_t range_start = (uint64_t)floor(start);
+            uint64_t range_end = (uint64_t)ceil(end);
+            dm_result = rocprofvis_db_read_trace_pmc_slice_async(db, range_start, range_end, kRocProfVisDmHashedTimestampTagAnalysis, (rocprofvis_db_track_selection_t)&track_id, true, false, object2wait);
             ROCPROFVIS_ASSERT(dm_result == kRocProfVisDmResultSuccess);
+            future->AddDependentFuture(object2wait);
+            dm_result = rocprofvis_db_future_wait(object2wait, UINT64_MAX);
+            ROCPROFVIS_ASSERT(dm_result == kRocProfVisDmResultSuccess || dm_result == kRocProfVisDmResultDbAbort);
+            rocprofvis_dm_slice_t slice = rocprofvis_dm_get_property_as_handle(dm_track, kRPVDMSliceHandleTimed, rocprofvis_dm_hash_combine_timestamp(range_start, range_end, kRocProfVisDmHashedTimestampTagAnalysis));
+            if(!future->IsCancelled())
+            {                
+                ROCPROFVIS_ASSERT(slice);
+                uint64_t num_records = rocprofvis_dm_get_property_as_uint64(slice, kRPVDMNumberOfRecordsUInt64, 0);
+                double min_value = 0.0;
+                double max_value = 0.0;
+                double mean_value = 0.0;
+                double std_dev = 0.0;
+                double sum = 0.0;
+                double sum_sq = 0.0;
+                double total_duration = 0.0;
+                bool range_empty = true;
+                for(uint64_t i = 0; i < num_records; i++)
+                {
+                    double value = rocprofvis_dm_get_property_as_double(slice, kRPVDMPmcValueDoubleIndexed, i);
+                    uint64_t sample_start = rocprofvis_dm_get_property_as_uint64(slice, kRPVDMTimestampUInt64Indexed, i);
+                    uint64_t sample_end = (i + 1 < num_records) ? rocprofvis_dm_get_property_as_uint64(slice, kRPVDMTimestampUInt64Indexed, i + 1) : range_end;
+                    if(sample_start < range_start)
+                    {
+                        sample_start = range_start;
+                    }
+                    if(sample_end > range_end)
+                    {
+                        sample_end = range_end;
+                    }
+                    if(sample_end > sample_start)
+                    {
+                        double duration = (double)(sample_end - sample_start);
+                        sum += value * duration;
+                        sum_sq += value * value * duration;
+                        total_duration += duration;
+                        if(range_empty)
+                        {
+                            min_value = value;
+                            max_value = value;
+                            range_empty = false;
+                        }
+                        else
+                        {
+                            if(value < min_value)
+                            {
+                                min_value = value;
+                            }
+                            if(value > max_value)
+                            {
+                                max_value = value;
+                            }
+                        }
+                    }
+                }
+                if(total_duration > 0.0)
+                {
+                    mean_value = sum / total_duration;
+                    double variance = sum_sq / total_duration - mean_value * mean_value;
+                    std_dev = (variance > 0.0) ? sqrt(variance) : 0.0;
+                }
+                output->min_value = min_value;
+                output->max_value = max_value;
+                output->mean_value = mean_value;
+                output->std_dev = std_dev;           
+            }            
+            dm_result = rocprofvis_dm_delete_time_slice_handle(trace->GetDMHandle(), track_id, slice);
+            if(!future->IsCancelled())
+            {
+                ROCPROFVIS_ASSERT(dm_result == kRocProfVisDmResultSuccess);
+            }
             future->RemoveDependentFuture(object2wait);
             rocprofvis_db_future_free(object2wait);
         }

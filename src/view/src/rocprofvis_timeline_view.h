@@ -92,7 +92,7 @@ public:
     void                                             MakeGraphView();
     void                                             ResetView();
     void                                             DestroyGraphs();
-    std::shared_ptr<std::vector<TrackGraph>> GetGraphs();
+    std::shared_ptr<std::vector<TrackItem*>>         GetTracks();
     void                                             RenderInteractiveUI();
     void ScrollToTrack(const uint64_t& track_id);
     void SetViewableRangeNS(double start_ns, double end_ns);
@@ -134,6 +134,25 @@ private:
         kEnd
     };
 
+    // Which measurement label the right-click context menu should offer a copy
+    // action for. Resolved from the cursor position when the menu opens.
+    enum class MeasurementCopyTarget
+    {
+        kNone,
+        kStart,
+        kEnd,
+        kDuration
+    };
+
+    // Screen-space rectangle of a measurement label, captured during
+    // RenderMeasurement so the context menu can hit-test the right-click.
+    struct MeasurementLabelRect
+    {
+        ImVec2 min   = ImVec2(0.0f, 0.0f);
+        ImVec2 max   = ImVec2(0.0f, 0.0f);
+        bool   valid = false;
+    };
+
     // Per-type track counts shown in the histogram header strip. The label
     // strings are built once when the trace is loaded (CalculateTrackCounts),
     // not rebuilt every frame in RenderTrackStats.
@@ -156,15 +175,13 @@ private:
     void BuildTrackCountLabels();
     void RenderTrackStats(float available_width);
 
-    void UpdateMaxMetaAreaSize(float new_size);
-    void CalculateMaxMetaAreaSize();
-    void UpdateAllMaxMetaAreaSizes();
+    void UpdateMaxMetaAreaSize(bool update_tracks = false);
 
     void RenderTrack(int track_index, bool request_data, ImGuiWindowFlags window_flags,
                      ImVec2 container_size);
     bool IsRequestDataNeeded();
     void RequestDataIfEmpty(TrackItem* track_item, bool request_data);
-    void RenderNormalTrack(TrackGraph& track_graph, int track_index, ImGuiWindowFlags window_flags,
+    void RenderNormalTrack(TrackItem* track_item, int track_index, ImGuiWindowFlags window_flags,
                    bool is_reordering);
     void RenderTimeRangeSelectionFill(ImDrawList* draw_list, ImVec2 lane_min,
                                       ImVec2 lane_max);
@@ -218,8 +235,8 @@ private:
     std::shared_ptr<AnnotationsManager> m_annotations;
     bool                                m_pseudo_focus;
     bool                                m_histogram_pseudo_focus;
-    float                               m_max_meta_area_size;
-    std::shared_ptr<std::vector<TrackGraph>> m_graphs;
+    float                               m_max_meta_scale_area_size;
+    std::shared_ptr<std::vector<TrackItem*>>          m_tracks;
     std::shared_ptr<TimePixelTransform>               m_tpt;
     struct
     {
@@ -232,6 +249,10 @@ private:
     bool m_dragging_selection_end;
     bool m_is_selecting_region;
     MeasurementRulerDragTarget m_dragging_measurement_ruler;
+    MeasurementLabelRect       m_measure_label_start;
+    MeasurementLabelRect       m_measure_label_end;
+    MeasurementLabelRect       m_measure_label_duration;
+    MeasurementCopyTarget      m_measure_copy_target;
 
     TimelineViewProjectSettings m_project_settings;
     LoadingTimer                m_loading_timer;

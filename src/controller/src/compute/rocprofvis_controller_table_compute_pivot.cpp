@@ -65,7 +65,7 @@ ComputePivotTable::Setup(rocprofvis_dm_trace_t dm_handle, Arguments& args, Futur
             if(args.GetString(kRPVControllerCPTArgsMetricSelectorIndexed, i,
                               buffer, &length) == kRocProfVisResultSuccess)
             {
-                m_metric_selectors.push_back(std::string(buffer));
+                m_metric_selectors.emplace_back(buffer, length);
             }
         }
 
@@ -105,7 +105,7 @@ ComputePivotTable::Setup(rocprofvis_dm_trace_t dm_handle, Arguments& args, Futur
                               filter_expr, &expr_length) != kRocProfVisResultSuccess)
                 continue;
 
-            m_column_filters[column_index] = std::string(filter_expr);
+            m_column_filters[column_index] = std::string(filter_expr, expr_length);
         }
     }
     else

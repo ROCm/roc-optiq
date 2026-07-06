@@ -59,7 +59,7 @@ Data::Data(Data const& other)
     operator=(other);
 }
 
-Data::Data(Data&& other)
+Data::Data(Data&& other) noexcept
 : m_type(other.m_type)
 {
     m_uint64 = 0;
@@ -105,7 +105,7 @@ Data& Data::operator=(Data const& other)
     return *this;
 }
 
-Data& Data::operator=(Data&& other)
+Data& Data::operator=(Data&& other) noexcept
 {
     if (this == &other)
     {
@@ -338,10 +338,19 @@ rocprofvis_result_t Data::GetString(char* string, uint32_t* length)
             }
             else if (length && string && (*length > 0))
             {
-                const size_t src_len = m_string ? strlen(m_string) : 0;
-                const size_t copy    = std::min(src_len, static_cast<size_t>(*length));
+                // *length is the capacity of the caller's buffer. Copy as many bytes
+                // as fit, and null-terminate only when there is spare room. This keeps
+                // the exact-fit caller (resize(strlen) then pass strlen) working while
+                // ensuring oversized buffers (e.g. a fixed char buf[256] later wrapped
+                // in std::string(buffer)) get a terminator instead of reading past the
+                // copied data into uninitialized memory.
+                const size_t src_len  = m_string ? strlen(m_string) : 0;
+                const size_t capacity = static_cast<size_t>(*length);
+                const size_t copy     = std::min(src_len, capacity);
                 if (copy > 0) std::memcpy(string, m_string, copy);
-                result = kRocProfVisResultSuccess;
+                if (copy < capacity) string[copy] = '\0';
+                *length = static_cast<uint32_t>(copy);
+                result  = kRocProfVisResultSuccess;
             }
             break;
         }

@@ -54,7 +54,6 @@ enum class RocEventType
     kNavigationEvent,
     kRequestProgressUpdateEvent,
 #ifdef COMPUTE_UI_SUPPORT
-    kComputeTableSearchEvent,
     kComputeSelectionChangedEvent,
     kComputeMetricsFetchedEvent,
     kComputeAddMetricToKernelDetailsEvent,

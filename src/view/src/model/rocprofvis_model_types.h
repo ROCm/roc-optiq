@@ -20,23 +20,12 @@ namespace View
 
 // Forward declarations
 class TableRequestParams;
-class TrackItem;
 
-enum class GraphType
+struct CompareSourceInfo
 {
-    TYPE_LINECHART,
-    TYPE_FLAMECHART
-};
-
-// Track Graph Information
-struct TrackGraph
-{
-    GraphType  graph_type;
-    bool       display;
-    bool       display_changed;
-    TrackItem* chart;
-    bool       selected;
-
+    std::string id;
+    std::string name;
+    std::string path;
 };
 
 union TopologyId
@@ -68,6 +57,9 @@ struct TrackInfo
     double                             min_ts;           // starting time stamp of track
     double                             max_ts;           // ending time stamp of track
     uint64_t                           num_entries;      // number of entries in the track
+    uint64_t                           instance_id;      // source database instance index for track
+    uint64_t                           file_id;          // source database file index for track
+    uint64_t                           order_rank;       // track order ranking
     uint64_t                           agent_or_pid;     // agent id or process id
     uint64_t                           queue_id_or_tid;  // queue id or thread id
     double min_value;  // minimum value in the track (for samples) or level (for events)
@@ -78,6 +70,7 @@ struct TrackInfo
     std::string sub_name;  // Track sub process string (TID, QueueID, PMC name)
     std::unordered_set<rocprofvis_dm_event_operation_t>
         operation_types;  // Operation types supported by the track
+    CompareSourceInfo compare_source;
     struct Topology
     {
         uint64_t node_id;     // ID of track's parent node
@@ -285,7 +278,7 @@ struct TableInfo
     uint64_t                              total_row_count;
 };
 
-struct AnalysisQueueUtilization
+struct AnalysisTrackStatistics
 {
     enum State
     {
@@ -294,9 +287,32 @@ struct AnalysisQueueUtilization
         kRequested,  // Pending fetch completion
         kReady,
     };
-    const TrackInfo* track;
-    double           util_pct;
-    mutable State    state;
+    struct Stat
+    {
+        const char* name;
+        const char* compact_name;
+        size_t      accent_color;
+        double      value;
+        std::string compact;
+        std::string extended;
+        std::string full;
+    };
+    enum Queue : size_t
+    {
+        kQueueUtilization = 0,
+        kQueueCount,
+    };
+    enum Counter : size_t
+    {
+        kCounterMin = 0,
+        kCounterMax,
+        kCounterMean,
+        kCounterStandardDeviation,
+        kCounterCount
+    };
+    const TrackInfo*  track;
+    mutable State     state;
+    std::vector<Stat> stats;
 };
 
 }  // namespace View

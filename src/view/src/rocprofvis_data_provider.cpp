@@ -537,6 +537,7 @@ DataProvider::ProcessLoadSystemTrace(RequestInfo& req)
                       min_ts, max_ts);
 
         HandleLoadTrackMetaData();
+        ApplyTrackOrderRanking();
     }
     else
     {
@@ -1003,7 +1004,7 @@ DataProvider::HandleLoadTrackMetaData()
 
         if(result == kRocProfVisResultSuccess)
         {
-            TrackInfo track_info;
+            TrackInfo track_info = {};
 
             track_info.graph_handle = graph;
 
@@ -1058,6 +1059,18 @@ DataProvider::HandleLoadTrackMetaData()
 
             result = rocprofvis_controller_get_uint64(
                 track, kRPVControllerTrackNumberOfEntries, 0, &track_info.num_entries);
+            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+
+            result = rocprofvis_controller_get_uint64(
+                track, kRPVControllerTrackInstanceId, 0, &track_info.instance_id);
+            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+
+            result = rocprofvis_controller_get_uint64(
+                track, kRPVControllerTrackFileId, 0, &track_info.file_id);
+            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+
+            result = rocprofvis_controller_get_uint64(
+                track, kRPVControllerTrackOrderRanking, 0, &track_info.order_rank);
             ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
             result = rocprofvis_controller_get_uint64(
@@ -1190,6 +1203,12 @@ DataProvider::HandleLoadTrackMetaData()
                 ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
             }
 
+            if(const CompareSourceInfo* source =
+                   m_model.GetCompareSource(track_info.file_id))
+            {
+                track_info.compare_source = *source;
+            }
+
             // Todo:
             // kRPVControllerTrackDescription = 0x30000007,
             // kRPVControllerTrackNode = 0x3000000A,
@@ -1204,6 +1223,51 @@ DataProvider::HandleLoadTrackMetaData()
     }
 
     spdlog::info("Track meta data loaded");
+}
+
+void
+DataProvider::ApplyTrackOrderRanking()
+{
+    // Only reorder compare traces. Normal single-file traces keep their natural load
+    // order; the ranking is what makes counterpart tracks from each compared file (A,
+    // B, ...) sit next to each other on the timeline.
+    if(!m_model.HasCompareSources())
+    {
+        return;
+    }
+
+    TimelineModel&                           tlm      = m_model.GetTimeline();
+    std::unordered_map<uint64_t, TrackInfo>& metadata = tlm.GetMutableTrackMetadata();
+
+    std::vector<const TrackInfo*> ordered;
+    ordered.reserve(metadata.size());
+    for(const auto& [id, info] : metadata)
+    {
+        ordered.push_back(&info);
+    }
+
+    // Sort by the precomputed order ranking; tie-break on track id for determinism.
+    std::stable_sort(ordered.begin(), ordered.end(),
+                     [](const TrackInfo* a, const TrackInfo* b) {
+                         if(a->order_rank != b->order_rank)
+                         {
+                             return a->order_rank < b->order_rank;
+                         }
+                         return a->id < b->id;
+                     });
+
+    // Apply the new order to the controller timeline (move-to-index semantics) and
+    // resync each track's display index so graph building picks up the new order.
+    for(size_t i = 0; i < ordered.size(); i++)
+    {
+        rocprofvis_result_t result = rocprofvis_controller_set_object(
+            m_trace_timeline, kRPVControllerTimelineGraphIndexed, i,
+            ordered[i]->graph_handle);
+        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+        metadata[ordered[i]->id].index = i;
+    }
+
+    spdlog::info("Applied compare track order ranking to {} tracks", ordered.size());
 }
 
 bool
@@ -2271,8 +2335,8 @@ DataProvider::FetchSummary()
 }
 
 bool
-DataProvider::FetchAnalysisQueueUtilization(
-    const AnalysisQueueUtilizationRequestParams& params)
+DataProvider::FetchAnalysisTrackStatistics(
+    const AnalysisTrackStatisticsRequestParams& params)
 {
     if(m_state != ProviderState::kReady)
     {
@@ -2284,13 +2348,12 @@ DataProvider::FetchAnalysisQueueUtilization(
     {
         uint64_t request_id = RequestIdBuilder::MakeTrackDataRequestId(
             static_cast<uint32_t>(params.m_track_id), 0, 0,
-            RequestType::kFetchAnalysisQueueUtilization);
+            RequestType::kFetchAnalysisTrackStatistics);
         auto it = m_requests.find(request_id);
         if(it != m_requests.end())
         {
-            spdlog::debug(
-                "Per-track queue utilization request for track {} is already pending",
-                params.m_track_id);
+            spdlog::debug("Track statistics request for track {} is already pending",
+                          params.m_track_id);
             return false;
         }
         else
@@ -2303,18 +2366,40 @@ DataProvider::FetchAnalysisQueueUtilization(
             ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess && track_handle);
             rocprofvis_controller_future_t* future = rocprofvis_controller_future_alloc();
             ROCPROFVIS_ASSERT(future);
-            std::shared_ptr<AnalysisQueueUtilizationRequestParams> stored_params =
-                std::make_shared<AnalysisQueueUtilizationRequestParams>(params);
+            std::shared_ptr<AnalysisTrackStatisticsRequestParams> stored_params =
+                std::make_shared<AnalysisTrackStatisticsRequestParams>(params);
             m_requests.emplace(request_id,
                                RequestInfo{ request_id, future, nullptr, nullptr, nullptr,
                                             RequestState::kLoading,
-                                            RequestType::kFetchAnalysisQueueUtilization,
+                                            RequestType::kFetchAnalysisTrackStatistics,
                                             stored_params });
-            result = rocprofvis_analysis_fetch_queue_utilization(
-                m_trace_controller, track_handle, stored_params->m_start_ts,
-                stored_params->m_end_ts, future, &stored_params->m_result);
+            switch(metadata->topology.type)
+            {
+                case TrackInfo::TrackType::Queue:
+                {
+                    result = rocprofvis_analysis_fetch_queue_utilization(
+                        m_trace_controller, track_handle, stored_params->m_start_ts,
+                        stored_params->m_end_ts, future,
+                        &stored_params->m_output.queue_util);
+                    break;
+                }
+                case TrackInfo::TrackType::Counter:
+                {
+                    result = rocprofvis_analysis_fetch_counter_statistics(
+                        m_trace_controller, track_handle, stored_params->m_start_ts,
+                        stored_params->m_end_ts, future,
+                        &stored_params->m_output.counter_stats);
+                    break;
+                }
+                default:
+                {
+                    result = kRocProfVisResultNotSupported;
+                    break;
+                }
+            }
+
             ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-            spdlog::debug("Fetching per-track queue utilization for track {}",
+            spdlog::debug("Fetching track statistics for track {}",
                           stored_params->m_track_id);
             return true;
         }
@@ -2933,9 +3018,9 @@ DataProvider::ProcessRequest(RequestInfo& req)
             ProcessSummaryRequest(req);
             break;
         }
-        case RequestType::kFetchAnalysisQueueUtilization:
+        case RequestType::kFetchAnalysisTrackStatistics:
         {
-            ProcessAnalysisQueueUtilizationRequest(req);
+            ProcessAnalysisTrackStatisticsRequest(req);
             break;
         }
 #ifdef COMPUTE_UI_SUPPORT
@@ -3018,23 +3103,39 @@ DataProvider::ProcessSummaryRequest(RequestInfo& req)
 }
 
 void
-DataProvider::ProcessAnalysisQueueUtilizationRequest(RequestInfo& req)
+DataProvider::ProcessAnalysisTrackStatisticsRequest(RequestInfo& req)
 {
-    std::shared_ptr<AnalysisQueueUtilizationRequestParams> params =
-        std::dynamic_pointer_cast<AnalysisQueueUtilizationRequestParams>(req.custom_params);
+    std::shared_ptr<AnalysisTrackStatisticsRequestParams> params =
+        std::dynamic_pointer_cast<AnalysisTrackStatisticsRequestParams>(
+            req.custom_params);
     if(!params)
     {
-        spdlog::error("Queue utilization params missing or invalid");
+        spdlog::error("Track statistics params missing or invalid");
     }
     else if(req.response_code != kRocProfVisResultSuccess)
     {
-        spdlog::debug("Queue utilization request for track {} failed with code {}",
+        spdlog::debug("Track statistics request for track {} failed with code {}",
                       params->m_track_id, req.response_code);
     }
     else
     {
-        m_model.GetAnalysis().SetPerTrackQueueUtilizationValue(params->m_track_id,
-                                                               params->m_result);
+        const TrackInfo* metadata = m_model.GetTimeline().GetTrack(params->m_track_id);
+        ROCPROFVIS_ASSERT(metadata);
+        switch(metadata->topology.type)
+        {
+            case TrackInfo::TrackType::Queue:
+            {
+                m_model.GetAnalysis().SetQueueUtilization(params->m_track_id,
+                                                          params->m_output.queue_util);
+                break;
+            }
+            case TrackInfo::TrackType::Counter:
+            {
+                m_model.GetAnalysis().SetCounterStatistics(
+                    params->m_track_id, params->m_output.counter_stats);
+                break;
+            }
+        }
     }
 }
 

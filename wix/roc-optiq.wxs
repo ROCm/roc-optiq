@@ -1,0 +1,107 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Copyright Advanced Micro Devices, Inc.
+  SPDX-License-Identifier: MIT
+
+  WiX v4 installer definition for ROCm Optiq.
+
+  Build via the PACKAGE_WIX CMake target:
+      cmake --build --preset x64-release --target PACKAGE_WIX
+
+  Prerequisites (one-time, per build machine):
+      dotnet tool install --global wix
+      wix extension add WixToolset.UI.wixext
+
+  Variables supplied by the PACKAGE_WIX CMake target (-d flags):
+      Version    - full version string, e.g. 0.5.0.0
+      ExeFile    - absolute path to roc-optiq.exe
+      LicenseRtf - absolute path to the RTF license shown in the installer UI
+      BannerBmp  - absolute path to the 493x58 banner bitmap
+      DialogBmp  - absolute path to the 493x312 background bitmap
+      IconFile   - absolute path to ROCm_Optiq.ico
+-->
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+     xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
+
+  <Package Name="ROCm Optiq"
+           Manufacturer="Advanced Micro Devices, Inc."
+           Version="$(var.Version)"
+           UpgradeCode="C502D354-6369-4175-AE83-D9C07716C7C9"
+           Language="1033"
+           Codepage="1252"
+           Scope="perMachine">
+
+    <!-- Silently replace any older version; block downgrades with a message. -->
+    <MajorUpgrade DowngradeErrorMessage="A newer version of ROCm Optiq is already installed." />
+
+    <!-- Embed the cabinet directly into the MSI. -->
+    <MediaTemplate EmbedCab="yes" />
+
+    <!-- Standard WixUI_InstallDir dialog set (license + install-dir page). -->
+    <ui:WixUI Id="WixUI_InstallDir" />
+    <WixVariable Id="WixUILicenseRtf" Value="$(var.LicenseRtf)" />
+    <WixVariable Id="WixUIBannerBmp"  Value="$(var.BannerBmp)" />
+    <WixVariable Id="WixUIDialogBmp"  Value="$(var.DialogBmp)" />
+
+    <!-- Product icon shown in Add/Remove Programs. -->
+    <Icon Id="ApplicationIcon" SourceFile="$(var.IconFile)" />
+    <Property Id="ARPPRODUCTICON"   Value="ApplicationIcon" />
+    <Property Id="WIXUI_INSTALLDIR" Value="INSTALLDIR" />
+
+    <!-- ═══════════════════════════════════════════════════════════════════
+         Directory layout
+         Default: C:\Program Files\AMD\ROCm Optiq <version>\
+         ═══════════════════════════════════════════════════════════════════ -->
+    <StandardDirectory Id="ProgramFiles64Folder">
+      <Directory Id="AMDDIR"      Name="AMD">
+        <Directory Id="INSTALLDIR" Name="ROCm Optiq $(var.Version)">
+
+          <Component Id="MainExecutable" Guid="*">
+            <File Id="RocOptiqExe"
+                  Name="roc-optiq.exe"
+                  Source="$(var.ExeFile)"
+                  KeyPath="yes" />
+          </Component>
+
+        </Directory>
+      </Directory>
+    </StandardDirectory>
+
+    <!-- ═══════════════════════════════════════════════════════════════════
+         Start Menu shortcut
+         The RegistryValue is the KeyPath so Windows Installer tracks it.
+         ═══════════════════════════════════════════════════════════════════ -->
+    <StandardDirectory Id="ProgramMenuFolder">
+      <Directory Id="ApplicationProgramsFolder" Name="AMD ROCm Optiq">
+
+        <Component Id="StartMenuShortcut" Guid="*">
+          <Shortcut Id="AppStartMenuShortcut"
+                    Name="ROCm Optiq"
+                    Description="ROCm Profiler Visualizer"
+                    Target="[INSTALLDIR]roc-optiq.exe"
+                    WorkingDirectory="INSTALLDIR"
+                    Icon="ApplicationIcon" />
+          <RemoveFolder Id="CleanupStartMenu"
+                        Directory="ApplicationProgramsFolder"
+                        On="uninstall" />
+          <RegistryValue Root="HKCU"
+                         Key="Software\AMD\ROCm Optiq"
+                         Name="StartMenuInstalled"
+                         Type="integer"
+                         Value="1"
+                         KeyPath="yes" />
+        </Component>
+
+      </Directory>
+    </StandardDirectory>
+
+    <!-- ═══════════════════════════════════════════════════════════════════
+         Feature tree (single feature, all components required)
+         ═══════════════════════════════════════════════════════════════════ -->
+    <Feature Id="ProductFeature" Title="ROCm Optiq" Level="1">
+      <ComponentRef Id="MainExecutable" />
+      <ComponentRef Id="StartMenuShortcut" />
+    </Feature>
+
+  </Package>
+</Wix>

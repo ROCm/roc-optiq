@@ -20,15 +20,17 @@ constexpr ImGuiTreeNodeFlags HEADER_FLAGS = ImGuiTreeNodeFlags_Framed |
                                             ImGuiTreeNodeFlags_DefaultOpen |
                                             ImGuiTreeNodeFlags_SpanLabelWidth;
 constexpr float TREE_LINE_W = 1.5f;
+// Node swatch radius as a fraction of the text line height.
+constexpr float NODE_SWATCH_RADIUS_SCALE = 0.3f;
 
 class TreeConnector
 {
 public:
-    explicit TreeConnector(SettingsManager& s)
+    explicit TreeConnector(SettingsManager& s, ImU32 color = 0)
     {
         float indent = ImGui::GetStyle().IndentSpacing;
         m_draw_list  = ImGui::GetWindowDrawList();
-        m_color      = s.GetColor(Colors::kMetaDataSeparator);
+        m_color      = color ? color : s.GetColor(Colors::kMetaDataSeparator);
         m_line_x     = ImGui::GetCursorScreenPos().x - indent * 0.5f;
         m_branch_len = indent * 0.45f;
         m_prev_y     = ImGui::GetCursorScreenPos().y;
@@ -367,6 +369,23 @@ SideBar::RenderBranchNode(const TreeNode& node, const TreeNode* state_node,
         ImGui::SameLine();
     }
 
+    // Node color swatch matching the track color-coding.
+    if(node.show_color_swatch && m_settings.ShowNodeColors())
+    {
+        const std::vector<ImU32>& wheel = m_settings.GetColorWheel();
+        if(!wheel.empty())
+        {
+            const float  frame_h = ImGui::GetFrameHeight();
+            const float  radius  = ImGui::GetTextLineHeight() * NODE_SWATCH_RADIUS_SCALE;
+            const ImVec2 pos     = ImGui::GetCursorScreenPos();
+            ImGui::GetWindowDrawList()->AddCircleFilled(
+                ImVec2(pos.x + radius, pos.y + frame_h * 0.5f), radius,
+                wheel[node.color_index % wheel.size()]);
+            ImGui::Dummy(ImVec2(radius * 2.0f, frame_h));
+            ImGui::SameLine(0.0f, ImGui::GetStyle().ItemInnerSpacing.x);
+        }
+    }
+
     bool open = true;
     if(node.collapsable)
     {
@@ -375,7 +394,19 @@ SideBar::RenderBranchNode(const TreeNode& node, const TreeNode* state_node,
 
     if(open)
     {
+        // While inside a node's subtree, tint all descendant connector lines
+        // with the node color (restored when the subtree finishes).
+        const ImU32 prev_node_color = m_active_node_color;
+        if(node.show_color_swatch && m_settings.ShowNodeColors())
+        {
+            const std::vector<ImU32>& wheel = m_settings.GetColorWheel();
+            if(!wheel.empty())
+            {
+                m_active_node_color = wheel[node.color_index % wheel.size()];
+            }
+        }
         RenderTreeChildren(node);
+        m_active_node_color = prev_node_color;
         if(node.collapsable)
         {
             ImGui::TreePop();
@@ -404,7 +435,9 @@ SideBar::RenderTreeChildren(const TreeNode& node)
         return;
     }
 
-    TreeConnector tc(m_settings);
+    // m_active_node_color carries the enclosing node's color down the whole
+    // subtree so deeper connector lines are tinted too, not just direct children.
+    TreeConnector tc(m_settings, m_active_node_color);
     for(const auto& child : node.children)
     {
         if(!child)

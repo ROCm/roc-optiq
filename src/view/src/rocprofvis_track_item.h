@@ -145,6 +145,7 @@ protected:
     void  FetchHelper();
     void  SetDefaultPillLabel(const TrackInfo* track_info);
     void  SetMetaAreaLabel(const TrackInfo* track_info);
+    void  SetNodeColor(const TrackInfo* track_info);
     Pill* AddPill(bool shown = true, bool active = true);
 
     const TrackInfo*                    m_track_metadata;
@@ -178,6 +179,15 @@ protected:
     static float                                     s_metadata_width;
     std::string                                      m_meta_area_label;
     std::string                                      m_meta_area_tooltip;
+
+    // Node color-coding: a pill showing the node's display index, accented with
+    // a color-wheel slot keyed by that index. Gated at render time by the
+    // "Color-code tracks by node" preference.
+    bool        m_has_node_color;
+    size_t      m_node_color_index;
+    size_t      m_node_display_index;
+    std::string m_node_name;
+    Pill*       m_node_pill;
 
 private:
     void RenderPills(ImVec2 region);

@@ -61,6 +61,7 @@ private:
     std::shared_ptr<std::vector<TrackItem*>> m_tracks;
     DataProvider&                            m_data_provider;
     bool                                     m_eye_state_dirty = false;
+    ImU32                                    m_active_node_color = 0;
 };
 
 }  // namespace View

@@ -772,8 +772,21 @@ TrackTopology::BuildSidebarTree()
                 continue;
             }
 
-            TreeNode* node_branch = AddBranchNode(node_list, NodeType::kNode,
-                node.info->host_name, true, true, false);
+            TopologyDataModel& tdm = m_data_provider.DataModel().GetTopology();
+            const size_t       node_index = tdm.GetNodeDisplayIndex(node.info->id);
+            const std::string  node_label =
+                (node_index > 0)
+                    ? "[" + std::to_string(node_index) + "] " + node.info->host_name
+                    : node.info->host_name;
+            TreeNode* node_branch =
+                AddBranchNode(node_list, NodeType::kNode, node_label, true, true, false);
+            if(node_index > 0)
+            {
+                const size_t wheel_size =
+                    SettingsManager::GetInstance().GetColorWheel().size();
+                node_branch->show_color_swatch = true;
+                node_branch->color_index = wheel_size ? (node_index - 1) % wheel_size : 0;
+            }
 
             if(!node.processors.empty())
             {

@@ -58,6 +58,10 @@ TrackItem::TrackItem(DataProvider& dp, uint64_t id, bool display,
 , m_chunk_duration_ns(DEFAULT_CHUNK_DURATION)
 , m_group_id_counter(0)
 , m_meta_area_label("")
+, m_has_node_color(false)
+, m_node_color_index(0)
+, m_node_display_index(0)
+, m_node_pill(nullptr)
 , m_selected(false)
 , m_selected_changed_token(EventManager::InvalidSubscriptionToken)
 , m_track_project_settings(m_data_provider.GetTraceFilePath(), *this)
@@ -78,6 +82,7 @@ TrackItem::TrackItem(DataProvider& dp, uint64_t id, bool display,
     m_track_metadata = track_info;
     m_name = m_data_provider.DataModel().BuildTrackName(m_track_id);
     SetMetaAreaLabel(track_info);
+    SetNodeColor(track_info);
     SetDefaultPillLabel(track_info);
 
     EventManager::EventHandler selected_changed_handler =
@@ -350,9 +355,16 @@ TrackItem::RenderMetaArea()
         ImGui::PopStyleColor();
         ImGui::EndGroup();
 
+        // The node pill is toggled from Edit -> Preferences.
+        if(m_node_pill)
+        {
+            m_node_pill->SetVisible(m_has_node_color && m_settings.ShowNodeColors());
+        }
+
         RenderMetaAreaScale();
         RenderMetaAreaExpand();
         RenderPills(ImVec2(available_for_text, content_size.y));
+
         ImGui::GetWindowDrawList()->AddLine(
             ImGui::GetWindowPos() + ImVec2(0.0f, ImGui::GetWindowSize().y),
             ImGui::GetWindowPos() + ImGui::GetWindowSize(),
@@ -660,11 +672,18 @@ TrackItem::SetMetaAreaLabel(const TrackInfo* track_info)
 {
     TopologyDataModel& tdm = m_data_provider.DataModel().GetTopology();
 
-    std::string node_id_str    = std::to_string(track_info->topology.node_id);
     std::string process_id_str = std::to_string(track_info->topology.process_id);
 
-    bool show_node_id    = tdm.NodeCount() > 1;
     bool show_process_id = tdm.ProcessCount() > 1;
+
+    // Node is conveyed by the colored node pill, so the tooltip carries the
+    // human-readable name + stable index instead of the raw node id.
+    const size_t    node_index = tdm.GetNodeDisplayIndex(track_info->topology.node_id);
+    const NodeInfo* node_info  = tdm.GetNode(track_info->topology.node_id);
+    const std::string node_name =
+        (node_info && !node_info->host_name.empty())
+            ? node_info->host_name
+            : "Node " + std::to_string(node_index);
 
     switch(track_info->topology.type)
     {
@@ -703,10 +722,6 @@ TrackItem::SetMetaAreaLabel(const TrackInfo* track_info)
         case TrackInfo::TrackType::Counter:
         {
             m_meta_area_label = track_info->sub_name;
-            if(show_node_id)
-            {
-                m_meta_area_label += " (NID: " + node_id_str + ")";
-            }
             if(show_process_id)
             {
                 m_meta_area_label += " (PID: " + process_id_str + ")";
@@ -730,10 +745,6 @@ TrackItem::SetMetaAreaLabel(const TrackInfo* track_info)
                 m_meta_area_label = track_info->sub_name;
             }
 
-            if(show_node_id)
-            {
-                m_meta_area_label += " (NID: " + node_id_str + ")";
-            }
             if(show_process_id)
             {
                 m_meta_area_label += " (PID: " + process_id_str + ")";
@@ -744,10 +755,6 @@ TrackItem::SetMetaAreaLabel(const TrackInfo* track_info)
         {
             m_meta_area_label = track_info->main_name;
 
-            if(show_node_id)
-            {
-                m_meta_area_label += " (NID: " + node_id_str + ")";
-            }
             if(show_process_id)
             {
                 m_meta_area_label += " (PID: " + process_id_str + ")";
@@ -767,7 +774,7 @@ TrackItem::SetMetaAreaLabel(const TrackInfo* track_info)
 
     std::string meta_lines;
     meta_lines += "Track ID: " + std::to_string(track_info->id) + "\n";
-    meta_lines += "Node ID: " + node_id_str + "\n";
+    meta_lines += "Node: " + node_name + " [" + std::to_string(node_index) + "]\n";
     meta_lines += "Process ID: " + process_id_str + "\n";
     meta_lines += std::string(count_label) + ": ";
 #ifdef ROCPROFVIS_DEVELOPER_MODE
@@ -792,6 +799,36 @@ TrackItem::SetMetaAreaLabel(const TrackInfo* track_info)
     {
         m_meta_area_tooltip += "\n\n" + meta_lines;
     }
+}
+
+void
+TrackItem::SetNodeColor(const TrackInfo* track_info)
+{
+    TopologyDataModel& tdm = m_data_provider.DataModel().GetTopology();
+
+    const uint64_t            node_id = track_info->topology.node_id;
+    const std::vector<ImU32>& wheel   = m_settings.GetColorWheel();
+    m_node_display_index              = tdm.GetNodeDisplayIndex(node_id);
+    m_has_node_color                  = m_node_display_index > 0 && !wheel.empty();
+    if(!m_has_node_color)
+    {
+        return;
+    }
+
+    const NodeInfo* node = tdm.GetNode(node_id);
+    m_node_name          = (node && !node->host_name.empty())
+                               ? node->host_name
+                               : "Node " + std::to_string(m_node_display_index);
+
+    // The 1-based display index maps to a stable color-wheel slot shared with
+    // the pill accent and the sidebar so every node cue matches.
+    m_node_color_index = (m_node_display_index - 1) % wheel.size();
+
+    m_node_pill = AddPill(true, true);
+    m_node_pill->SetLabel(std::to_string(m_node_display_index));
+    m_node_pill->SetAccentColor(m_node_color_index);
+    m_node_pill->SetTooltip("Node " + std::to_string(m_node_display_index) + ": " +
+                            m_node_name);
 }
 
 Pill*

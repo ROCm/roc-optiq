@@ -96,6 +96,8 @@ private:
     void   UpdateMetadata();
     ImVec2 MapToUI(double x, double y, ImVec2& c_position, ImVec2& c_size,
                    double scale_y);
+    // Fills out_ticks with interior Y-axis values, count based on plot_height.
+    void   GenerateYAxisTicks(float plot_height, std::vector<double>& out_ticks) const;
     bool   ExtractPointsFromData();
     float  CalculateMissingX(float x1, float y1, float x2, float y2, float known_y);
     void   BoxPlotRender(float graph_width);

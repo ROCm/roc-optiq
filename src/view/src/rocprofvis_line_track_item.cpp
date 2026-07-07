@@ -9,6 +9,7 @@
 #include "spdlog/spdlog.h"
 #include <algorithm>
 #include <charconv>
+#include <cmath>
 #include <iomanip>
 #include <sstream>
 
@@ -19,6 +20,13 @@ namespace View
 
 constexpr float DEFAULT_VERTICAL_PADDING = 2.0f;
 constexpr float DEFAULT_LINE_THICKNESS   = 1.0f;
+
+constexpr float Y_AXIS_TICK_MARK_LENGTH     = 4.0f;
+constexpr float Y_AXIS_TICK_LABEL_GAP       = 8.0f;
+constexpr float Y_AXIS_GRID_LINE_ALPHA      = 0.35f;
+constexpr float Y_AXIS_LABEL_SPACING_FACTOR = 2.5f;
+// Interior ticks/labels/grid lines only show above this height.
+constexpr float Y_AXIS_LABEL_MIN_TRACK_HEIGHT = 2.0f * DEFAULT_TRACK_HEIGHT;
 
 LineTrackItem::LineTrackItem(DataProvider& dp, uint64_t track_id, bool display,
                              std::shared_ptr<TimePixelTransform> tpt,
@@ -144,6 +152,23 @@ LineTrackItem::BoxPlotRender(float graph_width)
     ImU32 transparent_color = m_settings.GetColor(Colors::kTransparent);
     ImU32 outline_color     = alt_fill_color;
     ImU32 accent            = m_settings.GetColor(Colors::kAccent);
+
+    // Grid lines behind the data, matching the meta-area ticks.
+    if(m_track_height >= Y_AXIS_LABEL_MIN_TRACK_HEIGHT)
+    {
+        std::vector<double> grid_ticks;
+        GenerateYAxisTicks(content_size.y, grid_ticks);
+        const ImU32 grid_color =
+            ApplyAlpha(m_settings.GetColor(Colors::kGridColor), Y_AXIS_GRID_LINE_ALPHA);
+        for(double value : grid_ticks)
+        {
+            float grid_y = static_cast<float>(cursor_position.y + content_size.y -
+                                              (value - m_min_y.Value()) * scale_y);
+            draw_list->AddLine(ImVec2(cursor_position.x, grid_y),
+                               ImVec2(cursor_position.x + content_size.x, grid_y),
+                               grid_color);
+        }
+    }
 
     int hovered_idx = -1;
     size_t data_len = m_data.size();
@@ -344,20 +369,98 @@ LineTrackItem::CalculateMissingX(float x_1, float y_1, float x_2, float y_2,
 }
 
 void
+LineTrackItem::GenerateYAxisTicks(float plot_height, std::vector<double>& out_ticks) const
+{
+    out_ticks.clear();
+
+    const double min_v = m_min_y.Value();
+    const double max_v = m_max_y.Value();
+    const double range = max_v - min_v;
+    if(range <= 0.0 || plot_height <= 0.0f)
+    {
+        return;
+    }
+
+    // Equal segments keep the values centered: one interior value sits at the
+    // midpoint and fills outward as the track grows.
+    const float target_spacing =
+        (ImGui::GetTextLineHeight() + Y_AXIS_TICK_LABEL_GAP) * Y_AXIS_LABEL_SPACING_FACTOR;
+    const int segments = static_cast<int>(plot_height / target_spacing);
+    if(segments < 2)
+    {
+        return;
+    }
+
+    const double step = range / segments;
+    for(int i = 1; i < segments; ++i)
+    {
+        out_ticks.push_back(min_v + i * step);
+    }
+}
+
+void
 LineTrackItem::RenderMetaAreaScale()
 {
-    ImVec2 content_region = ImGui::GetContentRegionMax();
+    ImVec2      content_region = ImGui::GetContentRegionMax();
+    const float label_x =
+        content_region.x - m_meta_area_scale_width + m_metadata_padding.x;
 
-    ImGui::SetCursorPos(ImVec2(content_region.x - m_meta_area_scale_width +
-                                   m_metadata_padding.x,
-                               m_metadata_padding.y));
+    // Max value (top, editable).
+    ImGui::SetCursorPos(ImVec2(label_x, m_metadata_padding.y));
     m_max_y.Render();
 
+    // Min value (bottom, editable).
     ImVec2 min_size = ImGui::CalcTextSize(m_min_y.CompactValue().c_str());
-    ImGui::SetCursorPos(ImVec2(content_region.x - m_meta_area_scale_width +
-                                   m_metadata_padding.x,
-                               content_region.y - min_size.y - m_metadata_padding.y));
+    ImGui::SetCursorPos(
+        ImVec2(label_x, content_region.y - min_size.y - m_metadata_padding.y));
     m_min_y.Render();
+
+    // Anchor to the same plot region as BoxPlotRender so ticks line up with the
+    // grid lines.
+    ImDrawList*  draw_list    = ImGui::GetWindowDrawList();
+    const ImVec2 win_pos      = ImGui::GetWindowPos();
+    const float  plot_top     = win_pos.y + m_vertical_padding;
+    const float  plot_bottom  = win_pos.y + m_track_content_height - m_vertical_padding;
+    const float  plot_height  = plot_bottom - plot_top;
+    const float  tick_right_x = win_pos.x + ImGui::GetWindowSize().x;
+    const double min_v        = m_min_y.Value();
+    const double range        = m_max_y.Value() - min_v;
+
+    const ImU32 tick_color   = m_settings.GetColor(Colors::kGridColor);
+    const ImU32 label_color  = m_settings.GetColor(Colors::kTextDim);
+    ImFont*     font         = ImGui::GetFont();
+    const float font_size    = ImGui::GetFontSize();
+    const float label_x_screen = win_pos.x + label_x;
+
+    // Min/max tick marks.
+    draw_list->AddLine(ImVec2(tick_right_x - Y_AXIS_TICK_MARK_LENGTH, plot_top),
+                       ImVec2(tick_right_x, plot_top), tick_color);
+    draw_list->AddLine(ImVec2(tick_right_x - Y_AXIS_TICK_MARK_LENGTH, plot_bottom),
+                       ImVec2(tick_right_x, plot_bottom), tick_color);
+
+    if(range > 0.0 && plot_height > 0.0f &&
+       m_track_height >= Y_AXIS_LABEL_MIN_TRACK_HEIGHT)
+    {
+        std::vector<double> ticks;
+        GenerateYAxisTicks(plot_height, ticks);
+        for(double value : ticks)
+        {
+            float y = plot_bottom -
+                      static_cast<float>((value - min_v) / range) * plot_height;
+
+            draw_list->AddLine(ImVec2(tick_right_x - Y_AXIS_TICK_MARK_LENGTH, y),
+                               ImVec2(tick_right_x, y), tick_color);
+
+            // Skip labels that would overlap the min/max labels.
+            if(y > plot_top + font_size && y < plot_bottom - font_size)
+            {
+                std::string label = compact_number_format(value);
+                draw_list->AddText(font, font_size,
+                                   ImVec2(label_x_screen, y - font_size * 0.5f),
+                                   label_color, label.c_str());
+            }
+        }
+    }
 }
 
 void

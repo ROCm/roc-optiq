@@ -772,15 +772,16 @@ TrackTopology::BuildSidebarTree()
                 continue;
             }
 
-            TopologyDataModel& tdm = m_data_provider.DataModel().GetTopology();
+            TopologyDataModel& tdm        = m_data_provider.DataModel().GetTopology();
+            const bool         multi_node = tdm.NodeCount() > 1;
             const size_t       node_index = tdm.GetNodeDisplayIndex(node.info->id);
             const std::string  node_label =
-                (node_index > 0)
+                (multi_node && node_index > 0)
                     ? "[" + std::to_string(node_index) + "] " + node.info->host_name
                     : node.info->host_name;
             TreeNode* node_branch =
                 AddBranchNode(node_list, NodeType::kNode, node_label, true, true, false);
-            if(node_index > 0)
+            if(multi_node && node_index > 0)
             {
                 const size_t wheel_size =
                     SettingsManager::GetInstance().GetColorWheel().size();

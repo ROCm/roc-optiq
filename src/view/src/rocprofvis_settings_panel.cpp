@@ -228,15 +228,14 @@ SettingsPanel::RenderDisplayOptions()
         SetTooltipStyled("Switch between dark and light UI themes.");
     }
 
-    if(ImGui::Checkbox("Color-code tracks by node",
+    if(ImGui::Checkbox("Multi-node decorators",
                        &m_usersettings.display_settings.show_node_colors))
     {
         m_settings_changed = true;
     }
     if(ImGui::IsItemHovered())
     {
-        SetTooltipStyled("Show a colored strip and pill on each timeline track so "
-                         "tracks belonging to the same node are easy to spot.");
+        SetTooltipStyled("Color-code tracks and sidebar nodes by node on multi-node traces.");
     }
 
     ImGui::Spacing();

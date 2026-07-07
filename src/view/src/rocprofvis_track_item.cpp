@@ -806,10 +806,13 @@ TrackItem::SetNodeColor(const TrackInfo* track_info)
 {
     TopologyDataModel& tdm = m_data_provider.DataModel().GetTopology();
 
+    // Node decorations only make sense on multi-node traces; a single-node
+    // trace looks exactly as it did before this feature.
     const uint64_t            node_id = track_info->topology.node_id;
     const std::vector<ImU32>& wheel   = m_settings.GetColorWheel();
     m_node_display_index              = tdm.GetNodeDisplayIndex(node_id);
-    m_has_node_color                  = m_node_display_index > 0 && !wheel.empty();
+    m_has_node_color =
+        tdm.NodeCount() > 1 && m_node_display_index > 0 && !wheel.empty();
     if(!m_has_node_color)
     {
         return;
@@ -1199,6 +1202,13 @@ Pill::Render(const ImVec2& pos, SettingsManager& settings, Sizing sizing)
 void
 Pill::CalculateSize()
 {
+    // Measure with the same font Render() draws with; otherwise the width is
+    // computed from the larger default font and the gap grows with DPI, letting
+    // adjacent pills overlap on high-resolution displays.
+    FontManager& fonts = SettingsManager::GetInstance().GetFontManager();
+    ImGui::PushFont(fonts.GetFont(FontType::kDefault),
+                    fonts.GetFontSize(FontSize::kSmall));
+
     m_widths[kElided]  = ImGui::CalcTextSize("...").x + 2 * m_padding_x;
     m_widths[kCompact] = ImGui::CalcTextSize(m_compact_label.c_str()).x + 2 * m_padding_x;
     m_widths[kExtended] =
@@ -1206,6 +1216,8 @@ Pill::CalculateSize()
             ? m_widths[kCompact]
             : ImGui::CalcTextSize(m_ext_label.c_str()).x + 2 * m_padding_x;
     m_height = ImGui::GetTextLineHeight() + 2 * m_padding_y;
+
+    ImGui::PopFont();
 }
 
 }  // namespace View

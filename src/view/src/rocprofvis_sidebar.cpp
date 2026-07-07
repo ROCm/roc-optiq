@@ -9,6 +9,8 @@
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_timeline_selection.h"
 
+#include <cmath>
+#include <string>
 #include <unordered_set>
 
 namespace RocProfVis
@@ -369,27 +371,37 @@ SideBar::RenderBranchNode(const TreeNode& node, const TreeNode* state_node,
         ImGui::SameLine();
     }
 
-    // Node color swatch matching the track color-coding.
-    if(node.show_color_swatch && m_settings.ShowNodeColors())
-    {
-        const std::vector<ImU32>& wheel = m_settings.GetColorWheel();
-        if(!wheel.empty())
-        {
-            const float  frame_h = ImGui::GetFrameHeight();
-            const float  radius  = ImGui::GetTextLineHeight() * NODE_SWATCH_RADIUS_SCALE;
-            const ImVec2 pos     = ImGui::GetCursorScreenPos();
-            ImGui::GetWindowDrawList()->AddCircleFilled(
-                ImVec2(pos.x + radius, pos.y + frame_h * 0.5f), radius,
-                wheel[node.color_index % wheel.size()]);
-            ImGui::Dummy(ImVec2(radius * 2.0f, frame_h));
-            ImGui::SameLine(0.0f, ImGui::GetStyle().ItemInnerSpacing.x);
-        }
-    }
+    const bool draw_swatch = node.show_color_swatch && m_settings.ShowNodeColors() &&
+                             !m_settings.GetColorWheel().empty();
 
     bool open = true;
     if(node.collapsable)
     {
-        open = ImGui::TreeNodeEx(node.label.c_str(), HEADER_FLAGS);
+        if(draw_swatch)
+        {
+            // Reserve room after the collapse arrow with leading spaces, then draw
+            // the swatch into that gap so the row reads: arrow, swatch, label.
+            const float radius  = ImGui::GetTextLineHeight() * NODE_SWATCH_RADIUS_SCALE;
+            const float gap     = ImGui::GetStyle().ItemInnerSpacing.x;
+            const float space_w = ImGui::CalcTextSize(" ").x;
+            const int   pad     = space_w > 0.0f
+                                      ? static_cast<int>(std::ceil((radius * 2.0f + gap) / space_w))
+                                      : 0;
+
+            const ImVec2 node_pos = ImGui::GetCursorScreenPos();
+            open = ImGui::TreeNodeEx((std::string(pad, ' ') + node.label).c_str(),
+                                     HEADER_FLAGS);
+
+            const std::vector<ImU32>& wheel = m_settings.GetColorWheel();
+            ImGui::GetWindowDrawList()->AddCircleFilled(
+                ImVec2(node_pos.x + ImGui::GetTreeNodeToLabelSpacing() + radius,
+                       node_pos.y + ImGui::GetFrameHeight() * 0.5f),
+                radius, wheel[node.color_index % wheel.size()]);
+        }
+        else
+        {
+            open = ImGui::TreeNodeEx(node.label.c_str(), HEADER_FLAGS);
+        }
     }
 
     if(open)

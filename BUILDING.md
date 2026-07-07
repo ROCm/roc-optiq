@@ -196,10 +196,38 @@ cmake --build build/macos-release --preset "macOS Release Build" --parallel 4
 
 ---
 
+## Windows Installer (WiX MSI)
+
+On Windows, CMake is configured to produce an MSI installer via [WiX Toolset v4](https://wixtoolset.org/) through CPack.
+
+### Prerequisites
+
+Install the WiX .NET tool and its UI extension:
+
+```powershell
+dotnet tool install --global wix
+wix extension add WixToolset.UI.wixext
+```
+
+### Build the installer
+
+Build the application first, then invoke CPack directly from the build directory:
+
+```powershell
+cmake --preset "x64-release" -DROCPROFVIS_ENABLE_INTERNAL_BANNER=OFF
+cmake --build build/x64-release --preset "Windows Release Build" --parallel 4
+cd build/x64-release
+cpack -G WIX
+```
+
+The `.msi` file is emitted into the current build directory (`build/x64-release/`).
+
+---
+
 ## Artifacts
 
 - Linux: packages are emitted into the build directory (e.g., `.deb`, `.rpm`, `.gz`).
-- Windows: the executable is in `build/<preset>/<config>/roc-optiq.exe`.
+- Windows: the executable is in `build/<preset>/<config>/roc-optiq.exe`; the MSI installer is in `build/<preset>/` (when built with `--target package`).
 - macOS: the executable is in `build/<preset>/`.
 
 If you need symbol builds, use the `*-release-symbols` presets.

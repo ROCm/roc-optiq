@@ -39,6 +39,16 @@ private:
 
     void               RenderTrackItem(const uint64_t& index,
                                        bool show_eye_button = true);
+    void               ScrollToTrack(TrackItem& track);
+    void               SetTrackVisibility(TrackItem& track, bool visible,
+                                          std::vector<uint64_t>& chart_ids);
+    void               UpdateHistogramForVisibility(
+        const std::vector<uint64_t>& shown_chart_ids,
+        const std::vector<uint64_t>& hidden_chart_ids);
+    void               HideAllButTrack(const uint64_t& index);
+    void               ApplyAllTrackVisibility(bool visible);
+    void               ApplySelectedTrackVisibility(bool visible);
+    bool               HasTrackVisibility(bool visible) const;
     EyeButtonState     MergeEyeButtonState(EyeButtonState lhs,
                                            EyeButtonState rhs) const;
     EyeButtonState     GetLeafState(const LeafNode& leaf) const;

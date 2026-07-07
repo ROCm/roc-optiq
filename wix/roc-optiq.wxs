@@ -5,20 +5,19 @@
 
   WiX v4 installer definition for ROCm Optiq.
 
-  Build via the PACKAGE_WIX CMake target:
-      cmake --build --preset x64-release --target PACKAGE_WIX
+  Build via the PACKAGE_WIX CMake target defined in CMakeLists.txt.
 
   Prerequisites (one-time, per build machine):
-      dotnet tool install --global wix
+      dotnet tool install -g wix
       wix extension add WixToolset.UI.wixext
 
-  Variables supplied by the PACKAGE_WIX CMake target (-d flags):
-      Version    - full version string, e.g. 0.5.0.0
-      ExeFile    - absolute path to roc-optiq.exe
-      LicenseRtf - absolute path to the RTF license shown in the installer UI
-      BannerBmp  - absolute path to the 493x58 banner bitmap
-      DialogBmp  - absolute path to the 493x312 background bitmap
-      IconFile   - absolute path to ROCm_Optiq.ico
+  Variables supplied by CMake via -d flags:
+      Version    = full version string, e.g. 0.5.0.0
+      ExeFile    = absolute path to roc-optiq.exe
+      LicenseRtf = absolute path to the RTF license shown in the installer UI
+      BannerBmp  = absolute path to the 493x58 banner bitmap
+      DialogBmp  = absolute path to the 493x312 background bitmap
+      IconFile   = absolute path to ROCm_Optiq.ico
 -->
 <Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
      xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">

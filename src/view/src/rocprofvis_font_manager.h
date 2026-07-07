@@ -68,6 +68,9 @@ public:
     static constexpr int kNumSizes = static_cast<int>(FontSize::__kLastSize);
 
 private:
+    // Index of the available size closest to font_size. Assumes
+    // m_available_sizes is sorted ascending.
+    int GetClosestFontSizeIndex(float font_size) const;
 
     ImFont* m_text_font = nullptr;
     ImFont* m_icon_font = nullptr;

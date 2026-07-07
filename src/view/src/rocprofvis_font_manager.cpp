@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <cmath>
 #include <filesystem>
+#include <iterator>
 #include <string>
 #include <vector>
 
@@ -18,8 +19,8 @@ namespace View
 {
 
 constexpr float      BASE_FONT_SIZE       = 15.0f;
-constexpr float      MIN_USER_FONT_SIZE   = 13.0f;
-constexpr float      MAX_USER_FONT_SIZE   = 18.0f;
+constexpr float      MIN_USER_FONT_SIZE   = 12.0f;
+constexpr float      MAX_USER_FONT_SIZE   = 20.0f;
 constexpr std::array FONT_AVAILABLE_SIZES = { 9.0f,  10.0f, 11.0f, 12.0f, 13.0f,
                                               14.0f, 15.0f, 16.0f, 17.0f, 18.0f,
                                               19.0f, 20.0f, 21.0f, 22.0f, 23.0f,
@@ -28,28 +29,6 @@ constexpr std::array FONT_AVAILABLE_SIZES = { 9.0f,  10.0f, 11.0f, 12.0f, 13.0f,
 // Offsets applied to the user-selected base index (kMedium) to produce
 // kSmall/kMedium/kMedLarge/kLarge.
 static constexpr int kSizeOffsets[FontManager::kNumSizes] = { -1, 0, 1, 2 };
-
-static int
-GetClosestFontSizeIndex(const std::vector<float>& available_sizes, float font_size)
-{
-    int best_index = 0;
-
-    if(!available_sizes.empty())
-    {
-        float best_delta = std::abs(available_sizes[0] - font_size);
-        for(int i = 1; i < static_cast<int>(available_sizes.size()); ++i)
-        {
-            float delta = std::abs(available_sizes[i] - font_size);
-            if(delta < best_delta)
-            {
-                best_delta = delta;
-                best_index = i;
-            }
-        }
-    }
-
-    return best_index;
-}
 
 FontManager::FontManager() {}
 
@@ -77,23 +56,41 @@ FontManager::GetFontSizeAt(int idx) const
 }
 
 int
+FontManager::GetClosestFontSizeIndex(float font_size) const
+{
+    if(m_available_sizes.empty())
+        return 0;
+
+    auto it = std::lower_bound(m_available_sizes.begin(), m_available_sizes.end(), font_size);
+    if(it == m_available_sizes.begin())
+        return 0;
+    if(it == m_available_sizes.end())
+        return static_cast<int>(m_available_sizes.size()) - 1;
+
+    // Snap to whichever of the two neighbours is closer.
+    auto prev = std::prev(it);
+    if((font_size - *prev) <= (*it - font_size))
+        return static_cast<int>(std::distance(m_available_sizes.begin(), prev));
+    return static_cast<int>(std::distance(m_available_sizes.begin(), it));
+}
+
+int
 FontManager::GetFontSizeIndex(float font_size) const
 {
-    return GetClosestFontSizeIndex(m_available_sizes, font_size);
+    return GetClosestFontSizeIndex(font_size);
 }
 
 int
 FontManager::GetDefaultFontSizeIndex() const
 {
-    return GetClosestFontSizeIndex(m_available_sizes, BASE_FONT_SIZE);
+    return GetClosestFontSizeIndex(BASE_FONT_SIZE);
 }
 
 int
 FontManager::ClampFontSizeIndex(int idx) const
 {
-    int min_idx = GetFontSizeIndex(MIN_USER_FONT_SIZE);
-    int max_idx = GetFontSizeIndex(MAX_USER_FONT_SIZE);
-    return std::max(min_idx, std::min(idx, max_idx));
+    return std::clamp(idx, GetFontSizeIndex(MIN_USER_FONT_SIZE),
+                      GetFontSizeIndex(MAX_USER_FONT_SIZE));
 }
 
 void
@@ -125,7 +122,7 @@ FontManager::Update()
     // anyone. Detect the effective change here and fire a single event so every
     // subscriber stays in sync.
     const float font_size = ImGui::GetFontSize();
-    if(font_size != m_last_font_size)
+    if(std::abs(font_size - m_last_font_size) > 0.01f)
     {
         m_last_font_size = font_size;
         EventManager::GetInstance()->AddEvent(

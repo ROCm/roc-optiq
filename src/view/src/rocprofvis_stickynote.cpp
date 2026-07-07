@@ -25,9 +25,9 @@ constexpr float kExpandedMinWidth     = 160.0f;
 constexpr float kExpandedMinHeight    = 96.0f;
 constexpr float kWindowBorderSize     = 1.0f;
 constexpr float kNoteMargin           = 14.0f;
-constexpr float kHeaderButtonGap      = 8.0f;
-constexpr float kHeaderButtonMinSize  = 34.0f;
-constexpr float kHeaderButtonPadding  = 14.0f;
+constexpr float kHeaderButtonGap      = 2.0f;
+constexpr float kHeaderButtonMinSize  = 24.0f;
+constexpr float kHeaderButtonPadding  = 6.0f;
 constexpr float kAccentStripeWidth    = 3.0f;
 constexpr float kAccentStripeAlpha    = 0.78f;
 constexpr float kHeaderSeparatorAlpha = 0.42f;
@@ -522,8 +522,8 @@ StickyNote::RenderExpandedWindow(const ImVec2& anchor_pos)
         ImGui::SetCursorPos(ImVec2(
             win_size.x - action_btn_size * 2.0f - kHeaderButtonGap - kNoteMargin,
             action_btn_y));
-        if(IconButton(ICON_TRASH_CAN, action_icon_font, action_btn, nullptr, false,
-                      ImVec2(0.0f, 0.0f), transparent, icon_hover_color,
+        if(IconButton(ICON_TRASH_CAN, action_icon_font, action_btn, "Delete Annotation",
+                      false, ImVec2(0.0f, 0.0f), transparent, icon_hover_color,
                       icon_active_color,
                       ("delete_" + std::to_string(m_id)).c_str()))
         {
@@ -532,7 +532,7 @@ StickyNote::RenderExpandedWindow(const ImVec2& anchor_pos)
 
         ImGui::SetCursorPos(
             ImVec2(win_size.x - action_btn_size - kNoteMargin, action_btn_y));
-        if(IconButton(ICON_X_CIRCLED, action_icon_font, action_btn, nullptr, false,
+        if(IconButton(ICON_X_CIRCLED, action_icon_font, action_btn, "Close Note", false,
                       ImVec2(0.0f, 0.0f), transparent, icon_hover_color,
                       icon_active_color, ("close_" + std::to_string(m_id)).c_str()))
         {

@@ -302,6 +302,7 @@ BeginTooltipStyled()
     ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding,
                         settings.GetDefaultStyle().FrameRounding);
     ImGui::PushStyleColor(ImGuiCol_WindowBg, settings.GetColor(Colors::kBgFrame));
+    ImGui::PushStyleColor(ImGuiCol_Text, settings.GetColor(Colors::kTextMain));
     ImGui::BeginTooltip();
 }
 
@@ -314,12 +315,13 @@ BeginItemTooltipStyled()
     ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding,
                         settings.GetDefaultStyle().FrameRounding);
     ImGui::PushStyleColor(ImGuiCol_WindowBg, settings.GetColor(Colors::kBgFrame));
+    ImGui::PushStyleColor(ImGuiCol_Text, settings.GetColor(Colors::kTextMain));
     if(ImGui::BeginItemTooltip())
     {
         return true;
     }
     ImGui::PopStyleVar(2);
-    ImGui::PopStyleColor();
+    ImGui::PopStyleColor(2);
     return false;
 }
 
@@ -328,7 +330,7 @@ EndTooltipStyled()
 {
     ImGui::EndTooltip();
     ImGui::PopStyleVar(2);
-    ImGui::PopStyleColor();
+    ImGui::PopStyleColor(2);
 }
 
 void

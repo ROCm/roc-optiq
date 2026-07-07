@@ -56,6 +56,8 @@ private:
     uint32_t                          m_current_kernel_id;
     uint32_t                          m_current_workload_id;
     uint32_t                          m_fetch_generation = 0;
+    uint64_t                          m_active_request_id = 0;
+    bool                              m_fetch_in_progress = false;
     bool                              m_pending_refetch  = false;
 
     std::map<std::string /*file_path*/, uint32_t /*file_id*/> m_source_files;
@@ -146,9 +148,11 @@ private:
         std::string comment;
         uint32_t    id                  = 0;
         uint32_t    source_line_id      = 0;
-        uint32_t    wave_issued_count   = 0;
-        uint32_t    total_sample_count  = 0;
-        float       avg_active_lanes    = 0.0f;
+        uint32_t    issued_count        = 0;
+        uint32_t    stalled_count       = 0;
+        uint32_t    total_count         = 0;
+        float       active_threads_percent = 0.0f;
+        float       wave_occupancy_percent = 0.0f;
     };
 
     bool                m_show_comments = false;

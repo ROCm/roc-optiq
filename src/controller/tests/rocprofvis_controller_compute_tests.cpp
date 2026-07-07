@@ -532,6 +532,113 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture,
         }
     }
 
+    // Fetches every available source file for one kernel and then revisits the first
+    // file. The revisit exercises the controller's source-line cache while the first
+    // fetch validates the kernel-wide set queries.
+    SECTION("Controller Fetch PC Sampling Data")
+    {
+        bool tested_pc_sampling = false;
+        for(WorkloadInfo& workload : m_workloads)
+        {
+            for(const KernelInfo& kernel : workload.kernels)
+            {
+                rocprofvis_handle_t* kernel_handle = nullptr;
+                rocprofvis_result_t  result        = rocprofvis_controller_get_object(
+                    workload.handle, kRPVControllerWorkloadKernelById, kernel.id,
+                    &kernel_handle);
+                REQUIRE(result == kRocProfVisResultSuccess);
+                REQUIRE(kernel_handle);
+
+                rocprofvis_handle_t* pc_sampling = nullptr;
+                result                           = rocprofvis_controller_get_object(
+                    kernel_handle, kRPVControllerKernelPcSampling, 0, &pc_sampling);
+                REQUIRE(result == kRocProfVisResultSuccess);
+                REQUIRE(pc_sampling);
+
+                uint64_t num_source_files = 0;
+                result                    = rocprofvis_controller_get_uint64(
+                    pc_sampling, kRPVControllerPCSamplingNumSourceFiles, 0,
+                    &num_source_files);
+                REQUIRE(result == kRocProfVisResultSuccess);
+                if(num_source_files == 0)
+                {
+                    continue;
+                }
+
+                auto fetch_source_file = [&](uint64_t source_file_id) {
+                    rocprofvis_controller_arguments_t* args =
+                        rocprofvis_controller_arguments_alloc();
+                    rocprofvis_controller_future_t* future =
+                        rocprofvis_controller_future_alloc();
+                    REQUIRE(args);
+                    REQUIRE(future);
+
+                    rocprofvis_result_t fetch_result = rocprofvis_controller_set_uint64(
+                        args, kRPVControllerPcSamplingArgsWorkloadId, 0, workload.id);
+                    REQUIRE(fetch_result == kRocProfVisResultSuccess);
+                    fetch_result = rocprofvis_controller_set_uint64(
+                        args, kRPVControllerPcSamplingArgsKernelId, 0, kernel.id);
+                    REQUIRE(fetch_result == kRocProfVisResultSuccess);
+                    fetch_result = rocprofvis_controller_set_uint64(
+                        args, kRPVControllerPcSamplingArgsSourceFileId, 0,
+                        source_file_id);
+                    REQUIRE(fetch_result == kRocProfVisResultSuccess);
+
+                    fetch_result = rocprofvis_controller_pc_sampling_fetch_async(
+                        m_controller, args, future, pc_sampling);
+                    REQUIRE(fetch_result == kRocProfVisResultSuccess);
+                    fetch_result = rocprofvis_controller_future_wait(future, FLT_MAX);
+                    REQUIRE(fetch_result == kRocProfVisResultSuccess);
+
+                    uint64_t future_result = 0;
+                    fetch_result           = rocprofvis_controller_get_uint64(
+                        future, kRPVControllerFutureResult, 0, &future_result);
+                    REQUIRE(fetch_result == kRocProfVisResultSuccess);
+                    REQUIRE(future_result == kRocProfVisResultSuccess);
+
+                    uint64_t num_source_lines = 0;
+                    fetch_result              = rocprofvis_controller_get_uint64(
+                        pc_sampling, kRPVControllerPCSamplingNumSourceLines, 0,
+                        &num_source_lines);
+                    REQUIRE(fetch_result == kRocProfVisResultSuccess);
+                    REQUIRE(num_source_lines > 0);
+
+                    uint64_t num_isa_lines = 0;
+                    fetch_result           = rocprofvis_controller_get_uint64(
+                        pc_sampling, kRPVControllerPCSamplingNumIsaLines, 0,
+                        &num_isa_lines);
+                    REQUIRE(fetch_result == kRocProfVisResultSuccess);
+                    REQUIRE(num_isa_lines > 0);
+
+                    rocprofvis_controller_arguments_free(args);
+                    rocprofvis_controller_future_free(future);
+                };
+
+                uint64_t first_source_file_id = 0;
+                for(uint64_t file = 0; file < num_source_files; file++)
+                {
+                    uint64_t source_file_id = 0;
+                    result                  = rocprofvis_controller_get_uint64(
+                        pc_sampling, kRPVControllerPCSamplingSourceFileId, file,
+                        &source_file_id);
+                    REQUIRE(result == kRocProfVisResultSuccess);
+                    if(file == 0)
+                    {
+                        first_source_file_id = source_file_id;
+                    }
+                    fetch_source_file(source_file_id);
+                }
+                fetch_source_file(first_source_file_id);
+                tested_pc_sampling = true;
+                break;
+            }
+            if(tested_pc_sampling)
+            {
+                break;
+            }
+        }
+    }
+
     // Loads roofline data for each workload: ridge points, compute ceilings,
     // bandwidth ceilings, and per-kernel intensity points.
     // Fixture Reads: m_workloads[].handle, m_workloads[].id

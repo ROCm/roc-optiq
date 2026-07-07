@@ -373,8 +373,6 @@ private:
                                rocprofvis_handle_t* workload_handle);
     inline void LoadKernels(WorkloadInfo&        workload,
                                rocprofvis_handle_t* workload_handle);
-    inline void LoadPcSamplingData(KernelInfo&          kernel,
-                                   rocprofvis_handle_t* kernel_handle);
     inline void LoadPcSamplingCodeObjects(KernelInfo&          kernel,
                                           rocprofvis_handle_t* pc_handle);
     inline void LoadPcSamplingSourceFiles(KernelInfo&          kernel,
@@ -387,7 +385,7 @@ private:
                                          uint64_t             index);
     inline void LoadPcSamplingJunctions(KernelInfo&          kernel,
                                         rocprofvis_handle_t* pc_handle);
-    inline void LoadPcSamplingStallRecords(KernelInfo&          kernel,
+    inline void LoadPcSamplingStates(KernelInfo&          kernel,
                                            rocprofvis_handle_t* pc_handle);
     inline void LoadPcSamplingStallReasonCounts(KernelInfo&          kernel,
                                                 rocprofvis_handle_t* pc_handle);
@@ -401,8 +399,8 @@ private:
     using bandwidth_ridge_map = std::unordered_map<
         rocprofvis_controller_roofline_ceiling_bandwidth_type_t,
         std::unordered_map<rocprofvis_controller_roofline_ceiling_compute_type_t, Point>>;
-        
-    
+
+
     inline void LoadRoofLineCeilingsRidge(WorkloadInfo&        workload,
                                           rocprofvis_handle_t* roofline_handle,
                                           compute_ridge_map&   compute_ridge,

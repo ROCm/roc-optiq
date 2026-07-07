@@ -77,7 +77,7 @@ private:
     void FetchCodeObjectsAndIsaLines(rocprofvis_dm_database_t db, Future* future,
                                      uint64_t kernel_id, PcSampling& output);
     void FetchIsaLineDepsAndStalls(rocprofvis_dm_database_t db, Future* future,
-                                   PcSampling& output);
+                                   uint64_t kernel_id, PcSampling& output);
     void FetchStallReasonCounts(rocprofvis_dm_database_t db, Future* future,
                                 PcSampling& output);
     void FetchSourceFileAndLines(rocprofvis_dm_database_t db, Future* future,

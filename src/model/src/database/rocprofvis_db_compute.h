@@ -40,7 +40,7 @@ namespace DataModel
         std::string GetComputeSourceFileSourceLines(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params);
         std::string GetComputeKernelCodeObjects(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params);
         std::string GetComputeCodeObjectIsaLines(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params);
-        std::string GetComputeIsaLineIsaLineDeps(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params);
+        std::string GetComputeKernelIsaToIsaDeps(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params);
         std::string GetComputeIsaLineSourceLineDeps(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params);
         std::string GetComputeIsaLineStallRecord(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params);
         std::string GetComputeStallRecordReasonCounts(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params);

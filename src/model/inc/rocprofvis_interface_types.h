@@ -576,7 +576,7 @@ typedef enum rocprofvis_db_compute_use_case_enum_t
     kRPVComputeFetchSourceFileSourceLines,
     kRPVComputeFetchKernelCodeObjects,
     kRPVComputeFetchCodeObjectIsaLines,
-    kRPVComputeFetchIsaLineIsaLineDeps,
+    kRPVComputeFetchKernelIsaToIsaDeps,
     kRPVComputeFetchIsaLineSourceLineDeps,
     kRPVComputeFetchIsaLineStallRecord,
     kRPVComputeFetchStallRecordReasonCounts,

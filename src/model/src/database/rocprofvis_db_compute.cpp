@@ -25,7 +25,7 @@ namespace DataModel
 		{kRPVComputeFetchSourceFileSourceLines, "Fetch source lines for a source file"},
 		{kRPVComputeFetchKernelCodeObjects, "Fetch code objects for a kernel"},
 		{kRPVComputeFetchCodeObjectIsaLines, "Fetch ISA lines for a code object"},
-		{kRPVComputeFetchIsaLineIsaLineDeps, "Fetch ISA-to-ISA dependency edges for an ISA line"},
+		{kRPVComputeFetchKernelIsaToIsaDeps, "Fetch all ISA-to-ISA dependency edges for a kernel"},
 		{kRPVComputeFetchIsaLineSourceLineDeps, "Fetch ISA-to-source-line mapping for an ISA line"},
 		{kRPVComputeFetchIsaLineStallRecord, "Fetch stall record for an ISA line"},
 		{kRPVComputeFetchStallRecordReasonCounts, "Fetch stall reason counts for a stall record"}
@@ -308,14 +308,16 @@ namespace DataModel
 		return query;
 	}
 
-	std::string ComputeQueryFactory::GetComputeIsaLineIsaLineDeps(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params) {
+	std::string ComputeQueryFactory::GetComputeKernelIsaToIsaDeps(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params) {
 		std::string query;
-		if (num == 1 && params != nullptr && params[0].param_type == kRPVComputeParamIsaLineId)
+		if (num == 1 && params != nullptr && params[0].param_type == kRPVComputeParamKernelId)
 		{
 			query =
-				"SELECT dependent_isa_line_id, dependency_isa_line_id "
-				"FROM isa_line_to_isa_line_junction "
-				"WHERE dependent_isa_line_id = ";
+				"SELECT j.dependent_isa_line_id, j.dependency_isa_line_id "
+				"FROM isa_line_to_isa_line_junction j "
+				"JOIN isa_lines il ON il.id = j.dependent_isa_line_id "
+				"JOIN code_objects co ON co.id = il.code_object_id "
+				"WHERE co.kernel_id = ";
 			query += params[0].param_str;
 		}
 		return query;
@@ -872,8 +874,8 @@ void ComputeQueryFactory::ParseMetricParam(std::string metric_str, uint32_t work
 			case kRPVComputeFetchCodeObjectIsaLines:
 				query = m_query_factory.GetComputeCodeObjectIsaLines(num, params);
 				break;
-			case kRPVComputeFetchIsaLineIsaLineDeps:
-				query = m_query_factory.GetComputeIsaLineIsaLineDeps(num, params);
+			case kRPVComputeFetchKernelIsaToIsaDeps:
+				query = m_query_factory.GetComputeKernelIsaToIsaDeps(num, params);
 				break;
 			case kRPVComputeFetchIsaLineSourceLineDeps:
 				query = m_query_factory.GetComputeIsaLineSourceLineDeps(num, params);
@@ -944,7 +946,6 @@ void ComputeQueryFactory::ParseMetricParam(std::string metric_str, uint32_t work
 				case kRPVComputeFetchSourceFileSourceLines:
 				case kRPVComputeFetchKernelCodeObjects:
 				case kRPVComputeFetchCodeObjectIsaLines:
-				case kRPVComputeFetchIsaLineIsaLineDeps:
 				case kRPVComputeFetchIsaLineSourceLineDeps:
 				case kRPVComputeFetchIsaLineStallRecord:
 				case kRPVComputeFetchStallRecordReasonCounts:

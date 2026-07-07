@@ -19,10 +19,10 @@
 
 **Tracks and meta area**
 - Track meta-area cleanup: queue utilization rendered as a pill beside the QUEUE pill; removed redundant scale columns and separators.
-- Track meta-area tooltip enriched with track ID, type, node/process IDs, and event/sample counts; Node ID and Process ID are now always shown for every track.
+- Track meta-area tooltip enriched with track ID, type, node/process IDs, and event/sample counts.
 - Right-click the track meta area to copy the track name or track ID.
 - Track options moved from the gear button into the right-click context menu.
-- Track Details statistics (queue utilization, counter min/max/mean/std-dev) now show their units, and copied values include the unit.
+- Track Details statistics (queue utilization, counter min/max/mean/std-dev).
 - Histogram header now shows total track count and a per-type breakdown with compact/elided display and full details in a tooltip.
 - Fixed track reorder preview clamping.
 - Add support for NIC agent type. (Schema 3.0.1 and higher).
@@ -31,7 +31,7 @@
 - Call Stack table row navigation and highlighting.
 - Flow Data table hover and origin highlights, with an owner-row tint marking the event the flow was opened from.
 - Copy menu added to the Call Stack table, with fixed cell right-click hitboxes (correct column under cursor) for both flow and call stack tables.
-- Right-click copy (row and cell) added to the Kernel Selection and Track Details tables, matching the copy options elsewhere in the app.
+- Right-click copy (row and cell) added to the Kernel Selection and Track Details tables.
 - Icons added to context menus across the view (table rows, timeline events, call stack/flow menus, kernel bar-chart column menu) with aligned icon columns.
 
 **Compute profiling**

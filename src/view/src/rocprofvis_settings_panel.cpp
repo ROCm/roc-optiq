@@ -305,6 +305,30 @@ SettingsPanel::RenderDisplayOptions()
         ImGui::Text("AMD ROCm(TM) Optiq");
         ImGui::PopFont();
     }
+
+#ifdef COMPUTE_UI_SUPPORT
+    ImGui::Spacing();
+    ImGui::TextUnformatted("Roofline");
+    ImGui::Separator();
+    ImGui::AlignTextToFramePadding();
+    ImGui::TextUnformatted("Line thickness");
+    if(ImGui::IsItemHovered())
+    {
+        SetTooltipStyled("Thickness (in pixels) of the roofline chart's ceiling lines.");
+    }
+    ImGui::SameLine();
+    ImGui::SetNextItemWidth(kLogViewerInputWidth);
+    if(ImGui::SliderFloat("##roofline_line_thickness",
+                          &m_usersettings.display_settings.roofline_line_thickness,
+                          ROOFLINE_LINE_THICKNESS_MIN, ROOFLINE_LINE_THICKNESS_MAX,
+                          "%.1f px"))
+    {
+        m_usersettings.display_settings.roofline_line_thickness =
+            std::clamp(m_usersettings.display_settings.roofline_line_thickness,
+                       ROOFLINE_LINE_THICKNESS_MIN, ROOFLINE_LINE_THICKNESS_MAX);
+        m_settings_changed = true;
+    }
+#endif
 }
 
 void

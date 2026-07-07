@@ -24,6 +24,7 @@ typedef struct DisplaySettings
     bool use_dark_mode;
     bool dpi_based_scaling;
     int  font_size_index;
+    float roofline_line_thickness;
 
 } DisplaySettings;
 
@@ -213,6 +214,12 @@ constexpr const char* JSON_KEY_SETTINGS_CATEGORY_INTERNAL = "internal";
 constexpr const char* JSON_KEY_SETTINGS_DISPLAY_DARK_MODE   = "use_dark_mode";
 constexpr const char* JSON_KEY_SETTINGS_DISPLAY_DPI_SCALING = "dpi_based_scaling";
 constexpr const char* JSON_KEY_SETTINGS_DISPLAY_FONT_SIZE   = "font_size_index";
+constexpr const char* JSON_KEY_SETTINGS_DISPLAY_ROOFLINE_LINE_THICKNESS =
+    "roofline_line_thickness";
+
+constexpr float ROOFLINE_LINE_THICKNESS_DEFAULT = 1.0f;
+constexpr float ROOFLINE_LINE_THICKNESS_MIN     = 1.0f;
+constexpr float ROOFLINE_LINE_THICKNESS_MAX     = 6.0f;
 
 constexpr const char* JSON_KEY_SETTINGS_UNITS_TIME_FORMAT = "time_format";
 

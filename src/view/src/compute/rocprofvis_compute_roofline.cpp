@@ -19,6 +19,7 @@ namespace View
 
 constexpr float       IMPLOT_LEGEND_ICON_SHRINK       = 2.0f;  // Implot_internal.h
 constexpr float       HOVER_THESHOLD                  = 8.0f;
+constexpr float       HOVER_LINE_WEIGHT_BOOST         = 2.0f;
 constexpr const char* DISPLAY_NAMES_CEILING_COMPUTE[] = {
     "Peak MFMA FP4",   // kRPVControllerRooflineCeilingComputeMFMAFP4
     "Peak MFMA FP6",   // kRPVControllerRooflineCeilingComputeMFMAFP6
@@ -415,6 +416,8 @@ Roofline::Render()
             ImPlot::SetupAxisLimitsConstraints(ImAxis_Y1, m_workload->roofline.min.y / 10,
                                                m_workload->roofline.max.y * 10);
             PlotHoverIdx();
+            const float roofline_line_weight =
+                m_settings.GetUserSettings().display_settings.roofline_line_thickness;
             int item_count = static_cast<int>(m_items.size());
             for(int i = 0; i < item_count; i++)
             {
@@ -444,10 +447,10 @@ Roofline::Render()
                         case ItemModel::Type::CeilingCompute:
                         case ItemModel::Type::CeilingBandwidth:
                         {
-                            ImPlot::SetNextLineStyle(ImPlot::GetColormapColor(i),
-                                                     hovered
-                                                         ? plot_style.LineWeight * 3.0f
-                                                         : plot_style.LineWeight);
+                            ImPlot::SetNextLineStyle(
+                                ImPlot::GetColormapColor(i),
+                                hovered ? roofline_line_weight + HOVER_LINE_WEIGHT_BOOST
+                                        : roofline_line_weight);
                             ImPlot::PlotLineG(
                                 "",
                                 [](int idx, void* user_data) -> ImPlotPoint {

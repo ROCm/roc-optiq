@@ -449,6 +449,8 @@ SettingsManager::SerializeDisplaySettings(jt::Json& json)
         m_usersettings.display_settings.dpi_based_scaling;
     ds[JSON_KEY_SETTINGS_DISPLAY_FONT_SIZE] =
         m_usersettings.display_settings.font_size_index;
+    ds[JSON_KEY_SETTINGS_DISPLAY_ROOFLINE_LINE_THICKNESS] =
+        m_usersettings.display_settings.roofline_line_thickness;
 }
 
 void
@@ -471,6 +473,13 @@ SettingsManager::DeserializeDisplaySettings(jt::Json& json)
         {
             m_usersettings.display_settings.font_size_index =
                 static_cast<int>(ds[JSON_KEY_SETTINGS_DISPLAY_FONT_SIZE].getLong());
+        }
+        if(ds[JSON_KEY_SETTINGS_DISPLAY_ROOFLINE_LINE_THICKNESS].isNumber())
+        {
+            m_usersettings.display_settings.roofline_line_thickness = std::clamp(
+                static_cast<float>(
+                    ds[JSON_KEY_SETTINGS_DISPLAY_ROOFLINE_LINE_THICKNESS].getNumber()),
+                ROOFLINE_LINE_THICKNESS_MIN, ROOFLINE_LINE_THICKNESS_MAX);
         }
     }
 }
@@ -612,7 +621,8 @@ SettingsManager::GetContrastColormapName() const
 SettingsManager::SettingsManager()
 : m_color_store(nullptr)
 , m_usersettings_default(
-      { DisplaySettings{ false, true, 6 }, UnitSettings{ TimeFormat::kTimecode }, false,
+      { DisplaySettings{ false, true, 6, ROOFLINE_LINE_THICKNESS_DEFAULT },
+        UnitSettings{ TimeFormat::kTimecode }, false,
         false, LOG_VIEWER_MAX_ENTRIES_DEFAULT,
         LogViewerSettings{ LOG_VIEWER_DEFAULT_LEVEL_MASK, true, false, false, false } })
 , m_usersettings(m_usersettings_default)

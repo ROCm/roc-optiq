@@ -4,17 +4,25 @@
 
 **Timeline and measurement**
 - Measure Mode: measure the time delta between events or any two points on the timeline. Includes a measurement toolbar (edge toggle, freehand drag, reset), click-to-place freehand rulers, draggable ruler lines with grab cursors, viewport-clamped labels, and theme-aware highlighting. Measurement state is per-trace so it no longer leaks between loaded traces.
+- Right-click a measurement label on the timeline to copy the start time, end time, or measured duration.
 - Queue Utilization: per-queue utilization is computed and surfaced on the timeline, shown as a pill in the track meta area.
 - Sample counter track statistics (min, max, average, standard deviation) displayed in track meta data, shown as user selectable pills.
 - Top Events view: a new view summarizing the most significant events.
 - Recolor events that overlap a time-range selection using the main flame color ramp, and draw the translucent selection fill per-track behind events so highlighted colors stay legible.
 - Right-click copy for timeline event names and details (mirrors the hover tooltip fields: name, start, duration, ID), gated on the current selection.
 
+**Annotations**
+- Annotations are now track-bound: a note stays attached to its track and follows it as you scroll, reorder, or rearrange the timeline. The track is saved in the project file (older projects still load).
+- Expanded notes are now movable floating windows with inline editing: click the title or body to edit in place. New notes open ready to type and are discarded automatically if left empty; the separate Add/Edit dialogs are gone.
+- A time guide line appears while a note is hovered or dragged, showing exactly where it is anchored in time.
+- The annotations list now includes a Track column, and annotations hide automatically when their track is hidden.
+
 **Tracks and meta area**
 - Track meta-area cleanup: queue utilization rendered as a pill beside the QUEUE pill; removed redundant scale columns and separators.
-- Track meta-area tooltip enriched with track ID, type, node/process IDs, and event/sample counts.
+- Track meta-area tooltip enriched with track ID, type, node/process IDs, and event/sample counts; Node ID and Process ID are now always shown for every track.
 - Right-click the track meta area to copy the track name or track ID.
 - Track options moved from the gear button into the right-click context menu.
+- Track Details statistics (queue utilization, counter min/max/mean/std-dev) now show their units, and copied values include the unit.
 - Histogram header now shows total track count and a per-type breakdown with compact/elided display and full details in a tooltip.
 - Fixed track reorder preview clamping.
 - Add support for NIC agent type. (Schema 3.0.1 and higher).
@@ -23,11 +31,13 @@
 - Call Stack table row navigation and highlighting.
 - Flow Data table hover and origin highlights, with an owner-row tint marking the event the flow was opened from.
 - Copy menu added to the Call Stack table, with fixed cell right-click hitboxes (correct column under cursor) for both flow and call stack tables.
+- Right-click copy (row and cell) added to the Kernel Selection and Track Details tables, matching the copy options elsewhere in the app.
 - Icons added to context menus across the view (table rows, timeline events, call stack/flow menus, kernel bar-chart column menu) with aligned icon columns.
 
 **Compute profiling**
 - Added support for the LDS AI point on roofline plots.
 - Metric table view scrolling and tab-persistence consistency improvements aligned with the comparison tables.
+- Added a usage tooltip to the comparison threshold control explaining how to adjust it.
 
 **Welcome page and UI**
 - Homepage/welcome page redesign, now hasStart, Recent, and Resources tiles and logo 
@@ -35,6 +45,7 @@
 - Status bar area now shows active controller requests (or "Ready"), with height that scales to font size.
 - Improved splitter and tab visibility
 - Newly opened files now activate their tab automatically.
+- Saving a project now adds it to the Recent Files list.
 
 **Logging and diagnostics**
 - New user-facing Log Viewer mirroring the application's log stream into a virtualized, filterable, color-coded table: per-level filtering with counts, substring/regex search with highlighting, pause/auto-scroll, absolute/relative timestamps, copy actions, and "open log file".
@@ -61,7 +72,8 @@
 - Fixed timeline highlight artifacts.
 - Duplicate file open protection: canonicalize trace paths so a `.db` and a `.rpv` (or two `.rpv` files) pointing at the same trace are detected, with a clear popup instead of a confusing toast.
 - Fixed reopening a `.rpv` whose source `.db` is missing: the missing trace is reported by name and no empty 0-byte database is created.
-- Fixed multi-node topology node identification (aligned processor topology IDs across instances/queues).
+- Fixed multi-node topology node identification (aligned processor topology IDs across instances/queues), plus additional topology display fixes (null parent lookups, out-of-bounds stream processor lookup).
+- Fixed the welcome page sometimes appearing only partially drawn until the user moved the mouse or clicked (idle wait is now bounded).
 - Corrected stream track entry counts (accumulate record counts across per-operation build queries); bumped the track-info cache version, forcing a one-time rebuild of affected caches.
 - Made the per-track table count inclusive on the trace's upper time bound so it matches the tooltip total (off-by-one fix).
 - Don't block the UI thread during backend teardown when closing a tab or the application.
@@ -69,6 +81,8 @@
 - Various redesign polish fixes (event details styling, annotation row alignment, metric table row hover, settings table controls, aggregate clear button).
 - Fix flow rendering for `.rpd` traces.
 - Fix Compute chart metric mapping.
+- Fixed a memory leak related to flow data.
+- Fixed a macOS app packaging issue that could prevent the app bundle from being properly signed (static GLFW no longer staged into the bundle).
 
 ## Optiq Beta 0.4.0
 

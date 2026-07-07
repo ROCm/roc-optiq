@@ -1,0 +1,6 @@
+# Packaging/maintainer scripts and desktop entries must use LF line endings so
+# they run correctly on Linux even when authored or committed from Windows.
+postinst text eol=lf
+postrm text eol=lf
+*.desktop text eol=lf
+*.desktop.in text eol=lf

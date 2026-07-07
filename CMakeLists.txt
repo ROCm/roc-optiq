@@ -482,15 +482,23 @@ endif()
 
 # Linux desktop integration: install the .desktop entry and hicolor icon theme
 # so the desktop shell (GNOME/KDE/XFCE) shows the app icon in the launcher,
-# dock, and Alt-Tab instead of a generic fallback. These flow into the DEB/RPM
-# via CPack and into a local `make install`. Icons resolve from both /usr and
-# /usr/local prefixes since both share/ trees are on the default XDG_DATA_DIRS.
+# dock, and Alt-Tab instead of a generic fallback.
+#
+# These MUST land under a directory the desktop shell scans via XDG_DATA_DIRS.
+# The install prefix here is /opt/roc-optiq, whose share/ tree is NOT scanned,
+# so the desktop entry and icons are installed to /usr/share (absolute), while
+# the launcher Exec points at the real binary under the install prefix so it
+# still starts from the dock/menu.
 if(UNIX AND NOT APPLE)
-    install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/resources/linux/roc-optiq.desktop"
-            DESTINATION ${CMAKE_INSTALL_DATADIR}/applications
+    configure_file(
+        "${CMAKE_CURRENT_SOURCE_DIR}/resources/linux/roc-optiq.desktop.in"
+        "${CMAKE_CURRENT_BINARY_DIR}/roc-optiq.desktop"
+        @ONLY)
+    install(FILES "${CMAKE_CURRENT_BINARY_DIR}/roc-optiq.desktop"
+            DESTINATION /usr/share/applications
             COMPONENT ${RUNTIME_COMP_TYPE})
     install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/resources/linux/icons/hicolor"
-            DESTINATION ${CMAKE_INSTALL_DATADIR}/icons
+            DESTINATION /usr/share/icons
             COMPONENT ${RUNTIME_COMP_TYPE})
 endif()
 
@@ -514,6 +522,11 @@ set(CPACK_DEBIAN_PACKAGE_DEPENDS ${DEB_DEPENDS_STRING})
 set(CPACK_DEBIAN_PACKAGE_HOMEPAGE "https://github.com/ROCm/roc-optiq")
 set(CPACK_DEBIAN_RV_RUNTIME_PACKAGE_DEPENDS ${DEB_DEPENDS_STRING})
 set(CPACK_DEBIAN_PACKAGE_DESCRIPTION "${EXTENDED_PACKAGE_DESCRIPTION}")
+
+# Refresh the icon cache and desktop database on (un)install so the launcher
+# icon shows up immediately without requiring a logout/login.
+set(CPACK_DEBIAN_RV_RUNTIME_PACKAGE_CONTROL_EXTRA
+    "${CMAKE_CURRENT_SOURCE_DIR}/resources/linux/postinst;${CMAKE_CURRENT_SOURCE_DIR}/resources/linux/postrm")
 
 # RPM package specific variables
 if(NOT APPLE)
@@ -541,6 +554,11 @@ set(CPACK_RPM_FILE_NAME "RPM-DEFAULT")
 # Use automatic shared libraries dependency detection
 set(CPACK_RPM_PACKAGE_AUTOREQPROV "yes")
 set(CPACK_RPM_PACKAGE_DESCRIPTION "${EXTENDED_PACKAGE_DESCRIPTION}")
+
+# Refresh the icon cache and desktop database on (un)install (mirrors the DEB
+# maintainer scripts) so the launcher icon shows up without a logout/login.
+set(CPACK_RPM_POST_INSTALL_SCRIPT_FILE "${CMAKE_CURRENT_SOURCE_DIR}/resources/linux/postinst")
+set(CPACK_RPM_POST_UNINSTALL_SCRIPT_FILE "${CMAKE_CURRENT_SOURCE_DIR}/resources/linux/postrm")
 
 if("DEB" IN_LIST CPACK_GENERATOR)
   message(STATUS "Expected DEB Filename: ${CPACK_DEBIAN_RV_RUNTIME_PACKAGE_NAME}_${CPACK_PACKAGE_VERSION}-${CPACK_DEBIAN_PACKAGE_RELEASE}_<ARCH>.deb")

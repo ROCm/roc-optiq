@@ -480,25 +480,27 @@ else()
             COMPONENT ${RUNTIME_COMP_TYPE} )
 endif()
 
-# Linux desktop integration: install the .desktop entry and hicolor icon theme
-# so the desktop shell (GNOME/KDE/XFCE) shows the app icon in the launcher,
-# dock, and Alt-Tab instead of a generic fallback.
+# Linux desktop integration: ship the .desktop entry and hicolor icon theme so
+# the desktop shell (GNOME/KDE/XFCE) shows the app icon in the launcher, dock,
+# and Alt-Tab instead of a generic fallback.
 #
-# These MUST land under a directory the desktop shell scans via XDG_DATA_DIRS.
-# The install prefix here is /opt/roc-optiq, whose share/ tree is NOT scanned,
-# so the desktop entry and icons are installed to /usr/share (absolute), while
-# the launcher Exec points at the real binary under the install prefix so it
-# still starts from the dock/menu.
+# The desktop shell only scans directories on XDG_DATA_DIRS (e.g. /usr/share),
+# but this package installs under /opt/roc-optiq, which is NOT scanned. We can't
+# install directly to an absolute /usr/share here because CPack refuses to stage
+# absolute install() destinations into its packaging tree. So the files are
+# installed under the prefix (share/) and the post-install maintainer script
+# symlinks them into /usr/share; the launcher Exec points at the real binary
+# under the prefix so it still starts from the dock/menu.
 if(UNIX AND NOT APPLE)
     configure_file(
         "${CMAKE_CURRENT_SOURCE_DIR}/resources/linux/roc-optiq.desktop.in"
         "${CMAKE_CURRENT_BINARY_DIR}/roc-optiq.desktop"
         @ONLY)
     install(FILES "${CMAKE_CURRENT_BINARY_DIR}/roc-optiq.desktop"
-            DESTINATION /usr/share/applications
+            DESTINATION ${CMAKE_INSTALL_DATADIR}/applications
             COMPONENT ${RUNTIME_COMP_TYPE})
     install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/resources/linux/icons/hicolor"
-            DESTINATION /usr/share/icons
+            DESTINATION ${CMAKE_INSTALL_DATADIR}/icons
             COMPONENT ${RUNTIME_COMP_TYPE})
 endif()
 

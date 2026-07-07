@@ -1,14 +1,21 @@
 #!/bin/sh
 set -e
 
-# Refresh the icon cache and desktop database after removal so the launcher
-# entry and icon are cleaned up promptly.
-if command -v gtk-update-icon-cache >/dev/null 2>&1; then
-    gtk-update-icon-cache -q -t -f /usr/share/icons/hicolor || true
-fi
-
-if command -v update-desktop-database >/dev/null 2>&1; then
-    update-desktop-database -q /usr/share/applications || true
-fi
+# Remove the /usr/share symlinks created by postinst, but only on a real
+# removal, not an upgrade. DEB passes "remove"/"purge"; RPM passes a count
+# where 0 means the final uninstall. Skipping upgrades avoids stripping the
+# links the new package's postinst just (re)created.
+case "$1" in
+    0|remove|purge)
+        rm -f /usr/share/applications/roc-optiq.desktop
+        rm -f /usr/share/icons/hicolor/*/apps/roc-optiq.png
+        if command -v gtk-update-icon-cache >/dev/null 2>&1; then
+            gtk-update-icon-cache -q -t -f /usr/share/icons/hicolor || true
+        fi
+        if command -v update-desktop-database >/dev/null 2>&1; then
+            update-desktop-database -q /usr/share/applications || true
+        fi
+        ;;
+esac
 
 exit 0

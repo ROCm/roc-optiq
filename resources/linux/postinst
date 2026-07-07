@@ -1,13 +1,30 @@
 #!/bin/sh
 set -e
 
-# Update the icon cache so the newly installed hicolor icons are picked up
-# by the desktop shell without requiring a logout/login.
+# The package installs under /opt/roc-optiq, which the desktop shell does not
+# scan. Symlink the launcher entry and its icons into /usr/share (on the default
+# XDG_DATA_DIRS) so the app shows its name and icon in the menu/dock/Alt-Tab.
+OPT_SHARE=/opt/roc-optiq/share
+
+if [ -f "$OPT_SHARE/applications/roc-optiq.desktop" ]; then
+    mkdir -p /usr/share/applications
+    ln -sf "$OPT_SHARE/applications/roc-optiq.desktop" \
+        /usr/share/applications/roc-optiq.desktop
+fi
+
+if [ -d "$OPT_SHARE/icons/hicolor" ]; then
+    for src in "$OPT_SHARE"/icons/hicolor/*/apps/roc-optiq.png; do
+        [ -e "$src" ] || continue
+        rel=${src#"$OPT_SHARE"/icons/}
+        mkdir -p "/usr/share/icons/$(dirname "$rel")"
+        ln -sf "$src" "/usr/share/icons/$rel"
+    done
+fi
+
+# Refresh caches so the icon/entry appear without a logout/login.
 if command -v gtk-update-icon-cache >/dev/null 2>&1; then
     gtk-update-icon-cache -q -t -f /usr/share/icons/hicolor || true
 fi
-
-# Register the launcher entry.
 if command -v update-desktop-database >/dev/null 2>&1; then
     update-desktop-database -q /usr/share/applications || true
 fi

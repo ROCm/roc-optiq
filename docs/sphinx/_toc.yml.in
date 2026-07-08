@@ -11,7 +11,7 @@ subtrees:
 - caption: Install
   entries:
   - file: install/optiq-install
-    title: ROCm Optiq installation
+    title: Install ROCm Optiq
 
 - caption: How to
   entries:

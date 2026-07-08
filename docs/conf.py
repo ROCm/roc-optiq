@@ -43,7 +43,7 @@ all_article_info_author = ""
 #                      f.read())
 #    if not match:
 #        raise ValueError("VERSION not found!")
-version_number = "0.4.0"
+version_number = "0.5.0"
 
 # for PDF output on Read the Docs
 project = "ROCm Optiq (Beta)"

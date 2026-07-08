@@ -2,9 +2,9 @@
   :description: Install ROCm Optiq 
   :keywords: ROCm Optiq, ROCm, install, profiler
 
-***********************
-ROCm Optiq installation
-***********************
+******************
+Install ROCm Optiq
+******************
 
 Install ROCm Optiq for Windows or Linux using the installation files in the `https://github.com/ROCm/roc-optiq <https://github.com/ROCm/roc-optiq>`_  GitHub repository.
 
@@ -31,7 +31,7 @@ System requirements
 Install on Windows
 ==================
 
-1. Download the **ROCm-Optiq-Beta.exe** installer from the `ROCm Optiq GitHub repo <https://github.com/ROCm/roc-optiq/releases/tag/v0.4.0-optiq>`_ and follow the instructions in the install wizard.
+1. Download the **ROCm-Optiq-Beta.exe** installer from the `ROCm Optiq GitHub repo <https://github.com/ROCm/roc-optiq/releases/tag/v0.5.0-optiq>`_ and follow the instructions in the install wizard.
    
    .. image:: ../images/wizard.png
       :width: 500
@@ -66,7 +66,7 @@ The relevant fields are ``ID`` and the ``VERSION_ID``.
 Ubuntu 22.04 / 24.04 (Debian-based)
 -----------------------------------
 
-1. Download the ``.deb`` package from the `ROCm Optiq GitHub repo <https://github.com/ROCm/roc-optiq/releases/tag/v0.4.0-optiq>`_.
+1. Download the ``.deb`` package from the `ROCm Optiq GitHub repo <https://github.com/ROCm/roc-optiq/releases/tag/v0.5.0-optiq>`_.
 2. Install the ``.deb`` package:
 
    .. code-block:: shell
@@ -81,7 +81,7 @@ Ubuntu 22.04 / 24.04 (Debian-based)
 
 .. tip::
 
-   Download the latest ``.deb`` from the `ROCm Optiq GitHub repo <https://github.com/ROCm/roc-optiq/releases/tag/v0.4.0-optiq>`_ to ensure ROCm Optiq is up-to-date.
+   Download the latest ``.deb`` from the `ROCm Optiq GitHub repo <https://github.com/ROCm/roc-optiq/releases/tag/v0.5.0-optiq>`_ to ensure ROCm Optiq is up-to-date.
 
 Check the ROCm Optiq version
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -104,19 +104,19 @@ Once you've installed ROCm Optiq for your operating system, add the ROCm binarie
 Install on RHEL 8 / 9 / 10 and CentOS Stream 9 
 ==============================================
 
-1. Download the appropriate `.rpm` package from GitHub Releases. 
-2. Install the package: `sudo dnf install ./roc-optiq-*.rpm` 
-3. Verify the installation: `rpm -q roc-optiq` 
+1. Download the appropriate ``.rpm`` package from GitHub Releases. 
+2. Install the package: ``sudo dnf install ./roc-optiq-*.rpm`` 
+3. Verify the installation: ``rpm -q roc-optiq`` 
 
 Install on macOS
 ================
 
-1. Download `ROCm Optiq.app.zip` from `GitHub Releases <https://github.com/ROCm/roc-optiq/releases>`_ or your organization's artifact registry. 
+1. Download ``ROCm Optiq.app.zip`` from `GitHub Releases <https://github.com/ROCm/roc-optiq/releases>`_ or your organization's artifact registry. 
 2. Extract the archive and move **ROCm Optiq.app** to **Applications**. 
 3. Launch ROCm Optiq from Applications. 
 
-Settings, logs, and presets are stored at: `~/Library/Application Support/ROCm-Optiq/`.
+Settings, logs, and presets are stored at: ``~/Library/Application Support/ROCm-Optiq/``.
 
 .. note::
 
-   Settings from earlier versions stored in `~/.config/rocm-optiq/` are not migrated automatically.
+   Settings from earlier versions stored in ``~/.config/rocm-optiq/`` are not migrated automatically.

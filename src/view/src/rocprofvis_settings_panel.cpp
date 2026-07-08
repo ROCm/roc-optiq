@@ -228,6 +228,16 @@ SettingsPanel::RenderDisplayOptions()
         SetTooltipStyled("Switch between dark and light UI themes.");
     }
 
+    if(ImGui::Checkbox("Multi-node decorators",
+                       &m_usersettings.display_settings.show_node_colors))
+    {
+        m_settings_changed = true;
+    }
+    if(ImGui::IsItemHovered())
+    {
+        SetTooltipStyled("Color-code tracks and sidebar nodes by node on multi-node traces.");
+    }
+
     ImGui::Spacing();
     ImGui::TextUnformatted("Fonts");
     ImGui::Separator();

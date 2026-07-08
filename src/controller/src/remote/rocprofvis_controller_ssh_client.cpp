@@ -484,7 +484,7 @@ namespace Controller
 
         connection->SetSocket(CreateTcpConnection(connection->GetHost(), connection->GetPort()));
 
-        if (IsFutureCanceled(connection, future))
+        if (IsCancelRequested(connection, future))
         {
             return SshClient::Result::Cancelled;
         }
@@ -509,7 +509,7 @@ namespace Controller
             return SshClient::Result::SessionError;
         }
 
-        if (IsFutureCanceled(connection, future))
+        if (IsCancelRequested(connection, future))
         {
             return SshClient::Result::Cancelled;
         }
@@ -527,7 +527,7 @@ namespace Controller
             return SshClient::Result::HandshakeError;
         }
 
-        if (IsFutureCanceled(connection, future))
+        if (IsCancelRequested(connection, future))
         {
             return SshClient::Result::Cancelled;
         }
@@ -615,7 +615,7 @@ namespace Controller
             }
         }
 
-        if (IsFutureCanceled(connection, future))
+        if (IsCancelRequested(connection, future))
         {
             return SshClient::Result::Cancelled;
         }
@@ -656,7 +656,7 @@ namespace Controller
                     spdlog::info("[ssh]   default key absent: {}", p);
                     continue;
                 }
-                if (IsFutureCanceled(connection, future))
+                if (IsCancelRequested(connection, future))
                 {
                     return SshClient::Result::Cancelled;
                 }
@@ -670,7 +670,7 @@ namespace Controller
         {
             spdlog::info("[ssh] server does not advertise publickey");
         }
-        if (IsFutureCanceled(connection, future))
+        if (IsCancelRequested(connection, future))
         {
             return SshClient::Result::Cancelled;
         }
@@ -746,7 +746,7 @@ namespace Controller
             spdlog::info("[ssh] skipping password auth (server does not advertise password)");
         }
 
-        if (IsFutureCanceled(connection, future))
+        if (IsCancelRequested(connection, future))
         {
             return SshClient::Result::Cancelled;
         }
@@ -855,7 +855,7 @@ namespace Controller
 
         while (true)
         {
-            if (IsFutureCanceled(connection, future))
+            if (IsCancelRequested(connection, future))
             {
                 break;
             }
@@ -911,7 +911,7 @@ namespace Controller
 
         libssh2_channel_free(channel);
 
-        if (IsFutureCanceled(connection, future))
+        if (IsCancelRequested(connection, future))
         {
             return SshClient::Result::Cancelled;
         }
@@ -959,7 +959,7 @@ namespace Controller
         LIBSSH2_SESSION* session = connection->GetSession();
         libssh2_session_set_blocking(session, 1);
 
-        if (IsFutureCanceled(connection, future))
+        if (IsCancelRequested(connection, future))
         {
             return SshClient::Result::Cancelled;
         }
@@ -1033,7 +1033,7 @@ namespace Controller
 
         while (!libssh2_channel_eof(channel) && total_downloaded < fileinfo.st_size)
         {
-            if (IsFutureCanceled(connection, future))
+            if (IsCancelRequested(connection, future))
             {
                 break;
             }
@@ -1084,7 +1084,7 @@ namespace Controller
         libssh2_channel_wait_closed(channel);
         libssh2_channel_free(channel);
 
-        if (IsFutureCanceled(connection, future))
+        if (IsCancelRequested(connection, future))
         {
             return SshClient::Result::Cancelled;
         }
@@ -1131,7 +1131,7 @@ namespace Controller
                 connection->GetSshBridge()->SaveError(output);
                 return Result::SessionError;
             }
-            if (IsFutureCanceled(connection, future))
+            if (IsCancelRequested(connection, future))
             {
                 break;
             }
@@ -1156,7 +1156,7 @@ namespace Controller
                 libssh2_sftp_shutdown(sftp);
                 return Result::SessionError;
             }
-            if (IsFutureCanceled(connection, future))
+            if (IsCancelRequested(connection, future))
             {
                 break;
             }
@@ -1167,7 +1167,7 @@ namespace Controller
 
         while (true) {
             int rc;
-            if (IsFutureCanceled(connection, future))
+            if (IsCancelRequested(connection, future))
             {
                 break;
             }
@@ -1230,7 +1230,7 @@ namespace Controller
         }
 
 
-        if (IsFutureCanceled(connection, future))
+        if (IsCancelRequested(connection, future))
         {
             return SshClient::Result::Cancelled;
         }
@@ -1252,7 +1252,7 @@ namespace Controller
         libssh2_keepalive_config(connection->GetSession(), 1, intervalSeconds);
     }
 
-    bool SshClient::IsFutureCanceled(SshConnection * connection, Future* future)
+    bool SshClient::IsCancelRequested(SshConnection * connection, Future* future)
     {
         // Cancellation can arrive on two independent channels: the bound future
         // (rocprofvis_*_cancel) or the bridge (SshBridge::Cancel, used by the

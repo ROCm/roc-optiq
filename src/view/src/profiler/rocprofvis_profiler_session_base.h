@@ -8,6 +8,7 @@
 #include "rocprofvis_profiler.h"
 
 #include <cstdint>
+#include <functional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -86,6 +87,14 @@ protected:
     uint64_t ReadProfilerState() const;
 
     static bool IsTerminalProfilerState(uint64_t state);
+
+    // Optional teardown for a subclass-owned resource that MUST outlive an
+    // in-flight profiler worker (e.g. a borrowed SSH connection the remote exec
+    // streams over). FreeProfilerObjects runs it AFTER the profiler is freed
+    // (i.e. after the worker is joined), in both the immediate and deferred
+    // paths. Must be copyable (stored in std::function): capture owned resources
+    // via shared_ptr, not unique_ptr.
+    std::function<void()>           m_extra_teardown;
 
     rocprofvis_profiler_config_t*   m_config;
     rocprofvis_profiler_t*          m_profiler;

@@ -921,6 +921,17 @@ void ProfilerProcessController::ExecuteJob(ProfilerProcessController* controller
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
 
+    // The bound future resolves when this job returns. It must not resolve until
+    // the executor's worker has actually stopped: callers key resource teardown
+    // (freeing the profiler - which joins the worker - and the borrowed SSH
+    // connection) on the future. Cancel() only signals the worker; wait here for
+    // it to unwind so "future resolved" implies "worker done".
+    while (controller->m_executor && controller->m_executor->IsRunning())
+    {
+        controller->GetOutput();
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    }
+
     controller->GetOutput();
     spdlog::info("Profiler monitor job finished (state={})", static_cast<int>(controller->m_state.load()));
 }

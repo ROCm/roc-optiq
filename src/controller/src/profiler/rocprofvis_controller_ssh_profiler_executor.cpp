@@ -74,7 +74,7 @@ bool SshProfilerExecutor::Start(const ProfilerConfig& config)
     {
         // ExecuteCommand streams stdout/stderr into the connection's bridge and
         // blocks until the remote channel closes or a cancel is requested. The
-        // exec loop polls SshClient::IsFutureCanceled(), which observes both the
+        // exec loop polls SshClient::IsCancelRequested(), which observes both the
         // bound future and the bridge (Cancel() below routes through the bridge).
         // On a clean run it writes the remote process's exit status into
         // `remote_exit`.
@@ -161,14 +161,17 @@ bool SshProfilerExecutor::Cancel()
         return false;
     }
 
-    // Signal the exec loop (via the bridge) to stop; the worker thread will
-    // unwind and clear m_is_running.
+    // Signal the exec loop (via the bridge) to stop. Do NOT clear m_is_running
+    // here: the worker thread is still inside ExecuteCommand and owns that flag.
+    // Reporting "not running" before the worker has actually unwound would let
+    // the monitor/future report completion while the worker is still using the
+    // borrowed connection, which races teardown (freeing the connection out from
+    // under the worker) and deadlocks the join in the destructor. The worker
+    // clears m_is_running when it truly exits.
     if (SshBridge* bridge = m_connection->GetSshBridge())
     {
         bridge->Cancel();
     }
-    m_is_running = false;
-    m_exit_code  = 1;
     return true;
 }
 

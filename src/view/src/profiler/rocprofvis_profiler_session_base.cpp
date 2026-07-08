@@ -215,32 +215,48 @@ ProfilerSessionBase::FreeProfilerObjects()
 
     if(m_profiler == nullptr && m_future == nullptr && m_config == nullptr)
     {
+        // No profiler objects, but a subclass may still have handed us an extra
+        // teardown (e.g. an SSH connection); run it once.
+        if(m_extra_teardown)
+        {
+            m_extra_teardown();
+            m_extra_teardown = nullptr;
+        }
         return;
     }
 
     // If the job is still running, the worker is touching the profiler handle.
     // Transfer the resources to the monitor for deferred, non-blocking teardown
     // (cancel signalled, freed once the future resolves). Capture BY VALUE so
-    // the closures remain valid after this session is destroyed.
+    // the closures remain valid after this session is destroyed. The extra
+    // teardown (subclass-owned resource, e.g. the borrowed SSH connection) runs
+    // LAST, after the profiler is freed and its worker joined, so the resource
+    // outlives the worker.
     if(m_future != nullptr &&
        rocprofvis_controller_future_wait(m_future, 0) == kRocProfVisResultTimeout)
     {
         rocprofvis_profiler_config_t*   config   = m_config;
         rocprofvis_profiler_t*          profiler = m_profiler;
         rocprofvis_controller_future_t* future   = m_future;
+        std::function<void()>           extra    = std::move(m_extra_teardown);
         AppMonitor::GetInstance()->AddTeardownOp(
             MonitorOperationType::ProfilerSession,
             future,
             [profiler]() { rocprofvis_profiler_cancel(profiler); },
-            [config, profiler, future]()
+            [config, profiler, future, extra]()
             {
                 rocprofvis_controller_future_free(future);
                 rocprofvis_profiler_free(profiler);
                 rocprofvis_profiler_config_free(config);
+                if(extra)
+                {
+                    extra();
+                }
             });
-        m_future   = nullptr;
-        m_profiler = nullptr;
-        m_config   = nullptr;
+        m_future         = nullptr;
+        m_profiler       = nullptr;
+        m_config         = nullptr;
+        m_extra_teardown = nullptr;
         return;
     }
 
@@ -259,6 +275,13 @@ ProfilerSessionBase::FreeProfilerObjects()
     {
         rocprofvis_profiler_config_free(m_config);
         m_config = nullptr;
+    }
+    // Free the subclass-owned resource last, after the profiler (and its worker)
+    // is gone.
+    if(m_extra_teardown)
+    {
+        m_extra_teardown();
+        m_extra_teardown = nullptr;
     }
 }
 

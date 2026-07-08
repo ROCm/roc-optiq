@@ -72,9 +72,23 @@ RemoteProfilerSession::~RemoteProfilerSession()
         EventManager::GetInstance()->Unsubscribe(
             static_cast<int>(RocEvents::kProfilerStatusChanged), m_profiler_status_token);
     }
+
+    // The remote profiler streams over the SshSession's connection on a worker
+    // thread that may still be running. Hand the SshSession into the profiler
+    // teardown so it (and its connection) is destroyed only AFTER the profiler
+    // future resolves and the worker is joined - otherwise freeing the
+    // connection here would race the worker and deadlock the join. shared_ptr
+    // because the teardown is stored in a std::function. If there is no session
+    // or no in-flight profiler, FreeProfilerObjects runs this immediately.
+    if(m_session)
+    {
+        std::shared_ptr<SshSession> session = std::move(m_session);
+        m_extra_teardown = [session]() mutable { session.reset(); };
+    }
     Close();
-    // m_session's destructor hands any in-flight SSH op (and the connection) to
-    // the AppMonitor for deferred, non-blocking teardown.
+    // m_session is now empty (moved into the teardown above); on any in-flight
+    // SSH op, ~SshSession still hands the connection to the AppMonitor for
+    // deferred, non-blocking teardown when the shared_ptr is finally released.
 }
 
 bool

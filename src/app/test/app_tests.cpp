@@ -89,7 +89,7 @@ void RegisterAppTests(ImGuiTestEngine* e)
 {
     ImGuiTest* t = nullptr;
 
-    t = IM_REGISTER_TEST(e, "app", "file_menu_exists");
+    t = IM_REGISTER_TEST(e, "app", "common_file_menu_exists");
     t->TestFunc = [](ImGuiTestContext* ctx)
     {
         ctx->SetRef("Main Window");
@@ -97,7 +97,7 @@ void RegisterAppTests(ImGuiTestEngine* e)
     
     };
 
-    t = IM_REGISTER_TEST(e, "app", "file_menu_opens");
+    t = IM_REGISTER_TEST(e, "app", "common_file_menu_opens");
     t->TestFunc = [](ImGuiTestContext* ctx)
     {
         ctx->SetRef("Main Window");
@@ -106,7 +106,7 @@ void RegisterAppTests(ImGuiTestEngine* e)
         // Close the menu so its popup doesn't intercept clicks in later tests.
         ctx->PopupCloseAll();
     };
-    t = IM_REGISTER_TEST(e, "app", "events_view_populates");
+    t = IM_REGISTER_TEST(e, "app", "sys_events_view_populates");
     t->TestFunc = [](ImGuiTestContext* ctx)
     {
         AppWindow* app = AppWindow::GetInstance();
@@ -159,7 +159,7 @@ void RegisterAppTests(ImGuiTestEngine* e)
         IM_CHECK(EventsViewTestPeer{*ev}.EventItemCount() > 0);
     };
 
-    t = IM_REGISTER_TEST(e, "app", "timeline_zoom_hotkey");
+    t = IM_REGISTER_TEST(e, "app", "sys_timeline_zoom_hotkey");
     t->TestFunc = [](ImGuiTestContext* ctx)
     {
         AppWindow* app = AppWindow::GetInstance();
@@ -211,7 +211,7 @@ void RegisterAppTests(ImGuiTestEngine* e)
         IM_CHECK(zoom_out < zoom_in);
     };
 
-    t = IM_REGISTER_TEST(e, "app", "bookmark_save_restore_hotkey");
+    t = IM_REGISTER_TEST(e, "app", "sys_bookmark_save_restore_hotkey");
     t->TestFunc = [](ImGuiTestContext* ctx)
     {
         AppWindow* app = AppWindow::GetInstance();
@@ -280,7 +280,7 @@ void RegisterAppTests(ImGuiTestEngine* e)
         IM_CHECK(fabs(restored.v_max_x - saved.v_max_x) < tol);
     };
 
-    t = IM_REGISTER_TEST(e, "app", "event_multi_select");
+    t = IM_REGISTER_TEST(e, "app", "sys_event_multi_select");
     t->TestFunc = [](ImGuiTestContext* ctx)
     {
         AppWindow* app = AppWindow::GetInstance();
@@ -345,7 +345,7 @@ void RegisterAppTests(ImGuiTestEngine* e)
         ctx->Yield(2);
     };
 
-    t = IM_REGISTER_TEST(e, "app", "minimap_toggle_drives_click");
+    t = IM_REGISTER_TEST(e, "app", "sys_minimap_toggle_drives_click");
     t->TestFunc = [](ImGuiTestContext* ctx)
     {
         AppWindow* app = AppWindow::GetInstance();
@@ -464,7 +464,7 @@ void RegisterAppTests(ImGuiTestEngine* e)
         IM_CHECK(sel->GetSelectedKernel() != ComputeSelection::INVALID_SELECTION_ID);
     };
 
-    t = IM_REGISTER_TEST(e, "app", "timeline_pan_hotkey");
+    t = IM_REGISTER_TEST(e, "app", "sys_timeline_pan_hotkey");
     t->TestFunc = [](ImGuiTestContext* ctx)
     {
         AppWindow* app = AppWindow::GetInstance();
@@ -525,7 +525,7 @@ void RegisterAppTests(ImGuiTestEngine* e)
         IM_CHECK(v_min_left < v_min_right);
     };
 
-    t = IM_REGISTER_TEST(e, "app", "timeline_vscroll");
+    t = IM_REGISTER_TEST(e, "app", "sys_timeline_vscroll");
     t->TestFunc = [](ImGuiTestContext* ctx)
     {
         AppWindow* app = AppWindow::GetInstance();
@@ -580,7 +580,7 @@ void RegisterAppTests(ImGuiTestEngine* e)
         IM_CHECK(y_up < y_down);
     };
 
-    t = IM_REGISTER_TEST(e, "app", "reset_view_button");
+    t = IM_REGISTER_TEST(e, "app", "sys_reset_view_button");
     t->TestFunc = [](ImGuiTestContext* ctx)
     {
         AppWindow* app = AppWindow::GetInstance();
@@ -633,7 +633,7 @@ void RegisterAppTests(ImGuiTestEngine* e)
         IM_CHECK(y_after == 0.0);
     };
 
-    t = IM_REGISTER_TEST(e, "app", "timeline_compact_mode_toggle");
+    t = IM_REGISTER_TEST(e, "app", "sys_timeline_compact_mode_toggle");
     t->TestFunc = [](ImGuiTestContext* ctx)
     {
         AppWindow* app = AppWindow::GetInstance();
@@ -681,7 +681,7 @@ void RegisterAppTests(ImGuiTestEngine* e)
         IM_CHECK(back_height == orig_height);
     };
 
-    t = IM_REGISTER_TEST(e, "app", "timeline_mark_time_range");
+    t = IM_REGISTER_TEST(e, "app", "sys_timeline_mark_time_range");
     t->TestFunc = [](ImGuiTestContext* ctx)
     {
         AppWindow* app = AppWindow::GetInstance();
@@ -740,7 +740,7 @@ void RegisterAppTests(ImGuiTestEngine* e)
         ctx->Yield(2);
     };
 
-    t = IM_REGISTER_TEST(e, "app", "timeline_event_color_mode");
+    t = IM_REGISTER_TEST(e, "app", "sys_timeline_event_color_mode");
     t->TestFunc = [](ImGuiTestContext* ctx)
     {
         AppWindow* app = AppWindow::GetInstance();
@@ -786,7 +786,7 @@ void RegisterAppTests(ImGuiTestEngine* e)
         IM_CHECK(restored == orig);
     };
 
-    t = IM_REGISTER_TEST(e, "app", "settings_theme_toggle");
+    t = IM_REGISTER_TEST(e, "app", "common_settings_theme_toggle");
     t->TestFunc = [](ImGuiTestContext* ctx)
     {
         SettingsManager& sm = SettingsManager::GetInstance();
@@ -822,7 +822,7 @@ void RegisterAppTests(ImGuiTestEngine* e)
         IM_CHECK(back_bg == orig_bg);
     };
 
-    t = IM_REGISTER_TEST(e, "app", "settings_time_unit_change");
+    t = IM_REGISTER_TEST(e, "app", "common_settings_time_unit_change");
     t->TestFunc = [](ImGuiTestContext* ctx)
     {
         SettingsManager& sm = SettingsManager::GetInstance();
@@ -852,7 +852,7 @@ void RegisterAppTests(ImGuiTestEngine* e)
         IM_CHECK(back_fmt == orig);
     };
 
-    t = IM_REGISTER_TEST(e, "app", "histogram_normalization_toggle");
+    t = IM_REGISTER_TEST(e, "app", "sys_histogram_normalization_toggle");
     t->TestFunc = [](ImGuiTestContext* ctx)
     {
         AppWindow* app = AppWindow::GetInstance();
@@ -942,7 +942,7 @@ void RegisterAppTests(ImGuiTestEngine* e)
         IM_CHECK(selected != auto_kernel);
     };
 
-    t = IM_REGISTER_TEST(e, "app", "event_search_finds_results");
+    t = IM_REGISTER_TEST(e, "app", "sys_event_search_finds_results");
     t->TestFunc = [](ImGuiTestContext* ctx)
     {
         AppWindow* app = AppWindow::GetInstance();
@@ -986,7 +986,7 @@ void RegisterAppTests(ImGuiTestEngine* e)
         ctx->Yield(2);
     };
 
-    t = IM_REGISTER_TEST(e, "app", "summary_pie_kernel_select");
+    t = IM_REGISTER_TEST(e, "app", "sys_summary_pie_kernel_select");
     t->TestFunc = [](ImGuiTestContext* ctx)
     {
         AppWindow* app = AppWindow::GetInstance();

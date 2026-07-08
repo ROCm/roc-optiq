@@ -29,6 +29,8 @@ SshTestDialog::SshTestDialog(AppWindow* app_window)
 , m_show_progress_popup(false)
 , m_last_progress()
 , m_show_remote_filesystem_popup(false)
+, m_last_directory_state()
+, m_selected_file_index(0)
 {
     m_connection_store.Load();
     if(!m_connection_store.Empty())
@@ -402,7 +404,7 @@ void SshTestDialog::RenderRemoteFilePopup()
                         }
                         else
                         {
-                            m_orchestrator.release();
+                            m_orchestrator.reset();
                             m_uri->UseRemoteBrowsingPathString();
                             ImGui::CloseCurrentPopup();
                             m_show_remote_filesystem_popup = false;
@@ -465,7 +467,7 @@ void SshTestDialog::RenderRemoteFilePopup()
                     }
                     else
                     {
-                        m_orchestrator.release();
+                        m_orchestrator.reset();
                         m_uri->UseRemoteBrowsingPathString();
                         ImGui::CloseCurrentPopup();
                         m_show_remote_filesystem_popup = false;

@@ -184,6 +184,10 @@ private:
     bool m_disable_app_interaction;
     bool m_shutdown_requested;
     bool m_exit_notification_sent;
+    // Set when BeginAppShutdown() is first called. Bounds how long the exit gate
+    // waits for AppMonitor operations to drain so a stuck future cannot pin the
+    // app on the shutdown screen forever.
+    std::chrono::steady_clock::time_point m_shutdown_start;
 
     rocprofvis_view_file_dialog_preference_t m_file_dialog_preference;
 

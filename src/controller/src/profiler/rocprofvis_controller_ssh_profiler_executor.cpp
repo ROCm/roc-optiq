@@ -73,9 +73,11 @@ bool SshProfilerExecutor::Start(const ProfilerConfig& config)
     m_worker = std::thread([this, connection, future, remote_cmd]()
     {
         // ExecuteCommand streams stdout/stderr into the connection's bridge and
-        // blocks until the remote channel closes (or the bound future is
-        // cancelled - the exec loop polls future->IsCancelled()). On a clean
-        // run it writes the remote process's exit status into `remote_exit`.
+        // blocks until the remote channel closes or a cancel is requested. The
+        // exec loop polls SshClient::IsFutureCanceled(), which observes both the
+        // bound future and the bridge (Cancel() below routes through the bridge).
+        // On a clean run it writes the remote process's exit status into
+        // `remote_exit`.
         int               remote_exit = -1;
         SshClient::Result result =
             SshClient::ExecuteCommand(connection, remote_cmd, future, &remote_exit);

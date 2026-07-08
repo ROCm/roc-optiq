@@ -369,6 +369,12 @@ void SshBridge::Cancel()
     m_worker_cv.notify_all();
 }
 
+bool SshBridge::IsCancelled()
+{
+    std::lock_guard<std::mutex> lk(m_mutex);
+    return m_cancelled;
+}
+
 void SshBridge::Reset()
 {
     std::lock_guard<std::mutex> lk(m_mutex);

@@ -14,6 +14,13 @@ namespace RocProfVis
 namespace View
 {
 
+    size_t SshSession::s_active_session_count = 0;
+
+    size_t SshSession::ActiveSessionCount()
+    {
+        return s_active_session_count;
+    }
+
     SshSession::SshSession(std::shared_ptr<RemoteUri> uri)
     : m_uri(std::move(uri))
     , m_connection(nullptr)
@@ -21,6 +28,7 @@ namespace View
     , m_active_operation_id(0)
     , m_last_result(kRocProfVisResultSuccess)
     {
+        ++s_active_session_count;
         if (m_uri)
         {
             AllocateConnection(m_uri->GetRemoteHostString().c_str(), m_uri->GetRemotePortInt());
@@ -29,6 +37,10 @@ namespace View
     }
 
     SshSession::~SshSession() {
+        if (s_active_session_count > 0)
+        {
+            --s_active_session_count;
+        }
         // If a phase is still in flight, the worker may still be using the
         // connection. Hand the connection-free to the monitor so it runs only
         // after the bound future resolves (deferred, non-blocking). The closure
@@ -307,13 +319,16 @@ namespace View
             result = kRocProfVisResultPending;
             uint64_t remote_status;
             rocprofvis_result_t remote_result = rocprofvis_controller_get_uint64(m_connection, kRPVControllerRemoteStatus, 0, &remote_status);
-            if (remote_status == kRPVControllerSshCompleted)
+            if(remote_result == kRocProfVisResultSuccess)
             {
-                result = kRocProfVisResultSuccess;
-            }
-            else if (remote_status == kRPVControllerSshFailed)
-            {
-                result = kRocProfVisResultFailedSshCommunication;
+                if (remote_status == kRPVControllerSshCompleted)
+                {
+                    result = kRocProfVisResultSuccess;
+                }
+                else if (remote_status == kRPVControllerSshFailed)
+                {
+                    result = kRocProfVisResultFailedSshCommunication;
+                }
             }
         }
         return result;
@@ -371,7 +386,6 @@ namespace View
                 rocprofvis_controller_remote_cancel_prompt(m_connection);
                 return kRocProfVisResultFailedSshCommunication;
             };
-        rocprofvis_result_t result = kRocProfVisResultUnknownError;
         uint64_t remote_status;
         rocprofvis_result_t remote_result = rocprofvis_controller_get_uint64(m_connection, kRPVControllerRemoteStatus, 0, &remote_status);
         if (kRocProfVisResultSuccess == remote_result)

@@ -1254,8 +1254,11 @@ namespace Controller
 
     bool SshClient::IsFutureCanceled(SshConnection * connection, Future* future)
     {
-
-        if (future->IsCancelled())
+        // Cancellation can arrive on two independent channels: the bound future
+        // (rocprofvis_*_cancel) or the bridge (SshBridge::Cancel, used by the
+        // profiler executor and the auth-prompt path). Honor both so a cancel
+        // request always breaks the transport loop regardless of entry point.
+        if (future->IsCancelled() || connection->GetSshBridge()->IsCancelled())
         {
             std::string err = "Cancelled by user";
             spdlog::error("[ssh] {}", err);

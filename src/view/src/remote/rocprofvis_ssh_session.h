@@ -43,6 +43,12 @@ namespace View
         SshSession(std::shared_ptr<RemoteUri> uri);
         ~SshSession();
 
+        // Number of live SshSession objects (each owns one connection, which may
+        // sit idle between phases). Lets always-compiled UI surface open remote
+        // connections without the generic AppMonitor knowing about SSH. Main
+        // thread only (sessions are created/destroyed by UI code).
+        static size_t ActiveSessionCount();
+
         // Phase starters. Return the monitor operation id, or 0 on failure.
         uint64_t StartConnect();
         uint64_t StartAuthenticate();
@@ -127,6 +133,8 @@ namespace View
         std::string         m_pending_command;
         std::string         m_pending_remote_path;
         std::string         m_pending_local_path;
+
+        static size_t       s_active_session_count;
     };
 
 

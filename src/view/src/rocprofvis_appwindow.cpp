@@ -33,6 +33,7 @@
 #endif
 #ifdef ROCPROFVIS_ENABLE_REMOTE
 #include "remote/rocprofvis_ssh_auth_modal.h"
+#include "remote/rocprofvis_ssh_session.h"
 #endif
 #include "welcome/rocprofvis_welcome_page.h"
 #include <algorithm>
@@ -58,6 +59,12 @@ const std::vector<std::string> ALL_EXTENSIONS     = { "db", "rpd", "yaml", "rpv"
 
 constexpr const char* CLEANUP_MESSAGE = "Waiting for requests to finish cleanup...";
 constexpr const char* CLOSING_MESSAGE = "Closing...";
+
+// Upper bound on how long the shutdown exit gate waits for AppMonitor
+// operations to drain before exiting anyway. AppMonitor's destructor then runs
+// a final bounded, cancelling drain as the backstop so no worker is left
+// holding freed resources.
+constexpr auto MONITOR_SHUTDOWN_GRACE_PERIOD = std::chrono::seconds(5);
 
 // For testing DataProvider
 void
@@ -456,6 +463,7 @@ AppWindow::BeginAppShutdown()
     }
 
     m_shutdown_requested      = true;
+    m_shutdown_start          = std::chrono::steady_clock::now();
     m_disable_app_interaction = true;
 
     NotificationManager::GetInstance().ShowPersistent(
@@ -593,10 +601,25 @@ void
 AppWindow::RequestExitIfProviderCleanupsComplete()
 {
     if(!m_shutdown_requested || m_exit_notification_sent ||
-       !m_provider_cleanup_jobs.empty() ||
-       AppMonitor::GetInstance()->HasPendingOperations())
+       !m_provider_cleanup_jobs.empty())
     {
         return;
+    }
+
+    if(AppMonitor::GetInstance()->HasPendingOperations())
+    {
+        // The monitor drains non-blocking each shutdown frame. Bound the wait so
+        // a stuck / never-resolving future cannot pin the app on the shutdown
+        // screen forever. AppMonitor's destructor runs a final bounded,
+        // cancelling drain (kShutdownDrainTimeoutSeconds) as the backstop.
+        if(std::chrono::steady_clock::now() - m_shutdown_start <
+           MONITOR_SHUTDOWN_GRACE_PERIOD)
+        {
+            return;
+        }
+        spdlog::warn("AppWindow: {} monitored operation(s) still pending after shutdown "
+                     "grace period; exiting anyway",
+                     AppMonitor::GetInstance()->GetActiveOperationCount());
     }
 
     m_exit_notification_sent = true;
@@ -812,7 +835,10 @@ AppWindow::RenderShutdownState()
                                   ImGuiWindowFlags_NoMove |
                                   ImGuiWindowFlags_NoCollapse))
     {
-        if(m_provider_cleanup_jobs.empty())
+        const size_t cleanup_jobs = m_provider_cleanup_jobs.size();
+        const size_t monitor_ops  = AppMonitor::GetInstance()->GetActiveOperationCount();
+
+        if(cleanup_jobs == 0 && monitor_ops == 0)
         {
             CenterNextTextItem(CLOSING_MESSAGE);
             ImGui::TextUnformatted(CLOSING_MESSAGE);
@@ -826,11 +852,20 @@ AppWindow::RenderShutdownState()
             RenderLoadingIndicator(SettingsManager::GetInstance().GetColor(Colors::kTextMain),
                                    nullptr, kCenterHorizontal);
             ImGui::Spacing();
-            const std::string remaining_message =
-                "Cleanup jobs remaining: " +
-                std::to_string(m_provider_cleanup_jobs.size());
-            CenterNextTextItem(remaining_message.c_str());
-            ImGui::TextUnformatted(remaining_message.c_str());
+            if(cleanup_jobs > 0)
+            {
+                const std::string remaining_message =
+                    "Cleanup jobs remaining: " + std::to_string(cleanup_jobs);
+                CenterNextTextItem(remaining_message.c_str());
+                ImGui::TextUnformatted(remaining_message.c_str());
+            }
+            if(monitor_ops > 0)
+            {
+                const std::string ops_message =
+                    "Background operations remaining: " + std::to_string(monitor_ops);
+                CenterNextTextItem(ops_message.c_str());
+                ImGui::TextUnformatted(ops_message.c_str());
+            }
         }
         ImGui::EndPopup();
     }
@@ -1634,9 +1669,10 @@ AppWindow::HandleTestRemoteSSH()
 void
 AppWindow::UpdateStatusBar()
 {
-    // Update status message every N frames
-    const int UPDATE_STEP = 4;
-    if(ImGui::GetFrameCount() % UPDATE_STEP == 0)
+    // Update status message every N frames to avoid rebuilding the string each
+    // frame while background work is in flight.
+    constexpr int STATUS_BAR_UPDATE_FRAME_STEP = 4;
+    if(ImGui::GetFrameCount() % STATUS_BAR_UPDATE_FRAME_STEP == 0)
     {
         // Get number of pending requests from data provider
         size_t pending_requests = 0;
@@ -1655,28 +1691,71 @@ AppWindow::UpdateStatusBar()
         // also check if there are any cleanup jobs pending
         size_t clean_up_jobs = m_provider_cleanup_jobs.size();
         // background operations tracked by the monitor (SSH, profiler, etc.)
-        size_t monitor_ops = AppMonitor::GetInstance()->GetActiveOperationCount();
-        if(pending_requests > 0 || clean_up_jobs > 0 || monitor_ops > 0)
+        AppMonitor* monitor     = AppMonitor::GetInstance();
+        size_t      monitor_ops = monitor->GetActiveOperationCount();
+
+        // Live remote/SSH sessions (connections), including idle ones between
+        // operations. Only meaningful when remote support is built.
+        size_t remote_sessions = 0;
+#ifdef ROCPROFVIS_ENABLE_REMOTE
+        remote_sessions = SshSession::ActiveSessionCount();
+#endif
+
+        // In-flight work drives the busy spinner; an idle-but-connected SSH
+        // session is surfaced without the spinner so the user knows a connection
+        // is open without implying activity.
+        bool has_active_work = (pending_requests > 0 || clean_up_jobs > 0 || monitor_ops > 0);
+
+        std::vector<std::string> segments;
+        if(pending_requests > 0)
         {
-            if(pending_requests > 0)
+            segments.push_back("Working: " + std::to_string(pending_requests) +
+                               " pending request(s)");
+        }
+        if(clean_up_jobs > 0)
+        {
+            segments.push_back("Cleaning up: " + std::to_string(clean_up_jobs) +
+                               " pending job(s)");
+        }
+        if(monitor_ops > 0)
+        {
+            // Break the generic count down by domain (SSH / profiler) so the
+            // user can tell what is keeping the app busy. The domain grouping
+            // lives here (the caller), not in the generic AppMonitor.
+            size_t remote_ops =
+                monitor->GetActiveOperationCount(MonitorOperationType::SshConnection) +
+                monitor->GetActiveOperationCount(MonitorOperationType::SshAuthentication) +
+                monitor->GetActiveOperationCount(MonitorOperationType::FileTransfer) +
+                monitor->GetActiveOperationCount(MonitorOperationType::DirectoryListing);
+            size_t profiler_ops =
+                monitor->GetActiveOperationCount(MonitorOperationType::ProfilerSession);
+            std::string detail;
+            if(remote_ops > 0)
             {
-                m_status_message = "Working: " + std::to_string(pending_requests) +
-                                   " pending request(s)";
+                detail = std::to_string(remote_ops) + " SSH";
             }
-            if(clean_up_jobs > 0)
+            if(profiler_ops > 0)
             {
-                m_status_message = (pending_requests > 0 ? m_status_message + " | " : "") +
-                                    ("Cleaning up: " + std::to_string(clean_up_jobs) +
-                                     " pending job(s)");
+                detail += (detail.empty() ? "" : ", ") +
+                          std::to_string(profiler_ops) + " profiler";
             }
-            if(monitor_ops > 0)
+            segments.push_back("Background: " + std::to_string(monitor_ops) +
+                               " operation(s)" +
+                               (detail.empty() ? "" : " (" + detail + ")"));
+        }
+        if(remote_sessions > 0)
+        {
+            segments.push_back("SSH: " + std::to_string(remote_sessions) + " session(s)");
+        }
+
+        if(!segments.empty())
+        {
+            m_status_message.clear();
+            for(size_t i = 0; i < segments.size(); ++i)
             {
-                bool has_prefix = (pending_requests > 0 || clean_up_jobs > 0);
-                m_status_message = (has_prefix ? m_status_message + " | " : "") +
-                                   ("Background: " + std::to_string(monitor_ops) +
-                                    " operation(s)");
+                m_status_message += (i > 0 ? " | " : "") + segments[i];
             }
-            m_status_show_busy_indicator = true;
+            m_status_show_busy_indicator = has_active_work;
         }
         else
         {

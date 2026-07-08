@@ -66,6 +66,10 @@ public:
     void SubmitPromptResponses(std::vector<std::string> responses);
     void SubmitHostKeyDecision(HostKeyDecision decision);
     void Cancel();
+    // True once Cancel() has been requested (until Reset()). Lets the SSH
+    // transport loops abort promptly even when the bound future itself was not
+    // cancelled (e.g. cancel routed only through the bridge).
+    bool IsCancelled();
     void Reset();
     void Clear();
 

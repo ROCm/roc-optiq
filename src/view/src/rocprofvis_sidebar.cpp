@@ -20,8 +20,27 @@ constexpr ImGuiTreeNodeFlags HEADER_FLAGS = ImGuiTreeNodeFlags_Framed |
                                             ImGuiTreeNodeFlags_DefaultOpen |
                                             ImGuiTreeNodeFlags_SpanLabelWidth;
 constexpr float TREE_LINE_W = 1.5f;
-// Node swatch radius as a fraction of the text line height.
-constexpr float NODE_SWATCH_RADIUS_SCALE = 0.3f;
+
+// Recolors a framed tree node's collapse arrow, matching ImGui::RenderArrow's
+// geometry so it overlaps the default arrow exactly.
+static void
+DrawTreeArrow(ImDrawList* draw_list, float cx, float cy, float font_size, bool open,
+              ImU32 col)
+{
+    const float r = font_size * 0.40f;
+    if(open)  // pointing down
+    {
+        draw_list->AddTriangleFilled(ImVec2(cx, cy + 0.75f * r),
+                                     ImVec2(cx - 0.866f * r, cy - 0.75f * r),
+                                     ImVec2(cx + 0.866f * r, cy - 0.75f * r), col);
+    }
+    else  // pointing right
+    {
+        draw_list->AddTriangleFilled(ImVec2(cx + 0.75f * r, cy),
+                                     ImVec2(cx - 0.75f * r, cy + 0.866f * r),
+                                     ImVec2(cx - 0.75f * r, cy - 0.866f * r), col);
+    }
+}
 
 class TreeConnector
 {
@@ -369,41 +388,24 @@ SideBar::RenderBranchNode(const TreeNode& node, const TreeNode* state_node,
         ImGui::SameLine();
     }
 
-    const bool draw_swatch = node.show_color_swatch && m_settings.ShowNodeColors() &&
+    const bool color_arrow = node.show_color_swatch && m_settings.ShowNodeColors() &&
                              !m_settings.GetColorWheel().empty();
-
-    // Constant id so collapsed state survives the decorator toggle.
-    const char* const node_id = node.show_color_swatch ? "###node" : "";
 
     bool open = true;
     if(node.collapsable)
     {
-        if(draw_swatch)
-        {
-            const ImGuiTreeNodeFlags flags =
-                (HEADER_FLAGS & ~ImGuiTreeNodeFlags_SpanLabelWidth) |
-                ImGuiTreeNodeFlags_SpanAvailWidth;
+        const ImVec2 node_pos = ImGui::GetCursorScreenPos();
+        open                  = ImGui::TreeNodeEx(node.label.c_str(), HEADER_FLAGS);
 
-            const ImVec2 node_pos = ImGui::GetCursorScreenPos();
-            open                  = ImGui::TreeNodeEx(node_id, flags);
-
-            const float               radius = ImGui::GetTextLineHeight() *
-                                               NODE_SWATCH_RADIUS_SCALE;
-            const float               label_x = node_pos.x + ImGui::GetTreeNodeToLabelSpacing();
-            const std::vector<ImU32>& wheel   = m_settings.GetColorWheel();
-            ImDrawList*               draw    = ImGui::GetWindowDrawList();
-            draw->AddCircleFilled(
-                ImVec2(label_x + radius, node_pos.y + ImGui::GetFrameHeight() * 0.5f),
-                radius, wheel[node.color_index % wheel.size()]);
-            draw->AddText(
-                ImVec2(label_x + radius * 2.0f + ImGui::GetStyle().ItemInnerSpacing.x,
-                       node_pos.y +
-                           (ImGui::GetFrameHeight() - ImGui::GetTextLineHeight()) * 0.5f),
-                ImGui::GetColorU32(ImGuiCol_Text), node.label.c_str());
-        }
-        else
+        if(color_arrow)
         {
-            open = ImGui::TreeNodeEx((node.label + node_id).c_str(), HEADER_FLAGS);
+            const std::vector<ImU32>& wheel     = m_settings.GetColorWheel();
+            const float               font_size = ImGui::GetFontSize();
+            DrawTreeArrow(
+                ImGui::GetWindowDrawList(),
+                node_pos.x + ImGui::GetStyle().FramePadding.x + font_size * 0.5f,
+                (ImGui::GetItemRectMin().y + ImGui::GetItemRectMax().y) * 0.5f, font_size,
+                open, wheel[node.color_index % wheel.size()]);
         }
     }
 

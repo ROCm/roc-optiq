@@ -12,12 +12,12 @@ View ROCm Compute Profiler analysis data in ROCm Optiq
 .. |gear| image:: ../images/gear.png
 
 ROCm Optiq provides intuitive, interactive profiling analysis for compute workloads by moving from a high-level performance summary to detailed kernel- and metric-level analysis. 
-ROCm Optiq provides intuitive, interactive profiling and analysis for compute workloads, moving from high-level performance summaries to detailed kernel- and metric-level analysis. 
 It enables rapid identification of performance hotspots and interactive exploration of kernel-level metrics for a profiled workload.
 
 .. note::
 
-   See the `ROCm Compute Profiler documentation <https://rocm.docs.amd.com/projects/rocprofiler-compute/en/latest/index.html>`_ for more information.
+   - ROCm Optiq supports multi-node traces and multi-database YAML configurations. 
+   - See the `ROCm Compute Profiler documentation <https://rocm.docs.amd.com/projects/rocprofiler-compute/en/latest/index.html>`_ for more information.
 
 Open a ROCm Compute Profiler database file
 ==========================================
@@ -37,7 +37,7 @@ To generate profiling data in a compatible format, run the CLI analysis with the
 
   rocprof-compute analyze --output-name your-datafile-name --output-format db -p </path/to/workload>
 
-When you open a ROCm Compute Profiler analysis database file, you can view its data populated in :ref:`analysis-summary`, :ref:`kernel-details`, :ref:`analysis-table`, and :ref:`analysis-workload`.
+When you open a ROCm Compute Profiler analysis database file, you can view its data populated in :ref:`analysis-summary`, :ref:`kernel-details`, :ref:`analysis-table`, :ref:`analysis-workload`, and :ref:`baseline-comparison`.
 
 .. _analysis-summary:
 
@@ -80,7 +80,7 @@ The bar chart displays per-kernel metrics including the number of invocations, a
    :width: 800
    :align: center
 
-Selected kernels are highlighted in white in both charts.  
+Selected kernels are highlighted as black in the *Light* theme and white and the *Dark* theme in the bar and pie chart.
 
 Summary View -- Roofline Chart
 ------------------------------
@@ -108,7 +108,8 @@ Showing where kernels are positioned relative to these rooflines helps determine
      :width: 800
      :align: center
 
-.. _kernel-details:
+- Roofline chart now supports LDS (Local Data Share) Intensity points in addition to L1, L2, and HBM. Use the chart menu to show or hide LDS intensity markers. This requires ROCm Compute Profiler analysis database schema 1.4.0 with non-zero ``lds_cache_data`` (ROCm 7.14.0 or later). 
+
 
 Summary View -- System Speed-of-Light
 -------------------------------------
@@ -118,6 +119,8 @@ Summary View -- System Speed-of-Light
 - Metrics are aggregated across kernels to reflect overall application behavior rather than per-kernel performance. 
 - Use the **Percent-of-Peak** column to quickly identify whether execution is limited. Execution could be limited by compute, memory, or other hardware subsystems. 
 - Hover over a metric name to see a tooltip with a detailed description. 
+
+.. _kernel-details:
 
 Kernel Details
 ==============
@@ -214,7 +217,9 @@ Metrics are grouped into tabs that match compute categories, including:
 
 You can pin a metric for focused analysis by selecting the checkbox beside the metric. Pinned metric configurations can be saved to be persisted across sessions (see :ref:`Presets` for more information).
 
-You can add a metric to the Kernel Details by right-clicking that metric in Table View and selecting **Send Metric to kernel details**. 
+You can add a metric to the Kernel Details by right-clicking that metric in Table View and selecting **Send Metric to kernel details**. For example, clicking on **Avg** (or **Min** or **Max**) cell of VALU FLOPs as in the screenshot below will add VALU FLOPs Avg (or Min or Max) to the **Kernel Selection** table. 
+When you hover on a metric name, a tooltip shows the metric description. 
+
 Here's an example:
 
 .. image:: ../images/send-metric.png
@@ -269,7 +274,7 @@ For each metric, **Baseline Comparison** shows:
 - The **Baseline**, **Target**, **Difference**, and **Difference (%)** columns are color-coded to make changes easy to spot and quantify.
 - A combination of side-by-side statistics with clear delta reporting to provide a fast way to understand performance trends across workloads.
 
-You can configure a delta-threshold for comparison metrics to suppress the noise of minor deviations or filter out changes below a certain level.
+You can configure a delta-threshold for comparison metrics to suppress the noise of minor deviations or filter out changes below a certain level. You can either double-click the threshold control to enter a value or drag within the threshold box to adjust it. 
 
 .. image:: ../images/delta-threshold.png
    :width: 800

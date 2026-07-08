@@ -35,7 +35,22 @@ Traces contain event tracks and counter tracks:
 .. note::
 
    See the `ROCm Systems Profiler documentation <https://rocm.docs.amd.com/projects/rocprofiler-systems/en/latest/index.html>`_ for more information on tracing.
-  
+
+Welcome page 
+============
+
+When ROCm Optiq starts without an open project, the Welcome page displays: 
+
+- Open File—open a trace (``.db``, ``.rpd``), project (``.rpv``), or multi-database configuration (``.yaml``) 
+- Drag and drop—drop a supported file onto the window 
+- Recent files—quick access to recently opened files 
+- Documentation links—ROCm Optiq, ROCm Systems Profiler, and ROCm Compute Profiler documentation 
+
+.. note::
+
+   - Opening a file creates a new tab and activates it. 
+   - ROCm Optiq prevents opening a second tab for the same underlying trace database, including when a ``.rpv`` project references an already-open ``.db``. 
+
 .. _trace-file:
 
 Open a trace file
@@ -130,18 +145,21 @@ The shortcut keys (**WASD** and arrow keys) can also be used to zoom and pan the
 - **W** / **S**: Zoom in and out, respectively.
 - **A** or **Left Arrow** / **D** or **Right Arrow**: Pan left and right, respectively.
 - **Up Arrow** / **Down Arrow**: Scroll the track list up and down.
-
+- The upper-left region of the **Timeline View** displays a track summary showing the total number of tracks and a per-type breakdown (for example, event, counter, queue, and thread tracks).
 .. note::
 
    See :ref:`change-settings` to customize these hotkeys.
 
-Hold the mouse pointer over the **Description** area, and the scroll wheel will scroll through the track list. 
-Hold the mouse pointer over the **Graph** area, and the scroll wheel zooms the view in and out.
+- Hold the mouse pointer over the **Description** area, and the scroll wheel will scroll through the track list. 
+- Hold the mouse pointer over the **Graph** area, and the scroll wheel zooms the view in and out.
+- Hover the track name label in the **Description** area to view a tooltip with the full track name, track ID, and event or sample count.  
 
 Select a track
 ^^^^^^^^^^^^^^
 
-Clicking in the **Description** area selects or deselects the track. 
+- Clicking in the **Description** area selects or deselects the track. 
+- Right-click the track to select **Copy track name**, **Copy track ID**, or **Track Options**. 
+
 When a track is selected, the details display in the **Track Details** pane.
 
 Additionally, depending on the track type, the **Event Table** or **Sample Table** tabs in the **Advanced Details** section will be populated by the contents of the track.
@@ -170,13 +188,36 @@ Resize or reorder tracks
 - Resize tracks by dragging the separator lines between tracks.
 - Reorder tracks by clicking and dragging |grip| on the left side of the **Description** area.
 
+Queue utilization
+^^^^^^^^^^^^^^^^^
+
+For queue tracks, a Queue Utilization pill displays next to the queue label. It shows the percentage of time the queue was active over the visible time range. When a time-range filter is active, utilization is calculated for the selected range only.  
+The queue utilization is also visible in the **Track Details** tab. 
+
+Sample counter track statistics 
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+For sample counter tracks, pills showing standard deviation and average display next to the counter label. These can shown/hidden using the **Track Options** menu.  
+Additionally, min and max value pills can also be shown/hidden. 
+
+Similar to queue utilization, the values in these pills react to reflect the values in the current view or active time-range filter. 
+The Counter statistics are also visible in the **Track Details** tab. 
+
+Measure
+^^^^^^^
+
+**Measure** mode lets you measure the elapsed time between two points on the **Timeline View** — either between timeline points or between specific events. 
+
+- Enable **Measure** mode from the toolbar or the timeline right-click menu.  
+- **Events** mode: Measure duration between two selected events on the timeline. You can snap Start/End Rulers to Event start or Event end. 
+- **Anywhere** mode: Measure duration between two timeline points. You can drag the rulers horizontally to fine-tune.  
+- ROCm Optiq draws two vertical rulers with timestamps and shows the duration (time delta) in a label between them.  
+- Use **Reset** or **Clear measurement** to remove the rulers and start a new measurement. 
+
 Histogram
 ~~~~~~~~~
 
-The **Histogram** provides two display modes:
-
-- An event-density visual representation of all visible tracks.
-- A display across all tracks, visible and hidden.
+Histogram provides event density that is normalized across all tracks visible and hidden:
 
 .. image:: ../images/histogram.png
 
@@ -198,6 +239,7 @@ This section provides an interface for multiple data perspectives, offering gran
     :align: center
 
   - **Aggregate by Column**: A drop-down menu that groups the results by the selected column. Click **Submit** to group the results. To remove the grouping, select **-- None --** from the drop-down menu, then click **Submit**.
+  - **Aggregate**: A drop-down groups **Event Table** results by a selected field (Category, Name, Stream, Queue, Node, PID, or TID). Click **Submit** to group the results. To remove the grouping, choose —None— and click **Submit**. 
   - **Filter**: Enter SQL-like statements to filter the data. For example, ``“duration > 2000”`` displays all events greater than 2000 ns. Click **Submit** to filter the data.
   
   .. tip::
@@ -207,13 +249,21 @@ This section provides an interface for multiple data perspectives, offering gran
      - :ref:`time-range-filter` using the **Timeline View** to filter the rows to data contained within the selected time range.
 
 - **Sample Table**: Presents all performance counter data points associated with the selected tracks. Similar to the **Event Table**, it supports time-range selection and SQL-like query capabilities for detailed performance analysis. It supports the **Aggregate by Column** drop-down to group the results by the selected column.
-- **Event Details**: Shows extended information about the event that is not shown in the timeline or the **Event Table**. It shows raw database information such as timestamps, duration, associated queue/stream, correlation IDs, and API method parameters. It also shows flow, call stack information, and function call arguments, if available.  
+- **Event Details**: Shows extended information about the event that is not shown in the timeline or the **Event Table**. It shows raw database information such as id, category, duration, associated queue/stream, correlation IDs and API method parameters. It also shows flow, call stack information, and function call arguments, if available.  
 
   - The **Flow Data** displays all events logically connected to the selected event in the execution sequence. You can navigate any of the connected events on the timeline, with vertical track centering and highlight feedback, by right clicking and selecting **Go To Event**. The navigation makes it easier to follow the execution flow across queues and tracks. 
-  - The **Call Stack Data** shows the full call stack hierarchy for providing the calling context that led to that event. This provides understanding about where and why a kernel or function was invoked. The **Call Stack Data** is displayed in call order, following the execution path. 
+  - The **Call Stack Data** shows the full call stack hierarchy for providing the calling context that led to that event. This provides understanding about where and why a kernel or function was invoked. The **Call Stack Data** is displayed in call order, following the execution path. You can open any of the events in the call stack hierarchy by right clicking and choose **Go To Event**.
+  - You can also right-click on an event in the Flow Data or Call Stack Data for copy/export actions 
 
 - **Track Details**: Shows additional information about the track that is not visible on the timeline. It shows the node the track belongs to and its details, the process it belongs to, and the track type (thread, counter, queue, and so on).
 - **Annotations**: Displays user-created annotations, enabling easier navigation across critical points within large traces, enhancing collaboration and knowledge sharing. See :ref:`annotation` for more info.
+- **Top Events**: Provides analysis for the events of each operation type (instrumented Thread, Sampled thread, Dispatch, memory allocation, memory copy) from the selected tracks aggregated by event name. Available metrics are event count (invocations) and total/average/min/max duration. If you select tracks of different types, each type will be shown in a separate table. Each table has its own System Table instance and can be sorted individually. If you make a time-range selection, Top Events are limited to that selected time-range. 
+
+.. tip::
+
+   In the **Event Table**, **Event Details**, and **Top Events** tables, right-click a row or cell to **Go To Event**, **Copy Row Data**, **Copy Cell Data**, and **Export to File** (CSV).
+   In the **Flow Data**, and **Call Stack** tables, right-click a row or cell to **Go To Event**, **Copy Row Data**, or **Copy Cell Data**.  
+
 
 .. _summary-view:
 

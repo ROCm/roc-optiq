@@ -14,10 +14,14 @@ System requirements
 ===================
 
 - You must be running ROCm 7.1.0 or later for ROCm Systems Profiler database file support, and ROCm 7.12.0 or later for ROCm Compute Profiler analysis database file support.
+- For LDS roofline chart support, ROCm Compute Profiler analysis database schema 1.4.0 is required (ROCm 7.14.0 or later). 
 - Your system must be running one of these operating systems:
 
   - Microsoft Windows 11
-  - Ubuntu 22.04 or 24.04 (Debian-based)
+  - Ubuntu 22.04, 24.04, or 26.04 (Debian-based) 
+  - RHEL 8, 9, or 10 (Rocky Linux equivalent) 
+  - CentOS Stream 9 
+  - macOS 14 or 15 
 
 .. note::
 
@@ -38,6 +42,7 @@ Install on Windows
       :width: 500
   
 3. Launch **roc-optiq.exe** from the installation directory.
+
 
 Install on Linux
 ================
@@ -96,6 +101,22 @@ Once you've installed ROCm Optiq for your operating system, add the ROCm binarie
 
    export PATH=opt/roc-optiq/bin:$PATH
 
+Install on RHEL 8 / 9 / 10 and CentOS Stream 9 
+==============================================
 
+1. Download the appropriate `.rpm` package from GitHub Releases. 
+2. Install the package: `sudo dnf install ./roc-optiq-*.rpm` 
+3. Verify the installation: `rpm -q roc-optiq` 
 
+Install on macOS
+================
 
+1. Download `ROCm Optiq.app.zip` from `GitHub Releases <https://github.com/ROCm/roc-optiq/releases>`_ or your organization's artifact registry. 
+2. Extract the archive and move **ROCm Optiq.app** to **Applications**. 
+3. Launch ROCm Optiq from Applications. 
+
+Settings, logs, and presets are stored at: `~/Library/Application Support/ROCm-Optiq/`.
+
+.. note::
+
+   Settings from earlier versions stored in `~/.config/rocm-optiq/` are not migrated automatically.

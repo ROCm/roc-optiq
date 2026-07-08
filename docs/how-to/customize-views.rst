@@ -55,7 +55,7 @@ Use the **View** menu to show and hide application panels.
   :width: 300
 
 Customize projects for ROCm Systems Profiler traces
-==============================================================
+===================================================
 
 You can customize the data views of an open ROCm Systems Profiler trace file in ROCm Optiq, including timeline display settings, saved trace selections, added bookmarks/annotations, and more.
 
@@ -91,6 +91,10 @@ Selecting this sets a time-range filter with boundaries at the event's start and
 To clear the time range selection, press **Esc** or right-click and select **Remove Selection**:
 
 |remove|
+
+.. note::
+
+   When a time-range filter is active, all events intersecting that time-range remain at full brightness; events outside the range are dimmed. 
 
 Save trace selections
 ~~~~~~~~~~~~~~~~~~~~~
@@ -164,10 +168,11 @@ Customize display options for each track by clicking the gear icon in the track'
 .. image:: ../images/track-gear.png
    :width: 600
 
-- For event tracks, you can toggle between **Color by name**, **Color by Time Level**, **No Color**, and **Compact mode**.
+- For event tracks, you can toggle between **Color by Name**, **Color by Time Level**, **No Color**, and **Compact mode**.
 
-  - **Color by name**, **Color by Time Level**, and **No Color***: Change the coloring method used to color the events.
-  - **Compact Mode**: Shrink event heights to display tall flame graphs in a smaller area.
+   - **Color by Time Level**: Events with the same name but different start times have different colors. 
+   - **No Color**: Events render without name-based coloring. 
+   - **Compact Mode**: Shrink event track heights to display tall flame graphs in a smaller area. 
 
 - For sample counter tracks, you can toggle between **Show Counter Boxes**, **Alternate Counter Coloring**, and **Highlight Y Range**:
 
@@ -185,6 +190,10 @@ Customize display options for each track by clicking the gear icon in the track'
 
   .. image:: ../images/min-max.png
      :width: 400
+
+.. tip::
+
+   The context menu when right-clicking a track's description in **Timeline View** also provides **Copy track name** and **Copy track ID**. 
 
 Set the flow rendering display mode
 -----------------------------------

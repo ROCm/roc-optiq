@@ -831,17 +831,54 @@ namespace Controller
             return Result::SessionError;
         }
 
-        libssh2_session_set_blocking(connection->GetSession(), 1);
+        // Non-blocking setup so the channel open/exec phase observes
+        // cancellation and can never hang the worker thread if the server
+        // stalls. Each libssh2 EAGAIN is followed by a bounded WaitSocket, and
+        // the cancel flag is checked every iteration (matches the SFTP flow in
+        // BrowseRemoteDirectory and the read loop below).
+        libssh2_session_set_blocking(connection->GetSession(), 0);
 
-        LIBSSH2_CHANNEL* channel = libssh2_channel_open_session(connection->GetSession());
-        if (!channel)
+        LIBSSH2_CHANNEL* channel = nullptr;
+        while ((channel = libssh2_channel_open_session(connection->GetSession())) == nullptr)
         {
-            output = "Failed to open SSH channel";
-            connection->GetSshBridge()->SaveError(output);
-            return Result::ChannelError;
+            if (IsCancelRequested(connection, future))
+            {
+                return Result::Cancelled;
+            }
+            if (libssh2_session_last_errno(connection->GetSession()) == LIBSSH2_ERROR_EAGAIN)
+            {
+                if (!WaitSocket(connection))
+                {
+                    output = "Network failure while opening SSH channel";
+                    connection->GetSshBridge()->SaveError(output);
+                    return Result::ChannelError;
+                }
+            }
+            else
+            {
+                output = "Failed to open SSH channel";
+                connection->GetSshBridge()->SaveError(output);
+                return Result::ChannelError;
+            }
         }
 
-        if (libssh2_channel_exec(channel, command.c_str()))
+        int exec_rc = 0;
+        while ((exec_rc = libssh2_channel_exec(channel, command.c_str())) == LIBSSH2_ERROR_EAGAIN)
+        {
+            if (IsCancelRequested(connection, future))
+            {
+                libssh2_channel_free(channel);
+                return Result::Cancelled;
+            }
+            if (!WaitSocket(connection))
+            {
+                output = "Network failure while starting remote command";
+                connection->GetSshBridge()->SaveError(output);
+                libssh2_channel_free(channel);
+                return Result::ChannelError;
+            }
+        }
+        if (exec_rc != 0)
         {
             output = "libssh2_channel_exec failed";
             connection->GetSshBridge()->SaveError(output);
@@ -850,8 +887,6 @@ namespace Controller
         }
 
         char buffer[4096];
-
-        libssh2_session_set_blocking(connection->GetSession(), 0);
 
         while (true)
         {

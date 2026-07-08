@@ -137,7 +137,10 @@ bool ProfilerLaunchOrchestrator::LaunchRemote(const LaunchRequest& request)
         request.remote_uri,
         [this](const std::string& local_path)
         {
-            if(m_app_window && !local_path.empty())
+            // Honor the "Open trace when profiling completes" checkbox for remote
+            // runs too (m_auto_load_trace is set per launch and constant during
+            // the run).
+            if(m_app_window && m_auto_load_trace && !local_path.empty())
             {
                 m_app_window->OpenFile(local_path);
             }
@@ -315,6 +318,17 @@ void ProfilerLaunchOrchestrator::OnProfilerStateChanged(rocprofvis_profiler_stat
 
 void ProfilerLaunchOrchestrator::ResolveLocalTracePath()
 {
+    // Pull the freshest output directly from the session. The completion event is
+    // dispatched before Update() refreshes m_raw_output this frame, so parsing
+    // m_raw_output alone would use a stale/partial snapshot and needlessly fall
+    // back to the filesystem scan.
+    std::string latest = m_profiler_session.GetOutput();
+    if(!latest.empty() && latest != m_raw_output)
+    {
+        m_raw_output   = std::move(latest);
+        m_output_dirty = true;
+    }
+
     // Prefer the path the profiler actually reported in its output (the backend
     // scraper). Fall back to the controller's newest-".db" filesystem scan if
     // the parser can't find one.

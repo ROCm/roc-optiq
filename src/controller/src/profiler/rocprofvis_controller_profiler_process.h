@@ -30,7 +30,9 @@ namespace Controller
 {
 
 class Future;
-class SshConnection;
+#ifdef ROCPROFVIS_ENABLE_REMOTE
+class SshConnection;  // TEMPORARY (remote/SSH)
+#endif
 
 enum class ConnectionType
 {
@@ -148,14 +150,17 @@ public:
 
     rocprofvis_result_t LaunchAsync(ProfilerConfig const* config);
 
-    // Remote variant: runs the profiler over the supplied (already connected and
-    // authenticated) SSH connection via an SshProfilerExecutor. The connection
-    // is borrowed; the caller (View/SshSession) owns its lifetime. `future` is
-    // the bound profiler future, observed by the remote exec loop for
-    // cancellation; it is borrowed and may be null.
+#ifdef ROCPROFVIS_ENABLE_REMOTE
+    // TEMPORARY (remote/SSH): remote variant runs the profiler over the supplied
+    // (already connected and authenticated) SSH connection via an
+    // SshProfilerExecutor. The connection is borrowed; the caller
+    // (View/SshSession) owns its lifetime. `future` is the bound profiler
+    // future, observed by the remote exec loop for cancellation; it is borrowed
+    // and may be null.
     rocprofvis_result_t LaunchAsyncRemote(ProfilerConfig const* config,
                                           SshConnection*        connection,
                                           Future*               future);
+#endif
 
     rocprofvis_profiler_state_t GetState() const;
 

@@ -7,7 +7,11 @@
 #include "rocprofvis_events.h"
 #include "rocprofvis_event_manager.h"
 #include "rocprofvis_profiler_session.h"
+// TEMPORARY (remote/SSH): the remote profiler session is only available when
+// remote support is built. Remove this guard when the remote feature graduates.
+#ifdef ROCPROFVIS_ENABLE_REMOTE
 #include "rocprofvis_remote_profiler_session.h"
+#endif
 #include "rocprofvis_launch_shared_tabs.h"
 
 #include <cstdint>
@@ -23,7 +27,9 @@ namespace View
 {
 
 class AppWindow;
-class RemoteUri;
+#ifdef ROCPROFVIS_ENABLE_REMOTE
+class RemoteUri;  // TEMPORARY (remote/SSH)
+#endif
 
 // View-layer orchestrator for a profiling run. Owns the local / remote profiler
 // sessions and normalizes their two very different control flows (local is
@@ -54,8 +60,10 @@ public:
         bool                       is_remote       = false;
         bool                       auto_load_trace = true;
 
+#ifdef ROCPROFVIS_ENABLE_REMOTE
         // Remote only: the connection/operation state for the SSH workflow.
         std::shared_ptr<RemoteUri> remote_uri;
+#endif
 
         // Backend-specific scraper that derives the produced trace path from the
         // profiler's stdout. Used for the local trace resolution and forwarded
@@ -111,7 +119,8 @@ public:
     const std::string& GetLaunchError() const { return m_launch_error; }
 
     // --- Remote-specific accessors for the download popup / auth modal ------
-
+    // TEMPORARY (remote/SSH): remove these guards when remote graduates.
+#ifdef ROCPROFVIS_ENABLE_REMOTE
     SshSession* GetRemoteSshSession() const;
     bool        IsRemoteDownloading() const;
 
@@ -119,21 +128,28 @@ public:
     // Returns false when no remote run is active (caller maps local state).
     bool GetRemotePhaseBadge(std::string& out_label, ConsoleStatusLevel& out_level,
                              std::string& out_detail) const;
+#endif
 
 private:
     void OnProfilerStateChanged(rocprofvis_profiler_state_t new_state);
     bool LaunchLocal(const LaunchRequest& request);
+#ifdef ROCPROFVIS_ENABLE_REMOTE
     bool LaunchRemote(const LaunchRequest& request);
+#endif
     void ResolveLocalTracePath();
 
     AppWindow*                              m_app_window;
     ProfilerSession                         m_profiler_session;
+#ifdef ROCPROFVIS_ENABLE_REMOTE
     std::unique_ptr<RemoteProfilerSession>  m_remote_session;
+#endif
     EventManager::SubscriptionToken         m_profiler_status_token;
 
+#ifdef ROCPROFVIS_ENABLE_REMOTE
     // Orchestrator holds its own reference to the shared RemoteUri so the remote
     // session (and its deferred SSH teardown) can outlive the dialog's copy.
     std::shared_ptr<RemoteUri>              m_remote_uri;
+#endif
 
     rocprofvis_profiler_state_t m_profiler_state;
     bool                        m_is_running;

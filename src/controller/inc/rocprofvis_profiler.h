@@ -137,6 +137,9 @@ void rocprofvis_profiler_free(rocprofvis_profiler_t* profiler);
 rocprofvis_result_t rocprofvis_profiler_launch_async(rocprofvis_profiler_t* profiler, rocprofvis_profiler_config_t* config, rocprofvis_controller_future_t* future);
 
 /*
+* TEMPORARY (remote/SSH): remote profiler launch C ABI. Remove this guard when
+* the remote feature graduates.
+*
 * Launches a profiler process on a remote host over an existing SSH connection.
 * The connection must already be connected and authenticated (e.g. by the View's
 * SshSession) and must be idle (no other SSH operation in flight) for the
@@ -149,7 +152,9 @@ rocprofvis_result_t rocprofvis_profiler_launch_async(rocprofvis_profiler_t* prof
 * @param future The future object used to track job completion / cancellation.
 * @returns kRocProfVisResultSuccess or an error code.
 */
+#ifdef ROCPROFVIS_ENABLE_REMOTE
 rocprofvis_result_t rocprofvis_profiler_launch_remote_async(rocprofvis_profiler_t* profiler, rocprofvis_profiler_config_t* config, rocprofvis_controller_connection_t* connection, rocprofvis_controller_future_t* future);
+#endif
 
 /*
 * Gets the current state of the profiler execution.

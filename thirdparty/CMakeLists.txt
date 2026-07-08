@@ -11,6 +11,12 @@ set(YAML_CPP_BUILD_TESTS OFF CACHE BOOL "Disable yaml-cpp tests")
 set(YAML_CPP_BUILD_TOOLS OFF CACHE BOOL "Disable yaml-cpp tools")
 add_subdirectory(yaml-cpp)
 
+# TEMPORARY (remote/SSH): the crypto backend + libssh2 stack and its git
+# submodules (thirdparty/libssh2, thirdparty/mbedtls) are only built when
+# remote support is enabled, so the default build needs neither the submodules
+# nor a crypto dependency. Remove this guard when remote graduates.
+if(ROCPROFVIS_ENABLE_REMOTE)
+
 set(ENABLE_ZLIB_COMPRESSION OFF)
 # Default to the vendored mbedTLS backend so the out-of-the-box build needs no
 # system OpenSSL. OpenSSL is opt-in via -DCRYPTO_BACKEND=OpenSSL and is then
@@ -102,6 +108,8 @@ if (CRYPTO_BACKEND STREQUAL "mbedTLS")
     	mbedcrypto
 	)
 endif()
+
+endif() # ROCPROFVIS_ENABLE_REMOTE
 
 add_library(imgui STATIC
     imgui/imgui.cpp

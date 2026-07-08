@@ -11,7 +11,10 @@
 #include "rocprofvis_controller_table.h"
 #include "rocprofvis_controller_trace.h"
 #include "rocprofvis_core_assert.h"
+// TEMPORARY (remote/SSH): remove guard when remote graduates.
+#ifdef ROCPROFVIS_ENABLE_REMOTE
 #include "remote/rocprofvis_controller_remote.h"
+#endif
 #include "system/rocprofvis_controller_event.h"
 #include "system/rocprofvis_controller_sample.h"
 #include "system/rocprofvis_controller_track.h"
@@ -48,7 +51,9 @@ typedef Reference<rocprofvis_controller_summary_metrics_t, SummaryMetrics, kRPVC
 typedef Reference<rocprofvis_controller_t, ComputeTrace, kRPVControllerObjectTypeControllerCompute> ComputeTraceRef;
 typedef Reference<rocprofvis_controller_t, MetricsContainer, kRPVControllerObjectTypeMetricsContainer> MetricsContainerRef;
 #endif
+#ifdef ROCPROFVIS_ENABLE_REMOTE
 typedef Reference<rocprofvis_controller_connection_t, SshConnection, kRPVControllerObjectTypeRemoteConnection > ConnectionRef;
+#endif
 }
 }
 
@@ -479,6 +484,9 @@ rocprofvis_result_t rocprofvis_controller_metric_fetch_async(
 }
 #endif
 
+// TEMPORARY (remote/SSH): remote connection C ABI. Remove guard when remote
+// graduates.
+#ifdef ROCPROFVIS_ENABLE_REMOTE
 rocprofvis_result_t rocprofvis_controller_ssh_connection_alloc(
     rocprofvis_controller_arguments_t* args,    
     rocprofvis_controller_array_t* output)
@@ -636,6 +644,7 @@ rocprofvis_result_t rocprofvis_controller_remote_browser_async(
     }
     return error;
 }
+#endif // ROCPROFVIS_ENABLE_REMOTE
 
 void rocprofvis_controller_summary_metric_free(rocprofvis_controller_summary_metrics_t* object)
 {

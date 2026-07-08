@@ -14,10 +14,14 @@
 #endif
 
 #include "rocprofvis_profiler.h"
+// TEMPORARY (remote/SSH): remote profiler launch needs the SSH client. Remove
+// this guard when remote graduates.
+#ifdef ROCPROFVIS_ENABLE_REMOTE
 // Include the SSH client header (which pulls winsock2.h) BEFORE the profiler
 // process header (which pulls windows.h) so the winsock/windows include order
 // is correct on Windows.
 #include "remote/rocprofvis_controller_ssh_client.h"
+#endif
 #include "rocprofvis_controller_profiler_process.h"
 #include "rocprofvis_controller_reference.h"
 #include "rocprofvis_controller_future.h"
@@ -33,7 +37,9 @@ namespace Controller
 typedef Reference<rocprofvis_controller_future_t, Future, kRPVControllerObjectTypeFuture> FutureRef;
 typedef Reference<rocprofvis_profiler_config_t, ProfilerConfig, kRPVProfilerConfig> ProfilerConfigRef;
 typedef Reference<rocprofvis_profiler_t, ProfilerSession, kRPVProfiler> ProfilerSessionRef;
+#ifdef ROCPROFVIS_ENABLE_REMOTE
 typedef Reference<rocprofvis_controller_connection_t, SshConnection, kRPVControllerObjectTypeRemoteConnection> ConnectionRef;
+#endif
 
 // Copies a std::string into the caller's buffer using the standard
 // "pass null buffer to query length" idiom shared by every string getter
@@ -240,6 +246,9 @@ rocprofvis_result_t rocprofvis_profiler_launch_async(rocprofvis_profiler_t* prof
     return kRocProfVisResultSuccess;
 }
 
+#ifdef ROCPROFVIS_ENABLE_REMOTE
+// TEMPORARY (remote/SSH): remote profiler launch C ABI. Remove guard when
+// remote graduates.
 rocprofvis_result_t rocprofvis_profiler_launch_remote_async(rocprofvis_profiler_t* profiler, rocprofvis_profiler_config_t* config, rocprofvis_controller_connection_t* connection, rocprofvis_controller_future_t* future)
 {
     RocProfVis::Controller::ProfilerSessionRef session_ref(profiler);
@@ -274,6 +283,7 @@ rocprofvis_result_t rocprofvis_profiler_launch_remote_async(rocprofvis_profiler_
 
     return kRocProfVisResultSuccess;
 }
+#endif  // ROCPROFVIS_ENABLE_REMOTE
 
 rocprofvis_result_t rocprofvis_profiler_get_state(rocprofvis_profiler_t* profiler, rocprofvis_profiler_state_t* state)
 {

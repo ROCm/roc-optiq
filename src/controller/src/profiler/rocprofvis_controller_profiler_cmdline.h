@@ -85,23 +85,6 @@ std::string ToDisplayString(
     std::vector<std::string> const&                         argv,
     std::vector<std::pair<std::string, std::string>> const& env = {});
 
-
-/* 
- * SSHLIB2 example
- * 
-
-auto remote_cmd = Cmdline::ToPosixShellCommand(argv, env);  
-
-libssh2_session_handshake(session, sock);
-libssh2_userauth_publickey_fromfile(session, info.user.c_str(),
-                                    pub_path.c_str(), priv_path.c_str(), nullptr);
-auto* ch = libssh2_channel_open_session(session);
-libssh2_channel_exec(ch, remote_cmd.c_str());
-
-// then read loop + signal/close + sftp fetch...
-
-*/
-
 } // namespace Cmdline
 } // namespace Controller
 } // namespace RocProfVis

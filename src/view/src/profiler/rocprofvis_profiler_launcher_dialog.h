@@ -11,10 +11,15 @@
 #include "rocprofvis_profiler_backend.h"
 #include "rocprofvis_launch_preset_manager.h"
 #include "rocprofvis_launch_shared_tabs.h"
+// TEMPORARY (remote/SSH): the SSH connection authoring UI is only available
+// when remote support is built. Remove this guard when the remote feature
+// graduates.
+#ifdef ROCPROFVIS_ENABLE_REMOTE
 #include "remote/rocprofvis_ssh_uri.h"
 #include "remote/rocprofvis_ssh_connection_store.h"
 #include "remote/rocprofvis_ssh_settings_dialog.h"
 #include "remote/rocprofvis_ssh_fetch.h"
+#endif
 #include "imgui.h"
 #include <memory>
 #include <string>
@@ -59,14 +64,25 @@ private:
     void RebuildComposedOutput();
     void RefreshExecutionCache();
 
-    bool IsSshMode() const { return m_config.connection == ConnectionType::kSsh; }
+    bool IsSshMode() const
+    {
+#ifdef ROCPROFVIS_ENABLE_REMOTE
+        return m_config.connection == ConnectionType::kSsh;
+#else
+        // Remote support not built: always local, regardless of loaded config.
+        return false;
+#endif
+    }
     rocprofvis_profiler_type_t ResolveProfilerType() const;
 
     void RenderToolbar();
     void RenderMainContent();
-    void RenderRemoteSection();
     void RenderButtonRow();
+#ifdef ROCPROFVIS_ENABLE_REMOTE
+    // TEMPORARY (remote/SSH): SSH connection selector + popups.
+    void RenderRemoteSection();
     void RenderRemotePopups();
+#endif
 
     // Collapses the local profiler state and the remote workflow phase into a
     // single console status badge (label + semantic level) plus an optional
@@ -77,7 +93,9 @@ private:
     void SwitchBackend(int index);
     void LoadFromSettings();
     void SaveToSettings();
-    void ApplySelectedConnection();
+#ifdef ROCPROFVIS_ENABLE_REMOTE
+    void ApplySelectedConnection();  // TEMPORARY (remote/SSH)
+#endif
     void AddRecentTarget(std::string const& exe);
     std::string GetProfilerPath() const;
 
@@ -88,15 +106,18 @@ private:
     // its getters; it never touches the underlying sessions directly.
     ProfilerLaunchOrchestrator m_orchestrator;
 
-    // Remote (SSH) connection authoring. The connection config is owned here as
-    // a shared RemoteUri (edited via the on-demand SshSettingsDialog) and handed
-    // to the orchestrator at launch, mirroring the SshTestDialog pattern.
+#ifdef ROCPROFVIS_ENABLE_REMOTE
+    // TEMPORARY (remote/SSH): SSH connection authoring. The connection config is
+    // owned here as a shared RemoteUri (edited via the on-demand
+    // SshSettingsDialog) and handed to the orchestrator at launch, mirroring the
+    // SshTestDialog pattern.
     std::shared_ptr<RemoteUri>             m_remote_uri;
     SshConnectionStore                     m_connection_store;
     std::string                            m_selected_connection_id;
     std::unique_ptr<SshSettingsDialog>     m_ssh_settings_dialog;
     bool                                   m_remote_show_progress_popup;
     FileStat::Snapshot                     m_remote_last_progress;
+#endif
 
     bool m_should_open;
     bool m_show_window;

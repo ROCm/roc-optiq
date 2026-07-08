@@ -7,7 +7,10 @@
 #include "rocprofvis_utils.h"
 #include "rocprofvis_launch_shared_tabs.h"
 #include "rocprofvis_rocprof_sys_backend.h"
+// TEMPORARY (remote/SSH): remove guard when remote graduates.
+#ifdef ROCPROFVIS_ENABLE_REMOTE
 #include "remote/rocprofvis_ssh_auth_modal.h"
+#endif
 #include "widgets/rocprofvis_widget.h"
 #include "widgets/rocprofvis_gui_helpers.h"
 #include "imgui.h"
@@ -26,10 +29,12 @@ namespace View
 ProfilerLauncherDialog::ProfilerLauncherDialog(AppWindow* app_window)
     : m_app_window(app_window)
     , m_orchestrator(app_window)
+#ifdef ROCPROFVIS_ENABLE_REMOTE
     , m_remote_uri(std::make_shared<RemoteUri>())
     , m_ssh_settings_dialog(nullptr)
     , m_remote_show_progress_popup(false)
     , m_remote_last_progress()
+#endif
     , m_should_open(false)
     , m_show_window(false)
     , m_last_seen_state(kRPVProfilerStateIdle)
@@ -54,12 +59,14 @@ ProfilerLauncherDialog::ProfilerLauncherDialog(AppWindow* app_window)
     LoadFromSettings();
     RefreshExecutionCache();
 
+#ifdef ROCPROFVIS_ENABLE_REMOTE
     m_connection_store.Load();
     if(m_connection_store.Get(m_selected_connection_id) == nullptr && !m_connection_store.Empty())
     {
         m_selected_connection_id = m_connection_store.List().front().id;
     }
     ApplySelectedConnection();
+#endif
 
     // Run orchestration (sessions, profiler-state events, teardown) is owned by
     // m_orchestrator; the dialog only authors config and renders.
@@ -97,9 +104,11 @@ void ProfilerLauncherDialog::Render()
         IProfilerBackend* backend = m_backends[m_backend_index].get();
         m_config.backend_payload = backend->SaveSettings();
 
+#ifdef ROCPROFVIS_ENABLE_REMOTE
         // Keep the launch profile's SSH connection reference in sync with the
         // currently selected connection so saved profiles reference it.
         m_config.ssh_connection_ref = m_selected_connection_id;
+#endif
 
         RenderToolbar();
         backend = m_backends[m_backend_index].get();
@@ -167,9 +176,11 @@ void ProfilerLauncherDialog::Render()
     }
     ImGui::End();
 
+#ifdef ROCPROFVIS_ENABLE_REMOTE
     // SSH settings dialog, auth prompts and download progress (rendered outside
     // the main window scope, mirroring SshTestDialog).
     RenderRemotePopups();
+#endif
 
     if (!window_open)
     {
@@ -269,6 +280,7 @@ void ProfilerLauncherDialog::RenderToolbar()
                     break;
                 }
             }
+#ifdef ROCPROFVIS_ENABLE_REMOTE
             // Resolve the profile's referenced SSH connection (if any) so the
             // remote section reflects the saved connection.
             if (!m_config.ssh_connection_ref.empty() &&
@@ -277,6 +289,7 @@ void ProfilerLauncherDialog::RenderToolbar()
                 m_selected_connection_id = m_config.ssh_connection_ref;
                 ApplySelectedConnection();
             }
+#endif
         }
     }
 }
@@ -285,9 +298,11 @@ void ProfilerLauncherDialog::RenderMainContent()
 {
     IProfilerBackend const* backend = m_backends[m_backend_index].get();
 
+#ifdef ROCPROFVIS_ENABLE_REMOTE
     // Connection mode selector + SSH connection options (when in SSH mode).
     RenderRemoteSection();
     ImGui::Separator();
+#endif
 
     // Target is always visible at the top, not buried in a tab.
     RenderTargetSection(m_config.target, m_config.connection, m_app_window);
@@ -317,6 +332,9 @@ void ProfilerLauncherDialog::RenderMainContent()
     }
 }
 
+#ifdef ROCPROFVIS_ENABLE_REMOTE
+// TEMPORARY (remote/SSH): the SSH connection selector, settings dialog, auth
+// modal, and download-progress popup. Remove this guard when remote graduates.
 void ProfilerLauncherDialog::RenderRemoteSection()
 {
     // Local vs. remote (SSH) execution selector. Kept here (rather than in the
@@ -461,6 +479,7 @@ void ProfilerLauncherDialog::RenderRemotePopups()
         popup_style.PopStyles();
     }
 }
+#endif  // ROCPROFVIS_ENABLE_REMOTE
 
 void ProfilerLauncherDialog::RenderButtonRow()
 {
@@ -569,6 +588,7 @@ void ProfilerLauncherDialog::OnLaunchClicked()
 
     const bool is_remote = IsSshMode();
 
+#ifdef ROCPROFVIS_ENABLE_REMOTE
     // Remote precheck: bind the selected connection and require host/user.
     if (is_remote)
     {
@@ -580,6 +600,7 @@ void ProfilerLauncherDialog::OnLaunchClicked()
             return;
         }
     }
+#endif
 
     // Clear previous state
     m_error_message.clear();
@@ -604,13 +625,17 @@ void ProfilerLauncherDialog::OnLaunchClicked()
     request.env_vars          = m_execution_cache.env_vars;
     request.is_remote         = is_remote;
     request.auto_load_trace   = m_config.target.auto_load_trace;
+#ifdef ROCPROFVIS_ENABLE_REMOTE
     request.remote_uri        = is_remote ? m_remote_uri : nullptr;
+#endif
     request.parse_trace       = [backend](const std::string& profiler_stdout) -> std::string
     {
         return backend ? backend->ParseTraceOutputPath(profiler_stdout) : std::string();
     };
 
+#ifdef ROCPROFVIS_ENABLE_REMOTE
     m_remote_show_progress_popup = false;
+#endif
     m_last_seen_state            = kRPVProfilerStateIdle;
 
     bool success = m_orchestrator.Launch(request);
@@ -722,12 +747,14 @@ void ProfilerLauncherDialog::ComputeConsoleStatus(std::string&        out_label,
     out_level  = ConsoleStatusLevel::kIdle;
     out_detail.clear();
 
+#ifdef ROCPROFVIS_ENABLE_REMOTE
     // Remote: the badge reflects the workflow phase (connect/auth/profile/
     // download), provided by the orchestrator. Returns false when not remote.
     if (m_orchestrator.GetRemotePhaseBadge(out_label, out_level, out_detail))
     {
         return;
     }
+#endif
 
     // Local: map the profiler process state directly.
     switch (m_orchestrator.GetState())
@@ -823,7 +850,9 @@ void ProfilerLauncherDialog::LoadFromSettings()
     m_config.target.output_directory = ps.profiler_output_directory;
     m_config.target.auto_load_trace = ps.auto_load_trace;
     m_current_preset_name = ps.last_preset_name;
+#ifdef ROCPROFVIS_ENABLE_REMOTE
     m_selected_connection_id = ps.last_ssh_connection_id;
+#endif
 
     if (!ps.last_profiler_id.empty())
     {
@@ -849,10 +878,13 @@ void ProfilerLauncherDialog::SaveToSettings()
     ps.auto_load_trace = m_config.target.auto_load_trace;
     ps.last_preset_name = m_current_preset_name;
     ps.last_profiler_id = m_config.profiler_id;
+#ifdef ROCPROFVIS_ENABLE_REMOTE
     ps.last_ssh_connection_id = m_selected_connection_id;
+#endif
     settings.SaveProfilerSettings();
 }
 
+#ifdef ROCPROFVIS_ENABLE_REMOTE
 void ProfilerLauncherDialog::ApplySelectedConnection()
 {
     const SshConnectionConfig* cfg = m_connection_store.Get(m_selected_connection_id);
@@ -865,6 +897,7 @@ void ProfilerLauncherDialog::ApplySelectedConnection()
         m_remote_uri->SetConnection(SshConnectionConfig());
     }
 }
+#endif  // ROCPROFVIS_ENABLE_REMOTE
 
 void ProfilerLauncherDialog::AddRecentTarget(std::string const& exe)
 {

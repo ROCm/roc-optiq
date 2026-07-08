@@ -310,6 +310,11 @@ rocprofvis_result_t rocprofvis_controller_get_indexed_property_async(rocprofvis_
 */
 
 /*
+* TEMPORARY (remote/SSH): remote connection C ABI. Remove this guard when the
+* remote feature graduates.
+*/
+#ifdef ROCPROFVIS_ENABLE_REMOTE
+/*
 * Allocates ssh connection object using host and port parameters stored in arguments.
 * @param args contains host name and port number
 * @param output contains connection handler
@@ -421,6 +426,7 @@ rocprofvis_result_t rocprofvis_controller_remote_cancel_prompt(
 */
 rocprofvis_result_t rocprofvis_controller_remote_reset(
     rocprofvis_controller_connection_t* connection);
+#endif // ROCPROFVIS_ENABLE_REMOTE
 
 /*
 * Frees the provided summary metrics container object

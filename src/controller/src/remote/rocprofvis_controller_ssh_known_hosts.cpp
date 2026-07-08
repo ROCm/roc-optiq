@@ -158,7 +158,7 @@ bool KnownHosts::Add(const std::string& host, int port)
         type_mask, nullptr);
     if (rc != 0) {
         spdlog::error("failed adding new host: {}", rc);
-        false;
+        return false;
     }
     return true;
 }

@@ -12,9 +12,9 @@
 #include "rocprofvis_view_module.h"
 #include "widgets/rocprofvis_split_containers.h"
 #include "widgets/rocprofvis_tab_container.h"
-#define TEST_SSH_CONNECTION
-
-#ifdef TEST_SSH_CONNECTION
+// TEMPORARY (remote/SSH): the SSH test dialog is a remote-only dev aid.
+// Remove this guard when the remote feature graduates.
+#ifdef ROCPROFVIS_ENABLE_REMOTE
 #include "remote/rocprofvis_ssh_test_dialog.h"
 #endif
 
@@ -32,7 +32,9 @@ namespace View
 
 class ConfirmationDialog;
 class MessageDialog;
-class ProfilerLauncherDialog;
+#ifdef ROCPROFVIS_ENABLE_PROFILER
+class ProfilerLauncherDialog;  // TEMPORARY (profiler launch)
+#endif
 class Project;
 class WelcomePage;
 
@@ -85,7 +87,9 @@ public:
     void OpenFile(std::string file_path);
 
     void ShowCloseConfirm();
-    void ShowProfilerLauncher();
+#ifdef ROCPROFVIS_ENABLE_PROFILER
+    void ShowProfilerLauncher();  // TEMPORARY (profiler launch)
+#endif
 
     void SetFullscreenState(bool is_fullscreen);
     bool GetFullscreenState() const;
@@ -168,7 +172,7 @@ private:
 #ifdef ROCPROFVIS_DEVELOPER_MODE
     void RenderDebugOuput();
     void RenderDeveloperMenu();
-#ifdef TEST_SSH_CONNECTION
+#ifdef ROCPROFVIS_ENABLE_REMOTE
     void HandleTestRemoteSSH();
 #endif
     bool         m_show_metrics;
@@ -199,7 +203,9 @@ private:
     std::unique_ptr<SettingsPanel>      m_settings_panel;
     std::unique_ptr<WelcomePage>        m_welcome_page;
 
-    std::unique_ptr<ProfilerLauncherDialog> m_profiler_launcher_dialog;
+#ifdef ROCPROFVIS_ENABLE_PROFILER
+    std::unique_ptr<ProfilerLauncherDialog> m_profiler_launcher_dialog;  // TEMPORARY (profiler launch)
+#endif
 
     int                              m_tool_bar_index;
     std::function<void(int)>         m_notification_callback;
@@ -207,7 +213,7 @@ private:
     bool                             m_restore_fullscreen_later;
     std::vector<ProviderCleanupJob>  m_provider_cleanup_jobs;
     uint64_t                         m_next_provider_cleanup_id;
-#ifdef TEST_SSH_CONNECTION
+#ifdef ROCPROFVIS_ENABLE_REMOTE
     std::unique_ptr<SshTestDialog>   m_ssh_test_dialog;
 #endif
 

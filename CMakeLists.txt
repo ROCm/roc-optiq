@@ -28,12 +28,32 @@ option(USE_NATIVE_FILE_DIALOG "Use the OS native file dialog instead of ImGui fi
 option(GLFW_LINK_STATIC "Link GLFW statically instead of dynamically" ON)
 option(BUILD_TESTING "Build the testing tree" ON)
 
+# TEMPORARY: gate the in-development profiler-launch and remote/SSH features
+# until they ship. Both default OFF so release builds exclude the UI, the
+# dependent sources, and (for remote) the libssh2/mbedtls stack and its
+# submodules. Remove these options and unwrap their guards when the features
+# graduate.
+option(ROCPROFVIS_ENABLE_PROFILER "Build with in-app profiler launch support (in development)" OFF)
+option(ROCPROFVIS_ENABLE_REMOTE "Build with remote/SSH support (in development)" OFF)
+
+# The two flags are independent: profiler launch builds without remote (the
+# SSH connection UI inside the launcher is compiled out via
+# ROCPROFVIS_ENABLE_REMOTE guards), and remote can be enabled on its own. The
+# remote-profiling glue (RemoteProfilerSession / SshProfilerExecutor) is only
+# built when BOTH are enabled.
+
 if(COMPUTE_UI_SUPPORT) 
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DCOMPUTE_UI_SUPPORT")
 endif(COMPUTE_UI_SUPPORT)
 if(ROCPROFVIS_DEVELOPER_MODE)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DROCPROFVIS_DEVELOPER_MODE")
 endif(ROCPROFVIS_DEVELOPER_MODE)
+if(ROCPROFVIS_ENABLE_PROFILER)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DROCPROFVIS_ENABLE_PROFILER")
+endif(ROCPROFVIS_ENABLE_PROFILER)
+if(ROCPROFVIS_ENABLE_REMOTE)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DROCPROFVIS_ENABLE_REMOTE")
+endif(ROCPROFVIS_ENABLE_REMOTE)
 if(ROCPROFVIS_ENABLE_INTERNAL_BANNER)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DROCPROFVIS_ENABLE_INTERNAL_BANNER")
 endif(ROCPROFVIS_ENABLE_INTERNAL_BANNER)
@@ -114,6 +134,53 @@ set(VIEW_FILES
     src/view/src/rocprofvis_json_utils.h
     src/view/src/rocprofvis_profiles_document.cpp
     src/view/src/rocprofvis_profiles_document.h
+    # AppMonitor is generic long-running-operation infra shared by the profiler
+    # and remote features (and woven into the core app lifecycle), so it is
+    # always compiled regardless of those feature flags.
+    src/view/src/rocprofvis_appmonitor.cpp
+    src/view/src/rocprofvis_appmonitor.h
+    src/view/src/widgets/rocprofvis_widget.cpp
+    src/view/src/widgets/rocprofvis_split_containers.cpp
+    src/view/src/widgets/rocprofvis_flex_container.cpp
+    src/view/src/widgets/rocprofvis_tab_container.cpp
+    src/view/src/widgets/rocprofvis_editable_textfield.cpp
+    src/view/src/widgets/rocprofvis_debug_window.cpp
+    src/view/src/widgets/rocprofvis_log_viewer.cpp
+    src/view/src/widgets/rocprofvis_gui_helpers.cpp
+    src/view/src/widgets/rocprofvis_image_helpers.cpp
+    src/view/src/widgets/rocprofvis_infinite_scroll_table.cpp
+    src/view/src/widgets/rocprofvis_dialog.cpp
+    src/view/src/widgets/rocprofvis_notification_manager.cpp
+    )
+
+# TEMPORARY (profiler launch): profiler UI + backends + app monitor. Remove
+# this guard when the profiler feature graduates.
+if(ROCPROFVIS_ENABLE_PROFILER)
+list(APPEND VIEW_FILES
+    src/view/src/profiler/rocprofvis_profiler_launcher_dialog.cpp
+    src/view/src/profiler/rocprofvis_profiler_launcher_dialog.h
+    src/view/src/profiler/rocprofvis_profiler_session_base.cpp
+    src/view/src/profiler/rocprofvis_profiler_session_base.h
+    src/view/src/profiler/rocprofvis_profiler_session.cpp
+    src/view/src/profiler/rocprofvis_profiler_session.h
+    src/view/src/profiler/rocprofvis_profiler_launch_orchestrator.cpp
+    src/view/src/profiler/rocprofvis_profiler_launch_orchestrator.h
+    src/view/src/profiler/rocprofvis_launch_config.cpp
+    src/view/src/profiler/rocprofvis_launch_config.h
+    src/view/src/profiler/rocprofvis_profiler_backend.h
+    src/view/src/profiler/rocprofvis_rocprof_sys_backend.cpp
+    src/view/src/profiler/rocprofvis_rocprof_sys_backend.h
+    src/view/src/profiler/rocprofvis_launch_preset_manager.cpp
+    src/view/src/profiler/rocprofvis_launch_preset_manager.h
+    src/view/src/profiler/rocprofvis_launch_shared_tabs.cpp
+    src/view/src/profiler/rocprofvis_launch_shared_tabs.h
+)
+endif(ROCPROFVIS_ENABLE_PROFILER)
+
+# TEMPORARY (remote/SSH): remote connection UI, fetch, and trace orchestration.
+# Remove this guard when the remote feature graduates.
+if(ROCPROFVIS_ENABLE_REMOTE)
+list(APPEND VIEW_FILES
     src/view/src/remote/rocprofvis_ssh_uri.cpp
     src/view/src/remote/rocprofvis_ssh_connection_config.cpp
     src/view/src/remote/rocprofvis_ssh_connection_config.h
@@ -128,40 +195,17 @@ set(VIEW_FILES
     src/view/src/remote/rocprofvis_ssh_settings_dialog.h
     src/view/src/remote/rocprofvis_ssh_test_dialog.cpp
     src/view/src/remote/rocprofvis_ssh_test_dialog.h
-    src/view/src/widgets/rocprofvis_widget.cpp
-    src/view/src/widgets/rocprofvis_split_containers.cpp
-    src/view/src/widgets/rocprofvis_flex_container.cpp
-    src/view/src/widgets/rocprofvis_tab_container.cpp
-    src/view/src/widgets/rocprofvis_editable_textfield.cpp
-    src/view/src/widgets/rocprofvis_debug_window.cpp
-    src/view/src/widgets/rocprofvis_log_viewer.cpp
-    src/view/src/widgets/rocprofvis_gui_helpers.cpp
-    src/view/src/widgets/rocprofvis_image_helpers.cpp
-    src/view/src/widgets/rocprofvis_infinite_scroll_table.cpp
-    src/view/src/widgets/rocprofvis_dialog.cpp
-    src/view/src/widgets/rocprofvis_notification_manager.cpp
-    src/view/src/profiler/rocprofvis_profiler_launcher_dialog.cpp
-    src/view/src/profiler/rocprofvis_profiler_launcher_dialog.h
-    src/view/src/profiler/rocprofvis_profiler_session_base.cpp
-    src/view/src/profiler/rocprofvis_profiler_session_base.h
-    src/view/src/profiler/rocprofvis_profiler_session.cpp
-    src/view/src/profiler/rocprofvis_profiler_session.h
+)
+endif(ROCPROFVIS_ENABLE_REMOTE)
+
+# TEMPORARY (remote profiling): the remote profiler session bridges the
+# profiler and remote features, so it needs both flags.
+if(ROCPROFVIS_ENABLE_PROFILER AND ROCPROFVIS_ENABLE_REMOTE)
+list(APPEND VIEW_FILES
     src/view/src/profiler/rocprofvis_remote_profiler_session.cpp
     src/view/src/profiler/rocprofvis_remote_profiler_session.h
-    src/view/src/profiler/rocprofvis_profiler_launch_orchestrator.cpp
-    src/view/src/profiler/rocprofvis_profiler_launch_orchestrator.h
-    src/view/src/profiler/rocprofvis_launch_config.cpp
-    src/view/src/profiler/rocprofvis_launch_config.h
-    src/view/src/profiler/rocprofvis_profiler_backend.h
-    src/view/src/profiler/rocprofvis_rocprof_sys_backend.cpp
-    src/view/src/profiler/rocprofvis_rocprof_sys_backend.h
-    src/view/src/profiler/rocprofvis_launch_preset_manager.cpp
-    src/view/src/profiler/rocprofvis_launch_preset_manager.h
-    src/view/src/profiler/rocprofvis_launch_shared_tabs.cpp
-    src/view/src/profiler/rocprofvis_launch_shared_tabs.h
-    src/view/src/rocprofvis_appmonitor.cpp
-    src/view/src/rocprofvis_appmonitor.h
-    )
+)
+endif()
 
 if(COMPUTE_UI_SUPPORT) 
 list(APPEND VIEW_FILES
@@ -260,7 +304,10 @@ target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/sr
 target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/view/src/model)
 target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/view/src/icons)
 target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/view/src/widgets)
+# TEMPORARY (profiler launch): remove when the profiler feature graduates.
+if(ROCPROFVIS_ENABLE_PROFILER)
 target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/view/src/profiler)
+endif(ROCPROFVIS_ENABLE_PROFILER)
 target_include_directories(${TARGET_NAME} PRIVATE ${Vulkan_INCLUDE_DIRS})
 target_include_directories(${TARGET_NAME} PRIVATE ${Vulkan_INCLUDE_DIR})
 target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/model/inc)
@@ -275,6 +322,9 @@ target_link_libraries(${TARGET_NAME} PRIVATE spdlog)
 target_link_libraries(${TARGET_NAME} PRIVATE sqlite3)
 target_link_libraries(${TARGET_NAME} PRIVATE json)
 
+# TEMPORARY (remote/SSH): only link the SSH/crypto stack into the executable
+# when remote is built. Remove this guard when the remote feature graduates.
+if(ROCPROFVIS_ENABLE_REMOTE)
 if (CRYPTO_BACKEND STREQUAL "mbedTLS")
 target_link_libraries(${TARGET_NAME} PRIVATE libssh2_static)
 endif()
@@ -282,6 +332,7 @@ endif()
 if (CRYPTO_BACKEND STREQUAL "OpenSSL")
 target_link_libraries(${TARGET_NAME} PRIVATE libssh2_static OpenSSL::SSL OpenSSL::Crypto)
 endif()
+endif(ROCPROFVIS_ENABLE_REMOTE)
 
 if(APPLE)
     # rocprofvis_platform_helpers_macos.mm uses AppKit (+[NSEvent modifierFlags]).
@@ -412,7 +463,7 @@ Auto-detected from the Vulkan SDK / Homebrew when empty.")
     # the executable's actual dependency paths at build time with otool, then
     # rewrite every OpenSSL reference to `@rpath/<versioned-name>`. The staged
     # files keep their versioned names so the load commands match.
-    if(CRYPTO_BACKEND STREQUAL "OpenSSL")
+    if(ROCPROFVIS_ENABLE_REMOTE AND CRYPTO_BACKEND STREQUAL "OpenSSL")
         get_target_property(ROCPROFVIS_OPENSSL_SSL_LIB OpenSSL::SSL IMPORTED_LOCATION)
         get_target_property(ROCPROFVIS_OPENSSL_CRYPTO_LIB OpenSSL::Crypto IMPORTED_LOCATION)
         if(NOT ROCPROFVIS_OPENSSL_SSL_LIB OR NOT ROCPROFVIS_OPENSSL_CRYPTO_LIB)
@@ -582,7 +633,7 @@ endif()
 # DEB depends are explicit (unlike RPM AUTOREQPROV), so declare the system
 # OpenSSL runtime only when the OpenSSL backend is built. The default mbedTLS
 # backend links statically and needs no extra runtime dependency.
-if(CRYPTO_BACKEND STREQUAL "OpenSSL")
+if(ROCPROFVIS_ENABLE_REMOTE AND CRYPTO_BACKEND STREQUAL "OpenSSL")
     list(APPEND DEB_DEPENDS_LIST "libssl3")
 endif()
 list(APPEND DEB_DEPENDS_LIST "libc6")
@@ -645,7 +696,7 @@ if(WIN32)
     # $<TARGET_RUNTIME_DLLS> only captures OpenSSL if find_package produced shared
     # imported targets with the .dll as IMPORTED_LOCATION (distribution-dependent),
     # so copy the resolved OpenSSL DLLs explicitly when that backend is enabled.
-    if(CRYPTO_BACKEND STREQUAL "OpenSSL")
+    if(ROCPROFVIS_ENABLE_REMOTE AND CRYPTO_BACKEND STREQUAL "OpenSSL")
         set(_ossl_dlls "")
         # 1) Preferred: the imported target's IMPORTED_LOCATION, when it is a DLL.
         foreach(_ossl_target OpenSSL::SSL OpenSSL::Crypto)

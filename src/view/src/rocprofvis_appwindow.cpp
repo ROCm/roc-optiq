@@ -27,8 +27,11 @@
 #include "widgets/rocprofvis_gui_helpers.h"
 #include "widgets/rocprofvis_widget.h"
 #include "widgets/rocprofvis_notification_manager.h"
+// TEMPORARY (profiler launch): remove guard when the profiler feature graduates.
+#ifdef ROCPROFVIS_ENABLE_PROFILER
 #include "rocprofvis_profiler_launcher_dialog.h"
-#ifdef TEST_SSH_CONNECTION
+#endif
+#ifdef ROCPROFVIS_ENABLE_REMOTE
 #include "remote/rocprofvis_ssh_auth_modal.h"
 #endif
 #include "welcome/rocprofvis_welcome_page.h"
@@ -139,8 +142,10 @@ AppWindow::~AppWindow()
     // remote-trace orchestrator) before tearing down the monitor so they
     // unregister cleanly instead of lazily re-creating the singleton during
     // their own destruction.
+#ifdef ROCPROFVIS_ENABLE_PROFILER
     m_profiler_launcher_dialog.reset();
-#ifdef TEST_SSH_CONNECTION
+#endif
+#ifdef ROCPROFVIS_ENABLE_REMOTE
     m_ssh_test_dialog.reset();
 #endif
     AppMonitor::DestroyInstance();
@@ -485,8 +490,10 @@ AppWindow::BeginAppShutdown()
     // sessions transfer any in-flight work to the AppMonitor (non-blocking).
     // Subsequent Update() frames drain the monitor; the exit gate waits until it
     // is empty.
+#ifdef ROCPROFVIS_ENABLE_PROFILER
     m_profiler_launcher_dialog.reset();
-#ifdef TEST_SSH_CONNECTION
+#endif
+#ifdef ROCPROFVIS_ENABLE_REMOTE
     m_ssh_test_dialog.reset();
 #endif
 
@@ -624,10 +631,12 @@ AppWindow::Update()
     LogViewer::GetInstance()->Poll();
     DebugWindow::GetInstance()->ClearTransient();
     m_tab_container->Update();
+#ifdef ROCPROFVIS_ENABLE_PROFILER
     if (m_profiler_launcher_dialog)
     {
         m_profiler_launcher_dialog->Update();
     }
+#endif
 #ifdef ROCPROFVIS_DEVELOPER_MODE
     m_test_data_provider.Update();
 #endif
@@ -748,7 +757,7 @@ AppWindow::Render()
         m_open_about_dialog = false;  // Reset the flag after opening the dialog
     }
     RenderAboutDialog();  // Popup dialogs need to be rendered as part of the main window
-#ifdef TEST_SSH_CONNECTION
+#ifdef ROCPROFVIS_ENABLE_REMOTE
     if(m_ssh_test_dialog)
     {
         m_ssh_test_dialog->Render();
@@ -757,10 +766,12 @@ AppWindow::Render()
     m_confirmation_dialog->Render();
     m_message_dialog->Render();
     m_settings_panel->Render();
+#ifdef ROCPROFVIS_ENABLE_PROFILER
     if (m_profiler_launcher_dialog)
     {
         m_profiler_launcher_dialog->Render();
     }
+#endif
 
     ImGui::End();
     // Pop ImGuiStyleVar_ItemSpacing, ImGuiStyleVar_WindowPadding,
@@ -975,10 +986,13 @@ AppWindow::RenderFileMenu(Project* project)
             HandleSaveAsFile();
         }
         
+#ifdef ROCPROFVIS_ENABLE_PROFILER
+        // TEMPORARY (profiler launch): remove guard when the feature graduates.
         if(ImGui::MenuItem("Launch Profiler..."))
         {
             ShowProfilerLauncher();
         }
+#endif
         ImGui::Separator();
         {
             TraceView* trace_view = nullptr;
@@ -1604,7 +1618,7 @@ AppWindow::ShowImGuiFileDialog(const std::string& title, const std::vector<FileF
                                             filter_stream.str().c_str(), config);
 }
 
-#if defined(ROCPROFVIS_DEVELOPER_MODE) && defined(TEST_SSH_CONNECTION)
+#if defined(ROCPROFVIS_DEVELOPER_MODE) && defined(ROCPROFVIS_ENABLE_REMOTE)
 
 void
 AppWindow::HandleTestRemoteSSH()
@@ -1616,7 +1630,7 @@ AppWindow::HandleTestRemoteSSH()
     m_ssh_test_dialog->Show();
 }
 
-#endif // ROCPROFVIS_DEVELOPER_MODE && TEST_SSH_CONNECTION
+#endif // ROCPROFVIS_DEVELOPER_MODE && ROCPROFVIS_ENABLE_REMOTE
 void
 AppWindow::UpdateStatusBar()
 {
@@ -1738,7 +1752,7 @@ AppWindow::RenderDeveloperMenu()
                                    }
                                });
         }
-#ifdef TEST_SSH_CONNECTION
+#ifdef ROCPROFVIS_ENABLE_REMOTE
         if(ImGui::MenuItem("Open Remote...", nullptr, false))
         {
             HandleTestRemoteSSH();
@@ -1887,6 +1901,8 @@ AppWindow::RenderDebugOuput()
 }
 #endif  // ROCPROFVIS_DEVELOPER_MODE
 
+#ifdef ROCPROFVIS_ENABLE_PROFILER
+// TEMPORARY (profiler launch): remove guard when the feature graduates.
 void
 AppWindow::ShowProfilerLauncher()
 {
@@ -1899,6 +1915,7 @@ AppWindow::ShowProfilerLauncher()
 
     m_profiler_launcher_dialog->Show();
 }
+#endif  // ROCPROFVIS_ENABLE_PROFILER
 
 }  // namespace View
 }  // namespace RocProfVis

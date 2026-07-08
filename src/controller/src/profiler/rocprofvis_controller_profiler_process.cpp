@@ -3,7 +3,10 @@
 
 #include "rocprofvis_controller_profiler_process.h"
 #include "rocprofvis_controller_profiler_cmdline.h"
+// TEMPORARY (remote/SSH): remove guard when remote graduates.
+#ifdef ROCPROFVIS_ENABLE_REMOTE
 #include "rocprofvis_controller_ssh_profiler_executor.h"
+#endif
 #include "rocprofvis_controller_future.h"
 #include "rocprofvis_controller_job_system.h"
 #include "spdlog/spdlog.h"
@@ -702,6 +705,9 @@ rocprofvis_result_t ProfilerProcessController::LaunchAsync(ProfilerConfig const*
     return kRocProfVisResultSuccess;
 }
 
+#ifdef ROCPROFVIS_ENABLE_REMOTE
+// TEMPORARY (remote/SSH): remote profiler launch. Remove guard when remote
+// graduates.
 rocprofvis_result_t ProfilerProcessController::LaunchAsyncRemote(ProfilerConfig const* config,
                                                                  SshConnection*        connection,
                                                                  Future*               future)
@@ -739,6 +745,7 @@ rocprofvis_result_t ProfilerProcessController::LaunchAsyncRemote(ProfilerConfig 
     m_state = kRPVProfilerStateRunning;
     return kRocProfVisResultSuccess;
 }
+#endif  // ROCPROFVIS_ENABLE_REMOTE
 
 rocprofvis_profiler_state_t ProfilerProcessController::GetState() const
 {

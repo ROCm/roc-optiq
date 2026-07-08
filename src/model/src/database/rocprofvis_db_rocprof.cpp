@@ -2,10 +2,12 @@
 // SPDX-License-Identifier: MIT
 
 #include "rocprofvis_db_rocprof.h"
+#include "rocprofvis_db_query_builder.h"
 #include "rocprofvis_shared_types.h"
+#include <cfloat>
+#include <filesystem>
 #include <sstream>
 #include <string.h>
-#include <filesystem>
 
 namespace RocProfVis
 {
@@ -94,7 +96,10 @@ int RocprofDatabase::ProcessTrack(rocprofvis_dm_track_params_t& track_params, ro
     ROCPROFVIS_ASSERT_MSG_RETURN(track_params.track_indentifiers.db_instance != nullptr, ERROR_NODE_KEY_CANNOT_BE_NULL, 1);
     DbInstance* db_instance = (DbInstance*)track_params.track_indentifiers.db_instance;
     rocprofvis_dm_track_params_it it = TrackTracker()->FindTrackParamsIterator(track_params.track_indentifiers, db_instance->GuidIndex());
-    UpdateQueryForTrack(it, track_params, newqueries);
+    // Reader-backed tracks carry no SQL slice queries; UpdateQueryForTrack derefs
+    // newqueries[...] and would crash. Slice loads route to the reader instead.
+    if(track_params.reader_track_id == kInvalidReaderTrackId)
+        UpdateQueryForTrack(it, track_params, newqueries);
     if(it == TrackPropertiesEnd())
     {
     	TrackTracker()->AddTrack(track_params.track_indentifiers, db_instance->GuidIndex(), track_params.track_indentifiers.track_id);
@@ -186,6 +191,278 @@ int RocprofDatabase::ProcessTrack(rocprofvis_dm_track_params_t& track_params, ro
     return 0;
 }
 
+profiler_hub::reader_t*
+RocprofDatabase::GetReader(DbInstance* db_instance)
+{
+    std::lock_guard<std::mutex> lock(m_readers_mutex);
+    if(m_readers.size() < NumDbInstances()) m_readers.resize(NumDbInstances());
+    uint32_t idx = db_instance->GuidIndex();
+    if(!m_readers[idx])
+    {
+        try
+        {
+            // storage_t ignores the uuid on read-only opens and discovers the shard's
+            // tables itself; pass empty per its documented contract.
+            m_readers[idx] = std::make_unique<profiler_hub::reader_t>(
+                std::make_unique<profiler_hub::storage_t>(
+                    m_db_nodes[db_instance->FileIndex()]->filepath, std::string()));
+        } catch(const std::exception& e)
+        {
+            spdlog::error("Failed to open profiler-hub reader for shard {}: {}", idx,
+                          e.what());
+            return nullptr;
+        }
+    }
+    return m_readers[idx].get();
+}
+
+void
+RocprofDatabase::ReaderTrackInfoToTrackParams(
+    const profiler_hub::reader_types::track_info_t& info, DbInstance* db_instance,
+    rocprofvis_dm_track_params_t& track_params)
+{
+    bool is_sample =
+        info.region_kind == profiler_hub::reader_types::region_track_kind_t::sample;
+
+    track_params.track_indentifiers.db_instance = db_instance;
+    track_params.track_indentifiers.category =
+        is_sample ? kRocProfVisDmRegionSampleTrack : kRocProfVisDmRegionMainTrack;
+    track_params.op =
+        is_sample ? kRocProfVisDmOperationLaunchSample : kRocProfVisDmOperationLaunch;
+
+    uint64_t node_id =
+        info.node_info ? static_cast<uint64_t>(info.node_info->node_id) : 0;
+    uint64_t pid = info.process_info ? static_cast<uint64_t>(info.process_info->pid) : 0;
+    uint64_t tid =
+        info.thread_info ? static_cast<uint64_t>(info.thread_info->thread_id) : 0;
+
+    track_params.track_indentifiers.process_id =
+        static_cast<rocprofvis_dm_track_id_t>(pid);
+    track_params.track_indentifiers.id[TRACK_ID_NODE]         = node_id;
+    track_params.track_indentifiers.id[TRACK_ID_PID]          = pid;
+    track_params.track_indentifiers.id[TRACK_ID_TID]          = tid;
+    track_params.track_indentifiers.is_numeric[TRACK_ID_NODE] = true;
+    track_params.track_indentifiers.is_numeric[TRACK_ID_PID]  = true;
+    track_params.track_indentifiers.is_numeric[TRACK_ID_TID]  = true;
+    track_params.track_indentifiers.tag[TRACK_ID_NODE] = Builder::NODE_ID_SERVICE_NAME;
+    track_params.track_indentifiers.tag[TRACK_ID_PID]  = Builder::PROCESS_ID_SERVICE_NAME;
+    track_params.track_indentifiers.tag[TRACK_ID_TID]  = Builder::THREAD_ID_SERVICE_NAME;
+
+    track_params.reader_track_id = info.id;
+}
+
+rocprofvis_dm_result_t
+RocprofDatabase::AddReaderRegionTracks(Future* future)
+{
+    rocprofvis_dm_result_t result = kRocProfVisDmResultSuccess;
+    using region_track_kind_t     = profiler_hub::reader_types::region_track_kind_t;
+    using track_type_t            = profiler_hub::reader_types::track_type_t;
+
+    // load_id 0 = region-main, load_id 1 = region-sample. Two ordered blocks preserve
+    // the original [all-shards-main, all-shards-sample] track-id ordering for both the
+    // cache-hit and cache-miss paths.
+    for(uint32_t load_id = 0; load_id <= 1; ++load_id)
+    {
+        bool                     is_sample = (load_id == 1);
+        std::vector<std::thread> threads;
+        m_add_track_mutex.init(NumDbInstances());
+        auto task = [&](DbInstance* db_instance) {
+            uint32_t guid_index = db_instance->GuidIndex();
+            if(!GetMetadataVersionControl()->MustRebuildTrackInfo(
+                   db_instance->FileIndex()))
+            {
+                // Cache hit: reload the saved region tracks (incl. reader_track_id) by
+                // load_id. ExecuteSQLQuery ignores query[] on a hit and runs the cache
+                // load via CallBackLoadTrack, which locks the shard gate internally.
+                Future* sub_future = future->AddSubFuture();
+                result             = ExecuteSQLQuery(sub_future, db_instance, load_id,
+                                                     { "", "", "", "", "", "" }, &CallBackAddTrack,
+                                                     &CallBackLoadTrack);
+                future->DeleteSubFuture(sub_future);
+                m_add_track_mutex.unlock(guid_index);
+                return;
+            }
+
+            // Cache miss: synthesize region tracks from the reader (v3 region tuples).
+            TraceProperties()->tracks_info_restored = false;
+            profiler_hub::reader_t* reader          = GetReader(db_instance);
+            if(!reader)
+            {
+                result = kRocProfVisDmResultDbAccessFailed;
+                m_add_track_mutex.unlock(guid_index);
+                return;
+            }
+            auto reader_tracks = reader->get_all_tracks();
+            m_add_track_mutex.lock(guid_index);
+            for(const auto& info : reader_tracks)
+            {
+                if(!info || info->type != track_type_t::cpu_thread) continue;
+                bool info_sample = info->region_kind == region_track_kind_t::sample;
+                if(info_sample != is_sample) continue;
+
+                rocprofvis_dm_track_params_t track_params = { 0 };
+                ReaderTrackInfoToTrackParams(*info, db_instance, track_params);
+                track_params.track_indentifiers.track_id =
+                    (rocprofvis_dm_track_id_t) NumTracks();
+                track_params.load_id.insert(load_id);
+
+                track_params.record_count = reader->get_track_stats(info->id).count;
+
+                // min_ts/max_ts and the level range (min_value/max_value) mirror the SQL
+                // CallbackGetTrackProperties pass, which skips reader tracks; apply the
+                // same startTs!=0 && endTs!=0 filter.
+                rocprofvis_dm_timestamp_t min_ts    = UINT64_MAX;
+                rocprofvis_dm_timestamp_t max_ts    = 0;
+                rocprofvis_dm_value_t     min_level = DBL_MAX;
+                rocprofvis_dm_value_t     max_level = 0;
+                for(const auto& ev : reader->get_interval_track(info->id))
+                {
+                    if(ev.start == 0 || ev.end == 0) continue;
+                    if(ev.start < min_ts) min_ts = ev.start;
+                    if(ev.end > max_ts) max_ts = ev.end;
+                    if((double) ev.level < min_level) min_level = (double) ev.level;
+                    if((double) ev.level > max_level) max_level = (double) ev.level;
+                }
+                if(min_ts == UINT64_MAX)
+                {
+                    min_ts    = 0;
+                    min_level = 0;
+                }
+                track_params.min_ts    = min_ts;
+                track_params.max_ts    = max_ts;
+                track_params.min_value = min_level;
+                track_params.max_value = max_level;
+
+                if(track_params.op < kRocProfVisDmNumOperation)
+                    TraceProperties()->events_count[track_params.op] +=
+                        track_params.record_count;
+
+                // Reader tracks are skipped by the later property pass, so fold their
+                // span into the per-instance origin/duration here (matches
+                // CallbackGetTrackProperties).
+                if(track_params.record_count > 0)
+                {
+                    TraceProperties()->db_inst_start_time[guid_index] = std::min(
+                        TraceProperties()->db_inst_start_time[guid_index], min_ts);
+                    TraceProperties()->db_inst_end_time[guid_index] =
+                        std::max(TraceProperties()->db_inst_end_time[guid_index], max_ts);
+                    TraceProperties()->trace_duration =
+                        std::max(TraceProperties()->trace_duration,
+                                 TraceProperties()->db_inst_end_time[guid_index] -
+                                     TraceProperties()->db_inst_start_time[guid_index]);
+                }
+
+                if(ProcessTrack(track_params, nullptr) != 0)
+                {
+                    result = kRocProfVisDmResultDbAccessFailed;
+                    break;
+                }
+            }
+            m_add_track_mutex.unlock(guid_index);
+        };
+        for(auto& guid_info : DbInstances())
+            threads.emplace_back(task, &guid_info.first);
+        for(auto& t : threads)
+            t.join();
+    }
+    return result;
+}
+
+rocprofvis_dm_result_t
+RocprofDatabase::ReadReaderTraceSlice(rocprofvis_dm_timestamp_t     start,
+                                      rocprofvis_dm_timestamp_t     end,
+                                      rocprofvis_dm_track_params_t* props,
+                                      slice_array_t& slices, Future* future)
+{
+    ROCPROFVIS_ASSERT_MSG_RETURN(props, ERROR_NODE_KEY_CANNOT_BE_NULL,
+                                 kRocProfVisDmResultInvalidParameter);
+    DbInstance* db_instance        = (DbInstance*) props->track_indentifiers.db_instance;
+    profiler_hub::reader_t* reader = GetReader(db_instance);
+    if(!reader) return kRocProfVisDmResultDbAccessFailed;
+
+    uint32_t                  guid_index = db_instance->GuidIndex();
+    rocprofvis_dm_timestamp_t origin = TraceProperties()->db_inst_start_time[guid_index];
+    // Incoming start/end are origin-relative; reader events are absolute, matching the
+    // SQL slice path which adds the origin before filtering on absolute timestamps.
+    rocprofvis_dm_timestamp_t abs_start = start + origin;
+    rocprofvis_dm_timestamp_t abs_end   = end + origin;
+
+    rocprofvis_dm_track_id_t track_id = props->track_indentifiers.track_id;
+    for(const auto& ev : reader->get_interval_track(props->reader_track_id))
+    {
+        if(future->Interrupted()) return kRocProfVisDmResultDbAbort;
+        // Same overlap window as BuildSliceQuery's timed_query: start < end && end >
+        // start.
+        if(!(ev.start < abs_end && ev.end > abs_start)) continue;
+
+        rocprofvis_db_record_data_t record;
+        record.event.id.bitfield.event_op   = props->op;
+        record.event.id.bitfield.event_node = guid_index;
+        record.event.id.bitfield.event_id   = ev.opaque_id;
+        record.event.timestamp              = ev.start - origin;
+        record.event.duration = (rocprofvis_dm_duration_t) (ev.end - ev.start);
+        record.event.category = InternReaderString(ev.category);
+        record.event.symbol   = InternReaderString(ev.display_name);
+        record.event.level    = static_cast<rocprofvis_dm_event_level_t>(ev.level);
+
+        if(BindObject()->FuncAddRecord(slices[track_id], record) !=
+           kRocProfVisDmResultSuccess)
+            return kRocProfVisDmResultDbAccessFailed;
+        future->CountThisRow();
+    }
+    return kRocProfVisDmResultSuccess;
+}
+
+void
+RocprofDatabase::BuildReaderTrackHistogram(rocprofvis_dm_track_params_t* props,
+                                           uint64_t                      bucket_size)
+{
+    if(props == nullptr || bucket_size == 0) return;
+    DbInstance* db_instance        = (DbInstance*) props->track_indentifiers.db_instance;
+    profiler_hub::reader_t* reader = GetReader(db_instance);
+    if(!reader) return;
+
+    int64_t start_time =
+        (int64_t) TraceProperties()->db_inst_start_time[db_instance->GuidIndex()];
+    int64_t bsize = (int64_t) bucket_size;
+
+    // Reproduce GetHistogramQuerySuffix's bucket-overlap math over the reader's
+    // intervals: per event, distribute its overlap duration across the buckets it spans;
+    // per-bucket event count matches COUNT(DISTINCT event_id) (each event lands once per
+    // bucket).
+    for(const auto& ev : reader->get_interval_track(props->reader_track_id))
+    {
+        int64_t ev_start     = (int64_t) ev.start;
+        int64_t ev_end       = (int64_t) ev.end;
+        int64_t start_bucket = std::max<int64_t>(0, (ev_start - start_time) / bsize);
+        int64_t end_bucket   = std::max<int64_t>(0, (ev_end - 1 - start_time) / bsize);
+        for(int64_t bucket_no = start_bucket; bucket_no <= end_bucket; ++bucket_no)
+        {
+            int64_t overlap_start =
+                std::max<int64_t>(ev_start, start_time + bucket_no * bsize);
+            int64_t overlap_end =
+                std::min<int64_t>(ev_end, start_time + (bucket_no + 1) * bsize);
+            if(overlap_end > overlap_start)
+            {
+                auto& bucket = props->histogram[(uint32_t) bucket_no];
+                bucket.first += 1;
+                bucket.second += (double) (overlap_end - overlap_start);
+            }
+        }
+    }
+}
+
+rocprofvis_dm_id_t
+RocprofDatabase::InternReaderString(const std::string& str)
+{
+    std::lock_guard<std::mutex> lock(m_lock);
+    auto                        it = m_string_map.find(str);
+    if(it != m_string_map.end()) return it->second;
+    uint32_t string_index =
+        BindObject()->FuncAddString(BindObject()->trace_object, str.c_str());
+    m_string_map[str] = string_index;
+    return string_index;
+}
 
 int RocprofDatabase::CallbackCaptureMemoryActivity(void* data, int argc, sqlite3_stmt* stmt, char** azColName) {
     ROCPROFVIS_ASSERT_MSG_RETURN(argc==rocprofvis_db_sqlite_memory_alloc_activity_query_format::NUM_PARAMS, ERROR_DATABASE_QUERY_PARAMETERS_MISMATCH, 1);
@@ -963,64 +1240,12 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
         uint32_t load_id = 0;
 
         ShowProgress(5, "Adding HIP API tracks", kRPVDbBusy, future );
-        {
-            std::vector<std::thread> threads;
-            m_add_track_mutex.init(NumDbInstances());
-            auto task = [&](DbInstance* db_instance)
-                {
-                    Future* sub_future = future->AddSubFuture();
-                    result = ExecuteSQLQuery(sub_future, db_instance, load_id,
-                        {
-                            m_query_factory.GetRocprofRegionTrackQuery(false),
-                            "",
-                            m_query_factory.GetRocprofRegionLevelQuery(false),
-                            m_query_factory.GetRocprofRegionSliceQuery(false),
-                            "",
-                            m_query_factory.GetRocprofRegionTableQuery(false),
-                        },
-                        &CallBackAddTrack, &CallBackLoadTrack);
-                    future->DeleteSubFuture(sub_future);
-                    m_add_track_mutex.unlock(db_instance->GuidIndex());
-                };
-            for (auto& guid_info : DbInstances())
-            {
-                threads.emplace_back(task, &guid_info.first);
-            }
-            for (auto& t : threads)
-                t.join();
-            load_id++;
-        }
-
-
-        ShowProgress(5, "Adding HIP API Sample tracks", kRPVDbBusy, future );
-        {
-            std::vector<std::thread> threads;
-            m_add_track_mutex.init(NumDbInstances());
-            auto task = [&](DbInstance* db_instance)
-                {
-
-                    Future* sub_future = future->AddSubFuture();
-                    result = ExecuteSQLQuery(sub_future, db_instance, load_id,
-                    { 
-                        m_query_factory.GetRocprofRegionTrackQuery(true),
-                        "",
-                        m_query_factory.GetRocprofRegionLevelQuery(true),
-                        m_query_factory.GetRocprofRegionSliceQuery(true),
-                        "",
-                        m_query_factory.GetRocprofRegionTableQuery(true),
-                    },
-                    &CallBackAddTrack, &CallBackLoadTrack);
-                    future->DeleteSubFuture(sub_future);
-                    m_add_track_mutex.unlock(db_instance->GuidIndex());
-                };
-            for (auto& guid_info : DbInstances())
-            {
-                threads.emplace_back(task, &guid_info.first);
-            }
-            for (auto& t : threads)
-                t.join();
-            load_id++;
-        }
+        // v3 region/cpu_thread tracks are synthesized in the profiler-hub reader from
+        // rocpd_region (the v3 track-synthesis-over-registry decision, 2026-07-07), so
+        // discovery routes through the reader here instead of the region-main/sample SQL
+        // track queries. AddReaderRegionTracks consumes load_id 0 (main) and 1 (sample).
+        result = AddReaderRegionTracks(future);
+        load_id += 2;
 
         ShowProgress(5, "Adding kernel dispatch tracks", kRPVDbBusy, future );
         {
@@ -1365,6 +1590,22 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
                     DbInstances()))
             {
                 break;
+            }
+            // The SQL property pass skips reader tracks, so the trace_duration reset
+            // above dropped their span. db_inst_start/end already include both reader and
+            // SQL contributions (never reset); re-fold the per-instance span so
+            // reader-only instances are not left zero-duration.
+            for(size_t i = 0; i < DbInstances().size(); ++i)
+            {
+                if(TraceProperties()->db_inst_start_time[i] != UINT64_MAX &&
+                   TraceProperties()->db_inst_end_time[i] >=
+                       TraceProperties()->db_inst_start_time[i])
+                {
+                    TraceProperties()->trace_duration =
+                        std::max(TraceProperties()->trace_duration,
+                                 TraceProperties()->db_inst_end_time[i] -
+                                     TraceProperties()->db_inst_start_time[i]);
+                }
             }
         }
 

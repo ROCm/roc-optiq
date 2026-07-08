@@ -6,6 +6,9 @@
 #include "rocprofvis_db_profile.h"
 #include "rocprofvis_db_query_factory.h"
 
+#include <profiler-hub/reader.hpp>
+#include <profiler-hub/storage.hpp>
+
 namespace RocProfVis
 {
 namespace DataModel
@@ -174,7 +177,44 @@ private:
 
     int ProcessTrack(rocprofvis_dm_track_params_t& track_params, rocprofvis_dm_charptr_t*  newqueries) override;
 
-    protected:
+    // Open (once, lazily) the profiler-hub reader for a shard, keyed by GuidIndex.
+    // Returns nullptr if the reader cannot be constructed for this shard.
+    profiler_hub::reader_t* GetReader(DbInstance* db_instance);
+
+    // Translate a reader cpu_thread track into an Optiq track_params, mirroring the
+    // fields CallBackLoadTrack derives from SQL (identity/category/op/tags/stats) and
+    // stashing the reader track id so slice/detail reads route back to the reader.
+    void ReaderTrackInfoToTrackParams(
+        const profiler_hub::reader_types::track_info_t& info, DbInstance* db_instance,
+        rocprofvis_dm_track_params_t& track_params);
+
+    // Reader-backed cpu_thread discovery: replaces the region-main/region-sample SQL
+    // discovery blocks with get_all_tracks() filtered to cpu_thread, per shard.
+    rocprofvis_dm_result_t AddReaderRegionTracks(Future* future);
+
+    // Reader-backed slice load for a cpu_thread track (routed from ReadTraceSlice on a
+    // non-sentinel reader_track_id). Emits interval events with Optiq's exact overlap
+    // window semantics.
+    rocprofvis_dm_result_t ReadReaderTraceSlice(rocprofvis_dm_timestamp_t     start,
+                                                rocprofvis_dm_timestamp_t     end,
+                                                rocprofvis_dm_track_params_t* props,
+                                                slice_array_t&                slices,
+                                                Future* future) override;
+
+    // Reader-backed per-track histogram recompute for a cpu_thread track. Reproduces the
+    // exact bucket-overlap math of GetHistogramQuerySuffix over the reader's interval
+    // events, since the SQL histogram passes skip reader tracks. Invoked from the base
+    // BuildHistogram virtual hook before gap-fill.
+    void BuildReaderTrackHistogram(rocprofvis_dm_track_params_t* props,
+                                   uint64_t                      bucket_size) override;
+
+    // Intern a reader-supplied string (interval category / display name) into the trace
+    // string table, deduping via m_string_map so repeated slice loads reuse one index.
+    // The SQL path remaps DB string ids; reader records carry the resolved string
+    // instead.
+    rocprofvis_dm_id_t InternReaderString(const std::string& str);
+
+protected:
     const rocprofvis_event_data_category_map_t* GetCategoryEnumMap() override {
         return &s_rocprof_categorized_data;
     };
@@ -218,6 +258,10 @@ private:
     private:
         QueryFactory m_query_factory;
         std::string m_db_version;
+        // One profiler-hub reader per shard, indexed by GuidIndex; opened lazily and
+        // kept alive for the database lifetime so slice/detail reads can reuse it.
+        std::vector<std::unique_ptr<profiler_hub::reader_t>> m_readers;
+        std::mutex                                           m_readers_mutex;
         // map array for string indexes remapping. Main reason for remapping is older rocpd schema keeps duplicated symbols, one per GPU 
         string_index_map_t m_string_index_map; // id to index
         string_id_map_t m_string_id_map; // index to id

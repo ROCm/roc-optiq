@@ -25,7 +25,7 @@ typedef enum rocprofvis_db_async_tracks_flags_t
 
 typedef enum rocprofvis_track_load_params
 {
-    kRpvDbTrackLoadId=1,
+    kRpvDbTrackLoadId = 1,
     kRpvDbTrackLoadTrackId,
     kRpvDbTrackLoadCategory,
     kRpvDbTrackLoadOp,
@@ -42,6 +42,8 @@ typedef enum rocprofvis_track_load_params
     kRpvDbTrackLoadSubprocessTag,
     kRpvDbTrackLoadGuid,
     kRpvDbTrackLoadPID,
+    // profiler-hub reader track id (cpu_thread migration); -1 for legacy SQL tracks.
+    kRpvDbTrackLoadReaderTrackId,
     kRpvDbTrackLoadNumItems,
 } rocprofvis_track_load_params;
 
@@ -348,6 +350,32 @@ class ProfileDatabase : public SqliteDatabase
     uint64_t GetHistogramQueryAndSchemaHash();
 
     virtual int ProcessTrack(rocprofvis_dm_track_params_t& track_params, rocprofvis_dm_charptr_t*  newqueries) = 0;
+
+    // Hook for schema backends that load a track's slice from the profiler-hub reader
+    // instead of SQL. Called from ReadTraceSlice when a track carries a non-sentinel
+    // reader_track_id. Default: unsupported (SQL-only backends).
+    virtual rocprofvis_dm_result_t ReadReaderTraceSlice(
+        rocprofvis_dm_timestamp_t start, rocprofvis_dm_timestamp_t end,
+        rocprofvis_dm_track_params_t* props, slice_array_t& slices, Future* future)
+    {
+        (void) start;
+        (void) end;
+        (void) props;
+        (void) slices;
+        (void) future;
+        return kRocProfVisDmResultNotSupported;
+    }
+
+    // Hook for schema backends to populate a reader-backed track's per-bucket histogram
+    // (the SQL histogram passes skip reader tracks). Fills props->histogram in place
+    // using the same bucket math as GetHistogramQuerySuffix. Default: no-op (SQL-only
+    // backends).
+    virtual void BuildReaderTrackHistogram(rocprofvis_dm_track_params_t* props,
+                                           uint64_t                      bucket_size)
+    {
+        (void) props;
+        (void) bucket_size;
+    }
 
     virtual rocprofvis_dm_string_t GetEventOperationQuery(
         const rocprofvis_dm_event_operation_t operation) = 0;

@@ -141,8 +141,14 @@ typedef struct {
     std::map<uint32_t,std::pair<uint32_t,double>> histogram;
     rocprofvis_dm_op_t op;
     std::set<uint32_t> load_id;
-    
+    // profiler-hub reader track id for reader-backed track types (cpu_thread migration);
+    // kInvalidReaderTrackId when this track still uses the hand-rolled SQL query[] path.
+    size_t reader_track_id;
+
 } rocprofvis_dm_track_params_t;
+
+// Sentinel: track is not reader-backed (uses the legacy query[] SQL path).
+#define kInvalidReaderTrackId (~static_cast<size_t>(0))
 
 // rocprofvis_dm_trace_params_t contains trace parameters and shared between data model and database. Physically located in trace object and referenced by a pointer in binding structure.
 typedef struct {

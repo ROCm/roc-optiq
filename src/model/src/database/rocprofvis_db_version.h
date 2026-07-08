@@ -55,16 +55,22 @@ namespace DataModel
 
         enum roc_optiq_table_version_t : uint32_t
         {
-            kRocOptiqTableVersionMemoryActivity = 0x0002,
-            kRocOptiqTableVersionMemoryAllocate = 0x0001,
+            kRocOptiqTableVersionMemoryActivity      = 0x0002,
+            kRocOptiqTableVersionMemoryAllocate      = 0x0001,
             kRocOptiqTableVersionForLevelCalculation = 0x0002,
-            kRocOptiqTableVersionKernelDispatchLevel = kRocOptiqTableVersionForLevelCalculation,
+            kRocOptiqTableVersionKernelDispatchLevel =
+                kRocOptiqTableVersionForLevelCalculation,
             kRocOptiqTableVersionRegionLevel = kRocOptiqTableVersionForLevelCalculation,
-            kRocOptiqTableVersionRegionSampleLevel = kRocOptiqTableVersionForLevelCalculation,
-            kRocOptiqTableVersionMemoryAllocLevel = kRocOptiqTableVersionForLevelCalculation,
-            kRocOptiqTableVersionMemoryCopyLevel = kRocOptiqTableVersionForLevelCalculation,
+            kRocOptiqTableVersionRegionSampleLevel =
+                kRocOptiqTableVersionForLevelCalculation,
+            kRocOptiqTableVersionMemoryAllocLevel =
+                kRocOptiqTableVersionForLevelCalculation,
+            kRocOptiqTableVersionMemoryCopyLevel =
+                kRocOptiqTableVersionForLevelCalculation,
             kRocOptiqTableVersionHistogram = 0x0001,
-            kRocOptiqTableVersionTrackInfo = 0x0003,
+            // 0x0004: track_info gains a reader_track_id column (cpu_thread reader
+            // migration).
+            kRocOptiqTableVersionTrackInfo = 0x0004,
         };
 
         struct roc_optiq_metadata_t

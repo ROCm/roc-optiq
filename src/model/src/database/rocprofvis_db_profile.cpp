@@ -203,6 +203,9 @@ int ProfileDatabase::CallBackAddTrack(void *data, int argc, sqlite3_stmt* stmt, 
     ROCPROFVIS_ASSERT_MSG_RETURN(data, ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL, 1);
     void* func = (void*)&CallBackAddTrack;
     rocprofvis_dm_track_params_t track_params = {0};
+    // SQL-discovered tracks are not reader-backed; the {0} init would leave this at 0,
+    // a VALID reader track id, so slices would wrongly route to the reader.
+    track_params.reader_track_id = kInvalidReaderTrackId;
     rocprofvis_db_sqlite_callback_parameters* callback_params = (rocprofvis_db_sqlite_callback_parameters*)data;
     ROCPROFVIS_ASSERT_MSG_RETURN(callback_params->db_instance != nullptr, ERROR_NODE_KEY_CANNOT_BE_NULL, 1);
     ProfileDatabase* db = (ProfileDatabase*)callback_params->db;
@@ -288,6 +291,11 @@ int ProfileDatabase::CallBackLoadTrack(void *data, int argc, sqlite3_stmt* stmt,
     track_params.track_indentifiers.tag[TRACK_ID_NODE] = db->Sqlite3ColumnText(func, stmt, azColName,kRpvDbTrackLoadNodeTag);
     track_params.track_indentifiers.tag[TRACK_ID_PID_OR_AGENT] = db->Sqlite3ColumnText(func, stmt, azColName,kRpvDbTrackLoadProcessTag);
     track_params.track_indentifiers.tag[TRACK_ID_TID_OR_QUEUE] = db->Sqlite3ColumnText(func, stmt, azColName,kRpvDbTrackLoadSubprocessTag);
+
+    // Restore reader-backed routing: reader tracks were saved with their reader track id,
+    // legacy SQL tracks with -1 (kInvalidReaderTrackId) so they keep the query[] path.
+    track_params.reader_track_id = static_cast<size_t>(
+        db->Sqlite3ColumnInt64(func, stmt, azColName, kRpvDbTrackLoadReaderTrackId));
 
     db->ProcessTrack(track_params, callback_params->query);
 
@@ -806,8 +814,17 @@ ProfileDatabase::ExecuteQueryForAllTracksAsync(
     {
         DbInstance* db_instance = (DbInstance*)TrackPropertiesAt(i)->track_indentifiers.db_instance;
         ROCPROFVIS_ASSERT_MSG_RETURN(db_instance != nullptr, ERROR_NODE_KEY_CANNOT_BE_NULL, kRocProfVisDmResultUnknownError);
-        if (std::find_if(run_for_db_instances.begin(), run_for_db_instances.end(), [db_instance](GuidInfo& guid_info) 
-            { return guid_info.first.GuidIndex() == db_instance->GuidIndex(); }) == run_for_db_instances.end())
+        // Reader-backed tracks have no query[] SQL; their levels, per-track bounds and
+        // histogram are computed via the reader, so skip them in every SQL-driven pass.
+        if(TrackPropertiesAt(i)->reader_track_id != kInvalidReaderTrackId)
+        {
+            continue;
+        }
+        if(std::find_if(run_for_db_instances.begin(), run_for_db_instances.end(),
+                        [db_instance](GuidInfo& guid_info) {
+                            return guid_info.first.GuidIndex() ==
+                                   db_instance->GuidIndex();
+                        }) == run_for_db_instances.end())
         {
             continue;
         }       
@@ -1439,6 +1456,26 @@ rocprofvis_dm_result_t  ProfileDatabase::ReadTraceSlice(
         slice_array_t slices;
 
         slices[*tracks]=BindObject()->FuncAddSlice(BindObject()->trace_object, *tracks, start, end, tag);
+
+        // Reader-backed tracks bypass the SQL slice-query machinery entirely; there are
+        // no query[] entries to build from, so branch before BuildSliceQuery.
+        rocprofvis_dm_track_params_t* reader_props = TrackPropertiesAt(*tracks);
+        if(reader_props->reader_track_id != kInvalidReaderTrackId)
+        {
+            rocprofvis_dm_result_t reader_result =
+                ReadReaderTraceSlice(start, end, reader_props, slices, future);
+            if(reader_result == kRocProfVisDmResultSuccess)
+            {
+                BindObject()->FuncCompleteSlice(slices[*tracks]);
+                ShowProgress(100 - future->Progress(), "Time slice successfully loaded!",
+                             kRPVDbSuccess, future);
+                return future->SetPromise(kRocProfVisDmResultSuccess);
+            }
+            BindObject()->FuncRemoveSlice(BindObject()->trace_object, *tracks,
+                                          slices[*tracks]);
+            break;
+        }
+
         rocprofvis_dm_result_t result = BuildSliceQuery(start, end, num, tracks, slice_query, slices);
         std::string query;
 
@@ -1750,26 +1787,25 @@ rocprofvis_dm_result_t ProfileDatabase::SaveTrackProperties(Future* future) {
     // per-track summary rows. The SQLInsertParams describes the column names
     // and their SQLite types; the order here must match the order used when
     // binding values later in this function.
-    SQLInsertParams params = { 
-        { "id", "INTEGER PRIMARY KEY" },
-        { "load_id", "INTEGER" },
-        { "track_id", "INTEGER" },
-        { "category", "INTEGER" },
-        { "operation", "INTEGER" },
-        { "record_count", "INTEGER" },
-        { "min_timestamp", "INTEGER" },
-        { "max_timestamp", "INTEGER" },
-        { "min_value", "REAL" },
-        { "max_value", "REAL" },
-        { "node_id", "INTEGER" },
-        { "process_id", "INTEGER" },
-        { "sub_process_id", "TEXT" },
-        { "node_tag", "TEXT" },
-        { "process_tag", "TEXT" },
-        { "sub_process_tag", "TEXT" },
-        { "guid", "TEXT" },
-        { "pid", "INTEGER" }
-    };
+    SQLInsertParams params = { { "id", "INTEGER PRIMARY KEY" },
+                               { "load_id", "INTEGER" },
+                               { "track_id", "INTEGER" },
+                               { "category", "INTEGER" },
+                               { "operation", "INTEGER" },
+                               { "record_count", "INTEGER" },
+                               { "min_timestamp", "INTEGER" },
+                               { "max_timestamp", "INTEGER" },
+                               { "min_value", "REAL" },
+                               { "max_value", "REAL" },
+                               { "node_id", "INTEGER" },
+                               { "process_id", "INTEGER" },
+                               { "sub_process_id", "TEXT" },
+                               { "node_tag", "TEXT" },
+                               { "process_tag", "TEXT" },
+                               { "sub_process_tag", "TEXT" },
+                               { "guid", "TEXT" },
+                               { "pid", "INTEGER" },
+                               { "reader_track_id", "INTEGER" } };
 
     // Temporary container holding the derived properties for a single track
     // before it is written to the database. Each field corresponds to one
@@ -1803,6 +1839,7 @@ rocprofvis_dm_result_t ProfileDatabase::SaveTrackProperties(Future* future) {
         std::string subproc_tag;
         std::string guid;
         uint64_t pid;
+        size_t      reader_track_id;
     } store_params;
 
     std::map<uint32_t, std::vector<store_params>> v;
@@ -1840,6 +1877,7 @@ rocprofvis_dm_result_t ProfileDatabase::SaveTrackProperties(Future* future) {
             p.subproc_tag = TrackPropertiesAt(i)->track_indentifiers.tag[TRACK_ID_TID_OR_QUEUE];
             p.guid = GuidAt(db_instance->GuidIndex());
             p.pid = TrackPropertiesAt(i)->track_indentifiers.process_id;
+            p.reader_track_id = TrackPropertiesAt(i)->reader_track_id;
             v[db_instance->FileIndex()].push_back(p);
         }
     }
@@ -1879,6 +1917,9 @@ rocprofvis_dm_result_t ProfileDatabase::SaveTrackProperties(Future* future) {
                 sqlite3_bind_text(stmt, kRpvDbTrackLoadSubprocessTag + 1, p.subproc_tag.c_str(), -1, SQLITE_STATIC);
                 sqlite3_bind_text(stmt, kRpvDbTrackLoadGuid + 1, p.guid.c_str(), -1, SQLITE_STATIC);
                 sqlite3_bind_int64(stmt, kRpvDbTrackLoadPID + 1, p.pid);
+                // Round-trips kInvalidReaderTrackId (SIZE_MAX) as -1 via int64.
+                sqlite3_bind_int64(stmt, kRpvDbTrackLoadReaderTrackId + 1,
+                                   static_cast<sqlite3_int64>(p.reader_track_id));
             }, it->first);
     }
     return result;
@@ -2103,6 +2144,20 @@ rocprofvis_dm_result_t ProfileDatabase::BuildHistogram(Future* future, uint32_t 
 
             if (kRocProfVisDmResultSuccess == result)
             {
+                // Reader-backed tracks are skipped by the SQL histogram passes above
+                // (ExecuteQueryForAllTracksAsync guard), so recompute their per-track
+                // histograms here with the same bucket-overlap math, before gap-fill.
+                for(int i = 0; i < NumTracks(); i++)
+                {
+                    rocprofvis_dm_track_params_t* hp = TrackPropertiesAt(i);
+                    DbInstance*                   hp_db_instance =
+                        (DbInstance*) hp->track_indentifiers.db_instance;
+                    if(hp->reader_track_id != kInvalidReaderTrackId &&
+                       file_node->node_id == hp_db_instance->FileIndex())
+                    {
+                        BuildReaderTrackHistogram(hp, bucket_size);
+                    }
+                }
                 // use last known value for all missing buckets in counter's track histogram
                 for (int i = 0; i < NumTracks(); i++)
                 {

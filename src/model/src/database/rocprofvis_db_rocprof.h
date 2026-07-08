@@ -192,6 +192,22 @@ private:
     // discovery blocks with get_all_tracks() filtered to cpu_thread, per shard.
     rocprofvis_dm_result_t AddReaderRegionTracks(Future* future);
 
+    // Reader-backed gpu_queue and stream discovery: replaces the kernel-dispatch SQL
+    // discovery blocks with get_all_tracks() filtered to gpu_queue and stream, per shard.
+    rocprofvis_dm_result_t AddReaderGpuQueueAndStreamTracks(Future* future);
+
+    // Adapt a reader gpu_queue track into Optiq track_params (identity slots, category,
+    // op). Mirrors ReaderTrackInfoToTrackParams for cpu_thread.
+    void ReaderGpuQueueTrackToTrackParams(
+        const profiler_hub::reader_types::track_info_t& info, DbInstance* db_instance,
+        rocprofvis_dm_track_params_t& track_params);
+
+    // Adapt a reader stream track into Optiq track_params (identity slots, category).
+    // op is per-event (from op_kind), not fixed at track level.
+    void ReaderStreamTrackToTrackParams(
+        const profiler_hub::reader_types::track_info_t& info, DbInstance* db_instance,
+        rocprofvis_dm_track_params_t& track_params);
+
     // Reader-backed slice load for a cpu_thread track (routed from ReadTraceSlice on a
     // non-sentinel reader_track_id). Emits interval events with Optiq's exact overlap
     // window semantics.

@@ -368,6 +368,186 @@ RocprofDatabase::AddReaderRegionTracks(Future* future)
     return result;
 }
 
+void
+RocprofDatabase::ReaderGpuQueueTrackToTrackParams(
+    const profiler_hub::reader_types::track_info_t& info, DbInstance* db_instance,
+    rocprofvis_dm_track_params_t& track_params)
+{
+    uint64_t node_id =
+        info.node_info ? static_cast<uint64_t>(info.node_info->node_id) : 0;
+    uint64_t pid = info.process_info ? static_cast<uint64_t>(info.process_info->pid) : 0;
+    uint64_t agent_id = info.agent_info ? static_cast<uint64_t>(info.agent_info->id) : 0;
+    uint64_t queue_id =
+        info.queue_info ? static_cast<uint64_t>(info.queue_info->queue_id) : 0;
+
+    track_params.track_indentifiers.db_instance = db_instance;
+    track_params.track_indentifiers.category    = kRocProfVisDmKernelDispatchTrack;
+    track_params.op                             = kRocProfVisDmOperationDispatch;
+    track_params.track_indentifiers.process_id =
+        static_cast<rocprofvis_dm_track_id_t>(pid);
+    track_params.track_indentifiers.id[TRACK_ID_NODE]          = node_id;
+    track_params.track_indentifiers.id[TRACK_ID_AGENT]         = agent_id;
+    track_params.track_indentifiers.id[TRACK_ID_QUEUE]         = queue_id;
+    track_params.track_indentifiers.is_numeric[TRACK_ID_NODE]  = true;
+    track_params.track_indentifiers.is_numeric[TRACK_ID_AGENT] = true;
+    track_params.track_indentifiers.is_numeric[TRACK_ID_QUEUE] = true;
+    track_params.track_indentifiers.tag[TRACK_ID_NODE]  = Builder::NODE_ID_SERVICE_NAME;
+    track_params.track_indentifiers.tag[TRACK_ID_AGENT] = Builder::AGENT_ID_SERVICE_NAME;
+    track_params.track_indentifiers.tag[TRACK_ID_QUEUE] = Builder::QUEUE_ID_SERVICE_NAME;
+    track_params.reader_track_id                        = info.id;
+}
+
+void
+RocprofDatabase::ReaderStreamTrackToTrackParams(
+    const profiler_hub::reader_types::track_info_t& info, DbInstance* db_instance,
+    rocprofvis_dm_track_params_t& track_params)
+{
+    uint64_t node_id =
+        info.node_info ? static_cast<uint64_t>(info.node_info->node_id) : 0;
+    uint64_t pid = info.process_info ? static_cast<uint64_t>(info.process_info->pid) : 0;
+    uint64_t stream_id =
+        info.stream_info ? static_cast<uint64_t>(info.stream_info->stream_id) : 0;
+
+    track_params.track_indentifiers.db_instance = db_instance;
+    track_params.track_indentifiers.category    = kRocProfVisDmStreamTrack;
+    // Stream events carry heterogeneous op types per event; op is set per-event in
+    // ReadReaderTraceSlice from interval_event_t::op_kind.
+    track_params.op = kRocProfVisDmOperationNoOp;
+    track_params.track_indentifiers.process_id =
+        static_cast<rocprofvis_dm_track_id_t>(pid);
+    track_params.track_indentifiers.id[TRACK_ID_NODE]           = node_id;
+    track_params.track_indentifiers.id[TRACK_ID_PID]            = pid;
+    track_params.track_indentifiers.id[TRACK_ID_STREAM]         = stream_id;
+    track_params.track_indentifiers.is_numeric[TRACK_ID_NODE]   = true;
+    track_params.track_indentifiers.is_numeric[TRACK_ID_PID]    = true;
+    track_params.track_indentifiers.is_numeric[TRACK_ID_STREAM] = true;
+    track_params.track_indentifiers.tag[TRACK_ID_NODE] = Builder::NODE_ID_SERVICE_NAME;
+    track_params.track_indentifiers.tag[TRACK_ID_PID]  = Builder::PROCESS_ID_SERVICE_NAME;
+    track_params.track_indentifiers.tag[TRACK_ID_STREAM] =
+        Builder::STREAM_ID_SERVICE_NAME;
+    track_params.reader_track_id = info.id;
+}
+
+rocprofvis_dm_result_t
+RocprofDatabase::AddReaderGpuQueueAndStreamTracks(Future* future)
+{
+    rocprofvis_dm_result_t result = kRocProfVisDmResultSuccess;
+    using track_type_t            = profiler_hub::reader_types::track_type_t;
+
+    std::vector<std::thread> threads;
+    m_add_track_mutex.init(NumDbInstances());
+    auto task = [&](DbInstance* db_instance) {
+        uint32_t guid_index = db_instance->GuidIndex();
+        if(!GetMetadataVersionControl()->MustRebuildTrackInfo(db_instance->FileIndex()))
+        {
+            // Cache hit: reload saved gpu_queue + stream tracks (incl. reader_track_id).
+            Future* sub_future = future->AddSubFuture();
+            result             = ExecuteSQLQuery(sub_future, db_instance, /*load_id=*/2,
+                                                 { "", "", "", "", "", "" }, &CallBackAddTrack,
+                                                 &CallBackLoadTrack);
+            future->DeleteSubFuture(sub_future);
+            m_add_track_mutex.unlock(guid_index);
+            return;
+        }
+
+        TraceProperties()->tracks_info_restored = false;
+        profiler_hub::reader_t* reader          = GetReader(db_instance);
+        if(!reader)
+        {
+            result = kRocProfVisDmResultDbAccessFailed;
+            m_add_track_mutex.unlock(guid_index);
+            return;
+        }
+        auto reader_tracks = reader->get_all_tracks();
+        m_add_track_mutex.lock(guid_index);
+        for(const auto& info : reader_tracks)
+        {
+            if(!info) continue;
+            bool is_gpu_queue = (info->type == track_type_t::gpu_queue);
+            bool is_stream    = (info->type == track_type_t::stream);
+            if(!is_gpu_queue && !is_stream) continue;
+
+            rocprofvis_dm_track_params_t track_params = { 0 };
+            track_params.reader_track_id              = kInvalidReaderTrackId;
+            if(is_gpu_queue)
+                ReaderGpuQueueTrackToTrackParams(*info, db_instance, track_params);
+            else
+                ReaderStreamTrackToTrackParams(*info, db_instance, track_params);
+            track_params.track_indentifiers.track_id =
+                (rocprofvis_dm_track_id_t) NumTracks();
+            track_params.load_id.insert(2);
+
+            track_params.record_count = reader->get_track_stats(info->id).count;
+
+            rocprofvis_dm_timestamp_t min_ts    = UINT64_MAX;
+            rocprofvis_dm_timestamp_t max_ts    = 0;
+            rocprofvis_dm_value_t     min_level = DBL_MAX;
+            rocprofvis_dm_value_t     max_level = 0;
+            for(const auto& ev : reader->get_interval_track(info->id))
+            {
+                if(ev.start == 0 || ev.end == 0) continue;
+                if(ev.start < min_ts) min_ts = ev.start;
+                if(ev.end > max_ts) max_ts = ev.end;
+                if((double) ev.level < min_level) min_level = (double) ev.level;
+                if((double) ev.level > max_level) max_level = (double) ev.level;
+            }
+            if(min_ts == UINT64_MAX)
+            {
+                min_ts    = 0;
+                min_level = 0;
+            }
+            track_params.min_ts    = min_ts;
+            track_params.max_ts    = max_ts;
+            track_params.min_value = min_level;
+            track_params.max_value = max_level;
+
+            if(track_params.op < kRocProfVisDmNumOperation)
+                TraceProperties()->events_count[track_params.op] +=
+                    track_params.record_count;
+
+            if(track_params.record_count > 0)
+            {
+                TraceProperties()->db_inst_start_time[guid_index] =
+                    std::min(TraceProperties()->db_inst_start_time[guid_index], min_ts);
+                TraceProperties()->db_inst_end_time[guid_index] =
+                    std::max(TraceProperties()->db_inst_end_time[guid_index], max_ts);
+                TraceProperties()->trace_duration =
+                    std::max(TraceProperties()->trace_duration,
+                             TraceProperties()->db_inst_end_time[guid_index] -
+                                 TraceProperties()->db_inst_start_time[guid_index]);
+            }
+
+            if(ProcessTrack(track_params, nullptr) != 0)
+            {
+                result = kRocProfVisDmResultDbAccessFailed;
+                break;
+            }
+        }
+        m_add_track_mutex.unlock(guid_index);
+    };
+    for(auto& guid_info : DbInstances())
+        threads.emplace_back(task, &guid_info.first);
+    for(auto& t : threads)
+        t.join();
+    return result;
+}
+
+// Map reader event_type_t to Optiq rocprofvis_dm_event_operation_t for stream events.
+static rocprofvis_dm_event_operation_t
+OpKindToEventOp(profiler_hub::reader_types::event_type_t kind)
+{
+    switch(kind)
+    {
+        case profiler_hub::reader_types::event_type_t::kernel_dispatch:
+            return kRocProfVisDmOperationDispatch;
+        case profiler_hub::reader_types::event_type_t::memory_copy:
+            return kRocProfVisDmOperationMemoryCopy;
+        case profiler_hub::reader_types::event_type_t::memory_allocate:
+            return kRocProfVisDmOperationMemoryAllocate;
+        default: return kRocProfVisDmOperationNoOp;
+    }
+}
+
 rocprofvis_dm_result_t
 RocprofDatabase::ReadReaderTraceSlice(rocprofvis_dm_timestamp_t     start,
                                       rocprofvis_dm_timestamp_t     end,
@@ -396,7 +576,13 @@ RocprofDatabase::ReadReaderTraceSlice(rocprofvis_dm_timestamp_t     start,
         if(!(ev.start < abs_end && ev.end > abs_start)) continue;
 
         rocprofvis_db_record_data_t record;
-        record.event.id.bitfield.event_op   = props->op;
+        // Stream tracks carry heterogeneous op types per event (kernel_dispatch,
+        // memory_copy, memory_allocate); use op_kind to set event_op so the details
+        // dispatch (GetEventOperationQuery) routes each event to the right table.
+        rocprofvis_dm_event_operation_t event_op =
+            static_cast<rocprofvis_dm_event_operation_t>(props->op);
+        if(ev.op_kind.has_value()) event_op = OpKindToEventOp(*ev.op_kind);
+        record.event.id.bitfield.event_op   = event_op;
         record.event.id.bitfield.event_node = guid_index;
         record.event.id.bitfield.event_id   = ev.opaque_id;
         record.event.timestamp              = ev.start - origin;
@@ -1248,33 +1434,12 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
         load_id += 2;
 
         ShowProgress(5, "Adding kernel dispatch tracks", kRPVDbBusy, future );
-        {
-            std::vector<std::thread> threads;
-            m_add_track_mutex.init(NumDbInstances());
-            auto task = [&](DbInstance* db_instance)
-                {
-                    Future* sub_future = future->AddSubFuture();
-                    result = ExecuteSQLQuery(sub_future, db_instance, load_id,
-                    { 
-                        m_query_factory.GetRocprofKernelDispatchTrackQuery(),
-                        m_query_factory.GetRocprofKernelDispatchTrackQueryForStream(),
-                        m_query_factory.GetRocprofKernelDispatchLevelQuery(),
-                        m_query_factory.GetRocprofKernelDispatchSliceQuery(),
-                        m_query_factory.GetRocprofKernelDispatchSliceQueryForStream(),
-                        m_query_factory.GetRocprofKernelDispatchTableQuery(),
-                    },
-                    &CallBackAddTrack, &CallBackLoadTrack);
-                    future->DeleteSubFuture(sub_future);
-                    m_add_track_mutex.unlock(db_instance->GuidIndex());
-                };
-            for (auto& guid_info : DbInstances())
-            {
-                threads.emplace_back(task, &guid_info.first);
-            }
-            for (auto& t : threads)
-                t.join();
-            load_id++;
-        }
+        // gpu_queue (kernel dispatch) and stream tracks are synthesized by the
+        // profiler-hub reader, so discovery routes through the reader here instead of the
+        // SQL track and stream-for-track queries. AddReaderGpuQueueAndStreamTracks uses
+        // load_id 2.
+        result = AddReaderGpuQueueAndStreamTracks(future);
+        load_id++;
 
         ShowProgress(5, "Adding memory allocation tracks", kRPVDbBusy, future );
         {
@@ -1283,16 +1448,21 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
             auto task = [&](DbInstance* db_instance)
                 {
                     Future* sub_future = future->AddSubFuture();
-                    result = ExecuteSQLQuery(sub_future, db_instance, load_id,
-                    { 
-                        m_query_factory.GetRocprofMemoryAllocTrackQuery(),
-                        m_query_factory.GetRocprofMemoryAllocTrackQueryForStream(),
-                        m_query_factory.GetRocprofMemoryAllocLevelQuery(),
-                        m_query_factory.GetRocprofMemoryAllocSliceQuery(),
-                        m_query_factory.GetRocprofMemoryAllocSliceQueryForStream(),
-                        m_query_factory.GetRocprofMemoryAllocTableQuery(),
-                    },
-                    &CallBackAddTrack, &CallBackLoadTrack);
+                    result             = ExecuteSQLQuery(
+                        sub_future, db_instance, load_id,
+                        {
+                            m_query_factory.GetRocprofMemoryAllocTrackQuery(),
+                            // Stream memory-allocate events are covered by the reader
+                            // stream track (AddReaderGpuQueueAndStreamTracks); suppress
+                            // the ForStream SQL variants to avoid double-counting
+                            // record_count.
+                            "",
+                            m_query_factory.GetRocprofMemoryAllocLevelQuery(),
+                            m_query_factory.GetRocprofMemoryAllocSliceQuery(),
+                            "",
+                            m_query_factory.GetRocprofMemoryAllocTableQuery(),
+                        },
+                        &CallBackAddTrack, &CallBackLoadTrack);
                     future->DeleteSubFuture(sub_future);
                     m_add_track_mutex.unlock(db_instance->GuidIndex());
                 };
@@ -1322,16 +1492,21 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
             auto task = [&](DbInstance* db_instance)
                 {
                     Future* sub_future = future->AddSubFuture();
-                    result = ExecuteSQLQuery(sub_future, db_instance, load_id,
-                    { 
-                        m_query_factory.GetRocprofMemoryCopyTrackQuery(),
-                        m_query_factory.GetRocprofMemoryCopyTrackQueryForStream(),
-                        m_query_factory.GetRocprofMemoryCopyLevelQuery(),
-                        m_query_factory.GetRocprofMemoryCopySliceQuery(),
-                        m_query_factory.GetRocprofMemoryCopySliceQueryForStream(),
-                        m_query_factory.GetRocprofMemoryCopyTableQuery(),
-                    },
-                    &CallBackAddTrack, &CallBackLoadTrack);
+                    result             = ExecuteSQLQuery(
+                        sub_future, db_instance, load_id,
+                        {
+                            m_query_factory.GetRocprofMemoryCopyTrackQuery(),
+                            // Stream memory-copy events are covered by the reader stream
+                            // track (AddReaderGpuQueueAndStreamTracks); suppress the
+                            // ForStream SQL variants to avoid double-counting
+                            // record_count.
+                            "",
+                            m_query_factory.GetRocprofMemoryCopyLevelQuery(),
+                            m_query_factory.GetRocprofMemoryCopySliceQuery(),
+                            "",
+                            m_query_factory.GetRocprofMemoryCopyTableQuery(),
+                        },
+                        &CallBackAddTrack, &CallBackLoadTrack);
                     future->DeleteSubFuture(sub_future);
                     m_add_track_mutex.unlock(db_instance->GuidIndex());
                 };

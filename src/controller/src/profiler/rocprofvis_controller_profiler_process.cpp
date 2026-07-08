@@ -429,6 +429,24 @@ std::string LocalProfilerExecutor::ReadOutput()
 // target posix_spawnp instead of execvpe for portability.
 // ==================================================================================
 
+// Grace period after SIGTERM before escalating to SIGKILL during Cancel().
+static constexpr int SIGTERM_GRACE_MS = 100;
+
+// Decodes a waitpid() status into the executor's exit-code convention (matches
+// the mapping used by IsRunning): normal exit -> exit status; killed by a
+// signal -> 128 + signal number.
+static void set_exit_code_from_status(int status, int& exit_code)
+{
+    if (WIFEXITED(status))
+    {
+        exit_code = WEXITSTATUS(status);
+    }
+    else if (WIFSIGNALED(status))
+    {
+        exit_code = 128 + WTERMSIG(status);
+    }
+}
+
 LocalProfilerExecutor::LocalProfilerExecutor()
     : m_process_id(-1)
     , m_stdout_fd(-1)
@@ -556,19 +574,15 @@ bool LocalProfilerExecutor::IsRunning()
         return false;
     }
 
-    int status;
+    int   status = 0;
     pid_t result = waitpid(m_process_id, &status, WNOHANG);
 
     if (result == m_process_id)
     {
-        if (WIFEXITED(status))
-        {
-            m_exit_code = WEXITSTATUS(status);
-        }
-        else if (WIFSIGNALED(status))
-        {
-            m_exit_code = 128 + WTERMSIG(status);
-        }
+        set_exit_code_from_status(status, m_exit_code);
+        // Reaped: clear the pid so we never wait on / signal it again (and so a
+        // recycled PID can't be mistaken for our child).
+        m_process_id = -1;
         m_is_running = false;
         return false;
     }
@@ -583,21 +597,41 @@ bool LocalProfilerExecutor::Cancel()
         return false;
     }
 
-    if (kill(m_process_id, SIGTERM) == 0)
+    if (kill(m_process_id, SIGTERM) != 0)
     {
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
-
-        if (IsRunning())
-        {
-            kill(m_process_id, SIGKILL);
-        }
-
+        // The pid is gone (already exited, or reaped elsewhere). Nothing to do.
+        m_process_id = -1;
         m_is_running = false;
-        m_exit_code = 1;
-        return true;
+        return false;
     }
 
-    return false;
+    // Give the child a brief chance to exit on SIGTERM, then escalate. Either
+    // way we MUST reap it (blocking waitpid) so it does not linger as a zombie
+    // for the lifetime of the app.
+    std::this_thread::sleep_for(std::chrono::milliseconds(SIGTERM_GRACE_MS));
+
+    int   status = 0;
+    pid_t result = waitpid(m_process_id, &status, WNOHANG);
+    if (result == 0)
+    {
+        // Still alive after the grace period: force-kill and block until reaped.
+        kill(m_process_id, SIGKILL);
+        result = waitpid(m_process_id, &status, 0);
+    }
+
+    if (result == m_process_id)
+    {
+        set_exit_code_from_status(status, m_exit_code);
+    }
+    else
+    {
+        // Could not obtain a status (e.g. ECHILD); best-effort failure code.
+        m_exit_code = 1;
+    }
+
+    m_process_id = -1;
+    m_is_running = false;
+    return true;
 }
 
 int LocalProfilerExecutor::GetExitCode() const

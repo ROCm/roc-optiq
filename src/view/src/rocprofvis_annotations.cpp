@@ -47,6 +47,13 @@ AnnotationsManagerProjectSettings::FromJson()
             is_minimized = note_json[JSON_KEY_ANNOTATION_IS_MINIMIZED].getBool();
         }
 
+        bool is_locked = false;
+        if(note_json.contains(JSON_KEY_ANNOTATION_IS_LOCKED) &&
+           note_json[JSON_KEY_ANNOTATION_IS_LOCKED].isBool())
+        {
+            is_locked = note_json[JSON_KEY_ANNOTATION_IS_LOCKED].getBool();
+        }
+
         // Legacy projects have no track binding; load as unbound and re-anchor
         // on first render.
         uint64_t track_id = INVALID_TRACK_ID;
@@ -65,7 +72,7 @@ AnnotationsManagerProjectSettings::FromJson()
 
         ImVec2 size(size_x, size_y);
         m_annotations_manager.AddSticky(time_ns, y_offset, size, text, title, v_min,
-                                        v_max, track_id, is_minimized);
+                                        v_max, track_id, is_minimized, is_locked);
     }
 }
 
@@ -90,6 +97,7 @@ AnnotationsManagerProjectSettings::ToJson()
         sticky_json[JSON_KEY_TIMELINE_ANNOTATION_V_MIN_X] = notes[i].GetVMinX();
         sticky_json[JSON_KEY_TIMELINE_ANNOTATION_V_MAX_X] = notes[i].GetVMaxX();
         sticky_json[JSON_KEY_ANNOTATION_IS_MINIMIZED]     = notes[i].IsMinimized();
+        sticky_json[JSON_KEY_ANNOTATION_IS_LOCKED]        = notes[i].IsLocked();
 
         m_settings_json[JSON_KEY_ANNOTATIONS][i] = sticky_json;
     }
@@ -155,10 +163,10 @@ void
 AnnotationsManager::AddSticky(double time_ns, float y_offset, const ImVec2& size,
                               const std::string& text, const std::string& title,
                               double v_min, double v_max, uint64_t track_id,
-                              bool is_minimized)
+                              bool is_minimized, bool is_locked)
 {
     m_sticky_notes.emplace_back(time_ns, y_offset, size, text, title, v_min, v_max,
-                                track_id, is_minimized);
+                                track_id, is_minimized, is_locked);
 }
 
 bool

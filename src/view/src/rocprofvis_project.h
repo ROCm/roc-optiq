@@ -181,6 +181,7 @@ constexpr const char* JSON_KEY_ANNOTATION_TRACK_ID         = "track_id";
 constexpr const char* JSON_KEY_TIMELINE_ANNOTATION_V_MIN_X = "view_start_ns";
 constexpr const char* JSON_KEY_TIMELINE_ANNOTATION_V_MAX_X = "view_end_ns";
 constexpr const char* JSON_KEY_ANNOTATION_IS_MINIMIZED     = "is_minimized";
+constexpr const char* JSON_KEY_ANNOTATION_IS_LOCKED        = "is_locked";
 
 class ProjectSetting
 {

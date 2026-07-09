@@ -46,7 +46,7 @@ public:
     StickyNote(double time_ns, float y_offset, const ImVec2& size,
                const std::string& text, const std::string& title, double v_min,
                double v_max, uint64_t track_id = INVALID_TRACK_ID,
-               bool is_minimized = true);
+               bool is_minimized = true, bool is_locked = false);
 
     bool Render(ImDrawList* draw_list, const ImVec2& window_position,
                 std::shared_ptr<TimePixelTransform> conversion_manager,
@@ -80,6 +80,7 @@ public:
     double             GetVMinX() const;
     double             GetVMaxX() const;
     bool               IsMinimized() const { return m_is_minimized; }
+    bool               IsLocked() const { return m_locked; }
     uint64_t           GetTrackId() const { return m_track_id; }
     void               SetTrackHidden(bool hidden) { m_track_hidden = hidden; }
     bool               IsTrackHidden() const { return m_track_hidden; }
@@ -136,6 +137,7 @@ private:
     double      m_v_min_x;
     double      m_v_max_x;
     bool        m_is_minimized;
+    bool        m_locked         = false;  // Freezes the anchor against mouse drags.
     bool        m_pending_delete = false;
     bool        m_request_focus  = false;
     bool        m_focus_input    = false;  // Focus the title field next frame.

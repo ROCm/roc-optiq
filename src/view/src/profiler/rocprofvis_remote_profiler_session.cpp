@@ -158,6 +158,12 @@ void
 RemoteProfilerSession::OnRemoteStatus(uint64_t operation_id, uint64_t status,
                                       rocprofvis_result_t /*result*/)
 {
+    // Once the workflow has failed, ignore further status so a late/cancel event
+    // cannot overwrite the original failure reason or advance the phase machine.
+    if(m_phase == Phase::Failed)
+    {
+        return;
+    }
     if(!m_session || operation_id != m_session->GetActiveOperationId())
     {
         return;
@@ -244,6 +250,12 @@ RemoteProfilerSession::StartProfiler()
 void
 RemoteProfilerSession::OnProfilerStatus(uint64_t operation_id, rocprofvis_profiler_state_t state)
 {
+    // Once failed, ignore further profiler status (e.g. the Cancelled event that
+    // Fail() itself triggers) so the original failure reason is preserved.
+    if(m_phase == Phase::Failed)
+    {
+        return;
+    }
     if(m_profiler_op_id == 0 || operation_id != m_profiler_op_id)
     {
         return;
@@ -315,6 +327,18 @@ RemoteProfilerSession::Fail(const std::string& message)
     m_status_message = message;
     m_phase          = Phase::Failed;
     m_running        = false;
+
+    // Stop a still-running remote profiler so it doesn't keep executing on the
+    // remote host after the UI shows Failed. Set the phase first (above) so the
+    // Cancelled status this triggers is ignored by OnProfilerStatus's
+    // Phase::Failed guard and does not overwrite the original failure reason.
+    // In-flight SSH ops and the connection are torn down when this session is
+    // destroyed (deferred, non-blocking, via the base + SshSession teardown).
+    if(GetState() == kRPVProfilerStateRunning)
+    {
+        Cancel();
+    }
+
     if(m_profiler_state == kRPVProfilerStateRunning || m_profiler_state == kRPVProfilerStateIdle)
     {
         m_profiler_state = kRPVProfilerStateFailed;

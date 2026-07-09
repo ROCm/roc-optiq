@@ -359,6 +359,17 @@ int32_t ProfilerLaunchOrchestrator::GetExitCode() const
     return m_profiler_session.GetExitCode();
 }
 
+std::string ProfilerLaunchOrchestrator::GetRemoteStatusMessage() const
+{
+#ifdef ROCPROFVIS_ENABLE_REMOTE
+    if(m_remote_session)
+    {
+        return m_remote_session->GetStatusMessage();
+    }
+#endif
+    return std::string();
+}
+
 #ifdef ROCPROFVIS_ENABLE_REMOTE
 SshSession* ProfilerLaunchOrchestrator::GetRemoteSshSession() const
 {

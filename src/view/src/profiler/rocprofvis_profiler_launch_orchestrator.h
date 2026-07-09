@@ -118,6 +118,12 @@ public:
     // Human-readable reason for an immediate launch failure (empty otherwise).
     const std::string& GetLaunchError() const { return m_launch_error; }
 
+    // Human-readable status/error message from the remote workflow (e.g. "SSH
+    // authentication failed."). Empty for local runs or when no remote session
+    // exists. Always compiled so the dialog can surface remote failures without
+    // remote-specific guards.
+    std::string GetRemoteStatusMessage() const;
+
     // --- Remote-specific accessors for the download popup / auth modal ------
     // TEMPORARY (remote/SSH): remove these guards when remote graduates.
 #ifdef ROCPROFVIS_ENABLE_REMOTE

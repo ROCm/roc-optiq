@@ -182,21 +182,13 @@ FlameTrackItem::Update()
         if(m_track_statistics->state == AnalysisTrackStatistics::kReady &&
            m_track_statistics_dirty)
         {
+            const AnalysisTrackStatistics::Stat& stat =
+                m_track_statistics
+                    ->stats[AnalysisTrackStatistics::Queue::kQueueUtilization];
             m_pill_analysis_queue->Activate();
-            m_pill_analysis_queue->SetLabel(
-                m_track_statistics
-                    ->stats[AnalysisTrackStatistics::Queue::kQueueUtilization]
-                    .compact,
-                Pill::kCompact);
-            m_pill_analysis_queue->SetLabel(
-                m_track_statistics
-                    ->stats[AnalysisTrackStatistics::Queue::kQueueUtilization]
-                    .extended,
-                Pill::kExtended);
-            m_pill_analysis_queue->SetTooltip(
-                m_track_statistics
-                    ->stats[AnalysisTrackStatistics::Queue::kQueueUtilization]
-                    .full);
+            m_pill_analysis_queue->SetLabel(stat.CompactValue(), Pill::kCompact);
+            m_pill_analysis_queue->SetLabel(stat.CompactLabel(), Pill::kExtended);
+            m_pill_analysis_queue->SetTooltip(stat.FullLabel());
         }
         else if(m_track_statistics->state < AnalysisTrackStatistics::kReady)
         {

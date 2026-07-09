@@ -256,12 +256,12 @@ LineTrackItem::Update()
                 if(m_track_statistics->state == AnalysisTrackStatistics::kReady &&
                    m_track_statistics_dirty)
                 {
+                    const AnalysisTrackStatistics::Stat& stat =
+                        m_track_statistics->stats[i];
                     m_pills_analysis[i]->Activate();
-                    m_pills_analysis[i]->SetLabel(m_track_statistics->stats[i].compact,
-                                                  Pill::kCompact);
-                    m_pills_analysis[i]->SetLabel(m_track_statistics->stats[i].extended,
-                                                  Pill::kExtended);
-                    m_pills_analysis[i]->SetTooltip(m_track_statistics->stats[i].full);
+                    m_pills_analysis[i]->SetLabel(stat.CompactValue(), Pill::kCompact);
+                    m_pills_analysis[i]->SetLabel(stat.CompactLabel(), Pill::kExtended);
+                    m_pills_analysis[i]->SetTooltip(stat.FullLabel());
                 }
                 else if(m_track_statistics->state < AnalysisTrackStatistics::kReady)
                 {

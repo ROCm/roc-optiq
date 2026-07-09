@@ -35,9 +35,8 @@ public:
     void Clear();
 
 private:
-    void   ToString(const TrackInfo* track, AnalysisTrackStatistics::Stat& stat,
-                    const std::string& units);
-    double Round(double d) const;
+    void ToString(const TrackInfo* track, AnalysisTrackStatistics::Stat& stat,
+                  const std::string& units);
 
     double m_analysis_range_start_ns;
     double m_analysis_range_end_ns;

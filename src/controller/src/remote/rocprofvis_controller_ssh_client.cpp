@@ -1068,11 +1068,13 @@ namespace Controller
 
         ssize_t got = 0;
         uint64_t total_downloaded = 0;
+        bool     cancelled        = false;
 
         while (!libssh2_channel_eof(channel) && total_downloaded < fileinfo.st_size)
         {
             if (IsCancelRequested(connection, future))
             {
+                cancelled = true;
                 break;
             }
             got = libssh2_channel_read(channel, buffer.data(), buffer.size());
@@ -1083,7 +1085,21 @@ namespace Controller
                 {
                     got = fileinfo.st_size - total_downloaded;
                 }
-                fwrite(buffer.data(), 1, got, file);
+
+                // A short write (disk full / quota) must not be counted as
+                // progress - otherwise total_downloaded reaches st_size and the
+                // file is cached as complete while truncated on disk.
+                size_t written = fwrite(buffer.data(), 1, static_cast<size_t>(got), file);
+                if (written != static_cast<size_t>(got))
+                {
+                    err = "local write failed (disk full?): " + local_path;
+                    spdlog::error("[ssh] {}", err);
+                    connection->GetSshBridge()->SaveError(err);
+
+                    fclose(file);
+                    libssh2_channel_free(channel);
+                    return Result::WriteError;
+                }
 
                 total_downloaded += got;
                 connection->GetSshBridge()->SetDownloaded(got);
@@ -1112,6 +1128,14 @@ namespace Controller
 
         fclose(file);
 
+        const bool complete = (total_downloaded == fileinfo.st_size);
+
+        // Persist the freshness sidecar ONLY for a fully-received file. Writing it
+        // after a cancel/partial transfer would cache a truncated file as
+        // up-to-date, so the next download would skip and open a corrupt trace.
+        // With no .meta, the next attempt re-downloads (the freshness check needs
+        // both the file and its .meta).
+        if (!cancelled && complete)
         {
             std::ofstream m(meta_path, std::ios::trunc);
             if (m) m << fileinfo.st_size << ' ' << fileinfo.st_mtime << '\n';
@@ -1122,9 +1146,17 @@ namespace Controller
         libssh2_channel_wait_closed(channel);
         libssh2_channel_free(channel);
 
-        if (IsCancelRequested(connection, future))
+        if (cancelled)
         {
             return SshClient::Result::Cancelled;
+        }
+
+        if (!complete)
+        {
+            err = "incomplete download: " + remote_path;
+            spdlog::error("[ssh] {}", err);
+            connection->GetSshBridge()->SaveError(err);
+            return Result::ReadError;
         }
 
         return Result::Success;

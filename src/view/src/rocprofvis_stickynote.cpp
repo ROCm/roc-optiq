@@ -92,6 +92,25 @@ PopPlainTextInputStyle()
     ImGui::PopStyleVar(1);
     ImGui::PopStyleColor(3);
 }
+
+// Trims text to a single line fitting max_width (and max_chars), appending "..."
+// when shortened. Uses the current font for measurement.
+std::string
+ElideWithEllipsis(const std::string& text, float max_width, size_t max_chars)
+{
+    std::string out       = text.substr(0, max_chars);
+    bool        truncated = text.size() > max_chars;
+    while(!out.empty() && ImGui::CalcTextSize((out + "...").c_str()).x > max_width)
+    {
+        out.pop_back();
+        truncated = true;
+    }
+    if(truncated)
+    {
+        out += "...";
+    }
+    return out;
+}
 }  // namespace
 
 static int s_unique_id_counter = 0;
@@ -369,21 +388,9 @@ StickyNote::RenderAnchorMarker(ImDrawList* draw_list, const ImVec2& marker_pos)
         ImGui::PushFont(settings.GetFontManager().GetFont(FontType::kDefault));
         if(!m_title.empty())
         {
-            // Keep the title to a single line: cap length, then trim by width.
-            std::string title_preview = m_title.substr(0, kPreviewTitleMaxChars);
-            bool        truncated     = m_title.size() > kPreviewTitleMaxChars;
-            while(!title_preview.empty() &&
-                  ImGui::CalcTextSize((title_preview + "...").c_str()).x >
-                      kPreviewTooltipWidth)
-            {
-                title_preview.pop_back();
-                truncated = true;
-            }
-            if(truncated)
-            {
-                title_preview += "...";
-            }
-            ImGui::TextUnformatted(title_preview.c_str());
+            ImGui::TextUnformatted(
+                ElideWithEllipsis(m_title, kPreviewTooltipWidth, kPreviewTitleMaxChars)
+                    .c_str());
             ImGui::Spacing();
             ImGui::Separator();
             ImGui::Spacing();
@@ -549,7 +556,9 @@ StickyNote::RenderExpandedWindow(const ImVec2& anchor_pos)
             }
             else
             {
-                ElidedText(m_title.c_str(), title_width);
+                ImGui::TextUnformatted(
+                    ElideWithEllipsis(m_title, title_width, kPreviewTitleMaxChars)
+                        .c_str());
             }
 
             const ImVec2 title_min(win_pos.x + kNoteMargin, win_pos.y);
@@ -618,7 +627,7 @@ StickyNote::RenderExpandedWindow(const ImVec2& anchor_pos)
         InlineInputTextMultiline(
             ("##body_" + std::to_string(m_id)).c_str(), m_text,
             ImVec2(win_size.x - kNoteMargin * 2.0f, body_height),
-            ImGuiInputTextFlags_AllowTabInput);
+            ImGuiInputTextFlags_AllowTabInput | ImGuiInputTextFlags_WordWrap);
         bool body_active = ImGui::IsItemActive();
         PopPlainTextInputStyle();
         ImGui::PopStyleColor();

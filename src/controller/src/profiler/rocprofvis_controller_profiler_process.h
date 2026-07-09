@@ -174,7 +174,8 @@ public:
 
     rocprofvis_result_t Cancel();
 
-    static void ExecuteJob(ProfilerProcessController* controller, Future* future);
+
+    static rocprofvis_result_t ExecuteJob(ProfilerProcessController* controller, Future* future);
 
 private:
     void UpdateOutput();

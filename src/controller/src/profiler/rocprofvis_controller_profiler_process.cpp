@@ -939,12 +939,12 @@ std::string ProfilerProcessController::DetermineTracePath(ProfilerConfig const* 
     return best_path.string();
 }
 
-void ProfilerProcessController::ExecuteJob(ProfilerProcessController* controller, Future* future)
+rocprofvis_result_t ProfilerProcessController::ExecuteJob(ProfilerProcessController* controller, Future* future)
 {
     if (controller == nullptr)
     {
         spdlog::error("ProfilerProcessController::ExecuteJob: controller is null");
-        return;
+        return kRocProfVisResultInvalidArgument;
     }
 
     spdlog::info("Profiler monitor job started");
@@ -975,7 +975,18 @@ void ProfilerProcessController::ExecuteJob(ProfilerProcessController* controller
     }
 
     controller->GetOutput();
-    spdlog::info("Profiler monitor job finished (state={})", static_cast<int>(controller->m_state.load()));
+    rocprofvis_profiler_state_t final_state = controller->m_state.load();
+    spdlog::info("Profiler monitor job finished (state={})", static_cast<int>(final_state));
+
+    switch (final_state)
+    {
+        case kRPVProfilerStateCompleted:
+            return kRocProfVisResultSuccess;
+        case kRPVProfilerStateCancelled:
+            return kRocProfVisResultCancelled;
+        default:
+            return kRocProfVisResultUnknownError;
+    }
 }
 
 // ==================================================================================

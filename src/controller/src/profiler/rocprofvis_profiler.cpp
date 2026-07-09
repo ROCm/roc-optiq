@@ -237,8 +237,7 @@ rocprofvis_result_t rocprofvis_profiler_launch_async(rocprofvis_profiler_t* prof
     RocProfVis::Controller::Job* job = RocProfVis::Controller::JobSystem::Get().IssueJob(
         [controller_ptr](RocProfVis::Controller::Future* job_future) -> rocprofvis_result_t
         {
-            RocProfVis::Controller::ProfilerProcessController::ExecuteJob(controller_ptr, job_future);
-            return kRocProfVisResultSuccess;
+            return RocProfVis::Controller::ProfilerProcessController::ExecuteJob(controller_ptr, job_future);
         },
         future_ref.Get());
     future_ref->Set(job);
@@ -275,8 +274,7 @@ rocprofvis_result_t rocprofvis_profiler_launch_remote_async(rocprofvis_profiler_
     RocProfVis::Controller::Job* job = RocProfVis::Controller::JobSystem::Get().IssueJob(
         [controller_ptr](RocProfVis::Controller::Future* job_future) -> rocprofvis_result_t
         {
-            RocProfVis::Controller::ProfilerProcessController::ExecuteJob(controller_ptr, job_future);
-            return kRocProfVisResultSuccess;
+            return RocProfVis::Controller::ProfilerProcessController::ExecuteJob(controller_ptr, job_future);
         },
         future_ref.Get());
     future_ref->Set(job);

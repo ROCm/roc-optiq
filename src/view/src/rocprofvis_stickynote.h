@@ -117,8 +117,9 @@ private:
     // Always-visible timeline anchor. Returns true if hovered.
     bool RenderAnchorMarker(ImDrawList* draw_list, const ImVec2& marker_pos);
 
-    // Floating expanded window. Returns true if hovered.
-    bool RenderExpandedWindow(const ImVec2& anchor_pos);
+    // Floating expanded window. Returns true if hovered. marker_hovered highlights
+    // the note when the anchor is hovered (cross-highlight).
+    bool RenderExpandedWindow(const ImVec2& anchor_pos, bool marker_hovered);
 
     // True once the floating window has a real stored position.
     bool IsExpandedPlaced() const
@@ -136,6 +137,7 @@ private:
     bool        m_dragging       = false;
     bool        m_track_hidden   = false;
     bool        m_marker_hovered = false;  // Hovered last frame; drives drag-start.
+    bool        m_note_engaged   = false;  // Note hovered/focused; highlights anchor.
     float       m_drag_abs_y     = 0.0f;   // Anchor Y during a drag; bound on drop.
     ImVec2      m_drag_offset    = ImVec2(0, 0);
     bool        m_is_visible;

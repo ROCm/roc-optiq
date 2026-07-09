@@ -208,6 +208,15 @@ private:
         const profiler_hub::reader_types::track_info_t& info, DbInstance* db_instance,
         rocprofvis_dm_track_params_t& track_params);
 
+    // Reader-backed memory-alloc discovery: replaces the standalone memory-alloc SQL block
+    // with get_all_tracks() filtered to track_type_t::memory, per shard.
+    rocprofvis_dm_result_t AddReaderMemoryTracks(Future* future);
+
+    // Adapt a reader memory track into Optiq track_params (identity slots, category, op).
+    void ReaderMemoryTrackToTrackParams(
+        const profiler_hub::reader_types::track_info_t& info, DbInstance* db_instance,
+        rocprofvis_dm_track_params_t& track_params);
+
     // Reader-backed slice load for a cpu_thread track (routed from ReadTraceSlice on a
     // non-sentinel reader_track_id). Emits interval events with Optiq's exact overlap
     // window semantics.

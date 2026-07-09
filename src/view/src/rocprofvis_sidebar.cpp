@@ -168,9 +168,7 @@ SideBar::RenderTrackItem(const uint64_t& index, bool show_eye_button)
         ImGui::PushFont(m_settings.GetFontManager().GetFont(FontType::kIcon), 0.0f);
         if(ImGui::Button(ICON_ARROWS_SHRINK))
         {
-            EventManager::GetInstance()->AddEvent(std::make_shared<ScrollToTrackEvent>(
-                static_cast<int>(RocEvents::kHandleUserGraphNavigationEvent),
-                track.GetID(), m_data_provider.GetTraceFilePath()));
+            ScrollToTrack(track);
         }
         ImGui::PopFont();
         if(ImGui::IsItemHovered())

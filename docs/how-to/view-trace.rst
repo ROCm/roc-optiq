@@ -44,7 +44,11 @@ When ROCm Optiq starts without an open project, the Welcome page displays:
 - Open File—open a trace (``.db``, ``.rpd``), project (``.rpv``), or multi-database configuration (``.yaml``) 
 - Drag and drop—drop a supported file onto the window 
 - Recent files—quick access to recently opened files 
-- Documentation links—ROCm Optiq, ROCm Systems Profiler, and ROCm Compute Profiler documentation 
+- Documentation links—ROCm Optiq, ROCm Systems Profiler, and ROCm Compute Profiler documentation
+
+.. image:: ../images/welcome-page.png
+   :width: 800
+   :align: center
 
 .. note::
 
@@ -188,7 +192,7 @@ Resize or reorder tracks
 - Resize tracks by dragging the separator lines between tracks.
 - Reorder tracks by clicking and dragging |grip| on the left side of the **Description** area.
 
-Queue utilization
+Queue Utilization
 ^^^^^^^^^^^^^^^^^
 
 For queue tracks, a Queue Utilization pill displays next to the queue label. It shows the percentage of time the queue was active over the visible time range. When a time-range filter is active, utilization is calculated for the selected range only.  
@@ -201,7 +205,11 @@ For sample counter tracks, pills showing standard deviation and average display 
 Additionally, min and max value pills can also be shown/hidden. 
 
 Similar to queue utilization, the values in these pills react to reflect the values in the current view or active time-range filter. 
-The Counter statistics are also visible in the **Track Details** tab. 
+The Counter statistics are also visible in the **Track Details** tab.
+
+.. image:: ../images/new-track-details-statistics.png
+   :width: 800
+   :align: center
 
 Measure
 ^^^^^^^
@@ -212,7 +220,11 @@ Measure
 - **Events** mode: Measure duration between two selected events on the timeline. You can snap Start/End Rulers to Event start or Event end. 
 - **Anywhere** mode: Measure duration between two timeline points. You can drag the rulers horizontally to fine-tune.  
 - ROCm Optiq draws two vertical rulers with timestamps and shows the duration (time delta) in a label between them.  
-- Use **Reset** or **Clear measurement** to remove the rulers and start a new measurement. 
+- Use **Reset** or **Clear measurement** to remove the rulers and start a new measurement.
+
+.. image:: ../images/new-measurement-timestamp.png
+   :width: 800
+   :align: center
 
 Histogram
 ~~~~~~~~~

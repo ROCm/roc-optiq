@@ -132,6 +132,9 @@ To add an annotation:
    .. image:: ../images/annotation-example.png
       :width: 200
 
+   .. image:: ../images/new-annotation-example.png
+      :width: 200
+
 .. tip::
 
   - Edit or delete the annotation by clicking |pen|.

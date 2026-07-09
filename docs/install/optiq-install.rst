@@ -113,7 +113,7 @@ Install on macOS
 
 1. Download ``ROCm Optiq.app.zip`` from `GitHub Releases <https://github.com/ROCm/roc-optiq/releases>`_ or your organization's artifact registry. 
 2. Extract the archive and move **ROCm Optiq.app** to **Applications**. 
-3. Launch ROCm Optiq from Applications. 
+3. Launch ROCm Optiq from **Applications**. 
 
 Settings, logs, and presets are stored at: ``~/Library/Application Support/ROCm-Optiq/``.
 

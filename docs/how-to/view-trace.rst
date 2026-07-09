@@ -223,7 +223,7 @@ Measure
 - Use **Reset** or **Clear measurement** to remove the rulers and start a new measurement.
 
 .. image:: ../images/new-measurement-timestamp.png
-   :width: 800
+   :width: 300
    :align: center
 
 Histogram
@@ -322,7 +322,7 @@ You can open the **Minimap** by clicking |mini| from the main **Toolbar**.
 The **Minimap** provides a compact overview that visualizes event density of each track and/or counter values across the entire profiling trace, enabling you to identify hot spots without manually scanning the full timeline.  
 
 .. image:: ../images/minimap.png
-   :width: 600
+   :width: 200
 
 The **Minimap** provides:
 

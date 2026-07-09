@@ -98,7 +98,7 @@ Fixes
 
   .. grid-item-card:: Install
 
-    * :doc:`ROCm Optiq installation </install/optiq-install>`
+    * :doc:`Install ROCm Optiq </install/optiq-install>`
 
   .. grid-item-card:: How to
 

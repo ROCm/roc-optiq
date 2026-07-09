@@ -89,6 +89,11 @@ public:
     // True after the user hit the delete button; the owner sweeps these notes.
     bool               WantsDelete() const { return m_pending_delete; }
 
+    // True after the user hit the "go to anchor" button; the owner navigates the
+    // timeline to the anchor and clears the flag.
+    bool               WantsNavigate() const { return m_pending_navigate; }
+    void               ClearNavigate() { m_pending_navigate = false; }
+
 private:
     // Binds an unbound note to a track, making its offset track-relative.
     void EnsureBound(const TrackLayout& layout);
@@ -139,6 +144,7 @@ private:
     bool        m_is_minimized;
     bool        m_locked         = false;  // Freezes the anchor against mouse drags.
     bool        m_pending_delete = false;
+    bool        m_pending_navigate = false;
     bool        m_request_focus  = false;
     bool        m_focus_input    = false;  // Focus the title field next frame.
     bool        m_editing_title  = false;

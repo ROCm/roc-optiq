@@ -510,17 +510,19 @@ StickyNote::RenderExpandedWindow(const ImVec2& anchor_pos)
         ImVec2 trash_icon_size = ImGui::CalcTextSize(ICON_TRASH_CAN);
         ImVec2 lock_icon_size  = ImGui::CalcTextSize(ICON_LOCKED);
         ImVec2 unlock_icon_size = ImGui::CalcTextSize(ICON_UNLOCKED);
+        ImVec2 goto_icon_size   = ImGui::CalcTextSize(ICON_ARROW_FORWARD);
         ImGui::PopFont();
         const float action_btn_size = std::max(
             {kHeaderButtonMinSize, close_icon_size.x + kHeaderButtonPadding,
              trash_icon_size.x + kHeaderButtonPadding,
              lock_icon_size.x + kHeaderButtonPadding,
-             unlock_icon_size.x + kHeaderButtonPadding});
+             unlock_icon_size.x + kHeaderButtonPadding,
+             goto_icon_size.x + kHeaderButtonPadding});
         const float action_btn_y = (kExpandedHeaderHeight - action_btn_size) * 0.5f;
 
         // Title is plain text so the header stays draggable; click to edit.
         const float buttons_width =
-            action_btn_size * 3.0f + kHeaderButtonGap * 2.0f;
+            action_btn_size * 4.0f + kHeaderButtonGap * 3.0f;
         const float title_width   = std::max(
             0.0f, win_size.x - buttons_width - kHeaderButtonGap - kNoteMargin * 2.0f);
         ImGui::PushStyleColor(ImGuiCol_Text, text_color);
@@ -579,6 +581,17 @@ StickyNote::RenderExpandedWindow(const ImVec2& anchor_pos)
         ImGui::PushStyleColor(ImGuiCol_Text, muted_text_color);
         const ImU32 transparent = settings.GetColor(Colors::kTransparent);
         const ImVec2 action_btn(action_btn_size, action_btn_size);
+
+        ImGui::SetCursorPos(ImVec2(
+            win_size.x - action_btn_size * 4.0f - kHeaderButtonGap * 3.0f - kNoteMargin,
+            action_btn_y));
+        if(IconButton(ICON_ARROW_FORWARD, action_icon_font, action_btn, "Go to Anchor",
+                      false,
+                      ImVec2(0.0f, 0.0f), transparent, icon_hover_color,
+                      icon_active_color, ("goto_" + std::to_string(m_id)).c_str()))
+        {
+            m_pending_navigate = true;
+        }
 
         ImGui::SetCursorPos(ImVec2(
             win_size.x - action_btn_size * 3.0f - kHeaderButtonGap * 2.0f - kNoteMargin,

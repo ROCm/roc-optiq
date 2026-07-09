@@ -414,6 +414,15 @@ TimelineView::RenderAnnotations(ImDrawList* draw_list, ImVec2 window_position)
 
             annotation_blocks_timeline_input |=
                 note.Render(draw_list, window_position, m_tpt, layout);
+
+            if(note.WantsNavigate())
+            {
+                auto nav = std::make_shared<NavigationEvent>(
+                    note.GetVMinX(), note.GetVMaxX(), note.GetYOffset(), true,
+                    note.GetTrackId());
+                EventManager::GetInstance()->AddEvent(nav);
+                note.ClearNavigate();
+            }
         }
         m_stop_user_interaction |= annotation_blocks_timeline_input;
     }

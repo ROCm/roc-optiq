@@ -224,7 +224,7 @@ Measure
 
 .. image:: ../images/new-measurement-timestamp.png
    :width: 300
-   :align: center
+   :align: left
 
 Histogram
 ~~~~~~~~~
@@ -322,7 +322,7 @@ You can open the **Minimap** by clicking |mini| from the main **Toolbar**.
 The **Minimap** provides a compact overview that visualizes event density of each track and/or counter values across the entire profiling trace, enabling you to identify hot spots without manually scanning the full timeline.  
 
 .. image:: ../images/minimap.png
-   :width: 200
+   :width: 600
 
 The **Minimap** provides:
 

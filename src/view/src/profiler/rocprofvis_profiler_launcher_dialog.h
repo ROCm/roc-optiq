@@ -134,6 +134,10 @@ private:
     LaunchConfig m_config;
     std::string m_profiler_path_override;
     ExecutionCache m_execution_cache;
+    // Rebuild m_execution_cache (SaveSettings/flatten/preview - all allocating)
+    // only when inputs may have changed, not every frame. Set on open / backend
+    // switch / preset load, and while the user is actively editing a field.
+    bool m_execution_cache_dirty = true;
 
     // Presets
     LaunchPresetManager m_preset_manager;

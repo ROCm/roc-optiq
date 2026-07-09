@@ -20,6 +20,9 @@ namespace View
 constexpr float       IMPLOT_LEGEND_ICON_SHRINK       = 2.0f;  // Implot_internal.h
 constexpr float       HOVER_THESHOLD                  = 8.0f;
 constexpr float       HOVER_LINE_WEIGHT_BOOST         = 2.0f;
+constexpr float       LINE_THICKNESS_DEFAULT          = 1.0f;
+constexpr float       LINE_THICKNESS_MIN              = 1.0f;
+constexpr float       LINE_THICKNESS_MAX              = 6.0f;
 constexpr const char* DISPLAY_NAMES_CEILING_COMPUTE[] = {
     "Peak MFMA FP4",   // kRPVControllerRooflineCeilingComputeMFMAFP4
     "Peak MFMA FP6",   // kRPVControllerRooflineCeilingComputeMFMAFP6
@@ -66,6 +69,7 @@ Roofline::Roofline(DataProvider& data_provider, KernelMode kernel_mode)
 , m_menus_mode(Legend)
 , m_menus_placement(InsideTopRight)
 , m_scale_intensity(true)
+, m_line_thickness(LINE_THICKNESS_DEFAULT)
 , m_menus_rendered_height(0.0f)
 , m_hovered_item_distance(FLT_MAX)
 , m_workload_changed(false)
@@ -416,8 +420,6 @@ Roofline::Render()
             ImPlot::SetupAxisLimitsConstraints(ImAxis_Y1, m_workload->roofline.min.y / 10,
                                                m_workload->roofline.max.y * 10);
             PlotHoverIdx();
-            const float roofline_line_weight =
-                m_settings.GetUserSettings().display_settings.roofline_line_thickness;
             int item_count = static_cast<int>(m_items.size());
             for(int i = 0; i < item_count; i++)
             {
@@ -449,8 +451,8 @@ Roofline::Render()
                         {
                             ImPlot::SetNextLineStyle(
                                 ImPlot::GetColormapColor(i),
-                                hovered ? roofline_line_weight + HOVER_LINE_WEIGHT_BOOST
-                                        : roofline_line_weight);
+                                hovered ? m_line_thickness + HOVER_LINE_WEIGHT_BOOST
+                                        : m_line_thickness);
                             ImPlot::PlotLineG(
                                 "",
                                 [](int idx, void* user_data) -> ImPlotPoint {
@@ -910,6 +912,17 @@ Roofline::RenderMenus(ImVec2 region, ImVec2 plot_pos, ImVec2 plot_size,
         if(m_menus_mode == Options)
         {
             ImGui::SeparatorText("Options");
+            ImGui::PushID("line_thickness");
+            ElidedText("Line thickness", ImGui::GetContentRegionAvail().x,
+                       plot_size.x * 0.5f, Alignment_Left, true);
+            ImGui::SetNextItemWidth(-1.0f);
+            if(ImGui::SliderFloat("##line_thickness", &m_line_thickness,
+                                  LINE_THICKNESS_MIN, LINE_THICKNESS_MAX, "%.1f px"))
+            {
+                m_line_thickness =
+                    std::clamp(m_line_thickness, LINE_THICKNESS_MIN, LINE_THICKNESS_MAX);
+            }
+            ImGui::PopID();
             if(m_kernel_mode == AllKernels)
             {
                 ImGui::PushID("kernel_scale");

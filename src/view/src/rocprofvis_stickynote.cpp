@@ -40,6 +40,9 @@ constexpr float kUnplacedCoord        = -1.0f;
 constexpr float kTitleInputPadX       = 4.0f;
 constexpr float kTimeIndicatorWidth   = 1.5f;
 constexpr float kTimeIndicatorAlpha   = 0.85f;
+constexpr float  kPreviewTooltipWidth = 320.0f;
+constexpr size_t kPreviewMaxChars     = 200;
+constexpr size_t kPreviewTitleMaxChars = 60;
 
 // Grows the backing std::string so ImGui can edit it in place.
 int
@@ -359,6 +362,48 @@ StickyNote::RenderAnchorMarker(ImDrawList* draw_list, const ImVec2& marker_pos)
                   ImVec2(btn_size, btn_size));
     // IsItemHovered respects z-order, so a covered marker won't show the time line.
     bool hovered = ImGui::IsItemHovered();
+    // Hovering a minimized marker previews the note's title/text without expanding.
+    if(m_is_minimized && (!m_title.empty() || !m_text.empty()) &&
+       BeginItemTooltipStyled())
+    {
+        ImGui::PushFont(settings.GetFontManager().GetFont(FontType::kDefault));
+        if(!m_title.empty())
+        {
+            // Keep the title to a single line: cap length, then trim by width.
+            std::string title_preview = m_title.substr(0, kPreviewTitleMaxChars);
+            bool        truncated     = m_title.size() > kPreviewTitleMaxChars;
+            while(!title_preview.empty() &&
+                  ImGui::CalcTextSize((title_preview + "...").c_str()).x >
+                      kPreviewTooltipWidth)
+            {
+                title_preview.pop_back();
+                truncated = true;
+            }
+            if(truncated)
+            {
+                title_preview += "...";
+            }
+            ImGui::TextUnformatted(title_preview.c_str());
+            ImGui::Spacing();
+            ImGui::Separator();
+            ImGui::Spacing();
+        }
+        if(!m_text.empty())
+        {
+            std::string preview = m_text.substr(0, kPreviewMaxChars);
+            if(m_text.size() > kPreviewMaxChars)
+            {
+                preview += "...";
+            }
+            ImGui::PushStyleColor(ImGuiCol_Text, settings.GetColor(Colors::kTextDim));
+            ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + kPreviewTooltipWidth);
+            ImGui::TextUnformatted(preview.c_str());
+            ImGui::PopTextWrapPos();
+            ImGui::PopStyleColor();
+        }
+        ImGui::PopFont();
+        EndTooltipStyled();
+    }
     // Clicking a minimized marker expands the note; re-seed its window position.
     if(m_is_minimized && hovered && IsMouseReleasedWithDragCheck(ImGuiMouseButton_Left))
     {

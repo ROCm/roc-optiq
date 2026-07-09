@@ -142,7 +142,7 @@ namespace Controller
             if (kRocProfVisResultSuccess == args.GetUInt64(kRPVControllerUserNumResponses, 0, &num_responses))
             {
                 std::vector<std::string> responses;
-                for (int i = 0; i < num_responses; i++)
+                for (uint64_t i = 0; i < num_responses; i++)
                 {
                     std::array<char, 128> response{};
                     uint32_t response_length = static_cast<uint32_t>(response.size());

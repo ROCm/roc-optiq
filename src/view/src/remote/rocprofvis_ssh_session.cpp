@@ -790,9 +790,9 @@ namespace View
 
         if (result == kRocProfVisResultSuccess)
         {
-            for (int i = 0; i < responses.size(); i++)
+            for (size_t i = 0; i < responses.size(); i++)
             {
-                result = rocprofvis_controller_set_string(args, kRPVControllerUserResponseIndexed, 0, responses[i].c_str());
+                result = rocprofvis_controller_set_string(args, kRPVControllerUserResponseIndexed, i, responses[i].c_str());
                 ROCPROFVIS_ASSERT_MSG_BREAK(result == kRocProfVisResultSuccess, "Failed setting response argument");
             }
 

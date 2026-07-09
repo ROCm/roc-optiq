@@ -3,6 +3,7 @@
 
 #include "rocprofvis_profiler_launch_orchestrator.h"
 #include "rocprofvis_appwindow.h"
+#include "widgets/rocprofvis_notification_manager.h"
 // TEMPORARY (remote/SSH): remove guard when remote graduates.
 #ifdef ROCPROFVIS_ENABLE_REMOTE
 #include "remote/rocprofvis_ssh_uri.h"
@@ -43,7 +44,13 @@ ProfilerLaunchOrchestrator::ProfilerLaunchOrchestrator(AppWindow* app_window)
         static_cast<int>(RocEvents::kProfilerStatusChanged),
         [this](std::shared_ptr<RocEvent> event)
         {
-            auto* status_event = static_cast<ProfilerStatusEvent*>(event.get());
+            auto* status_event = dynamic_cast<ProfilerStatusEvent*>(event.get());
+            if(status_event == nullptr)
+            {
+                spdlog::warn("Received non-ProfilerStatusEvent on ProfilerLaunchOrchestrator "
+                             "subscriber");
+                return;
+            }
             if(status_event->GetOperationId() == m_profiler_session.GetOperationId())
             {
                 OnProfilerStateChanged(status_event->GetState());
@@ -137,7 +144,10 @@ bool ProfilerLaunchOrchestrator::LaunchRemote(const LaunchRequest& request)
         request.remote_uri,
         [this](const std::string& local_path)
         {
-            if(m_app_window && !local_path.empty())
+            // Honor the "Open trace when profiling completes" checkbox for remote
+            // runs too (m_auto_load_trace is set per launch and constant during
+            // the run).
+            if(m_app_window && m_auto_load_trace && !local_path.empty())
             {
                 m_app_window->OpenFile(local_path);
             }
@@ -302,6 +312,17 @@ void ProfilerLaunchOrchestrator::OnProfilerStateChanged(rocprofvis_profiler_stat
         {
             m_app_window->OpenFile(m_trace_path);
         }
+        else if(m_trace_path.empty() && m_auto_load_trace)
+        {
+            // No filesystem fallback by design (a newest-*.db guess can open a
+            // stale/unrelated trace). Fail safe and tell the user where to look.
+            spdlog::warn("ProfilerLaunchOrchestrator: could not determine trace path from "
+                         "profiler output");
+            NotificationManager::GetInstance().Show(
+                "Profiling finished, but the trace file could not be located automatically. "
+                "Open it manually from the output directory.",
+                NotificationLevel::Warning);
+        }
     }
     else if(new_state == kRPVProfilerStateFailed)
     {
@@ -315,22 +336,38 @@ void ProfilerLaunchOrchestrator::OnProfilerStateChanged(rocprofvis_profiler_stat
 
 void ProfilerLaunchOrchestrator::ResolveLocalTracePath()
 {
-    // Prefer the path the profiler actually reported in its output (the backend
-    // scraper). Fall back to the controller's newest-".db" filesystem scan if
-    // the parser can't find one.
-    m_trace_path = m_parse_trace ? m_parse_trace(m_raw_output) : std::string();
-    if(m_trace_path.empty())
+    // Pull the freshest output directly from the session. The completion event is
+    // dispatched before Update() refreshes m_raw_output this frame, so parsing
+    // m_raw_output alone would use a stale/partial snapshot and needlessly fall
+    // back to the filesystem scan.
+    std::string latest = m_profiler_session.GetOutput();
+    if(!latest.empty() && latest != m_raw_output)
     {
-        m_trace_path = m_profiler_session.GetTracePath();
-        spdlog::warn("ProfilerLaunchOrchestrator: backend failed to parse trace path from "
-                     "output; falling back to filesystem scan result '{}'",
-                     m_trace_path);
+        m_raw_output   = std::move(latest);
+        m_output_dirty = true;
     }
+
+    // The profiler backend scraper is the single source of truth for the trace
+    // path (it knows the tool's output format, and scales per-profiler via the
+    // view IProfilerBackend). An empty result is handled by the caller (fail-safe
+    // notification).
+    m_trace_path = m_parse_trace ? m_parse_trace(m_raw_output) : std::string();
 }
 
 int32_t ProfilerLaunchOrchestrator::GetExitCode() const
 {
     return m_profiler_session.GetExitCode();
+}
+
+std::string ProfilerLaunchOrchestrator::GetRemoteStatusMessage() const
+{
+#ifdef ROCPROFVIS_ENABLE_REMOTE
+    if(m_remote_session)
+    {
+        return m_remote_session->GetStatusMessage();
+    }
+#endif
+    return std::string();
 }
 
 #ifdef ROCPROFVIS_ENABLE_REMOTE

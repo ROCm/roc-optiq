@@ -134,7 +134,7 @@ namespace Controller
         static Result BrowseRemoteDirectory(SshConnection * connection, const std::string& path, Future* future);
 
         static bool IsAlive(SshConnection * connection);
-        static bool IsFutureCanceled(SshConnection * connection, Future* future);
+        static bool IsCancelRequested(SshConnection * connection, Future* future);
         static void SetKeepAlive(SshConnection * connection, int interval_seconds);
 
     private:

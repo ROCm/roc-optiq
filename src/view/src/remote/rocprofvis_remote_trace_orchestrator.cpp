@@ -27,7 +27,13 @@ RemoteTraceOrchestrator::RemoteTraceOrchestrator(
         static_cast<int>(RocEvents::kRemoteStatusChanged),
         [this](std::shared_ptr<RocEvent> event)
         {
-            auto* status_event = static_cast<RemoteStatusEvent*>(event.get());
+            auto* status_event = dynamic_cast<RemoteStatusEvent*>(event.get());
+            if(status_event == nullptr)
+            {
+                spdlog::warn("Received non-RemoteStatusEvent on RemoteTraceOrchestrator "
+                             "subscriber");
+                return;
+            }
             // Only react to events from this orchestrator's session's current
             // in-flight phase.
             if(m_session &&

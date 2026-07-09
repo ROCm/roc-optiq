@@ -588,6 +588,18 @@ void ProfilerLauncherDialog::OnLaunchClicked()
 
     const bool is_remote = IsSshMode();
 
+#ifndef ROCPROFVIS_ENABLE_REMOTE
+    // A config/preset can carry connection == kSsh even in a build without
+    // remote support (the two feature flags are independent). Don't silently run
+    // it locally - block with a clear reason.
+    if (m_config.connection == ConnectionType::kSsh)
+    {
+        m_error_message = "This configuration targets a remote (SSH) host, but this build "
+                          "was compiled without remote support.";
+        return;
+    }
+#endif
+
 #ifdef ROCPROFVIS_ENABLE_REMOTE
     // Remote precheck: bind the selected connection and require host/user.
     if (is_remote)
@@ -702,7 +714,13 @@ void ProfilerLauncherDialog::HandleStateTransition(rocprofvis_profiler_state_t n
     {
         if (is_remote)
         {
+            // Surface the specific remote failure reason (SSH connect/auth
+            // failure, "could not determine remote trace path", etc.) instead of
+            // a generic line with no cause.
+            std::string remote_msg = m_orchestrator.GetRemoteStatusMessage();
             m_output_epilogue += "\nRemote profiler failed.\n";
+            m_error_message = remote_msg.empty() ? std::string("Remote profiler failed.")
+                                                 : remote_msg;
             RebuildComposedOutput();
         }
         else

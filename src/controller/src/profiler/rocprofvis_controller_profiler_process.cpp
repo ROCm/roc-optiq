@@ -10,7 +10,6 @@
 #include "rocprofvis_controller_future.h"
 #include "rocprofvis_controller_job_system.h"
 #include "spdlog/spdlog.h"
-#include <filesystem>
 #include <chrono>
 
 #ifdef _WIN32
@@ -117,6 +116,14 @@ rocprofvis_result_t ProfilerConfig::AddEnvVar(char const* name, char const* valu
 {
     if (name == nullptr || value == nullptr)
     {
+        return kRocProfVisResultInvalidArgument;
+    }
+    // Reject names that are not valid POSIX identifiers. Besides being invalid
+    // env assignments, a non-identifier name would inject shell syntax when the
+    // config is serialized for a remote /bin/sh launch (see ToPosixShellCommand).
+    if (!Cmdline::IsValidEnvName(name))
+    {
+        spdlog::warn("Ignoring environment variable with invalid name '{}'", name);
         return kRocProfVisResultInvalidArgument;
     }
     m_env_vars.emplace_back(std::string(name), std::string(value));
@@ -429,6 +436,24 @@ std::string LocalProfilerExecutor::ReadOutput()
 // target posix_spawnp instead of execvpe for portability.
 // ==================================================================================
 
+// Grace period after SIGTERM before escalating to SIGKILL during Cancel().
+static constexpr int SIGTERM_GRACE_MS = 100;
+
+// Decodes a waitpid() status into the executor's exit-code convention (matches
+// the mapping used by IsRunning): normal exit -> exit status; killed by a
+// signal -> 128 + signal number.
+static void set_exit_code_from_status(int status, int& exit_code)
+{
+    if (WIFEXITED(status))
+    {
+        exit_code = WEXITSTATUS(status);
+    }
+    else if (WIFSIGNALED(status))
+    {
+        exit_code = 128 + WTERMSIG(status);
+    }
+}
+
 LocalProfilerExecutor::LocalProfilerExecutor()
     : m_process_id(-1)
     , m_stdout_fd(-1)
@@ -556,19 +581,15 @@ bool LocalProfilerExecutor::IsRunning()
         return false;
     }
 
-    int status;
+    int   status = 0;
     pid_t result = waitpid(m_process_id, &status, WNOHANG);
 
     if (result == m_process_id)
     {
-        if (WIFEXITED(status))
-        {
-            m_exit_code = WEXITSTATUS(status);
-        }
-        else if (WIFSIGNALED(status))
-        {
-            m_exit_code = 128 + WTERMSIG(status);
-        }
+        set_exit_code_from_status(status, m_exit_code);
+        // Reaped: clear the pid so we never wait on / signal it again (and so a
+        // recycled PID can't be mistaken for our child).
+        m_process_id = -1;
         m_is_running = false;
         return false;
     }
@@ -583,21 +604,41 @@ bool LocalProfilerExecutor::Cancel()
         return false;
     }
 
-    if (kill(m_process_id, SIGTERM) == 0)
+    if (kill(m_process_id, SIGTERM) != 0)
     {
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
-
-        if (IsRunning())
-        {
-            kill(m_process_id, SIGKILL);
-        }
-
+        // The pid is gone (already exited, or reaped elsewhere). Nothing to do.
+        m_process_id = -1;
         m_is_running = false;
-        m_exit_code = 1;
-        return true;
+        return false;
     }
 
-    return false;
+    // Give the child a brief chance to exit on SIGTERM, then escalate. Either
+    // way we MUST reap it (blocking waitpid) so it does not linger as a zombie
+    // for the lifetime of the app.
+    std::this_thread::sleep_for(std::chrono::milliseconds(SIGTERM_GRACE_MS));
+
+    int   status = 0;
+    pid_t result = waitpid(m_process_id, &status, WNOHANG);
+    if (result == 0)
+    {
+        // Still alive after the grace period: force-kill and block until reaped.
+        kill(m_process_id, SIGKILL);
+        result = waitpid(m_process_id, &status, 0);
+    }
+
+    if (result == m_process_id)
+    {
+        set_exit_code_from_status(status, m_exit_code);
+    }
+    else
+    {
+        // Could not obtain a status (e.g. ECHILD); best-effort failure code.
+        m_exit_code = 1;
+    }
+
+    m_process_id = -1;
+    m_is_running = false;
+    return true;
 }
 
 int LocalProfilerExecutor::GetExitCode() const
@@ -647,7 +688,6 @@ ProfilerProcessController::ProfilerProcessController()
     , m_config(nullptr)
     , m_state(kRPVProfilerStateIdle)
     , m_output_text()
-    , m_trace_path()
     , m_exit_code(-1)
 {
 }
@@ -774,11 +814,6 @@ void ProfilerProcessController::ClearOutput()
     m_output_text.clear();
 }
 
-std::string ProfilerProcessController::GetTracePath() const
-{
-    return m_trace_path;
-}
-
 int ProfilerProcessController::GetExitCode() const
 {
     return m_exit_code;
@@ -815,8 +850,7 @@ void ProfilerProcessController::UpdateState()
         if (exit_code == 0)
         {
             m_state = kRPVProfilerStateCompleted;
-            m_trace_path = DetermineTracePath(m_config.get());
-            spdlog::info("Profiler completed successfully, trace_path='{}'", m_trace_path);
+            spdlog::info("Profiler completed successfully");
         }
         else
         {
@@ -826,83 +860,12 @@ void ProfilerProcessController::UpdateState()
     }
 }
 
-std::string ProfilerProcessController::DetermineTracePath(ProfilerConfig const* config)
-{
-    if (config == nullptr)
-    {
-        return "";
-    }
-
-    // Remote: the trace lives on the remote host, so we cannot scan the local
-    // filesystem. Report the remote output directory; the View knows the
-    // expected artifact name and drives the SFTP download from there.
-    if (config->GetConnectionType() == ConnectionType::kSsh)
-    {
-        return config->GetOutputDirectory();
-    }
-
-    std::string output_dir = config->GetOutputDirectory();
-    if (output_dir.empty())
-    {
-        output_dir = std::filesystem::current_path().string();
-    }
-
-    std::filesystem::path output_path(output_dir);
-    if (!std::filesystem::exists(output_path))
-    {
-        return "";
-    }
-
-    auto is_trace_extension = [&](std::string const& ext) -> bool
-    {
-        //TODO: review extensions
-        switch (config->GetProfilerType())
-        {
-            case kRPVProfilerTypeRocprofSysRun:
-            case kRPVProfilerTypeRocprofSysInstrument:
-                return (ext == ".db" || ext == ".rpd");
-            case kRPVProfilerTypeRocprofCompute:
-            case kRPVProfilerTypeRocprofV3:
-                return (ext == ".db");
-            default:
-                return (ext == ".db" || ext == ".rpd");
-        }
-    };
-
-    std::filesystem::path best_path;
-    std::filesystem::file_time_type best_time{};
-
-    std::error_code ec;
-    for (auto const& entry : std::filesystem::recursive_directory_iterator(output_path, ec))
-    {
-        if (!entry.is_regular_file())
-        {
-            continue;
-        }
-
-        std::string ext = entry.path().extension().string();
-        if (!is_trace_extension(ext))
-        {
-            continue;
-        }
-
-        auto write_time = entry.last_write_time();
-        if (best_path.empty() || write_time > best_time)
-        {
-            best_path = entry.path();
-            best_time = write_time;
-        }
-    }
-
-    return best_path.string();
-}
-
-void ProfilerProcessController::ExecuteJob(ProfilerProcessController* controller, Future* future)
+rocprofvis_result_t ProfilerProcessController::ExecuteJob(ProfilerProcessController* controller, Future* future)
 {
     if (controller == nullptr)
     {
         spdlog::error("ProfilerProcessController::ExecuteJob: controller is null");
-        return;
+        return kRocProfVisResultInvalidArgument;
     }
 
     spdlog::info("Profiler monitor job started");
@@ -921,8 +884,30 @@ void ProfilerProcessController::ExecuteJob(ProfilerProcessController* controller
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
 
+    // The bound future resolves when this job returns. It must not resolve until
+    // the executor's worker has actually stopped: callers key resource teardown
+    // (freeing the profiler - which joins the worker - and the borrowed SSH
+    // connection) on the future. Cancel() only signals the worker; wait here for
+    // it to unwind so "future resolved" implies "worker done".
+    while (controller->m_executor && controller->m_executor->IsRunning())
+    {
+        controller->GetOutput();
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    }
+
     controller->GetOutput();
-    spdlog::info("Profiler monitor job finished (state={})", static_cast<int>(controller->m_state.load()));
+    rocprofvis_profiler_state_t final_state = controller->m_state.load();
+    spdlog::info("Profiler monitor job finished (state={})", static_cast<int>(final_state));
+
+    switch (final_state)
+    {
+        case kRPVProfilerStateCompleted:
+            return kRocProfVisResultSuccess;
+        case kRPVProfilerStateCancelled:
+            return kRocProfVisResultCancelled;
+        default:
+            return kRocProfVisResultUnknownError;
+    }
 }
 
 // ==================================================================================

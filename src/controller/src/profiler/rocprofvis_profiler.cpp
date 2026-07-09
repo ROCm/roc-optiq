@@ -237,8 +237,7 @@ rocprofvis_result_t rocprofvis_profiler_launch_async(rocprofvis_profiler_t* prof
     RocProfVis::Controller::Job* job = RocProfVis::Controller::JobSystem::Get().IssueJob(
         [controller_ptr](RocProfVis::Controller::Future* job_future) -> rocprofvis_result_t
         {
-            RocProfVis::Controller::ProfilerProcessController::ExecuteJob(controller_ptr, job_future);
-            return kRocProfVisResultSuccess;
+            return RocProfVis::Controller::ProfilerProcessController::ExecuteJob(controller_ptr, job_future);
         },
         future_ref.Get());
     future_ref->Set(job);
@@ -275,8 +274,7 @@ rocprofvis_result_t rocprofvis_profiler_launch_remote_async(rocprofvis_profiler_
     RocProfVis::Controller::Job* job = RocProfVis::Controller::JobSystem::Get().IssueJob(
         [controller_ptr](RocProfVis::Controller::Future* job_future) -> rocprofvis_result_t
         {
-            RocProfVis::Controller::ProfilerProcessController::ExecuteJob(controller_ptr, job_future);
-            return kRocProfVisResultSuccess;
+            return RocProfVis::Controller::ProfilerProcessController::ExecuteJob(controller_ptr, job_future);
         },
         future_ref.Get());
     future_ref->Set(job);
@@ -319,18 +317,6 @@ rocprofvis_result_t rocprofvis_profiler_clear_output(rocprofvis_profiler_t* prof
 
     session_ref->GetController().ClearOutput();
     return kRocProfVisResultSuccess;
-}
-
-rocprofvis_result_t rocprofvis_profiler_get_trace_path(rocprofvis_profiler_t* profiler, char* buffer, uint32_t* length)
-{
-    RocProfVis::Controller::ProfilerSessionRef session_ref(profiler);
-    if (!session_ref.IsValid() || length == nullptr)
-    {
-        return kRocProfVisResultInvalidArgument;
-    }
-
-    return RocProfVis::Controller::copy_string_to_buffer(
-        session_ref->GetController().GetTracePath(), buffer, length);
 }
 
 rocprofvis_result_t rocprofvis_profiler_get_exit_code(rocprofvis_profiler_t* profiler, int32_t* exit_code)

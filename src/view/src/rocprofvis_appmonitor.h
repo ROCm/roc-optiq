@@ -148,6 +148,11 @@ public:
     // status bar to surface background activity to the user.
     size_t GetActiveOperationCount() const;
 
+    // Number of tracked operations of a specific type (active or cancelling).
+    // The monitor stays domain-agnostic: callers own any grouping/labelling of
+    // types (e.g. treating the SSH-related types as one "remote" bucket).
+    size_t GetActiveOperationCount(MonitorOperationType type) const;
+
     // Main thread only. Polls every tracked operation and queues status-change
     // events. Terminal / cancelling operations are reaped once their future
     // resolves.

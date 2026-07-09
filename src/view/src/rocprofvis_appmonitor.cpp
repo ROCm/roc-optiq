@@ -243,6 +243,20 @@ AppMonitor::GetActiveOperationCount() const
     return m_operations.size();
 }
 
+size_t
+AppMonitor::GetActiveOperationCount(MonitorOperationType type) const
+{
+    size_t count = 0;
+    for(const auto& entry : m_operations)
+    {
+        if(entry.second.operation_type == type)
+        {
+            ++count;
+        }
+    }
+    return count;
+}
+
 void
 AppMonitor::Update()
 {

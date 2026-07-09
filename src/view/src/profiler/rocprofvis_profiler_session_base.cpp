@@ -144,33 +144,6 @@ ProfilerSessionBase::ClearOutput()
     }
 }
 
-std::string
-ProfilerSessionBase::GetTracePath()
-{
-    if(m_profiler == nullptr)
-    {
-        return "";
-    }
-
-    uint32_t length = 0;
-    rocprofvis_profiler_get_trace_path(m_profiler, nullptr, &length);
-    if(length == 0)
-    {
-        return "";
-    }
-
-    std::vector<char>   buffer(length + 1);
-    rocprofvis_result_t result =
-        rocprofvis_profiler_get_trace_path(m_profiler, buffer.data(), &length);
-    if(result != kRocProfVisResultSuccess)
-    {
-        return "";
-    }
-
-    buffer[length] = '\0';
-    return std::string(buffer.data());
-}
-
 int32_t
 ProfilerSessionBase::GetExitCode() const
 {

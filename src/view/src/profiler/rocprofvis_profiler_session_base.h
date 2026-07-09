@@ -46,7 +46,6 @@ public:
     virtual rocprofvis_profiler_state_t GetState() const;
     virtual std::string                 GetOutput();
     void                                ClearOutput();
-    virtual std::string                 GetTracePath();
     int32_t                             GetExitCode() const;
     virtual bool                        Cancel();
 

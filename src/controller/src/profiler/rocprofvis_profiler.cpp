@@ -319,18 +319,6 @@ rocprofvis_result_t rocprofvis_profiler_clear_output(rocprofvis_profiler_t* prof
     return kRocProfVisResultSuccess;
 }
 
-rocprofvis_result_t rocprofvis_profiler_get_trace_path(rocprofvis_profiler_t* profiler, char* buffer, uint32_t* length)
-{
-    RocProfVis::Controller::ProfilerSessionRef session_ref(profiler);
-    if (!session_ref.IsValid() || length == nullptr)
-    {
-        return kRocProfVisResultInvalidArgument;
-    }
-
-    return RocProfVis::Controller::copy_string_to_buffer(
-        session_ref->GetController().GetTracePath(), buffer, length);
-}
-
 rocprofvis_result_t rocprofvis_profiler_get_exit_code(rocprofvis_profiler_t* profiler, int32_t* exit_code)
 {
     RocProfVis::Controller::ProfilerSessionRef session_ref(profiler);

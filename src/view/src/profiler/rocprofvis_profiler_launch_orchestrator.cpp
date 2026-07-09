@@ -3,6 +3,7 @@
 
 #include "rocprofvis_profiler_launch_orchestrator.h"
 #include "rocprofvis_appwindow.h"
+#include "widgets/rocprofvis_notification_manager.h"
 // TEMPORARY (remote/SSH): remove guard when remote graduates.
 #ifdef ROCPROFVIS_ENABLE_REMOTE
 #include "remote/rocprofvis_ssh_uri.h"
@@ -311,6 +312,17 @@ void ProfilerLaunchOrchestrator::OnProfilerStateChanged(rocprofvis_profiler_stat
         {
             m_app_window->OpenFile(m_trace_path);
         }
+        else if(m_trace_path.empty() && m_auto_load_trace)
+        {
+            // No filesystem fallback by design (a newest-*.db guess can open a
+            // stale/unrelated trace). Fail safe and tell the user where to look.
+            spdlog::warn("ProfilerLaunchOrchestrator: could not determine trace path from "
+                         "profiler output");
+            NotificationManager::GetInstance().Show(
+                "Profiling finished, but the trace file could not be located automatically. "
+                "Open it manually from the output directory.",
+                NotificationLevel::Warning);
+        }
     }
     else if(new_state == kRPVProfilerStateFailed)
     {
@@ -335,17 +347,11 @@ void ProfilerLaunchOrchestrator::ResolveLocalTracePath()
         m_output_dirty = true;
     }
 
-    // Prefer the path the profiler actually reported in its output (the backend
-    // scraper). Fall back to the controller's newest-".db" filesystem scan if
-    // the parser can't find one.
+    // The profiler backend scraper is the single source of truth for the trace
+    // path (it knows the tool's output format, and scales per-profiler via the
+    // view IProfilerBackend). An empty result is handled by the caller (fail-safe
+    // notification).
     m_trace_path = m_parse_trace ? m_parse_trace(m_raw_output) : std::string();
-    if(m_trace_path.empty())
-    {
-        m_trace_path = m_profiler_session.GetTracePath();
-        spdlog::warn("ProfilerLaunchOrchestrator: backend failed to parse trace path from "
-                     "output; falling back to filesystem scan result '{}'",
-                     m_trace_path);
-    }
 }
 
 int32_t ProfilerLaunchOrchestrator::GetExitCode() const

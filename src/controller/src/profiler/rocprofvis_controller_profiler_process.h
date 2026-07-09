@@ -168,8 +168,6 @@ public:
 
     void ClearOutput();
 
-    std::string GetTracePath() const;
-
     int GetExitCode() const;
 
     rocprofvis_result_t Cancel();
@@ -180,13 +178,11 @@ public:
 private:
     void UpdateOutput();
     void UpdateState();
-    std::string DetermineTracePath(ProfilerConfig const* config);
 
     std::unique_ptr<IProfilerExecutor> m_executor;
     std::unique_ptr<ProfilerConfig> m_config;
     std::atomic<rocprofvis_profiler_state_t> m_state;
     std::string m_output_text;
-    std::string m_trace_path;
     int m_exit_code;
     std::mutex m_mutex;
 };

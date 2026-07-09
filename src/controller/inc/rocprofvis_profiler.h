@@ -183,15 +183,6 @@ rocprofvis_result_t rocprofvis_profiler_get_output(rocprofvis_profiler_t* profil
 rocprofvis_result_t rocprofvis_profiler_clear_output(rocprofvis_profiler_t* profiler);
 
 /*
-* Gets the path to the generated trace file after profiler completion.
-* @param profiler The profiler session handle.
-* @param buffer Buffer to write the trace path to, or null to query the length.
-* @param length Pointer to integer containing buffer size, or to write required size.
-* @returns kRocProfVisResultSuccess or an error code.
-*/
-rocprofvis_result_t rocprofvis_profiler_get_trace_path(rocprofvis_profiler_t* profiler, char* buffer, uint32_t* length);
-
-/*
 * Gets the exit code of a completed profiler process.
 * @param profiler The profiler session handle.
 * @param exit_code Output parameter for the process exit code.

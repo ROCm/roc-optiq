@@ -10,7 +10,6 @@
 #include "rocprofvis_controller_future.h"
 #include "rocprofvis_controller_job_system.h"
 #include "spdlog/spdlog.h"
-#include <filesystem>
 #include <chrono>
 
 #ifdef _WIN32
@@ -689,7 +688,6 @@ ProfilerProcessController::ProfilerProcessController()
     , m_config(nullptr)
     , m_state(kRPVProfilerStateIdle)
     , m_output_text()
-    , m_trace_path()
     , m_exit_code(-1)
 {
 }
@@ -816,11 +814,6 @@ void ProfilerProcessController::ClearOutput()
     m_output_text.clear();
 }
 
-std::string ProfilerProcessController::GetTracePath() const
-{
-    return m_trace_path;
-}
-
 int ProfilerProcessController::GetExitCode() const
 {
     return m_exit_code;
@@ -857,8 +850,7 @@ void ProfilerProcessController::UpdateState()
         if (exit_code == 0)
         {
             m_state = kRPVProfilerStateCompleted;
-            m_trace_path = DetermineTracePath(m_config.get());
-            spdlog::info("Profiler completed successfully, trace_path='{}'", m_trace_path);
+            spdlog::info("Profiler completed successfully");
         }
         else
         {
@@ -866,77 +858,6 @@ void ProfilerProcessController::UpdateState()
             spdlog::error("Profiler process exited with code {}", exit_code);
         }
     }
-}
-
-std::string ProfilerProcessController::DetermineTracePath(ProfilerConfig const* config)
-{
-    if (config == nullptr)
-    {
-        return "";
-    }
-
-    // Remote: the trace lives on the remote host, so we cannot scan the local
-    // filesystem. Report the remote output directory; the View knows the
-    // expected artifact name and drives the SFTP download from there.
-    if (config->GetConnectionType() == ConnectionType::kSsh)
-    {
-        return config->GetOutputDirectory();
-    }
-
-    std::string output_dir = config->GetOutputDirectory();
-    if (output_dir.empty())
-    {
-        output_dir = std::filesystem::current_path().string();
-    }
-
-    std::filesystem::path output_path(output_dir);
-    if (!std::filesystem::exists(output_path))
-    {
-        return "";
-    }
-
-    auto is_trace_extension = [&](std::string const& ext) -> bool
-    {
-        //TODO: review extensions
-        switch (config->GetProfilerType())
-        {
-            case kRPVProfilerTypeRocprofSysRun:
-            case kRPVProfilerTypeRocprofSysInstrument:
-                return (ext == ".db" || ext == ".rpd");
-            case kRPVProfilerTypeRocprofCompute:
-            case kRPVProfilerTypeRocprofV3:
-                return (ext == ".db");
-            default:
-                return (ext == ".db" || ext == ".rpd");
-        }
-    };
-
-    std::filesystem::path best_path;
-    std::filesystem::file_time_type best_time{};
-
-    std::error_code ec;
-    for (auto const& entry : std::filesystem::recursive_directory_iterator(output_path, ec))
-    {
-        if (!entry.is_regular_file())
-        {
-            continue;
-        }
-
-        std::string ext = entry.path().extension().string();
-        if (!is_trace_extension(ext))
-        {
-            continue;
-        }
-
-        auto write_time = entry.last_write_time();
-        if (best_path.empty() || write_time > best_time)
-        {
-            best_path = entry.path();
-            best_time = write_time;
-        }
-    }
-
-    return best_path.string();
 }
 
 rocprofvis_result_t ProfilerProcessController::ExecuteJob(ProfilerProcessController* controller, Future* future)

@@ -22,6 +22,11 @@ ComputeCodeView::ComputeCodeView(DataProvider& data_provider)
 , m_settings(SettingsManager::GetInstance())
 , m_data_provider(data_provider)
 , m_control_panel_height(0.0f)
+, m_current_source_file_id(ComputeSelection::INVALID_SELECTION_ID)
+, m_current_code_object_id(ComputeSelection::INVALID_SELECTION_ID)
+, m_current_kernel_id(ComputeSelection::INVALID_SELECTION_ID)
+, m_current_workload_id(ComputeSelection::INVALID_SELECTION_ID)
+, m_show_metadata_enabled(false)
 {
     m_source_code = std::make_shared<SourceCodeWidget>(m_line_selection);
     m_isa_code    = std::make_shared<IsaCodeWidget>(m_line_selection);
@@ -209,12 +214,11 @@ ComputeCodeView::RenderControlPanel()
         m_isa_layout_item->m_visible = !m_isa_layout_item->m_visible;
 
     ImGui::SameLine();
-    static bool show_metadata_enabled = false;
-    if(ImGui::Button(show_metadata_enabled ? hide_stalls_str : show_stalls_str))
+    if(ImGui::Button(m_show_metadata_enabled ? hide_stalls_str : show_stalls_str))
     {
-        show_metadata_enabled = !show_metadata_enabled;
-        m_source_code->ChangeStallVisibility(show_metadata_enabled);
-        m_isa_code->ChangeStallVisibility(show_metadata_enabled);
+        m_show_metadata_enabled = !m_show_metadata_enabled;
+        m_source_code->ChangeStallVisibility(m_show_metadata_enabled);
+        m_isa_code->ChangeStallVisibility(m_show_metadata_enabled);
     }
 
     if(m_isa_layout_item->m_visible)

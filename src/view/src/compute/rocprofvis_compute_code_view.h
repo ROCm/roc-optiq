@@ -51,10 +51,10 @@ private:
     LayoutItem::Ptr                   m_isa_layout_item;
     std::shared_ptr<HSplitContainer>  m_horizontal_split_container;
 
-    uint32_t                        m_current_source_file_id = 0;
-    uint32_t                        m_current_code_object_id = 0;
-    uint32_t                        m_current_kernel_id      = 0;
-    uint32_t                        m_current_workload_id    = 0;
+    uint32_t                          m_current_source_file_id;
+    uint32_t                          m_current_code_object_id;
+    uint32_t                          m_current_kernel_id;
+    uint32_t                          m_current_workload_id;
 
     std::map<std::string /*file_path*/, uint32_t /*file_id*/> m_source_files;
     LineSelection                   m_line_selection;
@@ -62,6 +62,7 @@ private:
     float m_control_panel_height;
 
     EventManager::SubscriptionToken m_kernel_selection_changed_token;
+    bool m_show_metadata_enabled;
 };
 
 struct CodeLine

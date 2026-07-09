@@ -101,11 +101,11 @@ struct TimelineViewTestPeer
 
     FlameTrackItem* FirstFlameTrack() const
     {
-        if(!v.m_graphs) return nullptr;
-        for(const TrackGraph& graph : *v.m_graphs)
+        if(!v.m_tracks) return nullptr;
+        for(TrackItem* track : *v.m_tracks)
         {
-            if(!graph.display || graph.chart == nullptr) continue;
-            FlameTrackItem* flame = dynamic_cast<FlameTrackItem*>(graph.chart);
+            if(track == nullptr || !track->IsDisplayed()) continue;
+            FlameTrackItem* flame = dynamic_cast<FlameTrackItem*>(track);
             if(flame != nullptr) return flame;
         }
         return nullptr;
@@ -116,11 +116,11 @@ struct TimelineViewTestPeer
     // Returns 0 if no flame track is present or it hasn't rendered yet.
     unsigned int FirstFlameWindowId() const
     {
-        if(!v.m_graphs) return 0;
-        for(const TrackGraph& graph : *v.m_graphs)
+        if(!v.m_tracks) return 0;
+        for(TrackItem* track : *v.m_tracks)
         {
-            if(!graph.display || graph.chart == nullptr) continue;
-            FlameTrackItem* flame = dynamic_cast<FlameTrackItem*>(graph.chart);
+            if(track == nullptr || !track->IsDisplayed()) continue;
+            FlameTrackItem* flame = dynamic_cast<FlameTrackItem*>(track);
             if(flame == nullptr) continue;
             unsigned int id = FlameTrackItemTestPeer{ *flame }.FlameWindowId();
             if(id != 0) return id;

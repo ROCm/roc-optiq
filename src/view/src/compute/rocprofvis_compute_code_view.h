@@ -55,6 +55,8 @@ private:
     uint32_t                          m_current_code_object_id;
     uint32_t                          m_current_kernel_id;
     uint32_t                          m_current_workload_id;
+    uint32_t                          m_fetch_generation = 0;
+    bool                              m_pending_refetch  = false;
 
     std::map<std::string /*file_path*/, uint32_t /*file_id*/> m_source_files;
     LineSelection                   m_line_selection;

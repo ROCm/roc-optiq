@@ -273,14 +273,19 @@ public:
     uint32_t m_workload_id;
     uint32_t m_kernel_id;
     uint32_t m_source_file_id;
+    // Per-kernel generation counter captured at submission.
+    // ProcessPcSamplingRequest discards results that belong to a stale generation.
+    uint32_t m_generation = 0;
 
     PcSamplingRequestParams(const PcSamplingRequestParams&)            = default;
     PcSamplingRequestParams& operator=(const PcSamplingRequestParams&) = default;
 
-    PcSamplingRequestParams(uint32_t workload_id, uint32_t kernel_id, uint32_t source_file_id)
+    PcSamplingRequestParams(uint32_t workload_id, uint32_t kernel_id,
+                            uint32_t source_file_id, uint32_t generation)
     : m_workload_id(workload_id)
     , m_kernel_id(kernel_id)
     , m_source_file_id(source_file_id)
+    , m_generation(generation)
     {}
 };
 

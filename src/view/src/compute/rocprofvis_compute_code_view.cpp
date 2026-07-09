@@ -102,27 +102,41 @@ ComputeCodeView::LoadData(uint32_t kernel_id)
 void
 ComputeCodeView::FetchPcSamplingForCurrentFile()
 {
-    if(m_current_kernel_id == 0 || m_current_source_file_id == 0)
+    if(m_current_kernel_id == ComputeSelection::INVALID_SELECTION_ID ||
+       m_current_source_file_id == ComputeSelection::INVALID_SELECTION_ID)
         return;
-
-    const PcSamplingRequestParams params(
-        m_current_workload_id, m_current_kernel_id, m_current_source_file_id);
 
     const uint64_t request_id = RequestIdBuilder::MakeClientRequestId(
         RequestType::kFetchPcSampling,
-        (static_cast<uint64_t>(params.m_kernel_id) << 32) | params.m_source_file_id);
+        (static_cast<uint64_t>(m_current_kernel_id) << 32) | m_current_source_file_id);
 
     if(m_data_provider.IsRequestPending(request_id))
+    {
+        m_pending_refetch = true;
         m_data_provider.CancelRequest(request_id);
+    }
     else
-        m_data_provider.FetchPcSampling(params);
+    {
+        ++m_fetch_generation;
+        m_pending_refetch = false;
+        m_data_provider.FetchPcSampling(
+            PcSamplingRequestParams(m_current_workload_id, m_current_kernel_id,
+                                    m_current_source_file_id, m_fetch_generation));
+    }
 }
 
 void
 ComputeCodeView::OnPcSamplingReady(uint32_t kernel_id, uint32_t source_file_id, bool success)
 {
-    if(!success || kernel_id != m_current_kernel_id || source_file_id != m_current_source_file_id)
+    if(kernel_id != m_current_kernel_id || source_file_id != m_current_source_file_id)
         return;
+
+    if(!success)
+    {
+        if(m_pending_refetch)
+            FetchPcSamplingForCurrentFile();
+        return;
+    }
 
     const KernelInfo* kernel_info = m_data_provider.ComputeModel().GetKernelInfo(
         m_current_workload_id, m_current_kernel_id);
@@ -131,13 +145,13 @@ ComputeCodeView::OnPcSamplingReady(uint32_t kernel_id, uint32_t source_file_id, 
 
     const PcSamplingData& data = kernel_info->pc_sampling_data;
 
-    if(m_current_source_file_id != 0)
+    if(m_current_source_file_id != ComputeSelection::INVALID_SELECTION_ID)
         m_source_code->Load(data, m_current_source_file_id);
 
     if(!data.code_objects.empty())
         m_current_code_object_id = data.code_objects[0].id;
 
-    if(m_current_code_object_id != 0)
+    if(m_current_code_object_id != ComputeSelection::INVALID_SELECTION_ID)
         m_isa_code->Load(data, m_current_code_object_id);
 }
 

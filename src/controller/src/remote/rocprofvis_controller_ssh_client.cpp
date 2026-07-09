@@ -101,7 +101,7 @@ namespace Controller
 
         // libssh2 fires this callback for every kbdint round, including "info"
         // rounds (banner / status messages with no input). If there are no
-        // prompts, there is nothing to ask the user  just acknowledge and
+        // prompts, there is nothing to ask the user ï¿½ just acknowledge and
         // continue without touching the UI.
         if(num_prompts == 0)
         {
@@ -238,7 +238,7 @@ namespace Controller
         case LIBSSH2_ERROR_FILE:
             hint = " [file unreadable or unsupported format]"; break;
         case LIBSSH2_ERROR_PUBLICKEY_UNVERIFIED:
-            hint = " [server rejected the key  possibly encrypted (passphrase needed) or not in authorized_keys]"; break;
+            hint = " [server rejected the key ï¿½ possibly encrypted (passphrase needed) or not in authorized_keys]"; break;
         case LIBSSH2_ERROR_AUTHENTICATION_FAILED:
             hint = " [auth rejected by server]"; break;
         case LIBSSH2_ERROR_METHOD_NOT_SUPPORTED:
@@ -591,7 +591,7 @@ namespace Controller
                 {
                     connection->Disconnect();
                     err = (m == KnownHostMatch::Mismatch)
-                        ? "Host key mismatch  connection rejected."
+                        ? "Host key mismatch ï¿½ connection rejected."
                         : "Host key not trusted.";
                     connection->GetSshBridge()->SaveError(err);
                     return Result::AuthError;
@@ -641,7 +641,7 @@ namespace Controller
                     return Result::Success;
                 }
             }
-            // 1b) ssh-agent  handles encrypted keys without us needing a passphrase.
+            // 1b) ssh-agent ï¿½ handles encrypted keys without us needing a passphrase.
             spdlog::info("[ssh] trying ssh-agent");
             if (TryAgent(connection, user, future))
             {
@@ -896,9 +896,11 @@ namespace Controller
             }
 
             bool got_data = false;
-            ssize_t n1 = libssh2_channel_read(channel, buffer, sizeof(buffer));
-            ssize_t n2 = libssh2_channel_read_stderr(channel, buffer, sizeof(buffer));
 
+            // Read and consume stdout BEFORE reading stderr: both reads share
+            // `buffer`, so the stderr read would otherwise overwrite the stdout
+            // bytes before AddStdOut has copied them out.
+            ssize_t n1 = libssh2_channel_read(channel, buffer, sizeof(buffer));
             if (n1 > 0)
             {
                 connection->GetSshBridge()->AddStdOut(buffer, n1);
@@ -906,6 +908,7 @@ namespace Controller
                 got_data = true;
             }
 
+            ssize_t n2 = libssh2_channel_read_stderr(channel, buffer, sizeof(buffer));
             if (n2 > 0)
             {
                 connection->GetSshBridge()->AddStdOut(buffer, n2);
@@ -942,7 +945,7 @@ namespace Controller
         }
 
         output = "Exit code : " + std::to_string(exit_code);
-        connection->GetSshBridge()->AddStdOut(output.data(), output.size()+1);
+        connection->GetSshBridge()->AddStdOut(output.data(), output.size());
 
         libssh2_channel_free(channel);
 

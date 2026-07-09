@@ -119,6 +119,14 @@ rocprofvis_result_t ProfilerConfig::AddEnvVar(char const* name, char const* valu
     {
         return kRocProfVisResultInvalidArgument;
     }
+    // Reject names that are not valid POSIX identifiers. Besides being invalid
+    // env assignments, a non-identifier name would inject shell syntax when the
+    // config is serialized for a remote /bin/sh launch (see ToPosixShellCommand).
+    if (!Cmdline::IsValidEnvName(name))
+    {
+        spdlog::warn("Ignoring environment variable with invalid name '{}'", name);
+        return kRocProfVisResultInvalidArgument;
+    }
     m_env_vars.emplace_back(std::string(name), std::string(value));
     return kRocProfVisResultSuccess;
 }

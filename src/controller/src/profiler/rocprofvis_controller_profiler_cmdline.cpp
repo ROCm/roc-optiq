@@ -4,6 +4,7 @@
 #include "rocprofvis_controller_profiler_cmdline.h"
 #include "rocprofvis_controller_profiler_process.h"
 
+#include <cctype>
 #include <sstream>
 
 namespace RocProfVis
@@ -137,6 +138,26 @@ std::vector<std::pair<std::string, std::string>> BuildEnv(ProfilerConfig const& 
     return config.GetEnvVars();
 }
 
+bool IsValidEnvName(std::string const& name)
+{
+    if (name.empty())
+    {
+        return false;
+    }
+    if (!(std::isalpha(static_cast<unsigned char>(name[0])) || name[0] == '_'))
+    {
+        return false;
+    }
+    for (char c : name)
+    {
+        if (!(std::isalnum(static_cast<unsigned char>(c)) || c == '_'))
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
 std::string ToPosixShellCommand(
     std::vector<std::string> const&                         argv,
     std::vector<std::pair<std::string, std::string>> const& env)
@@ -146,6 +167,14 @@ std::string ToPosixShellCommand(
 
     for (auto const& kv : env)
     {
+        // Defense-in-depth: the name is emitted unquoted (it must be a literal
+        // shell identifier), so never serialize a malformed name into the shell
+        // command. Invalid names are rejected at ProfilerConfig::AddEnvVar, but
+        // guard here too since this is the actual injection boundary.
+        if (!IsValidEnvName(kv.first))
+        {
+            continue;
+        }
         if (!first)
         {
             oss << ' ';

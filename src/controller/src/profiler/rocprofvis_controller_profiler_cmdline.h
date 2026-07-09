@@ -57,6 +57,14 @@ std::vector<std::string> BuildArgv(ProfilerConfig const& config);
 std::vector<std::pair<std::string, std::string>> BuildEnv(ProfilerConfig const& config);
 
 /*
+ * True if `name` is a valid POSIX environment variable name
+ * ([A-Za-z_][A-Za-z0-9_]*). Malformed names must be kept out of the remote
+ * shell command (ToPosixShellCommand) because the name is emitted unquoted and
+ * would otherwise allow shell-syntax injection.
+ */
+bool IsValidEnvName(std::string const& name);
+
+/*
  * Serialize argv (and optional env) into a single string suitable for a POSIX
  * /bin/sh interpreter - i.e. ssh user@host "<this>" or sh -c "<this>". Each
  * token is single-quoted; embedded single quotes are emitted as '\''. Env

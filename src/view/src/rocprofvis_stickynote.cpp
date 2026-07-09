@@ -670,15 +670,18 @@ StickyNote::RenderExpandedWindow(const ImVec2& anchor_pos, bool marker_hovered)
         m_note_engaged =
             hovered || ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows);
 
-        // Ring hugs the outside edge so it never overlaps the note interior.
+        // Drawn on the note's draw list (not the foreground) so tooltips stay on
+        // top; clip is expanded so the outset ring isn't clipped to the window.
         if(marker_hovered || m_note_engaged)
         {
-            ImGui::GetForegroundDrawList()->AddRect(
-                ImVec2(win_pos.x - kHighlightPad, win_pos.y - kHighlightPad),
-                ImVec2(win_pos.x + win_size.x + kHighlightPad,
-                       win_pos.y + win_size.y + kHighlightPad),
-                settings.GetColor(Colors::kStickyNoteAccent), rounding + kHighlightPad, 0,
-                kHighlightThickness);
+            const ImVec2 ring_min(win_pos.x - kHighlightPad, win_pos.y - kHighlightPad);
+            const ImVec2 ring_max(win_pos.x + win_size.x + kHighlightPad,
+                                  win_pos.y + win_size.y + kHighlightPad);
+            note_draw_list->PushClipRect(ring_min, ring_max, false);
+            note_draw_list->AddRect(ring_min, ring_max,
+                                    settings.GetColor(Colors::kStickyNoteAccent),
+                                    rounding + kHighlightPad, 0, kHighlightThickness);
+            note_draw_list->PopClipRect();
         }
 
         // Provisional note commits on first input, discarded if abandoned empty.

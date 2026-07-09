@@ -217,6 +217,17 @@ private:
         const profiler_hub::reader_types::track_info_t& info, DbInstance* db_instance,
         rocprofvis_dm_track_params_t& track_params);
 
+    // Reader-backed memory-copy discovery: replaces the standalone (queue-keyed)
+    // memory-copy SQL block with get_all_tracks() filtered to track_type_t::dma, per
+    // shard.
+    rocprofvis_dm_result_t AddReaderDmaTracks(Future* future);
+
+    // Adapt a reader dma (memory-copy) track into Optiq track_params (identity slots,
+    // category, op). Keyed by destination agent (agent_info from dst_agent_id).
+    void ReaderDmaTrackToTrackParams(const profiler_hub::reader_types::track_info_t& info,
+                                     DbInstance*                   db_instance,
+                                     rocprofvis_dm_track_params_t& track_params);
+
     // Reader-backed slice load for a cpu_thread track (routed from ReadTraceSlice on a
     // non-sentinel reader_track_id). Emits interval events with Optiq's exact overlap
     // window semantics.

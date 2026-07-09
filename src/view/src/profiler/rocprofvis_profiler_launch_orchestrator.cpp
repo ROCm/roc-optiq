@@ -43,7 +43,13 @@ ProfilerLaunchOrchestrator::ProfilerLaunchOrchestrator(AppWindow* app_window)
         static_cast<int>(RocEvents::kProfilerStatusChanged),
         [this](std::shared_ptr<RocEvent> event)
         {
-            auto* status_event = static_cast<ProfilerStatusEvent*>(event.get());
+            auto* status_event = dynamic_cast<ProfilerStatusEvent*>(event.get());
+            if(status_event == nullptr)
+            {
+                spdlog::warn("Received non-ProfilerStatusEvent on ProfilerLaunchOrchestrator "
+                             "subscriber");
+                return;
+            }
             if(status_event->GetOperationId() == m_profiler_session.GetOperationId())
             {
                 OnProfilerStateChanged(status_event->GetState());

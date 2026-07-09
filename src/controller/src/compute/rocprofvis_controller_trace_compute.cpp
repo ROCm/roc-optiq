@@ -493,9 +493,8 @@ ComputeTrace::FetchIsaLineDepsAndStalls(rocprofvis_dm_database_t db, Future* fut
                             SetObjectProperty((rocprofvis_handle_t*)&output, property, stall_offset + i, data_store.rows[i][column.second.value()], type);
                 stall_offset += data_store.rows.size();
             });
-
-        FetchStallReasonCounts(db, future, output);
     }
+    FetchStallReasonCounts(db, future, output);
 }
 
 void
@@ -558,11 +557,15 @@ ComputeTrace::FetchSourceFileAndLines(rocprofvis_dm_database_t db, Future* futur
     uint64_t num_source_files = 0;
     output.GetUInt64(kRPVControllerPCSamplingNumSourceFiles, 0, &num_source_files);
     uint64_t source_line_offset = 0;
-    for(uint64_t fi = 0; fi < num_source_files; fi++)
+    for(uint64_t file = 0; file < num_source_files; file++)
     {
-        uint64_t sf_id = 0;
-        output.GetUInt64(kRPVControllerPCSamplingSourceFileId, fi, &sf_id);
-        query_args = { {kRPVComputeParamSourceFileId, std::to_string(sf_id)} };
+        uint64_t file_id = 0;
+        output.GetUInt64(kRPVControllerPCSamplingSourceFileId, file, &file_id);
+        // Only fetch source lines for the selected file — other files' metadata
+        // is available for the dropdown but their line content is not needed.
+        if(file_id != source_file_id)
+            continue;
+        query_args = { {kRPVComputeParamSourceFileId, std::to_string(file_id)} };
         query_out  = {
             {
                 { kRPVComputeColumnPcSamplingSourceLineId,      std::nullopt },

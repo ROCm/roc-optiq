@@ -4413,6 +4413,8 @@ DataProvider::FetchPcSampling(const PcSamplingRequestParams& params)
 
     if(result == kRocProfVisResultSuccess)
     {
+        m_pc_sampling_generation[params.m_kernel_id] = params.m_generation;
+
         m_requests.emplace(
             request_id,
             RequestInfo{ request_id, future, nullptr, pc_handle, args,
@@ -4442,6 +4444,8 @@ DataProvider::ProcessLoadComputeTrace(RequestInfo& req)
         }                          
         return;
     }
+    m_pc_sampling_generation.clear();
+
     uint64_t            num_workloads = 0;
     rocprofvis_result_t result        = rocprofvis_controller_get_uint64(
         m_trace_controller, kRPVControllerNumWorkloads, 0, &num_workloads);
@@ -5326,7 +5330,13 @@ DataProvider::ProcessPcSamplingRequest(RequestInfo& req)
     const bool           success   = (req.response_code == kRocProfVisResultSuccess);
     rocprofvis_handle_t* pc_handle = req.request_obj_handle;
 
-    if(success && pc_handle)
+    // Discard results that belong to a superseded generation for this kernel.
+    const auto gen_it = m_pc_sampling_generation.find(params->m_kernel_id);
+    const bool is_current_generation =
+        gen_it != m_pc_sampling_generation.end() &&
+        gen_it->second == params->m_generation;
+
+    if(success && pc_handle && is_current_generation)
     {
         KernelInfo* kernel = m_compute_model.GetKernelInfoMutable(
             params->m_workload_id, params->m_kernel_id);
@@ -5339,6 +5349,12 @@ DataProvider::ProcessPcSamplingRequest(RequestInfo& req)
             LoadPcSamplingStallReasonCounts(*kernel, pc_handle);
             LoadPcSamplingSourceFiles(*kernel, pc_handle);
         }
+    }
+    else if(success && !is_current_generation)
+    {
+        spdlog::debug("PC sampling result for kernel {} generation {} discarded (current: {})",
+                      params->m_kernel_id, params->m_generation,
+                      gen_it != m_pc_sampling_generation.end() ? gen_it->second : 0);
     }
     else if(!success)
     {

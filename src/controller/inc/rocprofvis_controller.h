@@ -272,18 +272,6 @@ rocprofvis_controller_metrics_container_t* rocprofvis_controller_metrics_contain
 void rocprofvis_controller_metrics_container_free(rocprofvis_controller_metrics_container_t* object);
 
 /*
-* Allocate a private PC sampling object to carry async fetch results.
-* @returns A valid handle, or nullptr.
-*/
-rocprofvis_handle_t* rocprofvis_controller_pc_sampling_alloc(void);
-
-/*
-* Frees a PC sampling object previously allocated by rocprofvis_controller_pc_sampling_alloc.
-* @param object The handle to free.
-*/
-void rocprofvis_controller_pc_sampling_free(rocprofvis_handle_t* object);
-
-/*
 * Fetch compute trace metrics values, populating the passed in metrics container object.
 * @param controller The controller
 * @param args The input arguments

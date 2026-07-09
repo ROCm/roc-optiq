@@ -434,6 +434,8 @@ private:
 
     ComputeDataModel m_compute_model;
 
+    std::unordered_map<uint32_t, uint32_t> m_pc_sampling_generation;
+
     std::function<void(const std::string&, uint64_t, bool)> m_metrics_fetch_callback;
     std::function<void(const std::string&, uint32_t, uint32_t, bool)> m_pc_sampling_fetch_callback;
 

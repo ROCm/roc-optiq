@@ -172,7 +172,9 @@ ComputeCodeView::LoadSourceFileList(const PcSamplingData& data)
         }
     }
     if(!selection_valid)
-        m_current_source_file_id = m_source_files.empty() ? 0 : m_source_files.begin()->second;
+        m_current_source_file_id = m_source_files.empty()
+            ? ComputeSelection::INVALID_SELECTION_ID
+            : m_source_files.begin()->second;
 }
 
 void
@@ -193,7 +195,7 @@ ComputeCodeView::RenderControlPanel()
     constexpr const char* hide_isa_str = "Hide ISA";
     constexpr const char* show_isa_str = "Show ISA";
     constexpr const char* show_stalls_str = "Show Stalls";
-    constexpr const char* hide_stalls_str = "SHide Stalls";
+    constexpr const char* hide_stalls_str = "Hide Stalls";
 
     const float fallbackHeight =
         ImGui::GetFrameHeight() +
@@ -212,11 +214,13 @@ ComputeCodeView::RenderControlPanel()
     RenderSourceFileDropdown();
 
     const float button_isa_width   = ImGui::CalcTextSize(hide_isa_str).x      + ImGui::GetStyle().FramePadding.x * 2.0f;
-    const float button_stall_width = ImGui::CalcTextSize(show_stalls_str).x + ImGui::GetStyle().FramePadding.x * 2.0f;
+    const float button_stall_width = std::max(ImGui::CalcTextSize(show_stalls_str).x,
+                                              ImGui::CalcTextSize(hide_stalls_str).x)
+                                     + ImGui::GetStyle().FramePadding.x * 2.0f;
 
     const float                      button_comments_width =
         m_isa_layout_item->m_visible ?
-        (ImGui::CalcTextSize("Show Comnents").x + ImGui::GetStyle().FramePadding.x * 2.0f) : 0;
+        (ImGui::CalcTextSize("Show Comments").x + ImGui::GetStyle().FramePadding.x * 2.0f) : 0;
 
     const float buttons_width = button_isa_width + button_stall_width +
                                 button_comments_width +
@@ -239,7 +243,7 @@ ComputeCodeView::RenderControlPanel()
     {
         ImGui::SameLine();
         static bool show_comments_enabled = false;
-        if(ImGui::Button(show_comments_enabled ? "Hide Comnents" : "Show Comments"))
+        if(ImGui::Button(show_comments_enabled ? "Hide Comments" : "Show Comments"))
         {
             show_comments_enabled = !show_comments_enabled;
             m_isa_code->ShowComments(show_comments_enabled);

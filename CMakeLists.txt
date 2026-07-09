@@ -462,10 +462,12 @@ set(LICENSE_FILE "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE.md" CACHE PATH "Path to Li
 set(CPACK_RESOURCE_FILE_LICENSE "${LICENSE_FILE}")
 set(CPACK_PACKAGE_LICENSE "LicenseRef-AMD_EULA")
 set(CPACK_RPM_PACKAGE_LICENSE "LicenseRef-AMD_EULA")
-# License file
-install(FILES ${LICENSE_FILE}
-       DESTINATION ${CMAKE_INSTALL_DOCDIR} RENAME LICENSE.txt
-       COMPONENT ${RUNTIME_COMP_TYPE} )
+# License file (Windows destination is set alongside other docs below)
+if(NOT WIN32)
+    install(FILES ${LICENSE_FILE}
+           DESTINATION ${CMAKE_INSTALL_DOCDIR} RENAME LICENSE.txt
+           COMPONENT ${RUNTIME_COMP_TYPE} )
+endif()
 
 # Install Instruction for Files included in  Package Component
 if(APPLE)
@@ -474,7 +476,7 @@ if(APPLE)
             COMPONENT ${RUNTIME_COMP_TYPE})
 elseif(WIN32)
     install(TARGETS ${TARGET_NAME}
-            RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+            RUNTIME DESTINATION .
             COMPONENT ${RUNTIME_COMP_TYPE})
 else()
     install(PROGRAMS ${BUILD_DIR}/${TARGET_NAME}
@@ -483,13 +485,21 @@ else()
 endif()
 
 # Documentation files
+if(WIN32)
+    set(_doc_dest "docs")
+else()
+    set(_doc_dest "${CMAKE_INSTALL_DOCDIR}")
+endif()
 install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/README.md
-        DESTINATION ${CMAKE_INSTALL_DOCDIR}
+        DESTINATION ${_doc_dest}
         COMPONENT ${RUNTIME_COMP_TYPE})
 install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/docs/images/
-        DESTINATION ${CMAKE_INSTALL_DOCDIR}/images
+        DESTINATION ${_doc_dest}/images
         COMPONENT ${RUNTIME_COMP_TYPE}
         FILES_MATCHING PATTERN "*.png")
+install(FILES ${LICENSE_FILE}
+        DESTINATION ${_doc_dest} RENAME LICENSE.txt
+        COMPONENT ${RUNTIME_COMP_TYPE})
 
 # Debian package specific variables
 set(CPACK_COMPONENTS_ALL RV_RUNTIME)
@@ -550,6 +560,7 @@ endif()
 if(WIN32)
   list(APPEND CPACK_GENERATOR "WIX")
   set(CPACK_WIX_VERSION "4")
+  set(CPACK_PACKAGE_INSTALL_DIRECTORY "ROCm-Optiq")
   set(CPACK_WIX_UPGRADE_GUID "C502D354-6369-4175-AE83-D9C07716C7C9")
   set(CPACK_WIX_PRODUCT_ICON "${CMAKE_CURRENT_SOURCE_DIR}/resources/ROCm_Optiq.ico")
   set(CPACK_WIX_UI_BANNER "${CMAKE_CURRENT_SOURCE_DIR}/Installer/Installation/Files/banner.bmp")
@@ -558,7 +569,6 @@ if(WIN32)
   set(CPACK_WIX_PATCH_FILE "${CMAKE_CURRENT_SOURCE_DIR}/wix/wix_patch.xml")
   set(CPACK_WIX_LICENSE_RTF "${CMAKE_CURRENT_SOURCE_DIR}/wix/License.rtf")
   set(CPACK_WIX_UI_REF "WixUI_InstallDir")
-
   set_property(INSTALL "${CMAKE_INSTALL_BINDIR}/$<TARGET_FILE_NAME:${TARGET_NAME}>"
     PROPERTY CPACK_START_MENU_SHORTCUTS "ROCm Optiq"
   )

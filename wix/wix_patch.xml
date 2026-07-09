@@ -1,22 +1,31 @@
 <CPackWiXPatch>
   <!--
-    Register .rpd file association so double-clicking opens in roc-optiq.
+    Register .rpd file association and add a desktop shortcut.
+    Both are injected into the CPack-generated component for roc-optiq.exe.
 
     The fragment Id must match the CPack-generated component Id for the
     roc-optiq.exe file.  After a test `cpack -G WIX -C Release` run,
     inspect _CPack_Packages/.../WIX/files.wxs to verify the Id.
-    CPack convention: CM_CP_<install-path>.<filename> with path separators
+    CPack convention: CM_CP_<component>.<filename> with path separators
     replaced by dots and special chars (hyphens) replaced by underscores.
   -->
-  <CPackWiXFragment Id="CM_CP_RV_RUNTIME.bin.roc_optiq.exe">
+  <CPackWiXFragment Id="CM_CP_RV_RUNTIME.roc_optiq.exe">
     <ProgId Id="AMD.ROCmOptiq.rpd"
             Description="ROCm Profiler Data"
-            Icon="CM_FP_RV_RUNTIME.bin.roc_optiq.exe">
+            Icon="CM_FP_RV_RUNTIME.roc_optiq.exe">
       <Extension Id="rpd" ContentType="application/x-rocm-profiler-data">
         <Verb Id="open" Command="Open"
-              TargetFile="CM_FP_RV_RUNTIME.bin.roc_optiq.exe"
+              TargetFile="CM_FP_RV_RUNTIME.roc_optiq.exe"
               Argument="&quot;%1&quot;" />
       </Extension>
     </ProgId>
+    <Shortcut Id="DesktopShortcut"
+              Name="ROCm Optiq"
+              Description="AMD ROCm Optiq"
+              Target="[INSTALL_ROOT]roc-optiq.exe"
+              WorkingDirectory="INSTALL_ROOT"
+              Directory="DesktopFolder"
+              Icon="ProductIcon.ico"
+              IconIndex="0" />
   </CPackWiXFragment>
 </CPackWiXPatch>

@@ -45,6 +45,14 @@ on:
         description: 'Crypto backend for libssh2 (mbedTLS or OpenSSL)'
         type: string
         default: 'mbedTLS'
+      enable_remote:
+        description: 'Build with remote/SSH support (ROCPROFVIS_ENABLE_REMOTE)'
+        type: boolean
+        default: false
+      enable_profiler:
+        description: 'Build with in-app profiler launch (ROCPROFVIS_ENABLE_PROFILER)'
+        type: boolean
+        default: false
   workflow_call:
     inputs:
       os_version:
@@ -55,6 +63,14 @@ on:
         description: 'Crypto backend for libssh2 (mbedTLS or OpenSSL)'
         type: string
         default: 'mbedTLS'
+      enable_remote:
+        description: 'Build with remote/SSH support (ROCPROFVIS_ENABLE_REMOTE)'
+        type: boolean
+        default: false
+      enable_profiler:
+        description: 'Build with in-app profiler launch (ROCPROFVIS_ENABLE_PROFILER)'
+        type: boolean
+        default: false
       cmake_config_preset:
         description: 'CMake Config Preset to Use'
         type: string
@@ -89,6 +105,8 @@ env:
   DIST_DIR: "dist"
   BUILD_FILE_NAME: "roc-optiq"
   ENABLE_INTERNAL_BANNER: ${{ inputs.enable_internal_banner == 'true' && 'ON' || 'OFF' }}
+  ENABLE_REMOTE: ${{ inputs.enable_remote == 'true' && 'ON' || 'OFF' }}
+  ENABLE_PROFILER: ${{ inputs.enable_profiler == 'true' && 'ON' || 'OFF' }}
   S3_ROOT_DIRECTORY: ${{ inputs.s3_root_directory }}
   RELEASE_VERSION: ${{ inputs.release_version }}
 
@@ -124,7 +142,7 @@ jobs:
       - name: Build, Make, and Verify Installation
         run: |
           source /opt/vulkan/**/setup-env.sh
-          cmake -B ${{ env.BUILD_DIR }} --preset ${{ inputs.cmake_config_preset }} -DROCPROFVIS_ENABLE_INTERNAL_BANNER=${{ env.ENABLE_INTERNAL_BANNER }} -DCRYPTO_BACKEND=${{ inputs.crypto_backend }}
+          cmake -B ${{ env.BUILD_DIR }} --preset ${{ inputs.cmake_config_preset }} -DROCPROFVIS_ENABLE_INTERNAL_BANNER=${{ env.ENABLE_INTERNAL_BANNER }} -DROCPROFVIS_ENABLE_REMOTE=${{ env.ENABLE_REMOTE }} -DROCPROFVIS_ENABLE_PROFILER=${{ env.ENABLE_PROFILER }} -DCRYPTO_BACKEND=${{ inputs.crypto_backend }}
           cmake --build ${{ env.BUILD_DIR }} --parallel 4 --target package
           if [ -e ${{ env.BUILD_DIR }}/${{ env.BUILD_FILE_NAME }} ]; then
             echo "✅ ${{ env.BUILD_FILE_NAME }} has been successfully built!"

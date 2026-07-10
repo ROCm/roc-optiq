@@ -9,251 +9,268 @@ namespace View
 {
 
 
-    void PromptRequest::update(std::string name,
+    void PromptRequest::Update(std::string name,
         std::string instruction,
         std::vector<PromptItem> prompts)
     {
-        std::lock_guard<std::mutex> lock(m_);
+        std::lock_guard<std::mutex> lock(m_mutex);
 
-        name_ = std::move(name);
-        instruction_ = std::move(instruction);
-        prompts_ = std::move(prompts);
+        m_name = std::move(name);
+        m_instruction = std::move(instruction);
+        m_prompts = std::move(prompts);
 
-        updated_ = true;
+        m_updated = true;
     }
 
-    std::optional<PromptRequest::Snapshot> PromptRequest::consume_if_updated()
+    std::optional<PromptRequest::Snapshot> PromptRequest::ConsumeIfUpdated()
     {
-        std::lock_guard<std::mutex> lock(m_);
+        std::lock_guard<std::mutex> lock(m_mutex);
 
-        if (!updated_)
+        if (!m_updated)
+        {
             return std::nullopt;
+        }
 
         return Snapshot{
-            name_,
-            instruction_,
-            prompts_
+            m_name,
+            m_instruction,
+            m_prompts
         };
     }
 
-    void PromptRequest::clear_updated() {
-        updated_ = false;
+    void PromptRequest::ClearUpdated()
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        m_updated = false;
     }
 
-    PromptRequest::Snapshot PromptRequest::get() const
+    PromptRequest::Snapshot PromptRequest::Get() const
     {
-        std::lock_guard<std::mutex> lock(m_);
+        std::lock_guard<std::mutex> lock(m_mutex);
 
         return Snapshot{
-            name_,
-            instruction_,
-            prompts_
+            m_name,
+            m_instruction,
+            m_prompts
         };
     }
 
-    void PromptRequest::clear_prompts()
+    void PromptRequest::ClearPrompts()
     {
-        std::lock_guard<std::mutex> lock(m_);
+        std::lock_guard<std::mutex> lock(m_mutex);
 
-        prompts_.clear();
-        updated_ = true;
+        m_prompts.clear();
+        m_updated = true;
     }
 
-    void HostKeyRequest::update(std::string host,
+    void HostKeyRequest::Update(std::string host,
         uint64_t port,
         std::string fingerprint,
         std::string key_type,
         HostKeyState state)
     {
-        std::lock_guard<std::mutex> lock(m_);
+        std::lock_guard<std::mutex> lock(m_mutex);
 
-        host_ = std::move(host);
-        port_ = port;
-        fingerprint_sha256_b64_ = std::move(fingerprint);
-        key_type_ = std::move(key_type);
-        state_ = state;
+        m_host = std::move(host);
+        m_port = port;
+        m_fingerprint_sha256_b64 = std::move(fingerprint);
+        m_key_type = std::move(key_type);
+        m_state = state;
 
-        updated_ = true;
+        m_updated = true;
     }
 
-    std::optional<HostKeyRequest::Snapshot> HostKeyRequest::consume_if_updated()
+    std::optional<HostKeyRequest::Snapshot> HostKeyRequest::ConsumeIfUpdated()
     {
-        std::lock_guard<std::mutex> lock(m_);
+        std::lock_guard<std::mutex> lock(m_mutex);
 
-        if (!updated_)
+        if (!m_updated)
+        {
             return std::nullopt;
+        }
 
         return Snapshot{
-            host_,
-            port_,
-            fingerprint_sha256_b64_,
-            key_type_,
-            state_
+            m_host,
+            m_port,
+            m_fingerprint_sha256_b64,
+            m_key_type,
+            m_state
         };
     }
 
-    void HostKeyRequest::clear_updated() {
-        updated_ = false;
+    void HostKeyRequest::ClearUpdated()
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        m_updated = false;
     }
 
-    HostKeyRequest::Snapshot HostKeyRequest::get() const
+    HostKeyRequest::Snapshot HostKeyRequest::Get() const
     {
-        std::lock_guard<std::mutex> lock(m_);
+        std::lock_guard<std::mutex> lock(m_mutex);
 
         return Snapshot{
-            host_,
-            port_,
-            fingerprint_sha256_b64_,
-            key_type_,
-            state_
+            m_host,
+            m_port,
+            m_fingerprint_sha256_b64,
+            m_key_type,
+            m_state
         };
     }
 
 
-    void ExecutionOutput::append(std::string text)
+    void ExecutionOutput::Append(std::string text)
     {
-        std::lock_guard<std::mutex> lock(m_);
+        std::lock_guard<std::mutex> lock(m_mutex);
 
-        text_ += text;
-        updated_ = true;
+        m_text += text;
+        m_updated = true;
     }
 
-    std::optional<ExecutionOutput::Snapshot> ExecutionOutput::consume_if_updated()
+    std::optional<ExecutionOutput::Snapshot> ExecutionOutput::ConsumeIfUpdated()
     {
-        std::lock_guard<std::mutex> lock(m_);
+        std::lock_guard<std::mutex> lock(m_mutex);
 
-        if (!updated_)
+        if (!m_updated)
+        {
             return std::nullopt;
+        }
 
         // The terminal (finished) snapshot must reach the UI exactly once so the
         // output popup can auto-close; clear the latch after delivering it so it
         // is not re-emitted every frame.
-        Snapshot snapshot{ text_, finished_ };
-        if (finished_)
+        Snapshot snapshot{ m_text, m_finished };
+        if (m_finished)
         {
-            updated_ = false;
+            m_updated = false;
         }
         return snapshot;
     }
 
-    void ExecutionOutput::clear_updated() {
-        std::lock_guard<std::mutex> lock(m_);
-        updated_ = false;
-        finished_ = false;
-    }
-
-    void ExecutionOutput::finish()
+    void ExecutionOutput::ClearUpdated()
     {
-        std::lock_guard<std::mutex> lock(m_);
-        finished_ = true;
-        updated_ = true;
+        std::lock_guard<std::mutex> lock(m_mutex);
+        m_updated = false;
+        m_finished = false;
     }
 
-    ExecutionOutput::Snapshot ExecutionOutput::get() const
+    void ExecutionOutput::Finish()
     {
-        std::lock_guard<std::mutex> lock(m_);
-        return Snapshot{ text_ };
+        std::lock_guard<std::mutex> lock(m_mutex);
+        m_finished = true;
+        m_updated = true;
     }
 
-    void ExecutionOutput::clear()
+    ExecutionOutput::Snapshot ExecutionOutput::Get() const
     {
-        std::lock_guard<std::mutex> lock(m_);
-
-        text_.clear();
-        updated_ = true;
+        std::lock_guard<std::mutex> lock(m_mutex);
+        return Snapshot{ m_text };
     }
 
-    void FileStat::update(std::string name,
+    void ExecutionOutput::Clear()
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
+
+        m_text.clear();
+        m_updated = true;
+    }
+
+    void FileStat::Update(std::string name,
         uint64_t size,
         uint64_t time,
         uint64_t downloaded)
     {
-        std::lock_guard<std::mutex> lock(m_);
+        std::lock_guard<std::mutex> lock(m_mutex);
 
-        name_ = std::move(name);
-        size_ = size;
-        time_ = time;
-        downloaded_ = downloaded;
+        m_name = std::move(name);
+        m_size = size;
+        m_time = time;
+        m_downloaded = downloaded;
 
-        updated_ = true;
+        m_updated = true;
     }
 
-    std::optional<FileStat::Snapshot> FileStat::consume_if_updated()
+    std::optional<FileStat::Snapshot> FileStat::ConsumeIfUpdated()
     {
-        std::lock_guard<std::mutex> lock(m_);
+        std::lock_guard<std::mutex> lock(m_mutex);
 
-        if (!updated_)
+        if (!m_updated)
+        {
             return std::nullopt;
+        }
 
-        updated_ = false;
+        m_updated = false;
 
         return Snapshot{
-            name_,
-            size_,
-            time_,
-            downloaded_
+            m_name,
+            m_size,
+            m_time,
+            m_downloaded
         };
     }
 
-    FileStat::Snapshot FileStat::get() const
+    FileStat::Snapshot FileStat::Get() const
     {
-        std::lock_guard<std::mutex> lock(m_);
+        std::lock_guard<std::mutex> lock(m_mutex);
 
         return Snapshot{
-            name_,
-            size_,
-            time_,
-            downloaded_
+            m_name,
+            m_size,
+            m_time,
+            m_downloaded
         };
     }
 
-    void FileStat::set_downloaded(uint64_t downloaded)
+    void FileStat::SetDownloaded(uint64_t downloaded)
     {
-        std::lock_guard<std::mutex> lock(m_);
+        std::lock_guard<std::mutex> lock(m_mutex);
 
-        downloaded_ = downloaded;
-        updated_ = true;
+        m_downloaded = downloaded;
+        m_updated = true;
     }
 
 
-    void RemoteDir::update(std::string name,
+    void RemoteDir::Update(std::string name,
         uint64_t size,
         uint64_t time,
         uint64_t attrs)
     {
-        std::lock_guard<std::mutex> lock(m_);
+        std::lock_guard<std::mutex> lock(m_mutex);
         m_list_dir.push_back({ std::move(name), size, time, attrs & FileAttrs::Directory ? true : false });
-        updated_ = true;
+        m_updated = true;
     }
 
-    std::optional<RemoteDir::Snapshot> RemoteDir::consume_if_updated()
+    std::optional<RemoteDir::Snapshot> RemoteDir::ConsumeIfUpdated()
     {
-        std::lock_guard<std::mutex> lock(m_);
+        std::lock_guard<std::mutex> lock(m_mutex);
 
-        if (!updated_)
+        if (!m_updated)
+        {
             return std::nullopt;
+        }
 
-        updated_ = false;
+        m_updated = false;
 
         return Snapshot{
             m_list_dir
         };
     }
 
-    RemoteDir::Snapshot RemoteDir::get() const
+    RemoteDir::Snapshot RemoteDir::Get() const
     {
-        std::lock_guard<std::mutex> lock(m_);
+        std::lock_guard<std::mutex> lock(m_mutex);
 
         return Snapshot{
             m_list_dir
         };
     }
 
-    void RemoteDir::clear() {
+    void RemoteDir::Clear()
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
         m_list_dir.clear();
-        updated_ = true;
+        m_updated = true;
     }
 
 
-}  // namespace DataModel
+}  // namespace View
 }  // namespace RocProfVis

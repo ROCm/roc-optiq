@@ -424,7 +424,7 @@ void ProfilerLauncherDialog::RenderRemotePopups()
     // Pull the latest progress snapshot when available.
     if (ssh_session)
     {
-        if (auto fetch = ssh_session->GetFileStat()->consume_if_updated())
+        if (auto fetch = ssh_session->GetFileStat()->ConsumeIfUpdated())
         {
             m_remote_last_progress = *fetch;
         }

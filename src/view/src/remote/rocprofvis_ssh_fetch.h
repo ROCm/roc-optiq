@@ -41,25 +41,25 @@ namespace View
         PromptRequest& operator=(PromptRequest&&) = default;
 
     public:
-        void update(std::string name,
+        void Update(std::string name,
             std::string instruction,
             std::vector<PromptItem> prompts);
 
-        std::optional<Snapshot> consume_if_updated();
+        std::optional<Snapshot> ConsumeIfUpdated();
 
-        Snapshot get() const;
+        Snapshot Get() const;
 
-        void clear_prompts();
-        void clear_updated();
+        void ClearPrompts();
+        void ClearUpdated();
 
     private:
-        mutable std::mutex m_;
+        mutable std::mutex m_mutex;
 
-        std::string name_;
-        std::string instruction_;
-        std::vector<PromptItem> prompts_;
+        std::string m_name;
+        std::string m_instruction;
+        std::vector<PromptItem> m_prompts;
 
-        bool updated_ = false;
+        bool m_updated = false;
     };
 
 
@@ -98,28 +98,28 @@ namespace View
         HostKeyRequest& operator=(HostKeyRequest&&) = default;
 
     public:
-        void update(std::string host,
+        void Update(std::string host,
             uint64_t port,
             std::string fingerprint,
             std::string key_type,
             HostKeyState state);
 
-        std::optional<Snapshot> consume_if_updated();
+        std::optional<Snapshot> ConsumeIfUpdated();
 
-        void clear_updated();
+        void ClearUpdated();
 
-        Snapshot get() const;
+        Snapshot Get() const;
 
     private:
-        mutable std::mutex m_;
+        mutable std::mutex m_mutex;
 
-        std::string host_;
-        uint64_t port_ = 22;
-        std::string fingerprint_sha256_b64_;
-        std::string key_type_;
-        HostKeyState state_ = HostKeyState::NotFound;
+        std::string m_host;
+        uint64_t m_port = 22;
+        std::string m_fingerprint_sha256_b64;
+        std::string m_key_type;
+        HostKeyState m_state = HostKeyState::NotFound;
 
-        bool updated_ = false;
+        bool m_updated = false;
     };
 
 
@@ -143,22 +143,22 @@ namespace View
 
     public:
 
-        void append(std::string text);
+        void Append(std::string text);
 
-        std::optional<Snapshot> consume_if_updated();
-        void clear_updated();
+        std::optional<Snapshot> ConsumeIfUpdated();
+        void ClearUpdated();
 
-        Snapshot get() const;
+        Snapshot Get() const;
 
-        void clear();
+        void Clear();
 
-        void finish();
+        void Finish();
 
     private:
-        mutable std::mutex m_;
-        std::string text_;
-        bool updated_ = false; 
-        bool finished_ = false;
+        mutable std::mutex m_mutex;
+        std::string m_text;
+        bool m_updated = false;
+        bool m_finished = false;
     };
 
 
@@ -187,29 +187,29 @@ namespace View
 
     public:
         // Update all fields
-        void update(std::string name,
+        void Update(std::string name,
             uint64_t size,
             uint64_t time,
             uint64_t downloaded);
 
         // Consume update flag
-        std::optional<Snapshot> consume_if_updated();
+        std::optional<Snapshot> ConsumeIfUpdated();
 
         // Always get snapshot
-        Snapshot get() const;
+        Snapshot Get() const;
 
         // Partial update
-        void set_downloaded(uint64_t downloaded);
+        void SetDownloaded(uint64_t downloaded);
 
     private:
-        mutable std::mutex m_;
+        mutable std::mutex m_mutex;
 
-        std::string name_;
-        uint64_t size_ = 0;
-        uint64_t time_ = 0;
-        uint64_t downloaded_ = 0;
+        std::string m_name;
+        uint64_t m_size = 0;
+        uint64_t m_time = 0;
+        uint64_t m_downloaded = 0;
 
-        bool updated_ = false;
+        bool m_updated = false;
     };
 
 
@@ -222,8 +222,9 @@ namespace View
         };
 
 
-        struct FileEntry {
-            std::string name;           
+        struct FileEntry
+        {
+            std::string name;
             uint64_t size;
             uint64_t time;
             bool is_dir;
@@ -249,27 +250,27 @@ namespace View
 
     public:
         // Update all fields
-        void update(std::string name,
+        void Update(std::string name,
             uint64_t size,
             uint64_t time,
             uint64_t attrs);
 
         // Consume update flag
-        std::optional<Snapshot> consume_if_updated();
+        std::optional<Snapshot> ConsumeIfUpdated();
 
         // Always get snapshot
-        Snapshot get() const;
+        Snapshot Get() const;
 
-        void clear();
+        void Clear();
 
 
     private:
-        mutable std::mutex m_;
+        mutable std::mutex m_mutex;
 
         std::vector<FileEntry> m_list_dir;
 
-        bool updated_ = false;
+        bool m_updated = false;
     };
 
-}  // namespace DataModel
+}  // namespace View
 }  // namespace RocProfVis

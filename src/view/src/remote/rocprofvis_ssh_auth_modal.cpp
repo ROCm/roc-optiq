@@ -32,7 +32,7 @@ void RenderSshAuthModal(SshSession* ssh_session)
     if (!ssh_session) return;
 
     // ---- kbdint ----
-    if (auto req = ssh_session->GetPromptRequest()->consume_if_updated())
+    if (auto req = ssh_session->GetPromptRequest()->ConsumeIfUpdated())
     {
         auto& st = KbdintForFrame();
         // Gate on ImGui's own popup state rather than a persistent latch: if the
@@ -86,7 +86,7 @@ void RenderSshAuthModal(SshSession* ssh_session)
                 ssh_session->SubmitPromptResponses(resp);
                 st = {};
                 ImGui::CloseCurrentPopup();
-                ssh_session->GetPromptRequest()->clear_updated();
+                ssh_session->GetPromptRequest()->ClearUpdated();
             }
             ImGui::SameLine();
             if(ImGui::Button("Cancel", ImVec2(110, 0)))
@@ -94,7 +94,7 @@ void RenderSshAuthModal(SshSession* ssh_session)
                 ssh_session->CancelRequest();
                 st = {};
                 ImGui::CloseCurrentPopup();
-                ssh_session->GetPromptRequest()->clear_updated();
+                ssh_session->GetPromptRequest()->ClearUpdated();
             }
             ImGui::EndPopup();
         }
@@ -103,7 +103,7 @@ void RenderSshAuthModal(SshSession* ssh_session)
     }
 
     // ---- host key confirmation ----
-    if(auto req = ssh_session->GetHostKeyRequest()->consume_if_updated())
+    if(auto req = ssh_session->GetHostKeyRequest()->ConsumeIfUpdated())
     {
         // Gate on ImGui's own popup state (no persistent latch): if the op is
         // cancelled/torn down without a button press, the un-Begin'd modal
@@ -149,21 +149,21 @@ void RenderSshAuthModal(SshSession* ssh_session)
             {
                 ssh_session->SubmitHostKeyDecision(HostKeyDecision::TrustPermanently);
                 ImGui::CloseCurrentPopup();
-                ssh_session->GetHostKeyRequest()->clear_updated();
+                ssh_session->GetHostKeyRequest()->ClearUpdated();
             }
             ImGui::SameLine();
             if(ImGui::Button("Trust once", ImVec2(110, 0)))
             {
                 ssh_session->SubmitHostKeyDecision(HostKeyDecision::TrustOnce);
                 ImGui::CloseCurrentPopup();
-                ssh_session->GetHostKeyRequest()->clear_updated();
+                ssh_session->GetHostKeyRequest()->ClearUpdated();
             }
             ImGui::SameLine();
             if(ImGui::Button("Reject", ImVec2(110, 0)))
             {
                 ssh_session->SubmitHostKeyDecision(HostKeyDecision::Reject);
                 ImGui::CloseCurrentPopup();
-                ssh_session->GetHostKeyRequest()->clear_updated();
+                ssh_session->GetHostKeyRequest()->ClearUpdated();
             }
             ImGui::EndPopup();
         }

@@ -227,7 +227,7 @@ namespace View
     // if remote_path , the data will be taken from m_uri
     uint64_t SshSession::StartBrowsing(const char* remote_path)
     {
-        m_directory.clear();
+        m_directory.Clear();
         m_pending_remote_path = remote_path;
         return BeginOperation(SshOperation::Browse, MonitorOperationType::DirectoryListing,
             [this](rocprofvis_controller_future_t* future)
@@ -453,7 +453,7 @@ namespace View
                             prompts.push_back({ prompt,(bool)echo });
                         }
                             
-                        m_prompt_request.update(name, instruction, prompts);
+                        m_prompt_request.Update(name, instruction, prompts);
                             
                     }
                     else
@@ -490,7 +490,7 @@ namespace View
                         }
                         else
                         {
-                            m_host_key_request.update(host, port, fingerprint_sha256_b64, key_type, (HostKeyState)state);
+                            m_host_key_request.Update(host, port, fingerprint_sha256_b64, key_type, (HostKeyState)state);
                         }
                     }
                 }
@@ -522,7 +522,7 @@ namespace View
         rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
         if (m_connection && command_line && future)
         {
-            m_stdout.clear_updated();
+            m_stdout.ClearUpdated();
 
             rocprofvis_controller_arguments_t* args = rocprofvis_controller_arguments_alloc();
             ROCPROFVIS_ASSERT(args != nullptr);
@@ -566,7 +566,7 @@ namespace View
                     }
                     else
                     {
-                        m_stdout.append(out);
+                        m_stdout.Append(out);
                         result = kRocProfVisResultPending;
                     }
                 }
@@ -577,7 +577,7 @@ namespace View
 
     void SshSession::FinalizeExecution() 
     {
-        m_stdout.finish();
+        m_stdout.Finish();
     }
 
 
@@ -642,7 +642,7 @@ namespace View
                         kRocProfVisResultSuccess == rocprofvis_controller_get_uint64(m_connection, kRPVControllerRemoteFileTime, 0, &time) &&
                         kRocProfVisResultSuccess == rocprofvis_controller_get_uint64(m_connection, kRPVControllerRemoteDownloaded, 0, &downloaded_bytes))
                     {
-                        m_file_stat.update(name, size, time, downloaded_bytes);
+                        m_file_stat.Update(name, size, time, downloaded_bytes);
                     }
                     result = kRocProfVisResultSuccess;
                 }
@@ -683,7 +683,7 @@ namespace View
                     {
                         return kRocProfVisResultFailedSshCommunication;
                     }
-                    m_file_stat.update(name, size, time, downloaded_bytes);
+                    m_file_stat.Update(name, size, time, downloaded_bytes);
                     result = kRocProfVisResultPending;
                 }
             }
@@ -731,7 +731,7 @@ namespace View
                     // and is read in one pass once browsing completes. Reading
                     // kRPVControllerRemoteDirNumFiles moves the accumulated
                     // entries into the indexed buffer; rebuild m_directory fresh.
-                    m_directory.clear();
+                    m_directory.Clear();
 
                     uint64_t num = 0;
                     rocprofvis_result_t entry_result =
@@ -765,7 +765,7 @@ namespace View
                         {
                             return kRocProfVisResultFailedSshCommunication;
                         }
-                        m_directory.update(name, size, time, permissions);
+                        m_directory.Update(name, size, time, permissions);
                     }
 
                     result = kRocProfVisResultSuccess;

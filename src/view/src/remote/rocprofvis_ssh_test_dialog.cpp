@@ -228,7 +228,7 @@ SshTestDialog::RenderProgressPopup()
     SshSession* ssh_session = m_orchestrator ? m_orchestrator->GetSession() : nullptr;
     if(!ssh_session) return;
 
-    if(auto fetch = ssh_session->GetFileStat()->consume_if_updated())
+    if(auto fetch = ssh_session->GetFileStat()->ConsumeIfUpdated())
     {
         m_last_progress = *fetch;
 
@@ -293,7 +293,7 @@ SshTestDialog::RenderOutputPopup()
     SshSession* ssh_session = m_orchestrator ? m_orchestrator->GetSession() : nullptr;
     if(!ssh_session) return;
 
-    if(auto fetch = ssh_session->GetExecutionOutput()->consume_if_updated())
+    if(auto fetch = ssh_session->GetExecutionOutput()->ConsumeIfUpdated())
     {
         m_last_stdout = *fetch;
         if(!m_show_stdout_popup)
@@ -337,7 +337,7 @@ void SshTestDialog::RenderRemoteFilePopup()
         m_orchestrator ? m_orchestrator->GetSession() : nullptr;
     if (!ssh_session) return;
 
-    if (auto fetch = ssh_session->GetRemoteDir()->consume_if_updated())
+    if (auto fetch = ssh_session->GetRemoteDir()->ConsumeIfUpdated())
     {
         m_last_directory_state = *fetch;
         if (!m_show_remote_filesystem_popup)

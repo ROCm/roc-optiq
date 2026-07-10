@@ -77,7 +77,7 @@ Set a time range filter in the :ref:`timeline` to limit the data displayed to a 
 To set a time range filter, press and hold **Ctrl** while dragging your mouse in the **Timeline View** to select a range.
 
 .. image:: ../images/time-range-filter.gif
-   :width: 600
+   :width: 800
    :alt: Timeline View with a time range selected, showing the shaded selection area with draggable boundary handles
 
 Once a time range is selected, the selection boundaries can be adjusted by dragging them. 
@@ -211,7 +211,7 @@ Customize display options for each track by clicking the gear icon in the track'
   - Click |reset| to restore the values to their default.
 
   .. image:: ../images/min-max.png
-     :width: 400
+     :width: 800
      :alt: Sample counter track showing editable minimum and maximum scale values with a reset button
 
 .. tip::
@@ -228,13 +228,13 @@ Use the **Flow** buttons on the toolbar to show and hide flow information on the
 Chain mode displays events in a linked sequence, emphasizing dependencies and execution order. This is useful when analyzing how operations are chained together across queues or streams.
 
 .. image:: ../images/chain-mode.png
-   :width: 600
+   :width: 800
    :alt: Timeline View in Chain mode showing events linked in sequence to emphasize dependencies and execution order
 
 Render mode shows events in a fan-out style, highlighting parallelism and branching. This helps visualize concurrency and how multiple operations originate from a single source.
 
 .. image:: ../images/fan-mode.png
-   :width: 600
+   :width: 800
    :alt: Timeline View in Render (fan) mode showing events fanning out from a single source to highlight parallelism
 
 .. note::

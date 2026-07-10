@@ -109,7 +109,7 @@ Showing where kernels are positioned relative to these rooflines helps determine
   - Outside (which pushes the legend outside of the plot area)
 
   .. image:: ../images/Roofline-legend.png
-     :width: 800
+     :width: 400
      :align: center
      :alt: Roofline chart legend and menu repositioned to the inside bottom-right of the chart area
 

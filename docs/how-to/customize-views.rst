@@ -1,5 +1,5 @@
 .. meta::
-  :description: Learn how to customize your ROCm Optiq project.
+  :description: Learn how to customize ROCm Optiq projects: set time range filters, add bookmarks and annotations, adjust track display options, and save presets.
   :keywords: Optiq, ROCm, customize, filter, bookmarks, annotations
 
 .. _customize:
@@ -35,16 +35,19 @@ Select **Edit** > **Preferences** to adjust these global settings for ROCm Optiq
 
   .. image:: ../images/settings.png
      :width: 600
+     :alt: ROCm Optiq Settings panel showing theme and font scaling controls
 
 - The time unit settings displayed on the **Timeline View**:
 
   .. image:: ../images/units.png
      :width: 600
+     :alt: ROCm Optiq Settings panel showing the time unit selector for the Timeline View
 
 - The hotkey settings allow keyboard shortcuts to be redefined:
 
   .. image:: ../images/hotkeys.png
      :width: 600
+     :alt: ROCm Optiq Settings panel showing the hotkey configuration table for customizing keyboard shortcuts
 
 Show/hide panels
 ================
@@ -53,6 +56,7 @@ Use the **View** menu to show and hide application panels.
 
 .. image:: ../images/view.png
   :width: 300
+  :alt: View menu showing options to show and hide application panels
 
 Customize projects for ROCm Systems Profiler traces
 ===================================================
@@ -74,6 +78,7 @@ To set a time range filter, press and hold **Ctrl** while dragging your mouse in
 
 .. image:: ../images/filter.png
    :width: 600
+   :alt: Timeline View with a time range selected, showing the shaded selection area with draggable boundary handles
 
 Once a time range is selected, the selection boundaries can be adjusted by dragging them. 
 The active time range filter applies to event and sample counter details in the :ref:`advanced` section.
@@ -103,6 +108,7 @@ When there's an active time range filter, select **Edit** > **Save Trace Selecti
 
 .. image:: ../images/save-trace.png
    :width: 200
+   :alt: Edit menu with the Save Trace Selection option highlighted
 
 This creates a new trace file containing only the events in the filter.
 
@@ -119,6 +125,7 @@ To add an annotation:
 
    .. image:: ../images/add-annotation.png
       :width: 200
+      :alt: Annotations toolbar section with the plus button for adding a new annotation
 
    Annotations can also be added by right-clicking on the **Timeline View** and clicking the **Add Annotation** context menu option.
 
@@ -126,14 +133,22 @@ To add an annotation:
 
    .. image:: ../images/save-annotation.png
       :width: 500
+      :alt: Annotation dialog showing title and note text fields with a Save button
 
    Once saved, the annotation displays as a marker that can be expanded on the timeline:
 
    .. image:: ../images/annotation-example.png
       :width: 200
+      :alt: Timeline showing a collapsed annotation marker on a track
 
    .. image:: ../images/new-annotation-example.png
       :width: 200
+      :alt: Timeline showing an expanded annotation note as a floating window with inline editing
+
+      Annotations are track-bound and follow their tracks when scrolling, reordering, or rearranging the timeline. 
+      Expanded notes open as movable floating windows with inline editing; empty notes are discarded automatically. 
+      A time guide line appears while a note is hovered or dragged. 
+      The Annotations list adds a Track column, and annotations hide automatically when their track is hidden.
 
 .. tip::
 
@@ -160,6 +175,8 @@ Or:
 Delete bookmarks
 ~~~~~~~~~~~~~~~~
 
+Use the following actions to delete bookmarks or reset the view.
+
 - To delete a bookmark, click **X** to delete a bookmark from the |book| menu. 
 - Click **Reset View** to return the :ref:`timeline` to its original pan and zoom settings.
 
@@ -170,6 +187,7 @@ Customize display options for each track by clicking the gear icon in the track'
 
 .. image:: ../images/track-gear.png
    :width: 600
+   :alt: Timeline track Description area with the gear icon visible for accessing track display options
 
 - For event tracks, you can toggle between **Color by Name**, **Color by Time Level**, **No Color**, and **Compact mode**.
 
@@ -184,8 +202,9 @@ Customize display options for each track by clicking the gear icon in the track'
   - **Highlight Y Range**: Select an area of the graph to highlight. Choose the minimum and maximum range that you want to highlight. The tool highlights these values on the track region.
 
     .. image:: ../images/timeline-display-options.png
-       :width: 400  
-  
+       :width: 400
+       :alt: Track display options menu for a sample counter track showing Show Counter Boxes, Alternate Counter Coloring, and Highlight Y Range toggles
+
 - For sample counter tracks, you can set the min and max when showing the tracks: 
 
   - Click on the value beside the min and max to set/change the scale range. 
@@ -193,6 +212,7 @@ Customize display options for each track by clicking the gear icon in the track'
 
   .. image:: ../images/min-max.png
      :width: 400
+     :alt: Sample counter track showing editable minimum and maximum scale values with a reset button
 
 .. tip::
 
@@ -209,11 +229,13 @@ Chain mode displays events in a linked sequence, emphasizing dependencies and ex
 
 .. image:: ../images/chain-mode.png
    :width: 600
+   :alt: Timeline View in Chain mode showing events linked in sequence to emphasize dependencies and execution order
 
 Render mode shows events in a fan-out style, highlighting parallelism and branching. This helps visualize concurrency and how multiple operations originate from a single source.
 
 .. image:: ../images/fan-mode.png
    :width: 600
+   :alt: Timeline View in Render (fan) mode showing events fanning out from a single source to highlight parallelism
 
 .. note::
 
@@ -234,8 +256,9 @@ You can remove metadata added by ROCm Optiq during processing trace data by sele
 
 .. image:: ../images/cleanup.png
    :width: 300
+   :alt: File menu open with Database submenu showing the Full Cleanup option for removing ROCm Optiq metadata
 
-Customize projects for ROCm Compute Profiler Analysis Data
+Customize projects for ROCm Compute Profiler analysis data
 ==========================================================
 
 .. _presets:
@@ -247,6 +270,7 @@ Persist the pinned metric configurations for the Table View and Baseline Compari
 
 .. image:: ../images/presets.png
    :width: 300
+   :alt: Presets panel showing a text field for a new preset name and a list of saved presets with recall, overwrite, and delete buttons
 
 After a preset is saved, you can:
 

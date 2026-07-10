@@ -1,6 +1,6 @@
 .. meta::
-  :description: ROCm Optiq documentation
-  :keywords: Optiq, ROCm, documentation, profiler
+  :description: Learn what ROCm Optiq is: a unified GUI for visualizing ROCm Systems Profiler traces and ROCm Compute Profiler analysis data on Windows and Linux.
+  :keywords: Optiq, ROCm, profiler, visualization, trace, analysis, GPU, AMD, performance
 
 *******************
 What is ROCm Optiq?
@@ -18,6 +18,7 @@ Use ROCm Optiq to inspect CPU-GPU interactions, ROCm API calls, kernel execution
 .. image:: /images/optiq-systems.png
    :width: 800
    :align: center
+   :alt: ROCm Optiq timeline view showing CPU and GPU activity tracks for a ROCm Systems Profiler trace
 
 ROCm Optiq helps you identify stalls, memory bandwidth issues, and inefficient kernel launches. 
 It correlates GPU workloads with in-application CPU events and performance with hardware resource usage, providing a holistic view for optimization. 
@@ -38,7 +39,8 @@ Use ROCm Optiq to visualize profiling analysis data to rapidly identify performa
 .. image:: /images/optiq-compute.png
    :width: 800
    :align: center
-  
+   :alt: ROCm Optiq analysis view showing roofline chart and kernel metrics for a ROCm Compute Profiler workload
+
 Key features include: 
 
 - :ref:`analysis-summary`: High-level overview of the captured compute profiling data. 

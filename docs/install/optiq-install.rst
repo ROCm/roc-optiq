@@ -1,5 +1,5 @@
 .. meta::
-  :description: Install ROCm Optiq 
+  :description: Learn how to install ROCm Optiq on Windows, Linux (Ubuntu, RHEL, CentOS), and macOS, including system requirements and verification steps.
   :keywords: ROCm Optiq, ROCm, install, profiler
 
 ******************
@@ -25,7 +25,7 @@ System requirements
 
 .. note::
 
-   It's recommended to have at least 16 GB of RAM to run large traces in ROCm Optiq.
+   Use at least 16 GB of RAM to run large traces in ROCm Optiq.
 
 
 Install on Windows
@@ -35,12 +35,14 @@ Install on Windows
    
    .. image:: ../images/wizard.png
       :width: 500
+      :alt: ROCm Optiq installation wizard welcome screen on Windows
 
 2. Accept the agreement to install, then follow the installation instructions.
 
    .. image:: ../images/agreement.png
       :width: 500
-  
+      :alt: ROCm Optiq installer license agreement screen
+
 3. Launch **roc-optiq.exe** from the installation directory.
 
 
@@ -63,8 +65,8 @@ If you're unsure of the Linux distribution and version, the ``/etc/os-release`` 
 
 The relevant fields are ``ID`` and the ``VERSION_ID``.
 
-Ubuntu 22.04 / 24.04 (Debian-based)
------------------------------------
+Ubuntu 22.04 or 24.04 (Debian-based)
+-------------------------------------
 
 1. Download the ``.deb`` package from the `ROCm Optiq GitHub repo <https://github.com/ROCm/roc-optiq/releases/tag/v0.5.0-optiq>`_.
 2. Install the ``.deb`` package:
@@ -101,8 +103,8 @@ Once you've installed ROCm Optiq for your operating system, add the ROCm binarie
 
    export PATH=opt/roc-optiq/bin:$PATH
 
-Install on RHEL 8 / 9 / 10 and CentOS Stream 9 
-==============================================
+Install on RHEL 8, 9, or 10 and CentOS Stream 9
+================================================
 
 1. Download the appropriate ``.rpm`` package from GitHub Releases. 
 2. Install the package: ``sudo dnf install ./roc-optiq-*.rpm`` 

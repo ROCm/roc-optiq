@@ -1,6 +1,6 @@
 .. meta::
-  :description: ROCm Optiq documentation
-  :keywords: Visualizer, ROCm, documentation, profiler
+  :description: ROCm Optiq is a unified visualization and analysis tool for ROCm Systems Profiler and ROCm Compute Profiler performance data on AMD GPUs.
+  :keywords: ROCm Optiq, ROCm, profiler, visualization, trace, analysis, GPU, AMD, performance, Systems Profiler, Compute Profiler
 
 ************************
 ROCm Optiq documentation
@@ -23,10 +23,10 @@ ROCm Optiq (Beta) 0.5.0
 Added
 -----
 
-Features and Improvements for viewing ROCm Systems Profiler trace data
+Features and improvements for viewing ROCm Systems Profiler trace data
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-- **Timeline View - Measure Mode**: Measure the time delta between events or any two points on the timeline. Includes a measurement toolbar (edge toggle, freehand drag, reset), click-to-place freehand rulers, draggable ruler lines with grab cursors, viewport-clamped labels, and theme-aware highlighting. Measurement state is per-trace so it no longer leaks between loaded traces.
+- **Timeline View - Measure Mode**: Measure the time delta between events or any two points on the timeline. Includes a measurement toolbar (edge toggle, freehand drag, reset), click-to-place freehand rulers, draggable ruler lines with grab cursors, viewport-clamped labels, and theme-aware highlighting. Measurement state is per-trace so it no longer leaks between loaded traces. Right-click a measurement label to Copy Start Timestamp, Copy End Timestamp, or Copy Measurement Duration.
 - **Timeline View - Queue Utilization**: Per-queue utilization is computed and surfaced on the timeline, shown as a pill in the track meta area.
 - **Sample counter track statistics** (min, max, average, standard deviation) displayed in track meta data, shown as user-selectable pills.
 - **Track meta-area tooltip** enriched with track ID, type, node/process IDs, and event/sample counts.
@@ -42,12 +42,17 @@ Features and Improvements for viewing ROCm Systems Profiler trace data
 - **Copy menu** added to the Call Stack table, with fixed cell right-click hitboxes (correct column under cursor) for both flow and call stack tables.
 - **Icons** added to context menus across the view (table rows, timeline events, call stack/flow menus, kernel bar-chart column menu) with aligned icon columns.
 - **Right-click copy** for timeline event names and details (mirrors the hover tooltip fields: name, start, duration, ID), gated on the current selection.
+- **Annotations**: Annotations are now track-bound: annotations stay attached to their tracks and follow their tracks when scrolling, reordering, or rearranging the timeline. Expanded notes open as movable floating windows with inline editing; empty notes are discarded automatically. A time guide line appears while a note is hovered or dragged. 
+- Statistics in **Track Details**, these include queue utilization, counter Minimum, Maximum, Mean, and Standard Deviation. 
+- Right-click a row or cell of Track Details to **Copy Row Data** or **Copy Cell Data**. 
 
 Improvements for visualizing ROCm Compute Profiler analysis data
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 - Support for the LDS AI point on roofline plots.
 - Metric table view scrolling and tab-persistence consistency improvements aligned with the comparison tables.
+- Tooltip to the delta-threshold control in Baseline Comparison. 
+- **Copy Row Data** or **Copy Cell Data** context menu in Kernel Selection table. 
 
 Welcome page and UI
 ^^^^^^^^^^^^^^^^^^^
@@ -72,6 +77,7 @@ Changed
 - **Lazy render on idle:** Event-driven rendering so an idle app sleeps (near-zero CPU/GPU) and wakes instantly on input, while loads, async tasks, animations, and in-flight requests keep rendering continuous.
 - **Texture management rework:** Startup logo (and other images) uploaded as GPU textures via the modern ImGui textures API instead of per-frame CPU rasterization.
 - Migrated to the modern ImGui font-uploading system.
+- Saving a project (``.rpv``) adds it to the **Recent Files** list. 
 
 Fixes
 -----
@@ -84,14 +90,16 @@ Fixes
 - Fixed timeline highlight artifacts.
 - **Duplicate file open protection**: Canonicalize trace paths so a `.db` and a `.rpv` (or two `.rpv` files) pointing at the same trace are detected, with a clear popup instead of a confusing toast.
 - Fixed reopening a `.rpv` whose source `.db` is missing: the missing trace is reported by name and no empty 0-byte database is created.
-- Fixed multi-node topology node identification (aligned processor topology IDs across instances/queues).
+- Fixed multi-node topology node identification (aligned processor topology IDs across instances/queues), plus additional topology display fixes (null parent lookups, out-of-bounds stream processor lookup). 
 - Corrected stream track entry counts (accumulate record counts across per-operation build queries); bumped the track-info cache version, forcing a one-time rebuild of affected caches.
 - Made the per-track table count inclusive on the trace’s upper time bound so it matches the tooltip total (off-by-one fix).
-- Don’t block the UI thread during backend teardown when closing a tab or the application.
+- Don't block the UI thread during backend teardown when closing a tab or the application.
 - Fixed annotation scroll interactions so annotation scrollbars no longer drive timeline navigation and note dragging is limited to the header.
 - Various redesign polish fixes (event details styling, annotation row alignment, metric table row hover, settings table controls, aggregate clear button).
 - Fix flow rendering for `.rpd` traces.
 - Fix Compute chart metric mapping.
+- Fixed the Welcome page sometimes appearing only partially drawn until the user moved the mouse or clicked (idle wait is now bounded). 
+- Fixed a macOS app packaging issue that could prevent the app bundle from being properly signed (static GLFW no longer staged into the bundle). 
 
 .. grid:: 2
   :gutter: 3
@@ -108,7 +116,7 @@ Fixes
 
   .. grid-item-card:: Reference
 
-    * :doc:`Command line support <reference/cli-support>`
+    * :doc:`Command-line support <reference/cli-support>`
 
 To contribute to the documentation, refer to the
 `Programming Guide in the GitHub repo <https://github.com/ROCm/roc-optiq/blob/main/CODING.md>`_.

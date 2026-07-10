@@ -1,0 +1,151 @@
+> [!NOTE]
+> The published ROCm™ Optiq (Beta) documentation is available [here](https://rocm.docs.amd.com/projects/roc-optiq/en/latest/) in an organized, easy-to-read format, with search and a table of contents. The documentation source files reside in the `docs` folder of this repository. As with all ROCm projects, the documentation is open source. For more information on contributing to the documentation, see [Contribute to ROCm documentation](https://rocm.docs.amd.com/en/latest/contribute/contributing.html).
+
+# roc-optiq
+
+A visualizer for the ROCm Profiler Tools. 
+
+## Install
+
+Install from the package provided for your OS target on the [release](https://github.com/ROCm/roc-optiq/releases) page.
+
+To build from source follow the instructions in the file BUILDING.md.
+
+## Usage Instructions
+
+### Open a Trace
+Use the `File` -> `Open` menu to open a trace or project file.
+
+Supported trace formats are *.db* and *.rpd* trace files. Project files have the extension *.rpv*.
+
+Files can also be opened by dragging and dropping them onto the application window.
+
+### ROCm Systems Profiler Trace Data
+
+#### Projects
+Customizations made to tracks, bookmarks, and annotations can be persisted by saving the session as a project. Upon opening a project file, the associated trace file and previous customizations will be recalled.
+
+Use `File` -> `Save As` to create a new project, use `File` -> `Save` to overwrite the currently opened project.
+
+#### UI Layout
+![UI Layout](docs/images/ui_sections.png)
+
+1. System Topology Tree: Expand tree nodes to see relationship between tracks.
+2. Timeline View: List of tracks containing event or sample counter data.
+3. Advanced Details Area: Shows detailed information about selected events and tracks. 
+4. Histogram Area: Shows an event density histogram.
+5. Toolbar: Provides controls for various functions.
+
+#### Controls / Interactions
+1. System Topology Tree
+    - Click to expand / collapse the tree nodes.
+    - Click on the track node to select it.
+    - Click the eye icon to show or hide the track
+    - Click the `Scroll To Track` button to navigate to this track in the Timeline View.
+
+2. Timeline View
+    - The timeline view has two areas, the grey *Description* area and white *Graph* area where events and counter graphs are plotted.
+    - Pan and scroll the timeline view using the scrollbars.
+    - Dragging the mouse on the *Graph* area of the track will also scroll and pan the view.
+    - When hovering over the *Graph* area the scroll wheel will zoom the view.
+    - The WASD and arrow keys can be used to zoom and pan the view as well:
+        - W / S: Zoom in and out respectively.
+        - A or Left Arrow / D or Right Arrow: Pan left and right respectively.
+        - Up Arrow / Down Arrow: Scroll track list up and down.
+    - When hovering over the *Description* area of the track the scroll wheel will scroll the track list.
+    - Display options for each track can be accessed by clicking the gear icon in track's *Description* area.
+    - Clicking the *Description* area will select or deselect the track.  When selected, the track details will be displayed in the *Track Details* pane. Additionally, depending on the track type, the *Event Table* or *Sample Table* tabs in the *Advanced Details Area" will be populated by the contents of the track. 
+    - Clicking on an *Event* in the *Graph* area will select or deselect an event. When selected, details for the event can be seen in the *Event Details* tab of the *Advanced Details Area*.
+    - Ctrl+left mouse drag on the *Graph* will start a *Time Range Filter* selection. Use the context menu (right click) or ESC key to clear the *Time Range Filter*
+    - Tracks can be resized by hovering over and dragging the separator lines between tracks.
+    - Tracks can be reordered by clicking and dragging the grip on left side of the *Description* area.
+    - When there is an active *Time Range Filter* the trace can be trimmed using the `Edit->Save Trace Selection` menu option.  This will create a new trace file containing only the events in the selection zone.
+    - The current view (scroll and zoom position) can be saved to a bookmark for quick navigation.  Use `ctrl` + keys `0`- `9` to create a view bookmark and keys `0` - `9` to restore the view to a stored bookmark. 
+    - Bookmarks can also be set and recalled using the Bookmark dropdown on the main toolbar.
+    - Annotations can be managed (add/show/hide) from the main toolbar Annotations panel.
+
+3. Advanced Details Area
+    - Use the tabs to see different detailed information events and tracks
+    - The *Event Table* and *Sample Table* tabs provide a list (table) of the events or samples contained in the selected track or tracks.
+    - Right click on the column headers to show / hide columns.
+    - In the *Event Table* tab there is a drop-down box that allows the events grouped by a column to display aggregated metrics.
+    - Both the *Event Table* and *Sample Table* provide a text input box that can be used to filter the data.  Ex: `min_duration > 2000` will filter all events shorter than 2000 ns.
+    - Right click on a table row and select `Go to event` to navigate the timeline view to the highlighted event.
+    - Setting a *Time Range Filter* using the timeline view will filter the rows displayed in the table to be contained within the selected time range.
+    - The *Event Details* tab shows detailed information about currently selected events in the timeline view.
+    - The *Track Details* tab shows additional information about the currently selected tracks.
+    - The *Annotations* tab shows a list of user created annotations.
+        - Annotations can be individually hidden and shown using this interface.
+        - Clicking on a row will bring the associated annotation into view.
+
+4. Histogram Area
+    - Displays an event density histogram map.
+    - When timeline is zoomed the area currently in view is highlighted.
+    - Viewable area can be dragged to scroll timeline view.
+
+5. Toolbar
+    - Provides controls for various application functions.
+    - Buttons for showing and hiding flow information on timeline.
+    - Selecting the flow rendering mode. (Fan or chain mode).
+    - Buttons for showing, hiding and adding Annotations.
+    - A search bar for finding events within the trace.
+    - Controls for adding, removing, and navigating bookmarks.
+    - A button to show the mini-map.
+    - A button to reset the timeline view to default zoom and pan.
+
+### ROCm Compute Profiler Analysis Data
+
+1. Summary View: High-level overview of the captured data.
+    - Table: Lists the top longest-running kernels sorted by execution time with duration statistics.
+    - Charts: Plots duration and invocation statistics across kernels.
+    - Roofline Chart: Plots kernel performance against hardware ceilings to reveal whether performance is memory-bound or compute-bound. Click the gear icon to access customization options.
+
+2. Kernel Details: Focuses on one kernel at a time while allowing comparison across kernels.
+    - Kernel Selection Table: Lists kernels with GPU metrics. Use `Add Metric` to append additional GPU metric columns. Per-column search box accepts name or metric expressions (e.g., `metric > threshold`). Click `Apply Filters` to execute; combine multiple filters to narrow analysis.
+    - Memory Chart: Shows memory transactions and throughput per cache hierarchy level for the selected kernel.
+    - System Speed-of-Light: Displays key kernel-level GPU performance metrics with unit, average, peak, and percentage of peak values.
+    - Kernel Roofline Chart: Shows a kernel-specific roofline analysis to determine whether the kernel is compute-bound or memory-bound. Click the gear icon to access customization options.
+
+3. Table View: Provides a complete list of available metrics for the selected kernel grouped by category.
+
+4. Workload Details: Provides contextual information about the workload.
+    - System Information: Hardware details of the system where the data was collected.
+    - Profiling Configuration: Parameters and settings used during capture.
+
+## Keyboard Shortcuts
+
+### **Timeline Navigation**
+
+#### Horizontal Panning
+- **A** or **Left Arrow** - Pan left
+- **D** or **Right Arrow** - Pan right
+- **Shift + A/D/Arrows** - Pan faster (2x speed)
+
+#### Vertical Scrolling
+- **Up Arrow** - Scroll up
+- **Down Arrow** - Scroll down
+- **Shift + Up/Down Arrow** - Scroll faster (2x speed)
+
+#### Zoom Controls
+- **W** - Zoom in at cursor position
+- **S** - Zoom out at cursor position
+
+### **Selection & Time Ranges**
+
+- **Ctrl + Left Click** - Start selecting a time range
+- **M** - Mark selected events as a time range (or clear existing time range)
+- **Escape** - Clear time range selection
+- **Ctrl + Click on event** - Multi-select events
+
+### **Bookmarks**
+
+- **0-9** - Restore bookmark (view position, zoom, and scroll)
+- **Ctrl + 0-9** - Save current view as bookmark
+
+---
+
+**Tips**
+
+- Bookmarks save your complete view state including zoom level, pan position, and scroll offset
+- 10 bookmark slots available (0-9) for quick navigation
+- All timeline keyboard shortcuts respect input focus. They won't trigger while typing in text fields or when dialogs are open. Click once in timeline area to ensure it has focus if shortcuts are not responsive.

@@ -490,6 +490,41 @@ RocprofDatabase::ReaderDmaTrackToTrackParams(
     track_params.reader_track_id                        = info.id;
 }
 
+void
+RocprofDatabase::ReaderCounterTrackToTrackParams(
+    const profiler_hub::reader_types::track_info_t& info, DbInstance* db_instance,
+    rocprofvis_dm_track_params_t& track_params)
+{
+    uint64_t node_id =
+        info.node_info ? static_cast<uint64_t>(info.node_info->node_id) : 0;
+    uint64_t pid = info.process_info ? static_cast<uint64_t>(info.process_info->pid) : 0;
+    // Q10: agent_info is populated for v4.0 agent-scoped counters and nullopt for v3
+    // counters and v4.0 CPU-thread-scoped counters. The SQL path likewise leaves agent 0.
+    uint64_t agent_id = info.agent_info ? static_cast<uint64_t>(info.agent_info->id) : 0;
+    // The COUNTER identity slot is the real rocpd_info_pmc primary key (pmc_id). The SMI
+    // SQL path keys id[COUNTER] on PMC_E.pmc_id; the reader now exposes the same value
+    // via pmc_info->pmc_id, so ProcessTrack's PMC name/panel lookups match the SQL path
+    // exactly.
+    uint64_t pmc_id = info.pmc_info ? static_cast<uint64_t>(info.pmc_info->pmc_id) : 0;
+
+    track_params.track_indentifiers.db_instance = db_instance;
+    track_params.track_indentifiers.category    = kRocProfVisDmPmcTrack;
+    track_params.op                             = kRocProfVisDmOperationNoOp;
+    track_params.track_indentifiers.process_id =
+        static_cast<rocprofvis_dm_track_id_t>(pid);
+    track_params.track_indentifiers.id[TRACK_ID_NODE]            = node_id;
+    track_params.track_indentifiers.id[TRACK_ID_AGENT]           = agent_id;
+    track_params.track_indentifiers.id[TRACK_ID_COUNTER]         = pmc_id;
+    track_params.track_indentifiers.is_numeric[TRACK_ID_NODE]    = true;
+    track_params.track_indentifiers.is_numeric[TRACK_ID_AGENT]   = true;
+    track_params.track_indentifiers.is_numeric[TRACK_ID_COUNTER] = true;
+    track_params.track_indentifiers.tag[TRACK_ID_NODE]  = Builder::NODE_ID_SERVICE_NAME;
+    track_params.track_indentifiers.tag[TRACK_ID_AGENT] = Builder::AGENT_ID_SERVICE_NAME;
+    track_params.track_indentifiers.tag[TRACK_ID_COUNTER] =
+        Builder::COUNTER_ID_SERVICE_NAME;
+    track_params.reader_track_id = info.id;
+}
+
 rocprofvis_dm_result_t
 RocprofDatabase::AddReaderMemoryTracks(Future* future)
 {
@@ -689,6 +724,114 @@ RocprofDatabase::AddReaderDmaTracks(Future* future)
 }
 
 rocprofvis_dm_result_t
+RocprofDatabase::AddReaderCounterTracks(Future* future)
+{
+    rocprofvis_dm_result_t result = kRocProfVisDmResultSuccess;
+    using track_type_t            = profiler_hub::reader_types::track_type_t;
+
+    std::vector<std::thread> threads;
+    m_add_track_mutex.init(NumDbInstances());
+    auto task = [&](DbInstance* db_instance) {
+        uint32_t guid_index = db_instance->GuidIndex();
+        if(!GetMetadataVersionControl()->MustRebuildTrackInfo(db_instance->FileIndex()))
+        {
+            // Cache hit: reload saved counter tracks (incl. reader_track_id).
+            Future* sub_future = future->AddSubFuture();
+            result             = ExecuteSQLQuery(sub_future, db_instance, /*load_id=*/6,
+                                                 { "", "", "", "", "", "" }, &CallBackAddTrack,
+                                                 &CallBackLoadTrack);
+            future->DeleteSubFuture(sub_future);
+            m_add_track_mutex.unlock(guid_index);
+            return;
+        }
+
+        TraceProperties()->tracks_info_restored = false;
+        profiler_hub::reader_t* reader          = GetReader(db_instance);
+        if(!reader)
+        {
+            result = kRocProfVisDmResultDbAccessFailed;
+            m_add_track_mutex.unlock(guid_index);
+            return;
+        }
+        auto reader_tracks = reader->get_all_tracks();
+        m_add_track_mutex.lock(guid_index);
+        for(const auto& info : reader_tracks)
+        {
+            if(!info) continue;
+            if(info->type != track_type_t::counter) continue;
+
+            rocprofvis_dm_track_params_t track_params = { 0 };
+            track_params.reader_track_id              = kInvalidReaderTrackId;
+            ReaderCounterTrackToTrackParams(*info, db_instance, track_params);
+            track_params.track_indentifiers.track_id =
+                (rocprofvis_dm_track_id_t) NumTracks();
+            track_params.load_id.insert(6);
+
+            track_params.record_count = reader->get_track_stats(info->id).count;
+
+            // Counter samples are (timestamp, value) points, not intervals: derive the
+            // span from sample timestamps and the value range from the sample values (the
+            // SQL path's min/max come from the counter value column, not an interval
+            // level).
+            rocprofvis_dm_timestamp_t min_ts    = UINT64_MAX;
+            rocprofvis_dm_timestamp_t max_ts    = 0;
+            rocprofvis_dm_value_t     min_value = DBL_MAX;
+            rocprofvis_dm_value_t     max_value = 0;
+            for(const auto& ev : reader->get_scalar_track(info->id))
+            {
+                if(ev.timestamp == 0) continue;
+                if(ev.timestamp < min_ts) min_ts = ev.timestamp;
+                if(ev.timestamp > max_ts) max_ts = ev.timestamp;
+                if(ev.value < min_value) min_value = ev.value;
+                if(ev.value > max_value) max_value = ev.value;
+            }
+            bool has_samples = (min_ts != UINT64_MAX);
+            if(!has_samples)
+            {
+                min_ts    = 0;
+                min_value = 0;
+            }
+            track_params.min_ts    = min_ts;
+            track_params.max_ts    = max_ts;
+            track_params.min_value = min_value;
+            track_params.max_value = max_value;
+
+            if(track_params.op < kRocProfVisDmNumOperation)
+                TraceProperties()->events_count[track_params.op] +=
+                    track_params.record_count;
+
+            // Only real sample timestamps may expand the global trace bounds: a counter
+            // track can report a positive record_count while yielding no usable
+            // (non-zero) sample timestamp, and the min_ts=0 fallback would otherwise
+            // collapse the trace origin (db_inst_start_time) to zero.
+            if(has_samples)
+            {
+                TraceProperties()->db_inst_start_time[guid_index] =
+                    std::min(TraceProperties()->db_inst_start_time[guid_index], min_ts);
+                TraceProperties()->db_inst_end_time[guid_index] =
+                    std::max(TraceProperties()->db_inst_end_time[guid_index], max_ts);
+                TraceProperties()->trace_duration =
+                    std::max(TraceProperties()->trace_duration,
+                             TraceProperties()->db_inst_end_time[guid_index] -
+                                 TraceProperties()->db_inst_start_time[guid_index]);
+            }
+
+            if(ProcessTrack(track_params, nullptr) != 0)
+            {
+                result = kRocProfVisDmResultDbAccessFailed;
+                break;
+            }
+        }
+        m_add_track_mutex.unlock(guid_index);
+    };
+    for(auto& guid_info : DbInstances())
+        threads.emplace_back(task, &guid_info.first);
+    for(auto& t : threads)
+        t.join();
+    return result;
+}
+
+rocprofvis_dm_result_t
 RocprofDatabase::AddReaderGpuQueueAndStreamTracks(Future* future)
 {
     rocprofvis_dm_result_t result = kRocProfVisDmResultSuccess;
@@ -828,6 +971,93 @@ RocprofDatabase::ReadReaderTraceSlice(rocprofvis_dm_timestamp_t     start,
     rocprofvis_dm_timestamp_t abs_end   = end + origin;
 
     rocprofvis_dm_track_id_t track_id = props->track_indentifiers.track_id;
+
+    if(props->track_indentifiers.category == kRocProfVisDmPmcTrack)
+    {
+        using scalar_event_t = profiler_hub::reader_types::scalar_event_t;
+        // Counter (scalar) slice: samples are (timestamp, value) points, not intervals.
+        // Reproduce the SQL PMC slice's continuity contract
+        // (BuildCounterSliceLeft/RightNeighbourQuery + synthetic endpoint): one sample
+        // just before the window (so the line has a value at window entry), every
+        // in-window sample (START BETWEEN start AND end, inclusive, matching
+        // BuildSliceQuery's pmc branch), and one sample just after the window; if none
+        // exists, synthesize an endpoint at the trace end carrying the last value (the
+        // SQL zero-right-row path). pmc records carry only (timestamp, value); the value
+        // is on scalar_event_t directly, so get_scalar_details (which resolves by
+        // opaque_id) is not needed here.
+        auto samples = reader->get_scalar_track(props->reader_track_id);
+        std::sort(samples.begin(), samples.end(),
+                  [](const scalar_event_t& a, const scalar_event_t& b) {
+                      return a.timestamp < b.timestamp;
+                  });
+
+        auto emit = [&](rocprofvis_dm_timestamp_t abs_ts, double value) -> bool {
+            rocprofvis_db_record_data_t record;
+            record.pmc.timestamp = abs_ts - origin;
+            record.pmc.value     = value;
+            if(BindObject()->FuncAddRecord(slices[track_id], record) !=
+               kRocProfVisDmResultSuccess)
+                return false;
+            future->CountThisRow();
+            return true;
+        };
+
+        bool   have_last  = false;
+        double last_value = 0;
+
+        // Left neighbour: last sample strictly before the window.
+        const scalar_event_t* left = nullptr;
+        for(const auto& ev : samples)
+        {
+            if(ev.timestamp >= abs_start) break;
+            left = &ev;
+        }
+        if(left)
+        {
+            if(future->Interrupted()) return kRocProfVisDmResultDbAbort;
+            if(!emit(left->timestamp, left->value))
+                return kRocProfVisDmResultDbAccessFailed;
+            have_last  = true;
+            last_value = left->value;
+        }
+
+        // Main window: START BETWEEN start AND end (inclusive), preserving every value
+        // point (the v3 shared-opaque_id shape yields one scalar_event_t per value, so
+        // iterating samples here drops nothing and never collapses distinct values).
+        for(const auto& ev : samples)
+        {
+            if(future->Interrupted()) return kRocProfVisDmResultDbAbort;
+            if(ev.timestamp < abs_start || ev.timestamp > abs_end) continue;
+            if(!emit(ev.timestamp, ev.value)) return kRocProfVisDmResultDbAccessFailed;
+            have_last  = true;
+            last_value = ev.value;
+        }
+
+        // Right neighbour: first sample strictly after the window; else synthesize an
+        // endpoint at the trace end with the last value.
+        const scalar_event_t* right = nullptr;
+        for(const auto& ev : samples)
+        {
+            if(ev.timestamp > abs_end)
+            {
+                right = &ev;
+                break;
+            }
+        }
+        if(right)
+        {
+            if(future->Interrupted()) return kRocProfVisDmResultDbAbort;
+            if(!emit(right->timestamp, right->value))
+                return kRocProfVisDmResultDbAccessFailed;
+        }
+        else if(have_last)
+        {
+            if(!emit(TraceProperties()->db_inst_end_time[guid_index], last_value))
+                return kRocProfVisDmResultDbAccessFailed;
+        }
+        return kRocProfVisDmResultSuccess;
+    }
+
     for(const auto& ev : reader->get_interval_track(props->reader_track_id))
     {
         if(future->Interrupted()) return kRocProfVisDmResultDbAbort;
@@ -871,6 +1101,29 @@ RocprofDatabase::BuildReaderTrackHistogram(rocprofvis_dm_track_params_t* props,
     int64_t start_time =
         (int64_t) TraceProperties()->db_inst_start_time[db_instance->GuidIndex()];
     int64_t bsize = (int64_t) bucket_size;
+
+    // Scalar (PMC) counter tracks: per bucket, count samples and average their value,
+    // matching CallbackMakeHistogramPerTrack's {COUNT(*), AVG(value)} SQL semantics.
+    if(props->track_indentifiers.category == kRocProfVisDmPmcTrack)
+    {
+        std::map<uint32_t, std::pair<uint64_t, double>> accum;  // bucket -> {count, sum}
+        for(const auto& ev : reader->get_scalar_track(props->reader_track_id))
+        {
+            if(ev.timestamp == 0) continue;
+            int64_t bucket_no =
+                std::max<int64_t>(0, ((int64_t) ev.timestamp - start_time) / bsize);
+            auto& a = accum[(uint32_t) bucket_no];
+            a.first += 1;
+            a.second += ev.value;
+        }
+        for(const auto& kv : accum)
+        {
+            auto& bucket  = props->histogram[kv.first];
+            bucket.first  = kv.second.first;
+            bucket.second = kv.second.second / (double) kv.second.first;
+        }
+        return;
+    }
 
     // Reproduce GetHistogramQuerySuffix's bucket-overlap math over the reader's
     // intervals: per event, distribute its overlap duration across the buckets it spans;
@@ -1755,36 +2008,15 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
                 t.join();
             load_id++;
         }
-                   
-        // PMC schema is not fully defined yet
+
         ShowProgress(5, "Adding performance smi counters tracks", kRPVDbBusy, future );
-        {
-            std::vector<std::thread> threads;
-            m_add_track_mutex.init(NumDbInstances());
-            auto task = [&](DbInstance* db_instance)
-                {
-                    Future* sub_future = future->AddSubFuture();
-                    result = ExecuteSQLQuery(sub_future, db_instance, load_id,
-                    { 
-                        m_query_factory.GetRocprofSMIPerformanceCountersTrackQuery(),
-                        "",
-                        m_query_factory.GetRocprofSMIPerformanceCountersLevelQuery(),
-                        m_query_factory.GetRocprofSMIPerformanceCountersSliceQuery(),
-                        "",
-                        m_query_factory.GetRocprofSMIPerformanceCountersTableQuery(),
-                    },
-                    &CallBackAddTrack, &CallBackLoadTrack);
-                    future->DeleteSubFuture(sub_future);
-                    m_add_track_mutex.unlock(db_instance->GuidIndex());
-                };
-            for (auto& guid_info : DbInstances())
-            {
-                threads.emplace_back(task, &guid_info.first);
-            }
-            for (auto& t : threads)
-                t.join();
-            load_id++;
-        }
+        // The sample-based SMI performance counters are synthesized by the profiler-hub
+        // reader as track_type_t::counter (scalar/PMC), so discovery routes through the
+        // reader here instead of the SQL SMI track query. Kernel-dispatch PMC (above) and
+        // memory-activity (below) remain on SQL — the reader has no track type for
+        // either. Uses load_id 6.
+        result = AddReaderCounterTracks(future);
+        load_id++;
 
         ShowProgress(5, "Adding memory allocation activity tracks", kRPVDbBusy, future );
         {

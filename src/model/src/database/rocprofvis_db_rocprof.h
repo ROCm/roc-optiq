@@ -228,6 +228,19 @@ private:
                                      DbInstance*                   db_instance,
                                      rocprofvis_dm_track_params_t& track_params);
 
+    // Reader-backed counter (scalar/PMC) discovery: replaces the sample-based "SMI
+    // performance counters" SQL block with get_all_tracks() filtered to
+    // track_type_t::counter, per shard. Kernel-dispatch PMC and memory-activity blocks
+    // stay on SQL (the reader has no track type for either).
+    rocprofvis_dm_result_t AddReaderCounterTracks(Future* future);
+
+    // Adapt a reader counter track into Optiq track_params (identity slots, category,
+    // op). COUNTER slot keyed by the real pmc_id (pmc_info->pmc_id), so ProcessTrack's
+    // PMC name/panel lookups behave identically to the SQL path.
+    void ReaderCounterTrackToTrackParams(
+        const profiler_hub::reader_types::track_info_t& info, DbInstance* db_instance,
+        rocprofvis_dm_track_params_t& track_params);
+
     // Reader-backed slice load for a cpu_thread track (routed from ReadTraceSlice on a
     // non-sentinel reader_track_id). Emits interval events with Optiq's exact overlap
     // window semantics.

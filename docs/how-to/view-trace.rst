@@ -236,7 +236,6 @@ Measure
 
 .. image:: ../images/new-measurement-timestamp.png
    :width: 300
-   :align: left
    :alt: Timeline View Measure mode showing two vertical ruler lines with timestamps and a duration label between them
 
 Histogram

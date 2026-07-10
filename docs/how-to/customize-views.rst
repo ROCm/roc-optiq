@@ -76,7 +76,7 @@ Set a time range filter in the :ref:`timeline` to limit the data displayed to a 
 
 To set a time range filter, press and hold **Ctrl** while dragging your mouse in the **Timeline View** to select a range.
 
-.. image:: ../images/filter.png
+.. image:: ../images/time-range-filter.gif
    :width: 600
    :alt: Timeline View with a time range selected, showing the shaded selection area with draggable boundary handles
 

@@ -31,6 +31,7 @@ enum class RocEvents
     kTimeFormatChanged,
     kTopologyChanged,
     kRequestProgressUpdate,
+    kRevealTrackInTopology,
 #ifdef COMPUTE_UI_SUPPORT
     kComputeWorkloadSelectionChanged,
     kComputeKernelSelectionChanged,

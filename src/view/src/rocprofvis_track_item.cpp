@@ -494,6 +494,13 @@ TrackItem::RenderMetaArea()
             copy_to_clipboard(std::to_string(m_track_id));
         }
         ImGui::Separator();
+        if(IconMenuItem(ICON_TREE, "Reveal in topology"))
+        {
+            EventManager::GetInstance()->AddEvent(std::make_shared<ScrollToTrackEvent>(
+                static_cast<int>(RocEvents::kRevealTrackInTopology), m_track_id,
+                m_data_provider.GetTraceFilePath()));
+        }
+        ImGui::Separator();
         if(IconBeginMenu(ICON_GEAR, "Track Options"))
         {
             ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(0.0f, 0.0f));

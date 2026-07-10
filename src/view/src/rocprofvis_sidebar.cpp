@@ -5,10 +5,12 @@
 #include "icons/rocprovfis_icon_defines.h"
 #include "widgets/rocprofvis_gui_helpers.h"
 #include "rocprofvis_data_provider.h"
+#include "rocprofvis_events.h"
 #include "rocprofvis_track_item.h"
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_timeline_selection.h"
 
+#include <cmath>
 #include <unordered_set>
 
 namespace RocProfVis
@@ -20,6 +22,15 @@ constexpr ImGuiTreeNodeFlags HEADER_FLAGS = ImGuiTreeNodeFlags_Framed |
                                             ImGuiTreeNodeFlags_DefaultOpen |
                                             ImGuiTreeNodeFlags_SpanLabelWidth;
 constexpr float TREE_LINE_W = 1.5f;
+
+// Matches TimelineSelection::HIGHLIGHT_TIMEOUT_S so reveal and "go to event"
+// pulse for the same duration.
+constexpr double REVEAL_PULSE_DURATION_S = 10.0;
+// Force-open ancestors for a few frames; the scroll extent is only known once
+// the newly expanded rows have been laid out.
+constexpr int   REVEAL_SCROLL_FRAMES       = 3;
+constexpr float REVEAL_HIGHLIGHT_THICKNESS = 1.5f;
+constexpr float REVEAL_HIGHLIGHT_ROUNDING  = 2.0f;
 
 // Recolors a framed tree node's collapse arrow, matching ImGui::RenderArrow's
 // geometry so it overlaps the default arrow exactly.
@@ -82,9 +93,73 @@ SideBar::SideBar(std::shared_ptr<TrackTopology>         topology,
 , m_timeline_selection(timeline_selection)
 , m_tracks(tracks)
 , m_data_provider(dp)
-{}
+{
+    m_reveal_track_token = EventManager::GetInstance()->Subscribe(
+        static_cast<int>(RocEvents::kRevealTrackInTopology),
+        [this](std::shared_ptr<RocEvent> e) { HandleRevealTrack(e); });
+}
 
-SideBar::~SideBar() {}
+SideBar::~SideBar()
+{
+    EventManager::GetInstance()->Unsubscribe(
+        static_cast<int>(RocEvents::kRevealTrackInTopology), m_reveal_track_token);
+}
+
+void
+SideBar::HandleRevealTrack(const std::shared_ptr<RocEvent>& event)
+{
+    auto reveal = std::dynamic_pointer_cast<ScrollToTrackEvent>(event);
+    if(!reveal || reveal->GetSourceId() != m_data_provider.GetTraceFilePath())
+    {
+        return;
+    }
+
+    m_reveal_track_id      = reveal->GetTrackID();
+    m_reveal_active        = true;
+    m_reveal_scroll_frames = REVEAL_SCROLL_FRAMES;
+    m_reveal_start         = std::chrono::steady_clock::now();
+}
+
+// Depth-first search for the leaf matching m_reveal_track_id. On success,
+// records every ancestor branch node in m_reveal_path so they can be forced
+// open. Only run while forcing the target into view (the first few frames).
+bool
+SideBar::BuildRevealPath(const TreeNode& node)
+{
+    if(node.IsLeaf())
+    {
+        const LeafNode& leaf = static_cast<const LeafNode&>(node);
+        return leaf.track_id == m_reveal_track_id;
+    }
+
+    for(const auto& child : node.children)
+    {
+        if(child && BuildRevealPath(*child))
+        {
+            m_reveal_path.insert(&node);
+            return true;
+        }
+    }
+    return false;
+}
+
+void
+SideBar::DrawRevealPulse(const ImVec2& row_min, const ImVec2& row_max) const
+{
+    double elapsed = std::chrono::duration<double>(
+                         std::chrono::steady_clock::now() - m_reveal_start)
+                         .count();
+    float pulse     = 0.5f + 0.5f * std::sin(static_cast<float>(elapsed) * 6.0f);
+    float thickness = REVEAL_HIGHLIGHT_THICKNESS + pulse * 1.5f;
+
+    ImU32 color = m_settings.GetColor(Colors::kEventSearchHighlight);
+    ImU32 alpha = (color >> 24) & 0xFF;
+    ImU32 new_a = static_cast<ImU32>(alpha * (0.5f + 0.5f * pulse));
+    color       = (color & 0x00FFFFFF) | (new_a << 24);
+
+    ImGui::GetWindowDrawList()->AddRect(row_min, row_max, color,
+                                        REVEAL_HIGHLIGHT_ROUNDING, 0, thickness);
+}
 
 void
 SideBar::Render()
@@ -98,6 +173,31 @@ SideBar::Render()
             m_eye_state_dirty = false;
         }
 
+        if(m_reveal_active)
+        {
+            double elapsed = std::chrono::duration<double>(
+                                 std::chrono::steady_clock::now() - m_reveal_start)
+                                 .count();
+            if(elapsed >= REVEAL_PULSE_DURATION_S)
+            {
+                m_reveal_active        = false;
+                m_reveal_scroll_frames = 0;
+                m_reveal_path.clear();
+            }
+            else if(m_reveal_scroll_frames > 0)
+            {
+                // Rebuilt each frame: the tree may have been rebuilt since the
+                // last one, invalidating cached node pointers.
+                m_reveal_path.clear();
+                if(!sidebar_tree.root || !BuildRevealPath(*sidebar_tree.root))
+                {
+                    m_reveal_active        = false;
+                    m_reveal_scroll_frames = 0;
+                    m_reveal_path.clear();
+                }
+            }
+        }
+
         ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(5, 3));
         ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(5, 2));
         ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding,
@@ -107,6 +207,10 @@ SideBar::Render()
         ImGui::PushStyleColor(ImGuiCol_HeaderHovered,
                               ImGui::ColorConvertU32ToFloat4(
                                   m_settings.GetColor(Colors::kBgFrame)));
+        if(m_reveal_scroll_frames > 0)
+        {
+            ImGui::SetNextItemOpen(true);
+        }
         if(ImGui::TreeNodeEx("Project", HEADER_FLAGS))
         {
             TreeConnector project_tc(m_settings);
@@ -143,6 +247,11 @@ SideBar::Render()
 
         ImGui::PopStyleColor(2);
         ImGui::PopStyleVar(4);
+
+        if(m_reveal_scroll_frames > 0)
+        {
+            --m_reveal_scroll_frames;
+        }
     }
 }
 
@@ -365,7 +474,24 @@ void
 SideBar::RenderLeafNode(const LeafNode& leaf)
 {
     ImGui::PushID(static_cast<const void*>(&leaf));
+
+    const bool   is_reveal_target =
+        m_reveal_active && leaf.track_id == m_reveal_track_id;
+    const ImVec2 row_min          = ImGui::GetCursorScreenPos();
+
     RenderTrackItem(leaf.graph_index, leaf.show_eye_button);
+
+    if(is_reveal_target)
+    {
+        if(m_reveal_scroll_frames > 0)
+        {
+            ImGui::SetScrollHereY(0.5f);
+        }
+        const float content_max_x =
+            ImGui::GetWindowPos().x + ImGui::GetWindowContentRegionMax().x;
+        const ImVec2 row_max = ImVec2(content_max_x, ImGui::GetItemRectMax().y);
+        DrawRevealPulse(row_min, row_max);
+    }
 
     if(leaf.render_children_inline && !leaf.children.empty())
     {
@@ -402,6 +528,12 @@ SideBar::RenderBranchNode(const TreeNode& node, const TreeNode* state_node,
     bool open = true;
     if(node.collapsable)
     {
+        // While revealing a track, force every ancestor on the path open so the
+        // target leaf is laid out and can be scrolled to.
+        if(m_reveal_scroll_frames > 0 && m_reveal_path.count(&node) > 0)
+        {
+            ImGui::SetNextItemOpen(true);
+        }
         const ImVec2 node_pos = ImGui::GetCursorScreenPos();
         open                  = ImGui::TreeNodeEx(node.label.c_str(), HEADER_FLAGS);
 

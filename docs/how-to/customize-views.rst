@@ -211,7 +211,7 @@ Customize display options for each track by clicking the gear icon in the track'
   - Click |reset| to restore the values to their default.
 
   .. image:: ../images/min-max.png
-     :width: 800
+     :width: 1000
      :alt: Sample counter track showing editable minimum and maximum scale values with a reset button
 
 .. tip::

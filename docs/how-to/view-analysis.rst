@@ -110,7 +110,6 @@ Showing where kernels are positioned relative to these rooflines helps determine
 
   .. image:: ../images/Roofline-legend.png
      :width: 400
-     :align: center
      :alt: Roofline chart legend and menu repositioned to the inside bottom-right of the chart area
 
 - Roofline chart now supports LDS (Local Data Share) Intensity points in addition to L1, L2, and HBM. Use the chart menu to show or hide LDS intensity markers. This requires ROCm Compute Profiler analysis database schema 1.4.0 with non-zero ``lds_cache_data`` (ROCm 7.14.0 or later). 

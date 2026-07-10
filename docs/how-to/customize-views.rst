@@ -175,7 +175,7 @@ Customize display options for each track by clicking the gear icon in the track'
 
    - **Color by Time Level**: Events with the same name but different start times have different colors. 
    - **No Color**: Events render without name-based coloring. 
-   - **Compact Mode**: Shrink event track heights to display tall flame graphs in a smaller area. 
+   - **Compact mode**: Shrink event track heights to display tall flame graphs in a smaller area. 
 
 - For sample counter tracks, you can toggle between **Show Counter Boxes**, **Alternate Counter Coloring**, and **Highlight Y Range**:
 

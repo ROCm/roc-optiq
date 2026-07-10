@@ -201,7 +201,7 @@ The queue utilization is also visible in the **Track Details** tab.
 Sample counter track statistics 
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-For sample counter tracks, pills showing standard deviation and average display next to the counter label. These can shown/hidden using the **Track Options** menu.  
+For sample counter tracks, pills showing standard deviation and average display next to the counter label. These can be shown/hidden using the **Track Options** menu.  
 Additionally, min and max value pills can also be shown/hidden. 
 
 Similar to queue utilization, the values in these pills react to reflect the values in the current view or active time-range filter. 
@@ -214,7 +214,7 @@ The Counter statistics are also visible in the **Track Details** tab.
 Measure
 ^^^^^^^
 
-**Measure** mode lets you measure the elapsed time between two points on the **Timeline View** — either between timeline points or between specific events. 
+**Measure** mode lets you measure the elapsed time between two points on the **Timeline View**, either between timeline points or between specific events. 
 
 - Enable **Measure** mode from the toolbar or the timeline right-click menu.  
 - **Events** mode: Measure duration between two selected events on the timeline. You can snap Start/End Rulers to Event start or Event end. 
@@ -229,7 +229,7 @@ Measure
 Histogram
 ~~~~~~~~~
 
-Histogram provides event density that is normalized across all tracks visible and hidden:
+The **Histogram** provides event density that is normalized across all tracks visible and hidden:
 
 .. image:: ../images/histogram.png
 

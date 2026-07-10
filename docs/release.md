@@ -49,7 +49,7 @@
 - Homepage/welcome page with Start, Recent, and Resources.
 - Status bar area now shows active controller requests (or “Ready”), with height that scales to font size.
 
-#### Platform Supports
+#### Platform support
 
 - Added support for macOS.
 - Added support for Ubuntu 26.04.

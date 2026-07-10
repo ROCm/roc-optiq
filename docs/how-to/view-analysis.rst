@@ -80,7 +80,7 @@ The bar chart displays per-kernel metrics including the number of invocations, a
    :width: 800
    :align: center
 
-Selected kernels are highlighted as black in the *Light* theme and white and the *Dark* theme in the bar and pie chart.
+Selected kernels are highlighted as black in the *Light* theme and white in the *Dark* theme in the bar and pie chart.
 
 Summary View -- Roofline Chart
 ------------------------------

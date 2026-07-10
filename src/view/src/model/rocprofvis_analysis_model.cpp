@@ -5,8 +5,6 @@
 #include "../rocprofvis_utils.h"
 #include "rocprofvis_topology_model.h"
 #include <array>
-#include <iomanip>
-#include <sstream>
 #include <tuple>
 
 namespace RocProfVis
@@ -14,7 +12,6 @@ namespace RocProfVis
 namespace View
 {
 
-constexpr int SIGNIFICANT_DIGITS = 1;
 // Name, compact name, accent color index
 constexpr std::array<std::tuple<const char*, const char*, size_t>,
                      AnalysisTrackStatistics::Queue::kQueueCount>
@@ -208,17 +205,15 @@ void
 AnalysisModel::ToString(const TrackInfo* track, AnalysisTrackStatistics::Stat& stat,
                         const std::string& units)
 {
-    std::ostringstream oss;
-    oss << std::fixed << std::setprecision(SIGNIFICANT_DIGITS) << stat.value;
     stat.suffix = units;
-    stat.full   = oss.str();
+    stat.full   = full_number_format(stat.value);
     switch(track->topology.type)
     {
         case TrackInfo::Queue:
         {
             // Utilization percentages are already small; the compact form is
-            // the same fixed-precision value as the full form.
-            stat.compact = oss.str();
+            // the same value as the full form.
+            stat.compact = stat.full;
             break;
         }
         case TrackInfo::Counter:

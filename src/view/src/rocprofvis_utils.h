@@ -239,6 +239,12 @@ get_application_log_path(bool create_dirs);
 std::string
 compact_number_format(double number);
 
+// Full (non-abbreviated) number with adaptive decimal precision that matches
+// compact_number_format, so small values keep the same precision as their
+// compact form instead of being truncated.
+std::string
+full_number_format(double number);
+
 bool 
 open_url(const std::string& url);
 

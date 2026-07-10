@@ -671,21 +671,21 @@ TrackItem::SetDefaultPillLabel(const TrackInfo* track_info)
         {
             std::string pill_label =
                 "QUEUE" + (device_type_label.empty() ? "" : " " + device_type_label);
-            pill->SetLabel(pill_label);
+            pill->SetCompactLabel(pill_label);
             break;
         }
         case TrackInfo::TrackType::Stream:
         {
             std::string pill_label =
                 "STREAM" + (device_type_label.empty() ? "" : " " + device_type_label);
-            pill->SetLabel(pill_label);
+            pill->SetCompactLabel(pill_label);
             break;
         }
         case TrackInfo::TrackType::Counter:
         {
             std::string pill_label =
                 "COUNTER" + (device_type_label.empty() ? "" : " " + device_type_label);
-            pill->SetLabel(pill_label);
+            pill->SetCompactLabel(pill_label);
             break;
         }
         case TrackInfo::TrackType::InstrumentedThread:
@@ -695,17 +695,17 @@ TrackItem::SetDefaultPillLabel(const TrackInfo* track_info)
                thread_info && thread_info->tid == track_info->topology.process_id)
             {
                 pill->Activate();
-                pill->SetLabel("MAIN THREAD");
+                pill->SetCompactLabel("MAIN THREAD");
             }
             else
             {
-                pill->SetLabel("THREAD");
+                pill->SetCompactLabel("THREAD");
             }
             break;
         }
         case TrackInfo::TrackType::SampledThread:
         {
-            pill->SetLabel("SAMPLED THREAD");
+            pill->SetCompactLabel("SAMPLED THREAD");
             break;
         }
         default:
@@ -899,7 +899,7 @@ TrackItem::SetNodeColor(const TrackInfo* track_info)
     m_node_color_index = (m_node_display_index - 1) % wheel.size();
 
     m_node_pill = AddPill(true, true);
-    m_node_pill->SetLabel(std::to_string(m_node_display_index));
+    m_node_pill->SetCompactLabel(std::to_string(m_node_display_index));
     m_node_pill->SetAccentColor(m_node_color_index);
     m_node_pill->SetTooltip("Node " + std::to_string(m_node_display_index) + ": " +
                             m_node_name);
@@ -1128,21 +1128,16 @@ Pill::~Pill()
 }
 
 void
-Pill::SetLabel(const std::string& label, Sizing sizing)
+Pill::SetCompactLabel(const std::string& label)
 {
-    switch(sizing)
-    {
-        case kCompact:
-        {
-            m_compact_label = label;
-            break;
-        }
-        case kExtended:
-        {
-            m_ext_label = label;
-            break;
-        }
-    }
+    m_compact_label = label;
+    CalculateSize();
+}
+
+void
+Pill::SetExtendedLabel(const std::string& label)
+{
+    m_ext_label = label;
     CalculateSize();
 }
 

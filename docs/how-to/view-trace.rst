@@ -283,8 +283,8 @@ This section provides an interface for multiple data perspectives, offering gran
 
 - **Track Details**: Shows additional information about the track that is not visible on the timeline. It shows the node the track belongs to and its details, the process it belongs to, and the track type (thread, counter, queue, and so on).
 
-  - Track Details also shows statistics including queue utilization, counter Minimum, Maximum, Mean, and Standard Deviation. 
-  - You can right-click a row or cell of Track Details to **Copy Row Data** or **Copy Cell Data**. 
+  - The **Track Details** also show statistics such as queue utilization, counter Minimum, Maximum, Mean, and Standard Deviation. 
+  - You can right-click a row or cell of **Track Details** to **Copy Row Data** or **Copy Cell Data**. 
 
 - **Annotations**: Displays user-created annotations, enabling easier navigation across critical points within large traces, enhancing collaboration and knowledge sharing. See :ref:`annotation` for more info.
 - **Top Events**: Provides analysis for the events of each operation type (instrumented Thread, Sampled thread, Dispatch, memory allocation, memory copy) from the selected tracks aggregated by event name. Available metrics are event count (invocations) and total/average/min/max duration. If you select tracks of different types, each type will be shown in a separate table. Each table has its own System Table instance and can be sorted individually. If you make a time-range selection, Top Events are limited to that selected time-range. 

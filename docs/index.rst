@@ -26,14 +26,14 @@ Added
 Features and improvements for viewing ROCm Systems Profiler trace data
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-- **Timeline View - Measure Mode**: Measure the time delta between events or any two points on the timeline. Includes a measurement toolbar (edge toggle, freehand drag, reset), click-to-place freehand rulers, draggable ruler lines with grab cursors, viewport-clamped labels, and theme-aware highlighting. Measurement state is per-trace so it no longer leaks between loaded traces. Right-click a measurement label to Copy Start Timestamp, Copy End Timestamp, or Copy Measurement Duration.
+- **Timeline View - Measure Mode**: Measure the time delta between events or any two points on the timeline. Includes a measurement toolbar (edge toggle, freehand drag, reset), click-to-place freehand rulers, draggable ruler lines with grab cursors, viewport-clamped labels, and theme-aware highlighting. Measurement state is per-trace so it no longer leaks between loaded traces. Right-click a measurement label to **Copy Start Timestamp**, **Copy End Timestamp**, or **Copy Measurement Duration**.
 - **Timeline View - Queue Utilization**: Per-queue utilization is computed and surfaced on the timeline, shown as a pill in the track meta area.
 - **Sample counter track statistics** (min, max, average, standard deviation) displayed in track meta data, shown as user-selectable pills.
 - **Track meta-area tooltip** enriched with track ID, type, node/process IDs, and event/sample counts.
 - **Timeline View - Track summary** in the upper-left corner of the Timeline View shows total track count and a per-type breakdown with compact/elided display and full details in a tooltip.
 - **Advanced Details - Top Events view**: A new view summarizing the most significant events.
 - **Track display options** moved to the right-click **Track Options** submenu; inline gear button removed.
-- **Track tooltip and copy actions** (Copy track name, Copy track ID).
+- **Track tooltip and copy actions** (**Copy track name**, **Copy track ID**).
 - **Context menu icons** across tables, timeline, flow data, and call stack.
 - **Right-click copy and export actions** in Event Table, Flow Data, Call Stack, and Top Events.
 - **Time-range filter** now dims events outside the selected range.

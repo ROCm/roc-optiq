@@ -152,7 +152,7 @@ namespace View
 
         void clear();
 
-        void finish() { finished_ = true; }
+        void finish();
 
     private:
         mutable std::mutex m_;

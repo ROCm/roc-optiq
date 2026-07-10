@@ -308,11 +308,19 @@ SshTestDialog::RenderOutputPopup()
         ImGui::SetNextWindowSize(ImVec2(600, 400));
         if(ImGui::BeginPopupModal("Remote Execute", nullptr))
         {
-            ImGui::BeginChild("output", ImVec2(0, 0), true);
+            const float footer_height =
+                ImGui::GetFrameHeightWithSpacing() + ImGui::GetStyle().ItemSpacing.y;
+            ImGui::BeginChild("output", ImVec2(0, -footer_height), true);
             ImGui::TextUnformatted(m_last_stdout.text.c_str());
             ImGui::EndChild();
 
-            if(m_last_stdout.finished)
+            const bool finished = m_last_stdout.finished;
+            ImGui::TextUnformatted(finished ? "Execution finished." : "Executing...");
+            ImGui::SameLine();
+
+            // Always offer a manual Close so the popup can never wedge open, even
+            // if the terminal snapshot is missed (e.g. connection dropped).
+            if(ImGui::Button("Close"))
             {
                 ImGui::CloseCurrentPopup();
                 m_show_stdout_popup = false;

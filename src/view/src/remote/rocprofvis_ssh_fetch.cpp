@@ -122,15 +122,31 @@ namespace View
     {
         std::lock_guard<std::mutex> lock(m_);
 
-        if (!updated_ || finished_)
+        if (!updated_)
             return std::nullopt;
 
-        return Snapshot{ text_, finished_ };
+        // The terminal (finished) snapshot must reach the UI exactly once so the
+        // output popup can auto-close; clear the latch after delivering it so it
+        // is not re-emitted every frame.
+        Snapshot snapshot{ text_, finished_ };
+        if (finished_)
+        {
+            updated_ = false;
+        }
+        return snapshot;
     }
 
     void ExecutionOutput::clear_updated() {
+        std::lock_guard<std::mutex> lock(m_);
         updated_ = false;
         finished_ = false;
+    }
+
+    void ExecutionOutput::finish()
+    {
+        std::lock_guard<std::mutex> lock(m_);
+        finished_ = true;
+        updated_ = true;
     }
 
     ExecutionOutput::Snapshot ExecutionOutput::get() const

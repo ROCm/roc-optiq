@@ -419,7 +419,6 @@ rocprofvis_result_t rocprofvis_controller_table_export_csv(
 #ifdef COMPUTE_UI_SUPPORT
         else if (compute_trace.IsValid())
         {
-            // error = compute_trace->TableExportCSV(*table_ref, *args_ref, *future, path);
             error = kRocProfVisResultUnknownError;
         }
 #endif

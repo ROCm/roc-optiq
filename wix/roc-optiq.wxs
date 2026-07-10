@@ -38,10 +38,9 @@
 
     <!-- Standard WixUI_InstallDir dialog set (license + install-dir page). -->
     <ui:WixUI Id="WixUI_InstallDir" />
-    <WixVariable Id="WixUILicenseRtf" Value="$(var.LicenseRtf)" />
-    <WixVariable Id="WixUIBannerBmp"  Value="$(var.BannerBmp)" />
-    <WixVariable Id="WixUIDialogBmp"  Value="$(var.DialogBmp)" />
-
+    <WixVariable Id="WixUILicenseRtf"                       Value="$(var.LicenseRtf)" />
+    <WixVariable Id="WixUIBannerBmp"                        Value="$(var.BannerBmp)" />
+    <WixVariable Id="WixUIDialogBmp"                        Value="$(var.DialogBmp)" />
     <!-- Product icon shown in Add/Remove Programs. -->
     <Icon Id="ApplicationIcon" SourceFile="$(var.IconFile)" />
     <Property Id="ARPPRODUCTICON"   Value="ApplicationIcon" />
@@ -49,11 +48,11 @@
 
     <!-- ═══════════════════════════════════════════════════════════════════
          Directory layout
-         Default: C:\Program Files\AMD\ROCm Optiq <version>\
+         Default: C:\Program Files\AMD\ROCm-Optiq\
          ═══════════════════════════════════════════════════════════════════ -->
     <StandardDirectory Id="ProgramFiles64Folder">
       <Directory Id="AMDDIR"      Name="AMD">
-        <Directory Id="INSTALLDIR" Name="ROCm Optiq $(var.Version)">
+        <Directory Id="INSTALLDIR" Name="ROCm-Optiq">
 
           <Component Id="MainExecutable" Guid="*">
             <File Id="RocOptiqExe"
@@ -95,11 +94,35 @@
     </StandardDirectory>
 
     <!-- ═══════════════════════════════════════════════════════════════════
+         Desktop shortcut
+         ═══════════════════════════════════════════════════════════════════ -->
+    <StandardDirectory Id="DesktopFolder">
+      <Component Id="DesktopShortcut" Guid="*">
+        <Shortcut Id="AppDesktopShortcut"
+                  Name="ROCm Optiq"
+                  Description="ROCm Profiler Visualizer"
+                  Target="[INSTALLDIR]roc-optiq.exe"
+                  WorkingDirectory="INSTALLDIR"
+                  Icon="ApplicationIcon" />
+        <RemoveFile Id="CleanupDesktopShortcut"
+                    Name="ROCm Optiq.lnk"
+                    On="uninstall" />
+        <RegistryValue Root="HKCU"
+                       Key="Software\AMD\ROCm Optiq"
+                       Name="DesktopShortcutInstalled"
+                       Type="integer"
+                       Value="1"
+                       KeyPath="yes" />
+      </Component>
+    </StandardDirectory>
+
+    <!-- ═══════════════════════════════════════════════════════════════════
          Feature tree (single feature, all components required)
          ═══════════════════════════════════════════════════════════════════ -->
     <Feature Id="ProductFeature" Title="ROCm Optiq" Level="1">
       <ComponentRef Id="MainExecutable" />
       <ComponentRef Id="StartMenuShortcut" />
+      <ComponentRef Id="DesktopShortcut" />
     </Feature>
 
   </Package>

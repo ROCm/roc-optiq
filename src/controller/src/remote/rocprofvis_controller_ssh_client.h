@@ -105,6 +105,12 @@ namespace Controller
     public:
         SshClient();
         ~SshClient();
+
+        // True only if libssh2 (and, on Windows, Winsock) initialized
+        // successfully in the constructor. When false the client is unusable
+        // and AllocateConnection returns nullptr.
+        bool IsInitialized() const { return m_initialized; }
+
         SshConnection* AllocateConnection(
             const std::string& host,
             int port);
@@ -160,6 +166,8 @@ namespace Controller
         static bool WaitSocket(SshConnection* connection);
 
         std::vector<std::unique_ptr<SshConnection>> m_connections;
+
+        bool m_initialized = false;
 
     };
 }

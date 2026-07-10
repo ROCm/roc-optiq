@@ -67,21 +67,32 @@ namespace Controller
     {
 #ifdef _WIN32
         WSADATA wsa_data;
-        WSAStartup(MAKEWORD(2, 2), &wsa_data);
+        if (WSAStartup(MAKEWORD(2, 2), &wsa_data) != 0)
+        {
+            spdlog::error("[ssh] WSAStartup failed; SSH client is unusable");
+            return;
+        }
 #endif
-        if (libssh2_init(0) != 0) {
+        if (libssh2_init(0) != 0)
+        {
+            spdlog::error("[ssh] libssh2_init failed; SSH client is unusable");
 #ifdef _WIN32
             WSACleanup();
 #endif
+            return;
         }
+        m_initialized = true;
     }
 
     SshClient::~SshClient()
     {
-        libssh2_exit();
+        if (m_initialized)
+        {
+            libssh2_exit();
 #ifdef _WIN32
-        WSACleanup();
+            WSACleanup();
 #endif
+        }
     }
 
 //---------------------------------------------INTERACTIVE PARAMETERS CALLBACK----------------------------------------------//
@@ -101,7 +112,7 @@ namespace Controller
 
         // libssh2 fires this callback for every kbdint round, including "info"
         // rounds (banner / status messages with no input). If there are no
-        // prompts, there is nothing to ask the user ù just acknowledge and
+        // prompts, there is nothing to ask the user ÔøΩ just acknowledge and
         // continue without touching the UI.
         if(num_prompts == 0)
         {
@@ -235,7 +246,7 @@ namespace Controller
         case LIBSSH2_ERROR_FILE:
             hint = " [file unreadable or unsupported format]"; break;
         case LIBSSH2_ERROR_PUBLICKEY_UNVERIFIED:
-            hint = " [server rejected the key ù possibly encrypted (passphrase needed) or not in authorized_keys]"; break;
+            hint = " [server rejected the key ÔøΩ possibly encrypted (passphrase needed) or not in authorized_keys]"; break;
         case LIBSSH2_ERROR_AUTHENTICATION_FAILED:
             hint = " [auth rejected by server]"; break;
         case LIBSSH2_ERROR_METHOD_NOT_SUPPORTED:
@@ -450,6 +461,12 @@ namespace Controller
         const std::string& host,
         int port)
     {
+        if (!m_initialized)
+        {
+            spdlog::error("[ssh] AllocateConnection called on an uninitialized SSH client");
+            return nullptr;
+        }
+
         auto connection =
             std::make_unique<SshConnection>(host, port);
         SshConnection* raw = connection.get();
@@ -586,7 +603,7 @@ namespace Controller
                 {
                     connection->Disconnect();
                     err = (m == KnownHostMatch::Mismatch)
-                        ? "Host key mismatch ù connection rejected."
+                        ? "Host key mismatch ÔøΩ connection rejected."
                         : "Host key not trusted.";
                     connection->GetSshBridge()->SaveError(err);
                     return Result::AuthError;
@@ -636,7 +653,7 @@ namespace Controller
                     return Result::Success;
                 }
             }
-            // 1b) ssh-agent ù handles encrypted keys without us needing a passphrase.
+            // 1b) ssh-agent ÔøΩ handles encrypted keys without us needing a passphrase.
             spdlog::info("[ssh] trying ssh-agent");
             if (TryAgent(connection, user, future))
             {
@@ -1221,7 +1238,8 @@ namespace Controller
             }
         }
 
-        char mem[512];
+        constexpr size_t SFTP_NAME_BUFFER_SIZE = 512;
+        char mem[SFTP_NAME_BUFFER_SIZE];
         LIBSSH2_SFTP_ATTRIBUTES attrs;
 
         while (true) {
@@ -1232,7 +1250,11 @@ namespace Controller
             }
 
             do {
-                rc = libssh2_sftp_readdir(dir, mem, sizeof(mem), &attrs);
+                // Reserve the final byte for the NUL terminator written below:
+                // libssh2_sftp_readdir returns the filename length capped at the
+                // buffer size we pass, so bounding it to size-1 keeps mem[rc]
+                // in range even when the name would otherwise fill the buffer.
+                rc = libssh2_sftp_readdir(dir, mem, sizeof(mem) - 1, &attrs);
 
                 if (rc == LIBSSH2_ERROR_EAGAIN) {
                     if (!WaitSocket(connection))

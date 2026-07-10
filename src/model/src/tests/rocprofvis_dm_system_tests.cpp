@@ -8,10 +8,12 @@
 #include <algorithm>
 #include <catch2/catch_session.hpp>
 #include <catch2/catch_test_macros.hpp>
+#include <cmath>
 #include <cstdarg>
 #include <cstdio>
 #include <filesystem>
 #include <string.h>
+#include <utility>
 #include <vector>
 
 #define MULTI_LINE_LOG_START auto multi_line_log = fmt::memory_buffer()
@@ -599,12 +601,38 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisDMFixture, "System Trace Data-Model Tests
                          diff.count(), num_rows);
             CheckMemoryFootprint(m_trace);
             spdlog::info("Time slice content, up to {} records", LIST_SIZE_LIMIT);
-            int first_track = std::rand() % m_num_tracks;
+
+            // Keep only non-counter (interval) tracks on the std::rand()-by-index
+            // path below. Counter (PMC) tracks are validated separately by the
+            // dedicated, identity-ordered block further down, so a counter track
+            // that the random draw happens to land on does not contribute
+            // draw-dependent assertions here. (m_tracks_selection / m_num_tracks
+            // is the small random selection set up by GenerateRandomSlice.)
+            std::vector<uint32_t> interval_track_selection;
+            for(int i = 0; i < m_num_tracks; i++)
+            {
+                rocprofvis_dm_track_t classify_track =
+                    rocprofvis_dm_get_property_as_handle(
+                        m_trace, kRPVDMTrackHandleIndexed, m_tracks_selection[i]);
+                REQUIRE(classify_track != nullptr);
+                rocprofvis_dm_track_category_t classify_category =
+                    (rocprofvis_dm_track_category_t) rocprofvis_dm_get_property_as_uint64(
+                        classify_track, kRPVDMTrackCategoryEnumUInt64, 0);
+                if(classify_category !=
+                   rocprofvis_dm_track_category_t::kRocProfVisDmPmcTrack)
+                {
+                    interval_track_selection.push_back(m_tracks_selection[i]);
+                }
+            }
+
+            int num_interval_tracks = (int) interval_track_selection.size();
+            int first_track =
+                (num_interval_tracks > 0) ? (std::rand() % num_interval_tracks) : 0;
             for(int i = first_track;
-                (i < m_num_tracks) && (i < first_track + LIST_SIZE_LIMIT); i++)
+                (i < num_interval_tracks) && (i < first_track + LIST_SIZE_LIMIT); i++)
             {
                 rocprofvis_dm_track_t track = rocprofvis_dm_get_property_as_handle(
-                    m_trace, kRPVDMTrackHandleIndexed, m_tracks_selection[i]);
+                    m_trace, kRPVDMTrackHandleIndexed, interval_track_selection[i]);
                 REQUIRE(track != nullptr);
                 char* track_category_name = rocprofvis_dm_get_property_as_charptr(
                     track, kRPVDMTrackCategoryEnumCharPtr, 0);
@@ -658,7 +686,7 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisDMFixture, "System Trace Data-Model Tests
                     spdlog::info(ANSI_COLOR_BLUE
                                  "Time slice for time {0} - {1} for "
                                  "track {2} [{3}:{4}:{5}] has {6} records",
-                                 m_start_time, m_end_time, m_tracks_selection[i],
+                                 m_start_time, m_end_time, interval_track_selection[i],
                                  track_category_name, track_process_name,
                                  track_sub_process_name, num_records);
                     if(num_records == 0) continue;
@@ -949,28 +977,134 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisDMFixture, "System Trace Data-Model Tests
                             }
                             rocprofvis_db_future_free(object2wait4extdata);
                         }
-                        else if(track_category ==
-                                rocprofvis_dm_track_category_t::kRocProfVisDmPmcTrack)
-                        {
-                            double value = rocprofvis_dm_get_property_as_double(
-                                slice, kRPVDMPmcValueDoubleIndexed, j);
-                            spdlog::info(ANSI_COLOR_BLUE
-                                         "Record timestamp={0}, value={1}\n",
-                                         timestamp, value);
-                        }
                     }
                 }
                 else
                 {
                     spdlog::info(ANSI_COLOR_RED
                                  "No time slice at {0} loaded for track {1}",
-                                 m_start_time, m_tracks_selection[i]);
+                                 m_start_time, interval_track_selection[i]);
                 }
             }
             spdlog::info("Delete all slices");
             rocprofvis_dm_delete_all_time_slices(m_trace);
 
             rocprofvis_db_future_free(object2wait);
+
+            // Deterministic, identity-based counter (PMC) validation.
+            //
+            // This block deliberately does NOT use the random m_tracks_selection
+            // above: it scans every track in the trace, keeps the counter (PMC)
+            // tracks, sorts them by their intrinsic track_id and validates a
+            // fixed-size, order-stable prefix. Each counter track's slice is read
+            // one at a time (single-track read, slices cleared between reads),
+            // mirroring the "Whole Trace Read" section. The profiler-hub reader's
+            // counter topology is legitimately reshaped vs the old SQL SMI path
+            // along three axes (005B-4 finding #4); this block is written so its
+            // pass/fail is invariant to each of them, and it replaces the old PMC
+            // branch (which read a value under the std::rand()-by-index path but
+            // asserted nothing):
+            //
+            //   1. Track ORDER (GPU-first vs CPU-first). Counter tracks are
+            //      selected by sorting on their intrinsic track_id, so the set
+            //      and order of tracks asserted never depends on render order.
+            //   2. Per-track record count (462 faithful-dedup vs 2772 AMD-SMI
+            //      event_id fan-out). We assert a FIXED number of records
+            //      (LIST_SIZE_LIMIT) read from a FIXED offset (0), so a change
+            //      in total record count cannot change how many assertions fire.
+            //   3. v3 agent attribution (process=()/pid=0, locked Q10). We only
+            //      assert timestamp, value and counter identity (category +
+            //      track_id); process/agent/pid are never read, so dropping
+            //      agent attribution cannot perturb the result.
+            uint64_t total_track_count = rocprofvis_dm_get_property_as_uint64(
+                m_trace, kRPVDMNumberOfTracksUInt64, 0);
+            std::vector<std::pair<uint64_t, uint32_t>>
+                counter_tracks;  // (track_id, index)
+            for(uint32_t idx = 0; idx < total_track_count; idx++)
+            {
+                rocprofvis_dm_track_t scan_track = rocprofvis_dm_get_property_as_handle(
+                    m_trace, kRPVDMTrackHandleIndexed, idx);
+                REQUIRE(scan_track != nullptr);
+                rocprofvis_dm_track_category_t scan_category =
+                    (rocprofvis_dm_track_category_t) rocprofvis_dm_get_property_as_uint64(
+                        scan_track, kRPVDMTrackCategoryEnumUInt64, 0);
+                if(scan_category == rocprofvis_dm_track_category_t::kRocProfVisDmPmcTrack)
+                {
+                    uint64_t scan_track_id = rocprofvis_dm_get_property_as_uint64(
+                        scan_track, kRPVDMTrackIdUInt64, 0);
+                    counter_tracks.emplace_back(scan_track_id, idx);
+                }
+            }
+            std::sort(counter_tracks.begin(), counter_tracks.end());
+
+            int num_counters_to_check =
+                std::min((int) counter_tracks.size(), LIST_SIZE_LIMIT);
+            uint64_t counter_hash_time = rocprofvis_dm_hash_combine_timestamp(
+                m_start_time, m_end_time, kRocProfVisDmHashedTimestampTagTrackSlice);
+            for(int c = 0; c < num_counters_to_check; c++)
+            {
+                uint32_t counter_index = counter_tracks[c].second;
+
+                rocprofvis_db_future_t counter_future =
+                    rocprofvis_db_future_alloc(db_progress);
+                REQUIRE(nullptr != counter_future);
+                rocprofvis_dm_result_t counter_read_result =
+                    rocprofvis_db_read_trace_slice_async(
+                        m_db, m_start_time, m_end_time,
+                        kRocProfVisDmHashedTimestampTagTrackSlice, 1, &counter_index,
+                        counter_future);
+                REQUIRE(kRocProfVisDmResultSuccess == counter_read_result);
+                rocprofvis_dm_result_t counter_wait_result =
+                    rocprofvis_db_future_wait(counter_future, UINT64_MAX);
+                REQUIRE(kRocProfVisDmResultSuccess == counter_wait_result);
+
+                rocprofvis_dm_track_t counter_track =
+                    rocprofvis_dm_get_property_as_handle(
+                        m_trace, kRPVDMTrackHandleIndexed, counter_index);
+                REQUIRE(counter_track != nullptr);
+
+                // Identity: category name is present and the enum is PMC.
+                char* counter_category_name = rocprofvis_dm_get_property_as_charptr(
+                    counter_track, kRPVDMTrackCategoryEnumCharPtr, 0);
+                REQUIRE(counter_category_name != nullptr);
+                rocprofvis_dm_track_category_t counter_category =
+                    (rocprofvis_dm_track_category_t) rocprofvis_dm_get_property_as_uint64(
+                        counter_track, kRPVDMTrackCategoryEnumUInt64, 0);
+                REQUIRE(counter_category ==
+                        rocprofvis_dm_track_category_t::kRocProfVisDmPmcTrack);
+                uint64_t counter_track_id = rocprofvis_dm_get_property_as_uint64(
+                    counter_track, kRPVDMTrackIdUInt64, 0);
+
+                rocprofvis_dm_slice_t counter_slice =
+                    rocprofvis_dm_get_property_as_handle(
+                        counter_track, kRPVDMSliceHandleTimed, counter_hash_time);
+                REQUIRE(counter_slice != nullptr);
+                uint64_t counter_num_records = rocprofvis_dm_get_property_as_uint64(
+                    counter_slice, kRPVDMNumberOfRecordsUInt64, 0);
+                spdlog::info(ANSI_COLOR_BLUE "Counter track id={0} [{1}] has {2} records",
+                             counter_track_id, counter_category_name,
+                             counter_num_records);
+
+                for(uint64_t j = 0;
+                    (j < counter_num_records) && (j < (uint64_t) LIST_SIZE_LIMIT); j++)
+                {
+                    uint64_t counter_timestamp = rocprofvis_dm_get_property_as_uint64(
+                        counter_slice, kRPVDMTimestampUInt64Indexed, j);
+                    double counter_value = rocprofvis_dm_get_property_as_double(
+                        counter_slice, kRPVDMPmcValueDoubleIndexed, j);
+                    // Counter slices include left/right neighbour samples that may
+                    // fall outside [m_start_time, m_end_time] (loader continuity
+                    // contract), so assert a valid (non-zero) timestamp rather
+                    // than a window-bounded one.
+                    REQUIRE(counter_timestamp > 0);
+                    REQUIRE(std::isfinite(counter_value));
+                    spdlog::info(ANSI_COLOR_BLUE "\tRecord {0} timestamp={1}, value={2}",
+                                 j, counter_timestamp, counter_value);
+                }
+
+                rocprofvis_dm_delete_all_time_slices(m_trace);
+                rocprofvis_db_future_free(counter_future);
+            }
         }
     }
 

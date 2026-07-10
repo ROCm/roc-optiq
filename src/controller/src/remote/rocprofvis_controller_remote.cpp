@@ -26,7 +26,7 @@ namespace Controller
 
         if (kRocProfVisResultSuccess == args.GetString(kRPVControllerRemoteTypeHost, 0, host.data(), &host_length))
         {
-            SshConnection * connection = s_ssh_client.AllocateConnection(host.data(), port);
+            SshConnection * connection = s_ssh_client.AllocateConnection(host.data(), static_cast<int>(port));
             if (connection)
             {
                 output.SetObject(kRPVControllerArrayEntryIndexed, 0, (rocprofvis_handle_t*)connection);

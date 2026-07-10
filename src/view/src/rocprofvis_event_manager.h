@@ -38,8 +38,9 @@ public:
     // Thread-safe. Queues an event for the next DispatchEvents() on the main thread.
     void AddEvent(std::shared_ptr<RocEvent> event);
 
-    // True while events are queued for deferred dispatch (keeps lazy render on).
-    bool HasPendingEvents() const { return !m_event_queue.empty(); }
+    // Thread-safe. True while events are queued for deferred dispatch (keeps
+    // lazy render on).
+    bool HasPendingEvents() const;
 
 private:
     EventManager();
@@ -47,7 +48,7 @@ private:
     size_t m_next_token;
     std::map<int, std::vector<std::pair<SubscriptionToken, EventHandler>>>
                                          m_subscriptions;
-    std::mutex                           m_queue_mutex;
+    mutable std::mutex                   m_queue_mutex;
     std::list<std::shared_ptr<RocEvent>> m_event_queue;
 
     static EventManager* s_instance;

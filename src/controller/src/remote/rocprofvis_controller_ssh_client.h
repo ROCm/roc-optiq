@@ -31,7 +31,7 @@ namespace Controller
     {
         public:
             SshConnection(std::string host, int port) : Handle(__kRPVControllerSshConnectionPropertiesFirst, __kRPVControllerSshConnectionPropertiesLast), 
-                m_session(nullptr), m_socket(-1), m_host(host), m_port(port), m_connected(false) {};
+                m_session(nullptr), m_socket(kInvalidSocket), m_host(host), m_port(port), m_connected(false) {};
             virtual ~SshConnection() {};
             rocprofvis_controller_object_type_t GetType(void) final;
 
@@ -47,11 +47,11 @@ namespace Controller
 
             SshBridge*           GetSshBridge() { return &m_net_bridge; }
             LIBSSH2_SESSION*     GetSession() { return m_session; }
-            int                  GetSocket() { return m_socket; }
+            socket_t             GetSocket() { return m_socket; }
             std::string          GetHost() { return m_host; }
             int                  GetPort() { return m_port; }
             void                 SetSession(LIBSSH2_SESSION* session) { m_session = session; };
-            void                 SetSocket(int socket) { m_socket = socket; };
+            void                 SetSocket(socket_t socket) { m_socket = socket; };
             void                 SetConnected() { m_connected = true; }
             void                 Disconnect();
             bool                 IsConnected() { return m_connected; };
@@ -61,7 +61,7 @@ namespace Controller
         private:
             SshBridge            m_net_bridge;
             LIBSSH2_SESSION*     m_session;
-            int                  m_socket;
+            socket_t             m_socket;
             std::string          m_host;
             int                  m_port;
             bool                 m_connected;
@@ -162,7 +162,7 @@ namespace Controller
         static KeyType DetectPubkeyType(const char* pubkey_path);
 
         static bool Reconnect(SshConnection* connection, Future* future);
-        static int  CreateTcpConnection(const std::string& host, int port);
+        static socket_t CreateTcpConnection(const std::string& host, int port);
         static bool WaitSocket(SshConnection* connection);
 
         std::vector<std::unique_ptr<SshConnection>> m_connections;

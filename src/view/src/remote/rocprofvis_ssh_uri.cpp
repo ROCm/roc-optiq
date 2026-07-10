@@ -91,12 +91,12 @@ namespace View
 
     std::string RemoteUri::GetRemoteCommandLineString() const
     {
-        return util::string::trim_copy(m_remote_command_line);
+        return Core::String::trim_copy(m_remote_command_line);
     }
 
     std::string RemoteUri::GetRemoteResultPathString() const
     {
-        return util::string::trim_copy(m_remote_result_path);
+        return Core::String::trim_copy(m_remote_result_path);
     }
 
     std::string RemoteUri::GetRemoteBrowsingPathString() const

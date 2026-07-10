@@ -1,10 +1,19 @@
 // Copyright Advanced Micro Devices, Inc.
 // SPDX-License-Identifier: MIT
 
+// This file intentionally uses the portable C runtime functions (getenv,
+// fopen, fscanf, open/_open) so a single code path works across Windows and
+// POSIX. Suppress MSVC's "unsafe" deprecation for those calls rather than
+// forking into the *_s variants (matches the thirdparty imgui convention).
+#if defined(_MSC_VER) && !defined(_CRT_SECURE_NO_WARNINGS)
+#define _CRT_SECURE_NO_WARNINGS
+#endif
+
 #include "rocprofvis_controller_ssh_client.h"
 #include "rocprofvis_controller_enums.h"
 #include "rocprofvis_controller_ssh_known_hosts.h"
 #include "rocprofvis_controller_ssh_bridge.h"
+#include "rocprofvis_core_string_utils.h"
 #include <libssh2.h>
 #include <libssh2_sftp.h>
 #include <iostream>
@@ -15,7 +24,6 @@
 #include <spdlog/spdlog.h>
 #include <algorithm>
 #include <string>
-#include <cctype>
 
 #ifdef _WIN32
 #include <shlobj.h>
@@ -67,21 +75,32 @@ namespace Controller
     {
 #ifdef _WIN32
         WSADATA wsa_data;
-        WSAStartup(MAKEWORD(2, 2), &wsa_data);
+        if (WSAStartup(MAKEWORD(2, 2), &wsa_data) != 0)
+        {
+            spdlog::error("[ssh] WSAStartup failed; SSH client is unusable");
+            return;
+        }
 #endif
-        if (libssh2_init(0) != 0) {
+        if (libssh2_init(0) != 0)
+        {
+            spdlog::error("[ssh] libssh2_init failed; SSH client is unusable");
 #ifdef _WIN32
             WSACleanup();
 #endif
+            return;
         }
+        m_initialized = true;
     }
 
     SshClient::~SshClient()
     {
-        libssh2_exit();
+        if (m_initialized)
+        {
+            libssh2_exit();
 #ifdef _WIN32
-        WSACleanup();
+            WSACleanup();
 #endif
+        }
     }
 
 //---------------------------------------------INTERACTIVE PARAMETERS CALLBACK----------------------------------------------//
@@ -101,7 +120,7 @@ namespace Controller
 
         // libssh2 fires this callback for every kbdint round, including "info"
         // rounds (banner / status messages with no input). If there are no
-        // prompts, there is nothing to ask the user � just acknowledge and
+        // prompts, there is nothing to ask the user - just acknowledge and
         // continue without touching the UI.
         if(num_prompts == 0)
         {
@@ -214,10 +233,7 @@ namespace Controller
             passphrase.empty() ? nullptr : passphrase.c_str());
         if (rc == LIBSSH2_ERROR_AUTHENTICATION_FAILED)
         {
-            std::string u = user;
-
-            std::transform(u.begin(), u.end(), u.begin(),
-                [](unsigned char c) { return std::tolower(c); });
+            std::string u = Core::String::to_lower_copy(user);
             if (u != user && Reconnect(connection, future))
             {
                 rc = libssh2_userauth_publickey_fromfile(
@@ -238,7 +254,7 @@ namespace Controller
         case LIBSSH2_ERROR_FILE:
             hint = " [file unreadable or unsupported format]"; break;
         case LIBSSH2_ERROR_PUBLICKEY_UNVERIFIED:
-            hint = " [server rejected the key � possibly encrypted (passphrase needed) or not in authorized_keys]"; break;
+            hint = " [server rejected the key - possibly encrypted (passphrase needed) or not in authorized_keys]"; break;
         case LIBSSH2_ERROR_AUTHENTICATION_FAILED:
             hint = " [auth rejected by server]"; break;
         case LIBSSH2_ERROR_METHOD_NOT_SUPPORTED:
@@ -293,9 +309,7 @@ namespace Controller
             rc = libssh2_agent_userauth(agent, user.c_str(), identity);
             if (rc == LIBSSH2_ERROR_AUTHENTICATION_FAILED)
             {
-                std::string u = user;
-                std::transform(u.begin(), u.end(), u.begin(),
-                    [](unsigned char c) { return std::tolower(c); });
+                std::string u = Core::String::to_lower_copy(user);
                 if (u!=user && Reconnect(connection, future))
                 {
                     rc = libssh2_agent_userauth(agent, u.c_str(), identity);
@@ -374,7 +388,7 @@ namespace Controller
         return SshClient::KeyType::KEY_UNKNOWN;
     }
 
-    int SshClient::CreateTcpConnection(const std::string& host, int port)
+    socket_t SshClient::CreateTcpConnection(const std::string& host, int port)
     {
         std::string err;
         struct addrinfo hints{}, *res = nullptr;
@@ -392,12 +406,12 @@ namespace Controller
             return kInvalidSocket;
         }
 
-        int sock = kInvalidSocket;
+        socket_t sock = kInvalidSocket;
 
         for (addrinfo* p = res; p; p = p->ai_next)
         {
             sock = socket(p->ai_family, p->ai_socktype, p->ai_protocol);
-            if (sock < 0)
+            if (sock == kInvalidSocket)
                 continue;
 
             if (connect(sock, p->ai_addr, static_cast<socklen_t>(p->ai_addrlen)) == 0)
@@ -419,7 +433,7 @@ namespace Controller
         struct timeval timeout;
         fd_set fdread, fdwrite, fdex;
 
-        int sock = connection->GetSocket();
+        socket_t sock = connection->GetSocket();
         int dir = libssh2_session_block_directions(connection->GetSession());
 
         timeout.tv_sec = 10;
@@ -437,7 +451,7 @@ namespace Controller
 
         FD_SET(sock, &fdex);
 
-        int rc = select(sock + 1, &fdread, &fdwrite, &fdex, &timeout);
+        int rc = select(static_cast<int>(sock + 1), &fdread, &fdwrite, &fdex, &timeout);
 
         if (rc > 0)
             return true;   // ready
@@ -455,6 +469,12 @@ namespace Controller
         const std::string& host,
         int port)
     {
+        if (!m_initialized)
+        {
+            spdlog::error("[ssh] AllocateConnection called on an uninitialized SSH client");
+            return nullptr;
+        }
+
         auto connection =
             std::make_unique<SshConnection>(host, port);
         SshConnection* raw = connection.get();
@@ -591,7 +611,7 @@ namespace Controller
                 {
                     connection->Disconnect();
                     err = (m == KnownHostMatch::Mismatch)
-                        ? "Host key mismatch � connection rejected."
+                        ? "Host key mismatch - connection rejected."
                         : "Host key not trusted.";
                     connection->GetSshBridge()->SaveError(err);
                     return Result::AuthError;
@@ -641,7 +661,7 @@ namespace Controller
                     return Result::Success;
                 }
             }
-            // 1b) ssh-agent � handles encrypted keys without us needing a passphrase.
+            // 1b) ssh-agent - handles encrypted keys without us needing a passphrase.
             spdlog::info("[ssh] trying ssh-agent");
             if (TryAgent(connection, user, future))
             {
@@ -717,10 +737,7 @@ namespace Controller
                 if (auth_rc == LIBSSH2_ERROR_AUTHENTICATION_FAILED)
                 {
 
-                    std::string u = user;
-
-                    std::transform(u.begin(), u.end(), u.begin(),
-                        [](unsigned char c) { return std::tolower(c); });
+                    std::string u = Core::String::to_lower_copy(user);
                     if (u != user && Reconnect(connection, future))
                     {
                         auth_rc = libssh2_userauth_password(connection->GetSession(), u.c_str(),
@@ -764,10 +781,7 @@ namespace Controller
                 &KbdIntCallback);
             if (auth_rc == LIBSSH2_ERROR_AUTHENTICATION_FAILED)
             {
-                std::string u = user;
-
-                std::transform(u.begin(), u.end(), u.begin(),
-                    [](unsigned char c) { return std::tolower(c); });
+                std::string u = Core::String::to_lower_copy(user);
                 if (u != user && Reconnect(connection, future))
                 {
                     auth_rc = libssh2_userauth_keyboard_interactive(connection->GetSession(), u.c_str(),
@@ -1019,6 +1033,11 @@ namespace Controller
             return Result::SftpError;
         }
 
+        // libssh2's stat fields are signed; the transfer bookkeeping below is
+        // unsigned. Convert once so every comparison uses a matching type.
+        const uint64_t remote_size  = static_cast<uint64_t>(fileinfo.st_size);
+        const uint64_t remote_mtime = static_cast<uint64_t>(fileinfo.st_mtime);
+
         std::error_code ec;
         if(std::filesystem::exists(local_path, ec) &&
             std::filesystem::exists(meta_path, ec))
@@ -1026,7 +1045,7 @@ namespace Controller
             std::ifstream m(meta_path);
             uint64_t      cached_size = 0, cached_mtime = 0;
             if(m >> cached_size >> cached_mtime &&
-                cached_size == fileinfo.st_size && cached_mtime == fileinfo.st_mtime)
+                cached_size == remote_size && cached_mtime == remote_mtime)
             {
                 spdlog::info("[ssh] already up-to-date: {}", local_path);
 
@@ -1068,22 +1087,38 @@ namespace Controller
 
         ssize_t got = 0;
         uint64_t total_downloaded = 0;
+        bool     cancelled        = false;
 
-        while (!libssh2_channel_eof(channel) && total_downloaded < fileinfo.st_size)
+        while (!libssh2_channel_eof(channel) && total_downloaded < remote_size)
         {
             if (IsCancelRequested(connection, future))
             {
+                cancelled = true;
                 break;
             }
             got = libssh2_channel_read(channel, buffer.data(), buffer.size());
 
             if (got > 0)
             {
-                if (got > fileinfo.st_size - total_downloaded)
+                if (static_cast<uint64_t>(got) > remote_size - total_downloaded)
                 {
-                    got = fileinfo.st_size - total_downloaded;
+                    got = static_cast<ssize_t>(remote_size - total_downloaded);
                 }
-                fwrite(buffer.data(), 1, got, file);
+
+                // A short write (disk full / quota) must not be counted as
+                // progress - otherwise total_downloaded reaches st_size and the
+                // file is cached as complete while truncated on disk.
+                size_t written = fwrite(buffer.data(), 1, static_cast<size_t>(got), file);
+                if (written != static_cast<size_t>(got))
+                {
+                    err = "local write failed (disk full?): " + local_path;
+                    spdlog::error("[ssh] {}", err);
+                    connection->GetSshBridge()->SaveError(err);
+
+                    fclose(file);
+                    libssh2_channel_free(channel);
+                    return Result::WriteError;
+                }
 
                 total_downloaded += got;
                 connection->GetSshBridge()->SetDownloaded(got);
@@ -1112,6 +1147,14 @@ namespace Controller
 
         fclose(file);
 
+        const bool complete = (total_downloaded == remote_size);
+
+        // Persist the freshness sidecar ONLY for a fully-received file. Writing it
+        // after a cancel/partial transfer would cache a truncated file as
+        // up-to-date, so the next download would skip and open a corrupt trace.
+        // With no .meta, the next attempt re-downloads (the freshness check needs
+        // both the file and its .meta).
+        if (!cancelled && complete)
         {
             std::ofstream m(meta_path, std::ios::trunc);
             if (m) m << fileinfo.st_size << ' ' << fileinfo.st_mtime << '\n';
@@ -1122,9 +1165,17 @@ namespace Controller
         libssh2_channel_wait_closed(channel);
         libssh2_channel_free(channel);
 
-        if (IsCancelRequested(connection, future))
+        if (cancelled)
         {
             return SshClient::Result::Cancelled;
+        }
+
+        if (!complete)
+        {
+            err = "incomplete download: " + remote_path;
+            spdlog::error("[ssh] {}", err);
+            connection->GetSshBridge()->SaveError(err);
+            return Result::ReadError;
         }
 
         return Result::Success;
@@ -1133,7 +1184,6 @@ namespace Controller
     SshClient::Result SshClient::BrowseRemoteDirectory(SshConnection * connection, const std::string& path, Future* future)
     {
         std::string output;
-        int exit_code = -1;
         connection->GetSshBridge()->Clear();
         connection->GetSshBridge()->SetStatus(kRPVControllerSshBrowsing);
 
@@ -1200,7 +1250,8 @@ namespace Controller
             }
         }
 
-        char mem[512];
+        constexpr size_t SFTP_NAME_BUFFER_SIZE = 512;
+        char mem[SFTP_NAME_BUFFER_SIZE];
         LIBSSH2_SFTP_ATTRIBUTES attrs;
 
         while (true) {
@@ -1211,7 +1262,11 @@ namespace Controller
             }
 
             do {
-                rc = libssh2_sftp_readdir(dir, mem, sizeof(mem), &attrs);
+                // Reserve the final byte for the NUL terminator written below:
+                // libssh2_sftp_readdir returns the filename length capped at the
+                // buffer size we pass, so bounding it to size-1 keeps mem[rc]
+                // in range even when the name would otherwise fill the buffer.
+                rc = libssh2_sftp_readdir(dir, mem, sizeof(mem) - 1, &attrs);
 
                 if (rc == LIBSSH2_ERROR_EAGAIN) {
                     if (!WaitSocket(connection))

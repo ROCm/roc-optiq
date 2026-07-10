@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: MIT
 
 #include "rocprofvis_event_manager.h"
-#include "iostream"
 #include "spdlog/spdlog.h"
 
 #include <algorithm>
@@ -50,6 +49,13 @@ EventManager::AddEvent(std::shared_ptr<RocEvent> event)
 {
     std::lock_guard<std::mutex> lock(m_queue_mutex);
     m_event_queue.push_back(std::move(event));
+}
+
+bool
+EventManager::HasPendingEvents() const
+{
+    std::lock_guard<std::mutex> lock(m_queue_mutex);
+    return !m_event_queue.empty();
 }
 
 EventManager::SubscriptionToken

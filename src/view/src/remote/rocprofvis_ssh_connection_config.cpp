@@ -39,12 +39,12 @@ namespace
 
 std::string SshConnectionConfig::HostTrimmed() const
 {
-    return util::string::trim_copy(host);
+    return Core::String::trim_copy(host);
 }
 
 std::string SshConnectionConfig::PortTrimmed() const
 {
-    return util::string::trim_copy(port);
+    return Core::String::trim_copy(port);
 }
 
 int SshConnectionConfig::PortInt() const
@@ -54,22 +54,22 @@ int SshConnectionConfig::PortInt() const
 
 std::string SshConnectionConfig::UserTrimmed() const
 {
-    return util::string::trim_copy(user);
+    return Core::String::trim_copy(user);
 }
 
 std::string SshConnectionConfig::PasswordTrimmed() const
 {
-    return util::string::trim_copy(password);
+    return Core::String::trim_copy(password);
 }
 
 std::string SshConnectionConfig::IdentityFileTrimmed() const
 {
-    return util::string::trim_copy(identity_file);
+    return Core::String::trim_copy(identity_file);
 }
 
 std::string SshConnectionConfig::PassphraseTrimmed() const
 {
-    return util::string::trim_copy(passphrase);
+    return Core::String::trim_copy(passphrase);
 }
 
 jt::Json SshConnectionConfig::ToJson() const

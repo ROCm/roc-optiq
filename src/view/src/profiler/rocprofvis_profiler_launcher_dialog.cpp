@@ -77,6 +77,7 @@ ProfilerLauncherDialog::~ProfilerLauncherDialog() = default;
 void ProfilerLauncherDialog::Show()
 {
     m_should_open = true;
+    m_execution_cache_dirty = true;
 }
 
 void ProfilerLauncherDialog::Render()
@@ -269,6 +270,7 @@ void ProfilerLauncherDialog::RenderToolbar()
         if (m_preset_manager.LoadPreset(load_name, m_config.profiler_id, loaded))
         {
             m_config = loaded;
+            m_execution_cache_dirty = true;
             m_backends[m_backend_index]->LoadSettings(m_config.backend_payload);
             backend = m_backends[m_backend_index].get();
             tools = backend->GetTools();
@@ -422,7 +424,7 @@ void ProfilerLauncherDialog::RenderRemotePopups()
     // Pull the latest progress snapshot when available.
     if (ssh_session)
     {
-        if (auto fetch = ssh_session->GetFileStat()->consume_if_updated())
+        if (auto fetch = ssh_session->GetFileStat()->ConsumeIfUpdated())
         {
             m_remote_last_progress = *fetch;
         }
@@ -537,7 +539,17 @@ void ProfilerLauncherDialog::Update()
 {
     if (m_show_window)
     {
-        RefreshExecutionCache();
+        // Only rebuild the (allocation-heavy) execution cache / command preview
+        // when inputs may have changed: an explicit dirty request, or while the
+        // user is actively editing a widget (ImGui::IsAnyItemActive reflects the
+        // previous frame here, so the deactivation frame is still captured). This
+        // covers the backend-owned settings tabs without instrumenting each
+        // widget individually.
+        if (m_execution_cache_dirty || ImGui::IsAnyItemActive())
+        {
+            RefreshExecutionCache();
+            m_execution_cache_dirty = false;
+        }
     }
 
     // Pump the run engine, then reflect its normalized state into the console.
@@ -857,6 +869,7 @@ void ProfilerLauncherDialog::SwitchBackend(int index)
     m_config.tool_id = m_backends[index]->GetTools()[0].id;
     m_backends[index]->LoadSettings(jt::Json());
     m_config.backend_payload = m_backends[index]->SaveSettings();
+    m_execution_cache_dirty = true;
 }
 
 void ProfilerLauncherDialog::LoadFromSettings()

@@ -1,10 +1,17 @@
+// Copyright Advanced Micro Devices, Inc.
+// SPDX-License-Identifier: MIT
+
 #pragma once
 
 #include <string>
 #include <algorithm>
 #include <cctype>
 
-namespace util::string
+namespace RocProfVis
+{
+namespace Core
+{
+namespace String
 {
     // ---- trim (in-place) ----
 
@@ -94,4 +101,6 @@ namespace util::string
         return s;
     }
 
-} // namespace util::string
+}  // namespace String
+}  // namespace Core
+}  // namespace RocProfVis

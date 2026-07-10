@@ -228,7 +228,7 @@ SshTestDialog::RenderProgressPopup()
     SshSession* ssh_session = m_orchestrator ? m_orchestrator->GetSession() : nullptr;
     if(!ssh_session) return;
 
-    if(auto fetch = ssh_session->GetFileStat()->consume_if_updated())
+    if(auto fetch = ssh_session->GetFileStat()->ConsumeIfUpdated())
     {
         m_last_progress = *fetch;
 
@@ -293,7 +293,7 @@ SshTestDialog::RenderOutputPopup()
     SshSession* ssh_session = m_orchestrator ? m_orchestrator->GetSession() : nullptr;
     if(!ssh_session) return;
 
-    if(auto fetch = ssh_session->GetExecutionOutput()->consume_if_updated())
+    if(auto fetch = ssh_session->GetExecutionOutput()->ConsumeIfUpdated())
     {
         m_last_stdout = *fetch;
         if(!m_show_stdout_popup)
@@ -308,11 +308,19 @@ SshTestDialog::RenderOutputPopup()
         ImGui::SetNextWindowSize(ImVec2(600, 400));
         if(ImGui::BeginPopupModal("Remote Execute", nullptr))
         {
-            ImGui::BeginChild("output", ImVec2(0, 0), true);
+            const float footer_height =
+                ImGui::GetFrameHeightWithSpacing() + ImGui::GetStyle().ItemSpacing.y;
+            ImGui::BeginChild("output", ImVec2(0, -footer_height), true);
             ImGui::TextUnformatted(m_last_stdout.text.c_str());
             ImGui::EndChild();
 
-            if(m_last_stdout.finished)
+            const bool finished = m_last_stdout.finished;
+            ImGui::TextUnformatted(finished ? "Execution finished." : "Executing...");
+            ImGui::SameLine();
+
+            // Always offer a manual Close so the popup can never wedge open, even
+            // if the terminal snapshot is missed (e.g. connection dropped).
+            if(ImGui::Button("Close"))
             {
                 ImGui::CloseCurrentPopup();
                 m_show_stdout_popup = false;
@@ -329,7 +337,7 @@ void SshTestDialog::RenderRemoteFilePopup()
         m_orchestrator ? m_orchestrator->GetSession() : nullptr;
     if (!ssh_session) return;
 
-    if (auto fetch = ssh_session->GetRemoteDir()->consume_if_updated())
+    if (auto fetch = ssh_session->GetRemoteDir()->ConsumeIfUpdated())
     {
         m_last_directory_state = *fetch;
         if (!m_show_remote_filesystem_popup)

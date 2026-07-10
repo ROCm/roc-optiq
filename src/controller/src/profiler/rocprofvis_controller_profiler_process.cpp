@@ -515,6 +515,12 @@ bool LocalProfilerExecutor::Start(const ProfilerConfig& config)
         return false;
     }
 
+    // NOTE (macOS): this fork()+execvp() path is NOT safe on macOS - the child
+    // runs non-async-signal-safe code (setenv/allocations) between fork and exec
+    // while the parent is multithreaded (GLFW/MoltenVK/Obj-C runtime). It works
+    // on Linux, which is the only POSIX target today. Before enabling the
+    // profiler on macOS this must be reworked to posix_spawnp() (deferred; see
+    // the section banner above and review item H6).
     m_process_id = fork();
 
     if (m_process_id == -1)

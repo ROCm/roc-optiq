@@ -130,6 +130,9 @@ KnownHostMatch KnownHosts::Check(const std::string& host, int port) const
 
 bool KnownHosts::Add(const std::string& host, int port)
 {
+    // libssh2_knownhost_addc keys entries by host only; the port is part of the
+    // signature for symmetry with Check() but is not needed to store the entry.
+    (void) port;
     if(!m_kh) return false;
     size_t      key_len  = 0;
     int         key_type = 0;

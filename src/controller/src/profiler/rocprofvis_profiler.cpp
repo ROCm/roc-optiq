@@ -61,8 +61,13 @@ static rocprofvis_result_t copy_string_to_buffer(std::string const& src, char* b
         return kRocProfVisResultSuccess;
     }
 
-    uint32_t copy_len = std::min(*length, static_cast<uint32_t>(src.size() + 1));
-    std::strncpy(buffer, src.c_str(), copy_len);
+    // Copy what fits and always leave room for the null terminator. The
+    // *length == 0 case is handled above, so *length >= 1 here. std::memcpy is
+    // used instead of std::strncpy to avoid the MSVC C4996 deprecation and to
+    // guarantee termination even on truncation.
+    uint32_t copy_len = std::min(*length - 1, static_cast<uint32_t>(src.size()));
+    std::memcpy(buffer, src.c_str(), copy_len);
+    buffer[copy_len] = '\0';
     return kRocProfVisResultSuccess;
 }
 

@@ -22,7 +22,6 @@ namespace
 struct KbdintState
 {
     std::vector<std::string> answers;
-    bool                     opened = false;
 };
 
 KbdintState& KbdintForFrame() { static KbdintState s; return s; }
@@ -33,13 +32,15 @@ void RenderSshAuthModal(SshSession* ssh_session)
     if (!ssh_session) return;
 
     // ---- kbdint ----
-    if (auto req = ssh_session->GetPromptRequest()->consume_if_updated())
+    if (auto req = ssh_session->GetPromptRequest()->ConsumeIfUpdated())
     {
         auto& st = KbdintForFrame();
-        if(!st.opened)
+        // Gate on ImGui's own popup state rather than a persistent latch: if the
+        // op is torn down without a button press, the un-Begin'd modal
+        // auto-closes and a fresh request re-opens it (no wedged latch).
+        if(!ImGui::IsPopupOpen("SSH Authentication"))
         {
             st.answers.assign(req->prompts.size(), "");
-            st.opened = true;
             spdlog::info("[ssh-ui] kbdint pending: {} prompt(s); calling OpenPopup",
                          req->prompts.size());
             ImGui::OpenPopup("SSH Authentication");
@@ -85,7 +86,7 @@ void RenderSshAuthModal(SshSession* ssh_session)
                 ssh_session->SubmitPromptResponses(resp);
                 st = {};
                 ImGui::CloseCurrentPopup();
-                ssh_session->GetPromptRequest()->clear_updated();
+                ssh_session->GetPromptRequest()->ClearUpdated();
             }
             ImGui::SameLine();
             if(ImGui::Button("Cancel", ImVec2(110, 0)))
@@ -93,7 +94,7 @@ void RenderSshAuthModal(SshSession* ssh_session)
                 ssh_session->CancelRequest();
                 st = {};
                 ImGui::CloseCurrentPopup();
-                ssh_session->GetPromptRequest()->clear_updated();
+                ssh_session->GetPromptRequest()->ClearUpdated();
             }
             ImGui::EndPopup();
         }
@@ -102,12 +103,15 @@ void RenderSshAuthModal(SshSession* ssh_session)
     }
 
     // ---- host key confirmation ----
-    if(auto req = ssh_session->GetHostKeyRequest()->consume_if_updated())
+    if(auto req = ssh_session->GetHostKeyRequest()->ConsumeIfUpdated())
     {
-        static bool opened = false;
-        if(!opened) { 
-            ImGui::OpenPopup("SSH Host Key"); 
-            opened = true; 
+        // Gate on ImGui's own popup state (no persistent latch): if the op is
+        // cancelled/torn down without a button press, the un-Begin'd modal
+        // auto-closes and a subsequent host-key request re-opens it, instead of
+        // a stuck latch permanently suppressing future prompts.
+        if(!ImGui::IsPopupOpen("SSH Host Key"))
+        {
+            ImGui::OpenPopup("SSH Host Key");
         }
 
         PopUpStyle popup_style;
@@ -144,25 +148,22 @@ void RenderSshAuthModal(SshSession* ssh_session)
             if(ImGui::Button("Trust permanently", ImVec2(160, 0)))
             {
                 ssh_session->SubmitHostKeyDecision(HostKeyDecision::TrustPermanently);
-                opened = false;
                 ImGui::CloseCurrentPopup();
-                ssh_session->GetHostKeyRequest()->clear_updated();
+                ssh_session->GetHostKeyRequest()->ClearUpdated();
             }
             ImGui::SameLine();
             if(ImGui::Button("Trust once", ImVec2(110, 0)))
             {
                 ssh_session->SubmitHostKeyDecision(HostKeyDecision::TrustOnce);
-                opened = false;
                 ImGui::CloseCurrentPopup();
-                ssh_session->GetHostKeyRequest()->clear_updated();
+                ssh_session->GetHostKeyRequest()->ClearUpdated();
             }
             ImGui::SameLine();
             if(ImGui::Button("Reject", ImVec2(110, 0)))
             {
                 ssh_session->SubmitHostKeyDecision(HostKeyDecision::Reject);
-                opened = false;
                 ImGui::CloseCurrentPopup();
-                ssh_session->GetHostKeyRequest()->clear_updated();
+                ssh_session->GetHostKeyRequest()->ClearUpdated();
             }
             ImGui::EndPopup();
         }

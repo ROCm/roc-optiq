@@ -127,7 +127,7 @@ namespace View
         // for the current AuthRequest. The remote status is now level-triggered
         // (it persists while a request is pending), so this guards against
         // rebuilding the request every frame.
-        bool                m_auth_request_built = false;
+        bool                m_auth_request_built;
         // Pending command/paths captured for the active operation so the start
         // happens lazily inside BeginOperation's start_fn.
         std::string         m_pending_command;

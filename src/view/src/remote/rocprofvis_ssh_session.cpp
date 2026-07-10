@@ -27,6 +27,7 @@ namespace View
     , m_active_operation(SshOperation::None)
     , m_active_operation_id(0)
     , m_last_result(kRocProfVisResultSuccess)
+    , m_auth_request_built(false)
     {
         ++s_active_session_count;
         if (m_uri)

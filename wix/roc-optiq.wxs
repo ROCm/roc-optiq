@@ -48,11 +48,10 @@
 
     <!-- ═══════════════════════════════════════════════════════════════════
          Directory layout
-         Default: C:\Program Files\AMD\ROCm-Optiq\
+         Default: C:\Program Files\ROCm-Optiq\
          ═══════════════════════════════════════════════════════════════════ -->
     <StandardDirectory Id="ProgramFiles64Folder">
-      <Directory Id="AMDDIR"      Name="AMD">
-        <Directory Id="INSTALLDIR" Name="ROCm-Optiq">
+      <Directory Id="INSTALLDIR" Name="ROCm-Optiq">
 
           <Component Id="MainExecutable" Guid="*">
             <File Id="RocOptiqExe"
@@ -61,7 +60,6 @@
                   KeyPath="yes" />
           </Component>
 
-        </Directory>
       </Directory>
     </StandardDirectory>
 

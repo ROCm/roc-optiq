@@ -5,6 +5,7 @@
 #include "rocprofvis_controller_enums.h"
 #include "rocprofvis_controller_ssh_known_hosts.h"
 #include "rocprofvis_controller_ssh_bridge.h"
+#include "rocprofvis_core_string_utils.h"
 #include <libssh2.h>
 #include <libssh2_sftp.h>
 #include <iostream>
@@ -15,7 +16,6 @@
 #include <spdlog/spdlog.h>
 #include <algorithm>
 #include <string>
-#include <cctype>
 
 #ifdef _WIN32
 #include <shlobj.h>
@@ -101,7 +101,7 @@ namespace Controller
 
         // libssh2 fires this callback for every kbdint round, including "info"
         // rounds (banner / status messages with no input). If there are no
-        // prompts, there is nothing to ask the user ï¿½ just acknowledge and
+        // prompts, there is nothing to ask the user  just acknowledge and
         // continue without touching the UI.
         if(num_prompts == 0)
         {
@@ -214,10 +214,7 @@ namespace Controller
             passphrase.empty() ? nullptr : passphrase.c_str());
         if (rc == LIBSSH2_ERROR_AUTHENTICATION_FAILED)
         {
-            std::string u = user;
-
-            std::transform(u.begin(), u.end(), u.begin(),
-                [](unsigned char c) { return std::tolower(c); });
+            std::string u = Core::String::to_lower_copy(user);
             if (u != user && Reconnect(connection, future))
             {
                 rc = libssh2_userauth_publickey_fromfile(
@@ -238,7 +235,7 @@ namespace Controller
         case LIBSSH2_ERROR_FILE:
             hint = " [file unreadable or unsupported format]"; break;
         case LIBSSH2_ERROR_PUBLICKEY_UNVERIFIED:
-            hint = " [server rejected the key ï¿½ possibly encrypted (passphrase needed) or not in authorized_keys]"; break;
+            hint = " [server rejected the key  possibly encrypted (passphrase needed) or not in authorized_keys]"; break;
         case LIBSSH2_ERROR_AUTHENTICATION_FAILED:
             hint = " [auth rejected by server]"; break;
         case LIBSSH2_ERROR_METHOD_NOT_SUPPORTED:
@@ -293,9 +290,7 @@ namespace Controller
             rc = libssh2_agent_userauth(agent, user.c_str(), identity);
             if (rc == LIBSSH2_ERROR_AUTHENTICATION_FAILED)
             {
-                std::string u = user;
-                std::transform(u.begin(), u.end(), u.begin(),
-                    [](unsigned char c) { return std::tolower(c); });
+                std::string u = Core::String::to_lower_copy(user);
                 if (u!=user && Reconnect(connection, future))
                 {
                     rc = libssh2_agent_userauth(agent, u.c_str(), identity);
@@ -591,7 +586,7 @@ namespace Controller
                 {
                     connection->Disconnect();
                     err = (m == KnownHostMatch::Mismatch)
-                        ? "Host key mismatch ï¿½ connection rejected."
+                        ? "Host key mismatch  connection rejected."
                         : "Host key not trusted.";
                     connection->GetSshBridge()->SaveError(err);
                     return Result::AuthError;
@@ -641,7 +636,7 @@ namespace Controller
                     return Result::Success;
                 }
             }
-            // 1b) ssh-agent ï¿½ handles encrypted keys without us needing a passphrase.
+            // 1b) ssh-agent  handles encrypted keys without us needing a passphrase.
             spdlog::info("[ssh] trying ssh-agent");
             if (TryAgent(connection, user, future))
             {
@@ -717,10 +712,7 @@ namespace Controller
                 if (auth_rc == LIBSSH2_ERROR_AUTHENTICATION_FAILED)
                 {
 
-                    std::string u = user;
-
-                    std::transform(u.begin(), u.end(), u.begin(),
-                        [](unsigned char c) { return std::tolower(c); });
+                    std::string u = Core::String::to_lower_copy(user);
                     if (u != user && Reconnect(connection, future))
                     {
                         auth_rc = libssh2_userauth_password(connection->GetSession(), u.c_str(),
@@ -764,10 +756,7 @@ namespace Controller
                 &KbdIntCallback);
             if (auth_rc == LIBSSH2_ERROR_AUTHENTICATION_FAILED)
             {
-                std::string u = user;
-
-                std::transform(u.begin(), u.end(), u.begin(),
-                    [](unsigned char c) { return std::tolower(c); });
+                std::string u = Core::String::to_lower_copy(user);
                 if (u != user && Reconnect(connection, future))
                 {
                     auth_rc = libssh2_userauth_keyboard_interactive(connection->GetSession(), u.c_str(),

@@ -105,9 +105,9 @@ env:
   DIST_DIR: "dist"
   BUILD_FILE_NAME: "roc-optiq"
   VULKAN_SDK_VERSION: "1.4.328.1"
-  ENABLE_INTERNAL_BANNER: ${{ inputs.enable_internal_banner == 'true' && 'ON' || 'OFF' }}
-  ENABLE_REMOTE: ${{ inputs.enable_remote == 'true' && 'ON' || 'OFF' }}
-  ENABLE_PROFILER: ${{ inputs.enable_profiler == 'true' && 'ON' || 'OFF' }}
+  ENABLE_INTERNAL_BANNER: ${{ inputs.enable_internal_banner && 'ON' || 'OFF' }}
+  ENABLE_REMOTE: ${{ inputs.enable_remote && 'ON' || 'OFF' }}
+  ENABLE_PROFILER: ${{ inputs.enable_profiler && 'ON' || 'OFF' }}
   S3_ROOT_DIRECTORY: ${{ inputs.s3_root_directory }}
   RELEASE_VERSION: ${{ inputs.release_version }}
 

@@ -105,7 +105,7 @@ env:
   DIST_DIR: "dist"
   BINARY_DIR: ${{ inputs.cmake_config_preset == 'x64-debug' && 'Debug' || inputs.cmake_config_preset == 'x64-release-symbols' && 'RelWithDebInfo' || 'Release' }}
   BUILD_FILE_NAME: "roc-optiq"
-  ENABLE_INTERNAL_BANNER: ${{ inputs.enable_internal_banner == 'true' && 'ON' || 'OFF' }}
+  ENABLE_INTERNAL_BANNER: ${{ inputs.enable_internal_banner && 'ON' || 'OFF' }}
   ENABLE_REMOTE: ${{ inputs.enable_remote && 'ON' || 'OFF' }}
   ENABLE_PROFILER: ${{ inputs.enable_profiler && 'ON' || 'OFF' }}
   S3_ROOT_DIRECTORY: ${{ inputs.s3_root_directory }}

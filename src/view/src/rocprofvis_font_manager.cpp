@@ -139,6 +139,54 @@ FontManager::Init()
         m_text_font                = io.Fonts->AddFontDefault(&fallback_config);
     }
 
+#ifdef _WIN32
+    const char* code_font_paths[] = {
+        "C:\\Windows\\Fonts\\CascadiaCode.ttf",
+        "C:\\Windows\\Fonts\\CascadiaMono.ttf",
+        "C:\\Windows\\Fonts\\consola.ttf",
+        "C:\\Windows\\Fonts\\cour.ttf"
+    };
+#elif __APPLE__
+    const char* code_font_paths[] = {
+        "/System/Library/Fonts/SFMono-Regular.otf",
+        "/Library/Fonts/Menlo.ttc",
+        "/System/Library/Fonts/Menlo.ttc",
+        "/Library/Fonts/Courier New.ttf"
+    };
+#else
+    const char* code_font_paths[] = {
+        "/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf",
+        "/usr/share/fonts/dejavu/DejaVuSansMono.ttf",
+        "/usr/share/fonts/dejavu-sans-mono-fonts/DejaVuSansMono.ttf",
+        "/usr/share/fonts/truetype/liberation/LiberationMono-Regular.ttf",
+        "/usr/share/fonts/liberation-mono/LiberationMono-Regular.ttf",
+        "/usr/share/fonts/truetype/noto/NotoSansMono-Regular.ttf",
+        "/usr/share/fonts/google-noto/NotoSansMono-Regular.ttf",
+        "/usr/share/fonts/truetype/freefont/FreeMono.ttf"
+    };
+#endif
+
+    const char* code_font_path = nullptr;
+    for(const char* path : code_font_paths)
+    {
+        if(std::filesystem::exists(path))
+        {
+            code_font_path = path;
+            break;
+        }
+    }
+
+    if(code_font_path)
+    {
+        m_code_font = io.Fonts->AddFontFromFileTTF(code_font_path, 0.0f);
+    }
+    else
+    {
+        ImFontConfig mono_fallback_config;
+        mono_fallback_config.SizePixels = BASE_FONT_SIZE;
+        m_code_font                     = io.Fonts->AddFontDefault(&mono_fallback_config);
+    }
+
     ImFontConfig icon_config;
     icon_config.FontDataOwnedByAtlas = false;
     m_icon_font = io.Fonts->AddFontFromMemoryCompressedTTF(
@@ -171,6 +219,8 @@ FontManager::GetFont(FontType font_type)
             return m_text_font;
         case FontType::kIcon:
             return m_icon_font;
+        case FontType::kCode: 
+            return m_code_font;
         default:
             return m_text_font;
     }

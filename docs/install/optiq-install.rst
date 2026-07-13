@@ -65,8 +65,8 @@ If you're unsure of the Linux distribution and version, the ``/etc/os-release`` 
 
 The relevant fields are ``ID`` and the ``VERSION_ID``.
 
-Ubuntu 22.04 or 24.04 (Debian-based)
--------------------------------------
+Ubuntu (Debian-based)
+---------------------
 
 1. Download the ``.deb`` package from the `ROCm Optiq GitHub repo <https://github.com/ROCm/roc-optiq/releases/tag/v0.5.0-optiq>`_.
 2. Install the ``.deb`` package:

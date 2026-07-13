@@ -41,8 +41,7 @@ Welcome page
 
 When ROCm Optiq starts without an open project, the Welcome page displays: 
 
-- Open File—open a trace (``.db``, ``.rpd``), project (``.rpv``), or multi-database configuration (``.yaml``) 
-- Drag and drop—drop a supported file onto the window 
+- Open File—open a trace (``.db``, ``.rpd``), project (``.rpv``), or multi-database configuration (``.yaml``). You can also drag and drop a supported file into the window to open it.
 - Recent files—quick access to recently opened files 
 - Documentation links—ROCm Optiq, ROCm Systems Profiler, and ROCm Compute Profiler documentation
 
@@ -154,11 +153,12 @@ The shortcut keys (**WASD** and arrow keys) can also be used to zoom and pan the
 - **W** / **S**: Zoom in and out, respectively.
 - **A** or **Left Arrow** / **D** or **Right Arrow**: Pan left and right, respectively.
 - **Up Arrow** / **Down Arrow**: Scroll the track list up and down.
+
+   .. note::
+
+      See :ref:`change-settings` to customize these hotkeys.
+
 - The upper-left region of the **Timeline View** displays a track summary showing the total number of tracks and a per-type breakdown (for example, event, counter, queue, and thread tracks).
-.. note::
-
-   See :ref:`change-settings` to customize these hotkeys.
-
 - Hold the mouse pointer over the **Description** area, and the scroll wheel will scroll through the track list. 
 - Hold the mouse pointer over the **Graph** area, and the scroll wheel zooms the view in and out.
 - Hover the track name label in the **Description** area to view a tooltip with the full track name, track ID, and event or sample count.  
@@ -224,6 +224,10 @@ The Counter statistics are also visible in the **Track Details** tab.
 
 Measure
 ^^^^^^^
+
+.. image:: ../images/measure.png
+   :width: 300
+   :alt: The Measure mode UI button
 
 **Measure** mode lets you measure the elapsed time between two points on the **Timeline View**, either between timeline points or between specific events. 
 
@@ -292,7 +296,17 @@ This section provides an interface for multiple data perspectives, offering gran
 .. tip::
 
    In the **Event Table**, **Event Details**, and **Top Events** tables, right-click a row or cell to **Go To Event**, **Copy Row Data**, **Copy Cell Data**, and **Export to File** (CSV).
+
+   .. image:: ../images/go-to-event.png
+   :width: 300
+   :alt: Menu displaying **Go To Event**, **Copy Row Data**, **Copy Cell Data**, and **Export to File** options.
+
    In the **Flow Data**, and **Call Stack** tables, right-click a row or cell to **Go To Event**, **Copy Row Data**, or **Copy Cell Data**.  
+
+   .. image:: ../images/flow-options.png
+   :width: 300
+   :alt: Menu displaying **Go To Event**, **Copy Row Data**, and **Copy Cell Data** in the Flow Data section.
+
 
 
 .. _summary-view:

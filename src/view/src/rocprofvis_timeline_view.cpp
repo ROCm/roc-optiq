@@ -414,6 +414,15 @@ TimelineView::RenderAnnotations(ImDrawList* draw_list, ImVec2 window_position)
 
             annotation_blocks_timeline_input |=
                 note.Render(draw_list, window_position, m_tpt, layout);
+
+            if(note.WantsNavigate())
+            {
+                auto nav = std::make_shared<NavigationEvent>(
+                    note.GetVMinX(), note.GetVMaxX(), note.GetYOffset(), true,
+                    note.GetTrackId());
+                EventManager::GetInstance()->AddEvent(nav);
+                note.ClearNavigate();
+            }
         }
         m_stop_user_interaction |= annotation_blocks_timeline_input;
     }
@@ -663,6 +672,10 @@ TimelineView::RenderTimelineViewOptionsMenu(ImVec2 window_position)
             m_measure_copy_target = MeasurementCopyTarget::kEnd;
         }
 
+        // Remember where the right-click landed; menu actions anchor here, not at
+        // the cursor's later position on the menu item.
+        m_context_menu_pos = rel_mouse_pos;
+
         ImGui::OpenPopup("TimelineContextMenu");
     }
 
@@ -716,18 +729,18 @@ TimelineView::RenderTimelineViewOptionsMenu(ImVec2 window_position)
 
         if(IconMenuItem(ICON_ADD_NOTE, "Add Annotation"))
         {
-            float  x_in_chart = rel_mouse_pos.x;
+            float  x_in_chart = m_context_menu_pos.x;
             double time_ns    = m_tpt->PixelToTime(x_in_chart);
-            // Anchor the new note to the track under the cursor, storing a
+            // Anchor the new note to the track under the right-click, storing a
             // track-relative click offset.
             TrackLayout layout      = BuildTrackLayout();
             uint64_t    track_id    = INVALID_TRACK_ID;
             float       track_top_y = 0.0f;
-            float       y_offset    = rel_mouse_pos.y;
+            float       y_offset    = m_context_menu_pos.y;
             if(layout.track_at &&
-               layout.track_at(rel_mouse_pos.y, track_id, track_top_y))
+               layout.track_at(m_context_menu_pos.y, track_id, track_top_y))
             {
-                y_offset = rel_mouse_pos.y - track_top_y;
+                y_offset = m_context_menu_pos.y - track_top_y;
             }
             m_annotations->CreateStickyNote(time_ns, y_offset, m_tpt->GetVMinX(),
                                             m_tpt->GetVMaxX(), m_tpt->GetGraphSize(),

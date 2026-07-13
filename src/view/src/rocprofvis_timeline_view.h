@@ -254,6 +254,8 @@ private:
     MeasurementLabelRect       m_measure_label_duration;
     MeasurementCopyTarget      m_measure_copy_target;
 
+    ImVec2                     m_context_menu_pos = ImVec2(0.0f, 0.0f);
+
     TimelineViewProjectSettings m_project_settings;
     LoadingTimer                m_loading_timer;
     TrackTypeCounts             m_track_counts;

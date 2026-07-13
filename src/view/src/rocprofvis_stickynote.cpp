@@ -28,8 +28,6 @@ constexpr float kNoteMargin           = 14.0f;
 constexpr float kHeaderButtonGap      = 2.0f;
 constexpr float kHeaderButtonMinSize  = 24.0f;
 constexpr float kHeaderButtonPadding  = 6.0f;
-constexpr float kAccentStripeWidth    = 3.0f;
-constexpr float kAccentStripeAlpha    = 0.78f;
 constexpr float kHeaderSeparatorAlpha = 0.42f;
 constexpr float kIconHoverAlpha       = 0.12f;
 constexpr float kIconActiveAlpha      = 0.22f;
@@ -40,6 +38,13 @@ constexpr float kUnplacedCoord        = -1.0f;
 constexpr float kTitleInputPadX       = 4.0f;
 constexpr float kTimeIndicatorWidth   = 1.5f;
 constexpr float kTimeIndicatorAlpha   = 0.85f;
+constexpr float  kPreviewTooltipWidth = 320.0f;
+constexpr size_t kPreviewMaxChars     = 200;
+constexpr size_t kPreviewTitleMaxChars = 60;
+constexpr float  kHighlightThickness  = 2.0f;
+constexpr float  kHighlightPad        = 2.0f;
+constexpr float  kLockGlyphScale      = 0.30f;  // Lock badge size vs marker size.
+constexpr float  kLockGlyphPad        = 2.0f;   // Inset from the marker's corner.
 
 // Grows the backing std::string so ImGui can edit it in place.
 int
@@ -89,12 +94,22 @@ PopPlainTextInputStyle()
     ImGui::PopStyleVar(1);
     ImGui::PopStyleColor(3);
 }
+
+// Dark mode uses the brighter header tint.
+ImU32
+HighlightRingColor(SettingsManager& settings)
+{
+    return settings.GetUserSettings().display_settings.use_dark_mode
+               ? settings.GetColor(Colors::kStickyNoteHeader)
+               : settings.GetColor(Colors::kStickyNoteAccent);
+}
 }  // namespace
 
 static int s_unique_id_counter = 0;
 StickyNote::StickyNote(double time_ns, float y_offset, const ImVec2& size,
                        const std::string& text, const std::string& title, double v_min,
-                       double v_max, uint64_t track_id, bool is_minimized)
+                       double v_max, uint64_t track_id, bool is_minimized,
+                       bool is_locked)
 : m_time_ns(time_ns)
 , m_y_offset(y_offset)
 , m_track_id(track_id)
@@ -106,6 +121,7 @@ StickyNote::StickyNote(double time_ns, float y_offset, const ImVec2& size,
 , m_v_min_x(v_min)
 , m_v_max_x(v_max)
 , m_is_minimized(is_minimized)
+, m_locked(is_locked)
 {
     ++s_unique_id_counter;
 }
@@ -297,7 +313,7 @@ StickyNote::Render(ImDrawList* draw_list, const ImVec2& window_position,
     bool window_hovered = false;
     if(!m_is_minimized)
     {
-        window_hovered = RenderExpandedWindow(anchor_pos);
+        window_hovered = RenderExpandedWindow(anchor_pos, marker_hovered);
     }
 
     bool pair_hovered = marker_hovered || window_hovered;
@@ -305,6 +321,21 @@ StickyNote::Render(ImDrawList* draw_list, const ImVec2& window_position,
     if((pair_hovered || m_dragging) && draw_list)
     {
         RenderTimeIndicator(draw_list, window_position, tpt);
+    }
+
+    // Hovering the note glows the anchor. Drawn on the timeline layer so an
+    // overlapping note occludes it.
+    if(window_hovered && !marker_hidden && draw_list)
+    {
+        SettingsManager& settings = SettingsManager::GetInstance();
+        const float      rounding =
+            settings.GetDefaultStyle().ChildRounding * kMarkerRoundingScale;
+        const float sz = MarkerSize();
+        draw_list->AddRect(
+            ImVec2(anchor_pos.x - kHighlightPad, anchor_pos.y - kHighlightPad),
+            ImVec2(anchor_pos.x + sz + kHighlightPad, anchor_pos.y + sz + kHighlightPad),
+            HighlightRingColor(settings), rounding + kHighlightPad, 0,
+            kHighlightThickness);
     }
 
     TimelineFocusManager::GetInstance().RequestLayerFocus(
@@ -357,6 +388,36 @@ StickyNote::RenderAnchorMarker(ImDrawList* draw_list, const ImVec2& marker_pos)
                   ImVec2(btn_size, btn_size));
     // IsItemHovered respects z-order, so a covered marker won't show the time line.
     bool hovered = ImGui::IsItemHovered();
+    // Hovering a minimized marker previews the note's title/text without expanding.
+    if(m_is_minimized && (!m_title.empty() || !m_text.empty()) &&
+       BeginItemTooltipStyled())
+    {
+        ImGui::PushFont(settings.GetFontManager().GetFont(FontType::kDefault));
+        if(!m_title.empty())
+        {
+            ImGui::TextUnformatted(
+                ElideWithEllipsis(m_title, kPreviewTooltipWidth, kPreviewTitleMaxChars)
+                    .c_str());
+            ImGui::Spacing();
+            ImGui::Separator();
+            ImGui::Spacing();
+        }
+        if(!m_text.empty())
+        {
+            std::string preview = m_text.substr(0, kPreviewMaxChars);
+            if(m_text.size() > kPreviewMaxChars)
+            {
+                preview += "...";
+            }
+            ImGui::PushStyleColor(ImGuiCol_Text, settings.GetColor(Colors::kTextDim));
+            ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + kPreviewTooltipWidth);
+            ImGui::TextUnformatted(preview.c_str());
+            ImGui::PopTextWrapPos();
+            ImGui::PopStyleColor();
+        }
+        ImGui::PopFont();
+        EndTooltipStyled();
+    }
     // Clicking a minimized marker expands the note; re-seed its window position.
     if(m_is_minimized && hovered && IsMouseReleasedWithDragCheck(ImGuiMouseButton_Left))
     {
@@ -368,15 +429,29 @@ StickyNote::RenderAnchorMarker(ImDrawList* draw_list, const ImVec2& marker_pos)
     {
         m_request_focus = true;
     }
+
     ImGui::PopStyleColor(4);
     ImGui::PopFont();
+
+    // Tiny lock badge in the marker's top-right corner when locked.
+    if(m_locked && draw_list)
+    {
+        ImFont* icon_font = settings.GetFontManager().GetFont(FontType::kIcon);
+        float   glyph_sz  = btn_size * kLockGlyphScale;
+        ImVec2  text_dim =
+            icon_font->CalcTextSizeA(glyph_sz, FLT_MAX, 0.0f, ICON_LOCKED);
+        ImVec2 lock_pos(btn_max.x - text_dim.x - kLockGlyphPad,
+                        marker_pos.y + kLockGlyphPad);
+        draw_list->AddText(icon_font, glyph_sz, lock_pos, text_color, ICON_LOCKED);
+    }
+
     ImGui::EndChild();
 
     return hovered;
 }
 
 bool
-StickyNote::RenderExpandedWindow(const ImVec2& anchor_pos)
+StickyNote::RenderExpandedWindow(const ImVec2& anchor_pos, bool marker_hovered)
 {
     SettingsManager& settings     = SettingsManager::GetInstance();
     ImU32            bg_color     = settings.GetColor(Colors::kStickyNoteBg);
@@ -388,7 +463,6 @@ StickyNote::RenderExpandedWindow(const ImVec2& anchor_pos)
         ApplyAlpha(settings.GetColor(Colors::kStickyNoteText), kIconActiveAlpha);
     ImU32 text_color       = settings.GetColor(Colors::kStickyNoteText);
     ImU32 muted_text_color = settings.GetColor(Colors::kStickyNoteTextMuted);
-    ImU32 accent_color     = settings.GetColor(Colors::kStickyNoteAccent);
 
     const float  rounding    = settings.GetDefaultStyle().ChildRounding;
     const ImVec2 sticky_size = m_size;
@@ -442,10 +516,6 @@ StickyNote::RenderExpandedWindow(const ImVec2& anchor_pos)
             ImVec2(win_pos.x + win_size.x, win_pos.y + kExpandedHeaderHeight);
         note_draw_list->AddRectFilled(win_pos, header_max, header_color, rounding,
                                       ImDrawFlags_RoundCornersTop);
-        note_draw_list->AddRectFilled(
-            win_pos, ImVec2(win_pos.x + kAccentStripeWidth, win_pos.y + win_size.y),
-            ApplyAlpha(accent_color, kAccentStripeAlpha), rounding,
-            ImDrawFlags_RoundCornersLeft);
         note_draw_list->AddLine(ImVec2(win_pos.x, header_max.y),
                                 ImVec2(win_pos.x + win_size.x, header_max.y),
                                 ApplyAlpha(border_color, kHeaderSeparatorAlpha));
@@ -454,14 +524,21 @@ StickyNote::RenderExpandedWindow(const ImVec2& anchor_pos)
         ImGui::PushFont(action_icon_font);
         ImVec2 close_icon_size = ImGui::CalcTextSize(ICON_X_CIRCLED);
         ImVec2 trash_icon_size = ImGui::CalcTextSize(ICON_TRASH_CAN);
+        ImVec2 lock_icon_size  = ImGui::CalcTextSize(ICON_LOCKED);
+        ImVec2 unlock_icon_size = ImGui::CalcTextSize(ICON_UNLOCKED);
+        ImVec2 goto_icon_size   = ImGui::CalcTextSize(ICON_ARROW_FORWARD);
         ImGui::PopFont();
         const float action_btn_size = std::max(
             {kHeaderButtonMinSize, close_icon_size.x + kHeaderButtonPadding,
-             trash_icon_size.x + kHeaderButtonPadding});
+             trash_icon_size.x + kHeaderButtonPadding,
+             lock_icon_size.x + kHeaderButtonPadding,
+             unlock_icon_size.x + kHeaderButtonPadding,
+             goto_icon_size.x + kHeaderButtonPadding});
         const float action_btn_y = (kExpandedHeaderHeight - action_btn_size) * 0.5f;
 
         // Title is plain text so the header stays draggable; click to edit.
-        const float buttons_width = action_btn_size * 2.0f + kHeaderButtonGap;
+        const float buttons_width =
+            action_btn_size * 4.0f + kHeaderButtonGap * 3.0f;
         const float title_width   = std::max(
             0.0f, win_size.x - buttons_width - kHeaderButtonGap - kNoteMargin * 2.0f);
         ImGui::PushStyleColor(ImGuiCol_Text, text_color);
@@ -497,7 +574,9 @@ StickyNote::RenderExpandedWindow(const ImVec2& anchor_pos)
             }
             else
             {
-                ElidedText(m_title.c_str(), title_width);
+                ImGui::TextUnformatted(
+                    ElideWithEllipsis(m_title, title_width, kPreviewTitleMaxChars)
+                        .c_str());
             }
 
             const ImVec2 title_min(win_pos.x + kNoteMargin, win_pos.y);
@@ -518,6 +597,28 @@ StickyNote::RenderExpandedWindow(const ImVec2& anchor_pos)
         ImGui::PushStyleColor(ImGuiCol_Text, muted_text_color);
         const ImU32 transparent = settings.GetColor(Colors::kTransparent);
         const ImVec2 action_btn(action_btn_size, action_btn_size);
+
+        ImGui::SetCursorPos(ImVec2(
+            win_size.x - action_btn_size * 4.0f - kHeaderButtonGap * 3.0f - kNoteMargin,
+            action_btn_y));
+        if(IconButton(ICON_ARROW_FORWARD, action_icon_font, action_btn, "Go to Anchor",
+                      false,
+                      ImVec2(0.0f, 0.0f), transparent, icon_hover_color,
+                      icon_active_color, ("goto_" + std::to_string(m_id)).c_str()))
+        {
+            m_pending_navigate = true;
+        }
+
+        ImGui::SetCursorPos(ImVec2(
+            win_size.x - action_btn_size * 3.0f - kHeaderButtonGap * 2.0f - kNoteMargin,
+            action_btn_y));
+        if(IconButton(m_locked ? ICON_LOCKED : ICON_UNLOCKED, action_icon_font,
+                      action_btn, m_locked ? "Unlock Position" : "Lock Position", false,
+                      ImVec2(0.0f, 0.0f), transparent, icon_hover_color,
+                      icon_active_color, ("lock_" + std::to_string(m_id)).c_str()))
+        {
+            m_locked = !m_locked;
+        }
 
         ImGui::SetCursorPos(ImVec2(
             win_size.x - action_btn_size * 2.0f - kHeaderButtonGap - kNoteMargin,
@@ -555,7 +656,7 @@ StickyNote::RenderExpandedWindow(const ImVec2& anchor_pos)
         InlineInputTextMultiline(
             ("##body_" + std::to_string(m_id)).c_str(), m_text,
             ImVec2(win_size.x - kNoteMargin * 2.0f, body_height),
-            ImGuiInputTextFlags_AllowTabInput);
+            ImGuiInputTextFlags_AllowTabInput | ImGuiInputTextFlags_WordWrap);
         bool body_active = ImGui::IsItemActive();
         PopPlainTextInputStyle();
         ImGui::PopStyleColor();
@@ -569,6 +670,19 @@ StickyNote::RenderExpandedWindow(const ImVec2& anchor_pos)
         }
 
         hovered = ImGui::IsWindowHovered(ImGuiHoveredFlags_RootAndChildWindows);
+
+        // Hovering the anchor glows the note. Drawn on the note's draw list so
+        // tooltips stay on top; clip is expanded so the outset ring isn't clipped.
+        if(marker_hovered)
+        {
+            const ImVec2 ring_min(win_pos.x - kHighlightPad, win_pos.y - kHighlightPad);
+            const ImVec2 ring_max(win_pos.x + win_size.x + kHighlightPad,
+                                  win_pos.y + win_size.y + kHighlightPad);
+            note_draw_list->PushClipRect(ring_min, ring_max, false);
+            note_draw_list->AddRect(ring_min, ring_max, HighlightRingColor(settings),
+                                    rounding + kHighlightPad, 0, kHighlightThickness);
+            note_draw_list->PopClipRect();
+        }
 
         // Provisional note commits on first input, discarded if abandoned empty.
         if(m_provisional)
@@ -659,9 +773,11 @@ StickyNote::HandleDrag(const ImVec2&                       window_position,
     bool        mouse_released = ImGui::IsMouseReleased(ImGuiMouseButton_Left);
 
     // Drag-start uses the marker's own hover (last frame), which respects z-order
-    // and popups; an anchor overhanging onto a neighbour track still grabs.
-    if((dragged_id == INVALID_STICKY_ID || dragged_id == m_id) && !m_dragging &&
-       m_marker_hovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left) &&
+    // and popups; an anchor overhanging onto a neighbour track still grabs. A
+    // locked note ignores drags so it can't be nudged out of position.
+    if(!m_locked && (dragged_id == INVALID_STICKY_ID || dragged_id == m_id) &&
+       !m_dragging && m_marker_hovered &&
+       ImGui::IsMouseClicked(ImGuiMouseButton_Left) &&
        !HotkeyManager::GetInstance().IsActionHeld(HotkeyActionId::kRegionSelect))
     {
         m_dragging    = true;

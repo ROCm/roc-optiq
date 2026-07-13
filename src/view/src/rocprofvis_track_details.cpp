@@ -455,8 +455,9 @@ TrackDetails::RenderTable(InfoTable& table, const char* table_id,
                     CaptureCellRightClick(0, stat_row, m_cell_menu, open_menu);
                     PositionCell(1);
                     ImGui::BeginDisabled(!stats_ready);
-                    ImGui::TextUnformatted(stats_ready ? stats->stats[i].compact.c_str()
-                                                       : "--");
+                    const std::string stat_value =
+                        stats_ready ? stats->stats[i].FullValue() : "--";
+                    ImGui::TextUnformatted(stat_value.c_str());
                     ImGui::EndDisabled();
                     CaptureCellRightClick(1, stat_row, m_cell_menu, open_menu);
                     ImGui::PopID();
@@ -486,7 +487,8 @@ TrackDetails::RenderTable(InfoTable& table, const char* table_id,
                 {
                     const AnalysisTrackStatistics::Stat& stat =
                         stats->stats[m_cell_menu.row - rows];
-                    std::string stat_cells[2] = { std::string(stat.name), stat.compact };
+                    std::string stat_cells[2] = { std::string(stat.name),
+                                                  stat.FullValue() };
                     AddCopyRowCellMenuItems(stat_cells, 2, m_cell_menu.column);
                 }
                 EndCellContextMenu();

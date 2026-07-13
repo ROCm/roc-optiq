@@ -439,6 +439,15 @@ RocProfVis::View::get_application_log_path(bool create_dirs)
 #endif
 }
 
+// Number of decimal places to show for a value of the given magnitude. Fewer
+// decimals for larger numbers keeps things readable while preserving precision
+// for small values.
+static int
+adaptive_decimal_places(double magnitude)
+{
+    return magnitude >= 100.0 ? 0 : (magnitude >= 10.0 ? 1 : 2);
+}
+
 std::string
 RocProfVis::View::compact_number_format(double number)
 {
@@ -471,9 +480,23 @@ RocProfVis::View::compact_number_format(double number)
         return output.str();
     }
 
-    output << std::fixed << std::setprecision(number >= 100 ? 0 : (number >= 10 ? 1 : 2))
-        << number
-        << suffixes[magnitude];
+    output << std::fixed << std::setprecision(adaptive_decimal_places(number)) << number
+           << suffixes[magnitude];
+    return output.str();
+}
+
+std::string
+RocProfVis::View::full_number_format(double number)
+{
+    if(!std::isfinite(number))
+    {
+        if(std::isnan(number)) return "NaN";
+        return std::signbit(number) ? "-Inf" : "+Inf";
+    }
+
+    std::ostringstream output;
+    output << std::fixed << std::setprecision(adaptive_decimal_places(std::fabs(number)))
+           << number;
     return output.str();
 }
 

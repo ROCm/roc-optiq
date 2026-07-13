@@ -5,9 +5,6 @@
 #include "../rocprofvis_utils.h"
 #include "rocprofvis_topology_model.h"
 #include <array>
-#include <cmath>
-#include <iomanip>
-#include <sstream>
 #include <tuple>
 
 namespace RocProfVis
@@ -15,8 +12,6 @@ namespace RocProfVis
 namespace View
 {
 
-constexpr int SIGNIFICANT_DIGITS = 1;
-const double  ROUND_FACTOR       = std::pow(10.0, SIGNIFICANT_DIGITS);
 // Name, compact name, accent color index
 constexpr std::array<std::tuple<const char*, const char*, size_t>,
                      AnalysisTrackStatistics::Queue::kQueueCount>
@@ -142,7 +137,7 @@ AnalysisModel::SetQueueUtilization(uint64_t track_id, const double& util_pct)
        store.state == AnalysisTrackStatistics::State::kRequested)
     {
         store.stats[AnalysisTrackStatistics::Queue::kQueueUtilization].value =
-            Round(util_pct);
+            util_pct;
         ToString(store.track,
                  store.stats[AnalysisTrackStatistics::Queue::kQueueUtilization], "%");
         store.state = AnalysisTrackStatistics::State::kReady;
@@ -158,13 +153,13 @@ AnalysisModel::SetCounterStatistics(uint64_t track_id,
        store.state == AnalysisTrackStatistics::State::kRequested)
     {
         store.stats[AnalysisTrackStatistics::Counter::kCounterMin].value =
-            Round(stats.min_value);
+            stats.min_value;
         store.stats[AnalysisTrackStatistics::Counter::kCounterMax].value =
-            Round(stats.max_value);
+            stats.max_value;
         store.stats[AnalysisTrackStatistics::Counter::kCounterMean].value =
-            Round(stats.mean_value);
+            stats.mean_value;
         store.stats[AnalysisTrackStatistics::Counter::kCounterStandardDeviation].value =
-            Round(stats.std_dev);
+            stats.std_dev;
         const CounterInfo* counter =
             m_topology.GetCounter(store.track->topology.id.value);
         if(counter)
@@ -210,34 +205,23 @@ void
 AnalysisModel::ToString(const TrackInfo* track, AnalysisTrackStatistics::Stat& stat,
                         const std::string& units)
 {
-    std::ostringstream oss;
-    oss << std::fixed << std::setprecision(SIGNIFICANT_DIGITS) << stat.value;
+    stat.suffix = units;
+    stat.full   = full_number_format(stat.value);
     switch(track->topology.type)
     {
         case TrackInfo::Queue:
         {
-            stat.compact  = oss.str() + (units.empty() ? "" : " " + units);
-            stat.extended = std::string(stat.compact_name) + ": " + stat.compact;
-            stat.full     = std::string(stat.name) + ": " + oss.str() +
-                            (units.empty() ? "" : " " + units);
+            // Utilization percentages are already small; the compact form is
+            // the same value as the full form.
+            stat.compact = stat.full;
             break;
         }
         case TrackInfo::Counter:
         {
-            stat.compact =
-                compact_number_format(stat.value) + (units.empty() ? "" : " " + units);
-            stat.extended = std::string(stat.compact_name) + ": " + stat.compact;
-            stat.full     = std::string(stat.name) + ": " + oss.str() +
-                            (units.empty() ? "" : " " + units);
+            stat.compact = compact_number_format(stat.value);
             break;
         }
     }
-}
-
-double
-AnalysisModel::Round(double d) const
-{
-    return std::round(d * ROUND_FACTOR) / ROUND_FACTOR;
 }
 
 }  // namespace View

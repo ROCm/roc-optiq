@@ -1128,21 +1128,16 @@ Pill::~Pill()
 }
 
 void
-Pill::SetLabel(const std::string& label, Sizing sizing)
+Pill::SetLabel(const std::string& label)
 {
-    switch(sizing)
-    {
-        case kCompact:
-        {
-            m_compact_label = label;
-            break;
-        }
-        case kExtended:
-        {
-            m_ext_label = label;
-            break;
-        }
-    }
+    m_compact_label = label;
+    CalculateSize();
+}
+
+void
+Pill::SetExtendedLabel(const std::string& label)
+{
+    m_ext_label = label;
     CalculateSize();
 }
 

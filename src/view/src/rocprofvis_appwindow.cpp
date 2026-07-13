@@ -422,12 +422,7 @@ AppWindow::ShowPathPickerDialog(const std::string& title, const std::string& ini
         return;
     }
 #endif
-    m_file_dialog_callback = callback;
-    m_init_file_dialog     = true;
-    IGFD::FileDialogConfig config;
-    config.path = initial_path;
-    config.flags = ImGuiFileDialogFlags_Modal;
-    ImGuiFileDialog::Instance()->OpenDialog(FILE_DIALOG_NAME, title, nullptr, config);
+    ShowImGuiFileDialog(title, {}, initial_path, false, callback, true);
 }
 
 Project*
@@ -902,9 +897,12 @@ AppWindow::RenderFileDialog()
     {
         if(ImGuiFileDialog::Instance()->IsOk())
         {
-            m_file_dialog_callback(
-                std::filesystem::path(ImGuiFileDialog::Instance()->GetFilePathName())
-                    .string());
+            // Directory mode reports its result via GetCurrentPath(); GetFilePathName()
+            // is empty in that case.
+            const std::string result = m_imgui_file_dialog_folder_mode
+                                            ? ImGuiFileDialog::Instance()->GetCurrentPath()
+                                            : ImGuiFileDialog::Instance()->GetFilePathName();
+            m_file_dialog_callback(std::filesystem::path(result).string());
         }
         ImGuiFileDialog::Instance()->Close();
     }
@@ -1610,10 +1608,11 @@ AppWindow::ShowNativeFileDialog(const std::vector<FileFilter>&   file_filters,
 void
 AppWindow::ShowImGuiFileDialog(const std::string& title, const std::vector<FileFilter>& file_filters,
                           const std::string& initial_path, const bool& confirm_overwrite,
-                          std::function<void(std::string)> callback)
+                          std::function<void(std::string)> callback, bool folder_mode)
 {
-    m_file_dialog_callback = callback;
-    m_init_file_dialog     = true;
+    m_file_dialog_callback          = callback;
+    m_init_file_dialog              = true;
+    m_imgui_file_dialog_folder_mode = folder_mode;
 
     std::stringstream filter_stream;
     for(const auto& filter : file_filters)
@@ -1636,8 +1635,9 @@ AppWindow::ShowImGuiFileDialog(const std::string& title, const std::vector<FileF
         }
     }
 
-    // Empty filter list would leave ImGuiFileDialog with no dLGFilters, which rejects every file.
-    // Regex form matches any file name including extensionless executables (Linux/macOS).
+    // An empty filter list leaves ImGuiFileDialog with no dLGFilters, which then hides
+    // every regular file (directory-only mode). The regex form matches any file name,
+    // including extensionless executables (Linux/macOS).
     std::string filter_string = filter_stream.str();
     if(filter_string.empty())
     {
@@ -1649,8 +1649,9 @@ AppWindow::ShowImGuiFileDialog(const std::string& title, const std::vector<FileF
     config.flags = confirm_overwrite
                        ? ImGuiFileDialogFlags_Default
                        : ImGuiFileDialogFlags_Modal | ImGuiFileDialogFlags_HideColumnType;
-    ImGuiFileDialog::Instance()->OpenDialog(FILE_DIALOG_NAME, title,
-                                            filter_stream.str().c_str(), config);
+    // A nullptr filter switches ImGuiFileDialog into directory-selection mode.
+    const char* filters = folder_mode ? nullptr : filter_string.c_str();
+    ImGuiFileDialog::Instance()->OpenDialog(FILE_DIALOG_NAME, title, filters, config);
 }
 
 #if defined(ROCPROFVIS_DEVELOPER_MODE) && defined(ROCPROFVIS_ENABLE_REMOTE)

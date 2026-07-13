@@ -154,7 +154,8 @@ private:
     void ShowImGuiFileDialog(const std::string&             title,
                         const std::vector<FileFilter>& file_filters,
                         const std::string& initial_path, const bool& confirm_overwrite,
-                        std::function<void(std::string)> callback);
+                        std::function<void(std::string)> callback,
+                        bool                             folder_mode = false);
     static AppWindow* s_instance;
 
     std::shared_ptr<VFixedContainer> m_main_view;
@@ -196,6 +197,10 @@ private:
     std::atomic<bool>                m_use_native_file_dialog;
 
     bool                             m_init_file_dialog;
+    // Only used by the ImGuiFileDialog backend (not the native dialog): its directory
+    // mode returns the result via GetCurrentPath() instead of GetFilePathName(), so the
+    // shared ImGui callback site needs to know which to read.
+    bool                             m_imgui_file_dialog_folder_mode = false;
 #ifdef ROCPROFVIS_HAVE_NATIVE_FILE_DIALOG
     std::atomic<bool>                m_is_native_file_dialog_open;
     std::future<std::string>         m_file_dialog_future;

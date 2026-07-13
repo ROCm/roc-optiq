@@ -154,9 +154,9 @@ The shortcut keys (**WASD** and arrow keys) can also be used to zoom and pan the
 - **A** or **Left Arrow** / **D** or **Right Arrow**: Pan left and right, respectively.
 - **Up Arrow** / **Down Arrow**: Scroll the track list up and down.
 
-   .. note::
+  .. note::
 
-      See :ref:`change-settings` to customize these hotkeys.
+    See :ref:`change-settings` to customize these hotkeys.
 
 - The upper-left region of the **Timeline View** displays a track summary showing the total number of tracks and a per-type breakdown (for example, event, counter, queue, and thread tracks).
 - Hold the mouse pointer over the **Description** area, and the scroll wheel will scroll through the track list. 
@@ -298,14 +298,14 @@ This section provides an interface for multiple data perspectives, offering gran
    In the **Event Table**, **Event Details**, and **Top Events** tables, right-click a row or cell to **Go To Event**, **Copy Row Data**, **Copy Cell Data**, and **Export to File** (CSV).
 
    .. image:: ../images/go-to-event.png
-   :width: 300
-   :alt: Menu displaying **Go To Event**, **Copy Row Data**, **Copy Cell Data**, and **Export to File** options.
+      :width: 300
+      :alt: Menu displaying **Go To Event**, **Copy Row Data**, **Copy Cell Data**, and **Export to File** options.
 
    In the **Flow Data**, and **Call Stack** tables, right-click a row or cell to **Go To Event**, **Copy Row Data**, or **Copy Cell Data**.  
 
    .. image:: ../images/flow-options.png
-   :width: 300
-   :alt: Menu displaying **Go To Event**, **Copy Row Data**, and **Copy Cell Data** in the Flow Data section.
+      :width: 300
+      :alt: Menu displaying **Go To Event**, **Copy Row Data**, and **Copy Cell Data** in the Flow Data section.
 
 
 

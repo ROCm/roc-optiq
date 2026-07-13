@@ -101,4 +101,8 @@ the counter migration, explained above and locked down by the order-independence
 
 This branch is a working reference for exactly how each track type maps onto the ProfilerHub
 reader API and what each migration's fidelity check looked like — evidence that the reader API
-is sufficient to carry the loader's SQL layer off of hand-writ
+is sufficient to carry the loader's SQL layer off of hand-written queries entirely, not just for
+a subset of track types. It's one possible way to shape that migration, not a mandate to copy
+this branch commit-for-commit; if a different sequencing, grouping, or adapter structure fits
+Optiq's codebase better, this is meant as a starting point for that conversation, not the final
+answer. Questions, or want to walk through any specific migration in more depth, just ask.

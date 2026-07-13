@@ -119,16 +119,19 @@ typedef enum rocprofvis_controller_object_type_t
     kRPVControllerObjectTypeMetricsContainer = 103,
     // Roofline object
     kRPVControllerObjectTypeRoofline = 104,
-    // Roofline object
-    kRPVControllerObjectTypeRemoteConnection = 105,
-    // Profiler configuration
-    kRPVProfilerConfig = 106,
-    // Profiler session (owns ProfilerProcessController)
-    kRPVProfiler = 107,
-    // Ssh intercomponent bridge
-    kRPVSshBridge = 108,
 #endif
-
+#ifdef ROCPROFVIS_ENABLE_REMOTE
+    // Remote connection object
+    kRPVControllerObjectTypeRemoteConnection = 205,
+    // Ssh intercomponent bridge
+    kRPVSshBridge = 208,
+#endif
+#ifdef ROCPROFVIS_ENABLE_PROFILER
+    // Profiler configuration
+    kRPVProfilerConfig = 306,
+    // Profiler session (owns ProfilerProcessController)
+    kRPVProfiler = 307,
+#endif
 } rocprofvis_controller_object_type_t;
 
 /*

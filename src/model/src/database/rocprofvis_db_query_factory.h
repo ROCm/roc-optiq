@@ -23,7 +23,6 @@ public:
     std::string GetRocprofRegionSliceQuery(bool is_sample_track);
     std::string GetRocprofRegionTableQuery(bool is_sample_track);
 
-
     std::string GetRocprofKernelDispatchTrackQuery();
     std::string GetRocprofKernelDispatchTrackQueryForStream();
     std::string GetRocprofKernelDispatchLevelQuery();
@@ -63,7 +62,8 @@ public:
     std::string GetRocprofMemoryActivityLevelQuery();
     std::string GetRocprofMemoryActivitySliceQuery();
 
-    std::string GetRocprofEssentialInfoQueryForRegionEvent(uint64_t event_id, bool is_sample_track);
+    std::string GetRocprofEssentialInfoQueryForRegionEvent(uint64_t event_id,
+                                                           bool     is_sample_track);
     std::string GetRocprofEssentialInfoQueryForKernelDispatchEvent(uint64_t event_id);
     std::string GetRocprofEssentialInfoQueryForMemoryAllocEvent(uint64_t event_id);
     std::string GetRocprofEssentialInfoQueryForMemoryCopyEvent(uint64_t event_id);
@@ -78,10 +78,8 @@ public:
     std::string GetRocprofMemoryCopyStreamFlowQuery();
 
 private:
-
     ProfileDatabase* m_db;
 };
-
 
 }  // namespace DataModel
 }  // namespace RocProfVis

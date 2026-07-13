@@ -201,8 +201,9 @@ ReadSliceData(rocprofvis_dm_trace_t trace, uint32_t num_tracks,
         rocprofvis_dm_track_t track =
             rocprofvis_dm_get_property_as_handle(trace, kRPVDMTrackHandleIndexed, i);
         REQUIRE(track != nullptr);
-        uint64_t              hash_time = rocprofvis_dm_hash_combine_timestamp(start_time, end_time, kRocProfVisDmHashedTimestampTagTrackSlice);
-        rocprofvis_dm_slice_t slice     = rocprofvis_dm_get_property_as_handle(
+        uint64_t hash_time = rocprofvis_dm_hash_combine_timestamp(
+            start_time, end_time, kRocProfVisDmHashedTimestampTagTrackSlice);
+        rocprofvis_dm_slice_t slice = rocprofvis_dm_get_property_as_handle(
             track, kRPVDMSliceHandleTimed, hash_time);
         if(slice != nullptr)
         {
@@ -524,9 +525,10 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisDMFixture, "System Trace Data-Model Tests
 
                 auto                   t1 = std::chrono::steady_clock::now();
                 rocprofvis_dm_result_t read_slice_issue =
-                    rocprofvis_db_read_trace_slice_async(m_db, start_time, end_time,
-                                                         kRocProfVisDmHashedTimestampTagTrackSlice, 1,
-                                                         (uint32_t*) &i, object2wait);
+                    rocprofvis_db_read_trace_slice_async(
+                        m_db, start_time, end_time,
+                        kRocProfVisDmHashedTimestampTagTrackSlice, 1, (uint32_t*) &i,
+                        object2wait);
                 REQUIRE(kRocProfVisDmResultSuccess == read_slice_issue);
                 if(kRocProfVisDmResultSuccess == read_slice_issue)
                 {
@@ -541,7 +543,9 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisDMFixture, "System Trace Data-Model Tests
                         uint32_t num_rows = ((RocProfVis::DataModel::Future*) object2wait)
                                                 ->GetProcessedRowsCount();
                         total_num_rows += num_rows;
-                        uint64_t hash_time = rocprofvis_dm_hash_combine_timestamp(start_time, end_time, kRocProfVisDmHashedTimestampTagTrackSlice);
+                        uint64_t hash_time = rocprofvis_dm_hash_combine_timestamp(
+                            start_time, end_time,
+                            kRocProfVisDmHashedTimestampTagTrackSlice);
                         rocprofvis_dm_slice_t slice =
                             rocprofvis_dm_get_property_as_handle(
                                 track, kRPVDMSliceHandleTimed, hash_time);
@@ -583,10 +587,10 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisDMFixture, "System Trace Data-Model Tests
             spdlog::info("Read time slice for all tracks");
             auto                   t1 = std::chrono::steady_clock::now();
             rocprofvis_dm_result_t read_slice_result =
-                rocprofvis_db_read_trace_slice_async(m_db, m_start_time, m_end_time,
-                                                     kRocProfVisDmHashedTimestampTagTrackSlice,
-                                                     m_num_tracks, m_tracks_selection,
-                                                     object2wait);
+                rocprofvis_db_read_trace_slice_async(
+                    m_db, m_start_time, m_end_time,
+                    kRocProfVisDmHashedTimestampTagTrackSlice, m_num_tracks,
+                    m_tracks_selection, object2wait);
             REQUIRE(kRocProfVisDmResultSuccess == read_slice_result);
             rocprofvis_dm_result_t slice_wait_result =
                 rocprofvis_db_future_wait(object2wait, UINT64_MAX);
@@ -646,8 +650,9 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisDMFixture, "System Trace Data-Model Tests
                 rocprofvis_dm_track_category_t track_category =
                     (rocprofvis_dm_track_category_t) rocprofvis_dm_get_property_as_uint64(
                         track, kRPVDMTrackCategoryEnumUInt64, 0);
-                uint64_t              hash_time = rocprofvis_dm_hash_combine_timestamp(m_start_time, m_end_time, kRocProfVisDmHashedTimestampTagTrackSlice);
-                rocprofvis_dm_slice_t slice     = rocprofvis_dm_get_property_as_handle(
+                uint64_t hash_time = rocprofvis_dm_hash_combine_timestamp(
+                    m_start_time, m_end_time, kRocProfVisDmHashedTimestampTagTrackSlice);
+                rocprofvis_dm_slice_t slice = rocprofvis_dm_get_property_as_handle(
                     track, kRPVDMSliceHandleTimed, hash_time);
                 REQUIRE(slice != nullptr);
                 uint64_t track_id =
@@ -665,7 +670,8 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisDMFixture, "System Trace Data-Model Tests
 
                 spdlog::info(ANSI_COLOR_CYAN "\t{0} : {1} : {2}", "Properties",
                              "Memory usage", memory_usage);
-                for(int ext_data_index = 0; ext_data_index < num_ext_data; ext_data_index++)
+                for(int ext_data_index = 0; ext_data_index < num_ext_data;
+                    ext_data_index++)
                 {
                     char* ext_data_category = rocprofvis_dm_get_property_as_charptr(
                         track, kRPVDMTrackExtDataCategoryCharPtrIndexed, ext_data_index);
@@ -1391,10 +1397,9 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisDMFixture, "System Trace Data-Model Tests
             REQUIRE(nullptr != object2wait);
 
             rocprofvis_dm_result_t read_slice_issue =
-                rocprofvis_db_read_trace_slice_async(m_db, start_time, end_time,
-                                                     kRocProfVisDmHashedTimestampTagTrackSlice,
-                                                     m_num_tracks, m_tracks_selection,
-                                                     object2wait);
+                rocprofvis_db_read_trace_slice_async(
+                    m_db, start_time, end_time, kRocProfVisDmHashedTimestampTagTrackSlice,
+                    m_num_tracks, m_tracks_selection, object2wait);
             REQUIRE(kRocProfVisDmResultSuccess == read_slice_issue);
             spdlog::info("Access data while loaded");
             {

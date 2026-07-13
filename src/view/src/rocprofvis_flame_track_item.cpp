@@ -186,7 +186,7 @@ FlameTrackItem::Update()
                 m_track_statistics
                     ->stats[AnalysisTrackStatistics::Queue::kQueueUtilization];
             m_pill_analysis_queue->Activate();
-            m_pill_analysis_queue->SetCompactLabel(stat.CompactValue());
+            m_pill_analysis_queue->SetLabel(stat.CompactValue());
             m_pill_analysis_queue->SetExtendedLabel(stat.CompactLabel());
             m_pill_analysis_queue->SetTooltip(stat.FullLabel());
         }

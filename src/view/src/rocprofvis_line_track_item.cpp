@@ -258,7 +258,7 @@ LineTrackItem::Update()
                     const AnalysisTrackStatistics::Stat& stat =
                         m_track_statistics->stats[i];
                     m_pills_analysis[i]->Activate();
-                    m_pills_analysis[i]->SetCompactLabel(stat.CompactValue());
+                    m_pills_analysis[i]->SetLabel(stat.CompactValue());
                     m_pills_analysis[i]->SetExtendedLabel(stat.CompactLabel());
                     m_pills_analysis[i]->SetTooltip(stat.FullLabel());
                 }

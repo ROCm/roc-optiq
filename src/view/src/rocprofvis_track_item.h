@@ -63,7 +63,7 @@ public:
     Pill(bool shown, bool active);
     ~Pill();
 
-    void   SetCompactLabel(const std::string& label);
+    void   SetLabel(const std::string& label);
     void   SetExtendedLabel(const std::string& label);
     void   SetTooltip(std::string label);
     void   SetAccentColor(size_t accent_color);

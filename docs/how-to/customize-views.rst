@@ -191,9 +191,9 @@ Customize display options for each track by clicking the gear icon in the track'
 
 - For event tracks, you can toggle between **Color by Name**, **Color by Time Level**, **No Color**, and **Compact mode**.
 
-   - **Color by Time Level**: Events with the same name but different start times have different colors. 
-   - **No Color**: Events render without name-based coloring. 
-   - **Compact mode**: Shrink event track heights to display tall flame graphs in a smaller area. 
+  - **Color by Time Level**: Events with the same name but different start times have different colors. 
+  - **No Color**: Events render without name-based coloring. 
+  - **Compact mode**: Shrink event track heights to display tall flame graphs in a smaller area. 
 
 - For sample counter tracks, you can toggle between **Show Counter Boxes**, **Alternate Counter Coloring**, and **Highlight Y Range**:
 
@@ -219,7 +219,7 @@ Customize display options for each track by clicking the gear icon in the track'
    The context menu when right-clicking a track's description in **Timeline View** also provides **Copy track name** and **Copy track ID**. 
 
    .. image:: ../images/context-menu-min.png
-      :width: 200
+      :width: 400
       :alt: Context menu when right-clicking on a track's description.
 
 Set the flow rendering display mode

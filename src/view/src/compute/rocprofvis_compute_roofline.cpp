@@ -787,7 +787,7 @@ Roofline::RenderMenus(ImVec2 region, ImVec2 plot_pos, ImVec2 plot_size,
         ImGui::EndGroup();
         float header_height = ImGui::GetItemRectSize().y + 2 * style.WindowPadding.y;
         float footer_height =
-            (m_kernel_mode == AllKernels ? 4 : 3) * ImGui::GetFrameHeightWithSpacing() +
+            (m_kernel_mode == AllKernels ? 6 : 5) * ImGui::GetFrameHeightWithSpacing() +
             2 * style.WindowPadding.y;
         ImGui::SetNextWindowSizeConstraints(
             ImVec2(menus_content_width, 0),
@@ -912,6 +912,16 @@ Roofline::RenderMenus(ImVec2 region, ImVec2 plot_pos, ImVec2 plot_size,
         if(m_menus_mode == Options)
         {
             ImGui::SeparatorText("Options");
+            if(m_kernel_mode == AllKernels)
+            {
+                ImGui::PushID("kernel_scale");
+                ImGui::Checkbox("", &m_scale_intensity);
+                ImGui::SameLine();
+                ElidedText("Scale kernel marker size to duration",
+                           ImGui::GetContentRegionAvail().x, plot_size.x * 0.5f,
+                           Alignment_Left, true);
+                ImGui::PopID();
+            }
             ImGui::PushID("line_thickness");
             ElidedText("Line thickness", ImGui::GetContentRegionAvail().x,
                        plot_size.x * 0.5f, Alignment_Left, true);
@@ -923,16 +933,6 @@ Roofline::RenderMenus(ImVec2 region, ImVec2 plot_pos, ImVec2 plot_size,
                     std::clamp(m_line_thickness, LINE_THICKNESS_MIN, LINE_THICKNESS_MAX);
             }
             ImGui::PopID();
-            if(m_kernel_mode == AllKernels)
-            {
-                ImGui::PushID("kernel_scale");
-                ImGui::Checkbox("", &m_scale_intensity);
-                ImGui::SameLine();
-                ElidedText("Scale kernel marker size to duration",
-                           ImGui::GetContentRegionAvail().x, plot_size.x * 0.5f,
-                           Alignment_Left, true);
-                ImGui::PopID();
-            }
             ImGui::PushID("menus_placement");
             ElidedText("Menus position", ImGui::GetContentRegionAvail().x,
                        plot_size.x * 0.5f, Alignment_Left, true);

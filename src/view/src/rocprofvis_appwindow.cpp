@@ -939,10 +939,12 @@ AppWindow::RenderFileMenu(Project* project)
         {
             HandleOpenFile();
         }
+#ifdef ROCPROFVIS_DEVELOPER_MODE
         if(ImGui::MenuItem("Compare", nullptr, false, !is_open_file_dialog_open))
         {
             HandleCompareFiles();
         }
+#endif
         if(ImGui::MenuItem("Save", nullptr, false,
                            !is_open_file_dialog_open && (project && project->IsProject())))
         {

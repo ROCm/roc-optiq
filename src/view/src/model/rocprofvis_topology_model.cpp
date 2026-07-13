@@ -4,8 +4,10 @@
 #include "rocprofvis_topology_model.h"
 #include "rocprofvis_common_defs.h"
 
+#include <algorithm>
 #include <limits>
 #include <sstream>
+#include <vector>
 
 namespace RocProfVis
 {
@@ -30,6 +32,20 @@ TopologyDataModel::GetNodeList() const
         result.push_back(&pair.second);
     }
     return result;
+}
+
+size_t
+TopologyDataModel::GetNodeDisplayIndex(uint64_t node_id) const
+{
+    std::vector<uint64_t> ids;
+    ids.reserve(m_nodes.size());
+    for(const auto& pair : m_nodes)
+    {
+        ids.push_back(pair.first);
+    }
+    std::sort(ids.begin(), ids.end());
+    auto it = std::find(ids.begin(), ids.end(), node_id);
+    return (it != ids.end()) ? static_cast<size_t>(std::distance(ids.begin(), it)) + 1 : 0;
 }
 
 void

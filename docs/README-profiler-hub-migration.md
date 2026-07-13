@@ -10,10 +10,13 @@ migrates Optiq's own loader end to end, one track type at a time, and verifies e
 for fidelity against the existing SQL-based behavior it replaces.
 
 This branch lives on a personal fork (`avansick-amd/roc-optiq`), not on the official
-`ROCm/roc-optiq` repo, and nothing here is merged or PR'd against that repo. It's here so the
-Optiq team can look at a working, fidelity-checked example before any decision is made — you're
-free to adopt all of it, part of it, or none of it. Where this document says "replaces," it
-means "replaces in this prototype branch," not "should replace in your codebase."
+`ROCm/roc-optiq` repo, and nothing here is merged or PR'd against that repo. Moving Optiq's
+loader off its hand-written SQL layer and onto a shared reader API is one of the main drivers
+of the broader ProfilerHub project, and this branch exists to show that the reader API is
+actually sufficient to carry that move — proven end to end, one track type at a time, with a
+fidelity check against the SQL behavior it replaces. It's one concrete way to get there, not the
+only possible shape that migration could take. Where this document says "replaces," it means
+"replaces in this prototype branch."
 
 ## What changed, at a glance
 
@@ -96,9 +99,6 @@ the counter migration, explained above and locked down by the order-independence
 
 ## Bottom line for the Optiq team
 
-If you want to adopt any of this, this branch is a working reference for exactly how each track
-type maps onto the ProfilerHub reader API and what each migration's fidelity check looked like.
-If you'd rather keep your existing SQL path for some or all track types, nothing here forces a
-change — the reader API itself is the durable interface; this branch is just proof it's
-sufficient to build on. Questions, or want to walk through any specific migration in more depth,
-just ask.
+This branch is a working reference for exactly how each track type maps onto the ProfilerHub
+reader API and what each migration's fidelity check looked like — evidence that the reader API
+is sufficient to carry the loader's SQL layer off of hand-writ

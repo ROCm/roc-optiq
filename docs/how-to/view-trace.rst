@@ -379,6 +379,6 @@ Search for events using the search box on the main **Toolbar**.
    :alt: Search box on the main toolbar with a search string entered and results shown in a list below
 
 - To search, type a search string and press **Enter** (search is case-insensitive).
-- Clicking on a row in the search results will bring the selected event into view on the :ref:`timeline`.
+- Clicking on a row in the search results will bring the selected event into view on the :ref:`timeline`. 
 - Clicking **X** clears the search results.
 - The search can match multiple substrings at once. Multiple search tokens must be surrounded by quotation marks without spaces (for example: ``“term1””term2”``).

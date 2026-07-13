@@ -95,25 +95,6 @@ PopPlainTextInputStyle()
     ImGui::PopStyleColor(3);
 }
 
-// Trims text to a single line fitting max_width (and max_chars), appending "..."
-// when shortened. Uses the current font for measurement.
-std::string
-ElideWithEllipsis(const std::string& text, float max_width, size_t max_chars)
-{
-    std::string out       = text.substr(0, max_chars);
-    bool        truncated = text.size() > max_chars;
-    while(!out.empty() && ImGui::CalcTextSize((out + "...").c_str()).x > max_width)
-    {
-        out.pop_back();
-        truncated = true;
-    }
-    if(truncated)
-    {
-        out += "...";
-    }
-    return out;
-}
-
 // Dark mode uses the brighter header tint.
 ImU32
 HighlightRingColor(SettingsManager& settings)

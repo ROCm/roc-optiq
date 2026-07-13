@@ -405,6 +405,23 @@ ElidedText(const char* text, float available_width, float tooltip_width,
     }
 }
 
+std::string
+ElideWithEllipsis(const std::string& text, float max_width, size_t max_chars)
+{
+    std::string out       = text.substr(0, max_chars);
+    bool        truncated = text.size() > max_chars;
+    while(!out.empty() && ImGui::CalcTextSize((out + "...").c_str()).x > max_width)
+    {
+        out.pop_back();
+        truncated = true;
+    }
+    if(truncated)
+    {
+        out += "...";
+    }
+    return out;
+}
+
 void
 CenterNextTextItem(const char* text)
 {

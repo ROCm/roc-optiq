@@ -137,7 +137,6 @@ private:
     bool        m_dragging       = false;
     bool        m_track_hidden   = false;
     bool        m_marker_hovered = false;  // Hovered last frame; drives drag-start.
-    bool        m_note_engaged   = false;  // Note hovered/focused; highlights anchor.
     float       m_drag_abs_y     = 0.0f;   // Anchor Y during a drag; bound on drop.
     ImVec2      m_drag_offset    = ImVec2(0, 0);
     bool        m_is_visible;

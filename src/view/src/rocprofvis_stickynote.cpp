@@ -43,6 +43,8 @@ constexpr size_t kPreviewMaxChars     = 200;
 constexpr size_t kPreviewTitleMaxChars = 60;
 constexpr float  kHighlightThickness  = 2.0f;
 constexpr float  kHighlightPad        = 2.0f;
+constexpr float  kLockGlyphScale      = 0.30f;  // Lock badge size vs marker size.
+constexpr float  kLockGlyphPad        = 2.0f;   // Inset from the marker's corner.
 
 // Grows the backing std::string so ImGui can edit it in place.
 int
@@ -110,6 +112,15 @@ ElideWithEllipsis(const std::string& text, float max_width, size_t max_chars)
         out += "...";
     }
     return out;
+}
+
+// Dark mode uses the brighter header tint.
+ImU32
+HighlightRingColor(SettingsManager& settings)
+{
+    return settings.GetUserSettings().display_settings.use_dark_mode
+               ? settings.GetColor(Colors::kStickyNoteHeader)
+               : settings.GetColor(Colors::kStickyNoteAccent);
 }
 }  // namespace
 
@@ -318,7 +329,6 @@ StickyNote::Render(ImDrawList* draw_list, const ImVec2& window_position,
     // Cached for next frame's HandleDrag (which runs before this render pass).
     m_marker_hovered = marker_hovered;
 
-    m_note_engaged      = false;
     bool window_hovered = false;
     if(!m_is_minimized)
     {
@@ -332,10 +342,9 @@ StickyNote::Render(ImDrawList* draw_list, const ImVec2& window_position,
         RenderTimeIndicator(draw_list, window_position, tpt);
     }
 
-    // Outline the anchor when it (or its note) is engaged. Drawn on the timeline
-    // layer so an overlapping note occludes it instead of the outline bleeding
-    // over the covering window.
-    if((marker_hovered || m_note_engaged) && !marker_hidden && draw_list)
+    // Hovering the note glows the anchor. Drawn on the timeline layer so an
+    // overlapping note occludes it.
+    if(window_hovered && !marker_hidden && draw_list)
     {
         SettingsManager& settings = SettingsManager::GetInstance();
         const float      rounding =
@@ -344,7 +353,7 @@ StickyNote::Render(ImDrawList* draw_list, const ImVec2& window_position,
         draw_list->AddRect(
             ImVec2(anchor_pos.x - kHighlightPad, anchor_pos.y - kHighlightPad),
             ImVec2(anchor_pos.x + sz + kHighlightPad, anchor_pos.y + sz + kHighlightPad),
-            settings.GetColor(Colors::kStickyNoteAccent), rounding + kHighlightPad, 0,
+            HighlightRingColor(settings), rounding + kHighlightPad, 0,
             kHighlightThickness);
     }
 
@@ -439,8 +448,22 @@ StickyNote::RenderAnchorMarker(ImDrawList* draw_list, const ImVec2& marker_pos)
     {
         m_request_focus = true;
     }
+
     ImGui::PopStyleColor(4);
     ImGui::PopFont();
+
+    // Tiny lock badge in the marker's top-right corner when locked.
+    if(m_locked && draw_list)
+    {
+        ImFont* icon_font = settings.GetFontManager().GetFont(FontType::kIcon);
+        float   glyph_sz  = btn_size * kLockGlyphScale;
+        ImVec2  text_dim =
+            icon_font->CalcTextSizeA(glyph_sz, FLT_MAX, 0.0f, ICON_LOCKED);
+        ImVec2 lock_pos(btn_max.x - text_dim.x - kLockGlyphPad,
+                        marker_pos.y + kLockGlyphPad);
+        draw_list->AddText(icon_font, glyph_sz, lock_pos, text_color, ICON_LOCKED);
+    }
+
     ImGui::EndChild();
 
     return hovered;
@@ -667,19 +690,15 @@ StickyNote::RenderExpandedWindow(const ImVec2& anchor_pos, bool marker_hovered)
 
         hovered = ImGui::IsWindowHovered(ImGuiHoveredFlags_RootAndChildWindows);
 
-        m_note_engaged =
-            hovered || ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows);
-
-        // Drawn on the note's draw list (not the foreground) so tooltips stay on
-        // top; clip is expanded so the outset ring isn't clipped to the window.
-        if(marker_hovered || m_note_engaged)
+        // Hovering the anchor glows the note. Drawn on the note's draw list so
+        // tooltips stay on top; clip is expanded so the outset ring isn't clipped.
+        if(marker_hovered)
         {
             const ImVec2 ring_min(win_pos.x - kHighlightPad, win_pos.y - kHighlightPad);
             const ImVec2 ring_max(win_pos.x + win_size.x + kHighlightPad,
                                   win_pos.y + win_size.y + kHighlightPad);
             note_draw_list->PushClipRect(ring_min, ring_max, false);
-            note_draw_list->AddRect(ring_min, ring_max,
-                                    settings.GetColor(Colors::kStickyNoteAccent),
+            note_draw_list->AddRect(ring_min, ring_max, HighlightRingColor(settings),
                                     rounding + kHighlightPad, 0, kHighlightThickness);
             note_draw_list->PopClipRect();
         }

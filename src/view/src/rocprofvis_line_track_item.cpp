@@ -8,7 +8,6 @@
 #include "rocprofvis_utils.h"
 #include "spdlog/spdlog.h"
 #include <algorithm>
-#include <charconv>
 #include <iomanip>
 #include <sstream>
 
@@ -593,7 +592,7 @@ LineTrackItem::VerticalLimits::VerticalLimits(std::string field_id)
         {
             UpdateValue(m_default_value);
         }
-        else if(committed_text != m_compact_str)
+        else if(committed_text != m_edit_str)
         {
             double processed = ProcessUserInput(committed_text);
             UpdateValue(processed);
@@ -651,12 +650,15 @@ LineTrackItem::VerticalLimits::UpdateValue(double value)
     m_value         = value;
     m_formatted_str = FormatValue(value);
     m_compact_str   = compact_number_format(value);
+    // Units-free so the edit box shows "25.2M", not "25.2M bytes".
+    m_edit_str = m_compact_str;
     if(!m_units.empty())
     {
         m_formatted_str += " " + m_units;
         m_compact_str += " " + m_units;
     }
     m_text_field.SetText(m_compact_str, m_formatted_str, m_formatted_default);
+    m_text_field.SetEditText(m_edit_str);
 }
 
 std::string
@@ -670,37 +672,13 @@ LineTrackItem::VerticalLimits::FormatValue(double value)
 double
 LineTrackItem::VerticalLimits::ProcessUserInput(std::string_view input)
 {
-    double      result = 0.0;
-    const char* first  = input.data();
-    const char* last   = input.data() + input.size();
-    
-#if defined(__APPLE__)
-    // macOS doesn't support from_chars for floating point yet, use strtod as fallback
-    char* end_ptr = nullptr;
-    std::string null_terminated(input);
-    result = std::strtod(null_terminated.c_str(), &end_ptr);
-    if(end_ptr == null_terminated.c_str() + null_terminated.size() && std::isfinite(result))
+    double value = 0.0;
+    if(parse_compact_number(input, m_units, value))
     {
-        return result;
+        return value;
     }
-    else
-    {
-        m_text_field.RevertToDefault();
-        return m_default_value;
-    }
-#else
-    auto [ptr, error_code] =
-        std::from_chars(first, last, result, std::chars_format::general);
-    if(error_code == std::errc{} && std::isfinite(result) && ptr == last)
-    {
-        return result;
-    }
-    else
-    {
-        m_text_field.RevertToDefault();
-        return m_default_value;
-    }
-#endif
+    m_text_field.RevertToDefault();
+    return m_default_value;
 }
 
 }  // namespace View

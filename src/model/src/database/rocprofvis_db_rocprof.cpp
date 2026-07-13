@@ -2240,12 +2240,145 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
     return future->SetPromise(future->Interrupted() ? kRocProfVisDmResultDbAbort : kRocProfVisDmResultDbAccessFailed);
 }
 
+rocprofvis_dm_result_t
+RocprofDatabase::BuildReaderFlowIndexes(DbInstance* db_instance)
+{
+    using event_type_t = profiler_hub::reader_types::event_type_t;
+    using track_type_t = profiler_hub::reader_types::track_type_t;
 
+    std::lock_guard<std::mutex> lock(m_flow_index_mutex);
+    uint32_t                    idx = db_instance->GuidIndex();
+    if(m_flow_index_built.size() < NumDbInstances())
+    {
+        m_flow_topology.resize(NumDbInstances());
+        m_flow_payload.resize(NumDbInstances());
+        m_flow_index_built.resize(NumDbInstances(), false);
+    }
+    if(m_flow_index_built[idx]) return kRocProfVisDmResultSuccess;
+
+    profiler_hub::reader_t* reader = GetReader(db_instance);
+    if(!reader) return kRocProfVisDmResultDbAccessFailed;
+
+    reader_flow_topology_t& topology = m_flow_topology[idx];
+    reader_flow_payload_t&  payload  = m_flow_payload[idx];
+
+    // TOPOLOGY: one get_flows() call yields the full stack-clique as directed edges;
+    // store an undirected adjacency so a clicked endpoint of any type finds all its
+    // stack-mates (region sources via forward edges, GPU/memory endpoints via the
+    // reverse). std::set dedups and keeps neighbors ordered by (event_type, opaque_id) —
+    // which matches the SQL UNION leg order (region < kernel_dispatch < memory_copy <
+    // memory_allocate).
+    for(const auto& flow : reader->get_flows())
+    {
+        ReaderFlowKey src{ flow.source_type, flow.source_opaque_id };
+        ReaderFlowKey dst{ flow.dest_type, flow.dest_opaque_id };
+        topology[src].insert(dst);
+        topology[dst].insert(src);
+    }
+
+    // PAYLOAD: iterate only the four NATIVE single-table track types. Stream and counter
+    // tracks are excluded: a stream track re-lists kernel_dispatch/memory_copy/
+    // memory_allocate events (op_kind populated) whose per-track nesting level can differ
+    // from the native track's, and the SQL flow path sources level from the native
+    // (op-category) track. Excluding stream keeps (event_type, opaque_id) unique with the
+    // correct level. Each native track fixes the endpoint's op and identity slots (col4/
+    // col5) via the existing per-type ToTrackParams adapters.
+    for(const auto& info : reader->get_all_tracks())
+    {
+        if(!info) continue;
+        event_type_t                 etype;
+        rocprofvis_dm_track_params_t track_params = { 0 };
+        switch(info->type)
+        {
+            case track_type_t::cpu_thread:
+                etype = event_type_t::region;
+                ReaderTrackInfoToTrackParams(*info, db_instance, track_params);
+                break;
+            case track_type_t::gpu_queue:
+                etype = event_type_t::kernel_dispatch;
+                ReaderGpuQueueTrackToTrackParams(*info, db_instance, track_params);
+                break;
+            case track_type_t::dma:
+                etype = event_type_t::memory_copy;
+                ReaderDmaTrackToTrackParams(*info, db_instance, track_params);
+                break;
+            case track_type_t::memory:
+                etype = event_type_t::memory_allocate;
+                ReaderMemoryTrackToTrackParams(*info, db_instance, track_params);
+                break;
+            default: continue;  // stream, counter
+        }
+        uint64_t col4     = track_params.track_indentifiers.id[TRACK_ID_PID_OR_AGENT];
+        uint64_t col5     = track_params.track_indentifiers.id[TRACK_ID_TID_OR_QUEUE];
+        bool     is_alloc = (etype == event_type_t::memory_allocate);
+        for(const auto& ev : reader->get_interval_track(info->id))
+        {
+            ReaderFlowPayload p;
+            p.start    = ev.start;
+            p.end      = ev.end;
+            p.level    = ev.level;
+            p.col4     = col4;
+            p.col5     = col5;
+            p.category = ev.category;
+            // memory_allocate has no symbol column; the SQL path substitutes category_id
+            // for symbol_id, so mirror that here (symbol := category string).
+            p.symbol = is_alloc ? ev.category : ev.display_name;
+            payload[ReaderFlowKey{ etype, ev.opaque_id }] = p;
+        }
+    }
+
+    m_flow_index_built[idx] = true;
+    return kRocProfVisDmResultSuccess;
+}
+
+void
+RocprofDatabase::EmitReaderFlow(rocprofvis_dm_flowtrace_t flowtrace, uint32_t guid_index,
+                                const ReaderFlowKey&     endpoint,
+                                const ReaderFlowPayload& payload)
+{
+    using event_type_t = profiler_hub::reader_types::event_type_t;
+
+    rocprofvis_dm_event_operation_t op;
+    switch(endpoint.type)
+    {
+        case event_type_t::region: op = kRocProfVisDmOperationLaunch; break;
+        case event_type_t::kernel_dispatch: op = kRocProfVisDmOperationDispatch; break;
+        case event_type_t::memory_copy: op = kRocProfVisDmOperationMemoryCopy; break;
+        case event_type_t::memory_allocate:
+            op = kRocProfVisDmOperationMemoryAllocate;
+            break;
+        default: return;
+    }
+
+    rocprofvis_db_flow_data_t record;
+    record.id.bitfield.event_op   = op;
+    record.id.bitfield.event_node = guid_index;
+    // FindTrack resolves the endpoint's swimlane the same way CallbackAddFlowTrace did:
+    // op -> category mask, (col4, col5) identity. Skip endpoints with no matching track.
+    if(!TrackTracker()->FindTrack(TrackTracker()->SearchCategoryMaskLookup(op),
+                                  payload.col4, payload.col5, guid_index,
+                                  record.track_id))
+        return;
+
+    record.id.bitfield.event_id = endpoint.opaque_id;
+    record.time                 = payload.start;
+    record.time -= TraceProperties()->db_inst_start_time[guid_index];
+    record.end_time = payload.end;
+    record.end_time -= TraceProperties()->db_inst_start_time[guid_index];
+    record.level       = static_cast<rocprofvis_dm_event_level_t>(payload.level);
+    record.category_id = InternReaderString(payload.category);
+    record.symbol_id   = InternReaderString(payload.symbol);
+    // Reader strings are already interned into the trace string table (unlike the SQL
+    // path, which carries DB string ids), so no RemapStringIds step is needed here.
+    BindObject()->FuncAddFlow(flowtrace, record);
+}
 
 rocprofvis_dm_result_t  RocprofDatabase::ReadFlowTraceInfo(
         rocprofvis_dm_event_id_t event_id,
         Future* future)
 {
+    using event_type_t = profiler_hub::reader_types::event_type_t;
+
     ROCPROFVIS_ASSERT_MSG_RETURN(future, ERROR_FUTURE_CANNOT_BE_NULL, kRocProfVisDmResultInvalidParameter);
     while (true)
     {
@@ -2255,37 +2388,60 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadFlowTraceInfo(
         ROCPROFVIS_ASSERT_MSG_BREAK(flowtrace, ERROR_FLOW_TRACE_CANNOT_BE_NULL);
         DbInstance* node_ptr = DbInstancePtrAt(event_id.bitfield.event_node);
         ROCPROFVIS_ASSERT_MSG_BREAK(node_ptr!=nullptr, ERROR_NODE_KEY_CANNOT_BE_NULL);
-        std::string query;
+
+        // Map the clicked op to its reader event_type and the set of endpoint types the
+        // SQL UNION legs emitted for that clicked type. The type filter reproduces each
+        // query's legs exactly, including the memory_allocate asymmetry (its mama sibling
+        // clique is present in get_flows but dropped here, since the SQL alloc query had
+        // no sibling leg).
+        event_type_t           clicked_type;
+        std::set<event_type_t> allowed;
         if(event_id.bitfield.event_op == kRocProfVisDmOperationLaunch ||
            event_id.bitfield.event_op == kRocProfVisDmOperationLaunchSample)
         {
-            query = m_query_factory.GetRocprofDataFlowQueryForRegionEvent(event_id.bitfield.event_id);
-            ShowProgress(0, query.c_str(),kRPVDbBusy, future);
-            if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, node_ptr, query.c_str(), flowtrace, &CallbackAddFlowTrace)) break;
-        } else
-        if (event_id.bitfield.event_op == kRocProfVisDmOperationDispatch)
-        {
-            query = m_query_factory.GetRocprofDataFlowQueryForKernelDispatchEvent(event_id.bitfield.event_id);
-            ShowProgress(0, query.c_str(),kRPVDbBusy, future);
-            if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, node_ptr, query.c_str(), flowtrace, &CallbackAddFlowTrace)) break;
-        } else
-        if (event_id.bitfield.event_op == kRocProfVisDmOperationMemoryCopy)
-        {
-            query = m_query_factory.GetRocprofDataFlowQueryForMemoryCopyEvent(event_id.bitfield.event_id);
-            ShowProgress(0, query.c_str(), kRPVDbBusy, future);
-            if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, node_ptr, query.c_str(), flowtrace, &CallbackAddFlowTrace)) break;
+            clicked_type = event_type_t::region;
+            allowed      = { event_type_t::region, event_type_t::kernel_dispatch,
+                             event_type_t::memory_copy, event_type_t::memory_allocate };
         }
-        else
-        if (event_id.bitfield.event_op == kRocProfVisDmOperationMemoryAllocate)
+        else if(event_id.bitfield.event_op == kRocProfVisDmOperationDispatch)
         {
-            query = m_query_factory.GetRocprofDataFlowQueryForMemoryAllocEvent(event_id.bitfield.event_id);
-            ShowProgress(0, query.c_str(), kRPVDbBusy, future);
-            if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, node_ptr, query.c_str(), flowtrace, &CallbackAddFlowTrace)) break;
+            clicked_type = event_type_t::kernel_dispatch;
+            allowed      = { event_type_t::region, event_type_t::kernel_dispatch };
+        }
+        else if(event_id.bitfield.event_op == kRocProfVisDmOperationMemoryCopy)
+        {
+            clicked_type = event_type_t::memory_copy;
+            allowed      = { event_type_t::region, event_type_t::memory_copy };
+        }
+        else if(event_id.bitfield.event_op == kRocProfVisDmOperationMemoryAllocate)
+        {
+            clicked_type = event_type_t::memory_allocate;
+            allowed      = { event_type_t::region };
         }
         else
         {
             ShowProgress(0, "Flow trace is not available for specified operation type!", kRPVDbError, future );
             return future->SetPromise(kRocProfVisDmResultInvalidParameter);
+        }
+
+        if(kRocProfVisDmResultSuccess != BuildReaderFlowIndexes(node_ptr)) break;
+
+        uint32_t                      guid     = node_ptr->GuidIndex();
+        const reader_flow_topology_t& topology = m_flow_topology[guid];
+        const reader_flow_payload_t&  payload  = m_flow_payload[guid];
+
+        ReaderFlowKey clicked{ clicked_type, event_id.bitfield.event_id };
+        auto          it = topology.find(clicked);
+        if(it != topology.end())
+        {
+            // Neighbors iterate in (event_type, opaque_id) order == SQL UNION leg order.
+            for(const ReaderFlowKey& endpoint : it->second)
+            {
+                if(allowed.find(endpoint.type) == allowed.end()) continue;
+                auto pit = payload.find(endpoint);
+                if(pit == payload.end()) continue;
+                EmitReaderFlow(flowtrace, guid, endpoint, pit->second);
+            }
         }
         ShowProgress(100, "Flow trace successfully loaded!",kRPVDbSuccess, future);
         return future->SetPromise(kRocProfVisDmResultSuccess);

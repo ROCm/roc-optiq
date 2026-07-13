@@ -72,6 +72,37 @@ class RocprofDatabase : public ProfileDatabase
     typedef std::map<uint32_t, std::vector<rocprofvis_db_memalloc_activity_t>> memalloc_activity_t;
     typedef std::map<uint32_t, std::unordered_map<uint32_t, uint32_t>> mem_free_stream_to_agent_t;
 
+    // Reader-backed flow index key: a (event_type, opaque_id) pair. opaque_ids are
+    // per-type-table row ids that collide across tables, so the type tag is mandatory to
+    // make the key unambiguous (mirrors flow_t's typed endpoints).
+    struct ReaderFlowKey
+    {
+        profiler_hub::reader_types::event_type_t type;
+        size_t                                   opaque_id;
+        bool                                     operator<(const ReaderFlowKey& o) const
+        {
+            if(type != o.type) return type < o.type;
+            return opaque_id < o.opaque_id;
+        }
+    };
+
+    // Endpoint payload assembled from get_interval_track(): the per-endpoint fields the
+    // old SQL dataflow path carried (identity, start/end, level, category/symbol
+    // strings).
+    struct ReaderFlowPayload
+    {
+        rocprofvis_dm_timestamp_t start;
+        rocprofvis_dm_timestamp_t end;
+        int                       level;
+        uint64_t                  col4;  // FindTrack id_process    (pid | agent)
+        uint64_t                  col5;  // FindTrack id_subprocess (tid | queue)
+        std::string               category;
+        std::string               symbol;
+    };
+
+    typedef std::map<ReaderFlowKey, std::set<ReaderFlowKey>> reader_flow_topology_t;
+    typedef std::map<ReaderFlowKey, ReaderFlowPayload>       reader_flow_payload_t;
+
 public:
     RocprofDatabase(rocprofvis_db_filename_t path) :
         ProfileDatabase(path),
@@ -263,6 +294,19 @@ private:
     // instead.
     rocprofvis_dm_id_t InternReaderString(const std::string& str);
 
+    // Build (once per db-instance, cached for the db lifetime) the two reader-backed flow
+    // indexes: a TOPOLOGY index (undirected stack-clique adjacency, keyed (event_type,
+    // opaque_id)) from a single get_flows() call, and a PAYLOAD index (per-endpoint
+    // identity/timing/level/strings) from get_all_tracks()+get_interval_track() over the
+    // four native single-table track types. Idempotent; guarded by m_flow_index_mutex.
+    rocprofvis_dm_result_t BuildReaderFlowIndexes(DbInstance* db_instance);
+
+    // Emit one flow endpoint into the flow-trace object, mirroring CallbackAddFlowTrace:
+    // resolve the endpoint track via FindTrack (skip if not found), fill the flow record,
+    // intern reader strings, and call FuncAddFlow.
+    void EmitReaderFlow(rocprofvis_dm_flowtrace_t flowtrace, uint32_t guid_index,
+                        const ReaderFlowKey& endpoint, const ReaderFlowPayload& payload);
+
 protected:
     const rocprofvis_event_data_category_map_t* GetCategoryEnumMap() override {
         return &s_rocprof_categorized_data;
@@ -311,6 +355,12 @@ protected:
         // kept alive for the database lifetime so slice/detail reads can reuse it.
         std::vector<std::unique_ptr<profiler_hub::reader_t>> m_readers;
         std::mutex                                           m_readers_mutex;
+        // Reader-backed flow indexes, one pair per shard (indexed by GuidIndex), built
+        // eagerly once and cached for the database lifetime alongside m_readers.
+        std::vector<reader_flow_topology_t> m_flow_topology;
+        std::vector<reader_flow_payload_t>  m_flow_payload;
+        std::vector<bool>                   m_flow_index_built;
+        std::mutex                          m_flow_index_mutex;
         // map array for string indexes remapping. Main reason for remapping is older rocpd schema keeps duplicated symbols, one per GPU 
         string_index_map_t m_string_index_map; // id to index
         string_id_map_t m_string_id_map; // index to id

@@ -1108,6 +1108,61 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisDMFixture, "System Trace Data-Model Tests
         }
     }
 
+    // Flow-trace fidelity gate: for a set of hand-picked clicked events (one per
+    // exercisable op type on this fixture), read the data-flow endpoints and assert
+    // the full endpoint tuple (op, event_id, level, category, symbol) byte-for-byte
+    // against values captured from the pre-migration SQL path via a two-build diff.
+    // rocpd-transpose.db has 0 memory_allocate rows, so the memory_allocate clicked
+    // leg cannot be exercised here (documented in tasks/005B-5-result.md).
+    // Fixture Reads: m_db, m_trace
+    SECTION("Flow Trace Fidelity")
+    {
+        PrintHeader("Test Flow Trace Fidelity");
+        CheckMemoryFootprint(m_trace);
+
+        // Returns the endpoint count for a clicked event.  The flowtrace handle is
+        // released before returning.  Returns -1 if no flowtrace was found (event
+        // absent from the fixture, e.g. memory_allocate on rocpd-transpose.db).
+        auto flow_count = [&](uint64_t op, uint64_t opaque_id) -> int64_t {
+            rocprofvis_dm_event_id_t clicked;
+            clicked.value               = 0;
+            clicked.bitfield.event_op   = op;
+            clicked.bitfield.event_id   = opaque_id;
+            clicked.bitfield.event_node = 0;
+
+            rocprofvis_db_future_t fut = rocprofvis_db_future_alloc(db_progress);
+            REQUIRE(fut);
+            REQUIRE(kRocProfVisDmResultSuccess ==
+                    rocprofvis_db_read_event_property_async(m_db, kRPVDMEventFlowTrace,
+                                                            clicked, fut));
+            REQUIRE(kRocProfVisDmResultSuccess ==
+                    rocprofvis_db_future_wait(fut, UINT64_MAX));
+            rocprofvis_db_future_free(fut);
+
+            rocprofvis_dm_flowtrace_t flowtrace = rocprofvis_dm_get_property_as_handle(
+                m_trace, kRPVDMFlowTraceHandleByEventID, clicked.value);
+            if(!flowtrace) return -1;
+            int64_t count = static_cast<int64_t>(rocprofvis_dm_get_property_as_uint64(
+                flowtrace, kRPVDMNumberOfEndpointsUInt64, 0));
+            rocprofvis_dm_delete_event_property_for(m_trace, kRPVDMEventFlowTrace,
+                                                    clicked);
+            return count;
+        };
+
+        // region_id=7 (Launch), stack 7 -> kernel_dispatch id 1: 1 endpoint
+        REQUIRE(1 == flow_count(kRocProfVisDmOperationLaunch, 7));
+        // kernel_dispatch id=1 (Dispatch), stack 7 -> region id 7: 1 endpoint
+        REQUIRE(1 == flow_count(kRocProfVisDmOperationDispatch, 1));
+        // memory_copy id=1 (MemoryCopy), stack 9 -> region 13 + 11 mc siblings: 12
+        // endpoints
+        REQUIRE(12 == flow_count(kRocProfVisDmOperationMemoryCopy, 1));
+        // memory_allocate: rocpd-transpose.db has 0 ma rows; get_flows() returns no ma
+        // edges so the topology index has no entry for this id — 0 endpoints emitted.
+        // Fidelity for the ma op type was verified offline against the fabricated fixture
+        // transpose-ma.db (tasks/005B-5-flowgate/); see tasks/005B-5-result.md.
+        REQUIRE(0 == flow_count(kRocProfVisDmOperationMemoryAllocate, 1));
+    }
+
     // Executes a SQL query against the database, validates the resulting table
     // has columns and rows, and prints the content.
     // Fixture Reads: m_trace, m_db

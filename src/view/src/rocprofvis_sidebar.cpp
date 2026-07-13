@@ -20,6 +20,8 @@ constexpr ImGuiTreeNodeFlags HEADER_FLAGS = ImGuiTreeNodeFlags_Framed |
                                             ImGuiTreeNodeFlags_DefaultOpen |
                                             ImGuiTreeNodeFlags_SpanLabelWidth;
 constexpr float TREE_LINE_W = 1.5f;
+constexpr float MENU_PAD_X  = 8.0f;
+constexpr float MENU_PAD_Y  = 6.0f;
 
 // Recolors a framed tree node's collapse arrow, matching ImGui::RenderArrow's
 // geometry so it overlaps the default arrow exactly.
@@ -187,9 +189,7 @@ SideBar::RenderTrackItem(const uint64_t& index, bool show_eye_button)
         ImGui::PushFont(m_settings.GetFontManager().GetFont(FontType::kIcon), 0.0f);
         if(ImGui::Button(ICON_ARROWS_SHRINK))
         {
-            EventManager::GetInstance()->AddEvent(std::make_shared<ScrollToTrackEvent>(
-                static_cast<int>(RocEvents::kHandleUserGraphNavigationEvent),
-                track.GetID(), m_data_provider.GetTraceFilePath()));
+            ScrollToTrack(track);
         }
         ImGui::PopFont();
         if(ImGui::IsItemHovered())
@@ -227,7 +227,183 @@ SideBar::RenderTrackItem(const uint64_t& index, bool show_eye_button)
     }
     ImGui::PopStyleColor();
 
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(MENU_PAD_X, MENU_PAD_Y));
+    if(ImGui::BeginPopupContextItem("##track_ctx"))
+    {
+        if(ImGui::MenuItem("Go to Track"))
+        {
+            ScrollToTrack(track);
+        }
+
+        ImGui::Separator();
+
+        if(ImGui::MenuItem(display ? "Hide Track" : "Show Track"))
+        {
+            std::vector<uint64_t> shown_chart_ids;
+            std::vector<uint64_t> hidden_chart_ids;
+            SetTrackVisibility(track, !display,
+                               display ? hidden_chart_ids : shown_chart_ids);
+            UpdateHistogramForVisibility(shown_chart_ids, hidden_chart_ids);
+        }
+        if(ImGui::MenuItem("Show All Tracks", nullptr, false,
+                           HasTrackVisibility(false)))
+        {
+            ApplyAllTrackVisibility(true);
+        }
+        if(ImGui::MenuItem("Hide All But This Track"))
+        {
+            HideAllButTrack(index);
+        }
+
+        ImGui::Separator();
+
+        const bool has_selected_tracks =
+            m_timeline_selection && m_timeline_selection->HasSelectedTracks();
+        if(ImGui::MenuItem("Show Selected Tracks", nullptr, false,
+                           has_selected_tracks))
+        {
+            ApplySelectedTrackVisibility(true);
+        }
+        if(ImGui::MenuItem("Hide Selected Tracks", nullptr, false,
+                           has_selected_tracks))
+        {
+            ApplySelectedTrackVisibility(false);
+        }
+        ImGui::EndPopup();
+    }
+    ImGui::PopStyleVar();
+
     ImGui::PopID();
+}
+
+void
+SideBar::ScrollToTrack(TrackItem& track)
+{
+    EventManager::GetInstance()->AddEvent(std::make_shared<ScrollToTrackEvent>(
+        static_cast<int>(RocEvents::kHandleUserGraphNavigationEvent),
+        track.GetID(), m_data_provider.GetTraceFilePath()));
+}
+
+void
+SideBar::SetTrackVisibility(TrackItem& track, bool visible,
+                            std::vector<uint64_t>& chart_ids)
+{
+    if(track.IsDisplayed() == visible)
+    {
+        return;
+    }
+
+    track.SetDisplay(visible);
+    m_eye_state_dirty = true;
+    chart_ids.push_back(track.GetID());
+}
+
+void
+SideBar::UpdateHistogramForVisibility(
+    const std::vector<uint64_t>& shown_chart_ids,
+    const std::vector<uint64_t>& hidden_chart_ids)
+{
+    if(!shown_chart_ids.empty())
+    {
+        m_data_provider.DataModel().GetTimeline().UpdateHistogram(shown_chart_ids, true);
+    }
+    if(!hidden_chart_ids.empty())
+    {
+        m_data_provider.DataModel().GetTimeline().UpdateHistogram(hidden_chart_ids,
+                                                                  false);
+    }
+}
+
+void
+SideBar::HideAllButTrack(const uint64_t& index)
+{
+    if(!m_tracks || index >= m_tracks->size())
+    {
+        return;
+    }
+
+    std::vector<uint64_t> shown_chart_ids;
+    std::vector<uint64_t> hidden_chart_ids;
+
+    for(uint64_t i = 0; i < m_tracks->size(); ++i)
+    {
+        TrackItem* track = (*m_tracks)[i];
+        if(!track)
+        {
+            continue;
+        }
+        SetTrackVisibility(*track, i == index,
+                           i == index ? shown_chart_ids : hidden_chart_ids);
+    }
+
+    UpdateHistogramForVisibility(shown_chart_ids, hidden_chart_ids);
+}
+
+void
+SideBar::ApplyAllTrackVisibility(bool visible)
+{
+    if(!m_tracks)
+    {
+        return;
+    }
+
+    std::vector<uint64_t> shown_chart_ids;
+    std::vector<uint64_t> hidden_chart_ids;
+
+    for(auto* track : *m_tracks)
+    {
+        if(!track)
+        {
+            continue;
+        }
+        SetTrackVisibility(*track, visible,
+                           visible ? shown_chart_ids : hidden_chart_ids);
+    }
+
+    UpdateHistogramForVisibility(shown_chart_ids, hidden_chart_ids);
+}
+
+void
+SideBar::ApplySelectedTrackVisibility(bool visible)
+{
+    if(!m_tracks)
+    {
+        return;
+    }
+
+    std::vector<uint64_t> shown_chart_ids;
+    std::vector<uint64_t> hidden_chart_ids;
+
+    for(auto* track : *m_tracks)
+    {
+        if(!track || !track->IsSelected())
+        {
+            continue;
+        }
+        SetTrackVisibility(*track, visible,
+                           visible ? shown_chart_ids : hidden_chart_ids);
+    }
+
+    UpdateHistogramForVisibility(shown_chart_ids, hidden_chart_ids);
+}
+
+bool
+SideBar::HasTrackVisibility(bool visible) const
+{
+    if(!m_tracks)
+    {
+        return false;
+    }
+
+    for(const auto* track : *m_tracks)
+    {
+        if(track && track->IsDisplayed() == visible)
+        {
+            return true;
+        }
+    }
+
+    return false;
 }
 
 SideBar::EyeButtonState
@@ -414,6 +590,28 @@ SideBar::RenderBranchNode(const TreeNode& node, const TreeNode* state_node,
                 node_pos.x + ImGui::GetStyle().FramePadding.x + font_size * 0.5f,
                 (ImGui::GetItemRectMin().y + ImGui::GetItemRectMax().y) * 0.5f, font_size,
                 open, wheel[node.color_index % wheel.size()]);
+        }
+
+        if(node.show_eye_button)
+        {
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
+                                ImVec2(MENU_PAD_X, MENU_PAD_Y));
+            if(ImGui::BeginPopupContextItem("##branch_ctx"))
+            {
+                EyeButtonState current = GetTreeState(state_source);
+                if(ImGui::MenuItem("Show All Tracks Below", nullptr, false,
+                                   current != EyeButtonState::kAllVisible))
+                {
+                    ApplyVisibility(apply_target, true);
+                }
+                if(ImGui::MenuItem("Hide All Tracks Below", nullptr, false,
+                                   current != EyeButtonState::kAllHidden))
+                {
+                    ApplyVisibility(apply_target, false);
+                }
+                ImGui::EndPopup();
+            }
+            ImGui::PopStyleVar();
         }
     }
 

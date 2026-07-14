@@ -20,34 +20,34 @@ only possible shape that migration could take. Where this document says "replace
 
 ## What changed, at a glance
 
-Baseline: `48e29fbd` ("Duplicate File Open Protection"). Nine commits on top:
+Baseline: [`48e29fbd`](https://github.com/avansick-amd/roc-optiq/commit/48e29fbd) ("Duplicate File Open Protection"). Nine commits on top:
 
 | Commit | Track type / capability | What it replaced |
 |---|---|---|
-| `adc7a6b7` | Build wiring | Adds `find_package(profiler-hub REQUIRED)` and links the imported `profiler-hub::profiler-hub` target into the datamodel library — the prerequisite for every migration below |
-| `344fef7f` | `cpu_thread` | Standalone CPU-region SQL discovery |
-| `6cbdf6e5` | `gpu_queue` + `stream` | Queue-keyed kernel-dispatch SQL + the cross-cutting Stream-track SQL |
-| `59a80078` | `memory` (standalone memory-allocate) | `GetRocprofMemoryAllocTrackQuery`/`LevelQuery`/`SliceQuery` |
-| `722bc2d7` | `dma` (standalone memory-copy) | `GetRocprofMemoryCopyTrackQuery`/`LevelQuery`/`SliceQuery`/`TableQuery` |
-| `79a22f84` + `697f532a` | `counter` (SMI PMC) | Standalone counter-track SQL; second commit made system-test assertions order/index-independent |
-| `aab7609d` | dataflow (`get_flows()`) | Four `GetRocprofDataFlowQueryFor*` SQL methods, deleted entirely |
-| `aa16c861` | — | Formatting only (clang-format-18, no logic change) |
+| [`adc7a6b7`](https://github.com/avansick-amd/roc-optiq/commit/adc7a6b7) | Build wiring | Adds `find_package(profiler-hub REQUIRED)` and links the imported `profiler-hub::profiler-hub` target into the datamodel library — the prerequisite for every migration below |
+| [`344fef7f`](https://github.com/avansick-amd/roc-optiq/commit/344fef7f) | `cpu_thread` | Standalone CPU-region SQL discovery |
+| [`6cbdf6e5`](https://github.com/avansick-amd/roc-optiq/commit/6cbdf6e5) | `gpu_queue` + `stream` | Queue-keyed kernel-dispatch SQL + the cross-cutting Stream-track SQL |
+| [`59a80078`](https://github.com/avansick-amd/roc-optiq/commit/59a80078) | `memory` (standalone memory-allocate) | `GetRocprofMemoryAllocTrackQuery`/`LevelQuery`/`SliceQuery` |
+| [`722bc2d7`](https://github.com/avansick-amd/roc-optiq/commit/722bc2d7) | `dma` (standalone memory-copy) | `GetRocprofMemoryCopyTrackQuery`/`LevelQuery`/`SliceQuery`/`TableQuery` |
+| [`79a22f84`](https://github.com/avansick-amd/roc-optiq/commit/79a22f84) + [`697f532a`](https://github.com/avansick-amd/roc-optiq/commit/697f532a) | `counter` (SMI PMC) | Standalone counter-track SQL; second commit made system-test assertions order/index-independent |
+| [`aab7609d`](https://github.com/avansick-amd/roc-optiq/commit/aab7609d) | dataflow (`get_flows()`) | Four `GetRocprofDataFlowQueryFor*` SQL methods, deleted entirely |
+| [`aa16c861`](https://github.com/avansick-amd/roc-optiq/commit/aa16c861) | — | Formatting only (clang-format-18, no logic change) |
 
 Net diff vs. baseline: 10 files, +6,870/-4,985 lines. The two largest files by volume are
-`rocprofvis_db_query_factory.cpp` (losing most of its hand-written SQL generation) and
-`rocprofvis_db_rocprof.cpp` (gaining the adapter functions described below).
+[`rocprofvis_db_query_factory.cpp`](https://github.com/avansick-amd/roc-optiq/blob/9c09fbed/src/model/src/database/rocprofvis_db_query_factory.cpp) (losing most of its hand-written SQL generation) and
+[`rocprofvis_db_rocprof.cpp`](https://github.com/avansick-amd/roc-optiq/blob/9c09fbed/src/model/src/database/rocprofvis_db_rocprof.cpp) (gaining the adapter functions described below).
 
 ## The pattern, once, since it repeats seven times
 
 Every track-type migration in this branch follows the same two-function shape in
 `rocprofvis_db_rocprof.cpp`:
 
-1. **`Reader<Type>TrackToTrackParams(...)`** — a small adapter that reads a ProfilerHub
+1. **[`Reader<Type>TrackToTrackParams(...)`](https://github.com/avansick-amd/roc-optiq/blob/9c09fbed/src/model/src/database/rocprofvis_db_rocprof.cpp#L486-L512)** — a small adapter that reads a ProfilerHub
    `track_info_t` (id, agent/queue/stream/thread/pmc info) and populates Optiq's internal
    `rocprofvis_dm_track_params_t` (identifiers, category, op-type). This is where reader fields
    map onto Optiq's existing topology/naming conventions — e.g. numeric `agent_info->id` feeding
    `TRACK_ID_AGENT` for GPU-topology nesting.
-2. **`AddReader<Type>Tracks(Future* future)`** — the discovery/load function. Checks the
+2. **[`AddReader<Type>Tracks(Future* future)`](https://github.com/avansick-amd/roc-optiq/blob/9c09fbed/src/model/src/database/rocprofvis_db_rocprof.cpp#L643-L739)** — the discovery/load function. Checks the
    metadata-version cache first (a cache hit skips the reader entirely and reloads from the DB's
    own saved track table); on a cache miss, calls `reader->get_all_tracks()`, filters to the
    relevant `track_type_t`, and for each track computes `record_count` via `get_track_stats()`
@@ -76,14 +76,14 @@ call.
   old test suite picked assertions by numeric index over a track ordering that shifted shape once
   this fixed, the `697f532a` companion commit makes those system-test assertions order/index-
   independent so this class of false-positive can't recur.
-- **Dataflow (`get_flows()`)**: the migration with the strongest fidelity evidence. It replaces
+- **[Dataflow (`get_flows()`)](https://github.com/avansick-amd/roc-optiq/commit/aab7609d)**: the migration with the strongest fidelity evidence. It replaces
   four per-event `GetRocprofDataFlowQueryFor*` SQL branches with two eager, per-database-instance
   in-memory indexes built from one `get_flows()` call each: a TOPOLOGY index (undirected
   adjacency keyed on typed `(event_type, opaque_id)` pairs, since raw opaque ids collide across
   the region/kernel_dispatch/memory_copy/memory_allocate tables) and a PAYLOAD index (event
   metadata from `get_all_tracks()` + `get_interval_track()`, restricted to the four native
   single-table track types to avoid double-keying). Verified byte-identical against a pristine
-  pre-migration SQL oracle (a separate frozen worktree, `roc-optiq-sql-oracle` at `48e29fbd`) for
+  pre-migration SQL oracle (a separate frozen worktree, `roc-optiq-sql-oracle` at [`48e29fbd`](https://github.com/avansick-amd/roc-optiq/commit/48e29fbd)) for
   region, kernel-dispatch, and memory-copy causal edges, plus a fabricated fixture for
   memory-allocate edges — including reproducing the memory-allocate asymmetry (no sibling leg)
   that the old SQL also had. The four old SQL methods are deleted outright rather than left

@@ -208,7 +208,29 @@ The SSH and remote-profiling features use `libssh2`, which needs a crypto backen
 | Linux (Ubuntu/Debian) | `sudo apt install -y libssl-dev` | |
 | Linux (RHEL/Rocky/Oracle) | `sudo dnf install -y openssl-devel` | |
 | macOS | `brew install openssl@3` | configure with `-DOPENSSL_ROOT_DIR=$(brew --prefix openssl@3)` |
-| Windows | Install a VC-compatible OpenSSL (e.g. [Win64 OpenSSL](https://slproweb.com/products/Win32OpenSSL.html)) | set `OPENSSL_ROOT_DIR` to the install root |
+| Windows | `choco install openssl -y` (recommended; matches CI) | installs to `C:\Program Files\OpenSSL-Win64`; set `OPENSSL_ROOT_DIR` to the install root |
+
+On Windows, [Chocolatey](https://chocolatey.org/install) is the recommended way to install OpenSSL because it is exactly what the Windows CI workflow (`.github/workflows/ci-windows.yml`) uses, so a local build matches CI. From an elevated (Administrator) PowerShell:
+
+```powershell
+choco install openssl -y
+```
+
+This installs a VC-compatible build (the Shining Light [Win64 OpenSSL](https://slproweb.com/products/Win32OpenSSL.html) package) to `C:\Program Files\OpenSSL-Win64`. Then point CMake at it when configuring:
+
+```powershell
+cmake --preset "x64-release" -DCRYPTO_BACKEND=OpenSSL -DOPENSSL_ROOT_DIR="C:\Program Files\OpenSSL-Win64"
+```
+
+Newer Chocolatey/Shining Light builds nest the MSVC import libraries under `lib\VC\x64\MD`. If `find_package(OpenSSL)` fails to locate them from `OPENSSL_ROOT_DIR` alone, pass explicit hints (this mirrors what CI does):
+
+```powershell
+cmake --preset "x64-release" -DCRYPTO_BACKEND=OpenSSL `
+  -DOPENSSL_ROOT_DIR="C:\Program Files\OpenSSL-Win64" `
+  -DOPENSSL_INCLUDE_DIR="C:\Program Files\OpenSSL-Win64\include" `
+  -DLIB_EAY_RELEASE="C:\Program Files\OpenSSL-Win64\lib\VC\x64\MD\libcrypto.lib" `
+  -DSSL_EAY_RELEASE="C:\Program Files\OpenSSL-Win64\lib\VC\x64\MD\libssl.lib"
+```
 
 When the OpenSSL backend is built, its runtime libraries are deployed automatically: DLLs are copied next to `roc-optiq.exe` on Windows, `libssl`/`libcrypto` dylibs are staged into the `.app` bundle's `Frameworks` on macOS, and the Linux `.deb`/`.rpm` declares the system OpenSSL runtime as a dependency.
 

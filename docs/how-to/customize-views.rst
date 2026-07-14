@@ -132,7 +132,7 @@ To add an annotation:
 2. The **Annotation** dialog displays. Provide a title and your note, then click the **X** button to close the note and create the annotation.
 
    .. image:: ../images/save-annotation.png
-      :width: 500
+      :width: 200
       :alt: Annotation dialog showing title and note text fields with a Save button
 
    Once saved, the annotation displays as a marker that can be expanded on the timeline:
@@ -145,10 +145,10 @@ To add an annotation:
       :width: 00
       :alt: Timeline showing an expanded annotation note as a floating window with inline editing
 
-      Annotations are track-bound and follow their tracks when scrolling, reordering, or rearranging the timeline. 
-      Expanded notes open as movable floating windows with inline editing; empty notes are discarded automatically. 
-      A time guide line appears while a note is hovered or dragged. 
-      The Annotations list adds a Track column, and annotations hide automatically when their track is hidden.
+   Annotations are track-bound and follow their tracks when scrolling, reordering, or rearranging the timeline. 
+   Expanded notes open as movable floating windows with inline editing; empty notes are discarded automatically. 
+   A time guide line appears while a note is hovered or dragged. 
+   The Annotations list adds a Track column, and annotations hide automatically when their track is hidden.
 
 .. tip::
 

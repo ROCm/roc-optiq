@@ -15,9 +15,9 @@ System requirements
 
 - You must be running ROCm 7.1.0 or later for ROCm Systems Profiler database file support, and ROCm 7.12.0 or later for ROCm Compute Profiler analysis database file support.
 
-   .. note::
+  .. note::
 
-      Use this command to check which ROCm version is installed on your machine: ``cat /opt/rocm/.info/version``.
+   Use this command to check which ROCm version is installed on your machine: ``cat /opt/rocm/.info/version``.
 
 - For LDS roofline chart support, ROCm Compute Profiler analysis database schema 1.4.0 is required (ROCm 7.14.0 or later). 
 - Your system must be running one of these operating systems:
@@ -111,8 +111,8 @@ Install on CentOS Stream 9
 ==========================
 
 1. Download the appropriate ``.rpm`` package from GitHub Releases. 
-2. Install the package: ``sudo dnf install ./roc-optiq-*.rpm`` 
-3. Verify the installation: ``rpm -q roc-optiq`` 
+2. Install the package: ``sudo dnf install ./roc-optiq-*.rpm``. 
+3. Verify the installation: ``rpm -q roc-optiq``. 
 
 Install on macOS
 ================

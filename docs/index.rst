@@ -66,7 +66,7 @@ Changed
 - **Application look and feel redesign**: Refreshed app shell, palette, timeline surfaces, compute panels (unified card-based design), memory-chart flow view, and event details/annotations.
 - Improved splitter and tab visibility.
 - Newly opened files now activate their tab automatically.
-- **New user-facing Log Viewer** mirroring the application’s log stream into a virtualized, filterable, color-coded table: per-level filtering with counts, substring/regex search with highlighting, pause/auto-scroll, absolute/relative timestamps, copy actions, and “open log file”.
+- **New user-facing Log Viewer** mirroring the application's log stream into a virtualized, filterable, color-coded table: per-level filtering with counts, substring/regex search with highlighting, pause/auto-scroll, absolute/relative timestamps, copy actions, and “open log file”.
 - **Lazy render on idle:** Event-driven rendering so an idle app sleeps (near-zero CPU/GPU) and wakes instantly on input, while loads, async tasks, animations, and in-flight requests keep rendering continuous.
 - **Texture management rework:** Startup logo (and other images) uploaded as GPU textures via the modern ImGui textures API instead of per-frame CPU rasterization.
 - Migrated to the modern ImGui font-uploading system.
@@ -76,20 +76,22 @@ Fixes
 -----
 
 - **Memory leaks**:
+
   - Call destructors when a memory pool is freed.
   - Free leaked (sub) futures in model layer.
   - Future cleanup in system tests.
   - Fix Array/Data object ownership.
+
 - Fixed timeline highlight artifacts.
-- **Duplicate file open protection**: Canonicalize trace paths so a `.db` and a `.rpv` (or two `.rpv` files) pointing at the same trace are detected, with a clear popup instead of a confusing toast.
-- Fixed reopening a `.rpv` whose source `.db` is missing: the missing trace is reported by name and no empty 0-byte database is created.
+- **Duplicate file open protection**: Canonicalize trace paths so a ``.db`` and a ``.rpv`` (or two ``.rpv`` files) pointing at the same trace are detected, with a clear popup instead of a confusing toast.
+- Fixed reopening a ``.rpv`` whose source ``.db`` is missing: the missing trace is reported by name and no empty 0-byte database is created.
 - Fixed multi-node topology node identification (aligned processor topology IDs across instances/queues), plus additional topology display fixes (null parent lookups, out-of-bounds stream processor lookup). 
 - Corrected stream track entry counts (accumulate record counts across per-operation build queries); bumped the track-info cache version, forcing a one-time rebuild of affected caches.
-- Made the per-track table count inclusive on the trace’s upper time bound so it matches the tooltip total (off-by-one fix).
+- Made the per-track table count inclusive on the trace's upper time bound so it matches the tooltip total (off-by-one fix).
 - Don't block the UI thread during backend teardown when closing a tab or the application.
 - Fixed annotation scroll interactions so annotation scrollbars no longer drive timeline navigation and note dragging is limited to the header.
 - Various redesign polish fixes (event details styling, annotation row alignment, metric table row hover, settings table controls, aggregate clear button).
-- Fix flow rendering for `.rpd` traces.
+- Fix flow rendering for ``.rpd`` traces.
 - Fix Compute chart metric mapping.
 - Fixed the Welcome page sometimes appearing only partially drawn until the user moved the mouse or clicked (idle wait is now bounded). 
 - Fixed a macOS app packaging issue that could prevent the app bundle from being properly signed (static GLFW no longer staged into the bundle). 

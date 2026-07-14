@@ -16,7 +16,7 @@ It enables rapid identification of performance hotspots and interactive explorat
 
 .. note::
 
-   - See the `ROCm Compute Profiler documentation <https://rocm.docs.amd.com/projects/rocprofiler-compute/en/latest/index.html>`_ for more information.
+   See the `ROCm Compute Profiler documentation <https://rocm.docs.amd.com/projects/rocprofiler-compute/en/latest/index.html>`_ for more information.
 
 Open a ROCm Compute Profiler database file
 ==========================================

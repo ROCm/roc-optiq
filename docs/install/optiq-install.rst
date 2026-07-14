@@ -15,7 +15,7 @@ System requirements
 
 - You must be running ROCm 7.1.0 or later for ROCm Systems Profiler database file support, and ROCm 7.12.0 or later for ROCm Compute Profiler analysis database file support.
 
-  .. note::
+  .. tip::
 
    Use this command to check which ROCm version is installed on your machine: ``cat /opt/rocm/.info/version``.
 

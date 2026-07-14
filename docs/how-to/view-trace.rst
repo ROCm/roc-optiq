@@ -211,7 +211,7 @@ Measure
 **Measure** mode lets you measure the elapsed time between two points on the **Timeline View**, either between timeline points or between specific events. 
 
 .. image:: ../images/new-measurement-mode.png
-   :width: 600
+   :width: 800
    :alt: Measurement mode UI
 
 - Enable **Measure** mode from the toolbar or the timeline right-click menu.  
@@ -277,7 +277,7 @@ This section provides an interface for multiple data perspectives, offering gran
 - **Top Events**: Provides analysis for the events of each operation type (instrumented Thread, Sampled thread, Dispatch, memory allocation, memory copy) from the selected tracks aggregated by event name. Available metrics are event count (invocations) and total/average/min/max duration. If you select tracks of different types, each type will be shown in a separate table. Each table has its own System Table instance and can be sorted individually. If you make a time-range selection, Top Events are limited to that selected time-range. 
 
   .. image:: ../images/top-events.png
-     :width: 400
+     :width: 600
      :alt: Top events tab in Advanced Details
 
 .. tip::

@@ -226,6 +226,7 @@ jobs:
         run: |
           cd ${{ env.BUILD_DIR }}/${{ inputs.cmake_config_preset }}
           ctest \
+            --verbose \
             --output-on-failure \
             --no-tests=error \
             --output-junit ctest-results.xml

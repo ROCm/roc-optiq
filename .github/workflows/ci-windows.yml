@@ -140,6 +140,7 @@ jobs:
           cd ${{ env.BUILD_DIR }}/${{ inputs.cmake_config_preset }}
           ctest `
             -C ${{ env.BINARY_DIR }} `
+            --verbose `
             --output-on-failure `
             --no-tests=error `
             --output-junit ctest-results.xml

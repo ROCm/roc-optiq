@@ -135,20 +135,20 @@ To add an annotation:
       :width: 200
       :alt: Annotation dialog showing title and note text fields with a Save button
 
-   Once saved, the annotation displays as a marker that can be expanded on the timeline:
-
-   .. image:: ../images/annotation-example.png
-      :width: 200
-      :alt: Timeline showing a collapsed annotation marker on a track
-
-   .. image:: ../images/new-annotation-example.png
-      :width: 00
-      :alt: Timeline showing an expanded annotation note as a floating window with inline editing
+   Once saved, the annotation displays as a marker that can be expanded on the timeline.
 
    Annotations are track-bound and follow their tracks when scrolling, reordering, or rearranging the timeline. 
    Expanded notes open as movable floating windows with inline editing; empty notes are discarded automatically. 
    A time guide line appears while a note is hovered or dragged. 
-   The Annotations list adds a Track column, and annotations hide automatically when their track is hidden.
+   
+   .. image:: ../images/new-annotation-example.png
+      :width: 800
+      :alt: Timeline showing an expanded annotation note as a floating window with inline editing
+
+   The **Annotations** tab in the **Advanced Details** section shows a list of annotations.  
+   Each row shows the annotation title, the note, the track it is attached to, its start time, and a checkbox for visibility.
+   Clicking a row brings the selected annotation into view on the timeline.
+
 
 .. tip::
 
@@ -196,15 +196,16 @@ Customize display options for each track by right clicking the **Description** a
   - **No Color**: Events render without name-based coloring. 
   - **Compact mode**: Shrink event track heights to display tall flame graphs in a smaller area. 
 
+.. image:: ../images/timeline-display-options.png
+   :width: 600
+   :alt: Track display options menu for a sample counter track showing Show Counter Boxes, Alternate Counter Coloring, and Highlight Y Range toggles
+
 - For sample counter tracks, you can toggle between **Show Counter Boxes**, **Alternate Counter Coloring**, and **Highlight Y Range**:
 
   - **Show Counter Boxes**: Display as a line only, or fill the area under the line as well.
   - **Alternate Counter Coloring**: If the area under the line is filled, alternate the fill color for each sample.
   - **Highlight Y Range**: Select an area of the graph to highlight. Choose the minimum and maximum range that you want to highlight. The tool highlights these values on the track region.
 
-    .. image:: ../images/timeline-display-options.png
-       :width: 400
-       :alt: Track display options menu for a sample counter track showing Show Counter Boxes, Alternate Counter Coloring, and Highlight Y Range toggles
 
 - For sample counter tracks, you can set the min and max when showing the tracks: 
 

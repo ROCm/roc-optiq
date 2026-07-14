@@ -251,7 +251,6 @@ This section provides an interface for multiple data perspectives, offering gran
     :align: center
     :alt: Advanced Details section showing the Event Table with filter and aggregate controls
 
-  - **Aggregate by Column**: A drop-down menu that groups the results by the selected column. Click **Submit** to group the results. To remove the grouping, select **-- None --** from the drop-down menu, then click **Submit**.
   - **Aggregate**: A drop-down groups **Event Table** results by a selected field (Category, Name, Stream, Queue, Node, PID, or TID). Click **Submit** to group the results. To remove the grouping, choose —None— and click **Submit**. 
   - **Filter**: Enter SQL-like statements to filter the data. For example, ``“duration > 2000”`` displays all events greater than 2000 ns. Click **Submit** to filter the data.
   
@@ -266,7 +265,7 @@ This section provides an interface for multiple data perspectives, offering gran
 
   - The **Flow Data** displays all events logically connected to the selected event in the execution sequence. You can navigate any of the connected events on the timeline, with vertical track centering and highlight feedback, by right clicking and selecting **Go To Event**. The navigation makes it easier to follow the execution flow across queues and tracks. 
   - The **Call Stack Data** shows the full call stack hierarchy for providing the calling context that led to that event. This provides understanding about where and why a kernel or function was invoked. The **Call Stack Data** is displayed in call order, following the execution path. You can open any of the events in the call stack hierarchy by right clicking and choose **Go To Event**.
-  - You can also right-click on an event in the Flow Data or Call Stack Data for copy/export actions. 
+  - You can also right-click on a cell in the **Flow Data** or **Call Stack Data** table for copy/export actions.
 
 - **Track Details**: Shows additional information about the track that is not visible on the timeline. It shows the node the track belongs to and its details, the process it belongs to, and the track type (thread, counter, queue, and so on).
 

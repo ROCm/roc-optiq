@@ -129,7 +129,7 @@ To add an annotation:
 
    Annotations can also be added by right-clicking on the **Timeline View** and clicking the **Add Annotation** context menu option.
 
-2. The **Annotation** dialog displays. Provide a title and your note, then click **Save** to create the annotation.
+2. The **Annotation** dialog displays. Provide a title and your note, then click the **X** button to close the note and create the annotation.
 
    .. image:: ../images/save-annotation.png
       :width: 500
@@ -142,7 +142,7 @@ To add an annotation:
       :alt: Timeline showing a collapsed annotation marker on a track
 
    .. image:: ../images/new-annotation-example.png
-      :width: 200
+      :width: 00
       :alt: Timeline showing an expanded annotation note as a floating window with inline editing
 
       Annotations are track-bound and follow their tracks when scrolling, reordering, or rearranging the timeline. 
@@ -183,14 +183,15 @@ Use the following actions to delete bookmarks or reset the view.
 Customize timeline display options
 ----------------------------------
 
-Customize display options for each track by clicking the gear icon in the track's **Description** in the :ref:`timeline`:
+Customize display options for each track by right clicking the **Description** area to open the track's context menu. Select **Track Options** to customize the track's display options.
 
-.. image:: ../images/track-gear.png
+.. image:: ../images/track-options.png
    :width: 600
-   :alt: Timeline track Description area with the gear icon visible for accessing track display options
+   :alt: Timeline track context menu options
 
 - For event tracks, you can toggle between **Color by Name**, **Color by Time Level**, **No Color**, and **Compact mode**.
 
+  - **Color by Name**: All events with the same name share a color. 
   - **Color by Time Level**: Events with the same name but different start times have different colors. 
   - **No Color**: Events render without name-based coloring. 
   - **Compact mode**: Shrink event track heights to display tall flame graphs in a smaller area. 

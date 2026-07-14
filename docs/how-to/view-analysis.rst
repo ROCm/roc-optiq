@@ -16,7 +16,6 @@ It enables rapid identification of performance hotspots and interactive explorat
 
 .. note::
 
-   - ROCm Optiq supports multi-node traces and multi-database YAML configurations. 
    - See the `ROCm Compute Profiler documentation <https://rocm.docs.amd.com/projects/rocprofiler-compute/en/latest/index.html>`_ for more information.
 
 Open a ROCm Compute Profiler database file
@@ -83,7 +82,7 @@ The bar chart displays per-kernel metrics including the number of invocations, a
    :align: center
    :alt: Summary View bar chart displaying per-kernel invocation count and duration metrics
 
-Selected kernels are highlighted as black in the *Light* theme and white in the *Dark* theme in the bar and pie chart.
+Selected kernels are highlighted in both charts.
 
 Summary View -- Roofline Chart
 ------------------------------

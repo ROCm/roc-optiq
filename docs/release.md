@@ -54,12 +54,6 @@
 - Homepage/welcome page with Start, Recent, and Resources.
 - Status bar area now shows active controller requests (or “Ready”), with height that scales to font size.
 
-#### Platform support
-
-- Added support for macOS.
-- Added support for Ubuntu 26.04.
-- Added support for RHEL 8, 9, and 10.
-
 ### Changed
 
 - **Application look and feel redesign**: Refreshed app shell, palette, timeline surfaces, compute panels (unified card-based design), memory-chart flow view, and event details/annotations.

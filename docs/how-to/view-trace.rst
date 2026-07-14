@@ -36,27 +36,6 @@ Traces contain event tracks and counter tracks:
 
    See the `ROCm Systems Profiler documentation <https://rocm.docs.amd.com/projects/rocprofiler-systems/en/latest/index.html>`_ for more information on tracing.
 
-Welcome page 
-============
-
-When ROCm Optiq starts without an open project, the Welcome page displays: 
-
-- Open File—open a trace (``.db``, ``.rpd``), project (``.rpv``), or multi-database configuration (``.yaml``). You can also drag and drop a supported file into the window to open it.
-- Recent files—quick access to recently opened files 
-- Documentation links—ROCm Optiq, ROCm Systems Profiler, and ROCm Compute Profiler documentation
-
-.. image:: ../images/welcome-page.png
-   :width: 800
-   :align: center
-   :alt: ROCm Optiq welcome page showing Start, Recent files, and Documentation links sections
-
-.. note::
-
-   - Opening a file creates a new tab and activates it. 
-   - ROCm Optiq prevents opening a second tab for the same underlying trace database, including when a ``.rpv`` project references an already-open ``.db``. 
-
-.. _trace-file:
-
 Open a trace file
 =================
 
@@ -231,6 +210,10 @@ Measure
 
 **Measure** mode lets you measure the elapsed time between two points on the **Timeline View**, either between timeline points or between specific events. 
 
+.. image:: ../images/new-measurement-mode.png
+   :width: 400
+   :alt: Measurement mode UI
+
 - Enable **Measure** mode from the toolbar or the timeline right-click menu.  
 - **Events** mode: Measure duration between two selected events on the timeline. You can snap Start/End Rulers to Event start or Event end. 
 - **Anywhere** mode: Measure duration between two timeline points. You can drag the rulers horizontally to fine-tune.  
@@ -283,7 +266,7 @@ This section provides an interface for multiple data perspectives, offering gran
 
   - The **Flow Data** displays all events logically connected to the selected event in the execution sequence. You can navigate any of the connected events on the timeline, with vertical track centering and highlight feedback, by right clicking and selecting **Go To Event**. The navigation makes it easier to follow the execution flow across queues and tracks. 
   - The **Call Stack Data** shows the full call stack hierarchy for providing the calling context that led to that event. This provides understanding about where and why a kernel or function was invoked. The **Call Stack Data** is displayed in call order, following the execution path. You can open any of the events in the call stack hierarchy by right clicking and choose **Go To Event**.
-  - You can also right-click on an event in the Flow Data or Call Stack Data for copy/export actions 
+  - You can also right-click on an event in the Flow Data or Call Stack Data for copy/export actions. 
 
 - **Track Details**: Shows additional information about the track that is not visible on the timeline. It shows the node the track belongs to and its details, the process it belongs to, and the track type (thread, counter, queue, and so on).
 
@@ -292,6 +275,10 @@ This section provides an interface for multiple data perspectives, offering gran
 
 - **Annotations**: Displays user-created annotations, enabling easier navigation across critical points within large traces, enhancing collaboration and knowledge sharing. See :ref:`annotation` for more info.
 - **Top Events**: Provides analysis for the events of each operation type (instrumented Thread, Sampled thread, Dispatch, memory allocation, memory copy) from the selected tracks aggregated by event name. Available metrics are event count (invocations) and total/average/min/max duration. If you select tracks of different types, each type will be shown in a separate table. Each table has its own System Table instance and can be sorted individually. If you make a time-range selection, Top Events are limited to that selected time-range. 
+
+   .. image:: ../images/top-events.png
+      :width: 300
+      :alt: Top events tab in Advanced Details
 
 .. tip::
 

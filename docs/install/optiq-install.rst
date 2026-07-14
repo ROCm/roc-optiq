@@ -14,12 +14,16 @@ System requirements
 ===================
 
 - You must be running ROCm 7.1.0 or later for ROCm Systems Profiler database file support, and ROCm 7.12.0 or later for ROCm Compute Profiler analysis database file support.
+
+   .. note::
+
+      Use this command to check which ROCm version is installed on your machine: ``cat /opt/rocm/.info/version``.
+
 - For LDS roofline chart support, ROCm Compute Profiler analysis database schema 1.4.0 is required (ROCm 7.14.0 or later). 
 - Your system must be running one of these operating systems:
 
   - Microsoft Windows 11
-  - Ubuntu 22.04, 24.04, or 26.04 (Debian-based) 
-  - RHEL 8, 9, or 10 (Rocky Linux equivalent) 
+  - Ubuntu 22.04 / 24.04 (Debian-based) 
   - CentOS Stream 9 
   - macOS 14 or 15 
 
@@ -103,8 +107,8 @@ Once you've installed ROCm Optiq for your operating system, add the ROCm binarie
 
    export PATH=opt/roc-optiq/bin:$PATH
 
-Install on RHEL 8, 9, or 10 and CentOS Stream 9
-================================================
+Install on CentOS Stream 9
+==========================
 
 1. Download the appropriate ``.rpm`` package from GitHub Releases. 
 2. Install the package: ``sudo dnf install ./roc-optiq-*.rpm`` 
@@ -113,12 +117,8 @@ Install on RHEL 8, 9, or 10 and CentOS Stream 9
 Install on macOS
 ================
 
-1. Download ``ROCm Optiq.app.zip`` from `GitHub Releases <https://github.com/ROCm/roc-optiq/releases>`_ or your organization's artifact registry. 
-2. Extract the archive and move **ROCm Optiq.app** to **Applications**. 
+1. Download ``roc-optiq_0.5.0_macos.zip`` from `GitHub Releases <https://github.com/ROCm/roc-optiq/releases>`_ or your organization's artifact registry. 
+2. Drag and drop ``roc-optiq.app`` from the ``roc-optiq_0.5.0_macos`` folder to the ``Applications`` folder. 
 3. Launch ROCm Optiq from **Applications**. 
 
 Settings, logs, and presets are stored at: ``~/Library/Application Support/ROCm-Optiq/``.
-
-.. note::
-
-   Settings from earlier versions stored in ``~/.config/rocm-optiq/`` are not migrated automatically.

@@ -17,7 +17,11 @@ System requirements
 
   .. tip::
 
-   Use this command to check which ROCm version is installed on your machine: ``cat /opt/rocm/.info/version``.
+   Use this command to check which ROCm version is installed on your machine:
+
+   .. code-block:: shell
+      
+      cat /opt/rocm/.info/version
 
 - For LDS roofline chart support, ROCm Compute Profiler analysis database schema 1.4.0 is required (ROCm 7.14.0 or later). 
 - Your system must be running one of these operating systems:
@@ -117,7 +121,7 @@ Install on CentOS Stream 9
 Install on macOS
 ================
 
-1. Download ``roc-optiq_0.5.0_macos.zip`` from `GitHub Releases <https://github.com/ROCm/roc-optiq/releases>`_ or your organization's artifact registry. 
+1. Download ``roc-optiq_0.5.0_macos.zip`` from `GitHub Releases <https://github.com/ROCm/roc-optiq/releases>`_.
 2. Drag and drop ``roc-optiq.app`` from the ``roc-optiq_0.5.0_macos`` folder to the ``Applications`` folder. 
 3. Launch ROCm Optiq from **Applications**. 
 

@@ -43,6 +43,14 @@ public:
     bool Start();
     bool StartBrowsing();
 
+    // Browses the current m_uri browsing path. If this orchestrator already
+    // owns a connected + authenticated session (e.g. from a previous browse),
+    // it skips straight to the browse phase and reuses that session instead of
+    // reconnecting and re-authenticating. Otherwise it falls back to the full
+    // StartBrowsing() pipeline. This is what folder-to-folder navigation should
+    // call so each click does not tear down and re-auth the SSH session.
+    bool BrowsePath();
+
     // True while a phase is in flight or pending.
     bool IsRunning() const { return m_running; }
 
@@ -81,6 +89,10 @@ private:
     Phase                                    m_phase;
     Phase                                    m_task;
     bool                                     m_running;
+    // True once the owned session has completed its authenticate phase, so a
+    // subsequent BrowsePath() can reuse the live connection without redoing
+    // connect + authenticate. Reset whenever a fresh session is started.
+    bool                                     m_authenticated;
     std::string                              m_status_message;
 };
 

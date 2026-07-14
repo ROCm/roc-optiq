@@ -47,6 +47,12 @@ private:
     void RenderOutputPopup();
     void RenderRemoteFilePopup();
 
+    // Browses the current m_uri browsing path, lazily creating the orchestrator
+    // (bound to the directory-path callback) on first use and reusing it for
+    // subsequent folder navigation. Reuse keeps the SSH session connected +
+    // authenticated across clicks instead of reconnecting every time.
+    void BrowseRemotePath();
+
     // Binds the currently selected SSH connection profile into m_uri so the
     // spawned orchestrator/session read the right host/credentials.
     void ApplySelectedConnection();

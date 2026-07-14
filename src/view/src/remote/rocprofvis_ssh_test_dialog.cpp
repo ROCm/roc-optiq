@@ -4,18 +4,77 @@
 #include "rocprofvis_ssh_test_dialog.h"
 #include "rocprofvis_ssh_auth_modal.h"
 #include "rocprofvis_appwindow.h"
+#include "rocprofvis_settings_manager.h"
 #include "widgets/rocprofvis_widget.h"
 #include "widgets/rocprofvis_gui_helpers.h"
 
 #include "imgui.h"
 
 #include <cfloat>
+#include <cstdio>
+#include <ctime>
 #include <string>
 
 namespace RocProfVis
 {
 namespace View
 {
+
+namespace
+{
+    // Formats a byte count as a compact human-readable size (e.g. "4.0 KiB").
+    std::string format_file_size(uint64_t bytes)
+    {
+        constexpr const char* UNITS[] = { "B", "KiB", "MiB", "GiB", "TiB" };
+        double size = static_cast<double>(bytes);
+        int    unit = 0;
+        while (size >= 1024.0 && unit < 4)
+        {
+            size /= 1024.0;
+            unit++;
+        }
+
+        char buf[32];
+        if (unit == 0)
+        {
+            std::snprintf(buf, sizeof(buf), "%llu B", static_cast<unsigned long long>(bytes));
+        }
+        else
+        {
+            std::snprintf(buf, sizeof(buf), "%.1f %s", size, UNITS[unit]);
+        }
+        return std::string(buf);
+    }
+
+    // Formats a Unix epoch (seconds) as local "YYYY-MM-DD HH:MM"; "-" if zero.
+    std::string format_file_time(uint64_t epoch_seconds)
+    {
+        if (epoch_seconds == 0)
+        {
+            return "-";
+        }
+
+        std::time_t t = static_cast<std::time_t>(epoch_seconds);
+        std::tm     tm_buf{};
+#ifdef _WIN32
+        if (localtime_s(&tm_buf, &t) != 0)
+        {
+            return "-";
+        }
+#else
+        if (localtime_r(&t, &tm_buf) == nullptr)
+        {
+            return "-";
+        }
+#endif
+        char buf[32];
+        if (std::strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M", &tm_buf) == 0)
+        {
+            return "-";
+        }
+        return std::string(buf);
+    }
+}  // namespace
 
 SshTestDialog::SshTestDialog(AppWindow* app_window)
 : m_app_window(app_window)
@@ -129,13 +188,10 @@ SshTestDialog::Render()
             if (ImGui::Button("Browse", ImVec2(80, 0)))
             {
                 m_uri->InitRemoteBrowsingPathString(m_uri->GetRemoteResultPathString().c_str());
-                m_orchestrator = std::make_unique<RemoteTraceOrchestrator>(
-                    m_uri,
-                    [this](const std::string& path)
-                    {
-                        m_uri->SetCurrentDirectoryPath(path.c_str());
-                    });
-                m_orchestrator->StartBrowsing();
+                // Start a fresh browsing session from the top-level Browse
+                // button; subsequent folder navigation reuses this session.
+                m_orchestrator.reset();
+                BrowseRemotePath();
             }
 
             ImGui::Spacing();
@@ -331,6 +387,25 @@ SshTestDialog::RenderOutputPopup()
     }
 }
 
+void
+SshTestDialog::BrowseRemotePath()
+{
+    // Create the orchestrator on first use, bound to the callback that mirrors
+    // the browsed directory back into m_uri. Reusing the same orchestrator (and
+    // its SshSession) across folder navigation keeps the connection open and
+    // authenticated; BrowsePath() only reconnects when there is no live session.
+    if (!m_orchestrator)
+    {
+        m_orchestrator = std::make_unique<RemoteTraceOrchestrator>(
+            m_uri,
+            [this](const std::string& path)
+            {
+                m_uri->SetCurrentDirectoryPath(path.c_str());
+            });
+    }
+    m_orchestrator->BrowsePath();
+}
+
 void SshTestDialog::RenderRemoteFilePopup()
 {
     SshSession* ssh_session =
@@ -354,79 +429,112 @@ void SshTestDialog::RenderRemoteFilePopup()
         {
             float button_area_height = ImGui::GetFrameHeightWithSpacing() * 2.5f;
 
-            // --- Scroll area ---
-            ImGui::BeginChild("FileList", ImVec2(0, -button_area_height), true);
+            // --- File table (scrollable) ---
+            // Folders are tinted with the theme accent color so they stand out
+            // from files; the selectable spans all columns so a click anywhere
+            // on the row selects/opens the entry.
+            SettingsManager& settings      = SettingsManager::GetInstance();
+            const ImU32      folder_color  = settings.GetColor(Colors::kAccent);
 
-            ImGui::Indent(10.0f);
+            const ImGuiTableFlags table_flags =
+                ImGuiTableFlags_ScrollY | ImGuiTableFlags_RowBg |
+                ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_Resizable;
 
-            uint32_t index = 0;
-
-            // --- ".." entry ---
+            if (ImGui::BeginTable("RemoteFiles", 3, table_flags,
+                    ImVec2(0, -button_area_height)))
             {
-                bool selected = (m_selected_file_index == index);
-                if (ImGui::Selectable("..", selected, ImGuiSelectableFlags_AllowDoubleClick))
-                {
-                    m_selected_file_index = index;
+                ImGui::TableSetupScrollFreeze(0, 1);
+                ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_WidthStretch);
+                ImGui::TableSetupColumn("Size", ImGuiTableColumnFlags_WidthFixed, 90.0f);
+                ImGui::TableSetupColumn("Modified", ImGuiTableColumnFlags_WidthFixed, 140.0f);
+                ImGui::TableHeadersRow();
 
-                    if (ImGui::IsMouseDoubleClicked(0))
+                uint32_t index = 0;
+
+                // --- ".." parent entry (always a directory) ---
+                {
+                    ImGui::TableNextRow();
+                    ImGui::TableSetColumnIndex(0);
+
+                    bool selected = (m_selected_file_index == index);
+                    ImGui::PushStyleColor(ImGuiCol_Text, folder_color);
+                    if (ImGui::Selectable("..", selected,
+                            ImGuiSelectableFlags_SpanAllColumns |
+                            ImGuiSelectableFlags_AllowDoubleClick))
                     {
-                        m_uri->MakeRemoteBrowsingPath("..");
-                        m_orchestrator = std::make_unique<RemoteTraceOrchestrator>(
-                            m_uri,
-                            [this](const std::string& path)
+                        m_selected_file_index = index;
+
+                        if (ImGui::IsMouseDoubleClicked(0))
+                        {
+                            m_uri->MakeRemoteBrowsingPath("..");
+                            BrowseRemotePath();
+                        }
+                    }
+                    ImGui::PopStyleColor();
+
+                    ImGui::TableSetColumnIndex(1);
+                    ImGui::TextUnformatted("-");
+                    ImGui::TableSetColumnIndex(2);
+                    ImGui::TextUnformatted("-");
+
+                    index++;
+                }
+
+                for (auto& f : m_last_directory_state.list_dir)
+                {
+                    ImGui::TableNextRow();
+
+                    // --- Name column (folders get a trailing slash + accent) ---
+                    ImGui::TableSetColumnIndex(0);
+                    bool        selected = (m_selected_file_index == index);
+                    std::string label    = f.is_dir ? (f.name + "/") : f.name;
+
+                    if (f.is_dir)
+                    {
+                        ImGui::PushStyleColor(ImGuiCol_Text, folder_color);
+                    }
+                    bool clicked = ImGui::Selectable(label.c_str(), selected,
+                        ImGuiSelectableFlags_SpanAllColumns |
+                        ImGuiSelectableFlags_AllowDoubleClick);
+                    if (f.is_dir)
+                    {
+                        ImGui::PopStyleColor();
+                    }
+
+                    if (clicked)
+                    {
+                        m_selected_file_index = index;
+
+                        if (ImGui::IsMouseDoubleClicked(0))
+                        {
+                            m_uri->MakeRemoteBrowsingPath(f.name.c_str());
+                            if (f.is_dir)
                             {
-                                m_uri->SetCurrentDirectoryPath(path.c_str());
-                            });
-                        m_orchestrator->StartBrowsing();
-                    }
-                }
-                index++;
-            }
-
-            ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 6));
-
-            for (auto& f : m_last_directory_state.list_dir)
-            {
-                bool selected = (m_selected_file_index == index);
-
-                std::string label = f.is_dir
-                    ? (f.name + "/")
-                    : f.name;
-
-                if (ImGui::Selectable(label.c_str(), selected, ImGuiSelectableFlags_AllowDoubleClick))
-                {
-                    m_selected_file_index = index;
-
-                    if (ImGui::IsMouseDoubleClicked(0))
-                    {
-                        m_uri->MakeRemoteBrowsingPath(f.name.c_str());
-                        if (f.is_dir)
-                        {
-                            m_orchestrator = std::make_unique<RemoteTraceOrchestrator>(
-                                m_uri,
-                                [this](const std::string& path)
-                                {
-                                    m_uri->SetCurrentDirectoryPath(path.c_str());
-                                });
-                            m_orchestrator->StartBrowsing();
-                        }
-                        else
-                        {
-                            m_orchestrator.reset();
-                            m_uri->UseRemoteBrowsingPathString();
-                            ImGui::CloseCurrentPopup();
-                            m_show_remote_filesystem_popup = false;
+                                BrowseRemotePath();
+                            }
+                            else
+                            {
+                                m_orchestrator.reset();
+                                m_uri->UseRemoteBrowsingPathString();
+                                ImGui::CloseCurrentPopup();
+                                m_show_remote_filesystem_popup = false;
+                            }
                         }
                     }
+
+                    // --- Size column (directories have no meaningful size) ---
+                    ImGui::TableSetColumnIndex(1);
+                    ImGui::TextUnformatted(f.is_dir ? "-" : format_file_size(f.size).c_str());
+
+                    // --- Modified column ---
+                    ImGui::TableSetColumnIndex(2);
+                    ImGui::TextUnformatted(format_file_time(f.time).c_str());
+
+                    index++;
                 }
 
-                index++;
+                ImGui::EndTable();
             }
-
-            ImGui::PopStyleVar();
-            ImGui::Unindent(10.0f);
-
-            ImGui::EndChild();
 
             // --- Bottom buttons ---
             ImGui::Separator();
@@ -451,13 +559,7 @@ void SshTestDialog::RenderRemoteFilePopup()
                 if (m_selected_file_index == 0)
                 {
                     m_uri->MakeRemoteBrowsingPath("..");
-                    m_orchestrator = std::make_unique<RemoteTraceOrchestrator>(
-                        m_uri,
-                        [this](const std::string& path)
-                        {
-                            m_uri->SetCurrentDirectoryPath(path.c_str());
-                        });
-                    m_orchestrator->StartBrowsing();
+                    BrowseRemotePath();
                 }
                 else
                 {
@@ -465,13 +567,7 @@ void SshTestDialog::RenderRemoteFilePopup()
                     m_uri->MakeRemoteBrowsingPath(f.name.c_str());
                     if (f.is_dir)
                     {
-                        m_orchestrator = std::make_unique<RemoteTraceOrchestrator>(
-                            m_uri,
-                            [this](const std::string& path)
-                            {
-                                m_uri->SetCurrentDirectoryPath(path.c_str());
-                            });
-                        m_orchestrator->StartBrowsing();
+                        BrowseRemotePath();
                     }
                     else
                     {

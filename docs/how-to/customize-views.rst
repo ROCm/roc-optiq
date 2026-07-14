@@ -219,10 +219,6 @@ Customize display options for each track by right clicking the **Description** a
 
    The context menu when right-clicking a track's description in **Timeline View** also provides **Copy track name** and **Copy track ID**. 
 
-   .. image:: ../images/context-menu-min.png
-      :width: 400
-      :alt: Context menu when right-clicking on a track's description.
-
 Set the flow rendering display mode
 -----------------------------------
 

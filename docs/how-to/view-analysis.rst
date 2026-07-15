@@ -12,7 +12,6 @@ View ROCm Compute Profiler analysis data in ROCm Optiq
 .. |gear| image:: ../images/gear.png
 
 ROCm Optiq provides intuitive, interactive profiling analysis for compute workloads by moving from a high-level performance summary to detailed kernel- and metric-level analysis. 
-ROCm Optiq provides intuitive, interactive profiling and analysis for compute workloads, moving from high-level performance summaries to detailed kernel- and metric-level analysis. 
 It enables rapid identification of performance hotspots and interactive exploration of kernel-level metrics for a profiled workload.
 
 .. note::
@@ -37,7 +36,7 @@ To generate profiling data in a compatible format, run the CLI analysis with the
 
   rocprof-compute analyze --output-name your-datafile-name --output-format db -p </path/to/workload>
 
-When you open a ROCm Compute Profiler analysis database file, you can view its data populated in :ref:`analysis-summary`, :ref:`kernel-details`, :ref:`analysis-table`, and :ref:`analysis-workload`.
+When you open a ROCm Compute Profiler analysis database file, you can view its data populated in :ref:`analysis-summary`, :ref:`kernel-details`, :ref:`analysis-table`, :ref:`analysis-workload`, and :ref:`baseline-comparison`.
 
 .. _analysis-summary:
 
@@ -55,6 +54,7 @@ The table displays kernel names, the number of invocations, and statistics inclu
 .. image:: ../images/summary-view-table.png
    :width: 800
    :align: center
+   :alt: Summary View table listing the top 10 longest-running kernels with invocation count and duration statistics
 
 Summary View -- Charts
 ----------------------
@@ -69,6 +69,7 @@ The pie chart plots:
 .. image:: ../images/summary-view-pie-chart.png
    :width: 800
    :align: center
+   :alt: Summary View pie chart showing total execution time distribution across the top 10 kernels
 
 .. tip::
    
@@ -79,8 +80,9 @@ The bar chart displays per-kernel metrics including the number of invocations, a
 .. image:: ../images/summary-view-bar-chart.png
    :width: 800
    :align: center
+   :alt: Summary View bar chart displaying per-kernel invocation count and duration metrics
 
-Selected kernels are highlighted in white in both charts.  
+Selected kernels are highlighted in both charts.
 
 Summary View -- Roofline Chart
 ------------------------------
@@ -91,6 +93,7 @@ Showing where kernels are positioned relative to these rooflines helps determine
 .. image:: ../images/summary-view-roofline-analysis.png
    :width: 800
    :align: center
+   :alt: Summary View roofline chart plotting kernel arithmetic intensity against performance relative to hardware memory and compute ceilings
 
 - The kernel performance at each cache level is displayed as individual dots in the roofline chart. The size of each dot represents the kernel's duration. 
 - Click |gear| in the menu to show or hide rooflines or arithmetic intensity points. 
@@ -105,10 +108,11 @@ Showing where kernels are positioned relative to these rooflines helps determine
   - Outside (which pushes the legend outside of the plot area)
 
   .. image:: ../images/Roofline-legend.png
-     :width: 800
-     :align: center
+     :width: 400
+     :alt: Roofline chart legend and menu repositioned to the inside bottom-right of the chart area
 
-.. _kernel-details:
+- Roofline chart now supports LDS (Local Data Share) Intensity points in addition to L1, L2, and HBM. Use the chart menu to show or hide LDS intensity markers. This requires ROCm Compute Profiler analysis database schema 1.4.0 with non-zero ``lds_cache_data`` (ROCm 7.14.0 or later). 
+
 
 Summary View -- System Speed-of-Light
 -------------------------------------
@@ -118,6 +122,8 @@ Summary View -- System Speed-of-Light
 - Metrics are aggregated across kernels to reflect overall application behavior rather than per-kernel performance. 
 - Use the **Percent-of-Peak** column to quickly identify whether execution is limited. Execution could be limited by compute, memory, or other hardware subsystems. 
 - Hover over a metric name to see a tooltip with a detailed description. 
+
+.. _kernel-details:
 
 Kernel Details
 ==============
@@ -137,6 +143,7 @@ The **Kernel Selection Table** displays kernel information, including names and 
 .. image:: ../images/kernel-selection-table.png
    :width: 800
    :align: center
+   :alt: Kernel Selection Table displaying kernel names and GPU metrics with per-column search boxes and bar chart visualizations
 
 - Click **Add Metric** to select additional GPU metrics as columns. 
 - The search box below each column's header allows you to enter statements to filter the data, enabling targeted analysis. Click **Apply Filters** to execute. You can search for a kernel by name or metric equation.  
@@ -151,15 +158,17 @@ The **Kernel Selection Table** displays kernel information, including names and 
 - To show or hide bar charts for metric values in the **Kernel Selection Table**, select **Show Bar Charts** or **Hide Bar Charts**.  
 - To show or hide bar charts for a specific metric, right-click the metric's column header and select **Show Bar Chart** or **Hide Bar Charts**. 
 - Hover over a clipped kernel name to view the full name in a tooltip. 
+- You can right-click a row or cell of **Kernel Selection Table** to **Copy Row Data** or **Copy Cell Data**. 
 
 Kernel Details -- Memory Chart
 ------------------------------
 
-The **Memory Chart** displays memory transactions and throughput at each cache hierarchy level. Each cache level presents its associated counter values and derived metrics, helping users understand memory behavior across the hardware memory hierarchy.
+The **Memory Chart** displays memory transactions and throughput at each cache hierarchy level. Each cache level presents its associated counter values and derived metrics, helping you understand memory behavior across the hardware memory hierarchy.
 
 .. image:: ../images/memory-chart.png
    :width: 800
    :align: center
+   :alt: Memory Chart diagram showing memory transaction throughput at each cache hierarchy level from L1 to HBM
 
 This visual diagram displays counter values and calculations to help you understand which cache level each memory transaction corresponds to and how they interact.  
 
@@ -173,6 +182,7 @@ The **System Speed-of-Light** displays key kernel-level performance metrics to s
 .. image:: ../images/speed-of-light.png
    :width: 800
    :align: center
+   :alt: System Speed-of-Light table showing kernel-level performance metrics with average, peak, and percentage-of-peak values
 
 Kernel Details -- Kernel Roofline Chart
 ---------------------------------------
@@ -193,11 +203,12 @@ The **Table View** displays a complete list of available metrics for the selecte
 .. image:: ../images/analysis-table-view.png
    :width: 800
    :align: center
+   :alt: Table View displaying a complete list of available GPU metrics for a selected kernel organized into category tabs
 
 Metrics are grouped into tabs that match compute categories, including: 
 
 - Compute Units - Instruction Mix 
-- System Speed-of Light 
+- System Speed-of-Light
 - Compute Units - Compute Pipeline 
 - Memory Chart 
 - Roofline Performance Rates 
@@ -214,14 +225,15 @@ Metrics are grouped into tabs that match compute categories, including:
 
 You can pin a metric for focused analysis by selecting the checkbox beside the metric. Pinned metric configurations can be saved to be persisted across sessions (see :ref:`Presets` for more information).
 
-You can add a metric to the Kernel Details by right-clicking that metric in Table View and selecting **Send Metric to kernel details**. 
-Here's an example:
+You can add a metric to the Kernel Details by right-clicking that metric in Table View and selecting **Send metric to kernel details**. For example, clicking on **Avg** (or **Min** or **Max**) cell of VALU FLOPs as in the screenshot below will add VALU FLOPs Avg (or Min or Max) to the **Kernel Selection** table. 
+When you hover on a metric name, a tooltip shows the metric description. 
+
+The following example shows the context menu for adding a metric to the Kernel Selection Table:
 
 .. image:: ../images/send-metric.png
    :width: 800
    :align: center
-
-Clicking the **Avg** cell of the **VALU FLOPs** adds the VALU FLOPs average to the Kernel Selection Table.
+   :alt: Table View with the right-click context menu open on the VALU FLOPs row showing the Send Metric to kernel details option
 
 .. _analysis-workload:
 
@@ -236,6 +248,7 @@ Workload Details
 .. image:: ../images/workload-details.png
    :width: 800
    :align: center
+   :alt: Workload Details panel showing system hardware information and ROCm Compute Profiler configuration settings
 
 .. _baseline-comparison:
 
@@ -257,6 +270,7 @@ You can also compare two kernels within the same workload.
 .. image:: ../images/baseline-comparison.png
    :width: 800
    :align: center
+   :alt: Baseline Comparison view showing a side-by-side metric table with baseline, target, delta, and percentage-change columns color-coded for quick identification
 
 Choose how metrics are displayed by selecting **Show Common Metrics** or **Show All Metrics**. You can also pin metrics for focused analysis. Pinned metrics can be persisted across sessions (See :ref:`presets` for more information).
 
@@ -269,11 +283,12 @@ For each metric, **Baseline Comparison** shows:
 - The **Baseline**, **Target**, **Difference**, and **Difference (%)** columns are color-coded to make changes easy to spot and quantify.
 - A combination of side-by-side statistics with clear delta reporting to provide a fast way to understand performance trends across workloads.
 
-You can configure a delta-threshold for comparison metrics to suppress the noise of minor deviations or filter out changes below a certain level.
+You can configure a delta-threshold for comparison metrics to suppress the noise of minor deviations or filter out changes below a certain level. You can either double-click the threshold control to enter a value or drag within the threshold box to adjust it. 
 
 .. image:: ../images/delta-threshold.png
    :width: 800
    :align: center
+   :alt: Baseline Comparison delta-threshold control showing a numeric input field for suppressing minor metric deviations
 
 .. note::
 

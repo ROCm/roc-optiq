@@ -6,6 +6,7 @@
 #include <deque>
 #include <iostream>
 #include <string>
+#include <string_view>
 
 namespace RocProfVis
 {
@@ -238,6 +239,25 @@ get_application_log_path(bool create_dirs);
 
 std::string
 compact_number_format(double number);
+
+// Full (non-abbreviated) number with adaptive decimal precision that matches
+// compact_number_format, so small values keep the same precision as their
+// compact form instead of being truncated.
+std::string
+full_number_format(double number);
+
+/**
+ * @brief Parses a user-entered number that may carry a compact magnitude suffix
+ * (K/M/B/G/T/P, where G is an alias for B) and/or a trailing units string. This
+ * is the inverse of compact_number_format, tolerant of surrounding whitespace.
+ *
+ * @param input     The raw user input, e.g. "25.2M bytes", "35K", "50 %".
+ * @param units     Units to strip from the end if present (case-insensitive).
+ * @param out_value Receives the parsed value on success.
+ * @return true if the input parsed to a finite number, false otherwise.
+ */
+bool
+parse_compact_number(std::string_view input, std::string_view units, double& out_value);
 
 bool 
 open_url(const std::string& url);

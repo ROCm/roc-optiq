@@ -302,6 +302,7 @@ BeginTooltipStyled()
     ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding,
                         settings.GetDefaultStyle().FrameRounding);
     ImGui::PushStyleColor(ImGuiCol_WindowBg, settings.GetColor(Colors::kBgFrame));
+    ImGui::PushStyleColor(ImGuiCol_Text, settings.GetColor(Colors::kTextMain));
     ImGui::BeginTooltip();
 }
 
@@ -314,12 +315,13 @@ BeginItemTooltipStyled()
     ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding,
                         settings.GetDefaultStyle().FrameRounding);
     ImGui::PushStyleColor(ImGuiCol_WindowBg, settings.GetColor(Colors::kBgFrame));
+    ImGui::PushStyleColor(ImGuiCol_Text, settings.GetColor(Colors::kTextMain));
     if(ImGui::BeginItemTooltip())
     {
         return true;
     }
     ImGui::PopStyleVar(2);
-    ImGui::PopStyleColor();
+    ImGui::PopStyleColor(2);
     return false;
 }
 
@@ -328,7 +330,7 @@ EndTooltipStyled()
 {
     ImGui::EndTooltip();
     ImGui::PopStyleVar(2);
-    ImGui::PopStyleColor();
+    ImGui::PopStyleColor(2);
 }
 
 void
@@ -401,6 +403,23 @@ ElidedText(const char* text, float available_width, float tooltip_width,
             ImGui::PopStyleVar(2);
         }
     }
+}
+
+std::string
+ElideWithEllipsis(const std::string& text, float max_width, size_t max_chars)
+{
+    std::string out       = text.substr(0, max_chars);
+    bool        truncated = text.size() > max_chars;
+    while(!out.empty() && ImGui::CalcTextSize((out + "...").c_str()).x > max_width)
+    {
+        out.pop_back();
+        truncated = true;
+    }
+    if(truncated)
+    {
+        out += "...";
+    }
+    return out;
 }
 
 void

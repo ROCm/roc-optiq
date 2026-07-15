@@ -16,6 +16,7 @@ enum class FontType
 {
     kMainText,
     kIcon,
+    kCode,
     // Used to get the size of the enum, insert new fonts before this line
     __kLastFont,
     kDefault = kMainText
@@ -58,6 +59,7 @@ private:
 
     ImFont* m_text_font = nullptr;
     ImFont* m_icon_font = nullptr;
+    ImFont* m_code_font = nullptr;
     std::array<float, kNumSizes> m_sizes{};
     std::vector<float> m_available_sizes;
 };

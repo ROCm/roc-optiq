@@ -475,9 +475,19 @@ ComputeDataModel::GetKernelInfo(uint32_t workload_id, uint32_t kernel_id) const
     {
         const WorkloadInfo& workload = m_workloads.at(workload_id);
         if(workload.kernels.count(kernel_id))
-        {
             return &workload.kernels.at(kernel_id);
-        }
+    }
+    return nullptr;
+}
+
+KernelInfo*
+ComputeDataModel::GetKernelInfoMutable(uint32_t workload_id, uint32_t kernel_id)
+{
+    if(m_workloads.count(workload_id))
+    {
+        WorkloadInfo& workload = m_workloads.at(workload_id);
+        if(workload.kernels.count(kernel_id))
+            return &workload.kernels.at(kernel_id);
     }
     return nullptr;
 }

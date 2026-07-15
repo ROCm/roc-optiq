@@ -3,6 +3,7 @@
 
 #include "rocprofvis_utils.h"
 #include <cctype>
+#include <charconv>
 #include <cmath>
 #include <cstdint>
 #include <cstdlib>
@@ -438,6 +439,15 @@ RocProfVis::View::get_application_log_path(bool create_dirs)
 #endif
 }
 
+// Number of decimal places to show for a value of the given magnitude. Fewer
+// decimals for larger numbers keeps things readable while preserving precision
+// for small values.
+static int
+adaptive_decimal_places(double magnitude)
+{
+    return magnitude >= 100.0 ? 0 : (magnitude >= 10.0 ? 1 : 2);
+}
+
 std::string
 RocProfVis::View::compact_number_format(double number)
 {
@@ -470,10 +480,98 @@ RocProfVis::View::compact_number_format(double number)
         return output.str();
     }
 
-    output << std::fixed << std::setprecision(number >= 100 ? 0 : (number >= 10 ? 1 : 2))
-        << number
-        << suffixes[magnitude];
+    output << std::fixed << std::setprecision(adaptive_decimal_places(number)) << number
+           << suffixes[magnitude];
     return output.str();
+}
+
+std::string
+RocProfVis::View::full_number_format(double number)
+{
+    if(!std::isfinite(number))
+    {
+        if(std::isnan(number)) return "NaN";
+        return std::signbit(number) ? "-Inf" : "+Inf";
+    }
+
+    std::ostringstream output;
+    output << std::fixed << std::setprecision(adaptive_decimal_places(std::fabs(number)))
+           << number;
+    return output.str();
+}
+
+bool
+RocProfVis::View::parse_compact_number(std::string_view input, std::string_view units,
+                                       double& out_value)
+{
+    auto trim = [](std::string_view s) -> std::string_view {
+        const size_t begin = s.find_first_not_of(" \t\r\n");
+        if(begin == std::string_view::npos) return {};
+        return s.substr(begin, s.find_last_not_of(" \t\r\n") - begin + 1);
+    };
+
+    std::string_view sv = trim(input);
+
+    if(!units.empty() && sv.size() >= units.size())
+    {
+        std::string_view tail  = sv.substr(sv.size() - units.size());
+        bool             match = true;
+        for(size_t i = 0; i < units.size() && match; ++i)
+        {
+            match = std::tolower(static_cast<unsigned char>(tail[i])) ==
+                    std::tolower(static_cast<unsigned char>(units[i]));
+        }
+        if(match)
+        {
+            sv = trim(sv.substr(0, sv.size() - units.size()));
+        }
+    }
+
+    double multiplier = 1.0;
+    if(!sv.empty())
+    {
+        switch(std::toupper(static_cast<unsigned char>(sv.back())))
+        {
+        case 'K': multiplier = 1e3; break;
+        case 'M': multiplier = 1e6; break;
+        case 'B':
+        case 'G': multiplier = 1e9; break;
+        case 'T': multiplier = 1e12; break;
+        case 'P': multiplier = 1e15; break;
+        default: break;
+        }
+        if(multiplier != 1.0)
+        {
+            sv = trim(sv.substr(0, sv.size() - 1));
+        }
+    }
+
+    if(sv.empty())
+    {
+        return false;
+    }
+
+    double result = 0.0;
+    bool   parsed = false;
+#if defined(__APPLE__)
+    // macOS doesn't support from_chars for floating point yet, use strtod.
+    char*       end_ptr = nullptr;
+    std::string null_terminated(sv);
+    result = std::strtod(null_terminated.c_str(), &end_ptr);
+    parsed = (end_ptr == null_terminated.c_str() + null_terminated.size());
+#else
+    const char* last = sv.data() + sv.size();
+    auto [ptr, ec]   = std::from_chars(sv.data(), last, result, std::chars_format::general);
+    parsed           = (ec == std::errc{} && ptr == last);
+#endif
+
+    result *= multiplier;
+    if(parsed && std::isfinite(result))
+    {
+        out_value = result;
+        return true;
+    }
+    return false;
 }
 
 bool RocProfVis::View::open_url(const std::string& url)

@@ -71,6 +71,7 @@ class LineTrackItem : public TrackItem
 
         std::string m_formatted_str;
         std::string m_compact_str;
+        std::string m_edit_str;
         std::string m_units;
 
         EditableTextField m_text_field;

@@ -113,6 +113,7 @@ public:
     std::vector<const KernelInfo*> GetKernelInfoList(uint32_t workload_id) const;
 
     const KernelInfo* GetKernelInfo(uint32_t workload_id, uint32_t kernel_id) const;
+    KernelInfo*       GetKernelInfoMutable(uint32_t workload_id, uint32_t kernel_id);
 
 private:
     void OrderAvailableMetrics(WorkloadInfo& workload);

@@ -109,6 +109,11 @@ ElidedText(const char* text, float available_width, float tooltip_width = 0.0f,
            Alignment alignment                     = Alignment_Left,
            bool      imgui_AlignTextToFramePadding = false);
 
+// Trims text to a single line fitting max_width (and max_chars), appending "..."
+// when shortened. Uses the current font for measurement.
+std::string
+ElideWithEllipsis(const std::string& text, float max_width, size_t max_chars);
+
 void
 CenterNextTextItem(const char* text);
 

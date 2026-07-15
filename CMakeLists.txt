@@ -10,7 +10,7 @@ project(${TARGET_NAME})
 set(PROJECT_VERSION_MAJOR 0)
 set(PROJECT_VERSION_MINOR 5)
 set(PROJECT_VERSION_PATCH 0)
-set(PROJECT_VERSION_BUILD 0)
+set(PROJECT_VERSION_BUILD 1)
 
 # Name and path of the icon font header
 set(ICON_HEADER ${CMAKE_SOURCE_DIR}/src/view/src/icons/rocprofvis_icon_data.h)
@@ -137,6 +137,7 @@ list(APPEND VIEW_FILES
     src/view/src/compute/rocprofvis_compute_workload_view.cpp
     src/view/src/compute/rocprofvis_compute_kernel_metric_table.cpp
     src/view/src/compute/rocprofvis_compute_comparison.cpp
+    src/view/src/compute/rocprofvis_compute_code_view.cpp
     src/view/src/compute/rocprofvis_compute_tester.cpp
     src/view/src/model/compute/rocprofvis_compute_data_model.cpp
     src/view/src/widgets/rocprofvis_compute_widget.cpp

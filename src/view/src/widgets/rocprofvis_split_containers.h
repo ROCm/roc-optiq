@@ -45,6 +45,8 @@ public:
     virtual void Render() override;
 
     void SetSplit(float ratio) { m_split_ratio = ratio; };
+    void ShowSplitter(bool show) { m_always_show_splitter = show; };
+
     float GetMinSize();
 
 protected:
@@ -78,6 +80,8 @@ protected:
     std::string m_handle_name;
 
     float m_optimal_size = 0.0f;
+
+    bool m_always_show_splitter = false;
 };
 
 class HSplitContainer : public SplitContainerBase

@@ -185,10 +185,6 @@ Customize timeline display options
 
 Customize display options for each track by right clicking the **Description** area to open the track's context menu. Select **Track Options** to customize the track's display options.
 
-.. image:: ../images/track-options.png
-   :width: 600
-   :alt: Timeline track context menu options
-
 - For event tracks, you can toggle between **Color by Name**, **Color by Time Level**, **No Color**, and **Compact mode**.
 
   - **Color by Name**: All events with the same name share a color. 
@@ -196,9 +192,9 @@ Customize display options for each track by right clicking the **Description** a
   - **No Color**: Events render without name-based coloring. 
   - **Compact mode**: Shrink event track heights to display tall flame graphs in a smaller area. 
 
-.. image:: ../images/timeline-display-options.png
-   :width: 600
-   :alt: Track display options menu for a sample counter track showing Show Counter Boxes, Alternate Counter Coloring, and Highlight Y Range toggles
+   .. image:: ../images/track-options.png
+      :width: 600
+      :alt: Timeline track context menu options
 
 - For sample counter tracks, you can toggle between **Show Counter Boxes**, **Alternate Counter Coloring**, and **Highlight Y Range**:
 
@@ -206,6 +202,9 @@ Customize display options for each track by right clicking the **Description** a
   - **Alternate Counter Coloring**: If the area under the line is filled, alternate the fill color for each sample.
   - **Highlight Y Range**: Select an area of the graph to highlight. Choose the minimum and maximum range that you want to highlight. The tool highlights these values on the track region.
 
+   .. image:: ../images/timeline-display-options.png
+      :width: 600
+      :alt: Track display options menu for a sample counter track showing Show Counter Boxes, Alternate Counter Coloring, and Highlight Y Range toggles
 
 - For sample counter tracks, you can set the min and max when showing the tracks: 
 

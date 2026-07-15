@@ -225,7 +225,7 @@ Metrics are grouped into tabs that match compute categories, including:
 
 You can pin a metric for focused analysis by selecting the checkbox beside the metric. Pinned metric configurations can be saved to be persisted across sessions (see :ref:`Presets` for more information).
 
-You can add a metric to the Kernel Details by right-clicking that metric in Table View and selecting **Send Metric to kernel details**. For example, clicking on **Avg** (or **Min** or **Max**) cell of VALU FLOPs as in the screenshot below will add VALU FLOPs Avg (or Min or Max) to the **Kernel Selection** table. 
+You can add a metric to the Kernel Details by right-clicking that metric in Table View and selecting **Send metric to kernel details**. For example, clicking on **Avg** (or **Min** or **Max**) cell of VALU FLOPs as in the screenshot below will add VALU FLOPs Avg (or Min or Max) to the **Kernel Selection** table. 
 When you hover on a metric name, a tooltip shows the metric description. 
 
 The following example shows the context menu for adding a metric to the Kernel Selection Table:
@@ -234,8 +234,6 @@ The following example shows the context menu for adding a metric to the Kernel S
    :width: 800
    :align: center
    :alt: Table View with the right-click context menu open on the VALU FLOPs row showing the Send Metric to kernel details option
-
-Clicking the **Avg** cell of the **VALU FLOPs** adds the VALU FLOPs average to the Kernel Selection Table.
 
 .. _analysis-workload:
 

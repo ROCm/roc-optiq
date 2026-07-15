@@ -10,6 +10,7 @@
 #include <vector>
 #include <memory>
 #include <mutex>
+#include <condition_variable>
 #include <atomic>
 #include <thread>
 #include <utility>
@@ -172,6 +173,16 @@ public:
 
     rocprofvis_result_t Cancel();
 
+    // Called by the C ABI immediately BEFORE the monitor job is issued, so the
+    // destructor knows a JobSystem job holding a raw pointer to this controller
+    // (and its executor) is in flight.
+    void BeginMonitorJob();
+    // Called via a shared_ptr scope-guard captured in the job lambda, when the
+    // Job object is destroyed (in ~Future at future_free). This fires whether or
+    // not ExecuteJob ever ran - a job cancelled before it is dequeued never runs
+    // its function - so it reliably releases a destructor blocked below. Safe to
+    // call more than once (idempotent).
+    void EndMonitorJob();
 
     static rocprofvis_result_t ExecuteJob(ProfilerProcessController* controller, Future* future);
 
@@ -185,6 +196,16 @@ private:
     std::string m_output_text;
     int m_exit_code;
     std::mutex m_mutex;
+
+    // Guards the "a monitor job references this controller" flag. The destructor
+    // cancels the run and blocks on m_job_cv until the owning Job object is
+    // destroyed (at future_free), so the controller/executor are never destroyed
+    // out from under ExecuteJob. Contract: the bound future must be freed before
+    // (or concurrently with) the profiler; the view teardown frees the future
+    // first, so the wait returns without blocking.
+    std::mutex              m_job_mutex;
+    std::condition_variable m_job_cv;
+    bool                    m_job_active = false;
 };
 
 /*

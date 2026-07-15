@@ -700,6 +700,34 @@ ProfilerProcessController::ProfilerProcessController()
 
 ProfilerProcessController::~ProfilerProcessController()
 {
+    // The monitor job (ExecuteJob) holds a raw pointer to this controller and its
+    // executor. Signal cancellation, then block until the Job object that owns
+    // that pointer is gone before our members are destroyed. The block is
+    // released by EndMonitorJob(), which is driven by a shared_ptr scope-guard
+    // captured in the job lambda (see rocprofvis_profiler.cpp): it fires when the
+    // Job is destroyed - in ~Future at future_free - regardless of whether the
+    // job ever ran, so a job cancelled before it was dequeued still releases us.
+    // Contract: the caller must free the bound future before (or concurrently
+    // with, on another thread) freeing the profiler. The view teardown frees the
+    // future first, so this wait returns without blocking.
+    Cancel();
+    std::unique_lock<std::mutex> lock(m_job_mutex);
+    m_job_cv.wait(lock, [this] { return !m_job_active; });
+}
+
+void ProfilerProcessController::BeginMonitorJob()
+{
+    std::lock_guard<std::mutex> lock(m_job_mutex);
+    m_job_active = true;
+}
+
+void ProfilerProcessController::EndMonitorJob()
+{
+    {
+        std::lock_guard<std::mutex> lock(m_job_mutex);
+        m_job_active = false;
+    }
+    m_job_cv.notify_all();
 }
 
 rocprofvis_result_t ProfilerProcessController::LaunchAsync(ProfilerConfig const* config)
@@ -929,9 +957,10 @@ ProfilerSession::ProfilerSession()
 
 ProfilerSession::~ProfilerSession()
 {
-    // Best-effort cancel so any in-flight job stops before the controller goes
-    // away. The bound Future is owned by the caller and is not freed here.
-    m_controller.Cancel();
+    // The member ProfilerProcessController's destructor cancels the run and joins
+    // its monitor job before it (and its executor) are destroyed, so freeing the
+    // session is safe even with a job in flight. The bound Future is owned by the
+    // caller and is not touched here.
 }
 
 rocprofvis_controller_object_type_t ProfilerSession::GetType(void)

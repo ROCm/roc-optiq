@@ -29,6 +29,7 @@
 
 #include <algorithm>
 #include <cstring>
+#include <memory>
 
 namespace RocProfVis
 {
@@ -239,8 +240,19 @@ rocprofvis_result_t rocprofvis_profiler_launch_async(rocprofvis_profiler_t* prof
     session_ref->SetBoundFuture(future_ref.Get());
 
     RocProfVis::Controller::ProfilerProcessController* controller_ptr = &controller;
+    // Mark the monitor job in flight BEFORE issuing it, so the controller's
+    // destructor blocks until the job is fully done with the controller.
+    controller.BeginMonitorJob();
+    // Release that block when the Job object is destroyed (in ~Future at
+    // future_free) - this fires whether ExecuteJob ran OR the job was cancelled
+    // before it was ever dequeued (JobSystem::CancelJob / shutdown call
+    // Job::Cancel() without running the function). The shared_ptr deleter fires
+    // exactly once, when the last copy of the captured lambda (held by the Job)
+    // is destroyed, so std::function copies don't release it early.
+    std::shared_ptr<void> monitor_guard(
+        nullptr, [controller_ptr](void*) { controller_ptr->EndMonitorJob(); });
     RocProfVis::Controller::Job* job = RocProfVis::Controller::JobSystem::Get().IssueJob(
-        [controller_ptr](RocProfVis::Controller::Future* job_future) -> rocprofvis_result_t
+        [controller_ptr, monitor_guard](RocProfVis::Controller::Future* job_future) -> rocprofvis_result_t
         {
             return RocProfVis::Controller::ProfilerProcessController::ExecuteJob(controller_ptr, job_future);
         },
@@ -276,8 +288,19 @@ rocprofvis_result_t rocprofvis_profiler_launch_remote_async(rocprofvis_profiler_
     session_ref->SetBoundFuture(future_ref.Get());
 
     RocProfVis::Controller::ProfilerProcessController* controller_ptr = &controller;
+    // Mark the monitor job in flight BEFORE issuing it, so the controller's
+    // destructor blocks until the job is fully done with the controller.
+    controller.BeginMonitorJob();
+    // Release that block when the Job object is destroyed (in ~Future at
+    // future_free) - this fires whether ExecuteJob ran OR the job was cancelled
+    // before it was ever dequeued (JobSystem::CancelJob / shutdown call
+    // Job::Cancel() without running the function). The shared_ptr deleter fires
+    // exactly once, when the last copy of the captured lambda (held by the Job)
+    // is destroyed, so std::function copies don't release it early.
+    std::shared_ptr<void> monitor_guard(
+        nullptr, [controller_ptr](void*) { controller_ptr->EndMonitorJob(); });
     RocProfVis::Controller::Job* job = RocProfVis::Controller::JobSystem::Get().IssueJob(
-        [controller_ptr](RocProfVis::Controller::Future* job_future) -> rocprofvis_result_t
+        [controller_ptr, monitor_guard](RocProfVis::Controller::Future* job_future) -> rocprofvis_result_t
         {
             return RocProfVis::Controller::ProfilerProcessController::ExecuteJob(controller_ptr, job_future);
         },

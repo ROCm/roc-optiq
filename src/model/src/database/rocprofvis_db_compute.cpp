@@ -37,6 +37,7 @@ namespace DataModel
 		{"workload_sub_name", kRPVComputeColumnWorkloadSubName},
 		{"sys_info_extdata", kRPVComputeColumnWorkloadSysInfo},
 		{"profiling_config_extdata", kRPVComputeColumnWorkloadProfileConfig},
+		{"memory_chart_extdata", kRPVComputeColumnWorkloadMemoryChart},
 		{"roofline_bench_extdata", kRPVComputeColumnWorkloadRooflineBenchBlob},
 		{"kernel_uuid", kRPVComputeColumnKernelUUID},
 		{"kernel_name", kRPVComputeColumnKernelName},
@@ -123,8 +124,14 @@ namespace DataModel
 		query += "name as workload_name, "; 
 		query += "sub_name as workload_sub_name, ";
 		query += "sys_info_extdata, ";
-		query += "profiling_config_extdata "; 
-		query += "FROM ";
+		query += "profiling_config_extdata";
+		// memory_chart_extdata is an optional extension column; only select it
+		// when the database actually has it so older databases still load.
+		if (m_db != nullptr && m_db->m_has_memory_chart_extdata)
+		{
+			query += ", memory_chart_extdata";
+		}
+		query += " FROM ";
 		query += "compute_workload";
 		return query;
 	}
@@ -799,6 +806,9 @@ void ComputeQueryFactory::ParseMetricParam(std::string metric_str, uint32_t work
 		{			
 			if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, &tmp_db_instance, "SELECT * FROM compute_metadata;", &CallbackParseMetadata)) break;
 			m_query_factory.SetVersion(m_db_version.c_str());
+			// Best-effort detection of the optional memory_chart_extdata column so
+			// the workload query includes it only when present.
+			ExecuteSQLQuery(future, &tmp_db_instance, "SELECT name FROM pragma_table_info('compute_workload') WHERE name = 'memory_chart_extdata';", &CallbackDetectMemoryChartColumn);
 			if (kRocProfVisDmResultSuccess != CreateIndexes()) break;
 			TraceProperties()->metadata_loaded=true;
 			ShowProgress(100-future->Progress(), "Trace metadata successfully loaded", kRPVDbSuccess, future );
@@ -1088,6 +1098,16 @@ void ComputeQueryFactory::ParseMetricParam(std::string metric_str, uint32_t work
 		uint32_t kernel_id = db->Sqlite3ColumnInt(func, stmt, azColName, 0);
 		uint32_t workload_id = db->Sqlite3ColumnInt(func, stmt, azColName, 1);
 		db->m_kernel_workload_lookup[kernel_id] = workload_id;
+		callback_params->future->CountThisRow();
+		return 0;
+	}
+
+	int ComputeDatabase::CallbackDetectMemoryChartColumn(void* data, int /*argc*/, sqlite3_stmt* /*stmt*/, char** /*azColName*/) {
+		ROCPROFVIS_ASSERT_MSG_RETURN(data, ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL, 1);
+		rocprofvis_db_sqlite_callback_parameters* callback_params = (rocprofvis_db_sqlite_callback_parameters*)data;
+		ComputeDatabase* db = (ComputeDatabase*)callback_params->db;
+		// A returned row means the column exists in compute_workload.
+		db->m_has_memory_chart_extdata = true;
 		callback_params->future->CountThisRow();
 		return 0;
 	}

@@ -1,0 +1,306 @@
+{
+    "version": 2,
+    "metric_source": {
+        "category_id": 3,
+        "table_id": 1
+    },
+    "blocks": [
+        {
+            "id": 1,
+            "column": 0,
+            "title": "Compute Unit (WGP)",
+            "content": []
+        },
+        {
+            "id": 100,
+            "column": 1,
+            "order": 0,
+            "title": "TCP",
+            "children": [
+                {
+                    "id": 12,
+                    "order": 0,
+                    "title": "Vector Cache (GL0)",
+                    "content": [
+                        {
+                            "metric": "3.3.4",
+                            "title": "Hit",
+                            "category": "hit"
+                        },
+                        {
+                            "metric": "3.3.0",
+                            "title": "Requests",
+                            "category": "misc"
+                        },
+                        {
+                            "metric": "3.3.5",
+                            "title": "BW",
+                            "category": "misc"
+                        }
+                    ]
+                },
+                {
+                    "id": 13,
+                    "order": 1,
+                    "title": "LDS",
+                    "content": [
+                        {
+                            "metric": "3.4.0",
+                            "title": "Instr",
+                            "category": "misc"
+                        },
+                        {
+                            "metric": "3.4.4",
+                            "title": "Bank Conf",
+                            "category": "stall"
+                        },
+                        {
+                            "metric": "3.4.5",
+                            "title": "BW",
+                            "category": "misc"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "id": 101,
+            "column": 1,
+            "order": 1,
+            "title": "SQC",
+            "children": [
+                {
+                    "id": 10,
+                    "order": 0,
+                    "title": "Instruction Cache",
+                    "content": [
+                        {
+                            "metric": "3.1.1",
+                            "title": "Util",
+                            "category": "util"
+                        },
+                        {
+                            "metric": "3.1.2",
+                            "title": "Hit",
+                            "category": "hit"
+                        },
+                        {
+                            "metric": "3.1.0",
+                            "title": "Requests",
+                            "category": "misc"
+                        }
+                    ]
+                },
+                {
+                    "id": 11,
+                    "order": 1,
+                    "title": "Scalar Data Cache",
+                    "content": [
+                        {
+                            "metric": "3.2.1",
+                            "title": "Util",
+                            "category": "util"
+                        },
+                        {
+                            "metric": "3.2.2",
+                            "title": "Hit",
+                            "category": "hit"
+                        },
+                        {
+                            "metric": "3.2.0",
+                            "title": "Requests",
+                            "category": "misc"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "id": 20,
+            "column": 2,
+            "title": "GL1 Cache (L1)",
+            "content": [
+                {
+                    "metric": "3.6.0",
+                    "title": "Util",
+                    "category": "util"
+                },
+                {
+                    "metric": "3.6.5",
+                    "title": "Hit",
+                    "category": "hit"
+                },
+                {
+                    "metric": "3.6.1",
+                    "title": "Requests",
+                    "category": "misc"
+                },
+                {
+                    "metric": "3.6.4",
+                    "title": "Misses",
+                    "category": "stall"
+                }
+            ]
+        },
+        {
+            "id": 30,
+            "column": 3,
+            "title": "GL2 Cache (L2)",
+            "content": [
+                {
+                    "metric": "3.8.0",
+                    "title": "Util",
+                    "category": "util"
+                },
+                {
+                    "metric": "3.8.5",
+                    "title": "Hit",
+                    "category": "hit"
+                },
+                {
+                    "metric": "3.8.6",
+                    "title": "Rd BW",
+                    "category": "read"
+                },
+                {
+                    "metric": "3.8.7",
+                    "title": "Wr BW",
+                    "category": "write"
+                }
+            ]
+        },
+        {
+            "id": 40,
+            "column": 4,
+            "title": "System Memory (GCEA)",
+            "content": [
+                {
+                    "metric": "3.9.0",
+                    "title": "SARB Util",
+                    "category": "util"
+                },
+                {
+                    "metric": "3.9.4",
+                    "title": "DRAM Rd",
+                    "category": "read"
+                },
+                {
+                    "metric": "3.9.5",
+                    "title": "DRAM Wr",
+                    "category": "write"
+                },
+                {
+                    "metric": "3.9.6",
+                    "title": "Rd Ret",
+                    "category": "read"
+                }
+            ]
+        }
+    ],
+    "arrows": [
+        {
+            "from": 1,
+            "to": 10,
+            "direction": "backward",
+            "metric": "3.1.0",
+            "title": "Fetch",
+            "category": "read"
+        },
+        {
+            "from": 1,
+            "to": 11,
+            "direction": "backward",
+            "metric": "3.2.0",
+            "title": "Rd",
+            "category": "read"
+        },
+        {
+            "from": 1,
+            "to": 12,
+            "direction": "backward",
+            "metric": "3.3.1",
+            "title": "Rd",
+            "category": "read"
+        },
+        {
+            "from": 1,
+            "to": 12,
+            "direction": "forward",
+            "metric": "3.3.2",
+            "title": "Wr",
+            "category": "write"
+        },
+        {
+            "from": 1,
+            "to": 13,
+            "direction": "both",
+            "metric": "3.4.0",
+            "title": "Req",
+            "category": "misc"
+        },
+        {
+            "from": 10,
+            "to": 20,
+            "direction": "forward",
+            "metric": "3.1.5",
+            "title": "Rd BW",
+            "category": "read"
+        },
+        {
+            "from": 11,
+            "to": 20,
+            "direction": "forward",
+            "metric": "3.2.4",
+            "title": "Rd BW",
+            "category": "read"
+        },
+        {
+            "from": 12,
+            "to": 20,
+            "direction": "backward",
+            "metric": "3.5.0",
+            "title": "Rd",
+            "category": "read"
+        },
+        {
+            "from": 12,
+            "to": 20,
+            "direction": "forward",
+            "metric": "3.5.1",
+            "title": "Wr",
+            "category": "write"
+        },
+        {
+            "from": 20,
+            "to": 30,
+            "direction": "backward",
+            "metric": "3.7.0",
+            "title": "Rd",
+            "category": "read"
+        },
+        {
+            "from": 20,
+            "to": 30,
+            "direction": "forward",
+            "metric": "3.7.1",
+            "title": "Wr",
+            "category": "write"
+        },
+        {
+            "from": 30,
+            "to": 40,
+            "direction": "backward",
+            "metric": "3.9.4",
+            "title": "Rd",
+            "category": "read"
+        },
+        {
+            "from": 30,
+            "to": 40,
+            "direction": "forward",
+            "metric": "3.9.5",
+            "title": "Wr",
+            "category": "write"
+        }
+    ]
+}

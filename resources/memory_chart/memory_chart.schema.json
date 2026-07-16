@@ -1,0 +1,96 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "$id": "https://rocm.amd.com/roc-optiq/memory_chart.schema.json",
+    "title": "ROCm Optiq Memory Chart Layout (relational)",
+    "description": "Data-driven description of the Compute kernel-details Memory Chart. The layout is relational: a set of block rows and a set of arrow (relation) rows, both keyed by id. This mirrors the shape stored in the compute_workload table. The interpreter (ComputeMemoryChartView) places blocks into columns, resolves each referenced metric against the compute metric table, and routes the arrows to avoid overlap.",
+    "type": "object",
+    "required": ["version", "blocks"],
+    "additionalProperties": false,
+    "properties": {
+        "version": { "type": "integer", "minimum": 2, "description": "Schema version." },
+        "metric_source": {
+            "type": "object",
+            "description": "Which compute metric category/table the metric ids/names resolve against. Defaults to category 3, table 1 (the memory-chart table).",
+            "additionalProperties": false,
+            "properties": {
+                "category_id": { "type": "integer", "minimum": 0 },
+                "table_id": { "type": "integer", "minimum": 0 }
+            }
+        },
+        "blocks": {
+            "type": "array",
+            "description": "Block (node) rows.",
+            "items": { "$ref": "#/definitions/block" }
+        },
+        "arrows": {
+            "type": "array",
+            "description": "Arrow (relation) rows between blocks.",
+            "items": { "$ref": "#/definitions/arrow" }
+        }
+    },
+    "definitions": {
+        "metricRef": {
+            "description": "A metric reference, as a string. Preferred form is the metric's canonical dotted id 'category.table.entry' (e.g. \"3.1.0\"), matching compute_metric_definition.metric_id. A display name (e.g. \"L2 Rd\") is also accepted as a convenience. The referenced metric supplies the value, unit, and - when no title override is given - the label.",
+            "type": "string"
+        },
+        "contentItem": {
+            "description": "One line inside a block. Either a bare metric reference, or an object with an optional title override. The unit is taken from the metric entry automatically.",
+            "oneOf": [
+                { "$ref": "#/definitions/metricRef" },
+                {
+                    "type": "object",
+                    "required": ["metric"],
+                    "additionalProperties": false,
+                    "properties": {
+                        "metric": { "$ref": "#/definitions/metricRef" },
+                        "title": { "type": "string", "description": "Label override; when omitted the metric's own name is used." },
+                        "category": { "$ref": "#/definitions/category" }
+                    }
+                }
+            ]
+        },
+        "category": {
+            "type": "string",
+            "description": "Semantic category driving the accent color. Recognized: read, write, atomic, util, hit, stall. Anything else (or 'misc') uses a neutral color. When omitted, the color is inferred from the label text.",
+            "enum": ["read", "write", "atomic", "util", "hit", "stall", "misc"]
+        },
+        "block": {
+            "type": "object",
+            "required": ["id", "column"],
+            "additionalProperties": false,
+            "properties": {
+                "id": { "type": "integer", "minimum": 0, "description": "Unique block id, referenced by arrows." },
+                "column": { "type": "integer", "description": "Column index (left to right). Blocks sharing a column stack vertically." },
+                "order": { "type": "integer", "description": "Optional sort key within the parent (column for top-level blocks, or the containing block); declaration order is used when omitted." },
+                "title": { "type": "string", "description": "Block/box header title." },
+                "content": {
+                    "type": "array",
+                    "description": "Metric rows shown inside a leaf block. May be empty for a label-only block (e.g. xGMI / GMI). Ignored when 'children' is present.",
+                    "items": { "$ref": "#/definitions/contentItem" }
+                },
+                "children": {
+                    "type": "array",
+                    "description": "Nested blocks. A block with children is a container box (e.g. 'TCP' containing 'LDS' and 'GL0'); children stack vertically inside it. 'column' applies only to top-level blocks - children inherit their parent's column. Arrows still connect block-to-block by id, but a connection to a nested block terminates at its top-level ancestor's box edge, aligned with the block's row.",
+                    "items": { "$ref": "#/definitions/block" }
+                }
+            }
+        },
+        "arrow": {
+            "type": "object",
+            "required": ["from", "to"],
+            "additionalProperties": false,
+            "properties": {
+                "from": { "type": "integer", "minimum": 0, "description": "Source block id." },
+                "to": { "type": "integer", "minimum": 0, "description": "Destination block id." },
+                "direction": {
+                    "type": "string",
+                    "description": "Arrow head placement relative to (from -> to). 'forward' points at `to`, 'backward' points at `from`, 'both' is bidirectional.",
+                    "enum": ["forward", "backward", "both"]
+                },
+                "metric": { "$ref": "#/definitions/metricRef" },
+                "title": { "type": "string", "description": "Label override for the arrow; when omitted the metric's own name is used." },
+                "category": { "$ref": "#/definitions/category" }
+            }
+        }
+    }
+}

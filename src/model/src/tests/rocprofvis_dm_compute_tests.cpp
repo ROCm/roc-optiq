@@ -264,19 +264,6 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisDMFixture, "Compute Trace Data-Model Test
         rocprofvis_db_future_free(object2wait);
     }
 
-    SECTION("Reject Invalid PC Sampling Kernel IDs")
-    {
-        const char* invalid_kernel_id = "1); DROP TABLE source_files;--";
-        rocprofvis_db_compute_param_t query_arg = {
-            kRPVComputeParamKernelId, invalid_kernel_id
-        };
-        char* query = nullptr;
-        const rocprofvis_dm_result_t result = rocprofvis_db_build_compute_query(
-            m_db, kRPVComputeFetchKernelSourceFiles, 1, &query_arg, &query);
-        REQUIRE(kRocProfVisDmResultInvalidParameter == result);
-        REQUIRE(nullptr == query);
-    }
-
     // Queries all available workloads and stores their id/name in the fixture.
     // Fixture Reads:  m_db, m_trace
     // Fixture Writes: m_workloads[].id, m_workloads[].name

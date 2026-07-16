@@ -164,6 +164,9 @@ struct TopKernelsTestPeer
     TopKernels& v;
     // KernelCount() is 0 when m_kernels is null (pre-load) or empty; one check covers both.
     size_t                KernelCount() const { return v.m_kernels ? v.m_kernels->size() : 0; }
+    // Return name of kernel at given index
+    std::string KernelName(size_t idx) const{ return (v.m_kernels && idx < v.m_kernels->size()) ? v.m_kernels->at(idx).name : std::string{};}
+    double ExecTimeSum(size_t idx) const{ return (v.m_kernels && idx < v.m_kernels->size()) ? v.m_kernels->at(idx).exec_time_sum : 0.0;}
     std::optional<size_t> SelectedIdx() const { return v.m_selected_idx; }
     // The synthetic "Others" bucket, if present. ToggleSelectKernel treats it as a
     // deselect, so tests must avoid selecting it.

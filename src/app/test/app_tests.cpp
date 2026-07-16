@@ -1039,4 +1039,42 @@ void RegisterAppTests(ImGuiTestEngine* e)
         ctx->Yield(2);
         IM_CHECK(peer.SelectedIdx() == std::nullopt);
     };
+
+    t = IM_REGISTER_TEST(e, "app", "sys_summary_top_kernel_name");
+    t->TestFunc = [](ImGuiTestContext* ctx)
+    {
+        AppWindow* app = AppWindow::GetInstance();
+        Project* project = app->GetCurrentProject();
+        IM_CHECK(project != nullptr);
+        if (project == nullptr) return;
+        TraceView* tv = dynamic_cast<TraceView*>(project->GetView().get());
+        if (tv == nullptr)
+        {
+            ctx->LogWarning("SKIP: no trace view loaded (open a system/trace profile to exercise this)");
+            return;
+        }
+        SummaryView* sv = TraceViewTestPeer{*tv}.SummaryViewPtr();
+        IM_CHECK(sv != nullptr);
+        if (sv == nullptr) return;
+        TopKernels* tk = SummaryViewTestPeer{*sv}.TopKernelsPtr();
+        IM_CHECK(tk != nullptr);
+        if (tk == nullptr) return;
+
+        // The Summary fetch (FetchSummary) and TopKernels::Update both run only when
+        // the Summary window is shown; headless with no saved layout it may be closed,
+        // leaving the kernel list null forever. Force it open before draining the load.
+        SettingsManager::GetInstance().GetAppWindowSettings().show_summary = true;
+
+        // Summary data loads asynchronously; let Update() populate the kernel list.
+        // KernelCount() is 0 while m_kernels is still null.
+        TopKernelsTestPeer peer{*tk};
+        for (int i = 0; i < 60 && peer.KernelCount() == 0; i++) ctx->Yield(2);
+
+        IM_CHECK(peer.KernelCount() > 0);
+        IM_CHECK(!peer.KernelName(0).empty());
+        for (size_t i=1; i < peer.KernelCount();i++){
+            IM_CHECK(peer.ExecTimeSum(0) >= peer.ExecTimeSum(i));
+        }
+
+    };
 }

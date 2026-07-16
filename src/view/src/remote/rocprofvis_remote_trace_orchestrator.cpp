@@ -17,9 +17,12 @@ RemoteTraceOrchestrator::RemoteTraceOrchestrator(
     std::shared_ptr<RemoteUri> uri, std::function<void(const std::string&)> on_open_file)
 : m_uri(std::move(uri))
 , m_on_open_file(std::move(on_open_file))
+, m_on_search_results(nullptr)
+, m_search_command()
 , m_session(nullptr)
 , m_status_token(EventManager::InvalidSubscriptionToken)
 , m_phase(Phase::Idle)
+, m_task(Phase::Idle)
 , m_running(false)
 , m_authenticated(false)
 , m_status_message()
@@ -136,6 +139,47 @@ RemoteTraceOrchestrator::BrowsePath()
     return StartBrowsing();
 }
 
+bool
+RemoteTraceOrchestrator::SearchPath(const std::string& command)
+{
+    if(m_running)
+    {
+        return false;
+    }
+
+    m_search_command = command;
+
+    // Reuse a live authenticated session, mirroring the BrowsePath() fast path.
+    if(m_session && m_authenticated && m_session->IsConnected())
+    {
+        m_running = true;
+        m_task    = Phase::Searching;
+        RunSearch();
+        return m_phase != Phase::Failed;
+    }
+
+    // Otherwise connect + authenticate first, then search.
+    m_session = std::make_unique<SshSession>(m_uri);
+    if(!m_session->IsConnected())
+    {
+        Fail("Failed to create SSH session.");
+        return false;
+    }
+
+    m_authenticated  = false;
+    m_status_message = "Connecting...";
+    m_phase          = Phase::Connecting;
+    m_running        = true;
+    m_task           = Phase::Searching;
+
+    if(m_session->StartConnect() == 0)
+    {
+        Fail("SSH connection could not be started.");
+        return false;
+    }
+    return true;
+}
+
 void
 RemoteTraceOrchestrator::OnRemoteStatus(uint64_t status, rocprofvis_result_t result)
 {
@@ -153,6 +197,9 @@ RemoteTraceOrchestrator::OnRemoteStatus(uint64_t status, rocprofvis_result_t res
                 break;
             case Phase::Browsing:
                 Fail("Remote filesystem browsing failed.");
+                break;
+            case Phase::Searching:
+                Fail("Remote search failed.");
                 break;
             default: Fail("SSH operation failed."); break;
         }
@@ -174,6 +221,7 @@ RemoteTraceOrchestrator::OnRemoteStatus(uint64_t status, rocprofvis_result_t res
         case Phase::Executing:     AdvanceAfterExecute(); break;
         case Phase::Downloading:   AdvanceAfterDownload(); break;
         case Phase::Browsing:   AdvanceAfterBrowsing(); break;
+        case Phase::Searching:  AdvanceAfterSearch(); break;
         default: break;
     }
 }
@@ -214,6 +262,10 @@ RemoteTraceOrchestrator::AdvanceAfterAuthenticate()
     else if (m_task == Phase::Browsing)
     {
         Browse();
+    }
+    else if (m_task == Phase::Searching)
+    {
+        RunSearch();
     }
 }
 
@@ -281,6 +333,47 @@ RemoteTraceOrchestrator::Browse()
     m_phase          = Phase::Done;
     m_running        = false;
     m_status_message = "Done.";
+}
+
+void
+RemoteTraceOrchestrator::RunSearch()
+{
+    if(m_search_command.empty())
+    {
+        m_phase          = Phase::Done;
+        m_running        = false;
+        m_status_message = "Done.";
+        return;
+    }
+
+    m_status_message = "Searching...";
+    m_phase          = Phase::Searching;
+    if(m_session->StartExecute(m_search_command.c_str()) == 0)
+    {
+        Fail("Remote search could not be started.");
+    }
+}
+
+void
+RemoteTraceOrchestrator::AdvanceAfterSearch()
+{
+    // Capture the command's stdout and reset the execution-output latch so the
+    // owning dialog's stdout popup is not triggered by the search command.
+    std::string output;
+    if(m_session)
+    {
+        output = m_session->GetExecutionOutput()->Get().text;
+        m_session->GetExecutionOutput()->ClearUpdated();
+    }
+
+    m_phase          = Phase::Done;
+    m_running        = false;
+    m_status_message = "Done.";
+
+    if(m_on_search_results)
+    {
+        m_on_search_results(output);
+    }
 }
 
 void

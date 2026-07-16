@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include "rocprofvis_remote_file_browser.h"
 #include "rocprofvis_ssh_uri.h"
 #include "rocprofvis_ssh_connection_store.h"
 #include "rocprofvis_ssh_session.h"
@@ -45,13 +46,25 @@ public:
 private:
     void RenderProgressPopup();
     void RenderOutputPopup();
-    void RenderRemoteFilePopup();
 
-    // Browses the current m_uri browsing path, lazily creating the orchestrator
-    // (bound to the directory-path callback) on first use and reusing it for
-    // subsequent folder navigation. Reuse keeps the SSH session connected +
-    // authenticated across clicks instead of reconnecting every time.
+    // Wires the file-browser widget's callbacks to the SSH transport (listing,
+    // recursive search, file selection, cancel). Called once at construction.
+    void SetupFileBrowserCallbacks();
+
+    // Lazily creates the orchestrator bound to the directory-path and
+    // search-results callbacks. Reused for subsequent navigation/search so the
+    // SSH session stays connected + authenticated across clicks.
+    void EnsureOrchestrator();
+
+    // Browses the current m_uri browsing path via the (reused) orchestrator.
     void BrowseRemotePath();
+
+    // Feeds completed directory listings / search results / failures from the
+    // live SSH session into the file browser. Call every frame.
+    void PollFileBrowser();
+
+    // Parses `find -printf` stdout into browser entries and pushes them in.
+    void HandleSearchResults(const std::string& output);
 
     // Binds the currently selected SSH connection profile into m_uri so the
     // spawned orchestrator/session read the right host/credentials.
@@ -73,9 +86,8 @@ private:
     bool                                     m_show_progress_popup;
     FileStat::Snapshot                       m_last_progress;
 
-    bool                                     m_show_remote_filesystem_popup;
-    RemoteDir::Snapshot                      m_last_directory_state;
-    uint32_t                                 m_selected_file_index;
+    RemoteFileBrowser                        m_file_browser;
+    bool                                     m_search_in_progress;
 };
 
 }  // namespace View

@@ -11,9 +11,10 @@
 #include "imgui.h"
 
 #include <cfloat>
-#include <cstdio>
-#include <ctime>
+#include <cstdint>
+#include <cstdlib>
 #include <string>
+#include <vector>
 
 namespace RocProfVis
 {
@@ -22,57 +23,42 @@ namespace View
 
 namespace
 {
-    // Formats a byte count as a compact human-readable size (e.g. "4.0 KiB").
-    std::string format_file_size(uint64_t bytes)
+    // Wraps s in single quotes for safe embedding in a POSIX shell command,
+    // escaping any embedded single quotes.
+    std::string shell_single_quote(const std::string& s)
     {
-        constexpr const char* UNITS[] = { "B", "KiB", "MiB", "GiB", "TiB" };
-        double size = static_cast<double>(bytes);
-        int    unit = 0;
-        while (size >= 1024.0 && unit < 4)
+        std::string out = "'";
+        for (char c : s)
         {
-            size /= 1024.0;
-            unit++;
+            if (c == '\'')
+            {
+                out += "'\\''";
+            }
+            else
+            {
+                out += c;
+            }
         }
-
-        char buf[32];
-        if (unit == 0)
-        {
-            std::snprintf(buf, sizeof(buf), "%llu B", static_cast<unsigned long long>(bytes));
-        }
-        else
-        {
-            std::snprintf(buf, sizeof(buf), "%.1f %s", size, UNITS[unit]);
-        }
-        return std::string(buf);
+        out += "'";
+        return out;
     }
 
-    // Formats a Unix epoch (seconds) as local "YYYY-MM-DD HH:MM"; "-" if zero.
-    std::string format_file_time(uint64_t epoch_seconds)
-    {
-        if (epoch_seconds == 0)
-        {
-            return "-";
-        }
+    // Builds a `find` command listing (type, size, mtime, path) for every entry
+    // whose name contains query (case-insensitive) under dir. GNU find's
+    // `-printf` is assumed, which is safe for the Linux hosts that remote
+    // profiling targets.
+    // Caps the number of matches so a search under a huge tree cannot flood the
+    // UI with output.
+    constexpr int SEARCH_RESULT_LIMIT = 5000;
 
-        std::time_t t = static_cast<std::time_t>(epoch_seconds);
-        std::tm     tm_buf{};
-#ifdef _WIN32
-        if (localtime_s(&tm_buf, &t) != 0)
-        {
-            return "-";
-        }
-#else
-        if (localtime_r(&t, &tm_buf) == nullptr)
-        {
-            return "-";
-        }
-#endif
-        char buf[32];
-        if (std::strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M", &tm_buf) == 0)
-        {
-            return "-";
-        }
-        return std::string(buf);
+    std::string build_find_command(const std::string& query, const std::string& dir)
+    {
+        std::string pattern = "*" + query + "*";
+        std::string cmd = "find " + shell_single_quote(dir.empty() ? "." : dir) +
+            " -iname " + shell_single_quote(pattern) +
+            " -printf '%y\\t%s\\t%T@\\t%p\\n' 2>/dev/null | head -n " +
+            std::to_string(SEARCH_RESULT_LIMIT);
+        return cmd;
     }
 }  // namespace
 
@@ -87,9 +73,8 @@ SshTestDialog::SshTestDialog(AppWindow* app_window)
 , m_last_stdout()
 , m_show_progress_popup(false)
 , m_last_progress()
-, m_show_remote_filesystem_popup(false)
-, m_last_directory_state()
-, m_selected_file_index(0)
+, m_file_browser()
+, m_search_in_progress(false)
 {
     m_connection_store.Load();
     if(!m_connection_store.Empty())
@@ -97,6 +82,7 @@ SshTestDialog::SshTestDialog(AppWindow* app_window)
         m_selected_connection_id = m_connection_store.List().front().id;
     }
     ApplySelectedConnection();
+    SetupFileBrowserCallbacks();
 }
 
 void
@@ -191,7 +177,8 @@ SshTestDialog::Render()
                 // Start a fresh browsing session from the top-level Browse
                 // button; subsequent folder navigation reuses this session.
                 m_orchestrator.reset();
-                BrowseRemotePath();
+                m_search_in_progress = false;
+                m_file_browser.Open(m_uri->GetRemoteBrowsingPathString());
             }
 
             ImGui::Spacing();
@@ -271,11 +258,19 @@ SshTestDialog::Render()
         }
     }
 
-    // Auth prompts / host-key requests, and download/output popups.
+    // Auth prompts / host-key requests, and download/output popups. The
+    // download/output popups are suppressed while the file browser is open so
+    // they do not fight with it for the modal stack (the browser's own
+    // recursive search reuses the execute path and would otherwise pop the
+    // stdout window).
     RenderSshAuthModal(m_orchestrator ? m_orchestrator->GetSession() : nullptr);
-    RenderProgressPopup();
-    RenderOutputPopup();
-    RenderRemoteFilePopup();
+    if(!m_file_browser.IsOpen())
+    {
+        RenderProgressPopup();
+        RenderOutputPopup();
+    }
+    PollFileBrowser();
+    m_file_browser.Render();
 }
 
 void
@@ -388,12 +383,51 @@ SshTestDialog::RenderOutputPopup()
 }
 
 void
-SshTestDialog::BrowseRemotePath()
+SshTestDialog::SetupFileBrowserCallbacks()
 {
-    // Create the orchestrator on first use, bound to the callback that mirrors
-    // the browsed directory back into m_uri. Reusing the same orchestrator (and
-    // its SshSession) across folder navigation keeps the connection open and
-    // authenticated; BrowsePath() only reconnects when there is no live session.
+    RemoteFileBrowser::Callbacks callbacks;
+
+    // Navigate / refresh: point the browsing path at the requested directory and
+    // browse it over the (reused) SSH session.
+    callbacks.request_listing = [this](const std::string& path)
+    {
+        m_uri->SetRemoteBrowsingPathString(path.c_str());
+        BrowseRemotePath();
+    };
+
+    // Recursive search: run a remote `find` whose stdout is parsed into results.
+    callbacks.request_search = [this](const std::string& query, const std::string& dir)
+    {
+        EnsureOrchestrator();
+        m_search_in_progress = true;
+        m_orchestrator->SearchPath(build_find_command(query, dir));
+    };
+
+    // File chosen: commit the path and drop the browse session.
+    callbacks.on_file_chosen = [this](const std::string& file_path)
+    {
+        m_uri->SetRemoteResultPathString(file_path.c_str());
+        m_orchestrator.reset();
+        m_search_in_progress = false;
+    };
+
+    // Cancelled: drop the browse session.
+    callbacks.on_cancel = [this]()
+    {
+        m_orchestrator.reset();
+        m_search_in_progress = false;
+    };
+
+    m_file_browser.SetCallbacks(std::move(callbacks));
+}
+
+void
+SshTestDialog::EnsureOrchestrator()
+{
+    // Reuse one orchestrator (and its live SshSession) across folder navigation
+    // and searches so the connection stays authenticated; the directory-path
+    // callback mirrors the browsed directory back into m_uri, and the
+    // search-results callback receives raw `find` stdout.
     if (!m_orchestrator)
     {
         m_orchestrator = std::make_unique<RemoteTraceOrchestrator>(
@@ -402,186 +436,94 @@ SshTestDialog::BrowseRemotePath()
             {
                 m_uri->SetCurrentDirectoryPath(path.c_str());
             });
+        m_orchestrator->SetSearchResultsCallback(
+            [this](const std::string& output)
+            {
+                HandleSearchResults(output);
+            });
     }
+}
+
+void
+SshTestDialog::BrowseRemotePath()
+{
+    EnsureOrchestrator();
     m_orchestrator->BrowsePath();
 }
 
-void SshTestDialog::RenderRemoteFilePopup()
+void
+SshTestDialog::PollFileBrowser()
 {
-    SshSession* ssh_session =
-        m_orchestrator ? m_orchestrator->GetSession() : nullptr;
-    if (!ssh_session) return;
-
-    if (auto fetch = ssh_session->GetRemoteDir()->ConsumeIfUpdated())
+    if (!m_file_browser.IsOpen())
     {
-        m_last_directory_state = *fetch;
-        if (!m_show_remote_filesystem_popup)
+        return;
+    }
+
+    SshSession* ssh_session = m_orchestrator ? m_orchestrator->GetSession() : nullptr;
+    if (ssh_session)
+    {
+        // A completed directory listing arrives on the RemoteDir snapshot.
+        if (auto fetch = ssh_session->GetRemoteDir()->ConsumeIfUpdated())
         {
-            m_show_remote_filesystem_popup = true;
-            ImGui::OpenPopup("Remote File System");
+            m_file_browser.SetListing(m_uri->GetRemoteBrowsingPathString(), *fetch);
+            m_search_in_progress = false;
         }
     }
 
-    if (m_show_remote_filesystem_popup)
+    // Surface a browse/search failure into the browser. Fail() leaves a
+    // descriptive status and clears IsRunning(); success leaves "Done.".
+    if (m_orchestrator && !m_orchestrator->IsRunning())
     {
-        ImGui::SetNextWindowSize(ImVec2(600, 400));
-        if (ImGui::BeginPopupModal("Remote File System", nullptr))
+        const std::string& status = m_orchestrator->GetStatusMessage();
+        if (!status.empty() && status != "Done.")
         {
-            float button_area_height = ImGui::GetFrameHeightWithSpacing() * 2.5f;
-
-            // --- File table (scrollable) ---
-            // Folders are tinted with the theme accent color so they stand out
-            // from files; the selectable spans all columns so a click anywhere
-            // on the row selects/opens the entry.
-            SettingsManager& settings      = SettingsManager::GetInstance();
-            const ImU32      folder_color  = settings.GetColor(Colors::kAccent);
-
-            const ImGuiTableFlags table_flags =
-                ImGuiTableFlags_ScrollY | ImGuiTableFlags_RowBg |
-                ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_Resizable;
-
-            if (ImGui::BeginTable("RemoteFiles", 3, table_flags,
-                    ImVec2(0, -button_area_height)))
-            {
-                ImGui::TableSetupScrollFreeze(0, 1);
-                ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_WidthStretch);
-                ImGui::TableSetupColumn("Size", ImGuiTableColumnFlags_WidthFixed, 90.0f);
-                ImGui::TableSetupColumn("Modified", ImGuiTableColumnFlags_WidthFixed, 140.0f);
-                ImGui::TableHeadersRow();
-
-                uint32_t index = 0;
-
-                // --- ".." parent entry (always a directory) ---
-                {
-                    ImGui::TableNextRow();
-                    ImGui::TableSetColumnIndex(0);
-
-                    bool selected = (m_selected_file_index == index);
-                    ImGui::PushStyleColor(ImGuiCol_Text, folder_color);
-                    if (ImGui::Selectable("..", selected,
-                            ImGuiSelectableFlags_SpanAllColumns |
-                            ImGuiSelectableFlags_AllowDoubleClick))
-                    {
-                        m_selected_file_index = index;
-
-                        if (ImGui::IsMouseDoubleClicked(0))
-                        {
-                            m_uri->MakeRemoteBrowsingPath("..");
-                            BrowseRemotePath();
-                        }
-                    }
-                    ImGui::PopStyleColor();
-
-                    ImGui::TableSetColumnIndex(1);
-                    ImGui::TextUnformatted("-");
-                    ImGui::TableSetColumnIndex(2);
-                    ImGui::TextUnformatted("-");
-
-                    index++;
-                }
-
-                for (auto& f : m_last_directory_state.list_dir)
-                {
-                    ImGui::TableNextRow();
-
-                    // --- Name column (folders get a trailing slash + accent) ---
-                    ImGui::TableSetColumnIndex(0);
-                    bool        selected = (m_selected_file_index == index);
-                    std::string label    = f.is_dir ? (f.name + "/") : f.name;
-
-                    if (f.is_dir)
-                    {
-                        ImGui::PushStyleColor(ImGuiCol_Text, folder_color);
-                    }
-                    bool clicked = ImGui::Selectable(label.c_str(), selected,
-                        ImGuiSelectableFlags_SpanAllColumns |
-                        ImGuiSelectableFlags_AllowDoubleClick);
-                    if (f.is_dir)
-                    {
-                        ImGui::PopStyleColor();
-                    }
-
-                    if (clicked)
-                    {
-                        m_selected_file_index = index;
-
-                        if (ImGui::IsMouseDoubleClicked(0))
-                        {
-                            m_uri->MakeRemoteBrowsingPath(f.name.c_str());
-                            if (f.is_dir)
-                            {
-                                BrowseRemotePath();
-                            }
-                            else
-                            {
-                                m_orchestrator.reset();
-                                m_uri->UseRemoteBrowsingPathString();
-                                ImGui::CloseCurrentPopup();
-                                m_show_remote_filesystem_popup = false;
-                            }
-                        }
-                    }
-
-                    // --- Size column (directories have no meaningful size) ---
-                    ImGui::TableSetColumnIndex(1);
-                    ImGui::TextUnformatted(f.is_dir ? "-" : format_file_size(f.size).c_str());
-
-                    // --- Modified column ---
-                    ImGui::TableSetColumnIndex(2);
-                    ImGui::TextUnformatted(format_file_time(f.time).c_str());
-
-                    index++;
-                }
-
-                ImGui::EndTable();
-            }
-
-            // --- Bottom buttons ---
-            ImGui::Separator();
-
-            float button_width = 110.0f;
-            float spacing = ImGui::GetStyle().ItemSpacing.x;
-            float total_width = button_width * 2 + spacing;
-
-            ImGui::SetCursorPosX(ImGui::GetContentRegionAvail().x - total_width);
-
-            if (ImGui::Button("Cancel", ImVec2(button_width, 0)))
-            {
-                ImGui::CloseCurrentPopup();
-                m_show_remote_filesystem_popup = false;
-            }
-
-            ImGui::SameLine();
-
-            if (ImGui::Button("Open", ImVec2(button_width, 0)))
-            {
-
-                if (m_selected_file_index == 0)
-                {
-                    m_uri->MakeRemoteBrowsingPath("..");
-                    BrowseRemotePath();
-                }
-                else
-                {
-                    auto& f = m_last_directory_state.list_dir[m_selected_file_index - 1];
-                    m_uri->MakeRemoteBrowsingPath(f.name.c_str());
-                    if (f.is_dir)
-                    {
-                        BrowseRemotePath();
-                    }
-                    else
-                    {
-                        m_orchestrator.reset();
-                        m_uri->UseRemoteBrowsingPathString();
-                        ImGui::CloseCurrentPopup();
-                        m_show_remote_filesystem_popup = false;
-                    }
-                }
-            }
-
-            ImGui::EndPopup();
+            m_file_browser.SetError(status);
+            m_file_browser.SetBusy(false);
         }
     }
+}
+
+void
+SshTestDialog::HandleSearchResults(const std::string& output)
+{
+    // Each line is "%y\t%s\t%T@\t%p": type letter, size, mtime, and full path.
+    std::vector<RemoteDir::FileEntry> results;
+
+    std::string::size_type pos = 0;
+    while (pos < output.size())
+    {
+        std::string::size_type eol = output.find('\n', pos);
+        std::string line = (eol == std::string::npos) ? output.substr(pos)
+                                                       : output.substr(pos, eol - pos);
+        pos = (eol == std::string::npos) ? output.size() : eol + 1;
+
+        if (line.empty())
+        {
+            continue;
+        }
+
+        std::string::size_type t1 = line.find('\t');
+        if (t1 == std::string::npos) { continue; }
+        std::string::size_type t2 = line.find('\t', t1 + 1);
+        if (t2 == std::string::npos) { continue; }
+        std::string::size_type t3 = line.find('\t', t2 + 1);
+        if (t3 == std::string::npos) { continue; }
+
+        std::string type_field = line.substr(0, t1);
+        std::string size_field = line.substr(t1 + 1, t2 - t1 - 1);
+        std::string time_field = line.substr(t2 + 1, t3 - t2 - 1);
+        std::string path_field = line.substr(t3 + 1);
+
+        RemoteDir::FileEntry entry;
+        entry.name   = path_field;
+        entry.is_dir = (!type_field.empty() && type_field[0] == 'd');
+        entry.size   = static_cast<uint64_t>(std::strtoull(size_field.c_str(), nullptr, 10));
+        entry.time   = static_cast<uint64_t>(std::strtod(time_field.c_str(), nullptr));
+        results.push_back(std::move(entry));
+    }
+
+    m_file_browser.SetSearchResults(std::move(results));
+    m_search_in_progress = false;
 }
 
 

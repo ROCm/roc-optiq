@@ -55,6 +55,14 @@ namespace View
         void MakeRemoteBrowsingPath(const char* file_name);
         void SetCurrentDirectoryPath(const char* path);
 
+        // Sets the browsing path directly to an absolute path. Used by the file
+        // browser widget, which computes the target directory itself instead of
+        // appending segments via MakeRemoteBrowsingPath.
+        void SetRemoteBrowsingPathString(const char* path);
+
+        // Commits an explicit chosen file path into the result-path field.
+        void SetRemoteResultPathString(const char* path);
+
     private:
         SshConnectionConfig m_connection;
 

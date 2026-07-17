@@ -776,6 +776,10 @@ namespace View
                     {
                         m_directory.SetPath(resolved_path);
                     }
+                    else
+                    {
+                        m_directory.SetPath(m_pending_remote_path);
+                    }
 
                     result = kRocProfVisResultSuccess;
                 }

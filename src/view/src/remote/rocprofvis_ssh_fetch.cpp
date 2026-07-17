@@ -278,7 +278,7 @@ namespace View
         std::lock_guard<std::mutex> lock(m_mutex);
         m_list_dir.clear();
         m_path.clear();
-        m_updated = true;
+        m_updated = false;
     }
 
 

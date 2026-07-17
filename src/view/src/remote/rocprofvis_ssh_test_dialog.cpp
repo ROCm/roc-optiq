@@ -4,7 +4,9 @@
 #include "rocprofvis_ssh_test_dialog.h"
 #include "rocprofvis_ssh_auth_modal.h"
 #include "rocprofvis_appwindow.h"
+#include "rocprofvis_core_string_utils.h"
 #include "rocprofvis_settings_manager.h"
+#include "rocprofvis_utils.h"
 #include "widgets/rocprofvis_widget.h"
 #include "widgets/rocprofvis_gui_helpers.h"
 #include "rocprofvis_font_manager.h"
@@ -13,7 +15,6 @@
 #include "imgui.h"
 
 #include <algorithm>
-#include <cctype>
 #include <cfloat>
 #include <cstdint>
 #include <cstdio>
@@ -82,32 +83,6 @@ namespace
         return std::string(buf);
     }
 
-    std::string lower_copy(std::string value)
-    {
-        std::transform(value.begin(), value.end(), value.begin(),
-                       [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-        return value;
-    }
-
-    // The trailing path component (basename) of a POSIX path.
-    std::string base_name(const std::string& path)
-    {
-        std::string::size_type pos = path.find_last_of('/');
-        return pos == std::string::npos ? path : path.substr(pos + 1);
-    }
-
-    // The extension (without dot) of a path's basename, "" if none.
-    std::string file_extension(const std::string& path)
-    {
-        std::string name = base_name(path);
-        std::string::size_type pos = name.find_last_of('.');
-        if (pos == std::string::npos || pos == 0)
-        {
-            return std::string();
-        }
-        return name.substr(pos + 1);
-    }
-
     // Human-readable "Type" column label.
     std::string type_label(const RemoteDir::FileEntry& entry)
     {
@@ -115,112 +90,8 @@ namespace
         {
             return "Folder";
         }
-        std::string ext = file_extension(entry.name);
-        return ext.empty() ? std::string("File") : lower_copy(ext) + " file";
-    }
-
-    // Collapses ".", ".." and redundant slashes; preserves a leading "/".
-    std::string normalize_path(const std::string& path)
-    {
-        if (path.empty())
-        {
-            return ".";
-        }
-
-        bool                     absolute = (path[0] == '/');
-        std::vector<std::string> parts;
-        std::string::size_type   start = 0;
-        while (start <= path.size())
-        {
-            std::string::size_type slash = path.find('/', start);
-            std::string segment = (slash == std::string::npos) ? path.substr(start)
-                                                               : path.substr(start, slash - start);
-            if (!segment.empty() && segment != ".")
-            {
-                if (segment == "..")
-                {
-                    if (!parts.empty() && parts.back() != "..")
-                    {
-                        parts.pop_back();
-                    }
-                    else if (!absolute)
-                    {
-                        parts.push_back("..");
-                    }
-                }
-                else
-                {
-                    parts.push_back(segment);
-                }
-            }
-            if (slash == std::string::npos)
-            {
-                break;
-            }
-            start = slash + 1;
-        }
-
-        std::string result = absolute ? "/" : "";
-        for (size_t i = 0; i < parts.size(); i++)
-        {
-            result += parts[i];
-            if (i + 1 < parts.size())
-            {
-                result += "/";
-            }
-        }
-        if (result.empty())
-        {
-            result = absolute ? "/" : ".";
-        }
-        return result;
-    }
-
-    bool is_root_path(const std::string& dir)
-    {
-        std::string n = normalize_path(dir);
-        return n == "/" || n == ".";
-    }
-
-    std::string parent_path(const std::string& dir)
-    {
-        std::string n = normalize_path(dir);
-        if (is_root_path(n))
-        {
-            return n;
-        }
-        std::string::size_type pos = n.find_last_of('/');
-        if (pos == std::string::npos)
-        {
-            return ".";
-        }
-        return pos == 0 ? std::string("/") : n.substr(0, pos);
-    }
-
-    std::string join_path(const std::string& dir, const std::string& name)
-    {
-        if (name == "..")
-        {
-            return parent_path(dir);
-        }
-        if (!name.empty() && name[0] == '/')
-        {
-            return normalize_path(name);
-        }
-        std::string joined = dir;
-        if (joined.empty())
-        {
-            joined = name;
-        }
-        else if (joined.back() == '/')
-        {
-            joined += name;
-        }
-        else
-        {
-            joined += "/" + name;
-        }
-        return normalize_path(joined);
+        std::string ext = posix_file_extension(entry.name);
+        return ext.empty() ? std::string("File") : Core::String::to_lower_copy(ext) + " file";
     }
 
     // Extension presets for the "type" filter dropdown. Directories are always
@@ -652,7 +523,7 @@ SshTestDialog::OpenRemoteFileBrowser()
 void
 SshTestDialog::NavigateBrowserTo(const std::string& path, bool record_history)
 {
-    const std::string target = normalize_path(path);
+    const std::string target = normalize_posix_path(path);
 
     if (record_history && !m_browser_dir.empty() && target != m_browser_dir)
     {
@@ -663,6 +534,8 @@ SshTestDialog::NavigateBrowserTo(const std::string& path, bool record_history)
     m_browser_dir       = target;  // replaced by the server-resolved path on arrival
     m_address_edit      = target;
     m_in_search_mode    = false;
+    m_search_root.clear();
+    m_search_results.clear();
     m_selected_name.clear();
     m_browser_error.clear();
     m_browser_busy      = true;
@@ -739,12 +612,12 @@ SshTestDialog::ActivateBrowserEntry(const RemoteDir::FileEntry& entry)
     if (m_in_search_mode)
     {
         full_path = (!entry.name.empty() && entry.name[0] == '/')
-                        ? normalize_path(entry.name)
-                        : join_path(m_search_root, entry.name);
+                        ? normalize_posix_path(entry.name)
+                        : join_posix_path(m_search_root, entry.name);
     }
     else
     {
-        full_path = join_path(m_browser_dir, entry.name);
+        full_path = join_posix_path(m_browser_dir, entry.name);
     }
 
     if (entry.is_dir)
@@ -803,7 +676,10 @@ void SshTestDialog::RenderRemoteFilePopup()
         }
     }
 
-    if (!m_show_remote_filesystem_popup) return;
+    if (!m_show_remote_filesystem_popup)
+    {
+        return;
+    }
 
     SettingsManager&  settings   = SettingsManager::GetInstance();
     ImFont*           icon_font  = settings.GetFontManager().GetFont(FontType::kIcon);
@@ -828,13 +704,28 @@ void SshTestDialog::RenderRemoteFilePopup()
     // A file passes only when its extension matches the active preset; folders are
     // always shown so the user can navigate anywhere.
     auto passes_type = [&](const RemoteDir::FileEntry& e) -> bool {
-        if (e.is_dir) return true;
+        if (e.is_dir)
+        {
+            return true;
+        }
         const auto& presets = type_filter_presets();
-        if (m_type_filter <= 0 || m_type_filter >= static_cast<int>(presets.size())) return true;
+        if (m_type_filter <= 0 || m_type_filter >= static_cast<int>(presets.size()))
+        {
+            return true;
+        }
         const auto& exts = presets[m_type_filter].extensions;
-        if (exts.empty()) return true;
-        std::string ext = lower_copy(file_extension(e.name));
-        for (const auto& a : exts) { if (ext == a) return true; }
+        if (exts.empty())
+        {
+            return true;
+        }
+        std::string ext = Core::String::to_lower_copy(posix_file_extension(e.name));
+        for (const auto& a : exts)
+        {
+            if (ext == a)
+            {
+                return true;
+            }
+        }
         return false;
     };
 
@@ -856,7 +747,7 @@ void SshTestDialog::RenderRemoteFilePopup()
         const bool busy     = m_browser_busy || (m_orchestrator && m_orchestrator->IsRunning());
         const bool can_back = !m_history_back.empty();
         const bool can_fwd  = !m_history_forward.empty();
-        const bool can_up   = !m_in_search_mode && !is_root_path(m_browser_dir);
+        const bool can_up   = !m_in_search_mode && !is_posix_root_path(m_browser_dir);
 
         // Header card: title, host chip, navigation, address bar and filters.
         ImGui::PushStyleColor(ImGuiCol_ChildBg, settings.GetColor(Colors::kBgFrame));
@@ -891,10 +782,16 @@ void SshTestDialog::RenderRemoteFilePopup()
 
             // Navigation buttons and address bar.
             auto nav_button = [&](const char* glyph, const char* tip, bool enabled) -> bool {
-                if (!enabled) ImGui::BeginDisabled();
+                if (!enabled)
+                {
+                    ImGui::BeginDisabled();
+                }
                 bool pressed = IconButton(glyph, icon_font, ImVec2(0, 0), tip, false,
                                           style.FramePadding, btn_col, btn_hover, btn_active);
-                if (!enabled) ImGui::EndDisabled();
+                if (!enabled)
+                {
+                    ImGui::EndDisabled();
+                }
                 ImGui::SameLine();
                 return pressed && enabled;
             };
@@ -915,12 +812,18 @@ void SshTestDialog::RenderRemoteFilePopup()
             }
             if (nav_button(ICON_ARROW_UP, "Up one level", can_up && !busy))
             {
-                NavigateBrowserTo(parent_path(m_browser_dir), true);
+                NavigateBrowserTo(posix_parent_path(m_browser_dir), true);
             }
             if (nav_button(ICON_ARROWS_CYCLE, "Refresh", !busy))
             {
-                if (m_in_search_mode) RunRemoteSearch();
-                else                  NavigateBrowserTo(m_browser_dir, false);
+                if (m_in_search_mode)
+                {
+                    RunRemoteSearch();
+                }
+                else
+                {
+                    NavigateBrowserTo(m_browser_dir, false);
+                }
             }
             if (nav_button(ICON_HOME, "Home", !busy))
             {
@@ -953,7 +856,10 @@ void SshTestDialog::RenderRemoteFilePopup()
                         NavigateBrowserTo(m_address_edit, true);
                         m_address_editing = false;
                     }
-                    if (ImGui::IsKeyPressed(ImGuiKey_Escape)) m_address_editing = false;
+                    if (ImGui::IsKeyPressed(ImGuiKey_Escape))
+                    {
+                        m_address_editing = false;
+                    }
                 }
                 else
                 {
@@ -963,7 +869,10 @@ void SshTestDialog::RenderRemoteFilePopup()
                     ImGui::PushStyleColor(ImGuiCol_Text, accent);
                     ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(4, style.FramePadding.y));
 
-                    if (ImGui::Button("/##crumb_root")) NavigateBrowserTo("/", true);
+                    if (ImGui::Button("/##crumb_root"))
+                    {
+                        NavigateBrowserTo("/", true);
+                    }
 
                     std::string accum;
                     size_t seg = 0;
@@ -986,7 +895,10 @@ void SshTestDialog::RenderRemoteFilePopup()
                         ImGui::SameLine(0, 2.0f);
 
                         std::string crumb = segment + "##crumb" + accum;
-                        if (ImGui::Button(crumb.c_str())) NavigateBrowserTo(accum, true);
+                        if (ImGui::Button(crumb.c_str()))
+                        {
+                            NavigateBrowserTo(accum, true);
+                        }
                     }
 
                     ImGui::PopStyleVar();
@@ -1017,9 +929,15 @@ void SshTestDialog::RenderRemoteFilePopup()
 
             ImGui::SameLine();
             const bool can_search = !m_remote_file_filter.empty() && !busy;
-            if (!can_search) ImGui::BeginDisabled();
+            if (!can_search)
+            {
+                ImGui::BeginDisabled();
+            }
             const bool search_clicked = ImGui::Button("Search subfolders");
-            if (!can_search) ImGui::EndDisabled();
+            if (!can_search)
+            {
+                ImGui::EndDisabled();
+            }
             if ((search_clicked || (filter_enter && !m_remote_file_filter.empty())) && !busy)
             {
                 RunRemoteSearch();
@@ -1038,8 +956,14 @@ void SshTestDialog::RenderRemoteFilePopup()
                 for (int i = 0; i < static_cast<int>(presets.size()); ++i)
                 {
                     bool sel = (m_type_filter == i);
-                    if (ImGui::Selectable(presets[i].label, sel)) m_type_filter = i;
-                    if (sel) ImGui::SetItemDefaultFocus();
+                    if (ImGui::Selectable(presets[i].label, sel))
+                    {
+                        m_type_filter = i;
+                    }
+                    if (sel)
+                    {
+                        ImGui::SetItemDefaultFocus();
+                    }
                 }
                 ImGui::EndCombo();
             }
@@ -1090,17 +1014,26 @@ void SshTestDialog::RenderRemoteFilePopup()
         // Filtered index list over the active source (hidden, type and name
         // filter). Sorted below once the sort spec is known, and reused by the
         // footer and keyboard handling.
-        const std::string needle = lower_copy(m_remote_file_filter);
+        const std::string needle = Core::String::to_lower_copy(m_remote_file_filter);
         std::vector<size_t> visible;
         for (size_t i = 0; i < source.size(); ++i)
         {
-            const std::string bn = base_name(source[i].name);
-            if (!m_show_hidden && !bn.empty() && bn[0] == '.') continue;
-            if (!passes_type(source[i])) continue;
+            const std::string bn = posix_base_name(source[i].name);
+            if (!m_show_hidden && !bn.empty() && bn[0] == '.')
+            {
+                continue;
+            }
+            if (!passes_type(source[i]))
+            {
+                continue;
+            }
             if (!needle.empty())
             {
                 const std::string& hay = m_in_search_mode ? source[i].name : bn;
-                if (lower_copy(hay).find(needle) == std::string::npos) continue;
+                if (Core::String::to_lower_copy(hay).find(needle) == std::string::npos)
+                {
+                    continue;
+                }
             }
             visible.push_back(i);
         }
@@ -1136,15 +1069,34 @@ void SshTestDialog::RenderRemoteFilePopup()
                 std::sort(visible.begin(), visible.end(), [&](size_t a, size_t b) {
                     const auto& fa = source[a];
                     const auto& fb = source[b];
-                    if (fa.is_dir != fb.is_dir) return fa.is_dir;
+                    if (fa.is_dir != fb.is_dir)
+                    {
+                        return fa.is_dir;
+                    }
                     int cmp = 0;
-                    if (col == 1)      cmp = (fa.size < fb.size) ? -1 : (fa.size > fb.size ? 1 : 0);
-                    else if (col == 2) cmp = lower_copy(file_extension(fa.name))
-                                                 .compare(lower_copy(file_extension(fb.name)));
-                    else if (col == 3) cmp = (fa.time < fb.time) ? -1 : (fa.time > fb.time ? 1 : 0);
-                    else               cmp = 0;
-                    if (cmp == 0) cmp = lower_copy(base_name(fa.name))
-                                            .compare(lower_copy(base_name(fb.name)));
+                    if (col == 1)
+                    {
+                        cmp = (fa.size < fb.size) ? -1 : (fa.size > fb.size ? 1 : 0);
+                    }
+                    else if (col == 2)
+                    {
+                        cmp = Core::String::to_lower_copy(posix_file_extension(fa.name))
+                                  .compare(Core::String::to_lower_copy(
+                                      posix_file_extension(fb.name)));
+                    }
+                    else if (col == 3)
+                    {
+                        cmp = (fa.time < fb.time) ? -1 : (fa.time > fb.time ? 1 : 0);
+                    }
+                    else
+                    {
+                        cmp = 0;
+                    }
+                    if (cmp == 0)
+                    {
+                        cmp = Core::String::to_lower_copy(posix_base_name(fa.name))
+                                  .compare(Core::String::to_lower_copy(posix_base_name(fb.name)));
+                    }
                     return asc ? cmp < 0 : cmp > 0;
                 });
             }
@@ -1171,7 +1123,7 @@ void SshTestDialog::RenderRemoteFilePopup()
             };
 
             // Synthetic ".." parent row (directory mode, not at the root).
-            if (!m_in_search_mode && !is_root_path(m_browser_dir))
+            if (!m_in_search_mode && !is_posix_root_path(m_browser_dir))
             {
                 ImGui::TableNextRow();
                 ImGui::TableSetColumnIndex(0);
@@ -1181,7 +1133,7 @@ void SshTestDialog::RenderRemoteFilePopup()
                 {
                     m_selected_name = "..";
                     if (ImGui::IsMouseDoubleClicked(0))
-                        NavigateBrowserTo(parent_path(m_browser_dir), true);
+                        NavigateBrowserTo(posix_parent_path(m_browser_dir), true);
                 }
                 const ImU32 c = parent_selected ? text_on_accent : accent;
                 ImGui::SameLine(0, 0);
@@ -1216,8 +1168,8 @@ void SshTestDialog::RenderRemoteFilePopup()
                 const std::string full_path =
                     m_in_search_mode
                         ? ((!f.name.empty() && f.name[0] == '/') ? f.name
-                                                                 : join_path(m_search_root, f.name))
-                        : join_path(m_browser_dir, f.name);
+                                                                 : join_posix_path(m_search_root, f.name))
+                        : join_posix_path(m_browser_dir, f.name);
 
                 ImGui::TableNextRow();
                 ImGui::TableSetColumnIndex(0);
@@ -1228,7 +1180,10 @@ void SshTestDialog::RenderRemoteFilePopup()
                         ImGuiSelectableFlags_AllowDoubleClick))
                 {
                     m_selected_name = f.name;
-                    if (ImGui::IsMouseDoubleClicked(0)) ActivateBrowserEntry(f);
+                    if (ImGui::IsMouseDoubleClicked(0))
+                    {
+                        ActivateBrowserEntry(f);
+                    }
                 }
                 const bool row_hovered = ImGui::IsItemHovered();
 
@@ -1243,7 +1198,10 @@ void SshTestDialog::RenderRemoteFilePopup()
                     ImGui::EndPopup();
                 }
 
-                if (m_scroll_to_selected && row_selected) ImGui::SetScrollHereY();
+                if (m_scroll_to_selected && row_selected)
+                {
+                    ImGui::SetScrollHereY();
+                }
 
                 // Selected rows draw on the accent color; otherwise folders are
                 // accented and files use the default text with a dimmed icon.
@@ -1266,8 +1224,14 @@ void SshTestDialog::RenderRemoteFilePopup()
                 }
 
                 ImGui::TableSetColumnIndex(1);
-                if (f.is_dir) ImGui::TextDisabled("-");
-                else          ImGui::TextUnformatted(format_file_size(f.size).c_str());
+                if (f.is_dir)
+                {
+                    ImGui::TextDisabled("-");
+                }
+                else
+                {
+                    ImGui::TextUnformatted(format_file_size(f.size).c_str());
+                }
                 ImGui::TableSetColumnIndex(2);
                 ImGui::TextUnformatted(type_label(f).c_str());
                 ImGui::TableSetColumnIndex(3);
@@ -1293,7 +1257,7 @@ void SshTestDialog::RenderRemoteFilePopup()
             {
                 if (e.name == m_selected_name)
                 {
-                    selection_label  = base_name(e.name);
+                    selection_label  = posix_base_name(e.name);
                     selection_is_dir = e.is_dir;
                     break;
                 }
@@ -1305,7 +1269,7 @@ void SshTestDialog::RenderRemoteFilePopup()
         auto commit_selection = [&]() {
             if (m_selected_name == "..")
             {
-                NavigateBrowserTo(parent_path(m_browser_dir), true);
+                NavigateBrowserTo(posix_parent_path(m_browser_dir), true);
                 return;
             }
             for (const auto& e : source)
@@ -1354,7 +1318,10 @@ void SshTestDialog::RenderRemoteFilePopup()
             ImGui::SameLine();
 
             const bool can_open = !m_selected_name.empty();
-            if (!can_open) ImGui::BeginDisabled();
+            if (!can_open)
+            {
+                ImGui::BeginDisabled();
+            }
             ImGui::PushStyleColor(ImGuiCol_Button, accent);
             ImGui::PushStyleColor(ImGuiCol_ButtonHovered, accent_hover);
             ImGui::PushStyleColor(ImGuiCol_ButtonActive, accent_active);
@@ -1362,7 +1329,10 @@ void SshTestDialog::RenderRemoteFilePopup()
             open_pressed =
                 ImGui::Button(selection_is_dir ? "Open" : "Select", ImVec2(button_width, 0));
             ImGui::PopStyleColor(4);
-            if (!can_open) ImGui::EndDisabled();
+            if (!can_open)
+            {
+                ImGui::EndDisabled();
+            }
         }
         ImGui::EndChild();
         ImGui::PopStyleVar(2);
@@ -1384,12 +1354,30 @@ void SshTestDialog::RenderRemoteFilePopup()
             const int last = static_cast<int>(visible.size()) - 1;
             constexpr int PAGE = 10;
             int next = cur;
-            if (ImGui::IsKeyPressed(ImGuiKey_DownArrow))      next = (cur < 0) ? 0 : std::min(cur + 1, last);
-            else if (ImGui::IsKeyPressed(ImGuiKey_UpArrow))   next = (cur <= 0) ? 0 : cur - 1;
-            else if (ImGui::IsKeyPressed(ImGuiKey_PageDown))  next = (cur < 0) ? 0 : std::min(cur + PAGE, last);
-            else if (ImGui::IsKeyPressed(ImGuiKey_PageUp))    next = (cur <= 0) ? 0 : std::max(cur - PAGE, 0);
-            else if (ImGui::IsKeyPressed(ImGuiKey_Home))      next = 0;
-            else if (ImGui::IsKeyPressed(ImGuiKey_End))       next = last;
+            if (ImGui::IsKeyPressed(ImGuiKey_DownArrow))
+            {
+                next = (cur < 0) ? 0 : std::min(cur + 1, last);
+            }
+            else if (ImGui::IsKeyPressed(ImGuiKey_UpArrow))
+            {
+                next = (cur <= 0) ? 0 : cur - 1;
+            }
+            else if (ImGui::IsKeyPressed(ImGuiKey_PageDown))
+            {
+                next = (cur < 0) ? 0 : std::min(cur + PAGE, last);
+            }
+            else if (ImGui::IsKeyPressed(ImGuiKey_PageUp))
+            {
+                next = (cur <= 0) ? 0 : std::max(cur - PAGE, 0);
+            }
+            else if (ImGui::IsKeyPressed(ImGuiKey_Home))
+            {
+                next = 0;
+            }
+            else if (ImGui::IsKeyPressed(ImGuiKey_End))
+            {
+                next = last;
+            }
 
             if (next != cur && next >= 0 && next <= last)
             {
@@ -1404,9 +1392,9 @@ void SshTestDialog::RenderRemoteFilePopup()
             commit_selection();
         }
         else if (shortcuts_active && !busy && ImGui::IsKeyPressed(ImGuiKey_Backspace, false) &&
-                 !m_in_search_mode && !is_root_path(m_browser_dir))
+                 !m_in_search_mode && !is_posix_root_path(m_browser_dir))
         {
-            NavigateBrowserTo(parent_path(m_browser_dir), true);
+            NavigateBrowserTo(posix_parent_path(m_browser_dir), true);
         }
         else if (open_pressed)
         {

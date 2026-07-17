@@ -83,9 +83,9 @@ jt::Json SshConnectionConfig::ToJson() const
     obj["host"]          = host;
     obj["port"]          = port;
     obj["user"]          = user;
-    obj["password"]      = password;
     obj["identity_file"] = identity_file;
-    obj["passphrase"]    = passphrase;
+    // password and passphrase are deliberately not written; they live in the
+    // OS credential store (see SecretStore).
 
     return json;
 }
@@ -98,9 +98,8 @@ SshConnectionConfig SshConnectionConfig::FromJson(jt::Json const& j)
     cfg.host          = JsonUtils::GetString(j, "host", "");
     cfg.port          = JsonUtils::GetString(j, "port", "22");
     cfg.user          = JsonUtils::GetString(j, "user", "");
-    cfg.password      = JsonUtils::GetString(j, "password", "");
     cfg.identity_file = JsonUtils::GetString(j, "identity_file", "");
-    cfg.passphrase    = JsonUtils::GetString(j, "passphrase", "");
+    // Secrets are not read from disk; they come from the OS credential store.
 
     if(cfg.id.empty())
     {

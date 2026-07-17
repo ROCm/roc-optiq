@@ -153,6 +153,7 @@ SshTestDialog::SshTestDialog(AppWindow* app_window)
 , m_last_progress()
 , m_show_remote_filesystem_popup(false)
 , m_should_open_browser_popup(false)
+, m_should_close_browser_popup(false)
 , m_browser_busy(false)
 , m_browser_error()
 , m_browser_dir()
@@ -629,7 +630,7 @@ SshTestDialog::ActivateBrowserEntry(const RemoteDir::FileEntry& entry)
         m_uri->SetRemoteResultPathString(full_path.c_str());
         m_orchestrator.reset();
         m_browser_busy = false;
-        ImGui::CloseCurrentPopup();
+        m_should_close_browser_popup = true;
         m_show_remote_filesystem_popup = false;
     }
 }
@@ -878,9 +879,16 @@ void SshTestDialog::RenderRemoteFilePopup()
                     size_t seg = 0;
                     while (seg < m_browser_dir.size())
                     {
-                        if (m_browser_dir[seg] == '/') { ++seg; continue; }
+                        if (m_browser_dir[seg] == '/')
+                        {
+                            ++seg;
+                            continue;
+                        }
                         size_t start = seg;
-                        while (seg < m_browser_dir.size() && m_browser_dir[seg] != '/') ++seg;
+                        while (seg < m_browser_dir.size() && m_browser_dir[seg] != '/')
+                        {
+                            ++seg;
+                        }
                         std::string segment = m_browser_dir.substr(start, seg - start);
                         accum += "/";
                         accum += segment;
@@ -1349,7 +1357,11 @@ void SshTestDialog::RenderRemoteFilePopup()
             int cur = -1;
             for (size_t vi = 0; vi < visible.size(); ++vi)
             {
-                if (source[visible[vi]].name == m_selected_name) { cur = static_cast<int>(vi); break; }
+                if (source[visible[vi]].name == m_selected_name)
+                {
+                    cur = static_cast<int>(vi);
+                    break;
+                }
             }
             const int last = static_cast<int>(visible.size()) - 1;
             constexpr int PAGE = 10;
@@ -1399,6 +1411,12 @@ void SshTestDialog::RenderRemoteFilePopup()
         else if (open_pressed)
         {
             commit_selection();
+        }
+
+        if (m_should_close_browser_popup)
+        {
+            ImGui::CloseCurrentPopup();
+            m_should_close_browser_popup = false;
         }
 
         ImGui::EndPopup();

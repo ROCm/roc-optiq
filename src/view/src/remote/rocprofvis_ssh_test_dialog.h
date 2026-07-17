@@ -85,6 +85,7 @@ private:
     // ----- Remote file browser state -----
     bool                              m_show_remote_filesystem_popup;
     bool                              m_should_open_browser_popup; // defer OpenPopup to render scope
+    bool                              m_should_close_browser_popup;
     bool                              m_browser_busy;          // a listing/search is in flight
     std::string                       m_browser_error;         // last listing/search failure
     std::string                       m_browser_dir;           // resolved current directory

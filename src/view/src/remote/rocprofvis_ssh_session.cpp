@@ -771,8 +771,9 @@ namespace View
                     // Best-effort: attach the server-resolved absolute path so the
                     // UI can show a meaningful location instead of a relative ".".
                     std::string resolved_path;
-                    if (kRocProfVisResultSuccess ==
-                        GetString(m_connection, kRPVControllerRemoteResolvedPath, 0, resolved_path))
+                    rocprofvis_result_t path_result =
+                        GetString(m_connection, kRPVControllerRemoteResolvedPath, 0, resolved_path);
+                    if(path_result == kRocProfVisResultSuccess && !resolved_path.empty())
                     {
                         m_directory.SetPath(resolved_path);
                     }

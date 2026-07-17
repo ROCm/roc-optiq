@@ -147,6 +147,9 @@ public:
     std::vector<WarningMessage> GetWarnings(
         LaunchConfig const& config) const override;
 
+    std::vector<std::string> GetSummaryTags(
+        LaunchConfig const& config) const override;
+
     std::string ParseTraceOutputPath(std::string const& profiler_stdout) const override;
 
 private:

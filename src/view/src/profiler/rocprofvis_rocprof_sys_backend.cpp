@@ -2,9 +2,11 @@
 // SPDX-License-Identifier: MIT
 
 #include "rocprofvis_rocprof_sys_backend.h"
+#include "rocprofvis_launch_shared_tabs.h"
 #include "rocprofvis_gui_helpers.h"
 #include "rocprofvis_json_utils.h"
 #include "imgui.h"
+#include <cfloat>
 #include <sstream>
 #include <algorithm>
 #include <cctype>
@@ -471,26 +473,33 @@ std::vector<TabDescriptor> RocprofSysBackend::GetTabs(std::string const& tool_id
 {
     std::vector<TabDescriptor> tabs;
 
-    tabs.push_back({"quick", "Quick", [this]() {
+    // General: the everyday controls (preset, trace/profile format, collection
+    // toggles, trace delay/duration/region). Always visible in the launcher.
+    tabs.push_back({"general", "General", [this]() {
         const_cast<RocprofSysBackend*>(this)->RenderBackendsTab();
-    }});
+    }, false});
+
+    // Advanced: power-user detail, grouped by domain and tucked under the
+    // collapsible "Advanced Options" section so the common case stays simple.
     tabs.push_back({"sampling", "Sampling", [this]() {
-        const_cast<RocprofSysBackend*>(this)->RenderSamplingTab(); }});
+        const_cast<RocprofSysBackend*>(this)->RenderSamplingTab(); }, true});
     tabs.push_back({"rocm", "ROCm", [this]() {
-        const_cast<RocprofSysBackend*>(this)->RenderRocmTab(); }});
+        const_cast<RocprofSysBackend*>(this)->RenderRocmTab(); }, true});
+    tabs.push_back({"perfetto", "Perfetto", [this]() {
+        const_cast<RocprofSysBackend*>(this)->RenderPerfettoTab(); }, true});
     tabs.push_back({"process_sampling", "Process Sampling", [this]() {
-        const_cast<RocprofSysBackend*>(this)->RenderProcessSamplingTab(); }});
+        const_cast<RocprofSysBackend*>(this)->RenderProcessSamplingTab(); }, true});
     tabs.push_back({"parallelism", "Parallelism", [this]() {
-        const_cast<RocprofSysBackend*>(this)->RenderParallelismTab(); }});
+        const_cast<RocprofSysBackend*>(this)->RenderParallelismTab(); }, true});
 
     if (tool_id == "instrument")
     {
         tabs.push_back({"instrument", "Instrument", [this]() {
-            const_cast<RocprofSysBackend*>(this)->RenderInstrumentTab(); }});
+            const_cast<RocprofSysBackend*>(this)->RenderInstrumentTab(); }, true});
     }
 
-    tabs.push_back({"advanced", "Advanced", [this]() {
-        const_cast<RocprofSysBackend*>(this)->RenderAdvancedTab(); }});
+    tabs.push_back({"advanced", "Config & Logging", [this]() {
+        const_cast<RocprofSysBackend*>(this)->RenderAdvancedTab(); }, true});
 
     return tabs;
 }
@@ -594,6 +603,40 @@ std::vector<WarningMessage> RocprofSysBackend::GetWarnings(
     }
 
     return warnings;
+}
+
+std::vector<std::string> RocprofSysBackend::GetSummaryTags(
+    LaunchConfig const& config) const
+{
+    (void)config;
+    std::vector<std::string> tags;
+
+    // Output format (what the run will produce).
+    std::string output;
+    if (m_settings.trace_backend && m_settings.use_rocpd)
+    {
+        output = "Perfetto + ROCpd";
+    }
+    else if (m_settings.trace_backend)
+    {
+        output = "Perfetto trace";
+    }
+    else if (m_settings.use_rocpd)
+    {
+        output = "ROCpd database";
+    }
+    else
+    {
+        output = "No trace output";
+    }
+    tags.push_back(output);
+
+    // Active preset (or Custom when none is selected).
+    tags.push_back(m_settings.rocprof_preset.empty()
+                       ? std::string("Custom")
+                       : m_settings.rocprof_preset);
+
+    return tags;
 }
 
 // ==================================================================================
@@ -980,41 +1023,54 @@ std::string RocprofSysBackend::ExportCfg() const
 
 void RocprofSysBackend::RenderGeneralTraceOptions()
 {
-    SectionTitle("General Options");
+    // Delay + Duration side by side to use the horizontal space.
+    if (ImGui::BeginTable("timing_grid", 2, ImGuiTableFlags_None))
+    {
+        ImGui::TableNextColumn();
+        ImGui::AlignTextToFramePadding();
+        ImGui::TextUnformatted("Delay (s)");
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(90.0f);
+        ImGui::InputDouble("##TraceDelay", &m_settings.trace_delay, 0.0, 0.0, "%.2f");
+        HelpMarker("ROCPROFSYS_TRACE_DELAY",
+                   "Seconds before collection starts (0 = immediate)");
 
-    ImGui::Text("Trace Delay (s):");
-    ImGui::SameLine();
-    ImGui::InputDouble("##TraceDelay", &m_settings.trace_delay, 0.0, 0.0, "%.2f");
-    HelpMarker("ROCPROFSYS_TRACE_DELAY",
-               "Seconds before collection starts (0 = immediate)");
+        ImGui::TableNextColumn();
+        ImGui::AlignTextToFramePadding();
+        ImGui::TextUnformatted("Duration (s)");
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(90.0f);
+        ImGui::InputDouble("##TraceDuration", &m_settings.trace_duration, 0.0, 0.0, "%.2f");
+        HelpMarker("ROCPROFSYS_TRACE_DURATION",
+                   "Duration of collection in seconds (0 = unlimited)");
 
-    ImGui::Text("Trace Duration (s):");
-    ImGui::SameLine();
-    ImGui::InputDouble("##TraceDuration", &m_settings.trace_duration, 0.0, 0.0, "%.2f");
-    HelpMarker("ROCPROFSYS_TRACE_DURATION",
-               "Duration of collection in seconds (0 = unlimited)");
+        ImGui::EndTable();
+    }
 
-    ImGui::Text("Trace Region:");
-    ImGui::SameLine();
-    InputTextString("##TraceRegion", m_settings.trace_region);
+    ImGui::AlignTextToFramePadding();
+    ImGui::TextUnformatted("Region");
+    ImGui::SameLine(90.0f);
+    ImGui::SetNextItemWidth(-FLT_MIN);
+    InputTextStringWithHint("##TraceRegion", "ROCTX region names (comma-separated)",
+                            m_settings.trace_region);
     HelpMarker("ROCPROFSYS_TRACE_REGION",
                "Comma-separated ROCTX region names for selective tracing");
 }
 
 void RocprofSysBackend::RenderBackendsTab()
 {
-    // Primary: rocprof-sys built-in preset selector
-    ImGui::Text("Profiling Preset:");
-    ImGui::SameLine();
+    // Headline choice: the built-in rocprof-sys preset.
+    ImGui::AlignTextToFramePadding();
+    ImGui::TextUnformatted("Preset");
+    ImGui::SameLine(110.0f);
 
     const char* preset_label =
-        m_settings.rocprof_preset.empty()
-            ? "(none)" : m_settings.rocprof_preset.c_str();
+        m_settings.rocprof_preset.empty() ? "Custom" : m_settings.rocprof_preset.c_str();
 
-    ImGui::PushItemWidth(180);
+    ImGui::SetNextItemWidth(240.0f);
     if (ImGui::BeginCombo("##RocprofPresetCombo", preset_label))
     {
-        if (ImGui::Selectable("(none)", m_settings.rocprof_preset.empty()))
+        if (ImGui::Selectable("Custom", m_settings.rocprof_preset.empty()))
         {
             m_settings.rocprof_preset.clear();
         }
@@ -1032,52 +1088,42 @@ void RocprofSysBackend::RenderBackendsTab()
         }
         ImGui::EndCombo();
     }
-    ImGui::PopItemWidth();
-
-    ImGui::SameLine();
-    ImGui::TextDisabled("(?)");
-    if (ImGui::BeginItemTooltip())
-    {
-        ImGui::PushTextWrapPos(ImGui::GetFontSize() * 25.0f);
-        ImGui::TextUnformatted(
-            "Pick a built-in rocprof-sys preset to configure collection defaults. "
-            "When a preset is active, detailed settings are locked to preset values. "
-            "Use Raw Env Vars for manual overrides, or select (none) to unlock all controls.");
-        ImGui::PopTextWrapPos();
-        ImGui::EndTooltip();
-    }
-
-    ImGui::Separator();
-
-    auto toggle = [](char const* label, bool& val, char const* env,
-                     char const* help)
-    {
-        ImGui::Checkbox(label, &val);
-        HelpMarker(env, help);
-    };
-
-    SectionTitle("Trace Output Format");
-
-    toggle("Perfetto Tracing", m_settings.trace_backend,
-           "ROCPROFSYS_TRACE", "Enable Perfetto trace backend");
-    toggle("ROCpd Database", m_settings.use_rocpd,
-           "ROCPROFSYS_USE_ROCPD", "Enable ROCpd SQLite output");
+    HelpMarker("Profiling preset",
+               "Pick a built-in rocprof-sys preset to configure collection defaults. "
+               "When a preset is active, detailed settings are locked to preset values. "
+               "Choose Custom to unlock every control.");
 
     bool has_preset = !m_settings.rocprof_preset.empty();
 
+    // Toggle laid out in the next free column of a 2-wide grid, with a help (?).
+    auto toggle_cell = [](const char* label, bool* value, const char* env,
+                          const char* help)
+    {
+        ImGui::TableNextColumn();
+        ToggleSwitch(label, value);
+        HelpMarker(env, help);
+    };
+
+    // --- Output format (always editable) ---
+    LaunchSubHeader("OUTPUT FORMAT");
+    if (ImGui::BeginTable("out_fmt_grid", 2, ImGuiTableFlags_None))
+    {
+        toggle_cell("Perfetto trace", &m_settings.trace_backend,
+                    "ROCPROFSYS_TRACE", "Enable the Perfetto trace backend");
+        toggle_cell("ROCpd database", &m_settings.use_rocpd,
+                    "ROCPROFSYS_USE_ROCPD", "Enable ROCpd SQLite output");
+        ImGui::EndTable();
+    }
+
+    // --- Summary profile ---
     ImGui::BeginDisabled(has_preset);
-
-    SectionTitle("Summary Output Format");
-
-    ImGui::Text("Timemory Profile:");
-    HelpMarker("ROCPROFSYS_PROFILE / ROCPROFSYS_FLAT_PROFILE",
-               "Profiling backend mode (hierarchical or flat)");
+    LaunchSubHeader("SUMMARY PROFILE");
 
     int profile_mode = 0;
-    if (m_settings.profile)       profile_mode = 1;
-    if (m_settings.flat_profile)  profile_mode = 2;
+    if (m_settings.profile)      profile_mode = 1;
+    if (m_settings.flat_profile) profile_mode = 2;
 
-    if (ImGui::RadioButton("Off##Profile", profile_mode == 0))
+    if (ImGui::RadioButton("None##Profile", profile_mode == 0))
     {
         m_settings.profile      = false;
         m_settings.flat_profile = false;
@@ -1094,33 +1140,39 @@ void RocprofSysBackend::RenderBackendsTab()
         m_settings.profile      = false;
         m_settings.flat_profile = true;
     }
-
+    ImGui::SameLine();
+    HelpMarker("ROCPROFSYS_PROFILE / ROCPROFSYS_FLAT_PROFILE",
+               "Timemory summary profile mode (hierarchical or flat call stacks)");
     ImGui::EndDisabled();
 
-    RenderGeneralTraceOptions();
-
+    // --- Collection ---
     ImGui::BeginDisabled(has_preset);
-    
-    SectionTitle("Collection Options");
+    LaunchSubHeader("COLLECTION");
+    if (ImGui::BeginTable("collection_grid", 3, ImGuiTableFlags_None))
+    {
+        toggle_cell("Statistical sampling", &m_settings.use_sampling,
+                    "ROCPROFSYS_USE_SAMPLING", "Enable call-stack sampling");
+        toggle_cell("Process / system sampling", &m_settings.use_process_sampling,
+                    "ROCPROFSYS_USE_PROCESS_SAMPLING", "Background process/system metrics");
+        toggle_cell("AMD SMI GPU metrics", &m_settings.use_amd_smi,
+                    "ROCPROFSYS_USE_AMD_SMI", "GPU metrics via AMD SMI");
+        ImGui::EndTable();
+    }
+    ImGui::EndDisabled();
 
-    ImGui::Separator();
+    // --- Timing window ---
+    ImGui::BeginDisabled(has_preset);
+    LaunchSubHeader("TIMING");
+    RenderGeneralTraceOptions();
+    ImGui::EndDisabled();
 
-    toggle("Statistical Sampling", m_settings.use_sampling,
-           "ROCPROFSYS_USE_SAMPLING", "Enable call-stack sampling");
-    toggle("Process Sampling", m_settings.use_process_sampling,
-           "ROCPROFSYS_USE_PROCESS_SAMPLING", "Background process/system metrics");
-    toggle("AMD SMI", m_settings.use_amd_smi,
-           "ROCPROFSYS_USE_AMD_SMI", "GPU metrics via AMD SMI");
-
-    if (m_settings.trace_backend &&
-        (m_settings.profile || m_settings.flat_profile))
+    if (has_preset)
     {
         ImGui::Spacing();
-        WarningText("Both trace and profile backends are enabled -- "
-                    "this increases overhead");
+        ImGui::TextDisabled("Preset \"%s\" controls the locked options above. "
+                            "Choose Custom to edit them.",
+                            m_settings.rocprof_preset.c_str());
     }
-
-    ImGui::EndDisabled();
 }
 
 void RocprofSysBackend::RenderSamplingTab()
@@ -1236,6 +1288,17 @@ void RocprofSysBackend::RenderRocmTab()
 
 void RocprofSysBackend::RenderPerfettoTab()
 {
+    bool has_preset = !m_settings.rocprof_preset.empty();
+    if (has_preset)
+    {
+        ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.0f, 1.0f),
+            "Preset \"%s\" controls these settings.",
+            m_settings.rocprof_preset.c_str());
+        ImGui::TextDisabled("Clear the preset or use Raw Env Vars to override.");
+        ImGui::Spacing();
+    }
+    ImGui::BeginDisabled(has_preset);
+
     const char* backends[] = {"inprocess", "system", "all"};
     int backend_idx = 0;
     for (int i = 0; i < 3; i++)
@@ -1333,6 +1396,8 @@ void RocprofSysBackend::RenderPerfettoTab()
     ImGui::SameLine();
     InputTextString("##PerfFile", m_settings.perfetto_file);
     HelpMarker("ROCPROFSYS_PERFETTO_FILE", "Output filename for perfetto trace");
+
+    ImGui::EndDisabled();
 }
 
 void RocprofSysBackend::RenderProcessSamplingTab()
@@ -1405,7 +1470,7 @@ void RocprofSysBackend::RenderParallelismTab()
     auto toggle = [](char const* label, bool& val, char const* env,
                      char const* help)
     {
-        ImGui::Checkbox(label, &val);
+        ToggleSwitch(label, &val);
         HelpMarker(env, help);
     };
 
@@ -1525,13 +1590,6 @@ void RocprofSysBackend::RenderAdvancedTab()
     InputTextString("##TimComponents", m_settings.timemory_components);
     HelpMarker("ROCPROFSYS_TIMEMORY_COMPONENTS",
                "Comma-separated timemory component list");
-
-    ImGui::Separator();
-
-    if (ImGui::CollapsingHeader("Perfetto (advanced)"))
-    {
-        RenderPerfettoTab();
-    }
 
     ImGui::EndDisabled();
 }

@@ -6,6 +6,7 @@
 #include "rocprofvis_launch_config.h"
 #include "rocprofvis_profiler_backend.h"
 #include "rocprofvis_launch_preset_manager.h"
+#include "imgui.h"
 #include <string>
 #include <vector>
 #include <utility>
@@ -17,6 +18,56 @@ namespace View
 
 class AppWindow;
 
+// =============================================================================
+// Modern launcher UI primitives
+//
+// Small, self-contained widgets that give the launcher a contemporary,
+// card-based look instead of the default flat ImGui form. They read all colors
+// and fonts from SettingsManager so they track the active theme.
+// =============================================================================
+
+// A rounded, padded, subtly-bordered panel used to group related controls.
+// Auto-sizes to its content height. Always pair Begin/End.
+void BeginLaunchCard(const char* id);
+void EndLaunchCard();
+
+// Card title with a leading icon (from the icon font; pass nullptr for none),
+// an accent bar, and an optional dimmed subtitle. Call immediately after
+// BeginLaunchCard.
+void LaunchCardHeader(const char* icon, const char* title, const char* subtitle = nullptr);
+
+// Lightweight accent-colored group label used to separate blocks inside a card.
+void LaunchSubHeader(const char* text);
+
+// iOS-style animated on/off switch. Returns true on the frame it is toggled.
+// Draws the label (and keeps it clickable) to the right of the switch.
+bool ToggleSwitch(const char* label, bool* value);
+
+// A small rounded "tag": tinted background + accent border + accent text.
+// Advances the cursor by the chip size (use SameLine to place several).
+void Chip(const char* label, ImU32 accent_color);
+
+// Result of interacting with an EditablePill.
+enum class PillAction
+{
+    kNone,
+    kEdit,    // the pill body was clicked (pick it up to edit)
+    kRemove,  // the trailing "x" was clicked
+};
+
+// A removable/editable pill: a rounded tag with the label and a trailing "x".
+// Clicking the x returns kRemove; clicking the body returns kEdit. Used for the
+// command-line argument and environment-variable lists.
+PillAction EditablePill(const char* label, ImU32 accent_color);
+
+// Lays out a set of tags as wrapping accent chips, prefixed by a dim label.
+// Used for the live "this run will..." configuration summary.
+void RenderConfigChips(const char* lead_label, std::vector<std::string> const& tags);
+
+// A filled, rounded status badge with contrasting text - used for the run
+// status (Running / Completed / Failed).
+void StatusPill(const char* label, ImU32 bg_color);
+
 /**
  * Renders the Target section: executable, arguments, working dir, output dir.
  * The connection-mode selector lives in the launcher dialog (ProfilerLauncher
@@ -26,13 +77,6 @@ class AppWindow;
  * Returns true if any field was modified.
  */
 bool RenderTargetSection(TargetSpec& target, ConnectionType connection, AppWindow* app_window);
-
-/**
- * Renders the Raw Env Vars tab: editable name/value table with add/remove rows.
- * Highlights entries that shadow curated env var names.
- */
-void RenderRawEnvVarsTab(std::map<std::string, std::string>& extra_env,
-                         std::vector<std::pair<std::string, std::string>> const& curated_env);
 
 /**
  * Builds the displayed command line from cached execution inputs.

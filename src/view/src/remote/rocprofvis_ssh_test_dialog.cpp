@@ -1220,11 +1220,11 @@ void SshTestDialog::RenderRemoteFilePopup()
                 ImGui::SameLine(0, 0);
                 row_icon(f.is_dir ? ICON_FOLDER : ICON_DOCUMENT, icon_color);
                 // Search hits show the full path; directory rows show the name.
+                // The Name column clips long text; the full path is on hover.
                 const std::string display =
                     m_in_search_mode ? f.name : (f.is_dir ? f.name + "/" : f.name);
                 ImGui::PushStyleColor(ImGuiCol_Text, name_color);
-                ElidedText(display.c_str(), ImGui::GetContentRegionAvail().x, 0.0f,
-                           Alignment_Left, false);
+                ImGui::TextUnformatted(display.c_str());
                 ImGui::PopStyleColor();
                 if (row_hovered)
                 {

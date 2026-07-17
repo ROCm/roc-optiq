@@ -10,6 +10,7 @@
 #include "rocprofvis_measurement_controller.h"
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_timeline_selection.h"
+#include "rocprofvis_timeline_track_options.h"
 #include "rocprofvis_utils.h"
 #include "spdlog/spdlog.h"
 #include "widgets/rocprofvis_gui_helpers.h"
@@ -46,11 +47,12 @@ FlameTrackItem::CalculateMaxEventLabelWidth()
     s_max_event_label_width = ImGui::CalcTextSize("W").x * MAX_CHARACTERS_PER_LINE;
 }
 
-FlameTrackItem::FlameTrackItem(DataProvider& dp, uint64_t track_id, bool display,
+FlameTrackItem::FlameTrackItem(DataProvider& dp, uint64_t track_id,
+                               TimelineTrackOptions&                  track_options,
                                std::shared_ptr<TimePixelTransform>    tpt,
                                std::shared_ptr<TimelineSelection>     timeline_selection,                               
                                std::shared_ptr<MeasurementController> measurement)
-: TrackItem(dp, track_id, display, tpt, timeline_selection)
+: TrackItem(dp, track_id, track_options, tpt, timeline_selection)
 , m_text_padding(SettingsManager::GetInstance().GetDefaultIMGUIStyle().FramePadding)
 , m_level_height(SettingsManager::GetInstance().GetEventLevelHeight())
 , m_measurement(measurement)
@@ -58,12 +60,9 @@ FlameTrackItem::FlameTrackItem(DataProvider& dp, uint64_t track_id, bool display
 , m_has_drawn_tool_tip(false)
 , m_selected_chart_items({})
 , m_tooltip_size(0.0f, 0.0f)
-, m_is_expanded(false)
 , m_pill_analysis_queue(nullptr)
-, m_flame_track_project_settings(dp.GetTraceFilePath(), *this)
-, m_show_pill_analysis_queue(true)
-, m_event_color_mode(EventColorMode::kByEventName)
-, m_compact_mode(false)
+, m_event_options(nullptr)
+, m_queue_options(nullptr)
 {
     if(!m_tpt)
     {
@@ -77,10 +76,10 @@ FlameTrackItem::FlameTrackItem(DataProvider& dp, uint64_t track_id, bool display
         m_max_level = static_cast<float>(m_track_metadata->max_value);
         m_track_statistics =
             m_data_provider.DataModel().GetAnalysis().RegisterTrack(*m_track_metadata);
-        if(m_track_metadata->topology.type == TrackInfo::TrackType::Queue)
+        if(m_track_statistics &&
+           m_track_metadata->topology.type == TrackInfo::TrackType::Queue)
         {
             m_pill_analysis_queue = AddPill();
-            m_pill_analysis_queue->SetVisible(m_show_pill_analysis_queue);
             m_pill_analysis_queue->SetAccentColor(
                 m_track_statistics
                     ->stats[AnalysisTrackStatistics::Queue::kQueueUtilization]
@@ -105,22 +104,20 @@ FlameTrackItem::FlameTrackItem(DataProvider& dp, uint64_t track_id, bool display
         static_cast<int>(RocEvents::kTimelineEventHighlightChanged),
         timeline_highlight_changed_handler);
 
-    if(m_flame_track_project_settings.Valid())
+    if(m_options)
     {
-        m_event_color_mode = m_flame_track_project_settings.ColorEvents();
-        m_compact_mode     = m_flame_track_project_settings.CompactMode();
-        if(m_compact_mode)
+        m_event_options = dynamic_cast<EventTrackOptions*>(m_options.get());
+        m_queue_options = dynamic_cast<QueueTrackOptions*>(m_options.get());
+        if(m_event_options && m_event_options->m_compact)
         {
             m_level_height = m_settings.GetEventLevelCompactHeight();
         }
-        m_show_pill_analysis_queue =
-            m_flame_track_project_settings
-                .ShowAnalysis()[AnalysisTrackStatistics::Queue::kQueueUtilization];
-        if(m_pill_analysis_queue)
+        if(m_queue_options)
         {
-            m_pill_analysis_queue->SetVisible(m_show_pill_analysis_queue);
+            m_pill_analysis_queue->SetVisible(m_queue_options->m_show_queue_utilization);
         }
     }
+    ROCPROFVIS_ASSERT(m_event_options);
 }
 
 void
@@ -135,7 +132,8 @@ FlameTrackItem::RenderMetaAreaExpand()
         ImVec2(ImGui::GetContentRegionMax() - m_metadata_padding -
                ImVec2(ImGui::GetTextLineHeight() + m_meta_area_scale_width,
                       ImGui::GetTextLineHeight()));
-    int visible_levels = static_cast<int>(std::ceil(m_track_height / m_level_height));
+    int visible_levels =
+        static_cast<int>(std::ceil(m_options->m_height / m_level_height));
 
     if(visible_levels <= m_max_level + 1)
     {
@@ -143,21 +141,21 @@ FlameTrackItem::RenderMetaAreaExpand()
         if(ImGui::ArrowButton("##expand", ImGuiDir_Down))
         {
             RecalculateTrackHeight();
-            m_is_expanded = true;
+            m_event_options->m_expand = true;
         }
         if(ImGui::IsItemHovered()) SetTooltipStyled("Expand track to see all events");
     }
-    else if(m_track_height >
+    else if(m_options->m_height >
             std::max(m_max_level * m_level_height + m_level_height,
                      DEFAULT_TRACK_HEIGHT))  // stand-in for default height..
     {
         ImGui::SetCursorPos(button_pos);
         if(ImGui::ArrowButton("##contract", ImGuiDir_Up))
         {
-            m_track_height =
+            m_options->m_height =
                 DEFAULT_TRACK_HEIGHT;  // Default track height defined in parent class.
-            m_track_height_changed = true;
-            m_is_expanded          = false;
+            m_track_height_changed    = true;
+            m_event_options->m_expand = false;
         }
         if(ImGui::IsItemHovered()) SetTooltipStyled("Contract track to default height");
     }
@@ -195,6 +193,31 @@ FlameTrackItem::Update()
             m_pill_analysis_queue->Deactivate();
         }
     }
+    if(m_options->Updated())
+    {
+        if(m_event_options)
+        {
+            float level_height = m_event_options->m_compact
+                                     ? m_settings.GetEventLevelCompactHeight()
+                                     : m_settings.GetEventLevelHeight();
+            if(m_level_height != level_height)
+            {
+                m_level_height = level_height;
+                if(m_event_options->m_expand ||
+                   m_event_options->m_height >
+                       std::max(m_max_level * m_level_height + m_level_height + 2.0f,
+                                DEFAULT_TRACK_HEIGHT))
+                {
+                    RecalculateTrackHeight();
+                }
+            }
+        }
+        if(m_queue_options && m_track_statistics)
+        {
+            m_pill_analysis_queue->SetVisible(m_queue_options->m_show_queue_utilization);
+        }
+    }
+
     TrackItem::Update();
 }
 
@@ -207,6 +230,12 @@ FlameTrackItem::ReleaseData()
         return true;
     }
     return false;
+}
+
+bool
+FlameTrackItem::IsCompactMode() const
+{
+    return m_event_options->m_compact;
 }
 
 bool
@@ -384,7 +413,7 @@ FlameTrackItem::DrawBox(ImVec2 start_position, int color_index, ChartItem& chart
         const auto& highlight_wheel = m_settings.GetHighlightedEventColorWheel();
         rectColor = highlight_wheel[color_index % highlight_wheel.size()];
     }
-    else if(m_event_color_mode == EventColorMode::kNone)
+    else if(m_event_options->m_color_mode == EventTrackOptions::EventColorMode::kNone)
     {
         rectColor = m_settings.GetColor(Colors::kFlameChartColor);
     }
@@ -589,7 +618,8 @@ FlameTrackItem::RenderTooltip(ChartItem& chart_item, int color_index)
 
                 // Name column
                 ImGui::TableNextColumn();
-                if(m_event_color_mode != EventColorMode::kNone)
+                if(m_event_options->m_color_mode !=
+                   EventTrackOptions::EventColorMode::kNone)
                 {
                     auto c_idx =
                         static_cast<uint64_t>(chart_item.child_info[i].name_hash) %
@@ -641,7 +671,7 @@ FlameTrackItem::RenderTooltip(ChartItem& chart_item, int color_index)
         event_id = chart_item.event.m_id;
         ImGui::TextUnformatted("Name: ");
         ImGui::SameLine();
-        if(m_event_color_mode != EventColorMode::kNone)
+        if(m_event_options->m_color_mode != EventTrackOptions::EventColorMode::kNone)
         {
             ImVec2 text_size = ImGui::CalcTextSize(
                 chart_item.event.m_name.c_str(), nullptr, false, s_max_event_label_width);
@@ -676,8 +706,8 @@ FlameTrackItem::RenderTooltip(ChartItem& chart_item, int color_index)
 void
 FlameTrackItem::RecalculateTrackHeight()
 {
-    m_track_height = std::max(m_max_level * m_level_height + m_level_height + 2.0f,
-                              DEFAULT_TRACK_HEIGHT);
+    m_options->m_height = std::max(m_max_level * m_level_height + m_level_height + 2.0f,
+                                   DEFAULT_TRACK_HEIGHT);
     m_track_height_changed = true;
 }
 
@@ -722,13 +752,15 @@ FlameTrackItem::RenderChart(float graph_width)
             continue;  // Skip if the item is not visible in the current view
         }
 
-        if(m_event_color_mode == EventColorMode::kByTimeLevel)
+        if(m_event_options->m_color_mode ==
+           EventTrackOptions::EventColorMode::kByTimeLevel)
         {
             color_index =
                 static_cast<uint64_t>(item.event.m_start_ts + item.event.m_level) %
                 colorCount;
         }
-        else if(m_event_color_mode == EventColorMode::kByEventName)
+        else if(m_event_options->m_color_mode ==
+                EventTrackOptions::EventColorMode::kByEventName)
         {
             color_index = static_cast<uint64_t>(item.name_hash) % colorCount;
         }
@@ -809,148 +841,6 @@ FlameTrackItem::RenderChart(float graph_width)
     m_deferred_click_handled = false;
 
     ImGui::EndChild();
-}
-
-void
-FlameTrackItem::RenderMetaAreaOptions()
-{
-    if(m_track_statistics &&
-       m_track_metadata->topology.type == TrackInfo::TrackType::Queue)
-    {
-        ImGui::SeparatorText("Metrics");
-        ImGui::PushStyleColor(
-            ImGuiCol_CheckMark,
-            (m_settings.GetColorWheel()
-                 [m_track_statistics
-                      ->stats[AnalysisTrackStatistics::Queue::kQueueUtilization]
-                      .accent_color]) |
-                IM_COL32_A_MASK);
-        if(ImGui::Checkbox("##queue_util", &m_show_pill_analysis_queue))
-        {
-            m_pill_analysis_queue->SetVisible(m_show_pill_analysis_queue);
-        }
-        ImGui::PopStyleColor();
-        ImGui::SameLine();
-        ImGui::Text(
-            "Show %s",
-            m_track_statistics->stats[AnalysisTrackStatistics::Queue::kQueueUtilization]
-                .name);
-    }
-    ImGui::SeparatorText("Appearance");
-    EventColorMode mode = m_event_color_mode;
-    if(ImGui::RadioButton("Color by Name", mode == EventColorMode::kByEventName))
-        mode = EventColorMode::kByEventName;
-    if(ImGui::RadioButton("Color by Time Level", mode == EventColorMode::kByTimeLevel))
-        mode = EventColorMode::kByTimeLevel;
-    if(ImGui::RadioButton("No Color", mode == EventColorMode::kNone))
-        mode = EventColorMode::kNone;
-    m_event_color_mode = mode;
-    ImGui::Separator();
-    if(ImGui::Checkbox("Compact Mode", &m_compact_mode))
-    {
-        if(m_compact_mode)
-        {
-            m_level_height = m_settings.GetEventLevelCompactHeight();
-        }
-        else
-        {
-            m_level_height = m_settings.GetEventLevelHeight();
-            if(m_is_expanded)
-            {
-                RecalculateTrackHeight();
-            }
-        }
-        if(m_track_height > std::max(m_max_level * m_level_height + m_level_height, DEFAULT_TRACK_HEIGHT))
-        {
-            RecalculateTrackHeight();
-        }
-    }
-}
-
-FlameTrackProjectSettings::FlameTrackProjectSettings(const std::string& project_id,
-                                                     FlameTrackItem&    track_item)
-: ProjectSetting(project_id)
-, m_track_item(track_item)
-{}
-
-FlameTrackProjectSettings::~FlameTrackProjectSettings() {}
-
-void
-FlameTrackProjectSettings::ToJson()
-{
-    m_settings_json[JSON_KEY_GROUP_TIMELINE][JSON_KEY_TIMELINE_TRACK]
-                   [m_track_item.GetID()][JSON_KEY_TIMELINE_TRACK_COLOR] =
-                       static_cast<int>(m_track_item.m_event_color_mode);
-
-    m_settings_json[JSON_KEY_GROUP_TIMELINE][JSON_KEY_TIMELINE_TRACK]
-                   [m_track_item.GetID()][JSON_KEY_TIMELINE_TRACK_COMPACT_MODE] =
-                       m_track_item.m_compact_mode;
-
-    m_settings_json[JSON_KEY_GROUP_TIMELINE][JSON_KEY_TIMELINE_TRACK]
-                   [m_track_item.GetID()][JSON_KEY_TRACK_QUEUE_UTILIZATION] =
-                       m_track_item.m_show_pill_analysis_queue;
-}
-
-bool
-FlameTrackProjectSettings::Valid() const
-{
-    if(!m_settings_json[JSON_KEY_GROUP_TIMELINE][JSON_KEY_TIMELINE_TRACK]
-                       [m_track_item.GetID()][JSON_KEY_TIMELINE_TRACK_COLOR]
-                           .isNumber())
-    {
-        return false;
-    }
-
-    if(!m_settings_json[JSON_KEY_GROUP_TIMELINE][JSON_KEY_TIMELINE_TRACK]
-                       [m_track_item.GetID()][JSON_KEY_TIMELINE_TRACK_COMPACT_MODE]
-                           .isBool())
-    {
-        return false;
-    }
-
-    if(!m_settings_json[JSON_KEY_GROUP_TIMELINE][JSON_KEY_TIMELINE_TRACK]
-                       [m_track_item.GetID()][JSON_KEY_TRACK_QUEUE_UTILIZATION]
-                           .isBool())
-    {
-        return false;
-    }
-
-    return true;
-}
-
-EventColorMode
-FlameTrackProjectSettings::ColorEvents() const
-{
-    EventColorMode color_mode = EventColorMode::kNone;
-
-    double color_mode_raw =
-        m_settings_json[JSON_KEY_GROUP_TIMELINE][JSON_KEY_TIMELINE_TRACK]
-                       [m_track_item.GetID()][JSON_KEY_TIMELINE_TRACK_COLOR]
-                           .getNumber();
-    if(color_mode_raw >= 0 && color_mode_raw < static_cast<int>(EventColorMode::__kCount))
-    {
-        color_mode = static_cast<EventColorMode>(color_mode_raw);
-    }
-    return color_mode;
-}
-
-bool
-FlameTrackProjectSettings::CompactMode() const
-{
-    return m_settings_json[JSON_KEY_GROUP_TIMELINE][JSON_KEY_TIMELINE_TRACK]
-                          [m_track_item.GetID()][JSON_KEY_TIMELINE_TRACK_COMPACT_MODE]
-                              .getBool();
-}
-
-std::array<bool, AnalysisTrackStatistics::Queue::kQueueCount>
-FlameTrackProjectSettings::ShowAnalysis() const
-{
-    std::array<bool, AnalysisTrackStatistics::Queue::kQueueCount> show_analysis;
-    show_analysis[AnalysisTrackStatistics::Queue::kQueueUtilization] =
-        m_settings_json[JSON_KEY_GROUP_TIMELINE][JSON_KEY_TIMELINE_TRACK]
-                       [m_track_item.GetID()][JSON_KEY_TRACK_QUEUE_UTILIZATION]
-                           .getBool();
-    return show_analysis;
 }
 
 }  // namespace View

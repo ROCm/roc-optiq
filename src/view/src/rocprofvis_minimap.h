@@ -4,6 +4,7 @@
 #pragma once
 
 #include "rocprofvis_controller_enums.h"
+#include "rocprofvis_event_manager.h"
 #include "rocprofvis_settings_manager.h"
 #include "widgets/rocprofvis_widget.h"
 #include <vector>
@@ -15,14 +16,15 @@ namespace View
 
 class TimelineView;
 class DataProvider;
+class TrackItem;
 struct TrackInfo;
 
 class Minimap : public RocWidget
 {
 public:
     Minimap(DataProvider& data_provider, TimelineView* timeline_view);
-    ~Minimap() override = default;
-    void UpdateData();  
+    ~Minimap() override;
+    void Update();
     void Render() override;
 
     void SetData(const std::vector<std::vector<double>>& data);
@@ -57,6 +59,9 @@ private:
     TimelineView* m_timeline_view;
     double        m_event_global_max;
     bool          m_last_normalize_global;
+
+    EventManager::SubscriptionToken m_track_metadata_token;
+    EventManager::SubscriptionToken m_track_visibility_token;
 };
 
 }  // namespace View

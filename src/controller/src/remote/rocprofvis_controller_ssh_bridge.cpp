@@ -9,14 +9,14 @@ namespace Controller
 SshBridge::SshBridge()
     : Handle(__kRPVControllerRemotePropertiesFirst,
              __kRPVControllerRemotePropertiesLast)
- 
+
 {
     m_ssh_status = kRPVControllerSshIdle;
 }
 
 rocprofvis_controller_object_type_t SshBridge::GetType()
 {
-    return kRPVSshBridge; 
+    return kRPVSshBridge;
 }
 
 void SshBridge::SetStatus(rocprofvis_controller_remote_status_t status)
@@ -51,6 +51,7 @@ void SshBridge::Clear()
     std::lock_guard<std::mutex> lock(m_mutex);
     m_remote_file_stat.clear();
     m_remote_dir_info.clear();
+    m_resolved_path.clear();
 }
 
 void SshBridge::SetFileStat(std::string name, uint64_t size, uint64_t time, uint64_t downloaded)
@@ -86,6 +87,12 @@ void SshBridge::SetFileInfo(std::string name, uint64_t size, uint64_t time, uint
     m_remote_dir_info.push_back(file_info);
     // Entries accumulate losslessly in m_remote_dir_info; status reflects browsing.
     m_ssh_status = kRPVControllerSshBrowsing;
+}
+
+void SshBridge::SetResolvedPath(std::string path)
+{
+    std::lock_guard<std::mutex> lock(m_mutex);
+    m_resolved_path = std::move(path);
 }
 
 void SshBridge::SetDownloaded(uint64_t size)
@@ -248,6 +255,9 @@ rocprofvis_result_t SshBridge::GetString(
 
         case kRPVControllerRemoteLastError:
             return GetStdStringImpl(value, length, m_error_str);
+
+        case kRPVControllerRemoteResolvedPath:
+            return GetStdStringImpl(value, length, m_resolved_path);
 
         case kRPVControllerRemoteFileName:
             if (index < m_remote_file_stat.size())

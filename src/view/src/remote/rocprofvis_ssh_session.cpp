@@ -768,6 +768,15 @@ namespace View
                         m_directory.Update(name, size, time, permissions);
                     }
 
+                    // Best-effort: attach the server-resolved absolute path so the
+                    // UI can show a meaningful location instead of a relative ".".
+                    std::string resolved_path;
+                    if (kRocProfVisResultSuccess ==
+                        GetString(m_connection, kRPVControllerRemoteResolvedPath, 0, resolved_path))
+                    {
+                        m_directory.SetPath(resolved_path);
+                    }
+
                     result = kRocProfVisResultSuccess;
                 }
             }

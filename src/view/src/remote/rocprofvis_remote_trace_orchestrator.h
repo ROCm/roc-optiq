@@ -51,6 +51,18 @@ public:
     // call so each click does not tear down and re-auth the SSH session.
     bool BrowsePath();
 
+    // Runs a one-shot remote shell command (e.g. a `find`) whose stdout is
+    // delivered to the search-results callback when it completes. Reuses a live
+    // authenticated session when available, otherwise connects + authenticates
+    // first. Used by the file browser's "search subfolders" feature.
+    bool SearchPath(const std::string& command);
+
+    // Registers the callback invoked with the raw stdout of a SearchPath run.
+    void SetSearchResultsCallback(std::function<void(const std::string&)> on_search_results)
+    {
+        m_on_search_results = std::move(on_search_results);
+    }
+
     // True while a phase is in flight or pending.
     bool IsRunning() const { return m_running; }
 
@@ -69,6 +81,7 @@ private:
         Executing,
         Downloading,
         Browsing,
+        Searching,
         Done,
         Failed,
     };
@@ -79,11 +92,15 @@ private:
     void AdvanceAfterExecute();
     void AdvanceAfterDownload();
     void AdvanceAfterBrowsing();
+    void AdvanceAfterSearch();
     void Browse();
+    void RunSearch();
     void Fail(const std::string& message);
 
     std::shared_ptr<RemoteUri>               m_uri;
     std::function<void(const std::string&)>  m_on_open_file;
+    std::function<void(const std::string&)>  m_on_search_results;
+    std::string                              m_search_command;
     std::unique_ptr<SshSession>              m_session;
     EventManager::SubscriptionToken          m_status_token;
     Phase                                    m_phase;

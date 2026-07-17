@@ -21,7 +21,6 @@ set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DVK_PROTOTYPES")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DVK_PROTOTYPES")
 set(BUILD_SHARED_LIBS OFF)
 
-option(COMPUTE_UI_SUPPORT "Build with support for Rocprof Compute" ON)
 option(ROCPROFVIS_DEVELOPER_MODE "Enable developer mode features" OFF)
 option(ROCPROFVIS_ENABLE_INTERNAL_BANNER "Show diagonal internal build banner" OFF)
 option(USE_NATIVE_FILE_DIALOG "Use the OS native file dialog instead of ImGui file dialog" ON)
@@ -42,9 +41,6 @@ option(ROCPROFVIS_ENABLE_REMOTE "Build with remote/SSH support (in development)"
 # remote-profiling glue (RemoteProfilerSession / SshProfilerExecutor) is only
 # built when BOTH are enabled.
 
-if(COMPUTE_UI_SUPPORT) 
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DCOMPUTE_UI_SUPPORT")
-endif(COMPUTE_UI_SUPPORT)
 if(ROCPROFVIS_DEVELOPER_MODE)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DROCPROFVIS_DEVELOPER_MODE")
 endif(ROCPROFVIS_DEVELOPER_MODE)
@@ -136,9 +132,6 @@ set(VIEW_FILES
     src/view/src/rocprofvis_json_utils.h
     src/view/src/rocprofvis_profiles_document.cpp
     src/view/src/rocprofvis_profiles_document.h
-    # AppMonitor is generic long-running-operation infra shared by the profiler
-    # and remote features (and woven into the core app lifecycle), so it is
-    # always compiled regardless of those feature flags.
     src/view/src/rocprofvis_appmonitor.cpp
     src/view/src/rocprofvis_appmonitor.h
     src/view/src/widgets/rocprofvis_widget.cpp
@@ -153,7 +146,23 @@ set(VIEW_FILES
     src/view/src/widgets/rocprofvis_infinite_scroll_table.cpp
     src/view/src/widgets/rocprofvis_dialog.cpp
     src/view/src/widgets/rocprofvis_notification_manager.cpp
-    )
+    src/view/src/compute/rocprofvis_compute_view.cpp
+    src/view/src/compute/rocprofvis_compute_table_view.cpp
+    src/view/src/compute/rocprofvis_compute_kernel_details.cpp
+    src/view/src/compute/rocprofvis_compute_memory_chart.cpp
+    src/view/src/compute/rocprofvis_compute_selection.cpp
+    src/view/src/compute/rocprofvis_compute_summary.cpp
+    src/view/src/compute/rocprofvis_compute_roofline.cpp
+    src/view/src/compute/rocprofvis_compute_workload_view.cpp
+    src/view/src/compute/rocprofvis_compute_kernel_metric_table.cpp
+    src/view/src/compute/rocprofvis_compute_comparison.cpp
+    src/view/src/compute/rocprofvis_compute_code_view.cpp
+    src/view/src/compute/rocprofvis_compute_tester.cpp
+    src/view/src/model/compute/rocprofvis_compute_data_model.cpp
+    src/view/src/widgets/rocprofvis_compute_widget.cpp
+    src/view/src/widgets/rocprofvis_query_builder.cpp
+)
+
 
 # TEMPORARY (profiler launch): profiler UI + backends + app monitor. Remove
 # this guard when the profiler feature graduates.
@@ -208,26 +217,6 @@ list(APPEND VIEW_FILES
     src/view/src/profiler/rocprofvis_remote_profiler_session.h
 )
 endif()
-
-if(COMPUTE_UI_SUPPORT) 
-list(APPEND VIEW_FILES
-    src/view/src/compute/rocprofvis_compute_view.cpp
-    src/view/src/compute/rocprofvis_compute_table_view.cpp
-    src/view/src/compute/rocprofvis_compute_kernel_details.cpp
-    src/view/src/compute/rocprofvis_compute_memory_chart.cpp
-    src/view/src/compute/rocprofvis_compute_selection.cpp
-    src/view/src/compute/rocprofvis_compute_summary.cpp
-    src/view/src/compute/rocprofvis_compute_roofline.cpp
-    src/view/src/compute/rocprofvis_compute_workload_view.cpp
-    src/view/src/compute/rocprofvis_compute_kernel_metric_table.cpp
-    src/view/src/compute/rocprofvis_compute_comparison.cpp
-    src/view/src/compute/rocprofvis_compute_code_view.cpp
-    src/view/src/compute/rocprofvis_compute_tester.cpp
-    src/view/src/model/compute/rocprofvis_compute_data_model.cpp
-    src/view/src/widgets/rocprofvis_compute_widget.cpp
-    src/view/src/widgets/rocprofvis_query_builder.cpp
-)
-endif(COMPUTE_UI_SUPPORT)
 
 configure_file(
     "${CMAKE_CURRENT_SOURCE_DIR}/resources/version.h.in"

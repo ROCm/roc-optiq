@@ -108,20 +108,18 @@ typedef enum rocprofvis_controller_object_type_t
     kRPVControllerObjectTypeEventArgument = 23,
     // Topology node object
     kRPVControllerObjectTypeTopologyNode = 24,
-#ifdef COMPUTE_UI_SUPPORT
     // Compute trace controller object
-    kRPVControllerObjectTypeControllerCompute = 100,
+    kRPVControllerObjectTypeControllerCompute = 25,
     // Workload object
-    kRPVControllerObjectTypeWorkload = 101,
+    kRPVControllerObjectTypeWorkload = 26,
     // Kernel object
-    kRPVControllerObjectTypeKernel = 102,
+    kRPVControllerObjectTypeKernel = 27,
     // Metrics container object
-    kRPVControllerObjectTypeMetricsContainer = 103,
+    kRPVControllerObjectTypeMetricsContainer = 28,
     // Roofline object
-    kRPVControllerObjectTypeRoofline = 104,
+    kRPVControllerObjectTypeRoofline = 29,
     //PcSampling
-    kRPVControllerObjectTypePCSampling = 105,
-#endif
+    kRPVControllerObjectTypePCSampling = 30,
 #ifdef ROCPROFVIS_ENABLE_REMOTE
     // Remote connection object
     kRPVControllerObjectTypeRemoteConnection = 205,
@@ -961,7 +959,6 @@ typedef enum rocprofvis_controller_ssh_connection_properties_t : uint32_t
 } rocprofvis_controller_ssh_connection_properties_t;
 
 
-#ifdef COMPUTE_UI_SUPPORT
 /*
  * Properties for the controller which manages a compute trace.
  */
@@ -1224,7 +1221,6 @@ typedef enum rocprofvis_controller_roofline_kernel_intensity_type_t : uint32_t
     kRPVControllerRooflineKernelIntensityTypeL1,
     kRPVControllerRooflineKernelIntensityTypeLDS,
 } rocprofvis_controller_roofline_kernel_intensity_type_t;
-#endif
 
 /*
  * Profiler types supported by the profiler launcher

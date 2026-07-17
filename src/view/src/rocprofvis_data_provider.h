@@ -8,9 +8,7 @@
 #include "rocprofvis_raw_track_data.h"
 #include "rocprofvis_requests.h"
 #include "model/rocprofvis_trace_data_model.h"
-#ifdef COMPUTE_UI_SUPPORT
 #include "model/compute/rocprofvis_compute_data_model.h"
-#endif
 
 
 #include <functional>
@@ -66,10 +64,8 @@ public:
     static const uint64_t ANALYSIS_TOP_MEMORY_ALLOCATION_EVENTS_TABLE_REQUEST_ID;
     static const uint64_t ANALYSIS_TOP_MEMORY_COPY_EVENTS_TABLE_REQUEST_ID;
     static const uint64_t ANALYSIS_TOP_LAUNCH_SAMPLED_TABLE_REQUEST_ID;
-#ifdef COMPUTE_UI_SUPPORT
     static const uint64_t FETCH_COMPUTE_TRACE_REQUEST_ID;
     static const uint64_t METRIC_PIVOT_TABLE_REQUEST_ID;
-#endif
 
     DataProvider();
     ~DataProvider();
@@ -252,6 +248,17 @@ public:
     const TraceDataModel& DataModel() const { return m_model; };
     TraceDataModel&       DataModel() { return m_model; };
 
+    ComputeDataModel& ComputeModel();
+
+    bool FetchMetrics(const MetricsRequestParams& metrics_params);
+    bool FetchMetricPivotTable(const ComputeTableRequestParams& params);
+    bool FetchPcSampling(const PcSamplingRequestParams& params);
+
+    void SetFetchMetricsCallback(
+        const std::function<void(const std::string&, uint64_t, bool)>& callback);
+    void SetFetchPcSamplingCallback(
+        const std::function<void(const std::string&, uint32_t, uint32_t, bool)>& callback);
+
 private:
     struct ProcessChildCount
     {
@@ -354,20 +361,6 @@ private:
     // Current loading status progress in percents
     uint64_t m_progress_percent;
 
-#ifdef COMPUTE_UI_SUPPORT
-public:
-    ComputeDataModel& ComputeModel();
-
-    bool FetchMetrics(const MetricsRequestParams& metrics_params);
-    bool FetchMetricPivotTable(const ComputeTableRequestParams& params);
-    bool FetchPcSampling(const PcSamplingRequestParams& params);
-
-    void SetFetchMetricsCallback(
-        const std::function<void(const std::string&, uint64_t, bool)>& callback);
-    void SetFetchPcSamplingCallback(
-        const std::function<void(const std::string&, uint32_t, uint32_t, bool)>& callback);
-
-private:
     void ProcessLoadComputeTrace(RequestInfo& req);
     inline void LoadWorkload(uint64_t workload_index);
     inline void LoadSystemInfo(WorkloadInfo&        workload,
@@ -440,8 +433,6 @@ private:
 
     std::function<void(const std::string&, uint64_t, bool)> m_metrics_fetch_callback;
     std::function<void(const std::string&, uint32_t, uint32_t, bool)> m_pc_sampling_fetch_callback;
-
-#endif
 };
 
 }  // namespace View

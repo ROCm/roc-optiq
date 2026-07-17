@@ -100,8 +100,6 @@ CMake options worth knowing:
 - `ROCPROFVIS_ENABLE_INTERNAL_BANNER` - draws a watermark on internal builds.
 - `ROCPROFVIS_DEVELOPER_MODE` - enables extra menus, the Debug Window, and
   `ComputeTester`. Guarded with `#ifdef ROCPROFVIS_DEVELOPER_MODE` in code.
-- `COMPUTE_UI_SUPPORT` - guards the entire Compute analysis surface.
-  Code touching compute features is wrapped with `#ifdef COMPUTE_UI_SUPPORT`.
 - `USE_NATIVE_FILE_DIALOG` - off disables `nativefiledialog-extended`.
 
 The CLI flag `--file-dialog={auto|imgui|native}` overrides dialog selection
@@ -134,7 +132,7 @@ at runtime (see `src/app/src/rocprofvis_cli_parser.h`).
 |   \-- view/             # << This is the UI. Read sections 6-12. >>
 |       +-- inc/          # rocprofvis_view_module.h (entry: init/render/destroy)
 |       +-- src/          # All UI classes
-|       |   +-- compute/  # Compute-only views (#ifdef COMPUTE_UI_SUPPORT)
+|       |   +-- compute/  # Compute-only views
 |       |   +-- icons/    # Icon font glyph constants & ranges
 |       |   +-- model/    # UI-side data models (cached projections)
 |       |   |   +-- compute/
@@ -210,8 +208,8 @@ Key invariants:
    trace file path; the `EventManager` source ID and `ProjectSetting`
    serialization use the same key.
 6. **The app supports both system traces (`TraceView`) and compute traces
-   (`ComputeView`)**, both deriving from `RootView` and gated by
-   `Project::TraceType`. Compute is conditional behind `COMPUTE_UI_SUPPORT`.
+   (`ComputeView`)**, both deriving from `RootView` and selected by
+   `Project::TraceType`.
 
 ## 5. Module Boundaries
 
@@ -463,8 +461,8 @@ protected:
 };
 ```
 
-Implementations: `TraceView` (system) and `ComputeView` (compute, gated
-by `COMPUTE_UI_SUPPORT`). When you add a new project type, you derive
+Implementations: `TraceView` (system) and `ComputeView` (compute).
+When you add a new project type, you derive
 from `RootView`, fill `GetToolbar`, `RenderEditMenuOptions`, and
 `DetachProviderCleanup`, then teach `Project::Open` to instantiate it.
 
@@ -1000,9 +998,7 @@ new long-running fetch.
 
 ## 10. Compute View Internals
 
-All compute UI lives under `src/view/src/compute/` and is gated by
-`#ifdef COMPUTE_UI_SUPPORT`. Always wrap new compute-only code with
-this guard.
+All compute UI lives under `src/view/src/compute/`.
 
 ### `ComputeView : RootView` (`rocprofvis_compute_view.{h,cpp}`)
 
@@ -1680,7 +1676,6 @@ adding **anything** new, check this list and reuse if at all possible.
 | Persist a per-project flag/value              | Subclass `ProjectSetting`, register in ctor                                                    |
 | Render an embedded PNG/JPG                    | `EmbeddedImage(data, len)` then `Render(top_left, target_width)`                               |
 | Allocate a renderer texture                   | `GuiTexture::CreateRGBA32(pixels, w, h)`                                                       |
-| Wrap a constructor in compute UI guards       | `#ifdef COMPUTE_UI_SUPPORT` / `#endif`                                                         |
 | Wrap dev-only UI                              | `#ifdef ROCPROFVIS_DEVELOPER_MODE` / `#endif`                                                  |
 
 If a row above doesn't apply, search the source tree before writing
@@ -1872,7 +1867,7 @@ For fast lookup. Each entry: class -> file -> one-line role.
   `TraceEventId`, `TopologyId`, `TrackGraph`, `GraphType`,
   `AnalysisQueueUtilization` -> `model/rocprofvis_model_types.h`.
 
-### Compute UI (`#ifdef COMPUTE_UI_SUPPORT`)
+### Compute UI
 
 - `ComputeSelection` -> `compute/rocprofvis_compute_selection.h`.
 - `ComputeWorkloadView` -> `compute/rocprofvis_compute_workload_view.h`.

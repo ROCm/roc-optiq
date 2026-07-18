@@ -410,12 +410,10 @@ private:
 
     inline void LoadRoofLineCeilingsCompute(WorkloadInfo&        workload,
                                             rocprofvis_handle_t* roofline_handle,
-                                            compute_ridge_map&   compute_ridge,
-                                            bandwidth_ridge_map& bandwidth_ridge);
+                                            compute_ridge_map&   compute_ridge);
 
     inline void LoadRoofLineCeilingsBandwidth(WorkloadInfo&        workload,
                                               rocprofvis_handle_t* roofline_handle,
-                                              compute_ridge_map&   compute_ridge,
                                               bandwidth_ridge_map& bandwidth_ridge);
 
     inline void LoadRoofLineNumKernels(WorkloadInfo&        workload,

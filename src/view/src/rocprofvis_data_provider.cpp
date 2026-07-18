@@ -4990,9 +4990,9 @@ DataProvider::LoadRoofLine(WorkloadInfo& workload, rocprofvis_handle_t* workload
 
     LoadRoofLineCeilingsRidge(workload, roofline_handle, compute_ridge, bandwidth_ridge);
 
-    LoadRoofLineCeilingsCompute(workload, roofline_handle, compute_ridge, bandwidth_ridge);
+    LoadRoofLineCeilingsCompute(workload, roofline_handle, compute_ridge);
     
-    LoadRoofLineCeilingsBandwidth(workload, roofline_handle, compute_ridge, bandwidth_ridge);
+    LoadRoofLineCeilingsBandwidth(workload, roofline_handle, bandwidth_ridge);
 
     LoadRoofLineNumKernels(workload, roofline_handle, compute_ridge, bandwidth_ridge);
 }
@@ -5046,13 +5046,11 @@ DataProvider::LoadRoofLineCeilingsRidge(WorkloadInfo&        workload,
 inline void
 DataProvider::LoadRoofLineCeilingsCompute(WorkloadInfo&        workload,
                                           rocprofvis_handle_t* roofline_handle,
-                                          compute_ridge_map&   compute_ridge,
-                                          bandwidth_ridge_map& bandwidth_ridge)
+                                          compute_ridge_map&   compute_ridge)
 {
     double   double_data = 0.0;
     uint64_t uint64_data = 0;
     uint64_t num_entries = 0;
-    (void) bandwidth_ridge;
     
     rocprofvis_result_t result = rocprofvis_controller_get_uint64(
         roofline_handle, kRPVControllerRooflineNumCeilingsCompute, 0, &num_entries);
@@ -5101,13 +5099,11 @@ DataProvider::LoadRoofLineCeilingsCompute(WorkloadInfo&        workload,
 inline void
 DataProvider::LoadRoofLineCeilingsBandwidth(WorkloadInfo&        workload,
                                             rocprofvis_handle_t* roofline_handle,
-                                            compute_ridge_map&   compute_ridge,
                                             bandwidth_ridge_map& bandwidth_ridge)
 {
     double   double_data = 0.0;
     uint64_t uint64_data = 0;
     uint64_t num_entries = 0;
-    (void) compute_ridge;
     
     rocprofvis_result_t result = rocprofvis_controller_get_uint64(
         roofline_handle, kRPVControllerRooflineNumCeilingsBandwidth, 0, &num_entries);

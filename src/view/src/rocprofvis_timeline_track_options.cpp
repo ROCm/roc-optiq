@@ -516,7 +516,7 @@ EventTrackOptions::EventTrackOptions(const EventTrackOptions& other)
 : TrackOptions(other)
 , m_color_mode(other.m_color_mode)
 , m_compact(other.m_compact)
-, m_expand(other.m_compact)
+, m_expand(other.m_expand)
 {
     m_type_mask.set(TrackOptions::kEvent);
 }
@@ -867,7 +867,7 @@ TimelineTrackOptions::InitTrack(const TrackItem& track)
             }
             default:
             {
-                ROCPROFVIS_ASSERT(true);
+                ROCPROFVIS_ASSERT(false);
                 break;
             }
         }
@@ -990,6 +990,11 @@ TimelineTrackOptions::RenderContextMenu()
                 }
                 break;
             }
+            default:
+            {
+                ROCPROFVIS_ASSERT(false);
+                break;
+            }
         }
     }
 }
@@ -1039,7 +1044,7 @@ TimelineTrackOptions::CreateAggregate(
             }
             default:
             {
-                ROCPROFVIS_ASSERT(true);
+                ROCPROFVIS_ASSERT(false);
                 break;
             }
         }

@@ -101,7 +101,7 @@ TrackItem::TrackItem(DataProvider& dp, uint64_t id, bool display,
 , m_track_height_changed(false)
 , m_is_in_view_vertical(false)
 , m_distance_to_view_y(0.0f)
-, m_metadata_padding(ImVec2(8.0f, 5.0f))
+, m_metadata_padding(ImVec2(8.0f, 2.0f))
 , m_resize_grip_thickness(4.0f)
 , m_data_provider(dp)
 , m_request_state(TrackDataRequestState::kIdle)
@@ -322,7 +322,7 @@ TrackItem::RenderMetaArea()
     ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(4, 4));
     ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(4, 4));
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(4, 3));
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(5, 5));
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(5, 2));
     // Keep the meta-area square so the selection highlight fill reaches the corners
     // instead of bleeding through rounded edges.
     ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 0.0f);
@@ -405,6 +405,11 @@ TrackItem::RenderMetaArea()
 
         if(available_for_text < 0.0f) available_for_text = 0.0f;
 
+        // Draw the track title in the small font so the meta area stays legible
+        // in compact tracks, where the full-height title would overflow.
+        ImGui::PushFont(m_settings.GetFontManager().GetFont(FontType::kDefault),
+                        m_settings.GetFontManager().GetFontSize(FontSize::kSmall));
+
         ImVec2 track_name_size = ImGui::CalcTextSize(m_meta_area_label.c_str());
 
         ImGui::BeginGroup();
@@ -431,6 +436,7 @@ TrackItem::RenderMetaArea()
         }
         ImGui::PopStyleColor();
         ImGui::EndGroup();
+        ImGui::PopFont();
 
         // The node pill is toggled from Edit -> Preferences.
         if(m_node_pill)

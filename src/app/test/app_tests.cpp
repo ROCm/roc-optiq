@@ -1132,4 +1132,82 @@ void RegisterAppTests(ImGuiTestEngine* e)
         ctx->Yield(2);
         IM_CHECK(peer.IsDisplayPie());
     };
+
+    t = IM_REGISTER_TEST(e, "app", "compute_kernel_table_loads_sorted");
+    t->TestFunc = [](ImGuiTestContext* ctx)
+    {
+        AppWindow* app = AppWindow::GetInstance();
+        Project* project = app->GetCurrentProject();
+        IM_CHECK(project != nullptr);
+        if (project == nullptr) return;
+        ComputeView* cv = dynamic_cast<ComputeView*>(project->GetView().get());
+        if (cv == nullptr)
+        {
+            ctx->LogWarning("SKIP: no compute view loaded (open a compute profile to exercise this)");
+            return;
+        }
+        TabContainer* tc = ComputeViewTestPeer{*cv}.TabContainerPtr();
+        IM_CHECK(tc != nullptr);
+        if (tc == nullptr) return;
+
+        // The kernel metric table renders only while the "Kernel Details" tab is
+        // active (TabContainer renders just the active tab's content).
+        tc->SetActiveTab("compute_kernel_details_view");
+        ctx->Yield(3);
+        const TabItem* tab = tc->GetActiveTab();
+        IM_CHECK(tab != nullptr);
+        if (tab == nullptr) return;
+        ComputeKernelDetailsView* kd =
+            dynamic_cast<ComputeKernelDetailsView*>(tab->m_widget.get());
+        IM_CHECK(kd != nullptr);
+        if (kd == nullptr) return;
+        KernelMetricTable* kt = ComputeKernelDetailsViewTestPeer{*kd}.KernelMetricTablePtr();
+        IM_CHECK(kt != nullptr);
+        if (kt == nullptr) return;
+
+        // The table fetches its rows in response to a workload-selection event.
+        // The initial auto-select (ComputeView::CreateView) fires before this view
+        // subscribes, so the table starts empty; drive the fetch ourselves for the
+        // already-selected workload.
+        ComputeSelection* sel = ComputeViewTestPeer{*cv}.ComputeSelectionPtr();
+        IM_CHECK(sel != nullptr);
+        if (sel == nullptr) return;
+        const uint32_t workload = sel->GetSelectedWorkload();
+        IM_CHECK(workload != ComputeSelection::INVALID_SELECTION_ID);
+        kt->FetchData(workload);
+
+        // Wait for the rows to arrive: the table registers its own ImGui window
+        // (name contains "kernel_selection_table") only once BeginTable runs, which
+        // requires non-empty data. Its presence proves the table rendered populated.
+        ImGuiWindow* table_win = nullptr;
+        for (int i = 0; i < 120 && table_win == nullptr; i++)
+        {
+            ctx->Yield(2);
+            for (ImGuiWindow* w : ImGui::GetCurrentContext()->Windows)
+                if (strstr(w->Name, "kernel_selection_table")) { table_win = w; break; }
+        }
+        IM_CHECK(table_win != nullptr);
+
+        // On load the table sorts by the Duration column (index 2), descending
+        // (KernelMetricTable ctor: DURATION_COLUMN_INDEX + kRPVControllerSortOrderDescending).
+        KernelMetricTableTestPeer peer{*kt};
+        IM_CHECK(peer.SortColumnIndex() == 2);
+
+        // Prove the rows actually loaded in that order rather than just trusting the
+        // ctor default (which would pass even on an empty/unsorted fetch): the model's
+        // Duration cells are plain ns integers, so assert the column is monotonically
+        // non-increasing. Header col 2 is "Duration (ns)".
+        const std::vector<std::vector<std::string>>& rows =
+            cv->GetDataProvider()->ComputeModel().GetKernelSelectionTable().GetTableData();
+        IM_CHECK(rows.size() >= 2);
+        if (rows.size() < 2) return;
+        for (size_t r = 1; r < rows.size(); r++)
+        {
+            IM_CHECK(rows[r - 1].size() > 2 && rows[r].size() > 2);
+            if (rows[r - 1].size() <= 2 || rows[r].size() <= 2) return;
+            const double prev = std::strtod(rows[r - 1][2].c_str(), nullptr);
+            const double cur  = std::strtod(rows[r][2].c_str(), nullptr);
+            IM_CHECK(prev >= cur);
+        }
+    };
 }

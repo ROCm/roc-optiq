@@ -14,6 +14,8 @@
 #include "rocprofvis_summary_view.h"
 #include "rocprofvis_timeline_view.h"
 #include "rocprofvis_trace_view.h"
+#include "compute/rocprofvis_compute_kernel_details.h"
+#include "compute/rocprofvis_compute_kernel_metric_table.h"
 #include "compute/rocprofvis_compute_view.h"
 #include "compute/rocprofvis_compute_selection.h"
 #include "widgets/rocprofvis_infinite_scroll_table.h"
@@ -55,6 +57,21 @@ struct ComputeViewTestPeer
     ComputeView& v;
     TabContainer*     TabContainerPtr() const { return v.m_tab_container.get(); }
     ComputeSelection* ComputeSelectionPtr() const { return v.m_compute_selection.get(); }
+};
+
+struct ComputeKernelDetailsViewTestPeer
+{
+    ComputeKernelDetailsView& v;
+    KernelMetricTable* KernelMetricTablePtr() const { return v.m_kernel_metric_table.get(); }
+};
+
+// The kernel metric table's sort column/order are updated each frame from the
+// ImGui table sort specs, so a TableClickHeader on a column drives these.
+struct KernelMetricTableTestPeer
+{
+    const KernelMetricTable& v;
+    int SortColumnIndex() const { return v.m_sort_column_index; }
+    int SortOrder() const { return v.m_sort_order; }
 };
 
 // EventSearch's state lives in its protected base InfiniteScrollTable, so this

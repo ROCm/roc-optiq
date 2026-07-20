@@ -28,6 +28,8 @@ public:
     void Render() override;
     void Update() override;
 
+    friend struct ComputeKernelDetailsViewTestPeer;
+
 private:
 
     void SubscribeToEvents();

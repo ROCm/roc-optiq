@@ -10,6 +10,7 @@
 #include "rocprofvis_event_search.h"
 #include "rocprofvis_events_view.h"
 #include "rocprofvis_flame_track_item.h"
+#include "rocprofvis_measurement_controller.h"
 #include "rocprofvis_minimap.h"
 #include "rocprofvis_summary_view.h"
 #include "rocprofvis_timeline_view.h"
@@ -193,6 +194,7 @@ struct TraceViewTestPeer
         return dynamic_cast<AnalysisView*>(v.m_analysis_item->m_item.get());
     }
     TimelineView* TimelineViewPtr() const { return v.m_timeline_view.get(); }
+    MeasurementController* MeasurementControllerPtr() const { return v.m_measurement.get(); }
     Minimap*      MinimapPtr() const { return v.m_minimap.get(); }
     EventSearch*  EventSearchPtr() const { return v.m_event_search.get(); }
     SummaryView*  SummaryViewPtr() const { return v.m_summary_view.get(); }

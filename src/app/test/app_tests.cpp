@@ -10,6 +10,7 @@
 #include "rocprofvis_events_view.h"
 #include "rocprofvis_timeline_view.h"
 #include "rocprofvis_flame_track_item.h"
+#include "rocprofvis_measurement_controller.h"
 #include "rocprofvis_minimap.h"
 #include "rocprofvis_event_search.h"
 #include "rocprofvis_summary_view.h"
@@ -1285,5 +1286,64 @@ void RegisterAppTests(ImGuiTestEngine* e)
         // Leave a clean selection for following tests.
         sel->UnselectAllEvents();
         ctx->Yield(2);
+    };
+
+    t = IM_REGISTER_TEST(e, "app", "sys_timeline_measure_tool");
+    t->TestFunc = [](ImGuiTestContext* ctx)
+    {
+        AppWindow* app = AppWindow::GetInstance();
+        Project* project = app->GetCurrentProject();
+        IM_CHECK(project != nullptr);
+        if (project == nullptr) return;
+        TraceView* tv = dynamic_cast<TraceView*>(project->GetView().get());
+        if (tv == nullptr)
+        {
+            ctx->LogWarning("SKIP: no trace view loaded (open a system/trace profile to exercise this)");
+            return;
+        }
+        TimelineView* tlv = TraceViewTestPeer{*tv}.TimelineViewPtr();
+        IM_CHECK(tlv != nullptr);
+        if (tlv == nullptr) return;
+        MeasurementController* mc = TraceViewTestPeer{*tv}.MeasurementControllerPtr();
+        IM_CHECK(mc != nullptr);
+        if (mc == nullptr) return;
+
+        // Two distinct timestamps inside the trace's visible range; the measured
+        // span between them must be > 0.
+        const ViewCoords coords = tlv->GetViewCoords();
+        const double     span   = coords.v_max_x - coords.v_min_x;
+        IM_CHECK(span > 0.0);
+        if (span <= 0.0) return;
+        const double t0 = coords.v_min_x + span * 0.25;
+        const double t1 = coords.v_min_x + span * 0.75;
+
+        // Clear to a known baseline: measurement state persists on the TraceView
+        // across tests in the reused process.
+        mc->ExitMeasurementMode();
+        mc->ClearMeasurement();
+        ctx->Yield(2);
+        IM_CHECK(mc->IsMeasurementMode() == false);
+
+        // Enter mode and place both points via the same controller calls the menu
+        // item and freehand click handler drive.
+        mc->EnterMeasurementMode();
+        mc->SetFreehandMeasurementPoint(t0);
+        mc->SetFreehandMeasurementPoint(t1);
+        ctx->Yield(2);
+
+        // Capture observation, restore, THEN assert: IM_CHECK early-returns on
+        // failure, so leaving measurement mode active would leak into later tests.
+        const MeasurementState state = mc->GetMeasurementState();
+        const double duration =
+            std::fabs(mc->GetEffectiveTimestamp(1) - mc->GetEffectiveTimestamp(0));
+
+        mc->ExitMeasurementMode();
+        mc->ClearMeasurement();
+        ctx->Yield(2);
+        const bool inactive_after = (mc->IsMeasurementMode() == false);
+
+        IM_CHECK(state == MeasurementState::kComplete);
+        IM_CHECK(duration > 0.0);
+        IM_CHECK(inactive_after);
     };
 }

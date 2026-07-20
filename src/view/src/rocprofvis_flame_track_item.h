@@ -66,14 +66,14 @@ private:
     void HandleTimelineSelectionChanged(std::shared_ptr<RocEvent> e);
     void HandleTimelineHighlightChanged(std::shared_ptr<RocEvent> e);
 
-    void DrawBox(ImVec2 start_position, int boxplot_box_id, ChartItem& flame,
-                 float duration, ImDrawList* draw_list, bool use_highlight_color);
+    void DrawBox(ImVec2 start_position, ChartItem& flame, float duration,
+                 ImDrawList* draw_list, bool use_highlight_color);
 
     bool ExtractPointsFromData();
     bool ExtractChildInfo(ChartItem& item);
     bool ParseChildInfo(const std::string& combined_name, ChildEventInfo& out_info);
 
-    void RenderTooltip(ChartItem& chart_item, int color_index);
+    void RenderTooltip(ChartItem& chart_item, size_t color_index);
     void RecalculateTrackHeight();
 
     std::vector<ChartItem>                 m_chart_items;

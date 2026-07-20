@@ -175,7 +175,7 @@ TrackItem::TrackHeightChanged()
 float
 TrackItem::GetTrackHeight() const
 {
-    return m_options->m_height;
+    return m_options ? m_options->m_height : DEFAULT_TRACK_HEIGHT;
 }
 
 const std::string&
@@ -235,13 +235,16 @@ TrackItem::IsSelected() const
 bool
 TrackItem::IsDisplayed() const
 {
-    return m_options->m_display;
+    return m_options ? m_options->m_display : true;
 }
 
 void
 TrackItem::SetDisplay(bool display)
 {
-    m_options->m_display = display;
+    if(m_options)
+    {
+        m_options->m_display = display;
+    }
 }
 
 void
@@ -253,7 +256,7 @@ TrackItem::Render(float width)
     ImGui::SameLine();
 
     RenderChart(width);
-    RenderResizeBar(ImVec2(width + s_metadata_width, m_options->m_height));
+    RenderResizeBar(ImVec2(width + s_metadata_width, GetTrackHeight()));
 
     ImGui::EndGroup();
 
@@ -307,7 +310,7 @@ void
 TrackItem::RenderMetaArea()
 {
     ImVec2 outer_container_size = ImGui::GetContentRegionAvail();
-    m_track_content_height      = m_options->m_height - 0.5f * m_resize_grip_thickness;
+    m_track_content_height      = GetTrackHeight() - 0.5f * m_resize_grip_thickness;
 
     ImVec2 name_label_min(0.0f, 0.0f);
     ImVec2 name_label_max(0.0f, 0.0f);
@@ -524,12 +527,15 @@ TrackItem::RenderResizeBar(const ImVec2& parent_size)
 
     if(ImGui::BeginDragDropSource(ImGuiDragDropFlags_None))
     {
-        ImVec2 drag_delta = ImGui::GetMouseDragDelta(ImGuiMouseButton_Left);
-        m_options->m_height =
-            std::max(m_options->m_height + drag_delta.y, m_min_track_height);
+        if(m_options)
+        {
+            m_options->m_height = std::max(
+                m_options->m_height + ImGui::GetMouseDragDelta(ImGuiMouseButton_Left).y,
+                m_min_track_height);
+            m_track_height_changed = true;
+        }
         ImGui::ResetMouseDragDelta();
         ImGui::EndDragDropSource();
-        m_track_height_changed = true;
     }
     if(ImGui::BeginDragDropTarget())
     {

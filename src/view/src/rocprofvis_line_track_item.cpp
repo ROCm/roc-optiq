@@ -102,23 +102,31 @@ void
 LineTrackItem::RenderHighlightBand(ImDrawList* draw_list, const ImVec2& cursor_position,
                                    const ImVec2& content_size, double scale_y)
 {
-    float highlight_y_max = static_cast<float>(
-        cursor_position.y + content_size.y -
-        (m_counter_options->m_highlight.range_max - static_cast<float>(m_min_y.Value())) *
-            scale_y);
-    float highlight_y_min = static_cast<float>(
-        cursor_position.y + content_size.y -
-        (m_counter_options->m_highlight.range_min - static_cast<float>(m_min_y.Value())) *
-            scale_y);
+    if(m_counter_options)
+    {
+        float highlight_y_max =
+            static_cast<float>(cursor_position.y + content_size.y -
+                               (m_counter_options->m_highlight.range_max -
+                                static_cast<float>(m_min_y.Value())) *
+                                   scale_y);
+        float highlight_y_min =
+            static_cast<float>(cursor_position.y + content_size.y -
+                               (m_counter_options->m_highlight.range_min -
+                                static_cast<float>(m_min_y.Value())) *
+                                   scale_y);
 
-    highlight_y_max = std::max(
-        cursor_position.y, std::min(cursor_position.y + content_size.y, highlight_y_max));
-    highlight_y_min = std::max(
-        cursor_position.y, std::min(cursor_position.y + content_size.y, highlight_y_min));
+        highlight_y_max =
+            std::max(cursor_position.y,
+                     std::min(cursor_position.y + content_size.y, highlight_y_max));
+        highlight_y_min =
+            std::max(cursor_position.y,
+                     std::min(cursor_position.y + content_size.y, highlight_y_min));
 
-    draw_list->AddRectFilled(ImVec2(cursor_position.x, highlight_y_max),
-                             ImVec2(cursor_position.x + content_size.x, highlight_y_min),
-                             m_settings.GetColor(Colors::kTrackColorWarningBand));
+        draw_list->AddRectFilled(
+            ImVec2(cursor_position.x, highlight_y_max),
+            ImVec2(cursor_position.x + content_size.x, highlight_y_min),
+            m_settings.GetColor(Colors::kTrackColorWarningBand));
+    }
 }
 
 void
@@ -158,10 +166,21 @@ LineTrackItem::BoxPlotRender(float graph_width)
             point_end.x = std::max(point_end.x, point_start.x + 1.0f);
         }
 
-        ImU32 fill_color = (!m_counter_options->m_boxplot.enabled) ? transparent_color
-                           : (m_counter_options->m_boxplot.stripes && (i % 2 == 0))
-                               ? alt_fill_color
-                               : base_fill_color;
+        ImU32 fill_color = base_fill_color;
+        if(m_counter_options)
+        {
+            if(m_counter_options->m_boxplot.enabled)
+            {
+                if(m_counter_options->m_boxplot.stripes && (i % 2))
+                {
+                    fill_color = alt_fill_color;
+                }
+            }
+            else
+            {
+                fill_color = transparent_color;
+            }
+        }
 
         draw_list->AddRectFilled(ImVec2(point_start.x, point_start.y),
                                  ImVec2(point_end.x, bottom_of_chart), fill_color);
@@ -188,7 +207,7 @@ LineTrackItem::BoxPlotRender(float graph_width)
         }
     }
 
-    if(m_counter_options->m_highlight.enabled)
+    if(m_counter_options && m_counter_options->m_highlight.enabled)
     {
         RenderHighlightBand(draw_list, cursor_position, content_size, scale_y);
     }
@@ -271,7 +290,7 @@ LineTrackItem::Update()
             }
         }
     }
-    if(m_options->Updated())
+    if(m_options && m_options->Updated())
     {
         if(m_counter_options && m_track_statistics)
         {

@@ -123,43 +123,46 @@ FlameTrackItem::FlameTrackItem(DataProvider& dp, uint64_t track_id,
 void
 FlameTrackItem::RenderMetaAreaExpand()
 {
-    ImGui::PushStyleColor(ImGuiCol_Button, m_settings.GetColor(Colors::kTransparent));
-    ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
-                          m_settings.GetColor(Colors::kTransparent));
-    ImGui::PushStyleColor(ImGuiCol_ButtonActive,
-                          m_settings.GetColor(Colors::kTransparent));
-    ImVec2 button_pos =
-        ImVec2(ImGui::GetContentRegionMax() - m_metadata_padding -
-               ImVec2(ImGui::GetTextLineHeight() + m_meta_area_scale_width,
-                      ImGui::GetTextLineHeight()));
-    int visible_levels =
-        static_cast<int>(std::ceil(m_options->m_height / m_level_height));
+    if(m_event_options)
+    {
+        ImGui::PushStyleColor(ImGuiCol_Button, m_settings.GetColor(Colors::kTransparent));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
+                              m_settings.GetColor(Colors::kTransparent));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive,
+                              m_settings.GetColor(Colors::kTransparent));
+        ImVec2 button_pos =
+            ImVec2(ImGui::GetContentRegionMax() - m_metadata_padding -
+                   ImVec2(ImGui::GetTextLineHeight() + m_meta_area_scale_width,
+                          ImGui::GetTextLineHeight()));
+        int visible_levels =
+            static_cast<int>(std::ceil(m_options->m_height / m_level_height));
 
-    if(visible_levels <= m_max_level + 1)
-    {
-        ImGui::SetCursorPos(button_pos);
-        if(ImGui::ArrowButton("##expand", ImGuiDir_Down))
+        if(visible_levels <= m_max_level + 1)
         {
-            RecalculateTrackHeight();
-            m_event_options->m_expand = true;
+            ImGui::SetCursorPos(button_pos);
+            if(ImGui::ArrowButton("##expand", ImGuiDir_Down))
+            {
+                RecalculateTrackHeight();
+                m_event_options->m_expand = true;
+            }
+            if(ImGui::IsItemHovered()) SetTooltipStyled("Expand track to see all events");
         }
-        if(ImGui::IsItemHovered()) SetTooltipStyled("Expand track to see all events");
-    }
-    else if(m_options->m_height >
-            std::max(m_max_level * m_level_height + m_level_height,
-                     DEFAULT_TRACK_HEIGHT))  // stand-in for default height..
-    {
-        ImGui::SetCursorPos(button_pos);
-        if(ImGui::ArrowButton("##contract", ImGuiDir_Up))
+        else if(m_options->m_height >
+                std::max(m_max_level * m_level_height + m_level_height,
+                         DEFAULT_TRACK_HEIGHT))  // stand-in for default height..
         {
-            m_options->m_height =
-                DEFAULT_TRACK_HEIGHT;  // Default track height defined in parent class.
-            m_track_height_changed    = true;
-            m_event_options->m_expand = false;
+            ImGui::SetCursorPos(button_pos);
+            if(ImGui::ArrowButton("##contract", ImGuiDir_Up))
+            {
+                m_options->m_height =
+                    DEFAULT_TRACK_HEIGHT;  // Default track height defined in parent class.
+                m_track_height_changed    = true;
+                m_event_options->m_expand = false;
+            }
+            if(ImGui::IsItemHovered()) SetTooltipStyled("Contract track to default height");
         }
-        if(ImGui::IsItemHovered()) SetTooltipStyled("Contract track to default height");
+        ImGui::PopStyleColor(3);
     }
-    ImGui::PopStyleColor(3);
 }
 
 FlameTrackItem::~FlameTrackItem()
@@ -193,7 +196,7 @@ FlameTrackItem::Update()
             m_pill_analysis_queue->Deactivate();
         }
     }
-    if(m_options->Updated())
+    if(m_options && m_options->Updated())
     {
         if(m_event_options)
         {
@@ -235,7 +238,7 @@ FlameTrackItem::ReleaseData()
 bool
 FlameTrackItem::IsCompactMode() const
 {
-    return m_event_options->m_compact;
+    return m_event_options ? m_event_options->m_compact : TrackItem::IsCompactMode();
 }
 
 bool
@@ -397,8 +400,8 @@ FlameTrackItem::HandleTimelineHighlightChanged(std::shared_ptr<RocEvent> e)
 }
 
 void
-FlameTrackItem::DrawBox(ImVec2 start_position, int color_index, ChartItem& chart_item,
-                        float duration, ImDrawList* draw_list, bool use_highlight_color)
+FlameTrackItem::DrawBox(ImVec2 start_position, ChartItem& chart_item, float duration,
+                        ImDrawList* draw_list, bool use_highlight_color)
 {
     ImVec2 cursor_position = ImGui::GetCursorScreenPos();
     ImVec2 content_size    = ImGui::GetContentRegionAvail();
@@ -407,19 +410,33 @@ FlameTrackItem::DrawBox(ImVec2 start_position, int color_index, ChartItem& chart
     ImVec2 rectMax = ImVec2(start_position.x + duration,
                             start_position.y + m_level_height + cursor_position.y);
 
-    ImU32 rectColor;
-    if(use_highlight_color)
+    const std::vector<ImU32>& color_wheel =
+        use_highlight_color ? m_settings.GetHighlightedEventColorWheel()
+                            : m_settings.GetColorWheel();
+    size_t color_index = 0;
+    ImU32 rectColor = use_highlight_color ? color_wheel[0]
+                                          : m_settings.GetColor(Colors::kFlameChartColor);
+    if(m_event_options)
     {
-        const auto& highlight_wheel = m_settings.GetHighlightedEventColorWheel();
-        rectColor = highlight_wheel[color_index % highlight_wheel.size()];
-    }
-    else if(m_event_options->m_color_mode == EventTrackOptions::EventColorMode::kNone)
-    {
-        rectColor = m_settings.GetColor(Colors::kFlameChartColor);
+        if(m_event_options->m_color_mode ==
+           EventTrackOptions::EventColorMode::kByEventName)
+        {
+            color_index = static_cast<size_t>(chart_item.name_hash) % color_wheel.size();
+            rectColor   = color_wheel[color_index];
+        }
+        else if(m_event_options->m_color_mode ==
+                EventTrackOptions::EventColorMode::kByTimeLevel)
+        {
+            color_index = static_cast<size_t>(chart_item.event.m_start_ts +
+                                              chart_item.event.m_level) %
+                          color_wheel.size();
+            rectColor   = color_wheel[color_index];
+        }
     }
     else
     {
-        rectColor = m_settings.GetColorWheel()[color_index];
+        color_index = static_cast<size_t>(chart_item.name_hash) % color_wheel.size();
+        rectColor   = color_wheel[color_index];
     }
 
     float rounding = 2.0f;
@@ -526,10 +543,10 @@ FlameTrackItem::DrawBox(ImVec2 start_position, int color_index, ChartItem& chart
 }
 
 void
-FlameTrackItem::RenderTooltip(ChartItem& chart_item, int color_index)
+FlameTrackItem::RenderTooltip(ChartItem& chart_item, size_t color_index)
 {
     const auto& time_format = m_settings.GetUserSettings().unit_settings.time_format;
-    int         color_count = static_cast<int>(m_settings.GetColorWheel().size());
+    size_t      color_count = m_settings.GetColorWheel().size();
 
     ImVec2 mouse_pos      = ImGui::GetMousePos();
     ImVec2 viewport_size  = ImGui::GetMainViewport()->Size;
@@ -618,12 +635,11 @@ FlameTrackItem::RenderTooltip(ChartItem& chart_item, int color_index)
 
                 // Name column
                 ImGui::TableNextColumn();
-                if(m_event_options->m_color_mode !=
-                   EventTrackOptions::EventColorMode::kNone)
+                if(m_event_options && m_event_options->m_color_mode !=
+                                          EventTrackOptions::EventColorMode::kNone)
                 {
-                    auto c_idx =
-                        static_cast<uint64_t>(chart_item.child_info[i].name_hash) %
-                        color_count;
+                    auto c_idx = static_cast<size_t>(chart_item.child_info[i].name_hash) %
+                                 color_count;
                     ImU32 cellBgColor = m_settings.GetColorWheel()[c_idx];
                     ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, cellBgColor);
                 }
@@ -671,7 +687,8 @@ FlameTrackItem::RenderTooltip(ChartItem& chart_item, int color_index)
         event_id = chart_item.event.m_id;
         ImGui::TextUnformatted("Name: ");
         ImGui::SameLine();
-        if(m_event_options->m_color_mode != EventTrackOptions::EventColorMode::kNone)
+        if(m_event_options &&
+           m_event_options->m_color_mode != EventTrackOptions::EventColorMode::kNone)
         {
             ImVec2 text_size = ImGui::CalcTextSize(
                 chart_item.event.m_name.c_str(), nullptr, false, s_max_event_label_width);
@@ -706,9 +723,12 @@ FlameTrackItem::RenderTooltip(ChartItem& chart_item, int color_index)
 void
 FlameTrackItem::RecalculateTrackHeight()
 {
-    m_options->m_height = std::max(m_max_level * m_level_height + m_level_height + 2.0f,
-                                   DEFAULT_TRACK_HEIGHT);
-    m_track_height_changed = true;
+    if(m_options)
+    {
+        m_options->m_height = std::max(m_max_level * m_level_height + m_level_height + 2.0f,
+                                       DEFAULT_TRACK_HEIGHT);
+        m_track_height_changed = true;
+    }
 }
 
 void
@@ -717,9 +737,6 @@ FlameTrackItem::RenderChart(float graph_width)
     ImGui::BeginChild("FV", ImVec2(graph_width, m_track_content_height), false,
                       ImGuiWindowFlags_NoMouseInputs);
     ImDrawList* draw_list = ImGui::GetWindowDrawList();
-
-    int colorCount = static_cast<int>(m_settings.GetColorWheel().size());
-    ROCPROFVIS_ASSERT(colorCount > 0);
 
     int color_index      = 0;
     m_has_drawn_tool_tip = false;
@@ -752,19 +769,6 @@ FlameTrackItem::RenderChart(float graph_width)
             continue;  // Skip if the item is not visible in the current view
         }
 
-        if(m_event_options->m_color_mode ==
-           EventTrackOptions::EventColorMode::kByTimeLevel)
-        {
-            color_index =
-                static_cast<uint64_t>(item.event.m_start_ts + item.event.m_level) %
-                colorCount;
-        }
-        else if(m_event_options->m_color_mode ==
-                EventTrackOptions::EventColorMode::kByEventName)
-        {
-            color_index = static_cast<uint64_t>(item.name_hash) % colorCount;
-        }
-
         if(normalized_duration > std::numeric_limits<float>::max())
         {
             normalized_duration = std::numeric_limits<float>::max();
@@ -775,8 +779,8 @@ FlameTrackItem::RenderChart(float graph_width)
             item.event.m_start_ts <= range_end_ns &&
             item.event.m_start_ts + item.event.m_duration >= range_start_ns;
 
-        DrawBox(start_position, color_index, item,
-                static_cast<float>(normalized_duration), draw_list, use_highlight_color);
+        DrawBox(start_position, item, static_cast<float>(normalized_duration), draw_list,
+                use_highlight_color);
     }
 
     for(ChartItem& item : m_selected_chart_items)

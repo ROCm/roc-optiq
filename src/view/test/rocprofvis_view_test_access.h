@@ -108,6 +108,27 @@ struct FlameTrackItemTestPeer
     // ImGui ID of the "FV" child window the bars register under; tests gather
     // bars by this parent. 0 until the track has rendered at least once.
     unsigned int   FlameWindowId() const { return v.m_test_flame_window_id; }
+
+    size_t ChartItemCount() const { return v.m_chart_items.size(); }
+
+    // Identity of the earliest event (smallest m_start_ts) in this track. Chart
+    // item ordering is not guaranteed stable, so tests pick by timestamp rather
+    // than index. Returns false when the track holds no events.
+    bool EarliestEvent(uint64_t& uuid, std::string& name, double& start_ts) const
+    {
+        bool found = false;
+        for(const auto& chart_item : v.m_chart_items)
+        {
+            if(!found || chart_item.event.m_start_ts < start_ts)
+            {
+                uuid     = chart_item.event.m_id.uuid;
+                name     = chart_item.event.m_name;
+                start_ts = chart_item.event.m_start_ts;
+                found    = true;
+            }
+        }
+        return found;
+    }
 };
 
 struct TimelineViewTestPeer
@@ -126,6 +147,22 @@ struct TimelineViewTestPeer
             if(flame != nullptr) return flame;
         }
         return nullptr;
+    }
+
+    // All displayed flame tracks, in track order. Tests scan this for a track
+    // matching a criterion (has events, enough levels to expand) rather than
+    // assuming the first flame track qualifies.
+    std::vector<FlameTrackItem*> DisplayedFlameTracks() const
+    {
+        std::vector<FlameTrackItem*> flames;
+        if(!v.m_tracks) return flames;
+        for(TrackItem* track : *v.m_tracks)
+        {
+            if(track == nullptr || !track->IsDisplayed()) continue;
+            if(FlameTrackItem* flame = dynamic_cast<FlameTrackItem*>(track))
+                flames.push_back(flame);
+        }
+        return flames;
     }
 
     // ImGui ID of the first visible flame track's "FV" child window, the parent

@@ -1210,4 +1210,80 @@ void RegisterAppTests(ImGuiTestEngine* e)
             IM_CHECK(prev >= cur);
         }
     };
+
+    t = IM_REGISTER_TEST(e, "app", "sys_timeline_select_named_track_event");
+    t->TestFunc = [](ImGuiTestContext* ctx)
+    {
+        AppWindow* app = AppWindow::GetInstance();
+        Project* project = app->GetCurrentProject();
+        IM_CHECK(project != nullptr);
+        if (project == nullptr) return;
+        TraceView* tv = dynamic_cast<TraceView*>(project->GetView().get());
+        if (tv == nullptr)
+        {
+            ctx->LogWarning("SKIP: no trace view loaded (open a system/trace profile to exercise this)");
+            return;
+        }
+        TimelineView* tlv = TraceViewTestPeer{*tv}.TimelineViewPtr();
+        IM_CHECK(tlv != nullptr);
+        if (tlv == nullptr) return;
+        std::shared_ptr<TimelineSelection> sel = tv->GetTimelineSelection();
+        IM_CHECK(sel != nullptr);
+        if (sel == nullptr) return;
+
+        // Event chart items populate after the track's data fetch drains, so poll
+        // for a flame track that has at least one event before reaching in.
+        FlameTrackItem* flame    = nullptr;
+        uint64_t        track_id = 0;
+        for (int i = 0; i < 60 && flame == nullptr; i++)
+        {
+            for (FlameTrackItem* candidate :
+                 TimelineViewTestPeer{*tlv}.DisplayedFlameTracks())
+            {
+                if (FlameTrackItemTestPeer{*candidate}.ChartItemCount() > 0)
+                {
+                    flame    = candidate;
+                    track_id = candidate->GetID();
+                    break;
+                }
+            }
+            if (flame == nullptr) ctx->Yield(2);
+        }
+        if (flame == nullptr)
+        {
+            ctx->LogWarning("SKIP: no flame track has events to select by identity");
+            return;
+        }
+
+        // Target the earliest event by timestamp (chart-item order is not stable,
+        // so identity comes from the (name, start_ts) pair, not an index).
+        uint64_t    uuid     = 0;
+        std::string name;
+        double      start_ts = 0.0;
+        bool        have_event =
+            FlameTrackItemTestPeer{*flame}.EarliestEvent(uuid, name, start_ts);
+        IM_CHECK(have_event);
+        if (!have_event) return;
+
+        // Selection is dispatched through EventManager, so clear then yield before
+        // asserting the empty baseline.
+        sel->UnselectAllEvents();
+        ctx->Yield(3);
+        std::vector<uint64_t> ids;
+        sel->GetSelectedEvents(ids);
+        IM_CHECK(ids.empty());
+
+        // Select that exact event by its (track, uuid) identity, the same call the
+        // flame track makes on a bar click.
+        sel->SelectTrackEvent(track_id, uuid);
+        ctx->Yield(3);
+        IM_CHECK(sel->EventSelected(uuid));
+        ids.clear();
+        sel->GetSelectedEvents(ids);
+        IM_CHECK(ids.size() == 1 && ids[0] == uuid);
+
+        // Leave a clean selection for following tests.
+        sel->UnselectAllEvents();
+        ctx->Yield(2);
+    };
 }

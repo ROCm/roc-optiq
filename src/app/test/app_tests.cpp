@@ -1118,19 +1118,21 @@ void RegisterAppTests(ImGuiTestEngine* e)
         ctx->Yield(2);
         IM_CHECK(peer.IsDisplayPie());
 
-        // The switcher is three IconButtons in the "Summary" window, keyed by
-        // their icon glyph (rocprovfis_icon_defines.h). Each click sets
-        // TopKernels::m_display_mode.
-        ctx->ItemClick("//Summary/**/");  // ICON_CHART_BAR
-        ctx->Yield(2);
+        // The switcher is three IconButtons in the "Summary" window; IconButton
+        // does PushID(glyph)+Button(glyph), so each is addressed by its own icon
+        // glyph (rocprovfis_icon_defines.h) in the ref. Poll the mode after each
+        // click rather than asserting on a fixed yield: the click settles over a
+        // variable number of frames, so a hard Yield(2) is intermittently too short.
+        ctx->ItemClick("//Summary/**/");  // ICON_CHART_BAR
+        for (int i = 0; i < 30 && !peer.IsDisplayBar(); i++) ctx->Yield(2);
         IM_CHECK(peer.IsDisplayBar());
 
-        ctx->ItemClick("//Summary/**/");  // ICON_LIST (table)
-        ctx->Yield(2);
+        ctx->ItemClick("//Summary/**/");  // ICON_LIST (table)
+        for (int i = 0; i < 30 && !peer.IsDisplayTable(); i++) ctx->Yield(2);
         IM_CHECK(peer.IsDisplayTable());
 
-        ctx->ItemClick("//Summary/**/");  // ICON_CHART_PIE
-        ctx->Yield(2);
+        ctx->ItemClick("//Summary/**/");  // ICON_CHART_PIE
+        for (int i = 0; i < 30 && !peer.IsDisplayPie(); i++) ctx->Yield(2);
         IM_CHECK(peer.IsDisplayPie());
     };
 

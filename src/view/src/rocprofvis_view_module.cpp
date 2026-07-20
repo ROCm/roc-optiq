@@ -33,8 +33,8 @@ rocprofvis_view_init(std::function<void(int)>                 notification_callb
 void
 rocprofvis_view_render(const rocprofvis_view_render_options_t& render_options)
 {
-    if(render_options ==
-       rocprofvis_view_render_options_t::kRocProfVisViewRenderOption_RequestExit)
+    if(static_cast<int>(render_options) &
+       static_cast<int>(rocprofvis_view_render_options_t::kRocProfVisViewRenderOption_RequestExit))
     {
         AppWindow::GetInstance()->ShowCloseConfirm();
     }
@@ -91,6 +91,12 @@ rocprofvis_get_application_config_path()
 {
     // Get the application config path
     return get_application_config_path(true);
+}
+
+std::string
+rocprofvis_get_application_log_path()
+{
+    return get_application_log_path(true);
 }
 
 bool

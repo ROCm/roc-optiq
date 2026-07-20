@@ -102,7 +102,35 @@ rocprofvis_dm_result_t  Database::ReadTraceSliceAsync(
     try {
         future->SetWorker(std::move(std::thread(Database::ReadTraceSliceStatic, this, start, end, tag, num, tracks, future)));
     }
-    catch (std::exception ex)
+    catch (const std::exception& ex)
+    {
+        ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN(ex.what(), kRocProfVisDmResultUnknownError);
+    }
+    return kRocProfVisDmResultSuccess;
+}
+
+rocprofvis_dm_result_t
+Database::ReadTracePMCSliceAsync(
+                                                    rocprofvis_dm_timestamp_t start,
+                                                    rocprofvis_dm_timestamp_t end,
+                                                    rocprofvis_dm_hashed_timestamp_tag_t tag,
+                                                    rocprofvis_db_track_selection_t track,
+                                                    bool left_neighbor, 
+                                                    bool right_neighbor,
+                                                    rocprofvis_db_future_t object){
+    Future* future = (Future*) object;
+    ROCPROFVIS_ASSERT_MSG_RETURN(future, ERROR_FUTURE_CANNOT_BE_NULL, kRocProfVisDmResultInvalidParameter);
+    ROCPROFVIS_ASSERT_MSG_RETURN(!future->IsWorking(), ERROR_FUTURE_CANNOT_BE_USED, kRocProfVisDmResultResourceBusy);
+    rocprofvis_dm_result_t result = BindObject()->FuncCheckSliceExists(BindObject()->trace_object, start, end, tag, 1, track);
+    if(result != kRocProfVisDmResultNotLoaded)
+    {
+        spdlog::debug("Slice ({},{}) exists!", start, end);
+        return future->SetPromise(result);
+    }
+    try {
+        future->SetWorker(std::move(std::thread(Database::ReadTracePMCSliceStatic, this, start, end, tag, track, left_neighbor, right_neighbor, future)));
+    }
+    catch (const std::exception& ex)
     {
         ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN(ex.what(), kRocProfVisDmResultUnknownError);
     }
@@ -298,6 +326,35 @@ rocprofvis_dm_result_t  Database::ReadTraceSliceStatic(
     return db->ReadTraceSlice(start, end, tag, num, tracks, object);
 }
 
+rocprofvis_dm_result_t  Database::ReadTracePMCSliceStatic(
+                                                    Database* db, 
+                                                    rocprofvis_dm_timestamp_t start,
+                                                    rocprofvis_dm_timestamp_t            end,
+                                                    rocprofvis_dm_hashed_timestamp_tag_t tag,
+                                                    rocprofvis_db_track_selection_t      track,
+                                                    bool left_neighbor, 
+                                                    bool right_neighbor, 
+                                                    Future* object){
+    return db->ReadTracePMCSlice(start, end, tag, track, left_neighbor, right_neighbor, object);
+}
+
+rocprofvis_dm_result_t  Database::ReadTracePMCSlice(
+                                                    rocprofvis_dm_timestamp_t start,
+                                                    rocprofvis_dm_timestamp_t end,
+                                                    rocprofvis_dm_hashed_timestamp_tag_t tag,
+                                                    rocprofvis_db_track_selection_t track, 
+                                                    bool left_neighbor,
+                                                    bool right_neighbor, 
+                                                    Future* object){
+    (void) start;
+    (void) end;
+    (void) tag;
+    (void) track;
+    (void) left_neighbor;
+    (void) right_neighbor;
+    object->SetPromise(kRocProfVisDmResultNotSupported);
+    return kRocProfVisDmResultNotSupported;
+}
 
 rocprofvis_dm_result_t   Database::ReadEventPropertyStatic(
                                                     Database* db, 
@@ -483,6 +540,64 @@ Database::UpdateQueryForTrack(  rocprofvis_dm_track_params_it it,
     newprops.query[slice_query_category].push_back(newqueries[slice_source_query_category]);
     newprops.query[kRPVQueryTable].push_back(newqueries[kRPVSourceQueryTable]);
     newprops.query[kRPVQueryLevel].push_back(newqueries[kRPVSourceQueryLevel]); 
+}
+
+void Database::CreateTracksOrderRanking() {
+
+
+    using Track = rocprofvis_dm_track_params_t;
+
+    std::map<std::set<uint32_t>, std::vector<Track*>> partitions;
+
+    for (auto& track_prop : m_track_properties) {
+        Track* t = track_prop.get();
+        partitions[t->load_id].push_back(t);
+    }
+
+    uint32_t order_base = 0;
+
+    for (auto& [load_set, partition_tracks] : partitions) {
+
+
+        std::map<uint32_t, std::vector<Track*>> groups;
+
+        for (auto* t : partition_tracks) {
+            DbInstance* db_instance = (DbInstance*)t->track_indentifiers.db_instance;
+            uint32_t file_index = db_instance ? db_instance->FileIndex() : 0;
+            groups[file_index].push_back(t);
+        }
+
+        for (auto& [db, vec] : groups) {
+            std::sort(vec.begin(), vec.end(),[](
+                const Track* a, const Track* b) {
+                    return a->track_indentifiers.track_id <
+                    b->track_indentifiers.track_id;
+                });
+        }
+
+        size_t max_len = 0;
+        for (const auto& [_, vec] : groups) {
+            max_len = std::max(max_len, vec.size());
+        }
+
+        uint32_t local_order = 0;
+
+        for (size_t i = 0; i < max_len; ++i) {
+            for (auto& [db, vec] : groups) {
+                if (i < vec.size()) {
+                    vec[i]->order_id = order_base + local_order;
+                    ++local_order;
+                }
+            }
+        }
+
+        // Advance the base past every track assigned in this partition so
+        // order_ids stay globally unique regardless of how many tracks a
+        // partition holds (a fixed stride per partition would collide once a
+        // partition exceeds that stride).
+        order_base += local_order;
+    }
+
 }
 
 void DatabaseVersion::SetVersion(const char* version) {

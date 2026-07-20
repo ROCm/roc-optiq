@@ -8,7 +8,6 @@
 #include "rocprofvis_utils.h"
 #include "spdlog/spdlog.h"
 #include <algorithm>
-#include <charconv>
 #include <iomanip>
 #include <sstream>
 
@@ -20,27 +19,41 @@ namespace View
 constexpr float DEFAULT_VERTICAL_PADDING = 2.0f;
 constexpr float DEFAULT_LINE_THICKNESS   = 1.0f;
 
-LineTrackItem::LineTrackItem(DataProvider& dp, uint64_t track_id,
-                             std::shared_ptr<TimePixelTransform> tpt)
-: TrackItem(dp, track_id, tpt)
+LineTrackItem::LineTrackItem(DataProvider& dp, uint64_t track_id, bool display,
+                             std::shared_ptr<TimePixelTransform> tpt,
+                             std::shared_ptr<TimelineSelection>  timeline_selection)
+: TrackItem(dp, track_id, display, tpt, timeline_selection)
 , m_data({})
-, m_highlight_y_limits()
-, m_highlight_y_range(false)
-, m_dp(dp)
-, m_show_boxplot(true)
-, m_show_boxplot_stripes(false)
-, m_linetrack_project_settings(dp.GetTraceFilePath(), *this)
 , m_min_y("edit_min")
 , m_max_y("edit_max")
+, m_dp(dp)
 , m_vertical_padding(DEFAULT_VERTICAL_PADDING)
+, m_pills_analysis({})
+, m_linetrack_project_settings(dp.GetTraceFilePath(), *this)
+, m_show_analysis({ false, false, true, true })
+, m_highlight_y_range(false)
+, m_highlight_y_limits()
+, m_show_boxplot(true)
+, m_show_boxplot_stripes(false)
 {
     if(!m_tpt)
     {
         spdlog::error("LineTrackItem: m_tpt shared_ptr is null, cannot construct");
         return;
     }
-    m_meta_area_scale_width = CalculateNewMetaAreaSize();
     UpdateMetadata();
+
+    if(m_track_metadata)
+    {
+        m_track_statistics =
+            m_data_provider.DataModel().GetAnalysis().RegisterTrack(*m_track_metadata);
+        for(int i = 0; i < AnalysisTrackStatistics::Counter::kCounterCount; i++)
+        {
+            m_pills_analysis[i] = AddPill();
+            m_pills_analysis[i]->SetVisible(m_show_analysis[i]);
+            m_pills_analysis[i]->SetAccentColor(m_track_statistics->stats[i].accent_color);
+        }
+    }
 
     if(m_linetrack_project_settings.Valid())
     {
@@ -48,6 +61,14 @@ LineTrackItem::LineTrackItem(DataProvider& dp, uint64_t track_id,
         m_show_boxplot_stripes = m_linetrack_project_settings.BoxPlotStripes();
         m_highlight_y_range    = m_linetrack_project_settings.Highlight();
         m_highlight_y_limits   = m_linetrack_project_settings.HighlightRange();
+        m_show_analysis        = m_linetrack_project_settings.ShowAnalysis();
+        for(int i = 0; i < AnalysisTrackStatistics::Counter::kCounterCount; i++)
+        {
+            if(m_pills_analysis[i])
+            {
+                m_pills_analysis[i]->SetVisible(m_show_analysis[i]);
+            }
+        }
     }
 }
 
@@ -76,7 +97,8 @@ LineTrackItem::UpdateMetadata()
     {
         m_max_y.Init(m_min_y.Value() + 1.0, m_units);
     }
-    m_meta_area_scale_width = CalculateNewMetaAreaSize();
+    UpdateMetaScaleAreaSize();
+    UpdateMaxMetaScaleAreaSize();
 }
 
 void
@@ -201,18 +223,53 @@ LineTrackItem::BoxPlotRender(float graph_width)
     ImGui::EndChild();
 }
 
-float
-LineTrackItem::CalculateNewMetaAreaSize()
+void
+LineTrackItem::UpdateMetaScaleAreaSize()
 {
-    ImVec2 max_size = ImGui::CalcTextSize(m_max_y.CompactValue().c_str());
+    m_meta_area_scale_width =
+        std::max({ ImGui::CalcTextSize(m_max_y.CompactValue().c_str()).x +
+                       m_max_y.ButtonSize(),
+                   ImGui::CalcTextSize(m_min_y.CompactValue().c_str()).x +
+                       m_min_y.ButtonSize() }) +
+        ImGui::GetStyle().ItemSpacing.x;
+}
 
-    ImVec2 min_size = ImGui::CalcTextSize(m_min_y.CompactValue().c_str());
+void
+LineTrackItem::UpdateMaxMetaScaleAreaSize()
+{
+    // compact_number_format() will return no more than 8 characters...
+    m_max_meta_area_scale_width = m_max_y.ButtonSize() +
+                                  ImGui::CalcTextSize("XXXXXXXX").x +
+                                  ImGui::GetStyle().ItemSpacing.x;
+}
 
-    return std::max(
-               { max_size.x + m_max_y.ButtonSize(), min_size.x + m_min_y.ButtonSize() }) +
-           6 * m_metadata_padding
-                   .x;  // TODO: Hardcoded padding for posible label size
-                        // Think later how it can be calculated or store as default values
+void
+LineTrackItem::Update()
+{
+    if(m_track_statistics)
+    {
+        for(size_t i = 0; i < m_pills_analysis.size(); i++)
+        {
+            if(m_pills_analysis[i])
+            {
+                if(m_track_statistics->state == AnalysisTrackStatistics::kReady &&
+                   m_track_statistics_dirty)
+                {
+                    const AnalysisTrackStatistics::Stat& stat =
+                        m_track_statistics->stats[i];
+                    m_pills_analysis[i]->Activate();
+                    m_pills_analysis[i]->SetLabel(stat.CompactValue());
+                    m_pills_analysis[i]->SetExtendedLabel(stat.CompactLabel());
+                    m_pills_analysis[i]->SetTooltip(stat.FullLabel());
+                }
+                else if(m_track_statistics->state < AnalysisTrackStatistics::kReady)
+                {
+                    m_pills_analysis[i]->Deactivate();
+                }
+            }
+        }
+    }
+    TrackItem::Update();
 }
 
 bool
@@ -310,6 +367,30 @@ LineTrackItem::RenderChart(float graph_width)
 void
 LineTrackItem::RenderMetaAreaOptions()
 {
+    if(m_track_statistics)
+    {
+        ImGui::SeparatorText("Metrics");
+        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing,
+                            ImGui::GetStyle().ItemInnerSpacing);
+        for(int i = 0; i < AnalysisTrackStatistics::Counter::kCounterCount; i++)
+        {
+            ImGui::PushID(i);
+            ImGui::PushStyleColor(
+                ImGuiCol_CheckMark,
+                m_settings.GetColorWheel()[m_track_statistics->stats[i].accent_color] |
+                    IM_COL32_A_MASK);
+            if(ImGui::Checkbox("", &m_show_analysis[i]))
+            {
+                m_pills_analysis[i]->SetVisible(m_show_analysis[i]);
+            }
+            ImGui::PopStyleColor();
+            ImGui::SameLine();
+            ImGui::Text("Show %s", m_track_statistics->stats[i].name);
+            ImGui::PopID();
+        }
+        ImGui::PopStyleVar();
+    }
+    ImGui::SeparatorText("Appearance");
     ImGui::Checkbox("Show Counter Boxes", &m_show_boxplot);
     ImGui::Checkbox("Alternate Counter Coloring", &m_show_boxplot_stripes);
     if(ImGui::Checkbox("Highlight Y Range", &m_highlight_y_range))
@@ -422,6 +503,15 @@ LineTrackProjectSettings::ToJson()
     track[JSON_KEY_TIMELINE_TRACK_COLOR_RANGE_MAX] =
         m_track_item.m_highlight_y_limits.max_limit;
     track[JSON_KEY_TIMELINE_TRACK_STRIPES] = m_track_item.m_show_boxplot_stripes;
+    track[JSON_KEY_TRACK_MIN] =
+        m_track_item.m_show_analysis[AnalysisTrackStatistics::Counter::kCounterMin];
+    track[JSON_KEY_TRACK_MAX] =
+        m_track_item.m_show_analysis[AnalysisTrackStatistics::Counter::kCounterMax];
+    track[JSON_KEY_TRACK_MEAN] =
+        m_track_item.m_show_analysis[AnalysisTrackStatistics::Counter::kCounterMean];
+    track[JSON_KEY_TRACK_STANDARD_DEVIATION] =
+        m_track_item
+            .m_show_analysis[AnalysisTrackStatistics::Counter::kCounterStandardDeviation];
 }
 
 bool
@@ -433,7 +523,10 @@ LineTrackProjectSettings::Valid() const
            track[JSON_KEY_TIMELINE_TRACK_STRIPES].isBool() &&
            track[JSON_KEY_TIMELINE_TRACK_COLOR].isBool() &&
            track[JSON_KEY_TIMELINE_TRACK_COLOR_RANGE_MIN].isNumber() &&
-           track[JSON_KEY_TIMELINE_TRACK_COLOR_RANGE_MAX].isNumber();
+           track[JSON_KEY_TIMELINE_TRACK_COLOR_RANGE_MAX].isNumber() &&
+           track[JSON_KEY_TRACK_MIN].isBool() && track[JSON_KEY_TRACK_MAX].isBool() &&
+           track[JSON_KEY_TRACK_MEAN].isBool() &&
+           track[JSON_KEY_TRACK_STANDARD_DEVIATION].isBool();
 }
 
 bool
@@ -471,6 +564,23 @@ LineTrackProjectSettings::HighlightRange() const
     };
 }
 
+std::array<bool, AnalysisTrackStatistics::Counter::kCounterCount>
+LineTrackProjectSettings::ShowAnalysis() const
+{
+    jt::Json& track = m_settings_json[JSON_KEY_GROUP_TIMELINE][JSON_KEY_TIMELINE_TRACK]
+                                     [m_track_item.GetID()];
+    std::array<bool, AnalysisTrackStatistics::Counter::kCounterCount> show_analysis;
+    show_analysis[AnalysisTrackStatistics::Counter::kCounterMin] =
+        track[JSON_KEY_TRACK_MIN].getBool();
+    show_analysis[AnalysisTrackStatistics::Counter::kCounterMax] =
+        track[JSON_KEY_TRACK_MAX].getBool();
+    show_analysis[AnalysisTrackStatistics::Counter::kCounterMean] =
+        track[JSON_KEY_TRACK_MEAN].getBool();
+    show_analysis[AnalysisTrackStatistics::Counter::kCounterStandardDeviation] =
+        track[JSON_KEY_TRACK_STANDARD_DEVIATION].getBool();
+    return show_analysis;
+}
+
 LineTrackItem::VerticalLimits::VerticalLimits(std::string field_id)
 : m_default_value(0.0)
 , m_value(0.0)
@@ -482,7 +592,7 @@ LineTrackItem::VerticalLimits::VerticalLimits(std::string field_id)
         {
             UpdateValue(m_default_value);
         }
-        else if(committed_text != m_compact_str)
+        else if(committed_text != m_edit_str)
         {
             double processed = ProcessUserInput(committed_text);
             UpdateValue(processed);
@@ -540,12 +650,15 @@ LineTrackItem::VerticalLimits::UpdateValue(double value)
     m_value         = value;
     m_formatted_str = FormatValue(value);
     m_compact_str   = compact_number_format(value);
+    // Units-free so the edit box shows "25.2M", not "25.2M bytes".
+    m_edit_str = m_compact_str;
     if(!m_units.empty())
     {
         m_formatted_str += " " + m_units;
         m_compact_str += " " + m_units;
     }
     m_text_field.SetText(m_compact_str, m_formatted_str, m_formatted_default);
+    m_text_field.SetEditText(m_edit_str);
 }
 
 std::string
@@ -559,37 +672,13 @@ LineTrackItem::VerticalLimits::FormatValue(double value)
 double
 LineTrackItem::VerticalLimits::ProcessUserInput(std::string_view input)
 {
-    double      result = 0.0;
-    const char* first  = input.data();
-    const char* last   = input.data() + input.size();
-    
-#if defined(__APPLE__)
-    // macOS doesn't support from_chars for floating point yet, use strtod as fallback
-    char* end_ptr = nullptr;
-    std::string null_terminated(input);
-    result = std::strtod(null_terminated.c_str(), &end_ptr);
-    if(end_ptr == null_terminated.c_str() + null_terminated.size() && std::isfinite(result))
+    double value = 0.0;
+    if(parse_compact_number(input, m_units, value))
     {
-        return result;
+        return value;
     }
-    else
-    {
-        m_text_field.RevertToDefault();
-        return m_default_value;
-    }
-#else
-    auto [ptr, error_code] =
-        std::from_chars(first, last, result, std::chars_format::general);
-    if(error_code == std::errc{} && std::isfinite(result) && ptr == last)
-    {
-        return result;
-    }
-    else
-    {
-        m_text_field.RevertToDefault();
-        return m_default_value;
-    }
-#endif
+    m_text_field.RevertToDefault();
+    return m_default_value;
 }
 
 }  // namespace View

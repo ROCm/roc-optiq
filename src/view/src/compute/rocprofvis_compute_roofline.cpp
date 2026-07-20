@@ -19,6 +19,10 @@ namespace View
 
 constexpr float       IMPLOT_LEGEND_ICON_SHRINK       = 2.0f;  // Implot_internal.h
 constexpr float       HOVER_THESHOLD                  = 8.0f;
+constexpr float       HOVER_LINE_WEIGHT_BOOST         = 2.0f;
+constexpr float       LINE_THICKNESS_DEFAULT          = 1.0f;
+constexpr float       LINE_THICKNESS_MIN              = 1.0f;
+constexpr float       LINE_THICKNESS_MAX              = 6.0f;
 constexpr const char* DISPLAY_NAMES_CEILING_COMPUTE[] = {
     "Peak MFMA FP4",   // kRPVControllerRooflineCeilingComputeMFMAFP4
     "Peak MFMA FP6",   // kRPVControllerRooflineCeilingComputeMFMAFP6
@@ -65,6 +69,7 @@ Roofline::Roofline(DataProvider& data_provider, KernelMode kernel_mode)
 , m_menus_mode(Legend)
 , m_menus_placement(InsideTopRight)
 , m_scale_intensity(true)
+, m_line_thickness(LINE_THICKNESS_DEFAULT)
 , m_menus_rendered_height(0.0f)
 , m_hovered_item_distance(FLT_MAX)
 , m_workload_changed(false)
@@ -444,10 +449,10 @@ Roofline::Render()
                         case ItemModel::Type::CeilingCompute:
                         case ItemModel::Type::CeilingBandwidth:
                         {
-                            ImPlot::SetNextLineStyle(ImPlot::GetColormapColor(i),
-                                                     hovered
-                                                         ? plot_style.LineWeight * 3.0f
-                                                         : plot_style.LineWeight);
+                            ImPlot::SetNextLineStyle(
+                                ImPlot::GetColormapColor(i),
+                                hovered ? m_line_thickness + HOVER_LINE_WEIGHT_BOOST
+                                        : m_line_thickness);
                             ImPlot::PlotLineG(
                                 "",
                                 [](int idx, void* user_data) -> ImPlotPoint {
@@ -782,7 +787,7 @@ Roofline::RenderMenus(ImVec2 region, ImVec2 plot_pos, ImVec2 plot_size,
         ImGui::EndGroup();
         float header_height = ImGui::GetItemRectSize().y + 2 * style.WindowPadding.y;
         float footer_height =
-            (m_kernel_mode == AllKernels ? 4 : 3) * ImGui::GetFrameHeightWithSpacing() +
+            (m_kernel_mode == AllKernels ? 6 : 5) * ImGui::GetFrameHeightWithSpacing() +
             2 * style.WindowPadding.y;
         ImGui::SetNextWindowSizeConstraints(
             ImVec2(menus_content_width, 0),
@@ -917,6 +922,17 @@ Roofline::RenderMenus(ImVec2 region, ImVec2 plot_pos, ImVec2 plot_size,
                            Alignment_Left, true);
                 ImGui::PopID();
             }
+            ImGui::PushID("line_thickness");
+            ElidedText("Line thickness", ImGui::GetContentRegionAvail().x,
+                       plot_size.x * 0.5f, Alignment_Left, true);
+            ImGui::SetNextItemWidth(-1.0f);
+            if(ImGui::SliderFloat("##line_thickness", &m_line_thickness,
+                                  LINE_THICKNESS_MIN, LINE_THICKNESS_MAX, "%.1f px"))
+            {
+                m_line_thickness =
+                    std::clamp(m_line_thickness, LINE_THICKNESS_MIN, LINE_THICKNESS_MAX);
+            }
+            ImGui::PopID();
             ImGui::PushID("menus_placement");
             ElidedText("Menus position", ImGui::GetContentRegionAvail().x,
                        plot_size.x * 0.5f, Alignment_Left, true);

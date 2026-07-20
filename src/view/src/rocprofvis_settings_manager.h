@@ -24,6 +24,7 @@ typedef struct DisplaySettings
     bool use_dark_mode;
     bool dpi_based_scaling;
     int  font_size_index;
+    bool show_node_colors;  // color-code timeline tracks by node
 
 } DisplaySettings;
 
@@ -32,18 +33,42 @@ typedef struct UnitSettings
     TimeFormat time_format;
 } UnitSettings;
 
+// Persisted UI state for the log viewer window. level_mask packs one bit per
+// spdlog severity level (bit i => level i enabled).
+typedef struct LogViewerSettings
+{
+    int  level_mask;
+    bool auto_scroll;
+    bool use_regex;
+    bool relative_time;
+    bool visible;
+} LogViewerSettings;
+
 typedef struct UserSettings
 {
-    DisplaySettings display_settings;
-    UnitSettings    unit_settings;
-    bool            dont_ask_before_tab_closing;
-    bool            dont_ask_before_exit;
+    DisplaySettings   display_settings;
+    UnitSettings      unit_settings;
+    bool              dont_ask_before_tab_closing;
+    bool              dont_ask_before_exit;
+    int               log_viewer_max_entries;
+    LogViewerSettings log_viewer;
 } UserSettings;
 
 typedef struct InternalSettings
 {
     std::list<std::string> recent_files;
 } InternalSettings;
+
+typedef struct ProfilerSettings
+{
+    std::string profiler_path;
+    std::string profiler_output_directory;
+    bool        auto_load_trace = true;
+    std::vector<std::string> recent_targets;
+    std::string last_preset_name;
+    std::string last_profiler_id;
+    std::string last_ssh_connection_id;
+} ProfilerSettings;
 
 typedef struct AppWindowSettings
 {
@@ -177,6 +202,14 @@ enum class Colors
     kBannerText,
     kDebugNavBarBg,
 
+    // Log viewer per-level text colors
+    kLogTrace,
+    kLogDebug,
+    kLogInfo,
+    kLogWarning,
+    kLogError,
+    kLogCritical,
+
     // Used to get the size of the enum, insert new colors before this line
     __kLastColor
 };
@@ -192,6 +225,7 @@ constexpr const char* JSON_KEY_SETTINGS_CATEGORY_INTERNAL = "internal";
 constexpr const char* JSON_KEY_SETTINGS_DISPLAY_DARK_MODE   = "use_dark_mode";
 constexpr const char* JSON_KEY_SETTINGS_DISPLAY_DPI_SCALING = "dpi_based_scaling";
 constexpr const char* JSON_KEY_SETTINGS_DISPLAY_FONT_SIZE   = "font_size_index";
+constexpr const char* JSON_KEY_SETTINGS_DISPLAY_NODE_COLORS = "show_node_colors";
 
 constexpr const char* JSON_KEY_SETTINGS_UNITS_TIME_FORMAT = "time_format";
 
@@ -201,7 +235,28 @@ constexpr size_t      MAX_RECENT_FILES                       = 5;
 constexpr const char* JSON_KEY_SETTINGS_DONT_ASK_BEFORE_EXIT = "dont_ask_before_exit";
 constexpr const char* JSON_KEY_SETTINGS_DONT_ASK_BEFORE_TAB_CLOSE = "dont_ask_before_tab_close";
 
+constexpr const char* JSON_KEY_SETTINGS_LOG_VIEWER_MAX_ENTRIES = "log_viewer_max_entries";
+// Bounds for the log viewer's in-memory cache size. Older lines fall off the
+// ring buffer once the cap is reached; the full history lives in the log file.
+constexpr int LOG_VIEWER_MAX_ENTRIES_DEFAULT   = 512;
+constexpr int LOG_VIEWER_MAX_ENTRIES_MIN       = 64;
+constexpr int LOG_VIEWER_MAX_ENTRIES_MAX       = 100000;
+constexpr int LOG_VIEWER_MAX_ENTRIES_STEP      = 64;
+constexpr int LOG_VIEWER_MAX_ENTRIES_STEP_FAST = 512;
+
+constexpr const char* JSON_KEY_SETTINGS_LOG_VIEWER_LEVEL_MASK    = "log_viewer_level_mask";
+constexpr const char* JSON_KEY_SETTINGS_LOG_VIEWER_AUTO_SCROLL   = "log_viewer_auto_scroll";
+constexpr const char* JSON_KEY_SETTINGS_LOG_VIEWER_USE_REGEX     = "log_viewer_use_regex";
+constexpr const char* JSON_KEY_SETTINGS_LOG_VIEWER_RELATIVE_TIME = "log_viewer_relative_time";
+constexpr const char* JSON_KEY_SETTINGS_LOG_VIEWER_VISIBLE       = "log_viewer_visible";
+// All six severity levels enabled (bits 0..5).
+constexpr int LOG_VIEWER_DEFAULT_LEVEL_MASK = 0x3F;
+
 constexpr const char* JSON_KEY_SETTINGS_CATEGORY_HOTKEYS = "hotkeys";
+constexpr const char* JSON_KEY_SETTINGS_CATEGORY_PROFILER = "profiler";
+constexpr const char* JSON_KEY_SETTINGS_PROFILER_PATH = "profiler_path";
+constexpr const char* JSON_KEY_SETTINGS_PROFILER_OUTPUT_DIR = "profiler_output_directory";
+constexpr const char* JSON_KEY_SETTINGS_PROFILER_AUTO_LOAD = "auto_load_trace";
 
 class SettingsManager
 {
@@ -219,6 +274,7 @@ public:
     float        GetDPI();
 
     // Styling
+    bool ShowNodeColors() const { return m_usersettings.display_settings.show_node_colors; }
     ImU32                     GetColor(Colors color) const;
     const std::vector<ImU32>& GetColorWheel() const;
     const std::vector<ImU32>& GetHighlightedEventColorWheel() const;
@@ -247,12 +303,17 @@ public:
     AppWindowSettings& GetAppWindowSettings();
 
     void SaveHotkeySettings();
+    // Profiler settings
+    ProfilerSettings& GetProfilerSettings();
+    void SaveProfilerSettings();
 
     // Constant for event height;
     const float GetEventLevelHeight() const;
     const float GetEventLevelCompactHeight() const;
     const float GetEventLevelSpacing() const;
 
+    // Convenience static method (alias for GetInstance)
+    static SettingsManager& Get() { return GetInstance(); }
 
 private:
     SettingsManager();
@@ -281,6 +342,8 @@ private:
 
     void SerializeHotkeySettings(jt::Json& json);
     void DeserializeHotkeySettings(jt::Json& json);
+    void SerializeProfilerSettings(jt::Json& json);
+    void DeserializeProfilerSettings(jt::Json& json);
 
     const std::array<ImU32, static_cast<size_t>(Colors::__kLastColor)>* m_color_store;
 
@@ -292,7 +355,7 @@ private:
     UserSettings       m_usersettings;
     InternalSettings   m_internalsettings;
     AppWindowSettings  m_appwindowsettings;
-
+    ProfilerSettings   m_profilersettings;
 
     std::filesystem::path m_json_path;
 };

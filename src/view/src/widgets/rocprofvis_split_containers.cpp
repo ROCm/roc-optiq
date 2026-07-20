@@ -116,9 +116,10 @@ void SplitContainerBase::Render()
     if(m_first && m_first->m_visible && m_second && m_second->m_visible)
     {
         bool fill_active = false;
-        ImGui::Selectable(m_handle_name.c_str(), false,
-                          ImGuiSelectableFlags_AllowDoubleClick,
-                          GetSplitterSize(total_size));
+        // Use an invisible button instead of a Selectable so ImGui does not draw its
+        // own (rounded) hover / nav-focus highlight, which bled past the corners of the
+        // splitter fill we draw manually below.
+        ImGui::InvisibleButton(m_handle_name.c_str(), GetSplitterSize(total_size));
         ImVec2 splitter_min = ImGui::GetItemRectMin();
         ImVec2 splitter_max = ImGui::GetItemRectMax();
         if(ImGui::IsItemHovered())
@@ -192,7 +193,7 @@ void
 SplitContainerBase::SetMinSecondSize(float size)
 {
     m_second_min_size = size;
-};
+}
 
 //------------------------------------------------------------------
 HSplitContainer::HSplitContainer(LayoutItem::Ptr left, LayoutItem::Ptr right)
@@ -252,18 +253,18 @@ HSplitContainer::GetFirstChildSize(float available_width)
     float left_col_width = 0.0f;
     if (m_first && m_first->m_visible)
     {
-        left_col_width = available_width * m_split_ratio;
-        float max_left_col_width = (m_second && m_second->m_visible)
-            ? (available_width - m_second_min_size)
-            : available_width;
-        if(m_first_min_size >= max_left_col_width)
+        if(!m_second || !m_second->m_visible)
         {
-            left_col_width = m_first_min_size;
+            left_col_width = available_width;
         }
         else
         {
-            left_col_width = std::clamp(left_col_width, m_first_min_size,
-                                        max_left_col_width);
+            left_col_width = available_width * m_split_ratio;
+            const float max_left_col_width = available_width - m_second_min_size;
+            if(m_first_min_size >= max_left_col_width)
+                left_col_width = m_first_min_size;
+            else
+                left_col_width = std::clamp(left_col_width, m_first_min_size, max_left_col_width);
         }
     }
     return ImVec2(left_col_width, 0);

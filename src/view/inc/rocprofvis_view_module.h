@@ -10,8 +10,8 @@
 
 typedef enum rocprofvis_view_render_options_t
 {
-    kRocProfVisViewRenderOption_None        = 0,
-    kRocProfVisViewRenderOption_RequestExit = 1,
+    kRocProfVisViewRenderOption_None                = 0,
+    kRocProfVisViewRenderOption_RequestExit         = 1,
 } rocprofvis_view_render_options_t;
 
 typedef enum rocprofvis_view_notification_t
@@ -60,6 +60,9 @@ rocprofvis_view_set_texture_backend(
 
 std::string
 rocprofvis_get_application_config_path();
+
+std::string
+rocprofvis_get_application_log_path();
 
 bool
 rocprofvis_view_is_remote_display_session();

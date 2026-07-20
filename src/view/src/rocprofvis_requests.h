@@ -9,6 +9,7 @@
 #include <string>
 #include <vector>
 
+#include "rocprofvis_controller_analysis.h"
 #include "rocprofvis_controller_enums.h"
 #include "rocprofvis_controller_types.h"
 #include "rocprofvis_c_interface_types.h"
@@ -35,17 +36,16 @@ enum class RequestType
     kCleanupDatabase,
     kTableExport,
     kFetchSystemTrace,
-    kFetchAnalysisQueueUtilization,
+    kFetchAnalysisTrackStatistics,
     kFetchAnalysisTopEventsTable,
     kFetchAnalysisTopDispatchEventsTable,
     kFetchAnalysisTopMemoryAllocationEventsTable,
     kFetchAnalysisTopMemoryCopyEventsTable,
     kFetchAnalysisTopLaunchSampleEventsTable,
-#ifdef COMPUTE_UI_SUPPORT
     kFetchComputeTrace,
     kFetchMetrics,
     kFetchMetricPivotTable,
-#endif
+    kFetchPcSampling,
 };
 
 enum class RequestState
@@ -219,27 +219,33 @@ public:
     {}
 };
 
-// Queue utilization analysis request parameters
-class AnalysisQueueUtilizationRequestParams : public RequestParamsBase
+class AnalysisTrackStatisticsRequestParams : public RequestParamsBase
 {
 public:
+    union Output
+    {
+        double                                   queue_util;
+        rocprofvis_analysis_counter_statistics_t counter_stats;
+    };
+
     uint64_t m_track_id;
     double   m_start_ts;
     double   m_end_ts;
-    double   m_result;
+    Output   m_output;
 
-    AnalysisQueueUtilizationRequestParams(const AnalysisQueueUtilizationRequestParams& other)            = default;
-    AnalysisQueueUtilizationRequestParams& operator=(const AnalysisQueueUtilizationRequestParams& other) = default;
+    AnalysisTrackStatisticsRequestParams(
+        const AnalysisTrackStatisticsRequestParams& other) = default;
+    AnalysisTrackStatisticsRequestParams& operator=(
+        const AnalysisTrackStatisticsRequestParams& other) = default;
 
-    AnalysisQueueUtilizationRequestParams(uint64_t track_id, double start, double end)
+    AnalysisTrackStatisticsRequestParams(uint64_t track_id, double start, double end)
     : m_track_id(track_id)
     , m_start_ts(start)
     , m_end_ts(end)
-    , m_result(0.0)
+    , m_output{}
     {}
 };
 
-#ifdef COMPUTE_UI_SUPPORT
 class MetricsRequestParams : public RequestParamsBase
 {
 public:
@@ -263,6 +269,28 @@ public:
     , m_kernel_ids(kernel_ids)
     , m_metric_ids(metric_ids)
     , m_client_id(client_id)
+    {}
+};
+
+class PcSamplingRequestParams : public RequestParamsBase
+{
+public:
+    uint32_t m_workload_id;
+    uint32_t m_kernel_id;
+    uint32_t m_source_file_id;
+    // Per-kernel generation counter captured at submission.
+    // ProcessPcSamplingRequest discards results that belong to a stale generation.
+    uint32_t m_generation = 0;
+
+    PcSamplingRequestParams(const PcSamplingRequestParams&)            = default;
+    PcSamplingRequestParams& operator=(const PcSamplingRequestParams&) = default;
+
+    PcSamplingRequestParams(uint32_t workload_id, uint32_t kernel_id,
+                            uint32_t source_file_id, uint32_t generation)
+    : m_workload_id(workload_id)
+    , m_kernel_id(kernel_id)
+    , m_source_file_id(source_file_id)
+    , m_generation(generation)
     {}
 };
 
@@ -290,7 +318,6 @@ public:
     , m_column_filters(column_filters)
     {}
 };
-#endif
 
 
 struct RequestInfo

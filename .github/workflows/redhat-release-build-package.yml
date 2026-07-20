@@ -20,6 +20,7 @@ env:
   PRESET_BUILD: ${{ github.event.client_payload.enable_symbols == 'true' && 'Linux Release Build with Symbols' || 'Linux Release Build' }}
   BUILD_DIR: ${{ github.event.client_payload.enable_symbols == 'true' && 'build/linux-release-symbols' || 'build/linux-release' }}
   ENABLE_INTERNAL_BANNER: ${{ github.event.client_payload.enable_internal_banner == 'true' && 'ON' || 'OFF' }}
+  CRYPTO_BACKEND: ${{ github.event.client_payload.crypto_backend || 'mbedTLS' }}
 
 jobs:
   rocky-linux:
@@ -68,6 +69,11 @@ jobs:
             wget -q https://sdk.lunarg.com/sdk/download/${{ matrix.vulkan-sdk }}/linux/vulkansdk-linux-x86_64-${{ matrix.vulkan-sdk }}.tar.xz -O /tmp/vulkansdk.tar.xz
             tar -xf /tmp/vulkansdk.tar.xz -C /opt/vulkan
             echo "✅ Vulkan SDK Installed!"
+      - name: Install OpenSSL
+        if: env.CRYPTO_BACKEND == 'OpenSSL'
+        run: |
+            dnf install -y openssl-devel
+            echo "✅ OpenSSL Installed!"
       - uses: actions/checkout@v6
         with:
           ref: ${{ github.event.client_payload.ref || github.ref }}
@@ -84,7 +90,7 @@ jobs:
           fi
           
           mkdir -p ${{ env.BUILD_DIR }}
-          cmake -B ${{ env.BUILD_DIR }} --preset "${{ env.PRESET_CONFIG }}" -DROCPROFVIS_ENABLE_INTERNAL_BANNER=${{ env.ENABLE_INTERNAL_BANNER }} -DGLFW_LINK_STATIC=ON ${EXTRA_LINK_FLAGS:+-DCMAKE_EXE_LINKER_FLAGS="${EXTRA_LINK_FLAGS}"}
+          cmake -B ${{ env.BUILD_DIR }} --preset "${{ env.PRESET_CONFIG }}" -DROCPROFVIS_ENABLE_INTERNAL_BANNER=${{ env.ENABLE_INTERNAL_BANNER }} -DGLFW_LINK_STATIC=ON -DCRYPTO_BACKEND=${{ env.CRYPTO_BACKEND }} ${EXTRA_LINK_FLAGS:+-DCMAKE_EXE_LINKER_FLAGS="${EXTRA_LINK_FLAGS}"}
           cmake --build ${{ env.BUILD_DIR }} --preset "${{ env.PRESET_BUILD }}" --parallel 4 --target package
           
           if [ -e ${{ env.BUILD_DIR }}/${{ env.VISUALIZER_FILE_NAME }} ]; then

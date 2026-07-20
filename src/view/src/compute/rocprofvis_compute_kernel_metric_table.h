@@ -4,6 +4,7 @@
 #pragma once
 #include "model/compute/rocprofvis_compute_model_types.h"
 #include "rocprofvis_presets.h"
+#include "widgets/rocprofvis_gui_helpers.h"
 #include "widgets/rocprofvis_query_builder.h"
 #include "widgets/rocprofvis_widget.h"
 #include <memory>
@@ -105,6 +106,9 @@ private:
 
     std::set<int>                   m_bar_chart_columns;
     std::unordered_map<int, double> m_column_max_values;
+
+    // Row/column whose right-click opened the copy context menu.
+    CellMenuTarget m_cell_menu;
 
     std::unique_ptr<Preset> m_preset;
 };

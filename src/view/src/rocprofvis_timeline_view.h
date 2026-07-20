@@ -17,6 +17,7 @@
 #include <map>
 #include <memory>
 #include <string>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 #include <chrono>
@@ -91,7 +92,7 @@ public:
     void                                             MakeGraphView();
     void                                             ResetView();
     void                                             DestroyGraphs();
-    std::shared_ptr<std::vector<TrackGraph>> GetGraphs();
+    std::shared_ptr<std::vector<TrackItem*>>         GetTracks();
     void                                             RenderInteractiveUI();
     void ScrollToTrack(const uint64_t& track_id);
     void SetViewableRangeNS(double start_ns, double end_ns);
@@ -113,6 +114,9 @@ public:
     void           CalculateGridInterval();
     ImVec2         GetGraphSize();
     void           RenderAnnotations(ImDrawList* draw_list, ImVec2 window_position);
+    bool           IsAnnotationTrackVisible(uint64_t track_id) const;
+
+    void           AutoScrollForAnnotationDrag(ImVec2 content_origin);
     void           RenderMeasurement(ImDrawList* draw_list, ImVec2 window_position);
     ViewCoords                          GetViewCoords() const;
     std::shared_ptr<TimePixelTransform> GetTransform() const;
@@ -128,6 +132,25 @@ private:
         kNone,
         kStart,
         kEnd
+    };
+
+    // Which measurement label the right-click context menu should offer a copy
+    // action for. Resolved from the cursor position when the menu opens.
+    enum class MeasurementCopyTarget
+    {
+        kNone,
+        kStart,
+        kEnd,
+        kDuration
+    };
+
+    // Screen-space rectangle of a measurement label, captured during
+    // RenderMeasurement so the context menu can hit-test the right-click.
+    struct MeasurementLabelRect
+    {
+        ImVec2 min   = ImVec2(0.0f, 0.0f);
+        ImVec2 max   = ImVec2(0.0f, 0.0f);
+        bool   valid = false;
     };
 
     // Per-type track counts shown in the histogram header strip. The label
@@ -152,15 +175,13 @@ private:
     void BuildTrackCountLabels();
     void RenderTrackStats(float available_width);
 
-    void UpdateMaxMetaAreaSize(float new_size);
-    void CalculateMaxMetaAreaSize();
-    void UpdateAllMaxMetaAreaSizes();
+    void UpdateMaxMetaAreaSize(bool update_tracks = false);
 
     void RenderTrack(int track_index, bool request_data, ImGuiWindowFlags window_flags,
                      ImVec2 container_size);
     bool IsRequestDataNeeded();
     void RequestDataIfEmpty(TrackItem* track_item, bool request_data);
-    void RenderNormalTrack(TrackGraph& track_graph, int track_index, ImGuiWindowFlags window_flags,
+    void RenderNormalTrack(TrackItem* track_item, int track_index, ImGuiWindowFlags window_flags,
                    bool is_reordering);
     void RenderTimeRangeSelectionFill(ImDrawList* draw_list, ImVec2 lane_min,
                                       ImVec2 lane_max);
@@ -170,6 +191,8 @@ private:
     void                            ClearTimeRangeSelection();
     void                            CopySelectedEventNames();
     void                            CopySelectedEventDetails();
+
+    TrackLayout                     BuildTrackLayout();
     EventManager::SubscriptionToken m_scroll_to_track_token;
     EventManager::SubscriptionToken m_navigation_token;
     EventManager::SubscriptionToken m_new_track_token;
@@ -178,6 +201,8 @@ private:
     EventManager::SubscriptionToken m_timeline_time_range_changed_token;
 
     int                                 m_dragged_sticky_id;
+    uint64_t                            m_reordering_track_id;  // INVALID_TRACK_ID when idle
+    float                               m_reorder_preview_screen_top_y;
     const std::vector<double>*          m_histogram;
     float                               m_ruler_height;
     float                               m_ruler_padding;
@@ -188,6 +213,7 @@ private:
     double                              m_previous_scroll_position;
     bool                                m_meta_map_made;
     bool                                m_resize_activity;
+    bool                                m_reorder_auto_scrolling;
     double                              m_last_data_req_v_width;
     float                               m_unload_track_distance;
     DataProvider&                       m_data_provider;
@@ -209,8 +235,8 @@ private:
     std::shared_ptr<AnnotationsManager> m_annotations;
     bool                                m_pseudo_focus;
     bool                                m_histogram_pseudo_focus;
-    float                               m_max_meta_area_size;
-    std::shared_ptr<std::vector<TrackGraph>> m_graphs;
+    float                               m_max_meta_scale_area_size;
+    std::shared_ptr<std::vector<TrackItem*>>          m_tracks;
     std::shared_ptr<TimePixelTransform>               m_tpt;
     struct
     {
@@ -223,6 +249,12 @@ private:
     bool m_dragging_selection_end;
     bool m_is_selecting_region;
     MeasurementRulerDragTarget m_dragging_measurement_ruler;
+    MeasurementLabelRect       m_measure_label_start;
+    MeasurementLabelRect       m_measure_label_end;
+    MeasurementLabelRect       m_measure_label_duration;
+    MeasurementCopyTarget      m_measure_copy_target;
+
+    ImVec2                     m_context_menu_pos = ImVec2(0.0f, 0.0f);
 
     TimelineViewProjectSettings m_project_settings;
     LoadingTimer                m_loading_timer;

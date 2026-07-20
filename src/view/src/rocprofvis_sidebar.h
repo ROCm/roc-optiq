@@ -16,13 +16,14 @@ class SettingsManager;
 class TrackTopology;
 class TimelineSelection;
 class DataProvider;
+class TrackItem;
 
 class SideBar : public RocWidget
 {
 public:
     SideBar(std::shared_ptr<TrackTopology>         topology,
             std::shared_ptr<TimelineSelection>     timeline_selection,
-            std::shared_ptr<std::vector<TrackGraph>> graphs,
+            std::shared_ptr<std::vector<TrackItem*>> tracks,
             DataProvider&                          dp);
     ~SideBar();
     virtual void Render() override;
@@ -38,6 +39,16 @@ private:
 
     void               RenderTrackItem(const uint64_t& index,
                                        bool show_eye_button = true);
+    void               ScrollToTrack(TrackItem& track);
+    void               SetTrackVisibility(TrackItem& track, bool visible,
+                                          std::vector<uint64_t>& chart_ids);
+    void               UpdateHistogramForVisibility(
+        const std::vector<uint64_t>& shown_chart_ids,
+        const std::vector<uint64_t>& hidden_chart_ids);
+    void               HideAllButTrack(const uint64_t& index);
+    void               ApplyAllTrackVisibility(bool visible);
+    void               ApplySelectedTrackVisibility(bool visible);
+    bool               HasTrackVisibility(bool visible) const;
     EyeButtonState     MergeEyeButtonState(EyeButtonState lhs,
                                            EyeButtonState rhs) const;
     EyeButtonState     GetLeafState(const LeafNode& leaf) const;
@@ -57,9 +68,10 @@ private:
     SettingsManager&                         m_settings;
     std::shared_ptr<TrackTopology>           m_track_topology;
     std::shared_ptr<TimelineSelection>       m_timeline_selection;
-    std::shared_ptr<std::vector<TrackGraph>> m_graphs;
+    std::shared_ptr<std::vector<TrackItem*>> m_tracks;
     DataProvider&                            m_data_provider;
     bool                                     m_eye_state_dirty = false;
+    ImU32                                    m_active_node_color = 0;
 };
 
 }  // namespace View

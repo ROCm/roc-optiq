@@ -1346,4 +1346,75 @@ void RegisterAppTests(ImGuiTestEngine* e)
         IM_CHECK(duration > 0.0);
         IM_CHECK(inactive_after);
     };
+
+    t = IM_REGISTER_TEST(e, "app", "sys_timeline_track_expand_collapse");
+    t->TestFunc = [](ImGuiTestContext* ctx)
+    {
+        AppWindow* app = AppWindow::GetInstance();
+        Project* project = app->GetCurrentProject();
+        IM_CHECK(project != nullptr);
+        if (project == nullptr) return;
+        TraceView* tv = dynamic_cast<TraceView*>(project->GetView().get());
+        if (tv == nullptr)
+        {
+            ctx->LogWarning("SKIP: no trace view loaded (open a system/trace profile to exercise this)");
+            return;
+        }
+        TimelineView* tlv = TraceViewTestPeer{*tv}.TimelineViewPtr();
+        IM_CHECK(tlv != nullptr);
+        if (tlv == nullptr) return;
+
+        ctx->Yield(3);
+
+        // Expanding only changes height when the track has enough levels to exceed
+        // the default height; find a flame track for which that holds so the height
+        // assertion is meaningful (expanded height = max_level*lvl + lvl + 2).
+        FlameTrackItem* flame = nullptr;
+        for (FlameTrackItem* candidate : TimelineViewTestPeer{*tlv}.DisplayedFlameTracks())
+        {
+            FlameTrackItemTestPeer peer{*candidate};
+            const float level_h = peer.LevelHeight();
+            if (level_h > 0.0f &&
+                peer.MaxLevel() * level_h + level_h + 2.0f > DEFAULT_TRACK_HEIGHT)
+            {
+                flame = candidate;
+                break;
+            }
+        }
+        if (flame == nullptr)
+        {
+            ctx->LogWarning("SKIP: no flame track deep enough for expand to change height");
+            return;
+        }
+
+        FlameTrackItemTestPeer peer{*flame};
+        const bool  orig_expanded = peer.IsExpanded();
+        const float orig_height   = flame->GetTrackHeight();
+
+        // The expand/collapse arrow sits in a meta area with no stable ref, so
+        // drive the same side effect the button triggers. Force a collapsed
+        // baseline, then expand, capturing both states.
+        peer.SetExpanded(false);
+        ctx->Yield(2);
+        const bool  collapsed_state  = peer.IsExpanded();
+        const float collapsed_height = flame->GetTrackHeight();
+
+        peer.SetExpanded(true);
+        ctx->Yield(2);
+        const bool  expanded_state  = peer.IsExpanded();
+        const float expanded_height = flame->GetTrackHeight();
+
+        // Restore original state + exact height so later tests see the same layout.
+        peer.SetExpanded(orig_expanded);
+        peer.SetTrackHeight(orig_height);
+        ctx->Yield(2);
+        const bool  restored_state  = peer.IsExpanded();
+        const float restored_height = flame->GetTrackHeight();
+
+        IM_CHECK(collapsed_state == false);
+        IM_CHECK(expanded_state == true);
+        IM_CHECK(expanded_height != collapsed_height);
+        IM_CHECK(restored_state == orig_expanded);
+        IM_CHECK(restored_height == orig_height);
+    };
 }

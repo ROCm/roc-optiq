@@ -110,6 +110,35 @@ struct FlameTrackItemTestPeer
     // bars by this parent. 0 until the track has rendered at least once.
     unsigned int   FlameWindowId() const { return v.m_test_flame_window_id; }
 
+    bool IsExpanded() const { return v.m_is_expanded; }
+    int  MaxLevel() const { return static_cast<int>(v.m_max_level); }
+
+    // Mirrors the two arrow-button branches in RenderMetaAreaExpand (the arrow
+    // sits in a meta area with no stable widget ref): expanding grows the track
+    // to fit all levels, collapsing snaps it back to the default height.
+    void SetExpanded(bool expanded)
+    {
+        if(expanded)
+        {
+            v.RecalculateTrackHeight();
+            v.m_is_expanded = true;
+        }
+        else
+        {
+            v.m_track_height         = DEFAULT_TRACK_HEIGHT;
+            v.m_track_height_changed = true;
+            v.m_is_expanded          = false;
+        }
+    }
+
+    // Restore an exact captured height (SetExpanded canonicalizes it) so the
+    // track layout later tests see is unchanged.
+    void SetTrackHeight(float height)
+    {
+        v.m_track_height         = height;
+        v.m_track_height_changed = true;
+    }
+
     size_t ChartItemCount() const { return v.m_chart_items.size(); }
 
     // Identity of the earliest event (smallest m_start_ts) in this track. Chart

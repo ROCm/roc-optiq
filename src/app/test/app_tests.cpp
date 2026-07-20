@@ -1006,6 +1006,12 @@ void RegisterAppTests(ImGuiTestEngine* e)
         IM_CHECK(tk != nullptr);
         if (tk == nullptr) return;
 
+        // FetchSummary + TopKernels::Update only run while the Summary window is
+        // shown; headless with no saved layout it may be closed, leaving the kernel
+        // list null forever. Force it open ourselves rather than depending on another
+        // test having flipped this shared setting earlier in the process.
+        SettingsManager::GetInstance().GetAppWindowSettings().show_summary = true;
+
         // Summary data loads asynchronously; let Update() populate the kernel list.
         // KernelCount() is 0 while m_kernels is still null.
         TopKernelsTestPeer peer{*tk};
@@ -1076,5 +1082,54 @@ void RegisterAppTests(ImGuiTestEngine* e)
             IM_CHECK(peer.ExecTimeSum(0) >= peer.ExecTimeSum(i));
         }
 
+    };
+
+    t = IM_REGISTER_TEST(e, "app", "sys_summary_display_mode_switch");
+    t->TestFunc = [](ImGuiTestContext* ctx)
+    {
+        AppWindow* app = AppWindow::GetInstance();
+        Project* project = app->GetCurrentProject();
+        IM_CHECK(project != nullptr);
+        if (project == nullptr) return;
+        TraceView* tv = dynamic_cast<TraceView*>(project->GetView().get());
+        if (tv == nullptr)
+        {
+            ctx->LogWarning("SKIP: no trace view loaded (open a system/trace profile to exercise this)");
+            return;
+        }
+        SummaryView* sv = TraceViewTestPeer{*tv}.SummaryViewPtr();
+        IM_CHECK(sv != nullptr);
+        if (sv == nullptr) return;
+        TopKernels* tk = SummaryViewTestPeer{*sv}.TopKernelsPtr();
+        IM_CHECK(tk != nullptr);
+        if (tk == nullptr) return;
+
+        // The Pie/Bar/Table switcher renders only once the Summary window is
+        // shown and its kernel list has loaded; force it open and drain the
+        // async fetch first (mirrors sys_summary_top_kernel_name).
+        SettingsManager::GetInstance().GetAppWindowSettings().show_summary = true;
+        TopKernelsTestPeer peer{*tk};
+        for (int i = 0; i < 60 && peer.KernelCount() == 0; i++) ctx->Yield(2);
+        IM_CHECK(peer.KernelCount() > 0);
+
+        // Reaching this point means the load path ran (not the skip), so the
+        // mode assertions below genuinely exercise the switcher. Default is Pie.
+        ctx->Yield(2);
+        IM_CHECK(peer.IsDisplayPie());
+
+        // The switcher is three IconButtons in the "Summary" window, keyed by
+        // their icon glyph (rocprovfis_icon_defines.h). Each click sets
+        // TopKernels::m_display_mode.
+        ctx->ItemClick("//Summary/**/");  // ICON_CHART_BAR
+        ctx->Yield(2);
+        IM_CHECK(peer.IsDisplayBar());
+
+        ctx->ItemClick("//Summary/**/");  // ICON_LIST (table)
+        ctx->Yield(2);
+        IM_CHECK(peer.IsDisplayTable());
+
+        ctx->ItemClick("//Summary/**/");  // ICON_CHART_PIE
+        ctx->Yield(2);
+        IM_CHECK(peer.IsDisplayPie());
     };
 }

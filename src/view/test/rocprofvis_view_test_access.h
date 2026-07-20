@@ -168,6 +168,11 @@ struct TopKernelsTestPeer
     std::string KernelName(size_t idx) const{ return (v.m_kernels && idx < v.m_kernels->size()) ? v.m_kernels->at(idx).name : std::string{};}
     double ExecTimeSum(size_t idx) const{ return (v.m_kernels && idx < v.m_kernels->size()) ? v.m_kernels->at(idx).exec_time_sum : 0.0;}
     std::optional<size_t> SelectedIdx() const { return v.m_selected_idx; }
+    // Current chart/table display mode, exposed as booleans so the private
+    // TopKernels::DisplayMode enum stays encapsulated.
+    bool IsDisplayPie() const { return v.m_display_mode == TopKernels::Pie; }
+    bool IsDisplayBar() const { return v.m_display_mode == TopKernels::Bar; }
+    bool IsDisplayTable() const { return v.m_display_mode == TopKernels::Table; }
     // The synthetic "Others" bucket, if present. ToggleSelectKernel treats it as a
     // deselect, so tests must avoid selecting it.
     std::optional<size_t> PaddedIdx() const { return v.m_padded_idx; }

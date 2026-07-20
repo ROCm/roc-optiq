@@ -1233,7 +1233,21 @@ bool ComputeTrace::ParseUInt64(const char* value, uint64_t& result)
 
     const char* end = value + std::strlen(value);
     const std::from_chars_result conversion = std::from_chars(value, end, result);
-    return value != end && conversion.ec == std::errc() && conversion.ptr == end;
+    if(value == end || conversion.ec != std::errc())
+    {
+        return false;
+    }
+
+    const char* current = conversion.ptr;
+    if(current != end && *current == '.')
+    {
+        current++;
+        while(current != end && *current >= '0' && *current <= '9')
+        {
+            current++;
+        }
+    }
+    return current == end;
 }
 
 ComputeTrace::MetricID::MetricID(uint32_t cateory_id)

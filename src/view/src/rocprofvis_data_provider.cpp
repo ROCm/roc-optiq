@@ -5004,11 +5004,9 @@ DataProvider::LoadRoofLine(WorkloadInfo& workload, rocprofvis_handle_t* workload
 
     LoadRoofLineCeilingsRidge(workload, roofline_handle, compute_ridge, bandwidth_ridge);
 
-    LoadRoofLineCeilingsCompute(workload, roofline_handle, compute_ridge,
-                                bandwidth_ridge);
+    LoadRoofLineCeilingsCompute(workload, roofline_handle, compute_ridge);
 
-    LoadRoofLineCeilingsBandwidth(workload, roofline_handle, compute_ridge,
-                                  bandwidth_ridge);
+    LoadRoofLineCeilingsBandwidth(workload, roofline_handle, bandwidth_ridge);
 
     LoadRoofLineNumKernels(workload, roofline_handle, compute_ridge, bandwidth_ridge);
 }

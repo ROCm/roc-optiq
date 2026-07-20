@@ -30,9 +30,7 @@ public:
     {
         Undefined,
         System,
-#ifdef COMPUTE_UI_SUPPORT
         Compute,
-#endif
     };
 
     Project();

@@ -52,14 +52,15 @@ cmake --build build/x64-release-symbols --preset "Windows Release Build with Sym
 ### MSI installer (WiX v4)
 
 The `PACKAGE_WIX` CMake target builds a self-contained MSI using a hand-authored WiX v4 source file (`wix/roc-optiq.wxs`).
+We are currently using WiX v4.0.6 for building. An upgrade to WiX v7 is planned for a later date.
 
 #### One-time setup
 
 Install the WiX v4 CLI and the UI extension (requires the [.NET SDK](https://dotnet.microsoft.com/download)):
 
 ```powershell
-dotnet tool install --global wix
-wix extension add --global WixToolset.UI.wixext
+dotnet tool install --global wix --version 4.0.6
+wix extension add --global WixToolset.UI.wixext/4.0.6
 ```
 
 #### Building the application and installer separately
@@ -78,12 +79,12 @@ cmake --build build/x64-release --preset "Windows Release Build" --target roc-op
 
 ```powershell
 cmake --build build/x64-release --preset "Windows Release Build" --target PACKAGE_WIX
-# Sign build\x64-release\roc-optiq-0.5.0.0-win64.msi here.
+# Sign build\x64-release\roc-optiq-X.X.X.X-win64.msi here.
 ```
 
 CMake will not recompile the application between stages because no sources have changed. `PACKAGE_WIX` picks up the signed executable already on disk and passes it directly to `wix.exe`.
 
-Output: `build\x64-release\roc-optiq-0.5.0.0-win64.msi`
+Output: `build\x64-release\roc-optiq-X.X.X.X-win64.msi`
 
 ---
 

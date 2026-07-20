@@ -22,6 +22,31 @@ namespace
 
 static char s_save_preset_name[128] = {};
 
+// Design tokens for the custom launcher widgets below.
+constexpr float kCardRounding      = 10.0f;
+constexpr float kCardPadX          = 16.0f;
+constexpr float kCardPadY          = 13.0f;
+constexpr float kCardGap           = 7.0f;   // vertical gap between stacked cards
+constexpr float kAccentBarWidth    = 4.0f;   // card-header leading bar
+constexpr float kAccentBarGap      = 8.0f;
+constexpr float kChipPadX          = 9.0f;
+constexpr float kChipPadY          = 3.0f;
+constexpr float kChipBgAlpha       = 0.16f;
+constexpr float kChipEdgeAlpha     = 0.55f;
+constexpr float kPillPadX          = 11.0f;
+constexpr float kPillPadY          = 4.0f;
+constexpr float kPillGap           = 7.0f;
+constexpr float kPillCloseScale    = 0.75f;  // close glyph size, fraction of font
+constexpr float kPillBgAlpha       = 0.16f;
+constexpr float kPillBgHoverAlpha  = 0.30f;
+constexpr float kPillCloseIdleAlpha = 0.6f;
+constexpr float kStatusPillPadX    = 12.0f;
+constexpr float kStatusPillPadY    = 5.0f;
+constexpr float kToggleHeightScale = 0.82f;  // of frame height
+constexpr float kToggleWidthScale  = 1.75f;  // of toggle height
+constexpr float kToggleAnimSpeed   = 10.0f;
+constexpr float kToggleKnobInset   = 2.0f;   // knob padding inside the track
+
 // Linear blend between two packed colors (t in [0,1]).
 ImU32 LerpColor(ImU32 a, ImU32 b, float t)
 {
@@ -38,9 +63,9 @@ void BeginLaunchCard(const char* id)
 {
     SettingsManager& settings = SettingsManager::Get();
 
-    ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 10.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, kCardRounding);
     ImGui::PushStyleVar(ImGuiStyleVar_ChildBorderSize, 1.0f);
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(15.0f, 11.0f));
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(kCardPadX, kCardPadY));
     ImGui::PushStyleColor(ImGuiCol_ChildBg, settings.GetColor(Colors::kBgPanel));
     ImGui::PushStyleColor(ImGuiCol_Border, settings.GetColor(Colors::kPanelBorderSubtle));
 
@@ -53,8 +78,7 @@ void EndLaunchCard()
     ImGui::EndChild();
     ImGui::PopStyleColor(2);
     ImGui::PopStyleVar(3);
-    ImGui::Spacing();
-    ImGui::Spacing();
+    ImGui::Dummy(ImVec2(0.0f, kCardGap));
 }
 
 void LaunchCardHeader(const char* icon, const char* title, const char* subtitle)
@@ -67,13 +91,12 @@ void LaunchCardHeader(const char* icon, const char* title, const char* subtitle)
 
     // Leading accent bar sized to the (larger) header text.
     const float  bar_h = ImGui::GetFontSize();
-    const float  bar_w = 4.0f;
     ImVec2       p     = ImGui::GetCursorScreenPos();
     ImDrawList*  dl    = ImGui::GetWindowDrawList();
-    dl->AddRectFilled(ImVec2(p.x, p.y), ImVec2(p.x + bar_w, p.y + bar_h),
+    dl->AddRectFilled(ImVec2(p.x, p.y), ImVec2(p.x + kAccentBarWidth, p.y + bar_h),
                       settings.GetColor(Colors::kAccent), 2.0f);
 
-    ImGui::Indent(bar_w + 8.0f);
+    ImGui::Indent(kAccentBarWidth + kAccentBarGap);
 
     // Optional leading icon (drawn from the icon font, in the accent color).
     if (icon && icon[0])
@@ -84,7 +107,7 @@ void LaunchCardHeader(const char* icon, const char* title, const char* subtitle)
         ImGui::TextUnformatted(icon);
         ImGui::PopStyleColor();
         ImGui::PopFont();
-        ImGui::SameLine(0.0f, 8.0f);
+        ImGui::SameLine(0.0f, kAccentBarGap);
     }
 
     ImGui::PushStyleColor(ImGuiCol_Text, settings.GetColor(Colors::kTextMain));
@@ -98,7 +121,7 @@ void LaunchCardHeader(const char* icon, const char* title, const char* subtitle)
         ImGui::TextUnformatted(subtitle);
         ImGui::PopStyleColor();
     }
-    ImGui::Unindent(bar_w + 8.0f);
+    ImGui::Unindent(kAccentBarWidth + kAccentBarGap);
 
     ImGui::Spacing();
 }
@@ -106,17 +129,16 @@ void LaunchCardHeader(const char* icon, const char* title, const char* subtitle)
 void Chip(const char* label, ImU32 accent_color)
 {
     ImVec2      text_size = ImGui::CalcTextSize(label);
-    const ImVec2 pad(9.0f, 3.0f);
-    ImVec2      p    = ImGui::GetCursorScreenPos();
-    ImVec2      size(text_size.x + pad.x * 2.0f, text_size.y + pad.y * 2.0f);
-    ImDrawList* dl   = ImGui::GetWindowDrawList();
-    float       rnd  = size.y * 0.5f;
+    ImVec2      p         = ImGui::GetCursorScreenPos();
+    ImVec2      size(text_size.x + kChipPadX * 2.0f, text_size.y + kChipPadY * 2.0f);
+    ImDrawList* dl  = ImGui::GetWindowDrawList();
+    float       rnd = size.y * 0.5f;
 
     dl->AddRectFilled(p, ImVec2(p.x + size.x, p.y + size.y),
-                      ApplyAlpha(accent_color, 0.16f), rnd);
+                      ApplyAlpha(accent_color, kChipBgAlpha), rnd);
     dl->AddRect(p, ImVec2(p.x + size.x, p.y + size.y),
-                ApplyAlpha(accent_color, 0.55f), rnd);
-    dl->AddText(ImVec2(p.x + pad.x, p.y + pad.y), accent_color, label);
+                ApplyAlpha(accent_color, kChipEdgeAlpha), rnd);
+    dl->AddText(ImVec2(p.x + kChipPadX, p.y + kChipPadY), accent_color, label);
 
     ImGui::Dummy(size);
 }
@@ -124,33 +146,31 @@ void Chip(const char* label, ImU32 accent_color)
 PillAction EditablePill(const char* label, ImU32 accent_color)
 {
     const ImVec2 text_size = ImGui::CalcTextSize(label);
-    const float  pad_x     = 11.0f;
-    const float  pad_y     = 4.0f;
-    const float  gap       = 7.0f;
-    const float  x_size    = ImGui::GetFontSize() * 0.75f;
+    const float  x_size    = ImGui::GetFontSize() * kPillCloseScale;
 
-    ImVec2 size(pad_x + text_size.x + gap + x_size + pad_x - 2.0f,
-                text_size.y + pad_y * 2.0f);
+    ImVec2 size(kPillPadX * 2.0f + text_size.x + kPillGap + x_size,
+                text_size.y + kPillPadY * 2.0f);
     ImVec2 p = ImGui::GetCursorScreenPos();
 
     ImGui::InvisibleButton(label, size);
-    bool  hovered   = ImGui::IsItemHovered();
-    bool  clicked   = ImGui::IsItemClicked(ImGuiMouseButton_Left);
-    float x_left    = p.x + size.x - pad_x - x_size;
-    bool  over_x    = hovered && ImGui::GetIO().MousePos.x >= x_left;
+    bool  hovered = ImGui::IsItemHovered();
+    bool  clicked = ImGui::IsItemClicked(ImGuiMouseButton_Left);
+    float x_left  = p.x + size.x - kPillPadX - x_size;
+    bool  over_x  = hovered && ImGui::GetIO().MousePos.x >= x_left;
 
     ImDrawList* dl  = ImGui::GetWindowDrawList();
     float       rnd = size.y * 0.5f;
     dl->AddRectFilled(p, ImVec2(p.x + size.x, p.y + size.y),
-                      ApplyAlpha(accent_color, hovered ? 0.30f : 0.16f), rnd);
-    dl->AddText(ImVec2(p.x + pad_x, p.y + pad_y), accent_color, label);
+                      ApplyAlpha(accent_color, hovered ? kPillBgHoverAlpha : kPillBgAlpha),
+                      rnd);
+    dl->AddText(ImVec2(p.x + kPillPadX, p.y + kPillPadY), accent_color, label);
 
     // Trailing "x" - brightens when hovered so removal is obvious.
     ImVec2 xc(x_left + x_size * 0.5f, p.y + size.y * 0.5f);
-    float  r    = x_size * 0.30f;
-    ImU32  xcol = ApplyAlpha(accent_color, over_x ? 1.0f : 0.6f);
-    dl->AddLine(ImVec2(xc.x - r, xc.y - r), ImVec2(xc.x + r, xc.y + r), xcol, 1.6f);
-    dl->AddLine(ImVec2(xc.x - r, xc.y + r), ImVec2(xc.x + r, xc.y - r), xcol, 1.6f);
+    float  arm  = x_size * 0.3f;
+    ImU32  xcol = ApplyAlpha(accent_color, over_x ? 1.0f : kPillCloseIdleAlpha);
+    dl->AddLine(ImVec2(xc.x - arm, xc.y - arm), ImVec2(xc.x + arm, xc.y + arm), xcol, 1.6f);
+    dl->AddLine(ImVec2(xc.x - arm, xc.y + arm), ImVec2(xc.x + arm, xc.y - arm), xcol, 1.6f);
 
     if (clicked)
     {
@@ -177,9 +197,9 @@ void RenderConfigChips(const char* lead_label, std::vector<std::string> const& t
     ImGuiStyle&  style     = ImGui::GetStyle();
     const float  window_x2 = ImGui::GetWindowPos().x + ImGui::GetWindowContentRegionMax().x;
 
-    // Chip padding matches Chip(): text width + 2*9px horizontal padding.
+    // Chip width matches Chip(): text width plus its horizontal padding.
     auto chip_width = [](std::string const& s)
-    { return ImGui::CalcTextSize(s.c_str()).x + 18.0f; };
+    { return ImGui::CalcTextSize(s.c_str()).x + kChipPadX * 2.0f; };
 
     ImGui::SameLine();
     for (size_t i = 0; i < tags.size(); i++)
@@ -199,15 +219,16 @@ void RenderConfigChips(const char* lead_label, std::vector<std::string> const& t
 
 void StatusPill(const char* label, ImU32 bg_color)
 {
-    ImVec2       text_size = ImGui::CalcTextSize(label);
-    const ImVec2 pad(12.0f, 5.0f);
-    ImVec2       p    = ImGui::GetCursorScreenPos();
-    ImVec2       size(text_size.x + pad.x * 2.0f, text_size.y + pad.y * 2.0f);
-    ImDrawList*  dl   = ImGui::GetWindowDrawList();
-    float        rnd  = size.y * 0.5f;
+    ImVec2      text_size = ImGui::CalcTextSize(label);
+    ImVec2      p         = ImGui::GetCursorScreenPos();
+    ImVec2      size(text_size.x + kStatusPillPadX * 2.0f,
+                     text_size.y + kStatusPillPadY * 2.0f);
+    ImDrawList* dl  = ImGui::GetWindowDrawList();
+    float       rnd = size.y * 0.5f;
 
     dl->AddRectFilled(p, ImVec2(p.x + size.x, p.y + size.y), bg_color, rnd);
-    dl->AddText(ImVec2(p.x + pad.x, p.y + pad.y), IM_COL32(255, 255, 255, 255), label);
+    dl->AddText(ImVec2(p.x + kStatusPillPadX, p.y + kStatusPillPadY),
+                IM_COL32(255, 255, 255, 255), label);
 
     ImGui::Dummy(size);
 }
@@ -226,8 +247,8 @@ bool ToggleSwitch(const char* label, bool* value)
     SettingsManager& settings = SettingsManager::Get();
 
     const float frame_h = ImGui::GetFrameHeight();
-    const float height  = frame_h * 0.82f;
-    const float width   = height * 1.75f;
+    const float height  = frame_h * kToggleHeightScale;
+    const float width   = height * kToggleWidthScale;
     const float radius  = height * 0.5f;
 
     ImGui::PushID(label);
@@ -242,12 +263,12 @@ bool ToggleSwitch(const char* label, bool* value)
         changed = true;
     }
 
-    // Smoothly animate the knob/fill between states.
+    // Animate the knob/fill between states.
     ImGuiID       id      = ImGui::GetItemID();
     ImGuiStorage* storage = ImGui::GetStateStorage();
     float         target  = *value ? 1.0f : 0.0f;
     float         t       = storage->GetFloat(id, target);
-    float         step    = ImGui::GetIO().DeltaTime * 10.0f;
+    float         step    = ImGui::GetIO().DeltaTime * kToggleAnimSpeed;
     if (t < target) { t = std::min(t + step, target); }
     else if (t > target) { t = std::max(t - step, target); }
     storage->SetFloat(id, t);
@@ -265,7 +286,7 @@ bool ToggleSwitch(const char* label, bool* value)
 
     float  knob_x = bar_min.x + radius + t * (width - 2.0f * radius);
     ImVec2 knob_c(knob_x, bar_min.y + radius);
-    dl->AddCircleFilled(knob_c, radius - 2.0f, IM_COL32(255, 255, 255, 255));
+    dl->AddCircleFilled(knob_c, radius - kToggleKnobInset, IM_COL32(255, 255, 255, 255));
 
     ImGui::PopID();
 
@@ -291,7 +312,7 @@ bool RenderTargetSection(TargetSpec& target, ConnectionType connection, AppWindo
     SettingsManager&  settings      = SettingsManager::Get();
     ProfilerSettings& prof_settings = settings.GetProfilerSettings();
 
-    const float label_w  = 90.0f;
+    const float label_w  = 105.0f;
     const float browse_w = 84.0f;
     const float spacing  = ImGui::GetStyle().ItemSpacing.x;
     const float arrow_w  = ImGui::GetFrameHeight();
@@ -370,7 +391,7 @@ bool RenderTargetSection(TargetSpec& target, ConnectionType connection, AppWindo
 
     // --- Output folder (where the profiler writes the trace) ------------------
     ImGui::AlignTextToFramePadding();
-    ImGui::TextUnformatted("Output");
+    ImGui::TextUnformatted("Output folder");
     ImGui::SameLine(label_w);
     ImGui::SetNextItemWidth(-(browse_w + spacing));
     if (InputTextStringWithHint(
@@ -575,10 +596,10 @@ std::string RenderSavedProfileBar(
     std::vector<PresetInfo> presets = preset_mgr.ListPresets(profiler_id);
 
     ImGui::AlignTextToFramePadding();
-    ImGui::TextUnformatted("Profile");
+    ImGui::TextUnformatted("Saved Config");
     ImGui::SameLine();
 
-    // Combo for selecting a saved profile.
+    // Combo for selecting a saved configuration.
     ImGui::PushItemWidth(170);
     if (ImGui::BeginCombo("##PresetCombo",
                           current_preset_name.empty() ? "Unsaved" : current_preset_name.c_str()))
@@ -615,8 +636,8 @@ std::string RenderSavedProfileBar(
     if (ImGui::IsItemHovered())
     {
         ImGui::SetTooltip(current_preset_name.empty()
-                              ? "Save these settings as a named profile"
-                              : "Update the selected profile");
+                              ? "Save these settings as a named config"
+                              : "Update the selected config");
     }
 
     // Overflow menu keeps the less-common actions out of the toolbar.
@@ -630,11 +651,11 @@ std::string RenderSavedProfileBar(
     bool do_reset     = false;
     if (ImGui::BeginPopup("ProfileMenu"))
     {
-        if (ImGui::MenuItem("Save As New Profile..."))
+        if (ImGui::MenuItem("Save As New Config..."))
         {
             open_save_as = true;
         }
-        if (ImGui::MenuItem("Delete Profile", nullptr, false,
+        if (ImGui::MenuItem("Delete Config", nullptr, false,
                             !current_preset_name.empty()))
         {
             preset_mgr.DeletePreset(current_preset_name, profiler_id);
@@ -665,7 +686,7 @@ std::string RenderSavedProfileBar(
     // Save-As popup
     if (ImGui::BeginPopup("SavePresetPopup"))
     {
-        ImGui::TextUnformatted("Profile name:");
+        ImGui::TextUnformatted("Config name:");
         ImGui::SetNextItemWidth(240.0f);
         bool commit = ImGui::InputText("##SaveName", s_save_preset_name,
                                        sizeof(s_save_preset_name),

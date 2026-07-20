@@ -106,7 +106,6 @@ struct RocprofSysSettings
     std::string log_file            = "rocprof-sys-log.txt";
     std::string tmpdir;
     bool        use_pid             = true;
-    std::string timemory_components = "wall_clock";
 
     // Instrument
     std::string instr_include;

@@ -145,8 +145,7 @@ SshTestDialog::Render()
         const ImU32 text_on_accent = settings.GetColor(Colors::kTextOnAccent);
         const ImU32 text_dim       = settings.GetColor(Colors::kTextDim);
 
-        // Lock the width but let the window hug its content vertically so there is
-        // no empty band below the single result-database field.
+        // Fixed width, auto height, so the window hugs its content with no empty band.
         const float dialog_width =
             GetResponsiveWindowSize(ImVec2(720.0f, 0.0f), ImVec2(620.0f, 0.0f)).x;
         if(const ImGuiViewport* viewport = ImGui::GetMainViewport())

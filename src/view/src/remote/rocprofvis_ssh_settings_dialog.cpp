@@ -92,8 +92,7 @@ SshSettingsDialog::Render()
     SettingsManager&  settings = SettingsManager::GetInstance();
     const ImGuiStyle& style    = ImGui::GetStyle();
 
-    // Lock the width but let the modal grow to fit its content vertically, so no
-    // section is ever clipped and no scrollbar is needed.
+    // Fixed width, auto height, so no section clips and no scrollbar is needed.
     const float dialog_width =
         GetResponsiveWindowSize(ImVec2(720.0f, 0.0f), ImVec2(620.0f, 0.0f)).x;
     ImGui::SetNextWindowSizeConstraints(ImVec2(dialog_width, 0.0f),
@@ -116,10 +115,9 @@ SshSettingsDialog::Render()
         const ImU32 accent_hover   = settings.GetColor(Colors::kAccentHover);
         const ImU32 accent_active  = settings.GetColor(Colors::kAccentActive);
         const ImU32 text_on_accent = settings.GetColor(Colors::kTextOnAccent);
-        ImFont*       icon_font     = settings.GetFontManager().GetFont(FontType::kIcon);
+        ImFont*     icon_font      = settings.GetFontManager().GetFont(FontType::kIcon);
 
-        // Default row spacing, restored inside each card so the tight spacing used
-        // between panels does not also cramp the fields within a panel.
+        // Restored inside each card so the tighter panel gaps do not cramp fields.
         const ImVec2 default_item_spacing = style.ItemSpacing;
 
         auto label = [&](const char* text) {
@@ -359,8 +357,6 @@ SshSettingsDialog::Render()
                     InputTextStringWithHint(
                         "##rkey", "Optional private key path, e.g. ~/.ssh/id_ed25519",
                         m_working.identity_file);
-                    ImGui::TableSetColumnIndex(2);
-                    ImGui::TextUnformatted("");
 
                     ImGui::TableNextRow();
                     ImGui::TableSetColumnIndex(0);

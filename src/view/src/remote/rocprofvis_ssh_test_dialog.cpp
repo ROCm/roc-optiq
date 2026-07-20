@@ -112,32 +112,6 @@ namespace
         };
         return presets;
     }
-
-    // Wraps s in single quotes for safe embedding in a POSIX shell command.
-    std::string shell_single_quote(const std::string& s)
-    {
-        std::string out = "'";
-        for (char c : s)
-        {
-            out += (c == '\'') ? "'\\''" : std::string(1, c);
-        }
-        out += "'";
-        return out;
-    }
-
-    // Builds a `find` command emitting "type\tsize\tmtime\tpath" per match whose
-    // name contains query (case-insensitive) under dir. Capped so a huge tree
-    // cannot flood the UI. GNU find's -printf is assumed (Linux remote hosts).
-    constexpr int SEARCH_RESULT_LIMIT = 5000;
-
-    std::string build_find_command(const std::string& query, const std::string& dir)
-    {
-        std::string pattern = "*" + query + "*";
-        return "find " + shell_single_quote(dir.empty() ? "." : dir) + " -iname " +
-               shell_single_quote(pattern) +
-               " -printf '%y\\t%s\\t%T@\\t%p\\n' 2>/dev/null | head -n " +
-               std::to_string(SEARCH_RESULT_LIMIT);
-    }
 }  // namespace
 
 SshTestDialog::SshTestDialog(AppWindow* app_window)
@@ -158,9 +132,6 @@ SshTestDialog::SshTestDialog(AppWindow* app_window)
 , m_browser_error()
 , m_browser_dir()
 , m_last_directory_state()
-, m_search_results()
-, m_in_search_mode(false)
-, m_search_root()
 , m_history_back()
 , m_history_forward()
 , m_remote_file_filter()
@@ -475,7 +446,6 @@ SshTestDialog::EnsureBrowseOrchestrator()
     // the browsed directory back into m_uri. Reusing the same orchestrator (and
     // its SshSession) across folder navigation keeps the connection open and
     // authenticated; BrowsePath() only reconnects when there is no live session.
-    // The search-results callback receives the raw `find` stdout.
     if (!m_orchestrator)
     {
         m_orchestrator = std::make_unique<RemoteTraceOrchestrator>(
@@ -484,8 +454,6 @@ SshTestDialog::EnsureBrowseOrchestrator()
             {
                 m_uri->SetCurrentDirectoryPath(path.c_str());
             });
-        m_orchestrator->SetSearchResultsCallback(
-            [this](const std::string& output) { HandleSearchResults(output); });
     }
 }
 
@@ -499,12 +467,10 @@ SshTestDialog::BrowseRemotePath()
 void
 SshTestDialog::OpenRemoteFileBrowser()
 {
-    // Fresh browsing session: reset navigation, search, filter and selection
-    // state, then seed the initial directory from the current result path's
-    // parent (or the remote home when empty).
+    // Fresh browsing session: reset navigation, filter and selection state, then
+    // seed the initial directory from the current result path's parent (or the
+    // remote home when empty).
     m_orchestrator.reset();
-    m_in_search_mode = false;
-    m_search_results.clear();
     m_history_back.clear();
     m_history_forward.clear();
     m_remote_file_filter.clear();
@@ -534,9 +500,6 @@ SshTestDialog::NavigateBrowserTo(const std::string& path, bool record_history)
 
     m_browser_dir       = target;  // replaced by the server-resolved path on arrival
     m_address_edit      = target;
-    m_in_search_mode    = false;
-    m_search_root.clear();
-    m_search_results.clear();
     m_selected_name.clear();
     m_browser_error.clear();
     m_browser_busy      = true;
@@ -546,80 +509,10 @@ SshTestDialog::NavigateBrowserTo(const std::string& path, bool record_history)
 }
 
 void
-SshTestDialog::RunRemoteSearch()
-{
-    if (m_remote_file_filter.empty())
-    {
-        return;
-    }
-    EnsureBrowseOrchestrator();
-    m_search_root  = m_browser_dir;
-    m_browser_busy = true;
-    m_browser_error.clear();
-    m_selected_name.clear();
-    m_orchestrator->SearchPath(build_find_command(m_remote_file_filter, m_browser_dir));
-}
-
-void
-SshTestDialog::HandleSearchResults(const std::string& output)
-{
-    // Each line is "%y\t%s\t%T@\t%p": type letter, size, mtime, and full path.
-    std::vector<RemoteDir::FileEntry> results;
-
-    std::string::size_type pos = 0;
-    while (pos < output.size())
-    {
-        std::string::size_type eol = output.find('\n', pos);
-        std::string line = (eol == std::string::npos) ? output.substr(pos)
-                                                       : output.substr(pos, eol - pos);
-        pos = (eol == std::string::npos) ? output.size() : eol + 1;
-        if (line.empty())
-        {
-            continue;
-        }
-
-        std::string::size_type t1 = line.find('\t');
-        std::string::size_type t2 = (t1 == std::string::npos) ? t1 : line.find('\t', t1 + 1);
-        std::string::size_type t3 = (t2 == std::string::npos) ? t2 : line.find('\t', t2 + 1);
-        if (t3 == std::string::npos)
-        {
-            continue;
-        }
-
-        std::string type_field = line.substr(0, t1);
-        std::string size_field = line.substr(t1 + 1, t2 - t1 - 1);
-        std::string time_field = line.substr(t2 + 1, t3 - t2 - 1);
-
-        RemoteDir::FileEntry entry;
-        entry.name   = line.substr(t3 + 1);
-        entry.is_dir = (!type_field.empty() && type_field[0] == 'd');
-        entry.size   = static_cast<uint64_t>(std::strtoull(size_field.c_str(), nullptr, 10));
-        entry.time   = static_cast<uint64_t>(std::strtod(time_field.c_str(), nullptr));
-        results.push_back(std::move(entry));
-    }
-
-    m_search_results = std::move(results);
-    m_in_search_mode = true;
-    m_browser_busy   = false;
-    m_selected_name.clear();
-}
-
-void
 SshTestDialog::ActivateBrowserEntry(const RemoteDir::FileEntry& entry)
 {
-    // In search mode the entry name is a path (absolute or relative to the
-    // search root); in directory mode it is a plain name under m_browser_dir.
-    std::string full_path;
-    if (m_in_search_mode)
-    {
-        full_path = (!entry.name.empty() && entry.name[0] == '/')
-                        ? normalize_posix_path(entry.name)
-                        : join_posix_path(m_search_root, entry.name);
-    }
-    else
-    {
-        full_path = join_posix_path(m_browser_dir, entry.name);
-    }
+    // The entry name is a plain name under m_browser_dir.
+    const std::string full_path = join_posix_path(m_browser_dir, entry.name);
 
     if (entry.is_dir)
     {
@@ -638,8 +531,7 @@ SshTestDialog::ActivateBrowserEntry(const RemoteDir::FileEntry& entry)
 void SshTestDialog::RenderRemoteFilePopup()
 {
     // Pull a completed directory listing into browser state (pushed by the reused
-    // SSH session). Recursive-search results arrive separately via the
-    // orchestrator's search callback (HandleSearchResults).
+    // SSH session).
     if (m_orchestrator)
     {
         if (SshSession* ssh_session = m_orchestrator->GetSession())
@@ -647,7 +539,6 @@ void SshTestDialog::RenderRemoteFilePopup()
             if (auto fetch = ssh_session->GetRemoteDir()->ConsumeIfUpdated())
             {
                 m_last_directory_state = *fetch;
-                m_in_search_mode       = false;
                 m_browser_busy         = false;
                 m_selected_name.clear();
                 if (!m_last_directory_state.path.empty())
@@ -667,8 +558,7 @@ void SshTestDialog::RenderRemoteFilePopup()
             const bool transient = status.empty() || status == "Done." ||
                                    status.rfind("Connecting", 0) == 0 ||
                                    status.rfind("Authenticating", 0) == 0 ||
-                                   status.rfind("Browsing", 0) == 0 ||
-                                   status.rfind("Searching", 0) == 0;
+                                   status.rfind("Browsing", 0) == 0;
             if (!transient)
             {
                 m_browser_error = status;
@@ -697,10 +587,8 @@ void SshTestDialog::RenderRemoteFilePopup()
     const ImU32 btn_hover      = settings.GetColor(Colors::kButtonHovered);
     const ImU32 btn_active     = settings.GetColor(Colors::kButtonActive);
 
-    // The rows come from the recursive-search hits in search mode, otherwise the
-    // current directory listing. Entry names are full paths in search mode.
-    const std::vector<RemoteDir::FileEntry>& source =
-        m_in_search_mode ? m_search_results : m_last_directory_state.list_dir;
+    // The rows come from the current directory listing.
+    const std::vector<RemoteDir::FileEntry>& source = m_last_directory_state.list_dir;
 
     // A file passes only when its extension matches the active preset; folders are
     // always shown so the user can navigate anywhere.
@@ -748,7 +636,7 @@ void SshTestDialog::RenderRemoteFilePopup()
         const bool busy     = m_browser_busy || (m_orchestrator && m_orchestrator->IsRunning());
         const bool can_back = !m_history_back.empty();
         const bool can_fwd  = !m_history_forward.empty();
-        const bool can_up   = !m_in_search_mode && !is_posix_root_path(m_browser_dir);
+        const bool can_up   = !is_posix_root_path(m_browser_dir);
 
         // Header card: title, host chip, navigation, address bar and filters.
         ImGui::PushStyleColor(ImGuiCol_ChildBg, settings.GetColor(Colors::kBgFrame));
@@ -817,14 +705,7 @@ void SshTestDialog::RenderRemoteFilePopup()
             }
             if (nav_button(ICON_ARROWS_CYCLE, "Refresh", !busy))
             {
-                if (m_in_search_mode)
-                {
-                    RunRemoteSearch();
-                }
-                else
-                {
-                    NavigateBrowserTo(m_browser_dir, false);
-                }
+                NavigateBrowserTo(m_browser_dir, false);
             }
             if (nav_button(ICON_HOME, "Home", !busy))
             {
@@ -917,11 +798,10 @@ void SshTestDialog::RenderRemoteFilePopup()
             ImGui::PopStyleVar(2);
             ImGui::PopStyleColor(2);
 
-            // Name filter, recursive search, type filter and hidden toggle.
+            // Name filter, type filter and hidden toggle.
             ImGui::SetNextItemWidth(240.0f);
-            const bool filter_enter = InputTextStringWithHint("##remote_file_filter",
-                "Filter name (Enter to search subfolders)", m_remote_file_filter,
-                ImGuiInputTextFlags_EnterReturnsTrue);
+            InputTextStringWithHint("##remote_file_filter", "Filter name",
+                m_remote_file_filter);
             ImGui::SameLine();
             if (!m_remote_file_filter.empty())
             {
@@ -933,22 +813,6 @@ void SshTestDialog::RenderRemoteFilePopup()
             else
             {
                 ImGui::Dummy(ImVec2(ImGui::GetFrameHeight(), ImGui::GetFrameHeight()));
-            }
-
-            ImGui::SameLine();
-            const bool can_search = !m_remote_file_filter.empty() && !busy;
-            if (!can_search)
-            {
-                ImGui::BeginDisabled();
-            }
-            const bool search_clicked = ImGui::Button("Search subfolders");
-            if (!can_search)
-            {
-                ImGui::EndDisabled();
-            }
-            if ((search_clicked || (filter_enter && !m_remote_file_filter.empty())) && !busy)
-            {
-                RunRemoteSearch();
             }
 
             ImGui::SameLine();
@@ -984,31 +848,16 @@ void SshTestDialog::RenderRemoteFilePopup()
         ImGui::PopStyleVar(2);
         ImGui::PopStyleColor(2);
 
-        // Status line: busy, search context or error.
+        // Status line: busy or error.
         if (busy)
         {
             ImGui::PushStyleColor(ImGuiCol_Text, accent);
-            ImGui::TextUnformatted(m_in_search_mode || !m_search_root.empty() ? "Searching..."
-                                                                             : "Loading...");
+            ImGui::TextUnformatted("Loading...");
             ImGui::PopStyleColor();
         }
         else if (!m_browser_error.empty())
         {
             ImGui::TextColored(ImVec4(1.0f, 0.45f, 0.35f, 1.0f), "%s", m_browser_error.c_str());
-        }
-        else if (m_in_search_mode)
-        {
-            ImGui::TextDisabled("%zu match%s for \"%s\" in %s", m_search_results.size(),
-                m_search_results.size() == 1 ? "" : "es", m_remote_file_filter.c_str(),
-                m_search_root.c_str());
-            ImGui::SameLine();
-            if (ImGui::SmallButton("Clear search"))
-            {
-                m_in_search_mode = false;
-                m_search_results.clear();
-                m_remote_file_filter.clear();
-                m_selected_name.clear();
-            }
         }
         else
         {
@@ -1037,8 +886,7 @@ void SshTestDialog::RenderRemoteFilePopup()
             }
             if (!needle.empty())
             {
-                const std::string& hay = m_in_search_mode ? source[i].name : bn;
-                if (Core::String::to_lower_copy(hay).find(needle) == std::string::npos)
+                if (Core::String::to_lower_copy(bn).find(needle) == std::string::npos)
                 {
                     continue;
                 }
@@ -1130,8 +978,8 @@ void SshTestDialog::RenderRemoteFilePopup()
                 ImGui::SameLine(0, style.ItemInnerSpacing.x);
             };
 
-            // Synthetic ".." parent row (directory mode, not at the root).
-            if (!m_in_search_mode && !is_posix_root_path(m_browser_dir))
+            // Synthetic ".." parent row (not at the root).
+            if (!is_posix_root_path(m_browser_dir))
             {
                 ImGui::TableNextRow();
                 ImGui::TableSetColumnIndex(0);
@@ -1160,10 +1008,9 @@ void SshTestDialog::RenderRemoteFilePopup()
                 ImGui::TableSetColumnIndex(0);
                 ImGui::PushStyleColor(ImGuiCol_Text, text_dim);
                 ImGui::TextUnformatted(
-                    m_in_search_mode ? "No matches for the current search."
-                    : (!m_remote_file_filter.empty() || m_type_filter > 0)
-                          ? "No items match the current filter."
-                          : "This remote folder is empty.");
+                    (!m_remote_file_filter.empty() || m_type_filter > 0)
+                        ? "No items match the current filter."
+                        : "This remote folder is empty.");
                 ImGui::PopStyleColor();
             }
 
@@ -1173,11 +1020,7 @@ void SshTestDialog::RenderRemoteFilePopup()
                 const bool  row_selected = (selected_visible == static_cast<int>(vi));
 
                 // Full remote path of this entry (for copy-path + hover tooltip).
-                const std::string full_path =
-                    m_in_search_mode
-                        ? ((!f.name.empty() && f.name[0] == '/') ? f.name
-                                                                 : join_posix_path(m_search_root, f.name))
-                        : join_posix_path(m_browser_dir, f.name);
+                const std::string full_path = join_posix_path(m_browser_dir, f.name);
 
                 ImGui::TableNextRow();
                 ImGui::TableSetColumnIndex(0);
@@ -1219,10 +1062,9 @@ void SshTestDialog::RenderRemoteFilePopup()
                     row_selected ? text_on_accent : (f.is_dir ? accent : text_main);
                 ImGui::SameLine(0, 0);
                 row_icon(f.is_dir ? ICON_FOLDER : ICON_DOCUMENT, icon_color);
-                // Search hits show the full path; directory rows show the name.
+                // Directory rows show the name (folders with a trailing slash).
                 // The Name column clips long text; the full path is on hover.
-                const std::string display =
-                    m_in_search_mode ? f.name : (f.is_dir ? f.name + "/" : f.name);
+                const std::string display = f.is_dir ? f.name + "/" : f.name;
                 ImGui::PushStyleColor(ImGuiCol_Text, name_color);
                 ImGui::TextUnformatted(display.c_str());
                 ImGui::PopStyleColor();
@@ -1404,7 +1246,7 @@ void SshTestDialog::RenderRemoteFilePopup()
             commit_selection();
         }
         else if (shortcuts_active && !busy && ImGui::IsKeyPressed(ImGuiKey_Backspace, false) &&
-                 !m_in_search_mode && !is_posix_root_path(m_browser_dir))
+                 !is_posix_root_path(m_browser_dir))
         {
             NavigateBrowserTo(posix_parent_path(m_browser_dir), true);
         }

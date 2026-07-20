@@ -62,8 +62,6 @@ private:
     void EnsureBrowseOrchestrator();
     void OpenRemoteFileBrowser();
     void NavigateBrowserTo(const std::string& path, bool record_history);
-    void RunRemoteSearch();
-    void HandleSearchResults(const std::string& output);
     void ActivateBrowserEntry(const RemoteDir::FileEntry& entry);
 
     AppWindow*                               m_app_window;
@@ -86,13 +84,10 @@ private:
     bool                              m_show_remote_filesystem_popup;
     bool                              m_should_open_browser_popup; // defer OpenPopup to render scope
     bool                              m_should_close_browser_popup;
-    bool                              m_browser_busy;          // a listing/search is in flight
-    std::string                       m_browser_error;         // last listing/search failure
+    bool                              m_browser_busy;          // a listing is in flight
+    std::string                       m_browser_error;         // last listing failure
     std::string                       m_browser_dir;           // resolved current directory
     RemoteDir::Snapshot               m_last_directory_state;  // entries for m_browser_dir
-    std::vector<RemoteDir::FileEntry> m_search_results;        // recursive-search hits
-    bool                              m_in_search_mode;
-    std::string                       m_search_root;           // dir the search ran in
     std::vector<std::string>          m_history_back;
     std::vector<std::string>          m_history_forward;
     std::string                       m_remote_file_filter;    // live filter text
@@ -100,8 +95,7 @@ private:
     bool                              m_address_editing;       // breadcrumb vs. editable field
     bool                              m_show_hidden;
     int                               m_type_filter;           // index into extension presets
-    // Selection: "" = none, ".." = the parent row, otherwise the entry's name
-    // (basename in directory mode, full path in search mode).
+    // Selection: "" = none, ".." = the parent row, otherwise the entry's name.
     std::string                       m_selected_name;
     bool                              m_scroll_to_selected;
 };

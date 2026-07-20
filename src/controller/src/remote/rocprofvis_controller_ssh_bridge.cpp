@@ -1,3 +1,6 @@
+// Copyright Advanced Micro Devices, Inc.
+// SPDX-License-Identifier: MIT
+
 #include "rocprofvis_controller_ssh_bridge.h"
 #include "rocprofvis_core_assert.h"
 

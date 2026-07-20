@@ -1,3 +1,6 @@
+// Copyright Advanced Micro Devices, Inc.
+// SPDX-License-Identifier: MIT
+
 #pragma once
 
 #include "rocprofvis_controller_handle.h"

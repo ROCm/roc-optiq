@@ -14,6 +14,8 @@
 #include "rocprofvis_minimap.h"
 #include "rocprofvis_event_search.h"
 #include "rocprofvis_summary_view.h"
+#include "icons/rocprovfis_icon_defines.h"
+#include <string>
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_utils.h"
 #include "rocprofvis_data_provider.h"
@@ -1118,20 +1120,24 @@ void RegisterAppTests(ImGuiTestEngine* e)
         ctx->Yield(2);
         IM_CHECK(peer.IsDisplayPie());
 
-        // The switcher is three IconButtons in the "Summary" window; IconButton
-        // does PushID(glyph)+Button(glyph), so each is addressed by its own icon
-        // glyph (rocprovfis_icon_defines.h) in the ref. Poll the mode after each
-        // click rather than asserting on a fixed yield: the click settles over a
-        // variable number of frames, so a hard Yield(2) is intermittently too short.
-        ctx->ItemClick("//Summary/**/");  // ICON_CHART_BAR
+        // The switcher is three IconButtons in the "Summary" window. IconButton
+        // does PushID(glyph)+Button(glyph), so each button's ref ends in the icon
+        // glyph twice (rocprovfis_icon_defines.h). The "**/" hops the dynamic
+        // layout ids between the window and the button (clamped_view/RightColumn/
+        // TopRow hashes that vary per build). Poll the mode after each click rather
+        // than a fixed yield: the click settles over a variable number of frames.
+        std::string bar_ref = std::string("//Summary/**/") + ICON_CHART_BAR + "/" + ICON_CHART_BAR;
+        ctx->ItemClick(bar_ref.c_str());
         for (int i = 0; i < 30 && !peer.IsDisplayBar(); i++) ctx->Yield(2);
         IM_CHECK(peer.IsDisplayBar());
 
-        ctx->ItemClick("//Summary/**/");  // ICON_LIST (table)
+        std::string table_ref = std::string("//Summary/**/") + ICON_LIST + "/" + ICON_LIST;
+        ctx->ItemClick(table_ref.c_str());
         for (int i = 0; i < 30 && !peer.IsDisplayTable(); i++) ctx->Yield(2);
         IM_CHECK(peer.IsDisplayTable());
 
-        ctx->ItemClick("//Summary/**/");  // ICON_CHART_PIE
+        std::string pie_ref = std::string("//Summary/**/") + ICON_CHART_PIE + "/" + ICON_CHART_PIE;
+        ctx->ItemClick(pie_ref.c_str());
         for (int i = 0; i < 30 && !peer.IsDisplayPie(); i++) ctx->Yield(2);
         IM_CHECK(peer.IsDisplayPie());
     };

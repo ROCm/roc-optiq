@@ -34,7 +34,7 @@ public:
 
 private:
     JobFunction m_function;
-    std::mutex m_mutex;
+    mutable std::mutex m_mutex;
     std::condition_variable m_condition_variable;
     rocprofvis_result_t m_result;
     Future* m_future;

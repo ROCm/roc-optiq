@@ -16,36 +16,15 @@ namespace RocProfVis
 namespace View
 {
 
+class CounterTrackOptions;
 class LineTrackItem;
 class TimePixelTransform;
 class TimelineSelection;
-
-struct HighlightYRange
-{
-    float max_limit;
-    float min_limit;
-};
-
-class LineTrackProjectSettings : public ProjectSetting
-{
-public:
-    LineTrackProjectSettings(const std::string& project_id, LineTrackItem& track_item);
-    ~LineTrackProjectSettings() override;
-    void            ToJson() override;
-    bool            Valid() const override;
-    bool            BoxPlot() const;
-    bool            BoxPlotStripes() const;
-    bool            Highlight() const;
-    HighlightYRange HighlightRange() const;
-    std::array<bool, AnalysisTrackStatistics::Counter::kCounterCount> ShowAnalysis() const;
-
-private:
-    LineTrackItem& m_track_item;
-};
+class TimelineTrackOptions;
 
 class LineTrackItem : public TrackItem
 {
-    friend LineTrackProjectSettings;
+    friend CounterTrackOptions;
 
     class VerticalLimits
     {
@@ -78,7 +57,8 @@ class LineTrackItem : public TrackItem
     };
 
 public:
-    LineTrackItem(DataProvider& dp, uint64_t track_id, bool display,
+    LineTrackItem(DataProvider& dp, uint64_t track_id,
+                  TimelineTrackOptions&               track_options,
                   std::shared_ptr<TimePixelTransform> time_to_pixel_manager,
                   std::shared_ptr<TimelineSelection>  timeline_selection);
     ~LineTrackItem();
@@ -91,7 +71,6 @@ public:
 protected:
     virtual void RenderMetaAreaScale() override;
     virtual void RenderChart(float graph_width) override;
-    virtual void RenderMetaAreaOptions() override;
 
 private:
     void   UpdateMetadata();
@@ -113,13 +92,8 @@ private:
     float         m_vertical_padding;
 
     std::array<Pill*, AnalysisTrackStatistics::Counter::kCounterCount> m_pills_analysis;
-
-    LineTrackProjectSettings m_linetrack_project_settings;
-    std::array<bool, AnalysisTrackStatistics::Counter::kCounterCount> m_show_analysis;
-    bool                                                              m_highlight_y_range;
-    HighlightYRange m_highlight_y_limits;
-    bool            m_show_boxplot;
-    bool            m_show_boxplot_stripes;
+    // User configurable options. Underlying object is owned by TrackItem.
+    CounterTrackOptions* m_counter_options;  // Always valids.
 };
 
 }  // namespace View

@@ -456,7 +456,7 @@ DataProvider::ProcessLoadSystemTrace(RequestInfo& req)
     // Get reference to histogram in model for writing access
     std::vector<double>& histogram = tlm.GetHistogram();
 
-    std::map<uint64_t, std::tuple<std::vector<double>, bool>> histogram_minimap;
+    std::map<uint64_t, std::vector<double>> histogram_minimap;
 
     if(result == kRocProfVisResultSuccess && m_trace_timeline)
     {
@@ -505,7 +505,7 @@ DataProvider::ProcessLoadSystemTrace(RequestInfo& req)
                 }
             }
 
-            histogram_minimap[graphs] = std::make_tuple(histogram_track, true);
+            histogram_minimap[graphs] = histogram_track;
         }
         tlm.SetMiniMap(std::move(histogram_minimap));
 

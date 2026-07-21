@@ -26,6 +26,7 @@ enum class RocEvents
     kTimelineEventHighlightChanged,
     kHandleUserGraphNavigationEvent,
     kTrackMetadataChanged,
+    kTrackVisibilityChanged,
     kFontSizeChanged,
     kSetViewRange,
     kGoToTimelineSpot,

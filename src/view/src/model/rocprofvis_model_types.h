@@ -48,7 +48,8 @@ struct TrackInfo
         Stream,
         InstrumentedThread,
         SampledThread,
-        Counter
+        Counter,
+        Count
     };
 
     uint64_t                           index;  // index of the track in the controller

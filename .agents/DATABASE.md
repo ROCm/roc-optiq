@@ -1,8 +1,8 @@
 # DATABASE.md - ROCm Optiq Model / Database Layer Guide
 
 This document is the database/model-layer companion to
-[`.agents/AGENTS.md`](./AGENTS.md) and
-[`.agents/CONTROLLER.md`](./CONTROLLER.md). The main guide gives a
+[`.agents/UI.md`](./UI.md) and
+[`.agents/CONTROLLER.md`](./CONTROLLER.md). The UI guide gives a
 high-level pass over `src/model/`. **This file is the deep dive for
 `src/model/`** - the SQLite-backed data model that ingests trace files
 and serves typed records to the controller.
@@ -51,7 +51,7 @@ wins; please update this file in the same change.
 - **Linked by:** `src/controller/`. The controller is the normal
   consumer of `src/model/` headers (the View must never include
   `src/model/` directly; see the architecture rules in
-  `.agents/AGENTS.md`).
+  `.agents/UI.md`).
 - **CFFI / Python:** `src/model/python/rocprofvis_cffi_build.py`
   builds a Python wrapper that calls `rocprofvis_dm_*` and
   `rocprofvis_db_*` directly without going through the controller.

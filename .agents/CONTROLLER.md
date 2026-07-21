@@ -1,10 +1,10 @@
 # CONTROLLER.md - ROCm Optiq Controller Layer Guide
 
 This document is the controller-layer companion to
-[`.agents/AGENTS.md`](./AGENTS.md). The main guide covers the View layer
-in depth and gives a high-level pass over `controller/`. **This file is
-the deep dive for `src/controller/`** - the C ABI bridge between the
-Model (SQLite, parsing) and the View (ImGui UI).
+[`.agents/UI.md`](./UI.md). The UI guide covers the View layer in depth
+and gives a high-level pass over `controller/`. **This file is the deep
+dive for `src/controller/`** - the C ABI bridge between the Model
+(SQLite, parsing) and the View (ImGui UI).
 
 When humans and `CODING.md` disagree with this file, `CODING.md` wins.
 When this file disagrees with the source under `src/controller/`, the

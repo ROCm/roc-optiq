@@ -105,6 +105,12 @@ private:
     // given item survives the active memory-peak filter (non-intensity items
     // always pass).
     bool IntensityMatchesMemoryFilter(const ItemModel& item) const;
+    // Isolate a single kernel's dots in the workload roofline. Clicking the
+    // same kernel again clears isolation and restores the whole workload.
+    void ToggleKernelIsolation(const KernelInfo* kernel);
+    // Whether an item survives the active kernel isolation (non-intensity
+    // items, and everything outside AllKernels mode, always pass).
+    bool KernelPassesIsolation(const ItemModel& item) const;
 
     // Internal models...
     std::vector<ItemModel>   m_items;
@@ -128,6 +134,7 @@ private:
     bool                  m_kernel_changed;
     const KernelInfo*     m_kernel;
     uint32_t              m_requested_kernel_id;
+    const KernelInfo*     m_isolated_kernel;
     bool                  m_options_changed;
     bool                  m_plot_zoom_enabled;
     std::optional<size_t> m_hovered_item_idx;

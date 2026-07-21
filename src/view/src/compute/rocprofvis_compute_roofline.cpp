@@ -82,6 +82,7 @@ Roofline::Roofline(DataProvider& data_provider, KernelMode kernel_mode)
 , m_requested_workload_id(0)
 , m_kernel(nullptr)
 , m_requested_kernel_id(0)
+, m_isolated_kernel(nullptr)
 {
     m_widget_name = GenUniqueName("roofline");
     m_items.resize(static_cast<size_t>(__KRPVControllerRooflineCeilingComputeTypeLast +
@@ -121,6 +122,8 @@ Roofline::Update()
 {
     if(m_workload_changed)
     {
+        // Kernel pointers are rebuilt below, so drop any stale isolation.
+        m_isolated_kernel = nullptr;
         m_workload =
             m_data_provider.ComputeModel().GetWorkload(m_requested_workload_id);
         if(m_workload)
@@ -438,7 +441,8 @@ Roofline::Render()
                         display =
                             m_items[i].info.intensity &&
                             (m_kernel ? m_items[i].parent_info.kernel == m_kernel : true) &&
-                            IntensityMatchesMemoryFilter(m_items[i]);
+                            IntensityMatchesMemoryFilter(m_items[i]) &&
+                            KernelPassesIsolation(m_items[i]);
                     }
                 }
                 display &= m_items[i].visible;
@@ -604,8 +608,18 @@ Roofline::Render()
         }
         bool menus_item_hovered = false;
         RenderMenus(region, plot_pos, plot_size, style, plot_style, menus_item_hovered);
-        if(!m_plot_zoom_enabled && roofline_hovered &&
-           ImGui::IsMouseClicked(ImGuiMouseButton_Left))
+        bool dot_hovered =
+            !menus_item_hovered && m_kernel_mode == AllKernels && m_hovered_item_idx &&
+            m_items[m_hovered_item_idx.value()].type == ItemModel::Type::Intensity;
+        // Drag check so panning a zoomed plot is not treated as a dot click.
+        if(dot_hovered && roofline_hovered &&
+           IsMouseReleasedWithDragCheck(ImGuiMouseButton_Left))
+        {
+            ToggleKernelIsolation(
+                m_items[m_hovered_item_idx.value()].parent_info.kernel);
+        }
+        if(!m_plot_zoom_enabled && roofline_hovered && !dot_hovered &&
+           !menus_item_hovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left))
         {
             m_plot_zoom_enabled = true;
         }
@@ -823,7 +837,8 @@ Roofline::RenderMenus(ImVec2 region, ImVec2 plot_pos, ImVec2 plot_size,
                     display =
                         m_items[i].info.intensity &&
                         (m_kernel ? m_items[i].parent_info.kernel == m_kernel : true) &&
-                        IntensityMatchesMemoryFilter(m_items[i]);
+                        IntensityMatchesMemoryFilter(m_items[i]) &&
+                        KernelPassesIsolation(m_items[i]);
                     break;
                 }
             }
@@ -896,10 +911,18 @@ Roofline::RenderMenus(ImVec2 region, ImVec2 plot_pos, ImVec2 plot_size,
                 {
                     m_hovered_item_idx = i;
                     item_hovered       = true;
-                    if(row_clicked && m_menus_mode == Options)
+                    if(row_clicked)
                     {
-                        m_items[i].visible = !m_items[i].visible;
-                        m_options_changed  = true;
+                        if(m_menus_mode == Options)
+                        {
+                            m_items[i].visible = !m_items[i].visible;
+                            m_options_changed  = true;
+                        }
+                        else if(m_kernel_mode == AllKernels &&
+                                m_items[i].type == ItemModel::Type::Intensity)
+                        {
+                            ToggleKernelIsolation(m_items[i].parent_info.kernel);
+                        }
                     }
                 }
                 ImGui::PopStyleColor(3);
@@ -998,7 +1021,8 @@ Roofline::PlotHoverIdx()
         // Pick the closest visible item after plotting all candidates.
         for(size_t i = 0; i < m_items.size(); i++)
         {
-            if(m_items[i].visible && IntensityMatchesMemoryFilter(m_items[i]))
+            if(m_items[i].visible && IntensityMatchesMemoryFilter(m_items[i]) &&
+               KernelPassesIsolation(m_items[i]))
             {
                 switch(m_items[i].type)
                 {
@@ -1097,6 +1121,24 @@ Roofline::IntensityMatchesMemoryFilter(const ItemModel& item) const
         matches = item.subtype.intensity == m_memory_peak_filter.value();
     }
     return matches;
+}
+
+void
+Roofline::ToggleKernelIsolation(const KernelInfo* kernel)
+{
+    m_isolated_kernel = (kernel && m_isolated_kernel != kernel) ? kernel : nullptr;
+}
+
+bool
+Roofline::KernelPassesIsolation(const ItemModel& item) const
+{
+    bool passes = true;
+    if(m_kernel_mode == AllKernels && m_isolated_kernel &&
+       item.type == ItemModel::Type::Intensity)
+    {
+        passes = item.parent_info.kernel == m_isolated_kernel;
+    }
+    return passes;
 }
 
 }  // namespace View

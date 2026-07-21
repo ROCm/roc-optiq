@@ -15,6 +15,10 @@ namespace RocProfVis
 namespace View
 {
 
+// Font size the UI was laid out against. Sizes authored at this font render at
+// 1:1; ImGui's DPI font scaling then scales them via ImGui::GetFontSize().
+constexpr float BASE_DESIGN_FONT_SIZE = 13.0f;
+
 ImVec2
 MeasureLoadingIndicatorDots(float dot_radius, int num_dots,
                                               float spacing)
@@ -139,8 +143,7 @@ PopComboStyles()
 ImVec2
 GetResponsiveWindowSize(ImVec2 desired_size, ImVec2 min_size, float viewport_margin)
 {
-    constexpr float BASE_DESIGN_FONT_SIZE = 13.0f;
-    const float     scale = ImGui::GetFontSize() / BASE_DESIGN_FONT_SIZE;
+    const float scale = ImGui::GetFontSize() / BASE_DESIGN_FONT_SIZE;
 
     ImVec2 result(desired_size.x > 0.0f ? desired_size.x * scale : desired_size.x,
                   desired_size.y > 0.0f ? desired_size.y * scale : desired_size.y);
@@ -507,7 +510,7 @@ DrawInternalBuildBanner(const char* text /*= "Internal Build"*/)
     const ImVec2& disp = ImGui::GetIO().DisplaySize;
 
     // Parameters. Scale with the font so the banner tracks ImGui's DPI font scaling.
-    const float            ui_scale         = ImGui::GetFontSize() / 15.0f;
+    const float            ui_scale         = ImGui::GetFontSize() / BASE_DESIGN_FONT_SIZE;
     const float            ribbon_thickness = 20.0f * ui_scale;
     const float            min_base_length  = 150.0f * ui_scale;
     SettingsManager& settings    = SettingsManager::GetInstance();

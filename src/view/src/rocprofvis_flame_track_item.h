@@ -6,6 +6,8 @@
 #include "rocprofvis_event_manager.h"
 #include "rocprofvis_raw_track_data.h"
 #include "rocprofvis_track_item.h"
+#include <array>
+#include <cstdint>
 #include <memory>
 #include <string>
 #include <vector>
@@ -20,7 +22,7 @@ class FlameTrackItem;
 class TimePixelTransform;
 class MeasurementController;
 
-enum class EventColorMode
+enum class EventColorMode : uint8_t
 {
     kNone,
     kByEventName,
@@ -36,8 +38,8 @@ public:
     void ToJson() override;
     bool Valid() const override;
 
-    EventColorMode ColorEvents() const;
-    bool           CompactMode() const;
+    EventColorMode                                                ColorEvents() const;
+    bool                                                          CompactMode() const;
     std::array<bool, AnalysisTrackStatistics::Queue::kQueueCount> ShowAnalysis() const;
 
 private:
@@ -51,9 +53,9 @@ class FlameTrackItem : public TrackItem
 public:
     FlameTrackItem(DataProvider& dp, uint64_t track_id, bool display,
                    std::shared_ptr<TimePixelTransform>    time_to_pixel_manager,
-                   std::shared_ptr<TimelineSelection>     timeline_selection,                   
+                   std::shared_ptr<TimelineSelection>     timeline_selection,
                    std::shared_ptr<MeasurementController> measurement);
-    ~FlameTrackItem();
+    ~FlameTrackItem() override;
 
     void Update() override;
     bool ReleaseData() override;
@@ -67,6 +69,7 @@ protected:
     void  RenderChart(float graph_width) override;
     void  RenderMetaAreaOptions() override;
     void  RenderMetaAreaExpand() override;
+    float GetMetaAreaTrailingWidth() const override;
 
 private:
     struct ChildEventInfo
@@ -76,10 +79,10 @@ private:
         size_t      count;
         uint64_t    duration;
     };
-    
+
     struct ChartItem
     {
-        TraceEvent    event;
+        TraceEvent                  event;
         bool                        selected;
         bool                        highlighted;
         size_t                      name_hash;
@@ -93,15 +96,17 @@ private:
     void DrawBox(ImVec2 start_position, int boxplot_box_id, ChartItem& flame,
                  float duration, ImDrawList* draw_list, bool use_highlight_color);
 
-    bool ExtractPointsFromData();
+    bool ExtractPointsFromData() override;
     bool ExtractChildInfo(ChartItem& item);
     bool ParseChildInfo(const std::string& combined_name, ChildEventInfo& out_info);
 
-    void RenderTooltip(ChartItem& chart_item, int color_index);
-    void RecalculateTrackHeight();
+    void  RenderTooltip(ChartItem& chart_item, int color_index);
+    void  RecalculateTrackHeight();
     void  UpdateMinTrackHeight();
     void  RefreshLevelHeight();
     float DefaultTrackHeight() const;
+    float ExpandedTrackHeight() const;
+    float EventBoxHeight() const;
     float CalculateCenteredTextY(const std::string& label, float rect_min_y,
                                  float box_height) const;
 

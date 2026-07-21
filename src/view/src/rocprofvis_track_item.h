@@ -3,13 +3,12 @@
 
 #pragma once
 #include "rocprofvis_data_provider.h"
+#include "rocprofvis_event_manager.h"
 #include "rocprofvis_project.h"
 #include "rocprofvis_time_to_pixel.h"
-#include "rocprofvis_event_manager.h"
 
 #include <deque>
 #include <unordered_map>
-
 
 namespace RocProfVis
 {
@@ -24,8 +23,10 @@ class TimePixelTransform;
 class TimelineSelection;
 
 // Compare-source (A/B) badge shared by the timeline meta area and the sidebar.
-void  RenderCompareSourceBadge(const TrackInfo* track_info, SettingsManager& settings);
-float CompareSourceBadgeWidth(const TrackInfo* track_info);
+void
+RenderCompareSourceBadge(const TrackInfo* track_info, SettingsManager& settings);
+float
+CompareSourceBadgeWidth(const TrackInfo* track_info);
 
 enum class TrackDataRequestState
 {
@@ -96,9 +97,9 @@ private:
 class TrackItem
 {
 public:
-    TrackItem(DataProvider& dp, uint64_t id, bool diplay, 
+    TrackItem(DataProvider& dp, uint64_t id, bool display,
               std::shared_ptr<TimePixelTransform> tpt,
-              std::shared_ptr<TimelineSelection> timeline_selection = nullptr);
+              std::shared_ptr<TimelineSelection>  timeline_selection = nullptr);
     virtual ~TrackItem();
     void               SetID(uint64_t id);
     uint64_t           GetID() const;
@@ -106,10 +107,10 @@ public:
     virtual void       Render(float width);
     virtual void       Update();
     const std::string& GetName();
-    bool IsInViewVertical() const;
-    void SetInViewVertical(bool in_view);
+    bool               IsInViewVertical() const;
+    void               SetInViewVertical(bool in_view);
 
-    bool  IsSelected() const;
+    bool IsSelected() const;
 
     bool IsDisplayed() const;
     void SetDisplay(bool display);
@@ -139,22 +140,22 @@ public:
     float GetMaxMetaAreaScaleWidth() { return m_max_meta_area_scale_width; }
 
 protected:
-    virtual void RenderMetaArea();
-    virtual void RenderMetaAreaScale();
-    virtual void RenderMetaAreaOptions()        = 0;
-    virtual void RenderMetaAreaExpand();
-    virtual void RenderChart(float graph_width) = 0;
-    virtual void RenderResizeBar(const ImVec2& parent_size);
-    virtual bool ExtractPointsFromData() = 0;
+    virtual void  RenderMetaArea();
+    virtual void  RenderMetaAreaScale();
+    virtual float GetMetaAreaTrailingWidth() const;
+    virtual void  RenderMetaAreaOptions() = 0;
+    virtual void  RenderMetaAreaExpand();
+    virtual void  RenderChart(float graph_width) = 0;
+    virtual void  RenderResizeBar(const ImVec2& parent_size);
+    virtual bool  ExtractPointsFromData() = 0;
 
     void  FetchHelper();
     void  SetDefaultPillLabel(const TrackInfo* track_info);
     void  SetMetaAreaLabel(const TrackInfo* track_info);
     void  SetNodeColor(const TrackInfo* track_info);
     Pill* AddPill(bool shown = true, bool active = true);
-    // True if this track has a persisted (user-chosen) height in the project,
-    // so subclasses can avoid clobbering it with their own default.
-    bool HasSavedTrackHeight() const;
+    bool  HasSavedTrackHeight() const;
+    float GetMetaAreaMinHeight() const;
 
     const TrackInfo*                    m_track_metadata;
     const AnalysisTrackStatistics*      m_track_statistics;

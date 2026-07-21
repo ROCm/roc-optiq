@@ -11,8 +11,8 @@
 #include "widgets/rocprofvis_gui_helpers.h"
 #include "widgets/rocprofvis_notification_manager.h"
 #include "widgets/rocprofvis_widget.h"
-#include <memory>
 #include <algorithm>
+#include <memory>
 
 namespace RocProfVis
 {
@@ -26,6 +26,9 @@ inline constexpr float    META_TOOLTIP_MAX_WIDTH         = 320.0f;
 inline constexpr uint64_t META_TOOLTIP_COMPACT_COUNT_MIN = 1000;
 inline constexpr float    NAME_LABEL_HITBOX_PADDING_X    = 4.0f;
 inline constexpr float    NAME_LABEL_HITBOX_PADDING_Y    = 3.0f;
+inline constexpr float    META_WINDOW_PADDING_Y          = 2.0f;
+inline constexpr float    META_FRAME_PADDING_Y           = 4.0f;
+inline constexpr float    META_ITEM_SPACING_Y            = 3.0f;
 constexpr const char*     TRACK_COPY_MENU_POPUP_NAME     = "TrackCopyMenu";
 
 float TrackItem::s_metadata_width = 400.0f;
@@ -101,7 +104,7 @@ TrackItem::TrackItem(DataProvider& dp, uint64_t id, bool display,
 , m_track_height_changed(false)
 , m_is_in_view_vertical(false)
 , m_distance_to_view_y(0.0f)
-, m_metadata_padding(ImVec2(8.0f, 2.0f))
+, m_metadata_padding(ImVec2(8.0f, 4.0f))
 , m_resize_grip_thickness(4.0f)
 , m_data_provider(dp)
 , m_request_state(TrackDataRequestState::kIdle)
@@ -138,7 +141,7 @@ TrackItem::TrackItem(DataProvider& dp, uint64_t id, bool display,
         return;
     }
     m_track_metadata = track_info;
-    m_name = m_data_provider.DataModel().BuildTrackName(m_track_id);
+    m_name           = m_data_provider.DataModel().BuildTrackName(m_track_id);
     SetMetaAreaLabel(track_info);
     SetNodeColor(track_info);
     SetDefaultPillLabel(track_info);
@@ -170,6 +173,33 @@ bool
 TrackItem::HasSavedTrackHeight() const
 {
     return m_track_project_settings.Valid();
+}
+
+float
+TrackItem::GetMetaAreaMinHeight() const
+{
+    const FontManager& fonts  = m_settings.GetFontManager();
+    const float        chrome = 2.0f * (META_WINDOW_PADDING_Y + m_metadata_padding.y) +
+                         0.5f * m_resize_grip_thickness;
+    float min_height  = fonts.GetFontSize(FontSize::kSmall) + chrome;
+    float pill_height = 0.0f;
+
+    for(const std::unique_ptr<Pill>& pill : m_pills)
+    {
+        if(pill->Visible())
+        {
+            pill_height = std::max(pill_height, pill->Size().y);
+        }
+    }
+
+    if(pill_height > 0.0f)
+    {
+        const float title_row_height = fonts.GetFontSize(FontSize::kDefault) +
+                                       2.0f * META_FRAME_PADDING_Y + META_ITEM_SPACING_Y;
+        min_height = title_row_height + pill_height + chrome;
+    }
+
+    return min_height;
 }
 
 bool
@@ -309,6 +339,12 @@ TrackItem::RenderMetaAreaScale()
     // no-op
 }
 
+float
+TrackItem::GetMetaAreaTrailingWidth() const
+{
+    return 0.0f;
+}
+
 void
 TrackItem::RenderMetaArea()
 {
@@ -320,9 +356,9 @@ TrackItem::RenderMetaArea()
     bool   name_label_visible = false;
 
     ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(4, 4));
-    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(4, 4));
-    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(4, 3));
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(5, 2));
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(4, META_FRAME_PADDING_Y));
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(4, META_ITEM_SPACING_Y));
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(5, META_WINDOW_PADDING_Y));
     // Keep the meta-area square so the selection highlight fill reaches the corners
     // instead of bleeding through rounded edges.
     ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 0.0f);
@@ -365,7 +401,6 @@ TrackItem::RenderMetaArea()
 
         // Reordering grip decoration
         float grid_icon_width = ImGui::CalcTextSize(ICON_GRID).x;
-        float arrow_width       = ImGui::GetTextLineHeight();
 
         ImGui::SetCursorPos(
             ImVec2((m_reorder_grip_width - grid_icon_width) / 2,
@@ -400,13 +435,13 @@ TrackItem::RenderMetaArea()
         {
             compare_badge_width += ImGui::GetStyle().ItemSpacing.x;
         }
-        float available_for_text =
-            content_size.x - m_meta_area_scale_width - m_reorder_grip_width - compare_badge_width;
+        float available_for_text = content_size.x - m_meta_area_scale_width -
+                                   m_reorder_grip_width - compare_badge_width -
+                                   GetMetaAreaTrailingWidth();
 
         if(available_for_text < 0.0f) available_for_text = 0.0f;
 
-        // Draw the track title in the small font so the meta area stays legible
-        // in compact tracks, where the full-height title would overflow.
+        // Small text keeps titles readable in compact tracks.
         ImGui::PushFont(m_settings.GetFontManager().GetFont(FontType::kDefault),
                         m_settings.GetFontManager().GetFontSize(FontSize::kSmall));
 
@@ -429,9 +464,9 @@ TrackItem::RenderMetaArea()
             const float  label_width = std::min(track_name_size.x, available_for_text);
             const ImVec2 hit_padding(NAME_LABEL_HITBOX_PADDING_X,
                                      NAME_LABEL_HITBOX_PADDING_Y);
-            name_label_min = label_start - hit_padding;
-            name_label_max = ImVec2(label_start.x + label_width + hit_padding.x,
-                                    label_start.y + track_name_size.y + hit_padding.y);
+            name_label_min     = label_start - hit_padding;
+            name_label_max     = ImVec2(label_start.x + label_width + hit_padding.x,
+                                        label_start.y + track_name_size.y + hit_padding.y);
             name_label_visible = true;
         }
         ImGui::PopStyleColor();
@@ -475,8 +510,8 @@ TrackItem::RenderMetaArea()
     if(name_label_hovered && !m_meta_area_tooltip.empty())
     {
         const float wrap_width = META_TOOLTIP_MAX_WIDTH - 2.0f * style.WindowPadding.x;
-        ImGui::SetNextWindowSizeConstraints(
-            ImVec2(0, 0), ImVec2(META_TOOLTIP_MAX_WIDTH, FLT_MAX));
+        ImGui::SetNextWindowSizeConstraints(ImVec2(0, 0),
+                                            ImVec2(META_TOOLTIP_MAX_WIDTH, FLT_MAX));
         BeginTooltipStyled();
         ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + wrap_width);
         ImGui::TextUnformatted(m_meta_area_tooltip.c_str());
@@ -494,8 +529,8 @@ TrackItem::RenderMetaArea()
     {
         auto copy_to_clipboard = [](const std::string& text) {
             ImGui::SetClipboardText(text.c_str());
-            NotificationManager::GetInstance().Show(
-                COPY_DATA_NOTIFICATION.data(), NotificationLevel::Info);
+            NotificationManager::GetInstance().Show(COPY_DATA_NOTIFICATION.data(),
+                                                    NotificationLevel::Info);
         };
         if(IconMenuItem(ICON_COPY, "Copy track name"))
         {
@@ -598,7 +633,8 @@ TrackItem::RequestData(double min, double max, float width)
     else
     {
         spdlog::warn(
-            "Fetch request deferred for track {}, requests are already pending...", m_track_id);
+            "Fetch request deferred for track {}, requests are already pending...",
+            m_track_id);
 
         for(const auto& [request_id, req] : m_pending_requests)
         {
@@ -649,10 +685,9 @@ TrackItem::FetchHelper()
         }
         else
         {
-            spdlog::debug(
-                "Fetching from {} to {} ( {} ) for track {} part of group {}",
-                req.m_start_ts, req.m_end_ts, req.m_end_ts - req.m_start_ts, m_track_id,
-                req.m_data_group_id);
+            spdlog::debug("Fetching from {} to {} ( {} ) for track {} part of group {}",
+                          req.m_start_ts, req.m_end_ts, req.m_end_ts - req.m_start_ts,
+                          m_track_id, req.m_data_group_id);
 
             m_request_state = TrackDataRequestState::kRequesting;
             // Store the request with its ID
@@ -761,12 +796,11 @@ TrackItem::SetMetaAreaLabel(const TrackInfo* track_info)
 
     // Node is conveyed by the colored node pill, so the tooltip carries the
     // human-readable name + stable index instead of the raw node id.
-    const size_t    node_index = tdm.GetNodeDisplayIndex(track_info->topology.node_id);
-    const NodeInfo* node_info  = tdm.GetNode(track_info->topology.node_id);
-    const std::string node_name =
-        (node_info && !node_info->host_name.empty())
-            ? node_info->host_name
-            : "Node " + std::to_string(node_index);
+    const size_t      node_index = tdm.GetNodeDisplayIndex(track_info->topology.node_id);
+    const NodeInfo*   node_info  = tdm.GetNode(track_info->topology.node_id);
+    const std::string node_name  = (node_info && !node_info->host_name.empty())
+                                       ? node_info->host_name
+                                       : "Node " + std::to_string(node_index);
 
     switch(track_info->topology.type)
     {
@@ -810,7 +844,8 @@ TrackItem::SetMetaAreaLabel(const TrackInfo* track_info)
                 m_meta_area_label += " (PID: " + process_id_str + ")";
             }
             // set tooltip to counter description
-            const CounterInfo* counter_info = tdm.GetCounter(track_info->topology.id.value);
+            const CounterInfo* counter_info =
+                tdm.GetCounter(track_info->topology.id.value);
             if(counter_info)
             {
                 m_meta_area_tooltip = counter_info->description;
@@ -851,9 +886,8 @@ TrackItem::SetMetaAreaLabel(const TrackInfo* track_info)
         }
     }
 
-    const bool is_sample_track =
-        track_info->track_type == kRPVControllerTrackTypeSamples;
-    const char* count_label = is_sample_track ? "Samples" : "Events";
+    const bool is_sample_track = track_info->track_type == kRPVControllerTrackTypeSamples;
+    const char* count_label    = is_sample_track ? "Samples" : "Events";
 
     std::string meta_lines;
     meta_lines += "Track ID: " + std::to_string(track_info->id) + "\n";
@@ -865,8 +899,7 @@ TrackItem::SetMetaAreaLabel(const TrackInfo* track_info)
 #else
     if(track_info->num_entries >= META_TOOLTIP_COMPACT_COUNT_MIN)
     {
-        meta_lines +=
-            compact_number_format(static_cast<double>(track_info->num_entries));
+        meta_lines += compact_number_format(static_cast<double>(track_info->num_entries));
     }
     else
     {
@@ -894,8 +927,7 @@ TrackItem::SetNodeColor(const TrackInfo* track_info)
     const uint64_t            node_id = track_info->topology.node_id;
     const std::vector<ImU32>& wheel   = m_settings.GetColorWheel();
     m_node_display_index              = tdm.GetNodeDisplayIndex(node_id);
-    m_has_node_color =
-        tdm.NodeCount() > 1 && m_node_display_index > 0 && !wheel.empty();
+    m_has_node_color = tdm.NodeCount() > 1 && m_node_display_index > 0 && !wheel.empty();
     if(!m_has_node_color)
     {
         return;
@@ -948,7 +980,8 @@ TrackItem::HasData()
 bool
 TrackItem::ReleaseData()
 {
-    bool result = m_data_provider.DataModel().GetTimeline().FreeTrackData(m_track_id, true);
+    bool result =
+        m_data_provider.DataModel().GetTimeline().FreeTrackData(m_track_id, true);
     if(!result)
     {
         spdlog::warn("Failed to release data for track {}", m_track_id);
@@ -1133,7 +1166,7 @@ Pill::Pill(bool shown, bool active)
         static_cast<int>(RocEvents::kFontSizeChanged), font_changed_handler);
 }
 
-Pill::~Pill() 
+Pill::~Pill()
 {
     EventManager::GetInstance()->Unsubscribe(
         static_cast<int>(RocEvents::kFontSizeChanged), m_font_changed_token);

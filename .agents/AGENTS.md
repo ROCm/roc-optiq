@@ -707,8 +707,8 @@ Protected hooks every subclass implements:
 - `RenderResizeBar(parent_size)` - drag handle for height.
 
 State of note: `m_track_metadata` (`const TrackInfo*` from
-`TrackTopology`), `m_track_height`, `m_pill` (`Pill`, the small label
-pill in the meta area), `m_request_queue`, `m_pending_requests`.
+`TrackTopology`), `m_track_height`, `m_pills` (the labels in the meta
+area), `m_request_queue`, `m_pending_requests`.
 
 `class Pill` - the rounded label badge used inside meta areas.
 `Activate/Deactivate`, `Show/Hide`, `SetLabel/SetTooltipLabel`. Renders
@@ -728,6 +728,9 @@ Used for queues, streams, and instrumented threads. It holds:
   `kTimelineEventHighlightChanged`.
 - A static `s_max_event_label_width` and helper
   `CalculateMaxEventLabelWidth()` invoked when fonts change.
+- Font-responsive normal rows and fixed-height compact rows. Track
+  heights use a two-level default, an all-level expanded height, and
+  the base meta-area minimum so titles and pills remain readable.
 
 ### `LineTrackItem` - line/box-plot for counters
 

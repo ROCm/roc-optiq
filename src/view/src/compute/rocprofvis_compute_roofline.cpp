@@ -83,6 +83,7 @@ Roofline::Roofline(DataProvider& data_provider, KernelMode kernel_mode)
 , m_kernel(nullptr)
 , m_requested_kernel_id(0)
 , m_isolated_kernel(nullptr)
+, m_isolated_bandwidth(std::nullopt)
 {
     m_widget_name = GenUniqueName("roofline");
     m_items.resize(static_cast<size_t>(__KRPVControllerRooflineCeilingComputeTypeLast +
@@ -123,7 +124,8 @@ Roofline::Update()
     if(m_workload_changed)
     {
         // Kernel pointers are rebuilt below, so drop any stale isolation.
-        m_isolated_kernel = nullptr;
+        m_isolated_kernel    = nullptr;
+        m_isolated_bandwidth = std::nullopt;
         m_workload =
             m_data_provider.ComputeModel().GetWorkload(m_requested_workload_id);
         if(m_workload)
@@ -433,7 +435,8 @@ Roofline::Render()
                     case ItemModel::Type::CeilingCompute:
                     case ItemModel::Type::CeilingBandwidth:
                     {
-                        display = m_items[i].info.ceiling;
+                        display = m_items[i].info.ceiling &&
+                                  BandwidthPassesIsolation(m_items[i]);
                         break;
                     }
                     case ItemModel::Type::Intensity:
@@ -611,15 +614,27 @@ Roofline::Render()
         bool dot_hovered =
             !menus_item_hovered && m_kernel_mode == AllKernels && m_hovered_item_idx &&
             m_items[m_hovered_item_idx.value()].type == ItemModel::Type::Intensity;
-        // Drag check so panning a zoomed plot is not treated as a dot click.
-        if(dot_hovered && roofline_hovered &&
-           IsMouseReleasedWithDragCheck(ImGuiMouseButton_Left))
+        bool bandwidth_line_hovered =
+            !menus_item_hovered && m_hovered_item_idx &&
+            m_items[m_hovered_item_idx.value()].type ==
+                ItemModel::Type::CeilingBandwidth;
+        // Drag check so panning a zoomed plot is not treated as a click.
+        if(roofline_hovered && IsMouseReleasedWithDragCheck(ImGuiMouseButton_Left))
         {
-            ToggleKernelIsolation(
-                m_items[m_hovered_item_idx.value()].parent_info.kernel);
+            if(dot_hovered)
+            {
+                ToggleKernelIsolation(
+                    m_items[m_hovered_item_idx.value()].parent_info.kernel);
+            }
+            else if(bandwidth_line_hovered)
+            {
+                ToggleBandwidthIsolation(
+                    m_items[m_hovered_item_idx.value()].subtype.bandwidth);
+            }
         }
         if(!m_plot_zoom_enabled && roofline_hovered && !dot_hovered &&
-           !menus_item_hovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left))
+           !bandwidth_line_hovered && !menus_item_hovered &&
+           ImGui::IsMouseClicked(ImGuiMouseButton_Left))
         {
             m_plot_zoom_enabled = true;
         }
@@ -853,9 +868,13 @@ Roofline::RenderMenus(ImVec2 region, ImVec2 plot_pos, ImVec2 plot_size,
                                       m_settings.GetColor(Colors::kHighlightChart));
                 ImGui::PushStyleColor(ImGuiCol_HeaderActive,
                                       m_settings.GetColor(Colors::kHighlightChart));
-                ImVec2 pos         = ImGui::GetCursorPos();
-                bool   row_clicked = ImGui::Selectable(
-                    "", false,
+                ImVec2 pos          = ImGui::GetCursorPos();
+                bool   row_isolated = m_isolated_bandwidth &&
+                                    m_items[i].type == ItemModel::Type::CeilingBandwidth &&
+                                    m_items[i].subtype.bandwidth ==
+                                        m_isolated_bandwidth.value();
+                bool row_clicked = ImGui::Selectable(
+                    "", row_isolated,
                     m_hovered_item_idx && m_hovered_item_idx.value() == i
                           ? ImGuiSelectableFlags_Highlight
                           : ImGuiSelectableFlags_None);
@@ -922,6 +941,10 @@ Roofline::RenderMenus(ImVec2 region, ImVec2 plot_pos, ImVec2 plot_size,
                                 m_items[i].type == ItemModel::Type::Intensity)
                         {
                             ToggleKernelIsolation(m_items[i].parent_info.kernel);
+                        }
+                        else if(m_items[i].type == ItemModel::Type::CeilingBandwidth)
+                        {
+                            ToggleBandwidthIsolation(m_items[i].subtype.bandwidth);
                         }
                     }
                 }
@@ -1022,7 +1045,7 @@ Roofline::PlotHoverIdx()
         for(size_t i = 0; i < m_items.size(); i++)
         {
             if(m_items[i].visible && IntensityMatchesMemoryFilter(m_items[i]) &&
-               KernelPassesIsolation(m_items[i]))
+               KernelPassesIsolation(m_items[i]) && BandwidthPassesIsolation(m_items[i]))
             {
                 switch(m_items[i].type)
                 {
@@ -1137,6 +1160,31 @@ Roofline::KernelPassesIsolation(const ItemModel& item) const
        item.type == ItemModel::Type::Intensity)
     {
         passes = item.parent_info.kernel == m_isolated_kernel;
+    }
+    return passes;
+}
+
+void
+Roofline::ToggleBandwidthIsolation(
+    rocprofvis_controller_roofline_ceiling_bandwidth_type_t bandwidth)
+{
+    if(m_isolated_bandwidth && m_isolated_bandwidth.value() == bandwidth)
+    {
+        m_isolated_bandwidth = std::nullopt;
+    }
+    else
+    {
+        m_isolated_bandwidth = bandwidth;
+    }
+}
+
+bool
+Roofline::BandwidthPassesIsolation(const ItemModel& item) const
+{
+    bool passes = true;
+    if(m_isolated_bandwidth && item.type == ItemModel::Type::CeilingBandwidth)
+    {
+        passes = item.subtype.bandwidth == m_isolated_bandwidth.value();
     }
     return passes;
 }

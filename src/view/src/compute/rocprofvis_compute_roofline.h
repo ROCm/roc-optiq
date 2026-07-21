@@ -111,6 +111,9 @@ private:
     // Whether an item survives the active kernel isolation (non-intensity
     // items, and everything outside AllKernels mode, always pass).
     bool KernelPassesIsolation(const ItemModel& item) const;
+    void ToggleBandwidthIsolation(
+        rocprofvis_controller_roofline_ceiling_bandwidth_type_t bandwidth);
+    bool BandwidthPassesIsolation(const ItemModel& item) const;
 
     // Internal models...
     std::vector<ItemModel>   m_items;
@@ -135,6 +138,8 @@ private:
     const KernelInfo*     m_kernel;
     uint32_t              m_requested_kernel_id;
     const KernelInfo*     m_isolated_kernel;
+    std::optional<rocprofvis_controller_roofline_ceiling_bandwidth_type_t>
+        m_isolated_bandwidth;
     bool                  m_options_changed;
     bool                  m_plot_zoom_enabled;
     std::optional<size_t> m_hovered_item_idx;

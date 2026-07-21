@@ -70,6 +70,7 @@ Roofline::Roofline(DataProvider& data_provider, KernelMode kernel_mode)
 , m_menus_placement(InsideTopRight)
 , m_scale_intensity(true)
 , m_line_thickness(LINE_THICKNESS_DEFAULT)
+, m_memory_peak_filter(std::nullopt)
 , m_menus_rendered_height(0.0f)
 , m_hovered_item_distance(FLT_MAX)
 , m_workload_changed(false)
@@ -436,7 +437,8 @@ Roofline::Render()
                     {
                         display =
                             m_items[i].info.intensity &&
-                            (m_kernel ? m_items[i].parent_info.kernel == m_kernel : true);
+                            (m_kernel ? m_items[i].parent_info.kernel == m_kernel : true) &&
+                            IntensityMatchesMemoryFilter(m_items[i]);
                     }
                 }
                 display &= m_items[i].visible;
@@ -787,7 +789,7 @@ Roofline::RenderMenus(ImVec2 region, ImVec2 plot_pos, ImVec2 plot_size,
         ImGui::EndGroup();
         float header_height = ImGui::GetItemRectSize().y + 2 * style.WindowPadding.y;
         float footer_height =
-            (m_kernel_mode == AllKernels ? 6 : 5) * ImGui::GetFrameHeightWithSpacing() +
+            (m_kernel_mode == AllKernels ? 8 : 7) * ImGui::GetFrameHeightWithSpacing() +
             2 * style.WindowPadding.y;
         ImGui::SetNextWindowSizeConstraints(
             ImVec2(menus_content_width, 0),
@@ -820,7 +822,8 @@ Roofline::RenderMenus(ImVec2 region, ImVec2 plot_pos, ImVec2 plot_size,
                 {
                     display =
                         m_items[i].info.intensity &&
-                        (m_kernel ? m_items[i].parent_info.kernel == m_kernel : true);
+                        (m_kernel ? m_items[i].parent_info.kernel == m_kernel : true) &&
+                        IntensityMatchesMemoryFilter(m_items[i]);
                     break;
                 }
             }
@@ -912,6 +915,32 @@ Roofline::RenderMenus(ImVec2 region, ImVec2 plot_pos, ImVec2 plot_size,
         if(m_menus_mode == Options)
         {
             ImGui::SeparatorText("Options");
+            ImGui::PushID("memory_peak");
+            ElidedText("Kernel intensity", ImGui::GetContentRegionAvail().x,
+                       plot_size.x * 0.5f, Alignment_Left, true);
+            ImGui::SetNextItemWidth(-1.0f);
+            int intensity_filter_idx =
+                m_memory_peak_filter
+                    ? static_cast<int>(m_memory_peak_filter.value()) + 1
+                    : 0;
+            PushComboStyles();
+            // Order must match the intensity enum: All, HBM, L2, L1, LDS.
+            if(ImGui::Combo("##memory_peak", &intensity_filter_idx,
+                            "All\0HBM\0L2\0L1\0LDS\0\0"))
+            {
+                if(intensity_filter_idx == 0)
+                {
+                    m_memory_peak_filter = std::nullopt;
+                }
+                else
+                {
+                    m_memory_peak_filter = static_cast<
+                        rocprofvis_controller_roofline_kernel_intensity_type_t>(
+                        intensity_filter_idx - 1);
+                }
+            }
+            PopComboStyles();
+            ImGui::PopID();
             if(m_kernel_mode == AllKernels)
             {
                 ImGui::PushID("kernel_scale");
@@ -969,7 +998,7 @@ Roofline::PlotHoverIdx()
         // Pick the closest visible item after plotting all candidates.
         for(size_t i = 0; i < m_items.size(); i++)
         {
-            if(m_items[i].visible)
+            if(m_items[i].visible && IntensityMatchesMemoryFilter(m_items[i]))
             {
                 switch(m_items[i].type)
                 {
@@ -1057,6 +1086,17 @@ Roofline::ApplyPreset(PresetModel::Type type)
         m_items[i].visible = true;
     }
     m_options_changed = true;
+}
+
+bool
+Roofline::IntensityMatchesMemoryFilter(const ItemModel& item) const
+{
+    bool matches = true;
+    if(item.type == ItemModel::Type::Intensity && m_memory_peak_filter)
+    {
+        matches = item.subtype.intensity == m_memory_peak_filter.value();
+    }
+    return matches;
 }
 
 }  // namespace View

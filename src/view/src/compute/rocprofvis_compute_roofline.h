@@ -101,6 +101,10 @@ private:
                      bool& item_hovered);
     void PlotHoverIdx();
     void ApplyPreset(PresetModel::Type type);
+    // Kernel intensity dots exist per memory level; this decides whether a
+    // given item survives the active memory-peak filter (non-intensity items
+    // always pass).
+    bool IntensityMatchesMemoryFilter(const ItemModel& item) const;
 
     // Internal models...
     std::vector<ItemModel>   m_items;
@@ -112,6 +116,9 @@ private:
     MenusPlacement m_menus_placement;
     bool           m_scale_intensity;
     float          m_line_thickness;
+    // Which memory level's kernel intensity dots to show. nullopt = all levels.
+    std::optional<rocprofvis_controller_roofline_kernel_intensity_type_t>
+        m_memory_peak_filter;
 
     // Internal state...
     bool                  m_workload_changed;

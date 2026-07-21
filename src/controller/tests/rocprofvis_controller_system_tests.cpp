@@ -3,11 +3,13 @@
 
 #include "rocprofvis_c_interface.h"
 #include "rocprofvis_controller.h"
+#include "rocprofvis_controller_job_system.h"
 #include "rocprofvis_core.h"
 #include "system/rocprofvis_controller_event.h"
 #include "system/rocprofvis_controller_mem_mgmt.h"
 #include "system/rocprofvis_controller_segment.h"
 #include <algorithm>
+#include <atomic>
 #include <catch2/catch_session.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <cfloat>
@@ -3214,4 +3216,96 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture, "System Trace Controll
         spdlog::info("Free Controller");
         rocprofvis_controller_free(m_controller);
     }
+}
+
+// Regression coverage for the JobSystem Job::Wait primitive (lost-wakeup /
+// spurious-wakeup / m_result data race fix). The Job is exercised directly so
+// the tests target the synchronization primitive rather than the full async
+// pipeline. A null Future is passed because these job bodies never touch it.
+TEST_CASE("JobSystem Job blocking wait overlaps completion")
+{
+    using RocProfVis::Controller::Future;
+    using RocProfVis::Controller::Job;
+
+    // Race a blocking Wait(FLT_MAX) against Execute() finishing after a short,
+    // jittered delay, repeated many times to reliably hit the check-then-block
+    // window that previously produced a lost-wakeup hang. Each iteration must
+    // return Success and never hang (run under TSan to also catch the race).
+    const int iterations = 2000;
+    for(int i = 0; i < iterations; ++i)
+    {
+        int jitter_us = i % 7;
+        Job job(
+            [jitter_us](Future*) -> rocprofvis_result_t {
+                if(jitter_us > 0)
+                {
+                    std::this_thread::sleep_for(std::chrono::microseconds(jitter_us));
+                }
+                return kRocProfVisResultSuccess;
+            },
+            nullptr);
+
+        std::thread worker([&job]() { job.Execute(); });
+
+        rocprofvis_result_t result = job.Wait(FLT_MAX);
+        REQUIRE(result == kRocProfVisResultSuccess);
+
+        worker.join();
+        REQUIRE(job.GetResult() == kRocProfVisResultSuccess);
+    }
+}
+
+TEST_CASE("JobSystem Job cancel-then-wait teardown")
+{
+    using RocProfVis::Controller::Future;
+    using RocProfVis::Controller::Job;
+
+    // Queued job that never runs: Cancel() then a blocking Wait() must return
+    // immediately (result is no longer Pending) with the cancelled result
+    // recorded.
+    SECTION("cancelled queued job")
+    {
+        Job job([](Future*) { return kRocProfVisResultSuccess; }, nullptr);
+        job.Cancel();
+        REQUIRE(job.Wait(FLT_MAX) == kRocProfVisResultSuccess);
+        REQUIRE(job.GetResult() == kRocProfVisResultCancelled);
+    }
+
+    // Actively-running job: mirror the data-provider cleanup ordering where a
+    // blocking wait overlaps a job that is still running. Wait must observe
+    // completion and return without hanging or freeing a live job.
+    SECTION("running job then blocking wait")
+    {
+        const int iterations = 500;
+        for(int i = 0; i < iterations; ++i)
+        {
+            Job job(
+                [](Future*) {
+                    std::this_thread::sleep_for(std::chrono::microseconds(50));
+                    return kRocProfVisResultSuccess;
+                },
+                nullptr);
+
+            std::thread worker([&job]() { job.Execute(); });
+            REQUIRE(job.Wait(FLT_MAX) == kRocProfVisResultSuccess);
+            worker.join();
+            REQUIRE(job.GetResult() == kRocProfVisResultSuccess);
+        }
+    }
+}
+
+TEST_CASE("JobSystem Job polling contract unchanged")
+{
+    using RocProfVis::Controller::Future;
+    using RocProfVis::Controller::Job;
+
+    // While still Pending, an immediate poll (timeout == 0) must return Timeout
+    // without blocking.
+    Job job([](Future*) { return kRocProfVisResultSuccess; }, nullptr);
+    REQUIRE(job.Wait(0.0f) == kRocProfVisResultTimeout);
+
+    // Once resolved, the same poll must report Success.
+    job.Execute();
+    REQUIRE(job.Wait(0.0f) == kRocProfVisResultSuccess);
+    REQUIRE(job.GetResult() == kRocProfVisResultSuccess);
 }

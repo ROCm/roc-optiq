@@ -96,6 +96,7 @@ BuildProcessorTree(TreeNode* parent, const ProcessorModel& processor,
     TreeNode* node = AddBranchNode(parent, NodeType::kProcessor,
                                    processor.header, true, show_controls, false);
     node->breaks_visibility_chain = breaks_chain;
+    node->show_lead_arrow         = !show_controls;
     BuildLeafList(node, NodeType::kQueueList, processor.queue_header,
                   processor.queues, track_list, show_controls);
     BuildLeafList(node, NodeType::kCounterList, processor.counter_header,
@@ -398,7 +399,7 @@ TrackTopology::UpdateTopology()
                                             { InfoTable::Cell{ "Product name", false },
                                             InfoTable::Cell{ processor_info->product_name, false } } }
                                         };
-                                        stream->processors[processor_index].header = stream_info->name + " >>> " + 
+                                        stream->processors[processor_index].header =
                                             DeviceTypeString(processor_info->type) +
                                             std::to_string(processor_info->type_index);
 

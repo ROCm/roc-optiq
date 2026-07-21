@@ -23,6 +23,9 @@ constexpr ImGuiTreeNodeFlags HEADER_FLAGS = ImGuiTreeNodeFlags_Framed |
 constexpr float TREE_LINE_W = 1.5f;
 constexpr float MENU_PAD_X  = 8.0f;
 constexpr float MENU_PAD_Y  = 6.0f;
+// ImGui offsets a framed tree node's label by FontSize + FramePadding.x * this
+// factor (see TreeNodeBehavior); used to place the inline device lead arrow.
+constexpr float FRAMED_LABEL_PAD_MULT = 3.0f;
 
 // Recolors a framed tree node's collapse arrow, matching ImGui::RenderArrow's
 // geometry so it overlaps the default arrow exactly.
@@ -226,7 +229,8 @@ SideBar::RenderTrackItem(const uint64_t& index, bool show_eye_button)
     ImGui::PushStyleColor(
         ImGuiCol_Button,
         m_settings.GetColor(track.IsSelected() ? Colors::kSelection : Colors::kTransparent));
-    if(!display)
+    const bool dim_text = !display || m_render_muted;
+    if(dim_text)
     {
         ImGui::PushStyleColor(ImGuiCol_Text,
                               ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
@@ -235,7 +239,7 @@ SideBar::RenderTrackItem(const uint64_t& index, bool show_eye_button)
     {
         m_timeline_selection->ToggleSelectTrack(track);
     }
-    if(!display)
+    if(dim_text)
     {
         ImGui::PopStyleColor();
     }
@@ -560,7 +564,52 @@ SideBar::RenderBranchNode(const TreeNode& node, const TreeNode* state_node,
     if(node.collapsable)
     {
         const ImVec2 node_pos = ImGui::GetCursorScreenPos();
-        open                  = ImGui::TreeNodeEx(node.label.c_str(), HEADER_FLAGS);
+
+        // Lead arrow: pad the label to open a slot after the chevron, then draw
+        // the glyph at the label's start (keeps the chevron in place).
+        std::string display_label   = node.label;
+        ImFont*     lead_arrow_font = nullptr;
+        float       lead_arrow_size = 0.0f;
+        float       lead_arrow_x    = 0.0f;
+        if(node.show_lead_arrow)
+        {
+            ImFont* icon_font = m_settings.GetFontManager().GetFont(FontType::kIcon);
+            ImGui::PushFont(icon_font, 0.0f);
+            const float arrow_w = ImGui::CalcTextSize(ICON_ARROW_FORWARD).x;
+            lead_arrow_font     = icon_font;
+            lead_arrow_size     = ImGui::GetFontSize();
+            ImGui::PopFont();
+
+            const float gap     = ImGui::GetStyle().ItemInnerSpacing.x;
+            const float space_w = ImGui::CalcTextSize(" ").x;
+            const int   pad =
+                (space_w > 0.0f) ? static_cast<int>((arrow_w + gap) / space_w) + 1 : 2;
+            display_label.insert(0, static_cast<size_t>(pad), ' ');
+            lead_arrow_x = node_pos.x + ImGui::GetFontSize() +
+                           ImGui::GetStyle().FramePadding.x * FRAMED_LABEL_PAD_MULT;
+        }
+
+        if(m_render_muted)
+        {
+            ImGui::PushStyleColor(ImGuiCol_Text,
+                                  ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
+        }
+        open = ImGui::TreeNodeEx(node.label.c_str(), HEADER_FLAGS, "%s",
+                                 display_label.c_str());
+        if(m_render_muted)
+        {
+            ImGui::PopStyleColor();
+        }
+
+        if(lead_arrow_font)
+        {
+            const float cy =
+                (ImGui::GetItemRectMin().y + ImGui::GetItemRectMax().y) * 0.5f;
+            ImGui::GetWindowDrawList()->AddText(
+                lead_arrow_font, lead_arrow_size,
+                ImVec2(lead_arrow_x, cy - lead_arrow_size * 0.5f),
+                ImGui::GetColorU32(ImGuiCol_Text), ICON_ARROW_FORWARD);
+        }
 
         if(color_arrow)
         {
@@ -609,7 +658,15 @@ SideBar::RenderBranchNode(const TreeNode& node, const TreeNode* state_node,
                 m_active_node_color = wheel[node.color_index % wheel.size()];
             }
         }
+        const bool prev_muted = m_render_muted;
+        if(node.show_lead_arrow)
+        {
+            // Dim the tracks nested under an inline device node (but not the
+            // device label itself) so they draw less attention.
+            m_render_muted = true;
+        }
         RenderTreeChildren(node);
+        m_render_muted = prev_muted;
         m_active_node_color = prev_node_color;
         if(node.collapsable)
         {

@@ -147,7 +147,7 @@ SshTestDialog::Render()
 
         // Fixed width, auto height, so the window hugs its content with no empty band.
         const float dialog_width =
-            GetResponsiveWindowSize(ImVec2(720.0f, 0.0f), ImVec2(620.0f, 0.0f)).x;
+            GetResponsiveWindowSize(ImVec2(560.0f, 0.0f), ImVec2(480.0f, 0.0f)).x;
         if(const ImGuiViewport* viewport = ImGui::GetMainViewport())
         {
             ImGui::SetNextWindowPos(viewport->GetCenter(), ImGuiCond_Appearing,
@@ -200,8 +200,8 @@ SshTestDialog::Render()
                     : (user.empty() ? std::string("?") : user) + "@" + host + ":" +
                           m_uri->GetRemotePortString();
 
-            constexpr float LABEL_WIDTH  = 132.0f;
-            constexpr float BUTTON_WIDTH = 118.0f;
+            constexpr float LABEL_WIDTH  = 104.0f;
+            constexpr float BUTTON_WIDTH = 104.0f;
 
             // Tighten the vertical gaps between the stacked panels.
             const ImVec2 default_item_spacing = style.ItemSpacing;
@@ -211,7 +211,7 @@ SshTestDialog::Render()
             ImGui::PushStyleColor(ImGuiCol_ChildBg, settings.GetColor(Colors::kBgFrame));
             ImGui::PushStyleColor(ImGuiCol_Border, settings.GetColor(Colors::kPanelBorderSubtle));
             ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 10.0f);
-            ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(18.0f, 14.0f));
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(16.0f, 10.0f));
             ImGui::BeginChild("##remote_trace_header", ImVec2(0.0f, 0.0f),
                               ImGuiChildFlags_Borders | ImGuiChildFlags_AutoResizeY,
                               ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
@@ -221,7 +221,7 @@ SshTestDialog::Render()
                 {
                     ImGui::TableSetupColumn("Title", ImGuiTableColumnFlags_WidthStretch);
                     ImGui::TableSetupColumn("Connection", ImGuiTableColumnFlags_WidthFixed,
-                                            248.0f);
+                                            210.0f);
                     ImGui::TableSetupColumn("Close", ImGuiTableColumnFlags_WidthFixed, 24.0f);
                     ImGui::TableNextRow();
                     ImGui::TableSetColumnIndex(0);
@@ -274,7 +274,7 @@ SshTestDialog::Render()
             ImGui::PopStyleColor(2);
 
             ImGui::PushStyleColor(ImGuiCol_ChildBg, settings.GetColor(Colors::kBgMain));
-            ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(16.0f, 10.0f));
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(12.0f, 4.0f));
             ImGui::BeginChild("##remote_trace_body", ImVec2(0.0f, 0.0f),
                               ImGuiChildFlags_AutoResizeY,
                               ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
@@ -283,7 +283,7 @@ SshTestDialog::Render()
                 ImGui::PushStyleColor(ImGuiCol_Border,
                                       settings.GetColor(Colors::kPanelBorderSubtle));
                 ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 10.0f);
-                ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(14.0f, 12.0f));
+                ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(14.0f, 8.0f));
                 ImGui::BeginChild("##remote_trace_target", ImVec2(0.0f, 0.0f),
                                   ImGuiChildFlags_Borders | ImGuiChildFlags_AutoResizeY,
                                   ImGuiWindowFlags_NoScrollbar |
@@ -333,7 +333,7 @@ SshTestDialog::Render()
             bool open_clicked = false;
             ImGui::PushStyleColor(ImGuiCol_ChildBg, settings.GetColor(Colors::kBgFrame));
             ImGui::PushStyleColor(ImGuiCol_Border, settings.GetColor(Colors::kPanelBorderSubtle));
-            ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(18.0f, 14.0f));
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(14.0f, 8.0f));
             ImGui::BeginChild("##remote_trace_footer", ImVec2(0.0f, 0.0f),
                               ImGuiChildFlags_Borders | ImGuiChildFlags_AutoResizeY,
                               ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);

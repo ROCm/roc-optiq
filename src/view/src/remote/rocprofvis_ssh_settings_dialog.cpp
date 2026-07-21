@@ -94,7 +94,7 @@ SshSettingsDialog::Render()
 
     // Fixed width, auto height, so no section clips and no scrollbar is needed.
     const float dialog_width =
-        GetResponsiveWindowSize(ImVec2(720.0f, 0.0f), ImVec2(620.0f, 0.0f)).x;
+        GetResponsiveWindowSize(ImVec2(560.0f, 0.0f), ImVec2(480.0f, 0.0f)).x;
     ImGui::SetNextWindowSizeConstraints(ImVec2(dialog_width, 0.0f),
                                         ImVec2(dialog_width, FLT_MAX));
 
@@ -103,12 +103,11 @@ SshSettingsDialog::Render()
                                   ImGuiWindowFlags_NoSavedSettings |
                                   ImGuiWindowFlags_NoScrollbar))
     {
-        constexpr float CONTENT_PADDING_X = 18.0f;
-        constexpr float CONTENT_PADDING_Y = 12.0f;
-        constexpr float LABEL_WIDTH       = 118.0f;
-        constexpr float BUTTON_WIDTH      = 112.0f;
-        constexpr float PROFILE_BUTTON_W  = 88.0f;
-        constexpr float SHOW_TOGGLE_W     = 76.0f;
+        constexpr float CONTENT_PADDING_X = 14.0f;
+        constexpr float CONTENT_PADDING_Y = 8.0f;
+        constexpr float LABEL_WIDTH       = 104.0f;
+        constexpr float BUTTON_WIDTH      = 104.0f;
+        constexpr float PROFILE_BUTTON_W  = 78.0f;
 
         const ImU32 text_dim       = settings.GetColor(Colors::kTextDim);
         const ImU32 accent         = settings.GetColor(Colors::kAccent);
@@ -127,14 +126,34 @@ SshSettingsDialog::Render()
             ImGui::PopStyleColor();
         };
 
-        auto section_title = [&](const char* title, const char* subtitle) {
+        auto section_title = [&](const char* title) {
             ImGui::PushFont(nullptr,
                             settings.GetFontManager().GetFontSize(FontSize::kMedium));
             ImGui::TextUnformatted(title);
             ImGui::PopFont();
-            ImGui::PushStyleColor(ImGuiCol_Text, text_dim);
-            ImGui::TextWrapped("%s", subtitle);
-            ImGui::PopStyleColor();
+        };
+
+        // Compact reveal toggle that lives inside the field cell, so it can never
+        // overflow past the card like a trailing "Show" checkbox column would.
+        auto reveal_toggle = [&](const char* id, std::string& value, const char* hint,
+                                 bool& show) {
+            const float eye_w = ImGui::GetFrameHeight();
+            ImGui::SetNextItemWidth(-(eye_w + style.ItemInnerSpacing.x));
+            ImGuiInputTextFlags flags = show ? 0 : ImGuiInputTextFlags_Password;
+            if(hint)
+            {
+                InputTextStringWithHint(id, hint, value, flags);
+            }
+            else
+            {
+                InputTextString(id, value, flags);
+            }
+            ImGui::SameLine(0.0f, style.ItemInnerSpacing.x);
+            if(IconButton(show ? ICON_EYE_SLASH : ICON_EYE, icon_font,
+                          ImVec2(eye_w, eye_w), show ? "Hide" : "Show"))
+            {
+                show = !show;
+            }
         };
 
         auto begin_card = [&](const char* id) {
@@ -167,7 +186,7 @@ SshSettingsDialog::Render()
 
         ImGui::PushStyleColor(ImGuiCol_ChildBg, settings.GetColor(Colors::kBgFrame));
         ImGui::PushStyleColor(ImGuiCol_Border, settings.GetColor(Colors::kPanelBorderSubtle));
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(20.0f, 14.0f));
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(16.0f, 10.0f));
         ImGui::BeginChild("##ssh_settings_header", ImVec2(0.0f, 0.0f),
                           ImGuiChildFlags_Borders | ImGuiChildFlags_AutoResizeY,
                           ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
@@ -195,14 +214,14 @@ SshSettingsDialog::Render()
         ImGui::PopStyleColor(2);
 
         ImGui::PushStyleColor(ImGuiCol_ChildBg, settings.GetColor(Colors::kBgMain));
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(14.0f, 6.0f));
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(12.0f, 4.0f));
         ImGui::BeginChild("##ssh_settings_body", ImVec2(0.0f, 0.0f),
                           ImGuiChildFlags_AutoResizeY,
                           ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
         {
             begin_card("##ssh_profile_card");
             {
-                section_title("Profile", "Choose an existing profile or create a new one.");
+                section_title("Profile");
                 ImGui::Spacing();
 
                 if(ImGui::BeginTable("##ssh_profile_table", 3,
@@ -280,7 +299,7 @@ SshSettingsDialog::Render()
 
             begin_card("##ssh_connection_card");
             {
-                section_title("Connection", "Name the profile and set the remote host.");
+                section_title("Connection");
                 ImGui::Spacing();
 
                 if(ImGui::BeginTable("##ssh_connection_table", 2,
@@ -325,29 +344,21 @@ SshSettingsDialog::Render()
 
             begin_card("##ssh_auth_card");
             {
-                section_title("Authentication",
-                              "Use a password, SSH key, or agent-backed key for login.");
+                section_title("Authentication");
                 ImGui::Spacing();
 
-                if(ImGui::BeginTable("##ssh_auth_table", 3,
+                if(ImGui::BeginTable("##ssh_auth_table", 2,
                                       ImGuiTableFlags_SizingStretchProp))
                 {
                     ImGui::TableSetupColumn("Label", ImGuiTableColumnFlags_WidthFixed,
                                             LABEL_WIDTH);
                     ImGui::TableSetupColumn("Field", ImGuiTableColumnFlags_WidthStretch);
-                    ImGui::TableSetupColumn("Toggle", ImGuiTableColumnFlags_WidthFixed,
-                                            SHOW_TOGGLE_W);
 
                     ImGui::TableNextRow();
                     ImGui::TableSetColumnIndex(0);
                     label("Password");
                     ImGui::TableSetColumnIndex(1);
-                    ImGuiInputTextFlags pwd_flags =
-                        m_show_password ? 0 : ImGuiInputTextFlags_Password;
-                    ImGui::SetNextItemWidth(-FLT_MIN);
-                    InputTextString("##rpass", m_working.password, pwd_flags);
-                    ImGui::TableSetColumnIndex(2);
-                    ImGui::Checkbox("Show##password", &m_show_password);
+                    reveal_toggle("##rpass", m_working.password, nullptr, m_show_password);
 
                     ImGui::TableNextRow();
                     ImGui::TableSetColumnIndex(0);
@@ -362,24 +373,12 @@ SshSettingsDialog::Render()
                     ImGui::TableSetColumnIndex(0);
                     label("Passphrase");
                     ImGui::TableSetColumnIndex(1);
-                    ImGuiInputTextFlags pass_flags =
-                        m_show_passphrase ? 0 : ImGuiInputTextFlags_Password;
-                    ImGui::SetNextItemWidth(-FLT_MIN);
-                    InputTextStringWithHint(
-                        "##rkeypass", "Leave blank for unencrypted keys or ssh-agent",
-                        m_working.passphrase, pass_flags);
-                    ImGui::TableSetColumnIndex(2);
-                    ImGui::Checkbox("Show##passphrase", &m_show_passphrase);
+                    reveal_toggle("##rkeypass", m_working.passphrase,
+                                  "Leave blank for unencrypted keys or ssh-agent",
+                                  m_show_passphrase);
 
                     ImGui::EndTable();
                 }
-
-                ImGui::Spacing();
-                ImGui::PushStyleColor(ImGuiCol_Text, text_dim);
-                ImGui::TextWrapped(
-                    "Open Remote Trace requires a host, user, result database path, and either "
-                    "a password or SSH key.");
-                ImGui::PopStyleColor();
             }
             end_card();
         }
@@ -389,7 +388,7 @@ SshSettingsDialog::Render()
 
         ImGui::PushStyleColor(ImGuiCol_ChildBg, settings.GetColor(Colors::kBgFrame));
         ImGui::PushStyleColor(ImGuiCol_Border, settings.GetColor(Colors::kPanelBorderSubtle));
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(14.0f, 12.0f));
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(14.0f, 8.0f));
         ImGui::BeginChild("##ssh_settings_footer", ImVec2(0.0f, 0.0f),
                           ImGuiChildFlags_Borders | ImGuiChildFlags_AutoResizeY,
                           ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);

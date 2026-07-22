@@ -30,6 +30,9 @@ namespace RocProfVis
 namespace View
 {
 
+constexpr ImVec2 MINIMAP_POPUP_SIZE(600.0f, 435.0f);
+constexpr ImVec2 MINIMAP_POPUP_MIN_SIZE(500.0f, 360.0f);
+
 TraceView::TraceView()
 : m_timeline_view(nullptr)
 , m_horizontal_split_container(nullptr)
@@ -267,7 +270,7 @@ TraceView::Update()
     }
     if(m_minimap && m_show_minimap_popup)
     {
-        m_minimap->UpdateData();
+        m_minimap->Update();
     }
 }
 
@@ -385,8 +388,8 @@ TraceView::Render()
             popup_style.PushPopupStyles();
             popup_style.PushTitlebarColors();
 
-            float dpi = SettingsManager::GetInstance().GetDPI();
-            ImGui::SetNextWindowSize(ImVec2(400.0f * dpi, 290.0f * dpi));
+            ImGui::SetNextWindowSize(
+                GetResponsiveWindowSize(MINIMAP_POPUP_SIZE, MINIMAP_POPUP_MIN_SIZE));
             if(ImGui::Begin("Minimap", &m_show_minimap_popup,
                             ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse))
             {
@@ -880,10 +883,8 @@ TraceView::RenderAnnotationControls()
             ImVec2     graph_size   = m_timeline_view->GetGraphSize();
             double     center_time  = tpt->PixelToTime(graph_size.x * 0.5f);
             float      center_y     = m_timeline_view->GetScrollPosition() + graph_size.y * 0.5f;
-            m_annotations->OpenStickyNotePopup(
-                center_time, center_y, coords.v_min_x,
-                coords.v_max_x, graph_size);
-            m_annotations->ShowStickyNotePopup();
+            m_annotations->CreateStickyNote(center_time, center_y, coords.v_min_x,
+                                            coords.v_max_x, graph_size);
         }
     }
     ImGui::PopStyleColor();

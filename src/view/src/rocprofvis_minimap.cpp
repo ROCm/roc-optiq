@@ -31,12 +31,39 @@ Minimap::Minimap(DataProvider& dp, TimelineView* tv)
 , m_timeline_view(tv)
 , m_event_global_max(0.0)
 , m_last_normalize_global(true)
+, m_track_metadata_token(EventManager::InvalidSubscriptionToken)
+, m_track_visibility_token(EventManager::InvalidSubscriptionToken)
 {
     UpdateColorCache();
     m_event_global_max =
         m_data_provider.DataModel().GetTimeline().GetHistogramMaxValueGlobal();
     m_last_normalize_global =
         m_data_provider.DataModel().GetTimeline().IsNormalizeGlobal();
+
+    m_track_metadata_token = EventManager::GetInstance()->Subscribe(
+        static_cast<int>(RocEvents::kTrackMetadataChanged),
+        [this](std::shared_ptr<RocEvent> e) {
+            if(e && e->GetSourceId() == m_data_provider.GetTraceFilePath())
+            {
+                m_data_valid = false;
+            }
+        });
+    m_track_visibility_token = EventManager::GetInstance()->Subscribe(
+        static_cast<int>(RocEvents::kTrackVisibilityChanged),
+        [this](std::shared_ptr<RocEvent> e) {
+            if(e && e->GetSourceId() == m_data_provider.GetTraceFilePath())
+            {
+                m_data_valid = false;
+            }
+        });
+}
+
+Minimap::~Minimap()
+{
+    EventManager::GetInstance()->Unsubscribe(
+        static_cast<int>(RocEvents::kTrackMetadataChanged), m_track_metadata_token);
+    EventManager::GetInstance()->Unsubscribe(
+        static_cast<int>(RocEvents::kTrackVisibilityChanged), m_track_visibility_token);
 }
 void
 Minimap::UpdateColorCache()
@@ -58,25 +85,40 @@ Minimap::UpdateColorCache()
 }
 
 void
-Minimap::UpdateData()
+Minimap::Update()
 {
-    const auto& map    = m_data_provider.DataModel().GetTimeline().GetMiniMap();
-    auto        tracks = m_data_provider.DataModel().GetTimeline().GetTrackList();
+    bool current_normalize_global =
+    m_data_provider.DataModel().GetTimeline().IsNormalizeGlobal();
+    if(m_last_normalize_global != current_normalize_global)
+    {
+        m_last_normalize_global = current_normalize_global;
+        m_data_valid = false;
+    }
+
+    if(m_data_valid)
+    {
+        return;   
+    }
+
+    const std::vector<TrackItem*>& tracks = *m_timeline_view->GetTracks().get();
+    const auto& map = m_data_provider.DataModel().GetTimeline().GetMiniMap();
     if(map.empty() || tracks.empty()) return;
 
-    size_t width = std::get<0>(map.begin()->second).size();
+    size_t width = map.begin()->second.size();
 
     if(width == 0) return;
 
     // Build list of visible tracks only
     m_visible_tracks.clear();
-    for(size_t i = 0; i < tracks.size(); ++i)
+    for(const TrackItem* track : tracks)
     {
-        const auto* t  = tracks[i];
-        auto        it = map.find(t->id);
-        if(it != map.end() && std::get<1>(it->second))
+        if(track && track->IsDisplayed() && track->GetTrackInfo())
         {
-            m_visible_tracks.push_back(t);
+            auto it = map.find(track->GetID());
+            if(it != map.end())
+            {
+                m_visible_tracks.push_back(track->GetTrackInfo());
+            }
         }
     }
 
@@ -93,7 +135,7 @@ Minimap::UpdateData()
         auto        it = map.find(t->id);
         if(it != map.end())
         {
-            const auto& vec = std::get<0>(it->second);
+            const auto& vec = it->second;
             // Copy data to the corresponding row
             std::copy(vec.begin(), vec.end(), data[i].begin());
 
@@ -291,14 +333,6 @@ Minimap::GetColor(double v, rocprofvis_controller_track_type_t type) const
 void
 Minimap::Render()
 {
-    bool current_normalize_global =
-        m_data_provider.DataModel().GetTimeline().IsNormalizeGlobal();
-    if(m_last_normalize_global != current_normalize_global)
-    {
-        m_last_normalize_global = current_normalize_global;
-        UpdateData();
-    }
-
     SettingsManager& sm = SettingsManager::GetInstance();
     ImGui::PushStyleColor(ImGuiCol_ChildBg, sm.GetColor(Colors::kBgPanel));
     ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 4.0f);

@@ -16,6 +16,44 @@ namespace RocProfVis
 namespace View
 {
 
+// Font size the UI was laid out against. Sizes authored at this font render at
+// 1:1; ImGui's DPI font scaling then scales them via ImGui::GetFontSize().
+constexpr float BASE_DESIGN_FONT_SIZE = 13.0f;
+
+namespace
+{
+int
+StringResizeCallback(ImGuiInputTextCallbackData* data)
+{
+    if(data->EventFlag == ImGuiInputTextFlags_CallbackResize)
+    {
+        std::string* str = static_cast<std::string*>(data->UserData);
+        str->resize(static_cast<size_t>(data->BufTextLen));
+        data->Buf = str->data();
+    }
+    return 0;
+}
+}  // namespace
+
+bool
+InputTextString(const char* id, std::string& str, ImGuiInputTextFlags flags)
+{
+    str.reserve(std::max(str.size() + 1, static_cast<size_t>(256)));
+    return ImGui::InputText(id, str.data(), str.capacity() + 1,
+                            flags | ImGuiInputTextFlags_CallbackResize,
+                            StringResizeCallback, static_cast<void*>(&str));
+}
+
+bool
+InputTextStringWithHint(const char* id, const char* hint, std::string& str,
+                        ImGuiInputTextFlags flags)
+{
+    str.reserve(std::max(str.size() + 1, static_cast<size_t>(256)));
+    return ImGui::InputTextWithHint(id, hint, str.data(), str.capacity() + 1,
+                                    flags | ImGuiInputTextFlags_CallbackResize,
+                                    StringResizeCallback, static_cast<void*>(&str));
+}
+
 ImVec2
 MeasureLoadingIndicatorDots(float dot_radius, int num_dots,
                                               float spacing)
@@ -140,8 +178,7 @@ PopComboStyles()
 ImVec2
 GetResponsiveWindowSize(ImVec2 desired_size, ImVec2 min_size, float viewport_margin)
 {
-    constexpr float BASE_DESIGN_FONT_SIZE = 13.0f;
-    const float     scale = ImGui::GetFontSize() / BASE_DESIGN_FONT_SIZE;
+    const float scale = ImGui::GetFontSize() / BASE_DESIGN_FONT_SIZE;
 
     ImVec2 result(desired_size.x > 0.0f ? desired_size.x * scale : desired_size.x,
                   desired_size.y > 0.0f ? desired_size.y * scale : desired_size.y);
@@ -302,6 +339,7 @@ BeginTooltipStyled()
     ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding,
                         settings.GetDefaultStyle().FrameRounding);
     ImGui::PushStyleColor(ImGuiCol_WindowBg, settings.GetColor(Colors::kBgFrame));
+    ImGui::PushStyleColor(ImGuiCol_Text, settings.GetColor(Colors::kTextMain));
     ImGui::BeginTooltip();
 }
 
@@ -314,12 +352,13 @@ BeginItemTooltipStyled()
     ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding,
                         settings.GetDefaultStyle().FrameRounding);
     ImGui::PushStyleColor(ImGuiCol_WindowBg, settings.GetColor(Colors::kBgFrame));
+    ImGui::PushStyleColor(ImGuiCol_Text, settings.GetColor(Colors::kTextMain));
     if(ImGui::BeginItemTooltip())
     {
         return true;
     }
     ImGui::PopStyleVar(2);
-    ImGui::PopStyleColor();
+    ImGui::PopStyleColor(2);
     return false;
 }
 
@@ -328,7 +367,7 @@ EndTooltipStyled()
 {
     ImGui::EndTooltip();
     ImGui::PopStyleVar(2);
-    ImGui::PopStyleColor();
+    ImGui::PopStyleColor(2);
 }
 
 void
@@ -401,6 +440,23 @@ ElidedText(const char* text, float available_width, float tooltip_width,
             ImGui::PopStyleVar(2);
         }
     }
+}
+
+std::string
+ElideWithEllipsis(const std::string& text, float max_width, size_t max_chars)
+{
+    std::string out       = text.substr(0, max_chars);
+    bool        truncated = text.size() > max_chars;
+    while(!out.empty() && ImGui::CalcTextSize((out + "...").c_str()).x > max_width)
+    {
+        out.pop_back();
+        truncated = true;
+    }
+    if(truncated)
+    {
+        out += "...";
+    }
+    return out;
 }
 
 void
@@ -507,9 +563,10 @@ DrawInternalBuildBanner(const char* text /*= "Internal Build"*/)
     ImDrawList*   dl   = ImGui::GetForegroundDrawList();
     const ImVec2& disp = ImGui::GetIO().DisplaySize;
 
-    // Parameters
-    static constexpr float ribbon_thickness = 20.0f;
-    static constexpr float min_base_length  = 150.0f;
+    // Parameters. Scale with the font so the banner tracks ImGui's DPI font scaling.
+    const float            ui_scale         = ImGui::GetFontSize() / BASE_DESIGN_FONT_SIZE;
+    const float            ribbon_thickness = 20.0f * ui_scale;
+    const float            min_base_length  = 150.0f * ui_scale;
     SettingsManager& settings    = SettingsManager::GetInstance();
     const ImU32      col_fill     = settings.GetColor(Colors::kBannerFill);
     const ImU32      col_border   = settings.GetColor(Colors::kBannerBorder);

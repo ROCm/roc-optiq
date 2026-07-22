@@ -52,15 +52,6 @@ drop_callback(GLFWwindow* window, int count, const char* paths[])
 }
 
 static void
-content_scale_callback(GLFWwindow* window, float xscale, float yscale)
-{
-    // Unused parameters
-    (void) window;
-    (void) yscale;
-    rocprofvis_view_set_dpi(xscale);
-}
-
-static void
 close_callback(GLFWwindow* window)
 {
     g_render_options =
@@ -114,21 +105,30 @@ sync_imgui_modifiers_with_os()
     ImGuiIO&                            io = ImGui::GetIO();
     RocProfVis::Platform::ModifierState m  = RocProfVis::Platform::get_os_modifier_state();
 
-    if(io.KeyCtrl != m.ctrl)
+    io.AddKeyEvent(ImGuiMod_Ctrl, m.ctrl);
+    io.AddKeyEvent(ImGuiMod_Shift, m.shift);
+    io.AddKeyEvent(ImGuiMod_Alt, m.alt);
+    io.AddKeyEvent(ImGuiMod_Super, m.super);
+
+    if(!m.ctrl)
     {
-        io.AddKeyEvent(ImGuiMod_Ctrl, m.ctrl);
+        io.AddKeyEvent(ImGuiKey_LeftCtrl, false);
+        io.AddKeyEvent(ImGuiKey_RightCtrl, false);
     }
-    if(io.KeyShift != m.shift)
+    if(!m.shift)
     {
-        io.AddKeyEvent(ImGuiMod_Shift, m.shift);
+        io.AddKeyEvent(ImGuiKey_LeftShift, false);
+        io.AddKeyEvent(ImGuiKey_RightShift, false);
     }
-    if(io.KeyAlt != m.alt)
+    if(!m.alt)
     {
-        io.AddKeyEvent(ImGuiMod_Alt, m.alt);
+        io.AddKeyEvent(ImGuiKey_LeftAlt, false);
+        io.AddKeyEvent(ImGuiKey_RightAlt, false);
     }
-    if(io.KeySuper != m.super)
+    if(!m.super)
     {
-        io.AddKeyEvent(ImGuiMod_Super, m.super);
+        io.AddKeyEvent(ImGuiKey_LeftSuper, false);
+        io.AddKeyEvent(ImGuiKey_RightSuper, false);
     }
 }
 
@@ -156,7 +156,6 @@ static void
 key_callback(GLFWwindow* window, int key, int scancode, int action, int mods)
 {
     (void) scancode;
-    (void) mods;
 
 #ifndef __APPLE__
     // Toggle fullscreen with F11
@@ -338,12 +337,6 @@ main(int argc, char** argv)
             {
                 // After init: window may be recreated (e.g. Vulkan -> OpenGL fallback)
                 glfwSetDropCallback(window, drop_callback);
-                glfwSetWindowContentScaleCallback(window, content_scale_callback);
-                {
-                    float xs, ys;
-                    glfwGetWindowContentScale(window, &xs, &ys);
-                    content_scale_callback(window, xs, ys);
-                }
                 glfwSetWindowCloseCallback(window, close_callback);
                 glfwSetWindowSizeCallback(window, window_size_change_callback);
                 glfwSetKeyCallback(window, key_callback);
@@ -355,6 +348,7 @@ main(int argc, char** argv)
                 ImGui::CreateContext();
                 ImGuiIO& io = ImGui::GetIO();
                 io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
+                io.ConfigDpiScaleFonts               = true;
                 io.ConfigWindowsMoveFromTitleBarOnly = true;
 
                 ImGui::StyleColorsLight();

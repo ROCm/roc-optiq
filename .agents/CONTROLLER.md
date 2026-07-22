@@ -46,9 +46,6 @@ source wins; please update this file in the same change.
   (`src/view/src/rocprofvis_data_provider.h`) and from Python via the
   CFFI build script in `src/model/python/`.
 - **Build flags:**
-  - `COMPUTE_UI_SUPPORT` - enables `src/controller/src/compute/` and the
-    compute-only public API. Wrap any new compute-only symbol in
-    `#ifdef COMPUTE_UI_SUPPORT`.
   - `BUILD_TESTING` - builds `roc-optiq-controller-system-tests` and
     `roc-optiq-controller-compute-tests` (Catch2). Tests are wired
     against fixture traces under `sample/`.
@@ -100,11 +97,9 @@ typedef rocprofvis_handle_t rocprofvis_controller_summary_t;
 typedef rocprofvis_handle_t rocprofvis_controller_summary_metrics_t;
 typedef rocprofvis_handle_t rocprofvis_controller_topology_node_t;
 typedef rocprofvis_handle_t rocprofvis_controller_plot_t;
-#ifdef COMPUTE_UI_SUPPORT
 typedef rocprofvis_handle_t rocprofvis_controller_workload_t;
 typedef rocprofvis_handle_t rocprofvis_controller_kernel_t;
 typedef rocprofvis_handle_t rocprofvis_controller_metrics_container_t;
-#endif
 ```
 
 You can always recover the runtime kind via
@@ -122,8 +117,8 @@ void                      rocprofvis_controller_free(rocprofvis_controller_t*);
 
 `rocprofvis_controller_alloc` sniffs the file with
 `rocprofvis_db_identify_type` (from `src/model/`). It returns either a
-`SystemTrace*` (rocpd / rocprof / multinode SQLite) or, when
-`COMPUTE_UI_SUPPORT` is on, a `ComputeTrace*` (compute SQLite). The
+`SystemTrace*` (rocpd / rocprof / multinode SQLite) or a
+`ComputeTrace*` (compute SQLite). The
 caller treats both the same way - everything dispatches through the
 opaque handle and the runtime object type tag.
 
@@ -164,9 +159,7 @@ rocprofvis_controller_table_fetch_async(...);                    // tables (syst
 rocprofvis_controller_table_export_csv(...);                     // table -> CSV file
 rocprofvis_controller_summary_fetch_async(...);                  // summary metrics
 rocprofvis_controller_get_indexed_property_async(...);           // event/table/system props
-#ifdef COMPUTE_UI_SUPPORT
 rocprofvis_controller_metric_fetch_async(...);                   // compute metric values
-#endif
 rocprofvis_controller_create_analysis_view_async(...);           // analytic views (placeholder)
 ```
 
@@ -741,10 +734,8 @@ and LRU eviction.
 
 ## 6. Compute Trace Domain (`src/controller/src/compute/`)
 
-Compute-side public API is wrapped in `#ifdef COMPUTE_UI_SUPPORT`, and
-`src/controller/CMakeLists.txt` only compiles compute sources when that
-flag is enabled. New compute-only public symbols must follow the same
-guarding pattern. The compute objects all share the same `Handle` base,
+The compute-side public API and `src/controller/src/compute/` sources
+are always compiled. The compute objects all share the same `Handle` base,
 the same `Reference<>` validation, the same `JobSystem` / `Future`
 plumbing.
 
@@ -1051,7 +1042,7 @@ Property bank starting points (`uint32_t` enum bases):
 | Summary Metrics                       | `0xF0000000` |
 | Common (memory usage, etc.)           | `0xFFFF0000` |
 
-Compute-side banks (`COMPUTE_UI_SUPPORT`) start at the
+Compute-side banks start at the
 `__kRPVControllerComputePropertiesFirst` family. The auto-incrementing
 `__first / __last` brackets in each enum are an extension hint - if
 you add a new property to an existing bank, declare it inside the
@@ -1128,7 +1119,6 @@ These supplement `CODING.md`. When the two disagree, `CODING.md` wins.
 | Implement a new analysis function                       | Extend `Analysis` and add a free function in `rocprofvis_controller_analysis.h` |
 | Add a new object type                                   | See section 9 (six-step recipe)                                         |
 | Add a new property to an existing object type           | Append to that bank's enum inside the `__first / __last` brackets       |
-| Add a new compute-only feature                          | Wrap with `#ifdef COMPUTE_UI_SUPPORT` everywhere it appears             |
 | Generate / consume a unique 64-bit per-type id          | `IdGenerator<MyType>` (see `rocprofvis_controller_id.h`)                |
 
 ## 12. Common Pitfalls
@@ -1153,9 +1143,6 @@ These supplement `CODING.md`. When the two disagree, `CODING.md` wins.
 - **Adding properties without minding the bank base.** Property
   values are bit-packed numerically, not symbolically; collisions
   between banks will surface as silent dispatch errors.
-- **Forgetting the `COMPUTE_UI_SUPPORT` guard.** Compute-only headers
-  in `inc/` are guarded; matching `src/compute/` and any callsite must
-  also be guarded.
 - **Holding a pointer returned by `GetString` past the next
   `Set*`.** The buffer is owned by the caller; if you read into a
   thread-local buffer and then call `SetString`, the pointer is stale.
@@ -1244,8 +1231,7 @@ free" sequence.
 - `rocprofvis_controller_ext_data.{h,cpp}` -> `ExtData`,
   `ArgumentData`.
 
-### Compute trace (`src/controller/src/compute/`,
-`#ifdef COMPUTE_UI_SUPPORT`)
+### Compute trace (`src/controller/src/compute/`)
 
 - `rocprofvis_controller_trace_compute.{h,cpp}` -> `ComputeTrace`.
 - `rocprofvis_controller_workload.{h,cpp}` -> `Workload`.

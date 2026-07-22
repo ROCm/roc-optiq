@@ -12,6 +12,7 @@ namespace View
 {
 
 class ComputeSelection;
+class ComputeCodeView;
 class PresetBrowser;
 
 class ComputeView : public RootView
@@ -43,6 +44,7 @@ private:
 
     std::shared_ptr<ComputeSelection> m_compute_selection;
     std::unique_ptr<PresetBrowser>    m_preset_browser;
+    std::shared_ptr<ComputeCodeView>  m_code_view;
 
     std::shared_ptr<TabContainer> m_tab_container;
 

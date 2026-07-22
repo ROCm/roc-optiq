@@ -6,6 +6,7 @@
 #include "rocprofvis_font_manager.h"
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_timeline_selection.h"
+#include "rocprofvis_timeline_track_options.h"
 #include "rocprofvis_utils.h"
 #include "spdlog/spdlog.h"
 #include "widgets/rocprofvis_gui_helpers.h"
@@ -88,14 +89,13 @@ RenderCompareSourceBadge(const TrackInfo* track_info, SettingsManager& settings)
     ImGui::PopID();
 }
 
-TrackItem::TrackItem(DataProvider& dp, uint64_t id, bool display,
+TrackItem::TrackItem(DataProvider& dp, uint64_t id, TimelineTrackOptions& track_options,
                      std::shared_ptr<TimePixelTransform> tpt,
                      std::shared_ptr<TimelineSelection>  timeline_selection)
 : m_track_metadata(nullptr)
 , m_track_statistics(nullptr)
 , m_track_statistics_dirty(false)
 , m_track_id(id)
-, m_track_height(DEFAULT_TRACK_HEIGHT)
 , m_track_content_height(0.0f)
 , m_min_track_height(DEFAULT_MIN_TRACK_HEIGHT)
 , m_track_height_changed(false)
@@ -109,22 +109,21 @@ TrackItem::TrackItem(DataProvider& dp, uint64_t id, bool display,
 , m_meta_area_clicked(false)
 , m_meta_area_scale_width(0.0f)
 , m_max_meta_area_scale_width(0.0f)
-, m_display(display)
 , m_reorder_grip_width(DEFAULT_GRIP_WIDTH)
 , m_tpt(tpt)
 , m_timeline_selection(timeline_selection)
 , m_chunk_duration_ns(DEFAULT_CHUNK_DURATION)
 , m_group_id_counter(0)
 , m_meta_area_label("")
+, m_has_node_color(false)
+, m_node_color_index(0)
+, m_node_display_index(0)
+, m_node_pill(nullptr)
+, m_options(nullptr)
+, m_timeline_track_options(track_options)
 , m_selected(false)
 , m_selected_changed_token(EventManager::InvalidSubscriptionToken)
-, m_track_project_settings(m_data_provider.GetTraceFilePath(), *this)
 {
-    if(m_track_project_settings.Valid())
-    {
-        m_track_height = m_track_project_settings.Height();
-    }
-
     const TrackInfo* track_info =
         m_data_provider.DataModel().GetTimeline().GetTrack(m_track_id);
 
@@ -136,6 +135,7 @@ TrackItem::TrackItem(DataProvider& dp, uint64_t id, bool display,
     m_track_metadata = track_info;
     m_name = m_data_provider.DataModel().BuildTrackName(m_track_id);
     SetMetaAreaLabel(track_info);
+    SetNodeColor(track_info);
     SetDefaultPillLabel(track_info);
 
     EventManager::EventHandler selected_changed_handler =
@@ -152,6 +152,9 @@ TrackItem::TrackItem(DataProvider& dp, uint64_t id, bool display,
     m_selected_changed_token = EventManager::GetInstance()->Subscribe(
         static_cast<int>(RocEvents::kTimelineTrackSelectionChanged),
         selected_changed_handler);
+
+    m_options = m_timeline_track_options.InitTrack(*this);
+    ROCPROFVIS_ASSERT(m_options);
 }
 
 TrackItem::~TrackItem()
@@ -172,7 +175,7 @@ TrackItem::TrackHeightChanged()
 float
 TrackItem::GetTrackHeight() const
 {
-    return m_track_height;
+    return m_options ? m_options->m_height : DEFAULT_TRACK_HEIGHT;
 }
 
 const std::string&
@@ -232,16 +235,15 @@ TrackItem::IsSelected() const
 bool
 TrackItem::IsDisplayed() const
 {
-    return m_display;
+    return m_options ? m_options->m_display : true;
 }
 
 void
 TrackItem::SetDisplay(bool display)
 {
-    if(display != m_display)
+    if(m_options)
     {
-        m_display              = display;
-        m_track_height_changed = true;
+        m_options->m_display = display;
     }
 }
 
@@ -254,7 +256,7 @@ TrackItem::Render(float width)
     ImGui::SameLine();
 
     RenderChart(width);
-    RenderResizeBar(ImVec2(width + s_metadata_width, m_track_height));
+    RenderResizeBar(ImVec2(width + s_metadata_width, GetTrackHeight()));
 
     ImGui::EndGroup();
 
@@ -272,6 +274,12 @@ float
 TrackItem::GetReorderGripWidth()
 {
     return m_reorder_grip_width;
+}
+
+const TrackInfo*
+TrackItem::GetTrackInfo() const
+{
+    return m_track_metadata;
 }
 
 void
@@ -302,7 +310,7 @@ void
 TrackItem::RenderMetaArea()
 {
     ImVec2 outer_container_size = ImGui::GetContentRegionAvail();
-    m_track_content_height      = m_track_height - 0.5f * m_resize_grip_thickness;
+    m_track_content_height      = GetTrackHeight() - 0.5f * m_resize_grip_thickness;
 
     ImVec2 name_label_min(0.0f, 0.0f);
     ImVec2 name_label_max(0.0f, 0.0f);
@@ -421,9 +429,16 @@ TrackItem::RenderMetaArea()
         ImGui::PopStyleColor();
         ImGui::EndGroup();
 
+        // The node pill is toggled from Edit -> Preferences.
+        if(m_node_pill)
+        {
+            m_node_pill->SetVisible(m_has_node_color && m_settings.ShowNodeColors());
+        }
+
         RenderMetaAreaScale();
         RenderMetaAreaExpand();
         RenderPills(ImVec2(available_for_text, content_size.y));
+
         ImGui::GetWindowDrawList()->AddLine(
             ImGui::GetWindowPos() + ImVec2(0.0f, ImGui::GetWindowSize().y),
             ImGui::GetWindowPos() + ImGui::GetWindowSize(),
@@ -462,6 +477,7 @@ TrackItem::RenderMetaArea()
 
     if(meta_area_hovered && ImGui::IsMouseClicked(ImGuiMouseButton_Right))
     {
+        m_timeline_track_options.InitContextMenu(*this);
         ImGui::OpenPopup(TRACK_COPY_MENU_POPUP_NAME);
     }
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, style.WindowPadding);
@@ -484,9 +500,7 @@ TrackItem::RenderMetaArea()
         ImGui::Separator();
         if(IconBeginMenu(ICON_GEAR, "Track Options"))
         {
-            ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(0.0f, 0.0f));
-            RenderMetaAreaOptions();
-            ImGui::PopStyleVar();
+            m_timeline_track_options.RenderContextMenu();
             ImGui::EndMenu();
         }
         ImGui::EndPopup();
@@ -513,16 +527,15 @@ TrackItem::RenderResizeBar(const ImVec2& parent_size)
 
     if(ImGui::BeginDragDropSource(ImGuiDragDropFlags_None))
     {
-        ImVec2 drag_delta = ImGui::GetMouseDragDelta(ImGuiMouseButton_Left);
-        m_track_height    = m_track_height + (drag_delta.y);
-        if(m_track_height < m_min_track_height)
+        if(m_options)
         {
-            m_track_height = m_min_track_height;
+            m_options->m_height = std::max(
+                m_options->m_height + ImGui::GetMouseDragDelta(ImGuiMouseButton_Left).y,
+                m_min_track_height);
+            m_track_height_changed = true;
         }
-
         ImGui::ResetMouseDragDelta();
         ImGui::EndDragDropSource();
-        m_track_height_changed = true;
     }
     if(ImGui::BeginDragDropTarget())
     {
@@ -731,11 +744,18 @@ TrackItem::SetMetaAreaLabel(const TrackInfo* track_info)
 {
     TopologyDataModel& tdm = m_data_provider.DataModel().GetTopology();
 
-    std::string node_id_str    = std::to_string(track_info->topology.node_id);
     std::string process_id_str = std::to_string(track_info->topology.process_id);
 
-    bool show_node_id    = tdm.NodeCount() > 1;
     bool show_process_id = tdm.ProcessCount() > 1;
+
+    // Node is conveyed by the colored node pill, so the tooltip carries the
+    // human-readable name + stable index instead of the raw node id.
+    const size_t    node_index = tdm.GetNodeDisplayIndex(track_info->topology.node_id);
+    const NodeInfo* node_info  = tdm.GetNode(track_info->topology.node_id);
+    const std::string node_name =
+        (node_info && !node_info->host_name.empty())
+            ? node_info->host_name
+            : "Node " + std::to_string(node_index);
 
     switch(track_info->topology.type)
     {
@@ -774,10 +794,6 @@ TrackItem::SetMetaAreaLabel(const TrackInfo* track_info)
         case TrackInfo::TrackType::Counter:
         {
             m_meta_area_label = track_info->sub_name;
-            if(show_node_id)
-            {
-                m_meta_area_label += " (NID: " + node_id_str + ")";
-            }
             if(show_process_id)
             {
                 m_meta_area_label += " (PID: " + process_id_str + ")";
@@ -801,10 +817,6 @@ TrackItem::SetMetaAreaLabel(const TrackInfo* track_info)
                 m_meta_area_label = track_info->sub_name;
             }
 
-            if(show_node_id)
-            {
-                m_meta_area_label += " (NID: " + node_id_str + ")";
-            }
             if(show_process_id)
             {
                 m_meta_area_label += " (PID: " + process_id_str + ")";
@@ -815,10 +827,6 @@ TrackItem::SetMetaAreaLabel(const TrackInfo* track_info)
         {
             m_meta_area_label = track_info->main_name;
 
-            if(show_node_id)
-            {
-                m_meta_area_label += " (NID: " + node_id_str + ")";
-            }
             if(show_process_id)
             {
                 m_meta_area_label += " (PID: " + process_id_str + ")";
@@ -838,7 +846,7 @@ TrackItem::SetMetaAreaLabel(const TrackInfo* track_info)
 
     std::string meta_lines;
     meta_lines += "Track ID: " + std::to_string(track_info->id) + "\n";
-    meta_lines += "Node ID: " + node_id_str + "\n";
+    meta_lines += "Node: " + node_name + " [" + std::to_string(node_index) + "]\n";
     meta_lines += "Process ID: " + process_id_str + "\n";
     meta_lines += std::string(count_label) + ": ";
 #ifdef ROCPROFVIS_DEVELOPER_MODE
@@ -863,6 +871,39 @@ TrackItem::SetMetaAreaLabel(const TrackInfo* track_info)
     {
         m_meta_area_tooltip += "\n\n" + meta_lines;
     }
+}
+
+void
+TrackItem::SetNodeColor(const TrackInfo* track_info)
+{
+    TopologyDataModel& tdm = m_data_provider.DataModel().GetTopology();
+
+    // Node decorations only make sense on multi-node traces; a single-node
+    // trace looks exactly as it did before this feature.
+    const uint64_t            node_id = track_info->topology.node_id;
+    const std::vector<ImU32>& wheel   = m_settings.GetColorWheel();
+    m_node_display_index              = tdm.GetNodeDisplayIndex(node_id);
+    m_has_node_color =
+        tdm.NodeCount() > 1 && m_node_display_index > 0 && !wheel.empty();
+    if(!m_has_node_color)
+    {
+        return;
+    }
+
+    const NodeInfo* node = tdm.GetNode(node_id);
+    m_node_name          = (node && !node->host_name.empty())
+                               ? node->host_name
+                               : "Node " + std::to_string(m_node_display_index);
+
+    // The 1-based display index maps to a stable color-wheel slot shared with
+    // the pill accent and the sidebar so every node cue matches.
+    m_node_color_index = (m_node_display_index - 1) % wheel.size();
+
+    m_node_pill = AddPill(true, true);
+    m_node_pill->SetLabel(std::to_string(m_node_display_index));
+    m_node_pill->SetAccentColor(m_node_color_index);
+    m_node_pill->SetTooltip("Node " + std::to_string(m_node_display_index) + ": " +
+                            m_node_name);
 }
 
 Pill*
@@ -1026,39 +1067,6 @@ TrackItem::RenderPills(ImVec2 region)
     }
 }
 
-TrackProjectSettings::TrackProjectSettings(const std::string& project_id,
-                                           TrackItem&         track_item)
-: ProjectSetting(project_id)
-, m_track_item(track_item)
-{}
-
-TrackProjectSettings::~TrackProjectSettings() {}
-
-void
-TrackProjectSettings::ToJson()
-{
-    m_settings_json[JSON_KEY_GROUP_TIMELINE][JSON_KEY_TIMELINE_TRACK]
-                   [m_track_item.GetID()][JSON_KEY_TIMELINE_TRACK_HEIGHT] =
-                       m_track_item.GetTrackHeight();
-}
-
-bool
-TrackProjectSettings::Valid() const
-{
-    return m_settings_json[JSON_KEY_GROUP_TIMELINE][JSON_KEY_TIMELINE_TRACK]
-                          [m_track_item.GetID()][JSON_KEY_TIMELINE_TRACK_HEIGHT]
-                              .isNumber();
-}
-
-float
-TrackProjectSettings::Height() const
-{
-    return static_cast<float>(
-        m_settings_json[JSON_KEY_GROUP_TIMELINE][JSON_KEY_TIMELINE_TRACK]
-                       [m_track_item.GetID()][JSON_KEY_TIMELINE_TRACK_HEIGHT]
-                           .getNumber());
-}
-
 Pill::Pill(bool shown, bool active)
 : m_show_pill_label(shown)
 , m_active(active)
@@ -1088,21 +1096,16 @@ Pill::~Pill()
 }
 
 void
-Pill::SetLabel(const std::string& label, Sizing sizing)
+Pill::SetLabel(const std::string& label)
 {
-    switch(sizing)
-    {
-        case kCompact:
-        {
-            m_compact_label = label;
-            break;
-        }
-        case kExtended:
-        {
-            m_ext_label = label;
-            break;
-        }
-    }
+    m_compact_label = label;
+    CalculateSize();
+}
+
+void
+Pill::SetExtendedLabel(const std::string& label)
+{
+    m_ext_label = label;
     CalculateSize();
 }
 
@@ -1233,6 +1236,13 @@ Pill::Render(const ImVec2& pos, SettingsManager& settings, Sizing sizing)
 void
 Pill::CalculateSize()
 {
+    // Measure with the same font Render() draws with; otherwise the width is
+    // computed from the larger default font and the gap grows with DPI, letting
+    // adjacent pills overlap on high-resolution displays.
+    FontManager& fonts = SettingsManager::GetInstance().GetFontManager();
+    ImGui::PushFont(fonts.GetFont(FontType::kDefault),
+                    fonts.GetFontSize(FontSize::kSmall));
+
     m_widths[kElided]  = ImGui::CalcTextSize("...").x + 2 * m_padding_x;
     m_widths[kCompact] = ImGui::CalcTextSize(m_compact_label.c_str()).x + 2 * m_padding_x;
     m_widths[kExtended] =
@@ -1240,6 +1250,8 @@ Pill::CalculateSize()
             ? m_widths[kCompact]
             : ImGui::CalcTextSize(m_ext_label.c_str()).x + 2 * m_padding_x;
     m_height = ImGui::GetTextLineHeight() + 2 * m_padding_y;
+
+    ImGui::PopFont();
 }
 
 }  // namespace View

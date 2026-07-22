@@ -134,7 +134,6 @@ TableDataEvent::GetResponseCode() const
     return m_response_code;
 }
 
-#ifdef COMPUTE_UI_SUPPORT
 ComputeSelectionChangedEvent::ComputeSelectionChangedEvent(int event_id, uint32_t id, const std::string& source_id)
 : RocEvent(event_id, source_id)
 , m_id(id)
@@ -196,8 +195,6 @@ ComputeAddMetricToKernelDetailsEvent::GetValueName() const
 {
     return m_value_name;
 }
-
-#endif
 
 TabEvent::TabEvent(int event_id, const std::string& tab_id, const std::string& source_id)
 : RocEvent(event_id, source_id)
@@ -342,19 +339,6 @@ EventHighlightChangedEvent::IsBatch() const
     return m_is_batch;
 }
 
-StickyNoteEvent::StickyNoteEvent(int id, const std::string& source_id)
-: RocEvent(static_cast<int>(RocEvents::kStickyNoteEdited), source_id)
-, m_id(id)
-{
-    SetType(RocEventType::kStickyNoteEvent);
-}
-
-const int
-StickyNoteEvent::GetNoteId() const
-{
-    return m_id;
-}
-
 RangeEvent::RangeEvent(int event_id, double start_ns, double end_ns,
                        const std::string& source_id)
 : RocEvent(event_id, source_id)
@@ -375,12 +359,14 @@ RangeEvent::GetEndNs() const
 {
     return m_end_ns;
 }
-NavigationEvent::NavigationEvent(double v_min, double v_max, double y_position, bool center )
+NavigationEvent::NavigationEvent(double v_min, double v_max, double y_position,
+                                 bool center, uint64_t track_id)
 : RocEvent(static_cast<int>(RocEvents::kGoToTimelineSpot))
 , m_v_min(v_min)
 , m_v_max(v_max)
 , m_y_position(y_position)
 , m_center(center)
+, m_track_id(track_id)
 {
     SetType(RocEventType::kNavigationEvent);
 }
@@ -406,6 +392,11 @@ bool
 NavigationEvent::GetCenter() const
 {
     return m_center;
+}
+uint64_t
+NavigationEvent::GetTrackId() const
+{
+    return m_track_id;
 }
 
 RequestProgressUpdateEvent::RequestProgressUpdateEvent(
@@ -443,4 +434,56 @@ const std::string
 RequestProgressUpdateEvent::GetMessage() const
 {
     return m_message;
+}
+
+ProfilerStatusEvent::ProfilerStatusEvent(uint64_t                    operation_id,
+                                         rocprofvis_profiler_state_t state,
+                                         const std::string&          source_id)
+: RocEvent(static_cast<int>(RocEvents::kProfilerStatusChanged), source_id)
+, m_operation_id(operation_id)
+, m_state(state)
+{
+    m_event_type = RocEventType::kProfilerStatusEvent;
+}
+
+uint64_t
+ProfilerStatusEvent::GetOperationId() const
+{
+    return m_operation_id;
+}
+
+rocprofvis_profiler_state_t
+ProfilerStatusEvent::GetState() const
+{
+    return m_state;
+}
+
+RemoteStatusEvent::RemoteStatusEvent(uint64_t            operation_id,
+                                     uint32_t            status,
+                                     rocprofvis_result_t result,
+                                     const std::string&  source_id)
+: RocEvent(static_cast<int>(RocEvents::kRemoteStatusChanged), source_id)
+, m_operation_id(operation_id)
+, m_status(status)
+, m_result(result)
+{
+    m_event_type = RocEventType::kRemoteStatusEvent;
+}
+
+uint64_t
+RemoteStatusEvent::GetOperationId() const
+{
+    return m_operation_id;
+}
+
+uint32_t
+RemoteStatusEvent::GetStatus() const
+{
+    return m_status;
+}
+
+rocprofvis_result_t
+RemoteStatusEvent::GetResult() const
+{
+    return m_result;
 }

@@ -85,6 +85,15 @@ InputTextWithClear(const char* id, const char* hint, char* buf, size_t buf_size,
                    ImFont* icon_font, ImU32 bg_color, const ImGuiStyle& style,
                    float width = 0);
 
+// std::string-backed ImGui text inputs using ImGuiInputTextFlags_CallbackResize,
+// so callers do not need to manage fixed-size char buffers.
+bool
+InputTextString(const char* id, std::string& str, ImGuiInputTextFlags flags = 0);
+
+bool
+InputTextStringWithHint(const char* id, const char* hint, std::string& str,
+                        ImGuiInputTextFlags flags = 0);
+
 void
 SetTooltipStyled(const char* fmt, ...);
 
@@ -108,6 +117,11 @@ void
 ElidedText(const char* text, float available_width, float tooltip_width = 0.0f,
            Alignment alignment                     = Alignment_Left,
            bool      imgui_AlignTextToFramePadding = false);
+
+// Trims text to a single line fitting max_width (and max_chars), appending "..."
+// when shortened. Uses the current font for measurement.
+std::string
+ElideWithEllipsis(const std::string& text, float max_width, size_t max_chars);
 
 void
 CenterNextTextItem(const char* text);

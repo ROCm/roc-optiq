@@ -22,8 +22,8 @@ enum class TimeFormat;
 typedef struct DisplaySettings
 {
     bool use_dark_mode;
-    bool dpi_based_scaling;
     int  font_size_index;
+    bool show_node_colors;  // color-code timeline tracks by node
 
 } DisplaySettings;
 
@@ -57,6 +57,17 @@ typedef struct InternalSettings
 {
     std::list<std::string> recent_files;
 } InternalSettings;
+
+typedef struct ProfilerSettings
+{
+    std::string profiler_path;
+    std::string profiler_output_directory;
+    bool        auto_load_trace = true;
+    std::vector<std::string> recent_targets;
+    std::string last_preset_name;
+    std::string last_profiler_id;
+    std::string last_ssh_connection_id;
+} ProfilerSettings;
 
 typedef struct AppWindowSettings
 {
@@ -211,8 +222,8 @@ constexpr const char* JSON_KEY_SETTINGS_CATEGORY_OTHER    = "other";
 constexpr const char* JSON_KEY_SETTINGS_CATEGORY_INTERNAL = "internal";
 
 constexpr const char* JSON_KEY_SETTINGS_DISPLAY_DARK_MODE   = "use_dark_mode";
-constexpr const char* JSON_KEY_SETTINGS_DISPLAY_DPI_SCALING = "dpi_based_scaling";
 constexpr const char* JSON_KEY_SETTINGS_DISPLAY_FONT_SIZE   = "font_size_index";
+constexpr const char* JSON_KEY_SETTINGS_DISPLAY_NODE_COLORS = "show_node_colors";
 
 constexpr const char* JSON_KEY_SETTINGS_UNITS_TIME_FORMAT = "time_format";
 
@@ -240,6 +251,10 @@ constexpr const char* JSON_KEY_SETTINGS_LOG_VIEWER_VISIBLE       = "log_viewer_v
 constexpr int LOG_VIEWER_DEFAULT_LEVEL_MASK = 0x3F;
 
 constexpr const char* JSON_KEY_SETTINGS_CATEGORY_HOTKEYS = "hotkeys";
+constexpr const char* JSON_KEY_SETTINGS_CATEGORY_PROFILER = "profiler";
+constexpr const char* JSON_KEY_SETTINGS_PROFILER_PATH = "profiler_path";
+constexpr const char* JSON_KEY_SETTINGS_PROFILER_OUTPUT_DIR = "profiler_output_directory";
+constexpr const char* JSON_KEY_SETTINGS_PROFILER_AUTO_LOAD = "auto_load_trace";
 
 class SettingsManager
 {
@@ -253,10 +268,9 @@ public:
 
     // Fonts
     FontManager& GetFontManager();
-    void         SetDPI(float DPI);
-    float        GetDPI();
 
     // Styling
+    bool ShowNodeColors() const { return m_usersettings.display_settings.show_node_colors; }
     ImU32                     GetColor(Colors color) const;
     const std::vector<ImU32>& GetColorWheel() const;
     const std::vector<ImU32>& GetHighlightedEventColorWheel() const;
@@ -285,11 +299,16 @@ public:
     AppWindowSettings& GetAppWindowSettings();
 
     void SaveHotkeySettings();
+    // Profiler settings
+    ProfilerSettings& GetProfilerSettings();
+    void SaveProfilerSettings();
 
     // Constant for event height;
     const float GetEventLevelHeight() const;
     const float GetEventLevelCompactHeight() const;
 
+    // Convenience static method (alias for GetInstance)
+    static SettingsManager& Get() { return GetInstance(); }
 
 private:
     SettingsManager();
@@ -318,18 +337,19 @@ private:
 
     void SerializeHotkeySettings(jt::Json& json);
     void DeserializeHotkeySettings(jt::Json& json);
+    void SerializeProfilerSettings(jt::Json& json);
+    void DeserializeProfilerSettings(jt::Json& json);
 
     const std::array<ImU32, static_cast<size_t>(Colors::__kLastColor)>* m_color_store;
 
     FontManager        m_font_manager;
     ImGuiStyle         m_default_imgui_style;
     ImGuiStyle         m_default_style;
-    float              m_display_dpi;
     const UserSettings m_usersettings_default;
     UserSettings       m_usersettings;
     InternalSettings   m_internalsettings;
     AppWindowSettings  m_appwindowsettings;
-
+    ProfilerSettings   m_profilersettings;
 
     std::filesystem::path m_json_path;
 };

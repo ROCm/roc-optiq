@@ -34,6 +34,10 @@ public:
     void ClearNodes();
     size_t NodeCount() const { return m_nodes.size(); }
 
+    // Stable 1-based display index for a node (nodes ordered by ascending id).
+    // Returns 0 if the node id is unknown.
+    size_t GetNodeDisplayIndex(uint64_t node_id) const;
+
     // Device access
     const DeviceInfo* GetDevice(uint64_t device_id) const;
     void AddDevice(uint64_t device_id, DeviceInfo&& device);

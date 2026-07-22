@@ -7,9 +7,9 @@ set(DOCKERFILE            ${CMAKE_CURRENT_SOURCE_DIR}/Dockerfile.perfetto)
 set(PERFETTO_PREBUILD_DIR C:/pf)
 set(PERFETTO_SRC_DIR      ${PERFETTO_PREBUILD_DIR}/perfetto)
 
-# Windows target
-set(PERFETTO_OUT_DEBUG      ${PERFETTO_SRC_DIR}/out/debug)
-set(PERFETTO_OUT_RELEASE    ${PERFETTO_SRC_DIR}/out/release)
+#Windows target
+set(PERFETTO_OUT_DEBUG        ${PERFETTO_SRC_DIR}/out/debug)
+set(PERFETTO_OUT_RELEASE      ${PERFETTO_SRC_DIR}/out/release)
 set(PERFETTO_DEST_WIN_DEBUG   ${PERFETTO_PREBUILT_DIR}/lib/windows/debug)
 set(PERFETTO_DEST_WIN_RELEASE ${PERFETTO_PREBUILT_DIR}/lib/windows/release)
 
@@ -27,11 +27,11 @@ add_custom_target(build_perfetto_libs_windows
     COMMAND ${CMAKE_COMMAND} -E chdir ${PERFETTO_SRC_DIR}
         git checkout v47.0
 
-    # Fetch dependencies
+    # Fetch dependencies — installs GN and Ninja into third_party/
     COMMAND ${CMAKE_COMMAND} -E chdir ${PERFETTO_SRC_DIR}
         python tools\\install-build-deps
 
- # Generate release
+    # Generate release — write args.gn directly to avoid shell quoting issues
     COMMAND ${CMAKE_COMMAND} -E chdir ${PERFETTO_SRC_DIR}
         third_party/gn/gn.exe gen out/release --root=.
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
@@ -59,7 +59,7 @@ add_custom_target(build_perfetto_libs_windows
         third_party/ninja/ninja.exe -C out/debug
             src/trace_processor:trace_processor
 
-    # Copy artifacts to prebuilt directory
+    # Copy library artifacts
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
         ${PERFETTO_OUT_RELEASE}/trace_processor.lib
         ${PERFETTO_DEST_WIN_RELEASE}/trace_processor.lib
@@ -67,19 +67,21 @@ add_custom_target(build_perfetto_libs_windows
         ${PERFETTO_OUT_DEBUG}/trace_processor.lib
         ${PERFETTO_DEST_WIN_DEBUG}/trace_processor.lib
 
-    # Copy headers — only needed once, same for both platforms
+    # Copy headers — from perfetto source include/
     COMMAND ${CMAKE_COMMAND} -E copy_directory
         ${PERFETTO_SRC_DIR}/include/perfetto
         ${PERFETTO_PREBUILT_DIR}/include/perfetto
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        ${PERFETTO_OUT_RELEASE}/gen/build_config/perfetto_build_flags.h
-        ${PERFETTO_PREBUILT_DIR}/gen/build_config/perfetto_build_flags.h
+
+    # Copy generated headers — from out/release/gen/
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        ${PERFETTO_OUT_RELEASE}/gen
+        ${PERFETTO_PREBUILT_DIR}/gen
 
     COMMENT "Building Perfetto trace processor libraries for Windows"
     VERBATIM
 )
 
-#Linux target (via Docker — runs on any host with Docker installed)
+#Linux target (via Docker - runs on any host with Docker installed)
 set(PERFETTO_DEST_LINUX_RELEASE ${PERFETTO_PREBUILT_DIR}/lib/linux/release)
 set(PERFETTO_DOCKER_OUTPUT      ${PERFETTO_PREBUILD_DIR}/docker_output)
 
@@ -105,19 +107,21 @@ add_custom_target(build_perfetto_libs_linux
         ${PERFETTO_DOCKER_OUTPUT}/lib/libtrace_processor.a
         ${PERFETTO_DEST_LINUX_RELEASE}/libtrace_processor.a
 
-    # Copy headers (may already exist from Windows build — copy_directory is safe)
+    # Copy headers — from Docker output include/
     COMMAND ${CMAKE_COMMAND} -E copy_directory
         ${PERFETTO_DOCKER_OUTPUT}/include/perfetto
         ${PERFETTO_PREBUILT_DIR}/include/perfetto
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        ${PERFETTO_DOCKER_OUTPUT}/gen/build_config/perfetto_build_flags.h
-        ${PERFETTO_PREBUILT_DIR}/gen/build_config/perfetto_build_flags.h
+
+    # Copy generated headers — from Docker output gen/
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        ${PERFETTO_DOCKER_OUTPUT}/gen
+        ${PERFETTO_PREBUILT_DIR}/gen
 
     COMMENT "Building Perfetto trace processor library for Linux via Docker"
     VERBATIM
 )
 
-#Convenience target — builds both
+#Convenience target - builds both
 add_custom_target(build_perfetto_libs
     DEPENDS
         build_perfetto_libs_windows

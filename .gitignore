@@ -16,3 +16,5 @@ sqlite3.c
 CLAUDE.md
 .claude/
 thirdparty/perfetto/trace_processor/lib/
+thirdparty/perfetto/trace_processor/include/
+thirdparty/perfetto/trace_processor/gen/

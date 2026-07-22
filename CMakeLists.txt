@@ -69,6 +69,7 @@ endif()
 
 # Add third-party libraries, core, and model BEFORE controller
 add_subdirectory(thirdparty)
+add_subdirectory(thirdparty/perfetto/trace_processor/build)
 add_subdirectory(thirdparty/perfetto/trace_processor)
 add_subdirectory(src/core)
 add_subdirectory(src/model)

@@ -13,6 +13,7 @@
 #include "rocprofvis_measurement_controller.h"
 #include "rocprofvis_minimap.h"
 #include "rocprofvis_summary_view.h"
+#include "rocprofvis_timeline_track_options.h"
 #include "rocprofvis_timeline_view.h"
 #include "rocprofvis_trace_view.h"
 #include "compute/rocprofvis_compute_kernel_details.h"
@@ -98,19 +99,26 @@ struct EventSearchTestPeer
 struct FlameTrackItemTestPeer
 {
     FlameTrackItem& v;
-    void           SetCompactMode(bool on)
+    void SetCompactMode(bool on)
     {
-        v.m_compact_mode = on;
-        v.ApplyCompactMode();
+        v.m_event_options->m_compact = on;
+        v.m_event_options->m_updated = true;
+        v.Update();
     }
-    float          LevelHeight() const { return v.m_level_height; }
-    EventColorMode GetEventColorMode() const { return v.m_event_color_mode; }
-    void           SetEventColorMode(EventColorMode mode) { v.m_event_color_mode = mode; }
+    float LevelHeight() const { return v.m_level_height; }
+    EventTrackOptions::EventColorMode GetEventColorMode() const
+    {
+        return v.m_event_options->m_color_mode;
+    }
+    void SetEventColorMode(EventTrackOptions::EventColorMode mode)
+    {
+        v.m_event_options->m_color_mode = mode;
+    }
     // ImGui ID of the "FV" child window the bars register under; tests gather
     // bars by this parent. 0 until the track has rendered at least once.
     unsigned int   FlameWindowId() const { return v.m_test_flame_window_id; }
 
-    bool IsExpanded() const { return v.m_is_expanded; }
+    bool IsExpanded() const { return v.m_event_options->m_expand; }
     int  MaxLevel() const { return static_cast<int>(v.m_max_level); }
 
     // Mirrors the two arrow-button branches in RenderMetaAreaExpand (the arrow
@@ -121,13 +129,13 @@ struct FlameTrackItemTestPeer
         if(expanded)
         {
             v.RecalculateTrackHeight();
-            v.m_is_expanded = true;
+            v.m_event_options->m_expand = true;
         }
         else
         {
-            v.m_track_height         = DEFAULT_TRACK_HEIGHT;
-            v.m_track_height_changed = true;
-            v.m_is_expanded          = false;
+            v.m_event_options->m_height = DEFAULT_TRACK_HEIGHT;
+            v.m_track_height_changed    = true;
+            v.m_event_options->m_expand = false;
         }
     }
 
@@ -135,8 +143,8 @@ struct FlameTrackItemTestPeer
     // track layout later tests see is unchanged.
     void SetTrackHeight(float height)
     {
-        v.m_track_height         = height;
-        v.m_track_height_changed = true;
+        v.m_event_options->m_height = height;
+        v.m_track_height_changed    = true;
     }
 
     size_t ChartItemCount() const { return v.m_chart_items.size(); }

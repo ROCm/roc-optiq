@@ -41,12 +41,36 @@ on:
         description: 'Manually specify a release version to use in the S3 bucket path. Defaults to YYYY_MM_DD timestamp if left empty.'
         type: string
         default: ''
+      crypto_backend:
+        description: 'Crypto backend for libssh2 (mbedTLS or OpenSSL)'
+        type: string
+        default: 'mbedTLS'
+      enable_remote:
+        description: 'Build with remote/SSH support (ROCPROFVIS_ENABLE_REMOTE)'
+        type: boolean
+        default: false
+      enable_profiler:
+        description: 'Build with in-app profiler launch (ROCPROFVIS_ENABLE_PROFILER)'
+        type: boolean
+        default: false
   workflow_call:
     inputs:
       os_version:
         description: 'JSON array of OS version(s) to test'
         type: string
         default: '[ "8", "9", "10" ]'
+      crypto_backend:
+        description: 'Crypto backend for libssh2 (mbedTLS or OpenSSL)'
+        type: string
+        default: 'mbedTLS'
+      enable_remote:
+        description: 'Build with remote/SSH support (ROCPROFVIS_ENABLE_REMOTE)'
+        type: boolean
+        default: false
+      enable_profiler:
+        description: 'Build with in-app profiler launch (ROCPROFVIS_ENABLE_PROFILER)'
+        type: boolean
+        default: false
       cmake_config_preset:
         description: 'CMake Config Preset to Use'
         type: string
@@ -80,7 +104,9 @@ env:
   BUILD_DIR: "build"
   DIST_DIR: "dist"
   BUILD_FILE_NAME: "roc-optiq"
-  ENABLE_INTERNAL_BANNER: ${{ inputs.enable_internal_banner == 'true' && 'ON' || 'OFF' }}
+  ENABLE_INTERNAL_BANNER: ${{ inputs.enable_internal_banner && 'ON' || 'OFF' }}
+  ENABLE_REMOTE: ${{ inputs.enable_remote && 'ON' || 'OFF' }}
+  ENABLE_PROFILER: ${{ inputs.enable_profiler && 'ON' || 'OFF' }}
   S3_ROOT_DIRECTORY: ${{ inputs.s3_root_directory }}
   RELEASE_VERSION: ${{ inputs.release_version }}
 
@@ -107,6 +133,11 @@ jobs:
           lfs: true
           submodules: true
 
+      - name: Install OpenSSL
+        if: inputs.crypto_backend == 'OpenSSL'
+        run: |
+          dnf install -y openssl-devel
+
       - name: Build, Make, and Verify Installation
         run: |
           source /opt/vulkan/**/setup-env.sh
@@ -116,7 +147,7 @@ jobs:
           else
             EXTRA_LINK_FLAGS=""
           fi
-          cmake -B ${{ env.BUILD_DIR }} --preset ${{ inputs.cmake_config_preset }} -DROCPROFVIS_ENABLE_INTERNAL_BANNER=${{ env.ENABLE_INTERNAL_BANNER }} -DGLFW_LINK_STATIC=ON ${EXTRA_LINK_FLAGS:+-DCMAKE_EXE_LINKER_FLAGS="${EXTRA_LINK_FLAGS}"}
+          cmake -B ${{ env.BUILD_DIR }} --preset ${{ inputs.cmake_config_preset }} -DROCPROFVIS_ENABLE_INTERNAL_BANNER=${{ env.ENABLE_INTERNAL_BANNER }} -DROCPROFVIS_ENABLE_REMOTE=${{ env.ENABLE_REMOTE }} -DROCPROFVIS_ENABLE_PROFILER=${{ env.ENABLE_PROFILER }} -DGLFW_LINK_STATIC=ON -DCRYPTO_BACKEND=${{ inputs.crypto_backend }} ${EXTRA_LINK_FLAGS:+-DCMAKE_EXE_LINKER_FLAGS="${EXTRA_LINK_FLAGS}"}
           cmake --build ${{ env.BUILD_DIR }} --parallel 4 --target package
           if [ -e build/${{ env.BUILD_FILE_NAME }} ]; then
             echo "✅ ${{ env.BUILD_FILE_NAME }} has been successfully built!"

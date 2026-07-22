@@ -267,7 +267,7 @@ TraceView::Update()
     }
     if(m_minimap && m_show_minimap_popup)
     {
-        m_minimap->UpdateData();
+        m_minimap->Update();
     }
 }
 

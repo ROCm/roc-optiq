@@ -768,21 +768,25 @@ void RegisterAppTests(ImGuiTestEngine* e)
         // "Color by Name / Time Level / No Color" are gear-menu radio buttons in
         // a popup with no stable path; each sets the track's event color mode.
         // Drive that field directly and assert it changes, then restore.
-        const EventColorMode orig = FlameTrackItemTestPeer{*flame}.GetEventColorMode();
-        const EventColorMode other =
-            (orig == EventColorMode::kByTimeLevel) ? EventColorMode::kByEventName
-                                                   : EventColorMode::kByTimeLevel;
+        const EventTrackOptions::EventColorMode orig =
+            FlameTrackItemTestPeer{*flame}.GetEventColorMode();
+        const EventTrackOptions::EventColorMode other =
+            (orig == EventTrackOptions::EventColorMode::kByTimeLevel)
+                ? EventTrackOptions::EventColorMode::kByEventName
+                : EventTrackOptions::EventColorMode::kByTimeLevel;
 
         // Capture, restore, THEN assert: IM_CHECK early-returns on failure, so
         // asserting before the restore would leak the changed color mode (shared
         // per-track state) into later tests in the same process.
         FlameTrackItemTestPeer{*flame}.SetEventColorMode(other);
         ctx->Yield(2);
-        const EventColorMode changed = FlameTrackItemTestPeer{*flame}.GetEventColorMode();
+        const EventTrackOptions::EventColorMode changed =
+            FlameTrackItemTestPeer{*flame}.GetEventColorMode();
 
         FlameTrackItemTestPeer{*flame}.SetEventColorMode(orig);
         ctx->Yield(2);
-        const EventColorMode restored = FlameTrackItemTestPeer{*flame}.GetEventColorMode();
+        const EventTrackOptions::EventColorMode restored =
+            FlameTrackItemTestPeer{*flame}.GetEventColorMode();
 
         IM_CHECK(changed == other);
         IM_CHECK(changed != orig);
@@ -880,12 +884,12 @@ void RegisterAppTests(ImGuiTestEngine* e)
         // TimelineModel is shared across every timeline test in the process, so
         // asserting before the restore would leak the flipped mode into later tests.
         tl.ToggleNormalization();
-        tl.UpdateHistogram({}, false);
+        tl.UpdateHistogram({});
         ctx->Yield(2);
         const bool toggled_global = tl.IsNormalizeGlobal();
 
         tl.ToggleNormalization();
-        tl.UpdateHistogram({}, false);
+        tl.UpdateHistogram({});
         ctx->Yield(2);
         const bool back_global = tl.IsNormalizeGlobal();
 

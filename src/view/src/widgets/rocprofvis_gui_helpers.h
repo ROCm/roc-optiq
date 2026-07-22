@@ -85,6 +85,15 @@ InputTextWithClear(const char* id, const char* hint, char* buf, size_t buf_size,
                    ImFont* icon_font, ImU32 bg_color, const ImGuiStyle& style,
                    float width = 0);
 
+// std::string-backed ImGui text inputs using ImGuiInputTextFlags_CallbackResize,
+// so callers do not need to manage fixed-size char buffers.
+bool
+InputTextString(const char* id, std::string& str, ImGuiInputTextFlags flags = 0);
+
+bool
+InputTextStringWithHint(const char* id, const char* hint, std::string& str,
+                        ImGuiInputTextFlags flags = 0);
+
 void
 SetTooltipStyled(const char* fmt, ...);
 

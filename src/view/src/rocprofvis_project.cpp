@@ -6,9 +6,7 @@
 #include "rocprofvis_presets.h"
 #include "rocprofvis_trace_view.h"
 #include "rocprofvis_version.h"
-#ifdef COMPUTE_UI_SUPPORT
-#    include "compute/rocprofvis_compute_view.h"
-#endif
+#include "compute/rocprofvis_compute_view.h"
 #include "widgets/rocprofvis_notification_manager.h"
 #include <fstream>
 
@@ -248,7 +246,6 @@ Project::OpenTrace(std::string& file_path)
                     trace_type   = System;
                     view         = trace_view;
                 }
-#ifdef COMPUTE_UI_SUPPORT
                 else if(type == kRPVControllerObjectTypeControllerCompute)
                 {
                     std::shared_ptr<ComputeView> compute_view =
@@ -257,7 +254,6 @@ Project::OpenTrace(std::string& file_path)
                     trace_type   = Compute;
                     view         = compute_view;
                 }
-#endif
             }
         }
         if(trace_result && view)

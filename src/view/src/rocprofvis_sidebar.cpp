@@ -229,8 +229,7 @@ SideBar::RenderTrackItem(const uint64_t& index, bool show_eye_button)
     ImGui::PushStyleColor(
         ImGuiCol_Button,
         m_settings.GetColor(track.IsSelected() ? Colors::kSelection : Colors::kTransparent));
-    const bool dim_text = !display || m_render_muted;
-    if(dim_text)
+    if(!display)
     {
         ImGui::PushStyleColor(ImGuiCol_Text,
                               ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
@@ -239,7 +238,7 @@ SideBar::RenderTrackItem(const uint64_t& index, bool show_eye_button)
     {
         m_timeline_selection->ToggleSelectTrack(track);
     }
-    if(dim_text)
+    if(!display)
     {
         ImGui::PopStyleColor();
     }
@@ -589,17 +588,8 @@ SideBar::RenderBranchNode(const TreeNode& node, const TreeNode* state_node,
                            ImGui::GetStyle().FramePadding.x * FRAMED_LABEL_PAD_MULT;
         }
 
-        if(m_render_muted)
-        {
-            ImGui::PushStyleColor(ImGuiCol_Text,
-                                  ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
-        }
         open = ImGui::TreeNodeEx(node.label.c_str(), HEADER_FLAGS, "%s",
                                  display_label.c_str());
-        if(m_render_muted)
-        {
-            ImGui::PopStyleColor();
-        }
 
         if(lead_arrow_font)
         {
@@ -658,15 +648,7 @@ SideBar::RenderBranchNode(const TreeNode& node, const TreeNode* state_node,
                 m_active_node_color = wheel[node.color_index % wheel.size()];
             }
         }
-        const bool prev_muted = m_render_muted;
-        if(node.show_lead_arrow)
-        {
-            // Dim the tracks nested under an inline device node (but not the
-            // device label itself) so they draw less attention.
-            m_render_muted = true;
-        }
         RenderTreeChildren(node);
-        m_render_muted = prev_muted;
         m_active_node_color = prev_node_color;
         if(node.collapsable)
         {

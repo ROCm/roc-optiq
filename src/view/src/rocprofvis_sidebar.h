@@ -68,7 +68,6 @@ private:
     std::shared_ptr<std::vector<TrackItem*>> m_tracks;
     DataProvider&                            m_data_provider;
     ImU32                                    m_active_node_color;
-    bool                                     m_render_muted = false;
     EventManager::SubscriptionToken          m_track_visibility_token;
 };
 

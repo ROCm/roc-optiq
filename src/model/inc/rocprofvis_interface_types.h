@@ -4,7 +4,7 @@
 #include "rocprofvis_shared_types.h"
 
 /*
-* This interface header file cannot have any pre-compiler conditions to be successfully built by CFFI
+* This interface header file cannot have any pre-compiler conditions to be successfully built by CFFI   
 * Use CInterfaceTypes.h for C/C++ code
 */
 
@@ -71,11 +71,11 @@ typedef enum rocprofvis_dm_result_t
     kRocProfVisDmResultInvalidParameter = 5,
     // Operation failed due to database access problem
     kRocProfVisDmResultDbAccessFailed = 6,
-    // Operation failed due to invalid property
+    // Operation failed due to invalid property 
     kRocProfVisDmResultInvalidProperty = 7,
-    // Operation failed due to unsupported property
+    // Operation failed due to unsupported property 
     kRocProfVisDmResultNotSupported = 8,
-    // Operation failed due to busy status of resource
+    // Operation failed due to busy status of resource 
     kRocProfVisDmResultResourceBusy = 9,
     // Operation failed due to busy status of resource
     kRocProfVisDmResultDbAbort = 10,
@@ -136,7 +136,7 @@ typedef enum rocprofvis_dm_event_operation_t {
 // Database type
 typedef enum rocprofvis_db_type_t {
     // input file auto-detection
-    kAutodetect = 0,
+    kAutodetect = 0, 
     // old schema Rocpd database
 	kRocpdSqlite = 1,
     // new schema Rocprof database
@@ -190,7 +190,7 @@ typedef enum  rocprofvis_dm_trace_property_t {
 	kRPVDMStackTraceHandleByEventID,
     // Extended handle by specified event id (60-bit event id and 4-bit operation type)
     kRPVDMExtInfoHandleByEventID,
-    // Handle of a SQL query result table, by specified index
+    // Handle of a SQL query result table, by specified index  
     kRPVDMTableHandleByID,
     // Database handle
 	kRPVDMDatabaseHandle,
@@ -227,7 +227,7 @@ typedef enum rocprofvis_dm_track_property_t {
 	kRPVDMTrackCategoryEnumUInt64,
     // Track category string value
     kRPVDMTrackCategoryEnumCharPtr,
-    // Track ID
+    // Track ID 
     kRPVDMTrackIdUInt64,
     // Track Node ID
     kRPVDMTrackNodeIdUInt64,
@@ -240,7 +240,7 @@ typedef enum rocprofvis_dm_track_property_t {
     // Track memory footprint
     kRPVDMTrackMemoryFootprintUInt64,
     // Slice handle by specified index
-	kRPVDMSliceHandleIndexed,
+	kRPVDMSliceHandleIndexed,	
     // Slice handle by specified time
     kRPVDMSliceHandleTimed,
     // Number of extended data records
@@ -252,7 +252,7 @@ typedef enum rocprofvis_dm_track_property_t {
     // Extended data value by specified index
     kRPVDMTrackExtDataValueCharPtrIndexed,
     // Extended data in Json format
-	kRPVDMTrackInfoJsonCharPtr,
+	kRPVDMTrackInfoJsonCharPtr, 
     // Database handle
 	kRPVDMTrackDatabaseHandle,
     // Trace handle
@@ -293,9 +293,9 @@ typedef enum rocprofvis_dm_slice_property_t {
 	kRPVDMEventIdUInt64Indexed,
     // Event operation enumeration (none, launch, dispatch, allocate, copy)
     kRPVDMEventIdOperationEnumIndexed,
-    // Event operation string (none, launch, dispatch, allocate, copy)
+    // Event operation string (none, launch, dispatch, allocate, copy) 
     kRPVDMEventIdOperationCharPtrIndexed,
-    // Event duration. Can be negative. Negative has to be invalidated by controller
+    // Event duration. Can be negative. Negative has to be invalidated by controller 
 	kRPVDMEventDurationInt64Indexed,
     // Event type string
 	kRPVDMEventTypeStringCharPtrIndexed,
@@ -436,7 +436,7 @@ typedef enum rocprofvis_dm_hashed_timestamp_tag_t
 } rocprofvis_dm_hashed_timestamp_tag_t;
 
 // Event id structure
-typedef union {
+typedef union { 
     struct {
         // Event ID from database
         uint64_t    event_id:52;
@@ -454,8 +454,8 @@ typedef union {
 typedef void ( *rocprofvis_db_progress_callback_t)(
 		        rocprofvis_db_filename_t,
                 rocprofvis_db_future_id_t,
-                rocprofvis_db_progress_percent_t,
-                rocprofvis_db_status_t,
+                rocprofvis_db_progress_percent_t, 
+                rocprofvis_db_status_t, 
                 rocprofvis_db_status_message_t,
                 void*
 );

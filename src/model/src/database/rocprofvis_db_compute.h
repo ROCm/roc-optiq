@@ -94,7 +94,7 @@ namespace DataModel
         // class destructor, not really required, unless declared as virtual
         ~ComputeDatabase()override {};
         // worker method to read trace metadata
-        // @param object - future object providing asynchronous execution mechanism
+        // @param object - future object providing asynchronous execution mechanism 
         // @return status of operation
         rocprofvis_dm_result_t  ReadTraceMetadata(
             Future* object) override;
@@ -111,8 +111,8 @@ namespace DataModel
     protected:
 
         // worker method to read flow trace info
-        // @param event_id - 60-bit event id and 4-bit operation type
-        // @param object - future object providing asynchronous execution mechanism
+        // @param event_id - 60-bit event id and 4-bit operation type  
+        // @param object - future object providing asynchronous execution mechanism 
         // @return status of operation
         rocprofvis_dm_result_t  ReadFlowTraceInfo(
             rocprofvis_dm_event_id_t /*event_id*/,
@@ -120,8 +120,8 @@ namespace DataModel
             ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN("Compute database does not support flow trace", kRocProfVisDmResultNotSupported);
         };
         // worker method to read stack trace info
-        // @param event_id - 60-bit event id and 4-bit operation type
-        // @param object - future object providing asynchronous execution mechanism
+        // @param event_id - 60-bit event id and 4-bit operation type  
+        // @param object - future object providing asynchronous execution mechanism 
         // @return status of operation
         rocprofvis_dm_result_t  ReadStackTraceInfo(
             rocprofvis_dm_event_id_t /*event_id*/,
@@ -129,8 +129,8 @@ namespace DataModel
             ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN("Compute database does not support stack trace", kRocProfVisDmResultNotSupported);
         };
         // worker method to read extended info
-        // @param event_id - 60-bit event id and 4-bit operation type
-        // @param object - future object providing asynchronous execution mechanism
+        // @param event_id - 60-bit event id and 4-bit operation type  
+        // @param object - future object providing asynchronous execution mechanism 
         // @return status of operation
         rocprofvis_dm_result_t  ReadExtEventInfo(
             rocprofvis_dm_event_id_t /*event_id*/,
@@ -138,12 +138,12 @@ namespace DataModel
             ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN("Compute database does not support extended data", kRocProfVisDmResultNotSupported);
         };
         // worker method to read time slice
-        // @param start - start timestamp of time slice
-        // @param end - end timestamp of time slice
+        // @param start - start timestamp of time slice 
+        // @param end - end timestamp of time slice 
         // @param num - number of tracks
-        // @param tracks - uint32_t array with track IDs
-        // @param object - future object providing asynchronous execution mechanism
-        // @return status of operation
+        // @param tracks - uint32_t array with track IDs  
+        // @param object - future object providing asynchronous execution mechanism   
+        // @return status of operation        
         rocprofvis_dm_result_t  ReadTraceSlice(
             rocprofvis_dm_timestamp_t /*start*/,
             rocprofvis_dm_timestamp_t /*end*/,
@@ -154,9 +154,9 @@ namespace DataModel
             ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN("Compute database does not support extended data", kRocProfVisDmResultNotSupported);
         };
         // worker method to execute database query
-        // @param query - database query
+        // @param query - database query 
         // @param description - database description
-        // @param object - future object providing asynchronous execution mechanism
+        // @param object - future object providing asynchronous execution mechanism 
         // @return status of operation
         rocprofvis_dm_result_t  ExecuteQuery(
             rocprofvis_dm_charptr_t query,
@@ -183,10 +183,10 @@ namespace DataModel
             return &s_null_data_exceptions_skip;
         }
 
-        // method to build a query to read time slice of records for single track
-        // @param index - track index
+        // method to build a query to read time slice of records for single track 
+        // @param index - track index 
         // @param tyte - query type
-        // @param query - reference to output query string
+        // @param query - reference to output query string  
         // @return status of operation
         rocprofvis_dm_result_t BuildTrackQuery(
             rocprofvis_dm_index_t /*index*/,
@@ -197,14 +197,14 @@ namespace DataModel
             ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN("Compute database does not build track query", kRocProfVisDmResultNotSupported);
         }
 
-        // method to build a query to read time slice of records for all tracks in one shot
-        // @param start - start timestamp of time slice
-        // @param end - end timestamp of time slice
+        // method to build a query to read time slice of records for all tracks in one shot 
+        // @param start - start timestamp of time slice 
+        // @param end - end timestamp of time slice 
         // @param num - number of tracks
-        // @param tracks - uint32_t array with track IDs
-        // @param query - reference to query string
-        // @param slices - reference map array for storing slice handlers for multi-track request
-        // @return status of operation
+        // @param tracks - uint32_t array with track IDs 
+        // @param query - reference to query string 
+        // @param slices - reference map array for storing slice handlers for multi-track request   
+        // @return status of operation  
         rocprofvis_dm_result_t BuildSliceQuery(
             rocprofvis_dm_timestamp_t /*start*/,
             rocprofvis_dm_timestamp_t /*end*/,
@@ -267,18 +267,18 @@ namespace DataModel
                     {
                        "value"
                     }
-                }
+                } 
         };
 
-        inline static const rocprofvis_null_data_exceptions_int
+        inline static const rocprofvis_null_data_exceptions_int 
             s_null_data_exceptions_int = {
-                {
+                { 
 
                 }
         };
         inline static const rocprofvis_null_data_exceptions_string
             s_null_data_exceptions_string = {
-                {
+                { 
 
                 }
         };

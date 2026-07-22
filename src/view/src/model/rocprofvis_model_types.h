@@ -48,7 +48,8 @@ struct TrackInfo
         Stream,
         InstrumentedThread,
         SampledThread,
-        Counter
+        Counter,
+        Count
     };
 
     uint64_t                           index;  // index of the track in the controller
@@ -287,15 +288,39 @@ struct AnalysisTrackStatistics
         kRequested,  // Pending fetch completion
         kReady,
     };
+    // One statistic (min/max/mean/util/...) broken into its raw building
+    // blocks. Consumers (track pills, track details) compose the exact label
+    // they need from these components instead of a single pre-baked string.
     struct Stat
     {
-        const char* name;
-        const char* compact_name;
-        size_t      accent_color;
-        double      value;
-        std::string compact;
-        std::string extended;
-        std::string full;
+        const char* name         = "";   // Prefix, long form (e.g. "Mean").
+        const char* compact_name = "";   // Prefix, short form (e.g. "Avg").
+        size_t      accent_color = 0;    // Index into the settings color wheel.
+        double      value        = 0.0;  // Real, unrounded value (e.g. 22123.333).
+        std::string suffix;              // Units (e.g. "MB"), may be empty.
+        std::string compact;             // Compact value only (e.g. "22K").
+        std::string full;                // Full value only (e.g. "22123.3").
+
+        // Value with its units suffix appended.
+        std::string CompactValue() const { return WithSuffix(compact); }
+        std::string FullValue() const { return WithSuffix(full); }
+
+        // "<prefix>: <value> <units>". Compact uses the short prefix, full the
+        // long one.
+        std::string CompactLabel() const
+        {
+            return std::string(compact_name) + ": " + CompactValue();
+        }
+        std::string FullLabel() const
+        {
+            return std::string(name) + ": " + FullValue();
+        }
+
+    private:
+        std::string WithSuffix(const std::string& value_str) const
+        {
+            return suffix.empty() ? value_str : value_str + " " + suffix;
+        }
     };
     enum Queue : size_t
     {

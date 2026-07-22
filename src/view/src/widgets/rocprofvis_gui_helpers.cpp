@@ -16,6 +16,40 @@ namespace RocProfVis
 namespace View
 {
 
+namespace
+{
+int
+StringResizeCallback(ImGuiInputTextCallbackData* data)
+{
+    if(data->EventFlag == ImGuiInputTextFlags_CallbackResize)
+    {
+        std::string* str = static_cast<std::string*>(data->UserData);
+        str->resize(static_cast<size_t>(data->BufTextLen));
+        data->Buf = str->data();
+    }
+    return 0;
+}
+}  // namespace
+
+bool
+InputTextString(const char* id, std::string& str, ImGuiInputTextFlags flags)
+{
+    str.reserve(std::max(str.size() + 1, static_cast<size_t>(256)));
+    return ImGui::InputText(id, str.data(), str.capacity() + 1,
+                            flags | ImGuiInputTextFlags_CallbackResize,
+                            StringResizeCallback, static_cast<void*>(&str));
+}
+
+bool
+InputTextStringWithHint(const char* id, const char* hint, std::string& str,
+                        ImGuiInputTextFlags flags)
+{
+    str.reserve(std::max(str.size() + 1, static_cast<size_t>(256)));
+    return ImGui::InputTextWithHint(id, hint, str.data(), str.capacity() + 1,
+                                    flags | ImGuiInputTextFlags_CallbackResize,
+                                    StringResizeCallback, static_cast<void*>(&str));
+}
+
 ImVec2
 MeasureLoadingIndicatorDots(float dot_radius, int num_dots,
                                               float spacing)
@@ -403,6 +437,23 @@ ElidedText(const char* text, float available_width, float tooltip_width,
             ImGui::PopStyleVar(2);
         }
     }
+}
+
+std::string
+ElideWithEllipsis(const std::string& text, float max_width, size_t max_chars)
+{
+    std::string out       = text.substr(0, max_chars);
+    bool        truncated = text.size() > max_chars;
+    while(!out.empty() && ImGui::CalcTextSize((out + "...").c_str()).x > max_width)
+    {
+        out.pop_back();
+        truncated = true;
+    }
+    if(truncated)
+    {
+        out += "...";
+    }
+    return out;
 }
 
 void

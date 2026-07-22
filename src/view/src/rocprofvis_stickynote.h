@@ -46,7 +46,7 @@ public:
     StickyNote(double time_ns, float y_offset, const ImVec2& size,
                const std::string& text, const std::string& title, double v_min,
                double v_max, uint64_t track_id = INVALID_TRACK_ID,
-               bool is_minimized = true);
+               bool is_minimized = true, bool is_locked = false);
 
     bool Render(ImDrawList* draw_list, const ImVec2& window_position,
                 std::shared_ptr<TimePixelTransform> conversion_manager,
@@ -80,6 +80,7 @@ public:
     double             GetVMinX() const;
     double             GetVMaxX() const;
     bool               IsMinimized() const { return m_is_minimized; }
+    bool               IsLocked() const { return m_locked; }
     uint64_t           GetTrackId() const { return m_track_id; }
     void               SetTrackHidden(bool hidden) { m_track_hidden = hidden; }
     bool               IsTrackHidden() const { return m_track_hidden; }
@@ -87,6 +88,11 @@ public:
 
     // True after the user hit the delete button; the owner sweeps these notes.
     bool               WantsDelete() const { return m_pending_delete; }
+
+    // True after the user hit the "go to anchor" button; the owner navigates the
+    // timeline to the anchor and clears the flag.
+    bool               WantsNavigate() const { return m_pending_navigate; }
+    void               ClearNavigate() { m_pending_navigate = false; }
 
 private:
     // Binds an unbound note to a track, making its offset track-relative.
@@ -111,8 +117,9 @@ private:
     // Always-visible timeline anchor. Returns true if hovered.
     bool RenderAnchorMarker(ImDrawList* draw_list, const ImVec2& marker_pos);
 
-    // Floating expanded window. Returns true if hovered.
-    bool RenderExpandedWindow(const ImVec2& anchor_pos);
+    // Floating expanded window. Returns true if hovered. marker_hovered highlights
+    // the note when the anchor is hovered (cross-highlight).
+    bool RenderExpandedWindow(const ImVec2& anchor_pos, bool marker_hovered);
 
     // True once the floating window has a real stored position.
     bool IsExpandedPlaced() const
@@ -136,7 +143,9 @@ private:
     double      m_v_min_x;
     double      m_v_max_x;
     bool        m_is_minimized;
+    bool        m_locked         = false;  // Freezes the anchor against mouse drags.
     bool        m_pending_delete = false;
+    bool        m_pending_navigate = false;
     bool        m_request_focus  = false;
     bool        m_focus_input    = false;  // Focus the title field next frame.
     bool        m_editing_title  = false;

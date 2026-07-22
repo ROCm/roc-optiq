@@ -18,38 +18,16 @@ namespace View
 class TimelineSelection;
 class FlameTrackItem;
 class TimePixelTransform;
+class TimelineTrackOptions;
+class EventTrackOptions;
+class QueueTrackOptions;
 class MeasurementController;
-
-enum class EventColorMode
-{
-    kNone,
-    kByEventName,
-    kByTimeLevel,
-    __kCount
-};
-
-class FlameTrackProjectSettings : public ProjectSetting
-{
-public:
-    FlameTrackProjectSettings(const std::string& project_id, FlameTrackItem& track_item);
-    ~FlameTrackProjectSettings() override;
-    void ToJson() override;
-    bool Valid() const override;
-
-    EventColorMode ColorEvents() const;
-    bool           CompactMode() const;
-    std::array<bool, AnalysisTrackStatistics::Queue::kQueueCount> ShowAnalysis() const;
-
-private:
-    FlameTrackItem& m_track_item;
-};
 
 class FlameTrackItem : public TrackItem
 {
-    friend FlameTrackProjectSettings;
-
 public:
-    FlameTrackItem(DataProvider& dp, uint64_t track_id, bool display,
+    FlameTrackItem(DataProvider& dp, uint64_t track_id,
+                   TimelineTrackOptions&                  track_options,
                    std::shared_ptr<TimePixelTransform>    time_to_pixel_manager,
                    std::shared_ptr<TimelineSelection>     timeline_selection,                   
                    std::shared_ptr<MeasurementController> measurement);
@@ -61,11 +39,10 @@ public:
     // Called to calculate max event label width for all flame track items.
     // Call after font size or style changes.
     static void CalculateMaxEventLabelWidth();
-    bool        IsCompactMode() const override { return m_compact_mode; }
+    bool        IsCompactMode() const override;
 
 protected:
     void  RenderChart(float graph_width) override;
-    void  RenderMetaAreaOptions() override;
     void  RenderMetaAreaExpand() override;
 
 private:
@@ -79,7 +56,7 @@ private:
     
     struct ChartItem
     {
-        TraceEvent    event;
+        TraceEvent                  event;
         bool                        selected;
         bool                        highlighted;
         size_t                      name_hash;
@@ -89,14 +66,14 @@ private:
     void HandleTimelineSelectionChanged(std::shared_ptr<RocEvent> e);
     void HandleTimelineHighlightChanged(std::shared_ptr<RocEvent> e);
 
-    void DrawBox(ImVec2 start_position, int boxplot_box_id, ChartItem& flame,
-                 float duration, ImDrawList* draw_list, bool use_highlight_color);
+    void DrawBox(ImVec2 start_position, ChartItem& flame, float duration,
+                 ImDrawList* draw_list, bool use_highlight_color);
 
     bool ExtractPointsFromData();
     bool ExtractChildInfo(ChartItem& item);
     bool ParseChildInfo(const std::string& combined_name, ChildEventInfo& out_info);
 
-    void RenderTooltip(ChartItem& chart_item, int color_index);
+    void RenderTooltip(ChartItem& chart_item, size_t color_index);
     void RecalculateTrackHeight();
 
     std::vector<ChartItem>                 m_chart_items;
@@ -116,14 +93,12 @@ private:
 
     static float             s_max_event_label_width;
     static const std::string s_child_info_separator;
-    bool                     m_is_expanded;
 
     Pill* m_pill_analysis_queue;
 
-    FlameTrackProjectSettings m_flame_track_project_settings;
-    bool                      m_show_pill_analysis_queue;
-    EventColorMode            m_event_color_mode;
-    bool                      m_compact_mode;
+    // User configurable options. Underlying object is shared and owned by TrackItem.
+    EventTrackOptions* m_event_options;  // Always valid
+    QueueTrackOptions* m_queue_options;  // Valid for queue
 };
 
 }  // namespace View

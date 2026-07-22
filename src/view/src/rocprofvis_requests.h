@@ -42,11 +42,10 @@ enum class RequestType
     kFetchAnalysisTopMemoryAllocationEventsTable,
     kFetchAnalysisTopMemoryCopyEventsTable,
     kFetchAnalysisTopLaunchSampleEventsTable,
-#ifdef COMPUTE_UI_SUPPORT
     kFetchComputeTrace,
     kFetchMetrics,
     kFetchMetricPivotTable,
-#endif
+    kFetchPcSampling,
 };
 
 enum class RequestState
@@ -247,7 +246,6 @@ public:
     {}
 };
 
-#ifdef COMPUTE_UI_SUPPORT
 class MetricsRequestParams : public RequestParamsBase
 {
 public:
@@ -271,6 +269,28 @@ public:
     , m_kernel_ids(kernel_ids)
     , m_metric_ids(metric_ids)
     , m_client_id(client_id)
+    {}
+};
+
+class PcSamplingRequestParams : public RequestParamsBase
+{
+public:
+    uint32_t m_workload_id;
+    uint32_t m_kernel_id;
+    uint32_t m_source_file_id;
+    // Per-kernel generation counter captured at submission.
+    // ProcessPcSamplingRequest discards results that belong to a stale generation.
+    uint32_t m_generation = 0;
+
+    PcSamplingRequestParams(const PcSamplingRequestParams&)            = default;
+    PcSamplingRequestParams& operator=(const PcSamplingRequestParams&) = default;
+
+    PcSamplingRequestParams(uint32_t workload_id, uint32_t kernel_id,
+                            uint32_t source_file_id, uint32_t generation)
+    : m_workload_id(workload_id)
+    , m_kernel_id(kernel_id)
+    , m_source_file_id(source_file_id)
+    , m_generation(generation)
     {}
 };
 
@@ -298,7 +318,6 @@ public:
     , m_column_filters(column_filters)
     {}
 };
-#endif
 
 
 struct RequestInfo

@@ -22,6 +22,8 @@ constexpr ImGuiTreeNodeFlags HEADER_FLAGS = ImGuiTreeNodeFlags_Framed |
                                             ImGuiTreeNodeFlags_DefaultOpen |
                                             ImGuiTreeNodeFlags_SpanLabelWidth;
 constexpr float TREE_LINE_W = 1.5f;
+constexpr float MENU_PAD_X  = 8.0f;
+constexpr float MENU_PAD_Y  = 6.0f;
 
 // Matches TimelineSelection::HIGHLIGHT_TIMEOUT_S so reveal and "go to event"
 // pulse for the same duration.
@@ -93,7 +95,21 @@ SideBar::SideBar(std::shared_ptr<TrackTopology>         topology,
 , m_timeline_selection(timeline_selection)
 , m_tracks(tracks)
 , m_data_provider(dp)
+, m_active_node_color(0)
+, m_track_visibility_token(EventManager::InvalidSubscriptionToken)
 {
+    m_track_visibility_token = EventManager::GetInstance()->Subscribe(
+        static_cast<int>(RocEvents::kTrackVisibilityChanged),
+        [this](std::shared_ptr<RocEvent> e) {
+            if(e && e->GetSourceId() == m_data_provider.GetTraceFilePath())
+            {
+                const SidebarTree& sidebar_tree = m_track_topology->GetSidebarTree();
+                if(sidebar_tree.root)
+                {
+                    InvalidateEyeStateCache(*sidebar_tree.root);
+                }
+            }
+        });
     m_reveal_track_token = EventManager::GetInstance()->Subscribe(
         static_cast<int>(RocEvents::kRevealTrackInTopology),
         [this](std::shared_ptr<RocEvent> e) { HandleRevealTrack(e); });
@@ -101,6 +117,8 @@ SideBar::SideBar(std::shared_ptr<TrackTopology>         topology,
 
 SideBar::~SideBar()
 {
+    EventManager::GetInstance()->Unsubscribe(
+        static_cast<int>(RocEvents::kTrackVisibilityChanged), m_track_visibility_token);
     EventManager::GetInstance()->Unsubscribe(
         static_cast<int>(RocEvents::kRevealTrackInTopology), m_reveal_track_token);
 }
@@ -183,12 +201,6 @@ SideBar::Render()
     if(!m_track_topology->Dirty())
     {
         const SidebarTree& sidebar_tree = m_track_topology->GetSidebarTree();
-        if(m_eye_state_dirty && sidebar_tree.root)
-        {
-            InvalidateEyeStateCache(*sidebar_tree.root);
-            m_eye_state_dirty = false;
-        }
-
         if(m_reveal_active)
         {
             double elapsed = std::chrono::duration<double>(
@@ -302,9 +314,9 @@ SideBar::RenderTrackItem(const uint64_t& index, bool show_eye_button)
         if(ImGui::Button(display ? ICON_EYE : ICON_EYE_SLASH))
         {
             track.SetDisplay(!track.IsDisplayed());
-            m_eye_state_dirty     = true;
-            m_data_provider.DataModel().GetTimeline().UpdateHistogram(
-                { track.GetID() }, track.IsDisplayed());
+            EventManager::GetInstance()->AddEvent(std::make_shared<RocEvent>(
+                static_cast<int>(RocEvents::kTrackVisibilityChanged),
+                m_data_provider.GetTraceFilePath()));
         }
         ImGui::PopFont();
         if(ImGui::IsItemHovered())
@@ -314,9 +326,7 @@ SideBar::RenderTrackItem(const uint64_t& index, bool show_eye_button)
         ImGui::PushFont(m_settings.GetFontManager().GetFont(FontType::kIcon), 0.0f);
         if(ImGui::Button(ICON_ARROWS_SHRINK))
         {
-            EventManager::GetInstance()->AddEvent(std::make_shared<ScrollToTrackEvent>(
-                static_cast<int>(RocEvents::kHandleUserGraphNavigationEvent),
-                track.GetID(), m_data_provider.GetTraceFilePath()));
+            ScrollToTrack(track);
         }
         ImGui::PopFont();
         if(ImGui::IsItemHovered())
@@ -354,7 +364,154 @@ SideBar::RenderTrackItem(const uint64_t& index, bool show_eye_button)
     }
     ImGui::PopStyleColor();
 
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(MENU_PAD_X, MENU_PAD_Y));
+    if(ImGui::BeginPopupContextItem("##track_ctx"))
+    {
+        if(ImGui::MenuItem("Go to Track"))
+        {
+            ScrollToTrack(track);
+        }
+
+        ImGui::Separator();
+
+        if(ImGui::MenuItem(display ? "Hide Track" : "Show Track"))
+        {
+            SetTrackVisibility(track, !display);
+            EventManager::GetInstance()->AddEvent(std::make_shared<RocEvent>(
+                static_cast<int>(RocEvents::kTrackVisibilityChanged),
+                m_data_provider.GetTraceFilePath()));
+        }
+        if(ImGui::MenuItem("Show All Tracks", nullptr, false,
+                           HasTrackVisibility(false)))
+        {
+            ApplyAllTrackVisibility(true);
+        }
+        if(ImGui::MenuItem("Hide All But This Track"))
+        {
+            HideAllButTrack(index);
+        }
+
+        ImGui::Separator();
+
+        const bool has_selected_tracks =
+            m_timeline_selection && m_timeline_selection->HasSelectedTracks();
+        if(ImGui::MenuItem("Show Selected Tracks", nullptr, false,
+                           has_selected_tracks))
+        {
+            ApplySelectedTrackVisibility(true);
+        }
+        if(ImGui::MenuItem("Hide Selected Tracks", nullptr, false,
+                           has_selected_tracks))
+        {
+            ApplySelectedTrackVisibility(false);
+        }
+        ImGui::EndPopup();
+    }
+    ImGui::PopStyleVar();
+
     ImGui::PopID();
+}
+
+void
+SideBar::ScrollToTrack(TrackItem& track)
+{
+    EventManager::GetInstance()->AddEvent(std::make_shared<ScrollToTrackEvent>(
+        static_cast<int>(RocEvents::kHandleUserGraphNavigationEvent),
+        track.GetID(), m_data_provider.GetTraceFilePath()));
+}
+
+void
+SideBar::SetTrackVisibility(TrackItem& track, bool visible)
+{
+    if(track.IsDisplayed() == visible)
+    {
+        return;
+    }
+
+    track.SetDisplay(visible);
+}
+
+void
+SideBar::HideAllButTrack(const uint64_t& index)
+{
+    if(!m_tracks || index >= m_tracks->size())
+    {
+        return;
+    }
+
+    for(uint64_t i = 0; i < m_tracks->size(); ++i)
+    {
+        TrackItem* track = (*m_tracks)[i];
+        if(!track)
+        {
+            continue;
+        }
+        SetTrackVisibility(*track, i == index);
+    }
+    EventManager::GetInstance()->AddEvent(
+        std::make_shared<RocEvent>(static_cast<int>(RocEvents::kTrackVisibilityChanged),
+                                   m_data_provider.GetTraceFilePath()));
+}
+
+void
+SideBar::ApplyAllTrackVisibility(bool visible)
+{
+    if(!m_tracks)
+    {
+        return;
+    }
+
+    for(auto* track : *m_tracks)
+    {
+        if(!track)
+        {
+            continue;
+        }
+        SetTrackVisibility(*track, visible);
+    }
+    EventManager::GetInstance()->AddEvent(
+        std::make_shared<RocEvent>(static_cast<int>(RocEvents::kTrackVisibilityChanged),
+                                   m_data_provider.GetTraceFilePath()));
+}
+
+void
+SideBar::ApplySelectedTrackVisibility(bool visible)
+{
+    if(!m_tracks)
+    {
+        return;
+    }
+
+    for(auto* track : *m_tracks)
+    {
+        if(!track || !track->IsSelected())
+        {
+            continue;
+        }
+        SetTrackVisibility(*track, visible);
+    }
+    EventManager::GetInstance()->AddEvent(
+        std::make_shared<RocEvent>(static_cast<int>(RocEvents::kTrackVisibilityChanged),
+                                   m_data_provider.GetTraceFilePath()));
+}
+
+bool
+SideBar::HasTrackVisibility(bool visible) const
+{
+    if(!m_tracks)
+    {
+        return false;
+    }
+
+    for(const auto* track : *m_tracks)
+    {
+        if(track && track->IsDisplayed() == visible)
+        {
+            return true;
+        }
+    }
+
+    return false;
 }
 
 SideBar::EyeButtonState
@@ -439,7 +596,6 @@ SideBar::ApplyVisibility(const TreeNode& node, bool visible)
     }
 
     std::unordered_set<uint64_t> visited_graphs;
-    std::vector<uint64_t>        chart_ids;
     std::vector<const TreeNode*> stack = { &node };
 
     while(!stack.empty())
@@ -468,7 +624,6 @@ SideBar::ApplyVisibility(const TreeNode& node, bool visible)
                 if(track && track->IsDisplayed() != visible)
                 {
                     track->SetDisplay(visible);
-                    chart_ids.push_back(track->GetID());
                 }
             }
         }
@@ -481,11 +636,9 @@ SideBar::ApplyVisibility(const TreeNode& node, bool visible)
             }
         }
     }
-
-    if(!chart_ids.empty())
-    {
-        m_data_provider.DataModel().GetTimeline().UpdateHistogram(chart_ids, visible);
-    }
+    EventManager::GetInstance()->AddEvent(
+        std::make_shared<RocEvent>(static_cast<int>(RocEvents::kTrackVisibilityChanged),
+                                   m_data_provider.GetTraceFilePath()));
 }
 
 void
@@ -566,6 +719,28 @@ SideBar::RenderBranchNode(const TreeNode& node, const TreeNode* state_node,
                 node_pos.x + ImGui::GetStyle().FramePadding.x + font_size * 0.5f,
                 (ImGui::GetItemRectMin().y + ImGui::GetItemRectMax().y) * 0.5f, font_size,
                 open, wheel[node.color_index % wheel.size()]);
+        }
+
+        if(node.show_eye_button)
+        {
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
+                                ImVec2(MENU_PAD_X, MENU_PAD_Y));
+            if(ImGui::BeginPopupContextItem("##branch_ctx"))
+            {
+                EyeButtonState current = GetTreeState(state_source);
+                if(ImGui::MenuItem("Show All Tracks Below", nullptr, false,
+                                   current != EyeButtonState::kAllVisible))
+                {
+                    ApplyVisibility(apply_target, true);
+                }
+                if(ImGui::MenuItem("Hide All Tracks Below", nullptr, false,
+                                   current != EyeButtonState::kAllHidden))
+                {
+                    ApplyVisibility(apply_target, false);
+                }
+                ImGui::EndPopup();
+            }
+            ImGui::PopStyleVar();
         }
     }
 

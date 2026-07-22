@@ -708,7 +708,7 @@ TopKernels::RenderPieChart(const ImVec2 region, const ImPlotStyle& plot_style,
         if(m_hovered_idx)
         {
             ImPlot::PushColormap(m_settings.GetContrastColormapName());
-            ImGui::PushID(1);
+            ImGui::PushID(m_settings.GetContrastColormapName());
             ImPlot::PlotPieChart(
                 &m_kernel_pie.labels[m_hovered_idx.value()],
                 &m_kernel_pie.exec_time_pct[m_hovered_idx.value()], 1, 0.0, 0.0,
@@ -1122,7 +1122,7 @@ KernelInstanceTable::ToggleSelectKernel(const std::string& kernel_name,
         m_where = "nodeId = " + std::to_string(*node_id);
         if(device_id)
         {
-            m_where += " AND agentId = " + std::to_string(*device_id);
+            m_where += " AND agentId = " + std::to_string(*device_id & TOPOLOGY_ID_MASK);
         }
     }
     Fetch();

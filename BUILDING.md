@@ -196,6 +196,56 @@ cmake --build build/macos-release --preset "macOS Release Build" --parallel 4
 
 ---
 
+## Crypto backend (SSH / remote features)
+
+The SSH and remote-profiling features use `libssh2`, which needs a crypto backend selected at configure time via `CRYPTO_BACKEND`.
+
+- **Default: `mbedTLS`** — vendored under `thirdparty/mbedtls` and linked statically. This is the default build and requires **no extra dependency to install** and **nothing extra to deploy**. While remote features are disabled by default this is what ships.
+- **Opt-in: `OpenSSL`** — configure with `-DCRYPTO_BACKEND=OpenSSL`. OpenSSL is **not** vendored; it is resolved as an external dependency via `find_package(OpenSSL)`, the same way the Vulkan SDK is treated. Install a system OpenSSL first:
+
+| Platform | Install | Notes |
+|----------|---------|-------|
+| Linux (Ubuntu/Debian) | `sudo apt install -y libssl-dev` | |
+| Linux (RHEL/Rocky/Oracle) | `sudo dnf install -y openssl-devel` | |
+| macOS | `brew install openssl@3` | configure with `-DOPENSSL_ROOT_DIR=$(brew --prefix openssl@3)` |
+| Windows | `choco install openssl -y` (recommended; matches CI) | installs to `C:\Program Files\OpenSSL-Win64`; set `OPENSSL_ROOT_DIR` to the install root |
+
+On Windows, [Chocolatey](https://chocolatey.org/install) is the recommended way to install OpenSSL because it is exactly what the Windows CI workflow (`.github/workflows/ci-windows.yml`) uses, so a local build matches CI. From an elevated (Administrator) PowerShell:
+
+```powershell
+choco install openssl -y
+```
+
+This installs a VC-compatible build (the Shining Light [Win64 OpenSSL](https://slproweb.com/products/Win32OpenSSL.html) package) to `C:\Program Files\OpenSSL-Win64`. Then point CMake at it when configuring:
+
+```powershell
+cmake --preset "x64-release" -DCRYPTO_BACKEND=OpenSSL -DOPENSSL_ROOT_DIR="C:\Program Files\OpenSSL-Win64"
+```
+
+Newer Chocolatey/Shining Light builds nest the MSVC import libraries under `lib\VC\x64\MD`. If `find_package(OpenSSL)` fails to locate them from `OPENSSL_ROOT_DIR` alone, pass explicit hints (this mirrors what CI does):
+
+```powershell
+cmake --preset "x64-release" -DCRYPTO_BACKEND=OpenSSL `
+  -DOPENSSL_ROOT_DIR="C:\Program Files\OpenSSL-Win64" `
+  -DOPENSSL_INCLUDE_DIR="C:\Program Files\OpenSSL-Win64\include" `
+  -DLIB_EAY_RELEASE="C:\Program Files\OpenSSL-Win64\lib\VC\x64\MD\libcrypto.lib" `
+  -DSSL_EAY_RELEASE="C:\Program Files\OpenSSL-Win64\lib\VC\x64\MD\libssl.lib"
+```
+
+When the OpenSSL backend is built, its runtime libraries are deployed automatically: DLLs are copied next to `roc-optiq.exe` on Windows, `libssl`/`libcrypto` dylibs are staged into the `.app` bundle's `Frameworks` on macOS, and the Linux `.deb`/`.rpm` declares the system OpenSSL runtime as a dependency.
+
+On macOS the staging step (`cmake/macos_openssl_fixup.sh.in`) resolves the **versioned** dylibs (e.g. `libssl.3.dylib`), copies them under their real names, and rewrites every recorded OpenSSL load command to `@rpath/<name>` using `otool`. This avoids the failure mode where the executable kept an absolute Homebrew reference (`Library not loaded: /opt/homebrew/.../libssl.3.dylib`) and crashed at launch on a clean machine.
+
+Example (OpenSSL backend on Linux):
+
+```bash
+sudo apt install -y libssl-dev
+cmake -B build/linux-release --preset "linux-release" -DCRYPTO_BACKEND=OpenSSL
+cmake --build build/linux-release --preset "Linux Release Build" --parallel 4 --target package
+```
+
+---
+
 ## Artifacts
 
 - Linux: packages are emitted into the build directory (e.g., `.deb`, `.rpm`, `.gz`).

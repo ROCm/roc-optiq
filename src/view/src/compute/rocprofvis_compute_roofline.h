@@ -111,6 +111,7 @@ private:
     MenusMode      m_menus_mode;
     MenusPlacement m_menus_placement;
     bool           m_scale_intensity;
+    float          m_line_thickness;
 
     // Internal state...
     bool                  m_workload_changed;

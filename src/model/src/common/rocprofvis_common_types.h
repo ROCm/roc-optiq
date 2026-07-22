@@ -69,8 +69,6 @@ typedef union{
 #define TRACK_ID_STORE_ID 6
 #define TRACK_ID_RECORD_COUNT 7
 
-#define TOPOLOGY_INSTANCE_BIT_POS 54
-
 typedef struct
 {
     uint64_t id;

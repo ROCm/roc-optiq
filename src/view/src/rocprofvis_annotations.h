@@ -45,7 +45,7 @@ public:
     void AddSticky(double time_ns, float y_offset, const ImVec2& size,
                    const std::string& text, const std::string& title, double v_min,
                    double v_max, uint64_t track_id = INVALID_TRACK_ID,
-                   bool is_minimized = true);
+                   bool is_minimized = true, bool is_locked = false);
 
     void                     RemoveNotesPendingDelete();
     std::vector<StickyNote>& GetStickyNotes();

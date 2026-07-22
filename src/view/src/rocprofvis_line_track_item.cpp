@@ -5,10 +5,10 @@
 #include "rocprofvis_click_manager.h"
 #include "widgets/rocprofvis_gui_helpers.h"
 #include "rocprofvis_settings_manager.h"
+#include "rocprofvis_timeline_track_options.h"
 #include "rocprofvis_utils.h"
 #include "spdlog/spdlog.h"
 #include <algorithm>
-#include <charconv>
 #include <iomanip>
 #include <sstream>
 
@@ -20,22 +20,18 @@ namespace View
 constexpr float DEFAULT_VERTICAL_PADDING = 2.0f;
 constexpr float DEFAULT_LINE_THICKNESS   = 1.0f;
 
-LineTrackItem::LineTrackItem(DataProvider& dp, uint64_t track_id, bool display,
+LineTrackItem::LineTrackItem(DataProvider& dp, uint64_t track_id,
+                             TimelineTrackOptions&               track_options,
                              std::shared_ptr<TimePixelTransform> tpt,
                              std::shared_ptr<TimelineSelection>  timeline_selection)
-: TrackItem(dp, track_id, display, tpt, timeline_selection)
+: TrackItem(dp, track_id, track_options, tpt, timeline_selection)
 , m_data({})
 , m_min_y("edit_min")
 , m_max_y("edit_max")
 , m_dp(dp)
 , m_vertical_padding(DEFAULT_VERTICAL_PADDING)
 , m_pills_analysis({})
-, m_linetrack_project_settings(dp.GetTraceFilePath(), *this)
-, m_show_analysis({ false, false, true, true })
-, m_highlight_y_range(false)
-, m_highlight_y_limits()
-, m_show_boxplot(true)
-, m_show_boxplot_stripes(false)
+, m_counter_options(nullptr)
 {
     if(!m_tpt)
     {
@@ -48,29 +44,29 @@ LineTrackItem::LineTrackItem(DataProvider& dp, uint64_t track_id, bool display,
     {
         m_track_statistics =
             m_data_provider.DataModel().GetAnalysis().RegisterTrack(*m_track_metadata);
-        for(int i = 0; i < AnalysisTrackStatistics::Counter::kCounterCount; i++)
+        if(m_track_statistics)
         {
-            m_pills_analysis[i] = AddPill();
-            m_pills_analysis[i]->SetVisible(m_show_analysis[i]);
-            m_pills_analysis[i]->SetAccentColor(m_track_statistics->stats[i].accent_color);
-        }
-    }
-
-    if(m_linetrack_project_settings.Valid())
-    {
-        m_show_boxplot         = m_linetrack_project_settings.BoxPlot();
-        m_show_boxplot_stripes = m_linetrack_project_settings.BoxPlotStripes();
-        m_highlight_y_range    = m_linetrack_project_settings.Highlight();
-        m_highlight_y_limits   = m_linetrack_project_settings.HighlightRange();
-        m_show_analysis        = m_linetrack_project_settings.ShowAnalysis();
-        for(int i = 0; i < AnalysisTrackStatistics::Counter::kCounterCount; i++)
-        {
-            if(m_pills_analysis[i])
+            for(size_t i = 0; i < AnalysisTrackStatistics::Counter::kCounterCount; i++)
             {
-                m_pills_analysis[i]->SetVisible(m_show_analysis[i]);
+                m_pills_analysis[i] = AddPill();
+                m_pills_analysis[i]->SetAccentColor(
+                    m_track_statistics->stats[i].accent_color);
             }
         }
     }
+
+    m_counter_options = dynamic_cast<CounterTrackOptions*>(m_options.get());
+    if(m_counter_options)
+    {
+        for(size_t i = 0; i < AnalysisTrackStatistics::Counter::kCounterCount; i++)
+        {
+            if(m_pills_analysis[i])
+            {
+                m_pills_analysis[i]->SetVisible(m_counter_options->m_show_analysis[i]);
+            }
+        }
+    }
+    ROCPROFVIS_ASSERT(m_counter_options);
 }
 
 LineTrackItem::~LineTrackItem() {}
@@ -106,21 +102,31 @@ void
 LineTrackItem::RenderHighlightBand(ImDrawList* draw_list, const ImVec2& cursor_position,
                                    const ImVec2& content_size, double scale_y)
 {
-    float highlight_y_max = static_cast<float>(
-        cursor_position.y + content_size.y -
-        (m_highlight_y_limits.max_limit - static_cast<float>(m_min_y.Value())) * scale_y);
-    float highlight_y_min = static_cast<float>(
-        cursor_position.y + content_size.y -
-        (m_highlight_y_limits.min_limit - static_cast<float>(m_min_y.Value())) * scale_y);
+    if(m_counter_options)
+    {
+        float highlight_y_max =
+            static_cast<float>(cursor_position.y + content_size.y -
+                               (m_counter_options->m_highlight.range_max -
+                                static_cast<float>(m_min_y.Value())) *
+                                   scale_y);
+        float highlight_y_min =
+            static_cast<float>(cursor_position.y + content_size.y -
+                               (m_counter_options->m_highlight.range_min -
+                                static_cast<float>(m_min_y.Value())) *
+                                   scale_y);
 
-    highlight_y_max = std::max(
-        cursor_position.y, std::min(cursor_position.y + content_size.y, highlight_y_max));
-    highlight_y_min = std::max(
-        cursor_position.y, std::min(cursor_position.y + content_size.y, highlight_y_min));
+        highlight_y_max =
+            std::max(cursor_position.y,
+                     std::min(cursor_position.y + content_size.y, highlight_y_max));
+        highlight_y_min =
+            std::max(cursor_position.y,
+                     std::min(cursor_position.y + content_size.y, highlight_y_min));
 
-    draw_list->AddRectFilled(ImVec2(cursor_position.x, highlight_y_max),
-                             ImVec2(cursor_position.x + content_size.x, highlight_y_min),
-                             m_settings.GetColor(Colors::kTrackColorWarningBand));
+        draw_list->AddRectFilled(
+            ImVec2(cursor_position.x, highlight_y_max),
+            ImVec2(cursor_position.x + content_size.x, highlight_y_min),
+            m_settings.GetColor(Colors::kTrackColorWarningBand));
+    }
 }
 
 void
@@ -160,9 +166,21 @@ LineTrackItem::BoxPlotRender(float graph_width)
             point_end.x = std::max(point_end.x, point_start.x + 1.0f);
         }
 
-        ImU32 fill_color = (!m_show_boxplot)                          ? transparent_color
-                           : (m_show_boxplot_stripes && (i % 2 == 0)) ? alt_fill_color
-                                                                      : base_fill_color;
+        ImU32 fill_color = base_fill_color;
+        if(m_counter_options)
+        {
+            if(m_counter_options->m_boxplot.enabled)
+            {
+                if(m_counter_options->m_boxplot.stripes && (i % 2))
+                {
+                    fill_color = alt_fill_color;
+                }
+            }
+            else
+            {
+                fill_color = transparent_color;
+            }
+        }
 
         draw_list->AddRectFilled(ImVec2(point_start.x, point_start.y),
                                  ImVec2(point_end.x, bottom_of_chart), fill_color);
@@ -189,8 +207,10 @@ LineTrackItem::BoxPlotRender(float graph_width)
         }
     }
 
-    if(m_highlight_y_range)
+    if(m_counter_options && m_counter_options->m_highlight.enabled)
+    {
         RenderHighlightBand(draw_list, cursor_position, content_size, scale_y);
+    }
 
     if(hovered_idx != -1)
     {
@@ -256,12 +276,12 @@ LineTrackItem::Update()
                 if(m_track_statistics->state == AnalysisTrackStatistics::kReady &&
                    m_track_statistics_dirty)
                 {
+                    const AnalysisTrackStatistics::Stat& stat =
+                        m_track_statistics->stats[i];
                     m_pills_analysis[i]->Activate();
-                    m_pills_analysis[i]->SetLabel(m_track_statistics->stats[i].compact,
-                                                  Pill::kCompact);
-                    m_pills_analysis[i]->SetLabel(m_track_statistics->stats[i].extended,
-                                                  Pill::kExtended);
-                    m_pills_analysis[i]->SetTooltip(m_track_statistics->stats[i].full);
+                    m_pills_analysis[i]->SetLabel(stat.CompactValue());
+                    m_pills_analysis[i]->SetExtendedLabel(stat.CompactLabel());
+                    m_pills_analysis[i]->SetTooltip(stat.FullLabel());
                 }
                 else if(m_track_statistics->state < AnalysisTrackStatistics::kReady)
                 {
@@ -270,6 +290,17 @@ LineTrackItem::Update()
             }
         }
     }
+    if(m_options && m_options->Updated())
+    {
+        if(m_counter_options && m_track_statistics)
+        {
+            for(size_t i = 0; i < AnalysisTrackStatistics::Counter::kCounterCount; i++)
+            {
+                m_pills_analysis[i]->SetVisible(m_counter_options->m_show_analysis[i]);
+            }
+        }
+    }
+
     TrackItem::Update();
 }
 
@@ -365,112 +396,6 @@ LineTrackItem::RenderChart(float graph_width)
 {
     BoxPlotRender(graph_width);
 }
-void
-LineTrackItem::RenderMetaAreaOptions()
-{
-    if(m_track_statistics)
-    {
-        ImGui::SeparatorText("Metrics");
-        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing,
-                            ImGui::GetStyle().ItemInnerSpacing);
-        for(int i = 0; i < AnalysisTrackStatistics::Counter::kCounterCount; i++)
-        {
-            ImGui::PushID(i);
-            ImGui::PushStyleColor(
-                ImGuiCol_CheckMark,
-                m_settings.GetColorWheel()[m_track_statistics->stats[i].accent_color] |
-                    IM_COL32_A_MASK);
-            if(ImGui::Checkbox("", &m_show_analysis[i]))
-            {
-                m_pills_analysis[i]->SetVisible(m_show_analysis[i]);
-            }
-            ImGui::PopStyleColor();
-            ImGui::SameLine();
-            ImGui::Text("Show %s", m_track_statistics->stats[i].name);
-            ImGui::PopID();
-        }
-        ImGui::PopStyleVar();
-    }
-    ImGui::SeparatorText("Appearance");
-    ImGui::Checkbox("Show Counter Boxes", &m_show_boxplot);
-    ImGui::Checkbox("Alternate Counter Coloring", &m_show_boxplot_stripes);
-    if(ImGui::Checkbox("Highlight Y Range", &m_highlight_y_range))
-    {
-        float min_limit                = static_cast<float>(m_min_y.Value());
-        float max_limit                = static_cast<float>(m_max_y.Value());
-        m_highlight_y_limits.min_limit = min_limit;
-        m_highlight_y_limits.max_limit = max_limit;
-    }
-
-    if(m_highlight_y_range)
-    {
-        float min_limit = static_cast<float>(m_min_y.Value());
-        float max_limit = static_cast<float>(m_max_y.Value());
-
-        float min_percent =
-            (m_highlight_y_limits.min_limit - min_limit) / (max_limit - min_limit);
-        float max_percent =
-            (m_highlight_y_limits.max_limit - min_limit) / (max_limit - min_limit);
-
-        ImGui::BeginGroup();
-        ImGui::TextUnformatted("Min Value");
-        ImGui::SetNextItemWidth(120);
-        if(ImGui::SliderFloat("##min_drag", &min_percent, 0.0f, 1.0f, "",
-                              ImGuiSliderFlags_None))
-        {
-            m_highlight_y_limits.min_limit =
-                min_limit + (max_limit - min_limit) * min_percent;
-        }
-        ImGui::SetNextItemWidth(120);
-        if(ImGui::InputFloat("##min_input", &m_highlight_y_limits.min_limit))
-        {
-            m_highlight_y_limits.min_limit =
-                std::clamp(m_highlight_y_limits.min_limit, min_limit, max_limit);
-        }
-        ImGui::EndGroup();
-        ImGui::SameLine();
-        ImGui::Dummy(ImVec2(3.0f, 0.0f));
-        ImGui::SameLine();
-        ImGui::PushStyleColor(ImGuiCol_ChildBg,
-                              m_settings.GetColor(Colors::kSplitterColor));
-
-        ImGui::BeginChild("Splitter For Max/Min", ImVec2(1, 75), ImGuiChildFlags_None);
-
-        ImGui::EndChild();
-        ImGui::PopStyleColor();
-        ImGui::SameLine();
-        ImGui::Dummy(ImVec2(3.0f, 0.0f));
-        ImGui::SameLine();
-
-        ImGui::BeginGroup();
-        ImGui::TextUnformatted("Max Value");
-        ImGui::SetNextItemWidth(120);
-        if(ImGui::SliderFloat("##max_drag", &max_percent, 0.0f, 1.0f, "",
-                              ImGuiSliderFlags_None))
-        {
-            m_highlight_y_limits.max_limit =
-                min_limit + (max_limit - min_limit) * max_percent;
-        }
-        ImGui::SetNextItemWidth(120);
-        if(ImGui::InputFloat("##max_input", &m_highlight_y_limits.max_limit))
-        {
-            m_highlight_y_limits.max_limit =
-                std::clamp(m_highlight_y_limits.max_limit, min_limit, max_limit);
-        }
-        ImGui::EndGroup();
-
-        // Clamp and sync values only after user interaction
-        m_highlight_y_limits.min_limit =
-            std::clamp(m_highlight_y_limits.min_limit, min_limit, max_limit);
-        m_highlight_y_limits.max_limit =
-            std::clamp(m_highlight_y_limits.max_limit, min_limit, max_limit);
-
-        if(m_highlight_y_limits.min_limit > m_highlight_y_limits.max_limit)
-            m_highlight_y_limits.max_limit = m_highlight_y_limits.min_limit;
-        if(m_highlight_y_limits.max_limit < m_highlight_y_limits.min_limit)
-            m_highlight_y_limits.min_limit = m_highlight_y_limits.max_limit;
-    }
-}
 
 ImVec2
 LineTrackItem::MapToUI(double x_in, double y_in, ImVec2& cursor_position,
@@ -484,104 +409,6 @@ LineTrackItem::MapToUI(double x_in, double y_in, ImVec2& cursor_position,
     return ImVec2(static_cast<float>(x), static_cast<float>(y));
 }
 
-LineTrackProjectSettings::LineTrackProjectSettings(const std::string& project_id,
-                                                   LineTrackItem&     track_item)
-: ProjectSetting(project_id)
-, m_track_item(track_item)
-{}
-
-LineTrackProjectSettings::~LineTrackProjectSettings() {}
-
-void
-LineTrackProjectSettings::ToJson()
-{
-    jt::Json& track = m_settings_json[JSON_KEY_GROUP_TIMELINE][JSON_KEY_TIMELINE_TRACK]
-                                     [m_track_item.GetID()];
-    track[JSON_KEY_TIMELINE_TRACK_BOX_PLOT] = m_track_item.m_show_boxplot;
-    track[JSON_KEY_TIMELINE_TRACK_COLOR]    = m_track_item.m_highlight_y_range;
-    track[JSON_KEY_TIMELINE_TRACK_COLOR_RANGE_MIN] =
-        m_track_item.m_highlight_y_limits.min_limit;
-    track[JSON_KEY_TIMELINE_TRACK_COLOR_RANGE_MAX] =
-        m_track_item.m_highlight_y_limits.max_limit;
-    track[JSON_KEY_TIMELINE_TRACK_STRIPES] = m_track_item.m_show_boxplot_stripes;
-    track[JSON_KEY_TRACK_MIN] =
-        m_track_item.m_show_analysis[AnalysisTrackStatistics::Counter::kCounterMin];
-    track[JSON_KEY_TRACK_MAX] =
-        m_track_item.m_show_analysis[AnalysisTrackStatistics::Counter::kCounterMax];
-    track[JSON_KEY_TRACK_MEAN] =
-        m_track_item.m_show_analysis[AnalysisTrackStatistics::Counter::kCounterMean];
-    track[JSON_KEY_TRACK_STANDARD_DEVIATION] =
-        m_track_item
-            .m_show_analysis[AnalysisTrackStatistics::Counter::kCounterStandardDeviation];
-}
-
-bool
-LineTrackProjectSettings::Valid() const
-{
-    jt::Json& track = m_settings_json[JSON_KEY_GROUP_TIMELINE][JSON_KEY_TIMELINE_TRACK]
-                                     [m_track_item.GetID()];
-    return track[JSON_KEY_TIMELINE_TRACK_BOX_PLOT].isBool() &&
-           track[JSON_KEY_TIMELINE_TRACK_STRIPES].isBool() &&
-           track[JSON_KEY_TIMELINE_TRACK_COLOR].isBool() &&
-           track[JSON_KEY_TIMELINE_TRACK_COLOR_RANGE_MIN].isNumber() &&
-           track[JSON_KEY_TIMELINE_TRACK_COLOR_RANGE_MAX].isNumber() &&
-           track[JSON_KEY_TRACK_MIN].isBool() && track[JSON_KEY_TRACK_MAX].isBool() &&
-           track[JSON_KEY_TRACK_MEAN].isBool() &&
-           track[JSON_KEY_TRACK_STANDARD_DEVIATION].isBool();
-}
-
-bool
-LineTrackProjectSettings::BoxPlot() const
-{
-    return m_settings_json[JSON_KEY_GROUP_TIMELINE][JSON_KEY_TIMELINE_TRACK]
-                          [m_track_item.GetID()][JSON_KEY_TIMELINE_TRACK_BOX_PLOT]
-                              .getBool();
-}
-
-bool
-LineTrackProjectSettings::BoxPlotStripes() const
-{
-    return m_settings_json[JSON_KEY_GROUP_TIMELINE][JSON_KEY_TIMELINE_TRACK]
-                          [m_track_item.GetID()][JSON_KEY_TIMELINE_TRACK_STRIPES]
-                              .getBool();
-}
-
-bool
-LineTrackProjectSettings::Highlight() const
-{
-    return m_settings_json[JSON_KEY_GROUP_TIMELINE][JSON_KEY_TIMELINE_TRACK]
-                          [m_track_item.GetID()][JSON_KEY_TIMELINE_TRACK_COLOR]
-                              .getBool();
-}
-
-HighlightYRange
-LineTrackProjectSettings::HighlightRange() const
-{
-    jt::Json& track = m_settings_json[JSON_KEY_GROUP_TIMELINE][JSON_KEY_TIMELINE_TRACK]
-                                     [m_track_item.GetID()];
-    return HighlightYRange{
-        static_cast<float>(track[JSON_KEY_TIMELINE_TRACK_COLOR_RANGE_MAX].getNumber()),
-        static_cast<float>(track[JSON_KEY_TIMELINE_TRACK_COLOR_RANGE_MIN].getNumber())
-    };
-}
-
-std::array<bool, AnalysisTrackStatistics::Counter::kCounterCount>
-LineTrackProjectSettings::ShowAnalysis() const
-{
-    jt::Json& track = m_settings_json[JSON_KEY_GROUP_TIMELINE][JSON_KEY_TIMELINE_TRACK]
-                                     [m_track_item.GetID()];
-    std::array<bool, AnalysisTrackStatistics::Counter::kCounterCount> show_analysis;
-    show_analysis[AnalysisTrackStatistics::Counter::kCounterMin] =
-        track[JSON_KEY_TRACK_MIN].getBool();
-    show_analysis[AnalysisTrackStatistics::Counter::kCounterMax] =
-        track[JSON_KEY_TRACK_MAX].getBool();
-    show_analysis[AnalysisTrackStatistics::Counter::kCounterMean] =
-        track[JSON_KEY_TRACK_MEAN].getBool();
-    show_analysis[AnalysisTrackStatistics::Counter::kCounterStandardDeviation] =
-        track[JSON_KEY_TRACK_STANDARD_DEVIATION].getBool();
-    return show_analysis;
-}
-
 LineTrackItem::VerticalLimits::VerticalLimits(std::string field_id)
 : m_default_value(0.0)
 , m_value(0.0)
@@ -593,7 +420,7 @@ LineTrackItem::VerticalLimits::VerticalLimits(std::string field_id)
         {
             UpdateValue(m_default_value);
         }
-        else if(committed_text != m_compact_str)
+        else if(committed_text != m_edit_str)
         {
             double processed = ProcessUserInput(committed_text);
             UpdateValue(processed);
@@ -651,12 +478,15 @@ LineTrackItem::VerticalLimits::UpdateValue(double value)
     m_value         = value;
     m_formatted_str = FormatValue(value);
     m_compact_str   = compact_number_format(value);
+    // Units-free so the edit box shows "25.2M", not "25.2M bytes".
+    m_edit_str = m_compact_str;
     if(!m_units.empty())
     {
         m_formatted_str += " " + m_units;
         m_compact_str += " " + m_units;
     }
     m_text_field.SetText(m_compact_str, m_formatted_str, m_formatted_default);
+    m_text_field.SetEditText(m_edit_str);
 }
 
 std::string
@@ -670,37 +500,13 @@ LineTrackItem::VerticalLimits::FormatValue(double value)
 double
 LineTrackItem::VerticalLimits::ProcessUserInput(std::string_view input)
 {
-    double      result = 0.0;
-    const char* first  = input.data();
-    const char* last   = input.data() + input.size();
-    
-#if defined(__APPLE__)
-    // macOS doesn't support from_chars for floating point yet, use strtod as fallback
-    char* end_ptr = nullptr;
-    std::string null_terminated(input);
-    result = std::strtod(null_terminated.c_str(), &end_ptr);
-    if(end_ptr == null_terminated.c_str() + null_terminated.size() && std::isfinite(result))
+    double value = 0.0;
+    if(parse_compact_number(input, m_units, value))
     {
-        return result;
+        return value;
     }
-    else
-    {
-        m_text_field.RevertToDefault();
-        return m_default_value;
-    }
-#else
-    auto [ptr, error_code] =
-        std::from_chars(first, last, result, std::chars_format::general);
-    if(error_code == std::errc{} && std::isfinite(result) && ptr == last)
-    {
-        return result;
-    }
-    else
-    {
-        m_text_field.RevertToDefault();
-        return m_default_value;
-    }
-#endif
+    m_text_field.RevertToDefault();
+    return m_default_value;
 }
 
 }  // namespace View

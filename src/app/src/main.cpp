@@ -114,21 +114,30 @@ sync_imgui_modifiers_with_os()
     ImGuiIO&                            io = ImGui::GetIO();
     RocProfVis::Platform::ModifierState m  = RocProfVis::Platform::get_os_modifier_state();
 
-    if(io.KeyCtrl != m.ctrl)
+    io.AddKeyEvent(ImGuiMod_Ctrl, m.ctrl);
+    io.AddKeyEvent(ImGuiMod_Shift, m.shift);
+    io.AddKeyEvent(ImGuiMod_Alt, m.alt);
+    io.AddKeyEvent(ImGuiMod_Super, m.super);
+
+    if(!m.ctrl)
     {
-        io.AddKeyEvent(ImGuiMod_Ctrl, m.ctrl);
+        io.AddKeyEvent(ImGuiKey_LeftCtrl, false);
+        io.AddKeyEvent(ImGuiKey_RightCtrl, false);
     }
-    if(io.KeyShift != m.shift)
+    if(!m.shift)
     {
-        io.AddKeyEvent(ImGuiMod_Shift, m.shift);
+        io.AddKeyEvent(ImGuiKey_LeftShift, false);
+        io.AddKeyEvent(ImGuiKey_RightShift, false);
     }
-    if(io.KeyAlt != m.alt)
+    if(!m.alt)
     {
-        io.AddKeyEvent(ImGuiMod_Alt, m.alt);
+        io.AddKeyEvent(ImGuiKey_LeftAlt, false);
+        io.AddKeyEvent(ImGuiKey_RightAlt, false);
     }
-    if(io.KeySuper != m.super)
+    if(!m.super)
     {
-        io.AddKeyEvent(ImGuiMod_Super, m.super);
+        io.AddKeyEvent(ImGuiKey_LeftSuper, false);
+        io.AddKeyEvent(ImGuiKey_RightSuper, false);
     }
 }
 
@@ -156,7 +165,6 @@ static void
 key_callback(GLFWwindow* window, int key, int scancode, int action, int mods)
 {
     (void) scancode;
-    (void) mods;
 
 #ifndef __APPLE__
     // Toggle fullscreen with F11

@@ -27,9 +27,10 @@ namespace RocProfVis
 namespace View
 {
 
+class MeasurementController;
 class TimelineSelection;
 class TimelineView;
-class MeasurementController;
+class TimelineTrackOptions;
  
 typedef struct ViewCoords
 {
@@ -71,7 +72,6 @@ public:
     bool Valid() const override;
 
     uint64_t TrackID(int index) const;
-    bool     DisplayTrack(uint64_t track_id) const;
 
 private:
     TimelineView& m_timeline_view;
@@ -199,6 +199,7 @@ private:
     EventManager::SubscriptionToken m_font_changed_token;
     EventManager::SubscriptionToken m_set_view_range_token;
     EventManager::SubscriptionToken m_timeline_time_range_changed_token;
+    EventManager::SubscriptionToken m_track_visibility_token;
 
     int                                 m_dragged_sticky_id;
     uint64_t                            m_reordering_track_id;  // INVALID_TRACK_ID when idle
@@ -238,6 +239,8 @@ private:
     float                               m_max_meta_scale_area_size;
     std::shared_ptr<std::vector<TrackItem*>>          m_tracks;
     std::shared_ptr<TimePixelTransform>               m_tpt;
+    std::unique_ptr<TimelineTrackOptions>             m_track_options_context_menu;
+
     struct
     {
         bool     handled;
@@ -253,6 +256,8 @@ private:
     MeasurementLabelRect       m_measure_label_end;
     MeasurementLabelRect       m_measure_label_duration;
     MeasurementCopyTarget      m_measure_copy_target;
+
+    ImVec2                     m_context_menu_pos = ImVec2(0.0f, 0.0f);
 
     TimelineViewProjectSettings m_project_settings;
     LoadingTimer                m_loading_timer;

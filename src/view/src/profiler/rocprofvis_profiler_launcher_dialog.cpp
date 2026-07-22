@@ -129,27 +129,20 @@ void ProfilerLauncherDialog::Render()
     ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
     ImGui::SetNextWindowSize(ImVec2(1000, 700), ImGuiCond_FirstUseEver);
 
-    // AppWindow renders us inside its main-window scope, which pushes
-    // WindowPadding/WindowRounding to 0 (so the main layout is flush). Restore
-    // the app's standard window padding/rounding so this dialog isn't edge-to-
-    // edge. WindowPadding must be set before Begin() to take effect.
-    SettingsManager& settings = SettingsManager::Get();
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, settings.GetDefaultStyle().WindowPadding);
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, settings.GetDefaultStyle().WindowRounding);
+    // AppWindow renders us inside its main-window scope, which zeroes
+    // WindowPadding / ItemSpacing / WindowRounding for the flush main layout.
+    // Restore the app's standard style so this dialog matches the rest of the
+    // app (WindowPadding must be set before Begin() to take effect).
+    const ImGuiStyle& def = SettingsManager::Get().GetDefaultStyle();
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, def.WindowPadding);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, def.WindowRounding);
 
     bool window_open = true;
     bool visible     = ImGui::Begin("Launch Profiler", &window_open,
                                     ImGuiWindowFlags_NoScrollbar);
     if (visible)
     {
-        // Modern, roomier styling applied to the whole dialog: softer corners on
-        // frames/tabs/grips and a bit more breathing room between items.
-        ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 6.0f);
-        ImGui::PushStyleVar(ImGuiStyleVar_GrabRounding, 6.0f);
-        ImGui::PushStyleVar(ImGuiStyleVar_TabRounding, 6.0f);
-        ImGui::PushStyleVar(ImGuiStyleVar_PopupRounding, 6.0f);
-        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(8.0f, 5.0f));
-        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(8.0f, 5.0f));
+        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, def.ItemSpacing);
 
         // The dialog is a small two-step wizard: author the run (configure), then
         // watch it (run). Splitting them keeps the configuration uncluttered and
@@ -163,7 +156,7 @@ void ProfilerLauncherDialog::Render()
             RenderConfigureView();
         }
 
-        ImGui::PopStyleVar(6);
+        ImGui::PopStyleVar(1);
     }
     ImGui::End();
     ImGui::PopStyleVar(2);  // WindowPadding, WindowRounding
@@ -566,21 +559,17 @@ void ProfilerLauncherDialog::RenderAdvancedWindow()
     ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
     ImGui::SetNextWindowSize(ImVec2(700, 560), ImGuiCond_FirstUseEver);
 
-    // Restore the app's standard window padding/rounding (AppWindow's scope
-    // zeroes them). WindowPadding must be set before Begin().
-    SettingsManager& settings = SettingsManager::Get();
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, settings.GetDefaultStyle().WindowPadding);
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, settings.GetDefaultStyle().WindowRounding);
+    // Restore the app's standard style (AppWindow's scope zeroes window padding /
+    // item spacing / rounding). WindowPadding must be set before Begin().
+    const ImGuiStyle& def = SettingsManager::Get().GetDefaultStyle();
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, def.WindowPadding);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, def.WindowRounding);
 
     bool open    = true;
     bool visible = ImGui::Begin("Advanced Profiling Options", &open);
     if (visible)
     {
-        ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 6.0f);
-        ImGui::PushStyleVar(ImGuiStyleVar_GrabRounding, 6.0f);
-        ImGui::PushStyleVar(ImGuiStyleVar_TabRounding, 6.0f);
-        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(8.0f, 5.0f));
-        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(8.0f, 5.0f));
+        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, def.ItemSpacing);
 
         ImGui::TextDisabled("Fine-grained settings, applied on top of the selected preset.");
         ImGui::Spacing();
@@ -606,7 +595,7 @@ void ProfilerLauncherDialog::RenderAdvancedWindow()
             ImGui::EndTabBar();
         }
 
-        ImGui::PopStyleVar(5);
+        ImGui::PopStyleVar(1);
     }
     ImGui::End();
     ImGui::PopStyleVar(2);  // WindowPadding, WindowRounding

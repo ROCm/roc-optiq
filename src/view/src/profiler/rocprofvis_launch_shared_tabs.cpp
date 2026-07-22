@@ -22,30 +22,22 @@ namespace
 
 static char s_save_preset_name[128] = {};
 
-// Design tokens for the custom launcher widgets below.
-constexpr float kCardRounding      = 10.0f;
-constexpr float kCardPadX          = 16.0f;
-constexpr float kCardPadY          = 13.0f;
-constexpr float kCardGap           = 7.0f;   // vertical gap between stacked cards
-constexpr float kAccentBarWidth    = 4.0f;   // card-header leading bar
-constexpr float kAccentBarGap      = 8.0f;
-constexpr float kChipPadX          = 9.0f;
-constexpr float kChipPadY          = 3.0f;
-constexpr float kChipBgAlpha       = 0.16f;
-constexpr float kChipEdgeAlpha     = 0.55f;
-constexpr float kPillPadX          = 11.0f;
-constexpr float kPillPadY          = 4.0f;
-constexpr float kPillGap           = 7.0f;
-constexpr float kPillCloseScale    = 0.75f;  // close glyph size, fraction of font
-constexpr float kPillBgAlpha       = 0.16f;
-constexpr float kPillBgHoverAlpha  = 0.30f;
+// Color tints and intrinsic widget geometry only. Padding/spacing come from the
+// shared app style (GetDefaultStyle / frame padding) so the launcher matches the
+// rest of the application rather than inventing its own spacing rules.
+constexpr float kAccentBarWidth     = 4.0f;   // card-header leading accent bar
+constexpr float kAccentBarGap       = 8.0f;
+constexpr float kChipBgAlpha        = 0.16f;
+constexpr float kChipEdgeAlpha      = 0.55f;
+constexpr float kPillGap            = 7.0f;   // gap between pill label and close "x"
+constexpr float kPillCloseScale     = 0.75f;  // close glyph size, fraction of font
+constexpr float kPillBgAlpha        = 0.16f;
+constexpr float kPillBgHoverAlpha   = 0.30f;
 constexpr float kPillCloseIdleAlpha = 0.6f;
-constexpr float kStatusPillPadX    = 12.0f;
-constexpr float kStatusPillPadY    = 5.0f;
-constexpr float kToggleHeightScale = 0.82f;  // of frame height
-constexpr float kToggleWidthScale  = 1.75f;  // of toggle height
-constexpr float kToggleAnimSpeed   = 10.0f;
-constexpr float kToggleKnobInset   = 2.0f;   // knob padding inside the track
+constexpr float kToggleHeightScale  = 0.82f;  // of frame height
+constexpr float kToggleWidthScale   = 1.75f;  // of toggle height
+constexpr float kToggleAnimSpeed    = 10.0f;
+constexpr float kToggleKnobInset    = 2.0f;   // knob padding inside the track
 
 // Linear blend between two packed colors (t in [0,1]).
 ImU32 LerpColor(ImU32 a, ImU32 b, float t)
@@ -61,11 +53,12 @@ ImU32 LerpColor(ImU32 a, ImU32 b, float t)
 
 void BeginLaunchCard(const char* id)
 {
-    SettingsManager& settings = SettingsManager::Get();
+    SettingsManager&  settings = SettingsManager::Get();
+    const ImGuiStyle& def      = settings.GetDefaultStyle();
 
-    ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, kCardRounding);
+    ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, def.ChildRounding);
     ImGui::PushStyleVar(ImGuiStyleVar_ChildBorderSize, 1.0f);
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(kCardPadX, kCardPadY));
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, def.WindowPadding);
     ImGui::PushStyleColor(ImGuiCol_ChildBg, settings.GetColor(Colors::kBgPanel));
     ImGui::PushStyleColor(ImGuiCol_Border, settings.GetColor(Colors::kPanelBorderSubtle));
 
@@ -78,7 +71,7 @@ void EndLaunchCard()
     ImGui::EndChild();
     ImGui::PopStyleColor(2);
     ImGui::PopStyleVar(3);
-    ImGui::Dummy(ImVec2(0.0f, kCardGap));
+    ImGui::Dummy(ImVec2(0.0f, ImGui::GetStyle().ItemSpacing.y));
 }
 
 void LaunchCardHeader(const char* icon, const char* title, const char* subtitle)
@@ -128,34 +121,36 @@ void LaunchCardHeader(const char* icon, const char* title, const char* subtitle)
 
 void Chip(const char* label, ImU32 accent_color)
 {
-    ImVec2      text_size = ImGui::CalcTextSize(label);
-    ImVec2      p         = ImGui::GetCursorScreenPos();
-    ImVec2      size(text_size.x + kChipPadX * 2.0f, text_size.y + kChipPadY * 2.0f);
-    ImDrawList* dl  = ImGui::GetWindowDrawList();
-    float       rnd = size.y * 0.5f;
+    const ImVec2 pad       = ImGui::GetStyle().FramePadding;
+    ImVec2       text_size = ImGui::CalcTextSize(label);
+    ImVec2       p         = ImGui::GetCursorScreenPos();
+    ImVec2       size(text_size.x + pad.x * 2.0f, text_size.y + pad.y * 2.0f);
+    ImDrawList*  dl  = ImGui::GetWindowDrawList();
+    float        rnd = size.y * 0.5f;
 
     dl->AddRectFilled(p, ImVec2(p.x + size.x, p.y + size.y),
                       ApplyAlpha(accent_color, kChipBgAlpha), rnd);
     dl->AddRect(p, ImVec2(p.x + size.x, p.y + size.y),
                 ApplyAlpha(accent_color, kChipEdgeAlpha), rnd);
-    dl->AddText(ImVec2(p.x + kChipPadX, p.y + kChipPadY), accent_color, label);
+    dl->AddText(ImVec2(p.x + pad.x, p.y + pad.y), accent_color, label);
 
     ImGui::Dummy(size);
 }
 
 PillAction EditablePill(const char* label, ImU32 accent_color)
 {
+    const ImVec2 pad       = ImGui::GetStyle().FramePadding;
     const ImVec2 text_size = ImGui::CalcTextSize(label);
     const float  x_size    = ImGui::GetFontSize() * kPillCloseScale;
 
-    ImVec2 size(kPillPadX * 2.0f + text_size.x + kPillGap + x_size,
-                text_size.y + kPillPadY * 2.0f);
+    ImVec2 size(pad.x * 2.0f + text_size.x + kPillGap + x_size,
+                text_size.y + pad.y * 2.0f);
     ImVec2 p = ImGui::GetCursorScreenPos();
 
     ImGui::InvisibleButton(label, size);
     bool  hovered = ImGui::IsItemHovered();
     bool  clicked = ImGui::IsItemClicked(ImGuiMouseButton_Left);
-    float x_left  = p.x + size.x - kPillPadX - x_size;
+    float x_left  = p.x + size.x - pad.x - x_size;
     bool  over_x  = hovered && ImGui::GetIO().MousePos.x >= x_left;
 
     ImDrawList* dl  = ImGui::GetWindowDrawList();
@@ -163,7 +158,7 @@ PillAction EditablePill(const char* label, ImU32 accent_color)
     dl->AddRectFilled(p, ImVec2(p.x + size.x, p.y + size.y),
                       ApplyAlpha(accent_color, hovered ? kPillBgHoverAlpha : kPillBgAlpha),
                       rnd);
-    dl->AddText(ImVec2(p.x + kPillPadX, p.y + kPillPadY), accent_color, label);
+    dl->AddText(ImVec2(p.x + pad.x, p.y + pad.y), accent_color, label);
 
     // Trailing "x" - brightens when hovered so removal is obvious.
     ImVec2 xc(x_left + x_size * 0.5f, p.y + size.y * 0.5f);
@@ -197,9 +192,10 @@ void RenderConfigChips(const char* lead_label, std::vector<std::string> const& t
     ImGuiStyle&  style     = ImGui::GetStyle();
     const float  window_x2 = ImGui::GetWindowPos().x + ImGui::GetWindowContentRegionMax().x;
 
-    // Chip width matches Chip(): text width plus its horizontal padding.
-    auto chip_width = [](std::string const& s)
-    { return ImGui::CalcTextSize(s.c_str()).x + kChipPadX * 2.0f; };
+    // Chip width matches Chip(): text width plus its horizontal frame padding.
+    const float chip_pad_x = ImGui::GetStyle().FramePadding.x;
+    auto chip_width = [chip_pad_x](std::string const& s)
+    { return ImGui::CalcTextSize(s.c_str()).x + chip_pad_x * 2.0f; };
 
     ImGui::SameLine();
     for (size_t i = 0; i < tags.size(); i++)
@@ -219,16 +215,15 @@ void RenderConfigChips(const char* lead_label, std::vector<std::string> const& t
 
 void StatusPill(const char* label, ImU32 bg_color)
 {
-    ImVec2      text_size = ImGui::CalcTextSize(label);
-    ImVec2      p         = ImGui::GetCursorScreenPos();
-    ImVec2      size(text_size.x + kStatusPillPadX * 2.0f,
-                     text_size.y + kStatusPillPadY * 2.0f);
-    ImDrawList* dl  = ImGui::GetWindowDrawList();
-    float       rnd = size.y * 0.5f;
+    const ImVec2 pad       = ImGui::GetStyle().FramePadding;
+    ImVec2       text_size = ImGui::CalcTextSize(label);
+    ImVec2       p         = ImGui::GetCursorScreenPos();
+    ImVec2       size(text_size.x + pad.x * 2.0f, text_size.y + pad.y * 2.0f);
+    ImDrawList*  dl  = ImGui::GetWindowDrawList();
+    float        rnd = size.y * 0.5f;
 
     dl->AddRectFilled(p, ImVec2(p.x + size.x, p.y + size.y), bg_color, rnd);
-    dl->AddText(ImVec2(p.x + kStatusPillPadX, p.y + kStatusPillPadY),
-                IM_COL32(255, 255, 255, 255), label);
+    dl->AddText(ImVec2(p.x + pad.x, p.y + pad.y), IM_COL32(255, 255, 255, 255), label);
 
     ImGui::Dummy(size);
 }

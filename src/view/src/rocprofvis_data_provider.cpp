@@ -1630,6 +1630,10 @@ DataProvider::FetchSingleTrackTable(const TableRequestParams& table_params)
         spdlog::debug("Cannot fetch table, no track id provided");
         return false;
     }
+    if(IsTableRequestPending(table_params.m_table_type))
+    {
+        return false;
+    }
 
     uint64_t         track_id = table_params.m_track_ids[0];
     const TrackInfo* metadata = m_model.GetTimeline().GetTrack(track_id);
@@ -1811,6 +1815,10 @@ DataProvider::FetchTable(const TableRequestParams& table_params)
     {
         request_id = TABLE_EXPORT_REQUEST_ID;
     }
+    else if(table_params.m_request_id != TableRequestParams::INFER_REQUEST_ID)
+    {
+        request_id = table_params.m_request_id;
+    }
     else
     {
         switch(table_params.m_table_type)
@@ -1867,6 +1875,14 @@ DataProvider::FetchTable(const TableRequestParams& table_params)
                 return false;
             }
         }
+    }
+
+    // System tables are mutable controller objects. Keep requests targeting the same
+    // table type serialized so one source cannot replace the table metadata while the
+    // other source's response is being copied into its view model.
+    if(IsTableRequestPending(table_params.m_table_type))
+    {
+        return false;
     }
 
     auto it = m_requests.find(request_id);
@@ -2403,6 +2419,21 @@ DataProvider::IsRequestPending(uint64_t request_id) const
     if(it != m_requests.end())
     {
         return true;
+    }
+    return false;
+}
+
+bool
+DataProvider::IsTableRequestPending(rocprofvis_controller_table_type_t table_type) const
+{
+    for(const std::pair<const int64_t, RequestInfo>& item : m_requests)
+    {
+        std::shared_ptr<TableRequestParams> params =
+            std::dynamic_pointer_cast<TableRequestParams>(item.second.custom_params);
+        if(params && params->m_table_type == table_type)
+        {
+            return true;
+        }
     }
     return false;
 }
@@ -3593,6 +3624,28 @@ DataProvider::ProcessTableRequest(RequestInfo& req)
             {
                 spdlog::error("Unsupported table type: {}", static_cast<int>(table_type));
                 return;
+            }
+        }
+        if(table_params &&
+           table_params->m_view_table_type != TableType::__kTableTypeCount)
+        {
+            table_type_enum = table_params->m_view_table_type;
+            switch(table_type_enum)
+            {
+                case TableType::kAnalysisTopInstrumentedEventsTable:
+                case TableType::kAnalysisTopDispatchEventsTable:
+                case TableType::kAnalysisTopMemoryAllocationEventsTable:
+                case TableType::kAnalysisTopMemoryCopyEventsTable:
+                case TableType::kAnalysisTopSampledEventsTable:
+                {
+                    table_model = &m_model.GetAnalysis().GetTables();
+                    break;
+                }
+                default:
+                {
+                    table_model = &m_model.GetTables();
+                    break;
+                }
             }
         }
         ROCPROFVIS_ASSERT(table_model);

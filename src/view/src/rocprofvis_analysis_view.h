@@ -2,6 +2,9 @@
 // SPDX-License-Identifier: MIT
 
 #pragma once
+#include <cstddef>
+#include <vector>
+
 #include "rocprofvis_annotation_view.h"
 #include "rocprofvis_annotations.h"
 #include "rocprofvis_event_manager.h"
@@ -19,6 +22,7 @@ class TopEventsView;
 class TrackTopology;
 class TrackDetails;
 class TimelineSelection;
+class HSplitContainer;
 
 class AnalysisView : public RocWidget
 {
@@ -32,11 +36,16 @@ public:
 
 private:
     void HandleTimelineSelectionChanged(std::shared_ptr<RocEvent> e);
+    void RenderCompareEventTab();
+    void RenderCompareSourceTitle(size_t source_index);
 
     DataProvider& m_data_provider;
 
-    std::shared_ptr<MultiTrackTable> m_event_table;
-    std::shared_ptr<MultiTrackTable> m_sample_table;
+    std::vector<std::shared_ptr<MultiTrackTable>> m_event_tables;
+    std::shared_ptr<MultiTrackTable>              m_sample_table;
+    std::shared_ptr<HSplitContainer>              m_event_table_split;
+    std::shared_ptr<RocWidget>                    m_event_table_layout;
+    bool                                          m_split_event_tables;
 
     std::shared_ptr<TabContainer>   m_tab_container;
     std::shared_ptr<EventsView>     m_events_view;

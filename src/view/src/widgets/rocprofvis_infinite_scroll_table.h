@@ -43,6 +43,10 @@ public:
 
     void HandleNewTableData(std::shared_ptr<RocEvent> e);
 
+    // When false, the table body draws without its own border/child frame so a
+    // parent (e.g. a titled card) can supply the single surrounding frame.
+    void SetDrawBorder(bool draw) { m_draw_border = draw; }
+
     // Important columns in the table
     enum ImportantColumns
     {
@@ -87,6 +91,7 @@ protected:
 
     void FormatTimeColumns() const;
     void ExportToFile() const;
+    bool QueueTableRequest(const TableRequestParams& params);
 
     FilterOptions                      m_filter_options;
     FilterOptions                      m_pending_filter_options;
@@ -119,6 +124,7 @@ protected:
     int m_hovered_row;
 
     bool m_horizontal_scroll;
+    bool m_draw_border;
 
 private:
     void RenderCell(const std::string* cell_text, int row, int column);
@@ -130,10 +136,12 @@ private:
     int m_fetch_threshold_items;
 
     // Internal state flags below
-    bool     m_open_context_menu;
-    bool     m_skip_data_fetch;
-    uint64_t m_last_total_row_count;
-    ImVec2   m_last_table_size;
+    bool                                m_open_context_menu;
+    bool                                m_skip_data_fetch;
+    bool                                m_retry_fetch;
+    std::shared_ptr<TableRequestParams> m_retry_params;
+    uint64_t                            m_last_total_row_count;
+    ImVec2                              m_last_table_size;
 
     std::string m_no_data_text;
     std::string m_export_notification_id;

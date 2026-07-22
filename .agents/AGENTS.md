@@ -911,6 +911,9 @@ The bottom-right tabbed panel. Hosts:
     callstack, args).
   - `TrackDetails` - selected-track summary tab.
   - `MultiTrackTable` (event table) - cross-track event listing.
+    Compare projects render independent, source-filtered A/B tables
+    side by side. One shared filter/aggregation control applies the
+    same query settings to both tables without pooling their results.
   - `MultiTrackTable` (sample table) - cross-track sample listing.
   - `AnnotationView` - sticky-note list.
 - Listens to track / range / event selection events to keep tabs in
@@ -927,8 +930,8 @@ highlights the linked event.
 ### `MultiTrackTable` (`rocprofvis_multi_track_table.{h,cpp}`)
 
 `InfiniteScrollTable` subclass that aggregates rows across multiple
-selected tracks. Supports `group_by_choices`, custom filter store, and
-context menu copy.
+selected tracks. Supports `group_by_choices`, custom filter store,
+optional compare-source filtering, and context menu copy.
 
 ### `TrackDetails` (`rocprofvis_track_details.{h,cpp}`)
 
@@ -1193,8 +1196,9 @@ controller results.
 - `rocprofvis_summary_model.{h,cpp}` - `SummaryModel`: holds the
   computed `SummaryInfo::AggregateMetrics`.
 - `rocprofvis_tables_model.{h,cpp}` - `TablesModel`: `enum class
-  TableType { kSampleTable, kEventTable, kEventSearchTable,
-  kSummaryKernelTable }` and the table cache addressed by it.
+  TableType { kSampleTable, kEventTable, kCompareEventTableA,
+  kCompareEventTableB, kEventSearchTable, kSummaryKernelTable, ... }`
+  and the table cache addressed by it.
 - `rocprofvis_analysis_model.{h,cpp}` - `AnalysisModel`: per-track
   queue-utilization cache, with the `AnalysisQueueUtilization` state
   machine.
@@ -1456,6 +1460,10 @@ Things to honor in any new data path:
    `RootView::DetachProviderCleanup()` to return any in-flight work;
    `AppWindow` will drain it asynchronously
    (`StartProviderCleanup` / `UpdateProviderCleanups`).
+6. **System table controllers are mutable.** Requests for the same
+   `rocprofvis_controller_table_type_t` must stay serialized. Independent
+   views use client request IDs plus `TableRequestParams::m_view_table_type`
+   to route each completed response into its own `TablesModel` slot.
 
 ## 14. Coding Conventions
 

@@ -17,6 +17,8 @@ enum class TableType
 {
     kSampleTable,
     kEventTable,
+    kCompareEventTableA,
+    kCompareEventTableB,
     kEventSearchTable,
     kSummaryKernelTable,
     kAnalysisTopInstrumentedEventsTable,

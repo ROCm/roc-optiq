@@ -55,16 +55,16 @@ CompareSourceBadgeWidth(const TrackInfo* track_info)
 }
 
 void
-RenderCompareSourceBadge(const TrackInfo* track_info, SettingsManager& settings)
+RenderCompareSourceBadge(const CompareSourceInfo& source, SettingsManager& settings)
 {
-    if(!track_info || track_info->compare_source.id.empty())
+    if(source.id.empty())
     {
         return;
     }
 
-    const CompareSourceInfo& source = track_info->compare_source;
-    ImU32                    color  = CompareSourceColor(source, settings);
-    float                    width  = CompareSourceBadgeWidth(track_info);
+    ImU32 color = CompareSourceColor(source, settings);
+    float width = ImGui::CalcTextSize(source.id.c_str()).x +
+                  2.0f * ImGui::GetStyle().FramePadding.x;
 
     ImGui::PushID("compare_source_badge");
     ImGui::PushStyleColor(ImGuiCol_Button, color);
@@ -87,6 +87,15 @@ RenderCompareSourceBadge(const TrackInfo* track_info, SettingsManager& settings)
         SetTooltipStyled("%s", tooltip.c_str());
     }
     ImGui::PopID();
+}
+
+void
+RenderCompareSourceBadge(const TrackInfo* track_info, SettingsManager& settings)
+{
+    if(track_info)
+    {
+        RenderCompareSourceBadge(track_info->compare_source, settings);
+    }
 }
 
 TrackItem::TrackItem(DataProvider& dp, uint64_t id, TimelineTrackOptions& track_options,

@@ -79,36 +79,61 @@ class RocprofDatabase : public ProfileDatabase
     typedef std::map<uint32_t, std::unordered_map<uint32_t, uint32_t>>
         mem_free_stream_to_agent_t;
 
-    // Reader-backed flow index key: a (event_type, opaque_id) pair. opaque_ids are
-    // per-type-table row ids that collide across tables, so the type tag is mandatory to
-    // make the key unambiguous (mirrors flow_t's typed endpoints).
-    struct ReaderFlowKey
-    {
-        profiler_hub::reader_types::event_type_t type;
-        size_t                                   opaque_id;
-        bool                                     operator<(const ReaderFlowKey& o) const
-        {
-            if(type != o.type) return type < o.type;
-            return opaque_id < o.opaque_id;
-        }
-    };
-
-    // Endpoint payload assembled from get_interval_track(): the per-endpoint fields the
-    // old SQL dataflow path carried (identity, start/end, level, category/symbol
-    // strings).
+    // TASK 037: Task 028 sealed the (event_type, row_id) pair inside the opaque
+    // event_id_t, and tasks 032/033 removed flow_t's *_type/*_opaque_id fields. The flow
+    // index is now keyed directly on the opaque event_id_t (hashable + ordered), which
+    // uniquely names an event across all per-type tables with no companion type tag. The
+    // endpoint's event_type_t (needed for the leg-type filter and op mapping that the
+    // reader cannot decode from the opaque handle) is carried in the payload instead of
+    // the key.
     struct ReaderFlowPayload
     {
         rocprofvis_dm_timestamp_t start;
         rocprofvis_dm_timestamp_t end;
         int                       level;
-        uint64_t                  col4;  // FindTrack id_process    (pid | agent)
-        uint64_t                  col5;  // FindTrack id_subprocess (tid | queue)
-        std::string               category;
-        std::string               symbol;
+        uint64_t                  col4;  // FindTrack id_process (pid|agent)
+        uint64_t                  col5;  // FindTrack id_subproc (tid|queue)
+        profiler_hub::reader_types::event_type_t type;  // endpoint type (was in the key)
+        std::string                              category;
+        std::string                              symbol;
     };
 
-    typedef std::map<ReaderFlowKey, std::set<ReaderFlowKey>> reader_flow_topology_t;
-    typedef std::map<ReaderFlowKey, ReaderFlowPayload>       reader_flow_payload_t;
+    typedef std::map<profiler_hub::reader_types::event_id_t,
+                     std::set<profiler_hub::reader_types::event_id_t>>
+        reader_flow_topology_t;
+    typedef std::map<profiler_hub::reader_types::event_id_t, ReaderFlowPayload>
+        reader_flow_payload_t;
+
+    // TASK 037: Reader-backed event registry (Option A, owner-approved 2026-07-22). The
+    // 52-bit UI-handle event_id slot can no longer carry a decodable row id (028
+    // opacity), so it carries an Optiq-minted surrogate: the index into
+    // m_event_registry[guid]. This round-trips surrogate <-> opaque event_id_t and
+    // caches, per event, the two nesting levels and two swimlane track ids the detail
+    // panel's "Essential Info" needs
+    // (trackId/levelForTrack/streamTrackId/levelForStreamTrack) — replacing the
+    // numeric-id- keyed roc_optiq_event_levels_* tables + FindTrack-at-click for reader
+    // tracks. Built eagerly once per shard (BuildReaderEventRegistry) by scanning
+    // get_all_tracks() + get_interval_track() over every interval track type, so both
+    // levels are always available regardless of which slices are loaded.
+    struct ReaderEventInfo
+    {
+        profiler_hub::reader_types::event_id_t id;
+        uint32_t                               home_track_id    = INVALID_INDEX;
+        uint32_t                               stream_track_id  = INVALID_INDEX;
+        int                                    level_for_queue  = -1;
+        int                                    level_for_stream = -1;
+        // TASK 037: the event's operation type, taken from its native/home track during
+        // the eager scan (gpu_queue->Dispatch, dma->MemoryCopy, memory->MemoryAllocate).
+        // The reader seals the type inside the opaque event_id_t (028), so a stream track
+        // — which mixes those three types in one lane — cannot tell them apart at mint
+        // time. Recording the home-track op here lets the slice-mint stamp each stream
+        // event's UI handle with the correct event_op. NoOp when no native track set it
+        // (e.g. regions, which never appear on stream tracks and use the track-level op
+        // instead).
+        rocprofvis_dm_event_operation_t home_op = kRocProfVisDmOperationNoOp;
+    };
+    typedef std::unordered_map<profiler_hub::reader_types::event_id_t, uint64_t>
+        reader_event_surrogate_t;
 
 public:
     RocprofDatabase(rocprofvis_db_filename_t path)
@@ -306,17 +331,40 @@ private:
     rocprofvis_dm_id_t InternReaderString(const std::string& str);
 
     // Build (once per db-instance, cached for the db lifetime) the two reader-backed flow
-    // indexes: a TOPOLOGY index (undirected stack-clique adjacency, keyed (event_type,
-    // opaque_id)) from a single get_flows() call, and a PAYLOAD index (per-endpoint
-    // identity/timing/level/strings) from get_all_tracks()+get_interval_track() over the
-    // four native single-table track types. Idempotent; guarded by m_flow_index_mutex.
+    // indexes: a TOPOLOGY index (undirected stack-clique adjacency, keyed on the opaque
+    // event_id_t) from a single get_flows() call, and a PAYLOAD index (per-endpoint
+    // identity/timing/level/type/strings) from get_all_tracks()+get_interval_track() over
+    // the four native single-table track types. Builds the event registry first (for
+    // surrogate minting). Idempotent; guarded by m_flow_index_mutex.
     rocprofvis_dm_result_t BuildReaderFlowIndexes(DbInstance* db_instance);
 
     // Emit one flow endpoint into the flow-trace object, mirroring CallbackAddFlowTrace:
-    // resolve the endpoint track via FindTrack (skip if not found), fill the flow record,
-    // intern reader strings, and call FuncAddFlow.
+    // resolve the endpoint track via FindTrack (skip if not found), fill the flow record
+    // (event_id slot = the endpoint's surrogate), intern reader strings, and call
+    // FuncAddFlow.
     void EmitReaderFlow(rocprofvis_dm_flowtrace_t flowtrace, uint32_t guid_index,
-                        const ReaderFlowKey& endpoint, const ReaderFlowPayload& payload);
+                        const profiler_hub::reader_types::event_id_t& endpoint,
+                        const ReaderFlowPayload&                      payload);
+
+    // TASK 037: Build (once per shard, lazily, cached for the db lifetime) the reader
+    // event registry: scan get_all_tracks() + get_interval_track() over every interval
+    // track type, minting a stable surrogate per opaque event_id_t and recording its
+    // home/stream Optiq track ids and per-track nesting levels. Prerequisite for every
+    // reader detail/stack/ flow/slice path that round-trips the UI handle. Idempotent;
+    // guarded by m_event_registry_mutex.
+    rocprofvis_dm_result_t BuildReaderEventRegistry(DbInstance* db_instance);
+
+    // TASK 037: Get (minting if new) the 52-bit UI-handle surrogate for an opaque
+    // event_id_t within a shard. Requires BuildReaderEventRegistry(db_instance) to have
+    // run. Returns INVALID_INDEX if the handle is unknown to the registry.
+    uint64_t ReaderSurrogateFor(uint32_t                                      guid_index,
+                                const profiler_hub::reader_types::event_id_t& id);
+
+    // TASK 037: Resolve a UI-handle surrogate back to its opaque event_id_t and the
+    // cached per-event nav context (home/stream track ids + levels). Requires
+    // BuildReaderEventRegistry(db_instance) to have run. Returns nullptr if the surrogate
+    // is out of range for the shard.
+    const ReaderEventInfo* ReaderEventInfoFor(uint32_t guid_index, uint64_t surrogate);
 
 protected:
     const rocprofvis_event_data_category_map_t* GetCategoryEnumMap() override
@@ -379,6 +427,14 @@ private:
     std::vector<reader_flow_payload_t>  m_flow_payload;
     std::vector<bool>                   m_flow_index_built;
     std::mutex                          m_flow_index_mutex;
+    // TASK 037: reader event registry, one per shard (indexed by GuidIndex). The vector's
+    // index IS the 52-bit UI-handle surrogate; the map dedupes so a given opaque
+    // event_id_t always mints the same surrogate. Built eagerly once and cached for the
+    // db lifetime.
+    std::vector<std::vector<ReaderEventInfo>> m_event_registry;
+    std::vector<reader_event_surrogate_t>     m_event_surrogate;
+    std::vector<bool>                         m_event_registry_built;
+    std::mutex                                m_event_registry_mutex;
     // map array for string indexes remapping. Main reason for remapping is older rocpd
     // schema keeps duplicated symbols, one per GPU
     string_index_map_t            m_string_index_map;  // id to index

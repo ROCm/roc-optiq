@@ -2,12 +2,14 @@
 // SPDX-License-Identifier: MIT
 
 #include "rocprofvis_db_rocprof.h"
+#include "json.h"
 #include "rocprofvis_db_query_builder.h"
 #include "rocprofvis_shared_types.h"
 #include <cfloat>
 #include <filesystem>
 #include <sstream>
 #include <string.h>
+#include <type_traits>
 
 namespace RocProfVis
 {
@@ -525,7 +527,7 @@ RocprofDatabase::ReaderStreamTrackToTrackParams(
     track_params.track_indentifiers.db_instance = db_instance;
     track_params.track_indentifiers.category    = kRocProfVisDmStreamTrack;
     // Stream events carry heterogeneous op types per event; op is set per-event in
-    // ReadReaderTraceSlice from interval_event_t::op_kind.
+    // ReadReaderTraceSlice from the registry's home_op (TASK 037).
     track_params.op = kRocProfVisDmOperationNoOp;
     track_params.track_indentifiers.process_id =
         static_cast<rocprofvis_dm_track_id_t>(pid);
@@ -1049,22 +1051,6 @@ RocprofDatabase::AddReaderGpuQueueAndStreamTracks(Future* future)
     return result;
 }
 
-// Map reader event_type_t to Optiq rocprofvis_dm_event_operation_t for stream events.
-static rocprofvis_dm_event_operation_t
-OpKindToEventOp(profiler_hub::reader_types::event_type_t kind)
-{
-    switch(kind)
-    {
-        case profiler_hub::reader_types::event_type_t::kernel_dispatch:
-            return kRocProfVisDmOperationDispatch;
-        case profiler_hub::reader_types::event_type_t::memory_copy:
-            return kRocProfVisDmOperationMemoryCopy;
-        case profiler_hub::reader_types::event_type_t::memory_allocate:
-            return kRocProfVisDmOperationMemoryAllocate;
-        default: return kRocProfVisDmOperationNoOp;
-    }
-}
-
 rocprofvis_dm_result_t
 RocprofDatabase::ReadReaderTraceSlice(rocprofvis_dm_timestamp_t     start,
                                       rocprofvis_dm_timestamp_t     end,
@@ -1172,6 +1158,12 @@ RocprofDatabase::ReadReaderTraceSlice(rocprofvis_dm_timestamp_t     start,
         return kRocProfVisDmResultSuccess;
     }
 
+    // TASK 037: build the surrogate<->event_id_t registry once per shard before minting
+    // slices — the UI-handle event_id slot now carries a surrogate (028 opacity), not a
+    // row id, and every downstream detail/stack/flow path resolves through the registry.
+    if(kRocProfVisDmResultSuccess != BuildReaderEventRegistry(db_instance))
+        return kRocProfVisDmResultDbAccessFailed;
+
     for(const auto& ev : reader->get_interval_track(props->reader_track_id))
     {
         if(future->Interrupted()) return kRocProfVisDmResultDbAbort;
@@ -1180,15 +1172,23 @@ RocprofDatabase::ReadReaderTraceSlice(rocprofvis_dm_timestamp_t     start,
         if(!(ev.start < abs_end && ev.end > abs_start)) continue;
 
         rocprofvis_db_record_data_t record;
+        // TASK 037: surrogate replaces the removed interval_event_t::opaque_id.
+        uint64_t surrogate = ReaderSurrogateFor(guid_index, ev.id);
         // Stream tracks carry heterogeneous op types per event (kernel_dispatch,
-        // memory_copy, memory_allocate); use op_kind to set event_op so the details
-        // dispatch (GetEventOperationQuery) routes each event to the right table.
+        // memory_copy, memory_allocate). interval_event_t no longer exposes an op_kind
+        // (the type is sealed inside the opaque event_id_t), so the per-event operation
+        // is recovered from the registry's home_op, recorded during the eager scan from
+        // each event's native/home track type. Falls back to the track default
+        // (props->op) when the event has no native track (e.g. a home-only track already
+        // carries props->op).
         rocprofvis_dm_event_operation_t event_op =
             static_cast<rocprofvis_dm_event_operation_t>(props->op);
-        if(ev.op_kind.has_value()) event_op = OpKindToEventOp(*ev.op_kind);
+        const ReaderEventInfo* rei = ReaderEventInfoFor(guid_index, surrogate);
+        if(rei != nullptr && rei->home_op != kRocProfVisDmOperationNoOp)
+            event_op = rei->home_op;
         record.event.id.bitfield.event_op   = event_op;
         record.event.id.bitfield.event_node = guid_index;
-        record.event.id.bitfield.event_id   = ev.opaque_id;
+        record.event.id.bitfield.event_id   = surrogate;
         record.event.timestamp              = ev.start - origin;
         record.event.duration = (rocprofvis_dm_duration_t) (ev.end - ev.start);
         record.event.category = InternReaderString(ev.category);
@@ -2560,10 +2560,139 @@ coalesce(agent_id, 0) as agentId, -1 as queue  from rocpd_memory_allocate MA ",
 }
 
 rocprofvis_dm_result_t
+RocprofDatabase::BuildReaderEventRegistry(DbInstance* db_instance)
+{
+    using track_type_t = profiler_hub::reader_types::track_type_t;
+    using event_id_t   = profiler_hub::reader_types::event_id_t;
+
+    std::lock_guard<std::mutex> lock(m_event_registry_mutex);
+    uint32_t                    idx = db_instance->GuidIndex();
+    if(m_event_registry_built.size() < NumDbInstances())
+    {
+        m_event_registry.resize(NumDbInstances());
+        m_event_surrogate.resize(NumDbInstances());
+        m_event_registry_built.resize(NumDbInstances(), false);
+    }
+    if(m_event_registry_built[idx]) return kRocProfVisDmResultSuccess;
+
+    profiler_hub::reader_t* reader = GetReader(db_instance);
+    if(!reader) return kRocProfVisDmResultDbAccessFailed;
+
+    std::vector<ReaderEventInfo>& registry  = m_event_registry[idx];
+    reader_event_surrogate_t&     surrogate = m_event_surrogate[idx];
+
+    // The 52-bit UI-handle event_id slot can no longer carry a decodable row id (028
+    // opacity). Mint a stable per-shard surrogate == index into `registry`, deduped by
+    // the opaque event_id_t so an event that appears on BOTH its native/home track and a
+    // stream track resolves to the SAME surrogate and accumulates both nav lanes/levels.
+    auto get_or_mint = [&](const event_id_t& id) -> uint64_t {
+        auto it = surrogate.find(id);
+        if(it != surrogate.end()) return it->second;
+        uint64_t s = registry.size();
+        registry.push_back(ReaderEventInfo{ id });
+        surrogate.emplace(id, s);
+        return s;
+    };
+
+    // Eager, exhaustive pass over every interval track (owner decision 2026-07-22):
+    // native/ home tracks (cpu_thread/gpu_queue/dma/memory) fix each event's
+    // home_track_id + level_for_queue; stream tracks fix stream_track_id +
+    // level_for_stream. This mirrors the old eager CalculateEventLevels +
+    // roc_optiq_event_levels_* precompute (both levels always available) and the
+    // BuildReaderFlowIndexes scan. counter/kernel_dispatch_pmc are scalar-only or not
+    // materialized as Optiq tracks; skip. The home/stream Optiq track ids are resolved
+    // once here via FindTrack (identity-slots filled by the per-type ToTrackParams
+    // adapters), so the detail panel's Essential Info needs no per-click FindTrack.
+    for(const auto& info : reader->get_all_tracks())
+    {
+        if(!info) continue;
+        rocprofvis_dm_track_params_t    track_params = { 0 };
+        bool                            is_stream    = false;
+        rocprofvis_dm_event_operation_t home_op      = kRocProfVisDmOperationNoOp;
+        switch(info->type)
+        {
+            case track_type_t::cpu_thread:
+                ReaderTrackInfoToTrackParams(*info, db_instance, track_params);
+                break;
+            case track_type_t::gpu_queue:
+                ReaderGpuQueueTrackToTrackParams(*info, db_instance, track_params);
+                home_op = kRocProfVisDmOperationDispatch;
+                break;
+            case track_type_t::dma:
+                ReaderDmaTrackToTrackParams(*info, db_instance, track_params);
+                home_op = kRocProfVisDmOperationMemoryCopy;
+                break;
+            case track_type_t::memory:
+                ReaderMemoryTrackToTrackParams(*info, db_instance, track_params);
+                home_op = kRocProfVisDmOperationMemoryAllocate;
+                break;
+            case track_type_t::stream:
+                ReaderStreamTrackToTrackParams(*info, db_instance, track_params);
+                is_stream = true;
+                break;
+            default: continue;  // counter, kernel_dispatch_pmc
+        }
+        uint32_t track_id = INVALID_INDEX;
+        if(!TrackTracker()->FindTrack(track_params.track_indentifiers, idx, track_id))
+            continue;
+        for(const auto& ev : reader->get_interval_track(info->id))
+        {
+            uint64_t         s   = get_or_mint(ev.id);
+            ReaderEventInfo& rei = registry[s];
+            if(is_stream)
+            {
+                rei.stream_track_id  = track_id;
+                rei.level_for_stream = ev.level;
+            }
+            else
+            {
+                rei.home_track_id   = track_id;
+                rei.level_for_queue = ev.level;
+                // TASK 037: carry the home-track operation so the mint site can set
+                // event_op without an interval_event_t::op_kind (which no longer exists).
+                rei.home_op = home_op;
+            }
+        }
+    }
+
+    m_event_registry_built[idx] = true;
+    return kRocProfVisDmResultSuccess;
+}
+
+uint64_t
+RocprofDatabase::ReaderSurrogateFor(uint32_t guid_index,
+                                    const profiler_hub::reader_types::event_id_t& id)
+{
+    // BuildReaderEventRegistry(db_instance) must have run for this shard; once built the
+    // maps are immutable, so this lock-free const lookup is safe across concurrent slice
+    // threads. INVALID_INDEX_64 means the handle is unknown (should not happen: the eager
+    // build covers every interval event).
+    if(guid_index >= m_event_surrogate.size()) return INVALID_INDEX_64;
+    const reader_event_surrogate_t& surrogate = m_event_surrogate[guid_index];
+    auto                            it        = surrogate.find(id);
+    return it == surrogate.end() ? INVALID_INDEX_64 : it->second;
+}
+
+const RocprofDatabase::ReaderEventInfo*
+RocprofDatabase::ReaderEventInfoFor(uint32_t guid_index, uint64_t surrogate)
+{
+    if(guid_index >= m_event_registry.size()) return nullptr;
+    const std::vector<ReaderEventInfo>& registry = m_event_registry[guid_index];
+    if(surrogate >= registry.size()) return nullptr;
+    return &registry[surrogate];
+}
+
+rocprofvis_dm_result_t
 RocprofDatabase::BuildReaderFlowIndexes(DbInstance* db_instance)
 {
     using event_type_t = profiler_hub::reader_types::event_type_t;
     using track_type_t = profiler_hub::reader_types::track_type_t;
+
+    // Endpoints are emitted with a surrogate in the event_id slot (EmitReaderFlow) and
+    // the clicked handle is resolved surrogate->event_id_t via the registry
+    // (ReadFlowTraceInfo), so the registry must exist before the flow indexes are used.
+    if(kRocProfVisDmResultSuccess != BuildReaderEventRegistry(db_instance))
+        return kRocProfVisDmResultDbAccessFailed;
 
     std::lock_guard<std::mutex> lock(m_flow_index_mutex);
     uint32_t                    idx = db_instance->GuidIndex();
@@ -2589,10 +2718,10 @@ RocprofDatabase::BuildReaderFlowIndexes(DbInstance* db_instance)
     // memory_allocate).
     for(const auto& flow : reader->get_flows())
     {
-        ReaderFlowKey src{ flow.source_type, flow.source_opaque_id };
-        ReaderFlowKey dst{ flow.dest_type, flow.dest_opaque_id };
-        topology[src].insert(dst);
-        topology[dst].insert(src);
+        // TASK 037: flow_t now names endpoints by the opaque event_id_t directly (032/033
+        // removed the *_type/*_opaque_id fields); key the undirected adjacency on it.
+        topology[flow.source].insert(flow.dest);
+        topology[flow.dest].insert(flow.source);
     }
 
     // PAYLOAD: iterate only the four NATIVE single-table track types. Stream and counter
@@ -2638,11 +2767,13 @@ RocprofDatabase::BuildReaderFlowIndexes(DbInstance* db_instance)
             p.level    = ev.level;
             p.col4     = col4;
             p.col5     = col5;
+            p.type =
+                etype;  // TASK 037: endpoint type moved from the key into the payload
             p.category = ev.category;
             // memory_allocate has no symbol column; the SQL path substitutes category_id
             // for symbol_id, so mirror that here (symbol := category string).
-            p.symbol = is_alloc ? ev.category : ev.display_name;
-            payload[ReaderFlowKey{ etype, ev.opaque_id }] = p;
+            p.symbol       = is_alloc ? ev.category : ev.display_name;
+            payload[ev.id] = p;  // TASK 037: keyed on the opaque event_id_t
         }
     }
 
@@ -2652,13 +2783,14 @@ RocprofDatabase::BuildReaderFlowIndexes(DbInstance* db_instance)
 
 void
 RocprofDatabase::EmitReaderFlow(rocprofvis_dm_flowtrace_t flowtrace, uint32_t guid_index,
-                                const ReaderFlowKey&     endpoint,
-                                const ReaderFlowPayload& payload)
+                                const profiler_hub::reader_types::event_id_t& endpoint,
+                                const ReaderFlowPayload&                      payload)
 {
     using event_type_t = profiler_hub::reader_types::event_type_t;
 
+    // TASK 037: the endpoint's type is opaque in the handle, so it rides in the payload.
     rocprofvis_dm_event_operation_t op;
-    switch(endpoint.type)
+    switch(payload.type)
     {
         case event_type_t::region: op = kRocProfVisDmOperationLaunch; break;
         case event_type_t::kernel_dispatch: op = kRocProfVisDmOperationDispatch; break;
@@ -2679,7 +2811,8 @@ RocprofDatabase::EmitReaderFlow(rocprofvis_dm_flowtrace_t flowtrace, uint32_t gu
                                   record.track_id))
         return;
 
-    record.id.bitfield.event_id = endpoint.opaque_id;
+    // TASK 037: emit the endpoint's surrogate (registry built by BuildReaderFlowIndexes).
+    record.id.bitfield.event_id = ReaderSurrogateFor(guid_index, endpoint);
     record.time                 = payload.start;
     record.time -= TraceProperties()->db_inst_start_time[guid_index];
     record.end_time = payload.end;
@@ -2711,34 +2844,30 @@ RocprofDatabase::ReadFlowTraceInfo(rocprofvis_dm_event_id_t event_id, Future* fu
         DbInstance* node_ptr = DbInstancePtrAt(event_id.bitfield.event_node);
         ROCPROFVIS_ASSERT_MSG_BREAK(node_ptr != nullptr, ERROR_NODE_KEY_CANNOT_BE_NULL);
 
-        // Map the clicked op to its reader event_type and the set of endpoint types the
-        // SQL UNION legs emitted for that clicked type. The type filter reproduces each
-        // query's legs exactly, including the memory_allocate asymmetry (its mama sibling
-        // clique is present in get_flows but dropped here, since the SQL alloc query had
-        // no sibling leg).
-        event_type_t           clicked_type;
+        // Map the clicked op to the set of endpoint types the SQL UNION legs emitted for
+        // that clicked type. The type filter reproduces each query's legs exactly,
+        // including the memory_allocate asymmetry (its mama sibling clique is present in
+        // get_flows but dropped here, since the SQL alloc query had no sibling leg). The
+        // clicked event's own type is carried inside its opaque event_id_t, so no
+        // separate clicked_type tag is needed to key the topology (028).
         std::set<event_type_t> allowed;
         if(event_id.bitfield.event_op == kRocProfVisDmOperationLaunch ||
            event_id.bitfield.event_op == kRocProfVisDmOperationLaunchSample)
         {
-            clicked_type = event_type_t::region;
-            allowed      = { event_type_t::region, event_type_t::kernel_dispatch,
-                             event_type_t::memory_copy, event_type_t::memory_allocate };
+            allowed = { event_type_t::region, event_type_t::kernel_dispatch,
+                        event_type_t::memory_copy, event_type_t::memory_allocate };
         }
         else if(event_id.bitfield.event_op == kRocProfVisDmOperationDispatch)
         {
-            clicked_type = event_type_t::kernel_dispatch;
-            allowed      = { event_type_t::region, event_type_t::kernel_dispatch };
+            allowed = { event_type_t::region, event_type_t::kernel_dispatch };
         }
         else if(event_id.bitfield.event_op == kRocProfVisDmOperationMemoryCopy)
         {
-            clicked_type = event_type_t::memory_copy;
-            allowed      = { event_type_t::region, event_type_t::memory_copy };
+            allowed = { event_type_t::region, event_type_t::memory_copy };
         }
         else if(event_id.bitfield.event_op == kRocProfVisDmOperationMemoryAllocate)
         {
-            clicked_type = event_type_t::memory_allocate;
-            allowed      = { event_type_t::region };
+            allowed = { event_type_t::region };
         }
         else
         {
@@ -2753,17 +2882,25 @@ RocprofDatabase::ReadFlowTraceInfo(rocprofvis_dm_event_id_t event_id, Future* fu
         const reader_flow_topology_t& topology = m_flow_topology[guid];
         const reader_flow_payload_t&  payload  = m_flow_payload[guid];
 
-        ReaderFlowKey clicked{ clicked_type, event_id.bitfield.event_id };
-        auto          it = topology.find(clicked);
-        if(it != topology.end())
+        // TASK 037: resolve the clicked surrogate back to its opaque event_id_t (the
+        // topology/payload key) via the registry that BuildReaderFlowIndexes built.
+        const std::vector<ReaderEventInfo>& registry = m_event_registry[guid];
+        uint64_t clicked_surrogate                   = event_id.bitfield.event_id;
+        if(clicked_surrogate < registry.size())
         {
-            // Neighbors iterate in (event_type, opaque_id) order == SQL UNION leg order.
-            for(const ReaderFlowKey& endpoint : it->second)
+            const profiler_hub::reader_types::event_id_t& clicked =
+                registry[clicked_surrogate].id;
+            auto it = topology.find(clicked);
+            if(it != topology.end())
             {
-                if(allowed.find(endpoint.type) == allowed.end()) continue;
-                auto pit = payload.find(endpoint);
-                if(pit == payload.end()) continue;
-                EmitReaderFlow(flowtrace, guid, endpoint, pit->second);
+                // Neighbors iterate in event_id_t order == SQL UNION leg order.
+                for(const profiler_hub::reader_types::event_id_t& endpoint : it->second)
+                {
+                    auto pit = payload.find(endpoint);
+                    if(pit == payload.end()) continue;
+                    if(allowed.find(pit->second.type) == allowed.end()) continue;
+                    EmitReaderFlow(flowtrace, guid, endpoint, pit->second);
+                }
             }
         }
         ShowProgress(100, "Flow trace successfully loaded!", kRPVDbSuccess, future);
@@ -3263,56 +3400,69 @@ RocprofDatabase::ReadStackTraceInfo(rocprofvis_dm_event_id_t event_id, Future* f
         rocprofvis_dm_stacktrace_t stacktrace =
             BindObject()->FuncAddStackTrace(BindObject()->trace_object, event_id);
         ROCPROFVIS_ASSERT_MSG_BREAK(stacktrace, ERROR_EXT_DATA_CANNOT_BE_NULL);
-        std::stringstream query;
 
         DbInstance* node_ptr = DbInstancePtrAt(event_id.bitfield.event_node);
         ROCPROFVIS_ASSERT_MSG_BREAK(node_ptr, ERROR_NODE_KEY_CANNOT_BE_NULL);
-        ShowProgress(0, query.str().c_str(), kRPVDbBusy, future);
+        ShowProgress(0, "", kRPVDbBusy, future);
+
+        // TASK 037: the call stack comes from the opaque reader API, not raw rocpd SQL.
+        // Resolve the clicked surrogate back to its event_id_t via the registry, then ask
+        // the reader for the event's captured call stack (Phase 1
+        // get_call_stack(event_id_t) overload — decode stays inside the reader, 028
+        // opacity preserved). Each frame's program_counter carries function/file/line,
+        // matching the JSON shape CallbackAddStackTrace used to synthesize
+        // (symbol={"name","file"}, line=
+        // {"line_address"}); the controller parses those keys downstream. This replaces
+        // the old RECURSIVE region-nesting walk over
+        // rocpd_call_stack/line_info/info_source_code.
         if(event_id.bitfield.event_op == kRocProfVisDmOperationLaunch ||
            event_id.bitfield.event_op == kRocProfVisDmOperationLaunchSample)
         {
-            std::string level_table =
-                event_id.bitfield.event_op == kRocProfVisDmOperationLaunch
-                    ? " roc_optiq_event_levels_launch"
-                    : " roc_optiq_event_levels_launch_sample";
-            std::string callstack_params =
-                m_query_factory.IsVersionGreaterOrEqual("4")
-                    ? " 4 as version, R.id, L.parent_id, R.name_id, PC.function as p1, "
-                      "PC.file as p2, CODE.line_number as p3"
-                    : " 3 as version, R.id, L.parent_id, R.name_id, E.call_stack as p1, "
-                      "E.line_info as p2, 0 as p3 ";
-            std::stringstream callstack_tables;
-            callstack_tables << " rocpd_region_%GUID% R ";
-            callstack_tables << " INNER JOIN " << level_table
-                             << "_%GUID% L ON R.id = L.eid ";
-            callstack_tables << " INNER JOIN rocpd_event_%GUID% E ON R.event_id = E.id ";
-            if(m_query_factory.IsVersionGreaterOrEqual("4"))
+            if(kRocProfVisDmResultSuccess != BuildReaderEventRegistry(node_ptr)) break;
+            profiler_hub::reader_t* reader = GetReader(node_ptr);
+            ROCPROFVIS_ASSERT_MSG_BREAK(reader, ERROR_NODE_KEY_CANNOT_BE_NULL);
+            const ReaderEventInfo* info =
+                ReaderEventInfoFor(node_ptr->GuidIndex(), event_id.bitfield.event_id);
+            if(info)
             {
-                callstack_tables
-                    << " INNER JOIN rocpd_call_stack_%GUID% CS ON E.stack_id = CS.id ";
-                callstack_tables
-                    << " INNER JOIN rocpd_info_pc_%GUID% PC ON CS.pc_id = PC.id ";
-                callstack_tables << " INNER JOIN rocpd_line_info_%GUID% LI ON LI.pc_id = "
-                                    "CS.pc_id AND E.id = LI.event_id ";
-                callstack_tables << " INNER JOIN rocpd_info_source_code_%GUID% CODE ON "
-                                    "LI.source_code_id = CODE.id ";
-            }
-            query << "WITH RECURSIVE stack_chain AS (SELECT 0 AS depth, "
-                  << callstack_params;
-            query << " FROM " << callstack_tables.str();
-            query << " WHERE R.id = " << event_id.bitfield.event_id;
-            query << " UNION SELECT sc.depth + 1, " << callstack_params;
-            query << " FROM " << callstack_tables.str();
-            query << " JOIN stack_chain sc ON sc.parent_id = L.eid) ";
-            query << " SELECT sc.version, sc.id, sc.p1, sc.p2, sc.p3, S.string, sc.depth "
-                     "FROM stack_chain sc ";
-            query << " LEFT JOIN rocpd_string_%GUID% S ON S.id = sc.name_id ";
-            query << " ORDER BY depth DESC;";
-            if(kRocProfVisDmResultSuccess !=
-               ExecuteSQLQuery(future, node_ptr, query.str().c_str(), stacktrace,
-                               &CallbackAddStackTrace))
-            {
-                break;
+                uint32_t depth = 0;
+                for(const auto& frame : reader->get_call_stack(info->id))
+                {
+                    if(future->Interrupted()) break;
+                    if(!frame.program_counter.has_value())
+                    {
+                        depth++;
+                        continue;
+                    }
+                    const auto& pc = frame.program_counter.value();
+
+                    jt::Json symbol_json;
+                    symbol_json["name"] = pc.function;
+                    if(!pc.filename.empty()) symbol_json["file"] = pc.filename;
+                    std::string symbol_blob = symbol_json.toString();
+
+                    std::string line_blob;
+                    if(pc.line_number.has_value())
+                    {
+                        jt::Json line_json;
+                        line_json["line_address"] =
+                            std::to_string(pc.line_number.value());
+                        line_blob = line_json.toString();
+                    }
+
+                    rocprofvis_db_stack_data_t record = { "", "", "", 0, 0 };
+                    record.symbol                     = symbol_blob.c_str();
+                    record.line                       = line_blob.c_str();
+                    record.depth                      = depth++;
+                    // Reader call-stack frames are program-counter frames, not track
+                    // events, so there is no navigable per-frame event id (the recursive
+                    // region walk that populated one is gone). Leave id 0.
+                    record.id = 0;
+                    if(BindObject()->FuncAddStackFrame(stacktrace, record) !=
+                       kRocProfVisDmResultSuccess)
+                        break;
+                    future->CountThisRow();
+                }
             }
         }
 
@@ -3338,130 +3488,275 @@ RocprofDatabase::ReadExtEventInfo(rocprofvis_dm_event_id_t event_id, Future* fut
         rocprofvis_dm_extdata_t extdata =
             BindObject()->FuncAddExtData(BindObject()->trace_object, event_id);
         ROCPROFVIS_ASSERT_MSG_BREAK(extdata, ERROR_EXT_DATA_CANNOT_BE_NULL);
-        std::string query;
         DbInstance* node_ptr = DbInstancePtrAt(event_id.bitfield.event_node);
         ROCPROFVIS_ASSERT_MSG_BREAK(node_ptr, ERROR_NODE_KEY_CANNOT_BE_NULL);
         future->SetRuntimeStorageValue(kRPVFutureStorageEventId, event_id.value);
-        if(event_id.bitfield.event_op == kRocProfVisDmOperationLaunch ||
-           event_id.bitfield.event_op == kRocProfVisDmOperationLaunchSample)
-        {
-            query = "select * from regions where id == ";
-            query += std::to_string(event_id.bitfield.event_id);
-            query += " and guid = '";
-            query += GuidSymAt(node_ptr->GuidIndex());
-            query += "'";
-            ShowProgress(0, query.c_str(), kRPVDbBusy, future);
-            if(kRocProfVisDmResultSuccess !=
-               ExecuteSQLQuery(
-                   future, node_ptr, query.c_str(), "Properties", extdata,
-                   (rocprofvis_dm_event_operation_t) event_id.bitfield.event_op,
-                   &CallbackAddExtInfo))
-                break;
-            query = m_query_factory.GetRocprofEssentialInfoQueryForRegionEvent(
-                event_id.bitfield.event_id,
-                event_id.bitfield.event_op == kRocProfVisDmOperationLaunchSample);
-            if(kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, node_ptr,
-                                                             query.c_str(), extdata,
-                                                             &CallbackAddEssentialInfo))
-                break;
-            future->ResetRowCount();
-            query = m_query_factory.GetRocprofArgumentsInfoQueryForRegionEvent(
-                event_id.bitfield.event_id);
-            if(kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, node_ptr,
-                                                             query.c_str(), extdata,
-                                                             &CallbackAddArgumentsInfo))
-                break;
-        }
-        else if(event_id.bitfield.event_op == kRocProfVisDmOperationDispatch)
-        {
-            query = "select * from kernels where id == ";
-            query += std::to_string(event_id.bitfield.event_id);
-            query += " and guid = '";
-            query += GuidSymAt(node_ptr->GuidIndex());
-            query += "'";
-            ShowProgress(0, query.c_str(), kRPVDbBusy, future);
-            if(kRocProfVisDmResultSuccess !=
-               ExecuteSQLQuery(
-                   future, node_ptr, query.c_str(), "Properties", extdata,
-                   (rocprofvis_dm_event_operation_t) event_id.bitfield.event_op,
-                   &CallbackAddExtInfo))
-                break;
-            query = m_query_factory.GetRocprofEssentialInfoQueryForKernelDispatchEvent(
-                event_id.bitfield.event_id);
-            if(kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, node_ptr,
-                                                             query.c_str(), extdata,
-                                                             &CallbackAddEssentialInfo))
-                break;
-            future->ResetRowCount();
-            query = m_query_factory.GetRocprofArgumentsInfoQueryForKernelDispatchEvent(
-                event_id.bitfield.event_id);
-            if(kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, node_ptr,
-                                                             query.c_str(), extdata,
-                                                             &CallbackAddArgumentsInfo))
-                break;
-        }
-        else if(event_id.bitfield.event_op == kRocProfVisDmOperationMemoryAllocate)
-        {
-            query = "select * from memory_allocations where id == ";
-            query += std::to_string(event_id.bitfield.event_id);
-            query += " and guid = '";
-            query += GuidSymAt(node_ptr->GuidIndex());
-            query += "'";
-            ShowProgress(0, query.c_str(), kRPVDbBusy, future);
-            if(kRocProfVisDmResultSuccess !=
-               ExecuteSQLQuery(
-                   future, node_ptr, query.c_str(), "Properties", extdata,
-                   (rocprofvis_dm_event_operation_t) event_id.bitfield.event_op,
-                   &CallbackAddExtInfo))
-                break;
-            query = m_query_factory.GetRocprofEssentialInfoQueryForMemoryAllocEvent(
-                event_id.bitfield.event_id);
-            if(kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, node_ptr,
-                                                             query.c_str(), extdata,
-                                                             &CallbackAddEssentialInfo))
-                break;
-            future->ResetRowCount();
-            query = m_query_factory.GetRocprofArgumentsInfoQueryForMemoryAllocEvent(
-                event_id.bitfield.event_id);
-            if(kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, node_ptr,
-                                                             query.c_str(), extdata,
-                                                             &CallbackAddArgumentsInfo))
-                break;
-        }
-        else if(event_id.bitfield.event_op == kRocProfVisDmOperationMemoryCopy)
-        {
-            query = "select * from memory_copies where id == ";
-            query += std::to_string(event_id.bitfield.event_id);
-            query += " and guid = '";
-            query += GuidSymAt(node_ptr->GuidIndex());
-            query += "'";
-            ShowProgress(0, query.c_str(), kRPVDbBusy, future);
-            if(kRocProfVisDmResultSuccess !=
-               ExecuteSQLQuery(
-                   future, node_ptr, query.c_str(), "Properties", extdata,
-                   (rocprofvis_dm_event_operation_t) event_id.bitfield.event_op,
-                   &CallbackAddExtInfo))
-                break;
-            query = m_query_factory.GetRocprofEssentialInfoQueryForMemoryCopyEvent(
-                event_id.bitfield.event_id);
-            if(kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, node_ptr,
-                                                             query.c_str(), extdata,
-                                                             &CallbackAddEssentialInfo))
-                break;
-            future->ResetRowCount();
-            query = m_query_factory.GetRocprofArgumentsInfoQueryForMemoryCopyEvent(
-                event_id.bitfield.event_id);
-            if(kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, node_ptr,
-                                                             query.c_str(), extdata,
-                                                             &CallbackAddArgumentsInfo))
-                break;
-        }
-        else
+
+        // TASK 037: event detail now comes from the opaque reader API, not raw rocpd SQL.
+        // The clicked surrogate is resolved back to its event_id_t via the registry, then
+        // a single get_event_detail(id) call supplies the header + typed property bag,
+        // and get_arguments(id) supplies the Arguments panel with position/type
+        // preserved. The Essential Info nav fields (track/level for the home and stream
+        // lanes) come from the registry the eager Step-1 scan built (no SQL, no
+        // FindTrack, 028 opacity kept). This replaces
+        // GetRocprofEssentialInfoQueryFor*/GetRocprofArgumentsInfoQueryFor* and the
+        // per-type `select * from regions/kernels/...` Properties queries.
+        rocprofvis_dm_event_operation_t op =
+            (rocprofvis_dm_event_operation_t) event_id.bitfield.event_op;
+        if(op != kRocProfVisDmOperationLaunch &&
+           op != kRocProfVisDmOperationLaunchSample &&
+           op != kRocProfVisDmOperationDispatch &&
+           op != kRocProfVisDmOperationMemoryAllocate &&
+           op != kRocProfVisDmOperationMemoryCopy)
         {
             ShowProgress(0, "Extended data not available for specified operation type!",
                          kRPVDbError, future);
             return future->SetPromise(kRocProfVisDmResultInvalidParameter);
         }
+
+        if(kRocProfVisDmResultSuccess != BuildReaderEventRegistry(node_ptr)) break;
+        profiler_hub::reader_t* reader = GetReader(node_ptr);
+        ROCPROFVIS_ASSERT_MSG_BREAK(reader, ERROR_NODE_KEY_CANNOT_BE_NULL);
+        uint32_t               guid = node_ptr->GuidIndex();
+        const ReaderEventInfo* info =
+            ReaderEventInfoFor(guid, event_id.bitfield.event_id);
+        if(!info) break;
+        auto d = reader->get_event_detail(info->id);
+        if(!d) break;
+        ShowProgress(0, "", kRPVDbBusy, future);
+
+        int64_t origin = (int64_t) TraceProperties()->db_inst_start_time[guid];
+
+        // Serialize a typed reader property value to (string, db data type). Integers are
+        // tagged kRPVDataTypeInt so the controller parses them as UInt64 — required for
+        // the essential Start/Duration/Level fields the consumer reads back as UInt64.
+        auto value_to_str = [](const profiler_hub::reader_types::arg_value_t& v,
+                               rocprofvis_db_data_type_t& out_type) -> std::string {
+            return std::visit(
+                [&](auto&& a) -> std::string {
+                    using T = std::decay_t<decltype(a)>;
+                    if constexpr(std::is_same_v<T, std::monostate> ||
+                                 std::is_same_v<T, std::nullptr_t>)
+                    {
+                        out_type = kRPVDataTypeString;
+                        return std::string();
+                    }
+                    else if constexpr(std::is_same_v<T, int64_t> ||
+                                      std::is_same_v<T, uint64_t>)
+                    {
+                        out_type = kRPVDataTypeInt;
+                        return std::to_string(a);
+                    }
+                    else if constexpr(std::is_same_v<T, double>)
+                    {
+                        out_type = kRPVDataTypeDouble;
+                        return std::to_string(a);
+                    }
+                    else
+                    {
+                        out_type = kRPVDataTypeString;
+                        return a;
+                    }
+                },
+                v);
+        };
+
+        auto emit_ext = [&](const char* category, const std::string& name,
+                            const std::string& data, rocprofvis_db_data_type_t type,
+                            rocprofvis_event_data_category_enum_t cat_enum) -> bool {
+            rocprofvis_db_ext_data_t record;
+            record.category      = category;
+            record.name          = name.c_str();
+            record.data          = data.c_str();
+            record.type          = type;
+            record.category_enum = cat_enum;
+            record.db_instance   = guid;
+            if(BindObject()->FuncAddExtDataRecord(extdata, record) !=
+               kRocProfVisDmResultSuccess)
+                return false;
+            future->CountThisRow();
+            return true;
+        };
+
+        // Header essentials. Timestamps are made timeline-relative (subtract the shard's
+        // origin), matching what CallbackAddExtInfo did for the START/END columns.
+        if(!d->name.empty() &&
+           !emit_ext("Properties", "name", d->name, kRPVDataTypeString,
+                     kRocProfVisEventEssentialDataName))
+            break;
+        if(!d->category.empty() &&
+           !emit_ext("Properties", "category", d->category, kRPVDataTypeString,
+                     kRocProfVisEventEssentialDataCategory))
+            break;
+        if(!emit_ext("Properties", "start", std::to_string((int64_t) d->ts - origin),
+                     kRPVDataTypeInt, kRocProfVisEventEssentialDataStart))
+            break;
+        if(d->te.has_value())
+        {
+            if(!emit_ext("Properties", "end",
+                         std::to_string((int64_t) d->te.value() - origin),
+                         kRPVDataTypeInt, kRocProfVisEventEssentialDataEnd))
+                break;
+            if(!emit_ext("Properties", "duration",
+                         std::to_string((int64_t) d->te.value() - (int64_t) d->ts),
+                         kRPVDataTypeInt, kRocProfVisEventEssentialDataDuration))
+                break;
+        }
+
+        // Type-specific properties. get_event_detail folds the event's call-arguments
+        // into the tail of the property bag (fold_args runs last per type); those are
+        // surfaced separately under the Arguments panel below, so skip the last
+        // get_arguments()-many entries here to avoid showing them twice.
+        auto   args      = reader->get_arguments(info->id);
+        size_t arg_count = args.size();
+        size_t prop_end =
+            d->properties.size() >= arg_count ? d->properties.size() - arg_count : 0;
+        bool ok = true;
+        for(size_t i = 0; i < prop_end && ok; i++)
+        {
+            const auto&               prop = d->properties[i];
+            rocprofvis_db_data_type_t vtype;
+            std::string               vstr = value_to_str(prop.value, vtype);
+            ok =
+                emit_ext("Properties", prop.key, vstr, vtype,
+                         GetColumnDataCategory(s_rocprof_categorized_data, op, prop.key));
+        }
+        if(!ok) break;
+
+        // Enrich the collapsed entity-id properties: get_event_detail returns linked
+        // entities as their integer id only, so resolve the ids the old `select *` panel
+        // showed by name (kernel symbol static resource sizes, agent / stream / queue
+        // names, code-object uri) via the reader's bulk info lists.
+        auto find_id = [&](const char* key) -> std::optional<uint64_t> {
+            for(size_t i = 0; i < prop_end; i++)
+                if(d->properties[i].key == key)
+                    if(auto p = std::get_if<uint64_t>(&d->properties[i].value)) return *p;
+            return std::nullopt;
+        };
+        auto emit_opt_u = [&](const char* key, const std::optional<size_t>& v) -> bool {
+            if(!v.has_value()) return true;
+            return emit_ext("Properties", key, std::to_string(v.value()), kRPVDataTypeInt,
+                            kRocProfVisEventEssentialDataUncategorized);
+        };
+
+        if(auto ks_id = find_id("kernel_symbol_id"))
+        {
+            for(const auto& ks : reader->get_all_kernel_symbols())
+            {
+                if(!ks || ks->id != *ks_id) continue;
+                if(!ks->display_name.empty() &&
+                   !emit_ext("Properties", "kernel_name", ks->display_name,
+                             kRPVDataTypeString,
+                             kRocProfVisEventEssentialDataUncategorized))
+                    ok = false;
+                ok = ok && emit_opt_u("group_segment_size", ks->group_segment_size) &&
+                     emit_opt_u("private_segment_size", ks->private_segment_size) &&
+                     emit_opt_u("sgpr_count", ks->sgpr_count) &&
+                     emit_opt_u("arch_vgpr_count", ks->arch_vgpr_count) &&
+                     emit_opt_u("accum_vgpr_count", ks->accum_vgpr_count);
+                break;
+            }
+        }
+        if(!ok) break;
+        if(auto co_id = find_id("code_object_id"))
+        {
+            for(const auto& co : reader->get_all_code_objects())
+            {
+                if(!co || co->id != *co_id) continue;
+                if(!co->uri.empty() &&
+                   !emit_ext("Properties", "code_object_uri", co->uri, kRPVDataTypeString,
+                             kRocProfVisEventEssentialDataUncategorized))
+                    ok = false;
+                break;
+            }
+        }
+        if(!ok) break;
+        for(const char* akey : { "agent_id", "src_agent_id", "dst_agent_id" })
+        {
+            auto ag_id = find_id(akey);
+            if(!ag_id) continue;
+            for(const auto& ag : reader->get_all_agents())
+            {
+                if(!ag || ag->id != *ag_id) continue;
+                if(!ag->name.empty() &&
+                   !emit_ext("Properties", "agent_type", ag->name, kRPVDataTypeString,
+                             GetColumnDataCategory(s_rocprof_categorized_data, op,
+                                                   "agent_type")))
+                    ok = false;
+                break;
+            }
+            if(!ok) break;
+        }
+        if(!ok) break;
+        if(auto q_id = find_id("queue_id"))
+        {
+            for(const auto& q : reader->get_all_queues())
+            {
+                if(!q || q->queue_id != *q_id) continue;
+                if(!q->name.empty() &&
+                   !emit_ext("Properties", "queue_name", q->name, kRPVDataTypeString,
+                             kRocProfVisEventEssentialDataQueue))
+                    ok = false;
+                break;
+            }
+        }
+        if(!ok) break;
+        if(auto s_id = find_id("stream_id"))
+        {
+            for(const auto& s : reader->get_all_streams())
+            {
+                if(!s || s->stream_id != *s_id) continue;
+                if(!s->name.empty() &&
+                   !emit_ext("Properties", "stream_name", s->name, kRPVDataTypeString,
+                             kRocProfVisEventEssentialDataStream))
+                    ok = false;
+                break;
+            }
+        }
+        if(!ok) break;
+
+        // Essential Info nav fields from the registry (Step 1). Guarded by the sentinel
+        // the eager scan leaves when an event never appeared on a home / stream lane.
+        if(info->home_track_id != INVALID_INDEX)
+        {
+            if(!emit_ext("Track", "trackId", std::to_string(info->home_track_id),
+                         kRPVDataTypeInt, kRocProfVisEventEssentialDataTrack))
+                break;
+            if(!emit_ext("Track", "levelForTrack", std::to_string(info->level_for_queue),
+                         kRPVDataTypeInt, kRocProfVisEventEssentialDataLevel))
+                break;
+        }
+        if(info->stream_track_id != INVALID_INDEX)
+        {
+            if(!emit_ext("Track", "streamTrackId", std::to_string(info->stream_track_id),
+                         kRPVDataTypeInt, kRocProfVisEventEssentialDataStreamTrack))
+                break;
+            if(!emit_ext("Track", "levelForStreamTrack",
+                         std::to_string(info->level_for_stream), kRPVDataTypeInt,
+                         kRocProfVisEventEssentialDataStreamLevel))
+                break;
+        }
+
+        // Arguments panel: position + type preserved via the Phase 1 get_arguments(
+        // event_id_t) overload (the folded name/value pairs in event_detail_t lose both).
+        bool args_ok = true;
+        for(const auto& a : args)
+        {
+            if(!a) continue;
+            rocprofvis_db_argument_data_t record;
+            record.position = (uint32_t) a->position;
+            record.type     = a->type.c_str();
+            record.name     = a->name.c_str();
+            record.value    = a->value.c_str();
+            if(BindObject()->FuncAddArgDataRecord(extdata, record) !=
+               kRocProfVisDmResultSuccess)
+            {
+                args_ok = false;
+                break;
+            }
+            future->CountThisRow();
+        }
+        if(!args_ok) break;
         ShowProgress(100, "Extended data successfully loaded!", kRPVDbSuccess, future);
         return future->SetPromise(kRocProfVisDmResultSuccess);
     }

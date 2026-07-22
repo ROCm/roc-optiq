@@ -136,6 +136,53 @@ rocprofvis_dm_database_t rocprofvis_db_open_database(
 }
 
 /****************************************************************************************************
+* @brief Opens several trace files as a single combined (multinode) database.
+*
+* Skips the manifest-based detection in rocprofvis_db_open_database and constructs a
+* multinode rocprof database directly from the provided file list. Each file becomes a
+* database instance whose instance index matches its position in the array.
+*
+* @param filenames array of database file paths
+* @param count number of entries in filenames
+*
+***************************************************************************************************/
+rocprofvis_dm_database_t rocprofvis_db_open_database_multi(
+                                        rocprofvis_db_filename_t const* filenames,
+                                        rocprofvis_dm_size_t count){
+    PROFILE;
+    if (filenames == nullptr || count == 0)
+    {
+        spdlog::debug("No database files provided!");
+        return nullptr;
+    }
+    std::vector<std::string> files;
+    files.reserve(count);
+    for (rocprofvis_dm_size_t i = 0; i < count; i++)
+    {
+        ROCPROFVIS_ASSERT_MSG_RETURN(filenames[i],
+                                     RocProfVis::DataModel::ERROR_DATABASE_CANNOT_BE_NULL,
+                                     nullptr);
+        files.push_back(filenames[i]);
+    }
+    try {
+        RocProfVis::DataModel::Database* db =
+            new RocProfVis::DataModel::RocprofDatabase(files.front().c_str(), files);
+        if (kRocProfVisDmResultSuccess == db->Open()) {
+            return db;
+        }
+        else {
+            ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN("Error! Failed to open combined database!",
+                                                nullptr);
+        }
+    }
+    catch (std::exception ex)
+    {
+        ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN(
+            RocProfVis::DataModel::ERROR_MEMORY_ALLOCATION_FAILURE, nullptr);
+    }
+}
+
+/****************************************************************************************************
  * @brief Calculates size of memory used by database object
  * 
  * @param database database handle
@@ -294,6 +341,24 @@ rocprofvis_dm_result_t rocprofvis_db_read_trace_slice_async(
                                  kRocProfVisDmResultInvalidParameter);
     RocProfVis::DataModel::Database* db = (RocProfVis::DataModel::Database*) database;
     return db->ReadTraceSliceAsync(start,end,tag,num,tracks,object);
+}
+
+rocprofvis_dm_result_t
+rocprofvis_db_read_trace_pmc_slice_async(                                        
+                                        rocprofvis_dm_database_t database,
+                                        rocprofvis_dm_timestamp_t start,
+                                        rocprofvis_dm_timestamp_t end,
+                                        rocprofvis_dm_hashed_timestamp_tag_t tag,
+                                        rocprofvis_db_track_selection_t track,
+                                        bool left_neighbor,
+                                        bool right_neighbor,
+                                        rocprofvis_db_future_t object){
+    PROFILE;
+    ROCPROFVIS_ASSERT_MSG_RETURN(database,
+                                 RocProfVis::DataModel::ERROR_DATABASE_CANNOT_BE_NULL,
+                                 kRocProfVisDmResultInvalidParameter);
+    RocProfVis::DataModel::Database* db = (RocProfVis::DataModel::Database*) database;
+    return db->ReadTracePMCSliceAsync(start,end,tag,track,left_neighbor,right_neighbor,object);
 }
 
 rocprofvis_dm_result_t rocprofvis_db_build_table_query(

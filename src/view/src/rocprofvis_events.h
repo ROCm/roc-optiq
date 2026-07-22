@@ -2,8 +2,10 @@
 // SPDX-License-Identifier: MIT
 
 #pragma once
+#include "rocprofvis_controller_enums.h"
 #include <cstdint>
 #include <iostream>
+#include <limits>
 #include <string>
 #include <vector>
 namespace RocProfVis
@@ -24,19 +26,19 @@ enum class RocEvents
     kTimelineEventHighlightChanged,
     kHandleUserGraphNavigationEvent,
     kTrackMetadataChanged,
-    kStickyNoteEdited,
+    kTrackVisibilityChanged,
     kFontSizeChanged,
     kSetViewRange,
     kGoToTimelineSpot,
     kTimeFormatChanged,
     kTopologyChanged,
     kRequestProgressUpdate,
-#ifdef COMPUTE_UI_SUPPORT
+    kProfilerStatusChanged,
+    kRemoteStatusChanged,
     kComputeWorkloadSelectionChanged,
     kComputeKernelSelectionChanged,
     kComputeMetricsFetched,
     kComputeShowMetricInKernelDetails,
-#endif
 };
 
 enum class RocEventType
@@ -50,16 +52,14 @@ enum class RocEventType
     kTimelineEventSelectionChangedEvent,
     kTimelineEventHighlightChangedEvent,
     kScrollToTrackEvent,
-    kStickyNoteEvent,
     kRangeEvent,
     kNavigationEvent,
     kRequestProgressUpdateEvent,
-#ifdef COMPUTE_UI_SUPPORT
-    kComputeTableSearchEvent,
+    kProfilerStatusEvent,
+    kRemoteStatusEvent,
     kComputeSelectionChangedEvent,
     kComputeMetricsFetchedEvent,
     kComputeAddMetricToKernelDetailsEvent,
-#endif
 };
 
 class RocEvent
@@ -135,18 +135,23 @@ private:
 class NavigationEvent : public RocEvent
 {
 public:
-    NavigationEvent(double v_min, double v_max, double y_position, bool center);
+    // For a valid track_id, y_position is relative to that track's top;
+    // otherwise it is an absolute content-space Y.
+    NavigationEvent(double v_min, double v_max, double y_position, bool center,
+                    uint64_t track_id = std::numeric_limits<uint64_t>::max());
 
-    double GetVMin() const;
-    double GetVMax() const;
-    double GetYPosition() const;
-    bool   GetCenter() const;   
+    double   GetVMin() const;
+    double   GetVMax() const;
+    double   GetYPosition() const;
+    bool     GetCenter() const;
+    uint64_t GetTrackId() const;
 
 private:
-    double m_v_min;
-    double m_v_max;
-    double m_y_position;
-    bool m_center;
+    double   m_v_min;
+    double   m_v_max;
+    double   m_y_position;
+    bool     m_center;
+    uint64_t m_track_id;
 };
 
 class TrackDataEvent : public RocEvent
@@ -176,16 +181,6 @@ private:
     uint64_t    m_response_code;
 };
 
-class StickyNoteEvent : public RocEvent
-{
-public:
-    StickyNoteEvent(int id, const std::string& source_id);
-    const int GetNoteId() const;
-
-private:
-    int m_id;
-};
-
 class ScrollToTrackEvent : public RocEvent
 {
 public:
@@ -197,7 +192,6 @@ private:
     uint64_t    m_track_id;
 };
 
-#ifdef COMPUTE_UI_SUPPORT
 class ComputeSelectionChangedEvent : public RocEvent
 {
 public:
@@ -235,8 +229,6 @@ private:
     uint32_t m_entry_id;
     std::string  m_value_name;
 };
-
-#endif
 
 class TabEvent : public RocEvent
 {
@@ -338,6 +330,41 @@ private:
     RequestType m_request_type;
     uint64_t    m_progress_percent;
     std::string m_message;
+};
+
+// Emitted by AppMonitor when a monitored profiler session changes state.
+// Carries the monitor operation id so concurrent profiler sessions can be
+// distinguished by listeners.
+class ProfilerStatusEvent : public RocEvent
+{
+public:
+    ProfilerStatusEvent(uint64_t operation_id, rocprofvis_profiler_state_t state,
+                        const std::string& source_id = std::string());
+    uint64_t                    GetOperationId() const;
+    rocprofvis_profiler_state_t GetState() const;
+
+private:
+    uint64_t                    m_operation_id;
+    rocprofvis_profiler_state_t m_state;
+};
+
+// Emitted by AppMonitor when a monitored SSH operation changes status. Carries
+// the monitor operation id so concurrent SSH sessions are distinguishable, the
+// raw remote status (rocprofvis_controller_remote_status_t), and the latest
+// result code reported by the operation's check phase.
+class RemoteStatusEvent : public RocEvent
+{
+public:
+    RemoteStatusEvent(uint64_t operation_id, uint32_t status, rocprofvis_result_t result,
+                      const std::string& source_id = std::string());
+    uint64_t            GetOperationId() const;
+    uint32_t            GetStatus() const;
+    rocprofvis_result_t GetResult() const;
+
+private:
+    uint64_t            m_operation_id;
+    uint32_t            m_status;
+    rocprofvis_result_t m_result;
 };
 
 }  // namespace View

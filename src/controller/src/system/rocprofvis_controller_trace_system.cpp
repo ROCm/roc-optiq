@@ -39,8 +39,24 @@ SystemTrace::SystemTrace(const std::string& filename)
 , m_search_table(nullptr)
 , m_summary(nullptr)
 , m_mem_mgmt(nullptr)
+, m_topology_root(nullptr)
 {
     
+}
+
+SystemTrace::SystemTrace(const std::vector<std::string>& filenames)
+: Trace(__kRPVControllerSystemPropertiesFirst, __kRPVControllerSystemPropertiesLast,
+        filenames.empty() ? std::string() : filenames.front())
+, m_files(filenames)
+, m_timeline(nullptr)
+, m_event_table(nullptr)
+, m_sample_table(nullptr)
+, m_search_table(nullptr)
+, m_summary(nullptr)
+, m_mem_mgmt(nullptr)
+, m_topology_root(nullptr)
+{
+
 }
 
 rocprofvis_result_t SystemTrace::Init()
@@ -81,10 +97,6 @@ SystemTrace::~SystemTrace()
     for (Track* track : m_tracks)
     {
         delete track;
-    }
-    for (auto* node : m_nodes)
-    {
-        delete node;
     }
 }
 
@@ -134,8 +146,22 @@ rocprofvis_result_t SystemTrace::LoadRocpd(Future* future) {
         m_dm_handle = rocprofvis_dm_create_trace();
         if(nullptr != m_dm_handle)
         {
-            rocprofvis_dm_database_t db =
-                rocprofvis_db_open_database(m_trace_file.c_str(), kAutodetect);
+            rocprofvis_dm_database_t db = nullptr;
+            if(m_files.size() > 1)
+            {
+                std::vector<const char*> file_ptrs;
+                file_ptrs.reserve(m_files.size());
+                for(const std::string& file : m_files)
+                {
+                    file_ptrs.push_back(file.c_str());
+                }
+                db = rocprofvis_db_open_database_multi(file_ptrs.data(),
+                                                       file_ptrs.size());
+            }
+            else
+            {
+                db = rocprofvis_db_open_database(m_trace_file.c_str(), kAutodetect);
+            }
             if(nullptr != db && kRocProfVisDmResultSuccess ==
                                     rocprofvis_dm_bind_trace_to_database(m_dm_handle, db))
             {
@@ -1044,24 +1070,6 @@ rocprofvis_result_t SystemTrace::SetUInt64(rocprofvis_property_t property, uint6
         case kRPVControllerSystemNumAnalysisView:
         {
             ROCPROFVIS_UNIMPLEMENTED;
-            break;
-        }
-        case kRPVControllerSystemNumNodes:
-        {
-            if (m_nodes.size() != value)
-            {
-                for (uint64_t i = value; i < m_nodes.size(); i++)
-                {
-                    delete m_nodes[i];
-                    m_nodes[i] = nullptr;
-                }
-                m_nodes.resize(value);
-                result = m_nodes.size() == value ? kRocProfVisResultSuccess : kRocProfVisResultMemoryAllocError;
-            }
-            else
-            {
-                result = kRocProfVisResultSuccess;
-            }
             break;
         }
         default:

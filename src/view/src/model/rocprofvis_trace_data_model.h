@@ -55,6 +55,12 @@ public:
     const std::string& GetTraceFilePath() const { return m_trace_file_path; }
     void SetTraceFilePath(const std::string& path) { m_trace_file_path = path; }
 
+    // Compare sources (A, B, ...) are set when the trace is opened as a compare project.
+    // GetCompareSource maps a track's source instance index back to its file.
+    void SetCompareSources(const std::vector<CompareSourceInfo>& sources);
+    const CompareSourceInfo* GetCompareSource(size_t index) const;
+    bool HasCompareSources() const { return !m_compare_sources.empty(); }
+
     // Build display name for a track from topology/timeline data
     std::string BuildTrackName(uint64_t track_id) const;
 
@@ -70,6 +76,7 @@ private:
     AnalysisModel     m_analysis;
 
     std::string m_trace_file_path;
+    std::vector<CompareSourceInfo> m_compare_sources;
 };
 
 }  // namespace View

@@ -29,3 +29,9 @@
 [submodule "thirdparty/yaml-cpp"]
 	path = thirdparty/yaml-cpp
 	url = https://github.com/jbeder/yaml-cpp.git
+[submodule "thirdparty/mbedtls"]
+	path = thirdparty/mbedtls
+	url = https://github.com/Mbed-TLS/mbedtls.git
+[submodule "thirdparty/libssh2"]
+	path = thirdparty/libssh2
+	url = https://github.com/libssh2/libssh2.git

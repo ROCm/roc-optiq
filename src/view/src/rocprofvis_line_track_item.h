@@ -3,10 +3,8 @@
 
 #pragma once
 
-#include "rocprofvis_controller_types.h"
 #include "rocprofvis_raw_track_data.h"
 #include "rocprofvis_track_item.h"
-#include "widgets/rocprofvis_widget.h"
 #include "rocprofvis_time_to_pixel.h"
 #include <memory>
 #include "widgets/rocprofvis_editable_textfield.h"
@@ -18,34 +16,15 @@ namespace RocProfVis
 namespace View
 {
 
+class CounterTrackOptions;
 class LineTrackItem;
 class TimePixelTransform;
-
-struct HighlightYRange
-{
-    float max_limit;
-    float min_limit;
-};
-
-class LineTrackProjectSettings : public ProjectSetting
-{
-public:
-    LineTrackProjectSettings(const std::string& project_id, LineTrackItem& track_item);
-    ~LineTrackProjectSettings() override;
-    void            ToJson() override;
-    bool            Valid() const override;
-    bool            BoxPlot() const;
-    bool            BoxPlotStripes() const;
-    bool            Highlight() const;
-    HighlightYRange HighlightRange() const;
-
-private:
-    LineTrackItem& m_track_item;
-};
+class TimelineSelection;
+class TimelineTrackOptions;
 
 class LineTrackItem : public TrackItem
 {
-    friend LineTrackProjectSettings;
+    friend CounterTrackOptions;
 
     class VerticalLimits
     {
@@ -71,6 +50,7 @@ class LineTrackItem : public TrackItem
 
         std::string m_formatted_str;
         std::string m_compact_str;
+        std::string m_edit_str;
         std::string m_units;
 
         EditableTextField m_text_field;
@@ -78,16 +58,19 @@ class LineTrackItem : public TrackItem
 
 public:
     LineTrackItem(DataProvider& dp, uint64_t track_id,
-                  std::shared_ptr<TimePixelTransform> time_to_pixel_manager);
+                  TimelineTrackOptions&               track_options,
+                  std::shared_ptr<TimePixelTransform> time_to_pixel_manager,
+                  std::shared_ptr<TimelineSelection>  timeline_selection);
     ~LineTrackItem();
 
-    bool          ReleaseData() override;
-    virtual float CalculateNewMetaAreaSize() override;
+    void         Update() override;
+    bool         ReleaseData() override;
+    virtual void UpdateMetaScaleAreaSize() override;
+    virtual void UpdateMaxMetaScaleAreaSize() override;
 
 protected:
     virtual void RenderMetaAreaScale() override;
     virtual void RenderChart(float graph_width) override;
-    virtual void RenderMetaAreaOptions() override;
 
 private:
     void   UpdateMetadata();
@@ -100,18 +83,18 @@ private:
                                const ImVec2& content_size, double scale_y);
 
     std::vector<TraceCounter> m_data;
-    HighlightYRange                         m_highlight_y_limits;
 
-    VerticalLimits           m_min_y;
-    VerticalLimits           m_max_y;
-    std::string              m_units;
-    bool                     m_highlight_y_range;
-    DataProvider&            m_dp;
-    bool                     m_show_boxplot;
-    bool                     m_show_boxplot_stripes;
-    LineTrackProjectSettings m_linetrack_project_settings;
-    float                    m_vertical_padding;
- };
+    VerticalLimits m_min_y;
+    VerticalLimits m_max_y;
+    std::string    m_units;
+
+    DataProvider& m_dp;
+    float         m_vertical_padding;
+
+    std::array<Pill*, AnalysisTrackStatistics::Counter::kCounterCount> m_pills_analysis;
+    // User configurable options. Underlying object is owned by TrackItem.
+    CounterTrackOptions* m_counter_options;  // Always valids.
+};
 
 }  // namespace View
 }  // namespace RocProfVis

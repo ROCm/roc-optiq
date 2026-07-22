@@ -35,8 +35,6 @@ Traces contain event tracks and counter tracks:
 .. note::
 
    See the `ROCm Systems Profiler documentation <https://rocm.docs.amd.com/projects/rocprofiler-systems/en/latest/index.html>`_ for more information on tracing.
-  
-.. _trace-file:
 
 Open a trace file
 =================
@@ -51,7 +49,7 @@ Select **File** > **Open** to open a trace. You can also open files by dragging 
 Troubleshooting
 ---------------
 
-If the trace file doesn't open, the file may be in an unsupported format. Convert the file to a supported format (``.db`` or ``.rpd``) using ROCm scripts.
+If the trace file doesn't open, the file might be in an unsupported format. Convert the file to a supported format (``.db`` or ``.rpd``) using ROCm scripts.
 
 To generate profiling data in a compatible ROCpd format for ROCm Systems Profiler:
 
@@ -90,6 +88,7 @@ The **System Topology View** displays a hierarchical representation of the hardw
 .. image:: ../images/topology.png
    :width: 800
    :align: center
+   :alt: System Topology View showing a hierarchical tree of hardware and software components including processors, queues, and threads
 
 - Click |eye| to show or hide tracks. Hiding a higher-level element automatically hides all underlying queues, streams, and events.
 - Click |scroll| to go to the track in the :ref:`timeline`. 
@@ -109,16 +108,19 @@ The **Timeline View** displays CPU and GPU activities, events, and performance m
 - Review events such as API calls, kernel dispatches, and more.
 - See performance counter data as charts displaying the data points.
 - Zoom, filter, and bookmark data for detailed analysis. 
-- Correlate GPU workloads with in-application CPU events and performance with hardware resource usage, allowing for performance blockers to be easily identified and remedied.
+- Correlate GPU workloads with in-application CPU events and performance with hardware resource usage to identify and remedy performance blockers.
 
 The **Timeline View** has a **Description** area that describes a specific category of events or metrics within a profiling trace, and a **Graph** area where events and counter graphs are plotted:
 
 .. image:: ../images/timeline-details.png
    :width: 800
    :align: center
+   :alt: Timeline View with the Description area on the left showing track names and the Graph area on the right displaying event bars and counter charts
 
 Use the Timeline View
 ~~~~~~~~~~~~~~~~~~~~~
+
+The following sections describe how to navigate, select, and customize tracks in the Timeline View.
 
 Navigate the Timeline
 ^^^^^^^^^^^^^^^^^^^^^
@@ -131,17 +133,23 @@ The shortcut keys (**WASD** and arrow keys) can also be used to zoom and pan the
 - **A** or **Left Arrow** / **D** or **Right Arrow**: Pan left and right, respectively.
 - **Up Arrow** / **Down Arrow**: Scroll the track list up and down.
 
-.. note::
+  .. note::
 
-   See :ref:`change-settings` to customize these hotkeys.
+    See :ref:`change-settings` to customize these hotkeys.
 
-Hold the mouse pointer over the **Description** area, and the scroll wheel will scroll through the track list. 
-Hold the mouse pointer over the **Graph** area, and the scroll wheel zooms the view in and out.
+- The upper-left region of the **Timeline View** displays a track summary showing the total number of tracks and a per-type breakdown (for example, event, counter, queue, and thread tracks).
+- Hold the mouse pointer over the **Description** area, and the scroll wheel will scroll through the track list. 
+- Hold the mouse pointer over the **Graph** area, and the scroll wheel zooms the view in and out.
+- Hover the track name label in the **Description** area to view a tooltip with the full track name, track ID, and event or sample count.  
 
 Select a track
 ^^^^^^^^^^^^^^
 
-Clicking in the **Description** area selects or deselects the track. 
+Use the following actions to select tracks in the Timeline View.
+
+- Clicking in the **Description** area selects or deselects the track. 
+- Right-click the track to select **Copy track name**, **Copy track ID**, or **Track Options**. 
+
 When a track is selected, the details display in the **Track Details** pane.
 
 Additionally, depending on the track type, the **Event Table** or **Sample Table** tabs in the **Advanced Details** section will be populated by the contents of the track.
@@ -149,6 +157,7 @@ Additionally, depending on the track type, the **Event Table** or **Sample Table
 .. image:: ../images/selected-tracks.png
    :width: 800
    :align: center
+   :alt: Timeline View with a selected track highlighted and its details shown in the Track Details pane
 
 Select an event
 ^^^^^^^^^^^^^^^
@@ -167,18 +176,62 @@ When an event is selected, its event details are displayed in the **Event Detail
 Resize or reorder tracks
 ^^^^^^^^^^^^^^^^^^^^^^^^
 
+Use the following actions to resize or reorder tracks.
+
 - Resize tracks by dragging the separator lines between tracks.
 - Reorder tracks by clicking and dragging |grip| on the left side of the **Description** area.
+
+Queue Utilization
+^^^^^^^^^^^^^^^^^
+
+For queue tracks, a Queue Utilization pill displays next to the queue label. It shows the percentage of time the queue was active over the visible time range. When a time-range filter is active, utilization is calculated for the selected range only.  
+The queue utilization is also visible in the **Track Details** tab. 
+
+Sample counter track statistics 
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+For sample counter tracks, pills showing standard deviation and average display next to the counter label. These can be shown/hidden using the **Track Options** menu.  
+Additionally, min and max value pills can also be shown/hidden. 
+
+Similar to queue utilization, the values in these pills react to reflect the values in the current view or active time-range filter. 
+The Counter statistics are also visible in the **Track Details** tab.
+
+.. image:: ../images/new-track-details-statistics.png
+   :width: 800
+   :align: center
+   :alt: Track Details pane showing queue utilization percentage and counter statistics including minimum, maximum, mean, and standard deviation
+
+Measure
+^^^^^^^
+
+.. image:: ../images/measure.png
+   :width: 300
+   :alt: The Measure mode UI button
+
+**Measure** mode lets you measure the elapsed time between two points on the **Timeline View**, either between timeline points or between specific events. 
+
+.. image:: ../images/new-measurement-mode.png
+   :width: 800
+   :alt: Measurement mode UI
+
+- Enable **Measure** mode from the toolbar or the timeline right-click menu.  
+- **Events** mode: Measure duration between two selected events on the timeline. You can snap Start/End Rulers to Event start or Event end. 
+- **Anywhere** mode: Measure duration between two timeline points. You can drag the rulers horizontally to fine-tune.  
+- ROCm Optiq draws two vertical rulers with timestamps and shows the duration (time delta) in a label between them.
+- Right-click a measurement label on the timeline to **Copy Start Timestamp**, **Copy End Timestamp**, or **Copy Measurement Duration**.   
+- Use **Reset** or **Clear measurement** to remove the rulers and start a new measurement.
+
+.. image:: ../images/new-measurement-timestamp.png
+   :width: 300
+   :alt: Timeline View Measure mode showing two vertical ruler lines with timestamps and a duration label between them
 
 Histogram
 ~~~~~~~~~
 
-The **Histogram** provides two display modes:
-
-- An event-density visual representation of all visible tracks.
-- A display across all tracks, visible and hidden.
+The **Histogram** provides event density that is normalized across all tracks visible and hidden:
 
 .. image:: ../images/histogram.png
+   :alt: Histogram showing event density across all tracks with the currently zoomed region highlighted
 
 When the **Timeline View** is zoomed in, the area currently in view is highlighted on the **Histogram**. 
 The highlighted area in the **Histogram** can be dragged to scroll the **Timeline View**.
@@ -196,8 +249,9 @@ This section provides an interface for multiple data perspectives, offering gran
   .. image:: ../images/advanced.png
     :width: 800
     :align: center
+    :alt: Advanced Details section showing the Event Table with filter and aggregate controls
 
-  - **Aggregate by Column**: A drop-down menu that groups the results by the selected column. Click **Submit** to group the results. To remove the grouping, select **-- None --** from the drop-down menu, then click **Submit**.
+  - **Aggregate**: A drop-down groups **Event Table** results by a selected field (Category, Name, Stream, Queue, Node, PID, or TID). Click **Submit** to group the results. To remove the grouping, choose —None— and click **Submit**. 
   - **Filter**: Enter SQL-like statements to filter the data. For example, ``“duration > 2000”`` displays all events greater than 2000 ns. Click **Submit** to filter the data.
   
   .. tip::
@@ -207,13 +261,39 @@ This section provides an interface for multiple data perspectives, offering gran
      - :ref:`time-range-filter` using the **Timeline View** to filter the rows to data contained within the selected time range.
 
 - **Sample Table**: Presents all performance counter data points associated with the selected tracks. Similar to the **Event Table**, it supports time-range selection and SQL-like query capabilities for detailed performance analysis. It supports the **Aggregate by Column** drop-down to group the results by the selected column.
-- **Event Details**: Shows extended information about the event that is not shown in the timeline or the **Event Table**. It shows raw database information such as timestamps, duration, associated queue/stream, correlation IDs, and API method parameters. It also shows flow, call stack information, and function call arguments, if available.  
+- **Event Details**: Shows extended information about the event that is not shown in the timeline or the **Event Table**. It shows raw database information such as id, category, duration, associated queue/stream, correlation IDs and API method parameters. It also shows flow, call stack information, and function call arguments, if available.  
 
   - The **Flow Data** displays all events logically connected to the selected event in the execution sequence. You can navigate any of the connected events on the timeline, with vertical track centering and highlight feedback, by right clicking and selecting **Go To Event**. The navigation makes it easier to follow the execution flow across queues and tracks. 
-  - The **Call Stack Data** shows the full call stack hierarchy for providing the calling context that led to that event. This provides understanding about where and why a kernel or function was invoked. The **Call Stack Data** is displayed in call order, following the execution path. 
+  - The **Call Stack Data** shows the full call stack hierarchy for providing the calling context that led to that event. This provides understanding about where and why a kernel or function was invoked. The **Call Stack Data** is displayed in call order, following the execution path. You can open any of the events in the call stack hierarchy by right clicking and choose **Go To Event**.
+  - You can also right-click on a cell in the **Flow Data** or **Call Stack Data** table for copy/export actions.
 
 - **Track Details**: Shows additional information about the track that is not visible on the timeline. It shows the node the track belongs to and its details, the process it belongs to, and the track type (thread, counter, queue, and so on).
+
+  - The **Track Details** also show statistics such as queue utilization, counter Minimum, Maximum, Mean, and Standard Deviation. 
+  - You can right-click a row or cell of **Track Details** to **Copy Row Data** or **Copy Cell Data**. 
+
 - **Annotations**: Displays user-created annotations, enabling easier navigation across critical points within large traces, enhancing collaboration and knowledge sharing. See :ref:`annotation` for more info.
+- **Top Events**: Provides analysis for the events of each operation type (instrumented Thread, Sampled thread, Dispatch, memory allocation, memory copy) from the selected tracks aggregated by event name. Available metrics are event count (invocations) and total/average/min/max duration. If you select tracks of different types, each type will be shown in a separate table. Each table has its own System Table instance and can be sorted individually. If you make a time-range selection, Top Events are limited to that selected time-range. 
+
+  .. image:: ../images/top-events.png
+     :width: 600
+     :alt: Top events tab in Advanced Details
+
+.. tip::
+
+   In the **Event Table**, **Event Details**, and **Top Events** tables, right-click a row or cell to **Go To Event**, **Copy Row Data**, **Copy Cell Data**, and **Export to File** (CSV).
+
+   .. image:: ../images/go-to-event.png
+      :width: 300
+      :alt: Menu displaying **Go To Event**, **Copy Row Data**, **Copy Cell Data**, and **Export to File** options.
+
+   In the **Flow Data**, and **Call Stack** tables, right-click a row or cell to **Go To Event**, **Copy Row Data**, or **Copy Cell Data**.  
+
+   .. image:: ../images/flow-options.png
+      :width: 300
+      :alt: Menu displaying **Go To Event**, **Copy Row Data**, and **Copy Cell Data** in the Flow Data section.
+
+
 
 .. _summary-view:
 
@@ -225,11 +305,13 @@ The **Summary View** displays data from the top 10 kernels by execution time.
 .. image:: ../images/summary-view.png
    :width: 800
    :align: center
+   :alt: Summary View showing a pie chart of the top 10 kernels by execution time
 
 You can access **Summary View** by clicking **View** > **Show Summary**.
 
 .. image:: ../images/show-summary.png
    :width: 300
+   :alt: View menu with the Show Summary option highlighted
 
 There are three ways you can view this data: 
 
@@ -237,13 +319,14 @@ There are three ways you can view this data:
 - A bar chart |bar|
 - A table |table|
 
-You can select one of these views from the |views| icons in the bottom-left corner of the **Summary View**.
+You can select one of these views from the |views| icons in the bottom-left corner.
 
 Once a kernel is selected, the dispatch details display in a table below the chart:
 
 .. image:: ../images/table-highlight.png
    :width: 800
    :align: center
+   :alt: Summary View with a selected kernel highlighted in the pie chart and its dispatch details shown in a table below
 
 You can also select the **Node** and **GPU** from the drop-down menus to focus on the expected node and GPU:
 
@@ -261,6 +344,7 @@ The **Minimap** provides a compact overview that visualizes event density of eac
 
 .. image:: ../images/minimap.png
    :width: 600
+   :alt: Minimap panel showing event density and counter values across the full profiling trace as a compact overview
 
 The **Minimap** provides:
 
@@ -278,8 +362,9 @@ Search for events using the search box on the main **Toolbar**.
 
 .. image:: ../images/search.png
    :width: 800
+   :alt: Search box on the main toolbar with a search string entered and results shown in a list below
 
 - To search, type a search string and press **Enter** (search is case-insensitive).
-- Clicking on a row in the search results will bring the selected event into view on the :ref:`timeline`.
+- Clicking on a row in the search results will bring the selected event into view on the :ref:`timeline`. 
 - Clicking **X** clears the search results.
 - The search can match multiple substrings at once. Multiple search tokens must be surrounded by quotation marks without spaces (for example: ``“term1””term2”``).

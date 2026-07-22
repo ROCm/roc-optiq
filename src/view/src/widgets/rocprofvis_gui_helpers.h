@@ -3,6 +3,9 @@
 
 #pragma once
 #include "imgui.h"
+#include <functional>
+#include <string>
+#include <string_view>
 #include <utility>
 
 namespace RocProfVis
@@ -82,6 +85,15 @@ InputTextWithClear(const char* id, const char* hint, char* buf, size_t buf_size,
                    ImFont* icon_font, ImU32 bg_color, const ImGuiStyle& style,
                    float width = 0);
 
+// std::string-backed ImGui text inputs using ImGuiInputTextFlags_CallbackResize,
+// so callers do not need to manage fixed-size char buffers.
+bool
+InputTextString(const char* id, std::string& str, ImGuiInputTextFlags flags = 0);
+
+bool
+InputTextStringWithHint(const char* id, const char* hint, std::string& str,
+                        ImGuiInputTextFlags flags = 0);
+
 void
 SetTooltipStyled(const char* fmt, ...);
 
@@ -106,6 +118,11 @@ ElidedText(const char* text, float available_width, float tooltip_width = 0.0f,
            Alignment alignment                     = Alignment_Left,
            bool      imgui_AlignTextToFramePadding = false);
 
+// Trims text to a single line fitting max_width (and max_chars), appending "..."
+// when shortened. Uses the current font for measurement.
+std::string
+ElideWithEllipsis(const std::string& text, float max_width, size_t max_chars);
+
 void
 CenterNextTextItem(const char* text);
 
@@ -124,6 +141,73 @@ VerticalSeparator(SettingsManager* settings = nullptr);
 
 float
 TableRowHeight();
+
+// Toast text shown after copying a single cell / a whole row to the clipboard.
+inline constexpr std::string_view COPY_DATA_NOTIFICATION     = "Cell data was copied";
+inline constexpr std::string_view COPY_ROW_DATA_NOTIFICATION = "Row data copied to clipboard";
+
+// Similar to ImGui::TextUnformatted(), but allows copying the text to the clipboard
+// via left-click or a context menu.
+// If multiple instances with the same text can appear within the same frame,
+// the caller must provide a unique, stable identifier to avoid ID collisions.
+// For items created in loops, the loop index or iterator is typically sufficient.
+bool
+CopyableTextUnformatted(
+    const char* text, std::string_view unique_id = "", std::string_view notification = "",
+    bool one_click_copy = false, bool context_menu = false,
+    std::function<void(const char* value_to_copy)> menu_func = nullptr);
+
+// Renders a selectable menu item with an icon (from the icon font) followed by a text label.
+// Returns true when clicked. Intended for use inside BeginPopup/BeginPopupContextItem blocks.
+bool
+IconMenuItem(const char* icon, const char* label, bool enabled = true);
+
+// Opens a submenu entry with a leading icon (from the icon font) before the label.
+// Returns true when the submenu is open; call ImGui::EndMenu() only when it returns true.
+bool
+IconBeginMenu(const char* icon, const char* label);
+
+// Identifies the row/column of the cell whose right-click opened a table's copy
+// context menu. Reusable by any table that wants the shared full-row right-click
+// hit-box plus copy menu (see RenderRowHitbox / AddCopyRowCellMenuItems).
+struct CellMenuTarget
+{
+    int row    = -1;
+    int column = -1;
+};
+
+// Positions the cursor for a cell: column 0 shares the row with the hit-box via
+// SameLine(), later columns move to their own column.
+void
+PositionCell(int col);
+
+// Renders the transparent, full-row selectable that acts as the right-click
+// hit-box for the empty areas of a table row. Cells drawn on top capture
+// right-clicks that land directly on their text (see CaptureCellRightClick).
+// On a right-click, records the row and hovered column into target and raises
+// open. Returns whether the row is hovered (for double-click / highlight use).
+bool
+RenderRowHitbox(const char* hitbox_id, int row, int column_count,
+                CellMenuTarget& target, bool& open);
+
+// Records a right-click that landed on the cell content just submitted (the
+// copyable text/button steals hover from the row hit-box over its own area).
+// Call immediately after rendering a cell's content.
+void
+CaptureCellRightClick(int col, int row, CellMenuTarget& target, bool& open);
+
+// Opens the shared cell context-menu popup with consistent styling. When true is
+// returned, the caller fills in menu items and must call EndCellContextMenu().
+bool
+BeginCellContextMenu(const char* popup_id);
+
+void
+EndCellContextMenu();
+
+// Adds the shared "Copy Row Data" / "Copy Cell Data" items for the given row,
+// copying to the clipboard and raising the copy notification.
+void
+AddCopyRowCellMenuItems(const std::string* cells, int column_count, int column);
 
 #ifdef ROCPROFVIS_ENABLE_INTERNAL_BANNER
 void

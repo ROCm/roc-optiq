@@ -20,23 +20,12 @@ namespace View
 
 // Forward declarations
 class TableRequestParams;
-class TrackItem;
 
-enum class GraphType
+struct CompareSourceInfo
 {
-    TYPE_LINECHART,
-    TYPE_FLAMECHART
-};
-
-// Track Graph Information
-struct TrackGraph
-{
-    GraphType  graph_type;
-    bool       display;
-    bool       display_changed;
-    TrackItem* chart;
-    bool       selected;
-
+    std::string id;
+    std::string name;
+    std::string path;
 };
 
 union TopologyId
@@ -59,7 +48,8 @@ struct TrackInfo
         Stream,
         InstrumentedThread,
         SampledThread,
-        Counter
+        Counter,
+        Count
     };
 
     uint64_t                           index;  // index of the track in the controller
@@ -68,6 +58,9 @@ struct TrackInfo
     double                             min_ts;           // starting time stamp of track
     double                             max_ts;           // ending time stamp of track
     uint64_t                           num_entries;      // number of entries in the track
+    uint64_t                           instance_id;      // source database instance index for track
+    uint64_t                           file_id;          // source database file index for track
+    uint64_t                           order_rank;       // track order ranking
     uint64_t                           agent_or_pid;     // agent id or process id
     uint64_t                           queue_id_or_tid;  // queue id or thread id
     double min_value;  // minimum value in the track (for samples) or level (for events)
@@ -78,6 +71,7 @@ struct TrackInfo
     std::string sub_name;  // Track sub process string (TID, QueueID, PMC name)
     std::unordered_set<rocprofvis_dm_event_operation_t>
         operation_types;  // Operation types supported by the track
+    CompareSourceInfo compare_source;
     struct Topology
     {
         uint64_t node_id;     // ID of track's parent node
@@ -285,7 +279,7 @@ struct TableInfo
     uint64_t                              total_row_count;
 };
 
-struct AnalysisQueueUtilization
+struct AnalysisTrackStatistics
 {
     enum State
     {
@@ -294,9 +288,56 @@ struct AnalysisQueueUtilization
         kRequested,  // Pending fetch completion
         kReady,
     };
-    const TrackInfo* track;
-    double           util_pct;
-    mutable State    state;
+    // One statistic (min/max/mean/util/...) broken into its raw building
+    // blocks. Consumers (track pills, track details) compose the exact label
+    // they need from these components instead of a single pre-baked string.
+    struct Stat
+    {
+        const char* name         = "";   // Prefix, long form (e.g. "Mean").
+        const char* compact_name = "";   // Prefix, short form (e.g. "Avg").
+        size_t      accent_color = 0;    // Index into the settings color wheel.
+        double      value        = 0.0;  // Real, unrounded value (e.g. 22123.333).
+        std::string suffix;              // Units (e.g. "MB"), may be empty.
+        std::string compact;             // Compact value only (e.g. "22K").
+        std::string full;                // Full value only (e.g. "22123.3").
+
+        // Value with its units suffix appended.
+        std::string CompactValue() const { return WithSuffix(compact); }
+        std::string FullValue() const { return WithSuffix(full); }
+
+        // "<prefix>: <value> <units>". Compact uses the short prefix, full the
+        // long one.
+        std::string CompactLabel() const
+        {
+            return std::string(compact_name) + ": " + CompactValue();
+        }
+        std::string FullLabel() const
+        {
+            return std::string(name) + ": " + FullValue();
+        }
+
+    private:
+        std::string WithSuffix(const std::string& value_str) const
+        {
+            return suffix.empty() ? value_str : value_str + " " + suffix;
+        }
+    };
+    enum Queue : size_t
+    {
+        kQueueUtilization = 0,
+        kQueueCount,
+    };
+    enum Counter : size_t
+    {
+        kCounterMin = 0,
+        kCounterMax,
+        kCounterMean,
+        kCounterStandardDeviation,
+        kCounterCount
+    };
+    const TrackInfo*  track;
+    mutable State     state;
+    std::vector<Stat> stats;
 };
 
 }  // namespace View

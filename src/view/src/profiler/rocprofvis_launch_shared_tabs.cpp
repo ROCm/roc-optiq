@@ -1,0 +1,513 @@
+// Copyright Advanced Micro Devices, Inc.
+// SPDX-License-Identifier: MIT
+
+#include "rocprofvis_launch_shared_tabs.h"
+#include "rocprofvis_appwindow.h"
+#include "rocprofvis_gui_helpers.h"
+#include "rocprofvis_controller_enums.h"
+#include "rocprofvis_settings_manager.h"
+#include "imgui.h"
+#include <algorithm>
+#include <sstream>
+#include <cstring>
+
+namespace RocProfVis
+{
+namespace View
+{
+namespace
+{
+
+static char s_target_exe_buf[512] = {};
+static char s_target_args_buf[512] = {};
+static char s_working_dir_buf[512] = {};
+static char s_output_dir_buf[512] = {};
+
+static char s_new_env_name[128] = {};
+static char s_new_env_value[256] = {};
+
+static char s_save_preset_name[128] = {};
+
+void SyncBufFromString(char* buf, size_t buf_size, std::string const& str)
+{
+    std::snprintf(buf, buf_size, "%s", str.c_str());
+}
+
+} // namespace
+
+bool RenderTargetSection(TargetSpec& target, ConnectionType connection, AppWindow* app_window)
+{
+    bool modified = false;
+
+    // In remote (SSH) mode the executable / directories refer to paths on the
+    // remote host, so the local file/path Browse pickers don't apply (a remote
+    // file browser may re-enable them later).
+    const bool is_remote = (connection == ConnectionType::kSsh);
+
+    // Always sync buffers from target when target changed externally (e.g. preset load)
+    if (target.executable != s_target_exe_buf)
+    {
+        SyncBufFromString(s_target_exe_buf, sizeof(s_target_exe_buf), target.executable);
+    }
+    if (target.arguments != s_target_args_buf)
+    {
+        SyncBufFromString(s_target_args_buf, sizeof(s_target_args_buf), target.arguments);
+    }
+    if (target.working_directory != s_working_dir_buf)
+    {
+        SyncBufFromString(s_working_dir_buf, sizeof(s_working_dir_buf), target.working_directory);
+    }
+    if (target.output_directory != s_output_dir_buf)
+    {
+        SyncBufFromString(s_output_dir_buf, sizeof(s_output_dir_buf), target.output_directory);
+    }
+
+    ImGui::Text(is_remote ? "Remote Target Executable:" : "Target Executable:");
+    if (ImGui::InputText("##TargetExe", s_target_exe_buf, sizeof(s_target_exe_buf)))
+    {
+        target.executable = s_target_exe_buf;
+        modified = true;
+    }
+
+    // Local file picker - disabled for remote targets until remote browsing exists.
+    ImGui::SameLine();
+    if (is_remote) ImGui::BeginDisabled();
+    if (ImGui::Button("Browse##TargetExe") && app_window)
+    {
+        app_window->ShowOpenFileDialog(
+            "Choose Target Executable", {}, "",
+            [&target](std::string const& path)
+            {
+                target.executable = path;
+                SyncBufFromString(s_target_exe_buf, sizeof(s_target_exe_buf), path);
+            });
+    }
+    if (is_remote) ImGui::EndDisabled();
+
+    SettingsManager& settings = SettingsManager::Get();
+    ProfilerSettings& prof_settings = settings.GetProfilerSettings();
+    if (!is_remote && !prof_settings.recent_targets.empty())
+    {
+        ImGui::SameLine();
+        if (ImGui::ArrowButton("##RecentTargetExe", ImGuiDir_Down))
+        {
+            ImGui::OpenPopup("RecentTargetsPopup");
+        }
+        if (ImGui::IsItemHovered())
+        {
+            ImGui::SetTooltip("Choose a recent target executable");
+        }
+        if (ImGui::BeginPopup("RecentTargetsPopup"))
+        {
+            for (auto const& t : prof_settings.recent_targets)
+            {
+                std::string short_name = t;
+                if (short_name.size() > 25)
+                {
+                    short_name = "..." + short_name.substr(short_name.size() - 22);
+                }
+                if (ImGui::Selectable(short_name.c_str(), false))
+                {
+                    target.executable = t;
+                    SyncBufFromString(s_target_exe_buf, sizeof(s_target_exe_buf), t);
+                    modified = true;
+                }
+                if (ImGui::IsItemHovered())
+                {
+                    ImGui::SetTooltip("%s", t.c_str());
+                }
+            }
+            ImGui::EndPopup();
+        }
+    }
+
+    ImGui::Text("Target Arguments:");
+    if (ImGui::InputText("##TargetArgs", s_target_args_buf, sizeof(s_target_args_buf)))
+    {
+        target.arguments = s_target_args_buf;
+        modified = true;
+    }
+
+    ImGui::Text("Working Directory:");
+    if (ImGui::InputText("##WorkDir", s_working_dir_buf, sizeof(s_working_dir_buf)))
+    {
+        target.working_directory = s_working_dir_buf;
+        modified = true;
+    }
+
+    ImGui::Text(is_remote ? "Remote Output Directory:" : "Output Directory:");
+    if (ImGui::InputText("##OutputDir", s_output_dir_buf, sizeof(s_output_dir_buf)))
+    {
+        target.output_directory = s_output_dir_buf;
+        modified = true;
+    }
+    // Local path picker - disabled for remote targets until remote browsing exists.
+    ImGui::SameLine();
+    if (is_remote) ImGui::BeginDisabled();
+    if (ImGui::Button("Browse##OutputDir") && app_window)
+    {
+        app_window->ShowPathPickerDialog(
+            "Choose Output Directory", "",
+            [&target](std::string const& path)
+            {
+                target.output_directory = path;
+                SyncBufFromString(s_output_dir_buf, sizeof(s_output_dir_buf), path);
+            });
+    }
+    if (is_remote) ImGui::EndDisabled();
+
+    ImGui::Checkbox("Open trace when profiling completes", &target.auto_load_trace);
+
+    return modified;
+}
+
+void RenderRawEnvVarsTab(std::map<std::string, std::string>& extra_env,
+                         std::vector<std::pair<std::string, std::string>> const& curated_env)
+{
+    ImGui::Text("Additional environment variables passed to the profiler process.");
+    ImGui::Separator();
+
+    // Table of existing entries
+    std::string key_to_remove;
+
+    if (ImGui::BeginTable("EnvVars", 3, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg |
+                          ImGuiTableFlags_Resizable))
+    {
+        ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_WidthFixed, 200.0f);
+        ImGui::TableSetupColumn("Value", ImGuiTableColumnFlags_WidthStretch);
+        ImGui::TableSetupColumn("##Actions", ImGuiTableColumnFlags_WidthFixed, 60.0f);
+        ImGui::TableHeadersRow();
+
+        for (auto& kv : extra_env)
+        {
+            ImGui::TableNextRow();
+            ImGui::TableSetColumnIndex(0);
+
+            // Check if this shadows a curated env var
+            bool shadows_curated = false;
+            for (auto const& ce : curated_env)
+            {
+                if (ce.first == kv.first)
+                {
+                    shadows_curated = true;
+                    break;
+                }
+            }
+
+            if (shadows_curated)
+            {
+                ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.0f, 1.0f), "%s", kv.first.c_str());
+                if (ImGui::IsItemHovered())
+                {
+                    ImGui::SetTooltip("Overrides a curated setting above");
+                }
+            }
+            else
+            {
+                ImGui::TextUnformatted(kv.first.c_str());
+            }
+
+            ImGui::TableSetColumnIndex(1);
+            char val_buf[512];
+            std::snprintf(val_buf, sizeof(val_buf), "%s", kv.second.c_str());
+            std::string input_id = "##env_val_" + kv.first;
+            ImGui::PushItemWidth(-1);
+            if (ImGui::InputText(input_id.c_str(), val_buf, sizeof(val_buf)))
+            {
+                kv.second = val_buf;
+            }
+            ImGui::PopItemWidth();
+
+            ImGui::TableSetColumnIndex(2);
+            std::string rm_id = "X##rm_" + kv.first;
+            if (ImGui::SmallButton(rm_id.c_str()))
+            {
+                key_to_remove = kv.first;
+            }
+        }
+
+        ImGui::EndTable();
+    }
+
+    if (!key_to_remove.empty())
+    {
+        extra_env.erase(key_to_remove);
+    }
+
+    // Add new entry
+    ImGui::Separator();
+    ImGui::Text("Add:");
+    ImGui::SameLine();
+    ImGui::PushItemWidth(180);
+    ImGui::InputText("##NewEnvName", s_new_env_name, sizeof(s_new_env_name));
+    ImGui::PopItemWidth();
+    ImGui::SameLine();
+    ImGui::Text("=");
+    ImGui::SameLine();
+    ImGui::PushItemWidth(200);
+    ImGui::InputText("##NewEnvValue", s_new_env_value, sizeof(s_new_env_value));
+    ImGui::PopItemWidth();
+    ImGui::SameLine();
+    if (ImGui::Button("+##AddEnv"))
+    {
+        if (std::strlen(s_new_env_name) > 0)
+        {
+            extra_env[s_new_env_name] = s_new_env_value;
+            s_new_env_name[0] = '\0';
+            s_new_env_value[0] = '\0';
+        }
+    }
+}
+
+std::string BuildCommandPreviewString(
+    LaunchConfig const& config,
+    std::string const& profiler_path,
+    std::vector<std::pair<std::string, std::string>> const& env_vars,
+    std::vector<std::string> const& argv)
+{
+    std::ostringstream preview;
+
+    for (auto const& kv : env_vars)
+    {
+        if (!kv.second.empty())
+        {
+            preview << kv.first << "=" << kv.second << " \\\n";
+        }
+    }
+
+    preview << profiler_path;
+    for (auto const& arg : argv)
+    {
+        preview << " " << arg;
+    }
+
+    // Add extra_argv
+    for (auto const& arg : config.extra_argv)
+    {
+        preview << " " << arg;
+    }
+
+    if (!config.target.output_directory.empty())
+    {
+        preview << " --output " << config.target.output_directory;
+    }
+    if (!config.target.executable.empty())
+    {
+        preview << " -- " << config.target.executable;
+    }
+    if (!config.target.arguments.empty())
+    {
+        preview << " " << config.target.arguments;
+    }
+
+    return preview.str();
+}
+
+void RenderCommandPreview(std::string const& preview_text)
+{
+    ImGui::AlignTextToFramePadding();
+    ImGui::Text("Command Preview");
+    VerticalSeparator();
+
+    if (ImGui::Button("Copy Command##CmdPreview"))
+    {
+        ImGui::SetClipboardText(preview_text.c_str());
+    }
+    ImGui::Separator();
+
+    ImGuiWindowFlags flags = ImGuiWindowFlags_HorizontalScrollbar;
+    ImGui::BeginChild("CmdPreview", ImVec2(0, 80), ImGuiChildFlags_Borders, flags);
+    ImGui::TextUnformatted(preview_text.c_str());
+    ImGui::EndChild();
+}
+
+bool RenderOutputConsole(
+    std::string const& output_text,
+    std::string const& error_message,
+    std::string const& state_label,
+    ConsoleStatusLevel state_level,
+    std::string const& detail,
+    bool&              auto_scroll)
+{
+    bool clear_requested = false;
+    ImGui::AlignTextToFramePadding();
+    ImGui::Text("Output");
+
+    // The badge color follows the semantic level, sourced from the theme so it
+    // stays consistent with the rest of the app (and tracks light/dark themes).
+    SettingsManager& settings = SettingsManager::Get();
+    Colors color_id = Colors::kTextMain;
+    switch (state_level)
+    {
+        case ConsoleStatusLevel::kSuccess: color_id = Colors::kTextSuccess; break;
+        case ConsoleStatusLevel::kError:   color_id = Colors::kTextError;   break;
+        case ConsoleStatusLevel::kIdle:
+        case ConsoleStatusLevel::kRunning:
+        default:                           color_id = Colors::kTextMain;    break;
+    }
+    ImVec4 state_color = ImGui::ColorConvertU32ToFloat4(settings.GetColor(color_id));
+
+    float spacing = 4.0f;
+    ImGui::SameLine(0.0f, spacing);
+    ImGui::TextColored(state_color, "[%s]", state_label.c_str());
+
+    // Optional phase detail (e.g. the remote download path) next to the badge.
+    if (!detail.empty())
+    {
+        ImGui::SameLine(0.0f, spacing);
+        ImGui::TextDisabled("%s", detail.c_str());
+    }
+
+    VerticalSeparator();
+
+    if (ImGui::Button("Copy##OutputCopy"))
+    {
+        std::string clip;
+        if (!error_message.empty())
+        {
+            clip = error_message + "\n\n";
+        }
+        clip += output_text;
+        ImGui::SetClipboardText(clip.c_str());
+    }
+
+    ImGui::SameLine();
+    if (ImGui::Button("Clear##OutputClear"))
+    {
+        clear_requested = true;
+    }
+
+    VerticalSeparator();
+    ImGui::Checkbox("Auto-scroll##Output", &auto_scroll);
+
+    ImGuiWindowFlags output_flags = ImGuiWindowFlags_HorizontalScrollbar;
+    float output_height = std::max(ImGui::GetContentRegionAvail().y - 30.0f, 60.0f);
+    ImGui::BeginChild("OutputText", ImVec2(0, output_height), true, output_flags);
+
+    if (!error_message.empty())
+    {
+        ImGui::TextColored(ImVec4(1.0f, 0.0f, 0.0f, 1.0f), "%s", error_message.c_str());
+        ImGui::Separator();
+    }
+
+    ImGui::TextUnformatted(output_text.c_str());
+
+    if (auto_scroll && ImGui::GetScrollY() >= ImGui::GetScrollMaxY())
+    {
+        ImGui::SetScrollHereY(1.0f);
+    }
+
+    ImGui::EndChild();
+
+    return clear_requested;
+}
+
+std::string RenderSavedProfileBar(
+    LaunchPresetManager& preset_mgr,
+    std::string const& profiler_id,
+    std::string& current_preset_name,
+    LaunchConfig& config,
+    IProfilerBackend const* backend,
+    AppWindow* /*app_window*/)
+{
+    std::string load_name;
+
+    std::vector<PresetInfo> presets = preset_mgr.ListPresets(profiler_id);
+
+    ImGui::Text("Saved Profile:");
+    ImGui::SameLine();
+
+    // Combo for selecting preset
+    ImGui::PushItemWidth(150);
+    if (ImGui::BeginCombo("##PresetCombo", current_preset_name.empty() ? "(none)" : current_preset_name.c_str()))
+    {
+        if (ImGui::Selectable("(none)", current_preset_name.empty()))
+        {
+            current_preset_name.clear();
+        }
+        for (auto const& p : presets)
+        {
+            bool selected = (p.name == current_preset_name);
+            if (ImGui::Selectable(p.name.c_str(), selected))
+            {
+                load_name = p.name;
+                current_preset_name = p.name;
+            }
+        }
+        ImGui::EndCombo();
+    }
+    ImGui::PopItemWidth();
+
+    ImGui::SameLine();
+    if (ImGui::Button("Save##Preset"))
+    {
+        if (!current_preset_name.empty())
+        {
+            preset_mgr.SavePreset(current_preset_name, config, backend);
+        }
+        else
+        {
+            ImGui::OpenPopup("SavePresetPopup");
+        }
+    }
+
+    ImGui::SameLine();
+    if (ImGui::Button("Save As...##Preset"))
+    {
+        ImGui::OpenPopup("SavePresetPopup");
+    }
+
+    ImGui::SameLine();
+    if (ImGui::Button("Delete##Preset"))
+    {
+        if (!current_preset_name.empty())
+        {
+            preset_mgr.DeletePreset(current_preset_name, profiler_id);
+            current_preset_name.clear();
+        }
+    }
+
+    ImGui::SameLine();
+    if (ImGui::Button("Reset Overrides"))
+    {
+        if (backend)
+        {
+            // Reset backend settings to defaults while keeping the
+            // selected rocprof-sys preset and target intact.
+            const_cast<IProfilerBackend*>(backend)->LoadSettings(jt::Json());
+            config.backend_payload = backend->SaveSettings();
+            config.extra_env.clear();
+            config.extra_argv.clear();
+        }
+    }
+    if (ImGui::IsItemHovered())
+    {
+        ImGui::SetTooltip("Clear all override settings to defaults. "
+                          "Keeps the selected preset and target.");
+    }
+
+    // Save-As popup
+    if (ImGui::BeginPopup("SavePresetPopup"))
+    {
+        ImGui::Text("Preset name:");
+        ImGui::InputText("##SaveName", s_save_preset_name, sizeof(s_save_preset_name));
+        if (ImGui::Button("OK##SavePreset") && std::strlen(s_save_preset_name) > 0)
+        {
+            current_preset_name = s_save_preset_name;
+            preset_mgr.SavePreset(current_preset_name, config, backend);
+            s_save_preset_name[0] = '\0';
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Cancel##SavePreset"))
+        {
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::EndPopup();
+    }
+
+    return load_name;
+}
+
+} // namespace View
+} // namespace RocProfVis

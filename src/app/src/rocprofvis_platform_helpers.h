@@ -31,5 +31,11 @@ struct ModifierState
 ModifierState
 get_os_modifier_state();
 
+// macOS only. Points the Vulkan loader (VK_ICD_FILENAMES / VK_DRIVER_FILES) at
+// the MoltenVK ICD manifest bundled in the .app. No-op if the manifest is
+// missing or either variable is already set. Call before Vulkan/GLFW init.
+void
+configure_bundled_vulkan_icd();
+
 }  // namespace Platform
 }  // namespace RocProfVis

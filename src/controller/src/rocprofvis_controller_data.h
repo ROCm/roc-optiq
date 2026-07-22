@@ -19,11 +19,11 @@ public:
 
     Data(Data const& other);
 
-    Data(Data&& other);
+    Data(Data&& other) noexcept;
 
     Data& operator=(Data const& other);
 
-    Data& operator=(Data&& other);
+    Data& operator=(Data&& other) noexcept;
 
     Data(rocprofvis_controller_primitive_type_t type);
 
@@ -45,6 +45,12 @@ public:
 
     rocprofvis_result_t SetObject(rocprofvis_handle_t* object);
 
+    // Stores an object the Data takes ownership of: the referenced Handle is
+    // deleted when this Data is reset/destroyed. Use for heap objects (e.g.
+    // per-row Arrays) whose lifetime is bound to the containing Array, as
+    // opposed to SetObject() which only borrows a pointer (e.g. pooled events).
+    rocprofvis_result_t SetOwnedObject(rocprofvis_handle_t* object);
+
     rocprofvis_result_t GetString(char* string, uint32_t* length);
 
     rocprofvis_result_t SetString(char const* string);
@@ -61,6 +67,7 @@ public:
 
 private:
     rocprofvis_controller_primitive_type_t m_type;
+    bool m_owns_object = false;
     union
     {
         rocprofvis_handle_t* m_object;

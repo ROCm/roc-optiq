@@ -89,6 +89,22 @@ class ProfileDatabase : public SqliteDatabase
                         rocprofvis_db_num_of_tracks_t num,
                         rocprofvis_db_track_selection_t tracks,
                         Future* object) override;
+        // worker method to read PMC time slice
+        // @param start - start timestamp of time slice 
+        // @param end - end timestamp of time slice 
+        // @param track - track ID
+        // @param left_neighbor - include the left neighbor of the time range
+        // @param right_neighbor - include the right neighbor of the time range 
+        // @param object - future object providing asynchronous execution mechanism   
+        // @return status of operation 
+        rocprofvis_dm_result_t  ReadTracePMCSlice(
+                        rocprofvis_dm_timestamp_t start,
+                        rocprofvis_dm_timestamp_t end,
+                        rocprofvis_dm_hashed_timestamp_tag_t tag,
+                        rocprofvis_db_track_selection_t track,
+                        bool left_neighbor,
+                        bool right_neighbor,
+                        Future* object) override;
         // worker method to execute database query
         // @param query - database query 
         // @param description - database description
@@ -218,7 +234,7 @@ class ProfileDatabase : public SqliteDatabase
                             guid_list_t run_for_db_instances);
         rocprofvis_dm_result_t ExecuteQueriesAsync(
                             std::vector<std::pair<DbInstance*, std::string>>& queries,
-                            std::vector<Future*>& futures,
+                            Future* parent,
                             rocprofvis_dm_handle_t handle,
                             RpvSqliteExecuteQueryCallback callback);
 

@@ -3,6 +3,8 @@
 
 #include "rocprofvis_annotation_view.h"
 #include "icons/rocprovfis_icon_defines.h"
+#include "rocprofvis_data_provider.h"
+#include "rocprofvis_event_manager.h"
 #include "rocprofvis_events.h"
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_utils.h"
@@ -38,13 +40,15 @@ AnnotationView::Render()
                              0.5f);
         ImGui::TextDisabled("No annotations.");
     }
-    else if(ImGui::BeginTable("StickyNotesTable", 4,
+    else if(ImGui::BeginTable("StickyNotesTable", 5,
                               ImGuiTableFlags_BordersOuter | ImGuiTableFlags_BordersV |
                                   ImGuiTableFlags_RowBg | ImGuiTableFlags_Resizable |
                                   ImGuiTableFlags_SizingStretchProp))
     {
         ImGui::TableSetupColumn("Title");
         ImGui::TableSetupColumn("Text");
+        ImGui::TableSetupColumn("Track", ImGuiTableColumnFlags_WidthFixed,
+                                ImGui::GetFontSize() * 10.0f);
         ImGui::TableSetupColumn("Time", ImGuiTableColumnFlags_WidthFixed,
                                 ImGui::GetFontSize() * 12.0f);
         ImGui::TableSetupColumn("Visible", ImGuiTableColumnFlags_WidthFixed,
@@ -93,7 +97,8 @@ AnnotationView::Render()
             {
                 m_selected_note_id = note.GetID();
                 auto event         = std::make_shared<NavigationEvent>(
-                    note.GetVMinX(), note.GetVMaxX(), note.GetYOffset(), true);
+                    note.GetVMinX(), note.GetVMaxX(), note.GetYOffset(), true,
+                    note.GetTrackId());
                 EventManager::GetInstance()->AddEvent(event);
             }
             ImGui::PopStyleVar();
@@ -111,6 +116,29 @@ AnnotationView::Render()
             ElidedText(note_preview.c_str(), ImGui::GetContentRegionAvail().x);
             ImGui::PopID();
 
+            // Track column: the bound track's display name, or a placeholder
+            // for unbound legacy notes. Match the Text column's vertical offset
+            // so ElidedText lines up with the other columns.
+            ImGui::TableNextColumn();
+            ImGui::SetCursorPosY(ImGui::GetCursorPosY() +
+                                 ImGui::GetStyle().FramePadding.y);
+            const std::string track_name =
+                m_data_provider.DataModel().BuildTrackName(note.GetTrackId());
+            // Binding finalizes on drop; grey the column and keep the value.
+            const bool note_dragging = note.IsDragging();
+            if(note_dragging) ImGui::BeginDisabled();
+            if(track_name.empty())
+            {
+                ImGui::TextDisabled("Unbound");
+            }
+            else
+            {
+                ImGui::PushID("note_track");
+                ElidedText(track_name.c_str(), ImGui::GetContentRegionAvail().x);
+                ImGui::PopID();
+            }
+            if(note_dragging) ImGui::EndDisabled();
+
             // Time column
             ImGui::TableNextColumn();
             ImGui::AlignTextToFramePadding();
@@ -118,12 +146,16 @@ AnnotationView::Render()
                                         true);
             ImGui::TextUnformatted(time_label.c_str());
 
-            // Visibility column
+            // Visibility column. When the bound track is hidden the note is
+            // force-hidden on the timeline, so disable (grey out) the toggle.
             ImGui::TableNextColumn();
-            bool        visible     = note.IsVisible();
-            std::string checkbox_id = "##visible_" + std::to_string(note.GetID());
+            bool        visible       = note.IsVisible();
+            const bool  track_hidden  = note.IsTrackHidden();
+            std::string checkbox_id   = "##visible_" + std::to_string(note.GetID());
+            if(track_hidden) ImGui::BeginDisabled();
             ImGui::Checkbox(checkbox_id.c_str(), &visible);
-            if(visible != note.IsVisible()) note.SetVisibility(visible);
+            if(track_hidden) ImGui::EndDisabled();
+            if(!track_hidden && visible != note.IsVisible()) note.SetVisibility(visible);
 
             ImGui::PopID();
         }

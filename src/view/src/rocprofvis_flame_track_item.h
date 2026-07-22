@@ -9,7 +9,6 @@
 #include <memory>
 #include <string>
 #include <vector>
-#include "rocprofvis_time_to_pixel.h"
 
 namespace RocProfVis
 {
@@ -19,55 +18,32 @@ namespace View
 class TimelineSelection;
 class FlameTrackItem;
 class TimePixelTransform;
+class TimelineTrackOptions;
+class EventTrackOptions;
+class QueueTrackOptions;
 class MeasurementController;
-
-enum class EventColorMode
-{
-    kNone,
-    kByEventName,
-    kByTimeLevel,
-    __kCount
-};
-
-class FlameTrackProjectSettings : public ProjectSetting
-{
-public:
-    FlameTrackProjectSettings(const std::string& project_id, FlameTrackItem& track_item);
-    ~FlameTrackProjectSettings() override;
-    void ToJson() override;
-    bool Valid() const override;
-
-    EventColorMode ColorEvents() const;
-    bool           CompactMode() const;
-
-private:
-    FlameTrackItem& m_track_item;
-};
 
 class FlameTrackItem : public TrackItem
 {
-    friend FlameTrackProjectSettings;
-
 public:
-    FlameTrackItem(DataProvider&                          dp,
-                   std::shared_ptr<TimelineSelection>     timeline_selection,
-                   std::shared_ptr<MeasurementController> measurement,
-                   uint64_t                               track_id,
-                   std::shared_ptr<TimePixelTransform>    time_to_pixel_manager);
+    FlameTrackItem(DataProvider& dp, uint64_t track_id,
+                   TimelineTrackOptions&                  track_options,
+                   std::shared_ptr<TimePixelTransform>    time_to_pixel_manager,
+                   std::shared_ptr<TimelineSelection>     timeline_selection,                   
+                   std::shared_ptr<MeasurementController> measurement);
     ~FlameTrackItem();
 
+    void Update() override;
     bool ReleaseData() override;
 
     // Called to calculate max event label width for all flame track items.
     // Call after font size or style changes.
     static void CalculateMaxEventLabelWidth();
-    bool        IsCompactMode() const override { return m_compact_mode; }
+    bool        IsCompactMode() const override;
 
 protected:
     void  RenderChart(float graph_width) override;
-    void  RenderMetaAreaOptions() override;
     void  RenderMetaAreaExpand() override;
-    void  RenderSecondaryMetaPill(const ImVec2& content_size) override;
 
 private:
     struct ChildEventInfo
@@ -80,7 +56,7 @@ private:
     
     struct ChartItem
     {
-        TraceEvent    event;
+        TraceEvent                  event;
         bool                        selected;
         bool                        highlighted;
         size_t                      name_hash;
@@ -90,28 +66,23 @@ private:
     void HandleTimelineSelectionChanged(std::shared_ptr<RocEvent> e);
     void HandleTimelineHighlightChanged(std::shared_ptr<RocEvent> e);
 
-    void DrawBox(ImVec2 start_position, int boxplot_box_id, ChartItem& flame,
-                 float duration, ImDrawList* draw_list, bool use_highlight_color);
+    void DrawBox(ImVec2 start_position, ChartItem& flame, float duration,
+                 ImDrawList* draw_list, bool use_highlight_color);
 
     bool ExtractPointsFromData();
     bool ExtractChildInfo(ChartItem& item);
     bool ParseChildInfo(const std::string& combined_name, ChildEventInfo& out_info);
 
-    void RenderTooltip(ChartItem& chart_item, int color_index);
+    void RenderTooltip(ChartItem& chart_item, size_t color_index);
     void RecalculateTrackHeight();
-    
-    void RequestAnalysis() override;
 
-    std::vector<ChartItem>             m_chart_items;
-    EventColorMode                     m_event_color_mode;
-    ImVec2                             m_text_padding;
-    float                              m_level_height;
-    std::vector<uint64_t>              m_selected_event_id;
-    std::shared_ptr<TimelineSelection> m_timeline_selection;
+    std::vector<ChartItem>                 m_chart_items;
+    ImVec2                                 m_text_padding;
+    float                                  m_level_height;
+    std::vector<uint64_t>                  m_selected_event_id;
     std::shared_ptr<MeasurementController> m_measurement;
-    FlameTrackProjectSettings          m_flame_track_project_settings;
-    float                              m_min_level;
-    float                              m_max_level;
+    float                                  m_min_level;
+    float                                  m_max_level;
     // Used to enforce one click handling per render cycle.
     bool                            m_deferred_click_handled;
     bool                            m_has_drawn_tool_tip;
@@ -122,11 +93,12 @@ private:
 
     static float             s_max_event_label_width;
     static const std::string s_child_info_separator;
-    bool                     m_is_expanded;
-    bool                     m_compact_mode;
 
-    const AnalysisQueueUtilization* m_queue_utilization;
-    Pill                            m_queue_utilization_pill;
+    Pill* m_pill_analysis_queue;
+
+    // User configurable options. Underlying object is shared and owned by TrackItem.
+    EventTrackOptions* m_event_options;  // Always valid
+    QueueTrackOptions* m_queue_options;  // Valid for queue
 };
 
 }  // namespace View

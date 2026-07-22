@@ -27,7 +27,6 @@ class Graph;
 class Timeline;
 class Event;
 class Table;
-class Node;
 class SystemTable;
 class Summary;
 class SummaryMetrics;
@@ -37,6 +36,10 @@ class SystemTrace : public Trace
 {
 public:
     SystemTrace(const std::string& filename);
+
+    // Compare/combine: open several files as one trace. Each file becomes a source
+    // instance whose index is exposed via kRPVControllerTrackInstanceId.
+    SystemTrace(const std::vector<std::string>& filenames);
 
     virtual ~SystemTrace();
 
@@ -83,8 +86,8 @@ public:
     std::mutex& GetTableMutex(rocprofvis_dm_table_use_case_enum_t use_case);
 
 private:
+    std::vector<std::string>                       m_files;  // >1 entry => combined/compare load
     std::vector<Track*>                            m_tracks;
-    std::vector<Node*>                             m_nodes;
     Timeline*                                      m_timeline;
     SystemTable*                                   m_event_table;
     SystemTable*                                   m_sample_table;

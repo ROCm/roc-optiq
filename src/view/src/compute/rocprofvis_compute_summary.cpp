@@ -571,7 +571,7 @@ ComputeTopKernels::RenderPieChart(const ImPlotStyle& plot_style, TimeFormat time
         if(m_hovered_idx)
         {
             ImPlot::PushColormap(m_settings.GetContrastColormapName());
-            ImGui::PushID(1);
+            ImGui::PushID(m_settings.GetContrastColormapName());
             ImPlot::PlotPieChart(
                 &m_kernel_pie.labels[m_hovered_idx.value()],
                 &m_kernel_pie.metric_sets[m_kernel_pie.selected_metric]

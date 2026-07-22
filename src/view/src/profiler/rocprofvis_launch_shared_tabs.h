@@ -32,12 +32,13 @@ void BeginLaunchCard(const char* id);
 void EndLaunchCard();
 
 // Card title with a leading icon (from the icon font; pass nullptr for none),
-// an accent bar, and an optional dimmed subtitle. Call immediately after
-// BeginLaunchCard.
-void LaunchCardHeader(const char* icon, const char* title, const char* subtitle = nullptr);
+// an accent bar, and an optional trailing "(?)" help tooltip. Call immediately
+// after BeginLaunchCard.
+void LaunchCardHeader(const char* icon, const char* title, const char* help = nullptr);
 
-// Lightweight accent-colored group label used to separate blocks inside a card.
-void LaunchSubHeader(const char* text);
+// Lightweight accent-colored group label (with an optional trailing "(?)" help
+// tooltip) used to separate blocks inside a card.
+void LaunchSubHeader(const char* text, const char* help = nullptr);
 
 // iOS-style animated on/off switch. Returns true on the frame it is toggled.
 // Draws the label (and keeps it clickable) to the right of the switch.

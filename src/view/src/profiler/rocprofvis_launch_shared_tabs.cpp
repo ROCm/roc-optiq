@@ -39,6 +39,25 @@ constexpr float kToggleWidthScale   = 1.75f;  // of toggle height
 constexpr float kToggleAnimSpeed    = 10.0f;
 constexpr float kToggleKnobInset    = 2.0f;   // knob padding inside the track
 
+// Card interior vertical padding (horizontal padding still follows the app
+// style). Tighter than the app default so the stacked cards read as one compact
+// form instead of a column of tall panels.
+constexpr float kCardPadY = 5.0f;
+
+// A dimmed "(?)" that shows a wrapped tooltip on hover.
+void HelpTip(const char* tooltip)
+{
+    ImGui::SameLine();
+    ImGui::TextDisabled("(?)");
+    if (ImGui::BeginItemTooltip())
+    {
+        ImGui::PushTextWrapPos(ImGui::GetFontSize() * 25.0f);
+        ImGui::TextUnformatted(tooltip);
+        ImGui::PopTextWrapPos();
+        ImGui::EndTooltip();
+    }
+}
+
 // Linear blend between two packed colors (t in [0,1]).
 ImU32 LerpColor(ImU32 a, ImU32 b, float t)
 {
@@ -58,7 +77,7 @@ void BeginLaunchCard(const char* id)
 
     ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, def.ChildRounding);
     ImGui::PushStyleVar(ImGuiStyleVar_ChildBorderSize, 1.0f);
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, def.WindowPadding);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(def.WindowPadding.x, kCardPadY));
     ImGui::PushStyleColor(ImGuiCol_ChildBg, settings.GetColor(Colors::kBgPanel));
     ImGui::PushStyleColor(ImGuiCol_Border, settings.GetColor(Colors::kPanelBorderSubtle));
 
@@ -71,10 +90,10 @@ void EndLaunchCard()
     ImGui::EndChild();
     ImGui::PopStyleColor(2);
     ImGui::PopStyleVar(3);
-    ImGui::Dummy(ImVec2(0.0f, ImGui::GetStyle().ItemSpacing.y));
+    // Cards are separated by the surrounding item spacing only.
 }
 
-void LaunchCardHeader(const char* icon, const char* title, const char* subtitle)
+void LaunchCardHeader(const char* icon, const char* title, const char* help)
 {
     SettingsManager& settings = SettingsManager::Get();
     FontManager&     fonts    = settings.GetFontManager();
@@ -108,15 +127,11 @@ void LaunchCardHeader(const char* icon, const char* title, const char* subtitle)
     ImGui::PopStyleColor();
     ImGui::PopFont();
 
-    if (subtitle && subtitle[0])
+    if (help && help[0])
     {
-        ImGui::PushStyleColor(ImGuiCol_Text, settings.GetColor(Colors::kTextDim));
-        ImGui::TextUnformatted(subtitle);
-        ImGui::PopStyleColor();
+        HelpTip(help);
     }
     ImGui::Unindent(kAccentBarWidth + kAccentBarGap);
-
-    ImGui::Spacing();
 }
 
 void Chip(const char* label, ImU32 accent_color)
@@ -228,13 +243,17 @@ void StatusPill(const char* label, ImU32 bg_color)
     ImGui::Dummy(size);
 }
 
-void LaunchSubHeader(const char* text)
+void LaunchSubHeader(const char* text, const char* help)
 {
     SettingsManager& settings = SettingsManager::Get();
     ImGui::Spacing();
     ImGui::PushStyleColor(ImGuiCol_Text, settings.GetColor(Colors::kAccent));
     ImGui::TextUnformatted(text);
     ImGui::PopStyleColor();
+    if (help && help[0])
+    {
+        HelpTip(help);
+    }
 }
 
 bool ToggleSwitch(const char* label, bool* value)
@@ -474,10 +493,12 @@ void RenderCommandPreview(std::string const& preview_text)
     }
 
     // Monospaced, softly-rounded panel so the command reads like a terminal.
-    ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 8.0f);
+    // Fills the remaining height of its container (the launcher's preview panel).
+    ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding,
+                        settings.GetDefaultStyle().ChildRounding);
     ImGui::PushStyleColor(ImGuiCol_ChildBg, settings.GetColor(Colors::kBgMain));
     ImGuiWindowFlags flags = ImGuiWindowFlags_HorizontalScrollbar;
-    ImGui::BeginChild("CmdPreview", ImVec2(0, 78), ImGuiChildFlags_Borders, flags);
+    ImGui::BeginChild("CmdPreview", ImVec2(0.0f, 0.0f), ImGuiChildFlags_Borders, flags);
     ImGui::PushFont(fonts.GetFont(FontType::kCode), 0.0f);
     ImGui::TextUnformatted(preview_text.c_str());
     ImGui::PopFont();

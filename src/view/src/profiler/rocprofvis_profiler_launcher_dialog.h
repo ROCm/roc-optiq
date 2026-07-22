@@ -144,6 +144,10 @@ private:
     bool m_show_run_view;
     // Whether the separate "Advanced Options" window is open.
     bool m_show_advanced_window;
+    // Width (px) of the command-preview panel; user-adjustable via the splitter.
+    // Seeded to ~1/3 of the form width the first time the content is laid out.
+    float m_preview_width;
+    bool  m_preview_width_initialized;
     // "Add" edit-box buffers for the Arguments & Environment panel.
     std::string m_arg_input;
     std::string m_env_name_input;

@@ -29,6 +29,14 @@ namespace View
 
 namespace
 {
+// Configure-view split: the form and the command-preview panel are divided by a
+// draggable splitter, seeded to a 3:2 (form:preview) ratio on first open and
+// clamped so neither side collapses.
+constexpr float kSplitterWidth       = 6.0f;
+constexpr float kMinPreviewWidth     = 300.0f;
+constexpr float kMinFormWidth        = 320.0f;
+constexpr float kInitialPreviewRatio = 2.0f / 5.0f;
+
 // A filled, accent-colored primary button used for the main call-to-action
 // (Launch / Cancel) so it stands out from the neutral secondary buttons.
 bool AccentButton(const char* label, const ImVec2& size)
@@ -57,6 +65,8 @@ ProfilerLauncherDialog::ProfilerLauncherDialog(AppWindow* app_window)
     , m_show_window(false)
     , m_show_run_view(false)
     , m_show_advanced_window(false)
+    , m_preview_width(420.0f)
+    , m_preview_width_initialized(false)
     , m_arg_input()
     , m_env_name_input()
     , m_env_value_input()
@@ -219,15 +229,28 @@ void ProfilerLauncherDialog::RenderConfigureView()
     }
     ImGui::Spacing();
 
-    // Reserve bottom area for warnings + command preview + launch buttons. The
-    // live output console is no longer here - it moved to the run view.
-    float bottom_reserve = 200.0f;
-    ImGui::BeginChild("MainPane", ImVec2(0, -bottom_reserve), true);
+    // Reserve exactly the height the bottom block (warnings + error + separator
+    // + buttons) needs, so it stays pinned to the bottom with no dead space.
+    auto warnings = backend->GetWarnings(m_config);
+
+    const ImGuiStyle& style  = ImGui::GetStyle();
+    const float       line_h = ImGui::GetTextLineHeightWithSpacing();
+    float bottom_reserve = style.ItemSpacing.y            // gap after the form
+                         + style.ItemSpacing.y + 1.0f     // separator line + gap to buttons
+                         + ImGui::GetFrameHeight();        // button row (no trailing spacing)
+    bottom_reserve += warnings.size() * line_h;
+    if (!m_error_message.empty())
+    {
+        float wrap_w = ImGui::GetContentRegionAvail().x;
+        bottom_reserve += ImGui::CalcTextSize(m_error_message.c_str(), nullptr, false,
+                                              wrap_w).y + style.ItemSpacing.y;
+    }
+
+    ImGui::BeginChild("MainPane", ImVec2(0, -bottom_reserve), ImGuiChildFlags_None);
     RenderMainContent();
     ImGui::EndChild();
 
     // Warnings from backend
-    auto warnings = backend->GetWarnings(m_config);
     if (!warnings.empty())
     {
         for (auto const& w : warnings)
@@ -252,9 +275,6 @@ void ProfilerLauncherDialog::RenderConfigureView()
             ImGui::TextColored(color, "%s%s", prefix, w.text.c_str());
         }
     }
-
-    // Command preview
-    RenderCommandPreview(m_execution_cache.command_preview);
 
     // Pre-launch validation / immediate launch errors surface here since the
     // output console (which normally shows them) lives in the run view.
@@ -475,26 +495,8 @@ void ProfilerLauncherDialog::RenderMainContent()
 {
     IProfilerBackend const* backend = m_backends[m_backend_index].get();
 
-#ifdef ROCPROFVIS_ENABLE_REMOTE
-    // --- Where to run card (local vs. SSH) --- first: pick the machine before
-    // the paths, since a path only makes sense once the target host is known.
-    BeginLaunchCard("card_connection");
-    LaunchCardHeader(ICON_CHAIN, "Where to run");
-    RenderRemoteSection();
-    EndLaunchCard();
-#endif
-
-    // --- Target card (what to profile) ---
-    BeginLaunchCard("card_target");
-    LaunchCardHeader(ICON_OPEN, "Target",
-                     "The program to profile and where its results go");
-    RenderTargetSection(m_config.target, m_config.connection, m_app_window);
-    EndLaunchCard();
-
-    // Backend tabs are split by the backend into "general" (everyday controls)
-    // and "advanced" (power-user detail). General options and the raw env vars
-    // stay always-visible; everything else lives under a collapsible "Advanced
-    // Options" so the common path stays clean.
+    // Backend tabs are split into "general" (shown here) and "advanced" (opened
+    // in a separate window), so the common path stays clean.
     auto tabs = backend->GetTabs(m_config.tool_id);
     std::vector<TabDescriptor const*> general_tabs;
     std::vector<TabDescriptor const*> advanced_tabs;
@@ -503,7 +505,42 @@ void ProfilerLauncherDialog::RenderMainContent()
         (tab.advanced ? advanced_tabs : general_tabs).push_back(&tab);
     }
 
-    // --- Profiling Options card (the everyday controls) ---
+    // The configuration form goes on the left; the live command preview fills a
+    // dedicated full-height panel on the right, with a draggable splitter to
+    // adjust the preview width.
+    const float avail = ImGui::GetContentRegionAvail().x;
+
+    // Seed the split on first layout; afterwards the width follows the splitter.
+    if (!m_preview_width_initialized && avail > 0.0f)
+    {
+        m_preview_width             = (avail - kSplitterWidth) * kInitialPreviewRatio;
+        m_preview_width_initialized = true;
+    }
+
+    float max_preview = avail - kSplitterWidth - kMinFormWidth;
+    if (max_preview < kMinPreviewWidth)
+    {
+        max_preview = kMinPreviewWidth;
+    }
+    m_preview_width  = std::clamp(m_preview_width, kMinPreviewWidth, max_preview);
+    float left_w     = avail - kSplitterWidth - m_preview_width;
+
+    // --- Left: the configuration form (scrolls if it overflows) ---
+    ImGui::BeginChild("cfg_form", ImVec2(left_w, 0.0f), ImGuiChildFlags_None);
+#ifdef ROCPROFVIS_ENABLE_REMOTE
+    // Where to run first: pick the machine before the paths.
+    BeginLaunchCard("card_connection");
+    LaunchCardHeader(ICON_CHAIN, "Where to run");
+    RenderRemoteSection();
+    EndLaunchCard();
+#endif
+
+    BeginLaunchCard("card_target");
+    LaunchCardHeader(ICON_OPEN, "Target",
+                     "The program to profile and where its results go");
+    RenderTargetSection(m_config.target, m_config.connection, m_app_window);
+    EndLaunchCard();
+
     BeginLaunchCard("card_general");
     LaunchCardHeader(ICON_CHART_BAR, "Profiling Options");
     if (general_tabs.size() == 1)
@@ -527,23 +564,54 @@ void ProfilerLauncherDialog::RenderMainContent()
     }
     EndLaunchCard();
 
-    // --- Arguments & Environment (single panel) ---
     BeginLaunchCard("card_inputs");
     LaunchCardHeader(ICON_LIST, "Arguments & Environment");
     RenderArgsEnvPanel();
     EndLaunchCard();
 
-    // --- Advanced Options, at the very bottom of all the options. Deeper,
-    // less-common settings open in their own window to keep this view focused.
     if (!advanced_tabs.empty())
     {
         if (ImGui::Button("Advanced Options...", ImVec2(180, 0)))
         {
             m_show_advanced_window = true;
         }
-        ImGui::SameLine();
-        ImGui::TextDisabled("Sampling, ROCm domains, Perfetto, parallelism, logging");
+        if (ImGui::IsItemHovered())
+        {
+            ImGui::SetTooltip("Sampling, ROCm domains, Perfetto, parallelism, logging");
+        }
     }
+    ImGui::EndChild();
+
+    // --- Draggable splitter to resize the preview panel ---
+    SettingsManager& settings = SettingsManager::Get();
+    ImGui::SameLine(0.0f, 0.0f);
+    ImGui::PushStyleColor(ImGuiCol_Button, settings.GetColor(Colors::kTransparent));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, settings.GetColor(Colors::kSplitterColor));
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive, settings.GetColor(Colors::kAccent));
+    ImGui::Button("##cfg_splitter", ImVec2(kSplitterWidth, ImGui::GetContentRegionAvail().y));
+    if (ImGui::IsItemHovered() || ImGui::IsItemActive())
+    {
+        ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeEW);
+    }
+    if (ImGui::IsItemActive())
+    {
+        // Dragging right widens the form (narrows the preview) and vice versa.
+        m_preview_width -= ImGui::GetIO().MouseDelta.x;
+    }
+    ImGui::PopStyleColor(3);
+    ImGui::SameLine(0.0f, 0.0f);
+
+    // --- Right: full-height command preview panel ---
+    ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, settings.GetDefaultStyle().ChildRounding);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, settings.GetDefaultStyle().WindowPadding);
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, settings.GetColor(Colors::kBgPanel));
+    ImGui::PushStyleColor(ImGuiCol_Border, settings.GetColor(Colors::kPanelBorderSubtle));
+    ImGui::BeginChild("cfg_preview", ImVec2(0.0f, 0.0f),
+                      ImGuiChildFlags_Borders | ImGuiChildFlags_AlwaysUseWindowPadding);
+    RenderCommandPreview(m_execution_cache.command_preview);
+    ImGui::EndChild();
+    ImGui::PopStyleColor(2);
+    ImGui::PopStyleVar(2);
 }
 
 void ProfilerLauncherDialog::RenderAdvancedWindow()
@@ -628,8 +696,8 @@ void ProfilerLauncherDialog::RenderArgsEnvPanel()
     };
 
     // ===== Command line arguments (lead - they read as a one-liner) =====
-    LaunchSubHeader("COMMAND LINE ARGUMENTS");
-    ImGui::TextDisabled("Passed to the profiler, one entry at a time (flag or flag + value).");
+    LaunchSubHeader("COMMAND LINE ARGUMENTS",
+                    "Passed to the profiler, one entry at a time (a flag, or a flag + value).");
 
     bool add_arg = false;
     ImGui::SetNextItemWidth(-90.0f);
@@ -695,8 +763,8 @@ void ProfilerLauncherDialog::RenderArgsEnvPanel()
     ImGui::Spacing();
 
     // ===== Environment variables (name = value, grow vertically) =====
-    LaunchSubHeader("ENVIRONMENT VARIABLES");
-    ImGui::TextDisabled("Extra variables set for the profiler process.");
+    LaunchSubHeader("ENVIRONMENT VARIABLES",
+                    "Extra environment variables set for the profiler process.");
 
     bool add_env = false;
     ImGui::SetNextItemWidth(200.0f);

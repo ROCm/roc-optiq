@@ -155,6 +155,16 @@ constexpr float kListW       = 340.0f;  // comma-separated list text
 constexpr float kCheckboxColWidth = 190.0f;
 constexpr int   kCheckboxMaxCols  = 4;
 
+// General tab: the preset row and the side-by-side OUTPUT FORMAT / TRACE WINDOW
+// split (output takes a narrow fixed column so the trace window keeps Delay and
+// Duration on one line).
+constexpr float kPresetLabelW    = 110.0f;
+constexpr float kPresetComboW    = 240.0f;
+constexpr float kOutputColW      = 160.0f;
+constexpr float kTraceInlineNumW = 85.0f;   // Delay / Duration inputs (share a row)
+constexpr float kTraceFieldGapX  = 16.0f;   // gap between Delay and Duration
+constexpr float kTraceRegionTrail = 26.0f;  // width reserved for the Region (?)
+
 // Renders a label in a fixed-width column and sizes the next item so a whole
 // column of controls lines up regardless of label length.
 void FieldLabel(const char* label, float item_w, float label_w = kFieldLabelW)
@@ -211,6 +221,24 @@ bool AnyEnabled(std::map<std::string, bool> const& m)
             return true;
     }
     return false;
+}
+
+const ImVec4 kPresetLockColor(1.0f, 0.8f, 0.0f, 1.0f);  // amber "locked by preset"
+
+// Advanced tabs are read-only while a built-in preset is active. Draws the
+// "controlled by preset" banner (when one is set) and opens a BeginDisabled()
+// scope that the caller closes with ImGui::EndDisabled().
+void BeginPresetLockedSection(std::string const& preset)
+{
+    const bool has_preset = !preset.empty();
+    if (has_preset)
+    {
+        ImGui::TextColored(kPresetLockColor,
+                           "Preset \"%s\" controls these settings.", preset.c_str());
+        ImGui::TextDisabled("Clear the preset or use Raw Env Vars to override.");
+        ImGui::Spacing();
+    }
+    ImGui::BeginDisabled(has_preset);
 }
 
 // ==================================================================================
@@ -506,8 +534,8 @@ std::vector<TabDescriptor> RocprofSysBackend::GetTabs(std::string const& tool_id
 {
     std::vector<TabDescriptor> tabs;
 
-    // General: the everyday controls (preset, trace/profile format, collection
-    // toggles, trace delay/duration/region). Always visible in the launcher.
+    // General: the everyday controls (preset, output format, trace window).
+    // Always visible in the launcher.
     tabs.push_back({"general", "General", [this]() {
         const_cast<RocprofSysBackend*>(this)->RenderBackendsTab();
     }, false});
@@ -725,9 +753,8 @@ void RocprofSysBackend::FlattenToExecution(
         env_out.emplace_back("ROCPROFSYS_OUTPUT_PATH", config.target.output_directory);
     }
 
-    // General (skip ROCPROFSYS_MODE — use individual backend toggles instead)
-    // Legacy mode field is no longer emitted; behavior is driven by
-    // ROCPROFSYS_TRACE + ROCPROFSYS_USE_SAMPLING toggles.
+    // Legacy ROCPROFSYS_MODE is intentionally not emitted; the individual
+    // backend toggles drive behavior instead.
     emit_double("ROCPROFSYS_TRACE_DELAY", m_settings.trace_delay, defaults.trace_delay);
     emit_double("ROCPROFSYS_TRACE_DURATION",
                 m_settings.trace_duration, defaults.trace_duration);
@@ -1056,35 +1083,25 @@ std::string RocprofSysBackend::ExportCfg() const
 
 void RocprofSysBackend::RenderGeneralTraceOptions()
 {
-    // Delay + Duration side by side to use the horizontal space.
-    if (ImGui::BeginTable("timing_grid", 2, ImGuiTableFlags_None))
-    {
-        ImGui::TableNextColumn();
-        ImGui::AlignTextToFramePadding();
-        ImGui::TextUnformatted("Delay (s)");
-        ImGui::SameLine();
-        ImGui::SetNextItemWidth(kNumW);
-        ImGui::InputDouble("##TraceDelay", &m_settings.trace_delay, 0.0, 0.0, "%.2f");
-        HelpMarker("ROCPROFSYS_TRACE_DELAY",
-                   "Seconds before collection starts (0 = immediate)");
+    // Delay + Duration share a row; Region takes the next.
+    ImGui::AlignTextToFramePadding();
+    ImGui::TextUnformatted("Delay (s)");
+    ImGui::SameLine();
+    ImGui::SetNextItemWidth(kTraceInlineNumW);
+    ImGui::InputDouble("##TraceDelay", &m_settings.trace_delay, 0.0, 0.0, "%.2f");
 
-        ImGui::TableNextColumn();
-        ImGui::AlignTextToFramePadding();
-        ImGui::TextUnformatted("Duration (s)");
-        ImGui::SameLine();
-        ImGui::SetNextItemWidth(kNumW);
-        ImGui::InputDouble("##TraceDuration", &m_settings.trace_duration, 0.0, 0.0, "%.2f");
-        HelpMarker("ROCPROFSYS_TRACE_DURATION",
-                   "Duration of collection in seconds (0 = unlimited)");
-
-        ImGui::EndTable();
-    }
+    ImGui::SameLine(0.0f, kTraceFieldGapX);
+    ImGui::AlignTextToFramePadding();
+    ImGui::TextUnformatted("Duration (s)");
+    ImGui::SameLine();
+    ImGui::SetNextItemWidth(kTraceInlineNumW);
+    ImGui::InputDouble("##TraceDuration", &m_settings.trace_duration, 0.0, 0.0, "%.2f");
 
     ImGui::AlignTextToFramePadding();
-    ImGui::TextUnformatted("Trace region");
+    ImGui::TextUnformatted("Region");
     ImGui::SameLine();
-    ImGui::SetNextItemWidth(kListW);
-    InputTextStringWithHint("##TraceRegion", "ROCTX region names (comma-separated)",
+    ImGui::SetNextItemWidth(-kTraceRegionTrail);
+    InputTextStringWithHint("##TraceRegion", "ROCTX regions (comma-separated)",
                             m_settings.trace_region);
     HelpMarker("ROCPROFSYS_TRACE_REGION",
                "Comma-separated ROCTX region names for selective tracing");
@@ -1095,12 +1112,12 @@ void RocprofSysBackend::RenderBackendsTab()
     // Headline choice: the built-in rocprof-sys preset.
     ImGui::AlignTextToFramePadding();
     ImGui::TextUnformatted("Preset");
-    ImGui::SameLine(110.0f);
+    ImGui::SameLine(kPresetLabelW);
 
     const char* preset_label =
         m_settings.rocprof_preset.empty() ? "Custom" : m_settings.rocprof_preset.c_str();
 
-    ImGui::SetNextItemWidth(240.0f);
+    ImGui::SetNextItemWidth(kPresetComboW);
     if (ImGui::BeginCombo("##RocprofPresetCombo", preset_label))
     {
         if (ImGui::Selectable("Custom", m_settings.rocprof_preset.empty()))
@@ -1128,58 +1145,45 @@ void RocprofSysBackend::RenderBackendsTab()
 
     bool has_preset = !m_settings.rocprof_preset.empty();
 
-    // Show the selected preset's description inline so its intent is visible
-    // (not hidden behind the combo tooltip).
-    const char* preset_desc = nullptr;
-    for (size_t i = 0; i < kRocprofSysPresetsCount; i++)
+    // Show the active preset's description inline so its intent is visible.
+    if (has_preset)
     {
-        if (m_settings.rocprof_preset == kRocprofSysPresets[i].name)
+        for (size_t i = 0; i < kRocprofSysPresetsCount; i++)
         {
-            preset_desc = kRocprofSysPresets[i].description;
-            break;
+            if (m_settings.rocprof_preset == kRocprofSysPresets[i].name)
+            {
+                ImGui::PushStyleColor(ImGuiCol_Text,
+                                      ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
+                ImGui::PushTextWrapPos(0.0f);
+                ImGui::TextWrapped("%s", kRocprofSysPresets[i].description);
+                ImGui::PopTextWrapPos();
+                ImGui::PopStyleColor();
+                break;
+            }
         }
     }
-    ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
-    ImGui::PushTextWrapPos(0.0f);
-    if (preset_desc != nullptr)
-    {
-        ImGui::TextWrapped("%s", preset_desc);
-    }
-    else
-    {
-        ImGui::TextWrapped("Custom - configure the options below manually.");
-    }
-    ImGui::PopTextWrapPos();
-    ImGui::PopStyleColor();
 
-    // Toggle laid out in the next free column of a 2-wide grid, with a help (?).
-    auto toggle_cell = [](const char* label, bool* value, const char* env,
-                          const char* help)
+    // Output format and the trace window sit side by side.
+    if (ImGui::BeginTable("general_split", 2, ImGuiTableFlags_None))
     {
+        ImGui::TableSetupColumn("##out", ImGuiTableColumnFlags_WidthFixed, kOutputColW);
+        ImGui::TableSetupColumn("##trace", ImGuiTableColumnFlags_WidthStretch);
+
         ImGui::TableNextColumn();
-        ToggleSwitch(label, value);
-        HelpMarker(env, help);
-    };
+        LaunchSubHeader("OUTPUT FORMAT");
+        ToggleSwitch("Perfetto trace", &m_settings.trace_backend);
+        HelpMarker("ROCPROFSYS_TRACE", "Enable the Perfetto trace backend");
+        ToggleSwitch("ROCpd database", &m_settings.use_rocpd);
+        HelpMarker("ROCPROFSYS_USE_ROCPD", "Enable ROCpd SQLite output");
 
-    // --- Output format (always editable) ---
-    LaunchSubHeader("OUTPUT FORMAT");
-    if (ImGui::BeginTable("out_fmt_grid", 2, ImGuiTableFlags_None))
-    {
-        toggle_cell("Perfetto trace", &m_settings.trace_backend,
-                    "ROCPROFSYS_TRACE", "Enable the Perfetto trace backend");
-        toggle_cell("ROCpd database", &m_settings.use_rocpd,
-                    "ROCPROFSYS_USE_ROCPD", "Enable ROCpd SQLite output");
+        ImGui::TableNextColumn();
+        ImGui::BeginDisabled(has_preset);
+        LaunchSubHeader("TRACE WINDOW");
+        RenderGeneralTraceOptions();
+        ImGui::EndDisabled();
+
         ImGui::EndTable();
     }
-
-    // Summary profile and the collection toggles now live under Advanced
-    // (Sampling / Process Sampling / Config & Logging) to keep General lean.
-
-    // --- Trace window ---
-    ImGui::BeginDisabled(has_preset);
-    LaunchSubHeader("TRACE WINDOW");
-    RenderGeneralTraceOptions();
-    ImGui::EndDisabled();
 
     if (has_preset)
     {
@@ -1192,16 +1196,7 @@ void RocprofSysBackend::RenderBackendsTab()
 
 void RocprofSysBackend::RenderSamplingTab()
 {
-    bool has_preset = !m_settings.rocprof_preset.empty();
-    if (has_preset)
-    {
-        ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.0f, 1.0f),
-            "Preset \"%s\" controls these settings.",
-            m_settings.rocprof_preset.c_str());
-        ImGui::TextDisabled("Clear the preset or use Raw Env Vars to override.");
-        ImGui::Spacing();
-    }
-    ImGui::BeginDisabled(has_preset);
+    BeginPresetLockedSection(m_settings.rocprof_preset);
 
     LaunchSubHeader("ENABLE");
     ToggleSwitch("Call-stack sampling", &m_settings.use_sampling);
@@ -1268,16 +1263,7 @@ void RocprofSysBackend::RenderSamplingTab()
 
 void RocprofSysBackend::RenderRocmTab()
 {
-    bool has_preset = !m_settings.rocprof_preset.empty();
-    if (has_preset)
-    {
-        ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.0f, 1.0f),
-            "Preset \"%s\" controls these settings.",
-            m_settings.rocprof_preset.c_str());
-        ImGui::TextDisabled("Clear the preset or use Raw Env Vars to override.");
-        ImGui::Spacing();
-    }
-    ImGui::BeginDisabled(has_preset);
+    BeginPresetLockedSection(m_settings.rocprof_preset);
 
     ImGui::Text("ROCm Domains:");
     HelpMarker("ROCPROFSYS_ROCM_DOMAINS",
@@ -1308,20 +1294,11 @@ void RocprofSysBackend::RenderRocmTab()
 
 void RocprofSysBackend::RenderPerfettoTab()
 {
-    bool has_preset = !m_settings.rocprof_preset.empty();
-    if (has_preset)
-    {
-        ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.0f, 1.0f),
-            "Preset \"%s\" controls these settings.",
-            m_settings.rocprof_preset.c_str());
-        ImGui::TextDisabled("Clear the preset or use Raw Env Vars to override.");
-        ImGui::Spacing();
-    }
-    ImGui::BeginDisabled(has_preset);
+    BeginPresetLockedSection(m_settings.rocprof_preset);
 
     const char* backends[] = {"inprocess", "system", "all"};
     int backend_idx = 0;
-    for (int i = 0; i < 3; i++)
+    for (int i = 0; i < IM_ARRAYSIZE(backends); i++)
     {
         if (m_settings.perfetto_backend == backends[i])
         {
@@ -1330,7 +1307,7 @@ void RocprofSysBackend::RenderPerfettoTab()
         }
     }
     FieldLabel("Backend", kComboW);
-    if (ImGui::Combo("##PerfBackend", &backend_idx, backends, 3))
+    if (ImGui::Combo("##PerfBackend", &backend_idx, backends, IM_ARRAYSIZE(backends)))
     {
         m_settings.perfetto_backend = backends[backend_idx];
     }
@@ -1357,7 +1334,7 @@ void RocprofSysBackend::RenderPerfettoTab()
     const char* policies[] = {"discard", "fill"};
     int policy_idx = (m_settings.perfetto_fill_policy == "fill") ? 1 : 0;
     FieldLabel("Fill Policy", kComboW);
-    if (ImGui::Combo("##FillPolicy", &policy_idx, policies, 2))
+    if (ImGui::Combo("##FillPolicy", &policy_idx, policies, IM_ARRAYSIZE(policies)))
     {
         m_settings.perfetto_fill_policy = policies[policy_idx];
     }
@@ -1417,16 +1394,7 @@ void RocprofSysBackend::RenderPerfettoTab()
 
 void RocprofSysBackend::RenderProcessSamplingTab()
 {
-    bool has_preset = !m_settings.rocprof_preset.empty();
-    if (has_preset)
-    {
-        ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.0f, 1.0f),
-            "Preset \"%s\" controls these settings.",
-            m_settings.rocprof_preset.c_str());
-        ImGui::TextDisabled("Clear the preset or use Raw Env Vars to override.");
-        ImGui::Spacing();
-    }
-    ImGui::BeginDisabled(has_preset);
+    BeginPresetLockedSection(m_settings.rocprof_preset);
 
     LaunchSubHeader("ENABLE");
     ToggleSwitch("AMD SMI GPU metrics", &m_settings.use_amd_smi);
@@ -1475,16 +1443,7 @@ void RocprofSysBackend::RenderProcessSamplingTab()
 
 void RocprofSysBackend::RenderParallelismTab()
 {
-    bool has_preset = !m_settings.rocprof_preset.empty();
-    if (has_preset)
-    {
-        ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.0f, 1.0f),
-            "Preset \"%s\" controls these settings.",
-            m_settings.rocprof_preset.c_str());
-        ImGui::TextDisabled("Clear the preset or use Raw Env Vars to override.");
-        ImGui::Spacing();
-    }
-    ImGui::BeginDisabled(has_preset);
+    BeginPresetLockedSection(m_settings.rocprof_preset);
 
     auto toggle = [](char const* label, bool& val, char const* env,
                      char const* help)
@@ -1516,16 +1475,7 @@ void RocprofSysBackend::RenderParallelismTab()
 
 void RocprofSysBackend::RenderInstrumentTab()
 {
-    bool has_preset = !m_settings.rocprof_preset.empty();
-    if (has_preset)
-    {
-        ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.0f, 1.0f),
-            "Preset \"%s\" controls these settings.",
-            m_settings.rocprof_preset.c_str());
-        ImGui::TextDisabled("Clear the preset or use Raw Env Vars to override.");
-        ImGui::Spacing();
-    }
-    ImGui::BeginDisabled(has_preset);
+    BeginPresetLockedSection(m_settings.rocprof_preset);
 
     ImGui::Text("Binary Instrumentation Options");
     ImGui::Separator();
@@ -1555,16 +1505,7 @@ void RocprofSysBackend::RenderInstrumentTab()
 
 void RocprofSysBackend::RenderAdvancedTab()
 {
-    bool has_preset = !m_settings.rocprof_preset.empty();
-    if (has_preset)
-    {
-        ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.0f, 1.0f),
-            "Preset \"%s\" controls these settings.",
-            m_settings.rocprof_preset.c_str());
-        ImGui::TextDisabled("Clear the preset or use Raw Env Vars to override.");
-        ImGui::Spacing();
-    }
-    ImGui::BeginDisabled(has_preset);
+    BeginPresetLockedSection(m_settings.rocprof_preset);
 
     LaunchSubHeader("SUMMARY PROFILE");
     int profile_mode = 0;
@@ -1604,8 +1545,8 @@ void RocprofSysBackend::RenderAdvancedTab()
     ImGui::Separator();
 
     const char* levels[] = {"trace", "debug", "info", "warning", "error", "critical"};
-    int level_idx = 2;
-    for (int i = 0; i < 6; i++)
+    int level_idx = 2;  // default: "info"
+    for (int i = 0; i < IM_ARRAYSIZE(levels); i++)
     {
         if (m_settings.log_level == levels[i])
         {
@@ -1614,7 +1555,7 @@ void RocprofSysBackend::RenderAdvancedTab()
         }
     }
     FieldLabel("Log Level", kComboW);
-    if (ImGui::Combo("##LogLevel", &level_idx, levels, 6))
+    if (ImGui::Combo("##LogLevel", &level_idx, levels, IM_ARRAYSIZE(levels)))
     {
         m_settings.log_level = levels[level_idx];
     }

@@ -61,7 +61,7 @@ private:
     // "Reveal in topology": locate a track's leaf, expand only the ancestors
     // needed to see it, scroll it into view, and pulse-highlight the row.
     void               HandleRevealTrack(const std::shared_ptr<RocEvent>& event);
-    bool               BuildRevealPath(const TreeNode& node);
+    bool               BuildRevealPath(const TreeNode& node, bool in_processors);
     void               DrawRevealPulse(const ImVec2& row_min, const ImVec2& row_max) const;
 
     SettingsManager&                         m_settings;
@@ -78,6 +78,8 @@ private:
     int                                   m_reveal_scroll_frames = 0;
     std::chrono::steady_clock::time_point m_reveal_start;
     std::unordered_set<const TreeNode*>   m_reveal_path;
+    const LeafNode*                       m_reveal_leaf = nullptr;
+    bool                                  m_reveal_leaf_in_processors = false;
 };
 
 }  // namespace View

@@ -120,27 +120,43 @@ SideBar::HandleRevealTrack(const std::shared_ptr<RocEvent>& event)
     m_reveal_start         = std::chrono::steady_clock::now();
 }
 
-// Depth-first search for the leaf matching m_reveal_track_id. On success,
-// records every ancestor branch node in m_reveal_path so they can be forced
-// open. Only run while forcing the target into view (the first few frames).
+// A track can appear more than once in the tree. Collects the ancestors of
+// every matching leaf (so all occurrences glow) and picks one jump target in
+// m_reveal_leaf, preferring the Processors subtree.
 bool
-SideBar::BuildRevealPath(const TreeNode& node)
+SideBar::BuildRevealPath(const TreeNode& node, bool in_processors)
 {
     if(node.IsLeaf())
     {
         const LeafNode& leaf = static_cast<const LeafNode&>(node);
-        return leaf.track_id == m_reveal_track_id;
+        if(leaf.track_id != m_reveal_track_id)
+        {
+            return false;
+        }
+        if(m_reveal_leaf == nullptr ||
+           (in_processors && !m_reveal_leaf_in_processors))
+        {
+            m_reveal_leaf               = &leaf;
+            m_reveal_leaf_in_processors = in_processors;
+        }
+        return true;
     }
 
+    const bool child_in_processors =
+        in_processors || node.type == NodeType::kProcessorList;
+    bool contains_match = false;
     for(const auto& child : node.children)
     {
-        if(child && BuildRevealPath(*child))
+        if(child && BuildRevealPath(*child, child_in_processors))
         {
-            m_reveal_path.insert(&node);
-            return true;
+            contains_match = true;
         }
     }
-    return false;
+    if(contains_match)
+    {
+        m_reveal_path.insert(&node);
+    }
+    return contains_match;
 }
 
 void
@@ -189,7 +205,9 @@ SideBar::Render()
                 // Rebuilt each frame: the tree may have been rebuilt since the
                 // last one, invalidating cached node pointers.
                 m_reveal_path.clear();
-                if(!sidebar_tree.root || !BuildRevealPath(*sidebar_tree.root))
+                m_reveal_leaf               = nullptr;
+                m_reveal_leaf_in_processors = false;
+                if(!sidebar_tree.root || !BuildRevealPath(*sidebar_tree.root, false))
                 {
                     m_reveal_active        = false;
                     m_reveal_scroll_frames = 0;
@@ -475,15 +493,17 @@ SideBar::RenderLeafNode(const LeafNode& leaf)
 {
     ImGui::PushID(static_cast<const void*>(&leaf));
 
-    const bool   is_reveal_target =
+    // Every occurrence of the track glows; only the prioritized one (chosen in
+    // BuildRevealPath) is scrolled into view.
+    const bool   is_reveal_match =
         m_reveal_active && leaf.track_id == m_reveal_track_id;
     const ImVec2 row_min          = ImGui::GetCursorScreenPos();
 
     RenderTrackItem(leaf.graph_index, leaf.show_eye_button);
 
-    if(is_reveal_target)
+    if(is_reveal_match)
     {
-        if(m_reveal_scroll_frames > 0)
+        if(m_reveal_scroll_frames > 0 && &leaf == m_reveal_leaf)
         {
             ImGui::SetScrollHereY(0.5f);
         }

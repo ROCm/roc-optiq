@@ -25,6 +25,16 @@ rocprofvis_controller_object_type_t Table::GetType(void)
 	return kRPVControllerObjectTypeTable;
 }
 
+void
+Table::Reset()
+{
+    m_num_items = 0;
+    m_sort_column = 0;
+    m_sort_order = kRPVControllerSortOrderAscending;
+    m_columns.clear();
+    m_rows.clear();
+}
+
 rocprofvis_result_t
 Table::SetupAndFetch(Trace& controller, Arguments& args, Array& array, Future* future)
 {
@@ -44,6 +54,47 @@ Table::SetupAndFetch(Trace& controller, Arguments& args, Array& array, Future* f
         result = Fetch(controller.GetDMHandle(), start_index, start_count, array, future);
     }
     return result;
+}
+
+rocprofvis_result_t
+Table::UnpackArguments(Arguments& args, TableArguments*& out) const
+{
+    rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
+    if(!out)
+    {
+        out = new TableArguments();
+    }
+    uint64_t sort_column = 0;
+    uint64_t sort_order  = 0;
+    result = args.GetUInt64(kRPVControllerTableArgsSortColumn, 0, &sort_column);
+    if(result == kRocProfVisResultSuccess)
+    {
+        result = args.GetUInt64(kRPVControllerTableArgsSortOrder, 0, &sort_order);
+    }
+    if(result == kRocProfVisResultSuccess)
+    {
+        out->m_sort_column = sort_column;
+        out->m_sort_order = (rocprofvis_controller_sort_order_t)sort_order;
+    }
+    return result;
+}
+
+void
+Table::GetCurrentArguments(TableArguments*& out) const
+{
+    if(!out)
+    {
+        out = new TableArguments();
+    }
+    out->m_sort_column = m_sort_column;
+    out->m_sort_order = m_sort_order;
+}
+
+void
+Table::SetCurrentArguments(TableArguments& in)
+{
+    m_sort_column = in.m_sort_column;
+    m_sort_order = in.m_sort_order;
 }
 
 }

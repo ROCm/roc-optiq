@@ -1088,8 +1088,7 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisDMFixture, "System Trace Data-Model Tests
             "name, COUNT(*) AS num_invocations, AVG(duration) AS avg_duration, "
             "MIN(duration) AS min_duration, MAX(duration) AS max_duration, SUM(duration) "
             "AS total_duration",
-            "name", sort_column.c_str(), kRPVDMSortOrderDesc, 0, nullptr, 0, 0, false,
-            &built_query);
+            "name", sort_column.c_str(), kRPVDMSortOrderDesc, 0, 0, false, &built_query);
         REQUIRE(kRocProfVisDmResultSuccess == build_result);
         REQUIRE(built_query != nullptr);
 
@@ -1158,8 +1157,7 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisDMFixture, "System Trace Data-Model Tests
             "name, COUNT(*) AS num_invocations, AVG(duration) AS avg_duration, "
             "MIN(duration) AS min_duration, MAX(duration) AS max_duration, SUM(duration) "
             "AS total_duration",
-            "name", sort_column.c_str(), kRPVDMSortOrderDesc, 0, nullptr, 0, 0, false,
-            &csv_query);
+            "name", sort_column.c_str(), kRPVDMSortOrderDesc, 0, 0, false, &csv_query);
         REQUIRE(kRocProfVisDmResultSuccess == build_result);
         REQUIRE(csv_query != nullptr);
 

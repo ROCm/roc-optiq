@@ -1106,7 +1106,7 @@ TraceView::RenderEventSearch()
             ImGui::SetKeyboardFocusHere();
         }
         std::pair<bool, bool> search_bar = InputTextWithClear(
-            "search_bar", "Search events, kernels, tracks...",
+            "search_bar", "Search: hipLaunchKernel or \"hip\"\"kernel\"",
             m_event_search->TextInput(), m_event_search->TextInputLimit(),
             settings.GetFontManager().GetFont(FontType::kIcon),
             settings.GetColor(Colors::kBgMain), settings.GetDefaultStyle(),

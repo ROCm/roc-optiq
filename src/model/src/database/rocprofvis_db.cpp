@@ -159,6 +159,30 @@ rocprofvis_dm_result_t   Database::ReadEventPropertyAsync(
     return kRocProfVisDmResultSuccess;
 }
 
+rocprofvis_dm_result_t Database::BuildEventSearchQuery(
+    rocprofvis_dm_timestamp_t start, rocprofvis_dm_timestamp_t end,
+    rocprofvis_db_num_of_tracks_t num, rocprofvis_db_track_selection_t ops,
+    rocprofvis_dm_charptr_t where,
+    rocprofvis_dm_num_string_table_filters_t num_string_table_filters, rocprofvis_dm_string_table_filters_t string_table_filters,
+    rocprofvis_dm_charptr_t sort_column, rocprofvis_dm_sort_order_t sort_order,
+    uint64_t max_count, uint64_t offset, bool count_only, rocprofvis_dm_string_t& query)
+{
+    (void) start;
+    (void) end;
+    (void) num;
+    (void) ops;
+    (void) where;
+    (void) num_string_table_filters;
+    (void) string_table_filters;
+    (void) sort_column;
+    (void) sort_order;
+    (void) max_count;
+    (void) offset;
+    (void) count_only;
+    (void) query;
+    return kRocProfVisDmResultNotSupported;
+}
+
 rocprofvis_dm_result_t Database::ExportTableCSVAsync(rocprofvis_dm_string_t query,
                                                      rocprofvis_dm_string_t file_path,
                                                      rocprofvis_db_future_t object)

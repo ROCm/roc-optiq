@@ -167,12 +167,6 @@ public:
         uint64_t                           sort_column_index = 0,
         rocprofvis_controller_sort_order_t sort_order = kRPVControllerSortOrderAscending);
 
-    /*
-     * Fetches a table from the controller for a single track.
-     * @param table_params: The parameters for the table request
-     */
-    bool FetchSingleTrackTable(const TableRequestParams& table_params);
-
     bool FetchMultiTrackSampleTable(
         const std::vector<uint64_t>& track_ids, double start_ts, double end_ts,
         char const* filter, uint64_t start_row = -1, uint64_t req_row_count = -1,
@@ -272,8 +266,11 @@ private:
         size_t counter_count;
     };
 
+    bool FetchTrackTable(const TrackTableRequestParams& table_params);
+    bool FetchEventSearch(const EventSearchRequestParams& table_params);
     /* Helper called by FetchEvent()*/
     bool FetchEventExtData(uint64_t event_id);
+
     void HandleLoadSystemTopology();
     bool ParseNodeData(rocprofvis_handle_t* node_handle, NodeInfo& node_info);
     bool ParseDeviceData(rocprofvis_handle_t* processor_handle, DeviceInfo& device_info,

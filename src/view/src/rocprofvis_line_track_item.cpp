@@ -23,7 +23,8 @@ constexpr float DEFAULT_LINE_THICKNESS   = 1.0f;
 
 constexpr float Y_AXIS_TICK_MARK_LENGTH     = 4.0f;
 constexpr float Y_AXIS_TICK_LABEL_GAP       = 8.0f;
-constexpr float Y_AXIS_GRID_LINE_ALPHA      = 0.35f;
+// Matches the vertical minor grid lines drawn by the timeline (see RenderGrid).
+constexpr float Y_AXIS_GRID_LINE_ALPHA      = 0.10f;
 constexpr float Y_AXIS_LABEL_SPACING_FACTOR = 2.5f;
 // Interior ticks/labels/grid lines only show above this height.
 constexpr float Y_AXIS_LABEL_MIN_TRACK_HEIGHT = 2.0f * DEFAULT_TRACK_HEIGHT;
@@ -156,11 +157,10 @@ LineTrackItem::BoxPlotRender(float graph_width)
     // Grid lines behind the data, matching the meta-area ticks.
     if(m_track_height >= Y_AXIS_LABEL_MIN_TRACK_HEIGHT)
     {
-        std::vector<double> grid_ticks;
-        GenerateYAxisTicks(content_size.y, grid_ticks);
+        UpdateYAxisTicks();
         const ImU32 grid_color =
             ApplyAlpha(m_settings.GetColor(Colors::kGridColor), Y_AXIS_GRID_LINE_ALPHA);
-        for(double value : grid_ticks)
+        for(double value : m_grid_ticks)
         {
             float grid_y = static_cast<float>(cursor_position.y + content_size.y -
                                               (value - m_min_y.Value()) * scale_y);
@@ -399,6 +399,30 @@ LineTrackItem::GenerateYAxisTicks(float plot_height, std::vector<double>& out_ti
 }
 
 void
+LineTrackItem::UpdateYAxisTicks()
+{
+    const float  plot_height = m_track_content_height - m_vertical_padding * 2.0f;
+    const double min_v       = m_min_y.Value();
+    const double max_v       = m_max_y.Value();
+    const float  line_h      = ImGui::GetTextLineHeight();
+
+    // Ticks only depend on the plot height, the Y range, and the text height, so
+    // reuse the cached vector unless one of those has changed since last frame.
+    if(plot_height == m_cached_ticks_height && min_v == m_cached_ticks_min &&
+       max_v == m_cached_ticks_max && line_h == m_cached_ticks_line_h)
+    {
+        return;
+    }
+
+    m_cached_ticks_height = plot_height;
+    m_cached_ticks_min    = min_v;
+    m_cached_ticks_max    = max_v;
+    m_cached_ticks_line_h = line_h;
+
+    GenerateYAxisTicks(plot_height, m_grid_ticks);
+}
+
+void
 LineTrackItem::RenderMetaAreaScale()
 {
     ImVec2      content_region = ImGui::GetContentRegionMax();
@@ -430,7 +454,10 @@ LineTrackItem::RenderMetaAreaScale()
     const ImU32 label_color  = m_settings.GetColor(Colors::kTextDim);
     ImFont*     font         = ImGui::GetFont();
     const float font_size    = ImGui::GetFontSize();
-    const float label_x_screen = win_pos.x + label_x;
+    // Interior labels are right-aligned to the same edge as the min/max labels
+    // (see EditableTextField::DrawPlainText) so they line up horizontally.
+    const float label_right_x =
+        win_pos.x + content_region.x - ImGui::GetStyle().WindowPadding.x;
 
     // Min/max tick marks.
     draw_list->AddLine(ImVec2(tick_right_x - Y_AXIS_TICK_MARK_LENGTH, plot_top),
@@ -441,9 +468,8 @@ LineTrackItem::RenderMetaAreaScale()
     if(range > 0.0 && plot_height > 0.0f &&
        m_track_height >= Y_AXIS_LABEL_MIN_TRACK_HEIGHT)
     {
-        std::vector<double> ticks;
-        GenerateYAxisTicks(plot_height, ticks);
-        for(double value : ticks)
+        UpdateYAxisTicks();
+        for(double value : m_grid_ticks)
         {
             float y = plot_bottom -
                       static_cast<float>((value - min_v) / range) * plot_height;
@@ -454,9 +480,10 @@ LineTrackItem::RenderMetaAreaScale()
             // Skip labels that would overlap the min/max labels.
             if(y > plot_top + font_size && y < plot_bottom - font_size)
             {
-                std::string label = compact_number_format(value);
+                std::string label   = compact_number_format(value);
+                const float label_w = ImGui::CalcTextSize(label.c_str()).x;
                 draw_list->AddText(font, font_size,
-                                   ImVec2(label_x_screen, y - font_size * 0.5f),
+                                   ImVec2(label_right_x - label_w, y - font_size * 0.5f),
                                    label_color, label.c_str());
             }
         }

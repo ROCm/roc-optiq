@@ -430,7 +430,11 @@ File: `src/view/src/rocprofvis_appwindow.{h,cpp}`. Owns global UI state:
   helpers). Called by `rocprofvis_view_init`.
 - `void Render()` / `void Update()` - per-frame entry points.
 - `void OpenFile(std::string file_path)` - opens a trace or `.rpv`
-  project. Routes via `Project::Open()` and adds a tab.
+  project. Routes via `Project::Open()` and adds a tab. A duplicate
+  open (`OpenResult::Duplicate`) focuses the existing tab and shows a
+  "Trace Already Open" message rather than opening a second tab. While
+  the Compare dialog is open, dropped/opened files fill its slots
+  instead of opening standalone tabs.
 - `void OpenCompare(base_path, target_path)` / `MakeCompareId(files)` -
   creates a synthetic compare project containing two trace sources. The
   `File > Compare` entry point is currently gated behind
@@ -449,8 +453,14 @@ File: `src/view/src/rocprofvis_appwindow.{h,cpp}`. Owns global UI state:
 - `BeginAppShutdown()` - graceful shutdown that drains async
   `DataProvider` cleanup jobs and `AppMonitor` operations. Use this
   rather than terminating the process.
-- `WantsContinuousRender()` - keeps the lazy app loop awake while a
-  view, queued event, log stream, or monitored operation needs frames.
+- `WantsContinuousRender()` - keeps the lazy app loop awake while any
+  of these need frames: provider cleanup jobs, shutdown/disable flags,
+  pending events (`EventManager::HasPendingEvents()`), active
+  notifications, `AppMonitor::HasPendingOperations()`,
+  `LogViewer::IsLiveUpdating()`, any project still loading or with
+  pending requests, or the active `RootView::WantsContinuousRender()`
+  (which itself covers the `LoadingTimer`, an in-progress sticky-note
+  drag, and reorder auto-scroll).
 - `SetTabLabel(label, id)` - pushed to the `TabContainer` via the
   `Project` system; useful when a child view wants to indicate dirty
   state.
@@ -539,8 +549,12 @@ from `RootView`, fill `GetToolbar`, `RenderEditMenuOptions`, and
   collects base and target traces. `AppWindow::OpenCompare()` routes
   them through `Project::OpenCompare()`,
   `TraceDataModel::SetCompareSources()`, and per-track
-  `CompareSourceInfo` badges/colors. The `File > Compare` menu item is
-  currently behind `ROCPROFVIS_DEVELOPER_MODE`.
+  `CompareSourceInfo` badges/colors. `FileSlot {kFirst, kSecond}`
+  identifies the two drop targets; while the dialog `IsOpen()`,
+  `AppWindow::OpenFile()` routes files into it via `AddDroppedFile()`,
+  and `Validate()` rejects picking the same file twice. The
+  `File > Compare` menu item is currently behind
+  `ROCPROFVIS_DEVELOPER_MODE`.
 
 ## 7. Widget Library Reference (`src/view/src/widgets/`)
 
@@ -752,9 +766,14 @@ subclassing this; don't roll your own.**
   bounded ring buffer, level filter, regex search, relative time, and
   auto-scroll. `AppWindow::Update()` calls `Poll()` and `Render()` draws
   the overlay.
-- Settings live in `UserSettings::log_viewer`; use this viewer for
-  application logs. `DebugWindow` remains a separate developer-only
-  diagnostic surface.
+- Settings live in `UserSettings::log_viewer`
+  (`JSON_KEY_SETTINGS_LOG_VIEWER_*`); use this viewer for application
+  logs. `DebugWindow` remains a separate developer-only diagnostic
+  surface.
+- Opened via `View > Show Log Viewer`. `Poll()` pulls entries through
+  `rocprofvis_core_get_log_entries_ex`; `OpenLogFile()` opens the file
+  at `get_application_log_path()`. `IsLiveUpdating()` feeds
+  `AppWindow::WantsContinuousRender()`.
 
 ## 8. Track Item Hierarchy
 
@@ -802,7 +821,11 @@ Protected hooks every subclass implements:
 - `RenderMetaArea()` - left "description" column (default impl is
   reused).
 - `RenderMetaAreaScale()` - the in-meta numeric scale (per type).
-- `RenderMetaAreaOptions()` - the per-type options context menu.
+- `RenderMetaAreaOptions()` - the per-type options, shown under a
+  "Track Options" submenu of the meta-area right-click menu (the old
+  gear icon was removed). That right-click menu also copies the track
+  name / ID; the hover tooltip (Node ID + Process ID) is scoped to the
+  name-label hitbox only.
 - `RenderMetaAreaExpand()` - expand/collapse affordance.
 - `RenderChart(graph_width)` - the actual graph drawing.
 - `RenderResizeBar(parent_size)` - drag handle for height.
@@ -995,6 +1018,13 @@ Renders the topology tree in the left pane:
   `DataProvider`.
 - The active-node accent mirrors timeline node coloring when
   `SettingsManager::ShowNodeColors()` is enabled.
+- Right-click a leaf track (`##track_ctx`): Go to Track, Hide/Show
+  Track, Show All Tracks, Hide All But This Track, and Show/Hide
+  Selected Tracks (enabled when
+  `TimelineSelection::HasSelectedTracks()`). Right-click a branch
+  (`##branch_ctx`): Show All Tracks Below / Hide All Tracks Below.
+  Visibility changes refresh the histogram via
+  `UpdateHistogramForVisibility()`.
 
 ### `Minimap` (`rocprofvis_minimap.{h,cpp}`)
 
@@ -1041,7 +1071,10 @@ Renders the currently-selected event(s). Subsections rendered via
 `RenderBasicData / RenderEventExtData / RenderEventFlowInfo /
 RenderCallStackData / RenderArgumentData`. Tracks a
 `FlowHighlightState` so hovering an arg row in the flow table
-highlights the linked event.
+highlights the linked event. The call-stack table highlights the
+hovered row (`CallStackHoverState`), navigates on double-click / "Go To
+Event" (`TimelineSelection::NavigateToEvent`), and exposes per-row copy
+via `AddCopyRowCellMenuItems`.
 
 ### `MultiTrackTable` (`rocprofvis_multi_track_table.{h,cpp}`)
 
@@ -1062,8 +1095,10 @@ same cache used by track pills.
 
 Hosts five `TopEventsTable` instances for instrumented events,
 dispatches, memory allocations, memory copies, and sampled launches.
-Each table uses its dedicated analysis request/table type through the
-normal `DataProvider` + `TablesModel` pipeline.
+Each is filtered by `TrackInfo::operation_types` and stays hidden until
+a matching track is selected, and each maps to a dedicated
+`TableType::kAnalysisTop*` + `RequestType::kFetchAnalysisTop*` pair
+fetched through the normal `DataProvider` + `TablesModel` pipeline.
 
 ### `Annotations` and `StickyNote`
 
@@ -1081,6 +1116,15 @@ normal `DataProvider` + `TablesModel` pipeline.
   is a floating window with an inline-editable title (click to edit) and
   body; `BeginInlineEdit()` opens a freshly created note focused for
   typing.
+- Track binding + navigation: `TimelineView::BuildTrackLayout()` maps a
+  note's `track_id` (`INVALID_TRACK_ID` for free-floating notes) to a
+  lane. A note can be locked (`m_locked`), request "go to anchor"
+  navigation (`WantsNavigate()` -> a `NavigationEvent`), and
+  cross-highlight when its timeline marker is hovered. Persisted fields
+  (under `JSON_KEY_ANNOTATION_*` in `rocprofvis_project.h`): `time_ns`,
+  `y_offset`, `size_x/y`, `text`, `title`, `id`, `track_id`,
+  `view_start_ns`/`view_end_ns`, `is_minimized`, `is_locked` (the
+  expanded window's screen position is not persisted).
 - `AnnotationView` (`rocprofvis_annotation_view.{h,cpp}`) - the
   sub-tab in `AnalysisView` that lists notes and lets the user
   select/hide them.
@@ -1105,10 +1149,16 @@ tracks, tpt)` is called from `TimelineView::RenderTraceView`.
 
 `MeasurementController` owns the
 `kInactive | kWaitingForFirst | kWaitingForSecond | kComplete` state
-machine and two `MeasurementPoint`s. Points may be freehand or anchored
-to events; `TraceView` renders toolbar controls and `TimelineView`
-renders the overlay. Reuse this controller instead of storing a second
-measurement state in a widget.
+machine and two `MeasurementPoint`s. Two modes: event-anchored (snaps
+to event edges) or freehand (`SetFreehandMode()`, with `MeasureEdge
+{kStart, kEnd}` choosing which edge each ruler uses and per-point
+`m_freehand_offsets`). `GetEffectiveTimestamp()` resolves a point's
+time. `TraceView::RenderMeasurementControls()` draws the toolbar
+(Measure/Exit, Events vs Anywhere, an Options popup for the start/end
+edge, Clear, and the live duration); `TimelineView::RenderMeasurement()`
+draws the overlay and labels. Right-click a measurement label to copy
+it (`MeasurementCopyTarget` + the timeline context menu). Reuse this
+controller instead of storing measurement state in a widget.
 
 ### Click / focus arbitration: `TimelineFocusManager`
 
@@ -1207,7 +1257,9 @@ ImPlot-based roofline chart. Two modes:
   groups of items.
 - `ApplyPreset(type)` switches the active preset.
 - `RenderMenus(...)` draws the legend / options panels in
-  `InsideTopLeft|TopRight|BottomLeft|BottomRight|Outside` placements.
+  `InsideTopLeft|TopRight|BottomLeft|BottomRight|Outside` placements,
+  and exposes a "Line thickness" slider (`m_line_thickness`,
+  session-local, not persisted in settings).
 
 ### `ComputeMemoryChartView` (`rocprofvis_compute_memory_chart.{h,cpp}`)
 
@@ -1218,10 +1270,13 @@ inline via `DrawMetricRow`. The catalog of supported chart-only
 metrics is `enum MemChartMetric` (maps 1:1 to entries in compute
 metric table 3.1).
 
-If you need to add a new memory-hierarchy block:
-1. Add a `MemChartMetric` enum value (before `MEMCHART_METRIC_NA`).
-2. Add a `Draw*` method.
-3. Wire it into `ComputeLayout()` and `Render()`.
+Metric values bind data-driven: `METRIC_NAME_MAP` maps a compute
+metric `entry->name` to a `MemChartMetric` slot, and
+`FetchMemChartMetrics()` fills `m_metric_ptrs[]` from the fetched
+metrics. To surface a new metric on an existing block, add its name to
+`METRIC_NAME_MAP` (and make sure the controller returns that metric).
+Only add a new `MemChartMetric` value + `Draw*` method +
+`ComputeLayout()`/`Render()` wiring when you need a brand-new block.
 
 ### `KernelMetricTable` (`rocprofvis_compute_kernel_metric_table.{h,cpp}`)
 
@@ -1274,9 +1329,14 @@ production code from depending on it.
 ### `ComputeCodeView` (`rocprofvis_compute_code_view.{h,cpp}`) - dev only
 
 Correlates source code and ISA through `SourceCodeWidget` and
-`IsaCodeWidget`. PC-sampling data is fetched through
-`PcSamplingRequestParams` / `DataProvider::FetchPcSampling`; do not
-query the model directly from this view.
+`IsaCodeWidget`, which both derive from `BaseCodeWidget` and share a
+`LineSelection` so selecting a source line highlights the correlated
+ISA (and vice versa), laid out in an `HSplitContainer`.
+`RenderControlPanel()` hosts the source-file dropdown, and
+`FetchPcSamplingForCurrentFile()` re-fetches PC samples on file/kernel
+change. PC-sampling data is fetched through `PcSamplingRequestParams` /
+`DataProvider::FetchPcSampling`; do not query the model directly from
+this view.
 
 ### Compute data plumbing
 
@@ -1322,9 +1382,14 @@ controller results.
   - `struct SummaryInfo` with `KernelMetrics`, `GPUMetrics`,
     `CPUMetrics`, `AggregateMetrics`.
   - `struct TableInfo`, `FormattedColumnInfo`,
-    `AnalysisTrackStatistics` with `Stat`, queue utilization,
-    counter min/max/mean/standard deviation, and state machine
-    `kStale -> kPending -> kRequested -> kReady`.
+    `AnalysisTrackStatistics` with state machine `kStale -> kPending
+    -> kRequested -> kReady`, queue utilization, and counter
+    min/max/mean/standard deviation. Each `Stat` carries raw building
+    blocks (`name`/`compact_name`/`value`/`suffix` plus `compact`/
+    `full` strings); consumers compose labels via `CompactValue()`/
+    `CompactLabel()`/`FullValue()`/`FullLabel()`. Track pills use the
+    compact value with `SetExtendedLabel(CompactLabel())` and
+    `SetTooltip(FullLabel())`; Track Details uses `FullValue()`.
 
 - `rocprofvis_trace_data_model.{h,cpp}` - the **`TraceDataModel`
   facade**: aggregates `TopologyDataModel`, `TimelineModel`,
@@ -1449,8 +1514,9 @@ through this** - never hardcode `IM_COL32(...)` in feature code.
 - `GetUserSettings()` -> `UserSettings` (display, units, "don't ask"
   flags). `ApplyUserSettings(old, save_json)` writes JSON to disk.
 - `DisplaySettings::show_node_colors` /
-  `SettingsManager::ShowNodeColors()` controls matching node accents in
-  tracks and the sidebar.
+  `SettingsManager::ShowNodeColors()` enables node color-coding (only
+  when the trace has more than one node). It tints the track's node
+  pill and the sidebar tree connectors, not the chart lane itself.
 - `UserSettings::log_viewer` stores level mask, entry limit, search and
   presentation preferences for `LogViewer`.
 - `GetInternalSettings()` -> recent files (`MAX_RECENT_FILES = 5`).
@@ -1586,10 +1652,12 @@ Use these instead of writing your own.
   zoom looks right.
 - `TimeConstants::ns_per_us / ns_per_ms / ns_per_s / minute_in_s /
   minute_in_ns`.
-- `compact_number_format(double)` - SI-style "1.2K", "3.4M"
-  formatting.
-- `get_application_config_path(create_dirs)` -> the per-user config
-  dir.
+- `compact_number_format(double)` / `full_number_format(double)` -
+  SI-style "1.2K"/"3.4M" and full-precision number formatting.
+- `get_application_config_path(create_dirs)` /
+  `get_application_log_path(create_dirs)` -> platform-appropriate
+  per-user config and log directories (Windows `%LOCALAPPDATA%`, macOS
+  `~/Library/Application Support` + `~/Library/Logs`, Linux XDG).
 - `open_url(url)` - opens a browser. Reuse for "more info" links.
 - `get_executable_name(full_path)`.
 - `is_remote_display_session()` - detects SSH/X-forwarding for the
@@ -1667,65 +1735,168 @@ Permanent host-key trust uses the platform user's standard
 
 ### 13.2 Profiler launch stack (`src/view/src/profiler/`)
 
-- `IProfilerBackend` (`rocprofvis_profiler_backend.h`) is the extension
-  point. It validates settings, builds `ToolOption`/`TabDescriptor`
-  UI, flattens a `LaunchConfig` into execution arguments/environment,
-  reports warnings, parses the trace path from output, and exports
-  native config.
-- `RocprofSysBackend` is the currently registered backend. It supports
-  run/sample/instrument tools and owns the rocprof-sys option tabs and
-  `RocprofSysSettings`.
-- `LaunchConfig`, `TargetSpec`, and `ConnectionType` are the
-  serializable launch payload. SSH mode stores
-  `ssh_connection_ref`, not inline credentials.
-- `LaunchPresetManager` owns named launch profiles in
-  `profiles.json::launch_profiles`; this is independent of Compute's
-  per-project `PresetManager`.
-- `rocprofvis_launch_shared_tabs.*` provides reusable target,
-  environment, command-preview, output-console, and saved-profile UI.
-- `ProfilerLauncherDialog` authors configuration and renders UI. It
-  owns backends, launch presets, and `ProfilerLaunchOrchestrator`.
-- `ProfilerLaunchOrchestrator` is the UI-facing Launch/Cancel/Close/
-  Update entry point. It owns either `ProfilerSession` (local) or
-  `RemoteProfilerSession` (SSH).
-- `ProfilerSessionBase` owns controller profiler config/handle/future
-  resources and registers their status with `AppMonitor`.
+Layering, top to bottom: `ProfilerLauncherDialog` (authors config +
+renders) -> `ProfilerLaunchOrchestrator` (run engine, normalizes local
+vs remote) -> `ProfilerSession` / `RemoteProfilerSession` (both derive
+from `ProfilerSessionBase`) -> controller profiler C API
+(`rocprofvis_profiler.h`) -> `AppMonitor` -> status events. Profiler
+sessions are **not** `Project`s until a produced trace is handed to
+`AppWindow::OpenFile()`.
 
-Profiler sessions are not `Project`s. On completion, the backend parses
-the trace path from profiler output; if auto-load is enabled, the
-orchestrator calls `AppWindow::OpenFile()`. Do not guess the newest
-filesystem trace when parsing fails: show the existing warning and
-leave manual open available.
+**Backends (`IProfilerBackend`, `rocprofvis_profiler_backend.h`).** The
+pluggable extension point. Methods: `Id`, `DisplayName`, `GetTools`,
+`GetDefaultBinary`, `GetTabs` (returns `TabDescriptor`s that each carry
+an ImGui `render_fn` - the backend supplies renderers, the dialog draws
+the tab bar), `Validate` (empty string = OK), `FlattenToExecution`
+(curated settings -> env + argv; caller then merges `extra_env`),
+`LoadSettings`/`SaveSettings` (the JSON `backend_payload`), `ExportCfg`
+(native config text), and the default-implemented `GetWarnings`
+(`WarningMessage { Level {kInfo,kWarning,kError}, text }`) and
+`ParseTraceOutputPath` (scrape the trace path from stdout). Supporting
+structs: `ToolOption`, `TabDescriptor`, `WarningMessage`.
 
-### 13.3 Launch workflows and extension rules
+**`RocprofSysBackend`** is the only backend registered today (the
+`ProfilerLauncherDialog` ctor pushes one). `Id()` = `"rocprof-sys"`.
+Tools: `run` (`rocprof-sys-run`), `sample` (`rocprof-sys-sample`),
+`instrument` (`rocprof-sys-instrument`). Tabs: Quick, Sampling, ROCm,
+Process Sampling, Parallelism, Advanced, plus Instrument (only when the
+tool is `instrument`); the dialog appends a shared "Raw Env Vars" tab.
+Perfetto options are nested inside Advanced, not a top-level tab.
+`RocprofSysSettings` holds the serializable backend state (backends,
+sampling, ROCm domains, Perfetto, process sampling, parallelism,
+advanced, instrument) plus 11 built-in rocprof-sys `--preset=` names.
+
+**`LaunchConfig` (`rocprofvis_launch_config.h`)** is the serializable
+payload: `profiler_id`, `tool_id`, `connection` (`ConnectionType
+{kLocal, kSsh}`), `ssh_connection_ref` (an `SshConnectionConfig::id`,
+never inline credentials), `target` (`TargetSpec {executable, arguments,
+working_directory, output_directory, auto_load_trace}`), `extra_env`,
+`extra_argv`, and `backend_payload` (the backend's JSON).
+
+**Two independent preset systems - do not conflate:**
+- `LaunchPresetManager` - named Optiq launch profiles in the
+  `launch_profiles` section of `profiles.json`. CRUD over
+  `ProfilesDocument` (`ListPresets`/`SavePreset`/`LoadPreset`/
+  `DeletePreset`); `ExportCfg`/`ImportPreset` exist but are not wired
+  into the dialog yet. Distinct from Compute's per-project
+  `PresetManager`.
+- `RocprofSysSettings::rocprof_preset` - a rocprof-sys built-in preset
+  name emitted as `--preset=<name>`, which disables the overridden UI
+  controls while active.
+
+**Shared form helpers (`rocprofvis_launch_shared_tabs.h`)** - reuse
+these instead of re-authoring launcher UI: `RenderTargetSection`,
+`RenderRawEnvVarsTab`, `BuildCommandPreviewString`,
+`RenderCommandPreview`, `RenderOutputConsole` (+ `ConsoleStatusLevel
+{kIdle, kRunning, kSuccess, kError}`), `RenderSavedProfileBar`. The
+connection-mode selector and SSH UI live in the dialog
+(`RenderRemoteSection`), not here.
+
+**`ProfilerLauncherDialog`** owns `m_backends`, the
+`LaunchPresetManager`, the `ProfilerLaunchOrchestrator`, `m_config`, and
+an `ExecutionCache` (lazy `FlattenToExecution` result + command
+preview, rebuilt on a dirty flag). `AppWindow::ShowProfilerLauncher()`
+lazily creates it; the only entry point is `File > Launch Profiler...`
+(`#ifdef ROCPROFVIS_ENABLE_PROFILER`).
+
+**`ProfilerSessionBase`** owns the controller `config`/`profiler`/
+`future` handles and the `AppMonitor` op id. `GetState`, `GetOutput`,
+`GetExitCode`, `Cancel`, `Close`, and `GetOperationId` forward to the
+`rocprofvis_profiler_*` C API. `RegisterProfilerMonitor()` registers a
+`MonitorOperationType::ProfilerSession` op; `FreeProfilerObjects()`
+handles teardown (see 13.4). Subclasses set `m_extra_teardown` for
+resources that must outlive the profiler worker.
+
+### 13.3 Local vs remote profiling workflows
+
+**`ProfilerLaunchOrchestrator`** is the single UI-facing entry
+(`Launch` / `Cancel` / `Close` / `Update`) and the local/remote
+normalizer. It owns a local `ProfilerSession` and, for SSH, a
+`unique_ptr<RemoteProfilerSession>`, plus a `shared_ptr<RemoteUri>` so
+deferred teardown outlives the dialog's copy. `GetState()` reports a
+normalized `rocprofvis_profiler_state_t`; `GetRawOutput()` /
+`ConsumeOutputDirty()` expose stdout; `GetTracePath()` resolves the
+produced trace; `GetRemotePhaseBadge(...)` / `GetRemoteStatusMessage()`
+surface remote progress. `Update()` runs every frame to pump normalized
+state and output.
 
 Local:
 
 ```
-ProfilerLauncherDialog
-  -> IProfilerBackend::FlattenToExecution
-  -> ProfilerLaunchOrchestrator::Launch
-  -> ProfilerSession -> rocprofvis_profiler_launch_async
-  -> AppMonitor -> ProfilerStatusEvent
-  -> ParseTraceOutputPath -> AppWindow::OpenFile
+ProfilerLauncherDialog.OnLaunchClicked
+  -> RefreshExecutionCache (IProfilerBackend::FlattenToExecution + extra_env)
+  -> ProfilerLaunchOrchestrator::Launch(LaunchRequest)
+  -> ProfilerSession::Launch -> rocprofvis_profiler_launch_async
+  -> AppMonitor op (ProfilerSession) -> ProfilerStatusEvent
+  -> orchestrator OnProfilerStateChanged: on Completed,
+     ResolveLocalTracePath() (LaunchRequest.parse_trace ==
+     IProfilerBackend::ParseTraceOutputPath) -> AppWindow::OpenFile
+     when auto_load_trace
 ```
 
-Remote:
+Remote (`RemoteProfilerSession`, `#ifdef ROCPROFVIS_ENABLE_REMOTE`):
 
 ```
-RemoteProfilerSession
-  -> SshSession connect/authenticate
-  -> rocprofvis_profiler_launch_remote_async on the same connection
-  -> parse remote trace path
-  -> SshSession download
-  -> AppWindow::OpenFile(local cache path)
+ProfilerLaunchOrchestrator::Launch (is_remote)
+  -> RemoteProfilerSession::Launch: BuildConfig + SSH config,
+     SshSession::StartConnect
+Phase machine (event-driven, main thread):
+  Connecting -> Authenticating -> Profiling -> Downloading -> Done
+  - kRemoteStatusChanged (filtered by SshSession::GetActiveOperationId):
+      Connecting done   -> StartAuthenticate
+      Authenticating done -> StartProfiler
+      Downloading done  -> Done + on_open_file(local cache path)
+  - StartProfiler: rocprofvis_profiler_launch_remote_async(profiler,
+      config, SshSession::GetConnectionHandle(), future); registers a
+      profiler AppMonitor op
+  - kProfilerStatusChanged (filtered by m_profiler_op_id):
+      Completed -> StartDownload; Failed/Cancelled -> Fail
+  - StartDownload: parse the remote trace path from stdout only, then
+      SFTP-download over the same (now idle) connection
 ```
 
-The SSH connection must outlive the remote profiler worker. Filter
-status events by operation ID because the remote workflow has several
-operations. To add a backend, implement `IProfilerBackend`, register it
-in `ProfilerLauncherDialog`, map its controller profiler type, and
-provide deterministic output-path parsing.
+Key remote rules:
+- **`RemoteProfilerSession::Phase` = `{Idle, Connecting,
+  Authenticating, Profiling, Downloading, Done, Failed}`.** The console
+  badge only reads "Completed" at `Done` (after the download), never
+  when remote profiling itself finishes.
+- The remote session subscribes to **both** `kRemoteStatusChanged`
+  (SSH phases) and `kProfilerStatusChanged` (the remote run), each
+  filtered by its own operation id. The orchestrator's own
+  `kProfilerStatusChanged` subscription matches only the **local**
+  session's op id.
+- One `SshSession` connection is reused for connect, the profiler run
+  (passed as a raw connection handle), and the download; only one SSH
+  phase is ever in flight.
+- **No trace-path guessing** in either path: the path comes only from
+  the backend's stdout scraper (or a pre-set remote path). Empty ->
+  warning notification, manual open.
+- Auto-open differs by path: local fires from the orchestrator's
+  terminal-state handler; remote fires from the download-complete
+  callback inside `RemoteProfilerSession`.
+
+### 13.4 Async teardown for sessions
+
+Profiler and SSH work can outlive the dialog, so teardown defers
+through `AppMonitor` instead of blocking:
+- `ProfilerSessionBase::FreeProfilerObjects()` - if the profiler future
+  is still pending, it hands `config`/`profiler`/`future` and the
+  subclass `m_extra_teardown` to `AppMonitor::AddTeardownOp(...)`, which
+  cancels then frees them in order (future -> profiler -> config ->
+  extra) once the future resolves. If already resolved, it frees
+  immediately.
+- `RemoteProfilerSession::~RemoteProfilerSession()` moves its
+  `SshSession` into `m_extra_teardown` so the connection is freed
+  **last**, after the remote profiler worker has joined.
+- `SshSession::~SshSession()` uses `AppMonitor::AppendTeardown(...)` to
+  free the connection only after any in-flight SSH phase completes.
+- `ProfilerLaunchOrchestrator::Cancel()` for remote simply destroys the
+  session (running the deferred chain), not a direct
+  `rocprofvis_profiler_cancel`.
+
+To add a backend: implement `IProfilerBackend`, register it in
+`ProfilerLauncherDialog`, map its `rocprofvis_profiler_type_t` in
+`ResolveProfilerType`, and implement `ParseTraceOutputPath`.
 
 ## 14. Data Flow: Requests, Remote Operations, and Profiler Runs
 
@@ -2163,6 +2334,8 @@ For fast lookup. Each entry: class -> file -> one-line role.
 - `EventItem` (struct) -> same -> Cached state per visible event.
 - `FlowHighlightState` (struct) -> same -> Hover state for flow
   arrows.
+- `CallStackHoverState` (struct) -> same -> Hover state for call-stack
+  rows.
 - `TrackDetails` -> `rocprofvis_track_details.h` -> Selected-track
   detail tab.
 - `MultiTrackTable` -> `rocprofvis_multi_track_table.h` -> Cross-track
@@ -2320,8 +2493,8 @@ For fast lookup. Each entry: class -> file -> one-line role.
   `profiler/rocprofvis_profiler_launch_orchestrator.h`.
 - `ProfilerLauncherDialog` ->
   `profiler/rocprofvis_profiler_launcher_dialog.h`.
-- Shared target/environment/preview/console/profile render helpers ->
-  `profiler/rocprofvis_launch_shared_tabs.h`.
+- Shared target/environment/preview/console/profile render helpers +
+  `ConsoleStatusLevel` -> `profiler/rocprofvis_launch_shared_tabs.h`.
 
 ### Widget library (`src/view/src/widgets/`)
 

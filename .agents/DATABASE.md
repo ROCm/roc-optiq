@@ -78,7 +78,7 @@ controller-facing topology property enums, and
 
 ## 2. Public C ABI Surface (`src/model/inc/`)
 
-Three headers form the entire public contract:
+Four headers form the entire public contract:
 
 - `rocprofvis_interface.h` - all functions. Keep this header
   compatible with `src/model/python/rocprofvis_cffi_build.py`: avoid

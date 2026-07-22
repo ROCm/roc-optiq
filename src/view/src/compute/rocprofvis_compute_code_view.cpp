@@ -45,8 +45,9 @@ ComputeCodeView::ComputeCodeView(DataProvider& data_provider)
     SubscribeToEvents();
 
     m_data_provider.SetFetchPcSamplingCallback(
-        [this](const std::string&, uint32_t kernel_id, uint32_t source_file_id, bool success) {
-            OnPcSamplingReady(kernel_id, source_file_id, success);
+        [this](const std::string&, uint32_t kernel_id, uint32_t source_file_id,
+               uint32_t generation, bool success) {
+            OnPcSamplingReady(kernel_id, source_file_id, generation, success);
         });
 }
 
@@ -55,11 +56,22 @@ ComputeCodeView::~ComputeCodeView()
     EventManager::GetInstance()->Unsubscribe(
         static_cast<int>(RocEvents::kComputeKernelSelectionChanged),
         m_kernel_selection_changed_token);
+    EventManager::GetInstance()->Unsubscribe(
+        static_cast<int>(RocEvents::kComputeWorkloadSelectionChanged),
+        m_workload_selection_changed_token);
 }
 
 void
 ComputeCodeView::SubscribeToEvents()
 {
+    auto workload_changed = [this](std::shared_ptr<RocEvent> e) {
+        auto event = std::dynamic_pointer_cast<ComputeSelectionChangedEvent>(e);
+        if(event && event->GetSourceId() == m_data_provider.GetTraceFilePath())
+            SelectWorkload(event->GetId());
+    };
+    m_workload_selection_changed_token = EventManager::GetInstance()->Subscribe(
+        static_cast<int>(RocEvents::kComputeWorkloadSelectionChanged), workload_changed);
+
     auto kernel_changed = [this](std::shared_ptr<RocEvent> e) {
         auto event = std::dynamic_pointer_cast<ComputeSelectionChangedEvent>(e);
         if(event && event->GetSourceId() == m_data_provider.GetTraceFilePath())
@@ -70,33 +82,73 @@ ComputeCodeView::SubscribeToEvents()
 }
 
 void
+ComputeCodeView::SelectWorkload(uint32_t workload_id)
+{
+    m_current_workload_id = workload_id;
+}
+
+void
 ComputeCodeView::LoadData(uint32_t kernel_id)
 {
     m_current_kernel_id = kernel_id;
 
-    for(const WorkloadInfo* workload : m_data_provider.ComputeModel().GetWorkloadList())
+    const WorkloadInfo* workload =
+        m_data_provider.ComputeModel().GetWorkload(m_current_workload_id);
+    if(!workload || !workload->kernels.count(kernel_id))
     {
-        if(workload->kernels.count(kernel_id))
+        m_current_workload_id = ComputeSelection::INVALID_SELECTION_ID;
+        for(const WorkloadInfo* candidate : m_data_provider.ComputeModel().GetWorkloadList())
         {
-            m_current_workload_id = workload->id;
-            break;
+            if(candidate->kernels.count(kernel_id))
+            {
+                m_current_workload_id = candidate->id;
+                break;
+            }
         }
     }
     if(m_current_workload_id == ComputeSelection::INVALID_SELECTION_ID)
+    {
+        m_pending_refetch = false;
+        if(m_fetch_in_progress)
+            m_data_provider.CancelRequest(m_active_request_id);
+        ClearSelectionData();
         return;
+    }
 
     const KernelInfo* kernel_info = m_data_provider.ComputeModel().GetKernelInfo(
         m_current_workload_id, kernel_id);
     if(!kernel_info)
+    {
+        m_current_workload_id = ComputeSelection::INVALID_SELECTION_ID;
+        m_pending_refetch     = false;
+        if(m_fetch_in_progress)
+            m_data_provider.CancelRequest(m_active_request_id);
+        ClearSelectionData();
         return;
+    }
 
     // Source file list is already populated eagerly - just refresh the selection.
     LoadSourceFileList(kernel_info->pc_sampling_data);
 
     // Clear stale widget data and kick off the async fetch for the selected file.
+    ClearCodeData();
+    FetchPcSamplingForCurrentFile();
+}
+
+void
+ComputeCodeView::ClearCodeData()
+{
     m_source_code->Load({}, 0);
     m_isa_code->Load({}, 0);
-    FetchPcSamplingForCurrentFile();
+}
+
+void
+ComputeCodeView::ClearSelectionData()
+{
+    m_source_files.clear();
+    m_current_source_file_id = ComputeSelection::INVALID_SELECTION_ID;
+    m_current_code_object_id = ComputeSelection::INVALID_SELECTION_ID;
+    ClearCodeData();
 }
 
 void
@@ -104,7 +156,12 @@ ComputeCodeView::FetchPcSamplingForCurrentFile()
 {
     if(m_current_kernel_id == ComputeSelection::INVALID_SELECTION_ID ||
        m_current_source_file_id == ComputeSelection::INVALID_SELECTION_ID)
+    {
+        m_pending_refetch = false;
+        if(m_fetch_in_progress)
+            m_data_provider.CancelRequest(m_active_request_id);
         return;
+    }
 
     if(m_fetch_in_progress)
     {
@@ -113,6 +170,8 @@ ComputeCodeView::FetchPcSamplingForCurrentFile()
         return;
     }
 
+    // This ID correlates the callback with the selected kernel and source file;
+    // it does not permit multiple Code View requests to run concurrently.
     const uint64_t request_id = RequestIdBuilder::MakeClientRequestId(
         RequestType::kFetchPcSampling,
         (static_cast<uint64_t>(m_current_kernel_id) << 32) | m_current_source_file_id);
@@ -129,12 +188,14 @@ ComputeCodeView::FetchPcSamplingForCurrentFile()
 }
 
 void
-ComputeCodeView::OnPcSamplingReady(uint32_t kernel_id, uint32_t source_file_id, bool success)
+ComputeCodeView::OnPcSamplingReady(uint32_t kernel_id, uint32_t source_file_id,
+                                   uint32_t generation, bool success)
 {
     const uint64_t request_id = RequestIdBuilder::MakeClientRequestId(
         RequestType::kFetchPcSampling,
         (static_cast<uint64_t>(kernel_id) << 32) | source_file_id);
-    if(!m_fetch_in_progress || request_id != m_active_request_id)
+    if(!m_fetch_in_progress || request_id != m_active_request_id ||
+       generation != m_fetch_generation)
     {
         return;
     }

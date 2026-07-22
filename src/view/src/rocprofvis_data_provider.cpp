@@ -4441,7 +4441,7 @@ void DataProvider::SetFetchMetricsCallback(
 }
 
 void DataProvider::SetFetchPcSamplingCallback(
-    const std::function<void(const std::string&, uint32_t, uint32_t, bool)>& callback)
+    const std::function<void(const std::string&, uint32_t, uint32_t, uint32_t, bool)>& callback)
 {
     m_pc_sampling_fetch_callback = callback;
 }
@@ -4456,6 +4456,8 @@ DataProvider::FetchPcSampling(const PcSamplingRequestParams& params)
         return false;
     }
 
+    // Kernel and source-file IDs identify the response. They are not a
+    // concurrency key: this provider permits one PC sampling request at a time.
     const uint64_t request_id = RequestIdBuilder::MakeClientRequestId(
         RequestType::kFetchPcSampling,
         (static_cast<uint64_t>(params.m_kernel_id) << 32) | params.m_source_file_id);
@@ -4468,20 +4470,10 @@ DataProvider::FetchPcSampling(const PcSamplingRequestParams& params)
             continue;
         }
 
-        std::shared_ptr<PcSamplingRequestParams> pending_params =
-            std::dynamic_pointer_cast<PcSamplingRequestParams>(request.custom_params);
-        if(pending_params && pending_params->m_kernel_id == params.m_kernel_id)
-        {
-            spdlog::debug("PC sampling request already pending for kernel {}",
-                          params.m_kernel_id);
-            return false;
-        }
-    }
-
-    if(m_requests.find(request_id) != m_requests.end())
-    {
-        spdlog::debug("PC sampling request already pending for kernel {} file {}",
-                      params.m_kernel_id, params.m_source_file_id);
+        // Code View uses latest-selection-wins semantics. The active request is
+        // allowed to finish cancellation before the deferred replacement is
+        // submitted, so only one PC sampling request exists per trace.
+        spdlog::debug("PC sampling request already pending for this trace");
         return false;
     }
 
@@ -4517,7 +4509,7 @@ DataProvider::FetchPcSampling(const PcSamplingRequestParams& params)
 
     if(result == kRocProfVisResultSuccess)
     {
-        m_pc_sampling_generation[params.m_kernel_id] = params.m_generation;
+        m_pc_sampling_generation = params.m_generation;
 
         m_requests.emplace(
             request_id,
@@ -4548,7 +4540,7 @@ DataProvider::ProcessLoadComputeTrace(RequestInfo& req)
         }
         return;
     }
-    m_pc_sampling_generation.clear();
+    m_pc_sampling_generation = 0;
 
     uint64_t            num_workloads = 0;
     rocprofvis_result_t result        = rocprofvis_controller_get_uint64(
@@ -5430,11 +5422,9 @@ DataProvider::ProcessPcSamplingRequest(RequestInfo& req)
     const bool           success   = (req.response_code == kRocProfVisResultSuccess);
     rocprofvis_handle_t* pc_handle = req.request_obj_handle;
 
-    // Discard results that belong to a superseded generation for this kernel.
-    const auto gen_it = m_pc_sampling_generation.find(params->m_kernel_id);
+    // Discard results that belong to a superseded Code View selection.
     const bool is_current_generation =
-        gen_it != m_pc_sampling_generation.end() &&
-        gen_it->second == params->m_generation;
+        m_pc_sampling_generation == params->m_generation;
 
     if(success && pc_handle && is_current_generation)
     {
@@ -5454,7 +5444,7 @@ DataProvider::ProcessPcSamplingRequest(RequestInfo& req)
     {
         spdlog::debug("PC sampling result for kernel {} generation {} discarded (current: {})",
                       params->m_kernel_id, params->m_generation,
-                      gen_it != m_pc_sampling_generation.end() ? gen_it->second : 0);
+                      m_pc_sampling_generation);
     }
     else if(!success)
     {
@@ -5468,7 +5458,8 @@ DataProvider::ProcessPcSamplingRequest(RequestInfo& req)
         m_pc_sampling_fetch_callback(m_model.GetTraceFilePath(),
                                      params->m_kernel_id,
                                      params->m_source_file_id,
-                                     success);
+                                     params->m_generation,
+                                     success && is_current_generation);
     }
 }
 

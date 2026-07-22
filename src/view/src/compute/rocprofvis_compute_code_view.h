@@ -38,10 +38,14 @@ private:
     void RenderControlPanel();
     void RenderSourceFileDropdown();
     void SubscribeToEvents();
+    void SelectWorkload(uint32_t workload_id);
     void LoadData(uint32_t kernel_id);
+    void ClearCodeData();
+    void ClearSelectionData();
     void LoadSourceFileList(const PcSamplingData& data);
     void FetchPcSamplingForCurrentFile();
-    void OnPcSamplingReady(uint32_t kernel_id, uint32_t source_file_id, bool success);
+    void OnPcSamplingReady(uint32_t kernel_id, uint32_t source_file_id,
+                           uint32_t generation, bool success);
 
     SettingsManager&                  m_settings;
     DataProvider&                     m_data_provider;
@@ -66,6 +70,7 @@ private:
     float m_control_panel_height;
 
     EventManager::SubscriptionToken m_kernel_selection_changed_token;
+    EventManager::SubscriptionToken m_workload_selection_changed_token;
     bool m_show_metadata_enabled;
 };
 

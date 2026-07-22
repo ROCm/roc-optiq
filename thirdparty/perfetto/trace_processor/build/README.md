@@ -18,7 +18,7 @@ cmake --build . --target build_perfetto_libs
 ```
 
 > **Note:** The Linux target requires Docker to be installed and running.
-> The Windows target must be run on Windows with GN, Ninja, and Python on PATH.
+> The Windows target must be run on Windows with Python on PATH.
 
 ---
 
@@ -32,19 +32,25 @@ git clone https://github.com/google/perfetto
 cd perfetto
 git checkout v47.0
 
+# Downloads all dependencies including GN and Ninja into third_party/
 python tools\install-build-deps
 
+# GN and Ninja are now available at:
+#   third_party\gn\gn.exe
+#   third_party\ninja\ninja.exe
+# No PATH modification needed.
+
 # Write args files directly to avoid shell quoting issues
-gn gen out\release --root=.
+third_party\gn\gn.exe gen out\release --root=.
 "is_debug=false`nextra_cflags=`"/MD`"" | Set-Content out\release\args.gn
-gn gen out\release --root=.
+third_party\gn\gn.exe gen out\release --root=.
 
-gn gen out\debug --root=.
+third_party\gn\gn.exe gen out\debug --root=.
 "is_debug=false`nextra_cflags=`"/MDd`"" | Set-Content out\debug\args.gn
-gn gen out\debug --root=.
+third_party\gn\gn.exe gen out\debug --root=.
 
-ninja -C out\release src/trace_processor:trace_processor
-ninja -C out\debug   src/trace_processor:trace_processor
+third_party\ninja\ninja.exe -C out\release src/trace_processor:trace_processor
+third_party\ninja\ninja.exe -C out\debug   src/trace_processor:trace_processor
 
 # Copy artifacts to project — replace ${PROJECT} with your project root
 $PROJECT = "C:\path\to\rocprofiler-visualizer"
@@ -57,11 +63,6 @@ Copy-Item out\debug\trace_processor.lib   "$DEST\lib\windows\debug\"
 Copy-Item -Recurse out\release\gen\build_config "$DEST\gen\build_config" -Force
 Copy-Item -Recurse include\perfetto             "$DEST\include\perfetto"  -Force
 ```
-
-> **Note:** `gn` and `ninja` refer to the binaries downloaded by
-> `install-build-deps` into `third_party/gn/` and `third_party/ninja/`.
-> Add them to PATH or use their full paths:
-> `third_party/gn/gn.exe` and `third_party/ninja/ninja.exe`.
 
 ---
 

@@ -15,8 +15,10 @@
 #include <cfloat>
 #include <chrono>
 #include <filesystem>
+#include <memory>
 #include <thread>
 #include <unordered_map>
+#include <vector>
 
 std::string g_input_file = "sample/trace_70b_1024_32.rpd";
 
@@ -3308,4 +3310,89 @@ TEST_CASE("JobSystem Job polling contract unchanged")
     job.Execute();
     REQUIRE(job.Wait(0.0f) == kRocProfVisResultSuccess);
     REQUIRE(job.GetResult() == kRocProfVisResultSuccess);
+}
+
+// Lost-wakeup stress test for Job::Wait(FLT_MAX). Races many worker/waiter
+// pairs at once to reproduce the rare CI hang (seen most on the arm64 macOS
+// runner, occasionally on the few-core Windows runner):
+//   * unfixed code -> a lost wakeup eventually parks a waiter forever, wedging
+//     the join() below (the exact hang CI hits); kill the process to confirm.
+//   * fixed code   -> always runs to completion and passes.
+// Heavy oversubscription forces a waiter to be preempted between the unlocked
+// m_result read and cv.wait (as on few-core runners); the simultaneous release
+// gate with no delay maximizes the odds the worker's unlocked notify_all()
+// lands in that window (which weak-ordering arm64 exposes most readily).
+TEST_CASE("JobSystem Job lost-wakeup stress repro")
+{
+    using RocProfVis::Controller::Future;
+    using RocProfVis::Controller::Job;
+
+    const unsigned hw = std::max(2u, std::thread::hardware_concurrency());
+    // Oversubscribe: many more runnable threads than cores so the scheduler
+    // frequently preempts a waiter mid-Wait, mimicking the few-core CI runners.
+    // Round count is kept modest so the fixed branch finishes quickly; on the
+    // unfixed branch the very first lost wakeup wedges the run, so more rounds
+    // only cost time on the (already-correct) fixed branch. Bump `rounds` if
+    // you need a longer soak to reproduce on a strongly-ordered x86 box.
+    const int pairs  = int(hw) * 4;
+    const int rounds = 1000;
+
+    for(int r = 0; r < rounds; ++r)
+    {
+        std::vector<std::unique_ptr<Job>> jobs;
+        jobs.reserve(size_t(pairs));
+        for(int p = 0; p < pairs; ++p)
+        {
+            jobs.emplace_back(std::make_unique<Job>(
+                [](Future*) { return kRocProfVisResultSuccess; }, nullptr));
+        }
+
+        std::atomic<bool>        go{ false };
+        std::atomic<int>         successes{ 0 };
+        std::vector<std::thread> threads;
+        threads.reserve(size_t(pairs) * 2);
+
+        spdlog::info("Round {}: Launching {} jobs", r, pairs);
+
+        for(int p = 0; p < pairs; ++p)
+        {
+            Job* job = jobs[size_t(p)].get();
+
+            // Worker: on release, immediately publish + notify (no delay), so
+            // the notify can race straight into the waiter's (A)->(B) window.
+            threads.emplace_back([job, &go]() {
+                while(!go.load(std::memory_order_acquire))
+                {
+                }
+                job->Execute();
+            });
+
+            // Waiter: on release, block on the CV with no timeout. On unfixed
+            // code a lost wakeup parks this thread forever. NOTE: Catch2 macros
+            // are not thread-safe, so results are tallied atomically here and
+            // asserted on the main thread after the join.
+            threads.emplace_back([job, &go, &successes]() {
+                while(!go.load(std::memory_order_acquire))
+                {
+                }
+                if(job->Wait(FLT_MAX) == kRocProfVisResultSuccess)
+                {
+                    successes.fetch_add(1, std::memory_order_relaxed);
+                }
+            });
+        }
+
+        // Thundering-herd release: all pairs race at once to maximize churn.
+        go.store(true, std::memory_order_release);
+
+        // On unfixed code this join() is where the process wedges forever once
+        // any waiter has lost its wakeup -- exactly the CI hang being chased.
+        spdlog::info("Joining threads");
+        for(std::thread& t : threads)
+        {
+            t.join();
+        }
+
+        REQUIRE(successes.load(std::memory_order_relaxed) == pairs);
+    }
 }

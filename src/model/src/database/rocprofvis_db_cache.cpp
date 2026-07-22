@@ -56,7 +56,7 @@ namespace DataModel
         }
     }
 
-    const char* TableCache::GetCell(uint64_t row_id, const char* column_name)
+    const char* TableCache::GetCell(uint64_t row_id, std::string column_name)
     {
         auto it_row = m_row_index.find(row_id);
         auto it_column = m_column_index.find(column_name);
@@ -76,7 +76,7 @@ namespace DataModel
         return "";
     }
 
-    const char* TableCache::GetCellByIndex(uint64_t row_index, const char* column_name)
+    const char* TableCache::GetCellByIndex(uint64_t row_index, std::string column_name)
     {
         auto it_column = m_column_index.find(column_name);
         if (row_index < m_rows.size() && it_column!=m_column_index.end())
@@ -113,45 +113,45 @@ namespace DataModel
         return nullptr;
     }
 
-    void DatabaseCache::AddTableCell(const char* table_name, uint64_t row_id, uint32_t column_index, const char* cell_value)
+    void DatabaseCache::AddTableCell(std::string table_name, uint64_t row_id, uint32_t column_index, std::string cell_value)
     {
         std::unique_lock<std::shared_mutex> lock(m_mutex);
         tables[table_name].AddCell(column_index, row_id, cell_value);
     }
-    void DatabaseCache::AddTableCell(const char* table_name, uint64_t row_id, const char* column_name, rocprofvis_db_data_type_t column_type, const char* cell_value)
+    void DatabaseCache::AddTableCell(std::string table_name, uint64_t row_id, std::string column_name, rocprofvis_db_data_type_t column_type, std::string cell_value)
     {
         std::unique_lock<std::shared_mutex> lock(m_mutex);
         uint32_t column_index = tables[table_name].AddColumn(column_name, column_type);
         tables[table_name].AddCell(column_index, row_id, cell_value);
     }
-    void DatabaseCache::AddTableRow(const char* table_name, uint64_t row_id)
+    void DatabaseCache::AddTableRow(std::string table_name, uint64_t row_id)
     {
         std::unique_lock<std::shared_mutex> lock(m_mutex);
         tables[table_name].AddRow(row_id);
     }
-    void DatabaseCache::AddTableColumn(const char* table_name, const char* column_name, rocprofvis_db_data_type_t column_type)
+    void DatabaseCache::AddTableColumn(std::string table_name, std::string column_name, rocprofvis_db_data_type_t column_type)
     {
         std::unique_lock<std::shared_mutex> lock(m_mutex);
         tables[table_name].AddColumn(column_name, column_type);
     }
-    const char* DatabaseCache::GetTableCell(const char* table_name, uint64_t row_id, const char* column_name)
+    const char* DatabaseCache::GetTableCell(std::string table_name, uint64_t row_id, std::string column_name)
     {
-        std::shared_lock<std::shared_mutex> lock(m_mutex);
+        std::unique_lock<std::shared_mutex> lock(m_mutex);
         return tables[table_name].GetCell(row_id,column_name);
     }
-    const char* DatabaseCache::GetTableCellByIndex(const char* table_name, uint32_t row_index, const char* column_name)
+    const char* DatabaseCache::GetTableCellByIndex(std::string table_name, uint32_t row_index, std::string column_name)
     {
-        std::shared_lock<std::shared_mutex> lock(m_mutex);
+        std::unique_lock<std::shared_mutex> lock(m_mutex);
         return tables[table_name].GetCellByIndex(row_index,column_name);
     }
 
-    void* DatabaseCache::GetTableHandle(const char* table_name)
+    void* DatabaseCache::GetTableHandle(std::string table_name)
     {
-        std::shared_lock<std::shared_mutex> lock(m_mutex);
+        std::unique_lock<std::shared_mutex> lock(m_mutex);
         return &tables[table_name];
     }
 
-    rocprofvis_dm_result_t DatabaseCache::PopulateTrackExtendedDataTemplate(Database * db, uint32_t db_instance_id, const char* table_name, uint64_t process_id ){
+    rocprofvis_dm_result_t DatabaseCache::PopulateTrackExtendedDataTemplate(Database * db, uint32_t db_instance_id, std::string table_name, uint64_t process_id ){
         rocprofvis_dm_track_params_t* track_properties = db->TrackPropertiesLast();
         TableCache& table = tables[table_name];
         uint32_t num_columns = table.NumColumns();
@@ -161,7 +161,7 @@ namespace DataModel
             rocprofvis_db_ext_data_t record;
             record.name = table.GetColumnName(i);
             record.data     = str_id.c_str();
-            record.category = table_name;
+            record.category = table_name.c_str();
             record.type  = table.GetColumnType(i);
             record.db_instance = db_instance_id;
             rocprofvis_dm_result_t result = db->BindObject()->FuncAddExtDataRecord(track_properties->extdata, record);
@@ -170,7 +170,7 @@ namespace DataModel
         return PopulateTrackTopologyData(db, &track_properties->track_indentifiers, db_instance_id, table_name, process_id);
     }
 
-    rocprofvis_dm_result_t DatabaseCache::PopulateTrackTopologyData(Database * db, rocprofvis_dm_track_identifiers_t * track_indentifiers, uint32_t db_instance_id, const char* table_name, uint64_t process_id ){
+    rocprofvis_dm_result_t DatabaseCache::PopulateTrackTopologyData(Database * db, rocprofvis_dm_track_identifiers_t * track_indentifiers, uint32_t db_instance_id, std::string table_name, uint64_t process_id ){
         (void) db_instance_id;
         TableCache& table = tables[table_name];
         uint32_t num_columns = table.NumColumns();
@@ -182,7 +182,7 @@ namespace DataModel
                 db->BindObject()->trace_object, 
                 track_indentifiers, 
                 (rocprofvis_db_topology_data_type_t)type, 
-                table_name,  
+                table_name.c_str(),
                 name,
                 (void*)table.GetCell(process_id, name));
             if (result != kRocProfVisDmResultSuccess) return result;

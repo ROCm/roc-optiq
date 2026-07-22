@@ -59,7 +59,7 @@ class Trace : public DmBase{
         // @param db - pointer to database
         // @param bind_data - reference to pointer to bind data structure
         // @return status of operation 
-        rocprofvis_dm_result_t                          BindDatabase(rocprofvis_dm_database_t db, rocprofvis_dm_db_bind_struct* &bind_data);
+        rocprofvis_dm_result_t                          BindDatabase(rocprofvis_dm_database_t db, rocprofvis_dm_db_bind_struct* &bind_data, rocprofvis_dm_string_t config_path);
         // Method to delete a time slice with provide start and stop timestamps
         // @param start - time slice start timestamp
         // @param stop - time slice stop timestamp

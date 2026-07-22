@@ -85,7 +85,7 @@ public:
     rocprofvis_dm_string_t GetEventLevelQuery( const rocprofvis_dm_track_category_t category);
     rocprofvis_dm_string_t GetEventSliceQuery( const rocprofvis_dm_track_category_t category);
 
-    int ProcessTrack(rocprofvis_dm_track_params_t& track_params, rocprofvis_dm_charptr_t*  newqueries) override;
+    int ProcessTrack(rocprofvis_dm_track_params_t& track_params, std::vector<rocprofvis_dm_string_t> &  newqueries) override;
     
 private:
 

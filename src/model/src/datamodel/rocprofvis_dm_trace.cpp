@@ -19,10 +19,11 @@ Trace::Trace()
     m_parameters.metadata_loaded=false;
 }
 
-rocprofvis_dm_result_t Trace::BindDatabase(rocprofvis_dm_database_t db, rocprofvis_dm_db_bind_struct* & bind_data)
+rocprofvis_dm_result_t Trace::BindDatabase(rocprofvis_dm_database_t db, rocprofvis_dm_db_bind_struct* & bind_data, rocprofvis_dm_string_t config_path)
 {
     ROCPROFVIS_ASSERT_MSG_RETURN(db, ERROR_DATABASE_CANNOT_BE_NULL, kRocProfVisDmResultInvalidParameter);
      
+    m_binding_info.config_path = config_path;
     m_binding_info.trace_object = this;
     m_binding_info.trace_properties = &m_parameters;
     m_binding_info.FuncAddTrack = AddTrack;
@@ -381,7 +382,7 @@ rocprofvis_dm_index_t Trace::AddString(const rocprofvis_dm_trace_t object,  cons
     Trace* trace = (Trace*)object;
     rocprofvis_dm_index_t current_index = (rocprofvis_dm_index_t)trace->m_strings.size();
     try{
-        trace->m_strings.push_back(stringValue);
+        trace->m_strings.push_back(std::string(stringValue));
     }
     catch(const std::exception&)
     {

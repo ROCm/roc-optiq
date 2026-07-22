@@ -1,0 +1,297 @@
+// Copyright Advanced Micro Devices, Inc.
+// SPDX-License-Identifier: MIT
+
+#pragma once
+
+#include "rocprofvis_db_sqlite.h"
+#include "sqlite3.h" 
+#include <set>
+#include <mutex>
+#include <condition_variable>
+#include "rocprofvis_db_query_builder.h"
+#include "rocprofvis_db_table_processor.h"
+
+namespace RocProfVis
+{
+namespace DataModel
+{
+
+#define MAX_CONNECTIONS 100
+#define SINGLE_THREAD_RECORDS_COUNT_LIMIT 50000
+#define NO_THREAD_RECORDS_COUNT_LIMIT 1000
+
+typedef enum rocprofvis_db_query_type_t
+{
+    kRPVRocpdQuerySliceByQueue=0,
+    kRPVPerfettoQuerySlice=0,
+    kRPVRocpdQuerySliceByStream=1,
+    kRPVRocpdQueryTable=2,
+    kRPVPerfettoQueryTable=2,
+    kRPVRocpdQueryLevel=3,
+    kRPVRocpdQuerySliceByTrackSliceQuery=5,
+} rocprofvis_db_query_type_t;
+
+// type of sqlite3_exec callback function
+typedef int (*RpvSqliteExecuteQueryCallback)(void*, int, sqlite3_stmt*, char**);
+
+
+typedef enum rocprofvis_db_sqlite_query_type_t
+{
+    kRPVSourceQueryGeneric = 0,
+    kRPVSourceQueryTrackByQueue = 0,
+    kRPVSourceQueryTrackByStream = 1,
+    kRPVCacheTableName = 1,
+    kRPVSourceQueryLevel = 2,
+    kRPVSourceQuerySliceByQueue = 3,
+    kRPVSourceQuerySliceByStream = 4,
+    kRPVSourceQueryTable = 5,
+    kRPVNumSourceQueryTypes = 6
+} rocprofvis_db_sqlite_query_type_t;
+
+typedef enum rocprofvis_dm_track_search_id_t
+{
+    kRPVTrackSearchIdThreads,
+    kRPVTrackSearchIdThreadSamples,
+    kRPVTrackSearchIdDispatches,
+    kRPVTrackSearchIdMemAllocs,
+    kRPVTrackSearchIdMemCopies,
+    kRPVTrackSearchIdCounters,
+    kRPVTrackSearchIdStreams,
+    kRPVTrackSearchIdUnknown,
+} rocprofvis_dm_track_search_id_t;
+
+typedef enum rocprofvis_db_compound_table_type {
+    kRPVTableDataTypeEvent,
+    kRPVTableDataTypeSample,
+    kRPVTableDataTypeSearch,
+    kRPVTableDataTypeAnalysis,
+    kRPVTableDataTypesNum
+} rocprofvis_db_compound_table_type;
+
+typedef std::map<uint64_t, std::map<std::string, rocprofvis_event_data_category_enum_t>> rocprofvis_event_data_category_map_t;
+
+// class for any Sqlite database methods and properties 
+class QueryManager : public SqliteDatabase
+{
+    friend class TableProcessor;
+    friend class PackedTable;
+    friend class TrackLookup;
+    public:
+        // Database constructor
+        // @param path - full path to database file
+        QueryManager( rocprofvis_db_filename_t path, RpvSqliteExecuteQueryCallback callback_add_any_record) : 
+                        SqliteDatabase(path), m_callback_add_any_record(callback_add_any_record),
+            m_table_processor{TableProcessor(this),TableProcessor(this),TableProcessor(this), TableProcessor(this)} {};
+        // SqliteDatabase destructor, must be defined as virtual to free resources of derived classes 
+        virtual ~QueryManager() {};
+
+    protected:
+        
+        // worker method to execute database query
+        // @param query - database query 
+        // @param description - database description
+        // @param object - future object providing asynchronous execution mechanism 
+        // @return status of operation
+        rocprofvis_dm_result_t  ExecuteQuery(
+            rocprofvis_dm_charptr_t query,
+            rocprofvis_dm_charptr_t description,
+            Future* future) override; 
+        // method to build a query to read time slice of records for single track 
+        // @param index - track index 
+        // @param type - query type
+        // @param query - reference to output query string  
+        // @return status of operation
+        virtual rocprofvis_dm_result_t  BuildTrackQuery(           
+            rocprofvis_dm_index_t index, 
+            rocprofvis_dm_index_t type,
+            rocprofvis_dm_string_t & query,
+            uint32_t split_count,
+            uint32_t split_index) = 0;
+
+        // method to build a query to read time slice of records for all tracks in one shot 
+        // @param start - start timestamp of time slice 
+        // @param end - end timestamp of time slice 
+        // @param num - number of tracks
+        // @param tracks - uint32_t array with track IDs 
+        // @param query - reference to query string 
+        // @param slices - reference map array for storing slice handlers for multi-track request   
+        // @return status of operation                                                      
+        virtual rocprofvis_dm_result_t  BuildSliceQuery(      
+            rocprofvis_dm_timestamp_t start, 
+            rocprofvis_dm_timestamp_t end, 
+            rocprofvis_db_num_of_tracks_t num, 
+            rocprofvis_db_track_selection_t tracks, 
+            rocprofvis_dm_string_t& query, 
+            slice_array_t& slices) override;
+
+        // worker method to read time slice
+        // @param start - start timestamp of time slice 
+        // @param end - end timestamp of time slice 
+        // @param num - number of tracks
+        // @param tracks - uint32_t array with track IDs  
+        // @param object - future object providing asynchronous execution mechanism   
+        // @return status of operation        
+        rocprofvis_dm_result_t  ReadTraceSlice(
+            rocprofvis_dm_timestamp_t start,
+            rocprofvis_dm_timestamp_t end,
+            rocprofvis_dm_hashed_timestamp_tag_t tag,
+            rocprofvis_db_num_of_tracks_t num,
+            rocprofvis_db_track_selection_t tracks,
+            Future* object) override;
+        // worker method to read PMC time slice
+        // @param start - start timestamp of time slice 
+        // @param end - end timestamp of time slice 
+        // @param track - track ID
+        // @param left_neighbor - include the left neighbor of the time range
+        // @param right_neighbor - include the right neighbor of the time range 
+        // @param object - future object providing asynchronous execution mechanism   
+        // @return status of operation 
+        rocprofvis_dm_result_t  ReadTracePMCSlice(
+            rocprofvis_dm_timestamp_t start,
+            rocprofvis_dm_timestamp_t end,
+            rocprofvis_dm_hashed_timestamp_tag_t tag,
+            rocprofvis_db_track_selection_t track,
+            bool left_neighbor,
+            bool right_neighbor,
+            Future* object) override;
+
+        // sqlite3_exec callback to read value from single column and single row
+        // @param data - pointer to callback caller argument
+        // @param argc - number of columns in the query
+        // @param argv - pointer to row values
+        // @param azColName - pointer to column names  
+        // @return SQLITE_OK if successful
+        static int CallbackGetValue(void* data, int argc, sqlite3_stmt* stmt, char** azColName);  
+        // sqlite3_exec callback to store all requested rows into Table container
+        // @param data - pointer to callback caller argument
+        // @param argc - number of columns in the query
+        // @param argv - pointer to row values
+        // @param azColName - pointer to column names  
+        // @return SQLITE_OK if successful
+        static int CallbackRunQuery(void *data, int argc, sqlite3_stmt* stmt, char **azColName); 
+
+        static int CallbackMakeHistogramPerTrack(void* data, int argc, sqlite3_stmt* stmt,
+            char** azColName);
+
+        static rocprofvis_event_data_category_enum_t GetColumnDataCategory(
+            const rocprofvis_event_data_category_map_t category_map,
+            rocprofvis_dm_event_operation_t op, std::string column);
+
+        rocprofvis_dm_result_t RunCacheQueries(Future* future, std::vector<std::pair<std::string, std::string>>& info_table_lis, RpvSqliteExecuteQueryCallback   callback, bool async = true);
+
+        uint32_t CalculateParallelProcessSplitCount(uint32_t track_index);
+
+        rocprofvis_dm_result_t ExecuteQueryForAllTracksAsync(
+            uint32_t flags, 
+            rocprofvis_dm_index_t query_type,
+            rocprofvis_dm_charptr_t prefix, 
+            rocprofvis_dm_charptr_t suffix,
+            RpvSqliteExecuteQueryCallback callback, 
+            std::function<std::string(rocprofvis_dm_track_params_t*, rocprofvis_dm_charptr_t)> func_prepare,
+            std::function<void(rocprofvis_dm_track_params_t*)> func_clear,
+            guid_list_t run_for_db_instances);
+
+        rocprofvis_dm_result_t BuildTableQuery(
+            rocprofvis_dm_table_use_case_enum_t use_case,
+            rocprofvis_dm_timestamp_t start, 
+            rocprofvis_dm_timestamp_t end,
+            rocprofvis_db_num_of_tracks_t num,
+            rocprofvis_db_track_selection_t tracks,
+            rocprofvis_dm_charptr_t where,
+            rocprofvis_dm_charptr_t filter,
+            rocprofvis_dm_charptr_t group,
+            rocprofvis_dm_charptr_t group_cols, 
+            rocprofvis_dm_charptr_t sort_column, 
+            rocprofvis_dm_sort_order_t sort_order,
+            rocprofvis_dm_num_string_table_filters_t num_string_table_filters, 
+            rocprofvis_dm_string_table_filters_t string_table_filters,
+            uint64_t max_count, 
+            uint64_t offset,
+            bool count_only,
+            rocprofvis_dm_string_t& query) override;
+
+        rocprofvis_dm_result_t ExecuteQueriesAsync(
+            std::vector<std::pair<DbInstance*, std::string>>& queries,
+            Future* parent,
+            rocprofvis_dm_handle_t handle,
+            RpvSqliteExecuteQueryCallback callback);
+
+        rocprofvis_dm_result_t BuildComputeQuery(
+            rocprofvis_db_compute_use_case_enum_t use_case, rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params,
+            rocprofvis_dm_string_t& query) override {
+            (void) use_case;
+            (void) num;
+            (void) params;
+            (void) query;
+            ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN("Systems database does not build compute query", kRocProfVisDmResultNotSupported);
+        }
+
+        rocprofvis_dm_result_t  ExecuteComputeQuery(
+            rocprofvis_db_compute_use_case_enum_t use_case,
+            rocprofvis_dm_charptr_t query,
+            Future* future) override {
+            (void) use_case;
+            (void) query;
+            (void) future;
+            ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN("Systems database does not support compute query", kRocProfVisDmResultNotSupported);
+        }
+
+
+        std::string GetHistogramQueryPrefix(uint64_t bucket_size);
+        std::string GetHistogramQuerySuffix();
+
+        virtual void BuildSliceQueryMap(slice_query_map_t& slice_query_map, rocprofvis_dm_track_params_t* props) = 0;
+        // Searches for strings containing the passed in list of filter strings and builds a WHERE IN clause for the table query.
+        // @param num_string_table_filters - number of filter strings
+        // @param string_table_filters - array of filter strings
+        // @param filter - output string containing WHERE clause
+        // @return status of operation
+        virtual rocprofvis_dm_result_t BuildTableStringIdFilter(
+            rocprofvis_dm_num_string_table_filters_t num_string_table_filters, 
+            rocprofvis_dm_string_table_filters_t string_table_filters,
+            table_string_id_filter_map_t& filter) = 0;
+        virtual void BuildTableQueryMap(
+            rocprofvis_db_num_of_tracks_t num,
+            rocprofvis_db_track_selection_t tracks,
+            rocprofvis_dm_num_string_table_filters_t num_string_table_filters,
+            rocprofvis_dm_string_table_filters_t string_table_filters,
+            std::vector<slice_query_map_t>& slice_query_map_array) = 0;
+
+        virtual rocprofvis_dm_string_t GetEventOperationQuery(
+            const rocprofvis_dm_event_operation_t operation) = 0;
+
+        virtual rocprofvis_dm_result_t RemapStringId(uint64_t id, rocprofvis_db_string_type_t type, uint32_t node, uint64_t & result) = 0;
+        virtual void GetTrackIdentifierIndices(int column_index, char** azColName, rocprofvis_db_sqlite_track_identifier_index_t& track_ids_indices) = 0;
+        virtual bool FindTrack(rocprofvis_dm_track_category_t category, uint64_t id_process, uint64_t id_subprocess, uint32_t db_instance, uint32_t& out_track) = 0;
+        virtual rocprofvis_dm_track_category_t GetRegionTrackCategory()    = 0;
+        virtual const rocprofvis_event_data_category_map_t* GetCategoryEnumMap() = 0;
+
+        rocprofvis_dm_result_t BuildCounterSliceLeftNeighbourQuery(
+            rocprofvis_dm_timestamp_t start, 
+            rocprofvis_dm_timestamp_t end, 
+            rocprofvis_dm_index_t track_index, 
+            rocprofvis_dm_string_t& query);
+        rocprofvis_dm_result_t BuildCounterSliceRightNeighbourQuery(
+            rocprofvis_dm_timestamp_t start, 
+            rocprofvis_dm_timestamp_t end, 
+            rocprofvis_dm_index_t track_index, 
+            rocprofvis_dm_string_t& query);
+
+        StringTable& StringTableReference() { return m_string_table; };
+
+    private:
+
+        static rocprofvis_dm_event_operation_t GetTableQueryOperation(std::string query);
+        bool IsEmptyRange(uint32_t track, uint64_t start, uint64_t end);
+
+    private:
+        RpvSqliteExecuteQueryCallback m_callback_add_any_record;
+
+    protected:
+        TableProcessor m_table_processor[kRPVTableDataTypesNum];
+        StringTable m_string_table;
+       
+};
+
+}  // namespace DataModel
+}  // namespace RocProfVis

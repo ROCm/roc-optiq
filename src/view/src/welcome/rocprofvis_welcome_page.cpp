@@ -88,7 +88,7 @@ constexpr float WELCOME_LOGO_ALPHA_BOTTOM_LIGHT = 0.18f;
 constexpr int   WELCOME_LOGO_POLYGON_VERTICES   = 6;
 
 constexpr const char* SUPPORTED_FILE_TYPES_HINT =
-    "Supported types: .db, .rpd, .yaml, .rpv";
+    "Supported types: .db, .rpd, .yaml, .rpv, .json, .proto, .pftrace";
 
 struct ResourceGroup
 {

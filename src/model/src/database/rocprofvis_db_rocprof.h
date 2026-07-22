@@ -172,7 +172,7 @@ private:
     rocprofvis_dm_result_t RemapStringIds(rocprofvis_db_record_data_t & record) override;
     rocprofvis_dm_result_t RemapStringIds(rocprofvis_db_flow_data_t& record) override;
 
-    int ProcessTrack(rocprofvis_dm_track_params_t& track_params, rocprofvis_dm_charptr_t*  newqueries) override;
+    int ProcessTrack(rocprofvis_dm_track_params_t& track_params, std::vector<rocprofvis_dm_string_t> & newqueries) override;
 
     protected:
     const rocprofvis_event_data_category_map_t* GetCategoryEnumMap() override {
@@ -210,7 +210,6 @@ private:
         rocprofvis_dm_result_t CreateAgentFriendlyMemoryAllocationTable(Future* future);
         rocprofvis_dm_result_t LoadMemoryActivityData(Future* future);
         rocprofvis_dm_result_t GenerateInterdependencyTables(Future* future);
-        rocprofvis_dm_result_t RunCacheQueriesAsync(Future* future, std::vector<std::pair<std::string, std::string>>& info_table_lis);
     protected:
         uint64_t GetMemoryActivityTableSchemaHash();
         std::string GetLevelSchemaHashStr();

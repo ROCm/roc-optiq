@@ -69,6 +69,7 @@ endif()
 
 # Add third-party libraries, core, and model BEFORE controller
 add_subdirectory(thirdparty)
+add_subdirectory(thirdparty/perfetto/trace_processor)
 add_subdirectory(src/core)
 add_subdirectory(src/model)
 add_subdirectory(src/controller)
@@ -762,3 +763,5 @@ if(WIN32)
         endif()
     endif()
 endif()
+
+perfetto_copy_dll_to(${TARGET_NAME})

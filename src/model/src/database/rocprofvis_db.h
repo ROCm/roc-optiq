@@ -443,33 +443,6 @@ class Database
                                                                 rocprofvis_db_compute_use_case_enum_t use_case,
                                                                 rocprofvis_dm_charptr_t query,
                                                                 Future* future) = 0;
-        // method to build a query to read time slice of records for single track 
-        // @param index - track index 
-        // @param type - query type
-        // @param query - reference to output query string  
-        // @return status of operation
-        virtual rocprofvis_dm_result_t  BuildTrackQuery(           
-                                                                rocprofvis_dm_index_t index, 
-                                                                rocprofvis_dm_index_t type,
-                                                                rocprofvis_dm_string_t & query,
-                                                                uint32_t split_count,
-                                                                uint32_t split_index) = 0;
-
-        // method to build a query to read time slice of records for all tracks in one shot 
-        // @param start - start timestamp of time slice 
-        // @param end - end timestamp of time slice 
-        // @param num - number of tracks
-        // @param tracks - uint32_t array with track IDs 
-        // @param query - reference to query string 
-        // @param slices - reference map array for storing slice handlers for multi-track request   
-        // @return status of operation                                                      
-        virtual rocprofvis_dm_result_t  BuildSliceQuery(      
-                                                                rocprofvis_dm_timestamp_t start, 
-                                                                rocprofvis_dm_timestamp_t end, 
-                                                                rocprofvis_db_num_of_tracks_t num, 
-                                                                rocprofvis_db_track_selection_t tracks, 
-                                                                rocprofvis_dm_string_t& query, 
-                                                                slice_array_t& slices) = 0;
 
         // method to export the results of a table query to .CSV
         // @param query - database query
@@ -487,6 +460,8 @@ class Database
         rocprofvis_dm_db_bind_struct *m_binding_info;
         // database file path
         std::string m_path;
+        // app config path
+        std::string m_config_path;
         // vector array of track parameters. Used as a reference for data model Track objects and for Database component to generate proper database queries 
         std::vector<std::unique_ptr<rocprofvis_dm_track_params_t>> m_track_properties;
         // map array of cached tables, mostly with non-essential Track information
@@ -516,15 +491,7 @@ class Database
         // @return status of operation
         rocprofvis_dm_result_t          AddTrackProperties(
                                                                 rocprofvis_dm_track_params_t& props);
-        // adds a new query to the track queries collection 
-        // multiple queries for single track are required to support data from multiple database tables on single track,
-        // like Kernel Dispatch, Memory Copy and Memory Allocation
-        // @param it - track properties array iterator
-        // @param newprops - new track properties structure
-        // @param newquery - new track records query. One track can have multiple queries.
-        void                            UpdateQueryForTrack(rocprofvis_dm_track_params_it it, 
-                                                            rocprofvis_dm_track_params_t& newprops,
-                                                            rocprofvis_dm_charptr_t*      newqueries);
+
         // calls Future object callback method, if provided. The callback method is optionally provided by caller in order to display or save current database progress.
         // @param step - approximate percentage of single database operation
         // @param action - database operation description

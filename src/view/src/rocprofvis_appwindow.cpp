@@ -53,9 +53,9 @@ constexpr const char* ABOUT_DIALOG_NAME      = "About##_dialog";
 constexpr const char* APP_SHUTDOWN_NOTIFICATION_ID = "provider_cleanup_app_shutdown";
 constexpr const char* SHUTDOWN_DIALOG_NAME = "Closing Traces##_shutdown";
 
-const std::vector<std::string> TRACE_EXTENSIONS   = { "db", "rpd", "yaml" };
+const std::vector<std::string> TRACE_EXTENSIONS   = { "db", "rpd", "yaml", "json", "proto", "pftrace"};
 const std::vector<std::string> PROJECT_EXTENSIONS = { "rpv" };
-const std::vector<std::string> ALL_EXTENSIONS     = { "db", "rpd", "yaml", "rpv" };
+const std::vector<std::string> ALL_EXTENSIONS     = { "db", "rpd", "yaml", "rpv", "json", "proto", "pftrace" };
 const std::vector<std::string> COMPARE_EXTENSIONS = { "db" };
 
 constexpr const char* CLEANUP_MESSAGE = "Waiting for requests to finish cleanup...";
@@ -1889,7 +1889,8 @@ AppWindow::RenderDeveloperMenu()
             file_filters.push_back(trace_filter);
             ShowOpenFileDialog("Choose File", file_filters, "",
                                [this](std::string file_path) -> void {
-                                   rocprofvis_controller_t* controller = rocprofvis_controller_alloc(file_path.c_str());
+                                   std::string config_path = get_application_config_path(true);
+                                    rocprofvis_controller_t*   controller = rocprofvis_controller_alloc(file_path.c_str(), config_path.c_str());
                                    if(controller)
                                    {
                                        this->m_test_data_provider.FetchTrace(controller, file_path);

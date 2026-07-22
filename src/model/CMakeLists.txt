@@ -34,15 +34,30 @@ file(GLOB DATAMODEL_SRC CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/src/datam
 file(GLOB DATABASE_SRC CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/src/database/*.cpp")
 file(GLOB MAIN_SRC CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/src/test/*.cpp")
 
+#Separate the DLL wrapper from the rest
+set(WRAPPER_SOURCE
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/database/rocprofvis_db_trace_processor_dll.cpp)
 
-add_library(${PROJECT_NAME} ${DATAMODEL_SRC} ${DATABASE_SRC} ${DATABASE_SRC} ${COMMON_SRC} )
+list(REMOVE_ITEM DATABASE_SRC ${WRAPPER_SOURCE})
+
+add_library(${PROJECT_NAME} ${DATAMODEL_SRC} ${DATABASE_SRC} ${COMMON_SRC} )
 target_include_directories(${PROJECT_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../core/inc)
 target_include_directories(${PROJECT_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../../thirdparty/jsoncpp)
+target_include_directories(${PROJECT_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../../thirdparty/perfetto/trace_processor/include)
+target_include_directories(${PROJECT_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../../thirdparty/perfetto/trace_processor/gen/build_config)
+
+set_source_files_properties(
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/database/rocprofvis_db_trace_processor.cpp
+    PROPERTIES COMPILE_FLAGS
+        "$<$<CONFIG:Debug>:/D_ITERATOR_DEBUG_LEVEL=2>"
+)
+
 target_link_libraries(${PROJECT_NAME} roc-optiq-core)
 target_link_libraries(${PROJECT_NAME} sqlite3)
 target_link_libraries(${PROJECT_NAME} spdlog)
 target_link_libraries(${PROJECT_NAME} yaml-cpp)
 target_link_libraries(${PROJECT_NAME} json)
+target_link_libraries(${PROJECT_NAME} perfetto_trace_processor)
 
 # TBB is conditionally required on Linux when libtbb-dev is installed
 # - Windows MSVC: Has its own parallel backend, doesn't need TBB
@@ -64,6 +79,8 @@ target_link_libraries(${PROJECT_NAME}-test roc-optiq-core)
 target_link_libraries(${PROJECT_NAME}-test spdlog)
 target_link_libraries(${PROJECT_NAME}-test sqlite3)
 target_link_libraries(${PROJECT_NAME}-test json)
+
+perfetto_copy_dll_to(${PROJECT_NAME}-test)
 
 if(BUILD_TESTING)
 	set(SYSTEM_TEST_NAME ${PROJECT_NAME}-system-tests)
@@ -95,4 +112,8 @@ if(BUILD_TESTING)
     add_test(NAME ${COMPUTE_TEST_NAME} COMMAND ${COMPUTE_TEST_NAME} --input_file "${CMAKE_SOURCE_DIR}/sample/rocprof_compute_23ed6f36.db")
     set_tests_properties(${COMPUTE_TEST_NAME} PROPERTIES RUN_SERIAL ON)
     set_tests_properties(${COMPUTE_TEST_NAME} PROPERTIES WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}")
+    
+    perfetto_copy_dll_to(${SYSTEM_TEST_NAME})
+    perfetto_copy_dll_to(${COMPUTE_TEST_NAME})
+
 endif()

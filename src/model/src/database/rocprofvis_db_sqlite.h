@@ -16,6 +16,9 @@ namespace DataModel
 {
 
 #define MAX_CONNECTIONS 100
+#define SINGLE_THREAD_RECORDS_COUNT_LIMIT 50000
+#define NO_THREAD_RECORDS_COUNT_LIMIT 1000
+
 
 // type of sqlite3_exec callback function
 typedef int (*RpvSqliteExecuteQueryCallback)(void*, int, sqlite3_stmt*, char**);
@@ -26,31 +29,6 @@ typedef struct SQLInsertParam
 } SQLInsertParam;
 
 typedef std::vector<SQLInsertParam>  SQLInsertParams;
-
-typedef enum rocprofvis_db_sqlite_query_type_t
-{
-    kRPVSourceQueryGeneric = 0,
-    kRPVSourceQueryTrackByQueue = 0,
-    kRPVSourceQueryTrackByStream = 1,
-    kRPVCacheTableName = 1,
-    kRPVSourceQueryLevel = 2,
-    kRPVSourceQuerySliceByQueue = 3,
-    kRPVSourceQuerySliceByStream = 4,
-    kRPVSourceQueryTable = 5,
-    kRPVNumSourceQueryTypes = 6
-} rocprofvis_db_sqlite_query_type_t;
-
-typedef enum rocprofvis_dm_track_search_id_t
-{
-    kRPVTrackSearchIdThreads,
-    kRPVTrackSearchIdThreadSamples,
-    kRPVTrackSearchIdDispatches,
-    kRPVTrackSearchIdMemAllocs,
-    kRPVTrackSearchIdMemCopies,
-    kRPVTrackSearchIdCounters,
-    kRPVTrackSearchIdStreams,
-    kRPVTrackSearchIdUnknown,
-} rocprofvis_dm_track_search_id_t;
 
 
 // structure to pass parameters to sqlite3_exec callbacks
@@ -64,7 +42,7 @@ typedef struct{
     // callback method pointer
     RpvSqliteExecuteQueryCallback callback;
     // pointer to query string, convenient for multiuse callback debugging
-    const char*              query[kRPVNumSourceQueryTypes];
+    std::vector<std::string> query;
     rocprofvis_dm_track_id_t track_id;
     rocprofvis_dm_event_operation_t operation;
     DbInstance* db_instance;
@@ -105,6 +83,11 @@ class SqliteDatabase : public Database
         // @return status of operation
         rocprofvis_dm_result_t Close() override;
         void  InterruptQuery(void* connection) override;
+
+        char* Sqlite3ColumnText(void* func, sqlite3_stmt* stmt, char** azColName, int index);
+        int Sqlite3ColumnInt(void* func, sqlite3_stmt* stmt, char** azColName, int index);
+        int64_t Sqlite3ColumnInt64(void* func, sqlite3_stmt* stmt, char** azColName, int index);
+        double Sqlite3ColumnDouble(void* func, sqlite3_stmt* stmt, char** azColName, int index);
 
     protected:
         // Method to create SQL table
@@ -236,6 +219,34 @@ class SqliteDatabase : public Database
                                                rocprofvis_dm_event_operation_t op,
                                                RpvSqliteExecuteQueryCallback   callback);
 
+        // method to build a query to read time slice of records for single track 
+        // @param index - track index 
+        // @param type - query type
+        // @param query - reference to output query string  
+        // @return status of operation
+        virtual rocprofvis_dm_result_t  BuildTrackQuery(           
+            rocprofvis_dm_index_t index, 
+            rocprofvis_dm_index_t type,
+            rocprofvis_dm_string_t & query,
+            uint32_t split_count,
+            uint32_t split_index) = 0;
+
+        // method to build a query to read time slice of records for all tracks in one shot 
+        // @param start - start timestamp of time slice 
+        // @param end - end timestamp of time slice 
+        // @param num - number of tracks
+        // @param tracks - uint32_t array with track IDs 
+        // @param query - reference to query string 
+        // @param slices - reference map array for storing slice handlers for multi-track request   
+        // @return status of operation                                                      
+        virtual rocprofvis_dm_result_t  BuildSliceQuery(      
+            rocprofvis_dm_timestamp_t start, 
+            rocprofvis_dm_timestamp_t end, 
+            rocprofvis_db_num_of_tracks_t num, 
+            rocprofvis_db_track_selection_t tracks, 
+            rocprofvis_dm_string_t& query, 
+            slice_array_t& slices) = 0;
+
         // Method to check if table exists in database
         // @param is_view - true if view
         // @param table - name of the table
@@ -256,6 +267,10 @@ class SqliteDatabase : public Database
         // @param azColName - pointer to column names  
         // @return SQLITE_OK if successful
         static int CallbackRunQuery(void *data, int argc, sqlite3_stmt* stmt, char **azColName); 
+
+        static int CallbackMakeHistogramPerTrack(void* data, int argc, sqlite3_stmt* stmt,
+            char** azColName);
+
 
         static rocprofvis_dm_result_t ExecuteSQLQueryStatic(
             SqliteDatabase* db, 
@@ -283,19 +298,17 @@ class SqliteDatabase : public Database
         rocprofvis_dm_result_t ExecuteSQLQuery(DbInstance* db_instance, const char* query, rocprofvis_db_sqlite_callback_parameters * params);
 
         bool CheckTableExists(const std::string& table_name, uint32_t db_node_id);
-    
+
+
+        virtual MetadataVersionControl* GetMetadataVersionControl() { return nullptr; };
+
     protected:
-        char* Sqlite3ColumnText(void* func, sqlite3_stmt* stmt, char** azColName, int index);
-        int Sqlite3ColumnInt(void* func, sqlite3_stmt* stmt, char** azColName, int index);
-        int64_t Sqlite3ColumnInt64(void* func, sqlite3_stmt* stmt, char** azColName, int index);
-        double Sqlite3ColumnDouble(void* func, sqlite3_stmt* stmt, char** azColName, int index);
         uint64_t GetNullExceptionInt(void* func, char* column);
         char* GetNullExceptionString(void* func, char* column);
         bool NullExceptionSkip(void* func, char* column);
         virtual const rocprofvis_null_data_exceptions_int* GetNullDataExceptionsInt() = 0;
         virtual const rocprofvis_null_data_exceptions_string* GetNullDataExceptionsString() = 0;
         virtual const rocprofvis_null_data_exceptions_skip* GetNullDataExceptionsSkip() = 0;
-        virtual MetadataVersionControl* GetMetadataVersionControl() { return nullptr; };
 
         void CreateDbNodes(std::vector<std::string>& multinode_files);
         void CreateDbNode(rocprofvis_db_filename_t filepath);
@@ -318,8 +331,7 @@ class SqliteDatabase : public Database
                                         int (*callback)(void*, int, sqlite3_stmt*, char**),
                                         void* user_data);
         static void ReplaceAllSubstrings(std::string& str, const std::string& from, const std::string& to);
-        
-
+       
 };
 
 }  // namespace DataModel

@@ -255,7 +255,7 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisDMFixture, "System Trace Data-Model Tests
         m_db = rocprofvis_db_open_database(g_input_file.c_str(), kAutodetect);
         REQUIRE(nullptr != m_db);
         rocprofvis_dm_result_t bind_result =
-            rocprofvis_dm_bind_trace_to_database(m_trace, m_db);
+            rocprofvis_dm_bind_trace_to_database(m_trace, m_db, nullptr);
         REQUIRE(kRocProfVisDmResultSuccess == bind_result);
     }
 

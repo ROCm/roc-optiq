@@ -137,9 +137,9 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture, "System Trace Controll
     // Allocates a controller handle for the input trace file.
     // Fixture Writes: m_controller
     SECTION("Create Controller")
-    {
+    {       
         spdlog::info("Allocating Controller");
-        m_controller = rocprofvis_controller_alloc(g_input_file.c_str());
+        m_controller = rocprofvis_controller_alloc(g_input_file.c_str(), nullptr);
         REQUIRE(nullptr != m_controller);
     }
 

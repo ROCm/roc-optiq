@@ -31,7 +31,7 @@ typedef Reference<rocprofvis_controller_table_t, SystemTable, kRPVControllerObje
 typedef Reference<rocprofvis_controller_track_t, Track, kRPVControllerObjectTypeTrack> TrackRef;
 typedef Reference<rocprofvis_controller_timeline_t, Timeline, kRPVControllerObjectTypeTimeline> TimelineRef;
 
-SystemTrace::SystemTrace(const std::string& filename)
+SystemTrace::SystemTrace(const std::string& filename, const std::string& config_path)
 : Trace(__kRPVControllerSystemPropertiesFirst, __kRPVControllerSystemPropertiesLast, filename)
 , m_timeline(nullptr)
 , m_event_table(nullptr)
@@ -40,8 +40,8 @@ SystemTrace::SystemTrace(const std::string& filename)
 , m_summary(nullptr)
 , m_mem_mgmt(nullptr)
 , m_topology_root(nullptr)
+, m_config_path(config_path)
 {
-    
 }
 
 SystemTrace::SystemTrace(const std::vector<std::string>& filenames)
@@ -163,7 +163,7 @@ rocprofvis_result_t SystemTrace::LoadRocpd(Future* future) {
                 db = rocprofvis_db_open_database(m_trace_file.c_str(), kAutodetect);
             }
             if(nullptr != db && kRocProfVisDmResultSuccess ==
-                                    rocprofvis_dm_bind_trace_to_database(m_dm_handle, db))
+                                    rocprofvis_dm_bind_trace_to_database(m_dm_handle, db, m_config_path.c_str()))
             {
                 rocprofvis_db_future_t object2wait = rocprofvis_db_future_alloc(&Future::ProgressCallback, future);
                 if(nullptr != object2wait)
@@ -576,7 +576,10 @@ rocprofvis_result_t SystemTrace::Load(RocProfVis::Controller::Future& future)
             rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
             if(m_trace_file.find(".rpd", m_trace_file.size() - 4) != std::string::npos || 
                 m_trace_file.find(".db", m_trace_file.size() - 3) != std::string::npos ||
-                m_trace_file.find(".yaml", m_trace_file.size() - 5) != std::string::npos)
+                m_trace_file.find(".yaml", m_trace_file.size() - 5) != std::string::npos ||
+                m_trace_file.find(".json", m_trace_file.size() - 5) != std::string::npos ||
+                m_trace_file.find(".proto", m_trace_file.size() - 6) != std::string::npos || 
+                m_trace_file.find(".pftrace", m_trace_file.size() - 8) != std::string::npos)
             {
                 result = LoadRocpd(future);
             }

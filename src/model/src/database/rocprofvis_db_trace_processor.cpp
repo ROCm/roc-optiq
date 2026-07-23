@@ -1,5 +1,6 @@
 // Copyright Advanced Micro Devices, Inc.
 // SPDX-License-Identifier: MIT
+#ifdef ROCPROFVIS_PERFETTO_ENABLED
 
 #include "rocprofvis_db_trace_processor.h"
 #include "perfetto/ext/base/file_utils.h"
@@ -1430,3 +1431,5 @@ namespace RocProfVis
 
 }  // namespace DataModel
 }  // namespace RocProfVis
+
+#endif

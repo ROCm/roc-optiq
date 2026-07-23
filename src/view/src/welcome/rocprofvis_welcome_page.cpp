@@ -87,8 +87,13 @@ constexpr float WELCOME_LOGO_ALPHA_BOTTOM_DARK  = 0.16f;
 constexpr float WELCOME_LOGO_ALPHA_BOTTOM_LIGHT = 0.18f;
 constexpr int   WELCOME_LOGO_POLYGON_VERTICES   = 6;
 
+#ifdef ROCPROFVIS_PERFETTO_ENABLED
 constexpr const char* SUPPORTED_FILE_TYPES_HINT =
     "Supported types: .db, .rpd, .yaml, .rpv, .json, .proto, .pftrace";
+#else
+constexpr const char* SUPPORTED_FILE_TYPES_HINT =
+    "Supported types: .db, .rpd, .yaml, .rpv";
+#endif
 
 struct ResourceGroup
 {

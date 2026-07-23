@@ -3,12 +3,13 @@
 
 #pragma once
 
+#ifdef ROCPROFVIS_PERFETTO_ENABLED
+
 #include "rocprofvis_db_query_manager.h"
 #include "perfetto/trace_processor/trace_processor.h"          // main class
 #include "perfetto/trace_processor/trace_processor_storage.h"  // base storage class
 #include "perfetto/trace_processor/read_trace.h"               // file reading helper
 #include "perfetto/trace_processor/basic_types.h"              // SqlValue, Iterator
-#include "src/trace_processor/read_trace_internal.h"
 #include "rocprofvis_db_query_factory.h"
 
 namespace RocProfVis
@@ -239,3 +240,4 @@ class GoogleTraceProcessor : public QueryManager
 
 }  // namespace DataModel
 }  // namespace RocProfVis
+#endif

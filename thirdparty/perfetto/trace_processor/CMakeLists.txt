@@ -1,9 +1,39 @@
 # Guard against multiple inclusion
 if(TARGET perfetto_trace_processor)
+     message(STATUS "Perfetto trace processor multiple inclusions")
     return()
 endif()
 
 set(PERFETTO_PREBUILT_DIR ${CMAKE_CURRENT_SOURCE_DIR})
+
+#Detect whether prebuilt libraries and headers are available
+if(WIN32)
+    set(PERFETTO_LIB_CHECK
+        ${PERFETTO_PREBUILT_DIR}/lib/windows/release/trace_processor.lib)
+else()
+    set(PERFETTO_LIB_CHECK
+        ${PERFETTO_PREBUILT_DIR}/lib/linux/release/libtrace_processor.a)
+endif()
+
+set(PERFETTO_HEADER_CHECK
+    ${PERFETTO_PREBUILT_DIR}/include/perfetto/trace_processor/trace_processor.h)
+
+if(EXISTS ${PERFETTO_LIB_CHECK} AND EXISTS ${PERFETTO_HEADER_CHECK})
+    set(PERFETTO_AVAILABLE TRUE  CACHE BOOL
+        "Perfetto trace processor libraries are available" FORCE)
+else()
+    set(PERFETTO_AVAILABLE FALSE CACHE BOOL
+        "Perfetto trace processor libraries are available" FORCE)
+    message(STATUS
+        "Perfetto trace processor not found — feature disabled. "
+        "Run: cmake --build . --target build_perfetto_libs")
+endif()
+
+if(NOT PERFETTO_AVAILABLE)
+    message(STATUS "Perfetto trace processor libraries are not available")
+    return()
+endif()
+
 set(WRAPPER_SOURCE
     ${CMAKE_SOURCE_DIR}/src/model/src/database/rocprofvis_db_trace_processor_dll.cpp)
 

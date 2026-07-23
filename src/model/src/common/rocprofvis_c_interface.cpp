@@ -32,9 +32,11 @@
 rocprofvis_db_type_t rocprofvis_db_identify_type(
     rocprofvis_db_filename_t filename) {
     std::vector<std::string> multinode_files;
+#ifdef ROCPROFVIS_PERFETTO_ENABLED
     rocprofvis_db_type_t db_type = RocProfVis::DataModel::GoogleTraceProcessor::Detect(filename);
     if (db_type == rocprofvis_db_type_t::kChromeTrace || db_type == rocprofvis_db_type_t::kPerfettoTrace)
         return db_type;
+#endif
     return RocProfVis::DataModel::ProfileDatabase::Detect(filename, multinode_files);
 }
 
@@ -57,13 +59,15 @@ rocprofvis_dm_database_t rocprofvis_db_open_database(
     PROFILE;
     std::vector<std::string> multinode_files;
     if (db_type == rocprofvis_db_type_t::kAutodetect) {
+#ifdef ROCPROFVIS_PERFETTO_ENABLED
         db_type = RocProfVis::DataModel::GoogleTraceProcessor::Detect(filename);
         if (db_type == rocprofvis_db_type_t::kAutodetect)
+#endif
         {
             db_type = RocProfVis::DataModel::ProfileDatabase::Detect(filename, multinode_files);
         }
     } 
-
+#ifdef ROCPROFVIS_PERFETTO_ENABLED
     if (db_type == rocprofvis_db_type_t::kChromeTrace || db_type == rocprofvis_db_type_t::kPerfettoTrace)
     {
         try {
@@ -81,6 +85,7 @@ rocprofvis_dm_database_t rocprofvis_db_open_database(
                 RocProfVis::DataModel::ERROR_MEMORY_ALLOCATION_FAILURE, nullptr);
         }
     } else
+#endif
     if (db_type == rocprofvis_db_type_t::kRocpdSqlite)
     {
         try {

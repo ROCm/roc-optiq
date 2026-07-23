@@ -53,9 +53,17 @@ constexpr const char* ABOUT_DIALOG_NAME      = "About##_dialog";
 constexpr const char* APP_SHUTDOWN_NOTIFICATION_ID = "provider_cleanup_app_shutdown";
 constexpr const char* SHUTDOWN_DIALOG_NAME = "Closing Traces##_shutdown";
 
+#ifdef ROCPROFVIS_PERFETTO_ENABLED
 const std::vector<std::string> TRACE_EXTENSIONS   = { "db", "rpd", "yaml", "json", "proto", "pftrace"};
+#else
+const std::vector<std::string> TRACE_EXTENSIONS   = { "db", "rpd", "yaml"};
+#endif
 const std::vector<std::string> PROJECT_EXTENSIONS = { "rpv" };
+#ifdef ROCPROFVIS_PERFETTO_ENABLED
 const std::vector<std::string> ALL_EXTENSIONS     = { "db", "rpd", "yaml", "rpv", "json", "proto", "pftrace" };
+#else
+const std::vector<std::string> ALL_EXTENSIONS     = { "db", "rpd", "yaml", "rpv" };
+#endif
 const std::vector<std::string> COMPARE_EXTENSIONS = { "db" };
 
 constexpr const char* CLEANUP_MESSAGE = "Waiting for requests to finish cleanup...";

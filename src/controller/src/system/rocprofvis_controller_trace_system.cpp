@@ -576,10 +576,14 @@ rocprofvis_result_t SystemTrace::Load(RocProfVis::Controller::Future& future)
             rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
             if(m_trace_file.find(".rpd", m_trace_file.size() - 4) != std::string::npos || 
                 m_trace_file.find(".db", m_trace_file.size() - 3) != std::string::npos ||
-                m_trace_file.find(".yaml", m_trace_file.size() - 5) != std::string::npos ||
+                m_trace_file.find(".yaml", m_trace_file.size() - 5) != std::string::npos 
+#ifdef ROCPROFVIS_PERFETTO_ENABLED
+                ||
                 m_trace_file.find(".json", m_trace_file.size() - 5) != std::string::npos ||
                 m_trace_file.find(".proto", m_trace_file.size() - 6) != std::string::npos || 
-                m_trace_file.find(".pftrace", m_trace_file.size() - 8) != std::string::npos)
+                m_trace_file.find(".pftrace", m_trace_file.size() - 8) != std::string::npos
+#endif
+                )
             {
                 result = LoadRocpd(future);
             }

@@ -97,11 +97,16 @@ SshSettingsDialog::Render()
         GetResponsiveWindowSize(ImVec2(560.0f, 0.0f), ImVec2(480.0f, 0.0f)).x;
     ImGui::SetNextWindowSizeConstraints(ImVec2(dialog_width, 0.0f),
                                         ImVec2(dialog_width, FLT_MAX));
+    // Borderless card-stack: the header band carries the title (and its own
+    // close button) instead of the native title bar.
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 12.0f);
 
     if(ImGui::BeginPopupModal(kSshSettingsPopupName, nullptr,
                               ImGuiWindowFlags_AlwaysAutoResize |
                                   ImGuiWindowFlags_NoSavedSettings |
-                                  ImGuiWindowFlags_NoScrollbar))
+                                  ImGuiWindowFlags_NoScrollbar |
+                                  ImGuiWindowFlags_NoTitleBar))
     {
         constexpr float CONTENT_PADDING_X = 14.0f;
         constexpr float CONTENT_PADDING_Y = 8.0f;
@@ -109,12 +114,8 @@ SshSettingsDialog::Render()
         constexpr float BUTTON_WIDTH      = 104.0f;
         constexpr float PROFILE_BUTTON_W  = 78.0f;
 
-        const ImU32 text_dim       = settings.GetColor(Colors::kTextDim);
-        const ImU32 accent         = settings.GetColor(Colors::kAccent);
-        const ImU32 accent_hover   = settings.GetColor(Colors::kAccentHover);
-        const ImU32 accent_active  = settings.GetColor(Colors::kAccentActive);
-        const ImU32 text_on_accent = settings.GetColor(Colors::kTextOnAccent);
-        ImFont*     icon_font      = settings.GetFontManager().GetFont(FontType::kIcon);
+        const ImU32 text_dim  = settings.GetColor(Colors::kTextDim);
+        ImFont*     icon_font = settings.GetFontManager().GetFont(FontType::kIcon);
 
         // Restored inside each card so the tighter panel gaps do not cramp fields.
         const ImVec2 default_item_spacing = style.ItemSpacing;
@@ -156,25 +157,17 @@ SshSettingsDialog::Render()
             }
         };
 
+        // Delegate to the shared panel-card helper; restore default item spacing
+        // inside the card so the tighter inter-card gap does not cramp fields.
         auto begin_card = [&](const char* id) {
-            ImGui::PushStyleColor(ImGuiCol_ChildBg, settings.GetColor(Colors::kBgPanel));
-            ImGui::PushStyleColor(ImGuiCol_Border,
-                                  settings.GetColor(Colors::kPanelBorderSubtle));
-            ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 10.0f);
-            ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
-                                ImVec2(CONTENT_PADDING_X, CONTENT_PADDING_Y));
-            ImGui::BeginChild(id, ImVec2(0.0f, 0.0f),
-                              ImGuiChildFlags_Borders | ImGuiChildFlags_AutoResizeY,
-                              ImGuiWindowFlags_NoScrollbar |
-                                  ImGuiWindowFlags_NoScrollWithMouse);
+            BeginPanelCard(id, PanelCardTone::kPanel,
+                           ImVec2(CONTENT_PADDING_X, CONTENT_PADDING_Y), true, &settings);
             ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, default_item_spacing);
         };
 
         auto end_card = []() {
             ImGui::PopStyleVar();
-            ImGui::EndChild();
-            ImGui::PopStyleVar(2);
-            ImGui::PopStyleColor(2);
+            EndPanelCard();
         };
 
         bool close_popup = false;
@@ -184,40 +177,42 @@ SshSettingsDialog::Render()
         ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing,
                             ImVec2(default_item_spacing.x, 4.0f));
 
-        ImGui::PushStyleColor(ImGuiCol_ChildBg, settings.GetColor(Colors::kBgFrame));
-        ImGui::PushStyleColor(ImGuiCol_Border, settings.GetColor(Colors::kPanelBorderSubtle));
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(16.0f, 10.0f));
-        ImGui::BeginChild("##ssh_settings_header", ImVec2(0.0f, 0.0f),
-                          ImGuiChildFlags_Borders | ImGuiChildFlags_AutoResizeY,
-                          ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+        BeginPanelCard("##ssh_settings_header", PanelCardTone::kFrame, ImVec2(16.0f, 10.0f),
+                       true, &settings);
         {
-            ImGui::PushFont(icon_font, ImGui::GetFontSize());
-            ImGui::PushStyleColor(ImGuiCol_Text, accent);
-            ImGui::TextUnformatted(ICON_COMPASS);
-            ImGui::PopStyleColor();
-            ImGui::PopFont();
-            ImGui::SameLine(0.0f, style.ItemInnerSpacing.x);
-            ImGui::BeginGroup();
-            ImGui::PushFont(nullptr,
-                            settings.GetFontManager().GetFontSize(FontSize::kMedLarge));
-            ImGui::TextUnformatted("Remote SSH Profile");
-            ImGui::PopFont();
+            if(ImGui::BeginTable("##ssh_settings_header_table", 2,
+                                  ImGuiTableFlags_SizingStretchProp))
+            {
+                ImGui::TableSetupColumn("Title", ImGuiTableColumnFlags_WidthStretch);
+                ImGui::TableSetupColumn("Close", ImGuiTableColumnFlags_WidthFixed, 24.0f);
+                ImGui::TableNextRow();
 
-            ImGui::PushStyleColor(ImGuiCol_Text, text_dim);
-            ImGui::TextWrapped(
-                "Save the connection details used when opening profiler traces over SSH.");
-            ImGui::PopStyleColor();
-            ImGui::EndGroup();
+                ImGui::TableSetColumnIndex(0);
+                PanelIcon(ICON_COMPASS, Colors::kAccent, &settings);
+                ImGui::SameLine(0.0f, style.ItemInnerSpacing.x);
+                ImGui::BeginGroup();
+                ImGui::PushFont(nullptr,
+                                settings.GetFontManager().GetFontSize(FontSize::kMedLarge));
+                ImGui::TextUnformatted("Remote SSH Profile");
+                ImGui::PopFont();
+                ImGui::PushStyleColor(ImGuiCol_Text, text_dim);
+                ImGui::TextWrapped(
+                    "Save the connection details used when opening profiler traces over SSH.");
+                ImGui::PopStyleColor();
+                ImGui::EndGroup();
+
+                ImGui::TableSetColumnIndex(1);
+                if(XButton("##ssh_settings_close", "Close", &settings))
+                {
+                    close_popup = true;
+                }
+                ImGui::EndTable();
+            }
         }
-        ImGui::EndChild();
-        ImGui::PopStyleVar();
-        ImGui::PopStyleColor(2);
+        EndPanelCard();
 
-        ImGui::PushStyleColor(ImGuiCol_ChildBg, settings.GetColor(Colors::kBgMain));
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(12.0f, 4.0f));
-        ImGui::BeginChild("##ssh_settings_body", ImVec2(0.0f, 0.0f),
-                          ImGuiChildFlags_AutoResizeY,
-                          ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+        BeginPanelCard("##ssh_settings_body", PanelCardTone::kMain, ImVec2(12.0f, 4.0f),
+                       false, &settings);
         {
             begin_card("##ssh_profile_card");
             {
@@ -382,16 +377,10 @@ SshSettingsDialog::Render()
             }
             end_card();
         }
-        ImGui::EndChild();
-        ImGui::PopStyleVar();
-        ImGui::PopStyleColor();
+        EndPanelCard();
 
-        ImGui::PushStyleColor(ImGuiCol_ChildBg, settings.GetColor(Colors::kBgFrame));
-        ImGui::PushStyleColor(ImGuiCol_Border, settings.GetColor(Colors::kPanelBorderSubtle));
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(14.0f, 8.0f));
-        ImGui::BeginChild("##ssh_settings_footer", ImVec2(0.0f, 0.0f),
-                          ImGuiChildFlags_Borders | ImGuiChildFlags_AutoResizeY,
-                          ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+        BeginPanelCard("##ssh_settings_footer", PanelCardTone::kFrame, ImVec2(14.0f, 8.0f),
+                       true, &settings);
         {
             const float action_width = BUTTON_WIDTH * 2.0f + style.ItemSpacing.x;
             if(ImGui::BeginTable("##ssh_settings_footer_table", 2,
@@ -414,23 +403,15 @@ SshSettingsDialog::Render()
                     close_popup = true;
                 }
                 ImGui::SameLine();
-
-                ImGui::PushStyleColor(ImGuiCol_Button, accent);
-                ImGui::PushStyleColor(ImGuiCol_ButtonHovered, accent_hover);
-                ImGui::PushStyleColor(ImGuiCol_ButtonActive, accent_active);
-                ImGui::PushStyleColor(ImGuiCol_Text, text_on_accent);
-                if(ImGui::Button("Save", ImVec2(BUTTON_WIDTH, 0.0f)))
+                if(AccentButton("Save", ImVec2(BUTTON_WIDTH, 0.0f), &settings))
                 {
                     accept      = true;
                     close_popup = true;
                 }
-                ImGui::PopStyleColor(4);
                 ImGui::EndTable();
             }
         }
-        ImGui::EndChild();
-        ImGui::PopStyleVar();
-        ImGui::PopStyleColor(2);
+        EndPanelCard();
 
         if(accept)
         {
@@ -452,6 +433,7 @@ SshSettingsDialog::Render()
         ImGui::EndPopup();
     }
 
+    ImGui::PopStyleVar(2);  // WindowPadding, WindowRounding
     popup_style.PopStyles();
 
     return m_open;

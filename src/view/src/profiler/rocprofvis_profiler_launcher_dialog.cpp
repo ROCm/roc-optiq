@@ -3,6 +3,7 @@
 
 #include "rocprofvis_profiler_launcher_dialog.h"
 #include "rocprofvis_appwindow.h"
+#include "rocprofvis_font_manager.h"
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_utils.h"
 #include "rocprofvis_launch_shared_tabs.h"
@@ -839,15 +840,25 @@ void ProfilerLauncherDialog::RenderRemoteSection()
     // Local vs. remote (SSH) execution selector. Kept here (rather than in the
     // shared RenderTargetSection) so it sits alongside the SSH connection
     // options, which need dialog-owned state (RemoteUri / SshSettingsDialog /
-    // RemoteProfilerSession) to render.
-    const float label_w = 90.0f;
+    // RemoteProfilerSession) to render. Laid out as design-language label/value
+    // table rows so it matches the remote trace dialog.
+    SettingsManager&    settings    = SettingsManager::GetInstance();
+    constexpr float     LABEL_WIDTH = 96.0f;
 
-    ImGui::AlignTextToFramePadding();
-    ImGui::TextUnformatted("Run on");
-    ImGui::SameLine(label_w);
+    if (!ImGui::BeginTable("##profiler_run_on", 2, ImGuiTableFlags_SizingStretchProp))
+    {
+        return;
+    }
+    ImGui::TableSetupColumn("Label", ImGuiTableColumnFlags_WidthFixed, LABEL_WIDTH);
+    ImGui::TableSetupColumn("Value", ImGuiTableColumnFlags_WidthStretch);
+
+    ImGui::TableNextRow();
+    ImGui::TableSetColumnIndex(0);
+    PanelFieldLabel("Run on", true, &settings);
 
     // A two-button segmented control reads more clearly than a dropdown for a
     // binary choice.
+    ImGui::TableSetColumnIndex(1);
     bool is_local = (m_config.connection == ConnectionType::kLocal);
     if (ImGui::RadioButton("This machine", is_local))
     {
@@ -859,37 +870,47 @@ void ProfilerLauncherDialog::RenderRemoteSection()
         m_config.connection = ConnectionType::kSsh;
     }
 
-    if (!IsSshMode())
+    if (IsSshMode())
     {
-        return;
+        // Connection chip: accent when configured, dim "Configure" when not -
+        // clicking it opens the shared SSH settings dialog (matches the remote
+        // trace dialog's header connection button).
+        ImGui::TableNextRow();
+        ImGui::TableSetColumnIndex(0);
+        PanelFieldLabel("Connection", true, &settings);
+
+        ImGui::TableSetColumnIndex(1);
+        const std::string host = m_remote_uri->GetRemoteHostString();
+        const std::string user = m_remote_uri->GetRemoteUserString();
+        const std::string host_chip =
+            host.empty()
+                ? std::string("Configure")
+                : (user.empty() ? std::string("?") : user) + "@" + host + ":" +
+                      m_remote_uri->GetRemotePortString();
+
+        ImGui::PushStyleColor(ImGuiCol_Button, settings.GetColor(Colors::kButton));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
+                              settings.GetColor(Colors::kButtonHovered));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive,
+                              settings.GetColor(Colors::kButtonActive));
+        ImGui::PushStyleColor(ImGuiCol_Text, host.empty()
+                                                 ? settings.GetColor(Colors::kTextDim)
+                                                 : settings.GetColor(Colors::kAccent));
+        if (ImGui::Button((host_chip + "##profiler_connection").c_str(),
+                          ImVec2(-FLT_MIN, 0.0f)))
+        {
+            m_ssh_settings_dialog = std::make_unique<SshSettingsDialog>(
+                m_connection_store, m_selected_connection_id,
+                [this](const std::string& id)
+                {
+                    m_selected_connection_id = id;
+                    ApplySelectedConnection();
+                });
+        }
+        ImGui::PopStyleColor(4);
     }
 
-    ImGui::AlignTextToFramePadding();
-    ImGui::TextUnformatted("Host");
-    ImGui::SameLine(label_w);
-
-    std::string host = m_remote_uri->GetRemoteHostString();
-    std::string user = m_remote_uri->GetRemoteUserString();
-    if (host.empty())
-    {
-        ImGui::TextDisabled("no connection configured");
-    }
-    else
-    {
-        ImGui::Text("%s@%s:%s", user.empty() ? "?" : user.c_str(), host.c_str(),
-                    m_remote_uri->GetRemotePortString().c_str());
-    }
-    ImGui::SameLine();
-    if (ImGui::SmallButton(host.empty() ? "Configure..." : "Change..."))
-    {
-        m_ssh_settings_dialog = std::make_unique<SshSettingsDialog>(
-            m_connection_store, m_selected_connection_id,
-            [this](const std::string& id)
-            {
-                m_selected_connection_id = id;
-                ApplySelectedConnection();
-            });
-    }
+    ImGui::EndTable();
 }
 
 void ProfilerLauncherDialog::RenderRemotePopups()
@@ -929,36 +950,68 @@ void ProfilerLauncherDialog::RenderRemotePopups()
         }
     }
 
-    // TODO: share this dialog with the SshTestDialog, which has a similar download progress popup.
+    // Mirrors SshTestDialog::RenderProgressPopup so the remote download popup
+    // looks identical whether launched from the trace opener or the profiler.
     if (m_remote_show_progress_popup)
     {
+        SettingsManager&  settings = SettingsManager::GetInstance();
+        const ImGuiStyle& style    = ImGui::GetStyle();
+
         PopUpStyle popup_style;
         popup_style.PushPopupStyles();
         popup_style.PushTitlebarColors();
         popup_style.CenterPopup();
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 12.0f);
         ImGui::SetNextWindowSize(ImVec2(440, 0));
 
         if (ImGui::BeginPopupModal("Remote Trace Download", nullptr,
             ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove |
-            ImGuiWindowFlags_NoTitleBar))
+            ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoScrollbar))
         {
             const auto& fetch = m_remote_last_progress;
-            ImGui::Text("Downloading: %s", fetch.name.c_str());
+            uint64_t    done  = fetch.downloaded;
+            uint64_t    total = fetch.size;
 
-            uint64_t done  = fetch.downloaded;
-            uint64_t total = fetch.size;
-            if (total > 0)
+            ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing,
+                                ImVec2(style.ItemSpacing.x, 4.0f));
+
+            BeginPanelCard("##profiler_dl_header", PanelCardTone::kFrame,
+                           ImVec2(16.0f, 10.0f), true, &settings);
             {
-                float frac = static_cast<float>(done) / static_cast<float>(total);
-                if (frac > 1.0f) { frac = 1.0f; }
-                std::string label = std::to_string(done / 1024) + " / " +
-                                    std::to_string(total / 1024) + " KiB";
-                ImGui::ProgressBar(frac, ImVec2(-FLT_MIN, 0), label.c_str());
+                PanelIcon(ICON_ARROW_DOWN, Colors::kAccent, &settings);
+                ImGui::SameLine(0.0f, style.ItemInnerSpacing.x);
+                ImGui::BeginGroup();
+                ImGui::PushFont(nullptr,
+                                settings.GetFontManager().GetFontSize(FontSize::kMedLarge));
+                ImGui::TextUnformatted("Remote Download");
+                ImGui::PopFont();
+                ImGui::PushStyleColor(ImGuiCol_Text, settings.GetColor(Colors::kTextDim));
+                ImGui::TextUnformatted("Fetching the trace over SSH.");
+                ImGui::PopStyleColor();
+                ImGui::EndGroup();
             }
-            else
+            EndPanelCard();
+
+            BeginPanelCard("##profiler_dl_body", PanelCardTone::kPanel,
+                           ImVec2(14.0f, 10.0f), true, &settings);
             {
-                ImGui::Text("Starting...");
+                ImGui::TextWrapped("%s", fetch.name.c_str());
+                ImGui::Spacing();
+                if (total > 0)
+                {
+                    float frac = static_cast<float>(done) / static_cast<float>(total);
+                    if (frac > 1.0f) { frac = 1.0f; }
+                    std::string label = std::to_string(done / 1024) + " / " +
+                                        std::to_string(total / 1024) + " KiB";
+                    ImGui::ProgressBar(frac, ImVec2(-FLT_MIN, 0), label.c_str());
+                }
+                else
+                {
+                    PanelFieldLabel("Starting...", false, &settings);
+                }
             }
+            EndPanelCard();
 
             // Close as soon as the download phase ends (completed, failed, or the
             // session was torn down). This avoids hanging open when the final
@@ -969,6 +1022,7 @@ void ProfilerLauncherDialog::RenderRemotePopups()
                 m_remote_show_progress_popup = false;
             }
 
+            ImGui::PopStyleVar();  // ItemSpacing
             ImGui::EndPopup();
         }
         else
@@ -977,6 +1031,7 @@ void ProfilerLauncherDialog::RenderRemotePopups()
             // be reopened on the next download.
             m_remote_show_progress_popup = false;
         }
+        ImGui::PopStyleVar(2);  // WindowPadding, WindowRounding
         popup_style.PopStyles();
     }
 }

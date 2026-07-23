@@ -11,6 +11,7 @@
 
 #include <memory>
 #include <string>
+#include <vector>
 
 namespace RocProfVis
 {
@@ -57,6 +58,12 @@ private:
     // spawned orchestrator/session read the right host/credentials.
     void ApplySelectedConnection();
 
+    // Remote file browser helpers.
+    void EnsureBrowseOrchestrator();
+    void OpenRemoteFileBrowser();
+    void NavigateBrowserTo(const std::string& path, bool record_history);
+    void ActivateBrowserEntry(const RemoteDir::FileEntry& entry);
+
     AppWindow*                               m_app_window;
     SshConnectionStore                       m_connection_store;
     std::string                              m_selected_connection_id;
@@ -73,9 +80,24 @@ private:
     bool                                     m_show_progress_popup;
     FileStat::Snapshot                       m_last_progress;
 
-    bool                                     m_show_remote_filesystem_popup;
-    RemoteDir::Snapshot                      m_last_directory_state;
-    uint32_t                                 m_selected_file_index;
+    // ----- Remote file browser state -----
+    bool                              m_show_remote_filesystem_popup;
+    bool                              m_should_open_browser_popup; // defer OpenPopup to render scope
+    bool                              m_should_close_browser_popup;
+    bool                              m_browser_busy;          // a listing is in flight
+    std::string                       m_browser_error;         // last listing failure
+    std::string                       m_browser_dir;           // resolved current directory
+    RemoteDir::Snapshot               m_last_directory_state;  // entries for m_browser_dir
+    std::vector<std::string>          m_history_back;
+    std::vector<std::string>          m_history_forward;
+    std::string                       m_remote_file_filter;    // live filter text
+    std::string                       m_address_edit;          // editable address-bar buffer
+    bool                              m_address_editing;       // breadcrumb vs. editable field
+    bool                              m_show_hidden;
+    int                               m_type_filter;           // index into extension presets
+    // Selection: "" = none, ".." = the parent row, otherwise the entry's name.
+    std::string                       m_selected_name;
+    bool                              m_scroll_to_selected;
 };
 
 }  // namespace View

@@ -766,6 +766,8 @@ typedef enum rocprofvis_controller_remote_properties_t : uint32_t
     kRPVControllerRemoteDirNumFiles,
     // Remote file attributes
     kRPVControllerRemoteFileAttrs,
+    // Absolute path of the browsed directory, resolved server-side (SFTP realpath)
+    kRPVControllerRemoteResolvedPath,
     __kRPVControllerRemotePropertiesLast
 }rocprofvis_controller_remote_properties_t;
 

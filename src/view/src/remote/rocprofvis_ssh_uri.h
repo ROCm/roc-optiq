@@ -53,7 +53,14 @@ namespace View
         void InitRemoteBrowsingPathString(const char * source);
         void UseRemoteBrowsingPathString();
         void MakeRemoteBrowsingPath(const char* file_name);
+        // Sets the next directory to browse to an explicit (absolute) path, used
+        // for breadcrumb / address-bar navigation where the target is known.
+        void SetRemoteBrowsingPath(const char* path);
         void SetCurrentDirectoryPath(const char* path);
+
+        // Commits an explicit chosen file path into the result-path field (used
+        // when the file browser picks an entry by its full path).
+        void SetRemoteResultPathString(const char* path);
 
     private:
         SshConnectionConfig m_connection;

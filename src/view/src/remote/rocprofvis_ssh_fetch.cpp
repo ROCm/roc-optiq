@@ -239,6 +239,13 @@ namespace View
         m_updated = true;
     }
 
+    void RemoteDir::SetPath(std::string path)
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        m_path = std::move(path);
+        m_updated = true;
+    }
+
     std::optional<RemoteDir::Snapshot> RemoteDir::ConsumeIfUpdated()
     {
         std::lock_guard<std::mutex> lock(m_mutex);
@@ -251,7 +258,8 @@ namespace View
         m_updated = false;
 
         return Snapshot{
-            m_list_dir
+            m_list_dir,
+            m_path
         };
     }
 
@@ -260,7 +268,8 @@ namespace View
         std::lock_guard<std::mutex> lock(m_mutex);
 
         return Snapshot{
-            m_list_dir
+            m_list_dir,
+            m_path
         };
     }
 
@@ -268,7 +277,8 @@ namespace View
     {
         std::lock_guard<std::mutex> lock(m_mutex);
         m_list_dir.clear();
-        m_updated = true;
+        m_path.clear();
+        m_updated = false;
     }
 
 

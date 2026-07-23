@@ -150,12 +150,6 @@ jobs:
           apt-get update
           apt-get install -y libssl-dev
 
-      - name: Install UI test dependencies
-        if: env.ENABLE_UI_TESTS == 'ON'
-        run: |
-          apt-get update
-          apt-get install -y xvfb mesa-vulkan-drivers
-
       - name: Build, Make, and Verify Installation
         run: |
           source /opt/vulkan/**/setup-env.sh

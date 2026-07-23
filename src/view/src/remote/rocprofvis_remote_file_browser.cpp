@@ -4,6 +4,8 @@
 #include "rocprofvis_remote_file_browser.h"
 #include "rocprofvis_core_string_utils.h"
 #include "rocprofvis_settings_manager.h"
+#include "rocprofvis_ssh_auth_modal.h"
+#include "rocprofvis_ssh_session.h"
 #include "rocprofvis_utils.h"
 #include "widgets/rocprofvis_widget.h"
 #include "widgets/rocprofvis_gui_helpers.h"
@@ -293,6 +295,16 @@ void RemoteFileBrowser::Render()
     if (!m_show_remote_filesystem_popup)
     {
         return;
+    }
+
+    // This browser is itself a modal popup, so its own SSH session's auth prompt
+    // must be rendered nested inside it (see below) to stack above it.
+    if (m_orchestrator)
+    {
+        if (SshSession* browser_session = m_orchestrator->GetSession())
+        {
+            browser_session->SetAuthModalSelfManaged(true);
+        }
     }
 
     const bool dir_mode = (m_mode == PickMode::kDirectory);
@@ -1042,6 +1054,15 @@ void RemoteFileBrowser::Render()
         else if (open_pressed)
         {
             commit_selection();
+        }
+
+        // Nested SSH auth prompt for this browser's own session. 
+        if (m_orchestrator)
+        {
+            if (SshSession* browser_session = m_orchestrator->GetSession())
+            {
+                RenderSshAuthModal(browser_session);
+            }
         }
 
         if (m_should_close_browser_popup)

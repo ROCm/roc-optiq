@@ -386,10 +386,11 @@ SshTestDialog::Render()
         }
     }
 
-    // Auth prompts / host-key requests, and download/output popups. The download
-    // and output popups are suppressed while the browser is open so the recursive
-    // search (which reuses the execute path) does not open the stdout popup.
-    RenderSshAuthModal(m_orchestrator ? m_orchestrator->GetSession() : nullptr);
+    // Auth prompts / host-key requests are rendered centrally for every live
+    // session by AppWindow (RenderSshAuthModals), so this dialog only owns its
+    // download/output popups. Those are suppressed while the browser is open so
+    // the recursive search (which reuses the execute path) does not open the
+    // stdout popup.
     if (!m_file_browser.IsOpen())
     {
         RenderProgressPopup();

@@ -707,7 +707,10 @@ namespace Controller
             {
                 spdlog::info("[ssh] no password supplied; prompting UI for password");
                 PromptRequest req;
-                req.instruction = "Password";
+                std::string target = user.empty() ? connection->GetHost()
+                                                   : user + "@" + connection->GetHost();
+                req.instruction = target.empty() ? std::string("Enter your password")
+                                                 : "Enter the password for " + target;
                 PromptItem item;
                 item.text = "Password: ";
                 item.echo = false;  // mask input

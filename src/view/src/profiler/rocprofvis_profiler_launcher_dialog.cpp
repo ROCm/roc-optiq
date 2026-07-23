@@ -958,10 +958,10 @@ void ProfilerLauncherDialog::RenderRemotePopups()
         m_remote_file_browser->Render();
     }
 
+    // Auth prompts / host-key requests are rendered centrally for every live
+    // session by AppWindow (RenderSshAuthModals); this dialog only owns the
+    // download-progress popup below.
     SshSession* ssh_session = m_orchestrator.GetRemoteSshSession();
-
-    // Auth prompts / host-key requests.
-    RenderSshAuthModal(ssh_session);
 
     // Open the download-progress popup once the workflow enters the download
     // phase. Whether/when individual FileStat progress snapshots arrive is

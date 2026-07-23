@@ -193,7 +193,7 @@ rocprofvis_controller_t* rocprofvis_controller_alloc(char const* const filename,
                 case kPerfettoTrace:
                 case kGoogleSqlite:
                 {
-                    trace = new RocProfVis::Controller::SystemTrace(filename, config_path);                 
+                    trace = new RocProfVis::Controller::SystemTrace(filename, config_path!=nullptr?config_path:"");
                     break;
                 }
                 case kComputeSqlite:

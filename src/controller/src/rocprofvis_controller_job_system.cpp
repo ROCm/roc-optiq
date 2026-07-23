@@ -28,53 +28,43 @@ Job::~Job()
 
 void Job::Execute()
 {
-    m_result = m_function(m_future);
+    rocprofvis_result_t result = m_function(m_future);
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        m_result = result;
+    }
     m_condition_variable.notify_all();
 }
 
 void Job::Cancel()
 {
-    m_result = kRocProfVisResultCancelled;
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        m_result = kRocProfVisResultCancelled;
+    }
     m_condition_variable.notify_all();
 }
 
 rocprofvis_result_t Job::GetResult() const
 {
+    std::lock_guard<std::mutex> lock(m_mutex);
     return m_result;
 }
 
 rocprofvis_result_t Job::Wait(float timeout)
 {
-    rocprofvis_result_t result = kRocProfVisResultUnknownError;
-    if(m_result == kRocProfVisResultPending)
+    std::unique_lock<std::mutex> lock(m_mutex);
+    if(timeout == FLT_MAX)
     {
-        if(timeout == FLT_MAX)
-        {
-            std::unique_lock<std::mutex> lock(m_mutex);
-            m_condition_variable.wait(lock);
-            result = kRocProfVisResultSuccess;
-        }
-        else
-        {
-            std::unique_lock<std::mutex> lock(m_mutex);
-            std::chrono::microseconds    time =
-                std::chrono::microseconds(uint64_t(timeout * 1000000.0));
-            std::cv_status status = m_condition_variable.wait_for(lock, time);
-            if(status == std::cv_status::timeout)
-            {
-                result = kRocProfVisResultTimeout;
-            }
-            else
-            {
-                result = kRocProfVisResultSuccess;
-            }
-        }
+        m_condition_variable.wait(
+            lock, [this]() { return m_result != kRocProfVisResultPending; });
+        return kRocProfVisResultSuccess;
     }
-    else
-    {
-        result = kRocProfVisResultSuccess;
-    }
-    return result;
+    std::chrono::microseconds time =
+        std::chrono::microseconds(uint64_t(timeout * 1000000.0));
+    bool done = m_condition_variable.wait_for(
+        lock, time, [this]() { return m_result != kRocProfVisResultPending; });
+    return done ? kRocProfVisResultSuccess : kRocProfVisResultTimeout;
 }
 
 JobSystem JobSystem::s_self;

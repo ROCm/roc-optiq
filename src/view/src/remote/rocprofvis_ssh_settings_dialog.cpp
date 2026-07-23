@@ -150,11 +150,16 @@ SshSettingsDialog::Render()
                 InputTextString(id, value, flags);
             }
             ImGui::SameLine(0.0f, style.ItemInnerSpacing.x);
+            // Scope by the field id: both toggles render the same eye glyph, and
+            // IconButton derives its ID from the glyph, so without this they would
+            // collide (same ImGui ID) inside the shared table column.
+            ImGui::PushID(id);
             if(IconButton(show ? ICON_EYE_SLASH : ICON_EYE, icon_font,
                           ImVec2(eye_w, eye_w), show ? "Hide" : "Show"))
             {
                 show = !show;
             }
+            ImGui::PopID();
         };
 
         // Delegate to the shared panel-card helper; restore default item spacing

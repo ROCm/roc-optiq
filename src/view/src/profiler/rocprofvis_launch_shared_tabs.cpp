@@ -72,24 +72,18 @@ ImU32 LerpColor(ImU32 a, ImU32 b, float t)
 
 void BeginLaunchCard(const char* id)
 {
+    // Delegate to the shared design-language panel card so the launcher tracks
+    // the same rounded/bordered/tiered look as the remote dialogs. The tighter
+    // kCardPadY keeps the stacked launcher cards reading as one compact form.
     SettingsManager&  settings = SettingsManager::Get();
     const ImGuiStyle& def      = settings.GetDefaultStyle();
-
-    ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, def.ChildRounding);
-    ImGui::PushStyleVar(ImGuiStyleVar_ChildBorderSize, 1.0f);
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(def.WindowPadding.x, kCardPadY));
-    ImGui::PushStyleColor(ImGuiCol_ChildBg, settings.GetColor(Colors::kBgPanel));
-    ImGui::PushStyleColor(ImGuiCol_Border, settings.GetColor(Colors::kPanelBorderSubtle));
-
-    ImGui::BeginChild(id, ImVec2(0.0f, 0.0f),
-                      ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Borders);
+    BeginPanelCard(id, PanelCardTone::kPanel, ImVec2(def.WindowPadding.x, kCardPadY), true,
+                   &settings);
 }
 
 void EndLaunchCard()
 {
-    ImGui::EndChild();
-    ImGui::PopStyleColor(2);
-    ImGui::PopStyleVar(3);
+    EndPanelCard();
     // Cards are separated by the surrounding item spacing only.
 }
 

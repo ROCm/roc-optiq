@@ -511,38 +511,69 @@ SshTestDialog::RenderProgressPopup()
 
     if(m_show_progress_popup)
     {
+        SettingsManager&  settings = SettingsManager::GetInstance();
+        const ImGuiStyle& style    = ImGui::GetStyle();
+
         PopUpStyle popup_style;
         popup_style.PushPopupStyles();
         popup_style.PushTitlebarColors();
         popup_style.CenterPopup();
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 12.0f);
         ImGui::SetNextWindowSize(ImVec2(440, 0));
 
         if(ImGui::BeginPopupModal("Remote Download", nullptr,
             ImGuiWindowFlags_AlwaysAutoResize |
             ImGuiWindowFlags_NoMove |
-            ImGuiWindowFlags_NoTitleBar))
+            ImGuiWindowFlags_NoTitleBar |
+            ImGuiWindowFlags_NoScrollbar))
         {
             const auto& fetch = m_last_progress;
-
-            ImGui::Text("Downloading: %s", fetch.name.c_str());
 
             uint64_t done  = fetch.downloaded;
             uint64_t total = fetch.size;
 
-            if(total > 0)
-            {
-                float frac = static_cast<float>(done) / static_cast<float>(total);
+            ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing,
+                                ImVec2(style.ItemSpacing.x, 4.0f));
 
-                std::string label =
-                    std::to_string(done / 1024) + " / " +
-                    std::to_string(total / 1024) + " KiB";
-
-                ImGui::ProgressBar(frac, ImVec2(-FLT_MIN, 0), label.c_str());
-            }
-            else
+            BeginPanelCard("##remote_dl_header", PanelCardTone::kFrame, ImVec2(16.0f, 10.0f),
+                           true, &settings);
             {
-                ImGui::Text("Connecting...");
+                PanelIcon(ICON_ARROW_DOWN, Colors::kAccent, &settings);
+                ImGui::SameLine(0.0f, style.ItemInnerSpacing.x);
+                ImGui::BeginGroup();
+                ImGui::PushFont(nullptr,
+                                settings.GetFontManager().GetFontSize(FontSize::kMedLarge));
+                ImGui::TextUnformatted("Remote Download");
+                ImGui::PopFont();
+                ImGui::PushStyleColor(ImGuiCol_Text, settings.GetColor(Colors::kTextDim));
+                ImGui::TextUnformatted("Fetching the trace over SSH.");
+                ImGui::PopStyleColor();
+                ImGui::EndGroup();
             }
+            EndPanelCard();
+
+            BeginPanelCard("##remote_dl_body", PanelCardTone::kPanel, ImVec2(14.0f, 10.0f),
+                           true, &settings);
+            {
+                ImGui::TextWrapped("%s", fetch.name.c_str());
+                ImGui::Spacing();
+                if(total > 0)
+                {
+                    float frac = static_cast<float>(done) / static_cast<float>(total);
+
+                    std::string label =
+                        std::to_string(done / 1024) + " / " +
+                        std::to_string(total / 1024) + " KiB";
+
+                    ImGui::ProgressBar(frac, ImVec2(-FLT_MIN, 0), label.c_str());
+                }
+                else
+                {
+                    PanelFieldLabel("Connecting...", false, &settings);
+                }
+            }
+            EndPanelCard();
 
             if(total > 0 && done >= total)
             {
@@ -550,9 +581,11 @@ SshTestDialog::RenderProgressPopup()
                 m_show_progress_popup = false;
             }
 
+            ImGui::PopStyleVar();  // ItemSpacing
             ImGui::EndPopup();
         }
 
+        ImGui::PopStyleVar(2);  // WindowPadding, WindowRounding
         popup_style.PopStyles();
     }
 }
@@ -575,29 +608,96 @@ SshTestDialog::RenderOutputPopup()
 
     if(m_show_stdout_popup)
     {
-        ImGui::SetNextWindowSize(ImVec2(600, 400));
-        if(ImGui::BeginPopupModal("Remote Execute", nullptr))
+        SettingsManager&  settings = SettingsManager::GetInstance();
+        const ImGuiStyle& style    = ImGui::GetStyle();
+
+        PopUpStyle popup_style;
+        popup_style.PushPopupStyles();
+        popup_style.PushTitlebarColors();
+        popup_style.CenterPopup();
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 12.0f);
+        ImGui::SetNextWindowSize(ImVec2(620, 440));
+        if(ImGui::BeginPopupModal("Remote Execute", nullptr,
+                                  ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoScrollbar))
         {
-            const float footer_height =
-                ImGui::GetFrameHeightWithSpacing() + ImGui::GetStyle().ItemSpacing.y;
-            ImGui::BeginChild("output", ImVec2(0, -footer_height), true);
+            const bool finished = m_last_stdout.finished;
+
+            ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing,
+                                ImVec2(style.ItemSpacing.x, 4.0f));
+
+            BeginPanelCard("##remote_exec_header", PanelCardTone::kFrame, ImVec2(16.0f, 10.0f),
+                           true, &settings);
+            {
+                PanelIcon(ICON_LIST, Colors::kAccent, &settings);
+                ImGui::SameLine(0.0f, style.ItemInnerSpacing.x);
+                ImGui::BeginGroup();
+                ImGui::PushFont(nullptr,
+                                settings.GetFontManager().GetFontSize(FontSize::kMedLarge));
+                ImGui::TextUnformatted("Remote Execute");
+                ImGui::PopFont();
+                ImGui::PushStyleColor(ImGuiCol_Text, settings.GetColor(Colors::kTextDim));
+                ImGui::TextUnformatted("Profiler output streamed over SSH.");
+                ImGui::PopStyleColor();
+                ImGui::EndGroup();
+            }
+            EndPanelCard();
+
+            // Fill the space between the auto-height header and footer with a
+            // scrollable console styled as a kBgMain card.
+            const float footer_reserve =
+                ImGui::GetFrameHeight() + 16.0f + style.ItemSpacing.y;
+            float body_height =
+                ImGui::GetContentRegionAvail().y - footer_reserve - style.ItemSpacing.y;
+            if(body_height < ImGui::GetFrameHeight())
+            {
+                body_height = ImGui::GetFrameHeight();
+            }
+            ImGui::PushStyleColor(ImGuiCol_ChildBg, settings.GetColor(Colors::kBgMain));
+            ImGui::PushStyleColor(ImGuiCol_Border,
+                                  settings.GetColor(Colors::kPanelBorderSubtle));
+            ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, PANEL_CARD_ROUNDING);
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(12.0f, 8.0f));
+            ImGui::BeginChild("##remote_exec_output", ImVec2(0.0f, body_height),
+                              ImGuiChildFlags_Borders);
             ImGui::TextUnformatted(m_last_stdout.text.c_str());
             ImGui::EndChild();
+            ImGui::PopStyleVar(2);
+            ImGui::PopStyleColor(2);
 
-            const bool finished = m_last_stdout.finished;
-            ImGui::TextUnformatted(finished ? "Execution finished." : "Executing...");
-            ImGui::SameLine();
-
-            // Always offer a manual Close so the popup can never wedge open, even
-            // if the terminal snapshot is missed (e.g. connection dropped).
-            if(ImGui::Button("Close"))
+            BeginPanelCard("##remote_exec_footer", PanelCardTone::kFrame, ImVec2(14.0f, 8.0f),
+                           true, &settings);
             {
-                ImGui::CloseCurrentPopup();
-                m_show_stdout_popup = false;
-            }
+                constexpr float BUTTON_WIDTH = 104.0f;
+                PanelIcon(finished ? ICON_CHAIN : ICON_ARROWS_CYCLE,
+                          finished ? Colors::kTextDim : Colors::kAccent, &settings);
+                ImGui::SameLine(0.0f, style.ItemInnerSpacing.x);
+                ImGui::AlignTextToFramePadding();
+                ImGui::PushStyleColor(ImGuiCol_Text, settings.GetColor(Colors::kTextDim));
+                ImGui::TextUnformatted(finished ? "Execution finished." : "Executing...");
+                ImGui::PopStyleColor();
 
+                ImGui::SameLine();
+                const float avail = ImGui::GetContentRegionAvail().x;
+                if(avail > BUTTON_WIDTH)
+                {
+                    ImGui::SetCursorPosX(ImGui::GetCursorPosX() + (avail - BUTTON_WIDTH));
+                }
+                // Always offer a manual Close so the popup can never wedge open,
+                // even if the terminal snapshot is missed (e.g. connection dropped).
+                if(AccentButton("Close", ImVec2(BUTTON_WIDTH, 0), &settings))
+                {
+                    ImGui::CloseCurrentPopup();
+                    m_show_stdout_popup = false;
+                }
+            }
+            EndPanelCard();
+
+            ImGui::PopStyleVar();  // ItemSpacing
             ImGui::EndPopup();
         }
+        ImGui::PopStyleVar(2);  // WindowPadding, WindowRounding
+        popup_style.PopStyles();
     }
 }
 
@@ -803,7 +903,7 @@ void SshTestDialog::RenderRemoteFilePopup()
         // Header card: title, host chip, navigation, address bar and filters.
         ImGui::PushStyleColor(ImGuiCol_ChildBg, settings.GetColor(Colors::kBgFrame));
         ImGui::PushStyleColor(ImGuiCol_Border, settings.GetColor(Colors::kPanelBorderSubtle));
-        ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 8.0f);
+        ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, PANEL_CARD_ROUNDING);
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(12.0f, 10.0f));
 
         const float header_h = 10.0f * 2.0f + ImGui::GetTextLineHeightWithSpacing() +
@@ -1297,7 +1397,7 @@ void SshTestDialog::RenderRemoteFilePopup()
         bool open_pressed = false;
         ImGui::PushStyleColor(ImGuiCol_ChildBg, settings.GetColor(Colors::kBgFrame));
         ImGui::PushStyleColor(ImGuiCol_Border, settings.GetColor(Colors::kPanelBorderSubtle));
-        ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 8.0f);
+        ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, PANEL_CARD_ROUNDING);
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(10.0f, 8.0f));
         ImGui::BeginChild("RemoteExplorerFooter", ImVec2(0.0f, footer_card_height), true,
                           ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);

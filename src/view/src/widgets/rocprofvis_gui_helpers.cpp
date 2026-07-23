@@ -550,6 +550,107 @@ TableRowHeight()
     return ImGui::GetTextLineHeight() + ImGui::GetStyle().CellPadding.y * 2.0f;
 }
 
+namespace
+{
+Colors
+PanelCardBackground(PanelCardTone tone)
+{
+    Colors bg = Colors::kBgPanel;
+    if(tone == PanelCardTone::kFrame)
+    {
+        bg = Colors::kBgFrame;
+    }
+    else if(tone == PanelCardTone::kMain)
+    {
+        bg = Colors::kBgMain;
+    }
+    return bg;
+}
+}  // namespace
+
+void
+BeginPanelCard(const char* id, PanelCardTone tone, ImVec2 padding, bool bordered,
+               SettingsManager* settings)
+{
+    if(!settings)
+    {
+        settings = &SettingsManager::GetInstance();
+    }
+
+    ImGui::PushStyleColor(ImGuiCol_ChildBg,
+                          settings->GetColor(PanelCardBackground(tone)));
+    ImGui::PushStyleColor(ImGuiCol_Border,
+                          settings->GetColor(Colors::kPanelBorderSubtle));
+    ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, PANEL_CARD_ROUNDING);
+    ImGui::PushStyleVar(ImGuiStyleVar_ChildBorderSize, bordered ? 1.0f : 0.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, padding);
+
+    ImGuiChildFlags child_flags = ImGuiChildFlags_AutoResizeY;
+    if(bordered)
+    {
+        child_flags |= ImGuiChildFlags_Borders;
+    }
+    ImGui::BeginChild(id, ImVec2(0.0f, 0.0f), child_flags,
+                      ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+}
+
+void
+EndPanelCard()
+{
+    ImGui::EndChild();
+    ImGui::PopStyleVar(3);
+    ImGui::PopStyleColor(2);
+}
+
+void
+PanelFieldLabel(const char* text, bool align_to_frame, SettingsManager* settings)
+{
+    if(!settings)
+    {
+        settings = &SettingsManager::GetInstance();
+    }
+    if(align_to_frame)
+    {
+        ImGui::AlignTextToFramePadding();
+    }
+    ImGui::PushStyleColor(ImGuiCol_Text, settings->GetColor(Colors::kTextDim));
+    ImGui::TextUnformatted(text);
+    ImGui::PopStyleColor();
+}
+
+void
+PanelIcon(const char* glyph, Colors color, SettingsManager* settings)
+{
+    if(!settings)
+    {
+        settings = &SettingsManager::GetInstance();
+    }
+    ImGui::PushFont(settings->GetFontManager().GetFont(FontType::kIcon),
+                    ImGui::GetFontSize());
+    ImGui::PushStyleColor(ImGuiCol_Text, settings->GetColor(color));
+    ImGui::TextUnformatted(glyph);
+    ImGui::PopStyleColor();
+    ImGui::PopFont();
+}
+
+bool
+AccentButton(const char* label, ImVec2 size, SettingsManager* settings)
+{
+    if(!settings)
+    {
+        settings = &SettingsManager::GetInstance();
+    }
+    ImGui::PushStyleColor(ImGuiCol_Button, settings->GetColor(Colors::kAccent));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
+                          settings->GetColor(Colors::kAccentHover));
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive,
+                          settings->GetColor(Colors::kAccentActive));
+    ImGui::PushStyleColor(ImGuiCol_Text, settings->GetColor(Colors::kTextOnAccent));
+    bool clicked = ImGui::Button(label, size);
+    ImGui::PopStyleColor(4);
+    return clicked;
+}
+
 #ifdef ROCPROFVIS_ENABLE_INTERNAL_BANNER
 
 void

@@ -36,20 +36,6 @@ constexpr float kSplitterWidth       = 6.0f;
 constexpr float kMinPreviewWidth     = 300.0f;
 constexpr float kMinFormWidth        = 320.0f;
 constexpr float kInitialPreviewRatio = 2.0f / 5.0f;
-
-// A filled, accent-colored primary button used for the main call-to-action
-// (Launch / Cancel) so it stands out from the neutral secondary buttons.
-bool AccentButton(const char* label, const ImVec2& size)
-{
-    SettingsManager& settings = SettingsManager::Get();
-    ImGui::PushStyleColor(ImGuiCol_Button, settings.GetColor(Colors::kAccent));
-    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, settings.GetColor(Colors::kAccentHover));
-    ImGui::PushStyleColor(ImGuiCol_ButtonActive, settings.GetColor(Colors::kAccentActive));
-    ImGui::PushStyleColor(ImGuiCol_Text, settings.GetColor(Colors::kTextOnAccent));
-    bool clicked = ImGui::Button(label, size);
-    ImGui::PopStyleColor(4);
-    return clicked;
-}
 }  // namespace
 
 ProfilerLauncherDialog::ProfilerLauncherDialog(AppWindow* app_window)

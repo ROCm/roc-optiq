@@ -109,6 +109,7 @@ jobs:
     secrets: inherit
     with:
       os_version: ${{ needs.setup.outputs.ubuntu-os-versions }}
+      enable_ui_tests: true
       upload_to_github: ${{ github.event_name == 'schedule' || github.event.inputs.upload_to_github == 'true' }}
       upload_to_s3: ${{ github.event_name == 'schedule' || github.event.inputs.upload_to_s3 == 'true' }}
       s3_root_directory: ${{ github.event_name == 'schedule' && 'nightly' || 'test' }}

@@ -106,13 +106,16 @@ private:
     void  RefreshLevelHeight();
     float DefaultTrackHeight() const;
     float ExpandedTrackHeight() const;
-    float EventBoxHeight() const;
-    float CalculateCenteredTextY(const std::string& label, float rect_min_y,
-                                 float box_height) const;
+    float        EventBoxHeight() const;
+    float        ComputeTextVerticalOffset(float box_height) const;
+    // Font-size-dependent glyph ink center, shared/cached across all tracks.
+    static float TextGlyphCenter();
 
     std::vector<ChartItem>                 m_chart_items;
     ImVec2                                 m_text_padding;
     float                                  m_level_height;
+    // Cached per-frame vertical offset (from a box's top) for centering labels.
+    float                                  m_text_vertical_offset = 0.0f;
     std::vector<uint64_t>                  m_selected_event_id;
     std::shared_ptr<MeasurementController> m_measurement;
     float                                  m_min_level;

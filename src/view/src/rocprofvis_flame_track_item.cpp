@@ -433,27 +433,36 @@ FlameTrackItem::HandleFontSizeChanged(std::shared_ptr<RocEvent> e)
 }
 
 float
-FlameTrackItem::CalculateCenteredTextY(const std::string& label, float rect_min_y,
-                                       float box_height) const
+FlameTrackItem::TextGlyphCenter()
 {
+    // The vertical ink center of the font depends only on the current font size,
+    // which is shared by every flame track. Cache it and rescan only when the
+    // font size changes, so the glyph lookups run at most once
+    // per size change across all tracks rather than per track or per frame.
+    static float s_cached_font_size    = -1.0f;
+    static float s_cached_glyph_center = 0.0f;
+
+    const float font_size = ImGui::GetFontSize();
+    if(font_size == s_cached_font_size)
+    {
+        return s_cached_glyph_center;
+    }
+
     ImFontBaked* baked = ImGui::GetFontBaked();
     float        min_y = std::numeric_limits<float>::max();
     float        max_y = std::numeric_limits<float>::lowest();
 
     if(baked != nullptr)
     {
-        const float font_size = ImGui::GetFontSize();
-        const float scale     = baked->Size > 0.0f ? font_size / baked->Size : 1.0f;
+        const float scale = baked->Size > 0.0f ? font_size / baked->Size : 1.0f;
 
-        for(char c : label)
+        // Sentinel glyphs spanning the tallest caps and lowest descenders, which
+        // bound the ink extents of any typical label.
+        static const char* const kSentinel = "AQgjpqy()|";
+        for(const char* c = kSentinel; *c != '\0'; ++c)
         {
-            unsigned char codepoint = static_cast<unsigned char>(c);
-            if(codepoint == 0 || codepoint >= 0x80)
-            {
-                continue;
-            }
-
-            ImFontGlyph* glyph = baked->FindGlyph(codepoint);
+            ImFontGlyph* glyph =
+                baked->FindGlyph(static_cast<unsigned char>(*c));
             if(glyph != nullptr && glyph->Visible)
             {
                 min_y = std::min(min_y, glyph->Y0 * scale);
@@ -468,8 +477,19 @@ FlameTrackItem::CalculateCenteredTextY(const std::string& label, float rect_min_
         max_y = ImGui::GetTextLineHeight();
     }
 
-    const float glyph_center = (min_y + max_y) * 0.5f;
-    return rect_min_y + std::max(0.0f, box_height * 0.5f - glyph_center);
+    s_cached_font_size    = font_size;
+    s_cached_glyph_center = (min_y + max_y) * 0.5f;
+    return s_cached_glyph_center;
+}
+
+float
+FlameTrackItem::ComputeTextVerticalOffset(float box_height) const
+{
+    // The label baseline only depends on the shared font metrics and this
+    // track's (constant) box height, not on the label's own characters, so every
+    // event on a level aligns to the same baseline. Returns the offset from the
+    // box top at which text should be drawn.
+    return std::max(0.0f, box_height * 0.5f - TextGlyphCenter());
 }
 
 void
@@ -511,7 +531,7 @@ FlameTrackItem::DrawBox(ImVec2 start_position, int color_index, ChartItem& chart
             (chart_item.event.m_child_count > 1)
                 ? std::to_string(chart_item.event.m_child_count) + " events"
                 : chart_item.event.m_name;
-        const float text_y  = CalculateCenteredTextY(label, rectMin.y, box_height);
+        const float text_y  = rectMin.y + m_text_vertical_offset;
         ImVec2      textPos = ImVec2(rectMin.x + m_text_padding.x, text_y);
 
         if(chart_item.event.m_child_count > 1)
@@ -837,6 +857,10 @@ FlameTrackItem::RenderChart(float graph_width)
 
     int color_index      = 0;
     m_has_drawn_tool_tip = false;
+
+    // The label baseline is the same for every box on the track, so compute the
+    // vertical offset once per frame instead of per rendered event.
+    m_text_vertical_offset = ComputeTextVerticalOffset(EventBoxHeight());
 
     double     range_start_ns = TimelineSelection::INVALID_SELECTION_TIME;
     double     range_end_ns   = TimelineSelection::INVALID_SELECTION_TIME;

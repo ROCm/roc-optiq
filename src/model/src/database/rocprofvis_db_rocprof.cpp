@@ -3494,7 +3494,7 @@ RocprofDatabase::ReadExtEventInfo(rocprofvis_dm_event_id_t event_id, Future* fut
 
         // TASK 037: event detail now comes from the opaque reader API, not raw rocpd SQL.
         // The clicked surrogate is resolved back to its event_id_t via the registry, then
-        // a single get_event_detail(id) call supplies the header + typed property bag,
+        // a single get_event_info(id) call supplies the header + typed property bag,
         // and get_arguments(id) supplies the Arguments panel with position/type
         // preserved. The Essential Info nav fields (track/level for the home and stream
         // lanes) come from the registry the eager Step-1 scan built (no SQL, no
@@ -3521,7 +3521,7 @@ RocprofDatabase::ReadExtEventInfo(rocprofvis_dm_event_id_t event_id, Future* fut
         const ReaderEventInfo* info =
             ReaderEventInfoFor(guid, event_id.bitfield.event_id);
         if(!info) break;
-        auto d = reader->get_event_detail(info->id);
+        auto d = reader->get_event_info(info->id);
         if(!d) break;
         ShowProgress(0, "", kRPVDbBusy, future);
 
@@ -3603,7 +3603,7 @@ RocprofDatabase::ReadExtEventInfo(rocprofvis_dm_event_id_t event_id, Future* fut
                 break;
         }
 
-        // Type-specific properties. get_event_detail folds the event's call-arguments
+        // Type-specific properties. get_event_info folds the event's call-arguments
         // into the tail of the property bag (fold_args runs last per type); those are
         // surfaced separately under the Arguments panel below, so skip the last
         // get_arguments()-many entries here to avoid showing them twice.
@@ -3623,7 +3623,7 @@ RocprofDatabase::ReadExtEventInfo(rocprofvis_dm_event_id_t event_id, Future* fut
         }
         if(!ok) break;
 
-        // Enrich the collapsed entity-id properties: get_event_detail returns linked
+        // Enrich the collapsed entity-id properties: get_event_info returns linked
         // entities as their integer id only, so resolve the ids the old `select *` panel
         // showed by name (kernel symbol static resource sizes, agent / stream / queue
         // names, code-object uri) via the reader's bulk info lists.
@@ -3738,7 +3738,7 @@ RocprofDatabase::ReadExtEventInfo(rocprofvis_dm_event_id_t event_id, Future* fut
         }
 
         // Arguments panel: position + type preserved via the Phase 1 get_arguments(
-        // event_id_t) overload (the folded name/value pairs in event_detail_t lose both).
+        // event_id_t) overload (the folded name/value pairs in event_info_t lose both).
         bool args_ok = true;
         for(const auto& a : args)
         {

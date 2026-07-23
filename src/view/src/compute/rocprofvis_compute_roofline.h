@@ -101,31 +101,31 @@ private:
                      bool& item_hovered);
     void PlotHoverIdx();
     void ApplyPreset(PresetModel::Type type);
-    // Kernel intensity dots exist per memory level; this decides whether a
-    // given item survives the active memory-peak filter (non-intensity items
-    // always pass).
-    bool IntensityMatchesMemoryFilter(const ItemModel& item) const;
-    // Isolate a single kernel's dots in the workload roofline. Clicking the
-    // same kernel again clears isolation and restores the whole workload.
+    // Recompute every item's visibility from the active preset and the
+    // intensity/kernel/bandwidth filters. The chart, legend, and hover read
+    // visibility; the Options menu always lists the full data set.
+    void RecomputeVisibility();
     void ToggleKernelIsolation(const KernelInfo* kernel);
-    // Whether an item survives the active kernel isolation (non-intensity
-    // items, and everything outside AllKernels mode, always pass).
-    bool KernelPassesIsolation(const ItemModel& item) const;
     void ToggleBandwidthIsolation(
         rocprofvis_controller_roofline_ceiling_bandwidth_type_t bandwidth);
-    bool BandwidthPassesIsolation(const ItemModel& item) const;
 
     // Internal models...
     std::vector<ItemModel>   m_items;
     std::vector<PresetModel> m_presets;
+    // Filter options actually present in the workload (non-empty only).
+    std::vector<rocprofvis_controller_roofline_kernel_intensity_type_t>
+        m_available_intensities;
+    std::vector<rocprofvis_controller_roofline_ceiling_bandwidth_type_t>
+        m_available_bandwidths;
 
     // User options...
-    bool           m_show_menus;
-    MenusMode      m_menus_mode;
-    MenusPlacement m_menus_placement;
-    bool           m_scale_intensity;
-    float          m_line_thickness;
-    // Which memory level's kernel intensity dots to show. nullopt = all levels.
+    bool               m_show_menus;
+    MenusMode          m_menus_mode;
+    MenusPlacement     m_menus_placement;
+    bool               m_scale_intensity;
+    float              m_line_thickness;
+    PresetModel::Type  m_active_preset;
+    // Selected filters. nullopt = show all of that category.
     std::optional<rocprofvis_controller_roofline_kernel_intensity_type_t>
         m_memory_peak_filter;
 

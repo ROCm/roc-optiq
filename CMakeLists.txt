@@ -197,6 +197,8 @@ list(APPEND VIEW_FILES
     src/view/src/remote/rocprofvis_ssh_settings_dialog.h
     src/view/src/remote/rocprofvis_ssh_test_dialog.cpp
     src/view/src/remote/rocprofvis_ssh_test_dialog.h
+    src/view/src/remote/rocprofvis_remote_file_browser.cpp
+    src/view/src/remote/rocprofvis_remote_file_browser.h
 )
 endif(ROCPROFVIS_ENABLE_REMOTE)
 

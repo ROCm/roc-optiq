@@ -19,6 +19,7 @@
 #include "remote/rocprofvis_ssh_connection_store.h"
 #include "remote/rocprofvis_ssh_settings_dialog.h"
 #include "remote/rocprofvis_ssh_fetch.h"
+#include "remote/rocprofvis_remote_file_browser.h"
 #endif
 #include "imgui.h"
 #include <memory>
@@ -113,6 +114,8 @@ private:
     void SaveToSettings();
 #ifdef ROCPROFVIS_ENABLE_REMOTE
     void ApplySelectedConnection();  // TEMPORARY (remote/SSH)
+    // Lazily constructs m_remote_file_browser (bound to the shared RemoteUri).
+    void EnsureRemoteFileBrowser();
 #endif
     void AddRecentTarget(std::string const& exe);
     std::string GetProfilerPath() const;
@@ -133,6 +136,9 @@ private:
     SshConnectionStore                     m_connection_store;
     std::string                            m_selected_connection_id;
     std::unique_ptr<SshSettingsDialog>     m_ssh_settings_dialog;
+    // Shared remote file/directory picker for the Target section's Browse
+    // buttons; created lazily on first remote browse (see EnsureRemoteFileBrowser).
+    std::unique_ptr<RemoteFileBrowser>     m_remote_file_browser;
     bool                                   m_remote_show_progress_popup;
     FileStat::Snapshot                     m_remote_last_progress;
 #endif

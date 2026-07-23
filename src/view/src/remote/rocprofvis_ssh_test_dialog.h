@@ -8,6 +8,7 @@
 #include "rocprofvis_ssh_session.h"
 #include "rocprofvis_ssh_settings_dialog.h"
 #include "rocprofvis_remote_trace_orchestrator.h"
+#include "rocprofvis_remote_file_browser.h"
 
 #include <memory>
 #include <string>
@@ -46,23 +47,10 @@ public:
 private:
     void RenderProgressPopup();
     void RenderOutputPopup();
-    void RenderRemoteFilePopup();
-
-    // Browses the current m_uri browsing path, lazily creating the orchestrator
-    // (bound to the directory-path callback) on first use and reusing it for
-    // subsequent folder navigation. Reuse keeps the SSH session connected +
-    // authenticated across clicks instead of reconnecting every time.
-    void BrowseRemotePath();
 
     // Binds the currently selected SSH connection profile into m_uri so the
     // spawned orchestrator/session read the right host/credentials.
     void ApplySelectedConnection();
-
-    // Remote file browser helpers.
-    void EnsureBrowseOrchestrator();
-    void OpenRemoteFileBrowser();
-    void NavigateBrowserTo(const std::string& path, bool record_history);
-    void ActivateBrowserEntry(const RemoteDir::FileEntry& entry);
 
     AppWindow*                               m_app_window;
     SshConnectionStore                       m_connection_store;
@@ -70,6 +58,9 @@ private:
     std::shared_ptr<RemoteUri>               m_uri;
     std::unique_ptr<SshSettingsDialog>       m_settings_dialog;
     std::unique_ptr<RemoteTraceOrchestrator> m_orchestrator;
+    // Shared remote file/directory picker. Owns its own SSH session for listing
+    // directories, reading the connection from m_uri.
+    RemoteFileBrowser                        m_file_browser;
 
     bool                                     m_show_window;
     std::string                              m_status_msg;
@@ -79,25 +70,6 @@ private:
 
     bool                                     m_show_progress_popup;
     FileStat::Snapshot                       m_last_progress;
-
-    // ----- Remote file browser state -----
-    bool                              m_show_remote_filesystem_popup;
-    bool                              m_should_open_browser_popup; // defer OpenPopup to render scope
-    bool                              m_should_close_browser_popup;
-    bool                              m_browser_busy;          // a listing is in flight
-    std::string                       m_browser_error;         // last listing failure
-    std::string                       m_browser_dir;           // resolved current directory
-    RemoteDir::Snapshot               m_last_directory_state;  // entries for m_browser_dir
-    std::vector<std::string>          m_history_back;
-    std::vector<std::string>          m_history_forward;
-    std::string                       m_remote_file_filter;    // live filter text
-    std::string                       m_address_edit;          // editable address-bar buffer
-    bool                              m_address_editing;       // breadcrumb vs. editable field
-    bool                              m_show_hidden;
-    int                               m_type_filter;           // index into extension presets
-    // Selection: "" = none, ".." = the parent row, otherwise the entry's name.
-    std::string                       m_selected_name;
-    bool                              m_scroll_to_selected;
 };
 
 }  // namespace View

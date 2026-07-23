@@ -7,6 +7,7 @@
 #include "rocprofvis_profiler_backend.h"
 #include "rocprofvis_launch_preset_manager.h"
 #include "imgui.h"
+#include <functional>
 #include <string>
 #include <vector>
 #include <utility>
@@ -73,11 +74,17 @@ void StatusPill(const char* label, ImU32 bg_color);
  * Renders the Target section: executable, arguments, working dir, output dir.
  * The connection-mode selector lives in the launcher dialog (ProfilerLauncher
  * Dialog::RenderRemoteSection), next to the dialog-owned SSH options; the mode
- * is passed in here so labels read "Remote ..." and local file/path pickers are
- * disabled when targeting a remote host.
+ * is passed in here so labels read "Remote ...".
+ *
+ * In local mode the Browse buttons open the OS file/path pickers. In remote
+ * (SSH) mode they instead invoke the supplied callbacks (which open the shared
+ * remote file browser); when a remote callback is not supplied the corresponding
+ * Browse button is disabled, preserving the prior behavior.
  * Returns true if any field was modified.
  */
-bool RenderTargetSection(TargetSpec& target, ConnectionType connection, AppWindow* app_window);
+bool RenderTargetSection(TargetSpec& target, ConnectionType connection, AppWindow* app_window,
+                         const std::function<void()>& on_remote_browse_program = {},
+                         const std::function<void()>& on_remote_browse_output  = {});
 
 /**
  * Builds the displayed command line from cached execution inputs.

@@ -525,7 +525,36 @@ void ProfilerLauncherDialog::RenderMainContent()
     BeginLaunchCard("card_target");
     LaunchCardHeader(ICON_OPEN, "Target",
                      "The program to profile and where its results go");
+#ifdef ROCPROFVIS_ENABLE_REMOTE
+    // In remote (SSH) mode the Target Browse buttons open the shared remote file
+    // browser (same UI as the "Open Remote Trace" dialog). Local mode keeps the
+    // OS file/path dialogs, so the callbacks are only wired when targeting SSH.
+    std::function<void()> on_browse_program;
+    std::function<void()> on_browse_output;
+    if (IsSshMode())
+    {
+        on_browse_program = [this]()
+        {
+            ApplySelectedConnection();
+            EnsureRemoteFileBrowser();
+            m_remote_file_browser->Open(
+                m_config.target.executable, RemoteFileBrowser::PickMode::kFile,
+                [this](const std::string& path) { m_config.target.executable = path; });
+        };
+        on_browse_output = [this]()
+        {
+            ApplySelectedConnection();
+            EnsureRemoteFileBrowser();
+            m_remote_file_browser->Open(
+                m_config.target.output_directory, RemoteFileBrowser::PickMode::kDirectory,
+                [this](const std::string& path) { m_config.target.output_directory = path; });
+        };
+    }
+    RenderTargetSection(m_config.target, m_config.connection, m_app_window,
+                        on_browse_program, on_browse_output);
+#else
     RenderTargetSection(m_config.target, m_config.connection, m_app_window);
+#endif
     EndLaunchCard();
 
     BeginLaunchCard("card_general");
@@ -881,12 +910,10 @@ void ProfilerLauncherDialog::RenderRemoteSection()
 
         ImGui::TableSetColumnIndex(1);
         const std::string host = m_remote_uri->GetRemoteHostString();
-        const std::string user = m_remote_uri->GetRemoteUserString();
+        // Prefer the connection's user-chosen name; fall back to user@host:port.
         const std::string host_chip =
-            host.empty()
-                ? std::string("Configure")
-                : (user.empty() ? std::string("?") : user) + "@" + host + ":" +
-                      m_remote_uri->GetRemotePortString();
+            host.empty() ? std::string("Configure")
+                         : m_remote_uri->GetConnection().DisplayLabel();
 
         ImGui::PushStyleColor(ImGuiCol_Button, settings.GetColor(Colors::kButton));
         ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
@@ -922,6 +949,13 @@ void ProfilerLauncherDialog::RenderRemotePopups()
         {
             m_ssh_settings_dialog.reset();
         }
+    }
+
+    // Remote file/directory picker for the Target Browse buttons. Owns its own
+    // SSH session for listing, so it is independent of the launch orchestrator.
+    if (m_remote_file_browser)
+    {
+        m_remote_file_browser->Render();
     }
 
     SshSession* ssh_session = m_orchestrator.GetRemoteSshSession();
@@ -1568,6 +1602,14 @@ void ProfilerLauncherDialog::ApplySelectedConnection()
     else
     {
         m_remote_uri->SetConnection(SshConnectionConfig());
+    }
+}
+
+void ProfilerLauncherDialog::EnsureRemoteFileBrowser()
+{
+    if (!m_remote_file_browser)
+    {
+        m_remote_file_browser = std::make_unique<RemoteFileBrowser>(m_remote_uri);
     }
 }
 #endif  // ROCPROFVIS_ENABLE_REMOTE

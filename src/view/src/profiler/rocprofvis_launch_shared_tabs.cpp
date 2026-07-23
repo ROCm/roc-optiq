@@ -308,14 +308,19 @@ bool ToggleSwitch(const char* label, bool* value)
     return changed;
 }
 
-bool RenderTargetSection(TargetSpec& target, ConnectionType connection, AppWindow* app_window)
+bool RenderTargetSection(TargetSpec& target, ConnectionType connection, AppWindow* app_window,
+                         const std::function<void()>& on_remote_browse_program,
+                         const std::function<void()>& on_remote_browse_output)
 {
     bool modified = false;
 
     // In remote (SSH) mode the executable / output refer to paths on the remote
-    // host, so the local file/path Browse pickers don't apply (a remote file
-    // browser may re-enable them later).
-    const bool is_remote = (connection == ConnectionType::kSsh);
+    // host. When the caller supplies a remote-browse callback we drive the shared
+    // remote file browser; otherwise the local pickers don't apply and the Browse
+    // button stays disabled.
+    const bool is_remote        = (connection == ConnectionType::kSsh);
+    const bool remote_browse_exe = is_remote && static_cast<bool>(on_remote_browse_program);
+    const bool remote_browse_out = is_remote && static_cast<bool>(on_remote_browse_output);
 
     SettingsManager&  settings      = SettingsManager::Get();
     ProfilerSettings& prof_settings = settings.GetProfilerSettings();
@@ -343,14 +348,24 @@ bool RenderTargetSection(TargetSpec& target, ConnectionType connection, AppWindo
     }
 
     ImGui::SameLine();
-    if (is_remote) ImGui::BeginDisabled();
-    if (ImGui::Button("Browse##TargetExe", ImVec2(browse_w, 0)) && app_window)
+    // Disabled only in remote mode without a remote-browse handler; local mode
+    // and remote-with-handler both keep the button live.
+    const bool exe_disabled = is_remote && !remote_browse_exe;
+    if (exe_disabled) ImGui::BeginDisabled();
+    if (ImGui::Button("Browse##TargetExe", ImVec2(browse_w, 0)))
     {
-        app_window->ShowOpenFileDialog(
-            "Choose Program", {}, "",
-            [&target](std::string const& path) { target.executable = path; });
+        if (remote_browse_exe)
+        {
+            on_remote_browse_program();
+        }
+        else if (!is_remote && app_window)
+        {
+            app_window->ShowOpenFileDialog(
+                "Choose Program", {}, "",
+                [&target](std::string const& path) { target.executable = path; });
+        }
     }
-    if (is_remote) ImGui::EndDisabled();
+    if (exe_disabled) ImGui::EndDisabled();
 
     if (has_recent)
     {
@@ -410,14 +425,22 @@ bool RenderTargetSection(TargetSpec& target, ConnectionType connection, AppWindo
         modified = true;
     }
     ImGui::SameLine();
-    if (is_remote) ImGui::BeginDisabled();
-    if (ImGui::Button("Browse##OutputDir", ImVec2(browse_w, 0)) && app_window)
+    const bool out_disabled = is_remote && !remote_browse_out;
+    if (out_disabled) ImGui::BeginDisabled();
+    if (ImGui::Button("Browse##OutputDir", ImVec2(browse_w, 0)))
     {
-        app_window->ShowPathPickerDialog(
-            "Choose Output Directory", "",
-            [&target](std::string const& path) { target.output_directory = path; });
+        if (remote_browse_out)
+        {
+            on_remote_browse_output();
+        }
+        else if (!is_remote && app_window)
+        {
+            app_window->ShowPathPickerDialog(
+                "Choose Output Directory", "",
+                [&target](std::string const& path) { target.output_directory = path; });
+        }
     }
-    if (is_remote) ImGui::EndDisabled();
+    if (out_disabled) ImGui::EndDisabled();
 
     ImGui::Spacing();
     if (ImGui::Checkbox("Open the trace automatically when profiling finishes",

@@ -6,19 +6,26 @@
 #include "rocprofvis_controller.h"
 #include "rocprofvis_core_assert.h"
 #include "rocprofvis_events.h"
+#include <algorithm>
 #include <cfloat>
 #include <memory>
+#include <vector>
 
 namespace RocProfVis
 {
 namespace View
 {
 
-    size_t SshSession::s_active_session_count = 0;
+    std::vector<SshSession*> SshSession::s_active_sessions;
 
     size_t SshSession::ActiveSessionCount()
     {
-        return s_active_session_count;
+        return s_active_sessions.size();
+    }
+
+    const std::vector<SshSession*>& SshSession::ActiveSessions()
+    {
+        return s_active_sessions;
     }
 
     SshSession::SshSession(std::shared_ptr<RemoteUri> uri)
@@ -29,7 +36,7 @@ namespace View
     , m_last_result(kRocProfVisResultSuccess)
     , m_auth_request_built(false)
     {
-        ++s_active_session_count;
+        s_active_sessions.push_back(this);
         if (m_uri)
         {
             AllocateConnection(m_uri->GetRemoteHostString().c_str(), m_uri->GetRemotePortInt());
@@ -38,9 +45,11 @@ namespace View
     }
 
     SshSession::~SshSession() {
-        if (s_active_session_count > 0)
+        std::vector<SshSession*>::iterator it =
+            std::find(s_active_sessions.begin(), s_active_sessions.end(), this);
+        if (it != s_active_sessions.end())
         {
-            --s_active_session_count;
+            s_active_sessions.erase(it);
         }
         // If a phase is still in flight, the worker may still be using the
         // connection. Hand the connection-free to the monitor so it runs only

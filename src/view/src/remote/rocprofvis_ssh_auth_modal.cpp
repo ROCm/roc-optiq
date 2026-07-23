@@ -13,7 +13,6 @@
 #include <spdlog/spdlog.h>
 
 #include <cfloat>
-#include <cstring>
 #include <vector>
 
 namespace RocProfVis
@@ -53,20 +52,33 @@ void RenderAuthHeaderCard(const char* id, const char* title, const char* subtitl
 }
 }  // namespace
 
-void RenderSshAuthModal(SshSession* ssh_session)
+bool RenderSshAuthModal(SshSession* ssh_session)
 {
-    if (!ssh_session) return;
+    if (!ssh_session)
+    {
+        return false;
+    }
 
     // ---- kbdint ----
     if (auto req = ssh_session->GetPromptRequest()->ConsumeIfUpdated())
     {
         auto& st = KbdintForFrame();
+        // The kbdint answer buffer is a single process-wide scratch shared by
+        // every session's prompt (only one auth modal is ever visible at a
+        // time). Reconcile it to the current request's prompt count every frame
+        // - not just when opening - so a buffer left over from a different
+        // session's prompt can never be too small to index below. Only reassign
+        // when the count changes, so typed input is preserved across frames for
+        // the same prompt.
+        if(st.answers.size() != req->prompts.size())
+        {
+            st.answers.assign(req->prompts.size(), "");
+        }
         // Gate on ImGui's own popup state rather than a persistent latch: if the
         // op is torn down without a button press, the un-Begin'd modal
         // auto-closes and a fresh request re-opens it (no wedged latch).
         if(!ImGui::IsPopupOpen("SSH Authentication"))
         {
-            st.answers.assign(req->prompts.size(), "");
             spdlog::info("[ssh-ui] kbdint pending: {} prompt(s); calling OpenPopup",
                          req->prompts.size());
             ImGui::OpenPopup("SSH Authentication");
@@ -118,14 +130,9 @@ void RenderSshAuthModal(SshSession* ssh_session)
                     ImGui::SetNextItemWidth(-FLT_MIN);
                     ImGuiInputTextFlags flags =
                         req->prompts[i].echo ? 0 : ImGuiInputTextFlags_Password;
-                    char buf[256];
-                    std::strncpy(buf, st.answers[i].c_str(), sizeof(buf));
-                    buf[sizeof(buf) - 1] = '\0';
                     std::string id = "##kbd" + std::to_string(i);
-                    if(ImGui::InputText(id.c_str(), buf, sizeof(buf), flags))
-                    {
-                        st.answers[i] = buf;
-                    }
+                    // Writes directly into the answer string via CallbackResize.
+                    InputTextString(id.c_str(), st.answers[i], flags);
                 }
             }
             EndPanelCard();
@@ -164,7 +171,7 @@ void RenderSshAuthModal(SshSession* ssh_session)
         }
         ImGui::PopStyleVar(2);  // WindowPadding, WindowRounding
         popup_style.PopStyles();
-        return;
+        return true;
     }
 
     // ---- host key confirmation ----
@@ -299,12 +306,43 @@ void RenderSshAuthModal(SshSession* ssh_session)
         }
         ImGui::PopStyleVar(2);  // WindowPadding, WindowRounding
         popup_style.PopStyles();
-        return;
+        return true;
     }
 
     // No pending request; reset latched modal state in case a previous
     // one was just dismissed.
     KbdintForFrame() = {};
+    return false;
+}
+
+void RenderSshAuthModals()
+{
+    // A session whose owner renders its own auth modal nested inside its own
+    // modal window (e.g. the remote file browser) must not be rendered here:
+    // opening a second top-level modal would dismiss the owner's modal. While
+    // any such self-managed modal is up, defer every other session's prompt too
+    // for the same reason - requests are level-held, so they resurface once the
+    // owning modal closes.
+    for (SshSession* session : SshSession::ActiveSessions())
+    {
+        if (session->IsAuthModalSelfManaged())
+        {
+            return;
+        }
+    }
+
+    // ImGui modals are exclusive and each request is level-held (the flag
+    // persists until the user submits/cancels), so render at most one session's
+    // modal per frame; other pending sessions are serviced on later frames once
+    // this one resolves. This also keeps the shared popup IDs / kbdint input
+    // buffer owned by a single session at a time.
+    for (SshSession* session : SshSession::ActiveSessions())
+    {
+        if (RenderSshAuthModal(session))
+        {
+            break;
+        }
+    }
 }
 
 }  // namespace View

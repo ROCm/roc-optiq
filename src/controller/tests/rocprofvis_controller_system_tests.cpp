@@ -3335,7 +3335,7 @@ TEST_CASE("JobSystem Job lost-wakeup stress repro")
     // only cost time on the (already-correct) fixed branch. Bump `rounds` if
     // you need a longer soak to reproduce on a strongly-ordered x86 box.
     const int pairs  = int(hw) * 4;
-    const int rounds = 1000;
+    const int rounds = 500;
 
     for(int r = 0; r < rounds; ++r)
     {

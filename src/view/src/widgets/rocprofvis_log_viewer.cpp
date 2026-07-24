@@ -8,6 +8,7 @@
 #include "rocprofvis_core.h"
 #include "rocprofvis_gui_helpers.h"
 #include "rocprofvis_notification_manager.h"
+#include "rocprofvis_render_scheduler.h"
 
 #include <algorithm>
 #include <cctype>
@@ -287,6 +288,12 @@ LogViewer::Poll()
         rocprofvis_core_get_log_entries_ex(this, &LogViewer::ProcessEntry);
     }
     SaveUiState();
+
+    // Keep rendering while live so new log lines appear promptly.
+    if(IsLiveUpdating())
+    {
+        RenderScheduler::GetInstance().RequestRender();
+    }
 }
 
 bool

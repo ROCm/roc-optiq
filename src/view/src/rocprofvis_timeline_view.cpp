@@ -12,6 +12,7 @@
 #include "rocprofvis_font_manager.h"
 #include "rocprofvis_line_track_item.h"
 #include "rocprofvis_measurement_controller.h"
+#include "rocprofvis_render_scheduler.h"
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_timeline_selection.h"
 #include "rocprofvis_timeline_track_options.h"
@@ -1153,6 +1154,14 @@ TimelineView::Update()
             }
         }
     }
+
+    // Loading-timer debounce, sticky-note drag and reorder auto-scroll advance
+    // only while rendering; keep rendering while any is active.
+    if(m_loading_timer.IsRunning() || m_dragged_sticky_id != INVALID_STICKY_ID ||
+       m_reorder_auto_scrolling)
+    {
+        RenderScheduler::GetInstance().RequestRender();
+    }
 }
 
 void
@@ -1669,17 +1678,6 @@ TimelineView::RenderGraphView()
     TrackItem::SetSidebarSize(m_sidebar_size);
     ImGui::EndChild();
     ImGui::PopStyleColor();
-}
-
-bool
-TimelineView::WantsContinuousRender() const
-{
-    // The loading-timer debounce gates track-data requests and only advances
-    // while rendering, so keep rendering until it expires or the load stalls.
-    // Anchor drag and reorder auto-scroll both advance per frame, so keep
-    // rendering while either is active.
-    return m_loading_timer.IsRunning() || m_dragged_sticky_id != INVALID_STICKY_ID ||
-           m_reorder_auto_scrolling;
 }
 
 bool

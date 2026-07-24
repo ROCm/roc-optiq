@@ -19,29 +19,23 @@ namespace RocProfVis
 namespace View
 {
 
-constexpr size_t   COMPARE_SOURCE_A_INDEX         = 0;
-constexpr size_t   COMPARE_SOURCE_B_INDEX         = 1;
-constexpr uint64_t COMPARE_EVENT_TABLE_A_CLIENT_ID = 1;
-constexpr uint64_t COMPARE_EVENT_TABLE_B_CLIENT_ID = 2;
-constexpr float    COMPARE_EVENT_TABLE_MIN_WIDTH     = 280.0f;
-constexpr float    COMPARE_CARD_MARGIN               = 4.0f;
-constexpr float    COMPARE_SOURCE_TITLE_GAP_FACTOR   = 4.0f;
-constexpr uint64_t EVENT_TABLE_DEFAULT_SORT_COLUMN   = 1;
+constexpr size_t   COMPARE_SOURCE_A_INDEX          = 0;
+constexpr size_t   COMPARE_SOURCE_B_INDEX          = 1;
+constexpr uint64_t COMPARE_TABLE_A_CLIENT_ID       = 1;
+constexpr uint64_t COMPARE_TABLE_B_CLIENT_ID       = 2;
+constexpr float    COMPARE_TABLE_MIN_WIDTH         = 280.0f;
+constexpr float    COMPARE_CARD_MARGIN             = 4.0f;
+constexpr float    COMPARE_SOURCE_TITLE_GAP_FACTOR = 2.0f;
+constexpr uint64_t TABLE_DEFAULT_SORT_COLUMN       = 1;
 
 AnalysisView::AnalysisView(DataProvider& dp, std::shared_ptr<TrackTopology> topology,
                            std::shared_ptr<TimelineSelection>  timeline_selection,
                            std::shared_ptr<AnnotationsManager> annotation_manager)
 : m_data_provider(dp)
-, m_sample_table(std::make_shared<MultiTrackTable>(
-      dp, TableType::kSampleTable, kRPVControllerTableTypeSamples,
-      DataProvider::SAMPLE_TABLE_REQUEST_ID,
-      [&dp]() -> const TablesModel& { return dp.DataModel().GetTables(); },
-      [&dp]() -> TablesModel& { return dp.DataModel().GetTables(); }, true,
-      timeline_selection))
-, m_split_event_tables(false)
+, m_compare_mode(false)
 , m_events_view(std::make_shared<EventsView>(dp, timeline_selection))
-, m_annotation_view(std::make_shared<AnnotationView>(dp, annotation_manager))
 , m_track_details(std::make_shared<TrackDetails>(dp, topology, timeline_selection))
+, m_annotation_view(std::make_shared<AnnotationView>(dp, annotation_manager))
 , m_top_events_view(std::make_shared<TopEventsView>(dp, timeline_selection))
 {
     m_widget_name = GenUniqueName("Analysis View");
@@ -50,65 +44,40 @@ AnalysisView::AnalysisView(DataProvider& dp, std::shared_ptr<TrackTopology> topo
         dp.DataModel().GetCompareSource(COMPARE_SOURCE_A_INDEX);
     const CompareSourceInfo* source_b =
         dp.DataModel().GetCompareSource(COMPARE_SOURCE_B_INDEX);
-    m_split_event_tables = source_a && source_b;
-    if(m_split_event_tables)
+    m_compare_mode = source_a && source_b;
+
+    if(m_compare_mode)
     {
-        m_event_tables.push_back(std::make_shared<MultiTrackTable>(
-            dp, TableType::kCompareEventTableA, kRPVControllerTableTypeEvents,
+        BuildCompareGroup(
+            m_event_group, TableType::kCompareEventTableA, TableType::kCompareEventTableB,
+            kRPVControllerTableTypeEvents,
             RequestIdBuilder::MakeClientRequestId(RequestType::kFetchTrackEventTable,
-                                                  COMPARE_EVENT_TABLE_A_CLIENT_ID),
-            [&dp]() -> const TablesModel& { return dp.DataModel().GetTables(); },
-            [&dp]() -> TablesModel& { return dp.DataModel().GetTables(); }, false,
-            timeline_selection, EVENT_TABLE_DEFAULT_SORT_COLUMN,
-            kRPVControllerSortOrderAscending, "Event Table A", "", COMPARE_SOURCE_A_INDEX));
-        m_event_tables.push_back(std::make_shared<MultiTrackTable>(
-            dp, TableType::kCompareEventTableB, kRPVControllerTableTypeEvents,
+                                                  COMPARE_TABLE_A_CLIENT_ID),
             RequestIdBuilder::MakeClientRequestId(RequestType::kFetchTrackEventTable,
-                                                  COMPARE_EVENT_TABLE_B_CLIENT_ID),
-            [&dp]() -> const TablesModel& { return dp.DataModel().GetTables(); },
-            [&dp]() -> TablesModel& { return dp.DataModel().GetTables(); }, false,
-            timeline_selection, EVENT_TABLE_DEFAULT_SORT_COLUMN,
-            kRPVControllerSortOrderAscending, "Event Table B", "", COMPARE_SOURCE_B_INDEX));
-        m_event_tables[COMPARE_SOURCE_A_INDEX]->SetDisplaySummary(false);
-        m_event_tables[COMPARE_SOURCE_B_INDEX]->SetDisplaySummary(false);
-
-        m_event_tables[COMPARE_SOURCE_A_INDEX]->SetHeaderRenderer(
-            [this]() { RenderCompareSourceTitle(COMPARE_SOURCE_A_INDEX); });
-        m_event_tables[COMPARE_SOURCE_B_INDEX]->SetHeaderRenderer(
-            [this]() { RenderCompareSourceTitle(COMPARE_SOURCE_B_INDEX); });
-
-        m_event_tables[COMPARE_SOURCE_A_INDEX]->SetFilterSubmitCallback(
-            [this](const MultiTrackTable& source) {
-                m_event_tables[COMPARE_SOURCE_B_INDEX]->ApplySharedFiltersFrom(source);
-            });
-
-        // Each source renders as its own single-bordered card, so the panes and the
-        // container that hold them are borderless. A small margin gives the two cards
-        // breathing room around the splitter.
-        LayoutItem::Ptr source_a_item =
-            LayoutItem::CreateFromWidget(m_event_tables[COMPARE_SOURCE_A_INDEX]);
-        source_a_item->m_child_flags    = ImGuiChildFlags_None;
-        source_a_item->m_window_padding  = ImVec2(COMPARE_CARD_MARGIN, COMPARE_CARD_MARGIN);
-        LayoutItem::Ptr source_b_item =
-            LayoutItem::CreateFromWidget(m_event_tables[COMPARE_SOURCE_B_INDEX]);
-        source_b_item->m_child_flags    = ImGuiChildFlags_None;
-        source_b_item->m_window_padding  = ImVec2(COMPARE_CARD_MARGIN, COMPARE_CARD_MARGIN);
-        m_event_table_split =
-            std::make_shared<HSplitContainer>(source_a_item, source_b_item);
-        m_event_table_split->SetSplit(0.5f);
-        m_event_table_split->SetMinLeftWidth(COMPARE_EVENT_TABLE_MIN_WIDTH);
-        m_event_table_split->SetMinRightWidth(COMPARE_EVENT_TABLE_MIN_WIDTH);
-
-        // Render the shared filter form and the two source cards directly in the tab's
-        // full-width content region so controls size correctly and share one padded frame.
-        m_event_table_layout =
-            std::make_shared<RocCustomWidget>([this]() { RenderCompareEventTab(); });
+                                                  COMPARE_TABLE_B_CLIENT_ID),
+            "Event Table A", "Event Table B", "events", "compare_event_tab",
+            timeline_selection);
+        BuildCompareGroup(
+            m_sample_group, TableType::kCompareSampleTableA,
+            TableType::kCompareSampleTableB, kRPVControllerTableTypeSamples,
+            RequestIdBuilder::MakeClientRequestId(RequestType::kFetchTrackSampleTable,
+                                                  COMPARE_TABLE_A_CLIENT_ID),
+            RequestIdBuilder::MakeClientRequestId(RequestType::kFetchTrackSampleTable,
+                                                  COMPARE_TABLE_B_CLIENT_ID),
+            "Sample Table A", "Sample Table B", "samples", "compare_sample_tab",
+            timeline_selection);
     }
     else
     {
-        m_event_tables.push_back(std::make_shared<MultiTrackTable>(
+        m_event_group.tables.push_back(std::make_shared<MultiTrackTable>(
             dp, TableType::kEventTable, kRPVControllerTableTypeEvents,
             DataProvider::EVENT_TABLE_REQUEST_ID,
+            [&dp]() -> const TablesModel& { return dp.DataModel().GetTables(); },
+            [&dp]() -> TablesModel& { return dp.DataModel().GetTables(); }, true,
+            timeline_selection));
+        m_sample_group.tables.push_back(std::make_shared<MultiTrackTable>(
+            dp, TableType::kSampleTable, kRPVControllerTableTypeSamples,
+            DataProvider::SAMPLE_TABLE_REQUEST_ID,
             [&dp]() -> const TablesModel& { return dp.DataModel().GetTables(); },
             [&dp]() -> TablesModel& { return dp.DataModel().GetTables(); }, true,
             timeline_selection));
@@ -120,20 +89,13 @@ AnalysisView::AnalysisView(DataProvider& dp, std::shared_ptr<TrackTopology> topo
     tab_item.m_label     = "Event Table";
     tab_item.m_id        = "event_table";
     tab_item.m_can_close = false;
-    if(m_split_event_tables)
-    {
-        tab_item.m_widget = m_event_table_layout;
-    }
-    else
-    {
-        tab_item.m_widget = m_event_tables.front();
-    }
+    tab_item.m_widget    = TabWidgetFor(m_event_group);
     m_tab_container->AddTab(tab_item);
 
     tab_item.m_label     = "Sample Table";
     tab_item.m_id        = "sample_table";
     tab_item.m_can_close = false;
-    tab_item.m_widget    = m_sample_table;
+    tab_item.m_widget    = TabWidgetFor(m_sample_group);
     m_tab_container->AddTab(tab_item);
 
     // Add EventsView tab
@@ -198,9 +160,14 @@ AnalysisView::~AnalysisView()
 void
 AnalysisView::Update()
 {
-    if(m_split_event_tables)
+    // Compare tables live in custom layouts, not as tab widgets, so update them here.
+    if(m_compare_mode)
     {
-        for(std::shared_ptr<MultiTrackTable>& table : m_event_tables)
+        for(std::shared_ptr<MultiTrackTable>& table : m_event_group.tables)
+        {
+            table->Update();
+        }
+        for(std::shared_ptr<MultiTrackTable>& table : m_sample_group.tables)
         {
             table->Update();
         }
@@ -214,36 +181,101 @@ AnalysisView::Render()
     m_tab_container->Render();
 }
 
+std::shared_ptr<RocWidget>
+AnalysisView::TabWidgetFor(CompareGroup& group) const
+{
+    if(m_compare_mode && group.layout)
+    {
+        return group.layout;
+    }
+    return group.tables.front();
+}
+
 void
-AnalysisView::RenderCompareEventTab()
+AnalysisView::BuildCompareGroup(CompareGroup& group, TableType type_a, TableType type_b,
+                                rocprofvis_controller_table_type_t request_type,
+                                uint64_t request_id_a, uint64_t request_id_b,
+                                const char* friendly_a, const char* friendly_b,
+                                const char* noun, const char* child_id,
+                                std::shared_ptr<TimelineSelection> timeline_selection)
+{
+    DataProvider& dp = m_data_provider;
+    group.noun       = noun;
+
+    group.tables.push_back(std::make_shared<MultiTrackTable>(
+        dp, type_a, request_type, request_id_a,
+        [&dp]() -> const TablesModel& { return dp.DataModel().GetTables(); },
+        [&dp]() -> TablesModel& { return dp.DataModel().GetTables(); }, false,
+        timeline_selection, TABLE_DEFAULT_SORT_COLUMN, kRPVControllerSortOrderAscending,
+        friendly_a, "", COMPARE_SOURCE_A_INDEX));
+    group.tables.push_back(std::make_shared<MultiTrackTable>(
+        dp, type_b, request_type, request_id_b,
+        [&dp]() -> const TablesModel& { return dp.DataModel().GetTables(); },
+        [&dp]() -> TablesModel& { return dp.DataModel().GetTables(); }, false,
+        timeline_selection, TABLE_DEFAULT_SORT_COLUMN, kRPVControllerSortOrderAscending,
+        friendly_b, "", COMPARE_SOURCE_B_INDEX));
+    group.tables[COMPARE_SOURCE_A_INDEX]->SetDisplaySummary(false);
+    group.tables[COMPARE_SOURCE_B_INDEX]->SetDisplaySummary(false);
+
+    CompareGroup* grp = &group;
+    group.tables[COMPARE_SOURCE_A_INDEX]->SetHeaderRenderer(
+        [this, grp]() { RenderCompareSourceTitle(*grp, COMPARE_SOURCE_A_INDEX); });
+    group.tables[COMPARE_SOURCE_B_INDEX]->SetHeaderRenderer(
+        [this, grp]() { RenderCompareSourceTitle(*grp, COMPARE_SOURCE_B_INDEX); });
+    group.tables[COMPARE_SOURCE_A_INDEX]->SetFilterSubmitCallback(
+        [grp](const MultiTrackTable& source) {
+            grp->tables[COMPARE_SOURCE_B_INDEX]->ApplySharedFiltersFrom(source);
+        });
+
+    // Each table draws its own card, so the panes stay borderless with a small margin.
+    LayoutItem::Ptr source_a_item =
+        LayoutItem::CreateFromWidget(group.tables[COMPARE_SOURCE_A_INDEX]);
+    source_a_item->m_child_flags    = ImGuiChildFlags_None;
+    source_a_item->m_window_padding = ImVec2(COMPARE_CARD_MARGIN, COMPARE_CARD_MARGIN);
+    LayoutItem::Ptr source_b_item =
+        LayoutItem::CreateFromWidget(group.tables[COMPARE_SOURCE_B_INDEX]);
+    source_b_item->m_child_flags    = ImGuiChildFlags_None;
+    source_b_item->m_window_padding = ImVec2(COMPARE_CARD_MARGIN, COMPARE_CARD_MARGIN);
+    group.split = std::make_shared<HSplitContainer>(source_a_item, source_b_item);
+    group.split->SetSplit(0.5f);
+    group.split->SetMinLeftWidth(COMPARE_TABLE_MIN_WIDTH);
+    group.split->SetMinRightWidth(COMPARE_TABLE_MIN_WIDTH);
+
+    std::string child_id_str = child_id;
+    group.layout             = std::make_shared<RocCustomWidget>(
+        [this, grp, child_id_str]() { RenderCompareTab(*grp, child_id_str.c_str()); });
+}
+
+void
+AnalysisView::RenderCompareTab(CompareGroup& group, const char* child_id)
 {
     const ImGuiStyle& style = SettingsManager::GetInstance().GetDefaultStyle();
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, style.WindowPadding);
-    ImGui::BeginChild("##compare_event_tab", ImVec2(0.0f, 0.0f),
+    ImGui::PushID(child_id);
+    ImGui::BeginChild("##compare_tab", ImVec2(0.0f, 0.0f),
                       ImGuiChildFlags_AlwaysUseWindowPadding,
                       ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
 
-    // Shared filter form spanning the full content width.
-    m_event_tables[COMPARE_SOURCE_A_INDEX]->RenderSharedControls();
+    group.tables[COMPARE_SOURCE_A_INDEX]->RenderSharedControls();
 
     ImGui::Spacing();
     ImGui::Separator();
     ImGui::Spacing();
 
-    // Side-by-side source cards fill the remaining height.
-    if(m_event_table_split)
+    if(group.split)
     {
-        m_event_table_split->Render();
+        group.split->Render();
     }
 
     ImGui::EndChild();
+    ImGui::PopID();
     ImGui::PopStyleVar();
 }
 
 void
-AnalysisView::RenderCompareSourceTitle(size_t source_index)
+AnalysisView::RenderCompareSourceTitle(CompareGroup& group, size_t source_index)
 {
-    if(source_index >= m_event_tables.size())
+    if(source_index >= group.tables.size())
     {
         return;
     }
@@ -257,13 +289,15 @@ AnalysisView::RenderCompareSourceTitle(size_t source_index)
     SettingsManager& settings = SettingsManager::GetInstance();
 
     RenderCompareSourceBadge(*source, settings);
+    // Panes run with ItemSpacing 0, so take the badge gap from the default style.
     ImGui::SameLine(
-        0.0f, ImGui::GetStyle().ItemSpacing.x * COMPARE_SOURCE_TITLE_GAP_FACTOR);
+        0.0f, settings.GetDefaultStyle().ItemSpacing.x * COMPARE_SOURCE_TITLE_GAP_FACTOR);
 
     const std::string& label = source->name.empty() ? source->path : source->name;
     const std::string  summary =
-        std::to_string(m_event_tables[source_index]->GetTotalRowCount()) + " events \xC2\xB7 " +
-        std::to_string(m_event_tables[source_index]->GetIncludedTrackCount()) + " tracks";
+        std::to_string(group.tables[source_index]->GetTotalRowCount()) + " " + group.noun +
+        " \xC2\xB7 " +
+        std::to_string(group.tables[source_index]->GetIncludedTrackCount()) + " tracks";
     const float summary_width = ImGui::CalcTextSize(summary.c_str()).x;
 
     float label_width = ImGui::GetContentRegionAvail().x - summary_width -
@@ -291,15 +325,15 @@ AnalysisView::HandleTimelineSelectionChanged(std::shared_ptr<RocEvent> e)
                 std::static_pointer_cast<TrackSelectionChangedEvent>(e);
             if(selection_changed_event)
             {
-                for(std::shared_ptr<MultiTrackTable>& table : m_event_tables)
+                for(std::shared_ptr<MultiTrackTable>& table : m_event_group.tables)
                 {
                     table->HandleTrackSelectionChanged(
                         selection_changed_event->GetTrackID(),
                         selection_changed_event->TrackSelected());
                 }
-                if(m_sample_table)
+                for(std::shared_ptr<MultiTrackTable>& table : m_sample_group.tables)
                 {
-                    m_sample_table->HandleTrackSelectionChanged(
+                    table->HandleTrackSelectionChanged(
                         selection_changed_event->GetTrackID(),
                         selection_changed_event->TrackSelected());
                 }
@@ -323,15 +357,15 @@ AnalysisView::HandleTimelineSelectionChanged(std::shared_ptr<RocEvent> e)
                 std::static_pointer_cast<TimeRangeSelectionChangedEvent>(e);
             if(selection_changed_event)
             {
-                for(std::shared_ptr<MultiTrackTable>& table : m_event_tables)
+                for(std::shared_ptr<MultiTrackTable>& table : m_event_group.tables)
                 {
                     table->HandleTimeRangeSelectionChanged(
                         selection_changed_event->GetStartNs(),
                         selection_changed_event->GetEndNs());
                 }
-                if(m_sample_table)
+                for(std::shared_ptr<MultiTrackTable>& table : m_sample_group.tables)
                 {
-                    m_sample_table->HandleTimeRangeSelectionChanged(
+                    table->HandleTimeRangeSelectionChanged(
                         selection_changed_event->GetStartNs(),
                         selection_changed_event->GetEndNs());
                 }

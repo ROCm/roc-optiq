@@ -19,6 +19,8 @@ enum class TableType
     kEventTable,
     kCompareEventTableA,
     kCompareEventTableB,
+    kCompareSampleTableA,
+    kCompareSampleTableB,
     kEventSearchTable,
     kSummaryKernelTable,
     kAnalysisTopInstrumentedEventsTable,
@@ -26,6 +28,12 @@ enum class TableType
     kAnalysisTopMemoryAllocationEventsTable,
     kAnalysisTopMemoryCopyEventsTable,
     kAnalysisTopSampledEventsTable,
+    // Source-B slots for compare mode; the types above serve as source A.
+    kAnalysisTopInstrumentedEventsTableB,
+    kAnalysisTopDispatchEventsTableB,
+    kAnalysisTopMemoryAllocationEventsTableB,
+    kAnalysisTopMemoryCopyEventsTableB,
+    kAnalysisTopSampledEventsTableB,
     __kTableTypeCount
 };
 

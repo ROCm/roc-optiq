@@ -7,6 +7,7 @@
 #include "widgets/rocprofvis_widget.h"
 #include <array>
 #include <memory>
+#include <optional>
 #include <vector>
 
 namespace RocProfVis
@@ -38,10 +39,17 @@ private:
                        rocprofvis_controller_table_type_t request_table_type,
                        uint64_t                           request_id,
                        std::shared_ptr<TimelineSelection> timeline_selection,
-                       rocprofvis_dm_event_operation_t op, const char* header);
+                       rocprofvis_dm_event_operation_t op, const char* header,
+                       std::optional<uint64_t> source_index = std::nullopt);
         ~TopEventsTable();
 
+        // Pooled render: own collapsing header and row-based sizing.
         void Render() override;
+        // Compare render: sized card body only; the parent draws the category header.
+        void RenderBody(const ImVec2& size);
+        // Unclamped height to show all rows plus chrome.
+        float ContentHeight() const;
+
         void HandleTrackSelectionChanged(uint64_t track_id, bool selected) override;
 
         bool Visible() const;
@@ -66,9 +74,21 @@ private:
         rocprofvis_dm_event_operation_t         m_op;
         const char*                             m_header;
         bool                                    m_visible;
+        std::optional<uint64_t>                 m_source_index;
     };
 
-    std::array<std::unique_ptr<TopEventsTable>, 5> m_tables;
+    struct Category
+    {
+        std::unique_ptr<TopEventsTable> table_a;
+        std::unique_ptr<TopEventsTable> table_b;  // compare mode only
+        const char*                     header = nullptr;
+    };
+
+    void RenderSourceBadge(size_t source_index);
+
+    DataProvider&           m_data_provider;
+    bool                    m_compare_mode;
+    std::array<Category, 5> m_categories;
 };
 
 }  // namespace View

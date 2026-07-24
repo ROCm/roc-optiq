@@ -8,8 +8,10 @@
 #include "rocprofvis_events.h"
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_timeline_selection.h"
+#include "rocprofvis_track_item.h"
 #include "rocprofvis_track_topology.h"
 #include "widgets/rocprofvis_gui_helpers.h"
+#include "widgets/rocprofvis_split_containers.h"
 #include "widgets/rocprofvis_widget.h"
 
 #include <string>
@@ -28,6 +30,11 @@ constexpr const char* TRACK_PREFIX[] = { "Unknown", "Queue",  "Stream",
 // BeginTable scopes ids per table, so a single constant is unambiguous.
 constexpr const char* CELL_CONTEXT_MENU_ID = "##track_details_cell_menu";
 
+constexpr size_t COMPARE_SOURCE_A_INDEX = 0;
+constexpr size_t COMPARE_SOURCE_B_INDEX = 1;
+constexpr float  COMPARE_CARD_MARGIN    = 4.0f;
+constexpr float  COMPARE_TITLE_GAP      = 2.0f;
+
 TrackDetails::TrackDetails(DataProvider& dp, std::shared_ptr<TrackTopology> topology,
                            std::shared_ptr<TimelineSelection> timeline_selection)
 : m_track_topology(topology)
@@ -36,9 +43,34 @@ TrackDetails::TrackDetails(DataProvider& dp, std::shared_ptr<TrackTopology> topo
 , m_settings(SettingsManager::GetInstance())
 , m_selection_dirty(false)
 , m_data_valid(false)
+, m_compare_mode(false)
+, m_detail_split(nullptr)
 , m_topology_changed_event_token(EventManager::InvalidSubscriptionToken)
 , m_track_metadata_changed_event_token(EventManager::InvalidSubscriptionToken)
 {
+    const CompareSourceInfo* source_a =
+        m_data_provider.DataModel().GetCompareSource(COMPARE_SOURCE_A_INDEX);
+    const CompareSourceInfo* source_b =
+        m_data_provider.DataModel().GetCompareSource(COMPARE_SOURCE_B_INDEX);
+    m_compare_mode = source_a && source_b;
+    if(m_compare_mode)
+    {
+        LayoutItem::Ptr col_a = LayoutItem::CreateFromWidget(
+            std::make_shared<RocCustomWidget>([this]() {
+                RenderSourceColumn(COMPARE_SOURCE_A_INDEX);
+            }));
+        col_a->m_child_flags    = ImGuiChildFlags_None;
+        col_a->m_window_padding = ImVec2(COMPARE_CARD_MARGIN, COMPARE_CARD_MARGIN);
+        LayoutItem::Ptr col_b = LayoutItem::CreateFromWidget(
+            std::make_shared<RocCustomWidget>([this]() {
+                RenderSourceColumn(COMPARE_SOURCE_B_INDEX);
+            }));
+        col_b->m_child_flags    = ImGuiChildFlags_None;
+        col_b->m_window_padding = ImVec2(COMPARE_CARD_MARGIN, COMPARE_CARD_MARGIN);
+        m_detail_split = std::make_shared<HSplitContainer>(col_a, col_b);
+        m_detail_split->SetSplit(0.5f);
+    }
+
     auto topology_changed_event_handler = [this](std::shared_ptr<RocEvent> event) {
         if(event)
         {
@@ -83,6 +115,20 @@ TrackDetails::Render()
     if(m_data_valid && !m_selection_dirty && !m_track_topology->Dirty())
     {
         const ImGuiStyle& style = m_settings.GetDefaultStyle();
+
+        if(m_compare_mode && m_detail_split)
+        {
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, style.WindowPadding);
+            ImGui::BeginChild("track_details_compare", ImVec2(0, 0),
+                              ImGuiChildFlags_AlwaysUseWindowPadding,
+                              ImGuiWindowFlags_NoScrollbar |
+                                  ImGuiWindowFlags_NoScrollWithMouse);
+            m_detail_split->Render();
+            ImGui::EndChild();
+            ImGui::PopStyleVar();
+            return;
+        }
+
         ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, style.ChildRounding);
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, style.WindowPadding);
         ImGui::PushStyleColor(ImGuiCol_ChildBg, m_settings.GetColor(Colors::kBgPanel));
@@ -99,122 +145,170 @@ TrackDetails::Render()
         }
         else
         {
-            ImFont* icons = m_settings.GetFontManager().GetFont(FontType::kIcon);
-            ImGui::PushFont(icons);
-            ImVec2 icon_size = ImGui::CalcTextSize(ICON_CHEVRON_DOWN);
-            ImGui::PopFont();
-            int id = 0;
-            for(DetailItem& detail : m_track_details)
-            {
-                ImGui::PushID(id++);
-                if(ImGui::CollapsingHeader(detail.track_name.c_str(),
-                                           ImGuiTreeNodeFlags_DefaultOpen))
-                {
-                    if(detail.parents.node || detail.parents.process || detail.track ||
-                       detail.stream_track)
-                    {
-                        ImGui::BeginChild("topology", ImVec2(0.0f, 0.0f),
-                                          ImGuiChildFlags_Borders |
-                                              ImGuiChildFlags_AutoResizeY);
-                        ImGui::BeginGroup();
-                        IconButton(
-                            detail.parents.expand ? ICON_CHEVRON_DOWN
-                                                  : ICON_CHEVRON_RIGHT,
-                            icons,
-                            ImVec2(icon_size.x + style.FramePadding.x * 2.0f,
-                                   icon_size.y + style.FramePadding.y * 2.0f),
-                            nullptr, false, style.FramePadding,
-                            SettingsManager::GetInstance().GetColor(Colors::kTransparent),
-                            SettingsManager::GetInstance().GetColor(
-                                Colors::kButtonHovered),
-                            SettingsManager::GetInstance().GetColor(
-                                Colors::kTransparent));
-                        if(detail.parents.node)
-                        {
-                            ImGui::SameLine();
-                            ImGui::TextUnformatted(
-                                detail.parents.node->info->host_name.c_str());
-                        }
-                        if(detail.parents.process)
-                        {
-                            ImGui::PushFont(icons);
-                            ImGui::SameLine(0.0f, style.ItemSpacing.x);
-                            ImGui::TextUnformatted(ICON_ARROW_FORWARD);
-                            ImGui::PopFont();
-                            ImGui::SameLine(0.0f, style.ItemSpacing.x);
-                            ImGui::TextUnformatted(
-                                detail.parents.process->header.c_str());
-                        }
-                        if(detail.track || detail.stream_track)
-                        {
-                            ImGui::PushFont(icons);
-                            ImGui::SameLine(0.0f, style.ItemSpacing.x);
-                            ImGui::TextUnformatted(ICON_ARROW_FORWARD);
-                            ImGui::PopFont();
-                            ImGui::SameLine(0.0f, style.ItemSpacing.x);
-                            if(detail.track)
-                            {
-                                ImGui::TextUnformatted(detail.track->info->name.c_str());
-                            }
-                            else if(detail.stream_track)
-                            {
-                                ImGui::TextUnformatted(
-                                    detail.stream_track->info->name.c_str());
-                            }
-                        }
-                        ImGui::EndGroup();
-                        if(ImGui::IsItemClicked())
-                        {
-                            detail.parents.expand = !detail.parents.expand;
-                        }
-                        if(detail.parents.expand)
-                        {
-                            if(detail.parents.node)
-                            {
-                                ImGui::Text("Node: %s",
-                                            detail.parents.node->info->host_name.c_str());
-                                RenderTable(detail.parents.node->info_table,
-                                            "##td_node_table");
-                            }
-                            if(detail.parents.process)
-                            {
-                                ImGui::Text("Process: %s",
-                                            detail.parents.process->header.c_str());
-                                RenderTable(detail.parents.process->info_table,
-                                            "##td_process_table");
-                            }
-                        }
-                        ImGui::EndChild();
-                    }
-                    if(detail.track || detail.stream_track)
-                    {
-                        ImGui::BeginChild("track", ImVec2(0.0f, 0.0f),
-                                          ImGuiChildFlags_Borders |
-                                              ImGuiChildFlags_AutoResizeY);
-                        if(detail.track)
-                        {
-                            ImGui::Text("%s: %s", TRACK_PREFIX[detail.track_type],
-                                        detail.track->info->name.c_str());
-                            RenderTable(detail.track->info_table, "##td_track_table",
-                                        detail.stats);
-                        }
-                        else if(detail.stream_track)
-                        {
-                            ImGui::Text("%s: %s", TRACK_PREFIX[detail.track_type],
-                                        detail.stream_track->info->name.c_str());
-                            RenderTable(detail.stream_track->info_table,
-                                        "##td_stream_table", detail.stats);
-                        }
-                        ImGui::EndChild();
-                    }
-                }
-                ImGui::PopID();
-            }
+            RenderDetailList(std::nullopt);
         }
         ImGui::EndChild();
         ImGui::PopStyleColor(2);
         ImGui::PopStyleVar(2);
     }
+}
+
+void
+TrackDetails::RenderSourceColumn(size_t source_index)
+{
+    const CompareSourceInfo* source =
+        m_data_provider.DataModel().GetCompareSource(source_index);
+    if(!source)
+    {
+        return;
+    }
+
+    const ImGuiStyle& style = m_settings.GetDefaultStyle();
+    ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, style.ChildRounding);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, style.WindowPadding);
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, m_settings.GetColor(Colors::kBgPanel));
+    ImGui::PushStyleColor(ImGuiCol_Border, m_settings.GetColor(Colors::kBorderColor));
+    ImGui::BeginChild("##td_source_card", ImVec2(0.0f, 0.0f),
+                      ImGuiChildFlags_Borders | ImGuiChildFlags_AlwaysUseWindowPadding);
+
+    // Panes run with ItemSpacing 0, so take the badge gap from the default style.
+    RenderCompareSourceBadge(*source, m_settings);
+    ImGui::SameLine(0.0f, style.ItemSpacing.x * COMPARE_TITLE_GAP);
+    const std::string& label = source->name.empty() ? source->path : source->name;
+    ImGui::AlignTextToFramePadding();
+    ElidedText(label.c_str(), ImGui::GetContentRegionAvail().x,
+               ImGui::GetFontSize() * 24.0f, Alignment_Left, true);
+    ImGui::Spacing();
+    ImGui::Separator();
+    ImGui::Spacing();
+
+    if(RenderDetailList(source_index) == 0)
+    {
+        ImGui::TextDisabled("No data available for the selected tracks.");
+    }
+
+    ImGui::EndChild();
+    ImGui::PopStyleColor(2);
+    ImGui::PopStyleVar(2);
+}
+
+int
+TrackDetails::RenderDetailList(std::optional<uint64_t> source_index)
+{
+    const ImGuiStyle& style = m_settings.GetDefaultStyle();
+    ImFont*           icons = m_settings.GetFontManager().GetFont(FontType::kIcon);
+    ImGui::PushFont(icons);
+    ImVec2 icon_size = ImGui::CalcTextSize(ICON_CHEVRON_DOWN);
+    ImGui::PopFont();
+    int id       = 0;
+    int rendered = 0;
+    for(DetailItem& detail : m_track_details)
+    {
+        if(source_index.has_value())
+        {
+            const TrackInfo* track_info =
+                m_data_provider.DataModel().GetTimeline().GetTrack(detail.track_id);
+            if(!track_info || track_info->file_id != source_index.value())
+            {
+                continue;
+            }
+        }
+        ++rendered;
+        ImGui::PushID(id++);
+        if(ImGui::CollapsingHeader(detail.track_name.c_str(),
+                                   ImGuiTreeNodeFlags_DefaultOpen))
+        {
+            if(detail.parents.node || detail.parents.process || detail.track ||
+               detail.stream_track)
+            {
+                ImGui::BeginChild("topology", ImVec2(0.0f, 0.0f),
+                                  ImGuiChildFlags_Borders | ImGuiChildFlags_AutoResizeY);
+                ImGui::BeginGroup();
+                IconButton(
+                    detail.parents.expand ? ICON_CHEVRON_DOWN : ICON_CHEVRON_RIGHT, icons,
+                    ImVec2(icon_size.x + style.FramePadding.x * 2.0f,
+                           icon_size.y + style.FramePadding.y * 2.0f),
+                    nullptr, false, style.FramePadding,
+                    SettingsManager::GetInstance().GetColor(Colors::kTransparent),
+                    SettingsManager::GetInstance().GetColor(Colors::kButtonHovered),
+                    SettingsManager::GetInstance().GetColor(Colors::kTransparent));
+                if(detail.parents.node)
+                {
+                    ImGui::SameLine();
+                    ImGui::TextUnformatted(detail.parents.node->info->host_name.c_str());
+                }
+                if(detail.parents.process)
+                {
+                    ImGui::PushFont(icons);
+                    ImGui::SameLine(0.0f, style.ItemSpacing.x);
+                    ImGui::TextUnformatted(ICON_ARROW_FORWARD);
+                    ImGui::PopFont();
+                    ImGui::SameLine(0.0f, style.ItemSpacing.x);
+                    ImGui::TextUnformatted(detail.parents.process->header.c_str());
+                }
+                if(detail.track || detail.stream_track)
+                {
+                    ImGui::PushFont(icons);
+                    ImGui::SameLine(0.0f, style.ItemSpacing.x);
+                    ImGui::TextUnformatted(ICON_ARROW_FORWARD);
+                    ImGui::PopFont();
+                    ImGui::SameLine(0.0f, style.ItemSpacing.x);
+                    if(detail.track)
+                    {
+                        ImGui::TextUnformatted(detail.track->info->name.c_str());
+                    }
+                    else if(detail.stream_track)
+                    {
+                        ImGui::TextUnformatted(detail.stream_track->info->name.c_str());
+                    }
+                }
+                ImGui::EndGroup();
+                if(ImGui::IsItemClicked())
+                {
+                    detail.parents.expand = !detail.parents.expand;
+                }
+                if(detail.parents.expand)
+                {
+                    if(detail.parents.node)
+                    {
+                        ImGui::Text("Node: %s",
+                                    detail.parents.node->info->host_name.c_str());
+                        RenderTable(detail.parents.node->info_table, "##td_node_table");
+                    }
+                    if(detail.parents.process)
+                    {
+                        ImGui::Text("Process: %s",
+                                    detail.parents.process->header.c_str());
+                        RenderTable(detail.parents.process->info_table,
+                                    "##td_process_table");
+                    }
+                }
+                ImGui::EndChild();
+            }
+            if(detail.track || detail.stream_track)
+            {
+                ImGui::BeginChild("track", ImVec2(0.0f, 0.0f),
+                                  ImGuiChildFlags_Borders | ImGuiChildFlags_AutoResizeY);
+                if(detail.track)
+                {
+                    ImGui::Text("%s: %s", TRACK_PREFIX[detail.track_type],
+                                detail.track->info->name.c_str());
+                    RenderTable(detail.track->info_table, "##td_track_table",
+                                detail.stats);
+                }
+                else if(detail.stream_track)
+                {
+                    ImGui::Text("%s: %s", TRACK_PREFIX[detail.track_type],
+                                detail.stream_track->info->name.c_str());
+                    RenderTable(detail.stream_track->info_table, "##td_stream_table",
+                                detail.stats);
+                }
+                ImGui::EndChild();
+            }
+        }
+        ImGui::PopID();
+    }
+    return rendered;
 }
 
 void

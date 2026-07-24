@@ -7,6 +7,8 @@
 #include <cstdint>
 #include <limits>
 #include <list>
+#include <memory>
+#include <optional>
 #include <string>
 
 namespace RocProfVis
@@ -61,6 +63,10 @@ private:
     bool RenderCallStackData(const EventInfo* event_data);
     bool RenderArgumentData(const EventInfo* event_data);
 
+    // Renders selected-event cards, filtered to source_index in compare mode; returns count.
+    int  RenderEventList(std::optional<uint64_t> source_index);
+    void RenderSourceColumn(size_t source_index);
+
     bool XButton();
 
     struct CallStackHoverState
@@ -76,6 +82,8 @@ private:
     std::shared_ptr<TimelineSelection>       m_timeline_selection;
     std::list<EventItem>                     m_event_items;
     int                                      m_event_item_id;
+    bool                                     m_compare_mode;
+    std::shared_ptr<HSplitContainer>         m_events_split;
     CellMenuTarget                           m_flow_menu;
     CellMenuTarget                           m_callstack_menu;
     CellMenuTarget                           m_arg_menu;

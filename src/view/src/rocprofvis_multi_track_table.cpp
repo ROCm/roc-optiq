@@ -517,7 +517,9 @@ MultiTrackTable::IncludeTrack(uint64_t track_id) const
     if(track_info)
     {
         include = (track_info->track_type == kRPVControllerTrackTypeSamples &&
-                   m_table_type == TableType::kSampleTable) ||
+                   (m_table_type == TableType::kSampleTable ||
+                    m_table_type == TableType::kCompareSampleTableA ||
+                    m_table_type == TableType::kCompareSampleTableB)) ||
                   (track_info->track_type == kRPVControllerTrackTypeEvents &&
                    (m_table_type == TableType::kEventTable ||
                     m_table_type == TableType::kCompareEventTableA ||

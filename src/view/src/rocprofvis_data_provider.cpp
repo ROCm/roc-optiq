@@ -3637,6 +3637,11 @@ DataProvider::ProcessTableRequest(RequestInfo& req)
                 case TableType::kAnalysisTopMemoryAllocationEventsTable:
                 case TableType::kAnalysisTopMemoryCopyEventsTable:
                 case TableType::kAnalysisTopSampledEventsTable:
+                case TableType::kAnalysisTopInstrumentedEventsTableB:
+                case TableType::kAnalysisTopDispatchEventsTableB:
+                case TableType::kAnalysisTopMemoryAllocationEventsTableB:
+                case TableType::kAnalysisTopMemoryCopyEventsTableB:
+                case TableType::kAnalysisTopSampledEventsTableB:
                 {
                     table_model = &m_model.GetAnalysis().GetTables();
                     break;

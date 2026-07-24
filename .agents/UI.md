@@ -1069,9 +1069,6 @@ with:
 The bottom-right tabbed panel. Hosts, in source order:
 - `m_tab_container` (`TabContainer`) with sub-tabs:
   - `MultiTrackTable` (event table) - cross-track event listing.
-    Compare projects render independent, source-filtered A/B tables
-    side by side. One shared filter/aggregation control applies the
-    same query settings to both tables without pooling their results.
   - `MultiTrackTable` (sample table) - cross-track sample listing.
   - `EventsView` - per-event detail tab (basic info, ext data, flow,
     callstack, args).
@@ -1080,6 +1077,20 @@ The bottom-right tabbed panel. Hosts, in source order:
   - `AnnotationView` - sticky-note list.
 - Listens to track / range / event selection events to keep tabs in
   sync.
+- **Compare mode (two compare sources).** Every applicable tab splits
+  into side-by-side, source-filtered A/B views; only `AnnotationView`
+  stays single (notes are project-wide). `AnalysisView::CompareGroup`
+  bundles the A/B `MultiTrackTable`s, their `HSplitContainer`, and the
+  tab layout for the Event and Sample tables; `BuildCompareGroup` and
+  `RenderCompareTab` are reused for both. The table pairs share one
+  filter/aggregation control (`RenderSharedControls` /
+  `ApplySharedFiltersFrom`) without pooling results. `TopEventsView`
+  renders each category header once with A/B tables side by side
+  (per-source analysis-table slots `kAnalysisTop*TableB`). `EventsView`
+  and `TrackDetails` partition their selected-item cards into A/B
+  columns by each item's `TrackInfo::file_id`. A/B routing uses distinct
+  client request IDs plus per-source `TablesModel` slots
+  (`kCompareEventTableA/B`, `kCompareSampleTableA/B`).
 
 ### `EventsView` (`rocprofvis_events_view.{h,cpp}`)
 
@@ -1425,9 +1436,11 @@ controller results.
 - `rocprofvis_summary_model.{h,cpp}` - `SummaryModel`: holds the
   computed `SummaryInfo::AggregateMetrics`.
 - `rocprofvis_tables_model.{h,cpp}` - `TablesModel`: `enum class
-  TableType { kSampleTable, kEventTable, kCompareEventTableA,
-  kCompareEventTableB, kEventSearchTable, kSummaryKernelTable,
-  kAnalysisTop* }` and the table cache addressed by it.
+  TableType { kSampleTable, kEventTable, kCompareEventTableA/B,
+  kCompareSampleTableA/B, kEventSearchTable, kSummaryKernelTable,
+  kAnalysisTop*, kAnalysisTop*TableB }` and the table cache addressed
+  by it. The `*A/B` and `*TableB` slots hold the two compare sources'
+  results so independent A/B tables never overwrite each other.
 - `rocprofvis_analysis_model.{h,cpp}` - `AnalysisModel`: per-track
   queue/counter statistic cache plus analysis tables, using the
   `AnalysisTrackStatistics` state machine.

@@ -106,7 +106,6 @@ struct RocprofSysSettings
     std::string log_file            = "rocprof-sys-log.txt";
     std::string tmpdir;
     bool        use_pid             = true;
-    std::string timemory_components = "wall_clock";
 
     // Instrument
     std::string instr_include;
@@ -145,6 +144,9 @@ public:
     std::string ExportCfg() const override;
 
     std::vector<WarningMessage> GetWarnings(
+        LaunchConfig const& config) const override;
+
+    std::vector<std::string> GetSummaryTags(
         LaunchConfig const& config) const override;
 
     std::string ParseTraceOutputPath(std::string const& profiler_stdout) const override;

@@ -1,3 +1,6 @@
+// Copyright Advanced Micro Devices, Inc.
+// SPDX-License-Identifier: MIT
+
 #pragma once
 
 #include "rocprofvis_controller_handle.h"
@@ -58,6 +61,9 @@ public:
     void SetFileStat(std::string name, uint64_t size, uint64_t time, uint64_t downloaded);
     void SetDownloaded(uint64_t size);
     void SetFileInfo(std::string name, uint64_t size, uint64_t time, uint64_t attrs);
+    // Stores the absolute path of the directory being browsed (SFTP realpath),
+    // read by the UI via kRPVControllerRemoteResolvedPath for the location label.
+    void SetResolvedPath(std::string path);
 
     std::optional<std::vector<std::string>> AskPrompts(const PromptRequest& req);
     std::optional<HostKeyDecision>          AskHostKey(const HostKeyRequest& req);
@@ -81,6 +87,7 @@ private:
     std::string                                          m_error_str;
     std::vector<FileStat>                                m_remote_file_stat;
     std::vector<FileStat>                                m_remote_dir_info;
+    std::string                                          m_resolved_path;
     std::mutex                                           m_mutex;
     std::condition_variable                              m_worker_cv;
     bool                                                 m_cancelled = false;

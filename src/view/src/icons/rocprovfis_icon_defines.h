@@ -8,6 +8,9 @@ namespace View
 constexpr ImWchar icon_ranges[] = {
     0xF123, 0xF125,
     0xF128, 0xF128,
+    0xF12F, 0xF12F,
+    0xF139, 0xF139,
+    0xF144, 0xF144,
     0xF200, 0xF200,
     0xF254, 0xF254,
     0xF133, 0xF133,
@@ -41,6 +44,9 @@ inline constexpr const char* ICON_CHEVRON_DOWN  = u8"\uF123";
 inline constexpr const char* ICON_CHEVRON_LEFT  = u8"\uF124";
 inline constexpr const char* ICON_CHEVRON_RIGHT = u8"\uF125";
 inline constexpr const char* ICON_X_CIRCLED     = u8"\uF128";
+inline constexpr const char* ICON_DOCUMENT      = u8"\uF12F";
+inline constexpr const char* ICON_FOLDER        = u8"\uF139";
+inline constexpr const char* ICON_HOME          = u8"\uF144";
 inline constexpr const char* ICON_LOCKED        = u8"\uF200";
 inline constexpr const char* ICON_UNLOCKED      = u8"\uF254";
 inline constexpr const char* ICON_EYE           = u8"\uF133";

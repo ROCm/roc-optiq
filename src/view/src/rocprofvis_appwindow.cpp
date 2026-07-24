@@ -801,6 +801,14 @@ AppWindow::Render()
     RenderDebugOuput();
 #endif
 
+#ifdef ROCPROFVIS_ENABLE_REMOTE
+    // Centralized SSH auth prompts: draw the blocking prompt / host-key modal
+    // for every live session (including connections owned privately by widgets
+    // such as the remote file browser), so no session can wedge its worker
+    // waiting on a prompt that no dialog happens to render.
+    RenderSshAuthModals();
+#endif
+
     // render notifications last
     NotificationManager::GetInstance().Render();
 

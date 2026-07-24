@@ -37,6 +37,26 @@ namespace
     }
 }  // namespace
 
+std::string SshConnectionConfig::DisplayLabel() const
+{
+    // A user-chosen name wins over the raw endpoint so the UI shows what the
+    // user typed (e.g. "Lab box") rather than user@host:port.
+    std::string name = Core::String::trim_copy(display_name);
+    if(!name.empty())
+    {
+        return name;
+    }
+
+    std::string h = HostTrimmed();
+    if(h.empty())
+    {
+        return std::string();
+    }
+
+    std::string u = UserTrimmed();
+    return (u.empty() ? std::string("?") : u) + "@" + h + ":" + PortTrimmed();
+}
+
 std::string SshConnectionConfig::HostTrimmed() const
 {
     return Core::String::trim_copy(host);

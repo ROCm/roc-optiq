@@ -265,6 +265,24 @@ open_url(const std::string& url);
 std::string
 get_executable_name(const std::string& fullPath);
 
+std::string
+posix_base_name(const std::string& path);
+
+std::string
+posix_file_extension(const std::string& path);
+
+std::string
+normalize_posix_path(const std::string& path);
+
+bool
+is_posix_root_path(const std::string& path);
+
+std::string
+posix_parent_path(const std::string& path);
+
+std::string
+join_posix_path(const std::string& dir, const std::string& name);
+
 /**
  * @brief Detects whether the current process appears to be running in a remote
  *        session where xdg-desktop-portal file dialogs cannot reach the user.

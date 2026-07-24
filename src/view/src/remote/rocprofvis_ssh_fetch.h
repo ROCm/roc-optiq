@@ -234,6 +234,7 @@ namespace View
         struct Snapshot
         {
             std::vector<FileEntry> list_dir;
+            std::string            path;
         };
 
         // Constructors
@@ -255,6 +256,9 @@ namespace View
             uint64_t time,
             uint64_t attrs);
 
+        // Sets the absolute path of the directory these entries belong to.
+        void SetPath(std::string path);
+
         // Consume update flag
         std::optional<Snapshot> ConsumeIfUpdated();
 
@@ -268,6 +272,7 @@ namespace View
         mutable std::mutex m_mutex;
 
         std::vector<FileEntry> m_list_dir;
+        std::string            m_path;
 
         bool m_updated = false;
     };

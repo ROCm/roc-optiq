@@ -805,7 +805,7 @@ QueryManager::ExecuteQueryForAllTracksAsync(
                         db_instance,
                         futures.back()->GetAsyncQueryPtr(), callback)));
             }
-            catch (std::exception ex)
+            catch (const std::exception& ex)
             {
                 result = kRocProfVisDmResultUnknownError;
                 ROCPROFVIS_ASSERT_MSG_BREAK(false, ex.what());

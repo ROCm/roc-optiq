@@ -81,7 +81,7 @@
       <Publish Dialog="InstallDirDlg" Control="Next" Event="NewDialog" Value="ShortcutOptionsDlg" Order="999" Condition="WIXUI_DONTVALIDATEPATH OR WIXUI_INSTALLDIR_VALID=&quot;1&quot;" />
       <Publish Dialog="ShortcutOptionsDlg" Control="Back" Event="NewDialog" Value="InstallDirDlg" />
       <Publish Dialog="ShortcutOptionsDlg" Control="Next" Event="NewDialog" Value="VerifyReadyDlg" />
-      <Publish Dialog="VerifyReadyDlg" Control="Back" Event="NewDialog" Value="ShortcutOptionsDlg" />
+      <Publish Dialog="VerifyReadyDlg" Control="Back" Event="NewDialog" Value="ShortcutOptionsDlg" Order="2" />
     </UI>
 
     <!-- ═══════════════════════════════════════════════════════════════════

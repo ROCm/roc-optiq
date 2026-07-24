@@ -3,6 +3,7 @@
 
 #pragma once
 #include "imgui.h"
+#include <cstdint>
 #include <functional>
 #include <string>
 #include <string_view>
@@ -189,6 +190,18 @@ PanelIcon(const char* glyph, Colors color, SettingsManager* settings = nullptr);
 bool
 AccentButton(const char* label, ImVec2 size = ImVec2(0.0f, 0.0f),
              SettingsManager* settings = nullptr);
+
+// Renders the shared, theme-styled "remote download" progress modal used by both
+// the SSH test dialog and the profiler launcher (a rounded, stacked-card popup
+// with an accent header and a byte-count progress bar). The caller owns the
+// visibility flag: it must have called ImGui::OpenPopup(popup_id) on the frame
+// it set show=true. Call this every frame while show is true. Once finished is
+// true the popup is closed and show is set to false. total==0 renders a
+// "Starting..." placeholder in place of the progress bar.
+void
+RenderRemoteDownloadPopup(const char* popup_id, const char* file_name,
+                          uint64_t downloaded, uint64_t total, bool finished,
+                          bool& show);
 
 float
 TableRowHeight();

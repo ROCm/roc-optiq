@@ -86,6 +86,7 @@ enum class Colors
     kTransparent,
     kTextError,
     kTextSuccess,
+    kTextWarning,
     kFlameChartColor,
     kGridColor,
     kGridRed,

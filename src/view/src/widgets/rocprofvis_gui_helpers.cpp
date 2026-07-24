@@ -7,7 +7,9 @@
 #include "rocprofvis_utils.h"
 #include "spdlog/spdlog.h"
 #include "widgets/rocprofvis_notification_manager.h"
+#include "widgets/rocprofvis_widget.h"
 #include <algorithm>
+#include <cfloat>
 #include <cmath>
 
 namespace RocProfVis
@@ -652,6 +654,92 @@ AccentButton(const char* label, ImVec2 size, SettingsManager* settings)
     bool clicked = ImGui::Button(label, size);
     ImGui::PopStyleColor(4);
     return clicked;
+}
+
+void
+RenderRemoteDownloadPopup(const char* popup_id, const char* file_name,
+                          uint64_t downloaded, uint64_t total, bool finished,
+                          bool& show)
+{
+    if(!show)
+    {
+        return;
+    }
+
+    SettingsManager&  settings = SettingsManager::GetInstance();
+    const ImGuiStyle& style    = ImGui::GetStyle();
+
+    PopUpStyle popup_style;
+    popup_style.PushPopupStyles();
+    popup_style.PushTitlebarColors();
+    popup_style.CenterPopup();
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 12.0f);
+    ImGui::SetNextWindowSize(ImVec2(440.0f, 0.0f));
+
+    if(ImGui::BeginPopupModal(popup_id, nullptr,
+                              ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove |
+                                  ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoScrollbar))
+    {
+        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(style.ItemSpacing.x, 4.0f));
+
+        BeginPanelCard("##remote_dl_header", PanelCardTone::kFrame, ImVec2(16.0f, 10.0f), true,
+                       &settings);
+        {
+            PanelIcon(ICON_ARROW_DOWN, Colors::kAccent, &settings);
+            ImGui::SameLine(0.0f, style.ItemInnerSpacing.x);
+            ImGui::BeginGroup();
+            ImGui::PushFont(nullptr, settings.GetFontManager().GetFontSize(FontSize::kMedLarge));
+            ImGui::TextUnformatted("Remote Download");
+            ImGui::PopFont();
+            ImGui::PushStyleColor(ImGuiCol_Text, settings.GetColor(Colors::kTextDim));
+            ImGui::TextUnformatted("Fetching the trace over SSH.");
+            ImGui::PopStyleColor();
+            ImGui::EndGroup();
+        }
+        EndPanelCard();
+
+        BeginPanelCard("##remote_dl_body", PanelCardTone::kPanel, ImVec2(14.0f, 10.0f), true,
+                       &settings);
+        {
+            ImGui::TextWrapped("%s", file_name ? file_name : "");
+            ImGui::Spacing();
+            if(total > 0)
+            {
+                float frac = static_cast<float>(downloaded) / static_cast<float>(total);
+                if(frac > 1.0f)
+                {
+                    frac = 1.0f;
+                }
+                std::string label = std::to_string(downloaded / 1024) + " / " +
+                                    std::to_string(total / 1024) + " KiB";
+                ImGui::ProgressBar(frac, ImVec2(-FLT_MIN, 0.0f), label.c_str());
+            }
+            else
+            {
+                PanelFieldLabel("Starting...", false, &settings);
+            }
+        }
+        EndPanelCard();
+
+        if(finished)
+        {
+            ImGui::CloseCurrentPopup();
+            show = false;
+        }
+
+        ImGui::PopStyleVar();  // ItemSpacing
+        ImGui::EndPopup();
+    }
+    else
+    {
+        // Popup not actually open (e.g. dismissed); clear the flag so it can be
+        // reopened on the next download.
+        show = false;
+    }
+
+    ImGui::PopStyleVar(2);  // WindowPadding, WindowRounding
+    popup_style.PopStyles();
 }
 
 #ifdef ROCPROFVIS_ENABLE_INTERNAL_BANNER

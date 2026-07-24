@@ -1253,6 +1253,23 @@ namespace Controller
             }
         }
 
+        // The opendir loop can exit with a null handle when it was cancelled or
+        // broke on a network error. There is nothing to list in that case, so
+        // skip realpath / readdir / closedir (all of which would dereference the
+        // null handle) and shut the SFTP session down cleanly.
+        if (dir == NULL)
+        {
+            while (libssh2_sftp_shutdown(sftp) == LIBSSH2_ERROR_EAGAIN)
+            {
+                if (!WaitSocket(connection))
+                {
+                    break;
+                }
+            }
+            return IsCancelRequested(connection, future) ? Result::Cancelled
+                                                         : Result::SessionError;
+        }
+
         constexpr size_t SFTP_NAME_BUFFER_SIZE = 512;
         char mem[SFTP_NAME_BUFFER_SIZE];
         LIBSSH2_SFTP_ATTRIBUTES attrs;
@@ -1264,12 +1281,15 @@ namespace Controller
             char real_path[SFTP_NAME_BUFFER_SIZE];
             int  real_rc;
             while ((real_rc = libssh2_sftp_realpath(sftp, path.c_str(), real_path,
-                                                    sizeof(real_path) - 1)) == LIBSSH2_ERROR_EAGAIN) {
-                if (IsCancelRequested(connection, future) || !WaitSocket(connection)) {
+                                                    sizeof(real_path) - 1)) == LIBSSH2_ERROR_EAGAIN)
+            {
+                if (IsCancelRequested(connection, future) || !WaitSocket(connection))
+                {
                     break;
                 }
             }
-            if (real_rc > 0) {
+            if (real_rc > 0)
+            {
                 connection->GetSshBridge()->SetResolvedPath(
                     std::string(real_path, static_cast<size_t>(real_rc)));
             }

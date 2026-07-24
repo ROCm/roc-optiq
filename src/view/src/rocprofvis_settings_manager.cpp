@@ -28,6 +28,7 @@ constexpr std::array DARK_THEME_COLORS = {
     IM_COL32(0, 0, 0, 0),          // Colors::kTransparent
     IM_COL32(244, 96, 110, 255),   // Colors::kTextError
     IM_COL32(120, 220, 144, 255),  // Colors::kTextSuccess
+    IM_COL32(255, 199, 64, 255),   // Colors::kTextWarning
     IM_COL32(120, 162, 255, 220),  // Colors::kFlameChartColor
     IM_COL32(120, 130, 150, 32),   // Colors::kGridColor
     IM_COL32(142, 176, 236, 255),  // Colors::kGridRed
@@ -150,6 +151,7 @@ constexpr std::array LIGHT_THEME_COLORS = {
     IM_COL32(0, 0, 0, 0),          // Colors::kTransparent
     IM_COL32(214, 56, 64, 255),    // Colors::kTextError
     IM_COL32(36, 150, 82, 255),    // Colors::kTextSuccess
+    IM_COL32(176, 118, 0, 255),    // Colors::kTextWarning
     IM_COL32(88, 132, 245, 225),   // Colors::kFlameChartColor
     IM_COL32(140, 150, 170, 28),   // Colors::kGridColor
     IM_COL32(120, 162, 220, 255),  // Colors::kGridRed

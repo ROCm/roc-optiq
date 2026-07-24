@@ -256,6 +256,20 @@ bool QueryManager::IsEmptyRange(uint32_t track, uint64_t start, uint64_t end) {
 }
 
 
+/**
+ * Build a SQL query string for a table use-case over a time range and selected tracks.
+ *
+ * High-level flow:
+ *  1) Resolve the base SELECT/FROM for the requested use case.
+ *  2) Apply time-window and track constraints.
+ *  3) Append optional WHERE/filter/group/sort clauses.
+ *  4) Apply optional string-table filters and pagination (max_count/offset).
+ *  5) Optionally emit a COUNT-only query shape when requested.
+ *
+ * Inputs are treated as query-building directives; `query` is populated with the
+ * final SQL text. The method returns a data-model result code indicating success
+ * or parameter/assembly errors.
+ */
 rocprofvis_dm_result_t
 QueryManager::BuildTableQuery(
     rocprofvis_dm_table_use_case_enum_t use_case,
@@ -268,6 +282,7 @@ QueryManager::BuildTableQuery(
     uint64_t max_count, uint64_t offset, bool count_only, 
     rocprofvis_dm_string_t& query)
 {
+    // Query-shape flags and local accumulators used while assembling SQL fragments.
     bool sample_query = false;
     if (TABLE_QUERY_UNPACK_OP_TYPE(tracks[0]) == 0)
     {

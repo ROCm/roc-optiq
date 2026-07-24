@@ -96,6 +96,8 @@ private:
         std::vector<size_t> item_indices;
     };
 
+    // Always-visible horizontal filter toolbar drawn above the plot.
+    void RenderToolbar();
     void RenderMenus(ImVec2 region, ImVec2 plot_pos, ImVec2 plot_size,
                      const ImGuiStyle& style, const ImPlotStyle& plot_style,
                      bool& item_hovered);

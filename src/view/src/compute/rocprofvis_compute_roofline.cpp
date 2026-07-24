@@ -379,6 +379,15 @@ Roofline::Render()
                       ImGuiChildFlags_Borders |
                           ImGuiChildFlags_AlwaysUseWindowPadding);
     SectionTitle("Roofline Analysis");
+    bool has_roofline =
+        m_workload && !m_workload->roofline.ceiling_bandwidth.empty() &&
+        !m_workload->roofline.ceiling_compute.empty() &&
+        !(m_kernel_mode == SingleKernel &&
+          (!m_kernel || m_kernel->roofline.intensities.empty()));
+    if(has_roofline)
+    {
+        RenderToolbar();
+    }
     ImGui::BeginChild("roofline");
     const ImVec2       region     = ImGui::GetContentRegionAvail();
     const ImGuiStyle&  style      = ImGui::GetStyle();
@@ -708,6 +717,176 @@ Roofline::SetKernel(uint32_t id)
 }
 
 void
+Roofline::RenderToolbar()
+{
+    const ImGuiStyle& style = ImGui::GetStyle();
+    int               count = 1;  // Compute peak is always present.
+    if(!m_available_bandwidths.empty())
+    {
+        count++;
+    }
+    if(m_kernel_mode == AllKernels)
+    {
+        count++;
+    }
+    if(!m_available_intensities.empty())
+    {
+        count++;
+    }
+    float cell = (ImGui::GetContentRegionAvail().x -
+                  style.ItemSpacing.x * static_cast<float>(count - 1)) /
+                 static_cast<float>(count);
+    cell = std::max(cell, ImGui::GetFontSize() * 4.0f);
+
+    // Draw "<label>" to the left, then size the next combo to fill the cell.
+    auto label_cell = [&](const char* label) {
+        ImGui::AlignTextToFramePadding();
+        ImGui::TextUnformatted(label);
+        ImGui::SameLine();
+        float combo_width = cell - ImGui::GetItemRectSize().x - style.ItemSpacing.x;
+        ImGui::SetNextItemWidth(std::max(combo_width, ImGui::GetFontSize() * 2.0f));
+    };
+
+    // Compute peak (preset)...
+    ImGui::BeginGroup();
+    ImGui::PushID("compute_peak");
+    label_cell("Compute peak");
+    PushComboStyles();
+    if(ImGui::BeginCombo("##compute_peak", DISPLAY_NAMES_PRESET[m_active_preset]))
+    {
+        for(PresetModel& preset : m_presets)
+        {
+            if(!preset.item_indices.empty() &&
+               ImGui::Selectable(DISPLAY_NAMES_PRESET[preset.type],
+                                 preset.type == m_active_preset))
+            {
+                ApplyPreset(preset.type);
+            }
+        }
+        ImGui::EndCombo();
+    }
+    PopComboStyles();
+    ImGui::PopID();
+    ImGui::EndGroup();
+
+    // Bandwidth peak...
+    if(!m_available_bandwidths.empty())
+    {
+        ImGui::SameLine();
+        ImGui::BeginGroup();
+        ImGui::PushID("bandwidth_peak");
+        label_cell("Bandwidth peak");
+        PushComboStyles();
+        if(ImGui::BeginCombo("##bandwidth_peak",
+                             m_isolated_bandwidth
+                                 ? MEMORY_LEVEL_NAMES[m_isolated_bandwidth.value()]
+                                 : FILTER_OPTION_ALL))
+        {
+            if(ImGui::Selectable(FILTER_OPTION_ALL, !m_isolated_bandwidth))
+            {
+                m_isolated_bandwidth = std::nullopt;
+                RecomputeVisibility();
+            }
+            for(rocprofvis_controller_roofline_ceiling_bandwidth_type_t bandwidth :
+                m_available_bandwidths)
+            {
+                if(ImGui::Selectable(MEMORY_LEVEL_NAMES[bandwidth],
+                                     m_isolated_bandwidth &&
+                                         m_isolated_bandwidth.value() == bandwidth))
+                {
+                    m_isolated_bandwidth = bandwidth;
+                    RecomputeVisibility();
+                }
+            }
+            ImGui::EndCombo();
+        }
+        PopComboStyles();
+        ImGui::PopID();
+        ImGui::EndGroup();
+    }
+
+    // Kernel (workload roofline only)...
+    if(m_kernel_mode == AllKernels)
+    {
+        ImGui::SameLine();
+        ImGui::BeginGroup();
+        ImGui::PushID("kernel");
+        label_cell("Kernel");
+        PushComboStyles();
+        if(ImGui::BeginCombo("##kernel",
+                             m_isolated_kernel ? m_isolated_kernel->name.c_str()
+                                               : FILTER_OPTION_ALL))
+        {
+            if(ImGui::Selectable(FILTER_OPTION_ALL, !m_isolated_kernel))
+            {
+                m_isolated_kernel = nullptr;
+                RecomputeVisibility();
+            }
+            for(const KernelInfo* kernel : m_workload->ordered_kernels)
+            {
+                // Kernels without roofline data do not belong in this list.
+                if(kernel->roofline.intensities.empty())
+                {
+                    continue;
+                }
+                // Long/mangled names: elide so the popup stays the toolbar width.
+                ImGui::PushID(kernel);
+                ImVec2 pos     = ImGui::GetCursorPos();
+                bool   clicked = ImGui::Selectable("", m_isolated_kernel == kernel);
+                ImGui::SetCursorPos(pos);
+                ElidedText(kernel->name.c_str(), ImGui::GetContentRegionAvail().x, cell);
+                if(clicked)
+                {
+                    m_isolated_kernel = kernel;
+                    RecomputeVisibility();
+                }
+                ImGui::PopID();
+            }
+            ImGui::EndCombo();
+        }
+        PopComboStyles();
+        ImGui::PopID();
+        ImGui::EndGroup();
+    }
+
+    // Kernel bandwidth (intensity memory level)...
+    if(!m_available_intensities.empty())
+    {
+        ImGui::SameLine();
+        ImGui::BeginGroup();
+        ImGui::PushID("kernel_bandwidth");
+        label_cell("Kernel bandwidth");
+        PushComboStyles();
+        if(ImGui::BeginCombo("##kernel_bandwidth",
+                             m_memory_peak_filter
+                                 ? MEMORY_LEVEL_NAMES[m_memory_peak_filter.value()]
+                                 : FILTER_OPTION_ALL))
+        {
+            if(ImGui::Selectable(FILTER_OPTION_ALL, !m_memory_peak_filter))
+            {
+                m_memory_peak_filter = std::nullopt;
+                RecomputeVisibility();
+            }
+            for(rocprofvis_controller_roofline_kernel_intensity_type_t level :
+                m_available_intensities)
+            {
+                if(ImGui::Selectable(MEMORY_LEVEL_NAMES[level],
+                                     m_memory_peak_filter &&
+                                         m_memory_peak_filter.value() == level))
+                {
+                    m_memory_peak_filter = level;
+                    RecomputeVisibility();
+                }
+            }
+            ImGui::EndCombo();
+        }
+        PopComboStyles();
+        ImGui::PopID();
+        ImGui::EndGroup();
+    }
+}
+
+void
 Roofline::RenderMenus(ImVec2 region, ImVec2 plot_pos, ImVec2 plot_size,
                        const ImGuiStyle& style, const ImPlotStyle& plot_style,
                        bool& item_hovered)
@@ -836,131 +1015,6 @@ Roofline::RenderMenus(ImVec2 region, ImVec2 plot_pos, ImVec2 plot_size,
         ImGui::BeginGroup();
         if(m_menus_mode == Options)
         {
-            ImGui::SeparatorText("Presets");
-            ImGui::PushID("preset");
-            ElidedText("Preset", ImGui::GetContentRegionAvail().x, plot_size.x * 0.5f,
-                       Alignment_Left, true);
-            ImGui::SetNextItemWidth(-1.0f);
-            PushComboStyles();
-            if(ImGui::BeginCombo("##preset", DISPLAY_NAMES_PRESET[m_active_preset]))
-            {
-                for(PresetModel& preset : m_presets)
-                {
-                    if(!preset.item_indices.empty() &&
-                       ImGui::Selectable(DISPLAY_NAMES_PRESET[preset.type],
-                                         preset.type == m_active_preset))
-                    {
-                        ApplyPreset(preset.type);
-                    }
-                }
-                ImGui::EndCombo();
-            }
-            PopComboStyles();
-            ImGui::PopID();
-            if(!m_available_intensities.empty())
-            {
-                ImGui::PushID("kernel_intensity");
-                ElidedText("Kernel intensity", ImGui::GetContentRegionAvail().x,
-                           plot_size.x * 0.5f, Alignment_Left, true);
-                ImGui::SetNextItemWidth(-1.0f);
-                PushComboStyles();
-                if(ImGui::BeginCombo("##kernel_intensity",
-                                     m_memory_peak_filter
-                                         ? MEMORY_LEVEL_NAMES[m_memory_peak_filter.value()]
-                                         : FILTER_OPTION_ALL))
-                {
-                    if(ImGui::Selectable(FILTER_OPTION_ALL, !m_memory_peak_filter))
-                    {
-                        m_memory_peak_filter = std::nullopt;
-                        RecomputeVisibility();
-                    }
-                    for(rocprofvis_controller_roofline_kernel_intensity_type_t level :
-                        m_available_intensities)
-                    {
-                        if(ImGui::Selectable(MEMORY_LEVEL_NAMES[level],
-                                             m_memory_peak_filter &&
-                                                 m_memory_peak_filter.value() == level))
-                        {
-                            m_memory_peak_filter = level;
-                            RecomputeVisibility();
-                        }
-                    }
-                    ImGui::EndCombo();
-                }
-                PopComboStyles();
-                ImGui::PopID();
-            }
-            if(m_kernel_mode == AllKernels && m_workload)
-            {
-                ImGui::PushID("kernel");
-                ElidedText("Kernel", ImGui::GetContentRegionAvail().x, plot_size.x * 0.5f,
-                           Alignment_Left, true);
-                ImGui::SetNextItemWidth(-1.0f);
-                PushComboStyles();
-                if(ImGui::BeginCombo("##kernel",
-                                     m_isolated_kernel ? m_isolated_kernel->name.c_str()
-                                                       : FILTER_OPTION_ALL))
-                {
-                    if(ImGui::Selectable(FILTER_OPTION_ALL, !m_isolated_kernel))
-                    {
-                        m_isolated_kernel = nullptr;
-                        RecomputeVisibility();
-                    }
-                    for(const KernelInfo* kernel : m_workload->ordered_kernels)
-                    {
-                        // Kernel names are long/mangled; elide them so the combo
-                        // popup stays the width of the menu.
-                        ImGui::PushID(kernel);
-                        ImVec2 pos     = ImGui::GetCursorPos();
-                        bool   clicked = ImGui::Selectable("", m_isolated_kernel == kernel);
-                        ImGui::SetCursorPos(pos);
-                        ElidedText(kernel->name.c_str(),
-                                   ImGui::GetContentRegionAvail().x, plot_size.x * 0.5f);
-                        if(clicked)
-                        {
-                            m_isolated_kernel = kernel;
-                            RecomputeVisibility();
-                        }
-                        ImGui::PopID();
-                    }
-                    ImGui::EndCombo();
-                }
-                PopComboStyles();
-                ImGui::PopID();
-            }
-            if(!m_available_bandwidths.empty())
-            {
-                ImGui::PushID("bandwidth_peak");
-                ElidedText("Bandwidth peak", ImGui::GetContentRegionAvail().x,
-                           plot_size.x * 0.5f, Alignment_Left, true);
-                ImGui::SetNextItemWidth(-1.0f);
-                PushComboStyles();
-                if(ImGui::BeginCombo("##bandwidth_peak",
-                                     m_isolated_bandwidth
-                                         ? MEMORY_LEVEL_NAMES[m_isolated_bandwidth.value()]
-                                         : FILTER_OPTION_ALL))
-                {
-                    if(ImGui::Selectable(FILTER_OPTION_ALL, !m_isolated_bandwidth))
-                    {
-                        m_isolated_bandwidth = std::nullopt;
-                        RecomputeVisibility();
-                    }
-                    for(rocprofvis_controller_roofline_ceiling_bandwidth_type_t bandwidth :
-                        m_available_bandwidths)
-                    {
-                        if(ImGui::Selectable(MEMORY_LEVEL_NAMES[bandwidth],
-                                             m_isolated_bandwidth &&
-                                                 m_isolated_bandwidth.value() == bandwidth))
-                        {
-                            m_isolated_bandwidth = bandwidth;
-                            RecomputeVisibility();
-                        }
-                    }
-                    ImGui::EndCombo();
-                }
-                PopComboStyles();
-                ImGui::PopID();
-            }
             ImGui::SeparatorText("Custom");
         }
         ImGui::EndGroup();
@@ -971,7 +1025,7 @@ Roofline::RenderMenus(ImVec2 region, ImVec2 plot_pos, ImVec2 plot_size,
         ImGui::SetNextWindowSizeConstraints(
             ImVec2(menus_content_width, 0),
             ImVec2(menus_content_width,
-                   std::max(0.0f, max_menus_height - header_height - footer_height)));
+                   max_menus_height - header_height - footer_height));
         ImGui::BeginChild("menus_scroll_view", ImVec2(menus_content_width, 0),
                           ImGuiChildFlags_AutoResizeY);
         float icon_width = ImGui::GetFontSize();

@@ -855,7 +855,7 @@ QueryManager::ExecuteQueriesAsync(
                     futures[i],
                     queries[i].first,
                     queries[i].second.c_str(), handle, i, callback)));
-        } catch(std::exception ex)
+        } catch(const std::exception& ex)
         {
             // The worker thread never started, so the sub-future's promise will
             // never be set; unregister and free it now to avoid a wait below

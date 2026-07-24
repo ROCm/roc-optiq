@@ -1573,6 +1573,40 @@ void ProfilerLauncherDialog::LoadFromSettings()
             }
         }
     }
+
+    // Rehydrate the remembered profile's contents, not just its name (mirrors
+    // the combo-select load path in RenderToolbar()).
+    if (!m_current_preset_name.empty())
+    {
+        LaunchConfig loaded;
+        if (m_preset_manager.LoadPreset(m_current_preset_name,
+                                        m_config.profiler_id, loaded))
+        {
+            m_config = loaded;
+            m_execution_cache_dirty = true;
+            m_backends[m_backend_index]->LoadSettings(m_config.backend_payload);
+            IProfilerBackend const* backend = m_backends[m_backend_index].get();
+            std::vector<ToolOption> tools = backend->GetTools();
+            for (size_t i = 0; i < tools.size(); i++)
+            {
+                if (tools[i].id == m_config.tool_id)
+                {
+                    m_tool_index = static_cast<int>(i);
+                    break;
+                }
+            }
+#ifdef ROCPROFVIS_ENABLE_REMOTE
+            if (!m_config.ssh_connection_ref.empty())
+            {
+                m_selected_connection_id = m_config.ssh_connection_ref;
+            }
+#endif
+        }
+        else
+        {
+            m_current_preset_name.clear();  // profile was renamed/deleted
+        }
+    }
 }
 
 void ProfilerLauncherDialog::SaveToSettings()

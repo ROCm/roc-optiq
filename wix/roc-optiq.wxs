@@ -120,7 +120,7 @@
           <RemoveFolder Id="CleanupStartMenu"
                         Directory="ApplicationProgramsFolder"
                         On="uninstall" />
-          <RegistryValue Root="HKCU"
+          <RegistryValue Root="HKLM"
                          Key="Software\AMD\ROCm Optiq"
                          Name="StartMenuInstalled"
                          Type="integer"
@@ -145,7 +145,7 @@
         <RemoveFile Id="CleanupDesktopShortcut"
                     Name="ROCm™ Optiq.lnk"
                     On="uninstall" />
-        <RegistryValue Root="HKCU"
+        <RegistryValue Root="HKLM"
                        Key="Software\AMD\ROCm Optiq"
                        Name="DesktopShortcutInstalled"
                        Type="integer"

@@ -139,6 +139,57 @@ SectionTitle(const char* text, bool large = true, SettingsManager* settings = nu
 void
 VerticalSeparator(SettingsManager* settings = nullptr);
 
+// -----------------------------------------------------------------------------
+// Design-language "panel card" vocabulary
+//
+// The remote and profiler dialogs share a stacked-card look: rounded, subtly
+// bordered panels grouped over tiered backgrounds, with dim field labels,
+// accent-colored primary buttons, and icon-font glyphs tinted from the theme.
+// These helpers are the single source of truth for that vocabulary so every
+// dialog stays consistent - prefer them over hand-rolled BeginChild /
+// PushStyleColor sequences.
+// -----------------------------------------------------------------------------
+
+// Shared corner radius for every stacked design-language panel.
+inline constexpr float PANEL_CARD_ROUNDING = 10.0f;
+
+// Which background tier a panel card paints. Header/footer bands use kFrame,
+// inner grouping cards use kPanel, and the body backdrop uses kMain.
+enum class PanelCardTone
+{
+    kFrame,
+    kPanel,
+    kMain,
+};
+
+// Begins a rounded, padded, optionally-bordered child that groups related
+// controls - the building block of the remote/profiler dialog design language.
+// Pass a stable id. Always pair with EndPanelCard.
+void
+BeginPanelCard(const char* id, PanelCardTone tone = PanelCardTone::kPanel,
+               ImVec2 padding = ImVec2(14.0f, 8.0f), bool bordered = true,
+               SettingsManager* settings = nullptr);
+
+void
+EndPanelCard();
+
+// Dim form-field label (Colors::kTextDim), optionally aligned to the frame
+// padding so it lines up with inputs in table rows.
+void
+PanelFieldLabel(const char* text, bool align_to_frame = true,
+                SettingsManager* settings = nullptr);
+
+// Renders an icon-font glyph tinted with a theme color; advances the cursor
+// like TextUnformatted.
+void
+PanelIcon(const char* glyph, Colors color, SettingsManager* settings = nullptr);
+
+// Accent-colored primary action button (accent fill + on-accent text). Returns
+// true when clicked.
+bool
+AccentButton(const char* label, ImVec2 size = ImVec2(0.0f, 0.0f),
+             SettingsManager* settings = nullptr);
+
 float
 TableRowHeight();
 

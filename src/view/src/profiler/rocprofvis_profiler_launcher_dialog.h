@@ -19,6 +19,7 @@
 #include "remote/rocprofvis_ssh_connection_store.h"
 #include "remote/rocprofvis_ssh_settings_dialog.h"
 #include "remote/rocprofvis_ssh_fetch.h"
+#include "remote/rocprofvis_remote_file_browser.h"
 #endif
 #include "imgui.h"
 #include <memory>
@@ -75,9 +76,27 @@ private:
     }
     rocprofvis_profiler_type_t ResolveProfilerType() const;
 
+    // Top-level view routing: the dialog is either in "configure" mode (author
+    // the launch) or "run" mode (a focused output console shown once a run has
+    // been launched). m_show_run_view selects which is rendered.
+    void RenderConfigureView();
+    void RenderRunView();
+
     void RenderToolbar();
     void RenderMainContent();
+    // Deeper, less-common backend settings, shown in a separate floating window
+    // opened from the "Advanced Options..." button.
+    void RenderAdvancedWindow();
+    // Combined "Arguments & Environment" panel: command-line args (one edit box,
+    // added as pills) lead, environment variables (name/value, added as pills)
+    // grow below. Clicking a pill pulls it back into the editor to edit/remove.
+    void RenderArgsEnvPanel();
     void RenderButtonRow();
+    // Buttons for the run view: Cancel while running; Run Again / Back to
+    // Configuration / Open Trace / Close once the run has finished.
+    void RenderRunButtonRow();
+    // One-line "what is being run" summary shown atop the run view.
+    std::string BuildRunSummary() const;
 #ifdef ROCPROFVIS_ENABLE_REMOTE
     // TEMPORARY (remote/SSH): SSH connection selector + popups.
     void RenderRemoteSection();
@@ -95,6 +114,8 @@ private:
     void SaveToSettings();
 #ifdef ROCPROFVIS_ENABLE_REMOTE
     void ApplySelectedConnection();  // TEMPORARY (remote/SSH)
+    // Lazily constructs m_remote_file_browser (bound to the shared RemoteUri).
+    void EnsureRemoteFileBrowser();
 #endif
     void AddRecentTarget(std::string const& exe);
     std::string GetProfilerPath() const;
@@ -115,12 +136,32 @@ private:
     SshConnectionStore                     m_connection_store;
     std::string                            m_selected_connection_id;
     std::unique_ptr<SshSettingsDialog>     m_ssh_settings_dialog;
+    // Shared remote file/directory picker for the Target section's Browse
+    // buttons; created lazily on first remote browse (see EnsureRemoteFileBrowser).
+    std::unique_ptr<RemoteFileBrowser>     m_remote_file_browser;
     bool                                   m_remote_show_progress_popup;
     FileStat::Snapshot                     m_remote_last_progress;
 #endif
 
     bool m_should_open;
     bool m_show_window;
+    // Once a run is launched the dialog swaps to a focused output view; the
+    // user returns to configuration via "Back to Configuration". Reset on open.
+    bool m_show_run_view;
+    // Whether the separate "Advanced Options" window is open.
+    bool m_show_advanced_window;
+    // Width (px) of the command-preview panel; user-adjustable via the splitter.
+    // Seeded to ~1/3 of the form width the first time the content is laid out.
+    float m_preview_width;
+    bool  m_preview_width_initialized;
+    // "Add" edit-box buffers for the Arguments & Environment panel.
+    std::string m_arg_input;
+    std::string m_env_name_input;
+    std::string m_env_value_input;
+    // Wall-clock timing for the run view's elapsed readout. Start is set on
+    // launch; end is frozen when the run finishes (0 while still running).
+    double m_run_start_time;
+    double m_run_end_time;
     // Last run state the dialog has reacted to, so Update() can detect edges and
     // append epilogue text once per transition.
     rocprofvis_profiler_state_t m_last_seen_state;

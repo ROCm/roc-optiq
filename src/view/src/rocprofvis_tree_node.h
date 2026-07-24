@@ -57,6 +57,7 @@ public:
     bool                                    show_eye_button         = true;
     bool                                    breaks_visibility_chain = false;
     bool                                    render_children_inline  = false;
+    bool                                    show_lead_arrow         = false;
     mutable uint8_t                         cached_eye_state        = 0;
     bool                                    show_color_swatch       = false;
     size_t                                  color_index             = 0;

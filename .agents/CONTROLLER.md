@@ -1,10 +1,10 @@
 # CONTROLLER.md - ROCm Optiq Controller Layer Guide
 
 This document is the controller-layer companion to
-[`.agents/AGENTS.md`](./AGENTS.md). The main guide covers the View layer
-in depth and gives a high-level pass over `controller/`. **This file is
-the deep dive for `src/controller/`** - the C ABI bridge between the
-Model (SQLite, parsing) and the View (ImGui UI).
+[`.agents/UI.md`](./UI.md). The UI guide covers the View layer in depth
+and gives a high-level pass over `controller/`. **This file is the deep
+dive for `src/controller/`** - the C ABI bridge between the Model
+(SQLite, parsing) and the View (ImGui UI).
 
 When humans and `CODING.md` disagree with this file, `CODING.md` wins.
 When this file disagrees with the source under `src/controller/`, the
@@ -171,11 +171,11 @@ rocprofvis_controller_save_trimmed_trace(handle, start, end, path, future);
 rocprofvis_controller_cleanup_trace_database(handle, rebuild, future);
 ```
 
-Plus the analysis library's free function (declared in
-`rocprofvis_controller_analysis.h`):
+Plus the analysis sub-API (declared in
+`rocprofvis_controller_analysis.h`; see section 2.7), e.g.:
 
 ```c
-rocprofvis_controller_analysis_fetch_queue_utilization(
+rocprofvis_analysis_fetch_queue_utilization(
     controller, track, start_time, end_time, future, &out_double);
 ```
 
@@ -216,6 +216,31 @@ trace -> node -> processor metrics; see section 5.5).
 For compute metric fetches, results land in a
 `rocprofvis_controller_metrics_container_t` (a flat list of
 `{metric_id, source_type, source_id, value_name, value}` rows).
+
+### 2.7 The "analysis" sub-API
+
+Cross-cutting analytics live in
+`src/controller/src/rocprofvis_controller_analysis.{h,cpp}` and are
+exposed as `rocprofvis_analysis_*` functions (note this family drops
+the `_controller` infix). They reuse the same `Job + Future` plumbing
+as the data fetchers and back the View's Track Details and Top Events
+UI:
+
+- `rocprofvis_analysis_fetch_queue_utilization` - per-track queue
+  utilization over a time range (writes a `double`).
+- `rocprofvis_analysis_fetch_counter_statistics` - per-track counter
+  min/max/mean/stddev over a time range
+  (`rocprofvis_analysis_counter_statistics_t`).
+- `rocprofvis_analysis_get_*_events_table` - the five "top events"
+  table-handle getters (instrumented, dispatch, memory allocation,
+  memory copy, sampled).
+- `rocprofvis_analysis_fetch_table` - fetch rows for one of those
+  tables (paged via `rocprofvis_controller_arguments_t`).
+- `rocprofvis_analysis_free_trace_data` - release cached analysis
+  results for the trace.
+
+Add new cross-cutting analyses here rather than in the per-domain
+system / compute modules.
 
 ## 3. Internal Architecture & Threading Model
 
@@ -1265,13 +1290,3 @@ the Reuse Catalog). Keep this file the single source of truth for
 of writing it." If you find a duplicate of something listed here,
 prefer to delete the duplicate and route callers through the canonical
 entry.
-
-### 2.7 The "analysis" Sub-API
-
-The controller currently exposes one analysis function on top of the
-generic surface:
-`rocprofvis_controller_analysis_fetch_queue_utilization`. It is built
-on the same internal `Job + Future` plumbing as the data fetchers but
-runs a SQL query against the trace's database directly instead of
-serving from the segment cache. New cross-cutting analyses go in
-`src/controller/src/rocprofvis_controller_analysis.{h,cpp}`.

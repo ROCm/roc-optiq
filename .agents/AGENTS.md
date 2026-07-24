@@ -434,8 +434,8 @@ trace file:
   must persist participates by deriving from `ProjectSetting` and
   registering itself in its constructor. Examples:
   `TimelineViewProjectSettings`, `SystemTraceProjectSettings`,
-  `TrackProjectSettings`, `LineTrackProjectSettings`,
-  `FlameTrackProjectSettings`, `AnnotationsManagerProjectSettings`.
+  `AnnotationsManagerProjectSettings`, and the per-track `TrackOptions`
+  family (persisted via the nested `TrackOptions::TrackProjectSetting`).
 - `jt::Json& GetSettingsJson()` - the in-memory JSON tree. JSON keys
   used in `.rpv` files are the `JSON_KEY_*` constants in this header.
 - `TraceType GetTraceType()` - `Undefined | System | Compute`.
@@ -700,10 +700,14 @@ Protected hooks every subclass implements:
 - `RenderMetaArea()` - left "description" column (default impl is
   reused).
 - `RenderMetaAreaScale()` - the in-meta numeric scale (per type).
-- `RenderMetaAreaOptions()` - the gear-icon menu (per type).
 - `RenderMetaAreaExpand()` - expand/collapse affordance.
 - `RenderChart(graph_width)` - the actual graph drawing.
 - `RenderResizeBar(parent_size)` - drag handle for height.
+
+Per-track user options are no longer a per-type render hook. They live
+in the `TrackOptions` family (`rocprofvis_timeline_track_options.h`) and
+are edited through the meta-area right-click context menu that
+`TimelineTrackOptions::RenderContextMenu()` drives.
 
 State of note: `m_track_metadata` (`const TrackInfo*` from
 `TrackTopology`), `m_track_height`, `m_pill` (`Pill`, the small label
@@ -717,9 +721,11 @@ through `RenderPillLabel(container_size, settings, reorder_grip_width)`.
 
 Used for queues, streams, and instrumented threads. It holds:
 
-- `enum class EventColorMode { kNone, kByEventName, kByTimeLevel }`.
-- `class FlameTrackProjectSettings : ProjectSetting` - persists
-  `ColorEvents()` and `CompactMode()`.
+- `EventTrackOptions` / `QueueTrackOptions`
+  (`rocprofvis_timeline_track_options.h`) - per-track options that
+  persist the color mode (`EventTrackOptions::EventColorMode`), the
+  compact flag, and (queues) the queue-utilization toggle. The expand
+  flag is transient.
 - A cache of `ChartItem` (`TraceEvent` + selected/highlight + child
   info), refilled via `ExtractPointsFromData()`.
 - Selection / highlight bookkeeping that listens to
@@ -732,19 +738,29 @@ Used for queues, streams, and instrumented threads. It holds:
 
 Holds `m_data` (`vector<TraceCounter>`) and:
 
-- `class LineTrackProjectSettings : ProjectSetting` - persists box-plot
-  toggle, stripes, highlight band, and Y limits.
+- `class CounterTrackOptions : TrackOptions`
+  (`rocprofvis_timeline_track_options.h`) - persists the box-plot
+  toggle, stripes, highlight band, and per-counter analysis-pill
+  visibility. Reached via `m_counter_options` (guard before use).
 - `class LineTrackItem::VerticalLimits` - inline editable Y-min/Y-max
   fields backed by `EditableTextField`.
 - `BoxPlotRender(width)` and `RenderHighlightBand(...)`.
+- `GenerateYAxisTicks(...)` / `UpdateYAxisTicks()` - interior Y-axis
+  tick values (cached in `m_grid_ticks`), only shown once a track is
+  taller than `2 * DEFAULT_TRACK_HEIGHT`. `RenderMetaAreaScale()` draws
+  the tick marks/labels and `BoxPlotRender` draws the matching grid
+  lines; all three use `CalculatePlotHeight()` so ImGui's whole-pixel
+  child-window sizing cannot shift the chart and metadata coordinates.
 - `MapToUI` helper that converts `(x, y)` data to screen.
 
 When you add a new track type:
 
 1. Subclass `TrackItem`.
 2. Implement `RenderChart`, `RenderMetaAreaScale`,
-   `RenderMetaAreaOptions`, `ExtractPointsFromData`, `ReleaseData`.
-3. Add a `TrackProjectSettings` subclass if any state must persist.
+   `ExtractPointsFromData`, `ReleaseData`.
+3. Add a `TrackOptions` subclass if any per-track state must persist;
+   it self-registers a `ProjectSetting` via
+   `TrackOptions::TrackProjectSetting`.
 4. Construct from `TimelineView::MakeGraphView()` based on
    `TrackInfo::TrackType` / `rocprofvis_controller_track_type_t`.
 
@@ -1764,15 +1780,15 @@ For fast lookup. Each entry: class -> file -> one-line role.
 - `TrackItem` -> `rocprofvis_track_item.h` -> Base for any timeline
   track (description + chart + resize handle).
 - `Pill` -> same -> The small badge label inside a track meta area.
-- `TrackProjectSettings` -> same -> Persists track height per project.
 - `FlameTrackItem` -> `rocprofvis_flame_track_item.h` -> Flame chart
   for events; supports color modes and compact mode.
-- `FlameTrackProjectSettings` -> same.
 - `LineTrackItem` -> `rocprofvis_line_track_item.h` -> Line/box-plot
   for counter samples.
-- `LineTrackProjectSettings` -> same.
 - `LineTrackItem::VerticalLimits` -> same -> Editable Y-axis bounds.
-- `HighlightYRange` -> same -> `{ min_limit, max_limit }`.
+- `TrackOptions` / `CounterTrackOptions` / `EventTrackOptions` /
+  `QueueTrackOptions` / `TimelineTrackOptions` ->
+  `rocprofvis_timeline_track_options.h` -> Per-track user options and
+  the batch/context-menu controller that persists them.
 - `RawTrackData` / `TemplatedRawTrackData<T>` /
   `RawTrackEventData` / `RawTrackSampleData` ->
   `rocprofvis_raw_track_data.h` -> Chunked typed track storage.

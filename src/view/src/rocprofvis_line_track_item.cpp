@@ -9,6 +9,7 @@
 #include "rocprofvis_utils.h"
 #include "spdlog/spdlog.h"
 #include <algorithm>
+#include <cmath>
 #include <iomanip>
 #include <sstream>
 
@@ -57,8 +58,11 @@ LineTrackItem::LineTrackItem(DataProvider& dp, uint64_t track_id,
             for(size_t i = 0; i < AnalysisTrackStatistics::Counter::kCounterCount; i++)
             {
                 m_pills_analysis[i] = AddPill();
-                m_pills_analysis[i]->SetAccentColor(
-                    m_track_statistics->stats[i].accent_color);
+                if(m_pills_analysis[i])
+                {
+                    m_pills_analysis[i]->SetAccentColor(
+                        m_track_statistics->stats[i].accent_color);
+                }
             }
         }
     }
@@ -140,7 +144,11 @@ LineTrackItem::RenderHighlightBand(ImDrawList* draw_list, const ImVec2& cursor_p
 void
 LineTrackItem::BoxPlotRender(float graph_width)
 {
-    ImGui::BeginChild("LV", ImVec2(graph_width, m_track_content_height), false,
+    const float plot_height = CalculatePlotHeight();
+    const float chart_height = plot_height + m_vertical_padding * 2.0f;
+    // Borderless children use zero WindowPadding; the shared rounded height keeps
+    // this content region aligned with the meta-area scale.
+    ImGui::BeginChild("LV", ImVec2(graph_width, chart_height), false,
                       ImGuiWindowFlags_NoMouseInputs);
     ImDrawList* draw_list = ImGui::GetWindowDrawList();
 
@@ -148,7 +156,7 @@ LineTrackItem::BoxPlotRender(float graph_width)
     ImVec2 content_size    = ImGui::GetContentRegionAvail();
 
     cursor_position.y += m_vertical_padding;
-    content_size.y -= (m_vertical_padding * 2.0f);
+    content_size.y = plot_height;
 
     double      scale_y         = content_size.y / (m_max_y.Value() - m_min_y.Value());
     const float bottom_of_chart = cursor_position.y + content_size.y;
@@ -320,7 +328,10 @@ LineTrackItem::Update()
         {
             for(size_t i = 0; i < AnalysisTrackStatistics::Counter::kCounterCount; i++)
             {
-                m_pills_analysis[i]->SetVisible(m_counter_options->m_show_analysis[i]);
+                if(m_pills_analysis[i])
+                {
+                    m_pills_analysis[i]->SetVisible(m_counter_options->m_show_analysis[i]);
+                }
             }
         }
     }
@@ -398,6 +409,14 @@ LineTrackItem::CalculateMissingX(float x_1, float y_1, float x_2, float y_2,
     return static_cast<float>(x);
 }
 
+float
+LineTrackItem::CalculatePlotHeight() const
+{
+    // ImGui truncates child-window sizes to whole pixels.
+    const float chart_height = std::floor(m_track_content_height);
+    return std::max(0.0f, chart_height - m_vertical_padding * 2.0f);
+}
+
 void
 LineTrackItem::GenerateYAxisTicks(float plot_height, std::vector<double>& out_ticks) const
 {
@@ -431,13 +450,16 @@ LineTrackItem::GenerateYAxisTicks(float plot_height, std::vector<double>& out_ti
 void
 LineTrackItem::UpdateYAxisTicks()
 {
-    const float  plot_height = m_track_content_height - m_vertical_padding * 2.0f;
+    const float  plot_height = CalculatePlotHeight();
     const double min_v       = m_min_y.Value();
     const double max_v       = m_max_y.Value();
     const float  line_h      = ImGui::GetTextLineHeight();
 
     // Ticks only depend on the plot height, the Y range, and the text height, so
     // reuse the cached vector unless one of those has changed since last frame.
+    // Exact float equality is intentional: each input is recomputed identically
+    // every frame, so a bit-for-bit match means nothing changed. A spurious miss
+    // only costs one redundant regeneration, never a wrong result.
     if(plot_height == m_cached_ticks_height && min_v == m_cached_ticks_min &&
        max_v == m_cached_ticks_max && line_h == m_cached_ticks_line_h)
     {
@@ -474,8 +496,8 @@ LineTrackItem::RenderMetaAreaScale()
     ImDrawList*  draw_list    = ImGui::GetWindowDrawList();
     const ImVec2 win_pos      = ImGui::GetWindowPos();
     const float  plot_top     = win_pos.y + m_vertical_padding;
-    const float  plot_bottom  = win_pos.y + m_track_content_height - m_vertical_padding;
-    const float  plot_height  = plot_bottom - plot_top;
+    const float  plot_height  = CalculatePlotHeight();
+    const float  plot_bottom  = plot_top + plot_height;
     const float  tick_right_x = win_pos.x + ImGui::GetWindowSize().x;
     const double min_v        = m_min_y.Value();
     const double range        = m_max_y.Value() - min_v;

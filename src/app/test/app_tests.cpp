@@ -1225,6 +1225,70 @@ void RegisterAppTests(ImGuiTestEngine* e)
         ctx->Yield(2);
     };
 
+    t = IM_REGISTER_TEST(e, "app", "sys_track_details_populates_on_select");
+    t->TestFunc = [](ImGuiTestContext* ctx)
+    {
+        AppWindow* app = AppWindow::GetInstance();
+        Project* project = app->GetCurrentProject();
+        IM_CHECK(project != nullptr);
+        if (project == nullptr) return;
+        TraceView* tv = dynamic_cast<TraceView*>(project->GetView().get());
+        if (tv == nullptr)
+        {
+            ctx->LogWarning("SKIP: no trace view loaded (open a system/trace profile to exercise this)");
+            return;
+        }
+        AnalysisView* av = TraceViewTestPeer{*tv}.AnalysisViewPtr();
+        IM_CHECK(av != nullptr);
+        if (av == nullptr) return;
+        TrackDetails* td = AnalysisViewTestPeer{*av}.TrackDetailsPtr();
+        IM_CHECK(td != nullptr);
+        if (td == nullptr) return;
+        TimelineView* tlv = TraceViewTestPeer{*tv}.TimelineViewPtr();
+        IM_CHECK(tlv != nullptr);
+        if (tlv == nullptr) return;
+        std::shared_ptr<TimelineSelection> sel = tv->GetTimelineSelection();
+        IM_CHECK(sel != nullptr);
+        if (sel == nullptr) return;
+
+        // Tracks appear once the timeline's data fetch drains, so poll for a
+        // displayed flame track before reaching in for one to select.
+        FlameTrackItem* track = nullptr;
+        for (int i = 0; i < 60 && track == nullptr; i++)
+        {
+            std::vector<FlameTrackItem*> flames =
+                TimelineViewTestPeer{*tlv}.DisplayedFlameTracks();
+            if (!flames.empty()) { track = flames.front(); break; }
+            ctx->Yield(2);
+        }
+        if (track == nullptr)
+        {
+            ctx->LogWarning("SKIP: no displayed flame track to select");
+            return;
+        }
+        const uint64_t track_id = track->GetID();
+
+        // Selection dispatches async through EventManager, so poll after every drive.
+        // The reused process may carry a prior test's selection, so reset first.
+        sel->UnselectAllTracks();
+        for (int i = 0; i < 60 && TrackDetailsTestPeer{*td}.DetailCount() != 0; i++) ctx->Yield(2);
+        IM_CHECK(TrackDetailsTestPeer{*td}.DetailCount() == 0);
+
+        // Select that exact track by identity, the same call a track-header click makes.
+        sel->SelectTrack(*track);
+        for (int i = 0; i < 60 && TrackDetailsTestPeer{*td}.DetailCount() == 0; i++) ctx->Yield(2);
+        IM_CHECK(TrackDetailsTestPeer{*td}.DetailCount() == 1);
+        IM_CHECK(TrackDetailsTestPeer{*td}.HasTrack(track_id));
+
+        sel->UnselectTrack(*track);
+        for (int i = 0; i < 60 && TrackDetailsTestPeer{*td}.DetailCount() != 0; i++) ctx->Yield(2);
+        IM_CHECK(TrackDetailsTestPeer{*td}.DetailCount() == 0);
+
+        // Leave a clean selection for following tests.
+        sel->UnselectAllTracks();
+        ctx->Yield(2);
+    };
+
     t = IM_REGISTER_TEST(e, "app", "sys_timeline_measure_tool");
     t->TestFunc = [](ImGuiTestContext* ctx)
     {

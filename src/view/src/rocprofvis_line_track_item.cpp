@@ -10,7 +10,6 @@
 #include "spdlog/spdlog.h"
 #include <algorithm>
 #include <cmath>
-#include <cstring>
 #include <iomanip>
 #include <sstream>
 
@@ -29,14 +28,6 @@ constexpr float Y_AXIS_GRID_LINE_ALPHA      = 0.10f;
 constexpr float Y_AXIS_LABEL_SPACING_FACTOR = 2.5f;
 // Interior ticks/labels/grid lines only show above this height.
 constexpr float Y_AXIS_LABEL_MIN_TRACK_HEIGHT = 2.0f * DEFAULT_TRACK_HEIGHT;
-
-// Bit-for-bit compare so cache invalidation doesn't depend on float ==.
-template <typename T>
-static bool
-BitwiseEqual(T a, T b)
-{
-    return std::memcmp(&a, &b, sizeof(T)) == 0;
-}
 
 LineTrackItem::LineTrackItem(DataProvider& dp, uint64_t track_id,
                              TimelineTrackOptions&               track_options,
@@ -466,10 +457,8 @@ LineTrackItem::UpdateYAxisTicks()
 
     // Reuse the cached ticks unless the plot height, Y range, or text height
     // changed since the last frame.
-    if(BitwiseEqual(plot_height, m_cached_ticks_height) &&
-       BitwiseEqual(min_v, m_cached_ticks_min) &&
-       BitwiseEqual(max_v, m_cached_ticks_max) &&
-       BitwiseEqual(line_h, m_cached_ticks_line_h))
+    if(plot_height == m_cached_ticks_height && min_v == m_cached_ticks_min &&
+       max_v == m_cached_ticks_max && line_h == m_cached_ticks_line_h)
     {
         return;
     }

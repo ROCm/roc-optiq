@@ -403,13 +403,25 @@ namespace DataModel
 
     void PackedTable::AggregateRow(QueryManager* db, int row_index, int map_index)
     {
+        // Aggregate a single packed row into the target aggregation map.
+        // High-level flow:
+        //  1) Validate row/index and resolve row operation metadata.
+        //  2) Compute the group-by key value for this row.
+        //  3) Find/create the group bucket in aggregation_maps[map_index].
+        //  4) Update each configured aggregate metric for that bucket.
+        //  5) Persist any auxiliary string data needed by result formatting.
         if (row_index >= m_rows.size()) return;
         std::unique_ptr<PackedRow>& r = m_rows[row_index];
         uint8_t op = r->Get<uint8_t>(0);
+
+        // Resolve the configured group-by column definition for this row type/op.
         std::string group_by = m_aggregation.agg_params[0].column;
         MergedColumnDef& group_by_column_info = m_aggregation.column_def[group_by];
         DbInstance* db_instance = GetDbInstanceForRow(db, row_index);
         ROCPROFVIS_ASSERT_MSG_RETURN(db_instance != nullptr, ERROR_NODE_KEY_CANNOT_BE_NULL, );
+
+        // Extract a numeric group key from the row (or keep default 0 for null-sized types).
+        // This key is used to identify/update the corresponding aggregate bucket.
         uint8_t size = ColumnTypeSize(group_by_column_info.m_type[op]);
         double value = 0;
         if (size > 0)
@@ -417,6 +429,8 @@ namespace DataModel
             value = group_by_column_info.m_type[op] == ColumnType::Double ?  r->Get<double>(group_by_column_info.m_offset[op]) :  r->Get<uint64_t>(group_by_column_info.m_offset[op], size);
             
         }
+
+        // Locate an existing bucket for this group key; create one if absent below.
         auto it = m_aggregation.aggregation_maps[map_index].find(value);
         if (it == m_aggregation.aggregation_maps[map_index].end())
         {

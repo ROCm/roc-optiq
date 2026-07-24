@@ -3,12 +3,10 @@
 
 #pragma once
 
-#include "rocprofvis_event_model.h"
 #include "rocprofvis_model_types.h"
 #include "rocprofvis_raw_track_data.h"
 
 #include <map>
-#include <tuple>
 #include <unordered_map>
 #include <vector>
 
@@ -17,12 +15,15 @@ namespace RocProfVis
 namespace View
 {
 
+class TrackItem;
+
 /**
  * @brief Manages timeline visualization data.
  *
  * This model holds track metadata, track data, histograms, and mini-maps
  * used for rendering the trace timeline visualization.
  */
+
 class TimelineModel
 {
 public:
@@ -72,18 +73,18 @@ public:
     double                     GetMinimapGlobalMax() const { return m_minimap_global_max; }
 
     // Mini-map access
-    const std::map<uint64_t, std::tuple<std::vector<double>, bool>>& GetMiniMap() const
+    const std::map<uint64_t, std::vector<double>>& GetMiniMap() const
     {
         return m_mini_map;
     }
-    std::map<uint64_t, std::tuple<std::vector<double>, bool>>& GetMiniMap()
+    std::map<uint64_t, std::vector<double>>& GetMiniMap()
     {
         return m_mini_map;
     }
-    void SetMiniMap(std::map<uint64_t, std::tuple<std::vector<double>, bool>>&& mini_map);
+    void SetMiniMap(std::map<uint64_t, std::vector<double>>&& mini_map);
 
     // Histogram updates
-    void UpdateHistogram(const std::vector<uint64_t>& interest_id, bool add);
+    void UpdateHistogram(const std::vector<TrackItem*>& tracks);
     void NormalizeHistogram();
     void ToggleNormalization() { m_normalize_global = !m_normalize_global; }
     bool IsNormalizeGlobal() const { return m_normalize_global; }
@@ -110,7 +111,7 @@ private:
     std::unordered_map<uint64_t, RawTrackData*> m_raw_track_data;
 
     std::vector<double>                                       m_histogram;
-    std::map<uint64_t, std::tuple<std::vector<double>, bool>> m_mini_map;
+    std::map<uint64_t, std::vector<double>>                   m_mini_map;
     double                                                    m_histogram_max_value_global;
     double                                                    m_minimap_global_min;
     double                                                    m_minimap_global_max;

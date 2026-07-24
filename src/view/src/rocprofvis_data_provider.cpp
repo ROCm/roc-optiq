@@ -56,12 +56,10 @@ const uint64_t DataProvider::ANALYSIS_TOP_MEMORY_COPY_EVENTS_TABLE_REQUEST_ID =
 const uint64_t DataProvider::ANALYSIS_TOP_LAUNCH_SAMPLED_TABLE_REQUEST_ID =
     RequestIdBuilder::MakeRequestId(
         RequestType::kFetchAnalysisTopLaunchSampleEventsTable);
-#ifdef COMPUTE_UI_SUPPORT
 const uint64_t DataProvider::FETCH_COMPUTE_TRACE_REQUEST_ID =
     RequestIdBuilder::MakeRequestId(RequestType::kFetchComputeTrace);
 const uint64_t DataProvider::METRIC_PIVOT_TABLE_REQUEST_ID =
     RequestIdBuilder::MakeRequestId(RequestType::kFetchMetricPivotTable);
-#endif
 
 DataProvider::DataProvider()
 : m_state(ProviderState::kInit)
@@ -357,16 +355,10 @@ DataProvider::FetchTrace(rocprofvis_controller_t* controller, const std::string&
             rocprofvis_controller_get_object_type(m_trace_controller, &controller_type);
         if(result == kRocProfVisResultSuccess)
         {
-#ifdef COMPUTE_UI_SUPPORT
             result = (controller_type == kRPVControllerObjectTypeControllerSystem ||
                       controller_type == kRPVControllerObjectTypeControllerCompute)
                          ? kRocProfVisResultSuccess
                          : kRocProfVisResultInvalidType;
-#else
-            result = (controller_type == kRPVControllerObjectTypeControllerSystem)
-                         ? kRocProfVisResultSuccess
-                         : kRocProfVisResultInvalidType;
-#endif
         }
         if(result == kRocProfVisResultSuccess)
         {
@@ -389,13 +381,11 @@ DataProvider::FetchTrace(rocprofvis_controller_t* controller, const std::string&
                         request_info.request_id   = FETCH_SYSTEM_TRACE_REQUEST_ID;
                         request_info.request_type = RequestType::kFetchSystemTrace;
                     }
-#ifdef COMPUTE_UI_SUPPORT
                     else if(controller_type == kRPVControllerObjectTypeControllerCompute)
                     {
                         request_info.request_id   = FETCH_COMPUTE_TRACE_REQUEST_ID;
                         request_info.request_type = RequestType::kFetchComputeTrace;
                     }
-#endif
                     m_requests.emplace(request_info.request_id, request_info);
                 }
                 else
@@ -466,7 +456,7 @@ DataProvider::ProcessLoadSystemTrace(RequestInfo& req)
     // Get reference to histogram in model for writing access
     std::vector<double>& histogram = tlm.GetHistogram();
 
-    std::map<uint64_t, std::tuple<std::vector<double>, bool>> histogram_minimap;
+    std::map<uint64_t, std::vector<double>> histogram_minimap;
 
     if(result == kRocProfVisResultSuccess && m_trace_timeline)
     {
@@ -515,7 +505,7 @@ DataProvider::ProcessLoadSystemTrace(RequestInfo& req)
                 }
             }
 
-            histogram_minimap[graphs] = std::make_tuple(histogram_track, true);
+            histogram_minimap[graphs] = histogram_track;
         }
         tlm.SetMiniMap(std::move(histogram_minimap));
 
@@ -1031,11 +1021,11 @@ DataProvider::HandleLoadTrackMetaData()
                 track, kRPVControllerTrackNumberOfOperationTypes, 0,
                 &operation_type_count);
             ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-            for(uint64_t i = 0; i < operation_type_count; i++)
+            for(uint64_t k = 0; k < operation_type_count; k++)
             {
                 uint64_t operation_type = 0;
                 result = rocprofvis_controller_get_uint64(
-                    track, kRPVControllerTrackOperationTypeIndexed, i, &operation_type);
+                    track, kRPVControllerTrackOperationTypeIndexed, k, &operation_type);
                 ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
                 track_info.operation_types.insert(
                     (rocprofvis_dm_event_operation_t)operation_type);
@@ -2509,9 +2499,7 @@ DataProvider::UpdateRequestProgress(RequestInfo& req)
             break;
         }
         case RequestType::kFetchSystemTrace:
-#ifdef COMPUTE_UI_SUPPORT
         case RequestType::kFetchComputeTrace:
-#endif
         {
             if(req.request_future &&
                kRocProfVisResultSuccess == rocprofvis_controller_get_uint64(
@@ -3023,7 +3011,6 @@ DataProvider::ProcessRequest(RequestInfo& req)
             ProcessAnalysisTrackStatisticsRequest(req);
             break;
         }
-#ifdef COMPUTE_UI_SUPPORT
         case RequestType::kFetchComputeTrace:
         {
             ProcessLoadComputeTrace(req);
@@ -3044,7 +3031,6 @@ DataProvider::ProcessRequest(RequestInfo& req)
             ProcessPcSamplingRequest(req);
             break;
         }
-#endif
         default:
         {
             spdlog::debug("Unknown request type {}", static_cast<int>(req.request_type));
@@ -4218,7 +4204,6 @@ DataProvider::GetString(rocprofvis_handle_t* handle, rocprofvis_property_t prope
     return str;
 }
 
-#ifdef COMPUTE_UI_SUPPORT
 ComputeDataModel&
 DataProvider::ComputeModel()
 {
@@ -5005,9 +4990,9 @@ DataProvider::LoadRoofLine(WorkloadInfo& workload, rocprofvis_handle_t* workload
 
     LoadRoofLineCeilingsRidge(workload, roofline_handle, compute_ridge, bandwidth_ridge);
 
-    LoadRoofLineCeilingsCompute(workload, roofline_handle, compute_ridge, bandwidth_ridge);
+    LoadRoofLineCeilingsCompute(workload, roofline_handle, compute_ridge);
     
-    LoadRoofLineCeilingsBandwidth(workload, roofline_handle, compute_ridge, bandwidth_ridge);
+    LoadRoofLineCeilingsBandwidth(workload, roofline_handle, bandwidth_ridge);
 
     LoadRoofLineNumKernels(workload, roofline_handle, compute_ridge, bandwidth_ridge);
 }
@@ -5061,12 +5046,12 @@ DataProvider::LoadRoofLineCeilingsRidge(WorkloadInfo&        workload,
 inline void
 DataProvider::LoadRoofLineCeilingsCompute(WorkloadInfo&        workload,
                                           rocprofvis_handle_t* roofline_handle,
-                                          compute_ridge_map&   compute_ridge,
-                                          bandwidth_ridge_map& bandwidth_ridge)
+                                          compute_ridge_map&   compute_ridge)
 {
     double   double_data = 0.0;
     uint64_t uint64_data = 0;
     uint64_t num_entries = 0;
+    
     rocprofvis_result_t result = rocprofvis_controller_get_uint64(
         roofline_handle, kRPVControllerRooflineNumCeilingsCompute, 0, &num_entries);
     ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
@@ -5114,12 +5099,12 @@ DataProvider::LoadRoofLineCeilingsCompute(WorkloadInfo&        workload,
 inline void
 DataProvider::LoadRoofLineCeilingsBandwidth(WorkloadInfo&        workload,
                                             rocprofvis_handle_t* roofline_handle,
-                                            compute_ridge_map&   compute_ridge,
                                             bandwidth_ridge_map& bandwidth_ridge)
 {
     double   double_data = 0.0;
     uint64_t uint64_data = 0;
     uint64_t num_entries = 0;
+    
     rocprofvis_result_t result = rocprofvis_controller_get_uint64(
         roofline_handle, kRPVControllerRooflineNumCeilingsBandwidth, 0, &num_entries);
     ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
@@ -5472,8 +5457,6 @@ DataProvider::ProcessPcSamplingRequest(RequestInfo& req)
                                      success);
     }
 }
-
-#endif
 
 }  // namespace View
 }  // namespace RocProfVis

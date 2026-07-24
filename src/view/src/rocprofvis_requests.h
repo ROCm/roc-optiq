@@ -42,12 +42,10 @@ enum class RequestType
     kFetchAnalysisTopMemoryAllocationEventsTable,
     kFetchAnalysisTopMemoryCopyEventsTable,
     kFetchAnalysisTopLaunchSampleEventsTable,
-#ifdef COMPUTE_UI_SUPPORT
     kFetchComputeTrace,
     kFetchMetrics,
     kFetchMetricPivotTable,
     kFetchPcSampling,
-#endif
 };
 
 enum class RequestState
@@ -248,7 +246,6 @@ public:
     {}
 };
 
-#ifdef COMPUTE_UI_SUPPORT
 class MetricsRequestParams : public RequestParamsBase
 {
 public:
@@ -321,7 +318,6 @@ public:
     , m_column_filters(column_filters)
     {}
 };
-#endif
 
 
 struct RequestInfo

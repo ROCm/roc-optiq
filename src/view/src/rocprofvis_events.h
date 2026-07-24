@@ -26,6 +26,7 @@ enum class RocEvents
     kTimelineEventHighlightChanged,
     kHandleUserGraphNavigationEvent,
     kTrackMetadataChanged,
+    kTrackVisibilityChanged,
     kFontSizeChanged,
     kSetViewRange,
     kGoToTimelineSpot,
@@ -34,12 +35,10 @@ enum class RocEvents
     kRequestProgressUpdate,
     kProfilerStatusChanged,
     kRemoteStatusChanged,
-#ifdef COMPUTE_UI_SUPPORT
     kComputeWorkloadSelectionChanged,
     kComputeKernelSelectionChanged,
     kComputeMetricsFetched,
     kComputeShowMetricInKernelDetails,
-#endif
 };
 
 enum class RocEventType
@@ -58,11 +57,9 @@ enum class RocEventType
     kRequestProgressUpdateEvent,
     kProfilerStatusEvent,
     kRemoteStatusEvent,
-#ifdef COMPUTE_UI_SUPPORT
     kComputeSelectionChangedEvent,
     kComputeMetricsFetchedEvent,
     kComputeAddMetricToKernelDetailsEvent,
-#endif
 };
 
 class RocEvent
@@ -195,7 +192,6 @@ private:
     uint64_t    m_track_id;
 };
 
-#ifdef COMPUTE_UI_SUPPORT
 class ComputeSelectionChangedEvent : public RocEvent
 {
 public:
@@ -233,8 +229,6 @@ private:
     uint32_t m_entry_id;
     std::string  m_value_name;
 };
-
-#endif
 
 class TabEvent : public RocEvent
 {

@@ -134,7 +134,6 @@ TableDataEvent::GetResponseCode() const
     return m_response_code;
 }
 
-#ifdef COMPUTE_UI_SUPPORT
 ComputeSelectionChangedEvent::ComputeSelectionChangedEvent(int event_id, uint32_t id, const std::string& source_id)
 : RocEvent(event_id, source_id)
 , m_id(id)
@@ -196,8 +195,6 @@ ComputeAddMetricToKernelDetailsEvent::GetValueName() const
 {
     return m_value_name;
 }
-
-#endif
 
 TabEvent::TabEvent(int event_id, const std::string& tab_id, const std::string& source_id)
 : RocEvent(event_id, source_id)

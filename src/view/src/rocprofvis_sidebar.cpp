@@ -6,6 +6,7 @@
 #include "widgets/rocprofvis_gui_helpers.h"
 #include "rocprofvis_data_provider.h"
 #include "rocprofvis_track_item.h"
+#include "rocprofvis_events.h"
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_timeline_selection.h"
 
@@ -22,6 +23,9 @@ constexpr ImGuiTreeNodeFlags HEADER_FLAGS = ImGuiTreeNodeFlags_Framed |
 constexpr float TREE_LINE_W = 1.5f;
 constexpr float MENU_PAD_X  = 8.0f;
 constexpr float MENU_PAD_Y  = 6.0f;
+// ImGui offsets a framed tree node's label by FontSize + FramePadding.x * this
+// factor (see TreeNodeBehavior); used to place the inline device lead arrow.
+constexpr float FRAMED_LABEL_PAD_MULT = 3.0f;
 
 // Recolors a framed tree node's collapse arrow, matching ImGui::RenderArrow's
 // geometry so it overlaps the default arrow exactly.
@@ -84,9 +88,28 @@ SideBar::SideBar(std::shared_ptr<TrackTopology>         topology,
 , m_timeline_selection(timeline_selection)
 , m_tracks(tracks)
 , m_data_provider(dp)
-{}
+, m_active_node_color(0)
+, m_track_visibility_token(EventManager::InvalidSubscriptionToken)
+{
+    m_track_visibility_token = EventManager::GetInstance()->Subscribe(
+        static_cast<int>(RocEvents::kTrackVisibilityChanged),
+        [this](std::shared_ptr<RocEvent> e) {
+            if(e && e->GetSourceId() == m_data_provider.GetTraceFilePath())
+            {
+                const SidebarTree& sidebar_tree = m_track_topology->GetSidebarTree();
+                if(sidebar_tree.root)
+                {
+                    InvalidateEyeStateCache(*sidebar_tree.root);
+                }
+            }
+        });
+}
 
-SideBar::~SideBar() {}
+SideBar::~SideBar()
+{
+    EventManager::GetInstance()->Unsubscribe(
+        static_cast<int>(RocEvents::kTrackVisibilityChanged), m_track_visibility_token);
+}
 
 void
 SideBar::Render()
@@ -94,12 +117,6 @@ SideBar::Render()
     if(!m_track_topology->Dirty())
     {
         const SidebarTree& sidebar_tree = m_track_topology->GetSidebarTree();
-        if(m_eye_state_dirty && sidebar_tree.root)
-        {
-            InvalidateEyeStateCache(*sidebar_tree.root);
-            m_eye_state_dirty = false;
-        }
-
         ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(5, 3));
         ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(5, 2));
         ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding,
@@ -177,9 +194,9 @@ SideBar::RenderTrackItem(const uint64_t& index, bool show_eye_button)
         if(ImGui::Button(display ? ICON_EYE : ICON_EYE_SLASH))
         {
             track.SetDisplay(!track.IsDisplayed());
-            m_eye_state_dirty     = true;
-            m_data_provider.DataModel().GetTimeline().UpdateHistogram(
-                { track.GetID() }, track.IsDisplayed());
+            EventManager::GetInstance()->AddEvent(std::make_shared<RocEvent>(
+                static_cast<int>(RocEvents::kTrackVisibilityChanged),
+                m_data_provider.GetTraceFilePath()));
         }
         ImGui::PopFont();
         if(ImGui::IsItemHovered())
@@ -239,11 +256,10 @@ SideBar::RenderTrackItem(const uint64_t& index, bool show_eye_button)
 
         if(ImGui::MenuItem(display ? "Hide Track" : "Show Track"))
         {
-            std::vector<uint64_t> shown_chart_ids;
-            std::vector<uint64_t> hidden_chart_ids;
-            SetTrackVisibility(track, !display,
-                               display ? hidden_chart_ids : shown_chart_ids);
-            UpdateHistogramForVisibility(shown_chart_ids, hidden_chart_ids);
+            SetTrackVisibility(track, !display);
+            EventManager::GetInstance()->AddEvent(std::make_shared<RocEvent>(
+                static_cast<int>(RocEvents::kTrackVisibilityChanged),
+                m_data_provider.GetTraceFilePath()));
         }
         if(ImGui::MenuItem("Show All Tracks", nullptr, false,
                            HasTrackVisibility(false)))
@@ -285,8 +301,7 @@ SideBar::ScrollToTrack(TrackItem& track)
 }
 
 void
-SideBar::SetTrackVisibility(TrackItem& track, bool visible,
-                            std::vector<uint64_t>& chart_ids)
+SideBar::SetTrackVisibility(TrackItem& track, bool visible)
 {
     if(track.IsDisplayed() == visible)
     {
@@ -294,24 +309,6 @@ SideBar::SetTrackVisibility(TrackItem& track, bool visible,
     }
 
     track.SetDisplay(visible);
-    m_eye_state_dirty = true;
-    chart_ids.push_back(track.GetID());
-}
-
-void
-SideBar::UpdateHistogramForVisibility(
-    const std::vector<uint64_t>& shown_chart_ids,
-    const std::vector<uint64_t>& hidden_chart_ids)
-{
-    if(!shown_chart_ids.empty())
-    {
-        m_data_provider.DataModel().GetTimeline().UpdateHistogram(shown_chart_ids, true);
-    }
-    if(!hidden_chart_ids.empty())
-    {
-        m_data_provider.DataModel().GetTimeline().UpdateHistogram(hidden_chart_ids,
-                                                                  false);
-    }
 }
 
 void
@@ -322,9 +319,6 @@ SideBar::HideAllButTrack(const uint64_t& index)
         return;
     }
 
-    std::vector<uint64_t> shown_chart_ids;
-    std::vector<uint64_t> hidden_chart_ids;
-
     for(uint64_t i = 0; i < m_tracks->size(); ++i)
     {
         TrackItem* track = (*m_tracks)[i];
@@ -332,11 +326,11 @@ SideBar::HideAllButTrack(const uint64_t& index)
         {
             continue;
         }
-        SetTrackVisibility(*track, i == index,
-                           i == index ? shown_chart_ids : hidden_chart_ids);
+        SetTrackVisibility(*track, i == index);
     }
-
-    UpdateHistogramForVisibility(shown_chart_ids, hidden_chart_ids);
+    EventManager::GetInstance()->AddEvent(
+        std::make_shared<RocEvent>(static_cast<int>(RocEvents::kTrackVisibilityChanged),
+                                   m_data_provider.GetTraceFilePath()));
 }
 
 void
@@ -347,20 +341,17 @@ SideBar::ApplyAllTrackVisibility(bool visible)
         return;
     }
 
-    std::vector<uint64_t> shown_chart_ids;
-    std::vector<uint64_t> hidden_chart_ids;
-
     for(auto* track : *m_tracks)
     {
         if(!track)
         {
             continue;
         }
-        SetTrackVisibility(*track, visible,
-                           visible ? shown_chart_ids : hidden_chart_ids);
+        SetTrackVisibility(*track, visible);
     }
-
-    UpdateHistogramForVisibility(shown_chart_ids, hidden_chart_ids);
+    EventManager::GetInstance()->AddEvent(
+        std::make_shared<RocEvent>(static_cast<int>(RocEvents::kTrackVisibilityChanged),
+                                   m_data_provider.GetTraceFilePath()));
 }
 
 void
@@ -371,20 +362,17 @@ SideBar::ApplySelectedTrackVisibility(bool visible)
         return;
     }
 
-    std::vector<uint64_t> shown_chart_ids;
-    std::vector<uint64_t> hidden_chart_ids;
-
     for(auto* track : *m_tracks)
     {
         if(!track || !track->IsSelected())
         {
             continue;
         }
-        SetTrackVisibility(*track, visible,
-                           visible ? shown_chart_ids : hidden_chart_ids);
+        SetTrackVisibility(*track, visible);
     }
-
-    UpdateHistogramForVisibility(shown_chart_ids, hidden_chart_ids);
+    EventManager::GetInstance()->AddEvent(
+        std::make_shared<RocEvent>(static_cast<int>(RocEvents::kTrackVisibilityChanged),
+                                   m_data_provider.GetTraceFilePath()));
 }
 
 bool
@@ -488,7 +476,6 @@ SideBar::ApplyVisibility(const TreeNode& node, bool visible)
     }
 
     std::unordered_set<uint64_t> visited_graphs;
-    std::vector<uint64_t>        chart_ids;
     std::vector<const TreeNode*> stack = { &node };
 
     while(!stack.empty())
@@ -517,7 +504,6 @@ SideBar::ApplyVisibility(const TreeNode& node, bool visible)
                 if(track && track->IsDisplayed() != visible)
                 {
                     track->SetDisplay(visible);
-                    chart_ids.push_back(track->GetID());
                 }
             }
         }
@@ -530,11 +516,9 @@ SideBar::ApplyVisibility(const TreeNode& node, bool visible)
             }
         }
     }
-
-    if(!chart_ids.empty())
-    {
-        m_data_provider.DataModel().GetTimeline().UpdateHistogram(chart_ids, visible);
-    }
+    EventManager::GetInstance()->AddEvent(
+        std::make_shared<RocEvent>(static_cast<int>(RocEvents::kTrackVisibilityChanged),
+                                   m_data_provider.GetTraceFilePath()));
 }
 
 void
@@ -579,7 +563,43 @@ SideBar::RenderBranchNode(const TreeNode& node, const TreeNode* state_node,
     if(node.collapsable)
     {
         const ImVec2 node_pos = ImGui::GetCursorScreenPos();
-        open                  = ImGui::TreeNodeEx(node.label.c_str(), HEADER_FLAGS);
+
+        // Lead arrow: pad the label to open a slot after the chevron, then draw
+        // the glyph at the label's start (keeps the chevron in place).
+        std::string display_label   = node.label;
+        ImFont*     lead_arrow_font = nullptr;
+        float       lead_arrow_size = 0.0f;
+        float       lead_arrow_x    = 0.0f;
+        if(node.show_lead_arrow)
+        {
+            ImFont* icon_font = m_settings.GetFontManager().GetFont(FontType::kIcon);
+            ImGui::PushFont(icon_font, 0.0f);
+            const float arrow_w = ImGui::CalcTextSize(ICON_ARROW_FORWARD).x;
+            lead_arrow_font     = icon_font;
+            lead_arrow_size     = ImGui::GetFontSize();
+            ImGui::PopFont();
+
+            const float gap     = ImGui::GetStyle().ItemInnerSpacing.x;
+            const float space_w = ImGui::CalcTextSize(" ").x;
+            const int   pad =
+                (space_w > 0.0f) ? static_cast<int>((arrow_w + gap) / space_w) + 1 : 2;
+            display_label.insert(0, static_cast<size_t>(pad), ' ');
+            lead_arrow_x = node_pos.x + ImGui::GetFontSize() +
+                           ImGui::GetStyle().FramePadding.x * FRAMED_LABEL_PAD_MULT;
+        }
+
+        open = ImGui::TreeNodeEx(node.label.c_str(), HEADER_FLAGS, "%s",
+                                 display_label.c_str());
+
+        if(lead_arrow_font)
+        {
+            const float cy =
+                (ImGui::GetItemRectMin().y + ImGui::GetItemRectMax().y) * 0.5f;
+            ImGui::GetWindowDrawList()->AddText(
+                lead_arrow_font, lead_arrow_size,
+                ImVec2(lead_arrow_x, cy - lead_arrow_size * 0.5f),
+                ImGui::GetColorU32(ImGuiCol_Text), ICON_ARROW_FORWARD);
+        }
 
         if(color_arrow)
         {

@@ -17,8 +17,9 @@ namespace View
 // inside RemoteUri. Each profile carries a stable id (used as the on-disk key
 // and the reference target for launch profiles) and a user-facing display name.
 //
-// NOTE: password and passphrase are stored in plaintext for now. Secure storage
-// (e.g. an OS keyring) is intended future work and is explicitly out of scope.
+// NOTE: password and passphrase are held in memory only, never written to
+// profiles.json. They are persisted in the OS credential store (SecretStore)
+// keyed by this profile's id; SshConnectionStore moves them in and out.
 struct SshConnectionConfig
 {
     std::string id;            // stable, auto-generated identifier

@@ -67,8 +67,6 @@ class ProfileDatabase : public QueryManager
         static rocprofvis_db_type_t Detect(rocprofvis_db_filename_t filename, std::vector<std::string> & multinode_files);
         static rocprofvis_dm_result_t  DetectMultiNode(rocprofvis_db_filename_t filename, std::vector<std::string> & db_files);
 
-        bool isServiceColumn(const char* name);
-
         // method to execute table database query with appropriate .CSV writer callback based on existence of GROUP BY clause
         // @param query - database query 
         // @param file_path output path to write .CSV
@@ -79,17 +77,15 @@ class ProfileDatabase : public QueryManager
             rocprofvis_dm_charptr_t file_path,
             Future* future) override;
 
-    private:
+     protected:
 
-    // sqlite3_exec callback to add any record (Event or PMC) to time slice container. Used in all-selected-tracks time slice query
-    // @param data - pointer to callback caller argument
-    // @param argc - number of columns in the query
-    // @param argv - pointer to row values
-    // @param azColName - pointer to column names  
-    // @return SQLITE_OK if successful
-        static int CallbackAddAnyRecord(void* data, int argc, sqlite3_stmt* stmt, char** azColName);
-        
-        void BuildSliceQueryMap(slice_query_map_t& slice_query_map, rocprofvis_dm_track_params_t* props) override;
+        // ----------------------------------Query builders------------------------------------------
+        // builds query map based on track identifiers for slice query
+        void BuildSliceQueryMap(
+            slice_query_map_t& slice_query_map, 
+            rocprofvis_dm_track_params_t* props) override;
+
+        // builds query map based on track identifiers for table query
         void BuildTableQueryMap(
             rocprofvis_db_num_of_tracks_t num,
             rocprofvis_db_track_selection_t tracks,
@@ -97,19 +93,19 @@ class ProfileDatabase : public QueryManager
             rocprofvis_dm_string_table_filters_t string_table_filters,
             std::vector<slice_query_map_t>& slice_query_map_array) override;
 
-    protected:
+    
 
-    // method to build a query to read time slice of records for single track 
-    // @param index - track index 
-    // @param tyte - query type
-    // @param query - reference to output query string  
-    // @return status of operation
+        // method to build a query to read time slice of records for single track 
+        // @param index - track index 
+        // @param type - query type
+        // @param query - reference to output query string  
+        // @return status of operation
         rocprofvis_dm_result_t BuildTrackQuery(
-                            rocprofvis_dm_index_t index,
-                            rocprofvis_dm_index_t   type,
-                            rocprofvis_dm_string_t& query,
-                            uint32_t split_count,
-                            uint32_t split_index) override;
+                                rocprofvis_dm_index_t index,
+                                rocprofvis_dm_index_t   type,
+                                rocprofvis_dm_string_t& query,
+                                uint32_t split_count,
+                                uint32_t split_index) override;
 
 
         // adds a new query to the track queries collection 
@@ -118,107 +114,70 @@ class ProfileDatabase : public QueryManager
         // @param it - track properties array iterator
         // @param newprops - new track properties structure
         // @param newquery - new track records query. One track can have multiple queries.
-        void                            UpdateQueryForTrack(rocprofvis_dm_track_params_it it, 
+        void  UpdateQueryForTrack(rocprofvis_dm_track_params_it it, 
             rocprofvis_dm_track_params_t& newprops,
             std::vector<rocprofvis_dm_string_t> & newqueries);
 
     protected:
-    // sqlite3_exec callback to process stack trace information query and add stack trace object to StackTrace container
-    // @param data - pointer to callback caller argument
-    // @param argc - number of columns in the query
-    // @param argv - pointer to row values
-    // @param azColName - pointer to column names
-    // @return SQLITE_OK if successful
-    static int CallbackAddStackTrace(void *data, int argc, sqlite3_stmt* stmt, char **azColName);
-    // sqlite3_exec callback to cache specified tables data
-    // @param data - pointer to callback caller argument
-    // @param argc - number of columns in the query
-    // @param argv - pointer to row values
-    // @param azColName - pointer to column names
-    // @return SQLITE_OK if successful
-    static int CallbackCacheTable(void *data, int argc, sqlite3_stmt* stmt, char **azColName);
-    // sqlite3_exec callback to process track information query and add track object to Trace container
-    // @param data - pointer to callback caller argument
-    // @param argc - number of columns in the query
-    // @param argv - pointer to row values
-    // @param azColName - pointer to column names
-    // @return SQLITE_OK if successful
-    static int CallBackAddTrack(void* data, int argc, sqlite3_stmt* stmt, char** azColName);
-    // sqlite3_exec callback to load saved track information and add track object to Trace container
-    // @param data - pointer to callback caller argument
-    // @param argc - number of columns in the query
-    // @param argv - pointer to row values
-    // @param azColName - pointer to column names
-    // @return SQLITE_OK if successful
-    static int CallBackLoadTrack(void* data, int argc, sqlite3_stmt* stmt, char** azColName);
-    // sqlite3_exec callback to add flowtrace record to FlowTrace container.
+    // ------------------------------SQL query callbacks-----------------------------------
     // @param data - pointer to callback caller argument
     // @param argc - number of columns in the query
     // @param argv - pointer to row values
     // @param azColName - pointer to column names  
     // @return SQLITE_OK if successful
+
+        // sqlite3_exec callback to add any record (Event or PMC) to time slice container. 
+        static int CallbackAddAnyRecord(void* data, int argc, sqlite3_stmt* stmt, char** azColName);
+        // sqlite3_exec callback to process stack trace information query and add stack trace object to StackTrace container
+        static int CallbackAddStackTrace(void *data, int argc, sqlite3_stmt* stmt, char **azColName);
+        // sqlite3_exec callback to cache specified tables data
+        static int CallbackCacheTable(void *data, int argc, sqlite3_stmt* stmt, char **azColName);
+        // sqlite3_exec callback to process track information query and add track object to Trace container
+        static int CallBackAddTrack(void* data, int argc, sqlite3_stmt* stmt, char** azColName);
+        // sqlite3_exec callback to load saved track information and add track object to Trace container
+        static int CallBackLoadTrack(void* data, int argc, sqlite3_stmt* stmt, char** azColName);
+        // sqlite3_exec callback to add flowtrace record to FlowTrace container.
         static int CallbackAddFlowTrace(void *data, int argc, sqlite3_stmt* stmt, char **azColName);
-    // sqlite3_exec callback to add extended info record ExtData container.
-    // @param data - pointer to callback caller argument
-    // @param argc - number of columns in the query
-    // @param argv - pointer to row values
-    // @param azColName - pointer to column names 
-    // @return SQLITE_OK if successful
+        // sqlite3_exec callback to add extended info record ExtData container.
         static int CallbackAddExtInfo(void* data, int argc, sqlite3_stmt* stmt, char** azColName);
-    // sqlite3_exec callback to add essential info into ExtData container.
-    // @param data - pointer to callback caller argument
-    // @param argc - number of columns in the query
-    // @param argv - pointer to row values
-    // @param azColName - pointer to column names 
-    // @return SQLITE_OK if successful
+        // sqlite3_exec callback to add essential info into ExtData container.
         static int CallbackAddEssentialInfo(void* data, int argc, sqlite3_stmt* stmt, char** azColName);
-    // sqlite3_exec callback to add arguments info into ExtData container.
-    // @param data - pointer to callback caller argument
-    // @param argc - number of columns in the query
-    // @param argv - pointer to row values
-    // @param azColName - pointer to column names 
-    // @return SQLITE_OK if successful
+        // sqlite3_exec callback to add arguments info into ExtData container.
         static int CallbackAddArgumentsInfo(void* data, int argc, sqlite3_stmt* stmt, char** azColName);
-
-    // sqlite3_exec callback to calculate graph level for an event and store it into trace object map array
-    // @param data - pointer to callback caller argument
-    // @param argc - number of columns in the query
-    // @param argv - pointer to row values
-    // @param azColName - pointer to column names  
-    // @return SQLITE_OK if successful
-       static int CalculateEventLevels(void* data, int argc, sqlite3_stmt* stmt, char** azColName);
-    // sqlite3_exec callback to collect minimum/maximum timestamps and minimu/maximum value/level
-    // @param data - pointer to callback caller argument
-    // @param argc - number of columns in the query
-    // @param argv - pointer to row values
-    // @param azColName - pointer to column names
-    // @return SQLITE_OK if successful
-        static int CallbackGetTrackProperties(void* data, int argc, sqlite3_stmt* stmt,
-                                              char** azColName);
-       // sqlite3_exec callback to collect number of records in te track
-       // @param data - pointer to callback caller argument
-       // @param argc - number of columns in the query
-       // @param argv - pointer to row values
-       // @param azColName - pointer to column names
-       // @return SQLITE_OK if successful
-        static int CallbackGetTrackRecordsCount(void* data, int argc, sqlite3_stmt* stmt,
-                                                char** azColName);
-        static int CallbackTrimTableQuery(void* data, int argc, sqlite3_stmt* stmt,
-                                          char** azColName);
-
+        // sqlite3_exec callback to calculate graph level for an event and store it into trace object map array
+        static int CalculateEventLevels(void* data, int argc, sqlite3_stmt* stmt, char** azColName);
+        // sqlite3_exec callback to collect minimum/maximum timestamps and minimu/maximum value/level
+        static int CallbackGetTrackProperties(void* data, int argc, sqlite3_stmt* stmt, char** azColName);
+        // sqlite3_exec callback to collect number of records in te track
+        static int CallbackGetTrackRecordsCount(void* data, int argc, sqlite3_stmt* stmt, char** azColName);
+        // sqlite3_exec callback to collect existing tables in database
+        static int CallbackTrimTableQuery(void* data, int argc, sqlite3_stmt* stmt, char** azColName);
+        // sqlite3_exec callback to collect calculate histogram buckets
         static int CallBackLoadHistogram(void* data, int argc, sqlite3_stmt* stmt, char** azColName);
 
+    // ---------------------------------- Helpers ----------------------------------------
+
+        // collect service/identification parameters from table row 
         static void CollectTrackServiceData(ProfileDatabase* db,
             sqlite3_stmt* stmt, int column_index, char** azColName,
             rocprofvis_db_sqlite_track_service_data_t& service_data);
-        static const rocprofvis_dm_track_search_id_t GetTrackSearchId(rocprofvis_dm_track_category_t category);
+
+        // save track properties back into database for future use
         rocprofvis_dm_result_t SaveTrackProperties(Future* future);
+
+        // build histogram
         rocprofvis_dm_result_t BuildHistogram(Future* future, uint32_t desired_bins);
+
+        // hash histogram query and schema for version control 
         uint64_t GetHistogramQueryAndSchemaHash();
 
+        // get indeces of colums representing track identifiers
         void GetTrackIdentifierIndices(int column_index, char** azColName, rocprofvis_db_sqlite_track_identifier_index_t& track_ids_indices) override;
+
+        // process track discovery data and populate track parameters
         virtual int ProcessTrack(rocprofvis_dm_track_params_t& track_params, std::vector<rocprofvis_dm_string_t> & newqueries) = 0;
 
+        // Find track essential identifiers
         bool FindTrack(rocprofvis_dm_track_category_t category, uint64_t id_process, uint64_t id_subprocess, uint32_t db_instance, uint32_t& out_track) override;
 
     protected:

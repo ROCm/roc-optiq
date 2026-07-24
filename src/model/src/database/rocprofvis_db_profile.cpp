@@ -17,25 +17,6 @@ namespace DataModel
 {
 
 
-bool
-ProfileDatabase::isServiceColumn(const char* name)
-{
-    static const std::vector<std::string> service_columns = {
-        Builder::SPACESAVER_SERVICE_NAME,
-        Builder::AGENT_ID_SERVICE_NAME,
-        Builder::QUEUE_ID_SERVICE_NAME,
-        Builder::STREAM_ID_SERVICE_NAME,
-        Builder::OPERATION_SERVICE_NAME,
-        Builder::PROCESS_ID_SERVICE_NAME,
-        Builder::THREAD_ID_SERVICE_NAME
-    };
-    for (std::string service_column : service_columns)
-    {
-        if(service_column == name) return true;
-    }
-    return false;
-}
-
 int
 ProfileDatabase::CallbackAddStackTrace(void* data, int argc, sqlite3_stmt* stmt,
     char** azColName)
@@ -555,30 +536,6 @@ int ProfileDatabase::CallbackAddEssentialInfo(void* data, int argc, sqlite3_stmt
     return 0;
 }
 
-const rocprofvis_dm_track_search_id_t
-ProfileDatabase::GetTrackSearchId(rocprofvis_dm_track_category_t category)
-{
-    switch (category)
-    {
-    case kRocProfVisDmPmcTrack:
-        return kRPVTrackSearchIdCounters;
-    case kRocProfVisDmRegionTrack:
-    case kRocProfVisDmRegionMainTrack:
-        return kRPVTrackSearchIdThreads;
-    case kRocProfVisDmRegionSampleTrack:
-        return kRPVTrackSearchIdThreadSamples;
-    case kRocProfVisDmKernelDispatchTrack:
-        return kRPVTrackSearchIdDispatches;
-    case kRocProfVisDmMemoryAllocationTrack:
-        return kRPVTrackSearchIdMemAllocs;
-    case kRocProfVisDmMemoryCopyTrack:
-        return kRPVTrackSearchIdMemCopies;
-    case kRocProfVisDmStreamTrack:
-        return kRPVTrackSearchIdStreams;
-
-    }
-    return kRPVTrackSearchIdUnknown;
-}
 
 bool ProfileDatabase::FindTrack(rocprofvis_dm_track_category_t category, uint64_t id_process, uint64_t id_subprocess, uint32_t db_instance, uint32_t& out_track)
 {
@@ -859,7 +816,11 @@ void ProfileDatabase::BuildTableQueryMap(
         std::string filepath = filename;
         if (filepath.find(".yaml", filepath.size() - 5) != std::string::npos)
         {
-            YAML::Node config = YAML::LoadFile(filename);
+            std::filesystem::path safe_path;
+            if (!SanitizeFilePath(filepath, safe_path)) {
+                return result;
+            }
+            YAML::Node config = YAML::LoadFile(safe_path.string());
             auto db_files = config["rocprofiler-sdk"]["rocpd"]["files"];
             size_t pos = filepath.find_last_of("/\\");
             if (pos != std::string::npos)

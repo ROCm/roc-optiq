@@ -183,38 +183,6 @@ namespace DataModel
             return &s_null_data_exceptions_skip;
         }
 
-        // method to build a query to read time slice of records for single track 
-        // @param index - track index 
-        // @param tyte - query type
-        // @param query - reference to output query string  
-        // @return status of operation
-        rocprofvis_dm_result_t BuildTrackQuery(
-            rocprofvis_dm_index_t /*index*/,
-            rocprofvis_dm_index_t   /*type*/,
-            rocprofvis_dm_string_t& /*query*/,
-            uint32_t /*split_count*/,
-            uint32_t /*split_index*/) override{
-            ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN("Compute database does not build track query", kRocProfVisDmResultNotSupported);
-        }
-
-        // method to build a query to read time slice of records for all tracks in one shot 
-        // @param start - start timestamp of time slice 
-        // @param end - end timestamp of time slice 
-        // @param num - number of tracks
-        // @param tracks - uint32_t array with track IDs 
-        // @param query - reference to query string 
-        // @param slices - reference map array for storing slice handlers for multi-track request   
-        // @return status of operation  
-        rocprofvis_dm_result_t BuildSliceQuery(
-            rocprofvis_dm_timestamp_t /*start*/,
-            rocprofvis_dm_timestamp_t /*end*/,
-            rocprofvis_db_num_of_tracks_t /*num*/,
-            rocprofvis_db_track_selection_t /*tracks*/,
-            rocprofvis_dm_string_t& /*query*/,
-            slice_array_t& /*slices*/) override{
-            ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN("Compute database does not build slice query", kRocProfVisDmResultNotSupported);
-        }
-
         rocprofvis_dm_result_t BuildTableQuery(
             rocprofvis_dm_table_use_case_enum_t /*use_case*/,
             rocprofvis_dm_timestamp_t /*start*/,

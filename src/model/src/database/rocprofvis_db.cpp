@@ -14,6 +14,25 @@ namespace RocProfVis
 namespace DataModel
 {
 
+
+bool Database::SanitizeFilePath(const std::string& filename, std::filesystem::path& out_path) {
+    std::filesystem::path input(filename);
+
+    if (!input.is_absolute())
+        return false;
+
+    std::error_code ec;
+    std::filesystem::path canonical_path = std::filesystem::canonical(input, ec);
+    if (ec)
+        return false;
+
+    if (!std::filesystem::is_regular_file(canonical_path, ec) || ec)
+        return false;
+
+    out_path = canonical_path;
+    return true;
+}
+
 bool Database::IsNumber(const std::string& s) {
     std::istringstream iss(s);
     uint64_t d;
@@ -390,23 +409,6 @@ rocprofvis_dm_result_t   Database::ExecuteComputeQueryStatic(
     return db->ExecuteComputeQuery(use_case, query,object);
 }
 
-const char* Database::ProcessNameSuffixFor(rocprofvis_dm_track_category_t category){
-    switch(category){
-        case kRocProfVisDmPmcTrack:
-        case kRocProfVisDmKernelDispatchTrack:
-        case kRocProfVisDmMemoryAllocationTrack:
-        case kRocProfVisDmMemoryCopyTrack:
-            return "GPU:";
-        case kRocProfVisDmRegionSampleTrack: 
-            return "Sample PID:";
-        case kRocProfVisDmRegionTrack:
-        case kRocProfVisDmRegionMainTrack:
-            return "Thread PID:";
-        case kRocProfVisDmStreamTrack: 
-            return "STREAM:";
-    }
-    return "";
-}
 
 const char* Database::SubProcessNameSuffixFor(rocprofvis_dm_track_category_t category){
     switch(category){

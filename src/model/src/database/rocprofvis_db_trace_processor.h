@@ -103,6 +103,12 @@ class GoogleTraceProcessor : public QueryManager
     static rocprofvis_db_type_t Detect(rocprofvis_db_filename_t filename);
 
     private:
+        // ------------------------------SQL query callbacks-----------------------------------
+        // @param data - pointer to callback caller argument
+        // @param argc - number of columns in the query
+        // @param argv - pointer to row values
+        // @param azColName - pointer to column names  
+        // @return SQLITE_OK if successful
 
         static int CallbackCacheTable(void *data, int argc, sqlite3_stmt* stmt, char **azColName);
         static int CallbackAddTrack(void* data, int argc, sqlite3_stmt* stmt, char** azColName);
@@ -119,11 +125,10 @@ class GoogleTraceProcessor : public QueryManager
         rocprofvis_dm_result_t BuildHistogram(Future* future, uint32_t desired_bins);
         rocprofvis_dm_result_t CreateIndexes();
 
-    private:
-        std::mutex    m_lock;
-        QueryFactory  m_query_factory;
 
     protected:
+
+        // ----------------------------------Query builders------------------------------------------
 
         rocprofvis_dm_result_t BuildTrackQuery(
             rocprofvis_dm_index_t index,
@@ -141,6 +146,7 @@ class GoogleTraceProcessor : public QueryManager
             const rocprofvis_dm_event_operation_t operation) override;
 
         void BuildSliceQueryMap(slice_query_map_t& slice_query_map, rocprofvis_dm_track_params_t* props) override;
+
         void BuildTableQueryMap(
             rocprofvis_db_num_of_tracks_t num,
             rocprofvis_db_track_selection_t tracks,
@@ -148,13 +154,16 @@ class GoogleTraceProcessor : public QueryManager
             rocprofvis_dm_string_table_filters_t string_table_filters,
             std::vector<slice_query_map_t>& slice_query_map_array) override;
 
+        // ---------------------------------- Helpers ----------------------------------------
         rocprofvis_dm_result_t RemapStringId(uint64_t id, rocprofvis_db_string_type_t type, uint32_t node, uint64_t& result) override { result = id; return kRocProfVisDmResultSuccess; };
         rocprofvis_dm_track_category_t GetRegionTrackCategory() override { return kRocProfVisDmRegionTrack; }
         void GetTrackIdentifierIndices(int column_index, char** azColName, rocprofvis_db_sqlite_track_identifier_index_t& track_ids_indices) override;
         bool FindTrack(rocprofvis_dm_track_category_t category, uint64_t id_process, uint64_t id_subprocess, uint32_t db_instance, uint32_t& out_track) override;
 
-        private:
+     private:
 
+            std::mutex    m_lock;
+            QueryFactory  m_query_factory;
             string_map_t m_string_map; //temporary map to reuse string
             track_map_t m_track_map; //quick track remapping
 

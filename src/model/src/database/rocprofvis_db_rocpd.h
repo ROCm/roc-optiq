@@ -63,52 +63,32 @@ public:
     // @return size of memory used by the class
     rocprofvis_dm_size_t GetMemoryFootprint(void) override;
 
+    // trim database by provided start and end timestampt
     rocprofvis_dm_result_t SaveTrimmedData(rocprofvis_dm_timestamp_t start,
                                            rocprofvis_dm_timestamp_t end,
                                            rocprofvis_dm_charptr_t new_db_path,
                                            Future* future) override;
 
+    
+
+protected:
+
+    // ---------------------------------- Helpers ----------------------------------------
+
     rocprofvis_dm_result_t RemapStringId(uint64_t id, rocprofvis_db_string_type_t type, uint32_t node, uint64_t & result) override;
 
     rocprofvis_dm_result_t BuildTableStringIdFilter(
-                                    rocprofvis_dm_num_string_table_filters_t num_string_table_filters, 
-                                    rocprofvis_dm_string_table_filters_t string_table_filters,
-                                    table_string_id_filter_map_t& filter) override;
+        rocprofvis_dm_num_string_table_filters_t num_string_table_filters, 
+        rocprofvis_dm_string_table_filters_t string_table_filters,
+        table_string_id_filter_map_t& filter) override;
 
     rocprofvis_dm_string_t GetEventOperationQuery(
-                                        const rocprofvis_dm_event_operation_t operation) override;
+        const rocprofvis_dm_event_operation_t operation) override;
 
     rocprofvis_dm_result_t StringIndexToId(
-                                        rocprofvis_dm_index_t index, std::vector<rocprofvis_db_string_id_t>& id) override;
-
-    rocprofvis_dm_string_t GetEventTrackQuery( const rocprofvis_dm_track_category_t category);
-    rocprofvis_dm_string_t GetEventLevelQuery( const rocprofvis_dm_track_category_t category);
-    rocprofvis_dm_string_t GetEventSliceQuery( const rocprofvis_dm_track_category_t category);
+        rocprofvis_dm_index_t index, std::vector<rocprofvis_db_string_id_t>& id) override;
 
     int ProcessTrack(rocprofvis_dm_track_params_t& track_params, std::vector<rocprofvis_dm_string_t> &  newqueries) override;
-    
-private:
-
-    // sqlite3_exec callback to process string list query and add string object to Trace container
-    // @param data - pointer to callback caller argument
-    // @param argc - number of columns in the query
-    // @param argv - pointer to row values
-    // @param azColName - pointer to column names
-    // @return SQLITE_OK if successful
-    static int CallBackAddString(void *data, int argc, sqlite3_stmt* stmt, char **azColName);
-    // sqlite3_exec callback to collect Agent/Queue/Process dependency
-    // @param data - pointer to callback caller argument
-    // @param argc - number of columns in the query
-    // @param argv - pointer to row values
-    // @param azColName - pointer to column names
-    // @return SQLITE_OK if successful
-    static int CallBackAgentToProcess(void* data, int argc, sqlite3_stmt* stmt, char** azColName);
-
-    // map array for string indexes remapping. Main reason for remapping is older rocpd schema keeps duplicated symbols, one per GPU 
-    string_index_map_t m_string_index_map; // id to index
-    string_id_map_t m_string_id_map; // index to id
-    queue_pid_map_t m_pid_map;
-    RocpdMetadataVersionControl m_metadata_version_control;
 
     // method to remap string IDs. Main reason for remapping is older rocpd schema keeps duplicated symbols, one per GPU 
     // @param record - event record structure
@@ -121,10 +101,56 @@ private:
     // @return True if remapped
     const bool RemapStringIdHelper(uint64_t & id);
 
+    std::string GetLevelSchemaHashStr();
+
+private:
+
+    // ------------------------------SQL query callbacks--------------------------------------
+    // @param data - pointer to callback caller argument
+    // @param argc - number of columns in the query
+    // @param argv - pointer to row values
+    // @param azColName - pointer to column names  
+    // @return SQLITE_OK if successful
+    // 
+    // sqlite3_exec callback to process string list query and add string object to Trace container
+    static int CallBackAddString(void *data, int argc, sqlite3_stmt* stmt, char **azColName);
+    // sqlite3_exec callback to collect Agent/Queue/Process dependency
+    static int CallBackAgentToProcess(void* data, int argc, sqlite3_stmt* stmt, char** azColName);
+
+    // map array for string indexes remapping. Main reason for remapping is older rocpd schema keeps duplicated symbols, one per GPU 
+    string_index_map_t m_string_index_map; // id to index
+    string_id_map_t m_string_id_map; // index to id
+    queue_pid_map_t m_pid_map;
+    RocpdMetadataVersionControl m_metadata_version_control;
+
+    // ----------------------------------Query builders------------------------------------------
+
+    rocprofvis_dm_string_t GetEventTrackQuery( const rocprofvis_dm_track_category_t category);
+    rocprofvis_dm_string_t GetEventLevelQuery( const rocprofvis_dm_track_category_t category);
+    rocprofvis_dm_string_t GetEventSliceQuery( const rocprofvis_dm_track_category_t category);
+
+    // ---------------------------------- Helpers ----------------------------------------------
+
     const rocprofvis_event_data_category_map_t* GetCategoryEnumMap() override
     {
         return &s_rocpd_categorized_data;
     };
+    rocprofvis_dm_track_category_t GetRegionTrackCategory() override 
+    {
+        return kRocProfVisDmRegionTrack;
+    }
+    MetadataVersionControl* GetMetadataVersionControl() override 
+    { 
+        return &m_metadata_version_control; 
+    };
+    rocprofvis_dm_result_t  Cleanup(Future* future, bool rebuild) override 
+    {
+        return m_metadata_version_control.CleanupDatabase(future, rebuild);
+    };
+
+    rocprofvis_dm_result_t CreateIndexes();
+
+    // --------------------------------Null value handlers-------------------------------------- 
     const rocprofvis_null_data_exceptions_int* GetNullDataExceptionsInt() override
     {
         return &s_null_data_exception_int;
@@ -137,25 +163,8 @@ private:
     {
         return &s_null_data_exceptions_skip;
     }
-    rocprofvis_dm_track_category_t GetRegionTrackCategory() override 
-    {
-        return kRocProfVisDmRegionTrack;
-    }
 
-    MetadataVersionControl* GetMetadataVersionControl() override 
-    { 
-        return &m_metadata_version_control; 
-    };
 
-    rocprofvis_dm_result_t  Cleanup(Future* future, bool rebuild) override { return m_metadata_version_control.CleanupDatabase(future, rebuild); };
-
-    private:
-        rocprofvis_dm_result_t CreateIndexes();
-
-    protected:
-        std::string GetLevelSchemaHashStr();
-
-    private:
 
         inline static const rocprofvis_event_data_category_map_t
             s_rocpd_categorized_data = {

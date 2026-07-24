@@ -13,6 +13,7 @@
 #include <mutex>
 #include <shared_mutex>
 #include <condition_variable>
+#include <filesystem>
 
 namespace RocProfVis
 {
@@ -247,26 +248,7 @@ class Database
                                                     Future* object);
        virtual void InterruptQuery(void* connection) { (void) connection; };
 
-       // returns pointer to cached tables map array
-       DatabaseCache*                  CachedTables(uint32_t node_id) {return &m_cached_tables[node_id];}
 
-	   TrackLookup*                    TrackTracker() { return& m_track_lookup; }
-       // return current number of tracks
-       rocprofvis_dm_size_t            NumTracks() { return m_track_properties.size(); }
-       // returns pointer to track properties structure. Takes index of track as a parameter 
-       rocprofvis_dm_track_params_t*   TrackPropertiesAt(rocprofvis_dm_index_t index) { return m_track_properties[index].get(); }
-       void CreateTracksOrderRanking();
-
-       bool IsTrackIndexValid(rocprofvis_dm_index_t index) { return index < m_track_properties.size(); }
-
-
-       static rocprofvis_dm_table_t GetInfoTableHandle(const rocprofvis_dm_database_t object, rocprofvis_dm_node_id_t node, rocprofvis_dm_charptr_t table_name);
-       static size_t GetInfoTableNumColumns(rocprofvis_dm_table_t object);
-       static size_t GetInfoTableNumRows(rocprofvis_dm_table_t object);
-       static const char* GetInfoTableColumnName(rocprofvis_dm_table_t object, size_t column_index);
-       static rocprofvis_dm_table_row_t GetInfoTableRowHandle(rocprofvis_dm_table_t object, size_t row_index);
-       static const char* GetInfoTableRowCellValue(rocprofvis_dm_table_row_t object, size_t column_index);
-       static const size_t GetInfoTableRowNumCells(rocprofvis_dm_table_row_t object);
 
     private:
     /************************static methods to be used as a parameter to std::thread**********************/
@@ -471,6 +453,7 @@ class Database
 
 
     protected:
+        // ---------------------------------------------Getters---------------------------------------
         guid_list_t& DbInstances() { return m_db_instances; }
         uint32_t NumDbInstances() { return static_cast<uint32_t>(m_db_instances.size()); }
         std::string GuidAt(int index) { return index < m_db_instances.size() ? m_db_instances[index].second : std::string(); }
@@ -486,6 +469,18 @@ class Database
         rocprofvis_dm_track_params_it   TrackPropertiesEnd() { return m_track_properties.end(); }
         // returns pointer to trace properties, which contains shared trace information
         rocprofvis_dm_trace_params_t*   TraceProperties() { return m_binding_info->trace_properties; }
+        // returns pointer to cached tables map array
+        DatabaseCache*                  CachedTables(uint32_t node_id) {return &m_cached_tables[node_id];}
+
+        TrackLookup*                    TrackTracker() { return& m_track_lookup; }
+        // return current number of tracks
+        rocprofvis_dm_size_t            NumTracks() { return m_track_properties.size(); }
+        // returns pointer to track properties structure. Takes index of track as a parameter 
+        rocprofvis_dm_track_params_t*   TrackPropertiesAt(rocprofvis_dm_index_t index) { return m_track_properties[index].get(); }
+        // validated track index
+        bool                            IsTrackIndexValid(rocprofvis_dm_index_t index) { return index < m_track_properties.size(); }
+
+        // ---------------------------------------------Helpers---------------------------------------
         // register new track
         // @param props - track properties structure
         // @return status of operation
@@ -507,25 +502,31 @@ class Database
         // @return status of operation
         virtual rocprofvis_dm_result_t  RemapStringIds(
                                                                 rocprofvis_db_record_data_t & record) { (void) record; return kRocProfVisDmResultSuccess;};
-        virtual rocprofvis_dm_result_t RemapStringIds(
-                                                                rocprofvis_db_flow_data_t& record) { (void) record; return kRocProfVisDmResultSuccess;};
+        virtual rocprofvis_dm_result_t  RemapStringIds(
+                                                                rocprofvis_db_flow_data_t & record) { (void) record; return kRocProfVisDmResultSuccess;};
         virtual rocprofvis_dm_result_t  StringIndexToId(        
                                                                 rocprofvis_dm_index_t index, std::vector<rocprofvis_db_string_id_t>& id) { (void) index; (void) id; return kRocProfVisDmResultSuccess;};
 
-        // return suffix to process name for provided track category ('PID', 'Agent')
-        // @param category - track category
-        // @return track process name suffix  ('PID', 'Agent')      
-        static const char*              ProcessNameSuffixFor(   
-                                                                rocprofvis_dm_track_category_t category);
         // return suffix to sub-process name for provided track category ('TID', 'Queue')
         // @param category - track category
         // @return track sub-process name suffix  ('TID', 'Queue')  
-        static const char*              SubProcessNameSuffixFor(
-                                                                rocprofvis_dm_track_category_t category);
-        // check if string is number
-        // @param s - string to check
-        // @return True if number
+        static const char*              SubProcessNameSuffixFor(rocprofvis_dm_track_category_t category);
+        
+        // create tracks ranking so they can be sorted accordingly in UI
+        void                            CreateTracksOrderRanking();
+
+        //--------------------------------------Static helpers-----------------------------------------------------------------
+        static bool SanitizeFilePath(const std::string& filename, std::filesystem::path& out_path);
         static bool IsNumber(const std::string& s);
+
+        //--------------------------------------Direct interface to info tables-----------------------------------------------------------------
+        static rocprofvis_dm_table_t GetInfoTableHandle(const rocprofvis_dm_database_t object, rocprofvis_dm_node_id_t node, rocprofvis_dm_charptr_t table_name);
+        static size_t GetInfoTableNumColumns(rocprofvis_dm_table_t object);
+        static size_t GetInfoTableNumRows(rocprofvis_dm_table_t object);
+        static const char* GetInfoTableColumnName(rocprofvis_dm_table_t object, size_t column_index);
+        static rocprofvis_dm_table_row_t GetInfoTableRowHandle(rocprofvis_dm_table_t object, size_t row_index);
+        static const char* GetInfoTableRowCellValue(rocprofvis_dm_table_row_t object, size_t column_index);
+        static const size_t GetInfoTableRowNumCells(rocprofvis_dm_table_row_t object);
 
     public:
         // declare DatabaseCache as friend class, for having access to protected members

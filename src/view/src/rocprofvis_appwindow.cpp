@@ -15,6 +15,7 @@
 #include "rocprofvis_project.h"
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_hotkey_manager.h"
+#include "rocprofvis_render_scheduler.h"
 #include "rocprofvis_settings_panel.h"
 #include "rocprofvis_version.h"
 #include "rocprofvis_utils.h"
@@ -635,6 +636,8 @@ AppWindow::RequestExitIfProviderCleanupsComplete()
 void
 AppWindow::Update()
 {
+    RenderScheduler::GetInstance().BeginFrame();
+
 #ifdef ROCPROFVIS_HAVE_NATIVE_FILE_DIALOG
     UpdateNativeFileDialog();
 #endif
@@ -671,17 +674,16 @@ AppWindow::Update()
 bool
 AppWindow::WantsContinuousRender()
 {
-    if(!m_provider_cleanup_jobs.empty() || m_disable_app_interaction ||
-       m_shutdown_requested || EventManager::GetInstance()->HasPendingEvents() ||
-       NotificationManager::GetInstance().HasActiveNotifications() ||
-       AppMonitor::GetInstance()->HasPendingOperations())
+    // Animations and render-driven work push a frame request from their own
+    // Update()/Render() via RenderScheduler, so no per-feature branch is needed
+    // here.
+    if(RenderScheduler::GetInstance().WantsRender())
     {
         return true;
     }
 
-    // Keep rendering while the log viewer is open and unpaused so new log lines
-    // appear live instead of waiting for the next input to wake the idle loop.
-    if(LogViewer::GetInstance()->IsLiveUpdating())
+    if(!m_provider_cleanup_jobs.empty() || m_disable_app_interaction ||
+       m_shutdown_requested || EventManager::GetInstance()->HasPendingEvents())
     {
         return true;
     }
@@ -694,19 +696,9 @@ AppWindow::WantsContinuousRender()
     }
 #endif
 
-    // Only the active tab renders, so only it can have render-driven work with
-    // no events/requests yet (e.g. the timeline loading-timer debounce).
-    Project* current_project = GetCurrentProject();
-    if(current_project)
-    {
-        RootView* current_root =
-            dynamic_cast<RootView*>(current_project->GetView().get());
-        if(current_root && current_root->WantsContinuousRender())
-        {
-            return true;
-        }
-    }
-
+    // Polled across every tab (not just the active one) so background loads keep
+    // progressing. kLoading spans the whole load even when the pending count
+    // briefly hits zero between stages, so we never freeze mid-load.
     bool wants_render = false;
     for(const auto& [id, project] : m_projects)
     {
@@ -714,8 +706,6 @@ AppWindow::WantsContinuousRender()
         if(root_view)
         {
             DataProvider* data_provider = root_view->GetDataProvider();
-            // kLoading spans the whole initial load, even when the pending count
-            // briefly drops to zero between stages, so we never freeze mid-load.
             if(data_provider &&
                (data_provider->GetState() == ProviderState::kLoading ||
                 data_provider->GetPendingRequestCount() > 0))

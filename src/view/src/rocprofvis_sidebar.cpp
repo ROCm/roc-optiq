@@ -6,6 +6,7 @@
 #include "widgets/rocprofvis_gui_helpers.h"
 #include "rocprofvis_data_provider.h"
 #include "rocprofvis_events.h"
+#include "rocprofvis_render_scheduler.h"
 #include "rocprofvis_track_item.h"
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_timeline_selection.h"
@@ -215,18 +216,24 @@ SideBar::Render()
                 m_reveal_scroll_frames = 0;
                 m_reveal_path.clear();
             }
-            else if(m_reveal_scroll_frames > 0)
+            else
             {
-                // Rebuilt each frame: the tree may have been rebuilt since the
-                // last one, invalidating cached node pointers.
-                m_reveal_path.clear();
-                m_reveal_leaf               = nullptr;
-                m_reveal_leaf_in_processors = false;
-                if(!sidebar_tree.root || !BuildRevealPath(*sidebar_tree.root, false))
+                RenderScheduler::GetInstance().RequestRender();
+
+                if(m_reveal_scroll_frames > 0)
                 {
-                    m_reveal_active        = false;
-                    m_reveal_scroll_frames = 0;
+                    // Rebuilt each frame: the tree may have been rebuilt since
+                    // the last one, invalidating cached node pointers.
                     m_reveal_path.clear();
+                    m_reveal_leaf               = nullptr;
+                    m_reveal_leaf_in_processors = false;
+                    if(!sidebar_tree.root ||
+                       !BuildRevealPath(*sidebar_tree.root, false))
+                    {
+                        m_reveal_active        = false;
+                        m_reveal_scroll_frames = 0;
+                        m_reveal_path.clear();
+                    }
                 }
             }
         }

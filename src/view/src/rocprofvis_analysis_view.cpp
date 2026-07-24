@@ -23,9 +23,10 @@ constexpr size_t   COMPARE_SOURCE_A_INDEX         = 0;
 constexpr size_t   COMPARE_SOURCE_B_INDEX         = 1;
 constexpr uint64_t COMPARE_EVENT_TABLE_A_CLIENT_ID = 1;
 constexpr uint64_t COMPARE_EVENT_TABLE_B_CLIENT_ID = 2;
-constexpr float    COMPARE_EVENT_TABLE_MIN_WIDTH = 280.0f;
+constexpr float    COMPARE_EVENT_TABLE_MIN_WIDTH     = 280.0f;
 constexpr float    COMPARE_CARD_MARGIN               = 4.0f;
-constexpr uint64_t EVENT_TABLE_DEFAULT_SORT_COLUMN = 1;
+constexpr float    COMPARE_SOURCE_TITLE_GAP_FACTOR   = 4.0f;
+constexpr uint64_t EVENT_TABLE_DEFAULT_SORT_COLUMN   = 1;
 
 AnalysisView::AnalysisView(DataProvider& dp, std::shared_ptr<TrackTopology> topology,
                            std::shared_ptr<TimelineSelection>  timeline_selection,
@@ -256,8 +257,8 @@ AnalysisView::RenderCompareSourceTitle(size_t source_index)
     SettingsManager& settings = SettingsManager::GetInstance();
 
     RenderCompareSourceBadge(*source, settings);
-    // Extra gap so the A/B badge is not crowded against the source name.
-    ImGui::SameLine(0.0f, ImGui::GetStyle().ItemSpacing.x * 2.0f);
+    ImGui::SameLine(
+        0.0f, ImGui::GetStyle().ItemSpacing.x * COMPARE_SOURCE_TITLE_GAP_FACTOR);
 
     const std::string& label = source->name.empty() ? source->path : source->name;
     const std::string  summary =

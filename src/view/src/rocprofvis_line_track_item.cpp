@@ -30,9 +30,7 @@ constexpr float Y_AXIS_LABEL_SPACING_FACTOR = 2.5f;
 // Interior ticks/labels/grid lines only show above this height.
 constexpr float Y_AXIS_LABEL_MIN_TRACK_HEIGHT = 2.0f * DEFAULT_TRACK_HEIGHT;
 
-// Bit-for-bit comparison for cache invalidation. Exact equality is the intent
-// (a changed bit pattern means an input changed), and comparing the raw
-// representation sidesteps fragile floating-point == comparisons.
+// Bit-for-bit compare so cache invalidation doesn't depend on float ==.
 template <typename T>
 static bool
 BitwiseEqual(T a, T b)
@@ -466,11 +464,8 @@ LineTrackItem::UpdateYAxisTicks()
     const double max_v       = m_max_y.Value();
     const float  line_h      = ImGui::GetTextLineHeight();
 
-    // Ticks only depend on the plot height, the Y range, and the text height, so
-    // reuse the cached vector unless one of those has changed since last frame.
-    // A bit-for-bit match means nothing changed; each input is recomputed
-    // identically every frame, so a spurious miss only costs one redundant
-    // regeneration, never a wrong result.
+    // Reuse the cached ticks unless the plot height, Y range, or text height
+    // changed since the last frame.
     if(BitwiseEqual(plot_height, m_cached_ticks_height) &&
        BitwiseEqual(min_v, m_cached_ticks_min) &&
        BitwiseEqual(max_v, m_cached_ticks_max) &&

@@ -196,7 +196,15 @@ cmake --build build/macos-release --preset "macOS Release Build" --parallel 4
 
 ---
 
-## Crypto backend (SSH / remote features)
+## Remote / SSH support
+
+Remote/SSH connectivity and remote profiling are opt-in and **disabled by
+default** (the feature set is in development). Enable it at configure time with
+`-DROCPROFVIS_ENABLE_REMOTE=ON`. When enabled, the build pulls in the SSH
+transport (`libssh2`), a crypto backend, and the OS credential vault used to
+persist SSH secrets. Each of these has its own dependency notes below.
+
+### Crypto backend
 
 The SSH and remote-profiling features use `libssh2`, which needs a crypto backend selected at configure time via `CRYPTO_BACKEND`.
 
@@ -241,6 +249,52 @@ Example (OpenSSL backend on Linux):
 ```bash
 sudo apt install -y libssl-dev
 cmake -B build/linux-release --preset "linux-release" -DCRYPTO_BACKEND=OpenSSL
+cmake --build build/linux-release --preset "Linux Release Build" --parallel 4 --target package
+```
+
+### Credential storage (SSH secret vault)
+
+When remote/SSH support is enabled, the app can persist SSH passwords and
+key passphrases in the operating system's credential vault rather than
+prompting for them on every connect. This is handled by `SecretStore`
+(`src/view/src/remote/rocprofvis_secret_store.cpp`), which links a different
+backend per platform:
+
+| Platform | Backend | Extra dependency to install |
+|----------|---------|------------------------------|
+| Windows | Windows Credential Manager (`Advapi32` / `wincred.h`) | None — part of the Windows SDK |
+| macOS | Keychain (`Security` + `CoreFoundation` frameworks) | None — part of the system SDK |
+| Linux | libsecret (Secret Service / freedesktop.org, e.g. GNOME Keyring or KWallet) | `libsecret-1` development package (**optional**) |
+
+On Windows and macOS the credential store is always available and needs nothing
+extra installed. On Linux it is **optional**: CMake probes for `libsecret-1`
+via `pkg-config` at configure time.
+
+- If found, it is linked and `ROCPROFVIS_HAVE_LIBSECRET` is defined, enabling
+  secure persistence of SSH secrets.
+- If **not** found, CMake emits a warning and `SecretStore` compiles a stub
+  that reports itself unavailable. The build still succeeds, but SSH secrets
+  are never persisted — the user is prompted at connect time instead (secrets
+  are never written to disk in plaintext).
+
+To enable secure credential storage on Linux, install the development package
+before configuring:
+
+| Platform | Install |
+|----------|---------|
+| Linux (Ubuntu/Debian) | `sudo apt install -y libsecret-1-dev` |
+| Linux (RHEL/Rocky/Oracle) | `sudo dnf install -y libsecret-devel` |
+
+At runtime, a Secret Service provider (e.g. `gnome-keyring` or `kwallet` with
+its Secret Service interface) must be running for storage/retrieval to
+actually work; if none is present, `SecretStore::IsAvailable()` returns false
+and the app falls back to prompting.
+
+Example (remote support with credential storage on Ubuntu):
+
+```bash
+sudo apt install -y libsecret-1-dev
+cmake -B build/linux-release --preset "linux-release" -DROCPROFVIS_ENABLE_REMOTE=ON
 cmake --build build/linux-release --preset "Linux Release Build" --parallel 4 --target package
 ```
 

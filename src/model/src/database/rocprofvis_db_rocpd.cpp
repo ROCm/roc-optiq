@@ -53,10 +53,21 @@ rocprofvis_dm_size_t RocpdDatabase::GetMemoryFootprint()
 
 int RocpdDatabase::ProcessTrack(rocprofvis_dm_track_params_t& track_params, std::vector<rocprofvis_dm_string_t> & newqueries)
 {
+    // Process a rocpd track descriptor and merge it into the global track registry.
+    // This routine either creates a new track entry or updates an existing one,
+    // while also preparing/refreshing query text for the UI-facing data model.
+
+    // Preconditions: caller must provide a valid backing database instance handle.
     ROCPROFVIS_ASSERT_MSG_RETURN(track_params.track_indentifiers.db_instance != nullptr, ERROR_NODE_KEY_CANNOT_BE_NULL, 1);
     DbInstance* db_instance = (DbInstance*)track_params.track_indentifiers.db_instance;
+
+    // Force source attribution so lookups and merges are scoped to rocpd tracks.
     track_params.track_indentifiers.source_type = kRPVSystemSourceRocpd;
+
+    // Find an existing track with the same identifiers for this DB GUID, if present.
     rocprofvis_dm_track_params_it it = TrackTracker()->FindTrackParamsIterator(track_params.track_indentifiers, db_instance->GuidIndex());
+
+    // Keep query definitions synchronized with the current/merged track state.
     UpdateQueryForTrack(it, track_params, newqueries);    
     if(it == TrackPropertiesEnd())
     {
@@ -150,7 +161,9 @@ int RocpdDatabase::ProcessTrack(rocprofvis_dm_track_params_t& track_params, std:
     }
     else
     {
-        // Streams merge several per-operation queries into one track; sum the counts.
+        // Existing track path:
+        // Streams may emit multiple per-operation entries that map to one logical track.
+        // Merge by accumulating record count and preserving load ownership metadata.
         it->get()->record_count += track_params.record_count;
         it->get()->load_id.insert(*track_params.load_id.begin());
     }

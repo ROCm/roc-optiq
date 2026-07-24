@@ -21,11 +21,6 @@ public:
     void Render();
 
 private:
-    struct FontSettings
-    {
-        bool dpi_scaling;
-        int  size_index;
-    };
     enum Category
     {
         Display,
@@ -46,18 +41,20 @@ private:
 
     bool ResetButton();
 
-    bool                     m_should_open;
-    bool                     m_settings_changed;
-    bool                     m_settings_confirmed;
-    Category                 m_category;
+    bool             m_should_open;
+    bool             m_settings_changed;
+    bool             m_settings_confirmed;
+    Category         m_category;
     SettingsManager& m_settings;
     FontManager&     m_fonts;
     UserSettings&    m_usersettings;
 
     const UserSettings& m_usersettings_default;
-    UserSettings m_usersettings_initial;
-    UserSettings m_usersettings_previous;
-    FontSettings m_font_settings;
+    UserSettings        m_usersettings_initial;
+    UserSettings        m_usersettings_previous;
+
+    // Pending font size index, applied to user settings on OK.
+    int m_pending_font_size_index;
 
     HotkeyActionId m_rebinding_action  = HotkeyActionId::kCount;
     bool           m_rebinding_primary = true;

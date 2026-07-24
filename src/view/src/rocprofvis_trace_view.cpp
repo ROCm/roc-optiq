@@ -30,6 +30,9 @@ namespace RocProfVis
 namespace View
 {
 
+constexpr ImVec2 MINIMAP_POPUP_SIZE(600.0f, 435.0f);
+constexpr ImVec2 MINIMAP_POPUP_MIN_SIZE(500.0f, 360.0f);
+
 TraceView::TraceView()
 : m_timeline_view(nullptr)
 , m_horizontal_split_container(nullptr)
@@ -385,8 +388,8 @@ TraceView::Render()
             popup_style.PushPopupStyles();
             popup_style.PushTitlebarColors();
 
-            float dpi = SettingsManager::GetInstance().GetDPI();
-            ImGui::SetNextWindowSize(ImVec2(400.0f * dpi, 290.0f * dpi));
+            ImGui::SetNextWindowSize(
+                GetResponsiveWindowSize(MINIMAP_POPUP_SIZE, MINIMAP_POPUP_MIN_SIZE));
             if(ImGui::Begin("Minimap", &m_show_minimap_popup,
                             ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse))
             {

@@ -355,8 +355,8 @@ ProfileDatabase::CallBackLoadTrack(void* data, int argc, sqlite3_stmt* stmt,
 
     // Restore reader-backed routing: reader tracks were saved with their reader track id,
     // legacy SQL tracks with -1 (kInvalidReaderTrackId) so they keep the query[] path.
-    track_params.reader_track_id = static_cast<size_t>(
-        db->Sqlite3ColumnInt64(func, stmt, azColName, kRpvDbTrackLoadReaderTrackId));
+    track_params.reader_track_id = profiler_hub::reader_types::track_id_t{ static_cast<size_t>(
+        db->Sqlite3ColumnInt64(func, stmt, azColName, kRpvDbTrackLoadReaderTrackId)) };
 
     db->ProcessTrack(track_params, callback_params->query);
 
@@ -2104,8 +2104,8 @@ ProfileDatabase::SaveTrackProperties(Future* future)
         std::string process_tag;
         std::string subproc_tag;
         std::string guid;
-        uint64_t    pid;
-        size_t      reader_track_id;
+        uint64_t                               pid;
+        profiler_hub::reader_types::track_id_t reader_track_id;
     } store_params;
 
     std::map<uint32_t, std::vector<store_params>> v;
@@ -2198,7 +2198,7 @@ ProfileDatabase::SaveTrackProperties(Future* future)
                 sqlite3_bind_int64(stmt, kRpvDbTrackLoadPID + 1, p.pid);
                 // Round-trips kInvalidReaderTrackId (SIZE_MAX) as -1 via int64.
                 sqlite3_bind_int64(stmt, kRpvDbTrackLoadReaderTrackId + 1,
-                                   static_cast<sqlite3_int64>(p.reader_track_id));
+                                   static_cast<sqlite3_int64>(p.reader_track_id.value));
             },
             it->first);
     }

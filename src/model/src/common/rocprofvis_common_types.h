@@ -11,6 +11,7 @@
 #include "rocprofvis_controller_enums.h"
 #include "rocprofvis_error_handling.h"
 #include "rocprofvis_shared_types.h"
+#include <profiler-hub/reader_types.hpp>
 #include <algorithm>
 #include <list>
 #include <map>
@@ -145,12 +146,14 @@ typedef struct
     std::set<uint32_t>                              load_id;
     // profiler-hub reader track id for reader-backed track types (cpu_thread migration);
     // kInvalidReaderTrackId when this track still uses the hand-rolled SQL query[] path.
-    size_t reader_track_id;
+    profiler_hub::reader_types::track_id_t reader_track_id;
 
 } rocprofvis_dm_track_params_t;
 
-// Sentinel: track is not reader-backed (uses the legacy query[] SQL path).
-#define kInvalidReaderTrackId (~static_cast<size_t>(0))
+// Sentinel: track is not reader-backed (uses the legacy query[] SQL path). The underlying
+// integer stays SIZE_MAX so the on-disk "SIZE_MAX <-> -1" invalid encoding is preserved.
+#define kInvalidReaderTrackId \
+    (profiler_hub::reader_types::track_id_t{ ~static_cast<size_t>(0) })
 
 // rocprofvis_dm_trace_params_t contains trace parameters and shared between data model
 // and database. Physically located in trace object and referenced by a pointer in binding

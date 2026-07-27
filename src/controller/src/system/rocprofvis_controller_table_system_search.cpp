@@ -3,7 +3,6 @@
 
 #include "rocprofvis_controller_table_system_search.h"
 #include "rocprofvis_controller_arguments.h"
-#include "rocprofvis_controller_reference.h"
 
 namespace RocProfVis
 {
@@ -40,11 +39,7 @@ EventSearchTable::UnpackArguments(Arguments& args, TableArguments*& out) const
         std::vector<std::string> string_table_filters;
         uint64_t table_type = static_cast<uint64_t>(kRPVControllerTableTypeSearchResults);
 
-        if (result == kRocProfVisResultSuccess)
-        {
-            result = args.GetUInt64(kRPVControllerTableArgsType, 0, &table_type);
-        }
-
+        result = args.GetUInt64(kRPVControllerTableArgsType, 0, &table_type);
         if(result == kRocProfVisResultSuccess &&
            (table_type == kRPVControllerTableTypeSearchResults ||
             table_type == kRPVControllerTableTypeSummaryKernelInstances))

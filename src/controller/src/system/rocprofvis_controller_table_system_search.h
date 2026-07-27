@@ -34,9 +34,9 @@ protected:
     void                GetCurrentArguments(TableArguments*& out) const override;
     void                SetCurrentArguments(TableArguments& in) override;
 
-    virtual bool                   ArgumentsChanged(SystemTableArguments& in) const;
-    virtual rocprofvis_result_t    UnpackUseCase(Arguments& args, rocprofvis_dm_table_use_case_enum_t& out) const;
-    virtual rocprofvis_dm_result_t BuildQuery(rocprofvis_dm_database_t db, TableArguments& args, uint64_t index, uint64_t count, bool count_only, char** out) const;
+    virtual bool                   ArgumentsChanged(SystemTableArguments& in) const override;
+    virtual rocprofvis_result_t    UnpackUseCase(Arguments& args, rocprofvis_dm_table_use_case_enum_t& out) const override;
+    virtual rocprofvis_dm_result_t BuildQuery(rocprofvis_dm_database_t db, TableArguments& args, uint64_t index, uint64_t count, bool count_only, char** out) const override;
 
 private:
     std::vector<std::string> m_string_table_filters;

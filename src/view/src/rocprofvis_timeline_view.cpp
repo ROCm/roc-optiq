@@ -12,8 +12,10 @@
 #include "rocprofvis_font_manager.h"
 #include "rocprofvis_line_track_item.h"
 #include "rocprofvis_measurement_controller.h"
+#include "rocprofvis_render_scheduler.h"
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_timeline_selection.h"
+#include "rocprofvis_timeline_track_options.h"
 #include "rocprofvis_utils.h"
 #include "spdlog/spdlog.h"
 #include "widgets/rocprofvis_notification_manager.h"
@@ -79,6 +81,7 @@ TimelineView::TimelineView(DataProvider&                          dp,
 , m_font_changed_token(EventManager::InvalidSubscriptionToken)
 , m_set_view_range_token(EventManager::InvalidSubscriptionToken)
 , m_timeline_time_range_changed_token(EventManager::InvalidSubscriptionToken)
+, m_track_visibility_token(EventManager::InvalidSubscriptionToken)
 , m_settings(SettingsManager::GetInstance())
 , m_last_data_req_v_width(0.0)
 , m_last_data_req_view_time_offset_ns(0.0)
@@ -103,6 +106,8 @@ TimelineView::TimelineView(DataProvider&                          dp,
 , m_histogram_pseudo_focus(false)
 , m_max_meta_scale_area_size(0.0f)
 , m_tpt(std::make_shared<TimePixelTransform>())
+, m_track_options_context_menu(
+      std::make_unique<TimelineTrackOptions>(*timeline_selection))
 , m_dragging_selection_start(false)
 , m_dragging_selection_end(false)
 , m_is_selecting_region(false)
@@ -190,7 +195,19 @@ TimelineView::TimelineView(DataProvider&                          dp,
         }
     };
     m_timeline_time_range_changed_token = EventManager::GetInstance()->Subscribe(
-        static_cast<int>(RocEvents::kTimelineTimeRangeChanged), time_range_changed_handler);
+        static_cast<int>(RocEvents::kTimelineTimeRangeChanged),
+        time_range_changed_handler);
+
+    m_track_visibility_token = EventManager::GetInstance()->Subscribe(
+        static_cast<int>(RocEvents::kTrackVisibilityChanged),
+        [this](std::shared_ptr<RocEvent> e) {
+            if(e && e->GetSourceId() == m_data_provider.GetTraceFilePath())
+            {
+                m_data_provider.DataModel().GetTimeline().UpdateHistogram(
+                    *m_tracks.get());
+                m_resize_activity = true;
+            }
+        });
 
     m_tracks = std::make_shared<std::vector<TrackItem*>>();
 
@@ -1005,6 +1022,8 @@ TimelineView::~TimelineView()
     EventManager::GetInstance()->Unsubscribe(
         static_cast<int>(RocEvents::kTimelineTimeRangeChanged),
         m_timeline_time_range_changed_token);
+    EventManager::GetInstance()->Unsubscribe(
+        static_cast<int>(RocEvents::kTrackVisibilityChanged), m_track_visibility_token);
 }
 
 void
@@ -1123,6 +1142,10 @@ TimelineView::Update()
         }
         m_reorder_request.handled = true;
         m_resize_activity         = false;
+        if(m_track_options_context_menu)
+        {
+            m_track_options_context_menu->Update();
+        }
         for(TrackItem* track : *m_tracks)
         {
             if(track)
@@ -1130,6 +1153,14 @@ TimelineView::Update()
                 track->Update();
             }
         }
+    }
+
+    // Loading-timer debounce, sticky-note drag and reorder auto-scroll advance
+    // only while rendering; keep rendering while any is active.
+    if(m_loading_timer.IsRunning() || m_dragged_sticky_id != INVALID_STICKY_ID ||
+       m_reorder_auto_scrolling)
+    {
+        RenderScheduler::GetInstance().RequestRender();
     }
 }
 
@@ -1650,17 +1681,6 @@ TimelineView::RenderGraphView()
 }
 
 bool
-TimelineView::WantsContinuousRender() const
-{
-    // The loading-timer debounce gates track-data requests and only advances
-    // while rendering, so keep rendering until it expires or the load stalls.
-    // Anchor drag and reorder auto-scroll both advance per frame, so keep
-    // rendering while either is active.
-    return m_loading_timer.IsRunning() || m_dragged_sticky_id != INVALID_STICKY_ID ||
-           m_reorder_auto_scrolling;
-}
-
-bool
 TimelineView::IsRequestDataNeeded()
 {
     bool request_data = false;
@@ -2109,17 +2129,9 @@ TimelineView::MakeGraphView()
                 ROCPROFVIS_ASSERT(m_data_provider.SetGraphIndex(track_id_at_index, i));
             }
             track_info = track_at_index_info;
-            display    = m_project_settings.DisplayTrack(track_id_at_index);
         }
 
-        if(track_info)
-        {
-            if(!display)
-            {
-                hidden_tracks.push_back(track_info->id);
-            }
-        }
-        else
+        if(!track_info)
         {
             // log warning (should this be an error?)
             spdlog::warn("Missing track meta data for track id {}", i);
@@ -2132,14 +2144,16 @@ TimelineView::MakeGraphView()
             case kRPVControllerTrackTypeEvents:
             {
                 // Create FlameChart
-                track = new FlameTrackItem(m_data_provider, track_info->id, display,
-                                           m_tpt, m_timeline_selection, m_measurement);
+                track = new FlameTrackItem(m_data_provider, track_info->id,
+                                           *m_track_options_context_menu, m_tpt,
+                                           m_timeline_selection, m_measurement);
                 break;
             }
             case kRPVControllerTrackTypeSamples:
             {
                 // Linechart
-                track = new LineTrackItem(m_data_provider, track_info->id, display, m_tpt,
+                track = new LineTrackItem(m_data_provider, track_info->id,
+                                          *m_track_options_context_menu, m_tpt,
                                           m_timeline_selection);
                 break;
             }
@@ -2157,7 +2171,7 @@ TimelineView::MakeGraphView()
         }
     }
 
-    m_data_provider.DataModel().GetTimeline().UpdateHistogram(hidden_tracks, false);
+    m_data_provider.DataModel().GetTimeline().UpdateHistogram(*m_tracks.get());
     UpdateMaxMetaAreaSize();
     m_histogram       = &tlm.GetHistogram();
     m_meta_map_made   = true;
@@ -2500,7 +2514,7 @@ TimelineView::RenderHistogram()
                 if(!is_global)
                 {
                     tl.ToggleNormalization();
-                    tl.UpdateHistogram({}, false);
+                    tl.UpdateHistogram(*m_tracks.get());
                 }
             }
             if(ImGui::MenuItem("Normalize: Visible Tracks", nullptr, !is_global))
@@ -2508,7 +2522,7 @@ TimelineView::RenderHistogram()
                 if(is_global)
                 {
                     tl.ToggleNormalization();
-                    tl.UpdateHistogram({}, false);
+                    tl.UpdateHistogram(*m_tracks.get());
                 }
             }
             ImGui::EndPopup();
@@ -3231,8 +3245,6 @@ TimelineViewProjectSettings::ToJson()
     {
         uint64_t id = tracks[i]->GetID();
         m_settings_json[JSON_KEY_GROUP_TIMELINE][JSON_KEY_TIMELINE_TRACK_ORDER][i] = id;
-        m_settings_json[JSON_KEY_GROUP_TIMELINE][JSON_KEY_TIMELINE_TRACK][id]
-                       [JSON_KEY_TIMELINE_TRACK_DISPLAY] = tracks[i]->IsDisplayed();
     }
 }
 
@@ -3262,32 +3274,6 @@ TimelineViewProjectSettings::Valid() const
             valid = (valid_count == track_order.size());
         }
     }
-    if(valid)
-    {
-        valid = false;
-        if(m_settings_json[JSON_KEY_GROUP_TIMELINE][JSON_KEY_TIMELINE_TRACK].isArray())
-        {
-            std::vector<jt::Json>& tracks =
-                m_settings_json[JSON_KEY_GROUP_TIMELINE][JSON_KEY_TIMELINE_TRACK]
-                    .getArray();
-            if(tracks.size() == m_timeline_view.m_tracks->size())
-            {
-                int valid_count = 0;
-                for(jt::Json& track_id : tracks)
-                {
-                    if(track_id[JSON_KEY_TIMELINE_TRACK_DISPLAY].isBool())
-                    {
-                        valid_count++;
-                    }
-                    else
-                    {
-                        break;
-                    }
-                }
-                valid = (valid_count == tracks.size());
-            }
-        }
-    }
     return valid;
 }
 
@@ -3296,14 +3282,6 @@ TimelineViewProjectSettings::TrackID(int index) const
 {
     return m_settings_json[JSON_KEY_GROUP_TIMELINE][JSON_KEY_TIMELINE_TRACK_ORDER][index]
         .getLong();
-}
-
-bool
-TimelineViewProjectSettings::DisplayTrack(uint64_t track_id) const
-{
-    return m_settings_json[JSON_KEY_GROUP_TIMELINE][JSON_KEY_TIMELINE_TRACK][track_id]
-                          [JSON_KEY_TIMELINE_TRACK_DISPLAY]
-                              .getBool();
 }
 
 LoadingTimer::LoadingTimer(uint64_t delay)

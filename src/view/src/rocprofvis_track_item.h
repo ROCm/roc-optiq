@@ -4,7 +4,6 @@
 #pragma once
 #include "rocprofvis_data_provider.h"
 #include "rocprofvis_event_manager.h"
-#include "rocprofvis_project.h"
 #include "rocprofvis_time_to_pixel.h"
 
 #include <deque>
@@ -19,6 +18,10 @@ inline constexpr float DEFAULT_TRACK_HEIGHT = 75.0f;
 
 class SettingsManager;
 class TrackItem;
+class TrackOptions;
+class CounterTrackOptions;
+class QueueTrackOptions;
+class TimelineTrackOptions;
 class TimePixelTransform;
 class TimelineSelection;
 
@@ -34,20 +37,6 @@ enum class TrackDataRequestState
     kRequesting,
     kTimeout,
     kError
-};
-
-class TrackProjectSettings : public ProjectSetting
-{
-public:
-    TrackProjectSettings(const std::string& project_id, TrackItem& track_item);
-    ~TrackProjectSettings() override;
-    void ToJson() override;
-    bool Valid() const override;
-
-    float Height() const;
-
-private:
-    TrackItem& m_track_item;
 };
 
 class Pill
@@ -96,8 +85,13 @@ private:
 
 class TrackItem
 {
+    friend TimelineTrackOptions;
+    friend TrackOptions;
+    friend CounterTrackOptions;
+    friend QueueTrackOptions;
+
 public:
-    TrackItem(DataProvider& dp, uint64_t id, bool display,
+    TrackItem(DataProvider& dp, uint64_t id, TimelineTrackOptions& track_options,
               std::shared_ptr<TimePixelTransform> tpt,
               std::shared_ptr<TimelineSelection>  timeline_selection = nullptr);
     virtual ~TrackItem();
@@ -139,11 +133,12 @@ public:
 
     float GetMaxMetaAreaScaleWidth() { return m_max_meta_area_scale_width; }
 
+    const TrackInfo* GetTrackInfo() const;
+
 protected:
     virtual void  RenderMetaArea();
     virtual void  RenderMetaAreaScale();
     virtual float GetMetaAreaTrailingWidth() const;
-    virtual void  RenderMetaAreaOptions() = 0;
     virtual void  RenderMetaAreaExpand();
     virtual void  RenderChart(float graph_width) = 0;
     virtual void  RenderResizeBar(const ImVec2& parent_size);
@@ -161,7 +156,6 @@ protected:
     const AnalysisTrackStatistics*      m_track_statistics;
     bool                                m_track_statistics_dirty;
     uint64_t                            m_track_id;
-    float                               m_track_height;
     float                               m_track_content_height;
     float                               m_min_track_height;
     bool                                m_track_height_changed;
@@ -176,7 +170,6 @@ protected:
     bool                                m_meta_area_clicked;
     float                               m_meta_area_scale_width;
     float                               m_max_meta_area_scale_width;
-    bool                                m_display;
     float                               m_reorder_grip_width;
     std::shared_ptr<TimePixelTransform> m_tpt;
     std::shared_ptr<TimelineSelection>  m_timeline_selection;
@@ -198,14 +191,16 @@ protected:
     std::string m_node_name;
     Pill*       m_node_pill;
 
+    // User configurable options.
+    std::unique_ptr<TrackOptions> m_options;
+    TimelineTrackOptions&         m_timeline_track_options;
+
 private:
     void RenderPills(ImVec2 region);
 
-    bool                            m_selected;
-    EventManager::SubscriptionToken m_selected_changed_token;
-
     std::vector<std::unique_ptr<Pill>> m_pills;
-    TrackProjectSettings               m_track_project_settings;
+    bool                               m_selected;
+    EventManager::SubscriptionToken    m_selected_changed_token;
 };
 
 }  // namespace View

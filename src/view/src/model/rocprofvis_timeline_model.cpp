@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 #include "rocprofvis_timeline_model.h"
+#include "rocprofvis_track_item.h"
 #include "spdlog/spdlog.h"
 
 #include <algorithm>
@@ -131,58 +132,33 @@ TimelineModel::ResizeHistogram(size_t size)
 
 // Mini-map access
 void
-TimelineModel::SetMiniMap(
-    std::map<uint64_t, std::tuple<std::vector<double>, bool>>&& mini_map)
+TimelineModel::SetMiniMap(std::map<uint64_t, std::vector<double>>&& mini_map)
 {
     m_mini_map = std::move(mini_map);
 }
 
 void
-TimelineModel::UpdateHistogram(const std::vector<uint64_t>& interest_id, bool add)
+TimelineModel::UpdateHistogram(const std::vector<TrackItem*>& tracks)
 {
     /*
-    This function updates histogram and mini_map based on the interest_id list (which
-    is a list of track IDs to add or remove from the histogram).
+    This function updates histogram and mini_map.
     */
-
-    // Update visibility flags in mini_map
-    for(const auto& id : interest_id)
-    {
-        auto it = m_mini_map.find(id);
-        if(it != m_mini_map.end())
-        {
-            const std::vector<double>& mini_data   = std::get<0>(it->second);
-            bool                       is_included = std::get<1>(it->second);
-            if(add && !is_included)
-            {
-                it->second = std::make_tuple(mini_data, true);
-            }
-            else if(!add && is_included)
-            {
-                it->second = std::make_tuple(mini_data, false);
-            }
-        }
-    }
 
     // Recompute histogram from all visible tracks
     if(!m_histogram.empty())
     {
         std::fill(m_histogram.begin(), m_histogram.end(), 0.0);
-        for(const auto& kv : m_mini_map)
+        for(const TrackItem* track : tracks)
         {
-            bool is_included = std::get<1>(kv.second);
+            // If it's a counter/sample, or hidden track, skip adding it to the global
+            // histogram
+            bool is_included =
+                track && track->GetTrackInfo() && m_mini_map.count(track->GetID()) &&
+                track->IsDisplayed() &&
+                track->GetTrackInfo()->track_type == kRPVControllerTrackTypeEvents;
             if(is_included)
             {
-                // Retrieve track metadata to check its type
-                const TrackInfo* track_info = GetTrack(kv.first);
-
-                // If it's a counter/sample track, skip adding it to the global histogram
-                if(track_info && track_info->track_type == kRPVControllerTrackTypeSamples)
-                {
-                    continue;
-                }
-
-                const std::vector<double>& mini_data = std::get<0>(kv.second);
+                const std::vector<double>& mini_data = m_mini_map.at(track->GetID());
                 for(size_t i = 0; i < mini_data.size() && i < m_histogram.size(); ++i)
                 {
                     m_histogram[i] += mini_data[i];
@@ -199,18 +175,17 @@ TimelineModel::UpdateHistogram(const std::vector<uint64_t>& interest_id, bool ad
             m_minimap_global_min = DBL_MAX;
             m_minimap_global_max = -DBL_MAX;
 
-            for(const auto& kv : m_mini_map)
+            for(const TrackItem* track : tracks)
             {
-                // Retrieve track metadata to check its type
-                const TrackInfo* track_info = GetTrack(kv.first);
-
-                // If it's a counter/sample track, skip adding it to the global histogram
-                if(track_info && track_info->track_type == kRPVControllerTrackTypeSamples)
+                // If it's a counter/sample track skip adding it to the global histogram
+                if(!track || !track->GetTrackInfo() ||
+                   !m_mini_map.count(track->GetID()) ||
+                   track->GetTrackInfo()->track_type != kRPVControllerTrackTypeEvents)
                 {
                     continue;
                 }
 
-                const std::vector<double>& mini_data = std::get<0>(kv.second);
+                const std::vector<double>& mini_data = m_mini_map.at(track->GetID());
 
                 for(double val : mini_data)
                 {

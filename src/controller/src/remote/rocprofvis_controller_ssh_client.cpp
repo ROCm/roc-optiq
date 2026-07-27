@@ -707,7 +707,10 @@ namespace Controller
             {
                 spdlog::info("[ssh] no password supplied; prompting UI for password");
                 PromptRequest req;
-                req.instruction = "Password";
+                std::string target = user.empty() ? connection->GetHost()
+                                                   : user + "@" + connection->GetHost();
+                req.instruction = target.empty() ? std::string("Enter your password")
+                                                 : "Enter the password for " + target;
                 PromptItem item;
                 item.text = "Password: ";
                 item.echo = false;  // mask input
@@ -1253,6 +1256,24 @@ namespace Controller
         constexpr size_t SFTP_NAME_BUFFER_SIZE = 512;
         char mem[SFTP_NAME_BUFFER_SIZE];
         LIBSSH2_SFTP_ATTRIBUTES attrs;
+
+        // Resolve the (possibly relative, e.g. ".") requested path to an absolute
+        // path so the UI can show a meaningful location. Best-effort: failure here
+        // leaves the resolved path empty and does not abort the listing.
+        {
+            char real_path[SFTP_NAME_BUFFER_SIZE];
+            int  real_rc;
+            while ((real_rc = libssh2_sftp_realpath(sftp, path.c_str(), real_path,
+                                                    sizeof(real_path) - 1)) == LIBSSH2_ERROR_EAGAIN) {
+                if (IsCancelRequested(connection, future) || !WaitSocket(connection)) {
+                    break;
+                }
+            }
+            if (real_rc > 0) {
+                connection->GetSshBridge()->SetResolvedPath(
+                    std::string(real_path, static_cast<size_t>(real_rc)));
+            }
+        }
 
         while (true) {
             int rc;

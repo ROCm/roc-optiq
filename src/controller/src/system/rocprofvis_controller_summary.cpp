@@ -2,15 +2,12 @@
 // SPDX-License-Identifier: MIT
 
 #include "rocprofvis_controller_summary.h"
-#include "rocprofvis_controller_array.h"
 #include "rocprofvis_controller_future.h"
 #include "rocprofvis_controller_topology.h"
-#include "rocprofvis_controller_reference.h"
 #include "rocprofvis_controller_table_system.h"
 #include "rocprofvis_controller_trace.h"
 #include "rocprofvis_controller_track.h"
 #include "rocprofvis_controller_arguments.h"
-#include "rocprofvis_core_assert.h"
 #include <cstdlib>
 
 namespace RocProfVis
@@ -522,7 +519,7 @@ rocprofvis_result_t Summary::FetchTopKernels(rocprofvis_dm_trace_t dm_handle, No
                         result = processor->GetUInt64(kRPVControllerProcessorId, 0, &agent_id);
                         if(result == kRocProfVisResultSuccess)
                         {
-                            where_str += " AND agentId = " + std::to_string(agent_id);
+                            where_str += " AND agentId = " + std::to_string(agent_id & TOPOLOGY_ID_MASK);
                         }
                     }
                 }

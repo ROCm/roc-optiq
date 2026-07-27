@@ -4,6 +4,7 @@
 #include "rocprofvis_appmonitor.h"
 #include "rocprofvis_event_manager.h"
 #include "rocprofvis_controller.h"
+#include "rocprofvis_render_scheduler.h"
 
 #include <spdlog/spdlog.h>
 
@@ -318,6 +319,12 @@ AppMonitor::Update()
         {
             ++it;
         }
+    }
+
+    // Operations resolve on background threads; keep rendering to poll them.
+    if(HasPendingOperations())
+    {
+        RenderScheduler::GetInstance().RequestRender();
     }
 }
 

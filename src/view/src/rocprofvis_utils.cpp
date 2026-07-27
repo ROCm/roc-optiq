@@ -14,6 +14,7 @@
 #include <memory>
 #include <sstream>
 #include <string>
+#include <vector>
 #ifdef _WIN32
 #define NOMINMAX
 #include <windows.h>
@@ -604,6 +605,139 @@ RocProfVis::View::get_executable_name(const std::string& fullPath)
     return (pos == std::string::npos)
         ? fullPath
         : fullPath.substr(pos + 1);
+}
+
+std::string
+RocProfVis::View::posix_base_name(const std::string& path)
+{
+    std::string::size_type pos = path.find_last_of('/');
+    return pos == std::string::npos ? path : path.substr(pos + 1);
+}
+
+std::string
+RocProfVis::View::posix_file_extension(const std::string& path)
+{
+    std::string name = posix_base_name(path);
+    std::string::size_type pos = name.find_last_of('.');
+    if(pos == std::string::npos || pos == 0)
+    {
+        return std::string();
+    }
+    return name.substr(pos + 1);
+}
+
+std::string
+RocProfVis::View::normalize_posix_path(const std::string& path)
+{
+    if(path.empty())
+    {
+        return ".";
+    }
+
+    bool absolute = (path[0] == '/');
+    std::vector<std::string> parts;
+
+    std::string::size_type start = 0;
+    while(start <= path.size())
+    {
+        std::string::size_type slash = path.find('/', start);
+        std::string segment = (slash == std::string::npos) ? path.substr(start)
+                                                           : path.substr(start, slash - start);
+        if(!segment.empty() && segment != ".")
+        {
+            if(segment == "..")
+            {
+                if(!parts.empty() && parts.back() != "..")
+                {
+                    parts.pop_back();
+                }
+                else if(!absolute)
+                {
+                    parts.push_back("..");
+                }
+            }
+            else
+            {
+                parts.push_back(segment);
+            }
+        }
+        if(slash == std::string::npos)
+        {
+            break;
+        }
+        start = slash + 1;
+    }
+
+    std::string result = absolute ? "/" : "";
+    for(size_t i = 0; i < parts.size(); i++)
+    {
+        result += parts[i];
+        if(i + 1 < parts.size())
+        {
+            result += "/";
+        }
+    }
+    if(result.empty())
+    {
+        result = absolute ? "/" : ".";
+    }
+    return result;
+}
+
+bool
+RocProfVis::View::is_posix_root_path(const std::string& path)
+{
+    std::string normalized = normalize_posix_path(path);
+    return normalized == "/" || normalized == ".";
+}
+
+std::string
+RocProfVis::View::posix_parent_path(const std::string& path)
+{
+    std::string normalized = normalize_posix_path(path);
+    if(is_posix_root_path(normalized))
+    {
+        return normalized;
+    }
+
+    std::string::size_type pos = normalized.find_last_of('/');
+    if(pos == std::string::npos)
+    {
+        return ".";
+    }
+    if(pos == 0)
+    {
+        return "/";
+    }
+    return normalized.substr(0, pos);
+}
+
+std::string
+RocProfVis::View::join_posix_path(const std::string& dir, const std::string& name)
+{
+    if(name == "..")
+    {
+        return posix_parent_path(dir);
+    }
+    if(!name.empty() && name[0] == '/')
+    {
+        return normalize_posix_path(name);
+    }
+
+    std::string joined = dir;
+    if(joined.empty())
+    {
+        joined = name;
+    }
+    else if(joined.back() == '/')
+    {
+        joined += name;
+    }
+    else
+    {
+        joined += "/" + name;
+    }
+    return normalize_posix_path(joined);
 }
 
 namespace

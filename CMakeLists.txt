@@ -119,6 +119,7 @@ set(VIEW_FILES
     src/view/src/rocprofvis_event_manager.cpp
     src/view/src/rocprofvis_utils.cpp
     src/view/src/rocprofvis_timeline_selection.cpp
+    src/view/src/rocprofvis_timeline_track_options.cpp
     src/view/src/rocprofvis_track_topology.cpp
     src/view/src/rocprofvis_track_details.cpp
     src/view/src/rocprofvis_project.cpp
@@ -193,6 +194,8 @@ endif(ROCPROFVIS_ENABLE_PROFILER)
 if(ROCPROFVIS_ENABLE_REMOTE)
 list(APPEND VIEW_FILES
     src/view/src/remote/rocprofvis_ssh_uri.cpp
+    src/view/src/remote/rocprofvis_secret_store.cpp
+    src/view/src/remote/rocprofvis_secret_store.h
     src/view/src/remote/rocprofvis_ssh_connection_config.cpp
     src/view/src/remote/rocprofvis_ssh_connection_config.h
     src/view/src/remote/rocprofvis_ssh_connection_store.cpp
@@ -206,6 +209,8 @@ list(APPEND VIEW_FILES
     src/view/src/remote/rocprofvis_ssh_settings_dialog.h
     src/view/src/remote/rocprofvis_ssh_test_dialog.cpp
     src/view/src/remote/rocprofvis_ssh_test_dialog.h
+    src/view/src/remote/rocprofvis_remote_file_browser.cpp
+    src/view/src/remote/rocprofvis_remote_file_browser.h
 )
 endif(ROCPROFVIS_ENABLE_REMOTE)
 
@@ -323,6 +328,31 @@ endif()
 
 if (CRYPTO_BACKEND STREQUAL "OpenSSL")
 target_link_libraries(${TARGET_NAME} PRIVATE libssh2_static OpenSSL::SSL OpenSSL::Crypto)
+endif()
+
+# SecretStore backends: link the OS credential-vault APIs. On Linux libsecret
+# is optional; when absent, SecretStore compiles a stub that reports itself
+# unavailable and the app falls back to prompting for SSH secrets at connect
+# time (never persisting them in plaintext).
+if(WIN32)
+    target_link_libraries(${TARGET_NAME} PRIVATE Advapi32)
+elseif(APPLE)
+    target_link_libraries(${TARGET_NAME} PRIVATE "-framework Security" "-framework CoreFoundation")
+else()
+    find_package(PkgConfig QUIET)
+    if(PkgConfig_FOUND)
+        pkg_check_modules(LIBSECRET QUIET libsecret-1)
+    endif()
+    if(LIBSECRET_FOUND)
+        target_include_directories(${TARGET_NAME} PRIVATE ${LIBSECRET_INCLUDE_DIRS})
+        target_link_libraries(${TARGET_NAME} PRIVATE ${LIBSECRET_LIBRARIES})
+        target_compile_definitions(${TARGET_NAME} PRIVATE ROCPROFVIS_HAVE_LIBSECRET)
+    else()
+        message(WARNING
+            "libsecret-1 not found: SSH passwords will not be persisted on this "
+            "Linux build (users are prompted at connect time). Install "
+            "libsecret-1-dev / libsecret-devel to enable secure credential storage.")
+    endif()
 endif()
 endif(ROCPROFVIS_ENABLE_REMOTE)
 

@@ -1122,7 +1122,7 @@ KernelInstanceTable::ToggleSelectKernel(const std::string& kernel_name,
         m_where = "nodeId = " + std::to_string(*node_id);
         if(device_id)
         {
-            m_where += " AND agentId = " + std::to_string(*device_id);
+            m_where += " AND agentId = " + std::to_string(*device_id & TOPOLOGY_ID_MASK);
         }
     }
     Fetch();

@@ -39,6 +39,7 @@ SystemTrace::SystemTrace(const std::string& filename)
 , m_search_table(nullptr)
 , m_summary(nullptr)
 , m_mem_mgmt(nullptr)
+, m_topology_root(nullptr)
 {
     
 }
@@ -53,6 +54,7 @@ SystemTrace::SystemTrace(const std::vector<std::string>& filenames)
 , m_search_table(nullptr)
 , m_summary(nullptr)
 , m_mem_mgmt(nullptr)
+, m_topology_root(nullptr)
 {
 
 }
@@ -95,10 +97,6 @@ SystemTrace::~SystemTrace()
     for (Track* track : m_tracks)
     {
         delete track;
-    }
-    for (auto* node : m_nodes)
-    {
-        delete node;
     }
 }
 
@@ -1072,24 +1070,6 @@ rocprofvis_result_t SystemTrace::SetUInt64(rocprofvis_property_t property, uint6
         case kRPVControllerSystemNumAnalysisView:
         {
             ROCPROFVIS_UNIMPLEMENTED;
-            break;
-        }
-        case kRPVControllerSystemNumNodes:
-        {
-            if (m_nodes.size() != value)
-            {
-                for (uint64_t i = value; i < m_nodes.size(); i++)
-                {
-                    delete m_nodes[i];
-                    m_nodes[i] = nullptr;
-                }
-                m_nodes.resize(value);
-                result = m_nodes.size() == value ? kRocProfVisResultSuccess : kRocProfVisResultMemoryAllocError;
-            }
-            else
-            {
-                result = kRocProfVisResultSuccess;
-            }
             break;
         }
         default:

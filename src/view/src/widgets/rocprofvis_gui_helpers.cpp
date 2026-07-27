@@ -16,6 +16,44 @@ namespace RocProfVis
 namespace View
 {
 
+// Font size the UI was laid out against. Sizes authored at this font render at
+// 1:1; ImGui's DPI font scaling then scales them via ImGui::GetFontSize().
+constexpr float BASE_DESIGN_FONT_SIZE = 13.0f;
+
+namespace
+{
+int
+StringResizeCallback(ImGuiInputTextCallbackData* data)
+{
+    if(data->EventFlag == ImGuiInputTextFlags_CallbackResize)
+    {
+        std::string* str = static_cast<std::string*>(data->UserData);
+        str->resize(static_cast<size_t>(data->BufTextLen));
+        data->Buf = str->data();
+    }
+    return 0;
+}
+}  // namespace
+
+bool
+InputTextString(const char* id, std::string& str, ImGuiInputTextFlags flags)
+{
+    str.reserve(std::max(str.size() + 1, static_cast<size_t>(256)));
+    return ImGui::InputText(id, str.data(), str.capacity() + 1,
+                            flags | ImGuiInputTextFlags_CallbackResize,
+                            StringResizeCallback, static_cast<void*>(&str));
+}
+
+bool
+InputTextStringWithHint(const char* id, const char* hint, std::string& str,
+                        ImGuiInputTextFlags flags)
+{
+    str.reserve(std::max(str.size() + 1, static_cast<size_t>(256)));
+    return ImGui::InputTextWithHint(id, hint, str.data(), str.capacity() + 1,
+                                    flags | ImGuiInputTextFlags_CallbackResize,
+                                    StringResizeCallback, static_cast<void*>(&str));
+}
+
 ImVec2
 MeasureLoadingIndicatorDots(float dot_radius, int num_dots,
                                               float spacing)
@@ -140,8 +178,7 @@ PopComboStyles()
 ImVec2
 GetResponsiveWindowSize(ImVec2 desired_size, ImVec2 min_size, float viewport_margin)
 {
-    constexpr float BASE_DESIGN_FONT_SIZE = 13.0f;
-    const float     scale = ImGui::GetFontSize() / BASE_DESIGN_FONT_SIZE;
+    const float scale = ImGui::GetFontSize() / BASE_DESIGN_FONT_SIZE;
 
     ImVec2 result(desired_size.x > 0.0f ? desired_size.x * scale : desired_size.x,
                   desired_size.y > 0.0f ? desired_size.y * scale : desired_size.y);
@@ -516,6 +553,107 @@ TableRowHeight()
     return ImGui::GetTextLineHeight() + ImGui::GetStyle().CellPadding.y * 2.0f;
 }
 
+namespace
+{
+Colors
+PanelCardBackground(PanelCardTone tone)
+{
+    Colors bg = Colors::kBgPanel;
+    if(tone == PanelCardTone::kFrame)
+    {
+        bg = Colors::kBgFrame;
+    }
+    else if(tone == PanelCardTone::kMain)
+    {
+        bg = Colors::kBgMain;
+    }
+    return bg;
+}
+}  // namespace
+
+void
+BeginPanelCard(const char* id, PanelCardTone tone, ImVec2 padding, bool bordered,
+               SettingsManager* settings)
+{
+    if(!settings)
+    {
+        settings = &SettingsManager::GetInstance();
+    }
+
+    ImGui::PushStyleColor(ImGuiCol_ChildBg,
+                          settings->GetColor(PanelCardBackground(tone)));
+    ImGui::PushStyleColor(ImGuiCol_Border,
+                          settings->GetColor(Colors::kPanelBorderSubtle));
+    ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, PANEL_CARD_ROUNDING);
+    ImGui::PushStyleVar(ImGuiStyleVar_ChildBorderSize, bordered ? 1.0f : 0.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, padding);
+
+    ImGuiChildFlags child_flags = ImGuiChildFlags_AutoResizeY;
+    if(bordered)
+    {
+        child_flags |= ImGuiChildFlags_Borders;
+    }
+    ImGui::BeginChild(id, ImVec2(0.0f, 0.0f), child_flags,
+                      ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+}
+
+void
+EndPanelCard()
+{
+    ImGui::EndChild();
+    ImGui::PopStyleVar(3);
+    ImGui::PopStyleColor(2);
+}
+
+void
+PanelFieldLabel(const char* text, bool align_to_frame, SettingsManager* settings)
+{
+    if(!settings)
+    {
+        settings = &SettingsManager::GetInstance();
+    }
+    if(align_to_frame)
+    {
+        ImGui::AlignTextToFramePadding();
+    }
+    ImGui::PushStyleColor(ImGuiCol_Text, settings->GetColor(Colors::kTextDim));
+    ImGui::TextUnformatted(text);
+    ImGui::PopStyleColor();
+}
+
+void
+PanelIcon(const char* glyph, Colors color, SettingsManager* settings)
+{
+    if(!settings)
+    {
+        settings = &SettingsManager::GetInstance();
+    }
+    ImGui::PushFont(settings->GetFontManager().GetFont(FontType::kIcon),
+                    ImGui::GetFontSize());
+    ImGui::PushStyleColor(ImGuiCol_Text, settings->GetColor(color));
+    ImGui::TextUnformatted(glyph);
+    ImGui::PopStyleColor();
+    ImGui::PopFont();
+}
+
+bool
+AccentButton(const char* label, ImVec2 size, SettingsManager* settings)
+{
+    if(!settings)
+    {
+        settings = &SettingsManager::GetInstance();
+    }
+    ImGui::PushStyleColor(ImGuiCol_Button, settings->GetColor(Colors::kAccent));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
+                          settings->GetColor(Colors::kAccentHover));
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive,
+                          settings->GetColor(Colors::kAccentActive));
+    ImGui::PushStyleColor(ImGuiCol_Text, settings->GetColor(Colors::kTextOnAccent));
+    bool clicked = ImGui::Button(label, size);
+    ImGui::PopStyleColor(4);
+    return clicked;
+}
+
 #ifdef ROCPROFVIS_ENABLE_INTERNAL_BANNER
 
 void
@@ -526,9 +664,10 @@ DrawInternalBuildBanner(const char* text /*= "Internal Build"*/)
     ImDrawList*   dl   = ImGui::GetForegroundDrawList();
     const ImVec2& disp = ImGui::GetIO().DisplaySize;
 
-    // Parameters
-    static constexpr float ribbon_thickness = 20.0f;
-    static constexpr float min_base_length  = 150.0f;
+    // Parameters. Scale with the font so the banner tracks ImGui's DPI font scaling.
+    const float            ui_scale         = ImGui::GetFontSize() / BASE_DESIGN_FONT_SIZE;
+    const float            ribbon_thickness = 20.0f * ui_scale;
+    const float            min_base_length  = 150.0f * ui_scale;
     SettingsManager& settings    = SettingsManager::GetInstance();
     const ImU32      col_fill     = settings.GetColor(Colors::kBannerFill);
     const ImU32      col_border   = settings.GetColor(Colors::kBannerBorder);

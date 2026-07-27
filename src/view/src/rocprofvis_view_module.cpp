@@ -3,8 +3,6 @@
 
 #include "rocprofvis_view_module.h"
 #include "rocprofvis_appwindow.h"
-#include "rocprofvis_settings_manager.h"
-#include "rocprofvis_font_manager.h"
 #include "rocprofvis_utils.h"
 #include "widgets/rocprofvis_image_helpers.h"
 #include "spdlog/spdlog.h"
@@ -33,8 +31,8 @@ rocprofvis_view_init(std::function<void(int)>                 notification_callb
 void
 rocprofvis_view_render(const rocprofvis_view_render_options_t& render_options)
 {
-    if(render_options ==
-       rocprofvis_view_render_options_t::kRocProfVisViewRenderOption_RequestExit)
+    if(static_cast<int>(render_options) &
+       static_cast<int>(rocprofvis_view_render_options_t::kRocProfVisViewRenderOption_RequestExit))
     {
         AppWindow::GetInstance()->ShowCloseConfirm();
     }
@@ -45,21 +43,6 @@ void
 rocprofvis_view_destroy()
 {
     AppWindow::GetInstance()->DestroyInstance();
-}
-
-void
-rocprofvis_view_set_dpi(float dpi)
-{
-    SettingsManager& settings = SettingsManager::GetInstance();
-    if(settings.GetUserSettings().display_settings.dpi_based_scaling)
-    {
-        if(settings.GetDPI() != dpi)
-        {
-            settings.SetDPI(dpi);
-            FontManager& fonts = settings.GetFontManager();
-            fonts.SetFontSize(fonts.GetDPIScaledFontIndex());
-        }
-    }
 }
 
 void

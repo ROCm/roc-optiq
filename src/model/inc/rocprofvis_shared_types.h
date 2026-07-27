@@ -6,6 +6,8 @@
 
 #define INVALID_INDEX    0xFFFFFFFFu
 #define INVALID_INDEX_64 0xFFFFFFFFFFFFFFFFull
+#define TOPOLOGY_INSTANCE_BIT_POS 54
+#define TOPOLOGY_ID_MASK ((1ULL << TOPOLOGY_INSTANCE_BIT_POS) - 1)
 
 typedef enum rocprofvis_controller_node_properties_t : uint32_t
 {

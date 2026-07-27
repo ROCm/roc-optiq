@@ -1,5 +1,5 @@
 .. meta::
-  :description: Learn how to customize your ROCm Optiq project.
+  :description: Learn how to customize ROCm Optiq projects: set time range filters, add bookmarks and annotations, adjust track display options, and save presets.
   :keywords: Optiq, ROCm, customize, filter, bookmarks, annotations
 
 .. _customize:
@@ -35,16 +35,19 @@ Select **Edit** > **Preferences** to adjust these global settings for ROCm Optiq
 
   .. image:: ../images/settings.png
      :width: 600
+     :alt: ROCm Optiq Settings panel showing theme and font scaling controls
 
 - The time unit settings displayed on the **Timeline View**:
 
   .. image:: ../images/units.png
      :width: 600
+     :alt: ROCm Optiq Settings panel showing the time unit selector for the Timeline View
 
 - The hotkey settings allow keyboard shortcuts to be redefined:
 
   .. image:: ../images/hotkeys.png
      :width: 600
+     :alt: ROCm Optiq Settings panel showing the hotkey configuration table for customizing keyboard shortcuts
 
 Show/hide panels
 ================
@@ -53,9 +56,10 @@ Use the **View** menu to show and hide application panels.
 
 .. image:: ../images/view.png
   :width: 300
+  :alt: View menu showing options to show and hide application panels
 
 Customize projects for ROCm Systems Profiler traces
-==============================================================
+===================================================
 
 You can customize the data views of an open ROCm Systems Profiler trace file in ROCm Optiq, including timeline display settings, saved trace selections, added bookmarks/annotations, and more.
 
@@ -72,8 +76,9 @@ Set a time range filter in the :ref:`timeline` to limit the data displayed to a 
 
 To set a time range filter, press and hold **Ctrl** while dragging your mouse in the **Timeline View** to select a range.
 
-.. image:: ../images/filter.png
-   :width: 600
+.. image:: ../images/time-range-filter.gif
+   :width: 800
+   :alt: Timeline View with a time range selected, showing the shaded selection area with draggable boundary handles
 
 Once a time range is selected, the selection boundaries can be adjusted by dragging them. 
 The active time range filter applies to event and sample counter details in the :ref:`advanced` section.
@@ -92,6 +97,10 @@ To clear the time range selection, press **Esc** or right-click and select **Rem
 
 |remove|
 
+.. note::
+
+   When a time-range filter is active, all events intersecting that time-range remain at full brightness; events outside the range are dimmed. 
+
 Save trace selections
 ~~~~~~~~~~~~~~~~~~~~~
 
@@ -99,6 +108,7 @@ When there's an active time range filter, select **Edit** > **Save Trace Selecti
 
 .. image:: ../images/save-trace.png
    :width: 200
+   :alt: Edit menu with the Save Trace Selection option highlighted
 
 This creates a new trace file containing only the events in the filter.
 
@@ -115,18 +125,30 @@ To add an annotation:
 
    .. image:: ../images/add-annotation.png
       :width: 200
+      :alt: Annotations toolbar section with the plus button for adding a new annotation
 
    Annotations can also be added by right-clicking on the **Timeline View** and clicking the **Add Annotation** context menu option.
 
-2. The **Annotation** dialog displays. Provide a title and your note, then click **Save** to create the annotation.
+2. The **Annotation** dialog displays. Provide a title and your note, then click the **X** button to close the note and create the annotation.
 
    .. image:: ../images/save-annotation.png
-      :width: 500
-
-   Once saved, the annotation displays as a marker that can be expanded on the timeline:
-
-   .. image:: ../images/annotation-example.png
       :width: 200
+      :alt: Annotation dialog showing title and note text fields with a Save button
+
+   Once saved, the annotation displays as a marker that can be expanded on the timeline.
+
+   Annotations are track-bound and follow their tracks when scrolling, reordering, or rearranging the timeline. 
+   Expanded notes open as movable floating windows with inline editing; empty notes are discarded automatically. 
+   A time guide line appears while a note is hovered or dragged. 
+   
+   .. image:: ../images/new-annotation-example.png
+      :width: 800
+      :alt: Timeline showing an expanded annotation note as a floating window with inline editing
+
+   The **Annotations** tab in the **Advanced Details** section shows a list of annotations.  
+   Each row shows the annotation title, the note, the track it is attached to, its start time, and a checkbox for visibility.
+   Clicking a row brings the selected annotation into view on the timeline.
+
 
 .. tip::
 
@@ -153,21 +175,26 @@ Or:
 Delete bookmarks
 ~~~~~~~~~~~~~~~~
 
+Use the following actions to delete bookmarks or reset the view.
+
 - To delete a bookmark, click **X** to delete a bookmark from the |book| menu. 
 - Click **Reset View** to return the :ref:`timeline` to its original pan and zoom settings.
 
 Customize timeline display options
 ----------------------------------
 
-Customize display options for each track by clicking the gear icon in the track's **Description** in the :ref:`timeline`:
+Customize display options for each track by right clicking the **Description** area to open the track's context menu. Select **Track Options** to customize the track's display options.
 
-.. image:: ../images/track-gear.png
-   :width: 600
+- For event tracks, you can toggle between **Color by Name**, **Color by Time Level**, **No Color**, and **Compact mode**.
 
-- For event tracks, you can toggle between **Color by name**, **Color by Time Level**, **No Color**, and **Compact mode**.
+  - **Color by Name**: All events with the same name share a color. 
+  - **Color by Time Level**: Events with the same name but different start times have different colors. 
+  - **No Color**: Events render without name-based coloring. 
+  - **Compact mode**: Shrink event track heights to display tall flame graphs in a smaller area. 
 
-  - **Color by name**, **Color by Time Level**, and **No Color***: Change the coloring method used to color the events.
-  - **Compact Mode**: Shrink event heights to display tall flame graphs in a smaller area.
+   .. image:: ../images/track-options.png
+      :width: 600
+      :alt: Timeline track context menu options
 
 - For sample counter tracks, you can toggle between **Show Counter Boxes**, **Alternate Counter Coloring**, and **Highlight Y Range**:
 
@@ -175,16 +202,22 @@ Customize display options for each track by clicking the gear icon in the track'
   - **Alternate Counter Coloring**: If the area under the line is filled, alternate the fill color for each sample.
   - **Highlight Y Range**: Select an area of the graph to highlight. Choose the minimum and maximum range that you want to highlight. The tool highlights these values on the track region.
 
-    .. image:: ../images/timeline-display-options.png
-       :width: 400  
-  
+   .. image:: ../images/timeline-display-options.png
+      :width: 600
+      :alt: Track display options menu for a sample counter track showing Show Counter Boxes, Alternate Counter Coloring, and Highlight Y Range toggles
+
 - For sample counter tracks, you can set the min and max when showing the tracks: 
 
   - Click on the value beside the min and max to set/change the scale range. 
   - Click |reset| to restore the values to their default.
 
   .. image:: ../images/min-max.png
-     :width: 400
+     :width: 1000
+     :alt: Sample counter track showing editable minimum and maximum scale values with a reset button
+
+.. tip::
+
+   The context menu when right-clicking a track's description in **Timeline View** also provides **Copy track name** and **Copy track ID**. 
 
 Set the flow rendering display mode
 -----------------------------------
@@ -196,12 +229,14 @@ Use the **Flow** buttons on the toolbar to show and hide flow information on the
 Chain mode displays events in a linked sequence, emphasizing dependencies and execution order. This is useful when analyzing how operations are chained together across queues or streams.
 
 .. image:: ../images/chain-mode.png
-   :width: 600
+   :width: 800
+   :alt: Timeline View in Chain mode showing events linked in sequence to emphasize dependencies and execution order
 
 Render mode shows events in a fan-out style, highlighting parallelism and branching. This helps visualize concurrency and how multiple operations originate from a single source.
 
 .. image:: ../images/fan-mode.png
-   :width: 600
+   :width: 800
+   :alt: Timeline View in Render (fan) mode showing events fanning out from a single source to highlight parallelism
 
 .. note::
 
@@ -222,8 +257,9 @@ You can remove metadata added by ROCm Optiq during processing trace data by sele
 
 .. image:: ../images/cleanup.png
    :width: 300
+   :alt: File menu open with Database submenu showing the Full Cleanup option for removing ROCm Optiq metadata
 
-Customize projects for ROCm Compute Profiler Analysis Data
+Customize projects for ROCm Compute Profiler analysis data
 ==========================================================
 
 .. _presets:
@@ -235,6 +271,7 @@ Persist the pinned metric configurations for the Table View and Baseline Compari
 
 .. image:: ../images/presets.png
    :width: 300
+   :alt: Presets panel showing a text field for a new preset name and a list of saved presets with recall, overwrite, and delete buttons
 
 After a preset is saved, you can:
 

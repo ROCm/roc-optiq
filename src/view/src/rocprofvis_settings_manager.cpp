@@ -445,8 +445,6 @@ SettingsManager::SerializeDisplaySettings(jt::Json& json)
     jt::Json& ds = json[JSON_KEY_GROUP_SETTINGS][JSON_KEY_SETTINGS_CATEGORY_DISPLAY];
     ds[JSON_KEY_SETTINGS_DISPLAY_DARK_MODE] =
         m_usersettings.display_settings.use_dark_mode;
-    ds[JSON_KEY_SETTINGS_DISPLAY_DPI_SCALING] =
-        m_usersettings.display_settings.dpi_based_scaling;
     ds[JSON_KEY_SETTINGS_DISPLAY_FONT_SIZE] =
         m_usersettings.display_settings.font_size_index;
     ds[JSON_KEY_SETTINGS_DISPLAY_NODE_COLORS] =
@@ -464,15 +462,11 @@ SettingsManager::DeserializeDisplaySettings(jt::Json& json)
             m_usersettings.display_settings.use_dark_mode =
                 ds[JSON_KEY_SETTINGS_DISPLAY_DARK_MODE].getBool();
         }
-        if(ds[JSON_KEY_SETTINGS_DISPLAY_DPI_SCALING].isBool())
-        {
-            m_usersettings.display_settings.dpi_based_scaling =
-                ds[JSON_KEY_SETTINGS_DISPLAY_DPI_SCALING].getBool();
-        }
         if(ds[JSON_KEY_SETTINGS_DISPLAY_FONT_SIZE].isLong())
         {
             m_usersettings.display_settings.font_size_index =
-                static_cast<int>(ds[JSON_KEY_SETTINGS_DISPLAY_FONT_SIZE].getLong());
+                GetFontManager().ClampFontSizeIndex(
+                    static_cast<int>(ds[JSON_KEY_SETTINGS_DISPLAY_FONT_SIZE].getLong()));
         }
         if(ds[JSON_KEY_SETTINGS_DISPLAY_NODE_COLORS].isBool())
         {
@@ -493,6 +487,7 @@ SettingsManager::SaveSettingsJson()
     SerializeUnitSettings(settings_json);
     SerializeOtherSettings(settings_json);
     SerializeHotkeySettings(settings_json);
+    SerializeProfilerSettings(settings_json);
 
     std::ofstream out_file(m_json_path);
     if(out_file.is_open())
@@ -522,6 +517,7 @@ SettingsManager::LoadSettingsJson()
         DeserializeUnitSettings(result.second);
         DeserializeOtherSettings(result.second);
         DeserializeHotkeySettings(result.second);
+        DeserializeProfilerSettings(result.second);
     }
     else
     {
@@ -534,18 +530,6 @@ SettingsManager::GetStandardConfigPath()
 {
     std::filesystem::path config_dir = get_application_config_path(true);
     return config_dir / SETTINGS_FILE_NAME;
-}
-
-void
-SettingsManager::SetDPI(float dpi)
-{
-    m_display_dpi = dpi;
-}
-
-float
-SettingsManager::GetDPI()
-{
-    return m_display_dpi;
 }
 
 void
@@ -566,9 +550,9 @@ SettingsManager::ApplyUserDisplaySettings(const UserSettings& old_settings)
     }
     ApplyColorStyling();
 
-    GetFontManager().SetFontSize((m_usersettings.display_settings.dpi_based_scaling)
-                                     ? GetFontManager().GetDPIScaledFontIndex()
-                                     : m_usersettings.display_settings.font_size_index);
+    m_usersettings.display_settings.font_size_index =
+        GetFontManager().ClampFontSizeIndex(m_usersettings.display_settings.font_size_index);
+    GetFontManager().SetFontSize(m_usersettings.display_settings.font_size_index);
 }
 
 void
@@ -619,12 +603,11 @@ SettingsManager::GetContrastColormapName() const
 SettingsManager::SettingsManager()
 : m_color_store(nullptr)
 , m_usersettings_default(
-      { DisplaySettings{ false, true, 6, true }, UnitSettings{ TimeFormat::kTimecode },
+      { DisplaySettings{ false, 6, true }, UnitSettings{ TimeFormat::kTimecode },
         false, false, LOG_VIEWER_MAX_ENTRIES_DEFAULT,
         LogViewerSettings{ LOG_VIEWER_DEFAULT_LEVEL_MASK, true, false, false, false } })
 , m_usersettings(m_usersettings_default)
 , m_appwindowsettings({ AppWindowSettings{ true, true, true, true, false } })
-, m_display_dpi(1.5f)
 , m_json_path(GetStandardConfigPath())
 {}
 
@@ -953,6 +936,77 @@ void
 SettingsManager::SaveHotkeySettings()
 {
     SaveSettingsJson();
+}
+
+void
+SettingsManager::SaveProfilerSettings()
+{
+    SaveSettingsJson();
+}
+
+ProfilerSettings&
+SettingsManager::GetProfilerSettings()
+{
+    return m_profilersettings;
+}
+
+void
+SettingsManager::SerializeProfilerSettings(jt::Json& json)
+{
+    jt::Json& ps = json[JSON_KEY_GROUP_SETTINGS][JSON_KEY_SETTINGS_CATEGORY_PROFILER];
+    ps[JSON_KEY_SETTINGS_PROFILER_PATH] = m_profilersettings.profiler_path;
+    ps[JSON_KEY_SETTINGS_PROFILER_OUTPUT_DIR] = m_profilersettings.profiler_output_directory;
+    ps[JSON_KEY_SETTINGS_PROFILER_AUTO_LOAD] = m_profilersettings.auto_load_trace;
+    ps["last_preset_name"] = m_profilersettings.last_preset_name;
+    ps["last_profiler_id"] = m_profilersettings.last_profiler_id;
+    ps["last_ssh_connection_id"] = m_profilersettings.last_ssh_connection_id;
+
+    int rt_idx = 0;
+    for (auto const& t : m_profilersettings.recent_targets)
+    {
+        ps["recent_targets"][rt_idx++] = t;
+    }
+}
+
+void
+SettingsManager::DeserializeProfilerSettings(jt::Json& json)
+{
+    jt::Json& ps = json[JSON_KEY_GROUP_SETTINGS][JSON_KEY_SETTINGS_CATEGORY_PROFILER];
+    if(ps[JSON_KEY_SETTINGS_PROFILER_PATH].isString())
+    {
+        m_profilersettings.profiler_path = ps[JSON_KEY_SETTINGS_PROFILER_PATH].getString();
+    }
+    if(ps[JSON_KEY_SETTINGS_PROFILER_OUTPUT_DIR].isString())
+    {
+        m_profilersettings.profiler_output_directory = ps[JSON_KEY_SETTINGS_PROFILER_OUTPUT_DIR].getString();
+    }
+    if(ps[JSON_KEY_SETTINGS_PROFILER_AUTO_LOAD].isBool())
+    {
+        m_profilersettings.auto_load_trace = ps[JSON_KEY_SETTINGS_PROFILER_AUTO_LOAD].getBool();
+    }
+    if(ps["last_preset_name"].isString())
+    {
+        m_profilersettings.last_preset_name = ps["last_preset_name"].getString();
+    }
+    if(ps["last_profiler_id"].isString())
+    {
+        m_profilersettings.last_profiler_id = ps["last_profiler_id"].getString();
+    }
+    if(ps["last_ssh_connection_id"].isString())
+    {
+        m_profilersettings.last_ssh_connection_id = ps["last_ssh_connection_id"].getString();
+    }
+    if(ps["recent_targets"].isArray())
+    {
+        m_profilersettings.recent_targets.clear();
+        for (jt::Json& item : ps["recent_targets"].getArray())
+        {
+            if (item.isString())
+            {
+                m_profilersettings.recent_targets.push_back(item.getString());
+            }
+        }
+    }
 }
 
 }  // namespace View

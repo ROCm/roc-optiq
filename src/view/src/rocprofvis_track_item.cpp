@@ -6,6 +6,7 @@
 #include "rocprofvis_font_manager.h"
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_timeline_selection.h"
+#include "rocprofvis_timeline_track_options.h"
 #include "rocprofvis_utils.h"
 #include "spdlog/spdlog.h"
 #include "widgets/rocprofvis_gui_helpers.h"
@@ -88,14 +89,13 @@ RenderCompareSourceBadge(const TrackInfo* track_info, SettingsManager& settings)
     ImGui::PopID();
 }
 
-TrackItem::TrackItem(DataProvider& dp, uint64_t id, bool display,
+TrackItem::TrackItem(DataProvider& dp, uint64_t id, TimelineTrackOptions& track_options,
                      std::shared_ptr<TimePixelTransform> tpt,
                      std::shared_ptr<TimelineSelection>  timeline_selection)
 : m_track_metadata(nullptr)
 , m_track_statistics(nullptr)
 , m_track_statistics_dirty(false)
 , m_track_id(id)
-, m_track_height(DEFAULT_TRACK_HEIGHT)
 , m_track_content_height(0.0f)
 , m_min_track_height(DEFAULT_MIN_TRACK_HEIGHT)
 , m_track_height_changed(false)
@@ -109,7 +109,6 @@ TrackItem::TrackItem(DataProvider& dp, uint64_t id, bool display,
 , m_meta_area_clicked(false)
 , m_meta_area_scale_width(0.0f)
 , m_max_meta_area_scale_width(0.0f)
-, m_display(display)
 , m_reorder_grip_width(DEFAULT_GRIP_WIDTH)
 , m_tpt(tpt)
 , m_timeline_selection(timeline_selection)
@@ -120,15 +119,11 @@ TrackItem::TrackItem(DataProvider& dp, uint64_t id, bool display,
 , m_node_color_index(0)
 , m_node_display_index(0)
 , m_node_pill(nullptr)
+, m_options(nullptr)
+, m_timeline_track_options(track_options)
 , m_selected(false)
 , m_selected_changed_token(EventManager::InvalidSubscriptionToken)
-, m_track_project_settings(m_data_provider.GetTraceFilePath(), *this)
 {
-    if(m_track_project_settings.Valid())
-    {
-        m_track_height = m_track_project_settings.Height();
-    }
-
     const TrackInfo* track_info =
         m_data_provider.DataModel().GetTimeline().GetTrack(m_track_id);
 
@@ -157,6 +152,9 @@ TrackItem::TrackItem(DataProvider& dp, uint64_t id, bool display,
     m_selected_changed_token = EventManager::GetInstance()->Subscribe(
         static_cast<int>(RocEvents::kTimelineTrackSelectionChanged),
         selected_changed_handler);
+
+    m_options = m_timeline_track_options.InitTrack(*this);
+    ROCPROFVIS_ASSERT(m_options);
 }
 
 TrackItem::~TrackItem()
@@ -177,7 +175,7 @@ TrackItem::TrackHeightChanged()
 float
 TrackItem::GetTrackHeight() const
 {
-    return m_track_height;
+    return m_options ? m_options->m_height : DEFAULT_TRACK_HEIGHT;
 }
 
 const std::string&
@@ -237,16 +235,15 @@ TrackItem::IsSelected() const
 bool
 TrackItem::IsDisplayed() const
 {
-    return m_display;
+    return m_options ? m_options->m_display : true;
 }
 
 void
 TrackItem::SetDisplay(bool display)
 {
-    if(display != m_display)
+    if(m_options)
     {
-        m_display              = display;
-        m_track_height_changed = true;
+        m_options->m_display = display;
     }
 }
 
@@ -259,7 +256,7 @@ TrackItem::Render(float width)
     ImGui::SameLine();
 
     RenderChart(width);
-    RenderResizeBar(ImVec2(width + s_metadata_width, m_track_height));
+    RenderResizeBar(ImVec2(width + s_metadata_width, GetTrackHeight()));
 
     ImGui::EndGroup();
 
@@ -277,6 +274,12 @@ float
 TrackItem::GetReorderGripWidth()
 {
     return m_reorder_grip_width;
+}
+
+const TrackInfo*
+TrackItem::GetTrackInfo() const
+{
+    return m_track_metadata;
 }
 
 void
@@ -307,7 +310,7 @@ void
 TrackItem::RenderMetaArea()
 {
     ImVec2 outer_container_size = ImGui::GetContentRegionAvail();
-    m_track_content_height      = m_track_height - 0.5f * m_resize_grip_thickness;
+    m_track_content_height      = GetTrackHeight() - 0.5f * m_resize_grip_thickness;
 
     ImVec2 name_label_min(0.0f, 0.0f);
     ImVec2 name_label_max(0.0f, 0.0f);
@@ -474,6 +477,7 @@ TrackItem::RenderMetaArea()
 
     if(meta_area_hovered && ImGui::IsMouseClicked(ImGuiMouseButton_Right))
     {
+        m_timeline_track_options.InitContextMenu(*this);
         ImGui::OpenPopup(TRACK_COPY_MENU_POPUP_NAME);
     }
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, style.WindowPadding);
@@ -494,11 +498,16 @@ TrackItem::RenderMetaArea()
             copy_to_clipboard(std::to_string(m_track_id));
         }
         ImGui::Separator();
+        if(IconMenuItem(ICON_TREE, "Reveal in topology"))
+        {
+            EventManager::GetInstance()->AddEvent(std::make_shared<ScrollToTrackEvent>(
+                static_cast<int>(RocEvents::kRevealTrackInTopology), m_track_id,
+                m_data_provider.GetTraceFilePath()));
+        }
+        ImGui::Separator();
         if(IconBeginMenu(ICON_GEAR, "Track Options"))
         {
-            ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(0.0f, 0.0f));
-            RenderMetaAreaOptions();
-            ImGui::PopStyleVar();
+            m_timeline_track_options.RenderContextMenu();
             ImGui::EndMenu();
         }
         ImGui::EndPopup();
@@ -525,16 +534,15 @@ TrackItem::RenderResizeBar(const ImVec2& parent_size)
 
     if(ImGui::BeginDragDropSource(ImGuiDragDropFlags_None))
     {
-        ImVec2 drag_delta = ImGui::GetMouseDragDelta(ImGuiMouseButton_Left);
-        m_track_height    = m_track_height + (drag_delta.y);
-        if(m_track_height < m_min_track_height)
+        if(m_options)
         {
-            m_track_height = m_min_track_height;
+            m_options->m_height = std::max(
+                m_options->m_height + ImGui::GetMouseDragDelta(ImGuiMouseButton_Left).y,
+                m_min_track_height);
+            m_track_height_changed = true;
         }
-
         ImGui::ResetMouseDragDelta();
         ImGui::EndDragDropSource();
-        m_track_height_changed = true;
     }
     if(ImGui::BeginDragDropTarget())
     {
@@ -1064,39 +1072,6 @@ TrackItem::RenderPills(ImVec2 region)
             }
         }
     }
-}
-
-TrackProjectSettings::TrackProjectSettings(const std::string& project_id,
-                                           TrackItem&         track_item)
-: ProjectSetting(project_id)
-, m_track_item(track_item)
-{}
-
-TrackProjectSettings::~TrackProjectSettings() {}
-
-void
-TrackProjectSettings::ToJson()
-{
-    m_settings_json[JSON_KEY_GROUP_TIMELINE][JSON_KEY_TIMELINE_TRACK]
-                   [m_track_item.GetID()][JSON_KEY_TIMELINE_TRACK_HEIGHT] =
-                       m_track_item.GetTrackHeight();
-}
-
-bool
-TrackProjectSettings::Valid() const
-{
-    return m_settings_json[JSON_KEY_GROUP_TIMELINE][JSON_KEY_TIMELINE_TRACK]
-                          [m_track_item.GetID()][JSON_KEY_TIMELINE_TRACK_HEIGHT]
-                              .isNumber();
-}
-
-float
-TrackProjectSettings::Height() const
-{
-    return static_cast<float>(
-        m_settings_json[JSON_KEY_GROUP_TIMELINE][JSON_KEY_TIMELINE_TRACK]
-                       [m_track_item.GetID()][JSON_KEY_TIMELINE_TRACK_HEIGHT]
-                           .getNumber());
 }
 
 Pill::Pill(bool shown, bool active)

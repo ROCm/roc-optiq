@@ -45,11 +45,14 @@ target_include_directories(${PROJECT_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/.
 target_include_directories(${PROJECT_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../../thirdparty/perfetto/trace_processor/include)
 target_include_directories(${PROJECT_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../../thirdparty/perfetto/trace_processor/gen/build_config)
 
-set_source_files_properties(
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/database/rocprofvis_db_trace_processor.cpp
-    PROPERTIES COMPILE_FLAGS
-        "$<$<CONFIG:Debug>:/D_ITERATOR_DEBUG_LEVEL=2>"
-)
+# Only needed on Windows when Perfetto is available
+if(WIN32 AND PERFETTO_AVAILABLE)
+    set_source_files_properties(
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/database/rocprofvis_db_trace_processor.cpp
+        PROPERTIES COMPILE_FLAGS
+            "$<$<CONFIG:Debug>:/D_ITERATOR_DEBUG_LEVEL=2>"
+    )
+endif()
 
 target_link_libraries(${PROJECT_NAME} roc-optiq-core)
 target_link_libraries(${PROJECT_NAME} sqlite3)

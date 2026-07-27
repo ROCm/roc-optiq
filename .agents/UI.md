@@ -831,8 +831,9 @@ menu also copies the track name / ID; the hover tooltip (Node ID +
 Process ID) is scoped to the name-label hitbox only.
 
 State of note: `m_track_metadata` (`const TrackInfo*` from
-`TrackTopology`), `m_track_statistics`, `m_track_height`, `m_pills`
-(multiple labels/statistics in the meta area), `m_request_queue`, and
+`TrackTopology`), `m_track_statistics`, `m_options` (the track's
+`TrackOptions`, which owns the persisted height), `m_pills` (multiple
+labels/statistics in the meta area), `m_request_queue`, and
 `m_pending_requests`. `SetNodeColor()` and the node pill implement the
 optional `show_node_colors` display preference.
 
@@ -858,10 +859,14 @@ Used for queues, streams, and instrumented threads. It holds:
   `kTimelineEventHighlightChanged`.
 - A static `s_max_event_label_width` and helper
   `CalculateMaxEventLabelWidth()` invoked when fonts change.
-- Event rows use `SettingsManager::GetEventLevelHeight()` or
-  `GetEventLevelCompactHeight()`. The expand/contract affordance shows
-  all event levels, and `MeasurementController` can anchor measure
-  points to flame events.
+- Event rows use the font-responsive
+  `SettingsManager::GetEventLevelHeight()` or the fixed-height
+  `GetEventLevelCompactHeight()`, separated by
+  `GetEventLevelSpacing()`. Track heights use a two-level default, an
+  all-level expanded height, and the base meta-area minimum so titles
+  and pills remain readable. The expand/contract affordance shows all
+  event levels, and `MeasurementController` can anchor measure points
+  to flame events.
 
 ### `LineTrackItem` - line/box-plot for counters
 
@@ -1545,7 +1550,10 @@ through this** - never hardcode `IM_COL32(...)` in feature code.
   `fonts.GetFont(FontType::kMainText | kIcon)` and sizes via
   `fonts.GetFontSize(FontSize::kSmall|kMedium|kMedLarge|kLarge)`.
 - `GetEventLevelHeight()` / `GetEventLevelCompactHeight()` - the
-  pixel height of one flame-chart row in normal / compact mode.
+  pixel height of one flame-chart row in normal / compact mode. The
+  normal height scales with the active font size; compact is fixed.
+  `GetEventLevelSpacing()` is the gap between stacked event boxes, so
+  a box is one row height minus that spacing.
   **Reuse these instead of magic numbers.**
 - `GetProfilerSettings()` / `SaveProfilerSettings()` persist launcher
   paths, auto-load behavior, recent targets, and last profiler/preset/

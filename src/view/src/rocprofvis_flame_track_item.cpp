@@ -14,6 +14,7 @@
 #include "rocprofvis_utils.h"
 #include "spdlog/spdlog.h"
 #include "widgets/rocprofvis_gui_helpers.h"
+#include <algorithm>
 #include <cmath>
 #include <limits>
 #include <sstream>

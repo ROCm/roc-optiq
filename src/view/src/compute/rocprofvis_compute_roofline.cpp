@@ -1043,7 +1043,9 @@ Roofline::RenderMenus(ImVec2 region, ImVec2 plot_pos, ImVec2 plot_size,
         ImGui::EndGroup();
         float header_height = ImGui::GetItemRectSize().y + 2 * style.WindowPadding.y;
         float footer_height =
-            (m_kernel_mode == AllKernels ? 6 : 5) * ImGui::GetFrameHeightWithSpacing() +
+            (m_menus_mode == Legend ? 0.0f
+                                    : (m_kernel_mode == AllKernels ? 6 : 5) *
+                                          ImGui::GetFrameHeightWithSpacing()) +
             2 * style.WindowPadding.y;
         ImGui::SetNextWindowSizeConstraints(
             ImVec2(menus_content_width, 0),

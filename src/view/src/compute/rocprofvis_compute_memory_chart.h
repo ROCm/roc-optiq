@@ -106,10 +106,9 @@ private:
     // Group boxes (title + rect) computed during layout, drawn behind blocks.
     std::vector<MemChartGroupBox> m_group_boxes;
 
-    // Resolved after each fetch. Metrics are addressable by their dotted id
-    // ("category.table.entry", e.g. "3.1.0") or by display name.
+    // Resolved after each fetch; keyed by the metric's full dotted id
+    // ("category.table.entry", e.g. "3.1.0").
     std::unordered_map<std::string, const MetricValue*> m_ptr_by_metric_id;
-    std::unordered_map<std::string, const MetricValue*> m_ptr_by_name;
 };
 
 }  // namespace View

@@ -30,8 +30,9 @@
     },
     "definitions": {
         "metricRef": {
-            "description": "A metric reference, as a string. Preferred form is the metric's canonical dotted id 'category.table.entry' (e.g. \"3.1.0\"), matching compute_metric_definition.metric_id. A display name (e.g. \"L2 Rd\") is also accepted as a convenience. The referenced metric supplies the value, unit, and - when no title override is given - the label.",
-            "type": "string"
+            "description": "A metric reference: the metric's full canonical dotted id 'category.table.entry' (e.g. \"3.10.4\"), matching compute_metric_definition.metric_id. The complete three-part id is required - abbreviated ids and display-name aliases are not accepted. The referenced metric supplies the value, unit, and - when no title override is given - the label.",
+            "type": "string",
+            "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
         },
         "contentItem": {
             "description": "One line inside a block. Either a bare metric reference, or an object with an optional title override. The unit is taken from the metric entry automatically.",

@@ -5,6 +5,7 @@
 
 #include "rocprofvis_compute_selection.h"
 #include "rocprofvis_data_provider.h"
+#include "rocprofvis_memory_chart_default_layout.h"
 #include "rocprofvis_requests.h"
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_utils.h"
@@ -31,99 +32,7 @@ namespace RocProfVis
 namespace View
 {
 
-// The embedded default layout (a memory hierarchy expressed in the relational
-// model). In production the same JSON is expected to arrive from the
-// compute_workload table; this default keeps the chart populated in the
-// meantime and doubles as the reference example in
-// resources/memory_chart/memory_chart_default.json. A runtime override may be
-// dropped at <config-dir>/memory_chart.json.
-static const char* DEFAULT_MEMORY_CHART_JSON = R"JSON(
-{
-    "version": 2,
-    "metric_source": { "category_id": 3, "table_id": 1 },
-    "blocks": [
-        { "id": 1, "column": 0, "title": "Instr Buff", "content": [
-            { "metric": "3.1.0", "title": "Occupancy" },
-            { "metric": "3.1.1", "title": "Wave Life" }
-        ]},
-        { "id": 2, "column": 1, "title": "Exec", "content": [
-            { "metric": "3.1.11", "title": "Active CUs" },
-            { "metric": "3.1.12", "title": "VGPRs" },
-            { "metric": "3.1.13", "title": "SGPRs" },
-            { "metric": "3.1.14", "title": "LDS Alloc" },
-            { "metric": "3.1.15", "title": "Scratch" },
-            { "metric": "3.1.16", "title": "Wavefronts" },
-            { "metric": "3.1.17", "title": "Workgroups" }
-        ]},
-        { "id": 10, "column": 2, "order": 0, "title": "LDS", "content": [
-            { "metric": "3.1.19", "title": "Util" },
-            { "metric": "3.1.20", "title": "Latency" }
-        ]},
-        { "id": 11, "column": 2, "order": 1, "title": "Vector L1 Cache", "content": [
-            { "metric": "3.1.24", "title": "Hit" },
-            { "metric": "3.1.25", "title": "Latency" },
-            { "metric": "3.1.26", "title": "Coalescing" },
-            { "metric": "3.1.27", "title": "Stall" }
-        ]},
-        { "id": 12, "column": 2, "order": 2, "title": "Scalar L1D Cache", "content": [
-            { "metric": "3.1.32", "title": "Hit" },
-            { "metric": "3.1.33", "title": "Latency" }
-        ]},
-        { "id": 13, "column": 2, "order": 3, "title": "Instr L1 Cache", "content": [
-            { "metric": "3.1.38", "title": "Hit" },
-            { "metric": "3.1.39", "title": "Latency" }
-        ]},
-        { "id": 20, "column": 3, "title": "L2 Cache", "content": [
-            { "metric": "3.1.41", "title": "Rd" },
-            { "metric": "3.1.42", "title": "Wr" },
-            { "metric": "3.1.43", "title": "Atomic" },
-            { "metric": "3.1.44", "title": "Hit" },
-            { "metric": "3.1.45", "title": "Rd Latency" },
-            { "metric": "3.1.46", "title": "Wr Latency" }
-        ]},
-        { "id": 30, "column": 4, "order": 0, "title": "xGMI / PCIe", "content": [] },
-        { "id": 31, "column": 4, "order": 1, "title": "Fabric", "content": [
-            { "metric": "3.1.50", "title": "Rd" },
-            { "metric": "3.1.51", "title": "Wr" },
-            { "metric": "3.1.52", "title": "Atomic" }
-        ]},
-        { "id": 32, "column": 4, "order": 2, "title": "GMI", "content": [] },
-        { "id": 40, "column": 5, "title": "HBM", "content": [
-            { "metric": "3.1.53", "title": "Rd" },
-            { "metric": "3.1.54", "title": "Wr" }
-        ]}
-    ],
-    "arrows": [
-        { "from": 1, "to": 2, "direction": "forward", "metric": "3.1.2", "title": "SALU" },
-        { "from": 1, "to": 2, "direction": "forward", "metric": "3.1.3", "title": "SMEM" },
-        { "from": 1, "to": 2, "direction": "forward", "metric": "3.1.4", "title": "VALU" },
-        { "from": 1, "to": 2, "direction": "forward", "metric": "3.1.5", "title": "Matrix" },
-        { "from": 1, "to": 2, "direction": "forward", "metric": "3.1.6", "title": "VMEM" },
-        { "from": 1, "to": 2, "direction": "forward", "metric": "3.1.7", "title": "LDS" },
-        { "from": 1, "to": 2, "direction": "forward", "metric": "3.1.8", "title": "GWS" },
-        { "from": 1, "to": 2, "direction": "forward", "metric": "3.1.9", "title": "Br" },
-        { "from": 2,  "to": 10, "direction": "backward", "metric": "3.1.18", "title": "Req" },
-        { "from": 2,  "to": 11, "direction": "backward", "metric": "3.1.21", "title": "Rd" },
-        { "from": 2,  "to": 11, "direction": "forward",  "metric": "3.1.22", "title": "Wr" },
-        { "from": 2,  "to": 11, "direction": "both",     "metric": "3.1.23", "title": "Atomic" },
-        { "from": 2,  "to": 12, "direction": "backward", "metric": "3.1.31", "title": "Rd" },
-        { "from": 13, "to": 1,  "direction": "forward",  "metric": "3.1.37", "title": "Fetch" },
-        { "from": 11, "to": 20, "direction": "backward", "metric": "3.1.28", "title": "Rd" },
-        { "from": 11, "to": 20, "direction": "forward",  "metric": "3.1.29", "title": "Wr" },
-        { "from": 11, "to": 20, "direction": "both",     "metric": "3.1.30", "title": "Atomic" },
-        { "from": 12, "to": 20, "direction": "backward", "metric": "3.1.34", "title": "Rd" },
-        { "from": 12, "to": 20, "direction": "forward",  "metric": "3.1.35", "title": "Wr" },
-        { "from": 12, "to": 20, "direction": "both",     "metric": "3.1.36", "title": "Atomic" },
-        { "from": 13, "to": 20, "direction": "backward", "metric": "3.1.40", "title": "Req" },
-        { "from": 20, "to": 31, "direction": "backward", "metric": "3.1.47", "title": "Rd" },
-        { "from": 20, "to": 31, "direction": "forward",  "metric": "3.1.48", "title": "Wr" },
-        { "from": 20, "to": 31, "direction": "both",     "metric": "3.1.49", "title": "Atomic" },
-        { "from": 31, "to": 40, "direction": "backward", "metric": "3.1.53", "title": "Rd" },
-        { "from": 31, "to": 40, "direction": "forward",  "metric": "3.1.54", "title": "Wr" }
-    ]
-}
-)JSON";
-
+// Filename of an optional runtime override dropped at <config-dir>/.
 static constexpr const char* OVERRIDE_FILE_NAME = "memory_chart.json";
 
 // Layout constants.
@@ -394,7 +303,7 @@ void
 ComputeMemoryChartView::LoadLayout()
 {
     std::string error;
-    if(!MemChartLayout::ParseFromString(DEFAULT_MEMORY_CHART_JSON, m_layout, &error))
+    if(!MemChartLayout::ParseFromString(kDefaultMemoryChartLayout, m_layout, &error))
     {
         spdlog::error("Memory chart: failed to parse embedded layout: {}", error);
     }
@@ -449,7 +358,6 @@ void
 ComputeMemoryChartView::FetchMemChartMetrics()
 {
     m_ptr_by_metric_id.clear();
-    m_ptr_by_name.clear();
 
     m_data_provider.ComputeModel().ClearKernelMetricValues(m_client_id);
 
@@ -472,7 +380,6 @@ void
 ComputeMemoryChartView::UpdateMetrics()
 {
     m_ptr_by_metric_id.clear();
-    m_ptr_by_name.clear();
 
     if(!m_compute_selection) return;
 
@@ -486,15 +393,14 @@ ComputeMemoryChartView::UpdateMetrics()
     for(const std::shared_ptr<MetricValue>& metric : *metrics)
     {
         if(!metric || !metric->entry) continue;
-        // Keep every metric in the layout's category (any sub-table). Layouts
-        // reference metrics by dotted id ("category.table.entry") or by name.
+        // Keep metrics in the layout's category (any sub-table); layouts address
+        // them by their full dotted id ("category.table.entry").
         if(metric->entry->category_id != m_layout.metric_category_id) continue;
 
         std::string full_id = std::to_string(metric->entry->category_id) + "." +
                               std::to_string(metric->entry->table_id) + "." +
                               std::to_string(metric->entry->id);
-        m_ptr_by_metric_id[full_id]        = metric.get();
-        m_ptr_by_name[metric->entry->name] = metric.get();
+        m_ptr_by_metric_id[full_id] = metric.get();
     }
 }
 
@@ -502,14 +408,10 @@ const MetricValue*
 ComputeMemoryChartView::ResolveMetric(const MemChartMetricRef& ref) const
 {
     if(!ref.valid) return nullptr;
-    // A string reference is treated as a dotted metric id ("3.1.0") first, then
-    // as a display name; this lets layouts address metrics by their canonical id.
-    std::unordered_map<std::string, const MetricValue*>::const_iterator id_it =
+    // Layouts address metrics by their full dotted id ("category.table.entry").
+    std::unordered_map<std::string, const MetricValue*>::const_iterator it =
         m_ptr_by_metric_id.find(ref.name);
-    if(id_it != m_ptr_by_metric_id.end()) return id_it->second;
-    std::unordered_map<std::string, const MetricValue*>::const_iterator name_it =
-        m_ptr_by_name.find(ref.name);
-    return name_it != m_ptr_by_name.end() ? name_it->second : nullptr;
+    return it != m_ptr_by_metric_id.end() ? it->second : nullptr;
 }
 
 std::string

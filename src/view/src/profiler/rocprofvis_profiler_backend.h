@@ -26,6 +26,9 @@ struct TabDescriptor
     std::string id;
     std::string display_name;
     std::function<void()> render_fn;
+    // false => shown in the always-visible "General Options" area of the
+    // launcher; true => tucked under the collapsible "Advanced Options" section.
+    bool advanced = false;
 };
 
 struct WarningMessage
@@ -89,6 +92,17 @@ public:
      * tool routing suggestions, deprecated aliases in extra_env, etc.).
      */
     virtual std::vector<WarningMessage> GetWarnings(LaunchConfig const& config) const
+    {
+        (void)config;
+        return {};
+    }
+
+    /**
+     * Short, human-readable tags describing what this run will collect (e.g.
+     * "Perfetto trace", "Sampling 300Hz", "AMD SMI"). Rendered as a live chip
+     * summary in the launcher. Empty by default.
+     */
+    virtual std::vector<std::string> GetSummaryTags(LaunchConfig const& config) const
     {
         (void)config;
         return {};

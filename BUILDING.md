@@ -49,6 +49,41 @@ cmake --preset "x64-release-symbols" -DROCPROFVIS_ENABLE_INTERNAL_BANNER=OFF
 cmake --build build/x64-release-symbols --preset "Windows Release Build with Symbols" --parallel 4
 ```
 
+### MSI installer (WiX v4)
+
+The `PACKAGE_WIX` CMake target builds a self-contained MSI using a hand-authored WiX v4 source file (`wix/roc-optiq.wxs`).
+We are currently using WiX v4.0.6 for building. An upgrade to WiX v7 is planned for a later date.
+
+#### One-time setup
+
+Install the WiX v4 CLI and the UI extension (requires the [.NET SDK](https://dotnet.microsoft.com/download)):
+
+```powershell
+dotnet tool install --global wix --version 4.0.6
+wix extension add --global WixToolset.UI.wixext/4.0.6
+```
+
+#### Building the installer
+
+Building the installer is a two stage process - first we need to build the application, and then we can build the installer.
+
+**Stage 1 — build the application:**
+
+```powershell
+cmake --preset "x64-release" -DROCPROFVIS_ENABLE_INTERNAL_BANNER=OFF
+cmake --build build/x64-release --preset "Windows Release Build" --target roc-optiq --parallel 4
+# Output: build\x64-release\Release\roc-optiq.exe
+```
+
+**Stage 2 — build the installer:**
+
+```powershell
+cmake --build build/x64-release --preset "Windows Release Build" --target PACKAGE_WIX
+# Output: build\x64-release\roc-optiq-X.X.X.X-win64.msi
+```
+
+CMake will not recompile the application between stages because no sources have changed. `PACKAGE_WIX` picks up the executable already on disk and passes it directly to `wix.exe`.
+
 ---
 
 ## Linux (Ubuntu 22.04 / 24.04)
@@ -303,7 +338,7 @@ cmake --build build/linux-release --preset "Linux Release Build" --parallel 4 --
 ## Artifacts
 
 - Linux: packages are emitted into the build directory (e.g., `.deb`, `.rpm`, `.gz`).
-- Windows: the executable is in `build/<preset>/<config>/roc-optiq.exe`.
+- Windows: the executable is in `build/<preset>/<config>/roc-optiq.exe`; the MSI (when built via `PACKAGE_WIX`) is in `build/<preset>/roc-optiq-<version>-win64.msi`.
 - macOS: the executable is in `build/<preset>/`.
 
 If you need symbol builds, use the `*-release-symbols` presets.

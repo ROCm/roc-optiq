@@ -1,0 +1,167 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Copyright Advanced Micro Devices, Inc.
+  SPDX-License-Identifier: MIT
+
+  WiX v4 installer definition for ROCm Optiq.
+
+  Build via the PACKAGE_WIX CMake target defined in CMakeLists.txt.
+
+  Prerequisites (one-time, per build machine):
+      dotnet tool install -g wix
+      wix extension add WixToolset.UI.wixext
+
+  Variables supplied by CMake via -d flags:
+      Version    = 3-part MSI version: Major.Minor.(Patch*1000+Build), e.g. 0.5.1
+      ExeFile    = absolute path to roc-optiq.exe
+      LicenseRtf = absolute path to the RTF license shown in the installer UI
+      BannerBmp  = absolute path to the 493x58 banner bitmap
+      DialogBmp  = absolute path to the 493x312 background bitmap
+      IconFile   = absolute path to ROCm_Optiq.ico
+-->
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+     xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
+
+  <Package Name="ROCm™ Optiq"
+           Manufacturer="Advanced Micro Devices, Inc."
+           Version="$(var.Version)"
+           UpgradeCode="C502D354-6369-4175-AE83-D9C07716C7C9"
+           Language="1033"
+           Codepage="1252"
+           Scope="perMachine">
+
+    <!-- Silently replace any older version; block downgrades with a message. -->
+    <MajorUpgrade DowngradeErrorMessage="A newer version of ROCm™ Optiq is already installed." />
+
+    <!-- Embed the cabinet directly into the MSI. -->
+    <MediaTemplate EmbedCab="yes" />
+
+    <!-- Standard WixUI_InstallDir dialog set (license + install-dir page). -->
+    <ui:WixUI Id="WixUI_InstallDir" />
+    <WixVariable Id="WixUILicenseRtf"                       Value="$(var.LicenseRtf)" />
+    <WixVariable Id="WixUIBannerBmp"                        Value="$(var.BannerBmp)" />
+    <WixVariable Id="WixUIDialogBmp"                        Value="$(var.DialogBmp)" />
+    <!-- Product icon shown in Add/Remove Programs. -->
+    <Icon Id="ApplicationIcon" SourceFile="$(var.IconFile)" />
+    <Property Id="ARPPRODUCTICON"   Value="ApplicationIcon" />
+    <Property Id="WIXUI_INSTALLDIR" Value="INSTALLDIR" />
+
+    <!-- Checked by default; the checkboxes on ShortcutOptionsDlg toggle these. -->
+    <Property Id="INSTALLSTARTMENUSHORTCUT" Value="1" />
+    <Property Id="INSTALLDESKTOPSHORTCUT" Value="1" />
+
+    <!-- Custom dialog with a desktop-shortcut checkbox, inserted between
+         InstallDirDlg and VerifyReadyDlg in the WixUI_InstallDir sequence. -->
+    <UI>
+      <Dialog Id="ShortcutOptionsDlg" Width="370" Height="270" Title="!(loc.InstallDirDlg_Title)">
+        <Control Id="BannerBitmap" Type="Bitmap" X="0" Y="0" Width="370" Height="44"
+                 TabSkip="no" Text="!(loc.InstallDirDlgBannerBitmap)" />
+        <Control Id="BannerLine" Type="Line" X="0" Y="44" Width="370" Height="0" />
+        <Control Id="Title" Type="Text" X="15" Y="6" Width="200" Height="15" Transparent="yes"
+                 NoPrefix="yes" Text="{\WixUI_Font_Title}Shortcut Options" />
+        <Control Id="Description" Type="Text" X="25" Y="23" Width="280" Height="15" Transparent="yes"
+                 NoPrefix="yes" Text="Choose which shortcuts to create." />
+        <Control Id="StartMenuShortcutCheckBox" Type="CheckBox"
+                 X="20" Y="80" Width="300" Height="17"
+                 Property="INSTALLSTARTMENUSHORTCUT" CheckBoxValue="1"
+                 Text="Create a Start Menu shortcut" />
+        <Control Id="DesktopShortcutCheckBox" Type="CheckBox"
+                 X="20" Y="100" Width="300" Height="17"
+                 Property="INSTALLDESKTOPSHORTCUT" CheckBoxValue="1"
+                 Text="Create a desktop shortcut" />
+        <Control Id="BottomLine" Type="Line" X="0" Y="234" Width="370" Height="0" />
+        <Control Id="Back" Type="PushButton" X="180" Y="243" Width="56" Height="17" Text="!(loc.WixUIBack)" />
+        <Control Id="Next" Type="PushButton" X="236" Y="243" Width="56" Height="17" Default="yes" Text="!(loc.WixUINext)" />
+        <Control Id="Cancel" Type="PushButton" X="304" Y="243" Width="56" Height="17" Cancel="yes" Text="!(loc.WixUICancel)">
+          <Publish Event="SpawnDialog" Value="CancelDlg" />
+        </Control>
+      </Dialog>
+
+      <!-- Wire InstallDirDlg → ShortcutOptionsDlg → VerifyReadyDlg -->
+      <Publish Dialog="InstallDirDlg" Control="Next" Event="NewDialog" Value="ShortcutOptionsDlg" Order="999" Condition="WIXUI_DONTVALIDATEPATH OR WIXUI_INSTALLDIR_VALID=&quot;1&quot;" />
+      <Publish Dialog="ShortcutOptionsDlg" Control="Back" Event="NewDialog" Value="InstallDirDlg" />
+      <Publish Dialog="ShortcutOptionsDlg" Control="Next" Event="NewDialog" Value="VerifyReadyDlg" />
+      <Publish Dialog="VerifyReadyDlg" Control="Back" Event="NewDialog" Value="ShortcutOptionsDlg" Order="2" />
+    </UI>
+
+    <!-- ═══════════════════════════════════════════════════════════════════
+         Directory layout
+         Default: C:\Program Files\AMD\ROCm-Optiq\
+         ═══════════════════════════════════════════════════════════════════ -->
+    <StandardDirectory Id="ProgramFiles64Folder">
+      <Directory Id="AMDFolder" Name="AMD">
+        <Directory Id="INSTALLDIR" Name="ROCm-Optiq">
+
+            <Component Id="MainExecutable" Guid="*">
+              <File Id="RocOptiqExe"
+                    Name="roc-optiq.exe"
+                    Source="$(var.ExeFile)"
+                    KeyPath="yes" />
+            </Component>
+
+        </Directory>
+      </Directory>
+    </StandardDirectory>
+
+    <!-- ═══════════════════════════════════════════════════════════════════
+         Start Menu shortcut
+         The RegistryValue is the KeyPath so Windows Installer tracks it.
+         ═══════════════════════════════════════════════════════════════════ -->
+    <StandardDirectory Id="ProgramMenuFolder">
+      <Directory Id="ApplicationProgramsFolder" Name="AMD ROCm™ Optiq">
+
+        <Component Id="StartMenuShortcut" Guid="*" Condition="INSTALLSTARTMENUSHORTCUT">
+          <Shortcut Id="AppStartMenuShortcut"
+                    Name="ROCm™ Optiq"
+                    Description="ROCm™ Profiler Visualizer"
+                    Target="[INSTALLDIR]roc-optiq.exe"
+                    WorkingDirectory="INSTALLDIR"
+                    Icon="ApplicationIcon" />
+          <RemoveFolder Id="CleanupStartMenu"
+                        Directory="ApplicationProgramsFolder"
+                        On="uninstall" />
+          <RegistryValue Root="HKLM"
+                         Key="Software\AMD\ROCm Optiq"
+                         Name="StartMenuInstalled"
+                         Type="integer"
+                         Value="1"
+                         KeyPath="yes" />
+        </Component>
+
+      </Directory>
+    </StandardDirectory>
+
+    <!-- ═══════════════════════════════════════════════════════════════════
+         Desktop shortcut
+         ═══════════════════════════════════════════════════════════════════ -->
+    <StandardDirectory Id="DesktopFolder">
+      <Component Id="DesktopShortcut" Guid="*" Condition="INSTALLDESKTOPSHORTCUT">
+        <Shortcut Id="AppDesktopShortcut"
+                  Name="ROCm™ Optiq"
+                  Description="ROCm™ Profiler Visualizer"
+                  Target="[INSTALLDIR]roc-optiq.exe"
+                  WorkingDirectory="INSTALLDIR"
+                  Icon="ApplicationIcon" />
+        <RemoveFile Id="CleanupDesktopShortcut"
+                    Name="ROCm™ Optiq.lnk"
+                    On="uninstall" />
+        <RegistryValue Root="HKLM"
+                       Key="Software\AMD\ROCm Optiq"
+                       Name="DesktopShortcutInstalled"
+                       Type="integer"
+                       Value="1"
+                       KeyPath="yes" />
+      </Component>
+    </StandardDirectory>
+
+    <!-- ═══════════════════════════════════════════════════════════════════
+         Feature tree (single feature, all components required)
+         ═══════════════════════════════════════════════════════════════════ -->
+    <Feature Id="ProductFeature" Title="ROCm™ Optiq" Level="1">
+      <ComponentRef Id="MainExecutable" />
+      <ComponentRef Id="StartMenuShortcut" />
+      <ComponentRef Id="DesktopShortcut" />
+    </Feature>
+
+  </Package>
+</Wix>

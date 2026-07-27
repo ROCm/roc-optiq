@@ -4,6 +4,7 @@
 #include "rocprofvis_notification_manager.h"
 #include "imgui.h"
 #include "rocprofvis_gui_helpers.h"
+#include "rocprofvis_render_scheduler.h"
 #include "rocprofvis_settings_manager.h"
 #include <algorithm>
 
@@ -155,6 +156,12 @@ NotificationManager::ClearAll()
 void
 NotificationManager::Render()
 {
+    // Toasts fade over time; keep rendering while any is present.
+    if(!m_notifications.empty())
+    {
+        RenderScheduler::GetInstance().RequestRender();
+    }
+
     const ImGuiViewport* viewport = ImGui::GetMainViewport();
     const ImGuiStyle&    style    = ImGui::GetStyle();
     ImVec2               base_pos = viewport->WorkPos;

@@ -31,6 +31,12 @@ struct SshConnectionConfig
     std::string identity_file;
     std::string passphrase;
 
+    // User-facing label for this connection: the display name when the user set
+    // one, otherwise "user@host:port" (with "?" standing in for a missing user).
+    // Returns an empty string when no host is configured yet, so callers can fall
+    // back to a "Configure" prompt.
+    std::string DisplayLabel() const;
+
     // Trimmed accessors used by the SSH/session layers.
     std::string HostTrimmed() const;
     std::string PortTrimmed() const;

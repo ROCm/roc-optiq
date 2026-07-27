@@ -78,11 +78,17 @@ ProfilerLauncherDialog::ProfilerLauncherDialog(AppWindow* app_window)
     m_backends[0]->LoadSettings(jt::Json());
     m_config.backend_payload = m_backends[0]->SaveSettings();
 
+#ifdef ROCPROFVIS_ENABLE_REMOTE
+    // Must precede LoadFromSettings(): rehydrating the remembered profile
+    // validates its connection ref against this store, which would reject every
+    // ref while the store is still empty.
+    m_connection_store.Load();
+#endif
+
     LoadFromSettings();
     RefreshExecutionCache();
 
 #ifdef ROCPROFVIS_ENABLE_REMOTE
-    m_connection_store.Load();
     if(m_connection_store.Get(m_selected_connection_id) == nullptr && !m_connection_store.Empty())
     {
         m_selected_connection_id = m_connection_store.List().front().id;

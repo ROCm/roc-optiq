@@ -995,20 +995,34 @@ Roofline::RenderMenus(ImVec2 region, ImVec2 plot_pos, ImVec2 plot_size,
         }
         ImGui::SetCursorPos(button_pos +
                             ImVec2(0.0f, menus_on_bottom ? -button_size : button_size));
-        ImGui::PushFont(m_settings.GetFontManager().GetFont(FontType::kIcon), 0.0f);
-        if(ImGui::Button(m_menus_mode == Legend ? ICON_GEAR : ICON_LIST,
-                         ImVec2(button_size, button_size)))
+        // Draw the icon manually so it stays centered: ImGui::Button left-clamps
+        // a glyph that is wider than the (main-font-sized) button.
+        const char* mode_icon    = m_menus_mode == Legend ? ICON_GEAR : ICON_LIST;
+        ImVec2      mode_min      = ImGui::GetCursorScreenPos();
+        ImVec2      mode_size     = ImVec2(button_size, button_size);
+        bool        mode_clicked  = ImGui::InvisibleButton("menu_mode", mode_size);
+        ImU32       mode_bg =
+            ImGui::IsItemActive()    ? ImGui::GetColorU32(ImGuiCol_ButtonActive)
+            : ImGui::IsItemHovered() ? ImGui::GetColorU32(ImGuiCol_ButtonHovered)
+                                     : ImGui::GetColorU32(ImGuiCol_Button);
+        ImDrawList* mode_draw = ImGui::GetWindowDrawList();
+        mode_draw->AddRectFilled(mode_min, mode_min + mode_size, mode_bg,
+                                 style.FrameRounding);
+        if(style.FrameBorderSize > 0.0f)
         {
-            if(m_menus_mode == Legend)
-            {
-                m_menus_mode = Options;
-            }
-            else
-            {
-                m_menus_mode = Legend;
-            }
+            mode_draw->AddRect(mode_min, mode_min + mode_size,
+                               ImGui::GetColorU32(ImGuiCol_Border), style.FrameRounding, 0,
+                               style.FrameBorderSize);
         }
+        ImGui::PushFont(m_settings.GetFontManager().GetFont(FontType::kIcon), 0.0f);
+        ImVec2 mode_icon_size = ImGui::CalcTextSize(mode_icon);
+        mode_draw->AddText(mode_min + (mode_size - mode_icon_size) * 0.5f,
+                           ImGui::GetColorU32(ImGuiCol_Text), mode_icon);
         ImGui::PopFont();
+        if(mode_clicked)
+        {
+            m_menus_mode = m_menus_mode == Legend ? Options : Legend;
+        }
         ImGui::SetCursorPos(window_pos);
 
         ImGui::SetNextWindowSizeConstraints(ImVec2(menus_width, button_size * 2.0f),

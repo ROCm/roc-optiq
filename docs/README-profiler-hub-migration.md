@@ -49,7 +49,7 @@ Every track-type migration in this branch follows the same two-function shape in
    `TRACK_ID_AGENT` for GPU-topology nesting.
 2. **[`AddReader<Type>Tracks(Future* future)`](https://github.com/avansick-amd/roc-optiq/blob/9c09fbed/src/model/src/database/rocprofvis_db_rocprof.cpp#L643-L739)** — the discovery/load function. Checks the
    metadata-version cache first (a cache hit skips the reader entirely and reloads from the DB's
-   own saved track table); on a cache miss, calls `reader->get_all_tracks()`, filters to the
+   own saved track table); on a cache miss, calls `reader->get_tracks()`, filters to the
    relevant `track_type_t`, and for each track computes `record_count` via `get_track_stats()`
    and min/max timestamp/level via a single `get_interval_track()` walk. Threaded per DB
    instance, matching the existing threading model.
@@ -81,7 +81,7 @@ call.
   in-memory indexes built from one `get_flows()` call each: a TOPOLOGY index (undirected
   adjacency keyed on typed `(event_type, opaque_id)` pairs, since raw opaque ids collide across
   the region/kernel_dispatch/memory_copy/memory_allocate tables) and a PAYLOAD index (event
-  metadata from `get_all_tracks()` + `get_interval_track()`, restricted to the four native
+  metadata from `get_tracks()` + `get_interval_track()`, restricted to the four native
   single-table track types to avoid double-keying). Verified byte-identical against a pristine
   pre-migration SQL oracle (a separate frozen worktree, `roc-optiq-sql-oracle` at [`48e29fbd`](https://github.com/avansick-amd/roc-optiq/commit/48e29fbd)) for
   region, kernel-dispatch, and memory-copy causal edges, plus a fabricated fixture for

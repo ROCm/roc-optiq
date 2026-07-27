@@ -408,7 +408,7 @@ RocprofDatabase::AddReaderRegionTracks(Future* future)
                 m_add_track_mutex.unlock(guid_index);
                 return;
             }
-            auto reader_tracks = reader->get_all_tracks();
+            auto reader_tracks = reader->get_tracks();
             m_add_track_mutex.lock(guid_index);
             for(const auto& info : reader_tracks)
             {
@@ -671,7 +671,7 @@ RocprofDatabase::AddReaderMemoryTracks(Future* future)
             m_add_track_mutex.unlock(guid_index);
             return;
         }
-        auto reader_tracks = reader->get_all_tracks();
+        auto reader_tracks = reader->get_tracks();
         m_add_track_mutex.lock(guid_index);
         for(const auto& info : reader_tracks)
         {
@@ -770,7 +770,7 @@ RocprofDatabase::AddReaderDmaTracks(Future* future)
             m_add_track_mutex.unlock(guid_index);
             return;
         }
-        auto reader_tracks = reader->get_all_tracks();
+        auto reader_tracks = reader->get_tracks();
         m_add_track_mutex.lock(guid_index);
         for(const auto& info : reader_tracks)
         {
@@ -869,7 +869,7 @@ RocprofDatabase::AddReaderCounterTracks(Future* future)
             m_add_track_mutex.unlock(guid_index);
             return;
         }
-        auto reader_tracks = reader->get_all_tracks();
+        auto reader_tracks = reader->get_tracks();
         m_add_track_mutex.lock(guid_index);
         for(const auto& info : reader_tracks)
         {
@@ -977,7 +977,7 @@ RocprofDatabase::AddReaderGpuQueueAndStreamTracks(Future* future)
             m_add_track_mutex.unlock(guid_index);
             return;
         }
-        auto reader_tracks = reader->get_all_tracks();
+        auto reader_tracks = reader->get_tracks();
         m_add_track_mutex.lock(guid_index);
         for(const auto& info : reader_tracks)
         {
@@ -1074,7 +1074,7 @@ RocprofDatabase::ReadReaderTraceSlice(rocprofvis_dm_timestamp_t     start,
 
     if(props->track_indentifiers.category == kRocProfVisDmPmcTrack)
     {
-        using scalar_event_t = profiler_hub::reader_types::scalar_event_t;
+        using scalar_sample_t = profiler_hub::reader_types::scalar_sample_t;
         // Counter (scalar) slice: samples are (timestamp, value) points, not intervals.
         // Reproduce the SQL PMC slice's continuity contract
         // (BuildCounterSliceLeft/RightNeighbourQuery + synthetic endpoint): one sample
@@ -1083,11 +1083,11 @@ RocprofDatabase::ReadReaderTraceSlice(rocprofvis_dm_timestamp_t     start,
         // BuildSliceQuery's pmc branch), and one sample just after the window; if none
         // exists, synthesize an endpoint at the trace end carrying the last value (the
         // SQL zero-right-row path). pmc records carry only (timestamp, value); the value
-        // is on scalar_event_t directly, so get_scalar_details (which resolves by
+        // is on scalar_sample_t directly, so get_scalar_details (which resolves by
         // opaque_id) is not needed here.
         auto samples = reader->get_scalar_track(props->reader_track_id);
         std::sort(samples.begin(), samples.end(),
-                  [](const scalar_event_t& a, const scalar_event_t& b) {
+                  [](const scalar_sample_t& a, const scalar_sample_t& b) {
                       return a.timestamp < b.timestamp;
                   });
 
@@ -1106,7 +1106,7 @@ RocprofDatabase::ReadReaderTraceSlice(rocprofvis_dm_timestamp_t     start,
         double last_value = 0;
 
         // Left neighbour: last sample strictly before the window.
-        const scalar_event_t* left = nullptr;
+        const scalar_sample_t* left = nullptr;
         for(const auto& ev : samples)
         {
             if(ev.timestamp >= abs_start) break;
@@ -1122,7 +1122,7 @@ RocprofDatabase::ReadReaderTraceSlice(rocprofvis_dm_timestamp_t     start,
         }
 
         // Main window: START BETWEEN start AND end (inclusive), preserving every value
-        // point (the v3 shared-opaque_id shape yields one scalar_event_t per value, so
+        // point (the v3 shared-opaque_id shape yields one scalar_sample_t per value, so
         // iterating samples here drops nothing and never collapses distinct values).
         for(const auto& ev : samples)
         {
@@ -1135,7 +1135,7 @@ RocprofDatabase::ReadReaderTraceSlice(rocprofvis_dm_timestamp_t     start,
 
         // Right neighbour: first sample strictly after the window; else synthesize an
         // endpoint at the trace end with the last value.
-        const scalar_event_t* right = nullptr;
+        const scalar_sample_t* right = nullptr;
         for(const auto& ev : samples)
         {
             if(ev.timestamp > abs_end)
@@ -1172,10 +1172,10 @@ RocprofDatabase::ReadReaderTraceSlice(rocprofvis_dm_timestamp_t     start,
         if(!(ev.start < abs_end && ev.end > abs_start)) continue;
 
         rocprofvis_db_record_data_t record;
-        // TASK 037: surrogate replaces the removed interval_event_t::opaque_id.
+        // TASK 037: surrogate replaces the removed interval_entry_t::opaque_id.
         uint64_t surrogate = ReaderSurrogateFor(guid_index, ev.id);
         // Stream tracks carry heterogeneous op types per event (kernel_dispatch,
-        // memory_copy, memory_allocate). interval_event_t no longer exposes an op_kind
+        // memory_copy, memory_allocate). interval_entry_t no longer exposes an op_kind
         // (the type is sealed inside the opaque event_id_t), so the per-event operation
         // is recovered from the registry's home_op, recorded during the eager scan from
         // each event's native/home track type. Falls back to the track default
@@ -2603,7 +2603,7 @@ RocprofDatabase::BuildReaderEventRegistry(DbInstance* db_instance)
     // materialized as Optiq tracks; skip. The home/stream Optiq track ids are resolved
     // once here via FindTrack (identity-slots filled by the per-type ToTrackParams
     // adapters), so the detail panel's Essential Info needs no per-click FindTrack.
-    for(const auto& info : reader->get_all_tracks())
+    for(const auto& info : reader->get_tracks())
     {
         if(!info) continue;
         rocprofvis_dm_track_params_t    track_params = { 0 };
@@ -2649,7 +2649,7 @@ RocprofDatabase::BuildReaderEventRegistry(DbInstance* db_instance)
                 rei.home_track_id   = track_id;
                 rei.level_for_queue = ev.level;
                 // TASK 037: carry the home-track operation so the mint site can set
-                // event_op without an interval_event_t::op_kind (which no longer exists).
+                // event_op without an interval_entry_t::op_kind (which no longer exists).
                 rei.home_op = home_op;
             }
         }
@@ -2718,7 +2718,7 @@ RocprofDatabase::BuildReaderFlowIndexes(DbInstance* db_instance)
     // memory_allocate).
     for(const auto& flow : reader->get_flows())
     {
-        // TASK 037: flow_t now names endpoints by the opaque event_id_t directly (032/033
+        // TASK 037: flow_edge_t now names endpoints by the opaque event_id_t directly (032/033
         // removed the *_type/*_opaque_id fields); key the undirected adjacency on it.
         topology[flow.source].insert(flow.dest);
         topology[flow.dest].insert(flow.source);
@@ -2731,7 +2731,7 @@ RocprofDatabase::BuildReaderFlowIndexes(DbInstance* db_instance)
     // (op-category) track. Excluding stream keeps (event_type, opaque_id) unique with the
     // correct level. Each native track fixes the endpoint's op and identity slots (col4/
     // col5) via the existing per-type ToTrackParams adapters.
-    for(const auto& info : reader->get_all_tracks())
+    for(const auto& info : reader->get_tracks())
     {
         if(!info) continue;
         event_type_t                 etype;

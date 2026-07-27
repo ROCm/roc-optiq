@@ -80,7 +80,7 @@ class RocprofDatabase : public ProfileDatabase
         mem_free_stream_to_agent_t;
 
     // TASK 037: Task 028 sealed the (event_type, row_id) pair inside the opaque
-    // event_id_t, and tasks 032/033 removed flow_t's *_type/*_opaque_id fields. The flow
+    // event_id_t, and tasks 032/033 removed flow_edge_t's *_type/*_opaque_id fields. The flow
     // index is now keyed directly on the opaque event_id_t (hashable + ordered), which
     // uniquely names an event across all per-type tables with no companion type tag. The
     // endpoint's event_type_t (needed for the leg-type filter and op mapping that the
@@ -113,7 +113,7 @@ class RocprofDatabase : public ProfileDatabase
     // (trackId/levelForTrack/streamTrackId/levelForStreamTrack) — replacing the
     // numeric-id- keyed roc_optiq_event_levels_* tables + FindTrack-at-click for reader
     // tracks. Built eagerly once per shard (BuildReaderEventRegistry) by scanning
-    // get_all_tracks() + get_interval_track() over every interval track type, so both
+    // get_tracks() + get_interval_track() over every interval track type, so both
     // levels are always available regardless of which slices are loaded.
     struct ReaderEventInfo
     {
@@ -256,11 +256,11 @@ private:
         rocprofvis_dm_track_params_t& track_params);
 
     // Reader-backed cpu_thread discovery: replaces the region-main/region-sample SQL
-    // discovery blocks with get_all_tracks() filtered to cpu_thread, per shard.
+    // discovery blocks with get_tracks() filtered to cpu_thread, per shard.
     rocprofvis_dm_result_t AddReaderRegionTracks(Future* future);
 
     // Reader-backed gpu_queue and stream discovery: replaces the kernel-dispatch SQL
-    // discovery blocks with get_all_tracks() filtered to gpu_queue and stream, per shard.
+    // discovery blocks with get_tracks() filtered to gpu_queue and stream, per shard.
     rocprofvis_dm_result_t AddReaderGpuQueueAndStreamTracks(Future* future);
 
     // Adapt a reader gpu_queue track into Optiq track_params (identity slots, category,
@@ -276,7 +276,7 @@ private:
         rocprofvis_dm_track_params_t& track_params);
 
     // Reader-backed memory-alloc discovery: replaces the standalone memory-alloc SQL
-    // block with get_all_tracks() filtered to track_type_t::memory, per shard.
+    // block with get_tracks() filtered to track_type_t::memory, per shard.
     rocprofvis_dm_result_t AddReaderMemoryTracks(Future* future);
 
     // Adapt a reader memory track into Optiq track_params (identity slots, category, op).
@@ -285,7 +285,7 @@ private:
         rocprofvis_dm_track_params_t& track_params);
 
     // Reader-backed memory-copy discovery: replaces the standalone (queue-keyed)
-    // memory-copy SQL block with get_all_tracks() filtered to track_type_t::dma, per
+    // memory-copy SQL block with get_tracks() filtered to track_type_t::dma, per
     // shard.
     rocprofvis_dm_result_t AddReaderDmaTracks(Future* future);
 
@@ -296,7 +296,7 @@ private:
                                      rocprofvis_dm_track_params_t& track_params);
 
     // Reader-backed counter (scalar/PMC) discovery: replaces the sample-based "SMI
-    // performance counters" SQL block with get_all_tracks() filtered to
+    // performance counters" SQL block with get_tracks() filtered to
     // track_type_t::counter, per shard. Kernel-dispatch PMC and memory-activity blocks
     // stay on SQL (the reader has no track type for either).
     rocprofvis_dm_result_t AddReaderCounterTracks(Future* future);
@@ -333,7 +333,7 @@ private:
     // Build (once per db-instance, cached for the db lifetime) the two reader-backed flow
     // indexes: a TOPOLOGY index (undirected stack-clique adjacency, keyed on the opaque
     // event_id_t) from a single get_flows() call, and a PAYLOAD index (per-endpoint
-    // identity/timing/level/type/strings) from get_all_tracks()+get_interval_track() over
+    // identity/timing/level/type/strings) from get_tracks()+get_interval_track() over
     // the four native single-table track types. Builds the event registry first (for
     // surrogate minting). Idempotent; guarded by m_flow_index_mutex.
     rocprofvis_dm_result_t BuildReaderFlowIndexes(DbInstance* db_instance);
@@ -347,7 +347,7 @@ private:
                         const ReaderFlowPayload&                      payload);
 
     // TASK 037: Build (once per shard, lazily, cached for the db lifetime) the reader
-    // event registry: scan get_all_tracks() + get_interval_track() over every interval
+    // event registry: scan get_tracks() + get_interval_track() over every interval
     // track type, minting a stable surrogate per opaque event_id_t and recording its
     // home/stream Optiq track ids and per-track nesting levels. Prerequisite for every
     // reader detail/stack/ flow/slice path that round-trips the UI handle. Idempotent;

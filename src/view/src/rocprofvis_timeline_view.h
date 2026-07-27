@@ -190,6 +190,9 @@ private:
     void                            ClearTimeRangeSelection();
     void                            CopySelectedEventNames();
     void                            CopySelectedEventDetails();
+    void                            ZoomToTimeSpan(double start_ns, double end_ns);
+    void                            ZoomToMeasurement();
+    void                            ZoomToTimeRangeSelection();
 
     TrackLayout                     BuildTrackLayout();
     EventManager::SubscriptionToken m_scroll_to_track_token;

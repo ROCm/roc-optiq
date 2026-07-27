@@ -53,6 +53,9 @@ constexpr const char* DISPLAY_NAMES_KERNEL_INTENSITY[] = {
 };
 constexpr const char* MEMORY_LEVEL_NAMES[] = { "HBM", "L2", "L1", "LDS" };
 constexpr const char* FILTER_OPTION_ALL    = "All";
+// Shown by every dropdown once visibility has been hand-edited via Custom, so
+// the toolbar does not claim a selection that no longer matches the plot.
+constexpr const char* FILTER_OPTION_CUSTOM = "-";
 constexpr const char* DISPLAY_NAMES_PRESET[] = {
     "FP4",   // PresetModel::Type::FP4
     "FP6",   // PresetModel::Type::FP6
@@ -87,6 +90,7 @@ Roofline::Roofline(DataProvider& data_provider, KernelMode kernel_mode)
 , m_requested_kernel_id(0)
 , m_isolated_kernel(nullptr)
 , m_isolated_bandwidth(std::nullopt)
+, m_custom_visibility(false)
 {
     m_widget_name = GenUniqueName("roofline");
     m_items.resize(static_cast<size_t>(__KRPVControllerRooflineCeilingComputeTypeLast +
@@ -752,7 +756,9 @@ Roofline::RenderToolbar()
     ImGui::PushID("compute_peak");
     label_cell("Compute peak");
     PushComboStyles();
-    if(ImGui::BeginCombo("##compute_peak", DISPLAY_NAMES_PRESET[m_active_preset]))
+    if(ImGui::BeginCombo("##compute_peak",
+                         m_custom_visibility ? FILTER_OPTION_CUSTOM
+                                             : DISPLAY_NAMES_PRESET[m_active_preset]))
     {
         for(PresetModel& preset : m_presets)
         {
@@ -778,7 +784,8 @@ Roofline::RenderToolbar()
         label_cell("Bandwidth peak");
         PushComboStyles();
         if(ImGui::BeginCombo("##bandwidth_peak",
-                             m_isolated_bandwidth
+                             m_custom_visibility ? FILTER_OPTION_CUSTOM
+                             : m_isolated_bandwidth
                                  ? MEMORY_LEVEL_NAMES[m_isolated_bandwidth.value()]
                                  : FILTER_OPTION_ALL))
         {
@@ -814,8 +821,9 @@ Roofline::RenderToolbar()
         label_cell("Kernel");
         PushComboStyles();
         if(ImGui::BeginCombo("##kernel",
-                             m_isolated_kernel ? m_isolated_kernel->name.c_str()
-                                               : FILTER_OPTION_ALL))
+                             m_custom_visibility ? FILTER_OPTION_CUSTOM
+                             : m_isolated_kernel  ? m_isolated_kernel->name.c_str()
+                                                  : FILTER_OPTION_ALL))
         {
             if(ImGui::Selectable(FILTER_OPTION_ALL, !m_isolated_kernel))
             {
@@ -858,7 +866,8 @@ Roofline::RenderToolbar()
         label_cell("Kernel bandwidth");
         PushComboStyles();
         if(ImGui::BeginCombo("##kernel_bandwidth",
-                             m_memory_peak_filter
+                             m_custom_visibility ? FILTER_OPTION_CUSTOM
+                             : m_memory_peak_filter
                                  ? MEMORY_LEVEL_NAMES[m_memory_peak_filter.value()]
                                  : FILTER_OPTION_ALL))
         {
@@ -1133,8 +1142,9 @@ Roofline::RenderMenus(ImVec2 region, ImVec2 plot_pos, ImVec2 plot_size,
                     {
                         if(m_menus_mode == Options)
                         {
-                            m_items[i].visible = !m_items[i].visible;
-                            m_options_changed  = true;
+                            m_items[i].visible  = !m_items[i].visible;
+                            m_custom_visibility = true;
+                            m_options_changed   = true;
                         }
                         else if(m_kernel_mode == AllKernels &&
                                 m_items[i].type == ItemModel::Type::Intensity)
@@ -1319,6 +1329,8 @@ Roofline::RecomputeVisibility()
     {
         m_items[item_idx].visible = true;
     }
+    // Visibility now matches the dropdown selections again.
+    m_custom_visibility = false;
     // Visibility can change which ceilings are shown, so recompute the ridges.
     m_options_changed = true;
 }

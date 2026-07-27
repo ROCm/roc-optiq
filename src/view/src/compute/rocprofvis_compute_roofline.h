@@ -142,6 +142,8 @@ private:
     const KernelInfo*     m_isolated_kernel;
     std::optional<rocprofvis_controller_roofline_ceiling_bandwidth_type_t>
         m_isolated_bandwidth;
+    // Set when Custom toggles diverge visibility from the dropdown selections.
+    bool                  m_custom_visibility;
     bool                  m_options_changed;
     bool                  m_plot_zoom_enabled;
     std::optional<size_t> m_hovered_item_idx;

@@ -1,3 +1,5 @@
+// Copyright Advanced Micro Devices, Inc.
+// SPDX-License-Identifier: MIT
 // Test-only access shims (Test Peer pattern). Compiled ONLY into the
 // roc-optiq-tests executable; never referenced by production builds. Each view
 // class grants a single `friend struct <Class>TestPeer;` so these peers can read

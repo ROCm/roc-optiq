@@ -77,7 +77,6 @@ private:
 
     void RenderTooltip(ChartItem& chart_item, size_t color_index);
     void RecalculateTrackHeight();
-    void ApplyCompactMode();
 
     std::vector<ChartItem>                 m_chart_items;
     ImVec2                                 m_text_padding;

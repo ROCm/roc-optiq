@@ -598,6 +598,7 @@ TraceView::GetTimelineSelection() const
 {
     return m_timeline_selection;
 }
+
 std::shared_ptr<RocWidget>
 TraceView::GetToolbar()
 {

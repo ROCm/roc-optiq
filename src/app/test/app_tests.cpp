@@ -1,3 +1,5 @@
+// Copyright Advanced Micro Devices, Inc.
+// SPDX-License-Identifier: MIT
 #include "app_tests.h"
 #include "imgui_te_engine.h"
 #include "imgui_te_context.h"

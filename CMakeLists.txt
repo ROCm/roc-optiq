@@ -706,6 +706,43 @@ endif()
 # Include packaging
 include(CPack)
 
+# ── WiX v4 MSI installer (Windows only) ──────────────────────────────────────
+# Builds roc-optiq-<version>-win64.msi from wix/roc-optiq.wxs via the WiX v4
+# CLI.  Prerequisites (one-time per build machine):
+#   dotnet tool install --global wix
+#   wix extension add WixToolset.UI.wixext
+if(WIN32)
+  find_program(WIX_EXECUTABLE wix DOC "WiX v4 CLI (wix.exe)")
+  if(WIX_EXECUTABLE)
+    set(_wix_src  "${CMAKE_SOURCE_DIR}/wix/roc-optiq.wxs")
+    set(_wix_out  "${CMAKE_BINARY_DIR}/roc-optiq-${CPACK_PACKAGE_VERSION}-win64.msi")
+    # MSI only supports 3-part versions; encode Patch*1000+Build into the third component
+    # so upgrade detection works correctly when only the build number changes.
+    math(EXPR _wix_patch "${PROJECT_VERSION_PATCH} * 1000 + ${PROJECT_VERSION_BUILD}")
+    set(_wix_version "${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}.${_wix_patch}")
+    add_custom_target(PACKAGE_WIX
+      COMMAND "${WIX_EXECUTABLE}" build
+        -arch x64
+        -d "Version=${_wix_version}"
+        -d "ExeFile=$<TARGET_FILE:${TARGET_NAME}>"
+        -d "LicenseRtf=${CMAKE_SOURCE_DIR}/Installer/Documentation/License/License_Public.rtf"
+        -d "BannerBmp=${CMAKE_SOURCE_DIR}/Installer/Installation/Files/banner.bmp"
+        -d "DialogBmp=${CMAKE_SOURCE_DIR}/Installer/Installation/Files/main.bmp"
+        -d "IconFile=${CMAKE_SOURCE_DIR}/resources/ROCm_Optiq.ico"
+        -ext WixToolset.UI.wixext
+        -out "${_wix_out}"
+        "${_wix_src}"
+      DEPENDS ${TARGET_NAME}
+      COMMENT "Building WiX MSI installer: ${_wix_out}"
+      VERBATIM
+    )
+  else()
+    message(STATUS "wix.exe not found — PACKAGE_WIX target unavailable. "
+                   "Install WiX v4: dotnet tool install --global wix")
+  endif()
+endif()
+# ─────────────────────────────────────────────────────────────────────────────
+
 # Copy runtime files to target folder
 # Uses a no-op (cmake -E true) when there are no runtime DLLs (e.g. GLFW_LINK_STATIC=ON)
 if(WIN32)

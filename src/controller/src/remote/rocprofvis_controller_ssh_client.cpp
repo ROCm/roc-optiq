@@ -1184,36 +1184,26 @@ namespace Controller
         return Result::Success;
     }
 
-    // libssh2's SFTP teardown entry points can report EAGAIN on a non-blocking
-    // session, so releasing a handle needs the same bounded socket wait as the
-    // rest of the transport. These guards own that retry loop, so a listing
-    // releases its handles exactly once on every exit path - success, error or
-    // cancel - without repeating the teardown at each return. WaitSocket is
-    // injected as a function pointer to keep the guards local to this file.
-    using wait_socket_fn_t = bool (*)(SshConnection*);
-
+    // SFTP teardown can report EAGAIN on a non-blocking session, so closing a
+    // handle needs the same bounded socket wait as the rest of the transport.
     class SftpSessionGuard
     {
     public:
-        SftpSessionGuard(SshConnection* connection, LIBSSH2_SFTP* sftp,
-                         wait_socket_fn_t wait_socket)
+        SftpSessionGuard(SshConnection* connection, LIBSSH2_SFTP* sftp)
             : m_connection(connection)
             , m_sftp(sftp)
-            , m_wait_socket(wait_socket)
         {
         }
 
         ~SftpSessionGuard()
         {
-            if (m_sftp != nullptr)
+            while (m_sftp != nullptr &&
+                   libssh2_sftp_shutdown(m_sftp) == LIBSSH2_ERROR_EAGAIN)
             {
-                while (libssh2_sftp_shutdown(m_sftp) == LIBSSH2_ERROR_EAGAIN)
+                if (!SshClient::WaitSocket(m_connection))
                 {
-                    if (!m_wait_socket(m_connection))
-                    {
-                        spdlog::warn("[ssh] network failure while shutting down SFTP");
-                        break;
-                    }
+                    spdlog::warn("[ssh] network failure while shutting down SFTP");
+                    break;
                 }
             }
         }
@@ -1222,33 +1212,28 @@ namespace Controller
         SftpSessionGuard& operator=(const SftpSessionGuard&) = delete;
 
     private:
-        SshConnection*   m_connection;
-        LIBSSH2_SFTP*    m_sftp;
-        wait_socket_fn_t m_wait_socket;
+        SshConnection* m_connection;
+        LIBSSH2_SFTP*  m_sftp;
     };
 
     class SftpDirGuard
     {
     public:
-        SftpDirGuard(SshConnection* connection, LIBSSH2_SFTP_HANDLE* dir,
-                     wait_socket_fn_t wait_socket)
+        SftpDirGuard(SshConnection* connection, LIBSSH2_SFTP_HANDLE* dir)
             : m_connection(connection)
             , m_dir(dir)
-            , m_wait_socket(wait_socket)
         {
         }
 
         ~SftpDirGuard()
         {
-            if (m_dir != nullptr)
+            while (m_dir != nullptr &&
+                   libssh2_sftp_closedir(m_dir) == LIBSSH2_ERROR_EAGAIN)
             {
-                while (libssh2_sftp_closedir(m_dir) == LIBSSH2_ERROR_EAGAIN)
+                if (!SshClient::WaitSocket(m_connection))
                 {
-                    if (!m_wait_socket(m_connection))
-                    {
-                        spdlog::warn("[ssh] network failure while closing remote directory");
-                        break;
-                    }
+                    spdlog::warn("[ssh] network failure while closing remote directory");
+                    break;
                 }
             }
         }
@@ -1259,7 +1244,6 @@ namespace Controller
     private:
         SshConnection*       m_connection;
         LIBSSH2_SFTP_HANDLE* m_dir;
-        wait_socket_fn_t     m_wait_socket;
     };
 
     SshClient::Result SshClient::BrowseRemoteDirectory(SshConnection * connection, const std::string& path, Future* future)
@@ -1281,9 +1265,8 @@ namespace Controller
             return Result::SessionError;
         }
 
-        // Non-blocking for the whole listing (init included) so every libssh2
-        // EAGAIN is followed by a bounded WaitSocket and the cancel flag is
-        // checked each iteration - matches the channel flow in ExecuteCommand.
+        // Non-blocking from the start so the init loop below can honour a cancel
+        // instead of stalling inside libssh2.
         libssh2_session_set_blocking(connection->GetSession(), 0);
 
         // --- Init SFTP (non-blocking) ---
@@ -1309,11 +1292,8 @@ namespace Controller
             }
         }
 
-        // The loop above only falls through with a live handle, so from here on
-        // the guard shuts the session down on whichever path leaves the function.
-        SftpSessionGuard sftp_guard(connection, sftp, &SshClient::WaitSocket);
+        SftpSessionGuard sftp_guard(connection, sftp);
 
-        // --- Open the directory (non-blocking) ---
         LIBSSH2_SFTP_HANDLE* dir = nullptr;
         while ((dir = libssh2_sftp_opendir(sftp, path.c_str())) == nullptr)
         {
@@ -1335,7 +1315,7 @@ namespace Controller
             }
         }
 
-        SftpDirGuard dir_guard(connection, dir, &SshClient::WaitSocket);
+        SftpDirGuard dir_guard(connection, dir);
 
         constexpr size_t SFTP_NAME_BUFFER_SIZE = 512;
         char mem[SFTP_NAME_BUFFER_SIZE];
@@ -1389,7 +1369,7 @@ namespace Controller
 
             if (rc == 0)
             {
-                break;  // end of listing
+                break;  // done
             }
             if (rc < 0)
             {

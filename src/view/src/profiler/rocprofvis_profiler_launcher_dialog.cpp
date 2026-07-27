@@ -79,9 +79,8 @@ ProfilerLauncherDialog::ProfilerLauncherDialog(AppWindow* app_window)
     m_config.backend_payload = m_backends[0]->SaveSettings();
 
 #ifdef ROCPROFVIS_ENABLE_REMOTE
-    // Must precede LoadFromSettings(): rehydrating the remembered profile
-    // validates its connection ref against this store, which would reject every
-    // ref while the store is still empty.
+    // Before LoadFromSettings() so it can validate the saved profile's
+    // connection ref against the store.
     m_connection_store.Load();
 #endif
 
@@ -992,10 +991,8 @@ void ProfilerLauncherDialog::RenderRemotePopups()
         }
     }
 
-    // Render the shared, theme-styled download progress modal. It closes as soon
-    // as the download phase ends (completed, failed, or the session was torn
-    // down); relying on the final "downloaded == size" snapshot is unreliable for
-    // small/fast transfers.
+    // Closing on the download phase ending (rather than on downloaded == size)
+    // avoids hanging open when the final progress snapshot never arrives.
     RenderRemoteDownloadPopup("Remote Trace Download", m_remote_last_progress.name.c_str(),
                               m_remote_last_progress.downloaded, m_remote_last_progress.size,
                               !downloading, m_remote_show_progress_popup);
@@ -1534,15 +1531,12 @@ void ProfilerLauncherDialog::LoadFromSettings()
                 }
             }
 #ifdef ROCPROFVIS_ENABLE_REMOTE
-            // Only rebind the remote section when the profile references a
-            // connection that still exists; a stale ref (deleted connection) is
-            // left unbound rather than silently mapped to another connection.
-            // Mirrors the combo-select load path in RenderToolbar().
+            // A ref to a since-deleted connection is left unbound rather than
+            // remapped onto whichever connection is selected.
             if (!m_config.ssh_connection_ref.empty() &&
                 m_connection_store.Get(m_config.ssh_connection_ref) != nullptr)
             {
                 m_selected_connection_id = m_config.ssh_connection_ref;
-                ApplySelectedConnection();
             }
 #endif
         }

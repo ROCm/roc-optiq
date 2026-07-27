@@ -143,6 +143,10 @@ namespace Controller
         static bool IsCancelRequested(SshConnection * connection, Future* future);
         static void SetKeepAlive(SshConnection * connection, int interval_seconds);
 
+        // Waits (bounded) for the session socket to be ready in the direction
+        // libssh2 is blocked on. False on timeout or socket error.
+        static bool WaitSocket(SshConnection* connection);
+
     private:
 
         static bool MethodListed(const char* methods, const char* needle);
@@ -163,7 +167,6 @@ namespace Controller
 
         static bool Reconnect(SshConnection* connection, Future* future);
         static socket_t CreateTcpConnection(const std::string& host, int port);
-        static bool WaitSocket(SshConnection* connection);
 
         std::vector<std::unique_ptr<SshConnection>> m_connections;
 

@@ -63,28 +63,26 @@ dotnet tool install --global wix --version 4.0.6
 wix extension add --global WixToolset.UI.wixext/4.0.6
 ```
 
-#### Building the application and installer separately
+#### Building the installer
 
-Building in two stages lets you sign the executable before packaging and then sign the MSI after packaging — each artifact is signed independently.
+Building the installer is a two stage process - first we need to build the application, and then we can build the installer.
 
 **Stage 1 — build the application:**
 
 ```powershell
 cmake --preset "x64-release" -DROCPROFVIS_ENABLE_INTERNAL_BANNER=OFF
 cmake --build build/x64-release --preset "Windows Release Build" --target roc-optiq --parallel 4
-# Sign build\x64-release\Release\roc-optiq.exe here before proceeding.
+# Output: build\x64-release\Release\roc-optiq.exe
 ```
 
 **Stage 2 — build the installer:**
 
 ```powershell
 cmake --build build/x64-release --preset "Windows Release Build" --target PACKAGE_WIX
-# Sign build\x64-release\roc-optiq-X.X.X.X-win64.msi here.
+# Output: build\x64-release\roc-optiq-X.X.X.X-win64.msi
 ```
 
-CMake will not recompile the application between stages because no sources have changed. `PACKAGE_WIX` picks up the signed executable already on disk and passes it directly to `wix.exe`.
-
-Output: `build\x64-release\roc-optiq-X.X.X.X-win64.msi`
+CMake will not recompile the application between stages because no sources have changed. `PACKAGE_WIX` picks up the executable already on disk and passes it directly to `wix.exe`.
 
 ---
 

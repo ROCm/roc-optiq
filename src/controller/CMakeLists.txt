@@ -32,7 +32,8 @@ list(APPEND rocprofvis_controller_source_files
     src/system/rocprofvis_controller_timeline.cpp
     src/system/rocprofvis_controller_trace_system.cpp
     src/system/rocprofvis_controller_track.cpp
-    src/system/rocprofvis_controller_table_system.cpp	
+    src/system/rocprofvis_controller_table_system.cpp
+    src/system/rocprofvis_controller_table_system_search.cpp
     src/system/rocprofvis_controller_flow_control.cpp
     src/system/rocprofvis_controller_call_stack.cpp
     src/system/rocprofvis_controller_ext_data.cpp

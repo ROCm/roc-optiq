@@ -72,7 +72,7 @@ class ProfileDatabase : public SqliteDatabase
         // @param path - full path to database file
         ProfileDatabase( rocprofvis_db_filename_t path) : 
                         SqliteDatabase(path), 
-            m_table_processor{TableProcessor(this),TableProcessor(this),TableProcessor(this), TableProcessor(this)} {};
+            m_table_processor{TableProcessor(this),TableProcessor(this),TableProcessor(this)} {};
         // ProfileDatabase destructor, must be defined as virtual to free resources of derived classes 
         virtual ~ProfileDatabase() {}
         // worker method to read time slice
@@ -148,7 +148,23 @@ class ProfileDatabase : public SqliteDatabase
        
         static rocprofvis_dm_event_operation_t GetTableQueryOperation(std::string query);
         
-        void BuildSliceQueryMap(slice_query_map_t& slice_query_map, rocprofvis_dm_track_params_t* props);
+        void BuildSliceQueryMap(slice_query_map_t& slice_query_map, rocprofvis_dm_track_params_t* props, rocprofvis_db_query_type_t query_type);
+        rocprofvis_dm_result_t BuildCompoundQuery(rocprofvis_dm_table_use_case_enum_t use_case,
+                                rocprofvis_dm_timestamp_t start, 
+                                rocprofvis_dm_timestamp_t end,
+                                rocprofvis_db_num_of_tracks_t num,
+                                rocprofvis_db_track_selection_t tracks,
+                                std::vector<slice_query_map_t>& slice_query_map_array,
+                                rocprofvis_dm_charptr_t where,
+                                rocprofvis_dm_charptr_t filter,
+                                rocprofvis_dm_charptr_t group,
+                                rocprofvis_dm_charptr_t group_cols, 
+                                rocprofvis_dm_charptr_t sort_column, 
+                                rocprofvis_dm_sort_order_t sort_order,
+                                uint64_t max_count, 
+                                uint64_t offset,
+                                bool count_only,
+                                rocprofvis_dm_string_t& query);
 
         bool IsEmptyRange(uint32_t track, uint64_t start, uint64_t end);
 
@@ -216,8 +232,21 @@ class ProfileDatabase : public SqliteDatabase
                             rocprofvis_dm_charptr_t group_cols, 
                             rocprofvis_dm_charptr_t sort_column, 
                             rocprofvis_dm_sort_order_t sort_order,
+                            uint64_t max_count, 
+                            uint64_t offset,
+                            bool count_only,
+                            rocprofvis_dm_string_t& query) override;
+
+        rocprofvis_dm_result_t BuildEventSearchQuery(
+                            rocprofvis_dm_timestamp_t start, 
+                            rocprofvis_dm_timestamp_t end,
+                            rocprofvis_db_num_of_tracks_t num,
+                            rocprofvis_db_track_selection_t ops,
+                            rocprofvis_dm_charptr_t where,
                             rocprofvis_dm_num_string_table_filters_t num_string_table_filters, 
                             rocprofvis_dm_string_table_filters_t string_table_filters,
+                            rocprofvis_dm_charptr_t sort_column, 
+                            rocprofvis_dm_sort_order_t sort_order,
                             uint64_t max_count, 
                             uint64_t offset,
                             bool count_only,

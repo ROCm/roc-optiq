@@ -7,7 +7,6 @@
 #include "rocprofvis_controller.h"
 #include "rocprofvis_controller_handle.h"
 #include "rocprofvis_c_interface.h"
-#include <string>
 
 namespace RocProfVis
 {
@@ -18,9 +17,8 @@ class Trace;
 class Counter;
 class Node;
 class Processor;
-class SystemTable;
+class EventSearchTable;
 class Arguments;
-class Array;
 class Future;
 
 class Summary : public Handle
@@ -48,7 +46,7 @@ private:
     double m_end_ts;
 
     SummaryMetrics m_metrics;
-    SystemTable* m_kernel_instance_table;
+    EventSearchTable* m_kernel_instance_table;
 };
 
 }

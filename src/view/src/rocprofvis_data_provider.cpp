@@ -1597,9 +1597,9 @@ DataProvider::FetchSingleTrackSampleTable(uint64_t track_id, double start_ts,
                                           uint64_t sort_column_index,
                                           rocprofvis_controller_sort_order_t sort_order)
 {
-    return FetchSingleTrackTable(TableRequestParams(
-        kRPVControllerTableTypeSamples, { track_id }, {}, start_ts, end_ts, "", filter,
-        "", "", {}, start_row, req_row_count, sort_column_index, sort_order));
+    return FetchTable(TrackTableRequestParams(
+        kRPVControllerTableTypeSamples, { track_id }, start_ts, end_ts, "", filter, "",
+        "", start_row, req_row_count, sort_column_index, sort_order));
 }
 
 bool
@@ -1610,161 +1610,9 @@ DataProvider::FetchSingleTrackEventTable(uint64_t track_id, double start_ts,
                                          uint64_t sort_column_index,
                                          rocprofvis_controller_sort_order_t sort_order)
 {
-    return FetchSingleTrackTable(TableRequestParams(
-        kRPVControllerTableTypeEvents, { track_id }, {}, start_ts, end_ts, "", filter,
-        group, group_cols, {}, start_row, req_row_count, sort_column_index, sort_order));
-}
-
-bool
-DataProvider::FetchSingleTrackTable(const TableRequestParams& table_params)
-{
-    if(m_state != ProviderState::kReady)
-    {
-        spdlog::warn("Cannot fetch, provider not ready or error, state: {}",
-                     static_cast<int>(m_state));
-        return false;
-    }
-
-    if(table_params.m_track_ids.empty())
-    {
-        spdlog::debug("Cannot fetch table, no track id provided");
-        return false;
-    }
-
-    uint64_t         track_id = table_params.m_track_ids[0];
-    const TrackInfo* metadata = m_model.GetTimeline().GetTrack(track_id);
-
-    if(metadata)
-    {
-        uint64_t request_id = table_params.m_table_type == kRPVControllerTableTypeEvents
-                                  ? EVENT_TABLE_REQUEST_ID
-                                  : SAMPLE_TABLE_REQUEST_ID;
-
-        auto it = m_requests.find(request_id);
-
-        // check if track is an event track
-        if(table_params.m_table_type == kRPVControllerTableTypeEvents &&
-           metadata->track_type != kRPVControllerTrackTypeEvents)
-        {
-            spdlog::warn("Cannot fetch event table, track {} is not an event track",
-                         track_id);
-            return false;
-        }
-        // check if track is a sample track
-        if(table_params.m_table_type == kRPVControllerTableTypeSamples &&
-           metadata->track_type != kRPVControllerTrackTypeSamples)
-        {
-            spdlog::warn("Cannot fetch sample table, track {} is not a sample track",
-                         track_id);
-            return false;
-        }
-
-        // only allow load if a request for this table type is not pending
-        if(it == m_requests.end())
-        {
-            // get the table handle
-            rocprofvis_handle_t* table_handle = nullptr;
-            rocprofvis_result_t  result       = kRocProfVisResultUnknownError;
-
-            if(table_params.m_table_type == kRPVControllerTableTypeEvents)
-            {
-                result = rocprofvis_controller_get_object(
-                    m_trace_controller, kRPVControllerSystemEventTable, 0, &table_handle);
-            }
-            else if(table_params.m_table_type == kRPVControllerTableTypeSamples)
-            {
-                result = rocprofvis_controller_get_object(
-                    m_trace_controller, kRPVControllerSystemSampleTable, 0, &table_handle);
-            }
-            else
-            {
-                spdlog::error("Unsupported table type: {}",
-                              static_cast<int>(table_params.m_table_type));
-                return false;
-            }
-            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-            ROCPROFVIS_ASSERT(table_handle);
-
-            // get the track handle
-            rocprofvis_handle_t* track_handle = nullptr;
-            result                            = rocprofvis_controller_get_object(
-                metadata->graph_handle, kRPVControllerGraphTrack, 0, &track_handle);
-
-            // setup arguments for event table request
-            rocprofvis_controller_arguments_t* args =
-                rocprofvis_controller_arguments_alloc();
-            ROCPROFVIS_ASSERT(args != nullptr);
-
-            if(SetupCommonTableArguments(args, table_params))
-            {
-                result = rocprofvis_controller_set_uint64(
-                    args, kRPVControllerTableArgsNumTracks, 0, 1);
-                ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-
-                result = rocprofvis_controller_set_object(
-                    args, kRPVControllerTableArgsTracksIndexed, 0, track_handle);
-                ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-            }
-            else
-            {
-                spdlog::error("Failed to setup event table common arguments");
-                // free the args
-                rocprofvis_controller_arguments_free(args);
-                return false;
-            }
-
-            // prepare to fetch the table
-            rocprofvis_controller_array_t* array = rocprofvis_controller_array_alloc(0);
-            ROCPROFVIS_ASSERT(array != nullptr);
-
-            rocprofvis_controller_future_t* future = rocprofvis_controller_future_alloc();
-            ROCPROFVIS_ASSERT(future != nullptr);
-
-            result = rocprofvis_controller_table_fetch_async(
-                m_trace_controller, table_handle, args, future, array);
-            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-
-            // create the request info
-            RequestInfo request_info;
-            request_info.request_array      = array;
-            request_info.request_future     = future;
-            request_info.request_obj_handle = nullptr;
-            request_info.request_args       = args;
-            request_info.request_id         = request_id;
-            request_info.loading_state      = RequestState::kLoading;
-            request_info.request_type =
-                (table_params.m_table_type == kRPVControllerTableTypeEvents)
-                    ? RequestType::kFetchTrackEventTable
-                    : RequestType::kFetchTrackSampleTable;
-
-            std::vector<uint64_t> track_ids;
-            track_ids.push_back(track_id);
-
-            auto params         = std::make_shared<TableRequestParams>(table_params);
-            params->m_track_ids = std::move(track_ids);
-            request_info.custom_params = params;
-
-            m_requests.emplace(request_id, request_info);
-            spdlog::debug("Fetching {} table data",
-                          (table_params.m_table_type == kRPVControllerTableTypeEvents)
-                              ? "event"
-                              : "sample");
-
-            return true;
-        }
-        else
-        {
-            // request for item already exists
-            spdlog::debug("Request for this table, type {}, is already pending",
-                          static_cast<uint64_t>(table_params.m_table_type));
-            return false;
-        }
-    }
-    else
-    {
-        spdlog::debug("Cannot fetch track, index {} is out of range", track_id);
-        return false;
-    }
+    return FetchTable(TrackTableRequestParams(
+        kRPVControllerTableTypeEvents, { track_id }, start_ts, end_ts, "", filter, group,
+        group_cols, start_row, req_row_count, sort_column_index, sort_order));
 }
 
 bool
@@ -1775,9 +1623,9 @@ DataProvider::FetchMultiTrackSampleTable(const std::vector<uint64_t>& track_ids,
                                          uint64_t sort_column_index,
                                          rocprofvis_controller_sort_order_t sort_order)
 {
-    return FetchTable(TableRequestParams(
-        kRPVControllerTableTypeSamples, track_ids, {}, start_ts, end_ts, "", filter, "",
-        "", {}, start_row, req_row_count, sort_column_index, sort_order));
+    return FetchTable(TrackTableRequestParams(
+        kRPVControllerTableTypeSamples, track_ids, start_ts, end_ts, "", filter, "", "",
+        start_row, req_row_count, sort_column_index, sort_order));
 }
 
 bool
@@ -1790,13 +1638,28 @@ DataProvider::FetchMultiTrackEventTable(const std::vector<uint64_t>& track_ids,
                                         rocprofvis_controller_sort_order_t sort_order)
 
 {
-    return FetchTable(TableRequestParams(
-        kRPVControllerTableTypeEvents, track_ids, {}, start_ts, end_ts, "", filter, group,
-        group_cols, {}, start_row, req_row_count, sort_column_index, sort_order));
+    return FetchTable(TrackTableRequestParams(
+        kRPVControllerTableTypeEvents, track_ids, start_ts, end_ts, "", filter, group,
+        group_cols, start_row, req_row_count, sort_column_index, sort_order));
 }
 
 bool
 DataProvider::FetchTable(const TableRequestParams& table_params)
+{
+    if(table_params.m_table_type == kRPVControllerTableTypeSearchResults ||
+       table_params.m_table_type == kRPVControllerTableTypeSummaryKernelInstances)
+    {
+        return FetchEventSearch(
+            static_cast<const EventSearchRequestParams&>(table_params));
+    }
+    else
+    {
+        return FetchTrackTable(static_cast<const TrackTableRequestParams&>(table_params));
+    }
+}
+
+bool
+DataProvider::FetchTrackTable(const TrackTableRequestParams& table_params)
 {
     if(m_state != ProviderState::kReady)
     {
@@ -1823,16 +1686,6 @@ DataProvider::FetchTable(const TableRequestParams& table_params)
             case kRPVControllerTableTypeSamples:
             {
                 request_id = SAMPLE_TABLE_REQUEST_ID;
-                break;
-            }
-            case kRPVControllerTableTypeSearchResults:
-            {
-                request_id = EVENT_SEARCH_REQUEST_ID;
-                break;
-            }
-            case kRPVControllerTableTypeSummaryKernelInstances:
-            {
-                request_id = SUMMARY_KERNEL_INSTANCE_TABLE_REQUEST_ID;
                 break;
             }
             case kRPVControllerTableTypeInstrumentedEvents:
@@ -1879,202 +1732,111 @@ DataProvider::FetchTable(const TableRequestParams& table_params)
         rocprofvis_result_t   result       = kRocProfVisResultUnknownError;
         rocprofvis_handle_t*  table_handle = nullptr;
         std::vector<uint64_t> filtered_track_ids;
-        std::vector<rocprofvis_dm_event_operation_t> filtered_op_types;
         if(SetupCommonTableArguments(args, table_params))
         {
-            if(table_params.m_table_type == kRPVControllerTableTypeEvents ||
-               table_params.m_table_type == kRPVControllerTableTypeSamples ||
-               table_params.m_table_type == kRPVControllerTableTypeInstrumentedEvents ||
-               table_params.m_table_type == kRPVControllerTableTypeDispatchEvents ||
-               table_params.m_table_type ==
-                   kRPVControllerTableTypeMemoryAllocationEvents ||
-               table_params.m_table_type == kRPVControllerTableTypeMemoryCopyEvents ||
-               table_params.m_table_type == kRPVControllerTableTypeSampledEvents)
+            // get the table handle
+            switch(table_params.m_table_type)
             {
-                // get the table handle
-                switch(table_params.m_table_type)
-                {
-                    case kRPVControllerTableTypeEvents:
-                        result = rocprofvis_controller_get_object(
-                            m_trace_controller, kRPVControllerSystemEventTable, 0,
-                            &table_handle);
-                        break;
-                    case kRPVControllerTableTypeSamples:
-                        result = rocprofvis_controller_get_object(
-                            m_trace_controller, kRPVControllerSystemSampleTable, 0,
-                            &table_handle);
-                        break;
-                    case kRPVControllerTableTypeInstrumentedEvents:
-                        result = rocprofvis_analysis_get_instrumented_events_table(
-                            m_trace_controller, &table_handle);
-                        break;
-                    case kRPVControllerTableTypeDispatchEvents:
-                        result = rocprofvis_analysis_get_dispatch_events_table(
-                            m_trace_controller, &table_handle);
-                        break;
-                    case kRPVControllerTableTypeMemoryAllocationEvents:
-                        result = rocprofvis_analysis_get_memory_allocation_events_table(
-                            m_trace_controller, &table_handle);
-                        break;
-                    case kRPVControllerTableTypeMemoryCopyEvents:
-                        result = rocprofvis_analysis_get_memory_copy_events_table(
-                            m_trace_controller, &table_handle);
-                        break;
-                    case kRPVControllerTableTypeSampledEvents:
-                        result = rocprofvis_analysis_get_sampled_events_table(
-                            m_trace_controller, &table_handle);
-                        break;
-                    default: break;
-                }
-                ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-                ROCPROFVIS_ASSERT(table_handle);
-                for(const auto& track_id : table_params.m_track_ids)
-                {
-                    const TrackInfo* metadata = m_model.GetTimeline().GetTrack(track_id);
-                    // skip track if id is invalid
-                    if(!metadata)
-                    {
-                        spdlog::warn("Cannot fetch table, track id {} is invalid",
-                                     track_id);
-                        continue;
-                    }
-
-
-                    // check if track is an event track
-                    if((table_params.m_table_type == kRPVControllerTableTypeEvents ||
-                        table_params.m_table_type ==
-                            kRPVControllerTableTypeInstrumentedEvents ||
-                        table_params.m_table_type ==
-                            kRPVControllerTableTypeDispatchEvents ||
-                        table_params.m_table_type ==
-                            kRPVControllerTableTypeMemoryAllocationEvents ||
-                        table_params.m_table_type ==
-                            kRPVControllerTableTypeMemoryCopyEvents ||
-                        table_params.m_table_type ==
-                            kRPVControllerTableTypeSampledEvents) &&
-                       metadata->track_type != kRPVControllerTrackTypeEvents)
-                    {
-                        spdlog::warn("Cannot fetch event table, track id {} is not a "
-                                     "event track",
-                                     track_id);
-                        continue;
-                    }
-
-                    // check if track is a sample track
-                    if(table_params.m_table_type == kRPVControllerTableTypeSamples &&
-                       metadata->track_type != kRPVControllerTrackTypeSamples)
-                    {
-                        spdlog::warn("Cannot fetch sample table, track id {} is not an "
-                                     "sample track",
-                                     track_id);
-                        continue;
-                    }
-
-                    // get the track handle
-                    rocprofvis_handle_t* track_handle = nullptr;
-                    result = rocprofvis_controller_get_object(metadata->graph_handle,
-                                                              kRPVControllerGraphTrack, 0,
-                                                              &track_handle);
-                    ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-                    ROCPROFVIS_ASSERT(track_handle != nullptr);
-
-                    result = rocprofvis_controller_set_object(
-                        args, kRPVControllerTableArgsTracksIndexed,
-                        filtered_track_ids.size(), track_handle);
-                    ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-
-                    filtered_track_ids.push_back(track_id);
-                    spdlog::debug("Adding track id {} to table request", track_id);
-                }
-                if(filtered_track_ids.empty())
-                {
-                    spdlog::debug("No valid tracks found for table request, aborting");
-                    // free the args
-                    rocprofvis_controller_arguments_free(args);
-                    return false;
-                }
-                else
-                {
-                    // set the number of tracks in the request
-                    result = rocprofvis_controller_set_uint64(
-                        args, kRPVControllerTableArgsNumTracks, 0,
-                        filtered_track_ids.size());
-                    ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-
-                    // set the number of op types in the request
-                    result = rocprofvis_controller_set_uint64(
-                        args, kRPVControllerTableArgsNumOpTypes, 0, 0);
-                    ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-
-                    // set the number of string filters in request
-                    result = rocprofvis_controller_set_uint64(
-                        args, kRPVControllerTableArgsNumStringTableFilters, 0, 0);
-                    ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-                }
-            }
-            else if(table_params.m_table_type == kRPVControllerTableTypeSearchResults ||
-                    table_params.m_table_type ==
-                        kRPVControllerTableTypeSummaryKernelInstances)
-            {
-                // get the table handle
-                if(table_params.m_table_type == kRPVControllerTableTypeSearchResults)
-                {
+                case kRPVControllerTableTypeEvents:
                     result = rocprofvis_controller_get_object(
-                        m_trace_controller, kRPVControllerSystemSearchResultsTable, 0,
+                        m_trace_controller, kRPVControllerSystemEventTable, 0,
                         &table_handle);
-                }
-                else
-                {
-                    rocprofvis_handle_t* summary_handle = nullptr;
-                    result = rocprofvis_controller_get_object(m_trace_controller,
-                                                              kRPVControllerSystemSummary,
-                                                              0, &summary_handle);
-                    ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess &&
-                                      summary_handle);
+                    break;
+                case kRPVControllerTableTypeSamples:
                     result = rocprofvis_controller_get_object(
-                        summary_handle, kRPVControllerSummaryPropertyKernelInstanceTable,
-                        0, &table_handle);
-                }
-                ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-                ROCPROFVIS_ASSERT(table_handle);
-                for(const rocprofvis_dm_event_operation_t& op : table_params.m_op_types)
+                        m_trace_controller, kRPVControllerSystemSampleTable, 0,
+                        &table_handle);
+                    break;
+                case kRPVControllerTableTypeInstrumentedEvents:
+                    result = rocprofvis_analysis_get_instrumented_events_table(
+                        m_trace_controller, &table_handle);
+                    break;
+                case kRPVControllerTableTypeDispatchEvents:
+                    result = rocprofvis_analysis_get_dispatch_events_table(
+                        m_trace_controller, &table_handle);
+                    break;
+                case kRPVControllerTableTypeMemoryAllocationEvents:
+                    result = rocprofvis_analysis_get_memory_allocation_events_table(
+                        m_trace_controller, &table_handle);
+                    break;
+                case kRPVControllerTableTypeMemoryCopyEvents:
+                    result = rocprofvis_analysis_get_memory_copy_events_table(
+                        m_trace_controller, &table_handle);
+                    break;
+                case kRPVControllerTableTypeSampledEvents:
+                    result = rocprofvis_analysis_get_sampled_events_table(
+                        m_trace_controller, &table_handle);
+                    break;
+                default: break;
+            }
+            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+            ROCPROFVIS_ASSERT(table_handle);
+            for(const auto& track_id : table_params.m_track_ids)
+            {
+                const TrackInfo* metadata = m_model.GetTimeline().GetTrack(track_id);
+                // skip track if id is invalid
+                if(!metadata)
                 {
-                    result = rocprofvis_controller_set_uint64(
-                        args, kRPVControllerTableArgsOpTypesIndexed,
-                        filtered_op_types.size(), op);
-                    ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-                    filtered_op_types.push_back(op);
+                    spdlog::warn("Cannot fetch table, track id {} is invalid", track_id);
+                    continue;
                 }
-                // set the number of tracks in the request
-                result = rocprofvis_controller_set_uint64(
-                    args, kRPVControllerTableArgsNumTracks, 0, 0);
-                ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
-                // set the number of op types in the request
-                result = rocprofvis_controller_set_uint64(
-                    args, kRPVControllerTableArgsNumOpTypes, 0, filtered_op_types.size());
-                ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-
-                // set the number of string filters in request
-                result = rocprofvis_controller_set_uint64(
-                    args, kRPVControllerTableArgsNumStringTableFilters, 0,
-                    table_params.m_string_table_filters.size());
-                ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-
-                // set the string filters in request
-                for(int i = 0; i < table_params.m_string_table_filters.size(); i++)
+                // check if track is an event track
+                if((table_params.m_table_type == kRPVControllerTableTypeEvents ||
+                    table_params.m_table_type ==
+                        kRPVControllerTableTypeInstrumentedEvents ||
+                    table_params.m_table_type == kRPVControllerTableTypeDispatchEvents ||
+                    table_params.m_table_type ==
+                        kRPVControllerTableTypeMemoryAllocationEvents ||
+                    table_params.m_table_type ==
+                        kRPVControllerTableTypeMemoryCopyEvents ||
+                    table_params.m_table_type == kRPVControllerTableTypeSampledEvents) &&
+                   metadata->track_type != kRPVControllerTrackTypeEvents)
                 {
-                    result = rocprofvis_controller_set_string(
-                        args, kRPVControllerTableArgsStringTableFiltersIndexed, i,
-                        table_params.m_string_table_filters[i].data());
-                    ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+                    spdlog::warn("Cannot fetch event table, track id {} is not a "
+                                 "event track",
+                                 track_id);
+                    continue;
                 }
+
+                // check if track is a sample track
+                if(table_params.m_table_type == kRPVControllerTableTypeSamples &&
+                   metadata->track_type != kRPVControllerTrackTypeSamples)
+                {
+                    spdlog::warn("Cannot fetch sample table, track id {} is not an "
+                                 "sample track",
+                                 track_id);
+                    continue;
+                }
+
+                // get the track handle
+                rocprofvis_handle_t* track_handle = nullptr;
+                result                            = rocprofvis_controller_get_object(
+                    metadata->graph_handle, kRPVControllerGraphTrack, 0, &track_handle);
+                ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+                ROCPROFVIS_ASSERT(track_handle != nullptr);
+
+                result = rocprofvis_controller_set_object(
+                    args, kRPVControllerTableArgsTracksIndexed, filtered_track_ids.size(),
+                    track_handle);
+                ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+
+                filtered_track_ids.push_back(track_id);
+                spdlog::debug("Adding track id {} to table request", track_id);
+            }
+            if(filtered_track_ids.empty())
+            {
+                spdlog::debug("No valid tracks found for table request, aborting");
+                // free the args
+                rocprofvis_controller_arguments_free(args);
+                return false;
             }
             else
             {
-                spdlog::error("Unsupported table type: {}",
-                              static_cast<int>(table_params.m_table_type));
-                return false;
+                // set the number of tracks in the request
+                result = rocprofvis_controller_set_uint64(
+                    args, kRPVControllerTableArgsNumTracks, 0, filtered_track_ids.size());
+                ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
             }
         }
         else
@@ -2088,7 +1850,6 @@ DataProvider::FetchTable(const TableRequestParams& table_params)
         rocprofvis_controller_array_t*  array  = nullptr;
         rocprofvis_controller_future_t* future = rocprofvis_controller_future_alloc();
         ROCPROFVIS_ASSERT(future != nullptr);
-
         if(export_to_file)
         {
             if(table_params.m_table_type == kRPVControllerTableTypeInstrumentedEvents ||
@@ -2113,20 +1874,16 @@ DataProvider::FetchTable(const TableRequestParams& table_params)
         {
             array = rocprofvis_controller_array_alloc(0);
             ROCPROFVIS_ASSERT(array != nullptr);
-            if(table_params.m_table_type == kRPVControllerTableTypeInstrumentedEvents ||
-               table_params.m_table_type == kRPVControllerTableTypeDispatchEvents ||
-               table_params.m_table_type ==
-                   kRPVControllerTableTypeMemoryAllocationEvents ||
-               table_params.m_table_type == kRPVControllerTableTypeMemoryCopyEvents ||
-               table_params.m_table_type == kRPVControllerTableTypeSampledEvents)
-            {
-                result = rocprofvis_analysis_fetch_table(m_trace_controller, table_handle,
-                                                         args, future, array);
-            }
-            else
+            if(table_params.m_table_type == kRPVControllerTableTypeEvents ||
+               table_params.m_table_type == kRPVControllerTableTypeSamples)
             {
                 result = rocprofvis_controller_table_fetch_async(
                     m_trace_controller, table_handle, args, future, array);
+            }
+            else
+            {
+                result = rocprofvis_analysis_fetch_table(m_trace_controller, table_handle,
+                                                         args, future, array);
             }
         }
         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
@@ -2139,7 +1896,6 @@ DataProvider::FetchTable(const TableRequestParams& table_params)
         request_info.request_args       = args;
         request_info.request_id         = request_id;
         request_info.loading_state      = RequestState::kLoading;
-
         if(export_to_file)
         {
             request_info.request_type = RequestType::kTableExport;
@@ -2156,17 +1912,6 @@ DataProvider::FetchTable(const TableRequestParams& table_params)
                 case kRPVControllerTableTypeSamples:
                 {
                     request_info.request_type = RequestType::kFetchTrackSampleTable;
-                    break;
-                }
-                case kRPVControllerTableTypeSearchResults:
-                {
-                    request_info.request_type = RequestType::kFetchEventSearchTable;
-                    break;
-                }
-                case kRPVControllerTableTypeSummaryKernelInstances:
-                {
-                    request_info.request_type =
-                        RequestType::kFetchSummaryKernelInstanceTable;
                     break;
                 }
                 case kRPVControllerTableTypeInstrumentedEvents:
@@ -2201,9 +1946,8 @@ DataProvider::FetchTable(const TableRequestParams& table_params)
             }
         }
 
-        auto params                = std::make_shared<TableRequestParams>(table_params);
-        params->m_track_ids        = std::move(filtered_track_ids);
-        params->m_op_types         = std::move(filtered_op_types);
+        auto params         = std::make_shared<TrackTableRequestParams>(table_params);
+        params->m_track_ids = std::move(filtered_track_ids);
         request_info.custom_params = params;
 
         m_requests.emplace(request_id, request_info);
@@ -2224,16 +1968,6 @@ DataProvider::FetchTable(const TableRequestParams& table_params)
                 case kRPVControllerTableTypeSamples:
                 {
                     spdlog::debug("Fetching sample table data");
-                    break;
-                }
-                case kRPVControllerTableTypeSearchResults:
-                {
-                    spdlog::debug("Fetching search table data");
-                    break;
-                }
-                case kRPVControllerTableTypeSummaryKernelInstances:
-                {
-                    spdlog::debug("Fetching summary table data");
                     break;
                 }
                 case kRPVControllerTableTypeInstrumentedEvents:
@@ -2264,6 +1998,182 @@ DataProvider::FetchTable(const TableRequestParams& table_params)
                     break;
                 }
             }
+        }
+
+        return true;
+    }
+    else
+    {
+        // request for item already exists
+        spdlog::debug("Request for this table, type {}, is already pending",
+                      static_cast<uint64_t>(table_params.m_table_type));
+        return false;
+    }
+}
+
+bool
+DataProvider::FetchEventSearch(const EventSearchRequestParams& table_params)
+{
+    if(m_state != ProviderState::kReady)
+    {
+        spdlog::warn("Cannot fetch, provider not ready or error, state: {}",
+                     static_cast<int>(m_state));
+        return false;
+    }
+
+    bool     export_to_file = !table_params.m_export_to_file_path.empty();
+    uint64_t request_id;
+    if(export_to_file)
+    {
+        request_id = TABLE_EXPORT_REQUEST_ID;
+    }
+    else
+    {
+        switch(table_params.m_table_type)
+        {
+            case kRPVControllerTableTypeSearchResults:
+            {
+                request_id = EVENT_SEARCH_REQUEST_ID;
+                break;
+            }
+            case kRPVControllerTableTypeSummaryKernelInstances:
+            {
+                request_id = SUMMARY_KERNEL_INSTANCE_TABLE_REQUEST_ID;
+                break;
+            }
+            default:
+            {
+                spdlog::error("Unsupported table type: {}",
+                              static_cast<int>(table_params.m_table_type));
+                return false;
+            }
+        }
+    }
+
+    auto it = m_requests.find(request_id);
+    // only allow load if a request for a table of this type is not pending
+    if(it == m_requests.end())
+    {
+        // setup arguments for event table request
+        rocprofvis_controller_arguments_t* args = rocprofvis_controller_arguments_alloc();
+        ROCPROFVIS_ASSERT(args != nullptr);
+        rocprofvis_result_t  result       = kRocProfVisResultUnknownError;
+        rocprofvis_handle_t* table_handle = nullptr;
+        std::vector<rocprofvis_dm_event_operation_t> filtered_op_types;
+        if(SetupCommonTableArguments(args, table_params))
+        {
+            // get the table handle
+            if(table_params.m_table_type == kRPVControllerTableTypeSearchResults)
+            {
+                result = rocprofvis_controller_get_object(
+                    m_trace_controller, kRPVControllerSystemSearchResultsTable, 0,
+                    &table_handle);
+            }
+            else
+            {
+                rocprofvis_handle_t* summary_handle = nullptr;
+                result                              = rocprofvis_controller_get_object(
+                    m_trace_controller, kRPVControllerSystemSummary, 0, &summary_handle);
+                ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess && summary_handle);
+                result = rocprofvis_controller_get_object(
+                    summary_handle, kRPVControllerSummaryPropertyKernelInstanceTable, 0,
+                    &table_handle);
+            }
+            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+            ROCPROFVIS_ASSERT(table_handle);
+            for(const rocprofvis_dm_event_operation_t& op : table_params.m_op_types)
+            {
+                result = rocprofvis_controller_set_uint64(
+                    args, kRPVControllerTableArgsOpTypesIndexed, filtered_op_types.size(),
+                    op);
+                ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+                filtered_op_types.push_back(op);
+            }
+
+            // set the number of op types in the request
+            result = rocprofvis_controller_set_uint64(
+                args, kRPVControllerTableArgsNumOpTypes, 0, filtered_op_types.size());
+            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+
+            // set the number of string filters in request
+            result = rocprofvis_controller_set_uint64(
+                args, kRPVControllerTableArgsNumStringTableFilters, 0,
+                table_params.m_string_table_filters.size());
+            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+
+            // set the string filters in request
+            for(int i = 0; i < table_params.m_string_table_filters.size(); i++)
+            {
+                result = rocprofvis_controller_set_string(
+                    args, kRPVControllerTableArgsStringTableFiltersIndexed, i,
+                    table_params.m_string_table_filters[i].data());
+                ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+            }
+        }
+        else
+        {
+            spdlog::error("Failed to setup table common arguments");
+            // free the args
+            rocprofvis_controller_arguments_free(args);
+            return false;
+        }
+        // prepare to fetch the table
+        rocprofvis_controller_array_t*  array  = nullptr;
+        rocprofvis_controller_future_t* future = rocprofvis_controller_future_alloc();
+        ROCPROFVIS_ASSERT(future != nullptr);
+        if(export_to_file)
+        {
+            result = rocprofvis_controller_table_export_csv(
+                m_trace_controller, table_handle, args, future,
+                table_params.m_export_to_file_path.c_str());
+        }
+        else
+        {
+            array = rocprofvis_controller_array_alloc(0);
+            ROCPROFVIS_ASSERT(array != nullptr);
+            result = rocprofvis_controller_table_fetch_async(
+                m_trace_controller, table_handle, args, future, array);
+        }
+        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+
+        // create the request info
+        RequestInfo request_info;
+        request_info.request_array      = array;
+        request_info.request_future     = future;
+        request_info.request_obj_handle = nullptr;
+        request_info.request_args       = args;
+        request_info.request_id         = request_id;
+        request_info.loading_state      = RequestState::kLoading;
+        if(export_to_file)
+        {
+            request_info.request_type = RequestType::kTableExport;
+        }
+        else if(table_params.m_table_type == kRPVControllerTableTypeSearchResults)
+        {
+            request_info.request_type = RequestType::kFetchEventSearchTable;
+        }
+        else
+        {
+            request_info.request_type = RequestType::kFetchSummaryKernelInstanceTable;
+        }
+
+        auto params        = std::make_shared<EventSearchRequestParams>(table_params);
+        params->m_op_types = std::move(filtered_op_types);
+        request_info.custom_params = params;
+
+        m_requests.emplace(request_id, request_info);
+
+        if(export_to_file)
+        {
+            spdlog::debug("Exporting table data");
+        }
+        else if(table_params.m_table_type == kRPVControllerTableTypeSearchResults)
+        {
+            spdlog::debug("Fetching search table data");
+        }
+        else
+        {
+            spdlog::debug("Fetching summary table data");
         }
         return true;
     }

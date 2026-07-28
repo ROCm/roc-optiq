@@ -204,9 +204,9 @@ rocprofvis_dm_result_t rocprofvis_db_build_compute_query(
     database, compute_use_case, num_params, params, char** out_query);
 ```
 
-`rocprofvis_dm_table_use_case_enum_t` covers the four system table
+`rocprofvis_dm_table_use_case_enum_t` covers the three system table
 shapes (`kRPVDMTableUseCaseEventTrackTable`, `kRPVDMTableUseCaseSampleTrackTable`,
-`kRPVDMTableUseCaseEventSearch`, `kRPVDMTableUseCaseAnalysis`).
+`kRPVDMTableUseCaseEventSearch`).
 `rocprofvis_db_compute_use_case_enum_t` covers all the compute query
 shapes (workload list, top kernels, kernels list, metric definitions,
 roofline ceilings, kernel intensities, metric values, kernel metric

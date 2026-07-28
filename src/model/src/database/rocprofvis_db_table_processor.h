@@ -33,7 +33,6 @@ namespace DataModel
         kRPVTableDataTypeEvent,
         kRPVTableDataTypeSample,
         kRPVTableDataTypeSearch,
-        kRPVTableDataTypeAnalysis,
         kRPVTableDataTypesNum
     } rocprofvis_db_compound_table_type;
 

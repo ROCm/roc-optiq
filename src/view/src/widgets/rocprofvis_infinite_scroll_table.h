@@ -87,6 +87,16 @@ protected:
 
     void FormatTimeColumns() const;
     void ExportToFile() const;
+    /* Sends a table request, keeping it for Update() to reissue when the
+     * controller table it needs is busy. Returns whether it went out now.
+     */
+    bool QueueTableRequest(const TableRequestParams& params);
+    // Drops a request kept by QueueTableRequest, once it is out or obsolete.
+    void ClearQueuedTableRequest();
+    /* When false the body draws without its own frame, so a parent that already
+     * draws one around the title and the table supplies the only border.
+     */
+    void SetDrawBorder(bool draw);
 
     FilterOptions                      m_filter_options;
     FilterOptions                      m_pending_filter_options;
@@ -119,6 +129,7 @@ protected:
     int m_hovered_row;
 
     bool m_horizontal_scroll;
+    bool m_draw_border;
 
 private:
     void RenderCell(const std::string* cell_text, int row, int column);
@@ -130,10 +141,12 @@ private:
     int m_fetch_threshold_items;
 
     // Internal state flags below
-    bool     m_open_context_menu;
-    bool     m_skip_data_fetch;
-    uint64_t m_last_total_row_count;
-    ImVec2   m_last_table_size;
+    bool                                m_open_context_menu;
+    bool                                m_skip_data_fetch;
+    bool                                m_retry_fetch;
+    std::unique_ptr<TableRequestParams> m_retry_params;
+    uint64_t                            m_last_total_row_count;
+    ImVec2                              m_last_table_size;
 
     std::string m_no_data_text;
     std::string m_export_notification_id;

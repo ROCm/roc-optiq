@@ -5,6 +5,7 @@
 #include "icons/rocprovfis_icon_defines.h"
 #include "rocprofvis_appwindow.h"
 #include "rocprofvis_common_defs.h"
+#include "rocprofvis_events.h"
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_timeline_selection.h"
 #include "rocprofvis_utils.h"
@@ -37,6 +38,7 @@ InfiniteScrollTable::InfiniteScrollTable(
 : m_data_provider(dp)
 , m_open_context_menu(false)
 , m_skip_data_fetch(false)
+, m_retry_fetch(false)
 , m_table_type(table_type)
 , m_request_table_type(request_table_type)
 , m_request_id(request_id)
@@ -63,6 +65,7 @@ InfiniteScrollTable::InfiniteScrollTable(
 , m_export_notification_id(dp.GetTraceFilePath())
 , m_timeline_selection(timeline_selection)
 , m_horizontal_scroll(0.0f)
+, m_draw_border(true)
 , m_time_column_indices(
       { INVALID_UINT64_INDEX, INVALID_UINT64_INDEX, INVALID_UINT64_INDEX })
 , m_important_column_idxs(std::vector<size_t>(kNumImportantColumns, INVALID_UINT64_INDEX))
@@ -122,11 +125,52 @@ InfiniteScrollTable::~InfiniteScrollTable()
 void
 InfiniteScrollTable::Update()
 {
+    if(m_retry_fetch && !m_data_provider.IsRequestPending(m_request_id) &&
+       !m_data_provider.IsTableRequestPending(m_request_table_type))
+    {
+        ROCPROFVIS_ASSERT(m_retry_params);
+        if(m_data_provider.FetchTable(*m_retry_params))
+        {
+            ClearQueuedTableRequest();
+        }
+    }
     if(m_data_changed)
     {
         FormatData();
         m_data_changed = false;
     }
+}
+
+bool
+InfiniteScrollTable::QueueTableRequest(const TableRequestParams& params)
+{
+    bool queued = m_data_provider.FetchTable(params);
+    if(queued)
+    {
+        ClearQueuedTableRequest();
+    }
+    else
+    {
+        // The controller keeps one table per type, so a request placed while another
+        // view owns that table waits here and is reissued from Update().
+        spdlog::debug("Deferring table request for {}", m_widget_name);
+        m_retry_fetch  = true;
+        m_retry_params = std::make_unique<TableRequestParams>(params);
+    }
+    return queued;
+}
+
+void
+InfiniteScrollTable::ClearQueuedTableRequest()
+{
+    m_retry_fetch = false;
+    m_retry_params.reset();
+}
+
+void
+InfiniteScrollTable::SetDrawBorder(bool draw)
+{
+    m_draw_border = draw;
 }
 
 void
@@ -138,7 +182,10 @@ InfiniteScrollTable::FormatData() const
 void
 InfiniteScrollTable::HandleNewTableData(std::shared_ptr<RocEvent> e)
 {
-    if(e && e->GetSourceId() == m_data_provider.GetTraceFilePath())
+    std::shared_ptr<TableDataEvent> table_event =
+        std::dynamic_pointer_cast<TableDataEvent>(e);
+    if(table_event && table_event->GetSourceId() == m_data_provider.GetTraceFilePath() &&
+       table_event->GetRequestID() == m_request_id)
     {
         m_data_changed = true;
         IndexColumns();
@@ -165,7 +212,8 @@ InfiniteScrollTable::Render()
                         m_settings.GetDefaultStyle().ChildRounding);
     ImGui::PushStyleColor(ImGuiCol_ChildBg, m_settings.GetColor(Colors::kBgPanel));
     ImGui::PushStyleColor(ImGuiCol_Border, m_settings.GetColor(Colors::kBorderColor));
-    ImGui::BeginChild(m_widget_name.c_str(), ImVec2(0, 0), ImGuiChildFlags_Borders);
+    ImGui::BeginChild(m_widget_name.c_str(), ImVec2(0, 0),
+                      m_draw_border ? ImGuiChildFlags_Borders : ImGuiChildFlags_None);
     const auto& table_model = m_table_model();
 
     const std::vector<std::vector<std::string>>& table_data =
@@ -452,7 +500,7 @@ InfiniteScrollTable::Render()
                                 "{}, frame count: {}, chunk size: {}, scroll y: {}",
                                 new_start_pos, frame_count, m_fetch_chunk_size, scroll_y);
 
-                            m_data_provider.FetchTable(TableRequestParams(
+                            QueueTableRequest(TableRequestParams(
                                 m_request_table_type, table_params->m_track_ids,
                                 table_params->m_op_types, table_params->m_start_ts,
                                 table_params->m_end_ts, table_params->m_where.c_str(),
@@ -461,7 +509,9 @@ InfiniteScrollTable::Render()
                                 table_params->m_group_columns.c_str(),
                                 table_params->m_string_table_filters, new_start_pos,
                                 m_fetch_chunk_size, table_params->m_sort_column_index,
-                                table_params->m_sort_order));
+                                table_params->m_sort_order, "",
+                                table_params->m_view_table_type,
+                                table_params->m_request_id));
                         }
                         else if((scroll_y + ImGui::GetWindowHeight() >
                                  end_row_position -
@@ -491,7 +541,7 @@ InfiniteScrollTable::Render()
                                 "{}, frame count: {}, chunk size: {}, scroll y: {}",
                                 new_start_pos, frame_count, m_fetch_chunk_size, scroll_y);
 
-                            m_data_provider.FetchTable(TableRequestParams(
+                            QueueTableRequest(TableRequestParams(
                                 m_request_table_type, table_params->m_track_ids,
                                 table_params->m_op_types, table_params->m_start_ts,
                                 table_params->m_end_ts, table_params->m_where.c_str(),
@@ -500,7 +550,9 @@ InfiniteScrollTable::Render()
                                 table_params->m_group_columns.c_str(),
                                 table_params->m_string_table_filters, new_start_pos,
                                 m_fetch_chunk_size, table_params->m_sort_column_index,
-                                table_params->m_sort_order));
+                                table_params->m_sort_order, "",
+                                table_params->m_view_table_type,
+                                table_params->m_request_id));
                         }
                     }
                 }
@@ -626,7 +678,8 @@ InfiniteScrollTable::RenderContextMenu()
         ImGui::Separator();
         if(IconMenuItem(
                ICON_ARCHIVE, "Export To File",
-               !m_data_provider.IsRequestPending(DataProvider::TABLE_EXPORT_REQUEST_ID)))
+               !m_data_provider.IsRequestPending(DataProvider::TABLE_EXPORT_REQUEST_ID) &&
+                   !m_data_provider.IsTableRequestPending(m_request_table_type)))
         {
             ExportToFile();
         }
@@ -687,14 +740,15 @@ InfiniteScrollTable::ProcessSortOrFilterRequest(
             spdlog::debug("Fetching data for sort, frame count: {}", frame_count);
 
                 // Fetch the event table with the updated params
-            m_data_provider.FetchTable(TableRequestParams(
+            QueueTableRequest(TableRequestParams(
                 m_request_table_type, table_params->m_track_ids, table_params->m_op_types,
                 table_params->m_start_ts, table_params->m_end_ts,
                 table_params->m_where.c_str(), table_params->m_filter.c_str(),
                 table_params->m_group.c_str(), table_params->m_group_columns.c_str(),
                 table_params->m_string_table_filters, table_params->m_start_row,
                 table_params->m_req_row_count, table_params->m_sort_column_index,
-                table_params->m_sort_order));
+                table_params->m_sort_order, "", table_params->m_view_table_type,
+                table_params->m_request_id));
 
             m_filter_options = filter;
         }
@@ -980,7 +1034,8 @@ InfiniteScrollTable::ExportToFile() const
                    table_params->m_group_columns.c_str(),
                    table_params->m_string_table_filters, INVALID_UINT64_INDEX,
                    INVALID_UINT64_INDEX, table_params->m_sort_column_index,
-                   table_params->m_sort_order, file_path)))
+                   table_params->m_sort_order, file_path,
+                   table_params->m_view_table_type, table_params->m_request_id)))
             {
                 NotificationManager::GetInstance().ShowPersistent(
                     m_export_notification_id, "Exporting: " + file_path,

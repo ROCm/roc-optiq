@@ -3,10 +3,14 @@
 
 #pragma once
 
-#include "imgui.h"
-#include "widgets/rocprofvis_infinite_scroll_table.h"
+#include <cstddef>
+#include <functional>
+#include <optional>
 #include <string>
 #include <vector>
+
+#include "imgui.h"
+#include "widgets/rocprofvis_infinite_scroll_table.h"
 
 namespace RocProfVis
 {
@@ -16,6 +20,8 @@ namespace View
 class MultiTrackTable : public InfiniteScrollTable
 {
 public:
+    using FilterSubmitCallback = std::function<void(const MultiTrackTable&)>;
+
     MultiTrackTable(DataProvider& dp, TableType table_type,
                     rocprofvis_controller_table_type_t        request_table_type,
                     uint64_t                                  request_id,
@@ -26,13 +32,31 @@ public:
                     uint64_t                           default_sort_column_index = 1,
                     rocprofvis_controller_sort_order_t default_sort_order =
                         kRPVControllerSortOrderAscending,
-                    const std::string& friendly_name = "",
-                    const std::string& no_data_text  = "");
+                    const std::string&      friendly_name  = "",
+                    const std::string&      no_data_text   = "",
+                    std::optional<uint64_t> source_file_id = std::nullopt);
 
     ~MultiTrackTable();
 
     void Render() override;
     void Update() override;
+
+    // Draws the title row and the table body inside one card. Requires a header
+    // renderer; pass a zero size to fill the available region.
+    void RenderCard(const ImVec2& size);
+
+    // Filter form driving an A/B pair. Submitting it fetches this table and
+    // hands the same options to the other one through the submit callback.
+    void RenderSharedFilterControls();
+    void ApplySharedFiltersFrom(const MultiTrackTable& source);
+    void SetFilterSubmitCallback(const FilterSubmitCallback& callback);
+
+    void SetDisplaySummary(bool display);
+    // Draws the title row of the card, see RenderCard.
+    void SetHeaderRenderer(std::function<void()> renderer);
+
+    uint64_t GetTotalRowCount() const;
+    size_t   GetIncludedTrackCount() const;
 
     virtual void HandleTrackSelectionChanged(uint64_t track_id, bool selected);
     virtual void HandleTimeRangeSelectionChanged(double start_ns, double end_ns);
@@ -46,12 +70,18 @@ protected:
     // Subset of selected tracks applicable to this table type
     std::vector<uint64_t> m_included_tracks;
 
+    // Set in compare mode: only tracks from this source feed the table.
+    std::optional<uint64_t> m_source_file_id;
+
 private:
     void FetchSelectionData();
+    void SubmitFilters();
     bool XButton(const char* id) const;
 
-    bool m_retry_selection_fetch;
-    bool m_display_filters;
+    bool                  m_display_filters;
+    bool                  m_display_summary;
+    FilterSubmitCallback  m_filter_submit_callback;
+    std::function<void()> m_header_renderer;
 
     std::vector<std::string> m_group_by_choices;
     std::vector<const char*> m_group_by_choices_ptr;

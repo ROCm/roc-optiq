@@ -1,13 +1,13 @@
 // Copyright Advanced Micro Devices, Inc.
 // SPDX-License-Identifier: MIT
 
-#include "rocprofvis_common_defs.h"
 #include "rocprofvis_multi_track_table.h"
 #include "icons/rocprovfis_icon_defines.h"
-#include "widgets/rocprofvis_gui_helpers.h"
+#include "rocprofvis_common_defs.h"
+#include "rocprofvis_compare_panes.h"
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_timeline_selection.h"
-#include "spdlog/spdlog.h"
+#include "widgets/rocprofvis_gui_helpers.h"
 
 namespace RocProfVis
 {
@@ -23,6 +23,10 @@ constexpr const char* EVENT_ID_COLUMN_NAME  = "id";
 constexpr const char* NAME_COLUMN_NAME      = "name";
 constexpr const char* FOUND_ENTRIES_TEXT    = "Found %llu item(s) on %llu track(s)";
 
+constexpr const char* SHARED_APPLY_LABEL  = "Apply to Both";
+constexpr float       SHARED_LABEL_GAP    = 2.0f;
+constexpr float       SHARED_COMBO_GLYPHS = 12.0f;
+
 MultiTrackTable::MultiTrackTable(DataProvider& dp, TableType table_type,
                                  rocprofvis_controller_table_type_t request_table_type,
                                  uint64_t                           request_id,
@@ -33,18 +37,152 @@ MultiTrackTable::MultiTrackTable(DataProvider& dp, TableType table_type,
                                  uint64_t default_sort_column_index,
                                  rocprofvis_controller_sort_order_t default_sort_order,
                                  const std::string&                 friendly_name,
-                                 const std::string&                 no_data_text)
+                                 const std::string&                 no_data_text,
+                                 std::optional<uint64_t>            source_file_id)
 : InfiniteScrollTable(dp, table_type, request_table_type, request_id, table_model,
                       table_model_mutable, timeline_selection, default_sort_column_index,
-                      default_sort_order, friendly_name, NO_DATA_TEXT)
-, m_retry_selection_fetch(false)
+                      default_sort_order, friendly_name,
+                      no_data_text.empty() ? NO_DATA_TEXT : no_data_text)
+, m_source_file_id(source_file_id)
 , m_display_filters(display_filters)
+, m_display_summary(true)
 , m_group_by_selection_index(0)
 {
     m_filter_store[0] = '\0';
 }
 
 MultiTrackTable::~MultiTrackTable() {}
+
+void
+MultiTrackTable::ApplySharedFiltersFrom(const MultiTrackTable& source)
+{
+    m_pending_filter_options   = source.m_pending_filter_options;
+    m_group_by_selection_index = source.m_group_by_selection_index;
+    snprintf(m_filter_store, IM_ARRAYSIZE(m_filter_store), "%s", source.m_filter_store);
+    m_filter_requested = true;
+}
+
+void
+MultiTrackTable::SetFilterSubmitCallback(const FilterSubmitCallback& callback)
+{
+    m_filter_submit_callback = callback;
+}
+
+void
+MultiTrackTable::SetDisplaySummary(bool display)
+{
+    m_display_summary = display;
+}
+
+void
+MultiTrackTable::SetHeaderRenderer(std::function<void()> renderer)
+{
+    m_header_renderer = std::move(renderer);
+    // The card drawn by RenderCard is the only frame around the title and body.
+    SetDrawBorder(!m_header_renderer);
+}
+
+uint64_t
+MultiTrackTable::GetTotalRowCount() const
+{
+    return m_table_model().GetTableTotalRowCount(m_table_type);
+}
+
+size_t
+MultiTrackTable::GetIncludedTrackCount() const
+{
+    return m_included_tracks.size();
+}
+
+void
+MultiTrackTable::RenderSharedFilterControls()
+{
+    // Same shape as the per table form: a label column, the group by combo, the
+    // apply button on the right, then a filter input filling the row.
+    const ImGuiStyle& style     = ImGui::GetStyle();
+    ImFont*           icon_font = m_settings.GetFontManager().GetFont(FontType::kIcon);
+    const bool        grouping  = !m_pending_filter_options.group_by.empty();
+
+    const float label_col =
+        ImGui::CalcTextSize("Group by").x + style.ItemSpacing.x * SHARED_LABEL_GAP;
+    const float apply_width =
+        ImGui::CalcTextSize(SHARED_APPLY_LABEL).x + style.FramePadding.x * 2.0f;
+
+    ImGui::Spacing();
+
+    ImGui::AlignTextToFramePadding();
+    ImGui::TextUnformatted("Group by");
+    ImGui::SameLine(label_col);
+    ImGui::SetNextItemWidth(ImGui::GetFontSize() * SHARED_COMBO_GLYPHS);
+    PushComboStyles();
+    if(ImGui::Combo("##shared_group_by", &m_group_by_selection_index,
+                    m_group_by_choices_ptr.data(),
+                    static_cast<int>(m_group_by_choices_ptr.size())))
+    {
+        m_pending_filter_options.group_by =
+            m_group_by_selection_index == 0
+                ? ""
+                : m_group_by_choices_ptr[m_group_by_selection_index];
+    }
+    PopComboStyles();
+    if(ImGui::IsItemHovered())
+    {
+        SetTooltipStyled("Aggregate both tables by a column, or leave as -- None --.");
+    }
+
+    ImGui::SameLine();
+    ImGui::SetCursorPosX(ImGui::GetContentRegionMax().x - apply_width);
+    if(ImGui::Button(SHARED_APPLY_LABEL, ImVec2(apply_width, 0.0f)))
+    {
+        SubmitFilters();
+    }
+    if(ImGui::IsItemHovered())
+    {
+        SetTooltipStyled("Apply the same aggregation and filter to sources A and B.");
+    }
+
+    ImGui::AlignTextToFramePadding();
+    ImGui::TextUnformatted("Filter");
+    ImGui::SameLine(label_col);
+    const float filter_width = ImGui::GetContentRegionMax().x - ImGui::GetCursorPosX();
+    ImGui::BeginDisabled(grouping);
+    const std::pair<bool, bool> filter_input = InputTextWithClear(
+        "shared_filters", grouping ? "Disabled while grouping" : "Filter both sources",
+        m_pending_filter_options.filter, IM_ARRAYSIZE(m_pending_filter_options.filter),
+        icon_font, m_settings.GetColor(Colors::kBgFrame), style, filter_width);
+    if(filter_input.second)
+    {
+        m_pending_filter_options.filter[0] = '\0';
+    }
+    ImGui::EndDisabled();
+
+    ImGui::Spacing();
+}
+
+void
+MultiTrackTable::SubmitFilters()
+{
+    m_filter_requested  = true;
+    const bool grouping = (m_group_by_selection_index != 0);
+    if(!grouping && m_filter_store[0] != '\0')
+    {
+        // Reinstate the filter that was stashed when grouping was enabled.
+        snprintf(m_pending_filter_options.filter,
+                 IM_ARRAYSIZE(m_pending_filter_options.filter), "%s", m_filter_store);
+        m_filter_store[0] = '\0';
+    }
+    else if(grouping && m_pending_filter_options.filter[0] != '\0')
+    {
+        // Stash and clear the filter so it cannot fight the group-by query.
+        snprintf(m_filter_store, IM_ARRAYSIZE(m_filter_store), "%s",
+                 m_pending_filter_options.filter);
+        m_pending_filter_options.filter[0] = '\0';
+    }
+    if(m_filter_submit_callback)
+    {
+        m_filter_submit_callback(*this);
+    }
+}
 
 void
 MultiTrackTable::HandleTrackSelectionChanged(uint64_t track_id, bool selected)
@@ -65,14 +203,31 @@ MultiTrackTable::HandleTimeRangeSelectionChanged(double start_ns, double end_ns)
 }
 
 void
+MultiTrackTable::RenderCard(const ImVec2& size)
+{
+    ROCPROFVIS_ASSERT(m_header_renderer);
+    BeginCompareCard("##source_card", m_settings, size,
+                     ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+    m_header_renderer();
+    InfiniteScrollTable::Render();
+    EndCompareCard();
+}
+
+void
 MultiTrackTable::Render()
 {
+    // A header renderer means the table belongs to a compare card filling its pane.
+    if(m_header_renderer)
+    {
+        RenderCard(ImVec2(0.0f, 0.0f));
+        return;
+    }
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
     ImGui::BeginChild("multitrack_table", ImVec2(0.0f, 0.0f), ImGuiChildFlags_Borders,
                       ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
     ImGui::PopStyleVar();
     auto table_params = m_table_model().GetTableParams(m_table_type);
-    if(m_display_filters || table_params)
+    if(m_display_filters || (m_display_summary && table_params))
     {
         const ImGuiStyle& style = ImGui::GetStyle();
         ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding,
@@ -194,25 +349,7 @@ MultiTrackTable::Render()
                 ImGui::TableNextColumn();
                 if(ImGui::Button("Submit", ImVec2(-FLT_MIN, 0.0f)))
                 {
-                    m_filter_requested  = true;
-                    const bool grouping = (m_group_by_selection_index != 0);
-                    if(!grouping && m_filter_store[0] != '\0')
-                    {
-                        // Reinstate the filter that was stashed when grouping was
-                        // enabled.
-                        snprintf(m_pending_filter_options.filter,
-                                 IM_ARRAYSIZE(m_pending_filter_options.filter), "%s",
-                                 m_filter_store);
-                        m_filter_store[0] = '\0';
-                    }
-                    else if(grouping && m_pending_filter_options.filter[0] != '\0')
-                    {
-                        // Stash and clear the filter so it cannot fight the group-by
-                        // query.
-                        snprintf(m_filter_store, IM_ARRAYSIZE(m_filter_store), "%s",
-                                 m_pending_filter_options.filter);
-                        m_pending_filter_options.filter[0] = '\0';
-                    }
+                    SubmitFilters();
                 }
 
 #ifdef ROCPROFVIS_DEVELOPER_MODE
@@ -262,7 +399,7 @@ MultiTrackTable::Render()
             }
             ImGui::PopStyleVar();
         }
-        if(table_params)
+        if(table_params && m_display_summary)
         {
             ImGui::TextDisabled(FOUND_ENTRIES_TEXT,
                                 m_table_model().GetTableTotalRowCount(m_table_type),
@@ -287,19 +424,6 @@ MultiTrackTable::Render()
 void
 MultiTrackTable::Update()
 {
-    // Handle track selection changed event
-    if(m_retry_selection_fetch)
-    {
-        if(!m_data_provider.IsRequestPending(m_request_id))
-        {
-            // Try to reprocess the deferred track selection event.
-            spdlog::debug(
-                "Reprocessing deferred track selection changed event for table: {}",
-                m_widget_name);
-            FetchSelectionData();
-        }
-    }
-
     if(m_data_changed)
     {
         const std::vector<std::string>& column_names =
@@ -359,9 +483,12 @@ MultiTrackTable::IncludeTrack(uint64_t track_id) const
     if(track_info)
     {
         include = (track_info->track_type == kRPVControllerTrackTypeSamples &&
-                   m_table_type == TableType::kSampleTable) ||
+                   m_request_table_type == kRPVControllerTableTypeSamples) ||
                   (track_info->track_type == kRPVControllerTrackTypeEvents &&
-                   m_table_type == TableType::kEventTable);
+                   m_request_table_type == kRPVControllerTableTypeEvents);
+        // In compare mode a table only aggregates the tracks of its own source.
+        include = include &&
+                  (!m_source_file_id || track_info->file_id == m_source_file_id.value());
     }
     return include;
 }
@@ -455,8 +582,6 @@ MultiTrackTable::FetchSelectionData()
         }
     }
 
-    bool fetch_result = false;
-
     // Cancel pending requests.
     if(m_data_provider.IsRequestPending(m_request_id))
     {
@@ -466,32 +591,19 @@ MultiTrackTable::FetchSelectionData()
     if(included_tracks.empty())
     {
         m_table_model_mutable().ClearTable(m_table_type);
-        fetch_result = true;
+        // There is nothing left to ask for, so drop a request still waiting its turn.
+        ClearQueuedTableRequest();
     }
     else
     {
-        // Fetch table data for the selected tracks
-        TableRequestParams table_params(
+        // Fetch table data for the selected tracks. The request waits its turn when
+        // the other compare source is holding the controller table.
+        QueueTableRequest(TableRequestParams(
             m_request_table_type, included_tracks, {}, start_ns, end_ns,
             m_filter_options.where, m_filter_options.filter,
             m_filter_options.group_by.c_str(), m_filter_options.group_columns, {}, 0,
-            m_fetch_chunk_size, m_sort_column_index, m_sort_order);
-
-        fetch_result = m_data_provider.FetchTable(table_params);
-    }
-
-    if(!fetch_result)
-    {
-        spdlog::error("Failed to queue table request for tracks: {}",
-                      included_tracks.size());
-        // save this selection event to reprocess it later (it's ok to replace the
-        // previous one as the new one reflects the current selection)
-        m_retry_selection_fetch = true;
-    }
-    else
-    {
-        // clear any pending selection fetch
-        m_retry_selection_fetch = false;
+            m_fetch_chunk_size, m_sort_column_index, m_sort_order, "", m_table_type,
+            m_request_id));
     }
     // Update the included tracks for this table type
     m_included_tracks = std::move(included_tracks);

@@ -1387,31 +1387,48 @@ namespace RocProfVis
             ROCPROFVIS_ASSERT_MSG_BREAK(stacktrace, ERROR_STACK_TRACE_CANNOT_BE_NULL);
             if (event_id.bitfield.event_op == kRocProfVisDmOperationLaunch)
             {
-                std::string query = "WITH slice_args AS ("
-                    "SELECT "
-                    "a.arg_set_id, "
-                    "GROUP_CONCAT( "
-                    "    a.key || ' = ' || COALESCE( "
-                    "        a.string_value, "
-                    "        CAST(a.real_value AS TEXT), "
-                    "        CAST(a.int_value AS TEXT) "
-                    "    ), "
-                    "    ', ' "
-                    ") AS args "
-                    "FROM __intrinsic_slice s "
-                    "JOIN __intrinsic_args a ON s.arg_set_id = a.arg_set_id "
-                    "WHERE s.id = ";
+                std::string query = "WITH RECURSIVE params AS ( SELECT ";
                 query += std::to_string(event_id.bitfield.event_id);
-                query += " GROUP BY a.arg_set_id ) "
-                    "SELECT "
-                    "CAST(s.id AS INTEGER)           AS id, "
-                    "s.name                          AS symbol, "
-                    "COALESCE(sa.args, '')           AS args, "
-                    "s.depth                         AS depth "
-                    "FROM __intrinsic_slice s "
-                    "LEFT JOIN slice_args sa ON s.arg_set_id = sa.arg_set_id  "
-                    "WHERE s.id = ";
-                query += std::to_string(event_id.bitfield.event_id);
+                query += R"( AS target_id),
+                    stack_chain AS (
+                        SELECT s.id, s.name, s.depth, s.arg_set_id,
+                        s.parent_stack_id, s.stack_id,
+                        s.ts, s.dur, s.track_id
+                        FROM __intrinsic_slice s
+                        JOIN params p ON s.id = p.target_id
+                        UNION
+                        SELECT s.id, s.name, s.depth, s.arg_set_id,
+                        s.parent_stack_id, s.stack_id,
+                        s.ts, s.dur, s.track_id
+                        FROM __intrinsic_slice s
+                        JOIN stack_chain sc ON s.stack_id = sc.parent_stack_id
+                        WHERE s.track_id = sc.track_id 
+                        AND s.ts      <= sc.ts 
+                        AND s.ts + s.dur >= sc.ts + sc.dur  
+                    ),
+                    slice_args AS (
+                        SELECT
+                        a.arg_set_id,
+                        GROUP_CONCAT(
+                            a.key || ' = ' || COALESCE(
+                                a.string_value,
+                                CAST(a.real_value AS TEXT),
+                                CAST(a.int_value AS TEXT)
+                            ),
+                            ', '
+                        ) AS args
+                        FROM stack_chain sc
+                        JOIN __intrinsic_args a ON sc.arg_set_id = a.arg_set_id
+                        GROUP BY a.arg_set_id
+                    )
+                    SELECT
+                    CAST(sc.id AS INTEGER)  AS id,
+                    sc.name                 AS symbol,
+                    COALESCE(sa.args, '')   AS args,
+                    sc.depth                AS depth
+                    FROM stack_chain sc
+                    LEFT JOIN slice_args sa ON sc.arg_set_id = sa.arg_set_id
+                    ORDER BY sc.depth;)";
 
                 if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, DbInstancePtrAt(0), query.c_str(),
                     stacktrace,

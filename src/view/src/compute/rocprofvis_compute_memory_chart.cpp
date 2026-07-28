@@ -244,7 +244,7 @@ DrawFloatingLabel(ImDrawList* draw_list, ImVec2 pos, const char* text, ImU32 acc
     ImVec2 pad(5.0f, 2.0f);
     ImVec2 min(pos.x - pad.x, pos.y - pad.y);
     ImVec2 max(pos.x + text_size.x + pad.x, pos.y + text_size.y + pad.y);
-    draw_list->AddRectFilled(min, max, ApplyAlpha(C().bg, 0.92f), 4.0f);
+    draw_list->AddRectFilled(min, max, C().bg, 4.0f);
     draw_list->AddRect(min, max, ApplyAlpha(accent_color, 0.7f), 4.0f, 0, 1.0f);
     draw_list->AddText(pos, accent_color, text);
 }
@@ -978,13 +978,124 @@ ComputeMemoryChartView::BuildArrowRoutes(std::vector<ArrowRoute>& routes) const
                    (from->MidY() + to->MidY()) * 0.5f);
     }
 
-    // Skipping columns: run along a dedicated highway below the blocks so the
-    // line never crosses an intervening column. Each such arrow gets its own
-    // lane to avoid overlapping the others. When the destination is to the left,
-    // the route climbs the reserved left margin and enters the block's left edge
-    // (e.g. the instruction-fetch arrow returning to Instr Buff).
+    // Skipping columns: route along packed "highway" lanes below the blocks.
+    // Disjoint arrows share a lane; a shorter span nests nearer the blocks than
+    // the span enclosing it. Left-going routes climb the reserved left margin.
     const float margin_x = CHART_PADDING + LEFT_MARGIN * 0.35f;
-    int         skip_lane = 0;
+
+    // Horizontal extent each skipping arrow occupies along the highway.
+    struct SkipSpan
+    {
+        size_t index;
+        float  lo;
+        float  hi;
+        int    lane;
+    };
+    std::vector<SkipSpan> spans;
+    spans.reserve(skipping.size());
+    for(size_t index : skipping)
+    {
+        const MemChartArrow& arrow = m_layout.arrows[index];
+        const MemChartBlock* from  = m_layout.FindBlock(arrow.from);
+        const MemChartBlock* to    = m_layout.FindBlock(arrow.to);
+        if(!from || !to) continue;
+        float a = from->MidX();
+        float b = to->column < from->column ? margin_x : to->MidX();
+        spans.push_back({index, std::min(a, b), std::max(a, b), 0});
+    }
+
+    // Shortest spans first so they take the inner lanes; ties left-to-right.
+    std::stable_sort(spans.begin(), spans.end(), [](const SkipSpan& a, const SkipSpan& b) {
+        float wa = a.hi - a.lo;
+        float wb = b.hi - b.lo;
+        if(wa != wb) return wa < wb;
+        return a.lo < b.lo;
+    });
+
+    // First-fit packing: reuse the lowest lane clear of this span, else open one.
+    constexpr float                           SKIP_LANE_PAD = 24.0f;
+    std::vector<std::vector<const SkipSpan*>> lanes;
+    for(SkipSpan& span : spans)
+    {
+        int lane = 0;
+        for(; lane < static_cast<int>(lanes.size()); ++lane)
+        {
+            bool clear = true;
+            for(const SkipSpan* other : lanes[lane])
+            {
+                if(span.lo < other->hi + SKIP_LANE_PAD && other->lo < span.hi + SKIP_LANE_PAD)
+                {
+                    clear = false;
+                    break;
+                }
+            }
+            if(clear) break;
+        }
+        if(lane == static_cast<int>(lanes.size())) lanes.emplace_back();
+        span.lane = lane;
+        lanes[lane].push_back(&span);
+    }
+
+    std::unordered_map<size_t, int> lane_of;
+    for(const SkipSpan& span : spans)
+    {
+        lane_of[span.index] = span.lane;
+    }
+
+    // A label sits above its lane's line, so the pitch between lanes must exceed
+    // the label height - otherwise a lane's label lands on the line above it.
+    const float lane_pitch =
+        std::max(LANE_GAP, ImGui::GetTextLineHeight() + ARROW_LABEL_ABOVE + 12.0f);
+
+    // Spread each block's bottom connectors symmetrically about the centre so
+    // drops don't stack. Ordered left-headed by increasing span then right-headed
+    // by decreasing span, keeping the longest spans centre-most (no crossings).
+    struct BottomPort
+    {
+        size_t index;
+        bool   is_from;  // from-drop vs. to-rise
+        int    side;     // -1 = heads left, +1 = heads right
+        int    span;     // column distance
+    };
+    std::map<uint32_t, std::vector<BottomPort>> block_ports;
+    for(size_t index : skipping)
+    {
+        const MemChartArrow& arrow = m_layout.arrows[index];
+        const MemChartBlock* from  = m_layout.FindBlock(arrow.from);
+        const MemChartBlock* to    = m_layout.FindBlock(arrow.to);
+        if(!from || !to) continue;
+        bool right = to->column > from->column;
+        int  span  = right ? to->column - from->column : from->column - to->column;
+        block_ports[from->id].push_back({index, true, right ? 1 : -1, span});
+        // A left-going arrow enters its destination at the left edge, not the
+        // bottom, so only right-going arrows add a to-rise port.
+        if(right) block_ports[to->id].push_back({index, false, -1, span});
+    }
+
+    std::unordered_map<size_t, float> from_port_x;
+    std::unordered_map<size_t, float> to_port_x;
+    constexpr float                   PORT_STEP     = 16.0f;
+    constexpr float                   PORT_EDGE_PAD = 14.0f;
+    for(std::pair<const uint32_t, std::vector<BottomPort>>& kv : block_ports)
+    {
+        const MemChartBlock* block = m_layout.FindBlock(kv.first);
+        if(!block) continue;
+        std::vector<BottomPort>& ports = kv.second;
+        std::stable_sort(ports.begin(), ports.end(), [](const BottomPort& a, const BottomPort& b) {
+            if(a.side != b.side) return a.side < b.side;
+            return a.side < 0 ? a.span < b.span : a.span > b.span;
+        });
+        int   n      = static_cast<int>(ports.size());
+        float usable = std::max(block->w - PORT_EDGE_PAD * 2.0f, 0.0f);
+        float step   = n > 1 ? std::min(PORT_STEP, usable / static_cast<float>(n - 1)) : 0.0f;
+        for(int k = 0; k < n; ++k)
+        {
+            float x = block->MidX() +
+                      (static_cast<float>(k) - static_cast<float>(n - 1) * 0.5f) * step;
+            (ports[k].is_from ? from_port_x : to_port_x)[ports[k].index] = x;
+        }
+    }
+
     for(size_t index : skipping)
     {
         const MemChartArrow& arrow = m_layout.arrows[index];
@@ -992,24 +1103,27 @@ ComputeMemoryChartView::BuildArrowRoutes(std::vector<ArrowRoute>& routes) const
         const MemChartBlock* to    = m_layout.FindBlock(arrow.to);
         if(!from || !to) continue;
 
-        float highway_y = blocks_bottom + 24.0f + static_cast<float>(skip_lane++) * LANE_GAP;
+        int   lane      = lane_of.count(index) ? lane_of[index] : 0;
+        float highway_y = blocks_bottom + 30.0f + static_cast<float>(lane) * lane_pitch;
+        float fx        = from_port_x.count(index) ? from_port_x[index] : from->MidX();
 
         if(to->column < from->column)
         {
-            std::vector<std::pair<float, float>> pts = {{from->MidX(), from->Bottom()},
-                                                        {from->MidX(), highway_y},
+            std::vector<std::pair<float, float>> pts = {{fx, from->Bottom()},
+                                                        {fx, highway_y},
                                                         {margin_x, highway_y},
                                                         {margin_x, to->MidY()},
                                                         {to->conn_left, to->MidY()}};
-            make_route(arrow, std::move(pts), (margin_x + from->MidX()) * 0.5f, highway_y);
+            make_route(arrow, std::move(pts), (margin_x + fx) * 0.5f, highway_y);
         }
         else
         {
-            std::vector<std::pair<float, float>> pts = {{from->MidX(), from->Bottom()},
-                                                        {from->MidX(), highway_y},
-                                                        {to->MidX(), highway_y},
-                                                        {to->MidX(), to->Bottom()}};
-            make_route(arrow, std::move(pts), (from->MidX() + to->MidX()) * 0.5f, highway_y);
+            float tx = to_port_x.count(index) ? to_port_x[index] : to->MidX();
+            std::vector<std::pair<float, float>> pts = {{fx, from->Bottom()},
+                                                        {fx, highway_y},
+                                                        {tx, highway_y},
+                                                        {tx, to->Bottom()}};
+            make_route(arrow, std::move(pts), (fx + tx) * 0.5f, highway_y);
         }
     }
 }
@@ -1101,7 +1215,13 @@ ComputeMemoryChartView::DrawArrowRoutes(ImDrawList* draw_list, ImVec2 origin,
             ImVec2 prev = screen(last - 1);
             DrawArrowHead(draw_list, tip, {tip.x - prev.x, tip.y - prev.y}, route.color);
         }
+    }
 
+    // Labels last (a second pass) so a later arrow's line is never painted over
+    // an earlier arrow's label.
+    for(const ArrowRoute& route : routes)
+    {
+        if(route.points.size() < 2) continue;
         ImVec2 label_pos(origin.x + route.label_x, origin.y + route.label_y);
         DrawFloatingLabel(draw_list, label_pos, route.label.c_str(), route.color);
         ImVec2 label_size(route.label_w, route.label_h);

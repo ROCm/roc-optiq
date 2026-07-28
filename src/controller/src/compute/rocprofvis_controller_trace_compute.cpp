@@ -18,6 +18,7 @@
 #include <cstring>
 #include <cstdlib>
 #include <set>
+#include <unordered_map>
 
 namespace RocProfVis
 {
@@ -789,6 +790,20 @@ rocprofvis_result_t ComputeTrace::LoadRocpd(Future* future)
                                                     {kRPVComputeParamKernelId,
                                                      std::to_string(kernel_id)});
                                             }
+                                            std::unordered_map<uint64_t, rocprofvis_handle_t*>
+                                                kernel_by_id;
+                                            kernel_by_id.reserve(kernel_ids.size());
+                                            for(const uint32_t kernel_id : kernel_ids)
+                                            {
+                                                rocprofvis_handle_t* kernel_handle = nullptr;
+                                                if(kRocProfVisResultSuccess == workload->GetObject(
+                                                       kRPVControllerWorkloadKernelById,
+                                                       kernel_id, &kernel_handle) &&
+                                                   kernel_handle)
+                                                {
+                                                    kernel_by_id.emplace(kernel_id, kernel_handle);
+                                                }
+                                            }
                                             query_output = {
                                                 {
                                                     { kRPVComputeColumnKernelUUID, std::nullopt },
@@ -803,7 +818,7 @@ rocprofvis_result_t ComputeTrace::LoadRocpd(Future* future)
                                                 db, m_dm_handle, object2wait, nullptr,
                                                 kRPVComputeFetchKernelSourceFiles,
                                                 query_arguments, query_output,
-                                                [this, &workload](const QueryDataStore& data_store){
+                                                [this, &kernel_by_id](const QueryDataStore& data_store){
                                                 const auto kernel_column_it = data_store.columns.find(
                                                     kRPVComputeColumnKernelUUID);
                                                 if(kernel_column_it == data_store.columns.end() ||
@@ -837,16 +852,15 @@ rocprofvis_result_t ComputeTrace::LoadRocpd(Future* future)
 
                                                 for(const std::pair<const uint64_t, uint64_t>& count : file_counts)
                                                 {
-                                                    rocprofvis_handle_t* kernel_handle = nullptr;
-                                                    if(kRocProfVisResultSuccess != workload->GetObject(
-                                                           kRPVControllerWorkloadKernelById,
-                                                           count.first, &kernel_handle) ||
-                                                       !kernel_handle)
+                                                    const std::unordered_map<uint64_t,
+                                                        rocprofvis_handle_t*>::const_iterator kernel_it =
+                                                        kernel_by_id.find(count.first);
+                                                    if(kernel_it == kernel_by_id.end())
                                                     {
                                                         continue;
                                                     }
                                                     rocprofvis_handle_t* pc_handle = nullptr;
-                                                    reinterpret_cast<Kernel*>(kernel_handle)->GetObject(
+                                                    reinterpret_cast<Kernel*>(kernel_it->second)->GetObject(
                                                         kRPVControllerKernelPcSampling, 0, &pc_handle);
                                                     PcSamplingRef pc_sampling(pc_handle);
                                                     if(pc_sampling.IsValid())
@@ -864,17 +878,16 @@ rocprofvis_result_t ComputeTrace::LoadRocpd(Future* future)
                                                 {
                                                     const uint64_t kernel_id = parsed_row.first;
                                                     const std::vector<const char*>& row = *parsed_row.second;
-                                                    rocprofvis_handle_t* kernel_handle = nullptr;
-                                                    if(kRocProfVisResultSuccess != workload->GetObject(
-                                                           kRPVControllerWorkloadKernelById,
-                                                           kernel_id, &kernel_handle) ||
-                                                       !kernel_handle)
+                                                    const std::unordered_map<uint64_t,
+                                                        rocprofvis_handle_t*>::const_iterator kernel_it =
+                                                        kernel_by_id.find(kernel_id);
+                                                    if(kernel_it == kernel_by_id.end())
                                                     {
                                                         continue;
                                                     }
 
                                                     rocprofvis_handle_t* pc_handle = nullptr;
-                                                    reinterpret_cast<Kernel*>(kernel_handle)->GetObject(
+                                                    reinterpret_cast<Kernel*>(kernel_it->second)->GetObject(
                                                         kRPVControllerKernelPcSampling, 0, &pc_handle);
                                                     PcSamplingRef pc_sampling(pc_handle);
                                                     if(!pc_sampling.IsValid())

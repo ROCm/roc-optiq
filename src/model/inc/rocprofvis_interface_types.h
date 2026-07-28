@@ -581,9 +581,8 @@ typedef enum rocprofvis_db_compute_use_case_enum_t
     kRPVComputeFetchKernelSourceFiles,
     kRPVComputeFetchSourceFileSourceLines,
     kRPVComputeFetchKernelCodeObjects,
-    // Preserve public enum values after retiring the granular PC sampling queries.
-    kRPVComputeFetchKernelIsaToIsaDeps = 16,
-    kRPVComputeFetchKernelIsaLines = 20,
+    kRPVComputeFetchKernelIsaToIsaDeps,
+    kRPVComputeFetchKernelIsaLines,
     kRPVComputeFetchKernelIsaToSourceDeps,
     kRPVComputeFetchKernelSamplingStates,
     kRPVComputeFetchKernelSamplingStateReasonCounts,
@@ -595,8 +594,7 @@ typedef enum rocprofvis_db_compute_param_enum_t
     kRPVComputeParamWorkloadId,
     kRPVComputeParamKernelId,
     kRPVComputeParamSourceFileId,
-    // Preserve public enum values after retiring the granular PC sampling parameters.
-    kRPVComputeParamMetricId = 6,
+    kRPVComputeParamMetricId,
     kRPVComputeParamMetricSelector,
     kRPVComputeParamSortColumnIndex,
     kRPVComputeParamSortColumnOrder,

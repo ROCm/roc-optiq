@@ -14,6 +14,7 @@
 #include <memory>
 #include <sstream>
 #include <string>
+#include <vector>
 #ifdef _WIN32
 #define NOMINMAX
 #include <windows.h>
@@ -606,6 +607,139 @@ RocProfVis::View::get_executable_name(const std::string& fullPath)
         : fullPath.substr(pos + 1);
 }
 
+std::string
+RocProfVis::View::posix_base_name(const std::string& path)
+{
+    std::string::size_type pos = path.find_last_of('/');
+    return pos == std::string::npos ? path : path.substr(pos + 1);
+}
+
+std::string
+RocProfVis::View::posix_file_extension(const std::string& path)
+{
+    std::string name = posix_base_name(path);
+    std::string::size_type pos = name.find_last_of('.');
+    if(pos == std::string::npos || pos == 0)
+    {
+        return std::string();
+    }
+    return name.substr(pos + 1);
+}
+
+std::string
+RocProfVis::View::normalize_posix_path(const std::string& path)
+{
+    if(path.empty())
+    {
+        return ".";
+    }
+
+    bool absolute = (path[0] == '/');
+    std::vector<std::string> parts;
+
+    std::string::size_type start = 0;
+    while(start <= path.size())
+    {
+        std::string::size_type slash = path.find('/', start);
+        std::string segment = (slash == std::string::npos) ? path.substr(start)
+                                                           : path.substr(start, slash - start);
+        if(!segment.empty() && segment != ".")
+        {
+            if(segment == "..")
+            {
+                if(!parts.empty() && parts.back() != "..")
+                {
+                    parts.pop_back();
+                }
+                else if(!absolute)
+                {
+                    parts.push_back("..");
+                }
+            }
+            else
+            {
+                parts.push_back(segment);
+            }
+        }
+        if(slash == std::string::npos)
+        {
+            break;
+        }
+        start = slash + 1;
+    }
+
+    std::string result = absolute ? "/" : "";
+    for(size_t i = 0; i < parts.size(); i++)
+    {
+        result += parts[i];
+        if(i + 1 < parts.size())
+        {
+            result += "/";
+        }
+    }
+    if(result.empty())
+    {
+        result = absolute ? "/" : ".";
+    }
+    return result;
+}
+
+bool
+RocProfVis::View::is_posix_root_path(const std::string& path)
+{
+    std::string normalized = normalize_posix_path(path);
+    return normalized == "/" || normalized == ".";
+}
+
+std::string
+RocProfVis::View::posix_parent_path(const std::string& path)
+{
+    std::string normalized = normalize_posix_path(path);
+    if(is_posix_root_path(normalized))
+    {
+        return normalized;
+    }
+
+    std::string::size_type pos = normalized.find_last_of('/');
+    if(pos == std::string::npos)
+    {
+        return ".";
+    }
+    if(pos == 0)
+    {
+        return "/";
+    }
+    return normalized.substr(0, pos);
+}
+
+std::string
+RocProfVis::View::join_posix_path(const std::string& dir, const std::string& name)
+{
+    if(name == "..")
+    {
+        return posix_parent_path(dir);
+    }
+    if(!name.empty() && name[0] == '/')
+    {
+        return normalize_posix_path(name);
+    }
+
+    std::string joined = dir;
+    if(joined.empty())
+    {
+        joined = name;
+    }
+    else if(joined.back() == '/')
+    {
+        joined += name;
+    }
+    else
+    {
+        joined += "/" + name;
+    }
+    return normalize_posix_path(joined);
+}
+
 namespace
 {
 // Returns true if DISPLAY looks like an SSH X11-forwarded display, e.g.
@@ -649,3 +783,65 @@ RocProfVis::View::is_remote_display_session()
     return s_cached;
 }
 
+std::string
+RocProfVis::View::strip_ansi_for_display(std::string const& text)
+{
+    std::string out;
+    out.reserve(text.size());
+    size_t i = 0;
+    while (i < text.size())
+    {
+        unsigned char const c = static_cast<unsigned char>(text[i]);
+        if (c == 0x1BU)
+        {
+            if (i + 1 < text.size() && text[i + 1] == '[')
+            {
+                i += 2;
+                while (i < text.size())
+                {
+                    unsigned char const ch = static_cast<unsigned char>(text[i]);
+                    ++i;
+                    if (ch >= 0x40U && ch <= 0x7EU)
+                    {
+                        break;
+                    }
+                }
+                continue;
+            }
+            if (i + 1 < text.size() && text[i + 1] == ']')
+            {
+                i += 2;
+                while (i < text.size())
+                {
+                    if (text[i] == '\a')
+                    {
+                        ++i;
+                        break;
+                    }
+                    if (text[i] == '\x1b' && i + 1 < text.size() && text[i + 1] == '\\')
+                    {
+                        i += 2;
+                        break;
+                    }
+                    ++i;
+                }
+                continue;
+            }
+            if (i + 1 < text.size())
+            {
+                i += 2;
+                continue;
+            }
+            ++i;
+            continue;
+        }
+        if (c < 0x20U && c != '\n' && c != '\r' && c != '\t')
+        {
+            ++i;
+            continue;
+        }
+        out.push_back(static_cast<char>(c));
+        ++i;
+    }
+    return out;
+}

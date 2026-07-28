@@ -27,7 +27,6 @@ class Graph;
 class Timeline;
 class Event;
 class Table;
-class Node;
 class SystemTable;
 class Summary;
 class SummaryMetrics;
@@ -89,7 +88,6 @@ public:
 private:
     std::vector<std::string>                       m_files;  // >1 entry => combined/compare load
     std::vector<Track*>                            m_tracks;
-    std::vector<Node*>                             m_nodes;
     Timeline*                                      m_timeline;
     SystemTable*                                   m_event_table;
     SystemTable*                                   m_sample_table;

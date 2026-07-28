@@ -11,6 +11,10 @@
 #include "rocprofvis_controller_table.h"
 #include "rocprofvis_controller_trace.h"
 #include "rocprofvis_core_assert.h"
+// TEMPORARY (remote/SSH): remove guard when remote graduates.
+#ifdef ROCPROFVIS_ENABLE_REMOTE
+#include "remote/rocprofvis_controller_remote.h"
+#endif
 #include "system/rocprofvis_controller_event.h"
 #include "system/rocprofvis_controller_sample.h"
 #include "system/rocprofvis_controller_track.h"
@@ -19,11 +23,9 @@
 #include "system/rocprofvis_controller_graph.h"
 #include "system/rocprofvis_controller_summary.h"
 #include "system/rocprofvis_controller_summary_metrics.h"
-#ifdef COMPUTE_UI_SUPPORT
 #include "compute/rocprofvis_controller_metrics_container.h"
 #include "compute/rocprofvis_controller_trace_compute.h"
 #include "compute/rocprofvis_controller_pc_sampling.h"
-#endif
 #include "rocprofvis_c_interface.h"
 
 #include <cstring>
@@ -44,10 +46,11 @@ typedef Reference<rocprofvis_controller_table_t, Table, kRPVControllerObjectType
 typedef Reference<rocprofvis_controller_arguments_t, Arguments, kRPVControllerObjectTypeArguments> ArgumentsRef;
 typedef Reference<rocprofvis_controller_table_t, Summary, kRPVControllerObjectTypeSummary> SummaryRef;
 typedef Reference<rocprofvis_controller_summary_metrics_t, SummaryMetrics, kRPVControllerObjectTypeSummaryMetrics> SummaryMetricsRef;
-#ifdef COMPUTE_UI_SUPPORT
 typedef Reference<rocprofvis_controller_t, ComputeTrace, kRPVControllerObjectTypeControllerCompute> ComputeTraceRef;
 typedef Reference<rocprofvis_controller_t, MetricsContainer, kRPVControllerObjectTypeMetricsContainer> MetricsContainerRef;
 typedef Reference<rocprofvis_handle_t, PcSampling, kRPVControllerObjectTypePCSampling> PcSamplingRef;
+#ifdef ROCPROFVIS_ENABLE_REMOTE
+typedef Reference<rocprofvis_controller_connection_t, SshConnection, kRPVControllerObjectTypeRemoteConnection > ConnectionRef;
 #endif
 }
 }
@@ -190,13 +193,11 @@ rocprofvis_controller_t* rocprofvis_controller_alloc(char const* const filename)
                     trace = new RocProfVis::Controller::SystemTrace(filename);                 
                     break;
                 }
-#ifdef COMPUTE_UI_SUPPORT
                 case kComputeSqlite:
                 {
                     trace = new RocProfVis::Controller::ComputeTrace(filename);                  
                     break;
                 }
-#endif
             }
             if(trace && trace->Init() == kRocProfVisResultSuccess)
             {
@@ -262,9 +263,7 @@ rocprofvis_result_t rocprofvis_controller_load_async(rocprofvis_controller_t* co
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
 
     RocProfVis::Controller::SystemTraceRef system_trace(controller);
-#ifdef COMPUTE_UI_SUPPORT
     RocProfVis::Controller::ComputeTraceRef compute_trace(controller);
-#endif
     RocProfVis::Controller::FutureRef future_ref(future);
     if(future_ref.IsValid())
     {
@@ -272,12 +271,10 @@ rocprofvis_result_t rocprofvis_controller_load_async(rocprofvis_controller_t* co
         {
             result = system_trace->Load(*future_ref);
         }
-#ifdef COMPUTE_UI_SUPPORT
         else if(compute_trace.IsValid())
         {
             result = compute_trace->Load(*future_ref);
         }
-#endif
     }
 
     return result;
@@ -425,7 +422,6 @@ rocprofvis_result_t rocprofvis_controller_table_fetch_async(
                 error = system_trace->AsyncFetch(*table_ref, *args_ref, *future, *array);
             }
         }
-#ifdef COMPUTE_UI_SUPPORT
         else if (controller_type == kRPVControllerObjectTypeControllerCompute)
         {
             RocProfVis::Controller::ComputeTraceRef compute_trace(controller);
@@ -434,7 +430,6 @@ rocprofvis_result_t rocprofvis_controller_table_fetch_async(
                 error = compute_trace->AsyncFetch(*table_ref, *args_ref, *future, *array);
             }
         }
-#endif
     }
     return error;
 }
@@ -446,9 +441,7 @@ rocprofvis_result_t rocprofvis_controller_table_export_csv(
 {
     rocprofvis_result_t error = kRocProfVisResultInvalidArgument;
     RocProfVis::Controller::SystemTraceRef system_trace(controller);
-#ifdef COMPUTE_UI_SUPPORT
     RocProfVis::Controller::ComputeTraceRef compute_trace(controller);
-#endif
     RocProfVis::Controller::TableRef table_ref(table);
     RocProfVis::Controller::ArgumentsRef args_ref(args);
     RocProfVis::Controller::FutureRef future(result);
@@ -459,12 +452,10 @@ rocprofvis_result_t rocprofvis_controller_table_export_csv(
         {
             error = system_trace->TableExportCSV(*table_ref, *args_ref, *future, path);
         }
-#ifdef COMPUTE_UI_SUPPORT
         else if (compute_trace.IsValid())
         {
             error = kRocProfVisResultUnknownError;
         }
-#endif
     }
     return error;
 }
@@ -488,7 +479,6 @@ rocprofvis_result_t rocprofvis_controller_summary_fetch_async(
     return error;
 }
 
-#ifdef COMPUTE_UI_SUPPORT
 rocprofvis_controller_metrics_container_t* rocprofvis_controller_metrics_container_alloc(void)
 {
     rocprofvis_controller_metrics_container_t* container = (rocprofvis_controller_metrics_container_t*)new RocProfVis::Controller::MetricsContainer();
@@ -535,7 +525,168 @@ rocprofvis_result_t rocprofvis_controller_pc_sampling_fetch_async(
     }
     return error;
 }
-#endif
+
+// TEMPORARY (remote/SSH): remote connection C ABI. Remove guard when remote
+// graduates.
+#ifdef ROCPROFVIS_ENABLE_REMOTE
+rocprofvis_result_t rocprofvis_controller_ssh_connection_alloc(
+    rocprofvis_controller_arguments_t* args,    
+    rocprofvis_controller_array_t* output)
+{
+    rocprofvis_result_t error = kRocProfVisResultInvalidArgument;
+    RocProfVis::Controller::ArgumentsRef args_ref(args);
+    RocProfVis::Controller::ArrayRef array(output);
+    if (args_ref.IsValid() && array.IsValid())
+    {
+        error = RocProfVis::Controller::Remote::AllocateConnection( *args_ref, *array);
+    }
+    return error;
+}
+
+rocprofvis_result_t rocprofvis_controller_remote_connect_async(
+    rocprofvis_controller_future_t* future,
+    rocprofvis_controller_connection_t* connection)
+{
+    rocprofvis_result_t error = kRocProfVisResultInvalidArgument;
+    RocProfVis::Controller::FutureRef future_ref(future);
+    RocProfVis::Controller::ConnectionRef connection_ref(connection);
+    if (future_ref.IsValid() && connection_ref.IsValid())
+    {
+        error = RocProfVis::Controller::Remote::AsyncConnect(*future_ref, *connection_ref);
+    }
+    return error;
+}
+
+rocprofvis_result_t rocprofvis_controller_remote_authenticate_async(
+    rocprofvis_controller_future_t* future,
+    rocprofvis_controller_connection_t* connection,
+    rocprofvis_controller_arguments_t* args)
+{
+    rocprofvis_result_t error = kRocProfVisResultInvalidArgument;
+    RocProfVis::Controller::FutureRef future_ref(future);
+    RocProfVis::Controller::ArgumentsRef args_ref(args);
+    RocProfVis::Controller::ConnectionRef connection_ref(connection);
+    if (future_ref.IsValid() && args_ref.IsValid() && connection_ref.IsValid())
+    {
+        error = RocProfVis::Controller::Remote::AsyncAuthenticate(*future_ref, *connection_ref, *args_ref);
+    }
+    return error;
+}
+
+rocprofvis_result_t rocprofvis_controller_ssh_connection_free(
+    rocprofvis_controller_connection_t* connection)
+{
+    rocprofvis_result_t error = kRocProfVisResultInvalidArgument;
+    RocProfVis::Controller::ConnectionRef connection_ref(connection);
+    if (connection_ref.IsValid())
+    {
+        error = RocProfVis::Controller::Remote::DeleteConnection(*connection_ref);
+    }
+    return error;
+}
+
+rocprofvis_result_t rocprofvis_controller_remote_submit_responses(
+    rocprofvis_controller_connection_t* connection,
+    rocprofvis_controller_arguments_t* args)
+{
+    rocprofvis_result_t error = kRocProfVisResultInvalidArgument;
+    RocProfVis::Controller::ConnectionRef connection_ref(connection);
+    RocProfVis::Controller::ArgumentsRef args_ref(args);
+    if (connection_ref.IsValid() && args_ref.IsValid())
+    {
+        error = RocProfVis::Controller::Remote::SubmitPromptResponses(*connection_ref, *args_ref);
+    }
+    return error;
+}
+
+rocprofvis_result_t rocprofvis_controller_remote_submit_hostkey_decision(
+    rocprofvis_controller_connection_t* connection,
+    uint64_t decision)
+{
+    rocprofvis_result_t error = kRocProfVisResultInvalidArgument;
+    RocProfVis::Controller::ConnectionRef connection_ref(connection);
+    if (connection_ref.IsValid())
+    {
+        error = RocProfVis::Controller::Remote::SubmitHostKeyDecision(*connection_ref, decision);
+    }
+    return error;
+}
+
+rocprofvis_result_t rocprofvis_controller_remote_cancel_prompt(
+    rocprofvis_controller_connection_t* connection)
+{
+    rocprofvis_result_t error = kRocProfVisResultInvalidArgument;
+    RocProfVis::Controller::ConnectionRef connection_ref(connection);
+    if (connection_ref.IsValid())
+    {
+        error = RocProfVis::Controller::Remote::CancelPrompt(*connection_ref);
+    }
+    return error;
+}
+
+rocprofvis_result_t rocprofvis_controller_remote_reset(
+    rocprofvis_controller_connection_t* connection)
+{
+    rocprofvis_result_t error = kRocProfVisResultInvalidArgument;
+    RocProfVis::Controller::ConnectionRef connection_ref(connection);
+    if (connection_ref.IsValid())
+    {
+        error = RocProfVis::Controller::Remote::Reset(*connection_ref);
+    }
+    return error;
+}
+
+rocprofvis_result_t rocprofvis_controller_remote_execute_async(
+    rocprofvis_controller_future_t* future,
+    rocprofvis_controller_connection_t* connection,
+    rocprofvis_controller_arguments_t* args
+    )
+{
+    rocprofvis_result_t error = kRocProfVisResultInvalidArgument;
+    RocProfVis::Controller::FutureRef future_ref(future);
+    RocProfVis::Controller::ArgumentsRef args_ref(args);
+    RocProfVis::Controller::ConnectionRef connection_ref(connection);
+    if (future_ref.IsValid() && args_ref.IsValid() && connection_ref.IsValid())
+    {
+        error = RocProfVis::Controller::Remote::AsyncExecute(*future_ref, *connection_ref, *args_ref);
+    }
+    return error;
+}
+
+rocprofvis_result_t rocprofvis_controller_remote_transfer_async(
+    rocprofvis_controller_future_t* future,
+    rocprofvis_controller_connection_t* connection,
+    rocprofvis_controller_arguments_t* args
+)
+{
+    rocprofvis_result_t error = kRocProfVisResultInvalidArgument;
+    RocProfVis::Controller::FutureRef future_ref(future);
+    RocProfVis::Controller::ArgumentsRef args_ref(args);
+    RocProfVis::Controller::ConnectionRef connection_ref(connection);
+    if (future_ref.IsValid() && args_ref.IsValid() && connection_ref.IsValid())
+    {
+        error = RocProfVis::Controller::Remote::AsyncTransfer(*future_ref, *connection_ref, *args_ref);
+    }
+    return error;
+}
+
+rocprofvis_result_t rocprofvis_controller_remote_browser_async(
+    rocprofvis_controller_future_t* future,
+    rocprofvis_controller_connection_t* connection,
+    rocprofvis_controller_arguments_t* args
+)
+{
+    rocprofvis_result_t error = kRocProfVisResultInvalidArgument;
+    RocProfVis::Controller::FutureRef future_ref(future);
+    RocProfVis::Controller::ArgumentsRef args_ref(args);
+    RocProfVis::Controller::ConnectionRef connection_ref(connection);
+    if (future_ref.IsValid() && args_ref.IsValid() && connection_ref.IsValid())
+    {
+        error = RocProfVis::Controller::Remote::AsyncRemoteDirectory(*future_ref, *connection_ref, *args_ref);
+    }
+    return error;
+}
+#endif // ROCPROFVIS_ENABLE_REMOTE
 
 void rocprofvis_controller_summary_metric_free(rocprofvis_controller_summary_metrics_t* object)
 {
@@ -585,4 +736,5 @@ void rocprofvis_controller_free(rocprofvis_controller_t* object)
         delete trace.Get();
     }
 }
+
 }

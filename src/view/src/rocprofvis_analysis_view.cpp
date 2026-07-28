@@ -207,6 +207,16 @@ AnalysisView::BuildCompareGroup(CompareGroup&                                   
             group.tables[COMPARE_SOURCE_B]->ApplySharedFiltersFrom(source);
         });
 
+    // Either header can drive the sort, so sync both ways.
+    group.tables[COMPARE_SOURCE_A]->SetSortSyncCallback(
+        [&group](const MultiTrackTable& source) {
+            group.tables[COMPARE_SOURCE_B]->ApplySharedSortFrom(source);
+        });
+    group.tables[COMPARE_SOURCE_B]->SetSortSyncCallback(
+        [&group](const MultiTrackTable& source) {
+            group.tables[COMPARE_SOURCE_A]->ApplySharedSortFrom(source);
+        });
+
     group.split =
         MakeCompareSplit(group.tables[COMPARE_SOURCE_A], group.tables[COMPARE_SOURCE_B]);
 

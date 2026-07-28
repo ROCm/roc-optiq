@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 #include "rocprofvis_infinite_scroll_table.h"
+#include "imgui_internal.h"
 #include "icons/rocprovfis_icon_defines.h"
 #include "rocprofvis_appwindow.h"
 #include "rocprofvis_common_defs.h"
@@ -39,6 +40,9 @@ InfiniteScrollTable::InfiniteScrollTable(
 , m_open_context_menu(false)
 , m_skip_data_fetch(false)
 , m_retry_fetch(false)
+, m_pending_sort(false)
+, m_pending_sort_column(0)
+, m_pending_sort_order(kRPVControllerSortOrderAscending)
 , m_table_type(table_type)
 , m_request_table_type(request_table_type)
 , m_request_id(request_id)
@@ -165,6 +169,15 @@ InfiniteScrollTable::ClearQueuedTableRequest()
 {
     m_retry_fetch = false;
     m_retry_params.reset();
+}
+
+void
+InfiniteScrollTable::SetPendingSort(uint64_t                           column_index,
+                                    rocprofvis_controller_sort_order_t order)
+{
+    m_pending_sort        = true;
+    m_pending_sort_column = column_index;
+    m_pending_sort_order  = order;
 }
 
 void
@@ -337,6 +350,18 @@ InfiniteScrollTable::Render()
                                  : ImGuiTableColumnFlags_PreferSortDescending);
                     }
                     ImGui::TableSetupColumn(column_names[i].c_str(), col_flags);
+                }
+
+                if(m_pending_sort)
+                {
+                    // Dirties the specs, so the block below refetches as if clicked.
+                    ImGui::TableSetColumnSortDirection(
+                        static_cast<int>(m_pending_sort_column),
+                        m_pending_sort_order == kRPVControllerSortOrderAscending
+                            ? ImGuiSortDirection_Ascending
+                            : ImGuiSortDirection_Descending,
+                        false);
+                    m_pending_sort = false;
                 }
 
                 // Get sort specs
@@ -718,8 +743,9 @@ InfiniteScrollTable::ProcessSortOrFilterRequest(
         }
         // check that sort order and column index actually are different from the
         // current values before fetching
-        if(m_filter_requested || sort_order != m_sort_order ||
-           sort_column_index != m_sort_column_index)
+        const bool sort_changed = (sort_order != m_sort_order ||
+                                   sort_column_index != m_sort_column_index);
+        if(m_filter_requested || sort_changed)
         {
             m_sort_column_index = sort_column_index;
             m_sort_order        = sort_order;
@@ -751,6 +777,11 @@ InfiniteScrollTable::ProcessSortOrFilterRequest(
                 table_params->m_request_id));
 
             m_filter_options = filter;
+
+            if(sort_changed)
+            {
+                OnSortChanged();
+            }
         }
     }
     else

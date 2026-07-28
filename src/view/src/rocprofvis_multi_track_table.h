@@ -21,6 +21,7 @@ class MultiTrackTable : public InfiniteScrollTable
 {
 public:
     using FilterSubmitCallback = std::function<void(const MultiTrackTable&)>;
+    using SortSyncCallback     = std::function<void(const MultiTrackTable&)>;
 
     MultiTrackTable(DataProvider& dp, TableType table_type,
                     rocprofvis_controller_table_type_t        request_table_type,
@@ -51,6 +52,10 @@ public:
     void ApplySharedFiltersFrom(const MultiTrackTable& source);
     void SetFilterSubmitCallback(const FilterSubmitCallback& callback);
 
+    // Adopts the peer table's sort; a no-op when it already matches, which breaks the echo.
+    void ApplySharedSortFrom(const MultiTrackTable& source);
+    void SetSortSyncCallback(const SortSyncCallback& callback);
+
     void SetDisplaySummary(bool display);
     // Draws the title row of the card, see RenderCard.
     void SetHeaderRenderer(std::function<void()> renderer);
@@ -66,6 +71,7 @@ protected:
     void         FormatData() const override;
     void         IndexColumns() override;
     void         RowSelected(const ImGuiMouseButton mouse_button) override;
+    void         OnSortChanged() override;
 
     // Subset of selected tracks applicable to this table type
     std::vector<uint64_t> m_included_tracks;
@@ -81,6 +87,7 @@ private:
     bool                  m_display_filters;
     bool                  m_display_summary;
     FilterSubmitCallback  m_filter_submit_callback;
+    SortSyncCallback      m_sort_sync_callback;
     std::function<void()> m_header_renderer;
 
     std::vector<std::string> m_group_by_choices;

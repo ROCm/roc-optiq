@@ -116,6 +116,16 @@ TopEventsView::TopEventsView(DataProvider&                      data_provider,
             category.tables[source]->SetHeaderRenderer(
                 [this, source]() { RenderSourceTitle(source); });
         }
+
+        // Either header can drive the sort, so sync both ways.
+        for(size_t source = 0; source < COMPARE_SOURCE_COUNT; source++)
+        {
+            const size_t peer = (source + 1) % COMPARE_SOURCE_COUNT;
+            category.tables[source]->SetSortSyncCallback(
+                [&category, peer](const MultiTrackTable& src) {
+                    category.tables[peer]->ApplySharedSortFrom(src);
+                });
+        }
     }
 }
 

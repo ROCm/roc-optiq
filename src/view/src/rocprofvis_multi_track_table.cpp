@@ -69,6 +69,32 @@ MultiTrackTable::SetFilterSubmitCallback(const FilterSubmitCallback& callback)
 }
 
 void
+MultiTrackTable::ApplySharedSortFrom(const MultiTrackTable& source)
+{
+    if(m_sort_column_index == source.m_sort_column_index &&
+       m_sort_order == source.m_sort_order)
+    {
+        return;
+    }
+    SetPendingSort(source.m_sort_column_index, source.m_sort_order);
+}
+
+void
+MultiTrackTable::SetSortSyncCallback(const SortSyncCallback& callback)
+{
+    m_sort_sync_callback = callback;
+}
+
+void
+MultiTrackTable::OnSortChanged()
+{
+    if(m_sort_sync_callback)
+    {
+        m_sort_sync_callback(*this);
+    }
+}
+
+void
 MultiTrackTable::SetDisplaySummary(bool display)
 {
     m_display_summary = display;

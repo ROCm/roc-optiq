@@ -76,6 +76,11 @@ private:
     void   UpdateMetadata();
     ImVec2 MapToUI(double x, double y, ImVec2& c_position, ImVec2& c_size,
                    double scale_y);
+    float  CalculatePlotHeight() const;
+    // Fills out_ticks with interior Y-axis values, count based on plot_height.
+    void   GenerateYAxisTicks(float plot_height, std::vector<double>& out_ticks) const;
+    // Refreshes m_grid_ticks only when the track height or Y range has changed.
+    void   UpdateYAxisTicks();
     bool   ExtractPointsFromData();
     float  CalculateMissingX(float x1, float y1, float x2, float y2, float known_y);
     void   BoxPlotRender(float graph_width);
@@ -93,7 +98,15 @@ private:
 
     std::array<Pill*, AnalysisTrackStatistics::Counter::kCounterCount> m_pills_analysis;
     // User configurable options. Underlying object is owned by TrackItem.
-    CounterTrackOptions* m_counter_options;  // Always valids.
+    // May be null; guard before use.
+    CounterTrackOptions* m_counter_options;
+
+    // Cached interior Y-axis tick values; see UpdateYAxisTicks().
+    std::vector<double> m_grid_ticks;
+    float               m_cached_ticks_height = -1.0f;
+    double              m_cached_ticks_min    = 0.0;
+    double              m_cached_ticks_max    = 0.0;
+    float               m_cached_ticks_line_h = -1.0f;
 };
 
 }  // namespace View

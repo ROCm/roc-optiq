@@ -35,6 +35,7 @@ enum class RocEvents
     kRequestProgressUpdate,
     kProfilerStatusChanged,
     kRemoteStatusChanged,
+    kRevealTrackInTopology,
     kComputeWorkloadSelectionChanged,
     kComputeKernelSelectionChanged,
     kComputeMetricsFetched,

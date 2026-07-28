@@ -3,6 +3,7 @@
 #include "rocprofvis_timeline_selection.h"
 #include "rocprofvis_data_provider.h"
 #include "rocprofvis_event_manager.h"
+#include "rocprofvis_render_scheduler.h"
 #include "rocprofvis_track_item.h"
 #include "rocprofvis_utils.h"
 #include "spdlog/spdlog.h"
@@ -333,7 +334,8 @@ TimelineSelection::IsHighlightPersistent(uint64_t event_id) const
 void
 TimelineSelection::UpdateHighlightTimer()
 {
-    auto now = std::chrono::steady_clock::now();
+    auto now                  = std::chrono::steady_clock::now();
+    bool has_active_transient = false;
     for(auto it = m_highlighted_events.begin(); it != m_highlighted_events.end();)
     {
         if(it->second.persistent)
@@ -349,8 +351,15 @@ TimelineSelection::UpdateHighlightTimer()
         }
         else
         {
+            has_active_transient = true;
             ++it;
         }
+    }
+
+    // A transient highlight pulses every frame; keep rendering while it lasts.
+    if(has_active_transient)
+    {
+        RenderScheduler::GetInstance().RequestRender();
     }
 }
 

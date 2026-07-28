@@ -6,6 +6,7 @@
 #include "rocprofvis_event_manager.h"
 #include "rocprofvis_raw_track_data.h"
 #include "rocprofvis_track_item.h"
+#include <cstdint>
 #include <memory>
 #include <string>
 #include <vector>
@@ -29,9 +30,9 @@ public:
     FlameTrackItem(DataProvider& dp, uint64_t track_id,
                    TimelineTrackOptions&                  track_options,
                    std::shared_ptr<TimePixelTransform>    time_to_pixel_manager,
-                   std::shared_ptr<TimelineSelection>     timeline_selection,                   
+                   std::shared_ptr<TimelineSelection>     timeline_selection,
                    std::shared_ptr<MeasurementController> measurement);
-    ~FlameTrackItem();
+    ~FlameTrackItem() override;
 
     void Update() override;
     bool ReleaseData() override;
@@ -46,6 +47,7 @@ public:
 protected:
     void  RenderChart(float graph_width) override;
     void  RenderMetaAreaExpand() override;
+    float GetMetaAreaTrailingWidth() const override;
 
 private:
     struct ChildEventInfo
@@ -55,7 +57,7 @@ private:
         size_t      count;
         uint64_t    duration;
     };
-    
+
     struct ChartItem
     {
         TraceEvent                  event;
@@ -67,20 +69,31 @@ private:
 
     void HandleTimelineSelectionChanged(std::shared_ptr<RocEvent> e);
     void HandleTimelineHighlightChanged(std::shared_ptr<RocEvent> e);
+    void HandleFontSizeChanged(std::shared_ptr<RocEvent> e);
 
     void DrawBox(ImVec2 start_position, ChartItem& flame, float duration,
                  ImDrawList* draw_list, bool use_highlight_color);
 
-    bool ExtractPointsFromData();
+    bool ExtractPointsFromData() override;
     bool ExtractChildInfo(ChartItem& item);
     bool ParseChildInfo(const std::string& combined_name, ChildEventInfo& out_info);
 
-    void RenderTooltip(ChartItem& chart_item, size_t color_index);
-    void RecalculateTrackHeight();
+    void  RenderTooltip(ChartItem& chart_item, size_t color_index);
+    void  RecalculateTrackHeight();
+    void  UpdateMinTrackHeight();
+    void  RefreshLevelHeight();
+    float DefaultTrackHeight() const;
+    float ExpandedTrackHeight() const;
+    float EventBoxHeight() const;
+    float ComputeTextVerticalOffset(float box_height) const;
+    // Font-size-dependent glyph ink center, shared/cached across all tracks.
+    static float TextGlyphCenter();
 
     std::vector<ChartItem>                 m_chart_items;
     ImVec2                                 m_text_padding;
     float                                  m_level_height;
+    // Cached per-frame vertical offset (from a box's top) for centering labels.
+    float                                  m_text_vertical_offset = 0.0f;
     std::vector<uint64_t>                  m_selected_event_id;
     std::shared_ptr<MeasurementController> m_measurement;
     float                                  m_min_level;
@@ -91,6 +104,7 @@ private:
     std::vector<ChartItem>          m_selected_chart_items;
     EventManager::SubscriptionToken m_timeline_event_selection_changed_token;
     EventManager::SubscriptionToken m_timeline_event_highlight_changed_token;
+    EventManager::SubscriptionToken m_font_size_changed_token;
     ImVec2                          m_tooltip_size;
 
     static float             s_max_event_label_width;

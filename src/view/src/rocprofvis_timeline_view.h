@@ -89,7 +89,6 @@ public:
     ~TimelineView();
     virtual void                                     Render() override;
     void                                             Update() override;
-    bool                                             WantsContinuousRender() const;
     void                                             MakeGraphView();
     void                                             ResetView();
     void                                             DestroyGraphs();

@@ -306,6 +306,7 @@ public:
     // Constant for event height;
     const float GetEventLevelHeight() const;
     const float GetEventLevelCompactHeight() const;
+    const float GetEventLevelSpacing() const;
 
     // Convenience static method (alias for GetInstance)
     static SettingsManager& Get() { return GetInstance(); }

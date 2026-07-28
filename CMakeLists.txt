@@ -195,6 +195,8 @@ endif(ROCPROFVIS_ENABLE_PROFILER)
 if(ROCPROFVIS_ENABLE_REMOTE)
 list(APPEND VIEW_FILES
     src/view/src/remote/rocprofvis_ssh_uri.cpp
+    src/view/src/remote/rocprofvis_secret_store.cpp
+    src/view/src/remote/rocprofvis_secret_store.h
     src/view/src/remote/rocprofvis_ssh_connection_config.cpp
     src/view/src/remote/rocprofvis_ssh_connection_config.h
     src/view/src/remote/rocprofvis_ssh_connection_store.cpp
@@ -208,6 +210,8 @@ list(APPEND VIEW_FILES
     src/view/src/remote/rocprofvis_ssh_settings_dialog.h
     src/view/src/remote/rocprofvis_ssh_test_dialog.cpp
     src/view/src/remote/rocprofvis_ssh_test_dialog.h
+    src/view/src/remote/rocprofvis_remote_file_browser.cpp
+    src/view/src/remote/rocprofvis_remote_file_browser.h
 )
 endif(ROCPROFVIS_ENABLE_REMOTE)
 
@@ -398,6 +402,31 @@ endif()
 
 if (CRYPTO_BACKEND STREQUAL "OpenSSL")
 target_link_libraries(${TARGET_NAME} PRIVATE libssh2_static OpenSSL::SSL OpenSSL::Crypto)
+endif()
+
+# SecretStore backends: link the OS credential-vault APIs. On Linux libsecret
+# is optional; when absent, SecretStore compiles a stub that reports itself
+# unavailable and the app falls back to prompting for SSH secrets at connect
+# time (never persisting them in plaintext).
+if(WIN32)
+    target_link_libraries(${TARGET_NAME} PRIVATE Advapi32)
+elseif(APPLE)
+    target_link_libraries(${TARGET_NAME} PRIVATE "-framework Security" "-framework CoreFoundation")
+else()
+    find_package(PkgConfig QUIET)
+    if(PkgConfig_FOUND)
+        pkg_check_modules(LIBSECRET QUIET libsecret-1)
+    endif()
+    if(LIBSECRET_FOUND)
+        target_include_directories(${TARGET_NAME} PRIVATE ${LIBSECRET_INCLUDE_DIRS})
+        target_link_libraries(${TARGET_NAME} PRIVATE ${LIBSECRET_LIBRARIES})
+        target_compile_definitions(${TARGET_NAME} PRIVATE ROCPROFVIS_HAVE_LIBSECRET)
+    else()
+        message(WARNING
+            "libsecret-1 not found: SSH passwords will not be persisted on this "
+            "Linux build (users are prompted at connect time). Install "
+            "libsecret-1-dev / libsecret-devel to enable secure credential storage.")
+    endif()
 endif()
 endif(ROCPROFVIS_ENABLE_REMOTE)
 
@@ -750,6 +779,43 @@ endif()
 
 # Include packaging
 include(CPack)
+
+# ── WiX v4 MSI installer (Windows only) ──────────────────────────────────────
+# Builds roc-optiq-<version>-win64.msi from wix/roc-optiq.wxs via the WiX v4
+# CLI.  Prerequisites (one-time per build machine):
+#   dotnet tool install --global wix
+#   wix extension add WixToolset.UI.wixext
+if(WIN32)
+  find_program(WIX_EXECUTABLE wix DOC "WiX v4 CLI (wix.exe)")
+  if(WIX_EXECUTABLE)
+    set(_wix_src  "${CMAKE_SOURCE_DIR}/wix/roc-optiq.wxs")
+    set(_wix_out  "${CMAKE_BINARY_DIR}/roc-optiq-${CPACK_PACKAGE_VERSION}-win64.msi")
+    # MSI only supports 3-part versions; encode Patch*1000+Build into the third component
+    # so upgrade detection works correctly when only the build number changes.
+    math(EXPR _wix_patch "${PROJECT_VERSION_PATCH} * 1000 + ${PROJECT_VERSION_BUILD}")
+    set(_wix_version "${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}.${_wix_patch}")
+    add_custom_target(PACKAGE_WIX
+      COMMAND "${WIX_EXECUTABLE}" build
+        -arch x64
+        -d "Version=${_wix_version}"
+        -d "ExeFile=$<TARGET_FILE:${TARGET_NAME}>"
+        -d "LicenseRtf=${CMAKE_SOURCE_DIR}/Installer/Documentation/License/License_Public.rtf"
+        -d "BannerBmp=${CMAKE_SOURCE_DIR}/Installer/Installation/Files/banner.bmp"
+        -d "DialogBmp=${CMAKE_SOURCE_DIR}/Installer/Installation/Files/main.bmp"
+        -d "IconFile=${CMAKE_SOURCE_DIR}/resources/ROCm_Optiq.ico"
+        -ext WixToolset.UI.wixext
+        -out "${_wix_out}"
+        "${_wix_src}"
+      DEPENDS ${TARGET_NAME}
+      COMMENT "Building WiX MSI installer: ${_wix_out}"
+      VERBATIM
+    )
+  else()
+    message(STATUS "wix.exe not found — PACKAGE_WIX target unavailable. "
+                   "Install WiX v4: dotnet tool install --global wix")
+  endif()
+endif()
+# ─────────────────────────────────────────────────────────────────────────────
 
 # Copy runtime files to target folder
 # Uses a no-op (cmake -E true) when there are no runtime DLLs (e.g. GLFW_LINK_STATIC=ON)

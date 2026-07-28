@@ -43,10 +43,6 @@ public:
 
     void HandleNewTableData(std::shared_ptr<RocEvent> e);
 
-    // When false, the table body draws without its own border/child frame so a
-    // parent (e.g. a titled card) can supply the single surrounding frame.
-    void SetDrawBorder(bool draw) { m_draw_border = draw; }
-
     // Important columns in the table
     enum ImportantColumns
     {
@@ -91,7 +87,16 @@ protected:
 
     void FormatTimeColumns() const;
     void ExportToFile() const;
+    /* Sends a table request, keeping it for Update() to reissue when the
+     * controller table it needs is busy. Returns whether it went out now.
+     */
     bool QueueTableRequest(const TableRequestParams& params);
+    // Drops a request kept by QueueTableRequest, once it is out or obsolete.
+    void ClearQueuedTableRequest();
+    /* When false the body draws without its own frame, so a parent that already
+     * draws one around the title and the table supplies the only border.
+     */
+    void SetDrawBorder(bool draw);
 
     FilterOptions                      m_filter_options;
     FilterOptions                      m_pending_filter_options;
@@ -139,7 +144,7 @@ private:
     bool                                m_open_context_menu;
     bool                                m_skip_data_fetch;
     bool                                m_retry_fetch;
-    std::shared_ptr<TableRequestParams> m_retry_params;
+    std::unique_ptr<TableRequestParams> m_retry_params;
     uint64_t                            m_last_total_row_count;
     ImVec2                              m_last_table_size;
 

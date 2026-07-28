@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include "rocprofvis_compare_panes.h"
 #include "rocprofvis_multi_track_table.h"
 #include "widgets/rocprofvis_widget.h"
 #include <array>
@@ -40,14 +41,12 @@ private:
                        uint64_t                           request_id,
                        std::shared_ptr<TimelineSelection> timeline_selection,
                        rocprofvis_dm_event_operation_t op, const char* header,
-                       std::optional<uint64_t> source_index = std::nullopt);
+                       std::optional<uint64_t> source_file_id = std::nullopt);
         ~TopEventsTable();
 
-        // Pooled render: own collapsing header and row-based sizing.
+        // Draws its own collapsing header, sized to the rows it holds.
         void Render() override;
-        // Compare render: sized card body only; the parent draws the category header.
-        void RenderBody(const ImVec2& size);
-        // Unclamped height to show all rows plus chrome.
+        // Height that shows every row plus the table chrome, unclamped.
         float ContentHeight() const;
 
         void HandleTrackSelectionChanged(uint64_t track_id, bool selected) override;
@@ -74,21 +73,26 @@ private:
         rocprofvis_dm_event_operation_t         m_op;
         const char*                             m_header;
         bool                                    m_visible;
-        std::optional<uint64_t>                 m_source_index;
     };
 
+    // One event category, holding a single table or an A/B pair in compare mode.
     struct Category
     {
-        std::unique_ptr<TopEventsTable> table_a;
-        std::unique_ptr<TopEventsTable> table_b;  // compare mode only
-        const char*                     header = nullptr;
+        std::array<std::unique_ptr<TopEventsTable>, COMPARE_SOURCE_COUNT> tables;
+        const char* header = nullptr;
     };
 
-    void RenderSourceBadge(size_t source_index);
+    static constexpr size_t CATEGORY_COUNT = 5;
 
-    DataProvider&           m_data_provider;
-    bool                    m_compare_mode;
-    std::array<Category, 5> m_categories;
+    static bool AnyVisible(const Category& category);
+
+    // Draws one category header with the A/B cards of that category below it.
+    void RenderCategory(Category& category);
+    void RenderSourceTitle(size_t source_index);
+
+    DataProvider&                        m_data_provider;
+    bool                                 m_compare_mode;
+    std::array<Category, CATEGORY_COUNT> m_categories;
 };
 
 }  // namespace View

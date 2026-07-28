@@ -131,8 +131,7 @@ InfiniteScrollTable::Update()
         ROCPROFVIS_ASSERT(m_retry_params);
         if(m_data_provider.FetchTable(*m_retry_params))
         {
-            m_retry_fetch = false;
-            m_retry_params.reset();
+            ClearQueuedTableRequest();
         }
     }
     if(m_data_changed)
@@ -148,15 +147,30 @@ InfiniteScrollTable::QueueTableRequest(const TableRequestParams& params)
     bool queued = m_data_provider.FetchTable(params);
     if(queued)
     {
-        m_retry_fetch = false;
-        m_retry_params.reset();
+        ClearQueuedTableRequest();
     }
     else
     {
+        // The controller keeps one table per type, so a request placed while another
+        // view owns that table waits here and is reissued from Update().
+        spdlog::debug("Deferring table request for {}", m_widget_name);
         m_retry_fetch  = true;
-        m_retry_params = std::make_shared<TableRequestParams>(params);
+        m_retry_params = std::make_unique<TableRequestParams>(params);
     }
     return queued;
+}
+
+void
+InfiniteScrollTable::ClearQueuedTableRequest()
+{
+    m_retry_fetch = false;
+    m_retry_params.reset();
+}
+
+void
+InfiniteScrollTable::SetDrawBorder(bool draw)
+{
+    m_draw_border = draw;
 }
 
 void

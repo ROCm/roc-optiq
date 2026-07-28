@@ -4,12 +4,12 @@
 #include "rocprofvis_analysis_view.h"
 #include "rocprofvis_annotation_view.h"
 #include "rocprofvis_annotations.h"
+#include "rocprofvis_compare_panes.h"
 #include "rocprofvis_data_provider.h"
 #include "rocprofvis_events_view.h"
 #include "rocprofvis_multi_track_table.h"
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_top_events_view.h"
-#include "rocprofvis_track_item.h"
 #include "rocprofvis_track_details.h"
 #include "widgets/rocprofvis_gui_helpers.h"
 #include "widgets/rocprofvis_split_containers.h"
@@ -19,14 +19,9 @@ namespace RocProfVis
 namespace View
 {
 
-constexpr size_t   COMPARE_SOURCE_A_INDEX          = 0;
-constexpr size_t   COMPARE_SOURCE_B_INDEX          = 1;
-constexpr uint64_t COMPARE_TABLE_A_CLIENT_ID       = 1;
-constexpr uint64_t COMPARE_TABLE_B_CLIENT_ID       = 2;
-constexpr float    COMPARE_TABLE_MIN_WIDTH         = 280.0f;
-constexpr float    COMPARE_CARD_MARGIN             = 4.0f;
-constexpr float    COMPARE_SOURCE_TITLE_GAP_FACTOR = 2.0f;
-constexpr uint64_t TABLE_DEFAULT_SORT_COLUMN       = 1;
+constexpr uint64_t TABLE_DEFAULT_SORT_COLUMN = 1;
+// Middle dot between the row and track counts of a card summary.
+constexpr const char* SUMMARY_SEPARATOR = " \xC2\xB7 ";
 
 AnalysisView::AnalysisView(DataProvider& dp, std::shared_ptr<TrackTopology> topology,
                            std::shared_ptr<TimelineSelection>  timeline_selection,
@@ -40,32 +35,20 @@ AnalysisView::AnalysisView(DataProvider& dp, std::shared_ptr<TrackTopology> topo
 {
     m_widget_name = GenUniqueName("Analysis View");
 
-    const CompareSourceInfo* source_a =
-        dp.DataModel().GetCompareSource(COMPARE_SOURCE_A_INDEX);
-    const CompareSourceInfo* source_b =
-        dp.DataModel().GetCompareSource(COMPARE_SOURCE_B_INDEX);
-    m_compare_mode = source_a && source_b;
+    m_compare_mode = IsCompareTrace(dp.DataModel());
 
     if(m_compare_mode)
     {
         BuildCompareGroup(
-            m_event_group, TableType::kCompareEventTableA, TableType::kCompareEventTableB,
-            kRPVControllerTableTypeEvents,
-            RequestIdBuilder::MakeClientRequestId(RequestType::kFetchTrackEventTable,
-                                                  COMPARE_TABLE_A_CLIENT_ID),
-            RequestIdBuilder::MakeClientRequestId(RequestType::kFetchTrackEventTable,
-                                                  COMPARE_TABLE_B_CLIENT_ID),
-            "Event Table A", "Event Table B", "events", "compare_event_tab",
-            timeline_selection);
+            m_event_group,
+            { TableType::kCompareEventTableA, TableType::kCompareEventTableB },
+            kRPVControllerTableTypeEvents, RequestType::kFetchTrackEventTable,
+            "Event Table", "events", "compare_event_tab", timeline_selection);
         BuildCompareGroup(
-            m_sample_group, TableType::kCompareSampleTableA,
-            TableType::kCompareSampleTableB, kRPVControllerTableTypeSamples,
-            RequestIdBuilder::MakeClientRequestId(RequestType::kFetchTrackSampleTable,
-                                                  COMPARE_TABLE_A_CLIENT_ID),
-            RequestIdBuilder::MakeClientRequestId(RequestType::kFetchTrackSampleTable,
-                                                  COMPARE_TABLE_B_CLIENT_ID),
-            "Sample Table A", "Sample Table B", "samples", "compare_sample_tab",
-            timeline_selection);
+            m_sample_group,
+            { TableType::kCompareSampleTableA, TableType::kCompareSampleTableB },
+            kRPVControllerTableTypeSamples, RequestType::kFetchTrackSampleTable,
+            "Sample Table", "samples", "compare_sample_tab", timeline_selection);
     }
     else
     {
@@ -192,58 +175,44 @@ AnalysisView::TabWidgetFor(CompareGroup& group) const
 }
 
 void
-AnalysisView::BuildCompareGroup(CompareGroup& group, TableType type_a, TableType type_b,
-                                rocprofvis_controller_table_type_t request_type,
-                                uint64_t request_id_a, uint64_t request_id_b,
-                                const char* friendly_a, const char* friendly_b,
+AnalysisView::BuildCompareGroup(CompareGroup&                                      group,
+                                const std::array<TableType, COMPARE_SOURCE_COUNT>& types,
+                                rocprofvis_controller_table_type_t request_table_type,
+                                RequestType request_type, const char* friendly_name,
                                 const char* noun, const char* child_id,
                                 std::shared_ptr<TimelineSelection> timeline_selection)
 {
     DataProvider& dp = m_data_provider;
     group.noun       = noun;
 
-    group.tables.push_back(std::make_shared<MultiTrackTable>(
-        dp, type_a, request_type, request_id_a,
-        [&dp]() -> const TablesModel& { return dp.DataModel().GetTables(); },
-        [&dp]() -> TablesModel& { return dp.DataModel().GetTables(); }, false,
-        timeline_selection, TABLE_DEFAULT_SORT_COLUMN, kRPVControllerSortOrderAscending,
-        friendly_a, "", COMPARE_SOURCE_A_INDEX));
-    group.tables.push_back(std::make_shared<MultiTrackTable>(
-        dp, type_b, request_type, request_id_b,
-        [&dp]() -> const TablesModel& { return dp.DataModel().GetTables(); },
-        [&dp]() -> TablesModel& { return dp.DataModel().GetTables(); }, false,
-        timeline_selection, TABLE_DEFAULT_SORT_COLUMN, kRPVControllerSortOrderAscending,
-        friendly_b, "", COMPARE_SOURCE_B_INDEX));
-    group.tables[COMPARE_SOURCE_A_INDEX]->SetDisplaySummary(false);
-    group.tables[COMPARE_SOURCE_B_INDEX]->SetDisplaySummary(false);
+    for(size_t source = 0; source < COMPARE_SOURCE_COUNT; source++)
+    {
+        group.tables.push_back(std::make_shared<MultiTrackTable>(
+            dp, types[source], request_table_type,
+            RequestIdBuilder::MakeClientRequestId(request_type,
+                                                  COMPARE_CLIENT_ID[source]),
+            [&dp]() -> const TablesModel& { return dp.DataModel().GetTables(); },
+            [&dp]() -> TablesModel& { return dp.DataModel().GetTables(); }, false,
+            timeline_selection, TABLE_DEFAULT_SORT_COLUMN,
+            kRPVControllerSortOrderAscending,
+            std::string(friendly_name) + " " + COMPARE_SOURCE_LABEL[source], "", source));
+        // The card title carries the counts, and the filter form is shared.
+        group.tables[source]->SetDisplaySummary(false);
+        group.tables[source]->SetHeaderRenderer(
+            [this, &group, source]() { RenderCompareSourceTitle(group, source); });
+    }
 
-    CompareGroup* grp = &group;
-    group.tables[COMPARE_SOURCE_A_INDEX]->SetHeaderRenderer(
-        [this, grp]() { RenderCompareSourceTitle(*grp, COMPARE_SOURCE_A_INDEX); });
-    group.tables[COMPARE_SOURCE_B_INDEX]->SetHeaderRenderer(
-        [this, grp]() { RenderCompareSourceTitle(*grp, COMPARE_SOURCE_B_INDEX); });
-    group.tables[COMPARE_SOURCE_A_INDEX]->SetFilterSubmitCallback(
-        [grp](const MultiTrackTable& source) {
-            grp->tables[COMPARE_SOURCE_B_INDEX]->ApplySharedFiltersFrom(source);
+    group.tables[COMPARE_SOURCE_A]->SetFilterSubmitCallback(
+        [&group](const MultiTrackTable& source) {
+            group.tables[COMPARE_SOURCE_B]->ApplySharedFiltersFrom(source);
         });
 
-    // Each table draws its own card, so the panes stay borderless with a small margin.
-    LayoutItem::Ptr source_a_item =
-        LayoutItem::CreateFromWidget(group.tables[COMPARE_SOURCE_A_INDEX]);
-    source_a_item->m_child_flags    = ImGuiChildFlags_None;
-    source_a_item->m_window_padding = ImVec2(COMPARE_CARD_MARGIN, COMPARE_CARD_MARGIN);
-    LayoutItem::Ptr source_b_item =
-        LayoutItem::CreateFromWidget(group.tables[COMPARE_SOURCE_B_INDEX]);
-    source_b_item->m_child_flags    = ImGuiChildFlags_None;
-    source_b_item->m_window_padding = ImVec2(COMPARE_CARD_MARGIN, COMPARE_CARD_MARGIN);
-    group.split = std::make_shared<HSplitContainer>(source_a_item, source_b_item);
-    group.split->SetSplit(0.5f);
-    group.split->SetMinLeftWidth(COMPARE_TABLE_MIN_WIDTH);
-    group.split->SetMinRightWidth(COMPARE_TABLE_MIN_WIDTH);
+    group.split =
+        MakeCompareSplit(group.tables[COMPARE_SOURCE_A], group.tables[COMPARE_SOURCE_B]);
 
-    std::string child_id_str = child_id;
+    const std::string tab_id = child_id;
     group.layout             = std::make_shared<RocCustomWidget>(
-        [this, grp, child_id_str]() { RenderCompareTab(*grp, child_id_str.c_str()); });
+        [this, &group, tab_id]() { RenderCompareTab(group, tab_id.c_str()); });
 }
 
 void
@@ -256,16 +225,13 @@ AnalysisView::RenderCompareTab(CompareGroup& group, const char* child_id)
                       ImGuiChildFlags_AlwaysUseWindowPadding,
                       ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
 
-    group.tables[COMPARE_SOURCE_A_INDEX]->RenderSharedControls();
+    // One filter form above the split drives both tables.
+    group.tables[COMPARE_SOURCE_A]->RenderSharedFilterControls();
 
-    ImGui::Spacing();
     ImGui::Separator();
     ImGui::Spacing();
 
-    if(group.split)
-    {
-        group.split->Render();
-    }
+    group.split->Render();
 
     ImGui::EndChild();
     ImGui::PopID();
@@ -273,12 +239,8 @@ AnalysisView::RenderCompareTab(CompareGroup& group, const char* child_id)
 }
 
 void
-AnalysisView::RenderCompareSourceTitle(CompareGroup& group, size_t source_index)
+AnalysisView::RenderCompareSourceTitle(const CompareGroup& group, size_t source_index)
 {
-    if(source_index >= group.tables.size())
-    {
-        return;
-    }
     const CompareSourceInfo* source =
         m_data_provider.DataModel().GetCompareSource(source_index);
     if(!source)
@@ -286,31 +248,11 @@ AnalysisView::RenderCompareSourceTitle(CompareGroup& group, size_t source_index)
         return;
     }
 
-    SettingsManager& settings = SettingsManager::GetInstance();
-
-    RenderCompareSourceBadge(*source, settings);
-    // Panes run with ItemSpacing 0, so take the badge gap from the default style.
-    ImGui::SameLine(
-        0.0f, settings.GetDefaultStyle().ItemSpacing.x * COMPARE_SOURCE_TITLE_GAP_FACTOR);
-
-    const std::string& label = source->name.empty() ? source->path : source->name;
-    const std::string  summary =
-        std::to_string(group.tables[source_index]->GetTotalRowCount()) + " " + group.noun +
-        " \xC2\xB7 " +
-        std::to_string(group.tables[source_index]->GetIncludedTrackCount()) + " tracks";
-    const float summary_width = ImGui::CalcTextSize(summary.c_str()).x;
-
-    float label_width = ImGui::GetContentRegionAvail().x - summary_width -
-                        ImGui::GetStyle().ItemSpacing.x;
-    if(label_width < 0.0f)
-    {
-        label_width = 0.0f;
-    }
-    ElidedText(label.c_str(), label_width, ImGui::GetFontSize() * 24.0f, Alignment_Left,
-               true);
-    ImGui::SameLine();
-    ImGui::AlignTextToFramePadding();
-    ImGui::TextDisabled("%s", summary.c_str());
+    const MultiTrackTable& table   = *group.tables[source_index];
+    const std::string      summary = std::to_string(table.GetTotalRowCount()) + " " +
+                                group.noun + SUMMARY_SEPARATOR +
+                                std::to_string(table.GetIncludedTrackCount()) + " tracks";
+    RenderCompareCardTitle(*source, SettingsManager::GetInstance(), summary);
 }
 
 void

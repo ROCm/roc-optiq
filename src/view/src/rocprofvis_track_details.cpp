@@ -4,11 +4,11 @@
 #include "rocprofvis_track_details.h"
 #include "icons/rocprovfis_icon_defines.h"
 #include "model/rocprofvis_model_types.h"
+#include "rocprofvis_compare_panes.h"
 #include "rocprofvis_data_provider.h"
 #include "rocprofvis_events.h"
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_timeline_selection.h"
-#include "rocprofvis_track_item.h"
 #include "rocprofvis_track_topology.h"
 #include "widgets/rocprofvis_gui_helpers.h"
 #include "widgets/rocprofvis_split_containers.h"
@@ -30,10 +30,7 @@ constexpr const char* TRACK_PREFIX[] = { "Unknown", "Queue",  "Stream",
 // BeginTable scopes ids per table, so a single constant is unambiguous.
 constexpr const char* CELL_CONTEXT_MENU_ID = "##track_details_cell_menu";
 
-constexpr size_t COMPARE_SOURCE_A_INDEX = 0;
-constexpr size_t COMPARE_SOURCE_B_INDEX = 1;
-constexpr float  COMPARE_CARD_MARGIN    = 4.0f;
-constexpr float  COMPARE_TITLE_GAP      = 2.0f;
+constexpr const char* NO_DATA_TEXT = "No data available for the selected tracks.";
 
 TrackDetails::TrackDetails(DataProvider& dp, std::shared_ptr<TrackTopology> topology,
                            std::shared_ptr<TimelineSelection> timeline_selection)
@@ -48,27 +45,14 @@ TrackDetails::TrackDetails(DataProvider& dp, std::shared_ptr<TrackTopology> topo
 , m_topology_changed_event_token(EventManager::InvalidSubscriptionToken)
 , m_track_metadata_changed_event_token(EventManager::InvalidSubscriptionToken)
 {
-    const CompareSourceInfo* source_a =
-        m_data_provider.DataModel().GetCompareSource(COMPARE_SOURCE_A_INDEX);
-    const CompareSourceInfo* source_b =
-        m_data_provider.DataModel().GetCompareSource(COMPARE_SOURCE_B_INDEX);
-    m_compare_mode = source_a && source_b;
+    m_compare_mode = IsCompareTrace(m_data_provider.DataModel());
     if(m_compare_mode)
     {
-        LayoutItem::Ptr col_a = LayoutItem::CreateFromWidget(
-            std::make_shared<RocCustomWidget>([this]() {
-                RenderSourceColumn(COMPARE_SOURCE_A_INDEX);
-            }));
-        col_a->m_child_flags    = ImGuiChildFlags_None;
-        col_a->m_window_padding = ImVec2(COMPARE_CARD_MARGIN, COMPARE_CARD_MARGIN);
-        LayoutItem::Ptr col_b = LayoutItem::CreateFromWidget(
-            std::make_shared<RocCustomWidget>([this]() {
-                RenderSourceColumn(COMPARE_SOURCE_B_INDEX);
-            }));
-        col_b->m_child_flags    = ImGuiChildFlags_None;
-        col_b->m_window_padding = ImVec2(COMPARE_CARD_MARGIN, COMPARE_CARD_MARGIN);
-        m_detail_split = std::make_shared<HSplitContainer>(col_a, col_b);
-        m_detail_split->SetSplit(0.5f);
+        m_detail_split = MakeCompareSplit(
+            std::make_shared<RocCustomWidget>(
+                [this]() { RenderSourceColumn(COMPARE_SOURCE_A); }),
+            std::make_shared<RocCustomWidget>(
+                [this]() { RenderSourceColumn(COMPARE_SOURCE_B); }));
     }
 
     auto topology_changed_event_handler = [this](std::shared_ptr<RocEvent> event) {
@@ -138,10 +122,10 @@ TrackDetails::Render()
                               ImGuiChildFlags_AlwaysUseWindowPadding);
         if(m_track_details.empty())
         {
-            CenterNextTextItem("No data available for the selected tracks.");
+            CenterNextTextItem(NO_DATA_TEXT);
             ImGui::SetCursorPosY((ImGui::GetWindowHeight() - ImGui::GetTextLineHeight()) *
                                  0.5f);
-            ImGui::TextDisabled("No data available for the selected tracks.");
+            ImGui::TextDisabled(NO_DATA_TEXT);
         }
         else
         {
@@ -163,36 +147,18 @@ TrackDetails::RenderSourceColumn(size_t source_index)
         return;
     }
 
-    const ImGuiStyle& style = m_settings.GetDefaultStyle();
-    ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, style.ChildRounding);
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, style.WindowPadding);
-    ImGui::PushStyleColor(ImGuiCol_ChildBg, m_settings.GetColor(Colors::kBgPanel));
-    ImGui::PushStyleColor(ImGuiCol_Border, m_settings.GetColor(Colors::kBorderColor));
-    ImGui::BeginChild("##td_source_card", ImVec2(0.0f, 0.0f),
-                      ImGuiChildFlags_Borders | ImGuiChildFlags_AlwaysUseWindowPadding);
-
-    // Panes run with ItemSpacing 0, so take the badge gap from the default style.
-    RenderCompareSourceBadge(*source, m_settings);
-    ImGui::SameLine(0.0f, style.ItemSpacing.x * COMPARE_TITLE_GAP);
-    const std::string& label = source->name.empty() ? source->path : source->name;
-    ImGui::AlignTextToFramePadding();
-    ElidedText(label.c_str(), ImGui::GetContentRegionAvail().x,
-               ImGui::GetFontSize() * 24.0f, Alignment_Left, true);
-    ImGui::Spacing();
-    ImGui::Separator();
-    ImGui::Spacing();
+    BeginCompareCard("##td_source_card", m_settings);
+    RenderCompareCardTitle(*source, m_settings);
 
     if(RenderDetailList(source_index) == 0)
     {
-        ImGui::TextDisabled("No data available for the selected tracks.");
+        ImGui::TextDisabled(NO_DATA_TEXT);
     }
 
-    ImGui::EndChild();
-    ImGui::PopStyleColor(2);
-    ImGui::PopStyleVar(2);
+    EndCompareCard();
 }
 
-int
+size_t
 TrackDetails::RenderDetailList(std::optional<uint64_t> source_index)
 {
     const ImGuiStyle& style = m_settings.GetDefaultStyle();
@@ -200,8 +166,8 @@ TrackDetails::RenderDetailList(std::optional<uint64_t> source_index)
     ImGui::PushFont(icons);
     ImVec2 icon_size = ImGui::CalcTextSize(ICON_CHEVRON_DOWN);
     ImGui::PopFont();
-    int id       = 0;
-    int rendered = 0;
+    int    id       = 0;
+    size_t rendered = 0;
     for(DetailItem& detail : m_track_details)
     {
         if(source_index.has_value())

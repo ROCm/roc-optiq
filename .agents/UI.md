@@ -1084,18 +1084,42 @@ The bottom-right tabbed panel. Hosts, in source order:
   sync.
 - **Compare mode (two compare sources).** Every applicable tab splits
   into side-by-side, source-filtered A/B views; only `AnnotationView`
-  stays single (notes are project-wide). `AnalysisView::CompareGroup`
-  bundles the A/B `MultiTrackTable`s, their `HSplitContainer`, and the
-  tab layout for the Event and Sample tables; `BuildCompareGroup` and
+  stays single (notes are project-wide). The chrome of those panes is
+  shared, see `rocprofvis_compare_panes.{h,cpp}` below - do not hand
+  roll another split or card. `AnalysisView::CompareGroup` bundles the
+  A/B `MultiTrackTable`s, their `HSplitContainer`, and the tab layout
+  for the Event and Sample tables; `BuildCompareGroup` and
   `RenderCompareTab` are reused for both. The table pairs share one
-  filter/aggregation control (`RenderSharedControls` /
+  filter/aggregation form (`RenderSharedFilterControls` /
   `ApplySharedFiltersFrom`) without pooling results. `TopEventsView`
   renders each category header once with A/B tables side by side
   (per-source analysis-table slots `kAnalysisTop*TableB`). `EventsView`
   and `TrackDetails` partition their selected-item cards into A/B
   columns by each item's `TrackInfo::file_id`. A/B routing uses distinct
   client request IDs plus per-source `TablesModel` slots
-  (`kCompareEventTableA/B`, `kCompareSampleTableA/B`).
+  (`kCompareEventTableA/B`, `kCompareSampleTableA/B`); the two sources
+  hit the same controller table type, so a fetch that loses the race is
+  deferred and retried (`InfiniteScrollTable::QueueTableRequest`).
+
+### Compare panes (`rocprofvis_compare_panes.{h,cpp}`)
+
+The pieces every side-by-side view needs, so the four compare layouts
+stay identical:
+
+- `COMPARE_SOURCE_A` / `COMPARE_SOURCE_B` / `COMPARE_SOURCE_COUNT` and
+  `COMPARE_SOURCE_LABEL` - source order, which is also what
+  `TrackInfo::file_id` counts.
+- `IsCompareTrace(model)` - whether the trace was opened as an A/B
+  project. Use it instead of probing `GetCompareSource()` twice.
+- `MakeCompareSplit(pane_a, pane_b)` - the even `HSplitContainer` with
+  borderless, inset items, because each pane draws its own card.
+- `BeginCompareCard` / `EndCompareCard` - the bordered, padded surface
+  holding one source's content, styled like the panel it sits in (the
+  dialog `BeginPanelCard` look does not fit here).
+- `RenderCompareCardTitle(source, settings, summary)` - source badge,
+  elided source name, optional right-aligned summary, separator.
+  `MultiTrackTable::SetHeaderRenderer` + `RenderCard` draw a table
+  inside such a card.
 
 ### `EventsView` (`rocprofvis_events_view.{h,cpp}`)
 
@@ -2379,6 +2403,10 @@ For fast lookup. Each entry: class -> file -> one-line role.
   event/sample table.
 - `TopEventsView`, `TopEventsView::TopEventsTable` ->
   `rocprofvis_top_events_view.h` -> Category-specific top-event tables.
+- `IsCompareTrace`, `MakeCompareSplit`, `BeginCompareCard`,
+  `EndCompareCard`, `RenderCompareCardTitle` ->
+  `rocprofvis_compare_panes.h` -> Shared chrome of the A/B compare
+  layouts.
 - `EventSearch` -> `rocprofvis_event_search.h` -> Toolbar event search.
 - `AnnotationView` -> `rocprofvis_annotation_view.h` -> Sticky-note
   list tab.

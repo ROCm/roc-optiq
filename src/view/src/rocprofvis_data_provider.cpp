@@ -1630,10 +1630,6 @@ DataProvider::FetchSingleTrackTable(const TableRequestParams& table_params)
         spdlog::debug("Cannot fetch table, no track id provided");
         return false;
     }
-    if(IsTableRequestPending(table_params.m_table_type))
-    {
-        return false;
-    }
 
     uint64_t         track_id = table_params.m_track_ids[0];
     const TrackInfo* metadata = m_model.GetTimeline().GetTrack(track_id);
@@ -3626,32 +3622,13 @@ DataProvider::ProcessTableRequest(RequestInfo& req)
                 return;
             }
         }
+        // Compare mode feeds one controller table type into two view slots, so the
+        // request says which of them its rows belong to. Both slots live in the
+        // model the controller table type already picked above.
         if(table_params &&
            table_params->m_view_table_type != TableType::__kTableTypeCount)
         {
             table_type_enum = table_params->m_view_table_type;
-            switch(table_type_enum)
-            {
-                case TableType::kAnalysisTopInstrumentedEventsTable:
-                case TableType::kAnalysisTopDispatchEventsTable:
-                case TableType::kAnalysisTopMemoryAllocationEventsTable:
-                case TableType::kAnalysisTopMemoryCopyEventsTable:
-                case TableType::kAnalysisTopSampledEventsTable:
-                case TableType::kAnalysisTopInstrumentedEventsTableB:
-                case TableType::kAnalysisTopDispatchEventsTableB:
-                case TableType::kAnalysisTopMemoryAllocationEventsTableB:
-                case TableType::kAnalysisTopMemoryCopyEventsTableB:
-                case TableType::kAnalysisTopSampledEventsTableB:
-                {
-                    table_model = &m_model.GetAnalysis().GetTables();
-                    break;
-                }
-                default:
-                {
-                    table_model = &m_model.GetTables();
-                    break;
-                }
-            }
         }
         ROCPROFVIS_ASSERT(table_model);
         TablesModel& tables = *table_model;

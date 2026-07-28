@@ -46,15 +46,21 @@ CompareSourceColor(const CompareSourceInfo& source, SettingsManager& settings)
     return wheel[idx % wheel.size()];
 }
 
-float
-CompareSourceBadgeWidth(const TrackInfo* track_info)
+static float
+CompareSourceBadgeWidth(const CompareSourceInfo& source)
 {
-    if(!track_info || track_info->compare_source.id.empty())
+    if(source.id.empty())
     {
         return 0.0f;
     }
-    return ImGui::CalcTextSize(track_info->compare_source.id.c_str()).x +
+    return ImGui::CalcTextSize(source.id.c_str()).x +
            2.0f * ImGui::GetStyle().FramePadding.x;
+}
+
+float
+CompareSourceBadgeWidth(const TrackInfo* track_info)
+{
+    return track_info ? CompareSourceBadgeWidth(track_info->compare_source) : 0.0f;
 }
 
 void
@@ -66,8 +72,7 @@ RenderCompareSourceBadge(const CompareSourceInfo& source, SettingsManager& setti
     }
 
     ImU32 color = CompareSourceColor(source, settings);
-    float width = ImGui::CalcTextSize(source.id.c_str()).x +
-                  2.0f * ImGui::GetStyle().FramePadding.x;
+    float width = CompareSourceBadgeWidth(source);
 
     ImGui::PushID("compare_source_badge");
     ImGui::PushStyleColor(ImGuiCol_Button, color);

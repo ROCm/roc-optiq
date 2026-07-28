@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 #pragma once
+#include <array>
 #include <cstddef>
 #include <string>
 #include <vector>
@@ -9,8 +10,10 @@
 #include "model/rocprofvis_tables_model.h"
 #include "rocprofvis_annotation_view.h"
 #include "rocprofvis_annotations.h"
+#include "rocprofvis_compare_panes.h"
 #include "rocprofvis_controller_enums.h"
 #include "rocprofvis_event_manager.h"
+#include "rocprofvis_requests.h"
 #include "widgets/rocprofvis_tab_container.h"
 
 namespace RocProfVis
@@ -48,14 +51,15 @@ private:
     };
 
     void HandleTimelineSelectionChanged(std::shared_ptr<RocEvent> e);
-    void BuildCompareGroup(CompareGroup& group, TableType type_a, TableType type_b,
-                           rocprofvis_controller_table_type_t request_type,
-                           uint64_t request_id_a, uint64_t request_id_b,
-                           const char* friendly_a, const char* friendly_b,
+    // Builds the A/B tables of one tab, their shared filter and their layout.
+    void BuildCompareGroup(CompareGroup&                                      group,
+                           const std::array<TableType, COMPARE_SOURCE_COUNT>& types,
+                           rocprofvis_controller_table_type_t request_table_type,
+                           RequestType request_type, const char* friendly_name,
                            const char* noun, const char* child_id,
                            std::shared_ptr<TimelineSelection> timeline_selection);
     void RenderCompareTab(CompareGroup& group, const char* child_id);
-    void RenderCompareSourceTitle(CompareGroup& group, size_t source_index);
+    void RenderCompareSourceTitle(const CompareGroup& group, size_t source_index);
 
     std::shared_ptr<RocWidget> TabWidgetFor(CompareGroup& group) const;
 

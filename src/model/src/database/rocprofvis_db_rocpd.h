@@ -73,6 +73,7 @@ public:
     rocprofvis_dm_result_t BuildTableStringIdFilter(
                                     rocprofvis_dm_num_string_table_filters_t num_string_table_filters, 
                                     rocprofvis_dm_string_table_filters_t string_table_filters,
+                                    bool include_substring,
                                     table_string_id_filter_map_t& filter) override;
 
     rocprofvis_dm_string_t GetEventOperationQuery(

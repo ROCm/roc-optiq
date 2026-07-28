@@ -1138,6 +1138,11 @@ Args passed all the way through:
   search; the database resolves these via `BuildTableStringIdFilter`
   which finds matching string IDs and rewrites them into a
   `WHERE IN (...)`.
+- `include_substring` - how those filters are matched against the
+  string table. `true` (the default) matches any string containing a
+  filter, `false` only strings equal to it; both are case insensitive.
+  Exact matching is only satisfiable with a single distinct filter,
+  since a string cannot equal two different values at once.
 - `max_count`, `offset` - paging.
 - `count_only` - return a `SELECT COUNT(*) ...` shape.
 

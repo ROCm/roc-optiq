@@ -153,12 +153,13 @@ class Trace : public DmBase{
         // Method to get amount of memory used by Trace object, includes memory footprint of all other data model objects
         // @return used memory size        
         rocprofvis_dm_size_t                            GetMemoryFootprint();
-        // Method to get the string ids of strings inside string table that contain all of the passed in substrings
-        // @param num - number of substrings strings to search for
-        // @param substrings - array of substrings to search for
-        // @param indices - output array of string table indices 
-        // @return status of operation 
-        rocprofvis_dm_result_t                          GetStringIndicesWithSubstring(rocprofvis_dm_num_string_table_filters_t num, rocprofvis_dm_string_table_filters_t substrings, std::vector<rocprofvis_dm_index_t>& indices);
+        // Method to get the string ids of strings inside string table that match the passed in target strings
+        // @param num - number of strings to search for
+        // @param targets - array of strings to search for
+        // @param include_substring - when true a string matches if it contains the targets, when false it has to equal the targets.
+        // @param indices - output array of string table indices
+        // @return status of operation
+        rocprofvis_dm_result_t                          SearchStringIndices(rocprofvis_dm_num_string_table_filters_t num, rocprofvis_dm_string_table_filters_t targets, bool include_substring, std::vector<rocprofvis_dm_index_t>& indices);
         // Static method to add track object. Used by database component via binding interface
         // @param object - trace object handle to add new track to
         // @param params - pointer to track parameters structure (shared with database component) 
@@ -286,7 +287,7 @@ class Trace : public DmBase{
         void                                            BuildStringsOrderArray();
         static void                                     MetadataLoaded(const rocprofvis_dm_trace_t object);
         static const size_t                             GetStringOrder(const rocprofvis_dm_trace_t object, uint32_t index);
-        static rocprofvis_dm_result_t                   GetStringIndices(const rocprofvis_dm_trace_t object, rocprofvis_dm_num_string_table_filters_t num, rocprofvis_dm_string_table_filters_t substrings, std::vector<rocprofvis_dm_index_t>& indices);
+        static rocprofvis_dm_result_t                   GetStringIndices(const rocprofvis_dm_trace_t object, rocprofvis_dm_num_string_table_filters_t num, rocprofvis_dm_string_table_filters_t substrings, bool include_substring, std::vector<rocprofvis_dm_index_t>& indices);
 
 
         // trace parameters structure

@@ -642,10 +642,6 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture, "System Trace Controll
                                                   0, kRPVControllerSortOrderAscending);
         REQUIRE(result == kRocProfVisResultSuccess);
 
-        result = rocprofvis_controller_set_uint64(args, kRPVControllerTableArgsNumOpTypes,
-                                                  0, 0);
-        REQUIRE(result == kRocProfVisResultSuccess);
-
         result =
             rocprofvis_controller_set_string(args, kRPVControllerTableArgsWhere, 0, "");
         REQUIRE(result == kRocProfVisResultSuccess);
@@ -944,10 +940,6 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture, "System Trace Controll
 
         result = rocprofvis_controller_set_uint64(args, kRPVControllerTableArgsSortOrder,
                                                   0, kRPVControllerSortOrderAscending);
-        REQUIRE(result == kRocProfVisResultSuccess);
-
-        result = rocprofvis_controller_set_uint64(args, kRPVControllerTableArgsNumOpTypes,
-                                                  0, 0);
         REQUIRE(result == kRocProfVisResultSuccess);
 
         result =
@@ -3016,10 +3008,6 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture, "System Trace Controll
                                                   end_ts);
         REQUIRE(result == kRocProfVisResultSuccess);
 
-        result = rocprofvis_controller_set_uint64(args, kRPVControllerTableArgsNumTracks,
-                                                  0, 0);
-        REQUIRE(result == kRocProfVisResultSuccess);
-
         result = rocprofvis_controller_set_uint64(
             args, kRPVControllerTableArgsOpTypesIndexed, 0, kRocProfVisDmOperationLaunch);
         REQUIRE(result == kRocProfVisResultSuccess);
@@ -3075,6 +3063,10 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture, "System Trace Controll
         REQUIRE(result == kRocProfVisResultSuccess);
 
         result = rocprofvis_controller_set_uint64(args, kRPVControllerTableArgsStartCount,
+                                                  0, 1);
+        REQUIRE(result == kRocProfVisResultSuccess);
+
+        result = rocprofvis_controller_set_uint64(args, kRPVControllerTableArgsStringTableFiltersIncludeSubstrings,
                                                   0, 1);
         REQUIRE(result == kRocProfVisResultSuccess);
 

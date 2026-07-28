@@ -227,7 +227,8 @@ public:
     std::vector<rocprofvis_dm_event_operation_t>
         m_op_types;  // op types to include in search
     std::vector<std::string>
-        m_string_table_filters;  // strings to use for string table filtering.
+         m_string_table_filters;  // strings to use for string table filtering.
+    bool m_include_substrings;    // allow/disallow partial matches.
 
     EventSearchRequestParams(const EventSearchRequestParams& table_params) = default;
     EventSearchRequestParams& operator=(const EventSearchRequestParams& table_params) =
@@ -236,7 +237,7 @@ public:
     EventSearchRequestParams(
         rocprofvis_controller_table_type_t                  table_type,
         const std::vector<rocprofvis_dm_event_operation_t>& op_types, double start_ts,
-        double end_ts, const char* where,
+        double end_ts, const char* where, bool include_substrings,
         const std::vector<std::string> string_table_filters = {}, uint64_t start_row = -1,
         uint64_t req_row_count = -1, uint64_t sort_column_index = 0,
         rocprofvis_controller_sort_order_t sort_order = kRPVControllerSortOrderAscending,
@@ -246,6 +247,7 @@ public:
                          export_to_file_path)
     , m_op_types(op_types)
     , m_string_table_filters(string_table_filters)
+    , m_include_substrings(include_substrings)
     {}
 };
 

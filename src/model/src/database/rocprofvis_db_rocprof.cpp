@@ -1773,13 +1773,13 @@ rocprofvis_dm_result_t RocprofDatabase::SaveTrimmedData(rocprofvis_dm_timestamp_
 }
 
 rocprofvis_dm_result_t RocprofDatabase::BuildTableStringIdFilter( rocprofvis_dm_num_string_table_filters_t num_string_table_filters, 
-    rocprofvis_dm_string_table_filters_t string_table_filters, table_string_id_filter_map_t& filter)
+    rocprofvis_dm_string_table_filters_t string_table_filters, bool include_substring, table_string_id_filter_map_t& filter)
 {
     rocprofvis_dm_result_t result = kRocProfVisDmResultNotLoaded;
     if(num_string_table_filters > 0)
     {
         std::vector<rocprofvis_dm_index_t> string_indices;
-        result = BindObject()->FuncGetStringIndices(BindObject()->trace_object, num_string_table_filters, string_table_filters, string_indices);
+        result = BindObject()->FuncGetStringIndices(BindObject()->trace_object, num_string_table_filters, string_table_filters, include_substring, string_indices);
         ROCPROFVIS_ASSERT_RETURN(result == kRocProfVisDmResultSuccess, result);
         std::unordered_map<uint32_t, std::string> string_ids;
         std::unordered_map<uint32_t, std::string> kernel_ids;

@@ -30,6 +30,7 @@ namespace View
 class MeasurementController;
 class TimelineSelection;
 class TimelineView;
+class FlameTrackItem;
 class TimelineTrackOptions;
  
 typedef struct ViewCoords
@@ -119,6 +120,8 @@ public:
     void           RenderMeasurement(ImDrawList* draw_list, ImVec2 window_position);
     ViewCoords                          GetViewCoords() const;
     std::shared_ptr<TimePixelTransform> GetTransform() const;
+
+    friend struct TimelineViewTestPeer;
     float          GetTotalTrackHeight() const;
     float          GetTrackViewportHeight() const;
     void           GetVisibleTrackFractions(float& start_fraction, float& end_fraction) const;

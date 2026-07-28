@@ -58,7 +58,9 @@ public:
     // Option members...
     bool  m_display;
     float m_height;
-
+#ifdef IMGUI_ENABLE_TEST_ENGINE
+     friend struct FlameTrackItemTestPeer;
+#endif
 protected:
     class TrackProjectSetting : public ProjectSetting
     {

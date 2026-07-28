@@ -20,6 +20,10 @@ on:
         description: 'Enable the internal banner?'
         type: boolean
         default: false
+      enable_ui_tests:
+        description: 'Build + run the Dear ImGui UI tests?'
+        type: boolean
+        default: false
       upload_to_github:
         description: 'Upload build artifacts to GitHub Artifacts?'
         type: boolean
@@ -83,6 +87,10 @@ on:
         description: 'Enable the internal banner?'
         type: boolean
         default: false
+      enable_ui_tests:
+        description: 'Build + run the Dear ImGui UI tests?'
+        type: boolean
+        default: false
       upload_to_github:
         description: 'Upload build artifacts to GitHub Artifacts?'
         type: boolean
@@ -105,7 +113,8 @@ env:
   DIST_DIR: "dist"
   BINARY_DIR: ${{ inputs.cmake_config_preset == 'x64-debug' && 'Debug' || inputs.cmake_config_preset == 'x64-release-symbols' && 'RelWithDebInfo' || 'Release' }}
   BUILD_FILE_NAME: "roc-optiq"
-  ENABLE_INTERNAL_BANNER: ${{ inputs.enable_internal_banner && 'ON' || 'OFF' }}
+  ENABLE_INTERNAL_BANNER: ${{ inputs.enable_internal_banner == 'true' && 'ON' || 'OFF' }}
+  ENABLE_UI_TESTS: ${{ (inputs.enable_ui_tests == true || inputs.enable_ui_tests == 'true') && 'ON' || 'OFF' }}
   ENABLE_REMOTE: ${{ inputs.enable_remote && 'ON' || 'OFF' }}
   ENABLE_PROFILER: ${{ inputs.enable_profiler && 'ON' || 'OFF' }}
   S3_ROOT_DIRECTORY: ${{ inputs.s3_root_directory }}
@@ -188,6 +197,7 @@ jobs:
       - name: Build, Make, and Verify Installation
         run: |
           mkdir build
+
           $opensslArgs = @()
           if ("${{ inputs.crypto_backend }}" -eq "OpenSSL") {
             # Prefer the install tree we just configured (choco) over any other
@@ -203,7 +213,7 @@ jobs:
               )
             }
           }
-          cmake --preset "${{ inputs.cmake_config_preset }}" -DROCPROFVIS_ENABLE_INTERNAL_BANNER=${{ env.ENABLE_INTERNAL_BANNER }} -DROCPROFVIS_ENABLE_REMOTE=${{ env.ENABLE_REMOTE }} -DROCPROFVIS_ENABLE_PROFILER=${{ env.ENABLE_PROFILER }} -DCRYPTO_BACKEND=${{ inputs.crypto_backend }} @opensslArgs
+          cmake --preset "${{ inputs.cmake_config_preset }}" -DROCPROFVIS_ENABLE_INTERNAL_BANNER=${{ env.ENABLE_INTERNAL_BANNER }}  -DROCPROFVIS_ENABLE_UI_TESTS=${{ env.ENABLE_UI_TESTS }} -DROCPROFVIS_ENABLE_REMOTE=${{ env.ENABLE_REMOTE }} -DROCPROFVIS_ENABLE_PROFILER=${{ env.ENABLE_PROFILER }} -DCRYPTO_BACKEND=${{ inputs.crypto_backend }} @opensslArgs
           cmake --build ${{ env.BUILD_DIR }}/${{ inputs.cmake_config_preset }} --preset "${{ inputs.cmake_build_preset }}" --parallel 4
           if (Test-Path "${{ env.BUILD_DIR }}/${{ inputs.cmake_config_preset }}/${{ env.BINARY_DIR }}/${env:BUILD_FILE_NAME}.exe") {
             Write-Host "✅ $env:BUILD_FILE_NAME has been successfully built!"

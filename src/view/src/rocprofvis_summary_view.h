@@ -30,6 +30,7 @@ public:
     void Render() override;
 
 private:
+    friend struct SummaryViewTestPeer;
     DataProvider&    m_data_provider;
     SettingsManager& m_settings;
 
@@ -71,6 +72,8 @@ private:
 
 class TopKernels : public RocWidget
 {
+    friend struct TopKernelsTestPeer;
+
 public:
     TopKernels(DataProvider& dp,
                std::function<void(const char* kernel_name, const uint64_t* node_id,

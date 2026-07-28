@@ -1226,16 +1226,16 @@ void RegisterAppTests(ImGuiTestEngine* e)
 
         ctx->Yield(3);
 
-        // Expanding only changes height when the track has enough levels to exceed
-        // the default height; find a flame track for which that holds so the height
-        // assertion is meaningful (expanded height = max_level*lvl + lvl + 2).
+        // Expanding only changes height when the track has enough levels for its
+        // expanded height to exceed the default; find a flame track for which that
+        // holds so the height assertion is meaningful.
         FlameTrackItem* flame = nullptr;
         for (FlameTrackItem* candidate : TimelineViewTestPeer{*tlv}.DisplayedFlameTracks())
         {
             FlameTrackItemTestPeer peer{*candidate};
             const float level_h = peer.LevelHeight();
             if (level_h > 0.0f &&
-                peer.MaxLevel() * level_h + level_h + 2.0f > DEFAULT_TRACK_HEIGHT)
+                peer.ExpandedTrackHeight() > peer.DefaultTrackHeight())
             {
                 flame = candidate;
                 break;

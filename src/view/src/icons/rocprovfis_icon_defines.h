@@ -17,6 +17,7 @@ constexpr ImWchar icon_ranges[] = {
     0xF13D, 0xF13D,
     0xF1FE, 0xF1FE,
     0xF218, 0xF218,
+    0xF25E, 0xF25E,
     0xF267, 0xF267,
     0xF273, 0xF273,
     0xF2B5, 0xF2B5,
@@ -53,6 +54,7 @@ inline constexpr const char* ICON_EYE           = u8"\uF133";
 inline constexpr const char* ICON_GEAR          = u8"\uF13D";
 inline constexpr const char* ICON_CHAIN         = u8"\uF1FE";
 inline constexpr const char* ICON_ADD_NOTE      = u8"\uF218";
+inline constexpr const char* ICON_ARROWS_EXPAND = u8"\uF25E";
 inline constexpr const char* ICON_ARROWS_SHRINK = u8"\uF267";
 inline constexpr const char* ICON_COMPASS       = u8"\uF273";
 inline constexpr const char* ICON_CHART_BAR     = u8"\uF2B5";

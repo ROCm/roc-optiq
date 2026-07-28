@@ -322,8 +322,8 @@ public:
     uint32_t m_workload_id;
     uint32_t m_kernel_id;
     uint32_t m_source_file_id;
-    // Per-kernel generation counter captured at submission.
-    // ProcessPcSamplingRequest discards results that belong to a stale generation.
+    // Code View selection generation captured at submission.
+    // ProcessPcSamplingRequest discards results from superseded selections.
     uint32_t m_generation = 0;
 
     PcSamplingRequestParams(const PcSamplingRequestParams&)            = default;

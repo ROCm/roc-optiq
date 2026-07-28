@@ -548,15 +548,17 @@ typedef enum rocprofvis_db_compute_column_enum_t
     kRPVComputeColumnPcSamplingIsaToSourceSourceLineId,
     kRPVComputeColumnPcSamplingIsaToSourceDepth,
 
-    kRPVComputeColumnPcSamplingStallRecordId,
-    kRPVComputeColumnPcSamplingStallRecordIsaLineId,
-    kRPVComputeColumnPcSamplingStallRecordDispatchId,
-    kRPVComputeColumnPcSamplingStallRecordAvgActiveLanes,
-    kRPVComputeColumnPcSamplingStallRecordWaveIssuedCount,
-    kRPVComputeColumnPcSamplingStallRecordTotalSampleCount,
+    kRPVComputeColumnPcSamplingStateId,
+    kRPVComputeColumnPcSamplingStateIsaLineId,
+    kRPVComputeColumnPcSamplingStateDispatchId,
+    kRPVComputeColumnPcSamplingStateActiveThreadsPercent,
+    kRPVComputeColumnPcSamplingStateWaveOccupancyPercent,
+    kRPVComputeColumnPcSamplingStateIssuedCount,
+    kRPVComputeColumnPcSamplingStateStalledCount,
+    kRPVComputeColumnPcSamplingStateTotalCount,
 
-    kRPVComputeColumnPcSamplingStallReasonRecordId,
-    kRPVComputeColumnPcSamplingStallReasonTypeId,
+    kRPVComputeColumnPcSamplingStallReasonSamplingStateId,
+    kRPVComputeColumnPcSamplingStallReasonId,
     kRPVComputeColumnPcSamplingStallReasonCount,
 } rocprofvis_db_compute_column_enum_t;
 
@@ -578,11 +580,11 @@ typedef enum rocprofvis_db_compute_use_case_enum_t
     kRPVComputeFetchKernelSourceFiles,
     kRPVComputeFetchSourceFileSourceLines,
     kRPVComputeFetchKernelCodeObjects,
-    kRPVComputeFetchCodeObjectIsaLines,
-    kRPVComputeFetchIsaLineIsaLineDeps,
-    kRPVComputeFetchIsaLineSourceLineDeps,
-    kRPVComputeFetchIsaLineStallRecord,
-    kRPVComputeFetchStallRecordReasonCounts,
+    kRPVComputeFetchKernelIsaToIsaDeps,
+    kRPVComputeFetchKernelIsaLines,
+    kRPVComputeFetchKernelIsaToSourceDeps,
+    kRPVComputeFetchKernelSamplingStates,
+    kRPVComputeFetchKernelSamplingStateReasonCounts,
 } rocprofvis_db_compute_use_case_enum_t;
 
 // Compute database query parameter enumeration
@@ -591,9 +593,6 @@ typedef enum rocprofvis_db_compute_param_enum_t
     kRPVComputeParamWorkloadId,
     kRPVComputeParamKernelId,
     kRPVComputeParamSourceFileId,
-    kRPVComputeParamCodeObjectId,
-    kRPVComputeParamIsaLineId,
-    kRPVComputeParamStallRecordId,
     kRPVComputeParamMetricId,
     kRPVComputeParamMetricSelector,
     kRPVComputeParamSortColumnIndex,
@@ -611,4 +610,3 @@ typedef struct rocprofvis_db_compute_param_t
 
 typedef rocprofvis_db_compute_param_t* rocprofvis_db_compute_params_t;
 typedef uint32_t rocprofvis_db_num_of_params_t;
-

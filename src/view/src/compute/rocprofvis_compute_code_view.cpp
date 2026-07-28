@@ -45,8 +45,9 @@ ComputeCodeView::ComputeCodeView(DataProvider& data_provider)
     SubscribeToEvents();
 
     m_data_provider.SetFetchPcSamplingCallback(
-        [this](const std::string&, uint32_t kernel_id, uint32_t source_file_id, bool success) {
-            OnPcSamplingReady(kernel_id, source_file_id, success);
+        [this](const std::string&, uint32_t kernel_id, uint32_t source_file_id,
+               uint32_t generation, bool success) {
+            OnPcSamplingReady(kernel_id, source_file_id, generation, success);
         });
 }
 
@@ -55,11 +56,22 @@ ComputeCodeView::~ComputeCodeView()
     EventManager::GetInstance()->Unsubscribe(
         static_cast<int>(RocEvents::kComputeKernelSelectionChanged),
         m_kernel_selection_changed_token);
+    EventManager::GetInstance()->Unsubscribe(
+        static_cast<int>(RocEvents::kComputeWorkloadSelectionChanged),
+        m_workload_selection_changed_token);
 }
 
 void
 ComputeCodeView::SubscribeToEvents()
 {
+    auto workload_changed = [this](std::shared_ptr<RocEvent> e) {
+        auto event = std::dynamic_pointer_cast<ComputeSelectionChangedEvent>(e);
+        if(event && event->GetSourceId() == m_data_provider.GetTraceFilePath())
+            SelectWorkload(event->GetId());
+    };
+    m_workload_selection_changed_token = EventManager::GetInstance()->Subscribe(
+        static_cast<int>(RocEvents::kComputeWorkloadSelectionChanged), workload_changed);
+
     auto kernel_changed = [this](std::shared_ptr<RocEvent> e) {
         auto event = std::dynamic_pointer_cast<ComputeSelectionChangedEvent>(e);
         if(event && event->GetSourceId() == m_data_provider.GetTraceFilePath())
@@ -70,33 +82,73 @@ ComputeCodeView::SubscribeToEvents()
 }
 
 void
+ComputeCodeView::SelectWorkload(uint32_t workload_id)
+{
+    m_current_workload_id = workload_id;
+}
+
+void
 ComputeCodeView::LoadData(uint32_t kernel_id)
 {
     m_current_kernel_id = kernel_id;
 
-    for(const WorkloadInfo* workload : m_data_provider.ComputeModel().GetWorkloadList())
+    const WorkloadInfo* workload =
+        m_data_provider.ComputeModel().GetWorkload(m_current_workload_id);
+    if(!workload || !workload->kernels.count(kernel_id))
     {
-        if(workload->kernels.count(kernel_id))
+        m_current_workload_id = ComputeSelection::INVALID_SELECTION_ID;
+        for(const WorkloadInfo* candidate : m_data_provider.ComputeModel().GetWorkloadList())
         {
-            m_current_workload_id = workload->id;
-            break;
+            if(candidate->kernels.count(kernel_id))
+            {
+                m_current_workload_id = candidate->id;
+                break;
+            }
         }
     }
     if(m_current_workload_id == ComputeSelection::INVALID_SELECTION_ID)
+    {
+        m_pending_refetch = false;
+        if(m_fetch_in_progress)
+            m_data_provider.CancelRequest(m_active_request_id);
+        ClearSelectionData();
         return;
+    }
 
     const KernelInfo* kernel_info = m_data_provider.ComputeModel().GetKernelInfo(
         m_current_workload_id, kernel_id);
     if(!kernel_info)
+    {
+        m_current_workload_id = ComputeSelection::INVALID_SELECTION_ID;
+        m_pending_refetch     = false;
+        if(m_fetch_in_progress)
+            m_data_provider.CancelRequest(m_active_request_id);
+        ClearSelectionData();
         return;
+    }
 
-    // Source file list is already populated eagerly — just refresh the selection.
+    // Source file list is already populated eagerly - just refresh the selection.
     LoadSourceFileList(kernel_info->pc_sampling_data);
 
     // Clear stale widget data and kick off the async fetch for the selected file.
+    ClearCodeData();
+    FetchPcSamplingForCurrentFile();
+}
+
+void
+ComputeCodeView::ClearCodeData()
+{
     m_source_code->Load({}, 0);
     m_isa_code->Load({}, 0);
-    FetchPcSamplingForCurrentFile();
+}
+
+void
+ComputeCodeView::ClearSelectionData()
+{
+    m_source_files.clear();
+    m_current_source_file_id = ComputeSelection::INVALID_SELECTION_ID;
+    m_current_code_object_id = ComputeSelection::INVALID_SELECTION_ID;
+    ClearCodeData();
 }
 
 void
@@ -104,39 +156,64 @@ ComputeCodeView::FetchPcSamplingForCurrentFile()
 {
     if(m_current_kernel_id == ComputeSelection::INVALID_SELECTION_ID ||
        m_current_source_file_id == ComputeSelection::INVALID_SELECTION_ID)
+    {
+        m_pending_refetch = false;
+        if(m_fetch_in_progress)
+            m_data_provider.CancelRequest(m_active_request_id);
         return;
+    }
 
+    if(m_fetch_in_progress)
+    {
+        m_pending_refetch = true;
+        m_data_provider.CancelRequest(m_active_request_id);
+        return;
+    }
+
+    // This ID correlates the callback with the selected kernel and source file;
+    // it does not permit multiple Code View requests to run concurrently.
     const uint64_t request_id = RequestIdBuilder::MakeClientRequestId(
         RequestType::kFetchPcSampling,
         (static_cast<uint64_t>(m_current_kernel_id) << 32) | m_current_source_file_id);
 
-    if(m_data_provider.IsRequestPending(request_id))
+    ++m_fetch_generation;
+    m_pending_refetch = false;
+    if(m_data_provider.FetchPcSampling(
+           PcSamplingRequestParams(m_current_workload_id, m_current_kernel_id,
+                                   m_current_source_file_id, m_fetch_generation)))
     {
-        m_pending_refetch = true;
-        m_data_provider.CancelRequest(request_id);
-    }
-    else
-    {
-        ++m_fetch_generation;
-        m_pending_refetch = false;
-        m_data_provider.FetchPcSampling(
-            PcSamplingRequestParams(m_current_workload_id, m_current_kernel_id,
-                                    m_current_source_file_id, m_fetch_generation));
+        m_active_request_id = request_id;
+        m_fetch_in_progress = true;
     }
 }
 
 void
-ComputeCodeView::OnPcSamplingReady(uint32_t kernel_id, uint32_t source_file_id, bool success)
+ComputeCodeView::OnPcSamplingReady(uint32_t kernel_id, uint32_t source_file_id,
+                                   uint32_t generation, bool success)
 {
+    const uint64_t request_id = RequestIdBuilder::MakeClientRequestId(
+        RequestType::kFetchPcSampling,
+        (static_cast<uint64_t>(kernel_id) << 32) | source_file_id);
+    if(!m_fetch_in_progress || request_id != m_active_request_id ||
+       generation != m_fetch_generation)
+    {
+        return;
+    }
+
+    m_fetch_in_progress = false;
+
+    // Start a deferred fetch from Render, after DataProvider has erased the
+    // completed request from its request map.
+    if(m_pending_refetch)
+    {
+        return;
+    }
+
     if(kernel_id != m_current_kernel_id || source_file_id != m_current_source_file_id)
         return;
 
     if(!success)
-    {
-        if(m_pending_refetch)
-            FetchPcSamplingForCurrentFile();
         return;
-    }
 
     const KernelInfo* kernel_info = m_data_provider.ComputeModel().GetKernelInfo(
         m_current_workload_id, m_current_kernel_id);
@@ -180,6 +257,11 @@ ComputeCodeView::LoadSourceFileList(const PcSamplingData& data)
 void
 ComputeCodeView::Render()
 {
+    if(m_pending_refetch && !m_fetch_in_progress)
+    {
+        FetchPcSamplingForCurrentFile();
+    }
+
     RenderControlPanel();
 
     ImGui::PushFont(m_settings.GetFontManager().GetFont(FontType::kCode), 0.0f);
@@ -502,20 +584,22 @@ IsaCodeWidget::Load(const PcSamplingData& data, uint32_t code_object_id)
             source_by_isa.emplace(dep.isa_line_id, dep.source_line_id);
     }
 
-    for(const auto& il : code_object->isa_lines)
+    for(const auto& isa_line : code_object->isa_lines)
     {
         uint32_t source_line_id = 0;
-        if(const auto sit = source_by_isa.find(il.id); sit != source_by_isa.end())
+        if(const auto sit = source_by_isa.find(isa_line.id); sit != source_by_isa.end())
             source_line_id = sit->second;
 
         m_entries.push_back({
-            il.instruction,
-            il.comment,
-            il.id,
+            isa_line.instruction,
+            isa_line.comment,
+            isa_line.id,
             source_line_id,
-            il.stall_record.wave_issued_count,
-            il.stall_record.total_sample_count,
-            il.stall_record.avg_active_lanes
+            isa_line.sampling_state.issued_count,
+            isa_line.sampling_state.stalled_count,
+            isa_line.sampling_state.total_count,
+            isa_line.sampling_state.active_threads_percent,
+            isa_line.sampling_state.wave_occupancy_percent
         });
     }
 
@@ -531,7 +615,7 @@ IsaCodeWidget::Render()
         return;
     }
 
-    const int stall_columns   = IsStallShown() ? 3 : 0;
+    const int stall_columns   = IsStallShown() ? 5 : 0;
     const int comment_columns = m_show_comments ? 1 : 0;
     const int columns_count   = 2 + stall_columns + comment_columns;
 
@@ -545,10 +629,12 @@ IsaCodeWidget::Render()
     if(IsStallShown())
     {
         const float num_col_width = ImGui::CalcTextSize("999999").x;
-        const float flt_col_width = ImGui::CalcTextSize("99.99").x;
-        ImGui::TableSetupColumn("Samples",   ImGuiTableColumnFlags_WidthFixed, num_col_width);
-        ImGui::TableSetupColumn("Waves",     ImGuiTableColumnFlags_WidthFixed, num_col_width);
-        ImGui::TableSetupColumn("Avg Lanes", ImGuiTableColumnFlags_WidthFixed, flt_col_width);
+        const float flt_col_width = ImGui::CalcTextSize("100.00%").x;
+        ImGui::TableSetupColumn("Total",     ImGuiTableColumnFlags_WidthFixed, num_col_width);
+        ImGui::TableSetupColumn("Issued",    ImGuiTableColumnFlags_WidthFixed, num_col_width);
+        ImGui::TableSetupColumn("Stalled",   ImGuiTableColumnFlags_WidthFixed, num_col_width);
+        ImGui::TableSetupColumn("Active %",  ImGuiTableColumnFlags_WidthFixed, flt_col_width);
+        ImGui::TableSetupColumn("Occup. %",  ImGuiTableColumnFlags_WidthFixed, flt_col_width);
     }
 
     ImGui::TableSetupColumn("ISA", ImGuiTableColumnFlags_WidthStretch);
@@ -611,11 +697,15 @@ IsaCodeWidget::RenderLine(uint32_t index, uint32_t columns_count)
     if(IsStallShown())
     {
         ImGui::TableSetColumnIndex(++column);
-        ImGui::TextDisabled("%u", isa_row.total_sample_count);
+        ImGui::TextDisabled("%u", isa_row.total_count);
         ImGui::TableSetColumnIndex(++column);
-        ImGui::TextDisabled("%u", isa_row.wave_issued_count);
+        ImGui::TextDisabled("%u", isa_row.issued_count);
         ImGui::TableSetColumnIndex(++column);
-        ImGui::TextDisabled("%.2f", isa_row.avg_active_lanes);
+        ImGui::TextDisabled("%u", isa_row.stalled_count);
+        ImGui::TableSetColumnIndex(++column);
+        ImGui::TextDisabled("%.2f", isa_row.active_threads_percent);
+        ImGui::TableSetColumnIndex(++column);
+        ImGui::TextDisabled("%.2f", isa_row.wave_occupancy_percent);
     }
 
     ImGui::TableSetColumnIndex(++column);

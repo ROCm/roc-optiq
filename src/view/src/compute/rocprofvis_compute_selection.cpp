@@ -41,14 +41,16 @@ ComputeSelection::SelectWorkload(uint32_t workload_id)
     // select first kernel of the workload by default
     const std::vector<const KernelInfo*> kernel_info_list =
         m_data_provider.ComputeModel().GetKernelInfoList(workload_id);
-    if(!kernel_info_list.empty())
-    {
-        SelectKernel(kernel_info_list[0]->id);
-    }
-    else
-    {
-        SelectKernel(INVALID_SELECTION_ID);
-    }
+    const uint32_t kernel_id = kernel_info_list.empty()
+                                   ? INVALID_SELECTION_ID
+                                   : kernel_info_list[0]->id;
+
+    // A workload change also changes the kernel context, even when the new
+    // workload happens to use the same kernel ID (or both workloads are empty).
+    // Always notify kernel consumers so they cannot retain data from the old
+    // workload.
+    m_selected_kernel_id = kernel_id;
+    SendKernelSelectionChanged();
 }
 
 uint32_t

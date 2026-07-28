@@ -39,11 +39,11 @@ namespace DataModel
         std::string GetComputeKernelSourceFiles(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params);
         std::string GetComputeSourceFileSourceLines(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params);
         std::string GetComputeKernelCodeObjects(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params);
-        std::string GetComputeCodeObjectIsaLines(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params);
-        std::string GetComputeIsaLineIsaLineDeps(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params);
-        std::string GetComputeIsaLineSourceLineDeps(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params);
-        std::string GetComputeIsaLineStallRecord(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params);
-        std::string GetComputeStallRecordReasonCounts(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params);
+        std::string GetComputeKernelIsaToIsaDeps(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params);
+        std::string GetComputeKernelIsaLines(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params);
+        std::string GetComputeKernelIsaToSourceDeps(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params);
+        std::string GetComputeKernelSamplingStates(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params);
+        std::string GetComputeKernelSamplingStateReasonCounts(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params);
     private:
         MetricIdFormat ClassifyMetricIdFormat(const std::string& s);
         std::string SanitizeMetricValueName(const std::string& name);

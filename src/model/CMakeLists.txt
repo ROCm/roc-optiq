@@ -4,6 +4,8 @@ project(datamodel VERSION 0.1.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 
+find_package(profiler-hub REQUIRED)
+
 add_subdirectory(../../thirdparty/sqlite3 thirdparty/sqlite3)
 
 include_directories(inc ${CMAKE_CURRENT_SOURCE_DIR}/src/common ${CMAKE_CURRENT_SOURCE_DIR}/src/database ${CMAKE_CURRENT_SOURCE_DIR}/src/datamodel ${CMAKE_CURRENT_SOURCE_DIR}/../controller/inc)
@@ -43,6 +45,7 @@ target_link_libraries(${PROJECT_NAME} sqlite3)
 target_link_libraries(${PROJECT_NAME} spdlog)
 target_link_libraries(${PROJECT_NAME} yaml-cpp)
 target_link_libraries(${PROJECT_NAME} json)
+target_link_libraries(${PROJECT_NAME} profiler-hub::profiler-hub)
 
 # TBB is conditionally required on Linux when libtbb-dev is installed
 # - Windows MSVC: Has its own parallel backend, doesn't need TBB

@@ -162,6 +162,16 @@ namespace View
         m_current_directory_buffer = path ? path : "";
     }
 
+    void RemoteUri::SetRemoteBrowsingPath(const char* path)
+    {
+        m_file_browser_buffer = path ? path : "";
+    }
+
+    void RemoteUri::SetRemoteResultPathString(const char* path)
+    {
+        m_remote_result_path = path ? path : "";
+    }
+
     void RemoteUri::MakeRemoteBrowsingPath(const char* file_name)
     {
         if (!file_name)

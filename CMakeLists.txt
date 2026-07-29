@@ -26,6 +26,7 @@ option(ROCPROFVIS_ENABLE_INTERNAL_BANNER "Show diagonal internal build banner" O
 option(USE_NATIVE_FILE_DIALOG "Use the OS native file dialog instead of ImGui file dialog" ON)
 option(GLFW_LINK_STATIC "Link GLFW statically instead of dynamically" ON)
 option(BUILD_TESTING "Build the testing tree" ON)
+option(ROCPROFVIS_ENABLE_UI_TESTS "Build view-layer Dear ImGui UI tests" OFF)
 
 # TEMPORARY: gate the in-development profiler-launch and remote/SSH features
 # until they ship. Both default OFF so release builds exclude the UI, the
@@ -199,6 +200,8 @@ endif(ROCPROFVIS_ENABLE_PROFILER)
 if(ROCPROFVIS_ENABLE_REMOTE)
 list(APPEND VIEW_FILES
     src/view/src/remote/rocprofvis_ssh_uri.cpp
+    src/view/src/remote/rocprofvis_secret_store.cpp
+    src/view/src/remote/rocprofvis_secret_store.h
     src/view/src/remote/rocprofvis_ssh_connection_config.cpp
     src/view/src/remote/rocprofvis_ssh_connection_config.h
     src/view/src/remote/rocprofvis_ssh_connection_store.cpp
@@ -212,6 +215,8 @@ list(APPEND VIEW_FILES
     src/view/src/remote/rocprofvis_ssh_settings_dialog.h
     src/view/src/remote/rocprofvis_ssh_test_dialog.cpp
     src/view/src/remote/rocprofvis_ssh_test_dialog.h
+    src/view/src/remote/rocprofvis_remote_file_browser.cpp
+    src/view/src/remote/rocprofvis_remote_file_browser.h
 )
 endif(ROCPROFVIS_ENABLE_REMOTE)
 
@@ -241,25 +246,21 @@ if(WIN32)
         )
 endif(WIN32)
 
+# Shared app sources (no main): the prod exe adds main.cpp, the test exe adds test_main.cpp.
+set(APP_FILES
+    src/app/src/rocprofvis_imgui_backend.cpp
+    src/app/src/rocprofvis_imgui_vulkan.cpp
+    src/app/src/rocprofvis_imgui_opengl.cpp
+    src/app/src/glfw_util.cpp
+    src/app/src/rocprofvis_cli_parser.cpp)
 if(APPLE)
-    add_executable(${TARGET_NAME} MACOSX_BUNDLE
-        src/app/src/rocprofvis_imgui_backend.cpp
-        src/app/src/rocprofvis_imgui_vulkan.cpp
-        src/app/src/rocprofvis_imgui_opengl.cpp
-        src/app/src/main.cpp
-        src/app/src/glfw_util.cpp
-        src/app/src/rocprofvis_cli_parser.cpp
-        src/app/src/rocprofvis_platform_helpers_macos.mm
-        ${VIEW_FILES})
+    list(APPEND APP_FILES src/app/src/rocprofvis_platform_helpers_macos.mm)
+endif()
+
+if(APPLE)
+    add_executable(${TARGET_NAME} MACOSX_BUNDLE ${APP_FILES} src/app/src/main.cpp ${VIEW_FILES})
 else()
-    add_executable(${TARGET_NAME}
-        src/app/src/rocprofvis_imgui_backend.cpp
-        src/app/src/rocprofvis_imgui_vulkan.cpp
-        src/app/src/rocprofvis_imgui_opengl.cpp
-        src/app/src/main.cpp
-        src/app/src/glfw_util.cpp
-        src/app/src/rocprofvis_cli_parser.cpp
-        ${VIEW_FILES})
+    add_executable(${TARGET_NAME} ${APP_FILES} src/app/src/main.cpp ${VIEW_FILES})
 endif()
 
 add_dependencies(${TARGET_NAME} generate_icon_header)
@@ -320,6 +321,83 @@ target_link_libraries(${TARGET_NAME} PRIVATE spdlog)
 target_link_libraries(${TARGET_NAME} PRIVATE sqlite3)
 target_link_libraries(${TARGET_NAME} PRIVATE json)
 
+if(BUILD_TESTING AND ROCPROFVIS_ENABLE_UI_TESTS)
+    set(IMGUI_TEST_ENGINE_DIR
+        ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/imgui_test_engine/imgui_test_engine)
+    add_library(imgui_test_engine STATIC
+        ${IMGUI_TEST_ENGINE_DIR}/imgui_capture_tool.cpp
+        ${IMGUI_TEST_ENGINE_DIR}/imgui_te_context.cpp
+        ${IMGUI_TEST_ENGINE_DIR}/imgui_te_coroutine.cpp
+        ${IMGUI_TEST_ENGINE_DIR}/imgui_te_engine.cpp
+        ${IMGUI_TEST_ENGINE_DIR}/imgui_te_exporters.cpp
+        ${IMGUI_TEST_ENGINE_DIR}/imgui_te_perftool.cpp
+        ${IMGUI_TEST_ENGINE_DIR}/imgui_te_ui.cpp
+        ${IMGUI_TEST_ENGINE_DIR}/imgui_te_utils.cpp
+    )
+    target_compile_definitions(imgui_test_engine PUBLIC
+        IMGUI_ENABLE_TEST_ENGINE
+        IMGUI_TEST_ENGINE_ENABLE_COROUTINE_STDTHREAD_IMPL=1
+    )
+    target_include_directories(imgui_test_engine PUBLIC
+        ${IMGUI_TEST_ENGINE_DIR}
+        ${IMGUI_TEST_ENGINE_DIR}/thirdparty/Str
+    )
+    # Engine links the WITH-define imgui variant so its hook bodies match the callsites.
+    target_link_libraries(imgui_test_engine PUBLIC imgui_te)
+
+    # Separate test executable: same app+view sources, compiled WITH the define, linked
+    # against imgui_te (not the clean imgui). Uses test_main.cpp (the engine-wired copy of
+    # main.cpp) so production main.cpp stays pristine and free of any test references.
+    set(TEST_TARGET ${TARGET_NAME}-tests)
+    add_executable(${TEST_TARGET} ${APP_FILES} src/app/test/test_main.cpp ${VIEW_FILES} src/app/test/app_tests.cpp)
+    add_dependencies(${TEST_TARGET} generate_icon_header)
+    target_compile_definitions(${TEST_TARGET} PRIVATE IMGUI_ENABLE_TEST_ENGINE)
+    target_include_directories(${TEST_TARGET} PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/app/inc
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/app/src
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/app/test
+        ${CMAKE_CURRENT_SOURCE_DIR}/resources
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/controller/inc
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/view/inc
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/view/src
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/view/src/model
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/view/src/icons
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/view/test
+        ${Vulkan_INCLUDE_DIRS}
+        ${Vulkan_INCLUDE_DIR}
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/model/inc
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/core/inc
+    )
+    target_link_libraries(${TEST_TARGET} PRIVATE
+        imgui_te
+        imgui_test_engine
+        implot
+        glfw
+        ${TARGET_NAME}-controller
+        datamodel
+        ${TARGET_NAME}-core
+        spdlog
+        sqlite3
+        json
+        ImGuiFileDialog
+        "${Vulkan_LIBRARIES}"
+        OpenGL::GL
+    )
+    if(USE_NATIVE_FILE_DIALOG)
+        target_link_libraries(${TEST_TARGET} PRIVATE nfd)
+        target_compile_definitions(${TEST_TARGET} PRIVATE ROCPROFVIS_HAVE_NATIVE_FILE_DIALOG)
+    endif()
+    if(APPLE)
+        target_link_libraries(${TEST_TARGET} PRIVATE "-framework AppKit")
+    endif()
+    add_test(NAME roc-optiq-ui-tests-trace COMMAND roc-optiq-tests --run-tests -f "${CMAKE_SOURCE_DIR}/sample/rocpd-transpose.db")
+    set_tests_properties(roc-optiq-ui-tests-trace PROPERTIES RUN_SERIAL ON)
+    set_tests_properties(roc-optiq-ui-tests-trace PROPERTIES WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}")
+    add_test(NAME roc-optiq-ui-tests-compute COMMAND roc-optiq-tests --run-tests -f "${CMAKE_SOURCE_DIR}/sample/rocprof_compute_23ed6f36.db")
+    set_tests_properties(roc-optiq-ui-tests-compute PROPERTIES RUN_SERIAL ON)
+    set_tests_properties(roc-optiq-ui-tests-compute PROPERTIES WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}")
+endif()
+
 # TEMPORARY (remote/SSH): only link the SSH/crypto stack into the executable
 # when remote is built. Remove this guard when the remote feature graduates.
 if(ROCPROFVIS_ENABLE_REMOTE)
@@ -329,6 +407,31 @@ endif()
 
 if (CRYPTO_BACKEND STREQUAL "OpenSSL")
 target_link_libraries(${TARGET_NAME} PRIVATE libssh2_static OpenSSL::SSL OpenSSL::Crypto)
+endif()
+
+# SecretStore backends: link the OS credential-vault APIs. On Linux libsecret
+# is optional; when absent, SecretStore compiles a stub that reports itself
+# unavailable and the app falls back to prompting for SSH secrets at connect
+# time (never persisting them in plaintext).
+if(WIN32)
+    target_link_libraries(${TARGET_NAME} PRIVATE Advapi32)
+elseif(APPLE)
+    target_link_libraries(${TARGET_NAME} PRIVATE "-framework Security" "-framework CoreFoundation")
+else()
+    find_package(PkgConfig QUIET)
+    if(PkgConfig_FOUND)
+        pkg_check_modules(LIBSECRET QUIET libsecret-1)
+    endif()
+    if(LIBSECRET_FOUND)
+        target_include_directories(${TARGET_NAME} PRIVATE ${LIBSECRET_INCLUDE_DIRS})
+        target_link_libraries(${TARGET_NAME} PRIVATE ${LIBSECRET_LIBRARIES})
+        target_compile_definitions(${TARGET_NAME} PRIVATE ROCPROFVIS_HAVE_LIBSECRET)
+    else()
+        message(WARNING
+            "libsecret-1 not found: SSH passwords will not be persisted on this "
+            "Linux build (users are prompted at connect time). Install "
+            "libsecret-1-dev / libsecret-devel to enable secure credential storage.")
+    endif()
 endif()
 endif(ROCPROFVIS_ENABLE_REMOTE)
 
@@ -681,6 +784,43 @@ endif()
 
 # Include packaging
 include(CPack)
+
+# ── WiX v4 MSI installer (Windows only) ──────────────────────────────────────
+# Builds roc-optiq-<version>-win64.msi from wix/roc-optiq.wxs via the WiX v4
+# CLI.  Prerequisites (one-time per build machine):
+#   dotnet tool install --global wix
+#   wix extension add WixToolset.UI.wixext
+if(WIN32)
+  find_program(WIX_EXECUTABLE wix DOC "WiX v4 CLI (wix.exe)")
+  if(WIX_EXECUTABLE)
+    set(_wix_src  "${CMAKE_SOURCE_DIR}/wix/roc-optiq.wxs")
+    set(_wix_out  "${CMAKE_BINARY_DIR}/roc-optiq-${CPACK_PACKAGE_VERSION}-win64.msi")
+    # MSI only supports 3-part versions; encode Patch*1000+Build into the third component
+    # so upgrade detection works correctly when only the build number changes.
+    math(EXPR _wix_patch "${PROJECT_VERSION_PATCH} * 1000 + ${PROJECT_VERSION_BUILD}")
+    set(_wix_version "${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}.${_wix_patch}")
+    add_custom_target(PACKAGE_WIX
+      COMMAND "${WIX_EXECUTABLE}" build
+        -arch x64
+        -d "Version=${_wix_version}"
+        -d "ExeFile=$<TARGET_FILE:${TARGET_NAME}>"
+        -d "LicenseRtf=${CMAKE_SOURCE_DIR}/Installer/Documentation/License/License_Public.rtf"
+        -d "BannerBmp=${CMAKE_SOURCE_DIR}/Installer/Installation/Files/banner.bmp"
+        -d "DialogBmp=${CMAKE_SOURCE_DIR}/Installer/Installation/Files/main.bmp"
+        -d "IconFile=${CMAKE_SOURCE_DIR}/resources/ROCm_Optiq.ico"
+        -ext WixToolset.UI.wixext
+        -out "${_wix_out}"
+        "${_wix_src}"
+      DEPENDS ${TARGET_NAME}
+      COMMENT "Building WiX MSI installer: ${_wix_out}"
+      VERBATIM
+    )
+  else()
+    message(STATUS "wix.exe not found — PACKAGE_WIX target unavailable. "
+                   "Install WiX v4: dotnet tool install --global wix")
+  endif()
+endif()
+# ─────────────────────────────────────────────────────────────────────────────
 
 # Copy runtime files to target folder
 # Uses a no-op (cmake -E true) when there are no runtime DLLs (e.g. GLFW_LINK_STATIC=ON)

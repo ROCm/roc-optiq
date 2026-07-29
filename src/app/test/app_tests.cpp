@@ -1,0 +1,1437 @@
+// Copyright Advanced Micro Devices, Inc.
+// SPDX-License-Identifier: MIT
+#include "app_tests.h"
+#include "imgui_te_engine.h"
+#include "imgui_te_context.h"
+#include "imgui.h"
+#include "rocprofvis_appwindow.h"
+#include "rocprofvis_project.h"
+#include "rocprofvis_trace_view.h"
+#include "rocprofvis_timeline_selection.h"
+#include "rocprofvis_analysis_view.h"
+#include "rocprofvis_events_view.h"
+#include "rocprofvis_timeline_view.h"
+#include "rocprofvis_flame_track_item.h"
+#include "rocprofvis_measurement_controller.h"
+#include "rocprofvis_minimap.h"
+#include "rocprofvis_event_search.h"
+#include "rocprofvis_summary_view.h"
+#include "icons/rocprovfis_icon_defines.h"
+#include <string>
+#include "rocprofvis_settings_manager.h"
+#include "rocprofvis_utils.h"
+#include "rocprofvis_data_provider.h"
+#include "model/rocprofvis_trace_data_model.h"
+#include "model/rocprofvis_timeline_model.h"
+#include "compute/rocprofvis_compute_view.h"
+#include "compute/rocprofvis_compute_selection.h"
+#include "model/compute/rocprofvis_compute_data_model.h"
+#include "widgets/rocprofvis_tab_container.h"
+#include "rocprofvis_view_test_access.h"
+using namespace RocProfVis::View;
+
+namespace
+{
+// Flame-graph event bars are raw draw_list rects registered with the Test
+// Engine via IMGUI_TEST_ENGINE_ITEM_ADD under the track's "FV" child window.
+// These helpers gather that window's bars and pick reliably clickable targets
+// by width: the widest two avoid 1px slivers a click would miss, and give
+// multi-select tests two distinct targets on the same lane.
+
+// Finds the two widest bars under `flame_window_id`. out_second may stay empty
+// if fewer than two bars exist. Returns the number found (0, 1, or 2).
+int WidestFlameBars(ImGuiTestContext* ctx, unsigned int flame_window_id,
+                    ImGuiTestItemInfo& out_first, ImGuiTestItemInfo& out_second)
+{
+    if(flame_window_id == 0) return 0;
+    ImGuiTestItemList bars;
+    ctx->GatherItems(&bars, ImGuiTestRef(flame_window_id));
+
+    int   found        = 0;
+    float first_width  = -1.0f;
+    float second_width = -1.0f;
+    for(const ImGuiTestItemInfo& bar : bars)
+    {
+        const float width = bar.RectFull.GetWidth();
+        if(width > first_width)
+        {
+            out_second   = out_first;
+            second_width = first_width;
+            out_first    = bar;
+            first_width  = width;
+        }
+        else if(width > second_width)
+        {
+            out_second   = bar;
+            second_width = width;
+        }
+        found = found < 2 ? found + 1 : 2;
+    }
+    return found;
+}
+
+bool FirstEventScreenCenter(ImGuiTestContext* ctx, unsigned int flame_window_id,
+                            ImVec2& out_center)
+{
+    ImGuiTestItemInfo first, second;
+    if(WidestFlameBars(ctx, flame_window_id, first, second) < 1) return false;
+    out_center = first.RectFull.GetCenter();
+    return true;
+}
+
+bool TwoEventScreenCenters(ImGuiTestContext* ctx, unsigned int flame_window_id,
+                           ImVec2& out_first, ImVec2& out_second)
+{
+    ImGuiTestItemInfo first, second;
+    if(WidestFlameBars(ctx, flame_window_id, first, second) < 2) return false;
+    out_first  = first.RectFull.GetCenter();
+    out_second = second.RectFull.GetCenter();
+    return true;
+}
+}  // namespace
+
+void RegisterAppTests(ImGuiTestEngine* e)
+{
+    ImGuiTest* t = nullptr;
+
+    t = IM_REGISTER_TEST(e, "app", "common_file_menu_exists");
+    t->TestFunc = [](ImGuiTestContext* ctx)
+    {
+        ctx->SetRef("Main Window");
+        IM_CHECK(ctx->ItemExists("##MenuBar/File"));
+    
+    };
+
+    t = IM_REGISTER_TEST(e, "app", "common_file_menu_opens");
+    t->TestFunc = [](ImGuiTestContext* ctx)
+    {
+        ctx->SetRef("Main Window");
+        ctx->ItemClick("##MenuBar/File");
+        IM_CHECK(ctx->ItemExists("//Menu_00/Open"));
+        // Close the menu so its popup doesn't intercept clicks in later tests.
+        ctx->PopupCloseAll();
+    };
+    t = IM_REGISTER_TEST(e, "app", "sys_events_view_populates");
+    t->TestFunc = [](ImGuiTestContext* ctx)
+    {
+        AppWindow* app = AppWindow::GetInstance();
+        Project* project = app->GetCurrentProject();
+        IM_CHECK(project != nullptr);
+        if (project == nullptr) return;
+        TraceView* tv = dynamic_cast<TraceView*>(project->GetView().get());
+        if (tv == nullptr)
+        {
+            ctx->LogWarning("SKIP: no trace view loaded (open a system/trace profile to exercise this)");
+            return;
+        }
+        AnalysisView* av = TraceViewTestPeer{*tv}.AnalysisViewPtr();
+        IM_CHECK(av != nullptr);
+        if (av == nullptr) return;
+        EventsView* ev = AnalysisViewTestPeer{*av}.EventsViewPtr();
+        IM_CHECK(ev != nullptr);
+        if (ev == nullptr) return;
+
+        // A prior run may have left an event selected; the clear is dispatched
+        // through EventManager, so yield before asserting the empty baseline.
+        TraceViewTestPeer{*tv}.ClearEventSelection();
+        ctx->Yield(3);
+        IM_CHECK(EventsViewTestPeer{*ev}.EventItemCount() == 0);
+
+        // Timeline events are canvas-drawn (no widget IDs). Click the screen
+        // center of the first rendered event box, captured by the renderer with
+        // the geometry it draws/hit-tests with, so the click is window- and
+        // trace-independent (no hard-coded sidebar/track offsets).
+        TimelineView* tlv = TraceViewTestPeer{*tv}.TimelineViewPtr();
+        IM_CHECK(tlv != nullptr);
+        if (tlv == nullptr) return;
+
+        ctx->Yield(3);
+
+        ImVec2 event_center(0.0f, 0.0f);
+        bool   have_center = FirstEventScreenCenter(
+            ctx, TimelineViewTestPeer{*tlv}.FirstFlameWindowId(), event_center);
+        IM_CHECK(have_center);
+        if (!have_center) return;
+
+        // Selection is deferred a frame, so move/release with the mouse parked.
+        ctx->MouseMoveToPos(event_center);
+        ctx->Yield(2);
+        ctx->MouseDown(0);
+        ctx->Yield(1);
+        ctx->MouseUp(0);
+        ctx->Yield(3);
+
+        IM_CHECK(EventsViewTestPeer{*ev}.EventItemCount() > 0);
+    };
+
+    t = IM_REGISTER_TEST(e, "app", "sys_timeline_zoom_hotkey");
+    t->TestFunc = [](ImGuiTestContext* ctx)
+    {
+        AppWindow* app = AppWindow::GetInstance();
+        Project* project = app->GetCurrentProject();
+        IM_CHECK(project != nullptr);
+        if (project == nullptr) return;
+        TraceView* tv = dynamic_cast<TraceView*>(project->GetView().get());
+        if (tv == nullptr)
+        {
+            ctx->LogWarning("SKIP: no trace view loaded (open a system/trace profile to exercise this)");
+            return;
+        }
+        TimelineView* tlv = TraceViewTestPeer{*tv}.TimelineViewPtr();
+        IM_CHECK(tlv != nullptr);
+        if (tlv == nullptr) return;
+
+        // The W/S zoom hotkeys only fire while the timeline has pseudo-focus,
+        // which a mouse-down inside the graph sets. Park the cursor on the first
+        // rendered event (its captured center is a point known to be in-graph)
+        // and press the mouse to acquire focus.
+        ctx->Yield(3);
+        ImVec2 event_center(0.0f, 0.0f);
+        bool   have_center = FirstEventScreenCenter(
+            ctx, TimelineViewTestPeer{*tlv}.FirstFlameWindowId(), event_center);
+        IM_CHECK(have_center);
+        if (!have_center) return;
+
+        ctx->MouseMoveToPos(event_center);
+        ctx->MouseDown(0);
+        ctx->Yield(1);
+        ctx->MouseUp(0);
+        ctx->Yield(2);
+
+        const float zoom_before = TraceViewTestPeer{*tv}.TimelineViewPtr()->GetViewCoords().z;
+
+        // Zoom in: hotkey is consumed in the timeline's per-frame input handler,
+        // so keep the cursor parked in-graph while pressing.
+        ctx->MouseMoveToPos(event_center);
+        ctx->KeyPress(ImGuiKey_W);
+        ctx->Yield(3);
+        const float zoom_in = TraceViewTestPeer{*tv}.TimelineViewPtr()->GetViewCoords().z;
+        IM_CHECK(zoom_in > zoom_before);
+
+        // Zoom out returns toward the starting zoom.
+        ctx->MouseMoveToPos(event_center);
+        ctx->KeyPress(ImGuiKey_S);
+        ctx->Yield(3);
+        const float zoom_out = TraceViewTestPeer{*tv}.TimelineViewPtr()->GetViewCoords().z;
+        IM_CHECK(zoom_out < zoom_in);
+    };
+
+    t = IM_REGISTER_TEST(e, "app", "sys_bookmark_save_restore_hotkey");
+    t->TestFunc = [](ImGuiTestContext* ctx)
+    {
+        AppWindow* app = AppWindow::GetInstance();
+        Project* project = app->GetCurrentProject();
+        IM_CHECK(project != nullptr);
+        if (project == nullptr) return;
+        TraceView* tv = dynamic_cast<TraceView*>(project->GetView().get());
+        if (tv == nullptr)
+        {
+            ctx->LogWarning("SKIP: no trace view loaded (open a system/trace profile to exercise this)");
+            return;
+        }
+        TimelineView* tlv = TraceViewTestPeer{*tv}.TimelineViewPtr();
+        IM_CHECK(tlv != nullptr);
+        if (tlv == nullptr) return;
+
+        // Ctrl+1 always writes bookmark slot 1, and m_bookmarks is a slot-keyed
+        // map, so a re-save overwrites rather than grows it. Clear first so the
+        // 0->1 assertion holds on every invocation in a persistent process (the
+        // interactive harness reuses one process; headless is fresh each run).
+        TraceViewTestPeer{*tv}.ClearBookmarks();
+        ctx->Yield(1);
+        IM_CHECK(TraceViewTestPeer{*tv}.BookmarkCount() == 0);
+
+        // HandleHotKeys is gated on IsWindowFocused(RootAndChildWindows) for
+        // "Main Window". Headless that focus is implicit, but interactively the
+        // Test Engine window holds it and the chord is dropped. Focus explicitly,
+        // then click an event to land the cursor in-graph.
+        ctx->Yield(3);
+        ImVec2 event_center(0.0f, 0.0f);
+        bool   have_center = FirstEventScreenCenter(
+            ctx, TimelineViewTestPeer{*tlv}.FirstFlameWindowId(), event_center);
+        IM_CHECK(have_center);
+        if (!have_center) return;
+
+        ctx->WindowFocus("Main Window");
+        ctx->MouseMoveToPos(event_center);
+        ctx->MouseClick(0);
+        ctx->Yield(2);
+
+        // Save the current view, then record the coords the bookmark captured.
+        ctx->KeyPress(ImGuiMod_Ctrl | ImGuiKey_1);
+        ctx->Yield(3);
+        IM_CHECK(TraceViewTestPeer{*tv}.BookmarkCount() == 1);
+        const ViewCoords saved = TraceViewTestPeer{*tv}.TimelineViewPtr()->GetViewCoords();
+        const double saved_span = saved.v_max_x - saved.v_min_x;
+        IM_CHECK(saved_span > 0.0);
+        if (saved_span <= 0.0) return;
+
+        // Zoom in so the view range changes away from the saved one.
+        ctx->MouseMoveToPos(event_center);
+        ctx->KeyPress(ImGuiKey_W);
+        ctx->Yield(3);
+        const ViewCoords moved = TraceViewTestPeer{*tv}.TimelineViewPtr()->GetViewCoords();
+        IM_CHECK((moved.v_max_x - moved.v_min_x) < saved_span);
+
+        // Restore: bare "1" moves the view back to the saved range. Restore
+        // reconstructs zoom/offset from the saved span through a float, so assert
+        // within a small relative tolerance rather than exact equality.
+        ctx->MouseMoveToPos(event_center);
+        ctx->KeyPress(ImGuiKey_1);
+        ctx->Yield(3);
+        const ViewCoords restored = TraceViewTestPeer{*tv}.TimelineViewPtr()->GetViewCoords();
+        const double tol = saved_span * 0.01;
+        IM_CHECK(fabs(restored.v_min_x - saved.v_min_x) < tol);
+        IM_CHECK(fabs(restored.v_max_x - saved.v_max_x) < tol);
+    };
+
+    t = IM_REGISTER_TEST(e, "app", "sys_event_multi_select");
+    t->TestFunc = [](ImGuiTestContext* ctx)
+    {
+        AppWindow* app = AppWindow::GetInstance();
+        Project* project = app->GetCurrentProject();
+        IM_CHECK(project != nullptr);
+        if (project == nullptr) return;
+        TraceView* tv = dynamic_cast<TraceView*>(project->GetView().get());
+        if (tv == nullptr)
+        {
+            ctx->LogWarning("SKIP: no trace view loaded (open a system/trace profile to exercise this)");
+            return;
+        }
+        TimelineView* tlv = TraceViewTestPeer{*tv}.TimelineViewPtr();
+        IM_CHECK(tlv != nullptr);
+        if (tlv == nullptr) return;
+        std::shared_ptr<TimelineSelection> sel = tv->GetTimelineSelection();
+        IM_CHECK(sel != nullptr);
+        if (sel == nullptr) return;
+
+        // Start from a clean selection.
+        TraceViewTestPeer{*tv}.ClearEventSelection();
+        ctx->Yield(3);
+        std::vector<uint64_t> ids;
+        sel->GetSelectedEvents(ids);
+        IM_CHECK(ids.empty());
+
+        // Need two distinct, clickable events in one flame track.
+        ctx->Yield(3);
+        ImVec2 first(0.0f, 0.0f), second(0.0f, 0.0f);
+        bool have_two = TwoEventScreenCenters(
+            ctx, TimelineViewTestPeer{*tlv}.FirstFlameWindowId(), first, second);
+        if (!have_two)
+        {
+            ctx->LogWarning("SKIP: track lacks two distinct events to multi-select");
+            return;
+        }
+
+        // Plain click selects the first event.
+        ctx->MouseMoveToPos(first);
+        ctx->MouseClick(0);
+        ctx->Yield(3);
+        ids.clear();
+        sel->GetSelectedEvents(ids);
+        IM_CHECK(ids.size() == 1);
+
+        // Ctrl+click the second event adds to the selection (multi-select)
+        // rather than replacing it. KeyDown holds the modifier the flame track
+        // reads via HotkeyManager during click handling.
+        ctx->KeyDown(ImGuiMod_Ctrl);
+        ctx->MouseMoveToPos(second);
+        ctx->MouseClick(0);
+        ctx->Yield(3);
+        ctx->KeyUp(ImGuiMod_Ctrl);
+        ctx->Yield(2);
+
+        ids.clear();
+        sel->GetSelectedEvents(ids);
+        IM_CHECK(ids.size() == 2);
+
+        // Leave a clean selection for following tests.
+        TraceViewTestPeer{*tv}.ClearEventSelection();
+        ctx->Yield(2);
+    };
+
+    t = IM_REGISTER_TEST(e, "app", "sys_minimap_toggle_drives_click");
+    t->TestFunc = [](ImGuiTestContext* ctx)
+    {
+        AppWindow* app = AppWindow::GetInstance();
+        Project* project = app->GetCurrentProject();
+        IM_CHECK(project != nullptr);
+        if (project == nullptr) return;
+        TraceView* tv = dynamic_cast<TraceView*>(project->GetView().get());
+        if (tv == nullptr)
+        {
+            ctx->LogWarning("SKIP: no trace view loaded (open a system/trace profile to exercise this)");
+            return;
+        }
+        Minimap* mm = TraceViewTestPeer{*tv}.MinimapPtr();
+        IM_CHECK(mm != nullptr);
+        if (mm == nullptr) return;
+
+        IM_CHECK(MinimapTestPeer{*mm}.ShowEvents() == true);
+        // Counter overlay state before touching events, to confirm the two
+        // layers toggle independently (checklist: "Layers independent").
+        const bool counters_before = MinimapTestPeer{*mm}.ShowCounters();
+
+        // The ICON_COMPASS toolbar button and the ##events checkbox are both real
+        // ImGui widgets nested under unknown layout child-windows. The "**/"
+        // wildcard ref locates them past those intermediates by trailing label.
+        // The Minimap is a plain Begin("Minimap") window, not a popup, so ref it
+        // by title rather than $FOCUSED (which the window does not reliably own).
+        ctx->Yield(3);
+        ctx->ItemClick("//Main Window/**/\uF273");  // \uF273 = ICON_COMPASS
+        ctx->Yield(3);
+
+        ctx->SetRef("//Minimap");
+        IM_CHECK(ctx->ItemExists("**/##events"));
+        ctx->ItemClick("**/##events");
+        ctx->Yield(2);
+        IM_CHECK(MinimapTestPeer{*mm}.ShowEvents() == false);
+        // Toggling events must not disturb the counter overlay.
+        IM_CHECK(MinimapTestPeer{*mm}.ShowCounters() == counters_before);
+
+        // Toggle back to confirm the click is bidirectional.
+        ctx->ItemClick("**/##events");
+        ctx->Yield(2);
+        IM_CHECK(MinimapTestPeer{*mm}.ShowEvents() == true);
+
+        // Close the Minimap popup so it doesn't cover later tests' widgets.
+        ctx->ItemClick("//Main Window/**/\uF273");  // \uF273 = ICON_COMPASS
+        ctx->Yield(2);
+    };
+
+    t = IM_REGISTER_TEST(e, "app", "compute_view_tab_switch");
+    t->TestFunc = [](ImGuiTestContext* ctx)
+    {
+        AppWindow* app = AppWindow::GetInstance();
+        Project* project = app->GetCurrentProject();
+        IM_CHECK(project != nullptr);
+        if (project == nullptr) return;
+        // Needs a compute profile loaded; with a trace this cast is null and the
+        // test logs a skip (Test Engine has no skip status, so a bare return
+        // would read as a green assertion).
+        ComputeView* cv = dynamic_cast<ComputeView*>(project->GetView().get());
+        if (cv == nullptr)
+        {
+            ctx->LogWarning("SKIP: no compute view loaded (open a compute profile to exercise this)");
+            return;
+        }
+        TabContainer* tc = ComputeViewTestPeer{*cv}.TabContainerPtr();
+        if (tc == nullptr)
+        {
+            ctx->LogWarning("SKIP: compute view has no tab container");
+            return;
+        }
+
+        IM_CHECK(TabContainerTestPeer{*tc}.TabCount() >= 2);
+        if (TabContainerTestPeer{*tc}.TabCount() < 2) return;
+
+        ctx->Yield(3);
+        const int start_idx = TabContainerTestPeer{*tc}.ActiveTabIndex();
+        IM_CHECK(start_idx >= 0);
+
+        // Each tab is submitted as BeginTabItem(label) under PushID(id), nested in
+        // unknown layout child-windows. The "**/" wildcard locates the tab header
+        // by its trailing label past those intermediates and the id seed.
+        const int target_idx = (start_idx == 0) ? 1 : 0;
+        const std::vector<const TabItem*> tabs = tc->GetTabs();
+        IM_CHECK(target_idx < static_cast<int>(tabs.size()));
+        if (target_idx >= static_cast<int>(tabs.size())) return;
+        const std::string target_label = tabs[target_idx]->m_label;
+
+        ctx->ItemClick(("//Main Window/**/" + target_label).c_str());
+        ctx->Yield(3);
+
+        IM_CHECK(TabContainerTestPeer{*tc}.ActiveTabIndex() == target_idx);
+    };
+
+    t = IM_REGISTER_TEST(e, "app", "compute_workload_auto_selected");
+    t->TestFunc = [](ImGuiTestContext* ctx)
+    {
+        AppWindow* app = AppWindow::GetInstance();
+        Project* project = app->GetCurrentProject();
+        IM_CHECK(project != nullptr);
+        if (project == nullptr) return;
+        ComputeView* cv = dynamic_cast<ComputeView*>(project->GetView().get());
+        if (cv == nullptr)
+        {
+            ctx->LogWarning("SKIP: no compute view loaded (open a compute profile to exercise this)");
+            return;
+        }
+        ComputeSelection* sel = ComputeViewTestPeer{*cv}.ComputeSelectionPtr();
+        IM_CHECK(sel != nullptr);
+        if (sel == nullptr) return;
+
+        // Loading a compute profile auto-selects the first workload, which
+        // cascades to selecting that workload's first kernel. Both selection
+        // ids must therefore be valid (not the INVALID sentinel) once loaded.
+        ctx->Yield(3);
+        IM_CHECK(sel->GetSelectedWorkload() != ComputeSelection::INVALID_SELECTION_ID);
+        IM_CHECK(sel->GetSelectedKernel() != ComputeSelection::INVALID_SELECTION_ID);
+    };
+
+    t = IM_REGISTER_TEST(e, "app", "sys_timeline_pan_hotkey");
+    t->TestFunc = [](ImGuiTestContext* ctx)
+    {
+        AppWindow* app = AppWindow::GetInstance();
+        Project* project = app->GetCurrentProject();
+        IM_CHECK(project != nullptr);
+        if (project == nullptr) return;
+        TraceView* tv = dynamic_cast<TraceView*>(project->GetView().get());
+        if (tv == nullptr)
+        {
+            ctx->LogWarning("SKIP: no trace view loaded (open a system/trace profile to exercise this)");
+            return;
+        }
+        TimelineView* tlv = TraceViewTestPeer{*tv}.TimelineViewPtr();
+        IM_CHECK(tlv != nullptr);
+        if (tlv == nullptr) return;
+
+        // Pan (A/D) shares the timeline's m_pseudo_focus gate, set by a mouse-down
+        // in the graph; park on the first event to acquire it.
+        ctx->Yield(3);
+        ImVec2 event_center(0.0f, 0.0f);
+        bool   have_center = FirstEventScreenCenter(
+            ctx, TimelineViewTestPeer{*tlv}.FirstFlameWindowId(), event_center);
+        IM_CHECK(have_center);
+        if (!have_center) return;
+
+        ctx->MouseMoveToPos(event_center);
+        ctx->MouseDown(0);
+        ctx->Yield(1);
+        ctx->MouseUp(0);
+        ctx->Yield(2);
+
+        // At zoom 1 the view spans the full range, so pan is clamped with no
+        // headroom; zoom in first to make room to move.
+        ctx->MouseMoveToPos(event_center);
+        ctx->KeyPress(ImGuiKey_W);
+        ctx->KeyPress(ImGuiKey_W);
+        ctx->Yield(3);
+
+        // Pan left first so the subsequent D pan always has right-headroom
+        // regardless of where the zoom centered the view.
+        ctx->MouseMoveToPos(event_center);
+        ctx->KeyPress(ImGuiKey_A);
+        ctx->KeyPress(ImGuiKey_A);
+        ctx->Yield(3);
+
+        const double v_min_before = tlv->GetViewCoords().v_min_x;
+
+        ctx->MouseMoveToPos(event_center);
+        ctx->KeyPress(ImGuiKey_D);
+        ctx->Yield(3);
+        const double v_min_right = tlv->GetViewCoords().v_min_x;
+        IM_CHECK(v_min_right > v_min_before);
+
+        ctx->MouseMoveToPos(event_center);
+        ctx->KeyPress(ImGuiKey_A);
+        ctx->Yield(3);
+        const double v_min_left = tlv->GetViewCoords().v_min_x;
+        IM_CHECK(v_min_left < v_min_right);
+    };
+
+    t = IM_REGISTER_TEST(e, "app", "sys_timeline_vscroll");
+    t->TestFunc = [](ImGuiTestContext* ctx)
+    {
+        AppWindow* app = AppWindow::GetInstance();
+        Project* project = app->GetCurrentProject();
+        IM_CHECK(project != nullptr);
+        if (project == nullptr) return;
+        TraceView* tv = dynamic_cast<TraceView*>(project->GetView().get());
+        if (tv == nullptr)
+        {
+            ctx->LogWarning("SKIP: no trace view loaded (open a system/trace profile to exercise this)");
+            return;
+        }
+        TimelineView* tlv = TraceViewTestPeer{*tv}.TimelineViewPtr();
+        IM_CHECK(tlv != nullptr);
+        if (tlv == nullptr) return;
+
+        ctx->Yield(3);
+        ImVec2 event_center(0.0f, 0.0f);
+        bool   have_center = FirstEventScreenCenter(
+            ctx, TimelineViewTestPeer{*tlv}.FirstFlameWindowId(), event_center);
+        IM_CHECK(have_center);
+        if (!have_center) return;
+
+        ctx->MouseMoveToPos(event_center);
+        ctx->MouseDown(0);
+        ctx->Yield(1);
+        ctx->MouseUp(0);
+        ctx->Yield(2);
+
+        // Scroll step is a fraction of the max scroll offset, which is 0 when all
+        // tracks fit the viewport; Up/Down then no-op and the assertion would
+        // false-fail. Skip rather than assert on a trace with no headroom.
+        if (TimelineViewTestPeer{*tlv}.MaxYScroll() <= 0.0f)
+        {
+            ctx->LogWarning("SKIP: all tracks fit the viewport, no vertical scroll headroom");
+            return;
+        }
+
+        const double y_before = tlv->GetViewCoords().y;
+
+        ctx->MouseMoveToPos(event_center);
+        ctx->KeyPress(ImGuiKey_DownArrow);
+        ctx->Yield(3);
+        const double y_down = tlv->GetViewCoords().y;
+
+        ctx->MouseMoveToPos(event_center);
+        ctx->KeyPress(ImGuiKey_UpArrow);
+        ctx->Yield(3);
+        const double y_up = tlv->GetViewCoords().y;
+
+        IM_CHECK(y_down > y_before);
+        IM_CHECK(y_up < y_down);
+    };
+
+    t = IM_REGISTER_TEST(e, "app", "sys_reset_view_button");
+    t->TestFunc = [](ImGuiTestContext* ctx)
+    {
+        AppWindow* app = AppWindow::GetInstance();
+        Project* project = app->GetCurrentProject();
+        IM_CHECK(project != nullptr);
+        if (project == nullptr) return;
+        TraceView* tv = dynamic_cast<TraceView*>(project->GetView().get());
+        if (tv == nullptr)
+        {
+            ctx->LogWarning("SKIP: no trace view loaded (open a system/trace profile to exercise this)");
+            return;
+        }
+        TimelineView* tlv = TraceViewTestPeer{*tv}.TimelineViewPtr();
+        IM_CHECK(tlv != nullptr);
+        if (tlv == nullptr) return;
+
+        ctx->Yield(3);
+        ImVec2 event_center(0.0f, 0.0f);
+        bool   have_center = FirstEventScreenCenter(
+            ctx, TimelineViewTestPeer{*tlv}.FirstFlameWindowId(), event_center);
+        IM_CHECK(have_center);
+        if (!have_center) return;
+
+        // Dirty the view via zoom alone; vertical scroll can no-op when all
+        // tracks fit the viewport, so it is not a reliable way off default.
+        ctx->MouseMoveToPos(event_center);
+        ctx->MouseDown(0);
+        ctx->Yield(1);
+        ctx->MouseUp(0);
+        ctx->Yield(2);
+        ctx->MouseMoveToPos(event_center);
+        ctx->KeyPress(ImGuiKey_W);
+        ctx->KeyPress(ImGuiKey_W);
+        ctx->Yield(3);
+
+        const float zoom_dirty = tlv->GetViewCoords().z;
+        IM_CHECK(zoom_dirty > 1.0f);
+
+        // "Reset View" lives inside BeginChild("Toolbar") (no stable top-level
+        // path), so reach it with a recursive wildcard search.
+        ctx->SetRef("Main Window");
+        ctx->ItemClick("**/Reset View");
+        ctx->Yield(3);
+
+        // Reset restores the full range (zoom ~1.0), not merely a smaller zoom;
+        // pin to the default so a partial reset (e.g. still 2x) fails.
+        const float  zoom_after = tlv->GetViewCoords().z;
+        const double y_after    = tlv->GetViewCoords().y;
+        IM_CHECK(zoom_after <= 1.0f + 0.01f);
+        IM_CHECK(y_after == 0.0);
+    };
+
+    t = IM_REGISTER_TEST(e, "app", "sys_timeline_compact_mode_toggle");
+    t->TestFunc = [](ImGuiTestContext* ctx)
+    {
+        AppWindow* app = AppWindow::GetInstance();
+        Project* project = app->GetCurrentProject();
+        IM_CHECK(project != nullptr);
+        if (project == nullptr) return;
+        TraceView* tv = dynamic_cast<TraceView*>(project->GetView().get());
+        if (tv == nullptr)
+        {
+            ctx->LogWarning("SKIP: no trace view loaded (open a system/trace profile to exercise this)");
+            return;
+        }
+        TimelineView* tlv = TraceViewTestPeer{*tv}.TimelineViewPtr();
+        IM_CHECK(tlv != nullptr);
+        if (tlv == nullptr) return;
+
+        ctx->Yield(3);
+        FlameTrackItem* flame = TimelineViewTestPeer{*tlv}.FirstFlameTrack();
+        IM_CHECK(flame != nullptr);
+        if (flame == nullptr) return;
+
+        // Compact Mode is a per-track gear option whose checkbox lives in a popup
+        // with no stable widget id, so drive it through the same side-effecting
+        // path the checkbox uses. Turning it on shrinks the per-event level
+        // height; assert both the flag and the height follow, then restore.
+        const bool  orig_compact = flame->IsCompactMode();
+        const float orig_height  = FlameTrackItemTestPeer{*flame}.LevelHeight();
+
+        // Capture observations, restore, THEN assert: IM_CHECK early-returns on
+        // failure, so asserting before the restore would leak the flipped state
+        // (per-track flag, shared across the process) into later tests.
+        FlameTrackItemTestPeer{*flame}.SetCompactMode(!orig_compact);
+        ctx->Yield(2);
+        const bool  on_compact = flame->IsCompactMode();
+        const float on_height  = FlameTrackItemTestPeer{*flame}.LevelHeight();
+
+        FlameTrackItemTestPeer{*flame}.SetCompactMode(orig_compact);
+        ctx->Yield(2);
+        const bool  back_compact = flame->IsCompactMode();
+        const float back_height  = FlameTrackItemTestPeer{*flame}.LevelHeight();
+
+        IM_CHECK(on_compact != orig_compact);
+        IM_CHECK(on_height != orig_height);
+        IM_CHECK(back_compact == orig_compact);
+        IM_CHECK(back_height == orig_height);
+    };
+
+    t = IM_REGISTER_TEST(e, "app", "sys_timeline_mark_time_range");
+    t->TestFunc = [](ImGuiTestContext* ctx)
+    {
+        AppWindow* app = AppWindow::GetInstance();
+        Project* project = app->GetCurrentProject();
+        IM_CHECK(project != nullptr);
+        if (project == nullptr) return;
+        TraceView* tv = dynamic_cast<TraceView*>(project->GetView().get());
+        if (tv == nullptr)
+        {
+            ctx->LogWarning("SKIP: no trace view loaded (open a system/trace profile to exercise this)");
+            return;
+        }
+        TimelineView* tlv = TraceViewTestPeer{*tv}.TimelineViewPtr();
+        IM_CHECK(tlv != nullptr);
+        if (tlv == nullptr) return;
+        std::shared_ptr<TimelineSelection> sel = tv->GetTimelineSelection();
+        IM_CHECK(sel != nullptr);
+        if (sel == nullptr) return;
+
+        // Start from no event selection and no marked range.
+        TraceViewTestPeer{*tv}.ClearEventSelection();
+        sel->ClearTimeRange();
+        ctx->Yield(3);
+        IM_CHECK(!sel->HasValidTimeRangeSelection());
+
+        // The M (Toggle Mark) hotkey builds a time-range from the selected
+        // events, so select one first. The hotkey shares the timeline's
+        // pseudo-focus gate (set by a mouse-down in the graph), same as W/S/A/D.
+        ImVec2 event_center(0.0f, 0.0f);
+        bool   have_center = FirstEventScreenCenter(
+            ctx, TimelineViewTestPeer{*tlv}.FirstFlameWindowId(), event_center);
+        IM_CHECK(have_center);
+        if (!have_center) return;
+
+        ctx->MouseMoveToPos(event_center);
+        ctx->MouseClick(0);
+        ctx->Yield(3);
+        std::vector<uint64_t> ids;
+        sel->GetSelectedEvents(ids);
+        IM_CHECK(ids.size() >= 1);
+
+        // M marks the selected events' time range.
+        ctx->MouseMoveToPos(event_center);
+        ctx->KeyPress(ImGuiKey_M);
+        ctx->Yield(3);
+        IM_CHECK(sel->HasValidTimeRangeSelection());
+
+        // M again clears the marked range (toggle).
+        ctx->MouseMoveToPos(event_center);
+        ctx->KeyPress(ImGuiKey_M);
+        ctx->Yield(3);
+        IM_CHECK(!sel->HasValidTimeRangeSelection());
+
+        // Leave a clean selection state for following tests.
+        TraceViewTestPeer{*tv}.ClearEventSelection();
+        ctx->Yield(2);
+    };
+
+    t = IM_REGISTER_TEST(e, "app", "sys_timeline_event_color_mode");
+    t->TestFunc = [](ImGuiTestContext* ctx)
+    {
+        AppWindow* app = AppWindow::GetInstance();
+        Project* project = app->GetCurrentProject();
+        IM_CHECK(project != nullptr);
+        if (project == nullptr) return;
+        TraceView* tv = dynamic_cast<TraceView*>(project->GetView().get());
+        if (tv == nullptr)
+        {
+            ctx->LogWarning("SKIP: no trace view loaded (open a system/trace profile to exercise this)");
+            return;
+        }
+        TimelineView* tlv = TraceViewTestPeer{*tv}.TimelineViewPtr();
+        IM_CHECK(tlv != nullptr);
+        if (tlv == nullptr) return;
+
+        ctx->Yield(3);
+        FlameTrackItem* flame = TimelineViewTestPeer{*tlv}.FirstFlameTrack();
+        IM_CHECK(flame != nullptr);
+        if (flame == nullptr) return;
+
+        // "Color by Name / Time Level / No Color" are gear-menu radio buttons in
+        // a popup with no stable path; each sets the track's event color mode.
+        // Drive that field directly and assert it changes, then restore.
+        const EventTrackOptions::EventColorMode orig =
+            FlameTrackItemTestPeer{*flame}.GetEventColorMode();
+        const EventTrackOptions::EventColorMode other =
+            (orig == EventTrackOptions::EventColorMode::kByTimeLevel)
+                ? EventTrackOptions::EventColorMode::kByEventName
+                : EventTrackOptions::EventColorMode::kByTimeLevel;
+
+        // Capture, restore, THEN assert: IM_CHECK early-returns on failure, so
+        // asserting before the restore would leak the changed color mode (shared
+        // per-track state) into later tests in the same process.
+        FlameTrackItemTestPeer{*flame}.SetEventColorMode(other);
+        ctx->Yield(2);
+        const EventTrackOptions::EventColorMode changed =
+            FlameTrackItemTestPeer{*flame}.GetEventColorMode();
+
+        FlameTrackItemTestPeer{*flame}.SetEventColorMode(orig);
+        ctx->Yield(2);
+        const EventTrackOptions::EventColorMode restored =
+            FlameTrackItemTestPeer{*flame}.GetEventColorMode();
+
+        IM_CHECK(changed == other);
+        IM_CHECK(changed != orig);
+        IM_CHECK(restored == orig);
+    };
+
+    t = IM_REGISTER_TEST(e, "app", "common_settings_theme_toggle");
+    t->TestFunc = [](ImGuiTestContext* ctx)
+    {
+        SettingsManager& sm = SettingsManager::GetInstance();
+
+        // Flip the theme the same way the Preferences combo does: mutate the live
+        // user settings then ApplyUserSettings(old, save_json=false). The false
+        // keeps it off the on-disk settings json. The applied palette (GetColor)
+        // must follow, not just the bool, so assert a theme color changes too.
+        // Restore at the end so later tests / a 2nd run see the original theme.
+        const bool   orig_dark = sm.GetUserSettings().display_settings.use_dark_mode;
+        const ImU32  orig_bg   = sm.GetColor(Colors::kBgMain);
+
+        // Capture, restore, THEN assert: IM_CHECK early-returns on failure, and
+        // SettingsManager is a process-global singleton, so asserting before the
+        // restore would leak a flipped theme into every later test and the next run.
+        UserSettings before = sm.GetUserSettings();
+        sm.GetUserSettings().display_settings.use_dark_mode = !orig_dark;
+        sm.ApplyUserSettings(before, false);
+        ctx->Yield(2);
+        const bool  flipped_dark = sm.GetUserSettings().display_settings.use_dark_mode;
+        const ImU32 flipped_bg   = sm.GetColor(Colors::kBgMain);
+
+        UserSettings flipped = sm.GetUserSettings();
+        sm.GetUserSettings().display_settings.use_dark_mode = orig_dark;
+        sm.ApplyUserSettings(flipped, false);
+        ctx->Yield(2);
+        const bool  back_dark = sm.GetUserSettings().display_settings.use_dark_mode;
+        const ImU32 back_bg   = sm.GetColor(Colors::kBgMain);
+
+        IM_CHECK(flipped_dark != orig_dark);
+        IM_CHECK(flipped_bg != orig_bg);
+        IM_CHECK(back_dark == orig_dark);
+        IM_CHECK(back_bg == orig_bg);
+    };
+
+    t = IM_REGISTER_TEST(e, "app", "common_settings_time_unit_change");
+    t->TestFunc = [](ImGuiTestContext* ctx)
+    {
+        SettingsManager& sm = SettingsManager::GetInstance();
+
+        // Change the timeline time unit via the same path the Units combo uses,
+        // then restore the original so later tests / a 2nd run see the default.
+        const TimeFormat orig = sm.GetUserSettings().unit_settings.time_format;
+        const TimeFormat other =
+            (orig == TimeFormat::kNanoseconds) ? TimeFormat::kSeconds : TimeFormat::kNanoseconds;
+
+        // Capture, restore, THEN assert: IM_CHECK early-returns on failure, and
+        // SettingsManager is a process-global singleton, so asserting before the
+        // restore would leak the changed time unit into later tests / the next run.
+        UserSettings before = sm.GetUserSettings();
+        sm.GetUserSettings().unit_settings.time_format = other;
+        sm.ApplyUserSettings(before, false);
+        ctx->Yield(2);
+        const TimeFormat changed_fmt = sm.GetUserSettings().unit_settings.time_format;
+
+        UserSettings changed = sm.GetUserSettings();
+        sm.GetUserSettings().unit_settings.time_format = orig;
+        sm.ApplyUserSettings(changed, false);
+        ctx->Yield(2);
+        const TimeFormat back_fmt = sm.GetUserSettings().unit_settings.time_format;
+
+        IM_CHECK(changed_fmt == other);
+        IM_CHECK(back_fmt == orig);
+    };
+
+    t = IM_REGISTER_TEST(e, "app", "sys_histogram_normalization_toggle");
+    t->TestFunc = [](ImGuiTestContext* ctx)
+    {
+        AppWindow* app = AppWindow::GetInstance();
+        Project* project = app->GetCurrentProject();
+        IM_CHECK(project != nullptr);
+        if (project == nullptr) return;
+        TraceView* tv = dynamic_cast<TraceView*>(project->GetView().get());
+        if (tv == nullptr)
+        {
+            ctx->LogWarning("SKIP: no trace view loaded (open a system/trace profile to exercise this)");
+            return;
+        }
+        TimelineModel& tl = tv->GetDataProvider()->DataModel().GetTimeline();
+
+        // The All Tracks / Visible Tracks normalization toggle lives in the
+        // histogram right-click popup (no stable path), so drive it through the
+        // same model calls the menu items make. Assert the flag flips, then
+        // restore the original so later tests / a 2nd run see the default.
+        const bool orig_global = tl.IsNormalizeGlobal();
+
+        // Capture, restore, THEN assert: IM_CHECK early-returns on failure, and the
+        // TimelineModel is shared across every timeline test in the process, so
+        // asserting before the restore would leak the flipped mode into later tests.
+        tl.ToggleNormalization();
+        tl.UpdateHistogram({});
+        ctx->Yield(2);
+        const bool toggled_global = tl.IsNormalizeGlobal();
+
+        tl.ToggleNormalization();
+        tl.UpdateHistogram({});
+        ctx->Yield(2);
+        const bool back_global = tl.IsNormalizeGlobal();
+
+        IM_CHECK(toggled_global != orig_global);
+        IM_CHECK(back_global == orig_global);
+    };
+
+    t = IM_REGISTER_TEST(e, "app", "compute_kernel_select_changes");
+    t->TestFunc = [](ImGuiTestContext* ctx)
+    {
+        AppWindow* app = AppWindow::GetInstance();
+        Project* project = app->GetCurrentProject();
+        IM_CHECK(project != nullptr);
+        if (project == nullptr) return;
+        ComputeView* cv = dynamic_cast<ComputeView*>(project->GetView().get());
+        if (cv == nullptr)
+        {
+            ctx->LogWarning("SKIP: no compute view loaded (open a compute profile to exercise this)");
+            return;
+        }
+        ComputeSelection* sel = ComputeViewTestPeer{*cv}.ComputeSelectionPtr();
+        IM_CHECK(sel != nullptr);
+        if (sel == nullptr) return;
+
+        ctx->Yield(3);
+        const uint32_t workload = sel->GetSelectedWorkload();
+        IM_CHECK(workload != ComputeSelection::INVALID_SELECTION_ID);
+        const uint32_t auto_kernel = sel->GetSelectedKernel();
+        IM_CHECK(auto_kernel != ComputeSelection::INVALID_SELECTION_ID);
+
+        std::vector<const KernelInfo*> kernels =
+            cv->GetDataProvider()->ComputeModel().GetKernelInfoList(workload);
+        if (kernels.size() < 2)
+        {
+            ctx->LogWarning("SKIP: workload has fewer than two kernels to switch between");
+            return;
+        }
+
+        uint32_t other = ComputeSelection::INVALID_SELECTION_ID;
+        for (const KernelInfo* k : kernels)
+        {
+            if (k != nullptr && k->id != auto_kernel) { other = k->id; break; }
+        }
+        IM_CHECK(other != ComputeSelection::INVALID_SELECTION_ID);
+
+        // Capture, restore, THEN assert: IM_CHECK early-returns on failure, and
+        // ComputeSelection is shared across compute tests, so asserting before the
+        // restore would leak the non-auto kernel into later tests / the next run.
+        sel->SelectKernel(other);
+        ctx->Yield(3);
+        const uint32_t selected = sel->GetSelectedKernel();
+
+        sel->SelectKernel(auto_kernel);
+        ctx->Yield(2);
+
+        IM_CHECK(selected == other);
+        IM_CHECK(selected != auto_kernel);
+    };
+
+    t = IM_REGISTER_TEST(e, "app", "sys_event_search_finds_results");
+    t->TestFunc = [](ImGuiTestContext* ctx)
+    {
+        AppWindow* app = AppWindow::GetInstance();
+        Project* project = app->GetCurrentProject();
+        IM_CHECK(project != nullptr);
+        if (project == nullptr) return;
+        TraceView* tv = dynamic_cast<TraceView*>(project->GetView().get());
+        if (tv == nullptr)
+        {
+            ctx->LogWarning("SKIP: no trace view loaded (open a system/trace profile to exercise this)");
+            return;
+        }
+        EventSearch* es = TraceViewTestPeer{*tv}.EventSearchPtr();
+        IM_CHECK(es != nullptr);
+        if (es == nullptr) return;
+
+        // Clear so the searched flag starts from a known baseline (the harness
+        // reuses one process interactively).
+        es->Clear();
+        ctx->Yield(2);
+        IM_CHECK(es->Searched() == false);
+
+        // hipLaunchKernel is a launch region present in the trace; write it into
+        // the production search buffer and run the search the same way the input
+        // field's submit does.
+        char* buf = es->TextInput();
+        IM_CHECK(buf != nullptr);
+        if (buf == nullptr) return;
+        snprintf(buf, es->TextInputLimit(), "%s", "hipLaunchKernel");
+        es->Search();
+        ctx->Yield(2);
+        IM_CHECK(es->Searched() == true);
+
+        // The fetch is deferred; let it drain (Update re-runs Search when the
+        // request completes) before reading the result count.
+        for (int i = 0; i < 60 && EventSearchTestPeer{*es}.RequestPending(); i++) ctx->Yield(2);
+        ctx->Yield(5);
+        IM_CHECK(EventSearchTestPeer{*es}.ResultCount() > 0);
+
+        es->Clear();
+        ctx->Yield(2);
+    };
+
+    t = IM_REGISTER_TEST(e, "app", "sys_summary_pie_kernel_select");
+    t->TestFunc = [](ImGuiTestContext* ctx)
+    {
+        AppWindow* app = AppWindow::GetInstance();
+        Project* project = app->GetCurrentProject();
+        IM_CHECK(project != nullptr);
+        if (project == nullptr) return;
+        TraceView* tv = dynamic_cast<TraceView*>(project->GetView().get());
+        if (tv == nullptr)
+        {
+            ctx->LogWarning("SKIP: no trace view loaded (open a system/trace profile to exercise this)");
+            return;
+        }
+        SummaryView* sv = TraceViewTestPeer{*tv}.SummaryViewPtr();
+        IM_CHECK(sv != nullptr);
+        if (sv == nullptr) return;
+        TopKernels* tk = SummaryViewTestPeer{*sv}.TopKernelsPtr();
+        IM_CHECK(tk != nullptr);
+        if (tk == nullptr) return;
+
+        // FetchSummary + TopKernels::Update only run while the Summary window is
+        // shown; headless with no saved layout it may be closed, leaving the kernel
+        // list null forever. Force it open ourselves rather than depending on another
+        // test having flipped this shared setting earlier in the process.
+        SettingsManager::GetInstance().GetAppWindowSettings().show_summary = true;
+
+        // Summary data loads asynchronously; let Update() populate the kernel list.
+        // KernelCount() is 0 while m_kernels is still null.
+        TopKernelsTestPeer peer{*tk};
+        for (int i = 0; i < 60 && peer.KernelCount() == 0; i++) ctx->Yield(2);
+
+        // Pick a real kernel index, skipping the synthetic "Others" bucket (which
+        // ToggleSelectKernel treats as a deselect). Bail if there's nothing else.
+        size_t target = 0;
+        if (peer.PaddedIdx() == target) target = 1;
+        if (peer.KernelCount() <= target)
+        {
+            ctx->LogWarning("SKIP: summary has no selectable top kernel for this trace");
+            return;
+        }
+
+        // This drives the model (ToggleSelectKernel) and asserts selection state.
+        // The pie is ImPlot-canvas drawn with no widget ID, so the click-to-index
+        // hit-test is out of scope here; only the selection wiring is covered.
+
+        // Clear to a known baseline (the harness reuses one process interactively).
+        peer.ClearSelection();
+        ctx->Yield(2);
+        IM_CHECK(peer.SelectedIdx() == std::nullopt);
+
+        peer.Select(target);
+        ctx->Yield(2);
+        IM_CHECK(peer.SelectedIdx().has_value());
+        IM_CHECK(peer.SelectedIdx().value() == target);
+
+        peer.ClearSelection();
+        ctx->Yield(2);
+        IM_CHECK(peer.SelectedIdx() == std::nullopt);
+    };
+
+    t = IM_REGISTER_TEST(e, "app", "sys_summary_top_kernel_name");
+    t->TestFunc = [](ImGuiTestContext* ctx)
+    {
+        AppWindow* app = AppWindow::GetInstance();
+        Project* project = app->GetCurrentProject();
+        IM_CHECK(project != nullptr);
+        if (project == nullptr) return;
+        TraceView* tv = dynamic_cast<TraceView*>(project->GetView().get());
+        if (tv == nullptr)
+        {
+            ctx->LogWarning("SKIP: no trace view loaded (open a system/trace profile to exercise this)");
+            return;
+        }
+        SummaryView* sv = TraceViewTestPeer{*tv}.SummaryViewPtr();
+        IM_CHECK(sv != nullptr);
+        if (sv == nullptr) return;
+        TopKernels* tk = SummaryViewTestPeer{*sv}.TopKernelsPtr();
+        IM_CHECK(tk != nullptr);
+        if (tk == nullptr) return;
+
+        // The Summary fetch (FetchSummary) and TopKernels::Update both run only when
+        // the Summary window is shown; headless with no saved layout it may be closed,
+        // leaving the kernel list null forever. Force it open before draining the load.
+        SettingsManager::GetInstance().GetAppWindowSettings().show_summary = true;
+
+        // Summary data loads asynchronously; let Update() populate the kernel list.
+        // KernelCount() is 0 while m_kernels is still null.
+        TopKernelsTestPeer peer{*tk};
+        for (int i = 0; i < 60 && peer.KernelCount() == 0; i++) ctx->Yield(2);
+
+        IM_CHECK(peer.KernelCount() > 0);
+        IM_CHECK(!peer.KernelName(0).empty());
+        for (size_t i=1; i < peer.KernelCount();i++){
+            IM_CHECK(peer.ExecTimeSum(0) >= peer.ExecTimeSum(i));
+        }
+
+    };
+
+    t = IM_REGISTER_TEST(e, "app", "sys_summary_display_mode_switch");
+    t->TestFunc = [](ImGuiTestContext* ctx)
+    {
+        AppWindow* app = AppWindow::GetInstance();
+        Project* project = app->GetCurrentProject();
+        IM_CHECK(project != nullptr);
+        if (project == nullptr) return;
+        TraceView* tv = dynamic_cast<TraceView*>(project->GetView().get());
+        if (tv == nullptr)
+        {
+            ctx->LogWarning("SKIP: no trace view loaded (open a system/trace profile to exercise this)");
+            return;
+        }
+        SummaryView* sv = TraceViewTestPeer{*tv}.SummaryViewPtr();
+        IM_CHECK(sv != nullptr);
+        if (sv == nullptr) return;
+        TopKernels* tk = SummaryViewTestPeer{*sv}.TopKernelsPtr();
+        IM_CHECK(tk != nullptr);
+        if (tk == nullptr) return;
+
+        // The Pie/Bar/Table switcher renders only once the Summary window is
+        // shown and its kernel list has loaded; force it open and drain the
+        // async fetch first (mirrors sys_summary_top_kernel_name).
+        SettingsManager::GetInstance().GetAppWindowSettings().show_summary = true;
+        TopKernelsTestPeer peer{*tk};
+        for (int i = 0; i < 60 && peer.KernelCount() == 0; i++) ctx->Yield(2);
+        IM_CHECK(peer.KernelCount() > 0);
+
+        // Reaching this point means the load path ran (not the skip), so the
+        // mode assertions below genuinely exercise the switcher. Default is Pie.
+        ctx->Yield(2);
+        IM_CHECK(peer.IsDisplayPie());
+
+        // The switcher is three IconButtons in the "Summary" window. IconButton
+        // does PushID(glyph)+Button(glyph), so each button's ref ends in the icon
+        // glyph twice (rocprovfis_icon_defines.h). The "**/" hops the dynamic
+        // layout ids between the window and the button (clamped_view/RightColumn/
+        // TopRow hashes that vary per build). Poll the mode after each click rather
+        // than a fixed yield: the click settles over a variable number of frames.
+        std::string bar_ref = std::string("//Summary/**/") + ICON_CHART_BAR + "/" + ICON_CHART_BAR;
+        ctx->ItemClick(bar_ref.c_str());
+        for (int i = 0; i < 30 && !peer.IsDisplayBar(); i++) ctx->Yield(2);
+        IM_CHECK(peer.IsDisplayBar());
+
+        std::string table_ref = std::string("//Summary/**/") + ICON_LIST + "/" + ICON_LIST;
+        ctx->ItemClick(table_ref.c_str());
+        for (int i = 0; i < 30 && !peer.IsDisplayTable(); i++) ctx->Yield(2);
+        IM_CHECK(peer.IsDisplayTable());
+
+        std::string pie_ref = std::string("//Summary/**/") + ICON_CHART_PIE + "/" + ICON_CHART_PIE;
+        ctx->ItemClick(pie_ref.c_str());
+        for (int i = 0; i < 30 && !peer.IsDisplayPie(); i++) ctx->Yield(2);
+        IM_CHECK(peer.IsDisplayPie());
+    };
+
+    t = IM_REGISTER_TEST(e, "app", "compute_kernel_table_loads_sorted");
+    t->TestFunc = [](ImGuiTestContext* ctx)
+    {
+        AppWindow* app = AppWindow::GetInstance();
+        Project* project = app->GetCurrentProject();
+        IM_CHECK(project != nullptr);
+        if (project == nullptr) return;
+        ComputeView* cv = dynamic_cast<ComputeView*>(project->GetView().get());
+        if (cv == nullptr)
+        {
+            ctx->LogWarning("SKIP: no compute view loaded (open a compute profile to exercise this)");
+            return;
+        }
+        TabContainer* tc = ComputeViewTestPeer{*cv}.TabContainerPtr();
+        IM_CHECK(tc != nullptr);
+        if (tc == nullptr) return;
+
+        // The kernel metric table renders only while the "Kernel Details" tab is
+        // active (TabContainer renders just the active tab's content).
+        tc->SetActiveTab("compute_kernel_details_view");
+        ctx->Yield(3);
+        const TabItem* tab = tc->GetActiveTab();
+        IM_CHECK(tab != nullptr);
+        if (tab == nullptr) return;
+        ComputeKernelDetailsView* kd =
+            dynamic_cast<ComputeKernelDetailsView*>(tab->m_widget.get());
+        IM_CHECK(kd != nullptr);
+        if (kd == nullptr) return;
+        KernelMetricTable* kt = ComputeKernelDetailsViewTestPeer{*kd}.KernelMetricTablePtr();
+        IM_CHECK(kt != nullptr);
+        if (kt == nullptr) return;
+
+        // The table fetches its rows in response to a workload-selection event.
+        // The initial auto-select (ComputeView::CreateView) fires before this view
+        // subscribes, so the table starts empty; drive the fetch ourselves for the
+        // already-selected workload.
+        ComputeSelection* sel = ComputeViewTestPeer{*cv}.ComputeSelectionPtr();
+        IM_CHECK(sel != nullptr);
+        if (sel == nullptr) return;
+        const uint32_t workload = sel->GetSelectedWorkload();
+        IM_CHECK(workload != ComputeSelection::INVALID_SELECTION_ID);
+        kt->FetchData(workload);
+
+        // Wait for the rows to arrive: the table registers its own ImGui window
+        // (name contains "kernel_selection_table") only once BeginTable runs, which
+        // requires non-empty data. Its presence proves the table rendered populated.
+        ImGuiWindow* table_win = nullptr;
+        for (int i = 0; i < 120 && table_win == nullptr; i++)
+        {
+            ctx->Yield(2);
+            for (ImGuiWindow* w : ImGui::GetCurrentContext()->Windows)
+                if (strstr(w->Name, "kernel_selection_table")) { table_win = w; break; }
+        }
+        IM_CHECK(table_win != nullptr);
+
+        // On load the table sorts by the Duration column (index 2), descending
+        // (KernelMetricTable ctor: DURATION_COLUMN_INDEX + kRPVControllerSortOrderDescending).
+        KernelMetricTableTestPeer peer{*kt};
+        IM_CHECK(peer.SortColumnIndex() == 2);
+
+        // Prove the rows actually loaded in that order rather than just trusting the
+        // ctor default (which would pass even on an empty/unsorted fetch): the model's
+        // Duration cells are plain ns integers, so assert the column is monotonically
+        // non-increasing. Header col 2 is "Duration (ns)".
+        const std::vector<std::vector<std::string>>& rows =
+            cv->GetDataProvider()->ComputeModel().GetKernelSelectionTable().GetTableData();
+        if (rows.size() < 2)
+        {
+            ctx->LogWarning("SKIP: fewer than two kernel rows to verify sort order");
+            return;
+        }
+        for (size_t r = 1; r < rows.size(); r++)
+        {
+            IM_CHECK(rows[r - 1].size() > 2 && rows[r].size() > 2);
+            if (rows[r - 1].size() <= 2 || rows[r].size() <= 2) return;
+            const double prev = std::strtod(rows[r - 1][2].c_str(), nullptr);
+            const double cur  = std::strtod(rows[r][2].c_str(), nullptr);
+            IM_CHECK(prev >= cur);
+        }
+    };
+
+    t = IM_REGISTER_TEST(e, "app", "sys_timeline_select_named_track_event");
+    t->TestFunc = [](ImGuiTestContext* ctx)
+    {
+        AppWindow* app = AppWindow::GetInstance();
+        Project* project = app->GetCurrentProject();
+        IM_CHECK(project != nullptr);
+        if (project == nullptr) return;
+        TraceView* tv = dynamic_cast<TraceView*>(project->GetView().get());
+        if (tv == nullptr)
+        {
+            ctx->LogWarning("SKIP: no trace view loaded (open a system/trace profile to exercise this)");
+            return;
+        }
+        TimelineView* tlv = TraceViewTestPeer{*tv}.TimelineViewPtr();
+        IM_CHECK(tlv != nullptr);
+        if (tlv == nullptr) return;
+        std::shared_ptr<TimelineSelection> sel = tv->GetTimelineSelection();
+        IM_CHECK(sel != nullptr);
+        if (sel == nullptr) return;
+
+        // Event chart items populate after the track's data fetch drains, so poll
+        // for a flame track that has at least one event before reaching in.
+        FlameTrackItem* flame    = nullptr;
+        uint64_t        track_id = 0;
+        for (int i = 0; i < 60 && flame == nullptr; i++)
+        {
+            for (FlameTrackItem* candidate :
+                 TimelineViewTestPeer{*tlv}.DisplayedFlameTracks())
+            {
+                if (FlameTrackItemTestPeer{*candidate}.ChartItemCount() > 0)
+                {
+                    flame    = candidate;
+                    track_id = candidate->GetID();
+                    break;
+                }
+            }
+            if (flame == nullptr) ctx->Yield(2);
+        }
+        if (flame == nullptr)
+        {
+            ctx->LogWarning("SKIP: no flame track has events to select by identity");
+            return;
+        }
+
+        // Target the earliest event by timestamp (chart-item order is not stable,
+        // so identity comes from the (name, start_ts) pair, not an index).
+        uint64_t    uuid     = 0;
+        std::string name;
+        double      start_ts = 0.0;
+        bool        have_event =
+            FlameTrackItemTestPeer{*flame}.EarliestEvent(uuid, name, start_ts);
+        IM_CHECK(have_event);
+        if (!have_event) return;
+
+        // Selection is dispatched through EventManager, so clear then yield before
+        // asserting the empty baseline.
+        sel->UnselectAllEvents();
+        ctx->Yield(3);
+        std::vector<uint64_t> ids;
+        sel->GetSelectedEvents(ids);
+        IM_CHECK(ids.empty());
+
+        // Select that exact event by its (track, uuid) identity, the same call the
+        // flame track makes on a bar click.
+        sel->SelectTrackEvent(track_id, uuid);
+        ctx->Yield(3);
+        IM_CHECK(sel->EventSelected(uuid));
+        ids.clear();
+        sel->GetSelectedEvents(ids);
+        IM_CHECK(ids.size() == 1 && ids[0] == uuid);
+
+        // Leave a clean selection for following tests.
+        sel->UnselectAllEvents();
+        ctx->Yield(2);
+    };
+
+    t = IM_REGISTER_TEST(e, "app", "sys_timeline_measure_tool");
+    t->TestFunc = [](ImGuiTestContext* ctx)
+    {
+        AppWindow* app = AppWindow::GetInstance();
+        Project* project = app->GetCurrentProject();
+        IM_CHECK(project != nullptr);
+        if (project == nullptr) return;
+        TraceView* tv = dynamic_cast<TraceView*>(project->GetView().get());
+        if (tv == nullptr)
+        {
+            ctx->LogWarning("SKIP: no trace view loaded (open a system/trace profile to exercise this)");
+            return;
+        }
+        TimelineView* tlv = TraceViewTestPeer{*tv}.TimelineViewPtr();
+        IM_CHECK(tlv != nullptr);
+        if (tlv == nullptr) return;
+        MeasurementController* mc = TraceViewTestPeer{*tv}.MeasurementControllerPtr();
+        IM_CHECK(mc != nullptr);
+        if (mc == nullptr) return;
+
+        // Two distinct timestamps inside the trace's visible range; the measured
+        // span between them must be > 0.
+        const ViewCoords coords = tlv->GetViewCoords();
+        const double     span   = coords.v_max_x - coords.v_min_x;
+        IM_CHECK(span > 0.0);
+        if (span <= 0.0) return;
+        const double t0 = coords.v_min_x + span * 0.25;
+        const double t1 = coords.v_min_x + span * 0.75;
+
+        // Clear to a known baseline: measurement state persists on the TraceView
+        // across tests in the reused process.
+        mc->ExitMeasurementMode();
+        mc->ClearMeasurement();
+        ctx->Yield(2);
+        IM_CHECK(mc->IsMeasurementMode() == false);
+
+        // Enter mode and place both points via the same controller calls the menu
+        // item and freehand click handler drive.
+        mc->EnterMeasurementMode();
+        mc->SetFreehandMeasurementPoint(t0);
+        mc->SetFreehandMeasurementPoint(t1);
+        ctx->Yield(2);
+
+        // Capture observation, restore, THEN assert: IM_CHECK early-returns on
+        // failure, so leaving measurement mode active would leak into later tests.
+        const MeasurementState state = mc->GetMeasurementState();
+        const double duration =
+            std::fabs(mc->GetEffectiveTimestamp(1) - mc->GetEffectiveTimestamp(0));
+
+        mc->ExitMeasurementMode();
+        mc->ClearMeasurement();
+        ctx->Yield(2);
+        const bool inactive_after = (mc->IsMeasurementMode() == false);
+
+        IM_CHECK(state == MeasurementState::kComplete);
+        IM_CHECK(duration > 0.0);
+        IM_CHECK(inactive_after);
+    };
+
+    t = IM_REGISTER_TEST(e, "app", "sys_timeline_track_expand_collapse");
+    t->TestFunc = [](ImGuiTestContext* ctx)
+    {
+        AppWindow* app = AppWindow::GetInstance();
+        Project* project = app->GetCurrentProject();
+        IM_CHECK(project != nullptr);
+        if (project == nullptr) return;
+        TraceView* tv = dynamic_cast<TraceView*>(project->GetView().get());
+        if (tv == nullptr)
+        {
+            ctx->LogWarning("SKIP: no trace view loaded (open a system/trace profile to exercise this)");
+            return;
+        }
+        TimelineView* tlv = TraceViewTestPeer{*tv}.TimelineViewPtr();
+        IM_CHECK(tlv != nullptr);
+        if (tlv == nullptr) return;
+
+        ctx->Yield(3);
+
+        // Expanding only changes height when the track has enough levels to exceed
+        // the default height; find a flame track for which that holds so the height
+        // assertion is meaningful (expanded height = max_level*lvl + lvl + 2).
+        FlameTrackItem* flame = nullptr;
+        for (FlameTrackItem* candidate : TimelineViewTestPeer{*tlv}.DisplayedFlameTracks())
+        {
+            FlameTrackItemTestPeer peer{*candidate};
+            const float level_h = peer.LevelHeight();
+            if (level_h > 0.0f &&
+                peer.MaxLevel() * level_h + level_h + 2.0f > DEFAULT_TRACK_HEIGHT)
+            {
+                flame = candidate;
+                break;
+            }
+        }
+        if (flame == nullptr)
+        {
+            ctx->LogWarning("SKIP: no flame track deep enough for expand to change height");
+            return;
+        }
+
+        FlameTrackItemTestPeer peer{*flame};
+        const bool  orig_expanded = peer.IsExpanded();
+        const float orig_height   = flame->GetTrackHeight();
+
+        // The expand/collapse arrow sits in a meta area with no stable ref, so
+        // drive the same side effect the button triggers. Force a collapsed
+        // baseline, then expand, capturing both states.
+        peer.SetExpanded(false);
+        ctx->Yield(2);
+        const bool  collapsed_state  = peer.IsExpanded();
+        const float collapsed_height = flame->GetTrackHeight();
+
+        peer.SetExpanded(true);
+        ctx->Yield(2);
+        const bool  expanded_state  = peer.IsExpanded();
+        const float expanded_height = flame->GetTrackHeight();
+
+        // Restore original state + exact height so later tests see the same layout.
+        peer.SetExpanded(orig_expanded);
+        peer.SetTrackHeight(orig_height);
+        ctx->Yield(2);
+        const bool  restored_state  = peer.IsExpanded();
+        const float restored_height = flame->GetTrackHeight();
+
+        IM_CHECK(collapsed_state == false);
+        IM_CHECK(expanded_state == true);
+        IM_CHECK(expanded_height != collapsed_height);
+        IM_CHECK(restored_state == orig_expanded);
+        IM_CHECK(restored_height == orig_height);
+    };
+}

@@ -109,7 +109,7 @@ rocprofvis_dm_result_t QueryManager::BuildSliceQuery(rocprofvis_dm_timestamp_t s
     {
         pmc_query = true;
     }
-    BuildSliceQueryMap(slice_query_map, props);
+    BuildSliceQueryMap(slice_query_map, props, props->track_indentifiers.category ==  kRocProfVisDmStreamTrack? kRPVRocpdQuerySliceByStream : kRPVRocpdQuerySliceByQueue);
     if (start > props->min_ts || end < props->max_ts)
     {
         timed_query = true;
@@ -160,7 +160,7 @@ rocprofvis_dm_result_t QueryManager::BuildCounterSliceLeftNeighbourQuery(rocprof
     start += TraceProperties()->db_inst_start_time[db_instance->GuidIndex()];
     end += TraceProperties()->db_inst_start_time[db_instance->GuidIndex()];
 
-    BuildSliceQueryMap(slice_query_map, props);
+    BuildSliceQueryMap(slice_query_map, props, props->track_indentifiers.category ==  kRocProfVisDmStreamTrack? kRPVRocpdQuerySliceByStream : kRPVRocpdQuerySliceByQueue);
 
     if (!slice_query_map.empty()) {
         auto it_query = slice_query_map.begin();
@@ -187,7 +187,7 @@ rocprofvis_dm_result_t QueryManager::BuildCounterSliceRightNeighbourQuery(rocpro
     start += TraceProperties()->db_inst_start_time[db_instance->GuidIndex()];
     end += TraceProperties()->db_inst_start_time[db_instance->GuidIndex()];
 
-    BuildSliceQueryMap(slice_query_map, props);
+    BuildSliceQueryMap(slice_query_map, props, props->track_indentifiers.category ==  kRocProfVisDmStreamTrack? kRPVRocpdQuerySliceByStream : kRPVRocpdQuerySliceByQueue);
 
     if (!slice_query_map.empty()) {
         auto it_query = slice_query_map.begin();
@@ -256,97 +256,58 @@ bool QueryManager::IsEmptyRange(uint32_t track, uint64_t start, uint64_t end) {
 }
 
 
-/**
- * Build a SQL query string for a table use-case over a time range and selected tracks.
- *
- * High-level flow:
- *  1) Resolve the base SELECT/FROM for the requested use case.
- *  2) Apply time-window and track constraints.
- *  3) Append optional WHERE/filter/group/sort clauses.
- *  4) Apply optional string-table filters and pagination (max_count/offset).
- *  5) Optionally emit a COUNT-only query shape when requested.
- *
- * Inputs are treated as query-building directives; `query` is populated with the
- * final SQL text. The method returns a data-model result code indicating success
- * or parameter/assembly errors.
- */
 rocprofvis_dm_result_t
-QueryManager::BuildTableQuery(
-    rocprofvis_dm_table_use_case_enum_t use_case,
-    rocprofvis_dm_timestamp_t start, rocprofvis_dm_timestamp_t end,
-    rocprofvis_db_num_of_tracks_t num, rocprofvis_db_track_selection_t tracks, 
-    rocprofvis_dm_charptr_t where, rocprofvis_dm_charptr_t filter,
-    rocprofvis_dm_charptr_t group, rocprofvis_dm_charptr_t group_cols, 
-    rocprofvis_dm_charptr_t sort_column, rocprofvis_dm_sort_order_t sort_order, 
-    rocprofvis_dm_num_string_table_filters_t num_string_table_filters, rocprofvis_dm_string_table_filters_t string_table_filters,
-    uint64_t max_count, uint64_t offset, bool count_only, 
-    rocprofvis_dm_string_t& query)
+QueryManager::BuildCompoundQuery(
+    rocprofvis_dm_table_use_case_enum_t use_case, rocprofvis_dm_timestamp_t start,
+    rocprofvis_dm_timestamp_t end, rocprofvis_db_num_of_tracks_t num,
+    rocprofvis_db_track_selection_t tracks,
+    std::vector<slice_query_map_t>& slice_query_map_array, rocprofvis_dm_charptr_t where,
+    rocprofvis_dm_charptr_t filter, rocprofvis_dm_charptr_t group,
+    rocprofvis_dm_charptr_t group_cols, rocprofvis_dm_charptr_t sort_column,
+    rocprofvis_dm_sort_order_t sort_order, uint64_t max_count, uint64_t offset,
+    bool count_only, rocprofvis_dm_string_t& query)
 {
-    // Query-shape flags and local accumulators used while assembling SQL fragments.
-    bool sample_query = false;
-    if (TABLE_QUERY_UNPACK_OP_TYPE(tracks[0]) == 0)
-    {
-        sample_query = TrackPropertiesAt(tracks[0])->track_indentifiers.category == kRocProfVisDmPmcTrack;
-    }
-    else
-    {
-        sample_query = (rocprofvis_dm_event_operation_t)TABLE_QUERY_UNPACK_OP_TYPE(tracks[0]) == kRocProfVisDmOperationNoOp;
-    }
-
-    std::vector<slice_query_map_t> slice_query_map_array;
-
-    BuildTableQueryMap(num, tracks, num_string_table_filters, string_table_filters, slice_query_map_array);
-
-    bool slice_query_map_empty = true;
-    for(slice_query_map_t& query_map : slice_query_map_array)
-    {
-        if(!query_map.empty())
-        {
-            slice_query_map_empty = false;
-            break;
-        }
-    }
-    if(slice_query_map_empty)
-    {
-        return kRocProfVisDmResultSuccess;    
-    }
     query = "";
 
     size_t thread_count = std::thread::hardware_concurrency();
-    bool event_table = false;
-    for (int i = 0; i < num; i++)
+    bool   event_table  = false;
+    for(int i = 0; i < slice_query_map_array.size(); i++)
     {
         rocprofvis_dm_index_t track = tracks[i];
-        track = TABLE_QUERY_UNPACK_TRACK_ID(track);
+        track                       = TABLE_QUERY_UNPACK_TRACK_ID(track);
 
-        int divider = static_cast<int>(thread_count / num);
-        if (divider == 0) divider = 1;
-        for (auto it_query = slice_query_map_array[i].begin(); it_query != slice_query_map_array[i].end(); ++it_query) 
+        int divider = static_cast<int>(thread_count / slice_query_map_array.size());
+        if(divider == 0) divider = 1;
+        for(auto it_query = slice_query_map_array[i].begin();
+            it_query != slice_query_map_array[i].end(); ++it_query)
         {
             auto op = GetTableQueryOperation(it_query->first);
-            if (op > kRocProfVisDmOperationNoOp)
+            if(op > kRocProfVisDmOperationNoOp)
             {
                 event_table = true;
             }
-            if (TABLE_QUERY_UNPACK_OP_TYPE(track) == 0)
+            if(TABLE_QUERY_UNPACK_OP_TYPE(track) == 0)
             {
                 rocprofvis_dm_track_params_t* props = TrackPropertiesAt(track);
-                if (props->record_count < SINGLE_THREAD_RECORDS_COUNT_LIMIT ||
+                if(props->record_count < SINGLE_THREAD_RECORDS_COUNT_LIMIT ||
                     op == kRocProfVisDmOperationMemoryAllocate ||
                     op == kRocProfVisDmOperationMemoryCopy)
                     divider = 1;
             }
             uint64_t step = (end - start) / divider;
-            for (auto it_instance = it_query->second.begin(); it_instance != it_query->second.end(); ++it_instance)
+            for(auto it_instance = it_query->second.begin();
+                it_instance != it_query->second.end(); ++it_instance)
             {
                 DbInstance* db_inst = DbInstancePtrAt(it_instance->first);
-                ROCPROFVIS_ASSERT_MSG_RETURN(db_inst, ERROR_NODE_KEY_CANNOT_BE_NULL, kRocProfVisDmResultUnknownError);
-                uint64_t begin = start + TraceProperties()->db_inst_start_time[db_inst->GuidIndex()];
-                for (int j = 0; j < divider; j++)
+                ROCPROFVIS_ASSERT_MSG_RETURN(db_inst, ERROR_NODE_KEY_CANNOT_BE_NULL,
+                    kRocProfVisDmResultUnknownError);
+                uint64_t begin =
+                    start + TraceProperties()->db_inst_start_time[db_inst->GuidIndex()];
+                for(int j = 0; j < divider; j++)
                 {
                     uint64_t fetch_start = begin + (step * j);
-                    uint64_t fetch_end = begin + (step * j) + step;
-                    if (IsEmptyRange(tracks[i], fetch_start, fetch_end)) continue;
+                    uint64_t fetch_end   = begin + (step * j) + step;
+                    if(IsEmptyRange(tracks[i], fetch_start, fetch_end)) continue;
                     query += it_query->first;
                     if(it_instance->second.empty())
                     {
@@ -365,7 +326,7 @@ QueryManager::BuildTableQuery(
                     query += Builder::START_SERVICE_NAME;
                     query += (j == divider - 1) ? " <= " : " < ";
                     query += std::to_string(fetch_end);
-                    if (where && strlen(where))
+                    if(where && strlen(where))
                     {
                         query += " AND ";
                         query += where;
@@ -377,7 +338,6 @@ QueryManager::BuildTableQuery(
                     query += "\n";
                 }
             }
-
         }
     }
     if(query.empty())
@@ -402,14 +362,9 @@ QueryManager::BuildTableQuery(
         query += std::to_string(kRPVTableDataTypeSearch);
         break;
     }
-    case kRPVDMTableUseCaseAnalysis:
-    {
-        query += std::to_string(kRPVTableDataTypeAnalysis);
-        break;
-    }
     default:
     {
-        return kRocProfVisDmResultInvalidParameter; 
+        return kRocProfVisDmResultInvalidParameter;
         break;
     }
     }
@@ -418,9 +373,9 @@ QueryManager::BuildTableQuery(
     if(group && strlen(group))
     {
         query += "-- CMD: GROUP ";
-        if (group_cols && strlen(group_cols))
+        if(group_cols && strlen(group_cols))
         {
-            if (!FilterExpression::StartsWithSubstring(group, group_cols))
+            if(!FilterExpression::StartsWithSubstring(group, group_cols))
             {
                 query += group_cols;
                 query += ", ";
@@ -430,6 +385,19 @@ QueryManager::BuildTableQuery(
         else
         {
             query += group;
+            bool sample_query = false;
+            if(TABLE_QUERY_UNPACK_OP_TYPE(tracks[0]) == 0)
+            {
+                sample_query =
+                    TrackPropertiesAt(tracks[0])->track_indentifiers.category ==
+                    kRocProfVisDmPmcTrack;
+            }
+            else
+            {
+                sample_query =
+                    (rocprofvis_dm_event_operation_t) TABLE_QUERY_UNPACK_OP_TYPE(
+                        tracks[0]) == kRocProfVisDmOperationNoOp;
+            }
             if(sample_query)
             {
                 query += ", COUNT(*) as count, AVG(value) as avg_value, MIN(value) as "
@@ -444,17 +412,17 @@ QueryManager::BuildTableQuery(
         query += "\n";
     }
 
-    if (filter && strlen(filter))
+    if(filter && strlen(filter))
     {
         query += "-- CMD: FILTER ";
         query += filter;
         query += "\n";
     }
 
-    if (sort_column && strlen(sort_column))
+    if(sort_column && strlen(sort_column))
     {
         query += "-- CMD: SORT";
-        if (sort_order == kRPVDMSortOrderAsc)
+        if(sort_order == kRPVDMSortOrderAsc)
         {
             query += " ASC ";
         }
@@ -464,13 +432,13 @@ QueryManager::BuildTableQuery(
         }
         query += sort_column;
         query += "\n";
-
     }
     if(count_only)
     {
         query += "-- CMD: COUNT";
         query += "\n";
-    } else
+    }
+    else
     {
         if(max_count)
         {
@@ -485,8 +453,104 @@ QueryManager::BuildTableQuery(
             query += "\n";
         }
     }
-
     return kRocProfVisDmResultSuccess;
+}
+
+
+rocprofvis_dm_result_t
+QueryManager::BuildTableQuery(
+    rocprofvis_dm_table_use_case_enum_t use_case, 
+    rocprofvis_dm_timestamp_t start, rocprofvis_dm_timestamp_t end, 
+    rocprofvis_db_num_of_tracks_t num, rocprofvis_db_track_selection_t tracks, 
+    rocprofvis_dm_charptr_t where, rocprofvis_dm_charptr_t filter,
+    rocprofvis_dm_charptr_t group, rocprofvis_dm_charptr_t group_cols,
+    rocprofvis_dm_charptr_t sort_column, rocprofvis_dm_sort_order_t sort_order,
+    uint64_t max_count, uint64_t offset, bool count_only, rocprofvis_dm_string_t& query)
+{
+    std::vector<slice_query_map_t> slice_query_map_array;
+    slice_query_map_array.resize(num);
+    for(int i = 0; i < num; i++)
+    {
+        rocprofvis_dm_index_t track = tracks[i];
+        if(TABLE_QUERY_UNPACK_OP_TYPE(track) == 0)
+        {
+            track                               = TABLE_QUERY_UNPACK_TRACK_ID(track);
+            rocprofvis_dm_track_params_t* props = TrackPropertiesAt(track);
+            BuildSliceQueryMap(slice_query_map_array[i], props, kRPVRocpdQueryTable);
+        }
+        else 
+        {
+            track = TABLE_QUERY_UNPACK_OP_TYPE(track);
+            for(auto db_inst : DbInstances())
+            {
+                slice_query_map_array[i][GetEventOperationQuery(
+                    (rocprofvis_dm_event_operation_t) track)][db_inst.first.GuidIndex()];
+            }
+        }
+    }
+    bool slice_query_map_empty = true;
+    for(slice_query_map_t& query_map : slice_query_map_array)
+    {
+        if(!query_map.empty())
+        {
+            slice_query_map_empty = false;
+            break;
+        }
+    }
+    if(slice_query_map_empty)
+    {
+        return kRocProfVisDmResultSuccess;    
+    }
+    return BuildCompoundQuery(use_case, start, end, num, tracks, slice_query_map_array,
+        where, filter, group, group_cols, sort_column, sort_order,
+        max_count, offset, count_only, query);
+}
+
+rocprofvis_dm_result_t
+QueryManager::BuildEventSearchQuery(
+    rocprofvis_dm_timestamp_t start, rocprofvis_dm_timestamp_t end,
+    rocprofvis_db_num_of_tracks_t num, rocprofvis_db_track_selection_t ops,
+    rocprofvis_dm_charptr_t where,
+    rocprofvis_dm_num_string_table_filters_t num_string_table_filters,
+    rocprofvis_dm_string_table_filters_t     string_table_filters,
+    rocprofvis_dm_charptr_t sort_column, rocprofvis_dm_sort_order_t sort_order,
+    uint64_t max_count, uint64_t offset, bool count_only, rocprofvis_dm_string_t& query)
+{
+    std::vector<slice_query_map_t> slice_query_map_array;
+    table_string_id_filter_map_t string_id_filter_map;
+    rocprofvis_dm_result_t string_filter_result = BuildTableStringIdFilter(num_string_table_filters, string_table_filters, string_id_filter_map);
+    slice_query_map_array.resize(num);
+    for(int i = 0; i < num; i++)
+    {
+        rocprofvis_dm_index_t op = TABLE_QUERY_UNPACK_OP_TYPE(ops[i]);
+        if (num_string_table_filters > 0)
+        {
+            if (string_filter_result == kRocProfVisDmResultSuccess && string_id_filter_map.count((rocprofvis_dm_event_operation_t)op) > 0)
+            {
+                auto filters = string_id_filter_map.at((rocprofvis_dm_event_operation_t)op);
+                for (auto it = filters.begin(); it != filters.end(); ++it)
+                {
+                    slice_query_map_array[i][GetEventOperationQuery((rocprofvis_dm_event_operation_t)op)][it->first] = std::string(" WHERE ") + it->second;
+                }
+            }
+        }
+    }
+    bool slice_query_map_empty = true;
+    for(slice_query_map_t& query_map : slice_query_map_array)
+    {
+        if(!query_map.empty())
+        {
+            slice_query_map_empty = false;
+            break;
+        }
+    }
+    if(slice_query_map_empty)
+    {
+        return kRocProfVisDmResultSuccess;
+    }
+    return BuildCompoundQuery(kRPVDMTableUseCaseEventSearch, start, end, num, ops, slice_query_map_array,
+        where, nullptr, nullptr, nullptr, sort_column, sort_order,
+        max_count, offset, count_only, query);
 }
 
 rocprofvis_dm_result_t  QueryManager::ExecuteQuery(

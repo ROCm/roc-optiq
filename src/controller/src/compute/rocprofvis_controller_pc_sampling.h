@@ -5,7 +5,9 @@
 
 #include "rocprofvis_controller_handle.h"
 #include "rocprofvis_c_interface_types.h"
+#include <mutex>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 namespace RocProfVis
@@ -32,6 +34,10 @@ public:
     bool QueryToPropertyEnum(rocprofvis_db_compute_column_enum_t in, rocprofvis_property_t& property, rocprofvis_controller_primitive_type_t& type) const;
 
 private:
+    friend class ComputeTrace;
+
+    std::recursive_mutex& GetDataMutex();
+
     struct SourceLine
     {
         uint32_t    id             = 0;
@@ -71,19 +77,21 @@ private:
         uint32_t source_line_id = 0;
         uint32_t depth          = 0;
     };
-    struct StallRecord
+    struct SamplingState
     {
         uint32_t id                 = 0;
         uint32_t isa_line_id        = 0;
         uint64_t dispatch_id        = 0;
-        float    avg_active_lanes   = 0.0f;
-        uint32_t wave_issued_count  = 0;
-        uint32_t total_sample_count = 0;
+        float    active_threads_percent   = 0.0f;
+        float    wave_occupancy_percent   = 0.0f;
+        uint32_t issued_count       = 0;
+        uint32_t stalled_count      = 0;
+        uint32_t total_count        = 0;
     };
     struct StallReasonCount
     {
-        uint32_t record_id   = 0;
-        uint32_t type_id     = 0;
+        uint32_t sampling_state_id   = 0;
+        uint32_t reason_id     = 0;
         uint32_t count       = 0;
     };
 
@@ -93,8 +101,13 @@ private:
     std::vector<IsaLine>          m_isa_lines;
     std::vector<IsaToIsaDep>      m_isa_to_isa_deps;
     std::vector<IsaToSourceDep>   m_isa_to_source_deps;
-    std::vector<StallRecord>      m_stall_records;
+    std::vector<SamplingState>      m_sampling_states;
     std::vector<StallReasonCount> m_stall_reason_counts;
+
+    std::unordered_map<uint32_t, std::vector<SourceLine>> m_source_line_cache;
+    bool m_kernel_data_loaded = false;
+
+    std::recursive_mutex m_data_mutex;
 
 };
 

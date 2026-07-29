@@ -12,6 +12,7 @@
 #include "rocprofvis_font_manager.h"
 #include "rocprofvis_line_track_item.h"
 #include "rocprofvis_measurement_controller.h"
+#include "rocprofvis_render_scheduler.h"
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_timeline_selection.h"
 #include "rocprofvis_timeline_track_options.h"
@@ -36,7 +37,6 @@ constexpr float    SCROLL_SPEED                  = 100.0f;
 constexpr uint64_t DEFAULT_LOADING_TIMER         = 150;  // milliseconds
 constexpr float    ARTIFICIAL_SCROLLBAR_HEIGHT   = 18.0f;
 constexpr float    SIDEBAR_SPLITTER_WIDTH        = 5.0f;
-
 // Build a text block mirroring the on-hover tooltip (name, timing, and id)
 // for the clipboard.
 static std::string
@@ -548,11 +548,22 @@ TimelineView::RenderMeasurement(ImDrawList* draw_list, ImVec2 window_position)
                               ARTIFICIAL_SCROLLBAR_HEIGHT) / 2.0f;
     float label_y = visible_bot - ImGui::CalcTextSize("0").y - LABEL_PAD;
 
+    float graph_min_x = window_position.x;
+    float graph_max_x = window_position.x + m_tpt->GetGraphSizeX();
+
     // Draws a small timestamp label centered on a ruler line, capturing its rect
     // (index 0 = start ruler, 1 = end ruler) for the context-menu hit-test.
     auto draw_ruler_label = [&](int index, float x, const char* text) {
         ImVec2 sz = ImGui::CalcTextSize(text);
         float  lx = x - sz.x * 0.5f;
+
+        float label_min_x = graph_min_x + RULER_LABEL_PAD_X;
+        float label_max_x = graph_max_x - sz.x - RULER_LABEL_PAD_X;
+        if(x >= graph_min_x && x <= graph_max_x && label_min_x < label_max_x)
+        {
+            lx = std::clamp(lx, label_min_x, label_max_x);
+        }
+
         ImVec2 mn(lx - RULER_LABEL_PAD_X, label_y - RULER_LABEL_PAD_Y);
         ImVec2 mx(lx + sz.x + RULER_LABEL_PAD_X, label_y + sz.y + RULER_LABEL_PAD_Y);
         draw_list->AddRectFilled(mn, mx, label_bg, RULER_LABEL_ROUND);
@@ -737,6 +748,15 @@ TimelineView::RenderTimelineViewOptionsMenu(ImVec2 window_position)
         if(m_highlighted_region.first != TimelineSelection::INVALID_SELECTION_TIME ||
            m_highlighted_region.second != TimelineSelection::INVALID_SELECTION_TIME)
         {
+            if(m_highlighted_region.first != TimelineSelection::INVALID_SELECTION_TIME &&
+               m_highlighted_region.second != TimelineSelection::INVALID_SELECTION_TIME)
+            {
+                if(IconMenuItem(ICON_ARROWS_EXPAND, "Zoom to Time Range Selection"))
+                {
+                    ZoomToTimeRangeSelection();
+                }
+            }
+
             if(IconMenuItem(ICON_TRASH_CAN, "Remove Time Range Selection"))
             {
                 ClearTimeRangeSelection();
@@ -826,6 +846,14 @@ TimelineView::RenderTimelineViewOptionsMenu(ImVec2 window_position)
                             .c_str());
                     NotificationManager::GetInstance().Show("End timestamp was copied",
                                                             NotificationLevel::Info);
+                }
+            }
+
+            if(has_start && has_end)
+            {
+                if(IconMenuItem(ICON_ARROWS_EXPAND, "Zoom to Measurement"))
+                {
+                    ZoomToMeasurement();
                 }
             }
 
@@ -1004,6 +1032,58 @@ TimelineView::SetViewableRangeNS(double start_ns, double end_ns)
     m_recalculate_grid_interval = true;
 }
 
+void
+TimelineView::ZoomToTimeSpan(double start_ns, double end_ns)
+{
+    double span_ns = end_ns - start_ns;
+    if(span_ns <= 0.0)
+    {
+        return;
+    }
+
+    // Zoom is capped at one pixel per nanosecond, so center a span too narrow
+    // to fill the viewport rather than let the clamp pin it to the left edge.
+    double margin_ns   = 0.0;
+    double min_span_ns = static_cast<double>(m_tpt->GetGraphSizeX());
+    if(span_ns < min_span_ns)
+    {
+        margin_ns = (min_span_ns - span_ns) * 0.5;
+    }
+
+    SetViewableRangeNS(std::max(m_tpt->GetMinX(), start_ns - margin_ns),
+                       std::min(m_tpt->GetMaxX(), end_ns + margin_ns));
+}
+
+void
+TimelineView::ZoomToMeasurement()
+{
+    MeasurementController& fm = *m_measurement;
+    if(!fm.GetPoint(0).valid || !fm.GetPoint(1).valid)
+    {
+        return;
+    }
+
+    double first_ns = fm.GetEffectiveTimestamp(0);
+    double last_ns  = fm.GetEffectiveTimestamp(1);
+    ZoomToTimeSpan(std::min(first_ns, last_ns), std::max(first_ns, last_ns));
+}
+
+void
+TimelineView::ZoomToTimeRangeSelection()
+{
+    if(m_highlighted_region.first == TimelineSelection::INVALID_SELECTION_TIME ||
+       m_highlighted_region.second == TimelineSelection::INVALID_SELECTION_TIME)
+    {
+        return;
+    }
+
+    // The highlighted region is kept in normalized time, the zoom helper works
+    // in absolute timestamps.
+    double first_ns = m_tpt->DenormalizeTime(m_highlighted_region.first);
+    double last_ns  = m_tpt->DenormalizeTime(m_highlighted_region.second);
+    ZoomToTimeSpan(std::min(first_ns, last_ns), std::max(first_ns, last_ns));
+}
+
 TimelineView::~TimelineView()
 {
     DestroyGraphs();
@@ -1152,6 +1232,14 @@ TimelineView::Update()
                 track->Update();
             }
         }
+    }
+
+    // Loading-timer debounce, sticky-note drag and reorder auto-scroll advance
+    // only while rendering; keep rendering while any is active.
+    if(m_loading_timer.IsRunning() || m_dragged_sticky_id != INVALID_STICKY_ID ||
+       m_reorder_auto_scrolling)
+    {
+        RenderScheduler::GetInstance().RequestRender();
     }
 }
 
@@ -1669,17 +1757,6 @@ TimelineView::RenderGraphView()
     TrackItem::SetSidebarSize(m_sidebar_size);
     ImGui::EndChild();
     ImGui::PopStyleColor();
-}
-
-bool
-TimelineView::WantsContinuousRender() const
-{
-    // The loading-timer debounce gates track-data requests and only advances
-    // while rendering, so keep rendering until it expires or the load stalls.
-    // Anchor drag and reorder auto-scroll both advance per frame, so keep
-    // rendering while either is active.
-    return m_loading_timer.IsRunning() || m_dragged_sticky_id != INVALID_STICKY_ID ||
-           m_reorder_auto_scrolling;
 }
 
 bool

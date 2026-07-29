@@ -422,7 +422,7 @@ InfiniteScrollTable::Render()
 
                 // only check if we need to fetch based on the scroll position if we don't
                 // have all the data
-                if(!m_skip_data_fetch && table_data.size() < total_row_count - 1)
+                if(!m_skip_data_fetch && table_data.size() < total_row_count - 1 && table_params)
                 {
                     if(!m_data_provider.IsRequestPending(m_request_id))
                     {
@@ -452,16 +452,9 @@ InfiniteScrollTable::Render()
                                 "{}, frame count: {}, chunk size: {}, scroll y: {}",
                                 new_start_pos, frame_count, m_fetch_chunk_size, scroll_y);
 
-                            m_data_provider.FetchTable(TableRequestParams(
-                                m_request_table_type, table_params->m_track_ids,
-                                table_params->m_op_types, table_params->m_start_ts,
-                                table_params->m_end_ts, table_params->m_where.c_str(),
-                                table_params->m_filter.c_str(),
-                                table_params->m_group.c_str(),
-                                table_params->m_group_columns.c_str(),
-                                table_params->m_string_table_filters, new_start_pos,
-                                m_fetch_chunk_size, table_params->m_sort_column_index,
-                                table_params->m_sort_order));
+                            table_params->m_start_row     = new_start_pos;
+                            table_params->m_req_row_count = m_fetch_chunk_size;
+                            m_data_provider.FetchTable(*table_params);
                         }
                         else if((scroll_y + ImGui::GetWindowHeight() >
                                  end_row_position -
@@ -491,16 +484,9 @@ InfiniteScrollTable::Render()
                                 "{}, frame count: {}, chunk size: {}, scroll y: {}",
                                 new_start_pos, frame_count, m_fetch_chunk_size, scroll_y);
 
-                            m_data_provider.FetchTable(TableRequestParams(
-                                m_request_table_type, table_params->m_track_ids,
-                                table_params->m_op_types, table_params->m_start_ts,
-                                table_params->m_end_ts, table_params->m_where.c_str(),
-                                table_params->m_filter.c_str(),
-                                table_params->m_group.c_str(),
-                                table_params->m_group_columns.c_str(),
-                                table_params->m_string_table_filters, new_start_pos,
-                                m_fetch_chunk_size, table_params->m_sort_column_index,
-                                table_params->m_sort_order));
+                            table_params->m_start_row     = new_start_pos;
+                            table_params->m_req_row_count = m_fetch_chunk_size;
+                            m_data_provider.FetchTable(*table_params);
                         }
                     }
                 }
@@ -686,15 +672,8 @@ InfiniteScrollTable::ProcessSortOrFilterRequest(
 
             spdlog::debug("Fetching data for sort, frame count: {}", frame_count);
 
-                // Fetch the event table with the updated params
-            m_data_provider.FetchTable(TableRequestParams(
-                m_request_table_type, table_params->m_track_ids, table_params->m_op_types,
-                table_params->m_start_ts, table_params->m_end_ts,
-                table_params->m_where.c_str(), table_params->m_filter.c_str(),
-                table_params->m_group.c_str(), table_params->m_group_columns.c_str(),
-                table_params->m_string_table_filters, table_params->m_start_row,
-                table_params->m_req_row_count, table_params->m_sort_column_index,
-                table_params->m_sort_order));
+            // Fetch the event table with the updated params
+            m_data_provider.FetchTable(*table_params);
 
             m_filter_options = filter;
         }
@@ -971,20 +950,16 @@ InfiniteScrollTable::ExportToFile() const
         "Export Table", file_filters, "", [this](std::string file_path) -> void {
             std::shared_ptr<TableRequestParams> table_params =
                 m_table_model_mutable().GetTableParams(m_table_type);
-            if(table_params &&
-               m_data_provider.FetchTable(TableRequestParams(
-                   m_request_table_type, table_params->m_track_ids,
-                   table_params->m_op_types, table_params->m_start_ts,
-                   table_params->m_end_ts, table_params->m_where.c_str(),
-                   table_params->m_filter.c_str(), table_params->m_group.c_str(),
-                   table_params->m_group_columns.c_str(),
-                   table_params->m_string_table_filters, INVALID_UINT64_INDEX,
-                   INVALID_UINT64_INDEX, table_params->m_sort_column_index,
-                   table_params->m_sort_order, file_path)))
+            if(table_params)
             {
-                NotificationManager::GetInstance().ShowPersistent(
-                    m_export_notification_id, "Exporting: " + file_path,
-                    NotificationLevel::Info);
+                table_params->m_export_to_file_path = file_path;
+                if(m_data_provider.FetchTable(*table_params))
+                {
+                    NotificationManager::GetInstance().ShowPersistent(
+                        m_export_notification_id, "Exporting: " + file_path,
+                        NotificationLevel::Info);
+                }
+                table_params->m_export_to_file_path.clear();
             }
         });
 }

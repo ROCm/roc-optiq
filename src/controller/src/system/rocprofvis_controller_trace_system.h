@@ -27,6 +27,7 @@ class Graph;
 class Timeline;
 class Event;
 class Table;
+class EventSearchTable;
 class SystemTable;
 class Summary;
 class SummaryMetrics;
@@ -91,7 +92,7 @@ private:
     Timeline*                                      m_timeline;
     SystemTable*                                   m_event_table;
     SystemTable*                                   m_sample_table;
-    SystemTable*                                   m_search_table;
+    EventSearchTable*                              m_search_table;
     Summary*                                       m_summary;
     MemoryManager*                                 m_mem_mgmt;
     TopologyNode*                                  m_topology_root;

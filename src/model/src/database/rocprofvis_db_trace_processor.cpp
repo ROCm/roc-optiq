@@ -842,57 +842,12 @@ namespace RocProfVis
 
     }
 
-    void GoogleTraceProcessor::BuildSliceQueryMap(slice_query_map_t& slice_query_map, rocprofvis_dm_track_params_t* props)
+
+    void GoogleTraceProcessor::BuildSliceQueryMap(slice_query_map_t& slice_query_map, rocprofvis_dm_track_params_t* props, rocprofvis_db_query_type_t query_type)
     {
         DbInstance* instance = (DbInstance*)props->track_indentifiers.db_instance;
-        std::string q = props->query[kRPVPerfettoQuerySlice][0] + " WHERE ( track_id = "; 
+        std::string q = props->query[query_type][0] + " WHERE ( track_id = "; 
         slice_query_map[q][instance->GuidIndex()] = std::to_string(props->track_indentifiers.id[TRACK_ID_TID]);
-    }
-
-    void GoogleTraceProcessor::BuildTableQueryMap(
-        rocprofvis_db_num_of_tracks_t num, 
-        rocprofvis_db_track_selection_t tracks,
-        rocprofvis_dm_num_string_table_filters_t num_string_table_filters, 
-        rocprofvis_dm_string_table_filters_t string_table_filters,
-        std::vector<slice_query_map_t>& slice_query_map_array) {
-
-        slice_query_map_array.resize(num);
-        for (int i = 0; i < num; i++) {
-            rocprofvis_dm_index_t track = tracks[i];
-            if (TABLE_QUERY_UNPACK_OP_TYPE(track) == 0)
-            {
-                track = TABLE_QUERY_UNPACK_TRACK_ID(track);
-                rocprofvis_dm_track_params_t* props = TrackPropertiesAt(track);
-                DbInstance* instance = (DbInstance*)props->track_indentifiers.db_instance;
-                std::string q = props->query[kRPVPerfettoQueryTable][0] + " WHERE ( track_id = "; 
-                slice_query_map_array[i][q][instance->GuidIndex()] = std::to_string(props->track_indentifiers.id[TRACK_ID_TID]);
-            }
-            else
-            {
-                track = TABLE_QUERY_UNPACK_OP_TYPE(track);
-                table_string_id_filter_map_t string_id_filter_map;
-                rocprofvis_dm_result_t string_filter_result = BuildTableStringIdFilter(num_string_table_filters, string_table_filters, string_id_filter_map);
-                if (num_string_table_filters > 0)
-                {
-                    if (string_filter_result == kRocProfVisDmResultSuccess && string_id_filter_map.count((rocprofvis_dm_event_operation_t)track) > 0)
-                    {
-                        auto filters = string_id_filter_map.at((rocprofvis_dm_event_operation_t)track);
-                        for (auto it = filters.begin(); it != filters.end(); ++it)
-                        {
-                            slice_query_map_array[i][GetEventOperationQuery((rocprofvis_dm_event_operation_t)track)][it->first] = std::string(" WHERE ") + it->second;
-                        }
-                    }
-                }
-                else
-                {
-                    for (auto db_inst : DbInstances())
-                    {
-                        slice_query_map_array[i][GetEventOperationQuery((rocprofvis_dm_event_operation_t)track)][db_inst.first.GuidIndex()];
-                    }
-                }
-            }
-
-        }
     }
 
     rocprofvis_dm_result_t GoogleTraceProcessor::BuildHistogram(Future* future, uint32_t desired_bins) {
@@ -1006,7 +961,7 @@ namespace RocProfVis
         rocprofvis_dm_result_t result = kRocProfVisDmResultNotLoaded;
         if (num_string_table_filters > 0)
         {
-            std::string query;
+            std::string query = "( ";
             for (int i = 0; i < num_string_table_filters; i++)
             {
                 if (i > 0) {
@@ -1016,7 +971,7 @@ namespace RocProfVis
             }
 
             filter[kRocProfVisDmOperationLaunch][0] = query;
-            rocprofvis_dm_result_t result = kRocProfVisDmResultSuccess;
+            result = kRocProfVisDmResultSuccess;
         }
         return result;
     }

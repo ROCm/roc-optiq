@@ -29,7 +29,6 @@ namespace DataModel
 
     class QueryManager;
 
-
     typedef struct rocprofvis_db_compound_query_command {
         std::string name;
         std::string parameter;

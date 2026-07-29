@@ -30,6 +30,7 @@ namespace View
 class MeasurementController;
 class TimelineSelection;
 class TimelineView;
+class FlameTrackItem;
 class TimelineTrackOptions;
  
 typedef struct ViewCoords
@@ -88,7 +89,6 @@ public:
     ~TimelineView();
     virtual void                                     Render() override;
     void                                             Update() override;
-    bool                                             WantsContinuousRender() const;
     void                                             MakeGraphView();
     void                                             ResetView();
     void                                             DestroyGraphs();
@@ -120,6 +120,8 @@ public:
     void           RenderMeasurement(ImDrawList* draw_list, ImVec2 window_position);
     ViewCoords                          GetViewCoords() const;
     std::shared_ptr<TimePixelTransform> GetTransform() const;
+
+    friend struct TimelineViewTestPeer;
     float          GetTotalTrackHeight() const;
     float          GetTrackViewportHeight() const;
     void           GetVisibleTrackFractions(float& start_fraction, float& end_fraction) const;
@@ -191,6 +193,9 @@ private:
     void                            ClearTimeRangeSelection();
     void                            CopySelectedEventNames();
     void                            CopySelectedEventDetails();
+    void                            ZoomToTimeSpan(double start_ns, double end_ns);
+    void                            ZoomToMeasurement();
+    void                            ZoomToTimeRangeSelection();
 
     TrackLayout                     BuildTrackLayout();
     EventManager::SubscriptionToken m_scroll_to_track_token;

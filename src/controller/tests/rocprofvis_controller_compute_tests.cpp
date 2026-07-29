@@ -10,7 +10,10 @@
 #include <filesystem>
 #include <unordered_map>
 
-std::string g_input_file = "sample/rocprof_compute_23ed6f36.db";
+std::string g_input_file =
+    (std::filesystem::path(ROCPROFVIS_TEST_SOURCE_DIR) / "sample" /
+     "rocprof_compute_23ed6f36.db")
+        .string();
 
 int
 main(int argc, char** argv)

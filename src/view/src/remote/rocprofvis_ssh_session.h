@@ -11,6 +11,7 @@
 #include <functional>
 #include <memory>
 #include <string>
+#include <vector>
 
 namespace RocProfVis
 {
@@ -49,6 +50,13 @@ namespace View
         // thread only (sessions are created/destroyed by UI code).
         static size_t ActiveSessionCount();
 
+        // All live SshSession objects, in creation order. Backs the centralized
+        // SSH auth-modal render path: AppWindow renders the blocking prompt /
+        // host-key modal for every session each frame, so no session (including
+        // one owned privately by a widget like the remote file browser) can
+        // wedge its worker waiting on a prompt nobody draws. Main thread only.
+        static const std::vector<SshSession*>& ActiveSessions();
+
         // Phase starters. Return the monitor operation id, or 0 on failure.
         uint64_t StartConnect();
         uint64_t StartAuthenticate();
@@ -72,6 +80,15 @@ namespace View
         {
             return reinterpret_cast<rocprofvis_controller_connection_t*>(m_connection);
         }
+
+        // When true, this session's auth prompt / host-key modal is rendered by
+        // its owner nested inside the owner's own modal window (e.g. the remote
+        // file browser, which is itself a BeginPopupModal). The centralized
+        // RenderSshAuthModals path must then skip this session - opening a second
+        // top-level modal for it would dismiss the owner's modal - and defer any
+        // other session's prompt until the owning modal closes. Main thread only.
+        void SetAuthModalSelfManaged(bool self_managed) { m_auth_modal_self_managed = self_managed; }
+        bool IsAuthModalSelfManaged() const { return m_auth_modal_self_managed; }
 
         rocprofvis_result_t SubmitPromptResponses(std::vector<std::string>& responses);
         rocprofvis_result_t CancelRequest();
@@ -128,13 +145,16 @@ namespace View
         // (it persists while a request is pending), so this guards against
         // rebuilding the request every frame.
         bool                m_auth_request_built;
+        // See SetAuthModalSelfManaged: owner renders this session's auth modal
+        // nested, so the centralized path skips it.
+        bool                m_auth_modal_self_managed = false;
         // Pending command/paths captured for the active operation so the start
         // happens lazily inside BeginOperation's start_fn.
         std::string         m_pending_command;
         std::string         m_pending_remote_path;
         std::string         m_pending_local_path;
 
-        static size_t       s_active_session_count;
+        static std::vector<SshSession*> s_active_sessions;
     };
 
 

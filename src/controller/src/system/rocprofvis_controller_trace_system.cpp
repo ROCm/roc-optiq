@@ -12,6 +12,7 @@
 #include "rocprofvis_controller_summary.h"
 #include "rocprofvis_controller_summary_metrics.h"
 #include "rocprofvis_controller_table_system.h"
+#include "rocprofvis_controller_table_system_search.h"
 #include "rocprofvis_controller_timeline.h"
 #include "rocprofvis_controller_track.h"
 #include "rocprofvis_controller_topology.h"
@@ -68,7 +69,7 @@ rocprofvis_result_t SystemTrace::Init()
 
         m_sample_table = new SystemTable(1);
 
-        m_search_table = new SystemTable(2);
+        m_search_table = new EventSearchTable(2);
         
         m_summary = new Summary(this);
 
@@ -1130,7 +1131,7 @@ rocprofvis_result_t SystemTrace::SetObject(rocprofvis_property_t property, uint6
                 SystemTableRef table(value);
                 if(table.IsValid())
                 {
-                    m_search_table = table.Get();
+                    m_search_table = (EventSearchTable*)(table.Get());
                     result = kRocProfVisResultSuccess;
                 }
                 break;

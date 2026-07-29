@@ -59,6 +59,7 @@ class ProfileDatabase : public QueryManager
         // @param path - full path to database file
         ProfileDatabase( rocprofvis_db_filename_t path) : 
             QueryManager(path, CallbackAddAnyRecord) {};
+
         // ProfileDatabase destructor, must be defined as virtual to free resources of derived classes 
         virtual ~ProfileDatabase() {}
         // method to detect rocpd-based database type (rocpd vs rocprof)
@@ -81,18 +82,10 @@ class ProfileDatabase : public QueryManager
 
         // ----------------------------------Query builders------------------------------------------
         // builds query map based on track identifiers for slice query
-        void BuildSliceQueryMap(
-            slice_query_map_t& slice_query_map, 
-            rocprofvis_dm_track_params_t* props) override;
-
-        // builds query map based on track identifiers for table query
-        void BuildTableQueryMap(
-            rocprofvis_db_num_of_tracks_t num,
-            rocprofvis_db_track_selection_t tracks,
-            rocprofvis_dm_num_string_table_filters_t num_string_table_filters,
-            rocprofvis_dm_string_table_filters_t string_table_filters,
-            std::vector<slice_query_map_t>& slice_query_map_array) override;
-
+         void BuildSliceQueryMap(
+             slice_query_map_t& slice_query_map, 
+             rocprofvis_dm_track_params_t* props,
+             rocprofvis_db_query_type_t query_type) override;
     
 
         // method to build a query to read time slice of records for single track 
@@ -106,7 +99,6 @@ class ProfileDatabase : public QueryManager
                                 rocprofvis_dm_string_t& query,
                                 uint32_t split_count,
                                 uint32_t split_index) override;
-
 
         // adds a new query to the track queries collection 
         // multiple queries for single track are required to support data from multiple database tables on single track,

@@ -64,7 +64,6 @@ typedef enum rocprofvis_db_compound_table_type {
     kRPVTableDataTypeEvent,
     kRPVTableDataTypeSample,
     kRPVTableDataTypeSearch,
-    kRPVTableDataTypeAnalysis,
     kRPVTableDataTypesNum
 } rocprofvis_db_compound_table_type;
 
@@ -81,7 +80,7 @@ class QueryManager : public SqliteDatabase
         // @param path - full path to database file
         QueryManager( rocprofvis_db_filename_t path, RpvSqliteExecuteQueryCallback callback_add_any_record) : 
                         SqliteDatabase(path), m_callback_add_any_record(callback_add_any_record),
-            m_table_processor{TableProcessor(this),TableProcessor(this),TableProcessor(this), TableProcessor(this)} {};
+            m_table_processor{TableProcessor(this),TableProcessor(this),TableProcessor(this)} {};
         // SqliteDatabase destructor, must be defined as virtual to free resources of derived classes 
         virtual ~QueryManager() {};
 
@@ -126,7 +125,25 @@ class QueryManager : public SqliteDatabase
             rocprofvis_dm_string_t& query, 
             slice_array_t& slices);
 
-        // method to build a query to read time slice of records table view 
+
+        rocprofvis_dm_result_t BuildCompoundQuery(rocprofvis_dm_table_use_case_enum_t use_case,
+            rocprofvis_dm_timestamp_t start, 
+            rocprofvis_dm_timestamp_t end,
+            rocprofvis_db_num_of_tracks_t num,
+            rocprofvis_db_track_selection_t tracks,
+            std::vector<slice_query_map_t>& slice_query_map_array,
+            rocprofvis_dm_charptr_t where,
+            rocprofvis_dm_charptr_t filter,
+            rocprofvis_dm_charptr_t group,
+            rocprofvis_dm_charptr_t group_cols, 
+            rocprofvis_dm_charptr_t sort_column, 
+            rocprofvis_dm_sort_order_t sort_order,
+            uint64_t max_count, 
+            uint64_t offset,
+            bool count_only,
+            rocprofvis_dm_string_t& query);
+
+        // method to build a query to read time slice of records for table view 
         // @param use_case - the method is multi-use, this is enumeration of use cases
         // @param start - start timestamp of time slice 
         // @param end - end timestamp of time slice 
@@ -138,12 +155,11 @@ class QueryManager : public SqliteDatabase
         // @param group_cols - group by columns
         // @param sort_column - sort by column
         // @param sort_order - sort order
-        // @param num_string_table_filters - number of search string parameters   
-        // @param string_table_filters - search string parameters 
         // @param max_count - rows limit
         // @param offset - start row
         // @param count only - retrieve only rows count
         // @return status of operation 
+
         rocprofvis_dm_result_t BuildTableQuery(
             rocprofvis_dm_table_use_case_enum_t use_case,
             rocprofvis_dm_timestamp_t start, 
@@ -156,8 +172,36 @@ class QueryManager : public SqliteDatabase
             rocprofvis_dm_charptr_t group_cols, 
             rocprofvis_dm_charptr_t sort_column, 
             rocprofvis_dm_sort_order_t sort_order,
+            uint64_t max_count, 
+            uint64_t offset,
+            bool count_only,
+            rocprofvis_dm_string_t& query) override;
+
+        // method to build a query to read time slice of records for event search 
+        // @param start - start timestamp of time slice 
+        // @param end - end timestamp of time slice 
+        // @param num - number of tracks
+        // @param ops - uint32_t array with track IDs 
+        // @param where - where clause 
+        // @param sort_column - sort by column
+        // @param sort_order - sort order
+        // @param num_string_table_filters - number of search string parameters   
+        // @param string_table_filters - search string parameters 
+        // @param max_count - rows limit
+        // @param offset - start row
+        // @param count only - retrieve only rows count
+        // @return status of operation 
+
+        rocprofvis_dm_result_t BuildEventSearchQuery(
+            rocprofvis_dm_timestamp_t start, 
+            rocprofvis_dm_timestamp_t end,
+            rocprofvis_db_num_of_tracks_t num,
+            rocprofvis_db_track_selection_t ops,
+            rocprofvis_dm_charptr_t where,
             rocprofvis_dm_num_string_table_filters_t num_string_table_filters, 
             rocprofvis_dm_string_table_filters_t string_table_filters,
+            rocprofvis_dm_charptr_t sort_column, 
+            rocprofvis_dm_sort_order_t sort_order,
             uint64_t max_count, 
             uint64_t offset,
             bool count_only,
@@ -181,15 +225,8 @@ class QueryManager : public SqliteDatabase
         // builds query map based on track identifiers for slice query
         virtual void BuildSliceQueryMap(
             slice_query_map_t& slice_query_map, 
-            rocprofvis_dm_track_params_t* props) = 0;
-
-        // builds query map based on track identifiers for table query
-        virtual void BuildTableQueryMap(
-            rocprofvis_db_num_of_tracks_t num,
-            rocprofvis_db_track_selection_t tracks,
-            rocprofvis_dm_num_string_table_filters_t num_string_table_filters,
-            rocprofvis_dm_string_table_filters_t string_table_filters,
-            std::vector<slice_query_map_t>& slice_query_map_array) = 0;
+            rocprofvis_dm_track_params_t* props,
+            rocprofvis_db_query_type_t query_type) = 0;
 
         // Searches for strings containing the passed in list of filter strings and builds a WHERE IN clause for the table query.
         // @param num_string_table_filters - number of filter strings
@@ -315,8 +352,6 @@ class QueryManager : public SqliteDatabase
         virtual bool FindTrack(rocprofvis_dm_track_category_t category, uint64_t id_process, uint64_t id_subprocess, uint32_t db_instance, uint32_t& out_track) = 0;
         virtual rocprofvis_dm_track_category_t GetRegionTrackCategory()    = 0;
         virtual const rocprofvis_event_data_category_map_t* GetCategoryEnumMap() = 0;
-
-        
 
     private:
 

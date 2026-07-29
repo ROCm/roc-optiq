@@ -71,7 +71,9 @@ MultiTrackTable::Render()
     ImGui::BeginChild("multitrack_table", ImVec2(0.0f, 0.0f), ImGuiChildFlags_Borders,
                       ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
     ImGui::PopStyleVar();
-    auto table_params = m_table_model().GetTableParams(m_table_type);
+    std::shared_ptr<TrackTableRequestParams> table_params =
+        std::static_pointer_cast<TrackTableRequestParams>(
+            m_table_model().GetTableParams(m_table_type));
     if(m_display_filters || table_params)
     {
         const ImGuiStyle& style = ImGui::GetStyle();
@@ -471,13 +473,11 @@ MultiTrackTable::FetchSelectionData()
     else
     {
         // Fetch table data for the selected tracks
-        TableRequestParams table_params(
-            m_request_table_type, included_tracks, {}, start_ns, end_ns,
+        fetch_result = m_data_provider.FetchTable(TrackTableRequestParams{
+            m_request_table_type, included_tracks, start_ns, end_ns,
             m_filter_options.where, m_filter_options.filter,
-            m_filter_options.group_by.c_str(), m_filter_options.group_columns, {}, 0,
-            m_fetch_chunk_size, m_sort_column_index, m_sort_order);
-
-        fetch_result = m_data_provider.FetchTable(table_params);
+            m_filter_options.group_by.c_str(), m_filter_options.group_columns, 0,
+            m_fetch_chunk_size, m_sort_column_index, m_sort_order });
     }
 
     if(!fetch_result)

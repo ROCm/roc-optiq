@@ -450,8 +450,13 @@ Analysis::EventsTable::EventsTable(uint64_t id, rocprofvis_dm_event_operation_t 
 , m_op(op)
 {}
 
-rocprofvis_result_t Analysis::EventsTable::UnpackArguments(Arguments& args, QueryArguments& out) const
+rocprofvis_result_t Analysis::EventsTable::UnpackArguments(Arguments& args, TableArguments*& out) const
 {
+    if(!out)
+    {
+        out = new SystemTableArguments();
+    }
+    SystemTableArguments* sys_out = (SystemTableArguments*)out;
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     std::vector<uint32_t> tracks;
     uint64_t num_tracks = 0;
@@ -494,13 +499,21 @@ rocprofvis_result_t Analysis::EventsTable::UnpackArguments(Arguments& args, Quer
             }
         }
     }
-    const char* group = (m_op == kRocProfVisDmOperationLaunchSample) ? "name, COUNT(*) AS Invocations, SUM(duration) AS DurationTotal" :
-        "name, COUNT(*) AS Invocations, SUM(duration) AS DurationTotal, AVG(duration) AS DurationAvg, MIN(duration) AS DurationMin, MAX(duration) AS DurationMax";
     ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
     result = args.GetUInt64(kRPVControllerTableArgsSortColumn, 0, &sort_column_index);
     ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
     result = args.GetUInt64(kRPVControllerTableArgsSortOrder, 0, &sort_order);
-    out = {"", "__op = " + std::to_string(m_op), group, "name", sort_column_index, (rocprofvis_controller_sort_order_t)sort_order, tracks, {}, use_case, start_ts, end_ts};
+    sys_out->m_sort_column = sort_column_index;
+    sys_out->m_sort_order = (rocprofvis_controller_sort_order_t)sort_order;
+    sys_out->m_where = "";
+    sys_out->m_filter = "__op = " + std::to_string(m_op);
+    sys_out->m_group = (m_op == kRocProfVisDmOperationLaunchSample) ? "name, COUNT(*) AS Invocations, SUM(duration) AS DurationTotal" :
+        "name, COUNT(*) AS Invocations, SUM(duration) AS DurationTotal, AVG(duration) AS DurationAvg, MIN(duration) AS DurationMin, MAX(duration) AS DurationMax";
+    sys_out->m_group_cols = "name";
+    sys_out->m_tracks = std::move(tracks);
+    sys_out->m_use_case = use_case;
+    sys_out->m_start_ts = start_ts;
+    sys_out->m_end_ts = end_ts;
     return result;
 }
 

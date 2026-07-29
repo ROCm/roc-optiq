@@ -33,6 +33,8 @@ public:
     void SetQuery(const std::string& query);
     void SetExternalQuery(MetricId metric_id, const std::string& value_name);
 
+    friend struct KernelMetricTableTestPeer;
+
 private:
     void RenderColumnFilter(int column_index);
     void ApplyFilters();

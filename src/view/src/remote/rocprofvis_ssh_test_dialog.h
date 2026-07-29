@@ -8,9 +8,11 @@
 #include "rocprofvis_ssh_session.h"
 #include "rocprofvis_ssh_settings_dialog.h"
 #include "rocprofvis_remote_trace_orchestrator.h"
+#include "rocprofvis_remote_file_browser.h"
 
 #include <memory>
 #include <string>
+#include <vector>
 
 namespace RocProfVis
 {
@@ -45,13 +47,6 @@ public:
 private:
     void RenderProgressPopup();
     void RenderOutputPopup();
-    void RenderRemoteFilePopup();
-
-    // Browses the current m_uri browsing path, lazily creating the orchestrator
-    // (bound to the directory-path callback) on first use and reusing it for
-    // subsequent folder navigation. Reuse keeps the SSH session connected +
-    // authenticated across clicks instead of reconnecting every time.
-    void BrowseRemotePath();
 
     // Binds the currently selected SSH connection profile into m_uri so the
     // spawned orchestrator/session read the right host/credentials.
@@ -63,6 +58,9 @@ private:
     std::shared_ptr<RemoteUri>               m_uri;
     std::unique_ptr<SshSettingsDialog>       m_settings_dialog;
     std::unique_ptr<RemoteTraceOrchestrator> m_orchestrator;
+    // Shared remote file/directory picker. Owns its own SSH session for listing
+    // directories, reading the connection from m_uri.
+    RemoteFileBrowser                        m_file_browser;
 
     bool                                     m_show_window;
     std::string                              m_status_msg;
@@ -72,10 +70,6 @@ private:
 
     bool                                     m_show_progress_popup;
     FileStat::Snapshot                       m_last_progress;
-
-    bool                                     m_show_remote_filesystem_popup;
-    RemoteDir::Snapshot                      m_last_directory_state;
-    uint32_t                                 m_selected_file_index;
 };
 
 }  // namespace View

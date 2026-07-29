@@ -175,14 +175,15 @@ EventSearch::Search()
         {
             const TimelineModel& timeline = m_data_provider.DataModel().GetTimeline();
             m_data_provider.CancelRequest(m_request_id);
-            m_search_deferred = !m_data_provider.FetchTable(TableRequestParams(
-                m_request_table_type, {},
-                { kRocProfVisDmOperationLaunch, kRocProfVisDmOperationDispatch,
-                  kRocProfVisDmOperationLaunchSample },
-                timeline.GetStartTime(), timeline.GetEndTime(), "", "", "", "", { terms },
-                0, m_fetch_chunk_size, m_sort_column_index, m_sort_order));
-            m_searched        = true;
-            m_should_open     = true;
+            m_search_deferred =
+                !m_data_provider.FetchTable(EventSearchRequestParams(
+                    m_request_table_type,
+                    { kRocProfVisDmOperationLaunch, kRocProfVisDmOperationDispatch,
+                      kRocProfVisDmOperationLaunchSample },
+                    timeline.GetStartTime(), timeline.GetEndTime(), "", { terms }, 0,
+                    m_fetch_chunk_size, m_sort_column_index, m_sort_order));
+            m_searched    = true;
+            m_should_open = true;
         }
         else
         {

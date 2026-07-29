@@ -15,6 +15,7 @@
 #include "rocprofvis_project.h"
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_hotkey_manager.h"
+#include "rocprofvis_render_scheduler.h"
 #include "rocprofvis_settings_panel.h"
 #include "rocprofvis_version.h"
 #include "rocprofvis_utils.h"
@@ -253,7 +254,7 @@ AppWindow::Init()
         static_cast<int>(RocEvents::kTabSelected), new_tab_selected_handler);
 
     auto font_changed_handler = [this](std::shared_ptr<RocEvent> e) {
-        (void)e;
+        (void) e;
         HandleFontChanged();
     };
 
@@ -643,6 +644,8 @@ AppWindow::RequestExitIfProviderCleanupsComplete()
 void
 AppWindow::Update()
 {
+    RenderScheduler::GetInstance().BeginFrame();
+
 #ifdef ROCPROFVIS_HAVE_NATIVE_FILE_DIALOG
     UpdateNativeFileDialog();
 #endif
@@ -656,6 +659,7 @@ AppWindow::Update()
     }
 
     HotkeyManager::GetInstance().ProcessInput();
+    SettingsManager::GetInstance().GetFontManager().Update();
     // Poll long-running operations (profiler sessions, SSH) and queue any
     // status-change events before they are dispatched below this frame.
     AppMonitor::GetInstance()->Update();
@@ -678,17 +682,16 @@ AppWindow::Update()
 bool
 AppWindow::WantsContinuousRender()
 {
-    if(!m_provider_cleanup_jobs.empty() || m_disable_app_interaction ||
-       m_shutdown_requested || EventManager::GetInstance()->HasPendingEvents() ||
-       NotificationManager::GetInstance().HasActiveNotifications() ||
-       AppMonitor::GetInstance()->HasPendingOperations())
+    // Animations and render-driven work push a frame request from their own
+    // Update()/Render() via RenderScheduler, so no per-feature branch is needed
+    // here.
+    if(RenderScheduler::GetInstance().WantsRender())
     {
         return true;
     }
 
-    // Keep rendering while the log viewer is open and unpaused so new log lines
-    // appear live instead of waiting for the next input to wake the idle loop.
-    if(LogViewer::GetInstance()->IsLiveUpdating())
+    if(!m_provider_cleanup_jobs.empty() || m_disable_app_interaction ||
+       m_shutdown_requested || EventManager::GetInstance()->HasPendingEvents())
     {
         return true;
     }
@@ -701,19 +704,9 @@ AppWindow::WantsContinuousRender()
     }
 #endif
 
-    // Only the active tab renders, so only it can have render-driven work with
-    // no events/requests yet (e.g. the timeline loading-timer debounce).
-    Project* current_project = GetCurrentProject();
-    if(current_project)
-    {
-        RootView* current_root =
-            dynamic_cast<RootView*>(current_project->GetView().get());
-        if(current_root && current_root->WantsContinuousRender())
-        {
-            return true;
-        }
-    }
-
+    // Polled across every tab (not just the active one) so background loads keep
+    // progressing. kLoading spans the whole load even when the pending count
+    // briefly hits zero between stages, so we never freeze mid-load.
     bool wants_render = false;
     for(const auto& [id, project] : m_projects)
     {
@@ -721,8 +714,6 @@ AppWindow::WantsContinuousRender()
         if(root_view)
         {
             DataProvider* data_provider = root_view->GetDataProvider();
-            // kLoading spans the whole initial load, even when the pending count
-            // briefly drops to zero between stages, so we never freeze mid-load.
             if(data_provider &&
                (data_provider->GetState() == ProviderState::kLoading ||
                 data_provider->GetPendingRequestCount() > 0))
@@ -818,6 +809,14 @@ AppWindow::Render()
     RenderDebugOuput();
 #endif
 
+#ifdef ROCPROFVIS_ENABLE_REMOTE
+    // Centralized SSH auth prompts: draw the blocking prompt / host-key modal
+    // for every live session (including connections owned privately by widgets
+    // such as the remote file browser), so no session can wedge its worker
+    // waiting on a prompt that no dialog happens to render.
+    RenderSshAuthModals();
+#endif
+
     // render notifications last
     NotificationManager::GetInstance().Render();
 
@@ -829,13 +828,12 @@ AppWindow::RenderShutdownState()
 {
     ImGui::OpenPopup(SHUTDOWN_DIALOG_NAME);
 
-    const float dpi = SettingsManager::GetInstance().GetDPI();
     ImGuiViewport* viewport = ImGui::GetMainViewport();
     ImGui::SetNextWindowPos(
         ImVec2(viewport->WorkPos.x + viewport->WorkSize.x * 0.5f,
                viewport->WorkPos.y + viewport->WorkSize.y * 0.5f),
         ImGuiCond_Always, ImVec2(0.5f, 0.5f));
-    ImGui::SetNextWindowSize(ImVec2(360.0f * dpi, 0.0f), ImGuiCond_Always);
+    ImGui::SetNextWindowSize(ImVec2(360.0f, 0.0f), ImGuiCond_Always);
 
     PopUpStyle ps;
     ps.PushPopupStyles();
@@ -1409,12 +1407,14 @@ AppWindow::HandleFontChanged()
         return;
     }
 
-    // Calculate status bar height based on font size, with some padding.
-    ImGuiStyle& style     = ImGui::GetStyle();
-    float       line_pad  = style.CellPadding.y * 2.0f;
-    float       line_size = ImGui::GetTextLineHeight() + line_pad;
-
-    status_bar_item->m_height = line_size;
+    // Size the slot to one framed text line plus the child border so the
+    // status bar content does not overflow into a scrollbar.
+    const ImGuiStyle& default_style = SettingsManager::GetInstance().GetDefaultStyle();
+    const float       content_height =
+        ImGui::GetFontSize() + (default_style.FramePadding.y * 2.0f);
+    const float border_height = (status_bar_item->m_window_padding.y * 2.0f) +
+                                (ImGui::GetStyle().ChildBorderSize * 2.0f);
+    status_bar_item->m_height = content_height + border_height;
 
     // adjust main view's size to account for new status bar height
     auto main_view_item = m_main_view->GetMutableAt(count - 2);

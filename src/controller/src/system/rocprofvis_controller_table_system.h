@@ -4,12 +4,9 @@
 #pragma once
 
 #include "rocprofvis_controller.h"
-#include "rocprofvis_controller_handle.h"
-#include "rocprofvis_controller_data.h"
 #include "rocprofvis_controller_table.h"
 #include "rocprofvis_c_interface.h"
 #include <vector>
-#include <deque>
 
 namespace RocProfVis
 {
@@ -29,7 +26,7 @@ public:
 
     virtual ~SystemTable();
 
-    void Reset();
+    void Reset() override;
 
     rocprofvis_result_t SetupAndFetch(Trace& controller, Arguments& args, Array& array, Future* future) final;
     rocprofvis_result_t ExportCSV(rocprofvis_dm_trace_t dm_handle, Arguments& args, Future* future, const char* path) const final;
@@ -39,34 +36,38 @@ public:
     rocprofvis_result_t GetString(rocprofvis_property_t property, uint64_t index, char* value, uint32_t* length) final;
 
 protected:
-    struct QueryArguments
+    struct SystemTableArguments : TableArguments
     {
         std::string m_where;
         std::string m_filter;
         std::string m_group;
         std::string m_group_cols;
-        uint64_t m_sort_column;
-        rocprofvis_controller_sort_order_t m_sort_order;
         std::vector<uint32_t> m_tracks;
-        std::vector<std::string> m_string_table_filters;
         rocprofvis_dm_table_use_case_enum_t m_use_case;
         double m_start_ts;
         double m_end_ts;
     };
 
-    virtual rocprofvis_result_t UnpackArguments(Arguments& args, QueryArguments& out) const;
-    virtual rocprofvis_result_t UnpackUseCase(Arguments& args, rocprofvis_dm_table_use_case_enum_t& out) const;
+    rocprofvis_result_t UnpackArguments(Arguments& args, TableArguments*& out) const override;
+    void                GetCurrentArguments(TableArguments*& out) const override;
+    void                SetCurrentArguments(TableArguments& in) override;
+
+    virtual bool                   ArgumentsChanged(SystemTableArguments& in) const;
+    virtual rocprofvis_result_t    UnpackUseCase(Arguments& args, rocprofvis_dm_table_use_case_enum_t& out) const;
+    virtual rocprofvis_dm_result_t BuildQuery(rocprofvis_dm_database_t db, TableArguments& args, uint64_t index, uint64_t count, bool count_only, char** out) const;
 
 private:
     rocprofvis_result_t Setup(rocprofvis_dm_trace_t dm_handle, Arguments& args, Future* future) final;
     rocprofvis_result_t Fetch(rocprofvis_dm_trace_t dm_handle, uint64_t index, uint64_t count, Array& array, Future* future) final;
 
     std::vector<uint32_t> m_tracks;
-    std::vector<std::string> m_string_table_filters;
-    std::vector<const char*> m_string_table_filters_ptr;
     rocprofvis_dm_table_use_case_enum_t m_use_case;
     double m_start_ts;
     double m_end_ts;
+    std::string m_where;
+    std::string m_filter;
+    std::string m_group;
+    std::string m_group_cols;
 };
 
 }

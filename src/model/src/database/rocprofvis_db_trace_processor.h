@@ -145,14 +145,11 @@ class GoogleTraceProcessor : public QueryManager
         rocprofvis_dm_string_t GetEventOperationQuery(
             const rocprofvis_dm_event_operation_t operation) override;
 
-        void BuildSliceQueryMap(slice_query_map_t& slice_query_map, rocprofvis_dm_track_params_t* props) override;
-
-        void BuildTableQueryMap(
-            rocprofvis_db_num_of_tracks_t num,
-            rocprofvis_db_track_selection_t tracks,
-            rocprofvis_dm_num_string_table_filters_t num_string_table_filters,
-            rocprofvis_dm_string_table_filters_t string_table_filters,
-            std::vector<slice_query_map_t>& slice_query_map_array) override;
+        // builds query map based on track identifiers for slice query
+        void BuildSliceQueryMap(
+            slice_query_map_t& slice_query_map, 
+            rocprofvis_dm_track_params_t* props,
+            rocprofvis_db_query_type_t query_type) override;
 
         // ---------------------------------- Helpers ----------------------------------------
         rocprofvis_dm_result_t RemapStringId(uint64_t id, rocprofvis_db_string_type_t type, uint32_t node, uint64_t& result) override { result = id; return kRocProfVisDmResultSuccess; };

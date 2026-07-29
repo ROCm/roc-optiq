@@ -12,11 +12,10 @@ namespace RocProfVis
 namespace View
 {
 
-// Relational memory-chart layout ("nodes + edges"). This mirrors the shape the
-// data team will store in the compute_workload table: a set of block rows and a
-// set of arrow (relation) rows, both keyed by id and referencing metrics by id
-// (or, for convenience, by name). See
-// resources/memory_chart/memory_chart.schema.json.
+// Relational memory-chart layout ("nodes + edges"), mirroring the shape stored
+// in the compute_workload table: a set of block rows and arrow (relation) rows,
+// both keyed by id and referencing metrics by their full dotted id
+// ("category.table.entry").
 
 // Direction of an arrow relative to its declared (from -> to) endpoints.
 enum class MemChartArrowDir : uint8_t
@@ -26,14 +25,11 @@ enum class MemChartArrowDir : uint8_t
     kBoth,      // bidirectional
 };
 
-// A reference to a metric. The data model addresses metrics by numeric entry id;
-// a name may be used instead for authoring convenience. Exactly one of the two
-// forms is populated when `valid` is true.
+// A reference to a metric by its full dotted id ("category.table.entry", e.g.
+// "3.1.0"), held in `name` when `valid` is true.
 struct MemChartMetricRef
 {
     bool        valid = false;
-    bool        by_id = false;
-    uint32_t    id    = 0;
     std::string name;
 };
 
@@ -93,9 +89,7 @@ struct MemChartGroupBox
 
 struct MemChartLayout
 {
-    int      version            = 2;
-    uint32_t metric_category_id = 3;
-    uint32_t metric_table_id    = 1;
+    int version = 1;
 
     std::vector<MemChartBlock> blocks;
     std::vector<MemChartArrow> arrows;

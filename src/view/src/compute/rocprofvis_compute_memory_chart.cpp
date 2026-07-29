@@ -22,6 +22,7 @@
 #include <functional>
 #include <map>
 #include <optional>
+#include <set>
 #include <sstream>
 #include <vector>
 
@@ -354,6 +355,37 @@ ComputeMemoryChartView::LoadWorkloadLayout(uint32_t workload_id)
     LoadLayout();
 }
 
+// Category id (leading segment) of a dotted metric id "category.table.entry".
+static bool
+MetricCategory(const MemChartMetricRef& ref, uint32_t& category)
+{
+    if(!ref.valid) return false;
+    size_t dot = ref.name.find('.');
+    if(dot == 0 || dot == std::string::npos) return false;
+    category = 0;
+    for(size_t i = 0; i < dot; ++i)
+    {
+        char c = ref.name[i];
+        if(c < '0' || c > '9') return false;
+        category = category * 10 + static_cast<uint32_t>(c - '0');
+    }
+    return true;
+}
+
+static void
+CollectCategories(const std::vector<MemChartBlock>& blocks, std::set<uint32_t>& out)
+{
+    for(const MemChartBlock& block : blocks)
+    {
+        uint32_t category = 0;
+        for(const MemChartContentItem& item : block.content)
+        {
+            if(MetricCategory(item.metric, category)) out.insert(category);
+        }
+        CollectCategories(block.children, out);
+    }
+}
+
 void
 ComputeMemoryChartView::FetchMemChartMetrics()
 {
@@ -366,11 +398,24 @@ ComputeMemoryChartView::FetchMemChartMetrics()
     uint32_t workload_id = m_compute_selection->GetSelectedWorkload();
     uint32_t kernel_id   = m_compute_selection->GetSelectedKernel();
 
-    // Fetch the whole metric category (all sub-tables) so layouts that span
-    // 3.1-3.9 (e.g. RDNA memory hierarchies) resolve, not just one table.
+    // Metrics may span multiple categories/tables (e.g. 3.1.x and 3.3.x). Fetch
+    // each category the layout references, whole (all sub-tables), so every
+    // referenced metric resolves.
+    std::set<uint32_t> categories;
+    CollectCategories(m_layout.blocks, categories);
+    for(const MemChartArrow& arrow : m_layout.arrows)
+    {
+        uint32_t category = 0;
+        if(MetricCategory(arrow.metric, category)) categories.insert(category);
+    }
+    if(categories.empty()) return;
+
     std::vector<uint32_t>                       kernel_ids = {kernel_id};
     std::vector<MetricsRequestParams::MetricID> metric_ids;
-    metric_ids.push_back({m_layout.metric_category_id, std::nullopt, std::nullopt});
+    for(uint32_t category : categories)
+    {
+        metric_ids.push_back({category, std::nullopt, std::nullopt});
+    }
 
     m_data_provider.FetchMetrics(
         MetricsRequestParams(workload_id, kernel_ids, metric_ids, m_client_id));
@@ -393,10 +438,8 @@ ComputeMemoryChartView::UpdateMetrics()
     for(const std::shared_ptr<MetricValue>& metric : *metrics)
     {
         if(!metric || !metric->entry) continue;
-        // Keep metrics in the layout's category (any sub-table); layouts address
-        // them by their full dotted id ("category.table.entry").
-        if(metric->entry->category_id != m_layout.metric_category_id) continue;
-
+        // Index every fetched metric by its full dotted id ("category.table.entry");
+        // a layout may reference metrics across categories/tables.
         std::string full_id = std::to_string(metric->entry->category_id) + "." +
                               std::to_string(metric->entry->table_id) + "." +
                               std::to_string(metric->entry->id);
@@ -421,7 +464,7 @@ ComputeMemoryChartView::MetricLabel(const MemChartMetricRef& ref,
     if(!title_override.empty()) return title_override;
     const MetricValue* metric = ResolveMetric(ref);
     if(metric && metric->entry) return metric->entry->name;
-    if(!ref.by_id && !ref.name.empty()) return ref.name;
+    if(!ref.name.empty()) return ref.name;
     return "";
 }
 

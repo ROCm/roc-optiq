@@ -55,22 +55,14 @@ ReadUint(jt::Json& node, const char* key, uint32_t fallback)
     return fallback;
 }
 
-// Resolve a metric reference from a JSON value that is either a number (entry id)
-// or a string (entry name).
+// A metric reference is the metric's full dotted id ("category.table.entry").
 MemChartMetricRef
 ParseMetricRef(jt::Json& value)
 {
     MemChartMetricRef ref;
-    if(value.isNumber())
-    {
-        ref.valid = true;
-        ref.by_id = true;
-        ref.id    = static_cast<uint32_t>(value.getNumber());
-    }
-    else if(value.isString())
+    if(value.isString())
     {
         ref.name  = value.getString();
-        ref.by_id = false;
         ref.valid = !ref.name.empty();
     }
     return ref;
@@ -94,8 +86,8 @@ ParseDirection(const std::string& text)
     return MemChartArrowDir::kForward;
 }
 
-// Content is an array whose elements are either a bare metric ref (number/string)
-// or an object { "metric": <ref>, "title": <string> }.
+// Content is an array whose elements are either a bare metric ref (a dotted-id
+// string) or an object { "metric": <ref>, "title": <string> }.
 MemChartContentItem
 ParseContentItem(jt::Json& element)
 {
@@ -189,14 +181,7 @@ MemChartLayout::ParseFromString(const std::string& json_text, MemChartLayout& ou
     }
 
     MemChartLayout layout;
-    layout.version = ReadInt(root, "version", 2);
-
-    if(root.contains("metric_source"))
-    {
-        jt::Json& source          = root["metric_source"];
-        layout.metric_category_id = ReadUint(source, "category_id", 3);
-        layout.metric_table_id    = ReadUint(source, "table_id", 1);
-    }
+    layout.version = ReadInt(root, "version", 1);
 
     if(root.contains("blocks"))
     {

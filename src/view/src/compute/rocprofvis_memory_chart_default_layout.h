@@ -14,8 +14,7 @@ namespace View
 
 inline constexpr const char* kDefaultMemoryChartLayout = R"JSON(
 {
-    "version": 2,
-    "metric_source": { "category_id": 3, "table_id": 1 },
+    "version": 1,
     "blocks": [
         { "id": 1, "column": 0, "title": "Instr Buff", "content": [
             { "metric": "3.1.0", "title": "Occupancy" },

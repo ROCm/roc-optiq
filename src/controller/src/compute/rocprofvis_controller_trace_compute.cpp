@@ -302,7 +302,7 @@ rocprofvis_result_t ComputeTrace::AsyncFetch(Arguments& args, Future& future, Me
                     }
                     else
                     {
-                        result = (dm_result == kRocProfVisDmResultSuccess) ? kRocProfVisResultSuccess : kRocProfVisResultUnknownError;
+                        result = (dm_result == kRocProfVisDmResultSuccess || dm_result == kRocProfVisDmResultNotSupported) ? kRocProfVisResultSuccess : kRocProfVisResultUnknownError;
                     }
                     return result;
                 }, &future));

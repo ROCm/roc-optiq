@@ -1113,6 +1113,43 @@ The compute-side counterpart. One method per
 - `GetComputeMetricValues`
 - `GetComputeMetricValuesByWorkload`
 - `GetComputeKernelMetricsMatrix`
+- `GetComputeKernelSourceFiles`
+- `GetComputeSourceFileSourceLines`
+- `GetComputeKernelCodeObjects`
+- `GetComputeKernelIsaToIsaDeps`
+- `GetComputeKernelIsaLines`
+- `GetComputeKernelIsaToSourceDeps`
+- `GetComputeKernelSamplingStates`
+- `GetComputeKernelSamplingStateReasonCounts`
+
+All of them share the signature
+`rocprofvis_dm_result_t GetComputeX(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params, rocprofvis_dm_string_t& query)`
+- the SQL (or, for the metrics matrix, the JSON plan) is written to
+`query`, and the return value reports why it could not be built.
+
+Each method version-gates itself; `BuildComputeQuery` no longer wraps
+the switch in a single check, it just forwards the status:
+
+```cpp
+rocprofvis_dm_result_t result = kRocProfVisDmResultNotSupported;
+if(IsVersionGreaterOrEqual("1.3.0"))
+{
+    result = kRocProfVisDmResultInvalidParameter;
+    if(<params match this use case>)
+    {
+        query = ...;
+        result = kRocProfVisDmResultSuccess;
+    }
+}
+return result;
+```
+
+The gate is `1.3.0` for `GetComputeWorkloadMetricValueNames` and for
+the source / ISA / PC-sampling block (`GetComputeKernelSourceFiles`
+through `GetComputeKernelSamplingStateReasonCounts`), and `1.2.0` for
+the rest. Inner `IsVersionGreaterOrEqual("1.3.0")` / `"1.4.0"` tests
+inside a method still select between schema variants and are separate
+from the gate.
 
 Internal helpers: `ClassifyMetricIdFormat(s)` decides whether a
 metric ID is `XY`, `XYZ`, or `Other`; `ParseMetricParam(...)`

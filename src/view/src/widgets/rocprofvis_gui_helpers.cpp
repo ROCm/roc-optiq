@@ -622,7 +622,7 @@ PanelFieldLabel(const char* text, bool align_to_frame, SettingsManager* settings
 }
 
 void
-PanelIcon(const char* glyph, Colors color, SettingsManager* settings)
+PanelIcon(const char* glyph, ImU32 color, SettingsManager* settings)
 {
     if(!settings)
     {
@@ -630,10 +630,39 @@ PanelIcon(const char* glyph, Colors color, SettingsManager* settings)
     }
     ImGui::PushFont(settings->GetFontManager().GetFont(FontType::kIcon),
                     ImGui::GetFontSize());
-    ImGui::PushStyleColor(ImGuiCol_Text, settings->GetColor(color));
+    ImGui::PushStyleColor(ImGuiCol_Text, color);
     ImGui::TextUnformatted(glyph);
     ImGui::PopStyleColor();
     ImGui::PopFont();
+}
+
+void
+PanelIcon(const char* glyph, Colors color, SettingsManager* settings)
+{
+    if(!settings)
+    {
+        settings = &SettingsManager::GetInstance();
+    }
+    PanelIcon(glyph, settings->GetColor(color), settings);
+}
+
+void
+HelpMarker(const char* description, const char* env_var)
+{
+    ImGui::SameLine();
+    ImGui::TextDisabled("(?)");
+    if(ImGui::BeginItemTooltip())
+    {
+        ImGui::PushTextWrapPos(ImGui::GetFontSize() * HELP_MARKER_WRAP_EM);
+        if(env_var != nullptr && env_var[0] != '\0')
+        {
+            ImGui::TextUnformatted(env_var);
+            ImGui::Separator();
+        }
+        ImGui::TextUnformatted(description);
+        ImGui::PopTextWrapPos();
+        ImGui::EndTooltip();
+    }
 }
 
 bool

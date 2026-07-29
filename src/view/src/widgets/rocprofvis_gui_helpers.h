@@ -153,6 +153,21 @@ VerticalSeparator(SettingsManager* settings = nullptr);
 // Shared corner radius for every stacked design-language panel.
 inline constexpr float PANEL_CARD_ROUNDING = 10.0f;
 
+// Inner padding for the panel-card tiers, shared so every remote/profiler
+// dialog uses the same spacing. A standard grouping card is PANEL_CARD_PADDING
+// (also BeginPanelCard's default); header/footer bands are a touch roomier, and
+// cards holding wrapped prose get extra vertical breathing room.
+inline constexpr ImVec2 PANEL_CARD_PADDING   = ImVec2(14.0f, 8.0f);
+inline constexpr ImVec2 PANEL_HEADER_PADDING = ImVec2(16.0f, 10.0f);
+inline constexpr ImVec2 PANEL_BODY_PADDING   = ImVec2(14.0f, 10.0f);
+
+// Vertical gap between cards in a stack. Deliberately tighter than the default
+// ItemSpacing so a column of panel cards reads as one continuous surface.
+inline constexpr float PANEL_CARD_STACK_SPACING_Y = 4.0f;
+
+// Tooltip wrap width for HelpMarker, as a multiple of the current font size.
+inline constexpr float HELP_MARKER_WRAP_EM = 25.0f;
+
 // Which background tier a panel card paints. Header/footer bands use kFrame,
 // inner grouping cards use kPanel, and the body backdrop uses kMain.
 enum class PanelCardTone
@@ -167,7 +182,7 @@ enum class PanelCardTone
 // Pass a stable id. Always pair with EndPanelCard.
 void
 BeginPanelCard(const char* id, PanelCardTone tone = PanelCardTone::kPanel,
-               ImVec2 padding = ImVec2(14.0f, 8.0f), bool bordered = true,
+               ImVec2 padding = PANEL_CARD_PADDING, bool bordered = true,
                SettingsManager* settings = nullptr);
 
 void
@@ -184,11 +199,22 @@ PanelFieldLabel(const char* text, bool align_to_frame = true,
 void
 PanelIcon(const char* glyph, Colors color, SettingsManager* settings = nullptr);
 
+// As above, for callers that have already resolved a packed color (e.g. table
+// rows that tint per entry type). The Colors overload delegates to this.
+void
+PanelIcon(const char* glyph, ImU32 color, SettingsManager* settings = nullptr);
+
 // Accent-colored primary action button (accent fill + on-accent text). Returns
 // true when clicked.
 bool
 AccentButton(const char* label, ImVec2 size = ImVec2(0.0f, 0.0f),
              SettingsManager* settings = nullptr);
+
+// Dim "(?)" marker on the same line as the preceding item, with a wrapped
+// tooltip on hover. When env_var is non-null it is shown above the description,
+// separated by a rule. Shared by the profiler and rocprof-sys option tabs.
+void
+HelpMarker(const char* description, const char* env_var = nullptr);
 
 float
 TableRowHeight();

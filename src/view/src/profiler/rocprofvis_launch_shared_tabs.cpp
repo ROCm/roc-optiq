@@ -25,38 +25,24 @@ static char s_save_preset_name[128] = {};
 // Color tints and intrinsic widget geometry only. Padding/spacing come from the
 // shared app style (GetDefaultStyle / frame padding) so the launcher matches the
 // rest of the application rather than inventing its own spacing rules.
-constexpr float kAccentBarWidth     = 4.0f;   // card-header leading accent bar
-constexpr float kAccentBarGap       = 8.0f;
-constexpr float kChipBgAlpha        = 0.16f;
-constexpr float kChipEdgeAlpha      = 0.55f;
-constexpr float kPillGap            = 7.0f;   // gap between pill label and close "x"
-constexpr float kPillCloseScale     = 0.75f;  // close glyph size, fraction of font
-constexpr float kPillBgAlpha        = 0.16f;
-constexpr float kPillBgHoverAlpha   = 0.30f;
-constexpr float kPillCloseIdleAlpha = 0.6f;
-constexpr float kToggleHeightScale  = 0.82f;  // of frame height
-constexpr float kToggleWidthScale   = 1.75f;  // of toggle height
-constexpr float kToggleAnimSpeed    = 10.0f;
-constexpr float kToggleKnobInset    = 2.0f;   // knob padding inside the track
+constexpr float ACCENT_BAR_WIDTH      = 4.0f;   // card-header leading accent bar
+constexpr float ACCENT_BAR_GAP        = 8.0f;
+constexpr float CHIP_BG_ALPHA         = 0.16f;
+constexpr float CHIP_EDGE_ALPHA       = 0.55f;
+constexpr float PILL_GAP              = 7.0f;   // gap between pill label and close "x"
+constexpr float PILL_CLOSE_SCALE      = 0.75f;  // close glyph size, fraction of font
+constexpr float PILL_BG_ALPHA         = 0.16f;
+constexpr float PILL_BG_HOVER_ALPHA   = 0.30f;
+constexpr float PILL_CLOSE_IDLE_ALPHA = 0.6f;
+constexpr float TOGGLE_HEIGHT_SCALE   = 0.82f;  // of frame height
+constexpr float TOGGLE_WIDTH_SCALE    = 1.75f;  // of toggle height
+constexpr float TOGGLE_ANIM_SPEED     = 10.0f;
+constexpr float TOGGLE_KNOB_INSET     = 2.0f;   // knob padding inside the track
 
 // Card interior vertical padding (horizontal padding still follows the app
 // style). Tighter than the app default so the stacked cards read as one compact
 // form instead of a column of tall panels.
-constexpr float kCardPadY = 5.0f;
-
-// A dimmed "(?)" that shows a wrapped tooltip on hover.
-void HelpTip(const char* tooltip)
-{
-    ImGui::SameLine();
-    ImGui::TextDisabled("(?)");
-    if (ImGui::BeginItemTooltip())
-    {
-        ImGui::PushTextWrapPos(ImGui::GetFontSize() * 25.0f);
-        ImGui::TextUnformatted(tooltip);
-        ImGui::PopTextWrapPos();
-        ImGui::EndTooltip();
-    }
-}
+constexpr float CARD_PADDING_Y = 5.0f;
 
 // Linear blend between two packed colors (t in [0,1]).
 ImU32 LerpColor(ImU32 a, ImU32 b, float t)
@@ -74,10 +60,10 @@ void BeginLaunchCard(const char* id)
 {
     // Delegate to the shared design-language panel card so the launcher tracks
     // the same rounded/bordered/tiered look as the remote dialogs. The tighter
-    // kCardPadY keeps the stacked launcher cards reading as one compact form.
+    // CARD_PADDING_Y keeps the stacked launcher cards reading as one compact form.
     SettingsManager&  settings = SettingsManager::Get();
     const ImGuiStyle& def      = settings.GetDefaultStyle();
-    BeginPanelCard(id, PanelCardTone::kPanel, ImVec2(def.WindowPadding.x, kCardPadY), true,
+    BeginPanelCard(id, PanelCardTone::kPanel, ImVec2(def.WindowPadding.x, CARD_PADDING_Y), true,
                    &settings);
 }
 
@@ -99,10 +85,10 @@ void LaunchCardHeader(const char* icon, const char* title, const char* help)
     const float  bar_h = ImGui::GetFontSize();
     ImVec2       p     = ImGui::GetCursorScreenPos();
     ImDrawList*  dl    = ImGui::GetWindowDrawList();
-    dl->AddRectFilled(ImVec2(p.x, p.y), ImVec2(p.x + kAccentBarWidth, p.y + bar_h),
+    dl->AddRectFilled(ImVec2(p.x, p.y), ImVec2(p.x + ACCENT_BAR_WIDTH, p.y + bar_h),
                       settings.GetColor(Colors::kAccent), 2.0f);
 
-    ImGui::Indent(kAccentBarWidth + kAccentBarGap);
+    ImGui::Indent(ACCENT_BAR_WIDTH + ACCENT_BAR_GAP);
 
     // Optional leading icon (drawn from the icon font, in the accent color).
     if (icon && icon[0])
@@ -113,7 +99,7 @@ void LaunchCardHeader(const char* icon, const char* title, const char* help)
         ImGui::TextUnformatted(icon);
         ImGui::PopStyleColor();
         ImGui::PopFont();
-        ImGui::SameLine(0.0f, kAccentBarGap);
+        ImGui::SameLine(0.0f, ACCENT_BAR_GAP);
     }
 
     ImGui::PushStyleColor(ImGuiCol_Text, settings.GetColor(Colors::kTextMain));
@@ -123,9 +109,9 @@ void LaunchCardHeader(const char* icon, const char* title, const char* help)
 
     if (help && help[0])
     {
-        HelpTip(help);
+        HelpMarker(help);
     }
-    ImGui::Unindent(kAccentBarWidth + kAccentBarGap);
+    ImGui::Unindent(ACCENT_BAR_WIDTH + ACCENT_BAR_GAP);
 }
 
 void Chip(const char* label, ImU32 accent_color)
@@ -138,9 +124,9 @@ void Chip(const char* label, ImU32 accent_color)
     float        rnd = size.y * 0.5f;
 
     dl->AddRectFilled(p, ImVec2(p.x + size.x, p.y + size.y),
-                      ApplyAlpha(accent_color, kChipBgAlpha), rnd);
+                      ApplyAlpha(accent_color, CHIP_BG_ALPHA), rnd);
     dl->AddRect(p, ImVec2(p.x + size.x, p.y + size.y),
-                ApplyAlpha(accent_color, kChipEdgeAlpha), rnd);
+                ApplyAlpha(accent_color, CHIP_EDGE_ALPHA), rnd);
     dl->AddText(ImVec2(p.x + pad.x, p.y + pad.y), accent_color, label);
 
     ImGui::Dummy(size);
@@ -150,9 +136,9 @@ PillAction EditablePill(const char* label, ImU32 accent_color)
 {
     const ImVec2 pad       = ImGui::GetStyle().FramePadding;
     const ImVec2 text_size = ImGui::CalcTextSize(label);
-    const float  x_size    = ImGui::GetFontSize() * kPillCloseScale;
+    const float  x_size    = ImGui::GetFontSize() * PILL_CLOSE_SCALE;
 
-    ImVec2 size(pad.x * 2.0f + text_size.x + kPillGap + x_size,
+    ImVec2 size(pad.x * 2.0f + text_size.x + PILL_GAP + x_size,
                 text_size.y + pad.y * 2.0f);
     ImVec2 p = ImGui::GetCursorScreenPos();
 
@@ -165,14 +151,14 @@ PillAction EditablePill(const char* label, ImU32 accent_color)
     ImDrawList* dl  = ImGui::GetWindowDrawList();
     float       rnd = size.y * 0.5f;
     dl->AddRectFilled(p, ImVec2(p.x + size.x, p.y + size.y),
-                      ApplyAlpha(accent_color, hovered ? kPillBgHoverAlpha : kPillBgAlpha),
+                      ApplyAlpha(accent_color, hovered ? PILL_BG_HOVER_ALPHA : PILL_BG_ALPHA),
                       rnd);
     dl->AddText(ImVec2(p.x + pad.x, p.y + pad.y), accent_color, label);
 
     // Trailing "x" - brightens when hovered so removal is obvious.
     ImVec2 xc(x_left + x_size * 0.5f, p.y + size.y * 0.5f);
     float  arm  = x_size * 0.3f;
-    ImU32  xcol = ApplyAlpha(accent_color, over_x ? 1.0f : kPillCloseIdleAlpha);
+    ImU32  xcol = ApplyAlpha(accent_color, over_x ? 1.0f : PILL_CLOSE_IDLE_ALPHA);
     dl->AddLine(ImVec2(xc.x - arm, xc.y - arm), ImVec2(xc.x + arm, xc.y + arm), xcol, 1.6f);
     dl->AddLine(ImVec2(xc.x - arm, xc.y + arm), ImVec2(xc.x + arm, xc.y - arm), xcol, 1.6f);
 
@@ -231,8 +217,9 @@ void StatusPill(const char* label, ImU32 bg_color)
     ImDrawList*  dl  = ImGui::GetWindowDrawList();
     float        rnd = size.y * 0.5f;
 
+    const ImU32 text_color = SettingsManager::Get().GetColor(Colors::kTextOnAccent);
     dl->AddRectFilled(p, ImVec2(p.x + size.x, p.y + size.y), bg_color, rnd);
-    dl->AddText(ImVec2(p.x + pad.x, p.y + pad.y), IM_COL32(255, 255, 255, 255), label);
+    dl->AddText(ImVec2(p.x + pad.x, p.y + pad.y), text_color, label);
 
     ImGui::Dummy(size);
 }
@@ -246,7 +233,7 @@ void LaunchSubHeader(const char* text, const char* help)
     ImGui::PopStyleColor();
     if (help && help[0])
     {
-        HelpTip(help);
+        HelpMarker(help);
     }
 }
 
@@ -255,8 +242,8 @@ bool ToggleSwitch(const char* label, bool* value)
     SettingsManager& settings = SettingsManager::Get();
 
     const float frame_h = ImGui::GetFrameHeight();
-    const float height  = frame_h * kToggleHeightScale;
-    const float width   = height * kToggleWidthScale;
+    const float height  = frame_h * TOGGLE_HEIGHT_SCALE;
+    const float width   = height * TOGGLE_WIDTH_SCALE;
     const float radius  = height * 0.5f;
 
     ImGui::PushID(label);
@@ -276,7 +263,7 @@ bool ToggleSwitch(const char* label, bool* value)
     ImGuiStorage* storage = ImGui::GetStateStorage();
     float         target  = *value ? 1.0f : 0.0f;
     float         t       = storage->GetFloat(id, target);
-    float         step    = ImGui::GetIO().DeltaTime * kToggleAnimSpeed;
+    float         step    = ImGui::GetIO().DeltaTime * TOGGLE_ANIM_SPEED;
     if (t < target) { t = std::min(t + step, target); }
     else if (t > target) { t = std::max(t - step, target); }
     storage->SetFloat(id, t);
@@ -294,7 +281,8 @@ bool ToggleSwitch(const char* label, bool* value)
 
     float  knob_x = bar_min.x + radius + t * (width - 2.0f * radius);
     ImVec2 knob_c(knob_x, bar_min.y + radius);
-    dl->AddCircleFilled(knob_c, radius - kToggleKnobInset, IM_COL32(255, 255, 255, 255));
+    dl->AddCircleFilled(knob_c, radius - TOGGLE_KNOB_INSET,
+                        settings.GetColor(Colors::kTextOnAccent));
 
     ImGui::PopID();
 

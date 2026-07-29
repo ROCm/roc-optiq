@@ -108,11 +108,9 @@ SshSettingsDialog::Render()
                                   ImGuiWindowFlags_NoScrollbar |
                                   ImGuiWindowFlags_NoTitleBar))
     {
-        constexpr float CONTENT_PADDING_X = 14.0f;
-        constexpr float CONTENT_PADDING_Y = 8.0f;
-        constexpr float LABEL_WIDTH       = 104.0f;
-        constexpr float BUTTON_WIDTH      = 104.0f;
-        constexpr float PROFILE_BUTTON_W  = 78.0f;
+        constexpr float LABEL_WIDTH      = 104.0f;
+        constexpr float BUTTON_WIDTH     = 104.0f;
+        constexpr float PROFILE_BUTTON_W = 78.0f;
 
         const ImU32 text_dim  = settings.GetColor(Colors::kTextDim);
         ImFont*     icon_font = settings.GetFontManager().GetFont(FontType::kIcon);
@@ -165,8 +163,7 @@ SshSettingsDialog::Render()
         // Delegate to the shared panel-card helper; restore default item spacing
         // inside the card so the tighter inter-card gap does not cramp fields.
         auto begin_card = [&](const char* id) {
-            BeginPanelCard(id, PanelCardTone::kPanel,
-                           ImVec2(CONTENT_PADDING_X, CONTENT_PADDING_Y), true, &settings);
+            BeginPanelCard(id, PanelCardTone::kPanel, PANEL_CARD_PADDING, true, &settings);
             ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, default_item_spacing);
         };
 
@@ -182,7 +179,7 @@ SshSettingsDialog::Render()
         ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing,
                             ImVec2(default_item_spacing.x, 4.0f));
 
-        BeginPanelCard("##ssh_settings_header", PanelCardTone::kFrame, ImVec2(16.0f, 10.0f),
+        BeginPanelCard("##ssh_settings_header", PanelCardTone::kFrame, PANEL_HEADER_PADDING,
                        true, &settings);
         {
             if(ImGui::BeginTable("##ssh_settings_header_table", 2,
@@ -384,7 +381,7 @@ SshSettingsDialog::Render()
         }
         EndPanelCard();
 
-        BeginPanelCard("##ssh_settings_footer", PanelCardTone::kFrame, ImVec2(14.0f, 8.0f),
+        BeginPanelCard("##ssh_settings_footer", PanelCardTone::kFrame, PANEL_CARD_PADDING,
                        true, &settings);
         {
             const float action_width = BUTTON_WIDTH * 2.0f + style.ItemSpacing.x;

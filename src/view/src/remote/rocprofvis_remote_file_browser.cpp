@@ -598,7 +598,9 @@ void RemoteFileBrowser::Render()
         }
         else if (!m_browser_error.empty())
         {
-            ImGui::TextColored(ImVec4(1.0f, 0.45f, 0.35f, 1.0f), "%s", m_browser_error.c_str());
+            ImGui::TextColored(
+                ImGui::ColorConvertU32ToFloat4(settings.GetColor(Colors::kTextError)), "%s",
+                m_browser_error.c_str());
         }
         else
         {

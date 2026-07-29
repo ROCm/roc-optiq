@@ -37,7 +37,7 @@ void RenderAuthHeaderCard(const char* id, const char* title, const char* subtitl
     SettingsManager&  settings = SettingsManager::GetInstance();
     const ImGuiStyle& style    = ImGui::GetStyle();
 
-    BeginPanelCard(id, PanelCardTone::kFrame, ImVec2(16.0f, 10.0f), true, &settings);
+    BeginPanelCard(id, PanelCardTone::kFrame, PANEL_HEADER_PADDING, true, &settings);
     PanelIcon(ICON_COMPASS, Colors::kAccent, &settings);
     ImGui::SameLine(0.0f, style.ItemInnerSpacing.x);
     ImGui::BeginGroup();
@@ -110,7 +110,7 @@ bool RenderSshAuthModal(SshSession* ssh_session)
             RenderAuthHeaderCard("##ssh_auth_header", "SSH Authentication",
                                  "Enter your credentials to continue.");
 
-            BeginPanelCard("##ssh_auth_body", PanelCardTone::kPanel, ImVec2(14.0f, 10.0f),
+            BeginPanelCard("##ssh_auth_body", PanelCardTone::kPanel, PANEL_BODY_PADDING,
                            true, &settings);
             {
                 if(!req->name.empty())
@@ -137,7 +137,7 @@ bool RenderSshAuthModal(SshSession* ssh_session)
             }
             EndPanelCard();
 
-            BeginPanelCard("##ssh_auth_footer", PanelCardTone::kFrame, ImVec2(14.0f, 8.0f),
+            BeginPanelCard("##ssh_auth_footer", PanelCardTone::kFrame, PANEL_CARD_PADDING,
                            true, &settings);
             {
                 const float total = BUTTON_WIDTH * 2.0f + style.ItemSpacing.x;
@@ -210,7 +210,7 @@ bool RenderSshAuthModal(SshSession* ssh_session)
 
             RenderAuthHeaderCard("##ssh_hostkey_header", "SSH Host Key", subtitle);
 
-            BeginPanelCard("##ssh_hostkey_body", PanelCardTone::kPanel, ImVec2(14.0f, 10.0f),
+            BeginPanelCard("##ssh_hostkey_body", PanelCardTone::kPanel, PANEL_BODY_PADDING,
                            true, &settings);
             {
                 if(mismatch)
@@ -266,7 +266,7 @@ bool RenderSshAuthModal(SshSession* ssh_session)
             }
             EndPanelCard();
 
-            BeginPanelCard("##ssh_hostkey_footer", PanelCardTone::kFrame, ImVec2(14.0f, 8.0f),
+            BeginPanelCard("##ssh_hostkey_footer", PanelCardTone::kFrame, PANEL_CARD_PADDING,
                            true, &settings);
             {
                 constexpr float TRUST_WIDTH  = 150.0f;

@@ -87,6 +87,8 @@ bool RenderSshAuthModal(SshSession* ssh_session)
         SettingsManager&  settings = SettingsManager::GetInstance();
         const ImGuiStyle& style    = ImGui::GetStyle();
 
+        constexpr float PROMPT_MODAL_WIDTH = 480.0f;
+
         PopUpStyle popup_style;
         popup_style.PushPopupStyles();
         popup_style.PushTitlebarColors();
@@ -95,17 +97,16 @@ bool RenderSshAuthModal(SshSession* ssh_session)
         // trace dialog) and the header band carries the title instead of the
         // native title bar.
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 12.0f);
-        ImGui::SetNextWindowSize(ImVec2(480, 0));
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding,
+                            settings.GetDefaultStyle().WindowRounding);
+        ImGui::SetNextWindowSize(ImVec2(PROMPT_MODAL_WIDTH, 0));
 
         if(ImGui::BeginPopupModal("SSH Authentication", nullptr,
                                   ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove |
                                       ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoScrollbar))
         {
-            constexpr float BUTTON_WIDTH = 104.0f;
-
             ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing,
-                                ImVec2(style.ItemSpacing.x, 4.0f));
+                                ImVec2(style.ItemSpacing.x, PANEL_CARD_STACK_SPACING_Y));
 
             RenderAuthHeaderCard("##ssh_auth_header", "SSH Authentication",
                                  "Enter your credentials to continue.");
@@ -140,13 +141,13 @@ bool RenderSshAuthModal(SshSession* ssh_session)
             BeginPanelCard("##ssh_auth_footer", PanelCardTone::kFrame, PANEL_CARD_PADDING,
                            true, &settings);
             {
-                const float total = BUTTON_WIDTH * 2.0f + style.ItemSpacing.x;
+                const float total = DIALOG_BUTTON_WIDTH * 2.0f + style.ItemSpacing.x;
                 const float avail = ImGui::GetContentRegionAvail().x;
                 if(avail > total)
                 {
                     ImGui::SetCursorPosX(ImGui::GetCursorPosX() + (avail - total));
                 }
-                if(ImGui::Button("Cancel", ImVec2(BUTTON_WIDTH, 0)))
+                if(ImGui::Button("Cancel", ImVec2(DIALOG_BUTTON_WIDTH, 0)))
                 {
                     ssh_session->CancelRequest();
                     st = {};
@@ -154,7 +155,7 @@ bool RenderSshAuthModal(SshSession* ssh_session)
                     ssh_session->GetPromptRequest()->ClearUpdated();
                 }
                 ImGui::SameLine();
-                if(AccentButton("Submit", ImVec2(BUTTON_WIDTH, 0), &settings))
+                if(AccentButton("Submit", ImVec2(DIALOG_BUTTON_WIDTH, 0), &settings))
                 {
                     std::vector<std::string> resp = st.answers;
 
@@ -189,13 +190,16 @@ bool RenderSshAuthModal(SshSession* ssh_session)
         SettingsManager&  settings = SettingsManager::GetInstance();
         const ImGuiStyle& style    = ImGui::GetStyle();
 
+        constexpr float HOST_KEY_MODAL_WIDTH = 520.0f;
+
         PopUpStyle popup_style;
         popup_style.PushPopupStyles();
         popup_style.PushTitlebarColors();
         popup_style.CenterPopup();
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 12.0f);
-        ImGui::SetNextWindowSize(ImVec2(520, 0));
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding,
+                            settings.GetDefaultStyle().WindowRounding);
+        ImGui::SetNextWindowSize(ImVec2(HOST_KEY_MODAL_WIDTH, 0));
 
         if(ImGui::BeginPopupModal("SSH Host Key", nullptr,
                                   ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove |
@@ -206,7 +210,7 @@ bool RenderSshAuthModal(SshSession* ssh_session)
                                             : "Verify this host before connecting.";
 
             ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing,
-                                ImVec2(style.ItemSpacing.x, 4.0f));
+                                ImVec2(style.ItemSpacing.x, PANEL_CARD_STACK_SPACING_Y));
 
             RenderAuthHeaderCard("##ssh_hostkey_header", "SSH Host Key", subtitle);
 
@@ -269,23 +273,22 @@ bool RenderSshAuthModal(SshSession* ssh_session)
             BeginPanelCard("##ssh_hostkey_footer", PanelCardTone::kFrame, PANEL_CARD_PADDING,
                            true, &settings);
             {
-                constexpr float TRUST_WIDTH  = 150.0f;
-                constexpr float BUTTON_WIDTH = 104.0f;
+                constexpr float TRUST_WIDTH = 150.0f;
                 const float     total =
-                    TRUST_WIDTH + BUTTON_WIDTH * 2.0f + style.ItemSpacing.x * 2.0f;
+                    TRUST_WIDTH + DIALOG_BUTTON_WIDTH * 2.0f + style.ItemSpacing.x * 2.0f;
                 const float avail = ImGui::GetContentRegionAvail().x;
                 if(avail > total)
                 {
                     ImGui::SetCursorPosX(ImGui::GetCursorPosX() + (avail - total));
                 }
-                if(ImGui::Button("Reject", ImVec2(BUTTON_WIDTH, 0)))
+                if(ImGui::Button("Reject", ImVec2(DIALOG_BUTTON_WIDTH, 0)))
                 {
                     ssh_session->SubmitHostKeyDecision(HostKeyDecision::Reject);
                     ImGui::CloseCurrentPopup();
                     ssh_session->GetHostKeyRequest()->ClearUpdated();
                 }
                 ImGui::SameLine();
-                if(ImGui::Button("Trust once", ImVec2(BUTTON_WIDTH, 0)))
+                if(ImGui::Button("Trust once", ImVec2(DIALOG_BUTTON_WIDTH, 0)))
                 {
                     ssh_session->SubmitHostKeyDecision(HostKeyDecision::TrustOnce);
                     ImGui::CloseCurrentPopup();

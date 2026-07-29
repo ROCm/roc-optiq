@@ -29,18 +29,19 @@ constexpr float PROGRESS_POPUP_WIDTH = 440.0f;
 constexpr uint64_t BYTES_PER_KIB = 1024;
 }  // namespace
 
-void
+bool
 RenderRemoteDownloadPopup(const char* popup_id, const char* id_prefix,
                           const FileStat::Snapshot& progress, const char* idle_label,
                           bool finished, bool& open)
 {
     if(!open)
     {
-        return;
+        return false;
     }
 
     SettingsManager&  settings = SettingsManager::GetInstance();
     const ImGuiStyle& style    = ImGui::GetStyle();
+    bool              rendered = false;
 
     PopUpStyle popup_style;
     popup_style.PushPopupStyles();
@@ -57,6 +58,8 @@ RenderRemoteDownloadPopup(const char* popup_id, const char* id_prefix,
                                   ImGuiWindowFlags_NoTitleBar |
                                   ImGuiWindowFlags_NoScrollbar))
     {
+        rendered = true;
+
         // Tighten the gap between the stacked cards so they read as one surface.
         ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing,
                             ImVec2(style.ItemSpacing.x, PANEL_CARD_STACK_SPACING_Y));
@@ -89,6 +92,10 @@ RenderRemoteDownloadPopup(const char* popup_id, const char* id_prefix,
             {
                 float fraction = static_cast<float>(progress.downloaded) /
                                  static_cast<float>(progress.size);
+                if(fraction > 1.0f)
+                {
+                    fraction = 1.0f;
+                }
                 const std::string label =
                     std::to_string(progress.downloaded / BYTES_PER_KIB) + " / " +
                     std::to_string(progress.size / BYTES_PER_KIB) + " KiB";
@@ -110,15 +117,10 @@ RenderRemoteDownloadPopup(const char* popup_id, const char* id_prefix,
         ImGui::PopStyleVar();  // ItemSpacing
         ImGui::EndPopup();
     }
-    else
-    {
-        // The popup is no longer on the stack (dismissed, or never opened this
-        // frame), so clear the flag to let the next transfer reopen it.
-        open = false;
-    }
 
     ImGui::PopStyleVar(2);  // WindowPadding, WindowRounding
     popup_style.PopStyles();
+    return rendered;
 }
 
 }  // namespace View

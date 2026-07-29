@@ -84,9 +84,8 @@ SshTestDialog::Render()
 {
     if(m_show_window)
     {
-        SettingsManager&  settings  = SettingsManager::GetInstance();
-        ImFont*           icon_font = settings.GetFontManager().GetFont(FontType::kIcon);
-        const ImGuiStyle& style     = ImGui::GetStyle();
+        SettingsManager&  settings = SettingsManager::GetInstance();
+        const ImGuiStyle& style    = ImGui::GetStyle();
 
         const ImU32 accent         = settings.GetColor(Colors::kAccent);
         const ImU32 accent_hover   = settings.GetColor(Colors::kAccentHover);
@@ -96,7 +95,9 @@ SshTestDialog::Render()
 
         // Fixed width, auto height, so the window hugs its content with no empty band.
         const float dialog_width =
-            GetResponsiveWindowSize(ImVec2(560.0f, 0.0f), ImVec2(480.0f, 0.0f)).x;
+            GetResponsiveWindowSize(ImVec2(DIALOG_DEFAULT_WIDTH, 0.0f),
+                                    ImVec2(DIALOG_MIN_WIDTH, 0.0f))
+                .x;
         if(const ImGuiViewport* viewport = ImGui::GetMainViewport())
         {
             ImGui::SetNextWindowPos(viewport->GetCenter(), ImGuiCond_Appearing,
@@ -105,25 +106,14 @@ SshTestDialog::Render()
         ImGui::SetNextWindowSizeConstraints(ImVec2(dialog_width, 0.0f),
                                             ImVec2(dialog_width, FLT_MAX));
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 12.0f);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding,
+                            settings.GetDefaultStyle().WindowRounding);
         if(ImGui::Begin("Open Remote Trace", &m_show_window,
                ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_AlwaysAutoResize |
                    ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoTitleBar))
         {
             const bool running = m_orchestrator && m_orchestrator->IsRunning();
 
-            auto render_icon = [&](const char* glyph, ImU32 color) {
-                ImGui::PushFont(icon_font, ImGui::GetFontSize());
-                ImGui::PushStyleColor(ImGuiCol_Text, color);
-                ImGui::TextUnformatted(glyph);
-                ImGui::PopStyleColor();
-                ImGui::PopFont();
-            };
-            auto field_label = [&](const char* label) {
-                ImGui::PushStyleColor(ImGuiCol_Text, text_dim);
-                ImGui::TextUnformatted(label);
-                ImGui::PopStyleColor();
-            };
             auto open_connection_settings = [&]() {
                 m_settings_dialog = std::make_unique<SshSettingsDialog>(
                     m_connection_store, m_selected_connection_id,
@@ -147,17 +137,15 @@ SshTestDialog::Render()
                 host.empty() ? std::string("Configure")
                              : m_uri->GetConnection().DisplayLabel();
 
-            constexpr float LABEL_WIDTH  = 104.0f;
-            constexpr float BUTTON_WIDTH = 104.0f;
-
             // Tighten the vertical gaps between the stacked panels.
             const ImVec2 default_item_spacing = style.ItemSpacing;
-            ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing,
-                                ImVec2(default_item_spacing.x, 4.0f));
+            ImGui::PushStyleVar(
+                ImGuiStyleVar_ItemSpacing,
+                ImVec2(default_item_spacing.x, PANEL_CARD_STACK_SPACING_Y));
 
             ImGui::PushStyleColor(ImGuiCol_ChildBg, settings.GetColor(Colors::kBgFrame));
             ImGui::PushStyleColor(ImGuiCol_Border, settings.GetColor(Colors::kPanelBorderSubtle));
-            ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 10.0f);
+            ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, PANEL_CARD_ROUNDING);
             ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, PANEL_HEADER_PADDING);
             ImGui::BeginChild("##remote_trace_header", ImVec2(0.0f, 0.0f),
                               ImGuiChildFlags_Borders | ImGuiChildFlags_AutoResizeY,
@@ -169,10 +157,11 @@ SshTestDialog::Render()
                     ImGui::TableSetupColumn("Title", ImGuiTableColumnFlags_WidthStretch);
                     ImGui::TableSetupColumn("Connection", ImGuiTableColumnFlags_WidthFixed,
                                             210.0f);
-                    ImGui::TableSetupColumn("Close", ImGuiTableColumnFlags_WidthFixed, 24.0f);
+                    ImGui::TableSetupColumn("Close", ImGuiTableColumnFlags_WidthFixed,
+                                            DIALOG_CLOSE_COLUMN_WIDTH);
                     ImGui::TableNextRow();
                     ImGui::TableSetColumnIndex(0);
-                    render_icon(ICON_COMPASS, accent);
+                    PanelIcon(ICON_COMPASS, accent, &settings);
                     ImGui::SameLine(0.0f, style.ItemInnerSpacing.x);
                     ImGui::BeginGroup();
                     ImGui::PushFont(nullptr,
@@ -221,7 +210,7 @@ SshTestDialog::Render()
             ImGui::PopStyleColor(2);
 
             ImGui::PushStyleColor(ImGuiCol_ChildBg, settings.GetColor(Colors::kBgMain));
-            ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(12.0f, 4.0f));
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, PANEL_BACKDROP_PADDING);
             ImGui::BeginChild("##remote_trace_body", ImVec2(0.0f, 0.0f),
                               ImGuiChildFlags_AutoResizeY,
                               ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
@@ -229,7 +218,7 @@ SshTestDialog::Render()
                 ImGui::PushStyleColor(ImGuiCol_ChildBg, settings.GetColor(Colors::kBgPanel));
                 ImGui::PushStyleColor(ImGuiCol_Border,
                                       settings.GetColor(Colors::kPanelBorderSubtle));
-                ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 10.0f);
+                ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, PANEL_CARD_ROUNDING);
                 ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, PANEL_CARD_PADDING);
                 ImGui::BeginChild("##remote_trace_target", ImVec2(0.0f, 0.0f),
                                   ImGuiChildFlags_Borders | ImGuiChildFlags_AutoResizeY,
@@ -240,14 +229,13 @@ SshTestDialog::Render()
                                           ImGuiTableFlags_SizingStretchProp))
                     {
                         ImGui::TableSetupColumn("Label", ImGuiTableColumnFlags_WidthFixed,
-                                                LABEL_WIDTH);
+                                                DIALOG_LABEL_WIDTH);
                         ImGui::TableSetupColumn("Value", ImGuiTableColumnFlags_WidthStretch);
                         ImGui::TableSetupColumn("Action", ImGuiTableColumnFlags_WidthFixed,
                                                 94.0f);
                         ImGui::TableNextRow();
                         ImGui::TableSetColumnIndex(0);
-                        ImGui::AlignTextToFramePadding();
-                        field_label("Result database");
+                        PanelFieldLabel("Result database", true, &settings);
 
                         ImGui::TableSetColumnIndex(1);
                         ImGui::SetNextItemWidth(-FLT_MIN);
@@ -292,7 +280,8 @@ SshTestDialog::Render()
                 if(ImGui::BeginTable("##remote_trace_footer_table", 2,
                                       ImGuiTableFlags_SizingStretchProp))
                 {
-                    const float total_width = BUTTON_WIDTH * 2.0f + style.ItemSpacing.x;
+                    const float total_width =
+                        DIALOG_BUTTON_WIDTH * 2.0f + style.ItemSpacing.x;
                     ImGui::TableSetupColumn("Status", ImGuiTableColumnFlags_WidthStretch);
                     ImGui::TableSetupColumn("Actions", ImGuiTableColumnFlags_WidthFixed,
                                             total_width);
@@ -300,15 +289,12 @@ SshTestDialog::Render()
                     ImGui::TableSetColumnIndex(0);
                     if(status_msg.empty())
                     {
-                        ImGui::AlignTextToFramePadding();
-                        ImGui::PushStyleColor(ImGuiCol_Text, text_dim);
-                        ImGui::TextUnformatted("Ready");
-                        ImGui::PopStyleColor();
+                        PanelFieldLabel("Ready", true, &settings);
                     }
                     else
                     {
-                        render_icon(running ? ICON_ARROWS_CYCLE : ICON_CHAIN,
-                                    running ? accent : text_dim);
+                        PanelIcon(running ? ICON_ARROWS_CYCLE : ICON_CHAIN,
+                                  running ? accent : text_dim, &settings);
                         ImGui::SameLine(0.0f, style.ItemInnerSpacing.x);
                         ImGui::PushID("footer_status");
                         ImGui::PushStyleColor(ImGuiCol_Text, running ? accent : text_dim);
@@ -319,7 +305,7 @@ SshTestDialog::Render()
                     }
 
                     ImGui::TableSetColumnIndex(1);
-                    if(ImGui::Button("Close", ImVec2(BUTTON_WIDTH, 0.0f)))
+                    if(ImGui::Button("Close", ImVec2(DIALOG_BUTTON_WIDTH, 0.0f)))
                     {
                         m_show_window = false;
                     }
@@ -334,9 +320,8 @@ SshTestDialog::Render()
                     ImGui::PushStyleColor(ImGuiCol_ButtonHovered, accent_hover);
                     ImGui::PushStyleColor(ImGuiCol_ButtonActive, accent_active);
                     ImGui::PushStyleColor(ImGuiCol_Text, text_on_accent);
-                    open_clicked =
-                        ImGui::Button(running ? "Working..." : "Open",
-                                      ImVec2(BUTTON_WIDTH, 0.0f));
+                    open_clicked = ImGui::Button(running ? "Working..." : "Open",
+                                                 ImVec2(DIALOG_BUTTON_WIDTH, 0.0f));
                     ImGui::PopStyleColor(4);
                     if(open_disabled)
                     {
@@ -446,20 +431,24 @@ SshTestDialog::RenderOutputPopup()
         SettingsManager&  settings = SettingsManager::GetInstance();
         const ImGuiStyle& style    = ImGui::GetStyle();
 
+        constexpr ImVec2 EXEC_POPUP_SIZE      = ImVec2(620.0f, 440.0f);
+        constexpr ImVec2 EXEC_CONSOLE_PADDING = ImVec2(12.0f, 8.0f);
+
         PopUpStyle popup_style;
         popup_style.PushPopupStyles();
         popup_style.PushTitlebarColors();
         popup_style.CenterPopup();
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 12.0f);
-        ImGui::SetNextWindowSize(ImVec2(620, 440));
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding,
+                            settings.GetDefaultStyle().WindowRounding);
+        ImGui::SetNextWindowSize(EXEC_POPUP_SIZE);
         if(ImGui::BeginPopupModal("Remote Execute", nullptr,
                                   ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoScrollbar))
         {
             const bool finished = m_last_stdout.finished;
 
             ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing,
-                                ImVec2(style.ItemSpacing.x, 4.0f));
+                                ImVec2(style.ItemSpacing.x, PANEL_CARD_STACK_SPACING_Y));
 
             BeginPanelCard("##remote_exec_header", PanelCardTone::kFrame, PANEL_HEADER_PADDING,
                            true, &settings);
@@ -479,9 +468,11 @@ SshTestDialog::RenderOutputPopup()
             EndPanelCard();
 
             // Fill the space between the auto-height header and footer with a
-            // scrollable console styled as a kBgMain card.
+            // scrollable console styled as a kBgMain card. The footer keeps the
+            // default gaps above and below it, not the tightened card gap.
+            const float default_spacing_y = settings.GetDefaultStyle().ItemSpacing.y;
             const float footer_reserve =
-                ImGui::GetFrameHeight() + 16.0f + style.ItemSpacing.y;
+                ImGui::GetFrameHeight() + default_spacing_y * 2.0f + style.ItemSpacing.y;
             float body_height =
                 ImGui::GetContentRegionAvail().y - footer_reserve - style.ItemSpacing.y;
             if(body_height < ImGui::GetFrameHeight())
@@ -492,7 +483,7 @@ SshTestDialog::RenderOutputPopup()
             ImGui::PushStyleColor(ImGuiCol_Border,
                                   settings.GetColor(Colors::kPanelBorderSubtle));
             ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, PANEL_CARD_ROUNDING);
-            ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(12.0f, 8.0f));
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, EXEC_CONSOLE_PADDING);
             ImGui::BeginChild("##remote_exec_output", ImVec2(0.0f, body_height),
                               ImGuiChildFlags_Borders);
             ImGui::TextUnformatted(m_last_stdout.text.c_str());
@@ -503,24 +494,22 @@ SshTestDialog::RenderOutputPopup()
             BeginPanelCard("##remote_exec_footer", PanelCardTone::kFrame, PANEL_CARD_PADDING,
                            true, &settings);
             {
-                constexpr float BUTTON_WIDTH = 104.0f;
                 PanelIcon(finished ? ICON_CHAIN : ICON_ARROWS_CYCLE,
                           finished ? Colors::kTextDim : Colors::kAccent, &settings);
                 ImGui::SameLine(0.0f, style.ItemInnerSpacing.x);
-                ImGui::AlignTextToFramePadding();
-                ImGui::PushStyleColor(ImGuiCol_Text, settings.GetColor(Colors::kTextDim));
-                ImGui::TextUnformatted(finished ? "Execution finished." : "Executing...");
-                ImGui::PopStyleColor();
+                PanelFieldLabel(finished ? "Execution finished." : "Executing...", true,
+                                &settings);
 
                 ImGui::SameLine();
                 const float avail = ImGui::GetContentRegionAvail().x;
-                if(avail > BUTTON_WIDTH)
+                if(avail > DIALOG_BUTTON_WIDTH)
                 {
-                    ImGui::SetCursorPosX(ImGui::GetCursorPosX() + (avail - BUTTON_WIDTH));
+                    ImGui::SetCursorPosX(ImGui::GetCursorPosX() +
+                                         (avail - DIALOG_BUTTON_WIDTH));
                 }
                 // Always offer a manual Close so the popup can never wedge open,
                 // even if the terminal snapshot is missed (e.g. connection dropped).
-                if(AccentButton("Close", ImVec2(BUTTON_WIDTH, 0), &settings))
+                if(AccentButton("Close", ImVec2(DIALOG_BUTTON_WIDTH, 0), &settings))
                 {
                     ImGui::CloseCurrentPopup();
                     m_show_stdout_popup = false;

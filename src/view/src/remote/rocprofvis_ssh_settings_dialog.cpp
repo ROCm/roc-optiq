@@ -19,7 +19,7 @@ namespace RocProfVis
 namespace View
 {
 
-static const char* kSshSettingsPopupName = "SSH Connection Settings";
+constexpr const char* SSH_SETTINGS_POPUP_NAME = "SSH Connection Settings";
 
 SshSettingsDialog::SshSettingsDialog(SshConnectionStore& store, const std::string& initial_id,
                                      std::function<void(const std::string&)> on_commit)
@@ -80,7 +80,7 @@ SshSettingsDialog::Render()
     // Open the modal once on first render.
     if(!m_requested_open)
     {
-        ImGui::OpenPopup(kSshSettingsPopupName);
+        ImGui::OpenPopup(SSH_SETTINGS_POPUP_NAME);
         m_requested_open = true;
     }
 
@@ -93,23 +93,23 @@ SshSettingsDialog::Render()
     const ImGuiStyle& style    = ImGui::GetStyle();
 
     // Fixed width, auto height, so no section clips and no scrollbar is needed.
-    const float dialog_width =
-        GetResponsiveWindowSize(ImVec2(560.0f, 0.0f), ImVec2(480.0f, 0.0f)).x;
+    const float dialog_width = GetResponsiveWindowSize(ImVec2(DIALOG_DEFAULT_WIDTH, 0.0f),
+                                                       ImVec2(DIALOG_MIN_WIDTH, 0.0f))
+                                   .x;
     ImGui::SetNextWindowSizeConstraints(ImVec2(dialog_width, 0.0f),
                                         ImVec2(dialog_width, FLT_MAX));
     // Borderless card-stack: the header band carries the title (and its own
     // close button) instead of the native title bar.
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 12.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding,
+                        settings.GetDefaultStyle().WindowRounding);
 
-    if(ImGui::BeginPopupModal(kSshSettingsPopupName, nullptr,
+    if(ImGui::BeginPopupModal(SSH_SETTINGS_POPUP_NAME, nullptr,
                               ImGuiWindowFlags_AlwaysAutoResize |
                                   ImGuiWindowFlags_NoSavedSettings |
                                   ImGuiWindowFlags_NoScrollbar |
                                   ImGuiWindowFlags_NoTitleBar))
     {
-        constexpr float LABEL_WIDTH      = 104.0f;
-        constexpr float BUTTON_WIDTH     = 104.0f;
         constexpr float PROFILE_BUTTON_W = 78.0f;
 
         const ImU32 text_dim  = settings.GetColor(Colors::kTextDim);
@@ -117,13 +117,6 @@ SshSettingsDialog::Render()
 
         // Restored inside each card so the tighter panel gaps do not cramp fields.
         const ImVec2 default_item_spacing = style.ItemSpacing;
-
-        auto label = [&](const char* text) {
-            ImGui::AlignTextToFramePadding();
-            ImGui::PushStyleColor(ImGuiCol_Text, text_dim);
-            ImGui::TextUnformatted(text);
-            ImGui::PopStyleColor();
-        };
 
         auto section_title = [&](const char* title) {
             ImGui::PushFont(nullptr,
@@ -177,7 +170,7 @@ SshSettingsDialog::Render()
 
         // Tighten the vertical gaps between the stacked panels (header/cards/footer).
         ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing,
-                            ImVec2(default_item_spacing.x, 4.0f));
+                            ImVec2(default_item_spacing.x, PANEL_CARD_STACK_SPACING_Y));
 
         BeginPanelCard("##ssh_settings_header", PanelCardTone::kFrame, PANEL_HEADER_PADDING,
                        true, &settings);
@@ -186,7 +179,8 @@ SshSettingsDialog::Render()
                                   ImGuiTableFlags_SizingStretchProp))
             {
                 ImGui::TableSetupColumn("Title", ImGuiTableColumnFlags_WidthStretch);
-                ImGui::TableSetupColumn("Close", ImGuiTableColumnFlags_WidthFixed, 24.0f);
+                ImGui::TableSetupColumn("Close", ImGuiTableColumnFlags_WidthFixed,
+                                        DIALOG_CLOSE_COLUMN_WIDTH);
                 ImGui::TableNextRow();
 
                 ImGui::TableSetColumnIndex(0);
@@ -213,8 +207,8 @@ SshSettingsDialog::Render()
         }
         EndPanelCard();
 
-        BeginPanelCard("##ssh_settings_body", PanelCardTone::kMain, ImVec2(12.0f, 4.0f),
-                       false, &settings);
+        BeginPanelCard("##ssh_settings_body", PanelCardTone::kMain,
+                       PANEL_BACKDROP_PADDING, false, &settings);
         {
             begin_card("##ssh_profile_card");
             {
@@ -225,14 +219,14 @@ SshSettingsDialog::Render()
                                       ImGuiTableFlags_SizingStretchProp))
                 {
                     ImGui::TableSetupColumn("Label", ImGuiTableColumnFlags_WidthFixed,
-                                            LABEL_WIDTH);
+                                            DIALOG_LABEL_WIDTH);
                     ImGui::TableSetupColumn("Profile", ImGuiTableColumnFlags_WidthStretch);
                     ImGui::TableSetupColumn("Actions", ImGuiTableColumnFlags_WidthFixed,
                                             PROFILE_BUTTON_W * 2.0f + style.ItemSpacing.x);
                     ImGui::TableNextRow();
 
                     ImGui::TableSetColumnIndex(0);
-                    label("Profile");
+                    PanelFieldLabel("Profile", true, &settings);
 
                     ImGui::TableSetColumnIndex(1);
                     ImGui::SetNextItemWidth(-FLT_MIN);
@@ -303,33 +297,33 @@ SshSettingsDialog::Render()
                                       ImGuiTableFlags_SizingStretchProp))
                 {
                     ImGui::TableSetupColumn("Label", ImGuiTableColumnFlags_WidthFixed,
-                                            LABEL_WIDTH);
+                                            DIALOG_LABEL_WIDTH);
                     ImGui::TableSetupColumn("Field", ImGuiTableColumnFlags_WidthStretch);
 
                     ImGui::TableNextRow();
                     ImGui::TableSetColumnIndex(0);
-                    label("Name");
+                    PanelFieldLabel("Name", true, &settings);
                     ImGui::TableSetColumnIndex(1);
                     ImGui::SetNextItemWidth(-FLT_MIN);
                     InputTextString("##rname", m_working.display_name);
 
                     ImGui::TableNextRow();
                     ImGui::TableSetColumnIndex(0);
-                    label("Host");
+                    PanelFieldLabel("Host", true, &settings);
                     ImGui::TableSetColumnIndex(1);
                     ImGui::SetNextItemWidth(-FLT_MIN);
                     InputTextString("##rhost", m_working.host);
 
                     ImGui::TableNextRow();
                     ImGui::TableSetColumnIndex(0);
-                    label("Port");
+                    PanelFieldLabel("Port", true, &settings);
                     ImGui::TableSetColumnIndex(1);
                     ImGui::SetNextItemWidth(-FLT_MIN);
                     InputTextString("##rport", m_working.port);
 
                     ImGui::TableNextRow();
                     ImGui::TableSetColumnIndex(0);
-                    label("User");
+                    PanelFieldLabel("User", true, &settings);
                     ImGui::TableSetColumnIndex(1);
                     ImGui::SetNextItemWidth(-FLT_MIN);
                     InputTextString("##ruser", m_working.user);
@@ -348,18 +342,18 @@ SshSettingsDialog::Render()
                                       ImGuiTableFlags_SizingStretchProp))
                 {
                     ImGui::TableSetupColumn("Label", ImGuiTableColumnFlags_WidthFixed,
-                                            LABEL_WIDTH);
+                                            DIALOG_LABEL_WIDTH);
                     ImGui::TableSetupColumn("Field", ImGuiTableColumnFlags_WidthStretch);
 
                     ImGui::TableNextRow();
                     ImGui::TableSetColumnIndex(0);
-                    label("Password");
+                    PanelFieldLabel("Password", true, &settings);
                     ImGui::TableSetColumnIndex(1);
                     reveal_toggle("##rpass", m_working.password, nullptr, m_show_password);
 
                     ImGui::TableNextRow();
                     ImGui::TableSetColumnIndex(0);
-                    label("SSH Key");
+                    PanelFieldLabel("SSH Key", true, &settings);
                     ImGui::TableSetColumnIndex(1);
                     ImGui::SetNextItemWidth(-FLT_MIN);
                     InputTextStringWithHint(
@@ -368,7 +362,7 @@ SshSettingsDialog::Render()
 
                     ImGui::TableNextRow();
                     ImGui::TableSetColumnIndex(0);
-                    label("Passphrase");
+                    PanelFieldLabel("Passphrase", true, &settings);
                     ImGui::TableSetColumnIndex(1);
                     reveal_toggle("##rkeypass", m_working.passphrase,
                                   "Leave blank for unencrypted keys or ssh-agent",
@@ -384,7 +378,7 @@ SshSettingsDialog::Render()
         BeginPanelCard("##ssh_settings_footer", PanelCardTone::kFrame, PANEL_CARD_PADDING,
                        true, &settings);
         {
-            const float action_width = BUTTON_WIDTH * 2.0f + style.ItemSpacing.x;
+            const float action_width = DIALOG_BUTTON_WIDTH * 2.0f + style.ItemSpacing.x;
             if(ImGui::BeginTable("##ssh_settings_footer_table", 2,
                                   ImGuiTableFlags_SizingStretchProp))
             {
@@ -400,12 +394,12 @@ SshSettingsDialog::Render()
                 ImGui::PopStyleColor();
 
                 ImGui::TableSetColumnIndex(1);
-                if(ImGui::Button("Cancel", ImVec2(BUTTON_WIDTH, 0.0f)))
+                if(ImGui::Button("Cancel", ImVec2(DIALOG_BUTTON_WIDTH, 0.0f)))
                 {
                     close_popup = true;
                 }
                 ImGui::SameLine();
-                if(AccentButton("Save", ImVec2(BUTTON_WIDTH, 0.0f), &settings))
+                if(AccentButton("Save", ImVec2(DIALOG_BUTTON_WIDTH, 0.0f), &settings))
                 {
                     accept      = true;
                     close_popup = true;

@@ -388,11 +388,7 @@ void RemoteFileBrowser::Render()
                           ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
         {
             // Title and host chip.
-            ImGui::PushFont(icon_font, ImGui::GetFontSize());
-            ImGui::PushStyleColor(ImGuiCol_Text, accent);
-            ImGui::TextUnformatted(ICON_COMPASS);
-            ImGui::PopStyleColor();
-            ImGui::PopFont();
+            PanelIcon(ICON_COMPASS, accent, &settings);
             ImGui::SameLine();
             ImGui::TextUnformatted(dir_mode ? "Choose Remote Folder" : "Remote File System");
 
@@ -511,12 +507,8 @@ void RemoteFileBrowser::Render()
                         accum += segment;
 
                         ImGui::SameLine(0, 2.0f);
-                        ImGui::PushFont(icon_font, ImGui::GetFontSize());
-                        ImGui::PushStyleColor(ImGuiCol_Text, text_dim);
                         ImGui::AlignTextToFramePadding();
-                        ImGui::TextUnformatted(ICON_CHEVRON_RIGHT);
-                        ImGui::PopStyleColor();
-                        ImGui::PopFont();
+                        PanelIcon(ICON_CHEVRON_RIGHT, text_dim, &settings);
                         ImGui::SameLine(0, 2.0f);
 
                         std::string crumb = segment + "##crumb" + accum;
@@ -712,15 +704,6 @@ void RemoteFileBrowser::Render()
                 }
             }
 
-            auto row_icon = [&](const char* glyph, ImU32 color) {
-                ImGui::PushFont(icon_font, ImGui::GetFontSize());
-                ImGui::PushStyleColor(ImGuiCol_Text, color);
-                ImGui::TextUnformatted(glyph);
-                ImGui::PopStyleColor();
-                ImGui::PopFont();
-                ImGui::SameLine(0, style.ItemInnerSpacing.x);
-            };
-
             // Synthetic ".." parent row (not at the root).
             if (!is_posix_root_path(m_browser_dir))
             {
@@ -736,7 +719,8 @@ void RemoteFileBrowser::Render()
                 }
                 const ImU32 c = parent_selected ? text_on_accent : accent;
                 ImGui::SameLine(0, 0);
-                row_icon(ICON_FOLDER, c);
+                PanelIcon(ICON_FOLDER, c, &settings);
+                ImGui::SameLine(0, style.ItemInnerSpacing.x);
                 ImGui::PushStyleColor(ImGuiCol_Text, c);
                 ImGui::TextUnformatted("..");
                 ImGui::PopStyleColor();
@@ -813,7 +797,8 @@ void RemoteFileBrowser::Render()
                 const ImU32 name_color =
                     row_selected ? text_on_accent : (f.is_dir ? accent : text_main);
                 ImGui::SameLine(0, 0);
-                row_icon(f.is_dir ? ICON_FOLDER : ICON_DOCUMENT, icon_color);
+                PanelIcon(f.is_dir ? ICON_FOLDER : ICON_DOCUMENT, icon_color, &settings);
+                ImGui::SameLine(0, style.ItemInnerSpacing.x);
                 // Directory rows show the name (folders with a trailing slash).
                 // The Name column clips long text; the full path is on hover.
                 const std::string display = f.is_dir ? f.name + "/" : f.name;

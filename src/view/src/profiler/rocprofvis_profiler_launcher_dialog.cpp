@@ -992,9 +992,14 @@ void ProfilerLauncherDialog::RenderRemotePopups()
     // was torn down); waiting for a final "downloaded == size" snapshot would hang
     // the popup open on fast transfers. Rendering is shared with the remote trace
     // opener via RenderRemoteDownloadPopup.
-    RenderRemoteDownloadPopup("Remote Trace Download", "##profiler_dl",
-                              m_remote_last_progress, "Starting...", !downloading,
-                              m_remote_show_progress_popup);
+    if (!RenderRemoteDownloadPopup("Remote Trace Download", "##profiler_dl",
+                                   m_remote_last_progress, "Starting...", !downloading,
+                                   m_remote_show_progress_popup))
+    {
+        // Popup not actually open (e.g. dismissed); clear our flag so it can be
+        // reopened on the next download.
+        m_remote_show_progress_popup = false;
+    }
 }
 #endif  // ROCPROFVIS_ENABLE_REMOTE
 

@@ -157,13 +157,23 @@ inline constexpr float PANEL_CARD_ROUNDING = 10.0f;
 // dialog uses the same spacing. A standard grouping card is PANEL_CARD_PADDING
 // (also BeginPanelCard's default); header/footer bands are a touch roomier, and
 // cards holding wrapped prose get extra vertical breathing room.
-inline constexpr ImVec2 PANEL_CARD_PADDING   = ImVec2(14.0f, 8.0f);
-inline constexpr ImVec2 PANEL_HEADER_PADDING = ImVec2(16.0f, 10.0f);
-inline constexpr ImVec2 PANEL_BODY_PADDING   = ImVec2(14.0f, 10.0f);
+inline constexpr ImVec2 PANEL_CARD_PADDING     = ImVec2(14.0f, 8.0f);
+inline constexpr ImVec2 PANEL_HEADER_PADDING   = ImVec2(16.0f, 10.0f);
+inline constexpr ImVec2 PANEL_BODY_PADDING     = ImVec2(14.0f, 10.0f);
+inline constexpr ImVec2 PANEL_BACKDROP_PADDING = ImVec2(12.0f, 4.0f);
 
 // Vertical gap between cards in a stack. Deliberately tighter than the default
 // ItemSpacing so a column of panel cards reads as one continuous surface.
 inline constexpr float PANEL_CARD_STACK_SPACING_Y = 4.0f;
+
+// Metrics repeated across the stacked dialogs: the width they open at and the
+// narrowest they shrink to, the width of footer buttons and field-label
+// columns, and the width of a header's close-button column.
+inline constexpr float DIALOG_DEFAULT_WIDTH      = 560.0f;
+inline constexpr float DIALOG_MIN_WIDTH          = 480.0f;
+inline constexpr float DIALOG_BUTTON_WIDTH       = 104.0f;
+inline constexpr float DIALOG_LABEL_WIDTH        = 104.0f;
+inline constexpr float DIALOG_CLOSE_COLUMN_WIDTH = 24.0f;
 
 // Tooltip wrap width for HelpMarker, as a multiple of the current font size.
 inline constexpr float HELP_MARKER_WRAP_EM = 25.0f;

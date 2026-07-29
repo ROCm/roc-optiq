@@ -113,39 +113,39 @@ namespace DataModel
         return nullptr;
     }
 
-    void DatabaseCache::AddTableCell(std::string table_name, uint64_t row_id, uint32_t column_index, std::string cell_value)
+    void DatabaseCache::AddTableCell(const char* table_name, uint64_t row_id, uint32_t column_index, std::string cell_value)
     {
         std::unique_lock<std::shared_mutex> lock(m_mutex);
         tables[table_name].AddCell(column_index, row_id, cell_value);
     }
-    void DatabaseCache::AddTableCell(std::string table_name, uint64_t row_id, std::string column_name, rocprofvis_db_data_type_t column_type, std::string cell_value)
+    void DatabaseCache::AddTableCell(const char* table_name, uint64_t row_id, std::string column_name, rocprofvis_db_data_type_t column_type, std::string cell_value)
     {
         std::unique_lock<std::shared_mutex> lock(m_mutex);
         uint32_t column_index = tables[table_name].AddColumn(column_name, column_type);
         tables[table_name].AddCell(column_index, row_id, cell_value);
     }
-    void DatabaseCache::AddTableRow(std::string table_name, uint64_t row_id)
+    void DatabaseCache::AddTableRow(const char* table_name, uint64_t row_id)
     {
         std::unique_lock<std::shared_mutex> lock(m_mutex);
         tables[table_name].AddRow(row_id);
     }
-    void DatabaseCache::AddTableColumn(std::string table_name, std::string column_name, rocprofvis_db_data_type_t column_type)
+    void DatabaseCache::AddTableColumn(const char* table_name, std::string column_name, rocprofvis_db_data_type_t column_type)
     {
         std::unique_lock<std::shared_mutex> lock(m_mutex);
         tables[table_name].AddColumn(column_name, column_type);
     }
-    const char* DatabaseCache::GetTableCell(std::string table_name, uint64_t row_id, std::string column_name)
+    const char* DatabaseCache::GetTableCell(const char* table_name, uint64_t row_id, std::string column_name)
     {
         std::unique_lock<std::shared_mutex> lock(m_mutex);
         return tables[table_name].GetCell(row_id,column_name);
     }
-    const char* DatabaseCache::GetTableCellByIndex(std::string table_name, uint32_t row_index, std::string column_name)
+    const char* DatabaseCache::GetTableCellByIndex(const char* table_name, uint32_t row_index, std::string column_name)
     {
         std::unique_lock<std::shared_mutex> lock(m_mutex);
         return tables[table_name].GetCellByIndex(row_index,column_name);
     }
 
-    void* DatabaseCache::GetTableHandle(std::string table_name)
+    void* DatabaseCache::GetTableHandle(const char* table_name)
     {
         std::unique_lock<std::shared_mutex> lock(m_mutex);
         return &tables[table_name];

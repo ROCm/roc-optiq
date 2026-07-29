@@ -58,19 +58,6 @@ class GoogleTraceProcessor : public QueryManager
         // @return status of operation
         rocprofvis_dm_result_t  ReadTraceMetadata(
             Future* object) override;
-
-        // method to execute table database query with appropriate .CSV writer callback based on existence of GROUP BY clause
-        // @param query - database query 
-        // @param file_path output path to write .CSV
-        // @param future - future object providing asynchronous execution mechanism 
-        // @return status of operation
-        rocprofvis_dm_result_t ExportTableCSV(
-            rocprofvis_dm_charptr_t query,
-            rocprofvis_dm_charptr_t file_path,
-            Future* future) override {
-            return kRocProfVisDmResultSuccess;
-        };
-
         // worker method to read flow trace info
         // @param event_id - 60-bit event id and 4-bit operation type  
         // @param object - future object providing asynchronous execution mechanism 
@@ -97,7 +84,8 @@ class GoogleTraceProcessor : public QueryManager
             rocprofvis_dm_timestamp_t end,
             rocprofvis_dm_charptr_t new_db_path,
             Future* future) override {
-            return kRocProfVisDmResultSuccess;
+            ShowProgress(0, "Trimming is not supported for Perfetto traces!", kRPVDbError, future);
+            return future->SetPromise( kRocProfVisDmResultNotSupported);
         };
 
     static rocprofvis_db_type_t Detect(rocprofvis_db_filename_t filename);

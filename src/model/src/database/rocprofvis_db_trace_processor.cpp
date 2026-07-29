@@ -410,16 +410,16 @@ namespace RocProfVis
         {
             for (int i = 0; i < argc; i++)
             {
-                ref_tables->AddTableColumn(callback_params->query[kRPVCacheTableName], azColName[i], (rocprofvis_db_data_type_t)sqlite3_column_type(stmt, i));
+                ref_tables->AddTableColumn(callback_params->query[kRPVCacheTableName].c_str(), azColName[i], (rocprofvis_db_data_type_t)sqlite3_column_type(stmt, i));
             }
         }
 
         uint64_t id = db->Sqlite3ColumnInt64(func, stmt, azColName, 0);
-        ref_tables->AddTableRow(callback_params->query[kRPVCacheTableName], id);
+        ref_tables->AddTableRow(callback_params->query[kRPVCacheTableName].c_str(), id);
         for (int i = 0; i < argc; i++)
         {
             rocprofvis_db_data_type_t col_type = (rocprofvis_db_data_type_t)sqlite3_column_type(stmt, i);
-            ref_tables->AddTableCell(callback_params->query[kRPVCacheTableName], id, i,
+            ref_tables->AddTableCell(callback_params->query[kRPVCacheTableName].c_str(), id, i,
                 (char*)db->Sqlite3ColumnText(func, stmt, azColName, i));
         }
 

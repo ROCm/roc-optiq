@@ -68,16 +68,6 @@ class ProfileDatabase : public QueryManager
         static rocprofvis_db_type_t Detect(rocprofvis_db_filename_t filename, std::vector<std::string> & multinode_files);
         static rocprofvis_dm_result_t  DetectMultiNode(rocprofvis_db_filename_t filename, std::vector<std::string> & db_files);
 
-        // method to execute table database query with appropriate .CSV writer callback based on existence of GROUP BY clause
-        // @param query - database query 
-        // @param file_path output path to write .CSV
-        // @param future - future object providing asynchronous execution mechanism 
-        // @return status of operation
-        rocprofvis_dm_result_t ExportTableCSV(
-            rocprofvis_dm_charptr_t query,
-            rocprofvis_dm_charptr_t file_path,
-            Future* future) override;
-
      protected:
 
         // ----------------------------------Query builders------------------------------------------

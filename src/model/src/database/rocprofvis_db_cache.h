@@ -61,13 +61,13 @@ private:
 class DatabaseCache 
 {
     public:
-        void AddTableCell(std::string table_name, uint64_t row_id, uint32_t column_index, std::string cell_value);
-        void AddTableCell(std::string table_name, uint64_t row_id, std::string column_name, rocprofvis_db_data_type_t column_type, std::string cell_value);
-        void AddTableRow(std::string table_name, uint64_t row_id);
-        void AddTableColumn(std::string table_name, std::string column_name, rocprofvis_db_data_type_t column_type);
-        const char* GetTableCell(std::string table_name, uint64_t row_id, std::string column_name);
-        const char* GetTableCellByIndex(std::string table_name, uint32_t row_index, std::string column_name);
-        void* GetTableHandle(std::string table_name);
+        void AddTableCell(const char* table_name, uint64_t row_id, uint32_t column_index, std::string cell_value);
+        void AddTableCell(const char* table_name, uint64_t row_id, std::string column_name, rocprofvis_db_data_type_t column_type, std::string cell_value);
+        void AddTableRow(const char* table_name, uint64_t row_id);
+        void AddTableColumn(const char* table_name, std::string column_name, rocprofvis_db_data_type_t column_type);
+        const char* GetTableCell(const char* table_name, uint64_t row_id, std::string column_name);
+        const char* GetTableCellByIndex(const char* table_name, uint32_t row_index, std::string column_name);
+        void* GetTableHandle(const char* table_name);
       
         // Populate track extended data objects and topology tree with table content
         rocprofvis_dm_result_t PopulateTrackExtendedDataTemplate(Database * db, uint32_t node_id, std::string table_name, uint64_t instance_id ); 

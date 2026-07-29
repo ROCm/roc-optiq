@@ -1025,5 +1025,43 @@ std::string QueryManager::GetHistogramQuerySuffix()
 }
 
 
+rocprofvis_dm_result_t QueryManager::ExportTableCSV(rocprofvis_dm_charptr_t query,
+    rocprofvis_dm_charptr_t file_path,
+    Future* future)
+{
+    ROCPROFVIS_ASSERT_MSG_RETURN(file_path, "Output path cannot be NULL.", kRocProfVisDmResultInvalidParameter);
+    ROCPROFVIS_ASSERT_MSG_RETURN(future, ERROR_FUTURE_CANNOT_BE_NULL, kRocProfVisDmResultInvalidParameter);
+    ROCPROFVIS_ASSERT_MSG_RETURN(BindObject()->trace_object, ERROR_TRACE_CANNOT_BE_NULL, kRocProfVisDmResultInvalidParameter);
+    rocprofvis_dm_result_t result = kRocProfVisDmResultInvalidParameter;
+    Future* internal_future = future->AddSubFuture();
+    result = ExecuteQuery(query, "ExportTableCSV", internal_future);
+    future->WaitAndDeleteSubFuture(internal_future);
+    if (result == kRocProfVisDmResultSuccess)
+    {
+        rocprofvis_db_compound_table_type data_type = kRPVTableDataTypeEvent;
+        std::unordered_map<uint32_t, std::unordered_map<std::string, rocprofvis_db_compound_query_info>> queries;
+        std::vector<rocprofvis_db_compound_query_command> commands;
+        std::set<uint32_t> tracks;
+        TableProcessor::IsCompoundQuery(query, queries, tracks,  commands);
+        auto it = std::find_if(commands.begin(), commands.end(), [](rocprofvis_db_compound_query_command& cmd) { return cmd.name == "TYPE"; });
+        if (it != commands.end())
+        {
+            data_type = (rocprofvis_db_compound_table_type)std::atol(it->parameter.c_str());
+            result = m_table_processor[data_type].ExportToCSV(file_path);
+            if (result == kRocProfVisDmResultSuccess)
+            {
+                ShowProgress(100, "CSV export success", kRPVDbSuccess, future);        
+            }
+        }
+    }
+    BindObject()->FuncRemoveTable(BindObject()->trace_object, query);
+    if (result != kRocProfVisDmResultSuccess)
+    {
+        ShowProgress(0, "CSV export failed", kRPVDbError, future);
+    }
+    return future->SetPromise(result);
+}
+
+
 }  // namespace DataModel
 }  // namespace RocProfVis

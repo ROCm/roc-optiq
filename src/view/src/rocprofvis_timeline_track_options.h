@@ -55,6 +55,9 @@ public:
     // Inheritance hierarchy
     const std::bitset<kNumTypes>& TypeMask() const;
 
+    // The track this option set belongs to.
+    const TrackItem& GetTrackItem() const { return m_track_item; }
+
     // Option members...
     bool  m_display;
     float m_height;
@@ -177,8 +180,18 @@ public:
     void InitContextMenu(const TrackItem& target);
     // Display the options menu for the target track passed in InitContextMenu()
     void RenderContextMenu();
+    // Whether any known track is currently hidden.
+    bool HasHiddenTracks() const;
+    // Render the "Show Hidden Tracks" submenu contents. Call within a BeginMenu.
+    void RenderHiddenTracksSubmenu();
 
 private:
+    // Reveal every track in the list (sets display + fires a single
+    // visibility-changed event). Ignores tracks that are already displayed.
+    void ShowTracks(const std::vector<TrackOptions*>& options);
+    // Reveal every currently hidden track.
+    void ShowAllHiddenTracks();
+
     enum Propagate
     {
         kNone,

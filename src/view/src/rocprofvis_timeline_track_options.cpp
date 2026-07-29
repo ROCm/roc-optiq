@@ -12,6 +12,7 @@
 #include "rocprofvis_track_item.h"
 #include "widgets/rocprofvis_gui_helpers.h"
 #include <algorithm>
+#include <cstring>
 
 namespace RocProfVis
 {
@@ -22,6 +23,10 @@ constexpr std::array<const char*, TrackInfo::Count>
     DISPLAY_STRINGS_TOPOLOGY_TRACK_TYPES = { "##Unknown",         "Queue Tracks",
                                              "Stream Tracks",     "Thread Tracks",
                                              "Thread (S) Tracks", "Counter Tracks" };
+
+// Fraction of the viewport work area that a "Show Hidden Tracks" category
+// submenu may occupy before it starts scrolling.
+constexpr float HIDDEN_TRACKS_MENU_MAX_HEIGHT_FRACTION = 0.5f;
 constexpr std::array<const char*, 2> DISPLAY_STRINGS_TRACK_DATA_TYPES = {
     "Counter Tracks", "Event Tracks"
 };
@@ -995,6 +1000,139 @@ TimelineTrackOptions::RenderContextMenu()
                 ROCPROFVIS_ASSERT(false);
                 break;
             }
+        }
+    }
+}
+
+bool
+TimelineTrackOptions::HasHiddenTracks() const
+{
+    for(const auto& entry : m_options_map)
+    {
+        if(entry.second && !entry.second->m_display)
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+void
+TimelineTrackOptions::ShowTracks(const std::vector<TrackOptions*>& options)
+{
+    if(!m_context_menu_target)
+    {
+        return;
+    }
+    bool changed = false;
+    for(TrackOptions* option : options)
+    {
+        if(option && !option->m_display)
+        {
+            option->m_display = true;
+            changed           = true;
+        }
+    }
+    if(changed)
+    {
+        // Aggregated context-menu options track visibility too, so refresh them.
+        m_update_aggregates = true;
+        EventManager::GetInstance()->AddEvent(std::make_shared<RocEvent>(
+            static_cast<int>(RocEvents::kTrackVisibilityChanged),
+            m_context_menu_target->m_data_provider.GetTraceFilePath()));
+    }
+}
+
+void
+TimelineTrackOptions::ShowAllHiddenTracks()
+{
+    std::vector<TrackOptions*> hidden;
+    for(const auto& entry : m_options_map)
+    {
+        if(entry.second && !entry.second->m_display)
+        {
+            hidden.push_back(entry.second);
+        }
+    }
+    ShowTracks(hidden);
+}
+
+void
+TimelineTrackOptions::RenderHiddenTracksSubmenu()
+{
+    // Group hidden tracks by category (topology-type order; unknown-topology
+    // tracks fall back to a data-type label).
+    std::vector<std::pair<const char*, std::vector<TrackOptions*>>> categories;
+    auto bucket = [&categories](const char* label) -> std::vector<TrackOptions*>& {
+        for(auto& category : categories)
+        {
+            if(std::strcmp(category.first, label) == 0)
+            {
+                return category.second;
+            }
+        }
+        categories.emplace_back(label, std::vector<TrackOptions*>{});
+        return categories.back().second;
+    };
+
+    for(size_t type = TrackInfo::Queue; type < static_cast<size_t>(TrackInfo::Count);
+        ++type)
+    {
+        for(TrackOptions* option : m_siblings_by_topology_type[type])
+        {
+            if(option && !option->m_display)
+            {
+                bucket(DISPLAY_STRINGS_TOPOLOGY_TRACK_TYPES[type]).push_back(option);
+            }
+        }
+    }
+    for(TrackOptions* option : m_siblings_by_topology_type[TrackInfo::Unknown])
+    {
+        if(!option || option->m_display)
+        {
+            continue;
+        }
+        const TrackInfo* info = option->GetTrackItem().GetTrackInfo();
+        const char*      label =
+            (info && info->track_type == kRPVControllerTrackTypeSamples)
+                     ? DISPLAY_STRINGS_TOPOLOGY_TRACK_TYPES[TrackInfo::Counter]
+                     : "Event Tracks";
+        bucket(label).push_back(option);
+    }
+
+    // Null icon keeps rows aligned with the icon-bearing parent menu.
+    if(IconMenuItem(nullptr, "Show All Hidden Tracks"))
+    {
+        ShowAllHiddenTracks();
+    }
+    ImGui::Separator();
+
+    // Cap category submenu height so long lists scroll instead of filling the screen.
+    const float max_submenu_height =
+        ImGui::GetMainViewport()->WorkSize.y * HIDDEN_TRACKS_MENU_MAX_HEIGHT_FRACTION;
+    for(auto& category : categories)
+    {
+        ImGui::SetNextWindowSizeConstraints(ImVec2(0.0f, 0.0f),
+                                            ImVec2(FLT_MAX, max_submenu_height));
+        if(IconBeginMenu(nullptr, category.first))
+        {
+            if(IconMenuItem(nullptr, "Show All Hidden"))
+            {
+                ShowTracks(category.second);
+            }
+            ImGui::Separator();
+            for(TrackOptions* option : category.second)
+            {
+                // Hidden ##id suffix keeps ids unique when names repeat.
+                const std::string item =
+                    option->GetTrackItem().GetName() + "##" +
+                    std::to_string(option->GetTrackItem().GetID());
+                if(IconMenuItem(nullptr, item.c_str()))
+                {
+                    ShowTracks({ option });
+                }
+            }
+            ImGui::EndMenu();
         }
     }
 }

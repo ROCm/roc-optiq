@@ -100,7 +100,7 @@ public:
     virtual float      GetTrackHeight() const;
     virtual void       Render(float width);
     virtual void       Update();
-    const std::string& GetName();
+    const std::string& GetName() const;
     bool               IsInViewVertical() const;
     void               SetInViewVertical(bool in_view);
 

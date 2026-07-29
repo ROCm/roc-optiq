@@ -724,26 +724,20 @@ DrawInternalBuildBanner(const char* text /*= "Internal Build"*/)
 }
 #endif // ROCPROFVIS_ENABLE_INTERNAL_BANNER
 
-// Menu icon spacing, in multiples of the font size.
-inline constexpr float MENU_ICON_GAP_EM       = 0.7f;
-inline constexpr float MENU_NO_ICON_INDENT_EM = 1.0f;
+inline constexpr float MENU_ICON_COLUMN_EM = 1.0f;
+inline constexpr float MENU_ICON_GAP_EM    = 0.7f;
 
 static float
-MenuIconWidth(const char* icon)
+MenuIconColumnWidth()
 {
-    const float font_size = ImGui::GetFontSize();
-    if(!icon || icon[0] == '\0')
-        return font_size * MENU_NO_ICON_INDENT_EM;
-
-    ImFont* icon_font = SettingsManager::GetInstance().GetFontManager().GetFont(FontType::kIcon);
-    return icon_font->CalcTextSizeA(font_size, FLT_MAX, -1.0f, icon).x;
+    return ImGui::GetFontSize() * MENU_ICON_COLUMN_EM;
 }
 
 // Pads the label with leading spaces to leave room for the left-aligned icon.
 static std::string
-MenuLabelWithIconPadding(const char* icon, const char* label)
+MenuLabelWithIconPadding(const char* label)
 {
-    const float offset  = MenuIconWidth(icon) + ImGui::GetFontSize() * MENU_ICON_GAP_EM;
+    const float offset  = MenuIconColumnWidth() + ImGui::GetFontSize() * MENU_ICON_GAP_EM;
     const float space_w = ImGui::CalcTextSize(" ").x;
     const int   pad     = space_w > 0.0f ? static_cast<int>(std::ceil(offset / space_w)) : 1;
     std::string padded(static_cast<size_t>(std::max(pad, 1)), ' ');
@@ -773,7 +767,7 @@ IconMenuItem(const char* icon, const char* label, bool enabled)
 {
     ImDrawList*  draw_list    = ImGui::GetWindowDrawList();
     const ImVec2 row_start    = ImGui::GetCursorScreenPos();
-    std::string  padded_label = MenuLabelWithIconPadding(icon, label);
+    std::string  padded_label = MenuLabelWithIconPadding(label);
 
     bool clicked = ImGui::MenuItem(padded_label.c_str(), nullptr, false, enabled);
     DrawMenuItemIcon(draw_list, icon, row_start, enabled);
@@ -788,7 +782,7 @@ IconBeginMenu(const char* icon, const char* label)
 {
     ImDrawList*  draw_list    = ImGui::GetWindowDrawList();
     const ImVec2 row_start    = ImGui::GetCursorScreenPos();
-    std::string  padded_label = MenuLabelWithIconPadding(icon, label);
+    std::string  padded_label = MenuLabelWithIconPadding(label);
 
     bool open = ImGui::BeginMenu(padded_label.c_str());
     DrawMenuItemIcon(draw_list, icon, row_start, true);

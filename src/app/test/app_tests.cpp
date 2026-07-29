@@ -32,6 +32,36 @@ using namespace RocProfVis::View;
 
 namespace
 {
+    TraceView* GetTraceViewOrSkip(ImGuiTestContext* ctx)
+    {
+        AppWindow* app = AppWindow::GetInstance();
+        Project* project = app->GetCurrentProject();
+        // A null project means the db never opened (a real regression); fail hard.
+        // A non-null project of the wrong view type is an expected wrong-db skip.
+        IM_CHECK_RETV(project != nullptr, nullptr);
+        TraceView* tv = dynamic_cast<TraceView*>(project->GetView().get());
+        if (tv == nullptr)
+        {
+            ctx->LogWarning("SKIP: no trace view loaded (open a system/trace profile to exercise this)");
+            return nullptr;
+        }
+        return tv;
+    }
+
+    ComputeView* GetComputeViewOrSkip(ImGuiTestContext* ctx)
+    {
+        AppWindow* app = AppWindow::GetInstance();
+        Project* project = app->GetCurrentProject();
+        IM_CHECK_RETV(project != nullptr, nullptr);
+        ComputeView* cv = dynamic_cast<ComputeView*>(project->GetView().get());
+        if (cv == nullptr)
+        {
+            ctx->LogWarning("SKIP: no compute view loaded (open a compute profile to exercise this)");
+            return nullptr;
+        }
+        return cv;
+    }
+
 // Flame-graph event bars are raw draw_list rects registered with the Test
 // Engine via IMGUI_TEST_ENGINE_ITEM_ADD under the track's "FV" child window.
 // These helpers gather that window's bars and pick reliably clickable targets
@@ -114,16 +144,8 @@ void RegisterAppTests(ImGuiTestEngine* e)
     t = IM_REGISTER_TEST(e, "app", "sys_events_view_populates");
     t->TestFunc = [](ImGuiTestContext* ctx)
     {
-        AppWindow* app = AppWindow::GetInstance();
-        Project* project = app->GetCurrentProject();
-        IM_CHECK(project != nullptr);
-        if (project == nullptr) return;
-        TraceView* tv = dynamic_cast<TraceView*>(project->GetView().get());
-        if (tv == nullptr)
-        {
-            ctx->LogWarning("SKIP: no trace view loaded (open a system/trace profile to exercise this)");
-            return;
-        }
+        TraceView* tv = GetTraceViewOrSkip(ctx);
+        if (!tv) return;
         AnalysisView* av = TraceViewTestPeer{*tv}.AnalysisViewPtr();
         IM_CHECK(av != nullptr);
         if (av == nullptr) return;
@@ -167,16 +189,8 @@ void RegisterAppTests(ImGuiTestEngine* e)
     t = IM_REGISTER_TEST(e, "app", "sys_timeline_zoom_hotkey");
     t->TestFunc = [](ImGuiTestContext* ctx)
     {
-        AppWindow* app = AppWindow::GetInstance();
-        Project* project = app->GetCurrentProject();
-        IM_CHECK(project != nullptr);
-        if (project == nullptr) return;
-        TraceView* tv = dynamic_cast<TraceView*>(project->GetView().get());
-        if (tv == nullptr)
-        {
-            ctx->LogWarning("SKIP: no trace view loaded (open a system/trace profile to exercise this)");
-            return;
-        }
+        TraceView* tv = GetTraceViewOrSkip(ctx);
+        if (!tv) return;
         TimelineView* tlv = TraceViewTestPeer{*tv}.TimelineViewPtr();
         IM_CHECK(tlv != nullptr);
         if (tlv == nullptr) return;
@@ -219,16 +233,8 @@ void RegisterAppTests(ImGuiTestEngine* e)
     t = IM_REGISTER_TEST(e, "app", "sys_bookmark_save_restore_hotkey");
     t->TestFunc = [](ImGuiTestContext* ctx)
     {
-        AppWindow* app = AppWindow::GetInstance();
-        Project* project = app->GetCurrentProject();
-        IM_CHECK(project != nullptr);
-        if (project == nullptr) return;
-        TraceView* tv = dynamic_cast<TraceView*>(project->GetView().get());
-        if (tv == nullptr)
-        {
-            ctx->LogWarning("SKIP: no trace view loaded (open a system/trace profile to exercise this)");
-            return;
-        }
+        TraceView* tv = GetTraceViewOrSkip(ctx);
+        if (!tv) return;
         TimelineView* tlv = TraceViewTestPeer{*tv}.TimelineViewPtr();
         IM_CHECK(tlv != nullptr);
         if (tlv == nullptr) return;
@@ -288,16 +294,8 @@ void RegisterAppTests(ImGuiTestEngine* e)
     t = IM_REGISTER_TEST(e, "app", "sys_event_multi_select");
     t->TestFunc = [](ImGuiTestContext* ctx)
     {
-        AppWindow* app = AppWindow::GetInstance();
-        Project* project = app->GetCurrentProject();
-        IM_CHECK(project != nullptr);
-        if (project == nullptr) return;
-        TraceView* tv = dynamic_cast<TraceView*>(project->GetView().get());
-        if (tv == nullptr)
-        {
-            ctx->LogWarning("SKIP: no trace view loaded (open a system/trace profile to exercise this)");
-            return;
-        }
+        TraceView* tv = GetTraceViewOrSkip(ctx);
+        if (!tv) return;
         TimelineView* tlv = TraceViewTestPeer{*tv}.TimelineViewPtr();
         IM_CHECK(tlv != nullptr);
         if (tlv == nullptr) return;
@@ -353,16 +351,8 @@ void RegisterAppTests(ImGuiTestEngine* e)
     t = IM_REGISTER_TEST(e, "app", "sys_minimap_toggle_drives_click");
     t->TestFunc = [](ImGuiTestContext* ctx)
     {
-        AppWindow* app = AppWindow::GetInstance();
-        Project* project = app->GetCurrentProject();
-        IM_CHECK(project != nullptr);
-        if (project == nullptr) return;
-        TraceView* tv = dynamic_cast<TraceView*>(project->GetView().get());
-        if (tv == nullptr)
-        {
-            ctx->LogWarning("SKIP: no trace view loaded (open a system/trace profile to exercise this)");
-            return;
-        }
+        TraceView* tv = GetTraceViewOrSkip(ctx);
+        if (!tv) return;
         Minimap* mm = TraceViewTestPeer{*tv}.MinimapPtr();
         IM_CHECK(mm != nullptr);
         if (mm == nullptr) return;
@@ -402,19 +392,8 @@ void RegisterAppTests(ImGuiTestEngine* e)
     t = IM_REGISTER_TEST(e, "app", "compute_view_tab_switch");
     t->TestFunc = [](ImGuiTestContext* ctx)
     {
-        AppWindow* app = AppWindow::GetInstance();
-        Project* project = app->GetCurrentProject();
-        IM_CHECK(project != nullptr);
-        if (project == nullptr) return;
-        // Needs a compute profile loaded; with a trace this cast is null and the
-        // test logs a skip (Test Engine has no skip status, so a bare return
-        // would read as a green assertion).
-        ComputeView* cv = dynamic_cast<ComputeView*>(project->GetView().get());
-        if (cv == nullptr)
-        {
-            ctx->LogWarning("SKIP: no compute view loaded (open a compute profile to exercise this)");
-            return;
-        }
+        ComputeView* cv = GetComputeViewOrSkip(ctx);
+        if (!cv) return;
         TabContainer* tc = ComputeViewTestPeer{*cv}.TabContainerPtr();
         if (tc == nullptr)
         {
@@ -447,16 +426,8 @@ void RegisterAppTests(ImGuiTestEngine* e)
     t = IM_REGISTER_TEST(e, "app", "compute_workload_auto_selected");
     t->TestFunc = [](ImGuiTestContext* ctx)
     {
-        AppWindow* app = AppWindow::GetInstance();
-        Project* project = app->GetCurrentProject();
-        IM_CHECK(project != nullptr);
-        if (project == nullptr) return;
-        ComputeView* cv = dynamic_cast<ComputeView*>(project->GetView().get());
-        if (cv == nullptr)
-        {
-            ctx->LogWarning("SKIP: no compute view loaded (open a compute profile to exercise this)");
-            return;
-        }
+        ComputeView* cv = GetComputeViewOrSkip(ctx);
+        if (!cv) return;
         ComputeSelection* sel = ComputeViewTestPeer{*cv}.ComputeSelectionPtr();
         IM_CHECK(sel != nullptr);
         if (sel == nullptr) return;
@@ -472,16 +443,8 @@ void RegisterAppTests(ImGuiTestEngine* e)
     t = IM_REGISTER_TEST(e, "app", "sys_timeline_pan_hotkey");
     t->TestFunc = [](ImGuiTestContext* ctx)
     {
-        AppWindow* app = AppWindow::GetInstance();
-        Project* project = app->GetCurrentProject();
-        IM_CHECK(project != nullptr);
-        if (project == nullptr) return;
-        TraceView* tv = dynamic_cast<TraceView*>(project->GetView().get());
-        if (tv == nullptr)
-        {
-            ctx->LogWarning("SKIP: no trace view loaded (open a system/trace profile to exercise this)");
-            return;
-        }
+        TraceView* tv = GetTraceViewOrSkip(ctx);
+        if (!tv) return;
         TimelineView* tlv = TraceViewTestPeer{*tv}.TimelineViewPtr();
         IM_CHECK(tlv != nullptr);
         if (tlv == nullptr) return;
@@ -533,16 +496,8 @@ void RegisterAppTests(ImGuiTestEngine* e)
     t = IM_REGISTER_TEST(e, "app", "sys_timeline_vscroll");
     t->TestFunc = [](ImGuiTestContext* ctx)
     {
-        AppWindow* app = AppWindow::GetInstance();
-        Project* project = app->GetCurrentProject();
-        IM_CHECK(project != nullptr);
-        if (project == nullptr) return;
-        TraceView* tv = dynamic_cast<TraceView*>(project->GetView().get());
-        if (tv == nullptr)
-        {
-            ctx->LogWarning("SKIP: no trace view loaded (open a system/trace profile to exercise this)");
-            return;
-        }
+        TraceView* tv = GetTraceViewOrSkip(ctx);
+        if (!tv) return;
         TimelineView* tlv = TraceViewTestPeer{*tv}.TimelineViewPtr();
         IM_CHECK(tlv != nullptr);
         if (tlv == nullptr) return;
@@ -588,16 +543,8 @@ void RegisterAppTests(ImGuiTestEngine* e)
     t = IM_REGISTER_TEST(e, "app", "sys_reset_view_button");
     t->TestFunc = [](ImGuiTestContext* ctx)
     {
-        AppWindow* app = AppWindow::GetInstance();
-        Project* project = app->GetCurrentProject();
-        IM_CHECK(project != nullptr);
-        if (project == nullptr) return;
-        TraceView* tv = dynamic_cast<TraceView*>(project->GetView().get());
-        if (tv == nullptr)
-        {
-            ctx->LogWarning("SKIP: no trace view loaded (open a system/trace profile to exercise this)");
-            return;
-        }
+        TraceView* tv = GetTraceViewOrSkip(ctx);
+        if (!tv) return;
         TimelineView* tlv = TraceViewTestPeer{*tv}.TimelineViewPtr();
         IM_CHECK(tlv != nullptr);
         if (tlv == nullptr) return;
@@ -641,16 +588,8 @@ void RegisterAppTests(ImGuiTestEngine* e)
     t = IM_REGISTER_TEST(e, "app", "sys_timeline_compact_mode_toggle");
     t->TestFunc = [](ImGuiTestContext* ctx)
     {
-        AppWindow* app = AppWindow::GetInstance();
-        Project* project = app->GetCurrentProject();
-        IM_CHECK(project != nullptr);
-        if (project == nullptr) return;
-        TraceView* tv = dynamic_cast<TraceView*>(project->GetView().get());
-        if (tv == nullptr)
-        {
-            ctx->LogWarning("SKIP: no trace view loaded (open a system/trace profile to exercise this)");
-            return;
-        }
+        TraceView* tv = GetTraceViewOrSkip(ctx);
+        if (!tv) return;
         TimelineView* tlv = TraceViewTestPeer{*tv}.TimelineViewPtr();
         IM_CHECK(tlv != nullptr);
         if (tlv == nullptr) return;
@@ -689,16 +628,8 @@ void RegisterAppTests(ImGuiTestEngine* e)
     t = IM_REGISTER_TEST(e, "app", "sys_timeline_mark_time_range");
     t->TestFunc = [](ImGuiTestContext* ctx)
     {
-        AppWindow* app = AppWindow::GetInstance();
-        Project* project = app->GetCurrentProject();
-        IM_CHECK(project != nullptr);
-        if (project == nullptr) return;
-        TraceView* tv = dynamic_cast<TraceView*>(project->GetView().get());
-        if (tv == nullptr)
-        {
-            ctx->LogWarning("SKIP: no trace view loaded (open a system/trace profile to exercise this)");
-            return;
-        }
+        TraceView* tv = GetTraceViewOrSkip(ctx);
+        if (!tv) return;
         TimelineView* tlv = TraceViewTestPeer{*tv}.TimelineViewPtr();
         IM_CHECK(tlv != nullptr);
         if (tlv == nullptr) return;
@@ -748,16 +679,8 @@ void RegisterAppTests(ImGuiTestEngine* e)
     t = IM_REGISTER_TEST(e, "app", "sys_timeline_event_color_mode");
     t->TestFunc = [](ImGuiTestContext* ctx)
     {
-        AppWindow* app = AppWindow::GetInstance();
-        Project* project = app->GetCurrentProject();
-        IM_CHECK(project != nullptr);
-        if (project == nullptr) return;
-        TraceView* tv = dynamic_cast<TraceView*>(project->GetView().get());
-        if (tv == nullptr)
-        {
-            ctx->LogWarning("SKIP: no trace view loaded (open a system/trace profile to exercise this)");
-            return;
-        }
+        TraceView* tv = GetTraceViewOrSkip(ctx);
+        if (!tv) return;
         TimelineView* tlv = TraceViewTestPeer{*tv}.TimelineViewPtr();
         IM_CHECK(tlv != nullptr);
         if (tlv == nullptr) return;
@@ -864,16 +787,8 @@ void RegisterAppTests(ImGuiTestEngine* e)
     t = IM_REGISTER_TEST(e, "app", "sys_histogram_normalization_toggle");
     t->TestFunc = [](ImGuiTestContext* ctx)
     {
-        AppWindow* app = AppWindow::GetInstance();
-        Project* project = app->GetCurrentProject();
-        IM_CHECK(project != nullptr);
-        if (project == nullptr) return;
-        TraceView* tv = dynamic_cast<TraceView*>(project->GetView().get());
-        if (tv == nullptr)
-        {
-            ctx->LogWarning("SKIP: no trace view loaded (open a system/trace profile to exercise this)");
-            return;
-        }
+        TraceView* tv = GetTraceViewOrSkip(ctx);
+        if (!tv) return;
         TimelineModel& tl = tv->GetDataProvider()->DataModel().GetTimeline();
 
         // The All Tracks / Visible Tracks normalization toggle lives in the
@@ -902,16 +817,8 @@ void RegisterAppTests(ImGuiTestEngine* e)
     t = IM_REGISTER_TEST(e, "app", "compute_kernel_select_changes");
     t->TestFunc = [](ImGuiTestContext* ctx)
     {
-        AppWindow* app = AppWindow::GetInstance();
-        Project* project = app->GetCurrentProject();
-        IM_CHECK(project != nullptr);
-        if (project == nullptr) return;
-        ComputeView* cv = dynamic_cast<ComputeView*>(project->GetView().get());
-        if (cv == nullptr)
-        {
-            ctx->LogWarning("SKIP: no compute view loaded (open a compute profile to exercise this)");
-            return;
-        }
+        ComputeView* cv = GetComputeViewOrSkip(ctx);
+        if (!cv) return;
         ComputeSelection* sel = ComputeViewTestPeer{*cv}.ComputeSelectionPtr();
         IM_CHECK(sel != nullptr);
         if (sel == nullptr) return;
@@ -954,16 +861,8 @@ void RegisterAppTests(ImGuiTestEngine* e)
     t = IM_REGISTER_TEST(e, "app", "sys_event_search_finds_results");
     t->TestFunc = [](ImGuiTestContext* ctx)
     {
-        AppWindow* app = AppWindow::GetInstance();
-        Project* project = app->GetCurrentProject();
-        IM_CHECK(project != nullptr);
-        if (project == nullptr) return;
-        TraceView* tv = dynamic_cast<TraceView*>(project->GetView().get());
-        if (tv == nullptr)
-        {
-            ctx->LogWarning("SKIP: no trace view loaded (open a system/trace profile to exercise this)");
-            return;
-        }
+        TraceView* tv = GetTraceViewOrSkip(ctx);
+        if (!tv) return;
         EventSearch* es = TraceViewTestPeer{*tv}.EventSearchPtr();
         IM_CHECK(es != nullptr);
         if (es == nullptr) return;
@@ -998,16 +897,8 @@ void RegisterAppTests(ImGuiTestEngine* e)
     t = IM_REGISTER_TEST(e, "app", "sys_summary_pie_kernel_select");
     t->TestFunc = [](ImGuiTestContext* ctx)
     {
-        AppWindow* app = AppWindow::GetInstance();
-        Project* project = app->GetCurrentProject();
-        IM_CHECK(project != nullptr);
-        if (project == nullptr) return;
-        TraceView* tv = dynamic_cast<TraceView*>(project->GetView().get());
-        if (tv == nullptr)
-        {
-            ctx->LogWarning("SKIP: no trace view loaded (open a system/trace profile to exercise this)");
-            return;
-        }
+        TraceView* tv = GetTraceViewOrSkip(ctx);
+        if (!tv) return;
         SummaryView* sv = TraceViewTestPeer{*tv}.SummaryViewPtr();
         IM_CHECK(sv != nullptr);
         if (sv == nullptr) return;
@@ -1058,16 +949,8 @@ void RegisterAppTests(ImGuiTestEngine* e)
     t = IM_REGISTER_TEST(e, "app", "sys_summary_top_kernel_name");
     t->TestFunc = [](ImGuiTestContext* ctx)
     {
-        AppWindow* app = AppWindow::GetInstance();
-        Project* project = app->GetCurrentProject();
-        IM_CHECK(project != nullptr);
-        if (project == nullptr) return;
-        TraceView* tv = dynamic_cast<TraceView*>(project->GetView().get());
-        if (tv == nullptr)
-        {
-            ctx->LogWarning("SKIP: no trace view loaded (open a system/trace profile to exercise this)");
-            return;
-        }
+        TraceView* tv = GetTraceViewOrSkip(ctx);
+        if (!tv) return;
         SummaryView* sv = TraceViewTestPeer{*tv}.SummaryViewPtr();
         IM_CHECK(sv != nullptr);
         if (sv == nullptr) return;
@@ -1096,16 +979,8 @@ void RegisterAppTests(ImGuiTestEngine* e)
     t = IM_REGISTER_TEST(e, "app", "sys_summary_display_mode_switch");
     t->TestFunc = [](ImGuiTestContext* ctx)
     {
-        AppWindow* app = AppWindow::GetInstance();
-        Project* project = app->GetCurrentProject();
-        IM_CHECK(project != nullptr);
-        if (project == nullptr) return;
-        TraceView* tv = dynamic_cast<TraceView*>(project->GetView().get());
-        if (tv == nullptr)
-        {
-            ctx->LogWarning("SKIP: no trace view loaded (open a system/trace profile to exercise this)");
-            return;
-        }
+        TraceView* tv = GetTraceViewOrSkip(ctx);
+        if (!tv) return;
         SummaryView* sv = TraceViewTestPeer{*tv}.SummaryViewPtr();
         IM_CHECK(sv != nullptr);
         if (sv == nullptr) return;
@@ -1151,16 +1026,8 @@ void RegisterAppTests(ImGuiTestEngine* e)
     t = IM_REGISTER_TEST(e, "app", "compute_kernel_table_loads_sorted");
     t->TestFunc = [](ImGuiTestContext* ctx)
     {
-        AppWindow* app = AppWindow::GetInstance();
-        Project* project = app->GetCurrentProject();
-        IM_CHECK(project != nullptr);
-        if (project == nullptr) return;
-        ComputeView* cv = dynamic_cast<ComputeView*>(project->GetView().get());
-        if (cv == nullptr)
-        {
-            ctx->LogWarning("SKIP: no compute view loaded (open a compute profile to exercise this)");
-            return;
-        }
+        ComputeView* cv = GetComputeViewOrSkip(ctx);
+        if (!cv) return;
         TabContainer* tc = ComputeViewTestPeer{*cv}.TabContainerPtr();
         IM_CHECK(tc != nullptr);
         if (tc == nullptr) return;
@@ -1232,16 +1099,8 @@ void RegisterAppTests(ImGuiTestEngine* e)
     t = IM_REGISTER_TEST(e, "app", "sys_timeline_select_named_track_event");
     t->TestFunc = [](ImGuiTestContext* ctx)
     {
-        AppWindow* app = AppWindow::GetInstance();
-        Project* project = app->GetCurrentProject();
-        IM_CHECK(project != nullptr);
-        if (project == nullptr) return;
-        TraceView* tv = dynamic_cast<TraceView*>(project->GetView().get());
-        if (tv == nullptr)
-        {
-            ctx->LogWarning("SKIP: no trace view loaded (open a system/trace profile to exercise this)");
-            return;
-        }
+        TraceView* tv = GetTraceViewOrSkip(ctx);
+        if (!tv) return;
         TimelineView* tlv = TraceViewTestPeer{*tv}.TimelineViewPtr();
         IM_CHECK(tlv != nullptr);
         if (tlv == nullptr) return;
@@ -1308,16 +1167,8 @@ void RegisterAppTests(ImGuiTestEngine* e)
     t = IM_REGISTER_TEST(e, "app", "sys_timeline_measure_tool");
     t->TestFunc = [](ImGuiTestContext* ctx)
     {
-        AppWindow* app = AppWindow::GetInstance();
-        Project* project = app->GetCurrentProject();
-        IM_CHECK(project != nullptr);
-        if (project == nullptr) return;
-        TraceView* tv = dynamic_cast<TraceView*>(project->GetView().get());
-        if (tv == nullptr)
-        {
-            ctx->LogWarning("SKIP: no trace view loaded (open a system/trace profile to exercise this)");
-            return;
-        }
+        TraceView* tv = GetTraceViewOrSkip(ctx);
+        if (!tv) return;
         TimelineView* tlv = TraceViewTestPeer{*tv}.TimelineViewPtr();
         IM_CHECK(tlv != nullptr);
         if (tlv == nullptr) return;
@@ -1367,32 +1218,24 @@ void RegisterAppTests(ImGuiTestEngine* e)
     t = IM_REGISTER_TEST(e, "app", "sys_timeline_track_expand_collapse");
     t->TestFunc = [](ImGuiTestContext* ctx)
     {
-        AppWindow* app = AppWindow::GetInstance();
-        Project* project = app->GetCurrentProject();
-        IM_CHECK(project != nullptr);
-        if (project == nullptr) return;
-        TraceView* tv = dynamic_cast<TraceView*>(project->GetView().get());
-        if (tv == nullptr)
-        {
-            ctx->LogWarning("SKIP: no trace view loaded (open a system/trace profile to exercise this)");
-            return;
-        }
+        TraceView* tv = GetTraceViewOrSkip(ctx);
+        if (!tv) return;
         TimelineView* tlv = TraceViewTestPeer{*tv}.TimelineViewPtr();
         IM_CHECK(tlv != nullptr);
         if (tlv == nullptr) return;
 
         ctx->Yield(3);
 
-        // Expanding only changes height when the track has enough levels to exceed
-        // the default height; find a flame track for which that holds so the height
-        // assertion is meaningful (expanded height = max_level*lvl + lvl + 2).
+        // Expanding only changes height when the track has enough levels for its
+        // expanded height to exceed the default; find a flame track for which that
+        // holds so the height assertion is meaningful.
         FlameTrackItem* flame = nullptr;
         for (FlameTrackItem* candidate : TimelineViewTestPeer{*tlv}.DisplayedFlameTracks())
         {
             FlameTrackItemTestPeer peer{*candidate};
             const float level_h = peer.LevelHeight();
             if (level_h > 0.0f &&
-                peer.MaxLevel() * level_h + level_h + 2.0f > DEFAULT_TRACK_HEIGHT)
+                peer.ExpandedTrackHeight() > peer.DefaultTrackHeight())
             {
                 flame = candidate;
                 break;

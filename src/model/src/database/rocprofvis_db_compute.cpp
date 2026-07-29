@@ -118,39 +118,39 @@ namespace DataModel
 		{"I64Ops", kRPVComputeColumnWorkloadRooflineBenchI64Ops},
 	};
 
-	rocprofvis_dm_result_t ComputeQueryFactory::GetComputeListOfWorkloads(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params, rocprofvis_dm_string_t& query) {
+	rocprofvis_dm_result_t ComputeQueryFactory::GetComputeListOfWorkloads(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params, rocprofvis_dm_string_t& query_out) {
 		(void) num;
 		(void) params;
 		rocprofvis_dm_result_t result = kRocProfVisDmResultNotSupported;
 		if(IsVersionGreaterOrEqual("1.2.0"))
         {
-			query = "SELECT ";
-			query += "workload_id, ";
-			query += "name as workload_name, ";
-			query += "sub_name as workload_sub_name, ";
-			query += "sys_info_extdata, ";
-			query += "profiling_config_extdata ";
-			query += "FROM ";
-			query += "compute_workload";
+			query_out = "SELECT ";
+			query_out += "workload_id, ";
+			query_out += "name as workload_name, ";
+			query_out += "sub_name as workload_sub_name, ";
+			query_out += "sys_info_extdata, ";
+			query_out += "profiling_config_extdata ";
+			query_out += "FROM ";
+			query_out += "compute_workload";
             result = kRocProfVisDmResultSuccess;
 		}
 		return result;
 	}
-	rocprofvis_dm_result_t ComputeQueryFactory::GetComputeWorkloadRooflineCeiling(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params, rocprofvis_dm_string_t& query) {
+	rocprofvis_dm_result_t ComputeQueryFactory::GetComputeWorkloadRooflineCeiling(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params, rocprofvis_dm_string_t& query_out) {
 		rocprofvis_dm_result_t result = kRocProfVisDmResultNotSupported;
 		if (IsVersionGreaterOrEqual("1.2.0"))
 		{
 			result = kRocProfVisDmResultInvalidParameter;
 			if (num == 1 && params != nullptr && params[0].param_type == kRPVComputeParamWorkloadId)
 			{
-				query = "SELECT roofline_bench_extdata FROM compute_workload WHERE workload_id = ";
-				query += params[0].param_str;
+				query_out = "SELECT roofline_bench_extdata FROM compute_workload WHERE workload_id = ";
+				query_out += params[0].param_str;
 				result = kRocProfVisDmResultSuccess;
 			}
 		}
 		return result;
 	}
-	rocprofvis_dm_result_t ComputeQueryFactory::GetComputeWorkloadTopKernels(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params, rocprofvis_dm_string_t& query) {
+	rocprofvis_dm_result_t ComputeQueryFactory::GetComputeWorkloadTopKernels(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params, rocprofvis_dm_string_t& query_out) {
 
 		rocprofvis_dm_result_t result = kRocProfVisDmResultNotSupported;
 		if (IsVersionGreaterOrEqual("1.2.0"))
@@ -158,7 +158,7 @@ namespace DataModel
 			result = kRocProfVisDmResultInvalidParameter;
 			if (num == 1 && params != nullptr && params[0].param_type == kRPVComputeParamWorkloadId)
 			{
-				query =
+				query_out =
 					"SELECT "
 					"compute_kernel.kernel_uuid AS kernel_uuid,"
 					"compute_kernel.workload_id AS workload_id,"
@@ -172,60 +172,60 @@ namespace DataModel
 					"JOIN compute_workload "
 					"ON compute_kernel.workload_id = compute_workload.workload_id "
 					"WHERE compute_workload.workload_id = ";
-				query += params[0].param_str;
+				query_out += params[0].param_str;
 				result = kRocProfVisDmResultSuccess;
 			}
 		}
 		return result;
 
 	}
-	rocprofvis_dm_result_t ComputeQueryFactory::GetComputeWorkloadKernelsList(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params, rocprofvis_dm_string_t& query) {
+	rocprofvis_dm_result_t ComputeQueryFactory::GetComputeWorkloadKernelsList(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params, rocprofvis_dm_string_t& query_out) {
 		rocprofvis_dm_result_t result = kRocProfVisDmResultNotSupported;
 		if (IsVersionGreaterOrEqual("1.2.0"))
 		{
 			result = kRocProfVisDmResultInvalidParameter;
 			if (num == 1 && params != nullptr && params[0].param_type == kRPVComputeParamWorkloadId)
 			{
-				query = "SELECT ";
-				query += "kernel_uuid,  ";
-				query += "workload_id,  ";
-				query += "kernel_name  ";
-				query += "FROM  ";
-				query += "compute_kernel ";
-				query += "WHERE workload_id = ";
-				query += params[0].param_str;
+				query_out = "SELECT ";
+				query_out += "kernel_uuid,  ";
+				query_out += "workload_id,  ";
+				query_out += "kernel_name  ";
+				query_out += "FROM  ";
+				query_out += "compute_kernel ";
+				query_out += "WHERE workload_id = ";
+				query_out += params[0].param_str;
 				result = kRocProfVisDmResultSuccess;
 			}
 		}
 		return result;
 	}
 
-	rocprofvis_dm_result_t ComputeQueryFactory::GetComputeWorkloadMetricsDefinition(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params, rocprofvis_dm_string_t& query) {
+	rocprofvis_dm_result_t ComputeQueryFactory::GetComputeWorkloadMetricsDefinition(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params, rocprofvis_dm_string_t& query_out) {
 		rocprofvis_dm_result_t result = kRocProfVisDmResultNotSupported;
 		if (IsVersionGreaterOrEqual("1.2.0"))
 		{
 			result = kRocProfVisDmResultInvalidParameter;
 			if (num == 1 && params != nullptr && params[0].param_type == kRPVComputeParamWorkloadId)
 			{
-				query = "SELECT ";
-				query += "workload_id, ";
-				query += "name as metric_name, ";
-				query += "description as metric_description, ";
-				query += "substr(metric_id, 0, instr(metric_id, '.')) as table_id, ";
-				query += "metric_id as sub_table_id, "; //parsed in callback method
-				query += "table_name, ";
-				query += "sub_table_name, ";
-				query += "unit ";
-				query += "FROM compute_metric_definition ";
-				query += "WHERE workload_id = ";
-				query += params[0].param_str;
+				query_out = "SELECT ";
+				query_out += "workload_id, ";
+				query_out += "name as metric_name, ";
+				query_out += "description as metric_description, ";
+				query_out += "substr(metric_id, 0, instr(metric_id, '.')) as table_id, ";
+				query_out += "metric_id as sub_table_id, "; //parsed in callback method
+				query_out += "table_name, ";
+				query_out += "sub_table_name, ";
+				query_out += "unit ";
+				query_out += "FROM compute_metric_definition ";
+				query_out += "WHERE workload_id = ";
+				query_out += params[0].param_str;
 				result = kRocProfVisDmResultSuccess;
 			}
 		}
 		return result;
 	}
 
-	rocprofvis_dm_result_t ComputeQueryFactory::GetComputeWorkloadMetricValueNames(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params, rocprofvis_dm_string_t& query) {
+	rocprofvis_dm_result_t ComputeQueryFactory::GetComputeWorkloadMetricValueNames(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params, rocprofvis_dm_string_t& query_out) {
 		rocprofvis_dm_result_t result = kRocProfVisDmResultNotSupported;
 		if (IsVersionGreaterOrEqual("1.2.0"))
 		{
@@ -234,9 +234,9 @@ namespace DataModel
 				params[0].param_type == kRPVComputeParamWorkloadId &&
 				params[1].param_type == kRPVComputeParamMetricId)
 			{
-				query = "SELECT DISTINCT value_name FROM ";
-				query += IsVersionGreaterOrEqual("1.3.0") ? "compute_workload_metric_value " : "compute_metric_value ";
-				query += "WHERE metric_uuid IN(";
+				query_out = "SELECT DISTINCT value_name FROM ";
+				query_out += IsVersionGreaterOrEqual("1.3.0") ? "compute_workload_metric_value " : "compute_metric_value ";
+				query_out += "WHERE metric_uuid IN(";
 				std::string in_query;
 				for (auto& [metric_id, metric_uuid] : m_db->m_metric_uuid_lookup[std::atol(params[0].param_str)])
 				{
@@ -249,58 +249,58 @@ namespace DataModel
 						in_query += std::to_string(metric_uuid);
 					}
 				}
-				query += in_query + ")";
+				query_out += in_query + ")";
 				result = kRocProfVisDmResultSuccess;
 			}
 		}
 		return result;
 	}
 
-	rocprofvis_dm_result_t ComputeQueryFactory::GetComputeKernelRooflineIntensities(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params, rocprofvis_dm_string_t& query) {
+	rocprofvis_dm_result_t ComputeQueryFactory::GetComputeKernelRooflineIntensities(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params, rocprofvis_dm_string_t& query_out) {
 		rocprofvis_dm_result_t result = kRocProfVisDmResultNotSupported;
 		if (IsVersionGreaterOrEqual("1.2.0"))
 		{
 			result = kRocProfVisDmResultInvalidParameter;
 			if (num == 1 && params != nullptr && params[0].param_type == kRPVComputeParamKernelId)
 			{
-				query = "WITH AVG_D AS (SELECT AVG(end_timestamp - start_timestamp), kernel_uuid FROM compute_dispatch WHERE kernel_uuid = ";
-				query += params[0].param_str;
-				query += " GROUP BY kernel_uuid)";
-				query += " SELECT ";
-				query += " K.kernel_uuid, ";
-				query += " K.kernel_name, ";
-				query += " total_flops, ";
-				query += " l1_cache_data, ";
-				query += " l2_cache_data, ";
-				query += " hbm_cache_data ";
+				query_out = "WITH AVG_D AS (SELECT AVG(end_timestamp - start_timestamp), kernel_uuid FROM compute_dispatch WHERE kernel_uuid = ";
+				query_out += params[0].param_str;
+				query_out += " GROUP BY kernel_uuid)";
+				query_out += " SELECT ";
+				query_out += " K.kernel_uuid, ";
+				query_out += " K.kernel_name, ";
+				query_out += " total_flops, ";
+				query_out += " l1_cache_data, ";
+				query_out += " l2_cache_data, ";
+				query_out += " hbm_cache_data ";
 				if (IsVersionGreaterOrEqual("1.4.0"))
 				{ 
-					query += ", lds_cache_data ";
+					query_out += ", lds_cache_data ";
 				}
 				if (IsVersionGreaterOrEqual("1.3.0"))
 				{
-					query += " FROM compute_kernel_roofline_data CRD ";	
+					query_out += " FROM compute_kernel_roofline_data CRD ";	
 				}
 				else
 				{
-					query += " FROM compute_roofline_data CRD ";
+					query_out += " FROM compute_roofline_data CRD ";
 				}
-				query += " INNER JOIN AVG_D ON CRD.kernel_uuid = AVG_D.kernel_uuid ";
-				query += " INNER JOIN compute_kernel K ON AVG_D.kernel_uuid = K.kernel_uuid";
+				query_out += " INNER JOIN AVG_D ON CRD.kernel_uuid = AVG_D.kernel_uuid ";
+				query_out += " INNER JOIN compute_kernel K ON AVG_D.kernel_uuid = K.kernel_uuid";
 				result = kRocProfVisDmResultSuccess;
 			}
 		}
 		return result;
 	}
 
-	rocprofvis_dm_result_t ComputeQueryFactory::GetComputeKernelSourceFiles(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params, rocprofvis_dm_string_t& query) {
+	rocprofvis_dm_result_t ComputeQueryFactory::GetComputeKernelSourceFiles(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params, rocprofvis_dm_string_t& query_out) {
 		rocprofvis_dm_result_t result = kRocProfVisDmResultNotSupported;
 		if (IsVersionGreaterOrEqual("1.2.0"))
 		{
 			result = kRocProfVisDmResultInvalidParameter;
 			if (num > 0 && params != nullptr)
 			{
-				query =
+				query_out =
 					"SELECT kernel_id AS kernel_uuid, id, file_path, content_checksum "
 					"FROM source_files "
 					"WHERE kernel_id IN (";
@@ -308,7 +308,7 @@ namespace DataModel
 				{
 					if (params[i].param_type != kRPVComputeParamKernelId || params[i].param_str == nullptr)
 					{
-						query.clear();
+						query_out.clear();
 						break;
 					}
 					uint64_t kernel_id = 0;
@@ -318,18 +318,18 @@ namespace DataModel
 					if (params[i].param_str == end || conversion.ec != std::errc() ||
 						conversion.ptr != end)
 					{
-						query.clear();
+						query_out.clear();
 						break;
 					}
 					if (i > 0)
 					{
-						query += ",";
+						query_out += ",";
 					}
-					query += std::to_string(kernel_id);
+					query_out += std::to_string(kernel_id);
 				}
-				if (!query.empty())
+				if (!query_out.empty())
 				{
-					query += ") ORDER BY kernel_id, id";
+					query_out += ") ORDER BY kernel_id, id";
 					result = kRocProfVisDmResultSuccess;
 				}
 			}
@@ -337,112 +337,112 @@ namespace DataModel
 		return result;
 	}
 
-	rocprofvis_dm_result_t ComputeQueryFactory::GetComputeSourceFileSourceLines(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params, rocprofvis_dm_string_t& query) {
+	rocprofvis_dm_result_t ComputeQueryFactory::GetComputeSourceFileSourceLines(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params, rocprofvis_dm_string_t& query_out) {
 		rocprofvis_dm_result_t result = kRocProfVisDmResultNotSupported;
 		if (IsVersionGreaterOrEqual("1.2.0"))
 		{
 			result = kRocProfVisDmResultInvalidParameter;
 			if (num == 1 && params != nullptr && params[0].param_type == kRPVComputeParamSourceFileId)
 			{
-				query =
+				query_out =
 					"SELECT id AS source_line_id, source_file_id, line_number, content "
 					"FROM source_lines "
 					"WHERE source_file_id = ";
-				query += params[0].param_str;
-				query += " ORDER BY line_number";
+				query_out += params[0].param_str;
+				query_out += " ORDER BY line_number";
 				result = kRocProfVisDmResultSuccess;
 			}
 		}
 		return result;
 	}
 
-	rocprofvis_dm_result_t ComputeQueryFactory::GetComputeKernelCodeObjects(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params, rocprofvis_dm_string_t& query) {
+	rocprofvis_dm_result_t ComputeQueryFactory::GetComputeKernelCodeObjects(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params, rocprofvis_dm_string_t& query_out) {
 		rocprofvis_dm_result_t result = kRocProfVisDmResultNotSupported;
 		if (IsVersionGreaterOrEqual("1.2.0"))
 		{
 			result = kRocProfVisDmResultInvalidParameter;
 			if (num == 1 && params != nullptr && params[0].param_type == kRPVComputeParamKernelId)
 			{
-				query =
+				query_out =
 					"SELECT id AS code_object_id, uri, content_checksum AS code_object_checksum "
 					"FROM code_objects "
 					"WHERE kernel_id = ";
-				query += params[0].param_str;
+				query_out += params[0].param_str;
 				result = kRocProfVisDmResultSuccess;
 			}
 		}
 		return result;
 	}
 
-	rocprofvis_dm_result_t ComputeQueryFactory::GetComputeKernelIsaToIsaDeps(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params, rocprofvis_dm_string_t& query) {
+	rocprofvis_dm_result_t ComputeQueryFactory::GetComputeKernelIsaToIsaDeps(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params, rocprofvis_dm_string_t& query_out) {
 		rocprofvis_dm_result_t result = kRocProfVisDmResultNotSupported;
 		if (IsVersionGreaterOrEqual("1.2.0"))
 		{
 			result = kRocProfVisDmResultInvalidParameter;
 			if (num == 1 && params != nullptr && params[0].param_type == kRPVComputeParamKernelId)
 			{
-				query =
+				query_out =
 					"SELECT j.dependent_isa_line_id, j.dependency_isa_line_id "
 					"FROM isa_line_to_isa_line_junction j "
 					"JOIN isa_lines il ON il.id = j.dependent_isa_line_id "
 					"JOIN code_objects co ON co.id = il.code_object_id "
 					"WHERE co.kernel_id = ";
-				query += params[0].param_str;
+				query_out += params[0].param_str;
 				result = kRocProfVisDmResultSuccess;
 			}
 		}
 		return result;
 	}
 
-	rocprofvis_dm_result_t ComputeQueryFactory::GetComputeKernelIsaLines(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params, rocprofvis_dm_string_t& query) {
+	rocprofvis_dm_result_t ComputeQueryFactory::GetComputeKernelIsaLines(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params, rocprofvis_dm_string_t& query_out) {
 		rocprofvis_dm_result_t result = kRocProfVisDmResultNotSupported;
 		if (IsVersionGreaterOrEqual("1.2.0"))
 		{
 			result = kRocProfVisDmResultInvalidParameter;
 			if (num == 1 && params != nullptr && params[0].param_type == kRPVComputeParamKernelId)
 			{
-				query =
+				query_out =
 					"SELECT il.id AS isa_line_id, il.code_object_id AS isa_code_object_id, "
 					"il.code_object_offset, il.instruction_type_id, il.instruction, il.comment "
 					"FROM isa_lines il "
 					"JOIN code_objects co ON co.id = il.code_object_id "
 					"WHERE co.kernel_id = ";
-				query += params[0].param_str;
+				query_out += params[0].param_str;
 				result = kRocProfVisDmResultSuccess;
 			}
 		}
 		return result;
 	}
 
-	rocprofvis_dm_result_t ComputeQueryFactory::GetComputeKernelIsaToSourceDeps(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params, rocprofvis_dm_string_t& query) {
+	rocprofvis_dm_result_t ComputeQueryFactory::GetComputeKernelIsaToSourceDeps(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params, rocprofvis_dm_string_t& query_out) {
 		rocprofvis_dm_result_t result = kRocProfVisDmResultNotSupported;
 		if (IsVersionGreaterOrEqual("1.2.0"))
 		{
 			result = kRocProfVisDmResultInvalidParameter;
 			if (num == 1 && params != nullptr && params[0].param_type == kRPVComputeParamKernelId)
 			{
-				query =
+				query_out =
 					"SELECT j.isa_line_id AS isa_to_source_isa_line_id, "
 					"j.source_line_id AS isa_to_source_source_line_id, j.depth "
 					"FROM isa_line_to_source_line_junction j "
 					"JOIN isa_lines il ON il.id = j.isa_line_id "
 					"JOIN code_objects co ON co.id = il.code_object_id "
 					"WHERE co.kernel_id = ";
-				query += params[0].param_str;
+				query_out += params[0].param_str;
 				result = kRocProfVisDmResultSuccess;
 			}
 		}
 		return result;
 	}
 
-	rocprofvis_dm_result_t ComputeQueryFactory::GetComputeKernelSamplingStates(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params, rocprofvis_dm_string_t& query) {
+	rocprofvis_dm_result_t ComputeQueryFactory::GetComputeKernelSamplingStates(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params, rocprofvis_dm_string_t& query_out) {
 		rocprofvis_dm_result_t result = kRocProfVisDmResultNotSupported;
 		if (IsVersionGreaterOrEqual("1.2.0"))
 		{
 			result = kRocProfVisDmResultInvalidParameter;
 			if (num == 1 && params != nullptr && params[0].param_type == kRPVComputeParamKernelId)
 			{
-				query =
+				query_out =
 					"SELECT s.id AS sampling_state_id, s.isa_line AS sampling_state_isa_line_id, "
 					"s.dispatch_id, s.active_threads_percent, s.wave_occupancy_percent, "
 					"s.issued_count, s.stalled_count, s.total_count "
@@ -450,21 +450,21 @@ namespace DataModel
 					"JOIN isa_lines il ON il.id = s.isa_line "
 					"JOIN code_objects co ON co.id = il.code_object_id "
 					"WHERE co.kernel_id = ";
-				query += params[0].param_str;
+				query_out += params[0].param_str;
 				result = kRocProfVisDmResultSuccess;
 			}
 		}
 		return result;
 	}
 
-	rocprofvis_dm_result_t ComputeQueryFactory::GetComputeKernelSamplingStateReasonCounts(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params, rocprofvis_dm_string_t& query) {
+	rocprofvis_dm_result_t ComputeQueryFactory::GetComputeKernelSamplingStateReasonCounts(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params, rocprofvis_dm_string_t& query_out) {
 		rocprofvis_dm_result_t result = kRocProfVisDmResultNotSupported;
 		if (IsVersionGreaterOrEqual("1.2.0"))
 		{
 			result = kRocProfVisDmResultInvalidParameter;
 			if (num == 1 && params != nullptr && params[0].param_type == kRPVComputeParamKernelId)
 			{
-				query =
+				query_out =
 					"SELECT r.pc_sampling_states_per_line_id AS stall_reason_sampling_state_id, "
 					"r.stall_reason_id, r.count AS stall_reason_count "
 					"FROM pc_sampling_stall_reason r "
@@ -472,63 +472,63 @@ namespace DataModel
 					"JOIN isa_lines il ON il.id = s.isa_line "
 					"JOIN code_objects co ON co.id = il.code_object_id "
 					"WHERE co.kernel_id = ";
-				query += params[0].param_str;
+				query_out += params[0].param_str;
 				result = kRocProfVisDmResultSuccess;
 			}
 		}
 		return result;
 	}
 
-	rocprofvis_dm_result_t ComputeQueryFactory::GetComputeKernelMetricCategoriesList(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params, rocprofvis_dm_string_t& query) {
+	rocprofvis_dm_result_t ComputeQueryFactory::GetComputeKernelMetricCategoriesList(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params, rocprofvis_dm_string_t& query_out) {
 		rocprofvis_dm_result_t result = kRocProfVisDmResultNotSupported;
 		if (IsVersionGreaterOrEqual("1.2.0"))
 		{
 			result = kRocProfVisDmResultInvalidParameter;
 			if (num == 1 && params != nullptr && params[0].param_type == kRPVComputeParamKernelId)
 			{
-				query = "SELECT ";
-				query += "substr(metric_id, 0, instr(metric_id, '.')) as table_id, ";
-				query += "table_name ";
+				query_out = "SELECT ";
+				query_out += "substr(metric_id, 0, instr(metric_id, '.')) as table_id, ";
+				query_out += "table_name ";
 				if (IsVersionGreaterOrEqual("1.3.0"))
 				{
-					query += " FROM compute_kernel_metric_view";
+					query_out += " FROM compute_kernel_metric_view ";
 				}
 				else
 				{
-					query += " FROM compute_metric_view ";
+					query_out += " FROM compute_metric_view ";
 				}
-				query += "WHERE kernel_uuid = ";
-				query += params[0].param_str;
-				query += " GROUP BY table_name";
+				query_out += "WHERE kernel_uuid = ";
+				query_out += params[0].param_str;
+				query_out += " GROUP BY table_name";
 				result = kRocProfVisDmResultSuccess;
 			}
 		}
 		return result;
 	}
 
-	rocprofvis_dm_result_t ComputeQueryFactory::GetComputeMetricCategoryTablesList(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params, rocprofvis_dm_string_t& query) {
+	rocprofvis_dm_result_t ComputeQueryFactory::GetComputeMetricCategoryTablesList(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params, rocprofvis_dm_string_t& query_out) {
 		rocprofvis_dm_result_t result = kRocProfVisDmResultNotSupported;
 		if (IsVersionGreaterOrEqual("1.2.0"))
 		{
 			result = kRocProfVisDmResultInvalidParameter;
 			if (num == 2 && params != nullptr && params[0].param_type == kRPVComputeParamKernelId && params[1].param_type == kRPVComputeParamMetricId)
 			{
-				query = "SELECT ";
-				query += "metric_id as sub_table_id, "; //parsed in callback method
-				query += "sub_table_name ";
+				query_out = "SELECT ";
+				query_out += "metric_id as sub_table_id, "; //parsed in callback method
+				query_out += "sub_table_name ";
 				if (IsVersionGreaterOrEqual("1.3.0"))
 				{
-					query += " FROM compute_kernel_metric_view";
+					query_out += " FROM compute_kernel_metric_view ";
 				}
                 else
 				{
-					query += " FROM compute_metric_view ";
+					query_out += " FROM compute_metric_view ";
 				}
-				query += "WHERE kernel_uuid = ";
-				query += params[0].param_str;
-				query += " AND metric_id LIKE '";
-				query += params[1].param_str;
-				query += "%' GROUP BY table_name";
+				query_out += "WHERE kernel_uuid = ";
+				query_out += params[0].param_str;
+				query_out += " AND metric_id LIKE '";
+				query_out += params[1].param_str;
+				query_out += "%' GROUP BY table_name";
 				result = kRocProfVisDmResultSuccess;
 			}
 		}
@@ -991,10 +991,10 @@ void ComputeQueryFactory::ParseMetricParam(std::string metric_str, uint32_t work
 		case kRPVComputeFetchKernelRooflineIntensities:
 			result = m_query_factory.GetComputeKernelRooflineIntensities(num, params, query);
 			break;
-		case kRPVComputeFetchKernelMetricCategoriesList:
+		case kRPVComputeFetchKernelMetricCategoriesList: // Unused
 			result = m_query_factory.GetComputeKernelMetricCategoriesList(num, params, query);
 			break;
-		case kRPVComputeFetchMetricCategoryTablesList:
+		case kRPVComputeFetchMetricCategoryTablesList: // Unused
 			result = m_query_factory.GetComputeMetricCategoryTablesList(num, params, query);
 			break;
 		case kRPVComputeFetchMetricValues:

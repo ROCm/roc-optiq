@@ -1132,7 +1132,7 @@ the switch in a single check, it just forwards the status:
 
 ```cpp
 rocprofvis_dm_result_t result = kRocProfVisDmResultNotSupported;
-if(IsVersionGreaterOrEqual("1.3.0"))
+if(IsVersionGreaterOrEqual("1.2.0"))
 {
     result = kRocProfVisDmResultInvalidParameter;
     if(<params match this use case>)
@@ -1144,12 +1144,32 @@ if(IsVersionGreaterOrEqual("1.3.0"))
 return result;
 ```
 
-The gate is `1.3.0` for `GetComputeWorkloadMetricValueNames` and for
-the source / ISA / PC-sampling block (`GetComputeKernelSourceFiles`
-through `GetComputeKernelSamplingStateReasonCounts`), and `1.2.0` for
-the rest. Inner `IsVersionGreaterOrEqual("1.3.0")` / `"1.4.0"` tests
-inside a method still select between schema variants and are separate
-from the gate.
+The gate is `1.2.0` for every method except
+`GetComputeMetricValuesByWorkload`, which gates on `1.3.0` because it
+reads `compute_workload_metric_view` unconditionally and that view does
+not exist earlier.
+
+The source / ISA / PC-sampling block (`GetComputeKernelSourceFiles`
+through `GetComputeKernelSamplingStateReasonCounts`) is **not**
+version-gated beyond that `1.2.0` floor. PC sampling is an optional
+capture feature, so its tables can be absent from a `1.3.0`+ database
+and present in an earlier one — a schema version tells you nothing
+about them.
+
+Their absence is **not** guarded at query-build time. The
+`CheckTableExists("pc_sampling_states_per_line", ...)` probe in
+`CreateIndexes` only decides whether the PC-sampling indexes are
+created; nothing consults it when a query is built. Against a database
+that lacks those tables these use cases still return
+`kRocProfVisDmResultSuccess` with a valid-looking query, and the
+failure surfaces later as a SQLite "no such table" error
+(`kRocProfVisDmResultDbAccessFailed`) rather than
+`kRocProfVisDmResultNotSupported`. Closing that gap needs a cached
+table-presence probe the factory can read, not a version gate.
+
+Inner `IsVersionGreaterOrEqual("1.3.0")` / `"1.4.0"` tests inside a
+method still select between schema variants and are separate from the
+gate.
 
 Internal helpers: `ClassifyMetricIdFormat(s)` decides whether a
 metric ID is `XY`, `XYZ`, or `Other`; `ParseMetricParam(...)`

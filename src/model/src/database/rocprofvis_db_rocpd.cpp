@@ -526,13 +526,14 @@ rocprofvis_dm_result_t RocpdDatabase::SaveTrimmedData(rocprofvis_dm_timestamp_t 
 
 rocprofvis_dm_result_t RocpdDatabase::BuildTableStringIdFilter(rocprofvis_dm_num_string_table_filters_t num_string_table_filters,
     rocprofvis_dm_string_table_filters_t     string_table_filters,
+    bool                                     include_substring,
     table_string_id_filter_map_t&            filter)
 {
     rocprofvis_dm_result_t result = kRocProfVisDmResultNotLoaded;
     if(num_string_table_filters > 0)
     {
         std::vector<rocprofvis_dm_index_t> string_indices;
-        result = BindObject()->FuncGetStringIndices(BindObject()->trace_object, num_string_table_filters, string_table_filters, string_indices);
+        result = BindObject()->FuncGetStringIndices(BindObject()->trace_object, num_string_table_filters, string_table_filters, include_substring, string_indices);
         ROCPROFVIS_ASSERT_RETURN(result == kRocProfVisDmResultSuccess, result);
         std::string string;
         for(const rocprofvis_dm_index_t& index : string_indices)

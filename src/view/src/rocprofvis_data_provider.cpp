@@ -2109,6 +2109,12 @@ DataProvider::FetchEventSearch(const EventSearchRequestParams& table_params)
                     table_params.m_string_table_filters[i].data());
                 ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
             }
+
+            // set matching behavior in request
+            result = rocprofvis_controller_set_uint64(
+                args, kRPVControllerTableArgsStringTableFiltersIncludeSubstrings, 0,
+                table_params.m_include_substrings ? 1 : 0);
+            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
         }
         else
         {

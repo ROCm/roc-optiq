@@ -11,6 +11,7 @@ namespace Controller
 
 EventSearchTable::EventSearchTable(uint64_t id)
 : SystemTable(id)
+, m_include_substrings(true)
 {
 }
 
@@ -22,6 +23,7 @@ void EventSearchTable::Reset()
 {
     SystemTable::Reset();
     m_string_table_filters.clear();
+    m_include_substrings = true;
 }
 
 rocprofvis_result_t
@@ -36,6 +38,7 @@ EventSearchTable::UnpackArguments(Arguments& args, TableArguments*& out) const
     if(result == kRocProfVisResultSuccess)
     {
         uint64_t num_string_table_filters = 0;
+        uint64_t include_substrings = 1;
         std::vector<std::string> string_table_filters;
         uint64_t table_type = static_cast<uint64_t>(kRPVControllerTableTypeSearchResults);
 
@@ -63,11 +66,16 @@ EventSearchTable::UnpackArguments(Arguments& args, TableArguments*& out) const
                     }
                 }
             }
+            if(result == kRocProfVisResultSuccess)
+            {
+                result = args.GetUInt64(kRPVControllerTableArgsStringTableFiltersIncludeSubstrings, 0, &include_substrings);
+            }
         }
         if(result == kRocProfVisResultSuccess)
         {
             search_out->m_string_table_filters = std::move(string_table_filters);
-        }   
+            search_out->m_include_substrings = include_substrings != 0;
+        }
     }
 	return result;
 }
@@ -82,6 +90,7 @@ EventSearchTable::GetCurrentArguments(TableArguments*& out) const
     EventSearchTableArguments* search_out = (EventSearchTableArguments*)out;
     SystemTable::GetCurrentArguments(out);    
     search_out->m_string_table_filters = m_string_table_filters;
+    search_out->m_include_substrings = m_include_substrings;
 }
 
 void
@@ -90,13 +99,14 @@ EventSearchTable::SetCurrentArguments(TableArguments& in)
     EventSearchTableArguments& search_in = (EventSearchTableArguments&)in;
     SystemTable::SetCurrentArguments(search_in);
     m_string_table_filters = search_in.m_string_table_filters;
+    m_include_substrings = search_in.m_include_substrings;
 }
 
 bool
 EventSearchTable::ArgumentsChanged(SystemTableArguments& in) const
 {
     EventSearchTableArguments& search_in = (EventSearchTableArguments&)in;
-    return SystemTable::ArgumentsChanged(search_in) || m_string_table_filters != search_in.m_string_table_filters;
+    return SystemTable::ArgumentsChanged(search_in) || m_string_table_filters != search_in.m_string_table_filters || m_include_substrings != search_in.m_include_substrings;
 }
 
 rocprofvis_result_t
@@ -122,8 +132,9 @@ EventSearchTable::BuildQuery(rocprofvis_dm_database_t db, TableArguments& args, 
                                                     static_cast<rocprofvis_dm_timestamp_t>(arguments.m_start_ts), static_cast<rocprofvis_dm_timestamp_t>(arguments.m_end_ts), 
                                                     static_cast<rocprofvis_db_num_of_tracks_t>(arguments.m_tracks.size()), arguments.m_tracks.data(),
                                                     arguments.m_where.c_str(),
-                                                    static_cast<rocprofvis_dm_num_string_table_filters_t>(string_table_filters_ptr.size()), string_table_filters_ptr.data(), 
-                                                    sort_column, (rocprofvis_dm_sort_order_t)arguments.m_sort_order, 
+                                                    static_cast<rocprofvis_dm_num_string_table_filters_t>(string_table_filters_ptr.size()), string_table_filters_ptr.data(),
+                                                    arguments.m_include_substrings,
+                                                    sort_column, (rocprofvis_dm_sort_order_t)arguments.m_sort_order,
                                                     count_only ? 0 : count, count_only ? 0 : index, count_only, out);
     return result;
 }

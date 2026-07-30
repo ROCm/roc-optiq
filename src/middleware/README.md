@@ -254,6 +254,10 @@ client can index it directly; parents are referenced by id (`node_id`,
 (`start_row`, `row_count`), ordering (`sort_column`, `sort_order`), and clauses
 (`where`, `filter`, `group`, `group_columns`).
 
+A table is also clipped to `start_time` and `end_time`. Both default to the
+trace's own bounds, so omitting them means the whole thing rather than the
+empty range.
+
 Every table is scoped by a selection, and it must not be empty:
 
 | `table_type` | Selection |

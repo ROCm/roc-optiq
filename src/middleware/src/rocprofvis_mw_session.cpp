@@ -745,10 +745,25 @@ Session::BuildTableArguments(rocprofvis_controller_arguments_t* args,
                              const jt::Json& params, method_error_t& error)
 {
     rocprofvis_controller_set_uint64(args, kRPVControllerTableArgsType, 0, table_type);
+
+    /*
+     * The controller clips a table to a time window, so defaulting the bounds
+     * to zero would ask for the empty range and answer with no rows at all.
+     * A caller that named no window means the whole trace.
+     */
+    double start_time = 0.0;
+    double end_time   = 0.0;
+    if(m_timeline != nullptr)
+    {
+        rocprofvis_controller_get_double(m_timeline, kRPVControllerTimelineMinTimestamp,
+                                         0, &start_time);
+        rocprofvis_controller_get_double(m_timeline, kRPVControllerTimelineMaxTimestamp,
+                                         0, &end_time);
+    }
     rocprofvis_controller_set_double(args, kRPVControllerTableArgsStartTime, 0,
-                                     Json::GetDouble(params, "start_time", 0.0));
+                                     Json::GetDouble(params, "start_time", start_time));
     rocprofvis_controller_set_double(args, kRPVControllerTableArgsEndTime, 0,
-                                     Json::GetDouble(params, "end_time", 0.0));
+                                     Json::GetDouble(params, "end_time", end_time));
     rocprofvis_controller_set_uint64(args, kRPVControllerTableArgsSortColumn, 0,
                                      Json::GetUInt(params, "sort_column", 0));
 

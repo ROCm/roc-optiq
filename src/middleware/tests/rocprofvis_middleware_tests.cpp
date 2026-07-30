@@ -293,6 +293,53 @@ TEST_CASE("An event table fetch returns typed columns and rows")
     }
 }
 
+TEST_CASE("A table fetch without a time window covers the whole trace")
+{
+    Client client;
+    REQUIRE(client.IsValid());
+    client.CallAndWait(OpenTraceRequest());
+
+    jt::Json timeline =
+        client.CallAndWait("{\"method\":\"timeline.info\",\"params\":{}}");
+    std::string track_ids = EventTrackIds(timeline, 1);
+    REQUIRE(track_ids != "[]");
+
+    std::string paging = ",\"start_row\":0,\"row_count\":5,\"wait_ms\":" +
+                         std::to_string(FETCH_WAIT_MS) + "}}";
+
+    /*
+     * Naming no window must not be read as the empty range [0, 0], which
+     * answers with nothing rather than with the whole table.
+     */
+    jt::Json windowless = client.CallAndWait(
+        "{\"method\":\"table.fetch\",\"params\":{\"table_type\":\"events\""
+        ",\"track_ids\":" +
+        track_ids + paging);
+    INFO(windowless.toStringPretty());
+    REQUIRE(windowless["status"].getString() == "ready");
+
+    double total = windowless["result"]["total_rows"].getNumber();
+    REQUIRE(total > 0);
+
+    /* Spelling the trace's own bounds out must agree with omitting them. */
+    jt::Json spelled_out = client.CallAndWait(
+        "{\"method\":\"table.fetch\",\"params\":{\"table_type\":\"events\""
+        ",\"track_ids\":" +
+        track_ids +
+        ",\"start_time\":" + std::to_string(timeline["min_timestamp"].getNumber()) +
+        ",\"end_time\":" + std::to_string(timeline["max_timestamp"].getNumber()) + paging);
+    INFO(spelled_out.toStringPretty());
+    REQUIRE(spelled_out["result"]["total_rows"].getNumber() == total);
+
+    /* A window that is asked for is still honoured. */
+    jt::Json narrowed = client.CallAndWait(
+        "{\"method\":\"table.fetch\",\"params\":{\"table_type\":\"events\""
+        ",\"track_ids\":" +
+        track_ids + ",\"start_time\":0,\"end_time\":1" + paging);
+    INFO(narrowed.toStringPretty());
+    REQUIRE(narrowed["result"]["total_rows"].getNumber() < total);
+}
+
 TEST_CASE("An unknown table type is rejected before any work is done")
 {
     Client client;

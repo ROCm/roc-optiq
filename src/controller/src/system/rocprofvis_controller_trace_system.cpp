@@ -18,6 +18,7 @@
 #include "rocprofvis_controller_topology.h"
 #include "rocprofvis_core.h"
 #include "rocprofvis_core_assert.h"
+#include "rocprofvis_core_string_utils.h"
 #include <cfloat>
 #include <cstdint>
 #include <cstring>
@@ -575,14 +576,15 @@ rocprofvis_result_t SystemTrace::Load(RocProfVis::Controller::Future& future)
     future.Set(JobSystem::Get().IssueJob([this](Future* future) -> rocprofvis_result_t
         {
             rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
-            if(m_trace_file.find(".rpd", m_trace_file.size() - 4) != std::string::npos || 
-                m_trace_file.find(".db", m_trace_file.size() - 3) != std::string::npos ||
-                m_trace_file.find(".yaml", m_trace_file.size() - 5) != std::string::npos 
+            using RocProfVis::Core::String::ends_with;
+            if(ends_with(m_trace_file, ".rpd") ||
+                ends_with(m_trace_file, ".db") ||
+                ends_with(m_trace_file, ".yaml")
 #ifdef ROCPROFVIS_PERFETTO_ENABLED
                 ||
-                m_trace_file.find(".json", m_trace_file.size() - 5) != std::string::npos ||
-                m_trace_file.find(".proto", m_trace_file.size() - 6) != std::string::npos || 
-                m_trace_file.find(".pftrace", m_trace_file.size() - 8) != std::string::npos
+                ends_with(m_trace_file, ".json") ||
+                ends_with(m_trace_file, ".proto") ||
+                ends_with(m_trace_file, ".pftrace")
 #endif
                 )
             {

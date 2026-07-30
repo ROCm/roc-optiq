@@ -513,12 +513,13 @@ QueryManager::BuildEventSearchQuery(
     rocprofvis_dm_charptr_t where,
     rocprofvis_dm_num_string_table_filters_t num_string_table_filters,
     rocprofvis_dm_string_table_filters_t     string_table_filters,
+    bool include_substring,
     rocprofvis_dm_charptr_t sort_column, rocprofvis_dm_sort_order_t sort_order,
     uint64_t max_count, uint64_t offset, bool count_only, rocprofvis_dm_string_t& query)
 {
     std::vector<slice_query_map_t> slice_query_map_array;
     table_string_id_filter_map_t string_id_filter_map;
-    rocprofvis_dm_result_t string_filter_result = BuildTableStringIdFilter(num_string_table_filters, string_table_filters, string_id_filter_map);
+    rocprofvis_dm_result_t string_filter_result = BuildTableStringIdFilter(num_string_table_filters, string_table_filters, include_substring, string_id_filter_map);
     slice_query_map_array.resize(num);
     for(int i = 0; i < num; i++)
     {

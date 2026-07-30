@@ -1207,7 +1207,7 @@ KernelInstanceTable::Fetch()
     const TimelineModel& tlm = m_data_provider.DataModel().GetTimeline();
     m_fetch_deferred         = !m_data_provider.FetchTable(EventSearchRequestParams(
         m_request_table_type, { kRocProfVisDmOperationDispatch }, tlm.GetStartTime(),
-        tlm.GetEndTime(), m_where.c_str(), { m_kernel_name }, 0, m_fetch_chunk_size,
+        tlm.GetEndTime(), m_where.c_str(), false, { m_kernel_name }, 0, m_fetch_chunk_size,
         m_sort_column_index, m_sort_order));
     m_fetched                = true;
 }

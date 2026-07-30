@@ -210,6 +210,7 @@ class QueryManager : public SqliteDatabase
             rocprofvis_dm_charptr_t where,
             rocprofvis_dm_num_string_table_filters_t num_string_table_filters, 
             rocprofvis_dm_string_table_filters_t string_table_filters,
+            bool include_substring,
             rocprofvis_dm_charptr_t sort_column, 
             rocprofvis_dm_sort_order_t sort_order,
             uint64_t max_count, 
@@ -238,14 +239,16 @@ class QueryManager : public SqliteDatabase
             rocprofvis_dm_track_params_t* props,
             rocprofvis_db_query_type_t query_type) = 0;
 
-        // Searches for strings containing the passed in list of filter strings and builds a WHERE IN clause for the table query.
+        // Searches for strings matching the passed in list of filter strings and builds a WHERE IN clause for the table query.
         // @param num_string_table_filters - number of filter strings
         // @param string_table_filters - array of filter strings
+        // @param include_substring - when true a string matches if it contains the filter, when false it has to equal the filter.
         // @param filter - output string containing WHERE clause
         // @return status of operation
         virtual rocprofvis_dm_result_t BuildTableStringIdFilter(
             rocprofvis_dm_num_string_table_filters_t num_string_table_filters, 
             rocprofvis_dm_string_table_filters_t string_table_filters,
+            bool include_substring,
             table_string_id_filter_map_t& filter) = 0;
 
         // needs to be overriden in all adapters. Used by public interface method. 

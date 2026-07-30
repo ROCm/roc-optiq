@@ -28,6 +28,7 @@ protected:
     struct EventSearchTableArguments : SystemTableArguments
     {       
         std::vector<std::string> m_string_table_filters;
+        bool                     m_include_substrings;
     };
 
     rocprofvis_result_t UnpackArguments(Arguments& args, TableArguments*& out) const override;
@@ -40,6 +41,7 @@ protected:
 
 private:
     std::vector<std::string> m_string_table_filters;
+    bool                     m_include_substrings;
 
 };
 

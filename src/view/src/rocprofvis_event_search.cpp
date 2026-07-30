@@ -180,8 +180,8 @@ EventSearch::Search()
                     m_request_table_type,
                     { kRocProfVisDmOperationLaunch, kRocProfVisDmOperationDispatch,
                       kRocProfVisDmOperationLaunchSample },
-                    timeline.GetStartTime(), timeline.GetEndTime(), "", { terms }, 0,
-                    m_fetch_chunk_size, m_sort_column_index, m_sort_order));
+                    timeline.GetStartTime(), timeline.GetEndTime(), "", true, { terms },
+                    0, m_fetch_chunk_size, m_sort_column_index, m_sort_order));
             m_searched    = true;
             m_should_open = true;
         }

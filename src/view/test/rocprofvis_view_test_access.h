@@ -122,6 +122,8 @@ struct FlameTrackItemTestPeer
 
     bool IsExpanded() const { return v.m_event_options->m_expand; }
     int  MaxLevel() const { return static_cast<int>(v.m_max_level); }
+    float DefaultTrackHeight() const { return v.DefaultTrackHeight(); }
+    float ExpandedTrackHeight() const { return v.ExpandedTrackHeight(); }
 
     // Mirrors the two arrow-button branches in RenderMetaAreaExpand (the arrow
     // sits in a meta area with no stable widget ref): expanding grows the track
@@ -135,7 +137,7 @@ struct FlameTrackItemTestPeer
         }
         else
         {
-            v.m_event_options->m_height = DEFAULT_TRACK_HEIGHT;
+            v.m_event_options->m_height = v.DefaultTrackHeight();
             v.m_track_height_changed    = true;
             v.m_event_options->m_expand = false;
         }

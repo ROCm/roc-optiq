@@ -78,9 +78,10 @@ protected:
     rocprofvis_dm_result_t RemapStringId(uint64_t id, rocprofvis_db_string_type_t type, uint32_t node, uint64_t & result) override;
 
     rocprofvis_dm_result_t BuildTableStringIdFilter(
-        rocprofvis_dm_num_string_table_filters_t num_string_table_filters, 
-        rocprofvis_dm_string_table_filters_t string_table_filters,
-        table_string_id_filter_map_t& filter) override;
+                                    rocprofvis_dm_num_string_table_filters_t num_string_table_filters, 
+                                    rocprofvis_dm_string_table_filters_t string_table_filters,
+                                    bool include_substring,
+                                    table_string_id_filter_map_t& filter) override;
 
     rocprofvis_dm_string_t GetEventOperationQuery(
         const rocprofvis_dm_event_operation_t operation) override;

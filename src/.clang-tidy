@@ -7,6 +7,7 @@ misc-*,\
 -misc-static-assert,\
 -misc-no-recursion,\
 -misc-non-private-member-variables-in-classes,\
+-misc-use-anonymous-namespace,\
 modernize-*,\
 -modernize-deprecated-headers,\
 -modernize-raw-string-literal,\

@@ -12,6 +12,10 @@ live in `.agents/`:
 >   `src/model/` (SQLite adapters, query pipeline, packed table,
 >   data model, topology, metadata versioning)
 
+`src/middleware/` sits beside these as a JSON facade over the
+controller for frontends that do not link C++; its protocol is
+documented in [`src/middleware/README.md`](./src/middleware/README.md).
+
 **If you are an AI coding assistant** (Cursor, Codex, Claude Code,
 Copilot agent, etc.), read `.agents/UI.md` in full before making
 non-trivial changes under `src/view/` or to UI-facing app integration.
@@ -21,7 +25,8 @@ data-model layer), also read `.agents/DATABASE.md`. Together these
 guides are the single source of truth for:
 
 - Project identity, build, and repo layout
-- Module boundaries (`app` / `core` / `model` / `controller` / `view`)
+- Module boundaries (`app` / `core` / `model` / `controller` / `view`
+  / `middleware`)
 - The View layer top-down tour and full widget inventory
 - Track-item, trace-view, and compute-view internals
 - UI models and cross-cutting services (events, settings, monitoring,

@@ -73,6 +73,11 @@ add_subdirectory(src/core)
 add_subdirectory(src/model)
 add_subdirectory(src/controller)
 
+# JSON facade over the controller, for frontends that do not link C++ directly.
+# Depends only on the controller, so it must come after it and does not
+# participate in the view/app build below.
+add_subdirectory(src/middleware)
+
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src/model/inc)
 
 find_package(Vulkan REQUIRED)

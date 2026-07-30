@@ -181,8 +181,7 @@ private:
                 {
                     kRocProfVisDmOperationLaunch,
                     {
-                        { "apiName", kRocProfVisEventEssentialDataCategory },
-                        { "args", kRocProfVisEventEssentialDataName },
+                        { "apiName", kRocProfVisEventEssentialDataName },
                         { "pid", kRocProfVisEventEssentialDataProcess },
                         { "tid", kRocProfVisEventEssentialDataThread },
                     },

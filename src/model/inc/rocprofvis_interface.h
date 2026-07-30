@@ -341,7 +341,8 @@ rocprofvis_dm_result_t  rocprofvis_dm_delete_trace(
  ***************************************************************************************************/
 rocprofvis_dm_result_t  rocprofvis_dm_bind_trace_to_database( 
                                     rocprofvis_dm_trace_t,
-                                    rocprofvis_dm_database_t);                                      
+                                    rocprofvis_dm_database_t,
+                                    rocprofvis_dm_charptr_t);                                      
 
 /****************************************************************************************************
  * @brief Delete time slice with specified start and end timestamps

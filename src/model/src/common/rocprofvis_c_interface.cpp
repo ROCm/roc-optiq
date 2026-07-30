@@ -7,6 +7,7 @@
 #include "rocprofvis_db_rocprof.h"
 #include "rocprofvis_dm_trace.h"
 #include "rocprofvis_db_compute.h"
+#include "rocprofvis_db_trace_processor.h"
 
 #ifdef TEST
 #define ROCPROFVIS_DM_PROPSYMBOL(handle, property) ((RocProfVis::DataModel::DmBase*)handle)->GetPropertySymbol(property)
@@ -31,6 +32,11 @@
 rocprofvis_db_type_t rocprofvis_db_identify_type(
     rocprofvis_db_filename_t filename) {
     std::vector<std::string> multinode_files;
+#ifdef ROCPROFVIS_PERFETTO_ENABLED
+    rocprofvis_db_type_t db_type = RocProfVis::DataModel::GoogleTraceProcessor::Detect(filename);
+    if (db_type == rocprofvis_db_type_t::kChromeTrace || db_type == rocprofvis_db_type_t::kPerfettoTrace)
+        return db_type;
+#endif
     return RocProfVis::DataModel::ProfileDatabase::Detect(filename, multinode_files);
 }
 
@@ -53,9 +59,33 @@ rocprofvis_dm_database_t rocprofvis_db_open_database(
     PROFILE;
     std::vector<std::string> multinode_files;
     if (db_type == rocprofvis_db_type_t::kAutodetect) {
-        db_type = RocProfVis::DataModel::ProfileDatabase::Detect(filename, multinode_files);
+#ifdef ROCPROFVIS_PERFETTO_ENABLED
+        db_type = RocProfVis::DataModel::GoogleTraceProcessor::Detect(filename);
+        if (db_type == rocprofvis_db_type_t::kAutodetect)
+#endif
+        {
+            db_type = RocProfVis::DataModel::ProfileDatabase::Detect(filename, multinode_files);
+        }
     } 
-
+#ifdef ROCPROFVIS_PERFETTO_ENABLED
+    if (db_type == rocprofvis_db_type_t::kChromeTrace || db_type == rocprofvis_db_type_t::kPerfettoTrace)
+    {
+        try {
+            RocProfVis::DataModel::Database* db = new RocProfVis::DataModel::GoogleTraceProcessor(filename);
+            if (kRocProfVisDmResultSuccess == db->Open()) {
+                return db;
+            } else {
+                ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN("Error! Failed to open Chrome Trace or Perfetto output!",
+                    nullptr);
+            }
+        }
+        catch(std::exception ex)
+        {
+            ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN(
+                RocProfVis::DataModel::ERROR_MEMORY_ALLOCATION_FAILURE, nullptr);
+        }
+    } else
+#endif
     if (db_type == rocprofvis_db_type_t::kRocpdSqlite)
     {
         try {
@@ -639,7 +669,8 @@ rocprofvis_dm_result_t rocprofvis_dm_delete_trace(
  * 
  ***************************************************************************************************/
 rocprofvis_dm_result_t rocprofvis_dm_bind_trace_to_database(   rocprofvis_dm_trace_t trace,
-                                        rocprofvis_dm_database_t database){
+                                        rocprofvis_dm_database_t database,
+                                        rocprofvis_dm_charptr_t config_path) {
     PROFILE;
     ROCPROFVIS_ASSERT_MSG_RETURN(trace, RocProfVis::DataModel::ERROR_TRACE_CANNOT_BE_NULL,
                                  kRocProfVisDmResultInvalidParameter);
@@ -647,7 +678,7 @@ rocprofvis_dm_result_t rocprofvis_dm_bind_trace_to_database(   rocprofvis_dm_tra
                                  RocProfVis::DataModel::ERROR_DATABASE_CANNOT_BE_NULL,
                                  kRocProfVisDmResultInvalidParameter);
     rocprofvis_dm_db_bind_struct* bind_data=nullptr;
-    if  (kRocProfVisDmResultSuccess == ((RocProfVis::DataModel::Trace*)trace)->BindDatabase(database, bind_data) && 
+    if  (kRocProfVisDmResultSuccess == ((RocProfVis::DataModel::Trace*)trace)->BindDatabase(database, bind_data, config_path?config_path:"") &&
          kRocProfVisDmResultSuccess == ((RocProfVis::DataModel::Database*)database)->BindTrace(bind_data))
          return kRocProfVisDmResultSuccess;
     ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN("Error! Cannot bind trace to database",

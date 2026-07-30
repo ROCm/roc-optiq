@@ -35,6 +35,11 @@ namespace DataModel
         return BuildQuery(g_select_str, params.NUM_PARAMS, params.parameters, params.from,
                           "");
     }
+    std::string Builder::Select(rocprofvis_db_perfetto_slice_query_format params)
+    {
+        return BuildQuery(g_select_str, params.NUM_PARAMS, params.parameters, params.from,
+            "");
+    }
     std::string Builder::Select(rocprofvis_db_sqlite_launch_table_query_format params)
     {
         return BuildQuery(g_select_str, params.NUM_PARAMS, params.parameters, params.from,
@@ -76,6 +81,16 @@ namespace DataModel
     {
         return BuildQuery(g_select_str, params.NUM_PARAMS, params.parameters, params.from,
                           "");
+    }
+    std::string Builder::Select(rocprofvis_db_perfetto_launch_table_query_format params)
+    {
+        return BuildQuery(g_select_str, params.NUM_PARAMS, params.parameters, params.from,
+            "");
+    }
+    std::string Builder::Select(rocprofvis_db_perfetto_sample_table_query_format params)
+    {
+        return BuildQuery(g_select_str, params.NUM_PARAMS, params.parameters, params.from,
+            "");
     }
     std::string Builder::Select(rocprofvis_db_sqlite_dataflow_query_format params)
     {

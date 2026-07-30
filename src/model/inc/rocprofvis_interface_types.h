@@ -144,7 +144,12 @@ typedef enum rocprofvis_db_type_t {
     // new schema Rocprof multinode database
     kRocprofMultinodeSqlite = 3,
     // compute database
-    kComputeSqlite = 4
+    kComputeSqlite = 4,
+    // chrom trace or perfetto
+    kChromeTrace = 5,
+    kPerfettoTrace = 6,
+    kGoogleSqlite = 7
+
 } rocprofvis_db_type_t;
 
 // Database query status, reported by database query progress callback

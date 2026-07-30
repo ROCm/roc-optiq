@@ -14,6 +14,25 @@ namespace RocProfVis
 namespace DataModel
 {
 
+
+bool Database::SanitizeFilePath(const std::string& filename, std::filesystem::path& out_path) {
+    std::filesystem::path input(filename);
+
+    if (!input.is_absolute())
+        return false;
+
+    std::error_code ec;
+    std::filesystem::path canonical_path = std::filesystem::canonical(input, ec);
+    if (ec)
+        return false;
+
+    if (!std::filesystem::is_regular_file(canonical_path, ec) || ec)
+        return false;
+
+    out_path = canonical_path;
+    return true;
+}
+
 bool Database::IsNumber(const std::string& s) {
     std::istringstream iss(s);
     uint64_t d;
@@ -40,8 +59,8 @@ void  Database::ShowProgress(
     future->ShowProgress(Path(), step, action, status);
 }
 
-rocprofvis_dm_result_t Database::BindTrace(
-                                                    rocprofvis_dm_db_bind_struct * binding_info){
+
+rocprofvis_dm_result_t Database::BindTrace(rocprofvis_dm_db_bind_struct * binding_info){
     m_binding_info = binding_info;
     m_binding_info->FuncFindCachedTableValue = FindCachedTableValue;
     m_binding_info->FuncGetInfoTableNumColumns = GetInfoTableNumColumns;
@@ -415,23 +434,6 @@ rocprofvis_dm_result_t   Database::ExecuteComputeQueryStatic(
     return db->ExecuteComputeQuery(use_case, query,object);
 }
 
-const char* Database::ProcessNameSuffixFor(rocprofvis_dm_track_category_t category){
-    switch(category){
-        case kRocProfVisDmPmcTrack:
-        case kRocProfVisDmKernelDispatchTrack:
-        case kRocProfVisDmMemoryAllocationTrack:
-        case kRocProfVisDmMemoryCopyTrack:
-            return "GPU:";
-        case kRocProfVisDmRegionSampleTrack: 
-            return "Sample PID:";
-        case kRocProfVisDmRegionTrack:
-        case kRocProfVisDmRegionMainTrack:
-            return "Thread PID:";
-        case kRocProfVisDmStreamTrack: 
-            return "STREAM:";
-    }
-    return "";
-}
 
 const char* Database::SubProcessNameSuffixFor(rocprofvis_dm_track_category_t category){
     switch(category){
@@ -515,56 +517,6 @@ rocprofvis_dm_size_t Database::GetMemoryFootprint()
     size+=NumTracks()*(sizeof(rocprofvis_dm_track_params_t)+sizeof(std::unique_ptr<rocprofvis_dm_track_params_t>));
     size+=strlen(Path());
     return size;
-}
-
-void
-Database::UpdateQueryForTrack(  rocprofvis_dm_track_params_it it, 
-                                rocprofvis_dm_track_params_t& newprops,
-                                rocprofvis_dm_charptr_t*      newqueries)
-{
-
-    int slice_query_category        = newprops.track_indentifiers.category == kRocProfVisDmStreamTrack
-                                          ? kRPVQuerySliceByStream
-                                          : kRPVQuerySliceByQueue;
-    int slice_source_query_category = newprops.track_indentifiers.category == kRocProfVisDmStreamTrack
-                                          ? kRPVSourceQuerySliceByStream
-                                          : kRPVSourceQuerySliceByQueue;
-    if (it != TrackPropertiesEnd()) {
-            std::vector<rocprofvis_dm_string_t>::iterator s = 
-            std::find_if(it->get()->query[slice_query_category].begin(), 
-                            it->get()->query[slice_query_category].end(),
-                [newqueries, slice_source_query_category](rocprofvis_dm_string_t& str) {
-                                 return str == newqueries[slice_source_query_category];
-                         });
-            if(s == it->get()->query[slice_query_category].end())
-            {
-                it->get()->query[slice_query_category].push_back(
-                    newqueries[slice_source_query_category]);
-            }
-            
-            s = std::find_if(it->get()->query[kRPVQueryTable].begin(),
-                             it->get()->query[kRPVQueryTable].end(),
-                             [newqueries](rocprofvis_dm_string_t& str) {
-                                 return str == newqueries[kRPVSourceQueryTable];
-                             });
-            if(s == it->get()->query[kRPVQueryTable].end())
-            {
-                it->get()->query[kRPVQueryTable].push_back(newqueries[kRPVSourceQueryTable]);
-            }
-            s = std::find_if(it->get()->query[kRPVQueryLevel].begin(),
-                             it->get()->query[kRPVQueryLevel].end(),
-                             [newqueries](rocprofvis_dm_string_t& str) {
-                                 return str == newqueries[kRPVSourceQueryLevel];
-                             });
-            if(s == it->get()->query[kRPVQueryLevel].end())
-            {
-                it->get()->query[kRPVQueryLevel].push_back(newqueries[kRPVSourceQueryLevel]);
-            }
-        return;
-    } 
-    newprops.query[slice_query_category].push_back(newqueries[slice_source_query_category]);
-    newprops.query[kRPVQueryTable].push_back(newqueries[kRPVSourceQueryTable]);
-    newprops.query[kRPVQueryLevel].push_back(newqueries[kRPVSourceQueryLevel]); 
 }
 
 void Database::CreateTracksOrderRanking() {

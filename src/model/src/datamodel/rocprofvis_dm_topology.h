@@ -148,6 +148,11 @@ private:
             { "machine_id", kRPVControllerNodeMachineId },
             { "guid", kRPVControllerNodeMachineGuid },
             { "hash", kRPVControllerNodeHash },
+            { "system_name", kRPVControllerNodeOSName},
+            { "system_version", kRPVControllerNodeOSVersion },
+            { "system_release", kRPVControllerNodeOSRelease },
+            { "system_machine", kRPVControllerNodeHostName },
+            { "trace_uuid", kRPVControllerNodeMachineGuid },
     };
     rocprofvis_dm_track_identifiers_t temp_processor_node_idetifiers;
 };
@@ -174,6 +179,7 @@ private:
     bool IsRelevantPropertyTableName(std::string table_name) override { return table_name == "Process"; }
     uint32_t GetLevelId() const override { return TRACK_ID_PID; }
     const char* GetLevelTag() const override { return Builder::PROCESS_ID_SERVICE_NAME; }
+    bool DoesThisNodeMatchIdentifiers(rocprofvis_dm_track_identifiers_t* track_identifiers) override;
     inline static const std::map<std::string, uint32_t> 
         s_columns_ids = {
             { "id", kRPVControllerProcessId },
@@ -185,6 +191,12 @@ private:
             { "command", kRPVControllerProcessCommand },
             { "environment", kRPVControllerProcessEnvironment },
             { "extdata", kRPVControllerProcessExtData },
+
+ //           { "pid", kRPVControllerProcessId },
+            { "cmdline", kRPVControllerProcessCommand },
+            { "machine_id", kRPVControllerProcessNodeId },
+            { "end_ts", kRPVControllerProcessEndTime },
+            { "start_ts", kRPVControllerProcessStartTime },
     };
 };
 
@@ -201,6 +213,7 @@ private:
     bool IsRelevantPropertyTableName(std::string table_name) override { return table_name == "Agent"; }
     uint32_t GetLevelId() const override { return TRACK_ID_AGENT; }
     const char* GetLevelTag() const override { return Builder::AGENT_ID_SERVICE_NAME; }
+    bool DoesThisNodeMatchIdentifiers(rocprofvis_dm_track_identifiers_t* track_identifiers) override;
     inline static const std::map<std::string, uint32_t> 
         s_columns_ids = {
             { "id", kRPVControllerProcessorId },
@@ -216,6 +229,8 @@ private:
             { "product_name", kRPVControllerProcessorProductName },
             { "user_name", kRPVControllerProcessorUserName },
             { "extdata", kRPVControllerProcessorExtData },
+
+            { "machine_id", kRPVControllerProcessNodeId },
     };
 };
 
@@ -247,6 +262,12 @@ private:
         { "extdata", kRPVControllerThreadExtData },
         { "start", kRPVControllerThreadStartTime },
         { "end", kRPVControllerThreadEndTime },
+
+        { "tid", kRPVControllerThreadId },
+        { "machine_id", kRPVControllerThreadNode },
+        { "upid", kRPVControllerThreadProcess },
+        { "start_ts", kRPVControllerThreadStartTime },
+        { "end_ts", kRPVControllerThreadEndTime },
 
     };
 };
@@ -390,6 +411,9 @@ private:
         { "instance_id", kRPVControllerCounterInstanceId },
         { "is_constant", kRPVControllerCounterIsConstant },
         { "is_derived", kRPVControllerCounterIsDerived },
+
+        { "machine_id", kRPVControllerCounterNode },
+        { "upid", kRPVControllerCounterProcess },
     };
 };
 

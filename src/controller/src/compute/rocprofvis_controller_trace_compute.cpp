@@ -593,7 +593,7 @@ rocprofvis_result_t ComputeTrace::LoadRocpd(Future* future)
     if(nullptr != m_dm_handle)
     {
         rocprofvis_dm_database_t db = rocprofvis_db_open_database(m_trace_file.c_str(), kComputeSqlite);
-        if (nullptr != db && kRocProfVisDmResultSuccess == rocprofvis_dm_bind_trace_to_database(m_dm_handle, db))
+        if (nullptr != db && kRocProfVisDmResultSuccess == rocprofvis_dm_bind_trace_to_database(m_dm_handle, db, nullptr))
         {
             rocprofvis_db_future_t object2wait = rocprofvis_db_future_alloc(&Future::ProgressCallback, future);
             if (nullptr != object2wait)

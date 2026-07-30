@@ -48,6 +48,13 @@ Connect, give it a path **the server** can reach (`sample/trace_70b_1024_32.rpd`
 works), and press Open. HTTP is the default; the same session is reachable over
 the WebSocket, which the transport dropdown switches to.
 
+The path box starts on that sample. To point it somewhere else by default, put
+the path in `.env.local`, which is not committed:
+
+```
+VITE_TRACE_PATH=C:\path\to\your.db
+```
+
 ## How it talks to the server
 
 `src/api/client.ts` is the whole client, and the two transports differ only in

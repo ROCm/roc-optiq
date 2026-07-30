@@ -6,6 +6,7 @@ import type {
   TableData,
   TimelineInfo,
   Track,
+  TraceStatus,
   TrackData,
   TrackEvent,
   TrackSample,
@@ -21,6 +22,13 @@ import { formatCount, formatDuration, trackLabel, trackSubLabel } from './lib/fo
 type Tab = 'timeline' | 'table' | 'console';
 
 const DEFAULT_URL = 'http://127.0.0.1:8378';
+
+/*
+ * The path is resolved by the server, so the useful default differs per
+ * machine. Set VITE_TRACE_PATH in .env.local, which is not committed.
+ */
+const DEFAULT_TRACE_PATH: string =
+  import.meta.env.VITE_TRACE_PATH || 'sample/trace_70b_1024_32.rpd';
 const AUTO_SELECT_TRACKS = 6;
 const FETCH_DEBOUNCE_MS = 260;
 
@@ -31,7 +39,7 @@ export default function App() {
   const [connected, setConnected] = useState(false);
   const [session, setSession] = useState<SessionInfo | null>(null);
 
-  const [tracePath, setTracePath] = useState('sample/trace_70b_1024_32.rpd');
+  const [tracePath, setTracePath] = useState(DEFAULT_TRACE_PATH);
   const [timeline, setTimeline] = useState<TimelineInfo | null>(null);
   const [selectedTracks, setSelectedTracks] = useState<string[]>([]);
   const [trackData, setTrackData] = useState<Map<string, TrackData>>(new Map());
@@ -67,6 +75,27 @@ export default function App() {
 
   /* ------------------------------------------------------------ connect */
 
+  /* Read the timeline for whatever trace the session currently holds. */
+  const loadTimeline = useCallback(async (active: MiddlewareClient) => {
+    setStatus('Reading the timeline…');
+    const info = await active.call<TimelineInfo>('timeline.info');
+    setTimeline(info);
+    setView({ start: info.min_timestamp, end: info.max_timestamp });
+
+    /* Show something immediately rather than an empty canvas. */
+    const initial = info.tracks
+      .filter((track) => (track.num_entries ?? 0) > 0)
+      .slice(0, AUTO_SELECT_TRACKS)
+      .map((track) => String(track.id));
+    setSelectedTracks(initial);
+    setStatus(
+      `${info.num_tracks} tracks · ${formatDuration(
+        info.max_timestamp - info.min_timestamp,
+      )}`,
+    );
+    setTab('timeline');
+  }, []);
+
   const connect = useCallback(async () => {
     setError(null);
     setBusy(true);
@@ -82,6 +111,17 @@ export default function App() {
       setSession(info);
       setConnected(true);
       setStatus(`Connected over ${transport}`);
+
+      /*
+       * One session is shared across every client and transport, so a trace
+       * may already be open. Adopt it, rather than showing no trace and then
+       * failing an open with trace_already_open.
+       */
+      const trace = await next.call<TraceStatus>('trace.status');
+      if (trace.state === 'ready') {
+        if (trace.paths.length > 0) setTracePath(trace.paths[0]);
+        await loadTimeline(next);
+      }
     } catch (caught) {
       setClient(null);
       setConnected(false);
@@ -92,7 +132,7 @@ export default function App() {
     } finally {
       setBusy(false);
     }
-  }, [url, transport]);
+  }, [url, transport, loadTimeline]);
 
   const disconnect = useCallback(() => {
     client?.disconnect();
@@ -126,31 +166,14 @@ export default function App() {
       await client.fetchAsync('trace.open', { path: tracePath }, (progress, message) =>
         setStatus(`Opening trace… ${progress}% ${message}`),
       );
-
-      setStatus('Reading the timeline…');
-      const info = await client.call<TimelineInfo>('timeline.info');
-      setTimeline(info);
-      setView({ start: info.min_timestamp, end: info.max_timestamp });
-
-      /* Show something immediately rather than an empty canvas. */
-      const initial = info.tracks
-        .filter((track) => (track.num_entries ?? 0) > 0)
-        .slice(0, AUTO_SELECT_TRACKS)
-        .map((track) => String(track.id));
-      setSelectedTracks(initial);
-      setStatus(
-        `${info.num_tracks} tracks · ${formatDuration(
-          info.max_timestamp - info.min_timestamp,
-        )}`,
-      );
-      setTab('timeline');
+      await loadTimeline(client);
     } catch (caught) {
       setError(describe(caught));
       setStatus('Connected');
     } finally {
       setBusy(false);
     }
-  }, [client, tracePath]);
+  }, [client, tracePath, loadTimeline]);
 
   const closeTrace = useCallback(async () => {
     if (!client) return;

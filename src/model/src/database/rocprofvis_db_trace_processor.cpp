@@ -562,7 +562,7 @@ namespace RocProfVis
                 std::string unit = db->CachedTables(db_index)->GetTableCell(type.c_str(), track_params.track_indentifiers.track_id, "unit");
                 db->CachedTables(0)->AddTableCell("PMC", track_params.track_indentifiers.id[TRACK_ID_TID], "unit", kRPVDataTypeString, unit.c_str());
                 std::string description = db->CachedTables(db_index)->GetTableCell(type.c_str(), track_params.track_indentifiers.track_id, "description");
-                db->CachedTables(0)->AddTableCell("PMC", track_params.track_indentifiers.id[TRACK_ID_TID], "description", kRPVDataTypeString, unit.c_str());
+                db->CachedTables(0)->AddTableCell("PMC", track_params.track_indentifiers.id[TRACK_ID_TID], "description", kRPVDataTypeString, description.c_str());
                 std::string upid = db->CachedTables(db_index)->GetTableCell(type.c_str(), track_params.track_indentifiers.track_id, "upid");
                 db->CachedTables(0)->AddTableCell("PMC", track_params.track_indentifiers.id[TRACK_ID_TID], "upid", kRPVDataTypeInt, upid.c_str());
                 if (db->CachedTables(0)->PopulateTrackExtendedDataTemplate(db, 0, "PMC", track_params.track_indentifiers.id[TRACK_ID_TID]) != kRocProfVisDmResultSuccess) 
@@ -680,14 +680,26 @@ namespace RocProfVis
             fspath = fspath / HashFileIdentity(Path());
             fspath = fspath / "perfetto";
             std::string stem = fs::path(Path()).stem().string();
+            std::string temp = stem;
             stem += ".tpdb";
+            temp += ".tmp";
+            fs::path temp_path(fspath / temp);
             fspath = fspath / stem;
 
             if (!fs::exists(fspath))
             {
-                if (!TraceConverter::Convert(Path(), fspath.string())) {
+                if (!TraceConverter::Convert(Path(), temp_path.string())) {
                     spdlog::error("Conversion failed");
                     break;
+                }
+                else
+                {
+                    std::error_code ec;
+                    fs::rename(temp_path, fspath, ec);
+                    if (ec) {
+                        spdlog::error(ec.message());
+                        break;
+                    }
                 }
             }
 
@@ -955,9 +967,13 @@ namespace RocProfVis
     }
 
 
-    rocprofvis_dm_result_t GoogleTraceProcessor::BuildTableStringIdFilter( rocprofvis_dm_num_string_table_filters_t num_string_table_filters, 
-        rocprofvis_dm_string_table_filters_t string_table_filters, table_string_id_filter_map_t& filter)
+    rocprofvis_dm_result_t GoogleTraceProcessor::BuildTableStringIdFilter( 
+        rocprofvis_dm_num_string_table_filters_t num_string_table_filters, 
+        rocprofvis_dm_string_table_filters_t string_table_filters, 
+        bool include_substring,
+        table_string_id_filter_map_t& filter)
     {
+        (void)include_substring;
         rocprofvis_dm_result_t result = kRocProfVisDmResultNotLoaded;
         if (num_string_table_filters > 0)
         {
@@ -1148,7 +1164,7 @@ namespace RocProfVis
             record.time-=db->TraceProperties()->db_inst_start_time[db_instance];
             record.end_time = db->Sqlite3ColumnInt64(func, stmt, azColName, 4);  
             record.end_time-=db->TraceProperties()->db_inst_start_time[db_instance];
-            std::string category = db->Sqlite3ColumnText(func, stmt, azColName, 6);
+            std::string category = db->Sqlite3ColumnText(func, stmt, azColName, 5);
             auto it = db->m_string_map.find(category );
             uint32_t string_index = it != db->m_string_map.end() ? it->second : db->BindObject()->FuncAddString(db->BindObject()->trace_object, category.c_str());
             record.category_id = string_index;

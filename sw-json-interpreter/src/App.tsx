@@ -202,10 +202,18 @@ export default function App() {
         const track = timeline.tracks.find((item) => String(item.id) === trackId);
         if (!track) continue;
         try {
-          const data = await client.fetchAsync<TrackData>('track.fetch', {
+          /*
+           * graph.fetch rather than track.fetch: it returns entries at the
+           * asked-for pixel resolution instead of every raw one, which for a
+           * busy track is the difference between 19k entries in 2s and 1.5M
+           * in 72s. The entries carry real ids either way, so an event can
+           * still be inspected.
+           */
+          const data = await client.fetchAsync<TrackData>('graph.fetch', {
             track_id: track.id,
             start_time: view.start,
             end_time: view.end,
+            x_resolution: plotResolution(),
           });
           if (generation !== fetchGeneration.current) return;
           setTrackData((prev) => new Map(prev).set(trackId, data));
@@ -555,6 +563,15 @@ export default function App() {
       </div>
     </div>
   );
+}
+
+/*
+ * Level of detail to ask for. The window's width is an upper bound on the
+ * plot's, and asking for more detail than there are pixels only costs a
+ * little bandwidth, where asking for less loses events that would be visible.
+ */
+function plotResolution(): number {
+  return Math.max(Math.round(window.innerWidth), 800);
 }
 
 function describe(caught: unknown): string {

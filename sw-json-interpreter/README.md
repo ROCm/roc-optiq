@@ -68,6 +68,12 @@ reporting progress as it goes. It polls rather than passing `wait_ms` on
 purpose: the server serialises requests, so a long inline wait would stall
 every other client.
 
+The timeline reads `graph.fetch` rather than `track.fetch`, asking for entries
+at roughly the plot's pixel resolution. On a busy track that is the difference
+between 19k entries in about 2 seconds and 1.5M in about 72; the entries carry
+real ids either way, so an event can still be inspected after being drawn from
+a level-of-detail response.
+
 Two details that are easy to get wrong, both handled in `src/api/types.ts`:
 
 - **Ids past 2^53** arrive as decimal strings and have to be echoed back

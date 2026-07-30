@@ -86,7 +86,9 @@ export interface TrackSample {
 }
 
 export interface TrackData {
+  /* track.fetch names the first, graph.fetch the second. */
   track_type?: string;
+  graph_type?: string;
   kind: 'events' | 'samples';
   entries: Array<TrackEvent | TrackSample>;
 }

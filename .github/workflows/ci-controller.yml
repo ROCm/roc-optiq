@@ -31,7 +31,7 @@ on:
       ci_sanitizers:
         description: 'JSON array of sanitizers to run (when sanitizers are enabled)'
         type: string
-        default: '[ "address", "undefined", "thread" ]'
+        default: '[ "address", "undefined" ]'
       upload_to_github:
         description: 'Upload build artifacts to GitHub Artifacts?'
         type: boolean
@@ -149,5 +149,5 @@ jobs:
     secrets: inherit
     with:
       os_version: ${{ needs.setup.outputs.ubuntu-os-versions }}
-      sanitizers: ${{ github.event.inputs.ci_sanitizers || '[ "address", "undefined", "thread" ]' }}
+      sanitizers: ${{ github.event_name == 'schedule' && '[ "address", "undefined", "thread" ]' || github.event.inputs.ci_sanitizers || '[ "address", "undefined" ]' }}
       upload_to_github: ${{ github.event_name == 'schedule' || github.event.inputs.upload_to_github == 'true' }}

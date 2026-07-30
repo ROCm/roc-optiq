@@ -120,6 +120,7 @@ set(VIEW_FILES
     src/view/src/model/rocprofvis_event_model.cpp
     src/view/src/model/rocprofvis_analysis_model.cpp
     src/view/src/model/rocprofvis_trace_data_model.cpp
+    src/view/src/model/rocprofvis_data_model_json.cpp
     src/view/src/rocprofvis_raw_track_data.cpp
     src/view/src/rocprofvis_events.cpp
     src/view/src/rocprofvis_event_manager.cpp

@@ -49,9 +49,10 @@ TraceDataModel::BuildTrackName(uint64_t track_id) const
     {
         case TrackInfo::TrackType::Queue:
         {
-            // If the category is not "GPU Queue", use it as the name
-            // For example, "Memory Copy", "Memory Allocation", etc
-            if(track_info->category != "GPU Queue")
+            // "GPU Queue" and "KFD" lanes carry their distinguishing label in
+            // sub_name (queue name, or KFD label like "Page Migrate [CPU 0 -> GPU 0]").
+            // Other queue-shaped tracks (Memory copy/allocation) use the category.
+            if(track_info->category != "GPU Queue" && track_info->category != "KFD")
             {
                 name = track_info->category;
             }

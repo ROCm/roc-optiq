@@ -75,6 +75,10 @@ public:
     void                               SetAnalysisViewVisibility(bool visibility); 
     void                               SetSidebarViewVisibility(bool visibility);
     void                               SetHistogramVisibility(bool visibility);
+    /* False for compare projects: the summary aggregates one trace's kernels and
+     * hardware, which has no meaning across two sources.
+     */
+    bool                               SummarySupported() const;
 
 private:
     void HandleHotKeys();

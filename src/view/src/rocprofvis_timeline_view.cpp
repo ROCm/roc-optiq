@@ -1808,18 +1808,6 @@ TimelineView::IsRequestDataNeeded()
     return request_data;
 }
 
-bool
-TimelineView::HasVisibleTracks() const
-{
-    if(!m_tracks) return false;
-
-    for(const TrackItem* track : *m_tracks)
-    {
-        if(track && track->IsDisplayed()) return true;
-    }
-    return false;
-}
-
 void
 TimelineView::RenderEmptyTrackAreaMenu()
 {
@@ -1844,7 +1832,7 @@ TimelineView::RenderEmptyTrackAreaMenu()
     }
 
     // A blank timeline offers no affordance at all, so point at the right-click.
-    if(!HasVisibleTracks())
+    if(m_track_height_sum <= 0.0f)
     {
         ImGui::SetCursorPos(style.WindowPadding);
         ImGui::PushTextWrapPos(std::max(m_sidebar_size - style.WindowPadding.x, 0.0f));

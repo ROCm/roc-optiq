@@ -181,7 +181,6 @@ private:
 
     void RenderTrack(int track_index, bool request_data, ImGuiWindowFlags window_flags,
                      ImVec2 container_size);
-    bool HasVisibleTracks() const;
     // Right-click menu for restoring hidden tracks, from the empty space below
     // the last track.
     void RenderEmptyTrackAreaMenu();

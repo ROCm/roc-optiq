@@ -1,3 +1,55 @@
+## Optiq 1.0.0
+
+### Features and Improvements
+
+**Timeline and navigation**
+- Zoom-to-fit for measurements and time-range selections: right-click the timeline and choose "Zoom to Measurement" or "Zoom to Time Range Selection" to fit that span to the timeline width, with the markers landing on the left and right edges.
+
+**Tracks and topology**
+- Color-code tracks and the sidebar topology by node for easier multi-node navigation.
+- Refined inline device nodes in the sidebar topology tree.
+- "Reveal in topology" right-click action on a track.
+- Batch track settings: apply track option changes to multiple tracks at once.
+- Sidebar right-click context menu options.
+- More compact flame-chart events, with fixed resize/expand behavior.
+- Improved line-track Y-axis scale.
+
+**Annotations**
+- Annotation UX enhancements: lock, go-to-anchor, cross-highlight, text wrapping, and placement fixes.
+
+**Compute profiling**
+- Roofline single-click filtering for kernels, memory levels, and bandwidth peaks.
+- Roofline line-thickness preference.
+- New widget to display source code and correlate it to the corresponding ISA.
+- Skip loading workload Speed-of-Light for compute schema < 1.3.0; query builders now report and skip unsupported queries.
+- Fixed inconsistent kernel highlight color in the compute summary view.
+
+**Track details and tables**
+- Refactored track statistics into reusable components and show real values in Track Details.
+- Table API refactor: split into event-search and regular query paths.
+- RPD table and external-data (extdata) updates.
+
+**Rendering and performance**
+- Added a RenderScheduler to drive lazy-render wake-ups.
+- Adopted ImGui's built-in DPI handling, replacing the previous custom solution.
+- Refactored queries to align with the new schema and improve performance.
+
+### Experimental (not yet released)
+
+These features are in progress and available for preview only (build from src); behavior and UI are subject to change.
+
+- **Profiler launch**: launch the ROCm profiler locally or on a remote host, with remote file access/browsing and an SSH-based remote profiling workflow (redesigned remote profile panels and profiler launcher UI).
+- **Alien trace formats**: load Perfetto and Chrome (JSON) traces via the bundled Perfetto `trace_processor`, including file-extension detection for formats without magic numbers.
+
+### Fixes
+
+- Fixed welcome-page links firing through overlaying modal dialogs (links are now real ImGui buttons that respect hover ownership).
+- Fixed macOS Ctrl-Space modifier recovery.
+- Fixed editable counter-track value inputs.
+- Fixed data-flow arrow starting from level zero on `.rpd` traces.
+- Fixed the Systems multi-node summary window showing data only for the first node in the `.yaml`.
+- JobSystem fixes.
+
 ## Optiq Beta 0.5.0
 
 ### Features and Improvements

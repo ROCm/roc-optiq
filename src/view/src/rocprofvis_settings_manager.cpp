@@ -870,7 +870,9 @@ SettingsManager::DeserializeUnitSettings(jt::Json& json)
 const float
 SettingsManager::GetEventLevelHeight() const
 {
-    const float font_size = m_font_manager.GetFontSize(FontSize::kDefault);
+    const ImGuiStyle& style     = ImGui::GetStyle();
+    const float       base_size = m_font_manager.GetFontSize(FontSize::kDefault);
+    const float       font_size = base_size * style.FontScaleMain * style.FontScaleDpi;
     return std::ceil(font_size + EVENT_LEVEL_VERTICAL_MARGIN + EVENT_LEVEL_SPACING);
 }
 

@@ -93,6 +93,10 @@ protected:
     bool QueueTableRequest(const TableRequestParams& params);
     // Drops a request kept by QueueTableRequest, once it is out or obsolete.
     void ClearQueuedTableRequest();
+    /* Whether this table is waiting on data: either a request is out with the
+     * controller, or QueueTableRequest is holding one until the table frees up.
+     */
+    bool TableRequestInFlight() const;
     /* When false the body draws without its own frame, so a parent that already
      * draws one around the title and the table supplies the only border.
      */

@@ -1659,6 +1659,13 @@ DataProvider::FetchSingleTrackTable(const TableRequestParams& table_params)
             return false;
         }
 
+        // The pooled request id above misses the per-source ids of a compare
+        // project, so ask by table type as well before touching the system table.
+        if(IsTableRequestPending(table_params.m_table_type))
+        {
+            return false;
+        }
+
         // only allow load if a request for this table type is not pending
         if(it == m_requests.end())
         {

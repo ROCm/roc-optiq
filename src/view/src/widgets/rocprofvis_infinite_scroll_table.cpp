@@ -187,6 +187,12 @@ InfiniteScrollTable::ClearQueuedTableRequest()
     m_retry_params.reset();
 }
 
+bool
+InfiniteScrollTable::TableRequestInFlight() const
+{
+    return m_retry_fetch || m_data_provider.IsRequestPending(m_request_id);
+}
+
 void
 InfiniteScrollTable::SetPendingSort(uint64_t                           column_index,
                                     rocprofvis_controller_sort_order_t order)
@@ -288,7 +294,7 @@ InfiniteScrollTable::Render()
                                   ImGuiTableFlags_BordersV | ImGuiTableFlags_Resizable |
                                   ImGuiTableFlags_Reorderable | ImGuiTableFlags_Hideable;
 
-    if(!m_data_provider.IsRequestPending(m_request_id))
+    if(!TableRequestInFlight())
     {
         // If the request is not pending, we can allow sorting
         table_flags |= ImGuiTableFlags_Sortable;
@@ -368,7 +374,9 @@ InfiniteScrollTable::Render()
                     ImGui::TableSetupColumn(column_names[i].c_str(), col_flags);
                 }
 
-                if(m_pending_sort)
+                // Sorting is off while a request is in flight, and the specs of a
+                // table that cannot sort ignore this, so hold it until it can land.
+                if(m_pending_sort && (table_flags & ImGuiTableFlags_Sortable))
                 {
                     // Dirties the specs, so the block below refetches as if clicked.
                     ImGui::TableSetColumnSortDirection(
@@ -513,7 +521,9 @@ InfiniteScrollTable::Render()
                 // have all the data
                 if(!m_skip_data_fetch && table_data.size() < total_row_count - 1)
                 {
-                    if(!m_data_provider.IsRequestPending(m_request_id))
+                    // A held request would be replaced by a scroll fetch built from
+                    // the params of the response before it, so let it go out first.
+                    if(!TableRequestInFlight())
                     {
                         if(scroll_y < start_row_position +
                                           m_fetch_threshold_items * row_height &&

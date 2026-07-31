@@ -17,17 +17,16 @@
 **Annotations**
 - Annotation UX enhancements: lock, go-to-anchor, cross-highlight, text wrapping, and placement fixes.
 
+**Track details and tables**
+- Refactored track statistics into reusable components and show real values in Track Details.
+- Table API refactor: split into event-search and regular query paths.
+- RPD table and external-data (extdata) updates.
+
 **Compute profiling**
 - Roofline single-click filtering for kernels, memory levels, and bandwidth peaks.
 - Roofline line-thickness preference.
 - New widget to display source code and correlate it to the corresponding ISA.
 - Skip loading workload Speed-of-Light for compute schema < 1.3.0; query builders now report and skip unsupported queries.
-- Fixed inconsistent kernel highlight color in the compute summary view.
-
-**Track details and tables**
-- Refactored track statistics into reusable components and show real values in Track Details.
-- Table API refactor: split into event-search and regular query paths.
-- RPD table and external-data (extdata) updates.
 
 **Rendering and performance**
 - Added a RenderScheduler to drive lazy-render wake-ups.
@@ -43,6 +42,7 @@ These features are in progress and available for preview only (build from src); 
 
 ### Fixes
 
+- Fixed inconsistent kernel highlight color in the compute summary view.
 - Fixed welcome-page links firing through overlaying modal dialogs (links are now real ImGui buttons that respect hover ownership).
 - Fixed macOS Ctrl-Space modifier recovery.
 - Fixed editable counter-track value inputs.

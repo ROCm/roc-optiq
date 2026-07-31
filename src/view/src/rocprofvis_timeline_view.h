@@ -181,6 +181,9 @@ private:
 
     void RenderTrack(int track_index, bool request_data, ImGuiWindowFlags window_flags,
                      ImVec2 container_size);
+    // Right-click menu for restoring hidden tracks, from the empty space below
+    // the last track.
+    void RenderEmptyTrackAreaMenu();
     bool IsRequestDataNeeded();
     void RequestDataIfEmpty(TrackItem* track_item, bool request_data);
     void RenderNormalTrack(TrackItem* track_item, int track_index, ImGuiWindowFlags window_flags,
@@ -236,6 +239,7 @@ private:
     float                               m_last_zoom;
     std::unordered_map<uint64_t, float> m_track_position_y;  // Track index to height
     float                               m_track_height_sum;
+    size_t                              m_hidden_track_count;
     std::shared_ptr<TimelineSelection>  m_timeline_selection;
     std::shared_ptr<MeasurementController> m_measurement;
     std::shared_ptr<AnnotationsManager> m_annotations;

@@ -215,7 +215,7 @@ TrackItem::GetTrackHeight() const
 }
 
 const std::string&
-TrackItem::GetName()
+TrackItem::GetName() const
 {
     return m_name;
 }
@@ -556,6 +556,16 @@ TrackItem::RenderMetaArea()
         {
             m_timeline_track_options.RenderContextMenu();
             ImGui::EndMenu();
+        }
+        // Restore hidden tracks without needing the topology side bar. The entry
+        // is only shown when something is actually hidden.
+        if(m_timeline_track_options.HasHiddenTracks())
+        {
+            if(IconBeginMenu(ICON_EYE, "Show Hidden Tracks"))
+            {
+                m_timeline_track_options.RenderHiddenTracksSubmenu();
+                ImGui::EndMenu();
+            }
         }
         ImGui::EndPopup();
     }

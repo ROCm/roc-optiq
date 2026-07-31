@@ -487,7 +487,7 @@ int ProfileDatabase::CallbackAddEssentialInfo(void* data, int argc, sqlite3_stmt
         record.category = "Track";
         record.name = "levelForTrack";
         record.type = kRPVDataTypeInt;
-        column_data = std::to_string(db->Sqlite3ColumnInt64(func, stmt, azColName, argc - 3));
+        column_data = std::to_string(db->Sqlite3ColumnInt64(func, stmt, azColName, argc - 2));
         record.data = column_data.c_str();
         record.category_enum = kRocProfVisEventEssentialDataLevel;
         record.db_instance = callback_params->db_instance->GuidIndex();

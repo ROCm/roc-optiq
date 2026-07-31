@@ -1276,6 +1276,89 @@ void RegisterAppTests(ImGuiTestEngine* e)
         IM_CHECK(inactive_after);
     };
 
+    // AIPROFVIS-333: dragging the Description-column splitter must
+    // resize the sidebar without panning the timeline.
+    t = IM_REGISTER_TEST(e, "app", "sys_splitter_resize_no_pan");
+    t->TestFunc = [](ImGuiTestContext* ctx)
+    {
+        TraceView* tv = GetTraceViewOrSkip(ctx);
+        if (!tv) return;
+        TimelineView* tlv = TraceViewTestPeer{*tv}.TimelineViewPtr();
+        IM_CHECK(tlv != nullptr);
+        if (tlv == nullptr) return;
+
+        ctx->SetRef("Main Window");
+        ctx->Yield(3);
+
+        auto tpt = tlv->GetTransform();
+        IM_CHECK(tpt != nullptr);
+        if (tpt == nullptr) return;
+        const double range = tpt->GetRangeX();
+        IM_CHECK(range > 0.0);
+        if (range <= 0.0) return;
+
+        // Restore before the asserts. IM_CHECK returns on failure, so a trailing
+        // restore would leak state into later tests on abort.
+        const float  orig_zoom    = tpt->GetZoom();
+        const double orig_offset  = tpt->GetViewTimeOffsetNs();
+        const float  orig_sidebar = TimelineViewTestPeer{*tlv}.SidebarSize();
+
+        auto restore = [&]()
+        {
+            tpt->SetZoom(orig_zoom);
+            tpt->SetViewTimeOffsetNs(orig_offset);
+            TimelineViewTestPeer{*tlv}.SetSidebarSize(orig_sidebar);
+        };
+
+        // At zoom 1 the view spans the full range and any pan offset clamps to 0,
+        // so the bug is invisible; zoom in to create pan headroom.
+        //
+        // SetZoom applies only the min bound; the max clamp (range/graph_size_x)
+        // runs at render in ComputePixelMapping. So read the effective zoom back
+        // after a Yield, center the offset on that, Yield again, then read the
+        // achieved offset: if the clamp left no headroom, skip instead of false-green.
+        tpt->SetZoom(4.0f);
+        ctx->Yield(3);
+        const float  zoom    = tpt->GetZoom();
+        const double max_off = range - range / static_cast<double>(zoom);
+        tpt->SetViewTimeOffsetNs(max_off * 0.5);
+        ctx->Yield(3);
+        const double achieved_off = tpt->GetViewTimeOffsetNs();
+        if (achieved_off <= range * 1e-6)
+        {
+            restore();
+            ctx->LogWarning("SKIP: zoom clamped, no pan headroom to detect the bug");
+            return;
+        }
+
+        const char* splitter_ref = "**/##MovePositionLineVert";
+        if (!ctx->ItemExists(splitter_ref))
+        {
+            restore();
+            ctx->LogWarning("SKIP: description-column splitter not present");
+            return;
+        }
+
+        const float  sidebar_before = TimelineViewTestPeer{*tlv}.SidebarSize();
+        const double v_min_before   = tlv->GetViewCoords().v_min_x;
+
+        ctx->ItemDragWithDelta(splitter_ref, ImVec2(40.0f, 0.0f));
+        ctx->Yield(3);
+
+        const float  sidebar_after = TimelineViewTestPeer{*tlv}.SidebarSize();
+        const double v_min_after   = tlv->GetViewCoords().v_min_x;
+        const double eps           = range * 1e-4;
+
+        restore();
+        ctx->Yield(2);
+
+        // Guard: the drag must have resized the sidebar, else the pan check is vacuous.
+        IM_CHECK(sidebar_after > sidebar_before);
+
+        // The defect: resizing shifts the timeline min-x; correct behavior holds it.
+        IM_CHECK(std::fabs(v_min_after - v_min_before) <= eps);
+    };
+
     t = IM_REGISTER_TEST(e, "app", "sys_timeline_track_expand_collapse");
     t->TestFunc = [](ImGuiTestContext* ctx)
     {

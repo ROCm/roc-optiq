@@ -565,7 +565,7 @@ rocprofvis_dm_result_t RocpdDatabase::BuildTableStringIdFilter(rocprofvis_dm_num
         }
         if(!string.empty())
         {
-            filter[kRocProfVisDmOperationLaunch][0] = std::string(Builder::CATEGORY_REFERENCE_RPD) + " IN (" + string + ") OR " + Builder::EVENT_NAME_REFERENCE_RPD + " IN(" + string;
+            filter[kRocProfVisDmOperationLaunch][0] =  std::string(Builder::EVENT_NAME_REFERENCE_RPD) + " IN(" + string;
             filter[kRocProfVisDmOperationDispatch][0] = std::string(Builder::CATEGORY_REFERENCE_RPD) + " IN (" + string + ") OR " + Builder::EVENT_NAME_REFERENCE_RPD + " IN(" + string;
         }
     }   
@@ -582,8 +582,8 @@ rocprofvis_dm_string_t RocpdDatabase::GetEventOperationQuery(const rocprofvis_dm
                 { { Builder::QParamOperation(kRocProfVisDmOperationLaunch),
                 Builder::QParam("id", Builder::ID_PUBLIC_NAME),
                 Builder::QParam("id", Builder::DB_ID_PUBLIC_NAME),
-                Builder::QParam("apiName_id", Builder::CATEGORY_REFERENCE_RPD),
-                Builder::QParam("args_id", Builder::EVENT_NAME_REFERENCE_RPD), 
+                Builder::QParam("apiName_id", Builder::EVENT_NAME_REFERENCE_RPD),
+                Builder::QParam("args_id", Builder::EVENT_ARGS_RPD), 
                 Builder::QParam("start", Builder::START_SERVICE_NAME),
                 Builder::QParam("end", Builder::END_SERVICE_NAME),
                 Builder::QParam("(end-start)", Builder::DURATION_PUBLIC_NAME),

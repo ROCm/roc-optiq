@@ -198,7 +198,8 @@ namespace DataModel
             return db->CachedTables(node_id)->GetTableCellByIndex("Node", static_cast<uint32_t>(value), "id");
         } else
         if (column_index == Builder::SCHEMA_INDEX_CATEGORY || column_index == Builder::SCHEMA_INDEX_CATEGORY_RPD || 
-            column_index == Builder::SCHEMA_INDEX_EVENT_NAME || column_index == Builder::SCHEMA_INDEX_EVENT_NAME_RPD)
+            column_index == Builder::SCHEMA_INDEX_EVENT_NAME || column_index == Builder::SCHEMA_INDEX_EVENT_NAME_RPD || 
+            column_index == Builder::SCHEMA_INDEX_EVENT_ARGS_RPD)
         {
             if (kRocProfVisDmResultSuccess == db->RemapStringId(value, rocprofvis_db_string_type_t::kRPVStringTypeNameOrCategory, node_id, string_index))
             {

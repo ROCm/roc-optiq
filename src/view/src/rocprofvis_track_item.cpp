@@ -192,7 +192,7 @@ TrackItem::GetMetaAreaMinHeight() const
 
     if(pill_height > 0.0f)
     {
-        const float title_row_height = fonts.GetFontSize(FontSize::kDefault) +
+        const float title_row_height = ImGui::GetTextLineHeight() +
                                        2.0f * META_FRAME_PADDING_Y + META_ITEM_SPACING_Y;
         min_height = title_row_height + pill_height + chrome;
     }

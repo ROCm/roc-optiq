@@ -26,6 +26,7 @@ option(ROCPROFVIS_ENABLE_INTERNAL_BANNER "Show diagonal internal build banner" O
 option(USE_NATIVE_FILE_DIALOG "Use the OS native file dialog instead of ImGui file dialog" ON)
 option(GLFW_LINK_STATIC "Link GLFW statically instead of dynamically" ON)
 option(BUILD_TESTING "Build the testing tree" ON)
+option(ROCPROFVIS_ENABLE_UI_TESTS "Build view-layer Dear ImGui UI tests" OFF)
 
 # TEMPORARY: gate the in-development profiler-launch and remote/SSH features
 # until they ship. Both default OFF so release builds exclude the UI, the
@@ -69,6 +70,11 @@ endif()
 
 # Add third-party libraries, core, and model BEFORE controller
 add_subdirectory(thirdparty)
+add_subdirectory(thirdparty/perfetto/trace_processor/build)
+add_subdirectory(thirdparty/perfetto/trace_processor)
+if(PERFETTO_AVAILABLE)
+    add_compile_definitions(ROCPROFVIS_PERFETTO_ENABLED)
+endif()
 add_subdirectory(src/core)
 add_subdirectory(src/model)
 add_subdirectory(src/controller)
@@ -241,25 +247,21 @@ if(WIN32)
         )
 endif(WIN32)
 
+# Shared app sources (no main): the prod exe adds main.cpp, the test exe adds test_main.cpp.
+set(APP_FILES
+    src/app/src/rocprofvis_imgui_backend.cpp
+    src/app/src/rocprofvis_imgui_vulkan.cpp
+    src/app/src/rocprofvis_imgui_opengl.cpp
+    src/app/src/glfw_util.cpp
+    src/app/src/rocprofvis_cli_parser.cpp)
 if(APPLE)
-    add_executable(${TARGET_NAME} MACOSX_BUNDLE
-        src/app/src/rocprofvis_imgui_backend.cpp
-        src/app/src/rocprofvis_imgui_vulkan.cpp
-        src/app/src/rocprofvis_imgui_opengl.cpp
-        src/app/src/main.cpp
-        src/app/src/glfw_util.cpp
-        src/app/src/rocprofvis_cli_parser.cpp
-        src/app/src/rocprofvis_platform_helpers_macos.mm
-        ${VIEW_FILES})
+    list(APPEND APP_FILES src/app/src/rocprofvis_platform_helpers_macos.mm)
+endif()
+
+if(APPLE)
+    add_executable(${TARGET_NAME} MACOSX_BUNDLE ${APP_FILES} src/app/src/main.cpp ${VIEW_FILES})
 else()
-    add_executable(${TARGET_NAME}
-        src/app/src/rocprofvis_imgui_backend.cpp
-        src/app/src/rocprofvis_imgui_vulkan.cpp
-        src/app/src/rocprofvis_imgui_opengl.cpp
-        src/app/src/main.cpp
-        src/app/src/glfw_util.cpp
-        src/app/src/rocprofvis_cli_parser.cpp
-        ${VIEW_FILES})
+    add_executable(${TARGET_NAME} ${APP_FILES} src/app/src/main.cpp ${VIEW_FILES})
 endif()
 
 add_dependencies(${TARGET_NAME} generate_icon_header)
@@ -319,6 +321,83 @@ target_link_libraries(${TARGET_NAME} PRIVATE ${TARGET_NAME}-core)
 target_link_libraries(${TARGET_NAME} PRIVATE spdlog)
 target_link_libraries(${TARGET_NAME} PRIVATE sqlite3)
 target_link_libraries(${TARGET_NAME} PRIVATE json)
+
+if(BUILD_TESTING AND ROCPROFVIS_ENABLE_UI_TESTS)
+    set(IMGUI_TEST_ENGINE_DIR
+        ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/imgui_test_engine/imgui_test_engine)
+    add_library(imgui_test_engine STATIC
+        ${IMGUI_TEST_ENGINE_DIR}/imgui_capture_tool.cpp
+        ${IMGUI_TEST_ENGINE_DIR}/imgui_te_context.cpp
+        ${IMGUI_TEST_ENGINE_DIR}/imgui_te_coroutine.cpp
+        ${IMGUI_TEST_ENGINE_DIR}/imgui_te_engine.cpp
+        ${IMGUI_TEST_ENGINE_DIR}/imgui_te_exporters.cpp
+        ${IMGUI_TEST_ENGINE_DIR}/imgui_te_perftool.cpp
+        ${IMGUI_TEST_ENGINE_DIR}/imgui_te_ui.cpp
+        ${IMGUI_TEST_ENGINE_DIR}/imgui_te_utils.cpp
+    )
+    target_compile_definitions(imgui_test_engine PUBLIC
+        IMGUI_ENABLE_TEST_ENGINE
+        IMGUI_TEST_ENGINE_ENABLE_COROUTINE_STDTHREAD_IMPL=1
+    )
+    target_include_directories(imgui_test_engine PUBLIC
+        ${IMGUI_TEST_ENGINE_DIR}
+        ${IMGUI_TEST_ENGINE_DIR}/thirdparty/Str
+    )
+    # Engine links the WITH-define imgui variant so its hook bodies match the callsites.
+    target_link_libraries(imgui_test_engine PUBLIC imgui_te)
+
+    # Separate test executable: same app+view sources, compiled WITH the define, linked
+    # against imgui_te (not the clean imgui). Uses test_main.cpp (the engine-wired copy of
+    # main.cpp) so production main.cpp stays pristine and free of any test references.
+    set(TEST_TARGET ${TARGET_NAME}-tests)
+    add_executable(${TEST_TARGET} ${APP_FILES} src/app/test/test_main.cpp ${VIEW_FILES} src/app/test/app_tests.cpp)
+    add_dependencies(${TEST_TARGET} generate_icon_header)
+    target_compile_definitions(${TEST_TARGET} PRIVATE IMGUI_ENABLE_TEST_ENGINE)
+    target_include_directories(${TEST_TARGET} PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/app/inc
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/app/src
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/app/test
+        ${CMAKE_CURRENT_SOURCE_DIR}/resources
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/controller/inc
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/view/inc
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/view/src
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/view/src/model
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/view/src/icons
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/view/test
+        ${Vulkan_INCLUDE_DIRS}
+        ${Vulkan_INCLUDE_DIR}
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/model/inc
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/core/inc
+    )
+    target_link_libraries(${TEST_TARGET} PRIVATE
+        imgui_te
+        imgui_test_engine
+        implot
+        glfw
+        ${TARGET_NAME}-controller
+        datamodel
+        ${TARGET_NAME}-core
+        spdlog
+        sqlite3
+        json
+        ImGuiFileDialog
+        "${Vulkan_LIBRARIES}"
+        OpenGL::GL
+    )
+    if(USE_NATIVE_FILE_DIALOG)
+        target_link_libraries(${TEST_TARGET} PRIVATE nfd)
+        target_compile_definitions(${TEST_TARGET} PRIVATE ROCPROFVIS_HAVE_NATIVE_FILE_DIALOG)
+    endif()
+    if(APPLE)
+        target_link_libraries(${TEST_TARGET} PRIVATE "-framework AppKit")
+    endif()
+    add_test(NAME roc-optiq-ui-tests-trace COMMAND roc-optiq-tests --run-tests -f "${CMAKE_SOURCE_DIR}/sample/rocpd-transpose.db")
+    set_tests_properties(roc-optiq-ui-tests-trace PROPERTIES RUN_SERIAL ON)
+    set_tests_properties(roc-optiq-ui-tests-trace PROPERTIES WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}")
+    add_test(NAME roc-optiq-ui-tests-compute COMMAND roc-optiq-tests --run-tests -f "${CMAKE_SOURCE_DIR}/sample/rocprof_compute_23ed6f36.db")
+    set_tests_properties(roc-optiq-ui-tests-compute PROPERTIES RUN_SERIAL ON)
+    set_tests_properties(roc-optiq-ui-tests-compute PROPERTIES WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}")
+endif()
 
 # TEMPORARY (remote/SSH): only link the SSH/crypto stack into the executable
 # when remote is built. Remove this guard when the remote feature graduates.
@@ -828,4 +907,8 @@ if(WIN32)
                 "so the install prefix is known, or place the DLLs on PATH so roc-optiq can run.")
         endif()
     endif()
+endif()
+
+if(PERFETTO_AVAILABLE)
+	perfetto_copy_dll_to(${TARGET_NAME})
 endif()

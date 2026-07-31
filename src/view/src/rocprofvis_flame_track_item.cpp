@@ -14,8 +14,12 @@
 #include "rocprofvis_utils.h"
 #include "spdlog/spdlog.h"
 #include "widgets/rocprofvis_gui_helpers.h"
+#ifdef IMGUI_ENABLE_TEST_ENGINE
+#include "imgui_internal.h"
+#endif
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
 #include <limits>
 #include <sstream>
 #include <string>
@@ -559,6 +563,21 @@ FlameTrackItem::DrawBox(ImVec2 start_position, ChartItem& chart_item, float dura
     ImVec2 rectMax = ImVec2(start_position.x + duration,
                             start_position.y + box_height + cursor_position.y);
 
+#ifdef IMGUI_ENABLE_TEST_ENGINE
+    // Bars are raw draw_list rects with no ImGui ID, so the Test Engine can't
+    // find them by ref. Register each bar's bounding box with the engine under a
+    // stable per-event ID; tests then locate bars via GatherItems/ItemInfo. This
+    // compiles out of production and adds no widget.
+    {
+        ImGuiContext& g           = *GImGui;
+        ImGuiWindow*  test_window = ImGui::GetCurrentWindow();
+        ImGuiID       bar_id      = test_window->GetID(
+            reinterpret_cast<const void*>(
+                static_cast<uintptr_t>(chart_item.event.m_id.uuid)));
+        IMGUI_TEST_ENGINE_ITEM_ADD(bar_id, ImRect(rectMin, rectMax), nullptr);
+    }
+#endif
+
     const std::vector<ImU32>& color_wheel =
         use_highlight_color ? m_settings.GetHighlightedEventColorWheel()
                             : m_settings.GetColorWheel();
@@ -924,6 +943,10 @@ FlameTrackItem::RenderChart(float graph_width)
     ImGui::BeginChild("FV", ImVec2(graph_width, m_track_content_height), false,
                       ImGuiWindowFlags_NoMouseInputs);
     ImDrawList* draw_list = ImGui::GetWindowDrawList();
+
+#ifdef IMGUI_ENABLE_TEST_ENGINE
+    m_test_flame_window_id = ImGui::GetCurrentWindow()->ID;
+#endif
 
     m_has_drawn_tool_tip = false;
 

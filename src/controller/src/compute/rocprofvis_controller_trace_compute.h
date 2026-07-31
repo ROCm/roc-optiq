@@ -75,15 +75,23 @@ private:
 
     rocprofvis_result_t LoadRocpd(Future* future);
 
-    void FetchCodeObjectsAndIsaLines(rocprofvis_dm_database_t db, Future* future,
-                                     uint64_t kernel_id, PcSampling& output);
-    void FetchIsaLineDepsAndStalls(rocprofvis_dm_database_t db, Future* future,
-                                   PcSampling& output);
-    void FetchStallReasonCounts(rocprofvis_dm_database_t db, Future* future,
-                                PcSampling& output);
-    void FetchSourceFileAndLines(rocprofvis_dm_database_t db, Future* future,
-                                 uint64_t kernel_id, uint64_t source_file_id, PcSampling& output);
-    
+    rocprofvis_dm_result_t FetchCodeObjectsAndIsaLines(rocprofvis_dm_database_t db,
+                                                       Future* future,
+                                                       uint64_t kernel_id,
+                                                       PcSampling& output);
+    rocprofvis_dm_result_t FetchIsaLineDepsAndStalls(rocprofvis_dm_database_t db,
+                                                     Future* future,
+                                                     uint64_t kernel_id,
+                                                     PcSampling& output);
+    rocprofvis_dm_result_t FetchSourceFileLines(rocprofvis_dm_database_t db,
+                                                Future* future,
+                                                uint64_t source_file_id,
+                                                PcSampling& output);
+    void StorePcSamplingRows(PcSampling& output,
+                             rocprofvis_property_t count_property,
+                             const QueryDataStore& data_store);
+    static bool ParseUInt64(const char* value, uint64_t& result);
+
     rocprofvis_result_t    SetObjectProperty(rocprofvis_handle_t*  object,
                                              rocprofvis_property_t property, uint64_t index,
                                              const char*                            value,
@@ -98,8 +106,6 @@ private:
                                         QueryCallback       callback);
 
     std::vector<Workload*> m_workloads;
-    QueryArgumentStore m_query_arguments;
-    QueryDataStore m_query_output;
     std::atomic<uint64_t> m_async_fetch_counter;
 
     ComputePivotTable* m_kernel_metric_table;

@@ -32,7 +32,8 @@ list(APPEND rocprofvis_controller_source_files
     src/system/rocprofvis_controller_timeline.cpp
     src/system/rocprofvis_controller_trace_system.cpp
     src/system/rocprofvis_controller_track.cpp
-    src/system/rocprofvis_controller_table_system.cpp	
+    src/system/rocprofvis_controller_table_system.cpp
+    src/system/rocprofvis_controller_table_system_search.cpp
     src/system/rocprofvis_controller_flow_control.cpp
     src/system/rocprofvis_controller_call_stack.cpp
     src/system/rocprofvis_controller_ext_data.cpp
@@ -133,6 +134,7 @@ if(BUILD_TESTING)
     set_tests_properties(${SYSTEM_TEST_NAME}-DB PROPERTIES RUN_SERIAL ON)
     set_tests_properties(${SYSTEM_TEST_NAME}-DB PROPERTIES WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}")
 	add_executable(${COMPUTE_TEST_NAME} tests/rocprofvis_controller_compute_tests.cpp)
+	target_compile_definitions(${COMPUTE_TEST_NAME} PRIVATE ROCPROFVIS_TEST_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
 	target_link_libraries(${COMPUTE_TEST_NAME} PRIVATE ${PROJECT_NAME})
     target_link_libraries(${COMPUTE_TEST_NAME} PRIVATE Catch2::Catch2WithMain)
     add_test(NAME ${COMPUTE_TEST_NAME} COMMAND ${COMPUTE_TEST_NAME} --input_file "${CMAKE_SOURCE_DIR}/sample/rocprof_compute_23ed6f36.db")

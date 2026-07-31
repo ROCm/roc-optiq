@@ -167,12 +167,6 @@ public:
         uint64_t                           sort_column_index = 0,
         rocprofvis_controller_sort_order_t sort_order = kRPVControllerSortOrderAscending);
 
-    /*
-     * Fetches a table from the controller for a single track.
-     * @param table_params: The parameters for the table request
-     */
-    bool FetchSingleTrackTable(const TableRequestParams& table_params);
-
     bool FetchMultiTrackSampleTable(
         const std::vector<uint64_t>& track_ids, double start_ts, double end_ts,
         char const* filter, uint64_t start_row = -1, uint64_t req_row_count = -1,
@@ -257,7 +251,7 @@ public:
     void SetFetchMetricsCallback(
         const std::function<void(const std::string&, uint64_t, bool)>& callback);
     void SetFetchPcSamplingCallback(
-        const std::function<void(const std::string&, uint32_t, uint32_t, bool)>& callback);
+        const std::function<void(const std::string&, uint32_t, uint32_t, uint32_t, bool)>& callback);
 
 private:
     struct ProcessChildCount
@@ -272,8 +266,11 @@ private:
         size_t counter_count;
     };
 
+    bool FetchTrackTable(const TrackTableRequestParams& table_params);
+    bool FetchEventSearch(const EventSearchRequestParams& table_params);
     /* Helper called by FetchEvent()*/
     bool FetchEventExtData(uint64_t event_id);
+
     void HandleLoadSystemTopology();
     bool ParseNodeData(rocprofvis_handle_t* node_handle, NodeInfo& node_info);
     bool ParseDeviceData(rocprofvis_handle_t* processor_handle, DeviceInfo& device_info,
@@ -373,8 +370,6 @@ private:
                                rocprofvis_handle_t* workload_handle);
     inline void LoadKernels(WorkloadInfo&        workload,
                                rocprofvis_handle_t* workload_handle);
-    inline void LoadPcSamplingData(KernelInfo&          kernel,
-                                   rocprofvis_handle_t* kernel_handle);
     inline void LoadPcSamplingCodeObjects(KernelInfo&          kernel,
                                           rocprofvis_handle_t* pc_handle);
     inline void LoadPcSamplingSourceFiles(KernelInfo&          kernel,
@@ -387,7 +382,7 @@ private:
                                          uint64_t             index);
     inline void LoadPcSamplingJunctions(KernelInfo&          kernel,
                                         rocprofvis_handle_t* pc_handle);
-    inline void LoadPcSamplingStallRecords(KernelInfo&          kernel,
+    inline void LoadPcSamplingStates(KernelInfo&          kernel,
                                            rocprofvis_handle_t* pc_handle);
     inline void LoadPcSamplingStallReasonCounts(KernelInfo&          kernel,
                                                 rocprofvis_handle_t* pc_handle);
@@ -401,8 +396,8 @@ private:
     using bandwidth_ridge_map = std::unordered_map<
         rocprofvis_controller_roofline_ceiling_bandwidth_type_t,
         std::unordered_map<rocprofvis_controller_roofline_ceiling_compute_type_t, Point>>;
-        
-    
+
+
     inline void LoadRoofLineCeilingsRidge(WorkloadInfo&        workload,
                                           rocprofvis_handle_t* roofline_handle,
                                           compute_ridge_map&   compute_ridge,
@@ -427,10 +422,13 @@ private:
 
     ComputeDataModel m_compute_model;
 
-    std::unordered_map<uint32_t, uint32_t> m_pc_sampling_generation;
+    // Code View permits one PC sampling request per trace. Completed data is
+    // accepted only when it belongs to the latest submitted selection.
+    uint32_t m_pc_sampling_generation = 0;
 
     std::function<void(const std::string&, uint64_t, bool)> m_metrics_fetch_callback;
-    std::function<void(const std::string&, uint32_t, uint32_t, bool)> m_pc_sampling_fetch_callback;
+    std::function<void(const std::string&, uint32_t, uint32_t, uint32_t, bool)>
+        m_pc_sampling_fetch_callback;
 };
 
 }  // namespace View

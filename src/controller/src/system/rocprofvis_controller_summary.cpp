@@ -4,7 +4,7 @@
 #include "rocprofvis_controller_summary.h"
 #include "rocprofvis_controller_future.h"
 #include "rocprofvis_controller_topology.h"
-#include "rocprofvis_controller_table_system.h"
+#include "rocprofvis_controller_table_system_search.h"
 #include "rocprofvis_controller_trace.h"
 #include "rocprofvis_controller_track.h"
 #include "rocprofvis_controller_arguments.h"
@@ -22,7 +22,7 @@ Summary::Summary(Trace* ctx)
 , m_end_ts(-1.0)
 , m_kernel_instance_table(nullptr)
 {
-    m_kernel_instance_table = new SystemTable(0);
+    m_kernel_instance_table = new EventSearchTable(0);
 }
 
 Summary::~Summary() 
@@ -383,9 +383,13 @@ rocprofvis_result_t Summary::FetchCounterAverage(rocprofvis_dm_trace_t dm_handle
                             rocprofvis_dm_result_t dm_result = kRocProfVisDmResultUnknownError;
                             rocprofvis_dm_table_id_t table_id = 0;
                             char* query = nullptr;
-                            dm_result = rocprofvis_db_build_table_query(db, kRPVDMTableUseCaseSampleTrackTable, static_cast<rocprofvis_dm_timestamp_t>(m_start_ts), static_cast<rocprofvis_dm_timestamp_t>(m_end_ts), 1, (rocprofvis_db_track_selection_t)&track_id, nullptr, nullptr, 
+                            dm_result = rocprofvis_db_build_table_query(db, kRPVDMTableUseCaseSampleTrackTable, 
+                                                                        static_cast<rocprofvis_dm_timestamp_t>(m_start_ts), static_cast<rocprofvis_dm_timestamp_t>(m_end_ts), 
+                                                                        1, (rocprofvis_db_track_selection_t)&track_id, 
+                                                                        nullptr, nullptr, 
                                                                         "counter, AVG(value) AS avg_value, MIN(value) AS min_value, MAX(value) AS max_value", "counter", 
-                                                                        nullptr, kRPVDMSortOrderAsc, 0, nullptr,  0, 0, false, &query);
+                                                                        nullptr, kRPVDMSortOrderAsc, 
+                                                                        0, 0, false, &query);
                             if(dm_result == kRocProfVisDmResultSuccess)
                             {
                                 dm_result = rocprofvis_db_execute_query_async(db, query, "Fetch counter summary", object2wait, &table_id);
@@ -525,12 +529,15 @@ rocprofvis_result_t Summary::FetchTopKernels(rocprofvis_dm_trace_t dm_handle, No
                 }
             }
             rocprofvis_dm_table_id_t table_id = 0;
-            rocprofvis_dm_charptr_t where = where_str.empty() ? nullptr : where_str.c_str();
             std::string sort_column = "total_duration";
             char* query = nullptr;
-            dm_result = rocprofvis_db_build_table_query(db, kRPVDMTableUseCaseEventTrackTable, static_cast<rocprofvis_dm_timestamp_t>(m_start_ts), static_cast<rocprofvis_dm_timestamp_t>(m_end_ts), 1, (rocprofvis_db_track_selection_t)op, where, nullptr, 
-                                                        "name, COUNT(*) AS num_invocations, AVG(duration) AS avg_duration, MIN(duration) AS min_duration, MAX(duration) AS max_duration, SUM(duration) AS total_duration", 
-                                                        "name", sort_column.c_str(), kRPVDMSortOrderDesc, 0, nullptr, 0, 0, false, &query);
+            dm_result = rocprofvis_db_build_table_query(db, kRPVDMTableUseCaseEventTrackTable, 
+                                                        static_cast<rocprofvis_dm_timestamp_t>(m_start_ts), static_cast<rocprofvis_dm_timestamp_t>(m_end_ts), 
+                                                        1, (rocprofvis_db_track_selection_t)op, 
+                                                        where_str.empty() ? nullptr : where_str.c_str(), nullptr, 
+                                                        "name, COUNT(*) AS num_invocations, AVG(duration) AS avg_duration, MIN(duration) AS min_duration, MAX(duration) AS max_duration, SUM(duration) AS total_duration", "name", 
+                                                        sort_column.c_str(), kRPVDMSortOrderDesc,
+                                                        0, 0, false, &query);
             if(dm_result == kRocProfVisDmResultSuccess)
             {
                 dm_result = rocprofvis_db_execute_query_async(db, query, "Fetch kernel summary", object2wait, &table_id);

@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: MIT
 
 #include "rocprofvis_dm_topology.h"
+#include "rocprofvis_dm_topology.h"
+#include <sstream>
 
 namespace RocProfVis
 {
@@ -82,9 +84,11 @@ rocprofvis_dm_result_t   TopologyNode::SetBasicProperty(const char* name, rocpro
 			{
 				if (value)
 				{
-					if (strcmp(value, "0") == 0)
+					std::istringstream iss(value);
+					uint64_t d;
+					if (iss >> std::noskipws >> d && iss.eof())
 					{
-						m_properties[it->second] = (uint64_t)0;
+						m_properties[it->second] = d;
 					}
 					else
 					{
@@ -265,15 +269,24 @@ rocprofvis_dm_result_t TopologyNode::GetPropertyAsDouble(rocprofvis_dm_property_
 			if (std::holds_alternative<double>(it->second)) {
 				*value = std::get<double>(it->second);
 				return kRocProfVisDmResultSuccess;
+			} 
+			else
+			{
+				*value = 0;
+				return kRocProfVisDmResultSuccess;
 			}
 			ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN(ERROR_INVALID_PROPERTY_GETTER, kRocProfVisDmResultInvalidProperty);
 		}
 		case kRPVControllerTopologyNodePropertyValueKeyed:
 		{
 			auto it = m_properties.find(static_cast<unsigned int>(index));
-			ROCPROFVIS_ASSERT_MSG_RETURN(it!=m_properties.end(), ERROR_UNSUPPORTED_PROPERTY, kRocProfVisDmResultInvalidProperty);
-			if (std::holds_alternative<double>(it->second)) {
+			if (it!=m_properties.end() && std::holds_alternative<double>(it->second)) {
 				*value = std::get<double>(it->second);
+				return kRocProfVisDmResultSuccess;
+			}
+			else
+			{
+				*value = 0;
 				return kRocProfVisDmResultSuccess;
 			}
 			ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN(ERROR_INVALID_PROPERTY_GETTER, kRocProfVisDmResultInvalidProperty);
@@ -305,14 +318,23 @@ rocprofvis_dm_result_t TopologyNode::GetPropertyAsCharPtr(rocprofvis_dm_property
 				*value = (char*)std::get<std::string>(it->second).c_str();
 				return kRocProfVisDmResultSuccess;
 			}
+			else
+			{
+				*value = "";
+				return kRocProfVisDmResultSuccess;
+			}
 			ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN(ERROR_INVALID_PROPERTY_GETTER, kRocProfVisDmResultInvalidProperty);
 		}
 		case kRPVControllerTopologyNodePropertyValueKeyed:
 		{
 			auto it = m_properties.find(static_cast<unsigned int>(index));
-			ROCPROFVIS_ASSERT_MSG_RETURN(it!=m_properties.end(), ERROR_UNSUPPORTED_PROPERTY, kRocProfVisDmResultInvalidProperty);
-			if (std::holds_alternative<std::string>(it->second)) {
+			if (it!=m_properties.end() && std::holds_alternative<std::string>(it->second)) {
 				*value = (char*)std::get<std::string>(it->second).c_str();
+				return kRocProfVisDmResultSuccess;
+			}
+			else
+			{
+				*value = "";
 				return kRocProfVisDmResultSuccess;
 			}
 			ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN(ERROR_INVALID_PROPERTY_GETTER, kRocProfVisDmResultInvalidProperty);
@@ -421,13 +443,27 @@ rocprofvis_dm_result_t TopologyNodeProcess::AddNode(rocprofvis_dm_track_identifi
 		if (track_identifiers->category == kRocProfVisDmStreamTrack)
 		{
 			m_children.push_back(std::make_unique<TopologyNodeStream>(track_identifiers, this));
-		}
+		}		
 		else
 		{
 			return kRocProfVisDmResultInvalidParameter;
 		}
 	}
 	return kRocProfVisDmResultSuccess;
+}
+
+bool TopologyNodeProcess::DoesThisNodeMatchIdentifiers(rocprofvis_dm_track_identifiers_t* track_identifiers)
+{
+	bool result = TopologyNode::DoesThisNodeMatchIdentifiers(track_identifiers);
+	if (result)
+	{
+		result =
+			track_identifiers->category == kRocProfVisDmRegionSampleTrack ||
+			track_identifiers->category == kRocProfVisDmRegionMainTrack ||
+			track_identifiers->category == kRocProfVisDmRegionTrack ||
+			track_identifiers->category == kRocProfVisDmStreamTrack;
+	}
+	return result;
 }
 
 std::string TopologyNodeProcess::GetNodeName() {
@@ -474,6 +510,21 @@ rocprofvis_dm_result_t TopologyNodeProcessor::AddNode(rocprofvis_dm_track_identi
 		}
 	}
 	return kRocProfVisDmResultSuccess;
+}
+
+bool TopologyNodeProcessor::DoesThisNodeMatchIdentifiers(rocprofvis_dm_track_identifiers_t* track_identifiers)
+{
+	bool result = TopologyNode::DoesThisNodeMatchIdentifiers(track_identifiers);
+	if (result)
+	{
+		result =
+			track_identifiers->category == kRocProfVisDmMemoryCopyTrack ||
+			track_identifiers->category == kRocProfVisDmMemoryAllocationTrack ||
+			track_identifiers->category == kRocProfVisDmKernelDispatchTrack ||
+			track_identifiers->category == kRocProfVisDmPmcTrack ||
+			track_identifiers->category == kRocProfVisDmNotATrack;
+	}
+	return result;
 }
 
 std::string TopologyNodeProcessor::GetNodeName() {

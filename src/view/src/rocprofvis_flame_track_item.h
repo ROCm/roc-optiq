@@ -42,6 +42,8 @@ public:
     static void CalculateMaxEventLabelWidth();
     bool        IsCompactMode() const override;
 
+    friend struct FlameTrackItemTestPeer;
+
 protected:
     void  RenderChart(float graph_width) override;
     void  RenderMetaAreaExpand() override;
@@ -110,6 +112,11 @@ private:
 
     Pill* m_pill_analysis_queue;
 
+#ifdef IMGUI_ENABLE_TEST_ENGINE
+    // ID of the "FV" child window the bars are registered under; tests gather
+    // bars by this parent and pick targets by width. Captured during render.
+    unsigned int m_test_flame_window_id = 0;
+#endif
     // User configurable options. Underlying object is shared and owned by TrackItem.
     EventTrackOptions* m_event_options;  // Always valid
     QueueTrackOptions* m_queue_options;  // Valid for queue

@@ -117,18 +117,18 @@ TopologyNode* TopologyNode::GetParent() {
 }
 
 TopologyNode* TopologyNode::GetParent(rocprofvis_controller_object_type_t type) {
-    // Walk up until we find the requested ancestor type. Terminate at the root
-    // (null parent) instead of dereferencing it - combined/compare topologies can
-    // contain tracks whose ancestor chain does not include the requested type.
-    if (m_parent == nullptr)
+    if (m_parent)
     {
-        return nullptr;
+        if (m_parent->GetType() == type)
+        {
+            return m_parent;
+        }
+        else
+        {
+            return m_parent->GetParent(type);
+        }
     }
-    if (m_parent->GetType() == type)
-    {
-        return m_parent;
-    }
-    return m_parent->GetParent(type);
+    return nullptr;
 }
 
 rocprofvis_result_t
@@ -353,6 +353,8 @@ TopologyNode::GetObject(rocprofvis_property_t property, uint64_t index,
                     }
                 }
             }
+            *value = nullptr;
+            result = kRocProfVisResultSuccess;
         }
         break;
         default:

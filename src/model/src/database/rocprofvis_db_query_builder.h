@@ -12,7 +12,7 @@ namespace RocProfVis
 namespace DataModel
 {
 
-class ProfileDatabase;
+class SqliteDatabase;
 
 typedef struct rocprofvis_db_sqlite_track_service_data_t
 {
@@ -64,7 +64,7 @@ typedef struct rocprofvis_db_sqlite_slice_query_format
 typedef struct rocprofvis_db_sqlite_launch_table_query_format
 {
     static constexpr const int NUM_PARAMS = 14;
-    ProfileDatabase*            owner;
+    SqliteDatabase*            owner;
     std::string                parameters[NUM_PARAMS];
     std::vector<std::string>   from;
 } rocprofvis_db_sqlite_launch_table_query_format;
@@ -72,7 +72,7 @@ typedef struct rocprofvis_db_sqlite_launch_table_query_format
 typedef struct rocprofvis_db_sqlite_dispatch_table_query_format
 {
     static constexpr const int NUM_PARAMS = 31;
-    ProfileDatabase*            owner;
+    SqliteDatabase*            owner;
     std::string                parameters[NUM_PARAMS];
     std::vector<std::string>   from;
 } rocprofvis_db_sqlite_dispatch_table_query_format;
@@ -80,7 +80,7 @@ typedef struct rocprofvis_db_sqlite_dispatch_table_query_format
 typedef struct rocprofvis_db_sqlite_memory_alloc_table_query_format
 {
     static constexpr const int NUM_PARAMS = 24;
-    ProfileDatabase*            owner;
+    SqliteDatabase*            owner;
     std::string                parameters[NUM_PARAMS];
     std::vector<std::string>   from;
 } rocprofvis_db_sqlite_memory_alloc_table_query_format;
@@ -95,7 +95,7 @@ typedef struct rocprofvis_db_sqlite_memory_alloc_activity_query_format
 typedef struct rocprofvis_db_sqlite_memory_copy_table_query_format
 {
     static constexpr const int NUM_PARAMS = 28;
-    ProfileDatabase*            owner;
+    SqliteDatabase*            owner;
     std::string                parameters[NUM_PARAMS];
     std::vector<std::string>   from;
 } rocprofvis_db_sqlite_memory_copy_table_query_format;
@@ -110,7 +110,7 @@ typedef struct rocprofvis_db_sqlite_rocpd_table_query_format
 typedef struct rocprofvis_db_sqlite_sample_table_query_format
 {
     static constexpr const int NUM_PARAMS = 7;
-    ProfileDatabase*           owner;
+    SqliteDatabase*           owner;
     std::string                parameters[NUM_PARAMS];
     std::vector<std::string>   from;
 } rocprofvis_db_sqlite_sample_table_query_format;
@@ -118,7 +118,7 @@ typedef struct rocprofvis_db_sqlite_sample_table_query_format
 typedef struct rocprofvis_db_sqlite_rocpd_sample_table_query_format
 {
     static constexpr const int NUM_PARAMS = 9;
-    ProfileDatabase*           owner;
+    SqliteDatabase*           owner;
     std::string                parameters[NUM_PARAMS];
     std::vector<std::string>   from;
 } rocprofvis_db_sqlite_sample_rocpd_table_query_format;
@@ -154,6 +154,28 @@ typedef struct rocprofvis_db_sqlite_stream_to_hw_format
     std::vector<std::string>   from;
 } rocprofvis_db_sqlite_stream_to_hw_format;
 
+typedef struct rocprofvis_db_perfetto_slice_query_format
+{
+    static constexpr const int NUM_PARAMS = 9;
+    std::string                parameters[NUM_PARAMS];
+    std::vector<std::string>   from;
+} rocprofvis_db_perfetto_slice_query_format;
+
+typedef struct rocprofvis_db_perfetto_launch_table_query_format
+{
+    static constexpr const int NUM_PARAMS = 9;
+    std::string                parameters[NUM_PARAMS];
+    std::vector<std::string>   from;
+} rocprofvis_db_perfetto_launch_table_query_format;
+
+typedef struct rocprofvis_db_perfetto_sample_table_query_format
+{
+    static constexpr const int NUM_PARAMS = 5;
+    std::string                parameters[NUM_PARAMS];
+    std::vector<std::string>   from;
+} rocprofvis_db_perfetto_sample_table_query_format;
+
+
 enum class MultiNode : bool { No = false, Yes = true };
 
 class Builder
@@ -177,6 +199,7 @@ class Builder
         static constexpr const char* COUNTER_VALUE_PUBLIC_NAME = "value";
         static constexpr const char* TRACK_ID_PUBLIC_NAME = "__trackId";
         static constexpr const char* STREAM_TRACK_ID_PUBLIC_NAME = "__streamTrackId";
+        static constexpr const char* TRACK_ID_SERVICE_NAME = "track_id";
         static constexpr const char* SPACESAVER_SERVICE_NAME     = "const";
         static constexpr const char* COUNTER_NAME_SERVICE_NAME   = "monitorType";
         static constexpr const char* BLANK_COLUMN_STR            = "0";
@@ -237,6 +260,8 @@ class Builder
         static constexpr const char* LEVEL_REFERENCE = "_level";
         static constexpr const char* EVENT_LEVEL_SERVICE_NAME = "event_level";
         static constexpr const char* COUNTER_NAME_REFERENCE_RPD = "_c_name";
+        static constexpr const char* EVENT_NAME_REFERENCE_PERFETTO = "_p_name";
+        static constexpr const char* CATEGORY_REFERENCE_PERFETTO = "_p_category";
 
         static constexpr const char* SQL_AS_STATEMENT = " as ";
         static constexpr const char* SQL_ON_STATEMENT = " ON ";
@@ -297,9 +322,11 @@ class Builder
             SCHEMA_INDEX_EVENT_ID,
             SCHEMA_INDEX_CATEGORY,
             SCHEMA_INDEX_CATEGORY_RPD,
+            SCHEMA_INDEX_CATEGORY_PERFETTO,
             SCHEMA_INDEX_EVENT_NAME,
             SCHEMA_INDEX_EVENT_SYMBOL,
             SCHEMA_INDEX_EVENT_NAME_RPD,
+            SCHEMA_INDEX_EVENT_NAME_PERFETTO,
             SCHEMA_INDEX_MEM_TYPE,
             SCHEMA_INDEX_STREAM_NAME,
             SCHEMA_INDEX_QUEUE_NAME,
@@ -344,9 +371,11 @@ class Builder
             {ID_PUBLIC_NAME, {ID_PUBLIC_NAME, ColumnType::Qword, SCHEMA_INDEX_EVENT_ID}},
             {CATEGORY_REFERENCE, {CATEGORY_PUBLIC_NAME, ColumnType::Word, SCHEMA_INDEX_CATEGORY}},
             {CATEGORY_REFERENCE_RPD, {CATEGORY_PUBLIC_NAME, ColumnType::Word, SCHEMA_INDEX_CATEGORY_RPD}},
+            {CATEGORY_REFERENCE_PERFETTO, {CATEGORY_PUBLIC_NAME, ColumnType::Word, SCHEMA_INDEX_CATEGORY_PERFETTO}},
             {EVENT_NAME_REFERENCE, {NAME_PUBLIC_NAME, ColumnType::Dword, SCHEMA_INDEX_EVENT_NAME}},
             {SYMBOL_NAME_REFERENCE, {NAME_PUBLIC_NAME, ColumnType::Dword, SCHEMA_INDEX_EVENT_SYMBOL}},
             {EVENT_NAME_REFERENCE_RPD, {NAME_PUBLIC_NAME, ColumnType::Qword, SCHEMA_INDEX_EVENT_NAME_RPD}},
+            {EVENT_NAME_REFERENCE_PERFETTO, {NAME_PUBLIC_NAME, ColumnType::Qword, SCHEMA_INDEX_EVENT_NAME_PERFETTO}},
             {M_TYPE_REFERENCE, {NAME_PUBLIC_NAME, ColumnType::Byte, SCHEMA_INDEX_MEM_TYPE}},
             {STREAM_NAME_REFERENCE, {STREAM_PUBLIC_NAME, ColumnType::Word,SCHEMA_INDEX_STREAM_NAME}},
             {QUEUE_NAME_REFERENCE, {QUEUE_PUBLIC_NAME, ColumnType::Byte,SCHEMA_INDEX_QUEUE_NAME}},
@@ -417,6 +446,9 @@ class Builder
         static std::string Select(rocprofvis_db_sqlite_stream_to_hw_format params);
         static std::string Select(rocprofvis_db_sqlite_memory_alloc_activity_query_format);
         static std::string Select(rocprofvis_db_sqlite_mem_act_subquery_format params);
+        static std::string Select(rocprofvis_db_perfetto_slice_query_format params);
+        static std::string Select(rocprofvis_db_perfetto_launch_table_query_format params);
+        static std::string Select(rocprofvis_db_perfetto_sample_table_query_format params);
         static std::string SelectAll(std::string query);
         static std::string QParam(std::string name, std::string public_name);
         static std::string Blank();

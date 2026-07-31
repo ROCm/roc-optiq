@@ -28,6 +28,8 @@ public:
 
     void HandleEventSelectionChanged(const uint64_t event_id, const bool selected);
 
+    friend struct EventsViewTestPeer;
+
 private:
     struct EventItem
     {

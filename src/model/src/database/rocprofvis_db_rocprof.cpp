@@ -89,10 +89,11 @@ int RocprofDatabase::CallbackParseMetadata(void* data, int argc, sqlite3_stmt* s
     return 0;
 }
 
-int RocprofDatabase::ProcessTrack(rocprofvis_dm_track_params_t& track_params, rocprofvis_dm_charptr_t*  newqueries)
+int RocprofDatabase::ProcessTrack(rocprofvis_dm_track_params_t& track_params, std::vector<rocprofvis_dm_string_t> & newqueries)
 {
     ROCPROFVIS_ASSERT_MSG_RETURN(track_params.track_indentifiers.db_instance != nullptr, ERROR_NODE_KEY_CANNOT_BE_NULL, 1);
     DbInstance* db_instance = (DbInstance*)track_params.track_indentifiers.db_instance;
+    track_params.track_indentifiers.source_type = kRPVSystemSourceRocprof;
     rocprofvis_dm_track_params_it it = TrackTracker()->FindTrackParamsIterator(track_params.track_indentifiers, db_instance->GuidIndex());
     UpdateQueryForTrack(it, track_params, newqueries);
     if(it == TrackPropertiesEnd())
@@ -641,44 +642,6 @@ RocprofDatabase::CreateIndexes()
 }
 
 
-rocprofvis_dm_result_t RocprofDatabase::RunCacheQueriesAsync(Future* future, std::vector<std::pair<std::string, std::string>>& info_table_list){
-    std::vector<std::thread> threads;
-    rocprofvis_dm_result_t result = kRocProfVisDmResultNotLoaded;
-
-    auto get_info_table_task = [&](DbInstance* db_instance, std::string query, std::string tag) {
-        Future* sub_future = future->AddSubFuture();
-        result = ExecuteSQLQuery(sub_future, db_instance, query.c_str(), tag.c_str(), (rocprofvis_dm_handle_t)CachedTables(db_instance->GuidIndex()), &CallbackCacheTable);
-        future->DeleteSubFuture(sub_future);
-        };
-
-    for (auto& guid_info : DbInstances())
-    {
-        for (auto table : info_table_list)
-        {
-            threads.emplace_back(
-                get_info_table_task, 
-                &guid_info.first,
-                table.second, 
-                table.first);
-        }
-    }
-    for (auto& t : threads)
-        t.join();
-
-    if (result == kRocProfVisDmResultSuccess)
-    {
-        for (auto& guid_info : DbInstances())
-        {
-            for (auto table : info_table_list)
-            {
-                auto handle = CachedTables(guid_info.first.GuidIndex())->GetTableHandle(table.first.c_str());
-                BindObject()->FuncAddInfoTable(BindObject()->trace_object, guid_info.first.GuidIndex(), table.first.c_str(), handle);
-            }
-        }
-    }
-    return result;
-}
-
 rocprofvis_dm_result_t RocprofDatabase::GenerateInterdependencyTables(Future* future) {
 
 
@@ -695,7 +658,7 @@ rocprofvis_dm_result_t RocprofDatabase::GenerateInterdependencyTables(Future* fu
         Builder::STREAM_ID_SERVICE_NAME
         }};
 
-    return RunCacheQueriesAsync(future, info_table_list);
+    return RunCacheQueries(future, info_table_list, &CallbackCacheTable);
 }
 
 rocprofvis_dm_result_t RocprofDatabase::LoadInformationTables(Future* future) {
@@ -713,7 +676,7 @@ rocprofvis_dm_result_t RocprofDatabase::LoadInformationTables(Future* future) {
 
    };
 
-    return RunCacheQueriesAsync(future, info_table_list);
+    return RunCacheQueries(future, info_table_list, &CallbackCacheTable);
 }
 
 
@@ -1302,7 +1265,7 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
             if (kRocProfVisDmResultSuccess !=
                 ExecuteQueryForAllTracksAsync(
                     kRocProfVisDmIncludeStreamTracks,
-                    kRPVQueryLevel, "SELECT *, ", (std::string(" ORDER BY ") + Builder::START_SERVICE_NAME).c_str(), &CalculateEventLevels,
+                    kRPVRocpdQueryLevel, "SELECT *, ", (std::string(" ORDER BY ") + Builder::START_SERVICE_NAME).c_str(), &CalculateEventLevels,
                     [](rocprofvis_dm_track_params_t* params, rocprofvis_dm_charptr_t query) -> std::string { (void) params; return query; },
                     [](rocprofvis_dm_track_params_t* params) {
                         params->m_active_events.clear();
@@ -1361,7 +1324,7 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
             TraceProperties()->trace_duration = 0;
             if (kRocProfVisDmResultSuccess !=
                 ExecuteQueryForAllTracksAsync(
-                    kRocProfVisDmIncludePmcTracks | kRocProfVisDmIncludeStreamTracks, kRPVQuerySliceByTrackSliceQuery,
+                    kRocProfVisDmIncludePmcTracks | kRocProfVisDmIncludeStreamTracks, kRPVRocpdQuerySliceByTrackSliceQuery,
                     "SELECT MIN(startTs), MAX(endTs), MIN(event_level), MAX(event_level), ",
                     "WHERE startTs != 0 AND endTs != 0", &CallbackGetTrackProperties,
                     [](rocprofvis_dm_track_params_t* params, rocprofvis_dm_charptr_t query) -> std::string { (void) params; return query; },
@@ -1773,13 +1736,13 @@ rocprofvis_dm_result_t RocprofDatabase::SaveTrimmedData(rocprofvis_dm_timestamp_
 }
 
 rocprofvis_dm_result_t RocprofDatabase::BuildTableStringIdFilter( rocprofvis_dm_num_string_table_filters_t num_string_table_filters, 
-    rocprofvis_dm_string_table_filters_t string_table_filters, table_string_id_filter_map_t& filter)
+    rocprofvis_dm_string_table_filters_t string_table_filters, bool include_substring, table_string_id_filter_map_t& filter)
 {
     rocprofvis_dm_result_t result = kRocProfVisDmResultNotLoaded;
     if(num_string_table_filters > 0)
     {
         std::vector<rocprofvis_dm_index_t> string_indices;
-        result = BindObject()->FuncGetStringIndices(BindObject()->trace_object, num_string_table_filters, string_table_filters, string_indices);
+        result = BindObject()->FuncGetStringIndices(BindObject()->trace_object, num_string_table_filters, string_table_filters, include_substring, string_indices);
         ROCPROFVIS_ASSERT_RETURN(result == kRocProfVisDmResultSuccess, result);
         std::unordered_map<uint32_t, std::string> string_ids;
         std::unordered_map<uint32_t, std::string> kernel_ids;

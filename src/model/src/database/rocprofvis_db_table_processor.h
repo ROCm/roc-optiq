@@ -27,15 +27,7 @@ namespace RocProfVis
 namespace DataModel
 {
 
-    class ProfileDatabase;
-
-    typedef enum rocprofvis_db_compound_table_type {
-        kRPVTableDataTypeEvent,
-        kRPVTableDataTypeSample,
-        kRPVTableDataTypeSearch,
-        kRPVTableDataTypeAnalysis,
-        kRPVTableDataTypesNum
-    } rocprofvis_db_compound_table_type;
+    class QueryManager;
 
     typedef struct rocprofvis_db_compound_query_command {
         std::string name;
@@ -141,7 +133,7 @@ namespace DataModel
     {
 
     public:
-        TableProcessor(ProfileDatabase* db) : m_db(db) { 
+        TableProcessor(QueryManager* db) : m_db(db) { 
 
             m_timer.setAction([this] {
                 std::lock_guard<std::mutex> lock(m_lock);
@@ -175,7 +167,7 @@ namespace DataModel
         rocprofvis_dm_result_t AddAggregatedCells(bool to_file, rocprofvis_dm_handle_t handle, uint32_t row_index);
 
     private:
-        ProfileDatabase* m_db;
+        QueryManager* m_db;
         std::vector<std::unique_ptr<PackedTable>> m_tables;
         std::set<uint32_t> m_tracks;
         PackedTable m_merged_table;

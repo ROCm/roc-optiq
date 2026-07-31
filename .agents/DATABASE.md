@@ -204,9 +204,9 @@ rocprofvis_dm_result_t rocprofvis_db_build_compute_query(
     database, compute_use_case, num_params, params, char** out_query);
 ```
 
-`rocprofvis_dm_table_use_case_enum_t` covers the four system table
+`rocprofvis_dm_table_use_case_enum_t` covers the three system table
 shapes (`kRPVDMTableUseCaseEventTrackTable`, `kRPVDMTableUseCaseSampleTrackTable`,
-`kRPVDMTableUseCaseEventSearch`, `kRPVDMTableUseCaseAnalysis`).
+`kRPVDMTableUseCaseEventSearch`).
 `rocprofvis_db_compute_use_case_enum_t` covers all the compute query
 shapes (workload list, top kernels, kernels list, metric definitions,
 roofline ceilings, kernel intensities, metric values, kernel metric
@@ -1113,6 +1113,63 @@ The compute-side counterpart. One method per
 - `GetComputeMetricValues`
 - `GetComputeMetricValuesByWorkload`
 - `GetComputeKernelMetricsMatrix`
+- `GetComputeKernelSourceFiles`
+- `GetComputeSourceFileSourceLines`
+- `GetComputeKernelCodeObjects`
+- `GetComputeKernelIsaToIsaDeps`
+- `GetComputeKernelIsaLines`
+- `GetComputeKernelIsaToSourceDeps`
+- `GetComputeKernelSamplingStates`
+- `GetComputeKernelSamplingStateReasonCounts`
+
+All of them share the signature
+`rocprofvis_dm_result_t GetComputeX(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params, rocprofvis_dm_string_t& query)`
+- the SQL (or, for the metrics matrix, the JSON plan) is written to
+`query`, and the return value reports why it could not be built.
+
+Each method version-gates itself; `BuildComputeQuery` no longer wraps
+the switch in a single check, it just forwards the status:
+
+```cpp
+rocprofvis_dm_result_t result = kRocProfVisDmResultNotSupported;
+if(IsVersionGreaterOrEqual("1.2.0"))
+{
+    result = kRocProfVisDmResultInvalidParameter;
+    if(<params match this use case>)
+    {
+        query = ...;
+        result = kRocProfVisDmResultSuccess;
+    }
+}
+return result;
+```
+
+The gate is `1.2.0` for every method except
+`GetComputeMetricValuesByWorkload`, which gates on `1.3.0` because it
+reads `compute_workload_metric_view` unconditionally and that view does
+not exist earlier.
+
+The source / ISA / PC-sampling block (`GetComputeKernelSourceFiles`
+through `GetComputeKernelSamplingStateReasonCounts`) is **not**
+version-gated beyond that `1.2.0` floor. PC sampling is an optional
+capture feature, so its tables can be absent from a `1.3.0`+ database
+and present in an earlier one — a schema version tells you nothing
+about them.
+
+Their absence is **not** guarded at query-build time. The
+`CheckTableExists("pc_sampling_states_per_line", ...)` probe in
+`CreateIndexes` only decides whether the PC-sampling indexes are
+created; nothing consults it when a query is built. Against a database
+that lacks those tables these use cases still return
+`kRocProfVisDmResultSuccess` with a valid-looking query, and the
+failure surfaces later as a SQLite "no such table" error
+(`kRocProfVisDmResultDbAccessFailed`) rather than
+`kRocProfVisDmResultNotSupported`. Closing that gap needs a cached
+table-presence probe the factory can read, not a version gate.
+
+Inner `IsVersionGreaterOrEqual("1.3.0")` / `"1.4.0"` tests inside a
+method still select between schema variants and are separate from the
+gate.
 
 Internal helpers: `ClassifyMetricIdFormat(s)` decides whether a
 metric ID is `XY`, `XYZ`, or `Other`; `ParseMetricParam(...)`
@@ -1138,6 +1195,11 @@ Args passed all the way through:
   search; the database resolves these via `BuildTableStringIdFilter`
   which finds matching string IDs and rewrites them into a
   `WHERE IN (...)`.
+- `include_substring` - how those filters are matched against the
+  string table. `true` (the default) matches any string containing a
+  filter, `false` only strings equal to it; both are case insensitive.
+  Exact matching is only satisfiable with a single distinct filter,
+  since a string cannot equal two different values at once.
 - `max_count`, `offset` - paging.
 - `count_only` - return a `SELECT COUNT(*) ...` shape.
 

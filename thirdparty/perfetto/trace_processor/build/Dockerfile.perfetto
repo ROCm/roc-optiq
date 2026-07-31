@@ -1,0 +1,36 @@
+FROM ubuntu:22.04
+
+RUN apt-get update && apt-get install -y \
+    git python3 python3-pip python3.10-venv curl gcc g++ \
+    && rm -rf /var/lib/apt/lists/*
+
+# Disable SSL verification for git
+RUN git config --global http.sslVerify false
+
+# Disable SSL verification for curl globally
+RUN echo "insecure" > /root/.curlrc
+
+# Disable SSL for pip
+RUN printf '[global]\ntrusted-host = pypi.org\n\tfiles.pythonhosted.org\n' \
+    > /etc/pip.conf
+
+ENV REQUESTS_CA_BUNDLE=""
+ENV SSL_CERT_FILE=""
+
+WORKDIR /perfetto
+RUN git clone https://github.com/google/perfetto . && \
+    git checkout v47.0
+
+# install-build-deps fetches GN and ninja into third_party/
+RUN python3 tools/install-build-deps
+
+RUN third_party/gn/gn gen out/release --root=. --args="is_debug=false" && \
+    third_party/ninja/ninja -C out/release src/trace_processor:trace_processor
+
+CMD ["/bin/sh", "-c", "\
+    mkdir -p /output/lib /output/include /output/gen/build_config && \
+    cp out/release/libtrace_processor.a /output/lib/ && \
+    cp -r include/perfetto /output/include/perfetto && \
+    cp out/release/gen/build_config/perfetto_build_flags.h \
+       /output/gen/build_config/ \
+"]

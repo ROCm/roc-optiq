@@ -24,26 +24,26 @@ namespace DataModel
     {
     public:
         ComputeQueryFactory(ComputeDatabase* db) : m_db(db) {}
-        std::string GetComputeListOfWorkloads(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params);
-        std::string GetComputeWorkloadRooflineCeiling(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params);
-        std::string GetComputeWorkloadTopKernels(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params);
-        std::string GetComputeWorkloadKernelsList(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params);
-        std::string GetComputeKernelRooflineIntensities(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params);
-        std::string GetComputeKernelMetricCategoriesList(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params);
-        std::string GetComputeWorkloadMetricsDefinition(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params);
-        std::string GetComputeWorkloadMetricValueNames(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params);
-        std::string GetComputeMetricCategoryTablesList(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params);
-        std::string GetComputeMetricValues(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params);
-        std::string GetComputeMetricValuesByWorkload(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params);
-        std::string GetComputeKernelMetricsMatrix(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params);
-        std::string GetComputeKernelSourceFiles(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params);
-        std::string GetComputeSourceFileSourceLines(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params);
-        std::string GetComputeKernelCodeObjects(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params);
-        std::string GetComputeCodeObjectIsaLines(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params);
-        std::string GetComputeIsaLineIsaLineDeps(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params);
-        std::string GetComputeIsaLineSourceLineDeps(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params);
-        std::string GetComputeIsaLineStallRecord(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params);
-        std::string GetComputeStallRecordReasonCounts(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params);
+        rocprofvis_dm_result_t GetComputeListOfWorkloads(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params, rocprofvis_dm_string_t& query_out);
+        rocprofvis_dm_result_t GetComputeWorkloadRooflineCeiling(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params, rocprofvis_dm_string_t& query_out);
+        rocprofvis_dm_result_t GetComputeWorkloadTopKernels(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params, rocprofvis_dm_string_t& query_out);
+        rocprofvis_dm_result_t GetComputeWorkloadKernelsList(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params, rocprofvis_dm_string_t& query_out);
+        rocprofvis_dm_result_t GetComputeKernelRooflineIntensities(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params, rocprofvis_dm_string_t& query_out);
+        rocprofvis_dm_result_t GetComputeKernelMetricCategoriesList(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params, rocprofvis_dm_string_t& query_out);
+        rocprofvis_dm_result_t GetComputeWorkloadMetricsDefinition(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params, rocprofvis_dm_string_t& query_out);
+        rocprofvis_dm_result_t GetComputeWorkloadMetricValueNames(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params, rocprofvis_dm_string_t& query_out);
+        rocprofvis_dm_result_t GetComputeMetricCategoryTablesList(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params, rocprofvis_dm_string_t& query_out);
+        rocprofvis_dm_result_t GetComputeMetricValues(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params, rocprofvis_dm_string_t& query_out);
+        rocprofvis_dm_result_t GetComputeMetricValuesByWorkload(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params, rocprofvis_dm_string_t& query_out);
+        rocprofvis_dm_result_t GetComputeKernelMetricsMatrix(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params, rocprofvis_dm_string_t& query_out);
+        rocprofvis_dm_result_t GetComputeKernelSourceFiles(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params, rocprofvis_dm_string_t& query_out);
+        rocprofvis_dm_result_t GetComputeSourceFileSourceLines(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params, rocprofvis_dm_string_t& query_out);
+        rocprofvis_dm_result_t GetComputeKernelCodeObjects(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params, rocprofvis_dm_string_t& query_out);
+        rocprofvis_dm_result_t GetComputeKernelIsaToIsaDeps(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params, rocprofvis_dm_string_t& query_out);
+        rocprofvis_dm_result_t GetComputeKernelIsaLines(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params, rocprofvis_dm_string_t& query_out);
+        rocprofvis_dm_result_t GetComputeKernelIsaToSourceDeps(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params, rocprofvis_dm_string_t& query_out);
+        rocprofvis_dm_result_t GetComputeKernelSamplingStates(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params, rocprofvis_dm_string_t& query_out);
+        rocprofvis_dm_result_t GetComputeKernelSamplingStateReasonCounts(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params, rocprofvis_dm_string_t& query_out);
     private:
         MetricIdFormat ClassifyMetricIdFormat(const std::string& s);
         std::string SanitizeMetricValueName(const std::string& name);
@@ -183,38 +183,6 @@ namespace DataModel
             return &s_null_data_exceptions_skip;
         }
 
-        // method to build a query to read time slice of records for single track 
-        // @param index - track index 
-        // @param tyte - query type
-        // @param query - reference to output query string  
-        // @return status of operation
-        rocprofvis_dm_result_t BuildTrackQuery(
-            rocprofvis_dm_index_t /*index*/,
-            rocprofvis_dm_index_t   /*type*/,
-            rocprofvis_dm_string_t& /*query*/,
-            uint32_t /*split_count*/,
-            uint32_t /*split_index*/) override{
-            ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN("Compute database does not build track query", kRocProfVisDmResultNotSupported);
-        }
-
-        // method to build a query to read time slice of records for all tracks in one shot 
-        // @param start - start timestamp of time slice 
-        // @param end - end timestamp of time slice 
-        // @param num - number of tracks
-        // @param tracks - uint32_t array with track IDs 
-        // @param query - reference to query string 
-        // @param slices - reference map array for storing slice handlers for multi-track request   
-        // @return status of operation  
-        rocprofvis_dm_result_t BuildSliceQuery(
-            rocprofvis_dm_timestamp_t /*start*/,
-            rocprofvis_dm_timestamp_t /*end*/,
-            rocprofvis_db_num_of_tracks_t /*num*/,
-            rocprofvis_db_track_selection_t /*tracks*/,
-            rocprofvis_dm_string_t& /*query*/,
-            slice_array_t& /*slices*/) override{
-            ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN("Compute database does not build slice query", kRocProfVisDmResultNotSupported);
-        }
-
         rocprofvis_dm_result_t BuildTableQuery(
             rocprofvis_dm_table_use_case_enum_t /*use_case*/,
             rocprofvis_dm_timestamp_t /*start*/,
@@ -227,8 +195,6 @@ namespace DataModel
             rocprofvis_dm_charptr_t /*group_cols*/,
             rocprofvis_dm_charptr_t /*sort_column*/,
             rocprofvis_dm_sort_order_t /*sort_order*/,
-            rocprofvis_dm_num_string_table_filters_t /*num_string_table_filters*/,
-            rocprofvis_dm_string_table_filters_t /*string_table_filters*/,
             uint64_t /*max_count*/,
             uint64_t /*offset*/,
             bool /*count_only*/,

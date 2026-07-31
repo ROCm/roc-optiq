@@ -28,7 +28,7 @@ struct AvailableMetrics
         uint32_t    id;
         std::string name;
         std::string description;
-        std::string unit; 
+        std::string unit;
     };
     struct Table
     {
@@ -58,19 +58,21 @@ struct Point
 
 struct PcStallReason
 {
-    std::string type_name;
-    int32_t     type_id = 0;
+    int32_t     reason_id = 0;
     int32_t     count   = 0;
 };
 
-struct StallRecord
+struct SamplingState
 {
+    bool     loaded             = false;
     uint64_t dispatch_id        = 0;
     uint32_t id                 = 0;
     uint32_t isa_line_id        = 0;
-    uint32_t wave_issued_count  = 0;
-    uint32_t total_sample_count = 0;
-    float    avg_active_lanes   = 0.0f;
+    uint32_t issued_count       = 0;
+    uint32_t stalled_count      = 0;
+    uint32_t total_count        = 0;
+    float    active_threads_percent = 0.0f;
+    float    wave_occupancy_percent = 0.0f;
 
     std::vector<PcStallReason> stall_reasons;
 };
@@ -93,7 +95,7 @@ struct IsaLine
     uint64_t    code_object_offset  = 0;
     std::string instruction;
     std::string comment;
-    StallRecord           stall_record;
+    SamplingState           sampling_state;
     std::vector<uint32_t> source_line_ids;
     uint32_t    id                  = 0;
     uint32_t    instruction_type_id = 0;
@@ -201,7 +203,7 @@ struct WorkloadInfo
     Roofline                                 roofline;
 };
 
-struct MetricValue 
+struct MetricValue
 {
     AvailableMetrics::Entry*                   entry;
     rocprofvis_controller_metric_source_type_t source_type;

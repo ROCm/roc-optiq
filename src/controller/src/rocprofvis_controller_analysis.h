@@ -163,7 +163,7 @@ private:
         EventsTable(uint64_t id, rocprofvis_dm_event_operation_t op);
 
     protected:
-        rocprofvis_result_t UnpackArguments(Arguments& args, QueryArguments& out) const final;
+        rocprofvis_result_t UnpackArguments(Arguments& args, TableArguments*& out) const final;
         rocprofvis_result_t UnpackUseCase(Arguments& args, rocprofvis_dm_table_use_case_enum_t& out) const final;
 
     private:

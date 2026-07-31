@@ -9,7 +9,7 @@ namespace RocProfVis
 {
 namespace DataModel
 {
-    QueryFactory::QueryFactory(ProfileDatabase* db):m_db(db) {
+    QueryFactory::QueryFactory(SqliteDatabase* db):m_db(db) {
     }
 
 /*************************************************************************************************
@@ -2262,6 +2262,77 @@ namespace DataModel
                 { Builder::From("rocpd_memory_copy")} }));
         }
     }
+
+
+    /*************************************************************************************************
+    *                               Time slice queries for Perfetto tracks
+    **************************************************************************************************/
+    std::string QueryFactory::GetPerfettoEventSliceQuery() {
+        
+        return Builder::Select(rocprofvis_db_perfetto_slice_query_format(
+            { { Builder::QParamOperation(kRocProfVisDmOperationLaunch),
+            Builder::QParam("ts", Builder::START_SERVICE_NAME),
+            Builder::QParam("(ts + MAX(dur, 1))", Builder::END_SERVICE_NAME),
+            Builder::QParam("category"),
+            Builder::QParam("name"),
+            Builder::QParam("id"),
+            Builder::QParam("depth", Builder::EVENT_LEVEL_SERVICE_NAME),
+            Builder::QParamCategory(kRocProfVisDmRegionMainTrack),
+            Builder::SpaceSaver(0)
+                },
+            { Builder::From("__intrinsic_slice", MultiNode::No)
+             } }));
+    }
+
+    std::string QueryFactory::GetPerfettoCounterSliceQuery() {
+
+        return Builder::Select(rocprofvis_db_perfetto_slice_query_format(
+            { { Builder::QParamOperation(kRocProfVisDmOperationNoOp),
+            Builder::QParam("ts", Builder::START_SERVICE_NAME),
+            Builder::QParam("ts", Builder::END_SERVICE_NAME),
+            Builder::SpaceSaver(0),
+            Builder::SpaceSaver(0),
+            Builder::QParam("id"),
+            Builder::QParam("value", Builder::EVENT_LEVEL_SERVICE_NAME),
+            Builder::QParamCategory(kRocProfVisDmPmcTrack),
+            Builder::QParam("value", Builder::COUNTER_VALUE_SERVICE_NAME),
+                },
+            { Builder::From("counter", MultiNode::No)
+            } }));
+    }
+
+
+    std::string QueryFactory::GetPerfettoRegionTableQuery() {
+
+        return Builder::Select(rocprofvis_db_perfetto_launch_table_query_format(
+            { { Builder::QParamOperation(kRocProfVisDmOperationLaunch),
+            Builder::QParam("id", Builder::ID_PUBLIC_NAME),
+            Builder::QParam("id", Builder::DB_ID_PUBLIC_NAME),
+            Builder::QParam("category",Builder::CATEGORY_REFERENCE_PERFETTO),
+            Builder::QParam("name",Builder::EVENT_NAME_REFERENCE_PERFETTO),
+            Builder::QParam("ts", Builder::START_SERVICE_NAME),
+            Builder::QParam("(ts+dur)", Builder::END_SERVICE_NAME),
+            Builder::QParam("dur", Builder::DURATION_PUBLIC_NAME),
+            Builder::QParam("track_id", Builder::Builder::TRACK_ID_SERVICE_NAME),
+            },
+            { Builder::From("__intrinsic_slice", MultiNode::No),
+            } }));
+    }
+
+    std::string QueryFactory::GetPerfettoPerformanceCountersTableQuery() {
+     
+        return  Builder::Select(rocprofvis_db_perfetto_sample_table_query_format(
+            { { Builder::QParamOperation(kRocProfVisDmOperationNoOp),
+            Builder::QParam("ts", Builder::START_SERVICE_NAME), 
+            Builder::QParam("ts", Builder::END_SERVICE_NAME), 
+            Builder::QParam("track_id", Builder::Builder::TRACK_ID_SERVICE_NAME),
+            Builder::QParam("value", Builder::COUNTER_VALUE_SERVICE_NAME)
+            },
+            { Builder::From("counter", MultiNode::No),
+            } }));
+
+    }
+
 
 }  // namespace DataModel
 }  // namespace RocProfVis

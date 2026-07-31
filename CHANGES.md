@@ -13,25 +13,19 @@
 - Sidebar right-click context menu options.
 - More compact flame-chart events, with fixed resize/expand behavior.
 - Improved line-track Y-axis scale.
+- Display unrounded/untruncated track statistics in Track Details tab.
 
 **Annotations**
 - Annotation UX enhancements: lock, go-to-anchor, cross-highlight, text wrapping, and placement fixes.
 
-**Track details and tables**
-- Refactored track statistics into reusable components and show real values in Track Details.
-- Table API refactor: split into event-search and regular query paths.
-- RPD table and external-data (extdata) updates.
-
 **Compute profiling**
 - Roofline single-click filtering for kernels, memory levels, and bandwidth peaks.
 - Roofline line-thickness preference.
-- New widget to display source code and correlate it to the corresponding ISA.
 - Skip loading workload Speed-of-Light for compute schema < 1.3.0; query builders now report and skip unsupported queries.
 
 **Rendering and performance**
 - Added a RenderScheduler to drive lazy-render wake-ups.
 - Adopted ImGui's built-in DPI handling, replacing the previous custom solution.
-- Refactored queries to align with the new schema and improve performance.
 
 ### Experimental (not yet released)
 

@@ -239,6 +239,7 @@ private:
     float                               m_last_zoom;
     std::unordered_map<uint64_t, float> m_track_position_y;  // Track index to height
     float                               m_track_height_sum;
+    size_t                              m_hidden_track_count;
     std::shared_ptr<TimelineSelection>  m_timeline_selection;
     std::shared_ptr<MeasurementController> m_measurement;
     std::shared_ptr<AnnotationsManager> m_annotations;

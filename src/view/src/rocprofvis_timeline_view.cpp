@@ -92,6 +92,7 @@ TimelineView::TimelineView(DataProvider&                          dp,
 , m_last_graph_size(0.0f, 0.0f)
 , m_reorder_request({ true, 0, 0 })
 , m_track_height_sum(0.0f)
+, m_hidden_track_count(0)
 , m_arrow_layer(m_data_provider, timeline_selection)
 , m_stop_user_interaction(false)
 , m_timeline_selection(timeline_selection)
@@ -1206,17 +1207,19 @@ TimelineView::Update()
         if(m_resize_activity || !m_reorder_request.handled)
         {
             m_track_position_y.clear();
-            m_track_height_sum = 0;
+            m_track_height_sum   = 0;
+            m_hidden_track_count = 0;
             for(int i = 0; i < m_tracks->size(); i++)
             {
                 if((*m_tracks)[i])
                 {
+                    const bool displayed = (*m_tracks)[i]->IsDisplayed();
                     m_track_position_y[(*m_tracks)[i]->GetID()] = m_track_height_sum;
                     m_track_height_sum +=
-                        (*m_tracks)[i]->IsDisplayed()
-                            ? (*m_tracks)[i]
-                                  ->GetTrackHeight()  // Get the height of the track.
-                            : 0;
+                        displayed ? (*m_tracks)[i]
+                                        ->GetTrackHeight()  // Get the height of the track.
+                                  : 0;
+                    m_hidden_track_count += displayed ? 0 : 1;
                 }
             }
         }
@@ -1811,7 +1814,7 @@ TimelineView::IsRequestDataNeeded()
 void
 TimelineView::RenderEmptyTrackAreaMenu()
 {
-    if(!m_track_options_context_menu || !m_track_options_context_menu->HasHiddenTracks())
+    if(m_hidden_track_count == 0 || !m_track_options_context_menu)
     {
         return;
     }

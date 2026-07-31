@@ -22,7 +22,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-const char* APP_NAME = "ROCm(TM) Optiq Beta";
+const char* APP_NAME = "ROCm(TM) Optiq";
 
 // globals shared with callbacks
 static std::vector<std::string>         g_dropped_file_paths;

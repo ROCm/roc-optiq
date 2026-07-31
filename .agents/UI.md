@@ -65,7 +65,7 @@ When humans and `CODING.md` disagree with this file, `CODING.md` wins.
 
 ## 1. Project Identity
 
-- **Name:** ROCm Optiq (Beta) - `roc-optiq`
+- **Name:** ROCm Optiq - `roc-optiq`
 - **Owner:** AMD / ROCm
 - **License:** MIT (`LICENSE.md`)
 - **Language:** C++17. Public C library headers use C11.

@@ -7,12 +7,12 @@
 
 **Tracks and topology**
 - Color-code tracks and the sidebar topology by node for easier multi-node navigation.
-- Refined inline device nodes in the sidebar topology tree.
+- Improve how Stream nodes are display in the sidebar topology tree.
 - "Reveal in topology" right-click action on a track.
 - Batch track settings: apply track option changes to multiple tracks at once.
-- Sidebar right-click context menu options.
+- New sidebar right-click context menu options.
 - More compact flame-chart events, with fixed resize/expand behavior.
-- Improved line-track Y-axis scale.
+- Display incremental Y-axis scale ticks for counter tracks when expanded.
 - Display unrounded/untruncated track statistics in Track Details tab.
 
 **Annotations**
@@ -31,7 +31,7 @@
 These features are in progress and available for preview only (build from src); behavior and UI are subject to change.
 
 - **Profiler launch**: launch the ROCm profiler locally or on a remote host, with remote file access/browsing and an SSH-based remote profiling workflow (redesigned remote profile panels and profiler launcher UI).
-- **Alien trace formats**: load Perfetto and Chrome (JSON) traces via the bundled Perfetto `trace_processor`, including file-extension detection for formats without magic numbers.
+- **New trace formats**: load Perfetto and Chrome (JSON) traces.
 
 ### Fixes
 

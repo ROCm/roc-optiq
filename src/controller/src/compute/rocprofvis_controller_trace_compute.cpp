@@ -196,7 +196,6 @@ rocprofvis_result_t ComputeTrace::AsyncFetch(Arguments& args, Future& future, Me
 {
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     uint64_t num_entries = 0;
-    uint64_t uint64_data = 0;
     result = output.GetUInt64(kRPVControllerMetricsContainerNumMetrics, 0, &num_entries);
     if(result == kRocProfVisResultSuccess && num_entries == 0)
     {
@@ -204,26 +203,52 @@ rocprofvis_result_t ComputeTrace::AsyncFetch(Arguments& args, Future& future, Me
         rocprofvis_db_compute_use_case_enum_t use_case;
         if(kRocProfVisResultSuccess == args.GetUInt64(kRPVControllerMetricArgsNumKernels, 0, &num_entries) && num_entries > 0)
         {
+            uint64_t num_kernel_ids = 0;
+            result = args.GetCount(kRPVControllerMetricArgsKernelIdIndexed,
+                                   &num_kernel_ids);
+            if(result != kRocProfVisResultSuccess || num_entries > num_kernel_ids)
+            {
+                return result == kRocProfVisResultSuccess
+                           ? kRocProfVisResultInvalidArgument
+                           : result;
+            }
             query_args = std::make_shared<QueryArgumentStore>();
             for(uint64_t i = 0; i < num_entries; i++)
             {
-                result = args.GetUInt64(kRPVControllerMetricArgsKernelIdIndexed, i, &uint64_data);
+                uint32_t kernel_id = 0;
+                result = args.GetUnsigned(kRPVControllerMetricArgsKernelIdIndexed, i,
+                                          &kernel_id);
                 if(result == kRocProfVisResultSuccess)
                 {
-                    query_args->emplace_back(kRPVComputeParamKernelId, std::to_string(uint64_data));
+                    query_args->emplace_back(kRPVComputeParamKernelId,
+                                             std::to_string(kernel_id));
                 }
                 else
                 {
                     break;
                 }
             }
-            use_case = kRPVComputeFetchMetricValues;
+            if(result == kRocProfVisResultSuccess)
+            {
+                use_case = kRPVComputeFetchMetricValues;
+            }
+            else
+            {
+                query_args.reset();
+            }
         }
-        else if(kRocProfVisResultSuccess == args.GetUInt64(kRPVControllerMetricArgsWorkloadId, 0, &uint64_data))
+        else
         {
-            query_args = std::make_shared<QueryArgumentStore>();
-            query_args->emplace_back(kRPVComputeParamWorkloadId, std::to_string(uint64_data));
-            use_case = kRPVComputeFetchMetricValuesByWorkload;
+            uint32_t workload_id = 0;
+            result = args.GetUnsigned(kRPVControllerMetricArgsWorkloadId, 0,
+                                      &workload_id);
+            if(result == kRocProfVisResultSuccess)
+            {
+                query_args = std::make_shared<QueryArgumentStore>();
+                query_args->emplace_back(kRPVComputeParamWorkloadId,
+                                         std::to_string(workload_id));
+                use_case = kRPVComputeFetchMetricValuesByWorkload;
+            }
         }
         if(query_args)
         {
@@ -231,24 +256,56 @@ rocprofvis_result_t ComputeTrace::AsyncFetch(Arguments& args, Future& future, Me
             result = args.GetUInt64(kRPVControllerMetricArgsNumMetrics, 0, &num_entries);
             if(result == kRocProfVisResultSuccess)
             {
+                uint64_t num_metric_ids = 0;
+                if(num_entries > 0)
+                {
+                    result = args.GetCount(
+                        kRPVControllerMetricArgsMetricCategoryIdIndexed,
+                        &num_metric_ids);
+                }
+                if(result == kRocProfVisResultSuccess &&
+                   num_entries > num_metric_ids)
+                {
+                    result = kRocProfVisResultInvalidArgument;
+                }
+            }
+            if(result == kRocProfVisResultSuccess)
+            {
                 for(uint64_t i = 0; i < num_entries; i++)
                 {
-                    result = args.GetUInt64(kRPVControllerMetricArgsMetricCategoryIdIndexed, i, &uint64_data);
+                    uint32_t category_id = 0;
+                    uint32_t table_id    = 0;
+                    uint32_t entry_id    = 0;
+                    result = args.GetUnsigned(
+                        kRPVControllerMetricArgsMetricCategoryIdIndexed, i,
+                        &category_id);
                     if(result == kRocProfVisResultSuccess)
                     {
-                        MetricID metric_id((uint32_t)uint64_data);
-                        result = args.GetUInt64(kRPVControllerMetricArgsMetricTableIdIndexed, i, &uint64_data);
-                        if(result == kRocProfVisResultSuccess)
+                        result = args.GetUnsigned(
+                            kRPVControllerMetricArgsMetricTableIdIndexed, i,
+                            &table_id);
+                        if(result == kRocProfVisResultInvalidArgument)
                         {
-                            metric_id.SetTableID((uint32_t)uint64_data);
-                            result = args.GetUInt64(kRPVControllerMetricArgsMetricEntryIdIndexed, i, &uint64_data);
-                            if(result == kRocProfVisResultSuccess)
-                            {
-                                metric_id.SetEntryID((uint32_t)uint64_data);
-                            }
+                            result = kRocProfVisResultSuccess;
                         }
-                        query_args->emplace_back(kRPVComputeParamMetricId, metric_id.ToString());
-                        result = kRocProfVisResultSuccess;
+                    }
+                    if(result == kRocProfVisResultSuccess)
+                    {
+                        result = args.GetUnsigned(
+                            kRPVControllerMetricArgsMetricEntryIdIndexed, i,
+                            &entry_id);
+                        if(result == kRocProfVisResultInvalidArgument)
+                        {
+                            result = kRocProfVisResultSuccess;
+                        }
+                    }
+                    if(result == kRocProfVisResultSuccess)
+                    {
+                        MetricID metric_id(category_id);
+                        metric_id.SetTableID(table_id);
+                        metric_id.SetEntryID(entry_id);
+                        query_args->emplace_back(kRPVComputeParamMetricId,
+                                                 metric_id.ToString());
                     }
                     else
                     {
@@ -334,16 +391,27 @@ rocprofvis_result_t ComputeTrace::AsyncFetch(Table& table, Arguments& args, Futu
 
 rocprofvis_result_t ComputeTrace::AsyncFetchPcSampling(Arguments& args, Future& future, PcSampling& output)
 {
-    uint64_t workload_id    = 0;
-    uint64_t kernel_id      = 0;
-    uint64_t source_file_id = 0;
+    uint32_t workload_id    = 0;
+    uint32_t kernel_id      = 0;
+    uint32_t source_file_id = 0;
 
-    if(kRocProfVisResultSuccess != args.GetUInt64(kRPVControllerPcSamplingArgsWorkloadId,   0, &workload_id)    ||
-       kRocProfVisResultSuccess != args.GetUInt64(kRPVControllerPcSamplingArgsKernelId,     0, &kernel_id)     ||
-       kRocProfVisResultSuccess != args.GetUInt64(kRPVControllerPcSamplingArgsSourceFileId, 0, &source_file_id))
+    rocprofvis_result_t result = args.GetUnsigned(
+        kRPVControllerPcSamplingArgsWorkloadId, 0, &workload_id);
+    if(result == kRocProfVisResultSuccess)
     {
-        return kRocProfVisResultInvalidArgument;
+        result = args.GetUnsigned(kRPVControllerPcSamplingArgsKernelId, 0,
+                                  &kernel_id);
     }
+    if(result == kRocProfVisResultSuccess)
+    {
+        result = args.GetUnsigned(kRPVControllerPcSamplingArgsSourceFileId, 0,
+                                  &source_file_id);
+    }
+    if(result != kRocProfVisResultSuccess)
+    {
+        return result;
+    }
+    (void)workload_id;
 
     future.Set(JobSystem::Get().IssueJob([this, &output, kernel_id, source_file_id](Future* future) -> rocprofvis_result_t {
         std::unique_lock<std::recursive_mutex> data_lock(output.GetDataMutex());

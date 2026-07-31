@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 #include "rocprofvis_controller_pc_sampling.h"
+#include "rocprofvis_controller_safe_operations_helper.h"
 
 namespace RocProfVis
 {
@@ -314,32 +315,28 @@ rocprofvis_result_t PcSampling::SetUInt64(rocprofvis_property_t property, uint64
         case kRPVControllerPCSamplingNumSourceFiles:
         {
             (void)index;
-            m_source_files.resize(value);
-            result = kRocProfVisResultSuccess;
+            result = CheckedResize(m_source_files, value);
             break;
         }
         case kRPVControllerPCSamplingSourceFileId:
         {
             if(index < m_source_files.size())
             {
-                m_source_files[index].id = static_cast<uint32_t>(value);
-                result = kRocProfVisResultSuccess;
+                result = CheckedAssignUnsigned(value, m_source_files[index].id);
             }
             break;
         }
         case kRPVControllerPCSamplingNumSourceLines:
         {
             (void)index;
-            m_source_lines.resize(value);
-            result = kRocProfVisResultSuccess;
+            result = CheckedResize(m_source_lines, value);
             break;
         }
         case kRPVControllerPCSamplingSourceLineId:
         {
             if(index < m_source_lines.size())
             {
-                m_source_lines[index].id = static_cast<uint32_t>(value);
-                result = kRocProfVisResultSuccess;
+                result = CheckedAssignUnsigned(value, m_source_lines[index].id);
             }
             break;
         }
@@ -347,8 +344,8 @@ rocprofvis_result_t PcSampling::SetUInt64(rocprofvis_property_t property, uint64
         {
             if(index < m_source_lines.size())
             {
-                m_source_lines[index].source_file_id = static_cast<uint32_t>(value);
-                result = kRocProfVisResultSuccess;
+                result =
+                    CheckedAssignUnsigned(value, m_source_lines[index].source_file_id);
             }
             break;
         }
@@ -356,40 +353,36 @@ rocprofvis_result_t PcSampling::SetUInt64(rocprofvis_property_t property, uint64
         {
             if(index < m_source_lines.size())
             {
-                m_source_lines[index].line_number = static_cast<uint32_t>(value);
-                result = kRocProfVisResultSuccess;
+                result =
+                    CheckedAssignUnsigned(value, m_source_lines[index].line_number);
             }
             break;
         }
         case kRPVControllerPCSamplingNumCodeObjects:
         {
             (void)index;
-            m_code_objects.resize(value);
-            result = kRocProfVisResultSuccess;
+            result = CheckedResize(m_code_objects, value);
             break;
         }
         case kRPVControllerPCSamplingCodeObjectId:
         {
             if(index < m_code_objects.size())
             {
-                m_code_objects[index].id = static_cast<uint32_t>(value);
-                result = kRocProfVisResultSuccess;
+                result = CheckedAssignUnsigned(value, m_code_objects[index].id);
             }
             break;
         }
         case kRPVControllerPCSamplingNumIsaLines:
         {
             (void)index;
-            m_isa_lines.resize(value);
-            result = kRocProfVisResultSuccess;
+            result = CheckedResize(m_isa_lines, value);
             break;
         }
         case kRPVControllerPCSamplingIsaLineId:
         {
             if(index < m_isa_lines.size())
             {
-                m_isa_lines[index].id = static_cast<uint32_t>(value);
-                result = kRocProfVisResultSuccess;
+                result = CheckedAssignUnsigned(value, m_isa_lines[index].id);
             }
             break;
         }
@@ -397,8 +390,8 @@ rocprofvis_result_t PcSampling::SetUInt64(rocprofvis_property_t property, uint64
         {
             if(index < m_isa_lines.size())
             {
-                m_isa_lines[index].code_object_id = static_cast<uint32_t>(value);
-                result = kRocProfVisResultSuccess;
+                result =
+                    CheckedAssignUnsigned(value, m_isa_lines[index].code_object_id);
             }
             break;
         }
@@ -415,24 +408,23 @@ rocprofvis_result_t PcSampling::SetUInt64(rocprofvis_property_t property, uint64
         {
             if(index < m_isa_lines.size())
             {
-                m_isa_lines[index].instruction_type_id = static_cast<uint32_t>(value);
-                result = kRocProfVisResultSuccess;
+                result = CheckedAssignUnsigned(
+                    value, m_isa_lines[index].instruction_type_id);
             }
             break;
         }
         case kRPVControllerPCSamplingNumIsaToIsaDeps:
         {
             (void)index;
-            m_isa_to_isa_deps.resize(value);
-            result = kRocProfVisResultSuccess;
+            result = CheckedResize(m_isa_to_isa_deps, value);
             break;
         }
         case kRPVControllerPCSamplingIsaToIsaDependentIsaLineId:
         {
             if(index < m_isa_to_isa_deps.size())
             {
-                m_isa_to_isa_deps[index].dependent_isa_line_id = static_cast<uint32_t>(value);
-                result = kRocProfVisResultSuccess;
+                result = CheckedAssignUnsigned(
+                    value, m_isa_to_isa_deps[index].dependent_isa_line_id);
             }
             break;
         }
@@ -440,24 +432,23 @@ rocprofvis_result_t PcSampling::SetUInt64(rocprofvis_property_t property, uint64
         {
             if(index < m_isa_to_isa_deps.size())
             {
-                m_isa_to_isa_deps[index].dependency_isa_line_id = static_cast<uint32_t>(value);
-                result = kRocProfVisResultSuccess;
+                result = CheckedAssignUnsigned(
+                    value, m_isa_to_isa_deps[index].dependency_isa_line_id);
             }
             break;
         }
         case kRPVControllerPCSamplingNumIsaToSourceDeps:
         {
             (void)index;
-            m_isa_to_source_deps.resize(value);
-            result = kRocProfVisResultSuccess;
+            result = CheckedResize(m_isa_to_source_deps, value);
             break;
         }
         case kRPVControllerPCSamplingIsaToSourceIsaLineId:
         {
             if(index < m_isa_to_source_deps.size())
             {
-                m_isa_to_source_deps[index].isa_line_id = static_cast<uint32_t>(value);
-                result = kRocProfVisResultSuccess;
+                result = CheckedAssignUnsigned(
+                    value, m_isa_to_source_deps[index].isa_line_id);
             }
             break;
         }
@@ -465,8 +456,8 @@ rocprofvis_result_t PcSampling::SetUInt64(rocprofvis_property_t property, uint64
         {
             if(index < m_isa_to_source_deps.size())
             {
-                m_isa_to_source_deps[index].source_line_id = static_cast<uint32_t>(value);
-                result = kRocProfVisResultSuccess;
+                result = CheckedAssignUnsigned(
+                    value, m_isa_to_source_deps[index].source_line_id);
             }
             break;
         }
@@ -474,24 +465,22 @@ rocprofvis_result_t PcSampling::SetUInt64(rocprofvis_property_t property, uint64
         {
             if(index < m_isa_to_source_deps.size())
             {
-                m_isa_to_source_deps[index].depth = static_cast<uint32_t>(value);
-                result = kRocProfVisResultSuccess;
+                result = CheckedAssignUnsigned(value,
+                                               m_isa_to_source_deps[index].depth);
             }
             break;
         }
         case kRPVControllerPCSamplingNumSamplingStates:
         {
             (void)index;
-            m_sampling_states.resize(value);
-            result = kRocProfVisResultSuccess;
+            result = CheckedResize(m_sampling_states, value);
             break;
         }
         case kRPVControllerPCSamplingStateId:
         {
             if(index < m_sampling_states.size())
             {
-                m_sampling_states[index].id = static_cast<uint32_t>(value);
-                result = kRocProfVisResultSuccess;
+                result = CheckedAssignUnsigned(value, m_sampling_states[index].id);
             }
             break;
         }
@@ -499,8 +488,8 @@ rocprofvis_result_t PcSampling::SetUInt64(rocprofvis_property_t property, uint64
         {
             if(index < m_sampling_states.size())
             {
-                m_sampling_states[index].isa_line_id = static_cast<uint32_t>(value);
-                result = kRocProfVisResultSuccess;
+                result =
+                    CheckedAssignUnsigned(value, m_sampling_states[index].isa_line_id);
             }
             break;
         }
@@ -517,8 +506,8 @@ rocprofvis_result_t PcSampling::SetUInt64(rocprofvis_property_t property, uint64
         {
             if(index < m_sampling_states.size())
             {
-                m_sampling_states[index].issued_count = static_cast<uint32_t>(value);
-                result = kRocProfVisResultSuccess;
+                result = CheckedAssignUnsigned(
+                    value, m_sampling_states[index].issued_count);
             }
             break;
         }
@@ -526,8 +515,8 @@ rocprofvis_result_t PcSampling::SetUInt64(rocprofvis_property_t property, uint64
         {
             if(index < m_sampling_states.size())
             {
-                m_sampling_states[index].stalled_count = static_cast<uint32_t>(value);
-                result = kRocProfVisResultSuccess;
+                result = CheckedAssignUnsigned(
+                    value, m_sampling_states[index].stalled_count);
             }
             break;
         }
@@ -535,24 +524,23 @@ rocprofvis_result_t PcSampling::SetUInt64(rocprofvis_property_t property, uint64
         {
             if(index < m_sampling_states.size())
             {
-                m_sampling_states[index].total_count = static_cast<uint32_t>(value);
-                result = kRocProfVisResultSuccess;
+                result = CheckedAssignUnsigned(
+                    value, m_sampling_states[index].total_count);
             }
             break;
         }
         case kRPVControllerPCSamplingNumStallReasonCounts:
         {
             (void)index;
-            m_stall_reason_counts.resize(value);
-            result = kRocProfVisResultSuccess;
+            result = CheckedResize(m_stall_reason_counts, value);
             break;
         }
         case kRPVControllerPCSamplingStallReasonSamplingStateId:
         {
             if(index < m_stall_reason_counts.size())
             {
-                m_stall_reason_counts[index].sampling_state_id = static_cast<uint32_t>(value);
-                result = kRocProfVisResultSuccess;
+                result = CheckedAssignUnsigned(
+                    value, m_stall_reason_counts[index].sampling_state_id);
             }
             break;
         }
@@ -560,8 +548,8 @@ rocprofvis_result_t PcSampling::SetUInt64(rocprofvis_property_t property, uint64
         {
             if(index < m_stall_reason_counts.size())
             {
-                m_stall_reason_counts[index].reason_id = static_cast<uint32_t>(value);
-                result = kRocProfVisResultSuccess;
+                result = CheckedAssignUnsigned(
+                    value, m_stall_reason_counts[index].reason_id);
             }
             break;
         }
@@ -569,8 +557,8 @@ rocprofvis_result_t PcSampling::SetUInt64(rocprofvis_property_t property, uint64
         {
             if(index < m_stall_reason_counts.size())
             {
-                m_stall_reason_counts[index].count = static_cast<uint32_t>(value);
-                result = kRocProfVisResultSuccess;
+                result =
+                    CheckedAssignUnsigned(value, m_stall_reason_counts[index].count);
             }
             break;
         }

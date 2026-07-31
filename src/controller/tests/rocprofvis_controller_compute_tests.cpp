@@ -2,6 +2,10 @@
 // SPDX-License-Identifier: MIT
 
 #include "rocprofvis_controller.h"
+#include "rocprofvis_controller_cpp_abi_wrapper.h"
+#include "compute/rocprofvis_controller_kernel.h"
+#include "compute/rocprofvis_controller_pc_sampling.h"
+#include "compute/rocprofvis_controller_roofline.h"
 #include "rocprofvis_core.h"
 #include <algorithm>
 #include <catch2/catch_session.hpp>
@@ -14,6 +18,50 @@ std::string g_input_file =
     (std::filesystem::path(ROCPROFVIS_TEST_SOURCE_DIR) / "sample" /
      "rocprof_compute_23ed6f36.db")
         .string();
+
+TEST_CASE("Compute controller setters preserve uint32 values on overflow")
+{
+    RocProfVis::Controller::Kernel kernel;
+    REQUIRE(kernel.SetUInt64(kRPVControllerKernelId, 0, UINT32_MAX) ==
+            kRocProfVisResultSuccess);
+    REQUIRE(kernel.SetUInt64(kRPVControllerKernelId, 0,
+                             static_cast<uint64_t>(UINT32_MAX) + 1) ==
+            kRocProfVisResultOutOfRange);
+
+    uint64_t kernel_id = 0;
+    REQUIRE(kernel.GetUInt64(kRPVControllerKernelId, 0, &kernel_id) ==
+            kRocProfVisResultSuccess);
+    REQUIRE(kernel_id == UINT32_MAX);
+
+    RocProfVis::Controller::PcSampling pc_sampling;
+    REQUIRE(pc_sampling.SetUInt64(kRPVControllerPCSamplingNumSourceFiles, 0,
+                                  1) == kRocProfVisResultSuccess);
+    REQUIRE(pc_sampling.SetUInt64(kRPVControllerPCSamplingSourceFileId, 0,
+                                  UINT32_MAX) == kRocProfVisResultSuccess);
+    REQUIRE(pc_sampling.SetUInt64(
+                kRPVControllerPCSamplingSourceFileId, 0,
+                static_cast<uint64_t>(UINT32_MAX) + 1) ==
+            kRocProfVisResultOutOfRange);
+
+    uint64_t source_file_id = 0;
+    REQUIRE(pc_sampling.GetUInt64(kRPVControllerPCSamplingSourceFileId, 0,
+                                  &source_file_id) ==
+            kRocProfVisResultSuccess);
+    REQUIRE(source_file_id == UINT32_MAX);
+}
+
+TEST_CASE("Compute controller setters validate enums and vector sizes")
+{
+    RocProfVis::Controller::Roofline roofline;
+    REQUIRE(roofline.SetUInt64(kRPVControllerRooflineNumCeilingsCompute, 0,
+                               1) == kRocProfVisResultSuccess);
+    REQUIRE(roofline.SetUInt64(kRPVControllerRooflineCeilingComputeTypeIndexed,
+                               0, UINT32_MAX) ==
+            kRocProfVisResultInvalidEnum);
+    REQUIRE(roofline.SetUInt64(kRPVControllerRooflineNumKernels, 0,
+                               UINT64_MAX) ==
+            kRocProfVisResultOutOfRange);
+}
 
 int
 main(int argc, char** argv)
@@ -1269,6 +1317,54 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture,
             rocprofvis_controller_arguments_free(args);
             rocprofvis_controller_future_free(future);
         }
+    }
+
+    // Verifies colliding generic argument property values are interpreted by
+    // the request schema, not by a global property-to-width table.
+    SECTION("Controller validates integer widths in request context")
+    {
+        rocprofvis_controller_arguments_t* args =
+            rocprofvis_controller_arguments_alloc();
+        rocprofvis_controller_future_t* future =
+            rocprofvis_controller_future_alloc();
+        rocprofvis_controller_metrics_container_t* metrics =
+            rocprofvis_controller_metrics_container_alloc();
+        REQUIRE(args);
+        REQUIRE(future);
+        REQUIRE(metrics);
+
+        REQUIRE(rocprofvis_controller_set_uint64(
+                    args, kRPVControllerMetricArgsWorkloadId, 0,
+                    static_cast<uint64_t>(UINT32_MAX) + 1) ==
+                kRocProfVisResultSuccess);
+        REQUIRE(rocprofvis_controller_metric_fetch_async(
+                    m_controller, args, future, metrics) ==
+                kRocProfVisResultOutOfRange);
+
+        rocprofvis_controller_arguments_free(args);
+        rocprofvis_controller_future_free(future);
+        rocprofvis_controller_metrics_container_free(metrics);
+
+        args   = rocprofvis_controller_arguments_alloc();
+        future = rocprofvis_controller_future_alloc();
+        REQUIRE(args);
+        REQUIRE(future);
+
+        RocProfVis::Controller::PcSampling pc_sampling;
+        REQUIRE(rocprofvis_controller_set_uint64(
+                    args, kRPVControllerPcSamplingArgsWorkloadId, 0, 1) ==
+                kRocProfVisResultSuccess);
+        REQUIRE(rocprofvis_controller_set_uint64(
+                    args, kRPVControllerPcSamplingArgsKernelId, 0,
+                    static_cast<uint64_t>(UINT32_MAX) + 1) ==
+                kRocProfVisResultSuccess);
+        REQUIRE(rocprofvis_controller_pc_sampling_fetch_async(
+                    m_controller, args, future,
+                    reinterpret_cast<rocprofvis_handle_t*>(&pc_sampling)) ==
+                kRocProfVisResultOutOfRange);
+
+        rocprofvis_controller_arguments_free(args);
+        rocprofvis_controller_future_free(future);
     }
 
     // Frees the controller handle and all associated resources.

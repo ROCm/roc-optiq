@@ -58,8 +58,8 @@ struct Point
 
 struct PcStallReason
 {
-    int32_t     reason_id = 0;
-    int32_t     count   = 0;
+    uint32_t reason_id = 0;
+    uint32_t count     = 0;
 };
 
 struct SamplingState

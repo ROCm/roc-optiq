@@ -138,7 +138,7 @@ struct BasicEventData
 
 struct EventArg
 {
-    uint16_t    position;
+    uint32_t    position;
     std::string name;
     std::string value;
     std::string data_type;

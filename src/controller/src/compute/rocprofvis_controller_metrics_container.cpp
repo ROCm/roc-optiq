@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 #include "rocprofvis_controller_metrics_container.h"
+#include "rocprofvis_controller_safe_operations_helper.h"
 #include "rocprofvis_controller_string_table.h"
 
 namespace RocProfVis
@@ -189,17 +190,19 @@ rocprofvis_result_t MetricsContainer::SetUInt64(rocprofvis_property_t property, 
     {
         case kRPVControllerMetricsContainerNumMetrics:
         {
-            m_container.resize(value);
-            result = kRocProfVisResultSuccess;
+            result = CheckedResize(m_container, value);
             break;
         }
         case kRPVControllerMetricsContainerWorkloadIdIndexed:
         {
             if(index < m_container.size())
             {
-                m_container[index].source_type = kRPVControllerMetricSourceTypeWorkload;
-                m_container[index].source_id = (uint32_t) value;
-                result = kRocProfVisResultSuccess;
+                result = CheckedAssignUnsigned(value, m_container[index].source_id);
+                if(result == kRocProfVisResultSuccess)
+                {
+                    m_container[index].source_type =
+                        kRPVControllerMetricSourceTypeWorkload;
+                }
             }
             else
             {
@@ -211,9 +214,12 @@ rocprofvis_result_t MetricsContainer::SetUInt64(rocprofvis_property_t property, 
         {
             if(index < m_container.size())
             {
-                m_container[index].source_type = kRPVControllerMetricSourceTypeKernel;
-                m_container[index].source_id = (uint32_t) value;
-                result = kRocProfVisResultSuccess;
+                result = CheckedAssignUnsigned(value, m_container[index].source_id);
+                if(result == kRocProfVisResultSuccess)
+                {
+                    m_container[index].source_type =
+                        kRPVControllerMetricSourceTypeKernel;
+                }
             }
             else
             {

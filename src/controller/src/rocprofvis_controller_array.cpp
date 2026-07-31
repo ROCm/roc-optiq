@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 #include "rocprofvis_controller_array.h"
+#include "rocprofvis_controller_safe_operations_helper.h"
 #include "rocprofvis_controller_trace.h"
 
 namespace RocProfVis
@@ -201,8 +202,7 @@ rocprofvis_result_t Array::SetUInt64(rocprofvis_property_t property, uint64_t in
         {
             if(value != m_array.size())
             {
-                m_array.resize(value);
-                result = m_array.size() == value ? kRocProfVisResultSuccess : kRocProfVisResultMemoryAllocError;
+                result = CheckedResize(m_array, value);
             }
             else
             {

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 #include "rocprofvis_controller_plot_series.h"
+#include "rocprofvis_controller_safe_operations_helper.h"
 #include "rocprofvis_controller_data.h"
 #include <cstring>
 
@@ -144,20 +145,32 @@ rocprofvis_result_t PlotSeries::SetDouble(rocprofvis_property_t property, uint64
         {
             if (index >= m_values.size())
             {
-                m_values.resize(index + 1);
+                result = CheckedEnsureIndex(m_values, index);
             }
-            m_values[index].first = value;
-            result = kRocProfVisResultSuccess;
+            else
+            {
+                result = kRocProfVisResultSuccess;
+            }
+            if(result == kRocProfVisResultSuccess)
+            {
+                m_values[index].first = value;
+            }
             break;
         }
         case kRPVControllerPlotSeriesYValuesIndexed:
         {
             if (index >= m_values.size())
             {
-                m_values.resize(index + 1);
+                result = CheckedEnsureIndex(m_values, index);
             }
-            m_values[index].second = value;
-            result = kRocProfVisResultSuccess;
+            else
+            {
+                result = kRocProfVisResultSuccess;
+            }
+            if(result == kRocProfVisResultSuccess)
+            {
+                m_values[index].second = value;
+            }
             break;
         }
         default:

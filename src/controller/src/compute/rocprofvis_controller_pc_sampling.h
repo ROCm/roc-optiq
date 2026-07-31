@@ -25,10 +25,10 @@ public:
 
     rocprofvis_result_t GetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t* value) final;
     rocprofvis_result_t GetString(rocprofvis_property_t property, uint64_t index, char* value, uint32_t* length) final;
+    rocprofvis_result_t GetDouble(rocprofvis_property_t property, uint64_t index, double* value) final;
 
     rocprofvis_result_t SetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t value) final;
     rocprofvis_result_t SetDouble(rocprofvis_property_t property, uint64_t index, double value) final;
-    rocprofvis_result_t GetDouble(rocprofvis_property_t property, uint64_t index, double* value) final;
     rocprofvis_result_t SetString(rocprofvis_property_t property, uint64_t index, char const* value) final;
 
     bool QueryToPropertyEnum(rocprofvis_db_compute_column_enum_t in, rocprofvis_property_t& property, rocprofvis_controller_primitive_type_t& type) const;
@@ -47,7 +47,7 @@ private:
     };
     struct SourceFile
     {
-        uint32_t    id        = 0;
+        uint32_t    id = 0;
         std::string file_path;
         std::string content_checksum;
     };
@@ -62,7 +62,7 @@ private:
     };
     struct CodeObject
     {
-        uint32_t    id               = 0;
+        uint32_t    id = 0;
         std::string uri;
         std::string content_checksum;
     };
@@ -90,9 +90,9 @@ private:
     };
     struct StallReasonCount
     {
-        uint32_t sampling_state_id   = 0;
-        uint32_t reason_id     = 0;
-        uint32_t count       = 0;
+        uint32_t sampling_state_id = 0;
+        uint32_t reason_id         = 0;
+        uint32_t count             = 0;
     };
 
     std::vector<SourceFile>       m_source_files;
@@ -101,7 +101,7 @@ private:
     std::vector<IsaLine>          m_isa_lines;
     std::vector<IsaToIsaDep>      m_isa_to_isa_deps;
     std::vector<IsaToSourceDep>   m_isa_to_source_deps;
-    std::vector<SamplingState>      m_sampling_states;
+    std::vector<SamplingState>    m_sampling_states;
     std::vector<StallReasonCount> m_stall_reason_counts;
 
     std::unordered_map<uint32_t, std::vector<SourceLine>> m_source_line_cache;

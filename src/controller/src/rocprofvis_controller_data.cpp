@@ -225,7 +225,12 @@ rocprofvis_controller_primitive_type_t Data::GetType(void) const
 
 void Data::SetType(rocprofvis_controller_primitive_type_t type)
 {
-    m_type = type;
+    if(m_type != type)
+    {
+        Reset();
+        m_uint64 = 0;
+        m_type   = type;
+    }
 }
 
 rocprofvis_result_t Data::GetObject(rocprofvis_handle_t** object)

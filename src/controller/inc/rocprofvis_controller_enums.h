@@ -1105,7 +1105,7 @@ typedef enum rocprofvis_controller_pc_sampling_arguments_t : uint32_t
  */
 typedef enum rocprofvis_controller_compute_pivot_table_arguments_t : uint32_t
 {
-    // Workload ID to query (uint64)
+    // Workload ID to query (semantic uint32, transported through uint64 ABI)
     kRPVControllerCPTArgsWorkloadId = 0x13000000,
     // Number of metric selectors (uint64)
     kRPVControllerCPTArgsNumMetricSelectors,

@@ -48,64 +48,120 @@ ComputePivotTable::Setup(rocprofvis_dm_trace_t dm_handle, Arguments& args, Futur
     rocprofvis_result_t result = kRocProfVisResultSuccess;
 
     // Check if this is a dynamic metrics matrix query by detecting pivot table arguments
-    if(args.GetUInt64(kRPVControllerCPTArgsWorkloadId, 0, &m_workload_id) ==
+    if(args.GetUnsigned(kRPVControllerCPTArgsWorkloadId, 0, &m_workload_id) ==
        kRocProfVisResultSuccess)
     {
         // Extract number of metric selectors
         uint64_t num_selectors = 0;
-        args.GetUInt64(kRPVControllerCPTArgsNumMetricSelectors, 0,
-                       &num_selectors);
+        result = args.GetUInt64(kRPVControllerCPTArgsNumMetricSelectors, 0,
+                                &num_selectors);
+        uint64_t selector_count = 0;
+        if(result == kRocProfVisResultSuccess && num_selectors > 0)
+        {
+            result = args.GetCount(kRPVControllerCPTArgsMetricSelectorIndexed,
+                                   &selector_count);
+            if(result == kRocProfVisResultSuccess &&
+               num_selectors > selector_count)
+            {
+                result = kRocProfVisResultInvalidArgument;
+            }
+        }
 
         // Extract metric selectors (indexed string property)
         m_metric_selectors.clear();
-        for(uint64_t i = 0; i < num_selectors; i++)
+        for(uint64_t i = 0;
+            i < num_selectors && result == kRocProfVisResultSuccess; i++)
         {
             char     buffer[256];
             uint32_t length = sizeof(buffer);
-            if(args.GetString(kRPVControllerCPTArgsMetricSelectorIndexed, i,
-                              buffer, &length) == kRocProfVisResultSuccess)
+            result = args.GetString(kRPVControllerCPTArgsMetricSelectorIndexed, i,
+                                    buffer, &length);
+            if(result == kRocProfVisResultSuccess)
             {
                 m_metric_selectors.emplace_back(buffer, length);
             }
         }
 
         // Set sort column index
-        args.GetUInt64(kRPVControllerCPTArgsSortColumnIndex, 0,
-                       &m_sort_column);
+        if(result == kRocProfVisResultSuccess)
+        {
+            result = args.GetUInt64(kRPVControllerCPTArgsSortColumnIndex, 0,
+                                    &m_sort_column);
+        }
 
         // Set sort order
         uint64_t sort_order_val = 0;
-        if(args.GetUInt64(kRPVControllerCPTArgsSortOrder, 0, &sort_order_val) !=
-           kRocProfVisResultSuccess)
+        rocprofvis_result_t sort_result =
+            args.GetUInt64(kRPVControllerCPTArgsSortOrder, 0, &sort_order_val);
+        if(sort_result == kRocProfVisResultInvalidArgument)
         {
             m_sort_order = kRPVControllerSortOrderDescending;  // Default to descending
         }
-        else
+        else if(sort_result == kRocProfVisResultSuccess)
         {
-            m_sort_order = (sort_order_val == kRPVControllerSortOrderAscending)
-                               ? kRPVControllerSortOrderAscending
-                               : kRPVControllerSortOrderDescending;
+            sort_result = CheckedAssignEnum(
+                sort_order_val, m_sort_order,
+                [](rocprofvis_controller_sort_order_t order) {
+                    return order == kRPVControllerSortOrderAscending ||
+                           order == kRPVControllerSortOrderDescending;
+                });
+        }
+        if(result == kRocProfVisResultSuccess &&
+           sort_result != kRocProfVisResultSuccess)
+        {
+            result = sort_result;
         }
 
         // Extract column filters
         uint64_t num_filters = 0;
-        args.GetUInt64(kRPVControllerCPTArgsNumColumnFilters, 0, &num_filters);
+        if(result == kRocProfVisResultSuccess)
+        {
+            result = args.GetUInt64(kRPVControllerCPTArgsNumColumnFilters, 0,
+                                    &num_filters);
+        }
+        if(result == kRocProfVisResultSuccess && num_filters > 0)
+        {
+            uint64_t filter_column_count = 0;
+            uint64_t filter_expression_count = 0;
+            result = args.GetCount(
+                kRPVControllerCPTArgsFilterColumnIndexIndexed,
+                &filter_column_count);
+            if(result == kRocProfVisResultSuccess)
+            {
+                result = args.GetCount(
+                    kRPVControllerCPTArgsFilterExpressionIndexed,
+                    &filter_expression_count);
+            }
+            if(result == kRocProfVisResultSuccess &&
+               (num_filters > filter_column_count ||
+                num_filters > filter_expression_count))
+            {
+                result = kRocProfVisResultInvalidArgument;
+            }
+        }
 
         m_column_filters.clear();
-        for(uint64_t i = 0; i < num_filters; i++)
+        for(uint64_t i = 0;
+            i < num_filters && result == kRocProfVisResultSuccess; i++)
         {
             uint64_t column_index = 0;
-            if(args.GetUInt64(kRPVControllerCPTArgsFilterColumnIndexIndexed, i,
-                              &column_index) != kRocProfVisResultSuccess)
-                continue;
+            result = args.GetUInt64(kRPVControllerCPTArgsFilterColumnIndexIndexed, i,
+                                    &column_index);
 
             char     filter_expr[256];
             uint32_t expr_length = sizeof(filter_expr);
-            if(args.GetString(kRPVControllerCPTArgsFilterExpressionIndexed, i,
-                              filter_expr, &expr_length) != kRocProfVisResultSuccess)
-                continue;
+            if(result == kRocProfVisResultSuccess)
+            {
+                result = args.GetString(
+                    kRPVControllerCPTArgsFilterExpressionIndexed, i, filter_expr,
+                    &expr_length);
+            }
 
-            m_column_filters[column_index] = std::string(filter_expr, expr_length);
+            if(result == kRocProfVisResultSuccess)
+            {
+                m_column_filters[column_index] =
+                    std::string(filter_expr, expr_length);
+            }
         }
     }
     else

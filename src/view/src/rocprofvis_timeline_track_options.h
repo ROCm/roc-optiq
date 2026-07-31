@@ -182,7 +182,8 @@ public:
     void RenderContextMenu();
     // Whether any known track is currently hidden.
     bool HasHiddenTracks() const;
-    // Render the "Show Hidden Tracks" submenu contents. Call within a BeginMenu.
+    // Render the "Show Hidden Tracks" submenu contents. Call within an open menu
+    // or popup.
     void RenderHiddenTracksSubmenu();
 
 private:

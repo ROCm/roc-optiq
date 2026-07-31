@@ -37,6 +37,7 @@ constexpr float    SCROLL_SPEED                  = 100.0f;
 constexpr uint64_t DEFAULT_LOADING_TIMER         = 150;  // milliseconds
 constexpr float    ARTIFICIAL_SCROLLBAR_HEIGHT   = 18.0f;
 constexpr float    SIDEBAR_SPLITTER_WIDTH        = 5.0f;
+constexpr const char* HIDDEN_TRACKS_MENU_POPUP_NAME = "HiddenTracksMenu";
 // Build a text block mirroring the on-hover tooltip (name, timing, and id)
 // for the clipboard.
 static std::string
@@ -1754,6 +1755,8 @@ TimelineView::RenderGraphView()
         RenderTrack(index, request_data, window_flags, container_size);
     }
 
+    RenderEmptyTrackAreaMenu();
+
     TrackItem::SetSidebarSize(m_sidebar_size);
     ImGui::EndChild();
     ImGui::PopStyleColor();
@@ -1803,6 +1806,66 @@ TimelineView::IsRequestDataNeeded()
         request_data                        = true;
     }
     return request_data;
+}
+
+bool
+TimelineView::HasVisibleTracks() const
+{
+    if(!m_tracks) return false;
+
+    for(const TrackItem* track : *m_tracks)
+    {
+        if(track && track->IsDisplayed()) return true;
+    }
+    return false;
+}
+
+void
+TimelineView::RenderEmptyTrackAreaMenu()
+{
+    if(!m_track_options_context_menu || !m_track_options_context_menu->HasHiddenTracks())
+    {
+        return;
+    }
+
+    const ImGuiStyle& style       = m_settings.GetDefaultStyle();
+    const ImVec2      window_pos  = ImGui::GetWindowPos();
+    const ImVec2      window_size = ImGui::GetWindowSize();
+
+    // Starts below the last rendered track, so tracks keep their own context
+    // menu, and stops at the description column, so the graph area keeps
+    // TimelineContextMenu. Called after the track loop, hence the cursor.
+    const ImVec2 area_min = ImVec2(window_pos.x, ImGui::GetCursorScreenPos().y);
+    const ImVec2 area_max =
+        ImVec2(window_pos.x + m_sidebar_size, window_pos.y + window_size.y);
+    if(area_min.y >= area_max.y)
+    {
+        return;
+    }
+
+    // A blank timeline offers no affordance at all, so point at the right-click.
+    if(!HasVisibleTracks())
+    {
+        ImGui::SetCursorPos(style.WindowPadding);
+        ImGui::PushTextWrapPos(std::max(m_sidebar_size - style.WindowPadding.x, 0.0f));
+        ImGui::TextDisabled("All tracks are hidden.\nRight-click here to show them.");
+        ImGui::PopTextWrapPos();
+    }
+
+    if(ImGui::IsMouseClicked(ImGuiMouseButton_Right) && ImGui::IsWindowHovered() &&
+       ImGui::IsMouseHoveringRect(area_min, area_max))
+    {
+        ImGui::OpenPopup(HIDDEN_TRACKS_MENU_POPUP_NAME);
+    }
+
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, style.WindowPadding);
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, style.ItemSpacing);
+    if(ImGui::BeginPopup(HIDDEN_TRACKS_MENU_POPUP_NAME))
+    {
+        m_track_options_context_menu->RenderHiddenTracksSubmenu();
+        ImGui::EndPopup();
+    }
+    ImGui::PopStyleVar(2);
 }
 
 void

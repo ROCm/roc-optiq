@@ -1020,26 +1020,24 @@ TimelineTrackOptions::HasHiddenTracks() const
 void
 TimelineTrackOptions::ShowTracks(const std::vector<TrackOptions*>& options)
 {
-    if(!m_context_menu_target)
-    {
-        return;
-    }
-    bool changed = false;
+    // Sourced from a revealed track rather than the context-menu target, so this
+    // also works when the menu was opened without one (all tracks hidden).
+    const TrackItem* revealed = nullptr;
     for(TrackOptions* option : options)
     {
         if(option && !option->m_display)
         {
             option->m_display = true;
-            changed           = true;
+            revealed          = &option->GetTrackItem();
         }
     }
-    if(changed)
+    if(revealed)
     {
         // Aggregated context-menu options track visibility too, so refresh them.
         m_update_aggregates = true;
         EventManager::GetInstance()->AddEvent(std::make_shared<RocEvent>(
             static_cast<int>(RocEvents::kTrackVisibilityChanged),
-            m_context_menu_target->m_data_provider.GetTraceFilePath()));
+            revealed->m_data_provider.GetTraceFilePath()));
     }
 }
 

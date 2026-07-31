@@ -2009,6 +2009,11 @@ Things to honor in any new data path:
    `rocprofvis_controller_table_type_t` must stay serialized. Independent
    views use client request IDs plus `TableRequestParams::m_view_table_type`
    to route each completed response into its own `TablesModel` slot.
+   `DataProvider::FetchTable` refuses a request while that table type is
+   busy, so go through `InfiniteScrollTable::QueueTableRequest`, which
+   holds the refused request and reissues it from `Update()`. A held
+   request keeps asking `RenderScheduler` for frames, because the lazy
+   render loop would otherwise sleep before the reissue ever runs.
 7. **SSH/profiler work goes through `AppMonitor`.** Do not poll
    controller futures in a dialog or block `Render()`. Subscribe to
    typed status events, filter by operation ID, and use deferred

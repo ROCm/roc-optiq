@@ -136,7 +136,7 @@ EventsView::Render()
         CenterNextTextItem(NO_DATA_TEXT);
         ImGui::SetCursorPosY((ImGui::GetWindowHeight() - ImGui::GetTextLineHeight()) *
                              0.5f);
-        ImGui::TextDisabled(NO_DATA_TEXT);
+        ImGui::TextDisabled("%s", NO_DATA_TEXT);
     }
     else
     {
@@ -260,7 +260,7 @@ EventsView::RenderSourceColumn(size_t source_index)
         CenterNextTextItem(NO_DATA_TEXT);
         ImGui::SetCursorPosY((ImGui::GetWindowHeight() - ImGui::GetTextLineHeight()) *
                              0.5f);
-        ImGui::TextDisabled(NO_DATA_TEXT);
+        ImGui::TextDisabled("%s", NO_DATA_TEXT);
     }
 
     EndCompareCard();

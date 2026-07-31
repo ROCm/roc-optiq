@@ -234,7 +234,10 @@ MultiTrackTable::RenderCard(const ImVec2& size)
     ROCPROFVIS_ASSERT(m_header_renderer);
     BeginCompareCard("##source_card", m_settings, size,
                      ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
-    m_header_renderer();
+    if(m_header_renderer)
+    {
+        m_header_renderer();
+    }
     InfiniteScrollTable::Render();
     EndCompareCard();
 }

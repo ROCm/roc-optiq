@@ -7,6 +7,7 @@
 #include "rocprofvis_appwindow.h"
 #include "rocprofvis_common_defs.h"
 #include "rocprofvis_events.h"
+#include "rocprofvis_render_scheduler.h"
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_timeline_selection.h"
 #include "rocprofvis_utils.h"
@@ -129,12 +130,24 @@ InfiniteScrollTable::~InfiniteScrollTable()
 void
 InfiniteScrollTable::Update()
 {
-    if(m_retry_fetch && !m_data_provider.IsRequestPending(m_request_id) &&
-       !m_data_provider.IsTableRequestPending(m_request_table_type))
+    if(m_retry_fetch)
     {
-        ROCPROFVIS_ASSERT(m_retry_params);
-        if(m_data_provider.FetchTable(*m_retry_params))
+        if(m_data_provider.IsRequestPending(m_request_id) ||
+           m_data_provider.IsTableRequestPending(m_request_table_type))
         {
+            // The reissue below is the only thing that will send this request, and
+            // it needs a frame to run in, so hold the lazy render loop open.
+            RenderScheduler::GetInstance().RequestRender();
+        }
+        else
+        {
+            // Nothing holds the controller table now, so this is the one attempt
+            // that waiting was for. Whatever it returns, stop carrying the request:
+            // a refusal here is not about the table being busy.
+            if(m_retry_params)
+            {
+                m_data_provider.FetchTable(*m_retry_params);
+            }
             ClearQueuedTableRequest();
         }
     }
@@ -160,6 +173,9 @@ InfiniteScrollTable::QueueTableRequest(const TableRequestParams& params)
         spdlog::debug("Deferring table request for {}", m_widget_name);
         m_retry_fetch  = true;
         m_retry_params = std::make_unique<TableRequestParams>(params);
+        // Deferring can happen during Render(), after this frame's Update() has
+        // run, so ask for the frame that reissues it.
+        RenderScheduler::GetInstance().RequestRender();
     }
     return queued;
 }

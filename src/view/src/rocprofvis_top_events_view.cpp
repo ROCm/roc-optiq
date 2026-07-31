@@ -185,7 +185,7 @@ TopEventsView::Render()
         CenterNextTextItem(NO_DATA_TEXT);
         ImGui::SetCursorPosY((ImGui::GetWindowHeight() - ImGui::GetTextLineHeight()) *
                              0.5f);
-        ImGui::TextDisabled(NO_DATA_TEXT);
+        ImGui::TextDisabled("%s", NO_DATA_TEXT);
     }
     ImGui::EndChild();
     ImGui::PopStyleColor(2);

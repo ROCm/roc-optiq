@@ -1,5 +1,6 @@
 #include <windows.h>
 #include <winver.h>
+#pragma code_page(65001)
 
 #define FILEVERSION_MAJOR        @PROJECT_VERSION_MAJOR@
 #define FILEVERSION_MINOR        @PROJECT_VERSION_MINOR@
@@ -24,12 +25,12 @@ BEGIN
         BLOCK "040904B0" // Language and codepage: U.S. English, Unicode
         BEGIN
             VALUE "CompanyName", "AMD\0"
-            VALUE "FileDescription", "ROCm� Optiq\0"
+            VALUE "FileDescription", "ROCm™ Optiq\0"
             VALUE "FileVersion", STR(FILEVERSION_MAJOR) "." STR(FILEVERSION_MINOR) "." STR(FILEVERSION_PATCH) "." STR(FILEVERSION_BUILD) "\0"
             VALUE "ProductVersion", STR(FILEVERSION_MAJOR) "." STR(FILEVERSION_MINOR) "." STR(FILEVERSION_PATCH) "." STR(FILEVERSION_BUILD) "\0"
-            VALUE "InternalName", "ROCm� Optiq\0"
-            VALUE "ProductName", "ROCm� Optiq\0"
-            VALUE "LegalCopyright", "Copyright (C) 2025 AMD\0"
+            VALUE "InternalName", "ROCm™ Optiq\0"
+            VALUE "ProductName", "ROCm™ Optiq\0"
+            VALUE "LegalCopyright", "Copyright (C) 2026 AMD\0"
         END
     END
     BLOCK "VarFileInfo"

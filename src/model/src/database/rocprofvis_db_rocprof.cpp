@@ -862,7 +862,7 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
             {
                 if (version != m_db_version)
                 {
-                    spdlog::debug("Cannot support different version database nodes!");
+                    spdlog::warn("Cannot support different version database nodes!");
                     result = kRocProfVisDmResultNotSupported;
                     break;
                 }

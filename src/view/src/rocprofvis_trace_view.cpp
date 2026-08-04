@@ -57,7 +57,7 @@ TraceView::TraceView()
         (void)trace_path;                                    
         if(!success)
         {
-            spdlog::debug("Failed to fetch event data for event ID: {}", event_id);
+            spdlog::warn("Failed to fetch event data for event ID: {}", event_id);
             return;
         }
 

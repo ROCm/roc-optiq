@@ -1208,7 +1208,7 @@ DataProvider::HandleLoadTrackMetaData()
         }
         else
         {
-            spdlog::debug("Error getting track meta data for track at index: {}", i);
+            spdlog::warn("Error getting track meta data for track at index: {}", i);
         }
     }
 
@@ -1426,7 +1426,7 @@ DataProvider::FetchWholeTrack(uint32_t track_id, double start_ts, double end_ts,
             {
                 rocprofvis_controller_array_free(track_array);
                 rocprofvis_controller_future_free(track_future);
-                spdlog::debug("Failed to fetch track graph data {}, result: {}", track_id,
+                spdlog::warn("Failed to fetch track graph data {}, result: {}", track_id,
                               static_cast<int>(result));
             }
         }
@@ -1514,7 +1514,7 @@ DataProvider::FetchTrack(const TrackRequestParams& request_params)
             {
                 rocprofvis_controller_array_free(graph_array);
                 rocprofvis_controller_future_free(graph_future);
-                spdlog::debug("Failed to fetch track graph data {}, result: {}",
+                spdlog::warn("Failed to fetch track graph data {}, result: {}",
                               request_params.m_track_id, static_cast<int>(result));
             }
         }

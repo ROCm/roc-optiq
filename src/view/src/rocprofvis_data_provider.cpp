@@ -1212,7 +1212,7 @@ DataProvider::HandleLoadTrackMetaData()
         }
     }
 
-    spdlog::info("Track meta data loaded");
+    spdlog::debug("Track meta data loaded");
 }
 
 void
@@ -1257,7 +1257,7 @@ DataProvider::ApplyTrackOrderRanking()
         metadata[ordered[i]->id].index = i;
     }
 
-    spdlog::info("Applied compare track order ranking to {} tracks", ordered.size());
+    spdlog::debug("Applied compare track order ranking to {} tracks", ordered.size());
 }
 
 bool
@@ -2998,7 +2998,7 @@ DataProvider::ProcessSummaryRequest(RequestInfo& req)
         }
         else
         {
-            spdlog::debug("Summary request failed with code {}", req.response_code);
+            spdlog::warn("Summary request failed with code {}", req.response_code);
         }
         rocprofvis_controller_summary_metric_free(metrics_handle);
         req.request_obj_handle = nullptr;
@@ -3021,7 +3021,7 @@ DataProvider::ProcessAnalysisTrackStatisticsRequest(RequestInfo& req)
     }
     else if(req.response_code != kRocProfVisResultSuccess)
     {
-        spdlog::debug("Track statistics request for track {} failed with code {}",
+        spdlog::warn("Track statistics request for track {} failed with code {}",
                       params->m_track_id, req.response_code);
     }
     else
@@ -3520,7 +3520,7 @@ DataProvider::ProcessTableRequest(RequestInfo& req)
     }
     else
     {
-        spdlog::debug("Table request failed with code {}", req.response_code);
+        spdlog::warn("Table request failed with code {}", req.response_code);
     }
 
     // free the array
@@ -3644,7 +3644,7 @@ DataProvider::ProcessGraphRequest(RequestInfo& req)
     }
     else
     {
-        spdlog::debug("Graph request failed with code {}", req.response_code);
+        spdlog::warn("Graph request failed with code {}", req.response_code);
     }
 
     // use the track type to determine what type of data is present in the graph array
@@ -3703,7 +3703,7 @@ DataProvider::CreateRawSampleData(const TrackRequestParams& params,
     {
         // TODO: review the controller return codes to see if anycase should be escalated
         // to a warning
-        spdlog::debug("Sample track data request failed with code {}", req.response_code);
+        spdlog::warn("Sample track data request failed with code {}", req.response_code);
         count = 0;
     }
 
@@ -3810,7 +3810,7 @@ DataProvider::CreateRawEventData(const TrackRequestParams& params, const Request
     {
         // TODO: review the controller return codes to see if anycase should be escalated
         // to a warning
-        spdlog::debug("Event track data request failed with code {}", req.response_code);
+        spdlog::warn("Event track data request failed with code {}", req.response_code);
         count = 0;
     }
 
@@ -5196,7 +5196,7 @@ DataProvider::ProcessMetricsRequest(RequestInfo& req)
         }
         else
         {
-            spdlog::debug("Metrics request failed with code {}", req.response_code);
+            spdlog::warn("Metrics request failed with code {}", req.response_code);
             //call callback
             if(m_metrics_fetch_callback)
             {
@@ -5301,7 +5301,7 @@ DataProvider::ProcessMetricPivotTable(RequestInfo& req)
 
             kernel_pivot_table.table_params = request_params;
 
-            spdlog::info("Processed {} rows from metric pivot table", num_rows);
+            spdlog::debug("Processed {} rows from metric pivot table", num_rows);
         }
         else
         {
@@ -5364,7 +5364,7 @@ DataProvider::ProcessPcSamplingRequest(RequestInfo& req)
     }
     else if(!success)
     {
-        spdlog::debug("PC sampling request failed with code {}", req.response_code);
+        spdlog::warn("PC sampling request failed with code {}", req.response_code);
     }
 
     req.request_obj_handle = nullptr;

@@ -4,8 +4,10 @@
 #include "rocprofvis_controller.h"
 #include "rocprofvis_controller_cpp_abi_wrapper.h"
 #include "compute/rocprofvis_controller_kernel.h"
-#include "compute/rocprofvis_controller_pc_sampling.h"
 #include "compute/rocprofvis_controller_roofline.h"
+#ifdef ROCPROFVIS_DEVELOPER_MODE
+#    include "compute/rocprofvis_controller_pc_sampling.h"
+#endif
 #include "rocprofvis_core.h"
 #include <algorithm>
 #include <catch2/catch_session.hpp>
@@ -32,7 +34,11 @@ TEST_CASE("Compute controller setters preserve uint32 values on overflow")
     REQUIRE(kernel.GetUInt64(kRPVControllerKernelId, 0, &kernel_id) ==
             kRocProfVisResultSuccess);
     REQUIRE(kernel_id == UINT32_MAX);
+}
 
+#ifdef ROCPROFVIS_DEVELOPER_MODE
+TEST_CASE("PC sampling setters preserve uint32 values on overflow")
+{
     RocProfVis::Controller::PcSampling pc_sampling;
     REQUIRE(pc_sampling.SetUInt64(kRPVControllerPCSamplingNumSourceFiles, 0,
                                   1) == kRocProfVisResultSuccess);
@@ -49,6 +55,7 @@ TEST_CASE("Compute controller setters preserve uint32 values on overflow")
             kRocProfVisResultSuccess);
     REQUIRE(source_file_id == UINT32_MAX);
 }
+#endif
 
 TEST_CASE("Compute controller setters validate enums and vector sizes")
 {
@@ -1344,9 +1351,15 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture,
         rocprofvis_controller_arguments_free(args);
         rocprofvis_controller_future_free(future);
         rocprofvis_controller_metrics_container_free(metrics);
+    }
 
-        args   = rocprofvis_controller_arguments_alloc();
-        future = rocprofvis_controller_future_alloc();
+#ifdef ROCPROFVIS_DEVELOPER_MODE
+    SECTION("Controller validates PC sampling request integer widths")
+    {
+        rocprofvis_controller_arguments_t* args =
+            rocprofvis_controller_arguments_alloc();
+        rocprofvis_controller_future_t* future =
+            rocprofvis_controller_future_alloc();
         REQUIRE(args);
         REQUIRE(future);
 
@@ -1366,6 +1379,7 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture,
         rocprofvis_controller_arguments_free(args);
         rocprofvis_controller_future_free(future);
     }
+#endif
 
     // Frees the controller handle and all associated resources.
     // Fixture Reads: m_controller

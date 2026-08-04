@@ -1349,8 +1349,10 @@ Catch2 tests live in `src/controller/tests/`:
   `sample/rocprof_compute_23ed6f36.db`. Tests the compute load,
   workload + kernel + roofline + metric-fetch + pivot-table flows, plus
   PC-sampling `uint32_t` assignment and fetch-argument overflow
-  rejection. It does not currently exercise the full database-backed
-  PC-sampling fetch sequence.
+  rejection when `ROCPROFVIS_DEVELOPER_MODE` is enabled. The guarded
+  PC-sampling tests follow the same feature boundary as the developer-only
+  PC-sampling View. They do not currently exercise the full
+  database-backed PC-sampling fetch sequence.
 
 Both binaries accept `--input_file <path>` (parsed by Catch2 + Clara).
 Logs land in `Testing/Temporary/rocprofvis_controller_*_tests/`.

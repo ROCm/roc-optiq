@@ -103,7 +103,7 @@ extern "C" {
     }
 
     // Only call this if you used Perfetto_ParseTrace.
-    // Do NOT call after Perfetto_ReadTrace � it already called this internally.
+    // Do NOT call after Perfetto_ReadTrace - it already called this internally.
     PERFETTO_DLL_EXPORT
         bool Perfetto_NotifyEndOfFile(PerfettoHandle* h) {
         if (!h || !h->tp) return false;
@@ -117,7 +117,7 @@ extern "C" {
         auto* q = new PerfettoQuery{h->tp->ExecuteQuery(sql)};
         q->col_count = q->it.ColumnCount();
 
-        // Cache column names � GetColumnName returns std::string by value
+        // Cache column names - GetColumnName returns std::string by value
         // so we must store them before returning their c_str()
         q->col_names.reserve(q->col_count);
         for (uint32_t i = 0; i < q->col_count; i++) {

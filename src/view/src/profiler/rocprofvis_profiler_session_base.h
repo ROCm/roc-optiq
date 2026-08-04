@@ -18,6 +18,36 @@ namespace RocProfVis
 namespace View
 {
 
+// Everything needed to configure one profiler process launch. These are grouped
+// into a struct rather than passed positionally because most of them are
+// strings: a transposed pair would compile cleanly and silently launch the wrong
+// command.
+struct ProfilerLaunchSpec
+{
+    rocprofvis_profiler_type_t profiler_type = kRPVProfilerTypeRocprofSysRun;
+
+    // Binary to execute (argv[0]).
+    std::string profiler_path;
+
+    // Descriptive metadata for logging and artifact resolution. The profiled
+    // program and the output path also appear in profiler_argv wherever the
+    // profiler's CLI expects them; setting these does not put them on the
+    // command line.
+    std::string target_executable;
+    std::string output_directory;
+
+    // Directory to run the profiler process in. Empty inherits Optiq's own
+    // working directory. Only the child is affected.
+    std::string working_directory;
+
+    // The complete argument list following argv[0], as emitted by
+    // IProfilerBackend::FlattenToExecution. Each entry becomes one argv entry
+    // verbatim - no whitespace splitting, no shell interpretation.
+    std::vector<std::string> profiler_argv;
+
+    std::vector<std::pair<std::string, std::string>> env_vars;
+};
+
 // Shared base for view-layer profiler sessions. Owns the profiler C API
 // objects (config / session handle / future) and the AppMonitor operation that
 // surfaces profiler state transitions as ProfilerStatusEvents. Subclasses
@@ -35,13 +65,7 @@ public:
 
     // Launches a profiler workflow asynchronously. The mechanism (local /
     // remote / multi-stage) is defined by the concrete subclass.
-    virtual bool Launch(rocprofvis_profiler_type_t profiler_type,
-                        const std::string&         profiler_path,
-                        const std::string&         target_executable,
-                        const std::string&         target_args,
-                        const std::string&         output_directory,
-                        const std::string&         profiler_args,
-                        const std::vector<std::pair<std::string, std::string>>& env_vars = {}) = 0;
+    virtual bool Launch(const ProfilerLaunchSpec& spec) = 0;
 
     virtual rocprofvis_profiler_state_t GetState() const;
     virtual std::string                 GetOutput();
@@ -63,13 +87,7 @@ protected:
     // Allocates m_config and applies the common profiler settings. Returns
     // false if allocation fails. Subclasses may apply additional settings
     // (e.g. SSH connection details) after a successful return.
-    bool BuildConfig(rocprofvis_profiler_type_t profiler_type,
-                     const std::string&         profiler_path,
-                     const std::string&         target_executable,
-                     const std::string&         target_args,
-                     const std::string&         output_directory,
-                     const std::string&         profiler_args,
-                     const std::vector<std::pair<std::string, std::string>>& env_vars);
+    bool BuildConfig(const ProfilerLaunchSpec& spec);
 
     // Registers the profiler op with the AppMonitor (status poller reads the
     // live controller state; the factory emits ProfilerStatusEvents). Stores

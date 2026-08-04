@@ -44,11 +44,16 @@ typedef Reference<rocprofvis_controller_connection_t, SshConnection, kRPVControl
 
 // Copies a std::string into the caller's buffer using the standard
 // "pass null buffer to query length" idiom shared by every string getter
-// in the profiler C API.
-//   - If buffer is null or *length is 0: writes the required size (excluding
-//     the null terminator) into *length and returns success.
-//   - Otherwise copies up to *length bytes (including a null terminator when
-//     it fits) and returns success.
+// in the controller C API (see Handle::GetStringImpl, which this matches):
+//   - If buffer is null or *length is 0: writes the string length, excluding
+//     any null terminator, into *length and returns success.
+//   - Otherwise copies up to *length bytes and returns success.
+//
+// No null terminator is written, so *length is a plain byte count rather than
+// a capacity that has to reserve room for one. That is what lets a caller feed
+// the queried length straight back in without losing the final character. The
+// terminator is the caller's job, and every caller already allocates
+// length + 1 zero-filled bytes for it.
 static rocprofvis_result_t copy_string_to_buffer(std::string const& src, char* buffer, uint32_t* length)
 {
     if (length == nullptr)
@@ -62,13 +67,10 @@ static rocprofvis_result_t copy_string_to_buffer(std::string const& src, char* b
         return kRocProfVisResultSuccess;
     }
 
-    // Copy what fits and always leave room for the null terminator. The
-    // *length == 0 case is handled above, so *length >= 1 here. std::memcpy is
-    // used instead of std::strncpy to avoid the MSVC C4996 deprecation and to
-    // guarantee termination even on truncation.
-    uint32_t copy_len = std::min(*length - 1, static_cast<uint32_t>(src.size()));
+    // std::memcpy rather than std::strncpy to avoid the MSVC C4996 deprecation.
+    uint32_t copy_len = std::min(*length, static_cast<uint32_t>(src.size()));
     std::memcpy(buffer, src.c_str(), copy_len);
-    buffer[copy_len] = '\0';
+    *length = copy_len;
     return kRocProfVisResultSuccess;
 }
 
@@ -126,28 +128,6 @@ rocprofvis_result_t rocprofvis_profiler_config_set_target_executable(rocprofvis_
     return config_ref->SetTargetExecutable(target_executable);
 }
 
-rocprofvis_result_t rocprofvis_profiler_config_set_target_args(rocprofvis_profiler_config_t* config, char const* target_args)
-{
-    RocProfVis::Controller::ProfilerConfigRef config_ref(config);
-    if (!config_ref.IsValid())
-    {
-        return kRocProfVisResultInvalidArgument;
-    }
-
-    return config_ref->SetTargetArgs(target_args);
-}
-
-rocprofvis_result_t rocprofvis_profiler_config_set_profiler_args(rocprofvis_profiler_config_t* config, char const* profiler_args)
-{
-    RocProfVis::Controller::ProfilerConfigRef config_ref(config);
-    if (!config_ref.IsValid())
-    {
-        return kRocProfVisResultInvalidArgument;
-    }
-
-    return config_ref->SetProfilerArgs(profiler_args);
-}
-
 rocprofvis_result_t rocprofvis_profiler_config_set_output_directory(rocprofvis_profiler_config_t* config, char const* output_directory)
 {
     RocProfVis::Controller::ProfilerConfigRef config_ref(config);
@@ -157,6 +137,17 @@ rocprofvis_result_t rocprofvis_profiler_config_set_output_directory(rocprofvis_p
     }
 
     return config_ref->SetOutputDirectory(output_directory);
+}
+
+rocprofvis_result_t rocprofvis_profiler_config_set_working_directory(rocprofvis_profiler_config_t* config, char const* working_directory)
+{
+    RocProfVis::Controller::ProfilerConfigRef config_ref(config);
+    if (!config_ref.IsValid())
+    {
+        return kRocProfVisResultInvalidArgument;
+    }
+
+    return config_ref->SetWorkingDirectory(working_directory);
 }
 
 rocprofvis_result_t rocprofvis_profiler_config_add_env_var(rocprofvis_profiler_config_t* config, char const* name, char const* value)

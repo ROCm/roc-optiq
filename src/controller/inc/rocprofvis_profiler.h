@@ -41,6 +41,10 @@ rocprofvis_result_t rocprofvis_profiler_config_set_profiler_path(rocprofvis_prof
 
 /*
 * Sets the target executable path in the configuration.
+* Descriptive metadata only (logging, diagnostics); it does not add anything to
+* the command line. Pass the target on the command line explicitly with
+* rocprofvis_profiler_config_add_profiler_arg, since where it belongs (and
+* whether it needs a "--" separator) is profiler-specific.
 * @param config The profiler config object.
 * @param target_executable Path to the target application to profile.
 * @returns kRocProfVisResultSuccess or an error code.
@@ -48,28 +52,28 @@ rocprofvis_result_t rocprofvis_profiler_config_set_profiler_path(rocprofvis_prof
 rocprofvis_result_t rocprofvis_profiler_config_set_target_executable(rocprofvis_profiler_config_t* config, char const* target_executable);
 
 /*
-* Sets the target application arguments in the configuration.
-* @param config The profiler config object.
-* @param target_args Arguments to pass to the target application.
-* @returns kRocProfVisResultSuccess or an error code.
-*/
-rocprofvis_result_t rocprofvis_profiler_config_set_target_args(rocprofvis_profiler_config_t* config, char const* target_args);
-
-/*
-* Sets the profiler arguments in the configuration.
-* @param config The profiler config object.
-* @param profiler_args Arguments to pass to the profiler.
-* @returns kRocProfVisResultSuccess or an error code.
-*/
-rocprofvis_result_t rocprofvis_profiler_config_set_profiler_args(rocprofvis_profiler_config_t* config, char const* profiler_args);
-
-/*
 * Sets the output directory in the configuration.
+* Descriptive metadata only (logging, artifact resolution); it does not add
+* anything to the command line. Profilers spell their output flag differently,
+* so pass it explicitly with rocprofvis_profiler_config_add_profiler_arg.
 * @param config The profiler config object.
-* @param output_directory Directory where profiler output should be saved.
+* @param output_directory Directory where profiler output is expected.
 * @returns kRocProfVisResultSuccess or an error code.
 */
 rocprofvis_result_t rocprofvis_profiler_config_set_output_directory(rocprofvis_profiler_config_t* config, char const* output_directory);
+
+/*
+* Sets the working directory of the profiler process.
+* The directory is applied to the child process only (chdir after fork on
+* POSIX, lpCurrentDirectory on Windows, a "cd" prefix for remote launches);
+* the calling process's working directory is never changed. Required by tools
+* that write output relative to their own working directory rather than to a
+* path given on the command line.
+* @param config The profiler config object.
+* @param working_directory Directory to run the profiler process in. Must exist.
+* @returns kRocProfVisResultSuccess or an error code.
+*/
+rocprofvis_result_t rocprofvis_profiler_config_set_working_directory(rocprofvis_profiler_config_t* config, char const* working_directory);
 
 /*
 * Adds an environment variable to the profiler configuration.
@@ -82,8 +86,14 @@ rocprofvis_result_t rocprofvis_profiler_config_set_output_directory(rocprofvis_p
 rocprofvis_result_t rocprofvis_profiler_config_add_env_var(rocprofvis_profiler_config_t* config, char const* name, char const* value);
 
 /*
-* Adds a single argument to the profiler argument list.
-* Arguments added this way are passed before --output and -- target.
+* Appends a single argument to the profiler command line.
+* This is the only way arguments reach the process. The full command line is
+* argv[0] = profiler_path followed by these arguments in the order added, so
+* the caller composes the entire command - including any output flag, "--"
+* separator, target executable, and target arguments.
+* Each call adds exactly one argv entry, which is passed to the process
+* verbatim: no splitting on whitespace and no shell interpretation, so
+* arguments containing spaces or quotes arrive intact.
 * @param config The profiler config object.
 * @param arg The argument string (must not be null).
 * @returns kRocProfVisResultSuccess or an error code.
@@ -166,9 +176,14 @@ rocprofvis_result_t rocprofvis_profiler_get_state(rocprofvis_profiler_t* profile
 
 /*
 * Gets the profiler output (stdout/stderr).
+* Call with a null buffer (or *length of 0) to query the length in bytes, then
+* again with a buffer to receive the bytes. No null terminator is written, and
+* *length is a byte count rather than a capacity, so the queried length can be
+* passed straight back in; allocate length + 1 bytes and terminate the string
+* yourself. On the second call *length is updated to the number of bytes copied.
 * @param profiler The profiler session handle.
 * @param buffer Buffer to write the output to, or null to query the length.
-* @param length Pointer to integer containing buffer size, or to write required size.
+* @param length In: bytes to copy. Out: bytes available, or bytes copied.
 * @returns kRocProfVisResultSuccess or an error code.
 */
 rocprofvis_result_t rocprofvis_profiler_get_output(rocprofvis_profiler_t* profiler, char* buffer, uint32_t* length);

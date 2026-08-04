@@ -37,9 +37,8 @@ ProfilerConfig::ProfilerConfig()
     , m_profiler_type(kRPVProfilerTypeRocprofSysRun)
     , m_profiler_path()
     , m_target_executable()
-    , m_target_args()
-    , m_profiler_args()
     , m_output_directory()
+    , m_working_directory()
     , m_env_vars()
     , m_profiler_argv()
     , m_connection_type(ConnectionType::kLocal)
@@ -82,26 +81,6 @@ rocprofvis_result_t ProfilerConfig::SetTargetExecutable(char const* path)
     return kRocProfVisResultSuccess;
 }
 
-rocprofvis_result_t ProfilerConfig::SetTargetArgs(char const* args)
-{
-    if (args == nullptr)
-    {
-        return kRocProfVisResultInvalidArgument;
-    }
-    m_target_args = args;
-    return kRocProfVisResultSuccess;
-}
-
-rocprofvis_result_t ProfilerConfig::SetProfilerArgs(char const* args)
-{
-    if (args == nullptr)
-    {
-        return kRocProfVisResultInvalidArgument;
-    }
-    m_profiler_args = args;
-    return kRocProfVisResultSuccess;
-}
-
 rocprofvis_result_t ProfilerConfig::SetOutputDirectory(char const* path)
 {
     if (path == nullptr)
@@ -109,6 +88,16 @@ rocprofvis_result_t ProfilerConfig::SetOutputDirectory(char const* path)
         return kRocProfVisResultInvalidArgument;
     }
     m_output_directory = path;
+    return kRocProfVisResultSuccess;
+}
+
+rocprofvis_result_t ProfilerConfig::SetWorkingDirectory(char const* path)
+{
+    if (path == nullptr)
+    {
+        return kRocProfVisResultInvalidArgument;
+    }
+    m_working_directory = path;
     return kRocProfVisResultSuccess;
 }
 
@@ -289,6 +278,13 @@ bool LocalProfilerExecutor::Start(const ProfilerConfig& config)
 
     LPVOID env_ptr = env_block.empty() ? nullptr : env_block.data();
 
+    // Working directory for the child only; this process's cwd is untouched.
+    // A non-existent directory makes CreateProcessA fail, which is the desired
+    // behavior: tools that write output relative to their cwd must not silently
+    // run somewhere else.
+    LPCSTR working_dir_ptr =
+        config.GetWorkingDirectory().empty() ? nullptr : config.GetWorkingDirectory().c_str();
+
     BOOL success = CreateProcessA(
         nullptr,
         cmd_line_buffer.data(),
@@ -297,7 +293,7 @@ bool LocalProfilerExecutor::Start(const ProfilerConfig& config)
         TRUE,
         0,
         env_ptr,
-        nullptr,
+        working_dir_ptr,
         &si,
         &pi);
 
@@ -439,9 +435,19 @@ std::string LocalProfilerExecutor::ReadOutput()
 // Grace period after SIGTERM before escalating to SIGKILL during Cancel().
 static constexpr int SIGTERM_GRACE_MS = 100;
 
+// Statuses the forked child uses to report a failure that happened before the
+// profiler itself ever ran. The values follow the POSIX shell convention (see
+// POSIX.1 "Shell Command Language", Exit Status), which reserves 126, 127 and
+// 128+n precisely so they cannot be mistaken for a status the profiled command
+// returned. Callers distinguish the two pre-exec cases by these codes alone -
+// the accompanying stderr message carries the human-readable detail.
+static constexpr int EXIT_CODE_CANNOT_EXECUTE    = 126;  // found, but setup failed
+static constexpr int EXIT_CODE_COMMAND_NOT_FOUND = 127;  // execvp() could not find it
+static constexpr int EXIT_CODE_SIGNAL_BASE       = 128;  // + signal number
+
 // Decodes a waitpid() status into the executor's exit-code convention (matches
 // the mapping used by IsRunning): normal exit -> exit status; killed by a
-// signal -> 128 + signal number.
+// signal -> EXIT_CODE_SIGNAL_BASE + signal number.
 static void set_exit_code_from_status(int status, int& exit_code)
 {
     if (WIFEXITED(status))
@@ -450,7 +456,7 @@ static void set_exit_code_from_status(int status, int& exit_code)
     }
     else if (WIFSIGNALED(status))
     {
-        exit_code = 128 + WTERMSIG(status);
+        exit_code = EXIT_CODE_SIGNAL_BASE + WTERMSIG(status);
     }
 }
 
@@ -544,6 +550,30 @@ bool LocalProfilerExecutor::Start(const ProfilerConfig& config)
         close(stdout_pipe[1]);
         close(stderr_pipe[1]);
 
+        // Enter the requested working directory before exec. Only the child's
+        // cwd changes; the parent's is untouched. chdir() is async-signal-safe,
+        // so it is safe in this post-fork context. Bail out rather than exec on
+        // failure: some tools write their output relative to the cwd, so running
+        // in the wrong directory would silently produce output in the wrong place
+        // instead of reporting an error.
+        if (!config.GetWorkingDirectory().empty())
+        {
+            if (chdir(config.GetWorkingDirectory().c_str()) != 0)
+            {
+                int chdir_errno = errno;
+                char err_buf[512];
+                int n = snprintf(err_buf, sizeof(err_buf),
+                                 "chdir failed for working directory '%s': %s (errno %d)\n",
+                                 config.GetWorkingDirectory().c_str(),
+                                 strerror(chdir_errno), chdir_errno);
+                if (n > 0)
+                {
+                    (void)write(STDERR_FILENO, err_buf, static_cast<size_t>(n));
+                }
+                _exit(EXIT_CODE_CANNOT_EXECUTE);
+            }
+        }
+
         // Set environment variables. setenv() takes the libc env lock, which
         // is not async-signal-safe; see the section banner above for the
         // posix_spawn-based refactor that will eliminate this risk.
@@ -563,7 +593,7 @@ bool LocalProfilerExecutor::Start(const ProfilerConfig& config)
         {
             (void)write(STDERR_FILENO, err_buf, static_cast<size_t>(n));
         }
-        _exit(127);
+        _exit(EXIT_CODE_COMMAND_NOT_FOUND);
     }
 
     // Parent process
@@ -759,6 +789,11 @@ rocprofvis_result_t ProfilerProcessController::LaunchAsync(ProfilerConfig const*
     for (auto const& kv : config->GetEnvVars())
     {
         spdlog::info("Profiler env: {}={}", kv.first, kv.second);
+    }
+
+    if (!config->GetWorkingDirectory().empty())
+    {
+        spdlog::info("Profiler working directory: {}", config->GetWorkingDirectory());
     }
 
     spdlog::info("Profiler launch: {}", Cmdline::ToDisplayString(Cmdline::BuildArgv(*config)));

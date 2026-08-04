@@ -1766,7 +1766,9 @@ pluggable extension point. Methods: `Id`, `DisplayName`, `GetTools`,
 `GetDefaultBinary`, `GetTabs` (returns `TabDescriptor`s that each carry
 an ImGui `render_fn` - the backend supplies renderers, the dialog draws
 the tab bar), `Validate` (empty string = OK), `FlattenToExecution`
-(curated settings -> env + argv; caller then merges `extra_env`),
+(curated settings -> env + the **complete** argv after `argv[0]`,
+including `extra_argv`, the output flag in this profiler's spelling, and
+the target plus its arguments; caller then merges `extra_env`),
 `LoadSettings`/`SaveSettings` (the JSON `backend_payload`), `ExportCfg`
 (native config text), and the default-implemented `GetWarnings`
 (`WarningMessage { Level {kInfo,kWarning,kError}, text }`) and
@@ -1790,6 +1792,12 @@ payload: `profiler_id`, `tool_id`, `connection` (`ConnectionType
 never inline credentials), `target` (`TargetSpec {executable, arguments,
 working_directory, output_directory, auto_load_trace}`), `extra_env`,
 `extra_argv`, and `backend_payload` (the backend's JSON).
+`TargetSpec::working_directory` is honored at launch but has no UI field,
+so today it is only reachable through a saved profile. The same header
+provides `SplitArguments`, which word-splits `TargetSpec::arguments` the
+way a shell would (quote-aware, no expansion) - backends must use it
+rather than splitting on whitespace, or a quoted argument containing
+spaces is torn into several.
 
 **Two independent preset systems - do not conflate:**
 - `LaunchPresetManager` - named Optiq launch profiles in the
@@ -1824,6 +1832,16 @@ lazily creates it; the only entry point is `File > Launch Profiler...`
 `MonitorOperationType::ProfilerSession` op; `FreeProfilerObjects()`
 handles teardown (see 13.4). Subclasses set `m_extra_teardown` for
 resources that must outlive the profiler worker.
+
+`Launch` and `BuildConfig` take a **`ProfilerLaunchSpec`** (same header):
+`profiler_type`, `profiler_path` (`argv[0]`), `profiler_argv` (the
+complete argument list from `FlattenToExecution`, one entry per argv
+entry - the controller never re-splits it), `env_vars`,
+`working_directory` (applied to the child process only), and
+`target_executable` / `output_directory` as metadata that deliberately do
+**not** reach the command line. A struct rather than a parameter list
+because a transposed pair of the string fields would compile cleanly and
+launch the wrong command.
 
 ### 13.3 Local vs remote profiling workflows
 
@@ -2499,13 +2517,13 @@ For fast lookup. Each entry: class -> file -> one-line role.
   `profiler/rocprofvis_profiler_backend.h`.
 - `RocprofSysBackend`, `RocprofSysSettings` ->
   `profiler/rocprofvis_rocprof_sys_backend.h`.
-- `LaunchConfig`, `TargetSpec`, `ConnectionType` ->
+- `LaunchConfig`, `TargetSpec`, `ConnectionType`, `SplitArguments` ->
   `profiler/rocprofvis_launch_config.h`.
 - `LaunchPresetManager`, `PresetInfo` ->
   `profiler/rocprofvis_launch_preset_manager.h`.
-- `ProfilerSessionBase`, `ProfilerSession` -> matching `profiler/`
-  headers. `RemoteProfilerSession` additionally requires
-  `ROCPROFVIS_ENABLE_REMOTE`.
+- `ProfilerLaunchSpec`, `ProfilerSessionBase`, `ProfilerSession` ->
+  matching `profiler/` headers. `RemoteProfilerSession` additionally
+  requires `ROCPROFVIS_ENABLE_REMOTE`.
 - `ProfilerLaunchOrchestrator` ->
   `profiler/rocprofvis_profiler_launch_orchestrator.h`.
 - `ProfilerLauncherDialog` ->

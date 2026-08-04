@@ -50,9 +50,11 @@ private:
     {
         std::vector<std::pair<std::string, std::string>> curated_env_vars;
         std::vector<std::pair<std::string, std::string>> env_vars;
+        // Complete argument list for the profiler process, as emitted by the
+        // backend. Both the launch and the command preview read this, so what
+        // is shown is what runs.
         std::vector<std::string>                         argv;
         std::string                                      profiler_path;
-        std::string                                      profiler_args;
         std::string                                      command_preview;
     };
 

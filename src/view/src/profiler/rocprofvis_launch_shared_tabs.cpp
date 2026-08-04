@@ -467,7 +467,6 @@ bool RenderTargetSection(TargetSpec& target, ConnectionType connection, AppWindo
 }
 
 std::string BuildCommandPreviewString(
-    LaunchConfig const& config,
     std::string const& profiler_path,
     std::vector<std::pair<std::string, std::string>> const& env_vars,
     std::vector<std::string> const& argv)
@@ -482,29 +481,14 @@ std::string BuildCommandPreviewString(
         }
     }
 
+    // argv is already the complete argument list (see
+    // IProfilerBackend::FlattenToExecution), so the preview renders it as-is
+    // rather than re-deriving any part of the command. Anything appended here
+    // would be shown but not run.
     preview << profiler_path;
     for (auto const& arg : argv)
     {
         preview << " " << arg;
-    }
-
-    // Add extra_argv
-    for (auto const& arg : config.extra_argv)
-    {
-        preview << " " << arg;
-    }
-
-    if (!config.target.output_directory.empty())
-    {
-        preview << " --output " << config.target.output_directory;
-    }
-    if (!config.target.executable.empty())
-    {
-        preview << " -- " << config.target.executable;
-    }
-    if (!config.target.arguments.empty())
-    {
-        preview << " " << config.target.arguments;
     }
 
     return preview.str();

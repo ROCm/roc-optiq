@@ -107,5 +107,72 @@ LaunchConfig LaunchConfig::FromJson(jt::Json const& json)
     return cfg;
 }
 
+std::vector<std::string> SplitArguments(std::string const& arguments)
+{
+    std::vector<std::string> argv;
+    std::string              current;
+    // Tracks whether `current` holds a token at all, so that an explicitly
+    // empty argument ("" on the command line) survives as an empty entry
+    // instead of being dropped as if it were whitespace.
+    bool                     have_token = false;
+
+    for (size_t i = 0; i < arguments.size(); i++)
+    {
+        char c = arguments[i];
+
+        if (c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '\v' || c == '\f')
+        {
+            if (have_token)
+            {
+                argv.push_back(current);
+                current.clear();
+                have_token = false;
+            }
+            continue;
+        }
+
+        have_token = true;
+
+        if (c == '\'')
+        {
+            // Single quotes are fully literal: everything up to the closing
+            // quote, backslashes included.
+            for (i++; i < arguments.size() && arguments[i] != '\''; i++)
+            {
+                current.push_back(arguments[i]);
+            }
+        }
+        else if (c == '"')
+        {
+            for (i++; i < arguments.size() && arguments[i] != '"'; i++)
+            {
+                bool is_escape = arguments[i] == '\\' && (i + 1) < arguments.size() &&
+                                 (arguments[i + 1] == '"' || arguments[i + 1] == '\\');
+                if (is_escape)
+                {
+                    i++;
+                }
+                current.push_back(arguments[i]);
+            }
+        }
+        else if (c == '\\' && (i + 1) < arguments.size())
+        {
+            i++;
+            current.push_back(arguments[i]);
+        }
+        else
+        {
+            current.push_back(c);
+        }
+    }
+
+    if (have_token)
+    {
+        argv.push_back(current);
+    }
+
+    return argv;
+}
+
 } // namespace View
 } // namespace RocProfVis

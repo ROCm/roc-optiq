@@ -66,13 +66,7 @@ public:
     // Begins the workflow (connect phase). Profiler parameters mirror the local
     // ProfilerSession::Launch. Returns false if the session/connection could not
     // be created.
-    bool Launch(rocprofvis_profiler_type_t profiler_type,
-                const std::string&         profiler_path,
-                const std::string&         target_executable,
-                const std::string&         target_args,
-                const std::string&         output_directory,
-                const std::string&         profiler_args,
-                const std::vector<std::pair<std::string, std::string>>& env_vars = {}) override;
+    bool Launch(const ProfilerLaunchSpec& spec) override;
 
     bool                        IsRunning() const { return m_running; }
     // True only while the trace download phase is active. The dialog uses this

@@ -1237,15 +1237,15 @@ void ProfilerLauncherDialog::OnLaunchClicked()
     // to the orchestrator. The backend scraper resolves the produced trace path
     // from the profiler's stdout (local and remote).
     ProfilerLaunchOrchestrator::LaunchRequest request;
-    request.profiler_type     = ResolveProfilerType();
-    request.profiler_path     = m_execution_cache.profiler_path;
-    request.target_executable = m_config.target.executable;
-    request.target_args       = m_config.target.arguments;
-    request.output_directory  = m_config.target.output_directory;
-    request.profiler_args     = m_execution_cache.profiler_args;
-    request.env_vars          = m_execution_cache.env_vars;
-    request.is_remote         = is_remote;
-    request.auto_load_trace   = m_config.target.auto_load_trace;
+    request.spec.profiler_type     = ResolveProfilerType();
+    request.spec.profiler_path     = m_execution_cache.profiler_path;
+    request.spec.target_executable = m_config.target.executable;
+    request.spec.output_directory  = m_config.target.output_directory;
+    request.spec.working_directory = m_config.target.working_directory;
+    request.spec.profiler_argv     = m_execution_cache.argv;
+    request.spec.env_vars          = m_execution_cache.env_vars;
+    request.is_remote              = is_remote;
+    request.auto_load_trace        = m_config.target.auto_load_trace;
 #ifdef ROCPROFVIS_ENABLE_REMOTE
     request.remote_uri        = is_remote ? m_remote_uri : nullptr;
 #endif
@@ -1444,26 +1444,8 @@ void ProfilerLauncherDialog::RefreshExecutionCache()
         cache.env_vars.emplace_back(kv.first, kv.second);
     }
 
-    for (size_t i = 0; i < cache.argv.size(); i++)
-    {
-        if (i > 0)
-        {
-            cache.profiler_args += " ";
-        }
-        cache.profiler_args += cache.argv[i];
-    }
-
-    for (auto const& arg : m_config.extra_argv)
-    {
-        if (!cache.profiler_args.empty())
-        {
-            cache.profiler_args += " ";
-        }
-        cache.profiler_args += arg;
-    }
-
-    cache.command_preview = BuildCommandPreviewString(
-        m_config, cache.profiler_path, cache.env_vars, cache.argv);
+    cache.command_preview =
+        BuildCommandPreviewString(cache.profiler_path, cache.env_vars, cache.argv);
 
     m_execution_cache = std::move(cache);
 }

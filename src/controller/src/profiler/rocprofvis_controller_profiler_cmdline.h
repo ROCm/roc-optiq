@@ -36,17 +36,20 @@ namespace Cmdline
  */
 
 /*
- * Build the canonical argv from a ProfilerConfig. argv[0] is the profiler
- * executable path; argv[1..] are the arguments in the order:
- *   1. Explicit profiler argv entries (config.GetProfilerArgv()).
- *   2. Legacy whitespace-split profiler_args (config.GetProfilerArgs()).
- *   3. "--output <output_directory>" if set.
- *   4. "--" "<target_executable>" if set.
- *   5. Whitespace-split target args (config.GetTargetArgs()).
+ * Build the canonical argv from a ProfilerConfig: argv[0] is the profiler
+ * executable path, argv[1..] are the config's explicit argv entries
+ * (AddProfilerArg) in the order they were added.
  *
- * The whitespace-split behavior for legacy profiler_args / target_args is
- * preserved for backwards compatibility with existing callers; new callers
- * should prefer AddProfilerArg() so tokens containing spaces survive.
+ * This is deliberately a pass-through - no flag is synthesized here. Each
+ * profiler has its own CLI shape (where the output path goes, whether a "--"
+ * separator precedes the target, whether the target is an argument at all), so
+ * composing argv is the caller's job and every token arrives as a discrete
+ * entry. Nothing is split on whitespace, so paths and arguments containing
+ * spaces survive to execvp / CreateProcess intact.
+ *
+ * The config's target_executable and output_directory are descriptive metadata
+ * (logging, artifact resolution) and do NOT contribute to argv; a caller that
+ * wants them on the command line must add them explicitly.
  */
 std::vector<std::string> BuildArgv(ProfilerConfig const& config);
 
@@ -69,10 +72,18 @@ bool IsValidEnvName(std::string const& name);
  * /bin/sh interpreter - i.e. ssh user@host "<this>" or sh -c "<this>". Each
  * token is single-quoted; embedded single quotes are emitted as '\''. Env
  * pairs are prepended as KEY='VALUE'.
+ *
+ * When working_dir is non-empty the command is prefixed with
+ * "cd '<working_dir>' && ", which is the remote equivalent of the child-side
+ * chdir / lpCurrentDirectory used for local launches. "&&" is deliberate: if
+ * the directory does not exist the profiler must not run at all, since a tool
+ * that writes output relative to its cwd would otherwise silently produce it
+ * in the wrong place.
  */
 std::string ToPosixShellCommand(
     std::vector<std::string> const&                         argv,
-    std::vector<std::pair<std::string, std::string>> const& env = {});
+    std::vector<std::pair<std::string, std::string>> const& env = {},
+    std::string const&                                      working_dir = std::string());
 
 /*
  * Serialize argv into a single string suitable for the lpCommandLine

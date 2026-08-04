@@ -62,8 +62,23 @@ public:
     virtual std::string Validate(LaunchConfig const& config) const = 0;
 
     /**
-     * Convert the curated settings into env vars and argv for the
-     * profiler process. The caller merges extra_env on top afterwards.
+     * Convert the curated settings into the env vars and the complete argument
+     * list for the profiler process.
+     *
+     * argv_out receives every argument after argv[0] (the profiler binary), in
+     * the exact order and form the process will see it: the backend's own flags,
+     * config.extra_argv, the output path in whatever spelling this profiler
+     * uses, and the target executable plus its arguments (word-split with
+     * SplitArguments) wherever this profiler expects them. Command-line shape
+     * varies enough between profilers that no part of it is synthesized for the
+     * backend downstream - what is emitted here is what runs, and it is also
+     * what the command preview renders, so the two cannot drift apart.
+     *
+     * Each entry becomes one argv entry verbatim; nothing is re-split on
+     * whitespace or interpreted by a shell, so paths and arguments containing
+     * spaces must be emitted as single entries rather than pre-quoted.
+     *
+     * The caller merges config.extra_env on top of env_out afterwards.
      */
     virtual void FlattenToExecution(
         LaunchConfig const& config,

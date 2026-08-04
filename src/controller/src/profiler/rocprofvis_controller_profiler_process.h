@@ -65,9 +65,8 @@ public:
     rocprofvis_result_t SetProfilerType(rocprofvis_profiler_type_t type);
     rocprofvis_result_t SetProfilerPath(char const* path);
     rocprofvis_result_t SetTargetExecutable(char const* path);
-    rocprofvis_result_t SetTargetArgs(char const* args);
-    rocprofvis_result_t SetProfilerArgs(char const* args);
     rocprofvis_result_t SetOutputDirectory(char const* path);
+    rocprofvis_result_t SetWorkingDirectory(char const* path);
     rocprofvis_result_t AddEnvVar(char const* name, char const* value);
     rocprofvis_result_t AddProfilerArg(char const* arg);
     rocprofvis_result_t SetConnectionLocal();
@@ -78,9 +77,8 @@ public:
     rocprofvis_profiler_type_t GetProfilerType() const { return m_profiler_type; }
     std::string const& GetProfilerPath() const { return m_profiler_path; }
     std::string const& GetTargetExecutable() const { return m_target_executable; }
-    std::string const& GetTargetArgs() const { return m_target_args; }
-    std::string const& GetProfilerArgs() const { return m_profiler_args; }
     std::string const& GetOutputDirectory() const { return m_output_directory; }
+    std::string const& GetWorkingDirectory() const { return m_working_directory; }
 
     std::vector<std::pair<std::string, std::string>> const& GetEnvVars() const { return m_env_vars; }
     std::vector<std::string> const& GetProfilerArgv() const { return m_profiler_argv; }
@@ -91,10 +89,15 @@ public:
 private:
     rocprofvis_profiler_type_t m_profiler_type;
     std::string m_profiler_path;
+    // Descriptive only: the profiled program and where its output is expected.
+    // Neither contributes to argv (see Cmdline::BuildArgv) - callers that want
+    // them on the command line add them as explicit argv entries.
     std::string m_target_executable;
-    std::string m_target_args;
-    std::string m_profiler_args;
     std::string m_output_directory;
+    // Directory the child process runs in. Applied in the child only (chdir
+    // after fork / lpCurrentDirectory / a remote "cd" prefix) - never by
+    // chdir()ing this process, whose cwd is global shared state.
+    std::string m_working_directory;
 
     std::vector<std::pair<std::string, std::string>> m_env_vars;
     std::vector<std::string> m_profiler_argv;

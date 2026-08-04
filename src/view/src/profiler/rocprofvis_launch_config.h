@@ -51,5 +51,23 @@ struct LaunchConfig
     static LaunchConfig FromJson(jt::Json const& json);
 };
 
+/**
+ * Splits a user-typed argument string (TargetSpec::arguments) into individual
+ * argv entries the way a POSIX shell would word-split it, so that a quoted
+ * argument stays a single entry: --msg "hello world" yields two entries, not
+ * three. Whitespace separates entries; single quotes are literal; double quotes
+ * honor \" and \\; a backslash outside quotes escapes the next character.
+ *
+ * Only word-splitting and quote removal are performed. Nothing here is
+ * expanded - no globbing, variables, command substitution, or operators - and
+ * the resulting entries are passed to the process directly rather than through
+ * a shell, so shell metacharacters have no special meaning.
+ *
+ * An unterminated quote is not an error: the remainder of the string becomes
+ * the final entry, which keeps a half-typed command line previewing sensibly
+ * while the user is still editing it.
+ */
+std::vector<std::string> SplitArguments(std::string const& arguments);
+
 } // namespace View
 } // namespace RocProfVis

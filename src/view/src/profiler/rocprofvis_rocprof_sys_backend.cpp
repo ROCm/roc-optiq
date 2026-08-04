@@ -901,6 +901,33 @@ void RocprofSysBackend::FlattenToExecution(
             argv_out.push_back(std::to_string(m_settings.min_instructions));
         }
     }
+
+    // The user's raw escape hatch goes last among the profiler's own flags, so
+    // it can override anything emitted above, but still ahead of the "--"
+    // separator - past that point the tokens belong to the target, not to
+    // rocprof-sys.
+    for (auto const& arg : config.extra_argv)
+    {
+        argv_out.push_back(arg);
+    }
+
+    if (!config.target.output_directory.empty())
+    {
+        argv_out.push_back("--output");
+        argv_out.push_back(config.target.output_directory);
+    }
+
+    // Everything after "--" is the command rocprof-sys should run.
+    if (!config.target.executable.empty())
+    {
+        argv_out.push_back("--");
+        argv_out.push_back(config.target.executable);
+
+        for (auto const& arg : SplitArguments(config.target.arguments))
+        {
+            argv_out.push_back(arg);
+        }
+    }
 }
 
 // ==================================================================================
@@ -914,17 +941,35 @@ std::string RocprofSysBackend::ParseTraceOutputPath(std::string const& profiler_
     //   [...]database.cpp:151 database][info] Database: /path/rocpd-<pid>-0.db
     //   Output Summary box: "RocPD database" -> "File: /path/rocpd-<pid>-0.db"
     // We can't predict the exact filename (timestamp folder + PID suffix), so
-    // we scrape the path the tool actually printed. Strategy: scan lines and
-    // pull out a token ending in ".db". Prefer a line that explicitly names the
-    // database ("Database:" or "rocpd"); otherwise fall back to the last ".db"
-    // token seen anywhere in the output.
+    // we scrape the path the tool actually printed.
+    //
+    // Every candidate resolves to the LAST match in the stream, never the
+    // first. What we are handed is the whole child process tree's stdout and
+    // stderr, so the profiled application's own output is interleaved with the
+    // tool's and can name an unrelated database - profiling Optiq with Optiq
+    // logs "Opening file: <trace>.db" for whatever the user opens in the child.
+    // rocprof-sys reports its path during finalization, after the target has
+    // exited, so the tool's report is always the later one.
+    //
+    // Preference order, each resolved last-match: a path labelled "Database:",
+    // then one labelled "File:" (the Output Summary box), then any ".db" token
+    // for a tool that labels neither. The label has to appear before the path
+    // on the line, which is what keeps a lower-case "Opening file:" from
+    // passing itself off as the summary label.
+
+    struct DbToken
+    {
+        std::string text;
+        size_t      start = std::string::npos;
+    };
 
     // Extracts the last whitespace/quote-delimited token ending in ".db" from a
-    // single line, or empty if none. Trims surrounding quotes and punctuation.
-    auto extract_db_token = [](std::string const& line) -> std::string
+    // single line, or an empty token if none. Trims surrounding quotes and
+    // punctuation.
+    auto extract_db_token = [](std::string const& line) -> DbToken
     {
         const std::string ext = ".db";
-        std::string best;
+        DbToken best;
         size_t pos = 0;
         while ((pos = line.find(ext, pos)) != std::string::npos)
         {
@@ -959,36 +1004,46 @@ std::string RocprofSysBackend::ParseTraceOutputPath(std::string const& profiler_
                 --start;
             }
 
-            best = line.substr(start, end - start);
+            best.text  = line.substr(start, end - start);
+            best.start = start;
             pos = end;
         }
         return best;
     };
 
-    std::string fallback;
+    std::string labelled_database;
+    std::string labelled_file;
+    std::string unlabelled;
     std::istringstream stream(profiler_stdout);
     std::string line;
     while (std::getline(stream, line))
     {
-        std::string token = extract_db_token(line);
-        if (token.empty())
+        DbToken token = extract_db_token(line);
+        if (token.text.empty())
         {
             continue;
         }
 
-        // A line that explicitly labels the database is the strongest signal;
-        // return it immediately.
-        if (line.find("Database:") != std::string::npos ||
-            token.find("rocpd") != std::string::npos)
+        if (line.rfind("Database:", token.start) != std::string::npos)
         {
-            return token;
+            labelled_database = token.text;
         }
-
-        // Otherwise remember the most recent ".db" token as a fallback.
-        fallback = token;
+        else if (line.rfind("File:", token.start) != std::string::npos)
+        {
+            labelled_file = token.text;
+        }
+        unlabelled = token.text;
     }
 
-    return fallback;
+    if (!labelled_database.empty())
+    {
+        return labelled_database;
+    }
+    if (!labelled_file.empty())
+    {
+        return labelled_file;
+    }
+    return unlabelled;
 }
 
 // ==================================================================================

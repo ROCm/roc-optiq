@@ -17,20 +17,6 @@ namespace Cmdline
 namespace
 {
 
-void append_whitespace_split(std::vector<std::string>& out, std::string const& s)
-{
-    if (s.empty())
-    {
-        return;
-    }
-    std::istringstream iss(s);
-    std::string        token;
-    while (iss >> token)
-    {
-        out.push_back(token);
-    }
-}
-
 // POSIX shell single-quote a single token. Embedded ' becomes '\''.
 std::string posix_shell_quote(std::string const& tok)
 {
@@ -106,6 +92,7 @@ std::string windows_quote(std::string const& tok)
 std::vector<std::string> BuildArgv(ProfilerConfig const& config)
 {
     std::vector<std::string> argv;
+    argv.reserve(config.GetProfilerArgv().size() + 1);
 
     argv.push_back(config.GetProfilerPath());
 
@@ -113,22 +100,6 @@ std::vector<std::string> BuildArgv(ProfilerConfig const& config)
     {
         argv.push_back(arg);
     }
-
-    append_whitespace_split(argv, config.GetProfilerArgs());
-
-    if (!config.GetOutputDirectory().empty())
-    {
-        argv.emplace_back("--output");
-        argv.push_back(config.GetOutputDirectory());
-    }
-
-    if (!config.GetTargetExecutable().empty())
-    {
-        argv.emplace_back("--");
-        argv.push_back(config.GetTargetExecutable());
-    }
-
-    append_whitespace_split(argv, config.GetTargetArgs());
 
     return argv;
 }
@@ -160,10 +131,17 @@ bool IsValidEnvName(std::string const& name)
 
 std::string ToPosixShellCommand(
     std::vector<std::string> const&                         argv,
-    std::vector<std::pair<std::string, std::string>> const& env)
+    std::vector<std::pair<std::string, std::string>> const& env,
+    std::string const&                                      working_dir)
 {
     std::ostringstream oss;
     bool               first = true;
+
+    if (!working_dir.empty())
+    {
+        oss << "cd " << posix_shell_quote(working_dir) << " &&";
+        first = false;
+    }
 
     for (auto const& kv : env)
     {

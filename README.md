@@ -25,13 +25,13 @@ ROCm Optiq has no dependency on the ROCm stack itself. Collect data on a ROCm ma
 Inspect CPU-GPU interactions, ROCm API calls, kernel execution timelines, memory usage, and system telemetry to find stalls,
 memory bandwidth issues, and inefficient kernel launches.
 
-- **System topology tree** — hardware (processors, queues, counters) and software (processes, streams, threads) hierarchy for
+- **System Topology** — explore the hardware (processors, queues, counters) and software (processes, streams, threads) hierarchies for
   navigating and correlating application execution with hardware resources.
-- **Timeline view** — CPU and GPU activity, events, and performance counters in chronological order, with zoom, pan, filtering,
+- **Timeline** — view CPU and GPU activity, events, and performance counters in chronological order, with zoom, pan, filtering,
   measurement rulers, flow arrows, annotations, and bookmarks.
-- **Advanced details** — event and sample tables with grouping, expression filtering, and per-event, per-track, and top-event breakdowns.
-- **Summary view** — the top kernels by execution time as a pie chart, bar chart, or table.
-- **Minimap** — a compact overview of event density and counter values across the whole trace for navigating large datasets.
+- **Advanced details** — inspect event and sample tables with grouping, expression filtering, and per-event, per-track, and top-event breakdowns.
+- **Summary** — see the top kernels by execution time as a pie chart, bar chart, or table.
+- **Minimap** — view a compact overview of event density and counter values across the whole trace to quickly navigate large datasets.
 
 ### Analyze ROCm Compute Profiler data
 

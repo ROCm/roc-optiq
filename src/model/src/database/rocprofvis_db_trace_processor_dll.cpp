@@ -70,7 +70,7 @@ extern "C" {
         bool Perfetto_ReadTrace(PerfettoHandle* h, const char* path) {
         if (!h || !h->tp || !path) return false;
 
-        // Manual chunked read � avoids std::function parameter entirely
+        // Manual chunked read - avoids std::function parameter entirely
         FILE* f = fopen(path, "rb");
         if (!f) return false;
 

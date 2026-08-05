@@ -91,42 +91,14 @@ the trace, and is created with `File` > `Save As`.
 For the full list of command-line options, see the
 [command-line reference](https://rocm.docs.amd.com/projects/roc-optiq/en/latest/reference/cli-support.html).
 
-## User interface
+### Usage Instructions
 
-![ROCm Optiq UI layout](docs/images/ui_sections.png)
-
-1. **System topology tree** — expand nodes to see the relationships between tracks, toggle track visibility, and jump to a track in
-   the timeline.
-2. **Timeline view** — the list of tracks holding event and counter data. Tracks can be resized, reordered, and configured
-   individually; right-click for track options.
-3. **Advanced details area** — tabbed detail for the current selection: event table, sample table, event details, track details,
-   top events, and annotations.
-4. **Histogram area** — an event density histogram. The area currently in view is highlighted and can be dragged to scroll the timeline.
-5. **Toolbar** — flow rendering modes, annotations, event search, bookmarks, the minimap toggle, and view reset.
+Refer to ROCm documentation for detailed usage [instructions](https://rocm.docs.amd.com/projects/roc-optiq/en/latest/).
 
 Walkthroughs for each area are in the how-to guides:
 [view trace data](https://rocm.docs.amd.com/projects/roc-optiq/en/latest/how-to/view-trace.html),
 [view analysis data](https://rocm.docs.amd.com/projects/roc-optiq/en/latest/how-to/view-analysis.html), and
 [customize your project](https://rocm.docs.amd.com/projects/roc-optiq/en/latest/how-to/customize-views.html).
-
-## Keyboard shortcuts
-
-| Action | Shortcut |
-|--------|----------|
-| Pan left / right | `A` / `D` or `Left` / `Right` |
-| Scroll tracks up / down | `Up` / `Down` |
-| Pan or scroll faster (2x) | `Shift` + the above |
-| Zoom in / out at the cursor | `W` / `S` |
-| Select a time range | `Ctrl` + left-drag |
-| Mark selected events as a time range, or clear it | `M` |
-| Clear the time range selection | `Esc` |
-| Multi-select events | `Ctrl` + click |
-| Save the current view to a bookmark | `Ctrl` + `0`-`9` |
-| Restore a bookmark | `0`-`9` |
-
-Bookmarks capture the complete view state, including zoom level, pan position, and scroll offset, across 10 slots.
-Timeline shortcuts respect input focus and do not fire while you are typing in a text field or a dialog is open; click once in the
-timeline area if a shortcut seems unresponsive.
 
 ## Support
 

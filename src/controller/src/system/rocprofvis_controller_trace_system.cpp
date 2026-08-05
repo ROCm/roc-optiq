@@ -493,38 +493,6 @@ rocprofvis_result_t SystemTrace::LoadRocpd(Future* future) {
                             }
 
                             GetMemoryManager()->Init(trace_size);
-
-                            // This block is asynchronously loading full trace
-                            // todo : remove following block after  UI implemented segmented loading
-                            // or : use this code for preloading some segments at the load time. start and end has to be calculated considering preloaded segment boundaries  
- /*                           
-                            std::vector<RocProfVis::Controller::Array*> arrays;
-                            std::vector<RocProfVis::Controller::Future*> futures;
-                            arrays.resize(num_tracks);
-                            futures.resize(num_tracks);
-                            for(int i = 0; i < num_tracks; i++)
-                            {                               
-                                arrays[i] = (RocProfVis::Controller::Array*)
-                                    rocprofvis_controller_array_alloc(32);
-                                futures[i] = (RocProfVis::Controller::Future*)
-                                    rocprofvis_controller_future_alloc();
-                                double start, end;
-                                m_tracks[i]->GetDouble(kRPVControllerTrackMinTimestamp, 0, &start);
-                                m_tracks[i]->GetDouble(kRPVControllerTrackMaxTimestamp, 0, &end);
-                                result = AsyncFetch(*m_tracks[i], *futures[i], *arrays[i],
-                                                    start, end);
-                            }
-
-                            for (int i = 0; i < num_tracks; i++)
-                            {
-                                result = rocprofvis_controller_future_wait(
-                                    (rocprofvis_controller_future_t*) futures[i], FLT_MAX);
-                                rocprofvis_controller_future_free(
-                                    (rocprofvis_controller_future_t*) futures[i]);
-                                rocprofvis_controller_array_free(
-                                    (rocprofvis_controller_array_t*) arrays[i]);
-                            }
-                            */
                         }
                         else
                         {

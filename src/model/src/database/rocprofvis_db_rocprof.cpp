@@ -862,7 +862,7 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
             {
                 if (version != m_db_version)
                 {
-                    spdlog::warn("Cannot support different version database nodes!");
+                    spdlog::warn("Schema mismatch: all database sources must use the same schema version; the trace cannot be opened.");
                     result = kRocProfVisDmResultNotSupported;
                     break;
                 }

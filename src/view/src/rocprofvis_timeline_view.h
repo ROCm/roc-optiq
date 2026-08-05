@@ -21,6 +21,7 @@
 #include <utility>
 #include <vector>
 #include <chrono>
+#include <functional>
  
 namespace RocProfVis
 {
@@ -74,6 +75,14 @@ public:
 
     uint64_t TrackID(int index) const;
 
+    // Sort-selection persistence. HasSortSettings() reports whether the newer
+    // sort_mode key exists; older projects only stored an explicit "order" array
+    // (see Valid()/TrackID()) which is treated as the custom order on load.
+    bool                  HasSortSettings() const;
+    int                   SortMode() const;
+    bool                  CustomOrderValid() const;
+    std::vector<uint64_t> CustomOrder() const;
+
 private:
     TimelineView& m_timeline_view;
 };
@@ -83,6 +92,15 @@ class TimelineView : public RocWidget
     friend TimelineViewProjectSettings;
 
 public:
+    // How the timeline track order is derived. Persisted as an int, so keep the
+    // explicit values stable.
+    enum class TrackSortMode
+    {
+        kTopology = 0,  // Match the sidebar topology tree order.
+        kDefault  = 1,  // Natural load order captured when the trace opened.
+        kCustom   = 2,  // The user's manual (drag-reordered) order; one remembered slot.
+    };
+
     TimelineView(DataProvider& dp, std::shared_ptr<TimelineSelection> timeline_selection,
                  std::shared_ptr<MeasurementController> measurement,
                  std::shared_ptr<AnnotationsManager>   annotations);
@@ -128,7 +146,29 @@ public:
     void           RenderTimelineViewOptionsMenu(ImVec2 window_position);
     TimelineArrow& GetArrowLayer();
 
+    // Reorder the tracks according to the given sort mode. Topology order is
+    // resolved lazily through the provider set by SetTopologyOrderProvider(); if
+    // it is not available yet (e.g. the topology tree is still building at load),
+    // the sort is deferred and applied once the provider yields an order.
+    void          SortTracksBy(TrackSortMode mode);
+    TrackSortMode GetSortMode() const { return m_sort_mode; }
+    bool          HasCustomOrder() const { return !m_custom_order.empty(); }
+    // Supplies the sidebar-tree (topology) order. Wired by the owning TraceView,
+    // which owns the TrackTopology that builds the tree.
+    void          SetTopologyOrderProvider(std::function<std::vector<uint64_t>()> provider);
+
 private:
+    // Reindexes each TrackInfo and rebuilds m_tracks to match order, which must be
+    // a full permutation of the current track ids. View-only: never syncs the
+    // controller graph order.
+    void ApplyTrackOrder(const std::vector<uint64_t>& order);
+    // Rebuilds the m_tracks pointer vector from the current TrackInfo::index values.
+    void RebuildTrackVectorFromMetadata();
+    // Restores the persisted sort selection (and remembered custom order) after a
+    // trace loads.
+    void LoadSortSettings();
+    // Renders the "Sort tracks by" options inside an open popup.
+    void RenderTrackSortMenu();
     enum class MeasurementRulerDragTarget
     {
         kNone,
@@ -271,6 +311,16 @@ private:
     TimelineViewProjectSettings m_project_settings;
     LoadingTimer                m_loading_timer;
     TrackTypeCounts             m_track_counts;
+
+    // Track sort state. m_default_order is captured once when the trace loads;
+    // m_custom_order is the single remembered manual ordering. Topology order is
+    // fetched on demand from m_topology_order_provider; m_topology_sort_pending is
+    // set when a topology sort is requested before that provider can satisfy it.
+    TrackSortMode                          m_sort_mode;
+    std::vector<uint64_t>                  m_default_order;
+    std::vector<uint64_t>                  m_custom_order;
+    bool                                   m_topology_sort_pending;
+    std::function<std::vector<uint64_t>()> m_topology_order_provider;
 };
 
 }  // namespace View

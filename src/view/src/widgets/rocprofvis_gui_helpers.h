@@ -219,8 +219,10 @@ CopyableTextUnformatted(
 
 // Renders a selectable menu item with an icon (from the icon font) followed by a text label.
 // Returns true when clicked. Intended for use inside BeginPopup/BeginPopupContextItem blocks.
+// Pass selected = true to show a trailing check mark (e.g. radio-style option groups).
 bool
-IconMenuItem(const char* icon, const char* label, bool enabled = true);
+IconMenuItem(const char* icon, const char* label, bool enabled = true,
+             bool selected = false);
 
 // Opens a submenu entry with a leading icon (from the icon font) before the label.
 // Returns true when the submenu is open; call ImGui::EndMenu() only when it returns true.

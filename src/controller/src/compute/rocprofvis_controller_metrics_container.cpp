@@ -136,40 +136,25 @@ rocprofvis_result_t MetricsContainer::GetString(rocprofvis_property_t property, 
             case kRPVControllerMetricsContainerMetricIdIndexed:
             {
                 if(index < m_container.size())
-                {
-                    char const* str = StringTable::Get().GetString(m_container[index].id_idx);
-                    result = GetStringImpl(value, length, str, static_cast<uint32_t>(strlen(str)));
-                }
+                    result = GetStdStringImpl(value, length, StringTable::Get().GetString(m_container[index].id_idx));
                 else
-                {
                     result = kRocProfVisResultOutOfRange;
-                }
                 break;
             }
             case kRPVControllerMetricsContainerMetricNameIndexed:
             {
                 if(index < m_container.size())
-                {
-                    char const* str = StringTable::Get().GetString(m_container[index].name_idx);
-                    result = GetStringImpl(value, length, str, static_cast<uint32_t>(strlen(str)));
-                }
+                    result = GetStdStringImpl(value, length, StringTable::Get().GetString(m_container[index].name_idx));
                 else
-                {
                     result = kRocProfVisResultOutOfRange;
-                }
                 break;
             }
             case kRPVControllerMetricsContainerMetricValueNameIndexed:
             {
                 if(index < m_container.size())
-                {
-                    char const* str = StringTable::Get().GetString(m_container[index].value_name_idx);
-                    result = GetStringImpl(value, length, str, static_cast<uint32_t>(strlen(str)));
-                }
+                    result = GetStdStringImpl(value, length, StringTable::Get().GetString(m_container[index].value_name_idx));
                 else
-                {
                     result = kRocProfVisResultOutOfRange;
-                }
                 break;
             }
             default:

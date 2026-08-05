@@ -64,33 +64,25 @@ TopologyNode::TopologyNode(rocprofvis_dm_topology_node dm_topology_node, Trace* 
                 child_node = new Thread(dm_child_node, ctx, this);
                 child_node->GetObject(kRPVControllerThreadTrack, 0, (rocprofvis_handle_t**)& child_track);
                 if (child_track)
-                {
-                    child_track->SetObject(kRPVControllerTrackThread, 0, (rocprofvis_handle_t*)child_node);
-                }
+                    child_track->SetThread(static_cast<Thread*>(child_node));
                 break;
-            case kRPVControllerTopologyNodeQueue: 
+            case kRPVControllerTopologyNodeQueue:
                 child_node = new Queue(dm_child_node, ctx, this);
                 child_node->GetObject(kRPVControllerQueueTrack, 0, (rocprofvis_handle_t**)& child_track);
                 if (child_track)
-                {
-                    child_track->SetObject(kRPVControllerTrackQueue, 0, (rocprofvis_handle_t*)child_node);
-                }
+                    child_track->SetQueue(static_cast<Queue*>(child_node));
                 break;
-            case kRPVControllerTopologyNodeStream: 
+            case kRPVControllerTopologyNodeStream:
                 child_node = new Stream(dm_child_node, ctx, this);
                 child_node->GetObject(kRPVControllerStreamTrack, 0, (rocprofvis_handle_t**)& child_track);
                 if (child_track)
-                {
-                    child_track->SetObject(kRPVControllerTrackStream, 0, (rocprofvis_handle_t*)child_node);
-                }
+                    child_track->SetStream(static_cast<Stream*>(child_node));
                 break;
-            case kRPVControllerTopologyNodeCounter: 
+            case kRPVControllerTopologyNodeCounter:
                 child_node = new Counter(dm_child_node, ctx, this);
                 child_node->GetObject(kRPVControllerCounterTrack, 0, (rocprofvis_handle_t**)& child_track);
                 if (child_track)
-                {
-                    child_track->SetObject(kRPVControllerTrackCounter, 0, (rocprofvis_handle_t*)child_node);
-                }
+                    child_track->SetCounter(static_cast<Counter*>(child_node));
                 break;
             }   
             if (child_node)

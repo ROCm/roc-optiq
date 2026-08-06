@@ -21,7 +21,6 @@
 #include <utility>
 #include <vector>
 #include <chrono>
-#include <functional>
  
 namespace RocProfVis
 {
@@ -71,16 +70,14 @@ public:
                                 TimelineView&      timeline_view);
     ~TimelineViewProjectSettings() override;
     void ToJson() override;
+    // True when the persisted "order" list is a valid full permutation of the
+    // current tracks (the remembered custom order).
     bool Valid() const override;
 
-    uint64_t TrackID(int index) const;
-
-    // Sort-selection persistence. HasSortSettings() reports whether the newer
-    // sort_mode key exists; older projects only stored an explicit "order" array
-    // (see Valid()/TrackID()) which is treated as the custom order on load.
+    // The stored sort mode, if present; older projects only stored the "order"
+    // list, which is treated as the custom order on load.
     bool                  HasSortSettings() const;
     int                   SortMode() const;
-    bool                  CustomOrderValid() const;
     std::vector<uint64_t> CustomOrder() const;
 
 private:
@@ -146,16 +143,15 @@ public:
     void           RenderTimelineViewOptionsMenu(ImVec2 window_position);
     TimelineArrow& GetArrowLayer();
 
-    // Reorder the tracks according to the given sort mode. Topology order is
-    // resolved lazily through the provider set by SetTopologyOrderProvider(); if
-    // it is not available yet (e.g. the topology tree is still building at load),
-    // the sort is deferred and applied once the provider yields an order.
+    // Reorder the tracks according to the given sort mode. If topology order isn't
+    // available yet (the tree is still building at load), the sort is deferred and
+    // applied once SetTopologyOrder() provides it.
     void          SortTracksBy(TrackSortMode mode);
     TrackSortMode GetSortMode() const { return m_sort_mode; }
     bool          HasCustomOrder() const { return !m_custom_order.empty(); }
-    // Supplies the sidebar-tree (topology) order. Wired by the owning TraceView,
-    // which owns the TrackTopology that builds the tree.
-    void          SetTopologyOrderProvider(std::function<std::vector<uint64_t>()> provider);
+    // Points at the sidebar-tree (topology) order owned by TrackTopology. Wired by
+    // the owning TraceView; the pointee stays valid for the view's lifetime.
+    void          SetTopologyOrder(const std::vector<uint64_t>* order);
 
 private:
     // Reindexes each TrackInfo and rebuilds m_tracks to match order, which must be
@@ -313,14 +309,14 @@ private:
     TrackTypeCounts             m_track_counts;
 
     // Track sort state. m_default_order is captured once when the trace loads;
-    // m_custom_order is the single remembered manual ordering. Topology order is
-    // fetched on demand from m_topology_order_provider; m_topology_sort_pending is
-    // set when a topology sort is requested before that provider can satisfy it.
-    TrackSortMode                          m_sort_mode;
-    std::vector<uint64_t>                  m_default_order;
-    std::vector<uint64_t>                  m_custom_order;
-    bool                                   m_topology_sort_pending;
-    std::function<std::vector<uint64_t>()> m_topology_order_provider;
+    // m_custom_order is the single remembered manual ordering. m_topology_order
+    // points at TrackTopology's cached order; m_topology_sort_pending is set when a
+    // topology sort is requested before that order is available.
+    TrackSortMode                m_sort_mode;
+    std::vector<uint64_t>        m_default_order;
+    std::vector<uint64_t>        m_custom_order;
+    bool                         m_topology_sort_pending;
+    const std::vector<uint64_t>* m_topology_order = nullptr;
 };
 
 }  // namespace View

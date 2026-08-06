@@ -224,10 +224,10 @@ public:
         const std::function<void(const RequestInfo&, uint64_t, const std::string&)>&
             callback);
 
-    // View-only reorder: sets each TrackInfo::index from its position in
-    // ordered_track_ids (a full permutation) and fires the metadata-changed
-    // callback. Does not touch the controller's graph order.
-    bool SetTrackDisplayOrder(const std::vector<uint64_t>& ordered_track_ids);
+    // Sets each track's TrackInfo::index from its position in ordered_track_ids (a
+    // full permutation) and fires the metadata-changed callback. Does not touch the
+    // controller's graph order.
+    bool SetTrackIndex(const std::vector<uint64_t>& ordered_track_ids);
 
     bool SaveTrimmedTrace(const std::string& path, double start_ns, double end_ns);
 

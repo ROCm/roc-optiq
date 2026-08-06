@@ -1187,16 +1187,12 @@ TimelineView::Update()
     if(m_meta_map_made)
     {
         // A topology sort requested before the sidebar tree was ready (e.g. right
-        // after load) is applied here once the provider can satisfy it.
+        // after load) is applied here once the order becomes available.
         if(m_topology_sort_pending && m_sort_mode == TrackSortMode::kTopology &&
-           m_topology_order_provider)
+           m_topology_order && !m_topology_order->empty())
         {
-            std::vector<uint64_t> order = m_topology_order_provider();
-            if(!order.empty())
-            {
-                ApplyTrackOrder(order);
-                m_topology_sort_pending = false;
-            }
+            ApplyTrackOrder(*m_topology_order);
+            m_topology_sort_pending = false;
         }
 
         if(!m_reorder_request.handled)
@@ -2337,9 +2333,9 @@ TimelineView::MakeGraphView()
 }
 
 void
-TimelineView::SetTopologyOrderProvider(std::function<std::vector<uint64_t>()> provider)
+TimelineView::SetTopologyOrder(const std::vector<uint64_t>* order)
 {
-    m_topology_order_provider = std::move(provider);
+    m_topology_order = order;
 }
 
 void
@@ -2350,12 +2346,9 @@ TimelineView::SortTracksBy(TrackSortMode mode)
     {
         case TrackSortMode::kTopology:
         {
-            std::vector<uint64_t> order =
-                m_topology_order_provider ? m_topology_order_provider()
-                                          : std::vector<uint64_t>{};
-            if(!order.empty())
+            if(m_topology_order && !m_topology_order->empty())
             {
-                ApplyTrackOrder(order);
+                ApplyTrackOrder(*m_topology_order);
                 m_topology_sort_pending = false;
             }
             else
@@ -2389,8 +2382,8 @@ TimelineView::ApplyTrackOrder(const std::vector<uint64_t>& order)
     }
 
     // Callers pass a full permutation, so this is a straight reindex;
-    // SetTrackDisplayOrder guards against a malformed order.
-    if(!m_data_provider.SetTrackDisplayOrder(order))
+    // SetTrackIndex guards against a malformed order.
+    if(!m_data_provider.SetTrackIndex(order))
     {
         return;
     }
@@ -2427,6 +2420,13 @@ TimelineView::LoadSortSettings()
     m_custom_order.clear();
     m_topology_sort_pending = false;
 
+    // The persisted "order" list is the remembered custom order.
+    const bool custom_valid = m_project_settings.Valid();
+    if(custom_valid)
+    {
+        m_custom_order = m_project_settings.CustomOrder();
+    }
+
     if(m_project_settings.HasSortSettings())
     {
         int mode = m_project_settings.SortMode();
@@ -2435,20 +2435,10 @@ TimelineView::LoadSortSettings()
         {
             m_sort_mode = static_cast<TrackSortMode>(mode);
         }
-        if(m_project_settings.CustomOrderValid())
-        {
-            m_custom_order = m_project_settings.CustomOrder();
-        }
     }
-    else if(m_project_settings.Valid())
+    else if(custom_valid)
     {
-        // Legacy projects stored only an explicit track order; treat it as custom.
-        m_custom_order.clear();
-        m_custom_order.reserve(m_tracks->size());
-        for(int i = 0; i < static_cast<int>(m_tracks->size()); i++)
-        {
-            m_custom_order.push_back(m_project_settings.TrackID(i));
-        }
+        // Legacy projects stored only the order; restore it as the custom sort.
         m_sort_mode = TrackSortMode::kCustom;
     }
 
@@ -2628,20 +2618,6 @@ TimelineView::RenderTrackStats(float available_width)
 
     ImGui::EndGroup();
 
-    // Pull menu spacing from the base style; the histogram strip's child has zero
-    // padding, which would otherwise leave the popup cramped.
-    const ImGuiStyle& base = m_settings.GetDefaultStyle();
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, base.WindowPadding);
-    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, base.ItemSpacing);
-    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, base.FramePadding);
-    if(ImGui::BeginPopupContextWindow("##track_sort_ctx",
-                                      ImGuiPopupFlags_MouseButtonRight))
-    {
-        RenderTrackSortMenu();
-        ImGui::EndPopup();
-    }
-    ImGui::PopStyleVar(3);
-
     // Hovering the summary reveals the full per-type breakdown.
     if(BeginItemTooltipStyled())
     {
@@ -2657,6 +2633,48 @@ TimelineView::RenderTrackStats(float available_width)
         ImGui::PopStyleColor();
         EndTooltipStyled();
     }
+
+    // Full-width sort affordance pinned to the bottom of the header, so the sort
+    // options are discoverable without the right-click menu. The height is clamped
+    // to the arrow glyph with no vertical padding.
+    const std::string sort_label = std::string(ICON_CHEVRON_DOWN) + "##sort_tracks_btn";
+    ImGui::PushStyleColor(ImGuiCol_Button, m_settings.GetColor(Colors::kBgFrame));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
+                          m_settings.GetColor(Colors::kButtonHovered));
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive,
+                          m_settings.GetColor(Colors::kButtonActive));
+    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 0.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(0.0f, 0.0f));
+    ImGui::PushFont(fonts.GetFont(FontType::kIcon), fonts.GetFontSize(FontSize::kSmall));
+    const float arrow_h = ImGui::GetTextLineHeight();
+    ImGui::SetCursorPos(ImVec2(0.0f, ImGui::GetWindowHeight() - arrow_h));
+    if(ImGui::Button(sort_label.c_str(), ImVec2(available_width, arrow_h)))
+    {
+        ImGui::OpenPopup("##track_sort_ctx");
+    }
+    ImGui::PopFont();
+    ImGui::PopStyleVar(2);
+    ImGui::PopStyleColor(3);
+    if(BeginItemTooltipStyled())
+    {
+        ImGui::TextUnformatted("Sort tracks");
+        EndTooltipStyled();
+    }
+
+    // Sort menu, shared by the button above and a right-click anywhere on the
+    // header. Pull spacing from the base style; the histogram strip's child has zero
+    // padding, which would otherwise leave the popup cramped.
+    const ImGuiStyle& base = m_settings.GetDefaultStyle();
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, base.WindowPadding);
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, base.ItemSpacing);
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, base.FramePadding);
+    if(ImGui::BeginPopupContextWindow("##track_sort_ctx",
+                                      ImGuiPopupFlags_MouseButtonRight))
+    {
+        RenderTrackSortMenu();
+        ImGui::EndPopup();
+    }
+    ImGui::PopStyleVar(3);
 }
 
 void
@@ -3573,97 +3591,24 @@ TimelineViewProjectSettings::~TimelineViewProjectSettings() {}
 void
 TimelineViewProjectSettings::ToJson()
 {
-    const std::vector<TrackItem*>& tracks = *m_timeline_view.GetTracks();
-    for(int i = 0; i < tracks.size(); i++)
-    {
-        uint64_t id = tracks[i]->GetID();
-        m_settings_json[JSON_KEY_GROUP_TIMELINE][JSON_KEY_TIMELINE_TRACK_ORDER][i] = id;
-    }
-
-    // Persist the active sort mode and the single remembered custom ordering.
-    m_settings_json[JSON_KEY_GROUP_TIMELINE][JSON_KEY_TIMELINE_SORT_MODE] =
-        static_cast<int>(m_timeline_view.m_sort_mode);
+    // Persist the remembered custom order (reusing the track "order" key) and the
+    // active sort mode. The custom order is the only ordering that can't be derived
+    // at load; default and topology are recomputed.
     const std::vector<uint64_t>& custom = m_timeline_view.m_custom_order;
     for(size_t i = 0; i < custom.size(); i++)
     {
-        m_settings_json[JSON_KEY_GROUP_TIMELINE][JSON_KEY_TIMELINE_CUSTOM_ORDER][i] =
+        m_settings_json[JSON_KEY_GROUP_TIMELINE][JSON_KEY_TIMELINE_TRACK_ORDER][i] =
             custom[i];
     }
+    m_settings_json[JSON_KEY_GROUP_TIMELINE][JSON_KEY_TIMELINE_SORT_MODE] =
+        static_cast<int>(m_timeline_view.m_sort_mode);
 }
 
 bool
 TimelineViewProjectSettings::Valid() const
 {
-    bool valid = false;
-    if(m_settings_json[JSON_KEY_GROUP_TIMELINE][JSON_KEY_TIMELINE_TRACK_ORDER].isArray())
-    {
-        std::vector<jt::Json>& track_order =
-            m_settings_json[JSON_KEY_GROUP_TIMELINE][JSON_KEY_TIMELINE_TRACK_ORDER]
-                .getArray();
-        if(track_order.size() == m_timeline_view.m_tracks->size())
-        {
-            int valid_count = 0;
-            for(jt::Json& track_id : track_order)
-            {
-                if(track_id.isLong())
-                {
-                    valid_count++;
-                }
-                else
-                {
-                    break;
-                }
-            }
-            valid = (valid_count == track_order.size());
-        }
-    }
-    return valid;
-}
-
-uint64_t
-TimelineViewProjectSettings::TrackID(int index) const
-{
-    return m_settings_json[JSON_KEY_GROUP_TIMELINE][JSON_KEY_TIMELINE_TRACK_ORDER][index]
-        .getLong();
-}
-
-bool
-TimelineViewProjectSettings::HasSortSettings() const
-{
-    return m_settings_json[JSON_KEY_GROUP_TIMELINE][JSON_KEY_TIMELINE_SORT_MODE].isLong();
-}
-
-int
-TimelineViewProjectSettings::SortMode() const
-{
-    return static_cast<int>(
-        m_settings_json[JSON_KEY_GROUP_TIMELINE][JSON_KEY_TIMELINE_SORT_MODE].getLong());
-}
-
-std::vector<uint64_t>
-TimelineViewProjectSettings::CustomOrder() const
-{
-    std::vector<uint64_t> order;
-    jt::Json&             node =
-        m_settings_json[JSON_KEY_GROUP_TIMELINE][JSON_KEY_TIMELINE_CUSTOM_ORDER];
-    if(node.isArray())
-    {
-        for(jt::Json& id : node.getArray())
-        {
-            if(id.isLong())
-            {
-                order.push_back(static_cast<uint64_t>(id.getLong()));
-            }
-        }
-    }
-    return order;
-}
-
-bool
-TimelineViewProjectSettings::CustomOrderValid() const
-{
     jt::Json& node =
-        m_settings_json[JSON_KEY_GROUP_TIMELINE][JSON_KEY_TIMELINE_CUSTOM_ORDER];
+        m_settings_json[JSON_KEY_GROUP_TIMELINE][JSON_KEY_TIMELINE_TRACK_ORDER];
     if(!node.isArray())
     {
         return false;
@@ -3691,6 +3636,38 @@ TimelineViewProjectSettings::CustomOrderValid() const
         }
     }
     return true;
+}
+
+bool
+TimelineViewProjectSettings::HasSortSettings() const
+{
+    return m_settings_json[JSON_KEY_GROUP_TIMELINE][JSON_KEY_TIMELINE_SORT_MODE].isLong();
+}
+
+int
+TimelineViewProjectSettings::SortMode() const
+{
+    return static_cast<int>(
+        m_settings_json[JSON_KEY_GROUP_TIMELINE][JSON_KEY_TIMELINE_SORT_MODE].getLong());
+}
+
+std::vector<uint64_t>
+TimelineViewProjectSettings::CustomOrder() const
+{
+    std::vector<uint64_t> order;
+    jt::Json&             node =
+        m_settings_json[JSON_KEY_GROUP_TIMELINE][JSON_KEY_TIMELINE_TRACK_ORDER];
+    if(node.isArray())
+    {
+        for(jt::Json& id : node.getArray())
+        {
+            if(id.isLong())
+            {
+                order.push_back(static_cast<uint64_t>(id.getLong()));
+            }
+        }
+    }
+    return order;
 }
 
 LoadingTimer::LoadingTimer(uint64_t delay)

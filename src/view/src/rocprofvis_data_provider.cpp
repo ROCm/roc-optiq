@@ -286,7 +286,7 @@ DataProvider::SetRequestProgressUpdateCallback(
 }
 
 bool
-DataProvider::SetTrackDisplayOrder(const std::vector<uint64_t>& ordered_track_ids)
+DataProvider::SetTrackIndex(const std::vector<uint64_t>& ordered_track_ids)
 {
     if(m_state != ProviderState::kReady)
     {
@@ -296,10 +296,10 @@ DataProvider::SetTrackDisplayOrder(const std::vector<uint64_t>& ordered_track_id
     TimelineModel&                           tlm      = m_model.GetTimeline();
     std::unordered_map<uint64_t, TrackInfo>& metadata = tlm.GetMutableTrackMetadata();
 
-    // Require a full permutation so no two tracks share a display index.
+    // Require a full permutation so no two tracks share an index.
     if(ordered_track_ids.size() != metadata.size())
     {
-        spdlog::warn("SetTrackDisplayOrder ignored: expected {} track ids, got {}",
+        spdlog::warn("SetTrackIndex ignored: expected {} track ids, got {}",
                      metadata.size(), ordered_track_ids.size());
         return false;
     }
@@ -310,7 +310,7 @@ DataProvider::SetTrackDisplayOrder(const std::vector<uint64_t>& ordered_track_id
         auto it = metadata.find(track_id);
         if(it == metadata.end())
         {
-            spdlog::warn("SetTrackDisplayOrder ignored: unknown track id {}", track_id);
+            spdlog::warn("SetTrackIndex ignored: unknown track id {}", track_id);
             return false;
         }
         it->second.index = index++;

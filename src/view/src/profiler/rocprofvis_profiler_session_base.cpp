@@ -45,8 +45,15 @@ ProfilerSessionBase::BuildConfig(const ProfilerLaunchSpec& spec)
         return false;
     }
 
-    rocprofvis_profiler_config_set_type(m_config, spec.profiler_type);
-    rocprofvis_profiler_config_set_profiler_path(m_config, spec.profiler_path.c_str());
+    if(rocprofvis_profiler_config_set_tool(m_config, spec.tool) != kRocProfVisResultSuccess)
+    {
+        spdlog::error("Failed to set profiler tool ({})", static_cast<int>(spec.tool));
+        return false;
+    }
+    if(!spec.tool_directory.empty())
+    {
+        rocprofvis_profiler_config_set_tool_directory(m_config, spec.tool_directory.c_str());
+    }
     rocprofvis_profiler_config_set_target_executable(m_config, spec.target_executable.c_str());
     rocprofvis_profiler_config_set_output_directory(m_config, spec.output_directory.c_str());
     rocprofvis_profiler_config_set_working_directory(m_config, spec.working_directory.c_str());

@@ -4,6 +4,7 @@
 #pragma once
 
 #include "rocprofvis_launch_config.h"
+#include "rocprofvis_controller_enums.h"
 #include "json.h"
 #include <string>
 #include <vector>
@@ -15,10 +16,14 @@ namespace RocProfVis
 namespace View
 {
 
+// One entry in the launcher's tool combo. The tool is identified by the
+// controller's enum rather than a backend-local string id, so there is a single
+// spelling of "which tool" from the combo through to argv[0] - and no per-backend
+// id table to keep in step with it.
 struct ToolOption
 {
-    std::string id;
-    std::string display_name;
+    rocprofvis_profiler_tool_t tool = kRPVProfilerToolNone;
+    std::string                display_name;
 };
 
 struct TabDescriptor
@@ -50,10 +55,19 @@ public:
     virtual const char* Id() const = 0;
     virtual const char* DisplayName() const = 0;
 
+    /**
+     * The tools this backend offers, in combo order. The first is the default
+     * for a fresh config and the fallback when a loaded profile names a tool this
+     * backend does not offer.
+     */
     virtual std::vector<ToolOption> GetTools() const = 0;
-    virtual std::string GetDefaultBinary(std::string const& tool_id) const = 0;
 
-    virtual std::vector<TabDescriptor> GetTabs(std::string const& tool_id) const = 0;
+    /**
+     * Tabs for the given tool, which is always one of GetTools() - the launcher
+     * keeps LaunchConfig::tool in step with the selected backend, so this does
+     * not need to handle a foreign or unset value.
+     */
+    virtual std::vector<TabDescriptor> GetTabs(rocprofvis_profiler_tool_t tool) const = 0;
 
     /**
      * Validate the config before launch. Returns empty string on success,

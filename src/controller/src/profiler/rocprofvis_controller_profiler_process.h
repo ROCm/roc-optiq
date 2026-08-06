@@ -62,8 +62,8 @@ public:
 
     rocprofvis_controller_object_type_t GetType(void) final;
 
-    rocprofvis_result_t SetProfilerType(rocprofvis_profiler_type_t type);
-    rocprofvis_result_t SetProfilerPath(char const* path);
+    rocprofvis_result_t SetTool(rocprofvis_profiler_tool_t tool);
+    rocprofvis_result_t SetToolDirectory(char const* directory);
     rocprofvis_result_t SetTargetExecutable(char const* path);
     rocprofvis_result_t SetOutputDirectory(char const* path);
     rocprofvis_result_t SetWorkingDirectory(char const* path);
@@ -74,8 +74,28 @@ public:
                                          int port, char const* identity_file,
                                          char const* remote_stage_dir);
 
-    rocprofvis_profiler_type_t GetProfilerType() const { return m_profiler_type; }
-    std::string const& GetProfilerPath() const { return m_profiler_path; }
+    rocprofvis_profiler_tool_t GetTool() const { return m_tool; }
+    std::string const& GetToolDirectory() const { return m_tool_directory; }
+
+    // Resolves m_tool (in m_tool_directory if set) to an absolute executable path
+    // on this machine and caches it for GetResolvedToolPath. Must succeed before a
+    // launch: argv[0] comes from the cached result, so an unresolved tool must
+    // never reach exec.
+    rocprofvis_result_t ResolveToolPath();
+
+    // Remote equivalent. The tool lives on the remote host, so its filesystem
+    // cannot be searched from here without an extra round trip. argv[0] becomes
+    // <m_tool_directory>/<name> when a directory is configured (joined with '/',
+    // since the remote is addressed as POSIX regardless of what this host is), and
+    // otherwise the bare name for the remote $PATH to resolve. Consequently a
+    // missing remote tool still surfaces as the remote shell's "command not
+    // found" rather than kRocProfVisResultToolNotFound.
+    rocprofvis_result_t ResolveToolPathRemote();
+
+    // argv[0]. Empty until one of the two resolve calls above has succeeded -
+    // hence "resolved" in the name, since reading it earlier yields nothing.
+    std::string const& GetResolvedToolPath() const { return m_resolved_tool_path; }
+
     std::string const& GetTargetExecutable() const { return m_target_executable; }
     std::string const& GetOutputDirectory() const { return m_output_directory; }
     std::string const& GetWorkingDirectory() const { return m_working_directory; }
@@ -87,8 +107,14 @@ public:
     SshConnectionInfo const& GetSshInfo() const { return m_ssh_info; }
 
 private:
-    rocprofvis_profiler_type_t m_profiler_type;
-    std::string m_profiler_path;
+    // Which binary to run, named rather than pathed so that no caller-supplied
+    // string becomes argv[0]. m_tool_directory narrows *where* to look for it
+    // (for a ROCm install in a non-standard location) and is set through its own
+    // setter, never as a side effect of naming a tool; the filename still comes
+    // from the tool table, so a directory cannot name a different program.
+    rocprofvis_profiler_tool_t m_tool;
+    std::string m_tool_directory;
+    std::string m_resolved_tool_path;
     // Descriptive only: the profiled program and where its output is expected.
     // Neither contributes to argv (see Cmdline::BuildArgv) - callers that want
     // them on the command line add them as explicit argv entries.

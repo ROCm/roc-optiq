@@ -23,6 +23,7 @@
 #include "remote/rocprofvis_controller_ssh_client.h"
 #endif
 #include "rocprofvis_controller_profiler_process.h"
+#include "rocprofvis_controller_profiler_tool.h"
 #include "rocprofvis_controller_reference.h"
 #include "rocprofvis_controller_future.h"
 #include "rocprofvis_controller_job_system.h"
@@ -95,18 +96,31 @@ void rocprofvis_profiler_config_free(rocprofvis_profiler_config_t* config)
     }
 }
 
-rocprofvis_result_t rocprofvis_profiler_config_set_type(rocprofvis_profiler_config_t* config, rocprofvis_profiler_type_t profiler_type)
+rocprofvis_result_t rocprofvis_profiler_tool_get_binary_name(rocprofvis_profiler_tool_t tool, char* buffer, uint32_t* length)
 {
-    RocProfVis::Controller::ProfilerConfigRef config_ref(config);
-    if (!config_ref.IsValid())
+    char const* name = RocProfVis::Controller::ProfilerTool::GetBinaryName(tool);
+    if (name == nullptr)
     {
-        return kRocProfVisResultInvalidArgument;
+        return kRocProfVisResultInvalidEnum;
     }
 
-    return config_ref->SetProfilerType(profiler_type);
+    return RocProfVis::Controller::copy_string_to_buffer(name, buffer, length);
 }
 
-rocprofvis_result_t rocprofvis_profiler_config_set_profiler_path(rocprofvis_profiler_config_t* config, char const* profiler_path)
+rocprofvis_result_t rocprofvis_profiler_tool_resolve_path(rocprofvis_profiler_tool_t tool, char const* tool_directory, char* buffer, uint32_t* length)
+{
+    std::string         resolved;
+    rocprofvis_result_t result = RocProfVis::Controller::ProfilerTool::ResolvePath(
+        tool, tool_directory != nullptr ? tool_directory : "", resolved);
+    if (result != kRocProfVisResultSuccess)
+    {
+        return result;
+    }
+
+    return RocProfVis::Controller::copy_string_to_buffer(resolved, buffer, length);
+}
+
+rocprofvis_result_t rocprofvis_profiler_config_set_tool(rocprofvis_profiler_config_t* config, rocprofvis_profiler_tool_t tool)
 {
     RocProfVis::Controller::ProfilerConfigRef config_ref(config);
     if (!config_ref.IsValid())
@@ -114,7 +128,18 @@ rocprofvis_result_t rocprofvis_profiler_config_set_profiler_path(rocprofvis_prof
         return kRocProfVisResultInvalidArgument;
     }
 
-    return config_ref->SetProfilerPath(profiler_path);
+    return config_ref->SetTool(tool);
+}
+
+rocprofvis_result_t rocprofvis_profiler_config_set_tool_directory(rocprofvis_profiler_config_t* config, char const* tool_directory)
+{
+    RocProfVis::Controller::ProfilerConfigRef config_ref(config);
+    if (!config_ref.IsValid())
+    {
+        return kRocProfVisResultInvalidArgument;
+    }
+
+    return config_ref->SetToolDirectory(tool_directory);
 }
 
 rocprofvis_result_t rocprofvis_profiler_config_set_target_executable(rocprofvis_profiler_config_t* config, char const* target_executable)

@@ -129,8 +129,7 @@ public:
     const char* DisplayName() const override;
 
     std::vector<ToolOption> GetTools() const override;
-    std::string GetDefaultBinary(std::string const& tool_id) const override;
-    std::vector<TabDescriptor> GetTabs(std::string const& tool_id) const override;
+    std::vector<TabDescriptor> GetTabs(rocprofvis_profiler_tool_t tool) const override;
 
     std::string Validate(LaunchConfig const& config) const override;
 

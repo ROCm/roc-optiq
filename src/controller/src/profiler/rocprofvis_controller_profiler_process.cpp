@@ -3,6 +3,7 @@
 
 #include "rocprofvis_controller_profiler_process.h"
 #include "rocprofvis_controller_profiler_cmdline.h"
+#include "rocprofvis_controller_profiler_tool.h"
 // TEMPORARY (remote/SSH): remove guard when remote graduates.
 #ifdef ROCPROFVIS_ENABLE_REMOTE
 #include "rocprofvis_controller_ssh_profiler_executor.h"
@@ -34,8 +35,9 @@ namespace Controller
 
 ProfilerConfig::ProfilerConfig()
     : Handle(0, 0)
-    , m_profiler_type(kRPVProfilerTypeRocprofSysRun)
-    , m_profiler_path()
+    , m_tool(kRPVProfilerToolNone)
+    , m_tool_directory()
+    , m_resolved_tool_path()
     , m_target_executable()
     , m_output_directory()
     , m_working_directory()
@@ -55,19 +57,66 @@ rocprofvis_controller_object_type_t ProfilerConfig::GetType(void)
     return kRPVProfilerConfig;
 }
 
-rocprofvis_result_t ProfilerConfig::SetProfilerType(rocprofvis_profiler_type_t type)
+rocprofvis_result_t ProfilerConfig::SetTool(rocprofvis_profiler_tool_t tool)
 {
-    m_profiler_type = type;
+    if (ProfilerTool::GetBinaryName(tool) == nullptr)
+    {
+        return kRocProfVisResultInvalidEnum;
+    }
+    m_tool = tool;
     return kRocProfVisResultSuccess;
 }
 
-rocprofvis_result_t ProfilerConfig::SetProfilerPath(char const* path)
+rocprofvis_result_t ProfilerConfig::SetToolDirectory(char const* directory)
 {
-    if (path == nullptr)
+    if (directory == nullptr)
     {
         return kRocProfVisResultInvalidArgument;
     }
-    m_profiler_path = path;
+    m_tool_directory = directory;
+    return kRocProfVisResultSuccess;
+}
+
+rocprofvis_result_t ProfilerConfig::ResolveToolPath()
+{
+    return ProfilerTool::ResolvePath(m_tool, m_tool_directory, m_resolved_tool_path);
+}
+
+rocprofvis_result_t ProfilerConfig::ResolveToolPathRemote()
+{
+    char const* binary_name = ProfilerTool::GetBinaryName(m_tool);
+    if (binary_name == nullptr)
+    {
+        spdlog::error("ProfilerConfig::ResolveToolPathRemote: no tool selected");
+        return kRocProfVisResultInvalidArgument;
+    }
+
+    if (!m_tool_directory.empty())
+    {
+        // A remote path, so "absolute" means starting with '/' - std::filesystem
+        // would apply this host's rules, and on Windows would reject a perfectly
+        // good remote path (and join it with a backslash below).
+        if (m_tool_directory.front() != '/')
+        {
+            spdlog::error("Remote profiler tool directory must be an absolute POSIX path, "
+                          "got '{}'", m_tool_directory);
+            return kRocProfVisResultInvalidArgument;
+        }
+
+        std::string directory = m_tool_directory;
+        while (directory.size() > 1 && directory.back() == '/')
+        {
+            directory.pop_back();
+        }
+        m_resolved_tool_path =
+            (directory == "/") ? ("/" + std::string(binary_name))
+                               : (directory + "/" + binary_name);
+        spdlog::warn("Using configured remote tool directory for '{}': '{}'", binary_name,
+                     m_tool_directory);
+        return kRocProfVisResultSuccess;
+    }
+
+    m_resolved_tool_path = binary_name;
     return kRocProfVisResultSuccess;
 }
 
@@ -588,7 +637,7 @@ bool LocalProfilerExecutor::Start(const ProfilerConfig& config)
         char err_buf[256];
         int n = snprintf(err_buf, sizeof(err_buf),
                          "execvp failed for '%s': %s (errno %d)\n",
-                         config.GetProfilerPath().c_str(), strerror(exec_errno), exec_errno);
+                         config.GetResolvedToolPath().c_str(), strerror(exec_errno), exec_errno);
         if (n > 0)
         {
             (void)write(STDERR_FILENO, err_buf, static_cast<size_t>(n));
@@ -784,26 +833,36 @@ rocprofvis_result_t ProfilerProcessController::LaunchAsync(ProfilerConfig const*
         return kRocProfVisResultNotSupported;
     }
 
+    // Turn the tool enum into the absolute path that becomes argv[0]. Done on
+    // our own copy of the config, before anything is spawned, so a missing tool
+    // is reported as such instead of surfacing as the child's exit code 127.
+    rocprofvis_result_t resolved = m_config->ResolveToolPath();
+    if (resolved != kRocProfVisResultSuccess)
+    {
+        m_state = kRPVProfilerStateFailed;
+        return resolved;
+    }
+
     m_executor = std::make_unique<LocalProfilerExecutor>();
 
-    for (auto const& kv : config->GetEnvVars())
+    for (auto const& kv : m_config->GetEnvVars())
     {
         spdlog::info("Profiler env: {}={}", kv.first, kv.second);
     }
 
-    if (!config->GetWorkingDirectory().empty())
+    if (!m_config->GetWorkingDirectory().empty())
     {
-        spdlog::info("Profiler working directory: {}", config->GetWorkingDirectory());
+        spdlog::info("Profiler working directory: {}", m_config->GetWorkingDirectory());
     }
 
-    spdlog::info("Profiler launch: {}", Cmdline::ToDisplayString(Cmdline::BuildArgv(*config)));
+    spdlog::info("Profiler launch: {}", Cmdline::ToDisplayString(Cmdline::BuildArgv(*m_config)));
 
-    bool launched = m_executor->Start(*config);
+    bool launched = m_executor->Start(*m_config);
 
     if (!launched)
     {
         spdlog::error("ProfilerProcessController::LaunchAsync: failed to start process "
-                      "(executable='{}')", config->GetProfilerPath());
+                      "(executable='{}')", m_config->GetResolvedToolPath());
         m_state = kRPVProfilerStateFailed;
         m_executor.reset();
         return kRocProfVisResultUnknownError;
@@ -835,6 +894,13 @@ rocprofvis_result_t ProfilerProcessController::LaunchAsyncRemote(ProfilerConfig 
     }
 
     m_config = std::make_unique<ProfilerConfig>(*config);
+
+    rocprofvis_result_t resolved = m_config->ResolveToolPathRemote();
+    if (resolved != kRocProfVisResultSuccess)
+    {
+        m_state = kRPVProfilerStateFailed;
+        return resolved;
+    }
 
     // The executor reads the future lazily inside its worker thread (started in
     // Start) to observe cancellation; the ABI sets the future's job right after

@@ -58,9 +58,14 @@ typedef struct InternalSettings
     std::list<std::string> recent_files;
 } InternalSettings;
 
+// Deliberately holds no path to a profiler binary. Which binary runs is chosen
+// by a rocprofvis_profiler_tool_t, so a settings file that is edited, corrupted,
+// or copied from another machine cannot decide what gets executed. A ROCm install
+// in a non-standard location is handled by LaunchConfig::tool_directory, which
+// names a directory rather than an executable and belongs to the launch profile
+// because a remote profile needs a directory on the remote host.
 typedef struct ProfilerSettings
 {
-    std::string profiler_path;
     std::string profiler_output_directory;
     bool        auto_load_trace = true;
     std::vector<std::string> recent_targets;
@@ -253,7 +258,6 @@ constexpr int LOG_VIEWER_DEFAULT_LEVEL_MASK = 0x3F;
 
 constexpr const char* JSON_KEY_SETTINGS_CATEGORY_HOTKEYS = "hotkeys";
 constexpr const char* JSON_KEY_SETTINGS_CATEGORY_PROFILER = "profiler";
-constexpr const char* JSON_KEY_SETTINGS_PROFILER_PATH = "profiler_path";
 constexpr const char* JSON_KEY_SETTINGS_PROFILER_OUTPUT_DIR = "profiler_output_directory";
 constexpr const char* JSON_KEY_SETTINGS_PROFILER_AUTO_LOAD = "auto_load_trace";
 

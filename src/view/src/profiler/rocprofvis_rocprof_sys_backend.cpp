@@ -511,26 +511,13 @@ const char* RocprofSysBackend::DisplayName() const
 std::vector<ToolOption> RocprofSysBackend::GetTools() const
 {
     return {
-        {"run",        "Run (LD_PRELOAD)"},
-        {"sample",     "Sample"},
-        {"instrument", "Instrument (Dyninst)"},
+        {kRPVProfilerToolRocprofSysRun,        "Run"},
+        {kRPVProfilerToolRocprofSysSample,     "Sample"},
+        {kRPVProfilerToolRocprofSysInstrument, "Instrument"},
     };
 }
 
-std::string RocprofSysBackend::GetDefaultBinary(std::string const& tool_id) const
-{
-    if (tool_id == "run")
-        return "rocprof-sys-run";
-    if (tool_id == "sample")
-        return "rocprof-sys-sample";
-    if (tool_id == "instrument")
-        return "rocprof-sys-instrument";
-    if (tool_id == "causal")
-        return "rocprof-sys-causal";
-    return "rocprof-sys-run";
-}
-
-std::vector<TabDescriptor> RocprofSysBackend::GetTabs(std::string const& tool_id) const
+std::vector<TabDescriptor> RocprofSysBackend::GetTabs(rocprofvis_profiler_tool_t tool) const
 {
     std::vector<TabDescriptor> tabs;
 
@@ -553,7 +540,7 @@ std::vector<TabDescriptor> RocprofSysBackend::GetTabs(std::string const& tool_id
     tabs.push_back({"parallelism", "Parallelism", [this]() {
         const_cast<RocprofSysBackend*>(this)->RenderParallelismTab(); }, true});
 
-    if (tool_id == "instrument")
+    if (tool == kRPVProfilerToolRocprofSysInstrument)
     {
         tabs.push_back({"instrument", "Instrument", [this]() {
             const_cast<RocprofSysBackend*>(this)->RenderInstrumentTab(); }, true});
@@ -634,7 +621,7 @@ std::vector<WarningMessage> RocprofSysBackend::GetWarnings(
     }
 
     // MPI + instrument tool
-    if (m_settings.use_mpip && config.tool_id == "instrument")
+    if (m_settings.use_mpip && config.tool == kRPVProfilerToolRocprofSysInstrument)
     {
         warnings.push_back({WarningMessage::kWarning,
             "Runtime instrumentation is incompatible with MPI spawn. "
@@ -642,7 +629,7 @@ std::vector<WarningMessage> RocprofSysBackend::GetWarnings(
     }
 
     // Tool routing: run + sampling
-    if (config.tool_id == "run" && m_settings.use_sampling &&
+    if (config.tool == kRPVProfilerToolRocprofSysRun && m_settings.use_sampling &&
         !m_settings.trace_backend)
     {
         warnings.push_back({WarningMessage::kInfo,
@@ -883,7 +870,7 @@ void RocprofSysBackend::FlattenToExecution(
     emit_bool("ROCPROFSYS_USE_PID", effective_use_pid, defaults.use_pid);
 
     // Instrument args
-    if (config.tool_id == "instrument")
+    if (config.tool == kRPVProfilerToolRocprofSysInstrument)
     {
         if (!m_settings.instr_include.empty())
         {

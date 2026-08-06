@@ -56,6 +56,7 @@ if(ROCPROFVIS_ENABLE_PROFILER)
 list(APPEND rocprofvis_controller_source_files
     src/profiler/rocprofvis_controller_profiler_process.cpp
     src/profiler/rocprofvis_controller_profiler_cmdline.cpp
+    src/profiler/rocprofvis_controller_profiler_tool.cpp
     src/profiler/rocprofvis_profiler.cpp
 )
 endif(ROCPROFVIS_ENABLE_PROFILER)

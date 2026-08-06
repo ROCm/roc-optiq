@@ -12,6 +12,44 @@ extern "C"
 #endif
 
 /*
+* Gets the executable name for a profiler tool, without directory or platform
+* suffix (e.g. "rocprof-sys-run").
+* This is the single source of truth for what each tool is called on disk;
+* callers should query it rather than hard-coding names.
+* String getter convention: pass buffer = nullptr to query the required size in
+* *length, then call again with a buffer of at least that many bytes. *length is
+* a byte count and does not include a null terminator, so a caller wanting a
+* C string should allocate *length + 1 and terminate it itself.
+* @param tool The profiler tool.
+* @param buffer Destination buffer, or nullptr to query the length.
+* @param length In/out byte count (must not be null).
+* @returns kRocProfVisResultSuccess, or kRocProfVisResultInvalidEnum for an
+*          unrecognized tool or kRPVProfilerToolNone.
+*/
+rocprofvis_result_t rocprofvis_profiler_tool_get_binary_name(rocprofvis_profiler_tool_t tool, char* buffer, uint32_t* length);
+
+/*
+* Finds the absolute path of a profiler tool on this machine, in the same way and
+* the same order a launch would: inside tool_directory alone if one is given,
+* otherwise $ROCM_PATH/bin (defaulting to /opt/rocm off Windows) then each $PATH
+* entry.
+* Exposed separately from any session so a caller can show what will actually run
+* in a command preview, or check a tool is installed before committing to a run.
+* Answers a question about the LOCAL machine only - a remote launch resolves its
+* tool on the remote host, so a caller must not apply this to one.
+* Same string getter convention as rocprofvis_profiler_tool_get_binary_name.
+* @param tool The profiler tool.
+* @param tool_directory Absolute directory to search, or null/empty for the
+*        default search.
+* @param buffer Destination buffer, or nullptr to query the length.
+* @param length In/out byte count (must not be null).
+* @returns kRocProfVisResultSuccess, kRocProfVisResultToolNotFound if the tool is
+*          not present, or kRocProfVisResultInvalidArgument for an unknown tool
+*          or a relative directory.
+*/
+rocprofvis_result_t rocprofvis_profiler_tool_resolve_path(rocprofvis_profiler_tool_t tool, char const* tool_directory, char* buffer, uint32_t* length);
+
+/*
 * Allocates a profiler configuration object.
 * @returns A valid profiler config object, or nullptr on error.
 */
@@ -24,20 +62,36 @@ rocprofvis_profiler_config_t* rocprofvis_profiler_config_alloc(void);
 void rocprofvis_profiler_config_free(rocprofvis_profiler_config_t* config);
 
 /*
-* Sets the profiler type in the configuration.
+* Selects which profiler binary to run.
+* The tool is named, not pathed: the controller owns the mapping to a binary
+* name and the search for it (see rocprofvis_profiler_tool_resolve_path), so no
+* caller-supplied string becomes argv[0]. The search happens at launch, and a
+* tool that cannot be found fails the launch with kRocProfVisResultToolNotFound
+* instead of the child exiting 127.
 * @param config The profiler config object.
-* @param profiler_type The type of profiler to launch.
-* @returns kRocProfVisResultSuccess or an error code.
+* @param tool The profiler binary to run. kRPVProfilerToolNone is rejected.
+* @returns kRocProfVisResultSuccess, or kRocProfVisResultInvalidEnum for an
+*          unrecognized tool.
 */
-rocprofvis_result_t rocprofvis_profiler_config_set_type(rocprofvis_profiler_config_t* config, rocprofvis_profiler_type_t profiler_type);
+rocprofvis_result_t rocprofvis_profiler_config_set_tool(rocprofvis_profiler_config_t* config, rocprofvis_profiler_tool_t tool);
 
 /*
-* Sets the profiler executable path in the configuration.
+* Restricts where the configured tool is looked for, for a ROCm install in a
+* non-standard location.
+* This is a directory, never a path to an executable: the filename still comes
+* from the tool table, so this cannot name a different program to run. It is a
+* separate call from rocprofvis_profiler_config_set_tool so that a path can never
+* be supplied where a tool was expected.
+* Must be absolute - for a remote launch, an absolute path on the remote host.
+* When set, the tool must be in this directory: resolution does not fall back to
+* $ROCM_PATH or $PATH, so a directory that lacks the tool fails loudly rather
+* than silently running a different build of it. Logged prominently at launch.
 * @param config The profiler config object.
-* @param profiler_path Path to the profiler executable.
+* @param tool_directory Absolute directory holding the profiler tools. Empty
+*        restores the default search.
 * @returns kRocProfVisResultSuccess or an error code.
 */
-rocprofvis_result_t rocprofvis_profiler_config_set_profiler_path(rocprofvis_profiler_config_t* config, char const* profiler_path);
+rocprofvis_result_t rocprofvis_profiler_config_set_tool_directory(rocprofvis_profiler_config_t* config, char const* tool_directory);
 
 /*
 * Sets the target executable path in the configuration.
@@ -88,7 +142,7 @@ rocprofvis_result_t rocprofvis_profiler_config_add_env_var(rocprofvis_profiler_c
 /*
 * Appends a single argument to the profiler command line.
 * This is the only way arguments reach the process. The full command line is
-* argv[0] = profiler_path followed by these arguments in the order added, so
+* argv[0] = the resolved tool path followed by these arguments in the order added, so
 * the caller composes the entire command - including any output flag, "--"
 * separator, target executable, and target arguments.
 * Each call adds exactly one argv entry, which is passed to the process

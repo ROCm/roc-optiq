@@ -94,7 +94,7 @@ std::vector<std::string> BuildArgv(ProfilerConfig const& config)
     std::vector<std::string> argv;
     argv.reserve(config.GetProfilerArgv().size() + 1);
 
-    argv.push_back(config.GetProfilerPath());
+    argv.push_back(config.GetResolvedToolPath());
 
     for (auto const& arg : config.GetProfilerArgv())
     {

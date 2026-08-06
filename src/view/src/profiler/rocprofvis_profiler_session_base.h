@@ -24,10 +24,14 @@ namespace View
 // command.
 struct ProfilerLaunchSpec
 {
-    rocprofvis_profiler_type_t profiler_type = kRPVProfilerTypeRocprofSysRun;
+    // Which binary to execute. Named rather than pathed so that argv[0] is
+    // decided by the controller's tool table, not by any string this struct
+    // carries; the controller resolves it to an absolute path at launch.
+    rocprofvis_profiler_tool_t tool = kRPVProfilerToolNone;
 
-    // Binary to execute (argv[0]).
-    std::string profiler_path;
+    // Directory to find that tool in (LaunchConfig::tool_directory), for a ROCm
+    // install in a non-standard location. Empty uses the default search.
+    std::string tool_directory;
 
     // Descriptive metadata for logging and artifact resolution. The profiled
     // program and the output path also appear in profiler_argv wherever the

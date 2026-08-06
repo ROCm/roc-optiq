@@ -95,8 +95,6 @@ rocprofvis_result_t SystemTrace::Init()
     return result;
 }
 
-SystemTrace::~SystemTrace() = default;
-
 MemoryManager* SystemTrace::GetMemoryManager(){
     return m_mem_mgmt.get();
 }

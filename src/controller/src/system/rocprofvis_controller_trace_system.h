@@ -43,7 +43,7 @@ public:
     // instance whose index is exposed via kRPVControllerTrackInstanceId.
     SystemTrace(const std::vector<std::string>& filenames);
 
-    virtual ~SystemTrace();
+    virtual ~SystemTrace() = default;
 
     virtual rocprofvis_result_t Init() override;
 
@@ -90,13 +90,13 @@ public:
 private:
     std::vector<std::string>                       m_files;  // >1 entry => combined/compare load
     std::vector<std::unique_ptr<Track>>            m_tracks;
-    Timeline*                                      m_timeline;
-    SystemTable*                                   m_event_table;
-    SystemTable*                                   m_sample_table;
-    EventSearchTable*                              m_search_table;
-    Summary*                                       m_summary;
-    MemoryManager*                                 m_mem_mgmt;
-    TopologyNode*                                  m_topology_root;
+    std::unique_ptr<Timeline>                      m_timeline;
+    std::unique_ptr<SystemTable>                   m_event_table;
+    std::unique_ptr<SystemTable>                   m_sample_table;
+    std::unique_ptr<EventSearchTable>              m_search_table;
+    std::unique_ptr<Summary>                       m_summary;
+    std::unique_ptr<MemoryManager>                 m_mem_mgmt;
+    std::unique_ptr<TopologyNode>                  m_topology_root;
     std::array<std::mutex, kRPVDMTableNumUsecases> m_table_mutex;
     std::string                                    m_config_path;
 

@@ -33,6 +33,19 @@ typedef Reference<rocprofvis_controller_table_t, SystemTable, kRPVControllerObje
 typedef Reference<rocprofvis_controller_track_t, Track, kRPVControllerObjectTypeTrack> TrackRef;
 typedef Reference<rocprofvis_controller_timeline_t, Timeline, kRPVControllerObjectTypeTimeline> TimelineRef;
 
+namespace
+{
+struct DataModelFutureDeleter
+{
+    void operator()(rocprofvis_db_future_t future) const
+    {
+        rocprofvis_db_future_free(future);
+    }
+};
+
+using DataModelFuturePtr = std::unique_ptr<void, DataModelFutureDeleter>;
+}
+
 SystemTrace::SystemTrace(const std::string& filename, const std::string& config_path)
 : Trace(__kRPVControllerSystemPropertiesFirst, __kRPVControllerSystemPropertiesLast, filename)
 , m_timeline(nullptr)
@@ -66,15 +79,11 @@ rocprofvis_result_t SystemTrace::Init()
     rocprofvis_result_t result = kRocProfVisResultUnknownError;
     try
     {
-        m_event_table = new SystemTable(0);
-
-        m_sample_table = new SystemTable(1);
-
-        m_search_table = new EventSearchTable(2);
-        
-        m_summary = new Summary(this);
-
-        m_mem_mgmt = new MemoryManager(m_id);
+        m_event_table = std::make_unique<SystemTable>(0);
+        m_sample_table = std::make_unique<SystemTable>(1);
+        m_search_table = std::make_unique<EventSearchTable>(2);
+        m_summary = std::make_unique<Summary>(this);
+        m_mem_mgmt = std::make_unique<MemoryManager>(m_id);
 
         result = kRocProfVisResultSuccess;
     }
@@ -86,20 +95,10 @@ rocprofvis_result_t SystemTrace::Init()
     return result;
 }
 
-SystemTrace::~SystemTrace()
-{
-    delete m_mem_mgmt; 
-    m_mem_mgmt = nullptr;
-    delete m_timeline;
-    delete m_event_table;
-    delete m_sample_table;
-    delete m_search_table;
-    delete m_summary;
-    delete m_topology_root;
-}
+SystemTrace::~SystemTrace() = default;
 
 MemoryManager* SystemTrace::GetMemoryManager(){
-    return m_mem_mgmt;
+    return m_mem_mgmt.get();
 }
 
 std::mutex& SystemTrace::GetTableMutex(rocprofvis_dm_table_use_case_enum_t use_case)
@@ -139,7 +138,7 @@ rocprofvis_result_t SystemTrace::LoadRocpd(Future* future) {
     rocprofvis_result_t result = kRocProfVisResultUnknownError;
     try
     {
-        m_timeline                 = new Timeline(0);
+        m_timeline                 = std::make_unique<Timeline>(0);
         size_t trace_size          = 0;
         m_dm_handle = rocprofvis_dm_create_trace();
         if(nullptr != m_dm_handle)
@@ -163,7 +162,8 @@ rocprofvis_result_t SystemTrace::LoadRocpd(Future* future) {
             if(nullptr != db && kRocProfVisDmResultSuccess ==
                                     rocprofvis_dm_bind_trace_to_database(m_dm_handle, db, m_config_path.c_str()))
             {
-                rocprofvis_db_future_t object2wait = rocprofvis_db_future_alloc(&Future::ProgressCallback, future);
+                DataModelFuturePtr object2wait(
+                    rocprofvis_db_future_alloc(&Future::ProgressCallback, future));
                 if(nullptr != object2wait)
                 {
                     std::multimap<uint64_t, Track*> queue_to_track;
@@ -173,11 +173,11 @@ rocprofvis_result_t SystemTrace::LoadRocpd(Future* future) {
                     std::multimap<uint64_t, Track*> counter_to_track;
                     
                     if(kRocProfVisDmResultSuccess ==
-                       rocprofvis_db_read_metadata_async(db, object2wait))
+                       rocprofvis_db_read_metadata_async(db, object2wait.get()))
                     {
-                        future->AddDependentFuture(object2wait);
+                        future->AddDependentFuture(object2wait.get());
                         if(kRocProfVisDmResultSuccess ==
-                           rocprofvis_db_future_wait(object2wait, UINT64_MAX))
+                           rocprofvis_db_future_wait(object2wait.get(), UINT64_MAX))
                         {
                             rocprofvis_db_num_of_tracks_t num_tracks;
 
@@ -329,11 +329,13 @@ rocprofvis_result_t SystemTrace::LoadRocpd(Future* future) {
 
                                         m_tracks.push_back(std::move(track));
 
-                                        Graph* graph = new Graph(this,
-                                            (dm_track_type == kRocProfVisDmPmcTrack)
-                                                ? kRPVControllerGraphTypeLine
-                                                : kRPVControllerGraphTypeFlame,
-                                            track_id);
+                                        std::unique_ptr<Graph> graph =
+                                            std::make_unique<Graph>(
+                                                this,
+                                                (dm_track_type == kRocProfVisDmPmcTrack)
+                                                    ? kRPVControllerGraphTypeLine
+                                                    : kRPVControllerGraphTypeFlame,
+                                                track_id);
                                         {
                                             result = graph->SetObject(
                                                 kRPVControllerGraphTrack, 0,
@@ -348,11 +350,11 @@ rocprofvis_result_t SystemTrace::LoadRocpd(Future* future) {
                                                     result = m_timeline->SetObject(
                                                         kRPVControllerTimelineGraphIndexed,
                                                         graph_index - 1,
-                                                        (rocprofvis_handle_t*) graph);
+                                                        (rocprofvis_handle_t*) graph.get());
                                                 }
-                                                if(result != kRocProfVisResultSuccess)
+                                                if(result == kRocProfVisResultSuccess)
                                                 {
-                                                    delete graph;
+                                                    graph.release();
                                                 }
                                             }
                                         }
@@ -366,22 +368,20 @@ rocprofvis_result_t SystemTrace::LoadRocpd(Future* future) {
                         {
                             result = kRocProfVisResultTimeout;
                         }
-                        future->RemoveDependentFuture(object2wait);
+                        future->RemoveDependentFuture(object2wait.get());
                     }
                     else
                     {
                         result = kRocProfVisResultUnknownError;
                     }
-                    rocprofvis_db_future_free(object2wait);
-
-
                     rocprofvis_dm_topology_node dm_topology_root =
                         rocprofvis_dm_get_property_as_handle(
                             m_dm_handle, kRPVDMTopologyHandle, 0);
 
                     DbgPrintTopologyNodeData(dm_topology_root, 1);
 
-                    m_topology_root = new TopologyRoot(dm_topology_root, this);
+                    m_topology_root =
+                        std::make_unique<TopologyRoot>(dm_topology_root, this);
 
                 }
                 else
@@ -453,26 +453,26 @@ rocprofvis_result_t SystemTrace::SaveTrimmedTrace(Future& future, double start, 
                               rocprofvis_dm_database_t db = rocprofvis_dm_get_property_as_handle(dm_handle, kRPVDMDatabaseHandle, 0);
                               if (db)
                               {
-                                  rocprofvis_db_future_t object2wait = rocprofvis_db_future_alloc(&Future::ProgressCallback, future);
+                                  DataModelFuturePtr object2wait(
+                                      rocprofvis_db_future_alloc(
+                                          &Future::ProgressCallback, future));
                                   if (object2wait)
                                   {
-                                    auto error = rocprofvis_db_trim_save_async(db, static_cast<rocprofvis_dm_timestamp_t>(start), static_cast<rocprofvis_dm_timestamp_t>(end), path_str.c_str(), object2wait);
+                                    auto error = rocprofvis_db_trim_save_async(db, static_cast<rocprofvis_dm_timestamp_t>(start), static_cast<rocprofvis_dm_timestamp_t>(end), path_str.c_str(), object2wait.get());
                                       result = (error == kRocProfVisDmResultSuccess)
                                                    ? kRocProfVisResultSuccess
                                                    : kRocProfVisResultUnknownError;
 
                                     if (error == kRocProfVisDmResultSuccess)
                                     {
-                                        future->AddDependentFuture(object2wait);
-                                        error = rocprofvis_db_future_wait(object2wait,
+                                        future->AddDependentFuture(object2wait.get());
+                                        error = rocprofvis_db_future_wait(object2wait.get(),
                                                                           UINT64_MAX);
-                                        future->RemoveDependentFuture(object2wait);
+                                        future->RemoveDependentFuture(object2wait.get());
                                         result = (error == kRocProfVisDmResultSuccess)
                                                      ? kRocProfVisResultSuccess
                                                      : kRocProfVisResultUnknownError;
                                     }
-
-                                    rocprofvis_db_future_free(object2wait);
                                   }
                               }
                               return result;
@@ -497,24 +497,22 @@ rocprofvis_result_t SystemTrace::CleanupTraceDatabase(Future& future, bool rebui
         rocprofvis_dm_database_t db = rocprofvis_dm_get_property_as_handle(dm_handle, kRPVDMDatabaseHandle, 0);
         if (db)
         {
-            rocprofvis_db_future_t object2wait = rocprofvis_db_future_alloc(nullptr);
+            DataModelFuturePtr object2wait(rocprofvis_db_future_alloc(nullptr));
             if (object2wait)
             {
-                auto error = rocprofvis_db_cleanup_async(db, object2wait, rebuild);
+                auto error = rocprofvis_db_cleanup_async(db, object2wait.get(), rebuild);
                 result = (error == kRocProfVisDmResultSuccess)
                     ? kRocProfVisResultSuccess
                     : kRocProfVisResultUnknownError;
 
                 if (error == kRocProfVisDmResultSuccess)
                 {
-                    error = rocprofvis_db_future_wait(object2wait,
+                    error = rocprofvis_db_future_wait(object2wait.get(),
                         UINT64_MAX);
                     result = (error == kRocProfVisDmResultSuccess)
                         ? kRocProfVisResultSuccess
                         : kRocProfVisResultUnknownError;
                 }
-
-                rocprofvis_db_future_free(object2wait);
             }
         }
         return result;
@@ -797,25 +795,25 @@ rocprofvis_result_t SystemTrace::GetObject(rocprofvis_property_t property, uint6
         {
             case kRPVControllerSystemTimeline:
             {
-                *value = (rocprofvis_handle_t*)m_timeline;
+                *value = (rocprofvis_handle_t*)m_timeline.get();
                 result = kRocProfVisResultSuccess;
                 break;
             }
             case kRPVControllerSystemEventTable:
             {
-                *value = (rocprofvis_handle_t*)m_event_table;
+                *value = (rocprofvis_handle_t*)m_event_table.get();
                 result = kRocProfVisResultSuccess;
                 break;
             }
             case kRPVControllerSystemSampleTable:
             {
-                *value = (rocprofvis_handle_t*)m_sample_table;
+                *value = (rocprofvis_handle_t*)m_sample_table.get();
                 result = kRocProfVisResultSuccess;
                 break;
             }
             case kRPVControllerSystemSearchResultsTable:
             {
-                *value = (rocprofvis_handle_t*)m_search_table;
+                *value = (rocprofvis_handle_t*)m_search_table.get();
                 result = kRocProfVisResultSuccess;
                 break;
             }
@@ -865,7 +863,7 @@ rocprofvis_result_t SystemTrace::GetObject(rocprofvis_property_t property, uint6
             }
             case kRPVControllerSystemSummary:
             {
-                *value = (rocprofvis_handle_t*)m_summary;
+                *value = (rocprofvis_handle_t*)m_summary.get();
                 result = kRocProfVisResultSuccess;
                 break;
             }
@@ -937,7 +935,10 @@ rocprofvis_result_t SystemTrace::SetObject(rocprofvis_property_t property, uint6
                 TimelineRef timeline(value);
                 if(timeline.IsValid())
                 {
-                    m_timeline = timeline.Get();
+                    if(m_timeline.get() != timeline.Get())
+                    {
+                        m_timeline.reset(timeline.Get());
+                    }
                     result = kRocProfVisResultSuccess;
                 }
                 break;
@@ -947,7 +948,10 @@ rocprofvis_result_t SystemTrace::SetObject(rocprofvis_property_t property, uint6
                 SystemTableRef table(value);
                 if(table.IsValid())
                 {
-                    m_event_table = table.Get();
+                    if(m_event_table.get() != table.Get())
+                    {
+                        m_event_table.reset(table.Get());
+                    }
                     result = kRocProfVisResultSuccess;
                 }
                 break;
@@ -957,7 +961,10 @@ rocprofvis_result_t SystemTrace::SetObject(rocprofvis_property_t property, uint6
                 SystemTableRef table(value);
                 if(table.IsValid())
                 {
-                    m_sample_table = table.Get();
+                    if(m_sample_table.get() != table.Get())
+                    {
+                        m_sample_table.reset(table.Get());
+                    }
                     result = kRocProfVisResultSuccess;
                 }
                 break;
@@ -967,7 +974,12 @@ rocprofvis_result_t SystemTrace::SetObject(rocprofvis_property_t property, uint6
                 SystemTableRef table(value);
                 if(table.IsValid())
                 {
-                    m_search_table = (EventSearchTable*)(table.Get());
+                    EventSearchTable* search_table =
+                        static_cast<EventSearchTable*>(table.Get());
+                    if(m_search_table.get() != search_table)
+                    {
+                        m_search_table.reset(search_table);
+                    }
                     result = kRocProfVisResultSuccess;
                 }
                 break;

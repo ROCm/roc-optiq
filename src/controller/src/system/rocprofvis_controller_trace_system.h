@@ -11,6 +11,7 @@
 #include "rocprofvis_controller_data.h"
 #include "rocprofvis_controller_trace.h"
 #include <array>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -88,7 +89,7 @@ public:
 
 private:
     std::vector<std::string>                       m_files;  // >1 entry => combined/compare load
-    std::vector<Track*>                            m_tracks;
+    std::vector<std::unique_ptr<Track>>            m_tracks;
     Timeline*                                      m_timeline;
     SystemTable*                                   m_event_table;
     SystemTable*                                   m_sample_table;

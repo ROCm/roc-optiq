@@ -54,6 +54,10 @@ public:
     rocprofvis_result_t SetObject(rocprofvis_property_t property, uint64_t index, rocprofvis_handle_t* value) final;
     rocprofvis_result_t SetString(rocprofvis_property_t property, uint64_t index, char const* value) final;
 
+    rocprofvis_result_t FillBounds();
+    rocprofvis_result_t FillMetadata();
+    rocprofvis_result_t FillTopologyIds();
+
 private:
     struct fetch_range_t
     {

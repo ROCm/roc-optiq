@@ -1055,7 +1055,7 @@ rocprofvis_result_t Track::SetObject(rocprofvis_property_t property, uint64_t in
                 if(ref.IsValid())
                 {
                     m_topology_links.thread = ref.Get();
-                    result = kRocProfVisResultSuccess;
+                    result                  = kRocProfVisResultSuccess;
                 }
                 break;
             }
@@ -1065,7 +1065,7 @@ rocprofvis_result_t Track::SetObject(rocprofvis_property_t property, uint64_t in
                 if(ref.IsValid())
                 {
                     m_topology_links.queue = ref.Get();
-                    result = kRocProfVisResultSuccess;
+                    result                 = kRocProfVisResultSuccess;
                 }
                 break;
             }
@@ -1075,7 +1075,7 @@ rocprofvis_result_t Track::SetObject(rocprofvis_property_t property, uint64_t in
                 if(ref.IsValid())
                 {
                     m_topology_links.stream = ref.Get();
-                    result  = kRocProfVisResultSuccess;
+                    result                  = kRocProfVisResultSuccess;
                 }
                 break;
             }
@@ -1085,7 +1085,7 @@ rocprofvis_result_t Track::SetObject(rocprofvis_property_t property, uint64_t in
                 if(ref.IsValid())
                 {
                     m_topology_links.counter = ref.Get();
-                    result = kRocProfVisResultSuccess;
+                    result                   = kRocProfVisResultSuccess;
                 }
                 break;
             }
@@ -1132,6 +1132,186 @@ rocprofvis_result_t Track::SetString(rocprofvis_property_t property, uint64_t in
             }
         }
     }
+    return result;
+}
+
+rocprofvis_result_t
+Track::FillBounds()
+{
+    track_bounds_t bounds;
+    uint64_t       start_timestamp = 0;
+    uint64_t       end_timestamp   = 0;
+
+    rocprofvis_dm_result_t dm_result = rocprofvis_dm_get_property_as_uint64(
+        m_dm_handle, kRPVDMTrackNumRecordsUInt64, 0, &bounds.num_entries);
+    if(dm_result == kRocProfVisDmResultSuccess)
+    {
+        dm_result = rocprofvis_dm_get_property_as_uint64(
+            m_dm_handle, kRPVDMTrackMinimumTimestampUInt64, 0, &start_timestamp);
+    }
+    if(dm_result == kRocProfVisDmResultSuccess)
+    {
+        dm_result = rocprofvis_dm_get_property_as_uint64(
+            m_dm_handle, kRPVDMTrackMaximumTimestampUInt64, 0, &end_timestamp);
+    }
+    if(dm_result == kRocProfVisDmResultSuccess)
+    {
+        dm_result = rocprofvis_dm_get_property_as_double(
+            m_dm_handle, kRPVDMTrackMinimumValueDouble, 0, &bounds.min_value);
+    }
+    if(dm_result == kRocProfVisDmResultSuccess)
+    {
+        dm_result = rocprofvis_dm_get_property_as_double(
+            m_dm_handle, kRPVDMTrackMaximumValueDouble, 0, &bounds.max_value);
+    }
+
+    if(dm_result == kRocProfVisDmResultSuccess &&
+       m_type == kRPVControllerTrackTypeSamples)
+    {
+        rocprofvis_dm_trace_t trace = nullptr;
+        dm_result = rocprofvis_dm_get_property_as_handle(
+            m_dm_handle, kRPVDMTrackTraceHandle, 0, &trace);
+        if(dm_result == kRocProfVisDmResultSuccess)
+        {
+            dm_result = rocprofvis_dm_get_property_as_uint64(
+                trace, kRPVDMEndTimeUInt64, 0, &end_timestamp);
+        }
+    }
+
+    rocprofvis_result_t result = kRocProfVisResultUnknownError;
+    if(dm_result == kRocProfVisDmResultSuccess)
+    {
+        bounds.start_timestamp = static_cast<double>(start_timestamp);
+        bounds.end_timestamp   = static_cast<double>(end_timestamp);
+        m_bounds               = bounds;
+        result                 = kRocProfVisResultSuccess;
+    }
+
+    return result;
+}
+
+rocprofvis_result_t
+Track::FillMetadata()
+{
+    track_metadata_t metadata;
+    char*            category      = nullptr;
+    char*            main_name     = nullptr;
+    char*            sub_name      = nullptr;
+    uint64_t         dm_track_type = 0;
+
+    rocprofvis_dm_result_t dm_result = rocprofvis_dm_get_property_as_charptr(
+        m_dm_handle, kRPVDMTrackCategoryEnumCharPtr, 0, &category);
+    if(dm_result == kRocProfVisDmResultSuccess)
+    {
+        dm_result = rocprofvis_dm_get_property_as_charptr(
+            m_dm_handle, kRPVDMTrackMainProcessNameCharPtr, 0, &main_name);
+    }
+    if(dm_result == kRocProfVisDmResultSuccess)
+    {
+        dm_result = rocprofvis_dm_get_property_as_charptr(
+            m_dm_handle, kRPVDMTrackSubProcessNameCharPtr, 0, &sub_name);
+    }
+    if(dm_result == kRocProfVisDmResultSuccess)
+    {
+        dm_result = rocprofvis_dm_get_property_as_uint64(
+            m_dm_handle, kRPVDMTrackCategoryEnumUInt64, 0, &dm_track_type);
+    }
+
+    rocprofvis_result_t result = kRocProfVisResultUnknownError;
+    if(dm_result == kRocProfVisDmResultSuccess && category && main_name && sub_name)
+    {
+        metadata.category  = category;
+        metadata.main_name = main_name;
+        metadata.sub_name  = sub_name;
+
+        switch(static_cast<rocprofvis_dm_track_category_t>(dm_track_type))
+        {
+            case kRocProfVisDmPmcTrack:
+            {
+                metadata.operation_types = { kRocProfVisDmOperationNoOp };
+                break;
+            }
+            case kRocProfVisDmRegionTrack:
+            {
+                metadata.operation_types = { kRocProfVisDmOperationLaunch,
+                                             kRocProfVisDmOperationLaunchSample };
+                break;
+            }
+            case kRocProfVisDmKernelDispatchTrack:
+            {
+                metadata.operation_types = { kRocProfVisDmOperationDispatch };
+                break;
+            }
+            case kRocProfVisDmMemoryAllocationTrack:
+            {
+                metadata.operation_types = { kRocProfVisDmOperationMemoryAllocate };
+                break;
+            }
+            case kRocProfVisDmMemoryCopyTrack:
+            {
+                metadata.operation_types = { kRocProfVisDmOperationMemoryCopy };
+                break;
+            }
+            case kRocProfVisDmStreamTrack:
+            {
+                metadata.operation_types = { kRocProfVisDmOperationLaunch,
+                                             kRocProfVisDmOperationDispatch,
+                                             kRocProfVisDmOperationMemoryAllocate,
+                                             kRocProfVisDmOperationMemoryCopy,
+                                             kRocProfVisDmOperationLaunchSample };
+                break;
+            }
+            case kRocProfVisDmRegionMainTrack:
+            {
+                metadata.operation_types = { kRocProfVisDmOperationLaunch };
+                break;
+            }
+            case kRocProfVisDmRegionSampleTrack:
+            {
+                metadata.operation_types = { kRocProfVisDmOperationLaunchSample };
+                break;
+            }
+            default:
+            {
+                metadata.operation_types = { kRocProfVisDmMultipleOperations };
+                break;
+            }
+        }
+
+        m_metadata = metadata;
+        result     = kRocProfVisResultSuccess;
+    }
+
+    return result;
+}
+
+rocprofvis_result_t
+Track::FillTopologyIds()
+{
+    track_topology_ids_t topology_ids;
+
+    rocprofvis_dm_result_t dm_result = rocprofvis_dm_get_property_as_uint64(
+        m_dm_handle, kRPVDMTrackNodeIdUInt64, 0, &topology_ids.node_id);
+    if(dm_result == kRocProfVisDmResultSuccess)
+    {
+        dm_result = rocprofvis_dm_get_property_as_uint64(
+            m_dm_handle, kRPVDMTrackProcessIdUInt64, 0,
+            &topology_ids.agent_id_or_pid);
+    }
+    if(dm_result == kRocProfVisDmResultSuccess)
+    {
+        dm_result = rocprofvis_dm_get_property_as_uint64(
+            m_dm_handle, kRPVDMTrackSubProcessIdUInt64, 0,
+            &topology_ids.queue_id_or_tid);
+    }
+
+    rocprofvis_result_t result = kRocProfVisResultUnknownError;
+    if(dm_result == kRocProfVisDmResultSuccess)
+    {
+        m_topology_ids = topology_ids;
+        result         = kRocProfVisResultSuccess;
+    }
+
     return result;
 }
 

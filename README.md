@@ -84,7 +84,7 @@ Use `File` > `Open`, drag a file onto the application window, or pass it on the 
 roc-optiq -f /path/to/my_trace.db
 ```
 
-Supported inputs are ROCm Systems Profiler traces (`.db`), RPD traces (`.rpd`), ROCm Compute Profiler analysis databases, and ROCm
+Supported inputs are ROCm Systems Profiler traces (`.db`), RPD traces (`.rpd`), ROCm Compute Profiler analysis databases (`.db`), and ROCm
 Optiq project files (`.rpv`). A project file stores your track customizations, bookmarks, and annotations alongside a reference to
 the trace, and is created with `File` > `Save As`.
 
@@ -99,6 +99,30 @@ Walkthroughs for each area are in the how-to guides:
 [view trace data](https://rocm.docs.amd.com/projects/roc-optiq/en/latest/how-to/view-trace.html),
 [view analysis data](https://rocm.docs.amd.com/projects/roc-optiq/en/latest/how-to/view-analysis.html), and
 [customize your project](https://rocm.docs.amd.com/projects/roc-optiq/en/latest/how-to/customize-views.html).
+
+## Capturing traces or analysis data
+
+When capturing or traces or compute analysis data ensure that the rocpd or analysis db output formats are enabled.
+
+### Systems Profiler
+
+Set the `ROCPROFSYS_USE_ROCPD` environment variable to ensure rocpd output.
+
+`ROCPROFSYS_USE_ROCPD=true rocprof-sys-run -- ./myapp`
+
+### Compute Profiler
+
+Enable .db analysis creation via the `--output-format db` parameter.
+
+`rocprof-compute analyse --output-format db -p workloads/nbody/MI300X_A1`
+
+### Rocprofv3
+
+Enable rocpd output by using the `--output-format rocpd` parameter.
+
+`rocprofv3 --output-format rocpd --hip-trace -- ./myapp`
+ 
+`rocprofv3 --output-format rocpd --kernel-trace --hsa-trace -- ./myapp`
 
 ## Support
 

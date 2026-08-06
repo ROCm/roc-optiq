@@ -4,6 +4,7 @@
 #pragma once
 
 #include "rocprofvis_controller.h"
+#include "rocprofvis_controller_safe_operations_helper.h"
 #include "rocprofvis_controller_handle.h"
 #include "rocprofvis_controller_data.h"
 #include <map>
@@ -40,6 +41,32 @@ public:
                                   rocprofvis_handle_t* value) final;
     rocprofvis_result_t SetString(rocprofvis_property_t property, uint64_t index,
                                   char const* value) final;
+
+    rocprofvis_result_t GetCount(rocprofvis_property_t property,
+                                 uint64_t* count) const noexcept;
+
+    template<typename T>
+    rocprofvis_result_t GetUnsigned(rocprofvis_property_t property, uint64_t index,
+                                   T* value)
+    {
+        if(!value)
+        {
+            return kRocProfVisResultInvalidArgument;
+        }
+
+        uint64_t raw_value = 0;
+        rocprofvis_result_t result = GetUInt64(property, index, &raw_value);
+        if(result == kRocProfVisResultSuccess)
+        {
+            T converted{};
+            result = CheckedAssignUnsigned(raw_value, converted);
+            if(result == kRocProfVisResultSuccess)
+            {
+                *value = converted;
+            }
+        }
+        return result;
+    }
 
 private:
     std::map<rocprofvis_property_t, std::vector<Data>> m_args;

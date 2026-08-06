@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 #include "rocprofvis_controller_segment.h"
+#include "rocprofvis_controller_safe_operations_helper.h"
 #include "rocprofvis_controller_array.h"
 #include "rocprofvis_controller_event.h"
 #include "rocprofvis_controller_sample_lod.h"
@@ -174,9 +175,13 @@ rocprofvis_result_t Segment::Fetch(double start, double end, std::vector<Data>& 
 
                 if(min_ts <= end && max_ts >= start)
                 {
-                    if(array.size() < index + 1)
+                    if(index >= array.size())
                     {
-                        array.resize(index + 1);
+                        result = CheckedEnsureIndex(array, index);
+                    }
+                    if(result != kRocProfVisResultSuccess)
+                    {
+                        break;
                     }
                     array[index].SetType(kRPVControllerPrimitiveTypeObject);
                     array[index++] = Data((rocprofvis_handle_t*) lower->second);

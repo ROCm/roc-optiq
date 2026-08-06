@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 #include "rocprofvis_controller_event.h"
+#include "rocprofvis_controller_safe_operations_helper.h"
 #include "rocprofvis_controller_track.h"
 #include "rocprofvis_controller_reference.h"
 #include "rocprofvis_controller_array.h"
@@ -689,19 +690,13 @@ rocprofvis_result_t Event::SetUInt64(rocprofvis_property_t property, uint64_t in
         }
         case kRPVControllerEventLevel:
         {
-            // Currently the level should be an 8bit unsigned integer
-            // Anything beyond 255 will probably not display well.
-            // TODO: review this
-            ROCPROFVIS_ASSERT(value < 256);
-            m_level = std::min( static_cast<uint8_t>(value), static_cast<uint8_t>(255));
-            result = kRocProfVisResultSuccess;
+            result = CheckedAssignUnsigned(value, m_level);
             break;
         }
         case kRPVControllerEventTopCombinedNameStrIndex:
         {
             // Set string index for top combined name
-            m_combined_top_name = static_cast<size_t>(value);
-            result = kRocProfVisResultSuccess;
+            result = CheckedAssignUnsigned(value, m_combined_top_name);
             break;
         }
         default:

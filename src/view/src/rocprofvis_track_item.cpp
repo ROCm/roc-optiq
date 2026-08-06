@@ -3,6 +3,7 @@
 
 #include "rocprofvis_track_item.h"
 #include "icons/rocprovfis_icon_defines.h"
+#include "rocprofvis_controller_cpp_abi_wrapper.h"
 #include "rocprofvis_font_manager.h"
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_timeline_selection.h"
@@ -13,6 +14,8 @@
 #include "widgets/rocprofvis_notification_manager.h"
 #include "widgets/rocprofvis_widget.h"
 #include <algorithm>
+#include <cmath>
+#include <limits>
 #include <memory>
 
 namespace RocProfVis
@@ -618,6 +621,14 @@ TrackItem::RequestData(double min, double max, float width)
     m_group_id_counter++;
     std::deque<TrackRequestParams> temp_request_queue;
 
+    uint32_t request_track_id = 0;
+    if(Controller::Abi::CheckedAssignUnsigned(m_track_id, &request_track_id) !=
+       kRocProfVisResultSuccess)
+    {
+        spdlog::error("Track ID {} exceeds the request range", m_track_id);
+        return;
+    }
+
     for(size_t i = 0; i < chunk_count; ++i)
     {
         double chunk_start = min + i * TimeConstants::minute_in_ns;
@@ -627,10 +638,27 @@ TrackItem::RequestData(double min, double max, float width)
         float  percentage  = static_cast<float>(chunk_range / range);
         float  chunk_width = width * percentage;
 
-        TrackRequestParams request_params(static_cast<uint32_t>(m_track_id), chunk_start,
-                                          chunk_end, static_cast<uint32_t>(chunk_width),
-                                          m_group_id_counter, static_cast<uint16_t>(i),
-                                          chunk_count);
+        if(!std::isfinite(chunk_width) || chunk_width < 0.0f ||
+           static_cast<double>(chunk_width) >
+               static_cast<double>(std::numeric_limits<uint32_t>::max()))
+        {
+            spdlog::error("Track request width {} is outside the uint32 range",
+                          chunk_width);
+            return;
+        }
+
+        uint16_t chunk_index = 0;
+        if(Controller::Abi::CheckedAssignUnsigned(i, &chunk_index) !=
+           kRocProfVisResultSuccess)
+        {
+            spdlog::error("Track request has too many chunks ({})", chunk_count);
+            return;
+        }
+
+        TrackRequestParams request_params(
+            request_track_id, chunk_start, chunk_end,
+            static_cast<uint32_t>(chunk_width), m_group_id_counter, chunk_index,
+            chunk_count);
 
         temp_request_queue.push_back(request_params);
         spdlog::debug("Queueing request for track {}: {} to {} ({} ns) with width {}",
@@ -1037,8 +1065,18 @@ TrackItem::RequestAnalysis()
        (m_track_statistics->state == AnalysisTrackStatistics::kStale ||
         m_track_statistics->state == AnalysisTrackStatistics::kPending))
     {
+        uint32_t request_track_id = 0;
+        if(Controller::Abi::CheckedAssignUnsigned(m_track_id,
+                                                   &request_track_id) !=
+           kRocProfVisResultSuccess)
+        {
+            spdlog::error("Track ID {} exceeds the request-ID range", m_track_id);
+            m_track_statistics->state = AnalysisTrackStatistics::kPending;
+            return;
+        }
+
         uint64_t request_id = RequestIdBuilder::MakeTrackDataRequestId(
-            static_cast<uint32_t>(m_track_id), 0, 0,
+            request_track_id, 0, 0,
             RequestType::kFetchAnalysisTrackStatistics);
         if(m_data_provider.IsRequestPending(request_id))
         {

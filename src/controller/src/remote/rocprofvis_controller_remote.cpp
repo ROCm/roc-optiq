@@ -18,10 +18,17 @@ namespace Controller
         std::array<char, 128> host{};
         uint32_t host_length = static_cast<uint32_t>(host.size());
 
-        uint64_t port;
-        if (kRocProfVisResultSuccess != args.GetUInt64(kRPVControllerRemoteTypePort, 0, &port))
+        uint16_t port = 22;
+        rocprofvis_result_t port_result =
+            args.GetUnsigned(kRPVControllerRemoteTypePort, 0, &port);
+        if(port_result != kRocProfVisResultSuccess &&
+           port_result != kRocProfVisResultInvalidArgument)
         {
-            port = 22;
+            return port_result;
+        }
+        if(port == 0)
+        {
+            return kRocProfVisResultOutOfRange;
         }
 
         if (kRocProfVisResultSuccess == args.GetString(kRPVControllerRemoteTypeHost, 0, host.data(), &host_length))
@@ -141,6 +148,20 @@ namespace Controller
             uint64_t num_responses = 0;
             if (kRocProfVisResultSuccess == args.GetUInt64(kRPVControllerUserNumResponses, 0, &num_responses))
             {
+                uint64_t response_count = 0;
+                rocprofvis_result_t result = kRocProfVisResultSuccess;
+                if(num_responses > 0)
+                {
+                    result = args.GetCount(kRPVControllerUserResponseIndexed,
+                                           &response_count);
+                }
+                if(result != kRocProfVisResultSuccess ||
+                   num_responses > response_count)
+                {
+                    return result == kRocProfVisResultSuccess
+                               ? kRocProfVisResultInvalidArgument
+                               : result;
+                }
                 std::vector<std::string> responses;
                 for (uint64_t i = 0; i < num_responses; i++)
                 {
@@ -238,10 +259,24 @@ namespace Controller
         uint32_t src_path_length = static_cast<uint32_t>(src_path.size());
         std::array<char, 128> dst_path{};
         uint32_t dst_path_length = static_cast<uint32_t>(dst_path.size());
-        uint64_t direction = 0;
-        if (args.GetString(kRPVControllerRemoteTypeFilePathSrc, 0, src_path.data(), &src_path_length) == kRocProfVisResultSuccess &&
-            args.GetString(kRPVControllerRemoteTypeFilePathDst, 0, dst_path.data(), &dst_path_length) == kRocProfVisResultSuccess &&
-            args.GetUInt64(kRPVControllerRemoteTypeDirection, 0, &direction) == kRocProfVisResultSuccess)
+        uint8_t direction = 0;
+        error = args.GetString(kRPVControllerRemoteTypeFilePathSrc, 0,
+                               src_path.data(), &src_path_length);
+        if(error == kRocProfVisResultSuccess)
+        {
+            error = args.GetString(kRPVControllerRemoteTypeFilePathDst, 0,
+                                   dst_path.data(), &dst_path_length);
+        }
+        if(error == kRocProfVisResultSuccess)
+        {
+            error = args.GetUnsigned(kRPVControllerRemoteTypeDirection, 0,
+                                     &direction);
+        }
+        if(error == kRocProfVisResultSuccess && direction > 1)
+        {
+            error = kRocProfVisResultOutOfRange;
+        }
+        if(error == kRocProfVisResultSuccess)
         {
 
             future.Set(JobSystem::Get().IssueJob([&connection, src_path, dst_path, direction](Future* future) -> rocprofvis_result_t {

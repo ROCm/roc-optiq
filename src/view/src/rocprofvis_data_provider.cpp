@@ -4,6 +4,7 @@
 #include "rocprofvis_data_provider.h"
 #include "rocprofvis_common_defs.h"
 #include "rocprofvis_controller.h"
+#include "rocprofvis_controller_cpp_abi_wrapper.h"
 #include "rocprofvis_controller_analysis.h"
 #include "rocprofvis_core_assert.h"
 #include "rocprofvis_events.h"
@@ -11,14 +12,62 @@
 #include "spdlog/spdlog.h"
 
 #include <algorithm>
+#include <charconv>
 #include <cfloat>
 #include <future>
 #include <iostream>
+#include <string_view>
 
 namespace RocProfVis
 {
 namespace View
 {
+
+namespace AbiProperty = Controller::Abi::Property;
+
+static bool
+ParseUInt32(std::string_view text, uint32_t& value) noexcept
+{
+    if(text.empty())
+    {
+        return false;
+    }
+
+    uint32_t converted = 0;
+    const std::from_chars_result parse_result =
+        std::from_chars(text.data(), text.data() + text.size(), converted);
+    if(parse_result.ec != std::errc{} ||
+       parse_result.ptr != text.data() + text.size())
+    {
+        return false;
+    }
+
+    value = converted;
+    return true;
+}
+
+static bool
+ParseMetricId(std::string_view text, uint32_t& category_id, uint32_t& table_id,
+              uint32_t& entry_id) noexcept
+{
+    const size_t category_end = text.find('.');
+    if(category_end == std::string_view::npos)
+    {
+        return false;
+    }
+
+    const size_t table_end = text.find('.', category_end + 1);
+    if(table_end == std::string_view::npos)
+    {
+        return false;
+    }
+
+    return ParseUInt32(text.substr(0, category_end), category_id) &&
+           ParseUInt32(text.substr(category_end + 1,
+                                   table_end - category_end - 1),
+                       table_id) &&
+           ParseUInt32(text.substr(table_end + 1), entry_id);
+}
 
 const uint64_t DataProvider::EVENT_TABLE_REQUEST_ID =
     RequestIdBuilder::MakeRequestId(RequestType::kFetchTrackEventTable);
@@ -95,8 +144,8 @@ DataProvider::SetSelectedState(const std::string& id)
 {
     if(id == m_model.GetTraceFilePath())
     {
-        rocprofvis_controller_set_uint64(m_trace_controller, kRPVControllerSystemNotifySelected,
-                                         0, true);
+        Controller::Abi::SetBoolean<AbiProperty::SystemNotifySelected>(
+            m_trace_controller, 0, true);
     }
 }
 
@@ -475,9 +524,9 @@ DataProvider::ProcessLoadSystemTrace(RequestInfo& req)
                 m_trace_controller, kRPVControllerSystemTrackIndexed, graphs, &track);
             std::vector<double> histogram_track(num_buckets, 0.0);
 
-            uint64_t track_type = 0;
-            result = rocprofvis_controller_get_uint64(track, kRPVControllerTrackType, 0,
-                                                      &track_type);
+            rocprofvis_controller_track_type_t track_type{};
+            result = Controller::Abi::GetEnum<AbiProperty::TrackType>(
+                track, 0, &track_type);
 
             if(track_type == kRPVControllerTrackTypeSamples)
             {
@@ -742,12 +791,9 @@ DataProvider::ParseDeviceData(rocprofvis_handle_t* processor_handle,
     ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
     device_info.product_name =
         GetString(processor_handle, kRPVControllerProcessorProductName, 0);
-    uint64_t processor_type;
-    result = rocprofvis_controller_get_uint64(
-        processor_handle, kRPVControllerProcessorType, 0, &processor_type);
+    result = Controller::Abi::GetEnum<AbiProperty::ProcessorType>(
+        processor_handle, 0, &device_info.type);
     ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-    device_info.type =
-        static_cast<rocprofvis_controller_processor_type_t>(processor_type);
     result = rocprofvis_controller_get_uint64(
         processor_handle, kRPVControllerProcessorTypeIndex, 0, &device_info.type_index);
     ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
@@ -1003,15 +1049,9 @@ DataProvider::HandleLoadTrackMetaData()
                                                       &track_info.id);
             ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
-            uint64_t track_type = 0;
-            result = rocprofvis_controller_get_uint64(track, kRPVControllerTrackType, 0,
-                                                      &track_type);
-            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess &&
-                              (track_type == kRPVControllerTrackTypeEvents ||
-                               track_type == kRPVControllerTrackTypeSamples));
-            track_info.track_type = track_type == kRPVControllerTrackTypeSamples
-                                        ? kRPVControllerTrackTypeSamples
-                                        : kRPVControllerTrackTypeEvents;
+            result = Controller::Abi::GetEnum<AbiProperty::TrackType>(
+                track, 0, &track_info.track_type);
+            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
             result = GetString(track, kRPVControllerTrackCategory, 0, track_info.category);
             ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
@@ -1023,12 +1063,16 @@ DataProvider::HandleLoadTrackMetaData()
             ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
             for(uint64_t k = 0; k < operation_type_count; k++)
             {
-                uint64_t operation_type = 0;
-                result = rocprofvis_controller_get_uint64(
-                    track, kRPVControllerTrackOperationTypeIndexed, k, &operation_type);
+                rocprofvis_dm_event_operation_t operation_type{};
+                result = Controller::Abi::GetEnum(
+                    track, kRPVControllerTrackOperationTypeIndexed, k,
+                    &operation_type,
+                    [](rocprofvis_dm_event_operation_t operation) {
+                        return operation >= kRocProfVisDmOperationNoOp &&
+                               operation <= kRocProfVisDmMultipleOperations;
+                    });
                 ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-                track_info.operation_types.insert(
-                    (rocprofvis_dm_event_operation_t)operation_type);
+                track_info.operation_types.insert(operation_type);
             }
 
             result = GetString(track, kRPVControllerTrackMainName, 0,
@@ -1385,12 +1429,21 @@ DataProvider::FetchWholeTrack(uint32_t track_id, double start_ts, double end_ts,
         // only allow load if a request for this id (track) is not pending
         if(it == m_requests.end())
         {
+            uint32_t initial_size = 0;
+            rocprofvis_result_t result = Controller::Abi::CheckedAssignUnsigned(
+                metadata->num_entries, &initial_size);
+            if(result != kRocProfVisResultSuccess)
+            {
+                spdlog::error("Track {} has too many entries for the array ABI",
+                              track_id);
+                return false;
+            }
+
             rocprofvis_handle_t* track_future = rocprofvis_controller_future_alloc();
             rocprofvis_controller_array_t* track_array =
-                rocprofvis_controller_array_alloc(
-                    static_cast<uint32_t>(metadata->num_entries));
+                rocprofvis_controller_array_alloc(initial_size);
             rocprofvis_handle_t* track_handle = nullptr;
-            rocprofvis_result_t  result       = rocprofvis_controller_get_object(
+            result = rocprofvis_controller_get_object(
                 m_trace_controller, kRPVControllerSystemTrackById, track_id, &track_handle);
 
             if(result == kRocProfVisResultSuccess && track_handle && track_future &&
@@ -1538,8 +1591,9 @@ DataProvider::SetupCommonTableArguments(rocprofvis_controller_arguments_t* args,
 {
     ROCPROFVIS_ASSERT(args != nullptr);
 
-    rocprofvis_result_t result = rocprofvis_controller_set_uint64(
-        args, kRPVControllerTableArgsType, 0, table_params.m_table_type);
+    rocprofvis_result_t result =
+        Controller::Abi::SetEnum<AbiProperty::TableType>(
+            args, 0, table_params.m_table_type);
     ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
     result = rocprofvis_controller_set_double(args, kRPVControllerTableArgsStartTime, 0,
@@ -1550,12 +1604,13 @@ DataProvider::SetupCommonTableArguments(rocprofvis_controller_arguments_t* args,
                                               table_params.m_end_ts);
     ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
-    result = rocprofvis_controller_set_uint64(args, kRPVControllerTableArgsSortColumn, 0,
-                                              table_params.m_sort_column_index);
+    result = Controller::Abi::SetUnsigned(
+        args, kRPVControllerTableArgsSortColumn, 0,
+        static_cast<uint64_t>(table_params.m_sort_column_index));
     ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
-    result = rocprofvis_controller_set_uint64(args, kRPVControllerTableArgsSortOrder, 0,
-                                              table_params.m_sort_order);
+    result = Controller::Abi::SetEnum<AbiProperty::TableSortOrder>(
+        args, 0, table_params.m_sort_order);
     ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
     result = rocprofvis_controller_set_string(args, kRPVControllerTableArgsWhere, 0,
@@ -1576,15 +1631,17 @@ DataProvider::SetupCommonTableArguments(rocprofvis_controller_arguments_t* args,
 
     if(table_params.m_start_row != -1)
     {
-        result = rocprofvis_controller_set_uint64(args, kRPVControllerTableArgsStartIndex,
-                                                  0, table_params.m_start_row);
+        result = Controller::Abi::SetUnsigned(
+            args, kRPVControllerTableArgsStartIndex, 0,
+            static_cast<uint64_t>(table_params.m_start_row));
         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
     }
 
     if(table_params.m_req_row_count != -1)
     {
-        result = rocprofvis_controller_set_uint64(args, kRPVControllerTableArgsStartCount,
-                                                  0, table_params.m_req_row_count);
+        result = Controller::Abi::SetUnsigned(
+            args, kRPVControllerTableArgsStartCount, 0,
+            static_cast<uint64_t>(table_params.m_req_row_count));
         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
     }
     return true;
@@ -1834,9 +1891,20 @@ DataProvider::FetchTrackTable(const TrackTableRequestParams& table_params)
             else
             {
                 // set the number of tracks in the request
-                result = rocprofvis_controller_set_uint64(
-                    args, kRPVControllerTableArgsNumTracks, 0, filtered_track_ids.size());
+                uint16_t num_tracks = 0;
+                result = Controller::Abi::CheckedAssignUnsigned(
+                    filtered_track_ids.size(), &num_tracks);
+                if(result == kRocProfVisResultSuccess)
+                {
+                    result = Controller::Abi::SetUnsigned<
+                        AbiProperty::TableArgsNumTracks>(args, 0, num_tracks);
+                }
                 ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+                if(result != kRocProfVisResultSuccess)
+                {
+                    rocprofvis_controller_arguments_free(args);
+                    return false;
+                }
             }
         }
         else
@@ -2081,24 +2149,36 @@ DataProvider::FetchEventSearch(const EventSearchRequestParams& table_params)
             }
             ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
             ROCPROFVIS_ASSERT(table_handle);
+
+            uint16_t num_op_types = 0;
+            result = Controller::Abi::CheckedAssignUnsigned(
+                table_params.m_op_types.size(), &num_op_types);
+            if(result != kRocProfVisResultSuccess)
+            {
+                rocprofvis_controller_arguments_free(args);
+                return false;
+            }
             for(const rocprofvis_dm_event_operation_t& op : table_params.m_op_types)
             {
-                result = rocprofvis_controller_set_uint64(
+                result = Controller::Abi::SetEnum(
                     args, kRPVControllerTableArgsOpTypesIndexed, filtered_op_types.size(),
-                    op);
+                    op, [](rocprofvis_dm_event_operation_t operation) {
+                        return operation >= kRocProfVisDmOperationNoOp &&
+                               operation <= kRocProfVisDmMultipleOperations;
+                    });
                 ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
                 filtered_op_types.push_back(op);
             }
 
             // set the number of op types in the request
-            result = rocprofvis_controller_set_uint64(
-                args, kRPVControllerTableArgsNumOpTypes, 0, filtered_op_types.size());
+            result = Controller::Abi::SetUnsigned<
+                AbiProperty::TableArgsNumOpTypes>(args, 0, num_op_types);
             ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
             // set the number of string filters in request
-            result = rocprofvis_controller_set_uint64(
+            result = Controller::Abi::SetUnsigned(
                 args, kRPVControllerTableArgsNumStringTableFilters, 0,
-                table_params.m_string_table_filters.size());
+                static_cast<uint64_t>(table_params.m_string_table_filters.size()));
             ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
             // set the string filters in request
@@ -2252,8 +2332,18 @@ DataProvider::FetchAnalysisTrackStatistics(
     }
     else
     {
+        uint32_t request_track_id = 0;
+        rocprofvis_result_t result = Controller::Abi::CheckedAssignUnsigned(
+            params.m_track_id, &request_track_id);
+        if(result != kRocProfVisResultSuccess)
+        {
+            spdlog::error("Track ID {} exceeds the request-ID range",
+                          params.m_track_id);
+            return false;
+        }
+
         uint64_t request_id = RequestIdBuilder::MakeTrackDataRequestId(
-            static_cast<uint32_t>(params.m_track_id), 0, 0,
+            request_track_id, 0, 0,
             RequestType::kFetchAnalysisTrackStatistics);
         auto it = m_requests.find(request_id);
         if(it != m_requests.end())
@@ -2267,7 +2357,7 @@ DataProvider::FetchAnalysisTrackStatistics(
             const TrackInfo* metadata = m_model.GetTimeline().GetTrack(params.m_track_id);
             ROCPROFVIS_ASSERT(metadata);
             rocprofvis_controller_track_t* track_handle = nullptr;
-            rocprofvis_result_t            result = rocprofvis_controller_get_object(
+            result = rocprofvis_controller_get_object(
                 metadata->graph_handle, kRPVControllerGraphTrack, 0, &track_handle);
             ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess && track_handle);
             rocprofvis_controller_future_t* future = rocprofvis_controller_future_alloc();
@@ -2603,10 +2693,11 @@ DataProvider::ProcessEventExtendedRequest(RequestInfo& req)
                         break;
                     case kRocProfVisEventEssentialDataStart:
                     {
-                        uint64_t tmp_val = 0;
+                        uint8_t tmp_val = 0;
                         ROCPROFVIS_ASSERT(data_type == kRPVControllerPrimitiveTypeUInt64);
-                        result = rocprofvis_controller_get_uint64(
-                            ext_data_handle, kRPVControllerExtDataValue, 0, &tmp_val);
+                        result = Controller::Abi::GetUnsigned<
+                            AbiProperty::ExtDataUInt8Value>(ext_data_handle, 0,
+                                                           &tmp_val);
                         if(result == kRocProfVisResultSuccess)
                         {
                             event_info->basic_info.start_ts =
@@ -2635,21 +2726,20 @@ DataProvider::ProcessEventExtendedRequest(RequestInfo& req)
                             ext_data_handle, kRPVControllerExtDataValue, 0, &tmp_val);
                         if(result == kRocProfVisResultSuccess)
                         {
-                            event_info->basic_info.level =
-                                static_cast<uint32_t>(tmp_val);
+                            event_info->basic_info.level = tmp_val;
                         }
                     }
                     break;
                     case kRocProfVisEventEssentialDataStreamLevel:
                     {
-                        uint64_t tmp_val = 0;
+                        uint32_t tmp_val = 0;
                         ROCPROFVIS_ASSERT(data_type == kRPVControllerPrimitiveTypeUInt64);
-                        result = rocprofvis_controller_get_uint64(
-                            ext_data_handle, kRPVControllerExtDataValue, 0, &tmp_val);
+                        result = Controller::Abi::GetUnsigned<
+                            AbiProperty::ExtDataUInt32Value>(ext_data_handle, 0,
+                                                            &tmp_val);
                         if(result == kRocProfVisResultSuccess)
                         {
-                            event_info->basic_info.stream_level =
-                                static_cast<uint32_t>(tmp_val);
+                            event_info->basic_info.stream_level = tmp_val;
                         }
                     }
                     break;
@@ -2670,18 +2760,18 @@ DataProvider::ProcessEventExtendedRequest(RequestInfo& req)
                     {
                         // read argument data
                         EventArg& arg     = event_info->args.emplace_back();
-                        uint64_t  tmp_val = 0;
+                        uint32_t  tmp_val = 0;
 
-                        result = rocprofvis_controller_get_uint64(
-                            ext_data_handle, kRPVControllerEventArgumentPosition, 0,
-                            &tmp_val);
+                        result = Controller::Abi::GetUnsigned<
+                            AbiProperty::EventArgumentPosition>(ext_data_handle, 0,
+                                                               &tmp_val);
                         if(result != kRocProfVisResultSuccess)
                         {
                             spdlog::debug("Failed to get argument position for event {}, "
                                          "argument index {}",
                                          event_params->m_event_id, j);
                         }
-                        arg.position = static_cast<uint16_t>(tmp_val);
+                        arg.position = tmp_val;
 
                         result = GetString(ext_data_handle, kRPVControllerExtDataName, 0, arg.name);
                         if(result != kRocProfVisResultSuccess)
@@ -3058,12 +3148,10 @@ DataProvider::CreateSummaryData(rocprofvis_handle_t* metrics_handle,
         std::string                    str_data;
         SummaryInfo::AggregateMetrics* output_ptr         = nullptr;
         rocprofvis_handle_t*           sub_metrics_handle = nullptr;
-        result = rocprofvis_controller_get_uint64(
-            metrics_handle, kRPVControllerSummaryMetricPropertyAggregationLevel, 0,
-            &uint64_data);
+        rocprofvis_controller_summary_aggregation_level_t aggregation_level{};
+        result = Controller::Abi::GetEnum<AbiProperty::SummaryAggregationLevel>(
+            metrics_handle, 0, &aggregation_level);
         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-        rocprofvis_controller_summary_aggregation_level_t aggregation_level =
-            static_cast<rocprofvis_controller_summary_aggregation_level_t>(uint64_data);
 
         // Get reference to model's summary for modification
         SummaryInfo::AggregateMetrics& root_summary =
@@ -3099,13 +3187,12 @@ DataProvider::CreateSummaryData(rocprofvis_handle_t* metrics_handle,
             {
                 output.name = str_data;
             }
-            result = rocprofvis_controller_get_uint64(
-                metrics_handle, kRPVControllerSummaryMetricPropertyProcessorType, 0,
-                &uint64_data);
+            rocprofvis_controller_processor_type_t processor_type{};
+            result = Controller::Abi::GetEnum<AbiProperty::SummaryProcessorType>(
+                metrics_handle, 0, &processor_type);
             if(result == kRocProfVisResultSuccess)
             {
-                output.device_type =
-                    static_cast<rocprofvis_controller_processor_type_t>(uint64_data);
+                output.device_type = processor_type;
                 result = rocprofvis_controller_get_uint64(
                     metrics_handle, kRPVControllerSummaryMetricPropertyProcessorTypeIndex,
                     0, &uint64_data);
@@ -3393,9 +3480,9 @@ DataProvider::ProcessTableRequest(RequestInfo& req)
             ROCPROFVIS_ASSERT(row_array);
             for(uint32_t j = 0; j < num_columns; j++)
             {
-                uint64_t column_type = 0;
-                result               = rocprofvis_controller_get_uint64(
-                    table_handle, kRPVControllerTableColumnTypeIndexed, j, &column_type);
+                rocprofvis_controller_primitive_type_t column_type{};
+                result = Controller::Abi::GetEnum<AbiProperty::TableColumnType>(
+                    table_handle, j, &column_type);
                 ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
                 std::string column_value = "";
                 switch(column_type)
@@ -3617,11 +3704,12 @@ DataProvider::ProcessGraphRequest(RequestInfo& req)
 
     if(req.response_code == kRocProfVisResultSuccess)
     {
-        uint64_t graph_type = 0;
-        auto     graph      = req.request_obj_handle;
+        rocprofvis_controller_graph_type_t graph_type{};
+        auto                                graph = req.request_obj_handle;
 
-        rocprofvis_result_t result = rocprofvis_controller_get_uint64(
-            graph, kRPVControllerGraphType, 0, &graph_type);
+        rocprofvis_result_t result =
+            Controller::Abi::GetEnum<AbiProperty::GraphType>(graph, 0,
+                                                              &graph_type);
         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
         double min_ts = 0;
@@ -3896,17 +3984,17 @@ DataProvider::CreateRawEventData(const TrackRequestParams& params, const Request
         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
         trace_event.m_duration = end_ts - start_ts;
 
-        uint64_t level = 0;
-        result =
-            rocprofvis_controller_get_uint64(event, kRPVControllerEventLevel, 0, &level);
+        uint8_t level = 0;
+        result = Controller::Abi::GetUnsigned<AbiProperty::EventLevel>(
+            event, 0, &level);
         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-        trace_event.m_level = static_cast<uint32_t>(level);
+        trace_event.m_level = level;
 
-        uint64_t child_count = 0;
-        result = rocprofvis_controller_get_uint64(event, kRPVControllerEventNumChildren,
-                                                  0, &child_count);
+        uint32_t child_count = 0;
+        result = Controller::Abi::GetUnsigned<AbiProperty::EventNumChildren>(
+            event, 0, &child_count);
         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-        trace_event.m_child_count = static_cast<uint32_t>(child_count);
+        trace_event.m_child_count = child_count;
 
         // get event name
         result = GetString(event, kRPVControllerEventName, 0, trace_event.m_name);
@@ -4144,51 +4232,50 @@ DataProvider::FetchMetrics(const MetricsRequestParams& metrics_params)
         rocprofvis_controller_metrics_container_t* output =
             rocprofvis_controller_metrics_container_alloc();
         ROCPROFVIS_ASSERT(future && args && output);
-        rocprofvis_result_t result = rocprofvis_controller_set_uint64(
-            args, kRPVControllerMetricArgsWorkloadId, 0, metrics_params.m_workload_id);
+        rocprofvis_result_t result = Controller::Abi::SetUnsigned<
+            AbiProperty::MetricArgsWorkloadId>(args, 0,
+                                               metrics_params.m_workload_id);
         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
         for(size_t i = 0; i < metrics_params.m_kernel_ids.size(); i++)
         {
-            result = rocprofvis_controller_set_uint64(
-                args, kRPVControllerMetricArgsKernelIdIndexed, i,
-                static_cast<uint64_t>(metrics_params.m_kernel_ids[i]));
+            result = Controller::Abi::SetUnsigned<
+                AbiProperty::MetricArgsKernelId>(args, i,
+                                                 metrics_params.m_kernel_ids[i]);
             ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
         }
-        result =
-            rocprofvis_controller_set_uint64(args, kRPVControllerMetricArgsNumKernels, 0,
-                                             metrics_params.m_kernel_ids.size());
+        result = Controller::Abi::SetUnsigned(
+            args, kRPVControllerMetricArgsNumKernels, 0,
+            static_cast<uint64_t>(metrics_params.m_kernel_ids.size()));
         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
         for(size_t i = 0; i < metrics_params.m_kernel_ids.size(); i++)
         {
-            result = rocprofvis_controller_set_uint64(
-                args, kRPVControllerMetricArgsKernelIdIndexed, i,
-                static_cast<uint64_t>(metrics_params.m_kernel_ids[i]));
+            result = Controller::Abi::SetUnsigned<
+                AbiProperty::MetricArgsKernelId>(args, i,
+                                                 metrics_params.m_kernel_ids[i]);
             ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
         }
-        result =
-            rocprofvis_controller_set_uint64(args, kRPVControllerMetricArgsNumMetrics, 0,
-                                             metrics_params.m_metric_ids.size());
+        result = Controller::Abi::SetUnsigned(
+            args, kRPVControllerMetricArgsNumMetrics, 0,
+            static_cast<uint64_t>(metrics_params.m_metric_ids.size()));
         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
         for(size_t i = 0; i < metrics_params.m_metric_ids.size(); i++)
         {
-            result = rocprofvis_controller_set_uint64(
-                args, kRPVControllerMetricArgsMetricCategoryIdIndexed, i,
-                static_cast<uint64_t>(metrics_params.m_metric_ids[i].category_id));
+            result = Controller::Abi::SetUnsigned<
+                AbiProperty::MetricArgsCategoryId>(
+                args, i, metrics_params.m_metric_ids[i].category_id);
             ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
             if(metrics_params.m_metric_ids[i].table_id)
             {
-                result = rocprofvis_controller_set_uint64(
-                    args, kRPVControllerMetricArgsMetricTableIdIndexed, i,
-                    static_cast<uint64_t>(
-                        metrics_params.m_metric_ids[i].table_id.value()));
+                result = Controller::Abi::SetUnsigned<
+                    AbiProperty::MetricArgsTableId>(
+                    args, i, metrics_params.m_metric_ids[i].table_id.value());
                 ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
             }
             if(metrics_params.m_metric_ids[i].entry_id)
             {
-                result = rocprofvis_controller_set_uint64(
-                    args, kRPVControllerMetricArgsMetricEntryIdIndexed, i,
-                    static_cast<uint64_t>(
-                        metrics_params.m_metric_ids[i].entry_id.value()));
+                result = Controller::Abi::SetUnsigned<
+                    AbiProperty::MetricArgsEntryId>(
+                    args, i, metrics_params.m_metric_ids[i].entry_id.value());
                 ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
             }
         }
@@ -4242,19 +4329,17 @@ DataProvider::FetchMetricPivotTable(const ComputeTableRequestParams& params)
         ROCPROFVIS_ASSERT(args);
 
         // Set workload ID
-        result = rocprofvis_controller_set_uint64(
-            (rocprofvis_handle_t*)args,
-            kRPVControllerCPTArgsWorkloadId,
-            0,
-            params.m_workload_id);
+        result = Controller::Abi::SetUnsigned<
+            AbiProperty::ComputePivotWorkloadId>(
+            (rocprofvis_handle_t*)args, 0, params.m_workload_id);
         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
         // Set number of metric selectors
-        result = rocprofvis_controller_set_uint64(
+        result = Controller::Abi::SetUnsigned(
             (rocprofvis_handle_t*)args,
             kRPVControllerCPTArgsNumMetricSelectors,
             0,
-            params.m_metric_selectors.size());
+            static_cast<uint64_t>(params.m_metric_selectors.size()));
         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
         // Set metric selectors (indexed)
@@ -4269,7 +4354,7 @@ DataProvider::FetchMetricPivotTable(const ComputeTableRequestParams& params)
         }
 
         // Set sort column index
-        result = rocprofvis_controller_set_uint64(
+        result = Controller::Abi::SetUnsigned(
             (rocprofvis_handle_t*)args,
             kRPVControllerCPTArgsSortColumnIndex,
             0,
@@ -4277,26 +4362,23 @@ DataProvider::FetchMetricPivotTable(const ComputeTableRequestParams& params)
         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
         // Set sort order
-        result = rocprofvis_controller_set_uint64(
-            (rocprofvis_handle_t*)args,
-            kRPVControllerCPTArgsSortOrder,
-            0,
-            static_cast<uint64_t>(params.m_sort_order));
+        result = Controller::Abi::SetEnum<AbiProperty::ComputePivotSortOrder>(
+            (rocprofvis_handle_t*)args, 0, params.m_sort_order);
         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
         // Set number of column filters
-        result = rocprofvis_controller_set_uint64(
+        result = Controller::Abi::SetUnsigned(
             (rocprofvis_handle_t*)args,
             kRPVControllerCPTArgsNumColumnFilters,
             0,
-            params.m_column_filters.size());
+            static_cast<uint64_t>(params.m_column_filters.size()));
         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
         // Set column filters (indexed)
         uint64_t filter_idx = 0;
         for (const auto& [column_index, filter_expr] : params.m_column_filters)
         {
-            result = rocprofvis_controller_set_uint64(
+            result = Controller::Abi::SetUnsigned(
                 (rocprofvis_handle_t*)args,
                 kRPVControllerCPTArgsFilterColumnIndexIndexed,
                 filter_idx,
@@ -4416,9 +4498,12 @@ DataProvider::FetchPcSampling(const PcSamplingRequestParams& params)
         return false;
     }
 
-    rocprofvis_controller_set_uint64(args, kRPVControllerPcSamplingArgsWorkloadId,   0, params.m_workload_id);
-    rocprofvis_controller_set_uint64(args, kRPVControllerPcSamplingArgsKernelId,     0, params.m_kernel_id);
-    rocprofvis_controller_set_uint64(args, kRPVControllerPcSamplingArgsSourceFileId, 0, params.m_source_file_id);
+    Controller::Abi::SetUnsigned<AbiProperty::PcSamplingArgsWorkloadId>(
+        args, 0, params.m_workload_id);
+    Controller::Abi::SetUnsigned<AbiProperty::PcSamplingArgsKernelId>(
+        args, 0, params.m_kernel_id);
+    Controller::Abi::SetUnsigned<AbiProperty::PcSamplingArgsSourceFileId>(
+        args, 0, params.m_source_file_id);
 
     rocprofvis_result_t result = rocprofvis_controller_pc_sampling_fetch_async(
         m_trace_controller, args, future, pc_handle);
@@ -4482,12 +4567,10 @@ DataProvider::LoadWorkload(uint64_t workload_index)
         m_trace_controller, kRPVControllerWorkloadIndexed, workload_index,
         &workload_handle);
     ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess && workload_handle);
-    uint64_t     uint64_data = 0;
     WorkloadInfo workload;
-    result = rocprofvis_controller_get_uint64(workload_handle, kRPVControllerWorkloadId,
-                                              0, &uint64_data);
+    result = Controller::Abi::GetUnsigned<AbiProperty::WorkloadId>(
+        workload_handle, 0, &workload.id);
     ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-    workload.id          = static_cast<uint32_t>(uint64_data);
     workload.name        = GetString(workload_handle, kRPVControllerWorkloadName, 0);
 
     LoadSystemInfo(workload, workload_handle);
@@ -4548,7 +4631,6 @@ DataProvider::LoadProfilingConfig(WorkloadInfo&        workload,
 inline void
 DataProvider::LoadMetricList(WorkloadInfo& workload, rocprofvis_handle_t* workload_handle)
 {
-    uint64_t            uint64_data = 0;
     uint64_t num_entries = 0;
     rocprofvis_result_t result = rocprofvis_controller_get_uint64(
         workload_handle, kRPVControllerWorkloadNumAvailableMetrics, 0, &num_entries);
@@ -4556,18 +4638,16 @@ DataProvider::LoadMetricList(WorkloadInfo& workload, rocprofvis_handle_t* worklo
     workload.available_metrics.list.resize(num_entries);
     for(uint64_t j = 0; j < num_entries; j++)
     {
-        result = rocprofvis_controller_get_uint64(
-            workload_handle, kRPVControllerWorkloadAvailableMetricCategoryIdIndexed, j,
-            &uint64_data);
+        result = Controller::Abi::GetUnsigned<
+            AbiProperty::WorkloadAvailableMetricCategoryId>(
+            workload_handle, j,
+            &workload.available_metrics.list[j].category_id);
         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
         workload.available_metrics.list[j].index = static_cast<size_t>(j);
-        workload.available_metrics.list[j].category_id =
-            static_cast<uint32_t>(uint64_data);
-        result = rocprofvis_controller_get_uint64(
-            workload_handle, kRPVControllerWorkloadAvailableMetricTableIdIndexed, j,
-            &uint64_data);
+        result = Controller::Abi::GetUnsigned<
+            AbiProperty::WorkloadAvailableMetricTableId>(
+            workload_handle, j, &workload.available_metrics.list[j].table_id);
         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-        workload.available_metrics.list[j].table_id = static_cast<uint32_t>(uint64_data);
         workload.available_metrics.list[j].name     = GetString(
             workload_handle, kRPVControllerWorkloadAvailableMetricNameIndexed, j);
         workload.available_metrics.list[j].description = GetString(
@@ -4586,10 +4666,16 @@ DataProvider::LoadMetricList(WorkloadInfo& workload, rocprofvis_handle_t* worklo
         table.name = GetString(workload_handle,
                                kRPVControllerWorkloadAvailableMetricTableNameIndexed, j);
         // Last position of id is not returned, for now assume index...
-        workload.available_metrics.list[j].id =
-            static_cast<uint32_t>(table.entries.size());
-        table.entries.insert({ static_cast<uint32_t>(table.entries.size()),
-                               workload.available_metrics.list[j] });
+        uint32_t entry_id = 0;
+        result = Controller::Abi::CheckedAssignUnsigned(table.entries.size(),
+                                                         &entry_id);
+        if(result != kRocProfVisResultSuccess)
+        {
+            spdlog::error("Metric entry index exceeds the uint32 ABI range");
+            continue;
+        }
+        workload.available_metrics.list[j].id = entry_id;
+        table.entries.insert({ entry_id, workload.available_metrics.list[j] });
     }
 }
 
@@ -4602,22 +4688,22 @@ DataProvider::LoadValueNames(WorkloadInfo& workload, rocprofvis_handle_t* worklo
     ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
     for(uint64_t k = 0; k < num_value_names; k++)
     {
-        uint64_t cat_id = 0;
-        uint64_t tbl_id = 0;
-        result          = rocprofvis_controller_get_uint64(
-            workload_handle, kRPVControllerWorkloadMetricValueNameCategoryIdIndexed, k,
-            &cat_id);
+        uint32_t cat_id = 0;
+        uint32_t tbl_id = 0;
+        result = Controller::Abi::GetUnsigned<
+            AbiProperty::WorkloadMetricValueNameCategoryId>(workload_handle, k,
+                                                             &cat_id);
         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-        result = rocprofvis_controller_get_uint64(
-            workload_handle, kRPVControllerWorkloadMetricValueNameTableIdIndexed, k,
-            &tbl_id);
+        result = Controller::Abi::GetUnsigned<
+            AbiProperty::WorkloadMetricValueNameTableId>(workload_handle, k,
+                                                          &tbl_id);
         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
         std::string name = GetString(
             workload_handle, kRPVControllerWorkloadMetricValueNameStringIndexed, k);
-        auto cat_it = workload.available_metrics.tree.find(static_cast<uint32_t>(cat_id));
+        auto cat_it = workload.available_metrics.tree.find(cat_id);
         if(cat_it != workload.available_metrics.tree.end())
         {
-            auto tbl_it = cat_it->second.tables.find(static_cast<uint32_t>(tbl_id));
+            auto tbl_it = cat_it->second.tables.find(tbl_id);
             if(tbl_it != cat_it->second.tables.end())
             {
                 tbl_it->second.value_names.push_back(std::move(name));
@@ -4629,7 +4715,6 @@ DataProvider::LoadValueNames(WorkloadInfo& workload, rocprofvis_handle_t* worklo
 inline void
 DataProvider::LoadKernels(WorkloadInfo& workload, rocprofvis_handle_t* workload_handle)
 {
-    uint64_t uint64_data = 0;
     uint64_t num_entries = 0;
     rocprofvis_result_t result = rocprofvis_controller_get_uint64(
         workload_handle, kRPVControllerWorkloadNumKernels, 0, &num_entries);
@@ -4641,40 +4726,37 @@ DataProvider::LoadKernels(WorkloadInfo& workload, rocprofvis_handle_t* workload_
             workload_handle, kRPVControllerWorkloadKernelIndexed, j, &kernel_handle);
         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess && kernel_handle);
         KernelInfo kernel;
-        result = rocprofvis_controller_get_uint64(kernel_handle, kRPVControllerKernelId,
-                                                  0, &uint64_data);
+        result = Controller::Abi::GetUnsigned<AbiProperty::KernelId>(
+            kernel_handle, 0, &kernel.id);
         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-        kernel.id               = static_cast<uint32_t>(uint64_data);
         kernel.name             = GetString(kernel_handle, kRPVControllerKernelName, 0);
         kernel.dispatch_metrics = {};
-        result                  = rocprofvis_controller_get_uint64(
-            kernel_handle, kRPVControllerKernelInvocationCount, 0, &uint64_data);
+        uint32_t uint32_data = 0;
+        result = Controller::Abi::GetUnsigned<AbiProperty::KernelInvocationCount>(
+            kernel_handle, 0, &uint32_data);
         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-        kernel.dispatch_metrics[KernelInfo::InvocationCount] = uint64_data;
+        kernel.dispatch_metrics[KernelInfo::InvocationCount] = uint32_data;
+        uint64_t uint64_data = 0;
         result = rocprofvis_controller_get_uint64(
             kernel_handle, kRPVControllerKernelDurationTotal, 0, &uint64_data);
         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
         kernel.dispatch_metrics[KernelInfo::DurationTotal] = uint64_data;
-        result = rocprofvis_controller_get_uint64(
-            kernel_handle, kRPVControllerKernelDurationMin, 0, &uint64_data);
+        result = Controller::Abi::GetUnsigned<AbiProperty::KernelDurationMin>(
+            kernel_handle, 0, &uint32_data);
         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-        kernel.dispatch_metrics[KernelInfo::DurationMin] =
-            static_cast<uint32_t>(uint64_data);
-        result = rocprofvis_controller_get_uint64(
-            kernel_handle, kRPVControllerKernelDurationMax, 0, &uint64_data);
+        kernel.dispatch_metrics[KernelInfo::DurationMin] = uint32_data;
+        result = Controller::Abi::GetUnsigned<AbiProperty::KernelDurationMax>(
+            kernel_handle, 0, &uint32_data);
         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-        kernel.dispatch_metrics[KernelInfo::DurationMax] =
-            static_cast<uint32_t>(uint64_data);
-        result = rocprofvis_controller_get_uint64(
-            kernel_handle, kRPVControllerKernelDurationMean, 0, &uint64_data);
+        kernel.dispatch_metrics[KernelInfo::DurationMax] = uint32_data;
+        result = Controller::Abi::GetUnsigned<AbiProperty::KernelDurationMean>(
+            kernel_handle, 0, &uint32_data);
         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-        kernel.dispatch_metrics[KernelInfo::DurationMean] =
-            static_cast<uint32_t>(uint64_data);
-        result = rocprofvis_controller_get_uint64(
-            kernel_handle, kRPVControllerKernelDurationMedian, 0, &uint64_data);
+        kernel.dispatch_metrics[KernelInfo::DurationMean] = uint32_data;
+        result = Controller::Abi::GetUnsigned<AbiProperty::KernelDurationMedian>(
+            kernel_handle, 0, &uint32_data);
         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-        kernel.dispatch_metrics[KernelInfo::DurationMedian] =
-            static_cast<uint32_t>(uint64_data);
+        kernel.dispatch_metrics[KernelInfo::DurationMedian] = uint32_data;
         // Load only the source file list eagerly (for the dropdown).
         // Full ISA/source/stall data is loaded on-demand via FetchPcSampling.
         {
@@ -4702,9 +4784,8 @@ DataProvider::LoadPcSamplingCodeObjects(KernelInfo& kernel, rocprofvis_handle_t*
     code_objects_by_id.reserve(num_code_objects);
     for(uint64_t i = 0; i < num_code_objects; i++)
     {
-        uint64_t id = 0;
-        rocprofvis_controller_get_uint64(pc_handle, kRPVControllerPCSamplingCodeObjectId, i, &id);
-        kernel.pc_sampling_data.code_objects[i].id               = static_cast<uint32_t>(id);
+        Controller::Abi::GetUnsigned<AbiProperty::PcSamplingCodeObjectId>(
+            pc_handle, i, &kernel.pc_sampling_data.code_objects[i].id);
         kernel.pc_sampling_data.code_objects[i].uri              = GetString(pc_handle, kRPVControllerPCSamplingCodeObjectUri, i);
         kernel.pc_sampling_data.code_objects[i].content_checksum = GetString(pc_handle, kRPVControllerPCSamplingCodeObjectChecksum, i);
         code_objects_by_id.emplace(kernel.pc_sampling_data.code_objects[i].id,
@@ -4715,10 +4796,12 @@ DataProvider::LoadPcSamplingCodeObjects(KernelInfo& kernel, rocprofvis_handle_t*
     rocprofvis_controller_get_uint64(pc_handle, kRPVControllerPCSamplingNumIsaLines, 0, &num_isa_lines);
     for(uint64_t ii = 0; ii < num_isa_lines; ii++)
     {
-        uint64_t co_id = 0;
-        rocprofvis_controller_get_uint64(pc_handle, kRPVControllerPCSamplingIsaLineCodeObjectId, ii, &co_id);
+        uint32_t co_id = 0;
+        Controller::Abi::GetUnsigned<
+            AbiProperty::PcSamplingIsaLineCodeObjectId>(pc_handle, ii,
+                                                        &co_id);
         const std::unordered_map<uint32_t, CodeObject*>::iterator code_object_it =
-            code_objects_by_id.find(static_cast<uint32_t>(co_id));
+            code_objects_by_id.find(co_id);
         if(code_object_it != code_objects_by_id.end())
         {
             code_object_it->second->isa_lines.emplace_back();
@@ -4730,15 +4813,14 @@ DataProvider::LoadPcSamplingCodeObjects(KernelInfo& kernel, rocprofvis_handle_t*
 inline void
 DataProvider::LoadPcSamplingIsaLine(IsaLine& isa_line, rocprofvis_handle_t* pc_handle, uint64_t index)
 {
-    uint64_t isa_id = 0;
-    rocprofvis_controller_get_uint64(pc_handle, kRPVControllerPCSamplingIsaLineId, index, &isa_id);
-    isa_line.id = static_cast<uint32_t>(isa_id);
+    Controller::Abi::GetUnsigned<AbiProperty::PcSamplingIsaLineId>(
+        pc_handle, index, &isa_line.id);
     uint64_t offset = 0;
     rocprofvis_controller_get_uint64(pc_handle, kRPVControllerPCSamplingIsaLineCodeObjectOffset, index, &offset);
     isa_line.code_object_offset = offset;
-    uint64_t instruction_type_id = 0;
-    rocprofvis_controller_get_uint64(pc_handle, kRPVControllerPCSamplingIsaLineInstructionTypeId, index, &instruction_type_id);
-    isa_line.instruction_type_id = static_cast<uint32_t>(instruction_type_id);
+    Controller::Abi::GetUnsigned<
+        AbiProperty::PcSamplingIsaLineInstructionTypeId>(
+        pc_handle, index, &isa_line.instruction_type_id);
     isa_line.instruction = GetString(pc_handle, kRPVControllerPCSamplingIsaLineInstruction, index);
     isa_line.comment     = GetString(pc_handle, kRPVControllerPCSamplingIsaLineComment, index);
 }
@@ -4751,11 +4833,14 @@ DataProvider::LoadPcSamplingJunctions(KernelInfo& kernel, rocprofvis_handle_t* p
     kernel.pc_sampling_data.isa_to_isa_deps.resize(num_isa_to_isa);
     for(uint64_t i = 0; i < num_isa_to_isa; i++)
     {
-        uint64_t dependent = 0, dependency = 0;
-        rocprofvis_controller_get_uint64(pc_handle, kRPVControllerPCSamplingIsaToIsaDependentIsaLineId, i, &dependent);
-        rocprofvis_controller_get_uint64(pc_handle, kRPVControllerPCSamplingIsaToIsaDependencyIsaLineId, i, &dependency);
-        kernel.pc_sampling_data.isa_to_isa_deps[i].dependent_isa_line_id  = static_cast<uint32_t>(dependent);
-        kernel.pc_sampling_data.isa_to_isa_deps[i].dependency_isa_line_id = static_cast<uint32_t>(dependency);
+        Controller::Abi::GetUnsigned<
+            AbiProperty::PcSamplingIsaToIsaDependentIsaLineId>(
+            pc_handle, i,
+            &kernel.pc_sampling_data.isa_to_isa_deps[i].dependent_isa_line_id);
+        Controller::Abi::GetUnsigned<
+            AbiProperty::PcSamplingIsaToIsaDependencyIsaLineId>(
+            pc_handle, i,
+            &kernel.pc_sampling_data.isa_to_isa_deps[i].dependency_isa_line_id);
     }
 
     uint64_t num_isa_to_source = 0;
@@ -4763,13 +4848,17 @@ DataProvider::LoadPcSamplingJunctions(KernelInfo& kernel, rocprofvis_handle_t* p
     kernel.pc_sampling_data.isa_to_source_deps.resize(num_isa_to_source);
     for(uint64_t i = 0; i < num_isa_to_source; i++)
     {
-        uint64_t isa_id = 0, source_id = 0, depth = 0;
-        rocprofvis_controller_get_uint64(pc_handle, kRPVControllerPCSamplingIsaToSourceIsaLineId, i, &isa_id);
-        rocprofvis_controller_get_uint64(pc_handle, kRPVControllerPCSamplingIsaToSourceSourceLineId, i, &source_id);
-        rocprofvis_controller_get_uint64(pc_handle, kRPVControllerPCSamplingIsaToSourceDepth, i, &depth);
-        kernel.pc_sampling_data.isa_to_source_deps[i].isa_line_id    = static_cast<uint32_t>(isa_id);
-        kernel.pc_sampling_data.isa_to_source_deps[i].source_line_id = static_cast<uint32_t>(source_id);
-        kernel.pc_sampling_data.isa_to_source_deps[i].depth          = static_cast<uint32_t>(depth);
+        Controller::Abi::GetUnsigned<
+            AbiProperty::PcSamplingIsaToSourceIsaLineId>(
+            pc_handle, i,
+            &kernel.pc_sampling_data.isa_to_source_deps[i].isa_line_id);
+        Controller::Abi::GetUnsigned<
+            AbiProperty::PcSamplingIsaToSourceSourceLineId>(
+            pc_handle, i,
+            &kernel.pc_sampling_data.isa_to_source_deps[i].source_line_id);
+        Controller::Abi::GetUnsigned<
+            AbiProperty::PcSamplingIsaToSourceDepth>(
+            pc_handle, i, &kernel.pc_sampling_data.isa_to_source_deps[i].depth);
     }
 }
 
@@ -4786,37 +4875,43 @@ DataProvider::LoadPcSamplingStates(KernelInfo& kernel, rocprofvis_handle_t* pc_h
 
     for(uint64_t i = 0; i < num_sampling_states; i++)
     {
-        uint64_t isa_line_id = 0;
-        rocprofvis_controller_get_uint64(pc_handle, kRPVControllerPCSamplingStateIsaLineId, i, &isa_line_id);
+        uint32_t isa_line_id = 0;
+        Controller::Abi::GetUnsigned<AbiProperty::PcSamplingStateIsaLineId>(
+            pc_handle, i, &isa_line_id);
 
         const std::unordered_map<uint32_t, IsaLine*>::iterator isa_line_it =
-            isa_lines_by_id.find(static_cast<uint32_t>(isa_line_id));
+            isa_lines_by_id.find(isa_line_id);
         if(isa_line_it == isa_lines_by_id.end())
         {
             continue;
         }
 
-        uint64_t id = 0, dispatch_id = 0, issued_count = 0, stalled_count = 0, total_count = 0;
+        uint32_t id = 0, issued_count = 0, stalled_count = 0, total_count = 0;
+        uint64_t dispatch_id = 0;
         double active_threads_percent = 0.0;
         double wave_occupancy_percent = 0.0;
-        rocprofvis_controller_get_uint64(pc_handle, kRPVControllerPCSamplingStateId, i, &id);
+        Controller::Abi::GetUnsigned<AbiProperty::PcSamplingStateId>(
+            pc_handle, i, &id);
         rocprofvis_controller_get_uint64(pc_handle, kRPVControllerPCSamplingStateDispatchId, i, &dispatch_id);
-        rocprofvis_controller_get_uint64(pc_handle, kRPVControllerPCSamplingStateIssuedCount, i, &issued_count);
-        rocprofvis_controller_get_uint64(pc_handle, kRPVControllerPCSamplingStateStalledCount, i, &stalled_count);
-        rocprofvis_controller_get_uint64(pc_handle, kRPVControllerPCSamplingStateTotalCount, i, &total_count);
+        Controller::Abi::GetUnsigned<AbiProperty::PcSamplingStateIssuedCount>(
+            pc_handle, i, &issued_count);
+        Controller::Abi::GetUnsigned<AbiProperty::PcSamplingStateStalledCount>(
+            pc_handle, i, &stalled_count);
+        Controller::Abi::GetUnsigned<AbiProperty::PcSamplingStateTotalCount>(
+            pc_handle, i, &total_count);
         rocprofvis_controller_get_double(pc_handle, kRPVControllerPCSamplingStateActiveThreadsPercent, i, &active_threads_percent);
         rocprofvis_controller_get_double(pc_handle, kRPVControllerPCSamplingStateWaveOccupancyPercent, i, &wave_occupancy_percent);
 
         SamplingState& sampling_state = isa_line_it->second->sampling_state;
         sampling_state.loaded             = true;
-        sampling_state.id                 = static_cast<uint32_t>(id);
-        sampling_state.isa_line_id        = static_cast<uint32_t>(isa_line_id);
+        sampling_state.id                 = id;
+        sampling_state.isa_line_id        = isa_line_id;
         sampling_state.dispatch_id        = dispatch_id;
         sampling_state.active_threads_percent = static_cast<float>(active_threads_percent);
         sampling_state.wave_occupancy_percent = static_cast<float>(wave_occupancy_percent);
-        sampling_state.issued_count       = static_cast<uint32_t>(issued_count);
-        sampling_state.stalled_count      = static_cast<uint32_t>(stalled_count);
-        sampling_state.total_count        = static_cast<uint32_t>(total_count);
+        sampling_state.issued_count       = issued_count;
+        sampling_state.stalled_count      = stalled_count;
+        sampling_state.total_count        = total_count;
     }
 }
 
@@ -4834,17 +4929,20 @@ DataProvider::LoadPcSamplingStallReasonCounts(KernelInfo& kernel, rocprofvis_han
 
     for(uint64_t i = 0; i < num_reason_counts; i++)
     {
-        uint64_t sampling_state_id = 0, reason_id = 0, count = 0;
-        rocprofvis_controller_get_uint64(pc_handle, kRPVControllerPCSamplingStallReasonSamplingStateId, i, &sampling_state_id);
-        rocprofvis_controller_get_uint64(pc_handle, kRPVControllerPCSamplingStallReasonId,   i, &reason_id);
-        rocprofvis_controller_get_uint64(pc_handle, kRPVControllerPCSamplingStallReasonCount,    i, &count);
+        uint32_t sampling_state_id = 0, reason_id = 0, count = 0;
+        Controller::Abi::GetUnsigned<
+            AbiProperty::PcSamplingStallReasonSamplingStateId>(
+            pc_handle, i, &sampling_state_id);
+        Controller::Abi::GetUnsigned<AbiProperty::PcSamplingStallReasonId>(
+            pc_handle, i, &reason_id);
+        Controller::Abi::GetUnsigned<AbiProperty::PcSamplingStallReasonCount>(
+            pc_handle, i, &count);
 
         const std::unordered_map<uint32_t, SamplingState*>::iterator sampling_state_it =
-            sampling_states_by_id.find(static_cast<uint32_t>(sampling_state_id));
+            sampling_states_by_id.find(sampling_state_id);
         if(sampling_state_it != sampling_states_by_id.end())
         {
-            sampling_state_it->second->stall_reasons.push_back({
-                static_cast<int32_t>(reason_id), static_cast<int32_t>(count) });
+            sampling_state_it->second->stall_reasons.push_back({ reason_id, count });
         }
     }
 }
@@ -4862,9 +4960,8 @@ DataProvider::LoadPcSamplingSourceFiles(KernelInfo& kernel, rocprofvis_handle_t*
     source_files_by_id.reserve(num_source_files);
     for(uint64_t i = 0; i < num_source_files; i++)
     {
-        uint64_t id = 0;
-        rocprofvis_controller_get_uint64(pc_handle, kRPVControllerPCSamplingSourceFileId, i, &id);
-        kernel.pc_sampling_data.source_files[i].id               = static_cast<uint32_t>(id);
+        Controller::Abi::GetUnsigned<AbiProperty::PcSamplingSourceFileId>(
+            pc_handle, i, &kernel.pc_sampling_data.source_files[i].id);
         kernel.pc_sampling_data.source_files[i].file_path        = GetString(pc_handle, kRPVControllerPCSamplingFilePath, i);
         kernel.pc_sampling_data.source_files[i].content_checksum = GetString(pc_handle, kRPVControllerPCSamplingSourceFileChecksum, i);
         source_files_by_id.emplace(kernel.pc_sampling_data.source_files[i].id,
@@ -4875,10 +4972,12 @@ DataProvider::LoadPcSamplingSourceFiles(KernelInfo& kernel, rocprofvis_handle_t*
     rocprofvis_controller_get_uint64(pc_handle, kRPVControllerPCSamplingNumSourceLines, 0, &num_source_lines);
     for(uint64_t li = 0; li < num_source_lines; li++)
     {
-        uint64_t sf_id = 0;
-        rocprofvis_controller_get_uint64(pc_handle, kRPVControllerPCSamplingSourceLineSourceFileId, li, &sf_id);
+        uint32_t sf_id = 0;
+        Controller::Abi::GetUnsigned<
+            AbiProperty::PcSamplingSourceLineSourceFileId>(pc_handle, li,
+                                                           &sf_id);
         const std::unordered_map<uint32_t, SourceFile*>::iterator source_file_it =
-            source_files_by_id.find(static_cast<uint32_t>(sf_id));
+            source_files_by_id.find(sf_id);
         if(source_file_it != source_files_by_id.end())
         {
             source_file_it->second->source_lines.emplace_back();
@@ -4890,12 +4989,10 @@ DataProvider::LoadPcSamplingSourceFiles(KernelInfo& kernel, rocprofvis_handle_t*
 inline void
 DataProvider::LoadPcSamplingSourceLine(SourceLine& source_line, rocprofvis_handle_t* pc_handle, uint64_t index)
 {
-    uint64_t line_id = 0;
-    rocprofvis_controller_get_uint64(pc_handle, kRPVControllerPCSamplingSourceLineId, index, &line_id);
-    source_line.id = static_cast<uint32_t>(line_id);
-    uint64_t line_number = 0;
-    rocprofvis_controller_get_uint64(pc_handle, kRPVControllerPCSamplingSourceLineNumber, index, &line_number);
-    source_line.line_number = static_cast<uint32_t>(line_number);
+    Controller::Abi::GetUnsigned<AbiProperty::PcSamplingSourceLineId>(
+        pc_handle, index, &source_line.id);
+    Controller::Abi::GetUnsigned<AbiProperty::PcSamplingSourceLineNumber>(
+        pc_handle, index, &source_line.line_number);
     source_line.content     = GetString(pc_handle, kRPVControllerPCSamplingSourceLineContent, index);
 }
 
@@ -4926,7 +5023,6 @@ DataProvider::LoadRoofLineCeilingsRidge(WorkloadInfo&        workload,
                                         bandwidth_ridge_map& bandwidth_ridge)
 {
     double              double_data = 0.0;
-    uint64_t            uint64_data = 0;
     uint64_t            num_entries = 0;
     rocprofvis_result_t result      = rocprofvis_controller_get_uint64(
         roofline_handle, kRPVControllerRooflineNumCeilingsRidge, 0, &num_entries);
@@ -4939,19 +5035,14 @@ DataProvider::LoadRoofLineCeilingsRidge(WorkloadInfo&        workload,
         rocprofvis_controller_roofline_ceiling_compute_type_t   compute_type;
         rocprofvis_controller_roofline_ceiling_bandwidth_type_t bandwidth_type;
         Point                                                   position;
-        result = rocprofvis_controller_get_uint64(
-            roofline_handle, kRPVControllerRooflineCeilingRidgeComputeTypeIndexed, j,
-            &uint64_data);
+        result = Controller::Abi::GetEnum<
+            AbiProperty::RooflineRidgeComputeType>(roofline_handle, j,
+                                                   &compute_type);
         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-        compute_type = static_cast<rocprofvis_controller_roofline_ceiling_compute_type_t>(
-            uint64_data);
-        result = rocprofvis_controller_get_uint64(
-            roofline_handle, kRPVControllerRooflineCeilingRidgeBandwidthTypeIndexed, j,
-            &uint64_data);
+        result = Controller::Abi::GetEnum<
+            AbiProperty::RooflineRidgeBandwidthType>(roofline_handle, j,
+                                                     &bandwidth_type);
         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-        bandwidth_type =
-            static_cast<rocprofvis_controller_roofline_ceiling_bandwidth_type_t>(
-                uint64_data);
         result = rocprofvis_controller_get_double(
             roofline_handle, kRPVControllerRooflineCeilingRidgeXIndexed, j, &double_data);
         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
@@ -4971,7 +5062,6 @@ DataProvider::LoadRoofLineCeilingsCompute(WorkloadInfo&        workload,
                                           compute_ridge_map&   compute_ridge)
 {
     double   double_data = 0.0;
-    uint64_t uint64_data = 0;
     uint64_t num_entries = 0;
     
     rocprofvis_result_t result = rocprofvis_controller_get_uint64(
@@ -4980,13 +5070,10 @@ DataProvider::LoadRoofLineCeilingsCompute(WorkloadInfo&        workload,
     for(uint64_t j = 0; j < num_entries; j++)
     {
         WorkloadInfo::Roofline::Ceiling ceiling;
-        result = rocprofvis_controller_get_uint64(
-            roofline_handle, kRPVControllerRooflineCeilingComputeTypeIndexed, j,
-            &uint64_data);
+        result = Controller::Abi::GetEnum<
+            AbiProperty::RooflineCeilingComputeType>(roofline_handle, j,
+                                                     &ceiling.compute_type);
         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-        ceiling.compute_type =
-            static_cast<rocprofvis_controller_roofline_ceiling_compute_type_t>(
-                uint64_data);
         ROCPROFVIS_ASSERT(compute_ridge.count(ceiling.compute_type) > 0);
         for(const std::pair<const rocprofvis_controller_roofline_ceiling_bandwidth_type_t,
                             Point>& ridge : compute_ridge.at(ceiling.compute_type))
@@ -5024,7 +5111,6 @@ DataProvider::LoadRoofLineCeilingsBandwidth(WorkloadInfo&        workload,
                                             bandwidth_ridge_map& bandwidth_ridge)
 {
     double   double_data = 0.0;
-    uint64_t uint64_data = 0;
     uint64_t num_entries = 0;
     
     rocprofvis_result_t result = rocprofvis_controller_get_uint64(
@@ -5033,13 +5119,10 @@ DataProvider::LoadRoofLineCeilingsBandwidth(WorkloadInfo&        workload,
     for(uint64_t j = 0; j < num_entries; j++)
     {
         WorkloadInfo::Roofline::Ceiling ceiling;
-        result = rocprofvis_controller_get_uint64(
-            roofline_handle, kRPVControllerRooflineCeilingBandwidthTypeIndexed, j,
-            &uint64_data);
+        result = Controller::Abi::GetEnum<
+            AbiProperty::RooflineCeilingBandwidthType>(
+            roofline_handle, j, &ceiling.bandwidth_type);
         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-        ceiling.bandwidth_type =
-            static_cast<rocprofvis_controller_roofline_ceiling_bandwidth_type_t>(
-                uint64_data);
         ROCPROFVIS_ASSERT(bandwidth_ridge.count(ceiling.bandwidth_type) > 0);
         for(const std::pair<const rocprofvis_controller_roofline_ceiling_compute_type_t,
                             Point>& ridge : bandwidth_ridge.at(ceiling.bandwidth_type))
@@ -5080,20 +5163,16 @@ DataProvider::LoadRoofLineNumKernels(WorkloadInfo&        workload,
 {
     uint64_t num_entries = 0;
     double   double_data = 0.0;
-    uint64_t uint64_data = 0;
     rocprofvis_result_t result = rocprofvis_controller_get_uint64(
         roofline_handle, kRPVControllerRooflineNumKernels, 0, &num_entries);
     ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
     for(uint64_t j = 0; j < num_entries; j++)
     {
         KernelInfo::Roofline::Intensity intensity;
-        result = rocprofvis_controller_get_uint64(
-            roofline_handle, kRPVControllerRooflineKernelIntensityTypeIndexed, j,
-            &uint64_data);
+        result = Controller::Abi::GetEnum<
+            AbiProperty::RooflineKernelIntensityType>(roofline_handle, j,
+                                                      &intensity.type);
         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-        intensity.type =
-            static_cast<rocprofvis_controller_roofline_kernel_intensity_type_t>(
-                uint64_data);
         result = rocprofvis_controller_get_double(
             roofline_handle, kRPVControllerRooflineKernelIntensityXIndexed, j,
             &double_data);
@@ -5104,11 +5183,10 @@ DataProvider::LoadRoofLineNumKernels(WorkloadInfo&        workload,
             &double_data);
         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
         intensity.position.y = double_data;
-        uint32_t kernel_id;
-        result = rocprofvis_controller_get_uint64(
-            roofline_handle, kRPVControllerRooflineKernelIdIndexed, j, &uint64_data);
+        uint32_t kernel_id = 0;
+        result = Controller::Abi::GetUnsigned<AbiProperty::RooflineKernelId>(
+            roofline_handle, j, &kernel_id);
         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-        kernel_id = static_cast<uint32_t>(uint64_data);
         ROCPROFVIS_ASSERT(workload.kernels.count(kernel_id));
         workload.roofline.max.y = std::max(workload.roofline.max.y, intensity.position.y);
         workload.roofline.min.y = std::min(workload.roofline.min.y, intensity.position.y);
@@ -5134,7 +5212,6 @@ DataProvider::ProcessMetricsRequest(RequestInfo& req)
         {
             uint64_t                                   num_metrics = 0;
             rocprofvis_controller_metric_source_type_t metric_type;
-            uint64_t                                   uint_data;
             double                                     double_data;
             std::string                                string_data;
             rocprofvis_result_t result = rocprofvis_controller_get_uint64(
@@ -5142,41 +5219,37 @@ DataProvider::ProcessMetricsRequest(RequestInfo& req)
             ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
             for(uint64_t i = 0; i < num_metrics; i++)
             {
-                result = rocprofvis_controller_get_uint64(
-                    container, kRPVControllerMetricsContainerMetricSourceTypeIndexed, i,
-                    &uint_data);
+                result = Controller::Abi::GetEnum<AbiProperty::MetricSourceType>(
+                    container, i, &metric_type);
                 ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-                metric_type =
-                    static_cast<rocprofvis_controller_metric_source_type_t>(uint_data);
+                uint32_t source_id = 0;
                 if(metric_type == kRPVControllerMetricSourceTypeWorkload)
                 {
-                    result = rocprofvis_controller_get_uint64(
-                        container, kRPVControllerMetricsContainerWorkloadIdIndexed, i,
-                        &uint_data);
+                    result = Controller::Abi::GetUnsigned<
+                        AbiProperty::MetricsContainerWorkloadId>(container, i,
+                                                                 &source_id);
                 }
                 else if(metric_type == kRPVControllerMetricSourceTypeKernel)
                 {
-                    result = rocprofvis_controller_get_uint64(
-                        container, kRPVControllerMetricsContainerKernelIdIndexed, i,
-                        &uint_data);
+                    result = Controller::Abi::GetUnsigned<
+                        AbiProperty::MetricsContainerKernelId>(container, i,
+                                                               &source_id);
                 }
                 else
                 {
                     result = kRocProfVisResultInvalidType;
                 }
                 ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-                uint32_t source_id   = static_cast<uint32_t>(uint_data);
                 string_data          = GetString(container,
                                                  kRPVControllerMetricsContainerMetricIdIndexed, i);
-                auto category_id_end = string_data.find('.');
-                auto table_id_end    = string_data.find('.', category_id_end + 1);
-                // Should be chunked by datamodel if separate components are desirable...
-                uint32_t category_id = static_cast<uint32_t>(
-                    std::stoll(string_data.substr(0, category_id_end)));
-                uint32_t table_id = static_cast<uint32_t>(
-                    std::stoll(string_data.substr(category_id_end + 1, table_id_end)));
-                uint32_t entry_id = static_cast<uint32_t>(
-                    std::stoll(string_data.substr(table_id_end + 1)));
+                uint32_t category_id = 0;
+                uint32_t table_id    = 0;
+                uint32_t entry_id    = 0;
+                if(!ParseMetricId(string_data, category_id, table_id, entry_id))
+                {
+                    spdlog::error("Invalid metric identifier '{}'", string_data);
+                    continue;
+                }
                 string_data = GetString(
                     container, kRPVControllerMetricsContainerMetricValueNameIndexed, i);
                 result = rocprofvis_controller_get_double(

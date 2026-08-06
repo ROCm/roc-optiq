@@ -39,7 +39,7 @@ private:
     rocprofvis_result_t Fetch(rocprofvis_dm_trace_t dm_handle, uint64_t index, uint64_t count, Array& array, Future* future) final;
 
     // Stored arguments from Setup()
-    uint64_t m_workload_id;
+    uint32_t m_workload_id;
     std::vector<std::string> m_metric_selectors;  // Format: "metric_id:value_name"
     std::unordered_map<uint64_t, std::string>
         m_column_filters;  // column_index → expression

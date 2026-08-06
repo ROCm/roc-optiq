@@ -14,6 +14,24 @@ Arguments::Arguments()
 
 Arguments::~Arguments() {}
 
+rocprofvis_result_t Arguments::GetCount(rocprofvis_property_t property,
+                                        uint64_t* count) const noexcept
+{
+    if(!count)
+    {
+        return kRocProfVisResultInvalidArgument;
+    }
+
+    auto it = m_args.find(property);
+    if(it == m_args.end())
+    {
+        return kRocProfVisResultInvalidArgument;
+    }
+
+    *count = static_cast<uint64_t>(it->second.size());
+    return kRocProfVisResultSuccess;
+}
+
 rocprofvis_controller_object_type_t Arguments::GetType(void) 
 {
     return kRPVControllerObjectTypeArguments;
@@ -76,25 +94,25 @@ rocprofvis_result_t Arguments::GetString(rocprofvis_property_t property, uint64_
 rocprofvis_result_t Arguments::SetUInt64(rocprofvis_property_t property, uint64_t index,
                                 uint64_t value) 
 {
-    rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
-    if(m_args[property].size() < index + 1)
+    std::vector<Data>& values = m_args[property];
+    rocprofvis_result_t result = CheckedEnsureIndex(values, index);
+    if(result == kRocProfVisResultSuccess)
     {
-        m_args[property].resize(index + 1);
+        values[index].SetType(kRPVControllerPrimitiveTypeUInt64);
+        result = values[index].SetUInt64(value);
     }
-    m_args[property][index].SetType(kRPVControllerPrimitiveTypeUInt64);
-    result = m_args[property][index].SetUInt64(value);
     return result;
 }
 rocprofvis_result_t Arguments::SetDouble(rocprofvis_property_t property, uint64_t index,
                                 double value) 
 {
-    rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
-    if(m_args[property].size() < index + 1)
+    std::vector<Data>& values = m_args[property];
+    rocprofvis_result_t result = CheckedEnsureIndex(values, index);
+    if(result == kRocProfVisResultSuccess)
     {
-        m_args[property].resize(index + 1);
+        values[index].SetType(kRPVControllerPrimitiveTypeDouble);
+        result = values[index].SetDouble(value);
     }
-    m_args[property][index].SetType(kRPVControllerPrimitiveTypeDouble);
-    result = m_args[property][index].SetDouble(value);
     return result;
 }
 rocprofvis_result_t Arguments::SetObject(rocprofvis_property_t property, uint64_t index,
@@ -103,12 +121,13 @@ rocprofvis_result_t Arguments::SetObject(rocprofvis_property_t property, uint64_
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     if(value)
     {
-        if(m_args[property].size() < index + 1)
+        std::vector<Data>& values = m_args[property];
+        result = CheckedEnsureIndex(values, index);
+        if(result == kRocProfVisResultSuccess)
         {
-            m_args[property].resize(index + 1);
+            values[index].SetType(kRPVControllerPrimitiveTypeObject);
+            result = values[index].SetObject(value);
         }
-        m_args[property][index].SetType(kRPVControllerPrimitiveTypeObject);
-        result = m_args[property][index].SetObject(value);
     }
     return result;
 }
@@ -118,12 +137,13 @@ rocprofvis_result_t Arguments::SetString(rocprofvis_property_t property, uint64_
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     if(value)
     {
-        if(m_args[property].size() < index + 1)
+        std::vector<Data>& values = m_args[property];
+        result = CheckedEnsureIndex(values, index);
+        if(result == kRocProfVisResultSuccess)
         {
-            m_args[property].resize(index + 1);
+            values[index].SetType(kRPVControllerPrimitiveTypeString);
+            result = values[index].SetString(value);
         }
-        m_args[property][index].SetType(kRPVControllerPrimitiveTypeString);
-        result = m_args[property][index].SetString(value);
     }
     return result;
 }

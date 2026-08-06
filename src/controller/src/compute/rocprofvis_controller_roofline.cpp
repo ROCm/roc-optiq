@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 #include "rocprofvis_controller_roofline.h"
+#include "rocprofvis_controller_safe_operations_helper.h"
 
 namespace RocProfVis
 {
@@ -304,16 +305,19 @@ rocprofvis_result_t Roofline::SetUInt64(rocprofvis_property_t property, uint64_t
     {
         case kRPVControllerRooflineNumCeilingsCompute:
         {
-            m_ceilings_compute.resize(value);
-            result = kRocProfVisResultSuccess;
+            result = CheckedResize(m_ceilings_compute, value);
             break;
         }
         case kRPVControllerRooflineCeilingComputeTypeIndexed:
         {
             if(index < m_ceilings_compute.size())
             {
-                m_ceilings_compute[index].type = (rocprofvis_controller_roofline_ceiling_compute_type_t)value;
-                result = kRocProfVisResultSuccess;
+                result = CheckedAssignEnum(
+                    value, m_ceilings_compute[index].type,
+                    [](rocprofvis_controller_roofline_ceiling_compute_type_t type) {
+                        return type >= __KRPVControllerRooflineCeilingComputeTypeFirst &&
+                               type < __KRPVControllerRooflineCeilingComputeTypeLast;
+                    });
             }
             else
             {
@@ -323,16 +327,20 @@ rocprofvis_result_t Roofline::SetUInt64(rocprofvis_property_t property, uint64_t
         }
         case kRPVControllerRooflineNumCeilingsBandwidth:
         {
-            m_ceilings_bandwidth.resize(value);
-            result = kRocProfVisResultSuccess;
+            result = CheckedResize(m_ceilings_bandwidth, value);
             break;
         }
         case kRPVControllerRooflineCeilingBandwidthTypeIndexed:
         {
             if(index < m_ceilings_bandwidth.size())
             {
-                m_ceilings_bandwidth[index].type = (rocprofvis_controller_roofline_ceiling_bandwidth_type_t)value;
-                result = kRocProfVisResultSuccess;
+                result = CheckedAssignEnum(
+                    value, m_ceilings_bandwidth[index].type,
+                    [](rocprofvis_controller_roofline_ceiling_bandwidth_type_t type) {
+                        return type >=
+                                   __KRPVControllerRooflineCeilingBandwidthTypeFirst &&
+                               type < __KRPVControllerRooflineCeilingBandwidthTypeLast;
+                    });
             }
             else
             {
@@ -342,16 +350,19 @@ rocprofvis_result_t Roofline::SetUInt64(rocprofvis_property_t property, uint64_t
         }
         case kRPVControllerRooflineNumCeilingsRidge:
         {
-            m_ceilings_ridge.resize(value);
-            result = kRocProfVisResultSuccess;
+            result = CheckedResize(m_ceilings_ridge, value);
             break;
         }
         case kRPVControllerRooflineCeilingRidgeComputeTypeIndexed:
         {
             if(index < m_ceilings_ridge.size())
             {
-                m_ceilings_ridge[index].compute_type = (rocprofvis_controller_roofline_ceiling_compute_type_t)value;
-                result = kRocProfVisResultSuccess;
+                result = CheckedAssignEnum(
+                    value, m_ceilings_ridge[index].compute_type,
+                    [](rocprofvis_controller_roofline_ceiling_compute_type_t type) {
+                        return type >= __KRPVControllerRooflineCeilingComputeTypeFirst &&
+                               type < __KRPVControllerRooflineCeilingComputeTypeLast;
+                    });
             }
             else
             {
@@ -363,8 +374,13 @@ rocprofvis_result_t Roofline::SetUInt64(rocprofvis_property_t property, uint64_t
         {
             if(index < m_ceilings_ridge.size())
             {
-                m_ceilings_ridge[index].bandwidth_type = (rocprofvis_controller_roofline_ceiling_bandwidth_type_t)value;
-                result = kRocProfVisResultSuccess;
+                result = CheckedAssignEnum(
+                    value, m_ceilings_ridge[index].bandwidth_type,
+                    [](rocprofvis_controller_roofline_ceiling_bandwidth_type_t type) {
+                        return type >=
+                                   __KRPVControllerRooflineCeilingBandwidthTypeFirst &&
+                               type < __KRPVControllerRooflineCeilingBandwidthTypeLast;
+                    });
             }
             else
             {
@@ -374,16 +390,15 @@ rocprofvis_result_t Roofline::SetUInt64(rocprofvis_property_t property, uint64_t
         }
         case kRPVControllerRooflineNumKernels:
         {
-            m_intensities.resize(value);
-            result = kRocProfVisResultSuccess;
+            result = CheckedResize(m_intensities, value);
             break;
         }
         case kRPVControllerRooflineKernelIdIndexed:
         {
             if(index < m_intensities.size())
             {
-                m_intensities[index].kernel_id = (uint32_t)value;
-                result = kRocProfVisResultSuccess;
+                result = CheckedAssignUnsigned(value,
+                                               m_intensities[index].kernel_id);
             }
             else
             {
@@ -395,8 +410,12 @@ rocprofvis_result_t Roofline::SetUInt64(rocprofvis_property_t property, uint64_t
         {
             if(index < m_intensities.size())
             {
-                m_intensities[index].type = (rocprofvis_controller_roofline_kernel_intensity_type_t)value;
-                result = kRocProfVisResultSuccess;
+                result = CheckedAssignEnum(
+                    value, m_intensities[index].type,
+                    [](rocprofvis_controller_roofline_kernel_intensity_type_t type) {
+                        return type >= kRPVControllerRooflineKernelIntensityTypeHBM &&
+                               type <= kRPVControllerRooflineKernelIntensityTypeLDS;
+                    });
             }
             else
             {

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 #include "rocprofvis_controller_summary_metrics.h"
+#include "rocprofvis_controller_safe_operations_helper.h"
 #include <algorithm>
 #include <unordered_map>
 
@@ -259,14 +260,17 @@ rocprofvis_result_t SummaryMetrics::SetUInt64(rocprofvis_property_t property, ui
     {
         case kRPVControllerSummaryMetricPropertyAggregationLevel:
         {
-            m_aggregation_level = (rocprofvis_controller_summary_aggregation_level_t)value;
-            result = kRocProfVisResultSuccess;
+            result = CheckedAssignEnum(
+                value, m_aggregation_level,
+                [](rocprofvis_controller_summary_aggregation_level_t level) {
+                    return level >= __kRPVControllerSummaryAggregationLevelFirst &&
+                           level < __kRPVControllerSummaryAggregationLevelLast;
+                });
             break;
         }
         case kRPVControllerSummaryMetricPropertyNumSubMetrics:
         {
-            m_sub_metrics.resize(value);
-            result = kRocProfVisResultSuccess;
+            result = CheckedResize(m_sub_metrics, value);
             break;
         }
         case kRPVControllerSummaryMetricPropertyId:
@@ -277,21 +281,26 @@ rocprofvis_result_t SummaryMetrics::SetUInt64(rocprofvis_property_t property, ui
         }
         case kRPVControllerSummaryMetricPropertyNumKernels:
         {
-            if(m_gpu)
+            if(!m_gpu)
             {
-                m_gpu.value().top_kernels.resize(value);
+                m_gpu = GPUMetrics{};
             }
-            else
-            {
-                m_gpu = std::make_optional<GPUMetrics>({std::nullopt, std::nullopt, std::vector<KernelMetrics>(value)});
-            }
-            result = kRocProfVisResultSuccess;
+            result = CheckedResize(m_gpu.value().top_kernels, value);
             break;
         }
         case kRPVControllerSummaryMetricPropertyProcessorType:
         {
-            m_processor_type = (rocprofvis_controller_processor_type_t)value;
-            result = kRocProfVisResultSuccess;
+            rocprofvis_controller_processor_type_t processor_type{};
+            result = CheckedAssignEnum(
+                value, processor_type,
+                [](rocprofvis_controller_processor_type_t type) {
+                    return type >= kRPVControllerProcessorTypeUndefined &&
+                           type <= kRPVControllerProcessorTypeNIC;
+                });
+            if(result == kRocProfVisResultSuccess)
+            {
+                m_processor_type = processor_type;
+            }
             break;
         }
         case kRPVControllerSummaryMetricPropertyProcessorTypeIndex:

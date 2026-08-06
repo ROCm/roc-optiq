@@ -74,7 +74,12 @@ Table::UnpackArguments(Arguments& args, TableArguments*& out) const
     if(result == kRocProfVisResultSuccess)
     {
         out->m_sort_column = sort_column;
-        out->m_sort_order = (rocprofvis_controller_sort_order_t)sort_order;
+        result = CheckedAssignEnum(
+            sort_order, out->m_sort_order,
+            [](rocprofvis_controller_sort_order_t order) {
+                return order == kRPVControllerSortOrderAscending ||
+                       order == kRPVControllerSortOrderDescending;
+            });
     }
     return result;
 }

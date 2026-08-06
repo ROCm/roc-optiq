@@ -3,6 +3,7 @@
 
 #include "rocprofvis_controller_workload.h"
 #include "rocprofvis_controller_kernel.h"
+#include "rocprofvis_controller_safe_operations_helper.h"
 #include "rocprofvis_controller_roofline.h"
 #include "rocprofvis_controller_reference.h"
 #include "rocprofvis_controller_string_table.h"
@@ -369,36 +370,38 @@ rocprofvis_result_t Workload::SetUInt64(rocprofvis_property_t property, uint64_t
     {
         case kRPVControllerWorkloadId:
         {
-            m_id = (uint32_t)value;
-            result = kRocProfVisResultSuccess;
+            result = CheckedAssignUnsigned(value, m_id);
             break;
         }
         case kRPVControllerWorkloadSystemInfoNumEntries:
         {
-            m_system_info.keys.resize(value);
-            m_system_info.values.resize(value);
-            result = kRocProfVisResultSuccess;
+            result = CheckedResize(m_system_info.keys, value);
+            if(result == kRocProfVisResultSuccess)
+            {
+                result = CheckedResize(m_system_info.values, value);
+            }
             break;
         }
         case kRPVControllerWorkloadConfigurationNumEntries:
         {
-            m_profiling_config.keys.resize(value);
-            m_profiling_config.values.resize(value);
-            result = kRocProfVisResultSuccess;
+            result = CheckedResize(m_profiling_config.keys, value);
+            if(result == kRocProfVisResultSuccess)
+            {
+                result = CheckedResize(m_profiling_config.values, value);
+            }
             break;
         }
         case kRPVControllerWorkloadNumAvailableMetrics:
         {
-            m_available_metrics.resize(value);
-            result = kRocProfVisResultSuccess;
+            result = CheckedResize(m_available_metrics, value);
             break;
         }
         case kRPVControllerWorkloadAvailableMetricCategoryIdIndexed:
         {
             if(index < m_available_metrics.size())
             {
-                m_available_metrics[index].category_id = (uint32_t)value;
-                result = kRocProfVisResultSuccess;
+                result = CheckedAssignUnsigned(
+                    value, m_available_metrics[index].category_id);
             }
             else
             {
@@ -410,8 +413,8 @@ rocprofvis_result_t Workload::SetUInt64(rocprofvis_property_t property, uint64_t
         {
             if(index < m_available_metrics.size())
             {
-                m_available_metrics[index].table_id = (uint32_t)value;
-                result = kRocProfVisResultSuccess;
+                result = CheckedAssignUnsigned(
+                    value, m_available_metrics[index].table_id);
             }
             else
             {
@@ -421,16 +424,15 @@ rocprofvis_result_t Workload::SetUInt64(rocprofvis_property_t property, uint64_t
         }
         case kRPVControllerWorkloadNumMetricValueNames:
         {
-            m_metric_value_names.resize(value);
-            result = kRocProfVisResultSuccess;
+            result = CheckedResize(m_metric_value_names, value);
             break;
         }
         case kRPVControllerWorkloadMetricValueNameCategoryIdIndexed:
         {
             if(index < m_metric_value_names.size())
             {
-                m_metric_value_names[index].category_id = (uint32_t)value;
-                result = kRocProfVisResultSuccess;
+                result = CheckedAssignUnsigned(
+                    value, m_metric_value_names[index].category_id);
             }
             else
             {
@@ -442,8 +444,8 @@ rocprofvis_result_t Workload::SetUInt64(rocprofvis_property_t property, uint64_t
         {
             if(index < m_metric_value_names.size())
             {
-                m_metric_value_names[index].table_id = (uint32_t)value;
-                result = kRocProfVisResultSuccess;
+                result = CheckedAssignUnsigned(
+                    value, m_metric_value_names[index].table_id);
             }
             else
             {
@@ -453,8 +455,7 @@ rocprofvis_result_t Workload::SetUInt64(rocprofvis_property_t property, uint64_t
         }
         case kRPVControllerWorkloadNumKernels:
         {
-            m_kernels.resize(value);
-            result = kRocProfVisResultSuccess;
+            result = CheckedResize(m_kernels, value);
             break;
         }
         default:

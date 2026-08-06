@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 #include "rocprofvis_controller_timeline.h"
+#include "rocprofvis_controller_safe_operations_helper.h"
 #include "rocprofvis_controller_future.h"
 #include "rocprofvis_controller_track.h"
 #include "rocprofvis_controller_event.h"
@@ -252,8 +253,7 @@ rocprofvis_result_t Timeline::SetUInt64(rocprofvis_property_t property, uint64_t
                     delete m_graphs[i];
                     m_graphs[i] = nullptr;
                 }
-                m_graphs.resize(value);
-                result = (m_graphs.size() == value) ? kRocProfVisResultSuccess : kRocProfVisResultMemoryAllocError;
+                result = CheckedResize(m_graphs, value);
             }
             else
             {

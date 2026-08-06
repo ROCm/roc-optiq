@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 #include "rocprofvis_controller_trace_system.h"
+#include "rocprofvis_controller_safe_operations_helper.h"
 #include "rocprofvis_controller_arguments.h"
 #include "rocprofvis_controller_array.h"
 #include "rocprofvis_controller_event.h"
@@ -1060,8 +1061,7 @@ rocprofvis_result_t SystemTrace::SetUInt64(rocprofvis_property_t property, uint6
                     delete m_tracks[i];
                     m_tracks[i] = nullptr;
                 }
-                m_tracks.resize(value);
-                result = m_tracks.size() == value ? kRocProfVisResultSuccess : kRocProfVisResultMemoryAllocError;
+                result = CheckedResize(m_tracks, value);
             }
             else
             {
@@ -1071,9 +1071,17 @@ rocprofvis_result_t SystemTrace::SetUInt64(rocprofvis_property_t property, uint6
         }
         case kRPVControllerSystemNotifySelected:
         {
-            if(value > 0 && m_mem_mgmt != nullptr)
+            if(value > 1)
             {
-                m_mem_mgmt->Configure(2.0);
+                result = kRocProfVisResultOutOfRange;
+            }
+            else
+            {
+                if(value > 0 && m_mem_mgmt != nullptr)
+                {
+                    m_mem_mgmt->Configure(2.0);
+                }
+                result = kRocProfVisResultSuccess;
             }
             break;
         }

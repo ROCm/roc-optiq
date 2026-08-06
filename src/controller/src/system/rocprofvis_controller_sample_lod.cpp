@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 #include "rocprofvis_controller_sample_lod.h"
+#include "rocprofvis_controller_safe_operations_helper.h"
 #include "rocprofvis_controller_reference.h"
 #include "rocprofvis_core_assert.h"
 
@@ -291,10 +292,16 @@ rocprofvis_result_t SampleLOD::SetUInt64(rocprofvis_property_t property, uint64_
         {
             if(value != m_children.size())
             {
-                m_children.resize(value);
+                result = CheckedResize(m_children, value);
             }
-            CalculateChildValues();
-            result = kRocProfVisResultSuccess;
+            else
+            {
+                result = kRocProfVisResultSuccess;
+            }
+            if(result == kRocProfVisResultSuccess)
+            {
+                CalculateChildValues();
+            }
             break;
         }
         case kRPVControllerSampleChildIndex:

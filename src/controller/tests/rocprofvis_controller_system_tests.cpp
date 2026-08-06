@@ -3,6 +3,9 @@
 
 #include "rocprofvis_c_interface.h"
 #include "rocprofvis_controller.h"
+#include "rocprofvis_controller_cpp_abi_wrapper.h"
+#include "rocprofvis_controller_arguments.h"
+#include "rocprofvis_controller_array.h"
 #include "rocprofvis_controller_job_system.h"
 #include "rocprofvis_core.h"
 #include "system/rocprofvis_controller_event.h"
@@ -21,6 +24,109 @@
 #include <vector>
 
 std::string g_input_file = "sample/trace_70b_1024_32.rpd";
+
+TEST_CASE("Controller integer ABI checks narrow unsigned ranges")
+{
+    RocProfVis::Controller::Event event(1, 0.0, 1.0);
+    rocprofvis_handle_t* event_handle =
+        reinterpret_cast<rocprofvis_handle_t*>(&event);
+
+    REQUIRE(rocprofvis_controller_set_uint64(
+                event_handle, kRPVControllerEventLevel, 0, UINT8_MAX) ==
+            kRocProfVisResultSuccess);
+
+    uint8_t level = 0;
+    REQUIRE(RocProfVis::Controller::Abi::GetUnsigned<
+                RocProfVis::Controller::Abi::Property::EventLevel>(
+                event_handle, 0, &level) ==
+            kRocProfVisResultSuccess);
+    REQUIRE(level == UINT8_MAX);
+
+    REQUIRE(rocprofvis_controller_set_uint64(
+                event_handle, kRPVControllerEventLevel, 0,
+                static_cast<uint64_t>(UINT8_MAX) + 1) ==
+            kRocProfVisResultOutOfRange);
+    REQUIRE(RocProfVis::Controller::Abi::GetUnsigned<
+                RocProfVis::Controller::Abi::Property::EventLevel>(
+                event_handle, 0, &level) ==
+            kRocProfVisResultSuccess);
+    REQUIRE(level == UINT8_MAX);
+
+    uint16_t uint16_value = 17;
+    REQUIRE(RocProfVis::Controller::Abi::CheckedAssignUnsigned(
+                static_cast<uint64_t>(UINT16_MAX) + 1, &uint16_value) ==
+            kRocProfVisResultOutOfRange);
+    REQUIRE(uint16_value == 17);
+
+    uint32_t uint32_value = 19;
+    REQUIRE(RocProfVis::Controller::Abi::CheckedAssignUnsigned(
+                static_cast<uint64_t>(UINT32_MAX) + 1, &uint32_value) ==
+            kRocProfVisResultOutOfRange);
+    REQUIRE(uint32_value == 19);
+
+    RocProfVis::Controller::Arguments arguments;
+    rocprofvis_handle_t* arguments_handle =
+        reinterpret_cast<rocprofvis_handle_t*>(&arguments);
+
+    REQUIRE(arguments.SetUInt64(kRPVControllerTableArgsNumTracks, 0,
+                                static_cast<uint64_t>(UINT16_MAX) + 1) ==
+            kRocProfVisResultSuccess);
+    uint16_value = 23;
+    REQUIRE(RocProfVis::Controller::Abi::GetUnsigned<
+                RocProfVis::Controller::Abi::Property::TableArgsNumTracks>(
+                arguments_handle, 0, &uint16_value) ==
+            kRocProfVisResultOutOfRange);
+    REQUIRE(uint16_value == 23);
+
+    REQUIRE(arguments.SetUInt64(kRPVControllerMetricArgsWorkloadId, 0,
+                                static_cast<uint64_t>(UINT32_MAX) + 1) ==
+            kRocProfVisResultSuccess);
+    uint32_value = 29;
+    REQUIRE(RocProfVis::Controller::Abi::GetUnsigned<
+                RocProfVis::Controller::Abi::Property::MetricArgsWorkloadId>(
+                arguments_handle, 0, &uint32_value) ==
+            kRocProfVisResultOutOfRange);
+    REQUIRE(uint32_value == 29);
+}
+
+TEST_CASE("Controller integer ABI validates booleans enums and sizes")
+{
+    bool bool_value = true;
+    REQUIRE(RocProfVis::Controller::Abi::CheckedAssignBoolean(2, &bool_value) ==
+            kRocProfVisResultOutOfRange);
+    REQUIRE(bool_value);
+
+    RocProfVis::Controller::Arguments arguments;
+    rocprofvis_handle_t* arguments_handle =
+        reinterpret_cast<rocprofvis_handle_t*>(&arguments);
+    REQUIRE(arguments.SetUInt64(kRPVControllerSystemNotifySelected, 0, 2) ==
+            kRocProfVisResultSuccess);
+    REQUIRE(RocProfVis::Controller::Abi::GetBoolean<
+                RocProfVis::Controller::Abi::Property::SystemNotifySelected>(
+                arguments_handle, 0, &bool_value) ==
+            kRocProfVisResultOutOfRange);
+    REQUIRE(bool_value);
+
+    rocprofvis_controller_sort_order_t sort_order =
+        kRPVControllerSortOrderAscending;
+    REQUIRE(RocProfVis::Controller::Abi::CheckedAssignEnum(
+                99, &sort_order,
+                RocProfVis::Controller::Abi::IsValidSortOrder) ==
+            kRocProfVisResultInvalidEnum);
+    REQUIRE(sort_order == kRPVControllerSortOrderAscending);
+
+    RocProfVis::Controller::Array array;
+    REQUIRE(array.SetUInt64(kRPVControllerArrayNumEntries, 0, UINT64_MAX) ==
+            kRocProfVisResultOutOfRange);
+    uint64_t array_size = UINT64_MAX;
+    REQUIRE(array.GetUInt64(kRPVControllerArrayNumEntries, 0, &array_size) ==
+            kRocProfVisResultSuccess);
+    REQUIRE(array_size == 0);
+
+    REQUIRE(arguments.SetUInt64(kRPVControllerMetricArgsKernelIdIndexed,
+                                UINT64_MAX, 1) ==
+            kRocProfVisResultOutOfRange);
+}
 
 int
 main(int argc, char** argv)

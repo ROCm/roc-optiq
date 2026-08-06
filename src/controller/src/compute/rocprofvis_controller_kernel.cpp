@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 #include "rocprofvis_controller_kernel.h"
+#include "rocprofvis_controller_safe_operations_helper.h"
 
 namespace RocProfVis
 {
@@ -138,14 +139,12 @@ rocprofvis_result_t Kernel::SetUInt64(rocprofvis_property_t property, uint64_t i
     {
         case kRPVControllerKernelId:
         {
-            m_id = (uint32_t)value;
-            result = kRocProfVisResultSuccess;
+            result = CheckedAssignUnsigned(value, m_id);
             break;
         }
         case kRPVControllerKernelInvocationCount:
         {
-            m_invocation_count = (uint32_t)value;
-            result = kRocProfVisResultSuccess;
+            result = CheckedAssignUnsigned(value, m_invocation_count);
             break;
         }
         case kRPVControllerKernelDurationTotal:
@@ -156,26 +155,22 @@ rocprofvis_result_t Kernel::SetUInt64(rocprofvis_property_t property, uint64_t i
         }
         case kRPVControllerKernelDurationMin:
         {
-            m_duration_min = (uint32_t)value;
-            result = kRocProfVisResultSuccess;
+            result = CheckedAssignUnsigned(value, m_duration_min);
             break;
         }
         case kRPVControllerKernelDurationMax:
         {
-            m_duration_max = (uint32_t)value;
-            result = kRocProfVisResultSuccess;
+            result = CheckedAssignUnsigned(value, m_duration_max);
             break;
         }
         case kRPVControllerKernelDurationMedian:
         {
-            m_duration_median = (uint32_t)value;
-            result = kRocProfVisResultSuccess;
+            result = CheckedAssignUnsigned(value, m_duration_median);
             break;
         }
         case kRPVControllerKernelDurationMean:
         {
-            m_duration_mean = (uint32_t)value;
-            result = kRocProfVisResultSuccess;
+            result = CheckedAssignUnsigned(value, m_duration_mean);
             break;
         }
         default:

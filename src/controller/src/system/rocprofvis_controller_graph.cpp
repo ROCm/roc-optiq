@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 #include "rocprofvis_controller_graph.h"
+#include "rocprofvis_controller_safe_operations_helper.h"
 #include "rocprofvis_controller_array.h"
 #include "rocprofvis_controller_event.h"
 #include "rocprofvis_controller_reference.h"
@@ -835,8 +836,11 @@ Graph::SetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t value)
     {
         case kRPVControllerGraphType:
         {
-            m_type = (rocprofvis_controller_graph_type_t) value;
-            result = kRocProfVisResultSuccess;
+            result = CheckedAssignEnum(
+                value, m_type, [](rocprofvis_controller_graph_type_t type) {
+                    return type == kRPVControllerGraphTypeLine ||
+                           type == kRPVControllerGraphTypeFlame;
+                });
             break;
         }
         case kRPVControllerGraphId:

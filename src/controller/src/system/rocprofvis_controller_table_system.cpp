@@ -464,8 +464,8 @@ SystemTable::UnpackArguments(Arguments& args, TableArguments*& out) const
     if(result == kRocProfVisResultSuccess)
     {
         std::vector<uint32_t> tracks;
-        uint64_t num_tracks = 0;
-        uint64_t num_op_types = 0;
+        uint16_t num_tracks   = 0;
+        uint16_t num_op_types = 0;
         double   end_ts     = 0;
         double   start_ts   = 0;
         std::string where;
@@ -486,6 +486,13 @@ SystemTable::UnpackArguments(Arguments& args, TableArguments*& out) const
             switch (table_type)
             {
                 case kRPVControllerTableTypeEvents:
+                case kRPVControllerTableTypeSearchResults:
+                case kRPVControllerTableTypeSummaryKernelInstances:
+                case kRPVControllerTableTypeInstrumentedEvents:
+                case kRPVControllerTableTypeDispatchEvents:
+                case kRPVControllerTableTypeMemoryAllocationEvents:
+                case kRPVControllerTableTypeMemoryCopyEvents:
+                case kRPVControllerTableTypeSampledEvents:
                 {
                     track_type = kRPVControllerTrackTypeEvents;
                     break;
@@ -497,6 +504,7 @@ SystemTable::UnpackArguments(Arguments& args, TableArguments*& out) const
                 }
                 default:
                 {
+                    result = kRocProfVisResultInvalidEnum;
                     break;
                 }
             }
@@ -514,14 +522,26 @@ SystemTable::UnpackArguments(Arguments& args, TableArguments*& out) const
         
         if(result == kRocProfVisResultSuccess)
         {
-            args.GetUInt64(kRPVControllerTableArgsNumTracks, 0, &num_tracks);
-            args.GetUInt64(kRPVControllerTableArgsNumOpTypes, 0, &num_op_types);
+            result = args.GetUnsigned(kRPVControllerTableArgsNumTracks, 0,
+                                      &num_tracks);
+            if(result == kRocProfVisResultSuccess)
+            {
+                result = args.GetUnsigned(kRPVControllerTableArgsNumOpTypes, 0,
+                                          &num_op_types);
+            }
         }
         
         if(result == kRocProfVisResultSuccess)
         {
             if(num_tracks > 0 && num_op_types == 0)
             {
+                uint64_t track_count = 0;
+                result = args.GetCount(kRPVControllerTableArgsTracksIndexed,
+                                       &track_count);
+                if(result == kRocProfVisResultSuccess && num_tracks > track_count)
+                {
+                    result = kRocProfVisResultInvalidArgument;
+                }
                 for (uint32_t i = 0; i < num_tracks && (result == kRocProfVisResultSuccess); i++)
                 {
                     TrackRef track_ref;
@@ -536,8 +556,13 @@ SystemTable::UnpackArguments(Arguments& args, TableArguments*& out) const
                             result = track_ref->GetUInt64(kRPVControllerTrackId, 0, &track_id);
                             if(result == kRocProfVisResultSuccess)
                             {
-                                ROCPROFVIS_ASSERT(track_id <= UINT32_MAX);
-                                tracks.push_back((uint32_t)track_id);
+                                uint32_t converted_track_id = 0;
+                                result = CheckedAssignUnsigned(track_id,
+                                                               converted_track_id);
+                                if(result == kRocProfVisResultSuccess)
+                                {
+                                    tracks.push_back(converted_track_id);
+                                }
                             }
                         }
                         else
@@ -553,14 +578,33 @@ SystemTable::UnpackArguments(Arguments& args, TableArguments*& out) const
             }
             else if(num_tracks == 0 && num_op_types > 0)
             {
+                uint64_t operation_count = 0;
+                result = args.GetCount(kRPVControllerTableArgsOpTypesIndexed,
+                                       &operation_count);
+                if(result == kRocProfVisResultSuccess &&
+                   num_op_types > operation_count)
+                {
+                    result = kRocProfVisResultInvalidArgument;
+                }
                 for (uint32_t i = 0; i < num_op_types && (result == kRocProfVisResultSuccess); i++)
                 {
                     uint64_t op_type_uint64 = kRocProfVisDmOperationNoOp;
-                    result = args.GetUInt64(kRPVControllerTableArgsOpTypesIndexed, i, &op_type_uint64);
+                    result = args.GetUInt64(kRPVControllerTableArgsOpTypesIndexed,
+                                            i, &op_type_uint64);
                     if(result == kRocProfVisResultSuccess)
                     {
-                        ROCPROFVIS_ASSERT(op_type_uint64 < kRocProfVisDmNumOperation);
-                        tracks.push_back(static_cast<uint32_t>(TABLE_QUERY_PACK_OP_TYPE(op_type_uint64)));
+                        rocprofvis_dm_event_operation_t operation{};
+                        result = CheckedAssignEnum(
+                            op_type_uint64, operation,
+                            [](rocprofvis_dm_event_operation_t value) {
+                                return value >= kRocProfVisDmOperationNoOp &&
+                                       value < kRocProfVisDmNumOperation;
+                            });
+                        if(result == kRocProfVisResultSuccess)
+                        {
+                            tracks.push_back(static_cast<uint32_t>(
+                                TABLE_QUERY_PACK_OP_TYPE(operation)));
+                        }
                     }                
                 }
             }

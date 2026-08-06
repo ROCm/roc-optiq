@@ -4,6 +4,7 @@
 #include "rocprofvis_ssh_session.h"
 #include "rocprofvis_appmonitor.h"
 #include "rocprofvis_controller.h"
+#include "rocprofvis_controller_cpp_abi_wrapper.h"
 #include "rocprofvis_core_assert.h"
 #include "rocprofvis_events.h"
 #include <algorithm>
@@ -15,6 +16,8 @@ namespace RocProfVis
 {
 namespace View
 {
+
+    namespace AbiProperty = Controller::Abi::Property;
 
     std::vector<SshSession*> SshSession::s_active_sessions;
 
@@ -100,10 +103,12 @@ namespace View
                 return kRPVControllerSshIdle;
         }
 
-        uint64_t remote_status = kRPVControllerSshIdle;
+        rocprofvis_controller_remote_status_t remote_status =
+            kRPVControllerSshIdle;
         if (m_connection)
         {
-            rocprofvis_controller_get_uint64(m_connection, kRPVControllerRemoteStatus, 0, &remote_status);
+            Controller::Abi::GetEnum<AbiProperty::RemoteStatus>(
+                m_connection, 0, &remote_status);
         }
 
         bool terminal =
@@ -287,7 +292,8 @@ namespace View
             result = rocprofvis_controller_set_string(args, kRPVControllerRemoteTypeHost, 0, host);
             ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
-            result = rocprofvis_controller_set_uint64(args, kRPVControllerRemoteTypePort, 0, port);
+            result = Controller::Abi::SetUnsigned<AbiProperty::RemotePort>(
+                args, 0, static_cast<uint16_t>(port));
             ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
             if (result == kRocProfVisResultSuccess)
@@ -327,8 +333,10 @@ namespace View
         if (m_connection)
         {
             result = kRocProfVisResultPending;
-            uint64_t remote_status;
-            rocprofvis_result_t remote_result = rocprofvis_controller_get_uint64(m_connection, kRPVControllerRemoteStatus, 0, &remote_status);
+            rocprofvis_controller_remote_status_t remote_status{};
+            rocprofvis_result_t remote_result =
+                Controller::Abi::GetEnum<AbiProperty::RemoteStatus>(
+                    m_connection, 0, &remote_status);
             if(remote_result == kRocProfVisResultSuccess)
             {
                 if (remote_status == kRPVControllerSshCompleted)
@@ -396,8 +404,10 @@ namespace View
                 rocprofvis_controller_remote_cancel_prompt(m_connection);
                 return kRocProfVisResultFailedSshCommunication;
             };
-        uint64_t remote_status;
-        rocprofvis_result_t remote_result = rocprofvis_controller_get_uint64(m_connection, kRPVControllerRemoteStatus, 0, &remote_status);
+        rocprofvis_controller_remote_status_t remote_status{};
+        rocprofvis_result_t remote_result =
+            Controller::Abi::GetEnum<AbiProperty::RemoteStatus>(
+                m_connection, 0, &remote_status);
         if (kRocProfVisResultSuccess == remote_result)
         {
             if (remote_status == kRPVControllerSshCompleted)
@@ -419,9 +429,10 @@ namespace View
                 }
                 m_auth_request_built = true;
 
-                uint64_t prompt_type = 0;
-                rocprofvis_result_t prompt_result = rocprofvis_controller_get_uint64(
-                    m_connection, kRPVControllerRemoteUserPromptType, 0, &prompt_type);
+                rocprofvis_controller_user_prompt_type_t prompt_type{};
+                rocprofvis_result_t prompt_result =
+                    Controller::Abi::GetEnum<AbiProperty::RemoteUserPromptType>(
+                        m_connection, 0, &prompt_type);
                 if (kRocProfVisResultSuccess == prompt_result)
                 {
                     if (prompt_type == kRPVControllerUserPromptTypeGeneric)
@@ -453,13 +464,15 @@ namespace View
                             {
                                 return Failure();
                             }
-                            uint64_t echo = 0;
-                            prompt_result = rocprofvis_controller_get_uint64(m_connection, kRPVControllerRemoteUserGenericPromptEchoIndexed, i, &echo);
+                            bool echo = false;
+                            prompt_result = Controller::Abi::GetBoolean<
+                                AbiProperty::RemoteGenericPromptEcho>(m_connection, i,
+                                                                      &echo);
                             if (kRocProfVisResultSuccess != prompt_result)
                             {
                                 return Failure();
                             }
-                            prompts.push_back({ prompt,(bool)echo });
+                            prompts.push_back({ prompt, echo });
                         }
                             
                         m_prompt_request.Update(name, instruction, prompts);
@@ -469,7 +482,8 @@ namespace View
                     if (prompt_type == kRPVControllerUserPromptTypeHostKey)
                     {
                         std::string host;
-                        uint64_t port, state;
+                        uint16_t port = 0;
+                        bool     state = false;
                         std::string fingerprint_sha256_b64;
                         std::string key_type;
                         prompt_result = GetString(m_connection, kRPVControllerRemoteUserHostKeyPromptHost, 0, host);
@@ -477,7 +491,9 @@ namespace View
                         {
                             return Failure();
                         }
-                        prompt_result = rocprofvis_controller_get_uint64(m_connection, kRPVControllerRemoteUserHostKeyPromptPort, 0, &port);
+                        prompt_result = Controller::Abi::GetUnsigned<
+                            AbiProperty::RemoteHostKeyPromptPort>(m_connection, 0,
+                                                                  &port);
                         if (kRocProfVisResultSuccess != prompt_result)
                         {
                             return Failure();
@@ -492,14 +508,18 @@ namespace View
                         {
                             return Failure();
                         }
-                        prompt_result = rocprofvis_controller_get_uint64(m_connection, kRPVControllerRemoteUserHostKeyPromptState, 0, &state);
+                        prompt_result = Controller::Abi::GetBoolean<
+                            AbiProperty::RemoteHostKeyPromptState>(m_connection, 0,
+                                                                   &state);
                         if (kRocProfVisResultSuccess != prompt_result)
                         {
                             return Failure();
                         }
                         else
                         {
-                            m_host_key_request.Update(host, port, fingerprint_sha256_b64, key_type, (HostKeyState)state);
+                            m_host_key_request.Update(
+                                host, port, fingerprint_sha256_b64, key_type,
+                                static_cast<HostKeyState>(state));
                         }
                     }
                 }
@@ -553,8 +573,10 @@ namespace View
         rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
         if (m_connection)
         {
-            uint64_t remote_status;
-            rocprofvis_result_t remote_result = rocprofvis_controller_get_uint64(m_connection, kRPVControllerRemoteStatus, 0, (uint64_t*)&remote_status);
+            rocprofvis_controller_remote_status_t remote_status{};
+            rocprofvis_result_t remote_result =
+                Controller::Abi::GetEnum<AbiProperty::RemoteStatus>(
+                    m_connection, 0, &remote_status);
             if (kRocProfVisResultSuccess == remote_result)
             {
                 if (remote_status == kRPVControllerSshCompleted)
@@ -616,9 +638,10 @@ namespace View
             result = rocprofvis_controller_set_string(args, kRPVControllerRemoteTypeFilePathDst, 0, local_path);
             ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
-            uint64_t direction = 0; //download
+            uint8_t direction = 0; //download
 
-            result = rocprofvis_controller_set_uint64(args, kRPVControllerRemoteTypeDirection, 0, direction);
+            result = Controller::Abi::SetUnsigned<AbiProperty::RemoteDirection>(
+                args, 0, direction);
             ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
             if (result == kRocProfVisResultSuccess)
@@ -635,8 +658,10 @@ namespace View
         rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
         if (m_connection)
         {
-            uint64_t remote_status;
-            rocprofvis_result_t remote_result = rocprofvis_controller_get_uint64(m_connection, kRPVControllerRemoteStatus, 0, &remote_status);
+            rocprofvis_controller_remote_status_t remote_status{};
+            rocprofvis_result_t remote_result =
+                Controller::Abi::GetEnum<AbiProperty::RemoteStatus>(
+                    m_connection, 0, &remote_status);
             if (kRocProfVisResultSuccess == remote_result)
             {
                 if (remote_status == kRPVControllerSshCompleted)
@@ -726,8 +751,10 @@ namespace View
         rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
         if (m_connection)
         {
-            uint64_t remote_status;
-            rocprofvis_result_t remote_result = rocprofvis_controller_get_uint64(m_connection, kRPVControllerRemoteStatus, 0, &remote_status);
+            rocprofvis_controller_remote_status_t remote_status{};
+            rocprofvis_result_t remote_result =
+                Controller::Abi::GetEnum<AbiProperty::RemoteStatus>(
+                    m_connection, 0, &remote_status);
             if (kRocProfVisResultSuccess == remote_result)
             {
                 if (remote_status == kRPVControllerSshFailed)
@@ -809,7 +836,9 @@ namespace View
         rocprofvis_controller_arguments_t* args = rocprofvis_controller_arguments_alloc();
         ROCPROFVIS_ASSERT(args != nullptr);
 
-        result = rocprofvis_controller_set_uint64(args, kRPVControllerUserNumResponses, 0, responses.size());
+        result = Controller::Abi::SetUnsigned(
+            args, kRPVControllerUserNumResponses, 0,
+            static_cast<uint64_t>(responses.size()));
         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
         if (result == kRocProfVisResultSuccess)

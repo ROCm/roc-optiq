@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 #include "rocprofvis_controller_track.h"
+#include "rocprofvis_controller_safe_operations_helper.h"
 #include "rocprofvis_controller_array.h"
 #include "rocprofvis_controller_event.h"
 #include "rocprofvis_controller_sample.h"
@@ -763,8 +764,11 @@ rocprofvis_result_t Track::SetUInt64(rocprofvis_property_t property, uint64_t in
         }
         case kRPVControllerTrackType:
         {
-            m_type = (rocprofvis_controller_track_type_t)value;
-            result = kRocProfVisResultSuccess;
+            result = CheckedAssignEnum(
+                value, m_type, [](rocprofvis_controller_track_type_t type) {
+                    return type == kRPVControllerTrackTypeSamples ||
+                           type == kRPVControllerTrackTypeEvents;
+                });
             break;
         }
         case kRPVControllerTrackNumberOfEntries:
@@ -793,16 +797,19 @@ rocprofvis_result_t Track::SetUInt64(rocprofvis_property_t property, uint64_t in
         }
         case kRPVControllerTrackNumberOfOperationTypes:
         {
-            m_operation_types.resize(value);
-            result = kRocProfVisResultSuccess;
+            result = CheckedResize(m_operation_types, value);
             break;
         }
         case kRPVControllerTrackOperationTypeIndexed:
         {
             if(index < m_operation_types.size())
             {
-                m_operation_types[index] = (rocprofvis_dm_event_operation_t)value;
-                result = kRocProfVisResultSuccess;
+                result = CheckedAssignEnum(
+                    value, m_operation_types[index],
+                    [](rocprofvis_dm_event_operation_t operation) {
+                        return operation >= kRocProfVisDmOperationNoOp &&
+                               operation <= kRocProfVisDmMultipleOperations;
+                    });
             }
             else
             {

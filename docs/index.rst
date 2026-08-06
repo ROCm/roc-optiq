@@ -17,6 +17,53 @@ The ROCm Optiq project repository is located at `https://github.com/ROCm/roc-opt
 
   ROCm Optiq is in beta. Running production workloads is not recommended.
 
+User Interface Overview
+======================
+
+Systems Profiler Trace View:
+
+.. image:: /images/ui_sections.png
+   :alt: ROCm Optiq Systems Profiler UI layout
+
+1. **System topology tree** — expand nodes to see the relationships between tracks, toggle track visibility, and jump to a track in
+   the timeline.
+2. **Timeline view** — the list of tracks holding event and counter data. Tracks can be resized, reordered, and configured
+   individually; right-click for track options.
+3. **Advanced details area** — tabbed detail for the current selection: event table, sample table, event details, track details,
+   top events, and annotations.
+4. **Histogram area** — an event density histogram. The area currently in view is highlighted and can be dragged to scroll the timeline.
+5. **Toolbar** — flow rendering modes, annotations, event search, bookmarks, the minimap toggle, and view reset.
+
+Compute Profiler Analysis View:
+
+.. image:: /images/ui_sections.png
+   :alt: ROCm Optiq Compute Profiler UI layout
+
+1. **Toolbar** - Choose workload and kernel to inspect.
+2. **Tab view** - Switch between the Summary, Kernel details, Table view, Baseline comparison, Workload details
+3. **Work area** - Displays the selected view. 
+
+How to use ROCm Optiq
+=====================
+
+.. grid:: 2
+  :gutter: 3
+
+  .. grid-item-card:: Install
+
+    * :doc:`Install ROCm Optiq </install/optiq-install>`
+
+  .. grid-item-card:: How to
+
+    * :doc:`View trace data <how-to/view-trace>`
+    * :doc:`View analysis data <how-to/view-analysis>`
+    * :doc:`Customize your project <how-to/customize-views>`
+
+  .. grid-item-card:: Reference
+
+    * :doc:`Command-line support <reference/cli-support>`
+    * :doc:`Keyboard shortcuts <reference/keyboard-shortcuts>`
+
 ROCm Optiq (Beta) 0.5.0
 =======================
 
@@ -96,22 +143,6 @@ Fixes
 - Fixed the Welcome page sometimes appearing only partially drawn until the user moved the mouse or clicked (idle wait is now bounded). 
 - Fixed a macOS app packaging issue that could prevent the app bundle from being properly signed (static GLFW no longer staged into the bundle). 
 
-.. grid:: 2
-  :gutter: 3
-
-  .. grid-item-card:: Install
-
-    * :doc:`Install ROCm Optiq </install/optiq-install>`
-
-  .. grid-item-card:: How to
-
-    * :doc:`View trace data <how-to/view-trace>`
-    * :doc:`View analysis data <how-to/view-analysis>`
-    * :doc:`Customize your project <how-to/customize-views>`
-
-  .. grid-item-card:: Reference
-
-    * :doc:`Command-line support <reference/cli-support>`
 
 To contribute to the documentation, refer to the
 `Programming Guide in the GitHub repo <https://github.com/ROCm/roc-optiq/blob/main/CODING.md>`_.

@@ -1,0 +1,28 @@
+Systems Profiler Trace View Keyboard Shortcuts
+==============================================
+
+.. list-table::
+	 :header-rows: 1
+
+	 * - Action
+		 - Shortcut
+	 * - Pan left / right
+		 - ``A`` / ``D`` or ``Left`` / ``Right``
+	 * - Scroll tracks up / down
+		 - ``Up`` / ``Down``
+	 * - Pan or scroll faster (2x)
+		 - ``Shift`` + the above
+	 * - Zoom in / out at the cursor
+		 - ``W`` / ``S``
+	 * - Select a time range
+		 - ``Ctrl`` + left-drag
+	 * - Mark selected events as a time range, or clear it
+		 - ``M``
+	 * - Clear the time range selection
+		 - ``Esc``
+	 * - Multi-select events
+		 - ``Ctrl`` + click
+	 * - Save the current view to a bookmark
+		 - ``Ctrl`` + ``0``-``9``
+	 * - Restore a bookmark
+		 - ``0``-``9``

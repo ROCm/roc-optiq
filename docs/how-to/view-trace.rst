@@ -236,6 +236,41 @@ The **Histogram** provides event density that is normalized across all tracks vi
 When the **Timeline View** is zoomed in, the area currently in view is highlighted on the **Histogram**. 
 The highlighted area in the **Histogram** can be dragged to scroll the **Timeline View**.
 
+
+.. _time-range-filter:
+
+Set a time range filter
+-----------------------
+
+Set a time range filter in the :ref:`timeline` to limit the data displayed to a specific period. 
+
+To set a time range filter, press and hold **Ctrl** while dragging your mouse in the **Timeline View** to select a range.
+
+.. image:: ../images/time-range-filter.gif
+   :width: 800
+   :alt: Timeline View with a time range selected, showing the shaded selection area with draggable boundary handles
+
+Once a time range is selected, the selection boundaries can be adjusted by dragging them. 
+The active time range filter applies to event and sample counter details in the :ref:`advanced` section.
+
+If one or more events are selected, the **Make Time Range Selection** option displays on the timeline context menu when you right-click:
+
+|make|
+
+Selecting this sets a time-range filter with boundaries at the event's start and end times, or at the first start time and last end time if multiple events are selected. 
+
+.. tip::
+
+   Press **M** for a shortcut to **Make Time Range Selection** when one or more events are selected.  
+
+To clear the time range selection, press **Esc** or right-click and select **Remove Selection**:
+
+|remove|
+
+.. note::
+
+   When a time-range filter is active, all events intersecting that time-range remain at full brightness; events outside the range are dimmed. 
+
 .. _advanced:
 
 Advanced Details
@@ -368,3 +403,14 @@ Search for events using the search box on the main **Toolbar**.
 - Clicking on a row in the search results will bring the selected event into view on the :ref:`timeline`. 
 - Clicking **X** clears the search results.
 - The search can match multiple substrings at once. Multiple search tokens must be surrounded by quotation marks without spaces (for example: ``“term1””term2”``).
+
+Save trace selection (Trim trace)
+=================================
+
+When there's an active time range filter, select **Edit** > **Save Trace Selection** to trim the trace:
+
+.. image:: ../images/save-trace.png
+   :width: 200
+   :alt: Edit menu with the Save Trace Selection option highlighted
+
+This creates a new trace file containing only the events in the selected time range.

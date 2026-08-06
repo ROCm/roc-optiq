@@ -43,7 +43,7 @@ public:
     // instance whose index is exposed via kRPVControllerTrackInstanceId.
     SystemTrace(const std::vector<std::string>& filenames);
 
-    virtual ~SystemTrace() = default;
+    virtual ~SystemTrace();
 
     virtual rocprofvis_result_t Init() override;
 

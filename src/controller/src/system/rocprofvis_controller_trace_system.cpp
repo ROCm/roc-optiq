@@ -74,6 +74,8 @@ SystemTrace::SystemTrace(const std::vector<std::string>& filenames)
 
 }
 
+SystemTrace::~SystemTrace() = default;
+
 rocprofvis_result_t SystemTrace::Init()
 {
     rocprofvis_result_t result = kRocProfVisResultUnknownError;

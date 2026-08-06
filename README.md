@@ -102,7 +102,7 @@ Walkthroughs for each area are in the how-to guides:
 
 ## Capturing traces or analysis data
 
-When capturing or traces or compute analysis data ensure that the rocpd or analysis db output formats are enabled.
+When capturing System traces or Compute analysis data ensure that the rocpd or analysis db output formats are enabled.
 
 ### Systems Profiler
 

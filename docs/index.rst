@@ -36,7 +36,7 @@ Systems Profiler Trace View:
 
 Compute Profiler Analysis View:
 
-.. image:: /images/ui_computer_sections.png
+.. image:: /images/ui_compute_sections.png
    :alt: ROCm Optiq Compute Profiler UI layout
 
 1. **Toolbar** - Choose workload and kernel to inspect.

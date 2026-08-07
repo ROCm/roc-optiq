@@ -101,7 +101,32 @@ private:
     std::string                                    m_config_path;
 
 private:
+    struct track_lookup_t;
+
     rocprofvis_result_t LoadRocpd(Future* future);
+    rocprofvis_result_t OpenRocpdDatabase(rocprofvis_dm_database_t& database);
+    rocprofvis_result_t ReadRocpdMetadata(rocprofvis_dm_database_t database,
+                                          Future* future);
+    rocprofvis_result_t LoadRocpdTracks(size_t& trace_size);
+    rocprofvis_result_t LoadRocpdTrack(rocprofvis_dm_track_t dm_track_handle,
+                                      uint64_t dm_track_type, uint64_t track_id,
+                                      size_t& trace_size, uint64_t& graph_index,
+                                      track_lookup_t& track_lookup);
+    rocprofvis_result_t ReadRocpdTrackExtData(Track& track, uint64_t dm_track_type,
+                                              track_lookup_t& track_lookup);
+    rocprofvis_result_t ReadRocpdTrackExtDataEntry(
+        Track& track, uint32_t index, std::string& category, std::string& name,
+        std::string& value);
+    void UpdateRocpdTrackLookup(Track& track, uint64_t dm_track_type,
+                                uint64_t instance_id, const std::string& category,
+                                const std::string& name, const std::string& value,
+                                track_lookup_t& track_lookup);
+    rocprofvis_result_t AddRocpdGraph(Track* track, uint64_t dm_track_type,
+                                      uint64_t track_id, uint64_t& graph_index);
+    rocprofvis_result_t LoadRocpdTopology();
+    rocprofvis_result_t GetRocpdTrackString(Track& track,
+                                            rocprofvis_property_t property,
+                                            uint32_t index, std::string& value);
 
     void DbgPrintTopologyNodeData(rocprofvis_dm_topology_node node, int level);
 

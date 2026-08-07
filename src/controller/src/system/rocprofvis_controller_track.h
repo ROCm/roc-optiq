@@ -7,6 +7,8 @@
 #include "rocprofvis_controller_segment.h"
 #include "rocprofvis_controller_handle.h"
 #include "rocprofvis_c_interface.h"
+#include <cfloat>
+#include <condition_variable>
 #include <map>
 #include <string>
 #include <memory>
@@ -36,47 +38,111 @@ public:
     rocprofvis_result_t Fetch(double start, double end, Array& array, uint64_t& index, Future* future);
 
     rocprofvis_controller_object_type_t GetType(void) final;
+    rocprofvis_controller_track_type_t GetTrackType() const;
     rocprofvis_dm_track_t GetDmHandle(void);
+    uint64_t GetId() const;
+    uint64_t GetNumberOfEntries() const;
+    uint64_t GetExtDataNumberOfEntries() const;
+    rocprofvis_result_t GetInclusiveMemoryUsage(uint64_t* value);
+
     Handle* GetContext(void) override;
     SegmentTimeline* GetSegments();
     rocprofvis_result_t GetBucketValues(size_t buckets_num, Array& array);
 
     // Handlers for getters.
-    rocprofvis_result_t GetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t* value) final;
-    rocprofvis_result_t GetDouble(rocprofvis_property_t property, uint64_t index, double* value) final;
-    rocprofvis_result_t GetObject(rocprofvis_property_t property, uint64_t index, rocprofvis_handle_t** value) final;
-    rocprofvis_result_t GetString(rocprofvis_property_t property, uint64_t index, char* value, uint32_t* length) final;
+    rocprofvis_result_t GetObject(rocprofvis_property_t property, uint64_t index, rocprofvis_handle_t** value) override final;
+    rocprofvis_result_t GetDouble(rocprofvis_property_t property, uint64_t index, double* value) override final;
+    rocprofvis_result_t GetString(rocprofvis_property_t property, uint64_t index, char* value, uint32_t* length) override final;
 
-    rocprofvis_result_t SetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t value) final;
-    rocprofvis_result_t SetDouble(rocprofvis_property_t property, uint64_t index, double value) final;
-    rocprofvis_result_t SetObject(rocprofvis_property_t property, uint64_t index, rocprofvis_handle_t* value) final;
-    rocprofvis_result_t SetString(rocprofvis_property_t property, uint64_t index, char const* value) final;
+    rocprofvis_result_t SetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t value) override final;
+    rocprofvis_result_t SetDouble(rocprofvis_property_t property, uint64_t index, double value) override final;
+    rocprofvis_result_t SetObject(rocprofvis_property_t property, uint64_t index, rocprofvis_handle_t* value) override final;
+    rocprofvis_result_t SetString(rocprofvis_property_t property, uint64_t index, char const* value) override final;
+
+    rocprofvis_result_t FillBounds();
+    rocprofvis_result_t FillMetadata();
+    rocprofvis_result_t FillTopologyIds();
 
 private:
-    uint64_t m_id;
-    uint64_t m_node;
-    uint64_t m_agent_id_or_pid;
-    uint64_t m_queue_id_or_tid;
-    uint64_t m_num_entries;
+    rocprofvis_result_t GetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t* value) override final;
+
+    struct fetch_range_t
+    {
+        double start;
+        double end;
+    };
+
+    struct trace_read_request_t
+    {
+        rocprofvis_db_future_t future;
+        double                 start;
+        double                 end;
+    };
+    struct track_bounds_t
+    {
+        uint64_t num_entries     = 0;
+        double   start_timestamp = DBL_MIN;
+        double   end_timestamp   = DBL_MAX;
+        double   min_value       = 0.0;
+        double   max_value       = 0.0;
+    };
+
+    struct track_metadata_t
+    {
+        std::string category;
+        std::string main_name;
+        std::string sub_name;
+        std::vector<rocprofvis_dm_event_operation_t> operation_types;
+    };
+
+    struct track_topology_ids_t
+    {
+        uint64_t node_id         = 0;
+        uint64_t agent_id_or_pid = 0;
+        uint64_t queue_id_or_tid = 0;
+    };
+
+    struct track_topology_links_t
+    {
+        Thread*  thread  = nullptr;
+        Queue*   queue   = nullptr;
+        Stream*  stream  = nullptr;
+        Counter* counter = nullptr;
+    };
+
+    uint64_t                           m_id;
     rocprofvis_controller_track_type_t m_type;
-    SegmentTimeline m_segments;
-    double m_start_timestamp;
-    double m_end_timestamp;
-    double m_min_value;
-    double m_max_value;
-    std::string m_category;
-    std::string m_main_name;
-    std::string m_sub_name;
-    std::vector<rocprofvis_dm_event_operation_t> m_operation_types;
-    rocprofvis_dm_track_t m_dm_handle;
-    Thread* m_thread;
-    Queue* m_queue;
-    Stream* m_stream;
-    Counter* m_counter;
-    SystemTrace* m_ctx;
-    std::condition_variable_any  m_cv;
+    rocprofvis_dm_track_t              m_dm_handle;
+    SystemTrace*                       m_ctx;
+    track_bounds_t                     m_bounds;
+    track_metadata_t                   m_metadata;
+    track_topology_ids_t               m_topology_ids;
+    track_topology_links_t             m_topology_links;
+    SegmentTimeline                    m_segments;
+    std::condition_variable_any        m_state_changed;
 
 private:
+
+    fetch_range_t CalculateFetchRange(double start, double end) const;
+
+    std::vector<trace_read_request_t> ScheduleTraceReadRequests(
+        rocprofvis_dm_database_t database, const fetch_range_t& fetch_range,
+        int num_requests, Future* future);
+
+    rocprofvis_result_t WaitForAndProcessTraceReadRequests(
+        rocprofvis_dm_trace_t trace, uint64_t dm_track_type,
+        const std::vector<trace_read_request_t>& requests, Future* future);
+
+    rocprofvis_result_t ProcessTraceReadRequest(
+        rocprofvis_dm_trace_t trace, uint64_t dm_track_type,
+        const trace_read_request_t& request, Future* future);
+
+    rocprofvis_result_t ProcessEventRecords(
+        rocprofvis_dm_slice_t data, uint64_t num_records, Future* future);
+
+    rocprofvis_result_t ProcessPmcSampleRecords(
+        rocprofvis_dm_slice_t data, uint64_t num_records, Future* future);
+
     rocprofvis_result_t FetchFromDataModel(double start, double end, Future* future);
 
     uint32_t GetNumberOfEventsForTimeRange(double start, double end);

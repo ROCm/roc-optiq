@@ -1558,8 +1558,9 @@ through this** - never hardcode `IM_COL32(...)` in feature code.
 - `GetProfilerSettings()` / `SaveProfilerSettings()` persist the launcher's
   output directory, auto-load behavior, recent targets, and last
   profiler/preset/SSH-connection IDs. Deliberately **not** a path to a
-  profiler binary: that is chosen by a tool enum so a settings file cannot
-  decide what gets executed (D9 in `.agents/PROFILER_PIPELINE.md`).
+  profiler binary: which binary runs is chosen by a tool enum, so a settings
+  file that is edited, corrupted, or copied from another machine cannot
+  decide what gets executed. Do not add one back as a convenience.
 
 JSON keys are constants in this header
 (`JSON_KEY_SETTINGS_DISPLAY_DARK_MODE` etc.).
@@ -1903,10 +1904,16 @@ set directory is repeated above the command preview by
 `RenderToolResolutionNotice`, so a profile imported from elsewhere cannot
 silently run a different build. If the tool is not in the configured
 directory the launch fails rather than falling back to `$ROCM_PATH` or
-`$PATH`. Nothing about the profiler binary is persisted in
-`ProfilerSettings` - see D9 in `.agents/PROFILER_PIPELINE.md` for why, and
-for why a *directory* on the profile is a different proposition from the
-`profiler_path` it replaced.
+`$PATH`.
+
+No path to a profiler binary is persisted anywhere. An earlier development
+build kept one in `ProfilerSettings`, which meant an edited or shared
+settings file became the `argv[0]` of the next launch; it was deleted rather
+than sanitized. A directory on the profile is a different proposition
+because the filename still comes from the controller's tool table, so the
+worst a bad value can do is name a directory that lacks the tool - and the
+launcher shows an active directory before Launch, so an imported profile
+cannot redirect a run unnoticed.
 
 ### 13.3 Local vs remote profiling workflows
 

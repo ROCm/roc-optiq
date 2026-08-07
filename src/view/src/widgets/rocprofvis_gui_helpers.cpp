@@ -851,13 +851,13 @@ DrawMenuItemIcon(ImDrawList* draw_list, const char* icon, const ImVec2& row_star
 }
 
 bool
-IconMenuItem(const char* icon, const char* label, bool enabled)
+IconMenuItem(const char* icon, const char* label, bool enabled, bool selected)
 {
     ImDrawList*  draw_list    = ImGui::GetWindowDrawList();
     const ImVec2 row_start    = ImGui::GetCursorScreenPos();
     std::string  padded_label = MenuLabelWithIconPadding(label);
 
-    bool clicked = ImGui::MenuItem(padded_label.c_str(), nullptr, false, enabled);
+    bool clicked = ImGui::MenuItem(padded_label.c_str(), nullptr, selected, enabled);
     DrawMenuItemIcon(draw_list, icon, row_start, enabled);
 
     if(clicked)

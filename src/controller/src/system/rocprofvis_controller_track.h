@@ -39,6 +39,8 @@ public:
 
     rocprofvis_controller_object_type_t GetType(void) final;
     rocprofvis_dm_track_t GetDmHandle(void);
+    uint64_t GetNumberOfEntries() const;
+    uint64_t GetExtDataNumberOfEntries() const;
     Handle* GetContext(void) override;
     SegmentTimeline* GetSegments();
     rocprofvis_result_t GetBucketValues(size_t buckets_num, Array& array);

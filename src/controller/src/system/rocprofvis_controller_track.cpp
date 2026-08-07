@@ -44,6 +44,18 @@ rocprofvis_dm_track_t Track::GetDmHandle(void){
     return m_dm_handle;
 }
 
+uint64_t
+Track::GetNumberOfEntries() const
+{
+    return m_bounds.num_entries;
+}
+
+uint64_t
+Track::GetExtDataNumberOfEntries() const
+{
+    return rocprofvis_dm_get_property_as_uint64(
+        m_dm_handle, kRPVDMNumberOfTrackExtDataRecordsUInt64, 0);
+}
 
 Handle* Track::GetContext(void)
 {
@@ -585,8 +597,8 @@ rocprofvis_result_t Track::GetUInt64(rocprofvis_property_t property, uint64_t in
             }
             case kRPVControllerTrackExtDataNumberOfEntries:
             {
-                *value = rocprofvis_dm_get_property_as_uint64(
-                    m_dm_handle, kRPVDMNumberOfTrackExtDataRecordsUInt64, 0);
+                *value = GetExtDataNumberOfEntries();
+                result = kRocProfVisResultSuccess;
                 break;
             }
             case kRPVControllerTrackNode:

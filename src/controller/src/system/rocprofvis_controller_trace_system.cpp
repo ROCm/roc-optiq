@@ -227,10 +227,8 @@ rocprofvis_result_t SystemTrace::LoadRocpd(Future* future) {
                                             break;
                                         }
 
-                                        uint64_t num_records = 0;
-                                        result = track->GetUInt64(
-                                            kRPVControllerTrackNumberOfEntries, 0,
-                                            &num_records);
+                                        uint64_t num_records =
+                                            track->GetNumberOfEntries();
 
                                         trace_size +=
                                             num_records *
@@ -243,10 +241,8 @@ rocprofvis_result_t SystemTrace::LoadRocpd(Future* future) {
                                                 track->GetDmHandle(),
                                                 kRPVDMTrackInstanceIdUInt64, 0) << 48;
 
-                                        uint64_t num_ext_data = 0;
-                                        track->GetUInt64(
-                                            kRPVControllerTrackExtDataNumberOfEntries, 0,
-                                            &num_ext_data);
+                                        uint64_t num_ext_data =
+                                            track->GetExtDataNumberOfEntries();
                                         for (uint32_t idx = 0; idx < num_ext_data; idx++)
                                         {
                                             std::string ext_data_category;

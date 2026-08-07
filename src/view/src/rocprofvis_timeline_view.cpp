@@ -37,6 +37,7 @@ constexpr float    SCROLL_SPEED                  = 100.0f;
 constexpr uint64_t DEFAULT_LOADING_TIMER         = 150;  // milliseconds
 constexpr float    ARTIFICIAL_SCROLLBAR_HEIGHT   = 18.0f;
 constexpr float    SIDEBAR_SPLITTER_WIDTH        = 5.0f;
+constexpr float    LABEL_PADDING                 = 4.0f;
 constexpr const char* HIDDEN_TRACKS_MENU_POPUP_NAME = "HiddenTracksMenu";
 // Build a text block mirroring the on-hover tooltip (name, timing, and id)
 // for the clipboard.
@@ -1565,6 +1566,42 @@ TimelineView::RenderScrubber(ImVec2 screen_pos)
             m_settings.GetColor(Colors::kSelectionBorder), 3.0f);
     }
 
+    // Duration label for the active range selection, styled like the measure label.
+    if(m_highlighted_region.first != TimelineSelection::INVALID_SELECTION_TIME &&
+       m_highlighted_region.second != TimelineSelection::INVALID_SELECTION_TIME)
+    {
+        double span_ns =
+            std::abs(m_highlighted_region.second - m_highlighted_region.first);
+        std::string label = nanosecond_to_formatted_str(
+            span_ns, m_settings.GetUserSettings().unit_settings.time_format, true);
+        ImVec2 text_size = ImGui::CalcTextSize(label.c_str());
+
+        // TimeToPixel is linear, so the midpoint pixel of the two edges is just the
+        // pixel of their midpoint time.
+        double midpoint_ns =
+            (m_highlighted_region.first + m_highlighted_region.second) * 0.5;
+        float box_half_width = text_size.x * 0.5f + LABEL_PADDING;
+
+        // Center the box on the selection, clamped to keep it on screen when an edge
+        // is scrolled out of view.
+        float min_center_x = window_position.x + box_half_width;
+        float max_center_x = window_position.x + m_tpt->GetGraphSizeX() - box_half_width;
+        float center_x     = std::clamp(window_position.x + m_tpt->TimeToPixel(midpoint_ns),
+                                        min_center_x, max_center_x);
+
+        ImVec2 box_top_left(center_x - box_half_width, cursor_position.y + LABEL_PADDING);
+        ImVec2 box_bottom_right(center_x + box_half_width,
+                                box_top_left.y + text_size.y + LABEL_PADDING * 2.0f);
+        ImVec2 text_pos(center_x - text_size.x * 0.5f, box_top_left.y + LABEL_PADDING);
+
+        draw_list->AddRectFilled(box_top_left, box_bottom_right,
+                                 m_settings.GetColor(Colors::kMeasurementLabelBg));
+        draw_list->AddRect(box_top_left, box_bottom_right,
+                           m_settings.GetColor(Colors::kSelectionBorder));
+        draw_list->AddText(text_pos, m_settings.GetColor(Colors::kMeasurementLabelText),
+                           label.c_str());
+    }
+
     // IsMouseHoveringRect check in screen coordinates
     if(ImGui::IsMouseHoveringRect(window_position,
                                   ImVec2(window_position.x + m_tpt->GetGraphSizeX(),
@@ -1580,12 +1617,11 @@ TimelineView::RenderScrubber(ImVec2 screen_pos)
 
         ImVec2 label_size = ImGui::CalcTextSize(label.c_str());
 
-        constexpr float label_padding = 4.0f;
         ImVec2 rect_pos1 = ImVec2(mouse_position.x, screen_pos.y + container_size.y -
                                                         label_size.y - m_ruler_padding);
-        ImVec2 rect_pos2 = ImVec2(mouse_position.x + label_size.x + label_padding * 2,
+        ImVec2 rect_pos2 = ImVec2(mouse_position.x + label_size.x + LABEL_PADDING * 2,
                                   screen_pos.y + container_size.y - m_ruler_padding);
-        ImVec2 text_pos  = ImVec2(rect_pos1.x + label_padding, rect_pos1.y);
+        ImVec2 text_pos  = ImVec2(rect_pos1.x + LABEL_PADDING, rect_pos1.y);
 
         draw_list->AddRectFilled(rect_pos1, rect_pos2,
                                  m_settings.GetColor(Colors::kScrubberNumberColor));

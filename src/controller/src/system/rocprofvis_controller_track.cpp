@@ -50,6 +50,12 @@ Track::GetId() const
     return m_id;
 }
 
+rocprofvis_controller_track_type_t
+Track::GetTrackType() const
+{
+    return m_type;
+}
+
 uint64_t
 Track::GetNumberOfEntries() const
 {

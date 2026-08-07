@@ -61,6 +61,16 @@ constexpr char const* kToolFileName = "rocprof-sys-run.exe";
 constexpr char const* kToolFileName = "rocprof-sys-run";
 #endif
 
+// An absolute directory that does not exist. It has to be absolute per this
+// platform's rules, or resolution rejects it as relative before it ever looks
+// at the filesystem - and on Windows "absolute" means a drive letter, so a
+// leading '/' alone is not enough.
+#ifdef _WIN32
+constexpr char const* kMissingToolDirectory = "C:\\nonexistent-roc-optiq-tool-directory";
+#else
+constexpr char const* kMissingToolDirectory = "/nonexistent-roc-optiq-tool-directory";
+#endif
+
 // A scratch directory containing a stand-in for a ROCm tool.
 //
 // A tool is named, never pathed, so making a launch run some other program means
@@ -260,8 +270,7 @@ TEST_CASE("A configured tool directory decides where the tool is looked for",
 
     SECTION("a directory that does not exist is a failure")
     {
-        CHECK(ProfilerTool::ResolvePath(kRPVProfilerToolRocprofSysRun,
-                                        "/nonexistent-roc-optiq-tool-directory",
+        CHECK(ProfilerTool::ResolvePath(kRPVProfilerToolRocprofSysRun, kMissingToolDirectory,
                                         resolved) == kRocProfVisResultToolNotFound);
     }
 
@@ -686,8 +695,8 @@ TEST_CASE("A tool that cannot be resolved fails the launch without spawning anyt
 
     REQUIRE(rocprofvis_profiler_config_set_tool(config, kRPVProfilerToolRocprofSysRun) ==
             kRocProfVisResultSuccess);
-    REQUIRE(rocprofvis_profiler_config_set_tool_directory(
-                config, "/nonexistent-roc-optiq-tool-directory") == kRocProfVisResultSuccess);
+    REQUIRE(rocprofvis_profiler_config_set_tool_directory(config, kMissingToolDirectory) ==
+            kRocProfVisResultSuccess);
 
     rocprofvis_profiler_t*          profiler = rocprofvis_profiler_alloc();
     rocprofvis_controller_future_t* future   = rocprofvis_controller_future_alloc();

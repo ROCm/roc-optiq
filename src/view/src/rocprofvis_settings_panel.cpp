@@ -6,6 +6,7 @@
 #include "imgui.h"
 #include "rocprofvis_font_manager.h"
 #include "rocprofvis_settings_manager.h"
+#include "rocprofvis_utils.h"
 #include "widgets/rocprofvis_gui_helpers.h"
 #include "widgets/rocprofvis_notification_manager.h"
 #include "widgets/rocprofvis_widget.h"
@@ -19,6 +20,9 @@ constexpr float kContentHeight            = 450.0f;
 constexpr float kHotkeyCategoryColWidth   = 90.0f;
 constexpr float kHotkeyBindingColWidth    = 120.0f;
 constexpr float kLogViewerInputWidth      = 160.0f;
+
+// Sample duration (1h 23m 45.123456789s) shown in the time-format preview.
+constexpr double kPreviewSampleNs = 5025123456789.0;
 
 namespace RocProfVis
 {
@@ -289,15 +293,15 @@ SettingsPanel::RenderUnitOptions()
     ImGui::AlignTextToFramePadding();
     ImGui::TextUnformatted("Time Format");
     ImGui::SameLine();
-    ImGui::SetNextItemWidth(ImGui::CalcTextSize("Condensed Timecode").x +
+    ImGui::SetNextItemWidth(ImGui::CalcTextSize("Condensed Timecode (mm:ss.ns)").x +
                             2 * style.FramePadding.x +
                             ImGui::GetFrameHeightWithSpacing());
     int time_format_index = static_cast<int>(m_usersettings.unit_settings.time_format);
     // Options must match TimeFormat enum
     PushComboStyles();
     if(ImGui::Combo("##time_format", &time_format_index,
-                    "Timecode\0"
-                    "Condensed Timecode\0"
+                    "Timecode (hh:mm:ss.ns)\0"
+                    "Condensed Timecode (mm:ss.ns)\0"
                     "Seconds\0"
                     "Milliseconds\0"
                     "Microseconds\0"
@@ -308,6 +312,30 @@ SettingsPanel::RenderUnitOptions()
         m_settings_changed = true;
     }
     PopComboStyles();
+
+    // Time format preview, styled to match the font preview above.
+    const TimeFormat selected_format = m_usersettings.unit_settings.time_format;
+    const bool       is_timecode     = selected_format == TimeFormat::kTimecode ||
+                                 selected_format == TimeFormat::kTimecodeCondensed;
+    const std::string preview =
+        nanosecond_to_formatted_str(kPreviewSampleNs, selected_format, !is_timecode);
+
+    ImGui::AlignTextToFramePadding();
+    ImGui::TextUnformatted("Preview");
+    ImGui::SameLine();
+    ImGui::Spacing();
+    ImGui::SameLine();
+    ImGui::GetWindowDrawList()->AddRectFilled(
+        ImGui::GetCursorScreenPos() - ImVec2(style.FramePadding.x, 0),
+        ImGui::GetCursorScreenPos() + ImGui::CalcTextSize(preview.c_str()) +
+            ImVec2(style.FramePadding.x, 2 * style.FramePadding.y),
+        ImGui::GetColorU32(ImGui::GetStyleColorVec4(ImGuiCol_FrameBg)), style.FrameRounding);
+    ImGui::TextUnformatted(preview.c_str());
+    if(ImGui::IsItemHovered())
+    {
+        SetTooltipStyled("Example rendering of a 1h 23m 45.123456789s duration\n"
+                         "using the selected time format.");
+    }
 }
 
 void

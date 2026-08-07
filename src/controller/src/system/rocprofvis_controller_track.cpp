@@ -45,6 +45,12 @@ rocprofvis_dm_track_t Track::GetDmHandle(void){
 }
 
 uint64_t
+Track::GetId() const
+{
+    return m_id;
+}
+
+uint64_t
 Track::GetNumberOfEntries() const
 {
     return m_bounds.num_entries;
@@ -540,6 +546,32 @@ rocprofvis_controller_object_type_t Track::GetType(void)
     return kRPVControllerObjectTypeTrack;
 }
 
+rocprofvis_result_t
+Track::GetInclusiveMemoryUsage(uint64_t* value)
+{
+    if(value == nullptr)
+    {
+        return kRocProfVisResultInvalidArgument;
+    }
+
+    *value = sizeof(Track);
+    rocprofvis_result_t result = kRocProfVisResultSuccess;
+    for(auto& pair : m_segments.GetSegments())
+    {
+        *value += sizeof(pair);
+        uint64_t entry_size = 0;
+        result = pair.second->GetMemoryUsage(
+            &entry_size, kRPVControllerCommonMemoryUsageInclusive);
+        if(result != kRocProfVisResultSuccess)
+        {
+            break;
+        }
+        *value += entry_size;
+    }
+
+    return result;
+}
+
 rocprofvis_result_t Track::GetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t* value)
 {
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
@@ -549,22 +581,7 @@ rocprofvis_result_t Track::GetUInt64(rocprofvis_property_t property, uint64_t in
         {
             case kRPVControllerCommonMemoryUsageInclusive:
             {
-                *value = sizeof(Track);
-                result = kRocProfVisResultSuccess;
-                for(auto& pair : m_segments.GetSegments())
-                {
-                    *value += sizeof(pair);
-                    uint64_t entry_size = 0;
-                    result = pair.second->GetMemoryUsage(&entry_size, (rocprofvis_common_property_t)property);
-                    if (result == kRocProfVisResultSuccess)
-                    {
-                        *value += entry_size;
-                    }
-                    else
-                    {
-                        break;
-                    }
-                }
+                result = GetInclusiveMemoryUsage(value);
                 break;
             }
             case kRPVControllerCommonMemoryUsageExclusive:
@@ -579,7 +596,7 @@ rocprofvis_result_t Track::GetUInt64(rocprofvis_property_t property, uint64_t in
             }
             case kRPVControllerTrackId:
             {
-                *value = m_id;
+                *value = GetId();
                 result = kRocProfVisResultSuccess;
                 break;
             }

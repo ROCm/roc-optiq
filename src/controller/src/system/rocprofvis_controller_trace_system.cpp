@@ -709,7 +709,7 @@ rocprofvis_result_t SystemTrace::GetUInt64(rocprofvis_property_t property, uint6
                 for(const std::unique_ptr<Track>& track : m_tracks)
                 {
                     uint64_t entry_size = 0;
-                    result = track->GetUInt64(property, 0, &entry_size);
+                    result = track->GetInclusiveMemoryUsage(&entry_size);
                     if (result == kRocProfVisResultSuccess)
                     {
                         *value += entry_size;
@@ -825,11 +825,7 @@ rocprofvis_result_t SystemTrace::GetObject(rocprofvis_property_t property, uint6
                 result = kRocProfVisResultOutOfRange;
                 for(const std::unique_ptr<Track>& track : m_tracks)
                 {
-                    uint64_t track_id = 0;
-                    if(track != nullptr &&
-                       track->GetUInt64(kRPVControllerTrackId, 0, &track_id) ==
-                           kRocProfVisResultSuccess &&
-                       track_id == index)
+                    if(track != nullptr && track->GetId() == index)
                     {
                         *value = (rocprofvis_handle_t*)track.get();
                         result = kRocProfVisResultSuccess;

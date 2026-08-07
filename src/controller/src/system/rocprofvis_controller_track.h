@@ -39,8 +39,11 @@ public:
 
     rocprofvis_controller_object_type_t GetType(void) final;
     rocprofvis_dm_track_t GetDmHandle(void);
+    uint64_t GetId() const;
     uint64_t GetNumberOfEntries() const;
     uint64_t GetExtDataNumberOfEntries() const;
+    rocprofvis_result_t GetInclusiveMemoryUsage(uint64_t* value);
+
     Handle* GetContext(void) override;
     SegmentTimeline* GetSegments();
     rocprofvis_result_t GetBucketValues(size_t buckets_num, Array& array);
@@ -117,6 +120,7 @@ private:
     std::condition_variable_any        m_state_changed;
 
 private:
+
     fetch_range_t CalculateFetchRange(double start, double end) const;
 
     std::vector<trace_read_request_t> ScheduleTraceReadRequests(

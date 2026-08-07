@@ -6,6 +6,9 @@
 #include <sstream>
 #include <string.h>
 #include <filesystem>
+#include <functional>
+#include <thread>
+#include <vector>
 
 namespace RocProfVis
 {
@@ -681,14 +684,21 @@ rocprofvis_dm_result_t RocprofDatabase::LoadInformationTables(Future* future) {
 
 
 rocprofvis_dm_result_t RocprofDatabase::LoadMemoryActivityData(Future* future) {
-    rocprofvis_dm_result_t result = kRocProfVisDmResultNotLoaded;
     std::vector<std::thread> threads;
-    auto get_memory_allocation_activity_task = [&](DbInstance * db_instance, std::string query) {
+
+    // Each task writes its result into its own slot to avoid a data race on a
+    // single shared variable. The vector is sized up front so the element
+    // addresses remain stable for the lifetime of the threads.
+    const size_t task_count = DbInstances().size();
+    std::vector<rocprofvis_dm_result_t> results(task_count, kRocProfVisDmResultNotLoaded);
+
+    auto get_memory_allocation_activity_task = [&](rocprofvis_dm_result_t* result_slot, DbInstance * db_instance, std::string query) {
         Future* sub_future = future->AddSubFuture();
-        result = ExecuteSQLQuery(sub_future, db_instance, query.c_str(), &CallbackCaptureMemoryActivity);
+        *result_slot = ExecuteSQLQuery(sub_future, db_instance, query.c_str(), &CallbackCaptureMemoryActivity);
         future->DeleteSubFuture(sub_future);
         };
 
+    size_t task_index = 0;
     for (auto& guid_info : DbInstances())
     {
         std::string table_name = m_metadata_version_control.GetTableName(m_metadata_version_control.kRocOptiqTableMemoryActivity) + GuidAt(guid_info.first.GuidIndex());
@@ -696,6 +706,7 @@ rocprofvis_dm_result_t RocprofDatabase::LoadMemoryActivityData(Future* future) {
         {
             threads.emplace_back(
                 get_memory_allocation_activity_task,
+                &results[task_index++],
                 &guid_info.first,
                 m_query_factory.GetRocprofMemoryAllocActivityLoadQuery());
         }
@@ -703,12 +714,24 @@ rocprofvis_dm_result_t RocprofDatabase::LoadMemoryActivityData(Future* future) {
         {
             threads.emplace_back(
                 get_memory_allocation_activity_task,
+                &results[task_index++],
                 &guid_info.first,
                 m_query_factory.GetRocprofMemoryAllocActivityQuery());
         }
     }
     for (auto& t : threads)
         t.join();
+
+    // Succeed only if every query succeeded; otherwise report the first failure.
+    rocprofvis_dm_result_t result = task_count > 0 ? kRocProfVisDmResultSuccess : kRocProfVisDmResultNotLoaded;
+    for (rocprofvis_dm_result_t task_result : results)
+    {
+        if (task_result != kRocProfVisDmResultSuccess)
+        {
+            result = task_result;
+            break;
+        }
+    }
 
     return result;
 }
@@ -840,6 +863,45 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
         std::string value;
         rocprofvis_dm_result_t result = kRocProfVisDmResultSuccess;
 
+        // Runs `run` once per db instance, each on its own thread, and returns
+        // the first non-success result (or success if all succeed). Each thread
+        // writes only to its own result slot, so there is no data race on a
+        // shared variable. The results vector is sized up front so element
+        // addresses stay stable for the lifetime of the threads.
+        auto run_per_db_instance =
+            [&](const std::function<rocprofvis_dm_result_t(DbInstance*)>& run) -> rocprofvis_dm_result_t
+        {
+            const size_t count = DbInstances().size();
+            std::vector<rocprofvis_dm_result_t> task_results(count, kRocProfVisDmResultSuccess);
+            std::vector<std::thread> per_db_threads;
+            size_t idx = 0;
+            for (auto& guid_info : DbInstances())
+            {
+                per_db_threads.emplace_back(
+                    [&run, &task_results, idx](DbInstance* db_instance)
+                    {
+                        task_results[idx] = run(db_instance);
+                    },
+                    &guid_info.first);
+                ++idx;
+            }
+            for (auto& t : per_db_threads)
+            {
+                t.join();
+            }
+            rocprofvis_dm_result_t aggregate =
+                count > 0 ? kRocProfVisDmResultSuccess : kRocProfVisDmResultNotLoaded;
+            for (rocprofvis_dm_result_t task_result : task_results)
+            {
+                if (task_result != kRocProfVisDmResultSuccess)
+                {
+                    aggregate = task_result;
+                    break;
+                }
+            }
+            return aggregate;
+        };
+
         ShowProgress(2, "Detect Nodes", kRPVDbBusy, future);
         for (auto& file_node : m_db_nodes)
         {
@@ -927,12 +989,11 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
 
         ShowProgress(5, "Adding HIP API tracks", kRPVDbBusy, future );
         {
-            std::vector<std::thread> threads;
             m_add_track_mutex.init(NumDbInstances());
-            auto task = [&](DbInstance* db_instance)
+            result = run_per_db_instance([&](DbInstance* db_instance) -> rocprofvis_dm_result_t
                 {
                     Future* sub_future = future->AddSubFuture();
-                    result = ExecuteSQLQuery(sub_future, db_instance, load_id,
+                    rocprofvis_dm_result_t task_result = ExecuteSQLQuery(sub_future, db_instance, load_id,
                         {
                             m_query_factory.GetRocprofRegionTrackQuery(false),
                             "",
@@ -944,26 +1005,19 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
                         &CallBackAddTrack, &CallBackLoadTrack);
                     future->DeleteSubFuture(sub_future);
                     m_add_track_mutex.unlock(db_instance->GuidIndex());
-                };
-            for (auto& guid_info : DbInstances())
-            {
-                threads.emplace_back(task, &guid_info.first);
-            }
-            for (auto& t : threads)
-                t.join();
+                    return task_result;
+                });
             load_id++;
         }
 
 
         ShowProgress(5, "Adding HIP API Sample tracks", kRPVDbBusy, future );
         {
-            std::vector<std::thread> threads;
             m_add_track_mutex.init(NumDbInstances());
-            auto task = [&](DbInstance* db_instance)
+            result = run_per_db_instance([&](DbInstance* db_instance) -> rocprofvis_dm_result_t
                 {
-
                     Future* sub_future = future->AddSubFuture();
-                    result = ExecuteSQLQuery(sub_future, db_instance, load_id,
+                    rocprofvis_dm_result_t task_result = ExecuteSQLQuery(sub_future, db_instance, load_id,
                     { 
                         m_query_factory.GetRocprofRegionTrackQuery(true),
                         "",
@@ -975,24 +1029,18 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
                     &CallBackAddTrack, &CallBackLoadTrack);
                     future->DeleteSubFuture(sub_future);
                     m_add_track_mutex.unlock(db_instance->GuidIndex());
-                };
-            for (auto& guid_info : DbInstances())
-            {
-                threads.emplace_back(task, &guid_info.first);
-            }
-            for (auto& t : threads)
-                t.join();
+                    return task_result;
+                });
             load_id++;
         }
 
         ShowProgress(5, "Adding kernel dispatch tracks", kRPVDbBusy, future );
         {
-            std::vector<std::thread> threads;
             m_add_track_mutex.init(NumDbInstances());
-            auto task = [&](DbInstance* db_instance)
+            result = run_per_db_instance([&](DbInstance* db_instance) -> rocprofvis_dm_result_t
                 {
                     Future* sub_future = future->AddSubFuture();
-                    result = ExecuteSQLQuery(sub_future, db_instance, load_id,
+                    rocprofvis_dm_result_t task_result = ExecuteSQLQuery(sub_future, db_instance, load_id,
                     { 
                         m_query_factory.GetRocprofKernelDispatchTrackQuery(),
                         m_query_factory.GetRocprofKernelDispatchTrackQueryForStream(),
@@ -1004,24 +1052,18 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
                     &CallBackAddTrack, &CallBackLoadTrack);
                     future->DeleteSubFuture(sub_future);
                     m_add_track_mutex.unlock(db_instance->GuidIndex());
-                };
-            for (auto& guid_info : DbInstances())
-            {
-                threads.emplace_back(task, &guid_info.first);
-            }
-            for (auto& t : threads)
-                t.join();
+                    return task_result;
+                });
             load_id++;
         }
 
         ShowProgress(5, "Adding memory allocation tracks", kRPVDbBusy, future );
         {
-            std::vector<std::thread> threads;
             m_add_track_mutex.init(NumDbInstances());
-            auto task = [&](DbInstance* db_instance)
+            result = run_per_db_instance([&](DbInstance* db_instance) -> rocprofvis_dm_result_t
                 {
                     Future* sub_future = future->AddSubFuture();
-                    result = ExecuteSQLQuery(sub_future, db_instance, load_id,
+                    rocprofvis_dm_result_t task_result = ExecuteSQLQuery(sub_future, db_instance, load_id,
                     { 
                         m_query_factory.GetRocprofMemoryAllocTrackQuery(),
                         m_query_factory.GetRocprofMemoryAllocTrackQueryForStream(),
@@ -1033,13 +1075,8 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
                     &CallBackAddTrack, &CallBackLoadTrack);
                     future->DeleteSubFuture(sub_future);
                     m_add_track_mutex.unlock(db_instance->GuidIndex());
-                };
-            for (auto& guid_info : DbInstances())
-            {
-                threads.emplace_back(task, &guid_info.first);
-            }
-            for (auto& t : threads)
-                t.join();
+                    return task_result;
+                });
             load_id++;
         }
 
@@ -1055,12 +1092,11 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
    
         ShowProgress(5, "Adding memory copy tracks", kRPVDbBusy, future );
         {
-            std::vector<std::thread> threads;
             m_add_track_mutex.init(NumDbInstances());
-            auto task = [&](DbInstance* db_instance)
+            result = run_per_db_instance([&](DbInstance* db_instance) -> rocprofvis_dm_result_t
                 {
                     Future* sub_future = future->AddSubFuture();
-                    result = ExecuteSQLQuery(sub_future, db_instance, load_id,
+                    rocprofvis_dm_result_t task_result = ExecuteSQLQuery(sub_future, db_instance, load_id,
                     { 
                         m_query_factory.GetRocprofMemoryCopyTrackQuery(),
                         m_query_factory.GetRocprofMemoryCopyTrackQueryForStream(),
@@ -1072,25 +1108,19 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
                     &CallBackAddTrack, &CallBackLoadTrack);
                     future->DeleteSubFuture(sub_future);
                     m_add_track_mutex.unlock(db_instance->GuidIndex());
-                };
-            for (auto& guid_info : DbInstances())
-            {
-                threads.emplace_back(task, &guid_info.first);
-            }
-            for (auto& t : threads)
-                t.join();
+                    return task_result;
+                });
             load_id++;
         }
 
         // PMC schema is not fully defined yet
         ShowProgress(5, "Adding performance counters tracks", kRPVDbBusy, future );
         {
-            std::vector<std::thread> threads;
             m_add_track_mutex.init(NumDbInstances());
-            auto task = [&](DbInstance* db_instance)
+            result = run_per_db_instance([&](DbInstance* db_instance) -> rocprofvis_dm_result_t
                 {
                     Future* sub_future = future->AddSubFuture();
-                    result = ExecuteSQLQuery(sub_future, db_instance, load_id,
+                    rocprofvis_dm_result_t task_result = ExecuteSQLQuery(sub_future, db_instance, load_id,
                     { 
                         m_query_factory.GetRocprofPerformanceCountersTrackQuery(),
                         "",
@@ -1102,25 +1132,19 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
                     &CallBackAddTrack, &CallBackLoadTrack);
                     future->DeleteSubFuture(sub_future);
                     m_add_track_mutex.unlock(db_instance->GuidIndex());
-                };
-            for (auto& guid_info : DbInstances())
-            {
-                threads.emplace_back(task, &guid_info.first);
-            }
-            for (auto& t : threads)
-                t.join();
+                    return task_result;
+                });
             load_id++;
         }
                    
         // PMC schema is not fully defined yet
         ShowProgress(5, "Adding performance smi counters tracks", kRPVDbBusy, future );
         {
-            std::vector<std::thread> threads;
             m_add_track_mutex.init(NumDbInstances());
-            auto task = [&](DbInstance* db_instance)
+            result = run_per_db_instance([&](DbInstance* db_instance) -> rocprofvis_dm_result_t
                 {
                     Future* sub_future = future->AddSubFuture();
-                    result = ExecuteSQLQuery(sub_future, db_instance, load_id,
+                    rocprofvis_dm_result_t task_result = ExecuteSQLQuery(sub_future, db_instance, load_id,
                     { 
                         m_query_factory.GetRocprofSMIPerformanceCountersTrackQuery(),
                         "",
@@ -1132,24 +1156,18 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
                     &CallBackAddTrack, &CallBackLoadTrack);
                     future->DeleteSubFuture(sub_future);
                     m_add_track_mutex.unlock(db_instance->GuidIndex());
-                };
-            for (auto& guid_info : DbInstances())
-            {
-                threads.emplace_back(task, &guid_info.first);
-            }
-            for (auto& t : threads)
-                t.join();
+                    return task_result;
+                });
             load_id++;
         }
 
         ShowProgress(5, "Adding memory allocation activity tracks", kRPVDbBusy, future );
         {
-            std::vector<std::thread> threads;
             m_add_track_mutex.init(NumDbInstances());
-            auto task = [&](DbInstance* db_instance)
+            result = run_per_db_instance([&](DbInstance* db_instance) -> rocprofvis_dm_result_t
                 {
                     Future* sub_future = future->AddSubFuture();
-                    result = ExecuteSQLQuery(sub_future, db_instance, load_id,
+                    rocprofvis_dm_result_t task_result = ExecuteSQLQuery(sub_future, db_instance, load_id,
                         { 
                             m_query_factory.GetRocprofMemoryActivityTrackQuery(),
                             "",
@@ -1161,13 +1179,8 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
                         &CallBackAddTrack, &CallBackLoadTrack);
                     future->DeleteSubFuture(sub_future);
                     m_add_track_mutex.unlock(db_instance->GuidIndex());
-                };
-            for (auto& guid_info : DbInstances())
-            {
-                threads.emplace_back(task, &guid_info.first);
-            }
-            for (auto& t : threads)
-                t.join();
+                    return task_result;
+                });
             load_id++;
         }
 
@@ -1197,42 +1210,30 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
         ShowProgress(10, "Loading strings", kRPVDbBusy, future );
         BindObject()->FuncAddString(BindObject()->trace_object, ""); // 0 index string
         {
-            std::vector<std::thread> threads;
             m_add_track_mutex.init(NumDbInstances());
-            auto task = [&](DbInstance* db_instance)
+            result = run_per_db_instance([&](DbInstance* db_instance) -> rocprofvis_dm_result_t
                 {
                     Future* sub_future = future->AddSubFuture();
-                    result = ExecuteSQLQuery(sub_future, db_instance, (std::string("SELECT ") + 
+                    rocprofvis_dm_result_t task_result = ExecuteSQLQuery(sub_future, db_instance, (std::string("SELECT ") + 
                         std::to_string((uint32_t)rocprofvis_db_string_type_t::kRPVStringTypeNameOrCategory) + 
                         ", id, string FROM rocpd_string_%GUID% ORDER BY id; ").c_str(), &CallBackAddString);
                     future->DeleteSubFuture(sub_future);
-                };
-            for (auto& guid_info : DbInstances())
-            {
-                threads.emplace_back(task, &guid_info.first);
-            }
-            for (auto& t : threads)
-                t.join();
+                    return task_result;
+                });
         }
 
         ShowProgress(10, "Loading kenel symbols", kRPVDbBusy, future );
         {
-            std::vector<std::thread> threads;
             m_add_track_mutex.init(NumDbInstances());
-            auto task = [&](DbInstance* db_instance)
+            result = run_per_db_instance([&](DbInstance* db_instance) -> rocprofvis_dm_result_t
                 {
                     Future* sub_future = future->AddSubFuture();
-                    result = ExecuteSQLQuery(sub_future, db_instance, (std::string("SELECT ") + 
+                    rocprofvis_dm_result_t task_result = ExecuteSQLQuery(sub_future, db_instance, (std::string("SELECT ") + 
                         std::to_string((uint32_t)rocprofvis_db_string_type_t::kRPVStringTypeKernelSymbol) + 
                         ", id, display_name FROM rocpd_info_kernel_symbol_%GUID%;").c_str(), &CallBackAddString);
                     future->DeleteSubFuture(sub_future);
-                };
-            for (auto& guid_info : DbInstances())
-            {
-                threads.emplace_back(task, &guid_info.first);
-            }
-            for (auto& t : threads)
-                t.join();
+                    return task_result;
+                });
         }
 
         m_string_map.clear();

@@ -726,20 +726,28 @@ rocprofvis_dm_result_t QueryManager::RunCacheQueries(Future* future, std::vector
     std::vector<std::thread> threads;
     rocprofvis_dm_result_t result = kRocProfVisDmResultNotLoaded;
 
-    auto get_info_table_task = [&](DbInstance* db_instance, std::string query, std::string tag) {
+    // When run asynchronously each task writes into its own result slot to avoid
+    // a data race on a single shared variable. The vector is sized up front so
+    // the element addresses remain stable for the lifetime of the threads.
+    const size_t task_count = DbInstances().size() * info_table_list.size();
+    std::vector<rocprofvis_dm_result_t> results(task_count, kRocProfVisDmResultNotLoaded);
+
+    auto get_info_table_task = [&](rocprofvis_dm_result_t* result_slot, DbInstance* db_instance, std::string query, std::string tag) {
         Future* sub_future = future->AddSubFuture();
-        result = ExecuteSQLQuery(sub_future, db_instance, query.c_str(), tag.c_str(), (rocprofvis_dm_handle_t)CachedTables(db_instance->GuidIndex()), callback);
+        *result_slot = ExecuteSQLQuery(sub_future, db_instance, query.c_str(), tag.c_str(), (rocprofvis_dm_handle_t)CachedTables(db_instance->GuidIndex()), callback);
         future->DeleteSubFuture(sub_future);
         };
 
     if (async)
     {
+        size_t task_index = 0;
         for (auto& guid_info : DbInstances())
         {
             for (auto table : info_table_list)
             {
                 threads.emplace_back(
                     get_info_table_task,
+                    &results[task_index++],
                     &guid_info.first,
                     table.second,
                     table.first);
@@ -748,6 +756,16 @@ rocprofvis_dm_result_t QueryManager::RunCacheQueries(Future* future, std::vector
         for (auto& t : threads)
             t.join();
 
+        // Succeed only if every query succeeded; otherwise report the first failure.
+        result = task_count > 0 ? kRocProfVisDmResultSuccess : kRocProfVisDmResultNotLoaded;
+        for (rocprofvis_dm_result_t task_result : results)
+        {
+            if (task_result != kRocProfVisDmResultSuccess)
+            {
+                result = task_result;
+                break;
+            }
+        }
 
         if (result == kRocProfVisDmResultSuccess)
         {
@@ -763,15 +781,17 @@ rocprofvis_dm_result_t QueryManager::RunCacheQueries(Future* future, std::vector
     }
     else
     {
+        size_t task_index = 0;
         for (auto& guid_info : DbInstances())
         {
             for (auto table : info_table_list)
             {
-                get_info_table_task(&guid_info.first, table.second, table.first);
+                get_info_table_task(&results[task_index++], &guid_info.first, table.second, table.first);
                 auto handle = CachedTables(guid_info.first.GuidIndex())->GetTableHandle(table.first.c_str());
                 BindObject()->FuncAddInfoTable(BindObject()->trace_object, guid_info.first.GuidIndex(), table.first.c_str(), handle);
             }
         }
+        result = results.empty() ? kRocProfVisDmResultNotLoaded : results.back();
     }
     return result;
 }

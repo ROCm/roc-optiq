@@ -21,10 +21,14 @@
 **Compute profiling**
 - Roofline single-click filtering for kernels, memory levels, and bandwidth peaks.
 - Roofline line-thickness preference.
+- Re-ordered top level tabs.
 
 **Rendering and performance**
 - Added a RenderScheduler to drive lazy-render wake-ups.
 - Adopted ImGui's built-in DPI handling, replacing the previous custom solution.
+
+**Misc**
+- Cleaned up log messages.
 
 ### Experimental (not yet released)
 
@@ -42,6 +46,7 @@ These features are in progress and available for preview only (build from src); 
 - Fixed data-flow arrow starting from level zero on `.rpd` traces.
 - Fixed the Systems multi-node summary window showing data only for the first node in the `.yaml`.
 - Fixed loading workload Speed-of-Light for compute schema < 1.3.0; query builders now report and skip unsupported queries.
+- Fixed crash when invalid filter used in kernel selection table.
 - JobSystem fixes.
 
 ## Optiq Beta 0.5.0

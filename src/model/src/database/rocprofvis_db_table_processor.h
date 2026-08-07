@@ -143,6 +143,15 @@ namespace DataModel
 
         };
 
+        ~TableProcessor()
+        {
+            // The timer action takes m_lock, so the timer thread has to be
+            // joined while m_lock still exists. Members are destroyed after
+            // this body runs, and m_lock is declared after m_timer, so it
+            // would otherwise be destroyed while the action is blocked on it.
+            m_timer.stop();
+        }
+
         static bool IsCompoundQuery(const char* query, std::unordered_map<uint32_t, std::unordered_map<std::string, rocprofvis_db_compound_query_info>>& queries, std::set<uint32_t>& tracks,
             std::vector<rocprofvis_db_compound_query_command>& commands);
         static std::string QueryWithoutCommands(const char* query); // Unused

@@ -966,6 +966,11 @@ namespace DataModel
 
     rocprofvis_dm_result_t TableProcessor::ExportToCSV(rocprofvis_dm_charptr_t file_path)
     {
+        // The idle timer clears m_merged_table and m_tracks from its own thread,
+        // so the export has to hold m_lock for its whole duration to keep the
+        // packed column storage alive while it is being read.
+        std::lock_guard<std::mutex> lock(m_lock);
+
         rocprofvis_dm_result_t result = kRocProfVisDmResultNotLoaded;
         std::ofstream file(file_path);
         if (file.is_open())

@@ -1,5 +1,5 @@
-name: Ubuntu ASAN
-run-name: roc-optiq-ubuntu-asan
+name: Ubuntu Sanitizers
+run-name: roc-optiq-ubuntu-sanitizers
 
 on:
   workflow_dispatch:
@@ -8,6 +8,10 @@ on:
         description: 'JSON array of OS versions to test'
         type: string
         default: '[ "22.04", "24.04", "26.04" ]'
+      sanitizers:
+        description: 'JSON array of sanitizers to run (when sanitizers are enabled)'
+        type: string
+        default: '[ "address", "undefined", "thread" ]'
       cmake_config_preset:
         description: 'CMake Config Preset to Use'
         type: string
@@ -30,6 +34,10 @@ on:
         description: 'JSON array of OS versions to test'
         type: string
         default: '[ "22.04", "24.04", "26.04" ]'
+      sanitizers:
+        description: 'JSON array of sanitizers to run (when sanitizers are enabled)'
+        type: string
+        default: '[ "address", "undefined", "thread" ]'
       cmake_config_preset:
         description: 'CMake Config Preset to Use'
         type: string
@@ -55,7 +63,7 @@ env:
 
 jobs:
   ubuntu:
-    name: Ubuntu ${{ matrix.os-version }} • Optiq CI • ASAN
+    name: Ubuntu ${{ matrix.os-version }} • Optiq CI • ${{ matrix.sanitizer }}-san
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -67,8 +75,9 @@ jobs:
       image: ghcr.io/rocm/optiq-ci-ubuntu:${{ matrix.os-version }}
     strategy:
       fail-fast: false
-      matrix: 
+      matrix:
         os-version: ${{ fromJson(inputs.os_version) }}
+        sanitizer: ${{ fromJson(inputs.sanitizers) }}
 
     steps:
       - uses: actions/checkout@v6
@@ -81,8 +90,8 @@ jobs:
           source /opt/vulkan/**/setup-env.sh
           cmake -B ${{ env.BUILD_DIR }} --preset ${{ inputs.cmake_config_preset }} \
             -DROCPROFVIS_ENABLE_INTERNAL_BANNER=${{ env.ENABLE_INTERNAL_BANNER }} \
-            -DCMAKE_CXX_FLAGS="-fsanitize=address -fno-omit-frame-pointer -g" \
-            -DCMAKE_C_FLAGS="-fsanitize=address -fno-omit-frame-pointer -g"
+            -DCMAKE_CXX_FLAGS="-fsanitize=${{ matrix.sanitizer }} -fno-omit-frame-pointer -g" \
+            -DCMAKE_C_FLAGS="-fsanitize=${{ matrix.sanitizer }} -fno-omit-frame-pointer -g"
           cmake --build ${{ env.BUILD_DIR }} \
             --parallel 4 \
             --target package
@@ -96,7 +105,7 @@ jobs:
       - name: Run Tests
         id: run_tests
         continue-on-error: true
-        timeout-minutes: 30
+        timeout-minutes: ${{ matrix.sanitizer == 'thread' && 60 || 30 }}
         run: |
           cd ${{ env.BUILD_DIR }}
           ctest \
@@ -108,24 +117,24 @@ jobs:
         if: steps.run_tests.outcome == 'failure'
         uses: actions/upload-artifact@v7
         with:
-          name: asan-test-logs-ubuntu-${{ matrix.os-version }}
+          name: ${{ matrix.sanitizer }}-san-test-logs-ubuntu-${{ matrix.os-version }}
           path: |
             ${{ env.BUILD_DIR }}/ctest-results.xml
             ${{ env.BUILD_DIR }}/Testing/Temporary/**
           retention-days: 7
-      
+
       - name: Prepare Distribution Artifacts
         run: |
           mkdir ${{ env.DIST_DIR }}
           cp ${{ env.BUILD_DIR }}/*.tar.gz ${{ env.DIST_DIR }}/
           cp ${{ env.BUILD_DIR }}/*.deb ${{ env.DIST_DIR }}/
           ls -l ${{ env.DIST_DIR }}/
-      
+
       - name: Upload GitHub Artifacts
         if: ${{ inputs.upload_to_github }}
         uses: actions/upload-artifact@v7
         with:
-          name: roc-optiq-asan-ubuntu-${{ matrix.os-version }}-release
+          name: roc-optiq-${{ matrix.sanitizer }}-san-ubuntu-${{ matrix.os-version }}-release
           path: |
             ${{ env.DIST_DIR }}/
           retention-days: 2

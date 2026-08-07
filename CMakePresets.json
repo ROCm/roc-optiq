@@ -97,6 +97,36 @@
             }
         },
         {
+            "name": "linux-asan",
+            "displayName": "ROCm Optiq ASAN",
+            "description": "Configure ROCm Optiq for Linux with GCC and AddressSanitizer (matches CI ci-sanitizers 'address').",
+            "inherits": "linux-release",
+            "cacheVariables": {
+                "CMAKE_CXX_FLAGS": "-fsanitize=address -fno-omit-frame-pointer -g",
+                "CMAKE_C_FLAGS": "-fsanitize=address -fno-omit-frame-pointer -g"
+            }
+        },
+        {
+            "name": "linux-ubsan",
+            "displayName": "ROCm Optiq UBSAN",
+            "description": "Configure ROCm Optiq for Linux with GCC and UndefinedBehaviorSanitizer (matches CI ci-sanitizers 'undefined').",
+            "inherits": "linux-release",
+            "cacheVariables": {
+                "CMAKE_CXX_FLAGS": "-fsanitize=undefined -fno-omit-frame-pointer -g",
+                "CMAKE_C_FLAGS": "-fsanitize=undefined -fno-omit-frame-pointer -g"
+            }
+        },
+        {
+            "name": "linux-tsan",
+            "displayName": "ROCm Optiq TSAN",
+            "description": "Configure ROCm Optiq for Linux with GCC and ThreadSanitizer (matches CI ci-sanitizers 'thread').",
+            "inherits": "linux-release",
+            "cacheVariables": {
+                "CMAKE_CXX_FLAGS": "-fsanitize=thread -fno-omit-frame-pointer -g",
+                "CMAKE_C_FLAGS": "-fsanitize=thread -fno-omit-frame-pointer -g"
+            }
+        },
+        {
             "name": "macos-base",
             "hidden": true,
             "description": "Base settings for macOS builds of ROCm Optiq",
@@ -161,6 +191,24 @@
             "description": "",
             "displayName": "",
             "configurePreset": "linux-debug"
+        },
+        {
+            "name": "Linux ASAN Build",
+            "description": "Build ROCm Optiq for Linux with AddressSanitizer",
+            "displayName": "Linux ASAN Build",
+            "configurePreset": "linux-asan"
+        },
+        {
+            "name": "Linux UBSAN Build",
+            "description": "Build ROCm Optiq for Linux with UndefinedBehaviorSanitizer",
+            "displayName": "Linux UBSAN Build",
+            "configurePreset": "linux-ubsan"
+        },
+        {
+            "name": "Linux TSAN Build",
+            "description": "Build ROCm Optiq for Linux with ThreadSanitizer",
+            "displayName": "Linux TSAN Build",
+            "configurePreset": "linux-tsan"
         },
         {
             "name": "Windows Debug Build",

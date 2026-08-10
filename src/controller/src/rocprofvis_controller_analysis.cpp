@@ -197,10 +197,7 @@ rocprofvis_result_t Analysis::AsyncFetchQueueUtilization(SystemTrace* trace, Tra
     rocprofvis_result_t result = kRocProfVisResultUnknownError;
     future->Set(JobSystem::Get().IssueJob([this, trace, track, start, end, output](Future* future) -> rocprofvis_result_t {
         rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
-        rocprofvis_handle_t* queue_handle = nullptr;
-        result = track->GetObject(kRPVControllerTrackQueue, 0, &queue_handle);
-        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-        if(queue_handle)
+        if(track->GetQueue())
         {
             uint64_t               track_id  = track->GetId();
             rocprofvis_dm_track_t dm_track = track->GetDmHandle();
@@ -299,10 +296,7 @@ rocprofvis_result_t Analysis::AsyncFetchCounterStatistics(SystemTrace* trace, Tr
     rocprofvis_result_t result = kRocProfVisResultUnknownError;
     future->Set(JobSystem::Get().IssueJob([this, trace, track, start, end, output](Future* future) -> rocprofvis_result_t {
         rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
-        rocprofvis_handle_t* counter_handle = nullptr;
-        result = track->GetObject(kRPVControllerTrackCounter, 0, &counter_handle);
-        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-        if(counter_handle)
+        if(track->GetCounter())
         {
             rocprofvis_dm_result_t   dm_result = kRocProfVisDmResultUnknownError;
             uint64_t                 track_id = track->GetId();

@@ -37,23 +37,34 @@ public:
 
     rocprofvis_controller_object_type_t GetType(void) final;
     rocprofvis_controller_track_type_t GetTrackType() const;
-    rocprofvis_dm_track_t GetDmHandle(void);
+    rocprofvis_dm_track_t GetDmHandle(void) const;
+
     uint64_t GetId() const;
     uint64_t GetNumberOfEntries() const;
+    uint64_t GetExtDataNumberOfEntries() const;
+
     double GetStartTimestamp() const;
     double GetEndTimestamp() const;
-    uint64_t GetExtDataNumberOfEntries() const;
-    std::string GetExtDataCategory(uint64_t index);
-    std::string GetExtDataName(uint64_t index);
-    std::string GetExtDataValue(uint64_t index);
+
+    std::string GetExtDataCategory(uint64_t index) const;
+    std::string GetExtDataName(uint64_t index) const;
+    std::string GetExtDataValue(uint64_t index) const;
+
+    Thread*  GetThread()  const;
+    Queue*   GetQueue()   const;
+    Stream*  GetStream()  const;
+    Counter* GetCounter() const;
+    
+    void     SetThread(Thread* thread);
+    void     SetQueue(Queue* queue);
+    void     SetStream(Stream* stream);
+    void     SetCounter(Counter* counter);
+
     rocprofvis_result_t GetInclusiveMemoryUsage(uint64_t* value);
 
     Handle* GetContext(void) override;
     SegmentTimeline* GetSegments();
     rocprofvis_result_t GetBucketValues(size_t buckets_num, Array& array);
-
-    // Handlers for getters.
-
 
     rocprofvis_result_t FillBounds();
     rocprofvis_result_t FillMetadata();
@@ -63,13 +74,12 @@ private:
     rocprofvis_result_t GetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t* value) override final;
     rocprofvis_result_t GetDouble(rocprofvis_property_t property, uint64_t index, double* value) override final;
     rocprofvis_result_t GetString(rocprofvis_property_t property, uint64_t index, char* value, uint32_t* length) override final;
-    rocprofvis_result_t GetObject(rocprofvis_property_t property, uint64_t index, rocprofvis_handle_t** value) override final;
-
+    rocprofvis_result_t GetObject(rocprofvis_property_t property, uint64_t index, rocprofvis_handle_t** value) override final;  // use GetThread/GetQueue/GetStream/GetCounter instead
 
     rocprofvis_result_t SetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t value) override final;
     rocprofvis_result_t SetDouble(rocprofvis_property_t property, uint64_t index, double value) override final;
     rocprofvis_result_t SetString(rocprofvis_property_t property, uint64_t index, char const* value) override final;
-    rocprofvis_result_t SetObject(rocprofvis_property_t property, uint64_t index, rocprofvis_handle_t* value) override final;
+    rocprofvis_result_t SetObject(rocprofvis_property_t property, uint64_t index, rocprofvis_handle_t* value) override final;  // use SetThread/SetQueue/SetStream/SetCounter instead
 
     struct fetch_range_t
     {

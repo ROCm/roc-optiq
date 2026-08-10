@@ -39,8 +39,8 @@ Track::~Track()
 {
 }
 
-rocprofvis_dm_track_t Track::GetDmHandle(void){
-    
+rocprofvis_dm_track_t Track::GetDmHandle(void) const
+{
     return m_dm_handle;
 }
 
@@ -82,21 +82,21 @@ Track::GetExtDataNumberOfEntries() const
 }
 
 std::string
-Track::GetExtDataCategory(uint64_t index)
+Track::GetExtDataCategory(uint64_t index) const
 {
     return rocprofvis_dm_get_property_as_charptr(
         m_dm_handle, kRPVDMTrackExtDataCategoryCharPtrIndexed, index);
 }
 
 std::string
-Track::GetExtDataName(uint64_t index)
+Track::GetExtDataName(uint64_t index) const
 {
     return rocprofvis_dm_get_property_as_charptr(
         m_dm_handle, kRPVDMTrackExtDataNameCharPtrIndexed, index);
 }
 
 std::string
-Track::GetExtDataValue(uint64_t index)
+Track::GetExtDataValue(uint64_t index) const
 {
     return rocprofvis_dm_get_property_as_charptr(
         m_dm_handle, kRPVDMTrackExtDataValueCharPtrIndexed, index);
@@ -112,6 +112,16 @@ Track::GetSegments()
 {
     return &m_segments;
 }
+
+Thread*  Track::GetThread()  const { return m_topology_links.thread; }
+Queue*   Track::GetQueue()   const { return m_topology_links.queue; }
+Stream*  Track::GetStream()  const { return m_topology_links.stream; }
+Counter* Track::GetCounter() const { return m_topology_links.counter; }
+
+void Track::SetThread(Thread* thread)   { m_topology_links.thread  = thread; }
+void Track::SetQueue(Queue* queue)      { m_topology_links.queue   = queue; }
+void Track::SetStream(Stream* stream)   { m_topology_links.stream  = stream; }
+void Track::SetCounter(Counter* counter){ m_topology_links.counter = counter; }
 
 rocprofvis_result_t Track::GetBucketValues(size_t buckets_num, Array& array) {
 

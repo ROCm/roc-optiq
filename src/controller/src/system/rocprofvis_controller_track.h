@@ -7,6 +7,8 @@
 #include "rocprofvis_controller_segment.h"
 #include "rocprofvis_controller_handle.h"
 #include "rocprofvis_c_interface.h"
+#include <cfloat>
+#include <condition_variable>
 #include <map>
 #include <string>
 #include <memory>

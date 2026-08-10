@@ -151,7 +151,8 @@ jobs:
             -DGLFW_BUILD_WAYLAND=OFF \
             -DUSE_NATIVE_FILE_DIALOG=OFF \
             -DCRYPTO_BACKEND=${{ inputs.crypto_backend }} \
-            -DCPACK_GENERATOR="TGZ;DEB;RPM"
+            -DCPACK_GENERATOR="TGZ;DEB;RPM" \
+            -DCMAKE_EXE_LINKER_FLAGS="-ldl"
           cmake --build ${{ env.BUILD_DIR }} --parallel 4 --target package
           if [ -e ${{ env.BUILD_DIR }}/${{ env.BUILD_FILE_NAME }} ]; then
             echo "✅ ${{ env.BUILD_FILE_NAME }} has been successfully built!"

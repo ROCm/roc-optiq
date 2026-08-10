@@ -124,9 +124,6 @@ private:
     rocprofvis_result_t AddRocpdGraph(Track* track, uint64_t dm_track_type,
                                       uint64_t track_id, uint64_t& graph_index);
     rocprofvis_result_t LoadRocpdTopology();
-    rocprofvis_result_t GetRocpdTrackString(Track& track,
-                                            rocprofvis_property_t property,
-                                            uint32_t index, std::string& value);
 
     void DbgPrintTopologyNodeData(rocprofvis_dm_topology_node node, int level);
 

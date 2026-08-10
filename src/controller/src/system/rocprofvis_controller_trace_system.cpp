@@ -256,21 +256,6 @@ SystemTrace::ReadRocpdMetadata(rocprofvis_dm_database_t database, Future* future
 }
 
 rocprofvis_result_t
-SystemTrace::GetRocpdTrackString(Track& track, rocprofvis_property_t property,
-                                 uint32_t index, std::string& value)
-{
-    uint32_t length = 0;
-    rocprofvis_result_t result = track.GetString(property, index, nullptr, &length);
-    if(result != kRocProfVisResultSuccess)
-    {
-        return result;
-    }
-
-    value.resize(length);
-    return track.GetString(property, index, value.data(), &length);
-}
-
-rocprofvis_result_t
 SystemTrace::ReadRocpdTrackExtData(Track& track, uint64_t dm_track_type,
                                    track_lookup_t& track_lookup)
 {
@@ -304,22 +289,10 @@ SystemTrace::ReadRocpdTrackExtDataEntry(Track& track, uint32_t index,
                                         std::string& category, std::string& name,
                                         std::string& value)
 {
-    rocprofvis_result_t result = GetRocpdTrackString(
-        track, kRPVControllerTrackExtDataCategoryIndexed, index, category);
-    if(result != kRocProfVisResultSuccess)
-    {
-        return result;
-    }
-
-    result = GetRocpdTrackString(
-        track, kRPVControllerTrackExtDataNameIndexed, index, name);
-    if(result != kRocProfVisResultSuccess)
-    {
-        return result;
-    }
-
-    return GetRocpdTrackString(
-        track, kRPVControllerTrackExtDataValueIndexed, index, value);
+    category = track.GetExtDataCategory(index);
+    name     = track.GetExtDataName(index);
+    value    = track.GetExtDataValue(index);
+    return kRocProfVisResultSuccess;
 }
 
 void

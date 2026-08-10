@@ -485,11 +485,10 @@ Graph::GenerateLOD(uint32_t lod_to_generate, double start, double end, Future* f
         double min_ts = start;
         double max_ts = end;
 
-        if((m_track->GetDouble(kRPVControllerTrackMinTimestamp, 0, &min_ts) ==
-            kRocProfVisResultSuccess) &&
-           (m_track->GetDouble(kRPVControllerTrackMaxTimestamp, 0, &max_ts) ==
-            kRocProfVisResultSuccess))
+        if(m_track)
         {
+            min_ts = m_track->GetStartTimestamp();
+            max_ts = m_track->GetEndTimestamp();
             double scale = 1.0;
             for(uint32_t i = 0; i < lod_to_generate; i++)
             {
@@ -774,35 +773,28 @@ Graph::GetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t* value
 rocprofvis_result_t
 Graph::GetDouble(rocprofvis_property_t property, uint64_t index, double* value)
 {
-    rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
-    if(value)
+    if(!value)
+        return kRocProfVisResultInvalidArgument;
+    if(!m_track)
+        return kRocProfVisResultUnknownError;
+
+    switch(property)
     {
-        switch(property)
+        case kRPVControllerGraphStartTimestamp:
         {
-            case kRPVControllerGraphStartTimestamp:
-            {
-                *value = 0;
-                result = m_track ? m_track->GetDouble(kRPVControllerTrackMinTimestamp,
-                                                      index, value)
-                                 : kRocProfVisResultUnknownError;
-                break;
-            }
-            case kRPVControllerGraphEndTimestamp:
-            {
-                *value = 0;
-                result = m_track ? m_track->GetDouble(kRPVControllerTrackMaxTimestamp,
-                                                      index, value)
-                                 : kRocProfVisResultUnknownError;
-                break;
-            }
-            default:
-            {
-                result = UnhandledProperty(property);
-                break;
-            }
+            *value = m_track->GetStartTimestamp();
+            return kRocProfVisResultSuccess;
+        }
+        case kRPVControllerGraphEndTimestamp:
+        {
+            *value = m_track->GetEndTimestamp();
+            return kRocProfVisResultSuccess;
+        }
+        default:
+        {
+            return UnhandledProperty(property);
         }
     }
-    return result;
 }
 rocprofvis_result_t
 Graph::GetObject(rocprofvis_property_t property, uint64_t index,

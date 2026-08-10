@@ -62,11 +62,44 @@ Track::GetNumberOfEntries() const
     return m_bounds.num_entries;
 }
 
+double
+Track::GetStartTimestamp() const
+{
+    return m_bounds.start_timestamp;
+}
+
+double
+Track::GetEndTimestamp() const
+{
+    return m_bounds.end_timestamp;
+}
+
 uint64_t
 Track::GetExtDataNumberOfEntries() const
 {
     return rocprofvis_dm_get_property_as_uint64(
         m_dm_handle, kRPVDMNumberOfTrackExtDataRecordsUInt64, 0);
+}
+
+std::string
+Track::GetExtDataCategory(uint64_t index)
+{
+    return rocprofvis_dm_get_property_as_charptr(
+        m_dm_handle, kRPVDMTrackExtDataCategoryCharPtrIndexed, index);
+}
+
+std::string
+Track::GetExtDataName(uint64_t index)
+{
+    return rocprofvis_dm_get_property_as_charptr(
+        m_dm_handle, kRPVDMTrackExtDataNameCharPtrIndexed, index);
+}
+
+std::string
+Track::GetExtDataValue(uint64_t index)
+{
+    return rocprofvis_dm_get_property_as_charptr(
+        m_dm_handle, kRPVDMTrackExtDataValueCharPtrIndexed, index);
 }
 
 Handle* Track::GetContext(void)
@@ -817,23 +850,17 @@ rocprofvis_result_t Track::GetString(rocprofvis_property_t property, uint64_t in
         }
         case kRPVControllerTrackExtDataCategoryIndexed:
         {
-            char* str = rocprofvis_dm_get_property_as_charptr(
-                    m_dm_handle, kRPVDMTrackExtDataCategoryCharPtrIndexed, index);
-            result = GetStringImpl(value, length, str, static_cast<uint32_t>(strlen(str)));
+            result = GetStdStringImpl(value, length, GetExtDataCategory(index));
             break;
         }
         case kRPVControllerTrackExtDataNameIndexed:
         {
-            char* str = rocprofvis_dm_get_property_as_charptr(
-                    m_dm_handle, kRPVDMTrackExtDataNameCharPtrIndexed, index);
-            result = GetStringImpl(value, length, str, static_cast<uint32_t>(strlen(str)));
+            result = GetStdStringImpl(value, length, GetExtDataName(index));
             break;
         }
         case kRPVControllerTrackExtDataValueIndexed:
         {
-            char* str = rocprofvis_dm_get_property_as_charptr(
-                m_dm_handle, kRPVDMTrackExtDataValueCharPtrIndexed, index);
-            result = GetStringImpl(value, length, str, static_cast<uint32_t>(strlen(str)));
+            result = GetStdStringImpl(value, length, GetExtDataValue(index));
             break;
         }
         default:

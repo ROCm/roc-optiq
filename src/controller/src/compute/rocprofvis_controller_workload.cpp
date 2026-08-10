@@ -225,79 +225,49 @@ rocprofvis_result_t Workload::GetString(rocprofvis_property_t property, uint64_t
             case kRPVControllerWorkloadAvailableMetricCategoryNameIndexed:
             {
                 if(index < m_available_metrics.size())
-                {
-                    char const* str = StringTable::Get().GetString(m_available_metrics[index].category_name_idx);
-                    result = GetStringImpl(value, length, str, static_cast<uint32_t>(strlen(str)));
-                }
+                    result = GetStdStringImpl(value, length, StringTable::Get().GetString(m_available_metrics[index].category_name_idx));
                 else
-                {
                     result = kRocProfVisResultOutOfRange;
-                }
                 break;
             }
             case kRPVControllerWorkloadAvailableMetricTableNameIndexed:
             {
                 if(index < m_available_metrics.size())
-                {
-                    char const* str = StringTable::Get().GetString(m_available_metrics[index].table_name_idx);
-                    result = GetStringImpl(value, length, str, static_cast<uint32_t>(strlen(str)));
-                }
+                    result = GetStdStringImpl(value, length, StringTable::Get().GetString(m_available_metrics[index].table_name_idx));
                 else
-                {
                     result = kRocProfVisResultOutOfRange;
-                }
                 break;
             }
             case kRPVControllerWorkloadAvailableMetricNameIndexed:
             {
                 if(index < m_available_metrics.size())
-                {
-                    char const* str = StringTable::Get().GetString(m_available_metrics[index].name_idx);
-                    result = GetStringImpl(value, length, str, static_cast<uint32_t>(strlen(str)));
-                }
+                    result = GetStdStringImpl(value, length, StringTable::Get().GetString(m_available_metrics[index].name_idx));
                 else
-                {
                     result = kRocProfVisResultOutOfRange;
-                }
                 break;
             }
             case kRPVControllerWorkloadAvailableMetricDescriptionIndexed:
             {
                 if(index < m_available_metrics.size())
-                {
-                    char const* str = StringTable::Get().GetString(m_available_metrics[index].description_idx);
-                    result = GetStringImpl(value, length, str, static_cast<uint32_t>(strlen(str)));
-                }
+                    result = GetStdStringImpl(value, length, StringTable::Get().GetString(m_available_metrics[index].description_idx));
                 else
-                {
                     result = kRocProfVisResultOutOfRange;
-                }
                 break;
             }
             case kRPVControllerWorkloadAvailableMetricUnitIndexed:
             {
                 if(index < m_available_metrics.size())
-                {
-                    char const* str = StringTable::Get().GetString(m_available_metrics[index].unit_idx);
-                    result = GetStringImpl(value, length, str, static_cast<uint32_t>(strlen(str)));
-                }
+                    result = GetStdStringImpl(value, length, StringTable::Get().GetString(m_available_metrics[index].unit_idx));
                 else
-                {
                     result = kRocProfVisResultOutOfRange;
-                }
                 break;
             }
             case kRPVControllerWorkloadMetricValueNameStringIndexed:
             {
                 if(index < m_metric_value_names.size())
-                {
-                    char const* str = StringTable::Get().GetString(m_metric_value_names[index].value_name_idx);
-                    result = GetStringImpl(value, length, str, static_cast<uint32_t>(strlen(str)));
-                }
+                    result = GetStdStringImpl(value, length, StringTable::Get().GetString(m_metric_value_names[index].value_name_idx));
                 else
-                {
                     result = kRocProfVisResultOutOfRange;
-                }
                 break;
             }
             default:

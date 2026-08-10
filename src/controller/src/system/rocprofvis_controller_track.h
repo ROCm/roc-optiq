@@ -42,7 +42,12 @@ public:
     rocprofvis_dm_track_t GetDmHandle(void);
     uint64_t GetId() const;
     uint64_t GetNumberOfEntries() const;
+    double GetStartTimestamp() const;
+    double GetEndTimestamp() const;
     uint64_t GetExtDataNumberOfEntries() const;
+    std::string GetExtDataCategory(uint64_t index);
+    std::string GetExtDataName(uint64_t index);
+    std::string GetExtDataValue(uint64_t index);
     rocprofvis_result_t GetInclusiveMemoryUsage(uint64_t* value);
 
     Handle* GetContext(void) override;
@@ -51,13 +56,8 @@ public:
 
     // Handlers for getters.
     rocprofvis_result_t GetObject(rocprofvis_property_t property, uint64_t index, rocprofvis_handle_t** value) override final;
-    rocprofvis_result_t GetDouble(rocprofvis_property_t property, uint64_t index, double* value) override final;
-    rocprofvis_result_t GetString(rocprofvis_property_t property, uint64_t index, char* value, uint32_t* length) override final;
 
-    rocprofvis_result_t SetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t value) override final;
-    rocprofvis_result_t SetDouble(rocprofvis_property_t property, uint64_t index, double value) override final;
     rocprofvis_result_t SetObject(rocprofvis_property_t property, uint64_t index, rocprofvis_handle_t* value) override final;
-    rocprofvis_result_t SetString(rocprofvis_property_t property, uint64_t index, char const* value) override final;
 
     rocprofvis_result_t FillBounds();
     rocprofvis_result_t FillMetadata();
@@ -65,6 +65,12 @@ public:
 
 private:
     rocprofvis_result_t GetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t* value) override final;
+    rocprofvis_result_t GetDouble(rocprofvis_property_t property, uint64_t index, double* value) override final;
+    rocprofvis_result_t GetString(rocprofvis_property_t property, uint64_t index, char* value, uint32_t* length) override final;
+
+    rocprofvis_result_t SetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t value) override final;
+    rocprofvis_result_t SetDouble(rocprofvis_property_t property, uint64_t index, double value) override final;
+    rocprofvis_result_t SetString(rocprofvis_property_t property, uint64_t index, char const* value) override final;
 
     struct fetch_range_t
     {

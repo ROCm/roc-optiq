@@ -4,7 +4,7 @@
 #pragma once
 
 #include "rocprofvis_controller.h"
-#include <cstring>
+#include <string_view>
 
 namespace RocProfVis
 {
@@ -36,7 +36,7 @@ public:
     virtual void    IncreaseRetainCounter() {};
 
 protected:
-    rocprofvis_result_t GetStringImpl(char* value, uint32_t* length, char const* data, uint32_t data_len);
+    rocprofvis_result_t GetStdStringImpl(char* value, uint32_t* length, std::string_view data);
     rocprofvis_result_t UnhandledProperty(rocprofvis_property_t property);
 
     uint32_t m_first_prop_index;
@@ -45,5 +45,3 @@ protected:
 
 }
 }
-
-#define GetStdStringImpl(value, length, data) GetStringImpl(value, length, data.c_str(), static_cast<uint32_t>(data.length()))

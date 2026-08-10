@@ -320,7 +320,7 @@ rocprofvis_dm_result_t TopologyNode::GetPropertyAsCharPtr(rocprofvis_dm_property
 			}
 			else
 			{
-				*value = "";
+				*value = '\0';
 				return kRocProfVisDmResultSuccess;
 			}
 			ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN(ERROR_INVALID_PROPERTY_GETTER, kRocProfVisDmResultInvalidProperty);
@@ -334,7 +334,7 @@ rocprofvis_dm_result_t TopologyNode::GetPropertyAsCharPtr(rocprofvis_dm_property
 			}
 			else
 			{
-				*value = "";
+				*value = '\0';
 				return kRocProfVisDmResultSuccess;
 			}
 			ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN(ERROR_INVALID_PROPERTY_GETTER, kRocProfVisDmResultInvalidProperty);

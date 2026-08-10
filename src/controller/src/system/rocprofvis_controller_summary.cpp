@@ -9,6 +9,7 @@
 #include "rocprofvis_controller_track.h"
 #include "rocprofvis_controller_arguments.h"
 #include <cstdlib>
+#include <cstring>
 
 namespace RocProfVis
 {

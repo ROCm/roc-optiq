@@ -2648,7 +2648,10 @@ TimelineView::RenderTrackStats(float available_width)
     ImGui::PushFont(fonts.GetFont(FontType::kIcon), fonts.GetFontSize(FontSize::kSmall));
     const float arrow_h = ImGui::GetTextLineHeight();
     ImGui::SetCursorPos(ImVec2(0.0f, ImGui::GetWindowHeight() - arrow_h));
-    if(ImGui::Button(sort_label.c_str(), ImVec2(available_width, arrow_h)))
+    // Open the sort menu from the button itself (left- or right-click), rather than
+    // a right-click anywhere on the stats block.
+    if(ImGui::Button(sort_label.c_str(), ImVec2(available_width, arrow_h)) ||
+       ImGui::IsItemClicked(ImGuiMouseButton_Right))
     {
         ImGui::OpenPopup("##track_sort_ctx");
     }
@@ -2661,15 +2664,14 @@ TimelineView::RenderTrackStats(float available_width)
         EndTooltipStyled();
     }
 
-    // Sort menu, shared by the button above and a right-click anywhere on the
-    // header. Pull spacing from the base style; the histogram strip's child has zero
-    // padding, which would otherwise leave the popup cramped.
+    // Sort menu opened from the button above. Pull spacing from the base style; the
+    // histogram strip's child has zero padding, which would otherwise leave the
+    // popup cramped.
     const ImGuiStyle& base = m_settings.GetDefaultStyle();
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, base.WindowPadding);
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, base.ItemSpacing);
     ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, base.FramePadding);
-    if(ImGui::BeginPopupContextWindow("##track_sort_ctx",
-                                      ImGuiPopupFlags_MouseButtonRight))
+    if(ImGui::BeginPopup("##track_sort_ctx"))
     {
         RenderTrackSortMenu();
         ImGui::EndPopup();

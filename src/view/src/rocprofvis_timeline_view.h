@@ -89,15 +89,6 @@ class TimelineView : public RocWidget
     friend TimelineViewProjectSettings;
 
 public:
-    // How the timeline track order is derived. Persisted as an int, so keep the
-    // explicit values stable.
-    enum class TrackSortMode
-    {
-        kTopology = 0,  // Match the sidebar topology tree order.
-        kDefault  = 1,  // Natural load order captured when the trace opened.
-        kCustom   = 2,  // The user's manual (drag-reordered) order; one remembered slot.
-    };
-
     TimelineView(DataProvider& dp, std::shared_ptr<TimelineSelection> timeline_selection,
                  std::shared_ptr<MeasurementController> measurement,
                  std::shared_ptr<AnnotationsManager>   annotations);
@@ -143,17 +134,27 @@ public:
     void           RenderTimelineViewOptionsMenu(ImVec2 window_position);
     TimelineArrow& GetArrowLayer();
 
+    // Points at the sidebar-tree (topology) order owned by TrackTopology. Wired by
+    // the owning TraceView; the pointee stays valid for the view's lifetime.
+    void          SetTopologyOrder(const std::vector<uint64_t>* order);
+
+private:
+    // How the timeline track order is derived. Persisted as an int, so keep the
+    // explicit values stable.
+    enum class TrackSortMode
+    {
+        kTopology = 0,  // Match the sidebar topology tree order.
+        kDefault  = 1,  // Natural load order captured when the trace opened.
+        kCustom   = 2,  // The user's manual (drag-reordered) order; one remembered slot.
+    };
+
     // Reorder the tracks according to the given sort mode. If topology order isn't
     // available yet (the tree is still building at load), the sort is deferred and
     // applied once SetTopologyOrder() provides it.
     void          SortTracksBy(TrackSortMode mode);
     TrackSortMode GetSortMode() const { return m_sort_mode; }
     bool          HasCustomOrder() const { return !m_custom_order.empty(); }
-    // Points at the sidebar-tree (topology) order owned by TrackTopology. Wired by
-    // the owning TraceView; the pointee stays valid for the view's lifetime.
-    void          SetTopologyOrder(const std::vector<uint64_t>* order);
 
-private:
     // Reindexes each TrackInfo and rebuilds m_tracks to match order, which must be
     // a full permutation of the current track ids. View-only: never syncs the
     // controller graph order.

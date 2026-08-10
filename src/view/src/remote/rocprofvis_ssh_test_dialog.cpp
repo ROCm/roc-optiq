@@ -522,7 +522,11 @@ SshTestDialog::RenderOutputPopup()
                 }
                 // Always offer a manual Close so the popup can never wedge open,
                 // even if the terminal snapshot is missed (e.g. connection dropped).
-                if(AccentButton("Close", ImVec2(BUTTON_WIDTH, 0), &settings))
+                if(ColoredButton("Close", settings.GetColor(Colors::kAccent),
+                                 settings.GetColor(Colors::kAccentHover),
+                                 settings.GetColor(Colors::kAccentActive),
+                                 settings.GetColor(Colors::kTextOnAccent), nullptr,
+                                 ImVec2(BUTTON_WIDTH, 0)))
                 {
                     ImGui::CloseCurrentPopup();
                     m_show_stdout_popup = false;

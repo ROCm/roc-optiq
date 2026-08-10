@@ -639,20 +639,20 @@ PanelIcon(const char* glyph, Colors color, SettingsManager* settings)
 }
 
 bool
-AccentButton(const char* label, ImVec2 size, SettingsManager* settings)
+ColoredButton(const char* label, ImU32 color, ImU32 hovered_color, ImU32 active_color,
+              ImU32 text_color, const char* tooltip, ImVec2 size)
 {
-    if(!settings)
-    {
-        settings = &SettingsManager::GetInstance();
-    }
-    ImGui::PushStyleColor(ImGuiCol_Button, settings->GetColor(Colors::kAccent));
-    ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
-                          settings->GetColor(Colors::kAccentHover));
-    ImGui::PushStyleColor(ImGuiCol_ButtonActive,
-                          settings->GetColor(Colors::kAccentActive));
-    ImGui::PushStyleColor(ImGuiCol_Text, settings->GetColor(Colors::kTextOnAccent));
+    ImGui::PushStyleColor(ImGuiCol_Button, color);
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, hovered_color);
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive, active_color);
+    ImGui::PushStyleColor(ImGuiCol_Text, text_color);
     bool clicked = ImGui::Button(label, size);
     ImGui::PopStyleColor(4);
+    if(tooltip && strlen(tooltip) > 0 && BeginItemTooltipStyled())
+    {
+        ImGui::TextUnformatted(tooltip);
+        EndTooltipStyled();
+    }
     return clicked;
 }
 

@@ -182,7 +182,8 @@ rocprofvis_dm_result_t Database::BuildEventSearchQuery(
     rocprofvis_dm_timestamp_t start, rocprofvis_dm_timestamp_t end,
     rocprofvis_db_num_of_tracks_t num, rocprofvis_db_track_selection_t ops,
     rocprofvis_dm_charptr_t where,
-    rocprofvis_dm_num_string_table_filters_t num_string_table_filters, rocprofvis_dm_string_table_filters_t string_table_filters, bool include_substring,
+    rocprofvis_dm_num_string_table_filters_t num_string_table_filters, rocprofvis_dm_string_table_filters_t string_table_filters, 
+    bool include_substring, bool include_category, bool partial_matching,
     rocprofvis_dm_charptr_t sort_column, rocprofvis_dm_sort_order_t sort_order,
     uint64_t max_count, uint64_t offset, bool count_only, rocprofvis_dm_string_t& query)
 {
@@ -194,6 +195,8 @@ rocprofvis_dm_result_t Database::BuildEventSearchQuery(
     (void) num_string_table_filters;
     (void) string_table_filters;
     (void) include_substring;
+    (void) include_category;
+    (void) partial_matching;
     (void) sort_column;
     (void) sort_order;
     (void) max_count;

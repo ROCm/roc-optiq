@@ -185,11 +185,11 @@ PanelFieldLabel(const char* text, bool align_to_frame = true,
 void
 PanelIcon(const char* glyph, Colors color, SettingsManager* settings = nullptr);
 
-// Accent-colored primary action button (accent fill + on-accent text). Returns
-// true when clicked.
+// Colored button. Returns true when clicked.
 bool
-AccentButton(const char* label, ImVec2 size = ImVec2(0.0f, 0.0f),
-             SettingsManager* settings = nullptr);
+ColoredButton(const char* label, ImU32 color, ImU32 hovered_color, ImU32 active_color,
+              ImU32 text_color, const char* tooltip = nullptr,
+              ImVec2 size = ImVec2(0.0f, 0.0f));
 
 // Remote download progress modal, shared by the SSH test dialog and the
 // profiler launcher. The caller opens the popup (ImGui::OpenPopup) and owns

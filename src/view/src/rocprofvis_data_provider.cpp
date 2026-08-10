@@ -2110,10 +2110,20 @@ DataProvider::FetchEventSearch(const EventSearchRequestParams& table_params)
                 ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
             }
 
-            // set matching behavior in request
+            // set matching behavior in request...
             result = rocprofvis_controller_set_uint64(
                 args, kRPVControllerTableArgsStringTableFiltersIncludeSubstrings, 0,
                 table_params.m_include_substrings ? 1 : 0);
+            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+
+            result = rocprofvis_controller_set_uint64(
+                args, kRPVControllerTableArgsStringTableFiltersIncludeCategory, 0,
+                table_params.m_include_category ? 1 : 0);
+            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+
+            result = rocprofvis_controller_set_uint64(
+                args, kRPVControllerTableArgsStringTableFiltersPartialMatching, 0,
+                table_params.m_partial_matching ? 1 : 0);
             ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
         }
         else

@@ -20,7 +20,6 @@ constexpr const char* TRACK_ID_COLUMN_NAME  = "__trackId";
 constexpr const char* STREAM_ID_COLUMN_NAME = "__streamTrackId";
 constexpr const char* ID_COLUMN_NAME        = "__uuid";
 constexpr const char* EVENT_ID_COLUMN_NAME  = "id";
-constexpr const char* NAME_COLUMN_NAME      = "name";
 constexpr const char* FOUND_ENTRIES_TEXT    = "Found %llu item(s) on %llu track(s)";
 
 MultiTrackTable::MultiTrackTable(DataProvider& dp, TableType table_type,
@@ -408,10 +407,6 @@ MultiTrackTable::IndexColumns()
             else if(col == EVENT_ID_COLUMN_NAME)
             {
                 m_important_column_idxs[kDbEventId] = i;
-            }
-            else if(col == NAME_COLUMN_NAME)
-            {
-                m_important_column_idxs[kName] = i;
             }
         }
     }

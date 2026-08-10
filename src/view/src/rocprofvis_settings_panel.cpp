@@ -21,8 +21,10 @@ constexpr float kHotkeyCategoryColWidth   = 90.0f;
 constexpr float kHotkeyBindingColWidth    = 120.0f;
 constexpr float kLogViewerInputWidth      = 160.0f;
 
-// Sample duration (1h 23m 45.123456789s) shown in the time-format preview.
-constexpr double kPreviewSampleNs = 5025123456789.0;
+// Sample duration shown in the time-format preview: 12m 34.123456789s. Uses zero
+// hours so Condensed Timecode (which trims leading zero hour/minute groups)
+// renders differently from Timecode.
+constexpr double kPreviewSampleNs = 754123456789.0;
 
 namespace RocProfVis
 {
@@ -293,7 +295,7 @@ SettingsPanel::RenderUnitOptions()
     ImGui::AlignTextToFramePadding();
     ImGui::TextUnformatted("Time Format");
     ImGui::SameLine();
-    ImGui::SetNextItemWidth(ImGui::CalcTextSize("Condensed Timecode (mm:ss.ns)").x +
+    ImGui::SetNextItemWidth(ImGui::CalcTextSize("Condensed Timecode (hh:mm:ss.ns)").x +
                             2 * style.FramePadding.x +
                             ImGui::GetFrameHeightWithSpacing());
     int time_format_index = static_cast<int>(m_usersettings.unit_settings.time_format);
@@ -301,7 +303,7 @@ SettingsPanel::RenderUnitOptions()
     PushComboStyles();
     if(ImGui::Combo("##time_format", &time_format_index,
                     "Timecode (hh:mm:ss.ns)\0"
-                    "Condensed Timecode (mm:ss.ns)\0"
+                    "Condensed Timecode (hh:mm:ss.ns)\0"
                     "Seconds\0"
                     "Milliseconds\0"
                     "Microseconds\0"
@@ -314,11 +316,9 @@ SettingsPanel::RenderUnitOptions()
     PopComboStyles();
 
     // Time format preview, styled to match the font preview above.
-    const TimeFormat selected_format = m_usersettings.unit_settings.time_format;
-    const bool       is_timecode     = selected_format == TimeFormat::kTimecode ||
-                                 selected_format == TimeFormat::kTimecodeCondensed;
+    const TimeFormat  selected_format = m_usersettings.unit_settings.time_format;
     const std::string preview =
-        nanosecond_to_formatted_str(kPreviewSampleNs, selected_format, !is_timecode);
+        nanosecond_to_formatted_str(kPreviewSampleNs, selected_format, true);
 
     ImGui::AlignTextToFramePadding();
     ImGui::TextUnformatted("Preview");
@@ -333,7 +333,7 @@ SettingsPanel::RenderUnitOptions()
     ImGui::TextUnformatted(preview.c_str());
     if(ImGui::IsItemHovered())
     {
-        SetTooltipStyled("Example rendering of a 1h 23m 45.123456789s duration\n"
+        SetTooltipStyled("Example rendering of a 12m 34.123456789s duration\n"
                          "using the selected time format.");
     }
 }

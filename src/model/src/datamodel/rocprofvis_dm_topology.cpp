@@ -306,7 +306,7 @@ rocprofvis_dm_result_t TopologyNode::GetPropertyAsCharPtr(rocprofvis_dm_property
 			{
 				m_name = GetNodeName();
 			}
-			*value = const_cast<char*>(m_name.c_str());
+			*value = (char*)m_name.c_str();
 			return kRocProfVisDmResultSuccess;
 		}
 		case kRPVControllerTopologyNodePropertyValueIndexed:
@@ -320,7 +320,7 @@ rocprofvis_dm_result_t TopologyNode::GetPropertyAsCharPtr(rocprofvis_dm_property
 			}
 			else
 			{
-				*value = "";
+				*value = const_cast<char*>("");
 				return kRocProfVisDmResultSuccess;
 			}
 			ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN(ERROR_INVALID_PROPERTY_GETTER, kRocProfVisDmResultInvalidProperty);
@@ -334,7 +334,7 @@ rocprofvis_dm_result_t TopologyNode::GetPropertyAsCharPtr(rocprofvis_dm_property
 			}
 			else
 			{
-				*value = "";
+				*value = const_cast<char*>("");
 				return kRocProfVisDmResultSuccess;
 			}
 			ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN(ERROR_INVALID_PROPERTY_GETTER, kRocProfVisDmResultInvalidProperty);

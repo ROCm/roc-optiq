@@ -306,7 +306,7 @@ rocprofvis_dm_result_t TopologyNode::GetPropertyAsCharPtr(rocprofvis_dm_property
 			{
 				m_name = GetNodeName();
 			}
-			*value = (char*)m_name.c_str();
+			*value = const_cast<char*>(m_name.c_str());
 			return kRocProfVisDmResultSuccess;
 		}
 		case kRPVControllerTopologyNodePropertyValueIndexed:
@@ -315,12 +315,12 @@ rocprofvis_dm_result_t TopologyNode::GetPropertyAsCharPtr(rocprofvis_dm_property
 			auto it = m_properties.begin();
 			std::advance(it, index);
 			if (std::holds_alternative<std::string>(it->second)) {
-				*value = (char*)std::get<std::string>(it->second).c_str();
+				*value = const_cast<char*>(std::get<std::string>(it->second).c_str());
 				return kRocProfVisDmResultSuccess;
 			}
 			else
 			{
-				*value = '\0';
+				*value = "";
 				return kRocProfVisDmResultSuccess;
 			}
 			ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN(ERROR_INVALID_PROPERTY_GETTER, kRocProfVisDmResultInvalidProperty);
@@ -329,12 +329,12 @@ rocprofvis_dm_result_t TopologyNode::GetPropertyAsCharPtr(rocprofvis_dm_property
 		{
 			auto it = m_properties.find(static_cast<unsigned int>(index));
 			if (it!=m_properties.end() && std::holds_alternative<std::string>(it->second)) {
-				*value = (char*)std::get<std::string>(it->second).c_str();
+				*value = const_cast<char*>(std::get<std::string>(it->second).c_str());
 				return kRocProfVisDmResultSuccess;
 			}
 			else
 			{
-				*value = '\0';
+				*value = "";
 				return kRocProfVisDmResultSuccess;
 			}
 			ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN(ERROR_INVALID_PROPERTY_GETTER, kRocProfVisDmResultInvalidProperty);

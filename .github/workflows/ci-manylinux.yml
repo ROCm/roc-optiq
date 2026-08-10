@@ -148,6 +148,7 @@ jobs:
             -DROCPROFVIS_ENABLE_REMOTE=${{ env.ENABLE_REMOTE }} \
             -DROCPROFVIS_ENABLE_PROFILER=${{ env.ENABLE_PROFILER }} \
             -DGLFW_LINK_STATIC=ON \
+            -DGLFW_BUILD_WAYLAND=OFF \
             -DCRYPTO_BACKEND=${{ inputs.crypto_backend }} \
             -DCPACK_GENERATOR="TGZ;DEB;RPM"
           cmake --build ${{ env.BUILD_DIR }} --parallel 4 --target package

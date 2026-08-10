@@ -466,33 +466,9 @@ TraceView::HandleHotKeys()
 
     if(hk.WasActionTriggered(HotkeyActionId::kZoomToSelection))
     {
-        if(m_timeline_view && m_timeline_selection)
+        if(m_timeline_view)
         {
-            double start_ns  = 0.0;
-            double end_ns    = 0.0;
-            bool   has_range = false;
-
-            if(m_timeline_selection->HasValidTimeRangeSelection())
-            {
-                has_range =
-                    m_timeline_selection->GetSelectedTimeRange(start_ns, end_ns);
-            }
-            else if(m_timeline_selection->HasSelectedEvents())
-            {
-                has_range =
-                    m_timeline_selection->GetSelectedEventsTimeRange(start_ns, end_ns);
-            }
-
-            if(has_range && end_ns > start_ns)
-            {
-                m_timeline_view->MoveToPosition(
-                    start_ns, end_ns, m_timeline_view->GetViewCoords().y, false);
-            }
-            else
-            {
-                NotificationManager::GetInstance().Show(
-                    "No selection to zoom to.", NotificationLevel::Warning);
-            }
+            m_timeline_view->ZoomToTimeRangeSelection();
         }
     }
 }

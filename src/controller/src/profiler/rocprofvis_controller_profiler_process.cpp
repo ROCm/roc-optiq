@@ -95,7 +95,8 @@ rocprofvis_result_t ProfilerConfig::ResolveToolPathRemote()
     {
         // A remote path, so "absolute" means starting with '/' - std::filesystem
         // would apply this host's rules, and on Windows would reject a perfectly
-        // good remote path (and join it with a backslash below).
+        // good remote path (and join it with a backslash below). This is one of
+        // the places that assume a POSIX remote.
         if (m_tool_directory.front() != '/')
         {
             spdlog::error("Remote profiler tool directory must be an absolute POSIX path, "

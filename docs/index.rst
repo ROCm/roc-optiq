@@ -17,6 +17,24 @@ The ROCm Optiq project repository is located at `https://github.com/ROCm/roc-opt
 
   ROCm Optiq is in beta. Running production workloads is not recommended.
 
+.. grid:: 2
+  :gutter: 3
+
+  .. grid-item-card:: Install
+
+    * :doc:`Install ROCm Optiq </install/optiq-install>`
+
+  .. grid-item-card:: How to
+
+    * :doc:`View trace data <how-to/view-trace>`
+    * :doc:`View analysis data <how-to/view-analysis>`
+    * :doc:`Customize your project <how-to/customize-views>`
+
+  .. grid-item-card:: Reference
+
+    * :doc:`Command-line support <reference/cli-support>`
+    * :doc:`Keyboard shortcuts <reference/keyboard-shortcuts>`
+
 ROCm Optiq (Beta) 0.5.0
 =======================
 
@@ -96,22 +114,6 @@ Fixes
 - Fixed the Welcome page sometimes appearing only partially drawn until the user moved the mouse or clicked (idle wait is now bounded). 
 - Fixed a macOS app packaging issue that could prevent the app bundle from being properly signed (static GLFW no longer staged into the bundle). 
 
-.. grid:: 2
-  :gutter: 3
-
-  .. grid-item-card:: Install
-
-    * :doc:`Install ROCm Optiq </install/optiq-install>`
-
-  .. grid-item-card:: How to
-
-    * :doc:`View trace data <how-to/view-trace>`
-    * :doc:`View analysis data <how-to/view-analysis>`
-    * :doc:`Customize your project <how-to/customize-views>`
-
-  .. grid-item-card:: Reference
-
-    * :doc:`Command-line support <reference/cli-support>`
 
 To contribute to the documentation, refer to the
 `Programming Guide in the GitHub repo <https://github.com/ROCm/roc-optiq/blob/main/CODING.md>`_.

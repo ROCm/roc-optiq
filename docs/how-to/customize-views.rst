@@ -1,12 +1,12 @@
 .. meta::
-  :description: Learn how to customize ROCm Optiq projects: set time range filters, add bookmarks and annotations, adjust track display options, and save presets.
+  :description: Learn how to customize ROCm Optiq: add bookmarks and annotations, adjust track display options, and save presets.
   :keywords: Optiq, ROCm, customize, filter, bookmarks, annotations
 
 .. _customize:
 
-*********************************
-Customize your ROCm Optiq project
-*********************************
+********************
+Customize ROCm Optiq
+********************
 
 .. |book| image:: ../images/bookmarks.png
 .. |pen| image:: ../images/pencil.png
@@ -61,56 +61,11 @@ Use the **View** menu to show and hide application panels.
 Customize projects for ROCm Systems Profiler traces
 ===================================================
 
-You can customize the data views of an open ROCm Systems Profiler trace file in ROCm Optiq, including timeline display settings, saved trace selections, added bookmarks/annotations, and more.
+You can customize the data views of an open ROCm Systems Profiler trace file in ROCm Optiq, including timeline display settings, added bookmarks/annotations, and more.
 
 .. note::
 
    These settings only apply to ROCm Systems Profiler trace projects. They don't apply to ROCm Compute Profiler projects.
-
-.. _time-range-filter:
-
-Set a time range filter
------------------------
-
-Set a time range filter in the :ref:`timeline` to limit the data displayed to a specific period. 
-
-To set a time range filter, press and hold **Ctrl** while dragging your mouse in the **Timeline View** to select a range.
-
-.. image:: ../images/time-range-filter.gif
-   :width: 800
-   :alt: Timeline View with a time range selected, showing the shaded selection area with draggable boundary handles
-
-Once a time range is selected, the selection boundaries can be adjusted by dragging them. 
-The active time range filter applies to event and sample counter details in the :ref:`advanced` section.
-
-If one or more events are selected, the **Make Time Range Selection** option displays on the timeline context menu when you right-click:
-
-|make|
-
-Selecting this sets a time-range filter with boundaries at the event's start and end times, or at the first start time and last end time if multiple events are selected. 
-
-.. tip::
-
-   Press **M** for a shortcut to **Make Time Range Selection** when one or more events are selected.  
-
-To clear the time range selection, press **Esc** or right-click and select **Remove Selection**:
-
-|remove|
-
-.. note::
-
-   When a time-range filter is active, all events intersecting that time-range remain at full brightness; events outside the range are dimmed. 
-
-Save trace selections
-~~~~~~~~~~~~~~~~~~~~~
-
-When there's an active time range filter, select **Edit** > **Save Trace Selection** to trim the trace:
-
-.. image:: ../images/save-trace.png
-   :width: 200
-   :alt: Edit menu with the Save Trace Selection option highlighted
-
-This creates a new trace file containing only the events in the filter.
 
 .. _annotation:
 
@@ -259,7 +214,7 @@ You can remove metadata added by ROCm Optiq during processing trace data by sele
    :width: 300
    :alt: File menu open with Database submenu showing the Full Cleanup option for removing ROCm Optiq metadata
 
-Customize projects for ROCm Compute Profiler analysis data
+Customize views for ROCm Compute Profiler analysis data
 ==========================================================
 
 .. _presets:

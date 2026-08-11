@@ -209,7 +209,7 @@ jobs:
       - name: Upload DEB to S3
         if: ${{ inputs.upload_to_s3 }}
         run: |
-          S3_DEB_PREFIX="s3://${{ secrets.AWS_S3_BUCKET }}/${{ env.S3_ROOT_DIRECTORY }}/rocm/extras/rocoptiq/deb/pool/main"
+          S3_DEB_PREFIX="s3://${{ secrets.AWS_S3_BUCKET }}/${{ env.S3_ROOT_DIRECTORY }}/rocm/extras/rocoptiq/packages/deb/pool/main"
           aws s3 cp \
             $(ls ${{ env.DIST_DIR }}/*.deb | head -1) \
             "${S3_DEB_PREFIX}/amdrocm10-roc-optiq_1.0.0.0-1_amd64.deb" \
@@ -221,7 +221,7 @@ jobs:
           S3_RPM_PREFIX="s3://${{ secrets.AWS_S3_BUCKET }}/${{ env.S3_ROOT_DIRECTORY }}/rocm/extras/rocoptiq/packages/rpm/x86_64"
           aws s3 cp \
             $(ls ${{ env.DIST_DIR }}/*.rpm | head -1) \
-            "${S3_RPM_PREFIX}/amdrocm10-roc-optiq-1.0.0.0-1.el8.x86_64.rpm" \
+            "${S3_RPM_PREFIX}/amdrocm10-roc-optiq-1.0.0.0-1.x86_64.rpm" \
             --no-progress
 
       - name: Generate RPM Metadata for S3

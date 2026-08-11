@@ -206,23 +206,41 @@ jobs:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ secrets.AWS_REGION }}
 
+      - name: Upload DEB to S3
+        if: ${{ inputs.upload_to_s3 }}
+        run: |
+          S3_DEB_PREFIX="s3://${{ secrets.AWS_S3_BUCKET }}/${{ env.S3_ROOT_DIRECTORY }}/rocm/extras/rocoptiq/deb/pool/main"
+          aws s3 cp \
+            $(ls ${{ env.DIST_DIR }}/*.deb | head -1) \
+            "${S3_DEB_PREFIX}/amdrocm10-roc-optiq_1.0.0.0-1_amd64.deb" \
+            --no-progress
+
+      - name: Upload RPM to S3
+        if: ${{ inputs.upload_to_s3 }}
+        run: |
+          S3_RPM_PREFIX="s3://${{ secrets.AWS_S3_BUCKET }}/${{ env.S3_ROOT_DIRECTORY }}/rocm/extras/rocoptiq/packages/rpm/x86_64"
+          aws s3 cp \
+            $(ls ${{ env.DIST_DIR }}/*.rpm | head -1) \
+            "${S3_RPM_PREFIX}/amdrocm10-roc-optiq-1.0.0.0-1.el8.x86_64.rpm" \
+            --no-progress
+
       - name: Generate RPM Metadata for S3
         if: ${{ inputs.upload_to_s3 }}
-        working-directory: ${{ env.DIST_DIR }}
         run: |
-          createrepo_c .
+          mkdir -p rpm-repo
+          cp ${{ env.DIST_DIR }}/*.rpm rpm-repo/
+          createrepo_c rpm-repo/
+          aws s3 cp --recursive rpm-repo/repodata \
+            s3://${{ secrets.AWS_S3_BUCKET }}/${{ env.S3_ROOT_DIRECTORY }}/rocm/extras/rocoptiq/packages/rpm/x86_64/repodata/ \
+            --no-progress
 
-      - name: Upload Build to S3
+      - name: Upload Tarball to S3
         if: ${{ inputs.upload_to_s3 }}
         run: |
-          if [ -z "${{ env.RELEASE_VERSION }}" ]; then
-            echo "No release version provided, defaulting to using TIMESTAMP as S3_SECONDARY_DIRECTORY"
-            S3_SECONDARY_DIRECTORY=$(date +%Y_%m_%d)
-          else
-            echo "Release Version ${{ env.RELEASE_VERSION }} provided, using ${{ env.RELEASE_VERSION }} as S3_SECONDARY_DIRECTORY"
-            S3_SECONDARY_DIRECTORY="${{ env.RELEASE_VERSION }}"
-          fi
-          aws s3 cp --recursive ${{ env.DIST_DIR }} s3://${{ secrets.AWS_S3_BUCKET }}/${{ env.S3_ROOT_DIRECTORY }}/$S3_SECONDARY_DIRECTORY/manylinux/ \
+          S3_TGZ_PREFIX="s3://${{ secrets.AWS_S3_BUCKET }}/${{ env.S3_ROOT_DIRECTORY }}/rocm/extras/rocoptiq/tarball"
+          aws s3 cp \
+            $(ls ${{ env.DIST_DIR }}/*.tar.gz | head -1) \
+            "${S3_TGZ_PREFIX}/amdrocm10-roc-optiq-1.0.0.0-Linux.tar.gz" \
             --no-progress
 
       - name: Announce Test Failure

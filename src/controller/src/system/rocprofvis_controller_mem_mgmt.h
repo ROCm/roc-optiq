@@ -175,11 +175,21 @@ namespace RocProfVis
             void*           Allocate(size_t size, rocprofvis_object_type_t type, SegmentTimeline *owner);
             void            CleanUp();
             static void     UpdateSizeLimit();
+            // Queries physical memory and applies the environment overrides. Runs
+            // once per process; callers must hold s_lru_config_mutex.
+            static void     ProbeMemoryLimits();
             void            LockTimelines(std::vector<SegmentTimeline*>& locked, std::vector<SegmentTimeline*>& failed_to_lock);
             void            UnlockTimelines(std::vector<SegmentTimeline*>& locked);
             bool            CheckInUse(LRUMember* lru);
 
             inline static size_t                                        s_physical_memory_avail=0;
+            // Total bytes shared by every trace. Defaults to
+            // s_physical_memory_avail; ROCPROFVIS_MEM_LIMIT_MB overrides it.
+            inline static size_t                                        s_lru_budget=0;
+            // When non-zero the LRU thread sweeps every interval instead of only
+            // when it is notified. Test-only, set by ROCPROFVIS_MEM_LRU_POLL_MS.
+            inline static uint32_t                                      s_lru_poll_interval_ms=0;
+            inline static bool                                          s_limits_probed=false;
             inline static std::vector<MemoryManager*>                   s_memory_manager_instances;
             inline static std::mutex                                    s_lru_config_mutex;
 

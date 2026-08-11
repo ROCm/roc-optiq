@@ -1,6 +1,10 @@
 // Copyright Advanced Micro Devices, Inc.
 // SPDX-License-Identifier: MIT
 
+#if defined(_MSC_VER) && !defined(_CRT_SECURE_NO_WARNINGS)
+#define _CRT_SECURE_NO_WARNINGS
+#endif
+
 #include "rocprofvis_controller_mem_mgmt.h"
 #include "rocprofvis_controller_segment.h"
 #include "rocprofvis_controller_event.h"
@@ -21,6 +25,7 @@
 #undef min
 #undef max
 #include <algorithm>
+#include <cstdlib>
 #include <type_traits>
 
 
@@ -28,6 +33,44 @@ namespace RocProfVis
 {
 namespace Controller
 {
+
+// Test hooks. These exist so eviction pressure can be reproduced on a machine
+// that is not actually short on memory; none of them are set in normal use.
+//
+//   ROCPROFVIS_MEM_LIMIT_MB    total LRU budget in MiB, shared by all traces.
+//                              Leaves pool geometry untouched, so this is the
+//                              faithful way to shrink the budget.
+//   ROCPROFVIS_MEM_PERCENT     replaces kUseVailMemoryPercent. Also feeds the
+//                              pool block size, so it changes pool geometry.
+//   ROCPROFVIS_MEM_LRU_POLL_MS forces an eviction sweep on this interval even
+//                              when the budget is not exceeded.
+constexpr char     kMemoryLimitEnvVar[]   = "ROCPROFVIS_MEM_LIMIT_MB";
+constexpr char     kMemoryPercentEnvVar[] = "ROCPROFVIS_MEM_PERCENT";
+constexpr char     kMemoryPollEnvVar[]    = "ROCPROFVIS_MEM_LRU_POLL_MS";
+constexpr uint64_t kBytesPerMegabyte      = 1024ULL * 1024ULL;
+constexpr uint64_t kMaxMemoryPercent      = 100;
+
+static bool
+read_env_uint64(const char* name, uint64_t& value)
+{
+    bool        parsed = false;
+    const char* raw    = std::getenv(name);
+    if(raw != nullptr && raw[0] != '\0')
+    {
+        char*              end          = nullptr;
+        unsigned long long parsed_value = std::strtoull(raw, &end, 10);
+        if(end != nullptr && *end == '\0')
+        {
+            value  = static_cast<uint64_t>(parsed_value);
+            parsed = true;
+        }
+        else
+        {
+            spdlog::warn("Ignoring {}: '{}' is not an unsigned integer", name, raw);
+        }
+    }
+    return parsed;
+}
 
 MemoryManager::MemoryManager(uint64_t id)
 : m_lru_storage_memory_used(0)
@@ -76,49 +119,92 @@ MemoryManager::~MemoryManager()
     }
 }
 
+void
+MemoryManager::ProbeMemoryLimits()
+{
+    if(s_limits_probed)
+    {
+        return;
+    }
+    s_limits_probed = true;
+
+    uint64_t avail_phys_mem = 0;
+#if defined(_MSC_VER)
+    MEMORYSTATUSEX mem_info;
+    mem_info.dwLength = sizeof(MEMORYSTATUSEX);
+    GlobalMemoryStatusEx(&mem_info);
+
+    avail_phys_mem = mem_info.ullAvailPhys;
+#elif defined(__APPLE__)
+    mach_msg_type_number_t count = HOST_VM_INFO64_COUNT;
+    vm_statistics64_data_t vm_stats;
+    if(host_statistics64(mach_host_self(), HOST_VM_INFO64,
+                         reinterpret_cast<host_info64_t>(&vm_stats), &count) == KERN_SUCCESS)
+    {
+        const uint64_t page_size = static_cast<uint64_t>(getpagesize());
+        avail_phys_mem = (vm_stats.free_count + vm_stats.inactive_count) * page_size;
+    }
+
+    if(avail_phys_mem == 0)
+    {
+        uint64_t total_mem = 0;
+        size_t size = sizeof(total_mem);
+        if(sysctlbyname("hw.memsize", &total_mem, &size, nullptr, 0) == 0)
+        {
+            avail_phys_mem = total_mem;
+        }
+    }
+#elif defined(__GNUC__)
+    struct sysinfo mem_info;
+    sysinfo(&mem_info);
+
+    avail_phys_mem = mem_info.freeram;
+    avail_phys_mem *= mem_info.mem_unit;
+#endif
+
+    uint64_t percent     = kUseVailMemoryPercent;
+    uint64_t env_percent = 0;
+    if(read_env_uint64(kMemoryPercentEnvVar, env_percent))
+    {
+        if(env_percent > 0 && env_percent <= kMaxMemoryPercent)
+        {
+            percent = env_percent;
+            spdlog::warn("{} set: using {}% of available memory", kMemoryPercentEnvVar,
+                         percent);
+        }
+        else
+        {
+            spdlog::warn("Ignoring {}: {} is outside 1-{}", kMemoryPercentEnvVar,
+                         env_percent, kMaxMemoryPercent);
+        }
+    }
+
+    s_physical_memory_avail = static_cast<size_t>((avail_phys_mem / 100) * percent);
+    s_lru_budget            = s_physical_memory_avail;
+
+    uint64_t limit_megabytes = 0;
+    if(read_env_uint64(kMemoryLimitEnvVar, limit_megabytes) && limit_megabytes > 0)
+    {
+        s_lru_budget = static_cast<size_t>(limit_megabytes * kBytesPerMegabyte);
+        spdlog::warn("{} set: capping LRU budget at {} MiB ({} bytes)",
+                     kMemoryLimitEnvVar, limit_megabytes, s_lru_budget);
+    }
+
+    uint64_t poll_interval_ms = 0;
+    if(read_env_uint64(kMemoryPollEnvVar, poll_interval_ms) && poll_interval_ms > 0)
+    {
+        s_lru_poll_interval_ms = static_cast<uint32_t>(poll_interval_ms);
+        spdlog::warn("{} set: LRU thread will sweep every {} ms", kMemoryPollEnvVar,
+                     s_lru_poll_interval_ms);
+    }
+}
+
 // start memory manager LRU processing when trace size is known
 void MemoryManager::Init(size_t trace_size)
 {
-    if(s_physical_memory_avail == 0)
     {
-#if defined(_MSC_VER)
-        MEMORYSTATUSEX mem_info;
-        mem_info.dwLength = sizeof(MEMORYSTATUSEX);
-        GlobalMemoryStatusEx(&mem_info);
-
-        s_physical_memory_avail = (mem_info.ullAvailPhys / 100) * kUseVailMemoryPercent;
-
-#elif defined(__APPLE__)
-        uint64_t avail_phys_mem = 0;
-        mach_msg_type_number_t count = HOST_VM_INFO64_COUNT;
-        vm_statistics64_data_t vm_stats;
-        if(host_statistics64(mach_host_self(), HOST_VM_INFO64,
-                             reinterpret_cast<host_info64_t>(&vm_stats), &count) == KERN_SUCCESS)
-        {
-            const uint64_t page_size = static_cast<uint64_t>(getpagesize());
-            avail_phys_mem = (vm_stats.free_count + vm_stats.inactive_count) * page_size;
-        }
-
-        if(avail_phys_mem == 0)
-        {
-            uint64_t total_mem = 0;
-            size_t size = sizeof(total_mem);
-            if(sysctlbyname("hw.memsize", &total_mem, &size, nullptr, 0) == 0)
-            {
-                avail_phys_mem = total_mem;
-            }
-        }
-
-        s_physical_memory_avail = (avail_phys_mem / 100) * kUseVailMemoryPercent;
-#elif defined(__GNUC__)
-        struct sysinfo mem_info;
-        sysinfo(&mem_info);
-
-        uint64_t avail_phys_mem = mem_info.freeram;
-        avail_phys_mem *= mem_info.mem_unit;
-
-        s_physical_memory_avail = (avail_phys_mem / 100) * kUseVailMemoryPercent;
-#endif
+        std::unique_lock lock(s_lru_config_mutex);
+        ProbeMemoryLimits();
     }
 
     m_trace_size =  trace_size;
@@ -133,6 +219,7 @@ void MemoryManager::Init(size_t trace_size)
     m_mem_block_size = static_cast<uint32_t>(exponent << 11);
 
     spdlog::debug("Physical memory = {}!", s_physical_memory_avail);
+    spdlog::debug("Memory manager LRU budget = {} bytes!", s_lru_budget);
     spdlog::debug("Memory manager memory allocation block  size = {}!", m_mem_block_size);
     
     m_lru_thread         = std::thread(&MemoryManager::ManageLRU, this);
@@ -167,7 +254,7 @@ MemoryManager::UpdateSizeLimit()
             fraction = 1.0;
         }
         fraction = std::clamp(fraction, 0.0, 1.0);
-        size_t size_limit = static_cast<size_t>(fraction * static_cast<double>(s_physical_memory_avail));
+        size_t size_limit = static_cast<size_t>(fraction * static_cast<double>(s_lru_budget));
         {
             std::unique_lock<std::mutex> lock(instance->m_lru_cond_mutex);
             instance->m_lru_size_limit = size_limit;
@@ -194,12 +281,6 @@ MemoryManager::Configure(double weight)
     UpdateSizeLimit();
 }
 
-
-//std::unordered_map<Segment*, std::unique_ptr<LRUMember>>::iterator
-//MemoryManager::GetDefaultLRUIterator()
-//{
-//    return m_lru_array.end();
-//}
 
 rocprofvis_result_t
 MemoryManager::CancelArrayOwnership(void* array_ptr, rocprofvis_owner_type_t type)
@@ -362,11 +443,22 @@ MemoryManager::ManageLRU()
     {
         {
             std::unique_lock lock(m_lru_cond_mutex);
-            m_lru_cv.wait(lock, [&] {
+            auto             ready = [&] {
                 return (m_lru_configured &&
                         m_lru_storage_memory_used > m_lru_size_limit) ||
                        m_lru_mgmt_shutdown;
-            });
+            };
+            if(s_lru_poll_interval_ms > 0)
+            {
+                // Timing out here drops through to a sweep the budget check would
+                // otherwise have skipped, which is the point of the test hook.
+                m_lru_cv.wait_for(lock, std::chrono::milliseconds(s_lru_poll_interval_ms),
+                                  ready);
+            }
+            else
+            {
+                m_lru_cv.wait(lock, ready);
+            }
         }
         {
             std::vector<SegmentTimeline*> locked;

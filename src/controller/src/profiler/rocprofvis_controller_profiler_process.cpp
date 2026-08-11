@@ -575,7 +575,7 @@ bool LocalProfilerExecutor::Start(const ProfilerConfig& config)
     // while the parent is multithreaded (GLFW/MoltenVK/Obj-C runtime). It works
     // on Linux, which is the only POSIX target today. Before enabling the
     // profiler on macOS this must be reworked to posix_spawnp() (deferred; see
-    // the section banner above and review item H6).
+    // the section banner above).
     m_process_id = fork();
 
     if (m_process_id == -1)

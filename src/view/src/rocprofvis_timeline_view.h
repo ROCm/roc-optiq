@@ -97,6 +97,7 @@ public:
     void ScrollToTrack(const uint64_t& track_id);
     void SetViewableRangeNS(double start_ns, double end_ns);
     void MoveToPosition(double start_ns, double end_ns, double y_position, bool center);
+    void ZoomToTimeRangeSelection();
     void RenderGraphPoints();
     void RenderHistogram();
     void RenderTraceView();
@@ -198,7 +199,6 @@ private:
     void                            CopySelectedEventDetails();
     void                            ZoomToTimeSpan(double start_ns, double end_ns);
     void                            ZoomToMeasurement();
-    void                            ZoomToTimeRangeSelection();
 
     TrackLayout                     BuildTrackLayout();
     EventManager::SubscriptionToken m_scroll_to_track_token;

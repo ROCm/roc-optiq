@@ -463,6 +463,14 @@ TraceView::HandleHotKeys()
             }
         }
     }
+
+    if(hk.WasActionTriggered(HotkeyActionId::kZoomToSelection))
+    {
+        if(m_timeline_view)
+        {
+            m_timeline_view->ZoomToTimeRangeSelection();
+        }
+    }
 }
 
 bool

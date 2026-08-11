@@ -26,6 +26,8 @@ subtrees:
   entries:
   - file: reference/cli-support
     title: Command-line support
+  - file: reference/keyboard-shortcuts
+    title: Keyboard shortcuts
 
 - caption: About
   entries:

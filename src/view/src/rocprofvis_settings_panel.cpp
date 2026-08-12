@@ -240,6 +240,16 @@ SettingsPanel::RenderDisplayOptions()
         SetTooltipStyled("Color-code tracks and sidebar nodes by node on multi-node traces.");
     }
 
+    if(ImGui::Checkbox("Compact topology sidebar",
+                       &m_usersettings.display_settings.compact_sidebar))
+    {
+        m_settings_changed = true;
+    }
+    if(ImGui::IsItemHovered())
+    {
+        SetTooltipStyled("Drop the sidebar row icons and use the right-click menu instead.");
+    }
+
     ImGui::Spacing();
     ImGui::TextUnformatted("Fonts");
     ImGui::Separator();

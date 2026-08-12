@@ -219,19 +219,22 @@ jobs:
       - name: Upload DEB to S3
         if: ${{ inputs.upload_to_s3 }}
         run: |
+          DEB_SRC=$(ls ${{ env.DIST_DIR }}/*.deb | head -1)
+          DEB_NAME="amdrocm${ROCM_VERSION}-$(basename "${DEB_SRC}")"
           S3_DEB_BASE="s3://${{ secrets.AWS_S3_BUCKET }}/${{ env.S3_ROOT_DIRECTORY }}/rocm/extras/rocoptiq/packages/deb"
-          DEB_FILE="${S3_DEB_BASE}/pool/main/amdrocm${ROCM_VERSION}-roc-optiq_1.0.0.0-1_amd64.deb"
           aws s3 cp \
-            $(ls ${{ env.DIST_DIR }}/*.deb | head -1) \
-            "${DEB_FILE}" \
+            "${DEB_SRC}" \
+            "${S3_DEB_BASE}/pool/main/${DEB_NAME}" \
             --no-progress
 
       - name: Generate DEB Metadata for S3
         if: ${{ inputs.upload_to_s3 }}
         run: |
+          DEB_SRC=$(ls ${{ env.DIST_DIR }}/*.deb | head -1)
+          DEB_NAME="amdrocm${ROCM_VERSION}-$(basename "${DEB_SRC}")"
           mkdir -p deb-repo/pool/main deb-repo/dists/optiq-nightly/main/binary-amd64
-          cp $(ls ${{ env.DIST_DIR }}/*.deb | head -1) \
-            deb-repo/pool/main/amdrocm${ROCM_VERSION}-roc-optiq_1.0.0.0-1_amd64.deb
+          cp "${DEB_SRC}" \
+            deb-repo/pool/main/${DEB_NAME}
 
           # Generate Packages index
           cd deb-repo
@@ -267,10 +270,12 @@ jobs:
       - name: Upload RPM to S3
         if: ${{ inputs.upload_to_s3 }}
         run: |
+          RPM_SRC=$(ls ${{ env.DIST_DIR }}/*.rpm | head -1)
+          RPM_NAME="amdrocm${ROCM_VERSION}-$(basename "${RPM_SRC}" | sed 's/\.el[0-9]\+//')"
           S3_RPM_PREFIX="s3://${{ secrets.AWS_S3_BUCKET }}/${{ env.S3_ROOT_DIRECTORY }}/rocm/extras/rocoptiq/packages/rpm/x86_64"
           aws s3 cp \
-            $(ls ${{ env.DIST_DIR }}/*.rpm | head -1) \
-            "${S3_RPM_PREFIX}/amdrocm${ROCM_VERSION}-roc-optiq-1.0.0.0-1.x86_64.rpm" \
+            "${RPM_SRC}" \
+            "${S3_RPM_PREFIX}/${RPM_NAME}" \
             --no-progress
 
       - name: Generate RPM Metadata for S3
@@ -286,10 +291,12 @@ jobs:
       - name: Upload Tarball to S3
         if: ${{ inputs.upload_to_s3 }}
         run: |
+          TGZ_SRC=$(ls ${{ env.DIST_DIR }}/*.tar.gz | head -1)
+          TGZ_NAME="amdrocm${ROCM_VERSION}-$(basename "${TGZ_SRC}")"
           S3_TGZ_PREFIX="s3://${{ secrets.AWS_S3_BUCKET }}/${{ env.S3_ROOT_DIRECTORY }}/rocm/extras/rocoptiq/tarball"
           aws s3 cp \
-            $(ls ${{ env.DIST_DIR }}/*.tar.gz | head -1) \
-            "${S3_TGZ_PREFIX}/amdrocm${ROCM_VERSION}-roc-optiq-1.0.0.0-Linux.tar.gz" \
+            "${TGZ_SRC}" \
+            "${S3_TGZ_PREFIX}/${TGZ_NAME}" \
             --no-progress
 
       - name: Announce Test Failure

@@ -5,6 +5,7 @@
 #include "rocprofvis_settings_manager.h"
 #include "icons/rocprovfis_icon_defines.h"
 #include "widgets/rocprofvis_gui_helpers.h"
+#include <algorithm>
 
 namespace RocProfVis
 {
@@ -54,6 +55,10 @@ EditableTextField::DrawPlainText()
     SettingsManager& settings = SettingsManager::GetInstance();
     if(m_show_reset_button)
     {
+        ImGui::SetCursorPosX(ImGui::GetContentRegionMax().x - ButtonSize() -
+                             ImGui::GetStyle().ItemSpacing.x -
+                             ImGui::CalcTextSize(m_text.c_str()).x -
+                             ImGui::GetStyle().WindowPadding.x);
         if(IconButton(ICON_ARROWS_CYCLE,
                       settings.GetFontManager().GetFont(FontType::kIcon)))
         {
@@ -63,16 +68,19 @@ EditableTextField::DrawPlainText()
             SetTooltipStyled("Revert To Default\n%s", m_reset_tooltip.c_str());
         ImGui::SameLine();
     }
-    // Draw the text as a button to avoid the background
-    // and prevent clicks from being registered.
+    else
+    {
+        ImGui::SetCursorPosX(ImGui::GetContentRegionMax().x -
+                             ImGui::CalcTextSize(m_text.c_str()).x -
+                             ImGui::GetStyle().WindowPadding.x);
+    }
+    // Transparent at rest, themed highlight on hover/press.
     ImGui::PushStyleColor(ImGuiCol_Button, 0);
-    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, 0);
-    ImGui::PushStyleColor(ImGuiCol_ButtonActive, 0);
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
+                          ImGui::GetStyleColorVec4(ImGuiCol_FrameBgHovered));
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive,
+                          ImGui::GetStyleColorVec4(ImGuiCol_FrameBgActive));
     ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(0, 0));
-
-    ImGui::SetCursorPosX(ImGui::GetContentRegionMax().x -
-                         ImGui::CalcTextSize(m_text.c_str()).x -
-                         ImGui::GetStyle().WindowPadding.x);
     if(ImGui::Button(m_text.c_str()))
     {
         m_editing_mode           = true;
@@ -90,9 +98,10 @@ EditableTextField::DrawPlainText()
 void
 EditableTextField::DrawEditingText()
 {
-    if(m_edit_buf != m_text)
+    // Seed only on entering edit mode so keystrokes aren't clobbered each frame.
+    if(m_request_keyboard_focus)
     {
-        m_edit_buf = m_text;
+        m_edit_buf = m_edit_text.empty() ? m_text : m_edit_text;
     }
 
     auto resize_callback = [](ImGuiInputTextCallbackData* data) -> int {
@@ -105,13 +114,17 @@ EditableTextField::DrawEditingText()
         return 0;
     };
 
-    float width = ImGui::CalcTextSize(m_edit_buf.c_str()).x;
+    // Keep a readable minimum width so short values don't collapse to a sliver.
+    const ImGuiStyle& style       = ImGui::GetStyle();
+    const float       min_width   = ImGui::CalcTextSize("00000").x;
+    const float       text_width  = ImGui::CalcTextSize(m_edit_buf.c_str()).x;
+    const float       label_width = ImGui::CalcTextSize(m_text.c_str()).x;
+    const float       width       = std::max({ text_width, label_width, min_width }) +
+                        style.FramePadding.x * 2.0f;
     ImGui::SetNextItemWidth(width);
 
-    // make edit field on the same level as the textfield
-    ImGui::SetCursorPos(ImVec2(ImGui::GetContentRegionMax().x -
-                                   ImGui::CalcTextSize(m_text.c_str()).x -
-                                   ImGui::GetStyle().WindowPadding.x,
+    ImGui::SetCursorPos(ImVec2(ImGui::GetContentRegionMax().x - width -
+                                   style.WindowPadding.x,
                                ImGui::GetCursorPosY() - 2.0f));
 
     if(m_request_keyboard_focus)
@@ -148,14 +161,24 @@ EditableTextField::SetText(std::string text, std::string tooltip, std::string re
     m_reset_tooltip = std::move(reset_tooltip);
 }
 
+void
+EditableTextField::SetEditText(std::string edit_text)
+{
+    m_edit_text = std::move(edit_text);
+}
+
 float
 EditableTextField::ButtonSize() const
 {
-    ImFont* icon_font =
-        SettingsManager::GetInstance().GetFontManager().GetFont(FontType::kIcon);
-    ImGui::PushFont(icon_font, 0.0f);
-    float size = ImGui::CalcTextSize(ICON_ARROWS_CYCLE).x;
-    ImGui::PopFont();
+    float size = 0.0f;
+    if(m_show_reset_button)
+    {
+        ImFont* icon_font =
+            SettingsManager::GetInstance().GetFontManager().GetFont(FontType::kIcon);
+        ImGui::PushFont(icon_font);
+        size = ImGui::CalcTextSize(ICON_ARROWS_CYCLE).x;
+        ImGui::PopFont();
+    }
     return size;
 }
 

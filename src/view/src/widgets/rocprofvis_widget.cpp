@@ -2,13 +2,10 @@
 // SPDX-License-Identifier: MIT
 
 #include "rocprofvis_widget.h"
-#include "icons/rocprovfis_icon_defines.h"
 #include "imgui.h"
 #include "rocprofvis_core.h"
 #include "rocprofvis_debug_window.h"
 #include "rocprofvis_utils.h"
-#include "widgets/rocprofvis_gui_helpers.h"
-#include "widgets/rocprofvis_notification_manager.h"
 #include "rocprofvis_settings_manager.h"
 #include <iostream>
 #include <sstream>
@@ -63,138 +60,6 @@ LayoutItem::CreateFromWidget(std::shared_ptr<RocWidget> widget, float w, float h
     Ptr item     = std::make_shared<LayoutItem>(w, h);
     item->m_item = widget;
     return item;
-}
-
-
-void
-WithPadding(float left, float right, float top, float bottom,
-            const std::function<void()>& content)
-{
-    if(top > 0.0f) ImGui::Dummy(ImVec2(0, top));
-
-    // No border flags for invisible borders
-    if(ImGui::BeginTable("##padding_table", 3, ImGuiTableFlags_SizingFixedFit))
-    {
-        ImGui::TableSetupColumn("LeftPad", ImGuiTableColumnFlags_WidthFixed, left);
-        ImGui::TableSetupColumn("Content", ImGuiTableColumnFlags_WidthStretch);
-        ImGui::TableSetupColumn("RightPad", ImGuiTableColumnFlags_WidthFixed, right);
-
-        ImGui::TableNextRow();
-
-        // Left padding
-        ImGui::TableSetColumnIndex(0);
-        if(left > 0.0f) ImGui::Dummy(ImVec2(left, 0));
-
-        // Content
-        ImGui::TableSetColumnIndex(1);
-        ImGui::BeginGroup();
-        content();
-        ImGui::EndGroup();
-
-        // Right padding
-        ImGui::TableSetColumnIndex(2);
-        if(right > 0.0f) ImGui::Dummy(ImVec2(right, 0));
-
-        ImGui::EndTable();
-    }
-
-    if(bottom > 0.0f) ImGui::Dummy(ImVec2(0, bottom));
-}
-
-bool
-IconMenuItem(const char* icon, const char* label)
-{
-    ImFont* icon_font = SettingsManager::GetInstance().GetFontManager().GetFont(FontType::kIcon);
-
-    bool clicked = ImGui::Selectable(("##menu_item" + std::string(label)).c_str(), false,
-                                     ImGuiSelectableFlags_SpanAllColumns,
-                                     ImVec2(0, ImGui::GetTextLineHeightWithSpacing()));
-    ImGui::SameLine(0.0f, 0.0f);
-
-    ImGui::BeginGroup();
-    ImGui::PushFont(icon_font);
-    ImGui::TextUnformatted(icon);
-    ImGui::PopFont();
-    ImGui::SameLine(0.f, ImGui::GetStyle().ItemSpacing.x);
-    ImGui::TextUnformatted(label);
-    ImGui::EndGroup();
-
-    if(clicked)
-        ImGui::CloseCurrentPopup();
-    return clicked;
-}
-
-bool
-CopyableTextUnformatted(
-    const char* text, std::string_view unique_id, std::string_view notification,
-    bool one_click_copy, bool context_menu,
-                        std::function<void(const char* value_to_copy)> menu_func)
-{
-    bool clicked = false;
-    if(!unique_id.empty())
-        ImGui::PushID(unique_id.data());
-
-    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
-    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0, 0, 0, 0));
-    ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0, 0, 0, 0));
-    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(0, 0));
-
-    if(ImGui::Button(text, ImVec2(0, 0)))
-    {
-        clicked = true;
-        if(one_click_copy)
-        {
-            ImGui::SetClipboardText(text);
-            if(!notification.empty())
-            {
-                NotificationManager::GetInstance().Show(notification.data(),
-                                                        NotificationLevel::Info);
-            }
-        }
-    }
-    
-    if(context_menu)
-    {
-        auto style = SettingsManager::GetInstance().GetDefaultStyle();
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, style.WindowPadding);
-        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, style.ItemSpacing);
-        if (menu_func)
-        {
-            menu_func(text);
-        }
-        else if(ImGui::BeginPopupContextItem())
-        {
-            if(IconMenuItem(ICON_COPY, "Copy"))
-            {
-                ImGui::SetClipboardText(text);
-                if(!notification.empty())
-                {
-                    NotificationManager::GetInstance().Show(notification.data(),
-                                                            NotificationLevel::Info);
-                }
-            }
-            ImGui::EndPopup();
-        }
-        ImGui::PopStyleVar(2);
-    }
-
-    if(one_click_copy)
-    {
-        if(ImGui::IsItemHovered())
-        {
-            ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
-        }
-    }
-
-    ImGui::PopStyleVar();
-    ImGui::PopStyleColor(3);
-
-
-    if(!unique_id.empty())
-    {
-        ImGui::PopID();
-    }
-    return clicked;
 }
 
 PopUpStyle::PopUpStyle()

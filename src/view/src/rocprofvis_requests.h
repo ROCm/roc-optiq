@@ -9,6 +9,7 @@
 #include <string>
 #include <vector>
 
+#include "rocprofvis_controller_analysis.h"
 #include "rocprofvis_controller_enums.h"
 #include "rocprofvis_controller_types.h"
 #include "rocprofvis_c_interface_types.h"
@@ -35,17 +36,16 @@ enum class RequestType
     kCleanupDatabase,
     kTableExport,
     kFetchSystemTrace,
-    kFetchAnalysisQueueUtilization,
+    kFetchAnalysisTrackStatistics,
     kFetchAnalysisTopEventsTable,
     kFetchAnalysisTopDispatchEventsTable,
     kFetchAnalysisTopMemoryAllocationEventsTable,
     kFetchAnalysisTopMemoryCopyEventsTable,
     kFetchAnalysisTopLaunchSampleEventsTable,
-#ifdef COMPUTE_UI_SUPPORT
     kFetchComputeTrace,
     kFetchMetrics,
     kFetchMetricPivotTable,
-#endif
+    kFetchPcSampling,
 };
 
 enum class RequestState
@@ -158,8 +158,6 @@ class TableRequestParams : public RequestParamsBase
 {
 public:
     rocprofvis_controller_table_type_t m_table_type;  // type of the table
-    std::vector<uint64_t>              m_track_ids;   // ids of the tracks in the table
-    std::vector<rocprofvis_dm_event_operation_t> m_op_types;  // op types in the table
     double   m_start_ts;           // starting time stamp of the data in the table
     double   m_end_ts;             // ending time stamp of the data in the table
     uint64_t m_start_row;          // starting row of the data in the table
@@ -168,28 +166,23 @@ public:
     rocprofvis_controller_sort_order_t m_sort_order;  // sort order of the column
     std::string                        m_where;       // SQL where clause
     std::string                        m_filter;      // CMD filter
-    std::vector<std::string>
-                m_string_table_filters;  // strings to use for string table filtering.
-    std::string m_group;
-    std::string m_group_columns;
-    std::string m_export_to_file_path;
+    std::string                        m_group;
+    std::string                        m_group_columns;
+    std::string                        m_export_to_file_path;
 
+protected:
+    // Constructed only via derives...
     TableRequestParams(const TableRequestParams& table_params)            = default;
     TableRequestParams& operator=(const TableRequestParams& table_params) = default;
 
     TableRequestParams(
-        rocprofvis_controller_table_type_t                  table_type,
-        const std::vector<uint64_t>&                        track_ids,
-        const std::vector<rocprofvis_dm_event_operation_t>& op_types, double start_ts,
-        double end_ts, const char* where, char const* filter, char const* group,
-        char const* group_cols, const std::vector<std::string> string_table_filters = {},
+        rocprofvis_controller_table_type_t table_type, double start_ts, double end_ts,
+        const char* where, char const* filter, char const* group, char const* group_cols,
         uint64_t start_row = -1, uint64_t req_row_count = -1,
         uint64_t                           sort_column_index = 0,
         rocprofvis_controller_sort_order_t sort_order = kRPVControllerSortOrderAscending,
-        std::string export_to_file_path = "")
+        std::string                        export_to_file_path = "")
     : m_table_type(table_type)
-    , m_track_ids(track_ids)
-    , m_op_types(op_types)
     , m_start_ts(start_ts)
     , m_end_ts(end_ts)
     , m_start_row(start_row)
@@ -200,8 +193,61 @@ public:
     , m_filter(filter)
     , m_group(group)
     , m_group_columns(group_cols)
-    , m_string_table_filters(string_table_filters)
     , m_export_to_file_path(export_to_file_path)
+    {}
+};
+
+class TrackTableRequestParams : public TableRequestParams
+{
+public:
+    std::vector<uint64_t> m_track_ids;  // ids of the tracks in the table
+
+    TrackTableRequestParams(const TrackTableRequestParams& table_params) = default;
+    TrackTableRequestParams& operator=(const TrackTableRequestParams& table_params) =
+        default;
+
+    TrackTableRequestParams(
+        rocprofvis_controller_table_type_t table_type,
+        const std::vector<uint64_t>& track_ids, double start_ts, double end_ts,
+        const char* where, char const* filter, char const* group, char const* group_cols,
+        uint64_t start_row = -1, uint64_t req_row_count = -1,
+        uint64_t                           sort_column_index = 0,
+        rocprofvis_controller_sort_order_t sort_order = kRPVControllerSortOrderAscending,
+        std::string                        export_to_file_path = "")
+    : TableRequestParams(table_type, start_ts, end_ts, where, filter, group, group_cols, start_row,
+                         req_row_count, sort_column_index, sort_order,
+                         export_to_file_path)
+    , m_track_ids(track_ids)
+    {}
+};
+
+class EventSearchRequestParams : public TableRequestParams
+{
+public:
+    std::vector<rocprofvis_dm_event_operation_t>
+        m_op_types;  // op types to include in search
+    std::vector<std::string>
+         m_string_table_filters;  // strings to use for string table filtering.
+    bool m_include_substrings;    // allow/disallow partial matches.
+
+    EventSearchRequestParams(const EventSearchRequestParams& table_params) = default;
+    EventSearchRequestParams& operator=(const EventSearchRequestParams& table_params) =
+        default;
+
+    EventSearchRequestParams(
+        rocprofvis_controller_table_type_t                  table_type,
+        const std::vector<rocprofvis_dm_event_operation_t>& op_types, double start_ts,
+        double end_ts, const char* where, bool include_substrings,
+        const std::vector<std::string> string_table_filters = {}, uint64_t start_row = -1,
+        uint64_t req_row_count = -1, uint64_t sort_column_index = 0,
+        rocprofvis_controller_sort_order_t sort_order = kRPVControllerSortOrderAscending,
+        std::string                        export_to_file_path = "")
+    : TableRequestParams(table_type, start_ts, end_ts, where, "", "", "", start_row,
+                         req_row_count, sort_column_index, sort_order,
+                         export_to_file_path)
+    , m_op_types(op_types)
+    , m_string_table_filters(string_table_filters)
+    , m_include_substrings(include_substrings)
     {}
 };
 
@@ -219,27 +265,33 @@ public:
     {}
 };
 
-// Queue utilization analysis request parameters
-class AnalysisQueueUtilizationRequestParams : public RequestParamsBase
+class AnalysisTrackStatisticsRequestParams : public RequestParamsBase
 {
 public:
+    union Output
+    {
+        double                                   queue_util;
+        rocprofvis_analysis_counter_statistics_t counter_stats;
+    };
+
     uint64_t m_track_id;
     double   m_start_ts;
     double   m_end_ts;
-    double   m_result;
+    Output   m_output;
 
-    AnalysisQueueUtilizationRequestParams(const AnalysisQueueUtilizationRequestParams& other)            = default;
-    AnalysisQueueUtilizationRequestParams& operator=(const AnalysisQueueUtilizationRequestParams& other) = default;
+    AnalysisTrackStatisticsRequestParams(
+        const AnalysisTrackStatisticsRequestParams& other) = default;
+    AnalysisTrackStatisticsRequestParams& operator=(
+        const AnalysisTrackStatisticsRequestParams& other) = default;
 
-    AnalysisQueueUtilizationRequestParams(uint64_t track_id, double start, double end)
+    AnalysisTrackStatisticsRequestParams(uint64_t track_id, double start, double end)
     : m_track_id(track_id)
     , m_start_ts(start)
     , m_end_ts(end)
-    , m_result(0.0)
+    , m_output{}
     {}
 };
 
-#ifdef COMPUTE_UI_SUPPORT
 class MetricsRequestParams : public RequestParamsBase
 {
 public:
@@ -263,6 +315,28 @@ public:
     , m_kernel_ids(kernel_ids)
     , m_metric_ids(metric_ids)
     , m_client_id(client_id)
+    {}
+};
+
+class PcSamplingRequestParams : public RequestParamsBase
+{
+public:
+    uint32_t m_workload_id;
+    uint32_t m_kernel_id;
+    uint32_t m_source_file_id;
+    // Code View selection generation captured at submission.
+    // ProcessPcSamplingRequest discards results from superseded selections.
+    uint32_t m_generation = 0;
+
+    PcSamplingRequestParams(const PcSamplingRequestParams&)            = default;
+    PcSamplingRequestParams& operator=(const PcSamplingRequestParams&) = default;
+
+    PcSamplingRequestParams(uint32_t workload_id, uint32_t kernel_id,
+                            uint32_t source_file_id, uint32_t generation)
+    : m_workload_id(workload_id)
+    , m_kernel_id(kernel_id)
+    , m_source_file_id(source_file_id)
+    , m_generation(generation)
     {}
 };
 
@@ -290,7 +364,6 @@ public:
     , m_column_filters(column_filters)
     {}
 };
-#endif
 
 
 struct RequestInfo

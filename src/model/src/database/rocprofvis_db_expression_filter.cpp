@@ -169,7 +169,8 @@ namespace DataModel
                 break;
 
             std::string upper = word;
-            std::transform(upper.begin(), upper.end(), upper.begin(), ::toupper);
+            std::transform(upper.begin(), upper.end(), upper.begin(),
+                [](unsigned char c) -> char { return static_cast<char>(std::toupper(c)); });
 
             if (upper == "OR")
             {
@@ -201,7 +202,8 @@ namespace DataModel
                 break;
 
             std::string upper = word;
-            std::transform(upper.begin(), upper.end(), upper.begin(), ::toupper);
+            std::transform(upper.begin(), upper.end(), upper.begin(),
+                [](unsigned char c) -> char { return static_cast<char>(std::toupper(c)); });
 
             if (upper == "AND")
             {
@@ -267,11 +269,13 @@ namespace DataModel
         if (op.empty()) {
             // handle case like "name NOT LIKE ...", so look for keyword "NOT"
             std::string maybeNot = tk.GetIdentifier();
-            std::transform(maybeNot.begin(), maybeNot.end(), maybeNot.begin(), ::toupper);
+            std::transform(maybeNot.begin(), maybeNot.end(), maybeNot.begin(),
+                [](unsigned char c) -> char { return static_cast<char>(std::toupper(c)); });
 
             if (maybeNot == "NOT") {
                 std::string next = tk.GetIdentifier();
-                std::transform(next.begin(), next.end(), next.begin(), ::toupper);
+                std::transform(next.begin(), next.end(), next.begin(),
+                    [](unsigned char c) -> char { return static_cast<char>(std::toupper(c)); });
                 if (next == "LIKE") {
                     cond->m_op = Operator::Like;
                     cond->m_negate = true;  // add new flag to Condition
@@ -284,7 +288,8 @@ namespace DataModel
         }
         else {
 
-            std::transform(op.begin(), op.end(), op.begin(), ::toupper);
+            std::transform(op.begin(), op.end(), op.begin(),
+                [](unsigned char c) -> char { return static_cast<char>(std::toupper(c)); });
             if (op == "=" || op == "==") cond->m_op = Operator::Equal;
             else if (op == "!=")              cond->m_op = Operator::NotEqual;
             else if (op == "<")               cond->m_op = Operator::Less;
@@ -308,7 +313,8 @@ namespace DataModel
 
     void FilterExpression::RegisterFunction(const std::string& name, FunctionHandler handler) {
         std::string upper = name;
-        std::transform(upper.begin(), upper.end(), upper.begin(), ::toupper);
+        std::transform(upper.begin(), upper.end(), upper.begin(),
+            [](unsigned char c) -> char { return static_cast<char>(std::toupper(c)); });
         s_functions[upper] = handler;
     }
 
@@ -509,7 +515,7 @@ namespace DataModel
     FilterExpression::SqlCommand FilterExpression::ParseAggrCommand(const std::string& cmd) {
         std::string upper;
         upper.reserve(cmd.size());
-        for (char c : cmd) upper.push_back(std::toupper(static_cast<unsigned char>(c)));
+        for (char c : cmd) upper.push_back(static_cast<char>(std::toupper(static_cast<unsigned char>(c))));
 
         if (upper == "COUNT") return SqlCommand::Count;
         if (upper == "AVG")   return SqlCommand::Avg;

@@ -10,8 +10,6 @@
 #include "system/rocprofvis_controller_trace_system.h"
 #include "system/rocprofvis_controller_track.h"
 #include "rocprofvis_core_assert.h"
-#include <cstdlib>
-#include <cstring>
 #include <vector>
 
 namespace RocProfVis
@@ -39,6 +37,19 @@ rocprofvis_result_t rocprofvis_analysis_fetch_queue_utilization(rocprofvis_contr
     if(trace.IsValid() && future.IsValid() && track_ref.IsValid() && output)
     {
         error = RocProfVis::Controller::Analysis::GetInstance().AsyncFetchQueueUtilization(trace.Get(), track_ref.Get(), start_time, end_time, output, future.Get());
+    }
+    return error;
+}
+
+rocprofvis_result_t rocprofvis_analysis_fetch_counter_statistics(rocprofvis_controller_t* controller, rocprofvis_controller_track_t* track, double start_time, double end_time, rocprofvis_controller_future_t* result, rocprofvis_analysis_counter_statistics_t* output)
+{
+    rocprofvis_result_t error = kRocProfVisResultInvalidArgument;
+    RocProfVis::Controller::SystemTraceRef trace(controller);
+    RocProfVis::Controller::TrackRef track_ref(track);
+    RocProfVis::Controller::FutureRef future(result);
+    if(trace.IsValid() && future.IsValid() && track_ref.IsValid() && output)
+    {
+        error = RocProfVis::Controller::Analysis::GetInstance().AsyncFetchCounterStatistics(trace.Get(), track_ref.Get(), start_time, end_time, output, future.Get());
     }
     return error;
 }
@@ -191,105 +202,195 @@ rocprofvis_result_t Analysis::AsyncFetchQueueUtilization(SystemTrace* trace, Tra
         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
         if(queue_handle)
         {
-            std::lock_guard<std::mutex> lock(trace->GetTableMutex(kRPVDMTableUseCaseAnalysis));
+            rocprofvis_dm_result_t dm_result = kRocProfVisDmResultUnknownError;
             uint64_t track_id = 0;
             result = track->GetUInt64(kRPVControllerTrackId, 0, &track_id);
             ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-            rocprofvis_dm_database_t db = rocprofvis_dm_get_property_as_handle(trace->GetDMHandle(), kRPVDMDatabaseHandle, 0);
-            ROCPROFVIS_ASSERT(db);
-            char* query = nullptr;
-            double busy_duration = 0.0;
-            uint64_t event_count = 0;
-            rocprofvis_dm_result_t dm_result = rocprofvis_db_build_table_query(db, kRPVDMTableUseCaseAnalysis, start, end, 1, (rocprofvis_db_track_selection_t)&track_id, nullptr, nullptr,
-                                                                                "SUM(duration) AS total_duration, COUNT(*) AS event_count", "__trackId",
-                                                                                nullptr, kRPVDMSortOrderAsc, 0, nullptr, 0, 0, false, &query);
-            if(dm_result == kRocProfVisDmResultSuccess && strlen(query) > 0)
+            rocprofvis_dm_track_t dm_track = track->GetDmHandle();
+            rocprofvis_dm_database_t db = rocprofvis_dm_get_property_as_handle(dm_track, kRPVDMTrackDatabaseHandle, 0);
+            ROCPROFVIS_ASSERT(db);            
+            rocprofvis_db_future_t object2wait = rocprofvis_db_future_alloc(nullptr);
+            ROCPROFVIS_ASSERT(object2wait);
+            uint64_t range_start = (uint64_t)floor(start);
+            uint64_t range_end = (uint64_t)ceil(end);
+            bool     range_empty = true;
+            dm_result = rocprofvis_db_read_trace_slice_async(db, range_start, range_end, kRocProfVisDmHashedTimestampTagAnalysis, 1, (rocprofvis_db_track_selection_t)&track_id, object2wait);
+            ROCPROFVIS_ASSERT(dm_result == kRocProfVisDmResultSuccess);
+            future->AddDependentFuture(object2wait);
+            dm_result = rocprofvis_db_future_wait(object2wait, UINT64_MAX);
+            ROCPROFVIS_ASSERT(dm_result == kRocProfVisDmResultSuccess || dm_result == kRocProfVisDmResultDbAbort);
+            rocprofvis_dm_slice_t slice = rocprofvis_dm_get_property_as_handle(dm_track, kRPVDMSliceHandleTimed, rocprofvis_dm_hash_combine_timestamp(range_start, range_end, kRocProfVisDmHashedTimestampTagAnalysis));
+            if(!future->IsCancelled())
             {
-                result = ExecuteQuery(trace, query, "Coarse queue utilization", *future, [start, end, &busy_duration, &event_count](const QueryDataStore& store) -> rocprofvis_result_t {
-                    rocprofvis_result_t result = kRocProfVisResultUnknownError;
-                    if(store.rows.empty())
-                    {
-                        result = kRocProfVisResultSuccess;
-                    }
-                    else if(store.rows.size() == 1 && store.columns.count("total_duration") > 0 && store.columns.count("event_count") > 0)
-                    {
-                        const char* duration = store.rows[0][store.columns.at("total_duration")];
-                        const char* count = store.rows[0][store.columns.at("event_count")];
-                        if(duration && strlen(duration) > 0 && count && strlen(count) > 0)
-                        {
-                            busy_duration = strtod(duration, NULL);
-                            event_count = strtoull(count, NULL, 10);
-                            result = kRocProfVisResultSuccess;
-                        }
-                    }
-                    return result;
-                });
-            }
-            free(query);
-            if(dm_result == kRocProfVisDmResultSuccess && result == kRocProfVisResultSuccess && event_count > 0)
-            {
-                dm_result = rocprofvis_db_build_table_query(db, kRPVDMTableUseCaseAnalysis, start, end, 1, (rocprofvis_db_track_selection_t)&track_id, nullptr, nullptr, nullptr, nullptr,
-                                                                                nullptr, kRPVDMSortOrderAsc, 0, nullptr, 1, 0, false, &query);
-                if(dm_result == kRocProfVisDmResultSuccess && strlen(query) > 0)
+                ROCPROFVIS_ASSERT(slice);
+                uint64_t num_records = rocprofvis_dm_get_property_as_uint64(slice, kRPVDMNumberOfRecordsUInt64, 0);
+                uint64_t busy_duration = 0;
+                uint64_t busy_start = 0;
+                uint64_t busy_end   = 0;                
+                for(uint64_t i = 0; i < num_records; i++)
                 {
-                    result = ExecuteQuery(trace, query, "Fine queue utilization", *future, [start, end, &busy_duration](const QueryDataStore& store) -> rocprofvis_result_t {
-                        rocprofvis_result_t result = kRocProfVisResultUnknownError;
-                        if(store.rows.size() == 1 && store.columns.count("start") > 0)
+                    uint64_t event_start = rocprofvis_dm_get_property_as_uint64(slice, kRPVDMTimestampUInt64Indexed, i);
+                    uint64_t event_end = event_start + rocprofvis_dm_get_property_as_int64(slice, kRPVDMEventDurationInt64Indexed, i);
+                    if(event_end > event_start)
+                    {
+                        if(event_start < range_start)
                         {
-                            const char* data = store.rows[0][store.columns.at("start")];
-                            if(data && strlen(data) > 0)
+                            event_start = range_start;
+                        }
+                        if(event_end > range_end)
+                        {
+                            event_end = range_end;
+                        }
+                        if(range_empty)
+                        {
+                            busy_start = event_start;
+                            busy_end   = event_end;
+                            range_empty = false;
+                        }
+                        else if(event_start <= busy_end)
+                        {
+                            if(event_end > busy_end)
                             {
-                                double head = strtod(data, NULL);
-                                if(head < start)
-                                {
-                                    busy_duration -= (start - head);
-                                }
-                                result = kRocProfVisResultSuccess;
+                                busy_end = event_end;
                             }
                         }
-                        return result;
-                    });
-                }
-                free(query);
-                dm_result = rocprofvis_db_build_table_query(db, kRPVDMTableUseCaseAnalysis, start, end, 1, (rocprofvis_db_track_selection_t)&track_id, nullptr, nullptr, nullptr, nullptr,
-                                                                                    nullptr, kRPVDMSortOrderAsc, 0, nullptr, 1, event_count - 1, false, &query);
-                if(dm_result == kRocProfVisDmResultSuccess && strlen(query) > 0)
-                {
-                    result = ExecuteQuery(trace, query, "Fine queue utilization", *future, [start, end, &busy_duration](const QueryDataStore& store) -> rocprofvis_result_t {
-                        rocprofvis_result_t result = kRocProfVisResultUnknownError;
-                        if(store.rows.size() == 1 && store.columns.count("end") > 0)
+                        else
                         {
-                            const char* data = store.rows[0][store.columns.at("end")];
-                            if(data && strlen(data) > 0)
-                            {
-                                double tail = strtod(data, NULL);
-                                if(end < tail)
-                                {
-                                    busy_duration -= (tail - end);
-                                }
-                                result = kRocProfVisResultSuccess;
-                            }
+                            busy_duration += busy_end - busy_start;
+                            busy_start = event_start;
+                            busy_end   = event_end;
                         }
-                        return result;
-                    });
+                    }
                 }
-                free(query);
-            }
-            if(dm_result == kRocProfVisDmResultSuccess && result == kRocProfVisResultSuccess)
-            {
-                if(busy_duration == 0.0)
+                if(!range_empty)
+                {
+                    busy_duration += busy_end - busy_start;
+                }
+                if(busy_duration == 0)
                 {
                     *output = 0.0;
                 }
-                else if(end == start)
+                else if(range_start == range_end)
                 {
                     *output = 100.0;
                 }
                 else
                 {
-                    *output = busy_duration / (end - start) * 100.0;
-                }                
+                    *output = (double)busy_duration / (double)(range_end - range_start) * 100.0;
+                }           
             }
+            dm_result = rocprofvis_dm_delete_time_slice_handle(trace->GetDMHandle(), track_id, slice);
+            if(!future->IsCancelled())
+            {
+                ROCPROFVIS_ASSERT(dm_result == kRocProfVisDmResultSuccess);
+            }
+            future->RemoveDependentFuture(object2wait);
+            rocprofvis_db_future_free(object2wait);
+        }
+        return future->IsCancelled() ? kRocProfVisResultCancelled : result;
+    }, future));
+    if(future->IsValid())
+    {
+        result = kRocProfVisResultSuccess;
+    }
+    return result;
+}
+
+rocprofvis_result_t Analysis::AsyncFetchCounterStatistics(SystemTrace* trace, Track* track, double start, double end, rocprofvis_analysis_counter_statistics_t* output, Future* future) const
+{
+    rocprofvis_result_t result = kRocProfVisResultUnknownError;
+    future->Set(JobSystem::Get().IssueJob([this, trace, track, start, end, output](Future* future) -> rocprofvis_result_t {
+        rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
+        rocprofvis_handle_t* counter_handle = nullptr;
+        result = track->GetObject(kRPVControllerTrackCounter, 0, &counter_handle);
+        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+        if(counter_handle)
+        {
+            rocprofvis_dm_result_t dm_result = kRocProfVisDmResultUnknownError;
+            uint64_t track_id = 0;
+            result = track->GetUInt64(kRPVControllerTrackId, 0, &track_id);
+            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+            rocprofvis_dm_track_t dm_track = track->GetDmHandle();
+            rocprofvis_dm_database_t db = rocprofvis_dm_get_property_as_handle(dm_track, kRPVDMTrackDatabaseHandle, 0);
+            ROCPROFVIS_ASSERT(db);
+            rocprofvis_db_future_t object2wait = rocprofvis_db_future_alloc(nullptr);
+            ROCPROFVIS_ASSERT(object2wait);
+            uint64_t range_start = (uint64_t)floor(start);
+            uint64_t range_end = (uint64_t)ceil(end);
+            dm_result = rocprofvis_db_read_trace_pmc_slice_async(db, range_start, range_end, kRocProfVisDmHashedTimestampTagAnalysis, (rocprofvis_db_track_selection_t)&track_id, true, false, object2wait);
+            ROCPROFVIS_ASSERT(dm_result == kRocProfVisDmResultSuccess);
+            future->AddDependentFuture(object2wait);
+            dm_result = rocprofvis_db_future_wait(object2wait, UINT64_MAX);
+            ROCPROFVIS_ASSERT(dm_result == kRocProfVisDmResultSuccess || dm_result == kRocProfVisDmResultDbAbort);
+            rocprofvis_dm_slice_t slice = rocprofvis_dm_get_property_as_handle(dm_track, kRPVDMSliceHandleTimed, rocprofvis_dm_hash_combine_timestamp(range_start, range_end, kRocProfVisDmHashedTimestampTagAnalysis));
+            if(!future->IsCancelled())
+            {                
+                ROCPROFVIS_ASSERT(slice);
+                uint64_t num_records = rocprofvis_dm_get_property_as_uint64(slice, kRPVDMNumberOfRecordsUInt64, 0);
+                double min_value = 0.0;
+                double max_value = 0.0;
+                double mean_value = 0.0;
+                double std_dev = 0.0;
+                double sum = 0.0;
+                double sum_sq = 0.0;
+                double total_duration = 0.0;
+                bool range_empty = true;
+                for(uint64_t i = 0; i < num_records; i++)
+                {
+                    double value = rocprofvis_dm_get_property_as_double(slice, kRPVDMPmcValueDoubleIndexed, i);
+                    uint64_t sample_start = rocprofvis_dm_get_property_as_uint64(slice, kRPVDMTimestampUInt64Indexed, i);
+                    uint64_t sample_end = (i + 1 < num_records) ? rocprofvis_dm_get_property_as_uint64(slice, kRPVDMTimestampUInt64Indexed, i + 1) : range_end;
+                    if(sample_start < range_start)
+                    {
+                        sample_start = range_start;
+                    }
+                    if(sample_end > range_end)
+                    {
+                        sample_end = range_end;
+                    }
+                    if(sample_end > sample_start)
+                    {
+                        double duration = (double)(sample_end - sample_start);
+                        sum += value * duration;
+                        sum_sq += value * value * duration;
+                        total_duration += duration;
+                        if(range_empty)
+                        {
+                            min_value = value;
+                            max_value = value;
+                            range_empty = false;
+                        }
+                        else
+                        {
+                            if(value < min_value)
+                            {
+                                min_value = value;
+                            }
+                            if(value > max_value)
+                            {
+                                max_value = value;
+                            }
+                        }
+                    }
+                }
+                if(total_duration > 0.0)
+                {
+                    mean_value = sum / total_duration;
+                    double variance = sum_sq / total_duration - mean_value * mean_value;
+                    std_dev = (variance > 0.0) ? sqrt(variance) : 0.0;
+                }
+                output->min_value = min_value;
+                output->max_value = max_value;
+                output->mean_value = mean_value;
+                output->std_dev = std_dev;           
+            }            
+            dm_result = rocprofvis_dm_delete_time_slice_handle(trace->GetDMHandle(), track_id, slice);
+            if(!future->IsCancelled())
+            {
+                ROCPROFVIS_ASSERT(dm_result == kRocProfVisDmResultSuccess);
+            }
+            future->RemoveDependentFuture(object2wait);
+            rocprofvis_db_future_free(object2wait);
         }
         return future->IsCancelled() ? kRocProfVisResultCancelled : result;
     }, future));
@@ -349,8 +450,13 @@ Analysis::EventsTable::EventsTable(uint64_t id, rocprofvis_dm_event_operation_t 
 , m_op(op)
 {}
 
-rocprofvis_result_t Analysis::EventsTable::UnpackArguments(Arguments& args, QueryArguments& out) const
+rocprofvis_result_t Analysis::EventsTable::UnpackArguments(Arguments& args, TableArguments*& out) const
 {
+    if(!out)
+    {
+        out = new SystemTableArguments();
+    }
+    SystemTableArguments* sys_out = (SystemTableArguments*)out;
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     std::vector<uint32_t> tracks;
     uint64_t num_tracks = 0;
@@ -393,13 +499,21 @@ rocprofvis_result_t Analysis::EventsTable::UnpackArguments(Arguments& args, Quer
             }
         }
     }
-    const char* group = (m_op == kRocProfVisDmOperationLaunchSample) ? "name, COUNT(*) AS Invocations, SUM(duration) AS DurationTotal" :
-        "name, COUNT(*) AS Invocations, SUM(duration) AS DurationTotal, AVG(duration) AS DurationAvg, MIN(duration) AS DurationMin, MAX(duration) AS DurationMax";
     ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
     result = args.GetUInt64(kRPVControllerTableArgsSortColumn, 0, &sort_column_index);
     ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
     result = args.GetUInt64(kRPVControllerTableArgsSortOrder, 0, &sort_order);
-    out = {"", "__op = " + std::to_string(m_op), group, "name", sort_column_index, (rocprofvis_controller_sort_order_t)sort_order, tracks, {}, use_case, start_ts, end_ts};
+    sys_out->m_sort_column = sort_column_index;
+    sys_out->m_sort_order = (rocprofvis_controller_sort_order_t)sort_order;
+    sys_out->m_where = "";
+    sys_out->m_filter = "__op = " + std::to_string(m_op);
+    sys_out->m_group = (m_op == kRocProfVisDmOperationLaunchSample) ? "name, COUNT(*) AS Invocations, SUM(duration) AS DurationTotal" :
+        "name, COUNT(*) AS Invocations, SUM(duration) AS DurationTotal, AVG(duration) AS DurationAvg, MIN(duration) AS DurationMin, MAX(duration) AS DurationMax";
+    sys_out->m_group_cols = "name";
+    sys_out->m_tracks = std::move(tracks);
+    sys_out->m_use_case = use_case;
+    sys_out->m_start_ts = start_ts;
+    sys_out->m_end_ts = end_ts;
     return result;
 }
 
@@ -431,118 +545,6 @@ rocprofvis_result_t Analysis::GetOrAllocateEventsTable(EventsTable*& slot, rocpr
     }
     *table = (rocprofvis_handle_t*)slot;
     return slot ? kRocProfVisResultSuccess : kRocProfVisResultUnknownError;
-}
-
-rocprofvis_result_t Analysis::ExecuteQuery(Trace* trace, const char* query, const char* description, Future& future, QueryCallback callback) const
-{
-    rocprofvis_result_t result = kRocProfVisResultUnknownError;
-    ROCPROFVIS_ASSERT(trace && query && description);
-    rocprofvis_dm_handle_t dm_handle = trace->GetDMHandle();
-    ROCPROFVIS_ASSERT(dm_handle);
-    rocprofvis_dm_database_t db = rocprofvis_dm_get_property_as_handle(dm_handle, kRPVDMDatabaseHandle, 0);
-    ROCPROFVIS_ASSERT(db);
-    rocprofvis_db_future_t object2wait = rocprofvis_db_future_alloc(nullptr);
-    if(object2wait)
-    {
-        rocprofvis_dm_table_id_t table_id = 0;
-        rocprofvis_dm_result_t dm_result = rocprofvis_db_execute_query_async(db, query, description, object2wait, &table_id);
-        if(dm_result == kRocProfVisDmResultSuccess)
-        {
-            future.AddDependentFuture(object2wait);
-            dm_result = rocprofvis_db_future_wait(object2wait, UINT64_MAX);
-            if(dm_result == kRocProfVisDmResultSuccess)
-            {
-                uint64_t num_tables = rocprofvis_dm_get_property_as_uint64(dm_handle, kRPVDMNumberOfTablesUInt64, 0);
-                if(num_tables > 0)
-                {
-                    rocprofvis_dm_table_t table = rocprofvis_dm_get_property_as_handle(dm_handle, kRPVDMTableHandleByID, table_id);
-                    if(table)
-                    {
-                        if(future.IsCancelled())
-                        {
-                            result = kRocProfVisResultCancelled;
-                        }
-                        else
-                        {
-                            const char* table_query = rocprofvis_dm_get_property_as_charptr(table, kRPVDMExtTableQueryCharPtr, 0);
-                            uint64_t num_rows = rocprofvis_dm_get_property_as_uint64(table, kRPVDMNumberOfTableRowsUInt64, 0);
-                            uint64_t num_columns = rocprofvis_dm_get_property_as_uint64(table, kRPVDMNumberOfTableColumnsUInt64, 0);
-                            if(table_query && strcmp(table_query, query) == 0)
-                            {
-                                QueryDataStore data_store;
-                                for(uint64_t c = 0; c < num_columns; c++)
-                                {
-                                    data_store.columns[rocprofvis_dm_get_property_as_charptr(table, kRPVDMExtTableColumnNameCharPtrIndexed, c)] = c;
-                                }
-                                data_store.rows.resize(num_rows);
-                                bool rows_ok = true;
-                                for(uint64_t r = 0; r < num_rows && rows_ok; r++)
-                                {
-                                    rocprofvis_dm_table_row_t table_row = rocprofvis_dm_get_property_as_handle(table, kRPVDMExtTableRowHandleIndexed, r);
-                                    if(table_row)
-                                    {
-                                        uint64_t num_cells = rocprofvis_dm_get_property_as_uint64(table_row, kRPVDMNumberOfTableRowCellsUInt64, 0);
-                                        if(num_cells == num_columns)
-                                        {
-                                            data_store.rows[r].resize(num_columns);
-                                            for(uint64_t c = 0; c < num_columns; c++)
-                                            {
-                                                data_store.rows[r][c] = rocprofvis_dm_get_property_as_charptr(table_row, kRPVDMExtTableRowCellValueCharPtrIndexed, c);
-                                            }
-                                        }
-                                        else
-                                        {
-                                            rows_ok = false;
-                                        }
-                                    }
-                                    else
-                                    {
-                                        rows_ok = false;
-                                    }
-                                }
-                                if(rows_ok)
-                                {
-                                    result = callback(data_store);
-                                }
-                                else
-                                {
-                                    result = kRocProfVisResultUnknownError;
-                                }
-                            }
-                            else
-                            {
-                                result = kRocProfVisResultUnknownError;
-                            }
-                        }
-                    }
-                    else
-                    {
-                        result = kRocProfVisResultUnknownError;
-                    }
-                }
-                else
-                {
-                    result = kRocProfVisResultUnknownError;
-                }
-            }
-            else
-            {
-                result = kRocProfVisResultUnknownError;
-            }
-            future.RemoveDependentFuture(object2wait);
-        }
-        else
-        {
-            result = kRocProfVisResultUnknownError;
-        }
-        rocprofvis_dm_delete_table_at(dm_handle, table_id);
-        rocprofvis_db_future_free(object2wait);
-    }
-    else
-    {
-        result = kRocProfVisResultMemoryAllocError;
-    }
-    return result;
 }
 
 }

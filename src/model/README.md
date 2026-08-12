@@ -148,6 +148,7 @@ rocprofvis_dm_result_t rocprofvis_db_read_trace_slice_async(
                                     rocprofvis_dm_database_t,
                                     rocprofvis_dm_timestamp_t,
                                     rocprofvis_dm_timestamp_t,
+                                    rocprofvis_dm_hashed_timestamp_tag_t,
                                     rocprofvis_db_num_of_tracks_t,
                                     rocprofvis_db_track_selection_t,
                                     rocprofvis_db_future_t);                              

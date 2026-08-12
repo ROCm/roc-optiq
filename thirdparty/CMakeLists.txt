@@ -11,6 +11,106 @@ set(YAML_CPP_BUILD_TESTS OFF CACHE BOOL "Disable yaml-cpp tests")
 set(YAML_CPP_BUILD_TOOLS OFF CACHE BOOL "Disable yaml-cpp tools")
 add_subdirectory(yaml-cpp)
 
+# TEMPORARY (remote/SSH): the crypto backend + libssh2 stack and its git
+# submodules (thirdparty/libssh2, thirdparty/mbedtls) are only built when
+# remote support is enabled, so the default build needs neither the submodules
+# nor a crypto dependency. Remove this guard when remote graduates.
+if(ROCPROFVIS_ENABLE_REMOTE)
+
+set(ENABLE_ZLIB_COMPRESSION OFF)
+# Default to the vendored mbedTLS backend so the out-of-the-box build needs no
+# system OpenSSL. OpenSSL is opt-in via -DCRYPTO_BACKEND=OpenSSL and is then
+# resolved as an external dependency (find_package below), not vendored.
+set(CRYPTO_BACKEND "mbedTLS" CACHE STRING "Crypto backend (OpenSSL or mbedTLS)")
+
+if (CRYPTO_BACKEND STREQUAL "mbedTLS")
+
+	unset(ROCPROFVIS_OPENSSL_VERSION_MAJOR CACHE)
+
+	set(ENABLE_PROGRAMS OFF CACHE BOOL "" FORCE)
+	set(ENABLE_TESTING OFF CACHE BOOL "" FORCE)
+	set(ENABLE_DOCUMENTATION OFF CACHE BOOL "" FORCE)
+	set(MBEDTLS_FATAL_WARNINGS OFF CACHE BOOL "" FORCE)
+	set(BUILD_TESTING OFF)
+	set(BUILD_EXAMPLES OFF)
+	set(_prev_skip_install_rules ${CMAKE_SKIP_INSTALL_RULES})
+	set(CMAKE_SKIP_INSTALL_RULES ON)
+	add_subdirectory(mbedtls EXCLUDE_FROM_ALL)
+    set(CMAKE_SKIP_INSTALL_RULES ${_prev_skip_install_rules})
+	set(CRYPTO_BACKEND mbedTLS CACHE STRING "" FORCE)
+
+    	set(ENABLE_MBEDTLS ON CACHE BOOL "" FORCE)
+    	set(ENABLE_OPENSSL OFF CACHE BOOL "" FORCE)
+
+	set(MBEDTLS_FOUND TRUE)
+	set(MBEDTLS_INCLUDE_DIR ${CMAKE_SOURCE_DIR}/thirdparty/mbedtls/include)
+	set(MBEDCRYPTO_LIBRARY mbedcrypto)
+	set(MBEDX509_LIBRARY mbedx509)
+	set(MBEDTLS_LIBRARY mbedtls)
+
+endif()
+
+if (CRYPTO_BACKEND STREQUAL "OpenSSL")
+
+	set(ENABLE_TESTING OFF CACHE BOOL "" FORCE)
+	set(ENABLE_DOCUMENTATION OFF CACHE BOOL "" FORCE)
+	set(BUILD_TESTING OFF)
+	set(BUILD_EXAMPLES OFF)
+
+    # Resolve OpenSSL as an external dependency (Vulkan-style), not vendored.
+    # OPENSSL_ROOT_DIR may be supplied by the user/CI as a hint (e.g. macOS
+    # Homebrew openssl@3, or a Windows OpenSSL install root); FindOpenSSL honors
+    # it when set. We intentionally do NOT force it to a repo-local path.
+    # Request both components explicitly: without this FindOpenSSL can report
+    # success after locating only libcrypto, leaving OpenSSL::SSL uncreated.
+    find_package(OpenSSL REQUIRED COMPONENTS SSL Crypto)
+
+    # libssh2 (added below) runs its own find_package(OpenSSL) in its
+    # subdirectory scope, which would otherwise leave OpenSSL::SSL/::Crypto
+    # scoped below thirdparty and invisible to the root target that links them.
+    # Promote the imported targets to GLOBAL so every scope sees the same ones.
+    if(TARGET OpenSSL::SSL)
+        set_target_properties(OpenSSL::SSL PROPERTIES IMPORTED_GLOBAL TRUE)
+    endif()
+    if(TARGET OpenSSL::Crypto)
+        set_target_properties(OpenSSL::Crypto PROPERTIES IMPORTED_GLOBAL TRUE)
+    endif()
+
+    # Root CMakeLists Windows DLL staging needs the linked major; FindOpenSSL
+    # sets OPENSSL_VERSION_MAJOR only in this directory scope.
+    if(WIN32 AND DEFINED OPENSSL_VERSION_MAJOR AND NOT OPENSSL_VERSION_MAJOR STREQUAL "")
+        set(ROCPROFVIS_OPENSSL_VERSION_MAJOR "${OPENSSL_VERSION_MAJOR}" CACHE INTERNAL
+            "OpenSSL major for Windows libssl/libcrypto DLL staging glob")
+    endif()
+
+    	set(ENABLE_MBEDTLS OFF CACHE BOOL "" FORCE)
+    	set(ENABLE_OPENSSL ON CACHE BOOL "" FORCE)
+
+endif()
+
+
+set(LIBSSH2_INSTALL OFF CACHE BOOL "" FORCE)
+set(LIBSSH2_DISABLE_INSTALL ON CACHE BOOL "" FORCE)
+
+add_subdirectory(libssh2)
+
+target_include_directories(libssh2_static PUBLIC 
+${CMAKE_SOURCE_DIR}/thirdparty/libssh2/include)
+
+if (CRYPTO_BACKEND STREQUAL "mbedTLS")
+	target_include_directories(libssh2_static PRIVATE
+    		${CMAKE_SOURCE_DIR}/thirdparty/mbedtls/include
+	)
+
+	target_link_libraries(libssh2_static PRIVATE
+    	mbedtls
+    	mbedx509
+    	mbedcrypto
+	)
+endif()
+
+endif() # ROCPROFVIS_ENABLE_REMOTE
+
 add_library(imgui STATIC
     imgui/imgui.cpp
     imgui/imgui_draw.cpp
@@ -21,11 +121,35 @@ add_library(imgui STATIC
     imgui/backends/imgui_impl_opengl3.cpp
 )
 target_compile_definitions(imgui PUBLIC IMGUI_DEFINE_MATH_OPERATORS)
+# Base imgui is now ALWAYS clean (no test-engine define) -> production app links this.
 target_include_directories(imgui PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_include_directories(imgui PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/imgui)
 target_include_directories(imgui PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/imgui/backends)
 target_include_directories(imgui PUBLIC ${Vulkan_INCLUDE_DIRS})
 target_include_directories(imgui PUBLIC ${Vulkan_INCLUDE_DIR})
+
+# Second imgui built from the SAME sources WITH the test-engine define.
+# Only the test exe links this; production never sees it.
+if(BUILD_TESTING AND ROCPROFVIS_ENABLE_UI_TESTS)
+    add_library(imgui_te STATIC
+        imgui/imgui.cpp
+        imgui/imgui_draw.cpp
+        imgui/imgui_tables.cpp
+        imgui/imgui_widgets.cpp
+        imgui/backends/imgui_impl_glfw.cpp
+        imgui/backends/imgui_impl_vulkan.cpp
+        imgui/backends/imgui_impl_opengl3.cpp
+    )
+    target_compile_definitions(imgui_te PUBLIC
+        IMGUI_DEFINE_MATH_OPERATORS
+        IMGUI_ENABLE_TEST_ENGINE
+    )
+    target_include_directories(imgui_te PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+    target_include_directories(imgui_te PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/imgui)
+    target_include_directories(imgui_te PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/imgui/backends)
+    target_include_directories(imgui_te PUBLIC ${Vulkan_INCLUDE_DIRS})
+    target_include_directories(imgui_te PUBLIC ${Vulkan_INCLUDE_DIR})
+endif()
 
 add_library(implot STATIC
     implot/implot.cpp

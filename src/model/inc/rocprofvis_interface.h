@@ -36,8 +36,24 @@ rocprofvis_db_type_t rocprofvis_db_identify_type(rocprofvis_db_filename_t filena
  * 
  ***************************************************************************************************/
 rocprofvis_dm_database_t rocprofvis_db_open_database(
-                                    rocprofvis_db_filename_t, 
+                                    rocprofvis_db_filename_t,
                                     rocprofvis_db_type_t);
+
+/****************************************************************************************************
+ * @brief Opens several trace files as a single combined (multinode) database.
+ *
+ * Loads the supplied files into one database without requiring a multinode manifest on
+ * disk. Each file becomes a database instance whose instance index (0, 1, ...) matches
+ * its position in the array. Used by the Compare feature.
+ *
+ * @param filenames array of database file paths
+ * @param count number of entries in filenames
+ * @return handler to database object
+ *
+ ***************************************************************************************************/
+rocprofvis_dm_database_t rocprofvis_db_open_database_multi(
+                                    rocprofvis_db_filename_t const*,
+                                    rocprofvis_dm_size_t);
 
 /****************************************************************************************************
  * @brief Calculates size of memory used by database object
@@ -123,18 +139,30 @@ rocprofvis_dm_result_t rocprofvis_db_cleanup_async(
  * @param num number of tracks in rocprofvis_db_track_selection_t array (uint32*)
  * @param track tracks selection array (uint32*)
  * @param object future handle allocated by rocprofvis_db_future_alloc
+ * @param tag user tag given to the time slice
  * @return status of operation
  *
  * @note Object will stay in trace memory until deleted.
  *             Use rocprofvis_dm_delete_time_slice or rocprofvis_dm_delete_all_time_slices for deletion *
  ***************************************************************************************************/
-rocprofvis_dm_result_t rocprofvis_db_read_trace_slice_async( 
+rocprofvis_dm_result_t rocprofvis_db_read_trace_slice_async(
                                     rocprofvis_dm_database_t,
                                     rocprofvis_dm_timestamp_t,
                                     rocprofvis_dm_timestamp_t,
+                                    rocprofvis_dm_hashed_timestamp_tag_t,
                                     rocprofvis_db_num_of_tracks_t,
                                     rocprofvis_db_track_selection_t,
                                     rocprofvis_db_future_t);    
+
+rocprofvis_dm_result_t rocprofvis_db_read_trace_pmc_slice_async(
+                                    rocprofvis_dm_database_t,
+                                    rocprofvis_dm_timestamp_t,
+                                    rocprofvis_dm_timestamp_t,
+                                    rocprofvis_dm_hashed_timestamp_tag_t,
+                                    rocprofvis_db_track_selection_t,
+                                    bool,
+                                    bool,
+                                    rocprofvis_db_future_t);  
 
 /****************************************************************************************************
 * @brief method to build compute database query based on use case and set of parameters
@@ -170,8 +198,26 @@ rocprofvis_dm_result_t rocprofvis_db_build_table_query(
     rocprofvis_dm_charptr_t group_cols, 
     rocprofvis_dm_charptr_t sort_column, 
     rocprofvis_dm_sort_order_t sort_order, 
+    uint64_t max_count, 
+    uint64_t offset, 
+    bool count_only,
+    char** out_query);
+
+/****************************************************************************************************
+* @note caller is responsible for freeing out_query
+* ***************************************************************************************************/
+rocprofvis_dm_result_t rocprofvis_db_build_event_search_query(
+    rocprofvis_dm_database_t database,
+    rocprofvis_dm_timestamp_t start,
+    rocprofvis_dm_timestamp_t end, 
+    rocprofvis_db_num_of_tracks_t num,
+    rocprofvis_db_track_selection_t ops,
+    rocprofvis_dm_charptr_t where,
     rocprofvis_dm_num_string_table_filters_t num_string_table_filters, 
     rocprofvis_dm_string_table_filters_t string_table_filters,
+    bool include_substring,
+    rocprofvis_dm_charptr_t sort_column,
+    rocprofvis_dm_sort_order_t sort_order,
     uint64_t max_count, 
     uint64_t offset, 
     bool count_only,
@@ -295,7 +341,8 @@ rocprofvis_dm_result_t  rocprofvis_dm_delete_trace(
  ***************************************************************************************************/
 rocprofvis_dm_result_t  rocprofvis_dm_bind_trace_to_database( 
                                     rocprofvis_dm_trace_t,
-                                    rocprofvis_dm_database_t);                                      
+                                    rocprofvis_dm_database_t,
+                                    rocprofvis_dm_charptr_t);                                      
 
 /****************************************************************************************************
  * @brief Delete time slice with specified start and end timestamps
@@ -414,6 +461,20 @@ rocprofvis_dm_result_t  rocprofvis_dm_delete_table_at(
  ***************************************************************************************************/
 rocprofvis_dm_result_t  rocprofvis_dm_delete_all_tables( 
                                     rocprofvis_dm_trace_t);  
+
+/****************************************************************************************************
+ * @brief Combine a (start, end) timestamp pair and a tag into a single hashed value
+ *
+ *
+ * @param start time slice start timestamp
+ * @param end end of the time slice
+ * @param tag user tag given to the time slice
+ * @return hashed timestamp
+ ***************************************************************************************************/
+rocprofvis_dm_hashed_timestamp rocprofvis_dm_hash_combine_timestamp(
+                                    rocprofvis_dm_timestamp_t,
+                                    rocprofvis_dm_timestamp_t,
+                                    rocprofvis_dm_hashed_timestamp_tag_t);
 
 /***********************************Universal property getters**************************************
 *

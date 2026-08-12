@@ -5,6 +5,7 @@
 #include "rocprofvis_controller_arguments.h"
 #include "rocprofvis_controller_reference.h"
 #include "rocprofvis_controller_array.h"
+#include "rocprofvis_shared_types.h"
 #include "csv.hpp"
 #include <filesystem>
 
@@ -47,7 +48,12 @@ rocprofvis_result_t ComputeTable::Fetch(rocprofvis_dm_trace_t dm_handle, uint64_
                 row_data[c].SetType(m_rows[r][c].GetType());
                 row_data[c] = m_rows[r][c];
             }
-            result = array.SetObject(kRPVControllerArrayEntryIndexed, r, (rocprofvis_handle_t*)row_array);
+            result = array.SetOwnedObject(kRPVControllerArrayEntryIndexed, r, (rocprofvis_handle_t*)row_array);
+            if (result != kRocProfVisResultSuccess)
+            {
+                // Ownership was not transferred to the outer array; reclaim it.
+                delete row_array;
+            }
         }
     }
     return result;
@@ -231,7 +237,7 @@ rocprofvis_result_t ComputeTable::Load(const std::string& csv_file)
             {
                 if (csv_row[col].is_null())
                 {
-                    row_data.emplace_back(static_cast<uint64_t>(-1)); // Rows may have empty fields.
+                    row_data.emplace_back(INVALID_INDEX_64); // Rows may have empty fields.
                 }
                 else
                 {

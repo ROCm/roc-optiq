@@ -10,6 +10,11 @@
 #    include "spdlog/spdlog.h"
 #    include "rocprofvis_platform_helpers.h"
 
+namespace RocProfVis
+{
+namespace Platform
+{
+
 // This file addresses two distinct Mutter/Xwayland bugs that affect
 // our floating (secondary-viewport) windows on Linux.  They have
 // different blast radii across distributions and different cost
@@ -350,4 +355,8 @@ raise_dragged_viewport_after_release()
     }
     g_prev_mouse_left_down = curr_mouse_down;
 }
+
+}  // namespace Platform
+}  // namespace RocProfVis
+
 #endif

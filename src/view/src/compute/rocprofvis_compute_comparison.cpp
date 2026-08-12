@@ -707,6 +707,7 @@ ComputeComparisonView::RenderToolbar()
         ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + window_width * 0.25f);
         ImGui::TextUnformatted(
             "Highlight absolute percentage differences above this threshold.");
+        ImGui::TextUnformatted("Drag to adjust or double click to edit.");
         ImGui::PopTextWrapPos();
         EndTooltipStyled();
     }

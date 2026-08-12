@@ -6,9 +6,12 @@
 #include "imgui.h"
 #include "rocprofvis_font_manager.h"
 #include "rocprofvis_settings_manager.h"
+#include "rocprofvis_utils.h"
 #include "widgets/rocprofvis_gui_helpers.h"
 #include "widgets/rocprofvis_notification_manager.h"
 #include "widgets/rocprofvis_widget.h"
+
+#include <algorithm>
 
 // Layout constants
 constexpr float kCategorywidth            = 150.0f;
@@ -16,6 +19,12 @@ constexpr float kContentwidth             = 550.0f;
 constexpr float kContentHeight            = 450.0f;
 constexpr float kHotkeyCategoryColWidth   = 90.0f;
 constexpr float kHotkeyBindingColWidth    = 120.0f;
+constexpr float kLogViewerInputWidth      = 160.0f;
+
+// Sample duration shown in the time-format preview: 12m 34.123456789s. Uses zero
+// hours so Condensed Timecode (which trims leading zero hour/minute groups)
+// renders differently from Timecode.
+constexpr double kPreviewSampleNs = 754123456789.0;
 
 namespace RocProfVis
 {
@@ -221,12 +230,21 @@ SettingsPanel::RenderDisplayOptions()
         SetTooltipStyled("Switch between dark and light UI themes.");
     }
 
+    if(ImGui::Checkbox("Multi-node decorators",
+                       &m_usersettings.display_settings.show_node_colors))
+    {
+        m_settings_changed = true;
+    }
+    if(ImGui::IsItemHovered())
+    {
+        SetTooltipStyled("Color-code tracks and sidebar nodes by node on multi-node traces.");
+    }
+
     ImGui::Spacing();
     ImGui::TextUnformatted("Fonts");
     ImGui::Separator();
 
-    // Font size slider. Slider works in integer points, then snaps the
-    // pending index to the closest entry in the font manager's size table.
+    // Font size slider in points; snapped to the closest available size.
     m_pending_font_size_index = m_fonts.ClampFontSizeIndex(m_pending_font_size_index);
     int min_size  = static_cast<int>(m_fonts.GetMinUserFontSize());
     int max_size  = static_cast<int>(m_fonts.GetMaxUserFontSize());
@@ -245,7 +263,7 @@ SettingsPanel::RenderDisplayOptions()
         SetTooltipStyled("Adjust the UI font within the supported layout range.");
     }
 
-    // Font preview at the pending size.
+    // Font preview
     ImGui::AlignTextToFramePadding();
     ImGui::TextUnformatted("Preview");
     ImGui::SameLine();
@@ -277,15 +295,15 @@ SettingsPanel::RenderUnitOptions()
     ImGui::AlignTextToFramePadding();
     ImGui::TextUnformatted("Time Format");
     ImGui::SameLine();
-    ImGui::SetNextItemWidth(ImGui::CalcTextSize("Condensed Timecode").x +
+    ImGui::SetNextItemWidth(ImGui::CalcTextSize("Condensed Timecode (hh:mm:ss.ns)").x +
                             2 * style.FramePadding.x +
                             ImGui::GetFrameHeightWithSpacing());
     int time_format_index = static_cast<int>(m_usersettings.unit_settings.time_format);
     // Options must match TimeFormat enum
     PushComboStyles();
     if(ImGui::Combo("##time_format", &time_format_index,
-                    "Timecode\0"
-                    "Condensed Timecode\0"
+                    "Timecode (hh:mm:ss.ns)\0"
+                    "Condensed Timecode (hh:mm:ss.ns)\0"
                     "Seconds\0"
                     "Milliseconds\0"
                     "Microseconds\0"
@@ -296,6 +314,28 @@ SettingsPanel::RenderUnitOptions()
         m_settings_changed = true;
     }
     PopComboStyles();
+
+    // Time format preview, styled to match the font preview above.
+    const TimeFormat  selected_format = m_usersettings.unit_settings.time_format;
+    const std::string preview =
+        nanosecond_to_formatted_str(kPreviewSampleNs, selected_format, true);
+
+    ImGui::AlignTextToFramePadding();
+    ImGui::TextUnformatted("Preview");
+    ImGui::SameLine();
+    ImGui::Spacing();
+    ImGui::SameLine();
+    ImGui::GetWindowDrawList()->AddRectFilled(
+        ImGui::GetCursorScreenPos() - ImVec2(style.FramePadding.x, 0),
+        ImGui::GetCursorScreenPos() + ImGui::CalcTextSize(preview.c_str()) +
+            ImVec2(style.FramePadding.x, 2 * style.FramePadding.y),
+        ImGui::GetColorU32(ImGui::GetStyleColorVec4(ImGuiCol_FrameBg)), style.FrameRounding);
+    ImGui::TextUnformatted(preview.c_str());
+    if(ImGui::IsItemHovered())
+    {
+        SetTooltipStyled("Example rendering of a 12m 34.123456789s duration\n"
+                         "using the selected time format.");
+    }
 }
 
 void
@@ -308,6 +348,29 @@ SettingsPanel::RenderOtherSettings()
                     &m_usersettings.dont_ask_before_exit);
     ImGui::Checkbox("Don't ask before closing tabs",
                     &m_usersettings.dont_ask_before_tab_closing);
+
+    ImGui::Dummy(ImVec2(0.0f, ImGui::GetStyle().ItemSpacing.y));
+    ImGui::TextUnformatted("Log viewer");
+    ImGui::Separator();
+    ImGui::AlignTextToFramePadding();
+    ImGui::TextUnformatted("Max cached entries");
+    if(ImGui::IsItemHovered())
+    {
+        SetTooltipStyled("Number of recent log lines kept in the in-memory log viewer.\n"
+                         "Older lines fall off once the cap is reached - open the log\n"
+                         "file for the complete history. Range: %d to %d.",
+                         LOG_VIEWER_MAX_ENTRIES_MIN, LOG_VIEWER_MAX_ENTRIES_MAX);
+    }
+    ImGui::SameLine();
+    ImGui::SetNextItemWidth(kLogViewerInputWidth);
+    if(ImGui::InputInt("##log_viewer_max_entries", &m_usersettings.log_viewer_max_entries,
+                       LOG_VIEWER_MAX_ENTRIES_STEP, LOG_VIEWER_MAX_ENTRIES_STEP_FAST))
+    {
+        m_usersettings.log_viewer_max_entries =
+            std::clamp(m_usersettings.log_viewer_max_entries, LOG_VIEWER_MAX_ENTRIES_MIN,
+                       LOG_VIEWER_MAX_ENTRIES_MAX);
+    }
+
     m_settings_changed = true;
 }
 

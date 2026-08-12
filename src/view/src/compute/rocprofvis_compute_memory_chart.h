@@ -31,7 +31,7 @@ struct ChartBlock
     float MidY()   const { return y + h * 0.5f; }
 };
 
-// Maps 1:1 to metric entry IDs in table 3.1
+// Metric entry IDs in table 3.1
 enum MemChartMetric
 {
     WAVEFRONT_OCCUPANCY = 0,
@@ -59,6 +59,7 @@ enum MemChartMetric
     VL1_WR,
     VL1_ATOMIC,
     VL1_HIT,
+    VL1_LAT,
     VL1_COALESCE,
     VL1_STALL,
     VL1_L2_RD,
@@ -78,6 +79,8 @@ enum MemChartMetric
     L2_WR,
     L2_ATOMIC,
     L2_HIT,
+    L2_RD_LAT,
+    L2_WR_LAT,
     FABRIC_L2_RD,
     FABRIC_L2_WR,
     FABRIC_L2_ATOMIC,

@@ -14,6 +14,25 @@ namespace RocProfVis
 namespace DataModel
 {
 
+
+bool Database::SanitizeFilePath(const std::string& filename, std::filesystem::path& out_path) {
+    std::filesystem::path input(filename);
+
+    if (!input.is_absolute())
+        return false;
+
+    std::error_code ec;
+    std::filesystem::path canonical_path = std::filesystem::canonical(input, ec);
+    if (ec)
+        return false;
+
+    if (!std::filesystem::is_regular_file(canonical_path, ec) || ec)
+        return false;
+
+    out_path = canonical_path;
+    return true;
+}
+
 bool Database::IsNumber(const std::string& s) {
     std::istringstream iss(s);
     uint64_t d;
@@ -25,7 +44,7 @@ rocprofvis_dm_result_t Database::AddTrackProperties(
     try {
         m_track_properties.push_back(std::make_unique<rocprofvis_dm_track_params_t>(props));
     }
-    catch (const std::exception& ex)
+    catch (const std::exception&)
     {
         ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN(ERROR_MEMORY_ALLOCATION_FAILURE, kRocProfVisDmResultAllocFailure);
     }
@@ -40,8 +59,8 @@ void  Database::ShowProgress(
     future->ShowProgress(Path(), step, action, status);
 }
 
-rocprofvis_dm_result_t Database::BindTrace(
-                                                    rocprofvis_dm_db_bind_struct * binding_info){
+
+rocprofvis_dm_result_t Database::BindTrace(rocprofvis_dm_db_bind_struct * binding_info){
     m_binding_info = binding_info;
     m_binding_info->FuncFindCachedTableValue = FindCachedTableValue;
     m_binding_info->FuncGetInfoTableNumColumns = GetInfoTableNumColumns;
@@ -86,22 +105,51 @@ rocprofvis_dm_result_t  Database::ReadTraceMetadataAsync(
 rocprofvis_dm_result_t  Database::ReadTraceSliceAsync(
                                                     rocprofvis_dm_timestamp_t start,
                                                     rocprofvis_dm_timestamp_t end,
+                                                    rocprofvis_dm_hashed_timestamp_tag_t tag,
                                                     rocprofvis_db_num_of_tracks_t num,
                                                     rocprofvis_db_track_selection_t tracks,
                                                     rocprofvis_db_future_t object){
     Future* future = (Future*) object;
     ROCPROFVIS_ASSERT_MSG_RETURN(future, ERROR_FUTURE_CANNOT_BE_NULL, kRocProfVisDmResultInvalidParameter);
     ROCPROFVIS_ASSERT_MSG_RETURN(!future->IsWorking(), ERROR_FUTURE_CANNOT_BE_USED, kRocProfVisDmResultResourceBusy);
-    rocprofvis_dm_result_t result = BindObject()->FuncCheckSliceExists(BindObject()->trace_object, start, end, num, tracks); 
+    rocprofvis_dm_result_t result = BindObject()->FuncCheckSliceExists(BindObject()->trace_object, start, end, tag, num, tracks);
     if(result != kRocProfVisDmResultNotLoaded)
     {
         spdlog::debug("Slice ({},{}) exists!", start, end);
         return future->SetPromise(result);
     }
     try {
-        future->SetWorker(std::move(std::thread(Database::ReadTraceSliceStatic, this, start, end, num, tracks, future)));
+        future->SetWorker(std::move(std::thread(Database::ReadTraceSliceStatic, this, start, end, tag, num, tracks, future)));
     }
-    catch (std::exception ex)
+    catch (const std::exception& ex)
+    {
+        ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN(ex.what(), kRocProfVisDmResultUnknownError);
+    }
+    return kRocProfVisDmResultSuccess;
+}
+
+rocprofvis_dm_result_t
+Database::ReadTracePMCSliceAsync(
+                                                    rocprofvis_dm_timestamp_t start,
+                                                    rocprofvis_dm_timestamp_t end,
+                                                    rocprofvis_dm_hashed_timestamp_tag_t tag,
+                                                    rocprofvis_db_track_selection_t track,
+                                                    bool left_neighbor, 
+                                                    bool right_neighbor,
+                                                    rocprofvis_db_future_t object){
+    Future* future = (Future*) object;
+    ROCPROFVIS_ASSERT_MSG_RETURN(future, ERROR_FUTURE_CANNOT_BE_NULL, kRocProfVisDmResultInvalidParameter);
+    ROCPROFVIS_ASSERT_MSG_RETURN(!future->IsWorking(), ERROR_FUTURE_CANNOT_BE_USED, kRocProfVisDmResultResourceBusy);
+    rocprofvis_dm_result_t result = BindObject()->FuncCheckSliceExists(BindObject()->trace_object, start, end, tag, 1, track);
+    if(result != kRocProfVisDmResultNotLoaded)
+    {
+        spdlog::debug("Slice ({},{}) exists!", start, end);
+        return future->SetPromise(result);
+    }
+    try {
+        future->SetWorker(std::move(std::thread(Database::ReadTracePMCSliceStatic, this, start, end, tag, track, left_neighbor, right_neighbor, future)));
+    }
+    catch (const std::exception& ex)
     {
         ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN(ex.what(), kRocProfVisDmResultUnknownError);
     }
@@ -128,6 +176,31 @@ rocprofvis_dm_result_t   Database::ReadEventPropertyAsync(
         ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN(ex.what(), kRocProfVisDmResultUnknownError);
     }
     return kRocProfVisDmResultSuccess;
+}
+
+rocprofvis_dm_result_t Database::BuildEventSearchQuery(
+    rocprofvis_dm_timestamp_t start, rocprofvis_dm_timestamp_t end,
+    rocprofvis_db_num_of_tracks_t num, rocprofvis_db_track_selection_t ops,
+    rocprofvis_dm_charptr_t where,
+    rocprofvis_dm_num_string_table_filters_t num_string_table_filters, rocprofvis_dm_string_table_filters_t string_table_filters, bool include_substring,
+    rocprofvis_dm_charptr_t sort_column, rocprofvis_dm_sort_order_t sort_order,
+    uint64_t max_count, uint64_t offset, bool count_only, rocprofvis_dm_string_t& query)
+{
+    (void) start;
+    (void) end;
+    (void) num;
+    (void) ops;
+    (void) where;
+    (void) num_string_table_filters;
+    (void) string_table_filters;
+    (void) include_substring;
+    (void) sort_column;
+    (void) sort_order;
+    (void) max_count;
+    (void) offset;
+    (void) count_only;
+    (void) query;
+    return kRocProfVisDmResultNotSupported;
 }
 
 rocprofvis_dm_result_t Database::ExportTableCSVAsync(rocprofvis_dm_string_t query,
@@ -186,7 +259,6 @@ Database::SaveTrimmedDataAsync(rocprofvis_dm_timestamp_t start,
                                  kRocProfVisDmResultInvalidParameter);
     ROCPROFVIS_ASSERT_MSG_RETURN(!future->IsWorking(), ERROR_FUTURE_CANNOT_BE_USED,
                                  kRocProfVisDmResultResourceBusy);
-    rocprofvis_dm_result_t result = kRocProfVisDmResultUnknownError;
     try
     {
         future->SetWorker(std::move(std::thread(&SaveTrimmedDataStatic, this, start, end, new_db_path, future)));
@@ -291,12 +363,42 @@ rocprofvis_dm_result_t  Database::ReadTraceSliceStatic(
                                                     Database* db,
                                                     rocprofvis_dm_timestamp_t start,
                                                     rocprofvis_dm_timestamp_t end,
+                                                    rocprofvis_dm_hashed_timestamp_tag_t tag,
                                                     rocprofvis_db_num_of_tracks_t num,
                                                     rocprofvis_db_track_selection_t tracks,
                                                     Future* object){
-    return db->ReadTraceSlice(start, end, num, tracks, object);
+    return db->ReadTraceSlice(start, end, tag, num, tracks, object);
 }
 
+rocprofvis_dm_result_t  Database::ReadTracePMCSliceStatic(
+                                                    Database* db, 
+                                                    rocprofvis_dm_timestamp_t start,
+                                                    rocprofvis_dm_timestamp_t            end,
+                                                    rocprofvis_dm_hashed_timestamp_tag_t tag,
+                                                    rocprofvis_db_track_selection_t      track,
+                                                    bool left_neighbor, 
+                                                    bool right_neighbor, 
+                                                    Future* object){
+    return db->ReadTracePMCSlice(start, end, tag, track, left_neighbor, right_neighbor, object);
+}
+
+rocprofvis_dm_result_t  Database::ReadTracePMCSlice(
+                                                    rocprofvis_dm_timestamp_t start,
+                                                    rocprofvis_dm_timestamp_t end,
+                                                    rocprofvis_dm_hashed_timestamp_tag_t tag,
+                                                    rocprofvis_db_track_selection_t track, 
+                                                    bool left_neighbor,
+                                                    bool right_neighbor, 
+                                                    Future* object){
+    (void) start;
+    (void) end;
+    (void) tag;
+    (void) track;
+    (void) left_neighbor;
+    (void) right_neighbor;
+    object->SetPromise(kRocProfVisDmResultNotSupported);
+    return kRocProfVisDmResultNotSupported;
+}
 
 rocprofvis_dm_result_t   Database::ReadEventPropertyStatic(
                                                     Database* db, 
@@ -332,23 +434,6 @@ rocprofvis_dm_result_t   Database::ExecuteComputeQueryStatic(
     return db->ExecuteComputeQuery(use_case, query,object);
 }
 
-const char* Database::ProcessNameSuffixFor(rocprofvis_dm_track_category_t category){
-    switch(category){
-        case kRocProfVisDmPmcTrack:
-        case kRocProfVisDmKernelDispatchTrack:
-        case kRocProfVisDmMemoryAllocationTrack:
-        case kRocProfVisDmMemoryCopyTrack:
-            return "GPU:";
-        case kRocProfVisDmRegionSampleTrack: 
-            return "Sample PID:";
-        case kRocProfVisDmRegionTrack:
-        case kRocProfVisDmRegionMainTrack:
-            return "Thread PID:";
-        case kRocProfVisDmStreamTrack: 
-            return "STREAM:";
-    }
-    return "";
-}
 
 const char* Database::SubProcessNameSuffixFor(rocprofvis_dm_track_category_t category){
     switch(category){
@@ -374,7 +459,7 @@ rocprofvis_dm_result_t   Database::FindCachedTableValue(
                                                         rocprofvis_dm_charptr_t* value){
     Database* db = (Database*) object;
     ROCPROFVIS_ASSERT_MSG_RETURN(db, ERROR_DATABASE_CANNOT_BE_NULL, kRocProfVisDmResultInvalidParameter);
-    *value = db->CachedTables(node)->GetTableCell(table, id, column); 
+    *value = db->CachedTables(static_cast<uint32_t>(node))->GetTableCell(table, id, column); 
     return kRocProfVisDmResultSuccess;
 }
 
@@ -382,7 +467,7 @@ rocprofvis_dm_result_t   Database::FindCachedTableValue(
 rocprofvis_dm_table_t Database::GetInfoTableHandle(const rocprofvis_dm_database_t object, rocprofvis_dm_node_id_t node, rocprofvis_dm_charptr_t table_name){
     Database* db = (Database*) object;
     ROCPROFVIS_ASSERT_MSG_RETURN(db, ERROR_DATABASE_CANNOT_BE_NULL, nullptr);
-    return db->CachedTables(node)->GetTableHandle(table_name);
+    return db->CachedTables(static_cast<uint32_t>(node))->GetTableHandle(table_name);
 }
 size_t Database::GetInfoTableNumColumns(rocprofvis_dm_table_t object){
     TableCache* table = (TableCache*)object;
@@ -397,7 +482,7 @@ size_t Database::GetInfoTableNumRows(rocprofvis_dm_table_t object){
 const char* Database::GetInfoTableColumnName(rocprofvis_dm_table_t object, size_t column_index){
     TableCache* table = (TableCache*)object;
     ROCPROFVIS_ASSERT_MSG_RETURN(table, ERROR_TABLE_CANNOT_BE_NULL, 0);
-    return table->GetColumnName(column_index);
+    return table->GetColumnName(static_cast<uint32_t>(column_index));
 }
 rocprofvis_dm_table_row_t Database::GetInfoTableRowHandle(rocprofvis_dm_table_t object, size_t row_index){
     TableCache* table = (TableCache*)object;
@@ -434,54 +519,62 @@ rocprofvis_dm_size_t Database::GetMemoryFootprint()
     return size;
 }
 
-void
-Database::UpdateQueryForTrack(  rocprofvis_dm_track_params_it it, 
-                                rocprofvis_dm_track_params_t& newprops,
-                                rocprofvis_dm_charptr_t*      newqueries)
-{
+void Database::CreateTracksOrderRanking() {
 
-    int slice_query_category        = newprops.track_indentifiers.category == kRocProfVisDmStreamTrack
-                                          ? kRPVQuerySliceByStream
-                                          : kRPVQuerySliceByQueue;
-    int slice_source_query_category = newprops.track_indentifiers.category == kRocProfVisDmStreamTrack
-                                          ? kRPVSourceQuerySliceByStream
-                                          : kRPVSourceQuerySliceByQueue;
-    if (it != TrackPropertiesEnd()) {
-            std::vector<rocprofvis_dm_string_t>::iterator s = 
-            std::find_if(it->get()->query[slice_query_category].begin(), 
-                            it->get()->query[slice_query_category].end(),
-                [newqueries, slice_source_query_category](rocprofvis_dm_string_t& str) {
-                                 return str == newqueries[slice_source_query_category];
-                         });
-            if(s == it->get()->query[slice_query_category].end())
-            {
-                it->get()->query[slice_query_category].push_back(
-                    newqueries[slice_source_query_category]);
+
+    using Track = rocprofvis_dm_track_params_t;
+
+    std::map<std::set<uint32_t>, std::vector<Track*>> partitions;
+
+    for (auto& track_prop : m_track_properties) {
+        Track* t = track_prop.get();
+        partitions[t->load_id].push_back(t);
+    }
+
+    uint32_t order_base = 0;
+
+    for (auto& [load_set, partition_tracks] : partitions) {
+
+
+        std::map<uint32_t, std::vector<Track*>> groups;
+
+        for (auto* t : partition_tracks) {
+            DbInstance* db_instance = (DbInstance*)t->track_indentifiers.db_instance;
+            uint32_t file_index = db_instance ? db_instance->FileIndex() : 0;
+            groups[file_index].push_back(t);
+        }
+
+        for (auto& [db, vec] : groups) {
+            std::sort(vec.begin(), vec.end(),[](
+                const Track* a, const Track* b) {
+                    return a->track_indentifiers.track_id <
+                    b->track_indentifiers.track_id;
+                });
+        }
+
+        size_t max_len = 0;
+        for (const auto& [_, vec] : groups) {
+            max_len = std::max(max_len, vec.size());
+        }
+
+        uint32_t local_order = 0;
+
+        for (size_t i = 0; i < max_len; ++i) {
+            for (auto& [db, vec] : groups) {
+                if (i < vec.size()) {
+                    vec[i]->order_id = order_base + local_order;
+                    ++local_order;
+                }
             }
-            
-            s = std::find_if(it->get()->query[kRPVQueryTable].begin(),
-                             it->get()->query[kRPVQueryTable].end(),
-                             [newqueries](rocprofvis_dm_string_t& str) {
-                                 return str == newqueries[kRPVSourceQueryTable];
-                             });
-            if(s == it->get()->query[kRPVQueryTable].end())
-            {
-                it->get()->query[kRPVQueryTable].push_back(newqueries[kRPVSourceQueryTable]);
-            }
-            s = std::find_if(it->get()->query[kRPVQueryLevel].begin(),
-                             it->get()->query[kRPVQueryLevel].end(),
-                             [newqueries](rocprofvis_dm_string_t& str) {
-                                 return str == newqueries[kRPVSourceQueryLevel];
-                             });
-            if(s == it->get()->query[kRPVQueryLevel].end())
-            {
-                it->get()->query[kRPVQueryLevel].push_back(newqueries[kRPVSourceQueryLevel]);
-            }
-        return;
-    } 
-    newprops.query[slice_query_category].push_back(newqueries[slice_source_query_category]);
-    newprops.query[kRPVQueryTable].push_back(newqueries[kRPVSourceQueryTable]);
-    newprops.query[kRPVQueryLevel].push_back(newqueries[kRPVSourceQueryLevel]); 
+        }
+
+        // Advance the base past every track assigned in this partition so
+        // order_ids stay globally unique regardless of how many tracks a
+        // partition holds (a fixed stride per partition would collide once a
+        // partition exceeds that stride).
+        order_base += local_order;
+    }
+
 }
 
 void DatabaseVersion::SetVersion(const char* version) {

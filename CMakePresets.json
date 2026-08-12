@@ -10,8 +10,7 @@
             "installDir": "${sourceDir}/install/${presetName}",
             "cacheVariables": {
                 "CMAKE_C_COMPILER": "cl.exe",
-                "CMAKE_CXX_COMPILER": "cl.exe",
-                "COMPUTE_UI_SUPPORT": "ON"
+                "CMAKE_CXX_COMPILER": "cl.exe"
             },
             "condition": {
                 "type": "equals",
@@ -62,8 +61,7 @@
             "cacheVariables": {
                 "CMAKE_C_COMPILER": "gcc",
                 "CMAKE_CXX_COMPILER": "g++",
-                "CMAKE_INSTALL_PREFIX": "/opt/roc-optiq",
-                "COMPUTE_UI_SUPPORT": "ON"
+                "CMAKE_INSTALL_PREFIX": "/opt/roc-optiq"
             },
             "condition": {
                 "type": "equals",
@@ -108,8 +106,7 @@
                 "CMAKE_C_COMPILER": "clang",
                 "CMAKE_CXX_COMPILER": "clang++",
                 "CMAKE_INSTALL_PREFIX": "/usr/local",
-                "CMAKE_OSX_DEPLOYMENT_TARGET": "11.0",
-                "COMPUTE_UI_SUPPORT": "ON"
+                "CMAKE_OSX_DEPLOYMENT_TARGET": "11.0"
             },
             "condition": {
                 "type": "equals",

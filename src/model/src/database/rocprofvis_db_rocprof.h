@@ -15,7 +15,7 @@ typedef struct rocprofvis_db_string_id_hash_t
 {
     size_t operator()(const rocprofvis_db_string_id_t& s) const noexcept
     {
-        size_t h1 = std::hash<uint32_t>{}(s.m_string_id);
+        size_t h1 = std::hash<uint64_t>{}(s.m_string_id);
         size_t h2 = std::hash<uint32_t>{}(s.m_guid_id);
         size_t h3 = std::hash<rocprofvis_db_string_type_t>{}(s.m_string_type);
 
@@ -123,6 +123,7 @@ public:
     rocprofvis_dm_result_t BuildTableStringIdFilter( 
                                         rocprofvis_dm_num_string_table_filters_t num_string_table_filters, 
                                         rocprofvis_dm_string_table_filters_t string_table_filters,
+                                        bool include_substring,
                                         table_string_id_filter_map_t& filters) override;
 
     rocprofvis_dm_string_t GetEventOperationQuery(
@@ -133,51 +134,60 @@ public:
 
     rocprofvis_dm_result_t RemapStringId(uint64_t id, rocprofvis_db_string_type_t type, uint32_t node, uint64_t & result) override;
 
+protected:
+
+    uint64_t GetMemoryActivityTableSchemaHash();
+    std::string GetLevelSchemaHashStr();
+
 private:
-    // sqlite3_exec callback to process string list query and add string object to Trace container
+
+    // ------------------------------SQL query callbacks-----------------------------------
     // @param data - pointer to callback caller argument
     // @param argc - number of columns in the query
     // @param argv - pointer to row values
-    // @param azColName - pointer to column names
+    // @param azColName - pointer to column names  
     // @return SQLITE_OK if successful
+    // 
+    // sqlite3_exec callback to process string list query and add string object to Trace container
     static int CallbackCaptureMemoryActivity(void* data, int argc, sqlite3_stmt* stmt, char** azColName);
     // sqlite3_exec callback to process string list query and add string object to Trace container
-    // @param data - pointer to callback caller argument
-    // @param argc - number of columns in the query
-    // @param argv - pointer to row values
-    // @param azColName - pointer to column names
-    // @return SQLITE_OK if successful
     static int CallBackAddString(void *data, int argc, sqlite3_stmt* stmt, char **azColName);
     // sqlite3_exec callback to detect nodes and table names in the database
-    // object to StackTrace container
-    // @param data - pointer to callback caller argument
-    // @param argc - number of columns in the query
-    // @param argv - pointer to row values
-    // @param azColName - pointer to column names
-    // @return SQLITE_OK if successful
-    static int CallbackNodeEnumeration(void* data, int argc, sqlite3_stmt* stmt,
-                                       char** azColName);
+    static int CallbackNodeEnumeration(void* data, int argc, sqlite3_stmt* stmt, char** azColName);
     // sqlite3_exec callback to parse metadata table of new schema rocprof database
-    // object to StackTrace container
-    // @param data - pointer to callback caller argument
-    // @param argc - number of columns in the query
-    // @param argv - pointer to row values
-    // @param azColName - pointer to column names
-    // @return SQLITE_OK if successful
-    static int CallbackParseMetadata(void* data, int argc, sqlite3_stmt* stmt,
-        char** azColName);
+    static int CallbackParseMetadata(void* data, int argc, sqlite3_stmt* stmt, char** azColName);
+
+    // ---------------------------------- Helpers ----------------------------------------
+    rocprofvis_dm_result_t  Cleanup(Future* future, bool rebuild) override { return m_metadata_version_control.CleanupDatabase(future, rebuild); };
+    int ProcessTrack(rocprofvis_dm_track_params_t& track_params, std::vector<rocprofvis_dm_string_t> & newqueries) override;
+
     // method to remap string IDs. Main reason for remapping is having strings and kernel symbol names in one array 
     // @param record - event record structure
     // @return status of operation
     rocprofvis_dm_result_t RemapStringIds(rocprofvis_db_record_data_t & record) override;
     rocprofvis_dm_result_t RemapStringIds(rocprofvis_db_flow_data_t& record) override;
+    rocprofvis_dm_result_t CreateIndexes();
+    rocprofvis_dm_result_t LoadInformationTables(Future* future);
+    rocprofvis_dm_result_t PopulateStreamToHardwareFlowProperties(uint32_t stream_track_index, uint32_t db_instance);
+    rocprofvis_dm_result_t PopulateUnusedAgents(uint32_t db_instance);
+    rocprofvis_dm_result_t CreateMemoryActivityTable(Future* future);
+    rocprofvis_dm_result_t CreateAgentFriendlyMemoryAllocationTable(Future* future);
+    rocprofvis_dm_result_t LoadMemoryActivityData(Future* future);
+    rocprofvis_dm_result_t GenerateInterdependencyTables(Future* future);
 
-    int ProcessTrack(rocprofvis_dm_track_params_t& track_params, rocprofvis_dm_charptr_t*  newqueries) override;
-
-    protected:
     const rocprofvis_event_data_category_map_t* GetCategoryEnumMap() override {
         return &s_rocprof_categorized_data;
     };
+    rocprofvis_dm_track_category_t GetRegionTrackCategory() override
+    {
+        return kRocProfVisDmRegionMainTrack;
+    }
+    MetadataVersionControl* GetMetadataVersionControl() override 
+    { 
+        return &m_metadata_version_control; 
+    };
+
+    // --------------------------------Null value handlers-------------------------------------- 
     const rocprofvis_null_data_exceptions_int* GetNullDataExceptionsInt() override
     {
         return &s_null_data_exceptions_int;
@@ -190,32 +200,8 @@ private:
     {
         return &s_null_data_exceptions_skip;
     }
-    rocprofvis_dm_track_category_t GetRegionTrackCategory() override
-    {
-        return kRocProfVisDmRegionMainTrack;
-    }
-    MetadataVersionControl* GetMetadataVersionControl() override 
-    { 
-        return &m_metadata_version_control; 
-    };
 
-    rocprofvis_dm_result_t  Cleanup(Future* future, bool rebuild) override { return m_metadata_version_control.CleanupDatabase(future, rebuild); };
 
-    private:
-        rocprofvis_dm_result_t CreateIndexes();
-        rocprofvis_dm_result_t LoadInformationTables(Future* future);
-        rocprofvis_dm_result_t PopulateStreamToHardwareFlowProperties(uint32_t stream_track_index, uint32_t db_instance);
-        rocprofvis_dm_result_t PopulateUnusedAgents(uint32_t db_instance);
-        rocprofvis_dm_result_t CreateMemoryActivityTable(Future* future);
-        rocprofvis_dm_result_t CreateAgentFriendlyMemoryAllocationTable(Future* future);
-        rocprofvis_dm_result_t LoadMemoryActivityData(Future* future);
-        rocprofvis_dm_result_t GenerateInterdependencyTables(Future* future);
-        rocprofvis_dm_result_t RunCacheQueriesAsync(Future* future, std::vector<std::pair<std::string, std::string>>& info_table_lis);
-    protected:
-        uint64_t GetMemoryActivityTableSchemaHash();
-        std::string GetLevelSchemaHashStr();
-        
-    private:
         QueryFactory m_query_factory;
         std::string m_db_version;
         // map array for string indexes remapping. Main reason for remapping is older rocpd schema keeps duplicated symbols, one per GPU 

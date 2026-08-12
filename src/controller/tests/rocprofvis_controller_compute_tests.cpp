@@ -10,7 +10,10 @@
 #include <filesystem>
 #include <unordered_map>
 
-std::string g_input_file = "sample/rocprof_compute_23ed6f36.db";
+std::string g_input_file =
+    (std::filesystem::path(ROCPROFVIS_TEST_SOURCE_DIR) / "sample" /
+     "rocprof_compute_23ed6f36.db")
+        .string();
 
 int
 main(int argc, char** argv)
@@ -85,7 +88,7 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture,
     SECTION("Create Controller")
     {
         spdlog::info("Allocating Controller");
-        m_controller = rocprofvis_controller_alloc(g_input_file.c_str());
+        m_controller = rocprofvis_controller_alloc(g_input_file.c_str(), nullptr);
         REQUIRE(nullptr != m_controller);
     }
 

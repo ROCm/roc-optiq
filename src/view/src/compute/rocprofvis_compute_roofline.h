@@ -96,21 +96,40 @@ private:
         std::vector<size_t> item_indices;
     };
 
+    // Always-visible horizontal filter toolbar drawn above the plot.
+    void RenderToolbar();
     void RenderMenus(ImVec2 region, ImVec2 plot_pos, ImVec2 plot_size,
                      const ImGuiStyle& style, const ImPlotStyle& plot_style,
                      bool& item_hovered);
     void PlotHoverIdx();
     void ApplyPreset(PresetModel::Type type);
+    // Recompute every item's visibility from the active preset and the
+    // intensity/kernel/bandwidth filters. The chart, legend, and hover read
+    // visibility; the Options menu always lists the full data set.
+    void RecomputeVisibility();
+    void ToggleKernelIsolation(const KernelInfo* kernel);
+    void ToggleBandwidthIsolation(
+        rocprofvis_controller_roofline_ceiling_bandwidth_type_t bandwidth);
 
     // Internal models...
     std::vector<ItemModel>   m_items;
     std::vector<PresetModel> m_presets;
+    // Filter options actually present in the workload (non-empty only).
+    std::vector<rocprofvis_controller_roofline_kernel_intensity_type_t>
+        m_available_intensities;
+    std::vector<rocprofvis_controller_roofline_ceiling_bandwidth_type_t>
+        m_available_bandwidths;
 
     // User options...
-    bool           m_show_menus;
-    MenusMode      m_menus_mode;
-    MenusPlacement m_menus_placement;
-    bool           m_scale_intensity;
+    bool               m_show_menus;
+    MenusMode          m_menus_mode;
+    MenusPlacement     m_menus_placement;
+    bool               m_scale_intensity;
+    float              m_line_thickness;
+    PresetModel::Type  m_active_preset;
+    // Selected filters. nullopt = show all of that category.
+    std::optional<rocprofvis_controller_roofline_kernel_intensity_type_t>
+        m_memory_peak_filter;
 
     // Internal state...
     bool                  m_workload_changed;
@@ -120,6 +139,11 @@ private:
     bool                  m_kernel_changed;
     const KernelInfo*     m_kernel;
     uint32_t              m_requested_kernel_id;
+    const KernelInfo*     m_isolated_kernel;
+    std::optional<rocprofvis_controller_roofline_ceiling_bandwidth_type_t>
+        m_isolated_bandwidth;
+    // Set when Custom toggles diverge visibility from the dropdown selections.
+    bool                  m_custom_visibility;
     bool                  m_options_changed;
     bool                  m_plot_zoom_enabled;
     std::optional<size_t> m_hovered_item_idx;

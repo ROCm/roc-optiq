@@ -4,6 +4,7 @@
 #pragma once
 
 #include "rocprofvis_controller_enums.h"
+#include <cstdint>
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -27,7 +28,7 @@ struct AvailableMetrics
         uint32_t    id;
         std::string name;
         std::string description;
-        std::string unit; 
+        std::string unit;
     };
     struct Table
     {
@@ -53,6 +54,83 @@ struct Point
 {
     double x;
     double y;
+};
+
+struct PcStallReason
+{
+    int32_t     reason_id = 0;
+    int32_t     count   = 0;
+};
+
+struct SamplingState
+{
+    bool     loaded             = false;
+    uint64_t dispatch_id        = 0;
+    uint32_t id                 = 0;
+    uint32_t isa_line_id        = 0;
+    uint32_t issued_count       = 0;
+    uint32_t stalled_count      = 0;
+    uint32_t total_count        = 0;
+    float    active_threads_percent = 0.0f;
+    float    wave_occupancy_percent = 0.0f;
+
+    std::vector<PcStallReason> stall_reasons;
+};
+
+struct IsaToIsaDep
+{
+    uint32_t dependent_isa_line_id  = 0;
+    uint32_t dependency_isa_line_id = 0;
+};
+
+struct IsaToSourceDep
+{
+    uint32_t isa_line_id    = 0;
+    uint32_t source_line_id = 0;
+    uint32_t depth          = 0;
+};
+
+struct IsaLine
+{
+    uint64_t    code_object_offset  = 0;
+    std::string instruction;
+    std::string comment;
+    SamplingState           sampling_state;
+    std::vector<uint32_t> source_line_ids;
+    uint32_t    id                  = 0;
+    uint32_t    instruction_type_id = 0;
+};
+
+struct CodeObject
+{
+    std::string          uri;
+    std::string          content_checksum;
+    std::vector<IsaLine> isa_lines;
+    uint32_t             id = 0;
+};
+
+struct SourceLine
+{
+    std::string            content;
+    std::vector<uint32_t*> isa_line_ids;
+    uint32_t               id          = 0;
+    uint32_t               line_number = 0;
+};
+
+struct SourceFile
+{
+    std::string             file_path;
+    std::string             content_checksum;
+    std::vector<SourceLine> source_lines;
+    uint32_t                id = 0;
+};
+
+struct PcSamplingData
+{
+    std::vector<CodeObject>     code_objects;
+    std::vector<SourceFile>     source_files;
+    std::vector<IsaToIsaDep>    isa_to_isa_deps;
+    std::vector<IsaToSourceDep> isa_to_source_deps;
 };
 
 struct KernelInfo
@@ -82,6 +160,7 @@ struct KernelInfo
     std::string                      name;
     std::array<uint64_t, NumMetrics> dispatch_metrics;
     Roofline                         roofline;
+    PcSamplingData                   pc_sampling_data;
 };
 
 struct WorkloadInfo
@@ -123,7 +202,7 @@ struct WorkloadInfo
     Roofline                                 roofline;
 };
 
-struct MetricValue 
+struct MetricValue
 {
     AvailableMetrics::Entry*                   entry;
     rocprofvis_controller_metric_source_type_t source_type;

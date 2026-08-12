@@ -17,7 +17,18 @@ extern "C"
 * @param filename File to open.
 * @returns A valid controller, initialized to load the trace or nullptr on error.
 */
-rocprofvis_controller_t* rocprofvis_controller_alloc(char const* const filename);
+rocprofvis_controller_t* rocprofvis_controller_alloc(char const* const filename, char const* const config_path);
+
+/*
+* Create a system controller that loads several trace files as one combined trace.
+* Used by the Compare feature so two (or more) traces overlay on a single timeline; each
+* file's tracks are tagged with its source instance index (see kRPVControllerTrackInstanceId).
+* @param filenames Array of trace file paths.
+* @param count Number of entries in filenames.
+* @returns A valid controller, initialized to load the traces or nullptr on error.
+*/
+rocprofvis_controller_t* rocprofvis_controller_alloc_compare(char const* const* filenames,
+                                                             uint64_t           count);
 
 /*
 * Loads the file into the controller or returns an error.
@@ -257,8 +268,6 @@ rocprofvis_result_t rocprofvis_controller_table_export_csv(rocprofvis_controller
 */
 rocprofvis_result_t rocprofvis_controller_summary_fetch_async(rocprofvis_controller_t* controller, rocprofvis_controller_summary_t* summary, rocprofvis_controller_arguments_t* args, rocprofvis_controller_future_t* result, rocprofvis_controller_summary_metrics_t* output);
 
-#ifdef COMPUTE_UI_SUPPORT
-
 /*
 * Allocate a metrics container used for carrying compute trace metric data.
 * @returns A valid metrics container object, or nullptr.
@@ -280,7 +289,16 @@ void rocprofvis_controller_metrics_container_free(rocprofvis_controller_metrics_
 * @returns kRocProfVisResultSuccess or an error code.
 */
 rocprofvis_result_t rocprofvis_controller_metric_fetch_async(rocprofvis_controller_t* controller, rocprofvis_controller_arguments_t* args, rocprofvis_controller_future_t* result, rocprofvis_controller_metrics_container_t* output);
-#endif
+
+/*
+* Fetch PC sampling data for a specific kernel and source file asynchronously.
+* @param controller The controller
+* @param args Input arguments (workload id, kernel id, source file id)
+* @param result The future to wait on
+* @param output The PC sampling handle to write to
+* @returns kRocProfVisResultSuccess or an error code.
+*/
+rocprofvis_result_t rocprofvis_controller_pc_sampling_fetch_async(rocprofvis_controller_t* controller, rocprofvis_controller_arguments_t* args, rocprofvis_controller_future_t* result, rocprofvis_handle_t* output);
 
 /*
 * Get indexed properties from an object.
@@ -308,6 +326,125 @@ rocprofvis_result_t rocprofvis_controller_get_indexed_property_async(rocprofvis_
     type: rocprofvis_controller_object_type_t
 }
 */
+
+/*
+* TEMPORARY (remote/SSH): remote connection C ABI. Remove this guard when the
+* remote feature graduates.
+*/
+#ifdef ROCPROFVIS_ENABLE_REMOTE
+/*
+* Allocates ssh connection object using host and port parameters stored in arguments.
+* @param args contains host name and port number
+* @param output contains connection handler
+* @returns kRocProfVisResultSuccess or an error code.
+*/
+rocprofvis_result_t rocprofvis_controller_ssh_connection_alloc(
+    rocprofvis_controller_arguments_t* args,
+    rocprofvis_controller_array_t* output);
+
+/*
+* Free libssh2 connection.
+* @param connection libssh2 connection to disconnect
+* @returns kRocProfVisResultSuccess or an error code.
+*/
+rocprofvis_result_t rocprofvis_controller_ssh_connection_free(
+    rocprofvis_controller_connection_t* connection);
+
+/*
+* Connects to remote openssh system using connection object.
+* @param connection libssh2 connection to authenticate
+* @returns kRocProfVisResultSuccess or an error code.
+*/
+rocprofvis_result_t rocprofvis_controller_remote_connect_async(
+    rocprofvis_controller_future_t* future,
+    rocprofvis_controller_connection_t* connection);
+
+/*
+* Authenticates  connection to remote openssh system .
+* @param connection libssh2 connection to authenticate
+* @param args contains user name, password, path to public key
+* @returns kRocProfVisResultSuccess or an error code.
+*/
+rocprofvis_result_t rocprofvis_controller_remote_authenticate_async(
+    rocprofvis_controller_future_t* future,
+    rocprofvis_controller_connection_t* connection,
+    rocprofvis_controller_arguments_t* args);
+
+/*
+* Execute command remotely over ssh.
+* @param connection libssh2 connection for command execution
+* @param args contains command line
+* @returns kRocProfVisResultSuccess or an error code.
+*/
+rocprofvis_result_t rocprofvis_controller_remote_execute_async(
+    rocprofvis_controller_future_t* future,
+    rocprofvis_controller_connection_t* connection,
+    rocprofvis_controller_arguments_t* args
+);
+
+/*
+* Execute command remotely over ssh. Currently supports download only
+* @param connection libssh2 connection for file transfer
+* @param args contains source and destination path 
+* @returns kRocProfVisResultSuccess or an error code.
+*/
+rocprofvis_result_t rocprofvis_controller_remote_transfer_async(
+    rocprofvis_controller_future_t* future,
+    rocprofvis_controller_connection_t* connection,
+    rocprofvis_controller_arguments_t* args
+);
+
+/*
+* Browse remote direcrory over ssh. 
+* @param connection libssh2 connection for reading directory
+* @param args contains remote path 
+* @returns kRocProfVisResultSuccess or an error code.
+*/
+
+rocprofvis_result_t rocprofvis_controller_remote_browser_async(
+    rocprofvis_controller_future_t* future,
+    rocprofvis_controller_connection_t* connection,
+    rocprofvis_controller_arguments_t* args
+);
+
+/*
+* Reports host authentication decision 
+* @param connection libssh2 connection to report to
+* @param decision trust or reject connection
+* @returns kRocProfVisResultSuccess or an error code.
+*/
+rocprofvis_result_t rocprofvis_controller_remote_submit_hostkey_decision(
+    rocprofvis_controller_connection_t* connection,
+    uint64_t decision);
+
+/*
+* Reports responses requested by interractive authentication callback 
+* @param connection libssh2 connection to report to
+* @param args contains array of responses
+* @returns kRocProfVisResultSuccess or an error code.
+*/
+rocprofvis_result_t rocprofvis_controller_remote_submit_responses(
+    rocprofvis_controller_connection_t* connection,
+    rocprofvis_controller_arguments_t* args);
+
+/*
+* Cancels back end wait for prompt response
+* @param connection libssh2 to cancel prompt
+* @returns kRocProfVisResultSuccess or an error code.
+*/
+rocprofvis_result_t rocprofvis_controller_remote_cancel_prompt(
+    rocprofvis_controller_connection_t* connection);
+
+/*
+* Resets the connection's SSH bridge cancellation/prompt state so the same
+* live connection can be reused for further operations after a cancel. Clears
+* the latched cancelled flag and any pending prompt/host-key state.
+* @param connection The connection whose bridge state should be reset.
+* @returns kRocProfVisResultSuccess or an error code.
+*/
+rocprofvis_result_t rocprofvis_controller_remote_reset(
+    rocprofvis_controller_connection_t* connection);
+#endif // ROCPROFVIS_ENABLE_REMOTE
 
 /*
 * Frees the provided summary metrics container object

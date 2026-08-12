@@ -3,6 +3,7 @@
 
 #include "rocprofvis_image_helpers.h"
 #include "spdlog/spdlog.h"
+#define STB_IMAGE_IMPLEMENTATION
 #include "stb-image/stb_image.h"
 #include <utility>
 

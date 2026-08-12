@@ -16,6 +16,7 @@ enum class FontType
 {
     kMainText,
     kIcon,
+    kCode,
     // Used to get the size of the enum, insert new fonts before this line
     __kLastFont,
     kDefault = kMainText
@@ -46,11 +47,17 @@ public:
      */
     bool Init();
 
+    /*
+     * Called once per frame. ImGui applies font-size changes (user-selected or
+     * automatic DPI scaling) on the following frame, so this detects the
+     * effective size change and fires kFontSizeChanged for all subscribers.
+     */
+    void Update();
+
     ImFont* GetFont(FontType font_type);
     float   GetFontSize(FontSize font_type) const;
 
-    // User-controllable font size range. Sizes are in points and snap to
-    // entries in the internal size table.
+    // User-controllable font size (points), snapped to the available sizes.
     float GetMinUserFontSize() const;
     float GetMaxUserFontSize() const;
     float GetFontSizeAt(int idx) const;
@@ -62,11 +69,19 @@ public:
     static constexpr int kNumSizes = static_cast<int>(FontSize::__kLastSize);
 
 private:
+    // Index of the available size closest to font_size. Assumes
+    // m_available_sizes is sorted ascending.
+    int GetClosestFontSizeIndex(float font_size) const;
 
     ImFont* m_text_font = nullptr;
     ImFont* m_icon_font = nullptr;
+    ImFont* m_code_font = nullptr;
     std::array<float, kNumSizes> m_sizes{};
     std::vector<float> m_available_sizes;
+
+    // Last effective ImGui font size, used to detect both user-selected and
+    // auto-DPI font-size changes.
+    float m_last_font_size = 0.0f;
 };
 
 }  // namespace View

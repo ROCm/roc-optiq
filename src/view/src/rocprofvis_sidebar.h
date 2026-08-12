@@ -2,9 +2,12 @@
 // SPDX-License-Identifier: MIT
 
 #pragma once
+#include "rocprofvis_event_manager.h"
 #include "rocprofvis_track_topology.h"
 #include "widgets/rocprofvis_widget.h"
 
+#include <chrono>
+#include <unordered_set>
 #include <vector>
 
 namespace RocProfVis
@@ -16,13 +19,14 @@ class SettingsManager;
 class TrackTopology;
 class TimelineSelection;
 class DataProvider;
+class TrackItem;
 
 class SideBar : public RocWidget
 {
 public:
     SideBar(std::shared_ptr<TrackTopology>         topology,
             std::shared_ptr<TimelineSelection>     timeline_selection,
-            std::shared_ptr<std::vector<TrackGraph>> graphs,
+            std::shared_ptr<std::vector<TrackItem*>> tracks,
             DataProvider&                          dp);
     ~SideBar();
     virtual void Render() override;
@@ -38,6 +42,12 @@ private:
 
     void               RenderTrackItem(const uint64_t& index,
                                        bool show_eye_button = true);
+    void               ScrollToTrack(TrackItem& track);
+    void               SetTrackVisibility(TrackItem& track, bool visible);
+    void               HideAllButTrack(const uint64_t& index);
+    void               ApplyAllTrackVisibility(bool visible);
+    void               ApplySelectedTrackVisibility(bool visible);
+    bool               HasTrackVisibility(bool visible) const;
     EyeButtonState     MergeEyeButtonState(EyeButtonState lhs,
                                            EyeButtonState rhs) const;
     EyeButtonState     GetLeafState(const LeafNode& leaf) const;
@@ -54,12 +64,28 @@ private:
     EyeButtonState     DrawEyeButton(EyeButtonState eye_button_state);
     void               InvalidateEyeStateCache(const TreeNode& node);
 
+    // "Reveal in topology": locate a track's leaf, expand only the ancestors
+    // needed to see it, scroll it into view, and pulse-highlight the row.
+    void               HandleRevealTrack(const std::shared_ptr<RocEvent>& event);
+    bool               BuildRevealPath(const TreeNode& node, bool in_processors);
+    void               DrawRevealPulse(const ImVec2& row_min, const ImVec2& row_max) const;
+
     SettingsManager&                         m_settings;
     std::shared_ptr<TrackTopology>           m_track_topology;
     std::shared_ptr<TimelineSelection>       m_timeline_selection;
-    std::shared_ptr<std::vector<TrackGraph>> m_graphs;
+    std::shared_ptr<std::vector<TrackItem*>> m_tracks;
     DataProvider&                            m_data_provider;
-    bool                                     m_eye_state_dirty = false;
+    ImU32                                    m_active_node_color;
+    EventManager::SubscriptionToken          m_track_visibility_token;
+
+    EventManager::SubscriptionToken       m_reveal_track_token;
+    uint64_t                              m_reveal_track_id = 0;
+    bool                                  m_reveal_active   = false;
+    int                                   m_reveal_scroll_frames = 0;
+    std::chrono::steady_clock::time_point m_reveal_start;
+    std::unordered_set<const TreeNode*>   m_reveal_path;
+    const LeafNode*                       m_reveal_leaf = nullptr;
+    bool                                  m_reveal_leaf_in_processors = false;
 };
 
 }  // namespace View

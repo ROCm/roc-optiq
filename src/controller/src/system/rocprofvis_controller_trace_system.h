@@ -27,7 +27,7 @@ class Graph;
 class Timeline;
 class Event;
 class Table;
-class Node;
+class EventSearchTable;
 class SystemTable;
 class Summary;
 class SummaryMetrics;
@@ -36,7 +36,11 @@ class TopologyNode;
 class SystemTrace : public Trace
 {
 public:
-    SystemTrace(const std::string& filename);
+    SystemTrace(const std::string& filename, const std::string& config_path);
+
+    // Compare/combine: open several files as one trace. Each file becomes a source
+    // instance whose index is exposed via kRPVControllerTrackInstanceId.
+    SystemTrace(const std::vector<std::string>& filenames);
 
     virtual ~SystemTrace();
 
@@ -83,16 +87,17 @@ public:
     std::mutex& GetTableMutex(rocprofvis_dm_table_use_case_enum_t use_case);
 
 private:
+    std::vector<std::string>                       m_files;  // >1 entry => combined/compare load
     std::vector<Track*>                            m_tracks;
-    std::vector<Node*>                             m_nodes;
     Timeline*                                      m_timeline;
     SystemTable*                                   m_event_table;
     SystemTable*                                   m_sample_table;
-    SystemTable*                                   m_search_table;
+    EventSearchTable*                              m_search_table;
     Summary*                                       m_summary;
     MemoryManager*                                 m_mem_mgmt;
     TopologyNode*                                  m_topology_root;
     std::array<std::mutex, kRPVDMTableNumUsecases> m_table_mutex;
+    std::string                                    m_config_path;
 
 private:
     rocprofvis_result_t LoadRocpd(Future* future);

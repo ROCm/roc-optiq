@@ -386,7 +386,6 @@ Graph::GenerateLOD(uint32_t lod_to_generate, double start_ts, double end_ts,
         std::vector<Sample*> samples;
         double sample_insert_ts = 0.0;
         double sample_last_ts = 0.0;
-        double sample_last_value = 0.0;
         uint64_t type = 0;
 
         for(auto& data : entries)

@@ -41,7 +41,7 @@ if trace != None:
                         for i in range(num_tracks):
                             tracks.append(i)
                         tracks_selection = ffi.new("uint32_t[]", tracks)
-                        if  cffi_lib.lib.rocprofvis_db_read_trace_slice_async(db, start_time, end_time, num_tracks, tracks_selection, object2wait) == cffi_lib.lib.kRocProfVisDmResultSuccess:
+                        if  cffi_lib.lib.rocprofvis_db_read_trace_slice_async(db, start_time, end_time, cffi_lib.lib.kRocProfVisDmHashedTimestampTagTrackSlice, num_tracks, tracks_selection, object2wait) == cffi_lib.lib.kRocProfVisDmResultSuccess:
                             if cffi_lib.lib.rocprofvis_db_future_wait(object2wait, 10) == cffi_lib.lib.kRocProfVisDmResultSuccess:
                                 for i in range(num_tracks):
                                     track = cffi_lib.lib.rocprofvis_dm_get_property_as_handle(trace, cffi_lib.lib.kRPVDMTrackHandleIndexed, tracks_selection[i])

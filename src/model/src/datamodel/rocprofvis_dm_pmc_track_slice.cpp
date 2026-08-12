@@ -9,8 +9,8 @@ namespace RocProfVis
 namespace DataModel
 {
 
-PmcTrackSlice::PmcTrackSlice(Track* ctx, rocprofvis_dm_timestamp_t start, rocprofvis_dm_timestamp_t end)
-: TrackSlice(ctx, start, end)
+PmcTrackSlice::PmcTrackSlice(Track* ctx, rocprofvis_dm_timestamp_t start, rocprofvis_dm_timestamp_t end, rocprofvis_dm_hashed_timestamp_tag_t tag)
+: TrackSlice(ctx, start, end, tag)
 {
     m_samples.reserve(ctx->NumRecords());
 }; 
@@ -58,6 +58,13 @@ rocprofvis_dm_result_t PmcTrackSlice::GetRecordValueAt(const rocprofvis_dm_prope
     ROCPROFVIS_ASSERT_MSG_RETURN(index < m_samples.size(), ERROR_INDEX_OUT_OF_RANGE, kRocProfVisDmResultNotLoaded);
     value = m_samples[index]->Value();
     return kRocProfVisDmResultSuccess;
+}
+
+void
+PmcTrackSlice::SetComplete()
+{
+    std::sort(m_samples.begin(), m_samples.end(), [](PmcRecord* a, PmcRecord* b) -> bool { return a->Timestamp() < b->Timestamp(); });
+    TrackSlice::SetComplete();
 }
 
 }  // namespace DataModel

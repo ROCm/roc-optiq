@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <cmath>
 #include <filesystem>
+#include <iterator>
 #include <string>
 #include <vector>
 
@@ -18,52 +19,16 @@ namespace View
 {
 
 constexpr float      BASE_FONT_SIZE       = 15.0f;
-constexpr float      MIN_USER_FONT_SIZE   = 13.0f;
-constexpr float      MAX_USER_FONT_SIZE   = 18.0f;
+constexpr float      MIN_USER_FONT_SIZE   = 12.0f;
+constexpr float      MAX_USER_FONT_SIZE   = 20.0f;
 constexpr std::array FONT_AVAILABLE_SIZES = { 9.0f,  10.0f, 11.0f, 12.0f, 13.0f,
                                               14.0f, 15.0f, 16.0f, 17.0f, 18.0f,
                                               19.0f, 20.0f, 21.0f, 22.0f, 23.0f,
                                               25.0f, 27.0f, 29.0f, 31.0f, 35.0f };
 
-// Step offsets applied to the user-selected base index. Indexed by FontSize:
-// kSmall is one step below the base, kMedium is the base (what the user
-// picks in Settings), and kMedLarge / kLarge bump up from there.
-static constexpr int kSizeOffsets[FontManager::kNumSizes] = {
-    -1,  // FontSize::kSmall
-     0,  // FontSize::kMedium (== FontSize::kDefault, == user base)
-     1,  // FontSize::kMedLarge
-     2,  // FontSize::kLarge
-};
-
-static_assert(static_cast<int>(FontSize::kSmall)    == 0, "FontSize order changed");
-static_assert(static_cast<int>(FontSize::kMedium)   == 1, "FontSize order changed");
-static_assert(static_cast<int>(FontSize::kMedLarge) == 2, "FontSize order changed");
-static_assert(static_cast<int>(FontSize::kLarge)    == 3, "FontSize order changed");
-static_assert(static_cast<int>(FontSize::kDefault)  ==
-                  static_cast<int>(FontSize::kMedium),
-              "FontSize::kDefault should map to the user's base size");
-
-static int
-GetClosestFontSizeIndex(const std::vector<float>& available_sizes, float font_size)
-{
-    int best_index = 0;
-
-    if(!available_sizes.empty())
-    {
-        float best_delta = std::abs(available_sizes[0] - font_size);
-        for(int i = 1; i < static_cast<int>(available_sizes.size()); ++i)
-        {
-            float delta = std::abs(available_sizes[i] - font_size);
-            if(delta < best_delta)
-            {
-                best_delta = delta;
-                best_index = i;
-            }
-        }
-    }
-
-    return best_index;
-}
+// Offsets applied to the user-selected base index (kMedium) to produce
+// kSmall/kMedium/kMedLarge/kLarge.
+static constexpr int kSizeOffsets[FontManager::kNumSizes] = { -1, 0, 1, 2 };
 
 FontManager::FontManager() {}
 
@@ -91,23 +56,41 @@ FontManager::GetFontSizeAt(int idx) const
 }
 
 int
+FontManager::GetClosestFontSizeIndex(float font_size) const
+{
+    if(m_available_sizes.empty())
+        return 0;
+
+    auto it = std::lower_bound(m_available_sizes.begin(), m_available_sizes.end(), font_size);
+    if(it == m_available_sizes.begin())
+        return 0;
+    if(it == m_available_sizes.end())
+        return static_cast<int>(m_available_sizes.size()) - 1;
+
+    // Snap to whichever of the two neighbours is closer.
+    auto prev = std::prev(it);
+    if((font_size - *prev) <= (*it - font_size))
+        return static_cast<int>(std::distance(m_available_sizes.begin(), prev));
+    return static_cast<int>(std::distance(m_available_sizes.begin(), it));
+}
+
+int
 FontManager::GetFontSizeIndex(float font_size) const
 {
-    return GetClosestFontSizeIndex(m_available_sizes, font_size);
+    return GetClosestFontSizeIndex(font_size);
 }
 
 int
 FontManager::GetDefaultFontSizeIndex() const
 {
-    return GetClosestFontSizeIndex(m_available_sizes, BASE_FONT_SIZE);
+    return GetClosestFontSizeIndex(BASE_FONT_SIZE);
 }
 
 int
 FontManager::ClampFontSizeIndex(int idx) const
 {
-    int min_idx = GetFontSizeIndex(MIN_USER_FONT_SIZE);
-    int max_idx = GetFontSizeIndex(MAX_USER_FONT_SIZE);
-    return std::max(min_idx, std::min(idx, max_idx));
+    return std::clamp(idx, GetFontSizeIndex(MIN_USER_FONT_SIZE),
+                      GetFontSizeIndex(MAX_USER_FONT_SIZE));
 }
 
 void
@@ -124,14 +107,27 @@ FontManager::SetFontSize(int idx)
         m_sizes[i] = m_available_sizes[size_idx];
     }
 
-    // ImGui's default font and its base size for the next frame. Everything
-    // not pushing an explicit font/size renders at FontSize::kDefault, so the
-    // user's slider value matches what they see in the UI.
+    // Set the default font and its base size for the next frame. The
+    // kFontSizeChanged event is fired from Update() once the new size takes
+    // effect, so subscribers recalculate against the applied font size.
     ImGui::GetIO().FontDefault               = m_text_font;
     ImGui::GetStyle()._NextFrameFontSizeBase = m_sizes[static_cast<int>(FontSize::kDefault)];
+}
 
-    EventManager::GetInstance()->AddEvent(
-        std::make_shared<RocEvent>(static_cast<int>(RocEvents::kFontSizeChanged)));
+void
+FontManager::Update()
+{
+    // Both user-selected sizes (applied next frame via _NextFrameFontSizeBase)
+    // and ImGui's automatic DPI scaling change the font size without notifying
+    // anyone. Detect the effective change here and fire a single event so every
+    // subscriber stays in sync.
+    const float font_size = ImGui::GetFontSize();
+    if(std::abs(font_size - m_last_font_size) > 0.01f)
+    {
+        m_last_font_size = font_size;
+        EventManager::GetInstance()->AddEvent(
+            std::make_shared<RocEvent>(static_cast<int>(RocEvents::kFontSizeChanged)));
+    }
 }
 
 bool
@@ -201,6 +197,54 @@ FontManager::Init()
         m_text_font                = io.Fonts->AddFontDefault(&fallback_config);
     }
 
+#ifdef _WIN32
+    const char* code_font_paths[] = {
+        "C:\\Windows\\Fonts\\CascadiaCode.ttf",
+        "C:\\Windows\\Fonts\\CascadiaMono.ttf",
+        "C:\\Windows\\Fonts\\consola.ttf",
+        "C:\\Windows\\Fonts\\cour.ttf"
+    };
+#elif __APPLE__
+    const char* code_font_paths[] = {
+        "/System/Library/Fonts/SFMono-Regular.otf",
+        "/Library/Fonts/Menlo.ttc",
+        "/System/Library/Fonts/Menlo.ttc",
+        "/Library/Fonts/Courier New.ttf"
+    };
+#else
+    const char* code_font_paths[] = {
+        "/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf",
+        "/usr/share/fonts/dejavu/DejaVuSansMono.ttf",
+        "/usr/share/fonts/dejavu-sans-mono-fonts/DejaVuSansMono.ttf",
+        "/usr/share/fonts/truetype/liberation/LiberationMono-Regular.ttf",
+        "/usr/share/fonts/liberation-mono/LiberationMono-Regular.ttf",
+        "/usr/share/fonts/truetype/noto/NotoSansMono-Regular.ttf",
+        "/usr/share/fonts/google-noto/NotoSansMono-Regular.ttf",
+        "/usr/share/fonts/truetype/freefont/FreeMono.ttf"
+    };
+#endif
+
+    const char* code_font_path = nullptr;
+    for(const char* path : code_font_paths)
+    {
+        if(std::filesystem::exists(path))
+        {
+            code_font_path = path;
+            break;
+        }
+    }
+
+    if(code_font_path)
+    {
+        m_code_font = io.Fonts->AddFontFromFileTTF(code_font_path, 0.0f);
+    }
+    else
+    {
+        ImFontConfig mono_fallback_config;
+        mono_fallback_config.SizePixels = BASE_FONT_SIZE;
+        m_code_font                     = io.Fonts->AddFontDefault(&mono_fallback_config);
+    }
+
     ImFontConfig icon_config;
     icon_config.FontDataOwnedByAtlas = false;
     m_icon_font = io.Fonts->AddFontFromMemoryCompressedTTF(
@@ -221,6 +265,8 @@ FontManager::GetFont(FontType font_type)
             return m_text_font;
         case FontType::kIcon:
             return m_icon_font;
+        case FontType::kCode: 
+            return m_code_font;
         default:
             return m_text_font;
     }

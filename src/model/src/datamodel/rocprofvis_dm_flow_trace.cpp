@@ -15,7 +15,7 @@ rocprofvis_dm_size_t  FlowTrace::GetMemoryFootprint(){
 
 rocprofvis_dm_result_t  FlowTrace::AddRecord( rocprofvis_db_flow_data_t & data){
     try{
-        m_flows.push_back(FlowRecord(data.time, data.end_time, data.id, data.track_id, data.category_id, data.symbol_id, data.level));
+        m_flows.push_back(FlowRecord(data.time, data.end_time, data.id, data.track_id, static_cast<rocprofvis_dm_index_t>(data.category_id), static_cast<rocprofvis_dm_index_t>(data.symbol_id), data.level));
     }
     catch(std::exception ex)
     {

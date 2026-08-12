@@ -24,8 +24,8 @@ class PmcTrackSlice : public TrackSlice {
         // @param ctx - pointer to Track context
         // @param start - start timestamp of time slice
         // @param end - end timestamp of time slice
-        PmcTrackSlice(Track* ctx, rocprofvis_dm_timestamp_t start,
-                      rocprofvis_dm_timestamp_t end); 
+        // @param tag - tag used to compute the slice's hashed identity
+        PmcTrackSlice(Track* ctx, rocprofvis_dm_timestamp_t start, rocprofvis_dm_timestamp_t end, rocprofvis_dm_hashed_timestamp_tag_t tag);
         // PmcTrackSlice class destructor, not required unless declared as virtual
         ~PmcTrackSlice(){}
         // Method to add PMC data record
@@ -54,6 +54,8 @@ class PmcTrackSlice : public TrackSlice {
         // @param value - reference to PMC value
         // @return status of operation
         rocprofvis_dm_result_t  GetRecordValueAt(const rocprofvis_dm_property_index_t index, rocprofvis_dm_value_t & value) override;
+
+        void SetComplete() override;
 
     private:
         // vector array of PMC records

@@ -36,11 +36,11 @@ public:
 
     void AddCell(uint32_t column_index, uint64_t row_id, std::string cell);
 
-    const char* GetCell(uint64_t row_id, const char* column_name);
+    const char* GetCell(uint64_t row_id, std::string column_name);
 
     const char* GetCell(uint64_t row_index, uint32_t column_index);
 
-    const char* GetCellByIndex(uint64_t row_index, const char* column_name);
+    const char* GetCellByIndex(uint64_t row_index, std::string column_name);
 
     const char* GetColumnName(uint32_t column_index);
 
@@ -48,11 +48,10 @@ public:
 
     void* GetRow(uint64_t row_index);
 
-    uint32_t NumColumns() { return m_columns.size(); }
+    uint32_t NumColumns() { return static_cast<uint32_t>(m_columns.size()); }
     size_t NumRows() { return m_rows.size(); }
 
 private:
-    std::string name;
     std::vector<std::pair<std::string, rocprofvis_db_data_type_t>> m_columns;
     std::vector<Row> m_rows;
     std::unordered_map<std::string, uint32_t> m_column_index;
@@ -62,18 +61,18 @@ private:
 class DatabaseCache 
 {
     public:
-        void AddTableCell(const char* table_name, uint64_t row_id, uint32_t column_index, const char* cell_value);
-        void AddTableCell(const char* table_name, uint64_t row_id, const char* column_name, rocprofvis_db_data_type_t column_type, const char* cell_value);
+        void AddTableCell(const char* table_name, uint64_t row_id, uint32_t column_index, std::string cell_value);
+        void AddTableCell(const char* table_name, uint64_t row_id, std::string column_name, rocprofvis_db_data_type_t column_type, std::string cell_value);
         void AddTableRow(const char* table_name, uint64_t row_id);
-        void AddTableColumn(const char* table_name, const char* column_name, rocprofvis_db_data_type_t column_type);
-        const char* GetTableCell(const char* table_name, uint64_t row_id, const char* column_name);
-        const char* GetTableCellByIndex(const char* table_name, uint32_t row_index, const char* column_name);
+        void AddTableColumn(const char* table_name, std::string column_name, rocprofvis_db_data_type_t column_type);
+        const char* GetTableCell(const char* table_name, uint64_t row_id, std::string column_name);
+        const char* GetTableCellByIndex(const char* table_name, uint32_t row_index, std::string column_name);
         void* GetTableHandle(const char* table_name);
       
         // Populate track extended data objects and topology tree with table content
-        rocprofvis_dm_result_t PopulateTrackExtendedDataTemplate(Database * db, uint32_t node_id, const char* table_name, uint64_t instance_id ); 
+        rocprofvis_dm_result_t PopulateTrackExtendedDataTemplate(Database * db, uint32_t node_id, std::string table_name, uint64_t instance_id ); 
         // Populate track extended data objects and topology tree with table content
-        rocprofvis_dm_result_t PopulateTrackTopologyData(Database * db, rocprofvis_dm_track_identifiers_t * track_indentifiers, uint32_t db_instance_id, const char* table_name, uint64_t process_id );
+        rocprofvis_dm_result_t PopulateTrackTopologyData(Database * db, rocprofvis_dm_track_identifiers_t * track_indentifiers, uint32_t db_instance_id, std::string table_name, uint64_t process_id );
         // Get amount of memory used by the cached values map
         rocprofvis_dm_size_t    GetMemoryFootprint(void); 
 

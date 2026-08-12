@@ -11,6 +11,7 @@
 #include <functional>
 #include <optional>
 #include <unordered_map>
+#include <vector>
 
 namespace RocProfVis
 {
@@ -23,6 +24,7 @@ class Future;
 class Workload;
 class MetricsContainer;
 class MetricID;
+class PcSampling;
 class Table;
 class ComputePivotTable;
 
@@ -44,6 +46,7 @@ public:
 
     rocprofvis_result_t AsyncFetch(Arguments& args, Future& future, MetricsContainer& output);
     rocprofvis_result_t AsyncFetch(Table& table, Arguments& args, Future& future, Array& array);
+    rocprofvis_result_t AsyncFetchPcSampling(Arguments& args, Future& future, PcSampling& output);
 
 private:
     class MetricID
@@ -71,7 +74,24 @@ private:
     typedef std::function<void(const QueryDataStore&)> QueryCallback;
 
     rocprofvis_result_t LoadRocpd(Future* future);
-    
+
+    rocprofvis_dm_result_t FetchCodeObjectsAndIsaLines(rocprofvis_dm_database_t db,
+                                                       Future* future,
+                                                       uint64_t kernel_id,
+                                                       PcSampling& output);
+    rocprofvis_dm_result_t FetchIsaLineDepsAndStalls(rocprofvis_dm_database_t db,
+                                                     Future* future,
+                                                     uint64_t kernel_id,
+                                                     PcSampling& output);
+    rocprofvis_dm_result_t FetchSourceFileLines(rocprofvis_dm_database_t db,
+                                                Future* future,
+                                                uint64_t source_file_id,
+                                                PcSampling& output);
+    void StorePcSamplingRows(PcSampling& output,
+                             rocprofvis_property_t count_property,
+                             const QueryDataStore& data_store);
+    static bool ParseUInt64(const char* value, uint64_t& result);
+
     rocprofvis_result_t    SetObjectProperty(rocprofvis_handle_t*  object,
                                              rocprofvis_property_t property, uint64_t index,
                                              const char*                            value,
@@ -86,8 +106,6 @@ private:
                                         QueryCallback       callback);
 
     std::vector<Workload*> m_workloads;
-    QueryArgumentStore m_query_arguments;
-    QueryDataStore m_query_output;
     std::atomic<uint64_t> m_async_fetch_counter;
 
     ComputePivotTable* m_kernel_metric_table;

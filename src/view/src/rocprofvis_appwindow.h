@@ -4,6 +4,7 @@
 #pragma once
 
 #include "rocprofvis_controller.h"
+#include "rocprofvis_compare_files_dialog.h"
 #include "rocprofvis_data_provider.h"
 #include "rocprofvis_event_manager.h"
 #include "rocprofvis_settings_panel.h"
@@ -12,6 +13,11 @@
 #include "rocprofvis_view_module.h"
 #include "widgets/rocprofvis_split_containers.h"
 #include "widgets/rocprofvis_tab_container.h"
+// TEMPORARY (remote/SSH): the SSH test dialog is a remote-only dev aid.
+// Remove this guard when the remote feature graduates.
+#ifdef ROCPROFVIS_ENABLE_REMOTE
+#include "remote/rocprofvis_ssh_test_dialog.h"
+#endif
 
 #include <atomic>
 #include <chrono>
@@ -27,6 +33,9 @@ namespace View
 
 class ConfirmationDialog;
 class MessageDialog;
+#ifdef ROCPROFVIS_ENABLE_PROFILER
+class ProfilerLauncherDialog;  // TEMPORARY (profiler launch)
+#endif
 class Project;
 class WelcomePage;
 
@@ -69,13 +78,27 @@ public:
                             const std::string&               initial_path,
                             std::function<void(std::string)> callback);
 
+    void ShowPathPickerDialog(const std::string&               title,
+                            const std::string&               initial_path,
+                            std::function<void(std::string)> callback);
+                            
     Project* GetProject(const std::string& id);
     Project* GetCurrentProject();
 
     void OpenFile(std::string file_path);
 
+    // Opens two trace files as a single compare project (combined timeline, A/B tags).
+    void OpenCompare(const std::string& first_file, const std::string& second_file);
+
+    // Stable, file-derived project id/key for a compare of the given source files.
+    // Used as the tab id and the m_projects key for both fresh and reopened compares.
+    static std::string MakeCompareId(const std::vector<std::string>& files);
+
     void ShowCloseConfirm();
-    
+#ifdef ROCPROFVIS_ENABLE_PROFILER
+    void ShowProfilerLauncher();  // TEMPORARY (profiler launch)
+#endif
+
     void SetFullscreenState(bool is_fullscreen);
     bool GetFullscreenState() const;
 
@@ -115,7 +138,8 @@ private:
     void HandleTabSelectionChanged(std::shared_ptr<RocEvent> e);
     void HandleFontChanged();
     void HandleOpenFile();
-    void HandleOpenRecentFile(const std::string& file_path);
+    void HandleCompareFiles();
+    void HandleCompareFileBrowse(CompareFilesDialog::FileSlot slot);
     void HandleSaveAsFile();
     void ConfigureFileDialogBackend();
     void BeginAppShutdown();
@@ -126,18 +150,21 @@ private:
     void UpdateProviderCleanups();
     void RequestExitIfProviderCleanupsComplete();
 
+
 #ifdef ROCPROFVIS_HAVE_NATIVE_FILE_DIALOG
     void UpdateNativeFileDialog();
 
     void ShowNativeFileDialog(const std::vector<FileFilter>&   file_filters,
                               const std::string&               initial_path,
                               std::function<void(std::string)> callback,
-                              bool                             save_dialog);
+                              bool                             save_dialog,
+                              bool                             path_picker = false);
 #endif
     void ShowImGuiFileDialog(const std::string&             title,
                         const std::vector<FileFilter>& file_filters,
                         const std::string& initial_path, const bool& confirm_overwrite,
-                        std::function<void(std::string)> callback);
+                        std::function<void(std::string)> callback,
+                        bool                             folder_mode = false);
     static AppWindow* s_instance;
 
     std::shared_ptr<VFixedContainer> m_main_view;
@@ -155,7 +182,9 @@ private:
 #ifdef ROCPROFVIS_DEVELOPER_MODE
     void RenderDebugOuput();
     void RenderDeveloperMenu();
-
+#ifdef ROCPROFVIS_ENABLE_REMOTE
+    void HandleTestRemoteSSH();
+#endif
     bool         m_show_metrics;
     bool         m_show_debug_window;
     DataProvider m_test_data_provider;
@@ -165,6 +194,10 @@ private:
     bool m_disable_app_interaction;
     bool m_shutdown_requested;
     bool m_exit_notification_sent;
+    // Set when BeginAppShutdown() is first called. Bounds how long the exit gate
+    // waits for AppMonitor operations to drain so a stuck future cannot pin the
+    // app on the shutdown screen forever.
+    std::chrono::steady_clock::time_point m_shutdown_start;
 
     rocprofvis_view_file_dialog_preference_t m_file_dialog_preference;
 
@@ -173,6 +206,10 @@ private:
     std::atomic<bool>                m_use_native_file_dialog;
 
     bool                             m_init_file_dialog;
+    // Only used by the ImGuiFileDialog backend (not the native dialog): its directory
+    // mode returns the result via GetCurrentPath() instead of GetFilePathName(), so the
+    // shared ImGui callback site needs to know which to read.
+    bool                             m_imgui_file_dialog_folder_mode = false;
 #ifdef ROCPROFVIS_HAVE_NATIVE_FILE_DIALOG
     std::atomic<bool>                m_is_native_file_dialog_open;
     std::future<std::string>         m_file_dialog_future;
@@ -181,8 +218,13 @@ private:
     std::function<void(std::string)>    m_file_dialog_callback;
     std::unique_ptr<ConfirmationDialog> m_confirmation_dialog;
     std::unique_ptr<MessageDialog>      m_message_dialog;
+    std::unique_ptr<CompareFilesDialog> m_compare_files_dialog;
     std::unique_ptr<SettingsPanel>      m_settings_panel;
     std::unique_ptr<WelcomePage>        m_welcome_page;
+
+#ifdef ROCPROFVIS_ENABLE_PROFILER
+    std::unique_ptr<ProfilerLauncherDialog> m_profiler_launcher_dialog;  // TEMPORARY (profiler launch)
+#endif
 
     int                              m_tool_bar_index;
     std::function<void(int)>         m_notification_callback;
@@ -190,6 +232,9 @@ private:
     bool                             m_restore_fullscreen_later;
     std::vector<ProviderCleanupJob>  m_provider_cleanup_jobs;
     uint64_t                         m_next_provider_cleanup_id;
+#ifdef ROCPROFVIS_ENABLE_REMOTE
+    std::unique_ptr<SshTestDialog>   m_ssh_test_dialog;
+#endif
 
     std::string m_status_message;
     bool        m_status_show_busy_indicator;

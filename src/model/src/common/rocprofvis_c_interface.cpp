@@ -7,6 +7,7 @@
 #include "rocprofvis_db_rocprof.h"
 #include "rocprofvis_dm_trace.h"
 #include "rocprofvis_db_compute.h"
+#include "rocprofvis_db_trace_processor.h"
 
 #ifdef TEST
 #define ROCPROFVIS_DM_PROPSYMBOL(handle, property) ((RocProfVis::DataModel::DmBase*)handle)->GetPropertySymbol(property)
@@ -31,6 +32,11 @@
 rocprofvis_db_type_t rocprofvis_db_identify_type(
     rocprofvis_db_filename_t filename) {
     std::vector<std::string> multinode_files;
+#ifdef ROCPROFVIS_PERFETTO_ENABLED
+    rocprofvis_db_type_t db_type = RocProfVis::DataModel::GoogleTraceProcessor::Detect(filename);
+    if (db_type == rocprofvis_db_type_t::kChromeTrace || db_type == rocprofvis_db_type_t::kPerfettoTrace)
+        return db_type;
+#endif
     return RocProfVis::DataModel::ProfileDatabase::Detect(filename, multinode_files);
 }
 
@@ -53,9 +59,33 @@ rocprofvis_dm_database_t rocprofvis_db_open_database(
     PROFILE;
     std::vector<std::string> multinode_files;
     if (db_type == rocprofvis_db_type_t::kAutodetect) {
-        db_type = RocProfVis::DataModel::ProfileDatabase::Detect(filename, multinode_files);
+#ifdef ROCPROFVIS_PERFETTO_ENABLED
+        db_type = RocProfVis::DataModel::GoogleTraceProcessor::Detect(filename);
+        if (db_type == rocprofvis_db_type_t::kAutodetect)
+#endif
+        {
+            db_type = RocProfVis::DataModel::ProfileDatabase::Detect(filename, multinode_files);
+        }
     } 
-
+#ifdef ROCPROFVIS_PERFETTO_ENABLED
+    if (db_type == rocprofvis_db_type_t::kChromeTrace || db_type == rocprofvis_db_type_t::kPerfettoTrace)
+    {
+        try {
+            RocProfVis::DataModel::Database* db = new RocProfVis::DataModel::GoogleTraceProcessor(filename);
+            if (kRocProfVisDmResultSuccess == db->Open()) {
+                return db;
+            } else {
+                ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN("Error! Failed to open Chrome Trace or Perfetto output!",
+                    nullptr);
+            }
+        }
+        catch(std::exception ex)
+        {
+            ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN(
+                RocProfVis::DataModel::ERROR_MEMORY_ALLOCATION_FAILURE, nullptr);
+        }
+    } else
+#endif
     if (db_type == rocprofvis_db_type_t::kRocpdSqlite)
     {
         try {
@@ -133,6 +163,53 @@ rocprofvis_dm_database_t rocprofvis_db_open_database(
         spdlog::debug("Database type not supported!");
         return nullptr;
     }                                  
+}
+
+/****************************************************************************************************
+* @brief Opens several trace files as a single combined (multinode) database.
+*
+* Skips the manifest-based detection in rocprofvis_db_open_database and constructs a
+* multinode rocprof database directly from the provided file list. Each file becomes a
+* database instance whose instance index matches its position in the array.
+*
+* @param filenames array of database file paths
+* @param count number of entries in filenames
+*
+***************************************************************************************************/
+rocprofvis_dm_database_t rocprofvis_db_open_database_multi(
+                                        rocprofvis_db_filename_t const* filenames,
+                                        rocprofvis_dm_size_t count){
+    PROFILE;
+    if (filenames == nullptr || count == 0)
+    {
+        spdlog::debug("No database files provided!");
+        return nullptr;
+    }
+    std::vector<std::string> files;
+    files.reserve(count);
+    for (rocprofvis_dm_size_t i = 0; i < count; i++)
+    {
+        ROCPROFVIS_ASSERT_MSG_RETURN(filenames[i],
+                                     RocProfVis::DataModel::ERROR_DATABASE_CANNOT_BE_NULL,
+                                     nullptr);
+        files.push_back(filenames[i]);
+    }
+    try {
+        RocProfVis::DataModel::Database* db =
+            new RocProfVis::DataModel::RocprofDatabase(files.front().c_str(), files);
+        if (kRocProfVisDmResultSuccess == db->Open()) {
+            return db;
+        }
+        else {
+            ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN("Error! Failed to open combined database!",
+                                                nullptr);
+        }
+    }
+    catch (std::exception ex)
+    {
+        ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN(
+            RocProfVis::DataModel::ERROR_MEMORY_ALLOCATION_FAILURE, nullptr);
+    }
 }
 
 /****************************************************************************************************
@@ -270,6 +347,7 @@ rocprofvis_dm_result_t rocprofvis_db_cleanup_async(
  * @param database database handle
  * @param start begining of the time slice
  * @param start end of the time slice
+ * @param user tag given to the time slice
  * @param num number of tracks in rocprofvis_db_track_selection_t array (uint32*)
  * @param track tracks selection array (uint32*)
  * @param object future handle allocated by rocprofvis_db_future_alloc
@@ -283,6 +361,7 @@ rocprofvis_dm_result_t rocprofvis_db_read_trace_slice_async(
                                         rocprofvis_dm_database_t database,
                                         rocprofvis_dm_timestamp_t start,
                                         rocprofvis_dm_timestamp_t end,
+                                        rocprofvis_dm_hashed_timestamp_tag_t tag,
                                         rocprofvis_db_num_of_tracks_t num,
                                         rocprofvis_db_track_selection_t tracks,
                                         rocprofvis_db_future_t object){
@@ -291,7 +370,25 @@ rocprofvis_dm_result_t rocprofvis_db_read_trace_slice_async(
                                  RocProfVis::DataModel::ERROR_DATABASE_CANNOT_BE_NULL,
                                  kRocProfVisDmResultInvalidParameter);
     RocProfVis::DataModel::Database* db = (RocProfVis::DataModel::Database*) database;
-    return db->ReadTraceSliceAsync(start,end,num,tracks,object);
+    return db->ReadTraceSliceAsync(start,end,tag,num,tracks,object);
+}
+
+rocprofvis_dm_result_t
+rocprofvis_db_read_trace_pmc_slice_async(                                        
+                                        rocprofvis_dm_database_t database,
+                                        rocprofvis_dm_timestamp_t start,
+                                        rocprofvis_dm_timestamp_t end,
+                                        rocprofvis_dm_hashed_timestamp_tag_t tag,
+                                        rocprofvis_db_track_selection_t track,
+                                        bool left_neighbor,
+                                        bool right_neighbor,
+                                        rocprofvis_db_future_t object){
+    PROFILE;
+    ROCPROFVIS_ASSERT_MSG_RETURN(database,
+                                 RocProfVis::DataModel::ERROR_DATABASE_CANNOT_BE_NULL,
+                                 kRocProfVisDmResultInvalidParameter);
+    RocProfVis::DataModel::Database* db = (RocProfVis::DataModel::Database*) database;
+    return db->ReadTracePMCSliceAsync(start,end,tag,track,left_neighbor,right_neighbor,object);
 }
 
 rocprofvis_dm_result_t rocprofvis_db_build_table_query(
@@ -301,7 +398,6 @@ rocprofvis_dm_result_t rocprofvis_db_build_table_query(
     rocprofvis_dm_charptr_t where, rocprofvis_dm_charptr_t filter, 
     rocprofvis_dm_charptr_t group, rocprofvis_dm_charptr_t group_cols, 
     rocprofvis_dm_charptr_t sort_column, rocprofvis_dm_sort_order_t sort_order, 
-    rocprofvis_dm_num_string_table_filters_t num_string_table_filters, rocprofvis_dm_string_table_filters_t string_table_filters, 
     uint64_t max_count, uint64_t offset, bool count_only, 
     char** out_query)
 {
@@ -313,14 +409,57 @@ rocprofvis_dm_result_t rocprofvis_db_build_table_query(
                                  kRocProfVisDmResultInvalidParameter);
     RocProfVis::DataModel::Database* db = (RocProfVis::DataModel::Database*) database;
     std::string query;
-    rocprofvis_dm_result_t result = db->BuildTableQuery(use_case, start, end, num, tracks, where, filter, group, group_cols, sort_column, sort_order, 
-                                                        num_string_table_filters, string_table_filters, max_count, offset, count_only, query);
+    rocprofvis_dm_result_t result = db->BuildTableQuery(use_case, 
+                                                        start, end, 
+                                                        num, tracks, 
+                                                        where, filter, 
+                                                        group, group_cols, 
+                                                        sort_column, sort_order, 
+                                                        max_count, offset, count_only, query);
     if (result == kRocProfVisDmResultSuccess)
     {
         char* ptr = (char*) calloc(query.length() + 1, 1);
         ROCPROFVIS_ASSERT_MSG_RETURN(ptr, "Error! Couldn't allocate query string.",
                                      kRocProfVisDmResultAllocFailure);
-        strncpy(ptr, query.c_str(), query.length());
+        std::memcpy(ptr, query.c_str(), query.length());
+        ptr[query.length()] = '\0';
+        *out_query = ptr;
+    }
+    return result;
+}
+
+rocprofvis_dm_result_t rocprofvis_db_build_event_search_query(
+    rocprofvis_dm_database_t database, 
+    rocprofvis_dm_timestamp_t start, rocprofvis_dm_timestamp_t end, 
+    rocprofvis_db_num_of_tracks_t num, rocprofvis_db_track_selection_t ops,
+    rocprofvis_dm_charptr_t where,
+    rocprofvis_dm_num_string_table_filters_t num_string_table_filters, rocprofvis_dm_string_table_filters_t string_table_filters, bool include_substring,
+    rocprofvis_dm_charptr_t sort_column, rocprofvis_dm_sort_order_t sort_order,
+    uint64_t max_count, uint64_t offset, bool count_only, 
+    char** out_query)
+{
+    PROFILE;
+    ROCPROFVIS_ASSERT_MSG_RETURN(database,
+                                 RocProfVis::DataModel::ERROR_DATABASE_CANNOT_BE_NULL,
+                                 kRocProfVisDmResultInvalidParameter);
+    ROCPROFVIS_ASSERT_MSG_RETURN(out_query, "Error! Query cannot be null.",
+                                 kRocProfVisDmResultInvalidParameter);
+    RocProfVis::DataModel::Database* db = (RocProfVis::DataModel::Database*) database;
+    std::string query;
+    rocprofvis_dm_result_t result = db->BuildEventSearchQuery(start, end, 
+                                                              num, ops,
+                                                              where,
+                                                              num_string_table_filters, string_table_filters,
+                                                              include_substring,
+                                                              sort_column, sort_order,
+                                                              max_count, offset, count_only, query);
+    if (result == kRocProfVisDmResultSuccess)
+    {
+        char* ptr = (char*) calloc(query.length() + 1, 1);
+        ROCPROFVIS_ASSERT_MSG_RETURN(ptr, "Error! Couldn't allocate query string.",
+                                     kRocProfVisDmResultAllocFailure);
+        std::memcpy(ptr, query.c_str(), query.length());
+        ptr[query.length()] = '\0';
         *out_query = ptr;
     }
     return result;
@@ -345,7 +484,8 @@ rocprofvis_dm_result_t rocprofvis_db_build_compute_query(
         char* ptr = (char*) calloc(query.length() + 1, 1);
         ROCPROFVIS_ASSERT_MSG_RETURN(ptr, "Error! Couldn't allocate query string.",
             kRocProfVisDmResultAllocFailure);
-        strncpy(ptr, query.c_str(), query.length());
+        std::memcpy(ptr, query.c_str(), query.length());
+        ptr[query.length()] = '\0';
         *out_query = ptr;
     }
     return result;
@@ -529,7 +669,8 @@ rocprofvis_dm_result_t rocprofvis_dm_delete_trace(
  * 
  ***************************************************************************************************/
 rocprofvis_dm_result_t rocprofvis_dm_bind_trace_to_database(   rocprofvis_dm_trace_t trace,
-                                        rocprofvis_dm_database_t database){
+                                        rocprofvis_dm_database_t database,
+                                        rocprofvis_dm_charptr_t config_path) {
     PROFILE;
     ROCPROFVIS_ASSERT_MSG_RETURN(trace, RocProfVis::DataModel::ERROR_TRACE_CANNOT_BE_NULL,
                                  kRocProfVisDmResultInvalidParameter);
@@ -537,7 +678,7 @@ rocprofvis_dm_result_t rocprofvis_dm_bind_trace_to_database(   rocprofvis_dm_tra
                                  RocProfVis::DataModel::ERROR_DATABASE_CANNOT_BE_NULL,
                                  kRocProfVisDmResultInvalidParameter);
     rocprofvis_dm_db_bind_struct* bind_data=nullptr;
-    if  (kRocProfVisDmResultSuccess == ((RocProfVis::DataModel::Trace*)trace)->BindDatabase(database, bind_data) && 
+    if  (kRocProfVisDmResultSuccess == ((RocProfVis::DataModel::Trace*)trace)->BindDatabase(database, bind_data, config_path?config_path:"") &&
          kRocProfVisDmResultSuccess == ((RocProfVis::DataModel::Database*)database)->BindTrace(bind_data))
          return kRocProfVisDmResultSuccess;
     ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN("Error! Cannot bind trace to database",
@@ -702,6 +843,16 @@ rocprofvis_dm_result_t  rocprofvis_dm_delete_all_tables(
     ROCPROFVIS_ASSERT_MSG_RETURN(trace, RocProfVis::DataModel::ERROR_TRACE_CANNOT_BE_NULL,
                                  kRocProfVisDmResultInvalidParameter);
     return ((RocProfVis::DataModel::Trace*)trace)->DeleteAllTables();
+}
+
+rocprofvis_dm_hashed_timestamp rocprofvis_dm_hash_combine_timestamp(
+                                        rocprofvis_dm_timestamp_t start,
+                                        rocprofvis_dm_timestamp_t end,
+                                        rocprofvis_dm_hashed_timestamp_tag_t tag){
+    rocprofvis_dm_hashed_timestamp hash = start;
+    hash ^= end + 0x9e3779b97f4a7c15 + (hash << 12) + (hash >> 4);
+    hash ^= tag + 0x9e3779b97f4a7c15 + (hash << 12) + (hash >> 4);
+    return hash;
 }
 
 /***********************************Universal property getters**************************************

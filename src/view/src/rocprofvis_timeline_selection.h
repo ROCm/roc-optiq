@@ -30,7 +30,7 @@ namespace View
 {
 
 class DataProvider;
-struct TrackGraph;
+class TrackItem;
 
 class TimelineSelection
 {
@@ -38,12 +38,13 @@ public:
     TimelineSelection(DataProvider& dp);
     ~TimelineSelection();
 
-    void SelectTrack(TrackGraph& graph);
-    void UnselectTrack(TrackGraph& graph);
-    void ToggleSelectTrack(TrackGraph& graph);
-    void UnselectAllTracks(std::vector<TrackGraph>& graphs);
+    void SelectTrack(TrackItem& track);
+    void UnselectTrack(TrackItem& track);
+    void ToggleSelectTrack(TrackItem& track);
+    void UnselectAllTracks();
     bool GetSelectedTracks(std::vector<uint64_t>& track_ids) const;
     bool HasSelectedTracks() const;
+    bool IsTrackSelected(TrackItem& track) const;
 
     void SelectTimeRange(double start_ts, double end_ts);
     bool GetSelectedTimeRange(double& start_ts_out, double& end_ts_out) const;

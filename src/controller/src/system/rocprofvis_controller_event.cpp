@@ -153,8 +153,8 @@ Event::FetchDataModelFlowTraceProperty(uint64_t event_id, Array& array,
                                         )
                                     {
                                         FlowControl* flow_control = new FlowControl(
-                                            id, start_timestamp, end_timestamp, track_id,
-                                            level,
+                                            id, start_timestamp, end_timestamp, static_cast<uint32_t>(track_id),
+                                            static_cast<uint32_t>(level),
                                             dm_event_id.bitfield.event_op ==
                                                         kRocProfVisDmOperationLaunch ||
                                             dm_event_id.bitfield.event_op ==
@@ -164,10 +164,14 @@ Event::FetchDataModelFlowTraceProperty(uint64_t event_id, Array& array,
                                                 category, symbol);
                                         if(result == kRocProfVisResultSuccess)
                                         {
-                                            result = array.SetObject(
+                                            result = array.SetOwnedObject(
                                                 kRPVControllerArrayEntryIndexed,
                                                 entry_counter++,
                                                 (rocprofvis_handle_t*) flow_control);
+                                        }
+                                        if(result != kRocProfVisResultSuccess)
+                                        {
+                                            delete flow_control;
                                         }
                                     }
                                 }
@@ -226,10 +230,14 @@ Event::FetchDataModelStackTraceProperty(uint64_t event_id, Array& array,
                                    (uint64_t*) &records_count))
                             {
                                 uint64_t entry_counter = 0;
-                                for(int index = 0; index < records_count; index++)
+                                result = array.SetUInt64(kRPVControllerArrayNumEntries, 0,
+                                                         records_count);
+                                for(int index = 0;
+                                    result == kRocProfVisResultSuccess &&
+                                    index < records_count;
+                                    index++)
                                 {
                                     char* symbol = nullptr;
-                                    char* args     = nullptr;
                                     char* codeline    = nullptr;
                                     uint64_t id = 0;
                                     uint64_t depth = 0;
@@ -277,17 +285,25 @@ Event::FetchDataModelStackTraceProperty(uint64_t event_id, Array& array,
                                         if(!name.empty())
                                         {
                                             CallStack* call_stack = new CallStack(id, depth, file.c_str(), pc.c_str(), name.c_str(), line_name.c_str(), line_address.c_str());
-                                            result = array.SetUInt64(kRPVControllerArrayNumEntries, 0, entry_counter + 1);
+                                            result = array.SetOwnedObject(
+                                                kRPVControllerArrayEntryIndexed, entry_counter,
+                                                (rocprofvis_handle_t*) call_stack);
                                             if(result == kRocProfVisResultSuccess)
                                             {
-                                                result = array.SetObject(kRPVControllerArrayEntryIndexed, entry_counter++, (rocprofvis_handle_t*) call_stack);
+                                                entry_counter++;
                                             }
-                                            if(result != kRocProfVisResultSuccess)
+                                            else
                                             {
                                                 delete call_stack;
                                             }
                                         }
                                     }
+                                }
+                                if(result == kRocProfVisResultSuccess &&
+                                   entry_counter != records_count)
+                                {
+                                    result = array.SetUInt64(kRPVControllerArrayNumEntries, 0,
+                                                             entry_counter);
                                 }
                             }
                             result = kRocProfVisResultSuccess;
@@ -387,10 +403,14 @@ Event::FetchDataModelExtendedDataProperty(uint64_t event_id, Array& array, rocpr
 
                                         if(result == kRocProfVisResultSuccess)
                                         {
-                                            result = array.SetObject(
+                                            result = array.SetOwnedObject(
                                                 kRPVControllerArrayEntryIndexed,
                                                 entry_counter++,
                                                 (rocprofvis_handle_t*) ext_data);
+                                        }
+                                        if(result != kRocProfVisResultSuccess)
+                                        {
+                                            delete ext_data;
                                         }
                                     }
                                 }
@@ -427,10 +447,14 @@ Event::FetchDataModelExtendedDataProperty(uint64_t event_id, Array& array, rocpr
                                                 kRPVDataTypeString, kRocProfVisEventArgumentData, position, type);
                                         if(result == kRocProfVisResultSuccess)
                                         {
-                                            result = array.SetObject(
+                                            result = array.SetOwnedObject(
                                                 kRPVControllerArrayEntryIndexed,
                                                 entry_counter++,
                                                 (rocprofvis_handle_t*) arg_data);
+                                        }
+                                        if(result != kRocProfVisResultSuccess)
+                                        {
+                                            delete arg_data;
                                         }
                                     }
                                 }
@@ -460,17 +484,11 @@ Event::Fetch(rocprofvis_property_t property, Array& array,
              rocprofvis_dm_trace_t dm_trace_handle)
 {
     (void) array;
+    (void) property;
     rocprofvis_result_t result = kRocProfVisResultUnknownError;
     if(dm_trace_handle)
     {
-        switch(property)
-        {
-            default:
-            {
-                result = kRocProfVisResultInvalidEnum;
-                break;
-            }
-        }
+        result = kRocProfVisResultInvalidEnum;
     }
     return result;
 }

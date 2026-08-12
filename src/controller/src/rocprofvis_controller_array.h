@@ -44,6 +44,13 @@ public:
                                   double value) final;
     rocprofvis_result_t SetObject(rocprofvis_property_t property, uint64_t index,
                                   rocprofvis_handle_t* value) final;
+
+    // Like SetObject(), but the Array takes ownership of the entry: the object
+    // is deleted when this Array is destroyed (via rocprofvis_controller_array_free).
+    // Use for heap children whose lifetime is bound to this Array, such as the
+    // per-row Arrays produced by table fetches.
+    rocprofvis_result_t SetOwnedObject(rocprofvis_property_t property, uint64_t index,
+                                       rocprofvis_handle_t* value);
     rocprofvis_result_t SetString(rocprofvis_property_t property, uint64_t index,
                                   char const* value) final;
 

@@ -49,6 +49,8 @@ constexpr const char* JSON_KEY_SELECTION_ID         = "id";
 constexpr const char* JSON_KEY_SELECTION_NAME       = "name";
 constexpr const char* JSON_KEY_SELECTION_VALUE_NAME = "value";
 
+constexpr const char* CELL_CONTEXT_MENU_ID = "##kernel_table_cell_menu";
+
 KernelMetricTable::KernelMetricTable(DataProvider&                     data_provider,
                                      std::shared_ptr<ComputeSelection> compute_selection)
 : RocWidget()
@@ -422,9 +424,9 @@ KernelMetricTable::Render()
                         if(index < static_cast<int>(m_metrics_column_names.size()))
                         {
                             // Calculate width based on name + padding for close button
-                            float column_size =
+                            float column_size = static_cast<float>(
                                 ImGui::CalcTextSize(m_metrics_column_names[index].c_str()).x +
-                                cell_padding + char_width * 2.0;
+                                cell_padding + char_width * 2.0);
 
                             column_size = std::max(column_size, default_min_width);
 
@@ -544,6 +546,8 @@ KernelMetricTable::Render()
                 {
                     ImGui::BeginDisabled();
                 }
+
+                bool open_menu = false;
 
                 ImGuiListClipper clipper;
                 clipper.Begin(static_cast<int>(data.size()));
@@ -668,6 +672,16 @@ KernelMetricTable::Render()
                                 ImGui::PopTextWrapPos();
                                 EndTooltipStyled();
                             }
+
+                            // Resolve the column from the cell rect; the row-spanning
+                            // selectable and frozen column make item hover unreliable.
+                            if(cell_hovered &&
+                               ImGui::IsMouseClicked(ImGuiMouseButton_Right))
+                            {
+                                m_cell_menu.row    = row;
+                                m_cell_menu.column = col;
+                                open_menu          = true;
+                            }
                         }
                         ImGui::PopID();  // Pop row ID
                     }
@@ -676,6 +690,43 @@ KernelMetricTable::Render()
                 if(request_pending)
                 {
                     ImGui::EndDisabled();
+                }
+
+                if(open_menu)
+                {
+                    ImGui::OpenPopup(CELL_CONTEXT_MENU_ID);
+                }
+                if(BeginCellContextMenu(CELL_CONTEXT_MENU_ID))
+                {
+                    if(m_cell_menu.row >= 0 &&
+                       m_cell_menu.row < static_cast<int>(data.size()))
+                    {
+                        const std::vector<std::string>& menu_row = data[m_cell_menu.row];
+                        std::vector<std::string>        row_cells;
+                        row_cells.reserve(header.size());
+                        // Hidden columns have a header name starting with '_'. Remap
+                        // the data-column index to its visible-list position.
+                        int cell_index = 0;
+                        for(int col = 0; col < static_cast<int>(header.size()) &&
+                                         col < static_cast<int>(menu_row.size());
+                            col++)
+                        {
+                            if(!header[col].empty() && header[col][0] == '_')
+                            {
+                                continue;
+                            }
+                            if(col == m_cell_menu.column)
+                            {
+                                cell_index = static_cast<int>(row_cells.size());
+                            }
+                            row_cells.push_back(menu_row[col].empty() ? "N/A"
+                                                                      : menu_row[col]);
+                        }
+                        AddCopyRowCellMenuItems(row_cells.data(),
+                                                static_cast<int>(row_cells.size()),
+                                                cell_index);
+                    }
+                    EndCellContextMenu();
                 }
 
                 ImGui::PopStyleColor(3);
@@ -924,7 +975,7 @@ KernelMetricTable::RenderBarChartContextMenu(int col)
     if(ImGui::BeginPopupContextItem("##bar_ctx"))
     {
         bool has_bars = m_bar_chart_columns.count(col) > 0;
-        if(ImGui::MenuItem(has_bars ? "Hide Bar Chart" : "Show Bar Chart"))
+        if(IconMenuItem(ICON_CHART_BAR, has_bars ? "Hide Bar Chart" : "Show Bar Chart"))
         {
             if(has_bars)
             {
@@ -957,9 +1008,9 @@ KernelMetricTable::ValidateFilterExpression(const char* expr, bool is_numeric_co
 
     if(is_numeric_column)
     {
-        // Must be: operator + number, or just number
+        // Must be: operator + number
         // Check for operators followed by numbers
-        static const std::vector<std::string> ops = {">=", "<=", "!=", "<>", ">", "<", "="};
+        static const std::vector<std::string> ops = {">=", "<=", "!=", ">", "<", "="};
         for(const auto& op : ops)
         {
             if(trimmed.find(op) == 0)
@@ -969,15 +1020,14 @@ KernelMetricTable::ValidateFilterExpression(const char* expr, bool is_numeric_co
                 value.erase(0, value.find_first_not_of(" \t\n\r"));
                 value.erase(value.find_last_not_of(" \t\n\r") + 1);
                 // Check if value is numeric
-                if(!value.empty() && (std::isdigit(value[0]) || value[0] == '-' || value[0] == '.'))
+                if(!value.empty() && (std::isdigit(value[0]) || value[0] == '.'))
                 {
                     return true;
                 }
                 return false;
             }
         }
-        // If no operator, check if it's just a number
-        return !trimmed.empty() && (std::isdigit(trimmed[0]) || trimmed[0] == '-' || trimmed[0] == '.');
+        return false;
     }
     else
     {
@@ -985,7 +1035,8 @@ KernelMetricTable::ValidateFilterExpression(const char* expr, bool is_numeric_co
         auto starts_with_like = [](const std::string& str) {
             if(str.length() < 4) return false;
             std::string prefix = str.substr(0, 4);
-            std::transform(prefix.begin(), prefix.end(), prefix.begin(), ::tolower);
+            std::transform(prefix.begin(), prefix.end(), prefix.begin(),
+                [](unsigned char c) -> char { return static_cast<char>(std::tolower(c)); });
             return prefix == "like";
         };
         return starts_with_like(trimmed);

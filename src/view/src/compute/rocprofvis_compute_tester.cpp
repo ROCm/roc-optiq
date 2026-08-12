@@ -44,6 +44,7 @@ ComputeTester::ComputeTester(DataProvider& data_provider, std::shared_ptr<Comput
           { kRPVControllerRooflineKernelIntensityTypeHBM, "HBM" },
           { kRPVControllerRooflineKernelIntensityTypeL2, "L2" },
           { kRPVControllerRooflineKernelIntensityTypeL1, "L1" },
+          { kRPVControllerRooflineKernelIntensityTypeLDS, "LDS" },
       },
   })
 {}

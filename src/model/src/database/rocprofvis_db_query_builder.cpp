@@ -35,6 +35,11 @@ namespace DataModel
         return BuildQuery(g_select_str, params.NUM_PARAMS, params.parameters, params.from,
                           "");
     }
+    std::string Builder::Select(rocprofvis_db_perfetto_slice_query_format params)
+    {
+        return BuildQuery(g_select_str, params.NUM_PARAMS, params.parameters, params.from,
+            "");
+    }
     std::string Builder::Select(rocprofvis_db_sqlite_launch_table_query_format params)
     {
         return BuildQuery(g_select_str, params.NUM_PARAMS, params.parameters, params.from,
@@ -76,6 +81,16 @@ namespace DataModel
     {
         return BuildQuery(g_select_str, params.NUM_PARAMS, params.parameters, params.from,
                           "");
+    }
+    std::string Builder::Select(rocprofvis_db_perfetto_launch_table_query_format params)
+    {
+        return BuildQuery(g_select_str, params.NUM_PARAMS, params.parameters, params.from,
+            "");
+    }
+    std::string Builder::Select(rocprofvis_db_perfetto_sample_table_query_format params)
+    {
+        return BuildQuery(g_select_str, params.NUM_PARAMS, params.parameters, params.from,
+            "");
     }
     std::string Builder::Select(rocprofvis_db_sqlite_dataflow_query_format params)
     {
@@ -324,11 +339,11 @@ namespace DataModel
     }
 
     const uint8_t Builder::TypeEnumToInt(const char* type, std::vector<std::string>& lookup) {
-        for (int i=0; i < lookup.size(); i++)
+        for (size_t i = 0; i < lookup.size(); i++)
         {
             if (lookup[i] == type)
             {
-                return i;
+                return static_cast<uint8_t>(i);
             }
         }
         return 0;

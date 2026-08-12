@@ -59,7 +59,7 @@ class Trace : public DmBase{
         // @param db - pointer to database
         // @param bind_data - reference to pointer to bind data structure
         // @return status of operation 
-        rocprofvis_dm_result_t                          BindDatabase(rocprofvis_dm_database_t db, rocprofvis_dm_db_bind_struct* &bind_data);
+        rocprofvis_dm_result_t                          BindDatabase(rocprofvis_dm_database_t db, rocprofvis_dm_db_bind_struct* &bind_data, rocprofvis_dm_string_t config_path);
         // Method to delete a time slice with provide start and stop timestamps
         // @param start - time slice start timestamp
         // @param stop - time slice stop timestamp
@@ -153,12 +153,13 @@ class Trace : public DmBase{
         // Method to get amount of memory used by Trace object, includes memory footprint of all other data model objects
         // @return used memory size        
         rocprofvis_dm_size_t                            GetMemoryFootprint();
-        // Method to get the string ids of strings inside string table that contain all of the passed in substrings
-        // @param num - number of substrings strings to search for
-        // @param substrings - array of substrings to search for
-        // @param indices - output array of string table indices 
-        // @return status of operation 
-        rocprofvis_dm_result_t                          GetStringIndicesWithSubstring(rocprofvis_dm_num_string_table_filters_t num, rocprofvis_dm_string_table_filters_t substrings, std::vector<rocprofvis_dm_index_t>& indices);
+        // Method to get the string ids of strings inside string table that match the passed in target strings
+        // @param num - number of strings to search for
+        // @param targets - array of strings to search for
+        // @param include_substring - when true a string matches if it contains the targets, when false it has to equal the targets.
+        // @param indices - output array of string table indices
+        // @return status of operation
+        rocprofvis_dm_result_t                          SearchStringIndices(rocprofvis_dm_num_string_table_filters_t num, rocprofvis_dm_string_table_filters_t targets, bool include_substring, std::vector<rocprofvis_dm_index_t>& indices);
         // Static method to add track object. Used by database component via binding interface
         // @param object - trace object handle to add new track to
         // @param params - pointer to track parameters structure (shared with database component) 
@@ -170,7 +171,7 @@ class Trace : public DmBase{
         // @param start - start timestamp of the slice
         // @param end - end timestamp of the track 
         // @return status of operation 
-        static rocprofvis_dm_slice_t                    AddSlice(const rocprofvis_dm_trace_t object, const rocprofvis_dm_track_id_t track_id, const rocprofvis_dm_timestamp_t start, const rocprofvis_dm_timestamp_t end);  
+        static rocprofvis_dm_slice_t                    AddSlice(const rocprofvis_dm_trace_t object, const rocprofvis_dm_track_id_t track_id, const rocprofvis_dm_timestamp_t start, const rocprofvis_dm_timestamp_t end, const rocprofvis_dm_hashed_timestamp_tag_t tag);
         // Static method to  add new record to a slice object. Used by database component via binding interface
         // @param object - slice object handle to add new record to
         // @param data - reference to a new record parameters structure
@@ -277,7 +278,7 @@ class Trace : public DmBase{
         static rocprofvis_dm_result_t                   AddTopologyNode(const rocprofvis_dm_trace_t object, rocprofvis_dm_track_identifiers_t * track_indentifiers);
         static rocprofvis_dm_result_t                   AddTopologyNodeProperty(const rocprofvis_dm_trace_t object, rocprofvis_dm_track_identifiers_t * track_identifiers, rocprofvis_db_topology_data_type_t type, const char* table, const char* name, void* value);
 
-        static rocprofvis_dm_result_t                   CheckSliceExists(const rocprofvis_dm_trace_t object, const rocprofvis_dm_timestamp_t start, const rocprofvis_dm_timestamp_t end, const rocprofvis_db_num_of_tracks_t num, const rocprofvis_db_track_selection_t tracks);
+        static rocprofvis_dm_result_t                   CheckSliceExists(const rocprofvis_dm_trace_t object, const rocprofvis_dm_timestamp_t start, const rocprofvis_dm_timestamp_t end, const rocprofvis_dm_hashed_timestamp_tag_t tag, const rocprofvis_db_num_of_tracks_t num, const rocprofvis_db_track_selection_t tracks);
         static rocprofvis_dm_result_t                   CheckEventPropertyExists(const rocprofvis_dm_trace_t object, const rocprofvis_dm_event_property_type_t type, const rocprofvis_dm_event_id_t event_id);
         static rocprofvis_dm_result_t                   CheckTableExists(const rocprofvis_dm_trace_t object, const rocprofvis_dm_table_id_t table_id);
         static rocprofvis_dm_result_t                   CompleteSlice(const rocprofvis_dm_slice_t object);
@@ -286,7 +287,7 @@ class Trace : public DmBase{
         void                                            BuildStringsOrderArray();
         static void                                     MetadataLoaded(const rocprofvis_dm_trace_t object);
         static const size_t                             GetStringOrder(const rocprofvis_dm_trace_t object, uint32_t index);
-        static rocprofvis_dm_result_t                   GetStringIndices(const rocprofvis_dm_trace_t object, rocprofvis_dm_num_string_table_filters_t num, rocprofvis_dm_string_table_filters_t substrings, std::vector<rocprofvis_dm_index_t>& indices);
+        static rocprofvis_dm_result_t                   GetStringIndices(const rocprofvis_dm_trace_t object, rocprofvis_dm_num_string_table_filters_t num, rocprofvis_dm_string_table_filters_t substrings, bool include_substring, std::vector<rocprofvis_dm_index_t>& indices);
 
 
         // trace parameters structure

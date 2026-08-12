@@ -1,8 +1,8 @@
 # DATABASE.md - ROCm Optiq Model / Database Layer Guide
 
 This document is the database/model-layer companion to
-[`.agents/AGENTS.md`](./AGENTS.md) and
-[`.agents/CONTROLLER.md`](./CONTROLLER.md). The main guide gives a
+[`.agents/UI.md`](./UI.md) and
+[`.agents/CONTROLLER.md`](./CONTROLLER.md). The UI guide gives a
 high-level pass over `src/model/`. **This file is the deep dive for
 `src/model/`** - the SQLite-backed data model that ingests trace files
 and serves typed records to the controller.
@@ -51,7 +51,7 @@ wins; please update this file in the same change.
 - **Linked by:** `src/controller/`. The controller is the normal
   consumer of `src/model/` headers (the View must never include
   `src/model/` directly; see the architecture rules in
-  `.agents/AGENTS.md`).
+  `.agents/UI.md`).
 - **CFFI / Python:** `src/model/python/rocprofvis_cffi_build.py`
   builds a Python wrapper that calls `rocprofvis_dm_*` and
   `rocprofvis_db_*` directly without going through the controller.
@@ -78,7 +78,7 @@ controller-facing topology property enums, and
 
 ## 2. Public C ABI Surface (`src/model/inc/`)
 
-Three headers form the entire public contract:
+Four headers form the entire public contract:
 
 - `rocprofvis_interface.h` - all functions. Keep this header
   compatible with `src/model/python/rocprofvis_cffi_build.py`: avoid
@@ -172,7 +172,7 @@ database.
 rocprofvis_dm_result_t rocprofvis_db_read_metadata_async(database, future);
 rocprofvis_dm_result_t rocprofvis_db_cleanup_async(database, future, rebuild);
 rocprofvis_dm_result_t rocprofvis_db_read_trace_slice_async(
-    database, start_ns, end_ns, num_tracks, track_id_array, future);
+    database, start_ns, end_ns, hashed_timestamp_tag, num_tracks, track_id_array, future);
 rocprofvis_dm_result_t rocprofvis_db_read_event_property_async(
     database, kRPVDMEventFlowTrace|kRPVDMEventStackTrace|kRPVDMEventExtData,
     event_id, future);
@@ -204,9 +204,9 @@ rocprofvis_dm_result_t rocprofvis_db_build_compute_query(
     database, compute_use_case, num_params, params, char** out_query);
 ```
 
-`rocprofvis_dm_table_use_case_enum_t` covers the four system table
+`rocprofvis_dm_table_use_case_enum_t` covers the three system table
 shapes (`kRPVDMTableUseCaseEventTrackTable`, `kRPVDMTableUseCaseSampleTrackTable`,
-`kRPVDMTableUseCaseEventSearch`, `kRPVDMTableUseCaseAnalysis`).
+`kRPVDMTableUseCaseEventSearch`).
 `rocprofvis_db_compute_use_case_enum_t` covers all the compute query
 shapes (workload list, top kernels, kernels list, metric definitions,
 roofline ceilings, kernel intensities, metric values, kernel metric
@@ -1113,6 +1113,63 @@ The compute-side counterpart. One method per
 - `GetComputeMetricValues`
 - `GetComputeMetricValuesByWorkload`
 - `GetComputeKernelMetricsMatrix`
+- `GetComputeKernelSourceFiles`
+- `GetComputeSourceFileSourceLines`
+- `GetComputeKernelCodeObjects`
+- `GetComputeKernelIsaToIsaDeps`
+- `GetComputeKernelIsaLines`
+- `GetComputeKernelIsaToSourceDeps`
+- `GetComputeKernelSamplingStates`
+- `GetComputeKernelSamplingStateReasonCounts`
+
+All of them share the signature
+`rocprofvis_dm_result_t GetComputeX(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params, rocprofvis_dm_string_t& query)`
+- the SQL (or, for the metrics matrix, the JSON plan) is written to
+`query`, and the return value reports why it could not be built.
+
+Each method version-gates itself; `BuildComputeQuery` no longer wraps
+the switch in a single check, it just forwards the status:
+
+```cpp
+rocprofvis_dm_result_t result = kRocProfVisDmResultNotSupported;
+if(IsVersionGreaterOrEqual("1.2.0"))
+{
+    result = kRocProfVisDmResultInvalidParameter;
+    if(<params match this use case>)
+    {
+        query = ...;
+        result = kRocProfVisDmResultSuccess;
+    }
+}
+return result;
+```
+
+The gate is `1.2.0` for every method except
+`GetComputeMetricValuesByWorkload`, which gates on `1.3.0` because it
+reads `compute_workload_metric_view` unconditionally and that view does
+not exist earlier.
+
+The source / ISA / PC-sampling block (`GetComputeKernelSourceFiles`
+through `GetComputeKernelSamplingStateReasonCounts`) is **not**
+version-gated beyond that `1.2.0` floor. PC sampling is an optional
+capture feature, so its tables can be absent from a `1.3.0`+ database
+and present in an earlier one — a schema version tells you nothing
+about them.
+
+Their absence is **not** guarded at query-build time. The
+`CheckTableExists("pc_sampling_states_per_line", ...)` probe in
+`CreateIndexes` only decides whether the PC-sampling indexes are
+created; nothing consults it when a query is built. Against a database
+that lacks those tables these use cases still return
+`kRocProfVisDmResultSuccess` with a valid-looking query, and the
+failure surfaces later as a SQLite "no such table" error
+(`kRocProfVisDmResultDbAccessFailed`) rather than
+`kRocProfVisDmResultNotSupported`. Closing that gap needs a cached
+table-presence probe the factory can read, not a version gate.
+
+Inner `IsVersionGreaterOrEqual("1.3.0")` / `"1.4.0"` tests inside a
+method still select between schema variants and are separate from the
+gate.
 
 Internal helpers: `ClassifyMetricIdFormat(s)` decides whether a
 metric ID is `XY`, `XYZ`, or `Other`; `ParseMetricParam(...)`
@@ -1138,6 +1195,11 @@ Args passed all the way through:
   search; the database resolves these via `BuildTableStringIdFilter`
   which finds matching string IDs and rewrites them into a
   `WHERE IN (...)`.
+- `include_substring` - how those filters are matched against the
+  string table. `true` (the default) matches any string containing a
+  filter, `false` only strings equal to it; both are case insensitive.
+  Exact matching is only satisfiable with a single distinct filter,
+  since a string cannot equal two different values at once.
 - `max_count`, `offset` - paging.
 - `count_only` - return a `SELECT COUNT(*) ...` shape.
 
@@ -1466,7 +1528,7 @@ These supplement `CODING.md`. When the two disagree, `CODING.md` wins.
 | Run anything async                                                | `rocprofvis_db_future_alloc(callback, ud)` + `rocprofvis_db_future_wait(future, t)`       |
 | Compose a DB future with a controller future                      | `Future::AddDependentFuture(db_future)` + `Future::ProgressCallback`                      |
 | Read trace metadata                                               | `rocprofvis_db_read_metadata_async(database, future)`                                     |
-| Read a time slice                                                 | `rocprofvis_db_read_trace_slice_async(database, start, end, num, tracks, future)`         |
+| Read a time slice                                                 | `rocprofvis_db_read_trace_slice_async(database, start, end, tag, num, tracks, future)`         |
 | Read flow / stack / ext data for an event                         | `rocprofvis_db_read_event_property_async(database, type, event_id, future)`               |
 | Build a system table query                                        | `rocprofvis_db_build_table_query(...)` (then `rocprofvis_db_execute_query_async`)         |
 | Build a compute query                                             | `rocprofvis_db_build_compute_query(...)` (then `rocprofvis_db_execute_compute_query_async`)|
@@ -1594,7 +1656,7 @@ exploratory testing during development.
   `rocprofvis_dm_trace_params_t`, `rocprofvis_db_flow_data_t`,
   `rocprofvis_db_stack_data_t`, `rocprofvis_db_ext_data_t`,
   `rocprofvis_db_argument_data_t`, the `rocprofvis_dm_db_bind_struct`,
-  `DbInstance`, `hash_combine`, and `TRACK_ID_*` constants.
+  `DbInstance`, and `TRACK_ID_*` constants.
 - `rocprofvis_error_handling.h` -> ANSI color macros + `ERROR_*`
   message strings.
 - `rocprofvis_c_interface.cpp` -> `extern "C"` entry points; the

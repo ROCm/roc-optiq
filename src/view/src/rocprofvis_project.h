@@ -6,6 +6,7 @@
 #include <list>
 #include <memory>
 #include <string>
+#include <vector>
 
 namespace RocProfVis
 {
@@ -29,9 +30,7 @@ public:
     {
         Undefined,
         System,
-#ifdef COMPUTE_UI_SUPPORT
         Compute,
-#endif
     };
 
     Project();
@@ -66,6 +65,15 @@ public:
      * duplicate's tab.
      */
     OpenResult Open(std::string& file_path);
+    /*
+     * Opens two or more trace files as a single combined compare project. The traces
+     * overlay on one timeline and each track is tagged with its source (A, B, ...).
+     * @param project_id: Synthetic, stable id/key for the project (it has no single
+     * file path on disk).
+     * @param file_paths: The trace files to combine, tagged A, B, ... in order.
+     */
+    OpenResult OpenCompare(const std::string&              project_id,
+                           const std::vector<std::string>& file_paths);
     /*
      * Overwrites the project settings to the project file without further user input.
      */
@@ -118,6 +126,9 @@ private:
     std::string                m_name;
     std::string                m_project_file_path;
     std::string                m_trace_file_path;
+    // Source trace files when this is a compare project (empty otherwise). Persisted to
+    // the .rpv so the compare can be reopened.
+    std::vector<std::string>   m_compare_files;
     TraceType                  m_trace_type;
     std::shared_ptr<RocWidget> m_view;
     std::list<ProjectSetting*> m_settings;
@@ -131,6 +142,7 @@ constexpr const char* JSON_KEY_GROUP_TIMELINE = "timeline";
 
 constexpr const char* JSON_KEY_GENERAL_VERSION    = "version";
 constexpr const char* JSON_KEY_GENERAL_TRACE_PATH = "trace_path";
+constexpr const char* JSON_KEY_GENERAL_COMPARE_FILES = "compare_files";
 
 constexpr const char* JSON_KEY_TIMELINE_BOOKMARK         = "bookmarks";
 constexpr const char* JSON_KEY_TIMELINE_BOOKMARK_KEY     = "key";
@@ -139,16 +151,21 @@ constexpr const char* JSON_KEY_TIMELINE_BOOKMARK_V_MAX_X = "view_end_ns";
 constexpr const char* JSON_KEY_TIMELINE_BOOKMARK_Y       = "y";
 constexpr const char* JSON_KEY_TIMELINE_BOOKMARK_Z       = "z";
 
-constexpr const char* JSON_KEY_TIMELINE_TRACK                 = "tracks";
-constexpr const char* JSON_KEY_TIMELINE_TRACK_ORDER           = "order";
-constexpr const char* JSON_KEY_TIMELINE_TRACK_DISPLAY         = "display";
-constexpr const char* JSON_KEY_TIMELINE_TRACK_HEIGHT          = "height";
-constexpr const char* JSON_KEY_TIMELINE_TRACK_COMPACT_MODE    = "compact_mode";
-constexpr const char* JSON_KEY_TIMELINE_TRACK_COLOR           = "color";
-constexpr const char* JSON_KEY_TIMELINE_TRACK_COLOR_RANGE_MIN = "color_min";
-constexpr const char* JSON_KEY_TIMELINE_TRACK_COLOR_RANGE_MAX = "color_max";
-constexpr const char* JSON_KEY_TIMELINE_TRACK_BOX_PLOT        = "box_plot";
-constexpr const char* JSON_KEY_TIMELINE_TRACK_STRIPES         = "box_plot_stripes";
+constexpr const char* JSON_KEY_TIMELINE_TRACK                    = "tracks";
+constexpr const char* JSON_KEY_TIMELINE_TRACK_ORDER              = "order";
+constexpr const char* JSON_KEY_TIMELINE_TRACK_DISPLAY            = "display";
+constexpr const char* JSON_KEY_TIMELINE_TRACK_HEIGHT             = "height";
+constexpr const char* JSON_KEY_TIMELINE_TRACK_COMPACT_MODE       = "compact_mode";
+constexpr const char* JSON_KEY_TIMELINE_TRACK_COLOR              = "color";
+constexpr const char* JSON_KEY_TIMELINE_TRACK_COLOR_RANGE_MIN    = "color_min";
+constexpr const char* JSON_KEY_TIMELINE_TRACK_COLOR_RANGE_MAX    = "color_max";
+constexpr const char* JSON_KEY_TIMELINE_TRACK_BOX_PLOT           = "box_plot";
+constexpr const char* JSON_KEY_TIMELINE_TRACK_STRIPES            = "box_plot_stripes";
+constexpr const char* JSON_KEY_TIMELINE_TRACK_MIN                = "min";
+constexpr const char* JSON_KEY_TIMELINE_TRACK_MAX                = "max";
+constexpr const char* JSON_KEY_TIMELINE_TRACK_MEAN               = "mean";
+constexpr const char* JSON_KEY_TIMELINE_TRACK_STANDARD_DEVIATION = "standard_deviation";
+constexpr const char* JSON_KEY_TIMELINE_TRACK_QUEUE_UTILIZATION  = "queue_utilization";
 
 constexpr const char* JSON_KEY_ANNOTATIONS                 = "annotations";
 constexpr const char* JSON_KEY_ANNOTATION_TIME_NS          = "time_ns";
@@ -158,9 +175,11 @@ constexpr const char* JSON_KEY_ANNOTATION_SIZE_Y           = "size_y";
 constexpr const char* JSON_KEY_ANNOTATION_TEXT             = "text";
 constexpr const char* JSON_KEY_ANNOTATION_TITLE            = "title";
 constexpr const char* JSON_KEY_ANNOTATION_ID               = "id";
+constexpr const char* JSON_KEY_ANNOTATION_TRACK_ID         = "track_id";
 constexpr const char* JSON_KEY_TIMELINE_ANNOTATION_V_MIN_X = "view_start_ns";
 constexpr const char* JSON_KEY_TIMELINE_ANNOTATION_V_MAX_X = "view_end_ns";
 constexpr const char* JSON_KEY_ANNOTATION_IS_MINIMIZED     = "is_minimized";
+constexpr const char* JSON_KEY_ANNOTATION_IS_LOCKED        = "is_locked";
 
 class ProjectSetting
 {

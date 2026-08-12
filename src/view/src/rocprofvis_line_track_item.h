@@ -3,10 +3,8 @@
 
 #pragma once
 
-#include "rocprofvis_controller_types.h"
 #include "rocprofvis_raw_track_data.h"
 #include "rocprofvis_track_item.h"
-#include "widgets/rocprofvis_widget.h"
 #include "rocprofvis_time_to_pixel.h"
 #include <memory>
 #include "widgets/rocprofvis_editable_textfield.h"
@@ -18,34 +16,15 @@ namespace RocProfVis
 namespace View
 {
 
+class CounterTrackOptions;
 class LineTrackItem;
 class TimePixelTransform;
-
-struct HighlightYRange
-{
-    float max_limit;
-    float min_limit;
-};
-
-class LineTrackProjectSettings : public ProjectSetting
-{
-public:
-    LineTrackProjectSettings(const std::string& project_id, LineTrackItem& track_item);
-    ~LineTrackProjectSettings() override;
-    void            ToJson() override;
-    bool            Valid() const override;
-    bool            BoxPlot() const;
-    bool            BoxPlotStripes() const;
-    bool            Highlight() const;
-    HighlightYRange HighlightRange() const;
-
-private:
-    LineTrackItem& m_track_item;
-};
+class TimelineSelection;
+class TimelineTrackOptions;
 
 class LineTrackItem : public TrackItem
 {
-    friend LineTrackProjectSettings;
+    friend CounterTrackOptions;
 
     class VerticalLimits
     {
@@ -71,6 +50,7 @@ class LineTrackItem : public TrackItem
 
         std::string m_formatted_str;
         std::string m_compact_str;
+        std::string m_edit_str;
         std::string m_units;
 
         EditableTextField m_text_field;
@@ -78,21 +58,29 @@ class LineTrackItem : public TrackItem
 
 public:
     LineTrackItem(DataProvider& dp, uint64_t track_id,
-                  float max_meta_area_width, std::shared_ptr<TimePixelTransform> time_to_pixel_manager);
+                  TimelineTrackOptions&               track_options,
+                  std::shared_ptr<TimePixelTransform> time_to_pixel_manager,
+                  std::shared_ptr<TimelineSelection>  timeline_selection);
     ~LineTrackItem();
 
-    bool          ReleaseData() override;
-    virtual float CalculateNewMetaAreaSize() override;
+    void         Update() override;
+    bool         ReleaseData() override;
+    virtual void UpdateMetaScaleAreaSize() override;
+    virtual void UpdateMaxMetaScaleAreaSize() override;
 
 protected:
     virtual void RenderMetaAreaScale() override;
     virtual void RenderChart(float graph_width) override;
-    virtual void RenderMetaAreaOptions() override;
 
 private:
     void   UpdateMetadata();
     ImVec2 MapToUI(double x, double y, ImVec2& c_position, ImVec2& c_size,
                    double scale_y);
+    float  CalculatePlotHeight() const;
+    // Fills out_ticks with interior Y-axis values, count based on plot_height.
+    void   GenerateYAxisTicks(float plot_height, std::vector<double>& out_ticks) const;
+    // Refreshes m_grid_ticks only when the track height or Y range has changed.
+    void   UpdateYAxisTicks();
     bool   ExtractPointsFromData();
     float  CalculateMissingX(float x1, float y1, float x2, float y2, float known_y);
     void   BoxPlotRender(float graph_width);
@@ -100,18 +88,26 @@ private:
                                const ImVec2& content_size, double scale_y);
 
     std::vector<TraceCounter> m_data;
-    HighlightYRange                         m_highlight_y_limits;
 
-    VerticalLimits           m_min_y;
-    VerticalLimits           m_max_y;
-    std::string              m_units;
-    bool                     m_highlight_y_range;
-    DataProvider&            m_dp;
-    bool                     m_show_boxplot;
-    bool                     m_show_boxplot_stripes;
-    LineTrackProjectSettings m_linetrack_project_settings;
-    float                    m_vertical_padding;
- };
+    VerticalLimits m_min_y;
+    VerticalLimits m_max_y;
+    std::string    m_units;
+
+    DataProvider& m_dp;
+    float         m_vertical_padding;
+
+    std::array<Pill*, AnalysisTrackStatistics::Counter::kCounterCount> m_pills_analysis;
+    // User configurable options. Underlying object is owned by TrackItem.
+    // May be null; guard before use.
+    CounterTrackOptions* m_counter_options;
+
+    // Cached interior Y-axis tick values; see UpdateYAxisTicks().
+    std::vector<double> m_grid_ticks;
+    float               m_cached_ticks_height = -1.0f;
+    double              m_cached_ticks_min    = 0.0;
+    double              m_cached_ticks_max    = 0.0;
+    float               m_cached_ticks_line_h = -1.0f;
+};
 
 }  // namespace View
 }  // namespace RocProfVis

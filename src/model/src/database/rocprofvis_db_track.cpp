@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 #include "rocprofvis_db_profile.h"
+#include "rocprofvis_shared_types.h"
 
 namespace RocProfVis
 {
@@ -82,7 +83,7 @@ namespace DataModel
             cat = kRocProfVisDmRegionSampleTrack;
             break;
         case kRocProfVisDmOperationLaunch:
-            cat = ((ProfileDatabase*)m_db)->GetRegionTrackCategory();
+            cat = ((QueryManager*)m_db)->GetRegionTrackCategory();
             break;
         case kRocProfVisDmOperationDispatch:
             cat = kRocProfVisDmKernelDispatchTrack;
@@ -135,7 +136,7 @@ namespace DataModel
     {
         if (category & kRocProfVisDmStreamTrack)
         {
-            return MakeKey(id_stream, -1, db_instance);
+            return MakeKey(id_stream, INVALID_INDEX_64, db_instance);
         }
         else
         {

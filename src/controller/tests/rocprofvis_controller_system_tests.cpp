@@ -3,18 +3,22 @@
 
 #include "rocprofvis_c_interface.h"
 #include "rocprofvis_controller.h"
+#include "rocprofvis_controller_job_system.h"
 #include "rocprofvis_core.h"
 #include "system/rocprofvis_controller_event.h"
 #include "system/rocprofvis_controller_mem_mgmt.h"
 #include "system/rocprofvis_controller_segment.h"
 #include <algorithm>
+#include <atomic>
 #include <catch2/catch_session.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <cfloat>
 #include <chrono>
 #include <filesystem>
+#include <memory>
 #include <thread>
 #include <unordered_map>
+#include <vector>
 
 std::string g_input_file = "sample/trace_70b_1024_32.rpd";
 
@@ -137,9 +141,9 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture, "System Trace Controll
     // Allocates a controller handle for the input trace file.
     // Fixture Writes: m_controller
     SECTION("Create Controller")
-    {
+    {       
         spdlog::info("Allocating Controller");
-        m_controller = rocprofvis_controller_alloc(g_input_file.c_str());
+        m_controller = rocprofvis_controller_alloc(g_input_file.c_str(), nullptr);
         REQUIRE(nullptr != m_controller);
     }
 
@@ -560,8 +564,9 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture, "System Trace Controll
         rocprofvis_controller_arguments_t* args = rocprofvis_controller_arguments_alloc();
         REQUIRE(args != nullptr);
 
-        result = rocprofvis_controller_set_uint64(args, kRPVControllerTableArgsType, 0,
-                                                  kRPVControllerTableTypeEvents);
+        result = rocprofvis_controller_set_uint64(
+            args, kRPVControllerTableArgsType, 0,
+            static_cast<uint64_t>(kRPVControllerTableTypeEvents));
         REQUIRE(result == kRocProfVisResultSuccess);
 
         uint32_t num_event_tracks = 0;
@@ -635,10 +640,6 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture, "System Trace Controll
 
         result = rocprofvis_controller_set_uint64(args, kRPVControllerTableArgsSortOrder,
                                                   0, kRPVControllerSortOrderAscending);
-        REQUIRE(result == kRocProfVisResultSuccess);
-
-        result = rocprofvis_controller_set_uint64(args, kRPVControllerTableArgsNumOpTypes,
-                                                  0, 0);
         REQUIRE(result == kRocProfVisResultSuccess);
 
         result =
@@ -831,6 +832,9 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture, "System Trace Controll
 
         std::filesystem::remove(csv_path);
 
+        spdlog::info("Free Future");
+        rocprofvis_controller_future_free(future);
+
         spdlog::info("Free Args");
         rocprofvis_controller_arguments_free(args);
     }
@@ -860,8 +864,9 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture, "System Trace Controll
         rocprofvis_controller_arguments_t* args = rocprofvis_controller_arguments_alloc();
         REQUIRE(args != nullptr);
 
-        result = rocprofvis_controller_set_uint64(args, kRPVControllerTableArgsType, 0,
-                                                  kRPVControllerTableTypeSamples);
+        result = rocprofvis_controller_set_uint64(
+            args, kRPVControllerTableArgsType, 0,
+            static_cast<uint64_t>(kRPVControllerTableTypeSamples));
         REQUIRE(result == kRocProfVisResultSuccess);
 
         uint32_t num_sample_tracks = 0;
@@ -935,10 +940,6 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture, "System Trace Controll
 
         result = rocprofvis_controller_set_uint64(args, kRPVControllerTableArgsSortOrder,
                                                   0, kRPVControllerSortOrderAscending);
-        REQUIRE(result == kRocProfVisResultSuccess);
-
-        result = rocprofvis_controller_set_uint64(args, kRPVControllerTableArgsNumOpTypes,
-                                                  0, 0);
         REQUIRE(result == kRocProfVisResultSuccess);
 
         result =
@@ -1131,6 +1132,9 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture, "System Trace Controll
 
         std::filesystem::remove(csv_path);
 
+        spdlog::info("Free Future");
+        rocprofvis_controller_future_free(future);
+
         spdlog::info("Free Args");
         rocprofvis_controller_arguments_free(args);
     }
@@ -1151,7 +1155,7 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture, "System Trace Controll
         for(uint32_t track_idx = 0; track_idx < num_tracks; track_idx++)
         {
             rocprofvis_handle_t* track_handle = nullptr;
-            rocprofvis_result_t  result       = rocprofvis_controller_get_object(
+            result                            = rocprofvis_controller_get_object(
                 m_controller, kRPVControllerSystemTrackIndexed, track_idx, &track_handle);
             REQUIRE(result == kRocProfVisResultSuccess);
             REQUIRE(track_handle != nullptr);
@@ -1195,7 +1199,6 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture, "System Trace Controll
                 double start_ts = min_time;
                 double RANGE    = (max_time - min_time) / 10;
 
-                uint64_t total = 0;
                 while(start_ts < max_time)
                 {
                     double end_ts = std::min(start_ts + RANGE, max_time);
@@ -2191,8 +2194,8 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture, "System Trace Controll
                 }
                 else
                 {
-                    double density = 0;
-                    result         = rocprofvis_controller_get_double(
+                    uint64_t density = 0;
+                    result           = rocprofvis_controller_get_uint64(
                         track_handle, kRPVControllerTrackHistogramBucketDensityIndexed,
                         bin, &density);
                     REQUIRE(result == kRocProfVisResultSuccess);
@@ -2992,8 +2995,9 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture, "System Trace Controll
         rocprofvis_controller_arguments_t* args = rocprofvis_controller_arguments_alloc();
         REQUIRE(args != nullptr);
 
-        result = rocprofvis_controller_set_uint64(args, kRPVControllerTableArgsType, 0,
-                                                  kRPVControllerTableTypeSearchResults);
+        result = rocprofvis_controller_set_uint64(
+            args, kRPVControllerTableArgsType, 0,
+            static_cast<uint64_t>(kRPVControllerTableTypeSearchResults));
         REQUIRE(result == kRocProfVisResultSuccess);
 
         result = rocprofvis_controller_set_double(args, kRPVControllerTableArgsStartTime,
@@ -3002,10 +3006,6 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture, "System Trace Controll
 
         result = rocprofvis_controller_set_double(args, kRPVControllerTableArgsEndTime, 0,
                                                   end_ts);
-        REQUIRE(result == kRocProfVisResultSuccess);
-
-        result = rocprofvis_controller_set_uint64(args, kRPVControllerTableArgsNumTracks,
-                                                  0, 0);
         REQUIRE(result == kRocProfVisResultSuccess);
 
         result = rocprofvis_controller_set_uint64(
@@ -3063,6 +3063,10 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture, "System Trace Controll
         REQUIRE(result == kRocProfVisResultSuccess);
 
         result = rocprofvis_controller_set_uint64(args, kRPVControllerTableArgsStartCount,
+                                                  0, 1);
+        REQUIRE(result == kRocProfVisResultSuccess);
+
+        result = rocprofvis_controller_set_uint64(args, kRPVControllerTableArgsStringTableFiltersIncludeSubstrings,
                                                   0, 1);
         REQUIRE(result == kRocProfVisResultSuccess);
 
@@ -3205,5 +3209,182 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture, "System Trace Controll
 
         spdlog::info("Free Controller");
         rocprofvis_controller_free(m_controller);
+    }
+}
+
+// Regression coverage for the JobSystem Job::Wait primitive (lost-wakeup /
+// spurious-wakeup / m_result data race fix). The Job is exercised directly so
+// the tests target the synchronization primitive rather than the full async
+// pipeline. A null Future is passed because these job bodies never touch it.
+TEST_CASE("JobSystem Job blocking wait overlaps completion")
+{
+    using RocProfVis::Controller::Future;
+    using RocProfVis::Controller::Job;
+
+    // Race a blocking Wait(FLT_MAX) against Execute() finishing after a short,
+    // jittered delay, repeated many times to reliably hit the check-then-block
+    // window that previously produced a lost-wakeup hang. Each iteration must
+    // return Success and never hang (run under TSan to also catch the race).
+    const int iterations = 2000;
+    for(int i = 0; i < iterations; ++i)
+    {
+        int jitter_us = i % 7;
+        Job job(
+            [jitter_us](Future*) -> rocprofvis_result_t {
+                if(jitter_us > 0)
+                {
+                    std::this_thread::sleep_for(std::chrono::microseconds(jitter_us));
+                }
+                return kRocProfVisResultSuccess;
+            },
+            nullptr);
+
+        std::thread worker([&job]() { job.Execute(); });
+
+        rocprofvis_result_t result = job.Wait(FLT_MAX);
+        REQUIRE(result == kRocProfVisResultSuccess);
+
+        worker.join();
+        REQUIRE(job.GetResult() == kRocProfVisResultSuccess);
+    }
+}
+
+TEST_CASE("JobSystem Job cancel-then-wait teardown")
+{
+    using RocProfVis::Controller::Future;
+    using RocProfVis::Controller::Job;
+
+    // Queued job that never runs: Cancel() then a blocking Wait() must return
+    // immediately (result is no longer Pending) with the cancelled result
+    // recorded.
+    SECTION("cancelled queued job")
+    {
+        Job job([](Future*) { return kRocProfVisResultSuccess; }, nullptr);
+        job.Cancel();
+        REQUIRE(job.Wait(FLT_MAX) == kRocProfVisResultSuccess);
+        REQUIRE(job.GetResult() == kRocProfVisResultCancelled);
+    }
+
+    // Actively-running job: mirror the data-provider cleanup ordering where a
+    // blocking wait overlaps a job that is still running. Wait must observe
+    // completion and return without hanging or freeing a live job.
+    SECTION("running job then blocking wait")
+    {
+        const int iterations = 500;
+        for(int i = 0; i < iterations; ++i)
+        {
+            Job job(
+                [](Future*) {
+                    std::this_thread::sleep_for(std::chrono::microseconds(50));
+                    return kRocProfVisResultSuccess;
+                },
+                nullptr);
+
+            std::thread worker([&job]() { job.Execute(); });
+            REQUIRE(job.Wait(FLT_MAX) == kRocProfVisResultSuccess);
+            worker.join();
+            REQUIRE(job.GetResult() == kRocProfVisResultSuccess);
+        }
+    }
+}
+
+TEST_CASE("JobSystem Job polling contract unchanged")
+{
+    using RocProfVis::Controller::Future;
+    using RocProfVis::Controller::Job;
+
+    // While still Pending, an immediate poll (timeout == 0) must return Timeout
+    // without blocking.
+    Job job([](Future*) { return kRocProfVisResultSuccess; }, nullptr);
+    REQUIRE(job.Wait(0.0f) == kRocProfVisResultTimeout);
+
+    // Once resolved, the same poll must report Success.
+    job.Execute();
+    REQUIRE(job.Wait(0.0f) == kRocProfVisResultSuccess);
+    REQUIRE(job.GetResult() == kRocProfVisResultSuccess);
+}
+
+// Lost-wakeup stress test for Job::Wait(FLT_MAX). Races many worker/waiter
+// pairs at once to reproduce the rare CI hang (seen most on the arm64 macOS
+// runner, occasionally on the few-core Windows runner):
+//   * unfixed code -> a lost wakeup eventually parks a waiter forever, wedging
+//     the join() below (the exact hang CI hits); kill the process to confirm.
+//   * fixed code   -> always runs to completion and passes.
+// Heavy oversubscription forces a waiter to be preempted between the unlocked
+// m_result read and cv.wait (as on few-core runners); the simultaneous release
+// gate with no delay maximizes the odds the worker's unlocked notify_all()
+// lands in that window (which weak-ordering arm64 exposes most readily).
+TEST_CASE("JobSystem Job lost-wakeup stress repro")
+{
+    using RocProfVis::Controller::Future;
+    using RocProfVis::Controller::Job;
+
+    const unsigned hw = std::max(2u, std::thread::hardware_concurrency());
+    // Oversubscribe: many more runnable threads than cores so the scheduler
+    // frequently preempts a waiter mid-Wait, mimicking the few-core CI runners.
+    // Round count is kept modest so the fixed branch finishes quickly; on the
+    // unfixed branch the very first lost wakeup wedges the run, so more rounds
+    // only cost time on the (already-correct) fixed branch. Bump `rounds` if
+    // you need a longer soak to reproduce on a strongly-ordered x86 box.
+    const int pairs  = int(hw) * 4;
+    const int rounds = 500;
+
+    for(int r = 0; r < rounds; ++r)
+    {
+        std::vector<std::unique_ptr<Job>> jobs;
+        jobs.reserve(size_t(pairs));
+        for(int p = 0; p < pairs; ++p)
+        {
+            jobs.emplace_back(std::make_unique<Job>(
+                [](Future*) { return kRocProfVisResultSuccess; }, nullptr));
+        }
+
+        std::atomic<bool>        go{ false };
+        std::atomic<int>         successes{ 0 };
+        std::vector<std::thread> threads;
+        threads.reserve(size_t(pairs) * 2);
+
+        spdlog::info("Round {}: Launching {} jobs", r, pairs);
+
+        for(int p = 0; p < pairs; ++p)
+        {
+            Job* job = jobs[size_t(p)].get();
+
+            // Worker: on release, immediately publish + notify (no delay), so
+            // the notify can race straight into the waiter's (A)->(B) window.
+            threads.emplace_back([job, &go]() {
+                while(!go.load(std::memory_order_acquire))
+                {
+                }
+                job->Execute();
+            });
+
+            // Waiter: on release, block on the CV with no timeout. On unfixed
+            // code a lost wakeup parks this thread forever. NOTE: Catch2 macros
+            // are not thread-safe, so results are tallied atomically here and
+            // asserted on the main thread after the join.
+            threads.emplace_back([job, &go, &successes]() {
+                while(!go.load(std::memory_order_acquire))
+                {
+                }
+                if(job->Wait(FLT_MAX) == kRocProfVisResultSuccess)
+                {
+                    successes.fetch_add(1, std::memory_order_relaxed);
+                }
+            });
+        }
+
+        // Thundering-herd release: all pairs race at once to maximize churn.
+        go.store(true, std::memory_order_release);
+
+        // On unfixed code this join() is where the process wedges forever once
+        // any waiter has lost its wakeup -- exactly the CI hang being chased.
+        spdlog::info("Joining threads");
+        for(std::thread& t : threads)
+        {
+            t.join();
+        }
+
+        REQUIRE(successes.load(std::memory_order_relaxed) == pairs);
     }
 }

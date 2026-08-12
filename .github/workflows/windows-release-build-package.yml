@@ -14,6 +14,7 @@ env:
   ARTIFACT_NAME: roc-optiq-${{ github.event.client_payload.enable_symbols == 'true' && 'release-symbols' || 'release' }}
   BIN_DIR: ${{ github.event.client_payload.enable_symbols == 'true' && 'RelWithDebInfo' || 'Release' }}
   ENABLE_INTERNAL_BANNER: ${{ github.event.client_payload.enable_internal_banner == 'true' && 'ON' || 'OFF' }}
+  CRYPTO_BACKEND: ${{ github.event.client_payload.crypto_backend || 'mbedTLS' }}
 
 jobs:
   windows:
@@ -52,10 +53,62 @@ jobs:
           echo "PATH=$($vulkanRoot.FullName)\Bin;$env:PATH" | Out-File -FilePath $env:GITHUB_ENV -Append
           echo "LIB=$($vulkanRoot.FullName)\Lib;$env:LIB" | Out-File -FilePath $env:GITHUB_ENV -Append
 
+      - name: Install OpenSSL
+        if: env.CRYPTO_BACKEND == 'OpenSSL'
+        shell: pwsh
+        run: |
+          choco install openssl --no-progress -y
+          # CI-owned resolution order: prefer Chocolatey's Win64 layout over the
+          # runner image copy under "OpenSSL". First match must have headers + bin DLLs.
+          $candidates = @(
+            "C:\Program Files\OpenSSL-Win64",
+            "C:\Program Files\OpenSSL"
+          )
+          $opensslRoot = $null
+          foreach ($c in $candidates) {
+            if (-not (Test-Path $c)) { continue }
+            $sslHeader = Join-Path $c "include\openssl\ssl.h"
+            $binDir = Join-Path $c "bin"
+            if (-not (Test-Path $sslHeader)) { continue }
+            $dlls = @(Get-ChildItem -Path $binDir -Filter "libcrypto*.dll" -ErrorAction SilentlyContinue)
+            if ($dlls.Count -eq 0) { continue }
+            $opensslRoot = $c
+            break
+          }
+          if (-not $opensslRoot) {
+            Write-Host "CI: OpenSSL not found in managed paths (checked: $($candidates -join ', '))"
+            exit 1
+          }
+          Write-Host "CI OPENSSL_ROOT_DIR=$opensslRoot"
+          echo "OPENSSL_ROOT_DIR=$opensslRoot" | Out-File -FilePath $env:GITHUB_ENV -Append
+          echo "PATH=$opensslRoot\bin;$env:PATH" | Out-File -FilePath $env:GITHUB_ENV -Append
+          # Newer Shining Light / choco builds nest the MSVC import libs under
+          # lib\VC\x64\MD (dynamic CRT release). CMake's FindOpenSSL may not find
+          # them from OPENSSL_ROOT_DIR alone, so locate and export explicit hints.
+          $crypto = Get-ChildItem -Path $opensslRoot -Recurse -Filter "libcrypto.lib" -ErrorAction SilentlyContinue | Where-Object { $_.FullName -match "x64\\MD\\" -and $_.FullName -notmatch "static" } | Select-Object -First 1
+          $ssl = Get-ChildItem -Path $opensslRoot -Recurse -Filter "libssl.lib" -ErrorAction SilentlyContinue | Where-Object { $_.FullName -match "x64\\MD\\" -and $_.FullName -notmatch "static" } | Select-Object -First 1
+          if ($crypto -and $ssl) {
+            echo "OPENSSL_LIB_EAY_RELEASE=$($crypto.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Append
+            echo "OPENSSL_SSL_EAY_RELEASE=$($ssl.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Append
+          }
+
       - name: Build, Make, and Verify Installation
         run: |
           mkdir build
-          cmake --preset "${{ env.PRESET_CONFIG }}" -DROCPROFVIS_ENABLE_INTERNAL_BANNER=${{ env.ENABLE_INTERNAL_BANNER }}
+          $opensslArgs = @()
+          if ("${{ env.CRYPTO_BACKEND }}" -eq "OpenSSL") {
+            if ($env:OPENSSL_ROOT_DIR) {
+              $opensslArgs += "-DOPENSSL_ROOT_DIR=$($env:OPENSSL_ROOT_DIR)"
+            }
+            if ($env:OPENSSL_LIB_EAY_RELEASE) {
+              $opensslArgs += @(
+                "-DLIB_EAY_RELEASE=$env:OPENSSL_LIB_EAY_RELEASE",
+                "-DSSL_EAY_RELEASE=$env:OPENSSL_SSL_EAY_RELEASE",
+                "-DOPENSSL_INCLUDE_DIR=$env:OPENSSL_ROOT_DIR\include"
+              )
+            }
+          }
+          cmake --preset "${{ env.PRESET_CONFIG }}" -DROCPROFVIS_ENABLE_INTERNAL_BANNER=${{ env.ENABLE_INTERNAL_BANNER }} -DCRYPTO_BACKEND=${{ env.CRYPTO_BACKEND }} @opensslArgs
           cmake --build ${{ env.BUILD_DIR }} --preset "${{ env.PRESET_BUILD }}" --parallel 4
           if (Test-Path "${{ env.BUILD_DIR }}/${{ env.BIN_DIR }}/${env:VISUALIZER_FILE_NAME}.exe") {
             Write-Host "✅ $env:VISUALIZER_FILE_NAME has been successfully built!"
@@ -64,12 +117,21 @@ jobs:
             exit 1
           }
 
+      - name: Prepare Windows artifact bundle
+        shell: pwsh
+        run: |
+          $out = "${{ env.BUILD_DIR }}/${{ env.BIN_DIR }}"
+          $stage = "windows-artifact-staging"
+          New-Item -ItemType Directory -Path $stage -Force | Out-Null
+          Copy-Item "$out/${{ env.VISUALIZER_FILE_NAME }}.exe" $stage/
+          Copy-Item "$out/*.dll" $stage/ -ErrorAction SilentlyContinue
+          Copy-Item "$out/${{ env.VISUALIZER_FILE_NAME }}.pdb" $stage/ -ErrorAction SilentlyContinue
+          Get-ChildItem $stage
+
       - name: Upload Visualizer Binary
         uses: actions/upload-artifact@v7
         with:
           name: ${{ env.ARTIFACT_NAME }}
-          path: | 
-            ${{ env.BUILD_DIR }}/${{ env.BIN_DIR }}/${{ env.VISUALIZER_FILE_NAME }}.exe
-            ${{ env.BUILD_DIR }}/${{ env.BIN_DIR }}/${{ env.VISUALIZER_FILE_NAME }}.pdb
-            ${{ env.BUILD_DIR }}/${{ env.BIN_DIR }}/glfw3.dll
+          path: windows-artifact-staging/
+          if-no-files-found: error
           retention-days: 2

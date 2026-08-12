@@ -17,6 +17,7 @@
 #include <map>
 #include <memory>
 #include <string>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 #include <chrono>
@@ -26,9 +27,11 @@ namespace RocProfVis
 namespace View
 {
 
+class MeasurementController;
 class TimelineSelection;
 class TimelineView;
-class MeasurementController;
+class FlameTrackItem;
+class TimelineTrackOptions;
  
 typedef struct ViewCoords
 {
@@ -70,7 +73,6 @@ public:
     bool Valid() const override;
 
     uint64_t TrackID(int index) const;
-    bool     DisplayTrack(uint64_t track_id) const;
 
 private:
     TimelineView& m_timeline_view;
@@ -87,15 +89,15 @@ public:
     ~TimelineView();
     virtual void                                     Render() override;
     void                                             Update() override;
-    bool                                             WantsContinuousRender() const;
     void                                             MakeGraphView();
     void                                             ResetView();
     void                                             DestroyGraphs();
-    std::shared_ptr<std::vector<TrackGraph>> GetGraphs();
+    std::shared_ptr<std::vector<TrackItem*>>         GetTracks();
     void                                             RenderInteractiveUI();
     void ScrollToTrack(const uint64_t& track_id);
     void SetViewableRangeNS(double start_ns, double end_ns);
     void MoveToPosition(double start_ns, double end_ns, double y_position, bool center);
+    void ZoomToTimeRangeSelection();
     void RenderGraphPoints();
     void RenderHistogram();
     void RenderTraceView();
@@ -113,9 +115,14 @@ public:
     void           CalculateGridInterval();
     ImVec2         GetGraphSize();
     void           RenderAnnotations(ImDrawList* draw_list, ImVec2 window_position);
+    bool           IsAnnotationTrackVisible(uint64_t track_id) const;
+
+    void           AutoScrollForAnnotationDrag(ImVec2 content_origin);
     void           RenderMeasurement(ImDrawList* draw_list, ImVec2 window_position);
     ViewCoords                          GetViewCoords() const;
     std::shared_ptr<TimePixelTransform> GetTransform() const;
+
+    friend struct TimelineViewTestPeer;
     float          GetTotalTrackHeight() const;
     float          GetTrackViewportHeight() const;
     void           GetVisibleTrackFractions(float& start_fraction, float& end_fraction) const;
@@ -130,15 +137,57 @@ private:
         kEnd
     };
 
-    void UpdateMaxMetaAreaSize(float new_size);
-    void CalculateMaxMetaAreaSize();
-    void UpdateAllMaxMetaAreaSizes();
+    // Which measurement label the right-click context menu should offer a copy
+    // action for. Resolved from the cursor position when the menu opens.
+    enum class MeasurementCopyTarget
+    {
+        kNone,
+        kStart,
+        kEnd,
+        kDuration
+    };
+
+    // Screen-space rectangle of a measurement label, captured during
+    // RenderMeasurement so the context menu can hit-test the right-click.
+    struct MeasurementLabelRect
+    {
+        ImVec2 min   = ImVec2(0.0f, 0.0f);
+        ImVec2 max   = ImVec2(0.0f, 0.0f);
+        bool   valid = false;
+    };
+
+    // Per-type track counts shown in the histogram header strip. The label
+    // strings are built once when the trace is loaded (CalculateTrackCounts),
+    // not rebuilt every frame in RenderTrackStats.
+    struct TrackTypeCounts
+    {
+        uint64_t total                = 0;
+        uint64_t instrumented_threads = 0;
+        uint64_t sampled_threads      = 0;
+        uint64_t queues               = 0;
+        uint64_t streams              = 0;
+        uint64_t counters             = 0;
+        uint64_t other                = 0;
+
+        std::string              total_label;    // e.g. "12 Tracks"
+        std::string              breakdown;      // e.g. "3 threads, 2 queues"
+        std::vector<std::string> tooltip_lines;  // e.g. "Queues: 2" per non-zero type
+    };
+
+    void CalculateTrackCounts();
+    void BuildTrackCountLabels();
+    void RenderTrackStats(float available_width);
+
+    void UpdateMaxMetaAreaSize(bool update_tracks = false);
 
     void RenderTrack(int track_index, bool request_data, ImGuiWindowFlags window_flags,
                      ImVec2 container_size);
+    // Right-click menu for restoring hidden tracks, from the empty space below
+    // the last track.
+    void RenderEmptyTrackAreaMenu();
     bool IsRequestDataNeeded();
     void RequestDataIfEmpty(TrackItem* track_item, bool request_data);
-    void RenderNormalTrack(TrackGraph& track_graph, int track_index, ImGuiWindowFlags window_flags,
+    void RenderNormalTrack(TrackItem* track_item, int track_index, ImGuiWindowFlags window_flags,
                    bool is_reordering);
     void RenderTimeRangeSelectionFill(ImDrawList* draw_list, ImVec2 lane_min,
                                       ImVec2 lane_max);
@@ -148,14 +197,21 @@ private:
     void                            ClearTimeRangeSelection();
     void                            CopySelectedEventNames();
     void                            CopySelectedEventDetails();
+    void                            ZoomToTimeSpan(double start_ns, double end_ns);
+    void                            ZoomToMeasurement();
+
+    TrackLayout                     BuildTrackLayout();
     EventManager::SubscriptionToken m_scroll_to_track_token;
     EventManager::SubscriptionToken m_navigation_token;
     EventManager::SubscriptionToken m_new_track_token;
     EventManager::SubscriptionToken m_font_changed_token;
     EventManager::SubscriptionToken m_set_view_range_token;
     EventManager::SubscriptionToken m_timeline_time_range_changed_token;
+    EventManager::SubscriptionToken m_track_visibility_token;
 
     int                                 m_dragged_sticky_id;
+    uint64_t                            m_reordering_track_id;  // INVALID_TRACK_ID when idle
+    float                               m_reorder_preview_screen_top_y;
     const std::vector<double>*          m_histogram;
     float                               m_ruler_height;
     float                               m_ruler_padding;
@@ -166,6 +222,7 @@ private:
     double                              m_previous_scroll_position;
     bool                                m_meta_map_made;
     bool                                m_resize_activity;
+    bool                                m_reorder_auto_scrolling;
     double                              m_last_data_req_v_width;
     float                               m_unload_track_distance;
     DataProvider&                       m_data_provider;
@@ -182,14 +239,17 @@ private:
     float                               m_last_zoom;
     std::unordered_map<uint64_t, float> m_track_position_y;  // Track index to height
     float                               m_track_height_sum;
+    size_t                              m_hidden_track_count;
     std::shared_ptr<TimelineSelection>  m_timeline_selection;
     std::shared_ptr<MeasurementController> m_measurement;
     std::shared_ptr<AnnotationsManager> m_annotations;
     bool                                m_pseudo_focus;
     bool                                m_histogram_pseudo_focus;
-    float                               m_max_meta_area_size;
-    std::shared_ptr<std::vector<TrackGraph>> m_graphs;
+    float                               m_max_meta_scale_area_size;
+    std::shared_ptr<std::vector<TrackItem*>>          m_tracks;
     std::shared_ptr<TimePixelTransform>               m_tpt;
+    std::unique_ptr<TimelineTrackOptions>             m_track_options_context_menu;
+
     struct
     {
         bool     handled;
@@ -201,9 +261,16 @@ private:
     bool m_dragging_selection_end;
     bool m_is_selecting_region;
     MeasurementRulerDragTarget m_dragging_measurement_ruler;
+    MeasurementLabelRect       m_measure_label_start;
+    MeasurementLabelRect       m_measure_label_end;
+    MeasurementLabelRect       m_measure_label_duration;
+    MeasurementCopyTarget      m_measure_copy_target;
+
+    ImVec2                     m_context_menu_pos = ImVec2(0.0f, 0.0f);
 
     TimelineViewProjectSettings m_project_settings;
     LoadingTimer                m_loading_timer;
+    TrackTypeCounts             m_track_counts;
 };
 
 }  // namespace View

@@ -12,6 +12,7 @@
 #include "rocprofvis_utils.h"
 
 #include <algorithm>
+#include <cmath>
 #include <cstdlib>
 #include <fstream>
 
@@ -28,6 +29,7 @@ constexpr std::array DARK_THEME_COLORS = {
     IM_COL32(0, 0, 0, 0),          // Colors::kTransparent
     IM_COL32(244, 96, 110, 255),   // Colors::kTextError
     IM_COL32(120, 220, 144, 255),  // Colors::kTextSuccess
+    IM_COL32(255, 199, 64, 255),   // Colors::kTextWarning
     IM_COL32(120, 162, 255, 220),  // Colors::kFlameChartColor
     IM_COL32(120, 130, 150, 32),   // Colors::kGridColor
     IM_COL32(142, 176, 236, 255),  // Colors::kGridRed
@@ -121,19 +123,25 @@ constexpr std::array DARK_THEME_COLORS = {
     IM_COL32(231, 196, 65, 255),   // Colors::kMemChartHit
     IM_COL32(235, 82, 98, 255),    // Colors::kMemChartStall
     IM_COL32(0, 0, 0, 85),         // Colors::kMemChartShadow
-    IM_COL32(58, 53, 36, 245),     // Colors::kStickyNoteBg
-    IM_COL32(62, 116, 168, 220),   // Colors::kStickyNoteBorder
-    IM_COL32(70, 62, 40, 248),     // Colors::kStickyNoteHeader
-    IM_COL32(0, 0, 0, 85),         // Colors::kStickyNoteShadow
-    IM_COL32(238, 243, 255, 255),  // Colors::kStickyNoteText
-    IM_COL32(145, 156, 174, 255),  // Colors::kStickyNoteTextMuted
-    IM_COL32(225, 203, 78, 235),   // Colors::kStickyNoteAccent
-    IM_COL32(200, 200, 80, 255),   // Colors::kStickyNoteResize
-    IM_COL32(200, 100, 100, 255),  // Colors::kStickyNoteResizeActive
+    IM_COL32(240, 214, 92, 250),   // Colors::kStickyNoteBg
+    IM_COL32(193, 154, 40, 235),   // Colors::kStickyNoteBorder
+    IM_COL32(232, 200, 78, 252),   // Colors::kStickyNoteHeader
+    IM_COL32(0, 0, 0, 110),        // Colors::kStickyNoteShadow
+    IM_COL32(48, 40, 12, 255),     // Colors::kStickyNoteText
+    IM_COL32(112, 92, 40, 255),    // Colors::kStickyNoteTextMuted
+    IM_COL32(176, 130, 24, 235),   // Colors::kStickyNoteAccent
+    IM_COL32(176, 130, 24, 255),   // Colors::kStickyNoteResize
+    IM_COL32(150, 96, 24, 255),    // Colors::kStickyNoteResizeActive
     IM_COL32(200, 16, 32, 150),    // Colors::kBannerFill
     IM_COL32(255, 255, 255, 40),   // Colors::kBannerBorder
     IM_COL32(255, 255, 255, 255),  // Colors::kBannerText
     IM_COL32(228, 228, 228, 255),  // Colors::kDebugNavBarBg
+    IM_COL32(150, 150, 150, 255),  // Colors::kLogTrace
+    IM_COL32(150, 180, 210, 255),  // Colors::kLogDebug
+    IM_COL32(220, 220, 220, 255),  // Colors::kLogInfo
+    IM_COL32(235, 195, 90, 255),   // Colors::kLogWarning
+    IM_COL32(235, 110, 110, 255),  // Colors::kLogError
+    IM_COL32(255, 80, 80, 255),    // Colors::kLogCritical
     // This must follow the ordering of Colors enum.
 };
 
@@ -144,6 +152,7 @@ constexpr std::array LIGHT_THEME_COLORS = {
     IM_COL32(0, 0, 0, 0),          // Colors::kTransparent
     IM_COL32(214, 56, 64, 255),    // Colors::kTextError
     IM_COL32(36, 150, 82, 255),    // Colors::kTextSuccess
+    IM_COL32(176, 118, 0, 255),    // Colors::kTextWarning
     IM_COL32(88, 132, 245, 225),   // Colors::kFlameChartColor
     IM_COL32(140, 150, 170, 28),   // Colors::kGridColor
     IM_COL32(120, 162, 220, 255),  // Colors::kGridRed
@@ -237,19 +246,25 @@ constexpr std::array LIGHT_THEME_COLORS = {
     IM_COL32(177, 130, 0, 255),    // Colors::kMemChartHit
     IM_COL32(204, 55, 70, 255),    // Colors::kMemChartStall
     IM_COL32(76, 95, 128, 35),     // Colors::kMemChartShadow
-    IM_COL32(255, 252, 228, 248),  // Colors::kStickyNoteBg
-    IM_COL32(91, 139, 184, 205),   // Colors::kStickyNoteBorder
-    IM_COL32(255, 247, 204, 248),  // Colors::kStickyNoteHeader
+    IM_COL32(255, 245, 186, 250),  // Colors::kStickyNoteBg
+    IM_COL32(214, 176, 66, 230),   // Colors::kStickyNoteBorder
+    IM_COL32(255, 236, 158, 250),  // Colors::kStickyNoteHeader
     IM_COL32(76, 95, 128, 35),     // Colors::kStickyNoteShadow
-    IM_COL32(25, 38, 56, 255),     // Colors::kStickyNoteText
-    IM_COL32(92, 106, 126, 255),   // Colors::kStickyNoteTextMuted
-    IM_COL32(168, 128, 0, 235),    // Colors::kStickyNoteAccent
-    IM_COL32(200, 200, 80, 255),   // Colors::kStickyNoteResize
-    IM_COL32(200, 100, 100, 255),  // Colors::kStickyNoteResizeActive
+    IM_COL32(56, 46, 14, 255),     // Colors::kStickyNoteText
+    IM_COL32(120, 100, 50, 255),   // Colors::kStickyNoteTextMuted
+    IM_COL32(190, 146, 34, 235),   // Colors::kStickyNoteAccent
+    IM_COL32(190, 146, 34, 255),   // Colors::kStickyNoteResize
+    IM_COL32(150, 100, 24, 255),   // Colors::kStickyNoteResizeActive
     IM_COL32(200, 16, 32, 150),    // Colors::kBannerFill
     IM_COL32(255, 255, 255, 40),   // Colors::kBannerBorder
     IM_COL32(255, 255, 255, 255),  // Colors::kBannerText
     IM_COL32(228, 228, 228, 255),  // Colors::kDebugNavBarBg
+    IM_COL32(120, 120, 120, 255),  // Colors::kLogTrace
+    IM_COL32(60, 110, 160, 255),   // Colors::kLogDebug
+    IM_COL32(40, 40, 40, 255),     // Colors::kLogInfo
+    IM_COL32(170, 120, 0, 255),    // Colors::kLogWarning
+    IM_COL32(190, 40, 40, 255),    // Colors::kLogError
+    IM_COL32(200, 0, 0, 255),      // Colors::kLogCritical
     // This must follow the ordering of Colors enum.
 };
 // Same hue order as origin/main, desaturated for the redesign.
@@ -286,8 +301,9 @@ inline constexpr const char* FLAME_LIGHT_COLORMAP_NAME   = "flame_light";
 inline constexpr const char* CONTRAST_DARK_COLORMAP_NAME = "contrast_dark";
 inline constexpr const char* CONTRAST_LIGHT_COLORMAP_NAME = "contrast_light";
 inline constexpr const char* SETTINGS_FILE_NAME           = "settings_application.json";
-inline constexpr float       EVENT_LEVEL_HEIGHT           = 40.0f;
 inline constexpr float       COMPACT_EVENT_HEIGHT         = 6.0f;
+inline constexpr float       EVENT_LEVEL_VERTICAL_MARGIN  = 6.0f;
+inline constexpr float       EVENT_LEVEL_SPACING          = 1.0f;
 
 SettingsManager&
 SettingsManager::GetInstance()
@@ -435,6 +451,8 @@ SettingsManager::SerializeDisplaySettings(jt::Json& json)
         m_usersettings.display_settings.use_dark_mode;
     ds[JSON_KEY_SETTINGS_DISPLAY_FONT_SIZE] =
         m_usersettings.display_settings.font_size_index;
+    ds[JSON_KEY_SETTINGS_DISPLAY_NODE_COLORS] =
+        m_usersettings.display_settings.show_node_colors;
 }
 
 void
@@ -454,6 +472,11 @@ SettingsManager::DeserializeDisplaySettings(jt::Json& json)
                 GetFontManager().ClampFontSizeIndex(
                     static_cast<int>(ds[JSON_KEY_SETTINGS_DISPLAY_FONT_SIZE].getLong()));
         }
+        if(ds[JSON_KEY_SETTINGS_DISPLAY_NODE_COLORS].isBool())
+        {
+            m_usersettings.display_settings.show_node_colors =
+                ds[JSON_KEY_SETTINGS_DISPLAY_NODE_COLORS].getBool();
+        }
     }
 }
 
@@ -468,6 +491,7 @@ SettingsManager::SaveSettingsJson()
     SerializeUnitSettings(settings_json);
     SerializeOtherSettings(settings_json);
     SerializeHotkeySettings(settings_json);
+    SerializeProfilerSettings(settings_json);
 
     std::ofstream out_file(m_json_path);
     if(out_file.is_open())
@@ -497,6 +521,7 @@ SettingsManager::LoadSettingsJson()
         DeserializeUnitSettings(result.second);
         DeserializeOtherSettings(result.second);
         DeserializeHotkeySettings(result.second);
+        DeserializeProfilerSettings(result.second);
     }
     else
     {
@@ -582,7 +607,9 @@ SettingsManager::GetContrastColormapName() const
 SettingsManager::SettingsManager()
 : m_color_store(nullptr)
 , m_usersettings_default(
-      { DisplaySettings{ false, 6 }, UnitSettings{ TimeFormat::kTimecode } })
+      { DisplaySettings{ false, 6, true }, UnitSettings{ TimeFormat::kTimecode },
+        false, false, LOG_VIEWER_MAX_ENTRIES_DEFAULT,
+        LogViewerSettings{ LOG_VIEWER_DEFAULT_LEVEL_MASK, true, false, false, false } })
 , m_usersettings(m_usersettings_default)
 , m_appwindowsettings({ AppWindowSettings{ true, true, true, true, false } })
 , m_json_path(GetStandardConfigPath())
@@ -765,6 +792,13 @@ SettingsManager::SerializeOtherSettings(jt::Json& json)
 
     os[JSON_KEY_SETTINGS_DONT_ASK_BEFORE_EXIT] = m_usersettings.dont_ask_before_exit;
     os[JSON_KEY_SETTINGS_DONT_ASK_BEFORE_TAB_CLOSE] = m_usersettings.dont_ask_before_tab_closing;
+    os[JSON_KEY_SETTINGS_LOG_VIEWER_MAX_ENTRIES] = m_usersettings.log_viewer_max_entries;
+
+    os[JSON_KEY_SETTINGS_LOG_VIEWER_LEVEL_MASK]    = m_usersettings.log_viewer.level_mask;
+    os[JSON_KEY_SETTINGS_LOG_VIEWER_AUTO_SCROLL]   = m_usersettings.log_viewer.auto_scroll;
+    os[JSON_KEY_SETTINGS_LOG_VIEWER_USE_REGEX]     = m_usersettings.log_viewer.use_regex;
+    os[JSON_KEY_SETTINGS_LOG_VIEWER_RELATIVE_TIME] = m_usersettings.log_viewer.relative_time;
+    os[JSON_KEY_SETTINGS_LOG_VIEWER_VISIBLE]       = m_usersettings.log_viewer.visible;
 }
 
 void
@@ -780,6 +814,37 @@ SettingsManager::DeserializeOtherSettings(jt::Json& json)
     {
         m_usersettings.dont_ask_before_tab_closing =
             static_cast<bool>(os[JSON_KEY_SETTINGS_DONT_ASK_BEFORE_TAB_CLOSE].getBool());
+    }
+    if(os[JSON_KEY_SETTINGS_LOG_VIEWER_MAX_ENTRIES].isLong())
+    {
+        int value = static_cast<int>(os[JSON_KEY_SETTINGS_LOG_VIEWER_MAX_ENTRIES].getLong());
+        m_usersettings.log_viewer_max_entries =
+            std::clamp(value, LOG_VIEWER_MAX_ENTRIES_MIN, LOG_VIEWER_MAX_ENTRIES_MAX);
+    }
+    if(os[JSON_KEY_SETTINGS_LOG_VIEWER_LEVEL_MASK].isLong())
+    {
+        m_usersettings.log_viewer.level_mask =
+            static_cast<int>(os[JSON_KEY_SETTINGS_LOG_VIEWER_LEVEL_MASK].getLong());
+    }
+    if(os[JSON_KEY_SETTINGS_LOG_VIEWER_AUTO_SCROLL].isBool())
+    {
+        m_usersettings.log_viewer.auto_scroll =
+            static_cast<bool>(os[JSON_KEY_SETTINGS_LOG_VIEWER_AUTO_SCROLL].getBool());
+    }
+    if(os[JSON_KEY_SETTINGS_LOG_VIEWER_USE_REGEX].isBool())
+    {
+        m_usersettings.log_viewer.use_regex =
+            static_cast<bool>(os[JSON_KEY_SETTINGS_LOG_VIEWER_USE_REGEX].getBool());
+    }
+    if(os[JSON_KEY_SETTINGS_LOG_VIEWER_RELATIVE_TIME].isBool())
+    {
+        m_usersettings.log_viewer.relative_time =
+            static_cast<bool>(os[JSON_KEY_SETTINGS_LOG_VIEWER_RELATIVE_TIME].getBool());
+    }
+    if(os[JSON_KEY_SETTINGS_LOG_VIEWER_VISIBLE].isBool())
+    {
+        m_usersettings.log_viewer.visible =
+            static_cast<bool>(os[JSON_KEY_SETTINGS_LOG_VIEWER_VISIBLE].getBool());
     }
 }
 
@@ -805,13 +870,19 @@ SettingsManager::DeserializeUnitSettings(jt::Json& json)
 const float
 SettingsManager::GetEventLevelHeight() const
 {
-    return EVENT_LEVEL_HEIGHT;
+    return std::ceil(ImGui::GetTextLineHeight() + EVENT_LEVEL_VERTICAL_MARGIN + EVENT_LEVEL_SPACING);
 }
 
 const float
 SettingsManager::GetEventLevelCompactHeight() const
 {
     return COMPACT_EVENT_HEIGHT;
+}
+
+const float
+SettingsManager::GetEventLevelSpacing() const
+{
+    return EVENT_LEVEL_SPACING;
 }
 
 void
@@ -875,6 +946,77 @@ void
 SettingsManager::SaveHotkeySettings()
 {
     SaveSettingsJson();
+}
+
+void
+SettingsManager::SaveProfilerSettings()
+{
+    SaveSettingsJson();
+}
+
+ProfilerSettings&
+SettingsManager::GetProfilerSettings()
+{
+    return m_profilersettings;
+}
+
+void
+SettingsManager::SerializeProfilerSettings(jt::Json& json)
+{
+    jt::Json& ps = json[JSON_KEY_GROUP_SETTINGS][JSON_KEY_SETTINGS_CATEGORY_PROFILER];
+    ps[JSON_KEY_SETTINGS_PROFILER_PATH] = m_profilersettings.profiler_path;
+    ps[JSON_KEY_SETTINGS_PROFILER_OUTPUT_DIR] = m_profilersettings.profiler_output_directory;
+    ps[JSON_KEY_SETTINGS_PROFILER_AUTO_LOAD] = m_profilersettings.auto_load_trace;
+    ps["last_preset_name"] = m_profilersettings.last_preset_name;
+    ps["last_profiler_id"] = m_profilersettings.last_profiler_id;
+    ps["last_ssh_connection_id"] = m_profilersettings.last_ssh_connection_id;
+
+    int rt_idx = 0;
+    for (auto const& t : m_profilersettings.recent_targets)
+    {
+        ps["recent_targets"][rt_idx++] = t;
+    }
+}
+
+void
+SettingsManager::DeserializeProfilerSettings(jt::Json& json)
+{
+    jt::Json& ps = json[JSON_KEY_GROUP_SETTINGS][JSON_KEY_SETTINGS_CATEGORY_PROFILER];
+    if(ps[JSON_KEY_SETTINGS_PROFILER_PATH].isString())
+    {
+        m_profilersettings.profiler_path = ps[JSON_KEY_SETTINGS_PROFILER_PATH].getString();
+    }
+    if(ps[JSON_KEY_SETTINGS_PROFILER_OUTPUT_DIR].isString())
+    {
+        m_profilersettings.profiler_output_directory = ps[JSON_KEY_SETTINGS_PROFILER_OUTPUT_DIR].getString();
+    }
+    if(ps[JSON_KEY_SETTINGS_PROFILER_AUTO_LOAD].isBool())
+    {
+        m_profilersettings.auto_load_trace = ps[JSON_KEY_SETTINGS_PROFILER_AUTO_LOAD].getBool();
+    }
+    if(ps["last_preset_name"].isString())
+    {
+        m_profilersettings.last_preset_name = ps["last_preset_name"].getString();
+    }
+    if(ps["last_profiler_id"].isString())
+    {
+        m_profilersettings.last_profiler_id = ps["last_profiler_id"].getString();
+    }
+    if(ps["last_ssh_connection_id"].isString())
+    {
+        m_profilersettings.last_ssh_connection_id = ps["last_ssh_connection_id"].getString();
+    }
+    if(ps["recent_targets"].isArray())
+    {
+        m_profilersettings.recent_targets.clear();
+        for (jt::Json& item : ps["recent_targets"].getArray())
+        {
+            if (item.isString())
+            {
+                m_profilersettings.recent_targets.push_back(item.getString());
+            }
+        }
+    }
 }
 
 }  // namespace View

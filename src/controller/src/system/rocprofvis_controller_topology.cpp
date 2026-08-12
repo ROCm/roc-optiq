@@ -117,14 +117,18 @@ TopologyNode* TopologyNode::GetParent() {
 }
 
 TopologyNode* TopologyNode::GetParent(rocprofvis_controller_object_type_t type) {
-    if (m_parent && m_parent->GetType() == type)
+    if (m_parent)
     {
-        return m_parent;
+        if (m_parent->GetType() == type)
+        {
+            return m_parent;
+        }
+        else
+        {
+            return m_parent->GetParent(type);
+        }
     }
-    else
-    {
-        return m_parent->GetParent(type);
-    }
+    return nullptr;
 }
 
 rocprofvis_result_t
@@ -195,7 +199,8 @@ TopologyNode::GetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t
                 }
                 else
                 {
-                    result = kRocProfVisResultUnknownError;
+                    *value = kRPVControllerProcessorTypeUndefined;
+                    result = kRocProfVisResultSuccess;
                 }
             }
             else
@@ -264,9 +269,14 @@ TopologyNode::GetObject(rocprofvis_property_t property, uint64_t index,
             result = *value ? kRocProfVisResultSuccess : kRocProfVisResultNotLoaded;
             break;
         case kRPVControllerStreamProcessor:
-            *value = (rocprofvis_handle_t*)m_children[kRPVControllerTopologyNodeProcessor][0];
+        {
+            std::vector<TopologyNode*>& processors =
+                m_children[kRPVControllerTopologyNodeProcessor];
+            *value = processors.empty() ? nullptr
+                                        : (rocprofvis_handle_t*)processors[0];
             result = *value ? kRocProfVisResultSuccess : kRocProfVisResultNotLoaded;
             break;
+        }
         case kRPVControllerThreadTrack:
         case kRPVControllerQueueTrack:
         case kRPVControllerStreamTrack:
@@ -299,16 +309,19 @@ TopologyNode::GetObject(rocprofvis_property_t property, uint64_t index,
             if (kRocProfVisResultSuccess == GetUInt64(kRPVControllerQueueProcess, 0, &queue_pid))
             {
                 TopologyNode* system_node = GetParent(kRPVControllerObjectTypeNode);
-                for (auto process : system_node->m_children[kRPVControllerTopologyNodeProcess])
+                if (system_node)
                 {
-                    uint64_t process_id;
-                    if (kRocProfVisResultSuccess == process->GetUInt64(kRPVControllerProcessId, 0, &process_id))
+                    for (auto process : system_node->m_children[kRPVControllerTopologyNodeProcess])
                     {
-                        if (process_id == queue_pid)
+                        uint64_t process_id;
+                        if (kRocProfVisResultSuccess == process->GetUInt64(kRPVControllerProcessId, 0, &process_id))
                         {
-                            *value = (rocprofvis_handle_t*)process;
-                            result = kRocProfVisResultSuccess;
-                            break;
+                            if (process_id == queue_pid)
+                            {
+                                *value = (rocprofvis_handle_t*)process;
+                                result = kRocProfVisResultSuccess;
+                                break;
+                            }
                         }
                     }
                 }
@@ -323,20 +336,25 @@ TopologyNode::GetObject(rocprofvis_property_t property, uint64_t index,
             if (kRocProfVisResultSuccess == GetUInt64(kRPVControllerCounterProcess, 0, &counter_pid))
             {
                 TopologyNode* system_node = GetParent(kRPVControllerObjectTypeNode);
-                for (auto process : system_node->m_children[kRPVControllerTopologyNodeProcess])
+                if (system_node)
                 {
-                    uint64_t process_id;
-                    if (kRocProfVisResultSuccess == process->GetUInt64(kRPVControllerProcessId, 0, &process_id))
+                    for (auto process : system_node->m_children[kRPVControllerTopologyNodeProcess])
                     {
-                        if (process_id == counter_pid)
+                        uint64_t process_id;
+                        if (kRocProfVisResultSuccess == process->GetUInt64(kRPVControllerProcessId, 0, &process_id))
                         {
-                            *value = (rocprofvis_handle_t*)process;
-                            result = kRocProfVisResultSuccess;
-                            break;
+                            if (process_id == counter_pid)
+                            {
+                                *value = (rocprofvis_handle_t*)process;
+                                result = kRocProfVisResultSuccess;
+                                break;
+                            }
                         }
                     }
                 }
             }
+            *value = nullptr;
+            result = kRocProfVisResultSuccess;
         }
         break;
         default:
@@ -376,7 +394,7 @@ TopologyNode::GetDouble(rocprofvis_property_t property, uint64_t index, double* 
         uint64_t dm_value;
         if (kRocProfVisDmResultSuccess == rocprofvis_dm_get_property_as_uint64(m_dm_topology_node, kRPVControllerTopologyNodePropertyValueKeyed, property, &dm_value))
         {
-            *value = dm_value;
+            *value = static_cast<double>(dm_value);
             result = kRocProfVisResultSuccess;
         }
         break;

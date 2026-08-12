@@ -8,7 +8,6 @@
 * Use CInterfaceTypes.h for C/C++ code
 */
 
-#define INVALID_INDEX 0xFFFFFFFF
 #define TABLE_QUERY_PACK_OP_TYPE(rocprofvis_dm_event_operation_t_op_type) (rocprofvis_dm_event_operation_t_op_type << 28)
 #define TABLE_QUERY_UNPACK_OP_TYPE(rocprofvis_dm_track_id_t_track_id) (rocprofvis_dm_track_id_t_track_id >> 28)
 #define TABLE_QUERY_UNPACK_TRACK_ID(rocprofvis_dm_track_id_t_track_id) (rocprofvis_dm_track_id_t_track_id & 0x0FFFFFFF)
@@ -28,6 +27,7 @@ typedef     rocprofvis_dm_handle_t        rocprofvis_dm_table_row_t;            
 typedef     rocprofvis_dm_handle_t        rocprofvis_dm_topology_node;                  // Topology node handle
 typedef     uint32_t                      rocprofvis_dm_index_t;                        // Any data model array index, assuming array sizes will not exceed 32-bit value
 typedef     uint64_t                      rocprofvis_dm_timestamp_t;                    // Timestamp
+typedef     uint64_t                      rocprofvis_dm_hashed_timestamp;               // Hashed timestamp consisting of start and end timestamps plus user tag.
 typedef     uint32_t                      rocprofvis_dm_property_t;                     // any property enumeration
 typedef     uint64_t                      rocprofvis_dm_property_index_t;               // index of an indexed property
 typedef     const char*                   rocprofvis_dm_json_blob_t;                    // json blob string
@@ -144,7 +144,12 @@ typedef enum rocprofvis_db_type_t {
     // new schema Rocprof multinode database
     kRocprofMultinodeSqlite = 3,
     // compute database
-    kComputeSqlite = 4
+    kComputeSqlite = 4,
+    // chrom trace or perfetto
+    kChromeTrace = 5,
+    kPerfettoTrace = 6,
+    kGoogleSqlite = 7
+
 } rocprofvis_db_type_t;
 
 // Database query status, reported by database query progress callback
@@ -270,7 +275,11 @@ typedef enum rocprofvis_dm_track_property_t {
     // Track process ID (PID or Agent ID)
     kRPVDMTrackProcessIdUInt64,
     // Track process ID (TID or Queue ID)
-    kRPVDMTrackSubProcessIdUInt64
+    kRPVDMTrackSubProcessIdUInt64,
+    // Track File ID
+    kRPVDMTrackFileIdUInt64,
+    // Track Order Ranking ID
+    kRPVDMTrackOrderRankingUInt64,
 } rocprofvis_dm_track_property_t;
 
 // Slice properties
@@ -398,7 +407,6 @@ typedef enum rocprofvis_dm_table_use_case_enum_t {
     kRPVDMTableUseCaseEventTrackTable,
     kRPVDMTableUseCaseSampleTrackTable,
     kRPVDMTableUseCaseEventSearch,
-    kRPVDMTableUseCaseAnalysis,
     kRPVDMTableNumUsecases,
 } rocprofvis_dm_table_use_case_enum_t;
 
@@ -421,6 +429,15 @@ typedef enum rocprofvis_dm_sort_order_t {
     // Descending sort order
     kRPVDMSortOrderDesc,
 } rocprofvis_dm_sort_order_t;
+
+// Tags for hrocprofvis_dm_hashed_timestamp
+typedef enum rocprofvis_dm_hashed_timestamp_tag_t
+{
+    // Timeline track slice fetches
+    kRocProfVisDmHashedTimestampTagTrackSlice = 0,
+    // Controller analysis fetches
+    kRocProfVisDmHashedTimestampTagAnalysis = 1,
+} rocprofvis_dm_hashed_timestamp_tag_t;
 
 // Event id structure
 typedef union { 
@@ -491,6 +508,7 @@ typedef enum rocprofvis_db_compute_column_enum_t
     kRPVComputeColumnRooflineL1CacheData,
     kRPVComputeColumnRooflineL2CacheData,
     kRPVComputeColumnRooflineHBMCacheData,
+    kRPVComputeColumnRooflineLDSCacheData,
 
     kRPVComputeColumnMetricId,
     kRPVComputeColumnTableId,
@@ -507,6 +525,46 @@ typedef enum rocprofvis_db_compute_column_enum_t
 
     kRPVComputeColumnDynamicMetricValue,
     kRPVComputeColumnDynamicKernelUUID,
+
+    kRPVComputeColumnPcSamplingSourceFileId,
+    kRPVComputeColumnPcSamplingSourceFilePath,
+    kRPVComputeColumnPcSamplingSourceFileChecksum,
+
+    kRPVComputeColumnPcSamplingSourceLineId,
+    kRPVComputeColumnPcSamplingSourceLineFileId,
+    kRPVComputeColumnPcSamplingSourceLineNumber,
+    kRPVComputeColumnPcSamplingSourceLineContent,
+
+    kRPVComputeColumnPcSamplingCodeObjectId,
+    kRPVComputeColumnPcSamplingCodeObjectUri,
+    kRPVComputeColumnPcSamplingCodeObjectChecksum,
+
+    kRPVComputeColumnPcSamplingIsaLineId,
+    kRPVComputeColumnPcSamplingIsaLineCodeObjectId,
+    kRPVComputeColumnPcSamplingIsaLineCodeObjectOffset,
+    kRPVComputeColumnPcSamplingIsaLineInstructionTypeId,
+    kRPVComputeColumnPcSamplingIsaLineInstruction,
+    kRPVComputeColumnPcSamplingIsaLineComment,
+
+    kRPVComputeColumnPcSamplingIsaToIsaDependentIsaLineId,
+    kRPVComputeColumnPcSamplingIsaToIsaDependencyIsaLineId,
+
+    kRPVComputeColumnPcSamplingIsaToSourceIsaLineId,
+    kRPVComputeColumnPcSamplingIsaToSourceSourceLineId,
+    kRPVComputeColumnPcSamplingIsaToSourceDepth,
+
+    kRPVComputeColumnPcSamplingStateId,
+    kRPVComputeColumnPcSamplingStateIsaLineId,
+    kRPVComputeColumnPcSamplingStateDispatchId,
+    kRPVComputeColumnPcSamplingStateActiveThreadsPercent,
+    kRPVComputeColumnPcSamplingStateWaveOccupancyPercent,
+    kRPVComputeColumnPcSamplingStateIssuedCount,
+    kRPVComputeColumnPcSamplingStateStalledCount,
+    kRPVComputeColumnPcSamplingStateTotalCount,
+
+    kRPVComputeColumnPcSamplingStallReasonSamplingStateId,
+    kRPVComputeColumnPcSamplingStallReasonId,
+    kRPVComputeColumnPcSamplingStallReasonCount,
 } rocprofvis_db_compute_column_enum_t;
 
 // Compute database query use case enumerations
@@ -524,6 +582,14 @@ typedef enum rocprofvis_db_compute_use_case_enum_t
     kRPVComputeFetchKernelMetricsMatrix,
     kRPVComputeFetchWorkloadMetricValueNames,
     kRPVComputeFetchMetricValuesByWorkload,
+    kRPVComputeFetchKernelSourceFiles,
+    kRPVComputeFetchSourceFileSourceLines,
+    kRPVComputeFetchKernelCodeObjects,
+    kRPVComputeFetchKernelIsaToIsaDeps,
+    kRPVComputeFetchKernelIsaLines,
+    kRPVComputeFetchKernelIsaToSourceDeps,
+    kRPVComputeFetchKernelSamplingStates,
+    kRPVComputeFetchKernelSamplingStateReasonCounts,
 } rocprofvis_db_compute_use_case_enum_t;
 
 // Compute database query parameter enumeration
@@ -531,6 +597,7 @@ typedef enum rocprofvis_db_compute_param_enum_t
 {
     kRPVComputeParamWorkloadId,
     kRPVComputeParamKernelId,
+    kRPVComputeParamSourceFileId,
     kRPVComputeParamMetricId,
     kRPVComputeParamMetricSelector,
     kRPVComputeParamSortColumnIndex,
@@ -548,4 +615,3 @@ typedef struct rocprofvis_db_compute_param_t
 
 typedef rocprofvis_db_compute_param_t* rocprofvis_db_compute_params_t;
 typedef uint32_t rocprofvis_db_num_of_params_t;
-

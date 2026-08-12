@@ -3,6 +3,8 @@
 
 #include "rocprofvis_db_sqlite.h"
 #include "rocprofvis_core_profile.h"
+#include "rocprofvis_shared_types.h"
+#include "rocprofvis_c_interface.h"
 #include <sstream>
 
 namespace RocProfVis
@@ -25,19 +27,6 @@ void SqliteDatabase::CreateDbNode(rocprofvis_db_filename_t filepath) {
     m_db_nodes.back()->filepath = filepath;
 }
 
-int SqliteDatabase::CallbackGetValue(void* data, int argc, sqlite3_stmt* stmt, char** azColName){
-    ROCPROFVIS_ASSERT_MSG_RETURN(argc==1, ERROR_DATABASE_QUERY_PARAMETERS_MISMATCH, 1);
-    ROCPROFVIS_ASSERT_MSG_RETURN(data, ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL, 1);
-    void*  func = (void*)&CallbackGetValue;
-    rocprofvis_db_sqlite_callback_parameters* callback_params = (rocprofvis_db_sqlite_callback_parameters*)data;
-    SqliteDatabase* db = (SqliteDatabase*) callback_params->db;
-    std::string * string_ptr = (rocprofvis_dm_string_t*)callback_params->handle;
-    ROCPROFVIS_ASSERT_MSG_RETURN(string_ptr, ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL, 1);
-    *string_ptr = db->Sqlite3ColumnText(func, stmt, azColName, 0);
-    return 0;
-} 
-
-
 uint64_t
 SqliteDatabase::GetNullExceptionInt(void* func, char* column) {
     spdlog::debug("Column {} value is NULL!", column);
@@ -51,8 +40,8 @@ SqliteDatabase::GetNullExceptionInt(void* func, char* column) {
             auto it = fcit->second.find(column);
             if(it != fcit->second.end())
             {
-                return it->second;
                 spdlog::debug("Column {} value is NULL, replace with {}", column, it->second);
+                return it->second;
             }
         }
     }
@@ -119,7 +108,7 @@ int
 SqliteDatabase::Sqlite3ColumnInt(void* func, sqlite3_stmt* stmt, char** azColName, int index) {
     if(sqlite3_column_type(stmt, index) == SQLITE_NULL)
     {
-        return GetNullExceptionInt(func, azColName[index]);
+        return static_cast<int>(GetNullExceptionInt(func, azColName[index]));
     }
     else
     {
@@ -141,7 +130,7 @@ double
 SqliteDatabase::Sqlite3ColumnDouble(void* func, sqlite3_stmt* stmt, char** azColName, int index) {
     if(sqlite3_column_type(stmt, index) == SQLITE_NULL)
     {
-        return GetNullExceptionInt(func, azColName[index]);
+        return static_cast<double>(GetNullExceptionInt(func, azColName[index]));
     }
     else
     {
@@ -219,6 +208,9 @@ SqliteDatabase::DetectTable(sqlite3* conn, const char* table, bool is_view)
         rc = sqlite3_exec(
             conn, query.str().c_str(),
             [](void* data, int argc, char** argv, char** azColName) {
+                (void) data;
+                (void) argc;
+                (void) azColName;
                 uint32_t num = std::stol(argv[0]);
                 return num > 0 ? 0 : 1;
             },
@@ -332,9 +324,9 @@ sqlite3* SqliteDatabase::GetConnection(uint32_t db_node_id)
            
            auto it = std::prev(m_db_nodes[db_node_id]->m_available_connections.end());
            m_db_nodes[db_node_id]->m_connections_inuse.insert(*it);
-           sqlite3* conn = *it;
+           sqlite3* available_conn = *it;
            m_db_nodes[db_node_id]->m_available_connections.erase(it);
-           return conn;
+           return available_conn;
         }
         else
         {
@@ -386,7 +378,7 @@ rocprofvis_dm_result_t SqliteDatabase::ExecuteSQLQuery(
         nullptr,
         nullptr,
         { query },
-        static_cast<rocprofvis_dm_track_id_t>(-1)
+        INVALID_INDEX
     };
     return SqliteDatabase::ExecuteSQLQuery(db_instance, query, &params);
 }
@@ -403,7 +395,7 @@ rocprofvis_dm_result_t  SqliteDatabase::ExecuteSQLQuery(
         nullptr,
         callback,
         { query },
-        static_cast<rocprofvis_dm_track_id_t>(-1)
+        INVALID_INDEX
     };
     return SqliteDatabase::ExecuteSQLQuery(db_instance, query, &params);
 }
@@ -421,7 +413,7 @@ rocprofvis_dm_result_t SqliteDatabase::ExecuteSQLQuery(
         (rocprofvis_dm_handle_t) value,
         callback,
         { query },
-        static_cast<rocprofvis_dm_track_id_t>(-1)
+        INVALID_INDEX
     };
     return SqliteDatabase::ExecuteSQLQuery(db_instance, query, &params);
 }
@@ -468,7 +460,7 @@ rocprofvis_dm_result_t SqliteDatabase::ExecuteSQLQuery(
         handle,
         callback,
         { query },
-        static_cast<rocprofvis_dm_track_id_t>(-1)
+        INVALID_INDEX
     };
     return SqliteDatabase::ExecuteSQLQuery(db_instance, query, &params);
 }
@@ -505,7 +497,7 @@ rocprofvis_dm_result_t SqliteDatabase::ExecuteSQLQuery(
         handle,
         callback,
         { query, cache_table_name },
-        static_cast<rocprofvis_dm_track_id_t>(-1),
+        INVALID_INDEX,
         op
     };
     return SqliteDatabase::ExecuteSQLQuery(db_instance, query, &params);
@@ -526,7 +518,7 @@ rocprofvis_dm_result_t SqliteDatabase::ExecuteSQLQuery(
         handle,
         callback,
         { query, cache_table_name },
-        static_cast<rocprofvis_dm_track_id_t>(-1),
+        INVALID_INDEX,
     };
     return SqliteDatabase::ExecuteSQLQuery(db_instance, query, &params);
 }
@@ -544,12 +536,7 @@ rocprofvis_dm_result_t  SqliteDatabase::ExecuteSQLQuery(Future* future,
         future,
         nullptr,
         load_callback,
-        { query[kRPVSourceQueryTrackByQueue].c_str(),
-          query[kRPVSourceQueryTrackByStream].c_str(),
-          query[kRPVSourceQueryLevel].c_str(), 
-          query[kRPVSourceQuerySliceByQueue].c_str(),
-          query[kRPVSourceQuerySliceByStream].c_str(),
-          query[kRPVSourceQueryTable].c_str() },
+        query,
         static_cast<rocprofvis_dm_track_id_t>(load_id)
     };
 
@@ -569,16 +556,14 @@ rocprofvis_dm_result_t  SqliteDatabase::ExecuteSQLQuery(Future* future,
     {
         TraceProperties()->tracks_info_restored = false;
         params.callback = find_callback;
-        result = ExecuteSQLQuery(
-            db_instance,
-            query[kRPVSourceQueryTrackByQueue].c_str(), &params);
-        if (result == kRocProfVisDmResultSuccess &&
-            query[kRPVSourceQueryTrackByStream].length() > 0)
+        for (int i = 0; i < 2; i++)
         {
-            result = ExecuteSQLQuery(
-                db_instance,
-                query[kRPVSourceQueryTrackByStream].c_str(),
-                &params);
+            if (query[i].length() > 0)
+            {
+                result = ExecuteSQLQuery(
+                    db_instance,
+                    query[i].c_str(), &params);
+            }
         }
     }
     return result;
@@ -668,7 +653,6 @@ rocprofvis_dm_result_t  SqliteDatabase::ExecuteSQLQuery(DbInstance* db_instance,
     PROFILE;
     ROCPROFVIS_ASSERT_MSG_RETURN(db_instance != nullptr, ERROR_NODE_KEY_CANNOT_BE_NULL, kRocProfVisDmResultInvalidParameter);
     rocprofvis_dm_result_t result  = kRocProfVisDmResultSuccess;
-    char *zErrMsg = 0;
     params->db_instance = db_instance;
     sqlite3* conn = GetConnection(db_instance->FileIndex());
     std::string query_str = query;

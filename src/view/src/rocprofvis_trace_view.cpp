@@ -30,6 +30,9 @@ namespace RocProfVis
 namespace View
 {
 
+constexpr ImVec2 MINIMAP_POPUP_SIZE(600.0f, 435.0f);
+constexpr ImVec2 MINIMAP_POPUP_MIN_SIZE(500.0f, 360.0f);
+
 TraceView::TraceView()
 : m_timeline_view(nullptr)
 , m_horizontal_split_container(nullptr)
@@ -39,9 +42,9 @@ TraceView::TraceView()
 , m_measurement(std::make_shared<MeasurementController>())
 , m_track_topology(nullptr)
 , m_popup_info({ false, "", "" })
-, m_tabselected_event_token(static_cast<EventManager::SubscriptionToken>(-1))
-, m_event_selection_changed_event_token(static_cast<EventManager::SubscriptionToken>(-1))
-, m_progress_update_event_token(static_cast<EventManager::SubscriptionToken>(-1))
+, m_tabselected_event_token(EventManager::InvalidSubscriptionToken)
+, m_event_selection_changed_event_token(EventManager::InvalidSubscriptionToken)
+, m_progress_update_event_token(EventManager::InvalidSubscriptionToken)
 , m_save_notification_id("")
 , m_project_settings(nullptr)
 , m_annotations(nullptr)
@@ -54,7 +57,7 @@ TraceView::TraceView()
         (void)trace_path;                                    
         if(!success)
         {
-            spdlog::debug("Failed to fetch event data for event ID: {}", event_id);
+            spdlog::warn("Failed to fetch event data for event ID: {}", event_id);
             return;
         }
 
@@ -267,7 +270,7 @@ TraceView::Update()
     }
     if(m_minimap && m_show_minimap_popup)
     {
-        m_minimap->UpdateData();
+        m_minimap->Update();
     }
 }
 
@@ -290,7 +293,7 @@ TraceView::CreateView()
 
     auto sidebar =
         std::make_shared<SideBar>(m_track_topology, m_timeline_selection,
-                                  m_timeline_view->GetGraphs(), m_data_provider);
+                                  m_timeline_view->GetTracks(), m_data_provider);
     auto analysis = std::make_shared<AnalysisView>(m_data_provider, m_track_topology,
                                                    m_timeline_selection, m_annotations);
 
@@ -385,7 +388,8 @@ TraceView::Render()
             popup_style.PushPopupStyles();
             popup_style.PushTitlebarColors();
 
-            ImGui::SetNextWindowSize(ImVec2(400.0f, 290.0f));
+            ImGui::SetNextWindowSize(
+                GetResponsiveWindowSize(MINIMAP_POPUP_SIZE, MINIMAP_POPUP_MIN_SIZE));
             if(ImGui::Begin("Minimap", &m_show_minimap_popup,
                             ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse))
             {
@@ -457,6 +461,14 @@ TraceView::HandleHotKeys()
                     "Bookmark slot " + idx + " not assigned",
                     NotificationLevel::Warning);
             }
+        }
+    }
+
+    if(hk.WasActionTriggered(HotkeyActionId::kZoomToSelection))
+    {
+        if(m_timeline_view)
+        {
+            m_timeline_view->ZoomToTimeRangeSelection();
         }
     }
 }
@@ -609,11 +621,7 @@ TraceView::RenderEditMenuOptions()
     {
         if(m_timeline_selection)
         {
-            std::shared_ptr<std::vector<TrackGraph>> graphs = m_timeline_view->GetGraphs();
-            if(graphs)
-            {
-                m_timeline_selection->UnselectAllTracks(*graphs);
-            }
+            m_timeline_selection->UnselectAllTracks();
         }
     }
     if(ImGui::MenuItem("Unselect All Events", nullptr, false,
@@ -883,10 +891,8 @@ TraceView::RenderAnnotationControls()
             ImVec2     graph_size   = m_timeline_view->GetGraphSize();
             double     center_time  = tpt->PixelToTime(graph_size.x * 0.5f);
             float      center_y     = m_timeline_view->GetScrollPosition() + graph_size.y * 0.5f;
-            m_annotations->OpenStickyNotePopup(
-                center_time, center_y, coords.v_min_x,
-                coords.v_max_x, graph_size);
-            m_annotations->ShowStickyNotePopup();
+            m_annotations->CreateStickyNote(center_time, center_y, coords.v_min_x,
+                                            coords.v_max_x, graph_size);
         }
     }
     ImGui::PopStyleColor();
@@ -1108,7 +1114,7 @@ TraceView::RenderEventSearch()
             ImGui::SetKeyboardFocusHere();
         }
         std::pair<bool, bool> search_bar = InputTextWithClear(
-            "search_bar", "Search events, kernels, tracks...",
+            "search_bar", "Search: hipLaunchKernel or \"hip\"\"kernel\"",
             m_event_search->TextInput(), m_event_search->TextInputLimit(),
             settings.GetFontManager().GetFont(FontType::kIcon),
             settings.GetColor(Colors::kBgMain), settings.GetDefaultStyle(),

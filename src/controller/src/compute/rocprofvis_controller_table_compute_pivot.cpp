@@ -11,7 +11,9 @@
 #include "rocprofvis_controller_trace_compute.h"
 #include "rocprofvis_core_assert.h"
 #include "spdlog/spdlog.h"
+#include <algorithm>
 #include <cstdlib>
+#include <cstring>
 
 namespace RocProfVis
 {
@@ -63,7 +65,7 @@ ComputePivotTable::Setup(rocprofvis_dm_trace_t dm_handle, Arguments& args, Futur
             if(args.GetString(kRPVControllerCPTArgsMetricSelectorIndexed, i,
                               buffer, &length) == kRocProfVisResultSuccess)
             {
-                m_metric_selectors.push_back(std::string(buffer));
+                m_metric_selectors.emplace_back(buffer, length);
             }
         }
 
@@ -103,7 +105,7 @@ ComputePivotTable::Setup(rocprofvis_dm_trace_t dm_handle, Arguments& args, Futur
                               filter_expr, &expr_length) != kRocProfVisResultSuccess)
                 continue;
 
-            m_column_filters[column_index] = std::string(filter_expr);
+            m_column_filters[column_index] = std::string(filter_expr, expr_length);
         }
     }
     else
@@ -174,7 +176,8 @@ ComputePivotTable::Fetch(rocprofvis_dm_trace_t dm_handle, uint64_t index, uint64
     // Build query using model layer
     char*                  query     = nullptr;
     rocprofvis_dm_result_t dm_result = rocprofvis_db_build_compute_query(
-        db, kRPVComputeFetchKernelMetricsMatrix, params.size(), params.data(), &query);
+        db, kRPVComputeFetchKernelMetricsMatrix,
+        static_cast<rocprofvis_db_num_of_params_t>(params.size()), params.data(), &query);
 
     if(dm_result == kRocProfVisDmResultSuccess && query)
     {
@@ -273,10 +276,11 @@ ComputePivotTable::Fetch(rocprofvis_dm_trace_t dm_handle, uint64_t index, uint64
 
     for(size_t i = 0; i < m_rows.size(); i++)
     {
+        Array* row_array = nullptr;
         try
         {
-            Array* row_array = new Array();
-        
+            row_array = new Array();
+
             auto& row_vec = row_array->GetVector();
             row_vec.resize(m_rows[i].size());
             for(uint32_t j = 0; j < m_rows[i].size(); j++)
@@ -284,12 +288,18 @@ ComputePivotTable::Fetch(rocprofvis_dm_trace_t dm_handle, uint64_t index, uint64
                 row_vec[j].SetType(m_rows[i][j].GetType());
                 row_vec[j] = m_rows[i][j];
             }
-            result = array.SetObject(kRPVControllerArrayEntryIndexed, i,
+            result = array.SetOwnedObject(kRPVControllerArrayEntryIndexed, i,
                                         (rocprofvis_handle_t*) row_array);
-        
+
             ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+            if(result != kRocProfVisResultSuccess)
+            {
+                // Ownership was not transferred to the outer array; reclaim it.
+                delete row_array;
+            }
         } catch(const std::exception&)
         {
+            delete row_array;
             result = kRocProfVisResultMemoryAllocError;
         }
     }
@@ -370,12 +380,14 @@ ComputePivotTable::GetString(rocprofvis_property_t property, uint64_t index, cha
                 {
                     if(!value && length)
                     {
-                        *length = m_columns[index].m_name.size();
+                        *length = static_cast<uint32_t>(m_columns[index].m_name.size());
                         result  = kRocProfVisResultSuccess;
                     }
-                    else if(value && length)
+                    else if(value && length && *length > 0)
                     {
-                        strncpy(value, m_columns[index].m_name.c_str(), *length);
+                        const std::string& name = m_columns[index].m_name;
+                        const size_t copy = std::min(name.size(), static_cast<size_t>(*length));
+                        if (copy > 0) std::memcpy(value, name.data(), copy);
                         result = kRocProfVisResultSuccess;
                     }
                 }
@@ -386,12 +398,13 @@ ComputePivotTable::GetString(rocprofvis_property_t property, uint64_t index, cha
                 std::string title = "Kernel Metrics Matrix";
                 if(!value && length)
                 {
-                    *length = title.size();
+                    *length = static_cast<uint32_t>(title.size());
                     result  = kRocProfVisResultSuccess;
                 }
-                else if(value && length)
+                else if(value && length && *length > 0)
                 {
-                    strncpy(value, title.c_str(), *length);
+                    const size_t copy = std::min(title.size(), static_cast<size_t>(*length));
+                    if (copy > 0) std::memcpy(value, title.data(), copy);
                     result = kRocProfVisResultSuccess;
                 }
                 break;

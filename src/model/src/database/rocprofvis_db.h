@@ -13,6 +13,7 @@
 #include <mutex>
 #include <shared_mutex>
 #include <condition_variable>
+#include <filesystem>
 
 namespace RocProfVis
 {
@@ -65,7 +66,7 @@ class Database;
 // Helper class to lock processes in order of database instances
 class OrderedMutex {
 public:
-    void init(uint32_t num_instances) { for (int i = 0; i < num_instances; i++) { m_instances.insert(i); } }
+    void init(uint32_t num_instances) { for (uint32_t i = 0; i < num_instances; i++) { m_instances.insert(i); } }
 
     void lock(uint32_t id) {
         std::unique_lock<std::mutex> lock(m_lock);
@@ -136,9 +137,28 @@ class Database
         rocprofvis_dm_result_t          ReadTraceSliceAsync( 
                                                                 rocprofvis_dm_timestamp_t start,
                                                                 rocprofvis_dm_timestamp_t end,
+                                                                rocprofvis_dm_hashed_timestamp_tag_t tag,
                                                                 rocprofvis_db_num_of_tracks_t num,
                                                                 rocprofvis_db_track_selection_t tracks,
                                                                 rocprofvis_db_future_t object);
+
+        // Asynchronously read a PMC time slice (records from specified track for specified time frame) from database  
+        // @param start - start timestamp of time slice 
+        // @param end - end timestamp of time slice 
+        // @param track - track ID  
+        // @param left_neighbor - include the left neighbor of the time range
+        // @param right_neighbor - include the right neighbor of the time range
+        // @param object - future object providing asynchronous execution mechanism         
+        // @return status of operation
+        rocprofvis_dm_result_t          ReadTracePMCSliceAsync( 
+                                                                rocprofvis_dm_timestamp_t start,
+                                                                rocprofvis_dm_timestamp_t end,
+                                                                rocprofvis_dm_hashed_timestamp_tag_t tag,
+                                                                rocprofvis_db_track_selection_t track,
+                                                                bool left_neighbor,
+                                                                bool right_neighbor,
+                                                                rocprofvis_db_future_t object);
+
         // Asynchronously read different types of event properties (flowtrace, stacktrace, extdata) for event ID
         // @param type - event property type (flowtrace, stacktrace, extdata) 
         // @param event_id - 60-bit event id and 4-bit operation type  
@@ -194,12 +214,26 @@ class Database
                                                                 rocprofvis_dm_charptr_t group_cols, 
                                                                 rocprofvis_dm_charptr_t sort_column, 
                                                                 rocprofvis_dm_sort_order_t sort_order,
-                                                                rocprofvis_dm_num_string_table_filters_t num_string_table_filters, 
-                                                                rocprofvis_dm_string_table_filters_t string_table_filters,
                                                                 uint64_t max_count, 
                                                                 uint64_t offset,
                                                                 bool count_only,
                                                                 rocprofvis_dm_string_t& query) = 0;
+
+       virtual rocprofvis_dm_result_t BuildEventSearchQuery(    
+                                                                rocprofvis_dm_timestamp_t start, 
+                                                                rocprofvis_dm_timestamp_t end,
+                                                                rocprofvis_db_num_of_tracks_t num, 
+                                                                rocprofvis_db_track_selection_t ops,
+                                                                rocprofvis_dm_charptr_t where,
+                                                                rocprofvis_dm_num_string_table_filters_t num_string_table_filters,
+                                                                rocprofvis_dm_string_table_filters_t string_table_filters,
+                                                                bool include_substring,
+                                                                rocprofvis_dm_charptr_t sort_column,
+                                                                rocprofvis_dm_sort_order_t sort_order,
+                                                                uint64_t max_count,
+                                                                uint64_t offset,
+                                                                bool count_only,
+                                                                rocprofvis_dm_string_t& query);
 
 
         // Asynchronously writes the results of a table query to .CSV
@@ -226,27 +260,9 @@ class Database
                                                     rocprofvis_dm_timestamp_t end, 
                                                     rocprofvis_dm_string_t new_db_path,
                                                     Future* object);
-       virtual void InterruptQuery(void* connection) {};
-
-       // returns pointer to cached tables map array
-       DatabaseCache*                  CachedTables(uint32_t node_id) {return &m_cached_tables[node_id];}
-
-	   TrackLookup*                    TrackTracker() { return& m_track_lookup; }
-       // return current number of tracks
-       rocprofvis_dm_size_t            NumTracks() { return m_track_properties.size(); }
-       // returns pointer to track properties structure. Takes index of track as a parameter 
-       rocprofvis_dm_track_params_t*   TrackPropertiesAt(rocprofvis_dm_index_t index) { return m_track_properties[index].get(); }
-
-       bool IsTrackIndexValid(rocprofvis_dm_index_t index) { return index < m_track_properties.size(); }
+       virtual void InterruptQuery(void* connection) { (void) connection; };
 
 
-       static rocprofvis_dm_table_t GetInfoTableHandle(const rocprofvis_dm_database_t object, rocprofvis_dm_node_id_t node, rocprofvis_dm_charptr_t table_name);
-       static size_t GetInfoTableNumColumns(rocprofvis_dm_table_t object);
-       static size_t GetInfoTableNumRows(rocprofvis_dm_table_t object);
-       static const char* GetInfoTableColumnName(rocprofvis_dm_table_t object, size_t column_index);
-       static rocprofvis_dm_table_row_t GetInfoTableRowHandle(rocprofvis_dm_table_t object, size_t row_index);
-       static const char* GetInfoTableRowCellValue(rocprofvis_dm_table_row_t object, size_t column_index);
-       static const size_t GetInfoTableRowNumCells(rocprofvis_dm_table_row_t object);
 
     private:
     /************************static methods to be used as a parameter to std::thread**********************/
@@ -269,8 +285,28 @@ class Database
                                                                 Database* db,
                                                                 rocprofvis_dm_timestamp_t start,
                                                                 rocprofvis_dm_timestamp_t end,
+                                                                rocprofvis_dm_hashed_timestamp_tag_t tag,
                                                                 rocprofvis_db_num_of_tracks_t num,
                                                                 rocprofvis_db_track_selection_t tracks,
+                                                                Future* object);
+
+        //static method to read PMC time slice. Required to launch a unique thread for asynchronous time slice read
+        // @param db - pointer to database object 
+        // @param start - start timestamp of time slice 
+        // @param end - end timestamp of time slice 
+        // @param track - track ID
+        // @param left_neighbor - include the left neighbor of the time range
+        // @param right_neighbor - include the right neighbor of the time range 
+        // @param object - future object providing asynchronous execution mechanism   
+        // @return status of operation
+        static rocprofvis_dm_result_t   ReadTracePMCSliceStatic(
+                                                                Database* db,
+                                                                rocprofvis_dm_timestamp_t start,
+                                                                rocprofvis_dm_timestamp_t end,
+                                                                rocprofvis_dm_hashed_timestamp_tag_t tag,
+                                                                rocprofvis_db_track_selection_t track,
+                                                                bool left_neighbor,
+                                                                bool right_neighbor,
                                                                 Future* object);
         //static method to read Event properties. Required to launch a unique thread for asynchronous event properties read
         // @param db - pointer to database object
@@ -350,9 +386,20 @@ class Database
         virtual rocprofvis_dm_result_t  ReadTraceSlice(
                                                                 rocprofvis_dm_timestamp_t start,
                                                                 rocprofvis_dm_timestamp_t end,
+                                                                rocprofvis_dm_hashed_timestamp_tag_t tag,
                                                                 rocprofvis_db_num_of_tracks_t num,
                                                                 rocprofvis_db_track_selection_t tracks,
                                                                 Future* object) = 0;
+
+        virtual rocprofvis_dm_result_t  ReadTracePMCSlice(
+                                                                rocprofvis_dm_timestamp_t start,
+                                                                rocprofvis_dm_timestamp_t end,
+                                                                rocprofvis_dm_hashed_timestamp_tag_t tag,
+                                                                rocprofvis_db_track_selection_t track,
+                                                                bool left_neighbor,
+                                                                bool right_neighbor,
+                                                                Future* object);
+
         // worker method to read flow trace info, called from ReadEventPropertyStatic
         // @param event_id - 60-bit event id and 4-bit operation type  
         // @param object - future object providing asynchronous execution mechanism 
@@ -392,33 +439,6 @@ class Database
                                                                 rocprofvis_db_compute_use_case_enum_t use_case,
                                                                 rocprofvis_dm_charptr_t query,
                                                                 Future* future) = 0;
-        // method to build a query to read time slice of records for single track 
-        // @param index - track index 
-        // @param type - query type
-        // @param query - reference to output query string  
-        // @return status of operation
-        virtual rocprofvis_dm_result_t  BuildTrackQuery(           
-                                                                rocprofvis_dm_index_t index, 
-                                                                rocprofvis_dm_index_t type,
-                                                                rocprofvis_dm_string_t & query,
-                                                                uint32_t split_count,
-                                                                uint32_t split_index) = 0;
-
-        // method to build a query to read time slice of records for all tracks in one shot 
-        // @param start - start timestamp of time slice 
-        // @param end - end timestamp of time slice 
-        // @param num - number of tracks
-        // @param tracks - uint32_t array with track IDs 
-        // @param query - reference to query string 
-        // @param slices - reference map array for storing slice handlers for multi-track request   
-        // @return status of operation                                                      
-        virtual rocprofvis_dm_result_t  BuildSliceQuery(      
-                                                                rocprofvis_dm_timestamp_t start, 
-                                                                rocprofvis_dm_timestamp_t end, 
-                                                                rocprofvis_db_num_of_tracks_t num, 
-                                                                rocprofvis_db_track_selection_t tracks, 
-                                                                rocprofvis_dm_string_t& query, 
-                                                                slice_array_t& slices) = 0;
 
         // method to export the results of a table query to .CSV
         // @param query - database query
@@ -428,7 +448,7 @@ class Database
                                                                 rocprofvis_dm_charptr_t file_path,
                                                                 Future* future);
 
-        virtual rocprofvis_dm_result_t  Cleanup(Future* future, bool rebuild) { return kRocProfVisDmResultSuccess; };
+        virtual rocprofvis_dm_result_t  Cleanup(Future* future, bool rebuild) { (void) future; (void) rebuild; return kRocProfVisDmResultSuccess; };
 
     private:
         // pointer to a binding information structure physically located in Trace object and passed to Database object during binding
@@ -436,6 +456,8 @@ class Database
         rocprofvis_dm_db_bind_struct *m_binding_info;
         // database file path
         std::string m_path;
+        // app config path
+        std::string m_config_path;
         // vector array of track parameters. Used as a reference for data model Track objects and for Database component to generate proper database queries 
         std::vector<std::unique_ptr<rocprofvis_dm_track_params_t>> m_track_properties;
         // map array of cached tables, mostly with non-essential Track information
@@ -445,8 +467,9 @@ class Database
 
 
     protected:
+        // ---------------------------------------------Getters---------------------------------------
         guid_list_t& DbInstances() { return m_db_instances; }
-        uint32_t NumDbInstances() { return m_db_instances.size(); }
+        uint32_t NumDbInstances() { return static_cast<uint32_t>(m_db_instances.size()); }
         std::string GuidAt(int index) { return index < m_db_instances.size() ? m_db_instances[index].second : std::string(); }
         std::string GuidSymAt(int index) { std::string s = GuidAt(index); std::replace(s.begin(), s.end(), '_', '-'); return s; }
         DbInstance* DbInstancePtrAt(int index) { return index < m_db_instances.size() ? &m_db_instances[index].first : nullptr; }
@@ -460,20 +483,24 @@ class Database
         rocprofvis_dm_track_params_it   TrackPropertiesEnd() { return m_track_properties.end(); }
         // returns pointer to trace properties, which contains shared trace information
         rocprofvis_dm_trace_params_t*   TraceProperties() { return m_binding_info->trace_properties; }
+        // returns pointer to cached tables map array
+        DatabaseCache*                  CachedTables(uint32_t node_id) {return &m_cached_tables[node_id];}
+
+        TrackLookup*                    TrackTracker() { return& m_track_lookup; }
+        // return current number of tracks
+        rocprofvis_dm_size_t            NumTracks() { return m_track_properties.size(); }
+        // returns pointer to track properties structure. Takes index of track as a parameter 
+        rocprofvis_dm_track_params_t*   TrackPropertiesAt(rocprofvis_dm_index_t index) { return m_track_properties[index].get(); }
+        // validated track index
+        bool                            IsTrackIndexValid(rocprofvis_dm_index_t index) { return index < m_track_properties.size(); }
+
+        // ---------------------------------------------Helpers---------------------------------------
         // register new track
         // @param props - track properties structure
         // @return status of operation
         rocprofvis_dm_result_t          AddTrackProperties(
                                                                 rocprofvis_dm_track_params_t& props);
-        // adds a new query to the track queries collection 
-        // multiple queries for single track are required to support data from multiple database tables on single track,
-        // like Kernel Dispatch, Memory Copy and Memory Allocation
-        // @param it - track properties array iterator
-        // @param newprops - new track properties structure
-        // @param newquery - new track records query. One track can have multiple queries.
-        void                            UpdateQueryForTrack(rocprofvis_dm_track_params_it it, 
-                                                            rocprofvis_dm_track_params_t& newprops,
-                                                            rocprofvis_dm_charptr_t*      newqueries);
+
         // calls Future object callback method, if provided. The callback method is optionally provided by caller in order to display or save current database progress.
         // @param step - approximate percentage of single database operation
         // @param action - database operation description
@@ -488,26 +515,32 @@ class Database
         // @param record - event data record
         // @return status of operation
         virtual rocprofvis_dm_result_t  RemapStringIds(
-                                                                rocprofvis_db_record_data_t & record) {return kRocProfVisDmResultSuccess;};
-        virtual rocprofvis_dm_result_t RemapStringIds(
-                                                                rocprofvis_db_flow_data_t& record) {return kRocProfVisDmResultSuccess;};
+                                                                rocprofvis_db_record_data_t & record) { (void) record; return kRocProfVisDmResultSuccess;};
+        virtual rocprofvis_dm_result_t  RemapStringIds(
+                                                                rocprofvis_db_flow_data_t & record) { (void) record; return kRocProfVisDmResultSuccess;};
         virtual rocprofvis_dm_result_t  StringIndexToId(        
-                                                                rocprofvis_dm_index_t index, std::vector<rocprofvis_db_string_id_t>& id) {return kRocProfVisDmResultSuccess;};
+                                                                rocprofvis_dm_index_t index, std::vector<rocprofvis_db_string_id_t>& id) { (void) index; (void) id; return kRocProfVisDmResultSuccess;};
 
-        // return suffix to process name for provided track category ('PID', 'Agent')
-        // @param category - track category
-        // @return track process name suffix  ('PID', 'Agent')      
-        static const char*              ProcessNameSuffixFor(   
-                                                                rocprofvis_dm_track_category_t category);
         // return suffix to sub-process name for provided track category ('TID', 'Queue')
         // @param category - track category
         // @return track sub-process name suffix  ('TID', 'Queue')  
-        static const char*              SubProcessNameSuffixFor(
-                                                                rocprofvis_dm_track_category_t category);
-        // check if string is number
-        // @param s - string to check
-        // @return True if number
+        static const char*              SubProcessNameSuffixFor(rocprofvis_dm_track_category_t category);
+        
+        // create tracks ranking so they can be sorted accordingly in UI
+        void                            CreateTracksOrderRanking();
+
+        //--------------------------------------Static helpers-----------------------------------------------------------------
+        static bool SanitizeFilePath(const std::string& filename, std::filesystem::path& out_path);
         static bool IsNumber(const std::string& s);
+
+        //--------------------------------------Direct interface to info tables-----------------------------------------------------------------
+        static rocprofvis_dm_table_t GetInfoTableHandle(const rocprofvis_dm_database_t object, rocprofvis_dm_node_id_t node, rocprofvis_dm_charptr_t table_name);
+        static size_t GetInfoTableNumColumns(rocprofvis_dm_table_t object);
+        static size_t GetInfoTableNumRows(rocprofvis_dm_table_t object);
+        static const char* GetInfoTableColumnName(rocprofvis_dm_table_t object, size_t column_index);
+        static rocprofvis_dm_table_row_t GetInfoTableRowHandle(rocprofvis_dm_table_t object, size_t row_index);
+        static const char* GetInfoTableRowCellValue(rocprofvis_dm_table_row_t object, size_t column_index);
+        static const size_t GetInfoTableRowNumCells(rocprofvis_dm_table_row_t object);
 
     public:
         // declare DatabaseCache as friend class, for having access to protected members

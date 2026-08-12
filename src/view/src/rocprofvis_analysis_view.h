@@ -30,6 +30,8 @@ public:
     void Render() override;
     void Update() override;
 
+    friend struct AnalysisViewTestPeer;
+
 private:
     void HandleTimelineSelectionChanged(std::shared_ptr<RocEvent> e);
 

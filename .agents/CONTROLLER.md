@@ -1,10 +1,10 @@
 # CONTROLLER.md - ROCm Optiq Controller Layer Guide
 
 This document is the controller-layer companion to
-[`.agents/AGENTS.md`](./AGENTS.md). The main guide covers the View layer
-in depth and gives a high-level pass over `controller/`. **This file is
-the deep dive for `src/controller/`** - the C ABI bridge between the
-Model (SQLite, parsing) and the View (ImGui UI).
+[`.agents/UI.md`](./UI.md). The UI guide covers the View layer in depth
+and gives a high-level pass over `controller/`. **This file is the deep
+dive for `src/controller/`** - the C ABI bridge between the Model
+(SQLite, parsing) and the View (ImGui UI).
 
 When humans and `CODING.md` disagree with this file, `CODING.md` wins.
 When this file disagrees with the source under `src/controller/`, the
@@ -46,9 +46,6 @@ source wins; please update this file in the same change.
   (`src/view/src/rocprofvis_data_provider.h`) and from Python via the
   CFFI build script in `src/model/python/`.
 - **Build flags:**
-  - `COMPUTE_UI_SUPPORT` - enables `src/controller/src/compute/` and the
-    compute-only public API. Wrap any new compute-only symbol in
-    `#ifdef COMPUTE_UI_SUPPORT`.
   - `BUILD_TESTING` - builds `roc-optiq-controller-system-tests` and
     `roc-optiq-controller-compute-tests` (Catch2). Tests are wired
     against fixture traces under `sample/`.
@@ -100,11 +97,9 @@ typedef rocprofvis_handle_t rocprofvis_controller_summary_t;
 typedef rocprofvis_handle_t rocprofvis_controller_summary_metrics_t;
 typedef rocprofvis_handle_t rocprofvis_controller_topology_node_t;
 typedef rocprofvis_handle_t rocprofvis_controller_plot_t;
-#ifdef COMPUTE_UI_SUPPORT
 typedef rocprofvis_handle_t rocprofvis_controller_workload_t;
 typedef rocprofvis_handle_t rocprofvis_controller_kernel_t;
 typedef rocprofvis_handle_t rocprofvis_controller_metrics_container_t;
-#endif
 ```
 
 You can always recover the runtime kind via
@@ -122,8 +117,8 @@ void                      rocprofvis_controller_free(rocprofvis_controller_t*);
 
 `rocprofvis_controller_alloc` sniffs the file with
 `rocprofvis_db_identify_type` (from `src/model/`). It returns either a
-`SystemTrace*` (rocpd / rocprof / multinode SQLite) or, when
-`COMPUTE_UI_SUPPORT` is on, a `ComputeTrace*` (compute SQLite). The
+`SystemTrace*` (rocpd / rocprof / multinode SQLite) or a
+`ComputeTrace*` (compute SQLite). The
 caller treats both the same way - everything dispatches through the
 opaque handle and the runtime object type tag.
 
@@ -164,9 +159,7 @@ rocprofvis_controller_table_fetch_async(...);                    // tables (syst
 rocprofvis_controller_table_export_csv(...);                     // table -> CSV file
 rocprofvis_controller_summary_fetch_async(...);                  // summary metrics
 rocprofvis_controller_get_indexed_property_async(...);           // event/table/system props
-#ifdef COMPUTE_UI_SUPPORT
 rocprofvis_controller_metric_fetch_async(...);                   // compute metric values
-#endif
 rocprofvis_controller_create_analysis_view_async(...);           // analytic views (placeholder)
 ```
 
@@ -178,11 +171,11 @@ rocprofvis_controller_save_trimmed_trace(handle, start, end, path, future);
 rocprofvis_controller_cleanup_trace_database(handle, rebuild, future);
 ```
 
-Plus the analysis library's free function (declared in
-`rocprofvis_controller_analysis.h`):
+Plus the analysis sub-API (declared in
+`rocprofvis_controller_analysis.h`; see section 2.7), e.g.:
 
 ```c
-rocprofvis_controller_analysis_fetch_queue_utilization(
+rocprofvis_analysis_fetch_queue_utilization(
     controller, track, start_time, end_time, future, &out_double);
 ```
 
@@ -223,6 +216,31 @@ trace -> node -> processor metrics; see section 5.5).
 For compute metric fetches, results land in a
 `rocprofvis_controller_metrics_container_t` (a flat list of
 `{metric_id, source_type, source_id, value_name, value}` rows).
+
+### 2.7 The "analysis" sub-API
+
+Cross-cutting analytics live in
+`src/controller/src/rocprofvis_controller_analysis.{h,cpp}` and are
+exposed as `rocprofvis_analysis_*` functions (note this family drops
+the `_controller` infix). They reuse the same `Job + Future` plumbing
+as the data fetchers and back the View's Track Details and Top Events
+UI:
+
+- `rocprofvis_analysis_fetch_queue_utilization` - per-track queue
+  utilization over a time range (writes a `double`).
+- `rocprofvis_analysis_fetch_counter_statistics` - per-track counter
+  min/max/mean/stddev over a time range
+  (`rocprofvis_analysis_counter_statistics_t`).
+- `rocprofvis_analysis_get_*_events_table` - the five "top events"
+  table-handle getters (instrumented, dispatch, memory allocation,
+  memory copy, sampled).
+- `rocprofvis_analysis_fetch_table` - fetch rows for one of those
+  tables (paged via `rocprofvis_controller_arguments_t`).
+- `rocprofvis_analysis_free_trace_data` - release cached analysis
+  results for the trace.
+
+Add new cross-cutting analyses here rather than in the per-domain
+system / compute modules.
 
 ## 3. Internal Architecture & Threading Model
 
@@ -741,10 +759,8 @@ and LRU eviction.
 
 ## 6. Compute Trace Domain (`src/controller/src/compute/`)
 
-Compute-side public API is wrapped in `#ifdef COMPUTE_UI_SUPPORT`, and
-`src/controller/CMakeLists.txt` only compiles compute sources when that
-flag is enabled. New compute-only public symbols must follow the same
-guarding pattern. The compute objects all share the same `Handle` base,
+The compute-side public API and `src/controller/src/compute/` sources
+are always compiled. The compute objects all share the same `Handle` base,
 the same `Reference<>` validation, the same `JobSystem` / `Future`
 plumbing.
 
@@ -1051,7 +1067,7 @@ Property bank starting points (`uint32_t` enum bases):
 | Summary Metrics                       | `0xF0000000` |
 | Common (memory usage, etc.)           | `0xFFFF0000` |
 
-Compute-side banks (`COMPUTE_UI_SUPPORT`) start at the
+Compute-side banks start at the
 `__kRPVControllerComputePropertiesFirst` family. The auto-incrementing
 `__first / __last` brackets in each enum are an extension hint - if
 you add a new property to an existing bank, declare it inside the
@@ -1128,7 +1144,6 @@ These supplement `CODING.md`. When the two disagree, `CODING.md` wins.
 | Implement a new analysis function                       | Extend `Analysis` and add a free function in `rocprofvis_controller_analysis.h` |
 | Add a new object type                                   | See section 9 (six-step recipe)                                         |
 | Add a new property to an existing object type           | Append to that bank's enum inside the `__first / __last` brackets       |
-| Add a new compute-only feature                          | Wrap with `#ifdef COMPUTE_UI_SUPPORT` everywhere it appears             |
 | Generate / consume a unique 64-bit per-type id          | `IdGenerator<MyType>` (see `rocprofvis_controller_id.h`)                |
 
 ## 12. Common Pitfalls
@@ -1153,9 +1168,6 @@ These supplement `CODING.md`. When the two disagree, `CODING.md` wins.
 - **Adding properties without minding the bank base.** Property
   values are bit-packed numerically, not symbolically; collisions
   between banks will surface as silent dispatch errors.
-- **Forgetting the `COMPUTE_UI_SUPPORT` guard.** Compute-only headers
-  in `inc/` are guarded; matching `src/compute/` and any callsite must
-  also be guarded.
 - **Holding a pointer returned by `GetString` past the next
   `Set*`.** The buffer is owned by the caller; if you read into a
   thread-local buffer and then call `SetString`, the pointer is stale.
@@ -1244,8 +1256,7 @@ free" sequence.
 - `rocprofvis_controller_ext_data.{h,cpp}` -> `ExtData`,
   `ArgumentData`.
 
-### Compute trace (`src/controller/src/compute/`,
-`#ifdef COMPUTE_UI_SUPPORT`)
+### Compute trace (`src/controller/src/compute/`)
 
 - `rocprofvis_controller_trace_compute.{h,cpp}` -> `ComputeTrace`.
 - `rocprofvis_controller_workload.{h,cpp}` -> `Workload`.
@@ -1279,13 +1290,3 @@ the Reuse Catalog). Keep this file the single source of truth for
 of writing it." If you find a duplicate of something listed here,
 prefer to delete the duplicate and route callers through the canonical
 entry.
-
-### 2.7 The "analysis" Sub-API
-
-The controller currently exposes one analysis function on top of the
-generic surface:
-`rocprofvis_controller_analysis_fetch_queue_utilization`. It is built
-on the same internal `Job + Future` plumbing as the data fetchers but
-runs a SQL query against the trace's database directly instead of
-serving from the segment cache. New cross-cutting analyses go in
-`src/controller/src/rocprofvis_controller_analysis.{h,cpp}`.

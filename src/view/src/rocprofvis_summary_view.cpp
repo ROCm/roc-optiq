@@ -691,7 +691,8 @@ TopKernels::RenderPieChart(const ImVec2 region, const ImPlotStyle& plot_style,
         hovered_idx = PlotHoverIdx();
         ImPlot::PlotPieChart(
             m_kernel_pie.labels.data(), m_kernel_pie.exec_time_pct.data(),
-            m_kernel_pie.exec_time_pct.size(), 0.0, 0.0, PIE_CHART_RADIUS,
+            static_cast<int>(m_kernel_pie.exec_time_pct.size()),
+            0.0, 0.0, PIE_CHART_RADIUS,
             [](double value, char* buff, int size, void* user_data) -> int {
                 (void) user_data;
                 if(value * 100.0 > 10.0)
@@ -707,7 +708,7 @@ TopKernels::RenderPieChart(const ImVec2 region, const ImPlotStyle& plot_style,
         if(m_hovered_idx)
         {
             ImPlot::PushColormap(m_settings.GetContrastColormapName());
-            ImGui::PushID(1);
+            ImGui::PushID(m_settings.GetContrastColormapName());
             ImPlot::PlotPieChart(
                 &m_kernel_pie.labels[m_hovered_idx.value()],
                 &m_kernel_pie.exec_time_pct[m_hovered_idx.value()], 1, 0.0, 0.0,
@@ -779,9 +780,9 @@ TopKernels::RenderBarChart(const ImVec2 region, const ImPlotStyle& plot_style,
             {
                 ImPlot::PushColormap(m_settings.GetContrastColormapName());
             }
-            ImPlot::SetNextFillStyle(ImPlot::GetColormapColor(i));
+            ImPlot::SetNextFillStyle(ImPlot::GetColormapColor(static_cast<int>(i)));
             ImPlot::PlotBars((*m_kernels)[i].name.c_str(), &(*m_kernels)[i].exec_time_sum,
-                             1, BAR_CHART_THICKNESS, i);
+                             1, BAR_CHART_THICKNESS, static_cast<double>(i));
             if(i == m_hovered_idx)
             {
                 ImPlot::PopColormap();
@@ -915,8 +916,7 @@ TopKernels::RenderLegend(const ImVec2 region, const ImGuiStyle& style,
             ImGuiChildFlags_AutoResizeY, ImGuiWindowFlags_NoScrollWithMouse);
         for(size_t i = 0; i < m_kernels->size(); i++)
         {
-            float text_width = ImGui::CalcTextSize((*m_kernels)[i].name.c_str()).x;
-            ImGui::PushID(i);
+            ImGui::PushID(static_cast<int>(i));
             ImVec2 pos = ImGui::GetCursorPos();
             bool   row_clicked =
                 ImGui::Selectable("", m_selected_idx == i,
@@ -930,8 +930,9 @@ TopKernels::RenderLegend(const ImVec2 region, const ImGuiStyle& style,
                 ImGui::GetCursorScreenPos() +
                     ImVec2(icon_width - 2 * IMPLOT_LEGEND_ICON_SHRINK,
                            icon_width - 2 * IMPLOT_LEGEND_ICON_SHRINK),
-                ImGui::GetColorU32(ImGui::GetColorU32(ImPlot::GetColormapColor(i)),
-                                   row_hovered ? 0.75f : 1.0f));
+                ImGui::GetColorU32(
+                    ImGui::GetColorU32(ImPlot::GetColormapColor(static_cast<int>(i))),
+                    row_hovered ? 0.75f : 1.0f));
             ImGui::BeginDisabled(i == m_padded_idx);
             ImGui::SameLine(icon_width);
             ElidedText((*m_kernels)[i].name.c_str(), ImGui::GetContentRegionAvail().x,
@@ -939,7 +940,7 @@ TopKernels::RenderLegend(const ImVec2 region, const ImGuiStyle& style,
             ImGui::EndDisabled();
             if(row_hovered)
             {
-                hovered_idx = i;
+                hovered_idx = static_cast<int>(i);
                 if(row_clicked && m_selection_callback)
                 {
                     ToggleSelectKernel(i);
@@ -977,7 +978,7 @@ TopKernels::PlotHoverIdx() const
                            angle < m_kernel_pie.slices[i].angle +
                                        m_kernel_pie.slices[i].size_angle)
                         {
-                            idx = i;
+                            idx = static_cast<int>(i);
                             break;
                         }
                     }
@@ -992,7 +993,7 @@ TopKernels::PlotHoverIdx() const
                        mouse_pos.x <= static_cast<double>(i) + BAR_CHART_THICKNESS / 2.0 &&
                        mouse_pos.y >= 0.0 && mouse_pos.y <= (*m_kernels)[i].exec_time_sum)
                     {
-                        idx = i;
+                        idx = static_cast<int>(i);
                         break;
                     }
                 }
@@ -1121,7 +1122,7 @@ KernelInstanceTable::ToggleSelectKernel(const std::string& kernel_name,
         m_where = "nodeId = " + std::to_string(*node_id);
         if(device_id)
         {
-            m_where += " AND agentId = " + std::to_string(*device_id);
+            m_where += " AND agentId = " + std::to_string(*device_id & TOPOLOGY_ID_MASK);
         }
     }
     Fetch();
@@ -1204,10 +1205,10 @@ KernelInstanceTable::Fetch()
 {
     m_data_provider.CancelRequest(m_request_id);
     const TimelineModel& tlm = m_data_provider.DataModel().GetTimeline();
-    m_fetch_deferred         = !m_data_provider.FetchTable(TableRequestParams(
-        m_request_table_type, {}, { kRocProfVisDmOperationDispatch }, tlm.GetStartTime(),
-        tlm.GetEndTime(), m_where.c_str(), "", "", "", { m_kernel_name }, 0,
-        m_fetch_chunk_size, m_sort_column_index, m_sort_order));
+    m_fetch_deferred         = !m_data_provider.FetchTable(EventSearchRequestParams(
+        m_request_table_type, { kRocProfVisDmOperationDispatch }, tlm.GetStartTime(),
+        tlm.GetEndTime(), m_where.c_str(), false, { m_kernel_name }, 0, m_fetch_chunk_size,
+        m_sort_column_index, m_sort_order));
     m_fetched                = true;
 }
 

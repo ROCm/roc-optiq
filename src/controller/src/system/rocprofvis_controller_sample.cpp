@@ -17,7 +17,10 @@ Sample::Sample(rocprofvis_controller_primitive_type_t type, uint64_t id, double 
 , m_data(0)
 , m_end_timestamp(0)
 , m_timestamp(timestamp)
-{}
+{
+    (void) type;
+    (void) id;
+}
 
 Sample& Sample::operator=(Sample&& other)
 {
@@ -52,7 +55,7 @@ rocprofvis_result_t Sample::GetUInt64(rocprofvis_property_t property, uint64_t i
             }
             case kRPVControllerSampleId:
             {
-                *value = m_timestamp;
+                *value = static_cast<uint64_t>(m_timestamp);
                 result = kRocProfVisResultSuccess;
                 break;
             }
@@ -189,39 +192,6 @@ rocprofvis_result_t Sample::GetObject(rocprofvis_property_t property, uint64_t i
 }
 
 
-rocprofvis_result_t Sample::GetString(rocprofvis_property_t property, uint64_t index,
-                                char* value, uint32_t* length) 
-{
-    (void) index;
-    rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
-    switch(property)
-    {
-        default:
-        {
-            result = UnhandledProperty(property);
-            break;
-        }
-    }
-    return result;
-}
-
-
-rocprofvis_result_t Sample::SetUInt64(rocprofvis_property_t property, uint64_t index,
-                                uint64_t value) 
-{
-    (void) index;
-    rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
-    switch(property)
-    {
-        default:
-        {
-            result = UnhandledProperty(property);
-            break;
-        }
-    }
-    return result;
-}
-
 rocprofvis_result_t Sample::SetDouble(rocprofvis_property_t property, uint64_t index,
                                 double value) 
 {
@@ -245,46 +215,6 @@ rocprofvis_result_t Sample::SetDouble(rocprofvis_property_t property, uint64_t i
         {
             result = UnhandledProperty(property);
             break;
-        }
-    }
-    return result;
-}
-
-rocprofvis_result_t
-Sample::SetObject(rocprofvis_property_t property, uint64_t index,
-                  rocprofvis_handle_t* value)
-{
-    (void) index;
-    rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
-    if(value)
-    {
-        switch(property)
-        {
-            default:
-            {
-                result = UnhandledProperty(property);
-                break;
-            }
-        }
-    }
-    return result;
-}
-
-rocprofvis_result_t 
-Sample::SetString(rocprofvis_property_t property, uint64_t index,
-                                char const* value) 
-{
-    (void) index;
-    rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
-    if(value)
-    {
-        switch(property)
-        {
-            default:
-            {
-                result = UnhandledProperty(property);
-                break;
-            }
         }
     }
     return result;

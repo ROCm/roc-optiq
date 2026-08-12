@@ -3,6 +3,7 @@
 
 #include "rocprofvis_utils.h"
 #include <cctype>
+#include <charconv>
 #include <cmath>
 #include <cstdint>
 #include <cstdlib>
@@ -10,12 +11,62 @@
 #include <filesystem>
 #include <iomanip>
 #include <limits>
+#include <memory>
 #include <sstream>
 #include <string>
+#include <vector>
 #ifdef _WIN32
 #define NOMINMAX
 #include <windows.h>
 #endif
+
+namespace RocProfVis
+{
+namespace View
+{
+// Portable, deprecation-safe wrapper around getenv. Returns the value of `name`
+// or an empty string if unset. On MSVC, std::getenv is /W4-deprecated as C4996
+// in favor of _dupenv_s (which copies into a heap buffer the caller must free);
+// on POSIX the std::getenv pointer is used directly. The std::string return
+// hides the platform-specific lifetime so call sites stay simple.
+std::string
+safe_getenv(const char* name)
+{
+    if(name == nullptr) return {};
+#ifdef _WIN32
+    char*  buf      = nullptr;
+    size_t buf_size = 0;
+    if(_dupenv_s(&buf, &buf_size, name) != 0 || buf == nullptr) return {};
+    std::unique_ptr<char, decltype(&std::free)> owner(buf, &std::free);
+    return std::string(owner.get());
+#else
+    const char* value = std::getenv(name);
+    return value ? std::string(value) : std::string();
+#endif
+}
+
+// Sanitizing barrier for environment-derived directory paths. Values read from
+// environment variables (LOCALAPPDATA/XDG_CONFIG_HOME/HOME) are treated as
+// untrusted input that must not flow unchecked into file-open APIs (settings
+// ofstream/ifstream, spdlog log fopen, imgui.ini). Normalize the path and reject
+// anything that is not an absolute path or that still contains ".." traversal;
+// callers fall back to a known-safe location when this returns empty.
+static std::filesystem::path
+sanitize_base_dir(const std::string& raw)
+{
+    if(raw.empty()) return {};
+
+    std::filesystem::path normalized = std::filesystem::path(raw).lexically_normal();
+    if(!normalized.is_absolute()) return {};
+
+    for(const auto& component : normalized)
+    {
+        if(component == "..") return {};
+    }
+    return normalized;
+}
+}  // namespace View
+}  // namespace RocProfVis
 
 std::string
 RocProfVis::View::nanosecond_to_str(double time_point_ns, bool include_units) {
@@ -341,23 +392,61 @@ RocProfVis::View::get_application_config_path(bool create_dirs)
 {
 #ifdef _WIN32
     const char*           app_config_dir_name = "AMD\\ROCm-Optiq";
-    const char*           local_appdata       = std::getenv("LOCALAPPDATA");
+    std::filesystem::path base                = sanitize_base_dir(safe_getenv("LOCALAPPDATA"));
     std::filesystem::path config_dir =
-        local_appdata ? local_appdata : std::filesystem::current_path();
+        !base.empty() ? base : std::filesystem::current_path();
+#elif defined(__APPLE__)
+    const char*           app_config_dir_name = "ROCm-Optiq";
+    std::filesystem::path home                = sanitize_base_dir(safe_getenv("HOME"));
+    std::filesystem::path config_dir =
+        !home.empty() ? (home / "Library" / "Application Support")
+                       : std::filesystem::current_path();
 #else
     const char*           app_config_dir_name = "rocm-optiq";
-    const char*           xdg_config          = std::getenv("XDG_CONFIG_HOME");
-    std::filesystem::path config_dir =
-        xdg_config ? xdg_config
-                   : (std::filesystem::path(std::getenv("HOME")) / ".config");
+    std::filesystem::path config_dir          = sanitize_base_dir(safe_getenv("XDG_CONFIG_HOME"));
+    if(config_dir.empty())
+    {
+        std::filesystem::path home = sanitize_base_dir(safe_getenv("HOME"));
+        config_dir = !home.empty() ? (home / ".config") : std::filesystem::current_path();
+    }
 #endif
     config_dir /= app_config_dir_name;
+    config_dir = config_dir.lexically_normal();
     if(create_dirs)
     {
         std::filesystem::create_directories(config_dir);
     }
 
     return config_dir.string();
+}
+
+std::string
+RocProfVis::View::get_application_log_path(bool create_dirs)
+{
+#ifdef __APPLE__
+    std::filesystem::path home = sanitize_base_dir(safe_getenv("HOME"));
+    std::filesystem::path log_dir =
+        !home.empty() ? (home / "Library" / "Logs") : std::filesystem::current_path();
+    log_dir /= "ROCm-Optiq";
+    log_dir = log_dir.lexically_normal();
+    if(create_dirs)
+    {
+        std::filesystem::create_directories(log_dir);
+    }
+
+    return log_dir.string();
+#else
+    return get_application_config_path(create_dirs);
+#endif
+}
+
+// Number of decimal places to show for a value of the given magnitude. Fewer
+// decimals for larger numbers keeps things readable while preserving precision
+// for small values.
+static int
+adaptive_decimal_places(double magnitude)
+{
+    return magnitude >= 100.0 ? 0 : (magnitude >= 10.0 ? 1 : 2);
 }
 
 std::string
@@ -392,10 +481,98 @@ RocProfVis::View::compact_number_format(double number)
         return output.str();
     }
 
-    output << std::fixed << std::setprecision(number >= 100 ? 0 : (number >= 10 ? 1 : 2))
-        << number
-        << suffixes[magnitude];
+    output << std::fixed << std::setprecision(adaptive_decimal_places(number)) << number
+           << suffixes[magnitude];
     return output.str();
+}
+
+std::string
+RocProfVis::View::full_number_format(double number)
+{
+    if(!std::isfinite(number))
+    {
+        if(std::isnan(number)) return "NaN";
+        return std::signbit(number) ? "-Inf" : "+Inf";
+    }
+
+    std::ostringstream output;
+    output << std::fixed << std::setprecision(adaptive_decimal_places(std::fabs(number)))
+           << number;
+    return output.str();
+}
+
+bool
+RocProfVis::View::parse_compact_number(std::string_view input, std::string_view units,
+                                       double& out_value)
+{
+    auto trim = [](std::string_view s) -> std::string_view {
+        const size_t begin = s.find_first_not_of(" \t\r\n");
+        if(begin == std::string_view::npos) return {};
+        return s.substr(begin, s.find_last_not_of(" \t\r\n") - begin + 1);
+    };
+
+    std::string_view sv = trim(input);
+
+    if(!units.empty() && sv.size() >= units.size())
+    {
+        std::string_view tail  = sv.substr(sv.size() - units.size());
+        bool             match = true;
+        for(size_t i = 0; i < units.size() && match; ++i)
+        {
+            match = std::tolower(static_cast<unsigned char>(tail[i])) ==
+                    std::tolower(static_cast<unsigned char>(units[i]));
+        }
+        if(match)
+        {
+            sv = trim(sv.substr(0, sv.size() - units.size()));
+        }
+    }
+
+    double multiplier = 1.0;
+    if(!sv.empty())
+    {
+        switch(std::toupper(static_cast<unsigned char>(sv.back())))
+        {
+        case 'K': multiplier = 1e3; break;
+        case 'M': multiplier = 1e6; break;
+        case 'B':
+        case 'G': multiplier = 1e9; break;
+        case 'T': multiplier = 1e12; break;
+        case 'P': multiplier = 1e15; break;
+        default: break;
+        }
+        if(multiplier != 1.0)
+        {
+            sv = trim(sv.substr(0, sv.size() - 1));
+        }
+    }
+
+    if(sv.empty())
+    {
+        return false;
+    }
+
+    double result = 0.0;
+    bool   parsed = false;
+#if defined(__APPLE__)
+    // macOS doesn't support from_chars for floating point yet, use strtod.
+    char*       end_ptr = nullptr;
+    std::string null_terminated(sv);
+    result = std::strtod(null_terminated.c_str(), &end_ptr);
+    parsed = (end_ptr == null_terminated.c_str() + null_terminated.size());
+#else
+    const char* last = sv.data() + sv.size();
+    auto [ptr, ec]   = std::from_chars(sv.data(), last, result, std::chars_format::general);
+    parsed           = (ec == std::errc{} && ptr == last);
+#endif
+
+    result *= multiplier;
+    if(parsed && std::isfinite(result))
+    {
+        out_value = result;
+        return true;
+    }
+    return false;
 }
 
 bool RocProfVis::View::open_url(const std::string& url)
@@ -430,6 +607,139 @@ RocProfVis::View::get_executable_name(const std::string& fullPath)
         : fullPath.substr(pos + 1);
 }
 
+std::string
+RocProfVis::View::posix_base_name(const std::string& path)
+{
+    std::string::size_type pos = path.find_last_of('/');
+    return pos == std::string::npos ? path : path.substr(pos + 1);
+}
+
+std::string
+RocProfVis::View::posix_file_extension(const std::string& path)
+{
+    std::string name = posix_base_name(path);
+    std::string::size_type pos = name.find_last_of('.');
+    if(pos == std::string::npos || pos == 0)
+    {
+        return std::string();
+    }
+    return name.substr(pos + 1);
+}
+
+std::string
+RocProfVis::View::normalize_posix_path(const std::string& path)
+{
+    if(path.empty())
+    {
+        return ".";
+    }
+
+    bool absolute = (path[0] == '/');
+    std::vector<std::string> parts;
+
+    std::string::size_type start = 0;
+    while(start <= path.size())
+    {
+        std::string::size_type slash = path.find('/', start);
+        std::string segment = (slash == std::string::npos) ? path.substr(start)
+                                                           : path.substr(start, slash - start);
+        if(!segment.empty() && segment != ".")
+        {
+            if(segment == "..")
+            {
+                if(!parts.empty() && parts.back() != "..")
+                {
+                    parts.pop_back();
+                }
+                else if(!absolute)
+                {
+                    parts.push_back("..");
+                }
+            }
+            else
+            {
+                parts.push_back(segment);
+            }
+        }
+        if(slash == std::string::npos)
+        {
+            break;
+        }
+        start = slash + 1;
+    }
+
+    std::string result = absolute ? "/" : "";
+    for(size_t i = 0; i < parts.size(); i++)
+    {
+        result += parts[i];
+        if(i + 1 < parts.size())
+        {
+            result += "/";
+        }
+    }
+    if(result.empty())
+    {
+        result = absolute ? "/" : ".";
+    }
+    return result;
+}
+
+bool
+RocProfVis::View::is_posix_root_path(const std::string& path)
+{
+    std::string normalized = normalize_posix_path(path);
+    return normalized == "/" || normalized == ".";
+}
+
+std::string
+RocProfVis::View::posix_parent_path(const std::string& path)
+{
+    std::string normalized = normalize_posix_path(path);
+    if(is_posix_root_path(normalized))
+    {
+        return normalized;
+    }
+
+    std::string::size_type pos = normalized.find_last_of('/');
+    if(pos == std::string::npos)
+    {
+        return ".";
+    }
+    if(pos == 0)
+    {
+        return "/";
+    }
+    return normalized.substr(0, pos);
+}
+
+std::string
+RocProfVis::View::join_posix_path(const std::string& dir, const std::string& name)
+{
+    if(name == "..")
+    {
+        return posix_parent_path(dir);
+    }
+    if(!name.empty() && name[0] == '/')
+    {
+        return normalize_posix_path(name);
+    }
+
+    std::string joined = dir;
+    if(joined.empty())
+    {
+        joined = name;
+    }
+    else if(joined.back() == '/')
+    {
+        joined += name;
+    }
+    else
+    {
+        joined += "/" + name;
+    }
+    return normalize_posix_path(joined);
+}
+
 namespace
 {
 // Returns true if DISPLAY looks like an SSH X11-forwarded display, e.g.
@@ -438,18 +748,18 @@ namespace
 bool
 display_looks_forwarded()
 {
-    const char* disp = std::getenv("DISPLAY");
-    if(disp == nullptr || disp[0] == '\0')
+    const std::string disp = RocProfVis::View::safe_getenv("DISPLAY");
+    if(disp.empty())
     {
         return false;
     }
     constexpr const char* kPrefix   = "localhost:";
     constexpr size_t      kPrefixSz = 10;
-    if(std::strncmp(disp, kPrefix, kPrefixSz) != 0)
+    if(disp.compare(0, kPrefixSz, kPrefix) != 0)
     {
         return false;
     }
-    const char* num_begin = disp + kPrefixSz;
+    const char* num_begin = disp.c_str() + kPrefixSz;
     if(!std::isdigit(static_cast<unsigned char>(*num_begin)))
     {
         return false;
@@ -464,12 +774,74 @@ bool
 RocProfVis::View::is_remote_display_session()
 {
     static const bool s_cached = []() {
-        const bool ssh_connection = std::getenv("SSH_CONNECTION") != nullptr;
-        const bool ssh_client     = std::getenv("SSH_CLIENT") != nullptr;
-        const bool ssh_tty        = std::getenv("SSH_TTY") != nullptr;
+        const bool ssh_connection = !safe_getenv("SSH_CONNECTION").empty();
+        const bool ssh_client     = !safe_getenv("SSH_CLIENT").empty();
+        const bool ssh_tty        = !safe_getenv("SSH_TTY").empty();
         const bool forwarded      = display_looks_forwarded();
         return ssh_connection || ssh_client || ssh_tty || forwarded;
     }();
     return s_cached;
 }
 
+std::string
+RocProfVis::View::strip_ansi_for_display(std::string const& text)
+{
+    std::string out;
+    out.reserve(text.size());
+    size_t i = 0;
+    while (i < text.size())
+    {
+        unsigned char const c = static_cast<unsigned char>(text[i]);
+        if (c == 0x1BU)
+        {
+            if (i + 1 < text.size() && text[i + 1] == '[')
+            {
+                i += 2;
+                while (i < text.size())
+                {
+                    unsigned char const ch = static_cast<unsigned char>(text[i]);
+                    ++i;
+                    if (ch >= 0x40U && ch <= 0x7EU)
+                    {
+                        break;
+                    }
+                }
+                continue;
+            }
+            if (i + 1 < text.size() && text[i + 1] == ']')
+            {
+                i += 2;
+                while (i < text.size())
+                {
+                    if (text[i] == '\a')
+                    {
+                        ++i;
+                        break;
+                    }
+                    if (text[i] == '\x1b' && i + 1 < text.size() && text[i + 1] == '\\')
+                    {
+                        i += 2;
+                        break;
+                    }
+                    ++i;
+                }
+                continue;
+            }
+            if (i + 1 < text.size())
+            {
+                i += 2;
+                continue;
+            }
+            ++i;
+            continue;
+        }
+        if (c < 0x20U && c != '\n' && c != '\r' && c != '\t')
+        {
+            ++i;
+            continue;
+        }
+        out.push_back(static_cast<char>(c));
+        ++i;
+    }
+    return out;
+}

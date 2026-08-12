@@ -4,6 +4,11 @@
 
 #include <stdint.h>
 
+#define INVALID_INDEX    0xFFFFFFFFu
+#define INVALID_INDEX_64 0xFFFFFFFFFFFFFFFFull
+#define TOPOLOGY_INSTANCE_BIT_POS 54
+#define TOPOLOGY_ID_MASK ((1ULL << TOPOLOGY_INSTANCE_BIT_POS) - 1)
+
 typedef enum rocprofvis_controller_node_properties_t : uint32_t
 {
     __kRPVControllerNodePropertiesFirst = 0xC0000000,
@@ -162,7 +167,7 @@ typedef enum rocprofvis_controller_process_properties_t : uint32_t
 
 typedef enum rocprofvis_controller_topology_node_properties_t : uint32_t
 {
-    __kRPVControllerTopologyNodePropertiesFirst = 0xF1000000,
+    __kRPVControllerTopologyNodePropertiesFirst = 0xF6000000,
     kRPVControllerTopologyNodeTrackId = __kRPVControllerProcessPropertiesFirst,
     kRPVControllerTopologyNodeType,
     kRPVControllerTopologyNodeName,

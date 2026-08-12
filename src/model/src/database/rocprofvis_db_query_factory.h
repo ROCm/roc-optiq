@@ -3,7 +3,7 @@
 
 #pragma once
 
-#include "rocprofvis_db.h"
+#include "rocprofvis_db_sqlite.h"
 #include <vector>
 
 namespace RocProfVis
@@ -11,12 +11,10 @@ namespace RocProfVis
 namespace DataModel
 {
 
-class ProfileDatabase;
-
 class QueryFactory : public DatabaseVersion
 {
 public:
-    QueryFactory(ProfileDatabase* db);
+    QueryFactory(SqliteDatabase* db);
 
     std::string GetRocprofRegionTrackQuery(bool is_sample_track);
     std::string GetRocprofRegionLevelQuery(bool is_sample_track);
@@ -82,9 +80,14 @@ public:
     std::string GetRocprofMemoryAllocStreamFlowQuery();
     std::string GetRocprofMemoryCopyStreamFlowQuery();
 
+    std::string GetPerfettoEventSliceQuery();
+    std::string GetPerfettoCounterSliceQuery();
+    std::string GetPerfettoRegionTableQuery();
+    std::string GetPerfettoPerformanceCountersTableQuery();
+
 private:
 
-    ProfileDatabase* m_db;
+    SqliteDatabase* m_db;
 };
 
 

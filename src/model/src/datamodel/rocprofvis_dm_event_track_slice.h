@@ -22,15 +22,14 @@ class EventTrackSlice : public TrackSlice {
         // @param ctx - Track object context
         // @param start - start time of the slice
         // @param end - end time of the slice
-        EventTrackSlice(   Track* ctx, 
-                                rocprofvis_dm_timestamp_t start, 
-                                rocprofvis_dm_timestamp_t end); 
+        // @param tag - tag used to compute the slice's hashed identity
+        EventTrackSlice(Track* ctx, rocprofvis_dm_timestamp_t start, rocprofvis_dm_timestamp_t end, rocprofvis_dm_hashed_timestamp_tag_t tag);
         // EventTrackSlice class destructor, not required unless declared as virtual
         ~EventTrackSlice(){}
         // Method to add event record to the time slice
         // @param data - reference to a structure with record data
         // @return status of operation
-        rocprofvis_dm_result_t  AddRecord( rocprofvis_db_record_data_t & data) override;
+        rocprofvis_dm_result_t  AddRecord(rocprofvis_db_record_data_t & data) override;
         // Method to get amount of memory used by the class object
         // @return used memory size
         rocprofvis_dm_size_t    GetMemoryFootprint() override;
@@ -92,6 +91,8 @@ class EventTrackSlice : public TrackSlice {
         // @param level - graph level for the event
         // @return status of operation
         rocprofvis_dm_result_t GetRecordGraphLevelAt(const rocprofvis_dm_property_index_t index, rocprofvis_dm_event_level_t & level) override;
+
+        void SetComplete() override;
 
     private:
 

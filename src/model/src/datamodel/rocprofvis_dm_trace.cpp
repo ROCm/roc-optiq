@@ -3,6 +3,8 @@
 
 #include "rocprofvis_dm_trace.h"
 #include "rocprofvis_dm_table_row.h"
+#include "rocprofvis_shared_types.h"
+#include "rocprofvis_c_interface.h"
 #include <numeric>
 
 namespace RocProfVis
@@ -17,10 +19,11 @@ Trace::Trace()
     m_parameters.metadata_loaded=false;
 }
 
-rocprofvis_dm_result_t Trace::BindDatabase(rocprofvis_dm_database_t db, rocprofvis_dm_db_bind_struct* & bind_data)
+rocprofvis_dm_result_t Trace::BindDatabase(rocprofvis_dm_database_t db, rocprofvis_dm_db_bind_struct* & bind_data, rocprofvis_dm_string_t config_path)
 {
     ROCPROFVIS_ASSERT_MSG_RETURN(db, ERROR_DATABASE_CANNOT_BE_NULL, kRocProfVisDmResultInvalidParameter);
      
+    m_binding_info.config_path = config_path;
     m_binding_info.trace_object = this;
     m_binding_info.trace_properties = &m_parameters;
     m_binding_info.FuncAddTrack = AddTrack;
@@ -351,7 +354,7 @@ rocprofvis_dm_result_t Trace::AddTrack(const rocprofvis_dm_trace_t object, rocpr
     return kRocProfVisDmResultSuccess;
 }
 
-rocprofvis_dm_slice_t Trace::AddSlice(const rocprofvis_dm_trace_t object, const rocprofvis_dm_track_id_t track_id, const rocprofvis_dm_timestamp_t start, const rocprofvis_dm_timestamp_t end){
+rocprofvis_dm_slice_t Trace::AddSlice(const rocprofvis_dm_trace_t object, const rocprofvis_dm_track_id_t track_id, const rocprofvis_dm_timestamp_t start, const rocprofvis_dm_timestamp_t end, const rocprofvis_dm_hashed_timestamp_tag_t tag){
     ROCPROFVIS_ASSERT_MSG_RETURN(object, ERROR_TRACE_CANNOT_BE_NULL, nullptr);
     Trace* trace = (Trace*)object;
     rocprofvis_dm_track_t track = nullptr;
@@ -361,7 +364,7 @@ rocprofvis_dm_slice_t Trace::AddSlice(const rocprofvis_dm_trace_t object, const 
         ROCPROFVIS_ASSERT_MSG_RETURN(track, ERROR_TRACK_CANNOT_BE_NULL, nullptr);
         TimedLock<std::unique_lock<std::shared_mutex>> lock(*((Track*)track)->Mutex(), __func__,
                                                             trace);
-        return ((Track*)track)->AddSlice(start, end);
+        return ((Track*)track)->AddSlice(start, end, tag);
     }
     else
         return nullptr;
@@ -379,7 +382,7 @@ rocprofvis_dm_index_t Trace::AddString(const rocprofvis_dm_trace_t object,  cons
     Trace* trace = (Trace*)object;
     rocprofvis_dm_index_t current_index = (rocprofvis_dm_index_t)trace->m_strings.size();
     try{
-        trace->m_strings.push_back(stringValue);
+        trace->m_strings.push_back(std::string(stringValue));
     }
     catch(const std::exception&)
     {
@@ -404,7 +407,7 @@ void Trace::BuildStringsOrderArray() {
         });
     m_sorted_strings_lookup_array.resize(m_strings.size());
     for (size_t sorted_pos = 0; sorted_pos < idx.size(); ++sorted_pos)
-        m_sorted_strings_lookup_array[idx[sorted_pos]] = sorted_pos;
+        m_sorted_strings_lookup_array[idx[sorted_pos]] = static_cast<rocprofvis_dm_index_t>(sorted_pos);
 }
 
 const size_t Trace::GetStringOrder(const rocprofvis_dm_trace_t object, uint32_t index) {
@@ -418,11 +421,12 @@ rocprofvis_dm_result_t Trace::GetStringIndices(
     const rocprofvis_dm_trace_t object,
     rocprofvis_dm_num_string_table_filters_t num,
     rocprofvis_dm_string_table_filters_t substrings,
+    bool include_substring,
     std::vector<rocprofvis_dm_index_t>& indices)
 {
     ROCPROFVIS_ASSERT_MSG(object, ERROR_TRACE_CANNOT_BE_NULL);
     Trace* trace = (Trace*)object;
-    return trace->GetStringIndicesWithSubstring(num, substrings, indices);
+    return trace->SearchStringIndices(num, substrings, include_substring, indices);
 }
 
 void Trace::MetadataLoaded(const rocprofvis_dm_trace_t object)
@@ -559,7 +563,7 @@ rocprofvis_dm_table_t Trace::AddInfoTable(const rocprofvis_dm_trace_t object, ro
     Trace* trace = (Trace*) object;
     TimedLock<std::unique_lock<std::shared_mutex>> lock(*trace->Mutex(), __func__, trace);
     try{
-        uint32_t id = trace->m_info_tables.size();
+        uint32_t id = static_cast<uint32_t>(trace->m_info_tables.size());
         trace->m_info_tables.push_back(std::make_unique<InfoTable>(trace, id, node, name, handle));
     }
     catch(const std::exception&)
@@ -653,6 +657,7 @@ rocprofvis_dm_result_t Trace::CheckSliceExists(
                         const rocprofvis_dm_trace_t     object,
                         const rocprofvis_dm_timestamp_t start,
                         const rocprofvis_dm_timestamp_t end,
+                        const rocprofvis_dm_hashed_timestamp_tag_t tag,
                         const rocprofvis_db_num_of_tracks_t num,
                         const rocprofvis_db_track_selection_t tracks)
 {
@@ -668,14 +673,14 @@ rocprofvis_dm_result_t Trace::CheckSliceExists(
         {
             if(trace->m_tracks[i]->TrackId() == tracks[n])
             {
-                rocprofvis_dm_slice_t  object = nullptr;
+                rocprofvis_dm_slice_t  slice_object = nullptr;
                 rocprofvis_dm_result_t result =
-                    trace->m_tracks[i].get()->GetSliceAtTime(hash_combine(start,end), object);
+                    trace->m_tracks[i].get()->GetSliceAtTime(rocprofvis_dm_hash_combine_timestamp(start, end, tag), slice_object);
                 if(result == kRocProfVisDmResultSuccess)
                 {
-                    ROCPROFVIS_ASSERT_MSG_RETURN(object, ERROR_SLICE_CANNOT_BE_NULL,
+                    ROCPROFVIS_ASSERT_MSG_RETURN(slice_object, ERROR_SLICE_CANNOT_BE_NULL,
                                                     kRocProfVisDmResultUnknownError);
-                    TrackSlice* slice = (TrackSlice*) object;
+                    TrackSlice* slice = (TrackSlice*) slice_object;
                     lock.unlock();
 
                     slice->WaitComplete();
@@ -768,12 +773,12 @@ rocprofvis_dm_charptr_t Trace::GetStringAt(rocprofvis_dm_index_t index){
     return m_strings[index].c_str();
 }
 
-rocprofvis_dm_result_t Trace::GetStringIndicesWithSubstring(rocprofvis_dm_num_string_table_filters_t num, rocprofvis_dm_string_table_filters_t substrings, std::vector<rocprofvis_dm_index_t>& indices)
+rocprofvis_dm_result_t Trace::SearchStringIndices(rocprofvis_dm_num_string_table_filters_t num, rocprofvis_dm_string_table_filters_t targets, bool include_substring, std::vector<rocprofvis_dm_index_t>& indices)
 {
     ROCPROFVIS_ASSERT_MSG_RETURN(m_parameters.metadata_loaded, ERROR_METADATA_IS_NOT_LOADED, kRocProfVisDmResultNotLoaded);
     for(int i = 0; i < num; i ++)
     {
-        ROCPROFVIS_ASSERT_RETURN(substrings[i], kRocProfVisDmResultInvalidParameter);
+        ROCPROFVIS_ASSERT_RETURN(targets[i], kRocProfVisDmResultInvalidParameter);
     }
     for(int i = 0; i < m_strings.size(); i ++)
     {
@@ -781,14 +786,24 @@ rocprofvis_dm_result_t Trace::GetStringIndicesWithSubstring(rocprofvis_dm_num_st
         bool match = true;
         for(int j = 0; j < num; j ++)
         {
-            std::string_view sub_sv = substrings[j];
-            auto it = std::search(sv.begin(), sv.end(), sub_sv.begin(), sub_sv.end(),
-                        [](unsigned char c1, unsigned char c2) {
-                            return std::tolower(c1) == std::tolower(c2);
-                        });
-            if (it == sv.end())
+            std::string_view target_sv = targets[j];
+            if(include_substring)
             {
-                match = false;
+                match = std::search(sv.begin(), sv.end(), target_sv.begin(), target_sv.end(),
+                            [](unsigned char c1, unsigned char c2) {
+                                return std::tolower(c1) == std::tolower(c2);
+                            }) != sv.end();
+            }
+            else
+            {
+                match = sv.size() == target_sv.size() &&
+                        std::equal(sv.begin(), sv.end(), target_sv.begin(),
+                            [](unsigned char c1, unsigned char c2) {
+                                return std::tolower(c1) == std::tolower(c2);
+                            });
+            }
+            if(!match)
+            {
                 break;
             }
         }
@@ -801,6 +816,7 @@ rocprofvis_dm_result_t Trace::GetStringIndicesWithSubstring(rocprofvis_dm_num_st
 }
 
 rocprofvis_dm_result_t  Trace::GetPropertyAsUint64(rocprofvis_dm_property_t property, rocprofvis_dm_property_index_t index, uint64_t* value){
+    (void) index;
     ROCPROFVIS_ASSERT_MSG_RETURN(value, ERROR_REFERENCE_POINTER_CANNOT_BE_NULL, kRocProfVisDmResultInvalidParameter);
     switch(property)
     {
@@ -853,25 +869,25 @@ rocprofvis_dm_result_t    Trace::GetPropertyAsHandle(rocprofvis_dm_property_t pr
         case kRPVDMTableHandleByID:
             return GetTableHandle(*(rocprofvis_dm_table_id_t*) &index, *value);
         case kRPVDNodeInfoTableHandleIndexed:
-            return GetInfoTableHandle("Node",index, *value);
+            return GetInfoTableHandle("Node",static_cast<rocprofvis_dm_index_t>(index), *value);
         case kRPVDAgentInfoTableHandleIndexed:
-            return GetInfoTableHandle("Agent",index, *value);
+            return GetInfoTableHandle("Agent",static_cast<rocprofvis_dm_index_t>(index), *value);
         case kRPVDQueueInfoTableHandleIndexed:
-            return GetInfoTableHandle("Queue",index, *value);
+            return GetInfoTableHandle("Queue",static_cast<rocprofvis_dm_index_t>(index), *value);
         case kRPVDProcessInfoTableHandleIndexed:
-            return GetInfoTableHandle("Process",index, *value);
+            return GetInfoTableHandle("Process",static_cast<rocprofvis_dm_index_t>(index), *value);
         case kRPVDThreadInfoTableHandleIndexed:
-            return GetInfoTableHandle("Thread",index, *value);
+            return GetInfoTableHandle("Thread",static_cast<rocprofvis_dm_index_t>(index), *value);
         case kRPVDStreamInfoTableHandleIndexed:
-            return GetInfoTableHandle("Stream",index, *value);
+            return GetInfoTableHandle("Stream",static_cast<rocprofvis_dm_index_t>(index), *value);
         case kRPVDPmcInfoTableHandleIndexed:
-            return GetInfoTableHandle("PMC",index, *value);
+            return GetInfoTableHandle("PMC",static_cast<rocprofvis_dm_index_t>(index), *value);
         case kRPVDAgentQueueMappingInfoTableHandleIndexed:
-            return GetInfoTableHandle("AgentToQueue",index, *value);
+            return GetInfoTableHandle("AgentToQueue",static_cast<rocprofvis_dm_index_t>(index), *value);
         case kRPVDAgentStreamMappingInfoTableHandleIndexed:
-            return GetInfoTableHandle("AgentToStream",index, *value);
+            return GetInfoTableHandle("AgentToStream",static_cast<rocprofvis_dm_index_t>(index), *value);
         case kRPVDStreamQueueMappingInfoTableHandleIndexed:
-            return GetInfoTableHandle("StreamToQueue",index, *value);
+            return GetInfoTableHandle("StreamToQueue",static_cast<rocprofvis_dm_index_t>(index), *value);
         case kRPVDMTopologyHandle:
             *value = Topology();
             return kRocProfVisDmResultSuccess;

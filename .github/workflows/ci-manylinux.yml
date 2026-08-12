@@ -135,7 +135,8 @@ jobs:
             createrepo_c \
             rpm-build \
             dbus-devel \
-            wayland-devel
+            wayland-devel \
+            libxkbcommon-devel
 
       - name: Install OpenSSL
         if: inputs.crypto_backend == 'OpenSSL'

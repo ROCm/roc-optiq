@@ -384,6 +384,7 @@ LineTrackItem::ExtractPointsFromData()
     if(sample_track->GetData().empty())
     {
         spdlog::debug("No data for track {}", m_track_id);
+        m_request_state = TrackDataRequestState::kIdle;
         return false;
     }
     const std::vector<TraceCounter>& track_data = sample_track->GetData();

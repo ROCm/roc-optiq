@@ -321,6 +321,7 @@ FlameTrackItem::ExtractPointsFromData()
 
     if(event_track->GetData().empty())
     {
+        m_request_state = TrackDataRequestState::kIdle;
         spdlog::debug("No data for track {}", m_track_id);
         return false;
     }

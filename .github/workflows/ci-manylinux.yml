@@ -209,10 +209,49 @@ jobs:
       - name: Upload DEB to S3
         if: ${{ inputs.upload_to_s3 }}
         run: |
-          S3_DEB_PREFIX="s3://${{ secrets.AWS_S3_BUCKET }}/${{ env.S3_ROOT_DIRECTORY }}/rocm/extras/rocoptiq/packages/deb/pool/main"
+          S3_DEB_BASE="s3://${{ secrets.AWS_S3_BUCKET }}/${{ env.S3_ROOT_DIRECTORY }}/rocm/extras/rocoptiq/packages/deb"
+          DEB_FILE="${S3_DEB_BASE}/pool/main/amdrocm10-roc-optiq_1.0.0.0-1_amd64.deb"
           aws s3 cp \
             $(ls ${{ env.DIST_DIR }}/*.deb | head -1) \
-            "${S3_DEB_PREFIX}/amdrocm10-roc-optiq_1.0.0.0-1_amd64.deb" \
+            "${DEB_FILE}" \
+            --no-progress
+
+      - name: Generate DEB Metadata for S3
+        if: ${{ inputs.upload_to_s3 }}
+        run: |
+          mkdir -p deb-repo/pool/main deb-repo/dists/optiq-nightly/main/binary-amd64
+          cp $(ls ${{ env.DIST_DIR }}/*.deb | head -1) \
+            deb-repo/pool/main/amdrocm10-roc-optiq_1.0.0.0-1_amd64.deb
+
+          # Generate Packages index
+          cd deb-repo
+          dpkg-scanpackages pool/main /dev/null > dists/optiq-nightly/main/binary-amd64/Packages
+          gzip -k -f dists/optiq-nightly/main/binary-amd64/Packages
+
+          # Build Release file manually (apt-ftparchive unavailable on RHEL)
+          SUITE="optiq-nightly"
+          PKGS="dists/${SUITE}/main/binary-amd64/Packages"
+          PKGS_GZ="${PKGS}.gz"
+          cat > dists/${SUITE}/Release <<EOF
+          Origin: ROCm Optiq
+          Label: ${SUITE}
+          Suite: ${SUITE}
+          Codename: ${SUITE}
+          Architectures: amd64
+          Components: main
+          Date: $(date -u '+%a, %d %b %Y %H:%M:%S UTC')
+          MD5Sum:
+           $(md5sum ${PKGS}    | awk '{print $1, "'$(wc -c < ${PKGS})'",    "main/binary-amd64/Packages"}')
+           $(md5sum ${PKGS_GZ} | awk '{print $1, "'$(wc -c < ${PKGS_GZ})'", "main/binary-amd64/Packages.gz"}')
+          SHA256:
+           $(sha256sum ${PKGS}    | awk '{print $1, "'$(wc -c < ${PKGS})'",    "main/binary-amd64/Packages"}')
+           $(sha256sum ${PKGS_GZ} | awk '{print $1, "'$(wc -c < ${PKGS_GZ})'", "main/binary-amd64/Packages.gz"}')
+          EOF
+
+          cd ..
+          S3_DEB_BASE="s3://${{ secrets.AWS_S3_BUCKET }}/${{ env.S3_ROOT_DIRECTORY }}/rocm/extras/rocoptiq/packages/deb"
+          aws s3 cp --recursive deb-repo/dists \
+            "${S3_DEB_BASE}/dists/" \
             --no-progress
 
       - name: Upload RPM to S3

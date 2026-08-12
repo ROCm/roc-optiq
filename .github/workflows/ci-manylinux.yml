@@ -133,7 +133,8 @@ jobs:
             libXi-devel \
             dpkg-dev \
             createrepo_c \
-            rpm-build
+            rpm-build \
+            dbus-devel
 
       - name: Install OpenSSL
         if: inputs.crypto_backend == 'OpenSSL'
@@ -149,7 +150,6 @@ jobs:
             -DROCPROFVIS_ENABLE_PROFILER=${{ env.ENABLE_PROFILER }} \
             -DGLFW_LINK_STATIC=ON \
             -DGLFW_BUILD_WAYLAND=OFF \
-            -DUSE_NATIVE_FILE_DIALOG=OFF \
             -DCRYPTO_BACKEND=${{ inputs.crypto_backend }} \
             -DCPACK_GENERATOR="TGZ;DEB;RPM" \
             -DCMAKE_EXE_LINKER_FLAGS="-ldl"

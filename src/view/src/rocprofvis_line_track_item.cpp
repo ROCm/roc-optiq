@@ -5,6 +5,7 @@
 #include "rocprofvis_click_manager.h"
 #include "widgets/rocprofvis_gui_helpers.h"
 #include "rocprofvis_settings_manager.h"
+#include "rocprofvis_timeline_selection.h"
 #include "rocprofvis_timeline_track_options.h"
 #include "rocprofvis_utils.h"
 #include "spdlog/spdlog.h"
@@ -301,10 +302,14 @@ LineTrackItem::Update()
 {
     if(m_track_statistics)
     {
+        // Blue only while a time-range selection narrows the data.
+        const bool ranged =
+            m_timeline_selection && m_timeline_selection->HasValidTimeRangeSelection();
         for(size_t i = 0; i < m_pills_analysis.size(); i++)
         {
             if(m_pills_analysis[i])
             {
+                m_pills_analysis[i]->SetRangeAffected(ranged);
                 if(m_track_statistics->state == AnalysisTrackStatistics::kReady &&
                    m_track_statistics_dirty)
                 {

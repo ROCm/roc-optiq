@@ -57,6 +57,7 @@ public:
     void   SetExtendedLabel(const std::string& label);
     void   SetTooltip(std::string label);
     void   SetAccentColor(size_t accent_color);
+    void   SetRangeAffected(bool range_affected);
     void   Activate();
     void   Deactivate();
     void   Render(const ImVec2& pos, SettingsManager& settings, Sizing sizing = kCompact);
@@ -72,6 +73,8 @@ private:
     bool                              m_show_pill_label;
     bool                              m_active;
     std::optional<size_t>             m_accent_color;
+    // Tints the value text blue to flag dependence on the time-range selection.
+    bool                              m_range_affected;
     Sizing                            m_sizing;
     std::string                       m_compact_label;
     std::string                       m_ext_label;

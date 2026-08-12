@@ -206,6 +206,9 @@ FlameTrackItem::Update()
 {
     if(m_track_statistics && m_pill_analysis_queue)
     {
+        // Blue only while a time-range selection narrows the data.
+        m_pill_analysis_queue->SetRangeAffected(
+            m_timeline_selection && m_timeline_selection->HasValidTimeRangeSelection());
         if(m_track_statistics->state == AnalysisTrackStatistics::kReady &&
            m_track_statistics_dirty)
         {
@@ -552,7 +555,8 @@ FlameTrackItem::ComputeTextVerticalOffset(float box_height) const
 
 void
 FlameTrackItem::DrawBox(ImVec2 start_position, ChartItem& chart_item, float duration,
-                        ImDrawList* draw_list, bool use_highlight_color)
+                        ImDrawList* draw_list, bool use_highlight_color, bool mark_partial,
+                        float selection_px_start, float selection_px_end)
 {
     ImVec2 cursor_position = ImGui::GetCursorScreenPos();
     ImVec2 content_size    = ImGui::GetContentRegionAvail();
@@ -609,6 +613,31 @@ FlameTrackItem::DrawBox(ImVec2 start_position, ChartItem& chart_item, float dura
 
     float rounding = 2.0f;
     draw_list->AddRectFilled(rectMin, rectMax, rectColor, rounding);
+
+    if(mark_partial)
+    {
+        // The dimming scrim sits above the tracks, so repaint the slice(s) of this
+        // event that fall outside the selection at full brightness on the foreground
+        // list (clipped to the track) - it then reads as included in the results.
+        // Only the outer corners are rounded so the internal cut stays flush with
+        // the in-selection part.
+        ImDrawList* top_layer = ImGui::GetForegroundDrawList(ImGui::GetWindowViewport());
+        top_layer->PushClipRect(draw_list->GetClipRectMin(), draw_list->GetClipRectMax(),
+                                true);
+        if(selection_px_start > rectMin.x)
+        {
+            top_layer->AddRectFilled(
+                rectMin, ImVec2(std::min(selection_px_start, rectMax.x), rectMax.y),
+                rectColor, rounding, ImDrawFlags_RoundCornersLeft);
+        }
+        if(selection_px_end < rectMax.x)
+        {
+            top_layer->AddRectFilled(
+                ImVec2(std::max(selection_px_end, rectMin.x), rectMin.y), rectMax,
+                rectColor, rounding, ImDrawFlags_RoundCornersRight);
+        }
+        top_layer->PopClipRect();
+    }
 
     if(rectMax.x - rectMin.x > MIN_LABEL_WIDTH &&
        box_height >= ImGui::GetTextLineHeight())
@@ -959,10 +988,20 @@ FlameTrackItem::RenderChart(float graph_width)
     const bool has_time_range_selection =
         m_timeline_selection->GetSelectedTimeRange(range_start_ns, range_end_ns);
 
+    // Window origin is constant for every event drawn this frame.
+    const ImVec2 container_pos = ImGui::GetWindowPos();
+
+    // Selection edges in this track's pixel space (for partially-included events).
+    float selection_px_start = 0.0f;
+    float selection_px_end   = 0.0f;
+    if(has_time_range_selection)
+    {
+        selection_px_start = container_pos.x + m_tpt->RawTimeToPixel(range_start_ns);
+        selection_px_end   = container_pos.x + m_tpt->RawTimeToPixel(range_end_ns);
+    }
+
     for(ChartItem& item : m_chart_items)
     {
-        ImVec2 container_pos = ImGui::GetWindowPos();
-
         double normalized_start =
             container_pos.x + m_tpt->RawTimeToPixel(item.event.m_start_ts);
 
@@ -991,13 +1030,18 @@ FlameTrackItem::RenderChart(float graph_width)
             has_time_range_selection && item.event.m_start_ts <= range_end_ns &&
             item.event.m_start_ts + item.event.m_duration >= range_start_ns;
 
+        // Overlaps the selection but is not fully contained: only part is inside.
+        const bool mark_partial =
+            use_highlight_color &&
+            (item.event.m_start_ts < range_start_ns ||
+             item.event.m_start_ts + item.event.m_duration > range_end_ns);
+
         DrawBox(start_position, item, static_cast<float>(normalized_duration), draw_list,
-                use_highlight_color);
+                use_highlight_color, mark_partial, selection_px_start, selection_px_end);
     }
 
     for(ChartItem& item : m_selected_chart_items)
     {
-        ImVec2 container_pos = ImGui::GetWindowPos();
         double normalized_start =
             container_pos.x + m_tpt->RawTimeToPixel(item.event.m_start_ts);
 

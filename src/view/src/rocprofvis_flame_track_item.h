@@ -72,7 +72,9 @@ private:
     void HandleFontSizeChanged(std::shared_ptr<RocEvent> e);
 
     void DrawBox(ImVec2 start_position, ChartItem& flame, float duration,
-                 ImDrawList* draw_list, bool use_highlight_color);
+                 ImDrawList* draw_list, bool use_highlight_color,
+                 bool mark_partial = false, float selection_px_start = 0.0f,
+                 float selection_px_end = 0.0f);
 
     bool ExtractPointsFromData() override;
     bool ExtractChildInfo(ChartItem& item);

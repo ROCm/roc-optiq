@@ -7,8 +7,8 @@
 
 #    include <GLFW/glfw3.h>
 
-#    include "spdlog/spdlog.h"
 #    include "rocprofvis_platform_helpers.h"
+#    include "spdlog/spdlog.h"
 
 namespace RocProfVis
 {
@@ -116,7 +116,7 @@ should_apply_drag_repair()
 
     static const int env_value = []() {
         int repair = parse_drag_repair_value(std::getenv("ROCPROFVIS_DRAG_REPAIR"));
-        if(repair >= 0) 
+        if(repair >= 0)
         {
             spdlog::info("Window drag fix: {}", repair);
         }
@@ -254,7 +254,6 @@ restore_secondary_viewport_intended_pos(
     viewport_intended_pos.clear();
 }
 
-
 // Repair X11 pointer routing after a floating-window drag.
 //
 // Symptom: dragging a secondary (external) viewport and then clicking
@@ -339,8 +338,7 @@ raise_dragged_viewport_after_release()
     if(g_prev_mouse_left_down && !curr_mouse_down && g_dragged_viewport_id != 0)
     {
         ImGuiViewport* vp = ImGui::FindViewportByID(g_dragged_viewport_id);
-        if(vp != nullptr && vp->PlatformWindowCreated &&
-           vp->PlatformHandle != nullptr)
+        if(vp != nullptr && vp->PlatformWindowCreated && vp->PlatformHandle != nullptr)
         {
             GLFWwindow* glfw_win = static_cast<GLFWwindow*>(vp->PlatformHandle);
             // Capture position in case Mutter re-places the window on

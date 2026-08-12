@@ -394,8 +394,12 @@ main(int argc, char** argv)
                 // Multi-viewport lets panels be dragged out into their own OS
                 // window. Docking is intentionally left disabled.
                 io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
+                // ConfigDpiScaleViewports is deliberately left off. It rescales a
+                // window every time its viewport reports a new DPI, which upstream
+                // documents as a resizing feedback loop for a window straddling a
+                // DPI boundary, and the runaway size then persists to imgui.ini.
+                // Fonts still scale per monitor through ConfigDpiScaleFonts.
                 io.ConfigDpiScaleFonts               = true;
-                io.ConfigDpiScaleViewports           = true;
                 io.ConfigWindowsMoveFromTitleBarOnly = true;
 
                 ImGui::StyleColorsLight();

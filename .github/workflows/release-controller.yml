@@ -57,3 +57,12 @@ jobs:
       upload_to_s3: ${{ !inputs.dry_run }}
       s3_root_directory: release
       release_version: ${{ inputs.release_version }}
+    
+    release-manylinux:
+      name: ManyLinux Release
+      uses: ./.github/workflows/ci-manylinux.yml
+      secrets: inherit
+      with:
+        upload_to_github: ${{ !inputs.dry_run }}
+        upload_to_s3: ${{ !inputs.dry_run }}
+        s3_root_directory: v5

@@ -33,10 +33,6 @@ on:
           - nightly
           - rc
           - release
-      release_version:
-        description: 'Manually specify a release version to use in the S3 bucket path. Defaults to YYYY_MM_DD timestamp if left empty.'
-        type: string
-        default: ''
       crypto_backend:
         description: 'Crypto backend for libssh2 (mbedTLS or OpenSSL)'
         type: string
@@ -79,10 +75,6 @@ on:
         description: 'The root directory to use when uploading to the roc-optiq S3 bucket'
         type: string
         default: 'test'
-      release_version:
-        description: 'Manually specify a release version to use in the S3 bucket path. Defaults to YYYY_MM_DD timestamp if left empty.'
-        type: string
-        default: ''
       crypto_backend:
         description: 'Crypto backend for libssh2 (mbedTLS or OpenSSL)'
         type: string
@@ -108,7 +100,6 @@ env:
   ENABLE_REMOTE: ${{ inputs.enable_remote && 'ON' || 'OFF' }}
   ENABLE_PROFILER: ${{ inputs.enable_profiler && 'ON' || 'OFF' }}
   S3_ROOT_DIRECTORY: ${{ inputs.s3_root_directory }}
-  RELEASE_VERSION: ${{ inputs.release_version }}
   ROCM_VERSION: ${{ inputs.rocm_version }}
 
 jobs:

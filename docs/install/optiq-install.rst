@@ -6,7 +6,7 @@
 Install ROCm Optiq
 ******************
 
-Install ROCm Optiq for Windows or Linux using the installation files in the `https://github.com/ROCm/roc-optiq <https://github.com/ROCm/roc-optiq>`_  GitHub repository.
+Install ROCm Optiq for Linux, Windows or MacOS using the installation files in the `https://github.com/ROCm/roc-optiq <https://github.com/ROCm/roc-optiq>`_  GitHub repository.
 
 .. _requirements:
 
@@ -42,22 +42,19 @@ Supported operating systems
      - Supported versions
      - Install methods
    * - Ubuntu
-     - 24, 22
-     - apt, Tarball
-   * - Debian
-     - 13, 12
+     - Ubuntu 26.04, Ubuntu 24.04, Ubuntu 22.04
      - apt, Tarball
    * - RHEL
-     - 10, 9, 8
+     - RHEL 10, RHEL 9, RHEL 8
      - dnf, Tarball
    * - Oracle Linux
-     - 10, 9, 8
+     - Oracle Linux 10, Oracle Linux 9, Oracle Linux 8
      - dnf, Tarball
    * - Windows
-     - 11
+     - Windows 11
      - Windows installer
    * - macOS
-     - 26, 15, 14
+     - macOS Tahoe (Version 26), macOS Sequoia (Version 15), macOS Sonoma (Version 14)
      - .zip
 
 If you're not sure which Linux distribution or version you're running, the ``/etc/os-release`` file contains this information:

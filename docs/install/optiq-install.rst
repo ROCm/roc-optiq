@@ -97,7 +97,7 @@ Installation
 
       .. tab-set::
 
-         .. tab-item:: apt (Ubuntu / Debian)
+         .. tab-item:: apt (Ubuntu)
 
             1. Download the ``.zip`` package for your operating system and version from the `ROCm Optiq GitHub Releases <https://github.com/ROCm/roc-optiq/releases>`_ page.
             2. Unzip the package to extract the ``.deb`` file:
@@ -179,8 +179,8 @@ Installation
 
    .. tab-item:: macOS
 
-      1. Download the archive for your macOS version (for example, ``roc-optiq_macos.zip``) from the `ROCm Optiq GitHub Releases <https://github.com/ROCm/roc-optiq/releases>`_ page.
-      2. Unzip it, then drag ``roc-optiq.app`` from the extracted folder to the ``Applications`` folder.
+      1. Download the ``.zip`` from the `ROCm Optiq GitHub Releases <https://github.com/ROCm/roc-optiq/releases>`_ page.
+      2. Unzip it, then drag and drop ``roc-optiq.app`` from the extracted folder to the ``Applications`` folder.
       3. Launch ROCm Optiq from **Applications**.
 
       Settings, logs, and presets are stored at ``~/Library/Application Support/ROCm-Optiq/``.
@@ -190,30 +190,36 @@ Uninstall
 
 .. tab-set::
 
-   .. tab-item:: apt (Ubuntu / Debian)
-
-      .. code-block:: shell
-
-         sudo apt remove roc-optiq
-         sudo apt autoremove
-
-   .. tab-item:: dnf (RHEL / Oracle Linux)
-
-      .. code-block:: shell
-
-         sudo dnf remove roc-optiq
-
-   .. tab-item:: Tarball
-
-      .. code-block:: shell
-
-         rm -rf "$HOME/opt/roc-optiq"
-
-      Then remove the ``export PATH=...`` line you added to your shell profile.
-
    .. tab-item:: Windows
 
       Go to **Control Panel > Programs > Uninstall a program**, select **ROCm Optiq**, and follow the prompts.
+
+   .. tab-item:: Linux
+
+      Choose the uninstall method that matches how you installed ROCm Optiq.
+
+      .. tab-set::
+
+         .. tab-item:: apt (Ubuntu / Debian)
+
+            .. code-block:: shell
+
+               sudo apt remove roc-optiq
+               sudo apt autoremove
+
+         .. tab-item:: dnf (RHEL / Oracle Linux)
+
+            .. code-block:: shell
+
+               sudo dnf remove roc-optiq
+
+         .. tab-item:: Tarball (any Linux distribution)
+
+            .. code-block:: shell
+
+               rm -rf "$HOME/opt/roc-optiq"
+
+            Then remove the ``export PATH=...`` line you added to your shell profile.
 
    .. tab-item:: macOS
 

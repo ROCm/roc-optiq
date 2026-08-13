@@ -3690,6 +3690,7 @@ DataProvider::CreateRawSampleData(const TrackRequestParams& params,
     rocprofvis_controller_array_t*               track_data   = req.request_array;
     const std::chrono::steady_clock::time_point& request_time = req.request_time;
     bool response_valid = (req.response_code == kRocProfVisResultSuccess);
+    bool request_cancelled = (req.response_code == kRocProfVisResultCancelled);
 
     uint64_t count = 0;
 
@@ -3786,7 +3787,11 @@ DataProvider::CreateRawSampleData(const TrackRequestParams& params,
         trace_counter.m_value    = value;
     }
 
-    raw_sample_data->AddChunk(params.m_chunk_index, std::move(buffer));
+    // skip ading chunk when request is cancelled. Missing chunks will trigger re-request in TimelineView::RequestDataIfEmpty
+    if (!request_cancelled)
+    {
+        raw_sample_data->AddChunk(params.m_chunk_index, std::move(buffer));
+    }
 
     m_model.GetTimeline().SetTrackData(params.m_track_id, raw_sample_data);
 }
@@ -3797,6 +3802,7 @@ DataProvider::CreateRawEventData(const TrackRequestParams& params, const Request
     rocprofvis_controller_array_t*               track_data   = req.request_array;
     const std::chrono::steady_clock::time_point& request_time = req.request_time;
     bool response_valid = (req.response_code == kRocProfVisResultSuccess);
+    bool request_cancelled = (req.response_code == kRocProfVisResultCancelled);
 
     uint64_t count = 0;
 
@@ -3924,7 +3930,12 @@ DataProvider::CreateRawEventData(const TrackRequestParams& params, const Request
     // Add the buffer to the raw event data
     spdlog::debug("Adding {} event entries to track id {}", real_count,
                   params.m_track_id);
-    raw_event_data->AddChunk(params.m_chunk_index, std::move(buffer));
+
+    // skip ading chunk when request is cancelled. Missing chunks will trigger re-request in TimelineView::RequestDataIfEmpty
+    if (!request_cancelled)
+    {
+        raw_event_data->AddChunk(params.m_chunk_index, std::move(buffer));
+    }
     m_model.GetTimeline().SetTrackData(params.m_track_id, raw_event_data);
 }
 

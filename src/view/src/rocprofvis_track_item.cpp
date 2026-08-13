@@ -996,16 +996,17 @@ TrackItem::HasData()
 }
 
 bool
+TrackItem::AllDataReady()
+{
+    const RawTrackData* data =
+        m_data_provider.DataModel().GetTimeline().GetTrackData(m_track_id);
+    return data != nullptr && data->AllDataReady();
+}
+
+bool
 TrackItem::ReleaseData()
 {
-    bool result =
-        m_data_provider.DataModel().GetTimeline().FreeTrackData(m_track_id, true);
-    if(!result)
-    {
-        spdlog::warn("Failed to release data for track {}", m_track_id);
-    }
-
-    // Clear pending requests
+    // Cancel all pending requests first
     for(auto it = m_pending_requests.begin(); it != m_pending_requests.end();)
     {
         const auto request_id = it->first;
@@ -1015,12 +1016,27 @@ TrackItem::ReleaseData()
         }
         else
         {
-            spdlog::warn("Failed to cancel pending request {} for track {}", request_id,
-                         m_track_id);
+            spdlog::warn("Failed to cancel pending request {} for track {}",
+                request_id, m_track_id);
             ++it;
         }
     }
 
+    // If all pending requests were cancelled, reset state to idle
+    // so the track can be re-requested when it scrolls back into view
+    if(m_pending_requests.empty())
+    {
+        m_request_state = TrackDataRequestState::kIdle;
+    }
+
+    // Only force-free if no in-flight requests remain
+    bool force  = m_pending_requests.empty();
+    bool result = m_data_provider.DataModel().GetTimeline().FreeTrackData(m_track_id, force);
+
+    if(!result)
+    {
+        spdlog::warn("Failed to release data for track {}", m_track_id);
+    }
     return result;
 }
 

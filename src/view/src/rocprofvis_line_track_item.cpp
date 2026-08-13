@@ -376,7 +376,8 @@ LineTrackItem::ExtractPointsFromData()
         return false;
     }
 
-    if(sample_track->AllDataReady())
+    // if data ready or no more pending requests, reset request state to idle
+    if(sample_track->AllDataReady() || m_pending_requests.empty())
     {
         m_request_state = TrackDataRequestState::kIdle;
     }

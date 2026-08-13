@@ -314,7 +314,8 @@ FlameTrackItem::ExtractPointsFromData()
         return false;
     }
 
-    if(event_track->AllDataReady())
+    // if data ready or no more pending requests, reset request state to idle
+    if(event_track->AllDataReady() || m_pending_requests.empty())
     {
         m_request_state = TrackDataRequestState::kIdle;
     }

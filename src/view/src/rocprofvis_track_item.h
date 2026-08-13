@@ -116,6 +116,7 @@ public:
     static void SetSidebarSize(float sidebar_size);
 
     virtual bool HasData();
+    bool AllDataReady();
     virtual bool ReleaseData();
     virtual void RequestData(double min, double max, float width);
     void         RequestAnalysis();

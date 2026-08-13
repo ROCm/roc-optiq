@@ -182,7 +182,10 @@ rocprofvis_result_t Track::FetchSegments(double start, double end, void* user_pt
             });
         }
 
-        result = m_segments.FetchSegments(start, end, user_ptr, future, func);
+        // Fetching segnents when request cancelled will change return status to kRocProfVisResultOutOfRange.
+        // We need return status to be kRocProfVisResultCancelled in order to re-request data when the track is back in the view
+        if (result != kRocProfVisResultCancelled)
+            result = m_segments.FetchSegments(start, end, user_ptr, future, func);
 
     }
 

@@ -1934,19 +1934,26 @@ TimelineView::RenderTrack(int track_index, bool request_data,
 void
 TimelineView::RequestDataIfEmpty(TrackItem* track_item, bool request_data)
 {
-    // Request data for the chart if it doesn't have data.
-    if((!track_item->HasData() &&
-        track_item->GetRequestState() == TrackDataRequestState::kIdle) ||
-       request_data)
+    bool needs_data = !track_item->HasData() || !track_item->AllDataReady();
+    bool is_idle    = track_item->GetRequestState() == TrackDataRequestState::kIdle;
 
+    if((needs_data && is_idle) || request_data)
     {
-        // Request one viewport worth of data on each side of the current
-        // view.
+        // If partial data exists, free it before re-requesting
+        if(track_item->HasData() && !track_item->AllDataReady())
+        {
+            track_item->ReleaseData();
+            // If release failed (uncancellable in-flight requests remain),
+            // wait for them to land — ExtractPointsFromData will reset state
+            if(track_item->HasData())
+                return;
+        }
+
         double buffer_distance = m_tpt->GetVWidth();
         track_item->RequestData(
             (m_tpt->GetViewTimeOffsetNs() - buffer_distance) + m_tpt->GetMinX(),
             (m_tpt->GetViewTimeOffsetNs() + m_tpt->GetVWidth() + buffer_distance) +
-                m_tpt->GetMinX(),
+            m_tpt->GetMinX(),
             m_tpt->GetGraphSizeX() * 3);
     }
 }

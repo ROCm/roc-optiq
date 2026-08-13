@@ -211,21 +211,23 @@ jobs:
             ${{ env.DIST_DIR }}/
           retention-days: 2
 
-      - name: Configure AWS credentials
-        if: ${{ inputs.upload_to_s3 }}
-        uses: aws-actions/configure-aws-credentials@v6
-        with:
-          role-to-assume: ${{ inputs.s3_bucket == 'dev' && secrets.AWS_DEV_EXTRAS_ROLE_ARN || secrets.AWS_ROLE_ARN }}
-          aws-region: ${{ secrets.AWS_REGION }}
-
-      - name: Resolve S3 bucket
+      - name: Resolve S3 secrets
         if: ${{ inputs.upload_to_s3 }}
         run: |
           if [[ "${{ inputs.s3_bucket }}" == "dev" ]]; then
             echo "S3_BUCKET=${{ secrets.AWS_DEV_EXTRAS_S3_BUCKET }}" >> "$GITHUB_ENV"
+            echo "S3_ROLE_ARN=${{ secrets.AWS_DEV_EXTRAS_ROLE_ARN }}" >> "$GITHUB_ENV"
           else
             echo "S3_BUCKET=${{ secrets.AWS_S3_BUCKET }}" >> "$GITHUB_ENV"
+            echo "S3_ROLE_ARN=${{ secrets.AWS_ROLE_ARN }}" >> "$GITHUB_ENV"
           fi
+
+      - name: Configure AWS credentials
+        if: ${{ inputs.upload_to_s3 }}
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ env.S3_ROLE_ARN }}
+          aws-region: ${{ secrets.AWS_REGION }}
 
       - name: Upload DEB to S3
         if: ${{ inputs.upload_to_s3 }}

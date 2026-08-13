@@ -223,17 +223,17 @@ jobs:
         run: |
           DEB_SRC=$(ls ${{ env.DIST_DIR }}/*.deb | head -1)
           DEB_NAME="amdrocm${ROCM_VERSION}-$(basename "${DEB_SRC}")"
-          mkdir -p deb-repo/pool/main deb-repo/dists/stable/main/binary-amd64
+          SUITE="stable"
+          mkdir -p deb-repo/pool/main deb-repo/dists/${SUITE}/main/binary-amd64
           cp "${DEB_SRC}" \
             deb-repo/pool/main/${DEB_NAME}
 
           # Generate Packages index
           cd deb-repo
-          dpkg-scanpackages pool/main /dev/null > dists/optiq-nightly/main/binary-amd64/Packages
-          gzip -k -f dists/optiq-nightly/main/binary-amd64/Packages
+          dpkg-scanpackages pool/main /dev/null > dists/${SUITE}/main/binary-amd64/Packages
+          gzip -k -f dists/${SUITE}/main/binary-amd64/Packages
 
           # Build Release file manually (apt-ftparchive unavailable on RHEL)
-          SUITE="stable"
           PKGS="dists/${SUITE}/main/binary-amd64/Packages"
           PKGS_GZ="${PKGS}.gz"
           cat > dists/${SUITE}/Release <<EOF

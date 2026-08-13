@@ -161,4 +161,4 @@ jobs:
     with:
       upload_to_github: ${{ github.event.inputs.upload_to_github == 'true' }}
       upload_to_s3: ${{ github.event.inputs.upload_to_s3 == 'true' }}
-      s3_root_directory: ${{ github.event_name == 'schedule' && 'nightly' || 'test' }}
+      s3_root_directory: 'test'

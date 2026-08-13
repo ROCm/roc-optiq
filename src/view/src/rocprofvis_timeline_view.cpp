@@ -1214,9 +1214,11 @@ TimelineView::Update()
                 int idx = std::clamp(m_reorder_request.new_index, 0,
                                      static_cast<int>(order.size()));
                 order.insert(order.begin() + idx, m_reorder_request.track_id);
-                ApplyTrackOrder(order);
-                m_sort_mode    = TrackSortMode::kCustom;
-                m_custom_order = order;
+                if(ApplyTrackOrder(order))
+                {
+                    m_sort_mode    = TrackSortMode::kCustom;
+                    m_custom_order = order;
+                }
             }
         }
         // Rebuild the positioning map.
@@ -2264,7 +2266,6 @@ TimelineView::MakeGraphView()
     // selection (custom/topology/default) is restored afterwards in
     // LoadSortSettings() as a view-only reorder.
     std::vector<const TrackInfo*> track_list = tlm.GetTrackList();
-    std::vector<uint64_t>         hidden_tracks;
 
     for(int i = 0; i < track_list.size(); i++)
     {
@@ -2341,14 +2342,16 @@ TimelineView::SetTopologyOrder(const std::vector<uint64_t>* order)
 void
 TimelineView::SortTracksBy(TrackSortMode mode)
 {
-    m_sort_mode = mode;
     switch(mode)
     {
         case TrackSortMode::kTopology:
         {
             if(m_topology_order && !m_topology_order->empty())
             {
-                ApplyTrackOrder(*m_topology_order);
+                if(!ApplyTrackOrder(*m_topology_order))
+                {
+                    return;
+                }
                 m_topology_sort_pending = false;
             }
             else
@@ -2359,38 +2362,40 @@ TimelineView::SortTracksBy(TrackSortMode mode)
             break;
         }
         case TrackSortMode::kDefault:
-            if(!m_default_order.empty())
+            if(!m_default_order.empty() && !ApplyTrackOrder(m_default_order))
             {
-                ApplyTrackOrder(m_default_order);
+                return;
             }
             break;
         case TrackSortMode::kCustom:
-            if(!m_custom_order.empty())
+            if(!m_custom_order.empty() && !ApplyTrackOrder(m_custom_order))
             {
-                ApplyTrackOrder(m_custom_order);
+                return;
             }
             break;
     }
+    m_sort_mode = mode;
 }
 
-void
+bool
 TimelineView::ApplyTrackOrder(const std::vector<uint64_t>& order)
 {
     if(!m_tracks)
     {
-        return;
+        return false;
     }
 
     // Callers pass a full permutation, so this is a straight reindex;
     // SetTrackIndex guards against a malformed order.
     if(!m_data_provider.SetTrackIndex(order))
     {
-        return;
+        return false;
     }
 
     RebuildTrackVectorFromMetadata();
     // Force the position map / layout to recompute on the next Update().
     m_resize_activity = true;
+    return true;
 }
 
 void

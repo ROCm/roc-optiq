@@ -304,7 +304,11 @@ DataProvider::SetTrackIndex(const std::vector<uint64_t>& ordered_track_ids)
         return false;
     }
 
-    uint64_t index = 0;
+    // Resolve every id up front so a bad order can't leave the metadata
+    // half-reindexed (some tracks new indexes, the rest stale). We only mutate
+    // once the whole order is confirmed valid.
+    std::vector<TrackInfo*> ordered_metadata;
+    ordered_metadata.reserve(ordered_track_ids.size());
     for(uint64_t track_id : ordered_track_ids)
     {
         auto it = metadata.find(track_id);
@@ -313,7 +317,13 @@ DataProvider::SetTrackIndex(const std::vector<uint64_t>& ordered_track_ids)
             spdlog::warn("SetTrackIndex ignored: unknown track id {}", track_id);
             return false;
         }
-        it->second.index = index++;
+        ordered_metadata.push_back(&it->second);
+    }
+
+    uint64_t index = 0;
+    for(TrackInfo* info : ordered_metadata)
+    {
+        info->index = index++;
     }
 
     if(m_track_metadata_changed_callback)

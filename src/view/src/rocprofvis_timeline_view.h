@@ -152,13 +152,13 @@ private:
     // available yet (the tree is still building at load), the sort is deferred and
     // applied once SetTopologyOrder() provides it.
     void          SortTracksBy(TrackSortMode mode);
-    TrackSortMode GetSortMode() const { return m_sort_mode; }
     bool          HasCustomOrder() const { return !m_custom_order.empty(); }
 
     // Reindexes each TrackInfo and rebuilds m_tracks to match order, which must be
     // a full permutation of the current track ids. View-only: never syncs the
-    // controller graph order.
-    void ApplyTrackOrder(const std::vector<uint64_t>& order);
+    // controller graph order. Returns false (and leaves state untouched) if the
+    // order is rejected downstream.
+    bool ApplyTrackOrder(const std::vector<uint64_t>& order);
     // Rebuilds the m_tracks pointer vector from the current TrackInfo::index values.
     void RebuildTrackVectorFromMetadata();
     // Restores the persisted sort selection (and remembered custom order) after a

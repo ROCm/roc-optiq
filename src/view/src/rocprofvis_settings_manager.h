@@ -24,6 +24,7 @@ typedef struct DisplaySettings
     bool use_dark_mode;
     int  font_size_index;
     bool show_node_colors;  // color-code timeline tracks by node
+    bool compact_sidebar;   // drop the per-row icons in the topology sidebar
 
 } DisplaySettings;
 
@@ -222,9 +223,10 @@ constexpr const char* JSON_KEY_SETTINGS_CATEGORY_UNITS    = "units";
 constexpr const char* JSON_KEY_SETTINGS_CATEGORY_OTHER    = "other";
 constexpr const char* JSON_KEY_SETTINGS_CATEGORY_INTERNAL = "internal";
 
-constexpr const char* JSON_KEY_SETTINGS_DISPLAY_DARK_MODE   = "use_dark_mode";
-constexpr const char* JSON_KEY_SETTINGS_DISPLAY_FONT_SIZE   = "font_size_index";
-constexpr const char* JSON_KEY_SETTINGS_DISPLAY_NODE_COLORS = "show_node_colors";
+constexpr const char* JSON_KEY_SETTINGS_DISPLAY_DARK_MODE       = "use_dark_mode";
+constexpr const char* JSON_KEY_SETTINGS_DISPLAY_FONT_SIZE       = "font_size_index";
+constexpr const char* JSON_KEY_SETTINGS_DISPLAY_NODE_COLORS     = "show_node_colors";
+constexpr const char* JSON_KEY_SETTINGS_DISPLAY_COMPACT_SIDEBAR = "compact_sidebar";
 
 constexpr const char* JSON_KEY_SETTINGS_UNITS_TIME_FORMAT = "time_format";
 
@@ -272,6 +274,7 @@ public:
 
     // Styling
     bool ShowNodeColors() const { return m_usersettings.display_settings.show_node_colors; }
+    bool CompactSidebar() const { return m_usersettings.display_settings.compact_sidebar; }
     ImU32                     GetColor(Colors color) const;
     const std::vector<ImU32>& GetColorWheel() const;
     const std::vector<ImU32>& GetHighlightedEventColorWheel() const;

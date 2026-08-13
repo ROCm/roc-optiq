@@ -3759,6 +3759,15 @@ DataProvider::CreateRawSampleData(const TrackRequestParams& params,
 
     if(!raw_sample_data)
     {
+        // The track was unloaded and its requests cancelled. Creating an empty
+        // object here would make the track look loaded and block a refetch.
+        if(req.response_code == kRocProfVisResultCancelled)
+        {
+            spdlog::debug("Dropping cancelled response for sample track {}",
+                          params.m_track_id);
+            return;
+        }
+
         spdlog::debug("Create sample track {} data with {} entries", params.m_track_id,
                       count);
         raw_sample_data =
@@ -3875,6 +3884,15 @@ DataProvider::CreateRawEventData(const TrackRequestParams& params, const Request
 
     if(!raw_event_data)
     {
+        // The track was unloaded and its requests cancelled. Creating an empty
+        // object here would make the track look loaded and block a refetch.
+        if(req.response_code == kRocProfVisResultCancelled)
+        {
+            spdlog::debug("Dropping cancelled response for event track {}",
+                          params.m_track_id);
+            return;
+        }
+
         spdlog::debug("Creating event track {} data with {} entries", params.m_track_id,
                       count);
         raw_event_data =

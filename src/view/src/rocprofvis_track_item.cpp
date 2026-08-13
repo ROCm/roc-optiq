@@ -117,6 +117,7 @@ TrackItem::TrackItem(DataProvider& dp, uint64_t id, TimelineTrackOptions& track_
 , m_timeline_selection(timeline_selection)
 , m_chunk_duration_ns(DEFAULT_CHUNK_DURATION)
 , m_group_id_counter(0)
+, m_cancel_requested(false)
 , m_meta_area_label("")
 , m_has_node_color(false)
 , m_node_color_index(0)
@@ -654,12 +655,9 @@ TrackItem::RequestData(double min, double max, float width)
             "Fetch request deferred for track {}, requests are already pending...",
             m_track_id);
 
-        for(const auto& [request_id, req] : m_pending_requests)
-        {
-            spdlog::debug("RequestData: Found pending request {} for track {}",
-                          request_id, m_track_id);
-            m_data_provider.CancelRequest(request_id);
-        }
+        // The queue is fetched once the pending requests have drained and the
+        // state returns to idle.
+        CancelPendingRequests();
     }
 }
 
@@ -980,7 +978,7 @@ TrackItem::HandleTrackDataChanged(uint64_t request_id, uint64_t response_code)
     bool result = false;
     if(!m_pending_requests.erase(request_id))
     {
-        spdlog::warn("Failed to erase pending request {}", request_id);
+        spdlog::debug("Response {} is not pending on track {}", request_id, m_track_id);
     }
 
     // If the request was successful, extract the points from the data
@@ -992,6 +990,7 @@ TrackItem::HandleTrackDataChanged(uint64_t request_id, uint64_t response_code)
     // If there are no more pending requests, set the request state to idle
     if(m_pending_requests.empty())
     {
+        m_cancel_requested = false;
         if(m_request_state == TrackDataRequestState::kRequesting)
         {
             m_request_state = TrackDataRequestState::kIdle;
@@ -1010,30 +1009,46 @@ TrackItem::HasData()
 bool
 TrackItem::ReleaseData()
 {
-    bool result =
-        m_data_provider.DataModel().GetTimeline().FreeTrackData(m_track_id, true);
-    if(!result)
+    bool result = true;
+
+    // Having nothing to free is not a failure: the track can be unloaded while
+    // its first response is still in flight.
+    if(HasData())
     {
-        spdlog::warn("Failed to release data for track {}", m_track_id);
+        result = m_data_provider.DataModel().GetTimeline().FreeTrackData(m_track_id, true);
+        if(!result)
+        {
+            spdlog::warn("Failed to release data for track {}", m_track_id);
+        }
     }
 
-    // Clear pending requests
-    for(auto it = m_pending_requests.begin(); it != m_pending_requests.end();)
-    {
-        const auto request_id = it->first;
-        if(m_data_provider.CancelRequest(request_id))
-        {
-            it = m_pending_requests.erase(it);
-        }
-        else
-        {
-            spdlog::warn("Failed to cancel pending request {} for track {}", request_id,
-                         m_track_id);
-            ++it;
-        }
-    }
+    // Chunks that were queued but never issued can simply be dropped.
+    m_request_queue.clear();
+    CancelPendingRequests();
 
     return result;
+}
+
+void
+TrackItem::CancelPendingRequests()
+{
+    // Cancelling only asks the controller to stop early: the request stays in
+    // flight and leaves m_pending_requests when its future resolves. Ask once,
+    // otherwise every frame re-cancels the same ids while they drain.
+    if(m_cancel_requested || m_pending_requests.empty())
+    {
+        return;
+    }
+
+    for(const auto& [request_id, req] : m_pending_requests)
+    {
+        if(!m_data_provider.CancelRequest(request_id))
+        {
+            spdlog::debug("Failed to cancel pending request {} for track {}", request_id,
+                          m_track_id);
+        }
+    }
+    m_cancel_requested = true;
 }
 
 bool

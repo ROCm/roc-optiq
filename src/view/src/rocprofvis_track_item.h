@@ -146,6 +146,7 @@ protected:
     virtual bool  ExtractPointsFromData() = 0;
 
     void  FetchHelper();
+    void  CancelPendingRequests();
     void  SetDefaultPillLabel(const TrackInfo* track_info);
     void  SetMetaAreaLabel(const TrackInfo* track_info);
     void  SetNodeColor(const TrackInfo* track_info);
@@ -176,6 +177,9 @@ protected:
     std::shared_ptr<TimelineSelection>  m_timeline_selection;
     uint64_t m_chunk_duration_ns;  // Duration of each chunk in nanoseconds
     uint8_t  m_group_id_counter;   // Counter for grouping requests
+    // Cancellation has already been requested for everything in
+    // m_pending_requests; they stay pending until their futures resolve.
+    bool     m_cancel_requested;
 
     std::deque<TrackRequestParams>                   m_request_queue;
     std::unordered_map<uint64_t, TrackRequestParams> m_pending_requests;

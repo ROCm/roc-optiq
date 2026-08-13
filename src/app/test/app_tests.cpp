@@ -161,6 +161,21 @@ bool TwoStackedEventScreenCenters(ImGuiTestContext* ctx, unsigned int flame_wind
     return false;
 }
 
+// Restores show_summary when it goes out of scope. The Summary tests set it
+// true to drive their load path; without this, that state would leak into
+// later tests and cover the timeline.
+struct ShowSummaryGuard
+{
+    bool prev;
+    ShowSummaryGuard()
+        : prev(SettingsManager::GetInstance().GetAppWindowSettings().show_summary)
+    {
+    }
+    ~ShowSummaryGuard()
+    {
+        SettingsManager::GetInstance().GetAppWindowSettings().show_summary = prev;
+    }
+};
 }  // namespace
 
 void RegisterAppTests(ImGuiTestEngine* e)
@@ -953,6 +968,7 @@ void RegisterAppTests(ImGuiTestEngine* e)
         // shown; headless with no saved layout it may be closed, leaving the kernel
         // list null forever. Force it open ourselves rather than depending on another
         // test having flipped this shared setting earlier in the process.
+        ShowSummaryGuard summary_guard;
         SettingsManager::GetInstance().GetAppWindowSettings().show_summary = true;
 
         // Summary data loads asynchronously; let Update() populate the kernel list.
@@ -1004,6 +1020,7 @@ void RegisterAppTests(ImGuiTestEngine* e)
         // The Summary fetch (FetchSummary) and TopKernels::Update both run only when
         // the Summary window is shown; headless with no saved layout it may be closed,
         // leaving the kernel list null forever. Force it open before draining the load.
+        ShowSummaryGuard summary_guard;
         SettingsManager::GetInstance().GetAppWindowSettings().show_summary = true;
 
         // Summary data loads asynchronously; let Update() populate the kernel list.
@@ -1034,6 +1051,7 @@ void RegisterAppTests(ImGuiTestEngine* e)
         // The Pie/Bar/Table switcher renders only once the Summary window is
         // shown and its kernel list has loaded; force it open and drain the
         // async fetch first (mirrors sys_summary_top_kernel_name).
+        ShowSummaryGuard summary_guard;
         SettingsManager::GetInstance().GetAppWindowSettings().show_summary = true;
         TopKernelsTestPeer peer{*tk};
         for (int i = 0; i < 60 && peer.KernelCount() == 0; i++) ctx->Yield(2);
@@ -1333,9 +1351,9 @@ void RegisterAppTests(ImGuiTestEngine* e)
         IM_CHECK(sel != nullptr);
         if (sel == nullptr) return;
 
-        // The Summary window, if open, overlaps the timeline and captures the mouse
-        // so bar clicks would land on it, not the flame track. Close it for the
-        // clicks below; the guard restores the prior value on exit.
+        // Hide the Summary window so it doesn't sit over the timeline and catch
+        // the bar clicks below.
+        ShowSummaryGuard summary_guard;
         SettingsManager::GetInstance().GetAppWindowSettings().show_summary = false;
         ctx->Yield(2);
 

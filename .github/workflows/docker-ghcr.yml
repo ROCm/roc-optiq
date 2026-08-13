@@ -5,6 +5,7 @@ on:
   pull_request:
     paths:
       - '.github/workflows/docker-ghcr.yml'
+      - 'docker/**'
 
 env:
   VULKAN_SDK_VERSION: 1.4.328.1
@@ -19,7 +20,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os-release: [ 'ubuntu-22.04', 'ubuntu-24.04', 'ubuntu-26.04', 'rhel-8', 'rhel-9', 'rhel-10' ]
+        os-release: [ 'ubuntu-22.04', 'ubuntu-24.04', 'ubuntu-26.04', 'rhel-8', 'rhel-9', 'rhel-10', 'manylinux' ]
 
     steps:
       - name: Checkout Repository
@@ -38,12 +39,17 @@ jobs:
         id: setup_args
         run: |
           OS_RELEASE=${{ matrix.os-release }}
-          DISTRO=$(echo $OS_RELEASE | cut -d'-' -f1)
-          VERSION=$(echo $OS_RELEASE | cut -d'-' -f2)
-          DOCKER_FILE=docker/Dockerfile.$DISTRO
-          echo "distro=$DISTRO" >> $GITHUB_OUTPUT 
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "docker_file=$DOCKER_FILE" >> $GITHUB_OUTPUT
+          if [[ "$OS_RELEASE" == "manylinux" ]]; then
+            echo "distro=manylinux" >> $GITHUB_OUTPUT
+            echo "version=latest" >> $GITHUB_OUTPUT
+            echo "docker_file=docker/Dockerfile.manylinux" >> $GITHUB_OUTPUT
+          else
+            DISTRO=$(echo $OS_RELEASE | cut -d'-' -f1)
+            VERSION=$(echo $OS_RELEASE | cut -d'-' -f2)
+            echo "distro=$DISTRO" >> $GITHUB_OUTPUT
+            echo "version=$VERSION" >> $GITHUB_OUTPUT
+            echo "docker_file=docker/Dockerfile.$DISTRO" >> $GITHUB_OUTPUT
+          fi
 
       - name: Extract metadata (tags, labels) for Docker
         id: meta

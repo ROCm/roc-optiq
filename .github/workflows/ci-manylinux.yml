@@ -124,35 +124,13 @@ jobs:
       id-token: write
       contents: read
     container:
-      image: ghcr.io/rocm/therock_build_manylinux_x86_64:latest
+      image: ghcr.io/rocm/optiq-ci-manylinux:latest
 
     steps:
       - uses: actions/checkout@v6
         with:
           lfs: true
           submodules: true
-
-      - name: Install ROCm-Optiq Dependencies
-        run: |
-          yum install -y \
-            vulkan-loader-devel \
-            mesa-libGL-devel \
-            libX11-devel \
-            libXrandr-devel \
-            libXinerama-devel \
-            libXcursor-devel \
-            libXi-devel \
-            dpkg-dev \
-            createrepo_c \
-            rpm-build \
-            dbus-devel \
-            wayland-devel \
-            libxkbcommon-devel
-
-      - name: Install OpenSSL
-        if: inputs.crypto_backend == 'OpenSSL'
-        run: |
-          yum install -y openssl-devel
 
       - name: Build, Make, and Verify Installation
         run: |

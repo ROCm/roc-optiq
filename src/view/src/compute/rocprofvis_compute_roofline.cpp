@@ -623,7 +623,7 @@ Roofline::Render()
                                     ImVec2 reserved_pos = ImGui::GetCursorPos();
                                     ImGui::NewLine();
                                     ImGui::Text(
-                                        "Invocation(s): %u",
+                                        "Invocation(s): %llu",
                                         m_items[i].parent_info.kernel->dispatch_metrics
                                             [KernelInfo::InvocationCount]);
                                     ImGui::Text(

@@ -261,6 +261,10 @@ TopologyDataModel::TopologyToString()
         {
             const DeviceInfo* devInfo = GetDevice(d_id);
             ss << DeviceInfoToString(devInfo, level+1) << std::endl;
+            if(!devInfo)
+            {
+                continue;
+            }
 
             ss << indent(level) << "Queues: " << devInfo->queue_ids.size() << std::endl;
             for(const uint64_t& d : devInfo->queue_ids)

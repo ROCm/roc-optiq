@@ -639,6 +639,19 @@ PanelIcon(const char* glyph, Colors color, SettingsManager* settings)
 }
 
 bool
+AccentButton(const char* label, ImVec2 size, SettingsManager* settings)
+{
+    if(!settings)
+    {
+        settings = &SettingsManager::GetInstance();
+    }
+    return ColoredButton(label, settings->GetColor(Colors::kAccent),
+                         settings->GetColor(Colors::kAccentHover),
+                         settings->GetColor(Colors::kAccentActive),
+                         settings->GetColor(Colors::kTextOnAccent));
+}
+
+bool
 ColoredButton(const char* label, ImU32 color, ImU32 hovered_color, ImU32 active_color,
               ImU32 text_color, const char* tooltip, ImVec2 size)
 {

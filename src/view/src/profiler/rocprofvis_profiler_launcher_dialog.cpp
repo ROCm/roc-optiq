@@ -1003,7 +1003,6 @@ void ProfilerLauncherDialog::RenderButtonRow()
 {
     ImGui::Separator();
 
-    SettingsManager& settings = SettingsManager::Get();
     bool is_running = m_orchestrator.IsRunning();
     rocprofvis_profiler_state_t state = m_orchestrator.GetState();
     bool state_ready = !is_running &&
@@ -1030,10 +1029,7 @@ void ProfilerLauncherDialog::RenderButtonRow()
     {
         ImGui::BeginDisabled();
     }
-    if (ColoredButton("Launch Profiler", settings.GetColor(Colors::kAccent),
-                      settings.GetColor(Colors::kAccentHover),
-                      settings.GetColor(Colors::kAccentActive),
-                      settings.GetColor(Colors::kTextOnAccent), nullptr, ImVec2(160, 0)))
+    if (AccentButton("Launch Profiler", ImVec2(160, 0)))
     {
         OnLaunchClicked();
     }
@@ -1070,6 +1066,7 @@ void ProfilerLauncherDialog::RenderButtonRow()
     // Launch is (or isn't) available.
     if (!is_running)
     {
+        SettingsManager& settings = SettingsManager::Get();
         ImGui::SameLine(0.0f, 16.0f);
         ImGui::AlignTextToFramePadding();
         if (valid)
@@ -1089,28 +1086,19 @@ void ProfilerLauncherDialog::RenderRunButtonRow()
 {
     ImGui::Separator();
 
-    SettingsManager&            settings   = SettingsManager::Get();
     bool                        is_running = m_orchestrator.IsRunning();
     rocprofvis_profiler_state_t state      = m_orchestrator.GetState();
 
     if (is_running)
     {
-        if (ColoredButton("Cancel", settings.GetColor(Colors::kAccent),
-                          settings.GetColor(Colors::kAccentHover),
-                          settings.GetColor(Colors::kAccentActive),
-                          settings.GetColor(Colors::kTextOnAccent), nullptr,
-                          ImVec2(140, 0)))
+        if (AccentButton("Cancel", ImVec2(140, 0)))
         {
             OnCancelClicked();
         }
     }
     else
     {
-        if (ColoredButton("Run Again", settings.GetColor(Colors::kAccent),
-                          settings.GetColor(Colors::kAccentHover),
-                          settings.GetColor(Colors::kAccentActive),
-                          settings.GetColor(Colors::kTextOnAccent), nullptr,
-                          ImVec2(140, 0)))
+        if (AccentButton("Run Again", ImVec2(140, 0)))
         {
             OnLaunchClicked();
         }

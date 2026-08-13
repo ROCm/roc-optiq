@@ -185,6 +185,12 @@ PanelFieldLabel(const char* text, bool align_to_frame = true,
 void
 PanelIcon(const char* glyph, Colors color, SettingsManager* settings = nullptr);
 
+// Accent-colored primary action button (accent fill + on-accent text). Returns
+// true when clicked.
+bool
+AccentButton(const char* label, ImVec2 size = ImVec2(0.0f, 0.0f),
+             SettingsManager* settings = nullptr);
+
 // Colored button. Returns true when clicked.
 bool
 ColoredButton(const char* label, ImU32 color, ImU32 hovered_color, ImU32 active_color,

@@ -154,11 +154,7 @@ bool RenderSshAuthModal(SshSession* ssh_session)
                     ssh_session->GetPromptRequest()->ClearUpdated();
                 }
                 ImGui::SameLine();
-                if(ColoredButton("Submit", settings.GetColor(Colors::kAccent),
-                                 settings.GetColor(Colors::kAccentHover),
-                                 settings.GetColor(Colors::kAccentActive),
-                                 settings.GetColor(Colors::kTextOnAccent), nullptr,
-                                 ImVec2(BUTTON_WIDTH, 0)))
+                if(AccentButton("Submit", ImVec2(BUTTON_WIDTH, 0), &settings))
                 {
                     std::vector<std::string> resp = st.answers;
 
@@ -296,11 +292,7 @@ bool RenderSshAuthModal(SshSession* ssh_session)
                     ssh_session->GetHostKeyRequest()->ClearUpdated();
                 }
                 ImGui::SameLine();
-                if(ColoredButton("Trust permanently", settings.GetColor(Colors::kAccent),
-                                 settings.GetColor(Colors::kAccentHover),
-                                 settings.GetColor(Colors::kAccentActive),
-                                 settings.GetColor(Colors::kTextOnAccent), nullptr,
-                                 ImVec2(TRUST_WIDTH, 0)))
+                if(AccentButton("Trust permanently", ImVec2(TRUST_WIDTH, 0), &settings))
                 {
                     ssh_session->SubmitHostKeyDecision(HostKeyDecision::TrustPermanently);
                     ImGui::CloseCurrentPopup();

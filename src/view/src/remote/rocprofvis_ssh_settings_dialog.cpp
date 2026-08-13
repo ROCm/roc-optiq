@@ -408,11 +408,7 @@ SshSettingsDialog::Render()
                     close_popup = true;
                 }
                 ImGui::SameLine();
-                if(ColoredButton("Save", settings.GetColor(Colors::kAccent),
-                                 settings.GetColor(Colors::kAccentHover),
-                                 settings.GetColor(Colors::kAccentActive),
-                                 settings.GetColor(Colors::kTextOnAccent), nullptr,
-                                 ImVec2(BUTTON_WIDTH, 0.0f)))
+                if(AccentButton("Save", ImVec2(BUTTON_WIDTH, 0.0f), &settings))
                 {
                     accept      = true;
                     close_popup = true;

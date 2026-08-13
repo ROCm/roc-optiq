@@ -49,6 +49,13 @@ on:
         description: 'ROCm version number used in package naming (e.g. 10)'
         type: string
         default: '10'
+      s3_bucket:
+        description: 'S3 bucket to upload artifacts to'
+        type: choice
+        default: 'legacy'
+        options:
+          - dev
+          - legacy
   workflow_call:
     inputs:
       cmake_config_preset:
@@ -91,6 +98,10 @@ on:
         description: 'ROCm version number used in package naming (e.g. 10)'
         type: string
         default: '10'
+      s3_bucket:
+        description: 'S3 bucket to upload artifacts to'
+        type: string
+        default: 'legacy'
 
 env:
   BUILD_DIR: "build"
@@ -204,15 +215,24 @@ jobs:
         if: ${{ inputs.upload_to_s3 }}
         uses: aws-actions/configure-aws-credentials@v6
         with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          role-to-assume: ${{ inputs.s3_bucket == 'dev' && secrets.AWS_DEV_EXTRAS_ROLE_ARN || secrets.AWS_ROLE_ARN }}
           aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Resolve S3 bucket
+        if: ${{ inputs.upload_to_s3 }}
+        run: |
+          if [[ "${{ inputs.s3_bucket }}" == "dev" ]]; then
+            echo "S3_BUCKET=${{ secrets.AWS_DEV_EXTRAS_S3_BUCKET }}" >> "$GITHUB_ENV"
+          else
+            echo "S3_BUCKET=${{ secrets.AWS_S3_BUCKET }}" >> "$GITHUB_ENV"
+          fi
 
       - name: Upload DEB to S3
         if: ${{ inputs.upload_to_s3 }}
         run: |
           DEB_SRC=$(ls ${{ env.DIST_DIR }}/*.deb | head -1)
           DEB_NAME="amdrocm${ROCM_VERSION}-$(basename "${DEB_SRC}")"
-          S3_DEB_BASE="s3://${{ secrets.AWS_S3_BUCKET }}/${{ env.S3_ROOT_DIRECTORY }}/rocm/extras/rocoptiq/packages/deb"
+          S3_DEB_BASE="s3://${S3_BUCKET}/${{ env.S3_ROOT_DIRECTORY }}/rocm/extras/rocoptiq/packages/deb"
           aws s3 cp \
             "${DEB_SRC}" \
             "${S3_DEB_BASE}/pool/main/${DEB_NAME}" \
@@ -253,7 +273,7 @@ jobs:
           EOF
 
           cd ..
-          S3_DEB_BASE="s3://${{ secrets.AWS_S3_BUCKET }}/${{ env.S3_ROOT_DIRECTORY }}/rocm/extras/rocoptiq/packages/deb"
+          S3_DEB_BASE="s3://${S3_BUCKET}/${{ env.S3_ROOT_DIRECTORY }}/rocm/extras/rocoptiq/packages/deb"
           aws s3 cp --recursive deb-repo/dists \
             "${S3_DEB_BASE}/dists/" \
             --no-progress
@@ -263,7 +283,7 @@ jobs:
         run: |
           RPM_SRC=$(ls ${{ env.DIST_DIR }}/*.rpm | head -1)
           RPM_NAME="amdrocm${ROCM_VERSION}-$(basename "${RPM_SRC}" | sed 's/\.el[0-9]\+//')"
-          S3_RPM_PREFIX="s3://${{ secrets.AWS_S3_BUCKET }}/${{ env.S3_ROOT_DIRECTORY }}/rocm/extras/rocoptiq/packages/rpm/x86_64"
+          S3_RPM_PREFIX="s3://${S3_BUCKET}/${{ env.S3_ROOT_DIRECTORY }}/rocm/extras/rocoptiq/packages/rpm/x86_64"
           aws s3 cp \
             "${RPM_SRC}" \
             "${S3_RPM_PREFIX}/${RPM_NAME}" \
@@ -276,7 +296,7 @@ jobs:
           cp ${{ env.DIST_DIR }}/*.rpm rpm-repo/
           createrepo_c rpm-repo/
           aws s3 cp --recursive rpm-repo/repodata \
-            s3://${{ secrets.AWS_S3_BUCKET }}/${{ env.S3_ROOT_DIRECTORY }}/rocm/extras/rocoptiq/packages/rpm/x86_64/repodata/ \
+            s3://${S3_BUCKET}/${{ env.S3_ROOT_DIRECTORY }}/rocm/extras/rocoptiq/packages/rpm/x86_64/repodata/ \
             --no-progress
 
       - name: Upload Tarball to S3
@@ -284,7 +304,7 @@ jobs:
         run: |
           TGZ_SRC=$(ls ${{ env.DIST_DIR }}/*.tar.gz | head -1)
           TGZ_NAME="amdrocm${ROCM_VERSION}-$(basename "${TGZ_SRC}")"
-          S3_TGZ_PREFIX="s3://${{ secrets.AWS_S3_BUCKET }}/${{ env.S3_ROOT_DIRECTORY }}/rocm/extras/rocoptiq/tarball"
+          S3_TGZ_PREFIX="s3://${S3_BUCKET}/${{ env.S3_ROOT_DIRECTORY }}/rocm/extras/rocoptiq/tarball"
           aws s3 cp \
             "${TGZ_SRC}" \
             "${S3_TGZ_PREFIX}/${TGZ_NAME}" \

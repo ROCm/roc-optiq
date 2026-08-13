@@ -362,10 +362,8 @@ LineTrackItem::ExtractPointsFromData()
     // response was processed
     if(!rtd)
     {
-        spdlog::error("No raw track data found for track {}", m_track_id);
-        // Reset the request state to idle
-        m_request_state = TrackDataRequestState::kIdle;
-        return false;
+        spdlog::debug("No raw track data found for track {}", m_track_id);
+        return true;
     }
 
     const RawTrackSampleData* sample_track = dynamic_cast<const RawTrackSampleData*>(rtd);
@@ -376,15 +374,10 @@ LineTrackItem::ExtractPointsFromData()
         return false;
     }
 
-    if(sample_track->AllDataReady())
-    {
-        m_request_state = TrackDataRequestState::kIdle;
-    }
-
     if(sample_track->GetData().empty())
     {
         spdlog::debug("No data for track {}", m_track_id);
-        return false;
+        return true;
     }
     const std::vector<TraceCounter>& track_data = sample_track->GetData();
 

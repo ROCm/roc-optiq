@@ -121,6 +121,7 @@ public:
     void         RequestAnalysis();
     virtual bool HandleTrackDataChanged(uint64_t request_id, uint64_t response_code);
     virtual bool HasPendingRequests() const;
+    virtual bool HasPendingRequest(uint64_t request_id) const;
     virtual void UpdateMetaScaleAreaSize();
     virtual void UpdateMaxMetaScaleAreaSize();
     virtual bool IsCompactMode() const { return false; }

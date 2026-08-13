@@ -620,8 +620,8 @@ TrackItem::RequestData(double min, double max, float width)
 
     for(size_t i = 0; i < chunk_count; ++i)
     {
-        double chunk_start = min + i * TimeConstants::minute_in_ns;
-        double chunk_end   = std::min(chunk_start + TimeConstants::minute_in_ns, max);
+        double chunk_start = min + i * m_chunk_duration_ns;
+        double chunk_end   = std::min(chunk_start + m_chunk_duration_ns, max);
 
         double chunk_range = chunk_end - chunk_start;
         float  percentage  = static_cast<float>(chunk_range / range);
@@ -977,14 +977,26 @@ TrackItem::AddPill(bool shown, bool active)
 bool
 TrackItem::HandleTrackDataChanged(uint64_t request_id, uint64_t response_code)
 {
-    (void) response_code;  // Unused at the moment
     bool result = false;
     if(!m_pending_requests.erase(request_id))
     {
         spdlog::warn("Failed to erase pending request {}", request_id);
     }
 
-    result = ExtractPointsFromData();
+    // If the request was successful, extract the points from the data
+    if(response_code == kRocProfVisResultSuccess) 
+    {
+        result = ExtractPointsFromData();
+    }
+
+    // If there are no more pending requests, set the request state to idle
+    if(m_pending_requests.empty())
+    {
+        if(m_request_state == TrackDataRequestState::kRequesting)
+        {
+            m_request_state = TrackDataRequestState::kIdle;
+        }
+    }
 
     return result;
 }
@@ -1028,6 +1040,12 @@ bool
 TrackItem::HasPendingRequests() const
 {
     return !m_pending_requests.empty();
+}
+
+bool
+TrackItem::HasPendingRequest(uint64_t request_id) const
+{
+    return m_pending_requests.find(request_id) != m_pending_requests.end();
 }
 
 void

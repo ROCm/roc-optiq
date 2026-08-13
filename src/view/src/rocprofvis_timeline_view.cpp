@@ -1151,6 +1151,18 @@ TimelineView::HandleNewTrackData(std::shared_ptr<RocEvent> e)
             spdlog::error(
                 "No metadata found for track id {}, cannot process new track data",
                 tde->GetTrackID());
+            
+            // try to find request by request id on all tracks so that it can
+            // be cleared from pending queue
+            for(size_t i = 0; i < m_tracks->size(); ++i)
+            {
+                auto track = (*m_tracks)[i];
+                if(track && track->HasPendingRequest(tde->GetRequestID()))
+                {
+                    track->HandleTrackDataChanged(tde->GetRequestID(),
+                                                  tde->GetResponseCode());
+                }
+            }
             return;
         }
 

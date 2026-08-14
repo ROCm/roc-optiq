@@ -51,7 +51,6 @@ These features are in progress and available for preview only (build from src); 
 - Fixed loading workload Speed-of-Light for compute schema < 1.3.0; query builders now report and skip unsupported queries.
 - Fixed crash when invalid filter used in kernel selection table.
 - Fixed crash when adding a counter with `pmc_id` 0.
-- Fixed wrong thread IDs shown for compare / multi-node traces.
 - Fixed roofline precision fallback when FP32 ceilings are missing, and kernel markers vanishing when all durations are zero.
 - JobSystem fixes.
 - Fixed timeline tracks that could keep spinning, or show incomplete data, after scrolling or zooming quickly while track data was still loading (including a deadlock when cancelling counter-track queries).

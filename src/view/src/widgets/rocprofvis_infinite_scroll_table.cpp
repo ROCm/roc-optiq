@@ -241,12 +241,11 @@ InfiniteScrollTable::Render()
                           outer_size.y);
         }
 
-        // TODO: is there a more reliable way to detect Group by changes?
-        ImGui::PushID(static_cast<int>(column_names.size())); 
         ImGui::PushStyleColor(ImGuiCol_ChildBg,
                               m_settings.GetColor(Colors::kFillerColor));
         if(!table_data.empty())
         {
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, m_settings.GetDefaultStyle().WindowPadding);
             if(ImGui::BeginTable("infinite_scroll_table",
                                  static_cast<int>(column_names.size()), table_flags,
                                  outer_size))
@@ -267,14 +266,12 @@ InfiniteScrollTable::Render()
                     ImGuiTableColumnFlags col_flags = ImGuiTableColumnFlags_None;
                     if(!column_names[i].empty() && column_names[i][0] == '_')
                     {
-                        col_flags = ImGuiTableColumnFlags_DefaultHide |
-                                    ImGuiTableColumnFlags_Disabled;
+                        col_flags = ImGuiTableColumnFlags_Disabled;
                     }
                     if(!m_hidden_column_indices.empty() &&
                        i == m_hidden_column_indices[j])
                     {
-                        col_flags = ImGuiTableColumnFlags_DefaultHide |
-                                    ImGuiTableColumnFlags_Disabled;
+                        col_flags = ImGuiTableColumnFlags_Disabled;
                         if(j < m_hidden_column_indices.size() - 1)
                         {
                             j++;
@@ -492,6 +489,7 @@ InfiniteScrollTable::Render()
                 }
                 ImGui::EndTable();  // End BeginTable
             }
+            ImGui::PopStyleVar();
             RenderContextMenu();
         }
         else if(!m_no_data_text.empty() && !show_loading_indicator &&
@@ -503,7 +501,6 @@ InfiniteScrollTable::Render()
             ImGui::TextDisabled("%s", m_no_data_text.c_str());
         }
         ImGui::PopStyleColor();
-        ImGui::PopID();
     }
 
     if(show_loading_indicator)

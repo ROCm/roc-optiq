@@ -1240,94 +1240,61 @@ TimelineTrackOptions::RenderPropagateControl()
             m_settings.GetColor(Colors::kButton),
             m_settings.GetDefaultStyle().FrameRounding);
         ImGui::SetCursorPos(screen_pos - ImGui::GetWindowPos());
-        ImGui::PushStyleColor(
-            ImGuiCol_Button, m_propagate == kNone ? m_settings.GetColor(Colors::kAccent)
-                                                  : m_settings.GetColor(Colors::kButton));
-        ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
-                              m_propagate == kNone
-                                  ? m_settings.GetColor(Colors::kAccent)
-                                  : m_settings.GetColor(Colors::kButtonHovered));
-        ImGui::PushStyleColor(ImGuiCol_ButtonActive,
-                              m_propagate == kNone
-                                  ? m_settings.GetColor(Colors::kAccent)
-                                  : m_settings.GetColor(Colors::kButtonActive));
-        ImGui::PushStyleColor(ImGuiCol_Text,
-                              m_propagate == kNone
-                                  ? m_settings.GetColor(Colors::kTextOnAccent)
-                                  : m_settings.GetColor(Colors::kTextMain));
-        if(ImGui::Button("Current Track"))
+        if(ColoredButton(
+               "Current Track",
+               m_settings.GetColor(m_propagate == kNone ? Colors::kAccent
+                                                        : Colors::kButton),
+               m_settings.GetColor(m_propagate == kNone ? Colors::kAccent
+                                                        : Colors::kButtonHovered),
+               m_settings.GetColor(m_propagate == kNone ? Colors::kAccent
+                                                        : Colors::kButtonActive),
+               m_settings.GetColor(m_propagate == kNone ? Colors::kTextOnAccent
+                                                        : Colors::kTextMain),
+               "Apply changes to the current track."))
         {
             m_propagate = kNone;
         }
-        ImGui::PopStyleColor(4);
-        if(ImGui::IsItemHovered())
-        {
-            BeginTooltipStyled();
-            ImGui::TextUnformatted("Apply changes to the current track.");
-            EndTooltipStyled();
-        }
         ImGui::SameLine(0.0f, 0.0f);
-        ImGui::PushStyleColor(ImGuiCol_Button,
-                              m_propagate == Propagate::kSelected
-                                  ? m_settings.GetColor(Colors::kAccent)
-                                  : m_settings.GetColor(Colors::kButton));
-        ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
-                              m_propagate == Propagate::kSelected
-                                  ? m_settings.GetColor(Colors::kAccent)
-                                  : m_settings.GetColor(Colors::kButtonHovered));
-        ImGui::PushStyleColor(ImGuiCol_ButtonActive,
-                              m_propagate == Propagate::kSelected
-                                  ? m_settings.GetColor(Colors::kAccent)
-                                  : m_settings.GetColor(Colors::kButtonActive));
-        ImGui::PushStyleColor(ImGuiCol_Text,
-                              m_propagate == Propagate::kSelected
-                                  ? m_settings.GetColor(Colors::kTextOnAccent)
-                                  : m_settings.GetColor(Colors::kTextMain));
         ImGui::BeginDisabled(!m_options_aggregate_selected);
-        if(ImGui::Button("Selected Track(s)"))
+        if(ColoredButton("Selected Track(s)",
+                         m_settings.GetColor(m_propagate == Propagate::kSelected
+                                                 ? Colors::kAccent
+                                                 : Colors::kButton),
+                         m_settings.GetColor(m_propagate == Propagate::kSelected
+                                                 ? Colors::kAccent
+                                                 : Colors::kButtonHovered),
+                         m_settings.GetColor(m_propagate == Propagate::kSelected
+                                                 ? Colors::kAccent
+                                                 : Colors::kButtonActive),
+                         m_settings.GetColor(m_propagate == Propagate::kSelected
+                                                 ? Colors::kTextOnAccent
+                                                 : Colors::kTextMain),
+                         "Apply changes to selected track(s)."))
         {
             m_propagate = Propagate::kSelected;
         }
         ImGui::EndDisabled();
-        ImGui::PopStyleColor(4);
-        if(ImGui::IsItemHovered())
-        {
-            BeginTooltipStyled();
-            ImGui::TextUnformatted("Apply changes to selected track(s).");
-            EndTooltipStyled();
-        }
         ImGui::SameLine(0.0f, 0.0f);
-        ImGui::PushStyleColor(ImGuiCol_Button,
-                              m_propagate == Propagate::kSiblings
-                                  ? m_settings.GetColor(Colors::kAccent)
-                                  : m_settings.GetColor(Colors::kButton));
-        ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
-                              m_propagate == Propagate::kSiblings
-                                  ? m_settings.GetColor(Colors::kAccent)
-                                  : m_settings.GetColor(Colors::kButtonHovered));
-        ImGui::PushStyleColor(ImGuiCol_ButtonActive,
-                              m_propagate == Propagate::kSiblings
-                                  ? m_settings.GetColor(Colors::kAccent)
-                                  : m_settings.GetColor(Colors::kButtonActive));
-        ImGui::PushStyleColor(ImGuiCol_Text,
-                              m_propagate == Propagate::kSiblings
-                                  ? m_settings.GetColor(Colors::kTextOnAccent)
-                                  : m_settings.GetColor(Colors::kTextMain));
-        if(ImGui::Button(
+        if(ColoredButton(
                m_context_menu_target->GetTrackInfo()->topology.type == TrackInfo::Unknown
                    ? DISPLAY_STRINGS_TRACK_DATA_TYPES
                          [m_context_menu_target->GetTrackInfo()->track_type]
                    : DISPLAY_STRINGS_TOPOLOGY_TRACK_TYPES
-                         [m_context_menu_target->GetTrackInfo()->topology.type]))
+                         [m_context_menu_target->GetTrackInfo()->topology.type],
+               m_settings.GetColor(m_propagate == Propagate::kSiblings ? Colors::kAccent
+                                                                       : Colors::kButton),
+               m_settings.GetColor(m_propagate == Propagate::kSiblings
+                                       ? Colors::kAccent
+                                       : Colors::kButtonHovered),
+               m_settings.GetColor(m_propagate == Propagate::kSiblings
+                                       ? Colors::kAccent
+                                       : Colors::kButtonActive),
+               m_settings.GetColor(m_propagate == Propagate::kSiblings
+                                       ? Colors::kTextOnAccent
+                                       : Colors::kTextMain),
+               "Apply changes to all tracks of the same type."))
         {
             m_propagate = Propagate::kSiblings;
-        }
-        ImGui::PopStyleColor(4);
-        if(ImGui::IsItemHovered())
-        {
-            BeginTooltipStyled();
-            ImGui::TextUnformatted("Apply changes to all tracks of the same type.");
-            EndTooltipStyled();
         }
     }
 }

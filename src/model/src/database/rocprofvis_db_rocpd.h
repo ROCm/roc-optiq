@@ -81,6 +81,8 @@ protected:
                                     rocprofvis_dm_num_string_table_filters_t num_string_table_filters, 
                                     rocprofvis_dm_string_table_filters_t string_table_filters,
                                     bool include_substring,
+                                    bool include_category,
+                                    bool partial_matching,
                                     table_string_id_filter_map_t& filter) override;
 
     rocprofvis_dm_string_t GetEventOperationQuery(

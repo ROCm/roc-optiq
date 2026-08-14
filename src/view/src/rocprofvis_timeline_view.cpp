@@ -87,6 +87,7 @@ TimelineView::TimelineView(DataProvider&                          dp,
 , m_last_data_req_view_time_offset_ns(0.0)
 , m_can_drag_to_pan(false)
 , m_grid_interval_ns(0.0)
+, m_grid_interval_count(0)
 , m_recalculate_grid_interval(true)
 , m_last_zoom(1.0f)
 , m_last_graph_size(0.0f, 0.0f)
@@ -1462,7 +1463,7 @@ TimelineView::RenderScrubber(ImVec2 screen_pos)
         m_dragging_selection_start = false;
         m_dragging_selection_end   = false;
     }
-    else
+    else if(!m_stop_user_interaction)
     {
         if(m_dragging_selection_start)
         {
@@ -1489,7 +1490,7 @@ TimelineView::RenderScrubber(ImVec2 screen_pos)
         float line_y_end   = cursor_position.y + container_size.y - m_ruler_height;
 
         // Check hover for start line
-        if(!m_dragging_selection_end)  // Don't hover start if dragging end
+        if(!m_dragging_selection_end && !m_stop_user_interaction)  // Don't hover start if dragging end
         {
             bool hovered =
                 (mouse_pos.x >= normalized_start_box_highlighted - kGripWidth / 2 &&
@@ -1537,7 +1538,7 @@ TimelineView::RenderScrubber(ImVec2 screen_pos)
         float line_y_end   = cursor_position.y + container_size.y - m_ruler_height;
 
         // Check hover for end line
-        if(!m_dragging_selection_start)
+        if(!m_dragging_selection_start && !m_stop_user_interaction)
         {
             bool hovered =
                 (mouse_pos.x >= normalized_start_box_highlighted_end - kGripWidth / 2 &&

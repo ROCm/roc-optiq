@@ -511,24 +511,25 @@ QueryManager::BuildEventSearchQuery(
     rocprofvis_dm_timestamp_t start, rocprofvis_dm_timestamp_t end,
     rocprofvis_db_num_of_tracks_t num, rocprofvis_db_track_selection_t ops,
     rocprofvis_dm_charptr_t where,
-    rocprofvis_dm_num_string_table_filters_t num_string_table_filters,
-    rocprofvis_dm_string_table_filters_t     string_table_filters,
-    bool include_substring,
+    rocprofvis_dm_num_string_table_filters_t num_string_table_filters, rocprofvis_dm_string_table_filters_t string_table_filters,
+    bool include_substring, bool include_category, bool partial_matching,
     rocprofvis_dm_charptr_t sort_column, rocprofvis_dm_sort_order_t sort_order,
     uint64_t max_count, uint64_t offset, bool count_only, rocprofvis_dm_string_t& query)
 {
     std::vector<slice_query_map_t> slice_query_map_array;
     table_string_id_filter_map_t string_id_filter_map;
-    rocprofvis_dm_result_t string_filter_result = BuildTableStringIdFilter(num_string_table_filters, string_table_filters, include_substring, string_id_filter_map);
+    rocprofvis_dm_result_t string_filter_result = BuildTableStringIdFilter(num_string_table_filters, string_table_filters, include_substring, include_category, partial_matching, string_id_filter_map);
     slice_query_map_array.resize(num);
     for(int i = 0; i < num; i++)
     {
         rocprofvis_dm_index_t op = TABLE_QUERY_UNPACK_OP_TYPE(ops[i]);
         if (num_string_table_filters > 0)
         {
-            if (string_filter_result == kRocProfVisDmResultSuccess && string_id_filter_map.count((rocprofvis_dm_event_operation_t)op) > 0)
+            if (string_filter_result == kRocProfVisDmResultSuccess && 
+                string_id_filter_map.count((rocprofvis_dm_event_operation_t)op) > 0 && 
+                !GetEventOperationQuery((rocprofvis_dm_event_operation_t)op).empty())
             {
-                auto filters = string_id_filter_map.at((rocprofvis_dm_event_operation_t)op);
+                const auto& filters = string_id_filter_map.at((rocprofvis_dm_event_operation_t)op);
                 for (auto it = filters.begin(); it != filters.end(); ++it)
                 {
                     slice_query_map_array[i][GetEventOperationQuery((rocprofvis_dm_event_operation_t)op)][it->first] = std::string(" WHERE ") + it->second;

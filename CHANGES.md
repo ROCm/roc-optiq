@@ -48,6 +48,7 @@ These features are in progress and available for preview only (build from src); 
 - Fixed loading workload Speed-of-Light for compute schema < 1.3.0; query builders now report and skip unsupported queries.
 - Fixed crash when invalid filter used in kernel selection table.
 - JobSystem fixes.
+- Fixed timeline tracks that could keep spinning, or show incomplete data, after scrolling or zooming quickly while track data was still loading.
 
 ## Optiq Beta 0.5.0
 

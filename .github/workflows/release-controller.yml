@@ -14,10 +14,7 @@ on:
         default: 'dev'
         options:
           - dev
-          - nightly
-          - weekly
-          - rc
-          - stable
+          - legacy
       rocm_version:
         description: 'Specify the ROCm version to build with in ManyLinux for release.'
         type: string
@@ -31,5 +28,4 @@ jobs:
     with:
       upload_to_github: ${{ !inputs.dry_run }}
       upload_to_s3: ${{ !inputs.dry_run }}
-      s3_bucket: ${{ inputs.s3_bucket_env }}
-      s3_root_directory: v5
+      s3_bucket_env: ${{ inputs.s3_bucket_env }}

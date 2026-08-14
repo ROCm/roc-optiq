@@ -40,8 +40,8 @@ on:
         description: 'ROCm version number used in package naming (e.g. 10)'
         type: string
         default: '10'
-      s3_bucket:
-        description: 'S3 bucket to upload artifacts to'
+      s3_bucket_env:
+        description: 'S3 bucket environment to upload artifacts to'
         type: choice
         default: 'legacy'
         options:
@@ -85,10 +85,13 @@ on:
         description: 'ROCm version number used in package naming (e.g. 10)'
         type: string
         default: '10'
-      s3_bucket:
-        description: 'S3 bucket to upload artifacts to'
-        type: string
+      s3_bucket_env:
+        description: 'S3 bucket environment to upload artifacts to'
+        type: choice
         default: 'legacy'
+        options:
+          - dev
+          - legacy
 
 env:
   BUILD_DIR: "build"
@@ -179,7 +182,7 @@ jobs:
       - name: Resolve S3 secrets
         if: ${{ inputs.upload_to_s3 }}
         run: |
-          if [[ "${{ inputs.s3_bucket }}" == "dev" ]]; then
+          if [[ "${{ inputs.s3_bucket_env }}" == "dev" ]]; then
             echo "S3_BUCKET=${{ secrets.AWS_DEV_EXTRAS_S3_BUCKET }}" >> "$GITHUB_ENV"
             echo "S3_ROLE_ARN=${{ secrets.AWS_DEV_EXTRAS_ROLE_ARN }}" >> "$GITHUB_ENV"
           else

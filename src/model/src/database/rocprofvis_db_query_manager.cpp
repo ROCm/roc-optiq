@@ -525,7 +525,9 @@ QueryManager::BuildEventSearchQuery(
         rocprofvis_dm_index_t op = TABLE_QUERY_UNPACK_OP_TYPE(ops[i]);
         if (num_string_table_filters > 0)
         {
-            if (string_filter_result == kRocProfVisDmResultSuccess && string_id_filter_map.count((rocprofvis_dm_event_operation_t)op) > 0 && !GetEventOperationQuery((rocprofvis_dm_event_operation_t)op).empty())
+            if (string_filter_result == kRocProfVisDmResultSuccess && 
+                string_id_filter_map.count((rocprofvis_dm_event_operation_t)op) > 0 && 
+                !GetEventOperationQuery((rocprofvis_dm_event_operation_t)op).empty())
             {
                 const auto& filters = string_id_filter_map.at((rocprofvis_dm_event_operation_t)op);
                 for (auto it = filters.begin(); it != filters.end(); ++it)

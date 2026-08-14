@@ -1838,7 +1838,9 @@ rocprofvis_dm_result_t RocprofDatabase::BuildTableStringIdFilter( rocprofvis_dm_
                 {
                     filter[kRocProfVisDmOperationLaunch][it->first] += ") OR E.category_id IN (" + it->second;
                     filter[kRocProfVisDmOperationDispatch][it->first] += ") OR E.category_id IN (" + it->second;
-                    filter[kRocProfVisDmOperationMemoryAllocate][it->first] = filter[kRocProfVisDmOperationMemoryAllocate][it->first].empty() ? " E.category_id IN (" + it->second: "(" + filter[kRocProfVisDmOperationMemoryAllocate][it->first] + ") OR E.category_id IN (" + it->second + ")";
+                    filter[kRocProfVisDmOperationMemoryAllocate][it->first] = filter[kRocProfVisDmOperationMemoryAllocate][it->first].empty() ? 
+                        " E.category_id IN (" + it->second :
+                        "(" + filter[kRocProfVisDmOperationMemoryAllocate][it->first] + ") OR E.category_id IN (" + it->second + ")";
                     filter[kRocProfVisDmOperationMemoryCopy][it->first] += ") OR E.category_id IN (" + it->second;
                     filter[kRocProfVisDmOperationLaunchSample][it->first] += ") OR E.category_id IN (" + it->second;
                 }

@@ -2398,6 +2398,8 @@ TimelineView::ApplyTrackOrder(const std::vector<uint64_t>& order)
     return true;
 }
 
+// Replaces m_tracks; only call from Update(), never mid-render, since the render
+// loops iterate this list.
 void
 TimelineView::RebuildTrackVectorFromMetadata()
 {

@@ -972,10 +972,9 @@ TrackItem::AddPill(bool shown, bool active)
     return m_pills.back().get();
 }
 
-bool
+void
 TrackItem::HandleTrackDataChanged(uint64_t request_id, uint64_t response_code)
 {
-    bool result = false;
     if(!m_pending_requests.erase(request_id))
     {
         spdlog::debug("Response {} is not pending on track {}", request_id, m_track_id);
@@ -985,7 +984,7 @@ TrackItem::HandleTrackDataChanged(uint64_t request_id, uint64_t response_code)
     if(response_code == kRocProfVisResultSuccess ||
        response_code == kRocProfVisResultOutOfRange)
     {
-        result = ExtractPointsFromData();
+        ExtractPointsFromData();
     }
 
     // If there are no more pending requests, set the request state to idle
@@ -997,8 +996,6 @@ TrackItem::HandleTrackDataChanged(uint64_t request_id, uint64_t response_code)
             m_request_state = TrackDataRequestState::kIdle;
         }
     }
-
-    return result;
 }
 
 bool

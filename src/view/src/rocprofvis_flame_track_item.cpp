@@ -289,7 +289,7 @@ FlameTrackItem::IsCompactMode() const
     return m_event_options ? m_event_options->m_compact : TrackItem::IsCompactMode();
 }
 
-bool
+void
 FlameTrackItem::ExtractPointsFromData()
 {
     const RawTrackData* rtd =
@@ -300,7 +300,7 @@ FlameTrackItem::ExtractPointsFromData()
     if(!rtd)
     {
         spdlog::debug("No raw track data found for track {}", m_track_id);
-        return true;
+        return;
     }
 
     const RawTrackEventData* event_track = dynamic_cast<const RawTrackEventData*>(rtd);
@@ -309,13 +309,13 @@ FlameTrackItem::ExtractPointsFromData()
     {
         spdlog::debug("Invalid track data type for track {}", m_track_id);
         m_request_state = TrackDataRequestState::kError;
-        return false;
+        return;
     }
 
     if(event_track->GetData().empty())
     {
         spdlog::debug("No data for track {}", m_track_id);
-        return true;
+        return;
     }
 
     // Update selection state cache.
@@ -339,7 +339,6 @@ FlameTrackItem::ExtractPointsFromData()
         }
         m_chart_items[i].child_info.clear();
     }
-    return true;
 }
 
 bool

@@ -353,7 +353,7 @@ LineTrackItem::ReleaseData()
     return false;
 }
 
-bool
+void
 LineTrackItem::ExtractPointsFromData()
 {
     const RawTrackData* rtd = m_data_provider.DataModel().GetTimeline().GetTrackData(m_track_id);
@@ -363,7 +363,7 @@ LineTrackItem::ExtractPointsFromData()
     if(!rtd)
     {
         spdlog::debug("No raw track data found for track {}", m_track_id);
-        return true;
+        return;
     }
 
     const RawTrackSampleData* sample_track = dynamic_cast<const RawTrackSampleData*>(rtd);
@@ -371,19 +371,17 @@ LineTrackItem::ExtractPointsFromData()
     {
         spdlog::debug("Invalid track data type for track {}", m_track_id);
         m_request_state = TrackDataRequestState::kError;
-        return false;
+        return;
     }
 
     if(sample_track->GetData().empty())
     {
         spdlog::debug("No data for track {}", m_track_id);
-        return true;
+        return;
     }
     const std::vector<TraceCounter>& track_data = sample_track->GetData();
 
     m_data = track_data;
-
-    return true;
 }
 
 float

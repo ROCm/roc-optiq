@@ -120,7 +120,7 @@ public:
     virtual bool ReleaseData();
     virtual void RequestData(double min, double max, float width);
     void         RequestAnalysis();
-    virtual bool HandleTrackDataChanged(uint64_t request_id, uint64_t response_code);
+    virtual void HandleTrackDataChanged(uint64_t request_id, uint64_t response_code);
     virtual bool HasPendingRequests() const;
     virtual bool HasPendingRequest(uint64_t request_id) const;
     virtual void UpdateMetaScaleAreaSize();
@@ -144,7 +144,7 @@ protected:
     virtual void  RenderMetaAreaExpand();
     virtual void  RenderChart(float graph_width) = 0;
     virtual void  RenderResizeBar(const ImVec2& parent_size);
-    virtual bool  ExtractPointsFromData() = 0;
+    virtual void  ExtractPointsFromData() = 0;
 
     void  FetchHelper();
     void  CancelPendingRequests();

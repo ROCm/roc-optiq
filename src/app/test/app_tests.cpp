@@ -18,6 +18,8 @@
 #include "rocprofvis_summary_view.h"
 #include "icons/rocprovfis_icon_defines.h"
 #include <string>
+#include <filesystem>
+#include <fstream>
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_utils.h"
 #include "rocprofvis_data_provider.h"
@@ -118,6 +120,47 @@ bool TwoEventScreenCenters(ImGuiTestContext* ctx, unsigned int flame_window_id,
     out_second = second.RectFull.GetCenter();
     return true;
 }
+
+// Finds the first pair of bars that overlap in time but sit on different
+// rows, returning their centers. Only overlapping bars meaningfully test
+// selection -- well-separated bars have disjoint hit-regions and resolve
+// correctly regardless, so clicking them would prove nothing.
+bool TwoStackedEventScreenCenters(ImGuiTestContext* ctx, unsigned int flame_window_id,
+                                  ImVec2& out_first, ImVec2& out_second)
+{
+    if(flame_window_id == 0) return false;
+    ImGuiTestItemList bars;
+    ctx->GatherItems(&bars, ImGuiTestRef(flame_window_id));
+
+    const int count = bars.GetSize();
+    // Skip bars too thin to reliably click.
+    const float kMinClickWidth = 4.0f;
+    for(int i = 0; i < count; i++)
+    {
+        const ImGuiTestItemInfo* a = bars.GetByIndex(i);
+        if(a->RectFull.GetWidth() < kMinClickWidth) continue;
+        // Two bars are on different rows if their centers are more than half a
+        // bar-height apart.
+        const float row_threshold = a->RectFull.GetHeight() * 0.5f;
+        for(int j = i + 1; j < count; j++)
+        {
+            const ImGuiTestItemInfo* b = bars.GetByIndex(j);
+            if(b->RectFull.GetWidth() < kMinClickWidth) continue;
+            const bool overlap_x = a->RectFull.Min.x < b->RectFull.Max.x &&
+                                   b->RectFull.Min.x < a->RectFull.Max.x;
+            const bool diff_row =
+                fabsf(a->RectFull.GetCenter().y - b->RectFull.GetCenter().y) > row_threshold;
+            if(overlap_x && diff_row)
+            {
+                out_first  = a->RectFull.GetCenter();
+                out_second = b->RectFull.GetCenter();
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
 }  // namespace
 
 void RegisterAppTests(ImGuiTestEngine* e)
@@ -1276,5 +1319,174 @@ void RegisterAppTests(ImGuiTestEngine* e)
         IM_CHECK(expanded_height != collapsed_height);
         IM_CHECK(restored_state == orig_expanded);
         IM_CHECK(restored_height == orig_height);
+    };
+
+    t = IM_REGISTER_TEST(e, "app", "sys_stacked_event_select_distinct");
+    t->TestFunc = [](ImGuiTestContext* ctx)
+    {
+        TraceView* tv = GetTraceViewOrSkip(ctx);
+        if (!tv) return;
+        TimelineView* tlv = TraceViewTestPeer{*tv}.TimelineViewPtr();
+        IM_CHECK(tlv != nullptr);
+        if (tlv == nullptr) return;
+        std::shared_ptr<TimelineSelection> sel = tv->GetTimelineSelection();
+        IM_CHECK(sel != nullptr);
+        if (sel == nullptr) return;
+
+        // The Summary window, if open, overlaps the timeline and captures the mouse
+        // so bar clicks would land on it, not the flame track. Close it for the
+        // clicks below; the guard restores the prior value on exit.
+        SettingsManager::GetInstance().GetAppWindowSettings().show_summary = false;
+        ctx->Yield(2);
+
+        // Start from an empty selection. Selection is async, so yield first.
+        TraceViewTestPeer{*tv}.ClearEventSelection();
+        ctx->Yield(3);
+        std::vector<uint64_t> ids;
+        sel->GetSelectedEvents(ids);
+        IM_CHECK(ids.empty());
+
+        // Look for a stacked, overlapping pair of bars to click. Scan every
+        // flame track, since the first one may not contain such a pair.
+        ctx->Yield(3);
+        ImVec2 a(0.0f, 0.0f), b(0.0f, 0.0f);
+        bool   have_targets = false;
+        for (FlameTrackItem* flame : TimelineViewTestPeer{*tlv}.DisplayedFlameTracks())
+        {
+            if (flame == nullptr) continue;
+            const unsigned int flame_window_id = FlameTrackItemTestPeer{*flame}.FlameWindowId();
+            if (TwoStackedEventScreenCenters(ctx, flame_window_id, a, b))
+            {
+                have_targets = true;
+                break;
+            }
+        }
+        if (!have_targets)
+        {
+            ctx->LogWarning("SKIP: no lane with overlapping stacked events to disambiguate");
+            return;
+        }
+
+        // Click the first bar and wait for the selection to settle on one event.
+        ctx->MouseMoveToPos(a);
+        ctx->MouseClick(0);
+        for (int i = 0; i < 60 && ids.size() != 1; i++)
+        {
+            ctx->Yield(2);
+            ids.clear();
+            sel->GetSelectedEvents(ids);
+        }
+        IM_CHECK(ids.size() == 1);
+        if (ids.size() != 1) return;
+        const uint64_t id_a = ids.front();
+
+        // Click the second bar. A plain click replaces the selection, so wait
+        // for it to land on a single event other than the first. The loop is
+        // bounded so that if the selection never changes off the first event,
+        // it falls through to the assertion below instead of spinning forever.
+        ctx->MouseMoveToPos(b);
+        ctx->MouseClick(0);
+        ids.clear();
+        sel->GetSelectedEvents(ids);
+        for (int i = 0; i < 60 && (ids.size() != 1 || ids.front() == id_a); i++)
+        {
+            ctx->Yield(2);
+            ids.clear();
+            sel->GetSelectedEvents(ids);
+        }
+        IM_CHECK(ids.size() == 1);
+        if (ids.size() != 1) return;
+        const uint64_t id_b = ids.front();
+
+        // Clicking two different stacked bars must select two different events.
+        IM_CHECK(id_a != id_b);
+
+        // Leave a clean selection for following tests.
+        TraceViewTestPeer{*tv}.ClearEventSelection();
+        ctx->Yield(2);
+        ids.clear();
+        sel->GetSelectedEvents(ids);
+        IM_CHECK(ids.empty());
+    };
+
+    t = IM_REGISTER_TEST(e, "app", "sys_shared_db_open_dedups_and_switches");
+    t->TestFunc = [](ImGuiTestContext* ctx)
+    {
+        namespace fs = std::filesystem;
+
+        AppWindow* app = AppWindow::GetInstance();
+        IM_CHECK(app != nullptr);
+        if (app == nullptr) return;
+
+        // Sample dbs resolve relative to the working directory (the repo root).
+        // Skip if either is missing.
+        auto resolve_sample = [](const char* rel) -> std::string {
+            fs::path p(rel);
+            if (!fs::exists(p)) return std::string();
+            return fs::weakly_canonical(p).string();
+        };
+        const std::string db_a = resolve_sample("sample/rocpd-transpose.db");
+        const std::string db_b = resolve_sample("sample/rocprof_compute_23ed6f36.db");
+        if (db_a.empty() || db_b.empty())
+        {
+            ctx->LogWarning("SKIP: sample dbs (rocpd-transpose.db / rocprof_compute_23ed6f36.db) not found");
+            return;
+        }
+
+        // A project's id is its source-db path, so a .db and a .rpv that point
+        // at that same .db share one id.
+        const std::string id_a = db_a;
+        const std::string id_b = db_b;
+
+        // Open DB_A; afterward its project must exist.
+        app->OpenFile(db_a);
+        ctx->Yield(3);
+        IM_CHECK(app->GetProject(id_a) != nullptr);
+
+        // Open DB_B as a second, active tab so the later switch back to DB_A is
+        // actually observable.
+        app->OpenFile(db_b);
+        ctx->Yield(3);
+        IM_CHECK(app->GetProject(id_b) != nullptr);
+        IM_CHECK(app->GetCurrentProject() != nullptr);
+        if (app->GetCurrentProject() == nullptr) return;
+        IM_CHECK(app->GetCurrentProject()->GetID() == id_b);
+
+        // Write a temp .rpv pointing at DB_A by absolute path, so it resolves
+        // back to DB_A's id no matter where the .rpv lives. Escape the path so
+        // the JSON stays valid.
+        const fs::path rpv_path = fs::temp_directory_path() / "rocprofvis_shared_db_dedup.rpv";
+        std::string escaped;
+        for (char c : db_a)
+        {
+            if (c == '\\' || c == '"') escaped.push_back('\\');
+            escaped.push_back(c);
+        }
+        {
+            std::ofstream out(rpv_path);
+            IM_CHECK(out.is_open());
+            if (!out.is_open()) return;
+            out << "{\"general\": {\"version\": \"1.0\", \"trace_path\": \""
+                << escaped << "\"}}";
+        }
+
+        app->OpenFile(rpv_path.string());
+        ctx->Yield(3);
+
+        // Opening the .rpv must switch back to the existing DB_A tab instead of
+        // opening a duplicate.
+        IM_CHECK(app->GetCurrentProject() != nullptr);
+        if (app->GetCurrentProject() == nullptr) return;
+        IM_CHECK(app->GetCurrentProject()->GetID() == id_a);
+
+        // No project should be keyed at the .rpv path itself.
+        IM_CHECK(app->GetProject(rpv_path.string()) == nullptr);
+
+        // Remove the temp .rpv and dismiss the dedup popup so it can't cover
+        // later tests. The tabs stay open (no safe close hook).
+        std::error_code ec;
+        fs::remove(rpv_path, ec);
+        ctx->PopupCloseAll();
+        ctx->Yield(2);
     };
 }

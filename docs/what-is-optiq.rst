@@ -10,27 +10,6 @@ ROCm Optiq is a unified visualization and analysis tool for performance data col
 
 Because ROCm Optiq doesn't have any dependencies on the ROCm stack, trace files and profiling data files can be visualized with the ROCm Optiq GUI on any machine running a supported Microsoft Windows or Linux operating system. For more information, see :ref:`requirements`.
 
-Welcome page 
-============
-
-When ROCm Optiq starts without an open project, the Welcome page displays: 
-
-- Open File—open a trace (``.db``, ``.rpd``) or project (``.rpv``). You can also drag and drop a supported file into the window to open it.
-- Recent files—quick access to recently opened files 
-- Documentation links—ROCm Optiq, ROCm Systems Profiler, and ROCm Compute Profiler documentation
-
-.. image:: /images/welcome-page.png
-   :width: 800
-   :align: center
-   :alt: ROCm Optiq welcome page showing Start, Recent files, and Documentation links sections
-
-.. note::
-
-   - Opening a file creates a new tab and activates it. 
-   - ROCm Optiq prevents opening a second tab for the same underlying trace database, including when a ``.rpv`` project references an already-open ``.db``. 
-
-.. _trace-file:
-
 Visualize ROCm Systems Profiler traces
 ======================================
 
@@ -69,4 +48,26 @@ Key features include:
 - :ref:`analysis-table`: Complete list of available metrics for the selected kernel. Metrics are grouped by category. 
 - :ref:`analysis-workload`: Contextual information about the profiled workload, including system information and profiling configuration. 
 - :ref:`baseline-comparison`: A side-by-side view that compares two workload measurements (baseline vs. target) to quickly identify and assess performance regressions or improvements. 
+
+Welcome page 
+============
+
+When ROCm Optiq starts without an open project, the Welcome page displays: 
+
+- Open File—open a trace (``.db``, ``.rpd``) or project (``.rpv``). You can also drag and drop a supported file into the window to open it.
+- Recent files—quick access to recently opened files 
+- Documentation links—ROCm Optiq, ROCm Systems Profiler, and ROCm Compute Profiler documentation
+
+.. image:: /images/welcome-page.png
+   :width: 800
+   :align: center
+   :alt: ROCm Optiq welcome page showing Start, Recent files, and Documentation links sections
+
+.. note::
+
+   - Opening a file creates a new tab and activates it. 
+   - ROCm Optiq prevents opening a second tab for the same underlying trace database, including when a ``.rpv`` project references an already-open ``.db``. 
+
+.. _trace-file:
+
 

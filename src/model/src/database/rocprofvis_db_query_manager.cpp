@@ -527,7 +527,7 @@ QueryManager::BuildEventSearchQuery(
         {
             if (string_filter_result == kRocProfVisDmResultSuccess && string_id_filter_map.count((rocprofvis_dm_event_operation_t)op) > 0 && !GetEventOperationQuery((rocprofvis_dm_event_operation_t)op).empty())
             {
-                auto filters = string_id_filter_map.at((rocprofvis_dm_event_operation_t)op);
+                const auto& filters = string_id_filter_map.at((rocprofvis_dm_event_operation_t)op);
                 for (auto it = filters.begin(); it != filters.end(); ++it)
                 {
                     slice_query_map_array[i][GetEventOperationQuery((rocprofvis_dm_event_operation_t)op)][it->first] = std::string(" WHERE ") + it->second;

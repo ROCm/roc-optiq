@@ -1751,7 +1751,7 @@ rocprofvis_dm_result_t RocprofDatabase::BuildTableStringIdFilter( rocprofvis_dm_
             std::vector<rocprofvis_db_string_id_t> string_id_array;
             result = StringIndexToId(index, string_id_array);
             ROCPROFVIS_ASSERT_RETURN(result == kRocProfVisDmResultSuccess && string_id_array.size() > 0, result);
-            for (auto string_id_obj : string_id_array)
+            for (const auto& string_id_obj : string_id_array)
             {
                 
                 if (string_id_obj.m_string_type == rocprofvis_db_string_type_t::kRPVStringTypeKernelSymbol)

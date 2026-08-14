@@ -15,7 +15,7 @@ class EventSearch : public InfiniteScrollTable
 {
 public:
     EventSearch(DataProvider& dp, std::shared_ptr<TimelineSelection> timeline_selection);
-    ~EventSearch();
+    ~EventSearch() override;
 
     void Update() override;
     void Render() override;

@@ -648,7 +648,7 @@ AccentButton(const char* label, ImVec2 size, SettingsManager* settings)
     return ColoredButton(label, settings->GetColor(Colors::kAccent),
                          settings->GetColor(Colors::kAccentHover),
                          settings->GetColor(Colors::kAccentActive),
-                         settings->GetColor(Colors::kTextOnAccent));
+                         settings->GetColor(Colors::kTextOnAccent), nullptr, size);
 }
 
 bool

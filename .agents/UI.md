@@ -1036,6 +1036,11 @@ Renders the topology tree in the left pane:
   `DataProvider`.
 - The active-node accent mirrors timeline node coloring when
   `SettingsManager::ShowNodeColors()` is enabled.
+- `SettingsManager::CompactSidebar()` drops the per-row eye and
+  scroll-to-track buttons (leaf and branch) so labels sit flush against
+  the tree. Nothing is reserved in their place; the context menus below
+  remain the way to toggle visibility and jump to a track, and hidden
+  tracks stay marked by their dimmed label.
 - Right-click a leaf track (`##track_ctx`): Go to Track, Hide/Show
   Track, Show All Tracks, Hide All But This Track, and Show/Hide
   Selected Tracks (enabled when
@@ -1533,6 +1538,10 @@ through this** - never hardcode `IM_COL32(...)` in feature code.
   `SettingsManager::ShowNodeColors()` enables node color-coding (only
   when the trace has more than one node). It tints the track's node
   pill and the sidebar tree connectors, not the chart lane itself.
+- `DisplaySettings::compact_sidebar` /
+  `SettingsManager::CompactSidebar()` hides the topology sidebar's
+  per-row icons in favor of the right-click menus (see `SideBar` in
+  section 9).
 - `UserSettings::log_viewer` stores level mask, entry limit, search and
   presentation preferences for `LogViewer`.
 - `GetInternalSettings()` -> recent files (`MAX_RECENT_FILES = 5`).

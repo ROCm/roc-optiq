@@ -311,6 +311,10 @@ SideBar::RenderTrackItem(const uint64_t& index, bool show_eye_button)
     const TrackInfo* track_info =
         m_data_provider.DataModel().GetTimeline().GetTrack(track.GetID());
 
+    // Compact mode drops the row buttons entirely; the context menu below still
+    // toggles visibility and goes to the track.
+    const bool draw_buttons = show_eye_button && !m_settings.CompactSidebar();
+
     ImGui::PushID(static_cast<int>(track.GetID()));
     ImGui::PushStyleColor(ImGuiCol_Button, m_settings.GetColor(Colors::kTransparent));
     ImGui::PushStyleColor(ImGuiCol_ButtonHovered, m_settings.GetColor(Colors::kHighlightChart));
@@ -318,7 +322,7 @@ SideBar::RenderTrackItem(const uint64_t& index, bool show_eye_button)
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(2, 0));
 
     bool display = track.IsDisplayed();
-    if(show_eye_button)
+    if(draw_buttons)
     {
         ImGui::PushFont(m_settings.GetFontManager().GetFont(FontType::kIcon), 0.0f);
         if(ImGui::Button(display ? ICON_EYE : ICON_EYE_SLASH))
@@ -345,7 +349,7 @@ SideBar::RenderTrackItem(const uint64_t& index, bool show_eye_button)
 
     ImGui::PopStyleVar();
     ImGui::PopStyleColor(3);
-    if(show_eye_button)
+    if(draw_buttons)
     {
         ImGui::SameLine();
     }
@@ -694,7 +698,7 @@ SideBar::RenderBranchNode(const TreeNode& node, const TreeNode* state_node,
     const TreeNode& apply_target = target_node ? *target_node : node;
 
     ImGui::PushID(static_cast<const void*>(&node));
-    if(node.show_eye_button)
+    if(node.show_eye_button && !m_settings.CompactSidebar())
     {
         EyeButtonState current_state = GetTreeState(state_source);
         EyeButtonState new_state     = DrawEyeButton(current_state);

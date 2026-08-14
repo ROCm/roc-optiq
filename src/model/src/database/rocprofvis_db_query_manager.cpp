@@ -658,12 +658,12 @@ QueryManager::ReadTracePMCSlice(rocprofvis_dm_timestamp_t            start,
     rocprofvis_dm_track_params_t* props = TrackPropertiesAt(*track);
     if(props->track_indentifiers.category == kRocProfVisDmPmcTrack)
     {
+        slice_array_t slices;
+        slices[*track]=BindObject()->FuncAddSlice(BindObject()->trace_object, *track, start, end, tag);
         while (true)
         {
             std::string slice_query;
-            slice_array_t slices;
 
-            slices[*track]=BindObject()->FuncAddSlice(BindObject()->trace_object, *track, start, end, tag);
             rocprofvis_dm_result_t result = BuildSliceQuery(start, end, 1, track, slice_query, slices);
             std::string query;
 
@@ -677,44 +677,43 @@ QueryManager::ReadTracePMCSlice(rocprofvis_dm_timestamp_t            start,
                     if (result != kRocProfVisDmResultSuccess) break;
                 }
 
-                if (result == kRocProfVisDmResultSuccess)
+                result = ExecuteSQLQuery(future, (DbInstance*)props->track_indentifiers.db_instance, slice_query.c_str(), &slices, m_callback_add_any_record);
+
+                if (result == kRocProfVisDmResultSuccess && right_neighbor)
                 {
-                    result = ExecuteSQLQuery(future, (DbInstance*)props->track_indentifiers.db_instance, slice_query.c_str(), &slices, m_callback_add_any_record);
+                    query = "";
+                    future->ResetRowCount();
+                    if (BuildCounterSliceRightNeighbourQuery(start, end, *track, query) != kRocProfVisDmResultSuccess) break;
+                    if (ExecuteSQLQuery(future, (DbInstance*)props->track_indentifiers.db_instance, query.c_str(), &slices, m_callback_add_any_record) != kRocProfVisDmResultSuccess) break;
 
-                    if (result == kRocProfVisDmResultSuccess && right_neighbor)
+                    if (future->GetProcessedRowsCount() == 0)
                     {
-                        query = "";
-                        future->ResetRowCount();
-                        if (BuildCounterSliceRightNeighbourQuery(start, end, *track, query) != kRocProfVisDmResultSuccess) break;
-                        if (ExecuteSQLQuery(future, (DbInstance*)props->track_indentifiers.db_instance, query.c_str(), &slices, m_callback_add_any_record) != kRocProfVisDmResultSuccess) break;
+                        rocprofvis_db_record_data_t record; 
+                        auto db_instance = (DbInstance*)props->track_indentifiers.db_instance;
+                        record.pmc.timestamp = TraceProperties()->db_inst_end_time[db_instance->GuidIndex()]-TraceProperties()->db_inst_start_time[db_instance->GuidIndex()];
+                        record.pmc.value = future->GetRuntimeStorageValue<double>(kRPVFutureStorageSampleValue,0);
 
-                        if (future->GetProcessedRowsCount() == 0)
-                        {
-                            rocprofvis_db_record_data_t record; 
-                            auto db_instance = (DbInstance*)props->track_indentifiers.db_instance;
-                            record.pmc.timestamp = TraceProperties()->db_inst_end_time[db_instance->GuidIndex()]-TraceProperties()->db_inst_start_time[db_instance->GuidIndex()];
-                            record.pmc.value = future->GetRuntimeStorageValue<double>(kRPVFutureStorageSampleValue,0);
-
-                            if (BindObject()->FuncAddRecord(slices[*track], record) != kRocProfVisDmResultSuccess)
-                                break;
-
-                        }
+                        if (BindObject()->FuncAddRecord(slices[*track], record) != kRocProfVisDmResultSuccess)
+                            break;
                     }
-
-
-                    BindObject()->FuncCompleteSlice(slices[*track]);
-
                 }
             }
 
-            if(kRocProfVisDmResultSuccess != result)
+            if (kRocProfVisDmResultSuccess == result)
             {
-                BindObject()->FuncRemoveSlice(BindObject()->trace_object, *track, slices[*track]);
+                BindObject()->FuncCompleteSlice(slices[*track]);
+            }
+            else
+            {
                 break;
             }
+
             ShowProgress(100 - future->Progress(), "Time slice successfully loaded!", kRPVDbSuccess, future);
             return future->SetPromise(kRocProfVisDmResultSuccess);
         }    
+
+        BindObject()->FuncCompleteSlice(slices[*track]);
+        BindObject()->FuncRemoveSlice(BindObject()->trace_object, *track, slices[*track]);
     }
 
     ShowProgress(0, "Not all tracks are loaded!", kRPVDbError, future );

@@ -57,7 +57,7 @@ TraceView::TraceView()
         (void)trace_path;                                    
         if(!success)
         {
-            spdlog::debug("Failed to fetch event data for event ID: {}", event_id);
+            spdlog::warn("Failed to fetch event data for event ID: {}", event_id);
             return;
         }
 
@@ -462,6 +462,14 @@ TraceView::HandleHotKeys()
                     "Bookmark slot " + idx + " not assigned",
                     NotificationLevel::Warning);
             }
+        }
+    }
+
+    if(hk.WasActionTriggered(HotkeyActionId::kZoomToSelection))
+    {
+        if(m_timeline_view)
+        {
+            m_timeline_view->ZoomToTimeRangeSelection();
         }
     }
 }

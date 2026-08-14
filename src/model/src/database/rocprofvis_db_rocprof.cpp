@@ -172,8 +172,7 @@ int RocprofDatabase::ProcessTrack(rocprofvis_dm_track_params_t& track_params, st
             }
             else
             {
-                if(track_params.track_indentifiers.id[TRACK_ID_QUEUE] > 0)
-                    if (CachedTables(db_instance->GuidIndex())->PopulateTrackExtendedDataTemplate(this, db_instance->GuidIndex(), "PMC", track_params.track_indentifiers.id[TRACK_ID_COUNTER]) != kRocProfVisDmResultSuccess) return 1;
+                if (CachedTables(db_instance->GuidIndex())->PopulateTrackExtendedDataTemplate(this, db_instance->GuidIndex(), "PMC", track_params.track_indentifiers.id[TRACK_ID_COUNTER]) != kRocProfVisDmResultSuccess) return 1;
             }
         }
     }
@@ -862,7 +861,7 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
             {
                 if (version != m_db_version)
                 {
-                    spdlog::debug("Cannot support different version database nodes!");
+                    spdlog::warn("Schema mismatch: all database sources must use the same schema version; the trace cannot be opened.");
                     result = kRocProfVisDmResultNotSupported;
                     break;
                 }

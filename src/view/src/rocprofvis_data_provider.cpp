@@ -1212,11 +1212,11 @@ DataProvider::HandleLoadTrackMetaData()
         }
         else
         {
-            spdlog::debug("Error getting track meta data for track at index: {}", i);
+            spdlog::warn("Error getting track meta data for track at index: {}", i);
         }
     }
 
-    spdlog::info("Track meta data loaded");
+    spdlog::debug("Track meta data loaded");
 }
 
 void
@@ -1261,7 +1261,7 @@ DataProvider::ApplyTrackOrderRanking()
         metadata[ordered[i]->id].index = i;
     }
 
-    spdlog::info("Applied compare track order ranking to {} tracks", ordered.size());
+    spdlog::debug("Applied compare track order ranking to {} tracks", ordered.size());
 }
 
 bool
@@ -1430,7 +1430,7 @@ DataProvider::FetchWholeTrack(uint32_t track_id, double start_ts, double end_ts,
             {
                 rocprofvis_controller_array_free(track_array);
                 rocprofvis_controller_future_free(track_future);
-                spdlog::debug("Failed to fetch track graph data {}, result: {}", track_id,
+                spdlog::warn("Failed to fetch track graph data {}, result: {}", track_id,
                               static_cast<int>(result));
             }
         }
@@ -1518,7 +1518,7 @@ DataProvider::FetchTrack(const TrackRequestParams& request_params)
             {
                 rocprofvis_controller_array_free(graph_array);
                 rocprofvis_controller_future_free(graph_future);
-                spdlog::debug("Failed to fetch track graph data {}, result: {}",
+                spdlog::warn("Failed to fetch track graph data {}, result: {}",
                               request_params.m_track_id, static_cast<int>(result));
             }
         }
@@ -3002,7 +3002,7 @@ DataProvider::ProcessSummaryRequest(RequestInfo& req)
         }
         else
         {
-            spdlog::debug("Summary request failed with code {}", req.response_code);
+            spdlog::warn("Summary request failed with code {}", req.response_code);
         }
         rocprofvis_controller_summary_metric_free(metrics_handle);
         req.request_obj_handle = nullptr;
@@ -3025,7 +3025,7 @@ DataProvider::ProcessAnalysisTrackStatisticsRequest(RequestInfo& req)
     }
     else if(req.response_code != kRocProfVisResultSuccess)
     {
-        spdlog::debug("Track statistics request for track {} failed with code {}",
+        spdlog::warn("Track statistics request for track {} failed with code {}",
                       params->m_track_id, req.response_code);
     }
     else
@@ -3524,7 +3524,7 @@ DataProvider::ProcessTableRequest(RequestInfo& req)
     }
     else
     {
-        spdlog::debug("Table request failed with code {}", req.response_code);
+        spdlog::warn("Table request failed with code {}", req.response_code);
     }
 
     // free the array
@@ -3615,7 +3615,18 @@ DataProvider::ProcessGraphRequest(RequestInfo& req)
     auto track_params = std::dynamic_pointer_cast<TrackRequestParams>(req.custom_params);
     if(!track_params)
     {
-        spdlog::error("Track request params are not set or invalid");
+        // Note: if this is a real response to a fetch request then the UI track item will not
+        // be updated. (loading icon will remain spinning).
+        spdlog::error("Track request params are not set or invalid, cannot process data!");
+        rocprofvis_controller_array_free(req.request_array);
+        req.request_array = nullptr;
+
+        // call the new data ready callback with INVALID_INDEX to indicate an error
+        if(m_track_data_ready_callback)
+        {
+            m_track_data_ready_callback(INVALID_INDEX, m_model.GetTraceFilePath(), req);
+        }
+
         return;
     }
 
@@ -3647,30 +3658,44 @@ DataProvider::ProcessGraphRequest(RequestInfo& req)
                       track_params->m_track_id, item_count, min_ts, max_ts);
     }
     else
-    {
-        spdlog::debug("Graph request failed with code {}", req.response_code);
+    { 
+        // Silence out of range warnings as they are shown for empty areas of the track.
+        if(req.response_code != kRocProfVisResultOutOfRange)
+        {
+            spdlog::warn("Graph request failed with code {}", req.response_code);
+        }
     }
 
     // use the track type to determine what type of data is present in the graph array
     const TrackInfo* metadata = m_model.GetTimeline().GetTrack(track_params->m_track_id);
     ROCPROFVIS_ASSERT(metadata);
 
-    switch(metadata->track_type)
+    if(metadata)
     {
-        case kRPVControllerTrackTypeEvents:
+        switch(metadata->track_type)
         {
-            CreateRawEventData(*track_params, req);
-            break;
+            case kRPVControllerTrackTypeEvents:
+            {
+                CreateRawEventData(*track_params, req);
+                break;
+            }
+            case kRPVControllerTrackTypeSamples:
+            {
+                CreateRawSampleData(*track_params, req);
+                break;
+            }
+            default:
+            {
+                spdlog::error("Unknown track type for track id {}, cannot process data!",
+                              track_params->m_track_id);
+                break;
+            }
         }
-        case kRPVControllerTrackTypeSamples:
-        {
-            CreateRawSampleData(*track_params, req);
-            break;
-        }
-        default:
-        {
-            break;
-        }
+    }
+    else
+    {
+        spdlog::error("Track metadata not found for track id {}, cannot process data!",
+                      track_params->m_track_id);
     }
 
     // free the array
@@ -3705,9 +3730,11 @@ DataProvider::CreateRawSampleData(const TrackRequestParams& params,
     }
     else
     {
-        // TODO: review the controller return codes to see if anycase should be escalated
-        // to a warning
-        spdlog::debug("Sample track data request failed with code {}", req.response_code);
+        // Silence out of range warnings as they are shown for empty areas of the track.         
+        if(req.response_code != kRocProfVisResultOutOfRange)
+        {
+            spdlog::warn("Sample track data request failed with code {}", req.response_code);
+        }
         count = 0;
     }
 
@@ -3734,12 +3761,28 @@ DataProvider::CreateRawSampleData(const TrackRequestParams& params,
                           existing_raw_data->GetDataGroupID());
             return;
         }
-        m_model.GetTimeline().FreeTrackData(params.m_track_id);
-        spdlog::debug("Replacing existing track data with id {}", params.m_track_id);
+
+        spdlog::debug(
+            "Replacing existing track data from group {} with group {} for id {}",
+            existing_raw_data->GetDataGroupID(), params.m_data_group_id,
+            params.m_track_id);
+        if(!m_model.GetTimeline().FreeTrackData(params.m_track_id, true))
+        {
+            spdlog::warn("Failed to free existing track data with id {}", params.m_track_id);
+        }
     }
 
     if(!raw_sample_data)
     {
+        // The track was unloaded and its requests cancelled. Creating an empty
+        // object here would make the track look loaded and block a refetch.
+        if(req.response_code == kRocProfVisResultCancelled)
+        {
+            spdlog::debug("Dropping cancelled response for sample track {}",
+                          params.m_track_id);
+            return;
+        }
+
         spdlog::debug("Create sample track {} data with {} entries", params.m_track_id,
                       count);
         raw_sample_data =
@@ -3812,9 +3855,11 @@ DataProvider::CreateRawEventData(const TrackRequestParams& params, const Request
     }
     else
     {
-        // TODO: review the controller return codes to see if anycase should be escalated
-        // to a warning
-        spdlog::debug("Event track data request failed with code {}", req.response_code);
+        // Silence out of range warnings as they are shown for empty areas of the track.         
+        if(req.response_code != kRocProfVisResultOutOfRange)
+        {
+            spdlog::warn("Event track data request failed with code {}", req.response_code);
+        }
         count = 0;
     }
 
@@ -3846,11 +3891,23 @@ DataProvider::CreateRawEventData(const TrackRequestParams& params, const Request
             "Replacing existing track data from group {} with group {} for id {}",
             existing_raw_data->GetDataGroupID(), params.m_data_group_id,
             params.m_track_id);
-        m_model.GetTimeline().FreeTrackData(params.m_track_id);
+        if(!m_model.GetTimeline().FreeTrackData(params.m_track_id, true))
+        {
+            spdlog::warn("Failed to free existing track data with id {}", params.m_track_id);
+        }
     }
 
     if(!raw_event_data)
     {
+        // The track was unloaded and its requests cancelled. Creating an empty
+        // object here would make the track look loaded and block a refetch.
+        if(req.response_code == kRocProfVisResultCancelled)
+        {
+            spdlog::debug("Dropping cancelled response for event track {}",
+                          params.m_track_id);
+            return;
+        }
+
         spdlog::debug("Creating event track {} data with {} entries", params.m_track_id,
                       count);
         raw_event_data =
@@ -5200,7 +5257,7 @@ DataProvider::ProcessMetricsRequest(RequestInfo& req)
         }
         else
         {
-            spdlog::debug("Metrics request failed with code {}", req.response_code);
+            spdlog::warn("Metrics request failed with code {}", req.response_code);
             //call callback
             if(m_metrics_fetch_callback)
             {
@@ -5305,7 +5362,7 @@ DataProvider::ProcessMetricPivotTable(RequestInfo& req)
 
             kernel_pivot_table.table_params = request_params;
 
-            spdlog::info("Processed {} rows from metric pivot table", num_rows);
+            spdlog::debug("Processed {} rows from metric pivot table", num_rows);
         }
         else
         {
@@ -5368,7 +5425,7 @@ DataProvider::ProcessPcSamplingRequest(RequestInfo& req)
     }
     else if(!success)
     {
-        spdlog::debug("PC sampling request failed with code {}", req.response_code);
+        spdlog::warn("PC sampling request failed with code {}", req.response_code);
     }
 
     req.request_obj_handle = nullptr;

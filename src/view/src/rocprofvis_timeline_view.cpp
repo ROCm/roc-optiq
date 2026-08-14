@@ -1151,9 +1151,22 @@ TimelineView::HandleNewTrackData(std::shared_ptr<RocEvent> e)
             m_data_provider.DataModel().GetTimeline().GetTrack(tde->GetTrackID());
         if(!metadata)
         {
-            spdlog::error(
+            spdlog::warn(
                 "No metadata found for track id {}, cannot process new track data",
                 tde->GetTrackID());
+            
+            // try to find request by request id on all tracks so that it can
+            // be cleared from pending queue
+            for(size_t i = 0; i < m_tracks->size(); ++i)
+            {
+                TrackItem *track = (*m_tracks)[i];
+                if(track && track->HasPendingRequest(tde->GetRequestID()))
+                {
+                    track->HandleTrackDataChanged(tde->GetRequestID(),
+                                                  tde->GetResponseCode());
+                    break;
+                }
+            }
             return;
         }
 
@@ -1952,12 +1965,23 @@ TimelineView::RenderTrack(int track_index, bool request_data,
 void
 TimelineView::RequestDataIfEmpty(TrackItem* track_item, bool request_data)
 {
-    // Request data for the chart if it doesn't have data.
-    if((!track_item->HasData() &&
-        track_item->GetRequestState() == TrackDataRequestState::kIdle) ||
-       request_data)
+    bool idle = track_item->GetRequestState() == TrackDataRequestState::kIdle;
 
+    // True when the track holds no data at all, and also when it holds only some
+    // of its chunks: a track that scrolled out of view released its data and
+    // cancelled its requests, but cancellation is best effort, so whatever
+    // completed first recreates the data with just the chunks that landed.
+    bool incomplete = !track_item->AllDataReady();
+    bool refetch    = incomplete && idle;
+
+    // Request data for the chart if any of it is missing.
+    if(refetch || request_data)
     {
+        if(refetch && track_item->HasData())
+        {
+            track_item->ReleaseData();
+        }
+
         // Request one viewport worth of data on each side of the current
         // view.
         double buffer_distance = m_tpt->GetVWidth();

@@ -128,7 +128,7 @@ void SystemTrace::DbgPrintTopologyNodeData(rocprofvis_dm_topology_node node, int
         rocprofvis_dm_get_property_as_uint64(
             node, kRPVControllerTopologyNodeNumChildren, 0);
 
-    spdlog::info(line);
+    spdlog::debug(line);
 
     for (int i = 0; i < num_children; i++)
     {

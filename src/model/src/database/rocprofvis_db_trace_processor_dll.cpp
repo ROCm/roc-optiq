@@ -1,6 +1,8 @@
-// rocprofvis_db_trace_processor_dll.cpp
+// Copyright Advanced Micro Devices, Inc.
+// SPDX-License-Identifier: MIT
+
 // Wrapper DLL for Perfetto trace processor.
-// Exports a clean C interface — no name mangling, complete encapsulation
+// Exports a clean C interface: no name mangling, complete encapsulation
 // of all Perfetto internals (SQLite, jsoncpp, zlib) behind the DLL boundary.
 
 #ifdef _WIN32
@@ -68,7 +70,7 @@ extern "C" {
         bool Perfetto_ReadTrace(PerfettoHandle* h, const char* path) {
         if (!h || !h->tp || !path) return false;
 
-        // Manual chunked read — avoids std::function parameter entirely
+        // Manual chunked read - avoids std::function parameter entirely
         FILE* f = fopen(path, "rb");
         if (!f) return false;
 
@@ -101,7 +103,7 @@ extern "C" {
     }
 
     // Only call this if you used Perfetto_ParseTrace.
-    // Do NOT call after Perfetto_ReadTrace — it already called this internally.
+    // Do NOT call after Perfetto_ReadTrace - it already called this internally.
     PERFETTO_DLL_EXPORT
         bool Perfetto_NotifyEndOfFile(PerfettoHandle* h) {
         if (!h || !h->tp) return false;
@@ -115,7 +117,7 @@ extern "C" {
         auto* q = new PerfettoQuery{h->tp->ExecuteQuery(sql)};
         q->col_count = q->it.ColumnCount();
 
-        // Cache column names — GetColumnName returns std::string by value
+        // Cache column names - GetColumnName returns std::string by value
         // so we must store them before returning their c_str()
         q->col_names.reserve(q->col_count);
         for (uint32_t i = 0; i < q->col_count; i++) {

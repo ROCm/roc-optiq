@@ -113,7 +113,7 @@ namespace Controller
         void** abstract)
     {
         auto* ctx = static_cast<KbdintCtx*>(*abstract);
-        spdlog::info("[ssh] kbdint callback fired: name_len={} instr_len={} num_prompts={} ctx={}",
+        spdlog::debug("[ssh] kbdint callback fired: name_len={} instr_len={} num_prompts={} ctx={}",
             name_len, instruction_len, num_prompts,
             static_cast<void*>(ctx));
         if(!ctx || !ctx->bridge) return;
@@ -124,7 +124,7 @@ namespace Controller
         // continue without touching the UI.
         if(num_prompts == 0)
         {
-            spdlog::info("[ssh] kbdint callback: zero-prompt round (info/banner), auto-acking");
+            spdlog::debug("[ssh] kbdint callback: zero-prompt round (info/banner), auto-acking");
             return;
         }
 
@@ -141,10 +141,10 @@ namespace Controller
             req.prompts.push_back(std::move(p));
         }
 
-        spdlog::info("[ssh] kbdint callback: posting {} prompt(s) to UI bridge, blocking...",
+        spdlog::debug("[ssh] kbdint callback: posting {} prompt(s) to UI bridge, blocking...",
             num_prompts);
         auto answer = ctx->bridge->AskPrompts(req);
-        spdlog::info("[ssh] kbdint callback: bridge returned (cancelled={})", !answer.has_value());
+        spdlog::debug("[ssh] kbdint callback: bridge returned (cancelled={})", !answer.has_value());
         if(!answer)
         {
             ctx->was_cancelled = true;
@@ -225,7 +225,7 @@ namespace Controller
 
         bool        have_pub = std::filesystem::exists(pub_path);
         std::string pub      = pub_path.string();
-        spdlog::info("[ssh] trying publickey: priv={} pub={} have_passphrase={}",
+        spdlog::debug("[ssh] trying publickey: priv={} pub={} have_passphrase={}",
             priv_path, have_pub ? pub_path.string().c_str() : std::string("(derived from priv)"),
             !passphrase.empty());
         int rc = libssh2_userauth_publickey_fromfile(
@@ -272,12 +272,12 @@ namespace Controller
         LIBSSH2_AGENT* agent = libssh2_agent_init(connection->GetSession());
         if(!agent)
         {
-            spdlog::info("[ssh] agent: init failed (libssh2 built without agent support?)");
+            spdlog::debug("[ssh] agent: init failed (libssh2 built without agent support?)");
             return false;
         }
         if(libssh2_agent_connect(agent) != 0)
         {
-            spdlog::info("[ssh] agent: connect failed (no $SSH_AUTH_SOCK or agent not running)");
+            spdlog::debug("[ssh] agent: connect failed (no $SSH_AUTH_SOCK or agent not running)");
             libssh2_agent_free(agent);
             return false;
         }
@@ -303,7 +303,7 @@ namespace Controller
                 break;
             }
             identity_count++;
-            spdlog::info("[ssh] agent: trying identity '{}'",
+            spdlog::debug("[ssh] agent: trying identity '{}'",
                 identity->comment ? identity->comment : "(no comment)");
 
             rc = libssh2_agent_userauth(agent, user.c_str(), identity);
@@ -325,12 +325,12 @@ namespace Controller
             }
             char* msg = nullptr;
             libssh2_session_last_error(connection->GetSession(), &msg, nullptr, 0);
-            spdlog::info("[ssh] agent: identity rejected: {}", msg ? msg : "(no message)");
+            spdlog::debug("[ssh] agent: identity rejected: {}", msg ? msg : "(no message)");
             prev = identity;
         }
         if(!ok && identity_count == 0)
         {
-            spdlog::info("[ssh] agent: connected but no identities loaded (run 'ssh-add')");
+            spdlog::debug("[ssh] agent: connected but no identities loaded (run 'ssh-add')");
         }
 
         libssh2_agent_disconnect(agent);
@@ -517,7 +517,7 @@ namespace Controller
             return SshClient::Result::SocketError;
         }
 
-        spdlog::info("[ssh] TCP connected");
+        spdlog::debug("[ssh] TCP connected");
 
         connection->SetSession(libssh2_session_init());
         if (!connection->GetSession())
@@ -579,14 +579,14 @@ namespace Controller
         {
             KnownHosts kh(connection->GetSession());
             bool       loaded = kh.Load();
-            spdlog::info("[ssh] known_hosts loaded={} path={} fingerprint={}",
+            spdlog::debug("[ssh] known_hosts loaded={} path={} fingerprint={}",
                 loaded, kh.Path(), FormatHostKeyFingerprint(connection->GetSession()));
             KnownHostMatch m = kh.Check(connection->GetHost(), connection->GetPort());
             const char* mstr = m == KnownHostMatch::Match    ? "Match"
                 : m == KnownHostMatch::Mismatch ? "Mismatch"
                 : m == KnownHostMatch::NotFound ? "NotFound"
                 : "Failure";
-            spdlog::info("[ssh] host key check: {}", mstr);
+            spdlog::debug("[ssh] host key check: {}", mstr);
 
             if(m == KnownHostMatch::NotFound || m == KnownHostMatch::Mismatch)
             {
@@ -643,7 +643,7 @@ namespace Controller
         // ---- auth ----
         char* methods = libssh2_userauth_list(connection->GetSession(), user.c_str(),
             static_cast<unsigned int>(user.size()));
-        spdlog::info("[ssh] server auth methods: {}", methods ? methods : "(none)");
+        spdlog::debug("[ssh] server auth methods: {}", methods ? methods : "(none)");
 
         bool tried_password = false;
         bool tried_kbdint   = false;
@@ -662,18 +662,18 @@ namespace Controller
                 }
             }
             // 1b) ssh-agent - handles encrypted keys without us needing a passphrase.
-            spdlog::info("[ssh] trying ssh-agent");
+            spdlog::debug("[ssh] trying ssh-agent");
             if (TryAgent(connection, user, future))
             {
                 return Result::Success;
             }
             // 1c) default on-disk identity files
-            spdlog::info("[ssh] trying default identity files");
+            spdlog::debug("[ssh] trying default identity files");
             for(const auto& p : DefaultKeyPaths())
             {
                 if(!std::filesystem::exists(p))
                 {
-                    spdlog::info("[ssh]   default key absent: {}", p);
+                    spdlog::debug("[ssh]   default key absent: {}", p);
                     continue;
                 }
                 if (IsCancelRequested(connection, future))
@@ -688,7 +688,7 @@ namespace Controller
         }
         else
         {
-            spdlog::info("[ssh] server does not advertise publickey");
+            spdlog::debug("[ssh] server does not advertise publickey");
         }
         if (IsCancelRequested(connection, future))
         {
@@ -705,7 +705,7 @@ namespace Controller
             std::string effective_password = password;
             if(effective_password.empty())
             {
-                spdlog::info("[ssh] no password supplied; prompting UI for password");
+                spdlog::debug("[ssh] no password supplied; prompting UI for password");
                 PromptRequest req;
                 std::string target = user.empty() ? connection->GetHost()
                                                    : user + "@" + connection->GetHost();
@@ -720,7 +720,7 @@ namespace Controller
                 if(!answer)
                 {
                     err = "password prompt cancelled by user";
-                    spdlog::info("[ssh] {}", err);
+                    spdlog::debug("[ssh] {}", err);
                     connection->GetSshBridge()->SaveError(err);
                     connection->Disconnect();
                     return Result::AuthError;
@@ -733,7 +733,7 @@ namespace Controller
 
             if(!effective_password.empty())
             {
-                spdlog::info("[ssh] trying password auth");
+                spdlog::debug("[ssh] trying password auth");
                 tried_password = true;
                 auth_rc = libssh2_userauth_password(connection->GetSession(), user.c_str(),
                     effective_password.c_str());
@@ -763,7 +763,7 @@ namespace Controller
         }
         else
         {
-            spdlog::info("[ssh] skipping password auth (server does not advertise password)");
+            spdlog::debug("[ssh] skipping password auth (server does not advertise password)");
         }
 
         if (IsCancelRequested(connection, future))
@@ -775,7 +775,7 @@ namespace Controller
         auto kbd_ctx = std::make_shared<KbdintCtx>(KbdintCtx{connection->GetSshBridge(), false});
         if(MethodListed(methods, "keyboard-interactive"))
         {
-            spdlog::info("[ssh] trying keyboard-interactive auth (will route prompts to UI)");
+            spdlog::debug("[ssh] trying keyboard-interactive auth (will route prompts to UI)");
             tried_kbdint = true;
             // libssh2's session abstract slot: stash kbd_ctx so the C callback can find it.
             void** abstract = libssh2_session_abstract(connection->GetSession());
@@ -795,7 +795,7 @@ namespace Controller
             if(kbd_ctx->was_cancelled)
             {
                 err = "kbdint cancelled by user";
-                spdlog::info("[ssh] {}", err);
+                spdlog::debug("[ssh] {}", err);
                 connection->GetSshBridge()->SaveError(err);
                 connection->Disconnect();
                 return Result::AuthError;
@@ -1050,7 +1050,7 @@ namespace Controller
             if(m >> cached_size >> cached_mtime &&
                 cached_size == remote_size && cached_mtime == remote_mtime)
             {
-                spdlog::info("[ssh] already up-to-date: {}", local_path);
+                spdlog::debug("[ssh] already up-to-date: {}", local_path);
 
                 connection->GetSshBridge()->SetFileStat(remote_path, fileinfo.st_size, fileinfo.st_mtime, fileinfo.st_size);
                 libssh2_channel_free(channel);

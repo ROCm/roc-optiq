@@ -1562,15 +1562,21 @@ void ComputeQueryFactory::ParseMetricParam(std::string metric_str, uint32_t work
 		if (plan.contains("filters"))
 		{
 			auto& obj = plan["filters"].getObject();
-
-			for (auto& s : obj)
+			try
 			{
-				size_t column_index = std::atoll(s.first.c_str());
-				columns[column_index].filter = FilterExpression::Parse(columns[column_index].name + " " + s.second.getString());
-				columns[column_index].has_filter = true;
+				for (auto& s : obj)
+				{
+					size_t column_index = std::atoll(s.first.c_str());
+					columns[column_index].filter = FilterExpression::Parse(columns[column_index].name + " " + s.second.getString());
+					columns[column_index].has_filter = true;
+				}
+			}
+			catch (const std::exception& e)
+			{
+				spdlog::error("Error: {} ", e.what());
+				return kRocProfVisDmResultInvalidParameter;
 			}
 		}
-			
 
 		if (plan.contains("metric_selectors"))
 		{
@@ -1638,16 +1644,25 @@ void ComputeQueryFactory::ParseMetricParam(std::string metric_str, uint32_t work
 				columns[column_index++].eval_value = value;
 			}
 			bool passed_evaluation = true;
-			for (auto column : columns)
-			{
-				if (column.has_filter)
+			try
+            {
+				
+				for (auto column : columns)
 				{
-					if (!column.filter.Evaluate({ {column.name, column.eval_value} }))
+					if (column.has_filter)
 					{
-						passed_evaluation = false;
-						break;
+						if (!column.filter.Evaluate({ {column.name, column.eval_value} }))
+						{
+							passed_evaluation = false;
+							break;
+						}
 					}
-				}
+				}			
+			}
+			catch (const std::exception& e)
+			{
+				spdlog::error("Error: {} ", e.what());
+				return kRocProfVisDmResultInvalidParameter;
 			}
 			if (passed_evaluation)
 			{

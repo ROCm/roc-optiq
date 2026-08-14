@@ -24,15 +24,6 @@ on:
         description: 'Upload built artifacts to the roc-optiq S3 bucket?'
         type: boolean
         default: false
-      s3_root_directory:
-        description: 'The root directory to use when uploading to the roc-optiq S3 bucket'
-        type: choice
-        default: 'test'
-        options:
-          - test
-          - nightly
-          - rc
-          - release
       crypto_backend:
         description: 'Crypto backend for libssh2 (mbedTLS or OpenSSL)'
         type: string
@@ -78,10 +69,6 @@ on:
         description: 'Upload built artifacts to the roc-optiq S3 bucket?'
         type: boolean
         default: false
-      s3_root_directory:
-        description: 'The root directory to use when uploading to the roc-optiq S3 bucket'
-        type: string
-        default: 'test'
       crypto_backend:
         description: 'Crypto backend for libssh2 (mbedTLS or OpenSSL)'
         type: string
@@ -110,8 +97,8 @@ env:
   ENABLE_INTERNAL_BANNER: ${{ inputs.enable_internal_banner && 'ON' || 'OFF' }}
   ENABLE_REMOTE: ${{ inputs.enable_remote && 'ON' || 'OFF' }}
   ENABLE_PROFILER: ${{ inputs.enable_profiler && 'ON' || 'OFF' }}
-  S3_ROOT_DIRECTORY: ${{ inputs.s3_root_directory }}
   ROCM_VERSION: ${{ inputs.rocm_version }}
+  S3_ROOT_DIRECTORY: 'v5/rocm/extras/rocoptiq'
 
 jobs:
   manylinux:
@@ -212,7 +199,7 @@ jobs:
         run: |
           DEB_SRC=$(ls ${{ env.DIST_DIR }}/*.deb | head -1)
           DEB_NAME="amdrocm${ROCM_VERSION}-$(basename "${DEB_SRC}")"
-          S3_DEB_BASE="s3://${S3_BUCKET}/${{ env.S3_ROOT_DIRECTORY }}/rocm/extras/rocoptiq/packages/deb"
+          S3_DEB_BASE="s3://${S3_BUCKET}/${{ env.S3_ROOT_DIRECTORY }}/packages/deb"
           aws s3 cp \
             "${DEB_SRC}" \
             "${S3_DEB_BASE}/pool/main/${DEB_NAME}" \
@@ -253,7 +240,7 @@ jobs:
           EOF
 
           cd ..
-          S3_DEB_BASE="s3://${S3_BUCKET}/${{ env.S3_ROOT_DIRECTORY }}/rocm/extras/rocoptiq/packages/deb"
+          S3_DEB_BASE="s3://${S3_BUCKET}/${{ env.S3_ROOT_DIRECTORY }}/packages/deb"
           aws s3 cp --recursive deb-repo/dists \
             "${S3_DEB_BASE}/dists/" \
             --no-progress
@@ -263,7 +250,7 @@ jobs:
         run: |
           RPM_SRC=$(ls ${{ env.DIST_DIR }}/*.rpm | head -1)
           RPM_NAME="amdrocm${ROCM_VERSION}-$(basename "${RPM_SRC}" | sed 's/\.el[0-9]\+//')"
-          S3_RPM_PREFIX="s3://${S3_BUCKET}/${{ env.S3_ROOT_DIRECTORY }}/rocm/extras/rocoptiq/packages/rpm/x86_64"
+          S3_RPM_PREFIX="s3://${S3_BUCKET}/${{ env.S3_ROOT_DIRECTORY }}/packages/rpm/x86_64"
           aws s3 cp \
             "${RPM_SRC}" \
             "${S3_RPM_PREFIX}/${RPM_NAME}" \
@@ -276,7 +263,7 @@ jobs:
           cp ${{ env.DIST_DIR }}/*.rpm rpm-repo/
           createrepo_c rpm-repo/
           aws s3 cp --recursive rpm-repo/repodata \
-            s3://${S3_BUCKET}/${{ env.S3_ROOT_DIRECTORY }}/rocm/extras/rocoptiq/packages/rpm/x86_64/repodata/ \
+            s3://${S3_BUCKET}/${{ env.S3_ROOT_DIRECTORY }}/packages/rpm/x86_64/repodata/ \
             --no-progress
 
       - name: Upload Tarball to S3
@@ -284,7 +271,7 @@ jobs:
         run: |
           TGZ_SRC=$(ls ${{ env.DIST_DIR }}/*.tar.gz | head -1)
           TGZ_NAME="amdrocm${ROCM_VERSION}-$(basename "${TGZ_SRC}")"
-          S3_TGZ_PREFIX="s3://${S3_BUCKET}/${{ env.S3_ROOT_DIRECTORY }}/rocm/extras/rocoptiq/tarball"
+          S3_TGZ_PREFIX="s3://${S3_BUCKET}/${{ env.S3_ROOT_DIRECTORY }}/tarball"
           aws s3 cp \
             "${TGZ_SRC}" \
             "${S3_TGZ_PREFIX}/${TGZ_NAME}" \

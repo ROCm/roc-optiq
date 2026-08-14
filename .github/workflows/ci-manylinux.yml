@@ -87,11 +87,8 @@ on:
         default: '10'
       s3_bucket_env:
         description: 'S3 bucket environment to upload artifacts to'
-        type: choice
+        type: string
         default: 'legacy'
-        options:
-          - dev
-          - legacy
 
 env:
   BUILD_DIR: "build"

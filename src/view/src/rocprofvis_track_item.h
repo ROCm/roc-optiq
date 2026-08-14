@@ -115,7 +115,8 @@ public:
     bool        TrackHeightChanged();
     static void SetSidebarSize(float sidebar_size);
 
-    virtual bool HasData();
+    virtual bool HasData() const;
+    bool         AllDataReady() const;
     virtual bool ReleaseData();
     virtual void RequestData(double min, double max, float width);
     void         RequestAnalysis();

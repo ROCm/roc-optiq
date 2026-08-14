@@ -1002,9 +1002,17 @@ TrackItem::HandleTrackDataChanged(uint64_t request_id, uint64_t response_code)
 }
 
 bool
-TrackItem::HasData()
+TrackItem::HasData() const
 {
     return m_data_provider.DataModel().GetTimeline().GetTrackData(m_track_id) != nullptr;
+}
+
+bool
+TrackItem::AllDataReady() const
+{
+    const RawTrackData* data =
+        m_data_provider.DataModel().GetTimeline().GetTrackData(m_track_id);
+    return data != nullptr && data->AllDataReady();
 }
 
 bool

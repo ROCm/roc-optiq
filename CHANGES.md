@@ -4,6 +4,7 @@
 
 **Timeline and navigation**
 - Zoom-to-fit for measurements and time-range selections: right-click the timeline and choose "Zoom to Measurement" or "Zoom to Time Range Selection" to fit that span to the timeline width, with the markers landing on the left and right edges.
+- "Zoom to Selection" hotkey (default `Z`) to fit the timeline to the current region, time-range, or event selection.
 
 **Tracks and topology**
 - Color-code tracks and the sidebar topology by node for easier multi-node navigation.
@@ -14,6 +15,7 @@
 - More compact flame-chart events, with fixed resize/expand behavior.
 - Display incremental Y-axis scale ticks for counter tracks when expanded.
 - Display unrounded/untruncated track statistics in Track Details tab.
+- Setting to hide the eye / go-to-track icons on topology sidebar rows (actions remain available from the row context menu).
 
 **Annotations**
 - Annotation UX enhancements: lock, go-to-anchor, cross-highlight, text wrapping, and placement fixes.
@@ -28,6 +30,7 @@
 - Adopted ImGui's built-in DPI handling, replacing the previous custom solution.
 
 **Misc**
+- Time format setting now shows a live preview and clearer Timecode option labels (e.g. `hh:mm:ss.ns`).
 - Cleaned up log messages.
 
 ### Experimental (not yet released)
@@ -47,8 +50,11 @@ These features are in progress and available for preview only (build from src); 
 - Fixed the Systems multi-node summary window showing data only for the first node in the `.yaml`.
 - Fixed loading workload Speed-of-Light for compute schema < 1.3.0; query builders now report and skip unsupported queries.
 - Fixed crash when invalid filter used in kernel selection table.
+- Fixed crash when adding a counter with `pmc_id` 0.
+- Fixed wrong thread IDs shown for compare / multi-node traces.
+- Fixed roofline precision fallback when FP32 ceilings are missing, and kernel markers vanishing when all durations are zero.
 - JobSystem fixes.
-- Fixed timeline tracks that could keep spinning, or show incomplete data, after scrolling or zooming quickly while track data was still loading.
+- Fixed timeline tracks that could keep spinning, or show incomplete data, after scrolling or zooming quickly while track data was still loading (including a deadlock when cancelling counter-track queries).
 
 ## Optiq Beta 0.5.0
 

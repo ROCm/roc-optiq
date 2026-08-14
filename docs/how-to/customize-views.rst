@@ -103,6 +103,7 @@ To add an annotation:
    The **Annotations** tab in the **Advanced Details** section shows a list of annotations.  
    Each row shows the annotation title, the note, the track it is attached to, its start time, and a checkbox for visibility.
    Clicking a row brings the selected annotation into view on the timeline.
+   You can **Lock** to pin an annotation to prevent accidental drag/rebind. You can choose **Go-to-anchor** to jump the view back to the annotation's anchor point.
 
 
 .. tip::
@@ -173,6 +174,7 @@ Customize display options for each track by right clicking the **Description** a
 .. tip::
 
    The context menu when right-clicking a track's description in **Timeline View** also provides **Copy track name** and **Copy track ID**. 
+   You can select multiple tracks (for example, Ctrl/Shift-click in the Description area) and apply a **Track Options** change to all selected tracks at once instead of repeating the change per track.
 
 Set the flow rendering display mode
 -----------------------------------

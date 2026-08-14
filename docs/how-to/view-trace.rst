@@ -92,11 +92,16 @@ The **System Topology View** displays a hierarchical representation of the hardw
 
 - Click |eye| to show or hide tracks. Hiding a higher-level element automatically hides all underlying queues, streams, and events.
 - Click |scroll| to go to the track in the :ref:`timeline`. 
+- Right click to chose sidebar context menu options: **Go To Track**, **Hide Track**, **Show/Hide All But This Track**, **Show/Hide Selected Tracks**.
 
 ROCm Optiq displays ROCm events in both Stream view and Queue view simultaneously: 
 
 - **Stream view**: Groups events (kernels and memory copies) by the HIP stream to which they were submitted. This view reflects your application's intended dependencies. 
 - **Queue view**: Groups the same events by the HSA queue to which they were scheduled. This view reflects what the runtime and hardware actually used. 
+
+  .. note::
+
+    In multi-node traces, tracks in the **Timeline View** and their corresponding entries in the sidebar of **System Topology View** are color-coded by node, making it easier to visually match a track back to its originating node.
 
 .. _timeline:
 
@@ -141,6 +146,7 @@ The shortcut keys (**WASD** and arrow keys) can also be used to zoom and pan the
 - Hold the mouse pointer over the **Description** area, and the scroll wheel will scroll through the track list. 
 - Hold the mouse pointer over the **Graph** area, and the scroll wheel zooms the view in and out.
 - Hover the track name label in the **Description** area to view a tooltip with the full track name, track ID, and event or sample count.  
+- Right-click the track to **Copy track name**, **Copy track ID**, **Reveal in Topology** or open **Track Options**. Choose **Reveal in Topology** to jump to and highlight the track in the sidebar **System Topology View**.
 
 Select a track
 ^^^^^^^^^^^^^^
@@ -192,7 +198,7 @@ Sample counter track statistics
 
 For sample counter tracks, pills showing standard deviation and average display next to the counter label. These can be shown/hidden using the **Track Options** menu.  
 Additionally, min and max value pills can also be shown/hidden. 
-
+When a counter track is expanded to sufficient height, the Y-axis now shows incremental scale tick labels between the min and max values, making intermediate values easier to read without opening **Track Details**.
 Similar to queue utilization, the values in these pills react to reflect the values in the current view or active time-range filter. 
 The Counter statistics are also visible in the **Track Details** tab.
 
@@ -218,7 +224,8 @@ Measure
 - **Events** mode: Measure duration between two selected events on the timeline. You can snap Start/End Rulers to Event start or Event end. 
 - **Anywhere** mode: Measure duration between two timeline points. You can drag the rulers horizontally to fine-tune.  
 - ROCm Optiq draws two vertical rulers with timestamps and shows the duration (time delta) in a label between them.
-- Right-click a measurement label on the timeline to **Copy Start Timestamp**, **Copy End Timestamp**, or **Copy Measurement Duration**.   
+- Right-click a measurement label on the timeline to **Copy Start Timestamp**, **Copy End Timestamp**, or **Copy Measurement Duration**.
+- Right-click a measurement label and choose **Zoom to Measurement** to fit that span to the full timeline width, with the start markers landing on the left and right edges.
 - Use **Reset** or **Clear measurement** to remove the rulers and start a new measurement.
 
 .. image:: ../images/new-measurement-timestamp.png
@@ -257,7 +264,8 @@ If one or more events are selected, the **Make Time Range Selection** option dis
 
 |make|
 
-Selecting this sets a time-range filter with boundaries at the event's start and end times, or at the first start time and last end time if multiple events are selected. 
+Selecting this sets a time-range filter with boundaries at the event's start and end times, or at the first start time and last end time if multiple events are selected.
+Right-clicking an active time-range selection now offers **Zoom to Time Range Selection** with the same fit-to-width behavior.
 
 .. tip::
 
@@ -304,7 +312,7 @@ This section provides an interface for multiple data perspectives, offering gran
 
 - **Track Details**: Shows additional information about the track that is not visible on the timeline. It shows the node the track belongs to and its details, the process it belongs to, and the track type (thread, counter, queue, and so on).
 
-  - The **Track Details** also show statistics such as queue utilization, counter Minimum, Maximum, Mean, and Standard Deviation. 
+  - The **Track Details** also show statistics such as queue utilization, counter Minimum, Maximum, Mean, and Standard Deviation. The statistics display at full precision, without rounding or truncation.
   - You can right-click a row or cell of **Track Details** to **Copy Row Data** or **Copy Cell Data**. 
 
 - **Annotations**: Displays user-created annotations, enabling easier navigation across critical points within large traces, enhancing collaboration and knowledge sharing. See :ref:`annotation` for more info.

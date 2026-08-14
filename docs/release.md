@@ -29,7 +29,7 @@
 - **Node-based color coding** for tracks and the sidebar topology, improving navigation in multi-node traces.
 - **Reveal in Topology** right-click action on a track, to jump directly from a track to its location in the System Topology View.
 - **Batch track settings**: apply Track Options changes to multiple selected tracks at once.
-- New sidebar right-click context menu options.
+- New sidebar right-click context menu options: **Go To Track**, **Hide Track**, **Show/Hide All But This Track**, **Show/Hide Selected Tracks**.
 ##### Annotations
 - Annotation UX enhancements: **Lock Annotation**, **Go-to-Anchor**, cross-highlighting between annotations and their associated tracks/events, text wrapping, and placement fixes.
 ##### Track details and tables

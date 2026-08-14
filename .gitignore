@@ -18,3 +18,5 @@ CLAUDE.md
 thirdparty/perfetto/trace_processor/lib/
 thirdparty/perfetto/trace_processor/include/
 thirdparty/perfetto/trace_processor/gen/
+/_build
+docs/sphinx/_toc.yml

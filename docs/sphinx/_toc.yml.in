@@ -8,6 +8,11 @@ subtrees:
   - file: what-is-optiq.rst
     title: What is ROCm Optiq?
 
+- caption: Quick Reference
+  entries:
+  - file: quick-reference/optiq-at-a-glance.rst
+    title: ROCm Optiq at a glance
+
 - caption: Install
   entries:
   - file: install/optiq-install

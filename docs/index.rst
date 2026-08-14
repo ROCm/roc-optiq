@@ -103,6 +103,10 @@ Fixes
 
     * :doc:`Install ROCm Optiq </install/optiq-install>`
 
+  .. grid-item-card:: Quick reference
+
+    * :doc:`ROCm Optiq at a glance </quick-reference/optiq-at-a-glance>`
+
   .. grid-item-card:: How to
 
     * :doc:`View trace data <how-to/view-trace>`

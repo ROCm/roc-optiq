@@ -2283,7 +2283,7 @@ TimelineView::MakeGraphView()
             if(track_at_index_info && track_at_index_info->index != i)
             {
                 bool success = m_data_provider.SetGraphIndex(track_id_at_index, i);
-                ROCPROFVIS_ASSERT(!success);
+                ROCPROFVIS_ASSERT(success);
             }
             track_info = track_at_index_info;
         }

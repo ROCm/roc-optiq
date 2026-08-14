@@ -1148,7 +1148,7 @@ TimelineView::HandleNewTrackData(std::shared_ptr<RocEvent> e)
             m_data_provider.DataModel().GetTimeline().GetTrack(tde->GetTrackID());
         if(!metadata)
         {
-            spdlog::error(
+            spdlog::warn(
                 "No metadata found for track id {}, cannot process new track data",
                 tde->GetTrackID());
             
@@ -1156,11 +1156,12 @@ TimelineView::HandleNewTrackData(std::shared_ptr<RocEvent> e)
             // be cleared from pending queue
             for(size_t i = 0; i < m_tracks->size(); ++i)
             {
-                auto track = (*m_tracks)[i];
+                TrackItem *track = (*m_tracks)[i];
                 if(track && track->HasPendingRequest(tde->GetRequestID()))
                 {
                     track->HandleTrackDataChanged(tde->GetRequestID(),
                                                   tde->GetResponseCode());
+                    break;
                 }
             }
             return;
@@ -2263,7 +2264,6 @@ TimelineView::MakeGraphView()
     for(int i = 0; i < track_list.size(); i++)
     {
         const TrackInfo* track_info = track_list[i];
-        bool             display    = true;
 
         if(project_valid)
         {
@@ -2271,7 +2271,8 @@ TimelineView::MakeGraphView()
             const TrackInfo* track_at_index_info = tlm.GetTrack(track_id_at_index);
             if(track_at_index_info && track_at_index_info->index != i)
             {
-                ROCPROFVIS_ASSERT(m_data_provider.SetGraphIndex(track_id_at_index, i));
+                bool success = m_data_provider.SetGraphIndex(track_id_at_index, i);
+                ROCPROFVIS_ASSERT(!success);
             }
             track_info = track_at_index_info;
         }

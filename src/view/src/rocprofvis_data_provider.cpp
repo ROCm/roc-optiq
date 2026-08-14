@@ -3612,11 +3612,12 @@ DataProvider::ProcessGraphRequest(RequestInfo& req)
     if(!track_params)
     {
         // Note: if this is a real response to a fetch request then the UI track item will not
-        // be updated. (loading icon will remain spinning). We have no way to notify...        
+        // be updated. (loading icon will remain spinning).
         spdlog::error("Track request params are not set or invalid, cannot process data!");
         rocprofvis_controller_array_free(req.request_array);
         req.request_array = nullptr;
 
+        // call the new data ready callback with INVALID_INDEX to indicate an error
         if(m_track_data_ready_callback)
         {
             m_track_data_ready_callback(INVALID_INDEX, m_model.GetTraceFilePath(), req);
@@ -3665,22 +3666,32 @@ DataProvider::ProcessGraphRequest(RequestInfo& req)
     const TrackInfo* metadata = m_model.GetTimeline().GetTrack(track_params->m_track_id);
     ROCPROFVIS_ASSERT(metadata);
 
-    switch(metadata->track_type)
+    if(metadata)
     {
-        case kRPVControllerTrackTypeEvents:
+        switch(metadata->track_type)
         {
-            CreateRawEventData(*track_params, req);
-            break;
+            case kRPVControllerTrackTypeEvents:
+            {
+                CreateRawEventData(*track_params, req);
+                break;
+            }
+            case kRPVControllerTrackTypeSamples:
+            {
+                CreateRawSampleData(*track_params, req);
+                break;
+            }
+            default:
+            {
+                spdlog::error("Unknown track type for track id {}, cannot process data!",
+                              track_params->m_track_id);
+                break;
+            }
         }
-        case kRPVControllerTrackTypeSamples:
-        {
-            CreateRawSampleData(*track_params, req);
-            break;
-        }
-        default:
-        {
-            break;
-        }
+    }
+    else
+    {
+        spdlog::error("Track metadata not found for track id {}, cannot process data!",
+                      track_params->m_track_id);
     }
 
     // free the array
@@ -3751,7 +3762,7 @@ DataProvider::CreateRawSampleData(const TrackRequestParams& params,
             "Replacing existing track data from group {} with group {} for id {}",
             existing_raw_data->GetDataGroupID(), params.m_data_group_id,
             params.m_track_id);
-        if(!m_model.GetTimeline().FreeTrackData(params.m_track_id))
+        if(!m_model.GetTimeline().FreeTrackData(params.m_track_id, true))
         {
             spdlog::warn("Failed to free existing track data with id {}", params.m_track_id);
         }
@@ -3876,7 +3887,7 @@ DataProvider::CreateRawEventData(const TrackRequestParams& params, const Request
             "Replacing existing track data from group {} with group {} for id {}",
             existing_raw_data->GetDataGroupID(), params.m_data_group_id,
             params.m_track_id);
-        if(!m_model.GetTimeline().FreeTrackData(params.m_track_id))
+        if(!m_model.GetTimeline().FreeTrackData(params.m_track_id, true))
         {
             spdlog::warn("Failed to free existing track data with id {}", params.m_track_id);
         }

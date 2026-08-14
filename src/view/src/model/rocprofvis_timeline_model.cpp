@@ -104,7 +104,7 @@ TimelineModel::FreeTrackData(uint64_t track_id, bool force /* = false */)
         else
         {
             // Assert here as this should never happen
-            ROCPROFVIS_ASSERT(false, "Null pointer for track data");
+            ROCPROFVIS_ASSERT(false);
             spdlog::warn("No data to remove, null pointer for id: {}",
                          track_id);
             m_raw_track_data.erase(it);

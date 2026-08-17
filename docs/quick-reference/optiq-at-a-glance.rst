@@ -48,7 +48,7 @@ Supported data sources
      - Saved from a previous ROCm Optiq session
      - —
 
-See :ref:`view-systems` and :ref:`view-analysis` for details on viewing each format, or :ref:`view-trace-troubleshooting` and :ref:`view-analysis-troubleshooting` if a file doesn't open.
+For details on viewing each format, see :ref:`view-systems` and :ref:`view-analysis`. If a file doesn't open, see :ref:`trace troubleshooting <view-trace-troubleshooting>` and :ref:`analysis troubleshooting <view-analysis-troubleshooting>`.
 
 .. _glance-session-management:
 
@@ -57,7 +57,7 @@ Session management
 
 A ROCm Optiq project file (``.rpv``) saves the full analysis session state — the referenced trace file, track layout, zoom position, bookmarks, and annotations. Opening a ``.rpv`` file restores the session exactly as it was left. For the full set of customization options, including time-range filters, annotations, and presets, see :ref:`customize`.
 
-Bookmark navigation:
+A bookmark saves the timeline's current scroll and zoom position for quick recall. For the click-based method, see :ref:`customize`; the keyboard shortcuts are:
 
 .. list-table::
    :header-rows: 1

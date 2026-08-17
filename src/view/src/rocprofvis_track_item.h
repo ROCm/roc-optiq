@@ -24,6 +24,7 @@ class QueueTrackOptions;
 class TimelineTrackOptions;
 class TimePixelTransform;
 class TimelineSelection;
+enum class Colors;
 
 // Compare-source (A/B) badge shared by the timeline meta area and the sidebar.
 void
@@ -57,7 +58,7 @@ public:
     void   SetExtendedLabel(const std::string& label);
     void   SetTooltip(std::string label);
     void   SetAccentColor(size_t accent_color);
-    void   SetRangeAffected(bool range_affected);
+    void   SetTextColor(std::optional<Colors> color);
     void   Activate();
     void   Deactivate();
     void   Render(const ImVec2& pos, SettingsManager& settings, Sizing sizing = kCompact);
@@ -73,8 +74,9 @@ private:
     bool                              m_show_pill_label;
     bool                              m_active;
     std::optional<size_t>             m_accent_color;
-    // Tints the value text blue to flag dependence on the time-range selection.
-    bool                              m_range_affected;
+    // Overrides the value text color when set; unset falls back to the default.
+    // Generic so any state (e.g. time-range dependence) can retint the pill.
+    std::optional<Colors>             m_text_color;
     Sizing                            m_sizing;
     std::string                       m_compact_label;
     std::string                       m_ext_label;

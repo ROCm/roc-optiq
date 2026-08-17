@@ -309,7 +309,8 @@ LineTrackItem::Update()
         {
             if(m_pills_analysis[i])
             {
-                m_pills_analysis[i]->SetRangeAffected(ranged);
+                m_pills_analysis[i]->SetTextColor(
+                    ranged ? std::optional<Colors>(Colors::kAccent) : std::nullopt);
                 if(m_track_statistics->state == AnalysisTrackStatistics::kReady &&
                    m_track_statistics_dirty)
                 {

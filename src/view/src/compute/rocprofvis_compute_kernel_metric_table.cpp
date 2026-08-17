@@ -1,4 +1,4 @@
-// Copyright (c) 2024 Advanced Micro Devices, Inc. All rights reserved.
+// Copyright Advanced Micro Devices, Inc.
 // SPDX-License-Identifier: MIT
 
 #include "rocprofvis_compute_kernel_metric_table.h"

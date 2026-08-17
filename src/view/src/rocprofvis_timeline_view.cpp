@@ -37,8 +37,6 @@ constexpr float    SCROLL_SPEED                  = 100.0f;
 constexpr uint64_t DEFAULT_LOADING_TIMER         = 150;  // milliseconds
 constexpr float    ARTIFICIAL_SCROLLBAR_HEIGHT   = 18.0f;
 constexpr float    SIDEBAR_SPLITTER_WIDTH        = 5.0f;
-// Alpha of the scrim that dims tracks outside the selected time range.
-constexpr float    SELECTION_DIM_ALPHA           = 0.6f;
 // Thickness (px) of the selection boundary markers on the overview histogram.
 constexpr float    OVERVIEW_MARKER_THICKNESS     = 2.0f;
 // BT.601 luma weights for desaturating out-of-view overview bars.
@@ -1475,37 +1473,6 @@ TimelineView::RenderScrubber(ImVec2 screen_pos)
         }
     }
 
-    // Dim the tracks outside the selected time range so the selection stands out.
-    // Drawn in the scrubber overlay so it sits above all track content.
-    if(m_highlighted_region.first != TimelineSelection::INVALID_SELECTION_TIME &&
-       m_highlighted_region.second != TimelineSelection::INVALID_SELECTION_TIME)
-    {
-        const float graph_left  = window_position.x;
-        const float graph_right = window_position.x + m_tpt->GetGraphSizeX();
-        const float dim_top     = cursor_position.y;
-        const float dim_bottom  = cursor_position.y + container_size.y - m_ruler_height;
-        const float sel_left    = std::clamp(
-            window_position.x + m_tpt->TimeToPixel(std::min(m_highlighted_region.first,
-                                                            m_highlighted_region.second)),
-            graph_left, graph_right);
-        const float sel_right = std::clamp(
-            window_position.x + m_tpt->TimeToPixel(std::max(m_highlighted_region.first,
-                                                            m_highlighted_region.second)),
-            graph_left, graph_right);
-        const ImU32 scrim =
-            ApplyAlpha(m_settings.GetColor(Colors::kBgFrame), SELECTION_DIM_ALPHA);
-        if(sel_left > graph_left)
-        {
-            draw_list->AddRectFilled(ImVec2(graph_left, dim_top),
-                                     ImVec2(sel_left, dim_bottom), scrim);
-        }
-        if(sel_right < graph_right)
-        {
-            draw_list->AddRectFilled(ImVec2(sel_right, dim_top),
-                                     ImVec2(graph_right, dim_bottom), scrim);
-        }
-    }
-
     if(m_highlighted_region.first != TimelineSelection::INVALID_SELECTION_TIME)
     {
         float normalized_start_box_highlighted =
@@ -2627,6 +2594,27 @@ TimelineView::RenderHistogram()
     const bool dim_outside_view =
         (x_view_start > graph_origin_x) || (x_view_end < graph_origin_x + bars_width);
 
+    // Colour is kept only inside the "focus" region: the current view, further
+    // narrowed to the active time-range selection so the selected span pops in the
+    // overview while everything outside it goes greyscale.
+    float focus_left  = x_view_start;
+    float focus_right = x_view_end;
+    bool  grey_bars   = dim_outside_view;
+    {
+        double sel_start_ns = 0.0;
+        double sel_end_ns   = 0.0;
+        if(m_timeline_selection &&
+           m_timeline_selection->GetSelectedTimeRange(sel_start_ns, sel_end_ns) &&
+           m_tpt->GetRangeX() > 0.0)
+        {
+            focus_left =
+                std::max(focus_left, overview_x(m_tpt->NormalizeTime(sel_start_ns)));
+            focus_right =
+                std::min(focus_right, overview_x(m_tpt->NormalizeTime(sel_end_ns)));
+            grey_bars = true;
+        }
+    }
+
     auto to_greyscale = [](ImU32 color) -> ImU32 {
         ImVec4 rgba = ImGui::ColorConvertU32ToFloat4(color);
         float  luma =
@@ -2653,14 +2641,14 @@ TimelineView::RenderHistogram()
             // Use the normalized value directly (assumed in [0, 1])
             float bar_height = static_cast<float>((*m_histogram)[i]) * bars_height;
             float y_bar      = y1 - bar_height;
-            if(dim_outside_view)
+            if(grey_bars)
             {
-                // Grey the whole bar, then repaint the in-view slice; this splits a
-                // bar that straddles a view edge into coloured and grey parts.
+                // Grey the whole bar, then repaint the in-focus slice; this splits a
+                // bar that straddles a focus edge into coloured and grey parts.
                 draw_list->AddRectFilled(ImVec2(x0, y_bar), ImVec2(x1, y1),
                                          grey_colors[i % 2], 1.5f);
-                float in_left  = std::max(x0, x_view_start);
-                float in_right = std::min(x1, x_view_end);
+                float in_left  = std::max(x0, focus_left);
+                float in_right = std::min(x1, focus_right);
                 if(in_right > in_left)
                 {
                     // Round only the corners meeting the bar's real edges so the

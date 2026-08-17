@@ -16,6 +16,7 @@
 #include "widgets/rocprofvis_widget.h"
 #include <map>
 #include <memory>
+#include <optional>
 #include <string>
 #include <unordered_map>
 #include <utility>
@@ -318,6 +319,8 @@ private:
     std::vector<uint64_t>        m_custom_order;
     bool                         m_topology_sort_pending;
     const std::vector<uint64_t>* m_topology_order = nullptr;
+    // Menu-requested sort, applied in Update() (not mid-render). Empty if none.
+    std::optional<TrackSortMode> m_pending_sort_mode;
 };
 
 }  // namespace View

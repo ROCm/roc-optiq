@@ -1199,6 +1199,14 @@ TimelineView::Update()
 {
     if(m_meta_map_made)
     {
+        // Apply the menu-requested sort off the render pass. Consumed even on
+        // failure so a rejected order can't retry every frame.
+        if(m_pending_sort_mode)
+        {
+            SortTracksBy(*m_pending_sort_mode);
+            m_pending_sort_mode.reset();
+        }
+
         // A topology sort requested before the sidebar tree was ready (e.g. right
         // after load) is applied here once the order becomes available.
         if(m_topology_sort_pending && m_sort_mode == TrackSortMode::kTopology &&
@@ -2502,21 +2510,22 @@ TimelineView::RenderTrackSortMenu()
     // Flat layout: a titled separator header with the options directly beneath it.
     // A submenu would be pointless here since sorting is the only action.
     ImGui::SeparatorText("Sort tracks by");
+    // Record only; Update() applies the sort off the render pass.
     if(IconMenuItem(ICON_TREE, "Topology", true,
                     m_sort_mode == TrackSortMode::kTopology))
     {
-        SortTracksBy(TrackSortMode::kTopology);
+        m_pending_sort_mode = TrackSortMode::kTopology;
     }
     if(IconMenuItem(ICON_LIST, "Default (Track type)", true,
                     m_sort_mode == TrackSortMode::kDefault))
     {
-        SortTracksBy(TrackSortMode::kDefault);
+        m_pending_sort_mode = TrackSortMode::kDefault;
     }
     // Custom is only selectable once a manual ordering has been established.
     if(IconMenuItem(ICON_EDIT, "Custom", HasCustomOrder(),
                     m_sort_mode == TrackSortMode::kCustom))
     {
-        SortTracksBy(TrackSortMode::kCustom);
+        m_pending_sort_mode = TrackSortMode::kCustom;
     }
 }
 

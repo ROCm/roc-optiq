@@ -142,17 +142,6 @@ rocprofvis_result_t rocprofvis_profiler_config_set_tool_directory(rocprofvis_pro
     return config_ref->SetToolDirectory(tool_directory);
 }
 
-rocprofvis_result_t rocprofvis_profiler_config_set_target_executable(rocprofvis_profiler_config_t* config, char const* target_executable)
-{
-    RocProfVis::Controller::ProfilerConfigRef config_ref(config);
-    if (!config_ref.IsValid())
-    {
-        return kRocProfVisResultInvalidArgument;
-    }
-
-    return config_ref->SetTargetExecutable(target_executable);
-}
-
 rocprofvis_result_t rocprofvis_profiler_config_set_output_directory(rocprofvis_profiler_config_t* config, char const* output_directory)
 {
     RocProfVis::Controller::ProfilerConfigRef config_ref(config);

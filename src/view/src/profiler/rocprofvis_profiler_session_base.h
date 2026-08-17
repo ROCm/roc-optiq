@@ -33,11 +33,11 @@ struct ProfilerLaunchSpec
     // install in a non-standard location. Empty uses the default search.
     std::string tool_directory;
 
-    // Descriptive metadata for logging and artifact resolution. The profiled
-    // program and the output path also appear in profiler_argv wherever the
-    // profiler's CLI expects them; setting these does not put them on the
-    // command line.
-    std::string target_executable;
+    // Where the profiler is expected to write its output. This does not put
+    // anything on the command line - the output path already appears in
+    // profiler_argv wherever the profiler's CLI expects it - and the controller
+    // has no reader for it yet; see
+    // rocprofvis_profiler_config_set_output_directory for why it is passed.
     std::string output_directory;
 
     // Directory to run the profiler process in. Empty inherits Optiq's own

@@ -94,22 +94,16 @@ rocprofvis_result_t rocprofvis_profiler_config_set_tool(rocprofvis_profiler_conf
 rocprofvis_result_t rocprofvis_profiler_config_set_tool_directory(rocprofvis_profiler_config_t* config, char const* tool_directory);
 
 /*
-* Sets the target executable path in the configuration.
-* Descriptive metadata only (logging, diagnostics); it does not add anything to
-* the command line. Pass the target on the command line explicitly with
-* rocprofvis_profiler_config_add_profiler_arg, since where it belongs (and
-* whether it needs a "--" separator) is profiler-specific.
-* @param config The profiler config object.
-* @param target_executable Path to the target application to profile.
-* @returns kRocProfVisResultSuccess or an error code.
-*/
-rocprofvis_result_t rocprofvis_profiler_config_set_target_executable(rocprofvis_profiler_config_t* config, char const* target_executable);
-
-/*
-* Sets the output directory in the configuration.
-* Descriptive metadata only (logging, artifact resolution); it does not add
-* anything to the command line. Profilers spell their output flag differently,
-* so pass it explicitly with rocprofvis_profiler_config_add_profiler_arg.
+* Records where the profiler is expected to write its output.
+* This does not put anything on the command line: profilers spell their output
+* flag differently, and some take none at all, so pass it explicitly with
+* rocprofvis_profiler_config_add_profiler_arg.
+* Nothing reads this value yet. It is kept because a staged pipeline will need
+* a destination the controller acts on - moving a produced artifact there for
+* tools that can only write to their own working directory - at which point it
+* becomes a per-stage setting rather than a per-config one. Until then, do not
+* add readers that would make it a second source of truth for a path the
+* command line already carries.
 * @param config The profiler config object.
 * @param output_directory Directory where profiler output is expected.
 * @returns kRocProfVisResultSuccess or an error code.

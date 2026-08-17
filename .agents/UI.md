@@ -1877,10 +1877,18 @@ resources that must outlive the profiler worker.
 for it, see below), `profiler_argv` (the complete argument
 list from `FlattenToExecution`, one entry per argv entry - the controller
 never re-splits it), `env_vars`, `working_directory` (applied to the child
-process only), and `target_executable` / `output_directory` as metadata
-that deliberately do **not** reach the command line. A struct rather than
-a parameter list because a transposed pair of the string fields would
-compile cleanly and launch the wrong command.
+process only), and `output_directory`, which deliberately does **not**
+reach the command line and currently has no reader in the controller at
+all - the backend emits the output flag itself, because profilers spell it
+differently and some take none. A struct rather than a parameter list
+because a transposed pair of the string fields would compile cleanly and
+launch the wrong command.
+
+There is deliberately **no `target_executable`** on the spec. It used to be
+carried as metadata and was read by nothing; the target reaches the child
+only as argv entries the backend emits, so the View is the single owner of
+it. Do not re-add it to give the controller "context" - that recreates a
+second source of truth for a value the command line already carries.
 
 **Tool selection never involves a path from the UI.** The combo hands back
 a `rocprofvis_profiler_tool_t` straight from `GetTools`, and the launcher

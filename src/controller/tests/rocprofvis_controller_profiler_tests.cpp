@@ -141,14 +141,13 @@ TEST_CASE("BuildArgv passes explicit arguments through verbatim", "[profiler][cm
 
 TEST_CASE("BuildArgv synthesizes no flags of its own", "[profiler][cmdline]")
 {
-    // target_executable and output_directory are descriptive metadata. Each
-    // profiler spells its output flag differently and disagrees about whether a
-    // "--" separator precedes the target, so the command line must contain only
-    // what the caller put there.
+    // Each profiler spells its output flag differently, and some take none at
+    // all, so neither the output directory nor a "--" separator may be
+    // synthesized here - the command line must contain only what the caller put
+    // there.
     ScratchToolDir tool_dir;
     ProfilerConfig config;
     use_tool_in(config, tool_dir);
-    config.SetTargetExecutable("/home/me/app");
     config.SetOutputDirectory("/tmp/out");
     config.SetWorkingDirectory("/tmp");
 
@@ -587,9 +586,8 @@ TEST_CASE("Arguments reach the child process unsplit and uninterpreted", "[profi
     rocprofvis_profiler_config_add_profiler_arg(config, "meta;|&$(echo hi)*?");
     rocprofvis_profiler_config_add_profiler_arg(config, "/path/with space/trace.db");
 
-    // Metadata that must not leak onto the command line.
-    rocprofvis_profiler_config_set_target_executable(config, "/should/not/appear");
-    rocprofvis_profiler_config_set_output_directory(config, "/should/not/appear/either");
+    // Must not leak onto the command line.
+    rocprofvis_profiler_config_set_output_directory(config, "/should/not/appear");
 
     rocprofvis_profiler_state_t state     = kRPVProfilerStateIdle;
     int32_t                     exit_code = -1;

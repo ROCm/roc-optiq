@@ -64,7 +64,6 @@ public:
 
     rocprofvis_result_t SetTool(rocprofvis_profiler_tool_t tool);
     rocprofvis_result_t SetToolDirectory(char const* directory);
-    rocprofvis_result_t SetTargetExecutable(char const* path);
     rocprofvis_result_t SetOutputDirectory(char const* path);
     rocprofvis_result_t SetWorkingDirectory(char const* path);
     rocprofvis_result_t AddEnvVar(char const* name, char const* value);
@@ -96,7 +95,6 @@ public:
     // hence "resolved" in the name, since reading it earlier yields nothing.
     std::string const& GetResolvedToolPath() const { return m_resolved_tool_path; }
 
-    std::string const& GetTargetExecutable() const { return m_target_executable; }
     std::string const& GetOutputDirectory() const { return m_output_directory; }
     std::string const& GetWorkingDirectory() const { return m_working_directory; }
 
@@ -115,10 +113,10 @@ private:
     rocprofvis_profiler_tool_t m_tool;
     std::string m_tool_directory;
     std::string m_resolved_tool_path;
-    // Descriptive only: the profiled program and where its output is expected.
-    // Neither contributes to argv (see Cmdline::BuildArgv) - callers that want
-    // them on the command line add them as explicit argv entries.
-    std::string m_target_executable;
+    // Where output is expected. Does not contribute to argv (see
+    // Cmdline::BuildArgv) - a caller that wants it on the command line adds it
+    // as an explicit argv entry - and has no reader yet; see
+    // rocprofvis_profiler_config_set_output_directory for why it is kept.
     std::string m_output_directory;
     // Directory the child process runs in. Applied in the child only (chdir
     // after fork / lpCurrentDirectory / a remote "cd" prefix) - never by

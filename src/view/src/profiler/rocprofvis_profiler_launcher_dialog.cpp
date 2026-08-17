@@ -1340,7 +1340,6 @@ void ProfilerLauncherDialog::OnLaunchClicked()
     ProfilerLaunchOrchestrator::LaunchRequest request;
     request.spec.tool              = m_execution_cache.tool;
     request.spec.tool_directory    = m_config.tool_directory;
-    request.spec.target_executable = m_config.target.executable;
     request.spec.output_directory  = m_config.target.output_directory;
     request.spec.working_directory = m_config.target.working_directory;
     request.spec.profiler_argv     = m_execution_cache.argv;

@@ -47,9 +47,9 @@ namespace Cmdline
  * entry. Nothing is split on whitespace, so paths and arguments containing
  * spaces survive to execvp / CreateProcess intact.
  *
- * The config's target_executable and output_directory are descriptive metadata
- * (logging, artifact resolution) and do NOT contribute to argv; a caller that
- * wants them on the command line must add them explicitly.
+ * The config's output_directory does NOT contribute to argv; a caller that
+ * wants it on the command line must add it explicitly. Profilers spell their
+ * output flag differently, and some write only to their working directory.
  */
 std::vector<std::string> BuildArgv(ProfilerConfig const& config);
 

@@ -38,7 +38,6 @@ ProfilerConfig::ProfilerConfig()
     , m_tool(kRPVProfilerToolNone)
     , m_tool_directory()
     , m_resolved_tool_path()
-    , m_target_executable()
     , m_output_directory()
     , m_working_directory()
     , m_env_vars()
@@ -118,16 +117,6 @@ rocprofvis_result_t ProfilerConfig::ResolveToolPathRemote()
     }
 
     m_resolved_tool_path = binary_name;
-    return kRocProfVisResultSuccess;
-}
-
-rocprofvis_result_t ProfilerConfig::SetTargetExecutable(char const* path)
-{
-    if (path == nullptr)
-    {
-        return kRocProfVisResultInvalidArgument;
-    }
-    m_target_executable = path;
     return kRocProfVisResultSuccess;
 }
 

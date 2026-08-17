@@ -54,7 +54,6 @@ ProfilerSessionBase::BuildConfig(const ProfilerLaunchSpec& spec)
     {
         rocprofvis_profiler_config_set_tool_directory(m_config, spec.tool_directory.c_str());
     }
-    rocprofvis_profiler_config_set_target_executable(m_config, spec.target_executable.c_str());
     rocprofvis_profiler_config_set_output_directory(m_config, spec.output_directory.c_str());
     rocprofvis_profiler_config_set_working_directory(m_config, spec.working_directory.c_str());
 

@@ -25,7 +25,6 @@ typedef rocprofvis_handle_t rocprofvis_controller_arguments_t;
 typedef rocprofvis_handle_t rocprofvis_controller_node_t;
 typedef rocprofvis_handle_t rocprofvis_controller_processor_t;
 typedef rocprofvis_handle_t rocprofvis_controller_process_t;
-typedef rocprofvis_handle_t rocprofvis_controller_plot_t;
 typedef rocprofvis_handle_t rocprofvis_controller_thread_t;
 typedef rocprofvis_handle_t rocprofvis_controller_queue_t;
 typedef rocprofvis_handle_t rocprofvis_controller_stream_t;

@@ -1748,14 +1748,20 @@ TimelineView::RenderGraphView()
                       window_flags);
     m_content_max_y_scroll = ImGui::GetScrollMaxY();
 
-    // Prevent choppy behavior by preventing constant rerender.
-    float temp_scroll_position = ImGui::GetScrollY();
-    if(m_previous_scroll_position != temp_scroll_position)
+    // The scrollbar writes ImGui's scroll directly, the wheel and hotkeys write
+    // m_scroll_position_y and only land on the next Begin. Take the scrollbar's
+    // value only when nothing newer of ours is pending, else a fast wheel flick
+    // is overwritten by last frame's request.
+    float scroll_position = ImGui::GetScrollY();
+    if(m_previous_scroll_position != scroll_position)
     {
-        m_previous_scroll_position = temp_scroll_position;
-        m_scroll_position_y        = temp_scroll_position;
+        if(m_scroll_position_y == m_previous_scroll_position)
+        {
+            m_scroll_position_y = scroll_position;
+        }
+        m_previous_scroll_position = scroll_position;
     }
-    else if(m_scroll_position_y != temp_scroll_position)
+    if(m_scroll_position_y != scroll_position)
     {
         ImGui::SetScrollY(m_scroll_position_y);
     }
@@ -1892,13 +1898,16 @@ TimelineView::RenderTrack(int track_index, bool request_data,
             float track_top    = track_pos.y;
             float track_bottom = track_top + track_height;
 
+            // Cull against the scroll this window was laid out with, not
+            // m_scroll_position_y, which SetScrollY only applies next frame.
+            float view_top    = ImGui::GetScrollY();
+            float view_bottom = view_top + ImGui::GetWindowHeight();
+
             // Calculate deltas for out-of-view tracks
-            float delta_top = m_scroll_position_y -
-                              track_bottom;  // Positive if the track is above the view
+            float delta_top =
+                view_top - track_bottom;  // Positive if the track is above the view
             float delta_bottom =
-                track_top -
-                (m_scroll_position_y +
-                 m_tpt->GetGraphSizeY());  // Positive if the track is below the view
+                track_top - view_bottom;  // Positive if the track is below the view
 
             // Save distance for book keeping
             track_item->SetDistanceToView(std::max(std::max(delta_bottom, delta_top), 0.0f));
@@ -1909,9 +1918,8 @@ TimelineView::RenderTrack(int track_index, bool request_data,
                                  m_reorder_request.track_id == track_item->GetID();
 
             // Check if the track is visible
-            bool is_visible = (track_bottom >= m_scroll_position_y &&
-                               track_top <= m_scroll_position_y + m_tpt->GetGraphSizeY()) ||
-                              is_reordering;
+            bool is_visible =
+                (track_bottom >= view_top && track_top <= view_bottom) || is_reordering;
 
             track_item->SetInViewVertical(is_visible);
 

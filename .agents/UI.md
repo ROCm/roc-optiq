@@ -2221,6 +2221,12 @@ for nearly every common pattern.
 
 ## 18. Common Pitfalls
 
+- **Culling timeline rows against `m_scroll_position_y`.** `SetScrollY`
+  only takes effect on the next `Begin`, so that member can be a frame
+  ahead of the layout the rows are placed with. Track positions come
+  from `ImGui::GetCursorPos()`, so cull and hit-test against
+  `ImGui::GetScrollY()` inside `Graph View Main` or rows draw at the
+  wrong offset for a frame while scrolling.
 - **Forgetting to unsubscribe.** If you `Subscribe` to an event, store
   the token and `Unsubscribe` in your destructor. Otherwise the
   EventManager will dispatch into a dead `this`.

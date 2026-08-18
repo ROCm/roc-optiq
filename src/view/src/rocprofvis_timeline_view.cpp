@@ -22,6 +22,7 @@
 #include "widgets/rocprofvis_gui_helpers.h"
 #include <algorithm>
 #include <sstream>
+#include <unordered_set>
 
 namespace RocProfVis
 {
@@ -2211,6 +2212,12 @@ TimelineView::RenderReorderingTrack(TrackItem* track_item, ImVec2 container_size
 void
 TimelineView::DestroyGraphs()
 {
+    // Drop the context menu's references to per-track options first: it outlives the
+    // TrackItems and would otherwise keep dangling pointers into the tracks deleted below.
+    if(m_track_options_context_menu)
+    {
+        m_track_options_context_menu->Reset();
+    }
     if(m_tracks)
     {
         for(TrackItem* track : *m_tracks)
@@ -2244,32 +2251,52 @@ TimelineView::MakeGraphView()
     uint64_t num_graphs = tlm.GetTrackCount();
     m_tracks->resize(num_graphs);
 
-    std::vector<const TrackInfo*> track_list    = tlm.GetTrackList();
-    bool                          project_valid = m_project_settings.Valid();
-    std::vector<uint64_t>         hidden_tracks;
+    std::vector<const TrackInfo*> track_list = tlm.GetTrackList();
 
-    for(int i = 0; i < track_list.size(); i++)
+    // Build the display order: honor the persisted order as far as it applies, then append
+    // any tracks it does not cover (e.g. from a newly added file) in natural order. Driving
+    // off the saved count (not an exact size match) lets the order survive an Add.
+    std::vector<const TrackInfo*> ordered;
+    ordered.reserve(track_list.size());
+    std::unordered_set<uint64_t> placed;
+    for(uint64_t saved_id : m_project_settings.OrderedTrackIds())
     {
-        const TrackInfo* track_info = track_list[i];
-        bool             display    = true;
-
-        if(project_valid)
+        const TrackInfo* info = tlm.GetTrack(saved_id);
+        if(info && placed.insert(saved_id).second)
         {
-            uint64_t         track_id_at_index   = m_project_settings.TrackID(i);
-            const TrackInfo* track_at_index_info = tlm.GetTrack(track_id_at_index);
-            if(track_at_index_info && track_at_index_info->index != i)
-            {
-                ROCPROFVIS_ASSERT(m_data_provider.SetGraphIndex(track_id_at_index, i));
-            }
-            track_info = track_at_index_info;
+            ordered.push_back(info);
         }
-
-        if(!track_info)
+    }
+    for(const TrackInfo* info : track_list)
+    {
+        if(info && placed.insert(info->id).second)
         {
-            // log warning (should this be an error?)
-            spdlog::warn("Missing track meta data for track id {}", i);
-            continue;
+            ordered.push_back(info);
         }
+    }
+
+    // Apply the display order to the controller in a single O(N) pass rather than one
+    // SetGraphIndex per track (each of which re-syncs all indices -> O(N^2)).
+    std::vector<uint64_t> ordered_ids;
+    ordered_ids.reserve(ordered.size());
+    bool reordered = false;
+    for(int i = 0; i < static_cast<int>(ordered.size()); i++)
+    {
+        ordered_ids.push_back(ordered[i]->id);
+        if(ordered[i]->index != i)
+        {
+            reordered = true;
+        }
+    }
+    if(reordered)
+    {
+        m_data_provider.SetGraphOrder(ordered_ids);
+    }
+
+    for(int i = 0; i < static_cast<int>(ordered.size()) && i < static_cast<int>(num_graphs);
+        i++)
+    {
+        const TrackInfo* track_info = ordered[i];
 
         TrackItem* track = nullptr;
         switch(track_info->track_type)
@@ -2300,9 +2327,12 @@ TimelineView::MakeGraphView()
             m_tpt->SetMinMaxX(std::min(track_info->min_ts, m_tpt->GetMinX()),
                               std::max(track_info->max_ts, m_tpt->GetMaxX()));
 
-            (*m_tracks)[track_info->index] = track;
+            (*m_tracks)[i] = track;
         }
     }
+
+    // Keep the track list dense (drop any unfilled trailing slots).
+    m_tracks->resize(ordered.size());
 
     m_data_provider.DataModel().GetTimeline().UpdateHistogram(*m_tracks.get());
     UpdateMaxMetaAreaSize();
@@ -2810,8 +2840,25 @@ TimelineView::RenderTraceView()
     TimelineFocusManager::GetInstance().EvaluateFocusedLayer();
     if(m_loading_timer.IsExpired() && !m_timeline_selection->HasValidTimeRangeSelection())
     {
-        m_data_provider.DataModel().GetAnalysis().SetAnalysisRange(m_tpt->GetVMinX(),
-                                                                   m_tpt->GetVMaxX());
+        // Debounce: push the range into the analysis model only once it has been stable for a
+        // short window. Committing every frame while it settles re-arms all stats kStale and
+        // cancels the in-flight fetch before it lands, so pills never fill.
+        const double vmin = m_tpt->GetVMinX();
+        const double vmax = m_tpt->GetVMaxX();
+        const auto   now  = std::chrono::steady_clock::now();
+        if(vmin != m_analysis_range_min || vmax != m_analysis_range_max)
+        {
+            m_analysis_range_min       = vmin;
+            m_analysis_range_max       = vmax;
+            m_analysis_range_changed_at = now;
+            m_analysis_range_committed = false;
+        }
+        else if(!m_analysis_range_committed &&
+                (now - m_analysis_range_changed_at) >= std::chrono::milliseconds(250))
+        {
+            m_data_provider.DataModel().GetAnalysis().SetAnalysisRange(vmin, vmax);
+            m_analysis_range_committed = true;
+        }
     }
 }
 void
@@ -3370,51 +3417,61 @@ TimelineViewProjectSettings::TimelineViewProjectSettings(const std::string& proj
 
 TimelineViewProjectSettings::~TimelineViewProjectSettings() {}
 
+jt::Json&
+TimelineViewProjectSettings::TrackOrderJson() const
+{
+    return m_settings_json[JSON_KEY_GROUP_TIMELINE][JSON_KEY_TIMELINE_TRACK_ORDER];
+}
+
 void
 TimelineViewProjectSettings::ToJson()
 {
+    // Reset to an empty array first so a shrunk track set (after a Remove) does not leave
+    // stale ids in the tail, which would persist phantom ids.
+    jt::Json& order = TrackOrderJson();
+    order.setArray();
     const std::vector<TrackItem*>& tracks = *m_timeline_view.GetTracks();
     for(int i = 0; i < tracks.size(); i++)
     {
-        uint64_t id = tracks[i]->GetID();
-        m_settings_json[JSON_KEY_GROUP_TIMELINE][JSON_KEY_TIMELINE_TRACK_ORDER][i] = id;
+        order[i] = tracks[i]->GetID();
     }
 }
 
 bool
 TimelineViewProjectSettings::Valid() const
 {
-    bool valid = false;
-    if(m_settings_json[JSON_KEY_GROUP_TIMELINE][JSON_KEY_TIMELINE_TRACK_ORDER].isArray())
+    // MakeGraphView drives the order restore off OrderedTrackIds(); this override exists only
+    // to satisfy the ProjectSetting interface. Report valid when a non-empty long array.
+    jt::Json& order = TrackOrderJson();
+    if(!order.isArray() || order.getArray().empty())
     {
-        std::vector<jt::Json>& track_order =
-            m_settings_json[JSON_KEY_GROUP_TIMELINE][JSON_KEY_TIMELINE_TRACK_ORDER]
-                .getArray();
-        if(track_order.size() == m_timeline_view.m_tracks->size())
+        return false;
+    }
+    for(jt::Json& track_id : order.getArray())
+    {
+        if(!track_id.isLong())
         {
-            int valid_count = 0;
-            for(jt::Json& track_id : track_order)
-            {
-                if(track_id.isLong())
-                {
-                    valid_count++;
-                }
-                else
-                {
-                    break;
-                }
-            }
-            valid = (valid_count == track_order.size());
+            return false;
         }
     }
-    return valid;
+    return true;
 }
 
-uint64_t
-TimelineViewProjectSettings::TrackID(int index) const
+std::vector<uint64_t>
+TimelineViewProjectSettings::OrderedTrackIds() const
 {
-    return m_settings_json[JSON_KEY_GROUP_TIMELINE][JSON_KEY_TIMELINE_TRACK_ORDER][index]
-        .getLong();
+    std::vector<uint64_t> ids;
+    jt::Json&             order = TrackOrderJson();
+    if(order.isArray())
+    {
+        std::vector<jt::Json>& arr = order.getArray();
+        ids.reserve(arr.size());
+        for(jt::Json& track_id : arr)
+        {
+            ids.push_back(static_cast<uint64_t>(track_id.getLong()));
+        }
+    }
+    return ids;
 }
 
 LoadingTimer::LoadingTimer(uint64_t delay)

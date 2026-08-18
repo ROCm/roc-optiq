@@ -93,6 +93,12 @@ public:
     rocprofvis_dm_result_t  ReadTraceMetadata(
                                         Future* object) override;
 
+    // worker method to append one more database file to the already-loaded trace and read
+    // only that file's metadata (incremental add). Existing files are not re-read.
+    rocprofvis_dm_result_t  AddNode(
+                                        rocprofvis_db_filename_t filepath,
+                                        Future* object) override;
+
     // worker method to read flow trace info
     // @param event_id - 60-bit event id and 4-bit operation type  
     // @param object - future object providing asynchronous execution mechanism 

@@ -139,6 +139,299 @@ void SystemTrace::DbgPrintTopologyNodeData(rocprofvis_dm_topology_node node, int
     }
 }
 
+rocprofvis_result_t SystemTrace::BuildTracksFromDataModel(uint64_t start_index, uint64_t num_tracks,
+                                                          rocprofvis_dm_timestamp_t end_time,
+                                                          uint64_t& graph_index, size_t& trace_size)
+{
+    rocprofvis_result_t result = kRocProfVisResultSuccess;
+    for(uint64_t i = start_index; i < num_tracks; i++)
+    {
+        rocprofvis_dm_track_t dm_track_handle =
+            rocprofvis_dm_get_property_as_handle(
+                m_dm_handle, kRPVDMTrackHandleIndexed, i);
+        uint64_t track_id = rocprofvis_dm_get_property_as_uint64(
+            dm_track_handle, kRPVDMTrackIdUInt64, 0);
+        uint64_t dm_track_type =
+            rocprofvis_dm_get_property_as_uint64(
+                dm_track_handle, kRPVDMTrackCategoryEnumUInt64,
+                0);
+        if(dm_track_type == kRocProfVisDmRegionTrack ||
+           dm_track_type == kRocProfVisDmRegionMainTrack ||
+           dm_track_type == kRocProfVisDmRegionSampleTrack ||
+           dm_track_type == kRocProfVisDmKernelDispatchTrack ||
+           dm_track_type == kRocProfVisDmMemoryAllocationTrack ||
+           dm_track_type == kRocProfVisDmMemoryCopyTrack ||
+           dm_track_type == kRocProfVisDmStreamTrack ||
+           dm_track_type == kRocProfVisDmPmcTrack)
+        {
+            auto   type = (dm_track_type == kRocProfVisDmPmcTrack)
+                              ? kRPVControllerTrackTypeSamples
+                              : kRPVControllerTrackTypeEvents;
+            Track* track =
+                new Track(type, track_id, dm_track_handle, this);
+            {
+                std::string category =
+                    rocprofvis_dm_get_property_as_charptr(
+                        dm_track_handle,
+                        kRPVDMTrackCategoryEnumCharPtr, 0);
+
+                track->SetString(kRPVControllerTrackCategory, 0,
+                                 category.c_str());
+
+                std::string main_name =
+                    rocprofvis_dm_get_property_as_charptr(
+                        dm_track_handle,
+                        kRPVDMTrackMainProcessNameCharPtr, 0);
+                track->SetString(kRPVControllerTrackMainName, 0,
+                                 main_name.c_str());
+
+                std::string sub_name =
+                    rocprofvis_dm_get_property_as_charptr(
+                        dm_track_handle,
+                        kRPVDMTrackSubProcessNameCharPtr, 0);
+                track->SetString(kRPVControllerTrackSubName, 0,
+                                 sub_name.c_str());
+
+                uint64_t num_records =
+                    rocprofvis_dm_get_property_as_uint64(
+                        track->GetDmHandle(),
+                        kRPVDMTrackNumRecordsUInt64, 0);
+
+                trace_size +=
+                    num_records *
+                    (type == kRPVControllerTrackTypeEvents
+                         ? sizeof(Event)
+                         : sizeof(Sample));
+
+                track->SetUInt64(
+                    kRPVControllerTrackNumberOfEntries, 0,
+                    num_records);
+                double min_ts = static_cast<double>(
+                    rocprofvis_dm_get_property_as_uint64(
+                        track->GetDmHandle(),
+                        kRPVDMTrackMinimumTimestampUInt64, 0));
+                double max_ts = static_cast<double>(
+                    rocprofvis_dm_get_property_as_uint64(
+                        track->GetDmHandle(),
+                        kRPVDMTrackMaximumTimestampUInt64, 0));
+                double min_value =
+                    rocprofvis_dm_get_property_as_double(
+                        track->GetDmHandle(),
+                        kRPVDMTrackMinimumValueDouble, 0);
+                double max_value =
+                    rocprofvis_dm_get_property_as_double(
+                        track->GetDmHandle(),
+                        kRPVDMTrackMaximumValueDouble, 0);
+                uint64_t node =
+                    rocprofvis_dm_get_property_as_uint64(
+                        track->GetDmHandle(),
+                        kRPVDMTrackNodeIdUInt64, 0);
+                uint64_t agent_id_or_pid =
+                    rocprofvis_dm_get_property_as_uint64(
+                        track->GetDmHandle(),
+                        kRPVDMTrackProcessIdUInt64, 0);
+                uint64_t queue_id_or_tid =
+                    rocprofvis_dm_get_property_as_uint64(
+                        track->GetDmHandle(),
+                        kRPVDMTrackSubProcessIdUInt64, 0);
+                if (type == kRPVControllerTrackTypeSamples)
+                {
+                    max_ts = static_cast<double>(end_time);
+                }
+                track->SetDouble(kRPVControllerTrackMinTimestamp,
+                                 0, min_ts);
+                track->SetDouble(kRPVControllerTrackMaxTimestamp,
+                                 0, max_ts);
+                track->SetDouble(kRPVControllerTrackMinValue,
+                                 0, min_value);
+                track->SetDouble(kRPVControllerTrackMaxValue,
+                                 0, max_value);
+                track->SetUInt64(kRPVControllerTrackNode, 0,
+                                 node);
+                track->SetUInt64(kRPVControllerTrackAgentIdOrPid, 0,
+                    agent_id_or_pid);
+                track->SetUInt64(kRPVControllerTrackQueueIdOrTid, 0,
+                    queue_id_or_tid);
+
+                switch((rocprofvis_dm_track_category_t)dm_track_type)
+                {
+                    case kRocProfVisDmPmcTrack:
+                    {
+                        track->SetUInt64(kRPVControllerTrackNumberOfOperationTypes, 0, 1);
+                        track->SetUInt64(kRPVControllerTrackOperationTypeIndexed, 0, kRocProfVisDmOperationNoOp);
+                        break;
+                    }
+                    case kRocProfVisDmRegionTrack:
+                    {
+                        track->SetUInt64(kRPVControllerTrackNumberOfOperationTypes, 0, 2);
+                        track->SetUInt64(kRPVControllerTrackOperationTypeIndexed, 0, kRocProfVisDmOperationLaunch);
+                        track->SetUInt64(kRPVControllerTrackOperationTypeIndexed, 1, kRocProfVisDmOperationLaunchSample);
+                        break;
+                    }
+                    case kRocProfVisDmKernelDispatchTrack:
+                    {
+                        track->SetUInt64(kRPVControllerTrackNumberOfOperationTypes, 0, 1);
+                        track->SetUInt64(kRPVControllerTrackOperationTypeIndexed, 0, kRocProfVisDmOperationDispatch);
+                        break;
+                    }
+                    case kRocProfVisDmMemoryAllocationTrack:
+                    {
+                        track->SetUInt64(kRPVControllerTrackNumberOfOperationTypes, 0, 1);
+                        track->SetUInt64(kRPVControllerTrackOperationTypeIndexed, 0, kRocProfVisDmOperationMemoryAllocate);
+                        break;
+                    }
+                    case kRocProfVisDmMemoryCopyTrack:
+                    {
+                        track->SetUInt64(kRPVControllerTrackNumberOfOperationTypes, 0, 1);
+                        track->SetUInt64(kRPVControllerTrackOperationTypeIndexed, 0, kRocProfVisDmOperationMemoryCopy);
+                        break;
+                    }
+                    case kRocProfVisDmStreamTrack:
+                    {
+                        track->SetUInt64(kRPVControllerTrackNumberOfOperationTypes, 0, 5);
+                        track->SetUInt64(kRPVControllerTrackOperationTypeIndexed, 0, kRocProfVisDmOperationLaunch);
+                        track->SetUInt64(kRPVControllerTrackOperationTypeIndexed, 1, kRocProfVisDmOperationDispatch);
+                        track->SetUInt64(kRPVControllerTrackOperationTypeIndexed, 2, kRocProfVisDmOperationMemoryAllocate);
+                        track->SetUInt64(kRPVControllerTrackOperationTypeIndexed, 3, kRocProfVisDmOperationMemoryCopy);
+                        track->SetUInt64(kRPVControllerTrackOperationTypeIndexed, 4, kRocProfVisDmOperationLaunchSample);
+                        break;
+                    }
+                    case kRocProfVisDmRegionMainTrack:
+                    {
+                        track->SetUInt64(kRPVControllerTrackNumberOfOperationTypes, 0, 1);
+                        track->SetUInt64(kRPVControllerTrackOperationTypeIndexed, 0, kRocProfVisDmOperationLaunch);
+                        break;
+                    }
+                    case kRocProfVisDmRegionSampleTrack:
+                    {
+                        track->SetUInt64(kRPVControllerTrackNumberOfOperationTypes, 0, 1);
+                        track->SetUInt64(kRPVControllerTrackOperationTypeIndexed, 0, kRocProfVisDmOperationLaunchSample);
+                        break;
+                    }
+                    default:
+                    {
+                        track->SetUInt64(kRPVControllerTrackNumberOfOperationTypes, 0, 1);
+                        track->SetUInt64(kRPVControllerTrackOperationTypeIndexed, 0, kRocProfVisDmMultipleOperations);
+                        break;
+                    }
+                }
+
+                uint32_t index = static_cast<uint32_t>(m_tracks.size());
+                m_tracks.push_back(track);
+                if(m_tracks.size() != (index + 1))
+                {
+                    delete track;
+                    track  = nullptr;
+                    result = kRocProfVisResultMemoryAllocError;
+                    break;
+                }
+
+                Graph* graph = new Graph(this,
+                    (dm_track_type == kRocProfVisDmPmcTrack)
+                        ? kRPVControllerGraphTypeLine
+                        : kRPVControllerGraphTypeFlame,
+                    track_id);
+                {
+                    result = graph->SetObject(
+                        kRPVControllerGraphTrack, 0,
+                        (rocprofvis_handle_t*) track);
+                    if(result == kRocProfVisResultSuccess)
+                    {
+                        result = m_timeline->SetUInt64(
+                            kRPVControllerTimelineNumGraphs, 0,
+                            ++graph_index);
+                        if(result == kRocProfVisResultSuccess)
+                        {
+                            result = m_timeline->SetObject(
+                                kRPVControllerTimelineGraphIndexed,
+                                graph_index - 1,
+                                (rocprofvis_handle_t*) graph);
+                        }
+                        if(result != kRocProfVisResultSuccess)
+                        {
+                            delete graph;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    return result;
+}
+
+rocprofvis_result_t SystemTrace::AddTraceSource(Future& future, const std::string& filepath)
+{
+    rocprofvis_result_t error = kRocProfVisResultInvalidArgument;
+    future.Set(JobSystem::Get().IssueJob(
+        [this, path = filepath](Future* future) -> rocprofvis_result_t {
+            rocprofvis_result_t result = kRocProfVisResultUnknownError;
+            try
+            {
+                rocprofvis_dm_database_t db = rocprofvis_dm_get_property_as_handle(
+                    m_dm_handle, kRPVDMDatabaseHandle, 0);
+                if(nullptr == db)
+                {
+                    return kRocProfVisResultInvalidArgument;
+                }
+
+                // How many data-model tracks exist before the add; new tracks land after this.
+                uint64_t old_num_tracks = rocprofvis_dm_get_property_as_uint64(
+                    m_dm_handle, kRPVDMNumberOfTracksUInt64, 0);
+
+                rocprofvis_db_future_t object2wait =
+                    rocprofvis_db_future_alloc(&Future::ProgressCallback, future);
+                if(nullptr == object2wait)
+                {
+                    return kRocProfVisResultMemoryAllocError;
+                }
+
+                if(kRocProfVisDmResultSuccess ==
+                   rocprofvis_db_add_node_async(db, path.c_str(), object2wait))
+                {
+                    future->AddDependentFuture(object2wait);
+                    if(kRocProfVisDmResultSuccess ==
+                       rocprofvis_db_future_wait(object2wait, UINT64_MAX))
+                    {
+                        rocprofvis_dm_timestamp_t end_time =
+                            rocprofvis_dm_get_property_as_uint64(m_dm_handle,
+                                                                 kRPVDMEndTimeUInt64, 0);
+                        uint64_t new_num_tracks = rocprofvis_dm_get_property_as_uint64(
+                            m_dm_handle, kRPVDMNumberOfTracksUInt64, 0);
+
+                        // One graph per existing track, so the next graph index is the
+                        // current controller track count.
+                        uint64_t graph_index = m_tracks.size();
+                        size_t   trace_size  = 0;
+                        result = BuildTracksFromDataModel(old_num_tracks, new_num_tracks,
+                                                          end_time, graph_index, trace_size);
+
+                        // Rebuild the topology mirror so the newly added file's nodes appear.
+                        rocprofvis_dm_topology_node dm_topology_root =
+                            rocprofvis_dm_get_property_as_handle(m_dm_handle,
+                                                                 kRPVDMTopologyHandle, 0);
+                        delete m_topology_root;
+                        m_topology_root = new TopologyRoot(dm_topology_root, this);
+                    }
+                    future->RemoveDependentFuture(object2wait);
+                }
+                rocprofvis_db_future_free(object2wait);
+            }
+            catch(const std::exception&)
+            {
+                spdlog::error("Exception while adding trace source {}", path);
+                result = kRocProfVisResultMemoryAllocError;
+            }
+            return result;
+        },
+        &future));
+
+    if(future.IsValid())
+    {
+        error = kRocProfVisResultSuccess;
+    }
+    return error;
+}
+
 rocprofvis_result_t SystemTrace::LoadRocpd(Future* future) {
     rocprofvis_result_t result = kRocProfVisResultUnknownError;
     try
@@ -170,12 +463,6 @@ rocprofvis_result_t SystemTrace::LoadRocpd(Future* future) {
                 rocprofvis_db_future_t object2wait = rocprofvis_db_future_alloc(&Future::ProgressCallback, future);
                 if(nullptr != object2wait)
                 {
-                    std::multimap<uint64_t, Track*> queue_to_track;
-                    std::multimap<uint64_t, Track*> stream_to_track;
-                    std::multimap<uint64_t, Track*> thread_to_track;
-                    std::multimap<uint64_t, Track*> sample_thread_to_track;
-                    std::multimap<uint64_t, Track*> counter_to_track;
-                    
                     if(kRocProfVisDmResultSuccess ==
                        rocprofvis_db_read_metadata_async(db, object2wait))
                     {
@@ -183,12 +470,9 @@ rocprofvis_result_t SystemTrace::LoadRocpd(Future* future) {
                         if(kRocProfVisDmResultSuccess ==
                            rocprofvis_db_future_wait(object2wait, UINT64_MAX))
                         {
-                            rocprofvis_dm_timestamp_t     start_time;
                             rocprofvis_dm_timestamp_t     end_time;
                             rocprofvis_db_num_of_tracks_t num_tracks;
 
-                            start_time = rocprofvis_dm_get_property_as_uint64(
-                                m_dm_handle, kRPVDMStartTimeUInt64, 0);
                             end_time = rocprofvis_dm_get_property_as_uint64(
                                 m_dm_handle, kRPVDMEndTimeUInt64, 0);
                             num_tracks = (rocprofvis_db_num_of_tracks_t)
@@ -274,10 +558,6 @@ rocprofvis_result_t SystemTrace::LoadRocpd(Future* future) {
                                             rocprofvis_dm_get_property_as_double(
                                                 track->GetDmHandle(),
                                                 kRPVDMTrackMaximumValueDouble, 0);
-                                        uint64_t instance_id =
-                                            rocprofvis_dm_get_property_as_uint64(
-                                                track->GetDmHandle(),
-                                                kRPVDMTrackInstanceIdUInt64, 0) << 48;
                                         uint64_t node =
                                             rocprofvis_dm_get_property_as_uint64(
                                                 track->GetDmHandle(),
@@ -308,85 +588,6 @@ rocprofvis_result_t SystemTrace::LoadRocpd(Future* future) {
                                             agent_id_or_pid);
                                         track->SetUInt64(kRPVControllerTrackQueueIdOrTid, 0,
                                             queue_id_or_tid);
-
-                                        uint64_t num_ext_data = 0;
-                                        track->GetUInt64(
-                                            kRPVControllerTrackExtDataNumberOfEntries, 0,
-                                            &num_ext_data);
-                                        for (uint32_t idx = 0; idx < num_ext_data; idx++)
-                                        {
-                                            std::string ext_data_category;
-                                            std::string name;
-                                            std::string value;
-                                            uint32_t    length = 0;
-                                            track->GetString(
-                                                kRPVControllerTrackExtDataCategoryIndexed,
-                                                idx, nullptr, &length);
-                                            ext_data_category.resize(length);
-                                            track->GetString(
-                                                kRPVControllerTrackExtDataCategoryIndexed,
-                                                idx, ext_data_category.data(), &length);
-
-                                            length = 0;
-                                            track->GetString(
-                                                kRPVControllerTrackExtDataNameIndexed,
-                                                idx, nullptr, &length);
-                                            name.resize(length);
-                                            track->GetString(
-                                                kRPVControllerTrackExtDataNameIndexed,
-                                                idx, name.data(), &length);
-
-                                            length = 0;
-                                            track->GetString(
-                                                kRPVControllerTrackExtDataValueIndexed,
-                                                idx, nullptr, &length);
-                                            value.resize(length);
-                                            track->GetString(
-                                                kRPVControllerTrackExtDataValueIndexed,
-                                                idx, value.data(), &length);
-                                                
-                                            if (ext_data_category == "Queue" && name == "id")
-                                            {
-                                                char*    end = nullptr;
-                                                uint64_t val = std::strtoull(
-                                                    value.c_str(), &end, 10);
-                                                queue_to_track.insert({ val | instance_id, track });
-                                            }
-                                            else if(ext_data_category == "Stream" && name == "id")
-                                            {
-                                                char*    end = nullptr;
-                                                uint64_t val = std::strtoull(
-                                                    value.c_str(), &end, 10);
-                                                stream_to_track.insert({ val | instance_id, track });
-                                            }
-                                            else if(ext_data_category == "Thread" && name == "id")
-                                            {
-                                                char*    end = nullptr;
-                                                uint64_t val = std::strtoull(
-                                                    value.c_str(), &end, 10);
-                                                if(dm_track_type == kRocProfVisDmRegionSampleTrack)
-                                                {
-                                                    sample_thread_to_track.insert({ val | instance_id, track });
-                                                }
-                                                else
-                                                {
-                                                    thread_to_track.insert({ val | instance_id, track });
-                                                }                                                
-                                            }
-                                            else if(ext_data_category == "PMC")
-                                            {
-                                                if(name == "id")
-                                                {
-                                                    char*    end = nullptr;
-                                                    uint64_t val = std::strtoull(
-                                                        value.c_str(), &end, 10);
-                                                    counter_to_track.insert({ val | instance_id, track });
-                                                }
-                                            }
-
-                                            spdlog::debug("{} {} {}", ext_data_category.c_str(),
-                                                         name.c_str(), value.c_str());
-                                        }
 
                                         switch((rocprofvis_dm_track_category_t)dm_track_type)
                                         {

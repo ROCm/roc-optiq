@@ -102,6 +102,23 @@ rocprofvis_dm_result_t  Database::ReadTraceMetadataAsync(
     return kRocProfVisDmResultSuccess;
 }
 
+rocprofvis_dm_result_t  Database::AddNodeAsync(
+                                                    rocprofvis_db_filename_t filepath,
+                                                    rocprofvis_db_future_t object){
+    Future* future = (Future*) object;
+    ROCPROFVIS_ASSERT_MSG_RETURN(future, ERROR_FUTURE_CANNOT_BE_NULL, kRocProfVisDmResultInvalidParameter);
+    ROCPROFVIS_ASSERT_MSG_RETURN(!future->IsWorking(), ERROR_FUTURE_CANNOT_BE_USED, kRocProfVisDmResultResourceBusy);
+    ROCPROFVIS_ASSERT_MSG_RETURN(filepath, ERROR_DATABASE_CANNOT_BE_NULL, kRocProfVisDmResultInvalidParameter);
+    try {
+        future->SetWorker(std::move(std::thread(Database::AddNodeStatic, this, std::string(filepath), future)));
+    }
+    catch (const std::exception& ex)
+    {
+        ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN(ex.what(), kRocProfVisDmResultUnknownError);
+    }
+    return kRocProfVisDmResultSuccess;
+}
+
 rocprofvis_dm_result_t  Database::ReadTraceSliceAsync(
                                                     rocprofvis_dm_timestamp_t start,
                                                     rocprofvis_dm_timestamp_t end,
@@ -353,8 +370,15 @@ rocprofvis_dm_result_t  Database::CleanupStatic(Database* db, Future* future, bo
     return db->Cleanup(future, rebuild);
 }
 
+rocprofvis_dm_result_t  Database::AddNodeStatic(
+                                                    Database* db,
+                                                    std::string filepath,
+                                                    Future* object){
+    return db->AddNode(filepath.c_str(), object);
+}
+
 rocprofvis_dm_result_t  Database::ReadTraceMetadataStatic(
-                                                    Database* db, 
+                                                    Database* db,
                                                     Future* object){
     return db->ReadTraceMetadata(object);
 }

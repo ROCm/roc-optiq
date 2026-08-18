@@ -203,6 +203,10 @@ namespace DataModel
         SQLInsertParams metadata_schema_params = { { "id", "INTEGER PRIMARY KEY" }, { "name", "TEXT" }, { "type", "INTEGER" } , { "version", "INTEGER" }, { "hash", "INTEGER" } };
         for (auto& file_node : m_db->m_db_nodes)
         {
+            // Incremental add: skip already-loaded nodes. The metadata table name is hashed
+            // over all db-node filepaths, so appending a file would otherwise make existing
+            // nodes look "missing" and drop their derived tables.
+            if (!m_db->ShouldProcessInstance(file_node->node_id)) continue;
             DatabaseCache metadata_table;
             TemporaryDbInstance db_instance(file_node->node_id);
             future->ResetRowCount();

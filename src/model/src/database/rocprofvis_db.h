@@ -8,8 +8,10 @@
 #include "rocprofvis_db_track.h"
 #include "rocprofvis_db_version.h"
 #include <vector>
+#include <deque>
 #include <map>
 #include <unordered_map>
+#include <set>
 #include <mutex>
 #include <shared_mutex>
 #include <condition_variable>
@@ -30,7 +32,9 @@ typedef std::unordered_map<uint32_t, rocprofvis_dm_slice_t> slice_array_t;
 typedef std::unordered_map<rocprofvis_dm_event_operation_t, std::unordered_map<uint32_t, std::string>> table_string_id_filter_map_t;
 
 typedef std::pair<DbInstance, std::string> GuidInfo;
-typedef std::vector<GuidInfo> guid_list_t;
+// deque (not vector): tracks hold raw DbInstance* into these elements, so their addresses
+// must stay stable when a node is appended at runtime (Add Trace to View).
+typedef std::deque<GuidInfo> guid_list_t;
 
 class TemporaryDbInstance : public DbInstance
 {
@@ -67,6 +71,10 @@ class Database;
 class OrderedMutex {
 public:
     void init(uint32_t num_instances) { for (uint32_t i = 0; i < num_instances; i++) { m_instances.insert(i); } }
+    // Seed the ordering with an explicit set of instance ids. Used by the incremental add
+    // path, where only the newly added instance(s) participate - seeding 0..N-1 would make
+    // the new instance wait forever for the skipped earlier instances.
+    void init(const std::set<uint32_t>& instance_ids) { m_instances = instance_ids; }
 
     void lock(uint32_t id) {
         std::unique_lock<std::mutex> lock(m_lock);
@@ -126,6 +134,12 @@ class Database
         // @param object - future object providing asynchronous execution mechanism
         // @return status of operation
         rocprofvis_dm_result_t          ReadTraceMetadataAsync( 
+                                                                rocprofvis_db_future_t object);
+        // Asynchronously append one more database file to an already-loaded trace and read
+        // only that file's metadata, merging it into the existing trace. Existing files are
+        // not re-read. Only supported by database flavors that back a multi-file trace.
+        rocprofvis_dm_result_t          AddNodeAsync(
+                                                                rocprofvis_db_filename_t filepath,
                                                                 rocprofvis_db_future_t object);
         // Asynchronously read a time slice (records from specified number of tracks for specified time frame) from database  
         // @param start - start timestamp of time slice 
@@ -273,6 +287,12 @@ class Database
         static rocprofvis_dm_result_t   ReadTraceMetadataStatic(
                                                                 Database* db, 
                                                                 Future* object);
+        //static method to add a database node. Required to launch a unique thread for the
+        // asynchronous incremental add.
+        static rocprofvis_dm_result_t   AddNodeStatic(
+                                                                Database* db,
+                                                                std::string filepath,
+                                                                Future* object);
         //static method to read time slice. Required to launch a unique thread for asynchronous time slice read
         // @param db - pointer to database object 
         // @param start - start timestamp of time slice 
@@ -376,6 +396,14 @@ class Database
         // @return status of operation
         virtual rocprofvis_dm_result_t  ReadTraceMetadata(
                                                                 Future* object) = 0;
+        // worker method to append one database file and read only its metadata, merging it
+        // into the already-loaded trace. Default: not supported (single-file flavors).
+        virtual rocprofvis_dm_result_t  AddNode(
+                                                                rocprofvis_db_filename_t filepath,
+                                                                Future* object) {
+            (void) filepath; (void) object;
+            return kRocProfVisDmResultNotSupported;
+        }
         // worker method to read time slice
         // @param start - start timestamp of time slice 
         // @param end - end timestamp of time slice 
@@ -464,12 +492,46 @@ class Database
         std::unordered_map<uint32_t, DatabaseCache> m_cached_tables;
         guid_list_t   m_db_instances;
         TrackLookup   m_track_lookup;
+        // When non-empty, only these file-node indices are (re)loaded by the metadata
+        // read; used by the incremental AddNode path so already-loaded files are skipped.
+        // Empty (the default) means "load everything" - the original full-load behavior.
+        std::set<uint32_t> m_load_only_file_indices;
 
 
     protected:
         // ---------------------------------------------Getters---------------------------------------
         guid_list_t& DbInstances() { return m_db_instances; }
         uint32_t NumDbInstances() { return static_cast<uint32_t>(m_db_instances.size()); }
+        // Incremental-load gate: true when this file-node index should be processed by the
+        // current metadata read. Always true during a normal full load (filter empty).
+        bool ShouldProcessInstance(uint32_t file_index) const { return m_load_only_file_indices.empty() || m_load_only_file_indices.count(file_index) > 0; }
+        bool IsIncrementalLoad() const { return !m_load_only_file_indices.empty(); }
+        // The GuidIndices of the instances that the current metadata read will process.
+        // On a full load this is every instance; on an incremental add it is just the newly
+        // added file's instance(s). Used to seed OrderedMutex so ordering does not wait on
+        // skipped instances.
+        std::set<uint32_t> ParticipatingGuidIndices() {
+            std::set<uint32_t> ids;
+            for (auto& gi : m_db_instances) {
+                if (ShouldProcessInstance(gi.first.FileIndex())) ids.insert(gi.first.GuidIndex());
+            }
+            return ids;
+        }
+        // The subset of DbInstances() that the current metadata read should process. On a
+        // full load this is every instance; on an incremental add it is only the newly added
+        // file node. Used to scope per-track phases (e.g. track-extent collection) so already
+        // loaded files are not re-queried (which also avoids touching their derived tables).
+        guid_list_t ParticipatingGuidList() {
+            guid_list_t list;
+            for (auto& gi : m_db_instances) {
+                if (ShouldProcessInstance(gi.first.FileIndex())) list.push_back(gi);
+            }
+            return list;
+        }
+        // Scope the next metadata read to a single new file node (incremental add), or clear
+        // the scope to restore full-load behavior.
+        void SetIncrementalLoadFileIndex(uint32_t file_index) { m_load_only_file_indices.clear(); m_load_only_file_indices.insert(file_index); }
+        void ClearIncrementalLoad() { m_load_only_file_indices.clear(); }
         std::string GuidAt(int index) { return index < m_db_instances.size() ? m_db_instances[index].second : std::string(); }
         std::string GuidSymAt(int index) { std::string s = GuidAt(index); std::replace(s.begin(), s.end(), '_', '-'); return s; }
         DbInstance* DbInstancePtrAt(int index) { return index < m_db_instances.size() ? &m_db_instances[index].first : nullptr; }

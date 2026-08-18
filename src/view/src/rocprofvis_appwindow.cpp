@@ -159,6 +159,11 @@ AppWindow::~AppWindow()
         }
     }
     m_provider_cleanup_jobs.clear();
+    // Drop tab view references before destroying projects (see BeginAppShutdown).
+    if(m_tab_container)
+    {
+        m_tab_container->Clear();
+    }
     m_projects.clear();
     // Destroy owners of monitored sessions (e.g. the profiler dialog and the
     // remote-trace orchestrator) before tearing down the monitor so they
@@ -426,6 +431,25 @@ AppWindow::ShowOpenFileDialog(const std::string& title, const std::vector<FileFi
 }
 
 void
+AppWindow::ShowOpenFilesDialog(
+    const std::string& title, const std::vector<FileFilter>& file_filters,
+    const std::string&                                   initial_path,
+    std::function<void(const std::vector<std::string>&)> callback)
+{
+#ifdef ROCPROFVIS_HAVE_NATIVE_FILE_DIALOG
+    if(m_use_native_file_dialog.load())
+    {
+        (void)title;
+        ShowNativeFilesDialog(file_filters, initial_path, callback);
+        return;
+    }
+#endif
+    m_files_dialog_callback = std::move(callback);
+    ShowImGuiFileDialog(title, file_filters, initial_path, false, nullptr, false,
+                        /*multi_select*/ true);
+}
+
+void
 AppWindow::ShowPathPickerDialog(const std::string& title, const std::string& initial_path,
                                 std::function<void(std::string)> callback)
 {
@@ -498,11 +522,20 @@ AppWindow::BeginAppShutdown()
                          ProviderCleanupReason::kAppShutdown);
 #endif
 
-    m_projects.clear();
+    // Null the toolbar item first: it holds a widget from the active view whose callback
+    // captures that view, so it must be released before the views are destroyed below.
     if(m_main_view)
     {
         m_main_view->GetMutableAt(m_tool_bar_index)->m_item = nullptr;
     }
+    // Drop the tab's view references before destroying projects so ~Project owns the last
+    // view reference and destroys the view (and its ProjectSettings) while the project - and
+    // its settings registry - is still alive (keeps ~ProjectSetting's unregister safe).
+    if(m_tab_container)
+    {
+        m_tab_container->Clear();
+    }
+    m_projects.clear();
 
     // Release the profiler dialog and remote-trace orchestrator now so their
     // sessions transfer any in-flight work to the AppMonitor (non-blocking).
@@ -664,6 +697,39 @@ AppWindow::Update()
     // status-change events before they are dispatched below this frame.
     AppMonitor::GetInstance()->Update();
     EventManager::GetInstance()->DispatchEvents();
+    // Reopen subsets queued by RemoveTraceFromView, after DispatchEvents() has freed the
+    // closed project so the subset can open fresh even if its id matches.
+    if(!m_pending_view_reopens.empty())
+    {
+        std::vector<PendingViewReopen> reopens;
+        reopens.swap(m_pending_view_reopens);
+        for(PendingViewReopen& reopen : reopens)
+        {
+            std::string new_id;
+            if(reopen.files.size() == 1)
+            {
+                OpenFile(reopen.files.front());
+                // OpenFile()/OpenTrace() keys the project by the canonicalized path, so match
+                // that here or the settings seed below would miss and reset the track state.
+                new_id =
+                    std::filesystem::weakly_canonical(reopen.files.front()).string();
+            }
+            else if(reopen.files.size() > 1)
+            {
+                new_id = MakeCombinedId(reopen.files);
+                OpenCombined(reopen.files);
+            }
+            // Seed the reopened project with the snapshot before its async load builds the
+            // graph view (kReady -> MakeGraphView -> per-track FromJson reads this json).
+            if(!new_id.empty() && !reopen.settings.isNull())
+            {
+                if(Project* reopened = GetProject(new_id))
+                {
+                    reopened->GetSettingsJson() = std::move(reopen.settings);
+                }
+            }
+        }
+    }
     LogViewer::GetInstance()->Poll();
     DebugWindow::GetInstance()->ClearTransient();
     m_tab_container->Update();
@@ -691,7 +757,8 @@ AppWindow::WantsContinuousRender()
     }
 
     if(!m_provider_cleanup_jobs.empty() || m_disable_app_interaction ||
-       m_shutdown_requested || EventManager::GetInstance()->HasPendingEvents())
+       m_shutdown_requested || !m_pending_view_reopens.empty() ||
+       EventManager::GetInstance()->HasPendingEvents())
     {
         return true;
     }
@@ -910,13 +977,42 @@ AppWindow::RenderFileDialog()
     {
         if(ImGuiFileDialog::Instance()->IsOk())
         {
-            // Directory mode reports its result via GetCurrentPath(); GetFilePathName()
-            // is empty in that case.
-            const std::string result = m_imgui_file_dialog_folder_mode
-                                            ? ImGuiFileDialog::Instance()->GetCurrentPath()
-                                            : ImGuiFileDialog::Instance()->GetFilePathName();
-            m_file_dialog_callback(std::filesystem::path(result).string());
+            if(m_file_dialog_is_multi)
+            {
+                std::vector<std::string> paths;
+                const std::string        current_dir =
+                    ImGuiFileDialog::Instance()->GetCurrentPath();
+                for(const auto& entry : ImGuiFileDialog::Instance()->GetSelection())
+                {
+                    // GetSelection() maps fileName -> filePathName (full path). Fall back
+                    // to current_dir/fileName if the full path was not provided.
+                    std::string full = entry.second.empty()
+                                           ? (std::filesystem::path(current_dir) /
+                                              entry.first)
+                                                 .string()
+                                           : entry.second;
+                    paths.push_back(std::filesystem::path(full).string());
+                }
+                if(m_files_dialog_callback)
+                {
+                    m_files_dialog_callback(paths);
+                }
+            }
+            else
+            {
+                // Directory mode reports its result via GetCurrentPath();
+                // GetFilePathName() is empty in that case.
+                const std::string result =
+                    m_imgui_file_dialog_folder_mode
+                        ? ImGuiFileDialog::Instance()->GetCurrentPath()
+                        : ImGuiFileDialog::Instance()->GetFilePathName();
+                if(m_file_dialog_callback)
+                {
+                    m_file_dialog_callback(std::filesystem::path(result).string());
+                }
+            }
         }
+        m_file_dialog_is_multi = false;
         ImGuiFileDialog::Instance()->Close();
     }
     ImGui::PopStyleVar(3);
@@ -940,11 +1036,7 @@ AppWindow::OpenFile(std::string file_path)
     {
         case Project::OpenResult::Success:
         {
-            TabItem tab =
-                TabItem{ project->GetName(), project->GetID(), project->GetView(), true };
-            m_tab_container->AddTab(std::move(tab));
-            m_tab_container->SetActiveTab(project->GetID());            
-            m_projects[project->GetID()] = std::move(project);
+            RegisterAndActivateProject(std::move(project));
             SettingsManager::GetInstance().AddRecentFile(file_path);
             break;
         }
@@ -968,9 +1060,9 @@ AppWindow::OpenFile(std::string file_path)
 }
 
 std::string
-AppWindow::MakeCompareId(const std::vector<std::string>& files)
+AppWindow::JoinFileListId(const char* scheme, const std::vector<std::string>& files)
 {
-    std::string id = "compare://";
+    std::string id = scheme;
     for(size_t i = 0; i < files.size(); i++)
     {
         if(i > 0)
@@ -983,13 +1075,39 @@ AppWindow::MakeCompareId(const std::vector<std::string>& files)
 }
 
 void
+AppWindow::RegisterAndActivateProject(std::unique_ptr<Project> project)
+{
+    const std::string id = project->GetID();
+    m_tab_container->AddTab(TabItem{ project->GetName(), id, project->GetView(), true });
+    m_tab_container->SetActiveTab(id);
+    m_projects[id] = std::move(project);
+}
+
+std::string
+AppWindow::MakeCompareId(const std::vector<std::string>& files)
+{
+    return JoinFileListId("compare://", files);
+}
+
+void
 AppWindow::OpenCompare(const std::string& first_file, const std::string& second_file)
 {
-    spdlog::info("Opening compare: {} vs {}", first_file, second_file);
+    OpenCompare(std::vector<std::string>{ first_file, second_file });
+}
+
+void
+AppWindow::OpenCompare(const std::vector<std::string>& files)
+{
+    if(files.size() < 2)
+    {
+        return;
+    }
+
+    spdlog::info("Opening compare view of {} traces", files.size());
 
     // Synthetic, deterministic project id so the compare tab has a stable identity
-    // without a file on disk (the two traces are loaded directly by the controller).
-    const std::string compare_id = MakeCompareId({ first_file, second_file });
+    // without a file on disk (the traces are loaded directly by the controller).
+    const std::string compare_id = MakeCompareId(files);
     if(GetProject(compare_id))
     {
         m_tab_container->SetActiveTab(compare_id);
@@ -997,14 +1115,145 @@ AppWindow::OpenCompare(const std::string& first_file, const std::string& second_
     }
 
     std::unique_ptr<Project> project = std::make_unique<Project>();
-    if(project->OpenCompare(compare_id, { first_file, second_file }) ==
-       Project::OpenResult::Success)
+    if(project->OpenCompare(compare_id, files) == Project::OpenResult::Success)
     {
-        TabItem tab =
-            TabItem{ project->GetName(), project->GetID(), project->GetView(), true };
-        m_tab_container->AddTab(std::move(tab));
-        m_projects[project->GetID()] = std::move(project);
+        RegisterAndActivateProject(std::move(project));
     }
+}
+
+std::string
+AppWindow::MakeCombinedId(const std::vector<std::string>& files)
+{
+    return JoinFileListId("combined://", files);
+}
+
+void
+AppWindow::OpenCombined(const std::vector<std::string>& files)
+{
+    if(files.empty())
+    {
+        return;
+    }
+    // A single file is just a normal open; merging only applies to 2+ files.
+    if(files.size() == 1)
+    {
+        OpenFile(files.front());
+        return;
+    }
+
+    spdlog::info("Opening merged view of {} traces", files.size());
+
+    // Synthetic, deterministic project id so the merged tab has a stable identity without
+    // a file on disk (the traces are loaded directly by the controller).
+    const std::string combined_id = MakeCombinedId(files);
+    if(GetProject(combined_id))
+    {
+        m_tab_container->SetActiveTab(combined_id);
+        return;
+    }
+
+    std::unique_ptr<Project> project = std::make_unique<Project>();
+    if(project->OpenCombined(combined_id, files) == Project::OpenResult::Success)
+    {
+        RegisterAndActivateProject(std::move(project));
+    }
+}
+
+void
+AppWindow::RemoveTraceFromView(const std::string& file_to_remove)
+{
+    Project* project = GetCurrentProject();
+    if(project == nullptr || project->GetTraceType() != Project::System ||
+       project->IsCompare())
+    {
+        return;
+    }
+
+    const std::vector<std::string> files  = project->GetSourceFiles();
+    const std::string              old_id = project->GetID();
+
+    std::vector<std::string> subset;
+    subset.reserve(files.size());
+    for(const std::string& file : files)
+    {
+        if(file != file_to_remove)
+        {
+            subset.push_back(file);
+        }
+    }
+
+    // Nothing to do if the file was not part of this view or it is the only one left.
+    if(subset.empty() || subset.size() == files.size())
+    {
+        return;
+    }
+
+    // Snapshot the current view/track settings so the reopened subset restores them
+    // (matched by track id, which is stable for the retained tracks).
+    jt::Json captured_settings;
+    project->SerializeSettings();
+    captured_settings = project->GetSettingsJson();
+
+    // Close the current tab FIRST, then reopen the subset next frame. The Add path does not
+    // change the project id, so a subset can reopen to the same id as the still-open project;
+    // opening it now would just re-activate that project (a no-op). RemoveTab() defers freeing
+    // the project to the tab-closed event, so queueing the reopen lets that run first.
+    m_tab_container->RemoveTab(old_id);
+    m_pending_view_reopens.push_back({ std::move(subset), std::move(captured_settings) });
+}
+
+void
+AppWindow::AddTraceToCurrentView()
+{
+    Project* project = GetCurrentProject();
+    if(project == nullptr || project->GetTraceType() != Project::System ||
+       project->IsCompare())
+    {
+        ShowMessageDialog(
+            "Add Trace to View",
+            "Open a system trace first, then add another trace to merge it into the "
+            "same view.");
+        return;
+    }
+
+    // Capture the tab id so the async dialog callback can re-resolve the (still-open)
+    // project and inject the picked file into the SAME view via the incremental controller
+    // path - no new tab, existing tracks + view state preserved.
+    const std::string project_id = project->GetID();
+
+    std::vector<FileFilter> file_filters;
+    FileFilter              trace_filter;
+    trace_filter.m_name       = "Traces";
+    trace_filter.m_extensions = COMPARE_EXTENSIONS;
+    file_filters.push_back(trace_filter);
+
+    ShowOpenFileDialog(
+        "Add Trace to View", file_filters, "",
+        [this, project_id](std::string file_path) -> void {
+            if(file_path.empty())
+            {
+                return;
+            }
+            Project* current = GetProject(project_id);
+            if(current == nullptr)
+            {
+                return;
+            }
+            TraceView* trace_view = dynamic_cast<TraceView*>(current->GetView().get());
+            DataProvider* provider =
+                trace_view ? trace_view->GetDataProvider() : nullptr;
+            if(provider && provider->AddTraceSource(file_path))
+            {
+                current->AddSourceFile(file_path);
+            }
+            else
+            {
+                ShowMessageDialog(
+                    "Add Trace to View",
+                    "Could not add the trace. It must be a compatible rocprof .db of the "
+                    "same schema, and the current view must be idle.");
+            }
+        });
 }
 
 void
@@ -1053,6 +1302,32 @@ AppWindow::RenderFileMenu(Project* project)
         if(ImGui::MenuItem("Open", nullptr, false, !is_open_file_dialog_open))
         {
             HandleOpenFile();
+        }
+        // Add/Remove Trace apply to single and merged system traces, but NOT to compare
+        // projects: reopening a subset would drop the A/B/... compare tagging.
+        const bool can_add_trace = project != nullptr &&
+                                   project->GetTraceType() == Project::System &&
+                                   !project->IsCompare();
+        if(ImGui::MenuItem("Add Trace to View...", nullptr, false,
+                           can_add_trace && !is_open_file_dialog_open))
+        {
+            AddTraceToCurrentView();
+        }
+        const std::vector<std::string> view_sources =
+            can_add_trace ? project->GetSourceFiles() : std::vector<std::string>{};
+        if(ImGui::BeginMenu("Remove Trace from View",
+                            view_sources.size() >= 2 && !is_open_file_dialog_open))
+        {
+            for(const std::string& source : view_sources)
+            {
+                std::string label = std::filesystem::path(source).filename().string();
+                if(ImGui::MenuItem(label.c_str()))
+                {
+                    RemoveTraceFromView(source);
+                    break;
+                }
+            }
+            ImGui::EndMenu();
         }
 #ifdef ROCPROFVIS_DEVELOPER_MODE
         if(ImGui::MenuItem("Compare", nullptr, false, !is_open_file_dialog_open))
@@ -1279,9 +1554,41 @@ AppWindow::HandleOpenFile()
     file_filters.push_back(trace_filter);
     file_filters.push_back(project_filter);
 
-    ShowOpenFileDialog(
-        "Choose File", file_filters, "",
-        [this](std::string file_path) -> void { this->OpenFile(file_path); });
+    ShowOpenFilesDialog(
+        "Choose File(s)", file_filters, "",
+        [this](const std::vector<std::string>& files) -> void {
+            if(files.empty())
+            {
+                return;
+            }
+            // Projects (.rpv) open individually; multiple selected traces merge into one
+            // unified view (like a yaml manifest), while a single trace opens on its own.
+            std::vector<std::string> traces;
+            for(const std::string& file : files)
+            {
+                std::string ext = std::filesystem::path(file).extension().string();
+                std::transform(ext.begin(), ext.end(), ext.begin(),
+                               [](unsigned char c) {
+                                   return static_cast<char>(std::tolower(c));
+                               });
+                if(ext == ".rpv")
+                {
+                    OpenFile(file);
+                }
+                else
+                {
+                    traces.push_back(file);
+                }
+            }
+            if(traces.size() == 1)
+            {
+                OpenFile(traces.front());
+            }
+            else if(traces.size() >= 2)
+            {
+                OpenCombined(traces);
+            }
+        });
 }
 
 void
@@ -1509,33 +1816,55 @@ AppWindow::RenderAboutDialog()
 void
 AppWindow::UpdateNativeFileDialog()
 {
-    if(m_is_native_file_dialog_open)
+    if(!m_is_native_file_dialog_open)
     {
-        if(m_file_dialog_future.valid() &&
-           m_file_dialog_future.wait_for(std::chrono::seconds(0)) ==
+        return;
+    }
+
+    bool completed = false;
+    if(m_file_dialog_is_multi)
+    {
+        if(m_files_dialog_future.valid() &&
+           m_files_dialog_future.wait_for(std::chrono::seconds(0)) ==
                std::future_status::ready)
         {
-            m_disable_app_interaction = false;
-            std::string file_path     = m_file_dialog_future.get();
-            if(!file_path.empty() && m_file_dialog_callback)
+            m_disable_app_interaction         = false;
+            std::vector<std::string> paths    = m_files_dialog_future.get();
+            auto                     callback = m_files_dialog_callback;
+            m_is_native_file_dialog_open      = false;
+            m_files_dialog_callback           = nullptr;
+            m_file_dialog_is_multi            = false;
+            if(!paths.empty() && callback)
             {
-                m_file_dialog_callback(file_path);
+                callback(paths);
             }
-            m_is_native_file_dialog_open = false;
-            m_file_dialog_callback       = nullptr;
-
-            if(m_restore_fullscreen_later)
-            {
-                // toggle fullscreen on if it should be restored after dialog closes
-                if(!m_is_fullscreen && m_notification_callback)
-                {
-                    m_notification_callback(
-                        rocprofvis_view_notification_t::
-                            kRocProfVisViewNotification_Toggle_Fullscreen);
-                }
-                m_restore_fullscreen_later = false;
-            }
+            completed = true;
         }
+    }
+    else if(m_file_dialog_future.valid() &&
+            m_file_dialog_future.wait_for(std::chrono::seconds(0)) ==
+                std::future_status::ready)
+    {
+        m_disable_app_interaction = false;
+        std::string file_path     = m_file_dialog_future.get();
+        if(!file_path.empty() && m_file_dialog_callback)
+        {
+            m_file_dialog_callback(file_path);
+        }
+        m_is_native_file_dialog_open = false;
+        m_file_dialog_callback       = nullptr;
+        completed                    = true;
+    }
+
+    if(completed && m_restore_fullscreen_later)
+    {
+        // toggle fullscreen on if it should be restored after dialog closes
+        if(!m_is_fullscreen && m_notification_callback)
+        {
+            m_notification_callback(
+                rocprofvis_view_notification_t::kRocProfVisViewNotification_Toggle_Fullscreen);
+        }
+        m_restore_fullscreen_later = false;
     }
 }
 
@@ -1681,14 +2010,126 @@ AppWindow::ShowNativeFileDialog(const std::vector<FileFilter>&   file_filters,
 #endif
 }
 
+void
+AppWindow::ShowNativeFilesDialog(
+    const std::vector<FileFilter>& file_filters, const std::string& initial_path,
+    std::function<void(const std::vector<std::string>&)> callback)
+{
+    if(m_is_native_file_dialog_open)
+    {
+        return;
+    }
+    m_is_native_file_dialog_open = true;
+    m_files_dialog_callback      = std::move(callback);
+    m_file_dialog_is_multi       = true;
+    m_disable_app_interaction    = true;
+
+    if(m_is_fullscreen)
+    {
+        // toggle fullscreen off before opening native file dialog
+        if(m_notification_callback)
+        {
+            m_restore_fullscreen_later = true;
+            m_notification_callback(rocprofvis_view_notification_t::
+                                        kRocProfVisViewNotification_Toggle_Fullscreen);
+        }
+    }
+
+    auto dialog_task = [=]() -> std::vector<std::string> {
+        std::vector<std::string> results;
+        nfdresult_t              init_result = NFD_Init();
+        if(init_result != NFD_OKAY)
+        {
+            const char* err = NFD_GetError();
+            spdlog::error("NFD_Init failed at dialog open: {}", err ? err : "unknown");
+            NFD_ClearError();
+            m_use_native_file_dialog.store(false);
+            return results;
+        }
+
+        nfdu8filteritem_t*       filters = nullptr;
+        std::vector<std::string> extension_stings;
+        if(!file_filters.empty())
+        {
+            filters = new nfdu8filteritem_t[file_filters.size()];
+            for(size_t i = 0; i < file_filters.size(); ++i)
+            {
+                std::string extensions_str;
+                for(size_t j = 0; j < file_filters[i].m_extensions.size(); ++j)
+                {
+                    extensions_str += file_filters[i].m_extensions[j];
+                    if(j < file_filters[i].m_extensions.size() - 1)
+                    {
+                        extensions_str += ",";
+                    }
+                }
+                extension_stings.push_back(std::move(extensions_str));
+            }
+            for(size_t i = 0; i < file_filters.size(); ++i)
+            {
+                filters[i] = { file_filters[i].m_name.c_str(),
+                               extension_stings[i].c_str() };
+            }
+        }
+
+        const nfdpathset_t*   path_set = nullptr;
+        nfdopendialogu8args_t args     = {};
+        args.filterList                = filters;
+        args.filterCount = static_cast<nfdfiltersize_t>(file_filters.size());
+        if(!initial_path.empty())
+        {
+            args.defaultPath = initial_path.c_str();
+        }
+        nfdresult_t result = NFD_OpenDialogMultipleU8_With(&path_set, &args);
+        if(filters != nullptr)
+        {
+            delete[] filters;
+        }
+
+        if(result == NFD_OKAY && path_set != nullptr)
+        {
+            nfdpathsetsize_t count = 0;
+            NFD_PathSet_GetCount(path_set, &count);
+            for(nfdpathsetsize_t i = 0; i < count; ++i)
+            {
+                nfdu8char_t* out_path = nullptr;
+                if(NFD_PathSet_GetPathU8(path_set, i, &out_path) == NFD_OKAY &&
+                   out_path != nullptr)
+                {
+                    results.emplace_back(out_path);
+                    NFD_PathSet_FreePathU8(out_path);
+                }
+            }
+            NFD_PathSet_Free(path_set);
+        }
+        else if(result == NFD_ERROR)
+        {
+            spdlog::error("Error opening dialog: {}", NFD_GetError());
+            NFD_ClearError();
+        }
+        NFD_Quit();
+        return results;
+    };
+
+#if defined(__APPLE__)
+    std::promise<std::vector<std::string>> dialog_promise;
+    dialog_promise.set_value(dialog_task());
+    m_files_dialog_future = dialog_promise.get_future();
+#else
+    m_files_dialog_future = std::async(std::launch::async, std::move(dialog_task));
+#endif
+}
+
 #endif
 
 void
 AppWindow::ShowImGuiFileDialog(const std::string& title, const std::vector<FileFilter>& file_filters,
                           const std::string& initial_path, const bool& confirm_overwrite,
-                          std::function<void(std::string)> callback, bool folder_mode)
+                          std::function<void(std::string)> callback, bool folder_mode,
+                          bool multi_select)
 {
     m_file_dialog_callback          = callback;
+    m_file_dialog_is_multi          = multi_select;
     m_init_file_dialog              = true;
     m_imgui_file_dialog_folder_mode = folder_mode;
 
@@ -1724,6 +2165,8 @@ AppWindow::ShowImGuiFileDialog(const std::string& title, const std::vector<FileF
 
     IGFD::FileDialogConfig config;
     config.path  = initial_path;
+    // 0 == infinite selection; 1 == single file (the default single-select behavior).
+    config.countSelectionMax = multi_select ? 0 : 1;
     config.flags = confirm_overwrite
                        ? ImGuiFileDialogFlags_Default
                        : ImGuiFileDialogFlags_Modal | ImGuiFileDialogFlags_HideColumnType;

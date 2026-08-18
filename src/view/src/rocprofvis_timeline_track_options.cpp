@@ -893,6 +893,27 @@ TimelineTrackOptions::InitTrack(const TrackItem& track)
 }
 
 void
+TimelineTrackOptions::Reset()
+{
+    m_options_map.clear();
+    for(std::vector<TrackOptions*>& siblings : m_siblings_by_topology_type)
+    {
+        siblings.clear();
+    }
+    for(std::vector<TrackOptions*>& siblings : m_siblings_by_data_type)
+    {
+        siblings.clear();
+    }
+    m_siblings_by_selection.clear();
+    m_context_menu_target        = nullptr;
+    m_options_aggregate_selected = nullptr;
+    m_options_aggregate_type     = nullptr;
+    m_init_context_menu          = false;
+    m_update_aggregates          = false;
+    m_propagate                  = kNone;
+}
+
+void
 TimelineTrackOptions::Update()
 {
     if(m_context_menu_target && m_context_menu_target->GetTrackInfo())

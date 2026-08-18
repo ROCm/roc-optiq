@@ -238,6 +238,19 @@ TraceView::Update()
     {
         if(m_timeline_view)
         {
+            // Snapshot the live track/view settings before rebuilding so an Add preserves
+            // them. Only on a genuine rebuild (tracks exist): on first load there is nothing
+            // to snapshot and the json may hold .rpv values we must not overwrite.
+            std::shared_ptr<std::vector<TrackItem*>> existing_tracks =
+                m_timeline_view->GetTracks();
+            if(existing_tracks && !existing_tracks->empty())
+            {
+                if(Project* project = AppWindow::GetInstance()->GetProject(
+                       m_data_provider.GetTraceFilePath()))
+                {
+                    project->SerializeSettings();
+                }
+            }
             m_timeline_view->MakeGraphView();
         }
         m_project_settings = std::make_unique<SystemTraceProjectSettings>(

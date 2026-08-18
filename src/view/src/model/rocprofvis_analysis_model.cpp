@@ -36,6 +36,7 @@ AnalysisModel::SetAnalysisRange(double start_ns, double end_ns)
     {
         m_analysis_range_start_ns = start_ns;
         m_analysis_range_end_ns   = end_ns;
+        m_generation++;
         for(std::pair<const uint64_t, AnalysisTrackStatistics>& stats : m_track_stats)
         {
             stats.second.state = AnalysisTrackStatistics::kStale;
@@ -119,12 +120,19 @@ AnalysisModel::RegisterTrack(const TrackInfo& track)
         if(store)
         {
             store->track = &track;
-            store->state = AnalysisTrackStatistics::kReady;
+            // Start kStale so the track is fetched when first visible, without needing a
+            // SetAnalysisRange() invalidation (added-file tracks register after the range is
+            // committed, so a kReady default would leave their pills blank).
+            store->state = AnalysisTrackStatistics::kStale;
         }
     }
     else
     {
-        store = &m_track_stats.at(track.id);
+        // Refresh the cached pointer: a graph-view rebuild destroys and recreates every
+        // TrackInfo, but the stat store persists (keyed by track id). Without this the cached
+        // pointer would dangle and SetCounter/QueueStatistics would read freed memory.
+        store        = &m_track_stats.at(track.id);
+        store->track = &track;
     }
     return store;
 }
@@ -132,9 +140,16 @@ AnalysisModel::RegisterTrack(const TrackInfo& track)
 void
 AnalysisModel::SetQueueUtilization(uint64_t track_id, const double& util_pct)
 {
-    AnalysisTrackStatistics& store = m_track_stats.at(track_id);
-    if(store.track->topology.type == TrackInfo::TrackType::Queue &&
-       store.state == AnalysisTrackStatistics::State::kRequested)
+    auto it = m_track_stats.find(track_id);
+    if(it == m_track_stats.end())
+    {
+        return;  // track no longer registered (e.g. a late result after a rebuild)
+    }
+    AnalysisTrackStatistics& store = it->second;
+    // Apply regardless of state: SetAnalysisRange can re-arm the stat kStale while a request
+    // is in flight, and gating on kRequested here left pills permanently blank. Stale results
+    // (from a superseded range) are filtered by the generation check before this point.
+    if(store.track->topology.type == TrackInfo::TrackType::Queue)
     {
         store.stats[AnalysisTrackStatistics::Queue::kQueueUtilization].value =
             util_pct;
@@ -148,9 +163,14 @@ void
 AnalysisModel::SetCounterStatistics(uint64_t track_id,
                                     const rocprofvis_analysis_counter_statistics_t& stats)
 {
-    AnalysisTrackStatistics& store = m_track_stats.at(track_id);
-    if(store.track->topology.type == TrackInfo::TrackType::Counter &&
-       store.state == AnalysisTrackStatistics::State::kRequested)
+    auto it = m_track_stats.find(track_id);
+    if(it == m_track_stats.end())
+    {
+        return;  // track no longer registered (e.g. a late result after a rebuild)
+    }
+    AnalysisTrackStatistics& store = it->second;
+    // Apply any successful result regardless of state (see SetQueueUtilization).
+    if(store.track->topology.type == TrackInfo::TrackType::Counter)
     {
         store.stats[AnalysisTrackStatistics::Counter::kCounterMin].value =
             stats.min_value;

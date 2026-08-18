@@ -276,6 +276,15 @@ TabContainer::RemoveTab(const std::string& id)
 }
 
 void
+TabContainer::Clear()
+{
+    m_tabs.clear();
+    m_active_tab_index     = s_invalid_index;
+    m_set_active_tab_index = s_invalid_index;
+    m_pending_to_remove    = s_invalid_index;
+}
+
+void
 TabContainer::RemoveTab(int index)
 {
     if(index >= 0 && index < static_cast<int>(m_tabs.size()))

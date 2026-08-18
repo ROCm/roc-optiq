@@ -72,9 +72,12 @@ public:
     void ToJson() override;
     bool Valid() const override;
 
-    uint64_t TrackID(int index) const;
+    // The persisted track ids in display order (empty if none). Unlike Valid(), does not
+    // require a match with the current track count, so the order survives an Add.
+    std::vector<uint64_t> OrderedTrackIds() const;
 
 private:
+    jt::Json&     TrackOrderJson() const;
     TimelineView& m_timeline_view;
 };
 
@@ -271,6 +274,13 @@ private:
     TimelineViewProjectSettings m_project_settings;
     LoadingTimer                m_loading_timer;
     TrackTypeCounts             m_track_counts;
+
+    // Debounce state for pushing the visible range into the analysis model (see RenderTraceView):
+    // only commit once the range has been stable for a short window.
+    double m_analysis_range_min = 0.0;
+    double m_analysis_range_max = 0.0;
+    std::chrono::steady_clock::time_point m_analysis_range_changed_at{};
+    bool   m_analysis_range_committed = false;
 };
 
 }  // namespace View

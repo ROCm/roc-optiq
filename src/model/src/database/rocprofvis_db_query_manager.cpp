@@ -736,6 +736,7 @@ rocprofvis_dm_result_t QueryManager::RunCacheQueries(Future* future, std::vector
     {
         for (auto& guid_info : DbInstances())
         {
+            if (!ShouldProcessInstance(guid_info.first.FileIndex())) continue;
             for (auto table : info_table_list)
             {
                 threads.emplace_back(
@@ -753,6 +754,7 @@ rocprofvis_dm_result_t QueryManager::RunCacheQueries(Future* future, std::vector
         {
             for (auto& guid_info : DbInstances())
             {
+                if (!ShouldProcessInstance(guid_info.first.FileIndex())) continue;
                 for (auto table : info_table_list)
                 {
                     auto handle = CachedTables(guid_info.first.GuidIndex())->GetTableHandle(table.first.c_str());
@@ -765,6 +767,7 @@ rocprofvis_dm_result_t QueryManager::RunCacheQueries(Future* future, std::vector
     {
         for (auto& guid_info : DbInstances())
         {
+            if (!ShouldProcessInstance(guid_info.first.FileIndex())) continue;
             for (auto table : info_table_list)
             {
                 get_info_table_task(&guid_info.first, table.second, table.first);

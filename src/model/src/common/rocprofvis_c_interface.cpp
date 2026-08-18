@@ -321,6 +321,18 @@ rocprofvis_dm_result_t rocprofvis_db_read_metadata_async(
     return db->ReadTraceMetadataAsync(object);
 }
 
+rocprofvis_dm_result_t rocprofvis_db_add_node_async(
+                                        rocprofvis_dm_database_t database,
+                                        rocprofvis_db_filename_t filepath,
+                                        rocprofvis_db_future_t object){
+    PROFILE;
+    ROCPROFVIS_ASSERT_MSG_RETURN(database,
+                                 RocProfVis::DataModel::ERROR_DATABASE_CANNOT_BE_NULL,
+                                 kRocProfVisDmResultInvalidParameter);
+    RocProfVis::DataModel::Database* db = (RocProfVis::DataModel::Database*) database;
+    return db->AddNodeAsync(filepath, object);
+}
+
 /****************************************************************************************************
 * @brief Asynchronous call to cleanup database of service tables and indexes 
 * 

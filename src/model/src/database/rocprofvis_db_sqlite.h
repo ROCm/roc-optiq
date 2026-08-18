@@ -264,6 +264,9 @@ class SqliteDatabase : public Database
         sqlite3* GetServiceConnection(uint32_t db_node_id=0);
         void CreateDbNodes(std::vector<std::string>& multinode_files);
         void CreateDbNode(rocprofvis_db_filename_t filepath);
+        // Append one more db node at runtime (used by the incremental AddNode path) and
+        // prime a connection for it. Returns the new node's file-node id.
+        uint32_t AddDbNodeRuntime(rocprofvis_db_filename_t filepath);
         virtual MetadataVersionControl* GetMetadataVersionControl() { return nullptr; };
 
         // --------------------------------Null value handlers-------------------------------------- 

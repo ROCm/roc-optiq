@@ -57,6 +57,7 @@ public:
     static const uint64_t CLEANUP_DATABASE_REQUEST_ID;
     static const uint64_t TABLE_EXPORT_REQUEST_ID;
     static const uint64_t FETCH_SYSTEM_TRACE_REQUEST_ID;
+    static const uint64_t ADD_TRACE_SOURCE_REQUEST_ID;
     static const uint64_t SUMMARY_REQUEST_ID;
     static const uint64_t SUMMARY_KERNEL_INSTANCE_TABLE_REQUEST_ID;
     static const uint64_t ANALYSIS_TOP_INSTRUMENTED_EVENTS_TABLE_REQUEST_ID;
@@ -111,6 +112,15 @@ public:
      * @param file_path: The path to the trace file to passed to the trace data model.
      */
     bool FetchTrace(rocprofvis_controller_t* controller, const std::string& file_path);
+
+    /*
+     * Incrementally add one more trace file into the already-loaded system trace, reusing
+     * the existing controller (same tab). Quiesces in-flight fetches first, injects only
+     * the new file's data, then refreshes the timeline model. Existing tracks and their
+     * cached data are preserved. Returns false if the provider is busy or the request could
+     * not start.
+     */
+    bool AddTraceSource(const std::string& file_path);
 
     /*
      * Fetches a track from the controller. Stores the data in a raw track buffer.
@@ -233,6 +243,12 @@ public:
      */
     bool SetGraphIndex(uint64_t track_id, uint64_t index);
 
+    // Apply a full track display order in one pass: places every graph at its target position
+    // and re-syncs the model indices once (O(N)), instead of a per-track SetGraphIndex which
+    // re-syncs all indices on each call (O(N^2)). Fires the metadata-changed callback once.
+    // @param ordered_ids: track ids in the desired display order (position i -> ordered_ids[i]).
+    bool SetGraphOrder(const std::vector<uint64_t>& ordered_ids);
+
     bool SaveTrimmedTrace(const std::string& path, double start_ns, double end_ns);
 
     bool CleanupDatabase(bool rebuild);
@@ -271,6 +287,12 @@ private:
     /* Helper called by FetchEvent()*/
     bool FetchEventExtData(uint64_t event_id);
 
+    // Fire the track-metadata-changed callback once (rebuilds sidebar/minimap/track details).
+    void NotifyTrackMetadataChanged();
+    // Re-read the controller's graph order into the model's per-track indices. Shared by
+    // SetGraphIndex and SetGraphOrder.
+    void SyncTrackIndicesFromController();
+
     void HandleLoadSystemTopology();
     bool ParseNodeData(rocprofvis_handle_t* node_handle, NodeInfo& node_info);
     bool ParseDeviceData(rocprofvis_handle_t* processor_handle, DeviceInfo& device_info,
@@ -292,6 +314,9 @@ private:
 
     void ProcessRequest(RequestInfo& req);
     void ProcessLoadSystemTrace(RequestInfo& req);
+    // Completion handler for an incremental AddTraceSource: refreshes the timeline model
+    // from the controller without wiping the existing view if the add failed.
+    void ProcessAddTraceSource(RequestInfo& req);
     void ProcessEventExtendedRequest(RequestInfo& req);
     void ProcessEventFlowDetailsRequest(RequestInfo& req);
     void ProcessEventCallStackRequest(RequestInfo& req);

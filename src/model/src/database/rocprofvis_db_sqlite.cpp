@@ -27,6 +27,17 @@ void SqliteDatabase::CreateDbNode(rocprofvis_db_filename_t filepath) {
     m_db_nodes.back()->filepath = filepath;
 }
 
+uint32_t SqliteDatabase::AddDbNodeRuntime(rocprofvis_db_filename_t filepath) {
+    uint32_t node_id = static_cast<uint32_t>(m_db_nodes.size());
+    m_db_nodes.push_back(std::make_unique<rocprofvis_db_sqlite_db_node_t>());
+    m_db_nodes.back()->node_id  = node_id;
+    m_db_nodes.back()->filepath = filepath;
+    // Prime and keep an in-use service connection for this node (like Open()):
+    // GetServiceConnection()/ExecuteTransaction() need it to create the node's derived tables.
+    (void) GetConnection(node_id);
+    return node_id;
+}
+
 uint64_t
 SqliteDatabase::GetNullExceptionInt(void* func, char* column) {
     spdlog::debug("Column {} value is NULL!", column);
@@ -276,7 +287,11 @@ rocprofvis_dm_result_t SqliteDatabase::Close()
             spdlog::debug("Error : At the time of closing only one active connection should remain!");
             result = kRocProfVisDmResultUnknownError;
         }
-        ReleaseConnection(*node->m_connections_inuse.begin());
+        // A node may have no in-use connection at close time; guard the begin() deref.
+        if (!node->m_connections_inuse.empty())
+        {
+            ReleaseConnection(*node->m_connections_inuse.begin());
+        }
 
         for (auto it = node->m_available_connections.begin(); it != node->m_available_connections.end(); ++it)
         {

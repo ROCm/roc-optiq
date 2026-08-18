@@ -175,6 +175,10 @@ protected:
     std::shared_ptr<TimelineSelection>  m_timeline_selection;
     uint64_t m_chunk_duration_ns;  // Duration of each chunk in nanoseconds
     uint8_t  m_group_id_counter;   // Counter for grouping requests
+    // Last (track-window-clamped) range actually requested via RequestData. Used to skip
+    // re-issuing an identical fetch every frame while panning/zooming keeps request_data set.
+    double m_last_requested_min = -1.0;
+    double m_last_requested_max = -1.0;
 
     std::deque<TrackRequestParams>                   m_request_queue;
     std::unordered_map<uint64_t, TrackRequestParams> m_pending_requests;

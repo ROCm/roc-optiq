@@ -114,7 +114,23 @@ void rocprofvis_db_future_cancel(rocprofvis_db_future_t);
  * 
  ***************************************************************************************************/
 rocprofvis_dm_result_t rocprofvis_db_read_metadata_async(
-                                    rocprofvis_dm_database_t, 
+                                    rocprofvis_dm_database_t,
+                                    rocprofvis_db_future_t);
+
+/****************************************************************************************************
+ * @brief Asynchronously append one more trace file to an already-loaded (multi-file) trace
+ *        and read only that file's metadata, merging it into the existing trace. Already
+ *        loaded files are not re-read.
+ *
+ * @param database database handle the file is added to
+ * @param filepath path of the trace file to add
+ * @param object future handle allocated by rocprofvis_db_future_alloc
+ * @return status of operation
+ *
+ ***************************************************************************************************/
+rocprofvis_dm_result_t rocprofvis_db_add_node_async(
+                                    rocprofvis_dm_database_t,
+                                    rocprofvis_db_filename_t,
                                     rocprofvis_db_future_t);
 
 /****************************************************************************************************

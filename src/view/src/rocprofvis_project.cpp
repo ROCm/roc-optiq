@@ -9,6 +9,7 @@
 #include "rocprofvis_utils.h"
 #include "compute/rocprofvis_compute_view.h"
 #include "widgets/rocprofvis_notification_manager.h"
+#include <algorithm>
 #include <fstream>
 
 constexpr const char* PROJECT_VERSION = "1.0";
@@ -23,7 +24,14 @@ Project::Project()
 , m_trace_type(Undefined)
 {}
 
-Project::~Project() {}
+Project::~Project()
+{
+    // Destroy the view (which owns all ProjectSetting instances) while m_settings is still a
+    // live list, so their destructors' UnregisterSetting() calls stay valid. Member
+    // destruction order would otherwise free m_settings before m_view (a use-after-free).
+    m_view.reset();
+    m_settings.clear();
+}
 
 std::string
 Project::GetID() const
@@ -49,10 +57,75 @@ Project::GetTraceType() const
     return m_trace_type;
 }
 
+std::vector<std::string>
+Project::GetSourceFiles() const
+{
+    if(!m_combined_files.empty())
+    {
+        return m_combined_files;
+    }
+    if(!m_compare_files.empty())
+    {
+        return m_compare_files;
+    }
+    if(!m_trace_file_path.empty())
+    {
+        return { m_trace_file_path };
+    }
+    return {};
+}
+
+std::string
+Project::MakeCombinedName(const std::vector<std::string>& files)
+{
+    if(files.empty())
+    {
+        return {};
+    }
+    std::string first = std::filesystem::path(files.front()).stem().string();
+    if(files.size() == 1)
+    {
+        return first;
+    }
+    if(files.size() == 2)
+    {
+        return first + " + " + std::filesystem::path(files[1]).stem().string();
+    }
+    return first + " +" + std::to_string(files.size() - 1) + " more";
+}
+
+void
+Project::AddSourceFile(const std::string& path)
+{
+    if(m_combined_files.empty())
+    {
+        // Was a single-file (or compare) view; seed the combined list with its current
+        // sources so subsequent add/remove operate on the full merged set.
+        m_combined_files = GetSourceFiles();
+    }
+    if(std::find(m_combined_files.begin(), m_combined_files.end(), path) ==
+       m_combined_files.end())
+    {
+        m_combined_files.push_back(path);
+    }
+
+    if(!m_combined_files.empty())
+    {
+        m_name = MakeCombinedName(m_combined_files);
+        AppWindow::GetInstance()->SetTabLabel(m_name, GetID());
+    }
+}
+
 bool
 Project::IsProject() const
 {
     return !m_project_file_path.empty();
+}
+
+bool
+Project::IsCompare() const
+{
+    return !m_compare_files.empty();
 }
 
 Project::OpenResult
@@ -169,6 +242,29 @@ Project::OpenProject(std::string& file_path)
                 else
                 {
                     result = OpenCompare(compare_id, files);
+                }
+            }
+            else if(general[JSON_KEY_GENERAL_COMBINED_FILES].isArray())
+            {
+                std::vector<std::string> files;
+                for(jt::Json& entry : general[JSON_KEY_GENERAL_COMBINED_FILES].getArray())
+                {
+                    files.push_back(
+                        std::filesystem::weakly_canonical(
+                            project_dir / std::filesystem::path(entry.getString()))
+                            .string());
+                }
+                std::string combined_id = AppWindow::MakeCombinedId(files);
+                if(AppWindow::GetInstance()->GetProject(combined_id))
+                {
+                    file_path = combined_id;
+                    result    = Duplicate;
+                    NotificationManager::GetInstance().Show(
+                        "This merged view is already open.", NotificationLevel::Warning);
+                }
+                else
+                {
+                    result = OpenCombined(combined_id, files);
                 }
             }
             else
@@ -350,18 +446,95 @@ Project::OpenCompare(const std::string&              project_id,
     return result;
 }
 
+Project::OpenResult
+Project::OpenCombined(const std::string&              project_id,
+                      const std::vector<std::string>& file_paths)
+{
+    OpenResult result = Failed;
+    if(file_paths.empty() || m_view)
+    {
+        return result;
+    }
+
+    for(const std::string& path : file_paths)
+    {
+        if(!std::filesystem::exists(path))
+        {
+            AppWindow::GetInstance()->ShowMessageDialog("Error",
+                                                        "File does not exist: " + path);
+            spdlog::error("Failed to open trace file: {}, file does not exist", path);
+            return result;
+        }
+    }
+
+    std::vector<const char*> file_ptrs;
+    file_ptrs.reserve(file_paths.size());
+    for(const std::string& path : file_paths)
+    {
+        file_ptrs.push_back(path.c_str());
+    }
+
+    // The combine goes through the same multinode engine a .yaml manifest uses; unlike
+    // compare, we do not tag the sources A/B, so they merge into one topology/timeline.
+    rocprofvis_controller_t* controller =
+        rocprofvis_controller_alloc_compare(file_ptrs.data(), file_ptrs.size());
+    if(controller)
+    {
+        std::shared_ptr<TraceView> trace_view = std::make_shared<TraceView>();
+        if(trace_view->LoadTrace(controller, project_id))
+        {
+            m_trace_file_path = project_id;
+            m_combined_files  = file_paths;
+            m_trace_type      = System;
+            m_view            = trace_view;
+
+            m_name = MakeCombinedName(file_paths);
+            result = Success;
+        }
+        else
+        {
+            rocprofvis_controller_free(controller);
+        }
+    }
+
+    if(result == Failed)
+    {
+        AppWindow::GetInstance()->ShowMessageDialog(
+            "Error", "The selected traces could not be opened together.");
+    }
+    return result;
+}
+
 bool
 Project::JsonValidForLoad(jt::Json& json)
 {
     jt::Json& general = json[JSON_KEY_GROUP_GENERAL];
     return general[JSON_KEY_GENERAL_TRACE_PATH].isString() ||
-           general[JSON_KEY_GENERAL_COMPARE_FILES].isArray();
+           general[JSON_KEY_GENERAL_COMPARE_FILES].isArray() ||
+           general[JSON_KEY_GENERAL_COMBINED_FILES].isArray();
 }
 
 void
 Project::RegisterSetting(ProjectSetting* setting)
 {
     m_settings.push_back(setting);
+}
+
+void
+Project::UnregisterSetting(ProjectSetting* setting)
+{
+    m_settings.remove(setting);
+}
+
+void
+Project::SerializeSettings()
+{
+    // Snapshot every setting's live state into the in-memory json (like SaveSetttingsJson,
+    // but no file write) so a graph-view rebuild can restore the user's track settings.
+    for(ProjectSetting* setting : m_settings)
+    {
+        setting->ToJson();
+    }
 }
 
 jt::Json&
@@ -388,6 +561,18 @@ Project::SaveSetttingsJson()
         {
             compare_files[i] =
                 std::filesystem::proximate(m_compare_files[i], project_dir).generic_string();
+        }
+    }
+    else if(!m_combined_files.empty())
+    {
+        // Merged/combined project: persist the source files (relative to the .rpv) so the
+        // merged view can be reopened without a separate manifest on disk.
+        jt::Json& combined_files =
+            m_settings_json[JSON_KEY_GROUP_GENERAL][JSON_KEY_GENERAL_COMBINED_FILES];
+        for(size_t i = 0; i < m_combined_files.size(); i++)
+        {
+            combined_files[i] =
+                std::filesystem::proximate(m_combined_files[i], project_dir).generic_string();
         }
     }
     else
@@ -419,7 +604,11 @@ ProjectSetting::ProjectSetting(const std::string project_id)
     m_project.RegisterSetting(this);
 }
 
-ProjectSetting::~ProjectSetting() {}
+ProjectSetting::~ProjectSetting()
+{
+    // Unregister so a rebuilt graph view does not leave a dangling pointer in the registry.
+    m_project.UnregisterSetting(this);
+}
 
 }  // namespace View
 }  // namespace RocProfVis

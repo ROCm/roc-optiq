@@ -976,6 +976,7 @@ rocprofvis_dm_result_t ProfileDatabase::SaveTrackProperties(Future* future) {
         {
             DbInstance* db_instance = (DbInstance*)TrackPropertiesAt(i)->track_indentifiers.db_instance;
             if (db_instance == nullptr) continue;
+            if (!ShouldProcessInstance(db_instance->FileIndex())) continue;
             store_params p;
             p.id = counter++;
             p.load_id = load_id;
@@ -1113,9 +1114,18 @@ rocprofvis_dm_result_t ProfileDatabase::BuildHistogram(Future* future, uint32_t 
 
     uint64_t trace_length = TraceProperties()->trace_duration;
 
-    uint64_t bucket_size = (trace_length + desired_bins) / desired_bins;
+    // On an incremental add keep the bucket size chosen on the initial load so the newly
+    // added node's histogram buckets line up with the ones already computed.
+    uint64_t bucket_size = IsIncrementalLoad()
+                               ? TraceProperties()->histogram_bucket_size
+                               : (trace_length + desired_bins) / desired_bins;
 
-    TraceProperties()->histogram_bucket_size = bucket_size;
+    if (!IsIncrementalLoad())
+    {
+        TraceProperties()->histogram_bucket_size = bucket_size;
+    }
+    // Keep bucket_size stable across incremental adds (so buckets stay aligned) but let the
+    // bucket count grow if the newly added file extends the overall trace duration.
     TraceProperties()->histogram_bucket_count = (trace_length + bucket_size) / bucket_size;
 
 
@@ -1127,6 +1137,9 @@ rocprofvis_dm_result_t ProfileDatabase::BuildHistogram(Future* future, uint32_t 
 
     for (auto& file_node : m_db_nodes)
     {
+        // Incremental add: existing nodes' histograms are already loaded in memory; only
+        // process the newly added node so their buckets are not loaded/duplicated again.
+        if (!ShouldProcessInstance(file_node->node_id)) continue;
         std::vector<store_params> v;
         TemporaryDbInstance db_instance(file_node->node_id);
         if (false == GetMetadataVersionControl()->MustRebuildHistogram(file_node->node_id))
@@ -1135,17 +1148,17 @@ rocprofvis_dm_result_t ProfileDatabase::BuildHistogram(Future* future, uint32_t 
         }
         else
         {
+            // Only the instances of the node being processed: on an incremental add this is
+            // just the new file, so ExecuteQueryForAllTracksAsync runs the histogram query
+            // for the new file's tracks instead of re-querying every already-loaded file. (On
+            // a full load each node's iteration handles its own tracks, so each track's
+            // histogram is computed once instead of once per node.)
             guid_list_t guids_per_file;
-
-            for (int i = 0; i < NumTracks(); i++)
+            for (GuidInfo& guid_info : DbInstances())
             {
-                DbInstance* track_db_instance = (DbInstance*)TrackPropertiesAt(i)->track_indentifiers.db_instance;
-                for (GuidInfo& guid_info : DbInstances())
+                if (guid_info.first.FileIndex() == file_node->node_id)
                 {
-                    if (guid_info.first.FileIndex() == track_db_instance->FileIndex())
-                    {
-                        guids_per_file.push_back(guid_info);
-                    }
+                    guids_per_file.push_back(guid_info);
                 }
             }
 
@@ -1248,6 +1261,14 @@ rocprofvis_dm_result_t ProfileDatabase::BuildHistogram(Future* future, uint32_t 
     }
     for (int i = 0; i < NumTracks(); i++)
     {
+        // Incremental add: TraceProperties()->histogram already holds the aggregate for the
+        // previously-loaded instances. Only add the newly-processed node's tracks, otherwise
+        // every existing instance would be double-counted (2*old + new) into the overview.
+        if (IsIncrementalLoad())
+        {
+            DbInstance* inst = (DbInstance*)TrackPropertiesAt(i)->track_indentifiers.db_instance;
+            if (inst && !ShouldProcessInstance(inst->FileIndex())) continue;
+        }
         for (auto& [key, value] : TrackPropertiesAt(i)->histogram)
         {
             TraceProperties()->histogram[key] += value.first;

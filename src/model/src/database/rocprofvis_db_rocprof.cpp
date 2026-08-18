@@ -6,6 +6,8 @@
 #include <sstream>
 #include <string.h>
 #include <filesystem>
+#include <set>
+#include <utility>
 
 namespace RocProfVis
 {
@@ -304,6 +306,7 @@ rocprofvis_dm_result_t RocprofDatabase::CreateMemoryActivityTable(Future* future
 
     for (auto& guid_info : DbInstances())
     {
+        if (!ShouldProcessInstance(guid_info.first.FileIndex())) continue;
         const char* pmc_table_name = "PMC";
         std::map<uint32_t, uint64_t> allocated_memory_per_agent;
         std::map<uint32_t, uint64_t> pmc_id_per_agent;
@@ -457,6 +460,7 @@ rocprofvis_dm_result_t RocprofDatabase::CreateAgentFriendlyMemoryAllocationTable
     rocprofvis_dm_result_t result = kRocProfVisDmResultSuccess;
     for (auto& guid_info : DbInstances())
     {
+        if (!ShouldProcessInstance(guid_info.first.FileIndex())) continue;
         std::string from = "rocpd_memory_allocate_";
         std::string to = m_metadata_version_control.GetTableName(m_metadata_version_control.kRocOptiqTableMemoryAllocate);
         std::string original_m_alloc_table = from + GuidAt(guid_info.first.GuidIndex());
@@ -576,6 +580,7 @@ RocprofDatabase::CreateIndexes()
         };
     for (auto& guid_info : DbInstances())
     {
+        if (!ShouldProcessInstance(guid_info.first.FileIndex())) continue;
         if (file_node_id == -1)
         {
             file_node_id = guid_info.first.FileIndex();
@@ -690,6 +695,7 @@ rocprofvis_dm_result_t RocprofDatabase::LoadMemoryActivityData(Future* future) {
 
     for (auto& guid_info : DbInstances())
     {
+        if (!ShouldProcessInstance(guid_info.first.FileIndex())) continue;
         std::string table_name = m_metadata_version_control.GetTableName(m_metadata_version_control.kRocOptiqTableMemoryActivity) + GuidAt(guid_info.first.GuidIndex());
         if (false == m_metadata_version_control.MustRebuild(guid_info.first.FileIndex(), m_metadata_version_control.kRocOptiqTableMemoryActivity))
         {
@@ -764,30 +770,28 @@ rocprofvis_dm_result_t RocprofDatabase::PopulateUnusedAgents(uint32_t db_instanc
     rocprofvis_dm_result_t result = kRocProfVisDmResultSuccess;
     const char* table_name = "Agent";
     TableCache* table = (TableCache*)CachedTables(db_instance)->GetTableHandle(table_name);
+    // Collect the (node, agent) pairs actually used by this instance's device tracks in a
+    // single pass, so the per-agent-row check below is O(log) instead of re-scanning every
+    // track for each agent row (which was O(agents * total_tracks) and grew with each add).
+    std::set<std::pair<uint64_t, uint64_t>> in_use_agents;
+    for (int track_id = 0; track_id < NumTracks(); track_id++)
+    {
+        rocprofvis_dm_track_identifiers_t& ti = TrackPropertiesAt(track_id)->track_indentifiers;
+        DbInstance* instance = (DbInstance*)ti.db_instance;
+        if (instance->GuidIndex() == db_instance &&
+            (ti.category == kRocProfVisDmPmcTrack ||
+             ti.category == kRocProfVisDmKernelDispatchTrack ||
+             ti.category == kRocProfVisDmMemoryAllocationTrack ||
+             ti.category == kRocProfVisDmMemoryCopyTrack))
+        {
+            in_use_agents.insert({ ti.id[TRACK_ID_NODE], ti.id[TRACK_ID_AGENT] });
+        }
+    }
     for (uint64_t i = 0; i < table->NumRows(); i++)
     {
         uint64_t agent_id = std::atoll(table->GetCellByIndex(i, "id"));
         uint64_t node_id = std::atoll(table->GetCellByIndex(i,"nid"));
-        bool agent_in_use = false;
-        for (int track_id = 0; track_id < NumTracks(); track_id++)
-        {
-            DbInstance* instance = (DbInstance*)TrackPropertiesAt(track_id)->track_indentifiers.db_instance;
-
-            if (instance->GuidIndex() == db_instance)
-            {
-                rocprofvis_dm_track_identifiers_t& track_indentifiers = TrackPropertiesAt(track_id)->track_indentifiers;
-                if ((track_indentifiers.category == kRocProfVisDmPmcTrack || 
-                    track_indentifiers.category == kRocProfVisDmKernelDispatchTrack ||
-                    track_indentifiers.category == kRocProfVisDmMemoryAllocationTrack ||
-                    track_indentifiers.category == kRocProfVisDmMemoryCopyTrack) &&
-                    track_indentifiers.id[TRACK_ID_NODE] == node_id && 
-                    track_indentifiers.id[TRACK_ID_AGENT] == agent_id)
-                {
-                    agent_in_use = true;
-                    break;
-                }
-            }            
-        }
+        bool agent_in_use = in_use_agents.count({ node_id, agent_id }) > 0;
         if (agent_in_use == false)
         {
             rocprofvis_dm_track_identifiers_t track_indentifiers;
@@ -842,6 +846,9 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
         ShowProgress(2, "Detect Nodes", kRPVDbBusy, future);
         for (auto& file_node : m_db_nodes)
         {
+            // Incremental add: only enumerate (and thus create instances for) the new file
+            // node; existing nodes' instances are already in DbInstances().
+            if (!ShouldProcessInstance(file_node->node_id)) continue;
             TemporaryDbInstance db_instance(file_node->node_id);
             ExecuteSQLQuery(future,
                 &db_instance,
@@ -856,6 +863,7 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
         std::string version;
         for (auto& guid_info : DbInstances())
         {
+            if (!ShouldProcessInstance(guid_info.first.FileIndex())) continue;
             if ((result = kRocProfVisDmResultSuccess) != ExecuteSQLQuery(future, &guid_info.first, "SELECT * FROM rocpd_metadata_%GUID%;", &CallbackParseMetadata)) break;
             if (!version.empty())
             {
@@ -877,6 +885,7 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
         //pre-create cache tables
         for (auto& guid_info : DbInstances())
         {
+            if (!ShouldProcessInstance(guid_info.first.FileIndex())) continue;
             CachedTables(guid_info.first.GuidIndex());
         }
 
@@ -896,16 +905,23 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
         ShowProgress(1, "Collect topology data", kRPVDbBusy, future);
         GenerateInterdependencyTables(future);
 
-        TraceProperties()->events_count[kRocProfVisDmOperationLaunch]   = 0;
-        TraceProperties()->events_count[kRocProfVisDmOperationDispatch] = 0;
-        TraceProperties()->events_count[kRocProfVisDmOperationMemoryAllocate] = 0;
-        TraceProperties()->events_count[kRocProfVisDmOperationMemoryCopy]     = 0;
-        TraceProperties()->events_count[kRocProfVisDmOperationLaunchSample]   = 0;
+        // On an incremental add keep the existing counts, duration, and per-instance
+        // extents; only the newly added instance contributes new values below.
+        if (!IsIncrementalLoad())
+        {
+            TraceProperties()->events_count[kRocProfVisDmOperationLaunch]   = 0;
+            TraceProperties()->events_count[kRocProfVisDmOperationDispatch] = 0;
+            TraceProperties()->events_count[kRocProfVisDmOperationMemoryAllocate] = 0;
+            TraceProperties()->events_count[kRocProfVisDmOperationMemoryCopy]     = 0;
+            TraceProperties()->events_count[kRocProfVisDmOperationLaunchSample]   = 0;
 
-        TraceProperties()->tracks_info_restored = true;
-        TraceProperties()->trace_duration = 0;
+            TraceProperties()->tracks_info_restored = true;
+            TraceProperties()->trace_duration = 0;
+        }
 
-        for (size_t i = 0; i < DbInstances().size(); ++i)
+        // Grow the per-instance extent vectors to cover any newly added instances without
+        // disturbing the entries already computed for existing instances.
+        while (TraceProperties()->db_inst_start_time.size() < DbInstances().size())
         {
             TraceProperties()->db_inst_start_time.push_back(UINT64_MAX);
             TraceProperties()->db_inst_end_time.push_back(0);
@@ -927,7 +943,7 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
         ShowProgress(5, "Adding HIP API tracks", kRPVDbBusy, future );
         {
             std::vector<std::thread> threads;
-            m_add_track_mutex.init(NumDbInstances());
+            m_add_track_mutex.init(ParticipatingGuidIndices());
             auto task = [&](DbInstance* db_instance)
                 {
                     Future* sub_future = future->AddSubFuture();
@@ -946,6 +962,7 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
                 };
             for (auto& guid_info : DbInstances())
             {
+                if (!ShouldProcessInstance(guid_info.first.FileIndex())) continue;
                 threads.emplace_back(task, &guid_info.first);
             }
             for (auto& t : threads)
@@ -957,7 +974,7 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
         ShowProgress(5, "Adding HIP API Sample tracks", kRPVDbBusy, future );
         {
             std::vector<std::thread> threads;
-            m_add_track_mutex.init(NumDbInstances());
+            m_add_track_mutex.init(ParticipatingGuidIndices());
             auto task = [&](DbInstance* db_instance)
                 {
 
@@ -977,6 +994,7 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
                 };
             for (auto& guid_info : DbInstances())
             {
+                if (!ShouldProcessInstance(guid_info.first.FileIndex())) continue;
                 threads.emplace_back(task, &guid_info.first);
             }
             for (auto& t : threads)
@@ -987,7 +1005,7 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
         ShowProgress(5, "Adding kernel dispatch tracks", kRPVDbBusy, future );
         {
             std::vector<std::thread> threads;
-            m_add_track_mutex.init(NumDbInstances());
+            m_add_track_mutex.init(ParticipatingGuidIndices());
             auto task = [&](DbInstance* db_instance)
                 {
                     Future* sub_future = future->AddSubFuture();
@@ -1006,6 +1024,7 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
                 };
             for (auto& guid_info : DbInstances())
             {
+                if (!ShouldProcessInstance(guid_info.first.FileIndex())) continue;
                 threads.emplace_back(task, &guid_info.first);
             }
             for (auto& t : threads)
@@ -1016,7 +1035,7 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
         ShowProgress(5, "Adding memory allocation tracks", kRPVDbBusy, future );
         {
             std::vector<std::thread> threads;
-            m_add_track_mutex.init(NumDbInstances());
+            m_add_track_mutex.init(ParticipatingGuidIndices());
             auto task = [&](DbInstance* db_instance)
                 {
                     Future* sub_future = future->AddSubFuture();
@@ -1035,6 +1054,7 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
                 };
             for (auto& guid_info : DbInstances())
             {
+                if (!ShouldProcessInstance(guid_info.first.FileIndex())) continue;
                 threads.emplace_back(task, &guid_info.first);
             }
             for (auto& t : threads)
@@ -1055,7 +1075,7 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
         ShowProgress(5, "Adding memory copy tracks", kRPVDbBusy, future );
         {
             std::vector<std::thread> threads;
-            m_add_track_mutex.init(NumDbInstances());
+            m_add_track_mutex.init(ParticipatingGuidIndices());
             auto task = [&](DbInstance* db_instance)
                 {
                     Future* sub_future = future->AddSubFuture();
@@ -1074,6 +1094,7 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
                 };
             for (auto& guid_info : DbInstances())
             {
+                if (!ShouldProcessInstance(guid_info.first.FileIndex())) continue;
                 threads.emplace_back(task, &guid_info.first);
             }
             for (auto& t : threads)
@@ -1085,7 +1106,7 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
         ShowProgress(5, "Adding performance counters tracks", kRPVDbBusy, future );
         {
             std::vector<std::thread> threads;
-            m_add_track_mutex.init(NumDbInstances());
+            m_add_track_mutex.init(ParticipatingGuidIndices());
             auto task = [&](DbInstance* db_instance)
                 {
                     Future* sub_future = future->AddSubFuture();
@@ -1104,6 +1125,7 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
                 };
             for (auto& guid_info : DbInstances())
             {
+                if (!ShouldProcessInstance(guid_info.first.FileIndex())) continue;
                 threads.emplace_back(task, &guid_info.first);
             }
             for (auto& t : threads)
@@ -1115,7 +1137,7 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
         ShowProgress(5, "Adding performance smi counters tracks", kRPVDbBusy, future );
         {
             std::vector<std::thread> threads;
-            m_add_track_mutex.init(NumDbInstances());
+            m_add_track_mutex.init(ParticipatingGuidIndices());
             auto task = [&](DbInstance* db_instance)
                 {
                     Future* sub_future = future->AddSubFuture();
@@ -1134,6 +1156,7 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
                 };
             for (auto& guid_info : DbInstances())
             {
+                if (!ShouldProcessInstance(guid_info.first.FileIndex())) continue;
                 threads.emplace_back(task, &guid_info.first);
             }
             for (auto& t : threads)
@@ -1144,7 +1167,7 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
         ShowProgress(5, "Adding memory allocation activity tracks", kRPVDbBusy, future );
         {
             std::vector<std::thread> threads;
-            m_add_track_mutex.init(NumDbInstances());
+            m_add_track_mutex.init(ParticipatingGuidIndices());
             auto task = [&](DbInstance* db_instance)
                 {
                     Future* sub_future = future->AddSubFuture();
@@ -1163,6 +1186,7 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
                 };
             for (auto& guid_info : DbInstances())
             {
+                if (!ShouldProcessInstance(guid_info.first.FileIndex())) continue;
                 threads.emplace_back(task, &guid_info.first);
             }
             for (auto& t : threads)
@@ -1176,6 +1200,7 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
           
         for (auto& guid_info : DbInstances())
         {
+            if (!ShouldProcessInstance(guid_info.first.FileIndex())) continue;
             result = PopulateUnusedAgents( guid_info.first.GuidIndex());
             if (result != kRocProfVisDmResultSuccess) break;
         }
@@ -1187,6 +1212,7 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
             if (TrackPropertiesAt(i)->track_indentifiers.category == kRocProfVisDmStreamTrack)
             {
                 DbInstance* db_instance = (DbInstance*)TrackPropertiesAt(i)->track_indentifiers.db_instance;
+                if (!ShouldProcessInstance(db_instance->FileIndex())) continue;
                 result = PopulateStreamToHardwareFlowProperties( i, db_instance->GuidIndex());
                 if (result != kRocProfVisDmResultSuccess) break;
             }
@@ -1194,10 +1220,14 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
         if (result != kRocProfVisDmResultSuccess) break;
 
         ShowProgress(10, "Loading strings", kRPVDbBusy, future );
-        BindObject()->FuncAddString(BindObject()->trace_object, ""); // 0 index string
+        // The empty 0-index string is a one-time convention; only seed it on a full load.
+        if (!IsIncrementalLoad())
+        {
+            BindObject()->FuncAddString(BindObject()->trace_object, ""); // 0 index string
+        }
         {
             std::vector<std::thread> threads;
-            m_add_track_mutex.init(NumDbInstances());
+            m_add_track_mutex.init(ParticipatingGuidIndices());
             auto task = [&](DbInstance* db_instance)
                 {
                     Future* sub_future = future->AddSubFuture();
@@ -1208,6 +1238,7 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
                 };
             for (auto& guid_info : DbInstances())
             {
+                if (!ShouldProcessInstance(guid_info.first.FileIndex())) continue;
                 threads.emplace_back(task, &guid_info.first);
             }
             for (auto& t : threads)
@@ -1217,7 +1248,7 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
         ShowProgress(10, "Loading kenel symbols", kRPVDbBusy, future );
         {
             std::vector<std::thread> threads;
-            m_add_track_mutex.init(NumDbInstances());
+            m_add_track_mutex.init(ParticipatingGuidIndices());
             auto task = [&](DbInstance* db_instance)
                 {
                     Future* sub_future = future->AddSubFuture();
@@ -1228,6 +1259,7 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
                 };
             for (auto& guid_info : DbInstances())
             {
+                if (!ShouldProcessInstance(guid_info.first.FileIndex())) continue;
                 threads.emplace_back(task, &guid_info.first);
             }
             for (auto& t : threads)
@@ -1248,6 +1280,7 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
         guid_list_t calculate_level_for_guids;
         for (auto& guid_info : DbInstances())
         {
+            if (!ShouldProcessInstance(guid_info.first.FileIndex())) continue;
             if (m_metadata_version_control.MustRebuildLevels(guid_info.first.FileIndex()))
             {
                 calculate_level_for_guids.push_back(guid_info);
@@ -1293,6 +1326,7 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
             {
                 for (auto& guid_info : DbInstances())
                 {
+                    if (!ShouldProcessInstance(guid_info.first.FileIndex())) continue;
                     CreateSQLTable(
                         (prop.first + guid_info.second).c_str(), s_level_schema_params,
                         m_event_levels[prop.second][guid_info.first.GuidIndex()].size(),
@@ -1320,7 +1354,16 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
         {
             ShowProgress(5, "Collecting track properties",
                 kRPVDbBusy, future);
-            TraceProperties()->trace_duration = 0;
+            // On a full load recompute the overall duration from scratch. On an incremental
+            // add keep the existing duration (CallbackGetTrackProperties only maxes it) so the
+            // already-loaded files' extent is preserved when only the new node is processed.
+            if (!IsIncrementalLoad())
+            {
+                TraceProperties()->trace_duration = 0;
+            }
+            // Incremental add: process only the new file's tracks. Re-querying existing tracks
+            // is wasteful and needlessly touches their derived per-guid tables; their extents
+            // are already computed.
             if (kRocProfVisDmResultSuccess !=
                 ExecuteQueryForAllTracksAsync(
                     kRocProfVisDmIncludePmcTracks | kRocProfVisDmIncludeStreamTracks, kRPVRocpdQuerySliceByTrackSliceQuery,
@@ -1328,7 +1371,7 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
                     "WHERE startTs != 0 AND endTs != 0", &CallbackGetTrackProperties,
                     [](rocprofvis_dm_track_params_t* params, rocprofvis_dm_charptr_t query) -> std::string { (void) params; return query; },
                     [](rocprofvis_dm_track_params_t* params) { (void) params; },
-                    DbInstances()))
+                    ParticipatingGuidList()))
             {
                 break;
             }
@@ -1351,7 +1394,28 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
     return future->SetPromise(future->Interrupted() ? kRocProfVisDmResultDbAbort : kRocProfVisDmResultDbAccessFailed);
 }
 
+rocprofvis_dm_result_t  RocprofDatabase::AddNode(rocprofvis_db_filename_t filepath, Future* future)
+{
+    ROCPROFVIS_ASSERT_MSG_RETURN(future, ERROR_FUTURE_CANNOT_BE_NULL, kRocProfVisDmResultInvalidParameter);
+    ROCPROFVIS_ASSERT_MSG_RETURN(filepath, ERROR_DATABASE_CANNOT_BE_NULL, kRocProfVisDmResultInvalidParameter);
 
+    // Append the file as a new db node and scope the metadata read to just that node so
+    // the already-loaded files are not re-read. ReadTraceMetadata consults
+    // ShouldProcessInstance()/IsIncrementalLoad() to skip everything except this node and
+    // to append (rather than reset) the per-instance extents.
+    uint32_t new_node_id = AddDbNodeRuntime(filepath);
+
+    SetIncrementalLoadFileIndex(new_node_id);
+    // RAII so the incremental-load scope is always cleared, even if ReadTraceMetadata throws;
+    // otherwise m_load_only_file_indices would stay set and corrupt a later full load.
+    struct ClearIncrementalLoadGuard
+    {
+        RocprofDatabase* db;
+        ~ClearIncrementalLoadGuard() { db->ClearIncrementalLoad(); }
+    } clear_guard{ this };
+
+    return ReadTraceMetadata(future);
+}
 
 rocprofvis_dm_result_t  RocprofDatabase::ReadFlowTraceInfo(
         rocprofvis_dm_event_id_t event_id,

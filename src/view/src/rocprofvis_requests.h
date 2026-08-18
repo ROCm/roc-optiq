@@ -46,6 +46,7 @@ enum class RequestType
     kFetchMetrics,
     kFetchMetricPivotTable,
     kFetchPcSampling,
+    kAddTraceSource,
 };
 
 enum class RequestState
@@ -278,6 +279,9 @@ public:
     double   m_start_ts;
     double   m_end_ts;
     Output   m_output;
+    // Analysis-range generation this request was issued for; a result whose generation no
+    // longer matches the model's current one is stale and is discarded on apply.
+    uint64_t m_generation = 0;
 
     AnalysisTrackStatisticsRequestParams(
         const AnalysisTrackStatisticsRequestParams& other) = default;

@@ -97,7 +97,9 @@ TrackItem::TrackItem(DataProvider& dp, uint64_t id, TimelineTrackOptions& track_
                      std::shared_ptr<TimelineSelection>  timeline_selection)
 : m_track_metadata(nullptr)
 , m_track_statistics(nullptr)
-, m_track_statistics_dirty(false)
+// Start dirty so a freshly-created track item applies an already-kReady analysis stat on its
+// first Update (after a rebuild the stat survives but the pill label must be re-applied).
+, m_track_statistics_dirty(true)
 , m_track_id(id)
 , m_track_content_height(0.0f)
 , m_min_track_height(DEFAULT_MIN_TRACK_HEIGHT)
@@ -612,6 +614,45 @@ TrackItem::RenderResizeBar(const ImVec2& parent_size)
 void
 TrackItem::RequestData(double min, double max, float width)
 {
+    // Nothing valid to request for an empty/inverted range. Guarding here also prevents a
+    // negative range from producing a garbage (huge) chunk_count below.
+    if(max <= min)
+    {
+        return;
+    }
+
+    // Clamp the requested window to this track's own data range. In a merged/multinode view
+    // each file is normalized to its own start time, so a track only has data in
+    // [min_ts, max_ts]; the timeline requests the global viewport range for every track, so
+    // for shorter files the tail of that range lies past the track's data. Fetching it just
+    // yields OutOfRange chunks (wasted fetches, "code 10" log spam, blank overview). Clamp so
+    // only the covered portion is requested; scale the pixel width to the clamped fraction so
+    // the level-of-detail resolution still matches the pixels actually covered.
+    const double requested_range = max - min;
+    if(m_track_metadata)
+    {
+        min = std::max(min, m_track_metadata->min_ts);
+        max = std::min(max, m_track_metadata->max_ts);
+    }
+    if(max <= min)
+    {
+        // The visible window does not overlap this track's data at all.
+        return;
+    }
+    if(requested_range > 0.0)
+    {
+        width *= static_cast<float>((max - min) / requested_range);
+    }
+
+    // Skip re-issuing an identical request when we already hold that data; otherwise every
+    // pan/zoom re-fetches every visible track's whole chunk set each frame.
+    if(min == m_last_requested_min && max == m_last_requested_max && HasData())
+    {
+        return;
+    }
+    m_last_requested_min = min;
+    m_last_requested_max = max;
+
     // create request chunks with ranges of m_chunk_duration_ns  max
     double range       = max - min;
     size_t chunk_count = static_cast<size_t>(std::ceil(range / m_chunk_duration_ns));
@@ -620,8 +661,12 @@ TrackItem::RequestData(double min, double max, float width)
 
     for(size_t i = 0; i < chunk_count; ++i)
     {
-        double chunk_start = min + i * TimeConstants::minute_in_ns;
-        double chunk_end   = std::min(chunk_start + TimeConstants::minute_in_ns, max);
+        // Step by the same duration used to compute chunk_count. (Previously this stepped
+        // by a fixed minute while chunk_count used m_chunk_duration_ns, which overshot and
+        // produced chunks with start > end when the two differed.)
+        double chunk_start = min + i * static_cast<double>(m_chunk_duration_ns);
+        double chunk_end =
+            std::min(chunk_start + static_cast<double>(m_chunk_duration_ns), max);
 
         double chunk_range = chunk_end - chunk_start;
         float  percentage  = static_cast<float>(chunk_range / range);
@@ -1033,14 +1078,33 @@ TrackItem::HasPendingRequests() const
 void
 TrackItem::RequestAnalysis()
 {
-    if(m_track_statistics && m_timeline_selection &&
-       (m_track_statistics->state == AnalysisTrackStatistics::kStale ||
-        m_track_statistics->state == AnalysisTrackStatistics::kPending))
+    if(!m_track_statistics || !m_timeline_selection)
     {
-        uint64_t request_id = RequestIdBuilder::MakeTrackDataRequestId(
-            static_cast<uint32_t>(m_track_id), 0, 0,
-            RequestType::kFetchAnalysisTrackStatistics);
-        if(m_data_provider.IsRequestPending(request_id))
+        return;
+    }
+    // Fast path for the common settled case: a kReady stat needs nothing, so skip the
+    // request-id build and the pending-request map lookup this would otherwise do per visible
+    // track every frame.
+    if(m_track_statistics->state == AnalysisTrackStatistics::kReady)
+    {
+        return;
+    }
+    const uint64_t request_id = RequestIdBuilder::MakeTrackDataRequestId(
+        static_cast<uint32_t>(m_track_id), 0, 0,
+        RequestType::kFetchAnalysisTrackStatistics);
+    const bool request_pending = m_data_provider.IsRequestPending(request_id);
+    const AnalysisTrackStatistics::State state = m_track_statistics->state;
+    // (Re)fetch when kStale/kPending, or when kRequested but the request is gone: the add
+    // path's FreeRequests() drops in-flight futures without processing them, so a stat could
+    // otherwise wedge at kRequested (blank pill) forever. Self-heals without per-frame churn -
+    // once re-issued the request is pending again until it resolves.
+    const bool needs_request =
+        state == AnalysisTrackStatistics::kStale ||
+        state == AnalysisTrackStatistics::kPending ||
+        (state == AnalysisTrackStatistics::kRequested && !request_pending);
+    if(needs_request)
+    {
+        if(request_pending)
         {
             m_data_provider.CancelRequest(request_id);
             m_track_statistics->state = AnalysisTrackStatistics::kPending;
@@ -1058,10 +1122,19 @@ TrackItem::RequestAnalysis()
                 start_ts = m_tpt->GetVMinX();
                 end_ts   = m_tpt->GetVMaxX();
             }
+            // Clamp to the track's own [min_ts, max_ts]. In a merged view a track only has
+            // data in its window; requesting the full global range yields an empty slice
+            // (OutOfRange) for shorter files, so the pill never populates.
+            if(m_track_metadata)
+            {
+                start_ts = std::max(start_ts, m_track_metadata->min_ts);
+                end_ts   = std::min(end_ts, m_track_metadata->max_ts);
+            }
+            AnalysisTrackStatisticsRequestParams params(m_track_id, start_ts, end_ts);
+            params.m_generation =
+                m_data_provider.DataModel().GetAnalysis().GetGeneration();
             m_track_statistics->state =
-                (start_ts < end_ts &&
-                 m_data_provider.FetchAnalysisTrackStatistics(
-                     AnalysisTrackStatisticsRequestParams(m_track_id, start_ts, end_ts)))
+                (start_ts < end_ts && m_data_provider.FetchAnalysisTrackStatistics(params))
                     ? AnalysisTrackStatistics::kRequested
                     : AnalysisTrackStatistics::kPending;
         }

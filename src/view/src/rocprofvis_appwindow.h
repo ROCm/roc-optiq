@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include "json.h"
 #include "rocprofvis_controller.h"
 #include "rocprofvis_compare_files_dialog.h"
 #include "rocprofvis_data_provider.h"
@@ -78,6 +79,14 @@ public:
                             const std::string&               initial_path,
                             std::function<void(std::string)> callback);
 
+    // Like ShowOpenFileDialog but lets the user select multiple files at once. The
+    // callback receives all chosen paths (empty vector if the dialog was cancelled).
+    void ShowOpenFilesDialog(
+        const std::string&                                   title,
+        const std::vector<FileFilter>&                       file_filters,
+        const std::string&                                   initial_path,
+        std::function<void(const std::vector<std::string>&)> callback);
+
     void ShowPathPickerDialog(const std::string&               title,
                             const std::string&               initial_path,
                             std::function<void(std::string)> callback);
@@ -90,9 +99,26 @@ public:
     // Opens two trace files as a single compare project (combined timeline, A/B tags).
     void OpenCompare(const std::string& first_file, const std::string& second_file);
 
+    // Opens N (>= 2) trace files as a single combined project (one timeline, A/B/C...
+    // tags). Reuses the multinode/compare engine. Switches to the tab if already open.
+    void OpenCompare(const std::vector<std::string>& files);
+
+    // Opens N (>= 1) trace files merged into a single unified view, like a yaml manifest
+    // (parts of one program's run). No compare A/B tagging. One file opens normally.
+    void OpenCombined(const std::vector<std::string>& files);
+
     // Stable, file-derived project id/key for a compare of the given source files.
     // Used as the tab id and the m_projects key for both fresh and reopened compares.
     static std::string MakeCompareId(const std::vector<std::string>& files);
+
+    // Stable, file-derived id/key for a merged (multi-file) trace view.
+    static std::string MakeCombinedId(const std::vector<std::string>& files);
+
+    // "<scheme><file0>|<file1>|..." - the shared id form for compare/combined views.
+    static std::string JoinFileListId(const char*                     scheme,
+                                      const std::vector<std::string>& files);
+    // Add a tab for the project, make it active, and take ownership in m_projects.
+    void RegisterAndActivateProject(std::unique_ptr<Project> project);
 
     void ShowCloseConfirm();
 #ifdef ROCPROFVIS_ENABLE_PROFILER
@@ -138,6 +164,12 @@ private:
     void HandleTabSelectionChanged(std::shared_ptr<RocEvent> e);
     void HandleFontChanged();
     void HandleOpenFile();
+    // Picks another trace file and opens a combined view of the current system view's
+    // source file(s) plus the newly picked one (adds a trace into the same kind of view).
+    void AddTraceToCurrentView();
+    // Removes one source file from the current merged view: reopens the remaining subset
+    // (or the single remaining trace) and closes the previous merged tab.
+    void RemoveTraceFromView(const std::string& file_to_remove);
     void HandleCompareFiles();
     void HandleCompareFileBrowse(CompareFilesDialog::FileSlot slot);
     void HandleSaveAsFile();
@@ -159,12 +191,18 @@ private:
                               std::function<void(std::string)> callback,
                               bool                             save_dialog,
                               bool                             path_picker = false);
+
+    void ShowNativeFilesDialog(
+        const std::vector<FileFilter>&                       file_filters,
+        const std::string&                                   initial_path,
+        std::function<void(const std::vector<std::string>&)> callback);
 #endif
     void ShowImGuiFileDialog(const std::string&             title,
                         const std::vector<FileFilter>& file_filters,
                         const std::string& initial_path, const bool& confirm_overwrite,
                         std::function<void(std::string)> callback,
-                        bool                             folder_mode = false);
+                        bool                             folder_mode  = false,
+                        bool                             multi_select = false);
     static AppWindow* s_instance;
 
     std::shared_ptr<VFixedContainer> m_main_view;
@@ -213,8 +251,13 @@ private:
 #ifdef ROCPROFVIS_HAVE_NATIVE_FILE_DIALOG
     std::atomic<bool>                m_is_native_file_dialog_open;
     std::future<std::string>         m_file_dialog_future;
+    std::future<std::vector<std::string>> m_files_dialog_future;
 #endif
 
+    // True while the active open dialog is in multi-select mode; routes the result to
+    // m_files_dialog_callback instead of m_file_dialog_callback.
+    bool                                                 m_file_dialog_is_multi = false;
+    std::function<void(const std::vector<std::string>&)> m_files_dialog_callback;
     std::function<void(std::string)>    m_file_dialog_callback;
     std::unique_ptr<ConfirmationDialog> m_confirmation_dialog;
     std::unique_ptr<MessageDialog>      m_message_dialog;
@@ -232,6 +275,16 @@ private:
     bool                             m_restore_fullscreen_later;
     std::vector<ProviderCleanupJob>  m_provider_cleanup_jobs;
     uint64_t                         m_next_provider_cleanup_id;
+    // Trace-source subsets queued by RemoveTraceFromView, reopened one frame after the old
+    // tab is closed (so the tab-closed event frees the old project first, avoiding an id
+    // collision). `settings` is the closed view's serialized settings, seeded into the
+    // reopened project so retained tracks keep their height/visibility/order/options.
+    struct PendingViewReopen
+    {
+        std::vector<std::string> files;
+        jt::Json                 settings;
+    };
+    std::vector<PendingViewReopen> m_pending_view_reopens;
 #ifdef ROCPROFVIS_ENABLE_REMOTE
     std::unique_ptr<SshTestDialog>   m_ssh_test_dialog;
 #endif

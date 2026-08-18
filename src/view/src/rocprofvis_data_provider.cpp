@@ -40,6 +40,8 @@ const uint64_t DataProvider::TABLE_EXPORT_REQUEST_ID =
     RequestIdBuilder::MakeRequestId(RequestType::kTableExport);
 const uint64_t DataProvider::FETCH_SYSTEM_TRACE_REQUEST_ID =
     RequestIdBuilder::MakeRequestId(RequestType::kFetchSystemTrace);
+const uint64_t DataProvider::ADD_TRACE_SOURCE_REQUEST_ID =
+    RequestIdBuilder::MakeRequestId(RequestType::kAddTraceSource);
 const uint64_t DataProvider::SUMMARY_REQUEST_ID =
     RequestIdBuilder::MakeRequestId(RequestType::kFetchSummary);
 const uint64_t DataProvider::SUMMARY_KERNEL_INSTANCE_TABLE_REQUEST_ID =
@@ -285,6 +287,69 @@ DataProvider::SetRequestProgressUpdateCallback(
     m_request_progress_callback = callback;
 }
 
+void
+DataProvider::NotifyTrackMetadataChanged()
+{
+    if(m_track_metadata_changed_callback)
+    {
+        m_track_metadata_changed_callback(m_model.GetTraceFilePath());
+    }
+}
+
+void
+DataProvider::SyncTrackIndicesFromController()
+{
+    TimelineModel&       tlm        = m_model.GetTimeline();
+    const uint64_t       num_graphs = tlm.GetTrackCount();
+    rocprofvis_handle_t* graph      = nullptr;
+    for(uint64_t i = 0; i < num_graphs; i++)
+    {
+        if(rocprofvis_controller_get_object(m_trace_timeline,
+                                            kRPVControllerTimelineGraphIndexed, i, &graph) ==
+               kRocProfVisResultSuccess &&
+           graph)
+        {
+            uint64_t id = 0;
+            if(rocprofvis_controller_get_uint64(graph, kRPVControllerGraphId, 0, &id) ==
+               kRocProfVisResultSuccess)
+            {
+                const TrackInfo* metadata = tlm.GetTrack(id);
+                ROCPROFVIS_ASSERT(metadata && metadata->graph_handle == graph);
+                tlm.GetMutableTrackMetadata()[id].index = i;
+            }
+        }
+    }
+}
+
+bool
+DataProvider::SetGraphOrder(const std::vector<uint64_t>& ordered_ids)
+{
+    if(m_state != ProviderState::kReady)
+    {
+        return false;
+    }
+    TimelineModel& tlm = m_model.GetTimeline();
+    // Place each graph at its target position in one pass.
+    for(size_t i = 0; i < ordered_ids.size(); i++)
+    {
+        const TrackInfo* metadata = tlm.GetTrack(ordered_ids[i]);
+        if(!metadata)
+        {
+            continue;
+        }
+        if(rocprofvis_controller_set_object(m_trace_timeline,
+                                            kRPVControllerTimelineGraphIndexed, i,
+                                            metadata->graph_handle) !=
+           kRocProfVisResultSuccess)
+        {
+            return false;
+        }
+    }
+    SyncTrackIndicesFromController();
+    NotifyTrackMetadataChanged();
+    return true;
+}
+
 bool
 DataProvider::SetGraphIndex(uint64_t track_id, uint64_t index)
 {
@@ -302,28 +367,8 @@ DataProvider::SetGraphIndex(uint64_t track_id, uint64_t index)
                                                   index, metadata->graph_handle);
         if(result == kRocProfVisResultSuccess)
         {
-            rocprofvis_handle_t* graph = nullptr;
-            for(int i = 0; i < num_graphs; i++)
-            {
-                result = rocprofvis_controller_get_object(
-                    m_trace_timeline, kRPVControllerTimelineGraphIndexed, i, &graph);
-                if(result == kRocProfVisResultSuccess && graph)
-                {
-                    uint64_t id = 0;
-                    result      = rocprofvis_controller_get_uint64(
-                        graph, kRPVControllerGraphId, 0, &id);
-                    if(result == kRocProfVisResultSuccess)
-                    {
-                        metadata = tlm.GetTrack(id);
-                        ROCPROFVIS_ASSERT(metadata && metadata->graph_handle == graph);
-                        tlm.GetMutableTrackMetadata()[id].index = i;
-                    }
-                }
-            }
-            if(m_track_metadata_changed_callback)
-            {
-                m_track_metadata_changed_callback(m_model.GetTraceFilePath());
-            }
+            SyncTrackIndicesFromController();
+            NotifyTrackMetadataChanged();
         }
     }
     return (result == kRocProfVisResultSuccess);
@@ -550,9 +595,166 @@ DataProvider::ProcessLoadSystemTrace(RequestInfo& req)
 }
 
 
+bool
+DataProvider::AddTraceSource(const std::string& file_path)
+{
+    if(m_state != ProviderState::kReady || !m_trace_controller)
+    {
+        spdlog::warn("Cannot add trace source; provider not ready");
+        return false;
+    }
+
+    // QUIESCE: cancel + await + free all in-flight fetch requests so no worker thread is
+    // reading the trace while the controller injects the new file. This is the critical
+    // step - without it, per-frame track/graph fetches race the trace mutation and crash.
+    FreeRequests();
+
+    rocprofvis_controller_future_t* future = rocprofvis_controller_future_alloc();
+    if(!future)
+    {
+        return false;
+    }
+
+    rocprofvis_result_t result =
+        rocprofvis_controller_add_trace_source(m_trace_controller, file_path.c_str(), future);
+    if(result != kRocProfVisResultSuccess)
+    {
+        rocprofvis_controller_future_free(future);
+        return false;
+    }
+
+    RequestInfo request_info;
+    request_info.request_array      = nullptr;
+    request_info.request_future     = future;
+    request_info.request_obj_handle = nullptr;
+    request_info.request_args       = nullptr;
+    request_info.loading_state      = RequestState::kLoading;
+    request_info.request_id         = ADD_TRACE_SOURCE_REQUEST_ID;
+    request_info.request_type       = RequestType::kAddTraceSource;
+    m_requests.emplace(request_info.request_id, request_info);
+
+    // kLoading makes FetchTrack/FetchGraph early-return, so the render loop cannot issue
+    // new fetches while the injection is in progress.
+    m_state = ProviderState::kLoading;
+    return true;
+}
+
+void
+DataProvider::ProcessAddTraceSource(RequestInfo& req)
+{
+    if(req.response_code != kRocProfVisResultSuccess)
+    {
+        // The add failed (e.g. incompatible file). Keep the existing view intact; resuming
+        // kReady lets the timeline re-fetch its visible tracks from the controller cache.
+        spdlog::error("Failed to add trace source to {}, error code: {}",
+                      m_model.GetTraceFilePath(), req.response_code);
+        m_state = ProviderState::kReady;
+        return;
+    }
+
+    // Refresh the model from the controller, which now includes the newly added file's
+    // tracks. Existing tracks come from the same controller, so their controller-side
+    // segment caches are preserved (no re-index, no DB re-read of existing files).
+    HandleLoadSystemTopology();
+
+    rocprofvis_result_t result = rocprofvis_controller_get_object(
+        m_trace_controller, kRPVControllerSystemTimeline, 0, &m_trace_timeline);
+
+    uint64_t num_buckets = 0;
+    rocprofvis_controller_get_uint64(
+        m_trace_controller, kRPVControllerSystemGetHistogramBucketsNumber, 0, &num_buckets);
+
+    TimelineModel& tlm = m_model.GetTimeline();
+    tlm.ResizeHistogram(num_buckets);
+    std::vector<double>& histogram = tlm.GetHistogram();
+
+    std::map<uint64_t, std::vector<double>> histogram_minimap;
+
+    if(result == kRocProfVisResultSuccess && m_trace_timeline)
+    {
+        uint64_t num_graphs = 0;
+        rocprofvis_controller_get_uint64(m_trace_timeline,
+                                         kRPVControllerTimelineNumGraphs, 0, &num_graphs);
+        tlm.SetTrackCount(num_graphs);
+
+        histogram.assign(num_buckets, 0.0);
+
+        for(int graphs = 0; graphs < static_cast<int>(num_graphs); graphs++)
+        {
+            rocprofvis_handle_t* track = nullptr;
+            rocprofvis_controller_get_object(
+                m_trace_controller, kRPVControllerSystemTrackIndexed, graphs, &track);
+            if(!track)
+            {
+                continue;
+            }
+            std::vector<double> histogram_track(num_buckets, 0.0);
+
+            uint64_t track_type = 0;
+            rocprofvis_controller_get_uint64(track, kRPVControllerTrackType, 0, &track_type);
+
+            if(track_type == kRPVControllerTrackTypeSamples)
+            {
+                for(int bin_num = 0; bin_num < static_cast<int>(num_buckets); bin_num++)
+                {
+                    double binval = 0.0;
+                    rocprofvis_controller_get_double(
+                        track, kRPVControllerTrackHistogramBucketValueIndexed, bin_num,
+                        &binval);
+                    histogram_track[bin_num] = binval;
+                }
+            }
+            else
+            {
+                for(int bin_num = 0; bin_num < static_cast<int>(num_buckets); bin_num++)
+                {
+                    uint64_t binval = 0;
+                    rocprofvis_controller_get_uint64(
+                        track, kRPVControllerTrackHistogramBucketDensityIndexed, bin_num,
+                        &binval);
+                    histogram_track[bin_num] = static_cast<double>(binval);
+                    histogram[bin_num] += static_cast<double>(binval);
+                }
+            }
+
+            histogram_minimap[graphs] = histogram_track;
+        }
+        tlm.SetMiniMap(std::move(histogram_minimap));
+        tlm.NormalizeHistogram();
+
+        double min_ts = 0;
+        rocprofvis_controller_get_double(m_trace_timeline,
+                                         kRPVControllerTimelineMinTimestamp, 0, &min_ts);
+        double max_ts = 0;
+        rocprofvis_controller_get_double(m_trace_timeline,
+                                         kRPVControllerTimelineMaxTimestamp, 0, &max_ts);
+        tlm.SetTimeRange(min_ts, max_ts);
+
+        HandleLoadTrackMetaData();
+        ApplyTrackOrderRanking();
+    }
+
+    m_state = ProviderState::kReady;
+
+    // Rebuild listeners (topology sidebar, minimap, track details) against the merged
+    // topology. The initial load fires this via SetGraphIndex; the incremental add must fire
+    // it explicitly, else the sidebar keeps its stale node/track tree.
+    NotifyTrackMetadataChanged();
+    if(m_trace_data_ready_callback)
+    {
+        m_trace_data_ready_callback(m_model.GetTraceFilePath(), kRocProfVisResultSuccess);
+    }
+}
+
 void
 DataProvider::HandleLoadSystemTopology()
 {
+    // Clear first: this reruns after an incremental add, and counter ids are not globally
+    // unique across merged instances, so piling new topology on stale entries makes
+    // GetCounter() return the wrong counter (mismatched units). Rebuilding fresh is
+    // deterministic and matches a combined open.
+    m_model.GetTopology().Clear();
+
     uint64_t            num_nodes = 0;
     rocprofvis_result_t result    = rocprofvis_controller_get_uint64(
         m_trace_controller, kRPVControllerSystemNumNodes, 0, &num_nodes);
@@ -2416,6 +2618,7 @@ DataProvider::UpdateRequestProgress(RequestInfo& req)
         }
         case RequestType::kFetchSystemTrace:
         case RequestType::kFetchComputeTrace:
+        case RequestType::kAddTraceSource:
         {
             if(req.request_future &&
                kRocProfVisResultSuccess == rocprofvis_controller_get_uint64(
@@ -2917,6 +3120,11 @@ DataProvider::ProcessRequest(RequestInfo& req)
             ProcessLoadSystemTrace(req);
             break;
         }
+        case RequestType::kAddTraceSource:
+        {
+            ProcessAddTraceSource(req);
+            break;
+        }
         case RequestType::kFetchSummary:
         {
             ProcessSummaryRequest(req);
@@ -3023,6 +3231,12 @@ DataProvider::ProcessAnalysisTrackStatisticsRequest(RequestInfo& req)
     {
         spdlog::warn("Track statistics request for track {} failed with code {}",
                       params->m_track_id, req.response_code);
+    }
+    else if(params->m_generation != m_model.GetAnalysis().GetGeneration())
+    {
+        // The analysis range changed after this request was issued; its result is for a
+        // superseded range. Discard it - the track's stat is already re-armed (or self-heals
+        // via RequestAnalysis), so it will re-fetch for the current range.
     }
     else
     {

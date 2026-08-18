@@ -37,6 +37,16 @@ rocprofvis_controller_t* rocprofvis_controller_alloc_compare(char const* const* 
 * @returns kRocProfVisResultSuccess or an error code.
 */
 rocprofvis_result_t rocprofvis_controller_load_async(rocprofvis_controller_t* controller, rocprofvis_controller_future_t* future);
+/*
+* @brief Incrementally add one more trace file to an already-loaded system trace, reading
+*        only that file's metadata and appending its tracks. Existing tracks and their
+*        cached data are preserved (the existing files are not reprocessed).
+* @param controller a system trace controller handle
+* @param filename path of the trace file to add
+* @param future signals completion; poll like any other async request
+* @returns kRocProfVisResultSuccess or an error code.
+*/
+rocprofvis_result_t rocprofvis_controller_add_trace_source(rocprofvis_controller_t* controller, char const* filename, rocprofvis_controller_future_t* future);
 /* JSON: CreateController
 {
     file_path: String,

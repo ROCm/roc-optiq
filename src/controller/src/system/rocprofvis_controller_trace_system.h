@@ -48,6 +48,11 @@ public:
 
     rocprofvis_result_t Load(Future& future);
 
+    // Incremental add: append one more trace file to this already-loaded trace, reading
+    // only that file's metadata and appending its tracks. Existing tracks and their cached
+    // segment data are left intact (no reprocessing / no refetch of the existing files).
+    rocprofvis_result_t AddTraceSource(Future& future, const std::string& filepath);
+
     rocprofvis_result_t SaveTrimmedTrace(Future& future, double start, double end, char const* path);
 
     rocprofvis_result_t CleanupTraceDatabase(Future& future, bool rebuild);
@@ -101,6 +106,13 @@ private:
 
 private:
     rocprofvis_result_t LoadRocpd(Future* future);
+
+    // Build controller Track/Graph objects for data-model tracks in the half-open index
+    // range [start_index, num_tracks) and append them to m_tracks / m_timeline. Used by the
+    // incremental AddTraceSource path.
+    rocprofvis_result_t BuildTracksFromDataModel(uint64_t start_index, uint64_t num_tracks,
+                                                 rocprofvis_dm_timestamp_t end_time,
+                                                 uint64_t& graph_index, size_t& trace_size);
 
     void DbgPrintTopologyNodeData(rocprofvis_dm_topology_node node, int level);
 

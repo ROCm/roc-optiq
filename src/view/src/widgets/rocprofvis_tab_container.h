@@ -25,6 +25,10 @@ public:
     void RemoveTab(const std::string& id);
     void RemoveTab(int index);
 
+    // Remove all tabs without emitting close events. Used at shutdown to drop the container's
+    // view references before the owning projects are torn down.
+    void Clear();
+
     void SetActiveTab(int index);
     void SetActiveTab(const std::string& id);
 

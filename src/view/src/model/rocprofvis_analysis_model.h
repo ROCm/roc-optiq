@@ -23,6 +23,12 @@ public:
 
     void SetAnalysisRange(double start_ns, double end_ns);
 
+    // Monotonic counter bumped whenever the analysis range changes. Requests are stamped with
+    // the generation at issue time; a result whose generation no longer matches is stale (its
+    // range was superseded) and must be discarded, otherwise a late result could pin a pill
+    // to an old range's values.
+    uint64_t GetGeneration() const { return m_generation; }
+
     const AnalysisTrackStatistics* RegisterTrack(const TrackInfo& track);
 
     void SetQueueUtilization(uint64_t track_id, const double& util_pct);
@@ -38,8 +44,9 @@ private:
     void ToString(const TrackInfo* track, AnalysisTrackStatistics::Stat& stat,
                   const std::string& units);
 
-    double m_analysis_range_start_ns;
-    double m_analysis_range_end_ns;
+    double   m_analysis_range_start_ns;
+    double   m_analysis_range_end_ns;
+    uint64_t m_generation = 0;
 
     TablesModel                                           m_tables;
     std::unordered_map<uint64_t, AnalysisTrackStatistics> m_track_stats;

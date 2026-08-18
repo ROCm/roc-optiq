@@ -54,9 +54,27 @@ public:
      */
     TraceType GetTraceType() const;
     /*
+     * Returns the source trace files backing this project. For a single trace this is a
+     * one-element list; for a combined/compare project it is all combined files in order
+     * (A, B, ...). Empty if nothing has been loaded.
+     */
+    std::vector<std::string> GetSourceFiles() const;
+    /*
+     * Records that a trace file was merged into this (already-open) view via the incremental
+     * add path, so GetSourceFiles()/Remove reflect it. Updates the tab name. Does not itself
+     * load anything.
+     */
+    void AddSourceFile(const std::string& path);
+    /*
      * Returns true if the project is saved as a project (as opposed to a trace).
      */
     bool IsProject() const;
+    /*
+     * Returns true if this is a compare project (files overlaid with A/B/... tagging), as
+     * opposed to a single trace or a merged/combined view. Add/Remove Trace do not apply to
+     * compare projects (they would drop the compare tagging), so callers gate on this.
+     */
+    bool IsCompare() const;
 
     /*
      * Opens a project or trace file and returns Success/Duplicate/Failed.
@@ -74,6 +92,22 @@ public:
      */
     OpenResult OpenCompare(const std::string&              project_id,
                            const std::vector<std::string>& file_paths);
+    /*
+     * Opens one or more trace files merged into a single unified view, like a yaml
+     * manifest (parts of the same program's run). Unlike OpenCompare, the sources are not
+     * tagged A/B/...; they simply merge into one timeline/topology via the multinode
+     * engine.
+     * @param project_id: Synthetic, stable id/key for the merged project.
+     * @param file_paths: The trace files to merge.
+     */
+    OpenResult OpenCombined(const std::string&              project_id,
+                            const std::vector<std::string>& file_paths);
+    /*
+     * Serializes the current live view/track settings into the in-memory settings json
+     * WITHOUT writing to disk. Call before a graph-view rebuild (Add/Remove Trace) so the
+     * recreated tracks restore the user's state instead of falling back to defaults.
+     */
+    void SerializeSettings();
     /*
      * Overwrites the project settings to the project file without further user input.
      */
@@ -93,6 +127,12 @@ public:
      * process.
      */
     void RegisterSetting(ProjectSetting* setting);
+    /*
+     * Removes a participant from the settings registry. Called from ~ProjectSetting so
+     * settings destroyed on a graph-view rebuild do not leave dangling pointers.
+     * @param setting: The settings object to remove.
+     */
+    void UnregisterSetting(ProjectSetting* setting);
     /*
      * Returns the project settings json.
      */
@@ -114,6 +154,12 @@ private:
      */
     OpenResult OpenTrace(std::string& file_path);
     /*
+     * Builds the tab/display name for a merged view from its source files: the first file's
+     * stem, then "A + B" for two files or "A +N more" for more. Shared by OpenCombined and
+     * AddSourceFile so both paths label the same view identically.
+     */
+    static std::string MakeCombinedName(const std::vector<std::string>& files);
+    /*
      * Performs basic validation on the project settings for fields required to open a
      * trace.
      */
@@ -129,6 +175,9 @@ private:
     // Source trace files when this is a compare project (empty otherwise). Persisted to
     // the .rpv so the compare can be reopened.
     std::vector<std::string>   m_compare_files;
+    // Source trace files when this is a merged/combined project (empty otherwise).
+    // Persisted to the .rpv so the merged view can be reopened.
+    std::vector<std::string>   m_combined_files;
     TraceType                  m_trace_type;
     std::shared_ptr<RocWidget> m_view;
     std::list<ProjectSetting*> m_settings;
@@ -143,6 +192,7 @@ constexpr const char* JSON_KEY_GROUP_TIMELINE = "timeline";
 constexpr const char* JSON_KEY_GENERAL_VERSION    = "version";
 constexpr const char* JSON_KEY_GENERAL_TRACE_PATH = "trace_path";
 constexpr const char* JSON_KEY_GENERAL_COMPARE_FILES = "compare_files";
+constexpr const char* JSON_KEY_GENERAL_COMBINED_FILES = "combined_files";
 
 constexpr const char* JSON_KEY_TIMELINE_BOOKMARK         = "bookmarks";
 constexpr const char* JSON_KEY_TIMELINE_BOOKMARK_KEY     = "key";

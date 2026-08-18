@@ -175,6 +175,10 @@ public:
     // Construct options, loads from project, registers with context menu system, returns
     // option to caller
     std::unique_ptr<TrackOptions> InitTrack(const TrackItem& track);
+    // Drop all references to per-track TrackOptions. Call when the TrackItems are torn down
+    // (graph-view rebuild): this object outlives them, so its maps/lists would otherwise
+    // hold dangling pointers.
+    void                          Reset();
     void                          Update();
     // Given a target track, snapshot required info and setup aggregated options
     void InitContextMenu(const TrackItem& target);

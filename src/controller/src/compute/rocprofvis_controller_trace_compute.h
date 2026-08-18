@@ -75,14 +75,22 @@ private:
 
     rocprofvis_result_t LoadRocpd(Future* future);
 
-    rocprofvis_dm_result_t FetchCodeObjectsAndIsaLines(rocprofvis_dm_database_t db,
-                                                       Future* future,
-                                                       uint64_t kernel_id,
-                                                       PcSampling& output);
-    rocprofvis_dm_result_t FetchIsaLineDepsAndStalls(rocprofvis_dm_database_t db,
-                                                     Future* future,
-                                                     uint64_t kernel_id,
-                                                     PcSampling& output);
+    rocprofvis_dm_result_t FetchCodeObjects(rocprofvis_dm_database_t db,
+                                            Future* future,
+                                            uint64_t kernel_id,
+                                            PcSampling& output);
+    rocprofvis_dm_result_t FetchIsaLines(rocprofvis_dm_database_t db,
+                                         Future* future,
+                                         uint64_t kernel_id,
+                                         PcSampling& output);
+    rocprofvis_dm_result_t FetchIsaLineDeps(rocprofvis_dm_database_t db,
+                                            Future* future,
+                                            uint64_t kernel_id,
+                                            PcSampling& output);
+    rocprofvis_dm_result_t FetchStalls(rocprofvis_dm_database_t db,
+                                       Future* future,
+                                       uint64_t kernel_id,
+                                       PcSampling& output);
     rocprofvis_dm_result_t FetchSourceFileLines(rocprofvis_dm_database_t db,
                                                 Future* future,
                                                 uint64_t source_file_id,

@@ -101,7 +101,7 @@ private:
     std::vector<IsaLine>          m_isa_lines;
     std::vector<IsaToIsaDep>      m_isa_to_isa_deps;
     std::vector<IsaToSourceDep>   m_isa_to_source_deps;
-    std::vector<SamplingState>      m_sampling_states;
+    std::vector<SamplingState>    m_sampling_states;
     std::vector<StallReasonCount> m_stall_reason_counts;
 
     std::unordered_map<uint32_t, std::vector<SourceLine>> m_source_line_cache;

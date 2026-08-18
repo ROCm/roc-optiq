@@ -31,14 +31,15 @@ ComputeCodeView::ComputeCodeView(DataProvider& data_provider)
     m_source_code = std::make_shared<SourceCodeWidget>(m_line_selection);
     m_isa_code    = std::make_shared<IsaCodeWidget>(m_line_selection);
 
-    auto source_item             = LayoutItem::CreateFromWidget(m_source_code);
-    source_item->m_child_flags   = ImGuiChildFlags_None;
+    auto isa_item           = LayoutItem::CreateFromWidget(m_isa_code);
+    isa_item->m_child_flags = ImGuiChildFlags_None;
 
-    m_isa_layout_item              = LayoutItem::CreateFromWidget(m_isa_code);
-    m_isa_layout_item->m_child_flags = ImGuiChildFlags_None;
-    m_isa_layout_item->m_visible   = false;
+    m_source_layout_item                = LayoutItem::CreateFromWidget(m_source_code);
+    m_source_layout_item->m_child_flags = ImGuiChildFlags_None;
+    m_source_layout_item->m_visible     = false;
 
-    m_horizontal_split_container = std::make_shared<HSplitContainer>(source_item, m_isa_layout_item);
+    m_horizontal_split_container =
+        std::make_shared<HSplitContainer>(isa_item, m_source_layout_item);
     m_horizontal_split_container->SetSplit(0.5f);
     m_horizontal_split_container->ShowSplitter(true);
 
@@ -274,18 +275,16 @@ ComputeCodeView::Render()
 void
 ComputeCodeView::RenderControlPanel()
 {
-    constexpr const char* hide_isa_str = "Hide ISA";
-    constexpr const char* show_isa_str = "Show ISA";
-    constexpr const char* show_stalls_str = "Show Stalls";
-    constexpr const char* hide_stalls_str = "Hide Stalls";
+    constexpr const char* hide_source_code_str = "Hide Source Code";
+    constexpr const char* show_source_code_str = "Show Source Code";
+    constexpr const char* show_stalls_str      = "Show Stalls";
+    constexpr const char* hide_stalls_str      = "Hide Stalls";
 
     const float fallbackHeight =
-        ImGui::GetFrameHeight() +
-        ImGui::GetStyle().WindowPadding.y * 2.0f;
+        ImGui::GetFrameHeight() + ImGui::GetStyle().WindowPadding.y * 2.0f;
 
-    float topHeight = m_control_panel_height > 0.0f
-        ? m_control_panel_height
-        : fallbackHeight;
+    float topHeight =
+        m_control_panel_height > 0.0f ? m_control_panel_height : fallbackHeight;
 
     ImGui::BeginChild("ControlPanel", ImVec2(0.0f, topHeight), true);
 
@@ -295,23 +294,29 @@ ComputeCodeView::RenderControlPanel()
 
     RenderSourceFileDropdown();
 
-    const float button_isa_width   = ImGui::CalcTextSize(hide_isa_str).x      + ImGui::GetStyle().FramePadding.x * 2.0f;
+    const float button_source_code_width =
+        std::max(ImGui::CalcTextSize(show_source_code_str).x,
+                 ImGui::CalcTextSize(hide_source_code_str).x) +
+        ImGui::GetStyle().FramePadding.x * 2.0f;
     const float button_stall_width = std::max(ImGui::CalcTextSize(show_stalls_str).x,
-                                              ImGui::CalcTextSize(hide_stalls_str).x)
-                                     + ImGui::GetStyle().FramePadding.x * 2.0f;
+                                              ImGui::CalcTextSize(hide_stalls_str).x) +
+                                     ImGui::GetStyle().FramePadding.x * 2.0f;
 
-    const float                      button_comments_width =
-        m_isa_layout_item->m_visible ?
-        (ImGui::CalcTextSize("Show Comments").x + ImGui::GetStyle().FramePadding.x * 2.0f) : 0;
+    const float button_comments_width =
+        ImGui::CalcTextSize("Show Comments").x + ImGui::GetStyle().FramePadding.x * 2.0f;
 
-    const float buttons_width = button_isa_width + button_stall_width +
+    const float buttons_width = button_source_code_width + button_stall_width +
                                 button_comments_width +
                                 ImGui::GetStyle().ItemSpacing.x * 2.0f;
 
-    ImGui::SameLine(ImGui::GetContentRegionAvail().x + ImGui::GetCursorPosX() - buttons_width);
+    ImGui::SameLine(ImGui::GetContentRegionAvail().x + ImGui::GetCursorPosX() -
+                    buttons_width);
 
-    if(ImGui::Button(m_isa_layout_item->m_visible ? hide_isa_str : show_isa_str))
-        m_isa_layout_item->m_visible = !m_isa_layout_item->m_visible;
+    if(ImGui::Button(m_source_layout_item->m_visible ? hide_source_code_str
+                                                     : show_source_code_str))
+    {
+        m_source_layout_item->m_visible = !m_source_layout_item->m_visible;
+    }
 
     ImGui::SameLine();
     if(ImGui::Button(m_show_metadata_enabled ? hide_stalls_str : show_stalls_str))
@@ -321,15 +326,12 @@ ComputeCodeView::RenderControlPanel()
         m_isa_code->ChangeStallVisibility(m_show_metadata_enabled);
     }
 
-    if(m_isa_layout_item->m_visible)
+    ImGui::SameLine();
+    static bool show_comments_enabled = false;
+    if(ImGui::Button(show_comments_enabled ? "Hide Comments" : "Show Comments"))
     {
-        ImGui::SameLine();
-        static bool show_comments_enabled = false;
-        if(ImGui::Button(show_comments_enabled ? "Hide Comments" : "Show Comments"))
-        {
-            show_comments_enabled = !show_comments_enabled;
-            m_isa_code->ShowComments(show_comments_enabled);
-        }
+        show_comments_enabled = !show_comments_enabled;
+        m_isa_code->ShowComments(show_comments_enabled);
     }
 
     ImGui::EndGroup();

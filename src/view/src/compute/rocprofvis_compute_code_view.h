@@ -52,7 +52,7 @@ private:
 
     std::shared_ptr<SourceCodeWidget> m_source_code;
     std::shared_ptr<IsaCodeWidget>    m_isa_code;
-    LayoutItem::Ptr                   m_isa_layout_item;
+    LayoutItem::Ptr                   m_source_layout_item;
     std::shared_ptr<HSplitContainer>  m_horizontal_split_container;
 
     uint32_t                          m_current_source_file_id;

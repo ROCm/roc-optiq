@@ -5,6 +5,7 @@
 #include "rocprofvis_hotkey_manager.h"
 #include "imgui.h"
 #include "implot.h"
+#include "remote/rocprofvis_secret_store.h"
 #include "rocprofvis_core.h"
 #include "rocprofvis_event_manager.h"
 #include "rocprofvis_font_manager.h"
@@ -499,6 +500,7 @@ SettingsManager::SaveSettingsJson()
     SerializeOtherSettings(settings_json);
     SerializeHotkeySettings(settings_json);
     SerializeProfilerSettings(settings_json);
+    SerializeAssistantSettings(settings_json);
 
     std::ofstream out_file(m_json_path);
     if(out_file.is_open())
@@ -529,6 +531,7 @@ SettingsManager::LoadSettingsJson()
         DeserializeOtherSettings(result.second);
         DeserializeHotkeySettings(result.second);
         DeserializeProfilerSettings(result.second);
+        DeserializeAssistantSettings(result.second);
     }
     else
     {
@@ -616,7 +619,8 @@ SettingsManager::SettingsManager()
 , m_usersettings_default(
       { DisplaySettings{ false, 6, true, false }, UnitSettings{ TimeFormat::kTimecode },
         false, false, LOG_VIEWER_MAX_ENTRIES_DEFAULT,
-        LogViewerSettings{ LOG_VIEWER_DEFAULT_LEVEL_MASK, true, false, false, false } })
+        LogViewerSettings{ LOG_VIEWER_DEFAULT_LEVEL_MASK, true, false, false, false },
+        AssistantSettings{} })
 , m_usersettings(m_usersettings_default)
 , m_appwindowsettings({ AppWindowSettings{ true, true, true, true, false } })
 , m_json_path(GetStandardConfigPath())
@@ -1024,6 +1028,80 @@ SettingsManager::DeserializeProfilerSettings(jt::Json& json)
             }
         }
     }
+}
+
+void
+SettingsManager::SerializeAssistantSettings(jt::Json& json)
+{
+    jt::Json& as = json[JSON_KEY_GROUP_SETTINGS][JSON_KEY_SETTINGS_CATEGORY_ASSISTANT];
+    as[JSON_KEY_SETTINGS_ASSISTANT_ENDPOINT_URL] = m_usersettings.assistant.endpoint_url;
+    as[JSON_KEY_SETTINGS_ASSISTANT_MODEL]        = m_usersettings.assistant.model;
+}
+
+void
+SettingsManager::DeserializeAssistantSettings(jt::Json& json)
+{
+    jt::Json& as = json[JSON_KEY_GROUP_SETTINGS][JSON_KEY_SETTINGS_CATEGORY_ASSISTANT];
+    if(as[JSON_KEY_SETTINGS_ASSISTANT_ENDPOINT_URL].isString())
+    {
+        m_usersettings.assistant.endpoint_url =
+            as[JSON_KEY_SETTINGS_ASSISTANT_ENDPOINT_URL].getString();
+    }
+    if(as[JSON_KEY_SETTINGS_ASSISTANT_MODEL].isString())
+    {
+        m_usersettings.assistant.model = as[JSON_KEY_SETTINGS_ASSISTANT_MODEL].getString();
+    }
+}
+
+bool
+SettingsManager::HasAssistantToken() const
+{
+    std::string unused;
+    return GetAssistantToken(unused);
+}
+
+bool
+SettingsManager::GetAssistantToken(std::string& out_token) const
+{
+    out_token.clear();
+    if(SecretStore::IsAvailable() &&
+       SecretStore::Get(ASSISTANT_TOKEN_SECRET_KEY, out_token) && !out_token.empty())
+    {
+        return true;
+    }
+    if(!m_assistant_token_session.empty())
+    {
+        out_token = m_assistant_token_session;
+        return true;
+    }
+    return false;
+}
+
+bool
+SettingsManager::SetAssistantToken(const std::string& token)
+{
+    if(token.empty())
+    {
+        return ClearAssistantToken();
+    }
+
+    m_assistant_token_session = token;
+    if(SecretStore::IsAvailable())
+    {
+        return SecretStore::Set(ASSISTANT_TOKEN_SECRET_KEY, token);
+    }
+    return true;
+}
+
+bool
+SettingsManager::ClearAssistantToken()
+{
+    m_assistant_token_session.clear();
+    if(SecretStore::IsAvailable())
+    {
+        return SecretStore::Erase(ASSISTANT_TOKEN_SECRET_KEY);
+    }
+    return true;
 }
 
 }  // namespace View

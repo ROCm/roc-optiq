@@ -24,6 +24,7 @@
 #include "rocprofvis_view_module.h"
 #include "widgets/rocprofvis_debug_window.h"
 #include "widgets/rocprofvis_log_viewer.h"
+#include "rocprofvis_ai_assistant.h"
 #include "widgets/rocprofvis_dialog.h"
 #include "widgets/rocprofvis_gui_helpers.h"
 #include "widgets/rocprofvis_widget.h"
@@ -173,6 +174,7 @@ AppWindow::~AppWindow()
     AppMonitor::DestroyInstance();
 
     LogViewer::DestroyInstance();
+    AssistantPanel::DestroyInstance();
 }
 
 bool
@@ -665,6 +667,7 @@ AppWindow::Update()
     AppMonitor::GetInstance()->Update();
     EventManager::GetInstance()->DispatchEvents();
     LogViewer::GetInstance()->Poll();
+    AssistantPanel::GetInstance()->Update();
     DebugWindow::GetInstance()->ClearTransient();
     m_tab_container->Update();
 #ifdef ROCPROFVIS_ENABLE_PROFILER
@@ -805,6 +808,7 @@ AppWindow::Render()
     RenderFileDialog();
 
     LogViewer::GetInstance()->Render();
+    AssistantPanel::GetInstance()->Render();
 #ifdef ROCPROFVIS_DEVELOPER_MODE
     RenderDebugOuput();
 #endif
@@ -1241,6 +1245,7 @@ AppWindow::RenderViewMenu(Project* project)
         ImGui::Separator();
         ImGui::MenuItem("Show Log Viewer", nullptr,
                         LogViewer::GetInstance()->VisiblePtr());
+        ImGui::MenuItem("Ask Optiq", nullptr, AssistantPanel::GetInstance()->VisiblePtr());
         ImGui::EndMenu();
     }
 }

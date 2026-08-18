@@ -4,6 +4,7 @@
 #include "rocprofvis_settings_panel.h"
 #include "icons/rocprovfis_icon_defines.h"
 #include "imgui.h"
+#include "remote/rocprofvis_secret_store.h"
 #include "rocprofvis_font_manager.h"
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_utils.h"
@@ -12,6 +13,7 @@
 #include "widgets/rocprofvis_widget.h"
 
 #include <algorithm>
+#include <string>
 
 // Layout constants
 constexpr float kCategorywidth            = 150.0f;
@@ -42,6 +44,8 @@ SettingsPanel::SettingsPanel(SettingsManager& settings)
 , m_usersettings_initial(m_usersettings_default)
 , m_usersettings(settings.GetUserSettings())
 , m_pending_font_size_index(m_usersettings.display_settings.font_size_index)
+, m_assistant_show_token(false)
+, m_assistant_clear_token(false)
 {
 }
 
@@ -55,6 +59,9 @@ SettingsPanel::Show()
     m_usersettings_initial    = m_usersettings;
     m_usersettings_previous   = m_usersettings;
     m_pending_font_size_index = m_usersettings.display_settings.font_size_index;
+    m_assistant_token_draft.clear();
+    m_assistant_show_token  = false;
+    m_assistant_clear_token = false;
 }
 
 void
@@ -92,6 +99,10 @@ SettingsPanel::Render()
             {
                 m_category = Other;
             }
+            if(ImGui::Selectable("Assistant", m_category == Assistant))
+            {
+                m_category = Assistant;
+            }
             if(ImGui::Selectable("Hotkeys", m_category == Hotkeys))
             {
                 m_category = Hotkeys;
@@ -117,6 +128,11 @@ SettingsPanel::Render()
                 case Other:
                 {
                     RenderOtherSettings();
+                    break;
+                }
+                case Assistant:
+                {
+                    RenderAssistantSettings();
                     break;
                 }
                 case Hotkeys:
@@ -149,6 +165,15 @@ SettingsPanel::Render()
                         ResetUnitOptions();
                         break;
                     }
+                    case Other:
+                    {
+                        break;
+                    }
+                    case Assistant:
+                    {
+                        ResetAssistantOptions();
+                        break;
+                    }
                     case Hotkeys:
                     {
                         ResetHotkeySettings();
@@ -175,6 +200,16 @@ SettingsPanel::Render()
                     m_settings.SaveHotkeySettings();
                     m_hotkeys_changed = false;
                 }
+                if(m_assistant_clear_token)
+                {
+                    m_settings.ClearAssistantToken();
+                }
+                else if(!m_assistant_token_draft.empty())
+                {
+                    m_settings.SetAssistantToken(m_assistant_token_draft);
+                }
+                m_assistant_token_draft.clear();
+                m_assistant_clear_token = false;
                 ImGui::CloseCurrentPopup();
             }
             ImGui::SameLine();
@@ -190,6 +225,8 @@ SettingsPanel::Render()
                 }
                 m_settings_changed = true;
                 m_should_open      = false;
+                m_assistant_token_draft.clear();
+                m_assistant_clear_token = false;
                 ImGui::CloseCurrentPopup();
             }
             ImGui::EndPopup();
@@ -382,6 +419,112 @@ SettingsPanel::RenderOtherSettings()
     }
 
     m_settings_changed = true;
+}
+
+void
+SettingsPanel::RenderAssistantSettings()
+{
+    ImGuiStyle& style = ImGui::GetStyle();
+
+    ImGui::TextUnformatted("Endpoint");
+    ImGui::Separator();
+    ImGui::TextWrapped(
+        "AMD OnPrem / OpenAI-compatible base URL. The subscription key is stored "
+        "in the OS credential store, not in the settings file.");
+
+    ImGui::AlignTextToFramePadding();
+    ImGui::TextUnformatted("URL");
+    ImGui::SameLine();
+    ImGui::SetNextItemWidth(-1.0f);
+    if(InputTextStringWithHint("##assistant_url",
+                               "https://llm-api.amd.com/OnPrem",
+                               m_usersettings.assistant.endpoint_url))
+    {
+        m_settings_changed = true;
+    }
+    if(ImGui::IsItemHovered())
+    {
+        SetTooltipStyled(
+            "Base URL only. /chat/completions is appended automatically.\n"
+            "Example: https://llm-api.amd.com/OnPrem");
+    }
+
+    ImGui::AlignTextToFramePadding();
+    ImGui::TextUnformatted("Model");
+    ImGui::SameLine();
+    ImGui::SetNextItemWidth(-1.0f);
+    if(InputTextStringWithHint("##assistant_model", "GPT-oss-20B",
+                               m_usersettings.assistant.model))
+    {
+        m_settings_changed = true;
+    }
+    if(ImGui::IsItemHovered())
+    {
+        SetTooltipStyled("Model name sent in the request body, e.g. GPT-oss-20B.");
+    }
+
+    ImGui::Dummy(ImVec2(0.0f, style.ItemSpacing.y));
+    ImGui::TextUnformatted("Subscription key");
+    ImGui::Separator();
+
+    const bool token_stored = m_settings.HasAssistantToken() && !m_assistant_clear_token;
+    if(token_stored && m_assistant_token_draft.empty())
+    {
+        ImGui::TextUnformatted(
+            "A subscription key is stored. Leave the field blank to keep it.");
+    }
+    else if(SecretStore::IsAvailable())
+    {
+        ImGui::TextUnformatted(
+            "Sent as Ocp-Apim-Subscription-Key. Saved to the OS credential store "
+            "when you press OK.");
+    }
+    else
+    {
+        ImGui::TextWrapped(
+            "No OS credential store is available. The key is kept in memory "
+            "for this session only.");
+    }
+
+    ImGui::AlignTextToFramePadding();
+    ImGui::TextUnformatted("Key");
+    ImGui::SameLine();
+    const float eye_w = ImGui::GetFrameHeight();
+    ImGui::SetNextItemWidth(-(eye_w + style.ItemInnerSpacing.x));
+    ImGuiInputTextFlags token_flags =
+        m_assistant_show_token ? 0 : ImGuiInputTextFlags_Password;
+    if(InputTextStringWithHint("##assistant_token",
+                               token_stored ? "Stored — type to replace" : "Ocp-Apim-Subscription-Key",
+                               m_assistant_token_draft, token_flags))
+    {
+        m_assistant_clear_token = false;
+        m_settings_changed      = true;
+    }
+    ImGui::SameLine(0.0f, style.ItemInnerSpacing.x);
+    ImFont* icon_font = m_fonts.GetFont(FontType::kIcon);
+    ImGui::PushID("assistant_token_reveal");
+    if(IconButton(m_assistant_show_token ? ICON_EYE_SLASH : ICON_EYE, icon_font,
+                  ImVec2(eye_w, eye_w), m_assistant_show_token ? "Hide" : "Show"))
+    {
+        m_assistant_show_token = !m_assistant_show_token;
+    }
+    ImGui::PopID();
+
+    if(ImGui::Button("Clear stored key"))
+    {
+        m_assistant_token_draft.clear();
+        m_assistant_clear_token = true;
+        m_settings_changed      = true;
+    }
+}
+
+void
+SettingsPanel::ResetAssistantOptions()
+{
+    m_usersettings.assistant = m_usersettings_default.assistant;
+    m_assistant_token_draft.clear();
+    m_assistant_clear_token = false;
+    m_settings_changed      = true;
 }
 
 void

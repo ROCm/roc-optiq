@@ -26,17 +26,20 @@ private:
         Display,
         Units,
         Other,
+        Assistant,
         Hotkeys
     };
 
     void RenderDisplayOptions();
     void RenderUnitOptions();
     void RenderOtherSettings();
+    void RenderAssistantSettings();
     void RenderHotkeySettings();
 
     void ResetDisplayOptions();
     void ResetUnitOptions();
     void ResetHotkeySettings();
+    void ResetAssistantOptions();
     void StealChord(HotkeyActionId from, ImGuiKeyChord chord);
 
     bool ResetButton();
@@ -59,6 +62,10 @@ private:
     HotkeyActionId m_rebinding_action  = HotkeyActionId::kCount;
     bool           m_rebinding_primary = true;
     bool           m_hotkeys_changed   = false;
+
+    std::string m_assistant_token_draft;
+    bool        m_assistant_show_token     = false;
+    bool        m_assistant_clear_token    = false;
 };
 
 }  // namespace View

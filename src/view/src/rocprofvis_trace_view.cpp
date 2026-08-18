@@ -4,6 +4,7 @@
 #include "rocprofvis_trace_view.h"
 #include "icons/rocprovfis_icon_defines.h"
 #include "imgui.h"
+#include "rocprofvis_ai_assistant.h"
 #include "rocprofvis_click_manager.h"
 #include "rocprofvis_analysis_view.h"
 #include "rocprofvis_annotations.h"
@@ -747,6 +748,8 @@ TraceView::RenderToolbar()
         {
             SetTooltipStyled("Show Minimap");
         }
+        VerticalSeparator(&m_settings_manager);
+        AssistantPanel::RenderToolbarButton();
         VerticalSeparator(&m_settings_manager);
     }
 

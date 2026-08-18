@@ -44,14 +44,21 @@ typedef struct LogViewerSettings
     bool visible;
 } LogViewerSettings;
 
+typedef struct AssistantSettings
+{
+    std::string endpoint_url;
+    std::string model;
+} AssistantSettings;
+
 typedef struct UserSettings
 {
-    DisplaySettings   display_settings;
-    UnitSettings      unit_settings;
-    bool              dont_ask_before_tab_closing;
-    bool              dont_ask_before_exit;
-    int               log_viewer_max_entries;
-    LogViewerSettings log_viewer;
+    DisplaySettings    display_settings;
+    UnitSettings       unit_settings;
+    bool               dont_ask_before_tab_closing;
+    bool               dont_ask_before_exit;
+    int                log_viewer_max_entries;
+    LogViewerSettings  log_viewer;
+    AssistantSettings  assistant;
 } UserSettings;
 
 typedef struct InternalSettings
@@ -253,6 +260,12 @@ constexpr const char* JSON_KEY_SETTINGS_LOG_VIEWER_VISIBLE       = "log_viewer_v
 // All six severity levels enabled (bits 0..5).
 constexpr int LOG_VIEWER_DEFAULT_LEVEL_MASK = 0x3F;
 
+constexpr const char* JSON_KEY_SETTINGS_CATEGORY_ASSISTANT = "assistant";
+constexpr const char* JSON_KEY_SETTINGS_ASSISTANT_ENDPOINT_URL = "endpoint_url";
+constexpr const char* JSON_KEY_SETTINGS_ASSISTANT_MODEL        = "model";
+// OS credential-store key for the assistant API token. Never written to JSON.
+constexpr const char* ASSISTANT_TOKEN_SECRET_KEY = "assistant-api-token";
+
 constexpr const char* JSON_KEY_SETTINGS_CATEGORY_HOTKEYS = "hotkeys";
 constexpr const char* JSON_KEY_SETTINGS_CATEGORY_PROFILER = "profiler";
 constexpr const char* JSON_KEY_SETTINGS_PROFILER_PATH = "profiler_path";
@@ -307,6 +320,13 @@ public:
     ProfilerSettings& GetProfilerSettings();
     void SaveProfilerSettings();
 
+    // Assistant API token. Stored in the OS credential vault when available,
+    // otherwise held in process memory only. Never written to settings JSON.
+    bool HasAssistantToken() const;
+    bool GetAssistantToken(std::string& out_token) const;
+    bool SetAssistantToken(const std::string& token);
+    bool ClearAssistantToken();
+
     // Constant for event height;
     const float GetEventLevelHeight() const;
     const float GetEventLevelCompactHeight() const;
@@ -344,6 +364,8 @@ private:
     void DeserializeHotkeySettings(jt::Json& json);
     void SerializeProfilerSettings(jt::Json& json);
     void DeserializeProfilerSettings(jt::Json& json);
+    void SerializeAssistantSettings(jt::Json& json);
+    void DeserializeAssistantSettings(jt::Json& json);
 
     const std::array<ImU32, static_cast<size_t>(Colors::__kLastColor)>* m_color_store;
 
@@ -355,6 +377,7 @@ private:
     InternalSettings   m_internalsettings;
     AppWindowSettings  m_appwindowsettings;
     ProfilerSettings   m_profilersettings;
+    std::string        m_assistant_token_session;
 
     std::filesystem::path m_json_path;
 };

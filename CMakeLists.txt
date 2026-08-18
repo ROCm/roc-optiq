@@ -104,8 +104,14 @@ set(VIEW_FILES
     src/view/src/rocprofvis_stickynote.cpp
     src/view/src/rocprofvis_click_manager.cpp
     src/view/src/rocprofvis_measurement_controller.cpp
-    src/view/src/rocprofvis_analysis_view.cpp 
-    src/view/src/rocprofvis_trace_view.cpp 
+    src/view/src/rocprofvis_analysis_view.cpp
+    src/view/src/rocprofvis_ai_assistant.cpp
+    src/view/src/rocprofvis_ai_assistant.h
+    src/view/src/rocprofvis_ai_client.cpp
+    src/view/src/rocprofvis_ai_client.h
+    src/view/src/rocprofvis_ai_tools.cpp
+    src/view/src/rocprofvis_ai_tools.h
+    src/view/src/rocprofvis_trace_view.cpp
     src/view/src/rocprofvis_top_events_view.cpp
     src/view/src/rocprofvis_line_track_item.cpp 
     src/view/src/rocprofvis_timeline_view.cpp 
@@ -168,6 +174,8 @@ set(VIEW_FILES
     src/view/src/model/compute/rocprofvis_compute_data_model.cpp
     src/view/src/widgets/rocprofvis_compute_widget.cpp
     src/view/src/widgets/rocprofvis_query_builder.cpp
+    src/view/src/remote/rocprofvis_secret_store.cpp
+    src/view/src/remote/rocprofvis_secret_store.h
 )
 
 
@@ -200,8 +208,6 @@ endif(ROCPROFVIS_ENABLE_PROFILER)
 if(ROCPROFVIS_ENABLE_REMOTE)
 list(APPEND VIEW_FILES
     src/view/src/remote/rocprofvis_ssh_uri.cpp
-    src/view/src/remote/rocprofvis_secret_store.cpp
-    src/view/src/remote/rocprofvis_secret_store.h
     src/view/src/remote/rocprofvis_ssh_connection_config.cpp
     src/view/src/remote/rocprofvis_ssh_connection_config.h
     src/view/src/remote/rocprofvis_ssh_connection_store.cpp
@@ -408,32 +414,42 @@ endif()
 if (CRYPTO_BACKEND STREQUAL "OpenSSL")
 target_link_libraries(${TARGET_NAME} PRIVATE libssh2_static OpenSSL::SSL OpenSSL::Crypto)
 endif()
+endif(ROCPROFVIS_ENABLE_REMOTE)
 
-# SecretStore backends: link the OS credential-vault APIs. On Linux libsecret
-# is optional; when absent, SecretStore compiles a stub that reports itself
-# unavailable and the app falls back to prompting for SSH secrets at connect
-# time (never persisting them in plaintext).
+# SecretStore backends: OS credential-vault APIs used by the assistant token
+# (always) and by SSH passwords when remote is enabled. On Linux libsecret is
+# optional; when absent, SecretStore compiles a stub that reports itself
+# unavailable and secrets stay in process memory only.
+set(ROCPROFVIS_SECRET_STORE_TARGETS ${TARGET_NAME})
+if(TARGET ${TARGET_NAME}-tests)
+    list(APPEND ROCPROFVIS_SECRET_STORE_TARGETS ${TARGET_NAME}-tests)
+endif()
 if(WIN32)
-    target_link_libraries(${TARGET_NAME} PRIVATE Advapi32)
+    foreach(secret_target ${ROCPROFVIS_SECRET_STORE_TARGETS})
+        target_link_libraries(${secret_target} PRIVATE Advapi32)
+    endforeach()
 elseif(APPLE)
-    target_link_libraries(${TARGET_NAME} PRIVATE "-framework Security" "-framework CoreFoundation")
+    foreach(secret_target ${ROCPROFVIS_SECRET_STORE_TARGETS})
+        target_link_libraries(${secret_target} PRIVATE "-framework Security" "-framework CoreFoundation")
+    endforeach()
 else()
     find_package(PkgConfig QUIET)
     if(PkgConfig_FOUND)
         pkg_check_modules(LIBSECRET QUIET libsecret-1)
     endif()
     if(LIBSECRET_FOUND)
-        target_include_directories(${TARGET_NAME} PRIVATE ${LIBSECRET_INCLUDE_DIRS})
-        target_link_libraries(${TARGET_NAME} PRIVATE ${LIBSECRET_LIBRARIES})
-        target_compile_definitions(${TARGET_NAME} PRIVATE ROCPROFVIS_HAVE_LIBSECRET)
+        foreach(secret_target ${ROCPROFVIS_SECRET_STORE_TARGETS})
+            target_include_directories(${secret_target} PRIVATE ${LIBSECRET_INCLUDE_DIRS})
+            target_link_libraries(${secret_target} PRIVATE ${LIBSECRET_LIBRARIES})
+            target_compile_definitions(${secret_target} PRIVATE ROCPROFVIS_HAVE_LIBSECRET)
+        endforeach()
     else()
         message(WARNING
-            "libsecret-1 not found: SSH passwords will not be persisted on this "
-            "Linux build (users are prompted at connect time). Install "
-            "libsecret-1-dev / libsecret-devel to enable secure credential storage.")
+            "libsecret-1 not found: assistant tokens and SSH passwords will not "
+            "be persisted on this Linux build. Install libsecret-1-dev / "
+            "libsecret-devel to enable secure credential storage.")
     endif()
 endif()
-endif(ROCPROFVIS_ENABLE_REMOTE)
 
 if(APPLE)
     # rocprofvis_platform_helpers_macos.mm uses AppKit (+[NSEvent modifierFlags]).

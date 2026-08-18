@@ -12,6 +12,8 @@
 #include "rocprofvis_controller_job_system.h"
 #include "spdlog/spdlog.h"
 #include <chrono>
+#include <filesystem>
+#include <system_error>
 
 #ifdef _WIN32
 #include <windows.h>
@@ -21,7 +23,6 @@
 #include <signal.h>
 #include <fcntl.h>
 #include <errno.h>
-#include <cstring>
 #endif
 
 namespace RocProfVis
@@ -137,6 +138,28 @@ rocprofvis_result_t ProfilerConfig::SetWorkingDirectory(char const* path)
         return kRocProfVisResultInvalidArgument;
     }
     m_working_directory = path;
+    return kRocProfVisResultSuccess;
+}
+
+rocprofvis_result_t ProfilerConfig::ValidateWorkingDirectory() const
+{
+    // Empty means "inherit this process's cwd", which is always valid.
+    if (m_working_directory.empty())
+    {
+        return kRocProfVisResultSuccess;
+    }
+
+    // The std::error_code overload, as everywhere else in this codebase: the
+    // throwing overloads are not an option, and a path too long for the OS
+    // reports through `ec` rather than by overflowing anything here.
+    std::error_code ec;
+    if (!std::filesystem::is_directory(m_working_directory, ec) || ec)
+    {
+        spdlog::error("Profiler working directory '{}' is not an existing directory",
+                      m_working_directory);
+        return kRocProfVisResultInvalidArgument;
+    }
+
     return kRocProfVisResultSuccess;
 }
 
@@ -478,8 +501,9 @@ static constexpr int SIGTERM_GRACE_MS = 100;
 // profiler itself ever ran. The values follow the POSIX shell convention (see
 // POSIX.1 "Shell Command Language", Exit Status), which reserves 126, 127 and
 // 128+n precisely so they cannot be mistaken for a status the profiled command
-// returned. Callers distinguish the two pre-exec cases by these codes alone -
-// the accompanying stderr message carries the human-readable detail.
+// returned. Callers distinguish the two pre-exec cases by these codes; the
+// accompanying line on the captured stderr pipe is the human-readable detail
+// shown in the launcher output console.
 static constexpr int EXIT_CODE_CANNOT_EXECUTE    = 126;  // found, but setup failed
 static constexpr int EXIT_CODE_COMMAND_NOT_FOUND = 127;  // execvp() could not find it
 static constexpr int EXIT_CODE_SIGNAL_BASE       = 128;  // + signal number
@@ -599,16 +623,17 @@ bool LocalProfilerExecutor::Start(const ProfilerConfig& config)
         {
             if (chdir(config.GetWorkingDirectory().c_str()) != 0)
             {
-                int chdir_errno = errno;
-                char err_buf[512];
-                int n = snprintf(err_buf, sizeof(err_buf),
-                                 "chdir failed for working directory '%s': %s (errno %d)\n",
-                                 config.GetWorkingDirectory().c_str(),
-                                 strerror(chdir_errno), chdir_errno);
-                if (n > 0)
-                {
-                    (void)write(STDERR_FILENO, err_buf, static_cast<size_t>(n));
-                }
+                int const chdir_errno = errno;
+                // STDERR_FILENO is the capture pipe (dup2 above), not the
+                // parent's real stderr. size() is the actual byte count, unlike
+                // snprintf's untruncated length. This allocates, same class of
+                // post-fork risk as setenv below; posix_spawn is the real fix.
+                std::string msg = "chdir failed for working directory '";
+                msg += config.GetWorkingDirectory();
+                msg += "': errno ";
+                msg += std::to_string(chdir_errno);
+                msg += '\n';
+                (void)write(STDERR_FILENO, msg.c_str(), msg.size());
                 _exit(EXIT_CODE_CANNOT_EXECUTE);
             }
         }
@@ -623,15 +648,13 @@ bool LocalProfilerExecutor::Start(const ProfilerConfig& config)
 
         execvp(argv_cstr[0], argv_cstr.data());
 
-        int exec_errno = errno;
-        char err_buf[256];
-        int n = snprintf(err_buf, sizeof(err_buf),
-                         "execvp failed for '%s': %s (errno %d)\n",
-                         config.GetResolvedToolPath().c_str(), strerror(exec_errno), exec_errno);
-        if (n > 0)
-        {
-            (void)write(STDERR_FILENO, err_buf, static_cast<size_t>(n));
-        }
+        int const exec_errno = errno;
+        std::string msg = "execvp failed for '";
+        msg += config.GetResolvedToolPath();
+        msg += "': errno ";
+        msg += std::to_string(exec_errno);
+        msg += '\n';
+        (void)write(STDERR_FILENO, msg.c_str(), msg.size());
         _exit(EXIT_CODE_COMMAND_NOT_FOUND);
     }
 
@@ -831,6 +854,19 @@ rocprofvis_result_t ProfilerProcessController::LaunchAsync(ProfilerConfig const*
     {
         m_state = kRPVProfilerStateFailed;
         return resolved;
+    }
+
+    // Same rationale, applied to the working directory: checking it here turns
+    // the common failure into a proper result code with a logged reason, rather
+    // than a chdir failure inside the forked child whose only channels back are
+    // an exit code and a line on the captured stderr. What remains for the child
+    // to report is the narrow race where the directory disappears between this
+    // check and the fork.
+    rocprofvis_result_t working_directory_valid = m_config->ValidateWorkingDirectory();
+    if (working_directory_valid != kRocProfVisResultSuccess)
+    {
+        m_state = kRPVProfilerStateFailed;
+        return working_directory_valid;
     }
 
     m_executor = std::make_unique<LocalProfilerExecutor>();

@@ -91,6 +91,13 @@ public:
     // found" rather than kRocProfVisResultToolNotFound.
     rocprofvis_result_t ResolveToolPathRemote();
 
+    // Confirms a configured working directory exists locally, so a bad value is
+    // reported by the launching call instead of surfacing as the child's exit
+    // code 126 after a failed chdir - the same reasoning as ResolveToolPath.
+    // Only meaningful for local launches; a remote working directory lives on
+    // the far side of the connection and cannot be checked from here.
+    rocprofvis_result_t ValidateWorkingDirectory() const;
+
     // argv[0]. Empty until one of the two resolve calls above has succeeded -
     // hence "resolved" in the name, since reading it earlier yields nothing.
     std::string const& GetResolvedToolPath() const { return m_resolved_tool_path; }

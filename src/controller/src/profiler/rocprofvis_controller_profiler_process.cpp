@@ -93,10 +93,8 @@ rocprofvis_result_t ProfilerConfig::ResolveToolPathRemote()
 
     if (!m_tool_directory.empty())
     {
-        // A remote path, so "absolute" means starting with '/' - std::filesystem
-        // would apply this host's rules, and on Windows would reject a perfectly
-        // good remote path (and join it with a backslash below). This is one of
-        // the places that assume a POSIX remote.
+        // POSIX-absolute: std::filesystem would apply this host's rules (and
+        // join with '\\' on Windows). Remote is always POSIX.
         if (m_tool_directory.front() != '/')
         {
             spdlog::error("Remote profiler tool directory must be an absolute POSIX path, "
@@ -143,15 +141,12 @@ rocprofvis_result_t ProfilerConfig::SetWorkingDirectory(char const* path)
 
 rocprofvis_result_t ProfilerConfig::ValidateWorkingDirectory() const
 {
-    // Empty means "inherit this process's cwd", which is always valid.
+    // Empty inherits this process's cwd.
     if (m_working_directory.empty())
     {
         return kRocProfVisResultSuccess;
     }
 
-    // The std::error_code overload, as everywhere else in this codebase: the
-    // throwing overloads are not an option, and a path too long for the OS
-    // reports through `ec` rather than by overflowing anything here.
     std::error_code ec;
     if (!std::filesystem::is_directory(m_working_directory, ec) || ec)
     {
@@ -169,9 +164,7 @@ rocprofvis_result_t ProfilerConfig::AddEnvVar(char const* name, char const* valu
     {
         return kRocProfVisResultInvalidArgument;
     }
-    // Reject names that are not valid POSIX identifiers. Besides being invalid
-    // env assignments, a non-identifier name would inject shell syntax when the
-    // config is serialized for a remote /bin/sh launch (see ToPosixShellCommand).
+    // POSIX identifier only: the name is emitted unquoted in ToPosixShellCommand.
     if (!Cmdline::IsValidEnvName(name))
     {
         spdlog::warn("Ignoring environment variable with invalid name '{}'", name);
@@ -278,12 +271,8 @@ bool LocalProfilerExecutor::Start(const ProfilerConfig& config)
         return false;
     }
 
-    // Build command line via the shared helper. Tokens are quoted following
-    // the Windows CRT / CommandLineToArgvW reverse rules, so paths or
-    // arguments containing whitespace or quotes are preserved correctly.
     std::string cmd_line_str = Cmdline::ToWindowsCommandLine(Cmdline::BuildArgv(config));
 
-    // Create pipes for stdout and stderr
     SECURITY_ATTRIBUTES sa;
     sa.nLength = sizeof(SECURITY_ATTRIBUTES);
     sa.bInheritHandle = TRUE;
@@ -302,11 +291,10 @@ bool LocalProfilerExecutor::Start(const ProfilerConfig& config)
     }
     SetHandleInformation(m_stderr_read_handle, HANDLE_FLAG_INHERIT, 0);
 
-    // Build environment block if we have custom env vars
     std::string env_block;
     if (!config.GetEnvVars().empty())
     {
-        // Inherit current environment and add our vars
+        // Inherit the current environment, then append ours.
         char* current_env = GetEnvironmentStrings();
         if (current_env)
         {
@@ -340,10 +328,7 @@ bool LocalProfilerExecutor::Start(const ProfilerConfig& config)
 
     LPVOID env_ptr = env_block.empty() ? nullptr : env_block.data();
 
-    // Working directory for the child only; this process's cwd is untouched.
-    // A non-existent directory makes CreateProcessA fail, which is the desired
-    // behavior: tools that write output relative to their cwd must not silently
-    // run somewhere else.
+    // Child cwd only. CreateProcessA fails if the directory does not exist.
     LPCSTR working_dir_ptr =
         config.GetWorkingDirectory().empty() ? nullptr : config.GetWorkingDirectory().c_str();
 
@@ -468,49 +453,21 @@ std::string LocalProfilerExecutor::ReadOutput()
 #else
 
 // ==================================================================================
-// LocalProfilerExecutor Implementation - POSIX (Linux, and macOS if ROCm gains
-// macOS support in the future).
+// LocalProfilerExecutor - POSIX (Linux today).
 //
-// This implementation uses fork() + execvp() with pipes for stdout/stderr capture.
-// The pattern is correct and portable POSIX, but if/when macOS support is added
-// for the ROCm Systems Profiler, this code should be refactored to use
-// posix_spawnp() with posix_spawn_file_actions_* for the fd plumbing. Reasons:
-//
-//   - On macOS, the window between fork() and execvp() is unsafe with respect
-//     to most Apple frameworks (Cocoa, Core Foundation, libdispatch/GCD, Metal,
-//     Mach ports). Roc-optiq links these transitively via MoltenVK / GLFW /
-//     native file dialog, so the Objective-C runtime can abort the forked
-//     child before exec runs (look for OBJC_DISABLE_INITIALIZE_FORK_SAFETY).
-//   - The setenv() and std::string allocations in the child branch below are
-//     not async-signal-safe; they can deadlock on macOS if another roc-optiq
-//     thread held the malloc lock at fork time.
-//   - posix_spawn skips the address-space duplication entirely, which matters
-//     for a GUI/Vulkan process with many Mach VM regions.
-//   - posix_spawn with POSIX_SPAWN_CLOEXEC_DEFAULT / POSIX_SPAWN_SETSIGDEF
-//     gives cleaner fd and signal-handler hygiene than fork+exec.
-//
-// macOS does not provide execvpe(3), so any env-passing refactor on Linux
-// (e.g. switching from per-child setenv to passing envp directly) should
-// target posix_spawnp instead of execvpe for portability.
+// fork()+execvp() is not safe on macOS (Obj-C runtime, non-async-signal-safe
+// setenv/alloc in the child, Mach VM duplication). Refactor to posix_spawnp()
+// before enabling the profiler there. Linux is the only POSIX target today.
 // ==================================================================================
 
 // Grace period after SIGTERM before escalating to SIGKILL during Cancel().
 static constexpr int SIGTERM_GRACE_MS = 100;
 
-// Statuses the forked child uses to report a failure that happened before the
-// profiler itself ever ran. The values follow the POSIX shell convention (see
-// POSIX.1 "Shell Command Language", Exit Status), which reserves 126, 127 and
-// 128+n precisely so they cannot be mistaken for a status the profiled command
-// returned. Callers distinguish the two pre-exec cases by these codes; the
-// accompanying line on the captured stderr pipe is the human-readable detail
-// shown in the launcher output console.
+// Pre-exec child statuses (POSIX shell convention): not a profiled-command code.
 static constexpr int EXIT_CODE_CANNOT_EXECUTE    = 126;  // found, but setup failed
-static constexpr int EXIT_CODE_COMMAND_NOT_FOUND = 127;  // execvp() could not find it
+static constexpr int EXIT_CODE_COMMAND_NOT_FOUND = 127;  // execvp could not find it
 static constexpr int EXIT_CODE_SIGNAL_BASE       = 128;  // + signal number
 
-// Decodes a waitpid() status into the executor's exit-code convention (matches
-// the mapping used by IsRunning): normal exit -> exit status; killed by a
-// signal -> EXIT_CODE_SIGNAL_BASE + signal number.
 static void set_exit_code_from_status(int status, int& exit_code)
 {
     if (WIFEXITED(status))
@@ -563,9 +520,7 @@ bool LocalProfilerExecutor::Start(const ProfilerConfig& config)
         return false;
     }
 
-    // Build argv tokens BEFORE fork() so we don't allocate in the child between
-    // fork and execvp. The string data is copy-on-written into the child by
-    // fork, and the c_str() pointers we capture in argv_cstr remain valid there.
+    // Build argv before fork so the child does not allocate between fork and exec.
     std::vector<std::string> argv_tokens = Cmdline::BuildArgv(config);
 
     std::vector<char*> argv_cstr;
@@ -584,12 +539,7 @@ bool LocalProfilerExecutor::Start(const ProfilerConfig& config)
         return false;
     }
 
-    // NOTE (macOS): this fork()+execvp() path is NOT safe on macOS - the child
-    // runs non-async-signal-safe code (setenv/allocations) between fork and exec
-    // while the parent is multithreaded (GLFW/MoltenVK/Obj-C runtime). It works
-    // on Linux, which is the only POSIX target today. Before enabling the
-    // profiler on macOS this must be reworked to posix_spawnp() (deferred; see
-    // the section banner above).
+    // Linux-only today; posix_spawnp before enabling on macOS (section banner).
     m_process_id = fork();
 
     if (m_process_id == -1)
@@ -603,7 +553,6 @@ bool LocalProfilerExecutor::Start(const ProfilerConfig& config)
 
     if (m_process_id == 0)
     {
-        // Child process
         close(stdout_pipe[0]);
         close(stderr_pipe[0]);
 
@@ -613,21 +562,14 @@ bool LocalProfilerExecutor::Start(const ProfilerConfig& config)
         close(stdout_pipe[1]);
         close(stderr_pipe[1]);
 
-        // Enter the requested working directory before exec. Only the child's
-        // cwd changes; the parent's is untouched. chdir() is async-signal-safe,
-        // so it is safe in this post-fork context. Bail out rather than exec on
-        // failure: some tools write their output relative to the cwd, so running
-        // in the wrong directory would silently produce output in the wrong place
-        // instead of reporting an error.
+        // Child cwd only. Fail rather than exec in the wrong directory.
         if (!config.GetWorkingDirectory().empty())
         {
             if (chdir(config.GetWorkingDirectory().c_str()) != 0)
             {
                 int const chdir_errno = errno;
-                // STDERR_FILENO is the capture pipe (dup2 above), not the
-                // parent's real stderr. size() is the actual byte count, unlike
-                // snprintf's untruncated length. This allocates, same class of
-                // post-fork risk as setenv below; posix_spawn is the real fix.
+                // Writes to the capture pipe (dup2 above). Allocates; same
+                // post-fork risk as setenv. posix_spawn is the real fix.
                 std::string msg = "chdir failed for working directory '";
                 msg += config.GetWorkingDirectory();
                 msg += "': errno ";
@@ -638,9 +580,7 @@ bool LocalProfilerExecutor::Start(const ProfilerConfig& config)
             }
         }
 
-        // Set environment variables. setenv() takes the libc env lock, which
-        // is not async-signal-safe; see the section banner above for the
-        // posix_spawn-based refactor that will eliminate this risk.
+        // setenv is not async-signal-safe; see the POSIX section banner.
         for (auto const& kv : config.GetEnvVars())
         {
             setenv(kv.first.c_str(), kv.second.c_str(), 1);
@@ -658,7 +598,6 @@ bool LocalProfilerExecutor::Start(const ProfilerConfig& config)
         _exit(EXIT_CODE_COMMAND_NOT_FOUND);
     }
 
-    // Parent process
     close(stdout_pipe[1]);
     close(stderr_pipe[1]);
 
@@ -685,9 +624,7 @@ bool LocalProfilerExecutor::IsRunning()
     if (result == m_process_id)
     {
         set_exit_code_from_status(status, m_exit_code);
-        // Reaped: clear the pid so we never wait on / signal it again (and so a
-        // recycled PID can't be mistaken for our child).
-        m_process_id = -1;
+        m_process_id = -1;  // reaped; do not wait/kill a recycled pid
         m_is_running = false;
         return false;
     }
@@ -704,22 +641,18 @@ bool LocalProfilerExecutor::Cancel()
 
     if (kill(m_process_id, SIGTERM) != 0)
     {
-        // The pid is gone (already exited, or reaped elsewhere). Nothing to do.
-        m_process_id = -1;
+        m_process_id = -1;  // gone already
         m_is_running = false;
         return false;
     }
 
-    // Give the child a brief chance to exit on SIGTERM, then escalate. Either
-    // way we MUST reap it (blocking waitpid) so it does not linger as a zombie
-    // for the lifetime of the app.
+    // SIGTERM grace, then SIGKILL. Always reap so the child is not a zombie.
     std::this_thread::sleep_for(std::chrono::milliseconds(SIGTERM_GRACE_MS));
 
     int   status = 0;
     pid_t result = waitpid(m_process_id, &status, WNOHANG);
     if (result == 0)
     {
-        // Still alive after the grace period: force-kill and block until reaped.
         kill(m_process_id, SIGKILL);
         result = waitpid(m_process_id, &status, 0);
     }
@@ -730,8 +663,7 @@ bool LocalProfilerExecutor::Cancel()
     }
     else
     {
-        // Could not obtain a status (e.g. ECHILD); best-effort failure code.
-        m_exit_code = 1;
+        m_exit_code = 1;  // e.g. ECHILD
     }
 
     m_process_id = -1;
@@ -792,16 +724,8 @@ ProfilerProcessController::ProfilerProcessController()
 
 ProfilerProcessController::~ProfilerProcessController()
 {
-    // The monitor job (ExecuteJob) holds a raw pointer to this controller and its
-    // executor. Signal cancellation, then block until the Job object that owns
-    // that pointer is gone before our members are destroyed. The block is
-    // released by EndMonitorJob(), which is driven by a shared_ptr scope-guard
-    // captured in the job lambda (see rocprofvis_profiler.cpp): it fires when the
-    // Job is destroyed - in ~Future at future_free - regardless of whether the
-    // job ever ran, so a job cancelled before it was dequeued still releases us.
-    // Contract: the caller must free the bound future before (or concurrently
-    // with, on another thread) freeing the profiler. The view teardown frees the
-    // future first, so this wait returns without blocking.
+    // Cancel, then wait until the monitor Job (raw `this`) is destroyed.
+    // Caller must free the bound future first or concurrently; the View does.
     Cancel();
     std::unique_lock<std::mutex> lock(m_job_mutex);
     m_job_cv.wait(lock, [this] { return !m_job_active; });
@@ -846,9 +770,7 @@ rocprofvis_result_t ProfilerProcessController::LaunchAsync(ProfilerConfig const*
         return kRocProfVisResultNotSupported;
     }
 
-    // Turn the tool enum into the absolute path that becomes argv[0]. Done on
-    // our own copy of the config, before anything is spawned, so a missing tool
-    // is reported as such instead of surfacing as the child's exit code 127.
+    // Resolve before spawn so a missing tool is ToolNotFound, not child exit 127.
     rocprofvis_result_t resolved = m_config->ResolveToolPath();
     if (resolved != kRocProfVisResultSuccess)
     {
@@ -856,12 +778,7 @@ rocprofvis_result_t ProfilerProcessController::LaunchAsync(ProfilerConfig const*
         return resolved;
     }
 
-    // Same rationale, applied to the working directory: checking it here turns
-    // the common failure into a proper result code with a logged reason, rather
-    // than a chdir failure inside the forked child whose only channels back are
-    // an exit code and a line on the captured stderr. What remains for the child
-    // to report is the narrow race where the directory disappears between this
-    // check and the fork.
+    // Same for cwd: fail here rather than as child exit 126 after chdir.
     rocprofvis_result_t working_directory_valid = m_config->ValidateWorkingDirectory();
     if (working_directory_valid != kRocProfVisResultSuccess)
     {
@@ -928,9 +845,7 @@ rocprofvis_result_t ProfilerProcessController::LaunchAsyncRemote(ProfilerConfig 
         return resolved;
     }
 
-    // The executor reads the future lazily inside its worker thread (started in
-    // Start) to observe cancellation; the ABI sets the future's job right after
-    // this returns, which is fine.
+    // Worker reads `future` after Start; ABI binds the job immediately after this.
     m_executor = std::make_unique<SshProfilerExecutor>(connection, future);
 
     bool launched = m_executor->Start(*m_config);
@@ -1045,11 +960,8 @@ rocprofvis_result_t ProfilerProcessController::ExecuteJob(ProfilerProcessControl
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
 
-    // The bound future resolves when this job returns. It must not resolve until
-    // the executor's worker has actually stopped: callers key resource teardown
-    // (freeing the profiler - which joins the worker - and the borrowed SSH
-    // connection) on the future. Cancel() only signals the worker; wait here for
-    // it to unwind so "future resolved" implies "worker done".
+    // Do not resolve the future until the executor worker has stopped. Cancel()
+    // only signals it; teardown keys on the future.
     while (controller->m_executor && controller->m_executor->IsRunning())
     {
         controller->GetOutput();
@@ -1084,10 +996,7 @@ ProfilerSession::ProfilerSession()
 
 ProfilerSession::~ProfilerSession()
 {
-    // The member ProfilerProcessController's destructor cancels the run and joins
-    // its monitor job before it (and its executor) are destroyed, so freeing the
-    // session is safe even with a job in flight. The bound Future is owned by the
-    // caller and is not touched here.
+    // Controller dtor joins the monitor job. The bound Future is caller-owned.
 }
 
 rocprofvis_controller_object_type_t ProfilerSession::GetType(void)

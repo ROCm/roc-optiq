@@ -38,12 +38,8 @@ std::string posix_shell_quote(std::string const& tok)
     return out;
 }
 
-// Windows CRT (CommandLineToArgvW reverse) quoting for a single token.
-// Algorithm follows Microsoft's documented rules:
-//   - Tokens with no whitespace or quotes are passed through unchanged.
-//   - Otherwise wrap in double quotes and double-up backslash runs that
-//     immediately precede a quote, escaping the quote itself with one more
-//     backslash.
+// CommandLineToArgvW reverse quoting: quote if whitespace/quotes; double
+// backslashes that run up to a quote (and the quote itself).
 std::string windows_quote(std::string const& tok)
 {
     if (!tok.empty() && tok.find_first_of(" \t\n\v\"") == std::string::npos)
@@ -145,10 +141,7 @@ std::string ToPosixShellCommand(
 
     for (auto const& kv : env)
     {
-        // Defense-in-depth: the name is emitted unquoted (it must be a literal
-        // shell identifier), so never serialize a malformed name into the shell
-        // command. Invalid names are rejected at ProfilerConfig::AddEnvVar, but
-        // guard here too since this is the actual injection boundary.
+        // Name is emitted unquoted; skip invalid ones (AddEnvVar already rejects).
         if (!IsValidEnvName(kv.first))
         {
             continue;

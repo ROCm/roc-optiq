@@ -43,7 +43,7 @@ private:
     void ClearCodeData();
     void ClearSelectionData();
     void LoadSourceFileList(const PcSamplingData& data);
-    void FetchPcSamplingForCurrentFile();
+    void FetchMandatoryPcSampling();
     void OnPcSamplingReady(uint32_t kernel_id, uint32_t source_file_id,
                            uint32_t generation, bool success);
 

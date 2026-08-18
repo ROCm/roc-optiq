@@ -820,6 +820,16 @@ A kernel within a workload. Carries `m_id`, `m_name`,
 (`total/min/max/median/mean`). Property bank:
 `rocprofvis_controller_kernel_properties_t`.
 
+Each kernel also owns a `PcSampling` handle. The
+`rocprofvis_controller_pc_sampling_fetch_mandatorys_async` path calls
+`ComputeTrace::AsyncFetchPcSamplingMandatorys` to load only ISA-line rows.
+The full `rocprofvis_controller_pc_sampling_fetch_all_async` path loads code
+objects, optional ISA/source dependency rows, sampling states, stall-reason
+counts, and source lines in addition to those ISA rows. Source file ID 0 is
+reserved by the View as the schema-2.0 `ISA only` sentinel; the controller
+skips only the source-line query for that value while retaining the source
+stage for tables planned for a later schema.
+
 ### 6.4 `Roofline` (`rocprofvis_controller_roofline.{h,cpp}`)
 
 Holds the roofline geometry: vectors of `CeilingBandwidth`,

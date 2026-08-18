@@ -345,54 +345,121 @@ rocprofvis_result_t ComputeTrace::AsyncFetchPcSampling(Arguments& args, Future& 
         return kRocProfVisResultInvalidArgument;
     }
 
-    future.Set(JobSystem::Get().IssueJob([this, &output, kernel_id, source_file_id](Future* future) -> rocprofvis_result_t {
-        std::unique_lock<std::recursive_mutex> data_lock(output.GetDataMutex());
-        if(future->IsCancelled())
-        {
-            return kRocProfVisResultCancelled;
-        }
+    future.Set(JobSystem::Get().IssueJob(
+        [this, &output, kernel_id,
+         source_file_id](Future* future) -> rocprofvis_result_t {
+            std::unique_lock<std::recursive_mutex> data_lock(output.GetDataMutex());
+            if(future->IsCancelled())
+            {
+                return kRocProfVisResultCancelled;
+            }
 
-        rocprofvis_dm_database_t db = rocprofvis_dm_get_property_as_handle(m_dm_handle, kRPVDMDatabaseHandle, 0);
-        rocprofvis_dm_result_t dm_result = kRocProfVisDmResultSuccess;
+            rocprofvis_dm_database_t db = rocprofvis_dm_get_property_as_handle(
+                m_dm_handle, kRPVDMDatabaseHandle, 0);
+            rocprofvis_dm_result_t dm_result = kRocProfVisDmResultSuccess;
 
-        if(!output.m_kernel_data_loaded)
-        {
-            dm_result = FetchCodeObjects(db, future, kernel_id, output);
+            if(!output.m_kernel_data_loaded)
+            {
+                if(!output.m_code_objects_loaded)
+                {
+                    dm_result = FetchCodeObjects(db, future, kernel_id, output);
+                    if(dm_result == kRocProfVisDmResultSuccess)
+                    {
+                        output.m_code_objects_loaded = true;
+                    }
+                }
+                if(dm_result == kRocProfVisDmResultSuccess && !output.m_isa_lines_loaded)
+                {
+                    dm_result = FetchIsaLines(db, future, kernel_id, output);
+                    if(dm_result == kRocProfVisDmResultSuccess)
+                    {
+                        output.m_isa_lines_loaded = true;
+                    }
+                }
+                if(dm_result == kRocProfVisDmResultSuccess)
+                {
+                    dm_result = FetchIsaLineDeps(db, future, kernel_id, output);
+                }
+                if(dm_result == kRocProfVisDmResultSuccess)
+                {
+                    dm_result = FetchStalls(db, future, kernel_id, output);
+                }
+                if(dm_result == kRocProfVisDmResultSuccess)
+                {
+                    output.m_kernel_data_loaded = true;
+                }
+            }
+            if(future->IsCancelled())
+            {
+                return kRocProfVisResultCancelled;
+            }
+
             if(dm_result == kRocProfVisDmResultSuccess)
+            {
+                dm_result = FetchSourceFileLines(db, future, source_file_id, output);
+            }
+            if(future->IsCancelled())
+            {
+                return kRocProfVisResultCancelled;
+            }
+
+            return dm_result == kRocProfVisDmResultSuccess
+                       ? kRocProfVisResultSuccess
+                       : kRocProfVisResultUnknownError;
+        },
+        &future));
+
+    return future.IsValid() ? kRocProfVisResultSuccess : kRocProfVisResultUnknownError;
+}
+
+rocprofvis_result_t
+ComputeTrace::AsyncFetchPcSamplingMandatorys(Arguments& args, Future& future,
+                                             PcSampling& output)
+{
+    uint64_t kernel_id = 0;
+    if(kRocProfVisResultSuccess !=
+       args.GetUInt64(kRPVControllerPcSamplingArgsKernelId, 0, &kernel_id))
+    {
+        return kRocProfVisResultInvalidArgument;
+    }
+
+    future.Set(JobSystem::Get().IssueJob(
+        [this, &output, kernel_id](Future* future) -> rocprofvis_result_t {
+            std::unique_lock<std::recursive_mutex> data_lock(output.GetDataMutex());
+            if(future->IsCancelled())
+            {
+                return kRocProfVisResultCancelled;
+            }
+
+            rocprofvis_dm_database_t db = rocprofvis_dm_get_property_as_handle(
+                m_dm_handle, kRPVDMDatabaseHandle, 0);
+            rocprofvis_dm_result_t dm_result = kRocProfVisDmResultSuccess;
+            if(!output.m_code_objects_loaded)
+            {
+                dm_result = FetchCodeObjects(db, future, kernel_id, output);
+                if(dm_result == kRocProfVisDmResultSuccess)
+                {
+                    output.m_code_objects_loaded = true;
+                }
+            }
+            if(dm_result == kRocProfVisDmResultSuccess && !output.m_isa_lines_loaded)
             {
                 dm_result = FetchIsaLines(db, future, kernel_id, output);
+                if(dm_result == kRocProfVisDmResultSuccess)
+                {
+                    output.m_isa_lines_loaded = true;
+                }
             }
-            if(dm_result == kRocProfVisDmResultSuccess)
+            if(future->IsCancelled())
             {
-                dm_result = FetchIsaLineDeps(db, future, kernel_id, output);
+                return kRocProfVisResultCancelled;
             }
-            if(dm_result == kRocProfVisDmResultSuccess)
-            {
-                dm_result = FetchStalls(db, future, kernel_id, output);
-            }
-            if(dm_result == kRocProfVisDmResultSuccess)
-            {
-                output.m_kernel_data_loaded = true;
-            }
-        }
-        if(future->IsCancelled())
-        {
-            return kRocProfVisResultCancelled;
-        }
 
-        if(dm_result == kRocProfVisDmResultSuccess)
-        {
-            dm_result = FetchSourceFileLines(db, future, source_file_id, output);
-        }
-        if(future->IsCancelled())
-        {
-            return kRocProfVisResultCancelled;
-        }
-
-        return dm_result == kRocProfVisDmResultSuccess
-                   ? kRocProfVisResultSuccess
-                   : kRocProfVisResultUnknownError;
-    }, &future));
+            return dm_result == kRocProfVisDmResultSuccess
+                       ? kRocProfVisResultSuccess
+                       : kRocProfVisResultUnknownError;
+        },
+        &future));
 
     return future.IsValid() ? kRocProfVisResultSuccess : kRocProfVisResultUnknownError;
 }
@@ -835,6 +902,10 @@ rocprofvis_result_t ComputeTrace::LoadRocpd(Future* future)
                                                 kRPVComputeFetchKernelSourceFiles,
                                                 query_arguments, query_output,
                                                 [this, &kernel_by_id](const QueryDataStore& data_store){
+                                                if(data_store.rows.empty())
+                                                {
+                                                    return;
+                                                }
                                                 const auto kernel_column_it = data_store.columns.find(
                                                     kRPVComputeColumnKernelUUID);
                                                 if(kernel_column_it == data_store.columns.end() ||
@@ -1132,20 +1203,28 @@ rocprofvis_dm_result_t ComputeTrace::ExecuteQuery(rocprofvis_dm_database_t      
                                 {
                                     uint64_t num_columns = rocprofvis_dm_get_property_as_uint64(table_handle, kRPVDMNumberOfTableColumnsUInt64, 0);
                                     uint64_t num_rows = rocprofvis_dm_get_property_as_uint64(table_handle, kRPVDMNumberOfTableRowsUInt64, 0);
+                                    const bool empty_result = num_columns == 0 && num_rows == 0;
 
                                     for(uint64_t i = 0; i < num_columns; i++)
                                     {
                                         data_store.columns[rocprofvis_db_compute_column_enum_t(rocprofvis_dm_get_property_as_uint64(table_handle, kRPVDMExtTableColumnEnumUInt64Indexed, i))] = (int)i;
                                     }
-                                    for(auto& store_column : data_store.columns)
+                                    if(!empty_result)
                                     {
-                                        if(!store_column.second)
+                                        for(auto& store_column : data_store.columns)
                                         {
-                                            result = kRocProfVisDmResultUnknownError;
-                                            break;
+                                            if(!store_column.second)
+                                            {
+                                                result = kRocProfVisDmResultUnknownError;
+                                                break;
+                                            }
                                         }
                                     }
-                                    if(result == kRocProfVisDmResultSuccess)
+                                    if(empty_result)
+                                    {
+                                        callback(data_store);
+                                    }
+                                    else if(result == kRocProfVisDmResultSuccess)
                                     {
                                         data_store.rows.resize(num_rows);
                                         for(uint64_t i = 0; i < num_rows; i++)

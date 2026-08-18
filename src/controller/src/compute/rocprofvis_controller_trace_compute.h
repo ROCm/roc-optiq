@@ -58,6 +58,9 @@ public:
     rocprofvis_result_t AsyncFetchPcSampling(Arguments&  args,
                                              Future&     future,
                                              PcSampling& output);
+    rocprofvis_result_t AsyncFetchPcSamplingMandatorys(Arguments&  args,
+                                                       Future&     future,
+                                                       PcSampling& output);
 
 private:
     class MetricID

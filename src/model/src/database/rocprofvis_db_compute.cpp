@@ -295,7 +295,30 @@ namespace DataModel
 
 	rocprofvis_dm_result_t ComputeQueryFactory::GetComputeKernelSourceFiles(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params, rocprofvis_dm_string_t& query_out) {
 		rocprofvis_dm_result_t result = kRocProfVisDmResultNotSupported;
-		if (IsVersionGreaterOrEqual("1.2.0"))
+		if (IsVersionGreaterOrEqual("2.0.0"))
+		{
+			result = kRocProfVisDmResultInvalidParameter;
+			if (num > 0 && params != nullptr)
+			{
+				bool valid = true;
+				for (uint32_t i = 0; i < num; i++)
+				{
+					if (params[i].param_type != kRPVComputeParamKernelId || params[i].param_str == nullptr)
+					{
+						valid = false;
+						break;
+					}
+				}
+				if (valid)
+				{
+					query_out =
+						"SELECT 0 AS kernel_uuid, 0 AS id, '' AS file_path, "
+						"'' AS content_checksum WHERE 0";
+					result = kRocProfVisDmResultSuccess;
+				}
+			}
+		}
+		else if (IsVersionGreaterOrEqual("1.2.0"))
 		{
 			result = kRocProfVisDmResultInvalidParameter;
 			if (num > 0 && params != nullptr)
@@ -358,7 +381,23 @@ namespace DataModel
 
 	rocprofvis_dm_result_t ComputeQueryFactory::GetComputeKernelCodeObjects(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params, rocprofvis_dm_string_t& query_out) {
 		rocprofvis_dm_result_t result = kRocProfVisDmResultNotSupported;
-		if (IsVersionGreaterOrEqual("1.2.0"))
+		if (IsVersionGreaterOrEqual("2.0.0"))
+		{
+			result = kRocProfVisDmResultInvalidParameter;
+			if (num == 1 && params != nullptr && params[0].param_type == kRPVComputeParamKernelId)
+			{
+				query_out =
+					"SELECT DISTINCT co.code_object_uuid AS code_object_id, "
+					"'' AS uri, '' AS code_object_checksum "
+					"FROM compute_code_object_store co "
+					"JOIN compute_instruction_line il ON il.code_object_uuid = co.code_object_uuid "
+					"WHERE il.kernel_uuid = ";
+				query_out += params[0].param_str;
+				query_out += " ORDER BY co.code_object_uuid";
+				result = kRocProfVisDmResultSuccess;
+			}
+		}
+		else if (IsVersionGreaterOrEqual("1.2.0"))
 		{
 			result = kRocProfVisDmResultInvalidParameter;
 			if (num == 1 && params != nullptr && params[0].param_type == kRPVComputeParamKernelId)
@@ -396,7 +435,26 @@ namespace DataModel
 
 	rocprofvis_dm_result_t ComputeQueryFactory::GetComputeKernelIsaLines(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params, rocprofvis_dm_string_t& query_out) {
 		rocprofvis_dm_result_t result = kRocProfVisDmResultNotSupported;
-		if (IsVersionGreaterOrEqual("1.2.0"))
+		if (IsVersionGreaterOrEqual("2.0.0"))
+		{
+			result = kRocProfVisDmResultInvalidParameter;
+			if (num == 1 && params != nullptr && params[0].param_type == kRPVComputeParamKernelId)
+			{
+				query_out =
+					"SELECT il.instruction_uuid AS isa_line_id, "
+					"il.code_object_uuid AS isa_code_object_id, "
+					"COALESCE(il.code_object_offset, 0) AS code_object_offset, "
+					"0 AS instruction_type_id, "
+					"COALESCE(il.instruction, '') AS instruction, "
+					"COALESCE(il.comment, '') AS comment "
+					"FROM compute_instruction_line il "
+					"WHERE il.kernel_uuid = ";
+				query_out += params[0].param_str;
+				query_out += " ORDER BY il.code_object_offset";
+				result = kRocProfVisDmResultSuccess;
+			}
+		}
+		else if (IsVersionGreaterOrEqual("1.2.0"))
 		{
 			result = kRocProfVisDmResultInvalidParameter;
 			if (num == 1 && params != nullptr && params[0].param_type == kRPVComputeParamKernelId)

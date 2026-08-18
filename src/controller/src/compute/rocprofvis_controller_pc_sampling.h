@@ -105,7 +105,9 @@ private:
     std::vector<StallReasonCount> m_stall_reason_counts;
 
     std::unordered_map<uint32_t, std::vector<SourceLine>> m_source_line_cache;
-    bool m_kernel_data_loaded = false;
+    bool m_kernel_data_loaded  = false;
+    bool m_code_objects_loaded = false;
+    bool m_isa_lines_loaded    = false;
 
     std::recursive_mutex m_data_mutex;
 

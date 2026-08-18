@@ -131,9 +131,12 @@ ComputeCodeView::LoadData(uint32_t kernel_id)
     // Source file list is already populated eagerly - just refresh the selection.
     LoadSourceFileList(kernel_info->pc_sampling_data);
 
-    // Clear stale widget data and kick off the async fetch for the selected file.
+    // Clear stale widget data. The mandatory code-object and ISA request starts
+    // from Render, when the PC Sampling View is open.
     ClearCodeData();
-    FetchPcSamplingForCurrentFile();
+    m_pending_refetch = true;
+    if(m_fetch_in_progress)
+        m_data_provider.CancelRequest(m_active_request_id);
 }
 
 void
@@ -153,10 +156,10 @@ ComputeCodeView::ClearSelectionData()
 }
 
 void
-ComputeCodeView::FetchPcSamplingForCurrentFile()
+ComputeCodeView::FetchMandatoryPcSampling()
 {
     if(m_current_kernel_id == ComputeSelection::INVALID_SELECTION_ID ||
-       m_current_source_file_id == ComputeSelection::INVALID_SELECTION_ID)
+       m_current_workload_id == ComputeSelection::INVALID_SELECTION_ID)
     {
         m_pending_refetch = false;
         if(m_fetch_in_progress)
@@ -260,7 +263,7 @@ ComputeCodeView::Render()
 {
     if(m_pending_refetch && !m_fetch_in_progress)
     {
-        FetchPcSamplingForCurrentFile();
+        FetchMandatoryPcSampling();
     }
 
     RenderControlPanel();
@@ -380,7 +383,7 @@ ComputeCodeView::RenderSourceFileDropdown()
                 m_current_source_file_id = id;
                 m_source_code->Load({}, 0);
                 m_isa_code->Load({}, 0);
-                FetchPcSamplingForCurrentFile();
+                FetchMandatoryPcSampling();
             }
             if(selected)
                 ImGui::SetItemDefaultFocus();
@@ -628,6 +631,8 @@ IsaCodeWidget::Render()
         "#", ImGuiTableColumnFlags_NoResize | ImGuiTableColumnFlags_WidthFixed,
         m_line_num_width);
 
+    ImGui::TableSetupColumn("ISA", ImGuiTableColumnFlags_WidthStretch);
+
     if(IsStallShown())
     {
         const float num_col_width = ImGui::CalcTextSize("999999").x;
@@ -638,8 +643,6 @@ IsaCodeWidget::Render()
         ImGui::TableSetupColumn("Active %",  ImGuiTableColumnFlags_WidthFixed, flt_col_width);
         ImGui::TableSetupColumn("Occup. %",  ImGuiTableColumnFlags_WidthFixed, flt_col_width);
     }
-
-    ImGui::TableSetupColumn("ISA", ImGuiTableColumnFlags_WidthStretch);
 
     if(m_show_comments)
         ImGui::TableSetupColumn("Comments", ImGuiTableColumnFlags_WidthStretch);
@@ -696,6 +699,9 @@ IsaCodeWidget::RenderLine(uint32_t index, uint32_t columns_count)
 
     ImGui::TextColored(m_line_num_color, "%*u", m_line_num_digits, index + 1);
 
+    ImGui::TableSetColumnIndex(++column);
+    ImGui::TextUnformatted(isa_row.instruction.c_str());
+
     if(IsStallShown())
     {
         ImGui::TableSetColumnIndex(++column);
@@ -709,9 +715,6 @@ IsaCodeWidget::RenderLine(uint32_t index, uint32_t columns_count)
         ImGui::TableSetColumnIndex(++column);
         ImGui::TextDisabled("%.2f", isa_row.wave_occupancy_percent);
     }
-
-    ImGui::TableSetColumnIndex(++column);
-    ImGui::TextUnformatted(isa_row.instruction.c_str());
 
     if(m_show_comments)
     {

@@ -1066,7 +1066,14 @@ rocprofvis_result_t ComputeTrace::LoadRocpd(Future* future)
     return result;
 }
 
-rocprofvis_dm_result_t ComputeTrace::ExecuteQuery(rocprofvis_dm_database_t db, rocprofvis_dm_trace_t dm, rocprofvis_db_future_t db_future, Future* controller_future, rocprofvis_db_compute_use_case_enum_t use_case, QueryArgumentStore& argument_store, QueryDataStore& data_store, QueryCallback callback)
+rocprofvis_dm_result_t ComputeTrace::ExecuteQuery(rocprofvis_dm_database_t              db,
+                                                  rocprofvis_dm_trace_t                 dm,
+                                                  rocprofvis_db_future_t                db_future,
+                                                  Future*                               controller_future,
+                                                  rocprofvis_db_compute_use_case_enum_t use_case,
+                                                  QueryArgumentStore&                   argument_store,
+                                                  QueryDataStore&                       data_store,
+                                                  QueryCallback                         callback)
 {
     rocprofvis_dm_result_t result = kRocProfVisDmResultInvalidParameter;
     bool allocate_db_future = false;
@@ -1210,7 +1217,11 @@ rocprofvis_dm_result_t ComputeTrace::ExecuteQuery(rocprofvis_dm_database_t db, r
     return result;
 }
 
-rocprofvis_result_t ComputeTrace::SetObjectProperty(rocprofvis_handle_t* object, rocprofvis_property_t property, uint64_t index, const char* value, rocprofvis_controller_primitive_type_t type)
+rocprofvis_result_t ComputeTrace::SetObjectProperty(rocprofvis_handle_t*                   object,
+                                                    rocprofvis_property_t                  property,
+                                                    uint64_t                               index,
+                                                    const char*                            value,
+                                                    rocprofvis_controller_primitive_type_t type)
 {
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     if(object && value)

@@ -481,6 +481,51 @@ void RegisterAppTests(ImGuiTestEngine* e)
         IM_CHECK(TabContainerTestPeer{*tc}.ActiveTabIndex() == target_idx);
     };
 
+    t = IM_REGISTER_TEST(e, "app", "compute_workload_details_populates");
+    t->TestFunc = [](ImGuiTestContext* ctx)
+    {
+        ComputeView* cv = GetComputeViewOrSkip(ctx);
+        if (!cv) return;
+        TabContainer* tc = ComputeViewTestPeer{*cv}.TabContainerPtr();
+        if (tc == nullptr)
+        {
+            ctx->LogWarning("SKIP: compute view has no tab container");
+            return;
+        }
+
+        const std::vector<const TabItem*> tabs = tc->GetTabs();
+        ComputeWorkloadView* wv = nullptr;
+        std::string          wv_label;
+        for (const TabItem* tab : tabs)
+        {
+            if (tab->m_id == "compute_workload_view")
+            {
+                wv       = dynamic_cast<ComputeWorkloadView*>(tab->m_widget.get());
+                wv_label = tab->m_label;
+                break;
+            }
+        }
+        if (wv == nullptr)
+        {
+            ctx->LogWarning("SKIP: no Workload Details tab in this build");
+            return;
+        }
+
+        // m_workload_info populates in Render(), so the tab must be active first.
+        ctx->ItemClick(("//Main Window/**/" + wv_label).c_str());
+        ctx->Yield(3);
+
+        ComputeWorkloadViewTestPeer peer{*wv};
+        IM_CHECK(peer.WorkloadInfoPtr() != nullptr);
+        if (peer.WorkloadInfoPtr() == nullptr) return;
+
+        // Both panels fill only when the render gate passes: 2 cols, non-empty.
+        IM_CHECK(peer.SystemInfoCols() == 2);
+        IM_CHECK(peer.SystemInfoRows() > 0);
+        IM_CHECK(peer.ProfilingConfigCols() == 2);
+        IM_CHECK(peer.ProfilingConfigRows() > 0);
+    };
+
     t = IM_REGISTER_TEST(e, "app", "compute_workload_auto_selected");
     t->TestFunc = [](ImGuiTestContext* ctx)
     {

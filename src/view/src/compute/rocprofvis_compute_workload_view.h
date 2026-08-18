@@ -39,6 +39,8 @@ protected:
     std::unique_ptr<HSplitContainer> m_content_container;
 
     const WorkloadInfo* m_workload_info;
+
+    friend struct ComputeWorkloadViewTestPeer;
 };
 
 }  // namespace View

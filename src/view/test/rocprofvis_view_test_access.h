@@ -21,7 +21,9 @@
 #include "compute/rocprofvis_compute_kernel_details.h"
 #include "compute/rocprofvis_compute_kernel_metric_table.h"
 #include "compute/rocprofvis_compute_view.h"
+#include "compute/rocprofvis_compute_workload_view.h"
 #include "compute/rocprofvis_compute_selection.h"
+#include "model/compute/rocprofvis_compute_model_types.h"
 #include "widgets/rocprofvis_infinite_scroll_table.h"
 #include "widgets/rocprofvis_tab_container.h"
 
@@ -67,6 +69,32 @@ struct ComputeKernelDetailsViewTestPeer
 {
     ComputeKernelDetailsView& v;
     KernelMetricTable* KernelMetricTablePtr() const { return v.m_kernel_metric_table.get(); }
+};
+
+struct ComputeWorkloadViewTestPeer
+{
+    const ComputeWorkloadView& v;
+    const WorkloadInfo* WorkloadInfoPtr() const { return v.m_workload_info; }
+    size_t SystemInfoCols() const
+    {
+        return v.m_workload_info ? v.m_workload_info->system_info.size() : 0;
+    }
+    size_t SystemInfoRows() const
+    {
+        return (v.m_workload_info && !v.m_workload_info->system_info.empty())
+                   ? v.m_workload_info->system_info[0].size()
+                   : 0;
+    }
+    size_t ProfilingConfigCols() const
+    {
+        return v.m_workload_info ? v.m_workload_info->profiling_config.size() : 0;
+    }
+    size_t ProfilingConfigRows() const
+    {
+        return (v.m_workload_info && !v.m_workload_info->profiling_config.empty())
+                   ? v.m_workload_info->profiling_config[0].size()
+                   : 0;
+    }
 };
 
 // The kernel metric table's sort column/order are updated each frame from the

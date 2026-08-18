@@ -2226,7 +2226,11 @@ for nearly every common pattern.
   ahead of the layout the rows are placed with. Track positions come
   from `ImGui::GetCursorPos()`, so cull and hit-test against
   `ImGui::GetScrollY()` inside `Graph View Main` or rows draw at the
-  wrong offset for a frame while scrolling.
+  wrong offset for a frame while scrolling. ImGui also rounds
+  `window->Scroll` to whole pixels: keep `m_previous_scroll_position`
+  as a `float` and treat a sub-pixel gap as already applied, or a
+  leftover fraction looks like a pending wheel request and overwrites
+  the scrollbar.
 - **Forgetting to unsubscribe.** If you `Subscribe` to an event, store
   the token and `Unsubscribe` in your destructor. Otherwise the
   EventManager will dispatch into a dead `this`.

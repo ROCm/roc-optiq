@@ -34,6 +34,9 @@ constexpr float    SIDEBAR_WIDTH_MAX             = 600.0f;
 constexpr float    SIDEBAR_DEFAULT_SIZE          = 400.0f;
 constexpr float    LOADING_TRACK_DISTANCE        = DEFAULT_TRACK_HEIGHT * 14;
 constexpr float    SCROLL_SPEED                  = 100.0f;
+// ImGui rounds window->Scroll with ImRound64, so sub-pixel remainders are not
+// a distinct view position. Treat them as already applied.
+constexpr float    SCROLL_APPLY_TOLERANCE_PX     = 1.0f;
 constexpr uint64_t DEFAULT_LOADING_TIMER         = 150;  // milliseconds
 constexpr float    ARTIFICIAL_SCROLLBAR_HEIGHT   = 18.0f;
 constexpr float    SIDEBAR_SPLITTER_WIDTH        = 5.0f;
@@ -1748,20 +1751,29 @@ TimelineView::RenderGraphView()
                       window_flags);
     m_content_max_y_scroll = ImGui::GetScrollMaxY();
 
-    // The scrollbar writes ImGui's scroll directly, the wheel and hotkeys write
+    // The scrollbar writes ImGui's scroll directly; the wheel and hotkeys write
     // m_scroll_position_y and only land on the next Begin. Take the scrollbar's
     // value only when nothing newer of ours is pending, else a fast wheel flick
     // is overwritten by last frame's request.
-    float scroll_position = ImGui::GetScrollY();
-    if(m_previous_scroll_position != scroll_position)
+    //
+    // ImGui stores Scroll as whole pixels, so a fractional remainder is not a
+    // real pending jump. Exact equality would keep SetScrollY() every frame and
+    // treat that residue as "ours", which then fights a later scrollbar drag.
+    // Sub-pixel deltas stay in m_scroll_position_y so they can accumulate.
+    const float applied_scroll = ImGui::GetScrollY();
+    const bool  pending_request =
+        std::abs(m_scroll_position_y - m_previous_scroll_position) >=
+        SCROLL_APPLY_TOLERANCE_PX;
+
+    if(applied_scroll != m_previous_scroll_position)
     {
-        if(m_scroll_position_y == m_previous_scroll_position)
+        if(!pending_request)
         {
-            m_scroll_position_y = scroll_position;
+            m_scroll_position_y = applied_scroll;
         }
-        m_previous_scroll_position = scroll_position;
+        m_previous_scroll_position = applied_scroll;
     }
-    if(m_scroll_position_y != scroll_position)
+    if(std::abs(m_scroll_position_y - applied_scroll) >= SCROLL_APPLY_TOLERANCE_PX)
     {
         ImGui::SetScrollY(m_scroll_position_y);
     }

@@ -219,7 +219,7 @@ private:
     float                               m_scroll_position_y;
     float                               m_content_max_y_scroll;
     bool                                m_can_drag_to_pan;
-    double                              m_previous_scroll_position;
+    float                               m_previous_scroll_position;
     bool                                m_meta_map_made;
     bool                                m_resize_activity;
     bool                                m_reorder_auto_scrolling;

@@ -196,6 +196,7 @@ struct WorkloadInfo
     std::string                              name;
     std::vector<std::vector<std::string>>    system_info;
     std::vector<std::vector<std::string>>    profiling_config;
+    std::string                              memory_chart_layout;  // Raw JSON layout from the DB (empty if absent).
     AvailableMetrics                         available_metrics;
     std::unordered_map<uint32_t, KernelInfo> kernels;
     std::vector<const KernelInfo*>           ordered_kernels;  // built from map values; never null

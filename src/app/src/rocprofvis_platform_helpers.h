@@ -60,31 +60,22 @@ restore_secondary_viewport_intended_pos(
     std::unordered_map<ImGuiID, ImVec2>& viewport_intended_pos);
 
 // Linux only. Repair stale X11 pointer routing after a floating-window drag
-// ends. Gated by the drag-repair policy described below, so this is a no-op
-// unless the user has opted in.
+// ends. Off unless set_drag_repair_enabled(true) has been called, so this is a
+// no-op by default.
 void
 raise_dragged_viewport_after_release();
 
-// Override the policy that decides whether the post-drag click-through
-// fix runs (raise_dragged_viewport_after_release).  This does NOT
-// affect the always-on corner-lock cursor-offset fix, which is
-// engaged unconditionally on any Wayland session.
+// Enable or disable the post-drag click-through fix
+// (raise_dragged_viewport_after_release).  This does NOT affect the
+// always-on corner-lock cursor-offset fix, which is engaged
+// unconditionally on any Wayland session.
 //
-// Resolution order at call sites is (highest to lowest priority):
-//   1. CLI-supplied override (set via these functions from main()).
-//   2. Env var ROCPROFVIS_DRAG_REPAIR ("on"/"1"/"true"/"yes" => on,
-//      "off"/"0"/"false"/"no" => off, anything else ignored).
-//   3. Default OFF.  No auto-detect tier: the only known-buggy
-//      configuration is Ubuntu Wayland, which users must opt into
-//      explicitly because the fix incurs a magic-lamp flicker on
-//      every drag-release.
-//
-// Callers in main.cpp typically call set_drag_repair_override() once
-// after CLI parsing, when the user has passed --drag-repair on|off.
-// If the user omits the flag (or passes "auto"), the override stays
-// unset and policy falls through to the env-var / default tier.
+// The fix costs a magic-lamp flicker on every drag-release, so it is
+// off unless asked for.  main() calls this once at startup with the
+// preference stored in the application settings, which the
+// --drag-repair flag updates.
 void
-set_drag_repair_override(bool on);
+set_drag_repair_enabled(bool enabled);
 
 #endif  // __linux__
 

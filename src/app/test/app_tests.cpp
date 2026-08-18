@@ -666,6 +666,128 @@ void RegisterAppTests(ImGuiTestEngine* e)
         IM_CHECK(peer.HasDifferenceColumn());
     };
 
+    t = IM_REGISTER_TEST(e, "app", "compute_table_view_pin_persists_across_kernel_switch");
+    t->TestFunc = [](ImGuiTestContext* ctx)
+    {
+        ComputeView* cv = GetComputeViewOrSkip(ctx);
+        if (!cv) return;
+        TabContainer* tc = ComputeViewTestPeer{*cv}.TabContainerPtr();
+        IM_CHECK(tc != nullptr);
+        if (tc == nullptr) return;
+
+        const std::vector<const TabItem*> tabs = tc->GetTabs();
+        ComputeTableView* tbl = nullptr;
+        for (const TabItem* tab : tabs)
+        {
+            if (tab->m_id == "compute_table_view")
+            {
+                tbl = dynamic_cast<ComputeTableView*>(tab->m_widget.get());
+                break;
+            }
+        }
+        if (tbl == nullptr)
+        {
+            ctx->LogWarning("SKIP: no Table View tab in this build");
+            return;
+        }
+
+        ComputeSelection* sel = ComputeViewTestPeer{*cv}.ComputeSelectionPtr();
+        IM_CHECK(sel != nullptr);
+        if (sel == nullptr) return;
+        const uint32_t workload = sel->GetSelectedWorkload();
+        const uint32_t baseline_kernel = sel->GetSelectedKernel();
+        IM_CHECK(workload != ComputeSelection::INVALID_SELECTION_ID);
+        IM_CHECK(baseline_kernel != ComputeSelection::INVALID_SELECTION_ID);
+
+        std::vector<const KernelInfo*> kernels =
+            cv->GetDataProvider()->ComputeModel().GetKernelInfoList(workload);
+        if (kernels.size() < 2)
+        {
+            ctx->LogWarning("SKIP: workload has fewer than two kernels to switch between");
+            return;
+        }
+
+        tc->SetActiveTab("compute_table_view");
+        ctx->Yield(3);
+        ComputeTableViewTestPeer peer{*tbl};
+        for (int i = 0; i < 200 && (peer.FetchPending() || peer.TableWidgetCount() == 0); i++)
+            ctx->Yield(2);
+        IM_CHECK(peer.TableWidgetCount() > 0);
+        if (peer.TableWidgetCount() == 0) return;
+
+        // Metric tables sit in a nested child window the "//Main Window/**/"
+        // wildcard can't reach; grab the innermost "_table" one.
+        auto find_table_window = [&]() -> ImGuiWindow*
+        {
+            ImGuiWindow* found = nullptr;
+            for (ImGuiWindow* w : ImGui::GetCurrentContext()->Windows)
+                if (w->WasActive && strstr(w->Name, "_table") &&
+                    strstr(w->Name, "TabContainer"))
+                    found = w;  // keep last = deepest
+            return found;
+        };
+        ImGuiWindow* table_win = find_table_window();
+        IM_CHECK(table_win != nullptr);
+        if (table_win == nullptr) return;
+
+        // Each metric row starts with an empty-label pin Checkbox("") in column 0,
+        // followed by the metric-id cell (label like "0.1.3:Duration"). So the pin
+        // control is the empty-label item just before a cell whose label starts with
+        // a digit and contains a dot.
+        ctx->SetRef(table_win);
+        ImGuiTestItemList items;
+        ctx->GatherItems(&items, "");
+        ImGuiID pin_checkbox = 0;
+        for (int i = 1; i < items.GetSize(); i++)
+        {
+            const char* lbl = items[i]->DebugLabel;
+            const bool looks_like_id =
+                lbl[0] >= '0' && lbl[0] <= '9' && strchr(lbl, '.') != nullptr;
+            if (looks_like_id && items[i - 1]->DebugLabel[0] == '\0')
+            {
+                pin_checkbox = items[i - 1]->ID;
+                break;
+            }
+        }
+        IM_CHECK(pin_checkbox != 0);
+        if (pin_checkbox == 0) { ctx->SetRef("//Main Window"); return; }
+
+        IM_CHECK(peer.PinnedCount() == 0);
+        ctx->ItemClick(pin_checkbox);
+        ctx->Yield(3);
+        ctx->SetRef("//Main Window");
+
+        // Remember what got pinned so we can check it survives the kernel switch.
+        IM_CHECK(peer.PinnedCount() == 1);
+        if (peer.PinnedCount() != 1) return;
+        const MetricId pinned = peer.FirstPinned();
+
+        // Switch kernels: the table refetches, but pins should persist
+        // (ComputeTableView::RestoreMetricPining).
+        uint32_t other_kernel = ComputeSelection::INVALID_SELECTION_ID;
+        for (const KernelInfo* k : kernels)
+            if (k != nullptr && k->id != baseline_kernel) { other_kernel = k->id; break; }
+        IM_CHECK(other_kernel != ComputeSelection::INVALID_SELECTION_ID);
+
+        // Wait for the refetch to START before draining: SelectKernel's event fires
+        // a frame later, so an immediate drain would see no pending fetch and exit.
+        sel->SelectKernel(other_kernel);
+        for (int i = 0; i < 20 && !peer.FetchPending(); i++) ctx->Yield(1);
+        for (int i = 0; i < 300 && (peer.FetchPending() || peer.TableWidgetCount() == 0); i++)
+            ctx->Yield(2);
+
+        const bool still_pinned = peer.IsPinned(pinned);
+
+        // Restore before asserting: IM_CHECK aborts on failure, and pins + kernel
+        // selection are shared across compute tests.
+        sel->SelectKernel(baseline_kernel);
+        ctx->Yield(3);
+        for (int i = 0; i < 200 && peer.FetchPending(); i++) ctx->Yield(2);
+        if (peer.IsPinned(pinned)) peer.Unpin(pinned);
+
+        IM_CHECK(still_pinned);
+    };
+
     t = IM_REGISTER_TEST(e, "app", "sys_timeline_pan_hotkey");
     t->TestFunc = [](ImGuiTestContext* ctx)
     {

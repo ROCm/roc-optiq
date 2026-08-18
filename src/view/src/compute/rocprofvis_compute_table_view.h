@@ -65,6 +65,8 @@ private:
     EventManager::SubscriptionToken m_metrics_fetched_token;
 
     std::unique_ptr<Preset> m_preset;
+
+    friend struct ComputeTableViewTestPeer;
 };
 
 }  // namespace View

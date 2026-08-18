@@ -23,6 +23,7 @@
 #include "compute/rocprofvis_compute_view.h"
 #include "compute/rocprofvis_compute_workload_view.h"
 #include "compute/rocprofvis_compute_comparison.h"
+#include "compute/rocprofvis_compute_table_view.h"
 #include "compute/rocprofvis_compute_selection.h"
 #include "model/compute/rocprofvis_compute_model_types.h"
 #include "widgets/rocprofvis_infinite_scroll_table.h"
@@ -126,6 +127,24 @@ struct ComputeComparisonViewTestPeer
             }
         }
         return false;
+    }
+};
+
+struct ComputeTableViewTestPeer
+{
+    ComputeTableView& v;
+    bool   FetchPending() const { return v.m_fetch_pending; }
+    size_t TableWidgetCount() const { return v.m_table_widgets.size(); }
+    size_t PinnedCount() const { return v.m_pinned_metrics.size(); }
+    bool   IsPinned(const MetricId& id) const { return v.m_pinned_metrics.count(id) > 0; }
+    MetricId FirstPinned() const { return *v.m_pinned_metrics.begin(); }
+    // Test-only unpin for state restore (no public unpin exists). Skips the pin
+    // callback's source-table ChangePinState; safe only because callers refetch
+    // after, rebuilding pin state from m_pinned_metrics.
+    void Unpin(const MetricId& id)
+    {
+        v.m_pinned_metrics.erase(id);
+        v.m_pinned_metric_table.RefillTable(v.m_pinned_metrics);
     }
 };
 

@@ -543,6 +543,129 @@ void RegisterAppTests(ImGuiTestEngine* e)
         IM_CHECK(sel->GetSelectedKernel() != ComputeSelection::INVALID_SELECTION_ID);
     };
 
+    t = IM_REGISTER_TEST(e, "app", "compute_comparison_target_kernel_computes_delta");
+    t->TestFunc = [](ImGuiTestContext* ctx)
+    {
+        ComputeView* cv = GetComputeViewOrSkip(ctx);
+        if (!cv) return;
+        TabContainer* tc = ComputeViewTestPeer{*cv}.TabContainerPtr();
+        if (tc == nullptr)
+        {
+            ctx->LogWarning("SKIP: compute view has no tab container");
+            return;
+        }
+
+        const std::vector<const TabItem*> tabs = tc->GetTabs();
+        ComputeComparisonView* comp = nullptr;
+        std::string            comp_label;
+        for (const TabItem* tab : tabs)
+        {
+            if (tab->m_id == "compute_comparison_view")
+            {
+                comp       = dynamic_cast<ComputeComparisonView*>(tab->m_widget.get());
+                comp_label = tab->m_label;
+                break;
+            }
+        }
+        if (comp == nullptr)
+        {
+            ctx->LogWarning("SKIP: no Baseline Comparison tab in this build");
+            return;
+        }
+
+        ComputeSelection* sel = ComputeViewTestPeer{*cv}.ComputeSelectionPtr();
+        IM_CHECK(sel != nullptr);
+        if (sel == nullptr) return;
+        const uint32_t workload = sel->GetSelectedWorkload();
+        const uint32_t baseline_kernel = sel->GetSelectedKernel();
+        IM_CHECK(workload != ComputeSelection::INVALID_SELECTION_ID);
+        IM_CHECK(baseline_kernel != ComputeSelection::INVALID_SELECTION_ID);
+
+        ctx->ItemClick(("//Main Window/**/" + comp_label).c_str());
+        ctx->Yield(3);
+
+        ComputeComparisonViewTestPeer peer{*comp};
+
+        // The toolbar combos live in a nested child window the "//Main Window/**/"
+        // wildcard can't reach. Find it by name fragment, click relative to it, and
+        // re-find after each Yield (window pointers don't survive a rebuild).
+        auto set_ref_to_toolbar = [&]() -> bool
+        {
+            ImGuiContext* g = ImGui::GetCurrentContext();
+            for (ImGuiWindow* w : g->Windows)
+            {
+                if (w->WasActive && strstr(w->Name, "TabContainer") &&
+                    strstr(w->Name, "/toolbar_"))
+                {
+                    ctx->SetRef(w);
+                    return true;
+                }
+            }
+            return false;
+        };
+
+        // Pick the target workload first; it enables the kernel combo.
+        IM_CHECK(set_ref_to_toolbar());
+        ctx->ItemClick("##TargetWorkloads");
+        ctx->Yield(1);
+        {
+            ImGuiTestItemList items;
+            ctx->GatherItems(&items, "//$FOCUSED");
+            IM_CHECK(items.GetSize() >= 1);
+            if (items.GetSize() < 1) return;
+            ctx->ItemClick(items[0]->ID);
+        }
+        ctx->Yield(2);
+
+        // Index into the target workload's kernels (not baseline's): that combo's
+        // order is the gathered-item order we click by index below.
+        const uint32_t target_workload = peer.TargetWorkloadId();
+        std::vector<const KernelInfo*> kernels =
+            cv->GetDataProvider()->ComputeModel().GetKernelInfoList(target_workload);
+        int target_idx = -1;
+        for (int i = 0; i < static_cast<int>(kernels.size()); i++)
+        {
+            if (kernels[i] != nullptr && kernels[i]->id != baseline_kernel)
+            {
+                target_idx = i;
+                break;
+            }
+        }
+        if (target_idx < 0)
+        {
+            ctx->LogWarning("SKIP: target workload has no kernel distinct from the baseline");
+            return;
+        }
+
+        IM_CHECK(set_ref_to_toolbar());
+        ctx->ItemClick("##target_kernels");
+        ctx->Yield(1);
+        {
+            ImGuiTestItemList items;
+            ctx->GatherItems(&items, "//$FOCUSED");
+            IM_CHECK(target_idx < items.GetSize());
+            if (target_idx >= items.GetSize()) return;
+            ctx->ItemClick(items[target_idx]->ID);
+        }
+        ctx->Yield(2);
+        ctx->SetRef("//Main Window");
+
+        // Baseline and target fetch sequentially, so a "while pending" drain can
+        // slip through the gap between them. Poll the final end state instead.
+        const uint32_t want_kernel = kernels[target_idx]->id;
+        for (int i = 0; i < 300; i++)
+        {
+            if (peer.TargetKernelId() == want_kernel && !peer.RequestsPending() &&
+                peer.CategoryCount() > 0 && peer.HasDifferenceColumn())
+                break;
+            ctx->Yield(2);
+        }
+
+        IM_CHECK(peer.TargetKernelId() == want_kernel);
+        IM_CHECK(peer.CategoryCount() > 0);
+        IM_CHECK(peer.HasDifferenceColumn());
+    };
+
     t = IM_REGISTER_TEST(e, "app", "sys_timeline_pan_hotkey");
     t->TestFunc = [](ImGuiTestContext* ctx)
     {

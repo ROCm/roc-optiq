@@ -22,6 +22,7 @@
 #include "compute/rocprofvis_compute_kernel_metric_table.h"
 #include "compute/rocprofvis_compute_view.h"
 #include "compute/rocprofvis_compute_workload_view.h"
+#include "compute/rocprofvis_compute_comparison.h"
 #include "compute/rocprofvis_compute_selection.h"
 #include "model/compute/rocprofvis_compute_model_types.h"
 #include "widgets/rocprofvis_infinite_scroll_table.h"
@@ -94,6 +95,37 @@ struct ComputeWorkloadViewTestPeer
         return (v.m_workload_info && !v.m_workload_info->profiling_config.empty())
                    ? v.m_workload_info->profiling_config[0].size()
                    : 0;
+    }
+};
+
+struct ComputeComparisonViewTestPeer
+{
+    ComputeComparisonView& v;
+    uint32_t TargetWorkloadId() const { return v.m_target_workload_id; }
+    uint32_t TargetKernelId() const { return v.m_target_kernel_id; }
+    size_t   CategoryCount() const { return v.m_categories.size(); }
+    // True while either the baseline or target metrics fetch is still pending.
+    bool RequestsPending() const
+    {
+        return v.m_data_provider.IsRequestPending(v.m_baseline_request_id) ||
+               v.m_data_provider.IsRequestPending(v.m_target_request_id);
+    }
+    // True once a built table has a "Difference##" column, i.e. deltas were
+    // actually computed (not just tables allocated).
+    bool HasDifferenceColumn() const
+    {
+        for(const auto& category : v.m_categories)
+        {
+            for(const auto& table : category.tables)
+            {
+                if(!table) continue;
+                for(const std::string& name : table->OrderedValueNames())
+                {
+                    if(name.rfind("Difference##", 0) == 0) return true;
+                }
+            }
+        }
+        return false;
     }
 };
 

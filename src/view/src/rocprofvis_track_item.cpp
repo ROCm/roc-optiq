@@ -558,6 +558,15 @@ TrackItem::RenderMetaArea()
             m_timeline_track_options.RenderContextMenu();
             ImGui::EndMenu();
         }
+        // Also expose sorting here so it stays reachable when the header is hidden.
+        if(m_timeline_track_options.HasSortMenu())
+        {
+            if(IconBeginMenu(ICON_LIST, "Sort tracks"))
+            {
+                m_timeline_track_options.RenderSortMenu();
+                ImGui::EndMenu();
+            }
+        }
         // Restore hidden tracks without needing the topology side bar. The entry
         // is only shown when something is actually hidden.
         if(m_timeline_track_options.HasHiddenTracks())

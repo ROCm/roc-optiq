@@ -6,6 +6,7 @@
 #include "rocprofvis_project.h"
 #include <array>
 #include <bitset>
+#include <functional>
 #include <memory>
 #include <unordered_map>
 #include <vector>
@@ -186,6 +187,16 @@ public:
     // or popup.
     void RenderHiddenTracksSubmenu();
 
+    void SetSortMenuRenderer(std::function<void()> renderer)
+    {
+        m_render_sort_menu = std::move(renderer);
+    }
+    bool HasSortMenu() const { return static_cast<bool>(m_render_sort_menu); }
+    void RenderSortMenu() const
+    {
+        if(m_render_sort_menu) m_render_sort_menu();
+    }
+
 private:
     // Reveal every track in the list (sets display + fires a single
     // visibility-changed event). Ignores tracks that are already displayed.
@@ -229,6 +240,8 @@ private:
 
     const TimelineSelection& m_selection;
     const SettingsManager&   m_settings;
+
+    std::function<void()> m_render_sort_menu;
 };
 
 }  // namespace View

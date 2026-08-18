@@ -106,7 +106,8 @@ public:
     void MoveToPosition(double start_ns, double end_ns, double y_position, bool center);
     void ZoomToTimeRangeSelection();
     void RenderGraphPoints();
-    void RenderHistogram();
+    void RenderHeader();
+    void RenderHistogram(float total_height);
     void RenderTraceView();
 
     void           RenderGrid();
@@ -214,6 +215,7 @@ private:
 
     void CalculateTrackCounts();
     void BuildTrackCountLabels();
+    void RenderTrackInfo(float available_width);
     void RenderTrackStats(float available_width);
 
     void UpdateMaxMetaAreaSize(bool update_tracks = false);

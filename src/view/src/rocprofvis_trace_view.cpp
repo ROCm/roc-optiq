@@ -290,7 +290,7 @@ TraceView::CreateView()
     m_event_search = std::make_shared<EventSearch>(m_data_provider, m_timeline_selection);
     m_minimap               = std::make_shared<Minimap>(m_data_provider, m_timeline_view.get());
     auto m_histogram_widget = std::make_shared<RocCustomWidget>(
-        [this]() { m_timeline_view->RenderHistogram(); });
+        [this]() { m_timeline_view->RenderHeader(); });
 
     auto sidebar =
         std::make_shared<SideBar>(m_track_topology, m_timeline_selection,

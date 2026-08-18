@@ -119,6 +119,9 @@ TimelineView::TimelineView(DataProvider&                          dp,
 , m_sort_mode(TrackSortMode::kDefault)
 , m_topology_sort_pending(false)
 {
+    m_track_options_context_menu->SetSortMenuRenderer(
+        [this]() { RenderTrackSortMenu(); });
+
     // Subscribe to events
     auto new_track_data_handler = [this](std::shared_ptr<RocEvent> e) {
         this->HandleNewTrackData(e);
@@ -2673,6 +2676,14 @@ TimelineView::RenderTrackStats(float available_width)
         ImGui::PopStyleColor();
         EndTooltipStyled();
     }
+}
+
+void
+TimelineView::RenderTrackInfo(float available_width)
+{
+    RenderTrackStats(available_width);
+
+    FontManager& fonts = m_settings.GetFontManager();
 
     // Full-width sort affordance pinned to the bottom of the header, so the sort
     // options are discoverable without the right-click menu. The height is clamped
@@ -2720,20 +2731,17 @@ TimelineView::RenderTrackStats(float available_width)
 }
 
 void
-TimelineView::RenderHistogram()
+TimelineView::RenderHeader()
 {
     if(!m_histogram || m_histogram->empty()) return;
 
-    const float kHistogramTotalHeight = ImGui::GetContentRegionAvail().y;
-    const float kHistogramBarHeight   = kHistogramTotalHeight - m_ruler_height;
-    const auto& time_format = m_settings.GetUserSettings().unit_settings.time_format;
+    const float total_height = ImGui::GetContentRegionAvail().y;
 
-    // Sidebar spacer (left side, before histogram)
     ImGui::SetCursorPos(ImVec2(0, 0));
     ImGui::PushStyleColor(ImGuiCol_ChildBg, m_settings.GetColor(Colors::kBgMain));
-    ImGui::BeginChild("HistogramSidebar", ImVec2(m_sidebar_size, kHistogramTotalHeight),
-                      false, ImGuiWindowFlags_NoScrollbar);
-    RenderTrackStats(m_sidebar_size);
+    ImGui::BeginChild("HistogramSidebar", ImVec2(m_sidebar_size, total_height), false,
+                      ImGuiWindowFlags_NoScrollbar);
+    RenderTrackInfo(m_sidebar_size);
     ImGui::EndChild();
     ImGui::PopStyleColor();
     ImGui::SameLine();
@@ -2741,13 +2749,23 @@ TimelineView::RenderHistogram()
     // Vertical splitter
     float splitter_size = 1.0f;
     ImGui::PushStyleColor(ImGuiCol_ChildBg, m_settings.GetColor(Colors::kSplitterColor));
-    ImGui::BeginChild("HistogramSplitter", ImVec2(splitter_size, kHistogramTotalHeight),
-                      false);
+    ImGui::BeginChild("HistogramSplitter", ImVec2(splitter_size, total_height), false);
     ImGui::EndChild();
     ImGui::PopStyleColor();
     ImGui::SameLine();
 
-    float histogram_width = m_tpt->GetGraphSizeX() - splitter_size;
+    RenderHistogram(total_height);
+}
+
+void
+TimelineView::RenderHistogram(float total_height)
+{
+    const float kHistogramTotalHeight = total_height;
+    const float kHistogramBarHeight   = kHistogramTotalHeight - m_ruler_height;
+    const auto& time_format = m_settings.GetUserSettings().unit_settings.time_format;
+
+    constexpr float splitter_size = 1.0f;
+    float           histogram_width = m_tpt->GetGraphSizeX() - splitter_size;
 
     // Outer container
     ImGui::PushStyleColor(ImGuiCol_ChildBg, m_settings.GetColor(Colors::kBgMain));

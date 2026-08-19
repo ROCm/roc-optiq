@@ -36,6 +36,8 @@ public:
     TrackOptions(const TrackItem& track, TimelineTrackOptions& ctx,
                  const std::string& project_id);
     TrackOptions(const TrackOptions& other);
+    // Derived options are owned through unique_ptr<TrackOptions>
+    virtual ~TrackOptions() = default;
 
     // Part of aggregation, types dictate how to combine themselves
     virtual TrackOptions& operator&=(const TrackOptions& other);

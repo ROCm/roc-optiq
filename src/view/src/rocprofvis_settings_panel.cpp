@@ -200,13 +200,15 @@ SettingsPanel::Render()
                     m_settings.SaveHotkeySettings();
                     m_hotkeys_changed = false;
                 }
+                const std::string assistant_route = ActiveAssistantProviderName();
                 if(m_assistant_clear_token)
                 {
-                    m_settings.ClearAssistantToken();
+                    m_settings.ClearAssistantToken(assistant_route);
                 }
                 else if(!m_assistant_token_draft.empty())
                 {
-                    m_settings.SetAssistantToken(m_assistant_token_draft);
+                    m_settings.SetAssistantToken(assistant_route,
+                                                 m_assistant_token_draft);
                 }
                 m_assistant_token_draft.clear();
                 m_assistant_clear_token = false;
@@ -426,18 +428,103 @@ SettingsPanel::RenderAssistantSettings()
 {
     ImGuiStyle& style = ImGui::GetStyle();
 
+    AssistantSettings& assistant = m_usersettings.assistant;
+
     ImGui::TextUnformatted("Endpoint");
     ImGui::Separator();
     ImGui::TextWrapped(
-        "Base URL of an OpenAI-compatible chat endpoint. The key is stored in the "
-        "OS credential store, not in the settings file.");
+        "Routes to OpenAI-compatible chat endpoints. Each route keeps its own key "
+        "in the OS credential store, never in the settings file.");
+
+    const float label_width =
+        ImGui::CalcTextSize("Key header").x + 2.0f * style.ItemSpacing.x;
+    const float add_width    = ImGui::CalcTextSize("Add").x + 2.0f * style.FramePadding.x;
+    const float remove_width =
+        ImGui::CalcTextSize("Remove").x + 2.0f * style.FramePadding.x;
+
+    ImGui::AlignTextToFramePadding();
+    ImGui::TextUnformatted("Route");
+    ImGui::SameLine(label_width);
+    ImGui::SetNextItemWidth(-(add_width + remove_width +
+                              2.0f * style.ItemInnerSpacing.x));
+    PushComboStyles();
+    if(ImGui::BeginCombo("##assistant_provider",
+                         assistant.active < assistant.providers.size()
+                             ? assistant.providers[assistant.active].name.c_str()
+                             : "(none)"))
+    {
+        for(size_t i = 0; i < assistant.providers.size(); ++i)
+        {
+            ImGui::PushID(static_cast<int>(i));
+            if(ImGui::Selectable(assistant.providers[i].name.c_str(),
+                                 i == assistant.active))
+            {
+                assistant.active        = i;
+                m_assistant_token_draft.clear();
+                m_assistant_clear_token = false;
+                m_settings_changed      = true;
+            }
+            ImGui::PopID();
+        }
+        ImGui::EndCombo();
+    }
+    PopComboStyles();
+
+    ImGui::SameLine(0.0f, style.ItemInnerSpacing.x);
+    if(ImGui::Button("Add", ImVec2(add_width, 0)))
+    {
+        AssistantProvider added;
+        added.name = "New route";
+        assistant.providers.push_back(added);
+        assistant.active        = assistant.providers.size() - 1;
+        m_assistant_token_draft.clear();
+        m_assistant_clear_token = false;
+        m_settings_changed      = true;
+    }
+    ImGui::SameLine(0.0f, style.ItemInnerSpacing.x);
+    ImGui::BeginDisabled(assistant.providers.empty());
+    if(ImGui::Button("Remove", ImVec2(remove_width, 0)))
+    {
+        // The key belongs to the route, so drop it with the route rather than
+        // leaving an orphan entry in the credential store.
+        m_settings.ClearAssistantToken(assistant.providers[assistant.active].name);
+        assistant.providers.erase(assistant.providers.begin() +
+                                  static_cast<long>(assistant.active));
+        if(assistant.active >= assistant.providers.size() &&
+           !assistant.providers.empty())
+        {
+            assistant.active = assistant.providers.size() - 1;
+        }
+        m_assistant_token_draft.clear();
+        m_assistant_clear_token = false;
+        m_settings_changed      = true;
+    }
+    ImGui::EndDisabled();
+
+    if(assistant.providers.empty())
+    {
+        ImGui::TextWrapped("No routes yet. Press Add to create one.");
+        return;
+    }
+
+    AssistantProvider& provider = assistant.providers[assistant.active];
+
+    ImGui::AlignTextToFramePadding();
+    ImGui::TextUnformatted("Name");
+    ImGui::SameLine(label_width);
+    ImGui::SetNextItemWidth(-1.0f);
+    if(InputTextStringWithHint("##assistant_name", "Shown in this list",
+                               provider.name))
+    {
+        m_settings_changed = true;
+    }
 
     ImGui::AlignTextToFramePadding();
     ImGui::TextUnformatted("URL");
-    ImGui::SameLine();
+    ImGui::SameLine(label_width);
     ImGui::SetNextItemWidth(-1.0f);
     if(InputTextStringWithHint("##assistant_url", "https://<host>/<path>",
-                               m_usersettings.assistant.endpoint_url))
+                               provider.endpoint_url))
     {
         m_settings_changed = true;
     }
@@ -448,10 +535,9 @@ SettingsPanel::RenderAssistantSettings()
 
     ImGui::AlignTextToFramePadding();
     ImGui::TextUnformatted("Model");
-    ImGui::SameLine();
+    ImGui::SameLine(label_width);
     ImGui::SetNextItemWidth(-1.0f);
-    if(InputTextStringWithHint("##assistant_model", "Model name",
-                               m_usersettings.assistant.model))
+    if(InputTextStringWithHint("##assistant_model", "Model name", provider.model))
     {
         m_settings_changed = true;
     }
@@ -460,11 +546,63 @@ SettingsPanel::RenderAssistantSettings()
         SetTooltipStyled("Model name sent in the request body.");
     }
 
+    ImGui::AlignTextToFramePadding();
+    ImGui::TextUnformatted("Key header");
+    ImGui::SameLine(label_width);
+    ImGui::SetNextItemWidth(-1.0f);
+    if(InputTextStringWithHint("##assistant_auth_header", "Authorization",
+                               provider.auth_header))
+    {
+        m_settings_changed = true;
+    }
+    if(ImGui::IsItemHovered())
+    {
+        SetTooltipStyled("Header the key is sent in. OpenAI uses Authorization; "
+                         "gateways usually name their own.");
+    }
+
+    ImGui::AlignTextToFramePadding();
+    ImGui::TextUnformatted("Key prefix");
+    ImGui::SameLine(label_width);
+    ImGui::SetNextItemWidth(-1.0f);
+    if(InputTextStringWithHint("##assistant_auth_prefix", "Bearer ",
+                               provider.auth_prefix))
+    {
+        m_settings_changed = true;
+    }
+    if(ImGui::IsItemHovered())
+    {
+        SetTooltipStyled("Text placed before the key. Usually \"Bearer \" or empty.");
+    }
+
+    if(ImGui::Checkbox("Send a placeholder Authorization header",
+                       &provider.send_bearer_placeholder))
+    {
+        m_settings_changed = true;
+    }
+    if(ImGui::IsItemHovered())
+    {
+        SetTooltipStyled("For gateways that require the header to exist but never "
+                         "read it. Ignored when the key already uses Authorization.");
+    }
+
+    if(ImGui::Checkbox("Send max_tokens instead of max_completion_tokens",
+                       &provider.use_legacy_max_tokens))
+    {
+        m_settings_changed = true;
+    }
+    if(ImGui::IsItemHovered())
+    {
+        SetTooltipStyled("Most OpenAI-compatible servers only accept max_tokens. "
+                         "Newer OpenAI models require max_completion_tokens.");
+    }
+
     ImGui::Dummy(ImVec2(0.0f, style.ItemSpacing.y));
     ImGui::TextUnformatted("API key");
     ImGui::Separator();
 
-    const bool token_stored = m_settings.HasAssistantToken() && !m_assistant_clear_token;
+    const bool token_stored =
+        m_settings.HasAssistantToken(provider.name) && !m_assistant_clear_token;
     if(token_stored && m_assistant_token_draft.empty())
     {
         ImGui::TextUnformatted("A key is stored. Leave the field blank to keep it.");
@@ -512,6 +650,17 @@ SettingsPanel::RenderAssistantSettings()
         m_assistant_clear_token = true;
         m_settings_changed      = true;
     }
+}
+
+std::string
+SettingsPanel::ActiveAssistantProviderName() const
+{
+    const AssistantSettings& assistant = m_usersettings.assistant;
+    if(assistant.active >= assistant.providers.size())
+    {
+        return std::string();
+    }
+    return assistant.providers[assistant.active].name;
 }
 
 void

@@ -32,6 +32,12 @@ struct AssistantChatRequest
     std::string                  endpoint_url;
     std::string                  model;
     std::string                  api_token;
+    // How this route wants the key presented, and the quirks it needs in the
+    // body. See AssistantProvider in the settings manager.
+    std::string                  auth_header;
+    std::string                  auth_prefix;
+    bool                         send_bearer_placeholder = false;
+    bool                         use_legacy_max_tokens   = false;
     std::vector<AssistantMessage> messages;
     bool                         enable_tools = true;
 };

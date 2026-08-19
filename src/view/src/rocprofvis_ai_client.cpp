@@ -45,11 +45,10 @@ constexpr size_t ASSISTANT_MAX_HARMONY_CALLS       = 4;
 constexpr int    ASSISTANT_FIRST_ERROR_STATUS      = 400;
 constexpr double ASSISTANT_TEMPERATURE             = 0.7;
 constexpr char   ASSISTANT_JSON_CONTENT_TYPE[]     = "application/json";
-// Gateways in front of these endpoints authenticate on a subscription header
-// rather than the bearer token, so the bearer is a placeholder and the real key
-// travels in the header below. Both are wire-protocol names, not credentials.
+// Some gateways require an Authorization header to be present but never read
+// it, because the server behind them rejects requests that omit one. The real
+// key travels in whichever header the provider names.
 constexpr char   ASSISTANT_BEARER_PLACEHOLDER[]    = "dummy";
-constexpr char   ASSISTANT_KEY_HEADER[]            = "Ocp-Apim-Subscription-Key";
 constexpr char   ASSISTANT_BAD_URL_ERROR[] =
     "The assistant URL is not a valid http(s) address.";
 
@@ -422,8 +421,9 @@ BuildRequestBody(const AssistantChatRequest& request)
     {
         body["model"] = request.model;
     }
-    body["max_completion_tokens"] = ASSISTANT_MAX_COMPLETION_TOKENS;
-    body["temperature"]           = ASSISTANT_TEMPERATURE;
+    body[request.use_legacy_max_tokens ? "max_tokens" : "max_completion_tokens"] =
+        ASSISTANT_MAX_COMPLETION_TOKENS;
+    body["temperature"] = ASSISTANT_TEMPERATURE;
 
     for(size_t i = 0; i < request.messages.size(); ++i)
     {
@@ -490,12 +490,15 @@ SendAssistantChat(const AssistantChatRequest& request)
     client.set_follow_location(true);
 
     httplib::Headers headers;
-    headers.emplace("Authorization",
-                    std::string("Bearer ") + ASSISTANT_BEARER_PLACEHOLDER);
     headers.emplace("user", CurrentUserName());
-    if(!request.api_token.empty())
+    if(request.send_bearer_placeholder && request.auth_header != "Authorization")
     {
-        headers.emplace(ASSISTANT_KEY_HEADER, request.api_token);
+        headers.emplace("Authorization",
+                        std::string("Bearer ") + ASSISTANT_BEARER_PLACEHOLDER);
+    }
+    if(!request.api_token.empty() && !request.auth_header.empty())
+    {
+        headers.emplace(request.auth_header, request.auth_prefix + request.api_token);
     }
 
     const std::string     body = BuildRequestBody(request).toString();

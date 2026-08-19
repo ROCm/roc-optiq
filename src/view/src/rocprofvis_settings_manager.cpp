@@ -1037,23 +1037,115 @@ void
 SettingsManager::SerializeAssistantSettings(jt::Json& json)
 {
     jt::Json& as = json[JSON_KEY_GROUP_SETTINGS][JSON_KEY_SETTINGS_CATEGORY_ASSISTANT];
-    as[JSON_KEY_SETTINGS_ASSISTANT_ENDPOINT_URL] = m_usersettings.assistant.endpoint_url;
-    as[JSON_KEY_SETTINGS_ASSISTANT_MODEL]        = m_usersettings.assistant.model;
+    int       i  = 0;
+    for(const AssistantProvider& provider : m_usersettings.assistant.providers)
+    {
+        jt::Json& entry = as[JSON_KEY_SETTINGS_ASSISTANT_PROVIDERS][i++];
+        entry[JSON_KEY_SETTINGS_ASSISTANT_NAME]         = provider.name;
+        entry[JSON_KEY_SETTINGS_ASSISTANT_ENDPOINT_URL] = provider.endpoint_url;
+        entry[JSON_KEY_SETTINGS_ASSISTANT_MODEL]        = provider.model;
+        entry[JSON_KEY_SETTINGS_ASSISTANT_AUTH_HEADER]  = provider.auth_header;
+        entry[JSON_KEY_SETTINGS_ASSISTANT_AUTH_PREFIX]  = provider.auth_prefix;
+        entry[JSON_KEY_SETTINGS_ASSISTANT_BEARER_PLACEHOLDER] =
+            provider.send_bearer_placeholder;
+        entry[JSON_KEY_SETTINGS_ASSISTANT_LEGACY_MAX_TOKENS] =
+            provider.use_legacy_max_tokens;
+    }
+    as[JSON_KEY_SETTINGS_ASSISTANT_ACTIVE] =
+        static_cast<int>(m_usersettings.assistant.active);
 }
 
 void
 SettingsManager::DeserializeAssistantSettings(jt::Json& json)
 {
     jt::Json& as = json[JSON_KEY_GROUP_SETTINGS][JSON_KEY_SETTINGS_CATEGORY_ASSISTANT];
-    if(as[JSON_KEY_SETTINGS_ASSISTANT_ENDPOINT_URL].isString())
+
+    if(as[JSON_KEY_SETTINGS_ASSISTANT_PROVIDERS].isArray())
     {
-        m_usersettings.assistant.endpoint_url =
-            as[JSON_KEY_SETTINGS_ASSISTANT_ENDPOINT_URL].getString();
+        m_usersettings.assistant.providers.clear();
+        for(jt::Json& entry : as[JSON_KEY_SETTINGS_ASSISTANT_PROVIDERS].getArray())
+        {
+            if(!entry.isObject())
+            {
+                continue;
+            }
+            AssistantProvider provider;
+            if(entry[JSON_KEY_SETTINGS_ASSISTANT_NAME].isString())
+            {
+                provider.name = entry[JSON_KEY_SETTINGS_ASSISTANT_NAME].getString();
+            }
+            if(entry[JSON_KEY_SETTINGS_ASSISTANT_ENDPOINT_URL].isString())
+            {
+                provider.endpoint_url =
+                    entry[JSON_KEY_SETTINGS_ASSISTANT_ENDPOINT_URL].getString();
+            }
+            if(entry[JSON_KEY_SETTINGS_ASSISTANT_MODEL].isString())
+            {
+                provider.model = entry[JSON_KEY_SETTINGS_ASSISTANT_MODEL].getString();
+            }
+            if(entry[JSON_KEY_SETTINGS_ASSISTANT_AUTH_HEADER].isString())
+            {
+                provider.auth_header =
+                    entry[JSON_KEY_SETTINGS_ASSISTANT_AUTH_HEADER].getString();
+            }
+            if(entry[JSON_KEY_SETTINGS_ASSISTANT_AUTH_PREFIX].isString())
+            {
+                provider.auth_prefix =
+                    entry[JSON_KEY_SETTINGS_ASSISTANT_AUTH_PREFIX].getString();
+            }
+            if(entry[JSON_KEY_SETTINGS_ASSISTANT_BEARER_PLACEHOLDER].isBool())
+            {
+                provider.send_bearer_placeholder =
+                    entry[JSON_KEY_SETTINGS_ASSISTANT_BEARER_PLACEHOLDER].getBool();
+            }
+            if(entry[JSON_KEY_SETTINGS_ASSISTANT_LEGACY_MAX_TOKENS].isBool())
+            {
+                provider.use_legacy_max_tokens =
+                    entry[JSON_KEY_SETTINGS_ASSISTANT_LEGACY_MAX_TOKENS].getBool();
+            }
+            m_usersettings.assistant.providers.push_back(provider);
+        }
     }
-    if(as[JSON_KEY_SETTINGS_ASSISTANT_MODEL].isString())
+    else if(as[JSON_KEY_SETTINGS_ASSISTANT_ENDPOINT_URL].isString())
     {
-        m_usersettings.assistant.model = as[JSON_KEY_SETTINGS_ASSISTANT_MODEL].getString();
+        // Written before routes were configurable: fold the single endpoint into
+        // the list, reproducing the headers that build sent, so the key already
+        // in the credential store keeps working.
+        AssistantProvider provider;
+        provider.name         = ASSISTANT_DEFAULT_PROVIDER_NAME;
+        provider.endpoint_url = as[JSON_KEY_SETTINGS_ASSISTANT_ENDPOINT_URL].getString();
+        if(as[JSON_KEY_SETTINGS_ASSISTANT_MODEL].isString())
+        {
+            provider.model = as[JSON_KEY_SETTINGS_ASSISTANT_MODEL].getString();
+        }
+        provider.auth_header             = ASSISTANT_SUBSCRIPTION_KEY_HEADER;
+        provider.auth_prefix.clear();
+        provider.send_bearer_placeholder = true;
+        m_usersettings.assistant.providers.clear();
+        m_usersettings.assistant.providers.push_back(provider);
     }
+
+    m_usersettings.assistant.active = 0;
+    if(as[JSON_KEY_SETTINGS_ASSISTANT_ACTIVE].isLong())
+    {
+        const int64_t active = as[JSON_KEY_SETTINGS_ASSISTANT_ACTIVE].getLong();
+        if(active > 0 &&
+           static_cast<size_t>(active) < m_usersettings.assistant.providers.size())
+        {
+            m_usersettings.assistant.active = static_cast<size_t>(active);
+        }
+    }
+}
+
+const AssistantProvider*
+SettingsManager::GetActiveAssistantProvider() const
+{
+    const std::vector<AssistantProvider>& providers = m_usersettings.assistant.providers;
+    if(m_usersettings.assistant.active >= providers.size())
+    {
+        return nullptr;
+    }
+    return &providers[m_usersettings.assistant.active];
 }
 
 void
@@ -1089,55 +1181,96 @@ SettingsManager::DeserializeAppWindowSettings(jt::Json& json)
                            m_appwindowsettings.show_summary);
 }
 
+namespace
+{
+// Credential-store entry for one provider. Keys written before routes existed
+// live under the bare prefix, which GetAssistantToken still falls back to.
+std::string
+AssistantTokenKey(const std::string& provider_name)
+{
+    if(provider_name.empty())
+    {
+        return ASSISTANT_TOKEN_SECRET_KEY;
+    }
+    return std::string(ASSISTANT_TOKEN_SECRET_KEY) + "/" + provider_name;
+}
+}  // namespace
+
 bool
-SettingsManager::HasAssistantToken() const
+SettingsManager::HasAssistantToken(const std::string& provider_name) const
 {
     std::string unused;
-    return GetAssistantToken(unused);
+    return GetAssistantToken(provider_name, unused);
 }
 
 bool
-SettingsManager::GetAssistantToken(std::string& out_token) const
+SettingsManager::GetAssistantToken(const std::string& provider_name,
+                                   std::string&       out_token) const
 {
     out_token.clear();
-    if(SecretStore::IsAvailable() &&
+    const std::string key = AssistantTokenKey(provider_name);
+    if(SecretStore::IsAvailable() && SecretStore::Get(key, out_token) &&
+       !out_token.empty())
+    {
+        return true;
+    }
+
+    const std::map<std::string, std::string>::const_iterator session =
+        m_assistant_token_session.find(provider_name);
+    if(session != m_assistant_token_session.end() && !session->second.empty())
+    {
+        out_token = session->second;
+        return true;
+    }
+
+    // Fall back to the key stored before providers were configurable, so an
+    // upgrade does not make the user re-enter it.
+    out_token.clear();
+    if(key != ASSISTANT_TOKEN_SECRET_KEY && SecretStore::IsAvailable() &&
        SecretStore::Get(ASSISTANT_TOKEN_SECRET_KEY, out_token) && !out_token.empty())
     {
         return true;
     }
-    if(!m_assistant_token_session.empty())
-    {
-        out_token = m_assistant_token_session;
-        return true;
-    }
+    out_token.clear();
     return false;
 }
 
 bool
-SettingsManager::SetAssistantToken(const std::string& token)
+SettingsManager::SetAssistantToken(const std::string& provider_name,
+                                   const std::string& token)
 {
     if(token.empty())
     {
-        return ClearAssistantToken();
+        return ClearAssistantToken(provider_name);
     }
 
-    m_assistant_token_session = token;
+    m_assistant_token_session[provider_name] = token;
     if(SecretStore::IsAvailable())
     {
-        return SecretStore::Set(ASSISTANT_TOKEN_SECRET_KEY, token);
+        return SecretStore::Set(AssistantTokenKey(provider_name), token);
     }
     return true;
 }
 
 bool
-SettingsManager::ClearAssistantToken()
+SettingsManager::ClearAssistantToken(const std::string& provider_name)
 {
-    m_assistant_token_session.clear();
-    if(SecretStore::IsAvailable())
+    m_assistant_token_session.erase(provider_name);
+    if(!SecretStore::IsAvailable())
     {
-        return SecretStore::Erase(ASSISTANT_TOKEN_SECRET_KEY);
+        return true;
     }
-    return true;
+
+    const std::string key     = AssistantTokenKey(provider_name);
+    const bool        erased  = SecretStore::Erase(key);
+    if(key == ASSISTANT_TOKEN_SECRET_KEY)
+    {
+        return erased;
+    }
+    // Also drop the pre-provider key, otherwise GetAssistantToken would fall
+    // back to it and the key would look like it survived being cleared.
+    SecretStore::Erase(ASSISTANT_TOKEN_SECRET_KEY);
+    return erased;
 }
 
 }  // namespace View

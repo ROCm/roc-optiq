@@ -477,13 +477,24 @@ AssistantPanel::ResetTurn()
 void
 AssistantPanel::StartHttpRequest()
 {
-    SettingsManager& settings = SettingsManager::GetInstance();
-    const AssistantSettings& assistant = settings.GetUserSettings().assistant;
+    SettingsManager&         settings = SettingsManager::GetInstance();
+    const AssistantProvider* provider = settings.GetActiveAssistantProvider();
+    if(provider == nullptr)
+    {
+        ResetTurn();
+        AppendLine(Speaker::kStatus,
+                   "Add an endpoint in Edit > Preferences > Assistant.");
+        return;
+    }
 
     AssistantChatRequest request;
-    request.endpoint_url = assistant.endpoint_url;
-    request.model        = assistant.model;
-    settings.GetAssistantToken(request.api_token);
+    request.endpoint_url            = provider->endpoint_url;
+    request.model                   = provider->model;
+    request.auth_header             = provider->auth_header;
+    request.auth_prefix             = provider->auth_prefix;
+    request.send_bearer_placeholder = provider->send_bearer_placeholder;
+    request.use_legacy_max_tokens   = provider->use_legacy_max_tokens;
+    settings.GetAssistantToken(provider->name, request.api_token);
     request.enable_tools = !m_force_final;
 
     AssistantMessage system_message;
@@ -564,9 +575,9 @@ AssistantPanel::SendCurrentInput(bool explain_view)
         return;
     }
 
-    SettingsManager& settings = SettingsManager::GetInstance();
-    const AssistantSettings& assistant = settings.GetUserSettings().assistant;
-    if(assistant.endpoint_url.empty())
+    SettingsManager&         settings = SettingsManager::GetInstance();
+    const AssistantProvider* provider = settings.GetActiveAssistantProvider();
+    if(provider == nullptr || provider->endpoint_url.empty())
     {
         AppendLine(Speaker::kStatus,
                    "Set the assistant URL in Edit > Preferences > Assistant.");
@@ -946,7 +957,8 @@ AssistantPanel::RenderHeaderCard()
     BeginPanelCard("##assistant_header", PanelCardTone::kFrame, ASSISTANT_CARD_PADDING,
                    true, &settings);
 
-    const AssistantSettings& assistant = settings.GetUserSettings().assistant;
+    const AssistantProvider* provider = settings.GetActiveAssistantProvider();
+    const bool configured = provider != nullptr && !provider->endpoint_url.empty();
 
     // Title row: glyph, name, close. The endpoint lives in the tooltip rather
     // than its own line, which would cost a row of a narrow column.
@@ -955,16 +967,17 @@ AssistantPanel::RenderHeaderCard()
     ImGui::TextUnformatted("Ask Optiq");
     if(ImGui::IsItemHovered())
     {
-        if(assistant.endpoint_url.empty())
+        if(!configured)
         {
             SetTooltipStyled("Not configured. Edit > Preferences > Assistant.");
         }
         else
         {
-            SetTooltipStyled("%s\n%s",
-                             assistant.model.empty() ? "(no model set)"
-                                                     : assistant.model.c_str(),
-                             assistant.endpoint_url.c_str());
+            SetTooltipStyled("%s\n%s\n%s",
+                             provider->name.c_str(),
+                             provider->model.empty() ? "(no model set)"
+                                                     : provider->model.c_str(),
+                             provider->endpoint_url.c_str());
         }
     }
 
@@ -974,7 +987,7 @@ AssistantPanel::RenderHeaderCard()
         m_visible = false;
     }
 
-    if(assistant.endpoint_url.empty())
+    if(!configured)
     {
         ImGui::PushStyleColor(ImGuiCol_Text, settings.GetColor(Colors::kTextWarning));
         ImGui::TextWrapped("Set the URL and key in Edit > Preferences > Assistant.");
@@ -982,7 +995,7 @@ AssistantPanel::RenderHeaderCard()
     }
 
     ImGui::Spacing();
-    ImGui::BeginDisabled(Busy() || assistant.endpoint_url.empty());
+    ImGui::BeginDisabled(Busy() || !configured);
     if(AccentButton("Explain this view", ImVec2(-FLT_MIN, 0.0f), &settings))
     {
         SendCurrentInput(true);

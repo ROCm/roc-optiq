@@ -9,6 +9,7 @@
 #include <array>
 #include <filesystem>
 #include <list>
+#include <map>
 #include <string>
 #include <vector>
 
@@ -44,10 +45,31 @@ typedef struct LogViewerSettings
     bool visible;
 } LogViewerSettings;
 
-typedef struct AssistantSettings
+// One route to a chat endpoint. The request body is the same OpenAI shape for
+// every provider; only the endpoint, the model, and how the key is presented
+// differ, so those are the only things worth storing per route.
+typedef struct AssistantProvider
 {
+    std::string name;
     std::string endpoint_url;
     std::string model;
+    // Header the key travels in, and what precedes it. OpenAI wants
+    // "Authorization" with a "Bearer " prefix; gateways usually want their own
+    // header with no prefix.
+    std::string auth_header = "Authorization";
+    std::string auth_prefix = "Bearer ";
+    // Some gateways require an Authorization header to exist but never read it,
+    // because the backend behind them rejects requests without one.
+    bool        send_bearer_placeholder = false;
+    // Newer OpenAI models require max_completion_tokens; most compatible
+    // servers still only accept max_tokens.
+    bool        use_legacy_max_tokens = false;
+} AssistantProvider;
+
+typedef struct AssistantSettings
+{
+    std::vector<AssistantProvider> providers;
+    size_t                         active = 0;
 } AssistantSettings;
 
 typedef struct UserSettings
@@ -270,8 +292,22 @@ constexpr const char* JSON_KEY_SETTINGS_APP_WINDOW_SUMMARY       = "show_summary
 constexpr const char* JSON_KEY_SETTINGS_CATEGORY_ASSISTANT = "assistant";
 constexpr const char* JSON_KEY_SETTINGS_ASSISTANT_ENDPOINT_URL = "endpoint_url";
 constexpr const char* JSON_KEY_SETTINGS_ASSISTANT_MODEL        = "model";
+constexpr const char* JSON_KEY_SETTINGS_ASSISTANT_PROVIDERS    = "providers";
+constexpr const char* JSON_KEY_SETTINGS_ASSISTANT_ACTIVE       = "active";
+constexpr const char* JSON_KEY_SETTINGS_ASSISTANT_NAME         = "name";
+constexpr const char* JSON_KEY_SETTINGS_ASSISTANT_AUTH_HEADER  = "auth_header";
+constexpr const char* JSON_KEY_SETTINGS_ASSISTANT_AUTH_PREFIX  = "auth_prefix";
+constexpr const char* JSON_KEY_SETTINGS_ASSISTANT_BEARER_PLACEHOLDER =
+    "send_bearer_placeholder";
+constexpr const char* JSON_KEY_SETTINGS_ASSISTANT_LEGACY_MAX_TOKENS =
+    "use_legacy_max_tokens";
 // OS credential-store key for the assistant API token. Never written to JSON.
+// Each provider gets its own entry below this prefix so switching routes does
+// not overwrite the key for the previous one.
 constexpr const char* ASSISTANT_TOKEN_SECRET_KEY = "assistant-api-token";
+constexpr const char* ASSISTANT_DEFAULT_PROVIDER_NAME = "Default";
+// Wire-protocol header name used by API-management gateways, not a credential.
+constexpr const char* ASSISTANT_SUBSCRIPTION_KEY_HEADER = "Ocp-Apim-Subscription-Key";
 
 constexpr const char* JSON_KEY_SETTINGS_CATEGORY_HOTKEYS = "hotkeys";
 constexpr const char* JSON_KEY_SETTINGS_CATEGORY_PROFILER = "profiler";
@@ -327,12 +363,16 @@ public:
     ProfilerSettings& GetProfilerSettings();
     void SaveProfilerSettings();
 
-    // Assistant API token. Stored in the OS credential vault when available,
-    // otherwise held in process memory only. Never written to settings JSON.
-    bool HasAssistantToken() const;
-    bool GetAssistantToken(std::string& out_token) const;
-    bool SetAssistantToken(const std::string& token);
-    bool ClearAssistantToken();
+    // The route the assistant should use, or nullptr when none is configured.
+    const AssistantProvider* GetActiveAssistantProvider() const;
+
+    // Assistant API token, one per provider. Stored in the OS credential vault
+    // when available, otherwise held in process memory only. Never written to
+    // settings JSON.
+    bool HasAssistantToken(const std::string& provider_name) const;
+    bool GetAssistantToken(const std::string& provider_name, std::string& out_token) const;
+    bool SetAssistantToken(const std::string& provider_name, const std::string& token);
+    bool ClearAssistantToken(const std::string& provider_name);
 
     // Constant for event height;
     const float GetEventLevelHeight() const;
@@ -386,7 +426,8 @@ private:
     InternalSettings   m_internalsettings;
     AppWindowSettings  m_appwindowsettings;
     ProfilerSettings   m_profilersettings;
-    std::string        m_assistant_token_session;
+    // Provider name -> token, used only when no OS credential store exists.
+    std::map<std::string, std::string> m_assistant_token_session;
 
     std::filesystem::path m_json_path;
 };

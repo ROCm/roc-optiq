@@ -7,6 +7,7 @@
 #include <cctype>
 #include <cstdio>
 #include <cstdlib>
+#include <iomanip>
 #include <memory>
 #include <sstream>
 #include <string>
@@ -17,7 +18,9 @@
 
 #include "compute/rocprofvis_compute_selection.h"
 #include "model/compute/rocprofvis_compute_data_model.h"
+#include "rocprofvis_ai_actions.h"
 #include "model/rocprofvis_analysis_model.h"
+#include "model/rocprofvis_common_defs.h"
 #include "model/rocprofvis_summary_model.h"
 #include "model/rocprofvis_tables_model.h"
 #include "model/rocprofvis_timeline_model.h"
@@ -41,14 +44,65 @@ namespace View
 namespace
 {
 
-constexpr size_t ASSISTANT_DEFAULT_ROW_LIMIT = 10;
-constexpr size_t ASSISTANT_MAX_ROW_LIMIT     = 20;
-constexpr size_t ASSISTANT_MAX_TRACKS        = 32;
-constexpr size_t ASSISTANT_MAX_LIST_TRACKS   = 40;
-constexpr size_t ASSISTANT_MAX_METRIC_NAMES  = 40;
-constexpr size_t ASSISTANT_MAX_METRIC_FETCH  = 8;
-constexpr size_t ASSISTANT_TOP_KERNEL_LIMIT  = 10;
-constexpr size_t ASSISTANT_MAX_RESULT_CHARS  = 6000;
+constexpr size_t   ASSISTANT_MAX_TRACKS       = 32;
+constexpr size_t   ASSISTANT_MAX_LIST_TRACKS  = 80;
+constexpr size_t   ASSISTANT_MAX_METRIC_NAMES = 40;
+constexpr size_t   ASSISTANT_MAX_METRIC_FETCH = 8;
+constexpr size_t   ASSISTANT_TOP_KERNEL_LIMIT = 10;
+constexpr size_t   ASSISTANT_MAX_RESULT_CHARS = 20000;
+constexpr size_t   ASSISTANT_MAX_FILTERS      = 8;
+constexpr size_t   ASSISTANT_MAX_CALL_STACK   = 40;
+constexpr size_t   ASSISTANT_MAX_FLOW_ROWS    = 20;
+constexpr size_t   ASSISTANT_MAX_EXT_ROWS     = 40;
+constexpr size_t   ASSISTANT_MAX_EVENT_ARGS   = 40;
+constexpr size_t   ASSISTANT_MAX_SEARCH_TERMS = 8;
+constexpr size_t   ASSISTANT_OVERVIEW_BINS    = 32;
+constexpr size_t   ASSISTANT_OVERVIEW_TRACKS  = 12;
+constexpr size_t   ASSISTANT_MAX_HIGHLIGHTS   = 12;
+constexpr double   ASSISTANT_OVERVIEW_SCALE   = 100.0;
+constexpr uint64_t ASSISTANT_DURATION_COLUMN  = 2;
+
+// Columns the model is allowed to filter, group, and sort on. These are the
+// public result-column names the query builder emits; anything outside this
+// list is rejected so a tool argument can never reach the database as SQL.
+const char* const ASSISTANT_QUERY_COLUMNS[] = {
+    "name",       "category",  "duration",   "start",      "end",
+    "id",         "__uuid",    "PID",        "TID",        "queue",
+    "stream",     "node",      "nodeId",     "size",       "address",
+    "SrcAddr",    "value",     "counter",    "arguments",  "GridSizeX",
+    "GridSizeY",  "GridSizeZ", "WGSizeX",    "WGSizeY",    "WGSizeZ",
+    "LDSSize",    "ScratchSize", "StaticLDSSize", "StaticScratchSize",
+    "AgentAbsoluteIndex", "AgentType", "AgentTypeIndex", "AgentName",
+    "SrcAgentAbsoluteIndex", "SrcAgentType", "SrcAgentTypeIndex",
+    "SrcAgentName", "__trackId", "__streamTrackId",
+};
+
+enum class QueryWildcard
+{
+    kNone,
+    kContains,
+    kPrefix
+};
+
+struct QueryOperator
+{
+    const char*   key;
+    const char*   sql;
+    QueryWildcard wildcard;
+};
+
+const QueryOperator ASSISTANT_QUERY_OPERATORS[] = {
+    { "=", "=", QueryWildcard::kNone },
+    { "==", "=", QueryWildcard::kNone },
+    { "!=", "!=", QueryWildcard::kNone },
+    { "<>", "!=", QueryWildcard::kNone },
+    { "<", "<", QueryWildcard::kNone },
+    { "<=", "<=", QueryWildcard::kNone },
+    { ">", ">", QueryWildcard::kNone },
+    { ">=", ">=", QueryWildcard::kNone },
+    { "contains", "LIKE", QueryWildcard::kContains },
+    { "starts_with", "LIKE", QueryWildcard::kPrefix },
+};
 
 struct TopEventsSpec
 {
@@ -81,6 +135,15 @@ const TopEventsSpec k_top_event_specs[] = {
       DataProvider::ANALYSIS_TOP_LAUNCH_SAMPLED_TABLE_REQUEST_ID,
       kRocProfVisDmOperationLaunchSample },
 };
+
+// Every UI-facing thing a tool does goes through this, so the "what a click
+// actually does" knowledge lives in one place.
+OptiqActions
+Actions(const AssistantToolContext& context)
+{
+    return OptiqActions(context.data_provider, context.timeline_selection,
+                        context.compute_selection, context.trace_view);
+}
 
 std::string
 ToLowerCopy(std::string value)
@@ -323,6 +386,345 @@ TracksForOperation(const AssistantToolContext&     context,
     return matching;
 }
 
+std::vector<uint64_t>
+TracksOfType(const AssistantToolContext&        context,
+             rocprofvis_controller_track_type_t wanted)
+{
+    std::vector<uint64_t>               tracks;
+    const std::vector<const TrackInfo*> all =
+        context.data_provider->DataModel().GetTimeline().GetTrackList();
+    for(const TrackInfo* track : all)
+    {
+        if(track == nullptr || track->track_type != wanted)
+        {
+            continue;
+        }
+        tracks.push_back(track->id);
+        if(tracks.size() >= ASSISTANT_MAX_TRACKS)
+        {
+            break;
+        }
+    }
+    return tracks;
+}
+
+std::vector<uint64_t>
+KeepTracksOfType(const AssistantToolContext& context, const std::vector<uint64_t>& tracks,
+                 rocprofvis_controller_track_type_t wanted)
+{
+    const TimelineModel&  timeline = context.data_provider->DataModel().GetTimeline();
+    std::vector<uint64_t> kept;
+    kept.reserve(tracks.size());
+    for(uint64_t track_id : tracks)
+    {
+        const TrackInfo* track = timeline.GetTrack(track_id);
+        if(track != nullptr && track->track_type == wanted)
+        {
+            kept.push_back(track_id);
+        }
+    }
+    return kept;
+}
+
+bool
+IsAllowedQueryColumn(const std::string& name)
+{
+    for(const char* column : ASSISTANT_QUERY_COLUMNS)
+    {
+        if(name == column)
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+std::string
+AllowedQueryColumnList()
+{
+    std::ostringstream out;
+    bool               first = true;
+    for(const char* column : ASSISTANT_QUERY_COLUMNS)
+    {
+        if(!first)
+        {
+            out << ", ";
+        }
+        first = false;
+        out << column;
+    }
+    return out.str();
+}
+
+const QueryOperator*
+FindQueryOperator(const std::string& key)
+{
+    for(const QueryOperator& op : ASSISTANT_QUERY_OPERATORS)
+    {
+        if(key == op.key)
+        {
+            return &op;
+        }
+    }
+    return nullptr;
+}
+
+// Renders a string as a SQL literal: single quotes are doubled (the standard
+// escape) and control characters are dropped, so the value cannot terminate the
+// literal and inject syntax.
+std::string
+QuoteSqlLiteral(const std::string& value)
+{
+    std::string quoted = "'";
+    for(char c : value)
+    {
+        if(static_cast<unsigned char>(c) < 0x20)
+        {
+            continue;
+        }
+        if(c == '\'')
+        {
+            quoted += '\'';
+        }
+        quoted += c;
+    }
+    quoted += '\'';
+    return quoted;
+}
+
+std::string
+FormatNumberLiteral(double value)
+{
+    std::ostringstream out;
+    out << std::setprecision(17) << value;
+    return out.str();
+}
+
+// Turns a validated filter list into a boolean SQL fragment. The query builder
+// appends this after "AND", so it must not contain the WHERE keyword.
+std::string
+BuildWhereClause(const jt::Json& args, std::string& error_out)
+{
+    jt::Json& mutable_args = const_cast<jt::Json&>(args);
+    if(!mutable_args.contains("filters") || !mutable_args["filters"].isArray())
+    {
+        return std::string();
+    }
+
+    std::vector<jt::Json>& entries = mutable_args["filters"].getArray();
+    if(entries.size() > ASSISTANT_MAX_FILTERS)
+    {
+        error_out = "Too many filters. Use at most " +
+                    std::to_string(ASSISTANT_MAX_FILTERS) + ".";
+        return std::string();
+    }
+
+    std::ostringstream out;
+    size_t             used = 0;
+    for(jt::Json& entry : entries)
+    {
+        if(!entry.isObject())
+        {
+            continue;
+        }
+
+        const std::string column = JsonUtils::GetString(entry, "column", "");
+        if(!IsAllowedQueryColumn(column))
+        {
+            error_out = "Unknown filter column \"" + column +
+                        "\". Allowed columns: " + AllowedQueryColumnList();
+            return std::string();
+        }
+
+        const QueryOperator* op =
+            FindQueryOperator(ToLowerCopy(JsonUtils::GetString(entry, "op", "=")));
+        if(op == nullptr)
+        {
+            error_out = "Unknown filter op. Use =, !=, <, <=, >, >=, contains, "
+                        "or starts_with.";
+            return std::string();
+        }
+
+        if(!entry.contains("value"))
+        {
+            error_out = "Filter on \"" + column + "\" is missing value.";
+            return std::string();
+        }
+
+        jt::Json&   value = entry["value"];
+        std::string literal;
+        if(value.isString())
+        {
+            std::string text = value.getString();
+            if(op->wildcard == QueryWildcard::kContains)
+            {
+                text = "%" + text + "%";
+            }
+            else if(op->wildcard == QueryWildcard::kPrefix)
+            {
+                text += "%";
+            }
+            literal = QuoteSqlLiteral(text);
+        }
+        else if(value.isLong())
+        {
+            literal = std::to_string(value.getLong());
+        }
+        else if(value.isDouble())
+        {
+            literal = FormatNumberLiteral(value.getDouble());
+        }
+        else
+        {
+            error_out = "Filter on \"" + column + "\" needs a string or number value.";
+            return std::string();
+        }
+
+        if(used > 0)
+        {
+            out << " AND ";
+        }
+        out << column << " " << op->sql << " " << literal;
+        ++used;
+    }
+    return out.str();
+}
+
+// group_by goes into the query as a bare column name, so it gets the same
+// whitelist treatment as filter columns.
+std::string
+GroupByFromArgs(const jt::Json& args, std::string& error_out)
+{
+    const std::string group = JsonUtils::GetString(args, "group_by", "");
+    if(group.empty() || !error_out.empty())
+    {
+        return std::string();
+    }
+    if(!IsAllowedQueryColumn(group))
+    {
+        error_out = "Unknown group_by column \"" + group +
+                    "\". Allowed columns: " + AllowedQueryColumnList();
+        return std::string();
+    }
+    return group;
+}
+
+uint64_t
+ResolveSortColumn(const TablesModel& tables, TableType type, const std::string& name,
+                  uint64_t fallback)
+{
+    if(name.empty())
+    {
+        return fallback;
+    }
+    const std::vector<std::string>& header  = tables.GetTableHeader(type);
+    const std::string               lowered = ToLowerCopy(name);
+    for(size_t i = 0; i < header.size(); ++i)
+    {
+        if(ToLowerCopy(header[i]) == lowered)
+        {
+            return static_cast<uint64_t>(i);
+        }
+    }
+    return fallback;
+}
+
+rocprofvis_controller_sort_order_t
+SortOrderFromArgs(const jt::Json& args, rocprofvis_controller_sort_order_t fallback)
+{
+    const std::string order = ToLowerCopy(JsonUtils::GetString(args, "sort_order", ""));
+    if(order == "asc" || order == "ascending")
+    {
+        return kRPVControllerSortOrderAscending;
+    }
+    if(order == "desc" || order == "descending")
+    {
+        return kRPVControllerSortOrderDescending;
+    }
+    return fallback;
+}
+
+// Explicit start_ns/end_ns win. Otherwise fall back to the user's selection, or
+// to the whole trace when prefer_selection is false (search defaults trace-wide,
+// matching the search box's "Whole Trace" default).
+void
+TimeRangeFromArgs(const AssistantToolContext& context, const jt::Json& args,
+                  double& start_ns, double& end_ns, bool prefer_selection = true)
+{
+    if(prefer_selection)
+    {
+        SelectedOrFullTimeRange(context, start_ns, end_ns);
+    }
+    else
+    {
+        const TimelineModel& timeline = context.data_provider->DataModel().GetTimeline();
+        start_ns                      = timeline.GetStartTime();
+        end_ns                        = timeline.GetEndTime();
+    }
+
+    const double requested_start = JsonUtils::GetDouble(args, "start_ns", -1.0);
+    const double requested_end   = JsonUtils::GetDouble(args, "end_ns", -1.0);
+    if(requested_start >= 0.0 && requested_end > requested_start)
+    {
+        start_ns = requested_start;
+        end_ns   = requested_end;
+    }
+}
+
+// Track ids named by the model, filtered to tracks that exist and carry the
+// requested operation. Falls back to the selection-or-all behaviour when the
+// model does not name any.
+std::vector<uint64_t>
+TracksFromArgs(const AssistantToolContext& context, const jt::Json& args,
+               rocprofvis_dm_event_operation_t op, bool require_op,
+               std::string& error_out)
+{
+    jt::Json& mutable_args = const_cast<jt::Json&>(args);
+    if(!mutable_args.contains("track_ids") || !mutable_args["track_ids"].isArray())
+    {
+        return require_op ? TracksForOperation(context, op) : std::vector<uint64_t>();
+    }
+
+    const TimelineModel&   timeline = context.data_provider->DataModel().GetTimeline();
+    std::vector<jt::Json>& entries  = mutable_args["track_ids"].getArray();
+    std::vector<uint64_t>  tracks;
+    tracks.reserve(entries.size());
+    for(jt::Json& entry : entries)
+    {
+        uint64_t track_id = 0;
+        if(entry.isLong())
+        {
+            track_id = static_cast<uint64_t>(entry.getLong());
+        }
+        else if(entry.isDouble())
+        {
+            track_id = static_cast<uint64_t>(entry.getDouble());
+        }
+        else
+        {
+            continue;
+        }
+
+        const TrackInfo* track = timeline.GetTrack(track_id);
+        if(track == nullptr)
+        {
+            error_out = "Unknown track_id " + std::to_string(track_id) +
+                        ". Call list_tracks first.";
+            return std::vector<uint64_t>();
+        }
+        if(require_op && track->operation_types.count(op) == 0)
+        {
+            continue;
+        }
+        tracks.push_back(track_id);
+        if(tracks.size() >= ASSISTANT_MAX_TRACKS)
+        {
+            break;
+        }
+    }
+    return tracks;
+}
+
 std::string
 FormatTableSnapshot(const TablesModel& tables, TableType type, size_t limit)
 {
@@ -368,6 +770,393 @@ FormatTableSnapshot(const TablesModel& tables, TableType type, size_t limit)
         out << "... " << (total - row_count) << " more rows not shown\n";
     }
     return TrimResult(out.str());
+}
+
+const char*
+TrackTypeName(TrackInfo::TrackType type)
+{
+    switch(type)
+    {
+        case TrackInfo::Queue:              return "Queue";
+        case TrackInfo::Stream:             return "Stream";
+        case TrackInfo::InstrumentedThread: return "InstrumentedThread";
+        case TrackInfo::SampledThread:      return "SampledThread";
+        case TrackInfo::Counter:            return "Counter";
+        default:                            return "Unknown";
+    }
+}
+
+std::string
+FormatEventDetails(const AssistantToolContext& context, uint64_t event_id)
+{
+    const EventInfo* event =
+        context.data_provider->DataModel().GetEvents().GetEvent(event_id);
+    if(event == nullptr)
+    {
+        return "No details came back for that event_uuid. Check the __uuid value.";
+    }
+
+    std::ostringstream out;
+    out << "event_uuid: " << event_id << "\n";
+    if(!event->basic_info.name.empty())
+    {
+        out << "name: " << event->basic_info.name << "\n";
+        out << "start_ns: " << event->basic_info.start_ts << "\n";
+        out << "duration_ns: " << event->basic_info.duration << "\n";
+    }
+    if(event->track_id != INVALID_UINT64_INDEX)
+    {
+        out << "track_id: " << event->track_id << "\n";
+    }
+
+    if(!event->args.empty())
+    {
+        out << "arguments:\n";
+        size_t shown = 0;
+        for(const EventArg& arg : event->args)
+        {
+            out << "  " << arg.name << "=" << arg.value;
+            if(!arg.data_type.empty())
+            {
+                out << " (" << arg.data_type << ")";
+            }
+            out << "\n";
+            if(++shown >= ASSISTANT_MAX_EVENT_ARGS)
+            {
+                break;
+            }
+        }
+    }
+
+    if(!event->ext_info.empty())
+    {
+        out << "extended_data:\n";
+        size_t shown = 0;
+        for(const EventExtData& ext : event->ext_info)
+        {
+            out << "  " << ext.category << "." << ext.name << "=" << ext.value << "\n";
+            if(++shown >= ASSISTANT_MAX_EXT_ROWS)
+            {
+                break;
+            }
+        }
+    }
+
+    if(!event->flow_info.empty())
+    {
+        out << "flow:\n";
+        size_t shown = 0;
+        for(const EventFlowData& flow : event->flow_info)
+        {
+            out << "  uuid=" << flow.id.uuid << " track_id=" << flow.track_id
+                << " start_ns=" << flow.start_timestamp
+                << " end_ns=" << flow.end_timestamp << " name=\"" << flow.name << "\"\n";
+            if(++shown >= ASSISTANT_MAX_FLOW_ROWS)
+            {
+                break;
+            }
+        }
+    }
+
+    if(!event->call_stack_info.empty())
+    {
+        out << "call_stack:\n";
+        size_t shown = 0;
+        for(const CallStackData& frame : event->call_stack_info)
+        {
+            out << "  " << (shown + 1) << ". " << frame.name;
+            if(!frame.file.empty())
+            {
+                out << " (" << frame.file << ")";
+            }
+            out << "\n";
+            if(++shown >= ASSISTANT_MAX_CALL_STACK)
+            {
+                break;
+            }
+        }
+    }
+
+    if(event->args.empty() && event->ext_info.empty() && event->flow_info.empty() &&
+       event->call_stack_info.empty())
+    {
+        out << "This event has no arguments, flow links, or call stack recorded.\n";
+    }
+    return TrimResult(out.str());
+}
+
+// The minimap holds one row per track over a fixed number of time buckets:
+// event counts for event tracks, counter values for sample tracks. The
+// histogram strip above the timeline is the sum of the event rows. Both are
+// filled when the trace loads, so this reads without any fetch.
+struct OverviewProfile
+{
+    std::vector<double> bins;
+    double              total     = 0.0;
+    double              peak      = 0.0;
+    size_t              peak_bin  = 0;
+    double              min_value = 0.0;
+    double              max_value = 0.0;
+};
+
+// Averages a minimap row down to at most bin_count buckets.
+OverviewProfile
+Downsample(const std::vector<double>& source, size_t bin_count)
+{
+    OverviewProfile profile;
+    if(source.empty() || bin_count == 0)
+    {
+        return profile;
+    }
+
+    const size_t bins = std::min(bin_count, source.size());
+    profile.bins.assign(bins, 0.0);
+    std::vector<size_t> counts(bins, 0);
+    for(size_t i = 0; i < source.size(); ++i)
+    {
+        const size_t bin = std::min(bins - 1, i * bins / source.size());
+        profile.bins[bin] += source[i];
+        ++counts[bin];
+        profile.total += source[i];
+    }
+
+    bool seen = false;
+    for(size_t i = 0; i < bins; ++i)
+    {
+        if(counts[i] > 0)
+        {
+            profile.bins[i] /= static_cast<double>(counts[i]);
+        }
+        if(profile.bins[i] > profile.peak)
+        {
+            profile.peak     = profile.bins[i];
+            profile.peak_bin = i;
+        }
+        if(!seen || profile.bins[i] < profile.min_value)
+        {
+            profile.min_value = profile.bins[i];
+        }
+        if(!seen || profile.bins[i] > profile.max_value)
+        {
+            profile.max_value = profile.bins[i];
+        }
+        seen = true;
+    }
+    return profile;
+}
+
+void
+AppendBinRow(std::ostringstream& out, const OverviewProfile& profile)
+{
+    out << "activity_0_100:";
+    for(size_t i = 0; i < profile.bins.size(); ++i)
+    {
+        const double scaled =
+            profile.peak > 0.0 ? profile.bins[i] / profile.peak * ASSISTANT_OVERVIEW_SCALE
+                               : 0.0;
+        out << (i == 0 ? " " : ",") << static_cast<int>(scaled + 0.5);
+    }
+    out << "\n";
+}
+
+void
+AppendBinWindow(std::ostringstream& out, const char* label, size_t bin, size_t bin_count,
+                double start_ns, double span_ns)
+{
+    if(bin_count == 0)
+    {
+        return;
+    }
+    const double width = span_ns / static_cast<double>(bin_count);
+    out << label << ": " << (start_ns + width * static_cast<double>(bin)) << " .. "
+        << (start_ns + width * static_cast<double>(bin + 1)) << "\n";
+}
+
+// Sums the event rows of the minimap. This is exactly what the histogram strip
+// above the timeline draws.
+std::vector<double>
+CombinedEventRow(const AssistantToolContext& context)
+{
+    const TimelineModel& timeline = context.data_provider->DataModel().GetTimeline();
+    std::vector<double>  combined;
+    for(const std::pair<const uint64_t, std::vector<double>>& row :
+        timeline.GetMiniMap())
+    {
+        const TrackInfo* track = timeline.GetTrack(row.first);
+        if(track == nullptr || track->track_type == kRPVControllerTrackTypeSamples)
+        {
+            continue;
+        }
+        if(combined.size() < row.second.size())
+        {
+            combined.resize(row.second.size(), 0.0);
+        }
+        for(size_t i = 0; i < row.second.size(); ++i)
+        {
+            combined[i] += row.second[i];
+        }
+    }
+    return combined;
+}
+
+std::string
+FormatTraceOverview(const AssistantToolContext& context, size_t bin_count,
+                    uint64_t single_track)
+{
+    const TimelineModel& timeline = context.data_provider->DataModel().GetTimeline();
+    const std::map<uint64_t, std::vector<double>>& minimap = timeline.GetMiniMap();
+    if(minimap.empty())
+    {
+        return "The timeline overview has not been built for this trace.";
+    }
+
+    const double start_ns = timeline.GetStartTime();
+    const double end_ns   = timeline.GetEndTime();
+    const double span_ns  = end_ns - start_ns;
+
+    std::ostringstream out;
+    out << "trace_start_ns: " << start_ns << "\n";
+    out << "trace_end_ns: " << end_ns << "\n";
+    out << "trace_duration_ns: " << span_ns << "\n";
+
+    if(single_track != INVALID_UINT64_INDEX)
+    {
+        const std::map<uint64_t, std::vector<double>>::const_iterator row =
+            minimap.find(single_track);
+        if(row == minimap.end())
+        {
+            return "That track has no overview row. Call list_tracks.";
+        }
+        const TrackInfo*      track   = timeline.GetTrack(single_track);
+        const OverviewProfile profile = Downsample(row->second, bin_count);
+        const bool            counter =
+            track != nullptr && track->track_type == kRPVControllerTrackTypeSamples;
+
+        out << "track_id: " << single_track << "\n";
+        out << "track_name: "
+            << context.data_provider->DataModel().BuildTrackName(single_track) << "\n";
+        out << "bins: " << profile.bins.size() << "\n";
+        AppendBinRow(out, profile);
+        AppendBinWindow(out, "busiest_window_ns", profile.peak_bin, profile.bins.size(),
+                        start_ns, span_ns);
+        if(counter)
+        {
+            out << "counter_min: " << profile.min_value << "\n";
+            out << "counter_max: " << profile.max_value << "\n";
+        }
+        else
+        {
+            out << "event_count: " << profile.total << "\n";
+        }
+        return TrimResult(out.str());
+    }
+
+    std::vector<std::pair<uint64_t, OverviewProfile>> event_tracks;
+    size_t                                            counter_count = 0;
+    double                                            event_total   = 0.0;
+    for(const std::pair<const uint64_t, std::vector<double>>& row : minimap)
+    {
+        const TrackInfo* track = timeline.GetTrack(row.first);
+        if(track == nullptr)
+        {
+            continue;
+        }
+        if(track->track_type == kRPVControllerTrackTypeSamples)
+        {
+            ++counter_count;
+            continue;
+        }
+
+        const OverviewProfile profile = Downsample(row.second, bin_count);
+        event_tracks.emplace_back(row.first, profile);
+        event_total += profile.total;
+    }
+
+    const OverviewProfile overall = Downsample(CombinedEventRow(context), bin_count);
+    out << "bins: " << overall.bins.size() << "\n";
+    if(!overall.bins.empty())
+    {
+        out << "bin_width_ns: " << (span_ns / static_cast<double>(overall.bins.size()))
+            << "\n";
+    }
+    AppendBinRow(out, overall);
+    AppendBinWindow(out, "busiest_window_ns", overall.peak_bin, overall.bins.size(),
+                    start_ns, span_ns);
+
+    size_t quietest = 0;
+    for(size_t i = 0; i < overall.bins.size(); ++i)
+    {
+        if(overall.bins[i] < overall.bins[quietest])
+        {
+            quietest = i;
+        }
+    }
+    AppendBinWindow(out, "quietest_window_ns", quietest, overall.bins.size(), start_ns,
+                    span_ns);
+    out << "total_events: " << event_total << "\n";
+
+    std::sort(event_tracks.begin(), event_tracks.end(),
+              [](const std::pair<uint64_t, OverviewProfile>& a,
+                 const std::pair<uint64_t, OverviewProfile>& b) {
+                  return a.second.total > b.second.total;
+              });
+
+    out << "busiest_tracks:\n";
+    const size_t shown = std::min(event_tracks.size(), ASSISTANT_OVERVIEW_TRACKS);
+    for(size_t i = 0; i < shown; ++i)
+    {
+        const uint64_t         track_id = event_tracks[i].first;
+        const OverviewProfile& profile  = event_tracks[i].second;
+        out << "  " << (i + 1) << ". track_id=" << track_id << " events="
+            << profile.total;
+        if(event_total > 0.0)
+        {
+            out << " share_pct="
+                << FormatPercent(
+                       static_cast<float>(profile.total / event_total * 100.0));
+        }
+        out << " name=\""
+            << context.data_provider->DataModel().BuildTrackName(track_id) << "\"\n";
+    }
+    if(event_tracks.size() > shown)
+    {
+        out << "  ... " << (event_tracks.size() - shown) << " more event tracks\n";
+    }
+
+    if(counter_count > 0)
+    {
+        out << "counter_tracks: " << counter_count
+            << " (use track_samples or track_statistics)\n";
+    }
+    return TrimResult(out.str());
+}
+
+std::string
+FormatTrackStatistics(const AssistantToolContext& context, uint64_t track_id)
+{
+    const TrackInfo* track =
+        context.data_provider->DataModel().GetTimeline().GetTrack(track_id);
+    if(track == nullptr)
+    {
+        return "That track is no longer loaded.";
+    }
+    const AnalysisTrackStatistics* stats =
+        context.data_provider->DataModel().GetAnalysis().RegisterTrack(*track);
+    if(stats == nullptr || stats->state != AnalysisTrackStatistics::kReady)
+    {
+        return "Track statistics are not ready yet. Try again.";
+    }
+
+    std::ostringstream out;
+    out << "track_id: " << track_id << "\n";
+    out << "track_name: " << context.data_provider->DataModel().BuildTrackName(track_id)
+        << "\n";
+    out << "track_type: " << TrackTypeName(track->topology.type) << "\n";
+    for(const AnalysisTrackStatistics::Stat& stat : stats->stats)
+    {
+        out << stat.name << ": " << stat.FullValue() << "\n";
+    }
+    return out.str();
 }
 
 std::string
@@ -476,20 +1265,6 @@ FindComputeKernel(const WorkloadInfo& workload, const std::string& name, uint32_
     return nullptr;
 }
 
-const char*
-TrackTypeName(TrackInfo::TrackType type)
-{
-    switch(type)
-    {
-        case TrackInfo::Queue:              return "Queue";
-        case TrackInfo::Stream:             return "Stream";
-        case TrackInfo::InstrumentedThread: return "InstrumentedThread";
-        case TrackInfo::SampledThread:      return "SampledThread";
-        case TrackInfo::Counter:            return "Counter";
-        default:                            return "Unknown";
-    }
-}
-
 void
 AppendOpName(std::ostringstream& out, bool& first, rocprofvis_dm_event_operation_t op,
              const TrackInfo& track)
@@ -523,21 +1298,35 @@ DoneResult(const std::string& content, const std::string& status)
     return result;
 }
 
+AssistantFetchState
+TableFetch(AssistantFetchKind kind, TableType table_type, size_t row_limit)
+{
+    AssistantFetchState fetch;
+    fetch.kind       = kind;
+    fetch.table_type = table_type;
+    fetch.row_limit  = row_limit;
+    return fetch;
+}
+
 AssistantToolStartResult
-PendingResult(uint64_t request_id, AssistantFetchKind kind, size_t row_limit,
-              const std::string& status, bool started_fetch, TableType table_type,
-              uint32_t kernel_id)
+PendingResult(const std::vector<uint64_t>& request_ids, const AssistantFetchState& fetch,
+              const std::string& status, bool started_fetch)
 {
     AssistantToolStartResult result;
     result.pending       = true;
     result.started_fetch = started_fetch;
-    result.request_id    = request_id;
-    result.fetch_kind    = kind;
-    result.table_type    = table_type;
-    result.kernel_id     = kernel_id;
-    result.row_limit     = row_limit;
+    result.request_ids   = request_ids;
+    result.fetch         = fetch;
     result.status_line   = status;
     return result;
+}
+
+AssistantToolStartResult
+PendingResult(uint64_t request_id, const AssistantFetchState& fetch,
+              const std::string& status, bool started_fetch)
+{
+    return PendingResult(std::vector<uint64_t>{ request_id }, fetch, status,
+                         started_fetch);
 }
 
 jt::Json
@@ -570,6 +1359,57 @@ ObjectParams()
     return params;
 }
 
+void
+AddParam(jt::Json& params, const char* name, const char* type, const char* description)
+{
+    params["properties"][name]["type"]        = type;
+    params["properties"][name]["description"] = description;
+}
+
+// The window and tracks a table tool reads from.
+void
+AddScopeParams(jt::Json& params)
+{
+    AddParam(params, "start_ns", "number",
+             "Window start in nanoseconds. Defaults to the user's selected range, "
+             "or the whole trace.");
+    AddParam(params, "end_ns", "number", "Window end in nanoseconds.");
+    AddParam(params, "track_ids", "array",
+             "Track ids from list_tracks. Defaults to every track that carries the "
+             "requested events.");
+    params["properties"]["track_ids"]["items"]["type"] = "integer";
+}
+
+// The structured stand-in for a SQL query: filters, sort, paging, grouping.
+void
+AddQueryParams(jt::Json& params)
+{
+    jt::Json filter_item = ObjectParams();
+    AddParam(filter_item, "column", "string",
+             "Column name. A bad name comes back with the allowed list.");
+    AddParam(filter_item, "op", "string",
+             "=, !=, <, <=, >, >=, contains, or starts_with.");
+    filter_item["properties"]["value"]["description"] =
+        "String or number to compare against.";
+    filter_item["required"][0] = "column";
+    filter_item["required"][1] = "value";
+
+    AddParam(params, "filters", "array",
+             "Conditions combined with AND, e.g. "
+             "[{\"column\":\"duration\",\"op\":\">=\",\"value\":5000}].");
+    params["properties"]["filters"]["items"] = filter_item;
+
+    AddParam(params, "sort_by", "string",
+             "Column name to sort by. Call once without it to see the columns.");
+    AddParam(params, "sort_order", "string", "asc or desc.");
+    params["properties"]["sort_order"]["enum"] = MakeStringEnum({ "asc", "desc" });
+    AddParam(params, "limit", "integer", "Rows to return (default 20, max 200).");
+    AddParam(params, "offset", "integer",
+             "Rows to skip. Use with limit to page through a big result.");
+    AddParam(params, "group_by", "string",
+             "Optional column to aggregate rows by, e.g. name.");
+}
+
 }  // namespace
 
 jt::Json
@@ -584,29 +1424,24 @@ BuildAssistantToolsJson()
             summary_params);
 
     jt::Json top_params = ObjectParams();
-    top_params["properties"]["category"]["type"]        = "string";
-    top_params["properties"]["category"]["description"] =
-        "Event family to rank by duration.";
+    AddParam(top_params, "category", "string", "Event family to rank by duration.");
     top_params["properties"]["category"]["enum"] =
         MakeStringEnum({ "dispatch", "memory_copy", "memory_alloc", "instrumented",
                          "sampled" });
-    top_params["properties"]["limit"]["type"]        = "integer";
-    top_params["properties"]["limit"]["description"] =
-        "Max rows to return (default 10, max 20).";
+    AddScopeParams(top_params);
+    AddQueryParams(top_params);
     top_params["required"][0] = "category";
     AddTool(tools, 1, "top_events",
-            "Rank the hottest events of one category in the current time range "
-            "(or the full trace). Uses the same analysis tables as View > Top Events. "
-            "Does not run raw SQL.",
+            "Rank the hottest events of one category, optionally narrowed to named "
+            "tracks, an explicit time window, and column filters. Uses the same "
+            "analysis tables as View > Top Events. Does not run raw SQL.",
             top_params);
 
     jt::Json inst_params = ObjectParams();
-    inst_params["properties"]["kernel_name"]["type"]        = "string";
-    inst_params["properties"]["kernel_name"]["description"] =
-        "Exact or unique kernel name from get_summary / top_events.";
-    inst_params["properties"]["limit"]["type"]        = "integer";
-    inst_params["properties"]["limit"]["description"] =
-        "Max dispatch rows (default 10, max 20).";
+    AddParam(inst_params, "kernel_name", "string",
+             "Exact or unique kernel name from get_summary / top_events.");
+    AddScopeParams(inst_params);
+    AddQueryParams(inst_params);
     inst_params["required"][0] = "kernel_name";
     AddTool(tools, 2, "kernel_instances",
             "List individual GPU dispatches for one kernel name, with timestamps "
@@ -639,17 +1474,210 @@ BuildAssistantToolsJson()
     goto_params["properties"]["end_ns"]["description"] = "Range end in nanoseconds.";
     goto_params["properties"]["track_id"]["type"]        = "integer";
     goto_params["properties"]["track_id"]["description"] =
-        "Optional track to scroll into view.";
+        "__trackId of the event. Pass it whenever you pass event_uuid; without it "
+        "the flow arrows cannot be drawn.";
     goto_params["properties"]["event_uuid"]["type"]        = "integer";
     goto_params["properties"]["event_uuid"]["description"] =
-        "Optional event uuid from kernel_instances to highlight.";
+        "__uuid of the event to select. Selecting it expands its flow arrows and "
+        "call stack, the same as clicking it.";
     goto_params["properties"]["kernel_name"]["type"]        = "string";
     goto_params["properties"]["kernel_name"]["description"] =
         "On compute traces, select this kernel in the UI.";
+
+    jt::Json goto_event_item = ObjectParams();
+    AddParam(goto_event_item, "track_id", "integer", "Track the event lives on.");
+    AddParam(goto_event_item, "event_uuid", "integer", "__uuid of the event.");
+    goto_event_item["required"][0] = "event_uuid";
+    AddParam(goto_params, "events", "array",
+             "Events to light up on the timeline, from the __trackId and __uuid "
+             "columns. They stay highlighted while the user reads, and the first "
+             "one gets selected so its flow arrows and call stack expand.");
+    goto_params["properties"]["events"]["items"] = goto_event_item;
+    AddParam(goto_params, "zoom", "boolean",
+             "Also zoom the timeline to the range, not just select it. Use this "
+             "when the range is small enough that the user would have to zoom in "
+             "by hand.");
+
     AddTool(tools, 5, "goto",
-            "Move the Optiq UI to a time range and optionally highlight a track/event "
-            "or select a compute kernel. Call this when you know where the user should look.",
+            "Point the UI at what you are talking about: move the timeline to a "
+            "range, highlight the specific events behind your claim, and expand the "
+            "first one's connecting arrows. Call this whenever you name a window or "
+            "an outlier, so the user sees exactly what you saw.",
             goto_params);
+
+    jt::Json track_events_params = ObjectParams();
+    AddScopeParams(track_events_params);
+    AddQueryParams(track_events_params);
+    AddTool(tools, 6, "track_events",
+            "Read raw events off specific timeline tracks. This is the closest thing "
+            "to querying the database: pick tracks with track_ids, a window with "
+            "start_ns/end_ns, narrow rows with filters, then sort and page. Returns "
+            "the same rows as the Event Table tab.",
+            track_events_params);
+
+    jt::Json track_samples_params = ObjectParams();
+    AddScopeParams(track_samples_params);
+    AddQueryParams(track_samples_params);
+    AddTool(tools, 7, "track_samples",
+            "Read counter/PMC samples off specific counter tracks over a window. "
+            "Use track_ids from list_tracks where type=Counter. Same filtering, "
+            "sorting, and paging as track_events.",
+            track_samples_params);
+
+    jt::Json event_details_params = ObjectParams();
+    AddParam(event_details_params, "event_uuid", "integer",
+             "Event uuid from the __uuid column of track_events, top_events, or "
+             "kernel_instances.");
+    AddParam(event_details_params, "track_id", "integer",
+             "Optional owning track id, which fills in the event name and duration.");
+    event_details_params["required"][0] = "event_uuid";
+    AddTool(tools, 8, "event_details",
+            "Drill into one event: its arguments, extended data, flow links to and "
+            "from other events, and its call stack. Use after track_events or "
+            "top_events gives you a __uuid.",
+            event_details_params);
+
+    jt::Json track_stats_params = ObjectParams();
+    AddParam(track_stats_params, "track_id", "integer",
+             "Queue track (returns utilization) or counter track (returns "
+             "min/max/mean/stddev). From list_tracks.");
+    AddParam(track_stats_params, "start_ns", "number",
+             "Window start in nanoseconds. Defaults to the selection or whole trace.");
+    AddParam(track_stats_params, "end_ns", "number", "Window end in nanoseconds.");
+    track_stats_params["required"][0] = "track_id";
+    AddTool(tools, 9, "track_statistics",
+            "Compute statistics for one track over a window: queue busy percentage "
+            "for a queue track, or min/max/mean/standard deviation for a counter "
+            "track. Answers \"how busy was this GPU\" and \"how hot did it get\".",
+            track_stats_params);
+
+    jt::Json search_params = ObjectParams();
+    AddParam(search_params, "terms", "array",
+             "Names to search for, e.g. [\"gemm\", \"memcpy\"].");
+    search_params["properties"]["terms"]["items"]["type"] = "string";
+    AddParam(search_params, "match", "string",
+             "contains (default, substring) or equals (exact name).");
+    search_params["properties"]["match"]["enum"] =
+        MakeStringEnum({ "contains", "equals" });
+    AddParam(search_params, "combine", "string",
+             "all (default, an event must match every term) or any.");
+    search_params["properties"]["combine"]["enum"] = MakeStringEnum({ "all", "any" });
+    AddParam(search_params, "include_category", "boolean",
+             "Also match against event category names. Default false.");
+    AddParam(search_params, "categories", "array",
+             "Limit to these event families. Defaults to all of them.");
+    search_params["properties"]["categories"]["items"]["type"] = "string";
+    search_params["properties"]["categories"]["items"]["enum"] =
+        MakeStringEnum({ "dispatch", "memory_copy", "memory_alloc", "instrumented",
+                         "sampled" });
+    AddParam(search_params, "start_ns", "number",
+             "Window start in nanoseconds. Defaults to the whole trace.");
+    AddParam(search_params, "end_ns", "number", "Window end in nanoseconds.");
+    AddQueryParams(search_params);
+    search_params["required"][0] = "terms";
+    AddTool(tools, 10, "search_events",
+            "Search the whole trace by event name, the same as the search box in "
+            "the toolbar. Use this when you know part of a name but not which track "
+            "or when it ran. Returns matching events with track ids, timestamps, and "
+            "__uuid values you can pass to goto or event_details.",
+            search_params);
+
+    jt::Json overview_params = ObjectParams();
+    AddParam(overview_params, "track_id", "integer",
+             "Optional: profile one track instead of the whole trace.");
+    AddParam(overview_params, "bins", "integer",
+             "Time buckets to report (default 32).");
+    AddTool(tools, 11, "trace_overview",
+            "Preliminary analysis. Reads the timeline histogram and minimap that "
+            "Optiq already built: where activity is concentrated in time, the "
+            "busiest and quietest windows as real nanosecond ranges, total event "
+            "count, and which tracks own the most events. Costs no database query. "
+            "Call this FIRST so later tools can target a window and a track instead "
+            "of scanning the whole trace.",
+            overview_params);
+
+    jt::Json panel_params = ObjectParams();
+    AddParam(panel_params, "panel", "string",
+             ("Which panel: " + OptiqActions::PanelNameList()).c_str());
+    AddParam(panel_params, "visible", "boolean",
+             "true to open, false to close. Defaults to true.");
+    panel_params["required"][0] = "panel";
+    AddTool(tools, 12, "show_panel",
+            "Open or close one of Optiq's panels for the user, the same as using "
+            "the View menu. Use it to put the right view in front of them, and to "
+            "hide anything they say is in the way.",
+            panel_params);
+
+    jt::Json tab_params = ObjectParams();
+    AddParam(tab_params, "name", "string",
+             "Tab to switch to. Part of the name is enough. Omit to list every "
+             "tab that is available.");
+    AddTool(tools, 13, "switch_tab",
+            "Switch tabs. Covers both the open traces along the top and the "
+            "details panel's tabs at the bottom (Event Table, Sample Table, Event "
+            "Details, Track Details, Top Events, Annotations). Selecting a details "
+            "tab opens that panel if it is hidden. Call with no name to see what "
+            "is available.",
+            tab_params);
+
+    jt::Json flow_params = ObjectParams();
+    AddParam(flow_params, "visible", "boolean",
+             "Show or hide the flow arrows. Defaults to true.");
+    AddParam(flow_params, "style", "string",
+             "fan draws every link from the selected event; chain follows the "
+             "sequence end to end.");
+    flow_params["properties"]["style"]["enum"] = MakeStringEnum({ "fan", "chain" });
+    AddTool(tools, 14, "flow_arrows",
+            "Show, hide, or restyle the arrows that connect an event to the events "
+            "it launched or waited on. Pair it with goto when you are explaining a "
+            "launch or a synchronization delay.",
+            flow_params);
+
+    jt::Json note_params = ObjectParams();
+    AddParam(note_params, "time_ns", "number",
+             "Where on the timeline to pin the note.");
+    AddParam(note_params, "title", "string", "Short heading, a few words.");
+    AddParam(note_params, "text", "string",
+             "What you found here and why it matters.");
+    AddParam(note_params, "track_id", "integer",
+             "Optional track to attach the note to.");
+    note_params["required"][0] = "time_ns";
+    note_params["required"][1] = "title";
+    note_params["required"][2] = "text";
+    AddTool(tools, 15, "annotate",
+            "Pin a sticky note on the timeline at a point in time. Notes are saved "
+            "with the project, so this is how you leave a finding behind for the "
+            "user or their teammates to come back to.",
+            note_params);
+
+    jt::Json bookmark_params = ObjectParams();
+    AddParam(bookmark_params, "action", "string",
+             "save the current view, go to a saved one, remove one, or list them.");
+    bookmark_params["properties"]["action"]["enum"] =
+        MakeStringEnum({ "save", "goto", "remove", "list" });
+    AddParam(bookmark_params, "slot", "integer", "Bookmark slot, 0 to 9.");
+    AddTool(tools, 16, "bookmark",
+            "Save the current zoom and scroll position to a numbered slot, or jump "
+            "back to one, the same as the Bookmarks dropdown. Save a bookmark "
+            "before you take the user somewhere else so they can get back.",
+            bookmark_params);
+
+    jt::Json measure_params = ObjectParams();
+    AddParam(measure_params, "start_ns", "number", "Span start in nanoseconds.");
+    AddParam(measure_params, "end_ns", "number", "Span end in nanoseconds.");
+    AddParam(measure_params, "clear", "boolean",
+             "Set true to clear the measurement instead of taking one.");
+    AddTool(tools, 17, "measure",
+            "Drop the two measurement pins on a span so the toolbar shows its "
+            "duration, the same as the Measure tool. Use it when you are telling "
+            "the user how long something took, so they can see the span on screen.",
+            measure_params);
+
+    jt::Json reset_params = ObjectParams();
+    AddTool(tools, 18, "reset_view",
+            "Zoom the timeline back out to the whole trace, the same as the Reset "
+            "View button.",
+            reset_params);
 
     return tools;
 }
@@ -711,9 +1739,112 @@ BuildAssistantBriefing(const AssistantToolContext& context)
         }
     }
 
+    // Headline numbers only. The kernel breakdown is deliberately left out so
+    // the model has to fetch it, which is what makes it look at real rows
+    // instead of answering from the briefing alone.
+    const SummaryInfo::GPUMetrics& gpu =
+        context.data_provider->DataModel().GetSummary().GetSummaryData().gpu;
     out << "summary:\n";
-    out << FormatSystemSummary(context);
+    if(gpu.gfx_utilization.has_value())
+    {
+        out << "gfx_util_pct: " << FormatPercent(gpu.gfx_utilization.value()) << "\n";
+    }
+    if(gpu.mem_utilization.has_value())
+    {
+        out << "mem_util_pct: " << FormatPercent(gpu.mem_utilization.value()) << "\n";
+    }
+    out << "kernel_exec_time_total_ns: " << gpu.kernel_exec_time_total << "\n";
+    out << "named_kernels_available: " << gpu.top_kernels.size() << "\n";
+    out << "note: kernel names, per-kernel times, and event rows are NOT in this "
+           "briefing. Call get_summary, top_events, or track_events to see them.\n";
     return out.str();
+}
+
+std::vector<double>
+GetAssistantActivityBins(const AssistantToolContext& context, uint64_t track_id,
+                         size_t bin_count)
+{
+    if(context.data_provider == nullptr)
+    {
+        return std::vector<double>();
+    }
+
+    std::vector<double> source;
+    if(track_id == INVALID_UINT64_INDEX)
+    {
+        source = CombinedEventRow(context);
+    }
+    else
+    {
+        const std::map<uint64_t, std::vector<double>>& minimap =
+            context.data_provider->DataModel().GetTimeline().GetMiniMap();
+        const std::map<uint64_t, std::vector<double>>::const_iterator row =
+            minimap.find(track_id);
+        if(row == minimap.end())
+        {
+            return std::vector<double>();
+        }
+        source = row->second;
+    }
+
+    const OverviewProfile profile = Downsample(source, bin_count);
+    std::vector<double>   bins    = profile.bins;
+    if(profile.peak > 0.0)
+    {
+        for(double& value : bins)
+        {
+            value /= profile.peak;
+        }
+    }
+    return bins;
+}
+
+std::vector<AssistantActivityRow>
+GetAssistantActivityRows(const AssistantToolContext& context, size_t bin_count,
+                         size_t max_rows)
+{
+    std::vector<AssistantActivityRow> rows;
+    if(context.data_provider == nullptr)
+    {
+        return rows;
+    }
+
+    const TimelineModel& timeline = context.data_provider->DataModel().GetTimeline();
+    std::vector<std::pair<double, uint64_t>> ranked;
+    for(const std::pair<const uint64_t, std::vector<double>>& row :
+        timeline.GetMiniMap())
+    {
+        const TrackInfo* track = timeline.GetTrack(row.first);
+        if(track == nullptr || track->track_type == kRPVControllerTrackTypeSamples)
+        {
+            continue;
+        }
+        double total = 0.0;
+        for(double value : row.second)
+        {
+            total += value;
+        }
+        if(total > 0.0)
+        {
+            ranked.emplace_back(total, row.first);
+        }
+    }
+
+    std::sort(ranked.begin(), ranked.end(),
+              [](const std::pair<double, uint64_t>& a,
+                 const std::pair<double, uint64_t>& b) { return a.first > b.first; });
+
+    const size_t count = std::min(ranked.size(), max_rows);
+    rows.reserve(count);
+    for(size_t i = 0; i < count; ++i)
+    {
+        AssistantActivityRow entry;
+        entry.track_id = ranked[i].second;
+        entry.name = context.data_provider->DataModel().BuildTrackName(entry.track_id);
+        entry.bins = GetAssistantActivityBins(context, entry.track_id, bin_count);
+        rows.push_back(entry);
+    }
+    return rows;
 }
 
 std::string
@@ -743,6 +1874,58 @@ AssistantToolStatusLabel(const std::string& tool_name)
     {
         return "Moving the view...";
     }
+    if(tool_name == "track_events")
+    {
+        return "Reading track events...";
+    }
+    if(tool_name == "track_samples")
+    {
+        return "Reading counter samples...";
+    }
+    if(tool_name == "event_details")
+    {
+        return "Loading event details...";
+    }
+    if(tool_name == "track_statistics")
+    {
+        return "Computing track statistics...";
+    }
+    if(tool_name == "search_events")
+    {
+        return "Searching the trace...";
+    }
+    if(tool_name == "trace_overview")
+    {
+        return "Reading the timeline overview...";
+    }
+    if(tool_name == "show_panel")
+    {
+        return "Opening a panel...";
+    }
+    if(tool_name == "switch_tab")
+    {
+        return "Switching tabs...";
+    }
+    if(tool_name == "flow_arrows")
+    {
+        return "Adjusting flow arrows...";
+    }
+    if(tool_name == "annotate")
+    {
+        return "Leaving a note...";
+    }
+    if(tool_name == "bookmark")
+    {
+        return "Working with bookmarks...";
+    }
+    if(tool_name == "measure")
+    {
+        return "Measuring...";
+    }
+    if(tool_name == "reset_view")
+    {
+        return "Resetting the view...";
+    }
     return "Using " + tool_name + "...";
 }
 
@@ -762,6 +1945,262 @@ StartAssistantTool(const AssistantToolContext& context, const std::string& tool_
 
     const jt::Json args = ParseArgsObject(arguments_json);
 
+    if(tool_name == "show_panel")
+    {
+        const std::string panel_name = JsonUtils::GetString(args, "panel", "");
+        const OptiqPanel  panel      = OptiqActions::PanelFromName(panel_name);
+        if(panel == OptiqPanel::kUnknown)
+        {
+            return DoneResult("Unknown panel \"" + panel_name + "\". Use one of: " +
+                                  OptiqActions::PanelNameList() + ".",
+                              "Unknown panel");
+        }
+
+        const bool visible = JsonUtils::GetBool(args, "visible", true);
+        if(!Actions(context).ShowPanel(panel, visible))
+        {
+            return DoneResult(std::string("Could not change the ") +
+                                  OptiqActions::PanelName(panel) + " panel here.",
+                              "Panel unavailable");
+        }
+        return DoneResult(std::string(visible ? "Opened the " : "Closed the ") +
+                              OptiqActions::PanelName(panel) + " panel.",
+                          visible ? "Opened a panel" : "Closed a panel");
+    }
+
+    if(tool_name == "reset_view")
+    {
+        if(!Actions(context).ResetView())
+        {
+            return DoneResult("Reset view is only available on a system trace.",
+                              "Not available");
+        }
+        return DoneResult("Zoomed back out to the whole trace.", "Reset the view");
+    }
+
+    if(tool_name == "measure")
+    {
+        OptiqActions actions = Actions(context);
+        if(JsonUtils::GetBool(args, "clear", false))
+        {
+            actions.ClearMeasurement();
+            return DoneResult("Cleared the measurement.", "Cleared measurement");
+        }
+
+        const double start_ns = JsonUtils::GetDouble(args, "start_ns", -1.0);
+        const double end_ns   = JsonUtils::GetDouble(args, "end_ns", -1.0);
+        if(start_ns < 0.0 || end_ns <= start_ns)
+        {
+            return DoneResult("measure needs start_ns and end_ns with end > start.",
+                              "Bad range");
+        }
+        if(!actions.MeasureRange(start_ns, end_ns))
+        {
+            return DoneResult("Could not measure on this trace.", "Not available");
+        }
+
+        SettingsManager& settings    = SettingsManager::GetInstance();
+        const TimeFormat time_format = settings.GetUserSettings().unit_settings.time_format;
+        return DoneResult(
+            "Measured " +
+                nanosecond_to_formatted_str(end_ns - start_ns, time_format, true) +
+                " on the timeline.",
+            "Measured a span");
+    }
+
+    if(tool_name == "bookmark")
+    {
+        OptiqActions      actions = Actions(context);
+        const std::string action  = ToLowerCopy(JsonUtils::GetString(args, "action", "list"));
+        const std::vector<int> slots = actions.ListBookmarks();
+
+        std::ostringstream saved;
+        saved << "saved_bookmarks:";
+        if(slots.empty())
+        {
+            saved << " none";
+        }
+        for(int slot : slots)
+        {
+            saved << " " << slot;
+        }
+        saved << "\n";
+
+        if(action == "list")
+        {
+            return DoneResult(saved.str(), "Listed bookmarks");
+        }
+
+        const int slot = static_cast<int>(JsonUtils::GetInt(args, "slot", -1));
+        if(slot < 0)
+        {
+            return DoneResult("bookmark needs a slot from 0 to 9.\n" + saved.str(),
+                              "Missing slot");
+        }
+        if(action == "save")
+        {
+            if(!actions.SaveBookmark(slot))
+            {
+                return DoneResult("Could not save that bookmark.", "Bookmark failed");
+            }
+            return DoneResult("Saved the current view to bookmark " +
+                                  std::to_string(slot) + ".",
+                              "Saved a bookmark");
+        }
+        if(action == "goto")
+        {
+            if(!actions.GotoBookmark(slot))
+            {
+                return DoneResult("Bookmark " + std::to_string(slot) +
+                                      " is empty.\n" + saved.str(),
+                                  "No such bookmark");
+            }
+            return DoneResult("Jumped to bookmark " + std::to_string(slot) + ".",
+                              "Used a bookmark");
+        }
+        if(action == "remove")
+        {
+            if(!actions.RemoveBookmark(slot))
+            {
+                return DoneResult("Bookmark " + std::to_string(slot) + " is empty.",
+                                  "No such bookmark");
+            }
+            return DoneResult("Removed bookmark " + std::to_string(slot) + ".",
+                              "Removed a bookmark");
+        }
+        return DoneResult("Unknown action. Use save, goto, remove, or list.",
+                          "Bad action");
+    }
+
+    if(tool_name == "annotate")
+    {
+        if(context.is_compute)
+        {
+            return DoneResult("Notes are a timeline feature, so system traces only.",
+                              "Wrong trace kind");
+        }
+        const double      time_ns = JsonUtils::GetDouble(args, "time_ns", -1.0);
+        const std::string title   = JsonUtils::GetString(args, "title", "");
+        const std::string text    = JsonUtils::GetString(args, "text", "");
+        if(time_ns < 0.0 || title.empty() || text.empty())
+        {
+            return DoneResult("annotate needs time_ns, title, and text.",
+                              "Missing arguments");
+        }
+
+        double view_start = 0.0;
+        double view_end   = 0.0;
+        SelectedOrFullTimeRange(context, view_start, view_end);
+        if(!Actions(context).AddNote(time_ns, title, text, view_start, view_end,
+                                     JsonU64(args, "track_id", INVALID_UINT64_INDEX)))
+        {
+            return DoneResult("Could not pin a note on this trace.", "Note failed");
+        }
+        return DoneResult("Pinned a note titled \"" + title + "\" on the timeline.",
+                          "Left a note");
+    }
+
+    if(tool_name == "switch_tab")
+    {
+        OptiqActions                   actions       = Actions(context);
+        const std::vector<std::string> trace_tabs    = actions.ListTabs();
+        const std::vector<std::string> analysis_tabs = actions.ListAnalysisTabs();
+
+        std::ostringstream out;
+        out << "trace_tabs:";
+        for(const std::string& tab : trace_tabs)
+        {
+            out << "\n  " << tab;
+        }
+        out << "\nactive_trace_tab: " << actions.ActiveTab() << "\n";
+        if(!analysis_tabs.empty())
+        {
+            out << "details_panel_tabs:";
+            for(const std::string& tab : analysis_tabs)
+            {
+                out << "\n  " << tab;
+            }
+            out << "\nactive_details_tab: " << actions.ActiveAnalysisTab() << "\n";
+        }
+
+        const std::string name = JsonUtils::GetString(args, "name", "");
+        if(name.empty())
+        {
+            return DoneResult(out.str(), "Listed tabs");
+        }
+
+        // Details tabs are the ones people usually mean by name, so try those
+        // first; trace tabs are file names and rarely collide.
+        if(actions.SelectAnalysisTab(name))
+        {
+            return DoneResult("Opened the " + actions.ActiveAnalysisTab() +
+                                  " tab in the details panel.",
+                              "Switched tabs");
+        }
+        if(actions.SelectTab(name))
+        {
+            return DoneResult("Switched to trace " + actions.ActiveTab() + ".",
+                              "Switched tabs");
+        }
+
+        out << "Nothing matches \"" << name << "\".\n";
+        return DoneResult(out.str(), "No matching tab");
+    }
+
+    if(tool_name == "flow_arrows")
+    {
+        OptiqActions actions = Actions(context);
+        const bool   visible = JsonUtils::GetBool(args, "visible", true);
+        if(!actions.SetFlowArrowsVisible(visible))
+        {
+            return DoneResult("Flow arrows are only available on a system trace.",
+                              "Not available");
+        }
+
+        const std::string style = ToLowerCopy(JsonUtils::GetString(args, "style", ""));
+        if(style == "chain" || style == "fan")
+        {
+            actions.SetFlowRenderChained(style == "chain");
+        }
+
+        std::string message = visible ? "Flow arrows are on." : "Flow arrows are off.";
+        if(!style.empty())
+        {
+            message += " Style set to " + style + ".";
+        }
+        if(visible)
+        {
+            message +=
+                " They only draw for a selected event, so call goto with an "
+                "event_uuid and track_id to see them.";
+        }
+        return DoneResult(message, visible ? "Flow arrows on" : "Flow arrows off");
+    }
+
+    if(tool_name == "trace_overview")
+    {
+        if(context.is_compute)
+        {
+            return DoneResult(
+                "Compute traces have no timeline. Call get_summary instead.",
+                "Wrong trace kind");
+        }
+        const int32_t requested_bins = JsonUtils::GetInt(
+            args, "bins", static_cast<int32_t>(ASSISTANT_OVERVIEW_BINS));
+        const size_t bins =
+            requested_bins <= 0
+                ? ASSISTANT_OVERVIEW_BINS
+                : std::min(static_cast<size_t>(requested_bins), ASSISTANT_MAX_ROW_LIMIT);
+        const uint64_t track_id = JsonU64(args, "track_id", INVALID_UINT64_INDEX);
+
+        AssistantToolStartResult result =
+            DoneResult(FormatTraceOverview(context, bins, track_id),
+                       "Read the timeline overview");
+        result.chart          = true;
+        result.chart_track_id = track_id;
+        return result;
+    }
+
     if(tool_name == "get_summary")
     {
         if(context.is_compute)
@@ -769,12 +2208,13 @@ StartAssistantTool(const AssistantToolContext& context, const std::string& tool_
             return DoneResult(FormatComputeKernels(context, ASSISTANT_TOP_KERNEL_LIMIT),
                               "Read compute kernel stats");
         }
+        const AssistantFetchState summary_fetch =
+            TableFetch(AssistantFetchKind::kSummary, TableType::kSummaryKernelTable,
+                       ASSISTANT_DEFAULT_ROW_LIMIT);
         if(context.data_provider->IsRequestPending(DataProvider::SUMMARY_REQUEST_ID))
         {
-            return PendingResult(DataProvider::SUMMARY_REQUEST_ID,
-                                 AssistantFetchKind::kSummary,
-                                 ASSISTANT_DEFAULT_ROW_LIMIT, "Loading summary...", false,
-                                 TableType::kSummaryKernelTable, 0);
+            return PendingResult(DataProvider::SUMMARY_REQUEST_ID, summary_fetch,
+                                 "Loading summary...", false);
         }
         const SummaryInfo::GPUMetrics& gpu =
             context.data_provider->DataModel().GetSummary().GetSummaryData().gpu;
@@ -784,17 +2224,13 @@ StartAssistantTool(const AssistantToolContext& context, const std::string& tool_
         }
         if(context.data_provider->FetchSummary())
         {
-            return PendingResult(DataProvider::SUMMARY_REQUEST_ID,
-                                 AssistantFetchKind::kSummary,
-                                 ASSISTANT_DEFAULT_ROW_LIMIT, "Loading summary...", true,
-                                 TableType::kSummaryKernelTable, 0);
+            return PendingResult(DataProvider::SUMMARY_REQUEST_ID, summary_fetch,
+                                 "Loading summary...", true);
         }
         if(context.data_provider->IsRequestPending(DataProvider::SUMMARY_REQUEST_ID))
         {
-            return PendingResult(DataProvider::SUMMARY_REQUEST_ID,
-                                 AssistantFetchKind::kSummary,
-                                 ASSISTANT_DEFAULT_ROW_LIMIT, "Loading summary...", false,
-                                 TableType::kSummaryKernelTable, 0);
+            return PendingResult(DataProvider::SUMMARY_REQUEST_ID, summary_fetch,
+                                 "Loading summary...", false);
         }
         return DoneResult(FormatSystemSummary(context), "Read summary");
     }
@@ -819,11 +2255,15 @@ StartAssistantTool(const AssistantToolContext& context, const std::string& tool_
             if(track->topology.type != TrackInfo::Queue &&
                track->topology.type != TrackInfo::Stream &&
                track->topology.type != TrackInfo::InstrumentedThread &&
-               track->topology.type != TrackInfo::SampledThread)
+               track->topology.type != TrackInfo::SampledThread &&
+               track->topology.type != TrackInfo::Counter)
             {
                 continue;
             }
             out << "track_id=" << track->id << " type=" << TrackTypeName(track->topology.type)
+                << " reads_with="
+                << (track->track_type == kRPVControllerTrackTypeEvents ? "track_events"
+                                                                      : "track_samples")
                 << " name=\""
                 << context.data_provider->DataModel().BuildTrackName(track->id) << "\"";
             out << " ops=";
@@ -890,7 +2330,7 @@ StartAssistantTool(const AssistantToolContext& context, const std::string& tool_
             {
                 return DoneResult("Could not find that kernel to select.", "goto failed");
             }
-            context.compute_selection->SelectKernel(kernel->id);
+            Actions(context).SelectKernel(kernel->id);
             return DoneResult(std::string("Selected compute kernel ") + kernel->name,
                               "Selected kernel");
         }
@@ -907,18 +2347,72 @@ StartAssistantTool(const AssistantToolContext& context, const std::string& tool_
             return DoneResult("Timeline selection is not available.", "goto failed");
         }
 
-        context.timeline_selection->SelectTimeRange(start_ns, end_ns);
-        if(track_id != TimelineSelection::INVALID_SELECTION_ID ||
-           event_uuid != TimelineSelection::INVALID_SELECTION_ID)
+        OptiqActions actions = Actions(context);
+        actions.SelectRange(start_ns, end_ns);
+        const bool zoom = JsonUtils::GetBool(args, "zoom", false);
+        if(zoom)
         {
-            context.timeline_selection->NavigateToEvent(track_id, event_uuid, start_ns,
-                                                        end_ns - start_ns);
+            actions.ZoomToRange(start_ns, end_ns);
+        }
+
+        // Collect every event the answer points at. The model may name one via
+        // track_id/event_uuid or several via events[]; both shapes end up here
+        // so the behaviour does not depend on which one it picked.
+        std::vector<std::pair<uint64_t, uint64_t>> targets;
+        if(event_uuid != TimelineSelection::INVALID_SELECTION_ID)
+        {
+            targets.emplace_back(track_id, event_uuid);
+        }
+        jt::Json& mutable_args = const_cast<jt::Json&>(args);
+        if(mutable_args.contains("events") && mutable_args["events"].isArray())
+        {
+            for(jt::Json& entry : mutable_args["events"].getArray())
+            {
+                if(!entry.isObject() || targets.size() >= ASSISTANT_MAX_HIGHLIGHTS)
+                {
+                    continue;
+                }
+                const uint64_t entry_uuid =
+                    JsonU64(entry, "event_uuid",
+                            JsonU64(entry, "__uuid",
+                                    TimelineSelection::INVALID_SELECTION_ID));
+                if(entry_uuid != TimelineSelection::INVALID_SELECTION_ID)
+                {
+                    targets.emplace_back(JsonU64(entry, "track_id", track_id), entry_uuid);
+                }
+            }
+        }
+
+        if(targets.empty())
+        {
+            actions.ShowRange(start_ns, end_ns);
         }
         else
         {
-            EventManager::GetInstance()->AddEvent(std::make_shared<RangeEvent>(
-                static_cast<int>(RocEvents::kSetViewRange), start_ns, end_ns,
-                context.data_provider->GetTraceFilePath()));
+            actions.NavigateToEvent(targets.front().first, targets.front().second,
+                                    start_ns, end_ns - start_ns);
+        }
+
+        // Clicking the first target is what makes the trace view load its
+        // details, flow arrows, and call stack. NavigateToEvent only highlights,
+        // so without this the arrows never appear.
+        size_t highlighted = 0;
+        if(!targets.empty())
+        {
+            actions.ClearHighlights();
+            for(const std::pair<uint64_t, uint64_t>& target : targets)
+            {
+                if(!actions.HighlightEvent(target.first, target.second))
+                {
+                    continue;
+                }
+                if(highlighted == 0)
+                {
+                    actions.ClickEvent(target.first, target.second);
+                    actions.ScrollToTrack(target.first);
+                }
+                ++highlighted;
+            }
         }
 
         SettingsManager& settings    = SettingsManager::GetInstance();
@@ -927,6 +2421,16 @@ StartAssistantTool(const AssistantToolContext& context, const std::string& tool_
         out << "Moved the timeline to "
             << nanosecond_to_formatted_str(start_ns, time_format, true) << " .. "
             << nanosecond_to_formatted_str(end_ns, time_format, true);
+        if(zoom)
+        {
+            out << ", zoomed in";
+        }
+        if(highlighted > 0)
+        {
+            out << " and highlighted " << highlighted
+                << " event(s) there, with flow arrows expanded on the first";
+        }
+        out << ".";
         return DoneResult(out.str(), "Moved the view");
     }
 
@@ -950,7 +2454,14 @@ StartAssistantTool(const AssistantToolContext& context, const std::string& tool_
         const size_t limit =
             ClampRowLimit(JsonUtils::GetInt(args, "limit",
                                             static_cast<int32_t>(ASSISTANT_DEFAULT_ROW_LIMIT)));
-        const std::vector<uint64_t> tracks = TracksForOperation(context, spec->op);
+
+        std::string track_error;
+        const std::vector<uint64_t> tracks =
+            TracksFromArgs(context, args, spec->op, true, track_error);
+        if(!track_error.empty())
+        {
+            return DoneResult(track_error, "Bad track_ids");
+        }
         if(tracks.empty())
         {
             return DoneResult(
@@ -959,27 +2470,42 @@ StartAssistantTool(const AssistantToolContext& context, const std::string& tool_
                 "No matching tracks");
         }
 
-        double start_ns = 0.0;
-        double end_ns   = 0.0;
-        SelectedOrFullTimeRange(context, start_ns, end_ns);
-
-        if(context.data_provider->IsRequestPending(spec->request_id))
+        std::string       query_error;
+        const std::string where    = BuildWhereClause(args, query_error);
+        const std::string group_by = GroupByFromArgs(args, query_error);
+        if(!query_error.empty())
         {
-            return PendingResult(spec->request_id, AssistantFetchKind::kTopEvents, limit,
-                                 AssistantToolStatusLabel(tool_name), false,
-                                 spec->table_type, 0);
+            return DoneResult(query_error, "Bad query argument");
         }
 
+        double start_ns = 0.0;
+        double end_ns   = 0.0;
+        TimeRangeFromArgs(context, args, start_ns, end_ns);
+
+        const AssistantFetchState fetch =
+            TableFetch(AssistantFetchKind::kTopEvents, spec->table_type, limit);
+        if(context.data_provider->IsRequestPending(spec->request_id))
+        {
+            return PendingResult(spec->request_id, fetch,
+                                 AssistantToolStatusLabel(tool_name), false);
+        }
+
+        const TablesModel& tables =
+            context.data_provider->DataModel().GetAnalysis().GetTables();
         const bool queued = context.data_provider->FetchTable(TrackTableRequestParams(
-            spec->controller_type, tracks, start_ns, end_ns, "", "", "", "", 0,
-            static_cast<uint64_t>(limit), 2, kRPVControllerSortOrderDescending));
+            spec->controller_type, tracks, start_ns, end_ns, where.c_str(), "",
+            group_by.c_str(), "", JsonU64(args, "offset", 0),
+            static_cast<uint64_t>(limit),
+            ResolveSortColumn(tables, spec->table_type,
+                              JsonUtils::GetString(args, "sort_by", ""),
+                              ASSISTANT_DURATION_COLUMN),
+            SortOrderFromArgs(args, kRPVControllerSortOrderDescending)));
         if(!queued && !context.data_provider->IsRequestPending(spec->request_id))
         {
             return DoneResult("Could not queue the top_events fetch.", "Fetch failed");
         }
-        return PendingResult(spec->request_id, AssistantFetchKind::kTopEvents, limit,
-                             AssistantToolStatusLabel(tool_name), queued, spec->table_type,
-                             0);
+        return PendingResult(spec->request_id, fetch,
+                             AssistantToolStatusLabel(tool_name), queued);
     }
 
     if(tool_name == "kernel_instances")
@@ -998,30 +2524,43 @@ StartAssistantTool(const AssistantToolContext& context, const std::string& tool_
         const size_t limit =
             ClampRowLimit(JsonUtils::GetInt(args, "limit",
                                             static_cast<int32_t>(ASSISTANT_DEFAULT_ROW_LIMIT)));
-        double start_ns = 0.0;
-        double end_ns   = 0.0;
-        SelectedOrFullTimeRange(context, start_ns, end_ns);
 
-        const uint64_t request_id = DataProvider::SUMMARY_KERNEL_INSTANCE_TABLE_REQUEST_ID;
-        if(context.data_provider->IsRequestPending(request_id))
+        std::string       query_error;
+        const std::string where = BuildWhereClause(args, query_error);
+        if(!query_error.empty())
         {
-            return PendingResult(request_id, AssistantFetchKind::kKernelInstances, limit,
-                                 AssistantToolStatusLabel(tool_name), false,
-                                 TableType::kSummaryKernelTable, 0);
+            return DoneResult(query_error, "Bad query argument");
         }
 
+        double start_ns = 0.0;
+        double end_ns   = 0.0;
+        TimeRangeFromArgs(context, args, start_ns, end_ns);
+
+        const uint64_t request_id = DataProvider::SUMMARY_KERNEL_INSTANCE_TABLE_REQUEST_ID;
+        const AssistantFetchState fetch =
+            TableFetch(AssistantFetchKind::kKernelInstances, TableType::kSummaryKernelTable,
+                       limit);
+        if(context.data_provider->IsRequestPending(request_id))
+        {
+            return PendingResult(request_id, fetch, AssistantToolStatusLabel(tool_name),
+                                 false);
+        }
+
+        const TablesModel& tables = context.data_provider->DataModel().GetTables();
         const bool queued = context.data_provider->FetchTable(EventSearchRequestParams(
             kRPVControllerTableTypeSummaryKernelInstances,
-            { kRocProfVisDmOperationDispatch }, start_ns, end_ns, "", false, false, false,
-            { kernel_name }, 0, static_cast<uint64_t>(limit), 0,
-            kRPVControllerSortOrderAscending));
+            { kRocProfVisDmOperationDispatch }, start_ns, end_ns, where.c_str(), false,
+            false, false, { kernel_name }, JsonU64(args, "offset", 0),
+            static_cast<uint64_t>(limit),
+            ResolveSortColumn(tables, TableType::kSummaryKernelTable,
+                              JsonUtils::GetString(args, "sort_by", ""), 0),
+            SortOrderFromArgs(args, kRPVControllerSortOrderAscending)));
         if(!queued && !context.data_provider->IsRequestPending(request_id))
         {
             return DoneResult("Could not queue the kernel_instances fetch.", "Fetch failed");
         }
-        return PendingResult(request_id, AssistantFetchKind::kKernelInstances, limit,
-                             AssistantToolStatusLabel(tool_name), queued,
-                             TableType::kSummaryKernelTable, 0);
+        return PendingResult(request_id, fetch, AssistantToolStatusLabel(tool_name),
+                             queued);
     }
 
     if(tool_name == "kernel_metrics")
@@ -1158,12 +2697,14 @@ StartAssistantTool(const AssistantToolContext& context, const std::string& tool_
         model.ClearKernelMetricValues(context.metrics_client_id);
         const uint64_t request_id = RequestIdBuilder::MakeClientRequestId(
             RequestType::kFetchMetrics, context.metrics_client_id);
+        AssistantFetchState metrics_fetch =
+            TableFetch(AssistantFetchKind::kMetrics, TableType::kSummaryKernelTable,
+                       ASSISTANT_DEFAULT_ROW_LIMIT);
+        metrics_fetch.kernel_id = kernel->id;
         if(context.data_provider->IsRequestPending(request_id))
         {
-            return PendingResult(request_id, AssistantFetchKind::kMetrics,
-                                 ASSISTANT_DEFAULT_ROW_LIMIT,
-                                 AssistantToolStatusLabel(tool_name), false,
-                                 TableType::kSummaryKernelTable, kernel->id);
+            return PendingResult(request_id, metrics_fetch,
+                                 AssistantToolStatusLabel(tool_name), false);
         }
         const bool queued = context.data_provider->FetchMetrics(MetricsRequestParams(
             workload->id, { kernel->id }, metric_ids, context.metrics_client_id));
@@ -1172,54 +2713,360 @@ StartAssistantTool(const AssistantToolContext& context, const std::string& tool_
             out << "Could not queue the metric fetch.\n";
             return DoneResult(TrimResult(out.str()), "Fetch failed");
         }
-        AssistantToolStartResult pending =
-            PendingResult(request_id, AssistantFetchKind::kMetrics,
-                          ASSISTANT_DEFAULT_ROW_LIMIT, AssistantToolStatusLabel(tool_name),
-                          queued, TableType::kSummaryKernelTable, kernel->id);
+        AssistantToolStartResult pending = PendingResult(
+            request_id, metrics_fetch, AssistantToolStatusLabel(tool_name), queued);
         pending.content = out.str();
         return pending;
     }
 
-    return DoneResult("Unknown tool. Use get_summary, top_events, kernel_instances, "
-                      "kernel_metrics, list_tracks, or goto.",
+    if(tool_name == "track_events" || tool_name == "track_samples")
+    {
+        if(context.is_compute)
+        {
+            return DoneResult(
+                "Compute traces have no timeline tracks. Use kernel_metrics.",
+                "Wrong trace kind");
+        }
+
+        const bool      events   = tool_name == "track_events";
+        const TableType type     = events ? TableType::kEventTable : TableType::kSampleTable;
+        const uint64_t request_id = events ? DataProvider::EVENT_TABLE_REQUEST_ID
+                                           : DataProvider::SAMPLE_TABLE_REQUEST_ID;
+        const rocprofvis_controller_track_type_t wanted =
+            events ? kRPVControllerTrackTypeEvents : kRPVControllerTrackTypeSamples;
+
+        std::string           track_error;
+        std::vector<uint64_t> tracks = TracksFromArgs(
+            context, args, kRocProfVisDmOperationDispatch, false, track_error);
+        if(!track_error.empty())
+        {
+            return DoneResult(track_error, "Bad track_ids");
+        }
+        if(tracks.empty())
+        {
+            tracks = TracksOfType(context, wanted);
+        }
+        else
+        {
+            tracks = KeepTracksOfType(context, tracks, wanted);
+            if(tracks.empty())
+            {
+                return DoneResult(
+                    std::string("Those track_ids are not ") +
+                        (events ? "event tracks. Use track_samples for counter tracks."
+                                : "counter tracks. Use track_events for queue, stream, "
+                                  "and thread tracks."),
+                    "Wrong track kind");
+            }
+        }
+        if(tracks.empty())
+        {
+            return DoneResult(std::string("No ") +
+                                  (events ? "event" : "counter") +
+                                  " tracks found. Call list_tracks.",
+                              "No matching tracks");
+        }
+
+        std::string       query_error;
+        const std::string where    = BuildWhereClause(args, query_error);
+        const std::string group_by = GroupByFromArgs(args, query_error);
+        if(!query_error.empty())
+        {
+            return DoneResult(query_error, "Bad query argument");
+        }
+
+        const size_t limit =
+            ClampRowLimit(JsonUtils::GetInt(args, "limit",
+                                            static_cast<int32_t>(ASSISTANT_DEFAULT_ROW_LIMIT)));
+        double start_ns = 0.0;
+        double end_ns   = 0.0;
+        TimeRangeFromArgs(context, args, start_ns, end_ns);
+
+        const AssistantFetchState fetch =
+            TableFetch(AssistantFetchKind::kDataTable, type, limit);
+        if(context.data_provider->IsRequestPending(request_id))
+        {
+            return PendingResult(request_id, fetch, AssistantToolStatusLabel(tool_name),
+                                 false);
+        }
+
+        const TablesModel& tables = context.data_provider->DataModel().GetTables();
+        const bool queued = context.data_provider->FetchTable(TrackTableRequestParams(
+            events ? kRPVControllerTableTypeEvents : kRPVControllerTableTypeSamples,
+            tracks, start_ns, end_ns, where.c_str(), "", group_by.c_str(), "",
+            JsonU64(args, "offset", 0), static_cast<uint64_t>(limit),
+            ResolveSortColumn(tables, type, JsonUtils::GetString(args, "sort_by", ""), 0),
+            SortOrderFromArgs(args, kRPVControllerSortOrderAscending)));
+        if(!queued && !context.data_provider->IsRequestPending(request_id))
+        {
+            return DoneResult("Could not queue the " + tool_name + " fetch.",
+                              "Fetch failed");
+        }
+        return PendingResult(request_id, fetch, AssistantToolStatusLabel(tool_name),
+                             queued);
+    }
+
+    if(tool_name == "event_details")
+    {
+        if(context.is_compute)
+        {
+            return DoneResult("event_details is for system traces.", "Wrong trace kind");
+        }
+        const uint64_t event_uuid =
+            JsonU64(args, "event_uuid", JsonU64(args, "event_id", 0));
+        if(event_uuid == 0)
+        {
+            return DoneResult("event_details needs event_uuid from the __uuid column.",
+                              "Missing event_uuid");
+        }
+
+        const std::vector<uint64_t> request_ids = {
+            DataProvider::EVENT_EXTENDED_DATA_REQUEST_ID,
+            DataProvider::EVENT_FLOW_DATA_REQUEST_ID,
+            DataProvider::EVENT_CALL_STACK_DATA_REQUEST_ID
+        };
+        // These request ids are shared with the event panel, and re-issuing one
+        // that is already in flight would drop its future on the floor.
+        for(uint64_t request_id : request_ids)
+        {
+            if(context.data_provider->IsRequestPending(request_id))
+            {
+                return DoneResult("Event details are already loading. Try again.",
+                                  "Busy");
+            }
+        }
+
+        const uint64_t track_id = JsonU64(args, "track_id", INVALID_UINT64_INDEX);
+        // FetchEvent seeds name/duration from loaded track data and chains the
+        // extended-data fetch; without a track id only the async property
+        // fetches below have anything to say.
+        bool extended = false;
+        if(track_id != INVALID_UINT64_INDEX)
+        {
+            extended = context.data_provider->FetchEvent(track_id, event_uuid);
+        }
+        const bool flow  = context.data_provider->FetchEventFlowDetails(event_uuid);
+        const bool stack = context.data_provider->FetchEventCallStackData(event_uuid);
+        if(!extended && !flow && !stack)
+        {
+            return DoneResult("Could not load details for that event.", "Fetch failed");
+        }
+
+        AssistantFetchState fetch;
+        fetch.kind     = AssistantFetchKind::kEventDetails;
+        fetch.event_id = event_uuid;
+        fetch.track_id = track_id;
+        return PendingResult(request_ids, fetch, AssistantToolStatusLabel(tool_name),
+                             true);
+    }
+
+    if(tool_name == "track_statistics")
+    {
+        if(context.is_compute)
+        {
+            return DoneResult("track_statistics is for system traces.",
+                              "Wrong trace kind");
+        }
+        const uint64_t track_id = JsonU64(args, "track_id", INVALID_UINT64_INDEX);
+        const TrackInfo* track =
+            context.data_provider->DataModel().GetTimeline().GetTrack(track_id);
+        if(track == nullptr)
+        {
+            return DoneResult("Unknown track_id. Call list_tracks first.",
+                              "Unknown track");
+        }
+        if(track->topology.type != TrackInfo::Queue &&
+           track->topology.type != TrackInfo::Counter)
+        {
+            return DoneResult(
+                "track_statistics only works on Queue and Counter tracks. Use "
+                "track_events for thread and stream tracks.",
+                "Wrong track type");
+        }
+
+        const AnalysisTrackStatistics* stats =
+            context.data_provider->DataModel().GetAnalysis().RegisterTrack(*track);
+        if(stats == nullptr)
+        {
+            return DoneResult("Statistics are not available for that track.",
+                              "No statistics");
+        }
+
+        double start_ns = 0.0;
+        double end_ns   = 0.0;
+        TimeRangeFromArgs(context, args, start_ns, end_ns);
+
+        AssistantFetchState fetch;
+        fetch.kind     = AssistantFetchKind::kTrackStatistics;
+        fetch.track_id = track_id;
+
+        const uint64_t request_id = RequestIdBuilder::MakeTrackDataRequestId(
+            static_cast<uint32_t>(track_id), 0, 0,
+            RequestType::kFetchAnalysisTrackStatistics);
+        if(context.data_provider->IsRequestPending(request_id))
+        {
+            return PendingResult(request_id, fetch, AssistantToolStatusLabel(tool_name),
+                                 false);
+        }
+
+        const bool queued = context.data_provider->FetchAnalysisTrackStatistics(
+            AnalysisTrackStatisticsRequestParams(track_id, start_ns, end_ns));
+        stats->state = queued ? AnalysisTrackStatistics::kRequested
+                              : AnalysisTrackStatistics::kPending;
+        if(!queued)
+        {
+            return DoneResult("Could not queue the track statistics fetch.",
+                              "Fetch failed");
+        }
+        return PendingResult(request_id, fetch, AssistantToolStatusLabel(tool_name), true);
+    }
+
+    if(tool_name == "search_events")
+    {
+        if(context.is_compute)
+        {
+            return DoneResult(
+                "search_events is for system traces. Use kernel_metrics on compute "
+                "traces.",
+                "Wrong trace kind");
+        }
+
+        std::vector<std::string> terms = JsonUtils::GetStringArray(args, "terms");
+        const std::string        single = JsonUtils::GetString(args, "query", "");
+        if(terms.empty() && !single.empty())
+        {
+            terms.push_back(single);
+        }
+        if(terms.empty())
+        {
+            return DoneResult(
+                "search_events needs terms, e.g. {\"terms\":[\"gemm\"]}.",
+                "Missing terms");
+        }
+        if(terms.size() > ASSISTANT_MAX_SEARCH_TERMS)
+        {
+            terms.resize(ASSISTANT_MAX_SEARCH_TERMS);
+        }
+
+        std::vector<rocprofvis_dm_event_operation_t> ops;
+        for(const std::string& category : JsonUtils::GetStringArray(args, "categories"))
+        {
+            const TopEventsSpec* spec = FindTopEventsSpec(category);
+            if(spec == nullptr)
+            {
+                return DoneResult("Unknown category \"" + category +
+                                      "\". Use dispatch, memory_copy, memory_alloc, "
+                                      "instrumented, or sampled.",
+                                  "Bad category");
+            }
+            ops.push_back(spec->op);
+        }
+        if(ops.empty())
+        {
+            ops = { kRocProfVisDmOperationLaunch, kRocProfVisDmOperationDispatch,
+                    kRocProfVisDmOperationMemoryCopy,
+                    kRocProfVisDmOperationMemoryAllocate,
+                    kRocProfVisDmOperationLaunchSample };
+        }
+
+        const bool contains =
+            ToLowerCopy(JsonUtils::GetString(args, "match", "contains")) != "equals";
+        const bool any_term =
+            ToLowerCopy(JsonUtils::GetString(args, "combine", "all")) == "any";
+        const bool include_category =
+            JsonUtils::GetBool(args, "include_category", false);
+
+        std::string       query_error;
+        const std::string where = BuildWhereClause(args, query_error);
+        if(!query_error.empty())
+        {
+            return DoneResult(query_error, "Bad query argument");
+        }
+
+        const size_t limit =
+            ClampRowLimit(JsonUtils::GetInt(args, "limit",
+                                            static_cast<int32_t>(ASSISTANT_DEFAULT_ROW_LIMIT)));
+        double start_ns = 0.0;
+        double end_ns   = 0.0;
+        TimeRangeFromArgs(context, args, start_ns, end_ns, false);
+
+        const uint64_t            request_id = DataProvider::EVENT_SEARCH_REQUEST_ID;
+        const AssistantFetchState fetch = TableFetch(
+            AssistantFetchKind::kDataTable, TableType::kEventSearchTable, limit);
+        if(context.data_provider->IsRequestPending(request_id))
+        {
+            return PendingResult(request_id, fetch, AssistantToolStatusLabel(tool_name),
+                                 false);
+        }
+
+        const TablesModel& tables = context.data_provider->DataModel().GetTables();
+        const bool queued = context.data_provider->FetchTable(EventSearchRequestParams(
+            kRPVControllerTableTypeSearchResults, ops, start_ns, end_ns, where.c_str(),
+            contains, include_category, any_term, terms, JsonU64(args, "offset", 0),
+            static_cast<uint64_t>(limit),
+            ResolveSortColumn(tables, TableType::kEventSearchTable,
+                              JsonUtils::GetString(args, "sort_by", ""), 1),
+            SortOrderFromArgs(args, kRPVControllerSortOrderAscending)));
+        if(!queued && !context.data_provider->IsRequestPending(request_id))
+        {
+            return DoneResult("Could not queue the search.", "Fetch failed");
+        }
+        return PendingResult(request_id, fetch, AssistantToolStatusLabel(tool_name),
+                             queued);
+    }
+
+    return DoneResult("Unknown tool. Use trace_overview, get_summary, top_events, "
+                      "kernel_instances, kernel_metrics, list_tracks, goto, "
+                      "track_events, track_samples, event_details, track_statistics, "
+                      "search_events, show_panel, switch_tab, or flow_arrows.",
                       "Unknown tool");
 }
 
 std::string
-FinishAssistantFetch(const AssistantToolContext& context, AssistantFetchKind kind,
-                     TableType table_type, uint32_t kernel_id, size_t row_limit)
+FinishAssistantFetch(const AssistantToolContext& context,
+                     const AssistantFetchState&  fetch)
 {
     if(context.data_provider == nullptr)
     {
         return "No trace is open.";
     }
-    const size_t limit = row_limit == 0 ? ASSISTANT_DEFAULT_ROW_LIMIT : row_limit;
+    const size_t limit =
+        fetch.row_limit == 0 ? ASSISTANT_DEFAULT_ROW_LIMIT : fetch.row_limit;
 
-    if(kind == AssistantFetchKind::kSummary)
+    if(fetch.kind == AssistantFetchKind::kSummary)
     {
         return FormatSystemSummary(context);
     }
-    if(kind == AssistantFetchKind::kTopEvents)
+    if(fetch.kind == AssistantFetchKind::kTopEvents)
     {
         const TablesModel& tables =
             context.data_provider->DataModel().GetAnalysis().GetTables();
-        if(tables.GetTableData(table_type).empty() &&
-           tables.GetTableHeader(table_type).empty())
+        if(tables.GetTableData(fetch.table_type).empty() &&
+           tables.GetTableHeader(fetch.table_type).empty())
         {
             return "top_events returned no rows for the current tracks and time range.";
         }
-        return FormatTableSnapshot(tables, table_type, limit);
+        return FormatTableSnapshot(tables, fetch.table_type, limit);
     }
-    if(kind == AssistantFetchKind::kKernelInstances)
+    if(fetch.kind == AssistantFetchKind::kKernelInstances ||
+       fetch.kind == AssistantFetchKind::kDataTable)
     {
         return FormatTableSnapshot(context.data_provider->DataModel().GetTables(),
-                                   TableType::kSummaryKernelTable, limit);
+                                   fetch.table_type, limit);
     }
-    if(kind == AssistantFetchKind::kMetrics)
+    if(fetch.kind == AssistantFetchKind::kEventDetails)
+    {
+        return FormatEventDetails(context, fetch.event_id);
+    }
+    if(fetch.kind == AssistantFetchKind::kTrackStatistics)
+    {
+        return FormatTrackStatistics(context, fetch.track_id);
+    }
+    if(fetch.kind == AssistantFetchKind::kMetrics)
     {
         ComputeDataModel& model = context.data_provider->ComputeModel();
         const std::vector<std::shared_ptr<MetricValue>>* values =
-            model.GetKernelMetricsData(context.metrics_client_id, kernel_id);
+            model.GetKernelMetricsData(context.metrics_client_id, fetch.kernel_id);
         if(values == nullptr || values->empty())
         {
             return "Metric fetch finished with no values.";
@@ -1249,7 +3096,6 @@ FinishAssistantFetch(const AssistantToolContext& context, AssistantFetchKind kin
         }
         return TrimResult(out.str());
     }
-    (void) table_type;
     return "Fetch finished with nothing to report.";
 }
 

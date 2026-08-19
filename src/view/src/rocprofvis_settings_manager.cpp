@@ -9,6 +9,7 @@
 #include "rocprofvis_core.h"
 #include "rocprofvis_event_manager.h"
 #include "rocprofvis_font_manager.h"
+#include "rocprofvis_json_utils.h"
 #include "rocprofvis_settings_panel.h"
 #include "rocprofvis_utils.h"
 
@@ -501,6 +502,7 @@ SettingsManager::SaveSettingsJson()
     SerializeHotkeySettings(settings_json);
     SerializeProfilerSettings(settings_json);
     SerializeAssistantSettings(settings_json);
+    SerializeAppWindowSettings(settings_json);
 
     std::ofstream out_file(m_json_path);
     if(out_file.is_open())
@@ -532,6 +534,7 @@ SettingsManager::LoadSettingsJson()
         DeserializeHotkeySettings(result.second);
         DeserializeProfilerSettings(result.second);
         DeserializeAssistantSettings(result.second);
+        DeserializeAppWindowSettings(result.second);
     }
     else
     {
@@ -1051,6 +1054,39 @@ SettingsManager::DeserializeAssistantSettings(jt::Json& json)
     {
         m_usersettings.assistant.model = as[JSON_KEY_SETTINGS_ASSISTANT_MODEL].getString();
     }
+}
+
+void
+SettingsManager::SerializeAppWindowSettings(jt::Json& json)
+{
+    jt::Json& aw = json[JSON_KEY_GROUP_SETTINGS][JSON_KEY_SETTINGS_CATEGORY_APP_WINDOW];
+    aw[JSON_KEY_SETTINGS_APP_WINDOW_TOOLBAR]       = m_appwindowsettings.show_toolbar;
+    aw[JSON_KEY_SETTINGS_APP_WINDOW_DETAILS_PANEL] =
+        m_appwindowsettings.show_details_panel;
+    aw[JSON_KEY_SETTINGS_APP_WINDOW_SIDEBAR]   = m_appwindowsettings.show_sidebar;
+    aw[JSON_KEY_SETTINGS_APP_WINDOW_HISTOGRAM] = m_appwindowsettings.show_histogram;
+    aw[JSON_KEY_SETTINGS_APP_WINDOW_SUMMARY]   = m_appwindowsettings.show_summary;
+}
+
+void
+SettingsManager::DeserializeAppWindowSettings(jt::Json& json)
+{
+    jt::Json& aw = json[JSON_KEY_GROUP_SETTINGS][JSON_KEY_SETTINGS_CATEGORY_APP_WINDOW];
+    m_appwindowsettings.show_toolbar =
+        JsonUtils::GetBool(aw, JSON_KEY_SETTINGS_APP_WINDOW_TOOLBAR,
+                           m_appwindowsettings.show_toolbar);
+    m_appwindowsettings.show_details_panel =
+        JsonUtils::GetBool(aw, JSON_KEY_SETTINGS_APP_WINDOW_DETAILS_PANEL,
+                           m_appwindowsettings.show_details_panel);
+    m_appwindowsettings.show_sidebar =
+        JsonUtils::GetBool(aw, JSON_KEY_SETTINGS_APP_WINDOW_SIDEBAR,
+                           m_appwindowsettings.show_sidebar);
+    m_appwindowsettings.show_histogram =
+        JsonUtils::GetBool(aw, JSON_KEY_SETTINGS_APP_WINDOW_HISTOGRAM,
+                           m_appwindowsettings.show_histogram);
+    m_appwindowsettings.show_summary =
+        JsonUtils::GetBool(aw, JSON_KEY_SETTINGS_APP_WINDOW_SUMMARY,
+                           m_appwindowsettings.show_summary);
 }
 
 bool

@@ -105,6 +105,8 @@ set(VIEW_FILES
     src/view/src/rocprofvis_click_manager.cpp
     src/view/src/rocprofvis_measurement_controller.cpp
     src/view/src/rocprofvis_analysis_view.cpp
+    src/view/src/rocprofvis_ai_actions.cpp
+    src/view/src/rocprofvis_ai_actions.h
     src/view/src/rocprofvis_ai_assistant.cpp
     src/view/src/rocprofvis_ai_assistant.h
     src/view/src/rocprofvis_ai_client.cpp
@@ -326,6 +328,12 @@ target_link_libraries(${TARGET_NAME} PRIVATE ${TARGET_NAME}-core)
 target_link_libraries(${TARGET_NAME} PRIVATE spdlog)
 target_link_libraries(${TARGET_NAME} PRIVATE sqlite3)
 target_link_libraries(${TARGET_NAME} PRIVATE json)
+target_link_libraries(${TARGET_NAME} PRIVATE cpp-httplib)
+if(MSVC)
+    set_source_files_properties(src/view/src/rocprofvis_ai_client.cpp PROPERTIES
+        COMPILE_OPTIONS "/bigobj"
+    )
+endif()
 
 if(BUILD_TESTING AND ROCPROFVIS_ENABLE_UI_TESTS)
     set(IMGUI_TEST_ENGINE_DIR
@@ -385,6 +393,7 @@ if(BUILD_TESTING AND ROCPROFVIS_ENABLE_UI_TESTS)
         spdlog
         sqlite3
         json
+        cpp-httplib
         ImGuiFileDialog
         "${Vulkan_LIBRARIES}"
         OpenGL::GL

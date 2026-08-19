@@ -28,8 +28,17 @@ public:
     void Show();
     void ToggleVisible();
     bool* VisiblePtr();
+    bool  IsVisible() const;
+
+    // Width the docked panel wants, including its splitter. Zero when closed, so
+    // AppWindow can lay out the main view against it.
+    float DockedWidth() const;
 
     void Update() override;
+
+    // Renders as a docked column. AppWindow calls this inside the main window;
+    // Render() is kept for the RocWidget contract and forwards to it.
+    void RenderDocked();
     void Render() override;
 
     // Toolbar control shared by the system and compute toolbars.
@@ -40,7 +49,10 @@ private:
     {
         kUser,
         kAssistant,
-        kStatus
+        kStatus,
+        // Draws the timeline histogram and minimap from live model data rather
+        // than storing a snapshot in the transcript.
+        kChart
     };
 
     enum class Phase
@@ -54,28 +66,37 @@ private:
     {
         Speaker     speaker;
         std::string text;
+        uint64_t    track_id = 0;  // kChart only
     };
 
     struct FetchWait
     {
-        bool               active        = false;
-        bool               started_fetch = false;
-        uint64_t           request_id    = 0;
-        AssistantFetchKind kind          = AssistantFetchKind::kNone;
-        TableType          table_type    = TableType::kSummaryKernelTable;
-        uint32_t           kernel_id     = 0;
-        size_t             row_limit     = 10;
-        std::string        tool_call_id;
-        std::string        tool_name;
-        std::string        prefix;
+        bool                  active        = false;
+        bool                  started_fetch = false;
+        std::vector<uint64_t> request_ids;
+        AssistantFetchState   fetch;
+        std::string           tool_call_id;
+        std::string           tool_name;
+        std::string           prefix;
         std::chrono::steady_clock::time_point started;
     };
+
+    bool AnyFetchPending(const AssistantToolContext& context) const;
 
     AssistantPanel();
     ~AssistantPanel() override = default;
 
     void AppendLine(Speaker speaker, const std::string& text);
-    void ReplaceLastStatus(const std::string& text);
+    void AppendChart(uint64_t track_id);
+    void RenderActivityChart(uint64_t track_id);
+    void RenderHeaderCard();
+    void RenderTranscript();
+    void RenderMessageCard(size_t index, const ChatLine& line);
+    void RenderComposer();
+    void RenderSplitter();
+    // Transient "what I'm doing right now" text. Lives outside the transcript so
+    // it disappears with the spinner when the turn ends.
+    void SetStatus(const std::string& text);
     void SendCurrentInput(bool explain_view);
     void ResetTurn();
     void StartHttpRequest();
@@ -98,9 +119,14 @@ private:
 
     bool  m_visible;
     bool  m_scroll_to_bottom;
+    float m_dock_width;
     Phase m_phase;
 
     std::string           m_input;
+    std::string           m_status;
+    // Measured height of the composer block, so the transcript can reserve
+    // exactly the right amount instead of guessing and overflowing the window.
+    float                 m_composer_height;
     std::vector<ChatLine> m_lines;
 
     std::string                     m_queued_question;
@@ -109,6 +135,9 @@ private:
     std::vector<AssistantToolCall>  m_pending_calls;
     size_t                          m_next_call_index;
     uint32_t                        m_tool_round;
+    // Set when the tool budget runs out: the next request goes out without
+    // tools so the model has to write up what it already gathered.
+    bool                            m_force_final;
     uint64_t                        m_request_generation;
     uint64_t                        m_metrics_client_id;
     FetchWait                       m_fetch_wait;

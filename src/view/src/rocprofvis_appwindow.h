@@ -85,6 +85,10 @@ public:
     Project* GetProject(const std::string& id);
     Project* GetCurrentProject();
 
+    // Open traces, as tabs. Exposed so the assistant can switch between them
+    // through OptiqActions.
+    std::shared_ptr<TabContainer> GetTabContainer() const;
+
     void OpenFile(std::string file_path);
 
     // Opens two trace files as a single compare project (combined timeline, A/B tags).

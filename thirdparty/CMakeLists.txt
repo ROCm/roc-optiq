@@ -11,10 +11,47 @@ set(YAML_CPP_BUILD_TESTS OFF CACHE BOOL "Disable yaml-cpp tests")
 set(YAML_CPP_BUILD_TOOLS OFF CACHE BOOL "Disable yaml-cpp tools")
 add_subdirectory(yaml-cpp)
 
-# TEMPORARY (remote/SSH): the crypto backend + libssh2 stack and its git
-# submodules (thirdparty/libssh2, thirdparty/mbedtls) are only built when
-# remote support is enabled, so the default build needs neither the submodules
-# nor a crypto dependency. Remove this guard when remote graduates.
+# mbedTLS is built unconditionally: the assistant HTTPS client (cpp-httplib)
+# needs it, and it is also the default crypto backend for remote/SSH.
+set(ENABLE_PROGRAMS OFF CACHE BOOL "" FORCE)
+set(ENABLE_TESTING OFF CACHE BOOL "" FORCE)
+set(ENABLE_DOCUMENTATION OFF CACHE BOOL "" FORCE)
+set(MBEDTLS_FATAL_WARNINGS OFF CACHE BOOL "" FORCE)
+set(_prev_mbedtls_build_testing ${BUILD_TESTING})
+set(_prev_skip_install_rules ${CMAKE_SKIP_INSTALL_RULES})
+set(BUILD_TESTING OFF)
+set(BUILD_EXAMPLES OFF)
+set(CMAKE_SKIP_INSTALL_RULES ON)
+add_subdirectory(mbedtls EXCLUDE_FROM_ALL)
+set(CMAKE_SKIP_INSTALL_RULES ${_prev_skip_install_rules})
+set(BUILD_TESTING ${_prev_mbedtls_build_testing})
+
+# cpp-httplib v0.53.1 (MIT): in-process HTTPS client. TLS via vendored mbedTLS
+# so the GUI never shells out to curl.exe (which flashes a console on Windows).
+add_library(cpp-httplib INTERFACE)
+target_include_directories(cpp-httplib INTERFACE
+    ${CMAKE_CURRENT_SOURCE_DIR}/cpp-httplib
+    ${CMAKE_CURRENT_SOURCE_DIR}/mbedtls/include
+)
+target_compile_definitions(cpp-httplib INTERFACE
+    CPPHTTPLIB_MBEDTLS_SUPPORT
+    CPPHTTPLIB_NO_EXCEPTIONS
+)
+target_link_libraries(cpp-httplib INTERFACE mbedtls mbedx509 mbedcrypto)
+if(WIN32)
+    target_link_libraries(cpp-httplib INTERFACE crypt32 ws2_32)
+endif()
+if(APPLE)
+    target_compile_definitions(cpp-httplib INTERFACE
+        CPPHTTPLIB_USE_CERTS_FROM_MACOSX_KEYCHAIN
+    )
+    target_link_libraries(cpp-httplib INTERFACE
+        "-framework Security" "-framework CoreFoundation"
+    )
+endif()
+
+# TEMPORARY (remote/SSH): libssh2 and its crypto-backend selection stay gated
+# until remote graduates. mbedTLS itself is no longer gated (see above).
 if(ROCPROFVIS_ENABLE_REMOTE)
 
 set(ENABLE_ZLIB_COMPRESSION OFF)
@@ -26,17 +63,6 @@ set(CRYPTO_BACKEND "mbedTLS" CACHE STRING "Crypto backend (OpenSSL or mbedTLS)")
 if (CRYPTO_BACKEND STREQUAL "mbedTLS")
 
 	unset(ROCPROFVIS_OPENSSL_VERSION_MAJOR CACHE)
-
-	set(ENABLE_PROGRAMS OFF CACHE BOOL "" FORCE)
-	set(ENABLE_TESTING OFF CACHE BOOL "" FORCE)
-	set(ENABLE_DOCUMENTATION OFF CACHE BOOL "" FORCE)
-	set(MBEDTLS_FATAL_WARNINGS OFF CACHE BOOL "" FORCE)
-	set(BUILD_TESTING OFF)
-	set(BUILD_EXAMPLES OFF)
-	set(_prev_skip_install_rules ${CMAKE_SKIP_INSTALL_RULES})
-	set(CMAKE_SKIP_INSTALL_RULES ON)
-	add_subdirectory(mbedtls EXCLUDE_FROM_ALL)
-    set(CMAKE_SKIP_INSTALL_RULES ${_prev_skip_install_rules})
 	set(CRYPTO_BACKEND mbedTLS CACHE STRING "" FORCE)
 
     	set(ENABLE_MBEDTLS ON CACHE BOOL "" FORCE)

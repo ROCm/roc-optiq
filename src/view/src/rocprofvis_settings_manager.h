@@ -260,6 +260,13 @@ constexpr const char* JSON_KEY_SETTINGS_LOG_VIEWER_VISIBLE       = "log_viewer_v
 // All six severity levels enabled (bits 0..5).
 constexpr int LOG_VIEWER_DEFAULT_LEVEL_MASK = 0x3F;
 
+constexpr const char* JSON_KEY_SETTINGS_CATEGORY_APP_WINDOW      = "app_window";
+constexpr const char* JSON_KEY_SETTINGS_APP_WINDOW_TOOLBAR       = "show_toolbar";
+constexpr const char* JSON_KEY_SETTINGS_APP_WINDOW_DETAILS_PANEL = "show_details_panel";
+constexpr const char* JSON_KEY_SETTINGS_APP_WINDOW_SIDEBAR       = "show_sidebar";
+constexpr const char* JSON_KEY_SETTINGS_APP_WINDOW_HISTOGRAM     = "show_histogram";
+constexpr const char* JSON_KEY_SETTINGS_APP_WINDOW_SUMMARY       = "show_summary";
+
 constexpr const char* JSON_KEY_SETTINGS_CATEGORY_ASSISTANT = "assistant";
 constexpr const char* JSON_KEY_SETTINGS_ASSISTANT_ENDPOINT_URL = "endpoint_url";
 constexpr const char* JSON_KEY_SETTINGS_ASSISTANT_MODEL        = "model";
@@ -366,6 +373,8 @@ private:
     void DeserializeProfilerSettings(jt::Json& json);
     void SerializeAssistantSettings(jt::Json& json);
     void DeserializeAssistantSettings(jt::Json& json);
+    void SerializeAppWindowSettings(jt::Json& json);
+    void DeserializeAppWindowSettings(jt::Json& json);
 
     const std::array<ImU32, static_cast<size_t>(Colors::__kLastColor)>* m_color_store;
 

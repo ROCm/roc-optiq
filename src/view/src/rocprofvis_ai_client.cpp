@@ -5,25 +5,28 @@
 
 #include "rocprofvis_ai_tools.h"
 
+// Vendored single-header library; it does not compile clean at /W4.
+#ifdef _MSC_VER
+#pragma warning(push)
+#pragma warning(disable : 4100 4127 4244 4267 4456 4458 4996)
+#endif
+#include "httplib.h"
+#ifdef _MSC_VER
+#pragma warning(pop)
+#endif
+
 #include "json.h"
 #include "spdlog/spdlog.h"
 
 #include <cctype>
-#include <cstdio>
 #include <cstdlib>
-#include <filesystem>
-#include <fstream>
-#include <sstream>
 #include <string>
-#include <system_error>
 #include <utility>
 #include <vector>
 
 #ifdef _WIN32
-#include <process.h>
 #include <windows.h>
 #else
-#include <sys/stat.h>
 #include <unistd.h>
 #endif
 
@@ -35,66 +38,20 @@ namespace View
 namespace
 {
 
-constexpr int    ASSISTANT_CURL_TIMEOUT_SECONDS  = 120;
-constexpr int    ASSISTANT_READ_CHUNK_SIZE       = 4096;
-constexpr int    ASSISTANT_MAX_COMPLETION_TOKENS = 4096;
-constexpr char   ASSISTANT_CURL_BIN[]            = "curl";
-constexpr char   ASSISTANT_DUMMY_API_KEY[]       = "dummy";
-constexpr double ASSISTANT_TEMPERATURE           = 0.7;
-
-class ScopedTempFile
-{
-public:
-    ScopedTempFile() = default;
-
-    ~ScopedTempFile()
-    {
-        if(!m_path.empty())
-        {
-            std::error_code error_code;
-            std::filesystem::remove(m_path, error_code);
-        }
-    }
-
-    bool Write(const std::string& prefix, const std::string& contents)
-    {
-        std::error_code error_code;
-        std::filesystem::path dir = std::filesystem::temp_directory_path(error_code);
-        if(error_code)
-        {
-            return false;
-        }
-
-#ifdef _WIN32
-        const unsigned int pid = static_cast<unsigned int>(_getpid());
-#else
-        const unsigned int pid = static_cast<unsigned int>(getpid());
-#endif
-        m_path = dir / (prefix + std::to_string(pid) + ".tmp");
-
-        std::ofstream out(m_path, std::ios::binary | std::ios::trunc);
-        if(!out.is_open())
-        {
-            m_path.clear();
-            return false;
-        }
-        out << contents;
-        out.close();
-
-#ifndef _WIN32
-        chmod(m_path.c_str(), S_IRUSR | S_IWUSR);
-#endif
-        return true;
-    }
-
-    const std::string Path() const
-    {
-        return m_path.string();
-    }
-
-private:
-    std::filesystem::path m_path;
-};
+constexpr int    ASSISTANT_CONNECT_TIMEOUT_SECONDS = 15;
+constexpr int    ASSISTANT_HTTP_TIMEOUT_SECONDS    = 120;
+constexpr int    ASSISTANT_MAX_COMPLETION_TOKENS   = 4096;
+constexpr size_t ASSISTANT_MAX_HARMONY_CALLS       = 4;
+constexpr int    ASSISTANT_FIRST_ERROR_STATUS      = 400;
+constexpr double ASSISTANT_TEMPERATURE             = 0.7;
+constexpr char   ASSISTANT_JSON_CONTENT_TYPE[]     = "application/json";
+// Gateways in front of these endpoints authenticate on a subscription header
+// rather than the bearer token, so the bearer is a placeholder and the real key
+// travels in the header below. Both are wire-protocol names, not credentials.
+constexpr char   ASSISTANT_BEARER_PLACEHOLDER[]    = "dummy";
+constexpr char   ASSISTANT_KEY_HEADER[]            = "Ocp-Apim-Subscription-Key";
+constexpr char   ASSISTANT_BAD_URL_ERROR[] =
+    "The assistant URL is not a valid http(s) address.";
 
 std::string
 CurrentUserName()
@@ -112,11 +69,6 @@ CurrentUserName()
     {
         return std::string(user);
     }
-    const char* login = getlogin();
-    if(login != nullptr && login[0] != '\0')
-    {
-        return std::string(login);
-    }
 #endif
     return "unknown";
 }
@@ -124,11 +76,11 @@ CurrentUserName()
 std::string
 ChatCompletionsUrl(std::string base_url)
 {
-    while(!base_url.empty() && (base_url.back() == '/' || base_url.back() == '\\'))
+    const std::string suffix = "/chat/completions";
+    while(!base_url.empty() && base_url.back() == '/')
     {
         base_url.pop_back();
     }
-    const std::string suffix = "/chat/completions";
     if(base_url.size() >= suffix.size() &&
        base_url.compare(base_url.size() - suffix.size(), suffix.size(), suffix) == 0)
     {
@@ -137,131 +89,180 @@ ChatCompletionsUrl(std::string base_url)
     return base_url + suffix;
 }
 
-std::string
-QuoteForShell(const std::string& value)
+// httplib::Client wants the origin ("https://host:port") and the path
+// ("/some/path/chat/completions") as separate arguments.
+bool
+SplitUrl(const std::string& url, std::string& origin_out, std::string& path_out)
 {
-    std::string quoted = "\"";
-    for(char c : value)
+    const std::string separator = "://";
+    const size_t      scheme_end = url.find(separator);
+    if(scheme_end == std::string::npos)
     {
-        if(c == '"')
-        {
-            quoted += '\\';
-        }
-#ifdef _WIN32
-        if(c == '%')
-        {
-            quoted += '%';
-        }
-#endif
-        quoted += c;
+        return false;
     }
-    quoted += '"';
-    return quoted;
+
+    const size_t path_start = url.find('/', scheme_end + separator.size());
+    origin_out              = url.substr(0, path_start);
+    path_out = (path_start == std::string::npos) ? "/" : url.substr(path_start);
+    return true;
 }
 
 std::string
-RunCurl(const std::string& command, std::string& error_out)
+JsonString(jt::Json& node, const char* key)
 {
-    error_out.clear();
-#ifdef _WIN32
-    FILE* pipe = _popen(command.c_str(), "r");
-#else
-    FILE* pipe = popen(command.c_str(), "r");
-#endif
-    if(pipe == nullptr)
+    if(!node.contains(key) || !node[key].isString())
     {
-        error_out = "Could not start curl. Install curl and ensure it is on PATH.";
+        return std::string();
+    }
+    return node[key].getString();
+}
+
+// "content" is either a plain string or a list of {"text": "..."} parts.
+std::string
+JoinContent(jt::Json& content)
+{
+    if(content.isString())
+    {
+        return content.getString();
+    }
+    if(!content.isArray())
+    {
         return std::string();
     }
 
-    std::string output;
-    char        chunk[ASSISTANT_READ_CHUNK_SIZE];
-    while(fgets(chunk, sizeof(chunk), pipe) != nullptr)
+    std::string joined;
+    for(jt::Json& part : content.getArray())
     {
-        output += chunk;
-    }
-
-#ifdef _WIN32
-    const int status = _pclose(pipe);
-#else
-    const int status = pclose(pipe);
-#endif
-    if(status != 0 && output.empty())
-    {
-        error_out = "curl failed (status " + std::to_string(status) +
-                    "). Check the URL and that curl is installed.";
-    }
-    return output;
-}
-
-std::string
-ReadJsonString(jt::Json& node)
-{
-    if(node.isString())
-    {
-        return node.getString();
-    }
-    if(node.isArray())
-    {
-        std::string joined;
-        for(jt::Json& part : node.getArray())
+        if(part.isString())
         {
-            if(part.isString())
-            {
-                joined += part.getString();
-            }
-            else if(part.isObject() && part.contains("text") && part["text"].isString())
-            {
-                joined += part["text"].getString();
-            }
+            joined += part.getString();
         }
-        return joined;
+        else if(part.isObject())
+        {
+            joined += JsonString(part, "text");
+        }
     }
-    return std::string();
+    return joined;
 }
 
+// Reads the balanced {...} starting at or after "from", skipping braces that sit
+// inside string literals.
 bool
-ParseHarmonyToolCall(const std::string& content, AssistantToolCall& call_out)
+ExtractJsonObject(const std::string& text, size_t from, std::string& object_out,
+                  size_t& end_out)
 {
-    const std::string marker = "to=";
-    const size_t      pos0   = content.find(marker);
-    if(pos0 == std::string::npos)
+    const size_t open = text.find('{', from);
+    if(open == std::string::npos)
     {
         return false;
     }
-    size_t pos = pos0 + marker.size();
-    const std::string functions_prefix = "functions.";
-    if(content.compare(pos, functions_prefix.size(), functions_prefix) == 0)
+
+    int  depth     = 0;
+    bool in_string = false;
+    bool escaped   = false;
+    for(size_t i = open; i < text.size(); ++i)
     {
-        pos += functions_prefix.size();
-    }
-    size_t end = pos;
-    while(end < content.size())
-    {
-        const unsigned char c = static_cast<unsigned char>(content[end]);
-        if(!(std::isalnum(c) || content[end] == '_'))
+        const char c = text[i];
+        if(in_string)
         {
-            break;
+            if(escaped)
+            {
+                escaped = false;
+            }
+            else if(c == '\\')
+            {
+                escaped = true;
+            }
+            else if(c == '"')
+            {
+                in_string = false;
+            }
+            continue;
         }
-        ++end;
+
+        if(c == '"')
+        {
+            in_string = true;
+        }
+        else if(c == '{')
+        {
+            ++depth;
+        }
+        else if(c == '}')
+        {
+            --depth;
+            if(depth == 0)
+            {
+                object_out = text.substr(open, i - open + 1);
+                end_out    = i + 1;
+                return true;
+            }
+        }
     }
-    if(end == pos)
+    return false;
+}
+
+// GPT-oss models answer in the "harmony" format, which names tools inline
+// instead of filling in tool_calls, e.g. "to=functions.get_summary {...}". A
+// single reply can name several, so walk the whole string.
+void
+ParseHarmonyToolCalls(const std::string& content, std::vector<AssistantToolCall>& calls)
+{
+    const std::string marker           = "to=";
+    const std::string functions_prefix = "functions.";
+
+    size_t search = 0;
+    while(calls.size() < ASSISTANT_MAX_HARMONY_CALLS)
     {
-        return false;
+        const size_t marker_pos = content.find(marker, search);
+        if(marker_pos == std::string::npos)
+        {
+            return;
+        }
+
+        size_t start = marker_pos + marker.size();
+        if(content.compare(start, functions_prefix.size(), functions_prefix) == 0)
+        {
+            start += functions_prefix.size();
+        }
+
+        size_t end = start;
+        while(end < content.size() &&
+              (std::isalnum(static_cast<unsigned char>(content[end])) != 0 ||
+               content[end] == '_'))
+        {
+            ++end;
+        }
+        if(end == start)
+        {
+            search = marker_pos + marker.size();
+            continue;
+        }
+
+        AssistantToolCall call;
+        call.name      = content.substr(start, end - start);
+        call.id        = "harmony_" + std::to_string(calls.size() + 1);
+        call.arguments = "{}";
+
+        // Only take an argument object that appears before the next tool name;
+        // anything later belongs to that call, not this one.
+        const size_t next_marker = content.find(marker, end);
+        const size_t brace       = content.find('{', end);
+        std::string  object;
+        size_t       object_end = end;
+        if(brace != std::string::npos &&
+           (next_marker == std::string::npos || brace < next_marker) &&
+           ExtractJsonObject(content, end, object, object_end))
+        {
+            call.arguments = object;
+            search         = object_end;
+        }
+        else
+        {
+            search = end;
+        }
+        calls.push_back(call);
     }
-    call_out.name = content.substr(pos, end - pos);
-    call_out.id   = "harmony_1";
-    const size_t brace     = content.find('{', end);
-    const size_t brace_end = content.rfind('}');
-    if(brace != std::string::npos && brace_end != std::string::npos && brace_end > brace)
-    {
-        call_out.arguments = content.substr(brace, brace_end - brace + 1);
-    }
-    else
-    {
-        call_out.arguments = "{}";
-    }
-    return true;
 }
 
 void
@@ -271,161 +272,116 @@ ParseToolCalls(jt::Json& message, std::vector<AssistantToolCall>& calls)
     {
         return;
     }
+
     std::vector<jt::Json>& nodes = message["tool_calls"].getArray();
     calls.reserve(nodes.size());
     for(size_t i = 0; i < nodes.size(); ++i)
     {
         jt::Json& node = nodes[i];
-        if(!node.isObject())
+        if(!node.isObject() || !node.contains("function"))
         {
             continue;
         }
+
+        jt::Json&         function = node["function"];
         AssistantToolCall call;
-        if(node.contains("id") && node["id"].isString())
+        call.name = JsonString(function, "name");
+        if(call.name.empty())
         {
-            call.id = node["id"].getString();
+            continue;
         }
+
+        call.id = JsonString(node, "id");
         if(call.id.empty())
         {
             call.id = "call_" + std::to_string(i + 1);
         }
-        if(node.contains("function") && node["function"].isObject())
+
+        call.arguments = "{}";
+        if(function.contains("arguments"))
         {
-            jt::Json& function = node["function"];
-            if(function.contains("name") && function["name"].isString())
-            {
-                call.name = function["name"].getString();
-            }
-            if(function.contains("arguments"))
-            {
-                if(function["arguments"].isString())
-                {
-                    call.arguments = function["arguments"].getString();
-                }
-                else
-                {
-                    call.arguments = function["arguments"].toString();
-                }
-            }
+            jt::Json& arguments = function["arguments"];
+            call.arguments =
+                arguments.isString() ? arguments.getString() : arguments.toString();
         }
-        else if(node.contains("name") && node["name"].isString())
-        {
-            call.name = node["name"].getString();
-            if(node.contains("arguments") && node["arguments"].isString())
-            {
-                call.arguments = node["arguments"].getString();
-            }
-        }
-        if(!call.name.empty())
-        {
-            calls.push_back(call);
-        }
+        calls.push_back(call);
     }
+}
+
+std::string
+ErrorText(jt::Json& root)
+{
+    if(root.contains("error"))
+    {
+        jt::Json& error = root["error"];
+        if(error.isString())
+        {
+            return error.getString();
+        }
+        const std::string message = JsonString(error, "message");
+        return message.empty() ? "The endpoint returned an error." : message;
+    }
+    // A rejected subscription key comes back as a bare {"message": "..."}.
+    if(!root.contains("choices"))
+    {
+        return JsonString(root, "message");
+    }
+    return std::string();
 }
 
 void
 ParseChatCompletion(jt::Json& root, AssistantChatResult& result)
 {
-    if(root.contains("error"))
+    result.error = ErrorText(root);
+    if(!result.error.empty())
     {
-        jt::Json& error_node = root["error"];
-        if(error_node.isString())
-        {
-            result.error = error_node.getString();
-            return;
-        }
-        if(error_node.isObject() && error_node.contains("message") &&
-           error_node["message"].isString())
-        {
-            result.error = error_node["message"].getString();
-            return;
-        }
-        result.error = "The endpoint returned an error.";
-        return;
-    }
-    if(root.contains("message") && root["message"].isString() &&
-       !root.contains("choices"))
-    {
-        result.error = root["message"].getString();
         return;
     }
 
-    if(!root.contains("choices") || !root["choices"].isArray())
+    if(!root.contains("choices") || !root["choices"].isArray() ||
+       root["choices"].getArray().empty())
     {
-        result.error = "Unexpected response (no choices). Check that the URL is an "
+        result.error = "The endpoint returned no choices. Check that the URL is an "
                        "OpenAI-compatible chat endpoint.";
         return;
     }
 
-    std::vector<jt::Json>& choices = root["choices"].getArray();
-    if(choices.empty())
-    {
-        result.error = "The endpoint returned no choices.";
-        return;
-    }
+    jt::Json& choice     = root["choices"].getArray()[0];
+    result.finish_reason = JsonString(choice, "finish_reason");
 
-    jt::Json& first = choices[0];
-    if(first.contains("finish_reason") && first["finish_reason"].isString())
+    if(!choice.contains("message") || !choice["message"].isObject())
     {
-        result.finish_reason = first["finish_reason"].getString();
+        result.reply = JsonString(choice, "text");
     }
-
-    if(first.contains("message") && first["message"].isObject())
+    else
     {
-        jt::Json& message = first["message"];
+        jt::Json& message = choice["message"];
         ParseToolCalls(message, result.tool_calls);
-        if(message.contains("function_call") && message["function_call"].isObject() &&
-           result.tool_calls.empty())
-        {
-            AssistantToolCall call;
-            call.id = "call_1";
-            jt::Json& function_call = message["function_call"];
-            if(function_call.contains("name") && function_call["name"].isString())
-            {
-                call.name = function_call["name"].getString();
-            }
-            if(function_call.contains("arguments") && function_call["arguments"].isString())
-            {
-                call.arguments = function_call["arguments"].getString();
-            }
-            if(!call.name.empty())
-            {
-                result.tool_calls.push_back(call);
-            }
-        }
         if(message.contains("content"))
         {
-            result.reply = ReadJsonString(message["content"]);
+            result.reply = JoinContent(message["content"]);
         }
-        if(result.tool_calls.empty() && !result.reply.empty())
+
+        if(result.tool_calls.empty())
         {
-            AssistantToolCall harmony;
-            if(ParseHarmonyToolCall(result.reply, harmony))
+            ParseHarmonyToolCalls(result.reply, result.tool_calls);
+            if(!result.tool_calls.empty())
             {
-                result.tool_calls.push_back(harmony);
                 result.reply.clear();
             }
         }
-        if(result.reply.empty() && result.tool_calls.empty() &&
-           message.contains("reasoning") && message["reasoning"].isString())
+        if(result.reply.empty() && result.tool_calls.empty())
         {
-            result.reply = message["reasoning"].getString();
+            result.reply = JsonString(message, "reasoning");
         }
-    }
-    else if(first.contains("text") && first["text"].isString())
-    {
-        result.reply = first["text"].getString();
     }
 
     if(result.reply.empty() && result.tool_calls.empty())
     {
-        if(result.finish_reason == "length")
-        {
-            result.error = "The model hit the token limit before it finished. Try again.";
-            return;
-        }
-        result.error = "The model returned an empty answer.";
-        return;
+        result.error =
+            (result.finish_reason == "length")
+                ? "The model hit the token limit before it finished. Try again."
+                : "The model returned an empty answer.";
     }
 }
 
@@ -433,7 +389,9 @@ jt::Json
 MessageToJson(const AssistantMessage& message)
 {
     jt::Json json;
-    json["role"] = message.role;
+    json["role"]    = message.role;
+    json["content"] = message.content;
+
     if(message.role == "tool")
     {
         json["tool_call_id"] = message.tool_call_id;
@@ -441,25 +399,56 @@ MessageToJson(const AssistantMessage& message)
         {
             json["name"] = message.name;
         }
-        json["content"] = message.content;
         return json;
     }
-    if(!message.tool_calls.empty())
+
+    for(size_t i = 0; i < message.tool_calls.size(); ++i)
     {
-        json["content"] = message.content;
-        for(size_t i = 0; i < message.tool_calls.size(); ++i)
-        {
-            const AssistantToolCall& call = message.tool_calls[i];
-            json["tool_calls"][i]["id"]   = call.id;
-            json["tool_calls"][i]["type"] = "function";
-            json["tool_calls"][i]["function"]["name"]        = call.name;
-            json["tool_calls"][i]["function"]["arguments"]   =
-                call.arguments.empty() ? "{}" : call.arguments;
-        }
-        return json;
+        const AssistantToolCall& call = message.tool_calls[i];
+        json["tool_calls"][i]["id"]                    = call.id;
+        json["tool_calls"][i]["type"]                  = "function";
+        json["tool_calls"][i]["function"]["name"]      = call.name;
+        json["tool_calls"][i]["function"]["arguments"] =
+            call.arguments.empty() ? "{}" : call.arguments;
     }
-    json["content"] = message.content;
     return json;
+}
+
+jt::Json
+BuildRequestBody(const AssistantChatRequest& request)
+{
+    jt::Json body;
+    if(!request.model.empty())
+    {
+        body["model"] = request.model;
+    }
+    body["max_completion_tokens"] = ASSISTANT_MAX_COMPLETION_TOKENS;
+    body["temperature"]           = ASSISTANT_TEMPERATURE;
+
+    for(size_t i = 0; i < request.messages.size(); ++i)
+    {
+        body["messages"][i] = MessageToJson(request.messages[i]);
+    }
+    if(request.enable_tools)
+    {
+        body["tools"]       = BuildAssistantToolsJson();
+        body["tool_choice"] = "auto";
+    }
+    return body;
+}
+
+std::string
+ResponseError(int status, const std::string& body)
+{
+    if(status >= ASSISTANT_FIRST_ERROR_STATUS)
+    {
+        return "The endpoint returned HTTP " + std::to_string(status) + ".";
+    }
+    if(body.empty())
+    {
+        return "The endpoint returned an empty response.";
+    }
+    return "The endpoint did not return JSON. Check the URL.";
 }
 
 }  // namespace
@@ -474,98 +463,64 @@ SendAssistantChat(const AssistantChatRequest& request)
         result.error = "Set the assistant URL in Edit > Preferences > Assistant.";
         return result;
     }
-
-    jt::Json body;
-    if(!request.model.empty())
-    {
-        body["model"] = request.model;
-    }
-    body["max_completion_tokens"] = ASSISTANT_MAX_COMPLETION_TOKENS;
-    body["temperature"]           = ASSISTANT_TEMPERATURE;
-
     if(request.messages.empty())
     {
         result.error = "The assistant request had no messages.";
         return result;
     }
-    for(size_t i = 0; i < request.messages.size(); ++i)
-    {
-        body["messages"][i] = MessageToJson(request.messages[i]);
-    }
-    if(request.enable_tools)
-    {
-        body["tools"]       = BuildAssistantToolsJson();
-        body["tool_choice"] = "auto";
-    }
-
-    const std::string body_text = body.toString();
-
-    ScopedTempFile body_file;
-    if(!body_file.Write("roc-optiq-ai-body-", body_text))
-    {
-        result.error = "Could not write the request body to a temp file.";
-        return result;
-    }
-
-    std::string header_text = "Authorization: Bearer ";
-    header_text += ASSISTANT_DUMMY_API_KEY;
-    header_text += "\n";
-    header_text += "user: ";
-    header_text += CurrentUserName();
-    header_text += "\n";
-    if(!request.api_token.empty())
-    {
-        header_text += "Ocp-Apim-Subscription-Key: ";
-        header_text += request.api_token;
-        header_text += "\n";
-    }
-
-    ScopedTempFile header_file;
-    if(!header_file.Write("roc-optiq-ai-hdr-", header_text))
-    {
-        result.error = "Could not write the auth header to a temp file.";
-        return result;
-    }
 
     const std::string url = ChatCompletionsUrl(request.endpoint_url);
-
-    std::ostringstream command;
-    command << ASSISTANT_CURL_BIN << " -sS --max-time " << ASSISTANT_CURL_TIMEOUT_SECONDS
-            << " -H " << QuoteForShell("Content-Type: application/json") << " -H @"
-            << QuoteForShell(header_file.Path()) << " --data-binary @"
-            << QuoteForShell(body_file.Path()) << " " << QuoteForShell(url);
-
-    std::string curl_error;
-    const std::string output = RunCurl(command.str(), curl_error);
-    if(!curl_error.empty() && output.empty())
+    std::string       origin;
+    std::string       path;
+    if(!SplitUrl(url, origin, path))
     {
-        result.error = curl_error;
+        result.error = ASSISTANT_BAD_URL_ERROR;
         return result;
     }
 
-    std::pair<jt::Json::Status, jt::Json> parsed = jt::Json::parse(output);
+    httplib::Client client(origin);
+    if(!client.is_valid())
+    {
+        result.error = ASSISTANT_BAD_URL_ERROR;
+        return result;
+    }
+    client.set_connection_timeout(ASSISTANT_CONNECT_TIMEOUT_SECONDS);
+    client.set_read_timeout(ASSISTANT_HTTP_TIMEOUT_SECONDS);
+    client.set_write_timeout(ASSISTANT_HTTP_TIMEOUT_SECONDS);
+    client.set_follow_location(true);
+
+    httplib::Headers headers;
+    headers.emplace("Authorization",
+                    std::string("Bearer ") + ASSISTANT_BEARER_PLACEHOLDER);
+    headers.emplace("user", CurrentUserName());
+    if(!request.api_token.empty())
+    {
+        headers.emplace(ASSISTANT_KEY_HEADER, request.api_token);
+    }
+
+    const std::string     body = BuildRequestBody(request).toString();
+    const httplib::Result response =
+        client.Post(path, headers, body, ASSISTANT_JSON_CONTENT_TYPE);
+    if(!response)
+    {
+        result.error =
+            "HTTPS request failed (" + httplib::to_string(response.error()) + ").";
+        spdlog::warn("Assistant request to {} failed: {}", url,
+                     httplib::to_string(response.error()));
+        return result;
+    }
+
+    std::pair<jt::Json::Status, jt::Json> parsed = jt::Json::parse(response->body);
     if(parsed.first != jt::Json::success)
     {
-        if(output.empty())
-        {
-            result.error = curl_error.empty() ? "Empty response from the endpoint."
-                                              : curl_error;
-        }
-        else
-        {
-            result.error = "The endpoint did not return JSON. Check the URL.";
-            spdlog::warn("Assistant endpoint returned non-JSON ({} bytes)", output.size());
-        }
+        result.error = ResponseError(response->status, response->body);
+        spdlog::warn("Assistant response was not JSON (HTTP {}, {} bytes)",
+                     response->status, response->body.size());
         return result;
     }
 
     ParseChatCompletion(parsed.second, result);
-    if(!result.error.empty())
-    {
-        return result;
-    }
-
-    result.ok = true;
+    result.ok = result.error.empty();
     return result;
 }
 

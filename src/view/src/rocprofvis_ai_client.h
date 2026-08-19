@@ -45,10 +45,10 @@ struct AssistantChatResult
     std::vector<AssistantToolCall> tool_calls;
 };
 
-// POST to an OpenAI-compatible chat endpoint via curl, matching the AMD
-// OnPrem Python client: base_url + /chat/completions, Bearer dummy,
-// Ocp-Apim-Subscription-Key, and a user header. The subscription key is
-// written to a 0600 temp header file, never placed on the process command line.
+// POST to an OpenAI-compatible chat endpoint via cpp-httplib (in-process HTTPS
+// with mbedTLS). The configured base URL gets /chat/completions appended; the
+// key is read from the OS credential store at call time and never persisted
+// here.
 AssistantChatResult SendAssistantChat(const AssistantChatRequest& request);
 
 }  // namespace View

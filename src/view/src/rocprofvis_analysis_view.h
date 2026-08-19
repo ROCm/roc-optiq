@@ -30,6 +30,12 @@ public:
     void Render() override;
     void Update() override;
 
+    // The tab strip along the bottom: Event Table, Sample Table, Event Details,
+    // Track Details, Top Events, Annotations. Matched on the visible label.
+    std::vector<std::string> ListTabs();
+    bool                     SelectTab(const std::string& name);
+    std::string              ActiveTab();
+
     friend struct AnalysisViewTestPeer;
 
 private:

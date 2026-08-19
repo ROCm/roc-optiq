@@ -774,7 +774,22 @@ AppWindow::Render()
 
     if(m_main_view)
     {
-        m_main_view->Render();
+        // The assistant docks against the right edge, so the main view gets the
+        // remaining width. DockedWidth() is zero while the panel is closed.
+        AssistantPanel* assistant     = AssistantPanel::GetInstance();
+        const float     dock_width    = assistant->DockedWidth();
+        if(dock_width > 0.0f)
+        {
+            ImGui::BeginChild("##main_view_area", ImVec2(-dock_width, 0.0f));
+            m_main_view->Render();
+            ImGui::EndChild();
+            ImGui::SameLine(0.0f, 0.0f);
+            assistant->RenderDocked();
+        }
+        else
+        {
+            m_main_view->Render();
+        }
     }
 
     if(m_open_about_dialog)
@@ -808,7 +823,6 @@ AppWindow::Render()
     RenderFileDialog();
 
     LogViewer::GetInstance()->Render();
-    AssistantPanel::GetInstance()->Render();
 #ifdef ROCPROFVIS_DEVELOPER_MODE
     RenderDebugOuput();
 #endif
@@ -924,6 +938,12 @@ AppWindow::RenderFileDialog()
         ImGuiFileDialog::Instance()->Close();
     }
     ImGui::PopStyleVar(3);
+}
+
+std::shared_ptr<TabContainer>
+AppWindow::GetTabContainer() const
+{
+    return m_tab_container;
 }
 
 void

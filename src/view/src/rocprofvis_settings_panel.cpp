@@ -429,55 +429,51 @@ SettingsPanel::RenderAssistantSettings()
     ImGui::TextUnformatted("Endpoint");
     ImGui::Separator();
     ImGui::TextWrapped(
-        "AMD OnPrem / OpenAI-compatible base URL. The subscription key is stored "
-        "in the OS credential store, not in the settings file.");
+        "Base URL of an OpenAI-compatible chat endpoint. The key is stored in the "
+        "OS credential store, not in the settings file.");
 
     ImGui::AlignTextToFramePadding();
     ImGui::TextUnformatted("URL");
     ImGui::SameLine();
     ImGui::SetNextItemWidth(-1.0f);
-    if(InputTextStringWithHint("##assistant_url",
-                               "https://llm-api.amd.com/OnPrem",
+    if(InputTextStringWithHint("##assistant_url", "https://<host>/<path>",
                                m_usersettings.assistant.endpoint_url))
     {
         m_settings_changed = true;
     }
     if(ImGui::IsItemHovered())
     {
-        SetTooltipStyled(
-            "Base URL only. /chat/completions is appended automatically.\n"
-            "Example: https://llm-api.amd.com/OnPrem");
+        SetTooltipStyled("Base URL only. /chat/completions is appended automatically.");
     }
 
     ImGui::AlignTextToFramePadding();
     ImGui::TextUnformatted("Model");
     ImGui::SameLine();
     ImGui::SetNextItemWidth(-1.0f);
-    if(InputTextStringWithHint("##assistant_model", "GPT-oss-20B",
+    if(InputTextStringWithHint("##assistant_model", "Model name",
                                m_usersettings.assistant.model))
     {
         m_settings_changed = true;
     }
     if(ImGui::IsItemHovered())
     {
-        SetTooltipStyled("Model name sent in the request body, e.g. GPT-oss-20B.");
+        SetTooltipStyled("Model name sent in the request body.");
     }
 
     ImGui::Dummy(ImVec2(0.0f, style.ItemSpacing.y));
-    ImGui::TextUnformatted("Subscription key");
+    ImGui::TextUnformatted("API key");
     ImGui::Separator();
 
     const bool token_stored = m_settings.HasAssistantToken() && !m_assistant_clear_token;
     if(token_stored && m_assistant_token_draft.empty())
     {
-        ImGui::TextUnformatted(
-            "A subscription key is stored. Leave the field blank to keep it.");
+        ImGui::TextUnformatted("A key is stored. Leave the field blank to keep it.");
     }
     else if(SecretStore::IsAvailable())
     {
-        ImGui::TextUnformatted(
-            "Sent as Ocp-Apim-Subscription-Key. Saved to the OS credential store "
-            "when you press OK.");
+        ImGui::TextWrapped(
+            "Saved to the OS credential store when you press OK, never to the "
+            "settings file.");
     }
     else
     {
@@ -494,7 +490,7 @@ SettingsPanel::RenderAssistantSettings()
     ImGuiInputTextFlags token_flags =
         m_assistant_show_token ? 0 : ImGuiInputTextFlags_Password;
     if(InputTextStringWithHint("##assistant_token",
-                               token_stored ? "Stored — type to replace" : "Ocp-Apim-Subscription-Key",
+                               token_stored ? "Stored — type to replace" : "API key",
                                m_assistant_token_draft, token_flags))
     {
         m_assistant_clear_token = false;

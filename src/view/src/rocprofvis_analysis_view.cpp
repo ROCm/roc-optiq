@@ -124,6 +124,81 @@ AnalysisView::Render()
     m_tab_container->Render();
 }
 
+namespace
+{
+
+std::string
+ToLowerCopy(const std::string& value)
+{
+    std::string lowered;
+    lowered.reserve(value.size());
+    for(char c : value)
+    {
+        lowered += static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    }
+    return lowered;
+}
+
+}  // namespace
+
+std::vector<std::string>
+AnalysisView::ListTabs()
+{
+    std::vector<std::string> names;
+    if(!m_tab_container)
+    {
+        return names;
+    }
+    for(const TabItem* tab : m_tab_container->GetTabs())
+    {
+        if(tab != nullptr)
+        {
+            names.push_back(tab->m_label);
+        }
+    }
+    return names;
+}
+
+std::string
+AnalysisView::ActiveTab()
+{
+    if(!m_tab_container)
+    {
+        return std::string();
+    }
+    const TabItem* active = m_tab_container->GetActiveTab();
+    return active != nullptr ? active->m_label : std::string();
+}
+
+bool
+AnalysisView::SelectTab(const std::string& name)
+{
+    if(!m_tab_container || name.empty())
+    {
+        return false;
+    }
+
+    const std::string                 needle = ToLowerCopy(name);
+    const std::vector<const TabItem*> tabs   = m_tab_container->GetTabs();
+    for(const TabItem* tab : tabs)
+    {
+        if(tab != nullptr && ToLowerCopy(tab->m_label) == needle)
+        {
+            m_tab_container->SetActiveTab(tab->m_id);
+            return true;
+        }
+    }
+    for(const TabItem* tab : tabs)
+    {
+        if(tab != nullptr && ToLowerCopy(tab->m_label).find(needle) != std::string::npos)
+        {
+            m_tab_container->SetActiveTab(tab->m_id);
+            return true;
+        }
+    }
+    return false;
+}
+
 void
 AnalysisView::HandleTimelineSelectionChanged(std::shared_ptr<RocEvent> e)
 {

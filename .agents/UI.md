@@ -76,6 +76,7 @@ When humans and `CODING.md` disagree with this file, `CODING.md` wins.
 - **Render backend:** Vulkan (preferred) with OpenGL fallback. Selected by
   `src/app/src/rocprofvis_imgui_backend.cpp`.
 - **Persistence / parsing:** SQLite (`thirdparty/sqlite3/`), jsoncpp, yaml-cpp.
+- **HTTPS (Ask Optiq):** cpp-httplib (`thirdparty/cpp-httplib/`) with vendored mbedTLS.
 - **Logging:** spdlog (`thirdparty/spdlog/`). Use `spdlog::info/warn/error`,
   never `std::cout` / `printf` / `iostream`.
 - **File dialog:** Native via `nativefiledialog-extended` on most platforms,

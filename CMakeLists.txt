@@ -795,10 +795,7 @@ if(WIN32)
   if(WIX_EXECUTABLE)
     set(_wix_src  "${CMAKE_SOURCE_DIR}/wix/roc-optiq.wxs")
     set(_wix_out  "${CMAKE_BINARY_DIR}/roc-optiq-${CPACK_PACKAGE_VERSION}-win64.msi")
-    # MSI only supports 3-part versions; encode Patch*1000+Build into the third component
-    # so upgrade detection works correctly when only the build number changes.
-    math(EXPR _wix_patch "${PROJECT_VERSION_PATCH} * 1000 + ${PROJECT_VERSION_BUILD}")
-    set(_wix_version "${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}.${_wix_patch}")
+    set(_wix_version "${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}.${PROJECT_VERSION_PATCH}")
     add_custom_target(PACKAGE_WIX
       COMMAND "${WIX_EXECUTABLE}" build
         -arch x64

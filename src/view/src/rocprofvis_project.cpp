@@ -116,6 +116,23 @@ Project::AddSourceFile(const std::string& path)
     }
 }
 
+void
+Project::RemoveSourceFile(const std::string& path)
+{
+    if(m_combined_files.empty())
+    {
+        // Seed from the current sources so the remove operates on the full merged set.
+        m_combined_files = GetSourceFiles();
+    }
+    m_combined_files.erase(
+        std::remove(m_combined_files.begin(), m_combined_files.end(), path),
+        m_combined_files.end());
+    // Down to one file: relabel as that single trace (the id/key stays stable, and the
+    // Remove menu auto-disables at <2 sources, so it behaves like a single-trace view).
+    m_name = MakeCombinedName(GetSourceFiles());
+    AppWindow::GetInstance()->SetTabLabel(m_name, GetID());
+}
+
 bool
 Project::IsProject() const
 {

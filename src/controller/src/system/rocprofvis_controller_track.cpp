@@ -64,6 +64,15 @@ Track::GetSegments()
     return &m_segments;
 }
 
+void
+Track::ClearTopologyLinks()
+{
+    m_thread  = nullptr;
+    m_queue   = nullptr;
+    m_stream  = nullptr;
+    m_counter = nullptr;
+}
+
 rocprofvis_result_t Track::GetBucketValues(size_t buckets_num, Array& array) {
 
     rocprofvis_result_t result = kRocProfVisResultUnknownError;

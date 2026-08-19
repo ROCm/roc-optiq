@@ -42,6 +42,8 @@ const uint64_t DataProvider::FETCH_SYSTEM_TRACE_REQUEST_ID =
     RequestIdBuilder::MakeRequestId(RequestType::kFetchSystemTrace);
 const uint64_t DataProvider::ADD_TRACE_SOURCE_REQUEST_ID =
     RequestIdBuilder::MakeRequestId(RequestType::kAddTraceSource);
+const uint64_t DataProvider::REMOVE_TRACE_SOURCE_REQUEST_ID =
+    RequestIdBuilder::MakeRequestId(RequestType::kRemoveTraceSource);
 const uint64_t DataProvider::SUMMARY_REQUEST_ID =
     RequestIdBuilder::MakeRequestId(RequestType::kFetchSummary);
 const uint64_t DataProvider::SUMMARY_KERNEL_INSTANCE_TABLE_REQUEST_ID =
@@ -550,7 +552,12 @@ DataProvider::ProcessLoadSystemTrace(RequestInfo& req)
                 }
             }
 
-            histogram_minimap[graphs] = histogram_track;
+            // Key by track id (not loop index) so the minimap lookup by track->GetID()
+            // stays correct even when track ids are non-contiguous (e.g. after a remove).
+            uint64_t minimap_track_id = graphs;
+            rocprofvis_controller_get_uint64(track, kRPVControllerTrackId, 0,
+                                             &minimap_track_id);
+            histogram_minimap[minimap_track_id] = histogram_track;
         }
         tlm.SetMiniMap(std::move(histogram_minimap));
 
@@ -717,7 +724,13 @@ DataProvider::ProcessAddTraceSource(RequestInfo& req)
                 }
             }
 
-            histogram_minimap[graphs] = histogram_track;
+            // Key by track id (not loop index): after an in-place remove the surviving
+            // controller track ids are non-contiguous, and the minimap is looked up by
+            // track->GetID(), so an index key would mis-map or drop survivor strips.
+            uint64_t minimap_track_id = graphs;
+            rocprofvis_controller_get_uint64(track, kRPVControllerTrackId, 0,
+                                             &minimap_track_id);
+            histogram_minimap[minimap_track_id] = histogram_track;
         }
         tlm.SetMiniMap(std::move(histogram_minimap));
         tlm.NormalizeHistogram();
@@ -744,6 +757,56 @@ DataProvider::ProcessAddTraceSource(RequestInfo& req)
     {
         m_trace_data_ready_callback(m_model.GetTraceFilePath(), kRocProfVisResultSuccess);
     }
+}
+
+bool
+DataProvider::RemoveTraceSource(const std::string& file_path)
+{
+    if(m_state != ProviderState::kReady || !m_trace_controller)
+    {
+        spdlog::warn("Cannot remove trace source; provider not ready");
+        return false;
+    }
+
+    // QUIESCE: cancel + await + free all in-flight fetch requests so no worker thread is
+    // reading the trace (or holding pooled data for a track we are about to free) while the
+    // controller mutates it.
+    FreeRequests();
+
+    rocprofvis_controller_future_t* future = rocprofvis_controller_future_alloc();
+    if(!future)
+    {
+        return false;
+    }
+
+    rocprofvis_result_t result = rocprofvis_controller_remove_trace_source(
+        m_trace_controller, file_path.c_str(), future);
+    if(result != kRocProfVisResultSuccess)
+    {
+        rocprofvis_controller_future_free(future);
+        return false;
+    }
+
+    RequestInfo request_info;
+    request_info.request_array      = nullptr;
+    request_info.request_future     = future;
+    request_info.request_obj_handle = nullptr;
+    request_info.request_args       = nullptr;
+    request_info.loading_state      = RequestState::kLoading;
+    request_info.request_id         = REMOVE_TRACE_SOURCE_REQUEST_ID;
+    request_info.request_type       = RequestType::kRemoveTraceSource;
+    m_requests.emplace(request_info.request_id, request_info);
+
+    m_state = ProviderState::kLoading;
+    return true;
+}
+
+void
+DataProvider::ProcessRemoveTraceSource(RequestInfo& req)
+{
+    // The completion refresh is source-agnostic: rebuild the model from whatever the
+    // controller now holds (a smaller track/topology set), identical to the add path.
+    ProcessAddTraceSource(req);
 }
 
 void
@@ -2619,6 +2682,7 @@ DataProvider::UpdateRequestProgress(RequestInfo& req)
         case RequestType::kFetchSystemTrace:
         case RequestType::kFetchComputeTrace:
         case RequestType::kAddTraceSource:
+        case RequestType::kRemoveTraceSource:
         {
             if(req.request_future &&
                kRocProfVisResultSuccess == rocprofvis_controller_get_uint64(
@@ -3118,6 +3182,11 @@ DataProvider::ProcessRequest(RequestInfo& req)
         case RequestType::kFetchSystemTrace:
         {
             ProcessLoadSystemTrace(req);
+            break;
+        }
+        case RequestType::kRemoveTraceSource:
+        {
+            ProcessRemoveTraceSource(req);
             break;
         }
         case RequestType::kAddTraceSource:

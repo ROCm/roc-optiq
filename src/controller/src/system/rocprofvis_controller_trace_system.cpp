@@ -22,6 +22,7 @@
 #include <cfloat>
 #include <cstdint>
 #include <cstring>
+#include <filesystem>
 #include <set>
 
 namespace RocProfVis
@@ -44,6 +45,9 @@ SystemTrace::SystemTrace(const std::string& filename, const std::string& config_
 , m_topology_root(nullptr)
 , m_config_path(config_path)
 {
+    // Track the single source file so Add/Remove can map a file path to its db node index
+    // (position in m_files == db node index == kRPVControllerTrackFileId).
+    m_files.push_back(filename);
 }
 
 SystemTrace::SystemTrace(const std::vector<std::string>& filenames)
@@ -151,6 +155,15 @@ rocprofvis_result_t SystemTrace::BuildTracksFromDataModel(uint64_t start_index, 
                 m_dm_handle, kRPVDMTrackHandleIndexed, i);
         uint64_t track_id = rocprofvis_dm_get_property_as_uint64(
             dm_track_handle, kRPVDMTrackIdUInt64, 0);
+        // Never materialize a track that belongs to a removed (tombstoned) file, even if the
+        // build window ever includes it. A cleared m_files slot is the controller's tombstone
+        // marker for that file index.
+        uint64_t track_file_id = rocprofvis_dm_get_property_as_uint64(
+            dm_track_handle, kRPVDMTrackFileIdUInt64, 0);
+        if(track_file_id < m_files.size() && m_files[track_file_id].empty())
+        {
+            continue;
+        }
         uint64_t dm_track_type =
             rocprofvis_dm_get_property_as_uint64(
                 dm_track_handle, kRPVDMTrackCategoryEnumUInt64,
@@ -406,11 +419,25 @@ rocprofvis_result_t SystemTrace::AddTraceSource(Future& future, const std::strin
                                                           end_time, graph_index, trace_size);
 
                         // Rebuild the topology mirror so the newly added file's nodes appear.
+                        // Reset every track's topology back-pointers first: the rebuild
+                        // relinks them, and this prevents a not-relinked track from dangling
+                        // into the topology we free below.
+                        for(Track* track : m_tracks)
+                        {
+                            track->ClearTopologyLinks();
+                        }
                         rocprofvis_dm_topology_node dm_topology_root =
                             rocprofvis_dm_get_property_as_handle(m_dm_handle,
                                                                  kRPVDMTopologyHandle, 0);
                         delete m_topology_root;
                         m_topology_root = new TopologyRoot(dm_topology_root, this);
+
+                        // Record the new file so a later Remove can map its path to the db
+                        // node index it just got (appended == next index).
+                        if(result == kRocProfVisResultSuccess)
+                        {
+                            m_files.push_back(path);
+                        }
                     }
                     future->RemoveDependentFuture(object2wait);
                 }
@@ -419,6 +446,182 @@ rocprofvis_result_t SystemTrace::AddTraceSource(Future& future, const std::strin
             catch(const std::exception&)
             {
                 spdlog::error("Exception while adding trace source {}", path);
+                result = kRocProfVisResultMemoryAllocError;
+            }
+            return result;
+        },
+        &future));
+
+    if(future.IsValid())
+    {
+        error = kRocProfVisResultSuccess;
+    }
+    return error;
+}
+
+rocprofvis_result_t SystemTrace::RemoveTraceSource(Future& future, const std::string& filepath)
+{
+    rocprofvis_result_t error = kRocProfVisResultInvalidArgument;
+    future.Set(JobSystem::Get().IssueJob(
+        [this, path = filepath](Future* future) -> rocprofvis_result_t {
+            rocprofvis_result_t result = kRocProfVisResultUnknownError;
+            try
+            {
+                rocprofvis_dm_database_t db = rocprofvis_dm_get_property_as_handle(
+                    m_dm_handle, kRPVDMDatabaseHandle, 0);
+                if(nullptr == db)
+                {
+                    return kRocProfVisResultInvalidArgument;
+                }
+
+                // Resolve the file index: its position in m_files matches the db node id.
+                // Compare tolerantly (exact, then canonicalized) so a path stored at open
+                // still matches the possibly-differently-spelled path passed here.
+                auto same_file = [](const std::string& a, const std::string& b) -> bool {
+                    if(a.empty() || b.empty())
+                    {
+                        return false;
+                    }
+                    if(a == b)
+                    {
+                        return true;
+                    }
+                    std::error_code ec_a;
+                    std::error_code ec_b;
+                    std::filesystem::path ca = std::filesystem::weakly_canonical(a, ec_a);
+                    std::filesystem::path cb = std::filesystem::weakly_canonical(b, ec_b);
+                    return !ec_a && !ec_b && ca == cb;
+                };
+                int file_index = -1;
+                for(size_t i = 0; i < m_files.size(); i++)
+                {
+                    if(same_file(m_files[i], path))
+                    {
+                        file_index = static_cast<int>(i);
+                        break;
+                    }
+                }
+                if(file_index < 0)
+                {
+                    spdlog::error("RemoveTraceSource: file {} not found among {} sources",
+                                  path, m_files.size());
+                    return kRocProfVisResultInvalidArgument;
+                }
+
+                // Pass the path exactly as stored at open, so the model's own path lookup
+                // (FindDbNodeIndex) matches without depending on how the caller spelled it.
+                const std::string stored_path = m_files[file_index];
+
+                // Identify this file's tracks (by file id) BEFORE the model drops the instance.
+                std::vector<Track*> doomed;
+                for(Track* track : m_tracks)
+                {
+                    uint64_t fid = 0;
+                    if(track->GetUInt64(kRPVControllerTrackFileId, 0, &fid) ==
+                           kRocProfVisResultSuccess &&
+                       fid == static_cast<uint64_t>(file_index))
+                    {
+                        doomed.push_back(track);
+                    }
+                }
+
+                rocprofvis_db_future_t object2wait =
+                    rocprofvis_db_future_alloc(&Future::ProgressCallback, future);
+                if(nullptr == object2wait)
+                {
+                    return kRocProfVisResultMemoryAllocError;
+                }
+
+                if(kRocProfVisDmResultSuccess ==
+                   rocprofvis_db_remove_node_async(db, stored_path.c_str(), object2wait))
+                {
+                    future->AddDependentFuture(object2wait);
+                    if(kRocProfVisDmResultSuccess ==
+                       rocprofvis_db_future_wait(object2wait, UINT64_MAX))
+                    {
+                        // Pause the LRU eviction thread for the whole teardown so it cannot
+                        // dereference a track/graph timeline we are about to free.
+                        std::unique_lock<std::mutex> eviction_pause =
+                            GetMemoryManager()->PauseEviction();
+                        for(Track* track : doomed)
+                        {
+                            // Drop the track's cached segments from the memory-manager LRU
+                            // before destroying it, so the LRU thread cannot dangle.
+                            GetMemoryManager()->ForgetTimeline(track->GetSegments());
+
+                            // Remove the track's matching graph (matched by id, since a user
+                            // reorder can break the track/graph positional pairing).
+                            uint64_t track_id = 0;
+                            track->GetUInt64(kRPVControllerTrackId, 0, &track_id);
+                            uint64_t num_graphs = 0;
+                            m_timeline->GetUInt64(kRPVControllerTimelineNumGraphs, 0,
+                                                  &num_graphs);
+                            for(uint64_t g = 0; g < num_graphs; g++)
+                            {
+                                rocprofvis_handle_t* graph_handle = nullptr;
+                                if(m_timeline->GetObject(kRPVControllerTimelineGraphIndexed, g,
+                                                         &graph_handle) ==
+                                       kRocProfVisResultSuccess &&
+                                   graph_handle)
+                                {
+                                    uint64_t graph_id = 0;
+                                    if(((Graph*) graph_handle)
+                                               ->GetUInt64(kRPVControllerGraphId, 0,
+                                                           &graph_id) ==
+                                           kRocProfVisResultSuccess &&
+                                       graph_id == track_id)
+                                    {
+                                        // Drop the graph's per-LOD segment timelines from the
+                                        // LRU before RemoveGraph deletes the graph.
+                                        ((Graph*) graph_handle)
+                                            ->ForgetSegments(GetMemoryManager());
+                                        m_timeline->RemoveGraph((Graph*) graph_handle);
+                                        break;
+                                    }
+                                }
+                            }
+
+                            // Remove and delete the track.
+                            for(auto it = m_tracks.begin(); it != m_tracks.end(); ++it)
+                            {
+                                if(*it == track)
+                                {
+                                    m_tracks.erase(it);
+                                    break;
+                                }
+                            }
+                            delete track;
+                        }
+
+                        // The grow-only path never shrinks the timeline window; recompute it.
+                        m_timeline->RecomputeExtents();
+
+                        // Rebuild the topology mirror; the data model pruned the removed
+                        // file's nodes, so the ghost nodes disappear. Reset survivors'
+                        // topology back-pointers first so any track the rebuild does not
+                        // relink reads as unlinked instead of dangling into freed topology.
+                        for(Track* track : m_tracks)
+                        {
+                            track->ClearTopologyLinks();
+                        }
+                        rocprofvis_dm_topology_node dm_topology_root =
+                            rocprofvis_dm_get_property_as_handle(m_dm_handle,
+                                                                 kRPVDMTopologyHandle, 0);
+                        delete m_topology_root;
+                        m_topology_root = new TopologyRoot(dm_topology_root, this);
+
+                        // Tombstone the slot (keep positions stable; the db index is not
+                        // reused) so its path no longer resolves to this now-empty index.
+                        m_files[file_index].clear();
+                        result = kRocProfVisResultSuccess;
+                    }
+                    future->RemoveDependentFuture(object2wait);
+                }
+                rocprofvis_db_future_free(object2wait);
+            }
+            catch(const std::exception&)
+            {
+                spdlog::error("Exception while removing trace source {}", path);
                 result = kRocProfVisResultMemoryAllocError;
             }
             return result;

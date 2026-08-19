@@ -297,6 +297,33 @@ MemoryManager::CheckInUse(LRUMember* lru)
 //    return it;
 //}
 
+std::unique_lock<std::mutex>
+MemoryManager::PauseEviction()
+{
+    // Blocks until any in-progress eviction cycle finishes, then keeps the eviction thread
+    // out of its working block for as long as the caller holds the returned lock.
+    return std::unique_lock<std::mutex>(m_maintenance_mutex);
+}
+
+void
+MemoryManager::ForgetTimeline(SegmentTimeline* owner)
+{
+    if(owner == nullptr)
+    {
+        return;
+    }
+    // Drop the owner from LRU tracking so the LRU thread won't touch it once the caller
+    // destroys it. Caller must have quiesced fetches for this owner first.
+    {
+        std::unique_lock lock(m_lru_mutex);
+        m_lru_array.erase(owner);
+    }
+    {
+        std::lock_guard<std::mutex> lock(m_pool_mutex);
+        m_short_tracks.erase(owner);
+    }
+}
+
 void
 MemoryManager::AddLRUReference(SegmentTimeline* owner, Segment* reference, uint32_t lod,
                                void* array_ptr)
@@ -369,6 +396,10 @@ MemoryManager::ManageLRU()
             });
         }
         {
+            // Serialize against in-place trace remove: while a teardown holds this lock, no
+            // eviction cycle runs, so we never touch an owner the remove path is freeing.
+            std::lock_guard<std::mutex> maintenance(m_maintenance_mutex);
+
             std::vector<SegmentTimeline*> locked;
             std::vector<SegmentTimeline*> couldnt_take_lock;
             LockTimelines(locked, couldnt_take_lock);

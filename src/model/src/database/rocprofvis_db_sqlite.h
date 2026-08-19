@@ -267,6 +267,11 @@ class SqliteDatabase : public Database
         // Append one more db node at runtime (used by the incremental AddNode path) and
         // prime a connection for it. Returns the new node's file-node id.
         uint32_t AddDbNodeRuntime(rocprofvis_db_filename_t filepath);
+        // Find the file-node index for a given path, or -1 if not present.
+        int FindDbNodeIndex(rocprofvis_db_filename_t filepath) const;
+        // Close and free one db node's sqlite connections (used by in-place remove). The
+        // node slot is kept (emptied) so higher node ids stay stable.
+        void CloseDbNode(uint32_t db_node_id);
         virtual MetadataVersionControl* GetMetadataVersionControl() { return nullptr; };
 
         // --------------------------------Null value handlers-------------------------------------- 

@@ -66,6 +66,11 @@ public:
      */
     void AddSourceFile(const std::string& path);
     /*
+     * Removes a trace file that was merged into this view (the in-place Remove path). Updates
+     * GetSourceFiles()/the tab name. Keeps the project id stable. Does not unload anything.
+     */
+    void RemoveSourceFile(const std::string& path);
+    /*
      * Returns true if the project is saved as a project (as opposed to a trace).
      */
     bool IsProject() const;

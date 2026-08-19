@@ -35,6 +35,38 @@ Timeline::~Timeline()
     }
 }
 
+void Timeline::RemoveGraph(Graph* graph)
+{
+    for(auto it = m_graphs.begin(); it != m_graphs.end(); ++it)
+    {
+        if(*it == graph)
+        {
+            delete *it;
+            m_graphs.erase(it);
+            return;
+        }
+    }
+}
+
+void Timeline::RecomputeExtents()
+{
+    m_min_ts = DBL_MAX;
+    m_max_ts = DBL_MIN;
+    for(Graph* graph : m_graphs)
+    {
+        double min_ts = 0;
+        double max_ts = 0;
+        if(graph->GetDouble(kRPVControllerGraphStartTimestamp, 0, &min_ts) ==
+               kRocProfVisResultSuccess &&
+           graph->GetDouble(kRPVControllerGraphEndTimestamp, 0, &max_ts) ==
+               kRocProfVisResultSuccess)
+        {
+            m_min_ts = std::min(min_ts, m_min_ts);
+            m_max_ts = std::max(max_ts, m_max_ts);
+        }
+    }
+}
+
 rocprofvis_result_t Timeline::AsyncFetch(Graph& graph, Future& future, Array& array,
                                 double start, double end, uint32_t pixels)
 {

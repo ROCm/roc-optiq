@@ -141,6 +141,15 @@ namespace RocProfVis
             void                Configure(double weight);
 
             void                Delete(Handle* handle, SegmentTimeline* owner);
+            // Drop all LRU bookkeeping for a timeline owner that is about to be destroyed
+            // (in-place trace remove). Prevents the LRU thread from dereferencing the freed
+            // owner. Must be called while no fetch is in flight for this owner and while the
+            // eviction thread is paused (see PauseEviction).
+            void                ForgetTimeline(SegmentTimeline* owner);
+            // Block the LRU eviction thread from starting/continuing an eviction cycle while
+            // the caller tears down timelines (in-place trace remove). Hold the returned lock
+            // across all ForgetTimeline/ForgetSegments + delete calls, then let it drop.
+            [[nodiscard]] std::unique_lock<std::mutex> PauseEviction();
             Event*              NewEvent(uint64_t id, double start_ts, double end_ts, SegmentTimeline* owner);
             Sample*             NewSample(rocprofvis_controller_primitive_type_t type, uint64_t id, double timestamp, SegmentTimeline* owner);
             SampleLOD*          NewSampleLOD(rocprofvis_controller_primitive_type_t type, uint64_t id, double timestamp, std::vector<Sample*>& children, SegmentTimeline* owner);
@@ -170,6 +179,9 @@ namespace RocProfVis
             std::map<uint64_t, MemoryPool*>                             m_current_pool[kRocProfVisNumberOfObjectTypes];
             std::set<SegmentTimeline*>                                  m_short_tracks;
             std::mutex                                                  m_pool_mutex;
+            // Serializes an LRU eviction cycle against in-place timeline teardown so the
+            // eviction thread never dereferences an owner the remove path is deleting.
+            std::mutex                                                  m_maintenance_mutex;
 
             void            ManageLRU();
             void*           Allocate(size_t size, rocprofvis_object_type_t type, SegmentTimeline *owner);

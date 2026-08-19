@@ -53,6 +53,10 @@ public:
     // segment data are left intact (no reprocessing / no refetch of the existing files).
     rocprofvis_result_t AddTraceSource(Future& future, const std::string& filepath);
 
+    // In-place remove: drop one already-merged trace file from this trace, freeing its data
+    // without reloading the others. Surviving tracks and their cached data are left intact.
+    rocprofvis_result_t RemoveTraceSource(Future& future, const std::string& filepath);
+
     rocprofvis_result_t SaveTrimmedTrace(Future& future, double start, double end, char const* path);
 
     rocprofvis_result_t CleanupTraceDatabase(Future& future, bool rebuild);

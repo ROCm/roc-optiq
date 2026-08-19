@@ -275,16 +275,6 @@ private:
     bool                             m_restore_fullscreen_later;
     std::vector<ProviderCleanupJob>  m_provider_cleanup_jobs;
     uint64_t                         m_next_provider_cleanup_id;
-    // Trace-source subsets queued by RemoveTraceFromView, reopened one frame after the old
-    // tab is closed (so the tab-closed event frees the old project first, avoiding an id
-    // collision). `settings` is the closed view's serialized settings, seeded into the
-    // reopened project so retained tracks keep their height/visibility/order/options.
-    struct PendingViewReopen
-    {
-        std::vector<std::string> files;
-        jt::Json                 settings;
-    };
-    std::vector<PendingViewReopen> m_pending_view_reopens;
 #ifdef ROCPROFVIS_ENABLE_REMOTE
     std::unique_ptr<SshTestDialog>   m_ssh_test_dialog;
 #endif

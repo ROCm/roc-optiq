@@ -277,6 +277,45 @@ rocprofvis_dm_result_t SqliteDatabase::OpenConnection(uint32_t db_node_id, sqlit
     return kRocProfVisDmResultSuccess;
 }
 
+int SqliteDatabase::FindDbNodeIndex(rocprofvis_db_filename_t filepath) const
+{
+    if(filepath == nullptr)
+    {
+        return -1;
+    }
+    std::string target = filepath;
+    for(size_t i = 0; i < m_db_nodes.size(); i++)
+    {
+        if(m_db_nodes[i] && m_db_nodes[i]->filepath == target)
+        {
+            return static_cast<int>(i);
+        }
+    }
+    return -1;
+}
+
+void SqliteDatabase::CloseDbNode(uint32_t db_node_id)
+{
+    if(db_node_id >= m_db_nodes.size() || !m_db_nodes[db_node_id])
+    {
+        return;
+    }
+    auto& node = m_db_nodes[db_node_id];
+    if(!node->m_connections_inuse.empty())
+    {
+        ReleaseConnection(*node->m_connections_inuse.begin());
+    }
+    for(auto it = node->m_available_connections.begin(); it != node->m_available_connections.end(); ++it)
+    {
+        sqlite3_close(*it);
+    }
+    node->m_available_connections.clear();
+    node->m_connections_inuse.clear();
+    // Clear the path so FindDbNodeIndex cannot resolve a re-added file to this dead (tombstoned)
+    // slot, and so no query path can reopen the removed file's connection on demand.
+    node->filepath.clear();
+}
+
 rocprofvis_dm_result_t SqliteDatabase::Close()
 {
     rocprofvis_dm_result_t result = kRocProfVisDmResultSuccess;

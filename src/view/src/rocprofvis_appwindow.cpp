@@ -697,39 +697,6 @@ AppWindow::Update()
     // status-change events before they are dispatched below this frame.
     AppMonitor::GetInstance()->Update();
     EventManager::GetInstance()->DispatchEvents();
-    // Reopen subsets queued by RemoveTraceFromView, after DispatchEvents() has freed the
-    // closed project so the subset can open fresh even if its id matches.
-    if(!m_pending_view_reopens.empty())
-    {
-        std::vector<PendingViewReopen> reopens;
-        reopens.swap(m_pending_view_reopens);
-        for(PendingViewReopen& reopen : reopens)
-        {
-            std::string new_id;
-            if(reopen.files.size() == 1)
-            {
-                OpenFile(reopen.files.front());
-                // OpenFile()/OpenTrace() keys the project by the canonicalized path, so match
-                // that here or the settings seed below would miss and reset the track state.
-                new_id =
-                    std::filesystem::weakly_canonical(reopen.files.front()).string();
-            }
-            else if(reopen.files.size() > 1)
-            {
-                new_id = MakeCombinedId(reopen.files);
-                OpenCombined(reopen.files);
-            }
-            // Seed the reopened project with the snapshot before its async load builds the
-            // graph view (kReady -> MakeGraphView -> per-track FromJson reads this json).
-            if(!new_id.empty() && !reopen.settings.isNull())
-            {
-                if(Project* reopened = GetProject(new_id))
-                {
-                    reopened->GetSettingsJson() = std::move(reopen.settings);
-                }
-            }
-        }
-    }
     LogViewer::GetInstance()->Poll();
     DebugWindow::GetInstance()->ClearTransient();
     m_tab_container->Update();
@@ -757,8 +724,7 @@ AppWindow::WantsContinuousRender()
     }
 
     if(!m_provider_cleanup_jobs.empty() || m_disable_app_interaction ||
-       m_shutdown_requested || !m_pending_view_reopens.empty() ||
-       EventManager::GetInstance()->HasPendingEvents())
+       m_shutdown_requested || EventManager::GetInstance()->HasPendingEvents())
     {
         return true;
     }
@@ -1169,37 +1135,29 @@ AppWindow::RemoveTraceFromView(const std::string& file_to_remove)
         return;
     }
 
-    const std::vector<std::string> files  = project->GetSourceFiles();
-    const std::string              old_id = project->GetID();
-
-    std::vector<std::string> subset;
-    subset.reserve(files.size());
-    for(const std::string& file : files)
-    {
-        if(file != file_to_remove)
-        {
-            subset.push_back(file);
-        }
-    }
-
-    // Nothing to do if the file was not part of this view or it is the only one left.
-    if(subset.empty() || subset.size() == files.size())
+    const std::vector<std::string> files = project->GetSourceFiles();
+    // Need at least 2 files to remove one, and the file must actually be part of this view.
+    if(files.size() < 2 ||
+       std::find(files.begin(), files.end(), file_to_remove) == files.end())
     {
         return;
     }
 
-    // Snapshot the current view/track settings so the reopened subset restores them
-    // (matched by track id, which is stable for the retained tracks).
-    jt::Json captured_settings;
-    project->SerializeSettings();
-    captured_settings = project->GetSettingsJson();
-
-    // Close the current tab FIRST, then reopen the subset next frame. The Add path does not
-    // change the project id, so a subset can reopen to the same id as the still-open project;
-    // opening it now would just re-activate that project (a no-op). RemoveTab() defers freeing
-    // the project to the tab-closed event, so queueing the reopen lets that run first.
-    m_tab_container->RemoveTab(old_id);
-    m_pending_view_reopens.push_back({ std::move(subset), std::move(captured_settings) });
+    // In-place remove: drop the file from the SAME session/controller, no new tab. The
+    // project is retained, so per-track settings persist automatically (they are keyed by
+    // track id, which is stable for the surviving tracks) - no reopen, no settings carry-over.
+    TraceView* trace_view = dynamic_cast<TraceView*>(project->GetView().get());
+    DataProvider* provider = trace_view ? trace_view->GetDataProvider() : nullptr;
+    if(provider && provider->RemoveTraceSource(file_to_remove))
+    {
+        project->RemoveSourceFile(file_to_remove);
+    }
+    else
+    {
+        ShowMessageDialog(
+            "Remove Trace from View",
+            "Could not remove the trace. The current view must be idle.");
+    }
 }
 
 void

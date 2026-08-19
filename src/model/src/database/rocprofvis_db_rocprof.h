@@ -99,6 +99,12 @@ public:
                                         rocprofvis_db_filename_t filepath,
                                         Future* object) override;
 
+    // worker method to drop one already-merged database file from the trace in place
+    // (tombstone the instance + free its per-instance data). Other files are not reloaded.
+    rocprofvis_dm_result_t  RemoveNode(
+                                        rocprofvis_db_filename_t filepath,
+                                        Future* object) override;
+
     // worker method to read flow trace info
     // @param event_id - 60-bit event id and 4-bit operation type  
     // @param object - future object providing asynchronous execution mechanism 

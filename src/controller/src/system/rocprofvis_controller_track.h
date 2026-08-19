@@ -41,6 +41,11 @@ public:
     SegmentTimeline* GetSegments();
     rocprofvis_result_t GetBucketValues(size_t buckets_num, Array& array);
 
+    // Null the cached topology back-pointers (thread/queue/stream/counter). Called before the
+    // topology mirror is rebuilt (in-place add/remove) so a track that is not relinked by the
+    // new topology reads as unlinked instead of dangling into the freed old topology.
+    void ClearTopologyLinks();
+
     // Handlers for getters.
     rocprofvis_result_t GetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t* value) final;
     rocprofvis_result_t GetDouble(rocprofvis_property_t property, uint64_t index, double* value) final;

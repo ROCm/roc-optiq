@@ -639,6 +639,19 @@ Graph::Graph(Handle* ctx, rocprofvis_controller_graph_type_t type, uint64_t id)
 
 Graph::~Graph() {}
 
+void
+Graph::ForgetSegments(MemoryManager* mem_mgmt)
+{
+    if(mem_mgmt == nullptr)
+    {
+        return;
+    }
+    for(auto& lod : m_lods)
+    {
+        mem_mgmt->ForgetTimeline(&lod.second);
+    }
+}
+
 Handle* Graph::GetContext() {
     return m_ctx;
 }

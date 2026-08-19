@@ -130,6 +130,31 @@ bool TopologyNode::DoesThisNodeMatchIdentifiers(rocprofvis_dm_track_identifiers_
 	return result;
 }
 
+void TopologyNode::RemoveChildrenByFileIndex(uint32_t file_index)
+{
+	for (auto it = m_children.begin(); it != m_children.end(); )
+	{
+		// Recurse first. Intermediate nodes (System/Process/Processor) are matched by id
+		// without a db instance, so when traces from the same machine are merged they are
+		// SHARED and "owned" by whichever instance created the node first. Pruning such a
+		// shared node outright would delete surviving instances' leaves nested under it.
+		// So prune the removed file's descendants first, then drop this node only if it
+		// belongs to the removed file AND nothing is left under it (its own leaves have no
+		// children, so they are still erased; a shared ancestor with survivors is kept).
+		(*it)->RemoveChildrenByFileIndex(file_index);
+		DbInstance* inst = static_cast<DbInstance*>((*it)->m_db_instance);
+		const bool belongs_to_removed = (inst != nullptr && inst->FileIndex() == file_index);
+		if (belongs_to_removed && (*it)->m_children.empty())
+		{
+			it = m_children.erase(it);
+		}
+		else
+		{
+			++it;
+		}
+	}
+}
+
 TopologyNode*  TopologyNode::FindNodeMatchingIdentifiers(rocprofvis_dm_track_identifiers_t* track_identifiers)
 {
 	auto it = std::find_if(m_children.begin(), m_children.end(),

@@ -67,6 +67,9 @@ public:
         rocprofvis_dm_handle_t* value) override;
 
     virtual rocprofvis_dm_result_t  AddNode(rocprofvis_dm_track_identifiers_t* track_identifiers) { (void) track_identifiers; return kRocProfVisDmResultSuccess; };
+    // Recursively drop descendant nodes that belong to the given db file index (in-place
+    // trace remove), so a topology rebuild no longer shows the removed trace's nodes.
+    void RemoveChildrenByFileIndex(uint32_t file_index);
     virtual TopologyNode* FindNodeMatchingIdentifiers(rocprofvis_dm_track_identifiers_t* track_identifiers);
     rocprofvis_dm_result_t  SetBasicProperty(const char* name, rocprofvis_db_instance_t db_instance, rocprofvis_db_topology_data_type_t type, const char* value);
     virtual rocprofvis_dm_result_t  ProcessProperty(const char* name, rocprofvis_db_topology_data_type_t type, void* value) { (void) name; (void) type; (void) value; return kRocProfVisDmResultSuccess;};

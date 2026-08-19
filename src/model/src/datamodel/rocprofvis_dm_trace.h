@@ -44,6 +44,8 @@ class Trace : public DmBase{
         rocprofvis_dm_database_t                        Database() { return m_db; }
         // Returns pointer to topology object
         rocprofvis_dm_topology_node                     Topology() { return &m_topology_root; }
+        // Drop all topology nodes belonging to one db file index (in-place trace remove).
+        void                                            RemoveTopologyByFileIndex(uint32_t file_index) { m_topology_root.RemoveChildrenByFileIndex(file_index); }
         // Returns pointer to database binding structure 
         rocprofvis_dm_db_bind_struct*                   BindingInfo() {return &m_binding_info;}
         // Returns class mutex

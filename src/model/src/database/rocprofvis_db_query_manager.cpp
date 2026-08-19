@@ -483,6 +483,12 @@ QueryManager::BuildTableQuery(
             track = TABLE_QUERY_UNPACK_OP_TYPE(track);
             for(auto db_inst : DbInstances())
             {
+                // Skip instances removed in place, so the table view stops surfacing a
+                // removed trace's rows/counts.
+                if(!IsInstanceActive(db_inst.first.FileIndex()))
+                {
+                    continue;
+                }
                 slice_query_map_array[i][GetEventOperationQuery(
                     (rocprofvis_dm_event_operation_t) track)][db_inst.first.GuidIndex()];
             }

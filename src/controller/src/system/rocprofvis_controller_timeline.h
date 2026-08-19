@@ -45,6 +45,13 @@ public:
     rocprofvis_result_t SetObject(rocprofvis_property_t property, uint64_t index,
                                   rocprofvis_handle_t* value) final;
 
+    // Remove and delete one graph from the timeline (in-place trace remove). The dense
+    // vector re-packs, so higher graph indices shift down.
+    void RemoveGraph(Graph* graph);
+    // Recompute the global min/max timestamps from the remaining graphs (the grow-only
+    // SetObject path never shrinks them, so this is needed after a removal).
+    void RecomputeExtents();
+
 private:
     uint64_t            m_id;
     std::vector<Graph*> m_graphs;

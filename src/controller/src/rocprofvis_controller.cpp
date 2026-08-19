@@ -296,6 +296,21 @@ rocprofvis_result_t rocprofvis_controller_add_trace_source(rocprofvis_controller
 
     return result;
 }
+
+rocprofvis_result_t rocprofvis_controller_remove_trace_source(rocprofvis_controller_t* controller, char const* filename, rocprofvis_controller_future_t* future)
+{
+    rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
+
+    RocProfVis::Controller::SystemTraceRef system_trace(controller);
+    RocProfVis::Controller::FutureRef      future_ref(future);
+    if(future_ref.IsValid() && system_trace.IsValid() && filename != nullptr)
+    {
+        result = system_trace->RemoveTraceSource(*future_ref, std::string(filename));
+    }
+
+    return result;
+}
+
 rocprofvis_controller_future_t* rocprofvis_controller_future_alloc(void)
 {
     rocprofvis_controller_future_t* future = (rocprofvis_controller_future_t*)new RocProfVis::Controller::Future();

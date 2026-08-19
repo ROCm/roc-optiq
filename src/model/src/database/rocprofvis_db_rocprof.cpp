@@ -3,6 +3,7 @@
 
 #include "rocprofvis_db_rocprof.h"
 #include "rocprofvis_shared_types.h"
+#include "rocprofvis_dm_trace.h"
 #include <sstream>
 #include <string.h>
 #include <filesystem>
@@ -1417,6 +1418,50 @@ rocprofvis_dm_result_t  RocprofDatabase::AddNode(rocprofvis_db_filename_t filepa
     return ReadTraceMetadata(future);
 }
 
+rocprofvis_dm_result_t  RocprofDatabase::RemoveNode(rocprofvis_db_filename_t filepath, Future* future)
+{
+    ROCPROFVIS_ASSERT_MSG_RETURN(future, ERROR_FUTURE_CANNOT_BE_NULL, kRocProfVisDmResultInvalidParameter);
+    ROCPROFVIS_ASSERT_MSG_RETURN(filepath, ERROR_DATABASE_CANNOT_BE_NULL, kRocProfVisDmResultInvalidParameter);
+
+    int file_index = FindDbNodeIndex(filepath);
+    if (file_index < 0)
+    {
+        ShowProgress(0, "Trace to remove is not part of this view!", kRPVDbError, future);
+        return future->SetPromise(kRocProfVisDmResultInvalidParameter);
+    }
+
+    // Tombstone the instance: keep its positional slot so surviving instances' indices/ids
+    // (GuidIndex/FileIndex/track_id, and the event_node packed into loaded records) stay
+    // stable, but skip it in all later processing.
+    MarkFileIndexRemoved(static_cast<uint32_t>(file_index));
+
+    // Free the per-instance in-RAM caches for every guid hosted by this file node.
+    for (auto& gi : DbInstances())
+    {
+        if (gi.first.FileIndex() == static_cast<uint32_t>(file_index))
+        {
+            uint32_t guid_index = gi.first.GuidIndex();
+            EraseCachedTables(guid_index);
+            m_memalloc_activity.erase(guid_index);
+            m_memfree_stream_to_agent.erase(guid_index);
+        }
+    }
+
+    // Close and free this file's SQLite connections; its data is no longer queried. The user's
+    // .db file itself is not modified (no tables dropped).
+    CloseDbNode(static_cast<uint32_t>(file_index));
+
+    // Prune the removed file's topology subtree so a topology rebuild shows no ghost nodes.
+    if (BindObject() && BindObject()->trace_object)
+    {
+        static_cast<Trace*>(BindObject()->trace_object)
+            ->RemoveTopologyByFileIndex(static_cast<uint32_t>(file_index));
+    }
+
+    ShowProgress(100 - future->Progress(), "Trace removed from view", kRPVDbSuccess, future);
+    return future->SetPromise(kRocProfVisDmResultSuccess);
+}
+
 rocprofvis_dm_result_t  RocprofDatabase::ReadFlowTraceInfo(
         rocprofvis_dm_event_id_t event_id,
         Future* future)
@@ -1809,6 +1854,9 @@ rocprofvis_dm_result_t RocprofDatabase::BuildTableStringIdFilter( rocprofvis_dm_
         ROCPROFVIS_ASSERT_RETURN(result == kRocProfVisDmResultSuccess, result);
         std::unordered_map<uint32_t, std::string> string_ids;
         std::unordered_map<uint32_t, std::string> kernel_ids;
+        // Guids of instances still active; a removed trace's guids are skipped so event
+        // search stops returning its hits.
+        const std::set<uint32_t> active_guids = ActiveGuidIndices();
         for(const rocprofvis_dm_index_t& index : string_indices)
         {
             std::vector<rocprofvis_db_string_id_t> string_id_array;
@@ -1816,7 +1864,10 @@ rocprofvis_dm_result_t RocprofDatabase::BuildTableStringIdFilter( rocprofvis_dm_
             ROCPROFVIS_ASSERT_RETURN(result == kRocProfVisDmResultSuccess && string_id_array.size() > 0, result);
             for (auto string_id_obj : string_id_array)
             {
-                
+                if (active_guids.count(string_id_obj.m_guid_id) == 0)
+                {
+                    continue;
+                }
                 if (string_id_obj.m_string_type == rocprofvis_db_string_type_t::kRPVStringTypeKernelSymbol)
                 {
                     auto it = kernel_ids.find(string_id_obj.m_guid_id);

@@ -16,6 +16,7 @@ class Array;
 class Track;
 class SystemTrace;
 class Future;
+class MemoryManager;
 
 class Graph : public Handle
 {
@@ -31,6 +32,11 @@ public:
     virtual ~Graph();
 
     rocprofvis_result_t Fetch(uint32_t pixels, double start, double end, Array& array, uint64_t& index, Future* future);
+
+    // Drop all of this graph's LOD segment timelines from the memory-manager LRU before the
+    // graph is destroyed (in-place trace remove). Each LOD registers as its own LRU owner on
+    // fetch, so without this the LRU thread would dereference freed timelines.
+    void ForgetSegments(MemoryManager* mem_mgmt);
 
     rocprofvis_controller_object_type_t GetType(void) final;
     rocprofvis_result_t                 CombineEventInfo(std::vector<Event*>& events,

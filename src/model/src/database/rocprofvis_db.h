@@ -141,6 +141,11 @@ class Database
         rocprofvis_dm_result_t          AddNodeAsync(
                                                                 rocprofvis_db_filename_t filepath,
                                                                 rocprofvis_db_future_t object);
+        // Asynchronously drop one already-merged database file from the trace in place,
+        // freeing its data without reloading the others. Symmetric to AddNodeAsync.
+        rocprofvis_dm_result_t          RemoveNodeAsync(
+                                                                rocprofvis_db_filename_t filepath,
+                                                                rocprofvis_db_future_t object);
         // Asynchronously read a time slice (records from specified number of tracks for specified time frame) from database  
         // @param start - start timestamp of time slice 
         // @param end - end timestamp of time slice 
@@ -293,6 +298,12 @@ class Database
                                                                 Database* db,
                                                                 std::string filepath,
                                                                 Future* object);
+        //static method to remove a database node. Required to launch a unique thread for the
+        // asynchronous in-place remove.
+        static rocprofvis_dm_result_t   RemoveNodeStatic(
+                                                                Database* db,
+                                                                std::string filepath,
+                                                                Future* object);
         //static method to read time slice. Required to launch a unique thread for asynchronous time slice read
         // @param db - pointer to database object 
         // @param start - start timestamp of time slice 
@@ -404,6 +415,15 @@ class Database
             (void) filepath; (void) object;
             return kRocProfVisDmResultNotSupported;
         }
+        // worker method to drop one already-merged database file from the trace in place
+        // (tombstone the instance + free its heavy data), without reloading the others.
+        // Default: not supported (single-file flavors).
+        virtual rocprofvis_dm_result_t  RemoveNode(
+                                                                rocprofvis_db_filename_t filepath,
+                                                                Future* object) {
+            (void) filepath; (void) object;
+            return kRocProfVisDmResultNotSupported;
+        }
         // worker method to read time slice
         // @param start - start timestamp of time slice 
         // @param end - end timestamp of time slice 
@@ -496,6 +516,10 @@ class Database
         // read; used by the incremental AddNode path so already-loaded files are skipped.
         // Empty (the default) means "load everything" - the original full-load behavior.
         std::set<uint32_t> m_load_only_file_indices;
+        // File-node indices that have been removed in place (tombstoned). Their positional
+        // slots (deque/track/db-node) are kept so surviving instances' indices/ids stay
+        // stable, but their heavy data is freed and they are skipped by read/query paths.
+        std::set<uint32_t> m_removed_file_indices;
 
 
     protected:
@@ -504,7 +528,13 @@ class Database
         uint32_t NumDbInstances() { return static_cast<uint32_t>(m_db_instances.size()); }
         // Incremental-load gate: true when this file-node index should be processed by the
         // current metadata read. Always true during a normal full load (filter empty).
-        bool ShouldProcessInstance(uint32_t file_index) const { return m_load_only_file_indices.empty() || m_load_only_file_indices.count(file_index) > 0; }
+        // A tombstoned (removed) instance is never processed.
+        bool ShouldProcessInstance(uint32_t file_index) const { return m_removed_file_indices.count(file_index) == 0 && (m_load_only_file_indices.empty() || m_load_only_file_indices.count(file_index) > 0); }
+        // True unless the instance has been removed in place. Consulted by steady-state read
+        // paths (queries/slices) so a tombstoned instance is skipped even outside a load.
+        bool IsInstanceActive(uint32_t file_index) const { return m_removed_file_indices.count(file_index) == 0; }
+        // Tombstone a file-node index so it is skipped by all subsequent processing.
+        void MarkFileIndexRemoved(uint32_t file_index) { m_removed_file_indices.insert(file_index); }
         bool IsIncrementalLoad() const { return !m_load_only_file_indices.empty(); }
         // The GuidIndices of the instances that the current metadata read will process.
         // On a full load this is every instance; on an incremental add it is just the newly
@@ -514,6 +544,15 @@ class Database
             std::set<uint32_t> ids;
             for (auto& gi : m_db_instances) {
                 if (ShouldProcessInstance(gi.first.FileIndex())) ids.insert(gi.first.GuidIndex());
+            }
+            return ids;
+        }
+        // Guid indices whose instance has NOT been removed in place. Used by steady-state
+        // query builders (table view / event search) to skip a removed trace's data.
+        std::set<uint32_t> ActiveGuidIndices() {
+            std::set<uint32_t> ids;
+            for (auto& gi : m_db_instances) {
+                if (IsInstanceActive(gi.first.FileIndex())) ids.insert(gi.first.GuidIndex());
             }
             return ids;
         }
@@ -547,6 +586,8 @@ class Database
         rocprofvis_dm_trace_params_t*   TraceProperties() { return m_binding_info->trace_properties; }
         // returns pointer to cached tables map array
         DatabaseCache*                  CachedTables(uint32_t node_id) {return &m_cached_tables[node_id];}
+        // drop one instance's cached tables (used by in-place remove to free its RAM)
+        void                            EraseCachedTables(uint32_t guid_index) { m_cached_tables.erase(guid_index); }
 
         TrackLookup*                    TrackTracker() { return& m_track_lookup; }
         // return current number of tracks

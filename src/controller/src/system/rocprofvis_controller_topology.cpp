@@ -29,7 +29,10 @@ TopologyNode::TopologyNode(rocprofvis_dm_topology_node dm_topology_node, Trace* 
     uint64_t track_id;
     if (kRocProfVisDmResultSuccess == rocprofvis_dm_get_property_as_uint64(m_dm_topology_node, kRPVControllerTopologyNodeTrack, 0, &track_id))
     {
-        if (kRocProfVisResultSuccess != m_ctx->GetObject(kRPVControllerSystemTrackIndexed, track_id, (rocprofvis_handle_t**)&m_track))
+        // Resolve by track id, not by position: an in-place trace remove compacts m_tracks so
+        // a survivor's stable track id no longer equals its index. Positional lookup would
+        // relink the wrong/no track and leave survivors pointing at freed topology nodes.
+        if (kRocProfVisResultSuccess != m_ctx->GetObject(kRPVControllerSystemTrackById, track_id, (rocprofvis_handle_t**)&m_track))
         {
             m_track = nullptr;
         }

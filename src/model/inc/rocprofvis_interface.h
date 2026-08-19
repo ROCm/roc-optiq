@@ -134,6 +134,21 @@ rocprofvis_dm_result_t rocprofvis_db_add_node_async(
                                     rocprofvis_db_future_t);
 
 /****************************************************************************************************
+ * @brief Asynchronously drop one already-merged trace file from a multi-file trace in place,
+ *        freeing its data without reloading the remaining files.
+ *
+ * @param database database handle the file is removed from
+ * @param filepath path of the trace file to remove
+ * @param object future handle allocated by rocprofvis_db_future_alloc
+ * @return status of operation
+ *
+ ***************************************************************************************************/
+rocprofvis_dm_result_t rocprofvis_db_remove_node_async(
+                                    rocprofvis_dm_database_t,
+                                    rocprofvis_db_filename_t,
+                                    rocprofvis_db_future_t);
+
+/****************************************************************************************************
 * @brief Asynchronous call to cleanup database of service tables and indexes 
 * 
 * @param database database handle

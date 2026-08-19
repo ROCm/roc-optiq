@@ -58,6 +58,7 @@ public:
     static const uint64_t TABLE_EXPORT_REQUEST_ID;
     static const uint64_t FETCH_SYSTEM_TRACE_REQUEST_ID;
     static const uint64_t ADD_TRACE_SOURCE_REQUEST_ID;
+    static const uint64_t REMOVE_TRACE_SOURCE_REQUEST_ID;
     static const uint64_t SUMMARY_REQUEST_ID;
     static const uint64_t SUMMARY_KERNEL_INSTANCE_TABLE_REQUEST_ID;
     static const uint64_t ANALYSIS_TOP_INSTRUMENTED_EVENTS_TABLE_REQUEST_ID;
@@ -121,6 +122,15 @@ public:
      * not start.
      */
     bool AddTraceSource(const std::string& file_path);
+
+    /*
+     * Drop one already-merged trace file from the system trace in place, reusing the existing
+     * controller/session (same tab). Quiesces in-flight fetches first, tombstones and frees
+     * the removed file's data, then refreshes the timeline model. Surviving tracks and their
+     * cached data are preserved. Returns false if the provider is busy or the request could
+     * not start.
+     */
+    bool RemoveTraceSource(const std::string& file_path);
 
     /*
      * Fetches a track from the controller. Stores the data in a raw track buffer.
@@ -317,6 +327,9 @@ private:
     // Completion handler for an incremental AddTraceSource: refreshes the timeline model
     // from the controller without wiping the existing view if the add failed.
     void ProcessAddTraceSource(RequestInfo& req);
+    // Completion handler for an in-place RemoveTraceSource. Refreshes the timeline model from
+    // the (now smaller) controller, same as the add path.
+    void ProcessRemoveTraceSource(RequestInfo& req);
     void ProcessEventExtendedRequest(RequestInfo& req);
     void ProcessEventFlowDetailsRequest(RequestInfo& req);
     void ProcessEventCallStackRequest(RequestInfo& req);

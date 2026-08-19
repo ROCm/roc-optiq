@@ -47,6 +47,16 @@ rocprofvis_result_t rocprofvis_controller_load_async(rocprofvis_controller_t* co
 * @returns kRocProfVisResultSuccess or an error code.
 */
 rocprofvis_result_t rocprofvis_controller_add_trace_source(rocprofvis_controller_t* controller, char const* filename, rocprofvis_controller_future_t* future);
+/*
+* @brief Drop one already-merged trace file from a system trace in place, freeing its data
+*        without reloading the remaining files. Surviving tracks and their cached data are
+*        preserved.
+* @param controller a system trace controller handle
+* @param filename path of the trace file to remove
+* @param future signals completion; poll like any other async request
+* @returns kRocProfVisResultSuccess or an error code.
+*/
+rocprofvis_result_t rocprofvis_controller_remove_trace_source(rocprofvis_controller_t* controller, char const* filename, rocprofvis_controller_future_t* future);
 /* JSON: CreateController
 {
     file_path: String,

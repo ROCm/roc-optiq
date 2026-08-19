@@ -299,8 +299,7 @@ MultiTrackTable::Render()
                     {
                         SetTooltipStyled(
                             "These results reflect the current time-range selection "
-                            "(span: %s).\nClear the selection on the timeline to see "
-                            "the full trace.",
+                            "(span: %s).",
                             nanosecond_to_formatted_str(
                                 sel_end - sel_start,
                                 m_settings.GetUserSettings().unit_settings.time_format,
@@ -315,8 +314,7 @@ MultiTrackTable::Render()
                     {
                         SetTooltipStyled(
                             "No time-range selection - these results cover the full "
-                            "trace.\nDrag on the timeline ruler to limit results to a "
-                            "time range.");
+                            "trace.");
                     }
                 }
             }

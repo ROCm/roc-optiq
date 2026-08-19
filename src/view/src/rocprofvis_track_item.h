@@ -75,7 +75,6 @@ private:
     bool                              m_active;
     std::optional<size_t>             m_accent_color;
     // Overrides the value text color when set; unset falls back to the default.
-    // Generic so any state (e.g. time-range dependence) can retint the pill.
     std::optional<Colors>             m_text_color;
     Sizing                            m_sizing;
     std::string                       m_compact_label;

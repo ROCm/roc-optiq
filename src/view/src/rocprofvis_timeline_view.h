@@ -266,12 +266,8 @@ private:
     MeasurementLabelRect       m_measure_label_duration;
     MeasurementCopyTarget      m_measure_copy_target;
 
-    // Session-only drag state for the floating duration labels (range moves on both
-    // axes, measurement only vertically). Rects are captured each frame for hit-tests.
-    MeasurementLabelRect       m_range_label_rect;
-    ImVec2                     m_range_label_pos        = ImVec2(0.0f, 0.0f);
-    bool                       m_range_label_moved      = false;  // dragged to a custom spot
-    bool                       m_dragging_range_label   = false;
+    // Session-only drag state for the floating measurement duration label (moves
+    // vertically only); its rect is captured each frame for the hit-test.
     float                      m_measure_label_offset_y = 0.0f;
     bool                       m_dragging_measure_label = false;
 

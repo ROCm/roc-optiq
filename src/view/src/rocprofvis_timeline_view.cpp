@@ -750,33 +750,20 @@ TimelineView::RenderTimelineViewOptionsMenu(ImVec2 window_position)
             m_measure_copy_target = MeasurementCopyTarget::kEnd;
         }
 
-        // Right-clicking the range label opens its own minimal menu instead.
-        bool on_range_label =
-            m_range_label_rect.valid &&
-            ImGui::IsMouseHoveringRect(m_range_label_rect.min, m_range_label_rect.max);
-
         // Remember where the right-click landed; menu actions anchor here, not at
         // the cursor's later position on the menu item.
         m_context_menu_pos = rel_mouse_pos;
 
-        ImGui::OpenPopup(on_range_label ? "RangeLabelContextMenu" : "TimelineContextMenu");
+        ImGui::OpenPopup("TimelineContextMenu");
     }
 
+    if(!ImGui::IsPopupOpen("TimelineContextMenu"))
+    {
+        return;
+    }
     auto style = m_settings.GetDefaultStyle();
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, style.WindowPadding);
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, style.ItemSpacing);
-
-    // Minimal menu for the range-selection duration label (label actions only).
-    if(ImGui::BeginPopup("RangeLabelContextMenu"))
-    {
-        if(IconMenuItem(ICON_ARROWS_CYCLE, "Reset Duration Label Position"))
-        {
-            // Back to auto-centering on the selection midpoint.
-            m_range_label_moved = false;
-        }
-        ImGui::EndPopup();
-    }
-
     if(ImGui::BeginPopup("TimelineContextMenu"))
     {
         // Show event actions whenever events are selected, regardless of where the
@@ -1529,97 +1516,6 @@ TimelineView::RenderScrubber(ImVec2 screen_pos)
         }
     }
 
-    // Range-selection duration label: resolved before the edge grips below so it
-    // wins hit priority; drawn later so it sits above them.
-    bool        range_label_visible = false;
-    bool        over_range_label    = false;
-    ImVec2      range_box_min;
-    ImVec2      range_box_max;
-    ImVec2      range_text_pos;
-    std::string range_label_text;
-    if(m_highlighted_region.first != TimelineSelection::INVALID_SELECTION_TIME &&
-       m_highlighted_region.second != TimelineSelection::INVALID_SELECTION_TIME)
-    {
-        double span_ns =
-            std::abs(m_highlighted_region.second - m_highlighted_region.first);
-        range_label_text = nanosecond_to_formatted_str(
-            span_ns, m_settings.GetUserSettings().unit_settings.time_format, true);
-        ImVec2 text_size = ImGui::CalcTextSize(range_label_text.c_str());
-        float  box_w     = text_size.x + LABEL_PADDING * 2.0f;
-        float  box_h     = text_size.y + LABEL_PADDING * 2.0f;
-
-        // Untouched, the label auto-centers on the selection midpoint (adapting to
-        // size). A drag detaches it to a fixed position that no longer adapts.
-        ImVec2 drag_delta = ImGui::GetIO().MouseDelta;
-        if(m_dragging_range_label && mouse_down &&
-           (drag_delta.x != 0.0f || drag_delta.y != 0.0f))
-        {
-            m_range_label_moved = true;
-        }
-
-        if(!m_range_label_moved)
-        {
-            double midpoint_ns =
-                (m_highlighted_region.first + m_highlighted_region.second) * 0.5;
-            float mid_x =
-                window_position.x + static_cast<float>(m_tpt->TimeToPixel(midpoint_ns));
-            m_range_label_pos = ImVec2(mid_x - box_w * 0.5f,
-                                       cursor_position.y + LABEL_PADDING);
-        }
-        else if(m_dragging_range_label && mouse_down)
-        {
-            m_range_label_pos.x += drag_delta.x;
-            m_range_label_pos.y += drag_delta.y;
-        }
-
-        // Keep the pill fully inside the timeline view.
-        float view_min_x = window_position.x;
-        float view_max_x = window_position.x + m_tpt->GetGraphSizeX();
-        float view_min_y = window_position.y;
-        float view_max_y =
-            window_position.y + m_tpt->GetGraphSizeY() - ARTIFICIAL_SCROLLBAR_HEIGHT;
-        m_range_label_pos.x = std::clamp(m_range_label_pos.x, view_min_x,
-                                         std::max(view_min_x, view_max_x - box_w));
-        m_range_label_pos.y = std::clamp(m_range_label_pos.y, view_min_y,
-                                         std::max(view_min_y, view_max_y - box_h));
-
-        range_box_min  = ImVec2(m_range_label_pos.x, m_range_label_pos.y);
-        range_box_max  = ImVec2(m_range_label_pos.x + box_w, m_range_label_pos.y + box_h);
-        range_text_pos = ImVec2(m_range_label_pos.x + LABEL_PADDING,
-                                m_range_label_pos.y + LABEL_PADDING);
-
-        m_range_label_rect.min   = range_box_min;
-        m_range_label_rect.max   = range_box_max;
-        m_range_label_rect.valid = true;
-
-        // Manual interaction (scrubber is NoInputs): claim the click so it doesn't
-        // fall through.
-        over_range_label = ImGui::IsMouseHoveringRect(range_box_min, range_box_max);
-        if(over_range_label || m_dragging_range_label)
-        {
-            ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeAll);
-            m_stop_user_interaction = true;
-            TimelineFocusManager::GetInstance().RequestLayerFocus(Layer::kScrubberLayer);
-        }
-        if(over_range_label && mouse_clicked)
-        {
-            m_dragging_range_label = true;
-        }
-        if(!mouse_down)
-        {
-            m_dragging_range_label = false;
-        }
-
-        range_label_visible = true;
-    }
-    else
-    {
-        // No selection: revert to auto-centering for the next one.
-        m_range_label_moved      = false;
-        m_dragging_range_label   = false;
-        m_range_label_rect.valid = false;
-    }
-
     if(m_highlighted_region.first != TimelineSelection::INVALID_SELECTION_TIME)
     {
         float normalized_start_box_highlighted =
@@ -1628,8 +1524,8 @@ TimelineView::RenderScrubber(ImVec2 screen_pos)
         float line_y_start = cursor_position.y;
         float line_y_end   = cursor_position.y + container_size.y - m_ruler_height;
 
-        // Skip the start grip while the duration label is hovered/dragged.
-        if(!m_dragging_selection_end && !over_range_label && !m_dragging_range_label)
+        // Check hover for start line
+        if(!m_dragging_selection_end)  // Don't hover start if dragging end
         {
             bool hovered =
                 (mouse_pos.x >= normalized_start_box_highlighted - kGripWidth / 2 &&
@@ -1676,8 +1572,8 @@ TimelineView::RenderScrubber(ImVec2 screen_pos)
         float line_y_start = cursor_position.y;
         float line_y_end   = cursor_position.y + container_size.y - m_ruler_height;
 
-        // Skip the end grip while the duration label is hovered/dragged.
-        if(!m_dragging_selection_start && !over_range_label && !m_dragging_range_label)
+        // Check hover for end line
+        if(!m_dragging_selection_start)
         {
             bool hovered =
                 (mouse_pos.x >= normalized_start_box_highlighted_end - kGripWidth / 2 &&
@@ -1716,21 +1612,6 @@ TimelineView::RenderScrubber(ImVec2 screen_pos)
             ImVec2(normalized_start_box_highlighted_end,
                    cursor_position.y + container_size.y - m_ruler_height),
             m_settings.GetColor(Colors::kSelectionBorder), 3.0f);
-    }
-
-    // Draw the label on top of the edge lines (geometry/interaction resolved above).
-    if(range_label_visible)
-    {
-        draw_list->AddRectFilled(range_box_min, range_box_max,
-                                 m_settings.GetColor(Colors::kMeasurementLabelBg) |
-                                     IM_COL32_A_MASK,
-                                 LABEL_ROUNDING);
-        draw_list->AddRect(range_box_min, range_box_max,
-                           m_settings.GetColor(Colors::kMeasurementLabelEdge),
-                           LABEL_ROUNDING);
-        draw_list->AddText(range_text_pos,
-                           m_settings.GetColor(Colors::kMeasurementLabelText),
-                           range_label_text.c_str());
     }
 
     // IsMouseHoveringRect check in screen coordinates
@@ -2893,13 +2774,6 @@ TimelineView::RenderTraceView()
     // Claim label focus before the tracks render: flame-track clicks are focus-
     // arbitrated and evaluated at the end of RenderGraphView, so claiming later (in
     // RenderScrubber) would be a frame too late and the click would fall through.
-    if(m_dragging_range_label ||
-       (m_range_label_rect.valid &&
-        ImGui::IsMouseHoveringRect(m_range_label_rect.min, m_range_label_rect.max)))
-    {
-        TimelineFocusManager::GetInstance().RequestLayerFocus(Layer::kScrubberLayer);
-    }
-    // Same guard for the draggable measurement duration label.
     if(m_dragging_measure_label ||
        (m_measure_label_duration.valid &&
         ImGui::IsMouseHoveringRect(m_measure_label_duration.min,

@@ -94,6 +94,10 @@ The **System Topology View** displays a hierarchical representation of the hardw
 - Click |scroll| to go to the track in the :ref:`timeline`. 
 - Right click to chose sidebar context menu options: **Go To Track**, **Hide Track**, **Show/Hide All But This Track**, **Show/Hide Selected Tracks**.
 
+.. note::
+
+   Use **Edit** > **Preferences** > **Display Settings** to show or hide the |eye| and |scroll| icons. See :ref:`change-settings`.
+
 ROCm Optiq displays ROCm events in both Stream view and Queue view simultaneously: 
 
 - **Stream view**: Groups events (kernels and memory copies) by the HIP stream to which they were submitted. This view reflects your application's intended dependencies. 
@@ -269,7 +273,8 @@ Right-clicking an active time-range selection now offers **Zoom to Time Range Se
 
 .. tip::
 
-   Press **M** for a shortcut to **Make Time Range Selection** when one or more events are selected.  
+   - Press **M** for a shortcut to **Make Time Range Selection** when one or more events are selected.
+   - Press **Z** for a shortcut to **Zoom to Time Range Selection** when an active time-range selection exists.
 
 To clear the time range selection, press **Esc** or right-click and select **Remove Selection**:
 

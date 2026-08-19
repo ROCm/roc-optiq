@@ -40,6 +40,7 @@ Tracks and topology
 - **Reveal in Topology** right-click action on a track, to jump directly from a track to its location in the System Topology View.
 - **Batch track settings**: apply Track Options changes to multiple selected tracks at once.
 - New sidebar right-click context menu options.
+- **Display Settings preferences**: show or hide the show/hide-track and go-to-track sidebar icons in the System Topology View from **Edit** > **Preferences** > **Display Settings**.
 Annotations
 """"""""""""
 - Annotation UX enhancements: **Lock Annotation**, **Go-to-Anchor**, cross-highlighting between annotations and their associated tracks/events, text wrapping, and placement fixes.

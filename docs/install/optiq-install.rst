@@ -99,20 +99,14 @@ Installation
 
          .. tab-item:: apt (Ubuntu)
 
-            1. Download the ``.zip`` package for your operating system and version from the `ROCm Optiq GitHub Releases <https://github.com/ROCm/roc-optiq/releases>`_ page.
-            2. Unzip the package to extract the ``.deb`` file:
-
-               .. code-block:: shell
-
-                  unzip <package>.zip
-
-            3. Install the ``.deb`` package:
+            1. Download the ``.deb`` package for your operating system and version from the `ROCm Optiq GitHub Releases <https://github.com/ROCm/roc-optiq/releases/tag/v1.0.0-optiq>`_ page.
+            2. Install the ``.deb`` package:
 
                .. code-block:: shell
 
                   sudo apt install ./<package>.deb
 
-            4. Verify the installation:
+            3. Verify the installation:
 
                .. code-block:: shell
 
@@ -128,20 +122,14 @@ Installation
 
          .. tab-item:: dnf (RHEL / Oracle Linux)
 
-            1. Download the ``.zip`` package for your operating system and version from the `ROCm Optiq GitHub Releases <https://github.com/ROCm/roc-optiq/releases>`_ page.
-            2. Unzip the package to extract the ``.rpm`` file:
-
-               .. code-block:: shell
-
-                  unzip <package>.zip
-
-            3. Install the ``.rpm`` package:
+            1. Download the ``.rpm`` package for your operating system and version from the `ROCm Optiq GitHub Releases <https://github.com/ROCm/roc-optiq/releases/tag/v1.0.0-optiq>`_ page.
+            2. Install the ``.rpm`` package:
 
                .. code-block:: shell
 
                   sudo dnf install ./<package>.rpm
 
-            4. Verify the installation:
+            3. Verify the installation:
 
                .. code-block:: shell
 
@@ -157,7 +145,7 @@ Installation
 
          .. tab-item:: Tarball (any Linux distribution)
 
-            1. Download the tarball for your architecture from the `ROCm Optiq GitHub Releases <https://github.com/ROCm/roc-optiq/releases>`_ page.
+            1. Download the tarball for your architecture from the `ROCm Optiq GitHub Releases <https://github.com/ROCm/roc-optiq/releases/tag/v1.0.0-optiq>`_ page.
             2. Extract it to your preferred install location (no root required):
 
                .. code-block:: shell

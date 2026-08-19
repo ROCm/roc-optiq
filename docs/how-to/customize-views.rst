@@ -10,6 +10,8 @@ Customize ROCm Optiq
 
 .. |book| image:: ../images/bookmarks.png
 .. |pen| image:: ../images/pencil.png
+.. |eye| image:: ../images/eye.png
+.. |scroll| image:: ../images/scroll-to.png
 .. |flow| image:: ../images/flow-change.png
 .. |reset| image:: ../images/reset.png
 .. |make| image:: ../images/make-selection.png
@@ -48,6 +50,8 @@ Select **Edit** > **Preferences** to adjust these global settings for ROCm Optiq
   .. image:: ../images/hotkeys.png
      :width: 600
      :alt: ROCm Optiq Settings panel showing the hotkey configuration table for customizing keyboard shortcuts
+
+- Disabling **Compact topology sidebar** in the **Display Settings** tab controls whether the |eye| (show/hide track) and |scroll| (go to track) icons display in the sidebar of the :ref:`topology`.
 
 Show/hide panels
 ================

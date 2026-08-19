@@ -5087,6 +5087,12 @@ DataProvider::LoadRoofLineCeilingsCompute(WorkloadInfo&        workload,
                     ceiling;
             }
         }
+        else
+        {
+            spdlog::warn("DataProvider::LoadRoofLineCeilingsBandwidth - No ridge point "
+                         "found for ceiling type {}",
+                         static_cast<uint32_t>(ceiling.bandwidth_type));       
+        }
     }
 }
 
@@ -5145,6 +5151,12 @@ DataProvider::LoadRoofLineCeilingsBandwidth(WorkloadInfo&        workload,
                     ceiling;
             }
         }
+        else
+        {
+            spdlog::warn("DataProvider::LoadRoofLineCeilingsCompute - No ridge point "
+                         "found for ceiling type {}",
+                         static_cast<uint32_t>(ceiling.compute_type));
+        }
     }
 }
 
@@ -5191,6 +5203,11 @@ DataProvider::LoadRoofLineKernels(WorkloadInfo&        workload,
                 std::min(workload.roofline.min.y, intensity.position.y);
             workload.kernels[kernel_id].roofline.intensities[intensity.type] =
                 std::move(intensity);
+        }
+        else
+        {
+            spdlog::warn("DataProvider::LoadRoofLineKernels - Unexpected kernel id {}",
+                         kernel_id);
         }
     }
 }

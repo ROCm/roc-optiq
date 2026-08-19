@@ -388,7 +388,7 @@ namespace DataModel
 			{
 				query_out =
 					"SELECT DISTINCT co.code_object_uuid AS code_object_id, "
-					"'' AS uri, '' AS code_object_checksum "
+					"NULL AS uri, NULL AS code_object_checksum "
 					"FROM compute_code_object_store co "
 					"JOIN compute_instruction_line il ON il.code_object_uuid = co.code_object_uuid "
 					"WHERE il.kernel_uuid = ";
@@ -444,7 +444,7 @@ namespace DataModel
 					"SELECT il.instruction_uuid AS isa_line_id, "
 					"il.code_object_uuid AS isa_code_object_id, "
 					"COALESCE(il.code_object_offset, 0) AS code_object_offset, "
-					"0 AS instruction_type_id, "
+					"NULL AS instruction_type_id, "
 					"COALESCE(il.instruction, '') AS instruction, "
 					"COALESCE(il.comment, '') AS comment "
 					"FROM compute_instruction_line il "
@@ -495,7 +495,23 @@ namespace DataModel
 
 	rocprofvis_dm_result_t ComputeQueryFactory::GetComputeKernelSamplingStates(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params, rocprofvis_dm_string_t& query_out) {
 		rocprofvis_dm_result_t result = kRocProfVisDmResultNotSupported;
-		if (IsVersionGreaterOrEqual("1.2.0"))
+		if (IsVersionGreaterOrEqual("2.0.0"))
+		{
+			result = kRocProfVisDmResultInvalidParameter;
+			if (num == 1 && params != nullptr && params[0].param_type == kRPVComputeParamKernelId)
+			{
+				query_out =
+					"SELECT s.id AS sampling_state_id, s.instruction_uuid AS sampling_state_isa_line_id, "
+					"s.dispatch_id, s.active_threads_percent, s.wave_occupancy_percent, "
+					"s.issued_count, s.stalled_count, s.total_count "
+					"FROM compute_pc_sample_state s "
+					"JOIN compute_instruction_line il ON il.instruction_uuid = s.instruction_uuid "
+					"WHERE il.kernel_uuid = ";
+				query_out += params[0].param_str;
+				result = kRocProfVisDmResultSuccess;
+			}
+		}
+		else if (IsVersionGreaterOrEqual("1.2.0"))
 		{
 			result = kRocProfVisDmResultInvalidParameter;
 			if (num == 1 && params != nullptr && params[0].param_type == kRPVComputeParamKernelId)
@@ -517,7 +533,23 @@ namespace DataModel
 
 	rocprofvis_dm_result_t ComputeQueryFactory::GetComputeKernelSamplingStateReasonCounts(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params, rocprofvis_dm_string_t& query_out) {
 		rocprofvis_dm_result_t result = kRocProfVisDmResultNotSupported;
-		if (IsVersionGreaterOrEqual("1.2.0"))
+		if (IsVersionGreaterOrEqual("2.0.0"))
+		{
+			result = kRocProfVisDmResultInvalidParameter;
+			if (num == 1 && params != nullptr && params[0].param_type == kRPVComputeParamKernelId)
+			{
+				query_out =
+					"SELECT r.pc_sample_state_id AS stall_reason_sampling_state_id, "
+					"r.stall_reason_id, r.count AS stall_reason_count "
+					"FROM compute_pc_sample_stall_reason r "
+					"JOIN compute_pc_sample_state s ON s.id = r.pc_sample_state_id "
+					"JOIN compute_instruction_line il ON il.instruction_uuid = s.instruction_uuid "
+					"WHERE il.kernel_uuid = ";
+				query_out += params[0].param_str;
+				result = kRocProfVisDmResultSuccess;
+			}
+		}
+		else if (IsVersionGreaterOrEqual("1.2.0"))
 		{
 			result = kRocProfVisDmResultInvalidParameter;
 			if (num == 1 && params != nullptr && params[0].param_type == kRPVComputeParamKernelId)
@@ -961,7 +993,14 @@ void ComputeQueryFactory::ParseMetricParam(std::string metric_str, uint32_t work
 		{
 			vec.push_back("CREATE INDEX IF NOT EXISTS idx_metric_value_metric_uuid ON compute_metric_value(metric_uuid);");
 		}
-		if (CheckTableExists("pc_sampling_states_per_line", file_node_id))
+		if (CheckTableExists("compute_pc_sample_state", file_node_id))
+		{
+			vec.push_back("CREATE INDEX IF NOT EXISTS idx_instruction_line_kernel ON compute_instruction_line(kernel_uuid);");
+			vec.push_back("CREATE INDEX IF NOT EXISTS idx_instruction_line_code_object ON compute_instruction_line(code_object_uuid);");
+			vec.push_back("CREATE INDEX IF NOT EXISTS idx_pc_sample_state_instruction ON compute_pc_sample_state(instruction_uuid);");
+			vec.push_back("CREATE INDEX IF NOT EXISTS idx_pc_sample_stall_reason_state ON compute_pc_sample_stall_reason(pc_sample_state_id);");
+		}
+		else if (CheckTableExists("pc_sampling_states_per_line", file_node_id))
 		{
 			vec.push_back("CREATE INDEX IF NOT EXISTS idx_pc_sampling_code_objects_kernel ON code_objects(kernel_id);");
 			vec.push_back("CREATE INDEX IF NOT EXISTS idx_pc_sampling_source_files_kernel ON source_files(kernel_id);");

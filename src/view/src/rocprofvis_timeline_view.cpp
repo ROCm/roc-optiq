@@ -1318,21 +1318,14 @@ TimelineView::RenderSplitter()
     {
         ImVec2 drag_delta = ImGui::GetMouseDragDelta(ImGuiMouseButton_Left);
 
-        const float graph_w_before = m_tpt->GetGraphSizeX();
-        const float sidebar_before = m_sidebar_size;
-        m_sidebar_size             = std::clamp(m_sidebar_size + drag_delta.x,
-                                                m_max_meta_scale_area_size +
-                                                    2 * ImGui::GetFrameHeightWithSpacing(),
-                                                SIDEBAR_WIDTH_MAX);
-
-        // Hold pixels_per_ns constant (offset untouched) so resizing the
-        // description column neither pans nor rescales the timeline. AIPROFVIS-333.
-        const float applied       = m_sidebar_size - sidebar_before;
-        const float graph_w_after = graph_w_before - applied;
-        if(graph_w_after > 0.0f)
-        {
-            m_tpt->SetZoom(m_tpt->GetZoom() * graph_w_before / graph_w_after);
-        }
+        // Resize only; leave zoom/offset untouched. SetGraphSize() picks up the
+        // new width later this frame and recomputes pixels_per_ns on its own, so
+        // the visible ns-range (and thus v_min_x) never moves and this can't be
+        // mistaken for a real zoom change by IsRequestDataNeeded(). AIPROFVIS-333.
+        m_sidebar_size = std::clamp(m_sidebar_size + drag_delta.x,
+                                    m_max_meta_scale_area_size +
+                                        2 * ImGui::GetFrameHeightWithSpacing(),
+                                    SIDEBAR_WIDTH_MAX);
         ImGui::ResetMouseDragDelta();
         ImGui::EndDragDropSource();
         m_resize_activity |= true;

@@ -39,6 +39,9 @@ constexpr float    ARTIFICIAL_SCROLLBAR_HEIGHT   = 18.0f;
 constexpr float    SIDEBAR_SPLITTER_WIDTH        = 5.0f;
 // Thickness (px) of the selection boundary markers on the overview histogram.
 constexpr float    OVERVIEW_MARKER_THICKNESS     = 2.0f;
+// Overview duration bracket: end-cap half-height and label gap (px).
+constexpr float    OVERVIEW_BRACKET_CAP_HALF     = 3.0f;
+constexpr float    OVERVIEW_BRACKET_LABEL_GAP    = 4.0f;
 // BT.601 luma weights for desaturating out-of-view overview bars.
 constexpr float    LUMA_WEIGHT_R                 = 0.299f;
 constexpr float    LUMA_WEIGHT_G                 = 0.587f;
@@ -2557,6 +2560,65 @@ TimelineView::RenderHistogram()
         draw_list_ruler->AddLine(ImVec2(tick_x, tick_label_bottom),
                                  ImVec2(tick_x, tick_label_bottom + tick_length),
                                  m_settings.GetColor(Colors::kRulerTextColor), 1.0f);
+    }
+
+    // Duration bracket across the selection, drawn in the ruler's tick-mark row.
+    double sel_start_ns = 0.0;
+    double sel_end_ns   = 0.0;
+    if(m_timeline_selection &&
+       m_timeline_selection->GetSelectedTimeRange(sel_start_ns, sel_end_ns) &&
+       m_tpt->GetRangeX() > 0.0)
+    {
+        auto sel_x = [&](double raw_ns) {
+            float frac = std::clamp(
+                static_cast<float>(m_tpt->NormalizeTime(raw_ns) / m_tpt->GetRangeX()),
+                0.0f, 1.0f);
+            return graph_origin_x + frac * ruler_width;
+        };
+        const float xs = sel_x(sel_start_ns);
+        const float xe = sel_x(sel_end_ns);
+        if(xe > xs)
+        {
+            const ImU32       col = m_settings.GetColor(Colors::kSelectionBorder);
+            const std::string dur = nanosecond_to_formatted_str(
+                sel_end_ns - sel_start_ns, time_format, true);
+            const ImVec2 dsz =
+                font->CalcTextSizeA(label_font_size, FLT_MAX, 0.0f, dur.c_str());
+            const float by  = ruler_pos.y + m_ruler_height - dsz.y * 0.5f - 1.0f;
+            const float mid = (xs + xe) * 0.5f;
+            const float gap = dsz.x * 0.5f + OVERVIEW_BRACKET_LABEL_GAP;
+
+            draw_list_ruler->AddLine(ImVec2(xs, by - OVERVIEW_BRACKET_CAP_HALF),
+                                     ImVec2(xs, by + OVERVIEW_BRACKET_CAP_HALF), col, 1.0f);
+            draw_list_ruler->AddLine(ImVec2(xe, by - OVERVIEW_BRACKET_CAP_HALF),
+                                     ImVec2(xe, by + OVERVIEW_BRACKET_CAP_HALF), col, 1.0f);
+
+            if(mid - gap > xs && mid + gap < xe)
+            {
+                draw_list_ruler->AddLine(ImVec2(xs, by), ImVec2(mid - gap, by), col, 1.0f);
+                draw_list_ruler->AddLine(ImVec2(mid + gap, by), ImVec2(xe, by), col, 1.0f);
+                draw_list_ruler->AddText(font, label_font_size,
+                                         ImVec2(mid - dsz.x * 0.5f, by - dsz.y * 0.5f), col,
+                                         dur.c_str());
+            }
+            else
+            {
+                draw_list_ruler->AddLine(ImVec2(xs, by), ImVec2(xe, by), col, 1.0f);
+                const float right_edge = graph_origin_x + ruler_width;
+                float       label_x    = mid - dsz.x * 0.5f;
+                if(xe + OVERVIEW_BRACKET_LABEL_GAP + dsz.x <= right_edge)
+                {
+                    label_x = xe + OVERVIEW_BRACKET_LABEL_GAP;
+                }
+                else if(xs - OVERVIEW_BRACKET_LABEL_GAP - dsz.x >= graph_origin_x)
+                {
+                    label_x = xs - OVERVIEW_BRACKET_LABEL_GAP - dsz.x;
+                }
+                draw_list_ruler->AddText(font, label_font_size,
+                                         ImVec2(label_x, by - dsz.y * 0.5f), col,
+                                         dur.c_str());
+            }
+        }
     }
     ImGui::EndChild();
     ImGui::PopStyleColor();

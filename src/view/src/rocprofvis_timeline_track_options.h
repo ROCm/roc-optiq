@@ -63,7 +63,7 @@ public:
     bool  m_display;
     float m_height;
 #ifdef IMGUI_ENABLE_TEST_ENGINE
-     friend struct FlameTrackItemTestPeer;
+    friend struct FlameTrackItemTestPeer;
 #endif
 protected:
     class TrackProjectSetting : public ProjectSetting
@@ -178,38 +178,34 @@ public:
     std::unique_ptr<TrackOptions> InitTrack(const TrackItem& track);
     void                          Update();
     // Given a target track, snapshot required info and setup aggregated options
-    void InitContextMenu(const TrackItem& target);
-    // Display the options menu for the target track passed in InitContextMenu()
-    void RenderContextMenu();
+    void InitTrackOptionsSubmenu(const TrackItem& target);
+    // Display the options menu for the target track passed in InitTrackOptionsSubmenu()
+    void RenderTrackOptionsSubmenu();
     // Whether any known track is currently hidden.
-    bool HasHiddenTracks() const;
+    bool ShowHiddenTracksSubmenu() const;
     // Render the "Show Hidden Tracks" submenu contents. Call within an open menu
     // or popup.
     void RenderHiddenTracksSubmenu();
 
-    void SetSortMenuRenderer(std::function<void()> renderer)
-    {
-        m_render_sort_menu = std::move(renderer);
-    }
-    bool HasSortMenu() const { return static_cast<bool>(m_render_sort_menu); }
-    void RenderSortMenu() const
-    {
-        if(m_render_sort_menu) m_render_sort_menu();
-    }
+    void SetTrackSortSubmenu(std::function<void()> renderer);
+
+    bool ShowTrackSortSubmenu() const;
+
+    void RenderTrackSortSubmenu() const;
 
 private:
-    // Reveal every track in the list (sets display + fires a single
-    // visibility-changed event). Ignores tracks that are already displayed.
-    void ShowTracks(const std::vector<TrackOptions*>& options);
-    // Reveal every currently hidden track.
-    void ShowAllHiddenTracks();
-
     enum Propagate
     {
         kNone,
         kSelected,  // Apply to selected tracks
         kSiblings,  // Apply to all like tracks
     };
+
+    // Reveal every track in the list (sets display + fires a single
+    // visibility-changed event). Ignores tracks that are already displayed.
+    void ShowTracks(const std::vector<TrackOptions*>& options);
+    // Reveal every currently hidden track.
+    void ShowAllHiddenTracks();
 
     // Construct options that is aggregate representation of compoents
     std::unique_ptr<TrackOptions> CreateAggregate(

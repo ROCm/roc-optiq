@@ -39,6 +39,7 @@ constexpr uint64_t DEFAULT_LOADING_TIMER         = 150;  // milliseconds
 constexpr float    ARTIFICIAL_SCROLLBAR_HEIGHT   = 18.0f;
 constexpr float    SIDEBAR_SPLITTER_WIDTH        = 5.0f;
 constexpr const char* HIDDEN_TRACKS_MENU_POPUP_NAME = "HiddenTracksMenu";
+constexpr const char* SORT_TRACKS_MENU_POPUP_NAME   = "SortTracksMenu";
 // Build a text block mirroring the on-hover tooltip (name, timing, and id)
 // for the clipboard.
 static std::string
@@ -119,7 +120,7 @@ TimelineView::TimelineView(DataProvider&                          dp,
 , m_sort_mode(TrackSortMode::kDefault)
 , m_topology_sort_pending(false)
 {
-    m_track_options_context_menu->SetSortMenuRenderer(
+    m_track_options_context_menu->SetTrackSortSubmenu(
         [this]() { RenderTrackSortMenu(); });
 
     // Subscribe to events
@@ -2510,9 +2511,6 @@ TimelineView::LoadSortSettings()
 void
 TimelineView::RenderTrackSortMenu()
 {
-    // Flat layout: a titled separator header with the options directly beneath it.
-    // A submenu would be pointless here since sorting is the only action.
-    ImGui::SeparatorText("Sort tracks by");
     // Record only; Update() applies the sort off the render pass.
     if(IconMenuItem(ICON_TREE, "Topology", true,
                     m_sort_mode == TrackSortMode::kTopology))
@@ -2696,38 +2694,48 @@ TimelineView::RenderTrackInfo(float available_width)
                           m_settings.GetColor(Colors::kButtonActive));
     ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 0.0f);
     ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(0.0f, 0.0f));
-    ImGui::PushFont(fonts.GetFont(FontType::kIcon), fonts.GetFontSize(FontSize::kSmall));
+    ImGui::PushFont(fonts.GetFont(FontType::kIcon), fonts.GetFontSize(FontSize::kXSmall));
     const float arrow_h = ImGui::GetTextLineHeight();
     ImGui::SetCursorPos(ImVec2(0.0f, ImGui::GetWindowHeight() - arrow_h));
     // Open the sort menu from the button itself (left- or right-click), rather than
     // a right-click anywhere on the stats block.
+    ImGui::PushStyleColor(ImGuiCol_Text, m_settings.GetColor(Colors::kTextDim));
     if(ImGui::Button(sort_label.c_str(), ImVec2(available_width, arrow_h)) ||
        ImGui::IsItemClicked(ImGuiMouseButton_Right))
     {
-        ImGui::OpenPopup("##track_sort_ctx");
+        ImGui::OpenPopup(SORT_TRACKS_MENU_POPUP_NAME);
     }
+    ImGui::PopStyleColor();
     ImGui::PopFont();
     ImGui::PopStyleVar(2);
     ImGui::PopStyleColor(3);
     if(BeginItemTooltipStyled())
     {
-        ImGui::TextUnformatted("Sort tracks");
+        ImGui::TextUnformatted("Sort Tracks");
         EndTooltipStyled();
     }
 
     // Sort menu opened from the button above. Pull spacing from the base style; the
     // histogram strip's child has zero padding, which would otherwise leave the
     // popup cramped.
-    const ImGuiStyle& base = m_settings.GetDefaultStyle();
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, base.WindowPadding);
-    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, base.ItemSpacing);
-    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, base.FramePadding);
-    if(ImGui::BeginPopup("##track_sort_ctx"))
+    if(ImGui::IsPopupOpen(SORT_TRACKS_MENU_POPUP_NAME))
     {
-        RenderTrackSortMenu();
-        ImGui::EndPopup();
+        const ImGuiStyle& base = m_settings.GetDefaultStyle();
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, base.WindowPadding);
+        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, base.ItemSpacing);
+        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, base.FramePadding);
+        ImGui::SetNextWindowPos(
+            ImGui::GetItemRectMin() +
+                ImVec2(0.5f * ImGui::GetItemRectSize().x, ImGui::GetItemRectSize().y),
+            ImGuiCond_Always, ImVec2(0.5f, 0.0f));
+        if(ImGui::BeginPopup(SORT_TRACKS_MENU_POPUP_NAME))
+        {
+            ImGui::SeparatorText("Sort Tracks");
+            RenderTrackSortMenu();
+            ImGui::EndPopup();
+        }
+        ImGui::PopStyleVar(3);
     }
-    ImGui::PopStyleVar(3);
 }
 
 void

@@ -41,6 +41,7 @@
 - **Roofline line-thickness preference** to improve chart readability.
 
 #### Experimental
+
 .. note::
    These features are in progress and available for preview only (build from source). Behavior and UI are subject to change.
 - **Profiler launch**: Launch the ROCm profiler locally or on a remote host, with remote file access/browsing and an SSH-based remote profiling workflow (redesigned remote profile panels and profiler launcher UI).

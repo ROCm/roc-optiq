@@ -4983,7 +4983,7 @@ DataProvider::LoadRoofLine(WorkloadInfo& workload, rocprofvis_handle_t* workload
 
     LoadRoofLineCeilingsBandwidth(workload, roofline_handle, bandwidth_ridge);
 
-    LoadRoofLineNumKernels(workload, roofline_handle, compute_ridge, bandwidth_ridge);
+    LoadRoofLineKernels(workload, roofline_handle);
 }
 
 inline void
@@ -5054,33 +5054,44 @@ DataProvider::LoadRoofLineCeilingsCompute(WorkloadInfo&        workload,
         ceiling.compute_type =
             static_cast<rocprofvis_controller_roofline_ceiling_compute_type_t>(
                 uint64_data);
-        ROCPROFVIS_ASSERT(compute_ridge.count(ceiling.compute_type) > 0);
-        for(const std::pair<const rocprofvis_controller_roofline_ceiling_bandwidth_type_t,
-                            Point>& ridge : compute_ridge.at(ceiling.compute_type))
+        if(compute_ridge.count(ceiling.compute_type) > 0)
         {
-            ceiling.bandwidth_type = ridge.first;
-            ceiling.position.p1    = ridge.second;
-            result                 = rocprofvis_controller_get_double(
-                roofline_handle, kRPVControllerRooflineCeilingComputeXIndexed, j,
-                &double_data);
-            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-            ceiling.position.p2.x = double_data;
-            result                = rocprofvis_controller_get_double(
-                roofline_handle, kRPVControllerRooflineCeilingComputeYIndexed, j,
-                &double_data);
-            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-            ceiling.position.p2.y = double_data;
-            result                = rocprofvis_controller_get_double(
-                roofline_handle, kRPVControllerRooflineCeilingComputeThroughputIndexed, j,
-                &double_data);
-            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-            ceiling.throughput = double_data;
-            workload.roofline.max.x =
-                std::max(workload.roofline.max.x, ceiling.position.p2.x);
-            workload.roofline.max.y =
-                std::max(workload.roofline.max.y, ceiling.position.p2.y);
-            workload.roofline
-                .ceiling_compute[ceiling.compute_type][ceiling.bandwidth_type] = ceiling;
+            for(const std::pair<
+                    const rocprofvis_controller_roofline_ceiling_bandwidth_type_t, Point>&
+                    ridge : compute_ridge.at(ceiling.compute_type))
+            {
+                ceiling.bandwidth_type = ridge.first;
+                ceiling.position.p1    = ridge.second;
+                result                 = rocprofvis_controller_get_double(
+                    roofline_handle, kRPVControllerRooflineCeilingComputeXIndexed, j,
+                    &double_data);
+                ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+                ceiling.position.p2.x = double_data;
+                result                = rocprofvis_controller_get_double(
+                    roofline_handle, kRPVControllerRooflineCeilingComputeYIndexed, j,
+                    &double_data);
+                ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+                ceiling.position.p2.y = double_data;
+                result                = rocprofvis_controller_get_double(
+                    roofline_handle,
+                    kRPVControllerRooflineCeilingComputeThroughputIndexed, j,
+                    &double_data);
+                ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+                ceiling.throughput = double_data;
+                workload.roofline.max.x =
+                    std::max(workload.roofline.max.x, ceiling.position.p2.x);
+                workload.roofline.max.y =
+                    std::max(workload.roofline.max.y, ceiling.position.p2.y);
+                workload.roofline
+                    .ceiling_compute[ceiling.compute_type][ceiling.bandwidth_type] =
+                    ceiling;
+            }
+        }
+        else
+        {
+            spdlog::warn("DataProvider::LoadRoofLineCeilingsBandwidth - No ridge point "
+                         "found for ceiling type {}",
+                         static_cast<uint32_t>(ceiling.bandwidth_type));       
         }
     }
 }
@@ -5107,43 +5118,51 @@ DataProvider::LoadRoofLineCeilingsBandwidth(WorkloadInfo&        workload,
         ceiling.bandwidth_type =
             static_cast<rocprofvis_controller_roofline_ceiling_bandwidth_type_t>(
                 uint64_data);
-        ROCPROFVIS_ASSERT(bandwidth_ridge.count(ceiling.bandwidth_type) > 0);
-        for(const std::pair<const rocprofvis_controller_roofline_ceiling_compute_type_t,
-                            Point>& ridge : bandwidth_ridge.at(ceiling.bandwidth_type))
+        if(bandwidth_ridge.count(ceiling.bandwidth_type) > 0)
         {
-            ceiling.compute_type = ridge.first;
-            result               = rocprofvis_controller_get_double(
-                roofline_handle, kRPVControllerRooflineCeilingBandwidthXIndexed, j,
-                &double_data);
-            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-            ceiling.position.p1.x = double_data;
-            result                = rocprofvis_controller_get_double(
-                roofline_handle, kRPVControllerRooflineCeilingBandwidthYIndexed, j,
-                &double_data);
-            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-            ceiling.position.p1.y = double_data;
-            ceiling.position.p2   = ridge.second;
-            result                = rocprofvis_controller_get_double(
-                roofline_handle, kRPVControllerRooflineCeilingBandwidthThroughputIndexed,
-                j, &double_data);
-            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-            ceiling.throughput = double_data;
-            workload.roofline.min.x =
-                std::min(workload.roofline.min.x, ceiling.position.p1.x);
-            workload.roofline.min.y =
-                std::min(workload.roofline.min.y, ceiling.position.p1.y);
-            workload.roofline
-                .ceiling_bandwidth[ceiling.bandwidth_type][ceiling.compute_type] =
-                ceiling;
+            for(const std::pair<
+                    const rocprofvis_controller_roofline_ceiling_compute_type_t, Point>&
+                    ridge : bandwidth_ridge.at(ceiling.bandwidth_type))
+            {
+                ceiling.compute_type = ridge.first;
+                result               = rocprofvis_controller_get_double(
+                    roofline_handle, kRPVControllerRooflineCeilingBandwidthXIndexed, j,
+                    &double_data);
+                ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+                ceiling.position.p1.x = double_data;
+                result                = rocprofvis_controller_get_double(
+                    roofline_handle, kRPVControllerRooflineCeilingBandwidthYIndexed, j,
+                    &double_data);
+                ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+                ceiling.position.p1.y = double_data;
+                ceiling.position.p2   = ridge.second;
+                result                = rocprofvis_controller_get_double(
+                    roofline_handle,
+                    kRPVControllerRooflineCeilingBandwidthThroughputIndexed, j,
+                    &double_data);
+                ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+                ceiling.throughput = double_data;
+                workload.roofline.min.x =
+                    std::min(workload.roofline.min.x, ceiling.position.p1.x);
+                workload.roofline.min.y =
+                    std::min(workload.roofline.min.y, ceiling.position.p1.y);
+                workload.roofline
+                    .ceiling_bandwidth[ceiling.bandwidth_type][ceiling.compute_type] =
+                    ceiling;
+            }
+        }
+        else
+        {
+            spdlog::warn("DataProvider::LoadRoofLineCeilingsCompute - No ridge point "
+                         "found for ceiling type {}",
+                         static_cast<uint32_t>(ceiling.compute_type));
         }
     }
 }
 
 inline void
-DataProvider::LoadRoofLineNumKernels(WorkloadInfo&        workload,
-                                     rocprofvis_handle_t* roofline_handle,
-                                     compute_ridge_map&   compute_ridge,
-                                     bandwidth_ridge_map& bandwidth_ridge)
+DataProvider::LoadRoofLineKernels(WorkloadInfo&        workload,
+                                  rocprofvis_handle_t* roofline_handle)
 {
     uint64_t num_entries = 0;
     double   double_data = 0.0;
@@ -5153,34 +5172,43 @@ DataProvider::LoadRoofLineNumKernels(WorkloadInfo&        workload,
     ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
     for(uint64_t j = 0; j < num_entries; j++)
     {
-        KernelInfo::Roofline::Intensity intensity;
-        result = rocprofvis_controller_get_uint64(
-            roofline_handle, kRPVControllerRooflineKernelIntensityTypeIndexed, j,
-            &uint64_data);
-        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-        intensity.type =
-            static_cast<rocprofvis_controller_roofline_kernel_intensity_type_t>(
-                uint64_data);
-        result = rocprofvis_controller_get_double(
-            roofline_handle, kRPVControllerRooflineKernelIntensityXIndexed, j,
-            &double_data);
-        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-        intensity.position.x = double_data;
-        result               = rocprofvis_controller_get_double(
-            roofline_handle, kRPVControllerRooflineKernelIntensityYIndexed, j,
-            &double_data);
-        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-        intensity.position.y = double_data;
         uint32_t kernel_id;
         result = rocprofvis_controller_get_uint64(
             roofline_handle, kRPVControllerRooflineKernelIdIndexed, j, &uint64_data);
         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
         kernel_id = static_cast<uint32_t>(uint64_data);
-        ROCPROFVIS_ASSERT(workload.kernels.count(kernel_id));
-        workload.roofline.max.y = std::max(workload.roofline.max.y, intensity.position.y);
-        workload.roofline.min.y = std::min(workload.roofline.min.y, intensity.position.y);
-        workload.kernels[kernel_id].roofline.intensities[intensity.type] =
-            std::move(intensity);
+        if(workload.kernels.count(kernel_id))
+        {
+            KernelInfo::Roofline::Intensity intensity;
+            result = rocprofvis_controller_get_uint64(
+                roofline_handle, kRPVControllerRooflineKernelIntensityTypeIndexed, j,
+                &uint64_data);
+            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+            intensity.type =
+                static_cast<rocprofvis_controller_roofline_kernel_intensity_type_t>(
+                    uint64_data);
+            result = rocprofvis_controller_get_double(
+                roofline_handle, kRPVControllerRooflineKernelIntensityXIndexed, j,
+                &double_data);
+            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+            intensity.position.x = double_data;
+            result               = rocprofvis_controller_get_double(
+                roofline_handle, kRPVControllerRooflineKernelIntensityYIndexed, j,
+                &double_data);
+            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+            intensity.position.y = double_data;
+            workload.roofline.max.y =
+                std::max(workload.roofline.max.y, intensity.position.y);
+            workload.roofline.min.y =
+                std::min(workload.roofline.min.y, intensity.position.y);
+            workload.kernels[kernel_id].roofline.intensities[intensity.type] =
+                std::move(intensity);
+        }
+        else
+        {
+            spdlog::warn("DataProvider::LoadRoofLineKernels - Unexpected kernel id {}",
+                         kernel_id);
+        }
     }
 }
 

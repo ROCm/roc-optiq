@@ -411,10 +411,8 @@ private:
                                               rocprofvis_handle_t* roofline_handle,
                                               bandwidth_ridge_map& bandwidth_ridge);
 
-    inline void LoadRoofLineNumKernels(WorkloadInfo&        workload,
-                                       rocprofvis_handle_t* roofline_handle,
-                                       compute_ridge_map&   compute_ridge,
-                                       bandwidth_ridge_map& bandwidth_ridge);
+    inline void LoadRoofLineKernels(WorkloadInfo&        workload,
+                                    rocprofvis_handle_t* roofline_handle);
 
     void ProcessMetricsRequest(RequestInfo& req);
     void ProcessMetricPivotTable(RequestInfo& req);

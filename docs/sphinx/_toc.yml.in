@@ -4,6 +4,7 @@ defaults:
 root: index
 
 subtrees:
+- caption: At a glance
 - entries:
   - file: what-is-optiq.rst
     title: What is ROCm Optiq?

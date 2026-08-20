@@ -334,20 +334,20 @@ rocprofvis_result_t ComputeTrace::AsyncFetch(Table& table, Arguments& args, Futu
 
 rocprofvis_result_t ComputeTrace::AsyncFetchPcSampling(Arguments& args, Future& future, PcSampling& output)
 {
-    uint64_t workload_id    = 0;
-    uint64_t kernel_id      = 0;
-    uint64_t source_file_id = 0;
+    uint64_t workload_id      = 0;
+    uint64_t kernel_id        = 0;
+    uint64_t source_file_uuid = 0;
 
     if(kRocProfVisResultSuccess != args.GetUInt64(kRPVControllerPcSamplingArgsWorkloadId,   0, &workload_id)    ||
        kRocProfVisResultSuccess != args.GetUInt64(kRPVControllerPcSamplingArgsKernelId,     0, &kernel_id)     ||
-       kRocProfVisResultSuccess != args.GetUInt64(kRPVControllerPcSamplingArgsSourceFileId, 0, &source_file_id))
+       kRocProfVisResultSuccess != args.GetUInt64(kRPVControllerPcSamplingArgsSourceFileUuid, 0, &source_file_uuid))
     {
         return kRocProfVisResultInvalidArgument;
     }
 
     future.Set(JobSystem::Get().IssueJob(
         [this, &output, kernel_id,
-         source_file_id](Future* future) -> rocprofvis_result_t {
+         source_file_uuid](Future* future) -> rocprofvis_result_t {
             std::unique_lock<std::recursive_mutex> data_lock(output.GetDataMutex());
             if(future->IsCancelled())
             {
@@ -376,21 +376,34 @@ rocprofvis_result_t ComputeTrace::AsyncFetchPcSampling(Arguments& args, Future& 
                         output.m_kernel_symbols_loaded = true;
                     }
                 }
-                if(dm_result == kRocProfVisDmResultSuccess && !output.m_isa_lines_loaded)
+                if(dm_result == kRocProfVisDmResultSuccess && !output.m_instruction_lines_loaded)
                 {
-                    dm_result = FetchIsaLines(db, future, kernel_id, output);
+                    dm_result = FetchInstructionLines(db, future, kernel_id, output);
                     if(dm_result == kRocProfVisDmResultSuccess)
                     {
-                        output.m_isa_lines_loaded = true;
+                        output.m_instruction_lines_loaded = true;
+                    }
+                }
+                if(dm_result == kRocProfVisDmResultSuccess &&
+                   !output.m_pc_sample_states_loaded)
+                {
+                    dm_result = FetchPcSampleStates(db, future, kernel_id, output);
+                    if(dm_result == kRocProfVisDmResultSuccess)
+                    {
+                        output.m_pc_sample_states_loaded = true;
                     }
                 }
                 if(dm_result == kRocProfVisDmResultSuccess)
                 {
-                    dm_result = FetchIsaLineDeps(db, future, kernel_id, output);
+                    dm_result = FetchInstructionSourceLines(db, future, kernel_id, output);
                 }
                 if(dm_result == kRocProfVisDmResultSuccess)
                 {
                     dm_result = FetchStalls(db, future, kernel_id, output);
+                }
+                if(dm_result == kRocProfVisDmResultSuccess)
+                {
+                    dm_result = FetchInstructionSamples(db, future, kernel_id, output);
                 }
                 if(dm_result == kRocProfVisDmResultSuccess)
                 {
@@ -404,7 +417,7 @@ rocprofvis_result_t ComputeTrace::AsyncFetchPcSampling(Arguments& args, Future& 
 
             if(dm_result == kRocProfVisDmResultSuccess)
             {
-                dm_result = FetchSourceFileLines(db, future, source_file_id, output);
+                dm_result = FetchSourceFileLines(db, future, source_file_uuid, output);
             }
             if(future->IsCancelled())
             {
@@ -424,15 +437,18 @@ rocprofvis_result_t
 ComputeTrace::AsyncFetchPcSamplingMandatorys(Arguments& args, Future& future,
                                              PcSampling& output)
 {
-    uint64_t kernel_id = 0;
+    uint64_t kernel_id        = 0;
+    uint64_t source_file_uuid = 0;
     if(kRocProfVisResultSuccess !=
-       args.GetUInt64(kRPVControllerPcSamplingArgsKernelId, 0, &kernel_id))
+           args.GetUInt64(kRPVControllerPcSamplingArgsKernelId, 0, &kernel_id) ||
+       kRocProfVisResultSuccess !=
+           args.GetUInt64(kRPVControllerPcSamplingArgsSourceFileUuid, 0, &source_file_uuid))
     {
         return kRocProfVisResultInvalidArgument;
     }
 
     future.Set(JobSystem::Get().IssueJob(
-        [this, &output, kernel_id](Future* future) -> rocprofvis_result_t {
+        [this, &output, kernel_id, source_file_uuid](Future* future) -> rocprofvis_result_t {
             std::unique_lock<std::recursive_mutex> data_lock(output.GetDataMutex());
             if(future->IsCancelled())
             {
@@ -458,12 +474,12 @@ ComputeTrace::AsyncFetchPcSamplingMandatorys(Arguments& args, Future& future,
                     output.m_kernel_symbols_loaded = true;
                 }
             }
-            if(dm_result == kRocProfVisDmResultSuccess && !output.m_isa_lines_loaded)
+            if(dm_result == kRocProfVisDmResultSuccess && !output.m_instruction_lines_loaded)
             {
-                dm_result = FetchIsaLines(db, future, kernel_id, output);
+                dm_result = FetchInstructionLines(db, future, kernel_id, output);
                 if(dm_result == kRocProfVisDmResultSuccess)
                 {
-                    output.m_isa_lines_loaded = true;
+                    output.m_instruction_lines_loaded = true;
                 }
             }
             if(dm_result == kRocProfVisDmResultSuccess &&
@@ -474,6 +490,22 @@ ComputeTrace::AsyncFetchPcSamplingMandatorys(Arguments& args, Future& future,
                 {
                     output.m_pc_sample_states_loaded = true;
                 }
+            }
+            if(dm_result == kRocProfVisDmResultSuccess)
+            {
+                dm_result = FetchInstructionSourceLines(db, future, kernel_id, output);
+            }
+            if(dm_result == kRocProfVisDmResultSuccess)
+            {
+                dm_result = FetchStalls(db, future, kernel_id, output);
+            }
+            if(dm_result == kRocProfVisDmResultSuccess)
+            {
+                dm_result = FetchInstructionSamples(db, future, kernel_id, output);
+            }
+            if(dm_result == kRocProfVisDmResultSuccess)
+            {
+                dm_result = FetchSourceFileLines(db, future, source_file_uuid, output);
             }
             if(future->IsCancelled())
             {
@@ -534,65 +566,48 @@ ComputeTrace::FetchKernelSymbols(rocprofvis_dm_database_t db, Future* future,
 }
 
 rocprofvis_dm_result_t
-ComputeTrace::FetchIsaLines(rocprofvis_dm_database_t db, Future* future,
-                            uint64_t kernel_id, PcSampling& output)
+ComputeTrace::FetchInstructionLines(rocprofvis_dm_database_t db, Future* future,
+                                    uint64_t kernel_id, PcSampling& output)
 {
     QueryArgumentStore query_args = { {kRPVComputeParamKernelId, std::to_string(kernel_id)} };
     QueryDataStore query_out = {
         {
-            { kRPVComputeColumnPcSamplingIsaLineId,                  std::nullopt },
-            { kRPVComputeColumnPcSamplingIsaLineKernelSymbolUuid,    std::nullopt },
-            { kRPVComputeColumnPcSamplingIsaLineInstructionTypeUuid, std::nullopt },
-            { kRPVComputeColumnPcSamplingIsaLineCodeObjectOffset,    std::nullopt },
-            { kRPVComputeColumnPcSamplingIsaLineInstruction,         std::nullopt },
+            { kRPVComputeColumnPcSamplingInstructionLineUuid,                std::nullopt },
+            { kRPVComputeColumnPcSamplingInstructionLineKernelSymbolUuid,    std::nullopt },
+            { kRPVComputeColumnPcSamplingInstructionLineInstructionTypeUuid, std::nullopt },
+            { kRPVComputeColumnPcSamplingInstructionLineCodeObjectOffset,    std::nullopt },
+            { kRPVComputeColumnPcSamplingInstructionLineInstruction,         std::nullopt },
         }, {}
     };
     rocprofvis_dm_result_t result = ExecuteQuery(
-        db, m_dm_handle, nullptr, future, kRPVComputeFetchKernelIsaLines,
+        db, m_dm_handle, nullptr, future, kRPVComputeFetchKernelInstructionLines,
         query_args, query_out,
         [this, &output](const QueryDataStore& data_store){
-            StorePcSamplingRows(output, kRPVControllerPCSamplingNumIsaLines, data_store);
+            StorePcSamplingRows(output, kRPVControllerPCSamplingNumInstructionLines, data_store);
         });
     return result;
 }
 
 rocprofvis_dm_result_t
-ComputeTrace::FetchIsaLineDeps(rocprofvis_dm_database_t db, Future* future,
-                               uint64_t kernel_id, PcSampling& output)
+ComputeTrace::FetchInstructionSourceLines(rocprofvis_dm_database_t db, Future* future,
+                                          uint64_t kernel_id, PcSampling& output)
 {
     QueryArgumentStore query_args = { {kRPVComputeParamKernelId, std::to_string(kernel_id)} };
     QueryDataStore query_out = {
         {
-            { kRPVComputeColumnPcSamplingIsaToIsaDependentIsaLineId,  std::nullopt },
-            { kRPVComputeColumnPcSamplingIsaToIsaDependencyIsaLineId, std::nullopt },
+            { kRPVComputeColumnPcSamplingInstructionSourceLineUuid,            std::nullopt },
+            { kRPVComputeColumnPcSamplingInstructionSourceLineInstructionUuid, std::nullopt },
+            { kRPVComputeColumnPcSamplingInstructionSourceLineSourceLineUuid,  std::nullopt },
+            { kRPVComputeColumnPcSamplingInstructionSourceLineFrameIndex,      std::nullopt },
         }, {}
     };
-    rocprofvis_dm_result_t result = ExecuteQuery(
-        db, m_dm_handle, nullptr, future, kRPVComputeFetchKernelIsaToIsaDeps, query_args, query_out,
+    return ExecuteQuery(
+        db, m_dm_handle, nullptr, future, kRPVComputeFetchKernelInstructionSourceLines,
+        query_args, query_out,
         [this, &output](const QueryDataStore& data_store){
-            StorePcSamplingRows(output, kRPVControllerPCSamplingNumIsaToIsaDeps, data_store);
+            StorePcSamplingRows(output, kRPVControllerPCSamplingNumInstructionSourceLines,
+                                data_store);
         });
-
-    if(result == kRocProfVisDmResultSuccess)
-    {
-        query_args = { {kRPVComputeParamKernelId, std::to_string(kernel_id)} };
-        query_out  = {
-            {
-                { kRPVComputeColumnPcSamplingIsaToSourceIsaLineId,    std::nullopt },
-                { kRPVComputeColumnPcSamplingIsaToSourceSourceLineId, std::nullopt },
-                { kRPVComputeColumnPcSamplingIsaToSourceDepth,        std::nullopt },
-            }, {}
-        };
-        result = ExecuteQuery(
-            db, m_dm_handle, nullptr, future, kRPVComputeFetchKernelIsaToSourceDeps,
-            query_args, query_out,
-            [this, &output](const QueryDataStore& data_store){
-                StorePcSamplingRows(output, kRPVControllerPCSamplingNumIsaToSourceDeps,
-                                    data_store);
-            });
-    }
-
-    return result;
 }
 
 rocprofvis_dm_result_t
@@ -607,10 +622,13 @@ ComputeTrace::FetchPcSampleStates(rocprofvis_dm_database_t db, Future* future,
             { kRPVComputeColumnPcSampleStateTotalCount,      std::nullopt },
             { kRPVComputeColumnPcSampleStateIssueCount,      std::nullopt },
             { kRPVComputeColumnPcSampleStateStallCount,      std::nullopt },
+            { kRPVComputeColumnPcSampleStateActiveThreadPercent,   std::nullopt },
+            { kRPVComputeColumnPcSampleStateWaveOccupancyPercent,  std::nullopt },
+            { kRPVComputeColumnPcSampleStateDispatchUuid,           std::nullopt },
         }, {}
     };
     rocprofvis_dm_result_t result = ExecuteQuery(
-        db, m_dm_handle, nullptr, future, kRPVComputeFetchKernelSamplingStates,
+        db, m_dm_handle, nullptr, future, kRPVComputeFetchKernelPcSampleStates,
         query_args, query_out,
         [this, &output](const QueryDataStore& data_store){
             StorePcSamplingRows(output, kRPVControllerPCSamplingNumPcSampleStates,
@@ -642,13 +660,13 @@ ComputeTrace::FetchStalls(rocprofvis_dm_database_t db, Future* future,
             {
                 { kRPVComputeColumnPcSampleStallReasonUuid,     std::nullopt },
                 { kRPVComputeColumnPcSampleStallReasonStateUuid, std::nullopt },
-                { kRPVComputeColumnPcSampleStallReasonTypeUuid, std::nullopt },
+                { kRPVComputeColumnPcSampleStallReasonLookupUuid, std::nullopt },
                 { kRPVComputeColumnPcSampleStallReasonCount,    std::nullopt },
             }, {}
         };
         result = ExecuteQuery(
             db, m_dm_handle, nullptr, future,
-            kRPVComputeFetchKernelSamplingStateReasonCounts, query_args, query_out,
+            kRPVComputeFetchKernelPcSampleStallReasons, query_args, query_out,
             [this, &output](const QueryDataStore& data_store){
                 StorePcSamplingRows(output,
                                     kRPVControllerPCSamplingNumPcSampleStallReasons,
@@ -662,16 +680,16 @@ ComputeTrace::FetchStalls(rocprofvis_dm_database_t db, Future* future,
         };
         QueryDataStore query_out = {
             {
-                { kRPVComputeColumnPcSampleStallReasonTypeRecordUuid, std::nullopt },
-                { kRPVComputeColumnPcSampleStallReasonTypeText,       std::nullopt },
+                { kRPVComputeColumnPcSampleStallReasonLookupRecordUuid, std::nullopt },
+                { kRPVComputeColumnPcSampleStallReasonLookupText,       std::nullopt },
             }, {}
         };
         result = ExecuteQuery(
             db, m_dm_handle, nullptr, future,
-            kRPVComputeFetchKernelSamplingStallReasonTypes, query_args, query_out,
+            kRPVComputeFetchKernelPcSampleStallReasonLookups, query_args, query_out,
             [this, &output](const QueryDataStore& data_store){
                 StorePcSamplingRows(
-                    output, kRPVControllerPCSamplingNumPcSampleStallReasonTypes,
+                    output, kRPVControllerPCSamplingNumPcSampleStallReasonLookups,
                     data_store);
             });
     }
@@ -679,11 +697,73 @@ ComputeTrace::FetchStalls(rocprofvis_dm_database_t db, Future* future,
 }
 
 rocprofvis_dm_result_t
-ComputeTrace::FetchSourceFileLines(rocprofvis_dm_database_t db, Future* future,
-                                   uint64_t source_file_id, PcSampling& output)
+ComputeTrace::FetchInstructionSamples(rocprofvis_dm_database_t db, Future* future,
+                                      uint64_t kernel_id, PcSampling& output)
 {
-    const uint32_t source_file_key = static_cast<uint32_t>(source_file_id);
-    const std::unordered_map<uint32_t, std::vector<PcSampling::SourceLine>>::const_iterator
+    QueryArgumentStore query_args = {
+        {kRPVComputeParamKernelId, std::to_string(kernel_id)}
+    };
+    QueryDataStore query_out = {
+        {
+            { kRPVComputeColumnPcSamplingInstructionTypeLookupUuid, std::nullopt },
+            { kRPVComputeColumnPcSamplingInstructionTypeLookupText, std::nullopt },
+        }, {}
+    };
+    rocprofvis_dm_result_t result = ExecuteQuery(
+        db, m_dm_handle, nullptr, future,
+        kRPVComputeFetchKernelInstructionTypeLookups, query_args, query_out,
+        [this, &output](const QueryDataStore& data_store){
+            StorePcSamplingRows(output,
+                                kRPVControllerPCSamplingNumInstructionTypeLookups,
+                                data_store);
+        });
+
+    if(result == kRocProfVisDmResultSuccess)
+    {
+        query_out = {
+            {
+                { kRPVComputeColumnPcSamplingInstructionSampleUuid,       std::nullopt },
+                { kRPVComputeColumnPcSamplingInstructionSampleStateUuid,  std::nullopt },
+                { kRPVComputeColumnPcSamplingInstructionSampleLookupUuid, std::nullopt },
+                { kRPVComputeColumnPcSamplingInstructionSampleCount,      std::nullopt },
+            }, {}
+        };
+        result = ExecuteQuery(
+            db, m_dm_handle, nullptr, future,
+            kRPVComputeFetchKernelInstructionSamples, query_args, query_out,
+            [this, &output](const QueryDataStore& data_store){
+                StorePcSamplingRows(output,
+                                    kRPVControllerPCSamplingNumInstructionSamples,
+                                    data_store);
+            });
+    }
+
+    if(result == kRocProfVisDmResultSuccess)
+    {
+        query_out = {
+            {
+                { kRPVComputeColumnPcSamplingInstructionSampleLookupRecordUuid, std::nullopt },
+                { kRPVComputeColumnPcSamplingInstructionSampleLookupText,       std::nullopt },
+            }, {}
+        };
+        result = ExecuteQuery(
+            db, m_dm_handle, nullptr, future,
+            kRPVComputeFetchKernelInstructionSampleLookups, query_args, query_out,
+            [this, &output](const QueryDataStore& data_store){
+                StorePcSamplingRows(output,
+                                    kRPVControllerPCSamplingNumInstructionSampleLookups,
+                                    data_store);
+            });
+    }
+    return result;
+}
+
+rocprofvis_dm_result_t
+ComputeTrace::FetchSourceFileLines(rocprofvis_dm_database_t db, Future* future,
+                                   uint64_t source_file_uuid, PcSampling& output)
+{
+    const uint64_t source_file_key = source_file_uuid;
+    const std::unordered_map<uint64_t, std::vector<PcSampling::SourceLine>>::const_iterator
         cache_it = output.m_source_line_cache.find(source_file_key);
     if(cache_it != output.m_source_line_cache.end())
     {
@@ -694,21 +774,22 @@ ComputeTrace::FetchSourceFileLines(rocprofvis_dm_database_t db, Future* future,
     const std::vector<PcSampling::SourceFile>::const_iterator file_it = std::find_if(
         output.m_source_files.begin(), output.m_source_files.end(),
         [source_file_key](const PcSampling::SourceFile& source_file) {
-            return source_file.id == source_file_key;
+            return source_file.source_file_uuid == source_file_key;
         });
     if(file_it == output.m_source_files.end())
     {
-        return kRocProfVisDmResultInvalidParameter;
+        output.m_source_lines.clear();
+        return kRocProfVisDmResultSuccess;
     }
 
     output.m_source_lines.clear();
     QueryArgumentStore query_args = {
-        {kRPVComputeParamSourceFileId, std::to_string(source_file_id)}
+        {kRPVComputeParamSourceFileUuid, std::to_string(source_file_uuid)}
     };
     QueryDataStore query_out = {
         {
-            { kRPVComputeColumnPcSamplingSourceLineId,      std::nullopt },
-            { kRPVComputeColumnPcSamplingSourceLineFileId,  std::nullopt },
+            { kRPVComputeColumnPcSamplingSourceLineUuid,      std::nullopt },
+            { kRPVComputeColumnPcSamplingSourceLineSourceFileUuid,  std::nullopt },
             { kRPVComputeColumnPcSamplingSourceLineNumber,  std::nullopt },
             { kRPVComputeColumnPcSamplingSourceLineContent, std::nullopt },
         }, {}
@@ -974,9 +1055,10 @@ rocprofvis_result_t ComputeTrace::LoadRocpd(Future* future)
                                             query_output = {
                                                 {
                                                     { kRPVComputeColumnKernelUUID, std::nullopt },
-                                                    { kRPVComputeColumnPcSamplingSourceFileId, std::nullopt },
+                                                    { kRPVComputeColumnPcSamplingSourceFileUuid, std::nullopt },
+                                                    { kRPVComputeColumnPcSamplingSourceFileWorkloadId, std::nullopt },
                                                     { kRPVComputeColumnPcSamplingSourceFilePath, std::nullopt },
-                                                    { kRPVComputeColumnPcSamplingSourceFileChecksum, std::nullopt },
+                                                    { kRPVComputeColumnPcSamplingSourceFileMd5Checksum, std::nullopt },
                                                 },
                                                 {}
                                             };

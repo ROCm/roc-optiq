@@ -99,15 +99,16 @@ private:
                                               uint64_t                 kernel_id,
                                               PcSampling&              output);
 
-    rocprofvis_dm_result_t FetchIsaLines(rocprofvis_dm_database_t db,
-                                         Future*                  future,
-                                         uint64_t                 kernel_id,
-                                         PcSampling&              output);
+    rocprofvis_dm_result_t FetchInstructionLines(rocprofvis_dm_database_t db,
+                                                  Future*                  future,
+                                                  uint64_t                 kernel_id,
+                                                  PcSampling&              output);
 
-    rocprofvis_dm_result_t FetchIsaLineDeps(rocprofvis_dm_database_t db,
-                                            Future*                  future,
-                                            uint64_t                 kernel_id,
-                                            PcSampling&              output);
+    rocprofvis_dm_result_t FetchInstructionSourceLines(
+        rocprofvis_dm_database_t db,
+        Future*                  future,
+        uint64_t                 kernel_id,
+        PcSampling&              output);
 
     rocprofvis_dm_result_t FetchPcSampleStates(rocprofvis_dm_database_t db,
                                                Future*                  future,
@@ -119,9 +120,14 @@ private:
                                        uint64_t                 kernel_id,
                                        PcSampling&              output);
 
+    rocprofvis_dm_result_t FetchInstructionSamples(rocprofvis_dm_database_t db,
+                                                   Future*                  future,
+                                                   uint64_t                 kernel_id,
+                                                   PcSampling&              output);
+
     rocprofvis_dm_result_t FetchSourceFileLines(rocprofvis_dm_database_t db,
                                                 Future*                  future,
-                                                uint64_t                 source_file_id,
+                                                uint64_t                 source_file_uuid,
                                                 PcSampling&              output);
 
     void StorePcSamplingRows(PcSampling&           output,

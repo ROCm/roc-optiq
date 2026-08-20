@@ -39,11 +39,11 @@ rocprofvis_result_t PcSampling::GetUInt64(rocprofvis_property_t property, uint64
                 result = kRocProfVisResultSuccess;
                 break;
             }
-            case kRPVControllerPCSamplingSourceFileId:
+            case kRPVControllerPCSamplingSourceFileUuid:
             {
                 if(index < m_source_files.size())
                 {
-                    *value = m_source_files[index].id;
+                    *value = m_source_files[index].source_file_uuid;
                     result = kRocProfVisResultSuccess;
                 }
                 break;
@@ -55,20 +55,20 @@ rocprofvis_result_t PcSampling::GetUInt64(rocprofvis_property_t property, uint64
                 result = kRocProfVisResultSuccess;
                 break;
             }
-            case kRPVControllerPCSamplingSourceLineId:
+            case kRPVControllerPCSamplingSourceLineUuid:
             {
                 if(index < m_source_lines.size())
                 {
-                    *value = m_source_lines[index].id;
+                    *value = m_source_lines[index].source_line_uuid;
                     result = kRocProfVisResultSuccess;
                 }
                 break;
             }
-            case kRPVControllerPCSamplingSourceLineSourceFileId:
+            case kRPVControllerPCSamplingSourceLineSourceFileUuid:
             {
                 if(index < m_source_lines.size())
                 {
-                    *value = m_source_lines[index].source_file_id;
+                    *value = m_source_lines[index].source_file_uuid;
                     result = kRocProfVisResultSuccess;
                 }
                 break;
@@ -78,6 +78,15 @@ rocprofvis_result_t PcSampling::GetUInt64(rocprofvis_property_t property, uint64
                 if(index < m_source_lines.size())
                 {
                     *value = m_source_lines[index].line_number;
+                    result = kRocProfVisResultSuccess;
+                }
+                break;
+            }
+            case kRPVControllerPCSamplingSourceFileWorkloadId:
+            {
+                if(index < m_source_files.size())
+                {
+                    *value = m_source_files[index].workload_id;
                     result = kRocProfVisResultSuccess;
                 }
                 break;
@@ -177,142 +186,92 @@ rocprofvis_result_t PcSampling::GetUInt64(rocprofvis_property_t property, uint64
                 }
                 break;
             }
-            case kRPVControllerPCSamplingNumIsaLines:
+            case kRPVControllerPCSamplingNumInstructionLines:
             {
                 (void)index;
-                *value = m_isa_lines.size();
+                *value = m_instruction_lines.size();
                 result = kRocProfVisResultSuccess;
                 break;
             }
-            case kRPVControllerPCSamplingIsaLineId:
+            case kRPVControllerPCSamplingInstructionLineUuid:
             {
-                if(index < m_isa_lines.size())
+                if(index < m_instruction_lines.size())
                 {
-                    *value = m_isa_lines[index].instruction_uuid;
+                    *value = m_instruction_lines[index].instruction_uuid;
                     result = kRocProfVisResultSuccess;
                 }
                 break;
             }
-            case kRPVControllerPCSamplingIsaLineCodeObjectId:
+            case kRPVControllerPCSamplingInstructionLineKernelSymbolUuid:
             {
-                if(index < m_isa_lines.size())
+                if(index < m_instruction_lines.size())
                 {
-                    for(const KernelSymbol& symbol : m_kernel_symbols)
-                    {
-                        if(symbol.kernel_symbol_uuid == m_isa_lines[index].kernel_symbol_uuid)
-                        {
-                            *value = symbol.code_object_uuid;
-                            result = kRocProfVisResultSuccess;
-                            break;
-                        }
-                    }
-                }
-                break;
-            }
-            case kRPVControllerPCSamplingIsaLineKernelUuid:
-            {
-                if(index < m_isa_lines.size())
-                {
-                    for(const KernelSymbol& symbol : m_kernel_symbols)
-                    {
-                        if(symbol.kernel_symbol_uuid == m_isa_lines[index].kernel_symbol_uuid)
-                        {
-                            *value = symbol.kernel_uuid;
-                            result = kRocProfVisResultSuccess;
-                            break;
-                        }
-                    }
-                }
-                break;
-            }
-            case kRPVControllerPCSamplingIsaLineKernelSymbolUuid:
-            {
-                if(index < m_isa_lines.size())
-                {
-                    *value = m_isa_lines[index].kernel_symbol_uuid;
+                    *value = m_instruction_lines[index].kernel_symbol_uuid;
                     result = kRocProfVisResultSuccess;
                 }
                 break;
             }
-            case kRPVControllerPCSamplingIsaLineCodeObjectOffset:
+            case kRPVControllerPCSamplingInstructionLineCodeObjectOffset:
             {
-                if(index < m_isa_lines.size())
+                if(index < m_instruction_lines.size())
                 {
-                    *value = m_isa_lines[index].code_object_offset;
+                    *value = m_instruction_lines[index].code_object_offset;
                     result = kRocProfVisResultSuccess;
                 }
                 break;
             }
-            case kRPVControllerPCSamplingIsaLineInstructionTypeId:
-            case kRPVControllerPCSamplingIsaLineInstructionTypeUuid:
+            case kRPVControllerPCSamplingInstructionLineInstructionTypeUuid:
             {
-                if(index < m_isa_lines.size())
+                if(index < m_instruction_lines.size())
                 {
-                    *value = m_isa_lines[index].instruction_type_uuid;
+                    *value = m_instruction_lines[index].instruction_type_uuid;
                     result = kRocProfVisResultSuccess;
                 }
                 break;
             }
-            case kRPVControllerPCSamplingNumIsaToIsaDeps:
+            case kRPVControllerPCSamplingNumInstructionSourceLines:
             {
                 (void)index;
-                *value = m_isa_to_isa_deps.size();
+                *value = m_instruction_source_lines.size();
                 result = kRocProfVisResultSuccess;
                 break;
             }
-            case kRPVControllerPCSamplingIsaToIsaDependentIsaLineId:
+            case kRPVControllerPCSamplingInstructionSourceLineInstructionUuid:
             {
-                if(index < m_isa_to_isa_deps.size())
+                if(index < m_instruction_source_lines.size())
                 {
-                    *value = m_isa_to_isa_deps[index].dependent_isa_line_id;
+                    *value = m_instruction_source_lines[index].instruction_uuid;
                     result = kRocProfVisResultSuccess;
                 }
                 break;
             }
-            case kRPVControllerPCSamplingIsaToIsaDependencyIsaLineId:
+            case kRPVControllerPCSamplingInstructionSourceLineSourceLineUuid:
             {
-                if(index < m_isa_to_isa_deps.size())
+                if(index < m_instruction_source_lines.size())
                 {
-                    *value = m_isa_to_isa_deps[index].dependency_isa_line_id;
+                    *value = m_instruction_source_lines[index].source_line_uuid;
                     result = kRocProfVisResultSuccess;
                 }
                 break;
             }
-            case kRPVControllerPCSamplingNumIsaToSourceDeps:
+            case kRPVControllerPCSamplingInstructionSourceLineFrameIndex:
             {
-                (void)index;
-                *value = m_isa_to_source_deps.size();
-                result = kRocProfVisResultSuccess;
-                break;
-            }
-            case kRPVControllerPCSamplingIsaToSourceIsaLineId:
-            {
-                if(index < m_isa_to_source_deps.size())
+                if(index < m_instruction_source_lines.size())
                 {
-                    *value = m_isa_to_source_deps[index].isa_line_id;
+                    *value = m_instruction_source_lines[index].frame_index;
                     result = kRocProfVisResultSuccess;
                 }
                 break;
             }
-            case kRPVControllerPCSamplingIsaToSourceSourceLineId:
+            case kRPVControllerPCSamplingInstructionSourceLineUuid:
             {
-                if(index < m_isa_to_source_deps.size())
+                if(index < m_instruction_source_lines.size())
                 {
-                    *value = m_isa_to_source_deps[index].source_line_id;
+                    *value = m_instruction_source_lines[index].instruction_source_line_uuid;
                     result = kRocProfVisResultSuccess;
                 }
                 break;
             }
-            case kRPVControllerPCSamplingIsaToSourceDepth:
-            {
-                if(index < m_isa_to_source_deps.size())
-                {
-                    *value = m_isa_to_source_deps[index].depth;
-                    result = kRocProfVisResultSuccess;
-                }
-                break;
-            }
-            case kRPVControllerPCSamplingNumSamplingStates:
             case kRPVControllerPCSamplingNumPcSampleStates:
             {
                 (void)index;
@@ -320,7 +279,6 @@ rocprofvis_result_t PcSampling::GetUInt64(rocprofvis_property_t property, uint64
                 result = kRocProfVisResultSuccess;
                 break;
             }
-            case kRPVControllerPCSamplingStateId:
             case kRPVControllerPCSamplingPcSampleStateUuid:
             {
                 if(index < m_pc_sample_states.size())
@@ -330,7 +288,6 @@ rocprofvis_result_t PcSampling::GetUInt64(rocprofvis_property_t property, uint64
                 }
                 break;
             }
-            case kRPVControllerPCSamplingStateIsaLineId:
             case kRPVControllerPCSamplingPcSampleStateInstructionUuid:
             {
                 if(index < m_pc_sample_states.size())
@@ -340,17 +297,15 @@ rocprofvis_result_t PcSampling::GetUInt64(rocprofvis_property_t property, uint64
                 }
                 break;
             }
-            case kRPVControllerPCSamplingStateDispatchId:
+            case kRPVControllerPCSamplingPcSampleStateDispatchUuid:
             {
                 if(index < m_pc_sample_states.size())
                 {
-                    // Retained for compatibility with the legacy controller API.
-                    *value = 0;
+                    *value = m_pc_sample_states[index].dispatch_uuid;
                     result = kRocProfVisResultSuccess;
                 }
                 break;
             }
-            case kRPVControllerPCSamplingStateIssuedCount:
             case kRPVControllerPCSamplingPcSampleStateIssueCount:
             {
                 if(index < m_pc_sample_states.size())
@@ -360,7 +315,6 @@ rocprofvis_result_t PcSampling::GetUInt64(rocprofvis_property_t property, uint64
                 }
                 break;
             }
-            case kRPVControllerPCSamplingStateStalledCount:
             case kRPVControllerPCSamplingPcSampleStateStallCount:
             {
                 if(index < m_pc_sample_states.size())
@@ -370,7 +324,6 @@ rocprofvis_result_t PcSampling::GetUInt64(rocprofvis_property_t property, uint64
                 }
                 break;
             }
-            case kRPVControllerPCSamplingStateTotalCount:
             case kRPVControllerPCSamplingPcSampleStateTotalCount:
             {
                 if(index < m_pc_sample_states.size())
@@ -380,7 +333,6 @@ rocprofvis_result_t PcSampling::GetUInt64(rocprofvis_property_t property, uint64
                 }
                 break;
             }
-            case kRPVControllerPCSamplingNumStallReasonCounts:
             case kRPVControllerPCSamplingNumPcSampleStallReasons:
             {
                 (void)index;
@@ -388,7 +340,6 @@ rocprofvis_result_t PcSampling::GetUInt64(rocprofvis_property_t property, uint64
                 result = kRocProfVisResultSuccess;
                 break;
             }
-            case kRPVControllerPCSamplingStallReasonSamplingStateId:
             case kRPVControllerPCSamplingPcSampleStallReasonStateUuid:
             {
                 if(index < m_pc_sample_stall_reasons.size())
@@ -398,17 +349,15 @@ rocprofvis_result_t PcSampling::GetUInt64(rocprofvis_property_t property, uint64
                 }
                 break;
             }
-            case kRPVControllerPCSamplingStallReasonId:
-            case kRPVControllerPCSamplingPcSampleStallReasonTypeUuid:
+            case kRPVControllerPCSamplingPcSampleStallReasonLookupUuid:
             {
                 if(index < m_pc_sample_stall_reasons.size())
                 {
-                    *value = m_pc_sample_stall_reasons[index].pc_sample_stall_reason_type_uuid;
+                    *value = m_pc_sample_stall_reasons[index].pc_sample_stall_reason_lookup_uuid;
                     result = kRocProfVisResultSuccess;
                 }
                 break;
             }
-            case kRPVControllerPCSamplingStallReasonCount:
             case kRPVControllerPCSamplingPcSampleStallReasonCount:
             {
                 if(index < m_pc_sample_stall_reasons.size())
@@ -427,19 +376,79 @@ rocprofvis_result_t PcSampling::GetUInt64(rocprofvis_property_t property, uint64
                 }
                 break;
             }
-            case kRPVControllerPCSamplingNumPcSampleStallReasonTypes:
+            case kRPVControllerPCSamplingNumPcSampleStallReasonLookups:
             {
                 (void)index;
-                *value = m_pc_sample_stall_reason_types.size();
+                *value = m_pc_sample_stall_reason_lookups.size();
                 result = kRocProfVisResultSuccess;
                 break;
             }
-            case kRPVControllerPCSamplingPcSampleStallReasonTypeRecordUuid:
+            case kRPVControllerPCSamplingPcSampleStallReasonLookupRecordUuid:
             {
-                if(index < m_pc_sample_stall_reason_types.size())
+                if(index < m_pc_sample_stall_reason_lookups.size())
                 {
-                    *value = m_pc_sample_stall_reason_types[index]
-                                 .pc_sample_stall_reason_type_uuid;
+                    *value = m_pc_sample_stall_reason_lookups[index]
+                                 .pc_sample_stall_reason_lookup_uuid;
+                    result = kRocProfVisResultSuccess;
+                }
+                break;
+            }
+            case kRPVControllerPCSamplingNumInstructionTypeLookups:
+            {
+                (void)index;
+                *value = m_instruction_type_lookups.size();
+                result = kRocProfVisResultSuccess;
+                break;
+            }
+            case kRPVControllerPCSamplingInstructionTypeLookupUuid:
+            {
+                if(index < m_instruction_type_lookups.size())
+                {
+                    *value = m_instruction_type_lookups[index].instruction_type_lookup_uuid;
+                    result = kRocProfVisResultSuccess;
+                }
+                break;
+            }
+            case kRPVControllerPCSamplingNumInstructionSamples:
+            {
+                (void)index;
+                *value = m_instruction_samples.size();
+                result = kRocProfVisResultSuccess;
+                break;
+            }
+            case kRPVControllerPCSamplingInstructionSampleUuid:
+            case kRPVControllerPCSamplingInstructionSampleStateUuid:
+            case kRPVControllerPCSamplingInstructionSampleLookupUuid:
+            case kRPVControllerPCSamplingInstructionSampleCount:
+            {
+                if(index < m_instruction_samples.size())
+                {
+                    const InstructionSample& sample = m_instruction_samples[index];
+                    if(property == kRPVControllerPCSamplingInstructionSampleUuid)
+                        *value = sample.instruction_sample_uuid;
+                    else if(property == kRPVControllerPCSamplingInstructionSampleStateUuid)
+                        *value = sample.pc_sample_state_uuid;
+                    else if(property == kRPVControllerPCSamplingInstructionSampleLookupUuid)
+                        *value = sample.instruction_sample_lookup_uuid;
+                    else
+                        *value = sample.count;
+                    result = kRocProfVisResultSuccess;
+                }
+                break;
+            }
+            case kRPVControllerPCSamplingNumInstructionSampleLookups:
+            {
+                (void)index;
+                *value = m_instruction_sample_lookups.size();
+                result = kRocProfVisResultSuccess;
+                break;
+            }
+            case kRPVControllerPCSamplingInstructionSampleLookupRecordUuid:
+            {
+                if(index < m_instruction_sample_lookups.size())
+                {
+                    *value = m_instruction_sample_lookups[index]
+                                 .instruction_sample_lookup_uuid;
                     result = kRocProfVisResultSuccess;
                 }
                 break;
@@ -467,11 +476,11 @@ rocprofvis_result_t PcSampling::SetUInt64(rocprofvis_property_t property, uint64
             result = kRocProfVisResultSuccess;
             break;
         }
-        case kRPVControllerPCSamplingSourceFileId:
+        case kRPVControllerPCSamplingSourceFileUuid:
         {
             if(index < m_source_files.size())
             {
-                m_source_files[index].id = static_cast<uint32_t>(value);
+                m_source_files[index].source_file_uuid = value;
                 result = kRocProfVisResultSuccess;
             }
             break;
@@ -483,20 +492,20 @@ rocprofvis_result_t PcSampling::SetUInt64(rocprofvis_property_t property, uint64
             result = kRocProfVisResultSuccess;
             break;
         }
-        case kRPVControllerPCSamplingSourceLineId:
+        case kRPVControllerPCSamplingSourceLineUuid:
         {
             if(index < m_source_lines.size())
             {
-                m_source_lines[index].id = static_cast<uint32_t>(value);
+                m_source_lines[index].source_line_uuid = value;
                 result = kRocProfVisResultSuccess;
             }
             break;
         }
-        case kRPVControllerPCSamplingSourceLineSourceFileId:
+        case kRPVControllerPCSamplingSourceLineSourceFileUuid:
         {
             if(index < m_source_lines.size())
             {
-                m_source_lines[index].source_file_id = static_cast<uint32_t>(value);
+                m_source_lines[index].source_file_uuid = value;
                 result = kRocProfVisResultSuccess;
             }
             break;
@@ -505,7 +514,16 @@ rocprofvis_result_t PcSampling::SetUInt64(rocprofvis_property_t property, uint64
         {
             if(index < m_source_lines.size())
             {
-                m_source_lines[index].line_number = static_cast<uint32_t>(value);
+                m_source_lines[index].line_number = value;
+                result = kRocProfVisResultSuccess;
+            }
+            break;
+        }
+        case kRPVControllerPCSamplingSourceFileWorkloadId:
+        {
+            if(index < m_source_files.size())
+            {
+                m_source_files[index].workload_id = value;
                 result = kRocProfVisResultSuccess;
             }
             break;
@@ -605,121 +623,92 @@ rocprofvis_result_t PcSampling::SetUInt64(rocprofvis_property_t property, uint64
             }
             break;
         }
-        case kRPVControllerPCSamplingNumIsaLines:
+        case kRPVControllerPCSamplingNumInstructionLines:
         {
             (void)index;
-            m_isa_lines.resize(value);
+            m_instruction_lines.resize(value);
             result = kRocProfVisResultSuccess;
             break;
         }
-        case kRPVControllerPCSamplingIsaLineId:
+        case kRPVControllerPCSamplingInstructionLineUuid:
         {
-            if(index < m_isa_lines.size())
+            if(index < m_instruction_lines.size())
             {
-                m_isa_lines[index].instruction_uuid = value;
+                m_instruction_lines[index].instruction_uuid = value;
                 result = kRocProfVisResultSuccess;
             }
             break;
         }
-        case kRPVControllerPCSamplingIsaLineCodeObjectId:
-        case kRPVControllerPCSamplingIsaLineKernelUuid:
+        case kRPVControllerPCSamplingInstructionLineKernelSymbolUuid:
         {
-            if(index < m_isa_lines.size())
+            if(index < m_instruction_lines.size())
             {
-                // Retained for compatibility with legacy query results.
-                (void)value;
+                m_instruction_lines[index].kernel_symbol_uuid = value;
                 result = kRocProfVisResultSuccess;
             }
             break;
         }
-        case kRPVControllerPCSamplingIsaLineKernelSymbolUuid:
+        case kRPVControllerPCSamplingInstructionLineCodeObjectOffset:
         {
-            if(index < m_isa_lines.size())
+            if(index < m_instruction_lines.size())
             {
-                m_isa_lines[index].kernel_symbol_uuid = value;
+                m_instruction_lines[index].code_object_offset = value;
                 result = kRocProfVisResultSuccess;
             }
             break;
         }
-        case kRPVControllerPCSamplingIsaLineCodeObjectOffset:
+        case kRPVControllerPCSamplingInstructionLineInstructionTypeUuid:
         {
-            if(index < m_isa_lines.size())
+            if(index < m_instruction_lines.size())
             {
-                m_isa_lines[index].code_object_offset = value;
+                m_instruction_lines[index].instruction_type_uuid = value;
                 result = kRocProfVisResultSuccess;
             }
             break;
         }
-        case kRPVControllerPCSamplingIsaLineInstructionTypeId:
-        case kRPVControllerPCSamplingIsaLineInstructionTypeUuid:
-        {
-            if(index < m_isa_lines.size())
-            {
-                m_isa_lines[index].instruction_type_uuid = value;
-                result = kRocProfVisResultSuccess;
-            }
-            break;
-        }
-        case kRPVControllerPCSamplingNumIsaToIsaDeps:
+        case kRPVControllerPCSamplingNumInstructionSourceLines:
         {
             (void)index;
-            m_isa_to_isa_deps.resize(value);
+            m_instruction_source_lines.resize(value);
             result = kRocProfVisResultSuccess;
             break;
         }
-        case kRPVControllerPCSamplingIsaToIsaDependentIsaLineId:
+        case kRPVControllerPCSamplingInstructionSourceLineInstructionUuid:
         {
-            if(index < m_isa_to_isa_deps.size())
+            if(index < m_instruction_source_lines.size())
             {
-                m_isa_to_isa_deps[index].dependent_isa_line_id = static_cast<uint32_t>(value);
+                m_instruction_source_lines[index].instruction_uuid = value;
                 result = kRocProfVisResultSuccess;
             }
             break;
         }
-        case kRPVControllerPCSamplingIsaToIsaDependencyIsaLineId:
+        case kRPVControllerPCSamplingInstructionSourceLineSourceLineUuid:
         {
-            if(index < m_isa_to_isa_deps.size())
+            if(index < m_instruction_source_lines.size())
             {
-                m_isa_to_isa_deps[index].dependency_isa_line_id = static_cast<uint32_t>(value);
+                m_instruction_source_lines[index].source_line_uuid = value;
                 result = kRocProfVisResultSuccess;
             }
             break;
         }
-        case kRPVControllerPCSamplingNumIsaToSourceDeps:
+        case kRPVControllerPCSamplingInstructionSourceLineFrameIndex:
         {
-            (void)index;
-            m_isa_to_source_deps.resize(value);
-            result = kRocProfVisResultSuccess;
-            break;
-        }
-        case kRPVControllerPCSamplingIsaToSourceIsaLineId:
-        {
-            if(index < m_isa_to_source_deps.size())
+            if(index < m_instruction_source_lines.size())
             {
-                m_isa_to_source_deps[index].isa_line_id = static_cast<uint32_t>(value);
+                m_instruction_source_lines[index].frame_index = value;
                 result = kRocProfVisResultSuccess;
             }
             break;
         }
-        case kRPVControllerPCSamplingIsaToSourceSourceLineId:
+        case kRPVControllerPCSamplingInstructionSourceLineUuid:
         {
-            if(index < m_isa_to_source_deps.size())
+            if(index < m_instruction_source_lines.size())
             {
-                m_isa_to_source_deps[index].source_line_id = static_cast<uint32_t>(value);
+                m_instruction_source_lines[index].instruction_source_line_uuid = value;
                 result = kRocProfVisResultSuccess;
             }
             break;
         }
-        case kRPVControllerPCSamplingIsaToSourceDepth:
-        {
-            if(index < m_isa_to_source_deps.size())
-            {
-                m_isa_to_source_deps[index].depth = static_cast<uint32_t>(value);
-                result = kRocProfVisResultSuccess;
-            }
-            break;
-        }
-        case kRPVControllerPCSamplingNumSamplingStates:
         case kRPVControllerPCSamplingNumPcSampleStates:
         {
             (void)index;
@@ -727,7 +716,6 @@ rocprofvis_result_t PcSampling::SetUInt64(rocprofvis_property_t property, uint64
             result = kRocProfVisResultSuccess;
             break;
         }
-        case kRPVControllerPCSamplingStateId:
         case kRPVControllerPCSamplingPcSampleStateUuid:
         {
             if(index < m_pc_sample_states.size())
@@ -737,7 +725,6 @@ rocprofvis_result_t PcSampling::SetUInt64(rocprofvis_property_t property, uint64
             }
             break;
         }
-        case kRPVControllerPCSamplingStateIsaLineId:
         case kRPVControllerPCSamplingPcSampleStateInstructionUuid:
         {
             if(index < m_pc_sample_states.size())
@@ -747,17 +734,15 @@ rocprofvis_result_t PcSampling::SetUInt64(rocprofvis_property_t property, uint64
             }
             break;
         }
-        case kRPVControllerPCSamplingStateDispatchId:
+        case kRPVControllerPCSamplingPcSampleStateDispatchUuid:
         {
             if(index < m_pc_sample_states.size())
             {
-                // Retained for compatibility with legacy query results.
-                (void)value;
+                m_pc_sample_states[index].dispatch_uuid = value;
                 result = kRocProfVisResultSuccess;
             }
             break;
         }
-        case kRPVControllerPCSamplingStateIssuedCount:
         case kRPVControllerPCSamplingPcSampleStateIssueCount:
         {
             if(index < m_pc_sample_states.size())
@@ -767,7 +752,6 @@ rocprofvis_result_t PcSampling::SetUInt64(rocprofvis_property_t property, uint64
             }
             break;
         }
-        case kRPVControllerPCSamplingStateStalledCount:
         case kRPVControllerPCSamplingPcSampleStateStallCount:
         {
             if(index < m_pc_sample_states.size())
@@ -777,7 +761,6 @@ rocprofvis_result_t PcSampling::SetUInt64(rocprofvis_property_t property, uint64
             }
             break;
         }
-        case kRPVControllerPCSamplingStateTotalCount:
         case kRPVControllerPCSamplingPcSampleStateTotalCount:
         {
             if(index < m_pc_sample_states.size())
@@ -787,7 +770,6 @@ rocprofvis_result_t PcSampling::SetUInt64(rocprofvis_property_t property, uint64
             }
             break;
         }
-        case kRPVControllerPCSamplingNumStallReasonCounts:
         case kRPVControllerPCSamplingNumPcSampleStallReasons:
         {
             (void)index;
@@ -795,7 +777,6 @@ rocprofvis_result_t PcSampling::SetUInt64(rocprofvis_property_t property, uint64
             result = kRocProfVisResultSuccess;
             break;
         }
-        case kRPVControllerPCSamplingStallReasonSamplingStateId:
         case kRPVControllerPCSamplingPcSampleStallReasonStateUuid:
         {
             if(index < m_pc_sample_stall_reasons.size())
@@ -805,17 +786,15 @@ rocprofvis_result_t PcSampling::SetUInt64(rocprofvis_property_t property, uint64
             }
             break;
         }
-        case kRPVControllerPCSamplingStallReasonId:
-        case kRPVControllerPCSamplingPcSampleStallReasonTypeUuid:
+        case kRPVControllerPCSamplingPcSampleStallReasonLookupUuid:
         {
             if(index < m_pc_sample_stall_reasons.size())
             {
-                m_pc_sample_stall_reasons[index].pc_sample_stall_reason_type_uuid = value;
+                m_pc_sample_stall_reasons[index].pc_sample_stall_reason_lookup_uuid = value;
                 result = kRocProfVisResultSuccess;
             }
             break;
         }
-        case kRPVControllerPCSamplingStallReasonCount:
         case kRPVControllerPCSamplingPcSampleStallReasonCount:
         {
             if(index < m_pc_sample_stall_reasons.size())
@@ -834,19 +813,78 @@ rocprofvis_result_t PcSampling::SetUInt64(rocprofvis_property_t property, uint64
             }
             break;
         }
-        case kRPVControllerPCSamplingNumPcSampleStallReasonTypes:
+        case kRPVControllerPCSamplingNumPcSampleStallReasonLookups:
         {
             (void)index;
-            m_pc_sample_stall_reason_types.resize(value);
+            m_pc_sample_stall_reason_lookups.resize(value);
             result = kRocProfVisResultSuccess;
             break;
         }
-        case kRPVControllerPCSamplingPcSampleStallReasonTypeRecordUuid:
+        case kRPVControllerPCSamplingPcSampleStallReasonLookupRecordUuid:
         {
-            if(index < m_pc_sample_stall_reason_types.size())
+            if(index < m_pc_sample_stall_reason_lookups.size())
             {
-                m_pc_sample_stall_reason_types[index]
-                    .pc_sample_stall_reason_type_uuid = value;
+                m_pc_sample_stall_reason_lookups[index]
+                    .pc_sample_stall_reason_lookup_uuid = value;
+                result = kRocProfVisResultSuccess;
+            }
+            break;
+        }
+        case kRPVControllerPCSamplingNumInstructionTypeLookups:
+        {
+            (void)index;
+            m_instruction_type_lookups.resize(value);
+            result = kRocProfVisResultSuccess;
+            break;
+        }
+        case kRPVControllerPCSamplingInstructionTypeLookupUuid:
+        {
+            if(index < m_instruction_type_lookups.size())
+            {
+                m_instruction_type_lookups[index].instruction_type_lookup_uuid = value;
+                result = kRocProfVisResultSuccess;
+            }
+            break;
+        }
+        case kRPVControllerPCSamplingNumInstructionSamples:
+        {
+            (void)index;
+            m_instruction_samples.resize(value);
+            result = kRocProfVisResultSuccess;
+            break;
+        }
+        case kRPVControllerPCSamplingInstructionSampleUuid:
+        case kRPVControllerPCSamplingInstructionSampleStateUuid:
+        case kRPVControllerPCSamplingInstructionSampleLookupUuid:
+        case kRPVControllerPCSamplingInstructionSampleCount:
+        {
+            if(index < m_instruction_samples.size())
+            {
+                InstructionSample& sample = m_instruction_samples[index];
+                if(property == kRPVControllerPCSamplingInstructionSampleUuid)
+                    sample.instruction_sample_uuid = value;
+                else if(property == kRPVControllerPCSamplingInstructionSampleStateUuid)
+                    sample.pc_sample_state_uuid = value;
+                else if(property == kRPVControllerPCSamplingInstructionSampleLookupUuid)
+                    sample.instruction_sample_lookup_uuid = value;
+                else
+                    sample.count = value;
+                result = kRocProfVisResultSuccess;
+            }
+            break;
+        }
+        case kRPVControllerPCSamplingNumInstructionSampleLookups:
+        {
+            (void)index;
+            m_instruction_sample_lookups.resize(value);
+            result = kRocProfVisResultSuccess;
+            break;
+        }
+        case kRPVControllerPCSamplingInstructionSampleLookupRecordUuid:
+        {
+            if(index < m_instruction_sample_lookups.size())
+            {
+                m_instruction_sample_lookups[index].instruction_sample_lookup_uuid = value;
                 result = kRocProfVisResultSuccess;
             }
             break;
@@ -868,13 +906,20 @@ rocprofvis_result_t PcSampling::GetDouble(rocprofvis_property_t property, uint64
     {
         switch(property)
         {
-            case kRPVControllerPCSamplingStateActiveThreadsPercent:
-            case kRPVControllerPCSamplingStateWaveOccupancyPercent:
+            case kRPVControllerPCSamplingPcSampleStateActiveThreadPercent:
             {
                 if(index < m_pc_sample_states.size())
                 {
-                    // Retained for compatibility with the legacy controller API.
-                    *value = 0.0;
+                    *value = m_pc_sample_states[index].active_thread_percent;
+                    result = kRocProfVisResultSuccess;
+                }
+                break;
+            }
+            case kRPVControllerPCSamplingPcSampleStateWaveOccupancyPercent:
+            {
+                if(index < m_pc_sample_states.size())
+                {
+                    *value = m_pc_sample_states[index].wave_occupancy_percent;
                     result = kRocProfVisResultSuccess;
                 }
                 break;
@@ -895,13 +940,20 @@ rocprofvis_result_t PcSampling::SetDouble(rocprofvis_property_t property, uint64
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     switch(property)
     {
-        case kRPVControllerPCSamplingStateActiveThreadsPercent:
-        case kRPVControllerPCSamplingStateWaveOccupancyPercent:
+        case kRPVControllerPCSamplingPcSampleStateActiveThreadPercent:
         {
             if(index < m_pc_sample_states.size())
             {
-                // Retained for compatibility with legacy query results.
-                (void)value;
+                m_pc_sample_states[index].active_thread_percent = value;
+                result = kRocProfVisResultSuccess;
+            }
+            break;
+        }
+        case kRPVControllerPCSamplingPcSampleStateWaveOccupancyPercent:
+        {
+            if(index < m_pc_sample_states.size())
+            {
+                m_pc_sample_states[index].wave_occupancy_percent = value;
                 result = kRocProfVisResultSuccess;
             }
             break;
@@ -923,7 +975,7 @@ rocprofvis_result_t PcSampling::GetString(rocprofvis_property_t property, uint64
     {
         switch(property)
         {
-            case kRPVControllerPCSamplingFilePath:
+            case kRPVControllerPCSamplingSourceFilePath:
             {
                 if(index < m_source_files.size())
                 {
@@ -931,11 +983,11 @@ rocprofvis_result_t PcSampling::GetString(rocprofvis_property_t property, uint64
                 }
                 break;
             }
-            case kRPVControllerPCSamplingSourceFileChecksum:
+            case kRPVControllerPCSamplingSourceFileMd5Checksum:
             {
                 if(index < m_source_files.size())
                 {
-                    result = GetStdStringImpl(value, length, m_source_files[index].content_checksum);
+                    result = GetStdStringImpl(value, length, m_source_files[index].md5_checksum);
                 }
                 break;
             }
@@ -947,38 +999,38 @@ rocprofvis_result_t PcSampling::GetString(rocprofvis_property_t property, uint64
                 }
                 break;
             }
-            case kRPVControllerPCSamplingCodeObjectUri:
-            case kRPVControllerPCSamplingCodeObjectChecksum:
+            case kRPVControllerPCSamplingInstructionLineInstruction:
             {
-                if(index < m_code_object_store.size())
+                if(index < m_instruction_lines.size())
                 {
-                    // Retained for compatibility with the legacy controller API.
-                    result = GetStdStringImpl(value, length, std::string{});
+                    result = GetStdStringImpl(value, length, m_instruction_lines[index].instruction);
                 }
                 break;
             }
-            case kRPVControllerPCSamplingIsaLineInstruction:
+            case kRPVControllerPCSamplingPcSampleStallReasonLookupText:
             {
-                if(index < m_isa_lines.size())
-                {
-                    result = GetStdStringImpl(value, length, m_isa_lines[index].instruction);
-                }
-                break;
-            }
-            case kRPVControllerPCSamplingIsaLineComment:
-            {
-                if(index < m_isa_lines.size())
-                {
-                    result = GetStdStringImpl(value, length, std::string{});
-                }
-                break;
-            }
-            case kRPVControllerPCSamplingPcSampleStallReasonTypeText:
-            {
-                if(index < m_pc_sample_stall_reason_types.size())
+                if(index < m_pc_sample_stall_reason_lookups.size())
                 {
                     result = GetStdStringImpl(
-                        value, length, m_pc_sample_stall_reason_types[index].text);
+                        value, length, m_pc_sample_stall_reason_lookups[index].text);
+                }
+                break;
+            }
+            case kRPVControllerPCSamplingInstructionTypeLookupText:
+            {
+                if(index < m_instruction_type_lookups.size())
+                {
+                    result = GetStdStringImpl(value, length,
+                                              m_instruction_type_lookups[index].text);
+                }
+                break;
+            }
+            case kRPVControllerPCSamplingInstructionSampleLookupText:
+            {
+                if(index < m_instruction_sample_lookups.size())
+                {
+                    result = GetStdStringImpl(value, length,
+                                              m_instruction_sample_lookups[index].text);
                 }
                 break;
             }
@@ -998,7 +1050,7 @@ rocprofvis_result_t PcSampling::SetString(rocprofvis_property_t property, uint64
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     switch(property)
     {
-        case kRPVControllerPCSamplingFilePath:
+        case kRPVControllerPCSamplingSourceFilePath:
         {
             if(index < m_source_files.size())
             {
@@ -1007,11 +1059,11 @@ rocprofvis_result_t PcSampling::SetString(rocprofvis_property_t property, uint64
             }
             break;
         }
-        case kRPVControllerPCSamplingSourceFileChecksum:
+        case kRPVControllerPCSamplingSourceFileMd5Checksum:
         {
             if(index < m_source_files.size())
             {
-                m_source_files[index].content_checksum = value;
+                m_source_files[index].md5_checksum = value;
                 result = kRocProfVisResultSuccess;
             }
             break;
@@ -1025,40 +1077,38 @@ rocprofvis_result_t PcSampling::SetString(rocprofvis_property_t property, uint64
             }
             break;
         }
-        case kRPVControllerPCSamplingCodeObjectUri:
-        case kRPVControllerPCSamplingCodeObjectChecksum:
+        case kRPVControllerPCSamplingInstructionLineInstruction:
         {
-            if(index < m_code_object_store.size())
+            if(index < m_instruction_lines.size())
             {
-                // Retained for compatibility with legacy query results.
-                (void)value;
+                m_instruction_lines[index].instruction = value;
                 result = kRocProfVisResultSuccess;
             }
             break;
         }
-        case kRPVControllerPCSamplingIsaLineInstruction:
+        case kRPVControllerPCSamplingPcSampleStallReasonLookupText:
         {
-            if(index < m_isa_lines.size())
+            if(index < m_pc_sample_stall_reason_lookups.size())
             {
-                m_isa_lines[index].instruction = value;
+                m_pc_sample_stall_reason_lookups[index].text = value;
                 result = kRocProfVisResultSuccess;
             }
             break;
         }
-        case kRPVControllerPCSamplingIsaLineComment:
+        case kRPVControllerPCSamplingInstructionTypeLookupText:
         {
-            if(index < m_isa_lines.size())
+            if(index < m_instruction_type_lookups.size())
             {
-                (void)value;
+                m_instruction_type_lookups[index].text = value;
                 result = kRocProfVisResultSuccess;
             }
             break;
         }
-        case kRPVControllerPCSamplingPcSampleStallReasonTypeText:
+        case kRPVControllerPCSamplingInstructionSampleLookupText:
         {
-            if(index < m_pc_sample_stall_reason_types.size())
+            if(index < m_instruction_sample_lookups.size())
             {
-                m_pc_sample_stall_reason_types[index].text = value;
+                m_instruction_sample_lookups[index].text = value;
                 result = kRocProfVisResultSuccess;
             }
             break;
@@ -1077,33 +1127,39 @@ bool PcSampling::QueryToPropertyEnum(rocprofvis_db_compute_column_enum_t in, roc
     bool valid = true;
     switch(in)
     {
-        case kRPVComputeColumnPcSamplingSourceFileId:
+        case kRPVComputeColumnPcSamplingSourceFileUuid:
         {
-            property = kRPVControllerPCSamplingSourceFileId;
+            property = kRPVControllerPCSamplingSourceFileUuid;
             type = kRPVControllerPrimitiveTypeUInt64;
             break;
         }
         case kRPVComputeColumnPcSamplingSourceFilePath:
         {
-            property = kRPVControllerPCSamplingFilePath;
+            property = kRPVControllerPCSamplingSourceFilePath;
             type = kRPVControllerPrimitiveTypeString;
             break;
         }
-        case kRPVComputeColumnPcSamplingSourceFileChecksum:
+        case kRPVComputeColumnPcSamplingSourceFileMd5Checksum:
         {
-            property = kRPVControllerPCSamplingSourceFileChecksum;
+            property = kRPVControllerPCSamplingSourceFileMd5Checksum;
             type = kRPVControllerPrimitiveTypeString;
             break;
         }
-        case kRPVComputeColumnPcSamplingSourceLineId:
+        case kRPVComputeColumnPcSamplingSourceFileWorkloadId:
         {
-            property = kRPVControllerPCSamplingSourceLineId;
+            property = kRPVControllerPCSamplingSourceFileWorkloadId;
             type = kRPVControllerPrimitiveTypeUInt64;
             break;
         }
-        case kRPVComputeColumnPcSamplingSourceLineFileId:
+        case kRPVComputeColumnPcSamplingSourceLineUuid:
         {
-            property = kRPVControllerPCSamplingSourceLineSourceFileId;
+            property = kRPVControllerPCSamplingSourceLineUuid;
+            type = kRPVControllerPrimitiveTypeUInt64;
+            break;
+        }
+        case kRPVComputeColumnPcSamplingSourceLineSourceFileUuid:
+        {
+            property = kRPVControllerPCSamplingSourceLineSourceFileUuid;
             type = kRPVControllerPrimitiveTypeUInt64;
             break;
         }
@@ -1125,21 +1181,9 @@ bool PcSampling::QueryToPropertyEnum(rocprofvis_db_compute_column_enum_t in, roc
             type = kRPVControllerPrimitiveTypeUInt64;
             break;
         }
-        case kRPVComputeColumnPcSamplingCodeObjectUri:
+        case kRPVComputeColumnPcSamplingInstructionLineUuid:
         {
-            property = kRPVControllerPCSamplingCodeObjectUri;
-            type = kRPVControllerPrimitiveTypeString;
-            break;
-        }
-        case kRPVComputeColumnPcSamplingCodeObjectChecksum:
-        {
-            property = kRPVControllerPCSamplingCodeObjectChecksum;
-            type = kRPVControllerPrimitiveTypeString;
-            break;
-        }
-        case kRPVComputeColumnPcSamplingIsaLineId:
-        {
-            property = kRPVControllerPCSamplingIsaLineId;
+            property = kRPVControllerPCSamplingInstructionLineUuid;
             type = kRPVControllerPrimitiveTypeUInt64;
             break;
         }
@@ -1167,27 +1211,21 @@ bool PcSampling::QueryToPropertyEnum(rocprofvis_db_compute_column_enum_t in, roc
             type = kRPVControllerPrimitiveTypeUInt64;
             break;
         }
-        case kRPVComputeColumnPcSamplingIsaLineKernelSymbolUuid:
+        case kRPVComputeColumnPcSamplingInstructionLineKernelSymbolUuid:
         {
-            property = kRPVControllerPCSamplingIsaLineKernelSymbolUuid;
+            property = kRPVControllerPCSamplingInstructionLineKernelSymbolUuid;
             type = kRPVControllerPrimitiveTypeUInt64;
             break;
         }
-        case kRPVComputeColumnPcSamplingIsaLineInstructionTypeUuid:
+        case kRPVComputeColumnPcSamplingInstructionLineInstructionTypeUuid:
         {
-            property = kRPVControllerPCSamplingIsaLineInstructionTypeUuid;
+            property = kRPVControllerPCSamplingInstructionLineInstructionTypeUuid;
             type = kRPVControllerPrimitiveTypeUInt64;
             break;
         }
-        case kRPVComputeColumnPcSamplingIsaLineCodeObjectId:
+        case kRPVComputeColumnPcSamplingInstructionLineCodeObjectOffset:
         {
-            property = kRPVControllerPCSamplingIsaLineCodeObjectId;
-            type = kRPVControllerPrimitiveTypeUInt64;
-            break;
-        }
-        case kRPVComputeColumnPcSamplingIsaLineCodeObjectOffset:
-        {
-            property = kRPVControllerPCSamplingIsaLineCodeObjectOffset;
+            property = kRPVControllerPCSamplingInstructionLineCodeObjectOffset;
             type = kRPVControllerPrimitiveTypeUInt64;
             break;
         }
@@ -1215,123 +1253,33 @@ bool PcSampling::QueryToPropertyEnum(rocprofvis_db_compute_column_enum_t in, roc
             type = kRPVControllerPrimitiveTypeUInt64;
             break;
         }
-        case kRPVComputeColumnPcSamplingIsaLineKernelUuid:
+        case kRPVComputeColumnPcSamplingInstructionLineInstruction:
         {
-            property = kRPVControllerPCSamplingIsaLineKernelUuid;
-            type = kRPVControllerPrimitiveTypeUInt64;
-            break;
-        }
-        case kRPVComputeColumnPcSamplingIsaLineInstructionTypeId:
-        {
-            property = kRPVControllerPCSamplingIsaLineInstructionTypeId;
-            type = kRPVControllerPrimitiveTypeUInt64;
-            break;
-        }
-        case kRPVComputeColumnPcSamplingIsaLineInstruction:
-        {
-            property = kRPVControllerPCSamplingIsaLineInstruction;
+            property = kRPVControllerPCSamplingInstructionLineInstruction;
             type = kRPVControllerPrimitiveTypeString;
             break;
         }
-        case kRPVComputeColumnPcSamplingIsaLineComment:
+        case kRPVComputeColumnPcSamplingInstructionSourceLineInstructionUuid:
         {
-            property = kRPVControllerPCSamplingIsaLineComment;
-            type = kRPVControllerPrimitiveTypeString;
-            break;
-        }
-        case kRPVComputeColumnPcSamplingIsaToIsaDependentIsaLineId:
-        {
-            property = kRPVControllerPCSamplingIsaToIsaDependentIsaLineId;
+            property = kRPVControllerPCSamplingInstructionSourceLineInstructionUuid;
             type = kRPVControllerPrimitiveTypeUInt64;
             break;
         }
-        case kRPVComputeColumnPcSamplingIsaToIsaDependencyIsaLineId:
+        case kRPVComputeColumnPcSamplingInstructionSourceLineUuid:
         {
-            property = kRPVControllerPCSamplingIsaToIsaDependencyIsaLineId;
+            property = kRPVControllerPCSamplingInstructionSourceLineUuid;
             type = kRPVControllerPrimitiveTypeUInt64;
             break;
         }
-        case kRPVComputeColumnPcSamplingIsaToSourceIsaLineId:
+        case kRPVComputeColumnPcSamplingInstructionSourceLineSourceLineUuid:
         {
-            property = kRPVControllerPCSamplingIsaToSourceIsaLineId;
+            property = kRPVControllerPCSamplingInstructionSourceLineSourceLineUuid;
             type = kRPVControllerPrimitiveTypeUInt64;
             break;
         }
-        case kRPVComputeColumnPcSamplingIsaToSourceSourceLineId:
+        case kRPVComputeColumnPcSamplingInstructionSourceLineFrameIndex:
         {
-            property = kRPVControllerPCSamplingIsaToSourceSourceLineId;
-            type = kRPVControllerPrimitiveTypeUInt64;
-            break;
-        }
-        case kRPVComputeColumnPcSamplingIsaToSourceDepth:
-        {
-            property = kRPVControllerPCSamplingIsaToSourceDepth;
-            type = kRPVControllerPrimitiveTypeUInt64;
-            break;
-        }
-        case kRPVComputeColumnPcSamplingStateId:
-        {
-            property = kRPVControllerPCSamplingStateId;
-            type = kRPVControllerPrimitiveTypeUInt64;
-            break;
-        }
-        case kRPVComputeColumnPcSamplingStateIsaLineId:
-        {
-            property = kRPVControllerPCSamplingStateIsaLineId;
-            type = kRPVControllerPrimitiveTypeUInt64;
-            break;
-        }
-        case kRPVComputeColumnPcSamplingStateDispatchId:
-        {
-            property = kRPVControllerPCSamplingStateDispatchId;
-            type = kRPVControllerPrimitiveTypeUInt64;
-            break;
-        }
-        case kRPVComputeColumnPcSamplingStateActiveThreadsPercent:
-        {
-            property = kRPVControllerPCSamplingStateActiveThreadsPercent;
-            type = kRPVControllerPrimitiveTypeDouble;
-            break;
-        }
-        case kRPVComputeColumnPcSamplingStateWaveOccupancyPercent:
-        {
-            property = kRPVControllerPCSamplingStateWaveOccupancyPercent;
-            type = kRPVControllerPrimitiveTypeDouble;
-            break;
-        }
-        case kRPVComputeColumnPcSamplingStateIssuedCount:
-        {
-            property = kRPVControllerPCSamplingStateIssuedCount;
-            type = kRPVControllerPrimitiveTypeUInt64;
-            break;
-        }
-        case kRPVComputeColumnPcSamplingStateStalledCount:
-        {
-            property = kRPVControllerPCSamplingStateStalledCount;
-            type = kRPVControllerPrimitiveTypeUInt64;
-            break;
-        }
-        case kRPVComputeColumnPcSamplingStateTotalCount:
-        {
-            property = kRPVControllerPCSamplingStateTotalCount;
-            type = kRPVControllerPrimitiveTypeUInt64;
-            break;
-        }
-        case kRPVComputeColumnPcSamplingStallReasonSamplingStateId:
-        {
-            property = kRPVControllerPCSamplingStallReasonSamplingStateId;
-            type = kRPVControllerPrimitiveTypeUInt64;
-            break;
-        }
-        case kRPVComputeColumnPcSamplingStallReasonId:
-        {
-            property = kRPVControllerPCSamplingStallReasonId;
-            type = kRPVControllerPrimitiveTypeUInt64;
-            break;
-        }
-        case kRPVComputeColumnPcSamplingStallReasonCount:
-        {
-            property = kRPVControllerPCSamplingStallReasonCount;
+            property = kRPVControllerPCSamplingInstructionSourceLineFrameIndex;
             type = kRPVControllerPrimitiveTypeUInt64;
             break;
         }
@@ -1365,6 +1313,24 @@ bool PcSampling::QueryToPropertyEnum(rocprofvis_db_compute_column_enum_t in, roc
             type = kRPVControllerPrimitiveTypeUInt64;
             break;
         }
+        case kRPVComputeColumnPcSampleStateActiveThreadPercent:
+        {
+            property = kRPVControllerPCSamplingPcSampleStateActiveThreadPercent;
+            type = kRPVControllerPrimitiveTypeDouble;
+            break;
+        }
+        case kRPVComputeColumnPcSampleStateWaveOccupancyPercent:
+        {
+            property = kRPVControllerPCSamplingPcSampleStateWaveOccupancyPercent;
+            type = kRPVControllerPrimitiveTypeDouble;
+            break;
+        }
+        case kRPVComputeColumnPcSampleStateDispatchUuid:
+        {
+            property = kRPVControllerPCSamplingPcSampleStateDispatchUuid;
+            type = kRPVControllerPrimitiveTypeUInt64;
+            break;
+        }
         case kRPVComputeColumnPcSampleStallReasonUuid:
         {
             property = kRPVControllerPCSamplingPcSampleStallReasonUuid;
@@ -1377,27 +1343,75 @@ bool PcSampling::QueryToPropertyEnum(rocprofvis_db_compute_column_enum_t in, roc
             type = kRPVControllerPrimitiveTypeUInt64;
             break;
         }
-        case kRPVComputeColumnPcSampleStallReasonTypeUuid:
-        {
-            property = kRPVControllerPCSamplingPcSampleStallReasonTypeUuid;
-            type = kRPVControllerPrimitiveTypeUInt64;
-            break;
-        }
         case kRPVComputeColumnPcSampleStallReasonCount:
         {
             property = kRPVControllerPCSamplingPcSampleStallReasonCount;
             type = kRPVControllerPrimitiveTypeUInt64;
             break;
         }
-        case kRPVComputeColumnPcSampleStallReasonTypeRecordUuid:
+        case kRPVComputeColumnPcSampleStallReasonLookupUuid:
         {
-            property = kRPVControllerPCSamplingPcSampleStallReasonTypeRecordUuid;
+            property = kRPVControllerPCSamplingPcSampleStallReasonLookupUuid;
             type = kRPVControllerPrimitiveTypeUInt64;
             break;
         }
-        case kRPVComputeColumnPcSampleStallReasonTypeText:
+        case kRPVComputeColumnPcSampleStallReasonLookupRecordUuid:
         {
-            property = kRPVControllerPCSamplingPcSampleStallReasonTypeText;
+            property = kRPVControllerPCSamplingPcSampleStallReasonLookupRecordUuid;
+            type = kRPVControllerPrimitiveTypeUInt64;
+            break;
+        }
+        case kRPVComputeColumnPcSampleStallReasonLookupText:
+        {
+            property = kRPVControllerPCSamplingPcSampleStallReasonLookupText;
+            type = kRPVControllerPrimitiveTypeString;
+            break;
+        }
+        case kRPVComputeColumnPcSamplingInstructionTypeLookupUuid:
+        {
+            property = kRPVControllerPCSamplingInstructionTypeLookupUuid;
+            type = kRPVControllerPrimitiveTypeUInt64;
+            break;
+        }
+        case kRPVComputeColumnPcSamplingInstructionTypeLookupText:
+        {
+            property = kRPVControllerPCSamplingInstructionTypeLookupText;
+            type = kRPVControllerPrimitiveTypeString;
+            break;
+        }
+        case kRPVComputeColumnPcSamplingInstructionSampleUuid:
+        {
+            property = kRPVControllerPCSamplingInstructionSampleUuid;
+            type = kRPVControllerPrimitiveTypeUInt64;
+            break;
+        }
+        case kRPVComputeColumnPcSamplingInstructionSampleStateUuid:
+        {
+            property = kRPVControllerPCSamplingInstructionSampleStateUuid;
+            type = kRPVControllerPrimitiveTypeUInt64;
+            break;
+        }
+        case kRPVComputeColumnPcSamplingInstructionSampleLookupUuid:
+        {
+            property = kRPVControllerPCSamplingInstructionSampleLookupUuid;
+            type = kRPVControllerPrimitiveTypeUInt64;
+            break;
+        }
+        case kRPVComputeColumnPcSamplingInstructionSampleCount:
+        {
+            property = kRPVControllerPCSamplingInstructionSampleCount;
+            type = kRPVControllerPrimitiveTypeUInt64;
+            break;
+        }
+        case kRPVComputeColumnPcSamplingInstructionSampleLookupRecordUuid:
+        {
+            property = kRPVControllerPCSamplingInstructionSampleLookupRecordUuid;
+            type = kRPVControllerPrimitiveTypeUInt64;
+            break;
+        }
+        case kRPVComputeColumnPcSamplingInstructionSampleLookupText:
+        {
+            property = kRPVControllerPCSamplingInstructionSampleLookupText;
             type = kRPVControllerPrimitiveTypeString;
             break;
         }

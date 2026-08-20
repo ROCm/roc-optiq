@@ -22,7 +22,7 @@ ComputeCodeView::ComputeCodeView(DataProvider& data_provider)
 , m_settings(SettingsManager::GetInstance())
 , m_data_provider(data_provider)
 , m_control_panel_height(0.0f)
-, m_current_source_file_id(ComputeSelection::INVALID_SELECTION_ID)
+, m_current_source_file_uuid(ComputeSelection::INVALID_SELECTION_ID)
 , m_current_code_object_uuid(ComputeSelection::INVALID_SELECTION_ID)
 , m_current_kernel_id(ComputeSelection::INVALID_SELECTION_ID)
 , m_current_workload_id(ComputeSelection::INVALID_SELECTION_ID)
@@ -46,9 +46,9 @@ ComputeCodeView::ComputeCodeView(DataProvider& data_provider)
     SubscribeToEvents();
 
     m_data_provider.SetFetchPcSamplingCallback(
-        [this](const std::string&, uint32_t kernel_id, uint32_t source_file_id,
+        [this](const std::string&, uint32_t kernel_id, uint64_t source_file_uuid,
                uint32_t generation, bool success) {
-            OnPcSamplingReady(kernel_id, source_file_id, generation, success);
+            OnPcSamplingReady(kernel_id, source_file_uuid, generation, success);
         });
 }
 
@@ -150,7 +150,7 @@ void
 ComputeCodeView::ClearSelectionData()
 {
     m_source_files.clear();
-    m_current_source_file_id = ComputeSelection::INVALID_SELECTION_ID;
+    m_current_source_file_uuid = ComputeSelection::INVALID_SELECTION_ID;
     m_current_code_object_uuid = ComputeSelection::INVALID_SELECTION_ID;
     ClearCodeData();
 }
@@ -174,17 +174,16 @@ ComputeCodeView::FetchMandatoryPcSampling()
         return;
     }
 
-    // This ID correlates the callback with the selected kernel and source file;
-    // it does not permit multiple Code View requests to run concurrently.
-    const uint64_t request_id = RequestIdBuilder::MakeClientRequestId(
-        RequestType::kFetchPcSampling,
-        (static_cast<uint64_t>(m_current_kernel_id) << 32) | m_current_source_file_id);
+    // DataProvider permits only one PC sampling request at a time. Kernel,
+    // source-file, and generation values validate the callback separately.
+    const uint64_t request_id =
+        RequestIdBuilder::MakeRequestId(RequestType::kFetchPcSampling);
 
     ++m_fetch_generation;
     m_pending_refetch = false;
     if(m_data_provider.FetchPcSampling(
            PcSamplingRequestParams(m_current_workload_id, m_current_kernel_id,
-                                   m_current_source_file_id, m_fetch_generation)))
+                                   m_current_source_file_uuid, m_fetch_generation)))
     {
         m_active_request_id = request_id;
         m_fetch_in_progress = true;
@@ -192,12 +191,11 @@ ComputeCodeView::FetchMandatoryPcSampling()
 }
 
 void
-ComputeCodeView::OnPcSamplingReady(uint32_t kernel_id, uint32_t source_file_id,
+ComputeCodeView::OnPcSamplingReady(uint32_t kernel_id, uint64_t source_file_uuid,
                                    uint32_t generation, bool success)
 {
-    const uint64_t request_id = RequestIdBuilder::MakeClientRequestId(
-        RequestType::kFetchPcSampling,
-        (static_cast<uint64_t>(kernel_id) << 32) | source_file_id);
+    const uint64_t request_id =
+        RequestIdBuilder::MakeRequestId(RequestType::kFetchPcSampling);
     if(!m_fetch_in_progress || request_id != m_active_request_id ||
        generation != m_fetch_generation)
     {
@@ -213,7 +211,7 @@ ComputeCodeView::OnPcSamplingReady(uint32_t kernel_id, uint32_t source_file_id,
         return;
     }
 
-    if(kernel_id != m_current_kernel_id || source_file_id != m_current_source_file_id)
+    if(kernel_id != m_current_kernel_id || source_file_uuid != m_current_source_file_uuid)
         return;
 
     if(!success)
@@ -226,8 +224,8 @@ ComputeCodeView::OnPcSamplingReady(uint32_t kernel_id, uint32_t source_file_id,
 
     const PcSamplingData& data = kernel_info->pc_sampling_data;
 
-    if(m_current_source_file_id != ComputeSelection::INVALID_SELECTION_ID)
-        m_source_code->Load(data, m_current_source_file_id);
+    if(m_current_source_file_uuid != ComputeSelection::INVALID_SELECTION_ID)
+        m_source_code->Load(data, m_current_source_file_uuid);
 
     if(!data.code_objects.empty())
         m_current_code_object_uuid = data.code_objects[0].code_object_uuid;
@@ -241,19 +239,19 @@ ComputeCodeView::LoadSourceFileList(const PcSamplingData& data)
 {
     m_source_files.clear();
     for (auto& file : data.source_files)
-        m_source_files.emplace(file.file_path, file.id);
+        m_source_files.emplace(file.file_path, file.source_file_uuid);
 
     bool selection_valid = false;
     for(const auto& [path, id] : m_source_files)
     {
-        if(id == m_current_source_file_id)
+        if(id == m_current_source_file_uuid)
         {
             selection_valid = true;
             break;
         }
     }
     if(!selection_valid)
-        m_current_source_file_id = m_source_files.empty()
+        m_current_source_file_uuid = m_source_files.empty()
             ? ComputeSelection::INVALID_SELECTION_ID
             : m_source_files.begin()->second;
 }
@@ -350,7 +348,7 @@ ComputeCodeView::RenderSourceFileDropdown()
     };
 
     const auto selected_file_it = std::find_if(m_source_files.begin(), m_source_files.end(),
-        [this](const auto& pair) { return pair.second == m_current_source_file_id; });
+        [this](const auto& pair) { return pair.second == m_current_source_file_uuid; });
 
     const char* preview = selected_file_it != m_source_files.end()
                                     ? filename_of(selected_file_it->first)
@@ -365,10 +363,10 @@ ComputeCodeView::RenderSourceFileDropdown()
     {
         for(const auto& [path, id] : m_source_files)
         {
-            const bool selected = (id == m_current_source_file_id);
+            const bool selected = (id == m_current_source_file_uuid);
             if(ImGui::Selectable(filename_of(path), selected) && !selected)
             {
-                m_current_source_file_id = id;
+                m_current_source_file_uuid = id;
                 m_source_code->Load({}, 0);
                 m_isa_code->Load({}, 0);
                 FetchMandatoryPcSampling();
@@ -428,7 +426,7 @@ SourceCodeWidget::SourceCodeWidget(LineSelection& selection)
 }
 
 void
-SourceCodeWidget::Load(const PcSamplingData& data, uint32_t source_file_id)
+SourceCodeWidget::Load(const PcSamplingData& data, uint64_t source_file_uuid)
 {
     m_lines.clear();
     m_line_selection = {0, 0};
@@ -436,7 +434,7 @@ SourceCodeWidget::Load(const PcSamplingData& data, uint32_t source_file_id)
     const SourceFile* source_file = nullptr;
     for(const auto& file : data.source_files)
     {
-        if(file.id == source_file_id)
+        if(file.source_file_uuid == source_file_uuid)
         {
             source_file = &file;
             break;
@@ -445,16 +443,48 @@ SourceCodeWidget::Load(const PcSamplingData& data, uint32_t source_file_id)
     if(!source_file)
         return;
 
-    // STUB: summarised_stalls not yet derived from real stall data.
-    uint32_t stub_counter = 0;
-    for(const auto& source_line : source_file->source_lines)
+    struct SampleCounts
     {
-        const float stub_stall = static_cast<float>((stub_counter * 7 + 13) % 101);
-        stub_counter++;
-        m_lines.push_back({ source_line.content, source_line.id, stub_stall });
+        uint64_t total = 0;
+        uint64_t stall = 0;
+    };
+    std::unordered_map<uint64_t, SampleCounts> counts_by_instruction;
+    for(const PcSampleState& state : data.pc_sample_states)
+    {
+        SampleCounts& counts = counts_by_instruction[state.instruction_uuid];
+        counts.total += state.total_count;
+        counts.stall += state.stall_count;
     }
 
-    CalculateLineNumberWidth(m_lines.size());
+    std::unordered_map<uint64_t, SampleCounts> counts_by_source_line;
+    for(const InstructionSourceLine& mapping : data.instruction_source_lines)
+    {
+        if(mapping.frame_index != 0)
+            continue;
+        const auto state_it = counts_by_instruction.find(mapping.instruction_uuid);
+        if(state_it == counts_by_instruction.end())
+            continue;
+        SampleCounts& counts = counts_by_source_line[mapping.source_line_uuid];
+        counts.total += state_it->second.total;
+        counts.stall += state_it->second.stall;
+    }
+
+    uint64_t max_line_number = 0;
+    for(const auto& source_line : source_file->source_lines)
+    {
+        float stall_percent = 0.0f;
+        const auto counts_it = counts_by_source_line.find(source_line.source_line_uuid);
+        if(counts_it != counts_by_source_line.end() && counts_it->second.total != 0)
+        {
+            stall_percent = 100.0f * static_cast<float>(counts_it->second.stall) /
+                            static_cast<float>(counts_it->second.total);
+        }
+        m_lines.push_back({ source_line.content, source_line.source_line_uuid,
+                            source_line.line_number, stall_percent });
+        max_line_number = std::max(max_line_number, source_line.line_number);
+    }
+
+    CalculateLineNumberWidth(static_cast<uint32_t>(max_line_number));
 }
 
 void
@@ -508,7 +538,7 @@ void
 SourceCodeWidget::RenderLine(uint32_t index, uint32_t columns_count)
 {
     const SourceRow& source_row = m_lines[index];
-    uint32_t display_num = index + 1;
+    const uint64_t display_num = source_row.line_number;
 
     ImGui::TableNextRow();
 
@@ -531,7 +561,8 @@ SourceCodeWidget::RenderLine(uint32_t index, uint32_t columns_count)
     ImGui::SameLine(0.0f, 0.0f);
     ImGui::PopID();
 
-    ImGui::TextColored(m_line_num_color, "%*u", m_line_num_digits, display_num);
+    ImGui::TextColored(m_line_num_color, "%*llu", m_line_num_digits,
+                       static_cast<unsigned long long>(display_num));
 
     int col = 1;
     if(IsStallShown())
@@ -569,12 +600,12 @@ IsaCodeWidget::Load(const PcSamplingData& data, uint64_t code_object_uuid)
     if(!code_object)
         return;
 
-    // Build depth-0 source_line_id lookup: isa_line_id -> source_line_id
-    std::unordered_map<uint64_t, uint32_t> source_by_isa;
-    for(const auto& dep : data.isa_to_source_deps)
+    // Build frame-0 source-line lookup: instruction_uuid -> source_line_uuid.
+    std::unordered_map<uint64_t, uint64_t> source_by_isa;
+    for(const InstructionSourceLine& dep : data.instruction_source_lines)
     {
-        if(dep.depth == 0)
-            source_by_isa.emplace(dep.isa_line_id, dep.source_line_id);
+        if(dep.frame_index == 0)
+            source_by_isa.emplace(dep.instruction_uuid, dep.source_line_uuid);
     }
 
     struct InstructionSampleCounts
@@ -595,21 +626,21 @@ IsaCodeWidget::Load(const PcSamplingData& data, uint64_t code_object_uuid)
 
     for(const KernelSymbol& kernel_symbol : code_object->kernel_symbols)
     {
-        for(const IsaLine& isa_line : kernel_symbol.isa_lines)
+        for(const InstructionLine& instruction_line : kernel_symbol.instruction_lines)
         {
-            uint32_t source_line_id = 0;
-            if(const auto sit = source_by_isa.find(isa_line.instruction_uuid);
+            uint64_t source_line_id = 0;
+            if(const auto sit = source_by_isa.find(instruction_line.instruction_uuid);
                sit != source_by_isa.end())
                 source_line_id = sit->second;
 
             const InstructionSampleCounts* counts = nullptr;
-            if(const auto counts_it = counts_by_instruction.find(isa_line.instruction_uuid);
+            if(const auto counts_it = counts_by_instruction.find(instruction_line.instruction_uuid);
                counts_it != counts_by_instruction.end())
                 counts = &counts_it->second;
 
             m_entries.push_back({
-                isa_line.instruction,
-                isa_line.instruction_uuid,
+                instruction_line.instruction,
+                instruction_line.instruction_uuid,
                 source_line_id,
                 counts ? counts->issue_count : 0,
                 counts ? counts->stall_count : 0,

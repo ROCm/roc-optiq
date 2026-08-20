@@ -142,7 +142,6 @@ public:
     void Render() override;
 
     void Load(const PcSamplingData& data, uint64_t code_object_uuid);
-    void ShowComments(bool show) { m_show_comments = show; };
 
 private:
     void RenderLine(uint32_t index, uint32_t column_count);
@@ -150,7 +149,6 @@ private:
     struct IsaRow
     {
         std::string instruction;
-        std::string comment;
         uint64_t    id                  = 0;
         uint32_t    source_line_id      = 0;
         uint64_t    issue_count         = 0;
@@ -158,7 +156,6 @@ private:
         uint64_t    total_count         = 0;
     };
 
-    bool                m_show_comments = false;
     std::vector<IsaRow> m_entries;
 };
 

@@ -53,12 +53,18 @@ private:
     };
     struct IsaLine
     {
-        uint64_t    instruction_uuid   = 0;
-        uint64_t    code_object_uuid   = 0;
-        uint64_t    kernel_uuid        = 0;
-        uint64_t    code_object_offset = 0;
-        std::string comment;
+        uint64_t    instruction_uuid      = 0;
+        uint64_t    kernel_symbol_uuid    = 0;
+        uint64_t    instruction_type_uuid = 0;
+        uint64_t    code_object_offset    = 0;
         std::string instruction;
+    };
+    struct KernelSymbol
+    {
+        uint64_t kernel_symbol_uuid = 0;
+        uint64_t code_object_uuid   = 0;
+        uint64_t kernel_uuid        = 0;
+        uint64_t code_object_offset = 0;
     };
     struct CodeObjectStore
     {
@@ -103,6 +109,7 @@ private:
     std::vector<SourceFile>              m_source_files;
     std::vector<SourceLine>              m_source_lines;
     std::vector<CodeObjectStore>         m_code_object_store;
+    std::vector<KernelSymbol>            m_kernel_symbols;
     std::vector<IsaLine>                 m_isa_lines;
     std::vector<IsaToIsaDep>             m_isa_to_isa_deps;
     std::vector<IsaToSourceDep>          m_isa_to_source_deps;
@@ -113,6 +120,7 @@ private:
     std::unordered_map<uint32_t, std::vector<SourceLine>> m_source_line_cache;
     bool m_kernel_data_loaded       = false;
     bool m_code_object_store_loaded = false;
+    bool m_kernel_symbols_loaded    = false;
     bool m_isa_lines_loaded         = false;
     bool m_pc_sample_states_loaded  = false;
 

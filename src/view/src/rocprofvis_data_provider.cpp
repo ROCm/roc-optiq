@@ -4701,7 +4701,11 @@ DataProvider::LoadPcSamplingCodeObjects(KernelInfo&          kernel,
     uint64_t num_isa_lines = 0;
     rocprofvis_controller_get_uint64(pc_handle, kRPVControllerPCSamplingNumIsaLines, 0,
                                      &num_isa_lines);
+    uint64_t num_kernel_symbols = 0;
+    rocprofvis_controller_get_uint64(
+        pc_handle, kRPVControllerPCSamplingNumKernelSymbols, 0, &num_kernel_symbols);
 
+    kernel.pc_sampling_data.code_objects.clear();
     kernel.pc_sampling_data.code_objects.resize(num_code_objects);
     std::unordered_map<uint64_t, CodeObjectStore*> code_objects_by_uuid;
     code_objects_by_uuid.reserve(num_code_objects);
@@ -4725,20 +4729,62 @@ DataProvider::LoadPcSamplingCodeObjects(KernelInfo&          kernel,
         code_objects_by_uuid.emplace(code_object.code_object_uuid, &code_object);
     }
 
+    for(uint64_t si = 0; si < num_kernel_symbols; si++)
+    {
+        KernelSymbol kernel_symbol;
+        LoadPcSamplingKernelSymbol(kernel_symbol, pc_handle, si);
+        auto code_object_it = code_objects_by_uuid.find(kernel_symbol.code_object_uuid);
+        if(code_object_it == code_objects_by_uuid.end())
+        {
+            spdlog::debug("Skipping kernel symbol {} with unknown code object {}", si,
+                          kernel_symbol.code_object_uuid);
+            continue;
+        }
+        code_object_it->second->kernel_symbols.emplace_back(std::move(kernel_symbol));
+    }
+
+    std::unordered_map<uint64_t, KernelSymbol*> kernel_symbols_by_uuid;
+    kernel_symbols_by_uuid.reserve(num_kernel_symbols);
+    for(CodeObjectStore& code_object : kernel.pc_sampling_data.code_objects)
+    {
+        for(KernelSymbol& kernel_symbol : code_object.kernel_symbols)
+        {
+            kernel_symbols_by_uuid.emplace(kernel_symbol.kernel_symbol_uuid, &kernel_symbol);
+        }
+    }
+
     for(uint64_t ii = 0; ii < num_isa_lines; ii++)
     {
         IsaLine isa_line;
         LoadPcSamplingIsaLine(isa_line, pc_handle, ii);
-        std::unordered_map<uint64_t, CodeObjectStore*>::iterator code_object_it =
-            code_objects_by_uuid.find(isa_line.code_object_uuid);
-        if(code_object_it == code_objects_by_uuid.end())
+        auto kernel_symbol_it = kernel_symbols_by_uuid.find(isa_line.kernel_symbol_uuid);
+        if(kernel_symbol_it == kernel_symbols_by_uuid.end())
         {
-            spdlog::debug("Skipping ISA line {} with unknown code object {}", ii,
-                          isa_line.code_object_uuid);
+            spdlog::debug("Skipping ISA line {} with unknown kernel symbol {}", ii,
+                          isa_line.kernel_symbol_uuid);
             continue;
         }
-        code_object_it->second->isa_lines.emplace_back(std::move(isa_line));
+        kernel_symbol_it->second->isa_lines.emplace_back(std::move(isa_line));
     }
+}
+
+inline void
+DataProvider::LoadPcSamplingKernelSymbol(KernelSymbol&        kernel_symbol,
+                                         rocprofvis_handle_t* pc_handle,
+                                         uint64_t             index)
+{
+    rocprofvis_controller_get_uint64(
+        pc_handle, kRPVControllerPCSamplingKernelSymbolUuid, index,
+        &kernel_symbol.kernel_symbol_uuid);
+    rocprofvis_controller_get_uint64(
+        pc_handle, kRPVControllerPCSamplingKernelSymbolCodeObjectUuid, index,
+        &kernel_symbol.code_object_uuid);
+    rocprofvis_controller_get_uint64(
+        pc_handle, kRPVControllerPCSamplingKernelSymbolKernelUuid, index,
+        &kernel_symbol.kernel_uuid);
+    rocprofvis_controller_get_uint64(
+        pc_handle, kRPVControllerPCSamplingKernelSymbolCodeObjectOffset, index,
+        &kernel_symbol.code_object_offset);
 }
 
 inline void
@@ -4750,17 +4796,16 @@ DataProvider::LoadPcSamplingIsaLine(IsaLine& isa_line, rocprofvis_handle_t* pc_h
                                      &instruction_uuid);
     isa_line.instruction_uuid = instruction_uuid;
     rocprofvis_controller_get_uint64(
-        pc_handle, kRPVControllerPCSamplingIsaLineCodeObjectId, index,
-        &isa_line.code_object_uuid);
+        pc_handle, kRPVControllerPCSamplingIsaLineKernelSymbolUuid, index,
+        &isa_line.kernel_symbol_uuid);
     rocprofvis_controller_get_uint64(
-        pc_handle, kRPVControllerPCSamplingIsaLineKernelUuid, index,
-        &isa_line.kernel_uuid);
+        pc_handle, kRPVControllerPCSamplingIsaLineInstructionTypeUuid, index,
+        &isa_line.instruction_type_uuid);
     rocprofvis_controller_get_uint64(
         pc_handle, kRPVControllerPCSamplingIsaLineCodeObjectOffset, index,
         &isa_line.code_object_offset);
     isa_line.instruction =
         GetString(pc_handle, kRPVControllerPCSamplingIsaLineInstruction, index);
-    isa_line.comment     = GetString(pc_handle, kRPVControllerPCSamplingIsaLineComment, index);
 }
 
 inline void

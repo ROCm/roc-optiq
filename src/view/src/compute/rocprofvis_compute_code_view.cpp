@@ -305,12 +305,8 @@ ComputeCodeView::RenderControlPanel()
                                               ImGui::CalcTextSize(hide_stalls_str).x) +
                                      ImGui::GetStyle().FramePadding.x * 2.0f;
 
-    const float button_comments_width =
-        ImGui::CalcTextSize("Show Comments").x + ImGui::GetStyle().FramePadding.x * 2.0f;
-
     const float buttons_width = button_source_code_width + button_stall_width +
-                                button_comments_width +
-                                ImGui::GetStyle().ItemSpacing.x * 2.0f;
+                                ImGui::GetStyle().ItemSpacing.x;
 
     ImGui::SameLine(ImGui::GetContentRegionAvail().x + ImGui::GetCursorPosX() -
                     buttons_width);
@@ -327,14 +323,6 @@ ComputeCodeView::RenderControlPanel()
         m_show_metadata_enabled = !m_show_metadata_enabled;
         m_source_code->ChangeStallVisibility(m_show_metadata_enabled);
         m_isa_code->ChangeStallVisibility(m_show_metadata_enabled);
-    }
-
-    ImGui::SameLine();
-    static bool show_comments_enabled = false;
-    if(ImGui::Button(show_comments_enabled ? "Hide Comments" : "Show Comments"))
-    {
-        show_comments_enabled = !show_comments_enabled;
-        m_isa_code->ShowComments(show_comments_enabled);
     }
 
     ImGui::EndGroup();
@@ -605,27 +593,29 @@ IsaCodeWidget::Load(const PcSamplingData& data, uint64_t code_object_uuid)
         counts.stall_count += state.stall_count;
     }
 
-    for(const auto& isa_line : code_object->isa_lines)
+    for(const KernelSymbol& kernel_symbol : code_object->kernel_symbols)
     {
-        uint32_t source_line_id = 0;
-        if(const auto sit = source_by_isa.find(isa_line.instruction_uuid);
-           sit != source_by_isa.end())
-            source_line_id = sit->second;
+        for(const IsaLine& isa_line : kernel_symbol.isa_lines)
+        {
+            uint32_t source_line_id = 0;
+            if(const auto sit = source_by_isa.find(isa_line.instruction_uuid);
+               sit != source_by_isa.end())
+                source_line_id = sit->second;
 
-        const InstructionSampleCounts* counts = nullptr;
-        if(const auto counts_it = counts_by_instruction.find(isa_line.instruction_uuid);
-           counts_it != counts_by_instruction.end())
-            counts = &counts_it->second;
+            const InstructionSampleCounts* counts = nullptr;
+            if(const auto counts_it = counts_by_instruction.find(isa_line.instruction_uuid);
+               counts_it != counts_by_instruction.end())
+                counts = &counts_it->second;
 
-        m_entries.push_back({
-            isa_line.instruction,
-            isa_line.comment,
-            isa_line.instruction_uuid,
-            source_line_id,
-            counts ? counts->issue_count : 0,
-            counts ? counts->stall_count : 0,
-            counts ? counts->total_count : 0
-        });
+            m_entries.push_back({
+                isa_line.instruction,
+                isa_line.instruction_uuid,
+                source_line_id,
+                counts ? counts->issue_count : 0,
+                counts ? counts->stall_count : 0,
+                counts ? counts->total_count : 0
+            });
+        }
     }
 
     CalculateLineNumberWidth(m_entries.size());
@@ -640,9 +630,8 @@ IsaCodeWidget::Render()
         return;
     }
 
-    const int stall_columns   = IsStallShown() ? 3 : 0;
-    const int comment_columns = m_show_comments ? 1 : 0;
-    const int columns_count   = 2 + stall_columns + comment_columns;
+    const int stall_columns = IsStallShown() ? 3 : 0;
+    const int columns_count = 2 + stall_columns;
 
     if(!ImGui::BeginTable("IsaCode", columns_count, m_table_flags))
         return;
@@ -663,9 +652,6 @@ IsaCodeWidget::Render()
         ImGui::TableSetupColumn("Stall Count", ImGuiTableColumnFlags_WidthFixed,
                                 num_col_width);
     }
-
-    if(m_show_comments)
-        ImGui::TableSetupColumn("Comments", ImGuiTableColumnFlags_WidthStretch);
 
     ImGui::TableHeadersRow();
     PushStyles();
@@ -732,11 +718,6 @@ IsaCodeWidget::RenderLine(uint32_t index, uint32_t columns_count)
         ImGui::TextDisabled("%llu", static_cast<unsigned long long>(isa_row.stall_count));
     }
 
-    if(m_show_comments)
-    {
-        ImGui::TableSetColumnIndex(++column);
-        ImGui::TextColored(m_comment_color, "%s", ("//" + isa_row.comment).c_str());
-    }
 }
 
 }  // namespace View

@@ -94,13 +94,20 @@ struct IsaToSourceDep
 
 struct IsaLine
 {
-    uint64_t    instruction_uuid   = 0;
-    uint64_t    code_object_uuid   = 0;
-    uint64_t    kernel_uuid        = 0;
-    uint64_t    code_object_offset = 0;
-    std::string           comment;
-    std::string           instruction;
-    std::vector<uint32_t> source_line_ids;
+    uint64_t    instruction_uuid      = 0;
+    uint64_t    kernel_symbol_uuid    = 0;
+    uint64_t    instruction_type_uuid = 0;
+    uint64_t    code_object_offset    = 0;
+    std::string instruction;
+};
+
+struct KernelSymbol
+{
+    uint64_t             kernel_symbol_uuid = 0;
+    uint64_t             code_object_uuid   = 0;
+    uint64_t             kernel_uuid        = 0;
+    uint64_t             code_object_offset = 0;
+    std::vector<IsaLine> isa_lines;
 };
 
 struct CodeObjectStore
@@ -110,7 +117,7 @@ struct CodeObjectStore
     uint64_t             pid              = 0;
     uint64_t             code_object_id   = 0;
     uint64_t             load_base        = 0;
-    std::vector<IsaLine> isa_lines;
+    std::vector<KernelSymbol> kernel_symbols;
 };
 
 struct SourceLine

@@ -583,6 +583,12 @@ typedef enum rocprofvis_db_compute_column_enum_t
     kRPVComputeColumnPcSampleStallReasonCount,
     kRPVComputeColumnPcSampleStallReasonTypeRecordUuid,
     kRPVComputeColumnPcSampleStallReasonTypeText,
+    kRPVComputeColumnPcSamplingKernelSymbolUuid,
+    kRPVComputeColumnPcSamplingKernelSymbolCodeObjectUuid,
+    kRPVComputeColumnPcSamplingKernelSymbolKernelUuid,
+    kRPVComputeColumnPcSamplingKernelSymbolCodeObjectOffset,
+    kRPVComputeColumnPcSamplingIsaLineKernelSymbolUuid,
+    kRPVComputeColumnPcSamplingIsaLineInstructionTypeUuid,
 } rocprofvis_db_compute_column_enum_t;
 
 // Compute database query use case enumerations
@@ -609,6 +615,7 @@ typedef enum rocprofvis_db_compute_use_case_enum_t
     kRPVComputeFetchKernelSamplingStates,
     kRPVComputeFetchKernelSamplingStateReasonCounts,
     kRPVComputeFetchKernelSamplingStallReasonTypes,
+    kRPVComputeFetchKernelSymbols,
 } rocprofvis_db_compute_use_case_enum_t;
 
 // Compute database query parameter enumeration

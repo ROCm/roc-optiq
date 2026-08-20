@@ -371,7 +371,10 @@ private:
     inline void LoadKernels(WorkloadInfo&        workload,
                                rocprofvis_handle_t* workload_handle);
     inline void LoadPcSamplingCodeObjects(KernelInfo&          kernel,
-                                          rocprofvis_handle_t* pc_handle);
+                                           rocprofvis_handle_t* pc_handle);
+    inline void LoadPcSamplingKernelSymbol(KernelSymbol&        kernel_symbol,
+                                           rocprofvis_handle_t* pc_handle,
+                                           uint64_t             index);
     inline void LoadPcSamplingSourceFiles(KernelInfo&          kernel,
                                           rocprofvis_handle_t* pc_handle);
     inline void LoadPcSamplingIsaLine(IsaLine&             isa_line,

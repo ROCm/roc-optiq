@@ -20,6 +20,8 @@
 #include <string>
 #include <filesystem>
 #include <fstream>
+#include <algorithm>
+#include <cmath>
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_utils.h"
 #include "rocprofvis_data_provider.h"
@@ -30,6 +32,7 @@
 #include "model/compute/rocprofvis_compute_data_model.h"
 #include "widgets/rocprofvis_tab_container.h"
 #include "rocprofvis_view_test_access.h"
+#include "sqlite3.h"
 using namespace RocProfVis::View;
 
 namespace
@@ -176,6 +179,47 @@ struct ShowSummaryGuard
         SettingsManager::GetInstance().GetAppWindowSettings().show_summary = prev;
     }
 };
+
+// Run one SUM or COUNT on the sample db through a private read-only connection,
+// handing the single result back via `out`. Optiq builds its own totals by
+// summing raw rows in C++, so this SQL is an independent second opinion: if
+// Optiq's math is off, the two numbers diverge. Returns false on any sqlite error
+// so the caller fails loudly instead of trusting a garbage value.
+bool DbScalarQuery(const std::string& db_path, const char* sql, double& out)
+{
+    sqlite3* db = nullptr;
+    if(sqlite3_open_v2(db_path.c_str(), &db, SQLITE_OPEN_READONLY, nullptr) != SQLITE_OK)
+    {
+        if(db) sqlite3_close(db);
+        return false;
+    }
+    sqlite3_stmt* stmt = nullptr;
+    bool          ok   = false;
+    if(sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) == SQLITE_OK &&
+       sqlite3_step(stmt) == SQLITE_ROW)
+    {
+        out = sqlite3_column_double(stmt, 0);
+        ok  = true;
+    }
+    sqlite3_finalize(stmt);
+    sqlite3_close(db);
+    return ok;
+}
+
+// True for the v4 schema, where kernel timestamps live in their own
+// rocpd_timestamp table joined by start_id/end_id, false for the older layout
+// that keeps start/end inline on rocpd_kernel_dispatch. The duration query picks
+// its form from this, matching the query factory in GetRocprofKernelDispatchSliceQuery.
+bool DbHasTimestampTable(const std::string& db_path)
+{
+    double n = 0.0;
+    return DbScalarQuery(
+               db_path,
+               "SELECT COUNT(*) FROM sqlite_master WHERE type IN ('table','view') "
+               "AND name = 'rocpd_timestamp'",
+               n) &&
+           n > 0.0;
+}
 }  // namespace
 
 void RegisterAppTests(ImGuiTestEngine* e)
@@ -1082,6 +1126,116 @@ void RegisterAppTests(ImGuiTestEngine* e)
         ctx->ItemClick(pie_ref.c_str());
         for (int i = 0; i < 30 && !peer.IsDisplayPie(); i++) ctx->Yield(2);
         IM_CHECK(peer.IsDisplayPie());
+    };
+
+    // The total duration across the Summary's top-kernels list should equal an
+    // independent SQL SUM over every dispatch. The list is the top-N kernels plus an
+    // "Others" row that holds the leftover duration of all the rest (PadTopKernels
+    // fills it with total minus the top-N sum). So adding up the whole list gives the
+    // grand total over every dispatch, which is what the full-range SQL SUM measures.
+    t = IM_REGISTER_TEST(e, "app", "sys_summary_kernel_duration_total_matches_db");
+    t->TestFunc = [](ImGuiTestContext* ctx)
+    {
+        TraceView* tv = GetTraceViewOrSkip(ctx);
+        if (!tv) return;
+        SummaryView* sv = TraceViewTestPeer{*tv}.SummaryViewPtr();
+        IM_CHECK(sv != nullptr);
+        if (sv == nullptr) return;
+        TopKernels* tk = SummaryViewTestPeer{*sv}.TopKernelsPtr();
+        IM_CHECK(tk != nullptr);
+        if (tk == nullptr) return;
+
+        // FetchTopKernels + TopKernels::Update only run while the Summary window is
+        // shown. Force it open and drain the async fetch.
+        ShowSummaryGuard summary_guard;
+        SettingsManager::GetInstance().GetAppWindowSettings().show_summary = true;
+        TopKernelsTestPeer peer{*tk};
+        for (int i = 0; i < 60 && peer.KernelCount() == 0; i++) ctx->Yield(2);
+        IM_CHECK(peer.KernelCount() > 0);
+        if (peer.KernelCount() == 0) return;
+
+        // Optiq's grand total is the sum over every displayed entry (top-N plus "Others").
+        double optiq_total = 0.0;
+        for (size_t i = 0; i < peer.KernelCount(); i++) optiq_total += peer.ExecTimeSum(i);
+
+        // The independent SQL runs on the db this process opened. Optiq trims each
+        // row's duration to the visible time range, which only equals the full
+        // (end - start) when the whole trace is in view. So this query uses no time
+        // filter, otherwise the two sides would be measuring different spans.
+        Project* project = AppWindow::GetInstance()->GetCurrentProject();
+        IM_CHECK(project != nullptr);
+        if (project == nullptr) return;
+        const std::string db_path = project->GetID();
+
+        const char* sql =
+            DbHasTimestampTable(db_path)
+                ? "SELECT SUM(TE.value - TS.value) FROM rocpd_kernel_dispatch K "
+                  "INNER JOIN rocpd_timestamp TS ON TS.id = K.start_id "
+                  "INNER JOIN rocpd_timestamp TE ON TE.id = K.end_id"
+                : "SELECT SUM(K.end - K.start) FROM rocpd_kernel_dispatch K";
+        double sql_total = 0.0;
+        const bool have_sql = DbScalarQuery(db_path, sql, sql_total);
+        IM_CHECK(have_sql);
+        if (!have_sql) return;
+
+        // Compare with a relative tolerance, not exact equality. Both sides add large
+        // ns values into doubles, which carries a little floating-point round-off,
+        // while a genuine error would be off by whole kernels (millions of ns).
+        const double denom = std::max({ std::fabs(optiq_total), std::fabs(sql_total), 1.0 });
+        IM_CHECK(std::fabs(optiq_total - sql_total) / denom < 1e-6);
+    };
+
+    // The invocation counts shown in the Summary should add up to COUNT(*) over every
+    // dispatch. Caveat: when more kernels exist than the Summary lists, it appends an
+    // "Others" row that reports 0 invocations, so the visible counts only reach the
+    // true total when that row is absent. When it is present the rows are just the
+    // top-N, so skip rather than compare a partial sum to the full count.
+    t = IM_REGISTER_TEST(e, "app", "sys_summary_kernel_count_matches_db");
+    t->TestFunc = [](ImGuiTestContext* ctx)
+    {
+        TraceView* tv = GetTraceViewOrSkip(ctx);
+        if (!tv) return;
+        SummaryView* sv = TraceViewTestPeer{*tv}.SummaryViewPtr();
+        IM_CHECK(sv != nullptr);
+        if (sv == nullptr) return;
+        TopKernels* tk = SummaryViewTestPeer{*sv}.TopKernelsPtr();
+        IM_CHECK(tk != nullptr);
+        if (tk == nullptr) return;
+
+        ShowSummaryGuard summary_guard;
+        SettingsManager::GetInstance().GetAppWindowSettings().show_summary = true;
+        TopKernelsTestPeer peer{*tk};
+        for (int i = 0; i < 60 && peer.KernelCount() == 0; i++) ctx->Yield(2);
+        IM_CHECK(peer.KernelCount() > 0);
+        if (peer.KernelCount() == 0) return;
+
+        if (peer.PaddedIdx().has_value())
+        {
+            ctx->LogWarning("SKIP: top-N truncated (Others bucket present); dispatch count "
+                            "is not a grand total through the displayed entries");
+            return;
+        }
+
+        // No "Others" row here, so every kernel is shown and the invocation counts
+        // add up to the full dispatch count.
+        uint64_t optiq_count = 0;
+        for (size_t i = 0; i < peer.KernelCount(); i++) optiq_count += peer.Invocations(i);
+
+        Project* project = AppWindow::GetInstance()->GetCurrentProject();
+        IM_CHECK(project != nullptr);
+        if (project == nullptr) return;
+        const std::string db_path = project->GetID();
+
+        // Counting rows needs no timestamp join, so unlike the duration query this one
+        // is the same on every schema version.
+        double sql_count_d = 0.0;
+        const bool have_sql =
+            DbScalarQuery(db_path, "SELECT COUNT(*) FROM rocpd_kernel_dispatch", sql_count_d);
+        IM_CHECK(have_sql);
+        if (!have_sql) return;
+
+        // Both sides are exact integers, so assert exact equality.
+        IM_CHECK(optiq_count == static_cast<uint64_t>(sql_count_d));
     };
 
     t = IM_REGISTER_TEST(e, "app", "compute_kernel_table_loads_sorted");

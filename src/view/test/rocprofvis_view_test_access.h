@@ -264,6 +264,10 @@ struct TopKernelsTestPeer
     // Return name of kernel at given index
     std::string KernelName(size_t idx) const{ return (v.m_kernels && idx < v.m_kernels->size()) ? v.m_kernels->at(idx).name : std::string{};}
     double ExecTimeSum(size_t idx) const{ return (v.m_kernels && idx < v.m_kernels->size()) ? v.m_kernels->at(idx).exec_time_sum : 0.0;}
+    // Per-kernel dispatch invocation count (COUNT(*) per name). The synthetic
+    // "Others" bucket carries 0 here (PadTopKernels only fills its residual
+    // duration), so a count test may only sum these when no padded bucket exists.
+    uint64_t Invocations(size_t idx) const{ return (v.m_kernels && idx < v.m_kernels->size()) ? v.m_kernels->at(idx).invocations : 0;}
     std::optional<size_t> SelectedIdx() const { return v.m_selected_idx; }
     // Current chart/table display mode, exposed as booleans so the private
     // TopKernels::DisplayMode enum stays encapsulated.

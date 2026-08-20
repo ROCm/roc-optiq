@@ -1211,12 +1211,15 @@ TimelineView::Update()
             m_pending_sort_mode.reset();
         }
 
-        // A topology sort requested before the sidebar tree was ready (e.g. right
-        // after load) is applied here once the order becomes available.
+        // Apply a topology sort deferred until the order was ready; fall back to
+        // Default if the cached order isn't a full permutation of the current tracks.
         if(m_topology_sort_pending && m_sort_mode == TrackSortMode::kTopology &&
            m_topology_order && !m_topology_order->empty())
         {
-            ApplyTrackOrder(*m_topology_order);
+            if(!ApplyTrackOrder(*m_topology_order))
+            {
+                m_sort_mode = TrackSortMode::kDefault;
+            }
             m_topology_sort_pending = false;
         }
 

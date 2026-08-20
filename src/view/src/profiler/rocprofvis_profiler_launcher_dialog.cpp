@@ -556,7 +556,7 @@ void ProfilerLauncherDialog::RenderMainContent()
     LaunchCardHeader(ICON_CHART_BAR, "Profiling Options");
     if (general_tabs.size() == 1)
     {
-        general_tabs[0]->render_fn();
+        m_execution_cache_dirty |= general_tabs[0]->render_fn();
     }
     else if (!general_tabs.empty())
     {
@@ -566,7 +566,7 @@ void ProfilerLauncherDialog::RenderMainContent()
             {
                 if (ImGui::BeginTabItem(tab->display_name.c_str()))
                 {
-                    tab->render_fn();
+                    m_execution_cache_dirty |= tab->render_fn();
                     ImGui::EndTabItem();
                 }
             }
@@ -725,7 +725,7 @@ void ProfilerLauncherDialog::RenderAdvancedWindow()
                 {
                     ImGui::Spacing();
                     ImGui::BeginChild("adv_scroll", ImVec2(0.0f, 0.0f), ImGuiChildFlags_None);
-                    tab.render_fn();
+                    m_execution_cache_dirty |= tab.render_fn();
                     ImGui::EndChild();
                     ImGui::EndTabItem();
                 }
@@ -1183,13 +1183,11 @@ void ProfilerLauncherDialog::Update()
 {
     if (m_show_window)
     {
-        // Only rebuild the (allocation-heavy) execution cache / command preview
-        // when inputs may have changed: an explicit dirty request, or while the
-        // user is actively editing a widget (ImGui::IsAnyItemActive reflects the
-        // previous frame here, so the deactivation frame is still captured). This
-        // covers the backend-owned settings tabs without instrumenting each
-        // widget individually.
-        if (m_execution_cache_dirty || ImGui::IsAnyItemActive())
+        // Rebuild the (allocation-heavy) execution cache / command preview only
+        // when a control reported an actual change - every widget, including the
+        // backend-owned settings tabs, ORs its ImGui return value into the dirty
+        // flag. 
+        if (m_execution_cache_dirty)
         {
             RefreshExecutionCache();
             m_execution_cache_dirty = false;

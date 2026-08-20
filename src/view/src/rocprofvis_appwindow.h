@@ -93,6 +93,9 @@ public:
                             
     Project* GetProject(const std::string& id);
     Project* GetCurrentProject();
+    // Returns the open project that has `file_path` among its source files (canonical match),
+    // or nullptr. Finds merged constituents that GetProject (primary-id only) would miss.
+    Project* FindProjectContainingSource(const std::string& file_path);
 
     void OpenFile(std::string file_path);
 

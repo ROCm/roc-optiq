@@ -487,6 +487,32 @@ AppWindow::GetCurrentProject()
     return project;
 }
 
+Project*
+AppWindow::FindProjectContainingSource(const std::string& file_path)
+{
+    auto canonical = [](const std::string& p) -> std::string {
+        std::error_code      ec;
+        std::filesystem::path c = std::filesystem::weakly_canonical(p, ec);
+        return ec ? p : c.string();
+    };
+    const std::string target = canonical(file_path);
+    for(auto& [id, project] : m_projects)
+    {
+        if(!project)
+        {
+            continue;
+        }
+        for(const std::string& source : project->GetSourceFiles())
+        {
+            if(canonical(source) == target)
+            {
+                return project.get();
+            }
+        }
+    }
+    return nullptr;
+}
+
 void
 AppWindow::BeginAppShutdown()
 {
@@ -1195,6 +1221,17 @@ AppWindow::AddTraceToCurrentView()
             Project* current = GetProject(project_id);
             if(current == nullptr)
             {
+                return;
+            }
+            // One view per trace file: refuse a file already shown in this or another view.
+            if(Project* owner = FindProjectContainingSource(file_path))
+            {
+                ShowMessageDialog(
+                    "Add Trace to View",
+                    owner == current
+                        ? "That trace is already in this view."
+                        : "That trace is already open in \"" + owner->GetName() +
+                              "\". Close it there first, then add it here.");
                 return;
             }
             TraceView* trace_view = dynamic_cast<TraceView*>(current->GetView().get());

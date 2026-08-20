@@ -333,6 +333,11 @@ Project::OpenTrace(std::string& file_path)
     file_path = std::filesystem::weakly_canonical(file_path).string();
     // trace already open, return duplicate so we switch tabs instead of loading it twice
     Project* duplicate = AppWindow::GetInstance()->GetProject(file_path);
+    if(!duplicate)
+    {
+        // Also treat the file as open when it is a source of a merged view under another id.
+        duplicate = AppWindow::GetInstance()->FindProjectContainingSource(file_path);
+    }
     if(duplicate)
     {
         file_path   = duplicate->GetID();

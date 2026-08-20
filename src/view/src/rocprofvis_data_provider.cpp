@@ -4703,29 +4703,35 @@ DataProvider::LoadPcSamplingCodeObjects(KernelInfo&          kernel,
                                      &num_isa_lines);
 
     kernel.pc_sampling_data.code_objects.resize(num_code_objects);
-    std::unordered_map<uint64_t, CodeObject*> code_objects_by_id;
-    code_objects_by_id.reserve(num_code_objects);
+    std::unordered_map<uint64_t, CodeObjectStore*> code_objects_by_uuid;
+    code_objects_by_uuid.reserve(num_code_objects);
     for(uint64_t i = 0; i < num_code_objects; i++)
     {
-        uint64_t id = 0;
-        rocprofvis_controller_get_uint64(pc_handle, kRPVControllerPCSamplingCodeObjectId,
-                                         i, &id);
-        kernel.pc_sampling_data.code_objects[i].id = id;
-        kernel.pc_sampling_data.code_objects[i].uri =
-            GetString(pc_handle, kRPVControllerPCSamplingCodeObjectUri, i);
-        kernel.pc_sampling_data.code_objects[i].content_checksum =
-            GetString(pc_handle, kRPVControllerPCSamplingCodeObjectChecksum, i);
-        code_objects_by_id.emplace(kernel.pc_sampling_data.code_objects[i].id,
-                                   &kernel.pc_sampling_data.code_objects[i]);
+        CodeObjectStore& code_object = kernel.pc_sampling_data.code_objects[i];
+        rocprofvis_controller_get_uint64(
+            pc_handle, kRPVControllerPCSamplingCodeObjectUuid, i,
+            &code_object.code_object_uuid);
+        rocprofvis_controller_get_uint64(
+            pc_handle, kRPVControllerPCSamplingCodeObjectWorkloadId, i,
+            &code_object.workload_id);
+        rocprofvis_controller_get_uint64(
+            pc_handle, kRPVControllerPCSamplingCodeObjectPid, i, &code_object.pid);
+        rocprofvis_controller_get_uint64(
+            pc_handle, kRPVControllerPCSamplingCodeObjectId, i,
+            &code_object.code_object_id);
+        rocprofvis_controller_get_uint64(
+            pc_handle, kRPVControllerPCSamplingCodeObjectLoadBase, i,
+            &code_object.load_base);
+        code_objects_by_uuid.emplace(code_object.code_object_uuid, &code_object);
     }
 
     for(uint64_t ii = 0; ii < num_isa_lines; ii++)
     {
         IsaLine isa_line;
         LoadPcSamplingIsaLine(isa_line, pc_handle, ii);
-        std::unordered_map<uint64_t, CodeObject*>::iterator code_object_it =
-            code_objects_by_id.find(isa_line.code_object_uuid);
-        if(code_object_it == code_objects_by_id.end())
+        std::unordered_map<uint64_t, CodeObjectStore*>::iterator code_object_it =
+            code_objects_by_uuid.find(isa_line.code_object_uuid);
+        if(code_object_it == code_objects_by_uuid.end())
         {
             spdlog::debug("Skipping ISA line {} with unknown code object {}", ii,
                           isa_line.code_object_uuid);
@@ -4794,7 +4800,7 @@ DataProvider::LoadPcSamplingStates(KernelInfo& kernel, rocprofvis_handle_t* pc_h
     rocprofvis_controller_get_uint64(pc_handle, kRPVControllerPCSamplingNumSamplingStates, 0, &num_sampling_states);
 
     std::unordered_map<uint64_t, IsaLine*> isa_lines_by_id;
-    for(CodeObject& code_object : kernel.pc_sampling_data.code_objects)
+    for(CodeObjectStore& code_object : kernel.pc_sampling_data.code_objects)
         for(IsaLine& isa_line : code_object.isa_lines)
             isa_lines_by_id.emplace(isa_line.instruction_uuid, &isa_line);
 
@@ -4841,7 +4847,7 @@ DataProvider::LoadPcSamplingStallReasonCounts(KernelInfo& kernel, rocprofvis_han
     rocprofvis_controller_get_uint64(pc_handle, kRPVControllerPCSamplingNumStallReasonCounts, 0, &num_reason_counts);
 
     std::unordered_map<uint32_t, SamplingState*> sampling_states_by_id;
-    for(CodeObject& code_object : kernel.pc_sampling_data.code_objects)
+    for(CodeObjectStore& code_object : kernel.pc_sampling_data.code_objects)
         for(IsaLine& isa_line : code_object.isa_lines)
             if(isa_line.sampling_state.loaded)
                 sampling_states_by_id.emplace(isa_line.sampling_state.id, &isa_line.sampling_state);

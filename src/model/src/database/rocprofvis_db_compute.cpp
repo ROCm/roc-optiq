@@ -70,7 +70,11 @@ namespace DataModel
 		{"source_file_id", kRPVComputeColumnPcSamplingSourceLineFileId},
 		{"line_number", kRPVComputeColumnPcSamplingSourceLineNumber},
 		{"content", kRPVComputeColumnPcSamplingSourceLineContent},
+		{"code_object_uuid", kRPVComputeColumnPcSamplingCodeObjectUuid},
+		{"code_object_workload_id", kRPVComputeColumnPcSamplingCodeObjectWorkloadId},
+		{"code_object_pid", kRPVComputeColumnPcSamplingCodeObjectPid},
 		{"code_object_id", kRPVComputeColumnPcSamplingCodeObjectId},
+		{"code_object_load_base", kRPVComputeColumnPcSamplingCodeObjectLoadBase},
 		{"uri", kRPVComputeColumnPcSamplingCodeObjectUri},
 		{"code_object_checksum", kRPVComputeColumnPcSamplingCodeObjectChecksum},
 		{"isa_line_id", kRPVComputeColumnPcSamplingIsaLineId},
@@ -388,8 +392,11 @@ namespace DataModel
 			if (num == 1 && params != nullptr && params[0].param_type == kRPVComputeParamKernelId)
 			{
 				query_out =
-					"SELECT DISTINCT co.code_object_uuid AS code_object_id, "
-					"NULL AS uri, NULL AS code_object_checksum "
+					"SELECT DISTINCT co.code_object_uuid, "
+					"co.workload_id AS code_object_workload_id, "
+					"COALESCE(co.pid, 0) AS code_object_pid, "
+					"COALESCE(co.code_object_id, 0) AS code_object_id, "
+					"COALESCE(co.load_base, 0) AS code_object_load_base "
 					"FROM compute_code_object_store co "
 					"JOIN compute_instruction_line il ON il.code_object_uuid = co.code_object_uuid "
 					"WHERE il.kernel_uuid = ";
@@ -404,7 +411,9 @@ namespace DataModel
 			if (num == 1 && params != nullptr && params[0].param_type == kRPVComputeParamKernelId)
 			{
 				query_out =
-					"SELECT id AS code_object_id, uri, content_checksum AS code_object_checksum "
+					"SELECT id AS code_object_uuid, "
+					"0 AS code_object_workload_id, 0 AS code_object_pid, "
+					"id AS code_object_id, 0 AS code_object_load_base "
 					"FROM code_objects "
 					"WHERE kernel_id = ";
 				query_out += params[0].param_str;

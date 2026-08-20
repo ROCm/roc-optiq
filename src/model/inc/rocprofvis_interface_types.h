@@ -568,6 +568,10 @@ typedef enum rocprofvis_db_compute_column_enum_t
 
     // Appended to preserve the numeric values of existing DM columns.
     kRPVComputeColumnPcSamplingIsaLineKernelUuid,
+    kRPVComputeColumnPcSamplingCodeObjectUuid,
+    kRPVComputeColumnPcSamplingCodeObjectWorkloadId,
+    kRPVComputeColumnPcSamplingCodeObjectPid,
+    kRPVComputeColumnPcSamplingCodeObjectLoadBase,
 } rocprofvis_db_compute_column_enum_t;
 
 // Compute database query use case enumerations

@@ -360,12 +360,12 @@ rocprofvis_result_t ComputeTrace::AsyncFetchPcSampling(Arguments& args, Future& 
 
             if(!output.m_kernel_data_loaded)
             {
-                if(!output.m_code_objects_loaded)
+                if(!output.m_code_object_store_loaded)
                 {
                     dm_result = FetchCodeObjects(db, future, kernel_id, output);
                     if(dm_result == kRocProfVisDmResultSuccess)
                     {
-                        output.m_code_objects_loaded = true;
+                        output.m_code_object_store_loaded = true;
                     }
                 }
                 if(dm_result == kRocProfVisDmResultSuccess && !output.m_isa_lines_loaded)
@@ -434,12 +434,12 @@ ComputeTrace::AsyncFetchPcSamplingMandatorys(Arguments& args, Future& future,
             rocprofvis_dm_database_t db = rocprofvis_dm_get_property_as_handle(
                 m_dm_handle, kRPVDMDatabaseHandle, 0);
             rocprofvis_dm_result_t dm_result = kRocProfVisDmResultSuccess;
-            if(!output.m_code_objects_loaded)
+            if(!output.m_code_object_store_loaded)
             {
                 dm_result = FetchCodeObjects(db, future, kernel_id, output);
                 if(dm_result == kRocProfVisDmResultSuccess)
                 {
-                    output.m_code_objects_loaded = true;
+                    output.m_code_object_store_loaded = true;
                 }
             }
             if(dm_result == kRocProfVisDmResultSuccess && !output.m_isa_lines_loaded)
@@ -471,9 +471,11 @@ ComputeTrace::FetchCodeObjects(rocprofvis_dm_database_t db, Future* future,
     QueryArgumentStore query_args = { {kRPVComputeParamKernelId, std::to_string(kernel_id)} };
     QueryDataStore query_out = {
         {
-            { kRPVComputeColumnPcSamplingCodeObjectId,       std::nullopt },
-            { kRPVComputeColumnPcSamplingCodeObjectUri,      std::nullopt },
-            { kRPVComputeColumnPcSamplingCodeObjectChecksum, std::nullopt },
+            { kRPVComputeColumnPcSamplingCodeObjectUuid,       std::nullopt },
+            { kRPVComputeColumnPcSamplingCodeObjectWorkloadId, std::nullopt },
+            { kRPVComputeColumnPcSamplingCodeObjectPid,        std::nullopt },
+            { kRPVComputeColumnPcSamplingCodeObjectId,         std::nullopt },
+            { kRPVComputeColumnPcSamplingCodeObjectLoadBase,   std::nullopt },
         }, {}
     };
     rocprofvis_dm_result_t result = ExecuteQuery(

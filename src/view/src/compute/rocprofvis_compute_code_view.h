@@ -56,7 +56,7 @@ private:
     std::shared_ptr<HSplitContainer>  m_horizontal_split_container;
 
     uint32_t                          m_current_source_file_id;
-    uint64_t                          m_current_code_object_id;
+    uint64_t                          m_current_code_object_uuid;
     uint32_t                          m_current_kernel_id;
     uint32_t                          m_current_workload_id;
     uint32_t                          m_fetch_generation = 0;
@@ -141,7 +141,7 @@ public:
     IsaCodeWidget(LineSelection& selection);
     void Render() override;
 
-    void Load(const PcSamplingData& data, uint64_t code_object_id);
+    void Load(const PcSamplingData& data, uint64_t code_object_uuid);
     void ShowComments(bool show) { m_show_comments = show; };
 
 private:

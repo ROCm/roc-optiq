@@ -85,15 +85,51 @@ rocprofvis_result_t PcSampling::GetUInt64(rocprofvis_property_t property, uint64
             case kRPVControllerPCSamplingNumCodeObjects:
             {
                 (void)index;
-                *value = m_code_objects.size();
+                *value = m_code_object_store.size();
                 result = kRocProfVisResultSuccess;
+                break;
+            }
+            case kRPVControllerPCSamplingCodeObjectUuid:
+            {
+                if(index < m_code_object_store.size())
+                {
+                    *value = m_code_object_store[index].code_object_uuid;
+                    result = kRocProfVisResultSuccess;
+                }
+                break;
+            }
+            case kRPVControllerPCSamplingCodeObjectWorkloadId:
+            {
+                if(index < m_code_object_store.size())
+                {
+                    *value = m_code_object_store[index].workload_id;
+                    result = kRocProfVisResultSuccess;
+                }
+                break;
+            }
+            case kRPVControllerPCSamplingCodeObjectPid:
+            {
+                if(index < m_code_object_store.size())
+                {
+                    *value = m_code_object_store[index].pid;
+                    result = kRocProfVisResultSuccess;
+                }
                 break;
             }
             case kRPVControllerPCSamplingCodeObjectId:
             {
-                if(index < m_code_objects.size())
+                if(index < m_code_object_store.size())
                 {
-                    *value = m_code_objects[index].id;
+                    *value = m_code_object_store[index].code_object_id;
+                    result = kRocProfVisResultSuccess;
+                }
+                break;
+            }
+            case kRPVControllerPCSamplingCodeObjectLoadBase:
+            {
+                if(index < m_code_object_store.size())
+                {
+                    *value = m_code_object_store[index].load_base;
                     result = kRocProfVisResultSuccess;
                 }
                 break;
@@ -374,15 +410,51 @@ rocprofvis_result_t PcSampling::SetUInt64(rocprofvis_property_t property, uint64
         case kRPVControllerPCSamplingNumCodeObjects:
         {
             (void)index;
-            m_code_objects.resize(value);
+            m_code_object_store.resize(value);
             result = kRocProfVisResultSuccess;
+            break;
+        }
+        case kRPVControllerPCSamplingCodeObjectUuid:
+        {
+            if(index < m_code_object_store.size())
+            {
+                m_code_object_store[index].code_object_uuid = value;
+                result = kRocProfVisResultSuccess;
+            }
+            break;
+        }
+        case kRPVControllerPCSamplingCodeObjectWorkloadId:
+        {
+            if(index < m_code_object_store.size())
+            {
+                m_code_object_store[index].workload_id = value;
+                result = kRocProfVisResultSuccess;
+            }
+            break;
+        }
+        case kRPVControllerPCSamplingCodeObjectPid:
+        {
+            if(index < m_code_object_store.size())
+            {
+                m_code_object_store[index].pid = value;
+                result = kRocProfVisResultSuccess;
+            }
             break;
         }
         case kRPVControllerPCSamplingCodeObjectId:
         {
-            if(index < m_code_objects.size())
+            if(index < m_code_object_store.size())
             {
-                m_code_objects[index].id = value;
+                m_code_object_store[index].code_object_id = value;
+                result = kRocProfVisResultSuccess;
+            }
+            break;
+        }
+        case kRPVControllerPCSamplingCodeObjectLoadBase:
+        {
+            if(index < m_code_object_store.size())
+            {
+                m_code_object_store[index].load_base = value;
                 result = kRocProfVisResultSuccess;
             }
             break;
@@ -705,18 +777,12 @@ rocprofvis_result_t PcSampling::GetString(rocprofvis_property_t property, uint64
                 break;
             }
             case kRPVControllerPCSamplingCodeObjectUri:
-            {
-                if(index < m_code_objects.size())
-                {
-                    result = GetStdStringImpl(value, length, m_code_objects[index].uri);
-                }
-                break;
-            }
             case kRPVControllerPCSamplingCodeObjectChecksum:
             {
-                if(index < m_code_objects.size())
+                if(index < m_code_object_store.size())
                 {
-                    result = GetStdStringImpl(value, length, m_code_objects[index].content_checksum);
+                    // Retained for compatibility with the legacy controller API.
+                    result = GetStdStringImpl(value, length, std::string{});
                 }
                 break;
             }
@@ -780,19 +846,12 @@ rocprofvis_result_t PcSampling::SetString(rocprofvis_property_t property, uint64
             break;
         }
         case kRPVControllerPCSamplingCodeObjectUri:
-        {
-            if(index < m_code_objects.size())
-            {
-                m_code_objects[index].uri = value;
-                result = kRocProfVisResultSuccess;
-            }
-            break;
-        }
         case kRPVControllerPCSamplingCodeObjectChecksum:
         {
-            if(index < m_code_objects.size())
+            if(index < m_code_object_store.size())
             {
-                m_code_objects[index].content_checksum = value;
+                // Retained for compatibility with legacy query results.
+                (void)value;
                 result = kRocProfVisResultSuccess;
             }
             break;
@@ -904,6 +963,30 @@ bool PcSampling::QueryToPropertyEnum(rocprofvis_db_compute_column_enum_t in, roc
         case kRPVComputeColumnPcSamplingIsaLineCodeObjectOffset:
         {
             property = kRPVControllerPCSamplingIsaLineCodeObjectOffset;
+            type = kRPVControllerPrimitiveTypeUInt64;
+            break;
+        }
+        case kRPVComputeColumnPcSamplingCodeObjectUuid:
+        {
+            property = kRPVControllerPCSamplingCodeObjectUuid;
+            type = kRPVControllerPrimitiveTypeUInt64;
+            break;
+        }
+        case kRPVComputeColumnPcSamplingCodeObjectWorkloadId:
+        {
+            property = kRPVControllerPCSamplingCodeObjectWorkloadId;
+            type = kRPVControllerPrimitiveTypeUInt64;
+            break;
+        }
+        case kRPVComputeColumnPcSamplingCodeObjectPid:
+        {
+            property = kRPVControllerPCSamplingCodeObjectPid;
+            type = kRPVControllerPrimitiveTypeUInt64;
+            break;
+        }
+        case kRPVComputeColumnPcSamplingCodeObjectLoadBase:
+        {
+            property = kRPVControllerPCSamplingCodeObjectLoadBase;
             type = kRPVControllerPrimitiveTypeUInt64;
             break;
         }

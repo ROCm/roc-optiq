@@ -102,12 +102,14 @@ struct IsaLine
     std::vector<uint32_t> source_line_ids;
 };
 
-struct CodeObject
+struct CodeObjectStore
 {
-    std::string          uri;
-    std::string          content_checksum;
+    uint64_t             code_object_uuid = 0;
+    uint64_t             workload_id      = 0;
+    uint64_t             pid              = 0;
+    uint64_t             code_object_id   = 0;
+    uint64_t             load_base        = 0;
     std::vector<IsaLine> isa_lines;
-    uint64_t             id = 0;
 };
 
 struct SourceLine
@@ -128,10 +130,10 @@ struct SourceFile
 
 struct PcSamplingData
 {
-    std::vector<CodeObject>     code_objects;
-    std::vector<SourceFile>     source_files;
-    std::vector<IsaToIsaDep>    isa_to_isa_deps;
-    std::vector<IsaToSourceDep> isa_to_source_deps;
+    std::vector<CodeObjectStore> code_objects;
+    std::vector<SourceFile>      source_files;
+    std::vector<IsaToIsaDep>     isa_to_isa_deps;
+    std::vector<IsaToSourceDep>  isa_to_source_deps;
 };
 
 struct KernelInfo

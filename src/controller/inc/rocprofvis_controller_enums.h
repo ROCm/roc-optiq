@@ -1075,6 +1075,10 @@ typedef enum rocprofvis_controller_pc_sampling_data_properties_t : uint32_t
     kRPVControllerPCSamplingStallReasonCount,
     // Appended to preserve the numeric values of existing public properties.
     kRPVControllerPCSamplingIsaLineKernelUuid,
+    kRPVControllerPCSamplingCodeObjectUuid,
+    kRPVControllerPCSamplingCodeObjectWorkloadId,
+    kRPVControllerPCSamplingCodeObjectPid,
+    kRPVControllerPCSamplingCodeObjectLoadBase,
     __kRPVControllerPCSamplingPropertiesLast
 
 } rocprofvis_controller_pc_sampling_data_properties_t;

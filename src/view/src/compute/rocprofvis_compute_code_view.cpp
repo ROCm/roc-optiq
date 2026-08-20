@@ -23,7 +23,7 @@ ComputeCodeView::ComputeCodeView(DataProvider& data_provider)
 , m_data_provider(data_provider)
 , m_control_panel_height(0.0f)
 , m_current_source_file_id(ComputeSelection::INVALID_SELECTION_ID)
-, m_current_code_object_id(ComputeSelection::INVALID_SELECTION_ID)
+, m_current_code_object_uuid(ComputeSelection::INVALID_SELECTION_ID)
 , m_current_kernel_id(ComputeSelection::INVALID_SELECTION_ID)
 , m_current_workload_id(ComputeSelection::INVALID_SELECTION_ID)
 , m_show_metadata_enabled(false)
@@ -151,7 +151,7 @@ ComputeCodeView::ClearSelectionData()
 {
     m_source_files.clear();
     m_current_source_file_id = ComputeSelection::INVALID_SELECTION_ID;
-    m_current_code_object_id = ComputeSelection::INVALID_SELECTION_ID;
+    m_current_code_object_uuid = ComputeSelection::INVALID_SELECTION_ID;
     ClearCodeData();
 }
 
@@ -230,10 +230,10 @@ ComputeCodeView::OnPcSamplingReady(uint32_t kernel_id, uint32_t source_file_id,
         m_source_code->Load(data, m_current_source_file_id);
 
     if(!data.code_objects.empty())
-        m_current_code_object_id = data.code_objects[0].id;
+        m_current_code_object_uuid = data.code_objects[0].code_object_uuid;
 
-    if(m_current_code_object_id != ComputeSelection::INVALID_SELECTION_ID)
-        m_isa_code->Load(data, m_current_code_object_id);
+    if(m_current_code_object_uuid != ComputeSelection::INVALID_SELECTION_ID)
+        m_isa_code->Load(data, m_current_code_object_uuid);
 }
 
 void
@@ -564,15 +564,15 @@ IsaCodeWidget::IsaCodeWidget(LineSelection& selection)
 }
 
 void
-IsaCodeWidget::Load(const PcSamplingData& data, uint64_t code_object_id)
+IsaCodeWidget::Load(const PcSamplingData& data, uint64_t code_object_uuid)
 {
     m_entries.clear();
     m_line_selection = {0, 0};
 
-    const CodeObject* code_object = nullptr;
+    const CodeObjectStore* code_object = nullptr;
     for(const auto& code_obj : data.code_objects)
     {
-        if(code_obj.id == code_object_id)
+        if(code_obj.code_object_uuid == code_object_uuid)
         {
             code_object = &code_obj;
             break;

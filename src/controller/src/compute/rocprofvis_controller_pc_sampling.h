@@ -60,11 +60,13 @@ private:
         std::string comment;
         std::string instruction;
     };
-    struct CodeObject
+    struct CodeObjectStore
     {
-        uint64_t    id               = 0;
-        std::string uri;
-        std::string content_checksum;
+        uint64_t code_object_uuid = 0;
+        uint64_t workload_id      = 0;
+        uint64_t pid              = 0;
+        uint64_t code_object_id   = 0;
+        uint64_t load_base        = 0;
     };
     struct IsaToIsaDep
     {
@@ -97,7 +99,7 @@ private:
 
     std::vector<SourceFile>       m_source_files;
     std::vector<SourceLine>       m_source_lines;
-    std::vector<CodeObject>       m_code_objects;
+    std::vector<CodeObjectStore>  m_code_object_store;
     std::vector<IsaLine>          m_isa_lines;
     std::vector<IsaToIsaDep>      m_isa_to_isa_deps;
     std::vector<IsaToSourceDep>   m_isa_to_source_deps;
@@ -105,9 +107,9 @@ private:
     std::vector<StallReasonCount> m_stall_reason_counts;
 
     std::unordered_map<uint32_t, std::vector<SourceLine>> m_source_line_cache;
-    bool m_kernel_data_loaded  = false;
-    bool m_code_objects_loaded = false;
-    bool m_isa_lines_loaded    = false;
+    bool m_kernel_data_loaded       = false;
+    bool m_code_object_store_loaded = false;
+    bool m_isa_lines_loaded         = false;
 
     std::recursive_mutex m_data_mutex;
 

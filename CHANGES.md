@@ -54,6 +54,10 @@ These features are in progress and available for preview only (build from src); 
 - Fixed roofline precision fallback when FP32 ceilings are missing, and kernel markers vanishing when all durations are zero.
 - JobSystem fixes.
 - Fixed timeline tracks that could keep spinning, or show incomplete data, after scrolling or zooming quickly while track data was still loading (including a deadlock when cancelling counter-track queries).
+- Fix memory corruption issue when a trace is closed.
+- Fix handling non-finite numbers when comparing compute metrics.
+- Fix timeline flicker when scrolling via mouse wheel.
+- Fix handling analysis .db files with incomplete roofline data. (Missing compute ceilings).
 
 ## Optiq Beta 0.5.0
 

@@ -90,6 +90,26 @@ protected:
 
     void FormatTimeColumns() const;
     void ExportToFile() const;
+    /* Sends a table request, keeping it for Update() to reissue when the
+     * controller table it needs is busy. Returns whether it went out now.
+     * Held by pointer so the concrete params type survives, which is what
+     * DataProvider::FetchTable dispatches on.
+     */
+    bool QueueTableRequest(const std::shared_ptr<TableRequestParams>& params);
+    // Drops a request kept by QueueTableRequest, once it is out or obsolete.
+    void ClearQueuedTableRequest();
+    /* Whether this table is waiting on data: either a request is out with the
+     * controller, or QueueTableRequest is holding one until the table frees up.
+     */
+    bool TableRequestInFlight() const;
+    /* When false the body draws without its own frame, so a parent that already
+     * draws one around the title and the table supplies the only border.
+     */
+    void SetDrawBorder(bool draw);
+    // Applies an externally chosen sort on the next render.
+    void         SetPendingSort(uint64_t column_index,
+                                rocprofvis_controller_sort_order_t order);
+    virtual void OnSortChanged() {}
 
     FilterOptions                      m_filter_options;
     FilterOptions                      m_pending_filter_options;
@@ -122,6 +142,7 @@ protected:
     int m_hovered_row;
 
     bool m_horizontal_scroll;
+    bool m_draw_border;
 
 private:
     void RenderCell(const std::string* cell_text, int row, int column);
@@ -133,10 +154,15 @@ private:
     int m_fetch_threshold_items;
 
     // Internal state flags below
-    bool     m_open_context_menu;
-    bool     m_skip_data_fetch;
-    uint64_t m_last_total_row_count;
-    ImVec2   m_last_table_size;
+    bool                                m_open_context_menu;
+    bool                                m_skip_data_fetch;
+    bool                                m_retry_fetch;
+    bool                                m_pending_sort;
+    uint64_t                            m_pending_sort_column;
+    rocprofvis_controller_sort_order_t  m_pending_sort_order;
+    std::shared_ptr<TableRequestParams> m_retry_params;
+    uint64_t                            m_last_total_row_count;
+    ImVec2                              m_last_table_size;
 
     std::string m_no_data_text;
     std::string m_export_notification_id;

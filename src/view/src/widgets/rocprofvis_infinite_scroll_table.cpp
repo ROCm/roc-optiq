@@ -2,9 +2,12 @@
 // SPDX-License-Identifier: MIT
 
 #include "rocprofvis_infinite_scroll_table.h"
+#include "imgui_internal.h"
 #include "icons/rocprovfis_icon_defines.h"
 #include "rocprofvis_appwindow.h"
 #include "rocprofvis_common_defs.h"
+#include "rocprofvis_events.h"
+#include "rocprofvis_render_scheduler.h"
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_timeline_selection.h"
 #include "rocprofvis_utils.h"
@@ -37,6 +40,10 @@ InfiniteScrollTable::InfiniteScrollTable(
 : m_data_provider(dp)
 , m_open_context_menu(false)
 , m_skip_data_fetch(false)
+, m_retry_fetch(false)
+, m_pending_sort(false)
+, m_pending_sort_column(0)
+, m_pending_sort_order(kRPVControllerSortOrderAscending)
 , m_table_type(table_type)
 , m_request_table_type(request_table_type)
 , m_request_id(request_id)
@@ -63,6 +70,7 @@ InfiniteScrollTable::InfiniteScrollTable(
 , m_export_notification_id(dp.GetTraceFilePath())
 , m_timeline_selection(timeline_selection)
 , m_horizontal_scroll(0.0f)
+, m_draw_border(true)
 , m_time_column_indices(
       { INVALID_UINT64_INDEX, INVALID_UINT64_INDEX, INVALID_UINT64_INDEX })
 , m_important_column_idxs(std::vector<size_t>(kNumImportantColumns, INVALID_UINT64_INDEX))
@@ -122,11 +130,87 @@ InfiniteScrollTable::~InfiniteScrollTable()
 void
 InfiniteScrollTable::Update()
 {
+    if(m_retry_fetch)
+    {
+        if(m_data_provider.IsRequestPending(m_request_id) ||
+           m_data_provider.IsTableRequestPending(m_request_table_type))
+        {
+            // The reissue below is the only thing that will send this request, and
+            // it needs a frame to run in, so hold the lazy render loop open.
+            RenderScheduler::GetInstance().RequestRender();
+        }
+        else
+        {
+            // Nothing holds the controller table now, so this is the one attempt
+            // that waiting was for. Whatever it returns, stop carrying the request:
+            // a refusal here is not about the table being busy.
+            if(m_retry_params)
+            {
+                m_data_provider.FetchTable(*m_retry_params);
+            }
+            ClearQueuedTableRequest();
+        }
+    }
     if(m_data_changed)
     {
         FormatData();
         m_data_changed = false;
     }
+}
+
+bool
+InfiniteScrollTable::QueueTableRequest(const std::shared_ptr<TableRequestParams>& params)
+{
+    if(!params)
+    {
+        return false;
+    }
+
+    bool queued = m_data_provider.FetchTable(*params);
+    if(queued)
+    {
+        ClearQueuedTableRequest();
+    }
+    else
+    {
+        // The controller keeps one table per type, so a request placed while another
+        // view owns that table waits here and is reissued from Update().
+        spdlog::debug("Deferring table request for {}", m_widget_name);
+        m_retry_fetch  = true;
+        m_retry_params = params;
+        // Deferring can happen during Render(), after this frame's Update() has
+        // run, so ask for the frame that reissues it.
+        RenderScheduler::GetInstance().RequestRender();
+    }
+    return queued;
+}
+
+void
+InfiniteScrollTable::ClearQueuedTableRequest()
+{
+    m_retry_fetch = false;
+    m_retry_params.reset();
+}
+
+bool
+InfiniteScrollTable::TableRequestInFlight() const
+{
+    return m_retry_fetch || m_data_provider.IsRequestPending(m_request_id);
+}
+
+void
+InfiniteScrollTable::SetPendingSort(uint64_t                           column_index,
+                                    rocprofvis_controller_sort_order_t order)
+{
+    m_pending_sort        = true;
+    m_pending_sort_column = column_index;
+    m_pending_sort_order  = order;
+}
+
+void
+InfiniteScrollTable::SetDrawBorder(bool draw)
+{
+    m_draw_border = draw;
 }
 
 void
@@ -138,7 +222,10 @@ InfiniteScrollTable::FormatData() const
 void
 InfiniteScrollTable::HandleNewTableData(std::shared_ptr<RocEvent> e)
 {
-    if(e && e->GetSourceId() == m_data_provider.GetTraceFilePath())
+    std::shared_ptr<TableDataEvent> table_event =
+        std::dynamic_pointer_cast<TableDataEvent>(e);
+    if(table_event && table_event->GetSourceId() == m_data_provider.GetTraceFilePath() &&
+       table_event->GetRequestID() == m_request_id)
     {
         m_data_changed = true;
         IndexColumns();
@@ -165,7 +252,8 @@ InfiniteScrollTable::Render()
                         m_settings.GetDefaultStyle().ChildRounding);
     ImGui::PushStyleColor(ImGuiCol_ChildBg, m_settings.GetColor(Colors::kBgPanel));
     ImGui::PushStyleColor(ImGuiCol_Border, m_settings.GetColor(Colors::kBorderColor));
-    ImGui::BeginChild(m_widget_name.c_str(), ImVec2(0, 0), ImGuiChildFlags_Borders);
+    ImGui::BeginChild(m_widget_name.c_str(), ImVec2(0, 0),
+                      m_draw_border ? ImGuiChildFlags_Borders : ImGuiChildFlags_None);
     const auto& table_model = m_table_model();
 
     const std::vector<std::vector<std::string>>& table_data =
@@ -211,7 +299,7 @@ InfiniteScrollTable::Render()
                                   ImGuiTableFlags_BordersV | ImGuiTableFlags_Resizable |
                                   ImGuiTableFlags_Reorderable | ImGuiTableFlags_Hideable;
 
-    if(!m_data_provider.IsRequestPending(m_request_id))
+    if(!TableRequestInFlight())
     {
         // If the request is not pending, we can allow sorting
         table_flags |= ImGuiTableFlags_Sortable;
@@ -286,6 +374,20 @@ InfiniteScrollTable::Render()
                                  : ImGuiTableColumnFlags_PreferSortDescending);
                     }
                     ImGui::TableSetupColumn(column_names[i].c_str(), col_flags);
+                }
+
+                // Sorting is off while a request is in flight, and the specs of a
+                // table that cannot sort ignore this, so hold it until it can land.
+                if(m_pending_sort && (table_flags & ImGuiTableFlags_Sortable))
+                {
+                    // Dirties the specs, so the block below refetches as if clicked.
+                    ImGui::TableSetColumnSortDirection(
+                        static_cast<int>(m_pending_sort_column),
+                        m_pending_sort_order == kRPVControllerSortOrderAscending
+                            ? ImGuiSortDirection_Ascending
+                            : ImGuiSortDirection_Descending,
+                        false);
+                    m_pending_sort = false;
                 }
 
                 // Get sort specs
@@ -421,7 +523,9 @@ InfiniteScrollTable::Render()
                 // have all the data
                 if(!m_skip_data_fetch && table_data.size() < total_row_count - 1 && table_params)
                 {
-                    if(!m_data_provider.IsRequestPending(m_request_id))
+                    // A held request would be replaced by a scroll fetch built from
+                    // the params of the response before it, so let it go out first.
+                    if(!TableRequestInFlight())
                     {
                         if(scroll_y < start_row_position +
                                           m_fetch_threshold_items * row_height &&
@@ -451,7 +555,7 @@ InfiniteScrollTable::Render()
 
                             table_params->m_start_row     = new_start_pos;
                             table_params->m_req_row_count = m_fetch_chunk_size;
-                            m_data_provider.FetchTable(*table_params);
+                            QueueTableRequest(table_params);
                         }
                         else if((scroll_y + ImGui::GetWindowHeight() >
                                  end_row_position -
@@ -483,7 +587,7 @@ InfiniteScrollTable::Render()
 
                             table_params->m_start_row     = new_start_pos;
                             table_params->m_req_row_count = m_fetch_chunk_size;
-                            m_data_provider.FetchTable(*table_params);
+                            QueueTableRequest(table_params);
                         }
                     }
                 }
@@ -609,7 +713,8 @@ InfiniteScrollTable::RenderContextMenu()
         ImGui::Separator();
         if(IconMenuItem(
                ICON_ARCHIVE, "Export To File",
-               !m_data_provider.IsRequestPending(DataProvider::TABLE_EXPORT_REQUEST_ID)))
+               !m_data_provider.IsRequestPending(DataProvider::TABLE_EXPORT_REQUEST_ID) &&
+                   !m_data_provider.IsTableRequestPending(m_request_table_type)))
         {
             ExportToFile();
         }
@@ -648,8 +753,9 @@ InfiniteScrollTable::ProcessSortOrFilterRequest(
         }
         // check that sort order and column index actually are different from the
         // current values before fetching
-        if(m_filter_requested || sort_order != m_sort_order ||
-           sort_column_index != m_sort_column_index)
+        const bool sort_changed = (sort_order != m_sort_order ||
+                                   sort_column_index != m_sort_column_index);
+        if(m_filter_requested || sort_changed)
         {
             m_sort_column_index = sort_column_index;
             m_sort_order        = sort_order;
@@ -670,9 +776,14 @@ InfiniteScrollTable::ProcessSortOrFilterRequest(
             spdlog::debug("Fetching data for sort, frame count: {}", frame_count);
 
             // Fetch the event table with the updated params
-            m_data_provider.FetchTable(*table_params);
+            QueueTableRequest(table_params);
 
             m_filter_options = filter;
+
+            if(sort_changed)
+            {
+                OnSortChanged();
+            }
         }
     }
     else

@@ -564,7 +564,7 @@ IsaCodeWidget::IsaCodeWidget(LineSelection& selection)
 }
 
 void
-IsaCodeWidget::Load(const PcSamplingData& data, uint32_t code_object_id)
+IsaCodeWidget::Load(const PcSamplingData& data, uint64_t code_object_id)
 {
     m_entries.clear();
     m_line_selection = {0, 0};
@@ -582,7 +582,7 @@ IsaCodeWidget::Load(const PcSamplingData& data, uint32_t code_object_id)
         return;
 
     // Build depth-0 source_line_id lookup: isa_line_id -> source_line_id
-    std::unordered_map<uint32_t, uint32_t> source_by_isa;
+    std::unordered_map<uint64_t, uint32_t> source_by_isa;
     for(const auto& dep : data.isa_to_source_deps)
     {
         if(dep.depth == 0)
@@ -592,13 +592,14 @@ IsaCodeWidget::Load(const PcSamplingData& data, uint32_t code_object_id)
     for(const auto& isa_line : code_object->isa_lines)
     {
         uint32_t source_line_id = 0;
-        if(const auto sit = source_by_isa.find(isa_line.id); sit != source_by_isa.end())
+        if(const auto sit = source_by_isa.find(isa_line.instruction_uuid);
+           sit != source_by_isa.end())
             source_line_id = sit->second;
 
         m_entries.push_back({
             isa_line.instruction,
             isa_line.comment,
-            isa_line.id,
+            isa_line.instruction_uuid,
             source_line_id,
             isa_line.sampling_state.issued_count,
             isa_line.sampling_state.stalled_count,

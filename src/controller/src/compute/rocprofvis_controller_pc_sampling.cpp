@@ -109,7 +109,7 @@ rocprofvis_result_t PcSampling::GetUInt64(rocprofvis_property_t property, uint64
             {
                 if(index < m_isa_lines.size())
                 {
-                    *value = m_isa_lines[index].id;
+                    *value = m_isa_lines[index].instruction_uuid;
                     result = kRocProfVisResultSuccess;
                 }
                 break;
@@ -118,7 +118,16 @@ rocprofvis_result_t PcSampling::GetUInt64(rocprofvis_property_t property, uint64
             {
                 if(index < m_isa_lines.size())
                 {
-                    *value = m_isa_lines[index].code_object_id;
+                    *value = m_isa_lines[index].code_object_uuid;
+                    result = kRocProfVisResultSuccess;
+                }
+                break;
+            }
+            case kRPVControllerPCSamplingIsaLineKernelUuid:
+            {
+                if(index < m_isa_lines.size())
+                {
+                    *value = m_isa_lines[index].kernel_uuid;
                     result = kRocProfVisResultSuccess;
                 }
                 break;
@@ -136,7 +145,8 @@ rocprofvis_result_t PcSampling::GetUInt64(rocprofvis_property_t property, uint64
             {
                 if(index < m_isa_lines.size())
                 {
-                    *value = m_isa_lines[index].instruction_type_id;
+                    // Kept for compatibility with the legacy controller API.
+                    *value = 0;
                     result = kRocProfVisResultSuccess;
                 }
                 break;
@@ -372,7 +382,7 @@ rocprofvis_result_t PcSampling::SetUInt64(rocprofvis_property_t property, uint64
         {
             if(index < m_code_objects.size())
             {
-                m_code_objects[index].id = static_cast<uint32_t>(value);
+                m_code_objects[index].id = value;
                 result = kRocProfVisResultSuccess;
             }
             break;
@@ -388,7 +398,7 @@ rocprofvis_result_t PcSampling::SetUInt64(rocprofvis_property_t property, uint64
         {
             if(index < m_isa_lines.size())
             {
-                m_isa_lines[index].id = static_cast<uint32_t>(value);
+                m_isa_lines[index].instruction_uuid = value;
                 result = kRocProfVisResultSuccess;
             }
             break;
@@ -397,7 +407,16 @@ rocprofvis_result_t PcSampling::SetUInt64(rocprofvis_property_t property, uint64
         {
             if(index < m_isa_lines.size())
             {
-                m_isa_lines[index].code_object_id = static_cast<uint32_t>(value);
+                m_isa_lines[index].code_object_uuid = value;
+                result = kRocProfVisResultSuccess;
+            }
+            break;
+        }
+        case kRPVControllerPCSamplingIsaLineKernelUuid:
+        {
+            if(index < m_isa_lines.size())
+            {
+                m_isa_lines[index].kernel_uuid = value;
                 result = kRocProfVisResultSuccess;
             }
             break;
@@ -415,7 +434,8 @@ rocprofvis_result_t PcSampling::SetUInt64(rocprofvis_property_t property, uint64
         {
             if(index < m_isa_lines.size())
             {
-                m_isa_lines[index].instruction_type_id = static_cast<uint32_t>(value);
+                // Kept for compatibility with legacy query results.
+                (void)value;
                 result = kRocProfVisResultSuccess;
             }
             break;
@@ -884,6 +904,12 @@ bool PcSampling::QueryToPropertyEnum(rocprofvis_db_compute_column_enum_t in, roc
         case kRPVComputeColumnPcSamplingIsaLineCodeObjectOffset:
         {
             property = kRPVControllerPCSamplingIsaLineCodeObjectOffset;
+            type = kRPVControllerPrimitiveTypeUInt64;
+            break;
+        }
+        case kRPVComputeColumnPcSamplingIsaLineKernelUuid:
+        {
+            property = kRPVControllerPCSamplingIsaLineKernelUuid;
             type = kRPVControllerPrimitiveTypeUInt64;
             break;
         }

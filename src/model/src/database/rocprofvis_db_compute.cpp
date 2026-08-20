@@ -75,6 +75,7 @@ namespace DataModel
 		{"code_object_checksum", kRPVComputeColumnPcSamplingCodeObjectChecksum},
 		{"isa_line_id", kRPVComputeColumnPcSamplingIsaLineId},
 		{"isa_code_object_id", kRPVComputeColumnPcSamplingIsaLineCodeObjectId},
+		{"isa_kernel_uuid", kRPVComputeColumnPcSamplingIsaLineKernelUuid},
 		{"code_object_offset", kRPVComputeColumnPcSamplingIsaLineCodeObjectOffset},
 		{"instruction_type_id", kRPVComputeColumnPcSamplingIsaLineInstructionTypeId},
 		{"instruction", kRPVComputeColumnPcSamplingIsaLineInstruction},
@@ -443,8 +444,8 @@ namespace DataModel
 				query_out =
 					"SELECT il.instruction_uuid AS isa_line_id, "
 					"il.code_object_uuid AS isa_code_object_id, "
+					"il.kernel_uuid AS isa_kernel_uuid, "
 					"COALESCE(il.code_object_offset, 0) AS code_object_offset, "
-					"NULL AS instruction_type_id, "
 					"COALESCE(il.instruction, '') AS instruction, "
 					"COALESCE(il.comment, '') AS comment "
 					"FROM compute_instruction_line il "
@@ -461,7 +462,8 @@ namespace DataModel
 			{
 				query_out =
 					"SELECT il.id AS isa_line_id, il.code_object_id AS isa_code_object_id, "
-					"il.code_object_offset, il.instruction_type_id, il.instruction, il.comment "
+					"co.kernel_id AS isa_kernel_uuid, il.code_object_offset, "
+					"il.instruction, il.comment "
 					"FROM isa_lines il "
 					"JOIN code_objects co ON co.id = il.code_object_id "
 					"WHERE co.kernel_id = ";

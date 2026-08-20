@@ -493,8 +493,8 @@ ComputeTrace::FetchIsaLines(rocprofvis_dm_database_t db, Future* future,
         {
             { kRPVComputeColumnPcSamplingIsaLineId,               std::nullopt },
             { kRPVComputeColumnPcSamplingIsaLineCodeObjectId,     std::nullopt },
+            { kRPVComputeColumnPcSamplingIsaLineKernelUuid,       std::nullopt },
             { kRPVComputeColumnPcSamplingIsaLineCodeObjectOffset, std::nullopt },
-            { kRPVComputeColumnPcSamplingIsaLineInstructionTypeId,std::nullopt },
             { kRPVComputeColumnPcSamplingIsaLineInstruction,      std::nullopt },
             { kRPVComputeColumnPcSamplingIsaLineComment,          std::nullopt },
         }, {}

@@ -53,16 +53,16 @@ private:
     };
     struct IsaLine
     {
-        uint32_t    id                  = 0;
-        uint32_t    code_object_id      = 0;
-        uint64_t    code_object_offset  = 0;
-        uint32_t    instruction_type_id = 0;
-        std::string instruction;
+        uint64_t    instruction_uuid   = 0;
+        uint64_t    code_object_uuid   = 0;
+        uint64_t    kernel_uuid        = 0;
+        uint64_t    code_object_offset = 0;
         std::string comment;
+        std::string instruction;
     };
     struct CodeObject
     {
-        uint32_t    id               = 0;
+        uint64_t    id               = 0;
         std::string uri;
         std::string content_checksum;
     };

@@ -92,13 +92,14 @@ struct IsaToSourceDep
 
 struct IsaLine
 {
-    uint64_t    code_object_offset  = 0;
-    std::string instruction;
+    uint64_t    instruction_uuid   = 0;
+    uint64_t    code_object_uuid   = 0;
+    uint64_t    kernel_uuid        = 0;
+    uint64_t    code_object_offset = 0;
     std::string comment;
-    SamplingState           sampling_state;
+    std::string instruction;
+    SamplingState         sampling_state;
     std::vector<uint32_t> source_line_ids;
-    uint32_t    id                  = 0;
-    uint32_t    instruction_type_id = 0;
 };
 
 struct CodeObject
@@ -106,7 +107,7 @@ struct CodeObject
     std::string          uri;
     std::string          content_checksum;
     std::vector<IsaLine> isa_lines;
-    uint32_t             id = 0;
+    uint64_t             id = 0;
 };
 
 struct SourceLine

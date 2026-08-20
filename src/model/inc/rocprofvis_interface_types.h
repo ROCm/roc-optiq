@@ -539,8 +539,8 @@ typedef enum rocprofvis_db_compute_column_enum_t
     kRPVComputeColumnPcSamplingCodeObjectUri,
     kRPVComputeColumnPcSamplingCodeObjectChecksum,
 
-    kRPVComputeColumnPcSamplingIsaLineId,
-    kRPVComputeColumnPcSamplingIsaLineCodeObjectId,
+    kRPVComputeColumnPcSamplingIsaLineId,            // instruction_uuid
+    kRPVComputeColumnPcSamplingIsaLineCodeObjectId,  // code_object_uuid
     kRPVComputeColumnPcSamplingIsaLineCodeObjectOffset,
     kRPVComputeColumnPcSamplingIsaLineInstructionTypeId,
     kRPVComputeColumnPcSamplingIsaLineInstruction,
@@ -565,6 +565,9 @@ typedef enum rocprofvis_db_compute_column_enum_t
     kRPVComputeColumnPcSamplingStallReasonSamplingStateId,
     kRPVComputeColumnPcSamplingStallReasonId,
     kRPVComputeColumnPcSamplingStallReasonCount,
+
+    // Appended to preserve the numeric values of existing DM columns.
+    kRPVComputeColumnPcSamplingIsaLineKernelUuid,
 } rocprofvis_db_compute_column_enum_t;
 
 // Compute database query use case enumerations

@@ -1047,8 +1047,8 @@ typedef enum rocprofvis_controller_pc_sampling_data_properties_t : uint32_t
     kRPVControllerPCSamplingCodeObjectUri,
     kRPVControllerPCSamplingCodeObjectChecksum,
     kRPVControllerPCSamplingNumIsaLines,
-    kRPVControllerPCSamplingIsaLineId,
-    kRPVControllerPCSamplingIsaLineCodeObjectId,
+    kRPVControllerPCSamplingIsaLineId,            // instruction_uuid
+    kRPVControllerPCSamplingIsaLineCodeObjectId,  // code_object_uuid
     kRPVControllerPCSamplingIsaLineCodeObjectOffset,
     kRPVControllerPCSamplingIsaLineInstructionTypeId,
     kRPVControllerPCSamplingIsaLineInstruction,
@@ -1073,6 +1073,8 @@ typedef enum rocprofvis_controller_pc_sampling_data_properties_t : uint32_t
     kRPVControllerPCSamplingStallReasonSamplingStateId,
     kRPVControllerPCSamplingStallReasonId,
     kRPVControllerPCSamplingStallReasonCount,
+    // Appended to preserve the numeric values of existing public properties.
+    kRPVControllerPCSamplingIsaLineKernelUuid,
     __kRPVControllerPCSamplingPropertiesLast
 
 } rocprofvis_controller_pc_sampling_data_properties_t;

@@ -252,7 +252,8 @@ set(APP_FILES
     src/app/src/rocprofvis_imgui_vulkan.cpp
     src/app/src/rocprofvis_imgui_opengl.cpp
     src/app/src/glfw_util.cpp
-    src/app/src/rocprofvis_cli_parser.cpp)
+    src/app/src/rocprofvis_cli_parser.cpp
+    src/app/src/rocprofvis_platform_helpers.cpp)
 if(APPLE)
     list(APPEND APP_FILES src/app/src/rocprofvis_platform_helpers_macos.mm)
 endif()

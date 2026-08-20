@@ -153,11 +153,9 @@ private:
         std::string comment;
         uint64_t    id                  = 0;
         uint32_t    source_line_id      = 0;
-        uint32_t    issued_count        = 0;
-        uint32_t    stalled_count       = 0;
-        uint32_t    total_count         = 0;
-        float       active_threads_percent = 0.0f;
-        float       wave_occupancy_percent = 0.0f;
+        uint64_t    issue_count         = 0;
+        uint64_t    stall_count         = 0;
+        uint64_t    total_count         = 0;
     };
 
     bool                m_show_comments = false;

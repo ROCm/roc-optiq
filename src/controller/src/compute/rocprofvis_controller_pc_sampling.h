@@ -79,37 +79,42 @@ private:
         uint32_t source_line_id = 0;
         uint32_t depth          = 0;
     };
-    struct SamplingState
+    struct PcSampleState
     {
-        uint32_t id                 = 0;
-        uint32_t isa_line_id        = 0;
-        uint64_t dispatch_id        = 0;
-        float    active_threads_percent   = 0.0f;
-        float    wave_occupancy_percent   = 0.0f;
-        uint32_t issued_count       = 0;
-        uint32_t stalled_count      = 0;
-        uint32_t total_count        = 0;
+        uint64_t pc_sample_state_uuid = 0;
+        uint64_t instruction_uuid     = 0;
+        uint64_t total_count          = 0;
+        uint64_t issue_count          = 0;
+        uint64_t stall_count          = 0;
     };
-    struct StallReasonCount
+    struct PcSampleStallReason
     {
-        uint32_t sampling_state_id   = 0;
-        uint32_t reason_id     = 0;
-        uint32_t count       = 0;
+        uint64_t pc_sample_stall_reason_uuid      = 0;
+        uint64_t pc_sample_state_uuid             = 0;
+        uint64_t pc_sample_stall_reason_type_uuid = 0;
+        uint64_t count                            = 0;
+    };
+    struct PcSampleStallReasonType
+    {
+        uint64_t    pc_sample_stall_reason_type_uuid = 0;
+        std::string text;
     };
 
-    std::vector<SourceFile>       m_source_files;
-    std::vector<SourceLine>       m_source_lines;
-    std::vector<CodeObjectStore>  m_code_object_store;
-    std::vector<IsaLine>          m_isa_lines;
-    std::vector<IsaToIsaDep>      m_isa_to_isa_deps;
-    std::vector<IsaToSourceDep>   m_isa_to_source_deps;
-    std::vector<SamplingState>    m_sampling_states;
-    std::vector<StallReasonCount> m_stall_reason_counts;
+    std::vector<SourceFile>              m_source_files;
+    std::vector<SourceLine>              m_source_lines;
+    std::vector<CodeObjectStore>         m_code_object_store;
+    std::vector<IsaLine>                 m_isa_lines;
+    std::vector<IsaToIsaDep>             m_isa_to_isa_deps;
+    std::vector<IsaToSourceDep>          m_isa_to_source_deps;
+    std::vector<PcSampleState>           m_pc_sample_states;
+    std::vector<PcSampleStallReason>     m_pc_sample_stall_reasons;
+    std::vector<PcSampleStallReasonType> m_pc_sample_stall_reason_types;
 
     std::unordered_map<uint32_t, std::vector<SourceLine>> m_source_line_cache;
     bool m_kernel_data_loaded       = false;
     bool m_code_object_store_loaded = false;
     bool m_isa_lines_loaded         = false;
+    bool m_pc_sample_states_loaded  = false;
 
     std::recursive_mutex m_data_mutex;
 

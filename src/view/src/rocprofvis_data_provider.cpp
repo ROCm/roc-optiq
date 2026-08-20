@@ -4675,7 +4675,7 @@ DataProvider::LoadKernels(WorkloadInfo& workload, rocprofvis_handle_t* workload_
         kernel.dispatch_metrics[KernelInfo::DurationMedian] =
             static_cast<uint32_t>(uint64_data);
         // Load only the source file list eagerly (for the dropdown).
-        // Mandatory code-object and ISA rows are loaded on-demand via FetchPcSampling.
+        // Mandatory code-object, ISA, and sample-state rows are loaded on-demand.
         {
             rocprofvis_handle_t* pc_handle = nullptr;
             if(kRocProfVisResultSuccess == rocprofvis_controller_get_object(
@@ -4797,75 +4797,81 @@ inline void
 DataProvider::LoadPcSamplingStates(KernelInfo& kernel, rocprofvis_handle_t* pc_handle)
 {
     uint64_t num_sampling_states = 0;
-    rocprofvis_controller_get_uint64(pc_handle, kRPVControllerPCSamplingNumSamplingStates, 0, &num_sampling_states);
+    rocprofvis_controller_get_uint64(
+        pc_handle, kRPVControllerPCSamplingNumPcSampleStates, 0,
+        &num_sampling_states);
 
-    std::unordered_map<uint64_t, IsaLine*> isa_lines_by_id;
-    for(CodeObjectStore& code_object : kernel.pc_sampling_data.code_objects)
-        for(IsaLine& isa_line : code_object.isa_lines)
-            isa_lines_by_id.emplace(isa_line.instruction_uuid, &isa_line);
-
+    kernel.pc_sampling_data.pc_sample_states.resize(num_sampling_states);
     for(uint64_t i = 0; i < num_sampling_states; i++)
     {
-        uint64_t isa_line_id = 0;
-        rocprofvis_controller_get_uint64(pc_handle, kRPVControllerPCSamplingStateIsaLineId, i, &isa_line_id);
-
-        const std::unordered_map<uint64_t, IsaLine*>::iterator isa_line_it =
-            isa_lines_by_id.find(isa_line_id);
-        if(isa_line_it == isa_lines_by_id.end())
-        {
-            continue;
-        }
-
-        uint64_t id = 0, dispatch_id = 0, issued_count = 0, stalled_count = 0, total_count = 0;
-        double active_threads_percent = 0.0;
-        double wave_occupancy_percent = 0.0;
-        rocprofvis_controller_get_uint64(pc_handle, kRPVControllerPCSamplingStateId, i, &id);
-        rocprofvis_controller_get_uint64(pc_handle, kRPVControllerPCSamplingStateDispatchId, i, &dispatch_id);
-        rocprofvis_controller_get_uint64(pc_handle, kRPVControllerPCSamplingStateIssuedCount, i, &issued_count);
-        rocprofvis_controller_get_uint64(pc_handle, kRPVControllerPCSamplingStateStalledCount, i, &stalled_count);
-        rocprofvis_controller_get_uint64(pc_handle, kRPVControllerPCSamplingStateTotalCount, i, &total_count);
-        rocprofvis_controller_get_double(pc_handle, kRPVControllerPCSamplingStateActiveThreadsPercent, i, &active_threads_percent);
-        rocprofvis_controller_get_double(pc_handle, kRPVControllerPCSamplingStateWaveOccupancyPercent, i, &wave_occupancy_percent);
-
-        SamplingState& sampling_state = isa_line_it->second->sampling_state;
-        sampling_state.loaded             = true;
-        sampling_state.id                 = static_cast<uint32_t>(id);
-        sampling_state.isa_line_id        = static_cast<uint32_t>(isa_line_id);
-        sampling_state.dispatch_id        = dispatch_id;
-        sampling_state.active_threads_percent = static_cast<float>(active_threads_percent);
-        sampling_state.wave_occupancy_percent = static_cast<float>(wave_occupancy_percent);
-        sampling_state.issued_count       = static_cast<uint32_t>(issued_count);
-        sampling_state.stalled_count      = static_cast<uint32_t>(stalled_count);
-        sampling_state.total_count        = static_cast<uint32_t>(total_count);
+        PcSampleState& state = kernel.pc_sampling_data.pc_sample_states[i];
+        rocprofvis_controller_get_uint64(
+            pc_handle, kRPVControllerPCSamplingPcSampleStateUuid, i,
+            &state.pc_sample_state_uuid);
+        rocprofvis_controller_get_uint64(
+            pc_handle, kRPVControllerPCSamplingPcSampleStateInstructionUuid, i,
+            &state.instruction_uuid);
+        rocprofvis_controller_get_uint64(
+            pc_handle, kRPVControllerPCSamplingPcSampleStateTotalCount, i,
+            &state.total_count);
+        rocprofvis_controller_get_uint64(
+            pc_handle, kRPVControllerPCSamplingPcSampleStateIssueCount, i,
+            &state.issue_count);
+        rocprofvis_controller_get_uint64(
+            pc_handle, kRPVControllerPCSamplingPcSampleStateStallCount, i,
+            &state.stall_count);
     }
 }
 
 inline void
-DataProvider::LoadPcSamplingStallReasonCounts(KernelInfo& kernel, rocprofvis_handle_t* pc_handle)
+DataProvider::LoadPcSamplingStallReasons(KernelInfo& kernel,
+                                         rocprofvis_handle_t* pc_handle)
 {
-    uint64_t num_reason_counts = 0;
-    rocprofvis_controller_get_uint64(pc_handle, kRPVControllerPCSamplingNumStallReasonCounts, 0, &num_reason_counts);
+    uint64_t num_stall_reasons = 0;
+    rocprofvis_controller_get_uint64(
+        pc_handle, kRPVControllerPCSamplingNumPcSampleStallReasons, 0,
+        &num_stall_reasons);
 
-    std::unordered_map<uint32_t, SamplingState*> sampling_states_by_id;
-    for(CodeObjectStore& code_object : kernel.pc_sampling_data.code_objects)
-        for(IsaLine& isa_line : code_object.isa_lines)
-            if(isa_line.sampling_state.loaded)
-                sampling_states_by_id.emplace(isa_line.sampling_state.id, &isa_line.sampling_state);
-
-    for(uint64_t i = 0; i < num_reason_counts; i++)
+    kernel.pc_sampling_data.pc_sample_stall_reasons.resize(num_stall_reasons);
+    for(uint64_t i = 0; i < num_stall_reasons; i++)
     {
-        uint64_t sampling_state_id = 0, reason_id = 0, count = 0;
-        rocprofvis_controller_get_uint64(pc_handle, kRPVControllerPCSamplingStallReasonSamplingStateId, i, &sampling_state_id);
-        rocprofvis_controller_get_uint64(pc_handle, kRPVControllerPCSamplingStallReasonId,   i, &reason_id);
-        rocprofvis_controller_get_uint64(pc_handle, kRPVControllerPCSamplingStallReasonCount,    i, &count);
+        PcSampleStallReason& reason =
+            kernel.pc_sampling_data.pc_sample_stall_reasons[i];
+        rocprofvis_controller_get_uint64(
+            pc_handle, kRPVControllerPCSamplingPcSampleStallReasonUuid, i,
+            &reason.pc_sample_stall_reason_uuid);
+        rocprofvis_controller_get_uint64(
+            pc_handle, kRPVControllerPCSamplingPcSampleStallReasonStateUuid, i,
+            &reason.pc_sample_state_uuid);
+        rocprofvis_controller_get_uint64(
+            pc_handle, kRPVControllerPCSamplingPcSampleStallReasonTypeUuid, i,
+            &reason.pc_sample_stall_reason_type_uuid);
+        rocprofvis_controller_get_uint64(
+            pc_handle, kRPVControllerPCSamplingPcSampleStallReasonCount, i,
+            &reason.count);
+    }
+}
 
-        const std::unordered_map<uint32_t, SamplingState*>::iterator sampling_state_it =
-            sampling_states_by_id.find(static_cast<uint32_t>(sampling_state_id));
-        if(sampling_state_it != sampling_states_by_id.end())
-        {
-            sampling_state_it->second->stall_reasons.push_back({
-                static_cast<int32_t>(reason_id), static_cast<int32_t>(count) });
-        }
+inline void
+DataProvider::LoadPcSamplingStallReasonTypes(KernelInfo& kernel,
+                                             rocprofvis_handle_t* pc_handle)
+{
+    uint64_t num_stall_reason_types = 0;
+    rocprofvis_controller_get_uint64(
+        pc_handle, kRPVControllerPCSamplingNumPcSampleStallReasonTypes, 0,
+        &num_stall_reason_types);
+
+    kernel.pc_sampling_data.pc_sample_stall_reason_types.resize(
+        num_stall_reason_types);
+    for(uint64_t i = 0; i < num_stall_reason_types; i++)
+    {
+        PcSampleStallReasonType& type =
+            kernel.pc_sampling_data.pc_sample_stall_reason_types[i];
+        rocprofvis_controller_get_uint64(
+            pc_handle, kRPVControllerPCSamplingPcSampleStallReasonTypeRecordUuid,
+            i, &type.pc_sample_stall_reason_type_uuid);
+        type.text = GetString(
+            pc_handle, kRPVControllerPCSamplingPcSampleStallReasonTypeText, i);
     }
 }
 
@@ -5370,6 +5376,9 @@ DataProvider::ProcessPcSamplingRequest(RequestInfo& req)
         {
             kernel->pc_sampling_data.code_objects.clear();
             LoadPcSamplingCodeObjects(*kernel, pc_handle);
+            LoadPcSamplingStates(*kernel, pc_handle);
+            LoadPcSamplingStallReasons(*kernel, pc_handle);
+            LoadPcSamplingStallReasonTypes(*kernel, pc_handle);
         }
     }
     else if(success && !is_current_generation)

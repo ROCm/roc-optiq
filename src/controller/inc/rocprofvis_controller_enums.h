@@ -1079,6 +1079,20 @@ typedef enum rocprofvis_controller_pc_sampling_data_properties_t : uint32_t
     kRPVControllerPCSamplingCodeObjectWorkloadId,
     kRPVControllerPCSamplingCodeObjectPid,
     kRPVControllerPCSamplingCodeObjectLoadBase,
+    kRPVControllerPCSamplingNumPcSampleStates,
+    kRPVControllerPCSamplingPcSampleStateUuid,
+    kRPVControllerPCSamplingPcSampleStateInstructionUuid,
+    kRPVControllerPCSamplingPcSampleStateTotalCount,
+    kRPVControllerPCSamplingPcSampleStateIssueCount,
+    kRPVControllerPCSamplingPcSampleStateStallCount,
+    kRPVControllerPCSamplingNumPcSampleStallReasons,
+    kRPVControllerPCSamplingPcSampleStallReasonUuid,
+    kRPVControllerPCSamplingPcSampleStallReasonStateUuid,
+    kRPVControllerPCSamplingPcSampleStallReasonTypeUuid,
+    kRPVControllerPCSamplingPcSampleStallReasonCount,
+    kRPVControllerPCSamplingNumPcSampleStallReasonTypes,
+    kRPVControllerPCSamplingPcSampleStallReasonTypeRecordUuid,
+    kRPVControllerPCSamplingPcSampleStallReasonTypeText,
     __kRPVControllerPCSamplingPropertiesLast
 
 } rocprofvis_controller_pc_sampling_data_properties_t;

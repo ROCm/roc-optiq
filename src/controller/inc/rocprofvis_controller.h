@@ -301,7 +301,8 @@ rocprofvis_result_t rocprofvis_controller_metric_fetch_async(rocprofvis_controll
 rocprofvis_result_t rocprofvis_controller_pc_sampling_fetch_all_async(rocprofvis_controller_t* controller, rocprofvis_controller_arguments_t* args, rocprofvis_controller_future_t* result, rocprofvis_handle_t* output);
 
 /*
-* Fetch mandatory PC sampling code objects and ISA lines for a specific kernel asynchronously.
+* Fetch mandatory PC sampling code objects, ISA lines, and per-instruction sample states
+* for a specific kernel asynchronously.
 * @param controller The controller
 * @param args Input arguments (kernel id)
 * @param result The future to wait on

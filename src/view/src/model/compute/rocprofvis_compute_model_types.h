@@ -56,25 +56,27 @@ struct Point
     double y;
 };
 
-struct PcStallReason
+struct PcSampleState
 {
-    int32_t     reason_id = 0;
-    int32_t     count   = 0;
+    uint64_t pc_sample_state_uuid = 0;
+    uint64_t instruction_uuid     = 0;
+    uint64_t total_count          = 0;
+    uint64_t issue_count          = 0;
+    uint64_t stall_count          = 0;
 };
 
-struct SamplingState
+struct PcSampleStallReason
 {
-    bool     loaded             = false;
-    uint64_t dispatch_id        = 0;
-    uint32_t id                 = 0;
-    uint32_t isa_line_id        = 0;
-    uint32_t issued_count       = 0;
-    uint32_t stalled_count      = 0;
-    uint32_t total_count        = 0;
-    float    active_threads_percent = 0.0f;
-    float    wave_occupancy_percent = 0.0f;
+    uint64_t pc_sample_stall_reason_uuid      = 0;
+    uint64_t pc_sample_state_uuid             = 0;
+    uint64_t pc_sample_stall_reason_type_uuid = 0;
+    uint64_t count                            = 0;
+};
 
-    std::vector<PcStallReason> stall_reasons;
+struct PcSampleStallReasonType
+{
+    uint64_t    pc_sample_stall_reason_type_uuid = 0;
+    std::string text;
 };
 
 struct IsaToIsaDep
@@ -96,9 +98,8 @@ struct IsaLine
     uint64_t    code_object_uuid   = 0;
     uint64_t    kernel_uuid        = 0;
     uint64_t    code_object_offset = 0;
-    std::string comment;
-    std::string instruction;
-    SamplingState         sampling_state;
+    std::string           comment;
+    std::string           instruction;
     std::vector<uint32_t> source_line_ids;
 };
 
@@ -130,10 +131,13 @@ struct SourceFile
 
 struct PcSamplingData
 {
-    std::vector<CodeObjectStore> code_objects;
-    std::vector<SourceFile>      source_files;
-    std::vector<IsaToIsaDep>     isa_to_isa_deps;
-    std::vector<IsaToSourceDep>  isa_to_source_deps;
+    std::vector<CodeObjectStore>         code_objects;
+    std::vector<SourceFile>              source_files;
+    std::vector<IsaToIsaDep>             isa_to_isa_deps;
+    std::vector<IsaToSourceDep>          isa_to_source_deps;
+    std::vector<PcSampleState>           pc_sample_states;
+    std::vector<PcSampleStallReason>     pc_sample_stall_reasons;
+    std::vector<PcSampleStallReasonType> pc_sample_stall_reason_types;
 };
 
 struct KernelInfo

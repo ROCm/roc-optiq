@@ -131,8 +131,8 @@ ComputeCodeView::LoadData(uint32_t kernel_id)
     // Source file list is already populated eagerly - just refresh the selection.
     LoadSourceFileList(kernel_info->pc_sampling_data);
 
-    // Clear stale widget data. The mandatory code-object and ISA request starts
-    // from Render, when the PC Sampling View is open.
+    // Clear stale widget data. The mandatory code-object, ISA, and sample-state
+    // request starts from Render, when the PC Sampling View is open.
     ClearCodeData();
     m_pending_refetch = true;
     if(m_fetch_in_progress)
@@ -589,6 +589,22 @@ IsaCodeWidget::Load(const PcSamplingData& data, uint64_t code_object_uuid)
             source_by_isa.emplace(dep.isa_line_id, dep.source_line_id);
     }
 
+    struct InstructionSampleCounts
+    {
+        uint64_t total_count = 0;
+        uint64_t issue_count = 0;
+        uint64_t stall_count = 0;
+    };
+    std::unordered_map<uint64_t, InstructionSampleCounts> counts_by_instruction;
+    counts_by_instruction.reserve(data.pc_sample_states.size());
+    for(const PcSampleState& state : data.pc_sample_states)
+    {
+        InstructionSampleCounts& counts = counts_by_instruction[state.instruction_uuid];
+        counts.total_count += state.total_count;
+        counts.issue_count += state.issue_count;
+        counts.stall_count += state.stall_count;
+    }
+
     for(const auto& isa_line : code_object->isa_lines)
     {
         uint32_t source_line_id = 0;
@@ -596,16 +612,19 @@ IsaCodeWidget::Load(const PcSamplingData& data, uint64_t code_object_uuid)
            sit != source_by_isa.end())
             source_line_id = sit->second;
 
+        const InstructionSampleCounts* counts = nullptr;
+        if(const auto counts_it = counts_by_instruction.find(isa_line.instruction_uuid);
+           counts_it != counts_by_instruction.end())
+            counts = &counts_it->second;
+
         m_entries.push_back({
             isa_line.instruction,
             isa_line.comment,
             isa_line.instruction_uuid,
             source_line_id,
-            isa_line.sampling_state.issued_count,
-            isa_line.sampling_state.stalled_count,
-            isa_line.sampling_state.total_count,
-            isa_line.sampling_state.active_threads_percent,
-            isa_line.sampling_state.wave_occupancy_percent
+            counts ? counts->issue_count : 0,
+            counts ? counts->stall_count : 0,
+            counts ? counts->total_count : 0
         });
     }
 
@@ -621,7 +640,7 @@ IsaCodeWidget::Render()
         return;
     }
 
-    const int stall_columns   = IsStallShown() ? 5 : 0;
+    const int stall_columns   = IsStallShown() ? 3 : 0;
     const int comment_columns = m_show_comments ? 1 : 0;
     const int columns_count   = 2 + stall_columns + comment_columns;
 
@@ -636,13 +655,13 @@ IsaCodeWidget::Render()
 
     if(IsStallShown())
     {
-        const float num_col_width = ImGui::CalcTextSize("999999").x;
-        const float flt_col_width = ImGui::CalcTextSize("100.00%").x;
-        ImGui::TableSetupColumn("Total",     ImGuiTableColumnFlags_WidthFixed, num_col_width);
-        ImGui::TableSetupColumn("Issued",    ImGuiTableColumnFlags_WidthFixed, num_col_width);
-        ImGui::TableSetupColumn("Stalled",   ImGuiTableColumnFlags_WidthFixed, num_col_width);
-        ImGui::TableSetupColumn("Active %",  ImGuiTableColumnFlags_WidthFixed, flt_col_width);
-        ImGui::TableSetupColumn("Occup. %",  ImGuiTableColumnFlags_WidthFixed, flt_col_width);
+        const float num_col_width = ImGui::CalcTextSize("Total Count").x;
+        ImGui::TableSetupColumn("Total Count", ImGuiTableColumnFlags_WidthFixed,
+                                num_col_width);
+        ImGui::TableSetupColumn("Issue Count", ImGuiTableColumnFlags_WidthFixed,
+                                num_col_width);
+        ImGui::TableSetupColumn("Stall Count", ImGuiTableColumnFlags_WidthFixed,
+                                num_col_width);
     }
 
     if(m_show_comments)
@@ -706,15 +725,11 @@ IsaCodeWidget::RenderLine(uint32_t index, uint32_t columns_count)
     if(IsStallShown())
     {
         ImGui::TableSetColumnIndex(++column);
-        ImGui::TextDisabled("%u", isa_row.total_count);
+        ImGui::TextDisabled("%llu", static_cast<unsigned long long>(isa_row.total_count));
         ImGui::TableSetColumnIndex(++column);
-        ImGui::TextDisabled("%u", isa_row.issued_count);
+        ImGui::TextDisabled("%llu", static_cast<unsigned long long>(isa_row.issue_count));
         ImGui::TableSetColumnIndex(++column);
-        ImGui::TextDisabled("%u", isa_row.stalled_count);
-        ImGui::TableSetColumnIndex(++column);
-        ImGui::TextDisabled("%.2f", isa_row.active_threads_percent);
-        ImGui::TableSetColumnIndex(++column);
-        ImGui::TextDisabled("%.2f", isa_row.wave_occupancy_percent);
+        ImGui::TextDisabled("%llu", static_cast<unsigned long long>(isa_row.stall_count));
     }
 
     if(m_show_comments)

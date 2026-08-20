@@ -29,7 +29,8 @@ namespace DataModel
 		{kRPVComputeFetchKernelIsaLines, "Fetch all ISA lines for a kernel"},
 		{kRPVComputeFetchKernelIsaToSourceDeps, "Fetch all ISA-to-source-line mappings for a kernel"},
 		{kRPVComputeFetchKernelSamplingStates, "Fetch all PC sampling states for a kernel"},
-		{kRPVComputeFetchKernelSamplingStateReasonCounts, "Fetch all stall reason counts for a kernel"}
+		{kRPVComputeFetchKernelSamplingStateReasonCounts, "Fetch all PC sampling stall reasons for a kernel"},
+		{kRPVComputeFetchKernelSamplingStallReasonTypes, "Fetch all PC sampling stall reason types for a kernel"}
 	};
 
 	static const std::unordered_map<std::string, rocprofvis_db_compute_column_enum_t> ColumnNameToEnum {
@@ -100,6 +101,17 @@ namespace DataModel
 		{"stall_reason_sampling_state_id", kRPVComputeColumnPcSamplingStallReasonSamplingStateId},
 		{"stall_reason_id", kRPVComputeColumnPcSamplingStallReasonId},
 		{"stall_reason_count", kRPVComputeColumnPcSamplingStallReasonCount},
+		{"pc_sample_state_uuid", kRPVComputeColumnPcSampleStateUuid},
+		{"pc_sample_state_instruction_uuid", kRPVComputeColumnPcSampleStateInstructionUuid},
+		{"pc_sample_state_total_count", kRPVComputeColumnPcSampleStateTotalCount},
+		{"pc_sample_state_issue_count", kRPVComputeColumnPcSampleStateIssueCount},
+		{"pc_sample_state_stall_count", kRPVComputeColumnPcSampleStateStallCount},
+		{"pc_sample_stall_reason_uuid", kRPVComputeColumnPcSampleStallReasonUuid},
+		{"pc_sample_stall_reason_state_uuid", kRPVComputeColumnPcSampleStallReasonStateUuid},
+		{"pc_sample_stall_reason_type_uuid", kRPVComputeColumnPcSampleStallReasonTypeUuid},
+		{"pc_sample_stall_reason_count", kRPVComputeColumnPcSampleStallReasonCount},
+		{"pc_sample_stall_reason_type_record_uuid", kRPVComputeColumnPcSampleStallReasonTypeRecordUuid},
+		{"pc_sample_stall_reason_type_text", kRPVComputeColumnPcSampleStallReasonTypeText},
 	};
 
 	static const std::unordered_map<std::string, rocprofvis_db_compute_column_enum_t> RooflineBenchParamToEnum{
@@ -512,13 +524,16 @@ namespace DataModel
 			if (num == 1 && params != nullptr && params[0].param_type == kRPVComputeParamKernelId)
 			{
 				query_out =
-					"SELECT s.id AS sampling_state_id, s.instruction_uuid AS sampling_state_isa_line_id, "
-					"s.dispatch_id, s.active_threads_percent, s.wave_occupancy_percent, "
-					"s.issued_count, s.stalled_count, s.total_count "
+					"SELECT s.pc_sample_state_uuid, "
+					"s.instruction_uuid AS pc_sample_state_instruction_uuid, "
+					"COALESCE(s.total_count, 0) AS pc_sample_state_total_count, "
+					"COALESCE(s.issue_count, 0) AS pc_sample_state_issue_count, "
+					"COALESCE(s.stall_count, 0) AS pc_sample_state_stall_count "
 					"FROM compute_pc_sample_state s "
 					"JOIN compute_instruction_line il ON il.instruction_uuid = s.instruction_uuid "
 					"WHERE il.kernel_uuid = ";
 				query_out += params[0].param_str;
+				query_out += " ORDER BY s.pc_sample_state_uuid";
 				result = kRocProfVisDmResultSuccess;
 			}
 		}
@@ -528,14 +543,17 @@ namespace DataModel
 			if (num == 1 && params != nullptr && params[0].param_type == kRPVComputeParamKernelId)
 			{
 				query_out =
-					"SELECT s.id AS sampling_state_id, s.isa_line AS sampling_state_isa_line_id, "
-					"s.dispatch_id, s.active_threads_percent, s.wave_occupancy_percent, "
-					"s.issued_count, s.stalled_count, s.total_count "
+					"SELECT s.id AS pc_sample_state_uuid, "
+					"s.isa_line AS pc_sample_state_instruction_uuid, "
+					"COALESCE(s.total_count, 0) AS pc_sample_state_total_count, "
+					"COALESCE(s.issued_count, 0) AS pc_sample_state_issue_count, "
+					"COALESCE(s.stalled_count, 0) AS pc_sample_state_stall_count "
 					"FROM pc_sampling_states_per_line s "
 					"JOIN isa_lines il ON il.id = s.isa_line "
 					"JOIN code_objects co ON co.id = il.code_object_id "
 					"WHERE co.kernel_id = ";
 				query_out += params[0].param_str;
+				query_out += " ORDER BY s.id";
 				result = kRocProfVisDmResultSuccess;
 			}
 		}
@@ -550,13 +568,16 @@ namespace DataModel
 			if (num == 1 && params != nullptr && params[0].param_type == kRPVComputeParamKernelId)
 			{
 				query_out =
-					"SELECT r.pc_sample_state_id AS stall_reason_sampling_state_id, "
-					"r.stall_reason_id, r.count AS stall_reason_count "
+					"SELECT r.pc_sample_stall_reason_uuid, "
+					"r.pc_sample_state_uuid AS pc_sample_stall_reason_state_uuid, "
+					"r.pc_sample_stall_reason_type_uuid, "
+					"COALESCE(r.count, 0) AS pc_sample_stall_reason_count "
 					"FROM compute_pc_sample_stall_reason r "
-					"JOIN compute_pc_sample_state s ON s.id = r.pc_sample_state_id "
+					"JOIN compute_pc_sample_state s ON s.pc_sample_state_uuid = r.pc_sample_state_uuid "
 					"JOIN compute_instruction_line il ON il.instruction_uuid = s.instruction_uuid "
 					"WHERE il.kernel_uuid = ";
 				query_out += params[0].param_str;
+				query_out += " ORDER BY r.pc_sample_stall_reason_uuid";
 				result = kRocProfVisDmResultSuccess;
 			}
 		}
@@ -566,14 +587,58 @@ namespace DataModel
 			if (num == 1 && params != nullptr && params[0].param_type == kRPVComputeParamKernelId)
 			{
 				query_out =
-					"SELECT r.pc_sampling_states_per_line_id AS stall_reason_sampling_state_id, "
-					"r.stall_reason_id, r.count AS stall_reason_count "
+					"SELECT r.rowid AS pc_sample_stall_reason_uuid, "
+					"r.pc_sampling_states_per_line_id AS pc_sample_stall_reason_state_uuid, "
+					"r.stall_reason_id AS pc_sample_stall_reason_type_uuid, "
+					"COALESCE(r.count, 0) AS pc_sample_stall_reason_count "
 					"FROM pc_sampling_stall_reason r "
 					"JOIN pc_sampling_states_per_line s ON s.id = r.pc_sampling_states_per_line_id "
 					"JOIN isa_lines il ON il.id = s.isa_line "
 					"JOIN code_objects co ON co.id = il.code_object_id "
 					"WHERE co.kernel_id = ";
 				query_out += params[0].param_str;
+				query_out += " ORDER BY r.rowid";
+				result = kRocProfVisDmResultSuccess;
+			}
+		}
+		return result;
+	}
+
+	rocprofvis_dm_result_t ComputeQueryFactory::GetComputeKernelSamplingStallReasonTypes(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params, rocprofvis_dm_string_t& query_out) {
+		rocprofvis_dm_result_t result = kRocProfVisDmResultNotSupported;
+		if (IsVersionGreaterOrEqual("2.0.0"))
+		{
+			result = kRocProfVisDmResultInvalidParameter;
+			if (num == 1 && params != nullptr && params[0].param_type == kRPVComputeParamKernelId)
+			{
+				query_out =
+					"SELECT DISTINCT t.pc_sample_stall_reason_type_uuid AS pc_sample_stall_reason_type_record_uuid, "
+					"COALESCE(t.text, '') AS pc_sample_stall_reason_type_text "
+					"FROM compute_pc_sample_stall_reason_type t "
+					"JOIN compute_pc_sample_stall_reason r ON r.pc_sample_stall_reason_type_uuid = t.pc_sample_stall_reason_type_uuid "
+					"JOIN compute_pc_sample_state s ON s.pc_sample_state_uuid = r.pc_sample_state_uuid "
+					"JOIN compute_instruction_line il ON il.instruction_uuid = s.instruction_uuid "
+					"WHERE il.kernel_uuid = ";
+				query_out += params[0].param_str;
+				query_out += " ORDER BY t.pc_sample_stall_reason_type_uuid";
+				result = kRocProfVisDmResultSuccess;
+			}
+		}
+		else if (IsVersionGreaterOrEqual("1.2.0"))
+		{
+			result = kRocProfVisDmResultInvalidParameter;
+			if (num == 1 && params != nullptr && params[0].param_type == kRPVComputeParamKernelId)
+			{
+				query_out =
+					"SELECT DISTINCT r.stall_reason_id AS pc_sample_stall_reason_type_record_uuid, "
+					"CAST(r.stall_reason_id AS TEXT) AS pc_sample_stall_reason_type_text "
+					"FROM pc_sampling_stall_reason r "
+					"JOIN pc_sampling_states_per_line s ON s.id = r.pc_sampling_states_per_line_id "
+					"JOIN isa_lines il ON il.id = s.isa_line "
+					"JOIN code_objects co ON co.id = il.code_object_id "
+					"WHERE co.kernel_id = ";
+				query_out += params[0].param_str;
+				query_out += " ORDER BY r.stall_reason_id";
 				result = kRocProfVisDmResultSuccess;
 			}
 		}
@@ -1009,7 +1074,7 @@ void ComputeQueryFactory::ParseMetricParam(std::string metric_str, uint32_t work
 			vec.push_back("CREATE INDEX IF NOT EXISTS idx_instruction_line_kernel ON compute_instruction_line(kernel_uuid);");
 			vec.push_back("CREATE INDEX IF NOT EXISTS idx_instruction_line_code_object ON compute_instruction_line(code_object_uuid);");
 			vec.push_back("CREATE INDEX IF NOT EXISTS idx_pc_sample_state_instruction ON compute_pc_sample_state(instruction_uuid);");
-			vec.push_back("CREATE INDEX IF NOT EXISTS idx_pc_sample_stall_reason_state ON compute_pc_sample_stall_reason(pc_sample_state_id);");
+			vec.push_back("CREATE INDEX IF NOT EXISTS idx_pc_sample_stall_reason_state ON compute_pc_sample_stall_reason(pc_sample_state_uuid);");
 		}
 		else if (CheckTableExists("pc_sampling_states_per_line", file_node_id))
 		{
@@ -1141,6 +1206,9 @@ void ComputeQueryFactory::ParseMetricParam(std::string metric_str, uint32_t work
 		case kRPVComputeFetchKernelSamplingStateReasonCounts:
 			result = m_query_factory.GetComputeKernelSamplingStateReasonCounts(num, params, query);
 			break;
+		case kRPVComputeFetchKernelSamplingStallReasonTypes:
+			result = m_query_factory.GetComputeKernelSamplingStallReasonTypes(num, params, query);
+			break;
 		default:
 			break;
 		}
@@ -1192,6 +1260,7 @@ void ComputeQueryFactory::ParseMetricParam(std::string metric_str, uint32_t work
 				case kRPVComputeFetchKernelIsaToSourceDeps:
 				case kRPVComputeFetchKernelSamplingStates:
 				case kRPVComputeFetchKernelSamplingStateReasonCounts:
+				case kRPVComputeFetchKernelSamplingStallReasonTypes:
 					callback = CallbackGetComputeGeneric;
 					break;
 				case kRPVComputeFetchWorkloadRooflineCeiling:

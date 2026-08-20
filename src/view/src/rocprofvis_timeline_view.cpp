@@ -1317,15 +1317,22 @@ TimelineView::RenderSplitter()
     if(ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceNoPreviewTooltip))
     {
         ImVec2 drag_delta = ImGui::GetMouseDragDelta(ImGuiMouseButton_Left);
-        m_sidebar_size    = std::clamp(m_sidebar_size + drag_delta.x,
-                                       m_max_meta_scale_area_size +
-                                           2 * ImGui::GetFrameHeightWithSpacing(),
-                                       SIDEBAR_WIDTH_MAX);
 
-        m_tpt->SetViewTimeOffsetNs(
-            m_tpt->GetViewTimeOffsetNs() -
-            (drag_delta.x / display_size.x) *
-                m_tpt->GetVWidth());  // Prevents chart from moving in unexpected way.
+        const float graph_w_before = m_tpt->GetGraphSizeX();
+        const float sidebar_before = m_sidebar_size;
+        m_sidebar_size             = std::clamp(m_sidebar_size + drag_delta.x,
+                                                m_max_meta_scale_area_size +
+                                                    2 * ImGui::GetFrameHeightWithSpacing(),
+                                                SIDEBAR_WIDTH_MAX);
+
+        // Hold pixels_per_ns constant (offset untouched) so resizing the
+        // description column neither pans nor rescales the timeline. AIPROFVIS-333.
+        const float applied       = m_sidebar_size - sidebar_before;
+        const float graph_w_after = graph_w_before - applied;
+        if(graph_w_after > 0.0f)
+        {
+            m_tpt->SetZoom(m_tpt->GetZoom() * graph_w_before / graph_w_after);
+        }
         ImGui::ResetMouseDragDelta();
         ImGui::EndDragDropSource();
         m_resize_activity |= true;

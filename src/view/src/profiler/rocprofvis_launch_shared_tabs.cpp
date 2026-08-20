@@ -466,9 +466,74 @@ bool RenderTargetSection(TargetSpec& target, ConnectionType connection, AppWindo
     return modified;
 }
 
+bool RenderToolLocationSection(std::string& tool_directory, ConnectionType connection,
+                               AppWindow* app_window, std::string const& resolved_hint,
+                               const std::function<void()>& on_remote_browse_directory)
+{
+    bool modified = false;
+
+    const bool is_remote     = (connection == ConnectionType::kSsh);
+    const bool remote_browse = is_remote && static_cast<bool>(on_remote_browse_directory);
+
+    const float label_w  = 105.0f;
+    const float browse_w = 84.0f;
+    const float spacing  = ImGui::GetStyle().ItemSpacing.x;
+
+    ImGui::AlignTextToFramePadding();
+    ImGui::TextUnformatted("Tools folder");
+    ImGui::SameLine(label_w);
+    ImGui::SetNextItemWidth(-(browse_w + spacing));
+    if (InputTextStringWithHint(
+            "##ToolDir",
+            is_remote ? "leave empty to use the remote $ROCM_PATH or $PATH"
+                      : "leave empty to use $ROCM_PATH or $PATH",
+            tool_directory))
+    {
+        modified = true;
+    }
+    if (ImGui::IsItemHovered())
+    {
+        ImGui::SetTooltip("Folder containing the profiler executables, for a ROCm install in a\n"
+                          "non-standard location. The executable name is chosen by Optiq, so\n"
+                          "the tool must be present in this folder for the run to start.");
+    }
+
+    ImGui::SameLine();
+    const bool browse_disabled = is_remote && !remote_browse;
+    if (browse_disabled)
+    {
+        ImGui::BeginDisabled();
+    }
+    if (ImGui::Button("Browse##ToolDir", ImVec2(browse_w, 0)))
+    {
+        if (remote_browse)
+        {
+            on_remote_browse_directory();
+        }
+        else if (!is_remote && app_window)
+        {
+            app_window->ShowPathPickerDialog(
+                "Choose Profiler Tools Directory", "",
+                [&tool_directory](std::string const& path) { tool_directory = path; });
+        }
+    }
+    if (browse_disabled)
+    {
+        ImGui::EndDisabled();
+    }
+
+    if (!resolved_hint.empty())
+    {
+        ImGui::Dummy(ImVec2(label_w - ImGui::GetStyle().ItemSpacing.x, 0.0f));
+        ImGui::SameLine();
+        ImGui::TextDisabled("%s", resolved_hint.c_str());
+    }
+
+    return modified;
+}
+
 std::string BuildCommandPreviewString(
-    LaunchConfig const& config,
-    std::string const& profiler_path,
+    std::string const& tool_path,
     std::vector<std::pair<std::string, std::string>> const& env_vars,
     std::vector<std::string> const& argv)
 {
@@ -482,29 +547,14 @@ std::string BuildCommandPreviewString(
         }
     }
 
-    preview << profiler_path;
+    // argv is already the complete argument list (see
+    // IProfilerBackend::FlattenToExecution), so the preview renders it as-is
+    // rather than re-deriving any part of the command. Anything appended here
+    // would be shown but not run.
+    preview << tool_path;
     for (auto const& arg : argv)
     {
         preview << " " << arg;
-    }
-
-    // Add extra_argv
-    for (auto const& arg : config.extra_argv)
-    {
-        preview << " " << arg;
-    }
-
-    if (!config.target.output_directory.empty())
-    {
-        preview << " --output " << config.target.output_directory;
-    }
-    if (!config.target.executable.empty())
-    {
-        preview << " -- " << config.target.executable;
-    }
-    if (!config.target.arguments.empty())
-    {
-        preview << " " << config.target.arguments;
     }
 
     return preview.str();

@@ -18,7 +18,7 @@ The ROCm Optiq project repository is located at `https://github.com/ROCm/roc-opt
 
    .. grid-item-card:: At a glance
 
-      * :doc:`What is ROCm Optiq <what-is-optiq>`
+      * :doc:`What is ROCm Optiq? <what-is-optiq>`
 
    .. grid-item-card:: Install
 
@@ -37,8 +37,7 @@ The ROCm Optiq project repository is located at `https://github.com/ROCm/roc-opt
 
 ROCm Optiq 1.0.0
 =================
-Added
------
+
 Features and improvements for viewing ROCm Systems Profiler trace data
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 Timeline and navigation

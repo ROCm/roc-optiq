@@ -943,14 +943,17 @@ void ProfilerLauncherDialog::RenderRemoteSection()
     // binary choice.
     ImGui::TableSetColumnIndex(1);
     bool is_local = (m_config.connection == ConnectionType::kLocal);
+
     if (ImGui::RadioButton("This machine", is_local))
     {
-        m_config.connection = ConnectionType::kLocal;
+        m_config.connection     = ConnectionType::kLocal;
+        m_execution_cache_dirty = true;
     }
     ImGui::SameLine();
     if (ImGui::RadioButton("Remote (SSH)", !is_local))
     {
-        m_config.connection = ConnectionType::kSsh;
+        m_config.connection     = ConnectionType::kSsh;
+        m_execution_cache_dirty = true;
     }
 
     if (IsSshMode())
@@ -1316,6 +1319,10 @@ void ProfilerLauncherDialog::OnLaunchClicked()
     m_process_output_stripped.clear();
     m_output_text.clear();
 
+    // Re-resolve rather than reuse the memo: the user may have installed ROCm or
+    // corrected the tool directory since it was taken, and a launch is the one
+    // place where an out-of-date answer would be acted on rather than displayed.
+    RefreshToolPath(true);
     RefreshExecutionCache();
 
     // A tool that cannot be found is reported here rather than left to fail
@@ -1521,6 +1528,49 @@ void ProfilerLauncherDialog::ComputeConsoleStatus(std::string&        out_label,
     }
 }
 
+void ProfilerLauncherDialog::RefreshToolPath(bool force)
+{
+    bool const ssh = IsSshMode();
+    if (!force && m_tool_path.populated && m_tool_path.tool == m_config.tool &&
+        m_tool_path.ssh == ssh && m_tool_path.directory == m_config.tool_directory)
+    {
+        return;
+    }
+
+    m_tool_path.tool      = m_config.tool;
+    m_tool_path.directory = m_config.tool_directory;
+    m_tool_path.ssh       = ssh;
+    m_tool_path.populated = true;
+    m_tool_path.error.clear();
+
+    std::string const& tool_directory = m_config.tool_directory;
+    if (ssh)
+    {
+        // The tool is on the remote host, so this machine's filesystem says
+        // nothing about it - resolving here would report a local install (or its
+        // absence) for a command that runs elsewhere. Show exactly what the
+        // remote will run, which is what ProfilerConfig::ResolveToolPathRemote
+        // composes: <tool_directory>/<name>, or the bare name for the remote
+        // $PATH. Joined with '/' because the remote is addressed as POSIX.
+        std::string const name = GetToolBinaryName(m_config.tool);
+        m_tool_path.argv0 = tool_directory.empty()
+                                ? name
+                                : (tool_directory.back() == '/' ? tool_directory + name
+                                                                : tool_directory + "/" + name);
+    }
+    else
+    {
+        m_tool_path.argv0 =
+            ResolveToolPath(m_config.tool, tool_directory, m_tool_path.error);
+        if (m_tool_path.argv0.empty())
+        {
+            // Keep the preview a command line rather than "<not found>"; the
+            // notice above it carries the reason.
+            m_tool_path.argv0 = GetToolBinaryName(m_config.tool);
+        }
+    }
+}
+
 void ProfilerLauncherDialog::RefreshExecutionCache()
 {
     if (m_backends.empty())
@@ -1535,31 +1585,9 @@ void ProfilerLauncherDialog::RefreshExecutionCache()
     ExecutionCache cache;
     cache.tool = m_config.tool;
 
-    std::string const& tool_directory = m_config.tool_directory;
-    if (IsSshMode())
-    {
-        // The tool is on the remote host, so this machine's filesystem says
-        // nothing about it - resolving here would report a local install (or its
-        // absence) for a command that runs elsewhere. Show exactly what the
-        // remote will run, which is what ProfilerConfig::ResolveToolPathRemote
-        // composes: <tool_directory>/<name>, or the bare name for the remote
-        // $PATH. Joined with '/' because the remote is addressed as POSIX.
-        std::string const name = GetToolBinaryName(cache.tool);
-        cache.argv0 = tool_directory.empty()
-                          ? name
-                          : (tool_directory.back() == '/' ? tool_directory + name
-                                                          : tool_directory + "/" + name);
-    }
-    else
-    {
-        cache.argv0 = ResolveToolPath(cache.tool, tool_directory, cache.resolve_error);
-        if (cache.argv0.empty())
-        {
-            // Keep the preview a command line rather than "<not found>"; the
-            // notice above it carries the reason.
-            cache.argv0 = GetToolBinaryName(cache.tool);
-        }
-    }
+    RefreshToolPath(false);
+    cache.argv0         = m_tool_path.argv0;
+    cache.resolve_error = m_tool_path.error;
 
     backend->FlattenToExecution(m_config, cache.curated_env_vars, cache.argv);
 

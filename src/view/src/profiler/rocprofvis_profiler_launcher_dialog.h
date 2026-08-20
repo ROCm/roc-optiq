@@ -67,6 +67,19 @@ private:
         std::string                                      command_preview;
     };
 
+    // Memoized argv[0]. Resolving it is a controller call that searches the
+    // filesystem, so it is not redone for edits that cannot affect it.
+    struct ToolPathCache
+    {
+        rocprofvis_profiler_tool_t tool = kRPVProfilerToolNone;
+        std::string                directory;
+        bool                       ssh       = false;
+        bool                       populated = false;
+
+        std::string argv0;
+        std::string error;
+    };
+
     void OnLaunchClicked();
     void OnCancelClicked();
     void OnCloseClicked();
@@ -75,6 +88,7 @@ private:
     void HandleStateTransition(rocprofvis_profiler_state_t new_state);
     void RebuildComposedOutput();
     void RefreshExecutionCache();
+    void RefreshToolPath(bool force);
 
     bool IsSshMode() const
     {
@@ -193,9 +207,10 @@ private:
     // Config
     LaunchConfig m_config;
     ExecutionCache m_execution_cache;
+    ToolPathCache  m_tool_path;
     // Rebuild m_execution_cache (SaveSettings/flatten/preview - all allocating)
-    // only when inputs may have changed, not every frame. Set on open / backend
-    // switch / preset load, and while the user is actively editing a field.
+    // only when a control reported an actual change, not every frame. Also set
+    // on open / backend switch / preset load.
     bool m_execution_cache_dirty = true;
 
     // Presets

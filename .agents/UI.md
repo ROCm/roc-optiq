@@ -1780,7 +1780,16 @@ backends name a tool and never a path, so binary names live only in the
 controller's tool table), `GetTabs` (takes the selected tool; returns
 `TabDescriptor`s that each carry
 an ImGui `render_fn` - the backend supplies renderers, the dialog draws
-the tab bar), `Validate` (empty string = OK), `FlattenToExecution`
+the tab bar. **`render_fn` returns whether the user changed a setting
+this frame**, and every control in a tab must OR in its ImGui return
+value: that bool is the launcher's only signal that the command preview
+has gone stale, so an unreported change leaves the preview displaying a
+command the settings no longer describe. (Only the preview - launching
+rebuilds the cache unconditionally.) Do not try to infer this from
+`ImGui::IsAnyItemActive()`: it stays true while a field merely holds
+focus, and it is already false by the frame after a checkbox toggles,
+since `ButtonBehavior` clears `ActiveId` in the same frame it reports
+the press), `Validate` (empty string = OK), `FlattenToExecution`
 (curated settings -> env + the **complete** argv after `argv[0]`,
 including `extra_argv`, the output flag in this profiler's spelling, and
 the target plus its arguments; caller then merges `extra_env`),

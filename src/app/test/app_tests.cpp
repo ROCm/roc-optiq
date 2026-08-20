@@ -996,6 +996,202 @@ void RegisterAppTests(ImGuiTestEngine* e)
         ctx->Yield(2);
     };
 
+    // Type a filter predicate into the Event Table's real text box, click its real
+    // Submit, and check that the row count both drops and matches an independent SQL
+    // count of the same predicate. Unlike the other sys_ tests, which poke the model
+    // directly, this one drives the actual ImGui widgets and checks the numbers shown.
+    t = IM_REGISTER_TEST(e, "app", "sys_event_table_sql_filter_restricts_rows");
+    t->TestFunc = [](ImGuiTestContext* ctx)
+    {
+        TraceView* tv = GetTraceViewOrSkip(ctx);
+        if (!tv) return;
+        std::shared_ptr<TimelineSelection> sel = tv->GetTimelineSelection();
+        IM_CHECK(sel != nullptr);
+        if (sel == nullptr) return;
+        TimelineView* tlv = TraceViewTestPeer{*tv}.TimelineViewPtr();
+        IM_CHECK(tlv != nullptr);
+        if (tlv == nullptr) return;
+        DataProvider* dp = tv->GetDataProvider();
+        IM_CHECK(dp != nullptr);
+        if (dp == nullptr) return;
+
+        // The Event Table lives in the Advanced Details panel, and its widgets only
+        // register with the Test Engine while that panel is visible. Force it open (it
+        // is on by default, but a saved layout could have hidden it) and restore the
+        // previous state at the end.
+        const bool details_prev =
+            SettingsManager::GetInstance().GetAppWindowSettings().show_details_panel;
+        tv->SetAnalysisViewVisibility(true);
+        ctx->Yield(3);
+
+        // Clear the time-range selection first. The set of rows fetched follows the
+        // selection, so clearing it brings every row into scope. The Event Table's
+        // duration is the full (end - start), which is what the SQL predicate below
+        // compares against.
+        sel->ClearTimeRange();
+        sel->UnselectAllTracks();
+        ctx->Yield(3);
+
+        // Wait for the timeline's flame (event) tracks to load.
+        std::vector<FlameTrackItem*> flames;
+        for (int i = 0; i < 120 && flames.empty(); i++)
+        {
+            flames = TimelineViewTestPeer{*tlv}.DisplayedFlameTracks();
+            if (flames.empty()) ctx->Yield(2);
+        }
+        if (flames.empty())
+        {
+            ctx->LogWarning("SKIP: no flame tracks loaded to populate the Event Table");
+            tv->SetAnalysisViewVisibility(details_prev);
+            return;
+        }
+
+        // Select only the HIP-region tracks (their one operation is Launch). Rows for
+        // such a track come from a single source, the non-sample rocpd_region rows
+        // (SAMPLE.id IS NULL), which SQL can reproduce exactly. Skip GPU dispatch and
+        // stream tracks: their events are all over 1ms, so `duration > 2000` would
+        // match every row and the filter would not visibly shrink the set.
+        std::vector<std::pair<uint64_t, uint64_t>> region_tracks;  // (pid, tid)
+        const TimelineModel& tlm = dp->DataModel().GetTimeline();
+        for (FlameTrackItem* flame : flames)
+        {
+            if (flame == nullptr) continue;
+            const TrackInfo* ti = tlm.GetTrack(flame->GetID());
+            if (ti == nullptr) continue;
+            if (ti->operation_types.size() == 1 &&
+                ti->operation_types.count(kRocProfVisDmOperationLaunch) == 1)
+            {
+                sel->SelectTrack(*flame);
+                region_tracks.emplace_back(ti->agent_or_pid, ti->queue_id_or_tid);
+            }
+        }
+        if (region_tracks.empty())
+        {
+            ctx->LogWarning("SKIP: no HIP region track to exercise the SQL filter");
+            tv->SetAnalysisViewVisibility(details_prev);
+            return;
+        }
+
+        // Drain the async fetch triggered by the track selection before reading the
+        // row count.
+        ctx->Yield(3);
+        for (int i = 0; i < 120 &&
+                        dp->IsRequestPending(DataProvider::EVENT_TABLE_REQUEST_ID);
+             i++)
+            ctx->Yield(2);
+        ctx->Yield(5);
+
+        const uint64_t unfiltered =
+            dp->DataModel().GetTables().GetTableTotalRowCount(TableType::kEventTable);
+        IM_CHECK(unfiltered > 0);
+        if (unfiltered == 0)
+        {
+            sel->UnselectAllTracks();
+            tv->SetAnalysisViewVisibility(details_prev);
+            return;
+        }
+
+        // Independent oracle: a separate read-only sqlite handle counts the same rows
+        // the Event Table shows, the non-sample rocpd_region rows. Duration there is
+        // (end - start) ns, so the UI's `duration > 2000` is `(R.end - R.start) > 2000`
+        // in SQL, summed over the selected (pid, tid) tracks.
+        auto sql_count = [&](bool apply_predicate) -> long long {
+            sqlite3* db = nullptr;
+            if (sqlite3_open_v2(dp->GetTraceFilePath().c_str(), &db,
+                                SQLITE_OPEN_READONLY, nullptr) != SQLITE_OK)
+            {
+                if (db) sqlite3_close(db);
+                return -1;
+            }
+            long long total = 0;
+            bool      ok    = true;
+            for (const std::pair<uint64_t, uint64_t>& pt : region_tracks)
+            {
+                std::string q =
+                    "SELECT COUNT(*) FROM rocpd_region R "
+                    "LEFT JOIN rocpd_sample SAMPLE ON SAMPLE.event_id = R.event_id "
+                    "WHERE SAMPLE.id IS NULL AND R.pid=" + std::to_string(pt.first) +
+                    " AND R.tid=" + std::to_string(pt.second);
+                if (apply_predicate) q += " AND (R.end - R.start) > 2000";
+                sqlite3_stmt* stmt = nullptr;
+                if (sqlite3_prepare_v2(db, q.c_str(), -1, &stmt, nullptr) != SQLITE_OK)
+                {
+                    ok = false;
+                    break;
+                }
+                if (sqlite3_step(stmt) == SQLITE_ROW)
+                    total += sqlite3_column_int64(stmt, 0);
+                else
+                    ok = false;
+                sqlite3_finalize(stmt);
+                if (!ok) break;
+            }
+            sqlite3_close(db);
+            return ok ? total : -1;
+        };
+
+        const long long sql_total = sql_count(false);
+        IM_CHECK(sql_total >= 0);
+        // The selected rows must match the SQL source before filtering, or the
+        // filtered-count check below would be comparing two unrelated sets of rows.
+        IM_CHECK(static_cast<uint64_t>(sql_total) == unfiltered);
+
+        // The Event Table is the analysis view's default tab. Click it to be sure it
+        // is the active one, then check the filter widgets resolve before driving them
+        // rather than relying on a wildcard match.
+        const char* kTabRef    = "//Main Window/**/Event Table";
+        const char* kFilterRef = "//Main Window/**/filters/##input_text_with_clear";
+        const char* kSubmitRef = "//Main Window/**/Submit";
+        if (ctx->ItemExists(kTabRef)) ctx->ItemClick(kTabRef);
+        ctx->Yield(2);
+        IM_CHECK(ctx->ItemExists(kFilterRef));
+        IM_CHECK(ctx->ItemExists(kSubmitRef));
+
+        // Type the predicate into the text box and click Submit, driving the real
+        // widgets rather than poking the model directly.
+        ctx->ItemInput(kFilterRef);
+        ctx->KeyCharsReplace("duration > 2000");
+        ctx->ItemClick(kSubmitRef);
+
+        // Submit queues an async refetch that applies the predicate in memory over the
+        // merged rows. Drain it before reading the filtered count.
+        ctx->Yield(3);
+        for (int i = 0; i < 120 &&
+                        dp->IsRequestPending(DataProvider::EVENT_TABLE_REQUEST_ID);
+             i++)
+            ctx->Yield(2);
+        ctx->Yield(5);
+
+        const uint64_t filtered =
+            dp->DataModel().GetTables().GetTableTotalRowCount(TableType::kEventTable);
+        const long long sql_filtered = sql_count(true);
+        IM_CHECK(sql_filtered >= 0);
+
+        ctx->LogInfo("event table filter: unfiltered=%llu filtered=%llu sql_filtered=%lld",
+                     (unsigned long long) unfiltered, (unsigned long long) filtered,
+                     sql_filtered);
+
+        // Restore before the asserts. Clear the filter and drop the selection now, so
+        // that if an IM_CHECK below fails and returns, it cannot leave a filtered
+        // Event Table behind for later tests in this reused process.
+        ctx->ItemInput(kFilterRef);
+        ctx->KeyCharsReplace("");
+        ctx->ItemClick(kSubmitRef);
+        ctx->Yield(3);
+        for (int i = 0; i < 120 &&
+                        dp->IsRequestPending(DataProvider::EVENT_TABLE_REQUEST_ID);
+             i++)
+            ctx->Yield(2);
+        sel->UnselectAllTracks();
+        ctx->Yield(2);
+        tv->SetAnalysisViewVisibility(details_prev);
+
+        // Two things must hold: the filter shrank the displayed rows, and the result
+        // matches the independent SQL count of the same predicate on the same source.
+        IM_CHECK(filtered < unfiltered);
+        IM_CHECK(static_cast<long long>(filtered) == sql_filtered);
+    };
+
     t = IM_REGISTER_TEST(e, "app", "sys_summary_pie_kernel_select");
     t->TestFunc = [](ImGuiTestContext* ctx)
     {

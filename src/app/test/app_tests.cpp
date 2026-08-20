@@ -67,6 +67,55 @@ namespace
         return cv;
     }
 
+    // Reach the populated Kernel Selection Table on the Compute tab and drive its
+    // first fetch. On success returns the table and fills *out_cv / *out_table_win;
+    // returns nullptr after a skip (trace db or empty table) or a hard fail. The sort
+    // and filter tests below rely on one fact established here: the table's inner
+    // ImGui window has ChildId equal to the ImGuiTable id, the seed its custom header
+    // and per-column filter inputs hash their labels against.
+    KernelMetricTable* ReachKernelTableOrSkip(ImGuiTestContext* ctx, ComputeView** out_cv,
+                                              ImGuiWindow** out_table_win)
+    {
+        ComputeView* cv = GetComputeViewOrSkip(ctx);
+        if (cv == nullptr) return nullptr;
+        TabContainer* tc = ComputeViewTestPeer{*cv}.TabContainerPtr();
+        IM_CHECK_RETV(tc != nullptr, nullptr);
+
+        // The kernel metric table renders only while the "Kernel Details" tab is active.
+        tc->SetActiveTab("compute_kernel_details_view");
+        ctx->Yield(3);
+        const TabItem* tab = tc->GetActiveTab();
+        IM_CHECK_RETV(tab != nullptr, nullptr);
+        ComputeKernelDetailsView* kd =
+            dynamic_cast<ComputeKernelDetailsView*>(tab->m_widget.get());
+        IM_CHECK_RETV(kd != nullptr, nullptr);
+        KernelMetricTable* kt = ComputeKernelDetailsViewTestPeer{*kd}.KernelMetricTablePtr();
+        IM_CHECK_RETV(kt != nullptr, nullptr);
+
+        // The initial auto-select fires before this view subscribes, so the table
+        // starts empty. Drive the fetch here for the already-selected workload.
+        ComputeSelection* sel = ComputeViewTestPeer{*cv}.ComputeSelectionPtr();
+        IM_CHECK_RETV(sel != nullptr, nullptr);
+        const uint32_t workload = sel->GetSelectedWorkload();
+        IM_CHECK_RETV(workload != ComputeSelection::INVALID_SELECTION_ID, nullptr);
+        kt->FetchData(workload);
+
+        // The table registers its inner ImGui window (name contains
+        // "kernel_selection_table") only once BeginTable runs on non-empty data.
+        ImGuiWindow* table_win = nullptr;
+        for (int i = 0; i < 120 && table_win == nullptr; i++)
+        {
+            ctx->Yield(2);
+            for (ImGuiWindow* w : ImGui::GetCurrentContext()->Windows)
+                if (strstr(w->Name, "kernel_selection_table")) { table_win = w; break; }
+        }
+        IM_CHECK_RETV(table_win != nullptr, nullptr);
+
+        if (out_cv) *out_cv = cv;
+        if (out_table_win) *out_table_win = table_win;
+        return kt;
+    }
+
 // Flame-graph event bars are raw draw_list rects registered with the Test
 // Engine via IMGUI_TEST_ENGINE_ITEM_ADD under the track's "FV" child window.
 // These helpers gather that window's bars and pick reliably clickable targets
@@ -1505,6 +1554,216 @@ void RegisterAppTests(ImGuiTestEngine* e)
             const double cur  = std::strtod(rows[r][2].c_str(), nullptr);
             IM_CHECK(prev >= cur);
         }
+    };
+
+    t = IM_REGISTER_TEST(e, "app", "compute_kernel_table_sort_by_duration");
+    t->TestFunc = [](ImGuiTestContext* ctx)
+    {
+        ComputeView* cv        = nullptr;
+        ImGuiWindow* table_win = nullptr;
+        KernelMetricTable* kt  = ReachKernelTableOrSkip(ctx, &cv, &table_win);
+        if (kt == nullptr) return;
+        DataProvider* dp = cv->GetDataProvider();
+        IM_CHECK(dp != nullptr);
+        if (dp == nullptr) return;
+
+        // Click the Duration column header to trigger a sort. The Test Engine's usual
+        // TableClickHeader can't reach it. That helper finds a header by an id seeded
+        // from the column number, which the stock header row sets up but this custom
+        // header row does not. Instead, rebuild the id the way ImGui did, from the
+        // label plus the table's own id (table_win->ChildId), and click that. The
+        // click runs the real sort path: it sets the sort spec, which kicks off an
+        // async re-sort.
+        const ImGuiID header_id = ctx->GetID("Duration (ns)", table_win->ChildId);
+        IM_CHECK(ctx->ItemExists(header_id));
+        if (!ctx->ItemExists(header_id)) return;
+
+        KernelMetricTableTestPeer peer{*kt};
+        // Duration is the default sort column. Capture the starting sort so the two
+        // toggles below leave the table exactly as it started.
+        const int orig_col   = peer.SortColumnIndex();
+        const int orig_order = peer.SortOrder();
+
+        // Read the Duration column in display order as plain ns numbers. Empty or
+        // non-numeric cells are skipped, though a permanent column should not have any.
+        auto read_durations = [dp]() {
+            std::vector<double> out;
+            const std::vector<std::vector<std::string>>& rows =
+                dp->ComputeModel().GetKernelSelectionTable().GetTableData();
+            for (const std::vector<std::string>& row : rows)
+                if (row.size() > 2 && !row[2].empty())
+                    out.push_back(std::strtod(row[2].c_str(), nullptr));
+            return out;
+        };
+        auto drain = [ctx, dp]() {
+            ctx->Yield(3);  // let the sort-spec change dispatch the async refetch
+            for (int i = 0; i < 120 &&
+                 dp->IsRequestPending(DataProvider::METRIC_PIVOT_TABLE_REQUEST_ID); i++)
+                ctx->Yield(2);
+            ctx->Yield(5);  // let HandleNewData apply the re-sorted rows
+        };
+
+        if (read_durations().size() < 2)
+        {
+            ctx->LogWarning("SKIP: fewer than two kernel rows to verify sort order");
+            return;
+        }
+
+        // First click flips the sort direction and triggers an async re-sort.
+        ctx->ItemClick(header_id);
+        drain();
+        const int                 col1   = peer.SortColumnIndex();
+        const int                 order1 = peer.SortOrder();
+        const std::vector<double> after1 = read_durations();
+
+        // Second click flips it back to the original order.
+        ctx->ItemClick(header_id);
+        drain();
+        const int                 col2   = peer.SortColumnIndex();
+        const int                 order2 = peer.SortOrder();
+        const std::vector<double> after2 = read_durations();
+
+        // Check the actual order of the values, not just the sort-direction flag: a
+        // flag flipped over still-unsorted rows would pass falsely. The two toggles
+        // have already put the order back, so an IM_CHECK that returns early here
+        // cannot leak state into later tests.
+        auto check_monotonic = [](const std::vector<double>& v, int order) {
+            for (size_t i = 1; i < v.size(); i++)
+                if (order == kRPVControllerSortOrderAscending)
+                    IM_CHECK(v[i - 1] <= v[i]);
+                else
+                    IM_CHECK(v[i - 1] >= v[i]);
+        };
+
+        IM_CHECK(orig_col == 2);          // Duration column index
+        IM_CHECK(col1 == 2);
+        IM_CHECK(order1 != orig_order);   // direction flipped by the first click
+        check_monotonic(after1, order1);
+
+        IM_CHECK(col2 == 2);
+        IM_CHECK(order2 != order1);       // flipped again by the second click
+        IM_CHECK(order2 == orig_order);   // ...back to where we started
+        check_monotonic(after2, order2);
+    };
+
+    t = IM_REGISTER_TEST(e, "app", "compute_kernel_table_filter_duration");
+    t->TestFunc = [](ImGuiTestContext* ctx)
+    {
+        ComputeView* cv        = nullptr;
+        ImGuiWindow* table_win = nullptr;
+        KernelMetricTable* kt  = ReachKernelTableOrSkip(ctx, &cv, &table_win);
+        if (kt == nullptr) return;
+        DataProvider* dp = cv->GetDataProvider();
+        IM_CHECK(dp != nullptr);
+        if (dp == nullptr) return;
+
+        // Same id trick for the Duration column's filter box. Its id is built from
+        // PushID(column index) plus "##filter"
+        // (rocprofvis_compute_kernel_metric_table.cpp:886,897). "$$2" is how the Test
+        // Engine spells PushID(2) in a path, so GetID("$$2/##filter", table id)
+        // rebuilds the real input id for column 2, Duration.
+        const ImGuiID filter_id = ctx->GetID("$$2/##filter", table_win->ChildId);
+        IM_CHECK(ctx->ItemExists(filter_id));
+        if (!ctx->ItemExists(filter_id)) return;
+
+        // Apply and Clear are plain buttons in the table's "toolbar" child window.
+        // Find that window (its name carries both the card and toolbar segments), then
+        // address the buttons by label seeded on the window's id.
+        ImGuiWindow* toolbar_win = nullptr;
+        for (ImGuiWindow* w : ImGui::GetCurrentContext()->Windows)
+            if (strstr(w->Name, "kernel_metric_table_card") && strstr(w->Name, "toolbar"))
+            { toolbar_win = w; break; }
+        IM_CHECK(toolbar_win != nullptr);
+        if (toolbar_win == nullptr) return;
+        const ImGuiID apply_id = ctx->GetID("Apply Filters", toolbar_win->ID);
+        const ImGuiID clear_id = ctx->GetID("Clear All Filters", toolbar_win->ID);
+        IM_CHECK(ctx->ItemExists(apply_id));
+        IM_CHECK(ctx->ItemExists(clear_id));
+        if (!ctx->ItemExists(apply_id) || !ctx->ItemExists(clear_id)) return;
+
+        auto drain = [ctx, dp]() {
+            ctx->Yield(3);  // let ApplyFilters/ClearAllFilters dispatch the refetch
+            for (int i = 0; i < 120 &&
+                 dp->IsRequestPending(DataProvider::METRIC_PIVOT_TABLE_REQUEST_ID); i++)
+                ctx->Yield(2);
+            ctx->Yield(5);  // let HandleNewData apply the refetched rows
+        };
+        auto row_count = [dp]() {
+            return dp->ComputeModel().GetKernelSelectionTable().GetTableData().size();
+        };
+
+        // Start from a cleared filter so the baseline is unfiltered regardless of
+        // leftover state in the reused process.
+        ctx->ItemClick(clear_id);
+        drain();
+
+        // Snapshot the unfiltered Duration values, used both to pick a threshold that
+        // is sure to split the rows and to work out the expected filtered count without
+        // Optiq's filter SQL. Skip if any row has no Duration to filter on.
+        std::vector<double> durs;
+        {
+            const std::vector<std::vector<std::string>>& rows =
+                dp->ComputeModel().GetKernelSelectionTable().GetTableData();
+            for (const std::vector<std::string>& row : rows)
+            {
+                if (row.size() <= 2 || row[2].empty())
+                {
+                    ctx->LogWarning("SKIP: a kernel row has no Duration value to filter on");
+                    return;
+                }
+                durs.push_back(std::strtod(row[2].c_str(), nullptr));
+            }
+        }
+        const size_t unfiltered_count = durs.size();
+        if (unfiltered_count < 2)
+        {
+            ctx->LogWarning("SKIP: fewer than two kernel rows to split with a filter");
+            return;
+        }
+
+        double dmin = durs[0], dmax = durs[0], sum = 0.0;
+        for (double d : durs)
+        {
+            if (d < dmin) dmin = d;
+            if (d > dmax) dmax = d;
+            sum += d;
+        }
+        if (dmin == dmax)
+        {
+            ctx->LogWarning("SKIP: all kernel Durations equal; no numeric filter splits them");
+            return;
+        }
+        // The mean sits strictly between min and max, so "> mean" keeps at least one
+        // row and drops at least one. Use the same integer threshold in both the typed
+        // predicate and the expected-count math so the comparison is exact.
+        const long long threshold = static_cast<long long>(sum / static_cast<double>(unfiltered_count));
+        size_t expected = 0;
+        for (double d : durs)
+            if (d > static_cast<double>(threshold)) expected++;
+        if (expected == 0 || expected >= unfiltered_count)
+        {
+            ctx->LogWarning("SKIP: derived Duration threshold does not split the row set");
+            return;
+        }
+        const std::string predicate = ">" + std::to_string(threshold);
+
+        // Type the predicate into the Duration filter input, then apply it.
+        ctx->ItemInput(filter_id);
+        ctx->KeyChars(predicate.c_str());
+        ctx->Yield(2);  // let InputText commit the buffer before Apply deactivates it
+        ctx->ItemClick(apply_id);
+        drain();
+        const size_t filtered_count = row_count();
+
+        // Restore the unfiltered set before asserting so a failure can't leak the
+        // filter into later tests.
+        ctx->ItemClick(clear_id);
+        drain();
+        const size_t cleared_count = row_count();
+
+        IM_CHECK(filtered_count < unfiltered_count);   // the filter dropped rows
+        IM_CHECK(filtered_count == expected);          // exact, independently derived
+        IM_CHECK(cleared_count == unfiltered_count);   // clear restored the full set
     };
 
     t = IM_REGISTER_TEST(e, "app", "sys_timeline_select_named_track_event");

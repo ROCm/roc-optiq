@@ -955,7 +955,7 @@ TimelineTrackOptions::Update()
 }
 
 void
-TimelineTrackOptions::InitContextMenu(const TrackItem& target)
+TimelineTrackOptions::InitTrackOptionsSubmenu(const TrackItem& target)
 {
     m_context_menu_target = nullptr;
     if(target.GetTrackInfo() && target.m_options)
@@ -967,7 +967,7 @@ TimelineTrackOptions::InitContextMenu(const TrackItem& target)
 }
 
 void
-TimelineTrackOptions::RenderContextMenu()
+TimelineTrackOptions::RenderTrackOptionsSubmenu()
 {
     if(m_context_menu_target && m_context_menu_target->m_options)
     {
@@ -1005,7 +1005,7 @@ TimelineTrackOptions::RenderContextMenu()
 }
 
 bool
-TimelineTrackOptions::HasHiddenTracks() const
+TimelineTrackOptions::ShowHiddenTracksSubmenu() const
 {
     for(const auto& entry : m_options_map)
     {
@@ -1015,44 +1015,6 @@ TimelineTrackOptions::HasHiddenTracks() const
         }
     }
     return false;
-}
-
-void
-TimelineTrackOptions::ShowTracks(const std::vector<TrackOptions*>& options)
-{
-    // Sourced from a revealed track rather than the context-menu target, so this
-    // also works when the menu was opened without one (all tracks hidden).
-    const TrackItem* revealed = nullptr;
-    for(TrackOptions* option : options)
-    {
-        if(option && !option->m_display)
-        {
-            option->m_display = true;
-            revealed          = &option->GetTrackItem();
-        }
-    }
-    if(revealed)
-    {
-        // Aggregated context-menu options track visibility too, so refresh them.
-        m_update_aggregates = true;
-        EventManager::GetInstance()->AddEvent(std::make_shared<RocEvent>(
-            static_cast<int>(RocEvents::kTrackVisibilityChanged),
-            revealed->m_data_provider.GetTraceFilePath()));
-    }
-}
-
-void
-TimelineTrackOptions::ShowAllHiddenTracks()
-{
-    std::vector<TrackOptions*> hidden;
-    for(const auto& entry : m_options_map)
-    {
-        if(entry.second && !entry.second->m_display)
-        {
-            hidden.push_back(entry.second);
-        }
-    }
-    ShowTracks(hidden);
 }
 
 void
@@ -1091,10 +1053,9 @@ TimelineTrackOptions::RenderHiddenTracksSubmenu()
             continue;
         }
         const TrackInfo* info = option->GetTrackItem().GetTrackInfo();
-        const char*      label =
-            (info && info->track_type == kRPVControllerTrackTypeSamples)
-                     ? DISPLAY_STRINGS_TOPOLOGY_TRACK_TYPES[TrackInfo::Counter]
-                     : "Event Tracks";
+        const char* label = (info && info->track_type == kRPVControllerTrackTypeSamples)
+                                ? DISPLAY_STRINGS_TOPOLOGY_TRACK_TYPES[TrackInfo::Counter]
+                                : "Event Tracks";
         bucket(label).push_back(option);
     }
 
@@ -1122,9 +1083,8 @@ TimelineTrackOptions::RenderHiddenTracksSubmenu()
             for(TrackOptions* option : category.second)
             {
                 // Hidden ##id suffix keeps ids unique when names repeat.
-                const std::string item =
-                    option->GetTrackItem().GetName() + "##" +
-                    std::to_string(option->GetTrackItem().GetID());
+                const std::string item = option->GetTrackItem().GetName() + "##" +
+                                         std::to_string(option->GetTrackItem().GetID());
                 if(IconMenuItem(nullptr, item.c_str()))
                 {
                     ShowTracks({ option });
@@ -1133,6 +1093,65 @@ TimelineTrackOptions::RenderHiddenTracksSubmenu()
             ImGui::EndMenu();
         }
     }
+}
+
+void
+TimelineTrackOptions::SetTrackSortSubmenu(std::function<void()> renderer)
+{
+    m_render_sort_menu = std::move(renderer);
+}
+
+bool
+TimelineTrackOptions::ShowTrackSortSubmenu() const
+{
+    return static_cast<bool>(m_render_sort_menu);
+}
+
+void
+TimelineTrackOptions::RenderTrackSortSubmenu() const
+{
+    if(m_render_sort_menu)
+    {
+        m_render_sort_menu();
+    }
+}
+
+void
+TimelineTrackOptions::ShowTracks(const std::vector<TrackOptions*>& options)
+{
+    // Sourced from a revealed track rather than the context-menu target, so this
+    // also works when the menu was opened without one (all tracks hidden).
+    const TrackItem* revealed = nullptr;
+    for(TrackOptions* option : options)
+    {
+        if(option && !option->m_display)
+        {
+            option->m_display = true;
+            revealed          = &option->GetTrackItem();
+        }
+    }
+    if(revealed)
+    {
+        // Aggregated context-menu options track visibility too, so refresh them.
+        m_update_aggregates = true;
+        EventManager::GetInstance()->AddEvent(std::make_shared<RocEvent>(
+            static_cast<int>(RocEvents::kTrackVisibilityChanged),
+            revealed->m_data_provider.GetTraceFilePath()));
+    }
+}
+
+void
+TimelineTrackOptions::ShowAllHiddenTracks()
+{
+    std::vector<TrackOptions*> hidden;
+    for(const auto& entry : m_options_map)
+    {
+        if(entry.second && !entry.second->m_display)
+        {
+            hidden.push_back(entry.second);
+        }
+    }
+    ShowTracks(hidden);
 }
 
 std::unique_ptr<TrackOptions>

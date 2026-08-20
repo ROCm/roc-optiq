@@ -525,7 +525,7 @@ TrackItem::RenderMetaArea()
 
     if(meta_area_hovered && ImGui::IsMouseClicked(ImGuiMouseButton_Right))
     {
-        m_timeline_track_options.InitContextMenu(*this);
+        m_timeline_track_options.InitTrackOptionsSubmenu(*this);
         ImGui::OpenPopup(TRACK_COPY_MENU_POPUP_NAME);
     }
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, style.WindowPadding);
@@ -555,12 +555,22 @@ TrackItem::RenderMetaArea()
         ImGui::Separator();
         if(IconBeginMenu(ICON_GEAR, "Track Options"))
         {
-            m_timeline_track_options.RenderContextMenu();
+            m_timeline_track_options.RenderTrackOptionsSubmenu();
             ImGui::EndMenu();
+        }
+        ImGui::Separator();
+        // Also expose sorting here so it stays reachable when the header is hidden.
+        if(m_timeline_track_options.ShowTrackSortSubmenu())
+        {
+            if(IconBeginMenu(ICON_LIST, "Sort Tracks"))
+            {
+                m_timeline_track_options.RenderTrackSortSubmenu();
+                ImGui::EndMenu();
+            }
         }
         // Restore hidden tracks without needing the topology side bar. The entry
         // is only shown when something is actually hidden.
-        if(m_timeline_track_options.HasHiddenTracks())
+        if(m_timeline_track_options.ShowHiddenTracksSubmenu())
         {
             if(IconBeginMenu(ICON_EYE, "Show Hidden Tracks"))
             {

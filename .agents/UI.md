@@ -76,7 +76,8 @@ When humans and `CODING.md` disagree with this file, `CODING.md` wins.
 - **Render backend:** Vulkan (preferred) with OpenGL fallback. Selected by
   `src/app/src/rocprofvis_imgui_backend.cpp`.
 - **Persistence / parsing:** SQLite (`thirdparty/sqlite3/`), jsoncpp, yaml-cpp.
-- **HTTPS (Ask Optiq):** cpp-httplib (`thirdparty/cpp-httplib/`) with vendored mbedTLS.
+- **HTTPS (Ask Optiq):** cpp-httplib (`thirdparty/cpp-httplib/`) with vendored
+  mbedTLS. Targets the OpenAI chat-completions API.
 - **Logging:** spdlog (`thirdparty/spdlog/`). Use `spdlog::info/warn/error`,
   never `std::cout` / `printf` / `iostream`.
 - **File dialog:** Native via `nativefiledialog-extended` on most platforms,
@@ -1716,8 +1717,8 @@ An in-app LLM analyst that reads the open trace through the normal
 view APIs and drives the UI the way a user would. Four files, layered:
 
 - `rocprofvis_ai_client.{h,cpp}` - `AssistantChatCall`. One POST to an
-  OpenAI-compatible endpoint over cpp-httplib, plus the reply parser
-  (including a "harmony" inline tool-call fallback). Knows
+  OpenAI chat-completions endpoint over cpp-httplib, plus the reply
+  parser (including a "harmony" inline tool-call fallback). Knows
   nothing about traces.
 - `rocprofvis_ai_tools.{h,cpp}` - the tools the model may call:
   `StartAssistantTool` dispatches by name and returns either a finished
@@ -1762,21 +1763,36 @@ Rules that are easy to get wrong here:
   an answer. So every tool - including UI-only ones like
   `offer_next_steps` - goes through `BeginToolQueue` and answers the
   model on the next round. A code path that consumes a tool call
-  without queueing it ends the turn with an empty transcript.
+  without queueing it ends the turn with an empty transcript. The
+  harmony scan only runs on rounds where tools were offered, so a
+  literal `to=` in the final prose is not mistaken for a call.
 - **Tool rounds and the answer are separate HTTP calls.** When the
   model stops calling tools, `BeginFinalAnswer` discards that draft and
   spends one more round with tools off, which is the only prose the
   user reads.
 - **The settings page is URL, model, and API key.** There is no
   shipped endpoint URL. The default model is `ASSISTANT_DEFAULT_MODEL`
-  (`gpt-5.6-luna`). Auth is inferred from the URL: Azure OpenAI-style
-  paths (`/azure`, `/engines/`, `/openai/deployments`) send
-  `Ocp-Apim-Subscription-Key` and `max_tokens`; anything else sends
-  `Authorization: Bearer` and `max_tokens`. `/azure` posts to
-  `/azure/engines/<Model>/chat/completions`; `/openai` posts to
+  (`gpt-5.6-luna`). Nothing about the endpoint shape is persisted:
+  `AssistantProvider` holds only name, URL, and model, and the client
+  works the rest out from the URL.
+- **Two endpoint shapes, decided by `EndpointFlavour`.** Stock OpenAI
+  gets `/chat/completions` appended, names the model in the body, sends
+  `Authorization: Bearer`, and uses `max_completion_tokens`. Azure-style
+  bases (`/azure`, `/engines/`, `/openai/deployments`) - which is what
+  the AMD internal gateway `llm-api.amd.com/azure` is - take the
+  deployment from the Model field into the path, send
+  `Ocp-Apim-Subscription-Key`, omit `model` from the body, and use
+  `max_tokens` at a lower cap - that is all their API version accepts,
+  and it counts visible output only. `/azure` posts
+  to `/azure/engines/<Model>/chat/completions`; `/openai` posts to
   `/openai/deployments/<Model>/chat/completions` with `apiVersion`.
-  Other bases only get `/chat/completions` appended. The client omits
-  `model` from the body when the path already names a deployment.
+  Everything that differs between the two keys off the flavour in one
+  place, rather than being sniffed at each use.
+- **`temperature` and `reasoning_effort` are never sent.** Reasoning
+  models reject a non-default temperature, and each model's own default
+  effort is what we want. Keeping the body free of model-specific
+  parameters is what lets any chat model be configured without the
+  client knowing anything about it.
 - **Tools only ever run from `Update()`.** They toggle panel
   visibility and rebuild layout, so running them from `Render()` would
   mutate widgets halfway through the frame that draws them.
@@ -1789,9 +1805,8 @@ Rules that are easy to get wrong here:
   The flip side is that the trace in front can change mid-turn, which
   is what `m_turn_project_id` detects.
 - **The API key lives in `SecretStore`, never in settings JSON and
-  never in a log line.** `AssistantProvider` is still the saved
-  record in `UserSettings::assistant`; the extra auth fields are
-  filled in, not shown in `SettingsPanel`.
+  never in a log line.** `AssistantProvider` is the saved record in
+  `UserSettings::assistant`, and holds only name, URL, and model.
 
 ## 13. Remote / SSH and Profiler Launch UI
 

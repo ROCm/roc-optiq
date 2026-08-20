@@ -40,6 +40,7 @@ ToLower(const std::string& value)
 
 }  // namespace
 
+// Binds to one trace's view objects. Any of them may be null.
 OptiqActions::OptiqActions(DataProvider*      data_provider,
                            TimelineSelection* timeline_selection,
                            ComputeSelection*  compute_selection, TraceView* trace_view)
@@ -142,7 +143,7 @@ OptiqActions::ShowPanel(OptiqPanel panel, bool visible)
         case OptiqPanel::kHistogram:
         {
             // The layout item is seeded from the setting at construction, so
-            // both have to move for the change to stick and to be visible now.
+            // both have to move for the change to stick and to show now.
             app_settings.show_histogram = visible;
             if(m_trace_view != nullptr)
             {

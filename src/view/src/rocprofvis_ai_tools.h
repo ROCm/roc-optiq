@@ -25,6 +25,7 @@ class TraceView;
 constexpr size_t ASSISTANT_DEFAULT_ROW_LIMIT = 20;
 constexpr size_t ASSISTANT_MAX_ROW_LIMIT     = 200;
 
+// What a parked fetch is waiting on, which decides how its rows get formatted.
 enum class AssistantFetchKind
 {
     kNone,
@@ -39,6 +40,8 @@ enum class AssistantFetchKind
     kTrackStatistics
 };
 
+// What the tools may touch on the trace in front. Rebuilt for every call, so it
+// is never held across a frame.
 struct AssistantToolContext
 {
     DataProvider*       data_provider       = nullptr;
@@ -62,6 +65,8 @@ struct AssistantFetchState
     size_t             row_limit  = ASSISTANT_DEFAULT_ROW_LIMIT;
 };
 
+// What one tool call produced: either finished content, or a set of requests
+// for the panel to poll.
 struct AssistantToolStartResult
 {
     bool                  pending       = false;
@@ -98,16 +103,21 @@ std::vector<double> GetAssistantActivityBins(const AssistantToolContext& context
 std::vector<AssistantActivityRow> GetAssistantActivityRows(
     const AssistantToolContext& context, size_t bin_count, size_t max_rows);
 
+// The tool schema sent with every request. Thread-safe: reads no view state.
 jt::Json BuildAssistantToolsJson();
 
+// The short trace description the model sees before it asks anything.
 std::string BuildAssistantBriefing(const AssistantToolContext& context);
 
+// The line the panel shows under the transcript while a tool runs.
 std::string AssistantToolStatusLabel(const std::string& tool_name);
 
+// Runs one named tool. Returns finished content, or the requests to wait on.
 AssistantToolStartResult StartAssistantTool(const AssistantToolContext& context,
                                             const std::string&          tool_name,
                                             const std::string&          arguments_json);
 
+// Formats the rows of a fetch that has landed.
 std::string FinishAssistantFetch(const AssistantToolContext& context,
                                  const AssistantFetchState&  fetch);
 

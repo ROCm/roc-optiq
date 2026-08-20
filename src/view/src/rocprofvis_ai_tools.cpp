@@ -64,9 +64,9 @@ constexpr size_t   ASSISTANT_MAX_NEXT_STEP_CHARS = 80;
 constexpr double   ASSISTANT_OVERVIEW_SCALE   = 100.0;
 constexpr uint64_t ASSISTANT_DURATION_COLUMN  = 2;
 
-// Columns the model is allowed to filter, group, and sort on. These are the
-// public result-column names the query builder emits; anything outside this
-// list is rejected so a tool argument can never reach the database as SQL.
+// Columns the model is allowed to filter, group, and sort on. Filters reach the
+// database as a SQL fragment, so only names on this list are accepted and the
+// values beside them are quoted by QuoteSqlLiteral.
 const char* const ASSISTANT_QUERY_COLUMNS[] = {
     "name",       "category",  "duration",   "start",      "end",
     "id",         "__uuid",    "PID",        "TID",        "queue",
@@ -122,8 +122,8 @@ struct AssistantToolLabel
 };
 
 // Every tool the model can call, with the line the panel shows while it runs.
-// Keeping them in one list is what stops the status text and the "unknown tool"
-// reply from drifting away from what BuildAssistantToolsJson registers.
+// One list keeps the status text and the "unknown tool" reply in step with what
+// BuildAssistantToolsJson registers.
 const AssistantToolLabel ASSISTANT_TOOL_LABELS[] = {
     { "trace_overview", "Reading the timeline overview..." },
     { "get_summary", "Loading summary..." },
@@ -170,8 +170,7 @@ const TopEventsSpec k_top_event_specs[] = {
       kRocProfVisDmOperationLaunchSample },
 };
 
-// Every UI-facing thing a tool does goes through this, so the "what a click
-// actually does" knowledge lives in one place.
+// Every UI-facing thing a tool does goes through here.
 OptiqActions
 Actions(const AssistantToolContext& context)
 {
@@ -284,9 +283,8 @@ TrimResult(std::string text)
     return text;
 }
 
-// Reads a tool call's arguments. Sets ok_out to false on anything that is not a
-// JSON object, so the caller can say so rather than reporting every field as
-// missing and leaving the model to guess why.
+// Reads a tool call's arguments. Clears ok_out on anything that is not a JSON
+// object, so the caller can say that rather than report every field missing.
 jt::Json
 ParseArgsObject(const std::string& arguments_json, bool& ok_out)
 {
@@ -535,9 +533,8 @@ FindQueryOperator(const std::string& key)
     return nullptr;
 }
 
-// Renders a string as a SQL literal: single quotes are doubled (the standard
-// escape) and control characters are dropped, so the value cannot terminate the
-// literal and inject syntax.
+// Renders a string as a SQL literal: single quotes doubled, control characters
+// dropped, so a value cannot terminate the literal and inject syntax.
 std::string
 QuoteSqlLiteral(const std::string& value)
 {
@@ -713,9 +710,8 @@ SortOrderFromArgs(const jt::Json& args, rocprofvis_controller_sort_order_t fallb
     return fallback;
 }
 
-// Explicit start_ns/end_ns win. Otherwise fall back to the user's selection, or
-// to the whole trace when prefer_selection is false (search defaults trace-wide,
-// matching the search box's "Whole Trace" default).
+// Explicit start_ns/end_ns win, else the user's selection, else the whole
+// trace. Search passes prefer_selection false to match its "Whole Trace" default.
 void
 TimeRangeFromArgs(const AssistantToolContext& context, const jt::Json& args,
                   double& start_ns, double& end_ns, bool prefer_selection = true)
@@ -741,8 +737,7 @@ TimeRangeFromArgs(const AssistantToolContext& context, const jt::Json& args,
 }
 
 // Track ids named by the model, filtered to tracks that exist and carry the
-// requested operation. Falls back to the selection-or-all behaviour when the
-// model does not name any.
+// requested operation. Falls back to selection-or-all when none are named.
 std::vector<uint64_t>
 TracksFromArgs(const AssistantToolContext& context, const jt::Json& args,
                rocprofvis_dm_event_operation_t op, bool require_op,
@@ -957,10 +952,9 @@ FormatEventDetails(const AssistantToolContext& context, uint64_t event_id)
     return TrimResult(out.str());
 }
 
-// The minimap holds one row per track over a fixed number of time buckets:
-// event counts for event tracks, counter values for sample tracks. The
-// histogram strip above the timeline is the sum of the event rows. Both are
-// filled when the trace loads, so this reads without any fetch.
+// One minimap row reduced to a profile. The minimap holds event counts for
+// event tracks and counter values for sample tracks, and is filled when the
+// trace loads, so reading it costs no fetch.
 struct OverviewProfile
 {
     std::vector<double> bins;
@@ -1893,9 +1887,8 @@ BuildAssistantBriefing(const AssistantToolContext& context)
         }
     }
 
-    // Headline numbers only. The kernel breakdown is deliberately left out so
-    // the model has to fetch it, which is what makes it look at real rows
-    // instead of answering from the briefing alone.
+    // Headline numbers only. The kernel breakdown is left out so the model has
+    // to fetch it rather than answer from the briefing alone.
     const SummaryInfo::GPUMetrics& gpu =
         context.data_provider->DataModel().GetSummary().GetSummaryData().gpu;
     out << "summary:\n";
@@ -1954,10 +1947,9 @@ GetAssistantActivityBins(const AssistantToolContext& context, uint64_t track_id,
     return bins;
 }
 
-// Returns the busiest tracks with their activity rows, for the panel's chart.
-// Every row is scaled against the busiest bin of the whole set rather than its
-// own, so a quiet track reads as quiet. Normalizing each row separately made
-// them all peak at full brightness, which drew five identical solid bars.
+// The busiest tracks with their activity rows, for the panel's chart. Rows are
+// scaled against the busiest bin of the whole set, not their own, so a quiet
+// track reads as quiet instead of peaking at full brightness.
 std::vector<AssistantActivityRow>
 GetAssistantActivityRows(const AssistantToolContext& context, size_t bin_count,
                          size_t max_rows)
@@ -2492,9 +2484,8 @@ StartAssistantTool(const AssistantToolContext& context, const std::string& tool_
             actions.ZoomToRange(start_ns, end_ns);
         }
 
-        // Collect every event the answer points at. The model may name one via
-        // track_id/event_uuid or several via events[]; both shapes end up here
-        // so the behaviour does not depend on which one it picked.
+        // The model may name one event via track_id/event_uuid or several via
+        // events[]; both shapes collapse to this list.
         std::vector<std::pair<uint64_t, uint64_t>> targets;
         if(event_uuid != TimelineSelection::INVALID_SELECTION_ID)
         {
@@ -2975,8 +2966,7 @@ StartAssistantTool(const AssistantToolContext& context, const std::string& tool_
 
         const uint64_t track_id = JsonU64(args, "track_id", INVALID_UINT64_INDEX);
         // FetchEvent seeds name/duration from loaded track data and chains the
-        // extended-data fetch; without a track id only the async property
-        // fetches below have anything to say.
+        // extended-data fetch; without a track id only the fetches below run.
         bool extended = false;
         if(track_id != INVALID_UINT64_INDEX)
         {

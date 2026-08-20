@@ -1033,6 +1033,7 @@ SettingsManager::DeserializeProfilerSettings(jt::Json& json)
     }
 }
 
+// Writes the saved endpoints. The API keys live in the credential store.
 void
 SettingsManager::SerializeAssistantSettings(jt::Json& json)
 {
@@ -1044,15 +1045,12 @@ SettingsManager::SerializeAssistantSettings(jt::Json& json)
         entry[JSON_KEY_SETTINGS_ASSISTANT_NAME]         = provider.name;
         entry[JSON_KEY_SETTINGS_ASSISTANT_ENDPOINT_URL] = provider.endpoint_url;
         entry[JSON_KEY_SETTINGS_ASSISTANT_MODEL]        = provider.model;
-        entry[JSON_KEY_SETTINGS_ASSISTANT_AUTH_HEADER]  = provider.auth_header;
-        entry[JSON_KEY_SETTINGS_ASSISTANT_AUTH_PREFIX]  = provider.auth_prefix;
-        entry[JSON_KEY_SETTINGS_ASSISTANT_LEGACY_MAX_TOKENS] =
-            provider.use_legacy_max_tokens;
     }
     as[JSON_KEY_SETTINGS_ASSISTANT_ACTIVE] =
         static_cast<int>(m_usersettings.assistant.active);
 }
 
+// Reads the saved endpoints, upgrading the pre-provider single-endpoint shape.
 void
 SettingsManager::DeserializeAssistantSettings(jt::Json& json)
 {
@@ -1081,21 +1079,6 @@ SettingsManager::DeserializeAssistantSettings(jt::Json& json)
             {
                 provider.model = entry[JSON_KEY_SETTINGS_ASSISTANT_MODEL].getString();
             }
-            if(entry[JSON_KEY_SETTINGS_ASSISTANT_AUTH_HEADER].isString())
-            {
-                provider.auth_header =
-                    entry[JSON_KEY_SETTINGS_ASSISTANT_AUTH_HEADER].getString();
-            }
-            if(entry[JSON_KEY_SETTINGS_ASSISTANT_AUTH_PREFIX].isString())
-            {
-                provider.auth_prefix =
-                    entry[JSON_KEY_SETTINGS_ASSISTANT_AUTH_PREFIX].getString();
-            }
-            if(entry[JSON_KEY_SETTINGS_ASSISTANT_LEGACY_MAX_TOKENS].isBool())
-            {
-                provider.use_legacy_max_tokens =
-                    entry[JSON_KEY_SETTINGS_ASSISTANT_LEGACY_MAX_TOKENS].getBool();
-            }
             m_usersettings.assistant.providers.push_back(provider);
         }
         for(AssistantProvider& provider : m_usersettings.assistant.providers)
@@ -1105,9 +1088,9 @@ SettingsManager::DeserializeAssistantSettings(jt::Json& json)
     }
     else if(as[JSON_KEY_SETTINGS_ASSISTANT_ENDPOINT_URL].isString())
     {
-        // Written before routes were configurable: fold the single endpoint into
-        // the list, reproducing the headers that build sent, so the key already
-        // in the credential store keeps working.
+        // Written before routes were configurable: fold the single endpoint
+        // into the list under the default name, so the key already in the
+        // credential store keeps working.
         AssistantProvider provider;
         provider.name         = ASSISTANT_DEFAULT_PROVIDER_NAME;
         provider.endpoint_url = as[JSON_KEY_SETTINGS_ASSISTANT_ENDPOINT_URL].getString();
@@ -1132,6 +1115,7 @@ SettingsManager::DeserializeAssistantSettings(jt::Json& json)
     }
 }
 
+// The endpoint the assistant should post to, or nullptr when none is saved.
 const AssistantProvider*
 SettingsManager::GetActiveAssistantProvider() const
 {
@@ -1143,6 +1127,7 @@ SettingsManager::GetActiveAssistantProvider() const
     return &providers[m_usersettings.assistant.active];
 }
 
+// Persists panel visibility, so the View menu survives a restart.
 void
 SettingsManager::SerializeAppWindowSettings(jt::Json& json)
 {
@@ -1155,6 +1140,7 @@ SettingsManager::SerializeAppWindowSettings(jt::Json& json)
     aw[JSON_KEY_SETTINGS_APP_WINDOW_SUMMARY]   = m_appwindowsettings.show_summary;
 }
 
+// Restores panel visibility, keeping the built-in default for missing keys.
 void
 SettingsManager::DeserializeAppWindowSettings(jt::Json& json)
 {
@@ -1191,6 +1177,7 @@ AssistantTokenKey(const std::string& provider_name)
 }
 }  // namespace
 
+// True when a key is already saved for this endpoint.
 bool
 SettingsManager::HasAssistantToken(const std::string& provider_name) const
 {
@@ -1198,6 +1185,8 @@ SettingsManager::HasAssistantToken(const std::string& provider_name) const
     return GetAssistantToken(provider_name, unused);
 }
 
+// Reads the key from the credential store, this session's memory, or the
+// pre-provider entry, in that order.
 bool
 SettingsManager::GetAssistantToken(const std::string& provider_name,
                                    std::string&       out_token) const
@@ -1230,6 +1219,7 @@ SettingsManager::GetAssistantToken(const std::string& provider_name,
     return false;
 }
 
+// Saves the key, or clears it when the token is empty.
 bool
 SettingsManager::SetAssistantToken(const std::string& provider_name,
                                    const std::string& token)
@@ -1247,6 +1237,7 @@ SettingsManager::SetAssistantToken(const std::string& provider_name,
     return true;
 }
 
+// Forgets the key everywhere it could be stored.
 bool
 SettingsManager::ClearAssistantToken(const std::string& provider_name)
 {

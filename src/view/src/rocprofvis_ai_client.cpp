@@ -32,22 +32,62 @@ namespace View
 namespace
 {
 
-constexpr int    ASSISTANT_CONNECT_TIMEOUT_SECONDS = 15;
-constexpr int    ASSISTANT_HTTP_TIMEOUT_SECONDS    = 120;
-constexpr int    ASSISTANT_MAX_COMPLETION_TOKENS   = 4096;
-constexpr size_t ASSISTANT_MAX_HARMONY_CALLS       = 4;
-constexpr int    ASSISTANT_FIRST_ERROR_STATUS      = 400;
-constexpr int    ASSISTANT_HTTP_NOT_FOUND          = 404;
-constexpr double ASSISTANT_TEMPERATURE             = 0.7;
-constexpr char   ASSISTANT_JSON_CONTENT_TYPE[]     = "application/json";
-constexpr char   ASSISTANT_BAD_URL_ERROR[] =
+constexpr int  ASSISTANT_CONNECT_TIMEOUT_SECONDS   = 15;
+constexpr int  ASSISTANT_HTTP_TIMEOUT_SECONDS      = 120;
+constexpr int  ASSISTANT_FIRST_ERROR_STATUS        = 400;
+constexpr int  ASSISTANT_HTTP_NOT_FOUND            = 404;
+constexpr char ASSISTANT_JSON_CONTENT_TYPE[]       = "application/json";
+constexpr char ASSISTANT_CHAT_COMPLETIONS_SUFFIX[] = "/chat/completions";
+
+// Stock OpenAI: the key is a bearer token and the model is named in the body.
+constexpr char ASSISTANT_OPENAI_AUTH_HEADER[] = "Authorization";
+constexpr char ASSISTANT_OPENAI_AUTH_PREFIX[] = "Bearer ";
+
+// Azure OpenAI, which the AMD internal gateway fronts: the key is a
+// subscription key and the deployment is named in the path.
+constexpr char ASSISTANT_AZURE_AUTH_HEADER[]      = "Ocp-Apim-Subscription-Key";
+constexpr char ASSISTANT_AZURE_OPENAI_API_VERSION[] = "2024-09-01-preview";
+
+// max_completion_tokens also covers reasoning tokens, which are billed but
+// never returned, so it has to pay for the thinking as well as the prose. Too
+// low and a reasoning model spends the whole allowance thinking and answers
+// with nothing.
+constexpr int ASSISTANT_MAX_COMPLETION_TOKENS = 16384;
+
+// Azure's max_tokens counts visible output only, and deployments cap it far
+// lower than the budget above, so asking for that much is a 400.
+constexpr int ASSISTANT_MAX_OUTPUT_TOKENS = 4096;
+
+// A malformed reply could otherwise name an unbounded number of tools.
+constexpr size_t ASSISTANT_MAX_HARMONY_CALLS = 4;
+
+constexpr char ASSISTANT_BAD_URL_ERROR[] =
     "The assistant URL is not a valid http(s) address.";
-constexpr char   ASSISTANT_CHAT_COMPLETIONS_SUFFIX[] = "/chat/completions";
-constexpr char   ASSISTANT_AZURE_OPENAI_API_VERSION[] = "2024-09-01-preview";
-constexpr char   ASSISTANT_MISSING_DEPLOYMENT_ERROR[] =
+constexpr char ASSISTANT_MISSING_DEPLOYMENT_ERROR[] =
     "This Azure URL names the deployment in the path. Put the deployment id in "
     "the Model field.";
 
+// Which endpoint the URL implies. Everything that differs between them - the
+// path, the auth header, and the token-limit field - keys off this, so the two
+// shapes are described in one place rather than sniffed at each use.
+enum class EndpointFlavour
+{
+    kOpenAi,
+    kAzure
+};
+
+// Azure-style bases name the deployment in the path. The AMD internal gateway
+// (llm-api.amd.com/azure) is one of these.
+EndpointFlavour
+FlavourFromUrl(const std::string& url)
+{
+    const bool azure = url.find("/azure") != std::string::npos ||
+                       url.find("/engines/") != std::string::npos ||
+                       url.find("/openai/deployments") != std::string::npos;
+    return azure ? EndpointFlavour::kAzure : EndpointFlavour::kOpenAi;
+}
+
+// True when the value ends with the given suffix.
 bool
 EndsWith(const std::string& value, const char* suffix)
 {
@@ -55,21 +95,11 @@ EndsWith(const std::string& value, const char* suffix)
     return value.size() >= n && value.compare(value.size() - n, n, suffix) == 0;
 }
 
+// True when the base URL already names the chat-completions route.
 bool
 HasCompletionsSuffix(const std::string& url)
 {
-    const size_t n = std::strlen(ASSISTANT_CHAT_COMPLETIONS_SUFFIX);
-    return url.size() >= n &&
-           url.compare(url.size() - n, n, ASSISTANT_CHAT_COMPLETIONS_SUFFIX) == 0;
-}
-
-void
-StripCompletionsSuffix(std::string& url)
-{
-    if(HasCompletionsSuffix(url))
-    {
-        url.resize(url.size() - std::strlen(ASSISTANT_CHAT_COMPLETIONS_SUFFIX));
-    }
+    return EndsWith(url, ASSISTANT_CHAT_COMPLETIONS_SUFFIX);
 }
 
 // Azure's /openai deployments want apiVersion on the query when the user did
@@ -77,11 +107,7 @@ StripCompletionsSuffix(std::string& url)
 void
 EnsureAzureOpenAiVersion(const std::string& path, std::string& query)
 {
-    if(!query.empty())
-    {
-        return;
-    }
-    if(path.find("/openai/deployments/") == std::string::npos)
+    if(!query.empty() || path.find("/openai/deployments/") == std::string::npos)
     {
         return;
     }
@@ -89,16 +115,74 @@ EnsureAzureOpenAiVersion(const std::string& path, std::string& query)
     query += ASSISTANT_AZURE_OPENAI_API_VERSION;
 }
 
-// Turns the configured base into the chat-completions URL. An Azure-style
-// query (?apiVersion=...) has to come off first so the path suffix is not
-// buried inside it.
-//
-// Ordinary OpenAI-compatible bases only need /chat/completions. Azure OpenAI
-// bases are different: /azure posts to /azure/engines/<deployment>/chat/completions,
-// and /openai posts to /openai/deployments/<deployment>/chat/completions. Empty
-// return means the path needs a deployment and none was given.
+// Undoes a /chat/completions that was appended to an Azure base without the
+// deployment in between. Azure answers that with a 404, so a user who pasted
+// the failing URL back into settings would otherwise be stuck with it.
+void
+StripDeploymentlessCompletions(std::string& base_url)
+{
+    if(!HasCompletionsSuffix(base_url))
+    {
+        return;
+    }
+    std::string without_suffix = base_url;
+    without_suffix.resize(without_suffix.size() -
+                          std::strlen(ASSISTANT_CHAT_COMPLETIONS_SUFFIX));
+    if(EndsWith(without_suffix, "/azure") || EndsWith(without_suffix, "/openai") ||
+       EndsWith(without_suffix, "/azure/engines") ||
+       EndsWith(without_suffix, "/openai/deployments"))
+    {
+        base_url = without_suffix;
+    }
+}
+
+// Inserts the deployment segment an Azure base is missing, e.g. /azure becomes
+// /azure/engines/<model>. Empty return means the model field was not filled in.
+bool
+AppendAzureDeployment(std::string& base_url, const std::string& model)
+{
+    // A base that already names the deployment only needs the route appended.
+    if(base_url.find("/engines/") != std::string::npos ||
+       base_url.find("/deployments/") != std::string::npos)
+    {
+        return true;
+    }
+
+    const bool azure_base              = EndsWith(base_url, "/azure");
+    const bool openai_base             = EndsWith(base_url, "/openai");
+    const bool azure_engines_base      = EndsWith(base_url, "/azure/engines");
+    const bool openai_deployments_base = EndsWith(base_url, "/openai/deployments");
+    if(!azure_base && !openai_base && !azure_engines_base && !openai_deployments_base)
+    {
+        return true;
+    }
+    if(model.empty())
+    {
+        return false;
+    }
+
+    if(azure_base)
+    {
+        base_url += "/engines/";
+    }
+    else if(openai_base)
+    {
+        base_url += "/deployments/";
+    }
+    else
+    {
+        base_url += "/";
+    }
+    base_url += model;
+    return true;
+}
+
+// Turns the configured base into the chat-completions URL. Any query string
+// comes off first so the path suffix is not buried inside it. Empty return
+// means an Azure base needs a deployment and the Model field was blank.
 std::string
-ChatCompletionsUrl(std::string base_url, const std::string& model)
+ChatCompletionsUrl(std::string base_url, const std::string& model,
+                   EndpointFlavour flavour)
 {
     std::string  query;
     const size_t query_start = base_url.find('?');
@@ -113,60 +197,19 @@ ChatCompletionsUrl(std::string base_url, const std::string& model)
         base_url.pop_back();
     }
 
-    // A previous client appended /chat/completions onto /azure or /openai
-    // without inserting the deployment, which Azure answers with 404.
-    if(HasCompletionsSuffix(base_url))
+    if(flavour == EndpointFlavour::kAzure)
     {
-        std::string without_suffix = base_url;
-        StripCompletionsSuffix(without_suffix);
-        if(EndsWith(without_suffix, "/azure") || EndsWith(without_suffix, "/openai") ||
-           EndsWith(without_suffix, "/azure/engines") ||
-           EndsWith(without_suffix, "/openai/deployments"))
-        {
-            base_url = without_suffix;
-        }
+        StripDeploymentlessCompletions(base_url);
     }
 
     if(!HasCompletionsSuffix(base_url))
     {
-        const bool has_engines =
-            base_url.find("/engines/") != std::string::npos;
-        const bool has_deployments =
-            base_url.find("/deployments/") != std::string::npos;
-        const bool azure_base             = EndsWith(base_url, "/azure");
-        const bool openai_base            = EndsWith(base_url, "/openai");
-        const bool azure_engines_base     = EndsWith(base_url, "/azure/engines");
-        const bool openai_deployments_base = EndsWith(base_url, "/openai/deployments");
-        if(has_engines || has_deployments)
+        if(flavour == EndpointFlavour::kAzure &&
+           !AppendAzureDeployment(base_url, model))
         {
-            base_url += ASSISTANT_CHAT_COMPLETIONS_SUFFIX;
+            return std::string();
         }
-        else if(azure_base || openai_base || azure_engines_base ||
-                openai_deployments_base)
-        {
-            if(model.empty())
-            {
-                return std::string();
-            }
-            if(azure_base)
-            {
-                base_url += "/engines/";
-            }
-            else if(openai_base)
-            {
-                base_url += "/deployments/";
-            }
-            else
-            {
-                base_url += "/";
-            }
-            base_url += model;
-            base_url += ASSISTANT_CHAT_COMPLETIONS_SUFFIX;
-        }
-        else
-        {
-            base_url += ASSISTANT_CHAT_COMPLETIONS_SUFFIX;
-        }
+        base_url += ASSISTANT_CHAT_COMPLETIONS_SUFFIX;
     }
 
     EnsureAzureOpenAiVersion(base_url, query);
@@ -174,7 +217,7 @@ ChatCompletionsUrl(std::string base_url, const std::string& model)
 }
 
 // httplib::Client wants the origin ("https://host:port") and the path
-// ("/some/path/chat/completions") as separate arguments.
+// ("/v1/chat/completions") as separate arguments.
 bool
 SplitUrl(const std::string& url, std::string& origin_out, std::string& path_out)
 {
@@ -408,7 +451,7 @@ ErrorText(jt::Json& root)
         const std::string message = JsonString(error, "message");
         return message.empty() ? "The endpoint returned an error." : message;
     }
-    // A rejected subscription key comes back as a bare {"message": "..."}.
+    // A rejected key can come back as a bare {"message": "..."}.
     if(!root.contains("choices"))
     {
         return JsonString(root, "message");
@@ -417,8 +460,10 @@ ErrorText(jt::Json& root)
 }
 
 // Turns a chat-completions body into a reply, tool calls, or an error.
+// allow_tool_calls is false on the answer round, where tools were not offered:
+// any "to=" in the prose there is the model's own text, not a call.
 void
-ParseChatCompletion(jt::Json& root, AssistantChatResult& result)
+ParseChatCompletion(jt::Json& root, bool allow_tool_calls, AssistantChatResult& result)
 {
     result.error = ErrorText(root);
     if(!result.error.empty())
@@ -444,13 +489,16 @@ ParseChatCompletion(jt::Json& root, AssistantChatResult& result)
     else
     {
         jt::Json& message = choice["message"];
-        ParseToolCalls(message, result.tool_calls);
+        if(allow_tool_calls)
+        {
+            ParseToolCalls(message, result.tool_calls);
+        }
         if(message.contains("content"))
         {
             result.reply = JoinContent(message["content"]);
         }
 
-        if(result.tool_calls.empty())
+        if(allow_tool_calls && result.tool_calls.empty())
         {
             ParseHarmonyToolCalls(result.reply, result.tool_calls);
             if(!result.tool_calls.empty())
@@ -505,24 +553,30 @@ MessageToJson(const AssistantMessage& message)
     return json;
 }
 
-// Builds the whole request body: model, sampling, conversation, and tool schema.
+// Builds the whole request body: model, budget, conversation, and tool schema.
+// temperature and reasoning_effort are deliberately absent - reasoning models
+// reject a non-default temperature, and every model's own default effort is
+// what we want.
 jt::Json
-BuildRequestBody(const AssistantChatRequest& request, const std::string& completions_url)
+BuildRequestBody(const AssistantChatRequest& request, EndpointFlavour flavour)
 {
     jt::Json body;
-    // Azure names the deployment in /engines/ or /deployments/, and sending a
-    // model beside it is ignored at best and a 400 at worst, so let the path
-    // win rather than making the user empty the field to match the endpoint.
-    const bool deployment_in_path =
-        completions_url.find("/deployments/") != std::string::npos ||
-        completions_url.find("/engines/") != std::string::npos;
-    if(!request.model.empty() && !deployment_in_path)
+    // Azure names the deployment in the path, and a model beside it is ignored
+    // at best and a 400 at worst, so let the path win rather than making the
+    // user empty the field to match the endpoint.
+    if(flavour == EndpointFlavour::kOpenAi)
     {
         body["model"] = request.model;
     }
-    body[request.use_legacy_max_tokens ? "max_tokens" : "max_completion_tokens"] =
-        ASSISTANT_MAX_COMPLETION_TOKENS;
-    body["temperature"] = ASSISTANT_TEMPERATURE;
+    // Azure's API version predates max_completion_tokens and rejects it.
+    if(flavour == EndpointFlavour::kAzure)
+    {
+        body["max_tokens"] = ASSISTANT_MAX_OUTPUT_TOKENS;
+    }
+    else
+    {
+        body["max_completion_tokens"] = ASSISTANT_MAX_COMPLETION_TOKENS;
+    }
 
     for(size_t i = 0; i < request.messages.size(); ++i)
     {
@@ -570,7 +624,9 @@ AssistantChatCall::Send(const AssistantChatRequest& request)
         return result;
     }
 
-    const std::string url = ChatCompletionsUrl(request.endpoint_url, request.model);
+    const EndpointFlavour flavour = FlavourFromUrl(request.endpoint_url);
+    const std::string     url =
+        ChatCompletionsUrl(request.endpoint_url, request.model, flavour);
     if(url.empty())
     {
         result.error = ASSISTANT_MISSING_DEPLOYMENT_ERROR;
@@ -597,12 +653,16 @@ AssistantChatCall::Send(const AssistantChatRequest& request)
     client.set_follow_location(true);
 
     httplib::Headers headers;
-    if(!request.api_token.empty() && !request.auth_header.empty())
+    if(!request.api_token.empty())
     {
-        headers.emplace(request.auth_header, request.auth_prefix + request.api_token);
+        const bool azure = flavour == EndpointFlavour::kAzure;
+        headers.emplace(azure ? ASSISTANT_AZURE_AUTH_HEADER
+                              : ASSISTANT_OPENAI_AUTH_HEADER,
+                        (azure ? "" : ASSISTANT_OPENAI_AUTH_PREFIX) +
+                            request.api_token);
     }
 
-    const std::string body = BuildRequestBody(request, url).toString();
+    const std::string body = BuildRequestBody(request, flavour).toString();
     spdlog::info("Assistant POST {}", url);
     if(!Adopt(&client))
     {
@@ -643,7 +703,7 @@ AssistantChatCall::Send(const AssistantChatRequest& request)
         return result;
     }
 
-    ParseChatCompletion(parsed.second, result);
+    ParseChatCompletion(parsed.second, request.enable_tools, result);
     if(!result.error.empty() && response->status == ASSISTANT_HTTP_NOT_FOUND)
     {
         result.error.append(" Requested ");

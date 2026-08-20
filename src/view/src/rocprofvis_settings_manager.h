@@ -45,36 +45,21 @@ typedef struct LogViewerSettings
     bool visible;
 } LogViewerSettings;
 
-// Chat endpoint. The settings panel asks for URL, model, and API key. Auth
-// is inferred from the URL: Azure OpenAI-style paths use a subscription key;
-// other OpenAI-compatible servers use a Bearer token.
-constexpr const char* ASSISTANT_DEFAULT_PROVIDER_NAME   = "Default";
-constexpr const char* ASSISTANT_DEFAULT_MODEL           = "gpt-5.6-luna";
-constexpr const char* ASSISTANT_SUBSCRIPTION_KEY_HEADER = "Ocp-Apim-Subscription-Key";
-constexpr const char* ASSISTANT_BEARER_HEADER           = "Authorization";
-constexpr const char* ASSISTANT_BEARER_PREFIX           = "Bearer ";
+// Chat endpoint. The settings panel asks for URL, model, and API key; how the
+// key and model are presented is worked out from the URL by the client, so
+// nothing about the endpoint shape is stored here.
+constexpr const char* ASSISTANT_DEFAULT_PROVIDER_NAME = "Default";
+constexpr const char* ASSISTANT_DEFAULT_MODEL         = "gpt-5.6-luna";
 
-// One saved endpoint. The settings UI edits URL and model; name is the
-// credential-store key. Auth fields are filled from the URL, not shown.
+// One saved endpoint. Name is the credential-store key, not a display label.
 typedef struct AssistantProvider
 {
     std::string name = ASSISTANT_DEFAULT_PROVIDER_NAME;
     std::string endpoint_url;
-    std::string model        = ASSISTANT_DEFAULT_MODEL;
-    std::string auth_header  = ASSISTANT_BEARER_HEADER;
-    std::string auth_prefix  = ASSISTANT_BEARER_PREFIX;
-    bool        use_legacy_max_tokens = true;
+    std::string model = ASSISTANT_DEFAULT_MODEL;
 } AssistantProvider;
 
-inline bool
-IsAzureStyleAssistantUrl(const std::string& url)
-{
-    return url.find("/azure") != std::string::npos ||
-           url.find("/engines/") != std::string::npos ||
-           url.find("/openai/deployments") != std::string::npos;
-}
-
-// Fills empty name/model and sets how the key is presented from the URL.
+// Fills in an empty name or model, so a half-written settings file still runs.
 inline void
 ApplyAssistantEndpointDefaults(AssistantProvider& provider)
 {
@@ -86,17 +71,9 @@ ApplyAssistantEndpointDefaults(AssistantProvider& provider)
     {
         provider.model = ASSISTANT_DEFAULT_MODEL;
     }
-    provider.use_legacy_max_tokens = true;
-    if(IsAzureStyleAssistantUrl(provider.endpoint_url))
-    {
-        provider.auth_header = ASSISTANT_SUBSCRIPTION_KEY_HEADER;
-        provider.auth_prefix.clear();
-        return;
-    }
-    provider.auth_header = ASSISTANT_BEARER_HEADER;
-    provider.auth_prefix = ASSISTANT_BEARER_PREFIX;
 }
 
+// A provider with nothing configured but the defaults.
 inline AssistantProvider
 MakeDefaultAssistantProvider()
 {
@@ -334,10 +311,6 @@ constexpr const char* JSON_KEY_SETTINGS_ASSISTANT_MODEL        = "model";
 constexpr const char* JSON_KEY_SETTINGS_ASSISTANT_PROVIDERS    = "providers";
 constexpr const char* JSON_KEY_SETTINGS_ASSISTANT_ACTIVE       = "active";
 constexpr const char* JSON_KEY_SETTINGS_ASSISTANT_NAME         = "name";
-constexpr const char* JSON_KEY_SETTINGS_ASSISTANT_AUTH_HEADER  = "auth_header";
-constexpr const char* JSON_KEY_SETTINGS_ASSISTANT_AUTH_PREFIX  = "auth_prefix";
-constexpr const char* JSON_KEY_SETTINGS_ASSISTANT_LEGACY_MAX_TOKENS =
-    "use_legacy_max_tokens";
 // OS credential-store key for the assistant API token. Never written to JSON.
 constexpr const char* ASSISTANT_TOKEN_SECRET_KEY = "assistant-api-token";
 

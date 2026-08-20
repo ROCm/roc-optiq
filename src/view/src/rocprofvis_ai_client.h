@@ -17,6 +17,7 @@ namespace RocProfVis
 namespace View
 {
 
+// One function call the model asked for. Arguments arrive as a JSON string.
 struct AssistantToolCall
 {
     std::string id;
@@ -24,27 +25,29 @@ struct AssistantToolCall
     std::string arguments;
 };
 
+// One entry of the conversation, in the shape the chat API expects.
 struct AssistantMessage
 {
     std::string                    role;
     std::string                    content;
-    std::string                    name;
-    std::string                    tool_call_id;
-    std::vector<AssistantToolCall> tool_calls;
+    std::string                    name;          // tool replies only
+    std::string                    tool_call_id;  // tool replies only
+    std::vector<AssistantToolCall> tool_calls;    // assistant messages only
 };
 
+// One request to the chat endpoint.
 struct AssistantChatRequest
 {
-    std::string endpoint_url;
-    std::string model;
-    std::string api_token;
-    std::string                   auth_header;
-    std::string                   auth_prefix;
-    bool                          use_legacy_max_tokens = false;
+    std::string                   endpoint_url;
+    std::string                   model;
+    std::string                   api_token;
     std::vector<AssistantMessage> messages;
-    bool                          enable_tools = true;
+    // False on the round that writes the answer, which goes out without the
+    // tool schema.
+    bool enable_tools = true;
 };
 
+// What came back, or why nothing did.
 struct AssistantChatResult
 {
     bool                           ok        = false;
@@ -56,14 +59,15 @@ struct AssistantChatResult
 };
 
 /**
- * @brief One POST to an OpenAI-compatible chat endpoint, which the caller can
+ * @brief One POST to an OpenAI chat-completions endpoint, which the caller can
  * abandon.
  *
- * The configured base URL gets /chat/completions appended. Azure OpenAI
- * bases (/azure, /openai) also insert /engines/<model> or
- * /deployments/<model> from the Model field. The key travels in whichever
- * header the URL implies. TLS is in-process through cpp-httplib so the GUI
- * never shells out to curl.
+ * The endpoint shape is inferred from the URL. A stock OpenAI base just gets
+ * /chat/completions appended, names the model in the body, and sends the key as
+ * Authorization: Bearer. An Azure-style base - which is what the AMD internal
+ * gateway is - additionally takes the deployment from the Model field into the
+ * path, and sends the key as Ocp-Apim-Subscription-Key. TLS is in-process
+ * through cpp-httplib so the GUI never shells out to curl.
  *
  * Send() blocks on a worker thread until the endpoint answers, which is minutes
  * if the server is wedged. Cancel() closes the socket out from under it, so the

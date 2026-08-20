@@ -430,6 +430,7 @@ SettingsPanel::RenderOtherSettings()
     m_settings_changed = true;
 }
 
+// The Assistant page: endpoint URL, model, and the API key field.
 void
 SettingsPanel::RenderAssistantSettings()
 {
@@ -451,8 +452,8 @@ SettingsPanel::RenderAssistantSettings()
     ImGui::TextUnformatted("Assistant");
     ImGui::Separator();
     ImGui::TextWrapped(
-        "OpenAI-compatible chat endpoint. The key is stored in the OS credential "
-        "store, never in the settings file.");
+        "OpenAI-compatible chat endpoint. The key is stored in the OS "
+        "credential store, never in the settings file.");
 
     const float label_width =
         ImGui::CalcTextSize("Model").x + 2.0f * style.ItemSpacing.x;
@@ -468,8 +469,9 @@ SettingsPanel::RenderAssistantSettings()
     }
     if(ImGui::IsItemHovered())
     {
-        SetTooltipStyled("Base URL. /chat/completions is appended. Azure-style "
-                         "/azure and /openai paths also insert the model as the "
+        SetTooltipStyled("Base URL, e.g. https://api.openai.com/v1. "
+                         "/chat/completions is appended. Azure-style /azure "
+                         "and /openai paths also insert the model as the "
                          "deployment id.");
     }
 
@@ -484,8 +486,8 @@ SettingsPanel::RenderAssistantSettings()
     }
     if(ImGui::IsItemHovered())
     {
-        SetTooltipStyled("Model name sent to the endpoint. On Azure-style URLs this "
-                         "is the deployment id. Default is %s.",
+        SetTooltipStyled("Model name sent to the endpoint. On Azure-style URLs "
+                         "this is the deployment id. Default is %s.",
                          ASSISTANT_DEFAULT_MODEL);
     }
 
@@ -544,6 +546,7 @@ SettingsPanel::RenderAssistantSettings()
     }
 }
 
+// Name of the endpoint being edited, which is the key its token is stored under.
 std::string
 SettingsPanel::ActiveAssistantProviderName() const
 {
@@ -555,6 +558,7 @@ SettingsPanel::ActiveAssistantProviderName() const
     return assistant.providers[assistant.active].name;
 }
 
+// Restores the default endpoint and drops the pending key edit.
 void
 SettingsPanel::ResetAssistantOptions()
 {

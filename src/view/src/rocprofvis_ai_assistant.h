@@ -33,12 +33,12 @@ public:
     // AppWindow can lay out the main view against it.
     float DockedWidth() const;
 
-    // Drives the turn forward. This is the only place tools run, so a tool can
-    // never reorder panels in the middle of the frame that draws them.
+    // Drives the turn forward. The only place tools run, so a tool can never
+    // reorder panels in the middle of the frame that draws them.
     void Update() override;
 
-    // Renders as a docked column. AppWindow calls this inside the main window;
-    // Render() is kept for the RocWidget contract and forwards to it.
+    // Renders as a docked column, called by AppWindow inside the main window.
+    // Render() is kept for the RocWidget contract and forwards here.
     void RenderDocked();
     void Render() override;
 
@@ -51,8 +51,7 @@ private:
         kUser,
         kAssistant,
         kStatus,
-        // Draws the timeline histogram and minimap from live model data rather
-        // than storing a snapshot in the transcript.
+        // Drawn from live model data rather than a stored snapshot.
         kChart
     };
 
@@ -74,12 +73,11 @@ private:
     struct FetchWait
     {
         bool active = false;
-        // False when the tool piggybacked on a fetch someone else already had in
-        // flight: the rows that land answer their query, not ours, so the tool
-        // has to run again to issue its own.
+        // False when the tool piggybacked on a fetch already in flight: the rows
+        // that land answer someone else's query, so the tool must run again.
         bool started_fetch = false;
-        // The summary preload that runs before the first question, which has no
-        // tool call to answer and resumes the queued turn instead.
+        // The summary preload, which has no tool call to answer and resumes the
+        // queued turn instead.
         bool                  warmup = false;
         std::vector<uint64_t> request_ids;
         AssistantFetchState   fetch;
@@ -99,12 +97,12 @@ private:
     void RenderTranscript();
     void RenderMessageCard(size_t index, const ChatLine& line);
     void RenderComposer();
-    // Explain this view when the chat is empty, or the model's offered follow-ups
-    // after a turn. Lives under the transcript so the header stays just a title.
+    // Explain this view on an empty chat, or the model's offered follow-ups
+    // after a turn.
     void RenderSuggestedActions();
     void RenderSplitter();
-    // Transient "what I'm doing right now" text. Lives outside the transcript so
-    // it disappears with the spinner when the turn ends.
+    // Transient progress text, kept outside the transcript so it disappears
+    // with the spinner when the turn ends.
     void SetStatus(const std::string& text);
     void SendCurrentInput(bool explain_view);
     void ResetTurn();
@@ -115,8 +113,8 @@ private:
     void BeginToolQueue(const std::vector<AssistantToolCall>& calls,
                         const std::string&                    assistant_text);
     void RunNextTool();
-    // Spends one extra round on the answer, at a higher reasoning budget than
-    // the tool rounds run at.
+    // Spends one extra round on the answer, with tools off so the model writes
+    // prose instead of reaching for another call.
     void BeginFinalAnswer();
     void BeginFetchWait(const AssistantToolStartResult& started,
                         const std::string& tool_call_id, const std::string& tool_name,
@@ -141,8 +139,8 @@ private:
 
     std::string m_input;
     std::string m_status;
-    // Measured height of the composer block, so the transcript can reserve
-    // exactly the right amount instead of guessing and overflowing the window.
+    // Measured height of the composer block, so the transcript reserves exactly
+    // the right amount instead of guessing and overflowing.
     float                 m_composer_height;
     std::vector<ChatLine> m_lines;
 
@@ -153,16 +151,15 @@ private:
     size_t                         m_next_call_index;
     uint32_t                       m_tool_round;
     // Set when the tool budget runs out: the next request goes out without
-    // tools so the model has to write up what it already gathered.
+    // tools, so the model has to write up what it already gathered.
     bool     m_force_final;
     uint32_t m_fetch_retries;
-    // The trace the turn started on. Tools always read whichever trace is in
-    // front, so this is what catches the user switching tabs mid-investigation.
+    // The trace the turn started on, which is what catches the user switching
+    // tabs mid-investigation.
     std::string m_turn_project_id;
     uint64_t    m_metrics_client_id;
     FetchWait   m_fetch_wait;
-    // Clickable follow-ups from offer_next_steps. Empty chat shows Explain
-    // this view here instead. Cleared when the user starts a new turn.
+    // Clickable follow-ups from offer_next_steps. Cleared on a new turn.
     std::vector<std::string> m_next_steps;
 
     std::shared_ptr<AssistantChatCall> m_call;

@@ -45,8 +45,7 @@ constexpr float  ASSISTANT_DEFAULT_WIDTH  = 520.0f;
 constexpr float  ASSISTANT_MIN_WIDTH      = 440.0f;
 constexpr float  ASSISTANT_MAX_WIDTH      = 900.0f;
 constexpr float  ASSISTANT_SPLITTER_WIDTH = 6.0f;
-// Same padding the remote/profiler dialogs use. The old 8px gutter made a
-// 320px column feel like a squeezed inspector instead of a chat surface.
+// Same padding the remote/profiler dialogs use.
 constexpr ImVec2 ASSISTANT_WINDOW_PADDING = ImVec2(14.0f, 12.0f);
 constexpr ImVec2 ASSISTANT_CARD_PADDING   = ImVec2(14.0f, 10.0f);
 constexpr float  ASSISTANT_SEND_WIDTH     = 80.0f;
@@ -54,8 +53,7 @@ constexpr float  ASSISTANT_DOT_RADIUS     = 2.5f;
 constexpr int    ASSISTANT_DOT_COUNT      = 3;
 constexpr float  ASSISTANT_DOT_SPACING    = 4.0f;
 constexpr float  ASSISTANT_DOT_SPEED      = 5.0f;
-// The assistant is expected to chain tools without asking, so this budget has to
-// cover a whole self-directed investigation, not a single lookup.
+// Covers a whole self-directed investigation, not a single lookup.
 constexpr uint32_t ASSISTANT_MAX_TOOL_ROUNDS = 20;
 // How many times one tool may re-run after piggybacking on someone else's fetch.
 // Without a cap, a request id that stays busy would spin the tool forever.
@@ -204,7 +202,7 @@ constexpr const char* ASSISTANT_SYSTEM_PROMPT =
 
 AssistantPanel* AssistantPanel::s_instance = nullptr;
 
-// The panel, created on first use the way the other global overlays are.
+// Created on first use, like the other global overlays.
 AssistantPanel*
 AssistantPanel::GetInstance()
 {
@@ -223,6 +221,7 @@ AssistantPanel::DestroyInstance()
     s_instance = nullptr;
 }
 
+// Starts closed and idle; the metrics client id is fixed for the app's life.
 AssistantPanel::AssistantPanel()
 : m_visible(false)
 , m_scroll_to_bottom(false)
@@ -277,11 +276,9 @@ AssistantPanel::AppendLine(Speaker speaker, const std::string& text)
     m_scroll_to_bottom = true;
 }
 
-// Adds a transcript entry that draws the activity strip for one track, or the
-// whole trace when track_id is invalid. The chart reads live model data, so a
-// second one for the same track would be a pixel-identical copy: the model is
-// told to open every investigation with trace_overview, which would otherwise
-// stack one card per turn.
+// Adds an activity strip for one track, or the whole trace when track_id is
+// invalid. Deduplicated: the chart reads live model data, so a repeat would be
+// a pixel-identical copy of one already in the transcript.
 void
 AssistantPanel::AppendChart(uint64_t track_id)
 {
@@ -300,8 +297,8 @@ AssistantPanel::AppendChart(uint64_t track_id)
     m_scroll_to_bottom = true;
 }
 
-// Draws the same two things the timeline shows: the histogram strip (summed
-// event density over time) and, under it, the busiest minimap rows.
+// Draws what the timeline shows: the event-density histogram, then the busiest
+// minimap rows under it.
 void
 AssistantPanel::RenderActivityChart(uint64_t track_id)
 {
@@ -311,8 +308,8 @@ AssistantPanel::RenderActivityChart(uint64_t track_id)
         return;
     }
 
-    // Bin count follows the column width so the bars stay legible when the dock
-    // is dragged narrow instead of collapsing into a smear.
+    // Bin count follows the column width, so bars stay legible when the dock is
+    // dragged narrow.
     const float  avail_width = ImGui::GetContentRegionAvail().x;
     const size_t bin_count   = static_cast<size_t>(
         std::clamp(avail_width / ASSISTANT_CHART_PX_PER_BIN,
@@ -373,9 +370,8 @@ AssistantPanel::RenderActivityChart(uint64_t track_id)
 
     ImGui::Spacing();
 
-    // Size the label gutter to the widest id actually present rather than a
-    // fixed width, which would eat a chunk of a narrow column. The ids are worth
-    // the room: they are what the model cites in its answer.
+    // Size the gutter to the widest id present; a fixed width would eat a chunk
+    // of a narrow column.
     float label_width = 0.0f;
     for(const AssistantActivityRow& row : rows)
     {
@@ -389,8 +385,8 @@ AssistantPanel::RenderActivityChart(uint64_t track_id)
     const float strip_width = std::max(1.0f, width - label_width);
     const ImU32 label_color = settings.GetColor(Colors::kTextDim);
 
-    // The rows butt up against each other so they read as one strip. Default
-    // item spacing would leave a panel-coloured band between every pair.
+    // Rows butt up against each other so they read as one strip; default item
+    // spacing would band them.
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing,
                         ImVec2(0.0f, ASSISTANT_CHART_ROW_GAP));
     for(const AssistantActivityRow& row : rows)
@@ -417,8 +413,7 @@ AssistantPanel::RenderActivityChart(uint64_t track_id)
                       static_cast<unsigned long long>(row.track_id));
         draw->AddText(row_origin, label_color, label);
 
-        // Fill the lane first, so idle stretches read as gaps in a strip rather
-        // than as holes punched through to the panel behind it.
+        // Fill the lane first, so idle stretches read as gaps rather than holes.
         const float x_start = row_origin.x + label_width;
         draw->AddRectFilled(ImVec2(x_start, row_origin.y),
                             ImVec2(x_start + strip_width, row_origin.y + row_height),
@@ -481,9 +476,8 @@ AssistantPanel::RenderToolbarButton()
     }
 }
 
-// Resolves what the tools are allowed to touch, from whichever trace is in front.
-// Rebuilt on every call rather than cached, so a closed tab cannot leave a tool
-// holding a dead provider.
+// Resolves what the tools may touch, from whichever trace is in front. Rebuilt
+// per call, so a closed tab cannot leave a tool holding a dead provider.
 AssistantToolContext
 AssistantPanel::MakeToolContext() const
 {
@@ -540,8 +534,7 @@ AssistantPanel::CurrentProjectId() const
     return app->GetCurrentProject()->GetID();
 }
 
-// Wraps the question in the briefing, which is what orients the model on a trace
-// it has not seen yet.
+// Wraps the question in the briefing that orients the model on this trace.
 std::string
 AssistantPanel::BuildUserPrompt(const std::string& question, bool include_briefing) const
 {
@@ -599,7 +592,7 @@ AssistantPanel::CancelPendingRequest()
     m_call.reset();
 }
 
-// Posts the conversation so far to the configured route, on a worker thread.
+// Posts the conversation so far to the configured endpoint, on a worker thread.
 void
 AssistantPanel::StartHttpRequest()
 {
@@ -617,16 +610,11 @@ AssistantPanel::StartHttpRequest()
     ApplyAssistantEndpointDefaults(endpoint);
 
     AssistantChatRequest request;
-    request.endpoint_url          = endpoint.endpoint_url;
-    request.model                 = endpoint.model;
-    request.auth_header           = endpoint.auth_header;
-    request.auth_prefix           = endpoint.auth_prefix;
-    request.use_legacy_max_tokens = endpoint.use_legacy_max_tokens;
-    settings.GetAssistantToken(provider->name, request.api_token);
+    request.endpoint_url = endpoint.endpoint_url;
+    request.model        = endpoint.model;
+    settings.GetAssistantToken(endpoint.name, request.api_token);
     request.enable_tools = !m_force_final;
 
-    // Choosing the next tool is a lookup; the round that writes the answer is
-    // the one worth paying for.
     AssistantMessage system_message;
     system_message.role = "system";
     system_message.content = ASSISTANT_SYSTEM_PROMPT;
@@ -658,9 +646,8 @@ AssistantPanel::BeginQueuedTurn()
     StartHttpRequest();
 }
 
-// Loads the summary before the first question when it is still empty, so the
-// briefing carries real numbers instead of zeros. Returns false when there is
-// nothing to preload.
+// Preloads an empty summary so the briefing carries real numbers, not zeros.
+// False when there is nothing to preload.
 bool
 AssistantPanel::TryStartSummaryWarmup(const std::string& question, bool explain_view)
 {
@@ -756,8 +743,8 @@ AssistantPanel::SendCurrentInput(bool explain_view)
 void
 AssistantPanel::HandleHttpResult(const AssistantChatResult& result)
 {
-    // We walked away from this one, so there is nothing to say about it. Reset
-    // anyway, so a turn can never be left mid-phase with nothing in flight.
+    // Nothing to report on a request we abandoned, but still reset so a turn is
+    // never left mid-phase with nothing in flight.
     if(result.cancelled)
     {
         ResetTurn();
@@ -782,10 +769,9 @@ AssistantPanel::HandleHttpResult(const AssistantChatResult& result)
         return;
     }
 
-    // It has stopped reaching for tools, so this is its answer - written on the
-    // cheap reasoning budget the tool rounds run at. Throw that draft away and
-    // ask once more with the budget turned up, now that every number it needs is
-    // already in the conversation.
+    // It stopped reaching for tools, but that draft was written with the tool
+    // schema still in the request. Discard it and ask once more with tools off,
+    // so the model writes prose instead of weighing up another call.
     if(!m_force_final && m_tool_round > 0)
     {
         BeginFinalAnswer();
@@ -832,8 +818,8 @@ AssistantPanel::BeginToolQueue(const std::vector<AssistantToolCall>& calls,
     RunNextTool();
 }
 
-// Asks for the write-up itself: no tools, and the reasoning budget raised. This
-// is the only round whose prose the user ever reads.
+// Asks for the write-up with tools off. The only round whose prose the user
+// ever reads.
 void
 AssistantPanel::BeginFinalAnswer()
 {
@@ -858,9 +844,8 @@ AssistantPanel::RunNextTool()
         return;
     }
 
-    // Tools read whichever trace is in front, so a tab change between calls
-    // would quietly move the investigation to a different trace. Say so rather
-    // than letting the model mix the two sets of numbers.
+    // Tools read whichever trace is in front, so a tab change mid-queue would
+    // silently mix two traces' numbers. Say so instead.
     const std::string project_id = CurrentProjectId();
     if(project_id != m_turn_project_id)
     {
@@ -997,8 +982,8 @@ AssistantPanel::PollToolFetch()
         return;
     }
 
-    // The warmup has no tool call to answer; it exists to fill the briefing, so
-    // whether it landed or timed out the queued question goes out now.
+    // The warmup has no tool call to answer, so the queued question goes out
+    // whether it landed or timed out.
     if(m_fetch_wait.warmup)
     {
         m_fetch_wait = FetchWait();
@@ -1012,7 +997,7 @@ AssistantPanel::PollToolFetch()
         return;
     }
 
-    // The rows that landed answer someone else's query, so run the tool again to
+    // The rows that landed answer someone else's query, so re-run the tool to
     // issue its own. Bounded, in case that request id never goes quiet.
     if(!m_fetch_wait.started_fetch &&
        m_fetch_wait.fetch.kind != AssistantFetchKind::kSummary &&
@@ -1032,8 +1017,8 @@ AssistantPanel::PollToolFetch()
     FinishCurrentTool(body);
 }
 
-// Advances the turn once a frame: first the HTTP reply, then any fetch a tool is
-// waiting on. Tools only ever run from here, never from Render(), so they cannot
+// Advances the turn once a frame: the HTTP reply first, then any fetch a tool
+// is waiting on. Tools run only from here, never Render(), so they cannot
 // reorder panels halfway through the frame that draws them.
 void
 AssistantPanel::Update()
@@ -1068,8 +1053,8 @@ AssistantPanel::DockedWidth() const
     return m_visible ? m_dock_width + ASSISTANT_SPLITTER_WIDTH : 0.0f;
 }
 
-// A drag handle between the main view and the panel, matching how the topology
-// sidebar is resized on the other side of the window.
+// Drag handle between the main view and the panel, matching the topology
+// sidebar on the other side of the window.
 void
 AssistantPanel::RenderSplitter()
 {
@@ -1107,8 +1092,8 @@ AssistantPanel::RenderDocked()
         return;
     }
 
-    // A session that started before the min width went up would otherwise keep
-    // the old squeezed column until the splitter was dragged.
+    // A width persisted below the current minimum would otherwise stick until
+    // the splitter was dragged.
     m_dock_width = std::max(m_dock_width, ASSISTANT_MIN_WIDTH);
 
     SettingsManager& settings = SettingsManager::GetInstance();
@@ -1215,8 +1200,7 @@ AssistantPanel::RenderTranscript()
     SettingsManager&  settings = SettingsManager::GetInstance();
     const ImGuiStyle& style    = settings.GetDefaultStyle();
 
-    // Use last frame's measured composer height. The estimate below only runs on
-    // the very first frame, before there is anything to measure.
+    // Last frame's measured composer height; the estimate is only for frame one.
     const float composer_height =
         m_composer_height > 0.0f
             ? m_composer_height
@@ -1247,8 +1231,7 @@ AssistantPanel::RenderTranscript()
         RenderMessageCard(i, m_lines[i]);
     }
 
-    // The working indicator is drawn from live state, not stored in the
-    // transcript, so it cannot outlive the turn that spawned it.
+    // Drawn from live state rather than stored, so it cannot outlive its turn.
     if(Busy() && !m_status.empty())
     {
         RenderLoadingIndicatorDots(ASSISTANT_DOT_RADIUS, ASSISTANT_DOT_COUNT,
@@ -1280,8 +1263,7 @@ AssistantPanel::RenderMessageCard(size_t index, const ChatLine& line)
 
     if(line.speaker == Speaker::kStatus)
     {
-        // A notice that outlived the turn, such as a failed request. No spinner:
-        // nothing is still running.
+        // A notice that outlived its turn, such as a failed request.
         PanelIcon(ICON_X_CIRCLED, Colors::kTextError, &settings);
         ImGui::SameLine(0.0f, style.ItemInnerSpacing.x);
         ImGui::PushStyleColor(ImGuiCol_Text, settings.GetColor(Colors::kTextError));
@@ -1412,8 +1394,8 @@ AssistantPanel::RenderComposer()
     SettingsManager&  settings = SettingsManager::GetInstance();
     const ImGuiStyle& style    = settings.GetDefaultStyle();
 
-    // Measured from here to the end of the card, so RenderTranscript can reserve
-    // the exact space this block needs on the next frame.
+    // Measured to the end of the card, so RenderTranscript can reserve exactly
+    // this much on the next frame.
     const float start_y = ImGui::GetCursorPosY();
 
     BeginPanelCard("##assistant_composer", PanelCardTone::kFrame, ASSISTANT_CARD_PADDING,
@@ -1464,8 +1446,8 @@ AssistantPanel::RenderComposer()
 
     EndPanelCard();
 
-    // EndChild has already advanced the cursor past one ItemSpacing, which the
-    // transcript's reservation has to include as well.
+    // EndChild already advanced the cursor past one ItemSpacing, which the
+    // transcript's reservation has to include too.
     m_composer_height = ImGui::GetCursorPosY() - start_y +
                         settings.GetDefaultStyle().ItemSpacing.y;
 

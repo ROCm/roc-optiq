@@ -33,18 +33,18 @@ enum class OptiqPanel
 };
 
 /**
- * @brief Everything the assistant is allowed to do to Optiq, expressed the way a
- * user would do it.
+ * @brief Everything the assistant is allowed to do to Optiq, expressed the way
+ * a user would do it.
  *
  * Each method reproduces one real interaction - a click, a drag, a menu item -
- * including the event traffic the rest of the app listens for. The point is that
- * a tool never has to re-derive the correct sequence: selecting an event, for
- * instance, is what makes TraceView load that event's details, flow arrows, and
- * call stack, so callers must not also fetch them by hand.
+ * including the event traffic the rest of the app listens for, so a tool never
+ * has to re-derive the correct sequence. Selecting an event, for instance, is
+ * what makes TraceView load its details, flow arrows, and call stack; callers
+ * must not fetch those by hand as well.
  *
- * Every method is safe to call when the relevant part of the app is missing and
- * returns false rather than doing half the work. Adding a new capability should
- * be one method here, not a block of wiring in a tool.
+ * Every method is safe to call when the relevant part of the app is missing,
+ * and returns false rather than doing half the work. Add a capability as one
+ * method here, not as wiring inside a tool.
  */
 class OptiqActions
 {
@@ -57,14 +57,14 @@ public:
 
     // --- Panels -----------------------------------------------------------
 
-    // Open or close a panel, the same as ticking its View-menu item. Some
-    // panels need both the persisted setting and a live widget update; that
-    // pairing lives here so callers do not have to know about it.
+    // Open or close a panel, the same as ticking its View-menu item. Panels
+    // that need both the persisted setting and a live widget update are paired
+    // up here, so callers do not have to know which ones those are.
     bool ShowPanel(OptiqPanel panel, bool visible);
     bool IsPanelVisible(OptiqPanel panel, bool& visible_out) const;
 
-    // Accepts what a user would call the thing, not just the canonical name:
-    // "navbar" and "tree" both mean the topology panel, for instance.
+    // Accepts what a user would call the panel, not just its canonical name:
+    // "navbar" and "tree" both mean topology.
     static OptiqPanel  PanelFromName(const std::string& name);
     static const char* PanelName(OptiqPanel panel);
     static std::string PanelNameList();
@@ -94,8 +94,8 @@ public:
 
     // --- Leaving something behind ------------------------------------------
 
-    // Pins a sticky note on the timeline. It is saved with the project, so this
-    // is the one action that outlives the conversation.
+    // Pins a sticky note on the timeline. Saved with the project, so this is
+    // the one action that outlives the conversation.
     bool AddNote(double time_ns, const std::string& title, const std::string& text,
                  double v_min, double v_max, uint64_t track_id);
 
@@ -130,10 +130,10 @@ public:
     // --- Events -----------------------------------------------------------
 
     // The literal equivalent of clicking an event: drops the previous
-    // selection, then selects this one. That selection is what triggers the
-    // detail, flow-arrow, and call-stack loads. Do not pair this with a manual
-    // DataProvider::FetchEvent - the duplicate request collides on the shared
-    // request id and gets dropped.
+    // selection, then selects this one, which is what triggers the detail,
+    // flow-arrow, and call-stack loads. Do not pair this with a manual
+    // DataProvider::FetchEvent - the duplicate collides on the shared request
+    // id and gets dropped.
     bool ClickEvent(uint64_t track_id, uint64_t event_uuid);
 
     // Like ClickEvent but additive, the same as clicking with multi-select held.

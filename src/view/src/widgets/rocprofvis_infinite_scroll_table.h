@@ -48,11 +48,14 @@ public:
     {
         kUUId,
         kDbEventId,
+        kCategory,
         kName,
         kTrackId,
         kStreamId,
         kNumImportantColumns
     };
+
+    friend struct EventSearchTestPeer;
 
 protected:
     enum TimeColumns
@@ -89,8 +92,10 @@ protected:
     void ExportToFile() const;
     /* Sends a table request, keeping it for Update() to reissue when the
      * controller table it needs is busy. Returns whether it went out now.
+     * Held by pointer so the concrete params type survives, which is what
+     * DataProvider::FetchTable dispatches on.
      */
-    bool QueueTableRequest(const TableRequestParams& params);
+    bool QueueTableRequest(const std::shared_ptr<TableRequestParams>& params);
     // Drops a request kept by QueueTableRequest, once it is out or obsolete.
     void ClearQueuedTableRequest();
     /* Whether this table is waiting on data: either a request is out with the
@@ -155,7 +160,7 @@ private:
     bool                                m_pending_sort;
     uint64_t                            m_pending_sort_column;
     rocprofvis_controller_sort_order_t  m_pending_sort_order;
-    std::unique_ptr<TableRequestParams> m_retry_params;
+    std::shared_ptr<TableRequestParams> m_retry_params;
     uint64_t                            m_last_total_row_count;
     ImVec2                              m_last_table_size;
 

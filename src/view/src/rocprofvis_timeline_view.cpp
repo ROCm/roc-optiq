@@ -34,10 +34,13 @@ constexpr float    SIDEBAR_WIDTH_MAX             = 600.0f;
 constexpr float    SIDEBAR_DEFAULT_SIZE          = 400.0f;
 constexpr float    LOADING_TRACK_DISTANCE        = DEFAULT_TRACK_HEIGHT * 14;
 constexpr float    SCROLL_SPEED                  = 100.0f;
+// ImGui rounds window->Scroll with ImRound64, so sub-pixel remainders are not
+// a distinct view position. Treat them as already applied.
+constexpr float    SCROLL_APPLY_TOLERANCE_PX     = 1.0f;
 constexpr uint64_t DEFAULT_LOADING_TIMER         = 150;  // milliseconds
 constexpr float    ARTIFICIAL_SCROLLBAR_HEIGHT   = 18.0f;
 constexpr float    SIDEBAR_SPLITTER_WIDTH        = 5.0f;
-
+constexpr const char* HIDDEN_TRACKS_MENU_POPUP_NAME = "HiddenTracksMenu";
 // Build a text block mirroring the on-hover tooltip (name, timing, and id)
 // for the clipboard.
 static std::string
@@ -87,11 +90,13 @@ TimelineView::TimelineView(DataProvider&                          dp,
 , m_last_data_req_view_time_offset_ns(0.0)
 , m_can_drag_to_pan(false)
 , m_grid_interval_ns(0.0)
+, m_grid_interval_count(0)
 , m_recalculate_grid_interval(true)
 , m_last_zoom(1.0f)
 , m_last_graph_size(0.0f, 0.0f)
 , m_reorder_request({ true, 0, 0 })
 , m_track_height_sum(0.0f)
+, m_hidden_track_count(0)
 , m_arrow_layer(m_data_provider, timeline_selection)
 , m_stop_user_interaction(false)
 , m_timeline_selection(timeline_selection)
@@ -549,11 +554,22 @@ TimelineView::RenderMeasurement(ImDrawList* draw_list, ImVec2 window_position)
                               ARTIFICIAL_SCROLLBAR_HEIGHT) / 2.0f;
     float label_y = visible_bot - ImGui::CalcTextSize("0").y - LABEL_PAD;
 
+    float graph_min_x = window_position.x;
+    float graph_max_x = window_position.x + m_tpt->GetGraphSizeX();
+
     // Draws a small timestamp label centered on a ruler line, capturing its rect
     // (index 0 = start ruler, 1 = end ruler) for the context-menu hit-test.
     auto draw_ruler_label = [&](int index, float x, const char* text) {
         ImVec2 sz = ImGui::CalcTextSize(text);
         float  lx = x - sz.x * 0.5f;
+
+        float label_min_x = graph_min_x + RULER_LABEL_PAD_X;
+        float label_max_x = graph_max_x - sz.x - RULER_LABEL_PAD_X;
+        if(x >= graph_min_x && x <= graph_max_x && label_min_x < label_max_x)
+        {
+            lx = std::clamp(lx, label_min_x, label_max_x);
+        }
+
         ImVec2 mn(lx - RULER_LABEL_PAD_X, label_y - RULER_LABEL_PAD_Y);
         ImVec2 mx(lx + sz.x + RULER_LABEL_PAD_X, label_y + sz.y + RULER_LABEL_PAD_Y);
         draw_list->AddRectFilled(mn, mx, label_bg, RULER_LABEL_ROUND);
@@ -738,6 +754,15 @@ TimelineView::RenderTimelineViewOptionsMenu(ImVec2 window_position)
         if(m_highlighted_region.first != TimelineSelection::INVALID_SELECTION_TIME ||
            m_highlighted_region.second != TimelineSelection::INVALID_SELECTION_TIME)
         {
+            if(m_highlighted_region.first != TimelineSelection::INVALID_SELECTION_TIME &&
+               m_highlighted_region.second != TimelineSelection::INVALID_SELECTION_TIME)
+            {
+                if(IconMenuItem(ICON_ARROWS_EXPAND, "Zoom to Time Range Selection"))
+                {
+                    ZoomToTimeRangeSelection();
+                }
+            }
+
             if(IconMenuItem(ICON_TRASH_CAN, "Remove Time Range Selection"))
             {
                 ClearTimeRangeSelection();
@@ -827,6 +852,14 @@ TimelineView::RenderTimelineViewOptionsMenu(ImVec2 window_position)
                             .c_str());
                     NotificationManager::GetInstance().Show("End timestamp was copied",
                                                             NotificationLevel::Info);
+                }
+            }
+
+            if(has_start && has_end)
+            {
+                if(IconMenuItem(ICON_ARROWS_EXPAND, "Zoom to Measurement"))
+                {
+                    ZoomToMeasurement();
                 }
             }
 
@@ -1005,6 +1038,58 @@ TimelineView::SetViewableRangeNS(double start_ns, double end_ns)
     m_recalculate_grid_interval = true;
 }
 
+void
+TimelineView::ZoomToTimeSpan(double start_ns, double end_ns)
+{
+    double span_ns = end_ns - start_ns;
+    if(span_ns <= 0.0)
+    {
+        return;
+    }
+
+    // Zoom is capped at one pixel per nanosecond, so center a span too narrow
+    // to fill the viewport rather than let the clamp pin it to the left edge.
+    double margin_ns   = 0.0;
+    double min_span_ns = static_cast<double>(m_tpt->GetGraphSizeX());
+    if(span_ns < min_span_ns)
+    {
+        margin_ns = (min_span_ns - span_ns) * 0.5;
+    }
+
+    SetViewableRangeNS(std::max(m_tpt->GetMinX(), start_ns - margin_ns),
+                       std::min(m_tpt->GetMaxX(), end_ns + margin_ns));
+}
+
+void
+TimelineView::ZoomToMeasurement()
+{
+    MeasurementController& fm = *m_measurement;
+    if(!fm.GetPoint(0).valid || !fm.GetPoint(1).valid)
+    {
+        return;
+    }
+
+    double first_ns = fm.GetEffectiveTimestamp(0);
+    double last_ns  = fm.GetEffectiveTimestamp(1);
+    ZoomToTimeSpan(std::min(first_ns, last_ns), std::max(first_ns, last_ns));
+}
+
+void
+TimelineView::ZoomToTimeRangeSelection()
+{
+    if(m_highlighted_region.first == TimelineSelection::INVALID_SELECTION_TIME ||
+       m_highlighted_region.second == TimelineSelection::INVALID_SELECTION_TIME)
+    {
+        return;
+    }
+
+    // The highlighted region is kept in normalized time, the zoom helper works
+    // in absolute timestamps.
+    double first_ns = m_tpt->DenormalizeTime(m_highlighted_region.first);
+    double last_ns  = m_tpt->DenormalizeTime(m_highlighted_region.second);
+    ZoomToTimeSpan(std::min(first_ns, last_ns), std::max(first_ns, last_ns));
+}
+
 TimelineView::~TimelineView()
 {
     DestroyGraphs();
@@ -1067,9 +1152,22 @@ TimelineView::HandleNewTrackData(std::shared_ptr<RocEvent> e)
             m_data_provider.DataModel().GetTimeline().GetTrack(tde->GetTrackID());
         if(!metadata)
         {
-            spdlog::error(
+            spdlog::warn(
                 "No metadata found for track id {}, cannot process new track data",
                 tde->GetTrackID());
+            
+            // try to find request by request id on all tracks so that it can
+            // be cleared from pending queue
+            for(size_t i = 0; i < m_tracks->size(); ++i)
+            {
+                TrackItem *track = (*m_tracks)[i];
+                if(track && track->HasPendingRequest(tde->GetRequestID()))
+                {
+                    track->HandleTrackDataChanged(tde->GetRequestID(),
+                                                  tde->GetResponseCode());
+                    break;
+                }
+            }
             return;
         }
 
@@ -1126,17 +1224,19 @@ TimelineView::Update()
         if(m_resize_activity || !m_reorder_request.handled)
         {
             m_track_position_y.clear();
-            m_track_height_sum = 0;
+            m_track_height_sum   = 0;
+            m_hidden_track_count = 0;
             for(int i = 0; i < m_tracks->size(); i++)
             {
                 if((*m_tracks)[i])
                 {
+                    const bool displayed = (*m_tracks)[i]->IsDisplayed();
                     m_track_position_y[(*m_tracks)[i]->GetID()] = m_track_height_sum;
                     m_track_height_sum +=
-                        (*m_tracks)[i]->IsDisplayed()
-                            ? (*m_tracks)[i]
-                                  ->GetTrackHeight()  // Get the height of the track.
-                            : 0;
+                        displayed ? (*m_tracks)[i]
+                                        ->GetTrackHeight()  // Get the height of the track.
+                                  : 0;
+                    m_hidden_track_count += displayed ? 0 : 1;
                 }
             }
         }
@@ -1366,7 +1466,7 @@ TimelineView::RenderScrubber(ImVec2 screen_pos)
         m_dragging_selection_start = false;
         m_dragging_selection_end   = false;
     }
-    else
+    else if(!m_stop_user_interaction)
     {
         if(m_dragging_selection_start)
         {
@@ -1393,7 +1493,7 @@ TimelineView::RenderScrubber(ImVec2 screen_pos)
         float line_y_end   = cursor_position.y + container_size.y - m_ruler_height;
 
         // Check hover for start line
-        if(!m_dragging_selection_end)  // Don't hover start if dragging end
+        if(!m_dragging_selection_end && !m_stop_user_interaction)  // Don't hover start if dragging end
         {
             bool hovered =
                 (mouse_pos.x >= normalized_start_box_highlighted - kGripWidth / 2 &&
@@ -1441,7 +1541,7 @@ TimelineView::RenderScrubber(ImVec2 screen_pos)
         float line_y_end   = cursor_position.y + container_size.y - m_ruler_height;
 
         // Check hover for end line
-        if(!m_dragging_selection_start)
+        if(!m_dragging_selection_start && !m_stop_user_interaction)
         {
             bool hovered =
                 (mouse_pos.x >= normalized_start_box_highlighted_end - kGripWidth / 2 &&
@@ -1651,14 +1751,29 @@ TimelineView::RenderGraphView()
                       window_flags);
     m_content_max_y_scroll = ImGui::GetScrollMaxY();
 
-    // Prevent choppy behavior by preventing constant rerender.
-    float temp_scroll_position = ImGui::GetScrollY();
-    if(m_previous_scroll_position != temp_scroll_position)
+    // The scrollbar writes ImGui's scroll directly; the wheel and hotkeys write
+    // m_scroll_position_y and only land on the next Begin. Take the scrollbar's
+    // value only when nothing newer of ours is pending, else a fast wheel flick
+    // is overwritten by last frame's request.
+    //
+    // ImGui stores Scroll as whole pixels, so a fractional remainder is not a
+    // real pending jump. Exact equality would keep SetScrollY() every frame and
+    // treat that residue as "ours", which then fights a later scrollbar drag.
+    // Sub-pixel deltas stay in m_scroll_position_y so they can accumulate.
+    const float applied_scroll = ImGui::GetScrollY();
+    const bool  pending_request =
+        std::abs(m_scroll_position_y - m_previous_scroll_position) >=
+        SCROLL_APPLY_TOLERANCE_PX;
+
+    if(applied_scroll != m_previous_scroll_position)
     {
-        m_previous_scroll_position = temp_scroll_position;
-        m_scroll_position_y        = temp_scroll_position;
+        if(!pending_request)
+        {
+            m_scroll_position_y = applied_scroll;
+        }
+        m_previous_scroll_position = applied_scroll;
     }
-    else if(m_scroll_position_y != temp_scroll_position)
+    if(std::abs(m_scroll_position_y - applied_scroll) >= SCROLL_APPLY_TOLERANCE_PX)
     {
         ImGui::SetScrollY(m_scroll_position_y);
     }
@@ -1674,6 +1789,8 @@ TimelineView::RenderGraphView()
     {
         RenderTrack(index, request_data, window_flags, container_size);
     }
+
+    RenderEmptyTrackAreaMenu();
 
     TrackItem::SetSidebarSize(m_sidebar_size);
     ImGui::EndChild();
@@ -1727,6 +1844,54 @@ TimelineView::IsRequestDataNeeded()
 }
 
 void
+TimelineView::RenderEmptyTrackAreaMenu()
+{
+    if(m_hidden_track_count == 0 || !m_track_options_context_menu)
+    {
+        return;
+    }
+
+    const ImGuiStyle& style       = m_settings.GetDefaultStyle();
+    const ImVec2      window_pos  = ImGui::GetWindowPos();
+    const ImVec2      window_size = ImGui::GetWindowSize();
+
+    // Starts below the last rendered track, so tracks keep their own context
+    // menu, and stops at the description column, so the graph area keeps
+    // TimelineContextMenu. Called after the track loop, hence the cursor.
+    const ImVec2 area_min = ImVec2(window_pos.x, ImGui::GetCursorScreenPos().y);
+    const ImVec2 area_max =
+        ImVec2(window_pos.x + m_sidebar_size, window_pos.y + window_size.y);
+    if(area_min.y >= area_max.y)
+    {
+        return;
+    }
+
+    // A blank timeline offers no affordance at all, so point at the right-click.
+    if(m_track_height_sum <= 0.0f)
+    {
+        ImGui::SetCursorPos(style.WindowPadding);
+        ImGui::PushTextWrapPos(std::max(m_sidebar_size - style.WindowPadding.x, 0.0f));
+        ImGui::TextDisabled("All tracks are hidden.\nRight-click here to show them.");
+        ImGui::PopTextWrapPos();
+    }
+
+    if(ImGui::IsMouseClicked(ImGuiMouseButton_Right) && ImGui::IsWindowHovered() &&
+       ImGui::IsMouseHoveringRect(area_min, area_max))
+    {
+        ImGui::OpenPopup(HIDDEN_TRACKS_MENU_POPUP_NAME);
+    }
+
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, style.WindowPadding);
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, style.ItemSpacing);
+    if(ImGui::BeginPopup(HIDDEN_TRACKS_MENU_POPUP_NAME))
+    {
+        m_track_options_context_menu->RenderHiddenTracksSubmenu();
+        ImGui::EndPopup();
+    }
+    ImGui::PopStyleVar(2);
+}
+
+void
 TimelineView::RenderTrack(int track_index, bool request_data,
                           ImGuiWindowFlags window_flags, ImVec2 container_size)
 {
@@ -1745,13 +1910,16 @@ TimelineView::RenderTrack(int track_index, bool request_data,
             float track_top    = track_pos.y;
             float track_bottom = track_top + track_height;
 
+            // Cull against the scroll this window was laid out with, not
+            // m_scroll_position_y, which SetScrollY only applies next frame.
+            float view_top    = ImGui::GetScrollY();
+            float view_bottom = view_top + ImGui::GetWindowHeight();
+
             // Calculate deltas for out-of-view tracks
-            float delta_top = m_scroll_position_y -
-                              track_bottom;  // Positive if the track is above the view
+            float delta_top =
+                view_top - track_bottom;  // Positive if the track is above the view
             float delta_bottom =
-                track_top -
-                (m_scroll_position_y +
-                 m_tpt->GetGraphSizeY());  // Positive if the track is below the view
+                track_top - view_bottom;  // Positive if the track is below the view
 
             // Save distance for book keeping
             track_item->SetDistanceToView(std::max(std::max(delta_bottom, delta_top), 0.0f));
@@ -1762,9 +1930,8 @@ TimelineView::RenderTrack(int track_index, bool request_data,
                                  m_reorder_request.track_id == track_item->GetID();
 
             // Check if the track is visible
-            bool is_visible = (track_bottom >= m_scroll_position_y &&
-                               track_top <= m_scroll_position_y + m_tpt->GetGraphSizeY()) ||
-                              is_reordering;
+            bool is_visible =
+                (track_bottom >= view_top && track_top <= view_bottom) || is_reordering;
 
             track_item->SetInViewVertical(is_visible);
 
@@ -1801,12 +1968,23 @@ TimelineView::RenderTrack(int track_index, bool request_data,
 void
 TimelineView::RequestDataIfEmpty(TrackItem* track_item, bool request_data)
 {
-    // Request data for the chart if it doesn't have data.
-    if((!track_item->HasData() &&
-        track_item->GetRequestState() == TrackDataRequestState::kIdle) ||
-       request_data)
+    bool idle = track_item->GetRequestState() == TrackDataRequestState::kIdle;
 
+    // True when the track holds no data at all, and also when it holds only some
+    // of its chunks: a track that scrolled out of view released its data and
+    // cancelled its requests, but cancellation is best effort, so whatever
+    // completed first recreates the data with just the chunks that landed.
+    bool incomplete = !track_item->AllDataReady();
+    bool refetch    = incomplete && idle;
+
+    // Request data for the chart if any of it is missing.
+    if(refetch || request_data)
     {
+        if(refetch && track_item->HasData())
+        {
+            track_item->ReleaseData();
+        }
+
         // Request one viewport worth of data on each side of the current
         // view.
         double buffer_distance = m_tpt->GetVWidth();
@@ -2118,7 +2296,6 @@ TimelineView::MakeGraphView()
     for(int i = 0; i < track_list.size(); i++)
     {
         const TrackInfo* track_info = track_list[i];
-        bool             display    = true;
 
         if(project_valid)
         {
@@ -2126,7 +2303,8 @@ TimelineView::MakeGraphView()
             const TrackInfo* track_at_index_info = tlm.GetTrack(track_id_at_index);
             if(track_at_index_info && track_at_index_info->index != i)
             {
-                ROCPROFVIS_ASSERT(m_data_provider.SetGraphIndex(track_id_at_index, i));
+                bool success = m_data_provider.SetGraphIndex(track_id_at_index, i);
+                ROCPROFVIS_ASSERT(success);
             }
             track_info = track_at_index_info;
         }

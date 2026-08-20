@@ -101,6 +101,15 @@ TimelineModel::FreeTrackData(uint64_t track_id, bool force /* = false */)
             m_raw_track_data.erase(it);
             return true;
         }
+        else
+        {
+            // Assert here as this should never happen
+            ROCPROFVIS_ASSERT(false);
+            spdlog::warn("No data to remove, null pointer for id: {}",
+                         track_id);
+            m_raw_track_data.erase(it);
+            return true;
+        }
     }
 
     spdlog::debug("Cannot delete track data, invalid id: {}", track_id);

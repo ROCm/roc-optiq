@@ -141,9 +141,9 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture, "System Trace Controll
     // Allocates a controller handle for the input trace file.
     // Fixture Writes: m_controller
     SECTION("Create Controller")
-    {
+    {       
         spdlog::info("Allocating Controller");
-        m_controller = rocprofvis_controller_alloc(g_input_file.c_str());
+        m_controller = rocprofvis_controller_alloc(g_input_file.c_str(), nullptr);
         REQUIRE(nullptr != m_controller);
     }
 
@@ -642,10 +642,6 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture, "System Trace Controll
                                                   0, kRPVControllerSortOrderAscending);
         REQUIRE(result == kRocProfVisResultSuccess);
 
-        result = rocprofvis_controller_set_uint64(args, kRPVControllerTableArgsNumOpTypes,
-                                                  0, 0);
-        REQUIRE(result == kRocProfVisResultSuccess);
-
         result =
             rocprofvis_controller_set_string(args, kRPVControllerTableArgsWhere, 0, "");
         REQUIRE(result == kRocProfVisResultSuccess);
@@ -944,10 +940,6 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture, "System Trace Controll
 
         result = rocprofvis_controller_set_uint64(args, kRPVControllerTableArgsSortOrder,
                                                   0, kRPVControllerSortOrderAscending);
-        REQUIRE(result == kRocProfVisResultSuccess);
-
-        result = rocprofvis_controller_set_uint64(args, kRPVControllerTableArgsNumOpTypes,
-                                                  0, 0);
         REQUIRE(result == kRocProfVisResultSuccess);
 
         result =
@@ -3016,10 +3008,6 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture, "System Trace Controll
                                                   end_ts);
         REQUIRE(result == kRocProfVisResultSuccess);
 
-        result = rocprofvis_controller_set_uint64(args, kRPVControllerTableArgsNumTracks,
-                                                  0, 0);
-        REQUIRE(result == kRocProfVisResultSuccess);
-
         result = rocprofvis_controller_set_uint64(
             args, kRPVControllerTableArgsOpTypesIndexed, 0, kRocProfVisDmOperationLaunch);
         REQUIRE(result == kRocProfVisResultSuccess);
@@ -3076,6 +3064,18 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture, "System Trace Controll
 
         result = rocprofvis_controller_set_uint64(args, kRPVControllerTableArgsStartCount,
                                                   0, 1);
+        REQUIRE(result == kRocProfVisResultSuccess);
+
+        result = rocprofvis_controller_set_uint64(args, kRPVControllerTableArgsStringTableFiltersIncludeSubstrings,
+                                                  0, 1);
+        REQUIRE(result == kRocProfVisResultSuccess);
+
+        result = rocprofvis_controller_set_uint64(args, kRPVControllerTableArgsStringTableFiltersIncludeCategory,
+                                                  0, 0);
+        REQUIRE(result == kRocProfVisResultSuccess);
+
+        result = rocprofvis_controller_set_uint64(args, kRPVControllerTableArgsStringTableFiltersPartialMatching,
+                                                  0, 0);
         REQUIRE(result == kRocProfVisResultSuccess);
 
         spdlog::info("Allocating Array");

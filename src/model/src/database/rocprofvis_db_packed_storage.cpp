@@ -1,22 +1,5 @@
-// Copyright (c) 2025 Advanced Micro Devices, Inc. All rights reserved.
-//
-// Permission is hereby granted, free of charge, to any person obtaining a copy
-// of this software and associated documentation files (the "Software"), to deal
-// in the Software without restriction, including without limitation the rights
-// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-// copies of the Software, and to permit persons to whom the Software is
-// furnished to do so, subject to the following conditions:
-//
-// The above copyright notice and this permission notice shall be included in all
-// copies or substantial portions of the Software.
-//
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-// SOFTWARE.
+// Copyright Advanced Micro Devices, Inc.
+// SPDX-License-Identifier: MIT
 
 #include "rocprofvis_db_packed_storage.h"
 #include "rocprofvis_db_profile.h"
@@ -97,13 +80,13 @@ namespace DataModel
             throw std::out_of_range("Column out of range");
     }
 
-    DbInstance* PackedTable::GetDbInstanceForRow(ProfileDatabase * db, int row_index)
+    DbInstance* PackedTable::GetDbInstanceForRow(QueryManager * db, int row_index)
     {
         ROCPROFVIS_ASSERT_MSG_RETURN(row_index < m_rows.size(), ERROR_INDEX_OUT_OF_RANGE, nullptr);
         return GetDbInstanceForRow(db, m_rows[row_index].get());
     }
 
-    DbInstance* PackedTable::GetDbInstanceForRow(ProfileDatabase * db, PackedRow* row)
+    DbInstance* PackedTable::GetDbInstanceForRow(QueryManager * db, PackedRow* row)
     {
         auto columns = GetMergedColumns();
         uint8_t op = row->Get<uint8_t>(0);
@@ -163,7 +146,7 @@ namespace DataModel
         return  m_rows[row]->Get<uint8_t>(0);
     }
 
-    Numeric PackedTable::GetMergeTableValue(uint8_t op, size_t row, size_t col, ProfileDatabase* requestor) const
+    Numeric PackedTable::GetMergeTableValue(uint8_t op, size_t row, size_t col, QueryManager* requestor) const
     {
         (void) requestor;
         if (row >= m_rows.size() || col >= m_merged_columns.size())
@@ -189,7 +172,7 @@ namespace DataModel
     }
 
 
-    const char* PackedTable::ConvertSqlStringReference(ProfileDatabase* db, uint32_t column_index, uint64_t  value, uint32_t node_id, bool & numeric_string) {
+    const char* PackedTable::ConvertSqlStringReference(QueryManager* db, uint32_t column_index, uint64_t  value, uint32_t node_id, bool & numeric_string) {
         numeric_string = false;
         uint64_t string_index = 0;
         if (column_index == Builder::SCHEMA_INDEX_NODE_ID)
@@ -198,14 +181,17 @@ namespace DataModel
             return db->CachedTables(node_id)->GetTableCellByIndex("Node", static_cast<uint32_t>(value), "id");
         } else
         if (column_index == Builder::SCHEMA_INDEX_CATEGORY || column_index == Builder::SCHEMA_INDEX_CATEGORY_RPD || 
-            column_index == Builder::SCHEMA_INDEX_EVENT_NAME || column_index == Builder::SCHEMA_INDEX_EVENT_NAME_RPD)
+            column_index == Builder::SCHEMA_INDEX_EVENT_NAME || column_index == Builder::SCHEMA_INDEX_EVENT_NAME_RPD || 
+            column_index == Builder::SCHEMA_INDEX_EVENT_ARGS_RPD)
         {
             if (kRocProfVisDmResultSuccess == db->RemapStringId(value, rocprofvis_db_string_type_t::kRPVStringTypeNameOrCategory, node_id, string_index))
             {
                 return db->BindObject()->FuncGetString(db->BindObject()->trace_object, static_cast<uint32_t>(string_index));
             }
         } else
-        if (column_index == Builder::SCHEMA_INDEX_COUNTER_ID_RPD)
+        if (column_index == Builder::SCHEMA_INDEX_COUNTER_ID_RPD ||
+            column_index == Builder::SCHEMA_INDEX_CATEGORY_PERFETTO || 
+            column_index == Builder::SCHEMA_INDEX_EVENT_NAME_PERFETTO)
         {
             return db->StringTableReference().ToString(static_cast<uint32_t>(value));
         } else
@@ -371,7 +357,7 @@ namespace DataModel
         m_aggregation.m_string_data.Clear();
     }
 
-    void PackedTable::SortAggregationByColumn(ProfileDatabase* db, std::string sort_column, bool sort_order) {
+    void PackedTable::SortAggregationByColumn(QueryManager* db, std::string sort_column, bool sort_order) {
         (void) db;
 
         if (m_aggregation.agg_params[0].public_name == sort_column)
@@ -399,15 +385,27 @@ namespace DataModel
         
     }
 
-    void PackedTable::AggregateRow(ProfileDatabase* db, int row_index, int map_index)
+    void PackedTable::AggregateRow(QueryManager* db, int row_index, int map_index)
     {
+        // Aggregate a single packed row into the target aggregation map.
+        // High-level flow:
+        //  1) Validate row/index and resolve row operation metadata.
+        //  2) Compute the group-by key value for this row.
+        //  3) Find/create the group bucket in aggregation_maps[map_index].
+        //  4) Update each configured aggregate metric for that bucket.
+        //  5) Persist any auxiliary string data needed by result formatting.
         if (row_index >= m_rows.size()) return;
         std::unique_ptr<PackedRow>& r = m_rows[row_index];
         uint8_t op = r->Get<uint8_t>(0);
+
+        // Resolve the configured group-by column definition for this row type/op.
         std::string group_by = m_aggregation.agg_params[0].column;
         MergedColumnDef& group_by_column_info = m_aggregation.column_def[group_by];
         DbInstance* db_instance = GetDbInstanceForRow(db, row_index);
         ROCPROFVIS_ASSERT_MSG_RETURN(db_instance != nullptr, ERROR_NODE_KEY_CANNOT_BE_NULL, );
+
+        // Extract a numeric group key from the row (or keep default 0 for null-sized types).
+        // This key is used to identify/update the corresponding aggregate bucket.
         uint8_t size = ColumnTypeSize(group_by_column_info.m_type[op]);
         double value = 0;
         if (size > 0)
@@ -415,6 +413,8 @@ namespace DataModel
             value = group_by_column_info.m_type[op] == ColumnType::Double ?  r->Get<double>(group_by_column_info.m_offset[op]) :  r->Get<uint64_t>(group_by_column_info.m_offset[op], size);
             
         }
+
+        // Locate an existing bucket for this group key; create one if absent below.
         auto it = m_aggregation.aggregation_maps[map_index].find(value);
         if (it == m_aggregation.aggregation_maps[map_index].end())
         {
@@ -542,7 +542,7 @@ namespace DataModel
         }
     }
 
-    void PackedTable::SortByColumn(ProfileDatabase* db, std::string column, bool ascending)
+    void PackedTable::SortByColumn(QueryManager* db, std::string column, bool ascending)
     {
         auto it = std::find_if(m_merged_columns.begin(), m_merged_columns.end(), [column](MergedColumnDef& cdef) { return cdef.m_name == column; });
         if (it != m_merged_columns.end())

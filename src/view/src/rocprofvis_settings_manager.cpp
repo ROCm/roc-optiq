@@ -29,6 +29,7 @@ constexpr std::array DARK_THEME_COLORS = {
     IM_COL32(0, 0, 0, 0),          // Colors::kTransparent
     IM_COL32(244, 96, 110, 255),   // Colors::kTextError
     IM_COL32(120, 220, 144, 255),  // Colors::kTextSuccess
+    IM_COL32(255, 199, 64, 255),   // Colors::kTextWarning
     IM_COL32(120, 162, 255, 220),  // Colors::kFlameChartColor
     IM_COL32(120, 130, 150, 32),   // Colors::kGridColor
     IM_COL32(142, 176, 236, 255),  // Colors::kGridRed
@@ -151,6 +152,7 @@ constexpr std::array LIGHT_THEME_COLORS = {
     IM_COL32(0, 0, 0, 0),          // Colors::kTransparent
     IM_COL32(214, 56, 64, 255),    // Colors::kTextError
     IM_COL32(36, 150, 82, 255),    // Colors::kTextSuccess
+    IM_COL32(176, 118, 0, 255),    // Colors::kTextWarning
     IM_COL32(88, 132, 245, 225),   // Colors::kFlameChartColor
     IM_COL32(140, 150, 170, 28),   // Colors::kGridColor
     IM_COL32(120, 162, 220, 255),  // Colors::kGridRed
@@ -451,6 +453,8 @@ SettingsManager::SerializeDisplaySettings(jt::Json& json)
         m_usersettings.display_settings.font_size_index;
     ds[JSON_KEY_SETTINGS_DISPLAY_NODE_COLORS] =
         m_usersettings.display_settings.show_node_colors;
+    ds[JSON_KEY_SETTINGS_DISPLAY_COMPACT_SIDEBAR] =
+        m_usersettings.display_settings.compact_sidebar;
 }
 
 void
@@ -474,6 +478,11 @@ SettingsManager::DeserializeDisplaySettings(jt::Json& json)
         {
             m_usersettings.display_settings.show_node_colors =
                 ds[JSON_KEY_SETTINGS_DISPLAY_NODE_COLORS].getBool();
+        }
+        if(ds[JSON_KEY_SETTINGS_DISPLAY_COMPACT_SIDEBAR].isBool())
+        {
+            m_usersettings.display_settings.compact_sidebar =
+                ds[JSON_KEY_SETTINGS_DISPLAY_COMPACT_SIDEBAR].getBool();
         }
     }
 }
@@ -605,7 +614,7 @@ SettingsManager::GetContrastColormapName() const
 SettingsManager::SettingsManager()
 : m_color_store(nullptr)
 , m_usersettings_default(
-      { DisplaySettings{ false, 6, true }, UnitSettings{ TimeFormat::kTimecode },
+      { DisplaySettings{ false, 6, true, false }, UnitSettings{ TimeFormat::kTimecode },
         false, false, LOG_VIEWER_MAX_ENTRIES_DEFAULT,
         LogViewerSettings{ LOG_VIEWER_DEFAULT_LEVEL_MASK, true, false, false, false } })
 , m_usersettings(m_usersettings_default)
@@ -868,8 +877,7 @@ SettingsManager::DeserializeUnitSettings(jt::Json& json)
 const float
 SettingsManager::GetEventLevelHeight() const
 {
-    const float font_size = m_font_manager.GetFontSize(FontSize::kDefault);
-    return std::ceil(font_size + EVENT_LEVEL_VERTICAL_MARGIN + EVENT_LEVEL_SPACING);
+    return std::ceil(ImGui::GetTextLineHeight() + EVENT_LEVEL_VERTICAL_MARGIN + EVENT_LEVEL_SPACING);
 }
 
 const float

@@ -1,22 +1,5 @@
-// Copyright (c) 2025 Advanced Micro Devices, Inc. All rights reserved.
-//
-// Permission is hereby granted, free of charge, to any person obtaining a copy
-// of m_db software and associated documentation files (the "Software"), to deal
-// in the Software without restriction, including without limitation the rights
-// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-// copies of the Software, and to permit persons to whom the Software is
-// furnished to do so, subject to the following conditions:
-//
-// The above copyright notice and m_db permission notice shall be included in all
-// copies or substantial portions of the Software.
-//
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-// SOFTWARE.
+// Copyright Advanced Micro Devices, Inc.
+// SPDX-License-Identifier: MIT
 
 #include "rocprofvis_db_table_processor.h"
 #include "rocprofvis_db_expression_filter.h"
@@ -834,7 +817,7 @@ namespace DataModel
         ROCPROFVIS_ASSERT_MSG_RETURN(data, ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL, 1);
         rocprofvis_db_sqlite_callback_parameters* callback_params = (rocprofvis_db_sqlite_callback_parameters*)data;
         ROCPROFVIS_ASSERT_MSG_RETURN(callback_params->db_instance != nullptr, ERROR_NODE_KEY_CANNOT_BE_NULL, 1);
-        ProfileDatabase* db = (ProfileDatabase*)callback_params->db;
+        QueryManager* db = (QueryManager*)callback_params->db;
         TableProcessor* table_processor = (TableProcessor*)callback_params->handle;
         void* func = (void*)&CallbackRunCompoundQuery;
         if (callback_params->future->Interrupted())
@@ -856,7 +839,7 @@ namespace DataModel
                 {
                     table_processor->m_tables[callback_params->track_id]->AddColumn(it->second.public_name, it->second.type, static_cast<uint8_t>(column_index), it->second.index);
                 }
-                db->GetTrackIdentifierIndices(db, column_index, azColName, table_processor->m_tables[callback_params->track_id]->track_ids_indices);
+                db->GetTrackIdentifierIndices(column_index, azColName, table_processor->m_tables[callback_params->track_id]->track_ids_indices);
             }
 
             auto it = Builder::table_view_schema.find(Builder::TRACK_ID_PUBLIC_NAME);
@@ -906,7 +889,9 @@ namespace DataModel
                 value.bitfield.event_node = callback_params->db_instance->GuidIndex();
                 value.bitfield.event_op = op;
                 table_processor->m_tables[callback_params->track_id]->PlaceValue(column_index, value.value);
-            } else if (columns[column_index].m_schema_index == Builder::SCHEMA_INDEX_COUNTER_ID_RPD)
+            } else if (columns[column_index].m_schema_index == Builder::SCHEMA_INDEX_COUNTER_ID_RPD ||
+                columns[column_index].m_schema_index == Builder::SCHEMA_INDEX_CATEGORY_PERFETTO || 
+                columns[column_index].m_schema_index == Builder::SCHEMA_INDEX_EVENT_NAME_PERFETTO)
             {
                 uint64_t value = db->StringTableReference().ToInt(db->Sqlite3ColumnText(func, stmt, azColName,
                     columns[column_index].m_orig_index));
@@ -931,7 +916,7 @@ namespace DataModel
         }
 
         uint32_t track_id;
-        if (!db->TrackTracker()->FindTrack(db->TrackTracker()->SearchCategoryMaskLookup((rocprofvis_dm_event_operation_t)op),
+        if (!db->FindTrack(db->TrackTracker()->SearchCategoryMaskLookup((rocprofvis_dm_event_operation_t)op),
             db->Sqlite3ColumnInt64(func, stmt, azColName, table_processor->m_tables[callback_params->track_id]->track_ids_indices.process_index),
             db->Sqlite3ColumnInt64(func, stmt, azColName, table_processor->m_tables[callback_params->track_id]->track_ids_indices.sub_process_index),
             callback_params->db_instance->GuidIndex(),
@@ -946,7 +931,7 @@ namespace DataModel
             if (op == kRocProfVisDmOperationLaunch || 
                 op == kRocProfVisDmOperationLaunchSample || 
                 table_processor->m_tables[callback_params->track_id]->track_ids_indices.stream_index == -1 ||
-                !db->TrackTracker()->FindTrack(kRocProfVisDmStreamTrack,
+                !db->FindTrack(kRocProfVisDmStreamTrack,
                    db->Sqlite3ColumnInt(func, stmt, azColName, table_processor->m_tables[callback_params->track_id]->track_ids_indices.pid_index),
                 db->Sqlite3ColumnInt(func, stmt, azColName, table_processor->m_tables[callback_params->track_id]->track_ids_indices.stream_index),
                 callback_params->db_instance->GuidIndex(),

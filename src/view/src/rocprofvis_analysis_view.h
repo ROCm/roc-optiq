@@ -40,6 +40,8 @@ public:
     void Render() override;
     void Update() override;
 
+    friend struct AnalysisViewTestPeer;
+
 private:
     // One pooled table, or an A/B pair sharing a filter, backing a tab.
     struct CompareGroup

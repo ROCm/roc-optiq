@@ -159,9 +159,14 @@ InfiniteScrollTable::Update()
 }
 
 bool
-InfiniteScrollTable::QueueTableRequest(const TableRequestParams& params)
+InfiniteScrollTable::QueueTableRequest(const std::shared_ptr<TableRequestParams>& params)
 {
-    bool queued = m_data_provider.FetchTable(params);
+    if(!params)
+    {
+        return false;
+    }
+
+    bool queued = m_data_provider.FetchTable(*params);
     if(queued)
     {
         ClearQueuedTableRequest();
@@ -172,7 +177,7 @@ InfiniteScrollTable::QueueTableRequest(const TableRequestParams& params)
         // view owns that table waits here and is reissued from Update().
         spdlog::debug("Deferring table request for {}", m_widget_name);
         m_retry_fetch  = true;
-        m_retry_params = std::make_unique<TableRequestParams>(params);
+        m_retry_params = params;
         // Deferring can happen during Render(), after this frame's Update() has
         // run, so ask for the frame that reissues it.
         RenderScheduler::GetInstance().RequestRender();
@@ -324,12 +329,11 @@ InfiniteScrollTable::Render()
                           outer_size.y);
         }
 
-        // TODO: is there a more reliable way to detect Group by changes?
-        ImGui::PushID(static_cast<int>(column_names.size())); 
         ImGui::PushStyleColor(ImGuiCol_ChildBg,
                               m_settings.GetColor(Colors::kFillerColor));
         if(!table_data.empty())
         {
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, m_settings.GetDefaultStyle().WindowPadding);
             if(ImGui::BeginTable("infinite_scroll_table",
                                  static_cast<int>(column_names.size()), table_flags,
                                  outer_size))
@@ -350,14 +354,12 @@ InfiniteScrollTable::Render()
                     ImGuiTableColumnFlags col_flags = ImGuiTableColumnFlags_None;
                     if(!column_names[i].empty() && column_names[i][0] == '_')
                     {
-                        col_flags = ImGuiTableColumnFlags_DefaultHide |
-                                    ImGuiTableColumnFlags_Disabled;
+                        col_flags = ImGuiTableColumnFlags_Disabled;
                     }
                     if(!m_hidden_column_indices.empty() &&
                        i == m_hidden_column_indices[j])
                     {
-                        col_flags = ImGuiTableColumnFlags_DefaultHide |
-                                    ImGuiTableColumnFlags_Disabled;
+                        col_flags = ImGuiTableColumnFlags_Disabled;
                         if(j < m_hidden_column_indices.size() - 1)
                         {
                             j++;
@@ -519,7 +521,7 @@ InfiniteScrollTable::Render()
 
                 // only check if we need to fetch based on the scroll position if we don't
                 // have all the data
-                if(!m_skip_data_fetch && table_data.size() < total_row_count - 1)
+                if(!m_skip_data_fetch && table_data.size() < total_row_count - 1 && table_params)
                 {
                     // A held request would be replaced by a scroll fetch built from
                     // the params of the response before it, so let it go out first.
@@ -551,18 +553,9 @@ InfiniteScrollTable::Render()
                                 "{}, frame count: {}, chunk size: {}, scroll y: {}",
                                 new_start_pos, frame_count, m_fetch_chunk_size, scroll_y);
 
-                            QueueTableRequest(TableRequestParams(
-                                m_request_table_type, table_params->m_track_ids,
-                                table_params->m_op_types, table_params->m_start_ts,
-                                table_params->m_end_ts, table_params->m_where.c_str(),
-                                table_params->m_filter.c_str(),
-                                table_params->m_group.c_str(),
-                                table_params->m_group_columns.c_str(),
-                                table_params->m_string_table_filters, new_start_pos,
-                                m_fetch_chunk_size, table_params->m_sort_column_index,
-                                table_params->m_sort_order, "",
-                                table_params->m_view_table_type,
-                                table_params->m_request_id));
+                            table_params->m_start_row     = new_start_pos;
+                            table_params->m_req_row_count = m_fetch_chunk_size;
+                            QueueTableRequest(table_params);
                         }
                         else if((scroll_y + ImGui::GetWindowHeight() >
                                  end_row_position -
@@ -592,23 +585,15 @@ InfiniteScrollTable::Render()
                                 "{}, frame count: {}, chunk size: {}, scroll y: {}",
                                 new_start_pos, frame_count, m_fetch_chunk_size, scroll_y);
 
-                            QueueTableRequest(TableRequestParams(
-                                m_request_table_type, table_params->m_track_ids,
-                                table_params->m_op_types, table_params->m_start_ts,
-                                table_params->m_end_ts, table_params->m_where.c_str(),
-                                table_params->m_filter.c_str(),
-                                table_params->m_group.c_str(),
-                                table_params->m_group_columns.c_str(),
-                                table_params->m_string_table_filters, new_start_pos,
-                                m_fetch_chunk_size, table_params->m_sort_column_index,
-                                table_params->m_sort_order, "",
-                                table_params->m_view_table_type,
-                                table_params->m_request_id));
+                            table_params->m_start_row     = new_start_pos;
+                            table_params->m_req_row_count = m_fetch_chunk_size;
+                            QueueTableRequest(table_params);
                         }
                     }
                 }
                 ImGui::EndTable();  // End BeginTable
             }
+            ImGui::PopStyleVar();
             RenderContextMenu();
         }
         else if(!m_no_data_text.empty() && !show_loading_indicator &&
@@ -620,7 +605,6 @@ InfiniteScrollTable::Render()
             ImGui::TextDisabled("%s", m_no_data_text.c_str());
         }
         ImGui::PopStyleColor();
-        ImGui::PopID();
     }
 
     if(show_loading_indicator)
@@ -791,16 +775,8 @@ InfiniteScrollTable::ProcessSortOrFilterRequest(
 
             spdlog::debug("Fetching data for sort, frame count: {}", frame_count);
 
-                // Fetch the event table with the updated params
-            QueueTableRequest(TableRequestParams(
-                m_request_table_type, table_params->m_track_ids, table_params->m_op_types,
-                table_params->m_start_ts, table_params->m_end_ts,
-                table_params->m_where.c_str(), table_params->m_filter.c_str(),
-                table_params->m_group.c_str(), table_params->m_group_columns.c_str(),
-                table_params->m_string_table_filters, table_params->m_start_row,
-                table_params->m_req_row_count, table_params->m_sort_column_index,
-                table_params->m_sort_order, "", table_params->m_view_table_type,
-                table_params->m_request_id));
+            // Fetch the event table with the updated params
+            QueueTableRequest(table_params);
 
             m_filter_options = filter;
 
@@ -1082,21 +1058,16 @@ InfiniteScrollTable::ExportToFile() const
         "Export Table", file_filters, "", [this](std::string file_path) -> void {
             std::shared_ptr<TableRequestParams> table_params =
                 m_table_model_mutable().GetTableParams(m_table_type);
-            if(table_params &&
-               m_data_provider.FetchTable(TableRequestParams(
-                   m_request_table_type, table_params->m_track_ids,
-                   table_params->m_op_types, table_params->m_start_ts,
-                   table_params->m_end_ts, table_params->m_where.c_str(),
-                   table_params->m_filter.c_str(), table_params->m_group.c_str(),
-                   table_params->m_group_columns.c_str(),
-                   table_params->m_string_table_filters, INVALID_UINT64_INDEX,
-                   INVALID_UINT64_INDEX, table_params->m_sort_column_index,
-                   table_params->m_sort_order, file_path,
-                   table_params->m_view_table_type, table_params->m_request_id)))
+            if(table_params)
             {
-                NotificationManager::GetInstance().ShowPersistent(
-                    m_export_notification_id, "Exporting: " + file_path,
-                    NotificationLevel::Info);
+                table_params->m_export_to_file_path = file_path;
+                if(m_data_provider.FetchTable(*table_params))
+                {
+                    NotificationManager::GetInstance().ShowPersistent(
+                        m_export_notification_id, "Exporting: " + file_path,
+                        NotificationLevel::Info);
+                }
+                table_params->m_export_to_file_path.clear();
             }
         });
 }

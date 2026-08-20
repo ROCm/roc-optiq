@@ -29,8 +29,6 @@ constexpr float       INITIAL_RELATIVE_SIZE           = 0.8f;
 constexpr const char* TRACK_ID_COLUMN_NAME            = "__trackId";
 constexpr const char* STREAM_ID_COLUMN_NAME           = "__streamTrackId";
 constexpr const char* ID_COLUMN_NAME                  = "__uuid";
-constexpr const char* EVENT_ID_COLUMN_NAME            = "id";
-constexpr const char* NAME_COLUMN_NAME                = "name";
 
 namespace
 {
@@ -1177,14 +1175,6 @@ KernelInstanceTable::IndexColumns()
             {
                 m_important_column_idxs[kUUId] = i;
             }
-            else if(col == EVENT_ID_COLUMN_NAME)
-            {
-                m_important_column_idxs[kDbEventId] = i;
-            }
-            else if(col == NAME_COLUMN_NAME)
-            {
-                m_important_column_idxs[kName] = i;
-            }
         }
     }
     InfiniteScrollTable::IndexColumns();
@@ -1205,9 +1195,9 @@ KernelInstanceTable::Fetch()
 {
     m_data_provider.CancelRequest(m_request_id);
     const TimelineModel& tlm = m_data_provider.DataModel().GetTimeline();
-    m_fetch_deferred         = !m_data_provider.FetchTable(TableRequestParams(
-        m_request_table_type, {}, { kRocProfVisDmOperationDispatch }, tlm.GetStartTime(),
-        tlm.GetEndTime(), m_where.c_str(), "", "", "", { m_kernel_name }, 0,
+    m_fetch_deferred         = !m_data_provider.FetchTable(EventSearchRequestParams(
+        m_request_table_type, { kRocProfVisDmOperationDispatch }, tlm.GetStartTime(),
+        tlm.GetEndTime(), m_where.c_str(), false, false, false, { m_kernel_name }, 0,
         m_fetch_chunk_size, m_sort_column_index, m_sort_order));
     m_fetched                = true;
 }

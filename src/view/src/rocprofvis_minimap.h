@@ -29,6 +29,8 @@ public:
 
     void SetData(const std::vector<std::vector<double>>& data);
 
+    friend struct MinimapTestPeer;
+
 private:
     static constexpr size_t MINIMAP_SIZE = 500;
 

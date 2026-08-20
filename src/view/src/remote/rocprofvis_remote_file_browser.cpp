@@ -730,7 +730,9 @@ void RemoteFileBrowser::Render()
                 {
                     m_selected_name = "..";
                     if (ImGui::IsMouseDoubleClicked(0))
+                    {
                         NavigateBrowserTo(posix_parent_path(m_browser_dir), true);
+                    }
                 }
                 const ImU32 c = parent_selected ? text_on_accent : accent;
                 ImGui::SameLine(0, 0);
@@ -793,9 +795,13 @@ void RemoteFileBrowser::Render()
                 {
                     m_selected_name = f.name;
                     if (!inert && IconMenuItem(ICON_OPEN, f.is_dir ? "Open folder" : "Open"))
+                    {
                         ActivateBrowserEntry(f);
+                    }
                     if (IconMenuItem(ICON_COPY, "Copy path"))
+                    {
                         ImGui::SetClipboardText(full_path.c_str());
+                    }
                     ImGui::EndPopup();
                 }
 

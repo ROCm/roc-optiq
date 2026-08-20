@@ -162,13 +162,13 @@ ComputeView::CreateView()
                 std::make_shared<ComputeTableView>(m_data_provider, m_compute_selection),
                 false});
     m_tab_container->AddTab(
-        TabItem{"Workload Details", "compute_workload_view",
-                std::make_shared<ComputeWorkloadView>(m_data_provider, m_compute_selection),
-                false});
-    m_tab_container->AddTab(
         TabItem{"Baseline Comparison", "compute_comparison_view",
                 std::make_shared<ComputeComparisonView>(m_data_provider,
                                                         m_compute_selection),
+                false});
+    m_tab_container->AddTab(
+        TabItem{"Workload Details", "compute_workload_view",
+                std::make_shared<ComputeWorkloadView>(m_data_provider, m_compute_selection),
                 false});
 
 #ifdef ROCPROFVIS_DEVELOPER_MODE

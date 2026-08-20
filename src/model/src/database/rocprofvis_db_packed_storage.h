@@ -1,22 +1,5 @@
-// Copyright (c) 2025 Advanced Micro Devices, Inc. All rights reserved.
-//
-// Permission is hereby granted, free of charge, to any person obtaining a copy
-// of this software and associated documentation files (the "Software"), to deal
-// in the Software without restriction, including without limitation the rights
-// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-// copies of the Software, and to permit persons to whom the Software is
-// furnished to do so, subject to the following conditions:
-//
-// The above copyright notice and this permission notice shall be included in all
-// copies or substantial portions of the Software.
-//
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-// SOFTWARE.
+// Copyright Advanced Micro Devices, Inc.
+// SPDX-License-Identifier: MIT
 
 #pragma once
 #include "rocprofvis_shared_types.h"
@@ -117,7 +100,7 @@ namespace DataModel
         StringTable m_string_data;
     };
 
-    class ProfileDatabase;
+    class QueryManager;
 
     class PackedRow
     {
@@ -171,7 +154,7 @@ namespace DataModel
 
         void PlaceValue(size_t col, double value);
         void PlaceValue(size_t col, uint64_t value);
-        Numeric GetMergeTableValue(uint8_t op, size_t row, size_t col, ProfileDatabase* requestor) const;
+        Numeric GetMergeTableValue(uint8_t op, size_t row, size_t col, QueryManager* requestor) const;
         uint8_t GetOperationValue(size_t row) const;
 
         size_t ColumnCount() const { return m_columns.size(); }
@@ -184,8 +167,8 @@ namespace DataModel
         const std::vector<ColumnDef>& GetColumns() const { return m_columns; }
         const std::vector<FilterExpression::SqlAggregation>& GetAggregationSpec() const { return m_aggregation.agg_params; }
         const std::vector<MergedColumnDef>& GetMergedColumns() const { return m_merged_columns; }
-        DbInstance* GetDbInstanceForRow(ProfileDatabase * db, int row_index);
-        DbInstance* GetDbInstanceForRow(ProfileDatabase* db, PackedRow* row);
+        DbInstance* GetDbInstanceForRow(QueryManager * db, int row_index);
+        DbInstance* GetDbInstanceForRow(QueryManager* db, PackedRow* row);
         uint32_t SortedIndex(uint32_t index) { return m_sort_order[index]; };
 
         void Merge(std::vector<std::unique_ptr<PackedTable>>& tables);
@@ -196,15 +179,15 @@ namespace DataModel
 
         void RemoveDuplicates();
         void CreateSortOrderArray();
-        void SortByColumn(ProfileDatabase * db, std::string column, bool ascending);
+        void SortByColumn(QueryManager * db, std::string column, bool ascending);
         bool SetupAggregation(std::string agg_spec, int num_threads);
         void FinalizeAggregation();
         void ClearAggregation();
-        void AggregateRow(ProfileDatabase * db, int row_index, int map_index);
-        void SortAggregationByColumn(ProfileDatabase* db, std::string sort_column, bool sort_order);
+        void AggregateRow(QueryManager * db, int row_index, int map_index);
+        void SortAggregationByColumn(QueryManager* db, std::string sort_column, bool sort_order);
         void RemoveRowsForSetOfTracks(std::set<uint32_t> & selected_tracks, std::set<uint32_t> & unselected_tracks, bool remove_all);
 
-        static const char* ConvertSqlStringReference(ProfileDatabase* db, uint32_t column_index, uint64_t index, uint32_t node_id, bool & numeric_string);
+        static const char* ConvertSqlStringReference(QueryManager* db, uint32_t column_index, uint64_t index, uint32_t node_id, bool & numeric_string);
 
         void ResetTrackIdetifiers() { 
             track_ids_indices.nid_index = track_ids_indices.process_index = track_ids_indices.sub_process_index = track_ids_indices.stream_index = track_ids_indices.pid_index = INVALID_INDEX; 

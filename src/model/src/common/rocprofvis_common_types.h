@@ -77,16 +77,6 @@ typedef struct
     uint32_t level;
 } rocprofvis_event_timing_params_t;
 
-typedef enum rocprofvis_db_query_type_t
-{
-    kRPVQuerySliceByQueue,
-    kRPVQuerySliceByStream,
-    kRPVQueryTable,
-    kRPVQueryLevel,
-    kRPVNumQueryTypes,
-    kRPVQuerySliceByTrackSliceQuery,
-} rocprofvis_db_query_type_t;
-
 typedef enum rocprofvis_db_topology_data_type_t
 {
     kRPVTopologyDataTypeDefault = rocprofvis_db_data_type_t::kRPVDataTypeDefault,
@@ -98,6 +88,13 @@ typedef enum rocprofvis_db_topology_data_type_t
     kRPVTopologyDataTypeRef
 }rocprofvis_db_topology_data_type_t;
 
+typedef enum rocprofvis_db_system_source_type_t
+{
+    kRPVSystemSourceRocpd,
+    kRPVSystemSourceRocprof,
+    kRPVSystemSourcePerfetto
+}rocprofvis_db_system_source_type_t;
+
 typedef struct rocprofvis_dm_track_identifiers_t
 {
     // 32-bit track id
@@ -108,6 +105,8 @@ typedef struct rocprofvis_dm_track_identifiers_t
     rocprofvis_dm_track_id_t process_id; 
     // pointer to database instance descriptor
     rocprofvis_db_instance_t db_instance;
+    // type of system source database
+    rocprofvis_db_system_source_type_t source_type;
     // 64-bit process IDs
     rocprofvis_dm_process_id_t id[NUMBER_OF_TRACK_IDENTIFICATION_PARAMETERS];
     // database column name for process id
@@ -121,7 +120,7 @@ typedef struct rocprofvis_dm_track_identifiers_t
 typedef struct { 
     rocprofvis_dm_track_identifiers_t track_indentifiers;
     // SQL query to get data for this track, may have multiple sub-queries
-    std::vector<rocprofvis_dm_string_t> query[kRPVNumQueryTypes];   
+    std::map<uint64_t, std::vector<rocprofvis_dm_string_t>> query;
     // handle of extended data object  
     rocprofvis_dm_extdata_t extdata;  
     // total number of records in track
@@ -235,7 +234,7 @@ typedef rocprofvis_dm_result_t (*rocprofvis_dm_remove_slice_func_t) (const rocpr
 typedef const char*  (*rocprofvis_dm_get_string_func_t) (const rocprofvis_dm_trace_t object, uint32_t index);
 typedef const size_t  (*rocprofvis_dm_get_string_order_func_t) (const rocprofvis_dm_trace_t object, uint32_t index);
 typedef void (*rocprofvis_dm_metadata_loaded_func_t) (const rocprofvis_dm_trace_t object);
-typedef rocprofvis_dm_result_t  (*rocprofvis_dm_string_indices_func_t)(const rocprofvis_dm_trace_t object, rocprofvis_dm_num_string_table_filters_t num, rocprofvis_dm_string_table_filters_t substrings, std::vector<rocprofvis_dm_index_t>& indices);
+typedef rocprofvis_dm_result_t  (*rocprofvis_dm_string_indices_func_t)(const rocprofvis_dm_trace_t object, rocprofvis_dm_num_string_table_filters_t num, rocprofvis_dm_string_table_filters_t string_filters, bool include_substring, bool partial_matching, std::vector<rocprofvis_dm_index_t>& indices);
 typedef rocprofvis_dm_table_t (*rocprofvis_dm_add_info_table_func_t) (const rocprofvis_dm_trace_t object, rocprofvis_dm_node_id_t node, rocprofvis_dm_charptr_t name, rocprofvis_dm_table_t handle);
 
 typedef rocprofvis_dm_result_t (*rocprofvis_db_get_cached_table_value_func_t) (const rocprofvis_dm_database_t object, rocprofvis_dm_charptr_t table, 
@@ -254,6 +253,7 @@ typedef rocprofvis_dm_result_t(*rocprofvis_db_add_topology_node_property) (const
 
 typedef struct 
 {
+        rocprofvis_dm_string_t config_path;                             // application config path
         rocprofvis_dm_trace_t trace_object;                             // trace handle
         rocprofvis_dm_trace_params_t * trace_properties;                // pointer to trace parameters structure located in Trace object
         //data model interface methoths

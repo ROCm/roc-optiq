@@ -3,6 +3,7 @@
 
 #pragma once
 #include "imgui.h"
+#include <cstdint>
 #include <functional>
 #include <string>
 #include <string_view>
@@ -189,6 +190,20 @@ PanelIcon(const char* glyph, Colors color, SettingsManager* settings = nullptr);
 bool
 AccentButton(const char* label, ImVec2 size = ImVec2(0.0f, 0.0f),
              SettingsManager* settings = nullptr);
+
+// Colored button. Returns true when clicked.
+bool
+ColoredButton(const char* label, ImU32 color, ImU32 hovered_color, ImU32 active_color,
+              ImU32 text_color, const char* tooltip = nullptr,
+              ImVec2 size = ImVec2(0.0f, 0.0f));
+
+// Remote download progress modal, shared by the SSH test dialog and the
+// profiler launcher. The caller opens the popup (ImGui::OpenPopup) and owns
+// show, which is cleared once finished. A total of 0 renders "Starting...".
+void
+RenderRemoteDownloadPopup(const char* popup_id, const char* file_name,
+                          uint64_t downloaded, uint64_t total, bool finished,
+                          bool& show);
 
 float
 TableRowHeight();

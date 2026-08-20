@@ -13,6 +13,14 @@ namespace RocProfVis
 namespace DataModel
 {
 
+typedef enum rocprofvis_db_async_tracks_flags_t
+{
+    kRocProfVisDmIncludePmcTracks = 1,
+    kRocProfVisDmIncludeStreamTracks = 2,
+    kRocProfVisDmTrySplitTrack = 4,
+    kRocProfVisDmIncludePmcTracksOnly = 8,
+} rocprofvis_db_async_tracks_flags_t;
+
  typedef std::vector<std::unique_ptr<rocprofvis_dm_track_params_t>>::iterator rocprofvis_dm_track_params_it;
 
 class Database;

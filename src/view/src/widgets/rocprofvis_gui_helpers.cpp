@@ -7,7 +7,9 @@
 #include "rocprofvis_utils.h"
 #include "spdlog/spdlog.h"
 #include "widgets/rocprofvis_notification_manager.h"
+#include "widgets/rocprofvis_widget.h"
 #include <algorithm>
+#include <cfloat>
 #include <cmath>
 
 namespace RocProfVis
@@ -643,15 +645,114 @@ AccentButton(const char* label, ImVec2 size, SettingsManager* settings)
     {
         settings = &SettingsManager::GetInstance();
     }
-    ImGui::PushStyleColor(ImGuiCol_Button, settings->GetColor(Colors::kAccent));
-    ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
-                          settings->GetColor(Colors::kAccentHover));
-    ImGui::PushStyleColor(ImGuiCol_ButtonActive,
-                          settings->GetColor(Colors::kAccentActive));
-    ImGui::PushStyleColor(ImGuiCol_Text, settings->GetColor(Colors::kTextOnAccent));
+    return ColoredButton(label, settings->GetColor(Colors::kAccent),
+                         settings->GetColor(Colors::kAccentHover),
+                         settings->GetColor(Colors::kAccentActive),
+                         settings->GetColor(Colors::kTextOnAccent), nullptr, size);
+}
+
+bool
+ColoredButton(const char* label, ImU32 color, ImU32 hovered_color, ImU32 active_color,
+              ImU32 text_color, const char* tooltip, ImVec2 size)
+{
+    ImGui::PushStyleColor(ImGuiCol_Button, color);
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, hovered_color);
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive, active_color);
+    ImGui::PushStyleColor(ImGuiCol_Text, text_color);
     bool clicked = ImGui::Button(label, size);
     ImGui::PopStyleColor(4);
+    if(tooltip && strlen(tooltip) > 0 && BeginItemTooltipStyled())
+    {
+        ImGui::TextUnformatted(tooltip);
+        EndTooltipStyled();
+    }
     return clicked;
+}
+
+void
+RenderRemoteDownloadPopup(const char* popup_id, const char* file_name,
+                          uint64_t downloaded, uint64_t total, bool finished,
+                          bool& show)
+{
+    if(!show)
+    {
+        return;
+    }
+
+    SettingsManager&  settings = SettingsManager::GetInstance();
+    const ImGuiStyle& style    = ImGui::GetStyle();
+
+    PopUpStyle popup_style;
+    popup_style.PushPopupStyles();
+    popup_style.PushTitlebarColors();
+    popup_style.CenterPopup();
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 12.0f);
+    ImGui::SetNextWindowSize(ImVec2(440.0f, 0.0f));
+
+    if(ImGui::BeginPopupModal(popup_id, nullptr,
+                              ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove |
+                                  ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoScrollbar))
+    {
+        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(style.ItemSpacing.x, 4.0f));
+
+        BeginPanelCard("##remote_dl_header", PanelCardTone::kFrame, ImVec2(16.0f, 10.0f), true,
+                       &settings);
+        {
+            PanelIcon(ICON_ARROW_DOWN, Colors::kAccent, &settings);
+            ImGui::SameLine(0.0f, style.ItemInnerSpacing.x);
+            ImGui::BeginGroup();
+            ImGui::PushFont(nullptr, settings.GetFontManager().GetFontSize(FontSize::kMedLarge));
+            ImGui::TextUnformatted("Remote Download");
+            ImGui::PopFont();
+            ImGui::PushStyleColor(ImGuiCol_Text, settings.GetColor(Colors::kTextDim));
+            ImGui::TextUnformatted("Fetching the trace over SSH.");
+            ImGui::PopStyleColor();
+            ImGui::EndGroup();
+        }
+        EndPanelCard();
+
+        BeginPanelCard("##remote_dl_body", PanelCardTone::kPanel, ImVec2(14.0f, 10.0f), true,
+                       &settings);
+        {
+            ImGui::TextWrapped("%s", file_name ? file_name : "");
+            ImGui::Spacing();
+            if(total > 0)
+            {
+                float frac = static_cast<float>(downloaded) / static_cast<float>(total);
+                if(frac > 1.0f)
+                {
+                    frac = 1.0f;
+                }
+                std::string label = std::to_string(downloaded / 1024) + " / " +
+                                    std::to_string(total / 1024) + " KiB";
+                ImGui::ProgressBar(frac, ImVec2(-FLT_MIN, 0.0f), label.c_str());
+            }
+            else
+            {
+                PanelFieldLabel("Starting...", false, &settings);
+            }
+        }
+        EndPanelCard();
+
+        if(finished)
+        {
+            ImGui::CloseCurrentPopup();
+            show = false;
+        }
+
+        ImGui::PopStyleVar();  // ItemSpacing
+        ImGui::EndPopup();
+    }
+    else
+    {
+        // Popup not actually open (e.g. dismissed); clear the flag so it can be
+        // reopened on the next download.
+        show = false;
+    }
+
+    ImGui::PopStyleVar(2);  // WindowPadding, WindowRounding
+    popup_style.PopStyles();
 }
 
 #ifdef ROCPROFVIS_ENABLE_INTERNAL_BANNER
@@ -724,26 +825,20 @@ DrawInternalBuildBanner(const char* text /*= "Internal Build"*/)
 }
 #endif // ROCPROFVIS_ENABLE_INTERNAL_BANNER
 
-// Menu icon spacing, in multiples of the font size.
-inline constexpr float MENU_ICON_GAP_EM       = 0.7f;
-inline constexpr float MENU_NO_ICON_INDENT_EM = 1.0f;
+inline constexpr float MENU_ICON_COLUMN_EM = 1.0f;
+inline constexpr float MENU_ICON_GAP_EM    = 0.7f;
 
 static float
-MenuIconWidth(const char* icon)
+MenuIconColumnWidth()
 {
-    const float font_size = ImGui::GetFontSize();
-    if(!icon || icon[0] == '\0')
-        return font_size * MENU_NO_ICON_INDENT_EM;
-
-    ImFont* icon_font = SettingsManager::GetInstance().GetFontManager().GetFont(FontType::kIcon);
-    return icon_font->CalcTextSizeA(font_size, FLT_MAX, -1.0f, icon).x;
+    return ImGui::GetFontSize() * MENU_ICON_COLUMN_EM;
 }
 
 // Pads the label with leading spaces to leave room for the left-aligned icon.
 static std::string
-MenuLabelWithIconPadding(const char* icon, const char* label)
+MenuLabelWithIconPadding(const char* label)
 {
-    const float offset  = MenuIconWidth(icon) + ImGui::GetFontSize() * MENU_ICON_GAP_EM;
+    const float offset  = MenuIconColumnWidth() + ImGui::GetFontSize() * MENU_ICON_GAP_EM;
     const float space_w = ImGui::CalcTextSize(" ").x;
     const int   pad     = space_w > 0.0f ? static_cast<int>(std::ceil(offset / space_w)) : 1;
     std::string padded(static_cast<size_t>(std::max(pad, 1)), ' ');
@@ -773,7 +868,7 @@ IconMenuItem(const char* icon, const char* label, bool enabled)
 {
     ImDrawList*  draw_list    = ImGui::GetWindowDrawList();
     const ImVec2 row_start    = ImGui::GetCursorScreenPos();
-    std::string  padded_label = MenuLabelWithIconPadding(icon, label);
+    std::string  padded_label = MenuLabelWithIconPadding(label);
 
     bool clicked = ImGui::MenuItem(padded_label.c_str(), nullptr, false, enabled);
     DrawMenuItemIcon(draw_list, icon, row_start, enabled);
@@ -788,7 +883,7 @@ IconBeginMenu(const char* icon, const char* label)
 {
     ImDrawList*  draw_list    = ImGui::GetWindowDrawList();
     const ImVec2 row_start    = ImGui::GetCursorScreenPos();
-    std::string  padded_label = MenuLabelWithIconPadding(icon, label);
+    std::string  padded_label = MenuLabelWithIconPadding(label);
 
     bool open = ImGui::BeginMenu(padded_label.c_str());
     DrawMenuItemIcon(draw_list, icon, row_start, true);

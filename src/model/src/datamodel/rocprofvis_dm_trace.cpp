@@ -19,10 +19,11 @@ Trace::Trace()
     m_parameters.metadata_loaded=false;
 }
 
-rocprofvis_dm_result_t Trace::BindDatabase(rocprofvis_dm_database_t db, rocprofvis_dm_db_bind_struct* & bind_data)
+rocprofvis_dm_result_t Trace::BindDatabase(rocprofvis_dm_database_t db, rocprofvis_dm_db_bind_struct* & bind_data, rocprofvis_dm_string_t config_path)
 {
     ROCPROFVIS_ASSERT_MSG_RETURN(db, ERROR_DATABASE_CANNOT_BE_NULL, kRocProfVisDmResultInvalidParameter);
      
+    m_binding_info.config_path = config_path;
     m_binding_info.trace_object = this;
     m_binding_info.trace_properties = &m_parameters;
     m_binding_info.FuncAddTrack = AddTrack;
@@ -381,7 +382,7 @@ rocprofvis_dm_index_t Trace::AddString(const rocprofvis_dm_trace_t object,  cons
     Trace* trace = (Trace*)object;
     rocprofvis_dm_index_t current_index = (rocprofvis_dm_index_t)trace->m_strings.size();
     try{
-        trace->m_strings.push_back(stringValue);
+        trace->m_strings.push_back(std::string(stringValue));
     }
     catch(const std::exception&)
     {
@@ -420,11 +421,13 @@ rocprofvis_dm_result_t Trace::GetStringIndices(
     const rocprofvis_dm_trace_t object,
     rocprofvis_dm_num_string_table_filters_t num,
     rocprofvis_dm_string_table_filters_t substrings,
+    bool include_substring,
+    bool partial_matching,
     std::vector<rocprofvis_dm_index_t>& indices)
 {
     ROCPROFVIS_ASSERT_MSG(object, ERROR_TRACE_CANNOT_BE_NULL);
     Trace* trace = (Trace*)object;
-    return trace->GetStringIndicesWithSubstring(num, substrings, indices);
+    return trace->SearchStringIndices(num, substrings, include_substring, partial_matching, indices);
 }
 
 void Trace::MetadataLoaded(const rocprofvis_dm_trace_t object)
@@ -771,27 +774,37 @@ rocprofvis_dm_charptr_t Trace::GetStringAt(rocprofvis_dm_index_t index){
     return m_strings[index].c_str();
 }
 
-rocprofvis_dm_result_t Trace::GetStringIndicesWithSubstring(rocprofvis_dm_num_string_table_filters_t num, rocprofvis_dm_string_table_filters_t substrings, std::vector<rocprofvis_dm_index_t>& indices)
+rocprofvis_dm_result_t Trace::SearchStringIndices(rocprofvis_dm_num_string_table_filters_t num, rocprofvis_dm_string_table_filters_t targets, bool include_substring, bool partial_matching, std::vector<rocprofvis_dm_index_t>& indices)
 {
     ROCPROFVIS_ASSERT_MSG_RETURN(m_parameters.metadata_loaded, ERROR_METADATA_IS_NOT_LOADED, kRocProfVisDmResultNotLoaded);
     for(int i = 0; i < num; i ++)
     {
-        ROCPROFVIS_ASSERT_RETURN(substrings[i], kRocProfVisDmResultInvalidParameter);
+        ROCPROFVIS_ASSERT_RETURN(targets[i], kRocProfVisDmResultInvalidParameter);
     }
     for(int i = 0; i < m_strings.size(); i ++)
     {
         std::string_view sv = m_strings[i];
-        bool match = true;
+        bool match = !partial_matching;
         for(int j = 0; j < num; j ++)
         {
-            std::string_view sub_sv = substrings[j];
-            auto it = std::search(sv.begin(), sv.end(), sub_sv.begin(), sub_sv.end(),
-                        [](unsigned char c1, unsigned char c2) {
-                            return std::tolower(c1) == std::tolower(c2);
-                        });
-            if (it == sv.end())
+            std::string_view target_sv = targets[j];
+            if(include_substring)
             {
-                match = false;
+                match = std::search(sv.begin(), sv.end(), target_sv.begin(), target_sv.end(),
+                            [](unsigned char c1, unsigned char c2) {
+                                return std::tolower(c1) == std::tolower(c2);
+                            }) != sv.end();
+            }
+            else
+            {
+                match = sv.size() == target_sv.size() &&
+                        std::equal(sv.begin(), sv.end(), target_sv.begin(),
+                            [](unsigned char c1, unsigned char c2) {
+                                return std::tolower(c1) == std::tolower(c2);
+                            });
+            }
+            if(match == partial_matching)
+            {
                 break;
             }
         }

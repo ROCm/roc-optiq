@@ -30,6 +30,8 @@ public:
 
     virtual rocprofvis_controller_object_type_t GetType(void);
 
+    virtual void Reset();
+
     virtual rocprofvis_result_t SetupAndFetch(Trace& controller, Arguments& args, Array& array, Future* future);
     virtual rocprofvis_result_t ExportCSV(rocprofvis_dm_trace_t dm_handle, Arguments& args, Future* future, const char* path) const = 0;
 
@@ -39,16 +41,21 @@ protected:
         std::string m_name;
         rocprofvis_controller_primitive_type_t m_type;
     };
+    struct TableArguments
+    {
+        virtual ~TableArguments() = default;
+        uint64_t m_sort_column;
+        rocprofvis_controller_sort_order_t m_sort_order;
+    };
 
     virtual rocprofvis_result_t Setup(rocprofvis_dm_trace_t dm_handle, Arguments& args, Future* future) = 0;
     virtual rocprofvis_result_t Fetch(rocprofvis_dm_trace_t dm_handle, uint64_t index, uint64_t count, Array& array, Future* future) = 0;
+    virtual rocprofvis_result_t UnpackArguments(Arguments& args, TableArguments*& out) const;
+    virtual void                GetCurrentArguments(TableArguments*& out) const;
+    virtual void                SetCurrentArguments(TableArguments& in);
 
     std::vector<ColumnDefintion> m_columns;
     std::map<uint64_t, std::vector<Data>> m_rows;
-    std::string m_where;
-    std::string m_filter;
-    std::string m_group;
-    std::string m_group_cols;
     uint64_t m_num_items;
     uint64_t m_id;
     uint64_t m_sort_column;

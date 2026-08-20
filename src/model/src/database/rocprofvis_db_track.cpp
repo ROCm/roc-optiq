@@ -83,7 +83,7 @@ namespace DataModel
             cat = kRocProfVisDmRegionSampleTrack;
             break;
         case kRocProfVisDmOperationLaunch:
-            cat = ((ProfileDatabase*)m_db)->GetRegionTrackCategory();
+            cat = ((QueryManager*)m_db)->GetRegionTrackCategory();
             break;
         case kRocProfVisDmOperationDispatch:
             cat = kRocProfVisDmKernelDispatchTrack;

@@ -1,4 +1,4 @@
-// Copyright (c) 2024 Advanced Micro Devices, Inc. All rights reserved.
+// Copyright Advanced Micro Devices, Inc.
 // SPDX-License-Identifier: MIT
 
 #pragma once
@@ -32,6 +32,8 @@ public:
     void HandleNewData();
     void SetQuery(const std::string& query);
     void SetExternalQuery(MetricId metric_id, const std::string& value_name);
+
+    friend struct KernelMetricTableTestPeer;
 
 private:
     void RenderColumnFilter(int column_index);

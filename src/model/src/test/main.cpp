@@ -159,7 +159,7 @@ int main(int argc, char** argv)
             CheckMemoryFootprint(trace);
             PrintHeader("Open database %s", g_input_file.c_str());
             rocprofvis_dm_database_t db = rocprofvis_db_open_database(g_input_file.c_str(), kAutodetect);
-            if (nullptr != db && kRocProfVisDmResultSuccess == rocprofvis_dm_bind_trace_to_database(trace, db))
+            if (nullptr != db && kRocProfVisDmResultSuccess == rocprofvis_dm_bind_trace_to_database(trace, db, nullptr))
             {
                 PrintHeader("Allocate future");
                 rocprofvis_db_future_t object2wait = rocprofvis_db_future_alloc(db_progress);

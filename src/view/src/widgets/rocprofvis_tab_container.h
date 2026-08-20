@@ -32,6 +32,8 @@ public:
 
     const TabItem* GetActiveTab() const;
 
+    friend struct TabContainerTestPeer;
+
     void SetAllowToolTips(bool allow_tool_tips);
     bool GetAllowToolTips() const;
 

@@ -72,7 +72,9 @@ public:
     std::shared_ptr<RocWidget>         GetToolbar() override;
     void                               RenderEditMenuOptions() override;
     std::optional<DataProviderCleanupWork> DetachProviderCleanup() override;
-    void                               SetAnalysisViewVisibility(bool visibility); 
+    void                               SetAnalysisViewVisibility(bool visibility);
+
+    friend struct TraceViewTestPeer;
     void                               SetSidebarViewVisibility(bool visibility);
     void                               SetHistogramVisibility(bool visibility);
     /* False for compare projects: the summary aggregates one trace's kernels and

@@ -87,8 +87,13 @@ constexpr float WELCOME_LOGO_ALPHA_BOTTOM_DARK  = 0.16f;
 constexpr float WELCOME_LOGO_ALPHA_BOTTOM_LIGHT = 0.18f;
 constexpr int   WELCOME_LOGO_POLYGON_VERTICES   = 6;
 
+#ifdef ROCPROFVIS_PERFETTO_ENABLED
+constexpr const char* SUPPORTED_FILE_TYPES_HINT =
+    "Supported types: .db, .rpd, .yaml, .rpv, .json, .proto, .pftrace";
+#else
 constexpr const char* SUPPORTED_FILE_TYPES_HINT =
     "Supported types: .db, .rpd, .yaml, .rpv";
+#endif
 
 struct ResourceGroup
 {
@@ -196,7 +201,33 @@ DrawResourceGroup(SettingsManager& settings, const ResourceGroup& group, float w
     const ImVec2 bottom_right(pos.x + size.x, pos.y + size.y);
 
     ImGui::PushID(group.title);
-    // Reserve the card's space; clicks are dispatched manually per link below.
+
+    // Bottom row: "Open documentation" on the left, "GitHub" on the right.
+    const float link_y = pos.y + size.y - font_size * WELCOME_CARD_FOOTER_GAP_EM;
+
+    const char*  docs_text = "Open documentation";
+    const ImVec2 docs_size = ImGui::CalcTextSize(docs_text);
+    const ImVec2 docs_pos(pos.x + font_size * WELCOME_CARD_TITLE_X_EM, link_y);
+
+    const char*  github_text = "GitHub";
+    const ImVec2 github_size = ImGui::CalcTextSize(github_text);
+    const ImVec2 github_pos(
+        bottom_right.x - github_size.x - font_size * WELCOME_CARD_GITHUB_RIGHT_EM,
+        link_y);
+
+    // The links are submitted as real items so hover and clicks are suppressed
+    // whenever a modal or another window covers the page. A raw rect test would
+    // let both leak through to whatever is drawn underneath.
+    ImGui::SetCursorScreenPos(docs_pos);
+    const bool docs_clicked = ImGui::InvisibleButton("docs", docs_size);
+    const bool docs_hovered = ImGui::IsItemHovered();
+
+    ImGui::SetCursorScreenPos(github_pos);
+    const bool github_clicked = ImGui::InvisibleButton("github", github_size);
+    const bool github_hovered = ImGui::IsItemHovered();
+
+    // Reserve the card's space; the body outside the links stays inert.
+    ImGui::SetCursorScreenPos(pos);
     ImGui::Dummy(size);
 
     ImDrawList* draw_list  = ImGui::GetWindowDrawList();
@@ -238,28 +269,7 @@ DrawResourceGroup(SettingsManager& settings, const ResourceGroup& group, float w
         settings.GetColor(Colors::kTextDim), group.description);
     draw_list->PopClipRect();
 
-    // Bottom row: "Open documentation" on the left, "GitHub" on the right.
-    const float link_y = pos.y + size.y - font_size * WELCOME_CARD_FOOTER_GAP_EM;
-
-    const char*  docs_text = "Open documentation";
-    const ImVec2 docs_size = ImGui::CalcTextSize(docs_text);
-    const ImVec2 docs_pos(pos.x + font_size * WELCOME_CARD_TITLE_X_EM, link_y);
-    const ImVec2 docs_max(docs_pos.x + docs_size.x, docs_pos.y + docs_size.y);
-    const bool docs_hovered = ImGui::IsMouseHoveringRect(docs_pos, docs_max);
-    const bool docs_clicked = docs_hovered &&
-                              ImGui::IsMouseClicked(ImGuiMouseButton_Left);
     draw_list->AddText(docs_pos, settings.GetColor(Colors::kAccent), docs_text);
-
-    const char*  github_text = "GitHub";
-    const ImVec2 github_size = ImGui::CalcTextSize(github_text);
-    const ImVec2 github_pos(
-        bottom_right.x - github_size.x - font_size * WELCOME_CARD_GITHUB_RIGHT_EM,
-        link_y);
-    const ImVec2 github_max(github_pos.x + github_size.x,
-                            github_pos.y + github_size.y);
-    const bool github_hovered = ImGui::IsMouseHoveringRect(github_pos, github_max);
-    const bool github_clicked = github_hovered &&
-                                ImGui::IsMouseClicked(ImGuiMouseButton_Left);
     draw_list->AddText(github_pos, settings.GetColor(Colors::kAccent), github_text);
 
     if(github_hovered)

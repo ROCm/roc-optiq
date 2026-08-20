@@ -78,11 +78,16 @@ ProfilerLauncherDialog::ProfilerLauncherDialog(AppWindow* app_window)
     m_backends[0]->LoadSettings(jt::Json());
     m_config.backend_payload = m_backends[0]->SaveSettings();
 
+#ifdef ROCPROFVIS_ENABLE_REMOTE
+    // Before LoadFromSettings() so it can validate the saved profile's
+    // connection ref against the store.
+    m_connection_store.Load();
+#endif
+
     LoadFromSettings();
     RefreshExecutionCache();
 
 #ifdef ROCPROFVIS_ENABLE_REMOTE
-    m_connection_store.Load();
     if(m_connection_store.Get(m_selected_connection_id) == nullptr && !m_connection_store.Empty())
     {
         m_selected_connection_id = m_connection_store.List().front().id;
@@ -240,25 +245,27 @@ void ProfilerLauncherDialog::RenderConfigureView()
     // Warnings from backend
     if (!warnings.empty())
     {
+        SettingsManager& settings = SettingsManager::Get();
         for (auto const& w : warnings)
         {
-            ImVec4 color;
+            Colors      color_id;
             const char* prefix;
             switch (w.level)
             {
                 case WarningMessage::kError:
-                    color = ImVec4(1.0f, 0.0f, 0.0f, 1.0f);
-                    prefix = "Error: ";
+                    color_id = Colors::kTextError;
+                    prefix   = "Error: ";
                     break;
                 case WarningMessage::kWarning:
-                    color = ImVec4(1.0f, 0.8f, 0.0f, 1.0f);
-                    prefix = "Warning: ";
+                    color_id = Colors::kTextWarning;
+                    prefix   = "Warning: ";
                     break;
                 default:
-                    color = ImVec4(0.4f, 0.7f, 1.0f, 1.0f);
-                    prefix = "Hint: ";
+                    color_id = Colors::kAccent;
+                    prefix   = "Hint: ";
                     break;
             }
+            ImVec4 color = ImGui::ColorConvertU32ToFloat4(settings.GetColor(color_id));
             ImGui::TextColored(color, "%s%s", prefix, w.text.c_str());
         }
     }
@@ -984,90 +991,11 @@ void ProfilerLauncherDialog::RenderRemotePopups()
         }
     }
 
-    // Mirrors SshTestDialog::RenderProgressPopup so the remote download popup
-    // looks identical whether launched from the trace opener or the profiler.
-    if (m_remote_show_progress_popup)
-    {
-        SettingsManager&  settings = SettingsManager::GetInstance();
-        const ImGuiStyle& style    = ImGui::GetStyle();
-
-        PopUpStyle popup_style;
-        popup_style.PushPopupStyles();
-        popup_style.PushTitlebarColors();
-        popup_style.CenterPopup();
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 12.0f);
-        ImGui::SetNextWindowSize(ImVec2(440, 0));
-
-        if (ImGui::BeginPopupModal("Remote Trace Download", nullptr,
-            ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove |
-            ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoScrollbar))
-        {
-            const auto& fetch = m_remote_last_progress;
-            uint64_t    done  = fetch.downloaded;
-            uint64_t    total = fetch.size;
-
-            ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing,
-                                ImVec2(style.ItemSpacing.x, 4.0f));
-
-            BeginPanelCard("##profiler_dl_header", PanelCardTone::kFrame,
-                           ImVec2(16.0f, 10.0f), true, &settings);
-            {
-                PanelIcon(ICON_ARROW_DOWN, Colors::kAccent, &settings);
-                ImGui::SameLine(0.0f, style.ItemInnerSpacing.x);
-                ImGui::BeginGroup();
-                ImGui::PushFont(nullptr,
-                                settings.GetFontManager().GetFontSize(FontSize::kMedLarge));
-                ImGui::TextUnformatted("Remote Download");
-                ImGui::PopFont();
-                ImGui::PushStyleColor(ImGuiCol_Text, settings.GetColor(Colors::kTextDim));
-                ImGui::TextUnformatted("Fetching the trace over SSH.");
-                ImGui::PopStyleColor();
-                ImGui::EndGroup();
-            }
-            EndPanelCard();
-
-            BeginPanelCard("##profiler_dl_body", PanelCardTone::kPanel,
-                           ImVec2(14.0f, 10.0f), true, &settings);
-            {
-                ImGui::TextWrapped("%s", fetch.name.c_str());
-                ImGui::Spacing();
-                if (total > 0)
-                {
-                    float frac = static_cast<float>(done) / static_cast<float>(total);
-                    if (frac > 1.0f) { frac = 1.0f; }
-                    std::string label = std::to_string(done / 1024) + " / " +
-                                        std::to_string(total / 1024) + " KiB";
-                    ImGui::ProgressBar(frac, ImVec2(-FLT_MIN, 0), label.c_str());
-                }
-                else
-                {
-                    PanelFieldLabel("Starting...", false, &settings);
-                }
-            }
-            EndPanelCard();
-
-            // Close as soon as the download phase ends (completed, failed, or the
-            // session was torn down). This avoids hanging open when the final
-            // "downloaded == size" snapshot never arrives for fast transfers.
-            if (!downloading)
-            {
-                ImGui::CloseCurrentPopup();
-                m_remote_show_progress_popup = false;
-            }
-
-            ImGui::PopStyleVar();  // ItemSpacing
-            ImGui::EndPopup();
-        }
-        else
-        {
-            // Popup not actually open (e.g. dismissed); clear our flag so it can
-            // be reopened on the next download.
-            m_remote_show_progress_popup = false;
-        }
-        ImGui::PopStyleVar(2);  // WindowPadding, WindowRounding
-        popup_style.PopStyles();
-    }
+    // Closing on the download phase ending (rather than on downloaded == size)
+    // avoids hanging open when the final progress snapshot never arrives.
+    RenderRemoteDownloadPopup("Remote Trace Download", m_remote_last_progress.name.c_str(),
+                              m_remote_last_progress.downloaded, m_remote_last_progress.size,
+                              !downloading, m_remote_show_progress_popup);
 }
 #endif  // ROCPROFVIS_ENABLE_REMOTE
 
@@ -1097,12 +1025,18 @@ void ProfilerLauncherDialog::RenderButtonRow()
     bool valid      = readiness.empty();
     bool can_launch = state_ready && valid;
 
-    if (!can_launch) ImGui::BeginDisabled();
+    if (!can_launch)
+    {
+        ImGui::BeginDisabled();
+    }
     if (AccentButton("Launch Profiler", ImVec2(160, 0)))
     {
         OnLaunchClicked();
     }
-    if (!can_launch) ImGui::EndDisabled();
+    if (!can_launch)
+    {
+        ImGui::EndDisabled();
+    }
 
     // If a run is in flight or a previous run's output is available, let the
     // user jump straight to the focused run view.
@@ -1142,7 +1076,8 @@ void ProfilerLauncherDialog::RenderButtonRow()
         }
         else
         {
-            ImGui::TextColored(ImVec4(1.0f, 0.78f, 0.25f, 1.0f), "%s", readiness.c_str());
+            ImVec4 warn = ImGui::ColorConvertU32ToFloat4(settings.GetColor(Colors::kTextWarning));
+            ImGui::TextColored(warn, "%s", readiness.c_str());
         }
     }
 }
@@ -1596,7 +1531,10 @@ void ProfilerLauncherDialog::LoadFromSettings()
                 }
             }
 #ifdef ROCPROFVIS_ENABLE_REMOTE
-            if (!m_config.ssh_connection_ref.empty())
+            // A ref to a since-deleted connection is left unbound rather than
+            // remapped onto whichever connection is selected.
+            if (!m_config.ssh_connection_ref.empty() &&
+                m_connection_store.Get(m_config.ssh_connection_ref) != nullptr)
             {
                 m_selected_connection_id = m_config.ssh_connection_ref;
             }

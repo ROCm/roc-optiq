@@ -232,7 +232,8 @@ void StatusPill(const char* label, ImU32 bg_color)
     float        rnd = size.y * 0.5f;
 
     dl->AddRectFilled(p, ImVec2(p.x + size.x, p.y + size.y), bg_color, rnd);
-    dl->AddText(ImVec2(p.x + pad.x, p.y + pad.y), IM_COL32(255, 255, 255, 255), label);
+    dl->AddText(ImVec2(p.x + pad.x, p.y + pad.y),
+                SettingsManager::Get().GetColor(Colors::kTextOnAccent), label);
 
     ImGui::Dummy(size);
 }
@@ -294,7 +295,8 @@ bool ToggleSwitch(const char* label, bool* value)
 
     float  knob_x = bar_min.x + radius + t * (width - 2.0f * radius);
     ImVec2 knob_c(knob_x, bar_min.y + radius);
-    dl->AddCircleFilled(knob_c, radius - kToggleKnobInset, IM_COL32(255, 255, 255, 255));
+    dl->AddCircleFilled(knob_c, radius - kToggleKnobInset,
+                        settings.GetColor(Colors::kTextOnAccent));
 
     ImGui::PopID();
 
@@ -351,7 +353,10 @@ bool RenderTargetSection(TargetSpec& target, ConnectionType connection, AppWindo
     // Disabled only in remote mode without a remote-browse handler; local mode
     // and remote-with-handler both keep the button live.
     const bool exe_disabled = is_remote && !remote_browse_exe;
-    if (exe_disabled) ImGui::BeginDisabled();
+    if (exe_disabled)
+    {
+        ImGui::BeginDisabled();
+    }
     if (ImGui::Button("Browse##TargetExe", ImVec2(browse_w, 0)))
     {
         if (remote_browse_exe)
@@ -365,7 +370,10 @@ bool RenderTargetSection(TargetSpec& target, ConnectionType connection, AppWindo
                 [&target](std::string const& path) { target.executable = path; });
         }
     }
-    if (exe_disabled) ImGui::EndDisabled();
+    if (exe_disabled)
+    {
+        ImGui::EndDisabled();
+    }
 
     if (has_recent)
     {
@@ -426,7 +434,10 @@ bool RenderTargetSection(TargetSpec& target, ConnectionType connection, AppWindo
     }
     ImGui::SameLine();
     const bool out_disabled = is_remote && !remote_browse_out;
-    if (out_disabled) ImGui::BeginDisabled();
+    if (out_disabled)
+    {
+        ImGui::BeginDisabled();
+    }
     if (ImGui::Button("Browse##OutputDir", ImVec2(browse_w, 0)))
     {
         if (remote_browse_out)
@@ -440,7 +451,10 @@ bool RenderTargetSection(TargetSpec& target, ConnectionType connection, AppWindo
                 [&target](std::string const& path) { target.output_directory = path; });
         }
     }
-    if (out_disabled) ImGui::EndDisabled();
+    if (out_disabled)
+    {
+        ImGui::EndDisabled();
+    }
 
     ImGui::Spacing();
     if (ImGui::Checkbox("Open the trace automatically when profiling finishes",
@@ -588,7 +602,7 @@ bool RenderOutputConsole(
     float output_height = std::max(ImGui::GetContentRegionAvail().y - 30.0f, 60.0f);
 
     // Terminal-style panel: darker background, soft corners, monospaced text.
-    ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 8.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, settings.GetDefaultStyle().ChildRounding);
     ImGui::PushStyleColor(ImGuiCol_ChildBg, settings.GetColor(Colors::kBgMain));
     ImGui::BeginChild("OutputText", ImVec2(0, output_height), ImGuiChildFlags_Borders,
                       output_flags);

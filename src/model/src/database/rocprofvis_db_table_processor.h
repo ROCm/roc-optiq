@@ -1,22 +1,5 @@
-// Copyright (c) 2025 Advanced Micro Devices, Inc. All rights reserved.
-//
-// Permission is hereby granted, free of charge, to any person obtaining a copy
-// of this software and associated documentation files (the "Software"), to deal
-// in the Software without restriction, including without limitation the rights
-// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-// copies of the Software, and to permit persons to whom the Software is
-// furnished to do so, subject to the following conditions:
-//
-// The above copyright notice and this permission notice shall be included in all
-// copies or substantial portions of the Software.
-//
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-// SOFTWARE.
+// Copyright Advanced Micro Devices, Inc.
+// SPDX-License-Identifier: MIT
 
 #pragma once
 
@@ -27,15 +10,7 @@ namespace RocProfVis
 namespace DataModel
 {
 
-    class ProfileDatabase;
-
-    typedef enum rocprofvis_db_compound_table_type {
-        kRPVTableDataTypeEvent,
-        kRPVTableDataTypeSample,
-        kRPVTableDataTypeSearch,
-        kRPVTableDataTypeAnalysis,
-        kRPVTableDataTypesNum
-    } rocprofvis_db_compound_table_type;
+    class QueryManager;
 
     typedef struct rocprofvis_db_compound_query_command {
         std::string name;
@@ -141,7 +116,7 @@ namespace DataModel
     {
 
     public:
-        TableProcessor(ProfileDatabase* db) : m_db(db) { 
+        TableProcessor(QueryManager* db) : m_db(db) { 
 
             m_timer.setAction([this] {
                 std::lock_guard<std::mutex> lock(m_lock);
@@ -175,7 +150,7 @@ namespace DataModel
         rocprofvis_dm_result_t AddAggregatedCells(bool to_file, rocprofvis_dm_handle_t handle, uint32_t row_index);
 
     private:
-        ProfileDatabase* m_db;
+        QueryManager* m_db;
         std::vector<std::unique_ptr<PackedTable>> m_tables;
         std::set<uint32_t> m_tracks;
         PackedTable m_merged_table;

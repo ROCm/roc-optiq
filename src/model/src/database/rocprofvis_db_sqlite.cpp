@@ -4,6 +4,7 @@
 #include "rocprofvis_db_sqlite.h"
 #include "rocprofvis_core_profile.h"
 #include "rocprofvis_shared_types.h"
+#include "rocprofvis_c_interface.h"
 #include <sstream>
 
 namespace RocProfVis
@@ -25,19 +26,6 @@ void SqliteDatabase::CreateDbNode(rocprofvis_db_filename_t filepath) {
     m_db_nodes.back()->node_id = 0;
     m_db_nodes.back()->filepath = filepath;
 }
-
-int SqliteDatabase::CallbackGetValue(void* data, int argc, sqlite3_stmt* stmt, char** azColName){
-    ROCPROFVIS_ASSERT_MSG_RETURN(argc==1, ERROR_DATABASE_QUERY_PARAMETERS_MISMATCH, 1);
-    ROCPROFVIS_ASSERT_MSG_RETURN(data, ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL, 1);
-    void*  func = (void*)&CallbackGetValue;
-    rocprofvis_db_sqlite_callback_parameters* callback_params = (rocprofvis_db_sqlite_callback_parameters*)data;
-    SqliteDatabase* db = (SqliteDatabase*) callback_params->db;
-    std::string * string_ptr = (rocprofvis_dm_string_t*)callback_params->handle;
-    ROCPROFVIS_ASSERT_MSG_RETURN(string_ptr, ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL, 1);
-    *string_ptr = db->Sqlite3ColumnText(func, stmt, azColName, 0);
-    return 0;
-} 
-
 
 uint64_t
 SqliteDatabase::GetNullExceptionInt(void* func, char* column) {
@@ -548,12 +536,7 @@ rocprofvis_dm_result_t  SqliteDatabase::ExecuteSQLQuery(Future* future,
         future,
         nullptr,
         load_callback,
-        { query[kRPVSourceQueryTrackByQueue].c_str(),
-          query[kRPVSourceQueryTrackByStream].c_str(),
-          query[kRPVSourceQueryLevel].c_str(), 
-          query[kRPVSourceQuerySliceByQueue].c_str(),
-          query[kRPVSourceQuerySliceByStream].c_str(),
-          query[kRPVSourceQueryTable].c_str() },
+        query,
         static_cast<rocprofvis_dm_track_id_t>(load_id)
     };
 
@@ -573,16 +556,14 @@ rocprofvis_dm_result_t  SqliteDatabase::ExecuteSQLQuery(Future* future,
     {
         TraceProperties()->tracks_info_restored = false;
         params.callback = find_callback;
-        result = ExecuteSQLQuery(
-            db_instance,
-            query[kRPVSourceQueryTrackByQueue].c_str(), &params);
-        if (result == kRocProfVisDmResultSuccess &&
-            query[kRPVSourceQueryTrackByStream].length() > 0)
+        for (int i = 0; i < 2; i++)
         {
-            result = ExecuteSQLQuery(
-                db_instance,
-                query[kRPVSourceQueryTrackByStream].c_str(),
-                &params);
+            if (query[i].length() > 0)
+            {
+                result = ExecuteSQLQuery(
+                    db_instance,
+                    query[i].c_str(), &params);
+            }
         }
     }
     return result;

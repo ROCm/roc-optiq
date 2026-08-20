@@ -51,11 +51,23 @@ rocprofvis_dm_size_t RocpdDatabase::GetMemoryFootprint()
 }
 
 
-int RocpdDatabase::ProcessTrack(rocprofvis_dm_track_params_t& track_params, rocprofvis_dm_charptr_t*  newqueries)
+int RocpdDatabase::ProcessTrack(rocprofvis_dm_track_params_t& track_params, std::vector<rocprofvis_dm_string_t> & newqueries)
 {
+    // Process a rocpd track descriptor and merge it into the global track registry.
+    // This routine either creates a new track entry or updates an existing one,
+    // while also preparing/refreshing query text for the UI-facing data model.
+
+    // Preconditions: caller must provide a valid backing database instance handle.
     ROCPROFVIS_ASSERT_MSG_RETURN(track_params.track_indentifiers.db_instance != nullptr, ERROR_NODE_KEY_CANNOT_BE_NULL, 1);
     DbInstance* db_instance = (DbInstance*)track_params.track_indentifiers.db_instance;
+
+    // Force source attribution so lookups and merges are scoped to rocpd tracks.
+    track_params.track_indentifiers.source_type = kRPVSystemSourceRocpd;
+
+    // Find an existing track with the same identifiers for this DB GUID, if present.
     rocprofvis_dm_track_params_it it = TrackTracker()->FindTrackParamsIterator(track_params.track_indentifiers, db_instance->GuidIndex());
+
+    // Keep query definitions synchronized with the current/merged track state.
     UpdateQueryForTrack(it, track_params, newqueries);    
     if(it == TrackPropertiesEnd())
     {
@@ -149,7 +161,9 @@ int RocpdDatabase::ProcessTrack(rocprofvis_dm_track_params_t& track_params, rocp
     }
     else
     {
-        // Streams merge several per-operation queries into one track; sum the counts.
+        // Existing track path:
+        // Streams may emit multiple per-operation entries that map to one logical track.
+        // Merge by accumulating record count and preserving load ownership metadata.
         it->get()->record_count += track_params.record_count;
         it->get()->load_id.insert(*track_params.load_id.begin());
     }
@@ -319,7 +333,7 @@ rocprofvis_dm_result_t  RocpdDatabase::ReadTraceMetadata(Future* future)
             if(kRocProfVisDmResultSuccess !=
                ExecuteQueryForAllTracksAsync(
                    0,
-                   kRPVQueryLevel,
+                   kRPVRocpdQueryLevel,
                    "SELECT *, ", (std::string(" ORDER BY ")+Builder::START_SERVICE_NAME).c_str(), &CalculateEventLevels,
                    [](rocprofvis_dm_track_params_t* params, rocprofvis_dm_charptr_t query) -> std::string { (void) params; return query; },
                    [](rocprofvis_dm_track_params_t* params) {
@@ -371,7 +385,7 @@ rocprofvis_dm_result_t  RocpdDatabase::ReadTraceMetadata(Future* future)
                 kRPVDbBusy, future);
             if (kRocProfVisDmResultSuccess !=
                 ExecuteQueryForAllTracksAsync(kRocProfVisDmIncludePmcTracks | kRocProfVisDmIncludeStreamTracks,
-                    kRPVQuerySliceByTrackSliceQuery,
+                    kRPVRocpdQuerySliceByTrackSliceQuery,
                     "SELECT MIN(startTs), MAX(endTs), MIN(event_level), MAX(event_level), ", 
                     "WHERE startTs != 0 AND endTs != 0", &CallbackGetTrackProperties,
                     [](rocprofvis_dm_track_params_t* params, rocprofvis_dm_charptr_t query) -> std::string { (void) params; return query; },
@@ -526,13 +540,16 @@ rocprofvis_dm_result_t RocpdDatabase::SaveTrimmedData(rocprofvis_dm_timestamp_t 
 
 rocprofvis_dm_result_t RocpdDatabase::BuildTableStringIdFilter(rocprofvis_dm_num_string_table_filters_t num_string_table_filters,
     rocprofvis_dm_string_table_filters_t     string_table_filters,
+    bool                                     include_substring,
+    bool                                     include_category,
+    bool                                     partial_matching,
     table_string_id_filter_map_t&            filter)
 {
     rocprofvis_dm_result_t result = kRocProfVisDmResultNotLoaded;
     if(num_string_table_filters > 0)
     {
         std::vector<rocprofvis_dm_index_t> string_indices;
-        result = BindObject()->FuncGetStringIndices(BindObject()->trace_object, num_string_table_filters, string_table_filters, string_indices);
+        result = BindObject()->FuncGetStringIndices(BindObject()->trace_object, num_string_table_filters, string_table_filters, include_substring, partial_matching, string_indices);
         ROCPROFVIS_ASSERT_RETURN(result == kRocProfVisDmResultSuccess, result);
         std::string string;
         for(const rocprofvis_dm_index_t& index : string_indices)
@@ -550,8 +567,14 @@ rocprofvis_dm_result_t RocpdDatabase::BuildTableStringIdFilter(rocprofvis_dm_num
         }
         if(!string.empty())
         {
-            filter[kRocProfVisDmOperationLaunch][0] = std::string(Builder::CATEGORY_REFERENCE_RPD) + " IN (" + string + ") OR " + Builder::EVENT_NAME_REFERENCE_RPD + " IN(" + string;
-            filter[kRocProfVisDmOperationDispatch][0] = std::string(Builder::CATEGORY_REFERENCE_RPD) + " IN (" + string + ") OR " + Builder::EVENT_NAME_REFERENCE_RPD + " IN(" + string;
+            filter[kRocProfVisDmOperationLaunch][0] = std::string(Builder::EVENT_NAME_REFERENCE_RPD) + " IN (" + string;
+            filter[kRocProfVisDmOperationDispatch][0] = "(" + std::string(Builder::EVENT_NAME_REFERENCE_RPD) + " IN (" + string;
+
+            if(include_category)
+            {
+                filter[kRocProfVisDmOperationDispatch][0] += ") OR " + std::string(Builder::CATEGORY_REFERENCE_RPD) + " IN (" + string;
+            }
+            filter[kRocProfVisDmOperationDispatch][0] += ")";
         }
     }   
     return result;
@@ -567,8 +590,8 @@ rocprofvis_dm_string_t RocpdDatabase::GetEventOperationQuery(const rocprofvis_dm
                 { { Builder::QParamOperation(kRocProfVisDmOperationLaunch),
                 Builder::QParam("id", Builder::ID_PUBLIC_NAME),
                 Builder::QParam("id", Builder::DB_ID_PUBLIC_NAME),
-                Builder::QParam("apiName_id", Builder::CATEGORY_REFERENCE_RPD),
-                Builder::QParam("args_id", Builder::EVENT_NAME_REFERENCE_RPD), 
+                Builder::QParam("apiName_id", Builder::EVENT_NAME_REFERENCE_RPD),
+                Builder::QParam("args_id", Builder::EVENT_ARGS_RPD), 
                 Builder::QParam("start", Builder::START_SERVICE_NAME),
                 Builder::QParam("end", Builder::END_SERVICE_NAME),
                 Builder::QParam("(end-start)", Builder::DURATION_PUBLIC_NAME),
@@ -926,8 +949,8 @@ rocprofvis_dm_result_t  RocpdDatabase::ReadExtEventInfo(
                     Builder::QParam("pid", Builder::PROCESS_ID_SERVICE_NAME),
                     Builder::QParam("tid", Builder::THREAD_ID_SERVICE_NAME),
                     Builder::SpaceSaver(0), 
+                    Builder::QParam("pid", Builder::PID_SERVICE_NAME),
                     Builder::QParam("L.level"),
-                    Builder::SpaceSaver(0),
                     Builder::SpaceSaver(0)},
                   { Builder::From("rocpd_api", MultiNode::No),
                     Builder::LeftJoin(Builder::LevelTable("api"), "L", "id = L.eid", MultiNode::No) },
@@ -976,8 +999,8 @@ rocprofvis_dm_result_t  RocpdDatabase::ReadExtEventInfo(
                         Builder::QParam("gpuId", Builder::AGENT_ID_SERVICE_NAME),
                         Builder::QParam("queueId", Builder::QUEUE_ID_SERVICE_NAME),
                         Builder::SpaceSaver(0), 
-                        Builder::QParam("L.level"),
                         Builder::SpaceSaver(0),
+                        Builder::QParam("L.level"),
                         Builder::SpaceSaver(0) },
                       { Builder::From("rocpd_op", MultiNode::No),
                         Builder::LeftJoin(Builder::LevelTable("op"), "L", "id = L.eid", MultiNode::No) },

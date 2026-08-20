@@ -30,6 +30,7 @@ namespace View
 class MeasurementController;
 class TimelineSelection;
 class TimelineView;
+class FlameTrackItem;
 class TimelineTrackOptions;
  
 typedef struct ViewCoords
@@ -96,6 +97,7 @@ public:
     void ScrollToTrack(const uint64_t& track_id);
     void SetViewableRangeNS(double start_ns, double end_ns);
     void MoveToPosition(double start_ns, double end_ns, double y_position, bool center);
+    void ZoomToTimeRangeSelection();
     void RenderGraphPoints();
     void RenderHistogram();
     void RenderTraceView();
@@ -119,6 +121,8 @@ public:
     void           RenderMeasurement(ImDrawList* draw_list, ImVec2 window_position);
     ViewCoords                          GetViewCoords() const;
     std::shared_ptr<TimePixelTransform> GetTransform() const;
+
+    friend struct TimelineViewTestPeer;
     float          GetTotalTrackHeight() const;
     float          GetTrackViewportHeight() const;
     void           GetVisibleTrackFractions(float& start_fraction, float& end_fraction) const;
@@ -178,6 +182,9 @@ private:
 
     void RenderTrack(int track_index, bool request_data, ImGuiWindowFlags window_flags,
                      ImVec2 container_size);
+    // Right-click menu for restoring hidden tracks, from the empty space below
+    // the last track.
+    void RenderEmptyTrackAreaMenu();
     bool IsRequestDataNeeded();
     void RequestDataIfEmpty(TrackItem* track_item, bool request_data);
     void RenderNormalTrack(TrackItem* track_item, int track_index, ImGuiWindowFlags window_flags,
@@ -190,6 +197,8 @@ private:
     void                            ClearTimeRangeSelection();
     void                            CopySelectedEventNames();
     void                            CopySelectedEventDetails();
+    void                            ZoomToTimeSpan(double start_ns, double end_ns);
+    void                            ZoomToMeasurement();
 
     TrackLayout                     BuildTrackLayout();
     EventManager::SubscriptionToken m_scroll_to_track_token;
@@ -210,7 +219,7 @@ private:
     float                               m_scroll_position_y;
     float                               m_content_max_y_scroll;
     bool                                m_can_drag_to_pan;
-    double                              m_previous_scroll_position;
+    float                               m_previous_scroll_position;
     bool                                m_meta_map_made;
     bool                                m_resize_activity;
     bool                                m_reorder_auto_scrolling;
@@ -230,6 +239,7 @@ private:
     float                               m_last_zoom;
     std::unordered_map<uint64_t, float> m_track_position_y;  // Track index to height
     float                               m_track_height_sum;
+    size_t                              m_hidden_track_count;
     std::shared_ptr<TimelineSelection>  m_timeline_selection;
     std::shared_ptr<MeasurementController> m_measurement;
     std::shared_ptr<AnnotationsManager> m_annotations;

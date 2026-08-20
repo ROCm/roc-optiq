@@ -1046,8 +1046,6 @@ SettingsManager::SerializeAssistantSettings(jt::Json& json)
         entry[JSON_KEY_SETTINGS_ASSISTANT_MODEL]        = provider.model;
         entry[JSON_KEY_SETTINGS_ASSISTANT_AUTH_HEADER]  = provider.auth_header;
         entry[JSON_KEY_SETTINGS_ASSISTANT_AUTH_PREFIX]  = provider.auth_prefix;
-        entry[JSON_KEY_SETTINGS_ASSISTANT_BEARER_PLACEHOLDER] =
-            provider.send_bearer_placeholder;
         entry[JSON_KEY_SETTINGS_ASSISTANT_LEGACY_MAX_TOKENS] =
             provider.use_legacy_max_tokens;
     }
@@ -1093,17 +1091,16 @@ SettingsManager::DeserializeAssistantSettings(jt::Json& json)
                 provider.auth_prefix =
                     entry[JSON_KEY_SETTINGS_ASSISTANT_AUTH_PREFIX].getString();
             }
-            if(entry[JSON_KEY_SETTINGS_ASSISTANT_BEARER_PLACEHOLDER].isBool())
-            {
-                provider.send_bearer_placeholder =
-                    entry[JSON_KEY_SETTINGS_ASSISTANT_BEARER_PLACEHOLDER].getBool();
-            }
             if(entry[JSON_KEY_SETTINGS_ASSISTANT_LEGACY_MAX_TOKENS].isBool())
             {
                 provider.use_legacy_max_tokens =
                     entry[JSON_KEY_SETTINGS_ASSISTANT_LEGACY_MAX_TOKENS].getBool();
             }
             m_usersettings.assistant.providers.push_back(provider);
+        }
+        for(AssistantProvider& provider : m_usersettings.assistant.providers)
+        {
+            ApplyAssistantEndpointDefaults(provider);
         }
     }
     else if(as[JSON_KEY_SETTINGS_ASSISTANT_ENDPOINT_URL].isString())
@@ -1118,9 +1115,7 @@ SettingsManager::DeserializeAssistantSettings(jt::Json& json)
         {
             provider.model = as[JSON_KEY_SETTINGS_ASSISTANT_MODEL].getString();
         }
-        provider.auth_header             = ASSISTANT_SUBSCRIPTION_KEY_HEADER;
-        provider.auth_prefix.clear();
-        provider.send_bearer_placeholder = true;
+        ApplyAssistantEndpointDefaults(provider);
         m_usersettings.assistant.providers.clear();
         m_usersettings.assistant.providers.push_back(provider);
     }

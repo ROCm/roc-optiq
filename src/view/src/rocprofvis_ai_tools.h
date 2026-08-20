@@ -75,9 +75,13 @@ struct AssistantToolStartResult
     // Ask the panel to draw the timeline activity strip under this result.
     bool                  chart          = false;
     uint64_t              chart_track_id = INVALID_UINT64_INDEX;
+    // When true, replace the stacked follow-up buttons under the transcript.
+    bool                     set_next_steps = false;
+    std::vector<std::string> next_steps;
 };
 
-// One track's row from the minimap, normalized to [0,1] within the row.
+// One track's row from the minimap, in [0,1]. The rows of a set share one
+// scale, so their brightness is comparable to each other.
 struct AssistantActivityRow
 {
     uint64_t            track_id = 0;

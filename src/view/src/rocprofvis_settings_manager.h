@@ -45,26 +45,65 @@ typedef struct LogViewerSettings
     bool visible;
 } LogViewerSettings;
 
-// One route to a chat endpoint. The request body is the same OpenAI shape for
-// every provider; only the endpoint, the model, and how the key is presented
-// differ, so those are the only things worth storing per route.
+// Chat endpoint. The settings panel asks for URL, model, and API key. Auth
+// is inferred from the URL: Azure OpenAI-style paths use a subscription key;
+// other OpenAI-compatible servers use a Bearer token.
+constexpr const char* ASSISTANT_DEFAULT_PROVIDER_NAME   = "Default";
+constexpr const char* ASSISTANT_DEFAULT_MODEL           = "gpt-5.6-luna";
+constexpr const char* ASSISTANT_SUBSCRIPTION_KEY_HEADER = "Ocp-Apim-Subscription-Key";
+constexpr const char* ASSISTANT_BEARER_HEADER           = "Authorization";
+constexpr const char* ASSISTANT_BEARER_PREFIX           = "Bearer ";
+
+// One saved endpoint. The settings UI edits URL and model; name is the
+// credential-store key. Auth fields are filled from the URL, not shown.
 typedef struct AssistantProvider
 {
-    std::string name;
+    std::string name = ASSISTANT_DEFAULT_PROVIDER_NAME;
     std::string endpoint_url;
-    std::string model;
-    // Header the key travels in, and what precedes it. OpenAI wants
-    // "Authorization" with a "Bearer " prefix; gateways usually want their own
-    // header with no prefix.
-    std::string auth_header = "Authorization";
-    std::string auth_prefix = "Bearer ";
-    // Some gateways require an Authorization header to exist but never read it,
-    // because the backend behind them rejects requests without one.
-    bool        send_bearer_placeholder = false;
-    // Newer OpenAI models require max_completion_tokens; most compatible
-    // servers still only accept max_tokens.
-    bool        use_legacy_max_tokens = false;
+    std::string model        = ASSISTANT_DEFAULT_MODEL;
+    std::string auth_header  = ASSISTANT_BEARER_HEADER;
+    std::string auth_prefix  = ASSISTANT_BEARER_PREFIX;
+    bool        use_legacy_max_tokens = true;
 } AssistantProvider;
+
+inline bool
+IsAzureStyleAssistantUrl(const std::string& url)
+{
+    return url.find("/azure") != std::string::npos ||
+           url.find("/engines/") != std::string::npos ||
+           url.find("/openai/deployments") != std::string::npos;
+}
+
+// Fills empty name/model and sets how the key is presented from the URL.
+inline void
+ApplyAssistantEndpointDefaults(AssistantProvider& provider)
+{
+    if(provider.name.empty())
+    {
+        provider.name = ASSISTANT_DEFAULT_PROVIDER_NAME;
+    }
+    if(provider.model.empty())
+    {
+        provider.model = ASSISTANT_DEFAULT_MODEL;
+    }
+    provider.use_legacy_max_tokens = true;
+    if(IsAzureStyleAssistantUrl(provider.endpoint_url))
+    {
+        provider.auth_header = ASSISTANT_SUBSCRIPTION_KEY_HEADER;
+        provider.auth_prefix.clear();
+        return;
+    }
+    provider.auth_header = ASSISTANT_BEARER_HEADER;
+    provider.auth_prefix = ASSISTANT_BEARER_PREFIX;
+}
+
+inline AssistantProvider
+MakeDefaultAssistantProvider()
+{
+    AssistantProvider provider;
+    ApplyAssistantEndpointDefaults(provider);
+    return provider;
+}
 
 typedef struct AssistantSettings
 {
@@ -297,17 +336,10 @@ constexpr const char* JSON_KEY_SETTINGS_ASSISTANT_ACTIVE       = "active";
 constexpr const char* JSON_KEY_SETTINGS_ASSISTANT_NAME         = "name";
 constexpr const char* JSON_KEY_SETTINGS_ASSISTANT_AUTH_HEADER  = "auth_header";
 constexpr const char* JSON_KEY_SETTINGS_ASSISTANT_AUTH_PREFIX  = "auth_prefix";
-constexpr const char* JSON_KEY_SETTINGS_ASSISTANT_BEARER_PLACEHOLDER =
-    "send_bearer_placeholder";
 constexpr const char* JSON_KEY_SETTINGS_ASSISTANT_LEGACY_MAX_TOKENS =
     "use_legacy_max_tokens";
 // OS credential-store key for the assistant API token. Never written to JSON.
-// Each provider gets its own entry below this prefix so switching routes does
-// not overwrite the key for the previous one.
 constexpr const char* ASSISTANT_TOKEN_SECRET_KEY = "assistant-api-token";
-constexpr const char* ASSISTANT_DEFAULT_PROVIDER_NAME = "Default";
-// Wire-protocol header name used by API-management gateways, not a credential.
-constexpr const char* ASSISTANT_SUBSCRIPTION_KEY_HEADER = "Ocp-Apim-Subscription-Key";
 
 constexpr const char* JSON_KEY_SETTINGS_CATEGORY_HOTKEYS = "hotkeys";
 constexpr const char* JSON_KEY_SETTINGS_CATEGORY_PROFILER = "profiler";

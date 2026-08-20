@@ -52,7 +52,7 @@ When humans and `CODING.md` disagree with this file, `CODING.md` wins.
 9. Trace View Internals (System Profiler UI)
 10. Compute View Internals (Compute Profiler UI)
 11. UI Models (`src/view/src/model/`)
-12. Cross-cutting Services (Events, Monitoring, Settings, Logging, Persistence)
+12. Cross-cutting Services (Events, Monitoring, Settings, Logging, Persistence, Ask Optiq)
 13. Remote / SSH and Profiler Launch UI
 14. Data Flow: Requests, Remote Operations, and Profiler Runs
 15. Coding Conventions in this Repo
@@ -1710,6 +1710,89 @@ Use these instead of writing your own.
   glyph. Adding a new icon requires updating both files and the
   ranges array.
 
+### Ask Optiq assistant (`rocprofvis_ai_*.{h,cpp}`)
+
+An in-app LLM analyst that reads the open trace through the normal
+view APIs and drives the UI the way a user would. Four files, layered:
+
+- `rocprofvis_ai_client.{h,cpp}` - `AssistantChatCall`. One POST to an
+  OpenAI-compatible endpoint over cpp-httplib, plus the reply parser
+  (including a "harmony" inline tool-call fallback). Knows
+  nothing about traces.
+- `rocprofvis_ai_tools.{h,cpp}` - the tools the model may call:
+  `StartAssistantTool` dispatches by name and returns either a finished
+  result or a set of `DataProvider` request ids for the panel to poll;
+  `FinishAssistantFetch` formats the rows once they land.
+  `BuildAssistantToolsJson` publishes the schema. Reads go through
+  `DataProvider` and the view-side models only - never SQLite, never
+  `src/model/`. `offer_next_steps` is a UI side-effect rather than a
+  read: it fills the stacked follow-up buttons under the chat.
+  Unprompted UI mutation is only `goto` (zoom and select events).
+  Notes, bookmarks, measure pins, panels, tabs, flow arrows, and
+  reset_view wait until the user asked.
+- `rocprofvis_ai_actions.{h,cpp}` - `OptiqActions`, the only place that
+  mutates the UI. Every method reproduces one real interaction (a
+  click, a drag, a menu item) including the event traffic the rest of
+  the app listens for. **Add a capability here, as one method, rather
+  than wiring widgets from inside a tool.**
+- `rocprofvis_ai_assistant.{h,cpp}` - `AssistantPanel`, a lazy
+  singleton like `LogViewer`. Owns the transcript, the docked column,
+  and the turn loop. The composer shows **Explain this view** on an
+  empty chat, then replaces it with up to three stacked next-step
+  buttons from `offer_next_steps`. Clicking a step sends that text as
+  the next user message.
+
+Integration points:
+
+- `AppWindow` destroys it (`AssistantPanel::DestroyInstance()`), calls
+  `Update()` once a frame, reserves `DockedWidth()` on the right of the
+  main view, and renders it with `RenderDocked()`. The View menu binds
+  `VisiblePtr()`; `TraceView` and `ComputeView` toolbars call
+  `RenderToolbarButton()`.
+- `TraceView`, `AnalysisView`, and `ComputeView` expose the plain
+  accessors `OptiqActions` needs (`ZoomToRange`, `SelectAnalysisTab`,
+  `ListBookmarks`, `GetComputeSelection`, and friends). Reuse those
+  rather than reaching into their members.
+
+Rules that are easy to get wrong here:
+
+- **A tool call and the written answer never arrive together.** When
+  the client finds an inline harmony call it drops the prose, because
+  what surrounds the call is the model's commentary on it rather than
+  an answer. So every tool - including UI-only ones like
+  `offer_next_steps` - goes through `BeginToolQueue` and answers the
+  model on the next round. A code path that consumes a tool call
+  without queueing it ends the turn with an empty transcript.
+- **Tool rounds and the answer are separate HTTP calls.** When the
+  model stops calling tools, `BeginFinalAnswer` discards that draft and
+  spends one more round with tools off, which is the only prose the
+  user reads.
+- **The settings page is URL, model, and API key.** There is no
+  shipped endpoint URL. The default model is `ASSISTANT_DEFAULT_MODEL`
+  (`gpt-5.6-luna`). Auth is inferred from the URL: Azure OpenAI-style
+  paths (`/azure`, `/engines/`, `/openai/deployments`) send
+  `Ocp-Apim-Subscription-Key` and `max_tokens`; anything else sends
+  `Authorization: Bearer` and `max_tokens`. `/azure` posts to
+  `/azure/engines/<Model>/chat/completions`; `/openai` posts to
+  `/openai/deployments/<Model>/chat/completions` with `apiVersion`.
+  Other bases only get `/chat/completions` appended. The client omits
+  `model` from the body when the path already names a deployment.
+- **Tools only ever run from `Update()`.** They toggle panel
+  visibility and rebuild layout, so running them from `Render()` would
+  mutate widgets halfway through the frame that draws them.
+- **HTTP runs on a worker via `std::async`, and must stay cancellable.**
+  `AssistantChatCall::Cancel()` closes the socket; `CancelPendingRequest()`
+  is what lets the panel be destroyed without blocking on a
+  two-minute read timeout.
+- **The tool context is rebuilt every call** (`MakeToolContext()`) from
+  `AppWindow::GetCurrentProject()`, so it never holds a dead provider.
+  The flip side is that the trace in front can change mid-turn, which
+  is what `m_turn_project_id` detects.
+- **The API key lives in `SecretStore`, never in settings JSON and
+  never in a log line.** `AssistantProvider` is still the saved
+  record in `UserSettings::assistant`; the extra auth fields are
+  filled in, not shown in `SettingsPanel`.
+
 ## 13. Remote / SSH and Profiler Launch UI
 
 These optional UI slices are separate from trace-project tabs until a
@@ -2403,6 +2486,22 @@ For fast lookup. Each entry: class -> file -> one-line role.
 - `ProfilesDocument` -> `rocprofvis_profiles_document.h` -> Shared
   `profiles.json` owner.
 - `JsonUtils` -> `rocprofvis_json_utils.h` -> Typed JSON/file helpers.
+
+### Ask Optiq assistant
+
+- `AssistantPanel` -> `rocprofvis_ai_assistant.h` -> Docked chat panel
+  and turn loop.
+- `OptiqActions`, `OptiqPanel` -> `rocprofvis_ai_actions.h` -> The only
+  code that mutates the UI on the assistant's behalf.
+- `AssistantToolContext`, `AssistantFetchState`,
+  `AssistantToolStartResult`, `StartAssistantTool`,
+  `FinishAssistantFetch`, `BuildAssistantToolsJson`,
+  `BuildAssistantBriefing` -> `rocprofvis_ai_tools.h`.
+- `AssistantChatCall`, `AssistantChatRequest`, `AssistantChatResult`,
+  `AssistantMessage`, `AssistantToolCall` -> `rocprofvis_ai_client.h`.
+- `AssistantSettings`, `AssistantProvider` ->
+  `rocprofvis_settings_manager.h` -> Saved URL and model; the token
+  itself lives in `SecretStore`.
 
 ### Events / pubsub
 

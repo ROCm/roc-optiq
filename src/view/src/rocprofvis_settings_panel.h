@@ -40,7 +40,7 @@ private:
     void ResetUnitOptions();
     void ResetHotkeySettings();
     void ResetAssistantOptions();
-    // Name of the route the dialog is editing, used to key its stored API key.
+    // Name of the saved endpoint, used to key its stored API key.
     std::string ActiveAssistantProviderName() const;
     void StealChord(HotkeyActionId from, ImGuiKeyChord chord);
 

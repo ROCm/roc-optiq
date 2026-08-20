@@ -58,7 +58,9 @@ constexpr size_t   ASSISTANT_MAX_EVENT_ARGS   = 40;
 constexpr size_t   ASSISTANT_MAX_SEARCH_TERMS = 8;
 constexpr size_t   ASSISTANT_OVERVIEW_BINS    = 32;
 constexpr size_t   ASSISTANT_OVERVIEW_TRACKS  = 12;
-constexpr size_t   ASSISTANT_MAX_HIGHLIGHTS   = 12;
+constexpr size_t   ASSISTANT_MAX_HIGHLIGHTS      = 12;
+constexpr size_t   ASSISTANT_MAX_NEXT_STEPS      = 3;
+constexpr size_t   ASSISTANT_MAX_NEXT_STEP_CHARS = 80;
 constexpr double   ASSISTANT_OVERVIEW_SCALE   = 100.0;
 constexpr uint64_t ASSISTANT_DURATION_COLUMN  = 2;
 
@@ -113,6 +115,38 @@ struct TopEventsSpec
     rocprofvis_dm_event_operation_t    op;
 };
 
+struct AssistantToolLabel
+{
+    const char* name;
+    const char* status;
+};
+
+// Every tool the model can call, with the line the panel shows while it runs.
+// Keeping them in one list is what stops the status text and the "unknown tool"
+// reply from drifting away from what BuildAssistantToolsJson registers.
+const AssistantToolLabel ASSISTANT_TOOL_LABELS[] = {
+    { "trace_overview", "Reading the timeline overview..." },
+    { "get_summary", "Loading summary..." },
+    { "top_events", "Querying top events..." },
+    { "kernel_instances", "Loading kernel dispatches..." },
+    { "kernel_metrics", "Loading kernel metrics..." },
+    { "list_tracks", "Listing tracks..." },
+    { "search_events", "Searching the trace..." },
+    { "track_events", "Reading track events..." },
+    { "track_samples", "Reading counter samples..." },
+    { "event_details", "Loading event details..." },
+    { "track_statistics", "Computing track statistics..." },
+    { "goto", "Moving the view..." },
+    { "show_panel", "Opening a panel..." },
+    { "switch_tab", "Switching tabs..." },
+    { "flow_arrows", "Adjusting flow arrows..." },
+    { "annotate", "Leaving a note..." },
+    { "bookmark", "Working with bookmarks..." },
+    { "measure", "Measuring..." },
+    { "reset_view", "Resetting the view..." },
+    { "offer_next_steps", "Offering next steps..." },
+};
+
 const TopEventsSpec k_top_event_specs[] = {
     { "dispatch", kRPVControllerTableTypeDispatchEvents,
       TableType::kAnalysisTopDispatchEventsTable,
@@ -145,6 +179,7 @@ Actions(const AssistantToolContext& context)
                         context.compute_selection, context.trace_view);
 }
 
+// Lowercases a copy, for the case-insensitive matching the tools do on names.
 std::string
 ToLowerCopy(std::string value)
 {
@@ -155,18 +190,40 @@ ToLowerCopy(std::string value)
     return value;
 }
 
+// Strips leading and trailing whitespace from a follow-up the model offered.
+std::string
+TrimCopy(std::string value)
+{
+    size_t start = 0;
+    while(start < value.size() &&
+          std::isspace(static_cast<unsigned char>(value[start])) != 0)
+    {
+        ++start;
+    }
+    size_t end = value.size();
+    while(end > start &&
+          std::isspace(static_cast<unsigned char>(value[end - 1])) != 0)
+    {
+        --end;
+    }
+    return value.substr(start, end - start);
+}
+
+// Reports whether a column name is one of the model's internal "__" names.
 bool
 NameLooksInternal(const std::string& name)
 {
     return name.size() >= 2 && name[0] == '_' && name[1] == '_';
 }
 
+// Keeps the internal ids the model must pass back to goto or event_details.
 bool
 KeepInternalColumn(const std::string& name)
 {
     return name == "__uuid" || name == "__trackId" || name == "__streamTrackId";
 }
 
+// Clamps a requested row count so one tool call cannot ask for the world.
 size_t
 ClampRowLimit(int32_t requested)
 {
@@ -177,6 +234,7 @@ ClampRowLimit(int32_t requested)
     return std::min(static_cast<size_t>(requested), ASSISTANT_MAX_ROW_LIMIT);
 }
 
+// Formats a percentage to one decimal place, the way the UI shows it.
 std::string
 FormatPercent(float value)
 {
@@ -185,6 +243,7 @@ FormatPercent(float value)
     return std::string(buffer);
 }
 
+// Writes the GPU utilization lines and the top-kernel list of a summary.
 void
 AppendGpuMetrics(std::ostringstream& out, const SummaryInfo::GPUMetrics& gpu)
 {
@@ -213,6 +272,7 @@ AppendGpuMetrics(std::ostringstream& out, const SummaryInfo::GPUMetrics& gpu)
     }
 }
 
+// Caps a tool result so one big table cannot fill the model's context.
 std::string
 TrimResult(std::string text)
 {
@@ -224,31 +284,29 @@ TrimResult(std::string text)
     return text;
 }
 
+// Reads a tool call's arguments. Sets ok_out to false on anything that is not a
+// JSON object, so the caller can say so rather than reporting every field as
+// missing and leaving the model to guess why.
 jt::Json
-ParseArgsObject(const std::string& arguments_json)
+ParseArgsObject(const std::string& arguments_json, bool& ok_out)
 {
-    if(arguments_json.empty())
-    {
-        jt::Json empty;
-        empty.setObject();
-        return empty;
-    }
-    std::pair<jt::Json::Status, jt::Json> parsed = jt::Json::parse(arguments_json);
-    if(parsed.first != jt::Json::success)
-    {
-        jt::Json empty;
-        empty.setObject();
-        return empty;
-    }
-    if(parsed.second.isObject())
-    {
-        return parsed.second;
-    }
     jt::Json empty;
     empty.setObject();
-    return empty;
+    if(arguments_json.empty())
+    {
+        return empty;
+    }
+
+    std::pair<jt::Json::Status, jt::Json> parsed = jt::Json::parse(arguments_json);
+    if(parsed.first != jt::Json::success || !parsed.second.isObject())
+    {
+        ok_out = false;
+        return empty;
+    }
+    return parsed.second;
 }
 
+// Reads an unsigned id from JSON, however the model chose to encode it.
 uint64_t
 JsonU64(const jt::Json& json, const std::string& key, uint64_t default_value)
 {
@@ -280,6 +338,7 @@ JsonU64(const jt::Json& json, const std::string& key, uint64_t default_value)
     return default_value;
 }
 
+// Maps a category name, plus the synonyms the model likes, to its table spec.
 const TopEventsSpec*
 FindTopEventsSpec(const std::string& category)
 {
@@ -316,6 +375,7 @@ FindTopEventsSpec(const std::string& category)
     return nullptr;
 }
 
+// Yields the selected time range, or the whole trace if nothing is selected.
 void
 SelectedOrFullTimeRange(const AssistantToolContext& context, double& start_ns,
                         double& end_ns)
@@ -330,6 +390,7 @@ SelectedOrFullTimeRange(const AssistantToolContext& context, double& start_ns,
     }
 }
 
+// Prefers the selected tracks that carry an operation, else every such track.
 std::vector<uint64_t>
 TracksForOperation(const AssistantToolContext&     context,
                    rocprofvis_dm_event_operation_t op)
@@ -386,6 +447,7 @@ TracksForOperation(const AssistantToolContext&     context,
     return matching;
 }
 
+// Lists the tracks of one kind, for a tool the model called without track ids.
 std::vector<uint64_t>
 TracksOfType(const AssistantToolContext&        context,
              rocprofvis_controller_track_type_t wanted)
@@ -408,6 +470,7 @@ TracksOfType(const AssistantToolContext&        context,
     return tracks;
 }
 
+// Drops named tracks of the wrong kind, so counter and event reads stay apart.
 std::vector<uint64_t>
 KeepTracksOfType(const AssistantToolContext& context, const std::vector<uint64_t>& tracks,
                  rocprofvis_controller_track_type_t wanted)
@@ -426,6 +489,7 @@ KeepTracksOfType(const AssistantToolContext& context, const std::vector<uint64_t
     return kept;
 }
 
+// Reports whether a column name is one a tool argument is allowed to name.
 bool
 IsAllowedQueryColumn(const std::string& name)
 {
@@ -439,6 +503,7 @@ IsAllowedQueryColumn(const std::string& name)
     return false;
 }
 
+// Lists the allowed columns, so a rejection tells the model what to use.
 std::string
 AllowedQueryColumnList()
 {
@@ -456,6 +521,7 @@ AllowedQueryColumnList()
     return out.str();
 }
 
+// Looks up a filter operator, so only known spellings reach the query.
 const QueryOperator*
 FindQueryOperator(const std::string& key)
 {
@@ -492,6 +558,7 @@ QuoteSqlLiteral(const std::string& value)
     return quoted;
 }
 
+// Prints a double at full precision so a filter value survives the trip.
 std::string
 FormatNumberLiteral(double value)
 {
@@ -609,6 +676,7 @@ GroupByFromArgs(const jt::Json& args, std::string& error_out)
     return group;
 }
 
+// Turns a sort_by column name into its index in the table's own header.
 uint64_t
 ResolveSortColumn(const TablesModel& tables, TableType type, const std::string& name,
                   uint64_t fallback)
@@ -629,6 +697,7 @@ ResolveSortColumn(const TablesModel& tables, TableType type, const std::string& 
     return fallback;
 }
 
+// Reads asc/desc, keeping each tool's own default when the model omits it.
 rocprofvis_controller_sort_order_t
 SortOrderFromArgs(const jt::Json& args, rocprofvis_controller_sort_order_t fallback)
 {
@@ -725,6 +794,7 @@ TracksFromArgs(const AssistantToolContext& context, const jt::Json& args,
     return tracks;
 }
 
+// Renders a fetched table as named-value rows, hiding the internal columns.
 std::string
 FormatTableSnapshot(const TablesModel& tables, TableType type, size_t limit)
 {
@@ -772,6 +842,7 @@ FormatTableSnapshot(const TablesModel& tables, TableType type, size_t limit)
     return TrimResult(out.str());
 }
 
+// Names a track type for the model, using the same words the UI does.
 const char*
 TrackTypeName(TrackInfo::TrackType type)
 {
@@ -786,6 +857,7 @@ TrackTypeName(TrackInfo::TrackType type)
     }
 }
 
+// Renders one event's arguments, flow links, and call stack as text.
 std::string
 FormatEventDetails(const AssistantToolContext& context, uint64_t event_id)
 {
@@ -945,6 +1017,7 @@ Downsample(const std::vector<double>& source, size_t bin_count)
     return profile;
 }
 
+// Writes a profile as small integers scaled to its own peak.
 void
 AppendBinRow(std::ostringstream& out, const OverviewProfile& profile)
 {
@@ -959,6 +1032,7 @@ AppendBinRow(std::ostringstream& out, const OverviewProfile& profile)
     out << "\n";
 }
 
+// Writes the nanosecond window one bin covers, so the model can cite it.
 void
 AppendBinWindow(std::ostringstream& out, const char* label, size_t bin, size_t bin_count,
                 double start_ns, double span_ns)
@@ -999,6 +1073,7 @@ CombinedEventRow(const AssistantToolContext& context)
     return combined;
 }
 
+// Renders the minimap as an activity profile plus the busiest tracks.
 std::string
 FormatTraceOverview(const AssistantToolContext& context, size_t bin_count,
                     uint64_t single_track)
@@ -1131,6 +1206,7 @@ FormatTraceOverview(const AssistantToolContext& context, size_t bin_count,
     return TrimResult(out.str());
 }
 
+// Renders the statistics the analysis model computed for one track.
 std::string
 FormatTrackStatistics(const AssistantToolContext& context, uint64_t track_id)
 {
@@ -1159,6 +1235,7 @@ FormatTrackStatistics(const AssistantToolContext& context, uint64_t track_id)
     return out.str();
 }
 
+// Renders a system trace's GPU summary, with a nudge when it has no kernels.
 std::string
 FormatSystemSummary(const AssistantToolContext& context)
 {
@@ -1173,6 +1250,7 @@ FormatSystemSummary(const AssistantToolContext& context)
     return out.str();
 }
 
+// Renders a compute workload's kernels, ranked by total duration.
 std::string
 FormatComputeKernels(const AssistantToolContext& context, size_t limit)
 {
@@ -1228,6 +1306,7 @@ FormatComputeKernels(const AssistantToolContext& context, size_t limit)
     return out.str();
 }
 
+// Finds a kernel by id, then exact name, then a case-insensitive substring.
 const KernelInfo*
 FindComputeKernel(const WorkloadInfo& workload, const std::string& name, uint32_t id)
 {
@@ -1265,6 +1344,7 @@ FindComputeKernel(const WorkloadInfo& workload, const std::string& name, uint32_
     return nullptr;
 }
 
+// Appends one operation name to a comma-separated list, if the track has it.
 void
 AppendOpName(std::ostringstream& out, bool& first, rocprofvis_dm_event_operation_t op,
              const TrackInfo& track)
@@ -1289,6 +1369,7 @@ AppendOpName(std::ostringstream& out, bool& first, rocprofvis_dm_event_operation
     }
 }
 
+// Builds the result of a tool that finished without waiting on a fetch.
 AssistantToolStartResult
 DoneResult(const std::string& content, const std::string& status)
 {
@@ -1298,6 +1379,50 @@ DoneResult(const std::string& content, const std::string& status)
     return result;
 }
 
+// Reads the stacked follow-up buttons out of offer_next_steps arguments.
+AssistantToolStartResult
+OfferNextStepsResult(const jt::Json& args)
+{
+    jt::Json& mutable_args = const_cast<jt::Json&>(args);
+    if(!mutable_args.contains("steps") || !mutable_args["steps"].isArray())
+    {
+        return DoneResult("offer_next_steps needs a steps array of 1 to 3 strings.",
+                          "Missing steps");
+    }
+
+    AssistantToolStartResult result =
+        DoneResult("Offered next steps under the chat.", "Offered next steps");
+    result.set_next_steps = true;
+    for(jt::Json& entry : mutable_args["steps"].getArray())
+    {
+        if(!entry.isString())
+        {
+            continue;
+        }
+        std::string step = TrimCopy(entry.getString());
+        if(step.empty())
+        {
+            continue;
+        }
+        if(step.size() > ASSISTANT_MAX_NEXT_STEP_CHARS)
+        {
+            step.resize(ASSISTANT_MAX_NEXT_STEP_CHARS);
+        }
+        result.next_steps.push_back(step);
+        if(result.next_steps.size() >= ASSISTANT_MAX_NEXT_STEPS)
+        {
+            break;
+        }
+    }
+    if(result.next_steps.empty())
+    {
+        return DoneResult("offer_next_steps needs at least one non-empty step.",
+                          "Missing steps");
+    }
+    return result;
+}
+
+// Builds the state FinishAssistantFetch needs to format a table once it lands.
 AssistantFetchState
 TableFetch(AssistantFetchKind kind, TableType table_type, size_t row_limit)
 {
@@ -1308,6 +1433,7 @@ TableFetch(AssistantFetchKind kind, TableType table_type, size_t row_limit)
     return fetch;
 }
 
+// Builds the result of a tool that is waiting on a set of requests to land.
 AssistantToolStartResult
 PendingResult(const std::vector<uint64_t>& request_ids, const AssistantFetchState& fetch,
               const std::string& status, bool started_fetch)
@@ -1321,6 +1447,7 @@ PendingResult(const std::vector<uint64_t>& request_ids, const AssistantFetchStat
     return result;
 }
 
+// Forwards the single-request case, which is what most tools have.
 AssistantToolStartResult
 PendingResult(uint64_t request_id, const AssistantFetchState& fetch,
               const std::string& status, bool started_fetch)
@@ -1329,6 +1456,7 @@ PendingResult(uint64_t request_id, const AssistantFetchState& fetch,
                          started_fetch);
 }
 
+// Builds a JSON string array, for the enum of a tool parameter.
 jt::Json
 MakeStringEnum(const std::vector<const char*>& values)
 {
@@ -1340,6 +1468,7 @@ MakeStringEnum(const std::vector<const char*>& values)
     return array;
 }
 
+// Registers one tool in the schema array the model receives.
 void
 AddTool(jt::Json& tools, size_t index, const char* name, const char* description,
         jt::Json parameters)
@@ -1350,6 +1479,7 @@ AddTool(jt::Json& tools, size_t index, const char* name, const char* description
     tools[index]["function"]["parameters"]  = parameters;
 }
 
+// Starts an empty object schema, which every tool's parameters build on.
 jt::Json
 ObjectParams()
 {
@@ -1359,6 +1489,7 @@ ObjectParams()
     return params;
 }
 
+// Adds one typed, described property to a parameter schema.
 void
 AddParam(jt::Json& params, const char* name, const char* type, const char* description)
 {
@@ -1410,8 +1541,28 @@ AddQueryParams(jt::Json& params)
              "Optional column to aggregate rows by, e.g. name.");
 }
 
+// Every registered tool name, for telling the model when it invents one.
+std::string
+AssistantToolNameList()
+{
+    std::ostringstream out;
+    bool               first = true;
+    for(const AssistantToolLabel& label : ASSISTANT_TOOL_LABELS)
+    {
+        if(!first)
+        {
+            out << ", ";
+        }
+        first = false;
+        out << label.name;
+    }
+    return out.str();
+}
+
 }  // namespace
 
+// Builds the tool schema sent with every request. The descriptions here are
+// the only instructions the model gets about what each tool is for.
 jt::Json
 BuildAssistantToolsJson()
 {
@@ -1449,12 +1600,12 @@ BuildAssistantToolsJson()
             inst_params);
 
     jt::Json metrics_params = ObjectParams();
-    metrics_params["properties"]["kernel_name"]["type"]        = "string";
-    metrics_params["properties"]["kernel_name"]["description"] =
-        "Kernel name (compute traces) or summary kernel name (system traces).";
-    metrics_params["properties"]["metric_name"]["type"]        = "string";
-    metrics_params["properties"]["metric_name"]["description"] =
-        "Optional substring of a hardware metric to fetch on a compute trace.";
+    AddParam(metrics_params, "kernel_name", "string",
+             "Kernel name (compute traces) or summary kernel name (system traces).");
+    AddParam(metrics_params, "kernel_id", "integer",
+             "Kernel id from get_summary, instead of the name, on a compute trace.");
+    AddParam(metrics_params, "metric_name", "string",
+             "Optional substring of a hardware metric to fetch on a compute trace.");
     AddTool(tools, 3, "kernel_metrics",
             "Return duration/call stats for a kernel. On compute traces, can also "
             "fetch named hardware metrics. On system traces, returns summary stats.",
@@ -1467,22 +1618,18 @@ BuildAssistantToolsJson()
             tracks_params);
 
     jt::Json goto_params = ObjectParams();
-    goto_params["properties"]["start_ns"]["type"]        = "number";
-    goto_params["properties"]["start_ns"]["description"] =
-        "Range start in nanoseconds.";
-    goto_params["properties"]["end_ns"]["type"]        = "number";
-    goto_params["properties"]["end_ns"]["description"] = "Range end in nanoseconds.";
-    goto_params["properties"]["track_id"]["type"]        = "integer";
-    goto_params["properties"]["track_id"]["description"] =
-        "__trackId of the event. Pass it whenever you pass event_uuid; without it "
-        "the flow arrows cannot be drawn.";
-    goto_params["properties"]["event_uuid"]["type"]        = "integer";
-    goto_params["properties"]["event_uuid"]["description"] =
-        "__uuid of the event to select. Selecting it expands its flow arrows and "
-        "call stack, the same as clicking it.";
-    goto_params["properties"]["kernel_name"]["type"]        = "string";
-    goto_params["properties"]["kernel_name"]["description"] =
-        "On compute traces, select this kernel in the UI.";
+    AddParam(goto_params, "start_ns", "number", "Range start in nanoseconds.");
+    AddParam(goto_params, "end_ns", "number", "Range end in nanoseconds.");
+    AddParam(goto_params, "track_id", "integer",
+             "__trackId of the event. Pass it whenever you pass event_uuid; without "
+             "it the flow arrows cannot be drawn.");
+    AddParam(goto_params, "event_uuid", "integer",
+             "__uuid of the event to select. Selecting it expands its flow arrows "
+             "and call stack, the same as clicking it.");
+    AddParam(goto_params, "kernel_name", "string",
+             "On compute traces, select this kernel in the UI.");
+    AddParam(goto_params, "kernel_id", "integer",
+             "On compute traces, select this kernel id instead of the name.");
 
     jt::Json goto_event_item = ObjectParams();
     AddParam(goto_event_item, "track_id", "integer", "Track the event lives on.");
@@ -1499,10 +1646,10 @@ BuildAssistantToolsJson()
              "by hand.");
 
     AddTool(tools, 5, "goto",
-            "Point the UI at what you are talking about: move the timeline to a "
-            "range, highlight the specific events behind your claim, and expand the "
-            "first one's connecting arrows. Call this whenever you name a window or "
-            "an outlier, so the user sees exactly what you saw.",
+            "Point the UI at what you are talking about: zoom the timeline to a "
+            "range and select the events behind your claim. Call this on your own "
+            "whenever you name a window or an outlier. Do not use it to pin notes "
+            "or change other UI.",
             goto_params);
 
     jt::Json track_events_params = ObjectParams();
@@ -1603,9 +1750,8 @@ BuildAssistantToolsJson()
              "true to open, false to close. Defaults to true.");
     panel_params["required"][0] = "panel";
     AddTool(tools, 12, "show_panel",
-            "Open or close one of Optiq's panels for the user, the same as using "
-            "the View menu. Use it to put the right view in front of them, and to "
-            "hide anything they say is in the way.",
+            "Open or close one of Optiq's panels, the same as the View menu. Only "
+            "call this when the user asked you to show or hide that panel.",
             panel_params);
 
     jt::Json tab_params = ObjectParams();
@@ -1613,11 +1759,9 @@ BuildAssistantToolsJson()
              "Tab to switch to. Part of the name is enough. Omit to list every "
              "tab that is available.");
     AddTool(tools, 13, "switch_tab",
-            "Switch tabs. Covers both the open traces along the top and the "
-            "details panel's tabs at the bottom (Event Table, Sample Table, Event "
-            "Details, Track Details, Top Events, Annotations). Selecting a details "
-            "tab opens that panel if it is hidden. Call with no name to see what "
-            "is available.",
+            "Switch tabs among open traces or the details panel. Only call this "
+            "when the user asked you to change tabs. Call with no name to list "
+            "what is available.",
             tab_params);
 
     jt::Json flow_params = ObjectParams();
@@ -1629,8 +1773,8 @@ BuildAssistantToolsJson()
     flow_params["properties"]["style"]["enum"] = MakeStringEnum({ "fan", "chain" });
     AddTool(tools, 14, "flow_arrows",
             "Show, hide, or restyle the arrows that connect an event to the events "
-            "it launched or waited on. Pair it with goto when you are explaining a "
-            "launch or a synchronization delay.",
+            "it launched or waited on. Only call this when the user asked you to "
+            "change the arrows. Selecting an event with goto already expands them.",
             flow_params);
 
     jt::Json note_params = ObjectParams();
@@ -1645,9 +1789,8 @@ BuildAssistantToolsJson()
     note_params["required"][1] = "title";
     note_params["required"][2] = "text";
     AddTool(tools, 15, "annotate",
-            "Pin a sticky note on the timeline at a point in time. Notes are saved "
-            "with the project, so this is how you leave a finding behind for the "
-            "user or their teammates to come back to.",
+            "Pin a sticky note on the timeline. Notes are saved with the project. "
+            "Only call this when the user asked you to leave a note.",
             note_params);
 
     jt::Json bookmark_params = ObjectParams();
@@ -1657,9 +1800,8 @@ BuildAssistantToolsJson()
         MakeStringEnum({ "save", "goto", "remove", "list" });
     AddParam(bookmark_params, "slot", "integer", "Bookmark slot, 0 to 9.");
     AddTool(tools, 16, "bookmark",
-            "Save the current zoom and scroll position to a numbered slot, or jump "
-            "back to one, the same as the Bookmarks dropdown. Save a bookmark "
-            "before you take the user somewhere else so they can get back.",
+            "Save, jump to, remove, or list numbered zoom bookmarks. Only call "
+            "this when the user asked you to work with bookmarks.",
             bookmark_params);
 
     jt::Json measure_params = ObjectParams();
@@ -1669,19 +1811,31 @@ BuildAssistantToolsJson()
              "Set true to clear the measurement instead of taking one.");
     AddTool(tools, 17, "measure",
             "Drop the two measurement pins on a span so the toolbar shows its "
-            "duration, the same as the Measure tool. Use it when you are telling "
-            "the user how long something took, so they can see the span on screen.",
+            "duration. Only call this when the user asked you to measure a span.",
             measure_params);
 
     jt::Json reset_params = ObjectParams();
     AddTool(tools, 18, "reset_view",
-            "Zoom the timeline back out to the whole trace, the same as the Reset "
-            "View button.",
+            "Zoom the timeline back out to the whole trace. Only call this when "
+            "the user asked you to reset the view.",
             reset_params);
+
+    jt::Json next_params = ObjectParams();
+    AddParam(next_params, "steps", "array",
+             "Two or three short follow-ups the user can click, most useful first. "
+             "Each is a complete thing they would type, under 80 characters.");
+    next_params["properties"]["steps"]["items"]["type"] = "string";
+    next_params["required"][0] = "steps";
+    AddTool(tools, 19, "offer_next_steps",
+            "Puts stacked buttons under the chat for what to look at next. Call it "
+            "as the last tool of an investigation, then write your answer in the "
+            "response after it. Do not list those same options in the prose.",
+            next_params);
 
     return tools;
 }
 
+// Builds the short trace description the model sees before it asks anything.
 std::string
 BuildAssistantBriefing(const AssistantToolContext& context)
 {
@@ -1760,6 +1914,7 @@ BuildAssistantBriefing(const AssistantToolContext& context)
     return out.str();
 }
 
+// Returns one track's activity, or the whole trace's, normalized to its peak.
 std::vector<double>
 GetAssistantActivityBins(const AssistantToolContext& context, uint64_t track_id,
                          size_t bin_count)
@@ -1799,6 +1954,10 @@ GetAssistantActivityBins(const AssistantToolContext& context, uint64_t track_id,
     return bins;
 }
 
+// Returns the busiest tracks with their activity rows, for the panel's chart.
+// Every row is scaled against the busiest bin of the whole set rather than its
+// own, so a quiet track reads as quiet. Normalizing each row separately made
+// them all peak at full brightness, which drew five identical solid bars.
 std::vector<AssistantActivityRow>
 GetAssistantActivityRows(const AssistantToolContext& context, size_t bin_count,
                          size_t max_rows)
@@ -1810,9 +1969,10 @@ GetAssistantActivityRows(const AssistantToolContext& context, size_t bin_count,
     }
 
     const TimelineModel& timeline = context.data_provider->DataModel().GetTimeline();
+    const std::map<uint64_t, std::vector<double>>& minimap = timeline.GetMiniMap();
+
     std::vector<std::pair<double, uint64_t>> ranked;
-    for(const std::pair<const uint64_t, std::vector<double>>& row :
-        timeline.GetMiniMap())
+    for(const std::pair<const uint64_t, std::vector<double>>& row : minimap)
     {
         const TrackInfo* track = timeline.GetTrack(row.first);
         if(track == nullptr || track->track_type == kRPVControllerTrackTypeSamples)
@@ -1836,103 +1996,73 @@ GetAssistantActivityRows(const AssistantToolContext& context, size_t bin_count,
 
     const size_t count = std::min(ranked.size(), max_rows);
     rows.reserve(count);
+    double peak = 0.0;
     for(size_t i = 0; i < count; ++i)
     {
+        const std::map<uint64_t, std::vector<double>>::const_iterator source =
+            minimap.find(ranked[i].second);
+        if(source == minimap.end())
+        {
+            continue;
+        }
+
+        const OverviewProfile profile = Downsample(source->second, bin_count);
+        peak                          = std::max(peak, profile.peak);
+
         AssistantActivityRow entry;
         entry.track_id = ranked[i].second;
         entry.name = context.data_provider->DataModel().BuildTrackName(entry.track_id);
-        entry.bins = GetAssistantActivityBins(context, entry.track_id, bin_count);
+        entry.bins = profile.bins;
         rows.push_back(entry);
+    }
+
+    if(peak > 0.0)
+    {
+        for(AssistantActivityRow& row : rows)
+        {
+            for(double& value : row.bins)
+            {
+                value /= peak;
+            }
+        }
     }
     return rows;
 }
 
+// The line the panel shows under the transcript while a tool runs.
 std::string
 AssistantToolStatusLabel(const std::string& tool_name)
 {
-    if(tool_name == "get_summary")
+    for(const AssistantToolLabel& label : ASSISTANT_TOOL_LABELS)
     {
-        return "Loading summary...";
-    }
-    if(tool_name == "top_events")
-    {
-        return "Querying top events...";
-    }
-    if(tool_name == "kernel_instances")
-    {
-        return "Loading kernel dispatches...";
-    }
-    if(tool_name == "kernel_metrics")
-    {
-        return "Loading kernel metrics...";
-    }
-    if(tool_name == "list_tracks")
-    {
-        return "Listing tracks...";
-    }
-    if(tool_name == "goto")
-    {
-        return "Moving the view...";
-    }
-    if(tool_name == "track_events")
-    {
-        return "Reading track events...";
-    }
-    if(tool_name == "track_samples")
-    {
-        return "Reading counter samples...";
-    }
-    if(tool_name == "event_details")
-    {
-        return "Loading event details...";
-    }
-    if(tool_name == "track_statistics")
-    {
-        return "Computing track statistics...";
-    }
-    if(tool_name == "search_events")
-    {
-        return "Searching the trace...";
-    }
-    if(tool_name == "trace_overview")
-    {
-        return "Reading the timeline overview...";
-    }
-    if(tool_name == "show_panel")
-    {
-        return "Opening a panel...";
-    }
-    if(tool_name == "switch_tab")
-    {
-        return "Switching tabs...";
-    }
-    if(tool_name == "flow_arrows")
-    {
-        return "Adjusting flow arrows...";
-    }
-    if(tool_name == "annotate")
-    {
-        return "Leaving a note...";
-    }
-    if(tool_name == "bookmark")
-    {
-        return "Working with bookmarks...";
-    }
-    if(tool_name == "measure")
-    {
-        return "Measuring...";
-    }
-    if(tool_name == "reset_view")
-    {
-        return "Resetting the view...";
+        if(tool_name == label.name)
+        {
+            return label.status;
+        }
     }
     return "Using " + tool_name + "...";
 }
 
+// Dispatches one named tool call, returning either a finished result or a
+// pending fetch the panel polls until the rows land.
 AssistantToolStartResult
 StartAssistantTool(const AssistantToolContext& context, const std::string& tool_name,
                    const std::string& arguments_json)
 {
+    // Next-step buttons are a UI side-effect, so they do not need an open trace.
+    if(tool_name == "offer_next_steps")
+    {
+        bool           args_ok = true;
+        const jt::Json args    = ParseArgsObject(arguments_json, args_ok);
+        if(!args_ok)
+        {
+            return DoneResult("Those arguments were not a JSON object, so none of them "
+                              "were read. Send arguments as one JSON object.",
+                              "Bad arguments");
+        }
+        return OfferNextStepsResult(args);
+    }
+
     if(context.data_provider == nullptr)
     {
         return DoneResult("No trace is open.", "No trace");
@@ -1943,7 +2073,14 @@ StartAssistantTool(const AssistantToolContext& context, const std::string& tool_
                           "Trace not ready");
     }
 
-    const jt::Json args = ParseArgsObject(arguments_json);
+    bool           args_ok = true;
+    const jt::Json args    = ParseArgsObject(arguments_json, args_ok);
+    if(!args_ok)
+    {
+        return DoneResult("Those arguments were not a JSON object, so none of them "
+                          "were read. Send arguments as one JSON object.",
+                          "Bad arguments");
+    }
 
     if(tool_name == "show_panel")
     {
@@ -3015,13 +3152,11 @@ StartAssistantTool(const AssistantToolContext& context, const std::string& tool_
                              queued);
     }
 
-    return DoneResult("Unknown tool. Use trace_overview, get_summary, top_events, "
-                      "kernel_instances, kernel_metrics, list_tracks, goto, "
-                      "track_events, track_samples, event_details, track_statistics, "
-                      "search_events, show_panel, switch_tab, or flow_arrows.",
+    return DoneResult("Unknown tool. Use one of: " + AssistantToolNameList() + ".",
                       "Unknown tool");
 }
 
+// Formats the rows of a fetch that has landed, by the kind of fetch it was.
 std::string
 FinishAssistantFetch(const AssistantToolContext& context,
                      const AssistantFetchState&  fetch)

@@ -19,16 +19,10 @@
 #include "spdlog/spdlog.h"
 
 #include <cctype>
-#include <cstdlib>
+#include <cstring>
 #include <string>
 #include <utility>
 #include <vector>
-
-#ifdef _WIN32
-#include <windows.h>
-#else
-#include <unistd.h>
-#endif
 
 namespace RocProfVis
 {
@@ -43,49 +37,140 @@ constexpr int    ASSISTANT_HTTP_TIMEOUT_SECONDS    = 120;
 constexpr int    ASSISTANT_MAX_COMPLETION_TOKENS   = 4096;
 constexpr size_t ASSISTANT_MAX_HARMONY_CALLS       = 4;
 constexpr int    ASSISTANT_FIRST_ERROR_STATUS      = 400;
+constexpr int    ASSISTANT_HTTP_NOT_FOUND          = 404;
 constexpr double ASSISTANT_TEMPERATURE             = 0.7;
 constexpr char   ASSISTANT_JSON_CONTENT_TYPE[]     = "application/json";
-// Some gateways require an Authorization header to be present but never read
-// it, because the server behind them rejects requests that omit one. The real
-// key travels in whichever header the provider names.
-constexpr char   ASSISTANT_BEARER_PLACEHOLDER[]    = "dummy";
 constexpr char   ASSISTANT_BAD_URL_ERROR[] =
     "The assistant URL is not a valid http(s) address.";
+constexpr char   ASSISTANT_CHAT_COMPLETIONS_SUFFIX[] = "/chat/completions";
+constexpr char   ASSISTANT_AZURE_OPENAI_API_VERSION[] = "2024-09-01-preview";
+constexpr char   ASSISTANT_MISSING_DEPLOYMENT_ERROR[] =
+    "This Azure URL names the deployment in the path. Put the deployment id in "
+    "the Model field.";
 
-std::string
-CurrentUserName()
+bool
+EndsWith(const std::string& value, const char* suffix)
 {
-#ifdef _WIN32
-    char  buffer[256];
-    DWORD size = static_cast<DWORD>(sizeof(buffer));
-    if(GetUserNameA(buffer, &size) == TRUE && buffer[0] != '\0')
-    {
-        return std::string(buffer);
-    }
-#else
-    const char* user = std::getenv("USER");
-    if(user != nullptr && user[0] != '\0')
-    {
-        return std::string(user);
-    }
-#endif
-    return "unknown";
+    const size_t n = std::strlen(suffix);
+    return value.size() >= n && value.compare(value.size() - n, n, suffix) == 0;
 }
 
-std::string
-ChatCompletionsUrl(std::string base_url)
+bool
+HasCompletionsSuffix(const std::string& url)
 {
-    const std::string suffix = "/chat/completions";
+    const size_t n = std::strlen(ASSISTANT_CHAT_COMPLETIONS_SUFFIX);
+    return url.size() >= n &&
+           url.compare(url.size() - n, n, ASSISTANT_CHAT_COMPLETIONS_SUFFIX) == 0;
+}
+
+void
+StripCompletionsSuffix(std::string& url)
+{
+    if(HasCompletionsSuffix(url))
+    {
+        url.resize(url.size() - std::strlen(ASSISTANT_CHAT_COMPLETIONS_SUFFIX));
+    }
+}
+
+// Azure's /openai deployments want apiVersion on the query when the user did
+// not already supply one. /azure/engines does not.
+void
+EnsureAzureOpenAiVersion(const std::string& path, std::string& query)
+{
+    if(!query.empty())
+    {
+        return;
+    }
+    if(path.find("/openai/deployments/") == std::string::npos)
+    {
+        return;
+    }
+    query  = "?apiVersion=";
+    query += ASSISTANT_AZURE_OPENAI_API_VERSION;
+}
+
+// Turns the configured base into the chat-completions URL. An Azure-style
+// query (?apiVersion=...) has to come off first so the path suffix is not
+// buried inside it.
+//
+// Ordinary OpenAI-compatible bases only need /chat/completions. Azure OpenAI
+// bases are different: /azure posts to /azure/engines/<deployment>/chat/completions,
+// and /openai posts to /openai/deployments/<deployment>/chat/completions. Empty
+// return means the path needs a deployment and none was given.
+std::string
+ChatCompletionsUrl(std::string base_url, const std::string& model)
+{
+    std::string  query;
+    const size_t query_start = base_url.find('?');
+    if(query_start != std::string::npos)
+    {
+        query = base_url.substr(query_start);
+        base_url.resize(query_start);
+    }
+
     while(!base_url.empty() && base_url.back() == '/')
     {
         base_url.pop_back();
     }
-    if(base_url.size() >= suffix.size() &&
-       base_url.compare(base_url.size() - suffix.size(), suffix.size(), suffix) == 0)
+
+    // A previous client appended /chat/completions onto /azure or /openai
+    // without inserting the deployment, which Azure answers with 404.
+    if(HasCompletionsSuffix(base_url))
     {
-        return base_url;
+        std::string without_suffix = base_url;
+        StripCompletionsSuffix(without_suffix);
+        if(EndsWith(without_suffix, "/azure") || EndsWith(without_suffix, "/openai") ||
+           EndsWith(without_suffix, "/azure/engines") ||
+           EndsWith(without_suffix, "/openai/deployments"))
+        {
+            base_url = without_suffix;
+        }
     }
-    return base_url + suffix;
+
+    if(!HasCompletionsSuffix(base_url))
+    {
+        const bool has_engines =
+            base_url.find("/engines/") != std::string::npos;
+        const bool has_deployments =
+            base_url.find("/deployments/") != std::string::npos;
+        const bool azure_base             = EndsWith(base_url, "/azure");
+        const bool openai_base            = EndsWith(base_url, "/openai");
+        const bool azure_engines_base     = EndsWith(base_url, "/azure/engines");
+        const bool openai_deployments_base = EndsWith(base_url, "/openai/deployments");
+        if(has_engines || has_deployments)
+        {
+            base_url += ASSISTANT_CHAT_COMPLETIONS_SUFFIX;
+        }
+        else if(azure_base || openai_base || azure_engines_base ||
+                openai_deployments_base)
+        {
+            if(model.empty())
+            {
+                return std::string();
+            }
+            if(azure_base)
+            {
+                base_url += "/engines/";
+            }
+            else if(openai_base)
+            {
+                base_url += "/deployments/";
+            }
+            else
+            {
+                base_url += "/";
+            }
+            base_url += model;
+            base_url += ASSISTANT_CHAT_COMPLETIONS_SUFFIX;
+        }
+        else
+        {
+            base_url += ASSISTANT_CHAT_COMPLETIONS_SUFFIX;
+        }
+    }
+
+    EnsureAzureOpenAiVersion(base_url, query);
+    return base_url + query;
 }
 
 // httplib::Client wants the origin ("https://host:port") and the path
@@ -93,7 +178,7 @@ ChatCompletionsUrl(std::string base_url)
 bool
 SplitUrl(const std::string& url, std::string& origin_out, std::string& path_out)
 {
-    const std::string separator = "://";
+    const std::string separator  = "://";
     const size_t      scheme_end = url.find(separator);
     if(scheme_end == std::string::npos)
     {
@@ -106,6 +191,7 @@ SplitUrl(const std::string& url, std::string& origin_out, std::string& path_out)
     return true;
 }
 
+// Reads one string field, or empty when it is missing or the wrong type.
 std::string
 JsonString(jt::Json& node, const char* key)
 {
@@ -201,9 +287,9 @@ ExtractJsonObject(const std::string& text, size_t from, std::string& object_out,
     return false;
 }
 
-// GPT-oss models answer in the "harmony" format, which names tools inline
-// instead of filling in tool_calls, e.g. "to=functions.get_summary {...}". A
-// single reply can name several, so walk the whole string.
+// Some models answer in the "harmony" format, which names tools inline instead
+// of filling in tool_calls, e.g. "to=functions.get_summary {...}". A single
+// reply can name several, so walk the whole string.
 void
 ParseHarmonyToolCalls(const std::string& content, std::vector<AssistantToolCall>& calls)
 {
@@ -264,6 +350,7 @@ ParseHarmonyToolCalls(const std::string& content, std::vector<AssistantToolCall>
     }
 }
 
+// Reads the standard tool_calls array off an assistant message.
 void
 ParseToolCalls(jt::Json& message, std::vector<AssistantToolCall>& calls)
 {
@@ -307,6 +394,7 @@ ParseToolCalls(jt::Json& message, std::vector<AssistantToolCall>& calls)
     }
 }
 
+// Pulls the provider's error message out of a response body, if it is one.
 std::string
 ErrorText(jt::Json& root)
 {
@@ -328,6 +416,7 @@ ErrorText(jt::Json& root)
     return std::string();
 }
 
+// Turns a chat-completions body into a reply, tool calls, or an error.
 void
 ParseChatCompletion(jt::Json& root, AssistantChatResult& result)
 {
@@ -366,6 +455,8 @@ ParseChatCompletion(jt::Json& root, AssistantChatResult& result)
             ParseHarmonyToolCalls(result.reply, result.tool_calls);
             if(!result.tool_calls.empty())
             {
+                // What is left is the model's own commentary on the call it is
+                // about to make, not an answer.
                 result.reply.clear();
             }
         }
@@ -384,6 +475,7 @@ ParseChatCompletion(jt::Json& root, AssistantChatResult& result)
     }
 }
 
+// Serializes one conversation message the way the chat API expects it.
 jt::Json
 MessageToJson(const AssistantMessage& message)
 {
@@ -413,11 +505,18 @@ MessageToJson(const AssistantMessage& message)
     return json;
 }
 
+// Builds the whole request body: model, sampling, conversation, and tool schema.
 jt::Json
-BuildRequestBody(const AssistantChatRequest& request)
+BuildRequestBody(const AssistantChatRequest& request, const std::string& completions_url)
 {
     jt::Json body;
-    if(!request.model.empty())
+    // Azure names the deployment in /engines/ or /deployments/, and sending a
+    // model beside it is ignored at best and a 400 at worst, so let the path
+    // win rather than making the user empty the field to match the endpoint.
+    const bool deployment_in_path =
+        completions_url.find("/deployments/") != std::string::npos ||
+        completions_url.find("/engines/") != std::string::npos;
+    if(!request.model.empty() && !deployment_in_path)
     {
         body["model"] = request.model;
     }
@@ -437,6 +536,7 @@ BuildRequestBody(const AssistantChatRequest& request)
     return body;
 }
 
+// Describes a response that arrived but was not usable JSON.
 std::string
 ResponseError(int status, const std::string& body)
 {
@@ -453,8 +553,9 @@ ResponseError(int status, const std::string& body)
 
 }  // namespace
 
+// Posts the conversation and blocks until the endpoint answers.
 AssistantChatResult
-SendAssistantChat(const AssistantChatRequest& request)
+AssistantChatCall::Send(const AssistantChatRequest& request)
 {
     AssistantChatResult result;
 
@@ -469,9 +570,15 @@ SendAssistantChat(const AssistantChatRequest& request)
         return result;
     }
 
-    const std::string url = ChatCompletionsUrl(request.endpoint_url);
-    std::string       origin;
-    std::string       path;
+    const std::string url = ChatCompletionsUrl(request.endpoint_url, request.model);
+    if(url.empty())
+    {
+        result.error = ASSISTANT_MISSING_DEPLOYMENT_ERROR;
+        return result;
+    }
+
+    std::string origin;
+    std::string path;
     if(!SplitUrl(url, origin, path))
     {
         result.error = ASSISTANT_BAD_URL_ERROR;
@@ -490,22 +597,30 @@ SendAssistantChat(const AssistantChatRequest& request)
     client.set_follow_location(true);
 
     httplib::Headers headers;
-    headers.emplace("user", CurrentUserName());
-    if(request.send_bearer_placeholder && request.auth_header != "Authorization")
-    {
-        headers.emplace("Authorization",
-                        std::string("Bearer ") + ASSISTANT_BEARER_PLACEHOLDER);
-    }
     if(!request.api_token.empty() && !request.auth_header.empty())
     {
         headers.emplace(request.auth_header, request.auth_prefix + request.api_token);
     }
 
-    const std::string     body = BuildRequestBody(request).toString();
+    const std::string body = BuildRequestBody(request, url).toString();
+    spdlog::info("Assistant POST {}", url);
+    if(!Adopt(&client))
+    {
+        result.cancelled = true;
+        return result;
+    }
     const httplib::Result response =
         client.Post(path, headers, body, ASSISTANT_JSON_CONTENT_TYPE);
+    Release();
+
     if(!response)
     {
+        // Cancel() closed this socket on purpose, so the failure is expected.
+        if(Cancelled())
+        {
+            result.cancelled = true;
+            return result;
+        }
         result.error =
             "HTTPS request failed (" + httplib::to_string(response.error()) + ").";
         spdlog::warn("Assistant request to {} failed: {}", url,
@@ -517,14 +632,67 @@ SendAssistantChat(const AssistantChatRequest& request)
     if(parsed.first != jt::Json::success)
     {
         result.error = ResponseError(response->status, response->body);
+        if(response->status == ASSISTANT_HTTP_NOT_FOUND)
+        {
+            result.error.append(" Requested ");
+            result.error.append(url);
+            result.error.append(".");
+        }
         spdlog::warn("Assistant response was not JSON (HTTP {}, {} bytes)",
                      response->status, response->body.size());
         return result;
     }
 
     ParseChatCompletion(parsed.second, result);
+    if(!result.error.empty() && response->status == ASSISTANT_HTTP_NOT_FOUND)
+    {
+        result.error.append(" Requested ");
+        result.error.append(url);
+        result.error.append(".");
+    }
     result.ok = result.error.empty();
     return result;
+}
+
+// Aborts the request in flight, if any. Safe to call from another thread.
+void
+AssistantChatCall::Cancel()
+{
+    std::lock_guard<std::mutex> lock(m_mutex);
+    m_cancelled = true;
+    if(m_client != nullptr)
+    {
+        m_client->stop();
+    }
+}
+
+// Publishes the live socket for Cancel(), or refuses if already cancelled.
+bool
+AssistantChatCall::Adopt(httplib::Client* client)
+{
+    std::lock_guard<std::mutex> lock(m_mutex);
+    if(m_cancelled)
+    {
+        return false;
+    }
+    m_client = client;
+    return true;
+}
+
+// Withdraws the socket before it goes out of scope.
+void
+AssistantChatCall::Release()
+{
+    std::lock_guard<std::mutex> lock(m_mutex);
+    m_client = nullptr;
+}
+
+// True once Cancel() has been called.
+bool
+AssistantChatCall::Cancelled() const
+{
+    std::lock_guard<std::mutex> lock(m_mutex);
+    return m_cancelled;
 }
 
 }  // namespace View

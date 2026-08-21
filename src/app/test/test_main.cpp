@@ -40,6 +40,7 @@ static RocProfVis::View::FullscreenState g_fullscreen_state = {};
 // deferred event dispatch settle, then sleep until the next event when idle.
 static int       g_frames_to_render        = 1;
 constexpr int    RENDER_FRAMES_AFTER_INPUT = 4;
+constexpr double IDLE_WAIT_TIMEOUT_SECONDS = 1.0;
 
 static void
 drop_callback(GLFWwindow* window, int count, const char* paths[])
@@ -107,21 +108,30 @@ sync_imgui_modifiers_with_os()
     ImGuiIO&                            io = ImGui::GetIO();
     RocProfVis::Platform::ModifierState m  = RocProfVis::Platform::get_os_modifier_state();
 
-    if(io.KeyCtrl != m.ctrl)
+    io.AddKeyEvent(ImGuiMod_Ctrl, m.ctrl);
+    io.AddKeyEvent(ImGuiMod_Shift, m.shift);
+    io.AddKeyEvent(ImGuiMod_Alt, m.alt);
+    io.AddKeyEvent(ImGuiMod_Super, m.super);
+
+    if(!m.ctrl)
     {
-        io.AddKeyEvent(ImGuiMod_Ctrl, m.ctrl);
+        io.AddKeyEvent(ImGuiKey_LeftCtrl, false);
+        io.AddKeyEvent(ImGuiKey_RightCtrl, false);
     }
-    if(io.KeyShift != m.shift)
+    if(!m.shift)
     {
-        io.AddKeyEvent(ImGuiMod_Shift, m.shift);
+        io.AddKeyEvent(ImGuiKey_LeftShift, false);
+        io.AddKeyEvent(ImGuiKey_RightShift, false);
     }
-    if(io.KeyAlt != m.alt)
+    if(!m.alt)
     {
-        io.AddKeyEvent(ImGuiMod_Alt, m.alt);
+        io.AddKeyEvent(ImGuiKey_LeftAlt, false);
+        io.AddKeyEvent(ImGuiKey_RightAlt, false);
     }
-    if(io.KeySuper != m.super)
+    if(!m.super)
     {
-        io.AddKeyEvent(ImGuiMod_Super, m.super);
+        io.AddKeyEvent(ImGuiKey_LeftSuper, false);
+        io.AddKeyEvent(ImGuiKey_RightSuper, false);
     }
 }
 
@@ -237,14 +247,14 @@ main(int argc, char** argv)
         return app_result_code;
     }
 
-    std::string config_path = rocprofvis_get_application_config_path();
+    std::string log_dir = rocprofvis_get_application_log_path();
 #ifndef NDEBUG
     std::filesystem::path log_path =
-        std::filesystem::path(config_path) / "roc-optiq.debug.log";
+        std::filesystem::path(log_dir) / "roc-optiq.debug.log";
     rocprofvis_core_enable_log(log_path.string().c_str(), spdlog::level::debug);
 #else
     std::filesystem::path log_path =
-        std::filesystem::path(config_path) / "roc-optiq.log";
+        std::filesystem::path(log_dir) / "roc-optiq.log";
     rocprofvis_core_enable_log(log_path.string().c_str(), spdlog::level::info);
 #endif
 
@@ -296,6 +306,10 @@ main(int argc, char** argv)
             return 1;
         }
     }
+
+#ifdef __APPLE__
+    RocProfVis::Platform::configure_bundled_vulkan_icd();
+#endif
 
     glfwSetErrorCallback(glfw_error_callback);
 #ifdef __linux__
@@ -467,8 +481,10 @@ main(int argc, char** argv)
                     }
                     else
                     {
-                        // Idle: sleep until an OS event, then render a few frames.
-                        glfwWaitEvents();
+                        // Idle: sleep until an OS event or a short timeout, then
+                        // render a few frames. The timeout lets pending
+                        // multi-frame layout settle without user input.
+                        glfwWaitEventsTimeout(IDLE_WAIT_TIMEOUT_SECONDS);
                         g_frames_to_render = RENDER_FRAMES_AFTER_INPUT;
                     }
 

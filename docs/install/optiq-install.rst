@@ -6,7 +6,7 @@
 Install ROCm Optiq
 ******************
 
-Install ROCm Optiq for Linux, Windows or MacOS using the installation files in the `https://github.com/ROCm/roc-optiq <https://github.com/ROCm/roc-optiq>`_  GitHub repository.
+Install ROCm Optiq for Linux, Windows, or macOS using the installation files in the `https://github.com/ROCm/roc-optiq <https://github.com/ROCm/roc-optiq>`_  GitHub repository.
 
 .. _requirements:
 

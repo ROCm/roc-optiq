@@ -201,7 +201,7 @@ Uninstall
 
                sudo dnf remove roc-optiq
 
-         .. tab-item:: Tarball (any Linux distribution)
+         .. tab-item:: tarball (any Linux distribution)
 
             .. code-block:: shell
 

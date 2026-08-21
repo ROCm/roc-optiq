@@ -23,6 +23,8 @@ Systems Profiler trace view keyboard shortcuts
        - ``Ctrl`` + left-drag
      * - Mark selected events as a time range, or clear them
        - ``M``
+     * - Zoom to the selected time range
+       - ``Z``
      * - Clear the time range selection
        - ``Esc``
      * - Multi-select events

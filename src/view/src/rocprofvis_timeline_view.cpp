@@ -1350,15 +1350,15 @@ TimelineView::RenderSplitter()
     if(ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceNoPreviewTooltip))
     {
         ImVec2 drag_delta = ImGui::GetMouseDragDelta(ImGuiMouseButton_Left);
-        m_sidebar_size    = std::clamp(m_sidebar_size + drag_delta.x,
-                                       m_max_meta_scale_area_size +
-                                           2 * ImGui::GetFrameHeightWithSpacing(),
-                                       SIDEBAR_WIDTH_MAX);
 
-        m_tpt->SetViewTimeOffsetNs(
-            m_tpt->GetViewTimeOffsetNs() -
-            (drag_delta.x / display_size.x) *
-                m_tpt->GetVWidth());  // Prevents chart from moving in unexpected way.
+        // Resize only; leave zoom/offset untouched. SetGraphSize() picks up the
+        // new width later this frame and recomputes pixels_per_ns on its own, so
+        // the visible ns-range (and thus v_min_x) never moves and this can't be
+        // mistaken for a real zoom change by IsRequestDataNeeded(). AIPROFVIS-333.
+        m_sidebar_size = std::clamp(m_sidebar_size + drag_delta.x,
+                                    m_max_meta_scale_area_size +
+                                        2 * ImGui::GetFrameHeightWithSpacing(),
+                                    SIDEBAR_WIDTH_MAX);
         ImGui::ResetMouseDragDelta();
         ImGui::EndDragDropSource();
         m_resize_activity |= true;

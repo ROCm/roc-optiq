@@ -21,7 +21,7 @@ Systems Profiler trace view keyboard shortcuts
        - ``W`` / ``S``
      * - Select a time range
        - ``Ctrl`` + left-drag
-     * - Mark selected events as a time range, or clear it
+     * - Mark selected events as a time range, or clear them
        - ``M``
      * - Clear the time range selection
        - ``Esc``

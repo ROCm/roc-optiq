@@ -156,7 +156,7 @@ const char*  ExtData::GetPropertySymbol(rocprofvis_dm_property_t property) {
         case kRPVDMExtDataNameCharPtrIndexed:
             return "kRPVDMExtDataNameCharPtrIndexed";
         case kRPVDMExtDataValueCharPtrIndexed:
-            return "kRPVDMExtDataCharPtrIndexed";
+            return "kRPVDMExtDataValueCharPtrIndexed";
         case kRPVDMExtDataTypeUint64Indexed:
             return "kRPVDMExtDataTypeUint64Indexed";
         default:

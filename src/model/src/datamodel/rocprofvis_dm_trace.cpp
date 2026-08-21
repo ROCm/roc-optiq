@@ -921,8 +921,8 @@ const char*  Trace::GetPropertySymbol(rocprofvis_dm_property_t property) {
             return "kRPVDMStackTraceHandleByEventID";
         case kRPVDMExtInfoHandleByEventID:
             return "kRPVDMExtInfoHandleByEventID";
-        case kRPVDMTableHandleIndexed:
-            return "kRPVDMTableHandleIndexed";
+        case kRPVDMTableHandleByID:
+            return "kRPVDMTableHandleByID";
         case kRPVDMHistogramNumBuckets:
             return "kRPVDMHistogramNumBuckets";
         case kRPVDMHistogramBucketSize:

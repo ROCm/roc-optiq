@@ -143,7 +143,7 @@ Installation
 
                   export PATH=/opt/roc-optiq/bin:$PATH
 
-         .. tab-item:: Tarball (any Linux distribution)
+         .. tab-item:: tarball (any Linux distribution)
 
             1. Download the tarball for your architecture from the `ROCm Optiq GitHub Releases <https://github.com/ROCm/roc-optiq/releases/tag/v1.0.0-optiq>`_ page.
             2. Extract it to your preferred install location (no root required):

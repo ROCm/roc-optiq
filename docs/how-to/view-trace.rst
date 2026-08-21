@@ -94,7 +94,7 @@ The **System Topology View** displays a hierarchical representation of the hardw
 
 - Click |eye| to show or hide tracks. Hiding a higher-level element automatically hides all underlying queues, streams, and events.
 - Click |scroll| to go to the track in the :ref:`timeline`. 
-- Right click to chose sidebar context menu options: **Go To Track**, **Hide Track**, **Show/Hide All But This Track**, **Show/Hide Selected Tracks**.
+- Right click to choose sidebar context menu options: **Go To Track**, **Hide Track**, **Show/Hide All But This Track**, **Show/Hide Selected Tracks**.
 
 .. note::
 

@@ -12,7 +12,7 @@ ROCm Optiq is a unified visualization and analysis tool for performance data col
 
 ROCm Optiq has no dependency on the ROCm stack itself, so trace and analysis files can be visualized on any machine running a supported Windows or Linux operating system, independent of where the data was collected.
 
-This topic is a quick reference to ROCm Optiq's supported inputs and session features. For a narrative introduction and an overview of the available views, see :doc:`../what-is-optiq` For system requirements and installation steps, see :ref:`requirements` and :doc:`../install/optiq-install`.
+This topic is a quick reference to ROCm Optiq's supported inputs and session features. For a narrative introduction and an overview of the available views, see :doc:`../what-is-optiq`. For system requirements and installation steps, see :ref:`requirements` and :doc:`../install/optiq-install`.
 
 .. _glance-data-sources:
 

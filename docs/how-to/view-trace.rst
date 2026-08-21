@@ -253,19 +253,19 @@ The highlighted area in the **Histogram** can be dragged to scroll the **Timelin
 
 .. _time-range-filter:
 
-Set a time range filter
+Set a time-range filter
 -----------------------
 
-Set a time range filter in the :ref:`timeline` to limit the data displayed to a specific period. 
+Set a time-range filter in the :ref:`timeline` to limit the data displayed to a specific period. 
 
-To set a time range filter, press and hold **Ctrl** while dragging your mouse in the **Timeline View** to select a range.
+To set a time-range filter, press and hold **Ctrl** while dragging your mouse in the **Timeline View** to select a range.
 
 .. image:: ../images/time-range-filter.gif
    :width: 800
    :alt: Timeline View with a time range selected, showing the shaded selection area with draggable boundary handles
 
 Once a time range is selected, the selection boundaries can be adjusted by dragging them. 
-The active time range filter applies to event and sample counter details in the :ref:`advanced` section.
+The active time-range filter applies to event and sample counter details in the :ref:`advanced` section.
 
 If one or more events are selected, the **Make Time Range Selection** option displays on the timeline context menu when you right-click:
 
@@ -285,7 +285,7 @@ To clear the time range selection, press **Esc** or right-click and select **Rem
 
 .. note::
 
-   When a time range filter is active, events inside the range stay at full brightness, and events outside the range are dimmed.
+   When a time-range filter is active, events inside the range stay at full brightness, and events outside the range are dimmed.
 
 .. _advanced:
 
@@ -423,7 +423,7 @@ Search for events using the search box on the main **Toolbar**.
 Save trace selection (trim trace)
 =================================
 
-When there's an active time range filter, select **Edit** > **Save Trace Selection** to trim the trace:
+When there's an active time-range filter, select **Edit** > **Save Trace Selection** to trim the trace:
 
 .. image:: ../images/save-trace.png
    :width: 200

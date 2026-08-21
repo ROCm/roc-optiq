@@ -16,7 +16,7 @@ Use these shortcuts in the ROCm Systems Profiler trace view.
        - Shortcut
      * - Pan left or right
        - ``A`` / ``D`` or ``Left`` / ``Right``
-     * - Scroll tracks up / down
+     * - Scroll tracks up or down
        - ``Up`` / ``Down``
      * - Pan or scroll faster (2x)
        - ``Shift`` + the above

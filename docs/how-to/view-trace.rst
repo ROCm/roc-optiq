@@ -272,7 +272,7 @@ If one or more events are selected, the **Make Time Range Selection** option dis
 |make|
 
 Selecting this sets a time-range filter with boundaries at the event's start and end times, or at the first start time and last end time if multiple events are selected.
-Right-clicking an active time-range selection now offers **Zoom to Time Range Selection** with the same fit-to-width behavior.
+Right-click an active time range selection to choose **Zoom to Time Range Selection** with the same fit-to-width behavior.
 
 .. tip::
 

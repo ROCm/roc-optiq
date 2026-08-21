@@ -65,7 +65,7 @@ Use the **View** menu to show and hide application panels.
 Customize projects for ROCm Systems Profiler traces
 ===================================================
 
-You can customize the data views of an open ROCm Systems Profiler trace file in ROCm Optiq, including timeline display settings, added bookmarks/annotations, and more.
+You can customize the data views of an open ROCm Systems Profiler trace file in ROCm Optiq, including timeline display settings, bookmarks, annotations, and more.
 
 .. note::
 

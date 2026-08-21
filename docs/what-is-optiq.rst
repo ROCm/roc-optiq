@@ -1,5 +1,5 @@
 .. meta::
-  :description: Learn what ROCm Optiq is: a unified GUI for visualizing ROCm Systems Profiler traces and ROCm Compute Profiler analysis data on Windows and Linux.
+  :description: Learn what ROCm Optiq is: a unified GUI for visualizing ROCm Systems Profiler traces and ROCm Compute Profiler analysis data on Windows, Linux, and macOS.
   :keywords: Optiq, ROCm, profiler, visualization, trace, analysis, GPU, AMD, performance
 
 *******************

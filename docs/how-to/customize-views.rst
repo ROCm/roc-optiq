@@ -8,6 +8,8 @@
 Customize ROCm Optiq
 ********************
 
+.. |scroll| image:: ../images/scroll-to.png
+.. |eye| image:: ../images/eye.png
 .. |book| image:: ../images/bookmarks.png
 .. |pen| image:: ../images/pencil.png
 .. |flow| image:: ../images/flow-change.png

@@ -2563,10 +2563,10 @@ TimelineView::RenderHistogram()
     }
 
     // Duration bracket across the selection, drawn in the ruler's tick-mark row.
-    double sel_start_ns = 0.0;
-    double sel_end_ns   = 0.0;
+    double bracket_start_ns = 0.0;
+    double bracket_end_ns   = 0.0;
     if(m_timeline_selection &&
-       m_timeline_selection->GetSelectedTimeRange(sel_start_ns, sel_end_ns) &&
+       m_timeline_selection->GetSelectedTimeRange(bracket_start_ns, bracket_end_ns) &&
        m_tpt->GetRangeX() > 0.0)
     {
         auto sel_x = [&](double raw_ns) {
@@ -2575,13 +2575,13 @@ TimelineView::RenderHistogram()
                 0.0f, 1.0f);
             return graph_origin_x + frac * ruler_width;
         };
-        const float xs = sel_x(sel_start_ns);
-        const float xe = sel_x(sel_end_ns);
+        const float xs = sel_x(bracket_start_ns);
+        const float xe = sel_x(bracket_end_ns);
         if(xe > xs)
         {
             const ImU32       col = m_settings.GetColor(Colors::kSelectionBorder);
             const std::string dur = nanosecond_to_formatted_str(
-                sel_end_ns - sel_start_ns, time_format, true);
+                bracket_end_ns - bracket_start_ns, time_format, true);
             const ImVec2 dsz =
                 font->CalcTextSizeA(label_font_size, FLT_MAX, 0.0f, dur.c_str());
             const float by  = ruler_pos.y + m_ruler_height - dsz.y * 0.5f - 1.0f;

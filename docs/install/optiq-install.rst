@@ -46,7 +46,7 @@ Supported operating systems
      - apt, tarball
    * - RHEL
      - RHEL 10, RHEL 9, RHEL 8
-     - dnf, Tarball
+     - dnf, tarball
    * - Oracle Linux
      - Oracle Linux 10, Oracle Linux 9, Oracle Linux 8
      - dnf, Tarball

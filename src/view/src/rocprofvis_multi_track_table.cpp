@@ -55,7 +55,11 @@ MultiTrackTable::~MultiTrackTable() {}
 void
 MultiTrackTable::ApplySharedFiltersFrom(const MultiTrackTable& source)
 {
-    m_pending_filter_options   = source.m_pending_filter_options;
+    m_pending_filter_options = source.m_pending_filter_options;
+    // Commit now: the peer may have no table_params (empty pane), so
+    // ProcessSortOrFilterRequest cannot copy pending -> applied, and
+    // FetchSelectionData reads m_filter_options when tracks appear later.
+    m_filter_options           = m_pending_filter_options;
     m_group_by_selection_index = source.m_group_by_selection_index;
     snprintf(m_filter_store, IM_ARRAYSIZE(m_filter_store), "%s", source.m_filter_store);
     m_filter_requested = true;

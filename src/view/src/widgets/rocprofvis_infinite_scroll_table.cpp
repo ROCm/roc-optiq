@@ -788,8 +788,20 @@ InfiniteScrollTable::ProcessSortOrFilterRequest(
     }
     else
     {
-        spdlog::warn(
-            "Warning: Event table params not available, aborting sort request.");
+        // No cached params (cleared/empty table). Still commit an applied filter
+        // so a later FetchSelectionData does not refetch with the old clause.
+        if(m_filter_requested)
+        {
+            m_filter_options = m_pending_filter_options;
+            if(m_filter_options.group_by.empty())
+            {
+                m_filter_options.group_columns[0] = '\0';
+            }
+        }
+        else
+        {
+            spdlog::warn("Table params not available, aborting sort request.");
+        }
     }
 }
 

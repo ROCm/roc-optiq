@@ -28,7 +28,7 @@ The ROCm Optiq project repository is located at `https://github.com/ROCm/roc-opt
 
       * :doc:`View trace data <how-to/view-trace>`
       * :doc:`View analysis data <how-to/view-analysis>`
-      * :doc:`Customize your project <how-to/customize-views>`
+      * :doc:`Customize ROCm Optiq <how-to/customize-views>`
 
    .. grid-item-card:: Reference
 

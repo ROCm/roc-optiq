@@ -20,6 +20,8 @@
 #include <string>
 #include <filesystem>
 #include <fstream>
+#include <algorithm>
+#include <cmath>
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_utils.h"
 #include "rocprofvis_data_provider.h"
@@ -30,6 +32,7 @@
 #include "model/compute/rocprofvis_compute_data_model.h"
 #include "widgets/rocprofvis_tab_container.h"
 #include "rocprofvis_view_test_access.h"
+#include "sqlite3.h"
 using namespace RocProfVis::View;
 
 namespace
@@ -62,6 +65,55 @@ namespace
             return nullptr;
         }
         return cv;
+    }
+
+    // Reach the populated Kernel Selection Table on the Compute tab and drive its
+    // first fetch. On success returns the table and fills *out_cv / *out_table_win;
+    // returns nullptr after a skip (trace db or empty table) or a hard fail. The sort
+    // and filter tests below rely on one fact established here: the table's inner
+    // ImGui window has ChildId equal to the ImGuiTable id, the seed its custom header
+    // and per-column filter inputs hash their labels against.
+    KernelMetricTable* ReachKernelTableOrSkip(ImGuiTestContext* ctx, ComputeView** out_cv,
+                                              ImGuiWindow** out_table_win)
+    {
+        ComputeView* cv = GetComputeViewOrSkip(ctx);
+        if (cv == nullptr) return nullptr;
+        TabContainer* tc = ComputeViewTestPeer{*cv}.TabContainerPtr();
+        IM_CHECK_RETV(tc != nullptr, nullptr);
+
+        // The kernel metric table renders only while the "Kernel Details" tab is active.
+        tc->SetActiveTab("compute_kernel_details_view");
+        ctx->Yield(3);
+        const TabItem* tab = tc->GetActiveTab();
+        IM_CHECK_RETV(tab != nullptr, nullptr);
+        ComputeKernelDetailsView* kd =
+            dynamic_cast<ComputeKernelDetailsView*>(tab->m_widget.get());
+        IM_CHECK_RETV(kd != nullptr, nullptr);
+        KernelMetricTable* kt = ComputeKernelDetailsViewTestPeer{*kd}.KernelMetricTablePtr();
+        IM_CHECK_RETV(kt != nullptr, nullptr);
+
+        // The initial auto-select fires before this view subscribes, so the table
+        // starts empty. Drive the fetch here for the already-selected workload.
+        ComputeSelection* sel = ComputeViewTestPeer{*cv}.ComputeSelectionPtr();
+        IM_CHECK_RETV(sel != nullptr, nullptr);
+        const uint32_t workload = sel->GetSelectedWorkload();
+        IM_CHECK_RETV(workload != ComputeSelection::INVALID_SELECTION_ID, nullptr);
+        kt->FetchData(workload);
+
+        // The table registers its inner ImGui window (name contains
+        // "kernel_selection_table") only once BeginTable runs on non-empty data.
+        ImGuiWindow* table_win = nullptr;
+        for (int i = 0; i < 120 && table_win == nullptr; i++)
+        {
+            ctx->Yield(2);
+            for (ImGuiWindow* w : ImGui::GetCurrentContext()->Windows)
+                if (strstr(w->Name, "kernel_selection_table")) { table_win = w; break; }
+        }
+        IM_CHECK_RETV(table_win != nullptr, nullptr);
+
+        if (out_cv) *out_cv = cv;
+        if (out_table_win) *out_table_win = table_win;
+        return kt;
     }
 
 // Flame-graph event bars are raw draw_list rects registered with the Test
@@ -176,6 +228,47 @@ struct ShowSummaryGuard
         SettingsManager::GetInstance().GetAppWindowSettings().show_summary = prev;
     }
 };
+
+// Run one SUM or COUNT on the sample db through a private read-only connection,
+// handing the single result back via `out`. Optiq builds its own totals by
+// summing raw rows in C++, so this SQL is an independent second opinion: if
+// Optiq's math is off, the two numbers diverge. Returns false on any sqlite error
+// so the caller fails loudly instead of trusting a garbage value.
+bool DbScalarQuery(const std::string& db_path, const char* sql, double& out)
+{
+    sqlite3* db = nullptr;
+    if(sqlite3_open_v2(db_path.c_str(), &db, SQLITE_OPEN_READONLY, nullptr) != SQLITE_OK)
+    {
+        if(db) sqlite3_close(db);
+        return false;
+    }
+    sqlite3_stmt* stmt = nullptr;
+    bool          ok   = false;
+    if(sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) == SQLITE_OK &&
+       sqlite3_step(stmt) == SQLITE_ROW)
+    {
+        out = sqlite3_column_double(stmt, 0);
+        ok  = true;
+    }
+    sqlite3_finalize(stmt);
+    sqlite3_close(db);
+    return ok;
+}
+
+// True for the v4 schema, where kernel timestamps live in their own
+// rocpd_timestamp table joined by start_id/end_id, false for the older layout
+// that keeps start/end inline on rocpd_kernel_dispatch. The duration query picks
+// its form from this, matching the query factory in GetRocprofKernelDispatchSliceQuery.
+bool DbHasTimestampTable(const std::string& db_path)
+{
+    double n = 0.0;
+    return DbScalarQuery(
+               db_path,
+               "SELECT COUNT(*) FROM sqlite_master WHERE type IN ('table','view') "
+               "AND name = 'rocpd_timestamp'",
+               n) &&
+           n > 0.0;
+}
 }  // namespace
 
 void RegisterAppTests(ImGuiTestEngine* e)
@@ -952,6 +1045,202 @@ void RegisterAppTests(ImGuiTestEngine* e)
         ctx->Yield(2);
     };
 
+    // Type a filter predicate into the Event Table's real text box, click its real
+    // Submit, and check that the row count both drops and matches an independent SQL
+    // count of the same predicate. Unlike the other sys_ tests, which poke the model
+    // directly, this one drives the actual ImGui widgets and checks the numbers shown.
+    t = IM_REGISTER_TEST(e, "app", "sys_event_table_sql_filter_restricts_rows");
+    t->TestFunc = [](ImGuiTestContext* ctx)
+    {
+        TraceView* tv = GetTraceViewOrSkip(ctx);
+        if (!tv) return;
+        std::shared_ptr<TimelineSelection> sel = tv->GetTimelineSelection();
+        IM_CHECK(sel != nullptr);
+        if (sel == nullptr) return;
+        TimelineView* tlv = TraceViewTestPeer{*tv}.TimelineViewPtr();
+        IM_CHECK(tlv != nullptr);
+        if (tlv == nullptr) return;
+        DataProvider* dp = tv->GetDataProvider();
+        IM_CHECK(dp != nullptr);
+        if (dp == nullptr) return;
+
+        // The Event Table lives in the Advanced Details panel, and its widgets only
+        // register with the Test Engine while that panel is visible. Force it open (it
+        // is on by default, but a saved layout could have hidden it) and restore the
+        // previous state at the end.
+        const bool details_prev =
+            SettingsManager::GetInstance().GetAppWindowSettings().show_details_panel;
+        tv->SetAnalysisViewVisibility(true);
+        ctx->Yield(3);
+
+        // Clear the time-range selection first. The set of rows fetched follows the
+        // selection, so clearing it brings every row into scope. The Event Table's
+        // duration is the full (end - start), which is what the SQL predicate below
+        // compares against.
+        sel->ClearTimeRange();
+        sel->UnselectAllTracks();
+        ctx->Yield(3);
+
+        // Wait for the timeline's flame (event) tracks to load.
+        std::vector<FlameTrackItem*> flames;
+        for (int i = 0; i < 120 && flames.empty(); i++)
+        {
+            flames = TimelineViewTestPeer{*tlv}.DisplayedFlameTracks();
+            if (flames.empty()) ctx->Yield(2);
+        }
+        if (flames.empty())
+        {
+            ctx->LogWarning("SKIP: no flame tracks loaded to populate the Event Table");
+            tv->SetAnalysisViewVisibility(details_prev);
+            return;
+        }
+
+        // Select only the HIP-region tracks (their one operation is Launch). Rows for
+        // such a track come from a single source, the non-sample rocpd_region rows
+        // (SAMPLE.id IS NULL), which SQL can reproduce exactly. Skip GPU dispatch and
+        // stream tracks: their events are all over 1ms, so `duration > 2000` would
+        // match every row and the filter would not visibly shrink the set.
+        std::vector<std::pair<uint64_t, uint64_t>> region_tracks;  // (pid, tid)
+        const TimelineModel& tlm = dp->DataModel().GetTimeline();
+        for (FlameTrackItem* flame : flames)
+        {
+            if (flame == nullptr) continue;
+            const TrackInfo* ti = tlm.GetTrack(flame->GetID());
+            if (ti == nullptr) continue;
+            if (ti->operation_types.size() == 1 &&
+                ti->operation_types.count(kRocProfVisDmOperationLaunch) == 1)
+            {
+                sel->SelectTrack(*flame);
+                region_tracks.emplace_back(ti->agent_or_pid, ti->queue_id_or_tid);
+            }
+        }
+        if (region_tracks.empty())
+        {
+            ctx->LogWarning("SKIP: no HIP region track to exercise the SQL filter");
+            tv->SetAnalysisViewVisibility(details_prev);
+            return;
+        }
+
+        // Drain the async fetch triggered by the track selection before reading the
+        // row count.
+        ctx->Yield(3);
+        for (int i = 0; i < 120 &&
+                        dp->IsRequestPending(DataProvider::EVENT_TABLE_REQUEST_ID);
+             i++)
+            ctx->Yield(2);
+        ctx->Yield(5);
+
+        const uint64_t unfiltered =
+            dp->DataModel().GetTables().GetTableTotalRowCount(TableType::kEventTable);
+        IM_CHECK(unfiltered > 0);
+        if (unfiltered == 0)
+        {
+            sel->UnselectAllTracks();
+            tv->SetAnalysisViewVisibility(details_prev);
+            return;
+        }
+
+        // Independent oracle: a separate read-only sqlite handle counts the same rows
+        // the Event Table shows, the non-sample rocpd_region rows. Duration there is
+        // (end - start) ns, so the UI's `duration > 2000` is `(R.end - R.start) > 2000`
+        // in SQL, summed over the selected (pid, tid) tracks.
+        auto sql_count = [&](bool apply_predicate) -> long long {
+            sqlite3* db = nullptr;
+            if (sqlite3_open_v2(dp->GetTraceFilePath().c_str(), &db,
+                                SQLITE_OPEN_READONLY, nullptr) != SQLITE_OK)
+            {
+                if (db) sqlite3_close(db);
+                return -1;
+            }
+            long long total = 0;
+            bool      ok    = true;
+            for (const std::pair<uint64_t, uint64_t>& pt : region_tracks)
+            {
+                std::string q =
+                    "SELECT COUNT(*) FROM rocpd_region R "
+                    "LEFT JOIN rocpd_sample SAMPLE ON SAMPLE.event_id = R.event_id "
+                    "WHERE SAMPLE.id IS NULL AND R.pid=" + std::to_string(pt.first) +
+                    " AND R.tid=" + std::to_string(pt.second);
+                if (apply_predicate) q += " AND (R.end - R.start) > 2000";
+                sqlite3_stmt* stmt = nullptr;
+                if (sqlite3_prepare_v2(db, q.c_str(), -1, &stmt, nullptr) != SQLITE_OK)
+                {
+                    ok = false;
+                    break;
+                }
+                if (sqlite3_step(stmt) == SQLITE_ROW)
+                    total += sqlite3_column_int64(stmt, 0);
+                else
+                    ok = false;
+                sqlite3_finalize(stmt);
+                if (!ok) break;
+            }
+            sqlite3_close(db);
+            return ok ? total : -1;
+        };
+
+        const long long sql_total = sql_count(false);
+        IM_CHECK(sql_total >= 0);
+        // The selected rows must match the SQL source before filtering, or the
+        // filtered-count check below would be comparing two unrelated sets of rows.
+        IM_CHECK(static_cast<uint64_t>(sql_total) == unfiltered);
+
+        // The Event Table is the analysis view's default tab. Click it to be sure it
+        // is the active one, then check the filter widgets resolve before driving them
+        // rather than relying on a wildcard match.
+        const char* kTabRef    = "//Main Window/**/Event Table";
+        const char* kFilterRef = "//Main Window/**/filters/##input_text_with_clear";
+        const char* kSubmitRef = "//Main Window/**/Submit";
+        if (ctx->ItemExists(kTabRef)) ctx->ItemClick(kTabRef);
+        ctx->Yield(2);
+        IM_CHECK(ctx->ItemExists(kFilterRef));
+        IM_CHECK(ctx->ItemExists(kSubmitRef));
+
+        // Type the predicate into the text box and click Submit, driving the real
+        // widgets rather than poking the model directly.
+        ctx->ItemInput(kFilterRef);
+        ctx->KeyCharsReplace("duration > 2000");
+        ctx->ItemClick(kSubmitRef);
+
+        // Submit queues an async refetch that applies the predicate in memory over the
+        // merged rows. Drain it before reading the filtered count.
+        ctx->Yield(3);
+        for (int i = 0; i < 120 &&
+                        dp->IsRequestPending(DataProvider::EVENT_TABLE_REQUEST_ID);
+             i++)
+            ctx->Yield(2);
+        ctx->Yield(5);
+
+        const uint64_t filtered =
+            dp->DataModel().GetTables().GetTableTotalRowCount(TableType::kEventTable);
+        const long long sql_filtered = sql_count(true);
+        IM_CHECK(sql_filtered >= 0);
+
+        ctx->LogInfo("event table filter: unfiltered=%llu filtered=%llu sql_filtered=%lld",
+                     (unsigned long long) unfiltered, (unsigned long long) filtered,
+                     sql_filtered);
+
+        // Restore before the asserts. Clear the filter and drop the selection now, so
+        // that if an IM_CHECK below fails and returns, it cannot leave a filtered
+        // Event Table behind for later tests in this reused process.
+        ctx->ItemInput(kFilterRef);
+        ctx->KeyCharsReplace("");
+        ctx->ItemClick(kSubmitRef);
+        ctx->Yield(3);
+        for (int i = 0; i < 120 &&
+                        dp->IsRequestPending(DataProvider::EVENT_TABLE_REQUEST_ID);
+             i++)
+            ctx->Yield(2);
+        sel->UnselectAllTracks();
+        ctx->Yield(2);
+        tv->SetAnalysisViewVisibility(details_prev);
+
+        // Two things must hold: the filter shrank the displayed rows, and the result
+        // matches the independent SQL count of the same predicate on the same source.
+        IM_CHECK(filtered < unfiltered);
+        IM_CHECK(static_cast<long long>(filtered) == sql_filtered);
+    };
+
     t = IM_REGISTER_TEST(e, "app", "sys_summary_pie_kernel_select");
     t->TestFunc = [](ImGuiTestContext* ctx)
     {
@@ -1084,6 +1373,116 @@ void RegisterAppTests(ImGuiTestEngine* e)
         IM_CHECK(peer.IsDisplayPie());
     };
 
+    // The total duration across the Summary's top-kernels list should equal an
+    // independent SQL SUM over every dispatch. The list is the top-N kernels plus an
+    // "Others" row that holds the leftover duration of all the rest (PadTopKernels
+    // fills it with total minus the top-N sum). So adding up the whole list gives the
+    // grand total over every dispatch, which is what the full-range SQL SUM measures.
+    t = IM_REGISTER_TEST(e, "app", "sys_summary_kernel_duration_total_matches_db");
+    t->TestFunc = [](ImGuiTestContext* ctx)
+    {
+        TraceView* tv = GetTraceViewOrSkip(ctx);
+        if (!tv) return;
+        SummaryView* sv = TraceViewTestPeer{*tv}.SummaryViewPtr();
+        IM_CHECK(sv != nullptr);
+        if (sv == nullptr) return;
+        TopKernels* tk = SummaryViewTestPeer{*sv}.TopKernelsPtr();
+        IM_CHECK(tk != nullptr);
+        if (tk == nullptr) return;
+
+        // FetchTopKernels + TopKernels::Update only run while the Summary window is
+        // shown. Force it open and drain the async fetch.
+        ShowSummaryGuard summary_guard;
+        SettingsManager::GetInstance().GetAppWindowSettings().show_summary = true;
+        TopKernelsTestPeer peer{*tk};
+        for (int i = 0; i < 60 && peer.KernelCount() == 0; i++) ctx->Yield(2);
+        IM_CHECK(peer.KernelCount() > 0);
+        if (peer.KernelCount() == 0) return;
+
+        // Optiq's grand total is the sum over every displayed entry (top-N plus "Others").
+        double optiq_total = 0.0;
+        for (size_t i = 0; i < peer.KernelCount(); i++) optiq_total += peer.ExecTimeSum(i);
+
+        // The independent SQL runs on the db this process opened. Optiq trims each
+        // row's duration to the visible time range, which only equals the full
+        // (end - start) when the whole trace is in view. So this query uses no time
+        // filter, otherwise the two sides would be measuring different spans.
+        Project* project = AppWindow::GetInstance()->GetCurrentProject();
+        IM_CHECK(project != nullptr);
+        if (project == nullptr) return;
+        const std::string db_path = project->GetID();
+
+        const char* sql =
+            DbHasTimestampTable(db_path)
+                ? "SELECT SUM(TE.value - TS.value) FROM rocpd_kernel_dispatch K "
+                  "INNER JOIN rocpd_timestamp TS ON TS.id = K.start_id "
+                  "INNER JOIN rocpd_timestamp TE ON TE.id = K.end_id"
+                : "SELECT SUM(K.end - K.start) FROM rocpd_kernel_dispatch K";
+        double sql_total = 0.0;
+        const bool have_sql = DbScalarQuery(db_path, sql, sql_total);
+        IM_CHECK(have_sql);
+        if (!have_sql) return;
+
+        // Compare with a relative tolerance, not exact equality. Both sides add large
+        // ns values into doubles, which carries a little floating-point round-off,
+        // while a genuine error would be off by whole kernels (millions of ns).
+        const double denom = std::max({ std::fabs(optiq_total), std::fabs(sql_total), 1.0 });
+        IM_CHECK(std::fabs(optiq_total - sql_total) / denom < 1e-6);
+    };
+
+    // The invocation counts shown in the Summary should add up to COUNT(*) over every
+    // dispatch. Caveat: when more kernels exist than the Summary lists, it appends an
+    // "Others" row that reports 0 invocations, so the visible counts only reach the
+    // true total when that row is absent. When it is present the rows are just the
+    // top-N, so skip rather than compare a partial sum to the full count.
+    t = IM_REGISTER_TEST(e, "app", "sys_summary_kernel_count_matches_db");
+    t->TestFunc = [](ImGuiTestContext* ctx)
+    {
+        TraceView* tv = GetTraceViewOrSkip(ctx);
+        if (!tv) return;
+        SummaryView* sv = TraceViewTestPeer{*tv}.SummaryViewPtr();
+        IM_CHECK(sv != nullptr);
+        if (sv == nullptr) return;
+        TopKernels* tk = SummaryViewTestPeer{*sv}.TopKernelsPtr();
+        IM_CHECK(tk != nullptr);
+        if (tk == nullptr) return;
+
+        ShowSummaryGuard summary_guard;
+        SettingsManager::GetInstance().GetAppWindowSettings().show_summary = true;
+        TopKernelsTestPeer peer{*tk};
+        for (int i = 0; i < 60 && peer.KernelCount() == 0; i++) ctx->Yield(2);
+        IM_CHECK(peer.KernelCount() > 0);
+        if (peer.KernelCount() == 0) return;
+
+        if (peer.PaddedIdx().has_value())
+        {
+            ctx->LogWarning("SKIP: top-N truncated (Others bucket present); dispatch count "
+                            "is not a grand total through the displayed entries");
+            return;
+        }
+
+        // No "Others" row here, so every kernel is shown and the invocation counts
+        // add up to the full dispatch count.
+        uint64_t optiq_count = 0;
+        for (size_t i = 0; i < peer.KernelCount(); i++) optiq_count += peer.Invocations(i);
+
+        Project* project = AppWindow::GetInstance()->GetCurrentProject();
+        IM_CHECK(project != nullptr);
+        if (project == nullptr) return;
+        const std::string db_path = project->GetID();
+
+        // Counting rows needs no timestamp join, so unlike the duration query this one
+        // is the same on every schema version.
+        double sql_count_d = 0.0;
+        const bool have_sql =
+            DbScalarQuery(db_path, "SELECT COUNT(*) FROM rocpd_kernel_dispatch", sql_count_d);
+        IM_CHECK(have_sql);
+        if (!have_sql) return;
+
+        // Both sides are exact integers, so assert exact equality.
+        IM_CHECK(optiq_count == static_cast<uint64_t>(sql_count_d));
+    };
+
     t = IM_REGISTER_TEST(e, "app", "compute_kernel_table_loads_sorted");
     t->TestFunc = [](ImGuiTestContext* ctx)
     {
@@ -1155,6 +1554,216 @@ void RegisterAppTests(ImGuiTestEngine* e)
             const double cur  = std::strtod(rows[r][2].c_str(), nullptr);
             IM_CHECK(prev >= cur);
         }
+    };
+
+    t = IM_REGISTER_TEST(e, "app", "compute_kernel_table_sort_by_duration");
+    t->TestFunc = [](ImGuiTestContext* ctx)
+    {
+        ComputeView* cv        = nullptr;
+        ImGuiWindow* table_win = nullptr;
+        KernelMetricTable* kt  = ReachKernelTableOrSkip(ctx, &cv, &table_win);
+        if (kt == nullptr) return;
+        DataProvider* dp = cv->GetDataProvider();
+        IM_CHECK(dp != nullptr);
+        if (dp == nullptr) return;
+
+        // Click the Duration column header to trigger a sort. The Test Engine's usual
+        // TableClickHeader can't reach it. That helper finds a header by an id seeded
+        // from the column number, which the stock header row sets up but this custom
+        // header row does not. Instead, rebuild the id the way ImGui did, from the
+        // label plus the table's own id (table_win->ChildId), and click that. The
+        // click runs the real sort path: it sets the sort spec, which kicks off an
+        // async re-sort.
+        const ImGuiID header_id = ctx->GetID("Duration (ns)", table_win->ChildId);
+        IM_CHECK(ctx->ItemExists(header_id));
+        if (!ctx->ItemExists(header_id)) return;
+
+        KernelMetricTableTestPeer peer{*kt};
+        // Duration is the default sort column. Capture the starting sort so the two
+        // toggles below leave the table exactly as it started.
+        const int orig_col   = peer.SortColumnIndex();
+        const int orig_order = peer.SortOrder();
+
+        // Read the Duration column in display order as plain ns numbers. Empty or
+        // non-numeric cells are skipped, though a permanent column should not have any.
+        auto read_durations = [dp]() {
+            std::vector<double> out;
+            const std::vector<std::vector<std::string>>& rows =
+                dp->ComputeModel().GetKernelSelectionTable().GetTableData();
+            for (const std::vector<std::string>& row : rows)
+                if (row.size() > 2 && !row[2].empty())
+                    out.push_back(std::strtod(row[2].c_str(), nullptr));
+            return out;
+        };
+        auto drain = [ctx, dp]() {
+            ctx->Yield(3);  // let the sort-spec change dispatch the async refetch
+            for (int i = 0; i < 120 &&
+                 dp->IsRequestPending(DataProvider::METRIC_PIVOT_TABLE_REQUEST_ID); i++)
+                ctx->Yield(2);
+            ctx->Yield(5);  // let HandleNewData apply the re-sorted rows
+        };
+
+        if (read_durations().size() < 2)
+        {
+            ctx->LogWarning("SKIP: fewer than two kernel rows to verify sort order");
+            return;
+        }
+
+        // First click flips the sort direction and triggers an async re-sort.
+        ctx->ItemClick(header_id);
+        drain();
+        const int                 col1   = peer.SortColumnIndex();
+        const int                 order1 = peer.SortOrder();
+        const std::vector<double> after1 = read_durations();
+
+        // Second click flips it back to the original order.
+        ctx->ItemClick(header_id);
+        drain();
+        const int                 col2   = peer.SortColumnIndex();
+        const int                 order2 = peer.SortOrder();
+        const std::vector<double> after2 = read_durations();
+
+        // Check the actual order of the values, not just the sort-direction flag: a
+        // flag flipped over still-unsorted rows would pass falsely. The two toggles
+        // have already put the order back, so an IM_CHECK that returns early here
+        // cannot leak state into later tests.
+        auto check_monotonic = [](const std::vector<double>& v, int order) {
+            for (size_t i = 1; i < v.size(); i++)
+                if (order == kRPVControllerSortOrderAscending)
+                    IM_CHECK(v[i - 1] <= v[i]);
+                else
+                    IM_CHECK(v[i - 1] >= v[i]);
+        };
+
+        IM_CHECK(orig_col == 2);          // Duration column index
+        IM_CHECK(col1 == 2);
+        IM_CHECK(order1 != orig_order);   // direction flipped by the first click
+        check_monotonic(after1, order1);
+
+        IM_CHECK(col2 == 2);
+        IM_CHECK(order2 != order1);       // flipped again by the second click
+        IM_CHECK(order2 == orig_order);   // ...back to where we started
+        check_monotonic(after2, order2);
+    };
+
+    t = IM_REGISTER_TEST(e, "app", "compute_kernel_table_filter_duration");
+    t->TestFunc = [](ImGuiTestContext* ctx)
+    {
+        ComputeView* cv        = nullptr;
+        ImGuiWindow* table_win = nullptr;
+        KernelMetricTable* kt  = ReachKernelTableOrSkip(ctx, &cv, &table_win);
+        if (kt == nullptr) return;
+        DataProvider* dp = cv->GetDataProvider();
+        IM_CHECK(dp != nullptr);
+        if (dp == nullptr) return;
+
+        // Same id trick for the Duration column's filter box. Its id is built from
+        // PushID(column index) plus "##filter"
+        // (rocprofvis_compute_kernel_metric_table.cpp:886,897). "$$2" is how the Test
+        // Engine spells PushID(2) in a path, so GetID("$$2/##filter", table id)
+        // rebuilds the real input id for column 2, Duration.
+        const ImGuiID filter_id = ctx->GetID("$$2/##filter", table_win->ChildId);
+        IM_CHECK(ctx->ItemExists(filter_id));
+        if (!ctx->ItemExists(filter_id)) return;
+
+        // Apply and Clear are plain buttons in the table's "toolbar" child window.
+        // Find that window (its name carries both the card and toolbar segments), then
+        // address the buttons by label seeded on the window's id.
+        ImGuiWindow* toolbar_win = nullptr;
+        for (ImGuiWindow* w : ImGui::GetCurrentContext()->Windows)
+            if (strstr(w->Name, "kernel_metric_table_card") && strstr(w->Name, "toolbar"))
+            { toolbar_win = w; break; }
+        IM_CHECK(toolbar_win != nullptr);
+        if (toolbar_win == nullptr) return;
+        const ImGuiID apply_id = ctx->GetID("Apply Filters", toolbar_win->ID);
+        const ImGuiID clear_id = ctx->GetID("Clear All Filters", toolbar_win->ID);
+        IM_CHECK(ctx->ItemExists(apply_id));
+        IM_CHECK(ctx->ItemExists(clear_id));
+        if (!ctx->ItemExists(apply_id) || !ctx->ItemExists(clear_id)) return;
+
+        auto drain = [ctx, dp]() {
+            ctx->Yield(3);  // let ApplyFilters/ClearAllFilters dispatch the refetch
+            for (int i = 0; i < 120 &&
+                 dp->IsRequestPending(DataProvider::METRIC_PIVOT_TABLE_REQUEST_ID); i++)
+                ctx->Yield(2);
+            ctx->Yield(5);  // let HandleNewData apply the refetched rows
+        };
+        auto row_count = [dp]() {
+            return dp->ComputeModel().GetKernelSelectionTable().GetTableData().size();
+        };
+
+        // Start from a cleared filter so the baseline is unfiltered regardless of
+        // leftover state in the reused process.
+        ctx->ItemClick(clear_id);
+        drain();
+
+        // Snapshot the unfiltered Duration values, used both to pick a threshold that
+        // is sure to split the rows and to work out the expected filtered count without
+        // Optiq's filter SQL. Skip if any row has no Duration to filter on.
+        std::vector<double> durs;
+        {
+            const std::vector<std::vector<std::string>>& rows =
+                dp->ComputeModel().GetKernelSelectionTable().GetTableData();
+            for (const std::vector<std::string>& row : rows)
+            {
+                if (row.size() <= 2 || row[2].empty())
+                {
+                    ctx->LogWarning("SKIP: a kernel row has no Duration value to filter on");
+                    return;
+                }
+                durs.push_back(std::strtod(row[2].c_str(), nullptr));
+            }
+        }
+        const size_t unfiltered_count = durs.size();
+        if (unfiltered_count < 2)
+        {
+            ctx->LogWarning("SKIP: fewer than two kernel rows to split with a filter");
+            return;
+        }
+
+        double dmin = durs[0], dmax = durs[0], sum = 0.0;
+        for (double d : durs)
+        {
+            if (d < dmin) dmin = d;
+            if (d > dmax) dmax = d;
+            sum += d;
+        }
+        if (dmin == dmax)
+        {
+            ctx->LogWarning("SKIP: all kernel Durations equal; no numeric filter splits them");
+            return;
+        }
+        // The mean sits strictly between min and max, so "> mean" keeps at least one
+        // row and drops at least one. Use the same integer threshold in both the typed
+        // predicate and the expected-count math so the comparison is exact.
+        const long long threshold = static_cast<long long>(sum / static_cast<double>(unfiltered_count));
+        size_t expected = 0;
+        for (double d : durs)
+            if (d > static_cast<double>(threshold)) expected++;
+        if (expected == 0 || expected >= unfiltered_count)
+        {
+            ctx->LogWarning("SKIP: derived Duration threshold does not split the row set");
+            return;
+        }
+        const std::string predicate = ">" + std::to_string(threshold);
+
+        // Type the predicate into the Duration filter input, then apply it.
+        ctx->ItemInput(filter_id);
+        ctx->KeyChars(predicate.c_str());
+        ctx->Yield(2);  // let InputText commit the buffer before Apply deactivates it
+        ctx->ItemClick(apply_id);
+        drain();
+        const size_t filtered_count = row_count();
+
+        // Restore the unfiltered set before asserting so a failure can't leak the
+        // filter into later tests.
+        ctx->ItemClick(clear_id);
+        drain();
+        const size_t cleared_count = row_count();
+
+        IM_CHECK(filtered_count < unfiltered_count);   // the filter dropped rows
+        IM_CHECK(filtered_count == expected);          // exact, independently derived
+        IM_CHECK(cleared_count == unfiltered_count);   // clear restored the full set
     };
 
     t = IM_REGISTER_TEST(e, "app", "sys_timeline_select_named_track_event");

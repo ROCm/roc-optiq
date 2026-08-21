@@ -33,7 +33,7 @@
 ##### Annotations
 - Annotation UX enhancements: **Lock Annotation**, **Go-to-Anchor**, cross-highlighting between annotations and their associated tracks/events, text wrapping, and placement fixes.
 ##### Track details and tables
-- Refactored track statistics into reusable components; **Track Details** now displays statistics at full precision, without rounding or truncation.
+- Refactored track statistics into reusable components. **Track Details** now displays statistics at full precision, without rounding or truncation.
 
 #### Features and improvements for visualizing ROCm Compute Profiler analysis data
 ##### Roofline analysis

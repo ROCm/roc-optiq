@@ -77,7 +77,7 @@ Installation
 
    .. tab-item:: Windows
 
-      1. Download the ``.exe`` installer from the `ROCm Optiq GitHub Releases <https://github.com/ROCm/roc-optiq/releases>`_ page and follow the instructions in the install wizard.
+      1. Download the ``.msi`` installer from the `ROCm Optiq GitHub Releases <https://github.com/ROCm/roc-optiq/releases>`_ page and follow the instructions in the install wizard.
 
          .. image:: ../images/wizard.png
             :width: 500

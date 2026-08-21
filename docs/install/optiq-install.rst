@@ -49,7 +49,7 @@ Supported operating systems
      - dnf, tarball
    * - Oracle Linux
      - Oracle Linux 10, Oracle Linux 9, Oracle Linux 8
-     - dnf, Tarball
+     - dnf, tarball
    * - Windows
      - Windows 11
      - Windows installer

@@ -68,7 +68,7 @@ If the component does not need doxygen, delete this section for optimal build ti
 
 # Add more addtional package accordingly
 extensions = [
-    "rocm_docs", 
+    "rocm_docs", "rocm_docs.selector" 
 ] 
 
 html_title = f"{project} {version_number} documentation"

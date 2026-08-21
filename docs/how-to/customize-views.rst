@@ -178,7 +178,7 @@ Customize display options for each track by right clicking the **Description** a
 .. tip::
 
    The context menu when right-clicking a track's description in **Timeline View** also provides **Copy track name** and **Copy track ID**. 
-   You can select multiple tracks (for example, Ctrl-click or Shift-click in the Description area) and apply a **Track Options** change to all selected tracks at once instead of repeating the change per track.
+   You can select multiple tracks and apply a **Track Options** change to all selected tracks at once instead of repeating the change per track.
 
 Set the flow rendering display mode
 -----------------------------------

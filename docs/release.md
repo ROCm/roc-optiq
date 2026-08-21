@@ -36,6 +36,7 @@
 - Refactored track statistics into reusable components. **Track Details** now displays statistics at full precision, without rounding or truncation.
 
 #### Features and improvements for visualizing ROCm Compute Profiler analysis data
+
 ##### Roofline analysis
 - **Single-click filtering** for kernel data points, memory-level lines (L1, L2, HBM, LDS), and bandwidth peaks.
 - **Roofline line-thickness preference** to improve chart readability.

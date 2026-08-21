@@ -24,7 +24,7 @@
 #### Features and improvements for viewing ROCm Systems Profiler trace data
 
 ##### Timeline and navigation
-- **Zoom to Measurement** and **Zoom to Time Range Selection**: right-click the timeline and choose **Zoom to Measurement** or **Zoom to Time Range Selection** to fit that span to the timeline width, with the markers landing on the left and right edges.
+- **Zoom to Measurement** and **Zoom to Time Range Selection**: Right-click the timeline and choose **Zoom to Measurement** or **Zoom to Time Range Selection** to fit that span to the timeline width, with the markers landing on the left and right edges.
 ##### Tracks and topology
 - **Node-based color coding** for tracks and the sidebar topology, improving navigation in multi-node traces.
 - **Reveal in Topology** right-click action on a track, to jump directly from a track to its location in the System Topology View.

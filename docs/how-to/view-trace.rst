@@ -203,10 +203,11 @@ Sample counter track statistics
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 For sample counter tracks, pills showing standard deviation and average display next to the counter label. These can be shown/hidden using the **Track Options** menu.  
-Additionally, min and max value pills can also be shown/hidden. 
-When a counter track is expanded to sufficient height, the Y-axis now shows incremental scale tick labels between the minium and maxium values, making intermediate values easier to read without opening **Track Details**.
+Additionally, min and max value pills can also be shown/hidden.
+ 
+When a counter track is expanded to sufficient height, the Y-axis shows incremental scale tick labels between the minimum and maximum values, making intermediate values easier to read.
 Similar to queue utilization, the values in these pills react to reflect the values in the current view or active time-range filter. 
-The Counter statistics are also visible in the **Track Details** tab.
+The Counter statistics are also visible in the **Track Details** tab for the selected track(s).
 
 .. image:: ../images/new-track-details-statistics.png
    :width: 800

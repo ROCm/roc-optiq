@@ -86,7 +86,7 @@ Supported data sources
 
 For details on viewing each format, see :ref:`view-systems` and :ref:`view-analysis`. If a file doesn't open, see :ref:`trace troubleshooting <view-trace-troubleshooting>` and :ref:`analysis troubleshooting <view-analysis-troubleshooting>`.
 
-Welcome page 
+Welcome page
 ============
 
 When ROCm Optiq starts without an open project, the Welcome page displays: 

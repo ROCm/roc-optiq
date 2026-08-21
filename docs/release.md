@@ -42,26 +42,28 @@
 
 #### Experimental
 
-.. note::
-   These features are in progress and available for preview only (build from source). Behavior and UI are subject to change.
-   - **Profiler launch**: Launch the ROCm profiler locally or on a remote host, with remote file access/browsing and an SSH-based remote profiling workflow (redesigned remote profile panels and profiler launcher UI).
-   - **New trace formats**: Load Perfetto and Chrome (JSON) traces.
+```{note}
+These features are in progress and available for preview only when ROCm Optiq is built from source. Behavior and UI are subject to change.
+```
+- **Profiler launch**: Launch the ROCm profiler locally or on a remote host, with remote file access/browsing and an SSH-based remote profiling workflow (redesigned remote profile panels and profiler launcher UI).
+- **New trace formats**: Load Perfetto and Chrome (JSON) traces.
 
-###Changed
+
+### Changed
 
 - **Rendering and performance**: Added a ``RenderScheduler`` to drive lazy-render wake-ups, and adopted ImGui's built-in DPI handling, replacing the previous custom solution.
 - Improved how Stream nodes are displayed in the sidebar topology tree.
 - More compact flame-chart events, with fixed resize/expand behavior.
 - Incremental Y-axis scale tick labels for expanded counter tracks.
 
-###Fixes
+### Fixes
 - Fixed inconsistent kernel highlight color in the compute summary view.
 - Fixed welcome-page links firing through overlaying modal dialogs (links are now real ImGui buttons that respect hover ownership).
 - Fixed macOS Ctrl-Space modifier recovery.
 - Fixed editable counter-track value inputs.
 - Fixed data-flow arrow starting from level zero on ``.rpd`` traces.
 - Fixed the Systems multi-node summary window showing data only for the first node in the ``.yaml``.
-- Fixed loading workload Speed-of-Light for compute schema < 1.3.0; query builders now report and skip unsupported queries.
+- Fixed loading workload Speed-of-Light for compute schema < 1.3.0: Query builders now report and skip unsupported queries.
 - JobSystem fixes.
 
 ## ROCm Optiq (Beta) 0.5.0

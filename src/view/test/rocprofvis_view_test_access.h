@@ -21,7 +21,11 @@
 #include "compute/rocprofvis_compute_kernel_details.h"
 #include "compute/rocprofvis_compute_kernel_metric_table.h"
 #include "compute/rocprofvis_compute_view.h"
+#include "compute/rocprofvis_compute_workload_view.h"
+#include "compute/rocprofvis_compute_comparison.h"
+#include "compute/rocprofvis_compute_table_view.h"
 #include "compute/rocprofvis_compute_selection.h"
+#include "model/compute/rocprofvis_compute_model_types.h"
 #include "widgets/rocprofvis_infinite_scroll_table.h"
 #include "widgets/rocprofvis_tab_container.h"
 
@@ -67,6 +71,81 @@ struct ComputeKernelDetailsViewTestPeer
 {
     ComputeKernelDetailsView& v;
     KernelMetricTable* KernelMetricTablePtr() const { return v.m_kernel_metric_table.get(); }
+};
+
+struct ComputeWorkloadViewTestPeer
+{
+    const ComputeWorkloadView& v;
+    const WorkloadInfo* WorkloadInfoPtr() const { return v.m_workload_info; }
+    size_t SystemInfoCols() const
+    {
+        return v.m_workload_info ? v.m_workload_info->system_info.size() : 0;
+    }
+    size_t SystemInfoRows() const
+    {
+        return (v.m_workload_info && !v.m_workload_info->system_info.empty())
+                   ? v.m_workload_info->system_info[0].size()
+                   : 0;
+    }
+    size_t ProfilingConfigCols() const
+    {
+        return v.m_workload_info ? v.m_workload_info->profiling_config.size() : 0;
+    }
+    size_t ProfilingConfigRows() const
+    {
+        return (v.m_workload_info && !v.m_workload_info->profiling_config.empty())
+                   ? v.m_workload_info->profiling_config[0].size()
+                   : 0;
+    }
+};
+
+struct ComputeComparisonViewTestPeer
+{
+    ComputeComparisonView& v;
+    uint32_t TargetWorkloadId() const { return v.m_target_workload_id; }
+    uint32_t TargetKernelId() const { return v.m_target_kernel_id; }
+    size_t   CategoryCount() const { return v.m_categories.size(); }
+    // True while either the baseline or target metrics fetch is still pending.
+    bool RequestsPending() const
+    {
+        return v.m_data_provider.IsRequestPending(v.m_baseline_request_id) ||
+               v.m_data_provider.IsRequestPending(v.m_target_request_id);
+    }
+    // True once a built table has a "Difference##" column, i.e. deltas were
+    // actually computed (not just tables allocated).
+    bool HasDifferenceColumn() const
+    {
+        for(const auto& category : v.m_categories)
+        {
+            for(const auto& table : category.tables)
+            {
+                if(!table) continue;
+                for(const std::string& name : table->OrderedValueNames())
+                {
+                    if(name.rfind("Difference##", 0) == 0) return true;
+                }
+            }
+        }
+        return false;
+    }
+};
+
+struct ComputeTableViewTestPeer
+{
+    ComputeTableView& v;
+    bool   FetchPending() const { return v.m_fetch_pending; }
+    size_t TableWidgetCount() const { return v.m_table_widgets.size(); }
+    size_t PinnedCount() const { return v.m_pinned_metrics.size(); }
+    bool   IsPinned(const MetricId& id) const { return v.m_pinned_metrics.count(id) > 0; }
+    MetricId FirstPinned() const { return *v.m_pinned_metrics.begin(); }
+    // Test-only unpin for state restore (no public unpin exists). Skips the pin
+    // callback's source-table ChangePinState; safe only because callers refetch
+    // after, rebuilding pin state from m_pinned_metrics.
+    void Unpin(const MetricId& id)
+    {
+        v.m_pinned_metrics.erase(id);
+        v.m_pinned_metric_table.RefillTable(v.m_pinned_metrics);
+    }
 };
 
 // The kernel metric table's sort column/order are updated each frame from the

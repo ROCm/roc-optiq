@@ -279,6 +279,8 @@ private:
     EventManager::SubscriptionToken m_workload_selection_changed_token;
     EventManager::SubscriptionToken m_kernel_selection_changed_token;
     EventManager::SubscriptionToken m_metrics_fetched_token;
+
+    friend struct ComputeComparisonViewTestPeer;
 };
 
 }  // namespace View

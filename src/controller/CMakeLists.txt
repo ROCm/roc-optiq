@@ -133,6 +133,15 @@ if(BUILD_TESTING)
     add_test(NAME ${SYSTEM_TEST_NAME}-DB COMMAND ${SYSTEM_TEST_NAME} --input_file "${CMAKE_SOURCE_DIR}/sample/rocpd-transpose.db")
     set_tests_properties(${SYSTEM_TEST_NAME}-DB PROPERTIES RUN_SERIAL ON)
     set_tests_properties(${SYSTEM_TEST_NAME}-DB PROPERTIES WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}")
+    # In-place add/remove merge integrity suite: needs two distinct, schema-compatible traces
+    # supplied via ROCPROFVIS_MERGE_TEST_TRACE_A/_B (nothing is shipped). Registered only when a
+    # valid pair is available; the single-file runs above self-skip this suite.
+    if(ROCPROFVIS_MERGE_TEST_TRACE_A AND ROCPROFVIS_MERGE_TEST_TRACE_B AND
+       EXISTS "${ROCPROFVIS_MERGE_TEST_TRACE_A}" AND EXISTS "${ROCPROFVIS_MERGE_TEST_TRACE_B}")
+        add_test(NAME ${SYSTEM_TEST_NAME}-MERGE COMMAND ${SYSTEM_TEST_NAME} --input_file "${ROCPROFVIS_MERGE_TEST_TRACE_A}" --input_file_b "${ROCPROFVIS_MERGE_TEST_TRACE_B}" "In-place multi-trace data integrity")
+        set_tests_properties(${SYSTEM_TEST_NAME}-MERGE PROPERTIES RUN_SERIAL ON)
+        set_tests_properties(${SYSTEM_TEST_NAME}-MERGE PROPERTIES WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}")
+    endif()
 	add_executable(${COMPUTE_TEST_NAME} tests/rocprofvis_controller_compute_tests.cpp)
 	target_compile_definitions(${COMPUTE_TEST_NAME} PRIVATE ROCPROFVIS_TEST_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
 	target_link_libraries(${COMPUTE_TEST_NAME} PRIVATE ${PROJECT_NAME})

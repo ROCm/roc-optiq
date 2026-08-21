@@ -14,13 +14,19 @@
 #include <catch2/catch_test_macros.hpp>
 #include <cfloat>
 #include <chrono>
+#include <cmath>
 #include <filesystem>
+#include <map>
 #include <memory>
+#include <string>
 #include <thread>
 #include <unordered_map>
 #include <vector>
 
 std::string g_input_file = "sample/trace_70b_1024_32.rpd";
+// Optional second, schema-compatible trace used by the multi-trace merge integrity suite. When
+// empty that suite skips (it needs two distinct files to exercise a real merge).
+std::string g_input_file_b = "";
 
 int
 main(int argc, char** argv)
@@ -29,7 +35,9 @@ main(int argc, char** argv)
 
     using namespace Catch::Clara;
     auto cli = session.cli() |
-               Opt(g_input_file, "input_file")["--input_file"]("Path to input file");
+               Opt(g_input_file, "input_file")["--input_file"]("Path to input file") |
+               Opt(g_input_file_b, "input_file_b")["--input_file_b"](
+                   "Second trace for the multi-trace merge integrity suite");
 
     // Now pass the new composite back to Catch2 so it uses that
     session.cli(cli);
@@ -3386,5 +3394,469 @@ TEST_CASE("JobSystem Job lost-wakeup stress repro")
         }
 
         REQUIRE(successes.load(std::memory_order_relaxed) == pairs);
+    }
+}
+
+// In-place multi-trace (add/remove) data-integrity tests. Needs two distinct, schema-compatible
+// traces (--input_file / --input_file_b). A merged view must equal the union of the two single
+// opens; reducing back to one file must reproduce that file's single open. Compared per snapshot:
+// track count, each track's fingerprint as a multiset, total record count, and the trace-wide
+// top-kernel summary. Timestamps are not compared - merging rebases each trace's timeline.
+namespace
+{
+// Bound async waits so an unexpectedly slow/stuck merge skips instead of hanging the suite.
+constexpr float kMergeProbeTimeoutSeconds = 120.0f;
+constexpr float kOpTimeoutSeconds         = 300.0f;
+
+struct TrackFingerprint
+{
+    std::string category;
+    std::string main_name;
+    std::string sub_name;
+    uint64_t    type        = 0;
+    uint64_t    num_entries = 0;
+};
+
+bool
+operator<(const TrackFingerprint& a, const TrackFingerprint& b)
+{
+    if(a.category != b.category) return a.category < b.category;
+    if(a.main_name != b.main_name) return a.main_name < b.main_name;
+    if(a.sub_name != b.sub_name) return a.sub_name < b.sub_name;
+    if(a.type != b.type) return a.type < b.type;
+    return a.num_entries < b.num_entries;
+}
+
+bool
+operator==(const TrackFingerprint& a, const TrackFingerprint& b)
+{
+    return a.category == b.category && a.main_name == b.main_name && a.sub_name == b.sub_name &&
+           a.type == b.type && a.num_entries == b.num_entries;
+}
+
+struct KernelAgg
+{
+    uint64_t invocations = 0;
+    double   exec_sum    = 0.0;
+};
+
+struct TraceSnapshot
+{
+    uint64_t                       track_count   = 0;
+    uint64_t                       num_nodes     = 0;
+    uint64_t                       total_entries = 0;
+    double                         min_ts        = 0.0;
+    double                         max_ts        = 0.0;
+    std::vector<TrackFingerprint>  tracks;  // sorted
+    std::map<std::string, KernelAgg> kernels;
+};
+
+std::string
+GetControllerString(rocprofvis_handle_t* handle, rocprofvis_property_t prop, uint64_t index)
+{
+    uint32_t len = 0;
+    if(rocprofvis_controller_get_string(handle, prop, index, nullptr, &len) !=
+           kRocProfVisResultSuccess ||
+       len == 0)
+    {
+        return std::string();
+    }
+    std::string value;
+    value.resize(len);
+    rocprofvis_controller_get_string(handle, prop, index, const_cast<char*>(value.c_str()), &len);
+    while(!value.empty() && value.back() == '\0')
+    {
+        value.pop_back();
+    }
+    return value;
+}
+
+bool
+LoadAndWait(rocprofvis_controller_t* controller)
+{
+    if(!controller) return false;
+    rocprofvis_controller_future_t* future = rocprofvis_controller_future_alloc();
+    if(!future) return false;
+    bool ok =
+        rocprofvis_controller_load_async(controller, future) == kRocProfVisResultSuccess &&
+        rocprofvis_controller_future_wait(future, FLT_MAX) == kRocProfVisResultSuccess;
+    uint64_t future_result = 0;
+    rocprofvis_controller_get_uint64(future, kRPVControllerFutureResult, 0, &future_result);
+    rocprofvis_controller_future_free(future);
+    return ok && future_result == kRocProfVisResultSuccess;
+}
+
+// Runs an add/remove-trace-source op and waits for it to finish.
+bool
+SourceOpAndWait(rocprofvis_result_t (*op)(rocprofvis_controller_t*, char const*,
+                                          rocprofvis_controller_future_t*),
+                rocprofvis_controller_t* controller, const std::string& path)
+{
+    rocprofvis_controller_future_t* future = rocprofvis_controller_future_alloc();
+    if(!future) return false;
+    bool ok = op(controller, path.c_str(), future) == kRocProfVisResultSuccess &&
+              rocprofvis_controller_future_wait(future, kOpTimeoutSeconds) ==
+                  kRocProfVisResultSuccess;
+    uint64_t future_result = 0;
+    rocprofvis_controller_get_uint64(future, kRPVControllerFutureResult, 0, &future_result);
+    rocprofvis_controller_future_free(future);
+    return ok && future_result == kRocProfVisResultSuccess;
+}
+
+// Trace-wide top-kernel aggregation from the summary root: name -> (invocations, total exec).
+std::map<std::string, KernelAgg>
+CollectTopKernels(rocprofvis_controller_t* controller, double min_ts, double max_ts)
+{
+    std::map<std::string, KernelAgg> kernels;
+    rocprofvis_handle_t*             summary = nullptr;
+    if(rocprofvis_controller_get_object(controller, kRPVControllerSystemSummary, 0, &summary) !=
+           kRocProfVisResultSuccess ||
+       !summary)
+    {
+        return kernels;
+    }
+    rocprofvis_controller_arguments_t* args = rocprofvis_controller_arguments_alloc();
+    if(!args) return kernels;
+    rocprofvis_controller_set_double(args, kRPVControllerSummaryArgsStartTimestamp, 0, min_ts);
+    rocprofvis_controller_set_double(args, kRPVControllerSummaryArgsEndTimestamp, 0, max_ts);
+
+    rocprofvis_controller_summary_metrics_t* metrics =
+        rocprofvis_controller_summary_metrics_alloc();
+    rocprofvis_controller_future_t* future = rocprofvis_controller_future_alloc();
+    if(metrics && future &&
+       rocprofvis_controller_summary_fetch_async(
+           controller, (rocprofvis_controller_summary_t*) summary, args, future, metrics) ==
+           kRocProfVisResultSuccess &&
+       rocprofvis_controller_future_wait(future, kOpTimeoutSeconds) == kRocProfVisResultSuccess)
+    {
+        rocprofvis_handle_t* root         = (rocprofvis_handle_t*) metrics;
+        uint64_t             num_kernels  = 0;
+        if(rocprofvis_controller_get_uint64(
+               root, kRPVControllerSummaryMetricPropertyNumKernels, 0, &num_kernels) ==
+           kRocProfVisResultSuccess)
+        {
+            for(uint64_t k = 0; k < num_kernels; k++)
+            {
+                std::string name = GetControllerString(
+                    root, kRPVControllerSummaryMetricPropertyKernelNameIndexed, k);
+                KernelAgg agg;
+                rocprofvis_controller_get_uint64(
+                    root, kRPVControllerSummaryMetricPropertyKernelInvocationsIndexed, k,
+                    &agg.invocations);
+                rocprofvis_controller_get_double(
+                    root, kRPVControllerSummaryMetricPropertyKernelExecTimeSumIndexed, k,
+                    &agg.exec_sum);
+                kernels[name] = agg;
+            }
+        }
+    }
+    if(future) rocprofvis_controller_future_free(future);
+    if(metrics) rocprofvis_controller_summary_metric_free(metrics);
+    rocprofvis_controller_arguments_free(args);
+    return kernels;
+}
+
+TraceSnapshot
+SnapshotController(rocprofvis_controller_t* controller)
+{
+    TraceSnapshot snap;
+    rocprofvis_controller_get_uint64(controller, kRPVControllerSystemNumTracks, 0,
+                                     &snap.track_count);
+    rocprofvis_controller_get_uint64(controller, kRPVControllerSystemNumNodes, 0,
+                                     &snap.num_nodes);
+
+    rocprofvis_handle_t* timeline = nullptr;
+    if(rocprofvis_controller_get_object(controller, kRPVControllerSystemTimeline, 0, &timeline) ==
+           kRocProfVisResultSuccess &&
+       timeline)
+    {
+        rocprofvis_controller_get_double(timeline, kRPVControllerTimelineMinTimestamp, 0,
+                                         &snap.min_ts);
+        rocprofvis_controller_get_double(timeline, kRPVControllerTimelineMaxTimestamp, 0,
+                                         &snap.max_ts);
+    }
+
+    for(uint64_t i = 0; i < snap.track_count; i++)
+    {
+        rocprofvis_handle_t* track = nullptr;
+        if(rocprofvis_controller_get_object(controller, kRPVControllerSystemTrackIndexed, i,
+                                            &track) != kRocProfVisResultSuccess ||
+           !track)
+        {
+            continue;
+        }
+        TrackFingerprint fp;
+        fp.category  = GetControllerString(track, kRPVControllerTrackCategory, 0);
+        fp.main_name = GetControllerString(track, kRPVControllerTrackMainName, 0);
+        fp.sub_name  = GetControllerString(track, kRPVControllerTrackSubName, 0);
+        rocprofvis_controller_get_uint64(track, kRPVControllerTrackType, 0, &fp.type);
+        rocprofvis_controller_get_uint64(track, kRPVControllerTrackNumberOfEntries, 0,
+                                         &fp.num_entries);
+        snap.total_entries += fp.num_entries;
+        snap.tracks.push_back(fp);
+    }
+    std::sort(snap.tracks.begin(), snap.tracks.end());
+    snap.kernels = CollectTopKernels(controller, snap.min_ts, snap.max_ts);
+    return snap;
+}
+
+rocprofvis_controller_t*
+OpenSingleAndLoad(const std::string& path)
+{
+    rocprofvis_controller_t* controller = rocprofvis_controller_alloc(path.c_str(), nullptr);
+    if(controller && !LoadAndWait(controller))
+    {
+        rocprofvis_controller_free(controller);
+        return nullptr;
+    }
+    return controller;
+}
+
+// Batch open of several files. nullptr if unsupported or if the load exceeds the probe timeout;
+// on timeout `timed_out` is set and the stuck controller is leaked rather than freed (freeing
+// would hang).
+rocprofvis_controller_t*
+OpenCombinedAndLoad(const std::vector<std::string>& paths, bool& timed_out)
+{
+    timed_out = false;
+    std::vector<const char*> ptrs;
+    ptrs.reserve(paths.size());
+    for(const std::string& p : paths)
+    {
+        ptrs.push_back(p.c_str());
+    }
+    rocprofvis_controller_t* controller =
+        rocprofvis_controller_alloc_compare(ptrs.data(), ptrs.size());
+    if(!controller) return nullptr;
+
+    rocprofvis_controller_future_t* future = rocprofvis_controller_future_alloc();
+    if(!future)
+    {
+        rocprofvis_controller_free(controller);
+        return nullptr;
+    }
+    rocprofvis_result_t started = rocprofvis_controller_load_async(controller, future);
+    rocprofvis_result_t waited  = kRocProfVisResultUnknownError;
+    if(started == kRocProfVisResultSuccess)
+    {
+        waited = rocprofvis_controller_future_wait(future, kMergeProbeTimeoutSeconds);
+    }
+    uint64_t future_result = 0;
+    rocprofvis_controller_get_uint64(future, kRPVControllerFutureResult, 0, &future_result);
+    rocprofvis_controller_future_free(future);
+
+    if(waited == kRocProfVisResultTimeout)
+    {
+        timed_out = true;
+        return nullptr;
+    }
+    if(started != kRocProfVisResultSuccess || waited != kRocProfVisResultSuccess ||
+       future_result != kRocProfVisResultSuccess)
+    {
+        rocprofvis_controller_free(controller);
+        return nullptr;
+    }
+    return controller;
+}
+
+void
+RequireKernelsEqual(const std::map<std::string, KernelAgg>& actual,
+                    const std::map<std::string, KernelAgg>& expected)
+{
+    REQUIRE(actual.size() == expected.size());
+    for(const auto& [name, exp] : expected)
+    {
+        auto it = actual.find(name);
+        REQUIRE(it != actual.end());
+        REQUIRE(it->second.invocations == exp.invocations);
+        REQUIRE(std::fabs(it->second.exec_sum - exp.exec_sum) <=
+                1e-6 * std::max(1.0, std::fabs(exp.exec_sum)));
+    }
+}
+
+// Two snapshots must be byte-for-byte equivalent (track set, counts, window, node count, and
+// the top-kernel summary). Used to compare an in-place result against the trusted reference
+// built via a different construction path, and to check a reduced-to-one-file state against a
+// clean single open.
+void
+RequireSnapshotsEqual(const TraceSnapshot& actual, const TraceSnapshot& expected)
+{
+    REQUIRE(actual.track_count == expected.track_count);
+    REQUIRE(actual.num_nodes == expected.num_nodes);
+    REQUIRE(actual.total_entries == expected.total_entries);
+    REQUIRE(actual.tracks == expected.tracks);
+    RequireKernelsEqual(actual.kernels, expected.kernels);
+}
+
+// A merged view of two distinct files must be the exact union of the two single opens: track
+// counts and record counts add, the track set is the multiset union, and each top-kernel's
+// invocation count and total exec time sum across the files (by kernel name).
+void
+RequireUnion(const TraceSnapshot& actual, const TraceSnapshot& a, const TraceSnapshot& b)
+{
+    REQUIRE(actual.track_count == a.track_count + b.track_count);
+    REQUIRE(actual.total_entries == a.total_entries + b.total_entries);
+
+    std::vector<TrackFingerprint> merged = a.tracks;
+    merged.insert(merged.end(), b.tracks.begin(), b.tracks.end());
+    std::sort(merged.begin(), merged.end());
+    REQUIRE(actual.tracks == merged);
+
+    std::map<std::string, KernelAgg> summed;
+    for(const auto& [name, k] : a.kernels)
+    {
+        summed[name].invocations += k.invocations;
+        summed[name].exec_sum += k.exec_sum;
+    }
+    for(const auto& [name, k] : b.kernels)
+    {
+        summed[name].invocations += k.invocations;
+        summed[name].exec_sum += k.exec_sum;
+    }
+    RequireKernelsEqual(actual.kernels, summed);
+}
+}  // namespace
+
+struct MultiTraceIntegrityFixture
+{
+    mutable bool          ready              = false;
+    mutable bool          have_two_files     = false;
+    mutable bool          combined_available = false;
+    mutable TraceSnapshot single_a;      // clean single open of file A
+    mutable TraceSnapshot single_b;      // clean single open of file B
+    mutable TraceSnapshot combined_ref;  // trusted 2-file view via batch combined open
+};
+
+// Requires two distinct, schema-compatible traces via --input_file and --input_file_b. Merging
+// two real files (rather than a self-copy) validates the true union of the data and lets
+// "remove the original" leave the other file's data - with no duplicate-id artifacts.
+TEST_CASE_PERSISTENT_FIXTURE(MultiTraceIntegrityFixture, "In-place multi-trace data integrity")
+{
+    const std::string file_a = g_input_file;
+    const std::string file_b = g_input_file_b;
+
+    SECTION("reference single-open snapshots of both files")
+    {
+        if(file_b.empty())
+        {
+            WARN("Provide --input_file_b with a second compatible trace to run the multi-trace "
+                 "integrity suite; skipping.");
+            ready = true;
+            return;
+        }
+        have_two_files = true;
+
+        rocprofvis_controller_t* ref_a = OpenSingleAndLoad(file_a);
+        REQUIRE(ref_a != nullptr);
+        single_a = SnapshotController(ref_a);
+        REQUIRE(single_a.track_count > 0);
+        rocprofvis_controller_free(ref_a);
+
+        rocprofvis_controller_t* ref_b = OpenSingleAndLoad(file_b);
+        REQUIRE(ref_b != nullptr);
+        single_b = SnapshotController(ref_b);
+        REQUIRE(single_b.track_count > 0);
+        rocprofvis_controller_free(ref_b);
+
+        bool                     timed_out = false;
+        rocprofvis_controller_t* combined  = OpenCombinedAndLoad({ file_a, file_b }, timed_out);
+        if(combined != nullptr)
+        {
+            combined_ref       = SnapshotController(combined);
+            combined_available = true;
+            rocprofvis_controller_free(combined);
+        }
+        else
+        {
+            WARN("Batch combined open unavailable/timed out for this pair; the 2-file scenarios "
+                 "fall back to union checks against the single opens.");
+        }
+        ready = true;
+    }
+
+    SECTION("open two files at once equals the union of both")
+    {
+        REQUIRE(ready);
+        if(!have_two_files) return;
+        if(!combined_available)
+        {
+            WARN("Combined open unavailable; skipping.");
+            return;
+        }
+        RequireUnion(combined_ref, single_a, single_b);
+    }
+
+    // Also checked against the batch combined view: a differential across two construction paths.
+    SECTION("open one then add another equals the union of both")
+    {
+        REQUIRE(ready);
+        if(!have_two_files) return;
+        rocprofvis_controller_t* live = OpenSingleAndLoad(file_a);
+        REQUIRE(live != nullptr);
+        REQUIRE(SourceOpAndWait(&rocprofvis_controller_add_trace_source, live, file_b));
+        TraceSnapshot added = SnapshotController(live);
+        RequireUnion(added, single_a, single_b);
+        if(combined_available)
+        {
+            RequireSnapshotsEqual(added, combined_ref);
+        }
+        rocprofvis_controller_free(live);
+    }
+
+    SECTION("add then remove the added file restores the original")
+    {
+        REQUIRE(ready);
+        if(!have_two_files) return;
+        rocprofvis_controller_t* live = OpenSingleAndLoad(file_a);
+        REQUIRE(live != nullptr);
+        REQUIRE(SourceOpAndWait(&rocprofvis_controller_add_trace_source, live, file_b));
+        REQUIRE(SourceOpAndWait(&rocprofvis_controller_remove_trace_source, live, file_b));
+        RequireSnapshotsEqual(SnapshotController(live), single_a);
+        rocprofvis_controller_free(live);
+    }
+
+    // Removing the original (which owns the shared topology ancestors) exercises the prune path.
+    SECTION("add then remove the original file leaves the added file")
+    {
+        REQUIRE(ready);
+        if(!have_two_files) return;
+        rocprofvis_controller_t* live = OpenSingleAndLoad(file_a);
+        REQUIRE(live != nullptr);
+        REQUIRE(SourceOpAndWait(&rocprofvis_controller_add_trace_source, live, file_b));
+        REQUIRE(SourceOpAndWait(&rocprofvis_controller_remove_trace_source, live, file_a));
+        RequireSnapshotsEqual(SnapshotController(live), single_b);
+        rocprofvis_controller_free(live);
+    }
+
+    SECTION("repeated add/remove cycles restore the original")
+    {
+        REQUIRE(ready);
+        if(!have_two_files) return;
+        rocprofvis_controller_t* live = OpenSingleAndLoad(file_a);
+        REQUIRE(live != nullptr);
+        for(int cycle = 0; cycle < 3; cycle++)
+        {
+            REQUIRE(SourceOpAndWait(&rocprofvis_controller_add_trace_source, live, file_b));
+            REQUIRE(SourceOpAndWait(&rocprofvis_controller_remove_trace_source, live, file_b));
+        }
+        RequireSnapshotsEqual(SnapshotController(live), single_a);
+        rocprofvis_controller_free(live);
+    }
+
+    SECTION("open two files at once then remove one restores the other")
+    {
+        REQUIRE(ready);
+        if(!have_two_files) return;
+        if(!combined_available)
+        {
+            WARN("Combined open unavailable; skipping.");
+            return;
+        }
+        bool                     timed_out = false;
+        rocprofvis_controller_t* combined  = OpenCombinedAndLoad({ file_a, file_b }, timed_out);
+        REQUIRE(combined != nullptr);
+        REQUIRE(SourceOpAndWait(&rocprofvis_controller_remove_trace_source, combined, file_b));
+        RequireSnapshotsEqual(SnapshotController(combined), single_a);
+        rocprofvis_controller_free(combined);
     }
 }

@@ -35,6 +35,14 @@ option(ROCPROFVIS_ENABLE_UI_TESTS "Build view-layer Dear ImGui UI tests" OFF)
 # graduate.
 option(ROCPROFVIS_ENABLE_PROFILER "Build with in-app profiler launch support (in development)" OFF)
 option(ROCPROFVIS_ENABLE_REMOTE "Build with remote/SSH support (in development)" OFF)
+option(ROCPROFVIS_ENABLE_VIEW_TESTS "Build the headless view-layer integrity test (recompiles the view sources)" OFF)
+
+# Traces for the in-place add/remove merge integrity suites (controller + view). Not shipped -
+# set BOTH to any two distinct, schema-compatible traces to enable those tests, e.g.
+#   cmake -DROCPROFVIS_MERGE_TEST_TRACE_A=a.db -DROCPROFVIS_MERGE_TEST_TRACE_B=b.db
+# When unset, the merge tests are simply not registered.
+set(ROCPROFVIS_MERGE_TEST_TRACE_A "" CACHE FILEPATH "First trace for the merge integrity tests")
+set(ROCPROFVIS_MERGE_TEST_TRACE_B "" CACHE FILEPATH "Second distinct, compatible trace for the merge integrity tests")
 
 # The two flags are independent: profiler launch builds without remote (the
 # SSH connection UI inside the launcher is compiled out via
@@ -396,6 +404,66 @@ if(BUILD_TESTING AND ROCPROFVIS_ENABLE_UI_TESTS)
     add_test(NAME roc-optiq-ui-tests-compute COMMAND roc-optiq-tests --run-tests -f "${CMAKE_SOURCE_DIR}/sample/rocprof_compute_23ed6f36.db")
     set_tests_properties(roc-optiq-ui-tests-compute PROPERTIES RUN_SERIAL ON)
     set_tests_properties(roc-optiq-ui-tests-compute PROPERTIES WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}")
+endif()
+
+# Headless VIEW-layer integrity test (in-place add/remove): drives a real DataProvider with no
+# window/GL/ImGui context and asserts on the view models. Opt-in because it recompiles the view
+# sources; needs two distinct traces supplied via ROCPROFVIS_MERGE_TEST_TRACE_A/_B.
+if(BUILD_TESTING AND ROCPROFVIS_ENABLE_VIEW_TESTS)
+    set(VIEW_TEST_TARGET ${TARGET_NAME}-view-tests)
+    add_executable(${VIEW_TEST_TARGET} ${APP_FILES} ${VIEW_FILES}
+        src/view/tests/rocprofvis_view_tests.cpp)
+    add_dependencies(${VIEW_TEST_TARGET} generate_icon_header)
+    target_include_directories(${VIEW_TEST_TARGET} PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/app/inc
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/app/src
+        ${CMAKE_CURRENT_SOURCE_DIR}/resources
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/controller/inc
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/view/inc
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/view/src
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/view/src/model
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/view/src/icons
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/view/src/widgets
+        ${Vulkan_INCLUDE_DIRS}
+        ${Vulkan_INCLUDE_DIR}
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/model/inc
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/core/inc
+    )
+    if(ROCPROFVIS_ENABLE_PROFILER)
+        target_include_directories(${VIEW_TEST_TARGET} PRIVATE
+            ${CMAKE_CURRENT_SOURCE_DIR}/src/view/src/profiler)
+    endif()
+    target_link_libraries(${VIEW_TEST_TARGET} PRIVATE
+        imgui
+        implot
+        glfw
+        ${TARGET_NAME}-controller
+        datamodel
+        ${TARGET_NAME}-core
+        spdlog
+        sqlite3
+        json
+        ImGuiFileDialog
+        Catch2::Catch2WithMain
+        "${Vulkan_LIBRARIES}"
+        OpenGL::GL
+    )
+    if(USE_NATIVE_FILE_DIALOG)
+        target_link_libraries(${VIEW_TEST_TARGET} PRIVATE nfd)
+        target_compile_definitions(${VIEW_TEST_TARGET} PRIVATE ROCPROFVIS_HAVE_NATIVE_FILE_DIALOG)
+    endif()
+    if(APPLE)
+        target_link_libraries(${VIEW_TEST_TARGET} PRIVATE "-framework AppKit")
+    endif()
+    if(ROCPROFVIS_MERGE_TEST_TRACE_A AND ROCPROFVIS_MERGE_TEST_TRACE_B AND
+       EXISTS "${ROCPROFVIS_MERGE_TEST_TRACE_A}" AND EXISTS "${ROCPROFVIS_MERGE_TEST_TRACE_B}")
+        add_test(NAME ${VIEW_TEST_TARGET}-MERGE COMMAND ${VIEW_TEST_TARGET}
+            --input_file "${ROCPROFVIS_MERGE_TEST_TRACE_A}"
+            --input_file_b "${ROCPROFVIS_MERGE_TEST_TRACE_B}"
+            "In-place multi-trace view integrity")
+        set_tests_properties(${VIEW_TEST_TARGET}-MERGE PROPERTIES RUN_SERIAL ON)
+        set_tests_properties(${VIEW_TEST_TARGET}-MERGE PROPERTIES WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}")
+    endif()
 endif()
 
 # TEMPORARY (remote/SSH): only link the SSH/crypto stack into the executable

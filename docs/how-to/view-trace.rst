@@ -285,7 +285,7 @@ To clear the time range selection, press **Esc** or right-click and select **Rem
 
 .. note::
 
-   When a time-range filter is active, all events intersecting that time-range remain at full brightness; events outside the range are dimmed. 
+   When a time range filter is active, events inside the range stay at full brightness, and events outside the range are dimmed.
 
 .. _advanced:
 

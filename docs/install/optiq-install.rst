@@ -43,7 +43,7 @@ Supported operating systems
      - Install methods
    * - Ubuntu
      - Ubuntu 26.04, Ubuntu 24.04, Ubuntu 22.04
-     - apt, Tarball
+     - apt, tarball
    * - RHEL
      - RHEL 10, RHEL 9, RHEL 8
      - dnf, Tarball

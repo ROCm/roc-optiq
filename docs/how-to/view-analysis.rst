@@ -99,6 +99,7 @@ Showing where kernels are positioned relative to these rooflines helps determine
 - Click |gear| in the menu to show or hide rooflines or arithmetic intensity points. 
 - Hold your cursor over a dot to view detailed information about the kernel it represents. The information includes the Kernel name, Invocation(s), Duration, Arithmetic Intensity, and Performance. 
 - Use presets to display information specific to a particular data type. 
+- Select a kernel, a memory-level line (L1, L2, high bandwidth memory (HBM), or local data share (LDS)), or a bandwidth peak from the dropdown menus to filter the chart to that selection.
 - Use the Roofline **Legend/Menu position** control options to reposition the Roofline Legend/Menu. The options include: 
 
   - Inside, Top Left

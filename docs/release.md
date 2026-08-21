@@ -2,7 +2,7 @@
 
 <head>
   <meta charset="UTF-8">
-  <meta name="description" content="ROCm Optiq (Beta) release history">
+  <meta name="description" content="ROCm Optiq release history">
   <meta name="keywords" content="documentation, release history, ROCm, AMD">
 </head>
 
@@ -10,11 +10,62 @@
 
 | Version | Release date |
 | ------- | ------------ |
+| [1.0.0](https://rocm.docs.amd.com/projects/roc-optiq/en/1.0.0/index.html) | August 26, 2026 |
 | [Beta 0.5.0](https://rocm.docs.amd.com/projects/roc-optiq/en/beta-0.5.0/index.html) | July 15, 2026 |
 | [Beta 0.4.0](https://rocm.docs.amd.com/projects/roc-optiq/en/beta-0.4.0/index.html) | May 6, 2026 |
 | [Beta 0.3.0](https://rocm.docs.amd.com/projects/roc-optiq/en/beta-0.3.0/index.html) | March 26, 2026 |
 | [Beta 0.2.0](https://rocm.docs.amd.com/projects/roc-optiq/en/beta-0.2.0/index.html) | February 11, 2026 |
 | [Beta 0.1.0](https://rocm.docs.amd.com/projects/roc-optiq/en/beta-0.1.0/index.html) | December 10, 2025 |
+
+## ROCm Optiq 1.0.0
+
+### Added
+
+#### Features and improvements for viewing ROCm Systems Profiler trace data
+
+##### Timeline and navigation
+- **Zoom to Measurement** and **Zoom to Time Range Selection**: Right-click the timeline and choose **Zoom to Measurement** or **Zoom to Time Range Selection** to fit that span to the timeline width, with the markers landing on the left and right edges.
+##### Tracks and topology
+- **Node-based color coding** for tracks and the sidebar topology, improving navigation in multi-node traces.
+- **Reveal in Topology:** Right-click action on a track to jump directly from a track to its location in the System Topology View.
+- **Batch track settings**: Apply Track Options changes to multiple selected tracks at once.
+- New sidebar right-click context menu options: **Go To Track**, **Hide Track**, **Show/Hide All But This Track**, **Show/Hide Selected Tracks**.
+##### Annotations
+- Annotation UX enhancements: **Lock Annotation**, **Go-to-Anchor**, cross-highlighting between annotations and their associated tracks/events, text wrapping, and placement fixes.
+##### Track details and tables
+- Refactored track statistics into reusable components. **Track Details** now displays statistics at full precision, without rounding or truncation.
+
+#### Features and improvements for visualizing ROCm Compute Profiler analysis data
+
+##### Roofline analysis
+- **Single-click filtering** for kernel data points, memory-level lines (L1, L2, HBM, LDS), and bandwidth peaks.
+- **Roofline line-thickness preference** to improve chart readability.
+
+#### Experimental
+
+```{note}
+These features are in progress and available for preview only when ROCm Optiq is built from source. Behavior and UI are subject to change.
+```
+- **Profiler launch**: Launch the ROCm profiler locally or on a remote host, with remote file access/browsing and an SSH-based remote profiling workflow (redesigned remote profile panels and profiler launcher UI).
+- **New trace formats**: Load Perfetto and Chrome (JSON) traces.
+
+
+### Changed
+
+- **Rendering and performance**: Added a ``RenderScheduler`` to drive lazy-render wake-ups, and adopted ImGui's built-in DPI handling, replacing the previous custom solution.
+- Improved how Stream nodes are displayed in the sidebar topology tree.
+- More compact flame-chart events, with fixed resize/expand behavior.
+- Incremental Y-axis scale tick labels for expanded counter tracks.
+
+### Fixes
+- Fixed inconsistent kernel highlight color in the compute summary view.
+- Fixed welcome-page links firing through overlaying modal dialogs (links are now real ImGui buttons that respect hover ownership).
+- Fixed macOS Ctrl-Space modifier recovery.
+- Fixed editable counter-track value inputs.
+- Fixed data-flow arrow starting from level zero on ``.rpd`` traces.
+- Fixed the Systems multi-node summary window showing data only for the first node in the ``.yaml``.
+- Fixed loading workload Speed-of-Light for compute schema < 1.3.0: Query builders now report and skip unsupported queries.
+- JobSystem fixes.
 
 ## ROCm Optiq (Beta) 0.5.0
 

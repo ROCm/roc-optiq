@@ -1,36 +1,16 @@
 .. meta::
-  :description: Learn what ROCm Optiq is: a unified GUI for visualizing ROCm Systems Profiler traces and ROCm Compute Profiler analysis data on Windows and Linux.
+  :description: Learn what ROCm Optiq is: a unified GUI for visualizing ROCm Systems Profiler traces and ROCm Compute Profiler analysis data on Windows, Linux, and macOS.
   :keywords: Optiq, ROCm, profiler, visualization, trace, analysis, GPU, AMD, performance
 
 *******************
 What is ROCm Optiq?
 *******************
 
-ROCm Optiq is a unified visualization and analysis tool for performance data collected by ROCm profiling tools, specifically `ROCm Systems Profiler <https://rocm.docs.amd.com/projects/rocprofiler-systems/en/latest/index.html>`_ and `ROCm Compute Profiler <https://rocm.docs.amd.com/projects/rocprofiler-compute/en/latest/>`_. 
+ROCm Optiq is a unified visualization and analysis tool for performance data collected by ROCm profiling tools. It reads trace databases produced by `ROCm Systems Profiler <https://rocm.docs.amd.com/projects/rocprofiler-systems/en/latest/index.html>`_ and analysis databases produced by `ROCm Compute Profiler <https://rocm.docs.amd.com/projects/rocprofiler-compute/en/latest/>`_, and renders both in a single interactive interface.
 
-Because ROCm Optiq doesn't have any dependencies on the ROCm stack, trace files and profiling data files can be visualized with the ROCm Optiq GUI on any machine running a supported Microsoft Windows or Linux operating system. For more information, see :ref:`requirements`.
-
-Welcome page 
-============
-
-When ROCm Optiq starts without an open project, the Welcome page displays: 
-
-- Open File—open a trace (``.db``, ``.rpd``) or project (``.rpv``). You can also drag and drop a supported file into the window to open it.
-- Recent files—quick access to recently opened files 
-- Documentation links—ROCm Optiq, ROCm Systems Profiler, and ROCm Compute Profiler documentation
-
-.. image:: /images/welcome-page.png
-   :width: 800
-   :align: center
-   :alt: ROCm Optiq welcome page showing Start, Recent files, and Documentation links sections
-
-.. note::
-
-   - Opening a file creates a new tab and activates it. 
-   - ROCm Optiq prevents opening a second tab for the same underlying trace database, including when a ``.rpv`` project references an already-open ``.db``. 
+ROCm Optiq has no dependency on the ROCm stack itself, so trace and analysis files can be visualized on any machine running a supported Windows, Linux, or macOS operating system, independent of where the data was collected.
 
 .. _trace-file:
-
 Visualize ROCm Systems Profiler traces
 ======================================
 
@@ -69,4 +49,60 @@ Key features include:
 - :ref:`analysis-table`: Complete list of available metrics for the selected kernel. Metrics are grouped by category. 
 - :ref:`analysis-workload`: Contextual information about the profiled workload, including system information and profiling configuration. 
 - :ref:`baseline-comparison`: A side-by-side view that compares two workload measurements (baseline vs. target) to quickly identify and assess performance regressions or improvements. 
+
+.. _glance-data-sources:
+
+Supported data sources
+=========================
+
+.. list-table::
+   :header-rows: 1
+   :widths: 25 12 28 35
+
+   * - Input format
+     - Extension
+     - Producer
+     - ROCm requirement (trace collection)
+   * - ROCm Systems Profiler database
+     - ``.db``
+     - `ROCm Systems Profiler <https://rocm.docs.amd.com/projects/rocprofiler-systems/en/latest/index.html>`_
+     - ROCm 7.1.0 or later
+   * - ROCm Compute Profiler analysis database
+     - ``.db``
+     - `ROCm Compute Profiler <https://rocm.docs.amd.com/projects/rocprofiler-compute/en/latest/>`_
+     - ROCm 7.12.0 or later
+   * - rocprofv3 profiling database
+     - ``.db``
+     - `ROCprofiler-SDK <https://rocm.docs.amd.com/projects/rocprofiler-sdk/en/latest/index.html>`_ (``rocprofv3``)
+     - —
+   * - ROCm profiling data
+     - ``.rpd``
+     - `RPD tracer <https://github.com/ROCm/rocmProfileData/tree/master/rpd_tracer>`_
+     - —
+   * - ROCm Optiq project file
+     - ``.rpv``
+     - Saved from a previous ROCm Optiq session
+     - —
+
+For details on viewing each format, see :ref:`view-systems` and :ref:`view-analysis`. If a file doesn't open, see :ref:`trace troubleshooting <view-trace-troubleshooting>` and :ref:`analysis troubleshooting <view-analysis-troubleshooting>`.
+
+Welcome page
+============
+
+When ROCm Optiq starts without an open project, the Welcome page displays: 
+
+- **Open File:** Open a trace (``.db``, ``.rpd``) or project (``.rpv``). You can also drag and drop a supported file into the window to open it.
+- **Recent files:** Quick access to recently opened files. 
+- **Documentation links:** For ROCm Optiq, ROCm Systems Profiler, and ROCm Compute Profiler documentation.
+
+.. image:: /images/welcome-page.png
+   :width: 800
+   :align: center
+   :alt: ROCm Optiq welcome page showing Start, Recent files, and Documentation links sections
+
+.. note::
+
+   - Opening a file creates a new tab and activates it. 
+   - ROCm Optiq prevents opening a second tab for the same underlying trace database, including the case when a ``.rpv`` project references an already-open ``.db``. 
+
 

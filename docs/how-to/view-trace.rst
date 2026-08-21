@@ -18,6 +18,8 @@ View ROCm Systems Profiler trace data in ROCm Optiq
 .. |node| image:: ../images/node-menu.png
 .. |gpu| image:: ../images/gpu-menu.png
 .. |mini| image:: ../images/minimap-icon.png
+.. |make| image:: ../images/make-selection.png
+.. |remove| image:: ../images/remove-time.png
 
 ROCm Optiq provides a detailed view of a *trace*: a complete record of profiling data captured during an application run, including all event tracks, sample counters, and metadata. It captures what happened, when it happened, and often how long it took.
 
@@ -92,11 +94,20 @@ The **System Topology View** displays a hierarchical representation of the hardw
 
 - Click |eye| to show or hide tracks. Hiding a higher-level element automatically hides all underlying queues, streams, and events.
 - Click |scroll| to go to the track in the :ref:`timeline`. 
+- Right-click to choose sidebar context menu options: **Go To Track**, **Hide Track**, **Show/Hide All But This Track**, **Show/Hide Selected Tracks**.
+
+.. note::
+
+   Use **Edit** > **Preferences** > **Display Settings** to show or hide the |eye| and |scroll| icons. See :ref:`change-settings`.
 
 ROCm Optiq displays ROCm events in both Stream view and Queue view simultaneously: 
 
 - **Stream view**: Groups events (kernels and memory copies) by the HIP stream to which they were submitted. This view reflects your application's intended dependencies. 
 - **Queue view**: Groups the same events by the HSA queue to which they were scheduled. This view reflects what the runtime and hardware actually used. 
+
+  .. note::
+
+    In multi-node traces, tracks in the **Timeline View** and their corresponding entries in the sidebar of **System Topology View** are color-coded by node, making it easier to visually match a track back to its originating node.
 
 .. _timeline:
 
@@ -141,6 +152,7 @@ The shortcut keys (**WASD** and arrow keys) can also be used to zoom and pan the
 - Hold the mouse pointer over the **Description** area, and the scroll wheel will scroll through the track list. 
 - Hold the mouse pointer over the **Graph** area, and the scroll wheel zooms the view in and out.
 - Hover the track name label in the **Description** area to view a tooltip with the full track name, track ID, and event or sample count.  
+- Right-click the track to **Copy track name**, **Copy track ID**, **Reveal in Topology** or open **Track Options**. Choose **Reveal in Topology** to jump to and highlight the track in the sidebar **System Topology View**.
 
 Select a track
 ^^^^^^^^^^^^^^
@@ -184,17 +196,18 @@ Use the following actions to resize or reorder tracks.
 Queue Utilization
 ^^^^^^^^^^^^^^^^^
 
-For queue tracks, a Queue Utilization pill displays next to the queue label. It shows the percentage of time the queue was active over the visible time range. When a time-range filter is active, utilization is calculated for the selected range only.  
-The queue utilization is also visible in the **Track Details** tab. 
+For queue tracks, a **Queue Utilization** pill displays next to the queue label. It shows the percentage of time the queue was active over the visible time range. When a time-range filter is active, utilization is calculated for the selected range only.  
+**Queue Utilization** is also visible in the **Track Details** tab. 
 
 Sample counter track statistics 
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 For sample counter tracks, pills showing standard deviation and average display next to the counter label. These can be shown/hidden using the **Track Options** menu.  
-Additionally, min and max value pills can also be shown/hidden. 
-
+Additionally, min and max value pills can also be shown/hidden.
+ 
+When a counter track is expanded to sufficient height, the Y-axis shows incremental scale tick labels between the minimum and maximum values, making intermediate values easier to read.
 Similar to queue utilization, the values in these pills react to reflect the values in the current view or active time-range filter. 
-The Counter statistics are also visible in the **Track Details** tab.
+The Counter statistics are also visible in the **Track Details** tab for the selected track(s).
 
 .. image:: ../images/new-track-details-statistics.png
    :width: 800
@@ -218,7 +231,8 @@ Measure
 - **Events** mode: Measure duration between two selected events on the timeline. You can snap Start/End Rulers to Event start or Event end. 
 - **Anywhere** mode: Measure duration between two timeline points. You can drag the rulers horizontally to fine-tune.  
 - ROCm Optiq draws two vertical rulers with timestamps and shows the duration (time delta) in a label between them.
-- Right-click a measurement label on the timeline to **Copy Start Timestamp**, **Copy End Timestamp**, or **Copy Measurement Duration**.   
+- Right-click a measurement label on the timeline to **Copy Start Timestamp**, **Copy End Timestamp**, or **Copy Measurement Duration**.
+- Right-click a measurement label and choose **Zoom to Measurement** to fit that span to the full timeline width, with the start markers landing on the left and right edges.
 - Use **Reset** or **Clear measurement** to remove the rulers and start a new measurement.
 
 .. image:: ../images/new-measurement-timestamp.png
@@ -235,6 +249,43 @@ The **Histogram** provides event density that is normalized across all tracks vi
 
 When the **Timeline View** is zoomed in, the area currently in view is highlighted on the **Histogram**. 
 The highlighted area in the **Histogram** can be dragged to scroll the **Timeline View**.
+
+
+.. _time-range-filter:
+
+Set a time-range filter
+-----------------------
+
+Set a time-range filter in the :ref:`timeline` to limit the data displayed to a specific period. 
+
+To set a time-range filter, press and hold **Ctrl** while dragging your mouse in the **Timeline View** to select a range.
+
+.. image:: ../images/time-range-filter.gif
+   :width: 800
+   :alt: Timeline View with a time range selected, showing the shaded selection area with draggable boundary handles
+
+Once a time range is selected, the selection boundaries can be adjusted by dragging them. 
+The active time-range filter applies to event and sample counter details in the :ref:`advanced` section.
+
+If one or more events are selected, the **Make Time Range Selection** option displays on the timeline context menu when you right-click:
+
+|make|
+
+Selecting this sets a time-range filter with boundaries at the event's start and end times, or at the first start time and last end time if multiple events are selected.
+Right-click an active time range selection to choose **Zoom to Time Range Selection** with the same fit-to-width behavior.
+
+.. tip::
+
+   - Press **M** for a shortcut to **Make Time Range Selection** when one or more events are selected.
+   - Press **Z** for a shortcut to **Zoom to Time Range Selection** when an active time-range selection exists.
+
+To clear the time range selection, press **Esc** or right-click and select **Remove Selection**:
+
+|remove|
+
+.. note::
+
+   When a time-range filter is active, events inside the range stay at full brightness, and events outside the range are dimmed.
 
 .. _advanced:
 
@@ -269,7 +320,7 @@ This section provides an interface for multiple data perspectives, offering gran
 
 - **Track Details**: Shows additional information about the track that is not visible on the timeline. It shows the node the track belongs to and its details, the process it belongs to, and the track type (thread, counter, queue, and so on).
 
-  - The **Track Details** also show statistics such as queue utilization, counter Minimum, Maximum, Mean, and Standard Deviation. 
+  - The **Track Details** also show statistics such as queue utilization, counter Minimum, Maximum, Mean, and Standard Deviation. The statistics display at full precision, without rounding or truncation.
   - You can right-click a row or cell of **Track Details** to **Copy Row Data** or **Copy Cell Data**. 
 
 - **Annotations**: Displays user-created annotations, enabling easier navigation across critical points within large traces, enhancing collaboration and knowledge sharing. See :ref:`annotation` for more info.
@@ -368,3 +419,14 @@ Search for events using the search box on the main **Toolbar**.
 - Clicking on a row in the search results will bring the selected event into view on the :ref:`timeline`. 
 - Clicking **X** clears the search results.
 - The search can match multiple substrings at once. Multiple search tokens must be surrounded by quotation marks without spaces (for example: ``“term1””term2”``).
+
+Save trace selection (trim trace)
+=================================
+
+When there's an active time-range filter, select **Edit** > **Save Trace Selection** to trim the trace:
+
+.. image:: ../images/save-trace.png
+   :width: 200
+   :alt: Edit menu with the Save Trace Selection option highlighted
+
+This creates a new trace file containing only the events in the selected time range.

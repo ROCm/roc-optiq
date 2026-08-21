@@ -40,6 +40,8 @@ typedef enum rocprofvis_result_t
     kRocProfVisResultDuplicate = 13,
     // SSH authentication failed
     kRocProfVisResultFailedSshCommunication = 14,
+    // A requested profiler tool could not be found on this system
+    kRocProfVisResultToolNotFound = 15,
 } rocprofvis_result_t;
 
 /*
@@ -662,6 +664,8 @@ typedef enum rocprofvis_controller_table_arguments_t : uint32_t
     kRPVControllerTableArgsNumStringTableFilters               = 0xE000000F,
     kRPVControllerTableArgsStringTableFiltersIndexed           = 0xE0000010,
     kRPVControllerTableArgsStringTableFiltersIncludeSubstrings = 0xE0000011,
+    kRPVControllerTableArgsStringTableFiltersIncludeCategory   = 0xE0000012,
+    kRPVControllerTableArgsStringTableFiltersPartialMatching   = 0xE0000013,
 } rocprofvis_controller_table_arguments_t;
 
 typedef enum rocprofvis_controller_table_type_t
@@ -1228,19 +1232,30 @@ typedef enum rocprofvis_controller_roofline_kernel_intensity_type_t : uint32_t
 } rocprofvis_controller_roofline_kernel_intensity_type_t;
 
 /*
- * Profiler types supported by the profiler launcher
+ * Profiler tools the launcher knows how to find and execute.
+ *
+ * A launch names its tool with this enum rather than a path, and the controller
+ * owns both the enum-to-binary-name mapping and the resolution of that name to
+ * a validated absolute path. 
  */
-typedef enum rocprofvis_profiler_type_t
+typedef enum rocprofvis_profiler_tool_t : uint32_t
 {
-    // ROCm Systems Profiler - sampling mode (single-stage)
-    kRPVProfilerTypeRocprofSysRun = 0,
-    // ROCm Systems Profiler - instrumentation mode (two-stage: instrument + run)
-    kRPVProfilerTypeRocprofSysInstrument = 1,
-    // ROCm Compute Profiler v2 (rocprof)
-    kRPVProfilerTypeRocprofCompute = 2,
-    // ROCm Compute Profiler v3 (rocprofv3)
-    kRPVProfilerTypeRocprofV3 = 3,
-} rocprofvis_profiler_type_t;
+    // No tool selected. Never resolvable.
+    kRPVProfilerToolNone = 0,
+    // ROCm Systems Profiler, LD_PRELOAD mode
+    kRPVProfilerToolRocprofSysRun = 1,
+    // ROCm Systems Profiler, sampling mode
+    kRPVProfilerToolRocprofSysSample = 2,
+    // ROCm Systems Profiler, Dyninst instrumentation
+    kRPVProfilerToolRocprofSysInstrument = 3,
+    // ROCm Systems Profiler capability query, used for probing
+    kRPVProfilerToolRocprofSysAvail = 4,
+    // ROCm Compute Profiler (both its profile and analyze modes)
+    kRPVProfilerToolRocprofCompute = 5,
+    // rocprofv3
+    kRPVProfilerToolRocprofV3 = 6,
+    __kRPVProfilerToolLast
+} rocprofvis_profiler_tool_t;
 
 /*
  * Profiler execution state

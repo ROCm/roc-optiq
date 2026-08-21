@@ -645,14 +645,27 @@ AccentButton(const char* label, ImVec2 size, SettingsManager* settings)
     {
         settings = &SettingsManager::GetInstance();
     }
-    ImGui::PushStyleColor(ImGuiCol_Button, settings->GetColor(Colors::kAccent));
-    ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
-                          settings->GetColor(Colors::kAccentHover));
-    ImGui::PushStyleColor(ImGuiCol_ButtonActive,
-                          settings->GetColor(Colors::kAccentActive));
-    ImGui::PushStyleColor(ImGuiCol_Text, settings->GetColor(Colors::kTextOnAccent));
+    return ColoredButton(label, settings->GetColor(Colors::kAccent),
+                         settings->GetColor(Colors::kAccentHover),
+                         settings->GetColor(Colors::kAccentActive),
+                         settings->GetColor(Colors::kTextOnAccent), nullptr, size);
+}
+
+bool
+ColoredButton(const char* label, ImU32 color, ImU32 hovered_color, ImU32 active_color,
+              ImU32 text_color, const char* tooltip, ImVec2 size)
+{
+    ImGui::PushStyleColor(ImGuiCol_Button, color);
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, hovered_color);
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive, active_color);
+    ImGui::PushStyleColor(ImGuiCol_Text, text_color);
     bool clicked = ImGui::Button(label, size);
     ImGui::PopStyleColor(4);
+    if(tooltip && strlen(tooltip) > 0 && BeginItemTooltipStyled())
+    {
+        ImGui::TextUnformatted(tooltip);
+        EndTooltipStyled();
+    }
     return clicked;
 }
 
@@ -851,13 +864,13 @@ DrawMenuItemIcon(ImDrawList* draw_list, const char* icon, const ImVec2& row_star
 }
 
 bool
-IconMenuItem(const char* icon, const char* label, bool enabled)
+IconMenuItem(const char* icon, const char* label, bool enabled, bool selected)
 {
     ImDrawList*  draw_list    = ImGui::GetWindowDrawList();
     const ImVec2 row_start    = ImGui::GetCursorScreenPos();
     std::string  padded_label = MenuLabelWithIconPadding(label);
 
-    bool clicked = ImGui::MenuItem(padded_label.c_str(), nullptr, false, enabled);
+    bool clicked = ImGui::MenuItem(padded_label.c_str(), nullptr, selected, enabled);
     DrawMenuItemIcon(draw_list, icon, row_start, enabled);
 
     if(clicked)

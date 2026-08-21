@@ -179,6 +179,10 @@ struct TimelineViewTestPeer
 
     float MaxYScroll() const { return v.m_content_max_y_scroll; }
 
+    // Sidebar width, resized by dragging the "##MovePositionLineVert" splitter.
+    float SidebarSize() const { return v.m_sidebar_size; }
+    void  SetSidebarSize(float size) const { const_cast<TimelineView&>(v).m_sidebar_size = size; }
+
     FlameTrackItem* FirstFlameTrack() const
     {
         if(!v.m_tracks) return nullptr;

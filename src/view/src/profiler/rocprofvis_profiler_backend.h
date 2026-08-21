@@ -4,6 +4,7 @@
 #pragma once
 
 #include "rocprofvis_launch_config.h"
+#include "rocprofvis_controller_enums.h"
 #include "json.h"
 #include <string>
 #include <vector>
@@ -15,17 +16,22 @@ namespace RocProfVis
 namespace View
 {
 
+// One entry in the launcher's tool combo. The tool is identified by the
+// controller's enum rather than a backend-local string id, so there is a single
+// spelling of "which tool" from the combo through to argv[0] - and no per-backend
+// id table to keep in step with it.
 struct ToolOption
 {
-    std::string id;
-    std::string display_name;
+    rocprofvis_profiler_tool_t tool = kRPVProfilerToolNone;
+    std::string                display_name;
 };
 
 struct TabDescriptor
 {
     std::string id;
     std::string display_name;
-    std::function<void()> render_fn;
+    // Returns true if the user changed a setting this frame
+    std::function<bool()> render_fn;
     // false => shown in the always-visible "General Options" area of the
     // launcher; true => tucked under the collapsible "Advanced Options" section.
     bool advanced = false;
@@ -50,10 +56,19 @@ public:
     virtual const char* Id() const = 0;
     virtual const char* DisplayName() const = 0;
 
+    /**
+     * The tools this backend offers, in combo order. The first is the default
+     * for a fresh config and the fallback when a loaded profile names a tool this
+     * backend does not offer.
+     */
     virtual std::vector<ToolOption> GetTools() const = 0;
-    virtual std::string GetDefaultBinary(std::string const& tool_id) const = 0;
 
-    virtual std::vector<TabDescriptor> GetTabs(std::string const& tool_id) const = 0;
+    /**
+     * Tabs for the given tool, which is always one of GetTools() - the launcher
+     * keeps LaunchConfig::tool in step with the selected backend, so this does
+     * not need to handle a foreign or unset value.
+     */
+    virtual std::vector<TabDescriptor> GetTabs(rocprofvis_profiler_tool_t tool) const = 0;
 
     /**
      * Validate the config before launch. Returns empty string on success,
@@ -62,8 +77,23 @@ public:
     virtual std::string Validate(LaunchConfig const& config) const = 0;
 
     /**
-     * Convert the curated settings into env vars and argv for the
-     * profiler process. The caller merges extra_env on top afterwards.
+     * Convert the curated settings into the env vars and the complete argument
+     * list for the profiler process.
+     *
+     * argv_out receives every argument after argv[0] (the profiler binary), in
+     * the exact order and form the process will see it: the backend's own flags,
+     * config.extra_argv, the output path in whatever spelling this profiler
+     * uses, and the target executable plus its arguments (word-split with
+     * SplitArguments) wherever this profiler expects them. Command-line shape
+     * varies enough between profilers that no part of it is synthesized for the
+     * backend downstream - what is emitted here is what runs, and it is also
+     * what the command preview renders, so the two cannot drift apart.
+     *
+     * Each entry becomes one argv entry verbatim; nothing is re-split on
+     * whitespace or interpreted by a shell, so paths and arguments containing
+     * spaces must be emitted as single entries rather than pre-quoted.
+     *
+     * The caller merges config.extra_env on top of env_out afterwards.
      */
     virtual void FlattenToExecution(
         LaunchConfig const& config,

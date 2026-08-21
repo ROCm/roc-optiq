@@ -234,7 +234,7 @@ typedef rocprofvis_dm_result_t (*rocprofvis_dm_remove_slice_func_t) (const rocpr
 typedef const char*  (*rocprofvis_dm_get_string_func_t) (const rocprofvis_dm_trace_t object, uint32_t index);
 typedef const size_t  (*rocprofvis_dm_get_string_order_func_t) (const rocprofvis_dm_trace_t object, uint32_t index);
 typedef void (*rocprofvis_dm_metadata_loaded_func_t) (const rocprofvis_dm_trace_t object);
-typedef rocprofvis_dm_result_t  (*rocprofvis_dm_string_indices_func_t)(const rocprofvis_dm_trace_t object, rocprofvis_dm_num_string_table_filters_t num, rocprofvis_dm_string_table_filters_t string_filters, bool include_substring, std::vector<rocprofvis_dm_index_t>& indices);
+typedef rocprofvis_dm_result_t  (*rocprofvis_dm_string_indices_func_t)(const rocprofvis_dm_trace_t object, rocprofvis_dm_num_string_table_filters_t num, rocprofvis_dm_string_table_filters_t string_filters, bool include_substring, bool partial_matching, std::vector<rocprofvis_dm_index_t>& indices);
 typedef rocprofvis_dm_table_t (*rocprofvis_dm_add_info_table_func_t) (const rocprofvis_dm_trace_t object, rocprofvis_dm_node_id_t node, rocprofvis_dm_charptr_t name, rocprofvis_dm_table_t handle);
 
 typedef rocprofvis_dm_result_t (*rocprofvis_db_get_cached_table_value_func_t) (const rocprofvis_dm_database_t object, rocprofvis_dm_charptr_t table, 

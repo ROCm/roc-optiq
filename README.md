@@ -1,9 +1,6 @@
 # ROCm Optiq: Visualization and Analysis for ROCm Profiler Data
 
-[![Windows Continuous Integration](https://github.com/ROCm/roc-optiq/actions/workflows/ci-windows.yml/badge.svg)](https://github.com/ROCm/roc-optiq/actions/workflows/ci-windows.yml)
-[![Ubuntu Continuous Integration](https://github.com/ROCm/roc-optiq/actions/workflows/ci-ubuntu.yml/badge.svg)](https://github.com/ROCm/roc-optiq/actions/workflows/ci-ubuntu.yml)
-[![RedHat Continuous Integration](https://github.com/ROCm/roc-optiq/actions/workflows/ci-redhat.yml/badge.svg)](https://github.com/ROCm/roc-optiq/actions/workflows/ci-redhat.yml)
-[![Mac Continuous Integration](https://github.com/ROCm/roc-optiq/actions/workflows/ci-mac.yml/badge.svg)](https://github.com/ROCm/roc-optiq/actions/workflows/ci-mac.yml)
+[![Continuous Integration](https://github.com/ROCm/roc-optiq/actions/workflows/ci-controller.yml/badge.svg?branch=main)](https://github.com/ROCm/roc-optiq/actions/workflows/ci-controller.yml)
 
 ## Overview
 

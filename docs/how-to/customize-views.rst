@@ -138,7 +138,7 @@ Delete bookmarks
 Use the following actions to delete bookmarks or reset the view.
 
 - Select **X** to delete a bookmark from the |book| menu. 
-- Click **Reset View** to return the :ref:`timeline` to its original pan and zoom settings.
+- Select **Reset View** to return the :ref:`timeline` to its original pan and zoom settings.
 
 Customize timeline display options
 ----------------------------------

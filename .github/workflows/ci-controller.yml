@@ -24,10 +24,14 @@ on:
         description: 'Run macOS CI?'
         type: boolean
         default: true
-      enable_ci_asan:
-        description: 'Run Ubuntu ASAN?'
+      enable_ci_sanitizers:
+        description: 'Run Ubuntu Sanitizers?'
         type: boolean
         default: true
+      ci_sanitizers:
+        description: 'JSON array of sanitizers to run (when sanitizers are enabled)'
+        type: string
+        default: '[ "address", "undefined" ]'
       upload_to_github:
         description: 'Upload build artifacts to GitHub Artifacts?'
         type: boolean
@@ -138,12 +142,13 @@ jobs:
       upload_to_s3: ${{ github.event_name == 'schedule' || github.event.inputs.upload_to_s3 == 'true' }}
       s3_root_directory: ${{ github.event_name == 'schedule' && 'nightly' || 'test' }}
 
-  ci-asan:
-    name: Ubuntu ASAN
+  ci-sanitizers:
+    name: Ubuntu Sanitizers
     needs: setup
-    if: ${{ github.event_name != 'workflow_dispatch' || inputs.enable_ci_asan }}
-    uses: ./.github/workflows/ci-asan.yml
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.enable_ci_sanitizers }}
+    uses: ./.github/workflows/ci-sanitizers.yml
     secrets: inherit
     with:
       os_version: ${{ needs.setup.outputs.ubuntu-os-versions }}
+      sanitizers: ${{ github.event_name == 'schedule' && '[ "address", "undefined", "thread" ]' || github.event.inputs.ci_sanitizers || '[ "address", "undefined" ]' }}
       upload_to_github: ${{ github.event_name == 'schedule' || github.event.inputs.upload_to_github == 'true' }}

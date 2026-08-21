@@ -206,6 +206,11 @@ FlameTrackItem::Update()
 {
     if(m_track_statistics && m_pill_analysis_queue)
     {
+        // Blue only while a time-range selection narrows the data.
+        const bool ranged =
+            m_timeline_selection && m_timeline_selection->HasValidTimeRangeSelection();
+        m_pill_analysis_queue->SetTextColor(
+            ranged ? std::optional<Colors>(Colors::kAccent) : std::nullopt);
         if(m_track_statistics->state == AnalysisTrackStatistics::kReady &&
            m_track_statistics_dirty)
         {

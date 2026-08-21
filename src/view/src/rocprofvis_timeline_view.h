@@ -107,7 +107,7 @@ public:
     void ZoomToTimeRangeSelection();
     void RenderGraphPoints();
     void RenderHeader();
-    void RenderHistogram(float total_height);
+    void RenderHistogram(float total_height, float graph_origin_x);
     void RenderTraceView();
 
     void           RenderGrid();

@@ -7,6 +7,7 @@
 #include "widgets/rocprofvis_gui_helpers.h"
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_timeline_selection.h"
+#include "rocprofvis_utils.h"
 #include "spdlog/spdlog.h"
 
 namespace RocProfVis
@@ -274,6 +275,48 @@ MultiTrackTable::Render()
                 " | Cached %llu to %llu entries", table_params->m_start_row,
                 table_params->m_start_row + table_params->m_req_row_count);
 #endif
+            // Make it explicit whether these results are scoped to a time-range
+            // selection (accent) or the full trace (dim).
+            if(m_timeline_selection)
+            {
+                ImGui::SameLine();
+                ImGui::TextDisabled("|");
+                ImGui::SameLine();
+                if(m_timeline_selection->HasValidTimeRangeSelection())
+                {
+                    double sel_start = 0.0;
+                    double sel_end   = 0.0;
+                    m_timeline_selection->GetSelectedTimeRange(sel_start, sel_end);
+                    const ImVec4 accent = ThemeColor(m_settings, Colors::kAccent);
+                    ImGui::PushFont(m_settings.GetFontManager().GetFont(FontType::kIcon),
+                                    0.0f);
+                    ImGui::TextColored(accent, "%s", ICON_CROP);
+                    ImGui::PopFont();
+                    ImGui::SameLine(0.0f, style.ItemInnerSpacing.x);
+                    ImGui::TextColored(accent, "Limited to time-range selection");
+                    if(ImGui::IsItemHovered())
+                    {
+                        SetTooltipStyled(
+                            "These results reflect the current time-range selection "
+                            "(span: %s).",
+                            nanosecond_to_formatted_str(
+                                sel_end - sel_start,
+                                m_settings.GetUserSettings().unit_settings.time_format,
+                                true)
+                                .c_str());
+                    }
+                }
+                else
+                {
+                    ImGui::TextDisabled("Full trace");
+                    if(ImGui::IsItemHovered())
+                    {
+                        SetTooltipStyled(
+                            "No time-range selection - these results cover the full "
+                            "trace.");
+                    }
+                }
+            }
         }
         ImGui::EndChild();
         ImGui::PopStyleColor(2);

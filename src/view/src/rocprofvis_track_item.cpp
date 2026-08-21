@@ -1182,6 +1182,7 @@ Pill::Pill(bool shown, bool active)
 : m_show_pill_label(shown)
 , m_active(active)
 , m_accent_color(std::nullopt)
+, m_text_color(std::nullopt)
 , m_sizing(kCompact)
 , m_compact_label("")
 , m_ext_label("")
@@ -1230,6 +1231,12 @@ void
 Pill::SetAccentColor(size_t accent_color)
 {
     m_accent_color = accent_color;
+}
+
+void
+Pill::SetTextColor(std::optional<Colors> color)
+{
+    m_text_color = color;
 }
 
 void
@@ -1301,7 +1308,9 @@ Pill::Render(const ImVec2& pos, SettingsManager& settings, Sizing sizing)
     {
         draw_list->AddRectFilled(win_pos + pos, win_pos + pos + Size(),
                                  settings.GetColor(Colors::kBgFrame), m_height * 0.5f);
-        ImGui::PushStyleColor(ImGuiCol_Text, settings.GetColor(Colors::kTextMain));
+        ImGui::PushStyleColor(
+            ImGuiCol_Text,
+            settings.GetColor(m_text_color.value_or(Colors::kTextMain)));
     }
     else
     {

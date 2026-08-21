@@ -53,7 +53,7 @@ Session management
 
 A ROCm Optiq project file (``.rpv``) saves the full analysis session state — the referenced trace file, track layout, zoom position, bookmarks, and annotations. Opening a ``.rpv`` file restores the session exactly as it was left. For the full set of customization options, including time-range filters, annotations, and presets, see :ref:`customize`.
 
-A bookmark saves the timeline's current scroll and zoom position for quick recall. For the click-based method, see :ref:`customize`; the keyboard shortcuts are:
+A bookmark saves the timeline's current scroll and zoom position for quick recall. For the click-based method, see :ref:`customize`. The keyboard shortcuts are:
 
 .. list-table::
    :header-rows: 1

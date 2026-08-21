@@ -419,7 +419,7 @@ Search for events using the search box on the main **Toolbar**.
 - Clicking **X** clears the search results.
 - The search can match multiple substrings at once. Multiple search tokens must be surrounded by quotation marks without spaces (for example: ``“term1””term2”``).
 
-Save trace selection (Trim trace)
+Save trace selection (trim trace)
 =================================
 
 When there's an active time range filter, select **Edit** > **Save Trace Selection** to trim the trace:

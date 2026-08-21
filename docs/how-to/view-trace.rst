@@ -196,8 +196,8 @@ Use the following actions to resize or reorder tracks.
 Queue Utilization
 ^^^^^^^^^^^^^^^^^
 
-For queue tracks, a Queue Utilization pill displays next to the queue label. It shows the percentage of time the queue was active over the visible time range. When a time-range filter is active, utilization is calculated for the selected range only.  
-The queue utilization is also visible in the **Track Details** tab. 
+For queue tracks, a **Queue Utilization** pill displays next to the queue label. It shows the percentage of time the queue was active over the visible time range. When a time-range filter is active, utilization is calculated for the selected range only.  
+**Queue Utilization** is also visible in the **Track Details** tab. 
 
 Sample counter track statistics 
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

@@ -4428,7 +4428,7 @@ void DataProvider::SetFetchMetricsCallback(
 }
 
 void DataProvider::SetFetchPcSamplingCallback(
-    const std::function<void(const std::string&, uint32_t, uint32_t, uint32_t, bool)>& callback)
+    const std::function<void(const std::string&, uint32_t, uint64_t, uint32_t, bool)>& callback)
 {
     m_pc_sampling_fetch_callback = callback;
 }
@@ -4443,11 +4443,10 @@ DataProvider::FetchPcSampling(const PcSamplingRequestParams& params)
         return false;
     }
 
-    // Kernel and source-file IDs identify the response. They are not a
-    // concurrency key: this provider permits one PC sampling request at a time.
-    const uint64_t request_id = RequestIdBuilder::MakeClientRequestId(
-        RequestType::kFetchPcSampling,
-        (static_cast<uint64_t>(params.m_kernel_id) << 32) | params.m_source_file_id);
+    // This provider permits only one PC sampling request at a time. Selection
+    // identity is retained in PcSamplingRequestParams and checked on completion.
+    const uint64_t request_id =
+        RequestIdBuilder::MakeRequestId(RequestType::kFetchPcSampling);
 
     for(const std::pair<const uint64_t, RequestInfo>& entry : m_requests)
     {
@@ -4483,15 +4482,16 @@ DataProvider::FetchPcSampling(const PcSamplingRequestParams& params)
     if(!future || !args || !pc_handle)
     {
         if(future) rocprofvis_controller_future_free(future);
-        if(args)   rocprofvis_controller_arguments_free(args);
+        if(args) rocprofvis_controller_arguments_free(args);
         return false;
     }
 
-    rocprofvis_controller_set_uint64(args, kRPVControllerPcSamplingArgsWorkloadId,   0, params.m_workload_id);
-    rocprofvis_controller_set_uint64(args, kRPVControllerPcSamplingArgsKernelId,     0, params.m_kernel_id);
-    rocprofvis_controller_set_uint64(args, kRPVControllerPcSamplingArgsSourceFileId, 0, params.m_source_file_id);
+    rocprofvis_controller_set_uint64(args, kRPVControllerPcSamplingArgsKernelId, 0,
+                                     params.m_kernel_id);
+    rocprofvis_controller_set_uint64(args, kRPVControllerPcSamplingArgsSourceFileUuid, 0,
+                                     params.m_source_file_uuid);
 
-    rocprofvis_result_t result = rocprofvis_controller_pc_sampling_fetch_async(
+    rocprofvis_result_t result = rocprofvis_controller_pc_sampling_fetch_mandatorys_async(
         m_trace_controller, args, future, pc_handle);
 
     if(result == kRocProfVisResultSuccess)
@@ -4747,7 +4747,7 @@ DataProvider::LoadKernels(WorkloadInfo& workload, rocprofvis_handle_t* workload_
         kernel.dispatch_metrics[KernelInfo::DurationMedian] =
             static_cast<uint32_t>(uint64_data);
         // Load only the source file list eagerly (for the dropdown).
-        // Full ISA/source/stall data is loaded on-demand via FetchPcSampling.
+        // Mandatory code-object, ISA, and sample-state rows are loaded on-demand.
         {
             rocprofvis_handle_t* pc_handle = nullptr;
             if(kRocProfVisResultSuccess == rocprofvis_controller_get_object(
@@ -4761,86 +4761,151 @@ DataProvider::LoadKernels(WorkloadInfo& workload, rocprofvis_handle_t* workload_
 }
 
 inline void
-DataProvider::LoadPcSamplingCodeObjects(KernelInfo& kernel, rocprofvis_handle_t* pc_handle)
+DataProvider::LoadPcSamplingCodeObjects(KernelInfo&          kernel,
+                                        rocprofvis_handle_t* pc_handle)
 {
     uint64_t num_code_objects = 0;
-    if(kRocProfVisResultSuccess != rocprofvis_controller_get_uint64(
-           pc_handle, kRPVControllerPCSamplingNumCodeObjects, 0, &num_code_objects))
+    if(kRocProfVisResultSuccess !=
+       rocprofvis_controller_get_uint64(pc_handle, kRPVControllerPCSamplingNumCodeObjects,
+                                        0, &num_code_objects))
         return;
 
+    uint64_t num_instruction_lines = 0;
+    rocprofvis_controller_get_uint64(pc_handle, kRPVControllerPCSamplingNumInstructionLines, 0,
+                                     &num_instruction_lines);
+    uint64_t num_kernel_symbols = 0;
+    rocprofvis_controller_get_uint64(
+        pc_handle, kRPVControllerPCSamplingNumKernelSymbols, 0, &num_kernel_symbols);
+
+    kernel.pc_sampling_data.code_objects.clear();
     kernel.pc_sampling_data.code_objects.resize(num_code_objects);
-    std::unordered_map<uint32_t, CodeObject*> code_objects_by_id;
-    code_objects_by_id.reserve(num_code_objects);
+    std::unordered_map<uint64_t, CodeObjectStore*> code_objects_by_uuid;
+    code_objects_by_uuid.reserve(num_code_objects);
     for(uint64_t i = 0; i < num_code_objects; i++)
     {
-        uint64_t id = 0;
-        rocprofvis_controller_get_uint64(pc_handle, kRPVControllerPCSamplingCodeObjectId, i, &id);
-        kernel.pc_sampling_data.code_objects[i].id               = static_cast<uint32_t>(id);
-        kernel.pc_sampling_data.code_objects[i].uri              = GetString(pc_handle, kRPVControllerPCSamplingCodeObjectUri, i);
-        kernel.pc_sampling_data.code_objects[i].content_checksum = GetString(pc_handle, kRPVControllerPCSamplingCodeObjectChecksum, i);
-        code_objects_by_id.emplace(kernel.pc_sampling_data.code_objects[i].id,
-                                   &kernel.pc_sampling_data.code_objects[i]);
+        CodeObjectStore& code_object = kernel.pc_sampling_data.code_objects[i];
+        rocprofvis_controller_get_uint64(
+            pc_handle, kRPVControllerPCSamplingCodeObjectUuid, i,
+            &code_object.code_object_uuid);
+        rocprofvis_controller_get_uint64(
+            pc_handle, kRPVControllerPCSamplingCodeObjectWorkloadId, i,
+            &code_object.workload_id);
+        rocprofvis_controller_get_uint64(
+            pc_handle, kRPVControllerPCSamplingCodeObjectPid, i, &code_object.pid);
+        rocprofvis_controller_get_uint64(
+            pc_handle, kRPVControllerPCSamplingCodeObjectId, i,
+            &code_object.code_object_id);
+        rocprofvis_controller_get_uint64(
+            pc_handle, kRPVControllerPCSamplingCodeObjectLoadBase, i,
+            &code_object.load_base);
+        code_objects_by_uuid.emplace(code_object.code_object_uuid, &code_object);
     }
 
-    uint64_t num_isa_lines = 0;
-    rocprofvis_controller_get_uint64(pc_handle, kRPVControllerPCSamplingNumIsaLines, 0, &num_isa_lines);
-    for(uint64_t ii = 0; ii < num_isa_lines; ii++)
+    for(uint64_t si = 0; si < num_kernel_symbols; si++)
     {
-        uint64_t co_id = 0;
-        rocprofvis_controller_get_uint64(pc_handle, kRPVControllerPCSamplingIsaLineCodeObjectId, ii, &co_id);
-        const std::unordered_map<uint32_t, CodeObject*>::iterator code_object_it =
-            code_objects_by_id.find(static_cast<uint32_t>(co_id));
-        if(code_object_it != code_objects_by_id.end())
+        KernelSymbol kernel_symbol;
+        LoadPcSamplingKernelSymbol(kernel_symbol, pc_handle, si);
+        auto code_object_it = code_objects_by_uuid.find(kernel_symbol.code_object_uuid);
+        if(code_object_it == code_objects_by_uuid.end())
         {
-            code_object_it->second->isa_lines.emplace_back();
-            LoadPcSamplingIsaLine(code_object_it->second->isa_lines.back(), pc_handle, ii);
+            spdlog::debug("Skipping kernel symbol {} with unknown code object {}", si,
+                          kernel_symbol.code_object_uuid);
+            continue;
+        }
+        code_object_it->second->kernel_symbols.emplace_back(std::move(kernel_symbol));
+    }
+
+    std::unordered_map<uint64_t, KernelSymbol*> kernel_symbols_by_uuid;
+    kernel_symbols_by_uuid.reserve(num_kernel_symbols);
+    for(CodeObjectStore& code_object : kernel.pc_sampling_data.code_objects)
+    {
+        for(KernelSymbol& kernel_symbol : code_object.kernel_symbols)
+        {
+            kernel_symbols_by_uuid.emplace(kernel_symbol.kernel_symbol_uuid, &kernel_symbol);
         }
     }
-}
 
-inline void
-DataProvider::LoadPcSamplingIsaLine(IsaLine& isa_line, rocprofvis_handle_t* pc_handle, uint64_t index)
-{
-    uint64_t isa_id = 0;
-    rocprofvis_controller_get_uint64(pc_handle, kRPVControllerPCSamplingIsaLineId, index, &isa_id);
-    isa_line.id = static_cast<uint32_t>(isa_id);
-    uint64_t offset = 0;
-    rocprofvis_controller_get_uint64(pc_handle, kRPVControllerPCSamplingIsaLineCodeObjectOffset, index, &offset);
-    isa_line.code_object_offset = offset;
-    uint64_t instruction_type_id = 0;
-    rocprofvis_controller_get_uint64(pc_handle, kRPVControllerPCSamplingIsaLineInstructionTypeId, index, &instruction_type_id);
-    isa_line.instruction_type_id = static_cast<uint32_t>(instruction_type_id);
-    isa_line.instruction = GetString(pc_handle, kRPVControllerPCSamplingIsaLineInstruction, index);
-    isa_line.comment     = GetString(pc_handle, kRPVControllerPCSamplingIsaLineComment, index);
-}
-
-inline void
-DataProvider::LoadPcSamplingJunctions(KernelInfo& kernel, rocprofvis_handle_t* pc_handle)
-{
-    uint64_t num_isa_to_isa = 0;
-    rocprofvis_controller_get_uint64(pc_handle, kRPVControllerPCSamplingNumIsaToIsaDeps, 0, &num_isa_to_isa);
-    kernel.pc_sampling_data.isa_to_isa_deps.resize(num_isa_to_isa);
-    for(uint64_t i = 0; i < num_isa_to_isa; i++)
+    for(uint64_t ii = 0; ii < num_instruction_lines; ii++)
     {
-        uint64_t dependent = 0, dependency = 0;
-        rocprofvis_controller_get_uint64(pc_handle, kRPVControllerPCSamplingIsaToIsaDependentIsaLineId, i, &dependent);
-        rocprofvis_controller_get_uint64(pc_handle, kRPVControllerPCSamplingIsaToIsaDependencyIsaLineId, i, &dependency);
-        kernel.pc_sampling_data.isa_to_isa_deps[i].dependent_isa_line_id  = static_cast<uint32_t>(dependent);
-        kernel.pc_sampling_data.isa_to_isa_deps[i].dependency_isa_line_id = static_cast<uint32_t>(dependency);
+        InstructionLine instruction_line;
+        LoadPcSamplingInstructionLine(instruction_line, pc_handle, ii);
+        auto kernel_symbol_it = kernel_symbols_by_uuid.find(instruction_line.kernel_symbol_uuid);
+        if(kernel_symbol_it == kernel_symbols_by_uuid.end())
+        {
+            spdlog::debug("Skipping ISA line {} with unknown kernel symbol {}", ii,
+                          instruction_line.kernel_symbol_uuid);
+            continue;
+        }
+        kernel_symbol_it->second->instruction_lines.emplace_back(std::move(instruction_line));
     }
+}
 
-    uint64_t num_isa_to_source = 0;
-    rocprofvis_controller_get_uint64(pc_handle, kRPVControllerPCSamplingNumIsaToSourceDeps, 0, &num_isa_to_source);
-    kernel.pc_sampling_data.isa_to_source_deps.resize(num_isa_to_source);
-    for(uint64_t i = 0; i < num_isa_to_source; i++)
+inline void
+DataProvider::LoadPcSamplingKernelSymbol(KernelSymbol&        kernel_symbol,
+                                         rocprofvis_handle_t* pc_handle,
+                                         uint64_t             index)
+{
+    rocprofvis_controller_get_uint64(
+        pc_handle, kRPVControllerPCSamplingKernelSymbolUuid, index,
+        &kernel_symbol.kernel_symbol_uuid);
+    rocprofvis_controller_get_uint64(
+        pc_handle, kRPVControllerPCSamplingKernelSymbolCodeObjectUuid, index,
+        &kernel_symbol.code_object_uuid);
+    rocprofvis_controller_get_uint64(
+        pc_handle, kRPVControllerPCSamplingKernelSymbolKernelUuid, index,
+        &kernel_symbol.kernel_uuid);
+    rocprofvis_controller_get_uint64(
+        pc_handle, kRPVControllerPCSamplingKernelSymbolCodeObjectOffset, index,
+        &kernel_symbol.code_object_offset);
+}
+
+inline void
+DataProvider::LoadPcSamplingInstructionLine(InstructionLine&     instruction_line,
+                                            rocprofvis_handle_t* pc_handle,
+                                            uint64_t             index)
+{
+    uint64_t instruction_uuid = 0;
+    rocprofvis_controller_get_uint64(pc_handle, kRPVControllerPCSamplingInstructionLineUuid, index,
+                                     &instruction_uuid);
+    instruction_line.instruction_uuid = instruction_uuid;
+    rocprofvis_controller_get_uint64(
+        pc_handle, kRPVControllerPCSamplingInstructionLineKernelSymbolUuid, index,
+        &instruction_line.kernel_symbol_uuid);
+    rocprofvis_controller_get_uint64(
+        pc_handle, kRPVControllerPCSamplingInstructionLineInstructionTypeUuid, index,
+        &instruction_line.instruction_type_uuid);
+    rocprofvis_controller_get_uint64(
+        pc_handle, kRPVControllerPCSamplingInstructionLineCodeObjectOffset, index,
+        &instruction_line.code_object_offset);
+    instruction_line.instruction =
+        GetString(pc_handle, kRPVControllerPCSamplingInstructionLineInstruction, index);
+}
+
+inline void
+DataProvider::LoadPcSamplingInstructionSourceLines(KernelInfo&          kernel,
+                                                   rocprofvis_handle_t* pc_handle)
+{
+    uint64_t num_instruction_source_lines = 0;
+    rocprofvis_controller_get_uint64(
+        pc_handle, kRPVControllerPCSamplingNumInstructionSourceLines, 0,
+        &num_instruction_source_lines);
+    kernel.pc_sampling_data.instruction_source_lines.resize(num_instruction_source_lines);
+    for(uint64_t i = 0; i < num_instruction_source_lines; i++)
     {
-        uint64_t isa_id = 0, source_id = 0, depth = 0;
-        rocprofvis_controller_get_uint64(pc_handle, kRPVControllerPCSamplingIsaToSourceIsaLineId, i, &isa_id);
-        rocprofvis_controller_get_uint64(pc_handle, kRPVControllerPCSamplingIsaToSourceSourceLineId, i, &source_id);
-        rocprofvis_controller_get_uint64(pc_handle, kRPVControllerPCSamplingIsaToSourceDepth, i, &depth);
-        kernel.pc_sampling_data.isa_to_source_deps[i].isa_line_id    = static_cast<uint32_t>(isa_id);
-        kernel.pc_sampling_data.isa_to_source_deps[i].source_line_id = static_cast<uint32_t>(source_id);
-        kernel.pc_sampling_data.isa_to_source_deps[i].depth          = static_cast<uint32_t>(depth);
+        InstructionSourceLine& source_line =
+            kernel.pc_sampling_data.instruction_source_lines[i];
+        rocprofvis_controller_get_uint64(
+            pc_handle, kRPVControllerPCSamplingInstructionSourceLineUuid, i,
+            &source_line.instruction_source_line_uuid);
+        rocprofvis_controller_get_uint64(
+            pc_handle, kRPVControllerPCSamplingInstructionSourceLineInstructionUuid, i,
+            &source_line.instruction_uuid);
+        rocprofvis_controller_get_uint64(
+            pc_handle, kRPVControllerPCSamplingInstructionSourceLineSourceLineUuid, i,
+            &source_line.source_line_uuid);
+        rocprofvis_controller_get_uint64(
+            pc_handle, kRPVControllerPCSamplingInstructionSourceLineFrameIndex, i,
+            &source_line.frame_index);
     }
 }
 
@@ -4848,75 +4913,156 @@ inline void
 DataProvider::LoadPcSamplingStates(KernelInfo& kernel, rocprofvis_handle_t* pc_handle)
 {
     uint64_t num_sampling_states = 0;
-    rocprofvis_controller_get_uint64(pc_handle, kRPVControllerPCSamplingNumSamplingStates, 0, &num_sampling_states);
+    rocprofvis_controller_get_uint64(
+        pc_handle, kRPVControllerPCSamplingNumPcSampleStates, 0,
+        &num_sampling_states);
 
-    std::unordered_map<uint32_t, IsaLine*> isa_lines_by_id;
-    for(CodeObject& code_object : kernel.pc_sampling_data.code_objects)
-        for(IsaLine& isa_line : code_object.isa_lines)
-            isa_lines_by_id.emplace(isa_line.id, &isa_line);
-
+    kernel.pc_sampling_data.pc_sample_states.resize(num_sampling_states);
     for(uint64_t i = 0; i < num_sampling_states; i++)
     {
-        uint64_t isa_line_id = 0;
-        rocprofvis_controller_get_uint64(pc_handle, kRPVControllerPCSamplingStateIsaLineId, i, &isa_line_id);
-
-        const std::unordered_map<uint32_t, IsaLine*>::iterator isa_line_it =
-            isa_lines_by_id.find(static_cast<uint32_t>(isa_line_id));
-        if(isa_line_it == isa_lines_by_id.end())
-        {
-            continue;
-        }
-
-        uint64_t id = 0, dispatch_id = 0, issued_count = 0, stalled_count = 0, total_count = 0;
-        double active_threads_percent = 0.0;
-        double wave_occupancy_percent = 0.0;
-        rocprofvis_controller_get_uint64(pc_handle, kRPVControllerPCSamplingStateId, i, &id);
-        rocprofvis_controller_get_uint64(pc_handle, kRPVControllerPCSamplingStateDispatchId, i, &dispatch_id);
-        rocprofvis_controller_get_uint64(pc_handle, kRPVControllerPCSamplingStateIssuedCount, i, &issued_count);
-        rocprofvis_controller_get_uint64(pc_handle, kRPVControllerPCSamplingStateStalledCount, i, &stalled_count);
-        rocprofvis_controller_get_uint64(pc_handle, kRPVControllerPCSamplingStateTotalCount, i, &total_count);
-        rocprofvis_controller_get_double(pc_handle, kRPVControllerPCSamplingStateActiveThreadsPercent, i, &active_threads_percent);
-        rocprofvis_controller_get_double(pc_handle, kRPVControllerPCSamplingStateWaveOccupancyPercent, i, &wave_occupancy_percent);
-
-        SamplingState& sampling_state = isa_line_it->second->sampling_state;
-        sampling_state.loaded             = true;
-        sampling_state.id                 = static_cast<uint32_t>(id);
-        sampling_state.isa_line_id        = static_cast<uint32_t>(isa_line_id);
-        sampling_state.dispatch_id        = dispatch_id;
-        sampling_state.active_threads_percent = static_cast<float>(active_threads_percent);
-        sampling_state.wave_occupancy_percent = static_cast<float>(wave_occupancy_percent);
-        sampling_state.issued_count       = static_cast<uint32_t>(issued_count);
-        sampling_state.stalled_count      = static_cast<uint32_t>(stalled_count);
-        sampling_state.total_count        = static_cast<uint32_t>(total_count);
+        PcSampleState& state = kernel.pc_sampling_data.pc_sample_states[i];
+        rocprofvis_controller_get_uint64(
+            pc_handle, kRPVControllerPCSamplingPcSampleStateUuid, i,
+            &state.pc_sample_state_uuid);
+        rocprofvis_controller_get_uint64(
+            pc_handle, kRPVControllerPCSamplingPcSampleStateInstructionUuid, i,
+            &state.instruction_uuid);
+        rocprofvis_controller_get_uint64(
+            pc_handle, kRPVControllerPCSamplingPcSampleStateTotalCount, i,
+            &state.total_count);
+        rocprofvis_controller_get_uint64(
+            pc_handle, kRPVControllerPCSamplingPcSampleStateIssueCount, i,
+            &state.issue_count);
+        rocprofvis_controller_get_uint64(
+            pc_handle, kRPVControllerPCSamplingPcSampleStateStallCount, i,
+            &state.stall_count);
+        rocprofvis_controller_get_double(
+            pc_handle, kRPVControllerPCSamplingPcSampleStateActiveThreadPercent, i,
+            &state.active_thread_percent);
+        rocprofvis_controller_get_double(
+            pc_handle, kRPVControllerPCSamplingPcSampleStateWaveOccupancyPercent, i,
+            &state.wave_occupancy_percent);
+        rocprofvis_controller_get_uint64(
+            pc_handle, kRPVControllerPCSamplingPcSampleStateDispatchUuid, i,
+            &state.dispatch_uuid);
     }
 }
 
 inline void
-DataProvider::LoadPcSamplingStallReasonCounts(KernelInfo& kernel, rocprofvis_handle_t* pc_handle)
+DataProvider::LoadPcSamplingStallReasons(KernelInfo& kernel,
+                                         rocprofvis_handle_t* pc_handle)
 {
-    uint64_t num_reason_counts = 0;
-    rocprofvis_controller_get_uint64(pc_handle, kRPVControllerPCSamplingNumStallReasonCounts, 0, &num_reason_counts);
+    uint64_t num_stall_reasons = 0;
+    rocprofvis_controller_get_uint64(
+        pc_handle, kRPVControllerPCSamplingNumPcSampleStallReasons, 0,
+        &num_stall_reasons);
 
-    std::unordered_map<uint32_t, SamplingState*> sampling_states_by_id;
-    for(CodeObject& code_object : kernel.pc_sampling_data.code_objects)
-        for(IsaLine& isa_line : code_object.isa_lines)
-            if(isa_line.sampling_state.loaded)
-                sampling_states_by_id.emplace(isa_line.sampling_state.id, &isa_line.sampling_state);
-
-    for(uint64_t i = 0; i < num_reason_counts; i++)
+    kernel.pc_sampling_data.pc_sample_stall_reasons.resize(num_stall_reasons);
+    for(uint64_t i = 0; i < num_stall_reasons; i++)
     {
-        uint64_t sampling_state_id = 0, reason_id = 0, count = 0;
-        rocprofvis_controller_get_uint64(pc_handle, kRPVControllerPCSamplingStallReasonSamplingStateId, i, &sampling_state_id);
-        rocprofvis_controller_get_uint64(pc_handle, kRPVControllerPCSamplingStallReasonId,   i, &reason_id);
-        rocprofvis_controller_get_uint64(pc_handle, kRPVControllerPCSamplingStallReasonCount,    i, &count);
+        PcSampleStallReason& reason =
+            kernel.pc_sampling_data.pc_sample_stall_reasons[i];
+        rocprofvis_controller_get_uint64(
+            pc_handle, kRPVControllerPCSamplingPcSampleStallReasonUuid, i,
+            &reason.pc_sample_stall_reason_uuid);
+        rocprofvis_controller_get_uint64(
+            pc_handle, kRPVControllerPCSamplingPcSampleStallReasonStateUuid, i,
+            &reason.pc_sample_state_uuid);
+        rocprofvis_controller_get_uint64(
+            pc_handle, kRPVControllerPCSamplingPcSampleStallReasonLookupUuid, i,
+            &reason.pc_sample_stall_reason_lookup_uuid);
+        rocprofvis_controller_get_uint64(
+            pc_handle, kRPVControllerPCSamplingPcSampleStallReasonCount, i,
+            &reason.count);
+    }
+}
 
-        const std::unordered_map<uint32_t, SamplingState*>::iterator sampling_state_it =
-            sampling_states_by_id.find(static_cast<uint32_t>(sampling_state_id));
-        if(sampling_state_it != sampling_states_by_id.end())
-        {
-            sampling_state_it->second->stall_reasons.push_back({
-                static_cast<int32_t>(reason_id), static_cast<int32_t>(count) });
-        }
+inline void
+DataProvider::LoadPcSamplingStallReasonLookups(KernelInfo& kernel,
+                                               rocprofvis_handle_t* pc_handle)
+{
+    uint64_t num_stall_reason_lookups = 0;
+    rocprofvis_controller_get_uint64(
+        pc_handle, kRPVControllerPCSamplingNumPcSampleStallReasonLookups, 0,
+        &num_stall_reason_lookups);
+
+    kernel.pc_sampling_data.pc_sample_stall_reason_lookups.resize(
+        num_stall_reason_lookups);
+    for(uint64_t i = 0; i < num_stall_reason_lookups; i++)
+    {
+        PcSampleStallReasonLookup& lookup =
+            kernel.pc_sampling_data.pc_sample_stall_reason_lookups[i];
+        rocprofvis_controller_get_uint64(
+            pc_handle, kRPVControllerPCSamplingPcSampleStallReasonLookupRecordUuid,
+            i, &lookup.pc_sample_stall_reason_lookup_uuid);
+        lookup.text = GetString(
+            pc_handle, kRPVControllerPCSamplingPcSampleStallReasonLookupText, i);
+    }
+}
+
+inline void
+DataProvider::LoadPcSamplingInstructionTypes(KernelInfo& kernel,
+                                              rocprofvis_handle_t* pc_handle)
+{
+    uint64_t count = 0;
+    rocprofvis_controller_get_uint64(
+        pc_handle, kRPVControllerPCSamplingNumInstructionTypeLookups, 0, &count);
+    kernel.pc_sampling_data.instruction_type_lookups.resize(count);
+    for(uint64_t i = 0; i < count; i++)
+    {
+        InstructionTypeLookup& lookup =
+            kernel.pc_sampling_data.instruction_type_lookups[i];
+        rocprofvis_controller_get_uint64(
+            pc_handle, kRPVControllerPCSamplingInstructionTypeLookupUuid, i,
+            &lookup.instruction_type_lookup_uuid);
+        lookup.text = GetString(
+            pc_handle, kRPVControllerPCSamplingInstructionTypeLookupText, i);
+    }
+}
+
+inline void
+DataProvider::LoadPcSamplingInstructionSamples(KernelInfo& kernel,
+                                                rocprofvis_handle_t* pc_handle)
+{
+    uint64_t count = 0;
+    rocprofvis_controller_get_uint64(
+        pc_handle, kRPVControllerPCSamplingNumInstructionSamples, 0, &count);
+    kernel.pc_sampling_data.instruction_samples.resize(count);
+    for(uint64_t i = 0; i < count; i++)
+    {
+        InstructionSample& sample = kernel.pc_sampling_data.instruction_samples[i];
+        rocprofvis_controller_get_uint64(
+            pc_handle, kRPVControllerPCSamplingInstructionSampleUuid, i,
+            &sample.instruction_sample_uuid);
+        rocprofvis_controller_get_uint64(
+            pc_handle, kRPVControllerPCSamplingInstructionSampleStateUuid, i,
+            &sample.pc_sample_state_uuid);
+        rocprofvis_controller_get_uint64(
+            pc_handle, kRPVControllerPCSamplingInstructionSampleLookupUuid, i,
+            &sample.instruction_sample_lookup_uuid);
+        rocprofvis_controller_get_uint64(
+            pc_handle, kRPVControllerPCSamplingInstructionSampleCount, i,
+            &sample.count);
+    }
+}
+
+inline void
+DataProvider::LoadPcSamplingInstructionSampleLookups(
+    KernelInfo& kernel, rocprofvis_handle_t* pc_handle)
+{
+    uint64_t count = 0;
+    rocprofvis_controller_get_uint64(
+        pc_handle, kRPVControllerPCSamplingNumInstructionSampleLookups, 0, &count);
+    kernel.pc_sampling_data.instruction_sample_lookups.resize(count);
+    for(uint64_t i = 0; i < count; i++)
+    {
+        InstructionSampleLookup& lookup =
+            kernel.pc_sampling_data.instruction_sample_lookups[i];
+        rocprofvis_controller_get_uint64(
+            pc_handle, kRPVControllerPCSamplingInstructionSampleLookupRecordUuid, i,
+            &lookup.instruction_sample_lookup_uuid);
+        lookup.text = GetString(
+            pc_handle, kRPVControllerPCSamplingInstructionSampleLookupText, i);
     }
 }
 
@@ -4929,17 +5075,22 @@ DataProvider::LoadPcSamplingSourceFiles(KernelInfo& kernel, rocprofvis_handle_t*
         return;
 
     kernel.pc_sampling_data.source_files.resize(num_source_files);
-    std::unordered_map<uint32_t, SourceFile*> source_files_by_id;
+    std::unordered_map<uint64_t, SourceFile*> source_files_by_id;
     source_files_by_id.reserve(num_source_files);
     for(uint64_t i = 0; i < num_source_files; i++)
     {
-        uint64_t id = 0;
-        rocprofvis_controller_get_uint64(pc_handle, kRPVControllerPCSamplingSourceFileId, i, &id);
-        kernel.pc_sampling_data.source_files[i].id               = static_cast<uint32_t>(id);
-        kernel.pc_sampling_data.source_files[i].file_path        = GetString(pc_handle, kRPVControllerPCSamplingFilePath, i);
-        kernel.pc_sampling_data.source_files[i].content_checksum = GetString(pc_handle, kRPVControllerPCSamplingSourceFileChecksum, i);
-        source_files_by_id.emplace(kernel.pc_sampling_data.source_files[i].id,
-                                   &kernel.pc_sampling_data.source_files[i]);
+        SourceFile& source_file = kernel.pc_sampling_data.source_files[i];
+        rocprofvis_controller_get_uint64(
+            pc_handle, kRPVControllerPCSamplingSourceFileUuid, i,
+            &source_file.source_file_uuid);
+        rocprofvis_controller_get_uint64(
+            pc_handle, kRPVControllerPCSamplingSourceFileWorkloadId, i,
+            &source_file.workload_id);
+        source_file.file_path =
+            GetString(pc_handle, kRPVControllerPCSamplingSourceFilePath, i);
+        source_file.md5_checksum =
+            GetString(pc_handle, kRPVControllerPCSamplingSourceFileMd5Checksum, i);
+        source_files_by_id.emplace(source_file.source_file_uuid, &source_file);
     }
 
     uint64_t num_source_lines = 0;
@@ -4947,9 +5098,9 @@ DataProvider::LoadPcSamplingSourceFiles(KernelInfo& kernel, rocprofvis_handle_t*
     for(uint64_t li = 0; li < num_source_lines; li++)
     {
         uint64_t sf_id = 0;
-        rocprofvis_controller_get_uint64(pc_handle, kRPVControllerPCSamplingSourceLineSourceFileId, li, &sf_id);
-        const std::unordered_map<uint32_t, SourceFile*>::iterator source_file_it =
-            source_files_by_id.find(static_cast<uint32_t>(sf_id));
+        rocprofvis_controller_get_uint64(pc_handle, kRPVControllerPCSamplingSourceLineSourceFileUuid, li, &sf_id);
+        const std::unordered_map<uint64_t, SourceFile*>::iterator source_file_it =
+            source_files_by_id.find(sf_id);
         if(source_file_it != source_files_by_id.end())
         {
             source_file_it->second->source_lines.emplace_back();
@@ -4962,11 +5113,14 @@ inline void
 DataProvider::LoadPcSamplingSourceLine(SourceLine& source_line, rocprofvis_handle_t* pc_handle, uint64_t index)
 {
     uint64_t line_id = 0;
-    rocprofvis_controller_get_uint64(pc_handle, kRPVControllerPCSamplingSourceLineId, index, &line_id);
-    source_line.id = static_cast<uint32_t>(line_id);
+    rocprofvis_controller_get_uint64(pc_handle, kRPVControllerPCSamplingSourceLineUuid, index, &line_id);
+    source_line.source_line_uuid = line_id;
+    rocprofvis_controller_get_uint64(
+        pc_handle, kRPVControllerPCSamplingSourceLineSourceFileUuid, index,
+        &source_line.source_file_uuid);
     uint64_t line_number = 0;
     rocprofvis_controller_get_uint64(pc_handle, kRPVControllerPCSamplingSourceLineNumber, index, &line_number);
-    source_line.line_number = static_cast<uint32_t>(line_number);
+    source_line.line_number = line_number;
     source_line.content     = GetString(pc_handle, kRPVControllerPCSamplingSourceLineContent, index);
 }
 
@@ -5447,12 +5601,16 @@ DataProvider::ProcessPcSamplingRequest(RequestInfo& req)
             params->m_workload_id, params->m_kernel_id);
         if(kernel)
         {
-            kernel->pc_sampling_data = {};
-            LoadPcSamplingCodeObjects(*kernel, pc_handle);
-            LoadPcSamplingJunctions(*kernel, pc_handle);
-            LoadPcSamplingStates(*kernel, pc_handle);
-            LoadPcSamplingStallReasonCounts(*kernel, pc_handle);
+            kernel->pc_sampling_data.code_objects.clear();
             LoadPcSamplingSourceFiles(*kernel, pc_handle);
+            LoadPcSamplingCodeObjects(*kernel, pc_handle);
+            LoadPcSamplingInstructionSourceLines(*kernel, pc_handle);
+            LoadPcSamplingStates(*kernel, pc_handle);
+            LoadPcSamplingStallReasons(*kernel, pc_handle);
+            LoadPcSamplingStallReasonLookups(*kernel, pc_handle);
+            LoadPcSamplingInstructionTypes(*kernel, pc_handle);
+            LoadPcSamplingInstructionSamples(*kernel, pc_handle);
+            LoadPcSamplingInstructionSampleLookups(*kernel, pc_handle);
         }
     }
     else if(success && !is_current_generation)
@@ -5472,7 +5630,7 @@ DataProvider::ProcessPcSamplingRequest(RequestInfo& req)
     {
         m_pc_sampling_fetch_callback(m_model.GetTraceFilePath(),
                                      params->m_kernel_id,
-                                     params->m_source_file_id,
+                                     params->m_source_file_uuid,
                                      params->m_generation,
                                      success && is_current_generation);
     }

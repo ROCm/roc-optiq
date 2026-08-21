@@ -23,8 +23,8 @@ class DataProvider;
 
 struct LineSelection
 {
-    uint32_t hovered_line  = 0;
-    uint32_t selected_line = 0;
+    uint64_t hovered_line  = 0;
+    uint64_t selected_line = 0;
 };
 
 class ComputeCodeView : public RocWidget
@@ -43,8 +43,8 @@ private:
     void ClearCodeData();
     void ClearSelectionData();
     void LoadSourceFileList(const PcSamplingData& data);
-    void FetchPcSamplingForCurrentFile();
-    void OnPcSamplingReady(uint32_t kernel_id, uint32_t source_file_id,
+    void FetchMandatoryPcSampling();
+    void OnPcSamplingReady(uint32_t kernel_id, uint64_t source_file_uuid,
                            uint32_t generation, bool success);
 
     SettingsManager&                  m_settings;
@@ -52,11 +52,11 @@ private:
 
     std::shared_ptr<SourceCodeWidget> m_source_code;
     std::shared_ptr<IsaCodeWidget>    m_isa_code;
-    LayoutItem::Ptr                   m_isa_layout_item;
+    LayoutItem::Ptr                   m_source_layout_item;
     std::shared_ptr<HSplitContainer>  m_horizontal_split_container;
 
-    uint32_t                          m_current_source_file_id;
-    uint32_t                          m_current_code_object_id;
+    uint64_t                          m_current_source_file_uuid;
+    uint64_t                          m_current_code_object_uuid;
     uint32_t                          m_current_kernel_id;
     uint32_t                          m_current_workload_id;
     uint32_t                          m_fetch_generation = 0;
@@ -64,7 +64,7 @@ private:
     bool                              m_fetch_in_progress = false;
     bool                              m_pending_refetch  = false;
 
-    std::map<std::string /*file_path*/, uint32_t /*file_id*/> m_source_files;
+    std::map<std::string /*file_path*/, uint64_t /*file_id*/> m_source_files;
     LineSelection                   m_line_selection;
 
     float m_control_panel_height;
@@ -117,10 +117,10 @@ public:
     SourceCodeWidget(LineSelection& selection);
     void Render() override;
 
-    void Load(const PcSamplingData& data, uint32_t source_file_id);
+    void Load(const PcSamplingData& data, uint64_t source_file_uuid);
 
-    uint32_t GetSelectedLine() const { return m_line_selection.selected_line; }
-    uint32_t GetHoveredLine()  const { return m_line_selection.hovered_line; }
+    uint64_t GetSelectedLine() const { return m_line_selection.selected_line; }
+    uint64_t GetHoveredLine()  const { return m_line_selection.hovered_line; }
 
 private:
     void RenderLine(uint32_t index, uint32_t column_count);
@@ -128,7 +128,8 @@ private:
     struct SourceRow
     {
         std::string content;
-        uint32_t    id                = 0;
+        uint64_t    id                = 0;
+        uint64_t    line_number       = 0;
         float       summarised_stalls = 0.0f;
     };
 
@@ -141,8 +142,7 @@ public:
     IsaCodeWidget(LineSelection& selection);
     void Render() override;
 
-    void Load(const PcSamplingData& data, uint32_t code_object_id);
-    void ShowComments(bool show) { m_show_comments = show; };
+    void Load(const PcSamplingData& data, uint64_t code_object_uuid);
 
 private:
     void RenderLine(uint32_t index, uint32_t column_count);
@@ -150,17 +150,13 @@ private:
     struct IsaRow
     {
         std::string instruction;
-        std::string comment;
-        uint32_t    id                  = 0;
-        uint32_t    source_line_id      = 0;
-        uint32_t    issued_count        = 0;
-        uint32_t    stalled_count       = 0;
-        uint32_t    total_count         = 0;
-        float       active_threads_percent = 0.0f;
-        float       wave_occupancy_percent = 0.0f;
+        uint64_t    id                  = 0;
+        uint64_t    source_line_id      = 0;
+        uint64_t    issue_count         = 0;
+        uint64_t    stall_count         = 0;
+        uint64_t    total_count         = 0;
     };
 
-    bool                m_show_comments = false;
     std::vector<IsaRow> m_entries;
 };
 

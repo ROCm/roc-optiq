@@ -1149,7 +1149,16 @@ The gate is `1.2.0` for every method except
 reads `compute_workload_metric_view` unconditionally and that view does
 not exist earlier.
 
-The source / ISA / PC-sampling block (`GetComputeKernelSourceFiles`
+The PC-sampling block targets schema 2.0 and is version-gated at
+`2.0.0`. Its current tables are `compute_code_object_store`,
+`compute_instruction_line`, `compute_pc_sample_state`, and
+`compute_pc_sample_stall_reason`. Source and ISA-correlation tables
+are planned but absent from the initial schema, so those query builders
+currently return correctly shaped empty result sets. `CreateIndexes`
+probes `compute_pc_sample_state` before adding the new instruction,
+state, and stall-reason indexes.
+
+Historical pre-2.0 behavior: the source / ISA / PC-sampling block (`GetComputeKernelSourceFiles`
 through `GetComputeKernelSamplingStateReasonCounts`) is **not**
 version-gated beyond that `1.2.0` floor. PC sampling is an optional
 capture feature, so its tables can be absent from a `1.3.0`+ database

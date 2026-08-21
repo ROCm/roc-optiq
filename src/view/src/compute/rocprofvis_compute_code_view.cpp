@@ -22,8 +22,8 @@ ComputeCodeView::ComputeCodeView(DataProvider& data_provider)
 , m_settings(SettingsManager::GetInstance())
 , m_data_provider(data_provider)
 , m_control_panel_height(0.0f)
-, m_current_source_file_id(ComputeSelection::INVALID_SELECTION_ID)
-, m_current_code_object_id(ComputeSelection::INVALID_SELECTION_ID)
+, m_current_source_file_uuid(ComputeSelection::INVALID_SELECTION_ID)
+, m_current_code_object_uuid(ComputeSelection::INVALID_SELECTION_ID)
 , m_current_kernel_id(ComputeSelection::INVALID_SELECTION_ID)
 , m_current_workload_id(ComputeSelection::INVALID_SELECTION_ID)
 , m_show_metadata_enabled(false)
@@ -31,23 +31,24 @@ ComputeCodeView::ComputeCodeView(DataProvider& data_provider)
     m_source_code = std::make_shared<SourceCodeWidget>(m_line_selection);
     m_isa_code    = std::make_shared<IsaCodeWidget>(m_line_selection);
 
-    auto source_item             = LayoutItem::CreateFromWidget(m_source_code);
-    source_item->m_child_flags   = ImGuiChildFlags_None;
+    auto isa_item           = LayoutItem::CreateFromWidget(m_isa_code);
+    isa_item->m_child_flags = ImGuiChildFlags_None;
 
-    m_isa_layout_item              = LayoutItem::CreateFromWidget(m_isa_code);
-    m_isa_layout_item->m_child_flags = ImGuiChildFlags_None;
-    m_isa_layout_item->m_visible   = false;
+    m_source_layout_item                = LayoutItem::CreateFromWidget(m_source_code);
+    m_source_layout_item->m_child_flags = ImGuiChildFlags_None;
+    m_source_layout_item->m_visible     = false;
 
-    m_horizontal_split_container = std::make_shared<HSplitContainer>(source_item, m_isa_layout_item);
+    m_horizontal_split_container =
+        std::make_shared<HSplitContainer>(isa_item, m_source_layout_item);
     m_horizontal_split_container->SetSplit(0.5f);
     m_horizontal_split_container->ShowSplitter(true);
 
     SubscribeToEvents();
 
     m_data_provider.SetFetchPcSamplingCallback(
-        [this](const std::string&, uint32_t kernel_id, uint32_t source_file_id,
+        [this](const std::string&, uint32_t kernel_id, uint64_t source_file_uuid,
                uint32_t generation, bool success) {
-            OnPcSamplingReady(kernel_id, source_file_id, generation, success);
+            OnPcSamplingReady(kernel_id, source_file_uuid, generation, success);
         });
 }
 
@@ -130,9 +131,12 @@ ComputeCodeView::LoadData(uint32_t kernel_id)
     // Source file list is already populated eagerly - just refresh the selection.
     LoadSourceFileList(kernel_info->pc_sampling_data);
 
-    // Clear stale widget data and kick off the async fetch for the selected file.
+    // Clear stale widget data. The mandatory code-object, ISA, and sample-state
+    // request starts from Render, when the PC Sampling View is open.
     ClearCodeData();
-    FetchPcSamplingForCurrentFile();
+    m_pending_refetch = true;
+    if(m_fetch_in_progress)
+        m_data_provider.CancelRequest(m_active_request_id);
 }
 
 void
@@ -146,16 +150,16 @@ void
 ComputeCodeView::ClearSelectionData()
 {
     m_source_files.clear();
-    m_current_source_file_id = ComputeSelection::INVALID_SELECTION_ID;
-    m_current_code_object_id = ComputeSelection::INVALID_SELECTION_ID;
+    m_current_source_file_uuid = ComputeSelection::INVALID_SELECTION_ID;
+    m_current_code_object_uuid = ComputeSelection::INVALID_SELECTION_ID;
     ClearCodeData();
 }
 
 void
-ComputeCodeView::FetchPcSamplingForCurrentFile()
+ComputeCodeView::FetchMandatoryPcSampling()
 {
     if(m_current_kernel_id == ComputeSelection::INVALID_SELECTION_ID ||
-       m_current_source_file_id == ComputeSelection::INVALID_SELECTION_ID)
+       m_current_workload_id == ComputeSelection::INVALID_SELECTION_ID)
     {
         m_pending_refetch = false;
         if(m_fetch_in_progress)
@@ -170,17 +174,16 @@ ComputeCodeView::FetchPcSamplingForCurrentFile()
         return;
     }
 
-    // This ID correlates the callback with the selected kernel and source file;
-    // it does not permit multiple Code View requests to run concurrently.
-    const uint64_t request_id = RequestIdBuilder::MakeClientRequestId(
-        RequestType::kFetchPcSampling,
-        (static_cast<uint64_t>(m_current_kernel_id) << 32) | m_current_source_file_id);
+    // DataProvider permits only one PC sampling request at a time. Kernel,
+    // source-file, and generation values validate the callback separately.
+    const uint64_t request_id =
+        RequestIdBuilder::MakeRequestId(RequestType::kFetchPcSampling);
 
     ++m_fetch_generation;
     m_pending_refetch = false;
     if(m_data_provider.FetchPcSampling(
            PcSamplingRequestParams(m_current_workload_id, m_current_kernel_id,
-                                   m_current_source_file_id, m_fetch_generation)))
+                                   m_current_source_file_uuid, m_fetch_generation)))
     {
         m_active_request_id = request_id;
         m_fetch_in_progress = true;
@@ -188,12 +191,11 @@ ComputeCodeView::FetchPcSamplingForCurrentFile()
 }
 
 void
-ComputeCodeView::OnPcSamplingReady(uint32_t kernel_id, uint32_t source_file_id,
+ComputeCodeView::OnPcSamplingReady(uint32_t kernel_id, uint64_t source_file_uuid,
                                    uint32_t generation, bool success)
 {
-    const uint64_t request_id = RequestIdBuilder::MakeClientRequestId(
-        RequestType::kFetchPcSampling,
-        (static_cast<uint64_t>(kernel_id) << 32) | source_file_id);
+    const uint64_t request_id =
+        RequestIdBuilder::MakeRequestId(RequestType::kFetchPcSampling);
     if(!m_fetch_in_progress || request_id != m_active_request_id ||
        generation != m_fetch_generation)
     {
@@ -209,7 +211,7 @@ ComputeCodeView::OnPcSamplingReady(uint32_t kernel_id, uint32_t source_file_id,
         return;
     }
 
-    if(kernel_id != m_current_kernel_id || source_file_id != m_current_source_file_id)
+    if(kernel_id != m_current_kernel_id || source_file_uuid != m_current_source_file_uuid)
         return;
 
     if(!success)
@@ -222,14 +224,14 @@ ComputeCodeView::OnPcSamplingReady(uint32_t kernel_id, uint32_t source_file_id,
 
     const PcSamplingData& data = kernel_info->pc_sampling_data;
 
-    if(m_current_source_file_id != ComputeSelection::INVALID_SELECTION_ID)
-        m_source_code->Load(data, m_current_source_file_id);
+    if(m_current_source_file_uuid != ComputeSelection::INVALID_SELECTION_ID)
+        m_source_code->Load(data, m_current_source_file_uuid);
 
     if(!data.code_objects.empty())
-        m_current_code_object_id = data.code_objects[0].id;
+        m_current_code_object_uuid = data.code_objects[0].code_object_uuid;
 
-    if(m_current_code_object_id != ComputeSelection::INVALID_SELECTION_ID)
-        m_isa_code->Load(data, m_current_code_object_id);
+    if(m_current_code_object_uuid != ComputeSelection::INVALID_SELECTION_ID)
+        m_isa_code->Load(data, m_current_code_object_uuid);
 }
 
 void
@@ -237,19 +239,19 @@ ComputeCodeView::LoadSourceFileList(const PcSamplingData& data)
 {
     m_source_files.clear();
     for (auto& file : data.source_files)
-        m_source_files.emplace(file.file_path, file.id);
+        m_source_files.emplace(file.file_path, file.source_file_uuid);
 
     bool selection_valid = false;
     for(const auto& [path, id] : m_source_files)
     {
-        if(id == m_current_source_file_id)
+        if(id == m_current_source_file_uuid)
         {
             selection_valid = true;
             break;
         }
     }
     if(!selection_valid)
-        m_current_source_file_id = m_source_files.empty()
+        m_current_source_file_uuid = m_source_files.empty()
             ? ComputeSelection::INVALID_SELECTION_ID
             : m_source_files.begin()->second;
 }
@@ -259,7 +261,7 @@ ComputeCodeView::Render()
 {
     if(m_pending_refetch && !m_fetch_in_progress)
     {
-        FetchPcSamplingForCurrentFile();
+        FetchMandatoryPcSampling();
     }
 
     RenderControlPanel();
@@ -274,18 +276,16 @@ ComputeCodeView::Render()
 void
 ComputeCodeView::RenderControlPanel()
 {
-    constexpr const char* hide_isa_str = "Hide ISA";
-    constexpr const char* show_isa_str = "Show ISA";
-    constexpr const char* show_stalls_str = "Show Stalls";
-    constexpr const char* hide_stalls_str = "Hide Stalls";
+    constexpr const char* hide_source_code_str = "Hide Source Code";
+    constexpr const char* show_source_code_str = "Show Source Code";
+    constexpr const char* show_stalls_str      = "Show Stalls";
+    constexpr const char* hide_stalls_str      = "Hide Stalls";
 
     const float fallbackHeight =
-        ImGui::GetFrameHeight() +
-        ImGui::GetStyle().WindowPadding.y * 2.0f;
+        ImGui::GetFrameHeight() + ImGui::GetStyle().WindowPadding.y * 2.0f;
 
-    float topHeight = m_control_panel_height > 0.0f
-        ? m_control_panel_height
-        : fallbackHeight;
+    float topHeight =
+        m_control_panel_height > 0.0f ? m_control_panel_height : fallbackHeight;
 
     ImGui::BeginChild("ControlPanel", ImVec2(0.0f, topHeight), true);
 
@@ -295,23 +295,25 @@ ComputeCodeView::RenderControlPanel()
 
     RenderSourceFileDropdown();
 
-    const float button_isa_width   = ImGui::CalcTextSize(hide_isa_str).x      + ImGui::GetStyle().FramePadding.x * 2.0f;
+    const float button_source_code_width =
+        std::max(ImGui::CalcTextSize(show_source_code_str).x,
+                 ImGui::CalcTextSize(hide_source_code_str).x) +
+        ImGui::GetStyle().FramePadding.x * 2.0f;
     const float button_stall_width = std::max(ImGui::CalcTextSize(show_stalls_str).x,
-                                              ImGui::CalcTextSize(hide_stalls_str).x)
-                                     + ImGui::GetStyle().FramePadding.x * 2.0f;
+                                              ImGui::CalcTextSize(hide_stalls_str).x) +
+                                     ImGui::GetStyle().FramePadding.x * 2.0f;
 
-    const float                      button_comments_width =
-        m_isa_layout_item->m_visible ?
-        (ImGui::CalcTextSize("Show Comments").x + ImGui::GetStyle().FramePadding.x * 2.0f) : 0;
+    const float buttons_width = button_source_code_width + button_stall_width +
+                                ImGui::GetStyle().ItemSpacing.x;
 
-    const float buttons_width = button_isa_width + button_stall_width +
-                                button_comments_width +
-                                ImGui::GetStyle().ItemSpacing.x * 2.0f;
+    ImGui::SameLine(ImGui::GetContentRegionAvail().x + ImGui::GetCursorPosX() -
+                    buttons_width);
 
-    ImGui::SameLine(ImGui::GetContentRegionAvail().x + ImGui::GetCursorPosX() - buttons_width);
-
-    if(ImGui::Button(m_isa_layout_item->m_visible ? hide_isa_str : show_isa_str))
-        m_isa_layout_item->m_visible = !m_isa_layout_item->m_visible;
+    if(ImGui::Button(m_source_layout_item->m_visible ? hide_source_code_str
+                                                     : show_source_code_str))
+    {
+        m_source_layout_item->m_visible = !m_source_layout_item->m_visible;
+    }
 
     ImGui::SameLine();
     if(ImGui::Button(m_show_metadata_enabled ? hide_stalls_str : show_stalls_str))
@@ -319,17 +321,6 @@ ComputeCodeView::RenderControlPanel()
         m_show_metadata_enabled = !m_show_metadata_enabled;
         m_source_code->ChangeStallVisibility(m_show_metadata_enabled);
         m_isa_code->ChangeStallVisibility(m_show_metadata_enabled);
-    }
-
-    if(m_isa_layout_item->m_visible)
-    {
-        ImGui::SameLine();
-        static bool show_comments_enabled = false;
-        if(ImGui::Button(show_comments_enabled ? "Hide Comments" : "Show Comments"))
-        {
-            show_comments_enabled = !show_comments_enabled;
-            m_isa_code->ShowComments(show_comments_enabled);
-        }
     }
 
     ImGui::EndGroup();
@@ -357,7 +348,7 @@ ComputeCodeView::RenderSourceFileDropdown()
     };
 
     const auto selected_file_it = std::find_if(m_source_files.begin(), m_source_files.end(),
-        [this](const auto& pair) { return pair.second == m_current_source_file_id; });
+        [this](const auto& pair) { return pair.second == m_current_source_file_uuid; });
 
     const char* preview = selected_file_it != m_source_files.end()
                                     ? filename_of(selected_file_it->first)
@@ -372,13 +363,13 @@ ComputeCodeView::RenderSourceFileDropdown()
     {
         for(const auto& [path, id] : m_source_files)
         {
-            const bool selected = (id == m_current_source_file_id);
+            const bool selected = (id == m_current_source_file_uuid);
             if(ImGui::Selectable(filename_of(path), selected) && !selected)
             {
-                m_current_source_file_id = id;
+                m_current_source_file_uuid = id;
                 m_source_code->Load({}, 0);
                 m_isa_code->Load({}, 0);
-                FetchPcSamplingForCurrentFile();
+                FetchMandatoryPcSampling();
             }
             if(selected)
                 ImGui::SetItemDefaultFocus();
@@ -435,7 +426,7 @@ SourceCodeWidget::SourceCodeWidget(LineSelection& selection)
 }
 
 void
-SourceCodeWidget::Load(const PcSamplingData& data, uint32_t source_file_id)
+SourceCodeWidget::Load(const PcSamplingData& data, uint64_t source_file_uuid)
 {
     m_lines.clear();
     m_line_selection = {0, 0};
@@ -443,7 +434,7 @@ SourceCodeWidget::Load(const PcSamplingData& data, uint32_t source_file_id)
     const SourceFile* source_file = nullptr;
     for(const auto& file : data.source_files)
     {
-        if(file.id == source_file_id)
+        if(file.source_file_uuid == source_file_uuid)
         {
             source_file = &file;
             break;
@@ -452,16 +443,48 @@ SourceCodeWidget::Load(const PcSamplingData& data, uint32_t source_file_id)
     if(!source_file)
         return;
 
-    // STUB: summarised_stalls not yet derived from real stall data.
-    uint32_t stub_counter = 0;
-    for(const auto& source_line : source_file->source_lines)
+    struct SampleCounts
     {
-        const float stub_stall = static_cast<float>((stub_counter * 7 + 13) % 101);
-        stub_counter++;
-        m_lines.push_back({ source_line.content, source_line.id, stub_stall });
+        uint64_t total = 0;
+        uint64_t stall = 0;
+    };
+    std::unordered_map<uint64_t, SampleCounts> counts_by_instruction;
+    for(const PcSampleState& state : data.pc_sample_states)
+    {
+        SampleCounts& counts = counts_by_instruction[state.instruction_uuid];
+        counts.total += state.total_count;
+        counts.stall += state.stall_count;
     }
 
-    CalculateLineNumberWidth(m_lines.size());
+    std::unordered_map<uint64_t, SampleCounts> counts_by_source_line;
+    for(const InstructionSourceLine& mapping : data.instruction_source_lines)
+    {
+        if(mapping.frame_index != 0)
+            continue;
+        const auto state_it = counts_by_instruction.find(mapping.instruction_uuid);
+        if(state_it == counts_by_instruction.end())
+            continue;
+        SampleCounts& counts = counts_by_source_line[mapping.source_line_uuid];
+        counts.total += state_it->second.total;
+        counts.stall += state_it->second.stall;
+    }
+
+    uint64_t max_line_number = 0;
+    for(const auto& source_line : source_file->source_lines)
+    {
+        float stall_percent = 0.0f;
+        const auto counts_it = counts_by_source_line.find(source_line.source_line_uuid);
+        if(counts_it != counts_by_source_line.end() && counts_it->second.total != 0)
+        {
+            stall_percent = 100.0f * static_cast<float>(counts_it->second.stall) /
+                            static_cast<float>(counts_it->second.total);
+        }
+        m_lines.push_back({ source_line.content, source_line.source_line_uuid,
+                            source_line.line_number, stall_percent });
+        max_line_number = std::max(max_line_number, source_line.line_number);
+    }
+
+    CalculateLineNumberWidth(static_cast<uint32_t>(max_line_number));
 }
 
 void
@@ -515,7 +538,7 @@ void
 SourceCodeWidget::RenderLine(uint32_t index, uint32_t columns_count)
 {
     const SourceRow& source_row = m_lines[index];
-    uint32_t display_num = index + 1;
+    const uint64_t display_num = source_row.line_number;
 
     ImGui::TableNextRow();
 
@@ -538,7 +561,8 @@ SourceCodeWidget::RenderLine(uint32_t index, uint32_t columns_count)
     ImGui::SameLine(0.0f, 0.0f);
     ImGui::PopID();
 
-    ImGui::TextColored(m_line_num_color, "%*u", m_line_num_digits, display_num);
+    ImGui::TextColored(m_line_num_color, "%*llu", m_line_num_digits,
+                       static_cast<unsigned long long>(display_num));
 
     int col = 1;
     if(IsStallShown())
@@ -559,15 +583,15 @@ IsaCodeWidget::IsaCodeWidget(LineSelection& selection)
 }
 
 void
-IsaCodeWidget::Load(const PcSamplingData& data, uint32_t code_object_id)
+IsaCodeWidget::Load(const PcSamplingData& data, uint64_t code_object_uuid)
 {
     m_entries.clear();
     m_line_selection = {0, 0};
 
-    const CodeObject* code_object = nullptr;
+    const CodeObjectStore* code_object = nullptr;
     for(const auto& code_obj : data.code_objects)
     {
-        if(code_obj.id == code_object_id)
+        if(code_obj.code_object_uuid == code_object_uuid)
         {
             code_object = &code_obj;
             break;
@@ -576,31 +600,53 @@ IsaCodeWidget::Load(const PcSamplingData& data, uint32_t code_object_id)
     if(!code_object)
         return;
 
-    // Build depth-0 source_line_id lookup: isa_line_id -> source_line_id
-    std::unordered_map<uint32_t, uint32_t> source_by_isa;
-    for(const auto& dep : data.isa_to_source_deps)
+    // Build frame-0 source-line lookup: instruction_uuid -> source_line_uuid.
+    std::unordered_map<uint64_t, uint64_t> source_by_isa;
+    for(const InstructionSourceLine& dep : data.instruction_source_lines)
     {
-        if(dep.depth == 0)
-            source_by_isa.emplace(dep.isa_line_id, dep.source_line_id);
+        if(dep.frame_index == 0)
+            source_by_isa.emplace(dep.instruction_uuid, dep.source_line_uuid);
     }
 
-    for(const auto& isa_line : code_object->isa_lines)
+    struct InstructionSampleCounts
     {
-        uint32_t source_line_id = 0;
-        if(const auto sit = source_by_isa.find(isa_line.id); sit != source_by_isa.end())
-            source_line_id = sit->second;
+        uint64_t total_count = 0;
+        uint64_t issue_count = 0;
+        uint64_t stall_count = 0;
+    };
+    std::unordered_map<uint64_t, InstructionSampleCounts> counts_by_instruction;
+    counts_by_instruction.reserve(data.pc_sample_states.size());
+    for(const PcSampleState& state : data.pc_sample_states)
+    {
+        InstructionSampleCounts& counts = counts_by_instruction[state.instruction_uuid];
+        counts.total_count += state.total_count;
+        counts.issue_count += state.issue_count;
+        counts.stall_count += state.stall_count;
+    }
 
-        m_entries.push_back({
-            isa_line.instruction,
-            isa_line.comment,
-            isa_line.id,
-            source_line_id,
-            isa_line.sampling_state.issued_count,
-            isa_line.sampling_state.stalled_count,
-            isa_line.sampling_state.total_count,
-            isa_line.sampling_state.active_threads_percent,
-            isa_line.sampling_state.wave_occupancy_percent
-        });
+    for(const KernelSymbol& kernel_symbol : code_object->kernel_symbols)
+    {
+        for(const InstructionLine& instruction_line : kernel_symbol.instruction_lines)
+        {
+            uint64_t source_line_id = 0;
+            if(const auto sit = source_by_isa.find(instruction_line.instruction_uuid);
+               sit != source_by_isa.end())
+                source_line_id = sit->second;
+
+            const InstructionSampleCounts* counts = nullptr;
+            if(const auto counts_it = counts_by_instruction.find(instruction_line.instruction_uuid);
+               counts_it != counts_by_instruction.end())
+                counts = &counts_it->second;
+
+            m_entries.push_back({
+                instruction_line.instruction,
+                instruction_line.instruction_uuid,
+                source_line_id,
+                counts ? counts->issue_count : 0,
+                counts ? counts->stall_count : 0,
+                counts ? counts->total_count : 0
+            });
+        }
     }
 
     CalculateLineNumberWidth(m_entries.size());
@@ -615,9 +661,8 @@ IsaCodeWidget::Render()
         return;
     }
 
-    const int stall_columns   = IsStallShown() ? 5 : 0;
-    const int comment_columns = m_show_comments ? 1 : 0;
-    const int columns_count   = 2 + stall_columns + comment_columns;
+    const int stall_columns = IsStallShown() ? 3 : 0;
+    const int columns_count = 2 + stall_columns;
 
     if(!ImGui::BeginTable("IsaCode", columns_count, m_table_flags))
         return;
@@ -626,21 +671,18 @@ IsaCodeWidget::Render()
         "#", ImGuiTableColumnFlags_NoResize | ImGuiTableColumnFlags_WidthFixed,
         m_line_num_width);
 
-    if(IsStallShown())
-    {
-        const float num_col_width = ImGui::CalcTextSize("999999").x;
-        const float flt_col_width = ImGui::CalcTextSize("100.00%").x;
-        ImGui::TableSetupColumn("Total",     ImGuiTableColumnFlags_WidthFixed, num_col_width);
-        ImGui::TableSetupColumn("Issued",    ImGuiTableColumnFlags_WidthFixed, num_col_width);
-        ImGui::TableSetupColumn("Stalled",   ImGuiTableColumnFlags_WidthFixed, num_col_width);
-        ImGui::TableSetupColumn("Active %",  ImGuiTableColumnFlags_WidthFixed, flt_col_width);
-        ImGui::TableSetupColumn("Occup. %",  ImGuiTableColumnFlags_WidthFixed, flt_col_width);
-    }
-
     ImGui::TableSetupColumn("ISA", ImGuiTableColumnFlags_WidthStretch);
 
-    if(m_show_comments)
-        ImGui::TableSetupColumn("Comments", ImGuiTableColumnFlags_WidthStretch);
+    if(IsStallShown())
+    {
+        const float num_col_width = ImGui::CalcTextSize("Total Count").x;
+        ImGui::TableSetupColumn("Total Count", ImGuiTableColumnFlags_WidthFixed,
+                                num_col_width);
+        ImGui::TableSetupColumn("Issue Count", ImGuiTableColumnFlags_WidthFixed,
+                                num_col_width);
+        ImGui::TableSetupColumn("Stall Count", ImGuiTableColumnFlags_WidthFixed,
+                                num_col_width);
+    }
 
     ImGui::TableHeadersRow();
     PushStyles();
@@ -694,28 +736,19 @@ IsaCodeWidget::RenderLine(uint32_t index, uint32_t columns_count)
 
     ImGui::TextColored(m_line_num_color, "%*u", m_line_num_digits, index + 1);
 
-    if(IsStallShown())
-    {
-        ImGui::TableSetColumnIndex(++column);
-        ImGui::TextDisabled("%u", isa_row.total_count);
-        ImGui::TableSetColumnIndex(++column);
-        ImGui::TextDisabled("%u", isa_row.issued_count);
-        ImGui::TableSetColumnIndex(++column);
-        ImGui::TextDisabled("%u", isa_row.stalled_count);
-        ImGui::TableSetColumnIndex(++column);
-        ImGui::TextDisabled("%.2f", isa_row.active_threads_percent);
-        ImGui::TableSetColumnIndex(++column);
-        ImGui::TextDisabled("%.2f", isa_row.wave_occupancy_percent);
-    }
-
     ImGui::TableSetColumnIndex(++column);
     ImGui::TextUnformatted(isa_row.instruction.c_str());
 
-    if(m_show_comments)
+    if(IsStallShown())
     {
         ImGui::TableSetColumnIndex(++column);
-        ImGui::TextColored(m_comment_color, "%s", ("//" + isa_row.comment).c_str());
+        ImGui::TextDisabled("%llu", static_cast<unsigned long long>(isa_row.total_count));
+        ImGui::TableSetColumnIndex(++column);
+        ImGui::TextDisabled("%llu", static_cast<unsigned long long>(isa_row.issue_count));
+        ImGui::TableSetColumnIndex(++column);
+        ImGui::TextDisabled("%llu", static_cast<unsigned long long>(isa_row.stall_count));
     }
+
 }
 
 }  // namespace View

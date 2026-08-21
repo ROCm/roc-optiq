@@ -328,7 +328,7 @@ class PcSamplingRequestParams : public RequestParamsBase
 public:
     uint32_t m_workload_id;
     uint32_t m_kernel_id;
-    uint32_t m_source_file_id;
+    uint64_t m_source_file_uuid;
     // Code View selection generation captured at submission.
     // ProcessPcSamplingRequest discards results from superseded selections.
     uint32_t m_generation = 0;
@@ -337,10 +337,10 @@ public:
     PcSamplingRequestParams& operator=(const PcSamplingRequestParams&) = default;
 
     PcSamplingRequestParams(uint32_t workload_id, uint32_t kernel_id,
-                            uint32_t source_file_id, uint32_t generation)
+                            uint64_t source_file_uuid, uint32_t generation)
     : m_workload_id(workload_id)
     , m_kernel_id(kernel_id)
-    , m_source_file_id(source_file_id)
+    , m_source_file_uuid(source_file_uuid)
     , m_generation(generation)
     {}
 };

@@ -1347,17 +1347,27 @@ Internal scratchpad UI for exercising the metric / roofline APIs.
 Behind `#ifdef ROCPROFVIS_DEVELOPER_MODE`. Not user-facing - keep
 production code from depending on it.
 
-### `ComputeCodeView` (`rocprofvis_compute_code_view.{h,cpp}`) - dev only
+### `ComputeCodeView` (`rocprofvis_compute_code_view.{h,cpp}`)
 
 Correlates source code and ISA through `SourceCodeWidget` and
 `IsaCodeWidget`, which both derive from `BaseCodeWidget` and share a
 `LineSelection` so selecting a source line highlights the correlated
-ISA (and vice versa), laid out in an `HSplitContainer`.
+ISA (and vice versa). The ISA pane is the always-visible primary pane;
+the optional source-code pane is shown on the right through the
+`Show Source Code` / `Hide Source Code` control.
 `RenderControlPanel()` hosts the source-file dropdown, and
 `FetchPcSamplingForCurrentFile()` re-fetches PC samples on file/kernel
 change. PC-sampling data is fetched through `PcSamplingRequestParams` /
-`DataProvider::FetchPcSampling`; do not query the model directly from
-this view.
+`DataProvider::FetchPcSampling`; its default request uses the controller's
+mandatory fetch to load ISA rows only. The DataProvider groups those rows by
+their code-object IDs so the ISA pane does not depend on the optional
+code-object metadata query. Do not query the model directly from this view.
+
+Schema 2.0 can omit source and correlation tables. In that case the
+dropdown contains the synthetic `ISA only` entry (ID 0), and the
+controller skips only the source-line stage. Keep the source-side types
+and stages intact so future schema tables can restore the split
+source/ISA presentation.
 
 ### Compute data plumbing
 

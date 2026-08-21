@@ -56,81 +56,116 @@ struct Point
     double y;
 };
 
-struct PcStallReason
+struct PcSampleState
 {
-    int32_t     reason_id = 0;
-    int32_t     count   = 0;
+    uint64_t pc_sample_state_uuid    = 0;
+    uint64_t instruction_uuid        = 0;
+    uint64_t total_count             = 0;
+    uint64_t issue_count             = 0;
+    uint64_t stall_count             = 0;
+    double   active_thread_percent   = 0.0;
+    double   wave_occupancy_percent = 0.0;
+    uint64_t dispatch_uuid           = 0;
 };
 
-struct SamplingState
+struct PcSampleStallReason
 {
-    bool     loaded             = false;
-    uint64_t dispatch_id        = 0;
-    uint32_t id                 = 0;
-    uint32_t isa_line_id        = 0;
-    uint32_t issued_count       = 0;
-    uint32_t stalled_count      = 0;
-    uint32_t total_count        = 0;
-    float    active_threads_percent = 0.0f;
-    float    wave_occupancy_percent = 0.0f;
-
-    std::vector<PcStallReason> stall_reasons;
+    uint64_t pc_sample_stall_reason_uuid        = 0;
+    uint64_t pc_sample_state_uuid               = 0;
+    uint64_t pc_sample_stall_reason_lookup_uuid = 0;
+    uint64_t count                              = 0;
 };
 
-struct IsaToIsaDep
+struct PcSampleStallReasonLookup
 {
-    uint32_t dependent_isa_line_id  = 0;
-    uint32_t dependency_isa_line_id = 0;
+    uint64_t    pc_sample_stall_reason_lookup_uuid = 0;
+    std::string text;
 };
 
-struct IsaToSourceDep
+struct InstructionTypeLookup
 {
-    uint32_t isa_line_id    = 0;
-    uint32_t source_line_id = 0;
-    uint32_t depth          = 0;
+    uint64_t    instruction_type_lookup_uuid = 0;
+    std::string text;
 };
 
-struct IsaLine
+struct InstructionSample
 {
-    uint64_t    code_object_offset  = 0;
+    uint64_t instruction_sample_uuid        = 0;
+    uint64_t pc_sample_state_uuid           = 0;
+    uint64_t instruction_sample_lookup_uuid = 0;
+    uint64_t count                          = 0;
+};
+
+struct InstructionSampleLookup
+{
+    uint64_t    instruction_sample_lookup_uuid = 0;
+    std::string text;
+};
+
+struct InstructionSourceLine
+{
+    uint64_t instruction_source_line_uuid = 0;
+    uint64_t instruction_uuid             = 0;
+    uint64_t source_line_uuid             = 0;
+    uint64_t frame_index                  = 0;
+};
+
+struct InstructionLine
+{
+    uint64_t    instruction_uuid      = 0;
+    uint64_t    kernel_symbol_uuid    = 0;
+    uint64_t    instruction_type_uuid = 0;
+    uint64_t    code_object_offset    = 0;
     std::string instruction;
-    std::string comment;
-    SamplingState           sampling_state;
-    std::vector<uint32_t> source_line_ids;
-    uint32_t    id                  = 0;
-    uint32_t    instruction_type_id = 0;
 };
 
-struct CodeObject
+struct KernelSymbol
 {
-    std::string          uri;
-    std::string          content_checksum;
-    std::vector<IsaLine> isa_lines;
-    uint32_t             id = 0;
+    uint64_t                     kernel_symbol_uuid = 0;
+    uint64_t                     code_object_uuid   = 0;
+    uint64_t                     kernel_uuid        = 0;
+    uint64_t                     code_object_offset = 0;
+    std::vector<InstructionLine> instruction_lines;
+};
+
+struct CodeObjectStore
+{
+    uint64_t                  code_object_uuid = 0;
+    uint64_t                  workload_id      = 0;
+    uint64_t                  pid              = 0;
+    uint64_t                  code_object_id   = 0;
+    uint64_t                  load_base        = 0;
+    std::vector<KernelSymbol> kernel_symbols;
 };
 
 struct SourceLine
 {
-    std::string            content;
-    std::vector<uint32_t*> isa_line_ids;
-    uint32_t               id          = 0;
-    uint32_t               line_number = 0;
+    uint64_t    source_line_uuid = 0;
+    uint64_t    source_file_uuid = 0;
+    uint64_t    line_number      = 0;
+    std::string content;
 };
 
 struct SourceFile
 {
+    uint64_t                source_file_uuid = 0;
+    uint64_t                workload_id      = 0;
     std::string             file_path;
-    std::string             content_checksum;
+    std::string             md5_checksum;
     std::vector<SourceLine> source_lines;
-    uint32_t                id = 0;
 };
 
 struct PcSamplingData
 {
-    std::vector<CodeObject>     code_objects;
-    std::vector<SourceFile>     source_files;
-    std::vector<IsaToIsaDep>    isa_to_isa_deps;
-    std::vector<IsaToSourceDep> isa_to_source_deps;
+    std::vector<CodeObjectStore>           code_objects;
+    std::vector<SourceFile>                source_files;
+    std::vector<InstructionSourceLine>     instruction_source_lines;
+    std::vector<PcSampleState>             pc_sample_states;
+    std::vector<PcSampleStallReason>       pc_sample_stall_reasons;
+    std::vector<PcSampleStallReasonLookup> pc_sample_stall_reason_lookups;
+    std::vector<InstructionTypeLookup>     instruction_type_lookups;
+    std::vector<InstructionSample>         instruction_samples;
+    std::vector<InstructionSampleLookup>   instruction_sample_lookups;
 };
 
 struct KernelInfo

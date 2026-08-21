@@ -48,6 +48,7 @@ public:
     {
         kUUId,
         kDbEventId,
+        kCategory,
         kName,
         kTrackId,
         kStreamId,

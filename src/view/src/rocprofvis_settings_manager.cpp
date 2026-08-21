@@ -453,6 +453,8 @@ SettingsManager::SerializeDisplaySettings(jt::Json& json)
         m_usersettings.display_settings.font_size_index;
     ds[JSON_KEY_SETTINGS_DISPLAY_NODE_COLORS] =
         m_usersettings.display_settings.show_node_colors;
+    ds[JSON_KEY_SETTINGS_DISPLAY_COMPACT_SIDEBAR] =
+        m_usersettings.display_settings.compact_sidebar;
 }
 
 void
@@ -476,6 +478,11 @@ SettingsManager::DeserializeDisplaySettings(jt::Json& json)
         {
             m_usersettings.display_settings.show_node_colors =
                 ds[JSON_KEY_SETTINGS_DISPLAY_NODE_COLORS].getBool();
+        }
+        if(ds[JSON_KEY_SETTINGS_DISPLAY_COMPACT_SIDEBAR].isBool())
+        {
+            m_usersettings.display_settings.compact_sidebar =
+                ds[JSON_KEY_SETTINGS_DISPLAY_COMPACT_SIDEBAR].getBool();
         }
     }
 }
@@ -607,7 +614,7 @@ SettingsManager::GetContrastColormapName() const
 SettingsManager::SettingsManager()
 : m_color_store(nullptr)
 , m_usersettings_default(
-      { DisplaySettings{ false, 6, true }, UnitSettings{ TimeFormat::kTimecode },
+      { DisplaySettings{ false, 6, true, false }, UnitSettings{ TimeFormat::kTimecode },
         false, false, LOG_VIEWER_MAX_ENTRIES_DEFAULT,
         LogViewerSettings{ LOG_VIEWER_DEFAULT_LEVEL_MASK, true, false, false, false } })
 , m_usersettings(m_usersettings_default)
@@ -964,7 +971,6 @@ void
 SettingsManager::SerializeProfilerSettings(jt::Json& json)
 {
     jt::Json& ps = json[JSON_KEY_GROUP_SETTINGS][JSON_KEY_SETTINGS_CATEGORY_PROFILER];
-    ps[JSON_KEY_SETTINGS_PROFILER_PATH] = m_profilersettings.profiler_path;
     ps[JSON_KEY_SETTINGS_PROFILER_OUTPUT_DIR] = m_profilersettings.profiler_output_directory;
     ps[JSON_KEY_SETTINGS_PROFILER_AUTO_LOAD] = m_profilersettings.auto_load_trace;
     ps["last_preset_name"] = m_profilersettings.last_preset_name;
@@ -982,10 +988,6 @@ void
 SettingsManager::DeserializeProfilerSettings(jt::Json& json)
 {
     jt::Json& ps = json[JSON_KEY_GROUP_SETTINGS][JSON_KEY_SETTINGS_CATEGORY_PROFILER];
-    if(ps[JSON_KEY_SETTINGS_PROFILER_PATH].isString())
-    {
-        m_profilersettings.profiler_path = ps[JSON_KEY_SETTINGS_PROFILER_PATH].getString();
-    }
     if(ps[JSON_KEY_SETTINGS_PROFILER_OUTPUT_DIR].isString())
     {
         m_profilersettings.profiler_output_directory = ps[JSON_KEY_SETTINGS_PROFILER_OUTPUT_DIR].getString();

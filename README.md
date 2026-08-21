@@ -1,151 +1,133 @@
+# ROCm Optiq: Visualization and Analysis for ROCm Profiler Data
+
+[![Continuous Integration](https://github.com/ROCm/roc-optiq/actions/workflows/ci-controller.yml/badge.svg?branch=main)](https://github.com/ROCm/roc-optiq/actions/workflows/ci-controller.yml)
+
+## Overview
+
+ROCm Optiq (`roc-optiq`) is a unified visualization and analysis tool for performance data collected by the ROCm profiling tools,
+specifically [ROCm Systems Profiler](https://rocm.docs.amd.com/projects/rocprofiler-systems/en/latest/index.html) and
+[ROCm Compute Profiler](https://rocm.docs.amd.com/projects/rocprofiler-compute/en/latest/).
+It brings system-level traces and kernel-level analysis data together in a single desktop application, so you can identify performance
+bottlenecks, understand hardware utilization, and optimize workloads across CPUs and GPUs without switching between tools.
+
+ROCm Optiq has no dependency on the ROCm stack itself. Collect data on a ROCm machine, then open it anywhere — Windows, Linux, or macOS.
+
 > [!NOTE]
-> The published ROCm™ Optiq documentation is available [here](https://rocm.docs.amd.com/projects/roc-optiq/en/latest/) in an organized, easy-to-read format, with search and a table of contents. The documentation source files reside in the `docs` folder of this repository. As with all ROCm projects, the documentation is open source. For more information on contributing to the documentation, see [Contribute to ROCm documentation](https://rocm.docs.amd.com/en/latest/contribute/contributing.html).
+> The published ROCm Optiq documentation is available [here](https://rocm.docs.amd.com/projects/roc-optiq/en/latest/) in an organized, easy-to-read format, with search and a table of contents. The documentation source files reside in the `docs` folder of this repository. As with all ROCm projects, the documentation is open source. For more information on contributing to the documentation, see [Contribute to ROCm documentation](https://rocm.docs.amd.com/en/latest/contribute/contributing.html).
 
-# roc-optiq
+### Visualize ROCm Systems Profiler traces
 
-A visualizer for the ROCm Profiler Tools. 
+![ROCm Optiq timeline view showing CPU and GPU activity tracks](docs/images/optiq-systems.png)
 
-## Install
+Inspect CPU-GPU interactions, ROCm API calls, kernel execution timelines, memory usage, and system telemetry to find stalls,
+memory bandwidth issues, and inefficient kernel launches.
 
-Install from the package provided for your OS target on the [release](https://github.com/ROCm/roc-optiq/releases) page.
+- **System Topology** — explore the hardware (processors, queues, counters) and software (processes, streams, threads) hierarchies for
+  navigating and correlating application execution with hardware resources.
+- **Timeline** — view CPU and GPU activity, events, and performance counters in chronological order, with zoom, pan, filtering,
+  measurement rulers, flow arrows, annotations, and bookmarks.
+- **Advanced details** — inspect event and sample tables with grouping, expression filtering, and per-event, per-track, and top-event breakdowns.
+- **Summary** — see the top kernels by execution time as a pie chart, bar chart, or table.
+- **Minimap** — view a compact overview of event density and counter values across the whole trace to quickly navigate large datasets.
 
-To build from source follow the instructions in the file BUILDING.md.
+### Analyze ROCm Compute Profiler data
 
-## Usage Instructions
+![ROCm Optiq analysis view showing a roofline chart and kernel metrics](docs/images/optiq-compute.png)
 
-### Open a Trace
-Use the `File` -> `Open` menu to open a trace or project file.
+Explore kernel-level metrics for a profiled workload and locate bottlenecks quickly.
 
-Supported trace formats are *.db* and *.rpd* trace files. Project files have the extension *.rpv*.
+- **Summary** — a high-level overview of the selected workload, including duration and invocation statistics and a roofline chart.
+- **Kernel details** — memory chart, System Speed-of-Light metrics, and roofline chart for the selected kernel, with a filterable kernel selection table for comparing across kernels.
+- **Table view** — the complete list of available metrics for the selected kernel, grouped by category.
+- **Workload details** — system information and profiling configuration for the selected workload.
+- **Baseline comparison** — a side-by-side view of two kernel measurements to assess regressions and improvements.
 
-Files can also be opened by dragging and dropping them onto the application window.
+## Quick start
 
-### ROCm Systems Profiler Trace Data
+### System requirements
 
-#### Projects
-Customizations made to tracks, bookmarks, and annotations can be persisted by saving the session as a project. Upon opening a project file, the associated trace file and previous customizations will be recalled.
+| Requirement | Details |
+|-------------|---------|
+| Operating system | Windows 11, Ubuntu 22.04 / 24.04, CentOS Stream 9, or macOS 14 / 15 |
+| Memory | 16 GB RAM or more is recommended for large traces |
+| ROCm (for data collection only) | ROCm 7.1.0 or later for ROCm Systems Profiler traces; ROCm 7.12.0 or later for ROCm Compute Profiler analysis data |
 
-Use `File` -> `Save As` to create a new project, use `File` -> `Save` to overwrite the currently opened project.
+ROCm is not required on the machine running ROCm Optiq. To check the ROCm version on the machine where you collect data, run
+`cat /opt/rocm/.info/version`.
 
-#### UI Layout
-![UI Layout](docs/images/ui_sections.png)
+### Install
 
-1. System Topology Tree: Expand tree nodes to see relationship between tracks.
-2. Timeline View: List of tracks containing event or sample counter data.
-3. Advanced Details Area: Shows detailed information about selected events and tracks. 
-4. Histogram Area: Shows an event density histogram.
-5. Toolbar: Provides controls for various functions.
+Download the package for your platform from the [Releases](https://github.com/ROCm/roc-optiq/releases) page:
 
-#### Controls / Interactions
-1. System Topology Tree
-    - Click to expand / collapse the tree nodes.
-    - Click on the track node to select it.
-    - Click the eye icon to show or hide the track
-    - Click the `Scroll To Track` button to navigate to this track in the Timeline View.
+```shell
+# Ubuntu (Debian-based)
+sudo apt install ./roc-optiq-*.deb
 
-2. Timeline View
-    - The timeline view has two areas, the grey *Description* area and white *Graph* area where events and counter graphs are plotted.
-    - Pan and scroll the timeline view using the scrollbars.
-    - Dragging the mouse on the *Graph* area of the track will also scroll and pan the view.
-    - When hovering over the *Graph* area the scroll wheel will zoom the view.
-    - The WASD and arrow keys can be used to zoom and pan the view as well:
-        - W / S: Zoom in and out respectively.
-        - A or Left Arrow / D or Right Arrow: Pan left and right respectively.
-        - Up Arrow / Down Arrow: Scroll track list up and down.
-    - When hovering over the *Description* area of the track the scroll wheel will scroll the track list.
-    - Display options for each track can be accessed by clicking the gear icon in track's *Description* area.
-    - Clicking the *Description* area will select or deselect the track.  When selected, the track details will be displayed in the *Track Details* pane. Additionally, depending on the track type, the *Event Table* or *Sample Table* tabs in the *Advanced Details Area" will be populated by the contents of the track. 
-    - Clicking on an *Event* in the *Graph* area will select or deselect an event. When selected, details for the event can be seen in the *Event Details* tab of the *Advanced Details Area*.
-    - Ctrl+left mouse drag on the *Graph* will start a *Time Range Filter* selection. Use the context menu (right click) or ESC key to clear the *Time Range Filter*
-    - Tracks can be resized by hovering over and dragging the separator lines between tracks.
-    - Tracks can be reordered by clicking and dragging the grip on left side of the *Description* area.
-    - When there is an active *Time Range Filter* the trace can be trimmed using the `Edit->Save Trace Selection` menu option.  This will create a new trace file containing only the events in the selection zone.
-    - The current view (scroll and zoom position) can be saved to a bookmark for quick navigation.  Use `ctrl` + keys `0`- `9` to create a view bookmark and keys `0` - `9` to restore the view to a stored bookmark. 
-    - Bookmarks can also be set and recalled using the Bookmark dropdown on the main toolbar.
-    - Annotations can be managed (add/show/hide) from the main toolbar Annotations panel.
+# CentOS Stream / RHEL / Rocky
+sudo dnf install ./roc-optiq-*.rpm
+```
 
-3. Advanced Details Area
-    - Use the tabs to see different detailed information events and tracks
-    - The *Event Table* and *Sample Table* tabs provide a list (table) of the events or samples contained in the selected track or tracks.
-    - Right click on the column headers to show / hide columns.
-    - In the *Event Table* tab there is a drop-down box that allows the events grouped by a column to display aggregated metrics.
-    - Both the *Event Table* and *Sample Table* provide a text input box that can be used to filter the data.  Ex: `min_duration > 2000` will filter all events shorter than 2000 ns.
-    - Right click on a table row and select `Go to event` to navigate the timeline view to the highlighted event.
-    - Setting a *Time Range Filter* using the timeline view will filter the rows displayed in the table to be contained within the selected time range.
-    - The *Event Details* tab shows detailed information about currently selected events in the timeline view.
-    - The *Track Details* tab shows additional information about the currently selected tracks.
-    - The *Annotations* tab shows a list of user created annotations.
-        - Annotations can be individually hidden and shown using this interface.
-        - Clicking on a row will bring the associated annotation into view.
+On Windows, run the installer and launch `roc-optiq.exe`. On macOS, unzip the archive and drag `roc-optiq.app` into `Applications`.
 
-4. Histogram Area
-    - Displays an event density histogram map.
-    - When timeline is zoomed the area currently in view is highlighted.
-    - Viewable area can be dragged to scroll timeline view.
+For detailed steps and verification commands, see the
+[installation guide](https://rocm.docs.amd.com/projects/roc-optiq/en/latest/install/optiq-install.html).
+To build from source instead, see [BUILDING.md](BUILDING.md).
 
-5. Toolbar
-    - Provides controls for various application functions.
-    - Buttons for showing and hiding flow information on timeline.
-    - Selecting the flow rendering mode. (Fan or chain mode).
-    - Buttons for showing, hiding and adding Annotations.
-    - A search bar for finding events within the trace.
-    - Controls for adding, removing, and navigating bookmarks.
-    - A button to show the mini-map.
-    - A button to reset the timeline view to default zoom and pan.
+### Open a trace
 
-### ROCm Compute Profiler Analysis Data
+Use `File` > `Open`, drag a file onto the application window, or pass it on the command line:
 
-1. Summary View: High-level overview of the captured data.
-    - Table: Lists the top longest-running kernels sorted by execution time with duration statistics.
-    - Charts: Plots duration and invocation statistics across kernels.
-    - Roofline Chart: Plots kernel performance against hardware ceilings to reveal whether performance is memory-bound or compute-bound. Click the gear icon to access customization options.
+```shell
+roc-optiq -f /path/to/my_trace.db
+```
 
-2. Kernel Details: Focuses on one kernel at a time while allowing comparison across kernels.
-    - Kernel Selection Table: Lists kernels with GPU metrics. Use `Add Metric` to append additional GPU metric columns. Per-column search box accepts name or metric expressions (e.g., `metric > threshold`). Click `Apply Filters` to execute; combine multiple filters to narrow analysis.
-    - Memory Chart: Shows memory transactions and throughput per cache hierarchy level for the selected kernel.
-    - System Speed-of-Light: Displays key kernel-level GPU performance metrics with unit, average, peak, and percentage of peak values.
-    - Kernel Roofline Chart: Shows a kernel-specific roofline analysis to determine whether the kernel is compute-bound or memory-bound. Click the gear icon to access customization options.
+Supported inputs are ROCm Systems Profiler traces (`.db`), RPD traces (`.rpd`), ROCm Compute Profiler analysis databases (`.db`), and ROCm
+Optiq project files (`.rpv`). A project file stores your track customizations, bookmarks, and annotations alongside a reference to
+the trace, and is created with `File` > `Save As`.
 
-3. Table View: Provides a complete list of available metrics for the selected kernel grouped by category.
+For the full list of command-line options, see the
+[command-line reference](https://rocm.docs.amd.com/projects/roc-optiq/en/latest/reference/cli-support.html).
 
-4. Workload Details: Provides contextual information about the workload.
-    - System Information: Hardware details of the system where the data was collected.
-    - Profiling Configuration: Parameters and settings used during capture.
+### Usage Instructions
 
-## Keyboard Shortcuts
+Refer to ROCm documentation for detailed usage [instructions](https://rocm.docs.amd.com/projects/roc-optiq/en/latest/).
 
-### **Timeline Navigation**
+Walkthroughs for each area are in the how-to guides:
+[view trace data](https://rocm.docs.amd.com/projects/roc-optiq/en/latest/how-to/view-trace.html),
+[view analysis data](https://rocm.docs.amd.com/projects/roc-optiq/en/latest/how-to/view-analysis.html), and
+[customize your project](https://rocm.docs.amd.com/projects/roc-optiq/en/latest/how-to/customize-views.html).
 
-#### Horizontal Panning
-- **A** or **Left Arrow** - Pan left
-- **D** or **Right Arrow** - Pan right
-- **Shift + A/D/Arrows** - Pan faster (2x speed)
+## Capturing traces or analysis data
 
-#### Vertical Scrolling
-- **Up Arrow** - Scroll up
-- **Down Arrow** - Scroll down
-- **Shift + Up/Down Arrow** - Scroll faster (2x speed)
+When capturing System traces or Compute analysis data ensure that the rocpd or analysis db output formats are enabled.
 
-#### Zoom Controls
-- **W** - Zoom in at cursor position
-- **S** - Zoom out at cursor position
+### Systems Profiler
 
-### **Selection & Time Ranges**
+Set the `ROCPROFSYS_USE_ROCPD` environment variable to ensure rocpd output.
 
-- **Ctrl + Left Click** - Start selecting a time range
-- **M** - Mark selected events as a time range (or clear existing time range)
-- **Escape** - Clear time range selection
-- **Ctrl + Click on event** - Multi-select events
+`ROCPROFSYS_USE_ROCPD=true rocprof-sys-run -- ./myapp`
 
-### **Bookmarks**
+### Compute Profiler
 
-- **0-9** - Restore bookmark (view position, zoom, and scroll)
-- **Ctrl + 0-9** - Save current view as bookmark
+Enable .db analysis creation via the `--output-format db` parameter.
 
----
+`rocprof-compute analyse --output-format db -p workloads/nbody/MI300X_A1`
 
-**Tips**
+### Rocprofv3
 
-- Bookmarks save your complete view state including zoom level, pan position, and scroll offset
-- 10 bookmark slots available (0-9) for quick navigation
-- All timeline keyboard shortcuts respect input focus. They won't trigger while typing in text fields or when dialogs are open. Click once in timeline area to ensure it has focus if shortcuts are not responsive.
+Enable rocpd output by using the `--output-format rocpd` parameter.
+
+`rocprofv3 --output-format rocpd --hip-trace -- ./myapp`
+ 
+`rocprofv3 --output-format rocpd --kernel-trace --hsa-trace -- ./myapp`
+
+## Support
+
+Report bugs and request features through the [GitHub issue tracker](https://github.com/ROCm/roc-optiq/issues).
+
+## Contributions and license
+
+Contributions of any kind are welcome. See [CONTRIBUTING.md](.github/CONTRIBUTING.md) for the contribution process and
+[CODING.md](CODING.md) for the style rules that apply to all C++ changes.
+
+Licensing information is in [LICENSE.md](LICENSE.md).

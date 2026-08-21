@@ -24,6 +24,7 @@ class QueueTrackOptions;
 class TimelineTrackOptions;
 class TimePixelTransform;
 class TimelineSelection;
+enum class Colors;
 
 // Compare-source (A/B) badge shared by the timeline meta area and the sidebar.
 void
@@ -57,6 +58,7 @@ public:
     void   SetExtendedLabel(const std::string& label);
     void   SetTooltip(std::string label);
     void   SetAccentColor(size_t accent_color);
+    void   SetTextColor(std::optional<Colors> color);
     void   Activate();
     void   Deactivate();
     void   Render(const ImVec2& pos, SettingsManager& settings, Sizing sizing = kCompact);
@@ -72,6 +74,8 @@ private:
     bool                              m_show_pill_label;
     bool                              m_active;
     std::optional<size_t>             m_accent_color;
+    // Overrides the value text color when set; unset falls back to the default.
+    std::optional<Colors>             m_text_color;
     Sizing                            m_sizing;
     std::string                       m_compact_label;
     std::string                       m_ext_label;
@@ -115,12 +119,14 @@ public:
     bool        TrackHeightChanged();
     static void SetSidebarSize(float sidebar_size);
 
-    virtual bool HasData();
+    virtual bool HasData() const;
+    bool         AllDataReady() const;
     virtual bool ReleaseData();
     virtual void RequestData(double min, double max, float width);
     void         RequestAnalysis();
-    virtual bool HandleTrackDataChanged(uint64_t request_id, uint64_t response_code);
+    virtual void HandleTrackDataChanged(uint64_t request_id, uint64_t response_code);
     virtual bool HasPendingRequests() const;
+    virtual bool HasPendingRequest(uint64_t request_id) const;
     virtual void UpdateMetaScaleAreaSize();
     virtual void UpdateMaxMetaScaleAreaSize();
     virtual bool IsCompactMode() const { return false; }
@@ -142,9 +148,10 @@ protected:
     virtual void  RenderMetaAreaExpand();
     virtual void  RenderChart(float graph_width) = 0;
     virtual void  RenderResizeBar(const ImVec2& parent_size);
-    virtual bool  ExtractPointsFromData() = 0;
+    virtual void  ExtractPointsFromData() = 0;
 
     void  FetchHelper();
+    void  CancelPendingRequests();
     void  SetDefaultPillLabel(const TrackInfo* track_info);
     void  SetMetaAreaLabel(const TrackInfo* track_info);
     void  SetNodeColor(const TrackInfo* track_info);
@@ -175,6 +182,9 @@ protected:
     std::shared_ptr<TimelineSelection>  m_timeline_selection;
     uint64_t m_chunk_duration_ns;  // Duration of each chunk in nanoseconds
     uint8_t  m_group_id_counter;   // Counter for grouping requests
+    // Cancellation has already been requested for everything in
+    // m_pending_requests; they stay pending until their futures resolve.
+    bool     m_cancel_requested;
 
     std::deque<TrackRequestParams>                   m_request_queue;
     std::unordered_map<uint64_t, TrackRequestParams> m_pending_requests;

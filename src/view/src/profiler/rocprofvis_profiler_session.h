@@ -27,13 +27,7 @@ public:
     // Launches a local profiler process asynchronously. On success the session
     // is registered with the AppMonitor and ProfilerStatusEvents are emitted as
     // the state changes. Any previous launch on this session is closed first.
-    bool Launch(rocprofvis_profiler_type_t profiler_type,
-                const std::string&         profiler_path,
-                const std::string&         target_executable,
-                const std::string&         target_args,
-                const std::string&         output_directory,
-                const std::string&         profiler_args,
-                const std::vector<std::pair<std::string, std::string>>& env_vars = {}) override;
+    bool Launch(const ProfilerLaunchSpec& spec) override;
 };
 
 }  // namespace View

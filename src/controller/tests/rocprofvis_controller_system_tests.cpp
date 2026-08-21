@@ -3070,6 +3070,14 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture, "System Trace Controll
                                                   0, 1);
         REQUIRE(result == kRocProfVisResultSuccess);
 
+        result = rocprofvis_controller_set_uint64(args, kRPVControllerTableArgsStringTableFiltersIncludeCategory,
+                                                  0, 0);
+        REQUIRE(result == kRocProfVisResultSuccess);
+
+        result = rocprofvis_controller_set_uint64(args, kRPVControllerTableArgsStringTableFiltersPartialMatching,
+                                                  0, 0);
+        REQUIRE(result == kRocProfVisResultSuccess);
+
         spdlog::info("Allocating Array");
         rocprofvis_controller_array_t* array = rocprofvis_controller_array_alloc(0);
         REQUIRE(array != nullptr);

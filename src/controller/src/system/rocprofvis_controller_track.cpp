@@ -182,8 +182,14 @@ rocprofvis_result_t Track::FetchSegments(double start, double end, void* user_pt
             });
         }
 
-        result = m_segments.FetchSegments(start, end, user_ptr, future, func);
-
+        // Walking the segments would report kRocProfVisResultOutOfRange for a
+        // cancelled fetch, because the segments it needs were never populated.
+        // The cancellation has to survive so the view knows the data is missing
+        // and must be re-requested when the track comes back into view.
+        if(result != kRocProfVisResultCancelled)
+        {
+            result = m_segments.FetchSegments(start, end, user_ptr, future, func);
+        }
     }
 
     return result;

@@ -3,7 +3,7 @@
    :keywords: ROCm Optiq, ROCm, keyboard shortcuts
 
 **********************
-Keyboard shortcuts  
+Systems Profiler trace view keyboard shortcuts  
 ********************** 
 
 Use these shortcuts in the ROCm Systems Profiler trace view.

@@ -38,6 +38,9 @@ The ROCm Optiq project repository is located at `https://github.com/ROCm/roc-opt
 ROCm Optiq 1.0.0
 =================
 
+Added
+-----
+
 Features and improvements for viewing ROCm Systems Profiler trace data
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 Timeline and navigation

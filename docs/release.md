@@ -27,7 +27,7 @@
 - **Zoom to Measurement** and **Zoom to Time Range Selection**: Right-click the timeline and choose **Zoom to Measurement** or **Zoom to Time Range Selection** to fit that span to the timeline width, with the markers landing on the left and right edges.
 ##### Tracks and topology
 - **Node-based color coding** for tracks and the sidebar topology, improving navigation in multi-node traces.
-- **Reveal in Topology** right-click action on a track, to jump directly from a track to its location in the System Topology View.
+- **Reveal in Topology:** Right-click action on a track to jump directly from a track to its location in the System Topology View.
 - **Batch track settings**: apply Track Options changes to multiple selected tracks at once.
 - New sidebar right-click context menu options: **Go To Track**, **Hide Track**, **Show/Hide All But This Track**, **Show/Hide Selected Tracks**.
 ##### Annotations

@@ -21,7 +21,7 @@ subtrees:
   - file: how-to/view-analysis
     title: View ROCm Compute Profiler analysis data in ROCm Optiq
   - file: how-to/customize-views
-    title: Customize your project
+    title: Customize ROCm Optiq
 
 - caption: Reference
   entries:

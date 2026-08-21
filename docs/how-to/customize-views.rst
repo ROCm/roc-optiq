@@ -107,7 +107,7 @@ To add an annotation:
    The **Annotations** tab in the **Advanced Details** section shows a list of annotations.  
    Each row shows the annotation title, the note, the track it is attached to, its start time, and a checkbox for visibility.
    Clicking a row brings the selected annotation into view on the timeline.
-   You can **Lock** to pin an annotation to prevent accidental drag/rebind. You can choose **Go-to-anchor** to jump the view back to the annotation's anchor point.
+   You can **Lock** to pin an annotation to prevent accidental drag or rebind. You can choose **Go-to-Anchor** to bring the view back to the annotation's anchor point.
 
 
 .. tip::

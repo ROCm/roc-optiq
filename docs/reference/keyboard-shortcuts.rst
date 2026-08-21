@@ -20,7 +20,7 @@ Use these shortcuts in the ROCm Systems Profiler trace view.
        - ``Up`` / ``Down``
      * - Pan or scroll faster (2x)
        - ``Shift`` + the above
-     * - Zoom in / out at the cursor
+     * - Zoom in and out at the cursor
        - ``W`` / ``S``
      * - Select a time range
        - ``Ctrl`` + left-drag

@@ -10,61 +10,6 @@ ROCm Optiq is a unified visualization and analysis tool for performance data col
 
 ROCm Optiq has no dependency on the ROCm stack itself, so trace and analysis files can be visualized on any machine running a supported Windows, Linux, or macOS operating system, independent of where the data was collected.
 
-.. _glance-data-sources:
-
-Supported data sources
-=========================
-
-.. list-table::
-   :header-rows: 1
-   :widths: 25 12 28 35
-
-   * - Input format
-     - Extension
-     - Producer
-     - ROCm requirement (trace collection)
-   * - ROCm Systems Profiler database
-     - ``.db``
-     - `ROCm Systems Profiler <https://rocm.docs.amd.com/projects/rocprofiler-systems/en/latest/index.html>`_
-     - ROCm 7.1.0 or later
-   * - ROCm Compute Profiler analysis database
-     - ``.db``
-     - `ROCm Compute Profiler <https://rocm.docs.amd.com/projects/rocprofiler-compute/en/latest/>`_
-     - ROCm 7.12.0 or later
-   * - rocprofv3 profiling database
-     - ``.db``
-     - `ROCprofiler-SDK <https://rocm.docs.amd.com/projects/rocprofiler-sdk/en/latest/index.html>`_ (``rocprofv3``)
-     - —
-   * - ROCm profiling data
-     - ``.rpd``
-     - `RPD tracer <https://github.com/ROCm/rocmProfileData/tree/master/rpd_tracer>`_
-     - —
-   * - ROCm Optiq project file
-     - ``.rpv``
-     - Saved from a previous ROCm Optiq session
-     - —
-
-For details on viewing each format, see :ref:`view-systems` and :ref:`view-analysis`. If a file doesn't open, see :ref:`trace troubleshooting <view-trace-troubleshooting>` and :ref:`analysis troubleshooting <view-analysis-troubleshooting>`.
-
-.. _glance-session-management:
-
-Session management
-======================
-
-A ROCm Optiq project file (``.rpv``) saves the full analysis session state — the referenced trace file, track layout, zoom position, bookmarks, and annotations. Opening a ``.rpv`` file restores the session exactly as it was left. For the full set of customization options, including time-range filters, annotations, and presets, see :ref:`customize`.
-
-A bookmark saves the timeline's current scroll and zoom position for quick recall. For the click-based method, see :ref:`customize`. The keyboard shortcuts are:
-
-.. list-table::
-   :header-rows: 1
-
-   * - Action
-     - Control
-   * - Save a view bookmark
-     - **Ctrl** + **0** - **9**
-   * - Restore a view bookmark
-     - **0** - **9**
-
 .. _trace-file:
 Visualize ROCm Systems Profiler traces
 ======================================
@@ -104,6 +49,42 @@ Key features include:
 - :ref:`analysis-table`: Complete list of available metrics for the selected kernel. Metrics are grouped by category. 
 - :ref:`analysis-workload`: Contextual information about the profiled workload, including system information and profiling configuration. 
 - :ref:`baseline-comparison`: A side-by-side view that compares two workload measurements (baseline vs. target) to quickly identify and assess performance regressions or improvements. 
+
+.. _glance-data-sources:
+
+Supported data sources
+=========================
+
+.. list-table::
+   :header-rows: 1
+   :widths: 25 12 28 35
+
+   * - Input format
+     - Extension
+     - Producer
+     - ROCm requirement (trace collection)
+   * - ROCm Systems Profiler database
+     - ``.db``
+     - `ROCm Systems Profiler <https://rocm.docs.amd.com/projects/rocprofiler-systems/en/latest/index.html>`_
+     - ROCm 7.1.0 or later
+   * - ROCm Compute Profiler analysis database
+     - ``.db``
+     - `ROCm Compute Profiler <https://rocm.docs.amd.com/projects/rocprofiler-compute/en/latest/>`_
+     - ROCm 7.12.0 or later
+   * - rocprofv3 profiling database
+     - ``.db``
+     - `ROCprofiler-SDK <https://rocm.docs.amd.com/projects/rocprofiler-sdk/en/latest/index.html>`_ (``rocprofv3``)
+     - —
+   * - ROCm profiling data
+     - ``.rpd``
+     - `RPD tracer <https://github.com/ROCm/rocmProfileData/tree/master/rpd_tracer>`_
+     - —
+   * - ROCm Optiq project file
+     - ``.rpv``
+     - Saved from a previous ROCm Optiq session
+     - —
+
+For details on viewing each format, see :ref:`view-systems` and :ref:`view-analysis`. If a file doesn't open, see :ref:`trace troubleshooting <view-trace-troubleshooting>` and :ref:`analysis troubleshooting <view-analysis-troubleshooting>`.
 
 Welcome page 
 ============

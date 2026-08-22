@@ -242,6 +242,11 @@ UI:
 Add new cross-cutting analyses here rather than in the per-domain
 system / compute modules.
 
+User-authored Python analysis is a separate planned surface
+(`rocprofvis_script_*`, private `table_alloc` query tables, embedded
+interpreter). Do not extend `create_analysis_view_async` for that.
+See [`.agents/SCRIPTING.md`](./SCRIPTING.md).
+
 ## 3. Internal Architecture & Threading Model
 
 ```

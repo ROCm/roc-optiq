@@ -34,6 +34,9 @@ It also pairs with sibling agent guides under `.agents/`:
   change touches `src/model/`. The brief model summary in section
   5 of this file is the high-level pass; `DATABASE.md` is the
   source of truth.
+- [`.agents/SCRIPTING.md`](./SCRIPTING.md) - planned in-app Python
+  analysis (editor sends source strings; controller owns execution).
+  Read this when adding script UI or Ask Optiq script tools.
 
 When humans and `CODING.md` disagree with this file, `CODING.md` wins.
 

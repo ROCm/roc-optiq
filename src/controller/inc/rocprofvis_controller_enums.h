@@ -122,6 +122,8 @@ typedef enum rocprofvis_controller_object_type_t
     kRPVControllerObjectTypeRoofline = 29,
     //PcSampling
     kRPVControllerObjectTypePCSampling = 30,
+    // Result of a Python analysis script
+    kRPVControllerObjectTypeScriptResult = 31,
 #ifdef ROCPROFVIS_ENABLE_REMOTE
     // Remote connection object
     kRPVControllerObjectTypeRemoteConnection = 205,
@@ -1127,6 +1129,19 @@ typedef enum rocprofvis_controller_compute_pivot_table_arguments_t : uint32_t
     // Indexed filter expression string (e.g., "> 1000", "LIKE '%kernel%'")
     kRPVControllerCPTArgsFilterExpressionIndexed,
 } rocprofvis_controller_compute_pivot_table_arguments_t;
+
+/*
+ * Properties for a Python script result.
+ */
+typedef enum rocprofvis_controller_script_result_properties_t : uint32_t
+{
+    __kRPVControllerScriptResultPropertiesFirst = 0x14000000,
+    // Concatenated text from optiq.result.text calls
+    kRPVControllerScriptResultText = __kRPVControllerScriptResultPropertiesFirst,
+    // Traceback or runtime error message; empty on success
+    kRPVControllerScriptResultErrorMessage,
+    __kRPVControllerScriptResultPropertiesLast
+} rocprofvis_controller_script_result_properties_t;
 
 /*
  * Properties for a metrics container.

@@ -50,6 +50,13 @@ list(APPEND rocprofvis_controller_source_files
     src/compute/rocprofvis_controller_table_compute_pivot.cpp
 )
 
+if(ROCPROFVIS_ENABLE_SCRIPTING)
+list(APPEND rocprofvis_controller_source_files
+    src/rocprofvis_controller_script.cpp
+    src/python/rocprofvis_controller_python.cpp
+)
+endif()
+
 # TEMPORARY (profiler launch): local profiler orchestration sources. Remove
 # this guard when the profiler feature graduates.
 if(ROCPROFVIS_ENABLE_PROFILER)
@@ -122,6 +129,11 @@ target_include_directories(${TARGET_NAME} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/../
 target_include_directories(${TARGET_NAME} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/../core/inc)
 target_include_directories(${TARGET_NAME} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
 
+if(ROCPROFVIS_ENABLE_SCRIPTING)
+    target_link_libraries(${TARGET_NAME} PRIVATE roc-optiq-python)
+    target_include_directories(${TARGET_NAME} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/../python/inc)
+endif()
+
 if(BUILD_TESTING)
 	set(SYSTEM_TEST_NAME ${PROJECT_NAME}-system-tests)
 	set(COMPUTE_TEST_NAME ${PROJECT_NAME}-compute-tests)
@@ -152,4 +164,19 @@ if(BUILD_TESTING)
         add_test(NAME ${PROFILER_TEST_NAME} COMMAND ${PROFILER_TEST_NAME})
         set_tests_properties(${PROFILER_TEST_NAME} PROPERTIES WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}")
     endif(ROCPROFVIS_ENABLE_PROFILER)
+
+    if(ROCPROFVIS_ENABLE_SCRIPTING)
+        set(SCRIPT_TEST_NAME ${PROJECT_NAME}-script-tests)
+        add_executable(${SCRIPT_TEST_NAME} tests/rocprofvis_controller_script_tests.cpp)
+        target_link_libraries(${SCRIPT_TEST_NAME} PRIVATE ${PROJECT_NAME})
+        target_link_libraries(${SCRIPT_TEST_NAME} PRIVATE Catch2::Catch2)
+        target_link_libraries(${SCRIPT_TEST_NAME} PRIVATE roc-optiq-python)
+        add_test(NAME ${SCRIPT_TEST_NAME} COMMAND ${SCRIPT_TEST_NAME})
+        set_tests_properties(${SCRIPT_TEST_NAME} PROPERTIES RUN_SERIAL ON)
+        set_tests_properties(${SCRIPT_TEST_NAME} PROPERTIES WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}")
+        if(WIN32 AND ROCPROFVIS_PYTHON3_RUNTIME_LIBRARY_DIRS)
+            set_tests_properties(${SCRIPT_TEST_NAME} PROPERTIES
+                ENVIRONMENT "PATH=${ROCPROFVIS_PYTHON3_RUNTIME_LIBRARY_DIRS};$ENV{PATH}")
+        endif()
+    endif()
 endif()

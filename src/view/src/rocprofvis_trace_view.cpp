@@ -7,6 +7,9 @@
 #ifdef ROCPROFVIS_ENABLE_AGENTIC_PROFILING
 #    include "agenticprofiling/rocprofvis_ai_assistant.h"
 #endif
+#ifdef ROCPROFVIS_ENABLE_SCRIPTING
+#    include "widgets/rocprofvis_script_editor.h"
+#endif
 #include "rocprofvis_click_manager.h"
 #include "rocprofvis_analysis_view.h"
 #include "rocprofvis_annotations.h"
@@ -977,11 +980,15 @@ TraceView::RenderToolbar()
         {
             SetTooltipStyled("Show Minimap");
         }
-        VerticalSeparator(&m_settings_manager);
 #ifdef ROCPROFVIS_ENABLE_AGENTIC_PROFILING
-        AssistantPanel::RenderToolbarButton();
         VerticalSeparator(&m_settings_manager);
+        AssistantPanel::RenderToolbarButton();
 #endif
+#ifdef ROCPROFVIS_ENABLE_SCRIPTING
+        VerticalSeparator(&m_settings_manager);
+        ScriptEditor::RenderToolbarButton();
+#endif
+        VerticalSeparator(&m_settings_manager);
     }
 
     ImGui::PushStyleColor(ImGuiCol_Button, ImGui::ColorConvertU32ToFloat4(

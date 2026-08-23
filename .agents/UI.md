@@ -419,6 +419,7 @@ AppWindow (singleton, RocWidget)
 +-- SshTestDialog            : optional dev-only remote trace UI
 +-- AppMonitor               : singleton; polls background controller operations
 +-- LogViewer                : singleton production log overlay
++-- ScriptEditor             : singleton Python analysis overlay (scripting flag)
 +-- NotificationManager     : singleton, drawn last (toasts overlay)
 +-- DebugWindow             : singleton, dev mode only
 ```
@@ -780,6 +781,21 @@ subclassing this; don't roll your own.**
   `rocprofvis_core_get_log_entries_ex`; `OpenLogFile()` opens the file
   at `get_application_log_path()`. `IsLiveUpdating()` feeds
   `AppWindow::WantsContinuousRender()`.
+
+### 7.15 `rocprofvis_script_editor.{h,cpp}` - Python analysis editor
+
+Gated on `ROCPROFVIS_ENABLE_SCRIPTING`. `class ScriptEditor` is a
+lazy singleton like `LogViewer`: floating `ImGui::Begin` overlay,
+not a docked column. `AppWindow` destroys it, renders it after
+`LogViewer`, and binds `View > Show Script Editor` to `VisiblePtr()`.
+`TraceView` and `ComputeView` toolbars call `RenderToolbarButton()`
+("Script") next to Ask Optiq.
+
+Run sends the source string through `DataProvider::ExecuteScript`
+(current tab, selected tracks / time range). Cancel uses
+`CancelScript`. Load/Save go through `AppWindow` file dialogs with a
+`.py` filter. Output is `optiq.result.text` / the error string. No
+syntax highlighting; result tables are Phase 2.
 
 ## 8. Track Item Hierarchy
 
@@ -2523,6 +2539,7 @@ adding **anything** new, check this list and reuse if at all possible.
 | Keep the lazy render loop awake               | `RootView::WantsContinuousRender` / `AppWindow::WantsContinuousRender`                         |
 | Monitor controller operations without blocking| `AppMonitor::AddOperation` + typed status events                                               |
 | Show application logs                         | `LogViewer` (not the developer-only `DebugWindow`)                                             |
+| Run an in-app Python analysis script          | `ScriptEditor` (`View > Show Script Editor` + toolbar; `ROCPROFVIS_ENABLE_SCRIPTING`)          |
 | Add a hotkey                                  | Add to `HotkeyActionId`, declare info, read with `WasActionTriggered / IsActionHeld`           |
 | Disambiguate clicks across timeline layers    | `TimelineFocusManager::RequestLayerFocus / EvaluateFocusedLayer`                               |
 | Encode a request ID                           | `RequestIdBuilder::MakeRequestId(...)` or `MakeTrackDataRequestId(...)`                        |
@@ -2737,6 +2754,8 @@ For fast lookup. Each entry: class -> file -> one-line role.
   `rocprofvis_presets.h`.
 - `LogViewer` -> `widgets/rocprofvis_log_viewer.h` -> User-facing
   application log overlay.
+- `ScriptEditor` -> `widgets/rocprofvis_script_editor.h` -> Floating
+  Python analysis editor (scripting flag).
 - `ProfilesDocument` -> `rocprofvis_profiles_document.h` -> Shared
   `profiles.json` owner.
 - `JsonUtils` -> `rocprofvis_json_utils.h` -> Typed JSON/file helpers.
@@ -2911,7 +2930,7 @@ All under `agenticprofiling/`, compiled only with
   `COPY_ROW_DATA_NOTIFICATION`, `XButton`, `SectionTitle`,
   `VerticalSeparator`, `ElidedText`, `ElideWithEllipsis`, `Alignment`,
   `CenterNextItem`, `InputTextWithClear`, `InputTextString`,
-  `InputTextStringWithHint`, `CellMenuTarget`, `RenderRowHitbox`,
+  `InputTextStringWithHint`, `InputTextMultilineString`, `CellMenuTarget`, `RenderRowHitbox`,
   `BeginCellContextMenu`, `EndCellContextMenu`,
   `BeginTooltipStyled`, `BeginItemTooltipStyled`,
   `EndTooltipStyled`, `SetTooltipStyled`, `ApplyAlpha`, `ThemeColor`,
@@ -2929,6 +2948,7 @@ All under `agenticprofiling/`, compiled only with
   `rocprofvis_compute_widget.h`.
 - `DebugWindow` (dev only) -> `rocprofvis_debug_window.h`.
 - `LogViewer` -> `rocprofvis_log_viewer.h`.
+- `ScriptEditor` -> `rocprofvis_script_editor.h` (scripting flag).
 
 ### Tree types and constants
 

@@ -16,6 +16,9 @@
 #ifdef ROCPROFVIS_ENABLE_AGENTIC_PROFILING
 #    include "agenticprofiling/rocprofvis_ai_assistant.h"
 #endif
+#ifdef ROCPROFVIS_ENABLE_SCRIPTING
+#    include "widgets/rocprofvis_script_editor.h"
+#endif
 #include "rocprofvis_compute_workload_view.h"
 #include "rocprofvis_event_manager.h"
 #include "rocprofvis_settings_manager.h"
@@ -274,6 +277,10 @@ ComputeView::RenderToolbar()
 #ifdef ROCPROFVIS_ENABLE_AGENTIC_PROFILING
     VerticalSeparator(&m_settings_manager);
     AssistantPanel::RenderToolbarButton();
+#endif
+#ifdef ROCPROFVIS_ENABLE_SCRIPTING
+    VerticalSeparator(&m_settings_manager);
+    ScriptEditor::RenderToolbarButton();
 #endif
 
     // pop content style

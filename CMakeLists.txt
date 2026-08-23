@@ -269,6 +269,13 @@ list(APPEND VIEW_FILES
 )
 endif()
 
+if(ROCPROFVIS_ENABLE_SCRIPTING)
+list(APPEND VIEW_FILES
+    src/view/src/widgets/rocprofvis_script_editor.cpp
+    src/view/src/widgets/rocprofvis_script_editor.h
+)
+endif()
+
 configure_file(
     "${CMAKE_CURRENT_SOURCE_DIR}/resources/version.h.in"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/app/inc/rocprofvis_version.h"

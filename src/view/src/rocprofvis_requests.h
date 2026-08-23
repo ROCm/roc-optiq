@@ -46,6 +46,7 @@ enum class RequestType
     kFetchMetrics,
     kFetchMetricPivotTable,
     kFetchPcSampling,
+    kExecuteScript,
 };
 
 enum class RequestState

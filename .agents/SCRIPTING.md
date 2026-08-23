@@ -7,10 +7,11 @@ alongside this file. When `CODING.md` disagrees with this file,
 wins; update this file in the same change.
 
 This is a planned feature. Enable with
-`ROCPROFVIS_ENABLE_SCRIPTING=ON`. Phase 0 (runtime skeleton) and the
+`ROCPROFVIS_ENABLE_SCRIPTING=ON`. Phase 0 (runtime skeleton), the
 Phase 1 **read path** (query-table alloc, `optiq.trace` / `selection` /
-`table().fetch()` / `Track.events()`, Catch2 against a sample trace)
-are in tree. The Phase 1 editor / `DataProvider` hook is a later step.
+`table().fetch()` / `Track.events()`, Catch2 against a sample trace),
+and Phase 1b (DataProvider execute + floating script editor) are in
+tree.
 
 ---
 
@@ -233,13 +234,26 @@ enough.
 Follow `DataProvider`'s existing request/poll path (same as table
 fetch), not a parallel-only event channel.
 
-- New `RequestType::kExecuteScript`.
-- `DataProvider::ExecuteScript(source, context)` builds `arguments_t`,
-  calls `rocprofvis_script_execute_async`, polls the Future each
-  frame, forwards `kRPVControllerFutureProgressPercentage`.
-- Editor: start with `ImGui::InputTextMultiline`. Syntax highlighting
-  is later.
-- Phase 1 result UI: text log / panel.
+- `RequestType::kExecuteScript`.
+- `DataProvider::ExecuteScript(source, track_ids, start_ts, end_ts)`
+  builds script-context `arguments_t`, calls
+  `rocprofvis_script_execute_async`, polls the Future each frame,
+  forwards `kRPVControllerFutureProgressPercentage`. Cancel calls
+  `rocprofvis_script_cancel` **then** `future_cancel` (script jobs are
+  not on JobSystem). Closing a tab posts `ScriptExecuteCompleteEvent`
+  from cleanup so the editor does not stay on Running.
+- **Script editor** (`widgets/rocprofvis_script_editor.*`): floating
+  `ImGui::Begin` overlay like `LogViewer`, not a docked column. Open
+  from `View > Show Script Editor` (checkable) and a **Script** toolbar
+  button next to Ask Optiq on TraceView and ComputeView. Run / Cancel /
+  Load / Save; Load/Save use `AppWindow` file dialogs with a `.py`
+  filter. Source is `InputTextMultiline` (via `InputTextMultilineString`);
+  the result pane is `optiq.result.text` / error text. No syntax
+  highlighting in v1.
+- Run uses the **current tab's** ready `DataProvider`. Empty track
+  selection means all tracks; time range is the timeline selection or
+  the full trace. Compute traces can open the editor; `Track.events()` /
+  `optiq.table()` are system-oriented and may error in Python.
 - Phase 2: page a script-owned table handle with `InfiniteScrollTable`
   using a **unique** request id (not `EVENT_TABLE_REQUEST_ID`).
 
@@ -311,23 +325,21 @@ text, with the interpreter on its own thread.
 
 **Done when:** a script can query events without touching the UI event
 table (Catch2 + sample trace). Even-spacing is the acceptance script.
-The editor / `DataProvider` execute path is a **separate step**.
 
 - Implement `table_alloc` / `table_free` as a private `SystemTable`.
 - Bindings: `optiq.trace`, `optiq.selection`, `optiq.table().fetch()`,
   `Track.events()` with slice-wait and session-Future progress.
 - Copy fetch results into Python (do not share UI table handles).
 - Controller tests against a sample trace.
-- **Deferred:** `DataProvider` request type + poll, script editor
-  panel (`InputTextMultiline`) + text result view.
 
 ### Phase 1b — Minimal UI
 
-**Done when:** a panel can run a script and show text (including the
+**Done when:** a floating editor can run a script and show text (including the
 even-spacing example).
 
 - `DataProvider` request type + poll + progress callback.
-- Script editor panel (`InputTextMultiline`) + text result view.
+- Floating `ScriptEditor` (`InputTextMultiline` + text result, Load/Save,
+  View menu + toolbar).
 
 ### Phase 2 — Present analysis in the view
 
@@ -373,6 +385,6 @@ and a release build does not require a system Python.
 
 ## 10. Suggested first implementation slice
 
-Phase 0 end-to-end, then `table_alloc` + bindings behind Catch2
-(this step), then the editor. Do not start Ask Optiq or result-table
-widgets until Phase 1's read path is stable.
+Phases 0, 1, and 1b are in tree. Next is Phase 2 (result tables in
+the view). Do not start Ask Optiq or vendored CPython until that
+presentation path is stable.

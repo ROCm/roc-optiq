@@ -95,6 +95,10 @@ bool
 InputTextStringWithHint(const char* id, const char* hint, std::string& str,
                         ImGuiInputTextFlags flags = 0);
 
+bool
+InputTextMultilineString(const char* id, std::string& str, const ImVec2& size,
+                         ImGuiInputTextFlags flags = 0);
+
 void
 SetTooltipStyled(const char* fmt, ...);
 

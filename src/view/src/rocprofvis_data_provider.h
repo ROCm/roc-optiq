@@ -66,6 +66,9 @@ public:
     static const uint64_t ANALYSIS_TOP_LAUNCH_SAMPLED_TABLE_REQUEST_ID;
     static const uint64_t FETCH_COMPUTE_TRACE_REQUEST_ID;
     static const uint64_t METRIC_PIVOT_TABLE_REQUEST_ID;
+#ifdef ROCPROFVIS_ENABLE_SCRIPTING
+    static const uint64_t EXECUTE_SCRIPT_REQUEST_ID;
+#endif
 
     DataProvider();
     ~DataProvider();
@@ -231,6 +234,14 @@ public:
 
     bool SaveTrimmedTrace(const std::string& path, double start_ns, double end_ns);
 
+#ifdef ROCPROFVIS_ENABLE_SCRIPTING
+    // Runs source on the interpreter thread. track_ids empty means all
+    // tracks; start/end are the visible or selected time range.
+    bool ExecuteScript(const std::string& source, const std::vector<uint64_t>& track_ids,
+                       double start_ts, double end_ts);
+    bool CancelScript();
+#endif
+
     bool CleanupDatabase(bool rebuild);
 
     void SetCleanupDatabaseCallback(const std::function<void(bool)>& callback);
@@ -296,6 +307,11 @@ private:
     void ProcessTableRequest(RequestInfo& req);
     void ProcessTableExportRequest(RequestInfo& req);
     void ProcessSaveTrimmedTraceRequest(RequestInfo& req);
+#ifdef ROCPROFVIS_ENABLE_SCRIPTING
+    void ProcessExecuteScriptRequest(RequestInfo& req);
+    rocprofvis_controller_arguments_t* BuildScriptContext(
+        const std::vector<uint64_t>& track_ids, double start_ts, double end_ts);
+#endif
     void ProcessCleanupDatabaseRequest(RequestInfo& req);
     void ProcessSummaryRequest(RequestInfo& req);
     void ProcessAnalysisTrackStatisticsRequest(RequestInfo& req);

@@ -56,6 +56,16 @@ InputTextStringWithHint(const char* id, const char* hint, std::string& str,
                                     StringResizeCallback, static_cast<void*>(&str));
 }
 
+bool
+InputTextMultilineString(const char* id, std::string& str, const ImVec2& size,
+                         ImGuiInputTextFlags flags)
+{
+    str.reserve(std::max(str.size() + 1, static_cast<size_t>(256)));
+    return ImGui::InputTextMultiline(id, str.data(), str.capacity() + 1, size,
+                                     flags | ImGuiInputTextFlags_CallbackResize,
+                                     StringResizeCallback, static_cast<void*>(&str));
+}
+
 ImVec2
 MeasureLoadingIndicatorDots(float dot_radius, int num_dots,
                                               float spacing)

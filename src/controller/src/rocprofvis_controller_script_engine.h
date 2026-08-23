@@ -43,9 +43,11 @@ class ScriptEngine
 public:
     struct Session
     {
-        Future*       future = nullptr;
-        Job*          job    = nullptr;
-        ScriptResult* result = nullptr;
+        Future*                            future     = nullptr;
+        Job*                               job        = nullptr;
+        ScriptResult*                      result     = nullptr;
+        rocprofvis_controller_t*           controller = nullptr;
+        rocprofvis_controller_arguments_t* context    = nullptr;
     };
 
     static ScriptEngine& Get();

@@ -164,8 +164,6 @@ ScriptEngine::ExecuteAsync(rocprofvis_controller_t* controller, char const* sour
                            rocprofvis_controller_arguments_t* context, Future* future,
                            ScriptResult*& result)
 {
-    (void) controller;
-    (void) context;
     rocprofvis_result_t error = kRocProfVisResultInvalidArgument;
     result                    = nullptr;
     if(source && future)
@@ -184,6 +182,8 @@ ScriptEngine::ExecuteAsync(rocprofvis_controller_t* controller, char const* sour
             session->future             = future;
             session->job                = job;
             session->result             = script_result;
+            session->controller         = controller;
+            session->context            = context;
             {
                 std::lock_guard<std::mutex> lock(m_mutex);
                 m_sessions[future] = session;

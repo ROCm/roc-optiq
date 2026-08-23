@@ -48,7 +48,9 @@ source wins; please update this file in the same change.
 - **Build flags:**
   - `BUILD_TESTING` - builds `roc-optiq-controller-system-tests` and
     `roc-optiq-controller-compute-tests` (Catch2). Tests are wired
-    against fixture traces under `sample/`.
+    against fixture traces under `sample/`. With
+    `ROCPROFVIS_ENABLE_SCRIPTING=ON`, also builds
+    `roc-optiq-controller-script-tests`.
 
 The View must never include controller `src/` headers - only `inc/`.
 The controller must never include View headers.
@@ -1199,6 +1201,12 @@ Catch2 tests live in `src/controller/tests/`:
 - `rocprofvis_controller_compute_tests.cpp` - runs against
   `sample/rocprof_compute_23ed6f36.db`. Tests the compute load,
   workload + kernel + roofline + metric-fetch + pivot-table flows.
+- `rocprofvis_controller_script_tests.cpp` - built only with
+  `ROCPROFVIS_ENABLE_SCRIPTING=ON`. Phase 0: execute a source string
+  and read `optiq.result.text`. Phase 1: load
+  `sample/trace_70b_1024_32.rpd`, fetch events / a private query
+  table from Python, and confirm `table_alloc` is not the UI Event
+  Table singleton. Accepts `--input_file`.
 
 Both binaries accept `--input_file <path>` (parsed by Catch2 + Clara).
 Logs land in `Testing/Temporary/rocprofvis_controller_*_tests/`.
@@ -1236,6 +1244,9 @@ free" sequence.
 - `rocprofvis_controller_trace.{h,cpp}` -> `Trace` base.
 - `rocprofvis_controller_analysis.{h,cpp}` -> `Analysis` (queue
   utilization, room for more).
+- `rocprofvis_controller_script.{h,cpp}` / `script_engine.h` ->
+  `ScriptEngine`, `rocprofvis_script_*` (when scripting is enabled).
+- `python/rocprofvis_controller_python.{h,cpp}` -> `optiq` bindings.
 
 ### System trace (`src/controller/src/system/`)
 

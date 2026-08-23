@@ -20,6 +20,7 @@
 #include "system/rocprofvis_controller_track.h"
 #include "system/rocprofvis_controller_timeline.h"
 #include "system/rocprofvis_controller_trace_system.h"
+#include "system/rocprofvis_controller_table_system.h"
 #include "system/rocprofvis_controller_graph.h"
 #include "system/rocprofvis_controller_summary.h"
 #include "system/rocprofvis_controller_summary_metrics.h"
@@ -301,6 +302,12 @@ rocprofvis_controller_arguments_t* rocprofvis_controller_arguments_alloc(void)
 {
     rocprofvis_controller_arguments_t* args = (rocprofvis_controller_arguments_t*)new RocProfVis::Controller::Arguments();
     return args;
+}
+rocprofvis_controller_table_t* rocprofvis_controller_table_alloc(void)
+{
+    RocProfVis::Controller::SystemTable* table =
+        new RocProfVis::Controller::SystemTable(0);
+    return (rocprofvis_controller_table_t*)table;
 }
 rocprofvis_controller_summary_metrics_t* rocprofvis_controller_summary_metrics_alloc(void)
 {
@@ -706,6 +713,15 @@ void rocprofvis_controller_arguments_free(rocprofvis_controller_arguments_t* arg
     if(arguments.IsValid())
     {
         delete arguments.Get();
+    }
+}
+
+void rocprofvis_controller_table_free(rocprofvis_controller_table_t* table)
+{
+    RocProfVis::Controller::TableRef table_ref(table);
+    if(table_ref.IsValid())
+    {
+        delete table_ref.Get();
     }
 }
 

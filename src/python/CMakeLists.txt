@@ -41,13 +41,17 @@ target_link_libraries(${TARGET_NAME}
         spdlog
 )
 
-# Official Windows CPython does not ship python3xx_d.lib. Map the Debug
-# imported location to the release import library so Debug Optiq still links.
+# Official Windows CPython does not ship python3xx_d.lib. Debug still
+# links the release import library; IMPORTED_LOCATION must stay the DLL
+# so $<TARGET_RUNTIME_DLLS> copies python3xx.dll, not the .lib.
 if(MSVC AND Python3_LIBRARY_RELEASE)
     set_property(TARGET Python3::Python PROPERTY
         IMPORTED_IMPLIB_DEBUG "${Python3_LIBRARY_RELEASE}")
-    set_property(TARGET Python3::Python PROPERTY
-        IMPORTED_LOCATION_DEBUG "${Python3_LIBRARY_RELEASE}")
+    get_property(_py_dll TARGET Python3::Python PROPERTY IMPORTED_LOCATION_RELEASE)
+    if(_py_dll AND _py_dll MATCHES "\\.dll$")
+        set_property(TARGET Python3::Python PROPERTY
+            IMPORTED_LOCATION_DEBUG "${_py_dll}")
+    endif()
 endif()
 
 # Expose the Python prefix so tests can put python3xx.dll on PATH.

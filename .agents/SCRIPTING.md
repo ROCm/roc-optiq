@@ -7,8 +7,10 @@ alongside this file. When `CODING.md` disagrees with this file,
 wins; update this file in the same change.
 
 This is a planned feature. Enable with
-`ROCPROFVIS_ENABLE_SCRIPTING=ON`. Phase 0 (runtime skeleton) is in
-tree under `src/python/` and `rocprofvis_script_*`.
+`ROCPROFVIS_ENABLE_SCRIPTING=ON`. Phase 0 (runtime skeleton) and the
+Phase 1 **read path** (query-table alloc, `optiq.trace` / `selection` /
+`table().fetch()` / `Track.events()`, Catch2 against a sample trace)
+are in tree. The Phase 1 editor / `DataProvider` hook is a later step.
 
 ---
 
@@ -87,10 +89,10 @@ UI singletons; a second fetch overwrites their row cache and args.
 | **Query table** (Phase 1) | Extra `SystemTable` from `rocprofvis_controller_table_alloc` | Script runs the same (or custom) SQL-shaped query as the UI, then analyzes rows in Python. UI tables stay untouched. |
 | **Result table** (Phase 2) | In-memory table, not `SystemTable` | Script publishes columns/rows for the view to page/export. |
 
-`table_alloc(track)` is declared in `rocprofvis_controller.h` and
-never defined. Implement it as **query-table alloc** (ignore or drop
-the `track` argument — tracks belong in fetch args). Pair with the
-already-declared `rocprofvis_controller_table_free`.
+`table_alloc(track)` was declared in `rocprofvis_controller.h` and
+never defined. It is now **query-table alloc** with no track argument
+— tracks belong in fetch args. Pair with
+`rocprofvis_controller_table_free`.
 
 Analysis already uses the query-table pattern:
 `rocprofvis_analysis_get_*_events_table` allocates separate
@@ -150,10 +152,10 @@ Do **not** implement `rocprofvis_controller_create_analysis_view_async`
 as a second script entry point. That placeholder stays unused; scripts
 go through `rocprofvis_script_*`.
 
-Context properties need a **new unused bank** (not `0x10000000`, which
-is timeline). Candidate: `0x14000000` (compute-pivot args currently
-sit at `0x13000000`). Typical fields: selected track handles, time
-range start/end, selected event ids.
+Context properties live in a **dedicated bank at `0x15000000`**
+(`kRPVControllerScriptContext*`: selected track handles, time range
+start/end). Script **result** text uses `0x14000000`. Do not reuse
+timeline (`0x10000000`) or table-args (`0xE0000000`) for context.
 
 Query-table ABI (Phase 1), finishing existing declarations:
 
@@ -305,19 +307,27 @@ text, with the interpreter on its own thread.
 - Bindings: inject `optiq`, `optiq.result.text` only.
 - No view code. No trace reads.
 
-### Phase 1 — Custom analysis read path + minimal UI
+### Phase 1 — Custom analysis read path
 
 **Done when:** a script can query events without touching the UI event
-table, and a panel can run that script and show text (including the
-even-spacing example).
+table (Catch2 + sample trace). Even-spacing is the acceptance script.
+The editor / `DataProvider` execute path is a **separate step**.
 
 - Implement `table_alloc` / `table_free` as a private `SystemTable`.
 - Bindings: `optiq.trace`, `optiq.selection`, `optiq.table().fetch()`,
   `Track.events()` with slice-wait and session-Future progress.
 - Copy fetch results into Python (do not share UI table handles).
+- Controller tests against a sample trace.
+- **Deferred:** `DataProvider` request type + poll, script editor
+  panel (`InputTextMultiline`) + text result view.
+
+### Phase 1b — Minimal UI
+
+**Done when:** a panel can run a script and show text (including the
+even-spacing example).
+
 - `DataProvider` request type + poll + progress callback.
 - Script editor panel (`InputTextMultiline`) + text result view.
-- Controller/view tests against a sample trace.
 
 ### Phase 2 — Present analysis in the view
 
@@ -363,7 +373,6 @@ and a release build does not require a system Python.
 
 ## 10. Suggested first implementation slice
 
-Phase 0 end-to-end, then `table_alloc` + one binding
-(`table.fetch` **or** `track.events`) behind tests, then the editor.
-Do not start Ask Optiq or result-table widgets until Phase 1's read
-path is stable.
+Phase 0 end-to-end, then `table_alloc` + bindings behind Catch2
+(this step), then the editor. Do not start Ask Optiq or result-table
+widgets until Phase 1's read path is stable.

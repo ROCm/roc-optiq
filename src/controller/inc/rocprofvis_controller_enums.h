@@ -1144,6 +1144,22 @@ typedef enum rocprofvis_controller_script_result_properties_t : uint32_t
 } rocprofvis_controller_script_result_properties_t;
 
 /*
+ * Script execute_async context: selected tracks and visible time
+ * range. Distinct from script-result (0x14000000) and table-args
+ * (0xE0000000). Missing fields mean "all tracks" / timeline min-max.
+ */
+typedef enum rocprofvis_controller_script_context_properties_t : uint32_t
+{
+    __kRPVControllerScriptContextPropertiesFirst = 0x15000000,
+    kRPVControllerScriptContextTimeRangeStart =
+        __kRPVControllerScriptContextPropertiesFirst,
+    kRPVControllerScriptContextTimeRangeEnd,
+    kRPVControllerScriptContextNumTracks,
+    kRPVControllerScriptContextTracksIndexed,
+    __kRPVControllerScriptContextPropertiesLast
+} rocprofvis_controller_script_context_properties_t;
+
+/*
  * Properties for a metrics container.
  */
 typedef enum rocprofvis_controller_metrics_container_properties_t : uint32_t

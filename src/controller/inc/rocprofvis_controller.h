@@ -501,11 +501,12 @@ rocprofvis_controller_track_t* rocprofvis_controller_track_alloc(void);
 rocprofvis_controller_graph_t* rocprofvis_controller_graph_alloc(rocprofvis_controller_track_t* track);
 
 /*
-* Allocates a table
-* @param track The owning track or nullptr
+* Allocates a private query table (SystemTable) that is not the UI
+* Event Table / Sample Table singleton. Tracks belong in fetch args,
+* not on the alloc.
 * @returns The table or nullptr
 */
-rocprofvis_controller_table_t* rocprofvis_controller_table_alloc(rocprofvis_controller_track_t* track);
+rocprofvis_controller_table_t* rocprofvis_controller_table_alloc(void);
 
 /*
 * Allocates a sample

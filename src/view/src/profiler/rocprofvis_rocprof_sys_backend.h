@@ -161,6 +161,19 @@ private:
     void RenderInstrumentTab();
     void RenderAdvancedTab();
 
+    // Shared ROCPROFSYS_* env for every tool. Argv shape is per-tool:
+    // run and sample share --preset/--trace/--output; instrument does not.
+    void EmitCuratedEnv(
+        LaunchConfig const& config,
+        std::vector<std::pair<std::string, std::string>>& env_out) const;
+    void FlattenRunOrSample(
+        LaunchConfig const& config,
+        std::vector<std::string>& argv_out) const;
+    void FlattenInstrumentRuntime(
+        LaunchConfig const& config,
+        std::vector<std::pair<std::string, std::string>>& env_out,
+        std::vector<std::string>& argv_out) const;
+
     static std::string JoinEnabledKeys(
         std::map<std::string, bool> const& m,
         std::string const& custom);

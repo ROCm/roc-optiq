@@ -1074,9 +1074,11 @@ void RegisterAppTests(ImGuiTestEngine* e)
         ctx->Yield(2);
         IM_CHECK(es->Searched() == false);
 
-        // hipLaunchKernel is a launch region present in the trace; write it into
-        // the production search buffer and run the search the same way the input
-        // field's submit does.
+        // The search term is coupled to the CI sample db (sample/rocpd-transpose.db):
+        // it must name an event that exists AND is a searchable op type
+        // (Launch/Dispatch/MemoryCopy/MemoryAllocate/LaunchSample -- see
+        // EventSearch::Search). If the sample db changes, update it to a term the
+        // new db contains.
         char* buf = es->TextInput();
         IM_CHECK(buf != nullptr);
         if (buf == nullptr) return;

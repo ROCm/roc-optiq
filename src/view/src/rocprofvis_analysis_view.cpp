@@ -235,8 +235,16 @@ AnalysisView::RenderCompareTab(CompareGroup& group, const char* child_id)
                       ImGuiChildFlags_AlwaysUseWindowPadding,
                       ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
 
-    // One filter form above the split drives both tables.
-    group.tables[COMPARE_SOURCE_A]->RenderSharedFilterControls();
+    // One filter form above the split drives both tables. Group-by choices are
+    // the union of each source's last ungrouped header; Apply still sends a
+    // column only if that source has it.
+    std::vector<std::string> group_by_names;
+    std::vector<std::string> group_by_labels;
+    BuildCompareGroupByChoices(group.tables[COMPARE_SOURCE_A]->EligibleGroupByColumns(),
+                               group.tables[COMPARE_SOURCE_B]->EligibleGroupByColumns(),
+                               group_by_names, group_by_labels);
+    group.tables[COMPARE_SOURCE_A]->RenderSharedFilterControls(group_by_names,
+                                                               group_by_labels);
 
     ImGui::Separator();
     ImGui::Spacing();

@@ -63,6 +63,7 @@ InfiniteScrollTable::InfiniteScrollTable(
 , m_default_sort_order(default_sort_order)
 , m_data_changed(true)
 , m_filter_requested(false)
+, m_last_fetch_grouped(false)
 , m_selected_row(-1)
 , m_selected_column(-1)
 , m_hovered_row(-1)
@@ -751,6 +752,8 @@ InfiniteScrollTable::ProcessSortOrFilterRequest(
         {
             filter.group_columns[0] = '\0';
         }
+        FilterOptions request_filter = filter;
+        AdjustFilterForRequest(request_filter);
         // check that sort order and column index actually are different from the
         // current values before fetching
         const bool sort_changed = (sort_order != m_sort_order ||
@@ -762,9 +765,9 @@ InfiniteScrollTable::ProcessSortOrFilterRequest(
             // Update the event table params with the new sort request
             table_params->m_sort_column_index = m_sort_column_index;
             table_params->m_sort_order        = m_sort_order;
-            table_params->m_filter            = filter.filter;
-            table_params->m_group = filter.group_by;
-            table_params->m_group_columns = filter.group_columns;
+            table_params->m_filter            = request_filter.filter;
+            table_params->m_group             = request_filter.group_by;
+            table_params->m_group_columns     = request_filter.group_columns;
 
             // if filtering changed reset the start row as current row
             // may be beyond result length causing an assertion in controller
@@ -776,6 +779,7 @@ InfiniteScrollTable::ProcessSortOrFilterRequest(
             spdlog::debug("Fetching data for sort, frame count: {}", frame_count);
 
             // Fetch the event table with the updated params
+            m_last_fetch_grouped = !request_filter.group_by.empty();
             QueueTableRequest(table_params);
 
             m_filter_options = filter;

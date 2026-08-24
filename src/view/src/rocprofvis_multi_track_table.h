@@ -48,8 +48,14 @@ public:
 
     // Filter form driving an A/B pair. Submitting it fetches this table and
     // hands the same options to the other one through the submit callback.
-    void RenderSharedFilterControls();
+    // column_names is the query text; column_labels is what the combo shows.
+    void RenderSharedFilterControls(const std::vector<std::string>& column_names,
+                                    const std::vector<std::string>& column_labels);
     void ApplySharedFiltersFrom(const MultiTrackTable& source);
+
+    // Last ungrouped header's group-by candidates. Empty until the first
+    // ungrouped fetch. Compare mode unions this with the peer table.
+    const std::vector<std::string>& EligibleGroupByColumns() const;
     void SetFilterSubmitCallback(const FilterSubmitCallback& callback);
 
     // Adopts the peer table's sort; a no-op when it already matches, which breaks the echo.
@@ -72,6 +78,7 @@ protected:
     void         IndexColumns() override;
     void         RowSelected(const ImGuiMouseButton mouse_button) override;
     void         OnSortChanged() override;
+    void         AdjustFilterForRequest(FilterOptions& filter) const override;
 
     // Subset of selected tracks applicable to this table type
     std::vector<uint64_t> m_included_tracks;
@@ -83,6 +90,8 @@ private:
     void FetchSelectionData();
     void SubmitFilters();
     bool XButton(const char* id) const;
+    void RebuildEligibleGroupByColumns();
+    bool HasEligibleGroupByColumn(const std::string& name) const;
 
     bool                  m_display_filters;
     bool                  m_display_summary;
@@ -93,6 +102,9 @@ private:
     std::vector<std::string> m_group_by_choices;
     std::vector<const char*> m_group_by_choices_ptr;
     int                      m_group_by_selection_index;
+    // Ungrouped header columns that can be sent as group_by. Kept across
+    // grouped fetches so a later request still knows the original schema.
+    std::vector<std::string> m_eligible_group_by_columns;
 
     char m_filter_store[FILTER_SIZE];
 };

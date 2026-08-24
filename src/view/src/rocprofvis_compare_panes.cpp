@@ -10,6 +10,7 @@
 #include "widgets/rocprofvis_split_containers.h"
 
 #include <algorithm>
+#include <vector>
 
 namespace RocProfVis
 {
@@ -79,6 +80,54 @@ EndCompareCard()
     ImGui::EndChild();
     ImGui::PopStyleColor(2);
     ImGui::PopStyleVar(2);
+}
+
+void
+BuildCompareGroupByChoices(const std::vector<std::string>& columns_a,
+                           const std::vector<std::string>& columns_b,
+                           std::vector<std::string>&       names_out,
+                           std::vector<std::string>&       labels_out)
+{
+    names_out.clear();
+    labels_out.clear();
+    names_out.reserve(columns_a.size() + columns_b.size());
+    labels_out.reserve(columns_a.size() + columns_b.size());
+
+    for(size_t i = 0; i < columns_a.size(); i++)
+    {
+        names_out.push_back(columns_a[i]);
+    }
+    for(size_t i = 0; i < columns_b.size(); i++)
+    {
+        if(std::find(names_out.begin(), names_out.end(), columns_b[i]) == names_out.end())
+        {
+            names_out.push_back(columns_b[i]);
+        }
+    }
+
+    const std::string tag_a =
+        std::string(" (") + COMPARE_SOURCE_LABEL[COMPARE_SOURCE_A] + ")";
+    const std::string tag_b =
+        std::string(" (") + COMPARE_SOURCE_LABEL[COMPARE_SOURCE_B] + ")";
+    for(size_t i = 0; i < names_out.size(); i++)
+    {
+        const bool in_a =
+            std::find(columns_a.begin(), columns_a.end(), names_out[i]) != columns_a.end();
+        const bool in_b =
+            std::find(columns_b.begin(), columns_b.end(), names_out[i]) != columns_b.end();
+        if(in_a && in_b)
+        {
+            labels_out.push_back(names_out[i]);
+        }
+        else if(in_a)
+        {
+            labels_out.push_back(names_out[i] + tag_a);
+        }
+        else
+        {
+            labels_out.push_back(names_out[i] + tag_b);
+        }
+    }
 }
 
 void

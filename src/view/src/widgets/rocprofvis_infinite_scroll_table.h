@@ -110,6 +110,9 @@ protected:
     void         SetPendingSort(uint64_t column_index,
                                 rocprofvis_controller_sort_order_t order);
     virtual void OnSortChanged() {}
+    // Drops or rewrites filter fields that this table cannot send. Default is
+    // a no-op so non-compare tables keep the values the user applied.
+    virtual void AdjustFilterForRequest(FilterOptions&) const {}
 
     FilterOptions                      m_filter_options;
     FilterOptions                      m_pending_filter_options;
@@ -135,6 +138,9 @@ protected:
 
     bool m_data_changed;
     bool m_filter_requested;
+    // True when the last queued request included a group_by. Grouped results
+    // must not rebuild the eligible column cache from the aggregate header.
+    bool m_last_fetch_grouped;
 
     // Track the selected row for context menu actions
     int m_selected_row;

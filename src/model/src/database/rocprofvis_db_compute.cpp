@@ -443,7 +443,7 @@ namespace DataModel
 					"JOIN compute_kernel_symbol ks ON ks.kernel_symbol_uuid = il.kernel_symbol_uuid "
 					"WHERE ks.kernel_uuid = ";
 				query_out += params[0].param_str;
-				query_out += " ORDER BY il.kernel_symbol_uuid, il.code_object_offset";
+				query_out += " ORDER BY il.kernel_symbol_uuid, il.code_object_offset, il.instruction_uuid";
 				result = kRocProfVisDmResultSuccess;
 			}
 		}

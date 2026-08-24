@@ -334,13 +334,13 @@ rocprofvis_result_t ComputeTrace::AsyncFetch(Table& table, Arguments& args, Futu
 
 rocprofvis_result_t ComputeTrace::AsyncFetchPcSampling(Arguments& args, Future& future, PcSampling& output)
 {
-    uint64_t workload_id      = 0;
     uint64_t kernel_id        = 0;
     uint64_t source_file_uuid = 0;
-
-    if(kRocProfVisResultSuccess != args.GetUInt64(kRPVControllerPcSamplingArgsWorkloadId,   0, &workload_id)    ||
-       kRocProfVisResultSuccess != args.GetUInt64(kRPVControllerPcSamplingArgsKernelId,     0, &kernel_id)     ||
-       kRocProfVisResultSuccess != args.GetUInt64(kRPVControllerPcSamplingArgsSourceFileUuid, 0, &source_file_uuid))
+    if(kRocProfVisResultSuccess !=
+           args.GetUInt64(kRPVControllerPcSamplingArgsKernelId, 0, &kernel_id) ||
+       kRocProfVisResultSuccess !=
+           args.GetUInt64(kRPVControllerPcSamplingArgsSourceFileUuid, 0,
+                          &source_file_uuid))
     {
         return kRocProfVisResultInvalidArgument;
     }
@@ -349,81 +349,22 @@ rocprofvis_result_t ComputeTrace::AsyncFetchPcSampling(Arguments& args, Future& 
         [this, &output, kernel_id,
          source_file_uuid](Future* future) -> rocprofvis_result_t {
             std::unique_lock<std::recursive_mutex> data_lock(output.GetDataMutex());
-            if(future->IsCancelled())
-            {
-                return kRocProfVisResultCancelled;
-            }
+            if(future->IsCancelled()) return kRocProfVisResultCancelled;
 
             rocprofvis_dm_database_t db = rocprofvis_dm_get_property_as_handle(
                 m_dm_handle, kRPVDMDatabaseHandle, 0);
-            rocprofvis_dm_result_t dm_result = kRocProfVisDmResultSuccess;
-
-            if(!output.m_kernel_data_loaded)
-            {
-                if(!output.m_code_object_store_loaded)
-                {
-                    dm_result = FetchCodeObjects(db, future, kernel_id, output);
-                    if(dm_result == kRocProfVisDmResultSuccess)
-                    {
-                        output.m_code_object_store_loaded = true;
-                    }
-                }
-                if(dm_result == kRocProfVisDmResultSuccess && !output.m_kernel_symbols_loaded)
-                {
-                    dm_result = FetchKernelSymbols(db, future, kernel_id, output);
-                    if(dm_result == kRocProfVisDmResultSuccess)
-                    {
-                        output.m_kernel_symbols_loaded = true;
-                    }
-                }
-                if(dm_result == kRocProfVisDmResultSuccess && !output.m_instruction_lines_loaded)
-                {
-                    dm_result = FetchInstructionLines(db, future, kernel_id, output);
-                    if(dm_result == kRocProfVisDmResultSuccess)
-                    {
-                        output.m_instruction_lines_loaded = true;
-                    }
-                }
-                if(dm_result == kRocProfVisDmResultSuccess &&
-                   !output.m_pc_sample_states_loaded)
-                {
-                    dm_result = FetchPcSampleStates(db, future, kernel_id, output);
-                    if(dm_result == kRocProfVisDmResultSuccess)
-                    {
-                        output.m_pc_sample_states_loaded = true;
-                    }
-                }
-                if(dm_result == kRocProfVisDmResultSuccess)
-                {
-                    dm_result = FetchInstructionSourceLines(db, future, kernel_id, output);
-                }
-                if(dm_result == kRocProfVisDmResultSuccess)
-                {
-                    dm_result = FetchStalls(db, future, kernel_id, output);
-                }
-                if(dm_result == kRocProfVisDmResultSuccess)
-                {
-                    dm_result = FetchInstructionSamples(db, future, kernel_id, output);
-                }
-                if(dm_result == kRocProfVisDmResultSuccess)
-                {
-                    output.m_kernel_data_loaded = true;
-                }
-            }
-            if(future->IsCancelled())
-            {
-                return kRocProfVisResultCancelled;
-            }
-
+            rocprofvis_dm_result_t dm_result =
+                FetchPcSamplingIsaData(db, future, kernel_id, output);
             if(dm_result == kRocProfVisDmResultSuccess)
             {
-                dm_result = FetchSourceFileLines(db, future, source_file_uuid, output);
+                dm_result = FetchPcSamplingSourceData(db, future, kernel_id,
+                                                      source_file_uuid, output);
             }
-            if(future->IsCancelled())
+            if(dm_result == kRocProfVisDmResultSuccess)
             {
-                return kRocProfVisResultCancelled;
+                dm_result = FetchPcSamplingStallData(db, future, kernel_id, output);
             }
-
+            if(future->IsCancelled()) return kRocProfVisResultCancelled;
             return dm_result == kRocProfVisDmResultSuccess
                        ? kRocProfVisResultSuccess
                        : kRocProfVisResultUnknownError;
@@ -437,88 +378,166 @@ rocprofvis_result_t
 ComputeTrace::AsyncFetchPcSamplingMandatorys(Arguments& args, Future& future,
                                              PcSampling& output)
 {
-    uint64_t kernel_id        = 0;
-    uint64_t source_file_uuid = 0;
+    uint64_t kernel_id = 0;
     if(kRocProfVisResultSuccess !=
-           args.GetUInt64(kRPVControllerPcSamplingArgsKernelId, 0, &kernel_id) ||
-       kRocProfVisResultSuccess !=
-           args.GetUInt64(kRPVControllerPcSamplingArgsSourceFileUuid, 0, &source_file_uuid))
+       args.GetUInt64(kRPVControllerPcSamplingArgsKernelId, 0, &kernel_id))
     {
         return kRocProfVisResultInvalidArgument;
     }
 
     future.Set(JobSystem::Get().IssueJob(
-        [this, &output, kernel_id, source_file_uuid](Future* future) -> rocprofvis_result_t {
+        [this, &output, kernel_id](Future* future) -> rocprofvis_result_t {
             std::unique_lock<std::recursive_mutex> data_lock(output.GetDataMutex());
-            if(future->IsCancelled())
-            {
-                return kRocProfVisResultCancelled;
-            }
-
+            if(future->IsCancelled()) return kRocProfVisResultCancelled;
             rocprofvis_dm_database_t db = rocprofvis_dm_get_property_as_handle(
                 m_dm_handle, kRPVDMDatabaseHandle, 0);
-            rocprofvis_dm_result_t dm_result = kRocProfVisDmResultSuccess;
-            if(!output.m_code_object_store_loaded)
-            {
-                dm_result = FetchCodeObjects(db, future, kernel_id, output);
-                if(dm_result == kRocProfVisDmResultSuccess)
-                {
-                    output.m_code_object_store_loaded = true;
-                }
-            }
-            if(dm_result == kRocProfVisDmResultSuccess && !output.m_kernel_symbols_loaded)
-            {
-                dm_result = FetchKernelSymbols(db, future, kernel_id, output);
-                if(dm_result == kRocProfVisDmResultSuccess)
-                {
-                    output.m_kernel_symbols_loaded = true;
-                }
-            }
-            if(dm_result == kRocProfVisDmResultSuccess && !output.m_instruction_lines_loaded)
-            {
-                dm_result = FetchInstructionLines(db, future, kernel_id, output);
-                if(dm_result == kRocProfVisDmResultSuccess)
-                {
-                    output.m_instruction_lines_loaded = true;
-                }
-            }
-            if(dm_result == kRocProfVisDmResultSuccess &&
-               !output.m_pc_sample_states_loaded)
-            {
-                dm_result = FetchPcSampleStates(db, future, kernel_id, output);
-                if(dm_result == kRocProfVisDmResultSuccess)
-                {
-                    output.m_pc_sample_states_loaded = true;
-                }
-            }
-            if(dm_result == kRocProfVisDmResultSuccess)
-            {
-                dm_result = FetchInstructionSourceLines(db, future, kernel_id, output);
-            }
-            if(dm_result == kRocProfVisDmResultSuccess)
-            {
-                dm_result = FetchStalls(db, future, kernel_id, output);
-            }
-            if(dm_result == kRocProfVisDmResultSuccess)
-            {
-                dm_result = FetchInstructionSamples(db, future, kernel_id, output);
-            }
-            if(dm_result == kRocProfVisDmResultSuccess)
-            {
-                dm_result = FetchSourceFileLines(db, future, source_file_uuid, output);
-            }
-            if(future->IsCancelled())
-            {
-                return kRocProfVisResultCancelled;
-            }
-
+            const rocprofvis_dm_result_t dm_result =
+                FetchPcSamplingIsaData(db, future, kernel_id, output);
+            if(future->IsCancelled()) return kRocProfVisResultCancelled;
             return dm_result == kRocProfVisDmResultSuccess
                        ? kRocProfVisResultSuccess
                        : kRocProfVisResultUnknownError;
         },
         &future));
-
     return future.IsValid() ? kRocProfVisResultSuccess : kRocProfVisResultUnknownError;
+}
+
+rocprofvis_result_t
+ComputeTrace::AsyncFetchPcSamplingSource(Arguments& args, Future& future,
+                                         PcSampling& output)
+{
+    uint64_t kernel_id        = 0;
+    uint64_t source_file_uuid = 0;
+    if(kRocProfVisResultSuccess !=
+           args.GetUInt64(kRPVControllerPcSamplingArgsKernelId, 0, &kernel_id) ||
+       kRocProfVisResultSuccess !=
+           args.GetUInt64(kRPVControllerPcSamplingArgsSourceFileUuid, 0,
+                          &source_file_uuid))
+    {
+        return kRocProfVisResultInvalidArgument;
+    }
+
+    future.Set(JobSystem::Get().IssueJob(
+        [this, &output, kernel_id,
+         source_file_uuid](Future* future) -> rocprofvis_result_t {
+            std::unique_lock<std::recursive_mutex> data_lock(output.GetDataMutex());
+            if(future->IsCancelled()) return kRocProfVisResultCancelled;
+            rocprofvis_dm_database_t db = rocprofvis_dm_get_property_as_handle(
+                m_dm_handle, kRPVDMDatabaseHandle, 0);
+            const rocprofvis_dm_result_t dm_result = FetchPcSamplingSourceData(
+                db, future, kernel_id, source_file_uuid, output);
+            if(future->IsCancelled()) return kRocProfVisResultCancelled;
+            return dm_result == kRocProfVisDmResultSuccess
+                       ? kRocProfVisResultSuccess
+                       : kRocProfVisResultUnknownError;
+        },
+        &future));
+    return future.IsValid() ? kRocProfVisResultSuccess : kRocProfVisResultUnknownError;
+}
+
+rocprofvis_result_t
+ComputeTrace::AsyncFetchPcSamplingStalls(Arguments& args, Future& future,
+                                         PcSampling& output)
+{
+    uint64_t kernel_id = 0;
+    if(kRocProfVisResultSuccess !=
+       args.GetUInt64(kRPVControllerPcSamplingArgsKernelId, 0, &kernel_id))
+    {
+        return kRocProfVisResultInvalidArgument;
+    }
+
+    future.Set(JobSystem::Get().IssueJob(
+        [this, &output, kernel_id](Future* future) -> rocprofvis_result_t {
+            std::unique_lock<std::recursive_mutex> data_lock(output.GetDataMutex());
+            if(future->IsCancelled()) return kRocProfVisResultCancelled;
+            rocprofvis_dm_database_t db = rocprofvis_dm_get_property_as_handle(
+                m_dm_handle, kRPVDMDatabaseHandle, 0);
+            const rocprofvis_dm_result_t dm_result =
+                FetchPcSamplingStallData(db, future, kernel_id, output);
+            if(future->IsCancelled()) return kRocProfVisResultCancelled;
+            return dm_result == kRocProfVisDmResultSuccess
+                       ? kRocProfVisResultSuccess
+                       : kRocProfVisResultUnknownError;
+        },
+        &future));
+    return future.IsValid() ? kRocProfVisResultSuccess : kRocProfVisResultUnknownError;
+}
+
+rocprofvis_dm_result_t
+ComputeTrace::FetchPcSamplingIsaData(rocprofvis_dm_database_t db, Future* future,
+                                     uint64_t kernel_id, PcSampling& output)
+{
+    rocprofvis_dm_result_t result = kRocProfVisDmResultSuccess;
+    if(!output.m_code_object_store_loaded)
+    {
+        result = FetchCodeObjects(db, future, kernel_id, output);
+        if(result == kRocProfVisDmResultSuccess) output.m_code_object_store_loaded = true;
+    }
+    if(result == kRocProfVisDmResultSuccess && !output.m_kernel_symbols_loaded)
+    {
+        result = FetchKernelSymbols(db, future, kernel_id, output);
+        if(result == kRocProfVisDmResultSuccess) output.m_kernel_symbols_loaded = true;
+    }
+    if(result == kRocProfVisDmResultSuccess && !output.m_instruction_lines_loaded)
+    {
+        result = FetchInstructionLines(db, future, kernel_id, output);
+        if(result == kRocProfVisDmResultSuccess) output.m_instruction_lines_loaded = true;
+    }
+    return result;
+}
+
+rocprofvis_dm_result_t
+ComputeTrace::FetchPcSamplingSourceData(rocprofvis_dm_database_t db, Future* future,
+                                        uint64_t kernel_id, uint64_t source_file_uuid,
+                                        PcSampling& output)
+{
+    rocprofvis_dm_result_t result = kRocProfVisDmResultSuccess;
+    if(!output.m_source_files_loaded)
+    {
+        result = FetchSourceFiles(db, future, kernel_id, output);
+        if(result == kRocProfVisDmResultSuccess) output.m_source_files_loaded = true;
+    }
+    if(result == kRocProfVisDmResultSuccess && !output.m_instruction_source_lines_loaded)
+    {
+        result = FetchInstructionSourceLines(db, future, kernel_id, output);
+        if(result == kRocProfVisDmResultSuccess)
+            output.m_instruction_source_lines_loaded = true;
+    }
+
+    uint64_t selected_source_file_uuid = source_file_uuid;
+    if(selected_source_file_uuid == 0 && !output.m_source_files.empty())
+    {
+        selected_source_file_uuid = output.m_source_files.front().source_file_uuid;
+    }
+    if(result == kRocProfVisDmResultSuccess && selected_source_file_uuid != 0)
+    {
+        result = FetchSourceFileLines(db, future, selected_source_file_uuid, output);
+    }
+    return result;
+}
+
+rocprofvis_dm_result_t
+ComputeTrace::FetchPcSamplingStallData(rocprofvis_dm_database_t db, Future* future,
+                                       uint64_t kernel_id, PcSampling& output)
+{
+    rocprofvis_dm_result_t result = kRocProfVisDmResultSuccess;
+    if(!output.m_pc_sample_states_loaded)
+    {
+        result = FetchPcSampleStates(db, future, kernel_id, output);
+        if(result == kRocProfVisDmResultSuccess) output.m_pc_sample_states_loaded = true;
+    }
+    if(result == kRocProfVisDmResultSuccess && !output.m_stalls_loaded)
+    {
+        result = FetchStalls(db, future, kernel_id, output);
+        if(result == kRocProfVisDmResultSuccess) output.m_stalls_loaded = true;
+    }
+    if(result == kRocProfVisDmResultSuccess && !output.m_instruction_samples_loaded)
+    {
+        result = FetchInstructionSamples(db, future, kernel_id, output);
+        if(result == kRocProfVisDmResultSuccess)
+            output.m_instruction_samples_loaded = true;
+    }
+    return result;
 }
 
 rocprofvis_dm_result_t
@@ -756,6 +775,30 @@ ComputeTrace::FetchInstructionSamples(rocprofvis_dm_database_t db, Future* futur
             });
     }
     return result;
+}
+
+rocprofvis_dm_result_t
+ComputeTrace::FetchSourceFiles(rocprofvis_dm_database_t db, Future* future,
+                               uint64_t kernel_id, PcSampling& output)
+{
+    QueryArgumentStore query_args = { { kRPVComputeParamKernelId,
+                                        std::to_string(kernel_id) } };
+    QueryDataStore     query_out  = {
+        {
+            { kRPVComputeColumnKernelUUID, std::nullopt },
+            { kRPVComputeColumnPcSamplingSourceFileUuid, std::nullopt },
+            { kRPVComputeColumnPcSamplingSourceFileWorkloadId, std::nullopt },
+            { kRPVComputeColumnPcSamplingSourceFilePath, std::nullopt },
+            { kRPVComputeColumnPcSamplingSourceFileMd5Checksum, std::nullopt },
+        },
+        {}
+    };
+    return ExecuteQuery(
+        db, m_dm_handle, nullptr, future, kRPVComputeFetchKernelSourceFiles, query_args,
+        query_out, [this, &output](const QueryDataStore& data_store) {
+            StorePcSamplingRows(output, kRPVControllerPCSamplingNumSourceFiles,
+                                data_store);
+        });
 }
 
 rocprofvis_dm_result_t
@@ -1026,143 +1069,6 @@ rocprofvis_result_t ComputeTrace::LoadRocpd(Future* future)
                                                 }
                                             }
                                         });
-                                    }
-                                    if(dm_result == kRocProfVisDmResultSuccess)
-                                    {
-                                        if(!kernel_ids.empty())
-                                        {
-                                            query_arguments.clear();
-                                            for(const uint32_t kernel_id : kernel_ids)
-                                            {
-                                                query_arguments.push_back(
-                                                    {kRPVComputeParamKernelId,
-                                                     std::to_string(kernel_id)});
-                                            }
-                                            std::unordered_map<uint64_t, rocprofvis_handle_t*>
-                                                kernel_by_id;
-                                            kernel_by_id.reserve(kernel_ids.size());
-                                            for(const uint32_t kernel_id : kernel_ids)
-                                            {
-                                                rocprofvis_handle_t* kernel_handle = nullptr;
-                                                if(kRocProfVisResultSuccess == workload->GetObject(
-                                                       kRPVControllerWorkloadKernelById,
-                                                       kernel_id, &kernel_handle) &&
-                                                   kernel_handle)
-                                                {
-                                                    kernel_by_id.emplace(kernel_id, kernel_handle);
-                                                }
-                                            }
-                                            query_output = {
-                                                {
-                                                    { kRPVComputeColumnKernelUUID, std::nullopt },
-                                                    { kRPVComputeColumnPcSamplingSourceFileUuid, std::nullopt },
-                                                    { kRPVComputeColumnPcSamplingSourceFileWorkloadId, std::nullopt },
-                                                    { kRPVComputeColumnPcSamplingSourceFilePath, std::nullopt },
-                                                    { kRPVComputeColumnPcSamplingSourceFileMd5Checksum, std::nullopt },
-                                                },
-                                                {}
-                                            };
-                                            future->ResetProgress();
-                                            ExecuteQuery(
-                                                db, m_dm_handle, object2wait, nullptr,
-                                                kRPVComputeFetchKernelSourceFiles,
-                                                query_arguments, query_output,
-                                                [this, &kernel_by_id](const QueryDataStore& data_store){
-                                                if(data_store.rows.empty())
-                                                {
-                                                    return;
-                                                }
-                                                const auto kernel_column_it = data_store.columns.find(
-                                                    kRPVComputeColumnKernelUUID);
-                                                if(kernel_column_it == data_store.columns.end() ||
-                                                   !kernel_column_it->second)
-                                                {
-                                                    spdlog::error(
-                                                        "PC sampling source-file query did not return a kernel ID column");
-                                                    return;
-                                                }
-                                                const int kernel_column = *kernel_column_it->second;
-
-                                                typedef std::pair<uint64_t, const std::vector<const char*>*>
-                                                    ParsedSourceFileRow;
-                                                std::vector<ParsedSourceFileRow> parsed_rows;
-                                                parsed_rows.reserve(data_store.rows.size());
-                                                std::unordered_map<uint64_t, uint64_t> file_counts;
-                                                for(const std::vector<const char*>& row : data_store.rows)
-                                                {
-                                                    uint64_t kernel_id = 0;
-                                                    if(kernel_column < 0 ||
-                                                       static_cast<size_t>(kernel_column) >= row.size() ||
-                                                       !ParseUInt64(row[kernel_column], kernel_id))
-                                                    {
-                                                        spdlog::warn(
-                                                            "Ignoring PC sampling source-file row with an invalid kernel ID");
-                                                        continue;
-                                                    }
-                                                    parsed_rows.emplace_back(kernel_id, &row);
-                                                    file_counts[kernel_id]++;
-                                                }
-
-                                                for(const std::pair<const uint64_t, uint64_t>& count : file_counts)
-                                                {
-                                                    const std::unordered_map<uint64_t,
-                                                        rocprofvis_handle_t*>::const_iterator kernel_it =
-                                                        kernel_by_id.find(count.first);
-                                                    if(kernel_it == kernel_by_id.end())
-                                                    {
-                                                        continue;
-                                                    }
-                                                    rocprofvis_handle_t* pc_handle = nullptr;
-                                                    reinterpret_cast<Kernel*>(kernel_it->second)->GetObject(
-                                                        kRPVControllerKernelPcSampling, 0, &pc_handle);
-                                                    PcSamplingRef pc_sampling(pc_handle);
-                                                    if(pc_sampling.IsValid())
-                                                    {
-                                                        pc_sampling->SetUInt64(
-                                                            kRPVControllerPCSamplingNumSourceFiles,
-                                                            0, count.second);
-                                                    }
-                                                }
-
-                                                std::unordered_map<uint64_t, uint64_t> file_offsets;
-                                                rocprofvis_property_t property;
-                                                rocprofvis_controller_primitive_type_t type;
-                                                for(const ParsedSourceFileRow& parsed_row : parsed_rows)
-                                                {
-                                                    const uint64_t kernel_id = parsed_row.first;
-                                                    const std::vector<const char*>& row = *parsed_row.second;
-                                                    const std::unordered_map<uint64_t,
-                                                        rocprofvis_handle_t*>::const_iterator kernel_it =
-                                                        kernel_by_id.find(kernel_id);
-                                                    if(kernel_it == kernel_by_id.end())
-                                                    {
-                                                        continue;
-                                                    }
-
-                                                    rocprofvis_handle_t* pc_handle = nullptr;
-                                                    reinterpret_cast<Kernel*>(kernel_it->second)->GetObject(
-                                                        kRPVControllerKernelPcSampling, 0, &pc_handle);
-                                                    PcSamplingRef pc_sampling(pc_handle);
-                                                    if(!pc_sampling.IsValid())
-                                                    {
-                                                        continue;
-                                                    }
-
-                                                    const uint64_t file_index = file_offsets[kernel_id]++;
-                                                    for(const std::pair<const rocprofvis_db_compute_column_enum_t, std::optional<int>>& column : data_store.columns)
-                                                    {
-                                                        if(column.first != kRPVComputeColumnKernelUUID &&
-                                                           pc_sampling->QueryToPropertyEnum(
-                                                               column.first, property, type))
-                                                        {
-                                                            SetObjectProperty(
-                                                                pc_handle, property, file_index,
-                                                                row[column.second.value()], type);
-                                                        }
-                                                    }
-                                                }
-                                            });
-                                        }
                                     }
                                     if(dm_result == kRocProfVisDmResultSuccess)
                                     {

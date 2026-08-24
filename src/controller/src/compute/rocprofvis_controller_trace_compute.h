@@ -61,6 +61,10 @@ public:
     rocprofvis_result_t AsyncFetchPcSamplingMandatorys(Arguments&  args,
                                                        Future&     future,
                                                        PcSampling& output);
+    rocprofvis_result_t AsyncFetchPcSamplingSource(Arguments& args, Future& future,
+                                                   PcSampling& output);
+    rocprofvis_result_t AsyncFetchPcSamplingStalls(Arguments& args, Future& future,
+                                                   PcSampling& output);
 
 private:
     class MetricID
@@ -125,11 +129,24 @@ private:
                                                    uint64_t                 kernel_id,
                                                    PcSampling&              output);
 
+    rocprofvis_dm_result_t FetchSourceFiles(rocprofvis_dm_database_t db, Future* future,
+                                            uint64_t kernel_id, PcSampling& output);
+
     rocprofvis_dm_result_t FetchSourceFileLines(rocprofvis_dm_database_t db,
                                                 Future*                  future,
                                                 uint64_t                 source_file_uuid,
                                                 PcSampling&              output);
 
+    rocprofvis_dm_result_t FetchPcSamplingIsaData(rocprofvis_dm_database_t db,
+                                                  Future* future, uint64_t kernel_id,
+                                                  PcSampling& output);
+    rocprofvis_dm_result_t FetchPcSamplingSourceData(rocprofvis_dm_database_t db,
+                                                     Future* future, uint64_t kernel_id,
+                                                     uint64_t    source_file_uuid,
+                                                     PcSampling& output);
+    rocprofvis_dm_result_t FetchPcSamplingStallData(rocprofvis_dm_database_t db,
+                                                    Future* future, uint64_t kernel_id,
+                                                    PcSampling& output);
     void StorePcSamplingRows(PcSampling&           output,
                              rocprofvis_property_t count_property,
                              const QueryDataStore&  data_store);

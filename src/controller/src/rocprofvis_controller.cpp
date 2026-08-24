@@ -545,6 +545,38 @@ rocprofvis_result_t rocprofvis_controller_pc_sampling_fetch_mandatorys_async(
     return error;
 }
 
+rocprofvis_result_t rocprofvis_controller_pc_sampling_fetch_source_async(
+    rocprofvis_controller_t* controller, rocprofvis_controller_arguments_t* args,
+    rocprofvis_controller_future_t* result, rocprofvis_handle_t* output)
+{
+    rocprofvis_result_t                     error = kRocProfVisResultInvalidArgument;
+    RocProfVis::Controller::ComputeTraceRef trace(controller);
+    RocProfVis::Controller::ArgumentsRef    args_ref(args);
+    RocProfVis::Controller::FutureRef       future(result);
+    RocProfVis::Controller::PcSamplingRef   pc_sampling(output);
+    if(trace.IsValid() && args_ref.IsValid() && future.IsValid() && pc_sampling.IsValid())
+    {
+        error = trace->AsyncFetchPcSamplingSource(*args_ref, *future, *pc_sampling);
+    }
+    return error;
+}
+
+rocprofvis_result_t rocprofvis_controller_pc_sampling_fetch_stalls_async(
+    rocprofvis_controller_t* controller, rocprofvis_controller_arguments_t* args,
+    rocprofvis_controller_future_t* result, rocprofvis_handle_t* output)
+{
+    rocprofvis_result_t                     error = kRocProfVisResultInvalidArgument;
+    RocProfVis::Controller::ComputeTraceRef trace(controller);
+    RocProfVis::Controller::ArgumentsRef    args_ref(args);
+    RocProfVis::Controller::FutureRef       future(result);
+    RocProfVis::Controller::PcSamplingRef   pc_sampling(output);
+    if(trace.IsValid() && args_ref.IsValid() && future.IsValid() && pc_sampling.IsValid())
+    {
+        error = trace->AsyncFetchPcSamplingStalls(*args_ref, *future, *pc_sampling);
+    }
+    return error;
+}
+
 // TEMPORARY (remote/SSH): remote connection C ABI. Remove guard when remote
 // graduates.
 #ifdef ROCPROFVIS_ENABLE_REMOTE

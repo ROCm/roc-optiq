@@ -1030,7 +1030,8 @@ typedef enum rocprofvis_controller_kernel_properties_t : uint32_t
 /*
  * Pc Sampling data for kernels
  */
-typedef enum rocprofvis_controller_pc_sampling_data_properties_t : uint32_t
+typedef enum rocprofvis_controller_pc_sampling_data_properties_t
+: uint32_t
 {
     __kRPVControllerPCSamplingPropertiesFirst,
     kRPVControllerPCSamplingNumSourceFiles = __kRPVControllerPCSamplingPropertiesFirst,

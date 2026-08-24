@@ -9,6 +9,8 @@
 #include "widgets/rocprofvis_split_containers.h"
 #include "model/compute/rocprofvis_compute_model_types.h"
 
+#include <map>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -20,6 +22,7 @@ namespace View
 class SourceCodeWidget;
 class IsaCodeWidget;
 class DataProvider;
+enum class PcSamplingRequestKind : uint32_t;
 
 struct LineSelection
 {
@@ -43,9 +46,11 @@ private:
     void ClearCodeData();
     void ClearSelectionData();
     void LoadSourceFileList(const PcSamplingData& data);
-    void FetchMandatoryPcSampling();
-    void OnPcSamplingReady(uint32_t kernel_id, uint64_t source_file_uuid,
-                           uint32_t generation, bool success);
+    void QueuePcSamplingFetch(PcSamplingRequestKind kind);
+    void FetchPendingPcSampling();
+    void RefreshCodeWidgets();
+    void OnPcSamplingReady(PcSamplingRequestKind kind, uint32_t kernel_id,
+                           uint64_t source_file_uuid, uint32_t generation, bool success);
 
     SettingsManager&                  m_settings;
     DataProvider&                     m_data_provider;
@@ -61,10 +66,16 @@ private:
     uint32_t                          m_current_workload_id;
     uint32_t                          m_fetch_generation = 0;
     uint64_t                          m_active_request_id = 0;
+    PcSamplingRequestKind             m_active_request_kind;
     bool                              m_fetch_in_progress = false;
-    bool                              m_pending_refetch  = false;
+    bool                              m_pending_isa_fetch    = false;
+    bool                              m_pending_source_fetch = false;
+    bool                              m_pending_stall_fetch  = false;
+    bool                              m_isa_data_loaded      = false;
+    bool                              m_stall_data_loaded    = false;
 
     std::map<std::string /*file_path*/, uint64_t /*file_id*/> m_source_files;
+    std::set<uint64_t>                                        m_loaded_source_files;
     LineSelection                   m_line_selection;
 
     float m_control_panel_height;
@@ -108,7 +119,6 @@ protected:
     ImU32  m_hovered_colour;
 
     ImVec4 m_line_num_color;
-    ImVec4 m_comment_color;
 };
 
 class SourceCodeWidget : public BaseCodeWidget

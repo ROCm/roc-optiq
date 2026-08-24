@@ -22,10 +22,11 @@ ComputeCodeView::ComputeCodeView(DataProvider& data_provider)
 , m_settings(SettingsManager::GetInstance())
 , m_data_provider(data_provider)
 , m_control_panel_height(0.0f)
-, m_current_source_file_uuid(ComputeSelection::INVALID_SELECTION_ID)
+, m_current_source_file_uuid(0)
 , m_current_code_object_uuid(ComputeSelection::INVALID_SELECTION_ID)
 , m_current_kernel_id(ComputeSelection::INVALID_SELECTION_ID)
 , m_current_workload_id(ComputeSelection::INVALID_SELECTION_ID)
+, m_active_request_kind(PcSamplingRequestKind::kIsa)
 , m_show_metadata_enabled(false)
 {
     m_source_code = std::make_shared<SourceCodeWidget>(m_line_selection);
@@ -46,9 +47,9 @@ ComputeCodeView::ComputeCodeView(DataProvider& data_provider)
     SubscribeToEvents();
 
     m_data_provider.SetFetchPcSamplingCallback(
-        [this](const std::string&, uint32_t kernel_id, uint64_t source_file_uuid,
-               uint32_t generation, bool success) {
-            OnPcSamplingReady(kernel_id, source_file_uuid, generation, success);
+        [this](const std::string&, PcSamplingRequestKind kind, uint32_t kernel_id,
+               uint64_t source_file_uuid, uint32_t generation, bool success) {
+            OnPcSamplingReady(kind, kernel_id, source_file_uuid, generation, success);
         });
 }
 
@@ -109,7 +110,7 @@ ComputeCodeView::LoadData(uint32_t kernel_id)
     }
     if(m_current_workload_id == ComputeSelection::INVALID_SELECTION_ID)
     {
-        m_pending_refetch = false;
+        m_pending_isa_fetch = m_pending_source_fetch = m_pending_stall_fetch = false;
         if(m_fetch_in_progress)
             m_data_provider.CancelRequest(m_active_request_id);
         ClearSelectionData();
@@ -121,20 +122,20 @@ ComputeCodeView::LoadData(uint32_t kernel_id)
     if(!kernel_info)
     {
         m_current_workload_id = ComputeSelection::INVALID_SELECTION_ID;
-        m_pending_refetch     = false;
+        m_pending_isa_fetch = m_pending_source_fetch = m_pending_stall_fetch = false;
         if(m_fetch_in_progress)
             m_data_provider.CancelRequest(m_active_request_id);
         ClearSelectionData();
         return;
     }
 
-    // Source file list is already populated eagerly - just refresh the selection.
-    LoadSourceFileList(kernel_info->pc_sampling_data);
-
-    // Clear stale widget data. The mandatory code-object, ISA, and sample-state
-    // request starts from Render, when the PC Sampling View is open.
-    ClearCodeData();
-    m_pending_refetch = true;
+    // Start with the only data needed by the always-visible ISA pane. Optional
+    // source and stall data follows only when its corresponding UI is visible.
+    ClearSelectionData();
+    QueuePcSamplingFetch(PcSamplingRequestKind::kIsa);
+    if(m_source_layout_item->m_visible)
+        QueuePcSamplingFetch(PcSamplingRequestKind::kSource);
+    if(m_show_metadata_enabled) QueuePcSamplingFetch(PcSamplingRequestKind::kStalls);
     if(m_fetch_in_progress)
         m_data_provider.CancelRequest(m_active_request_id);
 }
@@ -150,88 +151,128 @@ void
 ComputeCodeView::ClearSelectionData()
 {
     m_source_files.clear();
-    m_current_source_file_uuid = ComputeSelection::INVALID_SELECTION_ID;
+    m_loaded_source_files.clear();
+    m_current_source_file_uuid = 0;
     m_current_code_object_uuid = ComputeSelection::INVALID_SELECTION_ID;
+    m_pending_isa_fetch        = false;
+    m_pending_source_fetch     = false;
+    m_pending_stall_fetch      = false;
+    m_isa_data_loaded          = false;
+    m_stall_data_loaded        = false;
+    m_source_code->ChangeStallVisibility(false);
+    m_isa_code->ChangeStallVisibility(false);
     ClearCodeData();
 }
 
 void
-ComputeCodeView::FetchMandatoryPcSampling()
+ComputeCodeView::QueuePcSamplingFetch(PcSamplingRequestKind kind)
+{
+    switch(kind)
+    {
+        case PcSamplingRequestKind::kIsa: m_pending_isa_fetch = true; break;
+        case PcSamplingRequestKind::kSource: m_pending_source_fetch = true; break;
+        case PcSamplingRequestKind::kStalls: m_pending_stall_fetch = true; break;
+    }
+}
+
+void
+ComputeCodeView::FetchPendingPcSampling()
 {
     if(m_current_kernel_id == ComputeSelection::INVALID_SELECTION_ID ||
        m_current_workload_id == ComputeSelection::INVALID_SELECTION_ID)
     {
-        m_pending_refetch = false;
+        m_pending_isa_fetch = m_pending_source_fetch = m_pending_stall_fetch = false;
         if(m_fetch_in_progress)
             m_data_provider.CancelRequest(m_active_request_id);
         return;
     }
 
-    if(m_fetch_in_progress)
+    if(m_fetch_in_progress) return;
+
+    PcSamplingRequestKind kind;
+    if(m_pending_isa_fetch)
     {
-        m_pending_refetch = true;
-        m_data_provider.CancelRequest(m_active_request_id);
+        kind                = PcSamplingRequestKind::kIsa;
+        m_pending_isa_fetch = false;
+    }
+    else if(m_pending_source_fetch)
+    {
+        kind                   = PcSamplingRequestKind::kSource;
+        m_pending_source_fetch = false;
+    }
+    else if(m_pending_stall_fetch)
+    {
+        kind                  = PcSamplingRequestKind::kStalls;
+        m_pending_stall_fetch = false;
+    }
+    else
+    {
         return;
     }
 
-    // DataProvider permits only one PC sampling request at a time. Kernel,
-    // source-file, and generation values validate the callback separately.
     const uint64_t request_id =
         RequestIdBuilder::MakeRequestId(RequestType::kFetchPcSampling);
+    const uint64_t source_file_uuid =
+        kind == PcSamplingRequestKind::kSource ? m_current_source_file_uuid : 0;
 
     ++m_fetch_generation;
-    m_pending_refetch = false;
     if(m_data_provider.FetchPcSampling(
-           PcSamplingRequestParams(m_current_workload_id, m_current_kernel_id,
-                                   m_current_source_file_uuid, m_fetch_generation)))
+           PcSamplingRequestParams(kind, m_current_workload_id, m_current_kernel_id,
+                                   source_file_uuid, m_fetch_generation)))
     {
-        m_active_request_id = request_id;
-        m_fetch_in_progress = true;
+        m_active_request_id   = request_id;
+        m_active_request_kind = kind;
+        m_fetch_in_progress   = true;
+    }
+    else
+    {
+        QueuePcSamplingFetch(kind);
     }
 }
 
 void
-ComputeCodeView::OnPcSamplingReady(uint32_t kernel_id, uint64_t source_file_uuid,
-                                   uint32_t generation, bool success)
+ComputeCodeView::OnPcSamplingReady(PcSamplingRequestKind kind, uint32_t kernel_id,
+                                   uint64_t source_file_uuid, uint32_t generation,
+                                   bool success)
 {
     const uint64_t request_id =
         RequestIdBuilder::MakeRequestId(RequestType::kFetchPcSampling);
     if(!m_fetch_in_progress || request_id != m_active_request_id ||
-       generation != m_fetch_generation)
+       generation != m_fetch_generation || kind != m_active_request_kind)
     {
         return;
     }
 
     m_fetch_in_progress = false;
 
-    // Start a deferred fetch from Render, after DataProvider has erased the
-    // completed request from its request map.
-    if(m_pending_refetch)
-    {
-        return;
-    }
-
-    if(kernel_id != m_current_kernel_id || source_file_uuid != m_current_source_file_uuid)
+    if(kernel_id != m_current_kernel_id ||
+       (kind == PcSamplingRequestKind::kSource && m_current_source_file_uuid != 0 &&
+        source_file_uuid != m_current_source_file_uuid))
         return;
 
     if(!success)
+    {
+        if(kind == PcSamplingRequestKind::kStalls) m_show_metadata_enabled = false;
         return;
+    }
 
     const KernelInfo* kernel_info = m_data_provider.ComputeModel().GetKernelInfo(
         m_current_workload_id, m_current_kernel_id);
     if(!kernel_info)
         return;
 
-    const PcSamplingData& data = kernel_info->pc_sampling_data;
-
-    if(m_current_source_file_uuid != ComputeSelection::INVALID_SELECTION_ID)
-        m_source_code->Load(data, m_current_source_file_uuid);
-
-    if(!data.code_objects.empty())
-        m_current_code_object_uuid = data.code_objects[0].code_object_uuid;
-
-    if(m_current_code_object_uuid != ComputeSelection::INVALID_SELECTION_ID)
-        m_isa_code->Load(data, m_current_code_object_uuid);
+    switch(kind)
+    {
+        case PcSamplingRequestKind::kIsa: m_isa_data_loaded = true; break;
+        case PcSamplingRequestKind::kSource:
+            m_current_source_file_uuid = source_file_uuid;
+            LoadSourceFileList(kernel_info->pc_sampling_data);
+            if(m_current_source_file_uuid != 0)
+                m_loaded_source_files.insert(m_current_source_file_uuid);
+            break;
+        case PcSamplingRequestKind::kStalls: m_stall_data_loaded = true; break;
+    }
+    RefreshCodeWidgets();
 }
 
 void
@@ -251,18 +292,37 @@ ComputeCodeView::LoadSourceFileList(const PcSamplingData& data)
         }
     }
     if(!selection_valid)
-        m_current_source_file_uuid = m_source_files.empty()
-            ? ComputeSelection::INVALID_SELECTION_ID
-            : m_source_files.begin()->second;
+        m_current_source_file_uuid =
+            m_source_files.empty() ? 0 : m_source_files.begin()->second;
+}
+
+void
+ComputeCodeView::RefreshCodeWidgets()
+{
+    const KernelInfo* kernel_info = m_data_provider.ComputeModel().GetKernelInfo(
+        m_current_workload_id, m_current_kernel_id);
+    if(!kernel_info) return;
+
+    const PcSamplingData& data = kernel_info->pc_sampling_data;
+    if(m_isa_data_loaded && !data.code_objects.empty())
+        m_current_code_object_uuid = data.code_objects[0].code_object_uuid;
+    if(m_isa_data_loaded &&
+       m_current_code_object_uuid != ComputeSelection::INVALID_SELECTION_ID)
+        m_isa_code->Load(data, m_current_code_object_uuid);
+
+    if(m_source_layout_item->m_visible &&
+       m_loaded_source_files.count(m_current_source_file_uuid))
+        m_source_code->Load(data, m_current_source_file_uuid);
+
+    const bool show_stalls = m_show_metadata_enabled && m_stall_data_loaded;
+    m_source_code->ChangeStallVisibility(show_stalls);
+    m_isa_code->ChangeStallVisibility(show_stalls);
 }
 
 void
 ComputeCodeView::Render()
 {
-    if(m_pending_refetch && !m_fetch_in_progress)
-    {
-        FetchMandatoryPcSampling();
-    }
+    FetchPendingPcSampling();
 
     RenderControlPanel();
 
@@ -302,7 +362,6 @@ ComputeCodeView::RenderControlPanel()
     const float button_stall_width = std::max(ImGui::CalcTextSize(show_stalls_str).x,
                                               ImGui::CalcTextSize(hide_stalls_str).x) +
                                      ImGui::GetStyle().FramePadding.x * 2.0f;
-
     const float buttons_width = button_source_code_width + button_stall_width +
                                 ImGui::GetStyle().ItemSpacing.x;
 
@@ -313,14 +372,30 @@ ComputeCodeView::RenderControlPanel()
                                                      : show_source_code_str))
     {
         m_source_layout_item->m_visible = !m_source_layout_item->m_visible;
+        if(m_source_layout_item->m_visible)
+        {
+            if(!m_loaded_source_files.count(m_current_source_file_uuid))
+                QueuePcSamplingFetch(PcSamplingRequestKind::kSource);
+            else
+                RefreshCodeWidgets();
+        }
+        else
+        {
+            m_pending_source_fetch = false;
+        }
     }
 
     ImGui::SameLine();
     if(ImGui::Button(m_show_metadata_enabled ? hide_stalls_str : show_stalls_str))
     {
         m_show_metadata_enabled = !m_show_metadata_enabled;
-        m_source_code->ChangeStallVisibility(m_show_metadata_enabled);
-        m_isa_code->ChangeStallVisibility(m_show_metadata_enabled);
+        if(m_show_metadata_enabled && !m_stall_data_loaded)
+            QueuePcSamplingFetch(PcSamplingRequestKind::kStalls);
+        else
+        {
+            if(!m_show_metadata_enabled) m_pending_stall_fetch = false;
+            RefreshCodeWidgets();
+        }
     }
 
     ImGui::EndGroup();
@@ -339,8 +414,7 @@ void
 ComputeCodeView::RenderSourceFileDropdown()
 {
     constexpr const float DROPDAWN_SIZE = 300.0f;
-    if(m_source_files.empty())
-        return;
+    if(!m_source_layout_item->m_visible || m_source_files.empty()) return;
 
     auto filename_of = [](const std::string& str) -> const char* {
         const auto pos = str.find_last_of("/\\");
@@ -368,8 +442,10 @@ ComputeCodeView::RenderSourceFileDropdown()
             {
                 m_current_source_file_uuid = id;
                 m_source_code->Load({}, 0);
-                m_isa_code->Load({}, 0);
-                FetchMandatoryPcSampling();
+                if(m_loaded_source_files.count(id))
+                    RefreshCodeWidgets();
+                else
+                    QueuePcSamplingFetch(PcSamplingRequestKind::kSource);
             }
             if(selected)
                 ImGui::SetItemDefaultFocus();
@@ -389,7 +465,6 @@ BaseCodeWidget::BaseCodeWidget(LineSelection& selection)
     m_hovered_colour  =
         ImGui::GetColorU32(m_settings.GetColor(Colors::kHighlightChart));
     m_line_num_color = ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled);
-    m_comment_color  = { 0.34f, 0.65f, 0.29f, 1.0f };
 
     m_table_flags = ImGuiTableFlags_Resizable | ImGuiTableFlags_NoPadOuterX |
         ImGuiTableFlags_BordersInnerV;
@@ -398,6 +473,7 @@ BaseCodeWidget::BaseCodeWidget(LineSelection& selection)
 void
 BaseCodeWidget::CalculateLineNumberWidth(uint32_t count)
 {
+    m_line_num_digits = 1;
     for(uint32_t number = count; number >= 10; number /= 10)
         m_line_num_digits++;
 
@@ -638,14 +714,11 @@ IsaCodeWidget::Load(const PcSamplingData& data, uint64_t code_object_uuid)
                counts_it != counts_by_instruction.end())
                 counts = &counts_it->second;
 
-            m_entries.push_back({
-                instruction_line.instruction,
-                instruction_line.instruction_uuid,
-                source_line_id,
-                counts ? counts->issue_count : 0,
-                counts ? counts->stall_count : 0,
-                counts ? counts->total_count : 0
-            });
+            m_entries.push_back({ instruction_line.instruction,
+                                  instruction_line.instruction_uuid, source_line_id,
+                                  counts ? counts->issue_count : 0,
+                                  counts ? counts->stall_count : 0,
+                                  counts ? counts->total_count : 0 });
         }
     }
 

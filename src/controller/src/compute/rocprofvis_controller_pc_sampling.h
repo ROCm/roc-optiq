@@ -137,11 +137,14 @@ private:
     std::vector<InstructionSampleLookup>   m_instruction_sample_lookups;
 
     std::unordered_map<uint64_t, std::vector<SourceLine>> m_source_line_cache;
-    bool m_kernel_data_loaded       = false;
-    bool m_code_object_store_loaded = false;
-    bool m_kernel_symbols_loaded    = false;
-    bool m_instruction_lines_loaded         = false;
-    bool m_pc_sample_states_loaded  = false;
+    bool                                                  m_source_files_loaded = false;
+    bool m_code_object_store_loaded                                             = false;
+    bool m_kernel_symbols_loaded                                                = false;
+    bool m_instruction_lines_loaded                                             = false;
+    bool m_instruction_source_lines_loaded                                      = false;
+    bool m_pc_sample_states_loaded                                              = false;
+    bool m_stalls_loaded                                                        = false;
+    bool m_instruction_samples_loaded                                           = false;
 
     std::recursive_mutex m_data_mutex;
 

@@ -4356,8 +4356,10 @@ void DataProvider::SetFetchMetricsCallback(
     m_metrics_fetch_callback = callback;
 }
 
-void DataProvider::SetFetchPcSamplingCallback(
-    const std::function<void(const std::string&, uint32_t, uint64_t, uint32_t, bool)>& callback)
+void
+DataProvider::SetFetchPcSamplingCallback(
+    const std::function<void(const std::string&, PcSamplingRequestKind, uint32_t,
+                             uint64_t, uint32_t, bool)>& callback)
 {
     m_pc_sampling_fetch_callback = callback;
 }
@@ -4420,8 +4422,22 @@ DataProvider::FetchPcSampling(const PcSamplingRequestParams& params)
     rocprofvis_controller_set_uint64(args, kRPVControllerPcSamplingArgsSourceFileUuid, 0,
                                      params.m_source_file_uuid);
 
-    rocprofvis_result_t result = rocprofvis_controller_pc_sampling_fetch_mandatorys_async(
-        m_trace_controller, args, future, pc_handle);
+    rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
+    switch(params.m_kind)
+    {
+        case PcSamplingRequestKind::kIsa:
+            result = rocprofvis_controller_pc_sampling_fetch_mandatorys_async(
+                m_trace_controller, args, future, pc_handle);
+            break;
+        case PcSamplingRequestKind::kSource:
+            result = rocprofvis_controller_pc_sampling_fetch_source_async(
+                m_trace_controller, args, future, pc_handle);
+            break;
+        case PcSamplingRequestKind::kStalls:
+            result = rocprofvis_controller_pc_sampling_fetch_stalls_async(
+                m_trace_controller, args, future, pc_handle);
+            break;
+    }
 
     if(result == kRocProfVisResultSuccess)
     {
@@ -4675,16 +4691,6 @@ DataProvider::LoadKernels(WorkloadInfo& workload, rocprofvis_handle_t* workload_
         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
         kernel.dispatch_metrics[KernelInfo::DurationMedian] =
             static_cast<uint32_t>(uint64_data);
-        // Load only the source file list eagerly (for the dropdown).
-        // Mandatory code-object, ISA, and sample-state rows are loaded on-demand.
-        {
-            rocprofvis_handle_t* pc_handle = nullptr;
-            if(kRocProfVisResultSuccess == rocprofvis_controller_get_object(
-                   kernel_handle, kRPVControllerKernelPcSampling, 0, &pc_handle) && pc_handle)
-            {
-                LoadPcSamplingSourceFiles(kernel, pc_handle);
-            }
-        }
         workload.kernels[kernel.id] = std::move(kernel);
     }
 }
@@ -4996,13 +5002,23 @@ DataProvider::LoadPcSamplingInstructionSampleLookups(
 }
 
 inline void
-DataProvider::LoadPcSamplingSourceFiles(KernelInfo& kernel, rocprofvis_handle_t* pc_handle)
+DataProvider::LoadPcSamplingSourceFiles(KernelInfo&          kernel,
+                                        rocprofvis_handle_t* pc_handle,
+                                        uint64_t             refreshed_source_file_uuid)
 {
     uint64_t num_source_files = 0;
     if(kRocProfVisResultSuccess != rocprofvis_controller_get_uint64(
            pc_handle, kRPVControllerPCSamplingNumSourceFiles, 0, &num_source_files))
         return;
 
+    std::unordered_map<uint64_t, std::vector<SourceLine>> cached_source_lines;
+    for(SourceFile& source_file : kernel.pc_sampling_data.source_files)
+    {
+        cached_source_lines.emplace(source_file.source_file_uuid,
+                                    std::move(source_file.source_lines));
+    }
+
+    kernel.pc_sampling_data.source_files.clear();
     kernel.pc_sampling_data.source_files.resize(num_source_files);
     std::unordered_map<uint64_t, SourceFile*> source_files_by_id;
     source_files_by_id.reserve(num_source_files);
@@ -5019,9 +5035,24 @@ DataProvider::LoadPcSamplingSourceFiles(KernelInfo& kernel, rocprofvis_handle_t*
             GetString(pc_handle, kRPVControllerPCSamplingSourceFilePath, i);
         source_file.md5_checksum =
             GetString(pc_handle, kRPVControllerPCSamplingSourceFileMd5Checksum, i);
+        const auto cache_it = cached_source_lines.find(source_file.source_file_uuid);
+        if(cache_it != cached_source_lines.end())
+        {
+            source_file.source_lines = std::move(cache_it->second);
+        }
         source_files_by_id.emplace(source_file.source_file_uuid, &source_file);
     }
 
+    if(refreshed_source_file_uuid != 0)
+    {
+        const auto refreshed_it = source_files_by_id.find(refreshed_source_file_uuid);
+        if(refreshed_it != source_files_by_id.end())
+        {
+            refreshed_it->second->source_lines.clear();
+        }
+    }
+
+    bool     refreshed_source_lines_cleared = refreshed_source_file_uuid != 0;
     uint64_t num_source_lines = 0;
     rocprofvis_controller_get_uint64(pc_handle, kRPVControllerPCSamplingNumSourceLines, 0, &num_source_lines);
     for(uint64_t li = 0; li < num_source_lines; li++)
@@ -5032,6 +5063,12 @@ DataProvider::LoadPcSamplingSourceFiles(KernelInfo& kernel, rocprofvis_handle_t*
             source_files_by_id.find(sf_id);
         if(source_file_it != source_files_by_id.end())
         {
+            // Source-file ID 0 means the controller selected the first file.
+            if(!refreshed_source_lines_cleared)
+            {
+                source_file_it->second->source_lines.clear();
+                refreshed_source_lines_cleared = true;
+            }
             source_file_it->second->source_lines.emplace_back();
             LoadPcSamplingSourceLine(source_file_it->second->source_lines.back(), pc_handle, li);
         }
@@ -5491,6 +5528,7 @@ DataProvider::ProcessPcSamplingRequest(RequestInfo& req)
 
     const bool           success   = (req.response_code == kRocProfVisResultSuccess);
     rocprofvis_handle_t* pc_handle = req.request_obj_handle;
+    uint64_t             completed_source_file_uuid = params->m_source_file_uuid;
 
     // Discard results that belong to a superseded Code View selection.
     const bool is_current_generation =
@@ -5502,16 +5540,32 @@ DataProvider::ProcessPcSamplingRequest(RequestInfo& req)
             params->m_workload_id, params->m_kernel_id);
         if(kernel)
         {
-            kernel->pc_sampling_data.code_objects.clear();
-            LoadPcSamplingSourceFiles(*kernel, pc_handle);
-            LoadPcSamplingCodeObjects(*kernel, pc_handle);
-            LoadPcSamplingInstructionSourceLines(*kernel, pc_handle);
-            LoadPcSamplingStates(*kernel, pc_handle);
-            LoadPcSamplingStallReasons(*kernel, pc_handle);
-            LoadPcSamplingStallReasonLookups(*kernel, pc_handle);
-            LoadPcSamplingInstructionTypes(*kernel, pc_handle);
-            LoadPcSamplingInstructionSamples(*kernel, pc_handle);
-            LoadPcSamplingInstructionSampleLookups(*kernel, pc_handle);
+            switch(params->m_kind)
+            {
+                case PcSamplingRequestKind::kIsa:
+                    LoadPcSamplingCodeObjects(*kernel, pc_handle);
+                    break;
+                case PcSamplingRequestKind::kSource:
+                    LoadPcSamplingSourceFiles(*kernel, pc_handle,
+                                              params->m_source_file_uuid);
+                    LoadPcSamplingInstructionSourceLines(*kernel, pc_handle);
+                    if(completed_source_file_uuid == 0 &&
+                       !kernel->pc_sampling_data.source_files.empty())
+                    {
+                        completed_source_file_uuid =
+                            kernel->pc_sampling_data.source_files.front()
+                                .source_file_uuid;
+                    }
+                    break;
+                case PcSamplingRequestKind::kStalls:
+                    LoadPcSamplingStates(*kernel, pc_handle);
+                    LoadPcSamplingStallReasons(*kernel, pc_handle);
+                    LoadPcSamplingStallReasonLookups(*kernel, pc_handle);
+                    LoadPcSamplingInstructionTypes(*kernel, pc_handle);
+                    LoadPcSamplingInstructionSamples(*kernel, pc_handle);
+                    LoadPcSamplingInstructionSampleLookups(*kernel, pc_handle);
+                    break;
+            }
         }
     }
     else if(success && !is_current_generation)
@@ -5529,9 +5583,8 @@ DataProvider::ProcessPcSamplingRequest(RequestInfo& req)
 
     if(m_pc_sampling_fetch_callback)
     {
-        m_pc_sampling_fetch_callback(m_model.GetTraceFilePath(),
-                                     params->m_kernel_id,
-                                     params->m_source_file_uuid,
+        m_pc_sampling_fetch_callback(m_model.GetTraceFilePath(), params->m_kind,
+                                     params->m_kernel_id, completed_source_file_uuid,
                                      params->m_generation,
                                      success && is_current_generation);
     }

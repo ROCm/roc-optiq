@@ -251,7 +251,8 @@ public:
     void SetFetchMetricsCallback(
         const std::function<void(const std::string&, uint64_t, bool)>& callback);
     void SetFetchPcSamplingCallback(
-        const std::function<void(const std::string&, uint32_t, uint64_t, uint32_t, bool)>& callback);
+        const std::function<void(const std::string&, PcSamplingRequestKind, uint32_t,
+                                 uint64_t, uint32_t, bool)>& callback);
 
 private:
     struct ProcessChildCount
@@ -376,7 +377,8 @@ private:
                                            rocprofvis_handle_t* pc_handle,
                                            uint64_t             index);
     inline void LoadPcSamplingSourceFiles(KernelInfo&          kernel,
-                                          rocprofvis_handle_t* pc_handle);
+                                          rocprofvis_handle_t* pc_handle,
+                                          uint64_t refreshed_source_file_uuid);
     inline void LoadPcSamplingInstructionLine(InstructionLine&             instruction_line,
                                       rocprofvis_handle_t* pc_handle,
                                       uint64_t             index);
@@ -438,7 +440,8 @@ private:
     uint32_t m_pc_sampling_generation = 0;
 
     std::function<void(const std::string&, uint64_t, bool)> m_metrics_fetch_callback;
-    std::function<void(const std::string&, uint32_t, uint64_t, uint32_t, bool)>
+    std::function<void(const std::string&, PcSamplingRequestKind, uint32_t, uint64_t,
+                       uint32_t, bool)>
         m_pc_sampling_fetch_callback;
 };
 

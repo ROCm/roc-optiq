@@ -318,9 +318,17 @@ public:
     {}
 };
 
+enum class PcSamplingRequestKind : uint32_t
+{
+    kIsa,
+    kSource,
+    kStalls
+};
+
 class PcSamplingRequestParams : public RequestParamsBase
 {
 public:
+    PcSamplingRequestKind m_kind;
     uint32_t m_workload_id;
     uint32_t m_kernel_id;
     uint64_t m_source_file_uuid;
@@ -331,9 +339,11 @@ public:
     PcSamplingRequestParams(const PcSamplingRequestParams&)            = default;
     PcSamplingRequestParams& operator=(const PcSamplingRequestParams&) = default;
 
-    PcSamplingRequestParams(uint32_t workload_id, uint32_t kernel_id,
-                            uint64_t source_file_uuid, uint32_t generation)
-    : m_workload_id(workload_id)
+    PcSamplingRequestParams(PcSamplingRequestKind kind, uint32_t workload_id,
+                            uint32_t kernel_id, uint64_t source_file_uuid,
+                            uint32_t generation)
+    : m_kind(kind)
+    , m_workload_id(workload_id)
     , m_kernel_id(kernel_id)
     , m_source_file_uuid(source_file_uuid)
     , m_generation(generation)

@@ -48,6 +48,8 @@ ROCm Optiq supports the ROCm ``.db`` and ``.rpd`` database formats.
 
 Select **File** > **Open** to open a trace. You can also open files by dragging them into the application window.
 
+.. _view-trace-troubleshooting:
+
 Troubleshooting
 ---------------
 

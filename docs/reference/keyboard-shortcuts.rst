@@ -2,9 +2,9 @@
    :description: Keyboard shortcuts for ROCm Optiq.
    :keywords: ROCm Optiq, ROCm, keyboard shortcuts
 
-**********************
+**********************************************
 Systems Profiler trace view keyboard shortcuts  
-********************** 
+**********************************************
 
 Use these shortcuts in the ROCm Systems Profiler trace view.
 

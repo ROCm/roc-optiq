@@ -11,6 +11,7 @@ ROCm Optiq is a unified visualization and analysis tool for performance data col
 ROCm Optiq has no dependency on the ROCm stack itself, so trace and analysis files can be visualized on any machine running a supported Windows, Linux, or macOS operating system, independent of where the data was collected.
 
 .. _trace-file:
+
 Visualize ROCm Systems Profiler traces
 ======================================
 

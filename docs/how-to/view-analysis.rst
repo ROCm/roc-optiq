@@ -26,6 +26,8 @@ ROCm Optiq supports the ROCm Compute Profiler analysis database format (``.db``)
 Select **File** > **Open** to open a database file. 
 You can also open files by dragging them into the application window. 
 
+.. _view-analysis-troubleshooting:
+
 Troubleshooting
 ---------------
 

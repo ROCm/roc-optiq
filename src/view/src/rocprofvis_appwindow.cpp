@@ -1226,7 +1226,7 @@ AppWindow::RenderViewMenu(Project* project)
                     trace_view_tab->SetSidebarViewVisibility(settings.show_sidebar);
             }
         }
-        if(ImGui::MenuItem("Show Histogram", nullptr, &settings.show_histogram))
+        if(ImGui::MenuItem("Show Timeline Overview", nullptr, &settings.show_histogram))
         {
             for(const auto& tab : m_tab_container->GetTabs())
             {

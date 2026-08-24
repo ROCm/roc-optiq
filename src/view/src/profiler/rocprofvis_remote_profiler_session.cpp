@@ -92,13 +92,7 @@ RemoteProfilerSession::~RemoteProfilerSession()
 }
 
 bool
-RemoteProfilerSession::Launch(rocprofvis_profiler_type_t profiler_type,
-                              const std::string&         profiler_path,
-                              const std::string&         target_executable,
-                              const std::string&         target_args,
-                              const std::string&         output_directory,
-                              const std::string&         profiler_args,
-                              const std::vector<std::pair<std::string, std::string>>& env_vars)
+RemoteProfilerSession::Launch(const ProfilerLaunchSpec& spec)
 {
     if(m_running)
     {
@@ -107,8 +101,7 @@ RemoteProfilerSession::Launch(rocprofvis_profiler_type_t profiler_type,
 
     // Build the profiler config (same fields as local) and tag it as an SSH
     // launch so the controller selects the SshProfilerExecutor.
-    if(!BuildConfig(profiler_type, profiler_path, target_executable, target_args,
-                    output_directory, profiler_args, env_vars))
+    if(!BuildConfig(spec))
     {
         Fail("Failed to allocate profiler config.");
         return false;
@@ -121,7 +114,7 @@ RemoteProfilerSession::Launch(rocprofvis_profiler_type_t profiler_type,
             m_uri->GetRemoteUserString().c_str(),
             m_uri->GetRemotePortInt(),
             m_uri->GetRemoteIdentityFileString().c_str(),
-            output_directory.c_str());
+            spec.output_directory.c_str());
     }
 
     m_profiler = rocprofvis_profiler_alloc();

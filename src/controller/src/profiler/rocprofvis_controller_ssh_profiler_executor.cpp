@@ -61,7 +61,13 @@ bool SshProfilerExecutor::Start(const ProfilerConfig& config)
     // for a POSIX shell (the remote host).
     std::vector<std::string> argv = Cmdline::BuildArgv(config);
     std::vector<std::pair<std::string, std::string>> env = Cmdline::BuildEnv(config);
-    std::string remote_cmd = Cmdline::ToPosixShellCommand(argv, env);
+    std::string remote_cmd =
+        Cmdline::ToPosixShellCommand(argv, env, config.GetWorkingDirectory());
+
+    if (!config.GetWorkingDirectory().empty())
+    {
+        spdlog::info("SSH profiler working directory: {}", config.GetWorkingDirectory());
+    }
 
     spdlog::info("SSH profiler launch: {}", Cmdline::ToDisplayString(argv, env));
 

@@ -22,6 +22,7 @@
 #include "widgets/rocprofvis_gui_helpers.h"
 #include <algorithm>
 #include <sstream>
+#include <unordered_set>
 
 namespace RocProfVis
 {
@@ -40,7 +41,17 @@ constexpr float    SCROLL_APPLY_TOLERANCE_PX     = 1.0f;
 constexpr uint64_t DEFAULT_LOADING_TIMER         = 150;  // milliseconds
 constexpr float    ARTIFICIAL_SCROLLBAR_HEIGHT   = 18.0f;
 constexpr float    SIDEBAR_SPLITTER_WIDTH        = 5.0f;
+// Thickness (px) of the selection boundary markers on the overview histogram.
+constexpr float    OVERVIEW_MARKER_THICKNESS     = 2.0f;
+// Overview duration bracket: end-cap half-height and label gap (px).
+constexpr float    OVERVIEW_BRACKET_CAP_HALF     = 3.0f;
+constexpr float    OVERVIEW_BRACKET_LABEL_GAP    = 4.0f;
+// BT.601 luma weights for desaturating out-of-view overview bars.
+constexpr float    LUMA_WEIGHT_R                 = 0.299f;
+constexpr float    LUMA_WEIGHT_G                 = 0.587f;
+constexpr float    LUMA_WEIGHT_B                 = 0.114f;
 constexpr const char* HIDDEN_TRACKS_MENU_POPUP_NAME = "HiddenTracksMenu";
+constexpr const char* SORT_TRACKS_MENU_POPUP_NAME   = "SortTracksMenu";
 // Build a text block mirroring the on-hover tooltip (name, timing, and id)
 // for the clipboard.
 static std::string
@@ -119,7 +130,12 @@ TimelineView::TimelineView(DataProvider&                          dp,
 , m_dragging_measurement_ruler(MeasurementRulerDragTarget::kNone)
 , m_measure_copy_target(MeasurementCopyTarget::kNone)
 , m_loading_timer(DEFAULT_LOADING_TIMER)
+, m_sort_mode(TrackSortMode::kDefault)
+, m_topology_sort_pending(false)
 {
+    m_track_options_context_menu->SetTrackSortSubmenu(
+        [this]() { RenderTrackSortMenu(); });
+
     // Subscribe to events
     auto new_track_data_handler = [this](std::shared_ptr<RocEvent> e) {
         this->HandleNewTrackData(e);
@@ -1200,24 +1216,50 @@ TimelineView::Update()
 {
     if(m_meta_map_made)
     {
+        // Apply the menu-requested sort off the render pass. Consumed even on
+        // failure so a rejected order can't retry every frame.
+        if(m_pending_sort_mode)
+        {
+            SortTracksBy(*m_pending_sort_mode);
+            m_pending_sort_mode.reset();
+        }
+
+        // Apply a topology sort deferred until the order was ready; fall back to
+        // Default if the cached order isn't a full permutation of the current tracks.
+        if(m_topology_sort_pending && m_sort_mode == TrackSortMode::kTopology &&
+           m_topology_order && !m_topology_order->empty())
+        {
+            if(!ApplyTrackOrder(*m_topology_order))
+            {
+                m_sort_mode = TrackSortMode::kDefault;
+            }
+            m_topology_sort_pending = false;
+        }
+
         if(!m_reorder_request.handled)
         {
-            if(m_data_provider.SetGraphIndex(m_reorder_request.track_id,
-                                             m_reorder_request.new_index))
+            // Move the dragged track to its drop index; this becomes the custom order.
+            std::vector<uint64_t> order;
+            order.reserve(m_tracks->size());
+            for(TrackItem* track : *m_tracks)
             {
-                std::vector<TrackItem*> tracks_reordered;
-                TimelineModel&          tlm = m_data_provider.DataModel().GetTimeline();
-                tracks_reordered.resize(tlm.GetTrackCount());
-                for(TrackItem* track : *m_tracks)
+                if(track)
                 {
-                    if(track)
-                    {
-                        const TrackInfo* metadata = tlm.GetTrack(track->GetID());
-                        ROCPROFVIS_ASSERT(metadata);
-                        tracks_reordered[metadata->index] = track;
-                    }
+                    order.push_back(track->GetID());
                 }
-                *m_tracks = std::move(tracks_reordered);
+            }
+            auto it = std::find(order.begin(), order.end(), m_reorder_request.track_id);
+            if(it != order.end())
+            {
+                order.erase(it);
+                int idx = std::clamp(m_reorder_request.new_index, 0,
+                                     static_cast<int>(order.size()));
+                order.insert(order.begin() + idx, m_reorder_request.track_id);
+                if(ApplyTrackOrder(order))
+                {
+                    m_sort_mode    = TrackSortMode::kCustom;
+                    m_custom_order = order;
+                }
             }
         }
         // Rebuild the positioning map.
@@ -1317,15 +1359,15 @@ TimelineView::RenderSplitter()
     if(ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceNoPreviewTooltip))
     {
         ImVec2 drag_delta = ImGui::GetMouseDragDelta(ImGuiMouseButton_Left);
-        m_sidebar_size    = std::clamp(m_sidebar_size + drag_delta.x,
-                                       m_max_meta_scale_area_size +
-                                           2 * ImGui::GetFrameHeightWithSpacing(),
-                                       SIDEBAR_WIDTH_MAX);
 
-        m_tpt->SetViewTimeOffsetNs(
-            m_tpt->GetViewTimeOffsetNs() -
-            (drag_delta.x / display_size.x) *
-                m_tpt->GetVWidth());  // Prevents chart from moving in unexpected way.
+        // Resize only; leave zoom/offset untouched. SetGraphSize() picks up the
+        // new width later this frame and recomputes pixels_per_ns on its own, so
+        // the visible ns-range (and thus v_min_x) never moves and this can't be
+        // mistaken for a real zoom change by IsRequestDataNeeded(). AIPROFVIS-333.
+        m_sidebar_size = std::clamp(m_sidebar_size + drag_delta.x,
+                                    m_max_meta_scale_area_size +
+                                        2 * ImGui::GetFrameHeightWithSpacing(),
+                                    SIDEBAR_WIDTH_MAX);
         ImGui::ResetMouseDragDelta();
         ImGui::EndDragDropSource();
         m_resize_activity |= true;
@@ -2289,25 +2331,14 @@ TimelineView::MakeGraphView()
     uint64_t num_graphs = tlm.GetTrackCount();
     m_tracks->resize(num_graphs);
 
-    std::vector<const TrackInfo*> track_list    = tlm.GetTrackList();
-    bool                          project_valid = m_project_settings.Valid();
-    std::vector<uint64_t>         hidden_tracks;
+    // Build the track vector in the natural load order. The persisted sort
+    // selection (custom/topology/default) is restored afterwards in
+    // LoadSortSettings() as a view-only reorder.
+    std::vector<const TrackInfo*> track_list = tlm.GetTrackList();
 
     for(int i = 0; i < track_list.size(); i++)
     {
         const TrackInfo* track_info = track_list[i];
-
-        if(project_valid)
-        {
-            uint64_t         track_id_at_index   = m_project_settings.TrackID(i);
-            const TrackInfo* track_at_index_info = tlm.GetTrack(track_id_at_index);
-            if(track_at_index_info && track_at_index_info->index != i)
-            {
-                bool success = m_data_provider.SetGraphIndex(track_id_at_index, i);
-                ROCPROFVIS_ASSERT(success);
-            }
-            track_info = track_at_index_info;
-        }
 
         if(!track_info)
         {
@@ -2356,6 +2387,180 @@ TimelineView::MakeGraphView()
     m_resize_activity = true;
 
     CalculateTrackCounts();
+
+    // Snapshot the natural load order for the "Default" sort, then restore whatever
+    // sort selection the project last used.
+    m_default_order.clear();
+    m_default_order.reserve(m_tracks->size());
+    for(TrackItem* track : *m_tracks)
+    {
+        if(track)
+        {
+            m_default_order.push_back(track->GetID());
+        }
+    }
+    LoadSortSettings();
+}
+
+void
+TimelineView::SetTopologyOrder(const std::vector<uint64_t>* order)
+{
+    m_topology_order = order;
+}
+
+void
+TimelineView::SortTracksBy(TrackSortMode mode)
+{
+    switch(mode)
+    {
+        case TrackSortMode::kTopology:
+        {
+            if(m_topology_order && !m_topology_order->empty())
+            {
+                if(!ApplyTrackOrder(*m_topology_order))
+                {
+                    return;
+                }
+                m_topology_sort_pending = false;
+            }
+            else
+            {
+                // Tree not built yet; Update() applies this once it is available.
+                m_topology_sort_pending = true;
+            }
+            break;
+        }
+        case TrackSortMode::kDefault:
+            if(!m_default_order.empty() && !ApplyTrackOrder(m_default_order))
+            {
+                return;
+            }
+            break;
+        case TrackSortMode::kCustom:
+            if(!m_custom_order.empty() && !ApplyTrackOrder(m_custom_order))
+            {
+                return;
+            }
+            break;
+    }
+    m_sort_mode = mode;
+}
+
+bool
+TimelineView::ApplyTrackOrder(const std::vector<uint64_t>& order)
+{
+    if(!m_tracks)
+    {
+        return false;
+    }
+
+    // Callers pass a full permutation, so this is a straight reindex;
+    // SetTrackIndex guards against a malformed order.
+    if(!m_data_provider.SetTrackIndex(order))
+    {
+        return false;
+    }
+
+    RebuildTrackVectorFromMetadata();
+    // Force the position map / layout to recompute on the next Update().
+    m_resize_activity = true;
+    return true;
+}
+
+// Replaces m_tracks; only call from Update(), never mid-render, since the render
+// loops iterate this list.
+void
+TimelineView::RebuildTrackVectorFromMetadata()
+{
+    TimelineModel&          tlm = m_data_provider.DataModel().GetTimeline();
+    std::vector<TrackItem*> reordered(tlm.GetTrackCount(), nullptr);
+    for(TrackItem* track : *m_tracks)
+    {
+        if(track)
+        {
+            const TrackInfo* metadata = tlm.GetTrack(track->GetID());
+            if(metadata && metadata->index < reordered.size())
+            {
+                reordered[metadata->index] = track;
+            }
+        }
+    }
+    *m_tracks = std::move(reordered);
+}
+
+void
+TimelineView::LoadSortSettings()
+{
+    // Defaults for a trace with no persisted sort selection.
+    m_sort_mode             = TrackSortMode::kDefault;
+    m_custom_order.clear();
+    m_topology_sort_pending = false;
+
+    // The persisted "order" list is the remembered custom order.
+    const bool custom_valid = m_project_settings.Valid();
+    if(custom_valid)
+    {
+        m_custom_order = m_project_settings.CustomOrder();
+    }
+
+    if(m_project_settings.HasSortSettings())
+    {
+        int mode = m_project_settings.SortMode();
+        if(mode == static_cast<int>(TrackSortMode::kTopology) ||
+           mode == static_cast<int>(TrackSortMode::kCustom))
+        {
+            m_sort_mode = static_cast<TrackSortMode>(mode);
+        }
+    }
+    else if(custom_valid)
+    {
+        // Legacy projects stored only the order; restore it as the custom sort.
+        m_sort_mode = TrackSortMode::kCustom;
+    }
+
+    switch(m_sort_mode)
+    {
+        case TrackSortMode::kCustom:
+            if(m_custom_order.size() == m_tracks->size())
+            {
+                ApplyTrackOrder(m_custom_order);
+            }
+            else
+            {
+                m_sort_mode = TrackSortMode::kDefault;
+            }
+            break;
+        case TrackSortMode::kTopology:
+            // Applied by Update() once the topology tree is available.
+            m_topology_sort_pending = true;
+            break;
+        case TrackSortMode::kDefault:
+        default:
+            // Tracks are already in natural load order.
+            break;
+    }
+}
+
+void
+TimelineView::RenderTrackSortMenu()
+{
+    // Record only; Update() applies the sort off the render pass.
+    if(IconMenuItem(ICON_TREE, "Topology", true,
+                    m_sort_mode == TrackSortMode::kTopology))
+    {
+        m_pending_sort_mode = TrackSortMode::kTopology;
+    }
+    if(IconMenuItem(ICON_LIST, "Default (Track type)", true,
+                    m_sort_mode == TrackSortMode::kDefault))
+    {
+        m_pending_sort_mode = TrackSortMode::kDefault;
+    }
+    // Custom is only selectable once a manual ordering has been established.
+    if(IconMenuItem(ICON_EDIT, "Custom", HasCustomOrder(),
+                    m_sort_mode == TrackSortMode::kCustom))
+    {
+        m_pending_sort_mode = TrackSortMode::kCustom;
+    }
 }
 
 void
@@ -2505,20 +2710,86 @@ TimelineView::RenderTrackStats(float available_width)
 }
 
 void
-TimelineView::RenderHistogram()
+TimelineView::RenderTrackInfo(float available_width)
+{
+    RenderTrackStats(available_width);
+
+    FontManager& fonts = m_settings.GetFontManager();
+
+    // Full-width sort affordance pinned to the bottom of the header, so the sort
+    // options are discoverable without the right-click menu. The height is clamped
+    // to the arrow glyph with no vertical padding.
+    const std::string sort_label = std::string(ICON_CHEVRON_DOWN) + "##sort_tracks_btn";
+    ImGui::PushStyleColor(ImGuiCol_Button, m_settings.GetColor(Colors::kBgFrame));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
+                          m_settings.GetColor(Colors::kButtonHovered));
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive,
+                          m_settings.GetColor(Colors::kButtonActive));
+    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 0.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(0.0f, 0.0f));
+    ImGui::PushFont(fonts.GetFont(FontType::kIcon), fonts.GetFontSize(FontSize::kXSmall));
+    const float arrow_h = ImGui::GetTextLineHeight();
+    ImGui::SetCursorPos(ImVec2(0.0f, ImGui::GetWindowHeight() - arrow_h));
+    // Open the sort menu from the button itself (left- or right-click), rather than
+    // a right-click anywhere on the stats block.
+    ImGui::PushStyleColor(ImGuiCol_Text, m_settings.GetColor(Colors::kTextDim));
+    if(ImGui::Button(sort_label.c_str(), ImVec2(available_width, arrow_h)) ||
+       ImGui::IsItemClicked(ImGuiMouseButton_Right))
+    {
+        ImGui::OpenPopup(SORT_TRACKS_MENU_POPUP_NAME);
+    }
+    ImGui::PopStyleColor();
+    ImGui::PopFont();
+    ImGui::PopStyleVar(2);
+    ImGui::PopStyleColor(3);
+    if(BeginItemTooltipStyled())
+    {
+        ImGui::TextUnformatted("Sort Tracks");
+        EndTooltipStyled();
+    }
+
+    // Sort menu opened from the button above. Pull spacing from the base style; the
+    // histogram strip's child has zero padding, which would otherwise leave the
+    // popup cramped.
+    if(ImGui::IsPopupOpen(SORT_TRACKS_MENU_POPUP_NAME))
+    {
+        const ImGuiStyle& base = m_settings.GetDefaultStyle();
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, base.WindowPadding);
+        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, base.ItemSpacing);
+        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, base.FramePadding);
+        ImGui::SetNextWindowPos(
+            ImGui::GetItemRectMin() +
+                ImVec2(0.5f * ImGui::GetItemRectSize().x, ImGui::GetItemRectSize().y),
+            ImGuiCond_Always, ImVec2(0.5f, 0.0f));
+        if(ImGui::BeginPopup(SORT_TRACKS_MENU_POPUP_NAME))
+        {
+            ImGui::SeparatorText("Sort Tracks");
+            RenderTrackSortMenu();
+            ImGui::EndPopup();
+        }
+        ImGui::PopStyleVar(3);
+    }
+}
+
+void
+TimelineView::RenderHeader()
 {
     if(!m_histogram || m_histogram->empty()) return;
 
-    const float kHistogramTotalHeight = ImGui::GetContentRegionAvail().y;
-    const float kHistogramBarHeight   = kHistogramTotalHeight - m_ruler_height;
-    const auto& time_format = m_settings.GetUserSettings().unit_settings.time_format;
+    const float total_height = ImGui::GetContentRegionAvail().y;
 
-    // Sidebar spacer (left side, before histogram)
     ImGui::SetCursorPos(ImVec2(0, 0));
+    // Origin the overview draws its time axis from. The histogram and the timeline
+    // are stacked panels that share this left edge and the same sidebar width, so
+    // (panel-left + sidebar) is exactly where the timeline graph starts. Drawing
+    // from here (rather than the bars child's own screen pos, which the 1px
+    // internal splitter + item spacing push a couple of pixels right) makes the
+    // overview line up with the tracks when fully zoomed out.
+    const float graph_origin_x = ImGui::GetCursorScreenPos().x + m_sidebar_size;
     ImGui::PushStyleColor(ImGuiCol_ChildBg, m_settings.GetColor(Colors::kBgMain));
-    ImGui::BeginChild("HistogramSidebar", ImVec2(m_sidebar_size, kHistogramTotalHeight),
-                      false, ImGuiWindowFlags_NoScrollbar);
-    RenderTrackStats(m_sidebar_size);
+    ImGui::BeginChild("HistogramSidebar", ImVec2(m_sidebar_size, total_height), false,
+                      ImGuiWindowFlags_NoScrollbar);
+    RenderTrackInfo(m_sidebar_size);
     ImGui::EndChild();
     ImGui::PopStyleColor();
     ImGui::SameLine();
@@ -2526,13 +2797,23 @@ TimelineView::RenderHistogram()
     // Vertical splitter
     float splitter_size = 1.0f;
     ImGui::PushStyleColor(ImGuiCol_ChildBg, m_settings.GetColor(Colors::kSplitterColor));
-    ImGui::BeginChild("HistogramSplitter", ImVec2(splitter_size, kHistogramTotalHeight),
-                      false);
+    ImGui::BeginChild("HistogramSplitter", ImVec2(splitter_size, total_height), false);
     ImGui::EndChild();
     ImGui::PopStyleColor();
     ImGui::SameLine();
 
-    float histogram_width = m_tpt->GetGraphSizeX() - splitter_size;
+    RenderHistogram(total_height, graph_origin_x);
+}
+
+void
+TimelineView::RenderHistogram(float total_height, float graph_origin_x)
+{
+    const float kHistogramTotalHeight = total_height;
+    const float kHistogramBarHeight   = kHistogramTotalHeight - m_ruler_height;
+    const auto& time_format = m_settings.GetUserSettings().unit_settings.time_format;
+
+    constexpr float splitter_size = 1.0f;
+    float           histogram_width = m_tpt->GetGraphSizeX() - splitter_size;
 
     // Outer container
     ImGui::PushStyleColor(ImGuiCol_ChildBg, m_settings.GetColor(Colors::kBgMain));
@@ -2558,14 +2839,13 @@ TimelineView::RenderHistogram()
         fit_graph_axis_interval(m_tpt->GetRangeX(), ruler_width, label_size.x, true, 0);
 
     double pixels_per_ns = m_tpt->GetGraphSizeX() / m_tpt->GetRangeX();
-    ImVec2 window_pos    = ImGui::GetWindowPos();
 
     for(int i = 0; i < fitted_interval.interval_count; i++)
     {
         double tick_ns = i * fitted_interval.interval_ns;
         // calculate x pos avoiding tpt related functions because histogram does not
         // use zoom/pan logic
-        float       tick_x = static_cast<float>(window_pos.x + tick_ns * pixels_per_ns);
+        float       tick_x = static_cast<float>(graph_origin_x + tick_ns * pixels_per_ns);
         std::string tick_label = nanosecond_to_formatted_str(tick_ns, time_format, true);
         label_size             = ImGui::CalcTextSize(tick_label.c_str());
 
@@ -2591,6 +2871,65 @@ TimelineView::RenderHistogram()
                                  ImVec2(tick_x, tick_label_bottom + tick_length),
                                  m_settings.GetColor(Colors::kRulerTextColor), 1.0f);
     }
+
+    // Duration bracket across the selection, drawn in the ruler's tick-mark row.
+    double bracket_start_ns = 0.0;
+    double bracket_end_ns   = 0.0;
+    if(m_timeline_selection &&
+       m_timeline_selection->GetSelectedTimeRange(bracket_start_ns, bracket_end_ns) &&
+       m_tpt->GetRangeX() > 0.0)
+    {
+        auto sel_x = [&](double raw_ns) {
+            float frac = std::clamp(
+                static_cast<float>(m_tpt->NormalizeTime(raw_ns) / m_tpt->GetRangeX()),
+                0.0f, 1.0f);
+            return graph_origin_x + frac * ruler_width;
+        };
+        const float xs = sel_x(bracket_start_ns);
+        const float xe = sel_x(bracket_end_ns);
+        if(xe > xs)
+        {
+            const ImU32       col = m_settings.GetColor(Colors::kSelectionBorder);
+            const std::string dur = nanosecond_to_formatted_str(
+                bracket_end_ns - bracket_start_ns, time_format, true);
+            const ImVec2 dsz =
+                font->CalcTextSizeA(label_font_size, FLT_MAX, 0.0f, dur.c_str());
+            const float by  = ruler_pos.y + m_ruler_height - dsz.y * 0.5f - 1.0f;
+            const float mid = (xs + xe) * 0.5f;
+            const float gap = dsz.x * 0.5f + OVERVIEW_BRACKET_LABEL_GAP;
+
+            draw_list_ruler->AddLine(ImVec2(xs, by - OVERVIEW_BRACKET_CAP_HALF),
+                                     ImVec2(xs, by + OVERVIEW_BRACKET_CAP_HALF), col, 1.0f);
+            draw_list_ruler->AddLine(ImVec2(xe, by - OVERVIEW_BRACKET_CAP_HALF),
+                                     ImVec2(xe, by + OVERVIEW_BRACKET_CAP_HALF), col, 1.0f);
+
+            if(mid - gap > xs && mid + gap < xe)
+            {
+                draw_list_ruler->AddLine(ImVec2(xs, by), ImVec2(mid - gap, by), col, 1.0f);
+                draw_list_ruler->AddLine(ImVec2(mid + gap, by), ImVec2(xe, by), col, 1.0f);
+                draw_list_ruler->AddText(font, label_font_size,
+                                         ImVec2(mid - dsz.x * 0.5f, by - dsz.y * 0.5f), col,
+                                         dur.c_str());
+            }
+            else
+            {
+                draw_list_ruler->AddLine(ImVec2(xs, by), ImVec2(xe, by), col, 1.0f);
+                const float right_edge = graph_origin_x + ruler_width;
+                float       label_x    = mid - dsz.x * 0.5f;
+                if(xe + OVERVIEW_BRACKET_LABEL_GAP + dsz.x <= right_edge)
+                {
+                    label_x = xe + OVERVIEW_BRACKET_LABEL_GAP;
+                }
+                else if(xs - OVERVIEW_BRACKET_LABEL_GAP - dsz.x >= graph_origin_x)
+                {
+                    label_x = xs - OVERVIEW_BRACKET_LABEL_GAP - dsz.x;
+                }
+                draw_list_ruler->AddText(font, label_font_size,
+                                         ImVec2(label_x, by - dsz.y * 0.5f), col,
+                                         dur.c_str());
+            }
+        }
+    }
     ImGui::EndChild();
     ImGui::PopStyleColor();
 
@@ -2605,6 +2944,63 @@ TimelineView::RenderHistogram()
     float       bars_height = kHistogramBarHeight;
     size_t      bin_count   = m_histogram->size();
 
+    const float y0 = bars_pos.y;
+    const float y1 = bars_pos.y + bars_height;
+
+    // Maps a view-relative timestamp (ns) to an x coordinate on the overview.
+    auto overview_x = [&](double view_ns) -> float {
+        const double range = m_tpt->GetRangeX();
+        if(range <= 0.0)
+        {
+            return graph_origin_x;
+        }
+        float frac = std::clamp(static_cast<float>(view_ns / range), 0.0f, 1.0f);
+        return graph_origin_x + frac * bars_width;
+    };
+
+    // Minimap behaviour: keep the current view in colour and grey everything
+    // outside it. Fully zoomed out the view covers the trace, so nothing is greyed.
+    const float x_view_start = overview_x(m_tpt->GetViewTimeOffsetNs());
+    const float x_view_end =
+        overview_x(m_tpt->GetViewTimeOffsetNs() + m_tpt->GetVWidth());
+    const bool dim_outside_view =
+        (x_view_start > graph_origin_x) || (x_view_end < graph_origin_x + bars_width);
+
+    // Colour is kept only inside the "focus" region: the current view, further
+    // narrowed to the active time-range selection so the selected span pops in the
+    // overview while everything outside it goes greyscale.
+    float focus_left  = x_view_start;
+    float focus_right = x_view_end;
+    bool  grey_bars   = dim_outside_view;
+    {
+        double sel_start_ns = 0.0;
+        double sel_end_ns   = 0.0;
+        if(m_timeline_selection &&
+           m_timeline_selection->GetSelectedTimeRange(sel_start_ns, sel_end_ns) &&
+           m_tpt->GetRangeX() > 0.0)
+        {
+            focus_left =
+                std::max(focus_left, overview_x(m_tpt->NormalizeTime(sel_start_ns)));
+            focus_right =
+                std::min(focus_right, overview_x(m_tpt->NormalizeTime(sel_end_ns)));
+            grey_bars = true;
+        }
+    }
+
+    auto to_greyscale = [](ImU32 color) -> ImU32 {
+        ImVec4 rgba = ImGui::ColorConvertU32ToFloat4(color);
+        float  luma =
+            LUMA_WEIGHT_R * rgba.x + LUMA_WEIGHT_G * rgba.y + LUMA_WEIGHT_B * rgba.z;
+        return ImGui::ColorConvertFloat4ToU32(ImVec4(luma, luma, luma, rgba.w));
+    };
+
+    // Bars alternate between two colours; resolve both (and their greyed variants)
+    // once rather than per bin.
+    const ImU32 bar_colors[2]  = { m_settings.GetColor(Colors::kLineChartColor),
+                                   m_settings.GetColor(Colors::kLineChartColorAlt) };
+    const ImU32 grey_colors[2] = { to_greyscale(bar_colors[0]),
+                                   to_greyscale(bar_colors[1]) };
+
     // Draw histogram bars
     if(bin_count > 0)
     {
@@ -2612,37 +3008,53 @@ TimelineView::RenderHistogram()
 
         for(size_t i = 0; i < bin_count; ++i)
         {
-            float x0 = bars_pos.x + i * bin_width;
+            float x0 = graph_origin_x + i * bin_width;
             float x1 = x0 + bin_width;
-            float y0 = bars_pos.y;
-            float y1 = y0 + bars_height;
             // Use the normalized value directly (assumed in [0, 1])
             float bar_height = static_cast<float>((*m_histogram)[i]) * bars_height;
             float y_bar      = y1 - bar_height;
-            draw_list->AddRectFilled(ImVec2(x0, y_bar), ImVec2(x1, y1),
-                                     i % 2 == 0
-                                         ? m_settings.GetColor(Colors::kLineChartColor)
-                                         : m_settings.GetColor(Colors::kLineChartColorAlt),
-                                     1.5f);
+            if(grey_bars)
+            {
+                // Grey the whole bar, then repaint the in-focus slice; this splits a
+                // bar that straddles a focus edge into coloured and grey parts.
+                draw_list->AddRectFilled(ImVec2(x0, y_bar), ImVec2(x1, y1),
+                                         grey_colors[i % 2], 1.5f);
+                float in_left  = std::max(x0, focus_left);
+                float in_right = std::min(x1, focus_right);
+                if(in_right > in_left)
+                {
+                    // Round only the corners meeting the bar's real edges so the
+                    // split stays flush with the greyed part.
+                    ImDrawFlags corners = ImDrawFlags_RoundCornersNone;
+                    if(in_left <= x0 && in_right >= x1)
+                    {
+                        corners = ImDrawFlags_RoundCornersAll;
+                    }
+                    else if(in_left <= x0)
+                    {
+                        corners = ImDrawFlags_RoundCornersLeft;
+                    }
+                    else if(in_right >= x1)
+                    {
+                        corners = ImDrawFlags_RoundCornersRight;
+                    }
+                    draw_list->AddRectFilled(ImVec2(in_left, y_bar), ImVec2(in_right, y1),
+                                             bar_colors[i % 2], 1.5f, corners);
+                }
+            }
+            else
+            {
+                draw_list->AddRectFilled(ImVec2(x0, y_bar), ImVec2(x1, y1),
+                                         bar_colors[i % 2], 1.5f);
+            }
         }
     }
-    // Draw view range overlays and labels
-    float view_start_frac =
-        static_cast<float>(m_tpt->GetViewTimeOffsetNs() / m_tpt->GetRangeX());
-    float view_end_frac = static_cast<float>(
-        (m_tpt->GetViewTimeOffsetNs() + m_tpt->GetVWidth()) / m_tpt->GetRangeX());
-    view_start_frac = std::clamp(view_start_frac, 0.0f, 1.0f);
-    view_end_frac   = std::clamp(view_end_frac, 0.0f, 1.0f);
 
-    float x_view_start = bars_pos.x + view_start_frac * bars_width;
-    float x_view_end   = bars_pos.x + view_end_frac * bars_width;
-    float y0           = bars_pos.y;
-    float y1           = bars_pos.y + bars_height;
-
+    // View-range boundary lines and labels (over the greyed bars).
     // Left overlay
-    if(x_view_start > bars_pos.x)
+    if(x_view_start > graph_origin_x)
     {
-        draw_list->AddRectFilled(ImVec2(bars_pos.x, y0), ImVec2(x_view_start, y1),
+        draw_list->AddRectFilled(ImVec2(graph_origin_x, y0), ImVec2(x_view_start, y1),
                                  m_settings.GetColor(Colors::kGridColor));
         draw_list->AddLine(ImVec2(x_view_start, y0), ImVec2(x_view_start, y1),
                            m_settings.GetColor(Colors::kRulerTextColor), 1.0f);
@@ -2650,17 +3062,17 @@ TimelineView::RenderHistogram()
             m_tpt->NormalizeTime(m_tpt->GetVMinX()), time_format, true);
         ImVec2 vmin_label_size = ImGui::CalcTextSize(vmin_label.c_str());
         float  vmin_label_x =
-            std::max(x_view_start - vmin_label_size.x - 6, bars_pos.x + 2);
+            std::max(x_view_start - vmin_label_size.x - 6, graph_origin_x + 2);
         ImVec2 vmin_label_pos(vmin_label_x, y0);
         draw_list->AddText(vmin_label_pos, m_settings.GetColor(Colors::kRulerTextColor),
                            vmin_label.c_str());
     }
 
     // Right overlay
-    if(x_view_end < bars_pos.x + bars_width)
+    if(x_view_end < graph_origin_x + bars_width)
     {
         draw_list->AddRectFilled(ImVec2(x_view_end, y0),
-                                 ImVec2(bars_pos.x + bars_width, y1),
+                                 ImVec2(graph_origin_x + bars_width, y1),
                                  m_settings.GetColor(Colors::kGridColor));
         draw_list->AddLine(ImVec2(x_view_end, y0), ImVec2(x_view_end, y1),
                            m_settings.GetColor(Colors::kRulerTextColor), 1.0f);
@@ -2668,10 +3080,34 @@ TimelineView::RenderHistogram()
             m_tpt->NormalizeTime(m_tpt->GetVMaxX()), time_format, true);
         ImVec2 vmax_label_size = ImGui::CalcTextSize(vmax_label.c_str());
         float  vmax_label_x =
-            std::min(x_view_end + 6, bars_pos.x + bars_width - vmax_label_size.x - 2);
+            std::min(x_view_end + 6, graph_origin_x + bars_width - vmax_label_size.x - 2);
         ImVec2 vmax_label_pos(vmax_label_x, y0 + (bars_height - vmax_label_size.y));
         draw_list->AddText(vmax_label_pos, m_settings.GetColor(Colors::kRulerTextColor),
                            vmax_label.c_str());
+    }
+
+    // Selection markers: two bars showing where the time-range selection sits in
+    // the full trace, independent of the view greyscale.
+    if(m_timeline_selection)
+    {
+        double sel_start_ns = 0.0;
+        double sel_end_ns   = 0.0;
+        if(m_timeline_selection->GetSelectedTimeRange(sel_start_ns, sel_end_ns) &&
+           m_tpt->GetRangeX() > 0.0)
+        {
+            const float x_sel_start = overview_x(m_tpt->NormalizeTime(sel_start_ns));
+            const float x_sel_end   = overview_x(m_tpt->NormalizeTime(sel_end_ns));
+            if(x_sel_end > x_sel_start)
+            {
+                draw_list->AddRectFilled(ImVec2(x_sel_start, y0), ImVec2(x_sel_end, y1),
+                                         m_settings.GetColor(Colors::kSelection));
+            }
+            const ImU32 marker_color = m_settings.GetColor(Colors::kSelectionBorder);
+            draw_list->AddLine(ImVec2(x_sel_start, y0), ImVec2(x_sel_start, y1),
+                               marker_color, OVERVIEW_MARKER_THICKNESS);
+            draw_list->AddLine(ImVec2(x_sel_end, y0), ImVec2(x_sel_end, y1), marker_color,
+                               OVERVIEW_MARKER_THICKNESS);
+        }
     }
 
     if(!m_resize_activity && !m_stop_user_interaction && ImGui::IsWindowHovered())
@@ -2713,8 +3149,8 @@ TimelineView::RenderHistogram()
     ImGui::PopStyleColor();
 
     // Check if mouse is inside histogram area
-    window_pos         = ImGui::GetWindowPos();
-    ImGuiIO& io        = ImGui::GetIO();
+    ImVec2   window_pos = ImGui::GetWindowPos();
+    ImGuiIO& io         = ImGui::GetIO();
     bool     mouse_any = io.MouseDown[ImGuiMouseButton_Left] ||
                      io.MouseDown[ImGuiMouseButton_Right] ||
                      io.MouseDown[ImGuiMouseButton_Middle];
@@ -3418,48 +3854,83 @@ TimelineViewProjectSettings::~TimelineViewProjectSettings() {}
 void
 TimelineViewProjectSettings::ToJson()
 {
-    const std::vector<TrackItem*>& tracks = *m_timeline_view.GetTracks();
-    for(int i = 0; i < tracks.size(); i++)
+    // Persist the remembered custom order (reusing the track "order" key) and the
+    // active sort mode. The custom order is the only ordering that can't be derived
+    // at load; default and topology are recomputed.
+    const std::vector<uint64_t>& custom = m_timeline_view.m_custom_order;
+    for(size_t i = 0; i < custom.size(); i++)
     {
-        uint64_t id = tracks[i]->GetID();
-        m_settings_json[JSON_KEY_GROUP_TIMELINE][JSON_KEY_TIMELINE_TRACK_ORDER][i] = id;
+        m_settings_json[JSON_KEY_GROUP_TIMELINE][JSON_KEY_TIMELINE_TRACK_ORDER][i] =
+            custom[i];
     }
+    m_settings_json[JSON_KEY_GROUP_TIMELINE][JSON_KEY_TIMELINE_SORT_MODE] =
+        static_cast<int>(m_timeline_view.m_sort_mode);
 }
 
 bool
 TimelineViewProjectSettings::Valid() const
 {
-    bool valid = false;
-    if(m_settings_json[JSON_KEY_GROUP_TIMELINE][JSON_KEY_TIMELINE_TRACK_ORDER].isArray())
+    jt::Json& node =
+        m_settings_json[JSON_KEY_GROUP_TIMELINE][JSON_KEY_TIMELINE_TRACK_ORDER];
+    if(!node.isArray())
     {
-        std::vector<jt::Json>& track_order =
-            m_settings_json[JSON_KEY_GROUP_TIMELINE][JSON_KEY_TIMELINE_TRACK_ORDER]
-                .getArray();
-        if(track_order.size() == m_timeline_view.m_tracks->size())
+        return false;
+    }
+    std::vector<jt::Json>& order = node.getArray();
+    if(order.size() != m_timeline_view.m_tracks->size())
+    {
+        return false;
+    }
+    // Require a real permutation (every id known, no duplicates) so the apply path
+    // can trust the stored order without re-checking it.
+    const TimelineModel& tlm =
+        m_timeline_view.m_data_provider.DataModel().GetTimeline();
+    std::unordered_set<uint64_t> seen;
+    for(jt::Json& id : order)
+    {
+        if(!id.isLong())
         {
-            int valid_count = 0;
-            for(jt::Json& track_id : track_order)
-            {
-                if(track_id.isLong())
-                {
-                    valid_count++;
-                }
-                else
-                {
-                    break;
-                }
-            }
-            valid = (valid_count == track_order.size());
+            return false;
+        }
+        const uint64_t track_id = static_cast<uint64_t>(id.getLong());
+        if(!tlm.GetTrack(track_id) || !seen.insert(track_id).second)
+        {
+            return false;
         }
     }
-    return valid;
+    return true;
 }
 
-uint64_t
-TimelineViewProjectSettings::TrackID(int index) const
+bool
+TimelineViewProjectSettings::HasSortSettings() const
 {
-    return m_settings_json[JSON_KEY_GROUP_TIMELINE][JSON_KEY_TIMELINE_TRACK_ORDER][index]
-        .getLong();
+    return m_settings_json[JSON_KEY_GROUP_TIMELINE][JSON_KEY_TIMELINE_SORT_MODE].isLong();
+}
+
+int
+TimelineViewProjectSettings::SortMode() const
+{
+    return static_cast<int>(
+        m_settings_json[JSON_KEY_GROUP_TIMELINE][JSON_KEY_TIMELINE_SORT_MODE].getLong());
+}
+
+std::vector<uint64_t>
+TimelineViewProjectSettings::CustomOrder() const
+{
+    std::vector<uint64_t> order;
+    jt::Json&             node =
+        m_settings_json[JSON_KEY_GROUP_TIMELINE][JSON_KEY_TIMELINE_TRACK_ORDER];
+    if(node.isArray())
+    {
+        for(jt::Json& id : node.getArray())
+        {
+            if(id.isLong())
+            {
+                order.push_back(static_cast<uint64_t>(id.getLong()));
+            }
+        }
+    }
+    return order;
 }
 
 LoadingTimer::LoadingTimer(uint64_t delay)

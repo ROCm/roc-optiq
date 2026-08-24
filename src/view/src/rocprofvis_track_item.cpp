@@ -539,7 +539,7 @@ TrackItem::RenderMetaArea()
 
     if(meta_area_hovered && ImGui::IsMouseClicked(ImGuiMouseButton_Right))
     {
-        m_timeline_track_options.InitContextMenu(*this);
+        m_timeline_track_options.InitTrackOptionsSubmenu(*this);
         ImGui::OpenPopup(TRACK_COPY_MENU_POPUP_NAME);
     }
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, style.WindowPadding);
@@ -569,12 +569,22 @@ TrackItem::RenderMetaArea()
         ImGui::Separator();
         if(IconBeginMenu(ICON_GEAR, "Track Options"))
         {
-            m_timeline_track_options.RenderContextMenu();
+            m_timeline_track_options.RenderTrackOptionsSubmenu();
             ImGui::EndMenu();
+        }
+        ImGui::Separator();
+        // Also expose sorting here so it stays reachable when the header is hidden.
+        if(m_timeline_track_options.ShowTrackSortSubmenu())
+        {
+            if(IconBeginMenu(ICON_LIST, "Sort Tracks"))
+            {
+                m_timeline_track_options.RenderTrackSortSubmenu();
+                ImGui::EndMenu();
+            }
         }
         // Restore hidden tracks without needing the topology side bar. The entry
         // is only shown when something is actually hidden.
-        if(m_timeline_track_options.HasHiddenTracks())
+        if(m_timeline_track_options.ShowHiddenTracksSubmenu())
         {
             if(IconBeginMenu(ICON_EYE, "Show Hidden Tracks"))
             {
@@ -1186,6 +1196,7 @@ Pill::Pill(bool shown, bool active)
 : m_show_pill_label(shown)
 , m_active(active)
 , m_accent_color(std::nullopt)
+, m_text_color(std::nullopt)
 , m_sizing(kCompact)
 , m_compact_label("")
 , m_ext_label("")
@@ -1234,6 +1245,12 @@ void
 Pill::SetAccentColor(size_t accent_color)
 {
     m_accent_color = accent_color;
+}
+
+void
+Pill::SetTextColor(std::optional<Colors> color)
+{
+    m_text_color = color;
 }
 
 void
@@ -1305,7 +1322,9 @@ Pill::Render(const ImVec2& pos, SettingsManager& settings, Sizing sizing)
     {
         draw_list->AddRectFilled(win_pos + pos, win_pos + pos + Size(),
                                  settings.GetColor(Colors::kBgFrame), m_height * 0.5f);
-        ImGui::PushStyleColor(ImGuiCol_Text, settings.GetColor(Colors::kTextMain));
+        ImGui::PushStyleColor(
+            ImGuiCol_Text,
+            settings.GetColor(m_text_color.value_or(Colors::kTextMain)));
     }
     else
     {

@@ -286,47 +286,51 @@ DataProvider::SetRequestProgressUpdateCallback(
 }
 
 bool
-DataProvider::SetGraphIndex(uint64_t track_id, uint64_t index)
+DataProvider::SetTrackIndex(const std::vector<uint64_t>& ordered_track_ids)
 {
-    rocprofvis_result_t result = kRocProfVisResultUnknownError;
-    TimelineModel& tlm = m_model.GetTimeline();
-    uint64_t num_graphs = tlm.GetTrackCount();
-
-    if(m_state == ProviderState::kReady)
+    if(m_state != ProviderState::kReady)
     {
-        ROCPROFVIS_ASSERT(index < num_graphs);
-        const TrackInfo* metadata = tlm.GetTrack(track_id);
-        ROCPROFVIS_ASSERT(metadata);
-        result = rocprofvis_controller_set_object(m_trace_timeline,
-                                                  kRPVControllerTimelineGraphIndexed,
-                                                  index, metadata->graph_handle);
-        if(result == kRocProfVisResultSuccess)
-        {
-            rocprofvis_handle_t* graph = nullptr;
-            for(int i = 0; i < num_graphs; i++)
-            {
-                result = rocprofvis_controller_get_object(
-                    m_trace_timeline, kRPVControllerTimelineGraphIndexed, i, &graph);
-                if(result == kRocProfVisResultSuccess && graph)
-                {
-                    uint64_t id = 0;
-                    result      = rocprofvis_controller_get_uint64(
-                        graph, kRPVControllerGraphId, 0, &id);
-                    if(result == kRocProfVisResultSuccess)
-                    {
-                        metadata = tlm.GetTrack(id);
-                        ROCPROFVIS_ASSERT(metadata && metadata->graph_handle == graph);
-                        tlm.GetMutableTrackMetadata()[id].index = i;
-                    }
-                }
-            }
-            if(m_track_metadata_changed_callback)
-            {
-                m_track_metadata_changed_callback(m_model.GetTraceFilePath());
-            }
-        }
+        return false;
     }
-    return (result == kRocProfVisResultSuccess);
+
+    TimelineModel&                           tlm      = m_model.GetTimeline();
+    std::unordered_map<uint64_t, TrackInfo>& metadata = tlm.GetMutableTrackMetadata();
+
+    // Require a full permutation so no two tracks share an index.
+    if(ordered_track_ids.size() != metadata.size())
+    {
+        spdlog::warn("SetTrackIndex ignored: expected {} track ids, got {}",
+                     metadata.size(), ordered_track_ids.size());
+        return false;
+    }
+
+    // Resolve every id up front so a bad order can't leave the metadata
+    // half-reindexed (some tracks new indexes, the rest stale). We only mutate
+    // once the whole order is confirmed valid.
+    std::vector<TrackInfo*> ordered_metadata;
+    ordered_metadata.reserve(ordered_track_ids.size());
+    for(uint64_t track_id : ordered_track_ids)
+    {
+        auto it = metadata.find(track_id);
+        if(it == metadata.end())
+        {
+            spdlog::warn("SetTrackIndex ignored: unknown track id {}", track_id);
+            return false;
+        }
+        ordered_metadata.push_back(&it->second);
+    }
+
+    uint64_t index = 0;
+    for(TrackInfo* info : ordered_metadata)
+    {
+        info->index = index++;
+    }
+
+    if(m_track_metadata_changed_callback)
+    {
+        m_track_metadata_changed_callback(m_model.GetTraceFilePath());
+    }
+    return true;
 }
 
 bool

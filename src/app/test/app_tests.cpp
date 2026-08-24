@@ -176,6 +176,42 @@ struct ShowSummaryGuard
         SettingsManager::GetInstance().GetAppWindowSettings().show_summary = prev;
     }
 };
+
+// Restores the tab set and active tab that existed when constructed, so a test
+// that opens extra dbs (sys_shared_db_open_dedups_and_switches) doesn't leave
+// stray tabs and a changed current project for the next test. The kTabClosed
+// event that frees the project is queued, so the destructor yields to drain it.
+struct TabStateGuard
+{
+    ImGuiTestContext* ctx;
+    TabContainer*     tc;
+    std::vector<std::string> start_ids;
+    std::string              start_active_id;
+
+    TabStateGuard(ImGuiTestContext* c, TabContainer* t) : ctx(c), tc(t)
+    {
+        if(!tc) return;
+        for(const TabItem* tab : tc->GetTabs()) start_ids.push_back(tab->m_id);
+        const TabItem* active = tc->GetActiveTab();
+        if(active) start_active_id = active->m_id;
+    }
+
+    ~TabStateGuard()
+    {
+        if(!tc) return;
+        std::vector<std::string> to_close;
+        for(const TabItem* tab : tc->GetTabs())
+        {
+            bool was_present = false;
+            for(const std::string& id : start_ids)
+                if(id == tab->m_id) { was_present = true; break; }
+            if(!was_present) to_close.push_back(tab->m_id);
+        }
+        for(const std::string& id : to_close) tc->RemoveTab(id);
+        if(!start_active_id.empty()) tc->SetActiveTab(start_active_id);
+        if(ctx) ctx->Yield(3);
+    }
+};
 }  // namespace
 
 void RegisterAppTests(ImGuiTestEngine* e)
@@ -1519,6 +1555,10 @@ void RegisterAppTests(ImGuiTestEngine* e)
         IM_CHECK(app != nullptr);
         if (app == nullptr) return;
 
+        // Construct before opening anything so the guard captures the startup
+        // tab set as the state to restore.
+        TabStateGuard tab_guard(ctx, AppWindowTestPeer{*app}.TabContainerPtr());
+
         // Sample dbs resolve relative to the working directory (the repo root).
         // Skip if either is missing.
         auto resolve_sample = [](const char* rel) -> std::string {
@@ -1584,7 +1624,7 @@ void RegisterAppTests(ImGuiTestEngine* e)
         IM_CHECK(app->GetProject(rpv_path.string()) == nullptr);
 
         // Remove the temp .rpv and dismiss the dedup popup so it can't cover
-        // later tests. The tabs stay open (no safe close hook).
+        // later tests. tab_guard restores the tab set on scope exit.
         std::error_code ec;
         fs::remove(rpv_path, ec);
         ctx->PopupCloseAll();

@@ -104,6 +104,8 @@ public:
 
     void SetFileDialogPreference(rocprofvis_view_file_dialog_preference_t pref);
 
+    friend struct AppWindowTestPeer;
+
 private:
     enum class ProviderCleanupReason
     {

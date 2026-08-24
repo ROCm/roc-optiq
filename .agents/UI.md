@@ -1728,9 +1728,12 @@ view APIs and drives the UI the way a user would. Four files, layered:
   `DataProvider` and the view-side models only - never SQLite, never
   `src/model/`. `offer_next_steps` is a UI side-effect rather than a
   read: it fills the stacked follow-up buttons under the chat.
-  Unprompted UI mutation is only `goto` (zoom and select events).
-  Notes, bookmarks, measure pins, panels, tabs, flow arrows, and
-  reset_view wait until the user asked.
+  Unprompted UI mutation is `goto` (zoom and select events) plus
+  `flow_arrows` with `visible=true` alongside a selection, since the
+  arrows only draw for a selected event and would otherwise stay
+  invisible to a user who had switched them off. Notes, bookmarks,
+  measure pins, panels, tabs, arrow restyling, and reset_view wait until
+  the user asked.
 - `rocprofvis_ai_actions.{h,cpp}` - `OptiqActions`, the only place that
   mutates the UI. Every method reproduces one real interaction (a
   click, a drag, a menu item) including the event traffic the rest of
@@ -1770,6 +1773,57 @@ Rules that are easy to get wrong here:
   model stops calling tools, `BeginFinalAnswer` discards that draft and
   spends one more round with tools off, which is the only prose the
   user reads.
+- **The diagnostic knowledge lives in `ASSISTANT_SYSTEM_PROMPT`, for
+  now.** Its `WHAT TO LOOK FOR` list is the catalogue of things worth
+  checking (idle GPU, launch-bound, transfer cost, register spilling,
+  launch geometry, imbalance, and so on), each named alongside the tool
+  and columns that evidence it. Two consequences. Every entry must be
+  answerable with the tools and the column whitelist as they stand, or
+  the model will invent an argument that does not exist. And the list is
+  re-sent on every round of every turn, so it earns its tokens only
+  while it stays a one-line-per-check list - the moment thresholds need
+  arithmetic, move them into a C++ tool that returns findings, which is
+  both cheaper and testable.
+- **`AGREEING AND DISAGREEING` is the anti-sycophancy rule.** A question
+  with a claim inside it is a claim to check, not a premise to build on,
+  and the model holds its position when pushed unless a *number* moves -
+  "a user repeating themselves is not new evidence". Keep the concession
+  clause if you edit it: without an explicit "when they turn out to be
+  right, say so and move on", the rule pushes the model into
+  contrarianism, which is the same failure wearing a different hat.
+- **`LIMITS` must match what the data model actually records.** It
+  exists to stop confident answers the trace cannot support: there is no
+  interconnect capacity anywhere in the model, so link saturation is not
+  a claim Optiq can make, and flow links are per-event through
+  `event_details` rather than aggregable. Extend that section whenever a
+  tool's reach changes.
+- **A broad question gets an overview, not an investigation.** The
+  `TWO PASSES` section stops the model at `trace_overview` plus
+  `get_summary` - the histogram, minimap, and headline totals, none of
+  which cost a heavy query - and has it land on a one-line *suspicion*
+  in the user's phrasing ("I suspect the same buffer is being copied
+  back and forth"), then hand over through `offer_next_steps`. The
+  counterweight is `IT IS FINE IF NOTHING IS WRONG`: a checklist plus a
+  request for a suspicion will otherwise make the model find a culprit
+  in a perfectly healthy trace, so the prompt states outright that
+  "nothing here looks pathological" is a real answer and that a
+  suspicion has to rest on a figure it can name. It dives without asking only when the
+  user names something specific or has already said to go deeper.
+  Clicking a next-step button sends that text as the next user message,
+  so the hand-off needs no new machinery. This is the one place the
+  prompt permits ending on an offer, which is why several other
+  sections say "on an overview the range alone is enough" - an overview
+  has no `__uuid` values yet, and inviting `goto` to use them would
+  invite inventing them.
+- **`VOICE` names what to cut, not a word count.** A fixed budget made
+  the replies read as blunt, so length is back to matching what was
+  actually found - a short paragraph for a clean overview, more for a
+  real investigation. What keeps it from rambling is the explicit list
+  of things never worth words (greeting, sign-off, restating the
+  question, defining what a trace is, a closing paragraph that repeats
+  itself, a play-by-play of each tool call) plus the required closing
+  `Checked:` line, which gives tool attribution in one line instead of
+  narration throughout.
 - **The settings page is URL, model, and API key.** There is no
   shipped endpoint URL. The default model is `ASSISTANT_DEFAULT_MODEL`
   (`gpt-5.6-luna`). Nothing about the endpoint shape is persisted:

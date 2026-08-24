@@ -38,6 +38,110 @@ ToLower(const std::string& value)
     return lowered;
 }
 
+// Reduces a panel name to lowercase letters and digits, so "Mini Map",
+// "mini-map", and "minimap" all arrive as the same key.
+std::string
+NormalizePanelKey(const std::string& name)
+{
+    std::string key;
+    key.reserve(name.size());
+    for(char c : name)
+    {
+        if(std::isalnum(static_cast<unsigned char>(c)) != 0)
+        {
+            key += static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+        }
+    }
+    return key;
+}
+
+// Drops the filler users wrap a panel name in - "the topology view", "details
+// panel" - leaving the alias itself. Worth trying only after an exact match has
+// failed, otherwise "overview" would be cut down to "over".
+std::string
+StripPanelFiller(const std::string& key)
+{
+    static const std::string k_prefixes[] = { "the", "my" };
+    static const std::string k_suffixes[] = { "view", "panel", "window", "pane",
+                                              "tab",  "area",  "section" };
+    std::string stripped = key;
+    for(const std::string& prefix : k_prefixes)
+    {
+        if(stripped.size() > prefix.size() &&
+           stripped.compare(0, prefix.size(), prefix) == 0)
+        {
+            stripped.erase(0, prefix.size());
+            break;
+        }
+    }
+    for(const std::string& suffix : k_suffixes)
+    {
+        if(stripped.size() > suffix.size() &&
+           stripped.compare(stripped.size() - suffix.size(), suffix.size(),
+                            suffix) == 0)
+        {
+            stripped.erase(stripped.size() - suffix.size());
+            break;
+        }
+    }
+    return stripped;
+}
+
+// Every name a user might reach for, keyed on the normalized form. No alias is
+// repeated across panels, so a name can never resolve two ways.
+OptiqPanel
+PanelFromKey(const std::string& key)
+{
+    if(key == "minimap" || key == "map" || key == "overview" ||
+       key == "birdseye" || key == "thumbnail")
+    {
+        return OptiqPanel::kMinimap;
+    }
+    if(key == "histogram" || key == "activity" || key == "activitybar" ||
+       key == "activitygraph" || key == "activitychart" || key == "density")
+    {
+        return OptiqPanel::kHistogram;
+    }
+    // The tall tree down the left, which users call the sidebar, the navbar,
+    // the track list, or just "the tracks".
+    if(key == "topology" || key == "sidebar" || key == "side" ||
+       key == "leftsidebar" || key == "left" || key == "navbar" || key == "nav" ||
+       key == "navigation" || key == "navigator" || key == "tree" ||
+       key == "hierarchy" || key == "track" || key == "tracks" ||
+       key == "tracklist" || key == "project" || key == "projecttree")
+    {
+        return OptiqPanel::kTopology;
+    }
+    if(key == "details" || key == "detail" || key == "advanced" ||
+       key == "analysis" || key == "table" || key == "tables" ||
+       key == "eventtable" || key == "eventtables" || key == "bottom" ||
+       key == "inspector")
+    {
+        return OptiqPanel::kDetails;
+    }
+    if(key == "summary" || key == "stats" || key == "statistics")
+    {
+        return OptiqPanel::kSummary;
+    }
+    if(key == "log" || key == "logs" || key == "logviewer" || key == "console" ||
+       key == "output" || key == "messages")
+    {
+        return OptiqPanel::kLogViewer;
+    }
+    if(key == "toolbar" || key == "tools" || key == "topbar" || key == "top" ||
+       key == "buttons" || key == "controls")
+    {
+        return OptiqPanel::kToolbar;
+    }
+    if(key == "annotations" || key == "annotation" || key == "notes" ||
+       key == "note" || key == "sticky" || key == "stickynote" ||
+       key == "stickynotes" || key == "comments")
+    {
+        return OptiqPanel::kAnnotations;
+    }
+    return OptiqPanel::kUnknown;
+}
+
 }  // namespace
 
 // Binds to one trace's view objects. Any of them may be null.
@@ -54,46 +158,15 @@ OptiqActions::OptiqActions(DataProvider*      data_provider,
 OptiqPanel
 OptiqActions::PanelFromName(const std::string& name)
 {
-    const std::string key = ToLower(name);
-
-    if(key == "minimap" || key == "mini-map" || key == "map" || key == "overview")
+    const std::string key   = NormalizePanelKey(name);
+    const OptiqPanel  exact = PanelFromKey(key);
+    if(exact != OptiqPanel::kUnknown)
     {
-        return OptiqPanel::kMinimap;
+        return exact;
     }
-    if(key == "histogram" || key == "activity" || key == "activity bar")
-    {
-        return OptiqPanel::kHistogram;
-    }
-    // The topology panel is the tall tree on the left, which users call the
-    // navbar, the sidebar, or just "the tracks".
-    if(key == "topology" || key == "sidebar" || key == "tracks" || key == "navbar" ||
-       key == "nav" || key == "navigation" || key == "tree" || key == "left" ||
-       key == "left panel" || key == "project")
-    {
-        return OptiqPanel::kTopology;
-    }
-    if(key == "details" || key == "advanced" || key == "tables" || key == "bottom" ||
-       key == "analysis" || key == "event table")
-    {
-        return OptiqPanel::kDetails;
-    }
-    if(key == "summary" || key == "stats")
-    {
-        return OptiqPanel::kSummary;
-    }
-    if(key == "log" || key == "logs" || key == "logviewer" || key == "log viewer")
-    {
-        return OptiqPanel::kLogViewer;
-    }
-    if(key == "toolbar" || key == "tools" || key == "top bar")
-    {
-        return OptiqPanel::kToolbar;
-    }
-    if(key == "annotations" || key == "notes" || key == "sticky notes")
-    {
-        return OptiqPanel::kAnnotations;
-    }
-    return OptiqPanel::kUnknown;
+    // Users rarely name a panel bare: "close the topology view" and "hide the
+    // details panel" both carry a word we do not care about.
+    return PanelFromKey(StripPanelFiller(key));
 }
 
 // The canonical name of a panel, for reporting back what was changed.
@@ -118,8 +191,12 @@ OptiqActions::PanelName(OptiqPanel panel)
 std::string
 OptiqActions::PanelNameList()
 {
-    return "minimap, histogram, topology (the left navbar/tree), details, summary, "
-           "log, toolbar, annotations";
+    return "minimap (map, overview), histogram (activity), topology (sidebar, "
+           "navbar, tree, tracks, left panel), details (analysis, tables, event "
+           "table, bottom), summary (stats), log (console, output), toolbar (top "
+           "bar), annotations (notes, sticky notes). Whatever the user called it "
+           "is fine: matching ignores case, spacing, and trailing words like "
+           "\"view\" or \"panel\"";
 }
 
 // Opens or closes a panel, the same as ticking its View-menu item.

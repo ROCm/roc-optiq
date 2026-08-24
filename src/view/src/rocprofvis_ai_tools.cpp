@@ -1640,10 +1640,13 @@ BuildAssistantToolsJson()
              "by hand.");
 
     AddTool(tools, 5, "goto",
-            "Point the UI at what you are talking about: zoom the timeline to a "
-            "range and select the events behind your claim. Call this on your own "
-            "whenever you name a window or an outlier. Do not use it to pin notes "
-            "or change other UI.",
+            "Point the UI at what you are talking about: move the timeline to a "
+            "range, highlight the specific events behind your claim, and expand "
+            "the first one's connecting arrows. Call this on your own whenever you "
+            "name a window or an outlier, so the user sees exactly what you saw. "
+            "A range on its own only scrolls the view - pass event_uuid and "
+            "track_id, or nothing gets highlighted and no arrows appear. Do not "
+            "use it to pin notes or change other UI.",
             goto_params);
 
     jt::Json track_events_params = ObjectParams();
@@ -1767,8 +1770,11 @@ BuildAssistantToolsJson()
     flow_params["properties"]["style"]["enum"] = MakeStringEnum({ "fan", "chain" });
     AddTool(tools, 14, "flow_arrows",
             "Show, hide, or restyle the arrows that connect an event to the events "
-            "it launched or waited on. Only call this when the user asked you to "
-            "change the arrows. Selecting an event with goto already expands them.",
+            "it launched or waited on. Selecting an event with goto expands that "
+            "event's arrows, but only while arrows are switched on, so pair this "
+            "with goto using visible=true whenever you select an event - the user "
+            "may have turned them off. Wait to be asked only before restyling them "
+            "or switching them off.",
             flow_params);
 
     jt::Json note_params = ObjectParams();

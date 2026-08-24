@@ -64,7 +64,9 @@ public:
     bool IsPanelVisible(OptiqPanel panel, bool& visible_out) const;
 
     // Accepts what a user would call the panel, not just its canonical name:
-    // "navbar" and "tree" both mean topology.
+    // "navbar" and "tree" both mean topology. Case, spacing and punctuation are
+    // ignored, and so is trailing filler, so "the Topology view" lands as well.
+    // Every alias is unique across panels, so a name never resolves two ways.
     static OptiqPanel  PanelFromName(const std::string& name);
     static const char* PanelName(OptiqPanel panel);
     static std::string PanelNameList();

@@ -1,11 +1,19 @@
-## Optiq 1.0.0
+# Changelog for ROCm Optiq
 
-### Features and Improvements
+Documentation for rocSPARSE is available at [https://rocm.docs.amd.com/projects/roc-optiq/en/latest/](https://rocm.docs.amd.com/projects/roc-optiq/en/latest/)
 
-**Timeline and navigation**
+## ROCm Optiq 1.0.0
+
+### Added
+
+#### Features and Improvements
+
+##### Timeline and navigation
+
 - Zoom-to-fit for measurements and time-range selections: right-click the timeline and choose "Zoom to Measurement" or "Zoom to Time Range Selection" to fit that span to the timeline width, with the markers landing on the left and right edges.
 
-**Tracks and topology**
+##### Tracks and topology
+
 - Color-code tracks and the sidebar topology by node for easier multi-node navigation.
 - Improve how Stream nodes are display in the sidebar topology tree.
 - "Reveal in topology" right-click action on a track.
@@ -15,25 +23,28 @@
 - Display incremental Y-axis scale ticks for counter tracks when expanded.
 - Display unrounded/untruncated track statistics in Track Details tab.
 
-**Annotations**
+##### Annotations
+
 - Annotation UX enhancements: lock, go-to-anchor, cross-highlight, text wrapping, and placement fixes.
 
-**Compute profiling**
+##### Compute profiling
+
 - Roofline single-click filtering for kernels, memory levels, and bandwidth peaks.
 - Roofline line-thickness preference.
 
-**Rendering and performance**
+##### Rendering and performance
+
 - Added a RenderScheduler to drive lazy-render wake-ups.
 - Adopted ImGui's built-in DPI handling, replacing the previous custom solution.
 
-### Experimental (not yet released)
+##### Experimental (not yet released)
 
 These features are in progress and available for preview only (build from src); behavior and UI are subject to change.
 
 - **Profiler launch**: launch the ROCm profiler locally or on a remote host, with remote file access/browsing and an SSH-based remote profiling workflow (redesigned remote profile panels and profiler launcher UI).
 - **New trace formats**: load Perfetto and Chrome (JSON) traces.
 
-### Fixes
+### Resolved Issues
 
 - Fixed inconsistent kernel highlight color in the compute summary view.
 - Fixed welcome-page links firing through overlaying modal dialogs (links are now real ImGui buttons that respect hover ownership).
@@ -42,7 +53,6 @@ These features are in progress and available for preview only (build from src); 
 - Fixed data-flow arrow starting from level zero on `.rpd` traces.
 - Fixed the Systems multi-node summary window showing data only for the first node in the `.yaml`.
 - Fixed loading workload Speed-of-Light for compute schema < 1.3.0; query builders now report and skip unsupported queries.
-- JobSystem fixes.
 
 ## Optiq Beta 0.5.0
 

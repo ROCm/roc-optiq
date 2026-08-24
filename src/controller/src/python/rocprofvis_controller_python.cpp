@@ -33,7 +33,11 @@ struct EventObject
     uint64_t  id;
     double    start;
     double    end;
+    uint64_t  level;
     PyObject* name;
+    PyObject* category;
+    // Counter reading for samples, Py_None for interval events.
+    PyObject* value;
 };
 
 struct TrackObject
@@ -387,15 +391,15 @@ copy_event(rocprofvis_handle_t* entry, uint64_t track_type)
     {
         return nullptr;
     }
-    event->id    = 0;
-    event->start = 0.0;
-    event->end   = 0.0;
-    event->name  = PyUnicode_FromString("");
-    if(!event->name)
-    {
-        Py_DECREF(event);
-        return nullptr;
-    }
+    // PyObject_New does not zero the payload, so null the owned references
+    // before any path that can decref a partially built event.
+    event->id       = 0;
+    event->start    = 0.0;
+    event->end      = 0.0;
+    event->level    = 0;
+    event->name     = nullptr;
+    event->category = nullptr;
+    event->value    = nullptr;
     if(track_type == kRPVControllerTrackTypeEvents)
     {
         rocprofvis_controller_get_uint64(entry, kRPVControllerEventId, 0, &event->id);
@@ -403,23 +407,29 @@ copy_event(rocprofvis_handle_t* entry, uint64_t track_type)
                                          &event->start);
         rocprofvis_controller_get_double(entry, kRPVControllerEventEndTimestamp, 0,
                                          &event->end);
-        Py_DECREF(event->name);
-        event->name = py_handle_string(entry, kRPVControllerEventName);
-        if(!event->name)
-        {
-            event->name = PyUnicode_FromString("");
-        }
+        rocprofvis_controller_get_uint64(entry, kRPVControllerEventLevel, 0,
+                                         &event->level);
+        event->name     = py_handle_string(entry, kRPVControllerEventName);
+        event->category = py_handle_string(entry, kRPVControllerEventCategory);
+        Py_INCREF(Py_None);
+        event->value = Py_None;
     }
     else
     {
+        double sample_value = 0.0;
         rocprofvis_controller_get_uint64(entry, kRPVControllerSampleId, 0, &event->id);
         rocprofvis_controller_get_double(entry, kRPVControllerSampleTimestamp, 0,
                                          &event->start);
         event->end = event->start;
         rocprofvis_controller_get_double(entry, kRPVControllerSampleEndTimestamp, 0,
                                          &event->end);
+        rocprofvis_controller_get_double(entry, kRPVControllerSampleValue, 0,
+                                         &sample_value);
+        event->name     = PyUnicode_FromString("");
+        event->category = PyUnicode_FromString("");
+        event->value    = PyFloat_FromDouble(sample_value);
     }
-    if(!event->name)
+    if(!event->name || !event->category || !event->value)
     {
         Py_DECREF(event);
         return nullptr;
@@ -560,6 +570,8 @@ void
 event_dealloc(EventObject* self)
 {
     Py_XDECREF(self->name);
+    Py_XDECREF(self->category);
+    Py_XDECREF(self->value);
     Py_TYPE(self)->tp_free(reinterpret_cast<PyObject*>(self));
 }
 
@@ -588,12 +600,38 @@ event_get_name(EventObject* self, void*)
     return self->name;
 }
 
+PyObject*
+event_get_level(EventObject* self, void*)
+{
+    return PyLong_FromUnsignedLongLong(self->level);
+}
+
+PyObject*
+event_get_category(EventObject* self, void*)
+{
+    Py_INCREF(self->category);
+    return self->category;
+}
+
+PyObject*
+event_get_value(EventObject* self, void*)
+{
+    Py_INCREF(self->value);
+    return self->value;
+}
+
 PyGetSetDef g_event_getset[] = {
     {"id", reinterpret_cast<getter>(event_get_id), nullptr, "Event id", nullptr},
     {"start", reinterpret_cast<getter>(event_get_start), nullptr, "Start timestamp",
      nullptr},
     {"end", reinterpret_cast<getter>(event_get_end), nullptr, "End timestamp", nullptr},
     {"name", reinterpret_cast<getter>(event_get_name), nullptr, "Event name", nullptr},
+    {"level", reinterpret_cast<getter>(event_get_level), nullptr,
+     "Nesting depth, 0 for samples", nullptr},
+    {"category", reinterpret_cast<getter>(event_get_category), nullptr, "Event category",
+     nullptr},
+    {"value", reinterpret_cast<getter>(event_get_value), nullptr,
+     "Sample value, None for interval events", nullptr},
     {nullptr, nullptr, nullptr, nullptr, nullptr}};
 
 PyType_Slot g_event_slots[] = {{Py_tp_dealloc, reinterpret_cast<void*>(event_dealloc)},

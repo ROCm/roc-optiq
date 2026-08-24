@@ -332,6 +332,81 @@ TEST_CASE("Script fetches events and measures spacing")
     rocprofvis_controller_free(controller);
 }
 
+TEST_CASE("Script events expose level, category and sample value")
+{
+    rocprofvis_controller_t* controller = load_sample_controller();
+    REQUIRE(controller);
+
+    // Interval events report a numeric level, a string category and no
+    // counter reading. Samples report the reading and no category.
+    char const* source =
+        "levels = 'none'\n"
+        "categories = 'none'\n"
+        "event_value = 'none'\n"
+        "sample_value = 'none'\n"
+        "for t in optiq.trace.tracks:\n"
+        "    if t.type == optiq.TRACK_TYPE_EVENTS and t.num_entries > 0:\n"
+        "        events = t.events()\n"
+        "        if events:\n"
+        "            levels = str(max(e.level for e in events))\n"
+        "            categories = str(all(isinstance(e.category, str) for e in events))\n"
+        "            event_value = str(events[0].value is None)\n"
+        "            break\n"
+        "for t in optiq.trace.tracks:\n"
+        "    if t.type == optiq.TRACK_TYPE_SAMPLES and t.num_entries > 0:\n"
+        "        samples = t.events()\n"
+        "        if samples:\n"
+        "            sample_value = str(isinstance(samples[0].value, float))\n"
+        "            break\n"
+        "optiq.result.text(levels)\n"
+        "optiq.result.text(categories)\n"
+        "optiq.result.text(event_value)\n"
+        "optiq.result.text(sample_value)\n";
+
+    rocprofvis_controller_future_t*        future = rocprofvis_controller_future_alloc();
+    rocprofvis_controller_script_result_t* result = nullptr;
+    REQUIRE(future);
+
+    rocprofvis_result_t error =
+        rocprofvis_script_execute_async(controller, source, nullptr, future, &result);
+    REQUIRE(error == kRocProfVisResultSuccess);
+    REQUIRE(wait_for_script(future) == kRocProfVisResultSuccess);
+
+    uint64_t future_result = kRocProfVisResultUnknownError;
+    error = rocprofvis_controller_get_uint64(future, kRPVControllerFutureResult, 0,
+                                             &future_result);
+    REQUIRE(error == kRocProfVisResultSuccess);
+    REQUIRE(future_result == kRocProfVisResultSuccess);
+
+    std::string text = get_handle_string(result, kRPVControllerScriptResultText);
+    std::vector<std::string> lines;
+    size_t                   start = 0;
+    while(start <= text.size())
+    {
+        size_t split = text.find('\n', start);
+        if(split == std::string::npos)
+        {
+            lines.push_back(text.substr(start));
+            break;
+        }
+        lines.push_back(text.substr(start, split - start));
+        start = split + 1;
+    }
+    REQUIRE(lines.size() == 4);
+    // Max level is trace dependent, so only require that it parsed.
+    REQUIRE(std::stoull(lines[0]) < 256);
+    REQUIRE(lines[1] == "True");
+    REQUIRE(lines[2] == "True");
+    if(lines[3] != "none")
+    {
+        REQUIRE(lines[3] == "True");
+    }
+
+    rocprofvis_script_result_free(result);
+    rocprofvis_controller_future_free(future);
+    rocprofvis_controller_free(controller);
+}
+
 TEST_CASE("Script table.fetch does not use the UI event table")
 {
     rocprofvis_controller_t* controller = load_sample_controller();

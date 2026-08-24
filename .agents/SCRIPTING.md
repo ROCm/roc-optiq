@@ -204,6 +204,15 @@ Property getters wrap `get_uint64` / `get_double` / `get_string` /
 `get_object` for a small set of names (`track.id`, `event.start`,
 …). Raw property ids can remain an escape hatch.
 
+`Event` is a **copy**, not a live handle: `id`, `start`, `end`, `level`,
+`name`, `category`, `value`. `copy_event` fills it from the event
+property bank for event tracks and the sample bank for sample tracks,
+so `level` / `category` are inert on samples and `value` is `None` on
+interval events. `PyObject_New` does not zero the payload — null every
+owned reference before a path that can decref a partially built event.
+Extend `copy_event` (not the fetch loop) when adding fields; user-facing
+docs live in [`PYTHON.md`](../PYTHON.md).
+
 ### 5.1 Async from Python (looks sync, polls internally)
 
 The ABI is async. The Python thread is the waiter, like the UI thread.

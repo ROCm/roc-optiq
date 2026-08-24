@@ -104,7 +104,9 @@ The call blocks until the controller fetch finishes. Keyboard interrupt
 / cancel is checked between wait slices.
 
 ```python
+track = optiq.selection.tracks[0]
 events = track.events(start=optiq.selection.start, end=optiq.selection.end)
+optiq.result.text(f'{len(events)} events on {track.name}')
 ```
 
 ---
@@ -120,6 +122,9 @@ handle.
 | `start` | `float` | Start timestamp. |
 | `end` | `float` | End timestamp. |
 | `name` | `str` | Event name. Empty for samples. |
+| `level` | `int` | Nesting depth on the track. `0` for top-level events and for samples. |
+| `category` | `str` | Event category. Empty for samples. |
+| `value` | `float` or `None` | Counter reading for samples. `None` for interval events. |
 
 Duration is `e.end - e.start`. Gap between consecutive events on a
 track is `events[i].start - events[i - 1].end`.
@@ -160,8 +165,12 @@ Keyword arguments:
 At least one track of the matching type is required. Otherwise
 `RuntimeError` is raised.
 
-Each row is a dict keyed by **column header** strings. Cell values are
-`int`, `float`, `str`, or `None` depending on the column type.
+Each row is a dict keyed by **column header** strings. The column
+headers come from the generated query, so they vary by table type and
+trace source. Inspect `sorted(rows[0].keys())` to see them.
+
+System-trace tables declare every column as text, so cell values arrive
+as `str`. Convert before doing math (`float(row['Duration'])`).
 
 ```python
 table = optiq.table()
@@ -226,7 +235,9 @@ optiq.result.text(str(len(optiq.trace.tracks)))
 
 ### Test even spacing on the first selected event track
 
-This is the default script in the editor.
+This is the default script in the editor. On a track with nested
+events, add `if e.level == 0` when collecting events so children do
+not distort the gaps.
 
 ```python
 track = None
@@ -251,6 +262,178 @@ else:
         optiq.result.text('max_dev=' + str(max_dev))
         optiq.result.text('even' if even else 'uneven')
 ```
+
+### Find idle gaps (which track is starved, and where)
+
+The most direct bottleneck question: how much of the selected window is
+a track actually busy, and where are the biggest holes? Overlapping and
+nested events are merged first, so nesting does not inflate busy time.
+Tracks are ranked by utilization, lowest first.
+
+```python
+TOP_GAPS = 5
+
+def merge_spans(events):
+    spans = sorted((e.start, e.end) for e in events if e.end > e.start)
+    merged = []
+    for start, end in spans:
+        if merged and start <= merged[-1][1]:
+            if end > merged[-1][1]:
+                merged[-1] = (merged[-1][0], end)
+        else:
+            merged.append((start, end))
+    return merged
+
+win_start = optiq.selection.start
+win_end = optiq.selection.end
+window = win_end - win_start
+
+rows = []
+for track in optiq.selection.tracks:
+    if track.type != optiq.TRACK_TYPE_EVENTS or track.num_entries == 0:
+        continue
+    events = track.events(start=win_start, end=win_end)
+    if not events:
+        continue
+    merged = merge_spans(events)
+    busy = sum(end - start for start, end in merged)
+    util = (100.0 * busy / window) if window > 0 else 0.0
+
+    gaps = []
+    cursor = win_start
+    for start, end in merged:
+        if start > cursor:
+            gaps.append((start - cursor, cursor))
+        if end > cursor:
+            cursor = end
+    if win_end > cursor:
+        gaps.append((win_end - cursor, cursor))
+    gaps.sort(reverse=True)
+
+    rows.append((util, window - busy, len(events), track, gaps))
+
+rows.sort(key=lambda r: r[0])
+
+optiq.result.text('util%,idle,events,track')
+for util, idle, count, track, gaps in rows:
+    label = track.sub_name or track.name
+    optiq.result.text(f'{util:6.2f},{idle:.0f},{count},{label}')
+
+if rows:
+    util, idle, count, track, gaps = rows[0]
+    optiq.result.text('')
+    optiq.result.text(f'largest gaps on {track.sub_name or track.name}:')
+    for width, at in gaps[:TOP_GAPS]:
+        share = (100.0 * width / window) if window > 0 else 0.0
+        optiq.result.text(f'  {width:.0f} ({share:.1f}% of window) starting {at:.0f}')
+```
+
+A GPU queue track sitting at low utilization with a few very large gaps
+usually means the host is not submitting fast enough. Many small gaps
+instead point at per-dispatch launch overhead or synchronization.
+
+### Tallest flame chart (deepest call stack)
+
+`Event.level` is the nesting depth the timeline uses to stack flame
+bars, so the deepest stack is just the highest level. Reconstructing
+the enclosing frames means walking back for the last event at each
+lower level that still contains the deepest one.
+
+```python
+best_level = -1
+best_track = None
+best_event = None
+best_events = []
+
+for track in optiq.selection.tracks:
+    if track.type != optiq.TRACK_TYPE_EVENTS or track.num_entries == 0:
+        continue
+    events = track.events(start=optiq.selection.start, end=optiq.selection.end)
+    for event in events:
+        if event.level > best_level:
+            best_level = event.level
+            best_track = track
+            best_event = event
+            best_events = events
+
+if best_track is None:
+    optiq.result.text('No event tracks in the selection')
+else:
+    label = best_track.sub_name or best_track.name
+    optiq.result.text(f'deepest stack: {best_level + 1} frames on {label}')
+
+    # Enclosing frames: one event per level that spans the deepest one.
+    frames = {}
+    for event in best_events:
+        if event.level < best_event.level:
+            if event.start <= best_event.start and event.end >= best_event.end:
+                frames[event.level] = event
+    frames[best_event.level] = best_event
+
+    for level in sorted(frames):
+        frame = frames[level]
+        indent = '  ' * level
+        optiq.result.text(f'{level:3d} {indent}{frame.name} '
+                          f'({frame.end - frame.start:.0f})')
+```
+
+### Counter statistics from a sample track
+
+Sample tracks expose the counter reading as `Event.value`.
+
+```python
+for track in optiq.selection.tracks:
+    if track.type != optiq.TRACK_TYPE_SAMPLES or track.num_entries == 0:
+        continue
+    values = [s.value for s in track.events(start=optiq.selection.start,
+                                            end=optiq.selection.end)
+              if s.value is not None]
+    if not values:
+        continue
+    label = track.sub_name or track.name
+    optiq.result.text(f'{label}: n={len(values)} min={min(values):.3f} '
+                      f'mean={statistics.mean(values):.3f} '
+                      f'max={max(values):.3f}')
+```
+
+### Hottest event names and duration outliers
+
+Ranks names by total time and flags names whose slowest instance is far
+from their own mean, which is where run-to-run stalls show up.
+
+```python
+durations = {}
+for track in optiq.selection.tracks:
+    if track.type != optiq.TRACK_TYPE_EVENTS:
+        continue
+    for event in track.events(start=optiq.selection.start,
+                              end=optiq.selection.end):
+        durations.setdefault(event.name, []).append(event.end - event.start)
+
+ranked = sorted(durations.items(), key=lambda kv: sum(kv[1]), reverse=True)
+
+optiq.result.text('total,count,mean,stdev,max,name')
+for name, values in ranked[:15]:
+    mean = statistics.mean(values)
+    stdev = statistics.pstdev(values) if len(values) > 1 else 0.0
+    optiq.result.text(f'{sum(values):.0f},{len(values)},{mean:.0f},'
+                      f'{stdev:.0f},{max(values):.0f},{name}')
+
+optiq.result.text('')
+optiq.result.text('outliers (max > mean + 3 stdev, count >= 5):')
+for name, values in ranked:
+    if len(values) < 5:
+        continue
+    mean = statistics.mean(values)
+    stdev = statistics.pstdev(values)
+    if stdev > 0.0 and max(values) > mean + 3.0 * stdev:
+        optiq.result.text(f'  {name}: max={max(values):.0f} mean={mean:.0f}')
+```
+
+On a nested track this totals **wall time including children**, so
+parents dominate the ranking. Use `Event.level` to bill self time
+instead: subtract each event's direct children (the next-deeper events
+it contains) from its own span before aggregating by name.
 
 ### Histogram of event count per track
 
@@ -317,6 +500,9 @@ error message on failure.
 
 - Publishing a result table or plot back to the view (`optiq.result`
   is text-only).
+- Flow arrows / correlation between CPU submit and GPU execute, so
+  launch-to-execute latency cannot be measured from a script yet.
+- Callstack entries and extended (argument) data on an event.
 - Compute-trace (`rocprof-compute`) queries via `optiq.table()`.
 - `numpy` and other third-party packages.
 - Writing files, launching processes, or talking to a system Python

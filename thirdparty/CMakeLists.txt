@@ -4,6 +4,9 @@
 find_package(Vulkan REQUIRED)
 set(VULKAN_LIB "Vulkan::Vulkan")
 
+set(PROFILER_HUB_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+set(PROFILER_HUB_BUILD_BENCHMARKS OFF CACHE BOOL "" FORCE)
+add_subdirectory(profiler-hub)
 add_subdirectory(spdlog)
 add_subdirectory(catch2)
 

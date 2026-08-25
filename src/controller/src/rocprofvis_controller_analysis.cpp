@@ -281,6 +281,7 @@ rocprofvis_result_t Analysis::AsyncFetchQueueUtilization(SystemTrace* trace, Tra
             }
             future->RemoveDependentFuture(object2wait);
             rocprofvis_db_future_free(object2wait);
+            result = kRocProfVisResultSuccess;
         }
         return future->IsCancelled() ? kRocProfVisResultCancelled : result;
     }, future));
@@ -381,6 +382,7 @@ rocprofvis_result_t Analysis::AsyncFetchCounterStatistics(SystemTrace* trace, Tr
             }
             future->RemoveDependentFuture(object2wait);
             rocprofvis_db_future_free(object2wait);
+            result = kRocProfVisResultSuccess;
         }
         return future->IsCancelled() ? kRocProfVisResultCancelled : result;
     }, future));

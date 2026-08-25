@@ -4,6 +4,7 @@
 #include "rocprofvis_ai_actions.h"
 
 #include <cctype>
+#include <cmath>
 #include <memory>
 
 #include "compute/rocprofvis_compute_selection.h"
@@ -25,17 +26,23 @@ namespace View
 namespace
 {
 
-// Lowercases a copy, so panel and tab names can be matched as the user typed them.
-std::string
-ToLower(const std::string& value)
+// True when a time range is one we can act on.
+//
+// The finiteness test is the point of this function. Every comparison against
+// NaN is false, so a bare "end_ns <= start_ns" guard lets NaN and infinity
+// straight through, and these numbers come from the model.
+bool
+IsUsableRange(double start_ns, double end_ns)
 {
-    std::string lowered;
-    lowered.reserve(value.size());
-    for(char c : value)
-    {
-        lowered += static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-    }
-    return lowered;
+    return std::isfinite(start_ns) && std::isfinite(end_ns) && end_ns > start_ns;
+}
+
+// True when a single point in time is one we can act on. Same reasoning as
+// IsUsableRange, for the arguments that are an instant rather than a span.
+bool
+IsUsableInstant(double time_ns)
+{
+    return std::isfinite(time_ns);
 }
 
 // Reduces a panel name to lowercase letters and digits, so "Mini Map",
@@ -199,10 +206,69 @@ OptiqActions::PanelNameList()
            "\"view\" or \"panel\"";
 }
 
+// Where a panel's visibility actually lives, which is what decides whether a
+// live TraceView is needed to change it.
+//
+//  - kTraceViewOnly       drawn by a TraceView widget, nothing persisted.
+//  - kSettingAndTraceView persisted in AppWindowSettings and mirrored on a
+//                         widget that was seeded from it at construction, so
+//                         both have to move: the setting is what survives a
+//                         restart, the widget is what redraws now.
+//  - kSettingOnly         persisted only; whoever draws it re-reads the flag
+//                         every frame, so there is no widget to miss.
+//  - kLogViewer           its own singleton, independent of any trace.
+//
+// The first two need a TraceView. A compute trace has none, so those panels
+// report failure there rather than moving a global setting that would then
+// surprise the next system trace the user opens.
+namespace
+{
+
+enum class PanelBacking
+{
+    kTraceViewOnly,
+    kSettingAndTraceView,
+    kSettingOnly,
+    kLogViewer
+};
+
+PanelBacking
+BackingOf(OptiqPanel panel)
+{
+    switch(panel)
+    {
+        case OptiqPanel::kMinimap:
+        case OptiqPanel::kAnnotations: return PanelBacking::kTraceViewOnly;
+        case OptiqPanel::kHistogram:
+        case OptiqPanel::kTopology:
+        case OptiqPanel::kDetails:     return PanelBacking::kSettingAndTraceView;
+        case OptiqPanel::kSummary:
+        case OptiqPanel::kToolbar:     return PanelBacking::kSettingOnly;
+        case OptiqPanel::kLogViewer:   return PanelBacking::kLogViewer;
+        default:                       return PanelBacking::kSettingOnly;
+    }
+}
+
+// True when this panel cannot be touched without a TraceView to touch.
+bool
+NeedsTraceView(OptiqPanel panel)
+{
+    const PanelBacking backing = BackingOf(panel);
+    return backing == PanelBacking::kTraceViewOnly ||
+           backing == PanelBacking::kSettingAndTraceView;
+}
+
+}  // namespace
+
 // Opens or closes a panel, the same as ticking its View-menu item.
 bool
 OptiqActions::ShowPanel(OptiqPanel panel, bool visible)
 {
+    if(NeedsTraceView(panel) && m_trace_view == nullptr)
+    {
+        return false;
+    }
+
     AppWindowSettings& app_settings =
         SettingsManager::GetInstance().GetAppWindowSettings();
 
@@ -210,45 +276,34 @@ OptiqActions::ShowPanel(OptiqPanel panel, bool visible)
     {
         case OptiqPanel::kMinimap:
         {
-            if(m_trace_view == nullptr)
-            {
-                return false;
-            }
             m_trace_view->SetMinimapVisibility(visible);
+            return true;
+        }
+        case OptiqPanel::kAnnotations:
+        {
+            m_trace_view->SetAnnotationsVisible(visible);
             return true;
         }
         case OptiqPanel::kHistogram:
         {
-            // The layout item is seeded from the setting at construction, so
-            // both have to move for the change to stick and to show now.
             app_settings.show_histogram = visible;
-            if(m_trace_view != nullptr)
-            {
-                m_trace_view->SetHistogramVisibility(visible);
-            }
+            m_trace_view->SetHistogramVisibility(visible);
             return true;
         }
         case OptiqPanel::kTopology:
         {
             app_settings.show_sidebar = visible;
-            if(m_trace_view != nullptr)
-            {
-                m_trace_view->SetSidebarViewVisibility(visible);
-            }
+            m_trace_view->SetSidebarViewVisibility(visible);
             return true;
         }
         case OptiqPanel::kDetails:
         {
             app_settings.show_details_panel = visible;
-            if(m_trace_view != nullptr)
-            {
-                m_trace_view->SetAnalysisViewVisibility(visible);
-            }
+            m_trace_view->SetAnalysisViewVisibility(visible);
             return true;
         }
         case OptiqPanel::kSummary:
         {
-            // SummaryView re-reads this every frame, so the setting is enough.
             app_settings.show_summary = visible;
             return true;
         }
@@ -257,23 +312,14 @@ OptiqActions::ShowPanel(OptiqPanel panel, bool visible)
             app_settings.show_toolbar = visible;
             return true;
         }
-        case OptiqPanel::kAnnotations:
-        {
-            if(m_trace_view == nullptr)
-            {
-                return false;
-            }
-            m_trace_view->SetAnnotationsVisible(visible);
-            return true;
-        }
         case OptiqPanel::kLogViewer:
         {
-            bool* log_visible = LogViewer::GetInstance()->VisiblePtr();
-            if(log_visible == nullptr)
+            LogViewer* log_viewer = LogViewer::GetInstance();
+            if(log_viewer == nullptr)
             {
                 return false;
             }
-            *log_visible = visible;
+            *log_viewer->VisiblePtr() = visible;
             return true;
         }
         default: return false;
@@ -281,9 +327,16 @@ OptiqActions::ShowPanel(OptiqPanel panel, bool visible)
 }
 
 // Reads a panel's current visibility, so a tool can report it without toggling.
+// Fails wherever ShowPanel would, so the two never disagree about whether this
+// panel is reachable at all.
 bool
 OptiqActions::IsPanelVisible(OptiqPanel panel, bool& visible_out) const
 {
+    if(NeedsTraceView(panel) && m_trace_view == nullptr)
+    {
+        return false;
+    }
+
     const AppWindowSettings& app_settings =
         SettingsManager::GetInstance().GetAppWindowSettings();
 
@@ -291,37 +344,47 @@ OptiqActions::IsPanelVisible(OptiqPanel panel, bool& visible_out) const
     {
         case OptiqPanel::kMinimap:
         {
-            if(m_trace_view == nullptr)
-            {
-                return false;
-            }
             visible_out = m_trace_view->IsMinimapVisible();
             return true;
         }
-        case OptiqPanel::kHistogram: visible_out = app_settings.show_histogram; return true;
-        case OptiqPanel::kTopology:  visible_out = app_settings.show_sidebar; return true;
-        case OptiqPanel::kDetails:
-            visible_out = app_settings.show_details_panel;
-            return true;
-        case OptiqPanel::kSummary:   visible_out = app_settings.show_summary; return true;
-        case OptiqPanel::kToolbar:   visible_out = app_settings.show_toolbar; return true;
         case OptiqPanel::kAnnotations:
         {
-            if(m_trace_view == nullptr)
-            {
-                return false;
-            }
             visible_out = m_trace_view->AreAnnotationsVisible();
+            return true;
+        }
+        case OptiqPanel::kHistogram:
+        {
+            visible_out = app_settings.show_histogram;
+            return true;
+        }
+        case OptiqPanel::kTopology:
+        {
+            visible_out = app_settings.show_sidebar;
+            return true;
+        }
+        case OptiqPanel::kDetails:
+        {
+            visible_out = app_settings.show_details_panel;
+            return true;
+        }
+        case OptiqPanel::kSummary:
+        {
+            visible_out = app_settings.show_summary;
+            return true;
+        }
+        case OptiqPanel::kToolbar:
+        {
+            visible_out = app_settings.show_toolbar;
             return true;
         }
         case OptiqPanel::kLogViewer:
         {
-            const bool* log_visible = LogViewer::GetInstance()->VisiblePtr();
-            if(log_visible == nullptr)
+            LogViewer* log_viewer = LogViewer::GetInstance();
+            if(log_viewer == nullptr)
             {
                 return false;
             }
-            visible_out = *log_visible;
+            visible_out = *log_viewer->VisiblePtr();
             return true;
         }
         default: return false;
@@ -393,28 +456,17 @@ OptiqActions::SelectTab(const std::string& name)
         return false;
     }
 
-    // Match on the label the user sees, exact first then as a substring, so
-    // "transpose" finds "rocpd-transpose.db".
-    const std::string             needle    = ToLower(name);
+    // Matching by label, including the ambiguity rules, belongs to the
+    // container that owns the tabs; the details panel resolves its inner tabs
+    // through the same call.
     std::shared_ptr<TabContainer> container = app->GetTabContainer();
-    const std::vector<const TabItem*> tabs  = container->GetTabs();
-    for(const TabItem* tab : tabs)
+    const TabItem*                match    = container->FindTabByLabel(name);
+    if(match == nullptr)
     {
-        if(tab != nullptr && ToLower(tab->m_label) == needle)
-        {
-            container->SetActiveTab(tab->m_id);
-            return true;
-        }
+        return false;
     }
-    for(const TabItem* tab : tabs)
-    {
-        if(tab != nullptr && ToLower(tab->m_label).find(needle) != std::string::npos)
-        {
-            container->SetActiveTab(tab->m_id);
-            return true;
-        }
-    }
-    return false;
+    container->SetActiveTab(match->m_id);
+    return true;
 }
 
 // The details panel's inner tabs, by label.
@@ -519,7 +571,11 @@ OptiqActions::RemoveBookmark(int slot)
 bool
 OptiqActions::MeasureRange(double start_ns, double end_ns)
 {
-    return m_trace_view != nullptr && m_trace_view->MeasureRange(start_ns, end_ns);
+    if(m_trace_view == nullptr || !IsUsableRange(start_ns, end_ns))
+    {
+        return false;
+    }
+    return m_trace_view->MeasureRange(start_ns, end_ns);
 }
 
 // Takes the measurement pins back off the timeline.
@@ -538,7 +594,7 @@ OptiqActions::ClearMeasurement()
 bool
 OptiqActions::ZoomToRange(double start_ns, double end_ns)
 {
-    if(m_trace_view == nullptr || end_ns <= start_ns)
+    if(m_trace_view == nullptr || !IsUsableRange(start_ns, end_ns))
     {
         return false;
     }
@@ -551,7 +607,8 @@ bool
 OptiqActions::AddNote(double time_ns, const std::string& title, const std::string& text,
                       double v_min, double v_max, uint64_t track_id)
 {
-    if(m_trace_view == nullptr)
+    if(m_trace_view == nullptr || !IsUsableInstant(time_ns) ||
+       !IsUsableRange(v_min, v_max))
     {
         return false;
     }
@@ -570,7 +627,7 @@ OptiqActions::Notify(const std::string& message, bool is_warning)
 bool
 OptiqActions::SelectRange(double start_ns, double end_ns)
 {
-    if(!HasTimeline() || end_ns <= start_ns)
+    if(!HasTimeline() || !IsUsableRange(start_ns, end_ns))
     {
         return false;
     }
@@ -594,7 +651,9 @@ OptiqActions::ClearRange()
 bool
 OptiqActions::ShowRange(double start_ns, double end_ns)
 {
-    if(m_data_provider == nullptr || end_ns <= start_ns)
+    // The timeline is what listens for this event, so require it rather than
+    // just a data provider: a compute trace has the latter but not the former.
+    if(!HasTimeline() || !IsUsableRange(start_ns, end_ns))
     {
         return false;
     }
@@ -697,7 +756,10 @@ bool
 OptiqActions::NavigateToEvent(uint64_t track_id, uint64_t event_uuid, double start_ns,
                               double duration_ns)
 {
-    if(!HasTimeline())
+    // A zero-length event is real - an instantaneous marker - so only the sign
+    // and finiteness are checked here, not that the duration is positive.
+    if(!HasTimeline() || !IsUsableInstant(start_ns) ||
+       !IsUsableInstant(duration_ns) || duration_ns < 0.0)
     {
         return false;
     }

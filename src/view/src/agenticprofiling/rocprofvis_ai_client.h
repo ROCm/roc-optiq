@@ -64,10 +64,11 @@ struct AssistantChatResult
  *
  * The endpoint shape is inferred from the URL. A stock OpenAI base just gets
  * /chat/completions appended, names the model in the body, and sends the key as
- * Authorization: Bearer. An Azure-style base - which is what the AMD internal
- * gateway is - additionally takes the deployment from the Model field into the
- * path, and sends the key as Ocp-Apim-Subscription-Key. TLS is in-process
- * through cpp-httplib so the GUI never shells out to curl.
+ * Authorization: Bearer. An Azure-style base - Azure OpenAI itself, or an
+ * API-management gateway in front of it - additionally takes the deployment
+ * from the Model field into the path, and sends the key as
+ * Ocp-Apim-Subscription-Key. TLS is in-process through cpp-httplib so the GUI
+ * never shells out to curl.
  *
  * Send() blocks on a worker thread until the endpoint answers, which is minutes
  * if the server is wedged. Cancel() closes the socket out from under it, so the

@@ -4,6 +4,7 @@
 #pragma once
 
 #include "rocprofvis_ai_client.h"
+#include "rocprofvis_ai_tool_schema.h"
 #include "rocprofvis_ai_tools.h"
 #include "rocprofvis_widget.h"
 

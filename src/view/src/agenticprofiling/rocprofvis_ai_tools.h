@@ -3,6 +3,9 @@
 
 #pragma once
 
+// The tool set is described in rocprofvis_ai_tool_schema.h and the query
+// arguments are turned into SQL in rocprofvis_ai_tool_query.h; this header is
+// the executor that sits between them.
 #include "json.h"
 #include "model/rocprofvis_common_defs.h"
 #include "model/rocprofvis_tables_model.h"
@@ -103,14 +106,8 @@ std::vector<double> GetAssistantActivityBins(const AssistantToolContext& context
 std::vector<AssistantActivityRow> GetAssistantActivityRows(
     const AssistantToolContext& context, size_t bin_count, size_t max_rows);
 
-// The tool schema sent with every request. Thread-safe: reads no view state.
-jt::Json BuildAssistantToolsJson();
-
 // The short trace description the model sees before it asks anything.
 std::string BuildAssistantBriefing(const AssistantToolContext& context);
-
-// The line the panel shows under the transcript while a tool runs.
-std::string AssistantToolStatusLabel(const std::string& tool_name);
 
 // Runs one named tool. Returns finished content, or the requests to wait on.
 AssistantToolStartResult StartAssistantTool(const AssistantToolContext& context,

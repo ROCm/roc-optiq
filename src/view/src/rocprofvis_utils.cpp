@@ -845,3 +845,15 @@ RocProfVis::View::strip_ansi_for_display(std::string const& text)
     }
     return out;
 }
+
+std::string
+RocProfVis::View::to_lower_copy(const std::string& value)
+{
+    std::string lowered;
+    lowered.reserve(value.size());
+    for(char c : value)
+    {
+        lowered += static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    }
+    return lowered;
+}

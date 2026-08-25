@@ -28,6 +28,8 @@
 #include "widgets/rocprofvis_gui_helpers.h"
 #include "widgets/rocprofvis_notification_manager.h"
 
+#include <cmath>
+
 namespace RocProfVis
 {
 namespace View
@@ -44,6 +46,28 @@ constexpr ImVec2 ANNOTATION_DEFAULT_SIZE(260.0f, 120.0f);
 // Bookmark slots exposed in the toolbar dropdown.
 constexpr int BOOKMARK_MIN_SLOT = 0;
 constexpr int BOOKMARK_MAX_SLOT = 9;
+
+namespace
+{
+
+// Slots outside the dropdown's range are rejected everywhere, not just on save,
+// so a bad slot fails the same way whichever entry point it arrives through.
+bool
+IsValidBookmarkSlot(int slot)
+{
+    return slot >= BOOKMARK_MIN_SLOT && slot <= BOOKMARK_MAX_SLOT;
+}
+
+// True when a time range can be acted on. Non-finite values have to be caught
+// explicitly: comparing anything against NaN is false, so "end <= start" alone
+// would let a NaN through into the view transform.
+bool
+IsUsableTimeRange(double start_ns, double end_ns)
+{
+    return std::isfinite(start_ns) && std::isfinite(end_ns) && end_ns > start_ns;
+}
+
+}  // namespace
 
 TraceView::TraceView()
 : m_timeline_view(nullptr)
@@ -356,6 +380,9 @@ TraceView::DestroyView()
     m_sidebar_item->m_item       = nullptr;
     m_horizontal_split_container = nullptr;
     m_analysis_item->m_item      = nullptr;
+    // Dropped with the rest: the analysis-tab accessors below go through this
+    // pointer, and a detached view would answer them from a dead layout.
+    m_analysis_view              = nullptr;
     m_view_created               = false;
 }
 
@@ -809,7 +836,7 @@ TraceView::ListBookmarks() const
 bool
 TraceView::SaveBookmark(int slot)
 {
-    if(!m_timeline_view || slot < BOOKMARK_MIN_SLOT || slot > BOOKMARK_MAX_SLOT)
+    if(!m_timeline_view || !IsValidBookmarkSlot(slot))
     {
         return false;
     }
@@ -820,6 +847,10 @@ TraceView::SaveBookmark(int slot)
 bool
 TraceView::GotoBookmark(int slot)
 {
+    if(!IsValidBookmarkSlot(slot))
+    {
+        return false;
+    }
     const std::unordered_map<int, ViewCoords>::const_iterator it = m_bookmarks.find(slot);
     if(it == m_bookmarks.end() || !m_timeline_view)
     {
@@ -833,13 +864,13 @@ TraceView::GotoBookmark(int slot)
 bool
 TraceView::RemoveBookmark(int slot)
 {
-    return m_bookmarks.erase(slot) > 0;
+    return IsValidBookmarkSlot(slot) && m_bookmarks.erase(slot) > 0;
 }
 
 bool
 TraceView::MeasureRange(double start_ns, double end_ns)
 {
-    if(!m_measurement || end_ns <= start_ns)
+    if(!m_measurement || !IsUsableTimeRange(start_ns, end_ns))
     {
         return false;
     }
@@ -866,7 +897,7 @@ TraceView::ClearMeasurement()
 void
 TraceView::ZoomToRange(double start_ns, double end_ns)
 {
-    if(m_timeline_view && end_ns > start_ns)
+    if(m_timeline_view && IsUsableTimeRange(start_ns, end_ns))
     {
         m_timeline_view->SetViewableRangeNS(start_ns, end_ns);
     }
@@ -876,7 +907,7 @@ bool
 TraceView::AddNote(double time_ns, const std::string& title, const std::string& text,
                    double v_min, double v_max, uint64_t track_id)
 {
-    if(!m_annotations)
+    if(!m_annotations || !std::isfinite(time_ns) || !IsUsableTimeRange(v_min, v_max))
     {
         return false;
     }

@@ -124,23 +124,6 @@ AnalysisView::Render()
     m_tab_container->Render();
 }
 
-namespace
-{
-
-std::string
-ToLowerCopy(const std::string& value)
-{
-    std::string lowered;
-    lowered.reserve(value.size());
-    for(char c : value)
-    {
-        lowered += static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-    }
-    return lowered;
-}
-
-}  // namespace
-
 std::vector<std::string>
 AnalysisView::ListTabs()
 {
@@ -173,30 +156,17 @@ AnalysisView::ActiveTab()
 bool
 AnalysisView::SelectTab(const std::string& name)
 {
-    if(!m_tab_container || name.empty())
+    if(!m_tab_container)
     {
         return false;
     }
-
-    const std::string                 needle = ToLowerCopy(name);
-    const std::vector<const TabItem*> tabs   = m_tab_container->GetTabs();
-    for(const TabItem* tab : tabs)
+    const TabItem* match = m_tab_container->FindTabByLabel(name);
+    if(match == nullptr)
     {
-        if(tab != nullptr && ToLowerCopy(tab->m_label) == needle)
-        {
-            m_tab_container->SetActiveTab(tab->m_id);
-            return true;
-        }
+        return false;
     }
-    for(const TabItem* tab : tabs)
-    {
-        if(tab != nullptr && ToLowerCopy(tab->m_label).find(needle) != std::string::npos)
-        {
-            m_tab_container->SetActiveTab(tab->m_id);
-            return true;
-        }
-    }
-    return false;
+    m_tab_container->SetActiveTab(match->m_id);
+    return true;
 }
 
 void

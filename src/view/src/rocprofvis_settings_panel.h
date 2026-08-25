@@ -6,6 +6,9 @@
 #include "rocprofvis_hotkey_manager.h"
 #include "rocprofvis_settings_manager.h"
 
+#include <string>
+#include <vector>
+
 namespace RocProfVis
 {
 namespace View
@@ -43,6 +46,9 @@ private:
 #ifdef ROCPROFVIS_ENABLE_AGENTIC_PROFILING
     void RenderAssistantSettings();
     void ResetAssistantOptions();
+    // Writes the pending key edits to the credential store, or drops them.
+    void ApplyAssistantTokenEdits();
+    void DiscardAssistantTokenEdits();
     // Name of the saved endpoint, used to key its stored API key.
     std::string ActiveAssistantProviderName() const;
 #endif
@@ -69,9 +75,16 @@ private:
     bool           m_rebinding_primary = true;
     bool           m_hotkeys_changed   = false;
 
-    std::string m_assistant_token_draft;
-    bool        m_assistant_show_token     = false;
-    bool        m_assistant_clear_token    = false;
+#ifdef ROCPROFVIS_ENABLE_AGENTIC_PROFILING
+    // Key edits are held here and applied on OK, like every other page. The
+    // draft is the replacement key, and the orphan list names endpoints whose
+    // configuration Reset threw away - their saved keys have to go with them,
+    // or they linger in the credential store with nothing pointing at them.
+    std::string              m_assistant_token_draft;
+    std::vector<std::string> m_assistant_orphaned_providers;
+    bool                     m_assistant_show_token  = false;
+    bool                     m_assistant_clear_token = false;
+#endif
 };
 
 }  // namespace View

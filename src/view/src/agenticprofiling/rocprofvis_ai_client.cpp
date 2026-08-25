@@ -3,7 +3,7 @@
 
 #include "rocprofvis_ai_client.h"
 
-#include "rocprofvis_ai_tools.h"
+#include "rocprofvis_ai_tool_schema.h"
 
 // Vendored single-header library; it does not compile clean at /W4.
 #ifdef _MSC_VER
@@ -34,6 +34,7 @@ namespace
 
 constexpr int  ASSISTANT_CONNECT_TIMEOUT_SECONDS   = 15;
 constexpr int  ASSISTANT_HTTP_TIMEOUT_SECONDS      = 120;
+constexpr int  ASSISTANT_FIRST_REDIRECT_STATUS     = 300;
 constexpr int  ASSISTANT_FIRST_ERROR_STATUS        = 400;
 constexpr int  ASSISTANT_HTTP_NOT_FOUND            = 404;
 constexpr char ASSISTANT_JSON_CONTENT_TYPE[]       = "application/json";
@@ -43,7 +44,7 @@ constexpr char ASSISTANT_CHAT_COMPLETIONS_SUFFIX[] = "/chat/completions";
 constexpr char ASSISTANT_OPENAI_AUTH_HEADER[] = "Authorization";
 constexpr char ASSISTANT_OPENAI_AUTH_PREFIX[] = "Bearer ";
 
-// Azure OpenAI, which the AMD internal gateway fronts: the key is a
+// Azure OpenAI, and the API-management gateways that front it: the key is a
 // subscription key and the deployment is named in the path.
 constexpr char ASSISTANT_AZURE_AUTH_HEADER[]      = "Ocp-Apim-Subscription-Key";
 constexpr char ASSISTANT_AZURE_OPENAI_API_VERSION[] = "2024-09-01-preview";
@@ -66,6 +67,14 @@ constexpr char ASSISTANT_BAD_URL_ERROR[] =
 constexpr char ASSISTANT_MISSING_DEPLOYMENT_ERROR[] =
     "This Azure URL names the deployment in the path. Put the deployment id in "
     "the Model field.";
+constexpr char ASSISTANT_INSECURE_URL_ERROR[] =
+    "The assistant URL is plain http, which would put the API key on the wire "
+    "in clear text. Use https, or clear the key to talk to this endpoint "
+    "without one.";
+constexpr char ASSISTANT_REDIRECT_ERROR[] =
+    "The endpoint answered with a redirect, which is not followed because the "
+    "API key must not be handed to another host. Point the URL at the address "
+    "the endpoint actually serves.";
 
 // Which endpoint the URL implies. Everything that differs between them - the
 // path, the auth header, and the token-limit field - keys off this, so the two
@@ -232,6 +241,67 @@ SplitUrl(const std::string& url, std::string& origin_out, std::string& path_out)
     origin_out              = url.substr(0, path_start);
     path_out = (path_start == std::string::npos) ? "/" : url.substr(path_start);
     return true;
+}
+
+// Lowercased copy, so a scheme or host typed in capitals still matches.
+std::string
+ToLowerAscii(const std::string& value)
+{
+    std::string lowered;
+    lowered.reserve(value.size());
+    for(char c : value)
+    {
+        lowered += static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    }
+    return lowered;
+}
+
+// The host of an origin ("https://host:port"), with the port and any IPv6
+// brackets removed. Empty when the origin has no scheme separator.
+std::string
+HostFromOrigin(const std::string& origin)
+{
+    const std::string separator  = "://";
+    const size_t      scheme_end = origin.find(separator);
+    if(scheme_end == std::string::npos)
+    {
+        return std::string();
+    }
+
+    std::string host = origin.substr(scheme_end + separator.size());
+    if(!host.empty() && host.front() == '[')
+    {
+        // An IPv6 literal is bracketed, so the colons inside it are not a port.
+        const size_t close = host.find(']');
+        return (close == std::string::npos) ? host : host.substr(1, close - 1);
+    }
+
+    const size_t colon = host.find(':');
+    if(colon != std::string::npos)
+    {
+        host.resize(colon);
+    }
+    return host;
+}
+
+// True when the request never leaves this machine, which is what makes a plain
+// http endpoint - a local Ollama or llama.cpp server - safe to send a key to.
+bool
+OriginIsLoopback(const std::string& origin)
+{
+    const std::string host = ToLowerAscii(HostFromOrigin(origin));
+    return host == "localhost" || host == "::1" ||
+           host.compare(0, 4, "127.") == 0;
+}
+
+// Whether the API key may be sent to this origin. TLS always qualifies; plain
+// http only over loopback. Anything else would put the key on the wire in
+// clear text, so Send() refuses rather than leaking it.
+bool
+OriginMayCarryToken(const std::string& origin)
+{
+    return ToLowerAscii(origin).compare(0, 8, "https://") == 0 ||
+           OriginIsLoopback(origin);
 }
 
 // Reads one string field, or empty when it is missing or the wrong type.
@@ -605,6 +675,107 @@ ResponseError(int status, const std::string& body)
     return "The endpoint did not return JSON. Check the URL.";
 }
 
+// The URL with any query string elided. A user who pastes a key into the URL
+// would otherwise see it copied into the log and into error text.
+std::string
+LoggableUrl(const std::string& url)
+{
+    const size_t query_start = url.find('?');
+    if(query_start == std::string::npos)
+    {
+        return url;
+    }
+    return url.substr(0, query_start) + "?...";
+}
+
+// Where a request is going, once the configured base URL has been turned into
+// a concrete origin and path.
+struct ResolvedEndpoint
+{
+    EndpointFlavour flavour = EndpointFlavour::kOpenAi;
+    std::string     url;
+    std::string     origin;
+    std::string     path;
+};
+
+// Works out the address to post to and checks it is one we may use. Returns an
+// empty string on success, or the reason the request cannot go out.
+std::string
+ResolveEndpoint(const AssistantChatRequest& request, ResolvedEndpoint& endpoint_out)
+{
+    endpoint_out.flavour = FlavourFromUrl(request.endpoint_url);
+    endpoint_out.url =
+        ChatCompletionsUrl(request.endpoint_url, request.model, endpoint_out.flavour);
+    if(endpoint_out.url.empty())
+    {
+        return ASSISTANT_MISSING_DEPLOYMENT_ERROR;
+    }
+    if(!SplitUrl(endpoint_out.url, endpoint_out.origin, endpoint_out.path))
+    {
+        return ASSISTANT_BAD_URL_ERROR;
+    }
+    if(!request.api_token.empty() && !OriginMayCarryToken(endpoint_out.origin))
+    {
+        return ASSISTANT_INSECURE_URL_ERROR;
+    }
+    return std::string();
+}
+
+// The auth header this endpoint shape expects, or none when no key is set.
+httplib::Headers
+AuthHeaders(const AssistantChatRequest& request, EndpointFlavour flavour)
+{
+    httplib::Headers headers;
+    if(request.api_token.empty())
+    {
+        return headers;
+    }
+    if(flavour == EndpointFlavour::kAzure)
+    {
+        headers.emplace(ASSISTANT_AZURE_AUTH_HEADER, request.api_token);
+    }
+    else
+    {
+        headers.emplace(ASSISTANT_OPENAI_AUTH_HEADER,
+                        std::string(ASSISTANT_OPENAI_AUTH_PREFIX) + request.api_token);
+    }
+    return headers;
+}
+
+// Turns a response that did arrive into a reply or an error.
+void
+InterpretResponse(const httplib::Response& response, const std::string& url,
+                  bool allow_tool_calls, AssistantChatResult& result)
+{
+    if(response.status >= ASSISTANT_FIRST_REDIRECT_STATUS &&
+       response.status < ASSISTANT_FIRST_ERROR_STATUS)
+    {
+        result.error = ASSISTANT_REDIRECT_ERROR;
+        return;
+    }
+
+    std::pair<jt::Json::Status, jt::Json> parsed = jt::Json::parse(response.body);
+    if(parsed.first != jt::Json::success)
+    {
+        result.error = ResponseError(response.status, response.body);
+        spdlog::warn("Assistant response was not JSON (HTTP {}, {} bytes)",
+                     response.status, response.body.size());
+    }
+    else
+    {
+        ParseChatCompletion(parsed.second, allow_tool_calls, result);
+    }
+
+    // A 404 is nearly always the URL being shaped wrong, so name what we asked
+    // for. The query comes off first in case a key was pasted into it.
+    if(!result.error.empty() && response.status == ASSISTANT_HTTP_NOT_FOUND)
+    {
+        result.error.append(" Requested ");
+        result.error.append(LoggableUrl(url));
+        result.error.append(".");
+    }
+}
+
 }  // namespace
 
 // Posts the conversation and blocks until the endpoint answers.
@@ -624,24 +795,14 @@ AssistantChatCall::Send(const AssistantChatRequest& request)
         return result;
     }
 
-    const EndpointFlavour flavour = FlavourFromUrl(request.endpoint_url);
-    const std::string     url =
-        ChatCompletionsUrl(request.endpoint_url, request.model, flavour);
-    if(url.empty())
+    ResolvedEndpoint endpoint;
+    result.error = ResolveEndpoint(request, endpoint);
+    if(!result.error.empty())
     {
-        result.error = ASSISTANT_MISSING_DEPLOYMENT_ERROR;
         return result;
     }
 
-    std::string origin;
-    std::string path;
-    if(!SplitUrl(url, origin, path))
-    {
-        result.error = ASSISTANT_BAD_URL_ERROR;
-        return result;
-    }
-
-    httplib::Client client(origin);
+    httplib::Client client(endpoint.origin);
     if(!client.is_valid())
     {
         result.error = ASSISTANT_BAD_URL_ERROR;
@@ -650,27 +811,26 @@ AssistantChatCall::Send(const AssistantChatRequest& request)
     client.set_connection_timeout(ASSISTANT_CONNECT_TIMEOUT_SECONDS);
     client.set_read_timeout(ASSISTANT_HTTP_TIMEOUT_SECONDS);
     client.set_write_timeout(ASSISTANT_HTTP_TIMEOUT_SECONDS);
-    client.set_follow_location(true);
+    // Redirects are deliberately not followed. cpp-httplib drops only a fixed
+    // set of headers when a redirect crosses to another host, and the Azure
+    // subscription key is not one of them, so following one could hand the key
+    // to whatever host the redirect names. A chat endpoint has no reason to
+    // redirect, so refusing costs nothing and InterpretResponse says why.
+    client.set_follow_location(false);
 
-    httplib::Headers headers;
-    if(!request.api_token.empty())
-    {
-        const bool azure = flavour == EndpointFlavour::kAzure;
-        headers.emplace(azure ? ASSISTANT_AZURE_AUTH_HEADER
-                              : ASSISTANT_OPENAI_AUTH_HEADER,
-                        (azure ? "" : ASSISTANT_OPENAI_AUTH_PREFIX) +
-                            request.api_token);
-    }
+    const httplib::Headers headers = AuthHeaders(request, endpoint.flavour);
+    const std::string      body =
+        BuildRequestBody(request, endpoint.flavour).toString();
+    const std::string loggable = LoggableUrl(endpoint.url);
+    spdlog::info("Assistant POST {}", loggable);
 
-    const std::string body = BuildRequestBody(request, flavour).toString();
-    spdlog::info("Assistant POST {}", url);
     if(!Adopt(&client))
     {
         result.cancelled = true;
         return result;
     }
     const httplib::Result response =
-        client.Post(path, headers, body, ASSISTANT_JSON_CONTENT_TYPE);
+        client.Post(endpoint.path, headers, body, ASSISTANT_JSON_CONTENT_TYPE);
     Release();
 
     if(!response)
@@ -683,33 +843,12 @@ AssistantChatCall::Send(const AssistantChatRequest& request)
         }
         result.error =
             "HTTPS request failed (" + httplib::to_string(response.error()) + ").";
-        spdlog::warn("Assistant request to {} failed: {}", url,
+        spdlog::warn("Assistant request to {} failed: {}", loggable,
                      httplib::to_string(response.error()));
         return result;
     }
 
-    std::pair<jt::Json::Status, jt::Json> parsed = jt::Json::parse(response->body);
-    if(parsed.first != jt::Json::success)
-    {
-        result.error = ResponseError(response->status, response->body);
-        if(response->status == ASSISTANT_HTTP_NOT_FOUND)
-        {
-            result.error.append(" Requested ");
-            result.error.append(url);
-            result.error.append(".");
-        }
-        spdlog::warn("Assistant response was not JSON (HTTP {}, {} bytes)",
-                     response->status, response->body.size());
-        return result;
-    }
-
-    ParseChatCompletion(parsed.second, request.enable_tools, result);
-    if(!result.error.empty() && response->status == ASSISTANT_HTTP_NOT_FOUND)
-    {
-        result.error.append(" Requested ");
-        result.error.append(url);
-        result.error.append(".");
-    }
+    InterpretResponse(*response, endpoint.url, request.enable_tools, result);
     result.ok = result.error.empty();
     return result;
 }

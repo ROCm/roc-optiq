@@ -782,20 +782,24 @@ AppWindow::Render()
     {
 #ifdef ROCPROFVIS_ENABLE_AGENTIC_PROFILING
         // The assistant docks against the right edge, so the main view gets the
-        // remaining width. DockedWidth() is zero while the panel is closed.
+        // remaining width. DockedWidth() is zero while the panel is closed, and
+        // a zero width here means "all of it".
+        //
+        // The main view goes inside this child either way, open or closed.
+        // ImGui scopes widget ids by window, so entering the child only when
+        // the panel happened to be open would give every widget in the main
+        // view a different id in each case - and table column widths, tree
+        // expansion, and scroll positions would all reset each time the user
+        // toggled the panel.
         AssistantPanel* assistant  = AssistantPanel::GetInstance();
         const float     dock_width = assistant->DockedWidth();
+        ImGui::BeginChild("##main_view_area", ImVec2(-dock_width, 0.0f));
+        m_main_view->Render();
+        ImGui::EndChild();
         if(dock_width > 0.0f)
         {
-            ImGui::BeginChild("##main_view_area", ImVec2(-dock_width, 0.0f));
-            m_main_view->Render();
-            ImGui::EndChild();
             ImGui::SameLine(0.0f, 0.0f);
             assistant->RenderDocked();
-        }
-        else
-        {
-            m_main_view->Render();
         }
 #else
         m_main_view->Render();

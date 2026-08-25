@@ -385,6 +385,9 @@ public:
     bool GetAssistantToken(const std::string& provider_name, std::string& out_token) const;
     bool SetAssistantToken(const std::string& provider_name, const std::string& token);
     bool ClearAssistantToken(const std::string& provider_name);
+    // Names the endpoint that owns a key saved before endpoints had names.
+    // Called once on load; see the definition for why it is not a live lookup.
+    void MigrateLegacyAssistantToken();
 #endif
 
     // Constant for event height;

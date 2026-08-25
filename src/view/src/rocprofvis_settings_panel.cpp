@@ -46,8 +46,6 @@ SettingsPanel::SettingsPanel(SettingsManager& settings)
 , m_usersettings_initial(m_usersettings_default)
 , m_usersettings(settings.GetUserSettings())
 , m_pending_font_size_index(m_usersettings.display_settings.font_size_index)
-, m_assistant_show_token(false)
-, m_assistant_clear_token(false)
 {
 }
 
@@ -61,9 +59,10 @@ SettingsPanel::Show()
     m_usersettings_initial    = m_usersettings;
     m_usersettings_previous   = m_usersettings;
     m_pending_font_size_index = m_usersettings.display_settings.font_size_index;
-    m_assistant_token_draft.clear();
-    m_assistant_show_token  = false;
-    m_assistant_clear_token = false;
+#ifdef ROCPROFVIS_ENABLE_AGENTIC_PROFILING
+    DiscardAssistantTokenEdits();
+    m_assistant_show_token = false;
+#endif
 }
 
 void
@@ -209,25 +208,7 @@ SettingsPanel::Render()
                     m_hotkeys_changed = false;
                 }
 #ifdef ROCPROFVIS_ENABLE_AGENTIC_PROFILING
-                const std::string assistant_route = ActiveAssistantProviderName();
-                if(!m_usersettings.assistant.providers.empty() &&
-                   m_usersettings.assistant.active <
-                       m_usersettings.assistant.providers.size())
-                {
-                    ApplyAssistantEndpointDefaults(
-                        m_usersettings.assistant.providers[m_usersettings.assistant.active]);
-                }
-                if(m_assistant_clear_token)
-                {
-                    m_settings.ClearAssistantToken(assistant_route);
-                }
-                else if(!m_assistant_token_draft.empty())
-                {
-                    m_settings.SetAssistantToken(assistant_route,
-                                                 m_assistant_token_draft);
-                }
-                m_assistant_token_draft.clear();
-                m_assistant_clear_token = false;
+                ApplyAssistantTokenEdits();
 #endif
                 ImGui::CloseCurrentPopup();
             }
@@ -245,8 +226,7 @@ SettingsPanel::Render()
                 m_settings_changed = true;
                 m_should_open      = false;
 #ifdef ROCPROFVIS_ENABLE_AGENTIC_PROFILING
-                m_assistant_token_draft.clear();
-                m_assistant_clear_token = false;
+                DiscardAssistantTokenEdits();
 #endif
                 ImGui::CloseCurrentPopup();
             }
@@ -559,6 +539,45 @@ SettingsPanel::RenderAssistantSettings()
     }
 }
 
+// Commits the pending key edits. Called from OK, so nothing typed on this page
+// reaches the credential store until the user accepts the dialog.
+void
+SettingsPanel::ApplyAssistantTokenEdits()
+{
+    // Endpoints dropped by Reset go first: their keys have nothing pointing at
+    // them once the configuration is gone.
+    for(const std::string& orphan : m_assistant_orphaned_providers)
+    {
+        m_settings.ClearAssistantToken(orphan);
+    }
+
+    if(m_usersettings.assistant.active < m_usersettings.assistant.providers.size())
+    {
+        ApplyAssistantEndpointDefaults(
+            m_usersettings.assistant.providers[m_usersettings.assistant.active]);
+    }
+
+    const std::string provider_name = ActiveAssistantProviderName();
+    if(m_assistant_clear_token)
+    {
+        m_settings.ClearAssistantToken(provider_name);
+    }
+    else if(!m_assistant_token_draft.empty())
+    {
+        m_settings.SetAssistantToken(provider_name, m_assistant_token_draft);
+    }
+    DiscardAssistantTokenEdits();
+}
+
+// Throws away the pending key edits without touching the credential store.
+void
+SettingsPanel::DiscardAssistantTokenEdits()
+{
+    m_assistant_token_draft.clear();
+    m_assistant_orphaned_providers.clear();
+    m_assistant_clear_token = false;
+}
+
 // Name of the endpoint being edited, which is the key its token is stored under.
 std::string
 SettingsPanel::ActiveAssistantProviderName() const
@@ -571,15 +590,28 @@ SettingsPanel::ActiveAssistantProviderName() const
     return assistant.providers[assistant.active].name;
 }
 
-// Restores the default endpoint and drops the pending key edit.
+// Restores the default endpoint and drops the pending key edit. Endpoints that
+// disappear here are remembered so OK can delete their keys too, rather than
+// leaving entries in the credential store that nothing refers to any more.
 void
 SettingsPanel::ResetAssistantOptions()
 {
+    const AssistantProvider default_provider = MakeDefaultAssistantProvider();
+    for(const AssistantProvider& provider : m_usersettings.assistant.providers)
+    {
+        if(provider.name != default_provider.name)
+        {
+            m_assistant_orphaned_providers.push_back(provider.name);
+        }
+    }
+
     m_usersettings.assistant.providers.clear();
-    m_usersettings.assistant.providers.push_back(MakeDefaultAssistantProvider());
+    m_usersettings.assistant.providers.push_back(default_provider);
     m_usersettings.assistant.active = 0;
     m_assistant_token_draft.clear();
-    m_assistant_clear_token = false;
+    // The default endpoint is back to having nothing configured, so its key
+    // should go as well.
+    m_assistant_clear_token = true;
     m_settings_changed      = true;
 }
 #endif  // ROCPROFVIS_ENABLE_AGENTIC_PROFILING

@@ -24,10 +24,11 @@ constexpr const char* ID_COLUMN_NAME        = "__uuid";
 constexpr const char* EVENT_ID_COLUMN_NAME  = "id";
 constexpr const char* FOUND_ENTRIES_TEXT    = "Found %llu item(s) on %llu track(s)";
 
-constexpr const char* SHARED_APPLY_LABEL  = "Apply to Both";
-constexpr const char* GROUP_BY_NONE_LABEL = "-- None --";
+constexpr const char* SHARED_APPLY_LABEL    = "Apply to Both";
+constexpr const char* SHARED_GROUP_BY_LABEL = "Group by";
+constexpr const char* GROUP_BY_NONE_LABEL   = "-- None --";
 constexpr const char* SHARED_GROUP_BY_TOOLTIP =
-    "Aggregate both tables by a column, or leave as -- None --. Columns tagged "
+    "Group both tables by a column, or leave as -- None --. Columns tagged "
     "(A) or (B) exist on only that source and are not applied to the other.";
 constexpr float SHARED_LABEL_GAP    = 2.0f;
 constexpr float SHARED_COMBO_GLYPHS = 12.0f;
@@ -139,8 +140,8 @@ MultiTrackTable::RenderSharedFilterControls(const std::vector<std::string>& colu
     ImFont*           icon_font = m_settings.GetFontManager().GetFont(FontType::kIcon);
     const bool        grouping  = !m_pending_filter_options.group_by.empty();
 
-    const float label_col =
-        ImGui::CalcTextSize("Group by").x + style.ItemSpacing.x * SHARED_LABEL_GAP;
+    const float label_col = ImGui::CalcTextSize(SHARED_GROUP_BY_LABEL).x +
+                            style.ItemSpacing.x * SHARED_LABEL_GAP;
     const float apply_width =
         ImGui::CalcTextSize(SHARED_APPLY_LABEL).x + style.FramePadding.x * 2.0f;
 
@@ -205,7 +206,7 @@ MultiTrackTable::RenderSharedFilterControls(const std::vector<std::string>& colu
     ImGui::Spacing();
 
     ImGui::AlignTextToFramePadding();
-    ImGui::TextUnformatted("Group by");
+    ImGui::TextUnformatted(SHARED_GROUP_BY_LABEL);
     ImGui::SameLine(label_col);
     ImGui::SetNextItemWidth(ImGui::GetFontSize() * SHARED_COMBO_GLYPHS);
     PushComboStyles();
@@ -237,7 +238,7 @@ MultiTrackTable::RenderSharedFilterControls(const std::vector<std::string>& colu
     }
     if(ImGui::IsItemHovered())
     {
-        SetTooltipStyled("Apply the same aggregation and filter to sources A and B.");
+        SetTooltipStyled("Apply the same grouping and filter to sources A and B.");
     }
 
     ImGui::AlignTextToFramePadding();
@@ -365,7 +366,7 @@ MultiTrackTable::Render()
                 ImGui::TableNextRow();
                 ImGui::TableNextColumn();
                 ImGui::AlignTextToFramePadding();
-                ImGui::TextDisabled("Aggregate");
+                ImGui::TextDisabled(SHARED_GROUP_BY_LABEL);
 
                 ImGui::TableNextColumn();
                 ImGui::SetNextItemWidth(-FLT_MIN);

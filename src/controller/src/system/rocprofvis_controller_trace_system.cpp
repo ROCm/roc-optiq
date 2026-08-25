@@ -391,57 +391,72 @@ SystemTrace::LoadRocpdTopology()
 
     DbgPrintTopologyNodeData(dm_topology_root, 1);
     m_topology_root = new TopologyRoot(dm_topology_root, this);
-    return ValidateRocpdTrackTopology();
+    if(!ValidateRocpdTrackTopology())
+    {
+        spdlog::warn("Trace loaded with incomplete track topology");
+    }
+    return kRocProfVisResultSuccess;
 }
 
-rocprofvis_result_t
+bool
 SystemTrace::ValidateRocpdTrackTopology() const
 {
-    for(Track* track : m_tracks)
+    bool valid = true;
+    for(const Track* track : m_tracks)
     {
-        uint64_t dm_track_type = rocprofvis_dm_get_property_as_uint64(
-            track->GetDmHandle(), kRPVDMTrackCategoryEnumUInt64, 0);
-        bool linked = false;
-        switch(dm_track_type)
+        const auto track_type = static_cast<rocprofvis_dm_track_category_t>(
+            rocprofvis_dm_get_property_as_uint64(
+                track->GetDmHandle(), kRPVDMTrackCategoryEnumUInt64, 0));
+        bool        linked        = false;
+        const char* expected_link = "unknown";
+        switch(track_type)
         {
             case kRocProfVisDmRegionTrack:
             case kRocProfVisDmRegionMainTrack:
             case kRocProfVisDmRegionSampleTrack:
             {
-                linked = track->GetThread() != nullptr;
+                linked        = track->GetThread() != nullptr;
+                expected_link = "thread";
                 break;
             }
             case kRocProfVisDmKernelDispatchTrack:
             case kRocProfVisDmMemoryAllocationTrack:
             case kRocProfVisDmMemoryCopyTrack:
             {
-                linked = track->GetQueue() != nullptr;
+                linked        = track->GetQueue() != nullptr;
+                expected_link = "queue";
                 break;
             }
             case kRocProfVisDmStreamTrack:
             {
-                linked = track->GetStream() != nullptr;
+                linked        = track->GetStream() != nullptr;
+                expected_link = "stream";
                 break;
             }
             case kRocProfVisDmPmcTrack:
             {
-                linked = track->GetCounter() != nullptr;
+                linked        = track->GetCounter() != nullptr;
+                expected_link = "counter";
                 break;
             }
             default:
             {
-                linked = true;
-                break;
+                spdlog::warn("Track {} has unsupported data-model type {}",
+                             track->GetId(), static_cast<uint64_t>(track_type));
+                valid = false;
+                continue;
             }
         }
 
         if(!linked)
         {
-            spdlog::warn("Track {} (type {}) has no matching topology node",
-                         track->GetId(), dm_track_type);
+            spdlog::warn("Track {} (type {}) is missing its {} topology link",
+                         track->GetId(), static_cast<uint64_t>(track_type),
+                         expected_link);
+            valid = false;
         }
     }
-    return kRocProfVisResultSuccess;
+    return valid;
 }
 
 rocprofvis_result_t SystemTrace::Load(RocProfVis::Controller::Future& future)

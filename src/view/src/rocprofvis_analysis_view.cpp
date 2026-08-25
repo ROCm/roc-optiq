@@ -7,6 +7,7 @@
 #include "rocprofvis_data_provider.h"
 #include "rocprofvis_events_view.h"
 #include "rocprofvis_multi_track_table.h"
+#include "rocprofvis_timeline_selection.h"
 #include "rocprofvis_top_events_view.h"
 #include "rocprofvis_track_details.h"
 
@@ -116,6 +117,43 @@ void
 AnalysisView::Update()
 {
     m_tab_container->Update();
+
+    // If a table tab that missed selection changes while hidden has just become active, catch
+    // it up now (a single refetch of the current selection) so it shows current data without
+    // every table having fetched on every earlier selection change.
+    const TabItem*   active        = m_tab_container->GetActiveTab();
+    const RocWidget* active_widget = active ? active->m_widget.get() : nullptr;
+    if(active_widget != m_last_active_tab_widget)
+    {
+        m_last_active_tab_widget = active_widget;
+        // The INVALID id is a "refetch the current selection" trigger for these table widgets
+        // (it reads the live selection + time range), so one call brings the tab up to date.
+        if(m_event_table_needs_refresh && IsTabActive(m_event_table.get()))
+        {
+            m_event_table_needs_refresh = false;
+            m_event_table->HandleTrackSelectionChanged(
+                TimelineSelection::INVALID_SELECTION_ID, false);
+        }
+        if(m_sample_table_needs_refresh && IsTabActive(m_sample_table.get()))
+        {
+            m_sample_table_needs_refresh = false;
+            m_sample_table->HandleTrackSelectionChanged(
+                TimelineSelection::INVALID_SELECTION_ID, false);
+        }
+        if(m_top_events_needs_refresh && IsTabActive(m_top_events_view.get()))
+        {
+            m_top_events_needs_refresh = false;
+            m_top_events_view->HandleTrackSelectionChanged(
+                TimelineSelection::INVALID_SELECTION_ID, false);
+        }
+    }
+}
+
+bool
+AnalysisView::IsTabActive(const RocWidget* widget) const
+{
+    const TabItem* active = m_tab_container->GetActiveTab();
+    return active != nullptr && widget != nullptr && active->m_widget.get() == widget;
 }
 
 void
@@ -136,29 +174,50 @@ AnalysisView::HandleTimelineSelectionChanged(std::shared_ptr<RocEvent> e)
                 std::static_pointer_cast<TrackSelectionChangedEvent>(e);
             if(selection_changed_event)
             {
+                const uint64_t track_id = selection_changed_event->GetTrackID();
+                const bool     selected = selection_changed_event->TrackSelected();
+
+                // Only the visible table tab fetches now; hidden ones are flagged and catch up
+                // when shown. This keeps a single track click from firing several slow merged
+                // table queries at once.
                 if(m_event_table)
                 {
-                    m_event_table->HandleTrackSelectionChanged(
-                        selection_changed_event->GetTrackID(),
-                        selection_changed_event->TrackSelected());
+                    if(IsTabActive(m_event_table.get()))
+                    {
+                        m_event_table->HandleTrackSelectionChanged(track_id, selected);
+                    }
+                    else
+                    {
+                        m_event_table_needs_refresh = true;
+                    }
                 }
                 if(m_sample_table)
                 {
-                    m_sample_table->HandleTrackSelectionChanged(
-                        selection_changed_event->GetTrackID(),
-                        selection_changed_event->TrackSelected());
-                }
-                if(m_track_details)
-                {
-                    m_track_details->HandleTrackSelectionChanged(
-                        selection_changed_event->GetTrackID(),
-                        selection_changed_event->TrackSelected());
+                    if(IsTabActive(m_sample_table.get()))
+                    {
+                        m_sample_table->HandleTrackSelectionChanged(track_id, selected);
+                    }
+                    else
+                    {
+                        m_sample_table_needs_refresh = true;
+                    }
                 }
                 if(m_top_events_view)
                 {
-                    m_top_events_view->HandleTrackSelectionChanged(
-                        selection_changed_event->GetTrackID(),
-                        selection_changed_event->TrackSelected());
+                    if(IsTabActive(m_top_events_view.get()))
+                    {
+                        m_top_events_view->HandleTrackSelectionChanged(track_id, selected);
+                    }
+                    else
+                    {
+                        m_top_events_needs_refresh = true;
+                    }
+                }
+                // Track Details keeps a per-track list (cheap, no DB query) and relies on the
+                // per-track add/remove deltas, so it is always kept in sync.
+                if(m_track_details)
+                {
+                    m_track_details->HandleTrackSelectionChanged(track_id, selected);
                 }
             }
         }
@@ -168,23 +227,43 @@ AnalysisView::HandleTimelineSelectionChanged(std::shared_ptr<RocEvent> e)
                 std::static_pointer_cast<TimeRangeSelectionChangedEvent>(e);
             if(selection_changed_event)
             {
+                const double start_ns = selection_changed_event->GetStartNs();
+                const double end_ns   = selection_changed_event->GetEndNs();
+
+                // Same visible-only policy as track selection: only the active table tab
+                // refetches for the new range; hidden ones catch up when shown.
                 if(m_event_table)
                 {
-                    m_event_table->HandleTimeRangeSelectionChanged(
-                        selection_changed_event->GetStartNs(),
-                        selection_changed_event->GetEndNs());
+                    if(IsTabActive(m_event_table.get()))
+                    {
+                        m_event_table->HandleTimeRangeSelectionChanged(start_ns, end_ns);
+                    }
+                    else
+                    {
+                        m_event_table_needs_refresh = true;
+                    }
                 }
                 if(m_sample_table)
                 {
-                    m_sample_table->HandleTimeRangeSelectionChanged(
-                        selection_changed_event->GetStartNs(),
-                        selection_changed_event->GetEndNs());
+                    if(IsTabActive(m_sample_table.get()))
+                    {
+                        m_sample_table->HandleTimeRangeSelectionChanged(start_ns, end_ns);
+                    }
+                    else
+                    {
+                        m_sample_table_needs_refresh = true;
+                    }
                 }
                 if(m_top_events_view)
                 {
-                    m_top_events_view->HandleTimeRangeSelectionChanged(
-                        selection_changed_event->GetStartNs(),
-                        selection_changed_event->GetEndNs());
+                    if(IsTabActive(m_top_events_view.get()))
+                    {
+                        m_top_events_view->HandleTimeRangeSelectionChanged(start_ns, end_ns);
+                    }
+                    else
+                    {
+                        m_top_events_needs_refresh = true;
+                    }
                 }
             }
         }

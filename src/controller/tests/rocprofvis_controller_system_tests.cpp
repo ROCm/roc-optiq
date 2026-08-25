@@ -3860,3 +3860,392 @@ TEST_CASE_PERSISTENT_FIXTURE(MultiTraceIntegrityFixture, "In-place multi-trace d
         rocprofvis_controller_free(combined);
     }
 }
+
+// Profiling harness: opens the two input files as one MERGED trace and times an Event Table
+// fetch over all event tracks. The model emits "[PROFILE]" phase timings (DB fetch / merge /
+// sort / process) so we can see where the wall-clock goes. Needs --input_file / --input_file_b.
+TEST_CASE("Merged table fetch profile")
+{
+    if(g_input_file.empty() || g_input_file_b.empty())
+    {
+        WARN("Merged table fetch profile needs --input_file and --input_file_b; skipping.");
+        return;
+    }
+
+    const char* const files[] = { g_input_file.c_str(), g_input_file_b.c_str() };
+    auto t_alloc0 = std::chrono::steady_clock::now();
+    rocprofvis_controller_t* controller = rocprofvis_controller_alloc_compare(files, 2);
+    REQUIRE(controller != nullptr);
+
+    rocprofvis_controller_future_t* load_future = rocprofvis_controller_future_alloc();
+    REQUIRE(load_future != nullptr);
+    REQUIRE(rocprofvis_controller_load_async(controller, load_future) ==
+            kRocProfVisResultSuccess);
+    REQUIRE(rocprofvis_controller_future_wait(load_future, FLT_MAX) ==
+            kRocProfVisResultSuccess);
+    rocprofvis_controller_future_free(load_future);
+    auto t_alloc1 = std::chrono::steady_clock::now();
+    spdlog::info("[PROFILE] ===== merged LOAD total: {} ms =====",
+                 std::chrono::duration_cast<std::chrono::milliseconds>(t_alloc1 - t_alloc0)
+                     .count());
+
+    rocprofvis_handle_t* table_handle = nullptr;
+    REQUIRE(rocprofvis_controller_get_object(controller, kRPVControllerSystemEventTable, 0,
+                                             &table_handle) == kRocProfVisResultSuccess);
+    REQUIRE(table_handle != nullptr);
+
+    uint64_t num_tracks = 0;
+    REQUIRE(rocprofvis_controller_get_uint64(controller, kRPVControllerSystemNumTracks, 0,
+                                             &num_tracks) == kRocProfVisResultSuccess);
+
+    rocprofvis_controller_arguments_t* args = rocprofvis_controller_arguments_alloc();
+    REQUIRE(args != nullptr);
+    rocprofvis_controller_set_uint64(args, kRPVControllerTableArgsType, 0,
+                                     static_cast<uint64_t>(kRPVControllerTableTypeEvents));
+
+    double   min_ts           = DBL_MAX;
+    double   max_ts           = -DBL_MAX;
+    uint32_t num_event_tracks = 0;
+    for(uint32_t i = 0; i < num_tracks; i++)
+    {
+        rocprofvis_handle_t* track_handle = nullptr;
+        if(rocprofvis_controller_get_object(controller, kRPVControllerSystemTrackIndexed, i,
+                                            &track_handle) != kRocProfVisResultSuccess ||
+           !track_handle)
+        {
+            continue;
+        }
+        uint64_t track_type = 0;
+        rocprofvis_controller_get_uint64(track_handle, kRPVControllerTrackType, 0,
+                                         &track_type);
+        if(track_type != kRPVControllerTrackTypeEvents) continue;
+
+        double min_time = 0, max_time = 0;
+        rocprofvis_controller_get_double(track_handle, kRPVControllerTrackMinTimestamp, 0,
+                                         &min_time);
+        rocprofvis_controller_get_double(track_handle, kRPVControllerTrackMaxTimestamp, 0,
+                                         &max_time);
+        min_ts = std::min(min_ts, min_time);
+        max_ts = std::max(max_ts, max_time);
+        rocprofvis_controller_set_uint64(args, kRPVControllerTableArgsNumTracks, 0,
+                                         num_event_tracks + 1);
+        rocprofvis_controller_set_object(args, kRPVControllerTableArgsTracksIndexed,
+                                         num_event_tracks++, track_handle);
+    }
+    REQUIRE(num_event_tracks > 0);
+    spdlog::info("[PROFILE] event tracks selected: {}", num_event_tracks);
+
+    rocprofvis_controller_set_double(args, kRPVControllerTableArgsStartTime, 0, min_ts);
+    rocprofvis_controller_set_double(args, kRPVControllerTableArgsEndTime, 0, max_ts);
+    rocprofvis_controller_set_uint64(args, kRPVControllerTableArgsSortColumn, 0, 0);
+    rocprofvis_controller_set_uint64(args, kRPVControllerTableArgsSortOrder, 0,
+                                     kRPVControllerSortOrderAscending);
+    rocprofvis_controller_set_string(args, kRPVControllerTableArgsWhere, 0, "");
+    rocprofvis_controller_set_string(args, kRPVControllerTableArgsFilter, 0, "");
+    rocprofvis_controller_set_string(args, kRPVControllerTableArgsGroup, 0, "");
+    rocprofvis_controller_set_string(args, kRPVControllerTableArgsGroupColumns, 0, "");
+    rocprofvis_controller_set_uint64(args, kRPVControllerTableArgsStartIndex, 0, 0);
+    rocprofvis_controller_set_uint64(args, kRPVControllerTableArgsStartCount, 0, 1000);
+
+    auto fetch_once = [&](const char* label, uint64_t sort_col) -> void {
+        rocprofvis_controller_set_uint64(args, kRPVControllerTableArgsSortColumn, 0, sort_col);
+        rocprofvis_controller_array_t*  array  = rocprofvis_controller_array_alloc(0);
+        rocprofvis_controller_future_t* future = rocprofvis_controller_future_alloc();
+        auto t0 = std::chrono::steady_clock::now();
+        REQUIRE(rocprofvis_controller_table_fetch_async(controller, table_handle, args,
+                                                        future, array) ==
+                kRocProfVisResultSuccess);
+        REQUIRE(rocprofvis_controller_future_wait(future, FLT_MAX) ==
+                kRocProfVisResultSuccess);
+        auto t1 = std::chrono::steady_clock::now();
+        uint64_t total_rows = 0;
+        rocprofvis_controller_get_uint64(table_handle, kRPVControllerTableNumRows, 0,
+                                         &total_rows);
+        uint64_t returned = 0;
+        rocprofvis_controller_get_uint64(array, kRPVControllerArrayNumEntries, 0, &returned);
+        spdlog::info("[PROFILE] ===== {} (sortcol {}): {} ms | total_rows={} returned={} =====",
+                     label, sort_col,
+                     std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count(),
+                     total_rows, returned);
+        rocprofvis_controller_future_free(future);
+        rocprofvis_controller_array_free(array);
+    };
+
+    // Warm the schema, then discover the numeric "start" column index and time a sorted page.
+    fetch_once("warmup", 0);
+    uint64_t num_columns = 0;
+    rocprofvis_controller_get_uint64(table_handle, kRPVControllerTableNumColumns, 0,
+                                     &num_columns);
+    uint64_t start_col = 0;
+    for(uint64_t i = 0; i < num_columns; i++)
+    {
+        uint32_t len = 0;
+        rocprofvis_controller_get_string(table_handle, kRPVControllerTableColumnHeaderIndexed,
+                                         i, nullptr, &len);
+        std::string header(len, '\0');
+        if(len)
+            rocprofvis_controller_get_string(table_handle,
+                                             kRPVControllerTableColumnHeaderIndexed, i,
+                                             header.data(), &len);
+        header = std::string(header.c_str());  // truncate at any null terminator
+        spdlog::info("[PROFILE] column[{}] = '{}'", i, header);
+        if(header == "start") start_col = i;
+    }
+    spdlog::info("[PROFILE] using start column index {}", start_col);
+    fetch_once("sorted-by-start pass A", start_col);
+    fetch_once("sorted-by-start pass B", start_col);
+
+    // Column 1 ("id") is the view's default event-table sort; verify that default path is fast.
+    fetch_once("sorted-by-id (default) A", 1);
+    fetch_once("sorted-by-id (default) B", 1);
+
+    rocprofvis_controller_arguments_free(args);
+    rocprofvis_controller_free(controller);
+}
+
+// Selecting one more track for a table must reuse the tracks already fetched and only query the
+// newly added track; deselecting a track must drop just its rows without refetching the rest.
+// This guards that incremental path against regressions: an incrementally built selection must be
+// identical to the same selection fetched from scratch, and reducing a selection back down must
+// reproduce the smaller selection exactly. Uses --input_file (a single trace with >= 2 event
+// tracks); comparison is order-independent (row multisets) and row-exact when the result fits in
+// one page, otherwise it falls back to the total row count.
+TEST_CASE("Incremental track selection equals full refetch")
+{
+    constexpr uint64_t kPageCap = 50000;
+
+    struct TableSignature
+    {
+        uint64_t                 total_rows    = 0;      // whole result (all pages)
+        bool                     full_coverage = false;  // returned page held every row
+        std::vector<std::string> row_digests;            // per-row cell text, sorted
+        bool                     valid         = false;
+    };
+
+    // Read every cell of one returned row into a single string.
+    auto row_to_string = [](rocprofvis_handle_t* table_handle, rocprofvis_handle_t* row,
+                            uint64_t num_columns) -> std::string {
+        std::string text;
+        for(uint64_t c = 0; c < num_columns; c++)
+        {
+            uint64_t column_type = 0;
+            rocprofvis_controller_get_uint64(table_handle, kRPVControllerTableColumnTypeIndexed,
+                                             c, &column_type);
+            switch(column_type)
+            {
+                case kRPVControllerPrimitiveTypeUInt64:
+                {
+                    uint64_t v = 0;
+                    rocprofvis_controller_get_uint64(row, kRPVControllerArrayEntryIndexed, c, &v);
+                    text += std::to_string(v);
+                    break;
+                }
+                case kRPVControllerPrimitiveTypeDouble:
+                {
+                    double v = 0;
+                    rocprofvis_controller_get_double(row, kRPVControllerArrayEntryIndexed, c, &v);
+                    text += std::to_string(v);
+                    break;
+                }
+                case kRPVControllerPrimitiveTypeString:
+                {
+                    text += GetControllerString(row, kRPVControllerArrayEntryIndexed, c);
+                    break;
+                }
+                default: break;
+            }
+            text += '|';
+        }
+        return text;
+    };
+
+    // Fetch the event table for an ordered subset of track handles over a FIXED time window (so a
+    // track's SQL is identical whether it is fetched alone or alongside another - that is what
+    // exercises the incremental add/remove path instead of a full query rebuild) and return an
+    // order-independent signature.
+    auto fetch_signature =
+        [&](rocprofvis_controller_t* controller, rocprofvis_handle_t* table_handle,
+            const std::vector<rocprofvis_handle_t*>& tracks, double start_ts,
+            double end_ts) -> TableSignature {
+        TableSignature                     sig;
+        rocprofvis_controller_arguments_t* args = rocprofvis_controller_arguments_alloc();
+        if(!args) return sig;
+        rocprofvis_controller_set_uint64(args, kRPVControllerTableArgsType, 0,
+                                         static_cast<uint64_t>(kRPVControllerTableTypeEvents));
+        for(size_t i = 0; i < tracks.size(); i++)
+        {
+            rocprofvis_controller_set_uint64(args, kRPVControllerTableArgsNumTracks, 0,
+                                             static_cast<uint64_t>(i + 1));
+            rocprofvis_controller_set_object(args, kRPVControllerTableArgsTracksIndexed,
+                                             static_cast<uint64_t>(i), tracks[i]);
+        }
+        rocprofvis_controller_set_double(args, kRPVControllerTableArgsStartTime, 0, start_ts);
+        rocprofvis_controller_set_double(args, kRPVControllerTableArgsEndTime, 0, end_ts);
+        rocprofvis_controller_set_uint64(args, kRPVControllerTableArgsSortColumn, 0, 0);
+        rocprofvis_controller_set_uint64(args, kRPVControllerTableArgsSortOrder, 0,
+                                         kRPVControllerSortOrderAscending);
+        rocprofvis_controller_set_string(args, kRPVControllerTableArgsWhere, 0, "");
+        rocprofvis_controller_set_string(args, kRPVControllerTableArgsFilter, 0, "");
+        rocprofvis_controller_set_string(args, kRPVControllerTableArgsGroup, 0, "");
+        rocprofvis_controller_set_string(args, kRPVControllerTableArgsGroupColumns, 0, "");
+        rocprofvis_controller_set_uint64(args, kRPVControllerTableArgsStartIndex, 0, 0);
+        rocprofvis_controller_set_uint64(args, kRPVControllerTableArgsStartCount, 0, kPageCap);
+
+        rocprofvis_controller_array_t*  array  = rocprofvis_controller_array_alloc(0);
+        rocprofvis_controller_future_t* future = rocprofvis_controller_future_alloc();
+        if(array && future &&
+           rocprofvis_controller_table_fetch_async(controller, table_handle, args, future,
+                                                    array) == kRocProfVisResultSuccess &&
+           rocprofvis_controller_future_wait(future, FLT_MAX) == kRocProfVisResultSuccess)
+        {
+            uint64_t future_result = 0;
+            rocprofvis_controller_get_uint64(future, kRPVControllerFutureResult, 0,
+                                             &future_result);
+            if(future_result == kRocProfVisResultSuccess)
+            {
+                uint64_t num_columns = 0;
+                rocprofvis_controller_get_uint64(table_handle, kRPVControllerTableNumColumns, 0,
+                                                 &num_columns);
+                rocprofvis_controller_get_uint64(table_handle, kRPVControllerTableNumRows, 0,
+                                                 &sig.total_rows);
+                uint64_t returned = 0;
+                rocprofvis_controller_get_uint64(array, kRPVControllerArrayNumEntries, 0,
+                                                 &returned);
+                sig.full_coverage = returned == sig.total_rows;
+                sig.row_digests.reserve(returned);
+                for(uint64_t r = 0; r < returned; r++)
+                {
+                    rocprofvis_handle_t* row = nullptr;
+                    if(rocprofvis_controller_get_object(array, kRPVControllerArrayEntryIndexed, r,
+                                                        &row) == kRocProfVisResultSuccess &&
+                       row)
+                    {
+                        sig.row_digests.push_back(row_to_string(table_handle, row, num_columns));
+                    }
+                }
+                std::sort(sig.row_digests.begin(), sig.row_digests.end());
+                sig.valid = true;
+            }
+        }
+        if(future) rocprofvis_controller_future_free(future);
+        if(array) rocprofvis_controller_array_free(array);
+        rocprofvis_controller_arguments_free(args);
+        return sig;
+    };
+
+    // Collect event-track handles (smallest first, tie-broken by track id so both opens of the
+    // same file pick the same tracks) plus the overall event time window.
+    auto collect_event_tracks =
+        [](rocprofvis_controller_t* controller, std::vector<rocprofvis_handle_t*>& tracks,
+           double& min_ts, double& max_ts) {
+        struct EventTrackEntry
+        {
+            uint64_t             entries;
+            uint64_t             id;
+            rocprofvis_handle_t* handle;
+        };
+        min_ts = DBL_MAX;
+        max_ts = -DBL_MAX;
+        std::vector<EventTrackEntry> found;
+        uint64_t                     num_tracks = 0;
+        rocprofvis_controller_get_uint64(controller, kRPVControllerSystemNumTracks, 0,
+                                         &num_tracks);
+        for(uint64_t i = 0; i < num_tracks; i++)
+        {
+            rocprofvis_handle_t* track = nullptr;
+            if(rocprofvis_controller_get_object(controller, kRPVControllerSystemTrackIndexed, i,
+                                                &track) != kRocProfVisResultSuccess ||
+               !track)
+            {
+                continue;
+            }
+            uint64_t type = 0;
+            rocprofvis_controller_get_uint64(track, kRPVControllerTrackType, 0, &type);
+            if(type != kRPVControllerTrackTypeEvents) continue;
+            double mn = 0.0, mx = 0.0;
+            rocprofvis_controller_get_double(track, kRPVControllerTrackMinTimestamp, 0, &mn);
+            rocprofvis_controller_get_double(track, kRPVControllerTrackMaxTimestamp, 0, &mx);
+            min_ts = std::min(min_ts, mn);
+            max_ts = std::max(max_ts, mx);
+            uint64_t entries = 0;
+            rocprofvis_controller_get_uint64(track, kRPVControllerTrackNumberOfEntries, 0,
+                                             &entries);
+            uint64_t id = 0;
+            rocprofvis_controller_get_uint64(track, kRPVControllerTrackId, 0, &id);
+            found.push_back({ entries, id, track });
+        }
+        std::sort(found.begin(), found.end(),
+                  [](const EventTrackEntry& a, const EventTrackEntry& b) {
+                      if(a.entries != b.entries) return a.entries < b.entries;
+                      return a.id < b.id;
+                  });
+        for(const EventTrackEntry& e : found)
+        {
+            tracks.push_back(e.handle);
+        }
+    };
+
+    // Incrementally build a selection on one controller: {A} -> {A,B} (adds B) -> {A} (removes B).
+    rocprofvis_controller_t* inc = OpenSingleAndLoad(g_input_file);
+    REQUIRE(inc != nullptr);
+
+    std::vector<rocprofvis_handle_t*> inc_tracks;
+    double                            inc_min = 0.0, inc_max = 0.0;
+    collect_event_tracks(inc, inc_tracks, inc_min, inc_max);
+    if(inc_tracks.size() < 2)
+    {
+        WARN("Need >= 2 event tracks to test incremental selection; skipping.");
+        rocprofvis_controller_free(inc);
+        return;
+    }
+
+    rocprofvis_handle_t* inc_table = nullptr;
+    REQUIRE(rocprofvis_controller_get_object(inc, kRPVControllerSystemEventTable, 0, &inc_table) ==
+            kRocProfVisResultSuccess);
+    REQUIRE(inc_table != nullptr);
+
+    const std::vector<rocprofvis_handle_t*> sel_a  = { inc_tracks[0] };
+    const std::vector<rocprofvis_handle_t*> sel_ab = { inc_tracks[0], inc_tracks[1] };
+
+    const TableSignature sig_a_first    = fetch_signature(inc, inc_table, sel_a, inc_min, inc_max);
+    const TableSignature sig_ab_inc     = fetch_signature(inc, inc_table, sel_ab, inc_min, inc_max);
+    const TableSignature sig_a_reduced  = fetch_signature(inc, inc_table, sel_a, inc_min, inc_max);
+    rocprofvis_controller_free(inc);
+
+    REQUIRE(sig_a_first.valid);
+    REQUIRE(sig_ab_inc.valid);
+    REQUIRE(sig_a_reduced.valid);
+
+    // Reference: the same {A,B} selection fetched from scratch on a fresh controller (its table
+    // processor has no cached tracks, so it queries both A and B together - the full path).
+    rocprofvis_controller_t* ref = OpenSingleAndLoad(g_input_file);
+    REQUIRE(ref != nullptr);
+    std::vector<rocprofvis_handle_t*> ref_tracks;
+    double                            ref_min = 0.0, ref_max = 0.0;
+    collect_event_tracks(ref, ref_tracks, ref_min, ref_max);
+    REQUIRE(ref_tracks.size() >= 2);
+    rocprofvis_handle_t* ref_table = nullptr;
+    REQUIRE(rocprofvis_controller_get_object(ref, kRPVControllerSystemEventTable, 0, &ref_table) ==
+            kRocProfVisResultSuccess);
+    const std::vector<rocprofvis_handle_t*> ref_ab = { ref_tracks[0], ref_tracks[1] };
+    const TableSignature sig_ab_ref = fetch_signature(ref, ref_table, ref_ab, ref_min, ref_max);
+    rocprofvis_controller_free(ref);
+    REQUIRE(sig_ab_ref.valid);
+
+    // Add: the incrementally-grown {A,B} must match a from-scratch {A,B}.
+    CHECK(sig_ab_inc.total_rows == sig_ab_ref.total_rows);
+    if(sig_ab_inc.full_coverage && sig_ab_ref.full_coverage)
+    {
+        CHECK(sig_ab_inc.row_digests == sig_ab_ref.row_digests);
+    }
+
+    // Remove: reducing {A,B} back to {A} must reproduce the original {A} exactly.
+    CHECK(sig_a_reduced.total_rows == sig_a_first.total_rows);
+    if(sig_a_reduced.full_coverage && sig_a_first.full_coverage)
+    {
+        CHECK(sig_a_reduced.row_digests == sig_a_first.row_digests);
+    }
+
+    // Adding a track must never drop rows the smaller selection already had.
+    CHECK(sig_ab_inc.total_rows >= sig_a_first.total_rows);
+}

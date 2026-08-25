@@ -350,6 +350,9 @@ typedef enum rocprofvis_controller_track_properties_t : uint32_t
     kRPVControllerTrackFileId,
     // Track order ranking
     kRPVControllerTrackOrderRanking,
+    // Absolute path of the source .db file this track came from (its file index resolved to
+    // a path). Used to disambiguate identically-named tracks when several files are merged.
+    kRPVControllerTrackSourceFilePath,
     __kRPVControllerTrackPropertiesLast
 } rocprofvis_controller_track_properties_t;
 /* JSON: RPVTrack

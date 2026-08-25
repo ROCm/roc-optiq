@@ -55,11 +55,19 @@ public:
     const std::string& GetTraceFilePath() const { return m_trace_file_path; }
     void SetTraceFilePath(const std::string& path) { m_trace_file_path = path; }
 
-    // Compare sources (A, B, ...) are set when the trace is opened as a compare project.
+    // Source tags map a track's source file index (file_id) back to its .db file. They are
+    // set for both compare projects (A, B, ...) and merged/combined projects (so the source
+    // badge can tell otherwise-identical tracks from same-hardware files apart).
     // GetCompareSource maps a track's source instance index back to its file.
     void SetCompareSources(const std::vector<CompareSourceInfo>& sources);
     const CompareSourceInfo* GetCompareSource(size_t index) const;
     bool HasCompareSources() const { return !m_compare_sources.empty(); }
+
+    // Whether counterpart tracks from each source should be reordered to sit adjacent on the
+    // timeline. Only compare projects want this; a plain merge keeps its natural (file-
+    // grouped) load order even though it, too, carries source tags for the badge.
+    void SetReorderCounterparts(bool reorder) { m_reorder_counterparts = reorder; }
+    bool ShouldReorderCounterparts() const { return m_reorder_counterparts; }
 
     // Build display name for a track from topology/timeline data
     std::string BuildTrackName(uint64_t track_id) const;
@@ -77,6 +85,7 @@ private:
 
     std::string m_trace_file_path;
     std::vector<CompareSourceInfo> m_compare_sources;
+    bool m_reorder_counterparts = false;
 };
 
 }  // namespace View

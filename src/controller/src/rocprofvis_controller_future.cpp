@@ -52,10 +52,16 @@ rocprofvis_result_t Future::Wait(float timeout)
 
 rocprofvis_result_t Future::Cancel()
 {
-    rocprofvis_result_t result = kRocProfVisResultUnknownError;
+    rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     if(m_job)
     {
-        result = JobSystem::Get().CancelJob(m_job);
+        // Try to drop the job from the queue if it has not started yet. If it is already
+        // running, CancelJob returns NotSupported - that is NOT a failure: we still flag
+        // cooperative cancellation below (m_cancelled + db-future cancel) so the in-flight
+        // work and its DB queries stop as soon as they next check. Report success whenever
+        // cancellation has been requested, so callers don't treat an in-flight cancel as a
+        // failure (which otherwise spams logs and blocks re-queuing the superseded request).
+        JobSystem::Get().CancelJob(m_job);
         m_cancelled = true;
         {
             std::unique_lock lock(m_mutex);
@@ -67,6 +73,7 @@ rocprofvis_result_t Future::Cancel()
                 }
             }
         }
+        result = kRocProfVisResultSuccess;
     }
     return result;
 }

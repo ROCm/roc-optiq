@@ -2838,7 +2838,9 @@ TimelineView::RenderTraceView()
     ImGui::PopStyleColor();
     ImGui::PopStyleVar(2);
     TimelineFocusManager::GetInstance().EvaluateFocusedLayer();
-    if(m_loading_timer.IsExpired() && !m_timeline_selection->HasValidTimeRangeSelection())
+    const bool has_time_range_selection =
+        m_timeline_selection->HasValidTimeRangeSelection();
+    if(m_loading_timer.IsExpired() && !has_time_range_selection)
     {
         // Debounce: push the range into the analysis model only once it has been stable for a
         // short window. Committing every frame while it settles re-arms all stats kStale and
@@ -2846,7 +2848,21 @@ TimelineView::RenderTraceView()
         const double vmin = m_tpt->GetVMinX();
         const double vmax = m_tpt->GetVMaxX();
         const auto   now  = std::chrono::steady_clock::now();
-        if(vmin != m_analysis_range_min || vmax != m_analysis_range_max)
+        if(m_had_time_range_selection)
+        {
+            // The selection was just cleared. The analysis range still holds that (now removed)
+            // selection - the selection handler committed it, bypassing this debounce's local
+            // bookkeeping - so the visible-range bookkeeping below can wrongly conclude "nothing
+            // changed". Clearing a selection is a discrete action (not a continuous drag), so
+            // commit the visible range immediately - no debounce delay - to refresh pills back
+            // to visible-range stats without a perceptible lag.
+            m_analysis_range_min        = vmin;
+            m_analysis_range_max        = vmax;
+            m_analysis_range_changed_at = now;
+            m_analysis_range_committed  = true;
+            m_data_provider.DataModel().GetAnalysis().SetAnalysisRange(vmin, vmax);
+        }
+        else if(vmin != m_analysis_range_min || vmax != m_analysis_range_max)
         {
             m_analysis_range_min       = vmin;
             m_analysis_range_max       = vmax;
@@ -2860,6 +2876,7 @@ TimelineView::RenderTraceView()
             m_analysis_range_committed = true;
         }
     }
+    m_had_time_range_selection = has_time_range_selection;
 }
 void
 TimelineView::RenderGraphPoints()

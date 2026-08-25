@@ -202,6 +202,38 @@ AnalysisModel::SetCounterStatistics(uint64_t track_id,
     }
 }
 
+void
+AnalysisModel::SetTrackStatisticsEmpty(uint64_t track_id)
+{
+    auto it = m_track_stats.find(track_id);
+    if(it == m_track_stats.end())
+    {
+        return;  // track no longer registered (e.g. a late result after a rebuild)
+    }
+    AnalysisTrackStatistics& store = it->second;
+    // The analysis range does not overlap this track's data, so every statistic is definitively
+    // zero for this range. Fill the values (so the pill shows a real number instead of staying
+    // blank) and mark the stat ready so it stops being re-requested.
+    if(store.track->topology.type == TrackInfo::TrackType::Queue)
+    {
+        AnalysisTrackStatistics::Stat& stat =
+            store.stats[AnalysisTrackStatistics::Queue::kQueueUtilization];
+        stat.value = 0.0;
+        ToString(store.track, stat, "%");
+    }
+    else if(store.track->topology.type == TrackInfo::TrackType::Counter)
+    {
+        const CounterInfo* counter = m_topology.GetCounter(store.track->topology.id.value);
+        const std::string  units   = counter ? counter->units : std::string();
+        for(AnalysisTrackStatistics::Stat& stat : store.stats)
+        {
+            stat.value = 0.0;
+            ToString(store.track, stat, units);
+        }
+    }
+    store.state = AnalysisTrackStatistics::State::kReady;
+}
+
 const TablesModel&
 AnalysisModel::GetTables() const
 {

@@ -117,6 +117,7 @@ TraceDataModel::Clear()
     m_analysis.Clear();
     m_trace_file_path.clear();
     m_compare_sources.clear();
+    m_reorder_counterparts = false;
 }
 
 }  // namespace View

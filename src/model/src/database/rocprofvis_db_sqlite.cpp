@@ -40,7 +40,9 @@ uint32_t SqliteDatabase::AddDbNodeRuntime(rocprofvis_db_filename_t filepath) {
 
 uint64_t
 SqliteDatabase::GetNullExceptionInt(void* func, char* column) {
-    spdlog::debug("Column {} value is NULL!", column);
+    // Per-cell NULL handling runs for every NULL value in a result set (easily thousands per
+    // query), so keep it at trace to avoid flooding the debug log.
+    spdlog::trace("Column {} value is NULL!", column);
     const rocprofvis_null_data_exceptions_int* exceptions_map =
         GetNullDataExceptionsInt();
     if(exceptions_map != nullptr)
@@ -51,12 +53,12 @@ SqliteDatabase::GetNullExceptionInt(void* func, char* column) {
             auto it = fcit->second.find(column);
             if(it != fcit->second.end())
             {
-                spdlog::debug("Column {} value is NULL, replace with {}", column, it->second);
+                spdlog::trace("Column {} value is NULL, replace with {}", column, it->second);
                 return it->second;
             }
         }
     }
-    spdlog::debug("Column {} value is NULL, replace with 0", column);
+    spdlog::trace("Column {} value is NULL, replace with 0", column);
     return 0;
 }
 
@@ -72,12 +74,12 @@ SqliteDatabase::GetNullExceptionString(void* func, char* column) {
             auto it = fcit->second.find(column);
             if(it != fcit->second.end())
             {
-                spdlog::debug("Column {} value is NULL, replace with {}", column, it->second.c_str());
+                spdlog::trace("Column {} value is NULL, replace with {}", column, it->second.c_str());
                 return (char*) it->second.c_str();
             }
         }
     }
-    spdlog::debug("Column {} value is NULL, replace with empty string", column);
+    spdlog::trace("Column {} value is NULL, replace with empty string", column);
     return "";
 }
 
@@ -94,7 +96,7 @@ SqliteDatabase::NullExceptionSkip(void* func, char* column)
             auto it = fcit->second.find(column);
             if(it != fcit->second.end())
             {
-                spdlog::debug("Column {} value is NULL, skip column", column);
+                spdlog::trace("Column {} value is NULL, skip column", column);
                 return true;
             }
         }

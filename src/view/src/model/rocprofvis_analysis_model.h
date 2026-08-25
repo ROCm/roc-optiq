@@ -35,6 +35,11 @@ public:
     void SetCounterStatistics(uint64_t                                        track_id,
                               const rocprofvis_analysis_counter_statistics_t& stats);
 
+    // Resolve a track's statistics to zero and mark them ready, for the case where the analysis
+    // range does not intersect the track's data window (so there is nothing to fetch). Without
+    // this the stat would loop kPending and its pill would stay greyed indefinitely.
+    void SetTrackStatisticsEmpty(uint64_t track_id);
+
     const TablesModel& GetTables() const;
     TablesModel&       GetTables();
 

@@ -445,6 +445,8 @@ Project::OpenCompare(const std::string&              project_id,
             if(DataProvider* provider = trace_view->GetDataProvider())
             {
                 provider->DataModel().SetCompareSources(sources);
+                // Compare wants counterpart tracks interleaved (A next to B, ...).
+                provider->DataModel().SetReorderCounterparts(true);
             }
 
             m_trace_file_path = project_id;
@@ -496,8 +498,11 @@ Project::OpenCombined(const std::string&              project_id,
         file_ptrs.push_back(path.c_str());
     }
 
-    // The combine goes through the same multinode engine a .yaml manifest uses; unlike
-    // compare, we do not tag the sources A/B, so they merge into one topology/timeline.
+    // The combine goes through the same multinode engine a .yaml manifest uses. Unlike
+    // compare, sources are NOT interleaved (they merge into one topology/timeline). Per-track
+    // source-file disambiguation is handled uniformly in the view from each track's source
+    // path (kRPVControllerTrackSourceFilePath), so it also covers in-place add/remove - no
+    // A/B tagging is needed here.
     rocprofvis_controller_t* controller =
         rocprofvis_controller_alloc_compare(file_ptrs.data(), file_ptrs.size());
     if(controller)

@@ -281,6 +281,11 @@ private:
     double m_analysis_range_max = 0.0;
     std::chrono::steady_clock::time_point m_analysis_range_changed_at{};
     bool   m_analysis_range_committed = false;
+    // Whether a time-range selection was active last frame. While a selection is active the
+    // analysis range is driven by the selection handler and this debounce is skipped; on the
+    // frame the selection is cleared we must force a re-commit of the visible range so the pills
+    // revert from the selection's stats to the visible-range stats.
+    bool   m_had_time_range_selection = false;
 };
 
 }  // namespace View

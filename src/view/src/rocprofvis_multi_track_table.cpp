@@ -482,7 +482,11 @@ MultiTrackTable::FetchSelectionData()
 
     if(!fetch_result)
     {
-        spdlog::error("Failed to queue table request for tracks: {}",
+        // A previous request for this table is still in flight (its cancel is cooperative and
+        // completes shortly). Not an error: Update() re-issues this fetch once the prior
+        // request clears, so the latest selection is always the one that lands.
+        spdlog::debug("Table request for {} track(s) deferred; a prior request is still "
+                      "in flight and will be retried",
                       included_tracks.size());
         // save this selection event to reprocess it later (it's ok to replace the
         // previous one as the new one reflects the current selection)

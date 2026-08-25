@@ -72,6 +72,9 @@ private:
     std::string m_category;
     std::string m_main_name;
     std::string m_sub_name;
+    // Absolute path of the source .db file this track came from (empty for single-file loads
+    // where disambiguation is unnecessary).
+    std::string m_source_file_path;
     std::vector<rocprofvis_dm_event_operation_t> m_operation_types;
     rocprofvis_dm_track_t m_dm_handle;
     Thread* m_thread;

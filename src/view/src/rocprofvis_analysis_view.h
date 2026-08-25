@@ -35,6 +35,11 @@ public:
 private:
     void HandleTimelineSelectionChanged(std::shared_ptr<RocEvent> e);
 
+    // True if the given widget is the tab currently shown. Used to fetch table data only for
+    // the visible tab so a single selection change does not fire every table's (potentially
+    // slow, merged-trace) query at once.
+    bool IsTabActive(const RocWidget* widget) const;
+
     DataProvider& m_data_provider;
 
     std::shared_ptr<MultiTrackTable> m_event_table;
@@ -49,6 +54,14 @@ private:
     EventManager::SubscriptionToken m_timeline_track_selection_changed_token;
     EventManager::SubscriptionToken m_timeline_range_selection_changed_token;
     EventManager::SubscriptionToken m_timeline_event_selection_changed_token;
+
+    // Per-table "missed a selection while hidden" flags, plus the last active tab, so a table
+    // tab can lazily catch up (refetch) when it becomes visible instead of every table
+    // fetching on every selection change.
+    bool             m_event_table_needs_refresh  = false;
+    bool             m_sample_table_needs_refresh = false;
+    bool             m_top_events_needs_refresh   = false;
+    const RocWidget* m_last_active_tab_widget      = nullptr;
 };
 
 }  // namespace View

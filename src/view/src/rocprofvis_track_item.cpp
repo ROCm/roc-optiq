@@ -35,15 +35,16 @@ constexpr const char*     TRACK_COPY_MENU_POPUP_NAME     = "TrackCopyMenu";
 float TrackItem::s_metadata_width = 400.0f;
 
 static ImU32
-CompareSourceColor(const CompareSourceInfo& source, SettingsManager& settings)
+CompareSourceColor(size_t source_index, SettingsManager& settings)
 {
     const std::vector<ImU32>& wheel = settings.GetColorWheel();
     if(wheel.empty())
     {
         return settings.GetColor(Colors::kTabAccent);
     }
-    size_t idx = (source.id == "A") ? 0 : 1;
-    return wheel[idx % wheel.size()];
+    // Color by the source's file index so every merged file gets a distinct swatch
+    // (not just an A/B two-way split).
+    return wheel[source_index % wheel.size()];
 }
 
 float
@@ -66,7 +67,7 @@ RenderCompareSourceBadge(const TrackInfo* track_info, SettingsManager& settings)
     }
 
     const CompareSourceInfo& source = track_info->compare_source;
-    ImU32                    color  = CompareSourceColor(source, settings);
+    ImU32                    color  = CompareSourceColor(track_info->file_id, settings);
     float                    width  = CompareSourceBadgeWidth(track_info);
 
     ImGui::PushID("compare_source_badge");
@@ -78,7 +79,7 @@ RenderCompareSourceBadge(const TrackInfo* track_info, SettingsManager& settings)
     ImGui::PopStyleColor(4);
     if(ImGui::IsItemHovered())
     {
-        std::string tooltip = "Compare source " + source.id;
+        std::string tooltip = "Source";
         if(!source.name.empty())
         {
             tooltip += ": " + source.name;
@@ -720,18 +721,20 @@ TrackItem::Update()
     }
     if(m_track_statistics)
     {
-        if(m_track_statistics->state == AnalysisTrackStatistics::kPending)
+        const AnalysisTrackStatistics::State prior_state = m_track_statistics->state;
+        if(prior_state == AnalysisTrackStatistics::kPending)
         {
             RequestAnalysis();
         }
-        if(m_track_statistics->state < AnalysisTrackStatistics::kReady)
-        {
-            m_track_statistics_dirty = true;
-        }
-        else
-        {
-            m_track_statistics_dirty = false;
-        }
+        // Keep the pill's refresh flag set while the stat is still loading, and also on the one
+        // frame it resolves inline - an empty-range stat is set kReady by RequestAnalysis itself
+        // here, so without catching that kPending->kReady edge the pill would never repaint and
+        // would stay greyed.
+        const AnalysisTrackStatistics::State current_state = m_track_statistics->state;
+        m_track_statistics_dirty =
+            current_state < AnalysisTrackStatistics::kReady ||
+            (prior_state < AnalysisTrackStatistics::kReady &&
+             current_state == AnalysisTrackStatistics::kReady);
     }
 }
 
@@ -1130,13 +1133,24 @@ TrackItem::RequestAnalysis()
                 start_ts = std::max(start_ts, m_track_metadata->min_ts);
                 end_ts   = std::min(end_ts, m_track_metadata->max_ts);
             }
-            AnalysisTrackStatisticsRequestParams params(m_track_id, start_ts, end_ts);
-            params.m_generation =
-                m_data_provider.DataModel().GetAnalysis().GetGeneration();
-            m_track_statistics->state =
-                (start_ts < end_ts && m_data_provider.FetchAnalysisTrackStatistics(params))
-                    ? AnalysisTrackStatistics::kRequested
-                    : AnalysisTrackStatistics::kPending;
+            if(start_ts < end_ts)
+            {
+                AnalysisTrackStatisticsRequestParams params(m_track_id, start_ts, end_ts);
+                params.m_generation =
+                    m_data_provider.DataModel().GetAnalysis().GetGeneration();
+                m_track_statistics->state =
+                    m_data_provider.FetchAnalysisTrackStatistics(params)
+                        ? AnalysisTrackStatistics::kRequested
+                        : AnalysisTrackStatistics::kPending;
+            }
+            else
+            {
+                // The analysis range does not intersect this track's data window (or collapses
+                // to a point, e.g. a queue with a single event). There is nothing to fetch, so
+                // resolve the stat to zero and mark it ready instead of leaving it kPending -
+                // which would loop every frame and leave the pill greyed forever.
+                m_data_provider.DataModel().GetAnalysis().SetTrackStatisticsEmpty(m_track_id);
+            }
         }
     }
 }

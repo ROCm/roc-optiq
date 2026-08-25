@@ -205,6 +205,15 @@ rocprofvis_result_t SystemTrace::BuildTracksFromDataModel(uint64_t start_index, 
                 track->SetString(kRPVControllerTrackSubName, 0,
                                  sub_name.c_str());
 
+                // Record which source .db this track came from (position in m_files == the
+                // track's file id). Lets the view label/disambiguate identically-named tracks
+                // from different files in a merged view; harmless for single-file loads.
+                if(track_file_id < m_files.size())
+                {
+                    track->SetString(kRPVControllerTrackSourceFilePath, 0,
+                                     m_files[track_file_id].c_str());
+                }
+
                 uint64_t num_records =
                     rocprofvis_dm_get_property_as_uint64(
                         track->GetDmHandle(),

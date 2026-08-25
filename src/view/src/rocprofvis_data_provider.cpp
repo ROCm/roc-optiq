@@ -12,8 +12,11 @@
 
 #include <algorithm>
 #include <cfloat>
+#include <filesystem>
 #include <future>
 #include <iostream>
+#include <unordered_map>
+#include <unordered_set>
 
 namespace RocProfVis
 {
@@ -1245,6 +1248,14 @@ DataProvider::HandleLoadTrackMetaData()
     tlm.FreeAllTrackData();
     uint64_t num_graphs = tlm.GetTrackCount();
 
+    // A source badge only helps when 2+ distinct source files are merged into this view. Rather
+    // than a separate controller pass to detect that (the main loop below already reads each
+    // track's file id), collect the distinct file ids here and resolve each file's badge once,
+    // then stamp the tracks in a cheap in-memory post-pass. Robust for combined opens and
+    // in-place add/remove alike, since the controller keys each track by its own source file id.
+    std::unordered_set<uint64_t>                    distinct_source_files;
+    std::unordered_map<uint64_t, CompareSourceInfo> source_badge_by_file;
+
     for(uint64_t i = 0; i < num_graphs; i++)
     {
         rocprofvis_handle_t* graph  = nullptr;
@@ -1461,7 +1472,31 @@ DataProvider::HandleLoadTrackMetaData()
             if(const CompareSourceInfo* source =
                    m_model.GetCompareSource(track_info.file_id))
             {
+                // Compare projects tag sources A/B/... explicitly; prefer that labeling.
                 track_info.compare_source = *source;
+            }
+            else
+            {
+                // Merged view candidate. Record this file id and resolve its badge (file name +
+                // full path) once per distinct file; the badge is actually applied below only if
+                // 2+ files turn out to have contributed. The source path is thus read at most
+                // once per file instead of once per track.
+                distinct_source_files.insert(track_info.file_id);
+                if(source_badge_by_file.find(track_info.file_id) ==
+                   source_badge_by_file.end())
+                {
+                    std::string source_path;
+                    if(GetString(track, kRPVControllerTrackSourceFilePath, 0, source_path) ==
+                           kRocProfVisResultSuccess &&
+                       !source_path.empty())
+                    {
+                        CompareSourceInfo badge;
+                        badge.name = std::filesystem::path(source_path).stem().string();
+                        badge.id   = badge.name;
+                        badge.path = std::move(source_path);
+                        source_badge_by_file.emplace(track_info.file_id, std::move(badge));
+                    }
+                }
             }
 
             // Todo:
@@ -1477,16 +1512,37 @@ DataProvider::HandleLoadTrackMetaData()
         }
     }
 
+    // Apply source badges only when 2+ distinct files merged in (single-file views stay clean).
+    // This runs over the already-built in-memory metadata - no extra controller round-trips.
+    if(distinct_source_files.size() > 1)
+    {
+        std::unordered_map<uint64_t, TrackInfo>& metadata = tlm.GetMutableTrackMetadata();
+        for(auto& entry : metadata)
+        {
+            TrackInfo& info = entry.second;
+            if(m_model.GetCompareSource(info.file_id) != nullptr)
+            {
+                continue;  // compare tracks already carry their explicit A/B badge
+            }
+            auto it = source_badge_by_file.find(info.file_id);
+            if(it != source_badge_by_file.end())
+            {
+                info.compare_source = it->second;
+            }
+        }
+    }
+
     spdlog::debug("Track meta data loaded");
 }
 
 void
 DataProvider::ApplyTrackOrderRanking()
 {
-    // Only reorder compare traces. Normal single-file traces keep their natural load
-    // order; the ranking is what makes counterpart tracks from each compared file (A,
-    // B, ...) sit next to each other on the timeline.
-    if(!m_model.HasCompareSources())
+    // Only reorder compare traces. Normal single-file traces - and plain merges, which
+    // carry source tags for the badge but should keep their natural (file-grouped) order -
+    // are left alone; the ranking is what makes counterpart tracks from each compared file
+    // (A, B, ...) sit next to each other on the timeline.
+    if(!m_model.ShouldReorderCounterparts())
     {
         return;
     }
@@ -3296,6 +3352,12 @@ DataProvider::ProcessAnalysisTrackStatisticsRequest(RequestInfo& req)
     {
         spdlog::error("Track statistics params missing or invalid");
     }
+    else if(req.response_code == kRocProfVisResultCancelled)
+    {
+        // Superseded by a newer selection/range; expected, not an error.
+        spdlog::debug("Track statistics request for track {} was cancelled",
+                      params->m_track_id);
+    }
     else if(req.response_code != kRocProfVisResultSuccess)
     {
         spdlog::warn("Track statistics request for track {} failed with code {}",
@@ -3800,6 +3862,11 @@ DataProvider::ProcessTableRequest(RequestInfo& req)
         tables.SetTableParams(table_type_enum, table_params);
         tables.SetTableTotalRowCount(table_type_enum, total_num_rows);
         tables.SetTableHeader(table_type_enum,  std::move(column_names));
+    }
+    else if(req.response_code == kRocProfVisResultCancelled)
+    {
+        // Superseded by a newer selection/range before it finished; expected, not an error.
+        spdlog::debug("Table request was cancelled");
     }
     else
     {

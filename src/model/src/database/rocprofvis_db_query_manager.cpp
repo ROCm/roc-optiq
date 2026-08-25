@@ -271,13 +271,37 @@ QueryManager::BuildCompoundQuery(
 
     size_t thread_count = std::thread::hardware_concurrency();
     bool   event_table  = false;
+
+    // Total event count across all operations. It is used to size each big track's parallel
+    // split proportionally, but it does not depend on the track, so compute it once here rather
+    // than re-summing it for every large track inside the loop below.
+    uint64_t total_events = 0;
+    for(int op = kRocProfVisDmOperationLaunch; op < kRocProfVisDmNumOperation; op++)
+    {
+        total_events += TraceProperties()->events_count[op];
+    }
+
     for(int i = 0; i < slice_query_map_array.size(); i++)
     {
         rocprofvis_dm_index_t track = tracks[i];
         track                       = TABLE_QUERY_UNPACK_TRACK_ID(track);
 
-        int divider = static_cast<int>(thread_count / slice_query_map_array.size());
-        if(divider == 0) divider = 1;
+        // Split a track's time range into windows proportional to its share of all events, so
+        // one very large track (e.g. a 3M-event region track) is packed by many threads in
+        // parallel instead of being the fetch's single-threaded long pole while small tracks'
+        // threads sit idle. Scaled by the core count so the dominant track can use most cores.
+        int divider = 1;
+        if(TABLE_QUERY_UNPACK_OP_TYPE(tracks[i]) == 0)
+        {
+            rocprofvis_dm_track_params_t* dprops = TrackPropertiesAt(track);
+            if(dprops->record_count > SINGLE_THREAD_RECORDS_COUNT_LIMIT && total_events > 0)
+            {
+                divider = static_cast<int>((dprops->record_count * thread_count) / total_events);
+            }
+        }
+        else
+            divider = static_cast<int>(thread_count / slice_query_map_array.size());
+        if(divider < 1) divider = 1;
         for(auto it_query = slice_query_map_array[i].begin();
             it_query != slice_query_map_array[i].end(); ++it_query)
         {

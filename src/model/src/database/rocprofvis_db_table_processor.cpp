@@ -22,9 +22,10 @@
 #include "rocprofvis_db_expression_filter.h"
 #include "rocprofvis_db_profile.h"
 #include "rocprofvis_shared_types.h"
+#include <chrono>
+#include <fstream>
 #include <sstream>
 #include <unordered_set>
-#include <fstream>
 
 namespace RocProfVis
 {
@@ -70,6 +71,12 @@ namespace DataModel
     {
         m_timer.pause();
         rocprofvis_dm_result_t result = kRocProfVisDmResultInvalidParameter;
+        // Per-phase wall-clock, so a slow merged fetch can be attributed to the DB fetch vs.
+        // the in-memory merge vs. the filter/sort/emit stage. Logged once per call ([PROFILE],
+        // debug level) - it is one line per fetch, not per row, so it does not spam the log.
+        long long profile_fetch_ms   = 0;
+        long long profile_merge_ms   = 0;
+        long long profile_process_ms = 0;
         if (queries.size() > 0)
         {
             std::lock_guard<std::mutex> lock(m_lock);
@@ -104,6 +111,17 @@ namespace DataModel
                 std::vector<std::pair<DbInstance*, std::string>> new_queries;
                 for (const std::pair<const uint32_t, std::unordered_map<std::string, rocprofvis_db_compound_query_info>>& track : queries)
                 {
+                    // Only (re)fetch tracks newly added to the selection. Rows for tracks that
+                    // were already selected still live in m_merged_table and are reused; removed
+                    // tracks are dropped by RemoveRowsForSetOfTracks below. So adding or removing
+                    // one small track no longer re-queries every selected track. When the query
+                    // itself changed, added_tracks == m_tracks-invalidated set (all tracks, since
+                    // query_updated forces removed=all/added=all above), so this still refetches
+                    // everything - which is required for correctness when the SQL changes.
+                    if (added_tracks.find(track.first) == added_tracks.end())
+                    {
+                        continue;
+                    }
                     for (const std::pair<const std::string, rocprofvis_db_compound_query_info>& compound_query : track.second)
                     {
                         m_tables.push_back(std::make_unique<PackedTable>());
@@ -117,9 +135,13 @@ namespace DataModel
 
                 if (new_queries.size())
                 {
+                    const auto fetch_start = std::chrono::steady_clock::now();
                     result = m_db->ExecuteQueriesAsync(new_queries, future, (rocprofvis_dm_handle_t)this, &CallbackRunCompoundQuery);
+                    profile_fetch_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                        std::chrono::steady_clock::now() - fetch_start).count();
                     if (kRocProfVisDmResultSuccess == result)
                     {
+                        const auto merge_start = std::chrono::steady_clock::now();
                         try {
 
                             m_merged_table.Merge(m_tables);
@@ -139,13 +161,21 @@ namespace DataModel
                             spdlog::error("Unknown error!");
                             result = kRocProfVisDmResultUnknownError;
                         }
+                        profile_merge_ms += std::chrono::duration_cast<std::chrono::milliseconds>(
+                            std::chrono::steady_clock::now() - merge_start).count();
                     }                      
                 }
                 else
                 {
+                    const auto manage_start = std::chrono::steady_clock::now();
                     m_merged_table.ManageColumns(m_tables);
+                    profile_merge_ms += std::chrono::duration_cast<std::chrono::milliseconds>(
+                        std::chrono::steady_clock::now() - manage_start).count();
                 }
+                const auto sort_prep_start = std::chrono::steady_clock::now();
                 m_merged_table.CreateSortOrderArray();
+                profile_merge_ms += std::chrono::duration_cast<std::chrono::milliseconds>(
+                    std::chrono::steady_clock::now() - sort_prep_start).count();
                 if (m_merged_table.RowCount() == 0)
                 {
                     result = (kRocProfVisDmResultSuccess == result) ? kRocProfVisDmResultSuccess : kRocProfVisDmResultNotLoaded;
@@ -155,7 +185,10 @@ namespace DataModel
 
             if (kRocProfVisDmResultSuccess == result && m_merged_table.RowCount() > 0)
             {
+                const auto process_start = std::chrono::steady_clock::now();
                 result = ProcessCompoundQuery(handle, commands, !same_queries);
+                profile_process_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                    std::chrono::steady_clock::now() - process_start).count();
                 m_tracks = tracks;
             }
             else
@@ -163,6 +196,12 @@ namespace DataModel
                 m_tracks.clear();
                 m_tables.clear();
             }
+        }
+        if (profile_fetch_ms > 0 || profile_merge_ms > 0 || profile_process_ms > 0)
+        {
+            spdlog::debug("[PROFILE] compound query: db_fetch={}ms merge={}ms process={}ms rows={}",
+                          profile_fetch_ms, profile_merge_ms, profile_process_ms,
+                          m_merged_table.RowCount());
         }
         m_timer.restart(std::chrono::seconds(60));
         return result;
@@ -254,7 +293,9 @@ namespace DataModel
 
         if (row_index < m_merged_table.RowCount())
         { 
-            auto columns = m_merged_table.GetMergedColumns();
+            // Reference, not a copy: GetMergedColumns() returns a const& to a vector of
+            // MergedColumnDef (each holds a std::string), and this runs once per emitted row.
+            const auto& columns = m_merged_table.GetMergedColumns();
             uint8_t op = m_merged_table.GetOperationValue(row_index);
             int column_counter = 0;
             DbInstance * db_instance = m_merged_table.GetDbInstanceForRow(m_db, row_index);
@@ -366,7 +407,7 @@ namespace DataModel
         std::ofstream* file = (std::ofstream*)handle;
         rocprofvis_dm_result_t result = kRocProfVisDmResultSuccess;
         int column_index = 0;
-        for (auto column : m_merged_table.GetMergedColumns())
+        for (const auto& column : m_merged_table.GetMergedColumns())
         {
             if (to_file)
             {
@@ -397,7 +438,7 @@ namespace DataModel
         std::ofstream* file = (std::ofstream*)handle;
         rocprofvis_dm_result_t result = kRocProfVisDmResultSuccess;
         int column_index = 0;
-        for (auto column : m_merged_table.GetAggregationSpec())
+        for (const auto& column : m_merged_table.GetAggregationSpec())
         {
             if (to_file)
             {
@@ -445,8 +486,8 @@ namespace DataModel
         {
             m_db->BindObject()->FuncAddTableRowCell(row, r.first.c_str());
         }
-        auto aggr_spec = m_merged_table.GetAggregationSpec();
-        for (auto param : aggr_spec)
+        const auto& aggr_spec = m_merged_table.GetAggregationSpec();
+        for (const auto& param : aggr_spec)
         {  
             auto it = r.second.result.find(param.public_name);
             if (it == r.second.result.end())
@@ -487,7 +528,11 @@ namespace DataModel
                 ROCPROFVIS_ASSERT_MSG_RETURN(db_instance != nullptr, ERROR_NODE_KEY_CANNOT_BE_NULL, );
                 if (row_index < m_merged_table.RowCount())
                 {
-                    auto columns = m_merged_table.GetMergedColumns();
+                    // Reference, not a copy: this lambda is called for every row of the whole
+                    // merged table during the (multithreaded) filter pass, so copying the
+                    // column vector (each MergedColumnDef owns a std::string) per row was a
+                    // large, needless allocation cost. GetMergedColumns() returns a const&.
+                    const auto& columns = m_merged_table.GetMergedColumns();
                     uint8_t op = m_merged_table.GetOperationValue(row_index);
                     for (int column_index = 0; column_index < m_merged_table.MergedColumnCount(); column_index++)
                     {

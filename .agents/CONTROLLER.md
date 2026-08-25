@@ -349,9 +349,10 @@ Every public object type (`SystemTrace`, `Track`, `Graph`, `Event`,
 
 `m_first_prop_index` / `m_last_prop_index` form a guard band so an
 unhandled getter falls back to `UnhandledProperty(property)` (which
-returns `kRocProfVisResultInvalidArgument`). The `GetStdStringImpl`
-macro is the canonical way to copy a `std::string` into the caller's
-buffer with proper sizing.
+returns `kRocProfVisResultInvalidArgument`). The protected method
+`GetStdStringImpl(value, length, std::string_view)` is the canonical
+way to copy a string into the caller's buffer with proper sizing; it
+replaced the old `GetStdStringImpl` macro and `GetStringImpl` helper.
 
 ### 4.2 `Reference<>` template
 File: `rocprofvis_controller_reference.h`.
@@ -551,16 +552,23 @@ into SQLite directly, only through `rocprofvis_dm_*` calls.
 root system-trace controller. It owns:
 
 ```cpp
-std::vector<std::unique_ptr<Track>> m_tracks;
-std::vector<Node*>    m_nodes;          // legacy flat node list
-std::unique_ptr<Timeline>         m_timeline;
-std::unique_ptr<SystemTable>      m_event_table;
-std::unique_ptr<SystemTable>      m_sample_table;
-std::unique_ptr<EventSearchTable> m_search_table;
-std::unique_ptr<Summary>          m_summary;
-std::unique_ptr<MemoryManager>    m_mem_mgmt;
-std::unique_ptr<TopologyNode>     m_topology_root;
+std::vector<Track*>  m_tracks;
+Timeline*            m_timeline;
+SystemTable*         m_event_table;
+SystemTable*         m_sample_table;
+EventSearchTable*    m_search_table;
+Summary*             m_summary;
+MemoryManager*       m_mem_mgmt;
+TopologyNode*        m_topology_root;
 ```
+
+`LoadRocpd` is decomposed into four private helpers:
+`OpenRocpdDatabase` (opens / binds the SQLite database),
+`ReadRocpdMetadata` (issues `rocprofvis_db_read_metadata_async` and
+waits), `LoadRocpdTracks` (iterates model tracks and calls
+`LoadRocpdTrack` + `AddRocpdGraph` for each one), and
+`LoadRocpdTopology` (constructs the `TopologyNode` tree and calls
+`ValidateRocpdTrackTopology`).
 
 Five `AsyncFetch(...)` overloads cover everything the View asks for:
 
@@ -587,9 +595,19 @@ instrumented thread, sampled thread, counter). Carries:
 
 - `m_type` (`rocprofvis_controller_track_type_t`: `Samples` or `Events`).
 - `m_segments` (a `SegmentTimeline`, see section 7).
-- `m_thread`, `m_queue`, `m_stream`, `m_counter` - the linked
-  `TopologyNode*`s, may be null.
+- `m_topology_links` — struct holding `Thread*`, `Queue*`, `Stream*`,
+  `Counter*`; set after topology construction via `SetThread` /
+  `SetQueue` / `SetStream` / `SetCounter`. Access via the typed
+  getters `GetThread()`, `GetQueue()`, `GetStream()`, `GetCounter()`.
 - `m_dm_handle` - the model-layer track reference.
+
+Typed accessors (prefer these over the generic property API for
+internal C++ code): `GetId()`, `GetTrackType()`,
+`GetStartTimestamp()`, `GetEndTimestamp()`, `GetNumberOfEntries()`,
+`GetThread()`, `GetQueue()`, `GetStream()`, `GetCounter()`. The
+generic `GetObject` / `SetObject` overrides on `Track` are `private`;
+use the typed setters (`SetThread`, `SetQueue`, `SetStream`,
+`SetCounter`) when wiring topology links.
 
 `Fetch(start, end, array, index, future)` walks the segment cache:
 segments inside `[start, end]` that are not yet loaded get a
@@ -732,7 +750,12 @@ File: `rocprofvis_controller_topology.{h,cpp}`.
 `GetParent(type)` walks up the chain to the nearest ancestor of a
 given type. The View's `TrackTopology` mirrors this tree exactly when
 populating the side-bar; do not add a new topology kind without also
-extending `TopologyNode`.
+extending `TopologyNode`. Track-to-topology links come from the model
+node's `kRPVControllerTopologyNodeTrack` reference while the controller
+tree is constructed; track extended-data records are not a secondary
+wiring source. `SystemTrace::LoadRocpdTopology` checks whether every
+supported track received the expected thread, queue, stream, or counter
+link and logs incomplete topology without failing the trace load.
 
 ### 5.8 `FlowControl`, `CallStack`, `ExtData`, `ArgumentData`
 Files: `rocprofvis_controller_flow_control.h`,
@@ -1140,6 +1163,9 @@ These supplement `CODING.md`. When the two disagree, `CODING.md` wins.
 | Release an array's in-use grip                          | `MemoryManager::CancelArrayOwnership(arr, type)` (called by `array_free`) |
 | Walk segments inside `[start, end]`                     | `SegmentTimeline::FetchSegments(start, end, user_ptr, future, func)`    |
 | Identify a topology node's nearest typed ancestor       | `TopologyNode::GetParent(rocprofvis_controller_object_type_t)`          |
+| Get a track's linked topology node                      | `Track::GetThread()` / `GetQueue()` / `GetStream()` / `GetCounter()`   |
+| Wire a topology node to a track                         | `Track::SetThread()` / `SetQueue()` / `SetStream()` / `SetCounter()`   |
+| RAII-wrap a `rocprofvis_db_future_t`                    | `DataModelFuturePtr` (file-scope in `rocprofvis_controller_trace_system.cpp`) |
 | Implement a new table                                   | Subclass `Table`, override `Setup` / `Fetch` / `ExportCSV`              |
 | Implement a new system table use case                   | Add to `rocprofvis_dm_table_use_case_enum_t` and switch in `SystemTable` |
 | Implement a new compute pre-baked table                 | Add a `ComputeTableDefinition` row in `COMPUTE_TABLE_DEFINITIONS`       |

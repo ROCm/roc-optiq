@@ -8,6 +8,7 @@
 
 #include "imgui.h"
 
+#include "rocprofvis_appwindow.h"
 #include "rocprofvis_analysis_view.h"
 #include "rocprofvis_event_search.h"
 #include "rocprofvis_events_view.h"
@@ -58,6 +59,12 @@ struct TabContainerTestPeer
     const TabContainer& v;
     int  ActiveTabIndex() const { return v.m_active_tab_index; }
     int  TabCount() const { return static_cast<int>(v.m_tabs.size()); }
+};
+
+struct AppWindowTestPeer
+{
+    AppWindow& v;
+    TabContainer* TabContainerPtr() const { return v.m_tab_container.get(); }
 };
 
 struct ComputeViewTestPeer

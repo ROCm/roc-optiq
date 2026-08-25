@@ -161,6 +161,77 @@ bool TwoStackedEventScreenCenters(ImGuiTestContext* ctx, unsigned int flame_wind
     return false;
 }
 
+// Opens the "Track Options" gear menu for the flame track whose FV child window
+// is fv_id and returns the submenu window (nullptr on failure). Pass the fv_id
+// of the track the caller asserts on, so the menu and the assertion target the
+// same track. Menu entries are matched by DebugLabel substring: their labels
+// carry icon-padding spaces and their ids change every run. Caller must
+// PopupCloseAll().
+ImGuiWindow* OpenTrackGearMenu(ImGuiTestContext* ctx, unsigned int fv_id)
+{
+    if(fv_id == 0)
+    {
+        ctx->LogWarning("SKIP: no rendered flame track to open a gear menu on");
+        return nullptr;
+    }
+    ImGuiWindow* fv = ImGui::FindWindowByID(fv_id);
+    if(fv == nullptr || fv->ParentWindow == nullptr) return nullptr;
+
+    // A track's FV and MetaData Area windows are the two children of one
+    // per-track container, so the sibling of this FV is the right meta window.
+    ImGuiWindow* container = fv->ParentWindow;
+    ImGuiWindow* meta      = nullptr;
+    for(ImGuiWindow* w : ImGui::GetCurrentContext()->Windows)
+    {
+        if(w->WasActive && w->ParentWindow == container &&
+           strstr(w->Name, "MetaData Area"))
+        {
+            meta = w;
+            break;
+        }
+    }
+    if(meta == nullptr)
+    {
+        ctx->LogWarning("SKIP: flame track has no MetaData Area window");
+        return nullptr;
+    }
+
+    ctx->MouseMoveToPos(ImVec2(meta->Pos.x + meta->Size.x * 0.5f,
+                               meta->Pos.y + meta->Size.y * 0.5f));
+    ctx->MouseClick(ImGuiMouseButton_Right);
+    ctx->Yield(3);
+
+    ImGuiTestItemList items;
+    ctx->GatherItems(&items, "//$FOCUSED");
+    ImGuiID gear_id = 0;
+    for(int i = 0; i < items.GetSize(); i++)
+        if(strstr(items[i]->DebugLabel, "Track Options")) { gear_id = items[i]->ID; break; }
+    if(gear_id == 0) return nullptr;
+
+    ctx->ItemClick(gear_id);
+    ctx->Yield(3);
+
+    for(ImGuiWindow* w : ImGui::GetCurrentContext()->Windows)
+        if(w->WasActive && strstr(w->Name, "Track Options###Menu")) return w;
+    return nullptr;
+}
+
+// Clicks a control in an open gear submenu whose label contains `label`.
+// Returns false if no gathered item matches.
+bool ClickGearMenuItem(ImGuiTestContext* ctx, ImGuiWindow* menu, const char* label)
+{
+    ctx->SetRef(menu);
+    ImGuiTestItemList items;
+    ctx->GatherItems(&items, "");
+    for(int i = 0; i < items.GetSize(); i++)
+        if(strstr(items[i]->DebugLabel, label))
+        {
+            ctx->ItemClick(items[i]->ID);
+            return true;
+        }
+    return false;
+}
+
 // Restores show_summary when it goes out of scope. The Summary tests set it
 // true to drive their load path; without this, that state would leak into
 // later tests and cover the timeline.
@@ -174,6 +245,42 @@ struct ShowSummaryGuard
     ~ShowSummaryGuard()
     {
         SettingsManager::GetInstance().GetAppWindowSettings().show_summary = prev;
+    }
+};
+
+// Restores the tab set and active tab that existed when constructed, so a test
+// that opens extra dbs (sys_shared_db_open_dedups_and_switches) doesn't leave
+// stray tabs and a changed current project for the next test. The kTabClosed
+// event that frees the project is queued, so the destructor yields to drain it.
+struct TabStateGuard
+{
+    ImGuiTestContext* ctx;
+    TabContainer*     tc;
+    std::vector<std::string> start_ids;
+    std::string              start_active_id;
+
+    TabStateGuard(ImGuiTestContext* c, TabContainer* t) : ctx(c), tc(t)
+    {
+        if(!tc) return;
+        for(const TabItem* tab : tc->GetTabs()) start_ids.push_back(tab->m_id);
+        const TabItem* active = tc->GetActiveTab();
+        if(active) start_active_id = active->m_id;
+    }
+
+    ~TabStateGuard()
+    {
+        if(!tc) return;
+        std::vector<std::string> to_close;
+        for(const TabItem* tab : tc->GetTabs())
+        {
+            bool was_present = false;
+            for(const std::string& id : start_ids)
+                if(id == tab->m_id) { was_present = true; break; }
+            if(!was_present) to_close.push_back(tab->m_id);
+        }
+        for(const std::string& id : to_close) tc->RemoveTab(id);
+        if(!start_active_id.empty()) tc->SetActiveTab(start_active_id);
+        if(ctx) ctx->Yield(3);
     }
 };
 }  // namespace
@@ -947,28 +1054,39 @@ void RegisterAppTests(ImGuiTestEngine* e)
         IM_CHECK(flame != nullptr);
         if (flame == nullptr) return;
 
-        // Compact Mode is a per-track gear option whose checkbox lives in a popup
-        // with no stable widget id, so drive it through the same side-effecting
-        // path the checkbox uses. Turning it on shrinks the per-event level
-        // height; assert both the flag and the height follow, then restore.
+        // Click the real "Compact Mode" checkbox so the test covers the menu
+        // wiring, not just the field. Turning it on shrinks the level height.
+        const unsigned int fv_id = FlameTrackItemTestPeer{*flame}.FlameWindowId();
         const bool  orig_compact = flame->IsCompactMode();
         const float orig_height  = FlameTrackItemTestPeer{*flame}.LevelHeight();
 
-        // Capture observations, restore, THEN assert: IM_CHECK early-returns on
-        // failure, so asserting before the restore would leak the flipped state
-        // (per-track flag, shared across the process) into later tests.
-        FlameTrackItemTestPeer{*flame}.SetCompactMode(!orig_compact);
+        ImGuiWindow* menu = OpenTrackGearMenu(ctx, fv_id);
+        if (menu == nullptr) return;  // logged skip inside the helper
+        const bool clicked_on = ClickGearMenuItem(ctx, menu, "Compact Mode");
+        ctx->PopupCloseAll();
         ctx->Yield(2);
+        IM_CHECK(clicked_on);
+        if (!clicked_on) return;
+
         const bool  on_compact = flame->IsCompactMode();
         const float on_height  = FlameTrackItemTestPeer{*flame}.LevelHeight();
 
-        FlameTrackItemTestPeer{*flame}.SetCompactMode(orig_compact);
+        // Toggle back through the checkbox to restore state for later tests. A
+        // peer restore backstops it in case the second click fails to register.
+        ImGuiWindow* menu2       = OpenTrackGearMenu(ctx, fv_id);
+        bool         clicked_off = false;
+        if (menu2 != nullptr) clicked_off = ClickGearMenuItem(ctx, menu2, "Compact Mode");
+        ctx->PopupCloseAll();
+        ctx->Yield(2);
+        if (flame->IsCompactMode() != orig_compact)
+            FlameTrackItemTestPeer{*flame}.SetCompactMode(orig_compact);
         ctx->Yield(2);
         const bool  back_compact = flame->IsCompactMode();
         const float back_height  = FlameTrackItemTestPeer{*flame}.LevelHeight();
 
         IM_CHECK(on_compact != orig_compact);
         IM_CHECK(on_height != orig_height);
+        IM_CHECK(clicked_off);
         IM_CHECK(back_compact == orig_compact);
         IM_CHECK(back_height == orig_height);
     };
@@ -1038,31 +1156,56 @@ void RegisterAppTests(ImGuiTestEngine* e)
         IM_CHECK(flame != nullptr);
         if (flame == nullptr) return;
 
-        // "Color by Name / Time Level / No Color" are gear-menu radio buttons in
-        // a popup with no stable path; each sets the track's event color mode.
-        // Drive that field directly and assert it changes, then restore.
-        const EventTrackOptions::EventColorMode orig =
-            FlameTrackItemTestPeer{*flame}.GetEventColorMode();
-        const EventTrackOptions::EventColorMode other =
-            (orig == EventTrackOptions::EventColorMode::kByTimeLevel)
-                ? EventTrackOptions::EventColorMode::kByEventName
-                : EventTrackOptions::EventColorMode::kByTimeLevel;
+        using ColorMode = EventTrackOptions::EventColorMode;
+        auto label_for = [](ColorMode m) -> const char* {
+            switch (m)
+            {
+                case ColorMode::kByEventName: return "Color by Name";
+                case ColorMode::kByTimeLevel: return "Color by Time Level";
+                case ColorMode::kNone:        return "No Color";
+                default:                      return nullptr;  // kMixed has no radio
+            }
+        };
 
-        // Capture, restore, THEN assert: IM_CHECK early-returns on failure, so
-        // asserting before the restore would leak the changed color mode (shared
-        // per-track state) into later tests in the same process.
-        FlameTrackItemTestPeer{*flame}.SetEventColorMode(other);
-        ctx->Yield(2);
-        const EventTrackOptions::EventColorMode changed =
-            FlameTrackItemTestPeer{*flame}.GetEventColorMode();
+        // Click the real color-mode radio so the test covers the menu wiring,
+        // not just the field. Switch to a different mode, then restore the
+        // original by clicking its radio.
+        const ColorMode orig  = FlameTrackItemTestPeer{*flame}.GetEventColorMode();
+        const ColorMode other = (orig == ColorMode::kByTimeLevel)
+                                    ? ColorMode::kByEventName
+                                    : ColorMode::kByTimeLevel;
+        const char* orig_label = label_for(orig);
+        if (orig_label == nullptr)
+        {
+            ctx->LogWarning("SKIP: track color mode has no radio to restore to (kMixed)");
+            return;
+        }
+        const unsigned int fv_id = FlameTrackItemTestPeer{*flame}.FlameWindowId();
 
-        FlameTrackItemTestPeer{*flame}.SetEventColorMode(orig);
+        ImGuiWindow* menu = OpenTrackGearMenu(ctx, fv_id);
+        if (menu == nullptr) return;  // logged skip inside the helper
+        const bool clicked_other = ClickGearMenuItem(ctx, menu, label_for(other));
+        ctx->PopupCloseAll();
         ctx->Yield(2);
-        const EventTrackOptions::EventColorMode restored =
-            FlameTrackItemTestPeer{*flame}.GetEventColorMode();
+        IM_CHECK(clicked_other);
+        if (!clicked_other) return;
+        const ColorMode changed = FlameTrackItemTestPeer{*flame}.GetEventColorMode();
+
+        // Restore the original mode through its radio. A peer restore backstops
+        // it in case the click fails to register.
+        ImGuiWindow* menu2       = OpenTrackGearMenu(ctx, fv_id);
+        bool         clicked_orig = false;
+        if (menu2 != nullptr) clicked_orig = ClickGearMenuItem(ctx, menu2, orig_label);
+        ctx->PopupCloseAll();
+        ctx->Yield(2);
+        if (FlameTrackItemTestPeer{*flame}.GetEventColorMode() != orig)
+            FlameTrackItemTestPeer{*flame}.SetEventColorMode(orig);
+        ctx->Yield(2);
+        const ColorMode restored = FlameTrackItemTestPeer{*flame}.GetEventColorMode();
 
         IM_CHECK(changed == other);
         IM_CHECK(changed != orig);
+        IM_CHECK(clicked_orig);
         IM_CHECK(restored == orig);
     };
 
@@ -1221,9 +1364,11 @@ void RegisterAppTests(ImGuiTestEngine* e)
         ctx->Yield(2);
         IM_CHECK(es->Searched() == false);
 
-        // hipLaunchKernel is a launch region present in the trace; write it into
-        // the production search buffer and run the search the same way the input
-        // field's submit does.
+        // The search term is coupled to the CI sample db (sample/rocpd-transpose.db):
+        // it must name an event that exists AND is a searchable op type
+        // (Launch/Dispatch/MemoryCopy/MemoryAllocate/LaunchSample -- see
+        // EventSearch::Search). If the sample db changes, update it to a term the
+        // new db contains.
         char* buf = es->TextInput();
         IM_CHECK(buf != nullptr);
         if (buf == nullptr) return;
@@ -1809,6 +1954,10 @@ void RegisterAppTests(ImGuiTestEngine* e)
         IM_CHECK(app != nullptr);
         if (app == nullptr) return;
 
+        // Construct before opening anything so the guard captures the startup
+        // tab set as the state to restore.
+        TabStateGuard tab_guard(ctx, AppWindowTestPeer{*app}.TabContainerPtr());
+
         // Sample dbs resolve relative to the working directory (the repo root).
         // Skip if either is missing.
         auto resolve_sample = [](const char* rel) -> std::string {
@@ -1874,7 +2023,7 @@ void RegisterAppTests(ImGuiTestEngine* e)
         IM_CHECK(app->GetProject(rpv_path.string()) == nullptr);
 
         // Remove the temp .rpv and dismiss the dedup popup so it can't cover
-        // later tests. The tabs stay open (no safe close hook).
+        // later tests. tab_guard restores the tab set on scope exit.
         std::error_code ec;
         fs::remove(rpv_path, ec);
         ctx->PopupCloseAll();

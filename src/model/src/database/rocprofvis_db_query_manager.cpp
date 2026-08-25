@@ -291,7 +291,7 @@ QueryManager::BuildCompoundQuery(
         // parallel instead of being the fetch's single-threaded long pole while small tracks'
         // threads sit idle. Scaled by the core count so the dominant track can use most cores.
         int divider = 1;
-        if(TABLE_QUERY_UNPACK_OP_TYPE(tracks[i]) == 0)
+        if(TABLE_QUERY_UNPACK_OP_TYPE(tracks[i]) == kRocProfVisDmOperationNoOp)
         {
             rocprofvis_dm_track_params_t* dprops = TrackPropertiesAt(track);
             if(dprops->record_count > SINGLE_THREAD_RECORDS_COUNT_LIMIT && total_events > 0)
@@ -300,8 +300,19 @@ QueryManager::BuildCompoundQuery(
             }
         }
         else
+        {
             divider = static_cast<int>(thread_count / slice_query_map_array.size());
-        if(divider < 1) divider = 1;
+        }
+        // Never fewer than one window, and never more than the core count (a NoOp combined
+        // track's record_count can transiently exceed the summed per-op counts).
+        if(divider < 1)
+        {
+            divider = 1;
+        }
+        else if(thread_count > 0 && divider > static_cast<int>(thread_count))
+        {
+            divider = static_cast<int>(thread_count);
+        }
         for(auto it_query = slice_query_map_array[i].begin();
             it_query != slice_query_map_array[i].end(); ++it_query)
         {

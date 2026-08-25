@@ -177,9 +177,9 @@ rocprofvis_result_t SystemTrace::BuildTracksFromDataModel(uint64_t start_index, 
            dm_track_type == kRocProfVisDmStreamTrack ||
            dm_track_type == kRocProfVisDmPmcTrack)
         {
-            auto   type = (dm_track_type == kRocProfVisDmPmcTrack)
-                              ? kRPVControllerTrackTypeSamples
-                              : kRPVControllerTrackTypeEvents;
+            rocprofvis_controller_track_type_t type =
+                (dm_track_type == kRocProfVisDmPmcTrack) ? kRPVControllerTrackTypeSamples
+                                                         : kRPVControllerTrackTypeEvents;
             Track* track =
                 new Track(type, track_id, dm_track_handle, this);
             {
@@ -424,6 +424,11 @@ rocprofvis_result_t SystemTrace::AddTraceSource(Future& future, const std::strin
                         // current controller track count.
                         uint64_t graph_index = m_tracks.size();
                         size_t   trace_size  = 0;
+                        // Record the added file before building: its db-node index equals this
+                        // new m_files slot, and BuildTracksFromDataModel tags each new track with
+                        // m_files[file_id] so merged sources can be told apart. (Popped on
+                        // failure below.)
+                        m_files.push_back(path);
                         result = BuildTracksFromDataModel(old_num_tracks, new_num_tracks,
                                                           end_time, graph_index, trace_size);
 
@@ -441,11 +446,9 @@ rocprofvis_result_t SystemTrace::AddTraceSource(Future& future, const std::strin
                         delete m_topology_root;
                         m_topology_root = new TopologyRoot(dm_topology_root, this);
 
-                        // Record the new file so a later Remove can map its path to the db
-                        // node index it just got (appended == next index).
-                        if(result == kRocProfVisResultSuccess)
+                        if(result != kRocProfVisResultSuccess)
                         {
-                            m_files.push_back(path);
+                            m_files.pop_back();
                         }
                     }
                     future->RemoveDependentFuture(object2wait);
@@ -739,6 +742,20 @@ rocprofvis_result_t SystemTrace::LoadRocpd(Future* future) {
                                                 kRPVDMTrackSubProcessNameCharPtr, 0);
                                         track->SetString(kRPVControllerTrackSubName, 0,
                                                          sub_name.c_str());
+
+                                        // Tag every track with its source .db path so a merged
+                                        // view badges all sources - including the first/opened
+                                        // file(s) here, not just files added later via
+                                        // BuildTracksFromDataModel. Harmless for single-file loads.
+                                        uint64_t track_file_id =
+                                            rocprofvis_dm_get_property_as_uint64(
+                                                dm_track_handle, kRPVDMTrackFileIdUInt64, 0);
+                                        if(track_file_id < m_files.size())
+                                        {
+                                            track->SetString(
+                                                kRPVControllerTrackSourceFilePath, 0,
+                                                m_files[track_file_id].c_str());
+                                        }
 
                                         uint64_t num_records =
                                             rocprofvis_dm_get_property_as_uint64(

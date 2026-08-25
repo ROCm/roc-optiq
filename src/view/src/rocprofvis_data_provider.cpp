@@ -259,6 +259,13 @@ DataProvider::SetSummaryDataReadyCallback(const std::function<void()>& callback)
 }
 
 void
+DataProvider::SetSourceMutationDoneCallback(
+    const std::function<void(const std::string&, bool, bool)>& callback)
+{
+    m_source_mutation_done_callback = callback;
+}
+
+void
 DataProvider::SetTraceLoadedCallback(
     const std::function<void(const std::string&, uint64_t)>& callback)
 {
@@ -645,8 +652,20 @@ DataProvider::AddTraceSource(const std::string& file_path)
 
     // kLoading makes FetchTrack/FetchGraph early-return, so the render loop cannot issue
     // new fetches while the injection is in progress.
-    m_state = ProviderState::kLoading;
+    m_pending_source_mutation_path   = file_path;
+    m_pending_source_mutation_is_add = true;
+    m_state                          = ProviderState::kLoading;
     return true;
+}
+
+void
+DataProvider::NotifySourceMutationDone(bool success)
+{
+    if(m_source_mutation_done_callback)
+    {
+        m_source_mutation_done_callback(m_pending_source_mutation_path,
+                                        m_pending_source_mutation_is_add, success);
+    }
 }
 
 void
@@ -654,11 +673,13 @@ DataProvider::ProcessAddTraceSource(RequestInfo& req)
 {
     if(req.response_code != kRocProfVisResultSuccess)
     {
-        // The add failed (e.g. incompatible file). Keep the existing view intact; resuming
-        // kReady lets the timeline re-fetch its visible tracks from the controller cache.
-        spdlog::error("Failed to add trace source to {}, error code: {}",
+        // The add/remove failed (e.g. incompatible file). Keep the existing view intact;
+        // resuming kReady lets the timeline re-fetch its visible tracks from the controller
+        // cache. The owner is told (success=false) so it does not commit the source change.
+        spdlog::error("Failed to mutate trace sources for {}, error code: {}",
                       m_model.GetTraceFilePath(), req.response_code);
         m_state = ProviderState::kReady;
+        NotifySourceMutationDone(false);
         return;
     }
 
@@ -760,6 +781,7 @@ DataProvider::ProcessAddTraceSource(RequestInfo& req)
     {
         m_trace_data_ready_callback(m_model.GetTraceFilePath(), kRocProfVisResultSuccess);
     }
+    NotifySourceMutationDone(true);
 }
 
 bool
@@ -800,7 +822,9 @@ DataProvider::RemoveTraceSource(const std::string& file_path)
     request_info.request_type       = RequestType::kRemoveTraceSource;
     m_requests.emplace(request_info.request_id, request_info);
 
-    m_state = ProviderState::kLoading;
+    m_pending_source_mutation_path   = file_path;
+    m_pending_source_mutation_is_add = false;
+    m_state                          = ProviderState::kLoading;
     return true;
 }
 

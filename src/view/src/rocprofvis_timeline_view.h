@@ -14,13 +14,13 @@
 #include "rocprofvis_timeline_arrow.h"
 #include "rocprofvis_track_item.h"
 #include "widgets/rocprofvis_widget.h"
+#include <chrono>
 #include <map>
 #include <memory>
 #include <string>
 #include <unordered_map>
 #include <utility>
 #include <vector>
-#include <chrono>
  
 namespace RocProfVis
 {
@@ -77,7 +77,11 @@ public:
     std::vector<uint64_t> OrderedTrackIds() const;
 
 private:
-    jt::Json&     TrackOrderJson() const;
+    // Get-or-create the track-order node (for writing in ToJson).
+    jt::Json& TrackOrderJson();
+    // Read-only lookup of the track-order node; nullptr if absent. Does not insert, so it is
+    // safe to call from the const Valid()/OrderedTrackIds() without mutating the shared settings.
+    jt::Json*     FindTrackOrder() const;
     TimelineView& m_timeline_view;
 };
 

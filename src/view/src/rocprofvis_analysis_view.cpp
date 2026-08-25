@@ -126,21 +126,24 @@ AnalysisView::Update()
     if(active_widget != m_last_active_tab_widget)
     {
         m_last_active_tab_widget = active_widget;
-        // The INVALID id is a "refetch the current selection" trigger for these table widgets
-        // (it reads the live selection + time range), so one call brings the tab up to date.
-        if(m_event_table_needs_refresh && IsTabActive(m_event_table.get()))
+        // Compare against the active widget we already have instead of re-querying the tab
+        // container per table. The INVALID id triggers a refetch of the live selection + range.
+        auto is_active = [active_widget](const RocWidget* widget) {
+            return widget != nullptr && widget == active_widget;
+        };
+        if(m_event_table_needs_refresh && is_active(m_event_table.get()))
         {
             m_event_table_needs_refresh = false;
             m_event_table->HandleTrackSelectionChanged(
                 TimelineSelection::INVALID_SELECTION_ID, false);
         }
-        if(m_sample_table_needs_refresh && IsTabActive(m_sample_table.get()))
+        if(m_sample_table_needs_refresh && is_active(m_sample_table.get()))
         {
             m_sample_table_needs_refresh = false;
             m_sample_table->HandleTrackSelectionChanged(
                 TimelineSelection::INVALID_SELECTION_ID, false);
         }
-        if(m_top_events_needs_refresh && IsTabActive(m_top_events_view.get()))
+        if(m_top_events_needs_refresh && is_active(m_top_events_view.get()))
         {
             m_top_events_needs_refresh = false;
             m_top_events_view->HandleTrackSelectionChanged(

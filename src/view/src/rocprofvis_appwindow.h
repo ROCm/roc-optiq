@@ -3,7 +3,6 @@
 
 #pragma once
 
-#include "json.h"
 #include "rocprofvis_controller.h"
 #include "rocprofvis_compare_files_dialog.h"
 #include "rocprofvis_data_provider.h"
@@ -173,6 +172,10 @@ private:
     // Removes one source file from the current merged view: reopens the remaining subset
     // (or the single remaining trace) and closes the previous merged tab.
     void RemoveTraceFromView(const std::string& file_to_remove);
+    // Wire a provider's add/remove-trace-source completion to commit the project's source list
+    // + tab label on success, or surface an error dialog on failure - only once the async op
+    // has finished (so a failed add/remove never leaves a phantom source or wrong tab name).
+    void WireSourceMutationCallback(DataProvider* provider, const std::string& project_id);
     void HandleCompareFiles();
     void HandleCompareFileBrowse(CompareFilesDialog::FileSlot slot);
     void HandleSaveAsFile();

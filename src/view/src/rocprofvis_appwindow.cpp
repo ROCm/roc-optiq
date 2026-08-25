@@ -1174,11 +1174,12 @@ AppWindow::RemoveTraceFromView(const std::string& file_to_remove)
     // track id, which is stable for the surviving tracks) - no reopen, no settings carry-over.
     TraceView* trace_view = dynamic_cast<TraceView*>(project->GetView().get());
     DataProvider* provider = trace_view ? trace_view->GetDataProvider() : nullptr;
-    if(provider && provider->RemoveTraceSource(file_to_remove))
+    if(provider)
     {
-        project->RemoveSourceFile(file_to_remove);
+        // Commit the source-list/tab change only when the async remove actually succeeds.
+        WireSourceMutationCallback(provider, project->GetID());
     }
-    else
+    if(!provider || !provider->RemoveTraceSource(file_to_remove))
     {
         ShowMessageDialog(
             "Remove Trace from View",
@@ -1237,16 +1238,46 @@ AppWindow::AddTraceToCurrentView()
             TraceView* trace_view = dynamic_cast<TraceView*>(current->GetView().get());
             DataProvider* provider =
                 trace_view ? trace_view->GetDataProvider() : nullptr;
-            if(provider && provider->AddTraceSource(file_path))
+            if(provider)
             {
-                current->AddSourceFile(file_path);
+                // Commit the source-list/tab change only when the async add actually succeeds.
+                WireSourceMutationCallback(provider, current->GetID());
             }
-            else
+            if(!provider || !provider->AddTraceSource(file_path))
             {
                 ShowMessageDialog(
                     "Add Trace to View",
                     "Could not add the trace. It must be a compatible rocprof .db of the "
                     "same schema, and the current view must be idle.");
+            }
+        });
+}
+
+void
+AppWindow::WireSourceMutationCallback(DataProvider* provider, const std::string& project_id)
+{
+    provider->SetSourceMutationDoneCallback(
+        [this, project_id](const std::string& path, bool is_add, bool success) {
+            if(success)
+            {
+                if(Project* project = GetProject(project_id))
+                {
+                    if(is_add)
+                    {
+                        project->AddSourceFile(path);
+                    }
+                    else
+                    {
+                        project->RemoveSourceFile(path);
+                    }
+                }
+            }
+            else
+            {
+                ShowMessageDialog(is_add ? "Add Trace to View" : "Remove Trace from View",
+                                  is_add ? "Could not add the trace. It must be a compatible "
+                                           "rocprof .db of the same schema."
+                                         : "Could not remove the trace from the view.");
             }
         });
 }

@@ -861,19 +861,31 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
         TraceProperties()->num_db_instances = static_cast<uint32_t>(DbInstances().size());
 
         ShowProgress(1, "Get version", kRPVDbBusy, future);
-        std::string version;
+        // The schema version every instance must share. On an incremental add the existing files
+        // were already validated to m_db_version, so seed the reference with it - the loop below
+        // only processes the newly added node, and it must match what is already loaded.
+        std::string version = IsIncrementalLoad() ? m_db_version : std::string();
+        const std::string existing_version = version;
         for (auto& guid_info : DbInstances())
         {
             if (!ShouldProcessInstance(guid_info.first.FileIndex())) continue;
-            if ((result = kRocProfVisDmResultSuccess) != ExecuteSQLQuery(future, &guid_info.first, "SELECT * FROM rocpd_metadata_%GUID%;", &CallbackParseMetadata)) break;
-            if (!version.empty())
+            // CallbackParseMetadata writes m_db_version for this instance.
+            result = ExecuteSQLQuery(future, &guid_info.first, "SELECT * FROM rocpd_metadata_%GUID%;", &CallbackParseMetadata);
+            if (result != kRocProfVisDmResultSuccess) break;
+            if (version.empty())
             {
-                if (version != m_db_version)
+                version = m_db_version;  // first instance establishes the reference
+            }
+            else if (m_db_version != version)
+            {
+                spdlog::warn("Schema mismatch: all database sources must use the same schema version; the trace cannot be opened.");
+                result = kRocProfVisDmResultNotSupported;
+                // Restore the live trace's version so a rejected incremental add leaves it intact.
+                if (!existing_version.empty())
                 {
-                    spdlog::warn("Schema mismatch: all database sources must use the same schema version; the trace cannot be opened.");
-                    result = kRocProfVisDmResultNotSupported;
-                    break;
+                    m_db_version = existing_version;
                 }
+                break;
             }
         }
         if (result != kRocProfVisDmResultSuccess)
@@ -1399,6 +1411,22 @@ rocprofvis_dm_result_t  RocprofDatabase::AddNode(rocprofvis_db_filename_t filepa
 {
     ROCPROFVIS_ASSERT_MSG_RETURN(future, ERROR_FUTURE_CANNOT_BE_NULL, kRocProfVisDmResultInvalidParameter);
     ROCPROFVIS_ASSERT_MSG_RETURN(filepath, ERROR_DATABASE_CANNOT_BE_NULL, kRocProfVisDmResultInvalidParameter);
+
+    // Reject an incompatible file before touching any shared state: incremental add only
+    // supports appending another modern rocprof (rocpd_event schema) trace. A legacy rocpd,
+    // rocprof-compute, or unrecognized file would otherwise be appended as a node that
+    // enumerates no rocprof instances - silently merging nothing rather than reporting an error.
+    std::vector<std::string> multinode_files;
+    rocprofvis_db_type_t     added_type = Detect(filepath, multinode_files);
+    if(added_type != kRocprofSqlite && added_type != kRocprofMultinodeSqlite)
+    {
+        spdlog::warn("Cannot add {}: only another rocprof trace of the same schema can be "
+                     "merged into this view.",
+                     filepath);
+        ShowProgress(0, "Incompatible trace: only another rocprof trace can be added.",
+                     kRPVDbError, future);
+        return future->SetPromise(kRocProfVisDmResultNotSupported);
+    }
 
     // Append the file as a new db node and scope the metadata read to just that node so
     // the already-loaded files are not re-read. ReadTraceMetadata consults

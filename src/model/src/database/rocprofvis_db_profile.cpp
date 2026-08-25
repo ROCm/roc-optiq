@@ -1120,6 +1120,17 @@ rocprofvis_dm_result_t ProfileDatabase::BuildHistogram(Future* future, uint32_t 
                                ? TraceProperties()->histogram_bucket_size
                                : (trace_length + desired_bins) / desired_bins;
 
+    // Guard against a zero bucket size (an incremental add before any full load set it, or a
+    // zero desired_bins): a zero here would divide-by-zero below and in the bucket queries.
+    if(bucket_size == 0)
+    {
+        bucket_size = (desired_bins > 0) ? (trace_length + desired_bins) / desired_bins : 1;
+        if(bucket_size == 0)
+        {
+            bucket_size = 1;
+        }
+    }
+
     if (!IsIncrementalLoad())
     {
         TraceProperties()->histogram_bucket_size = bucket_size;

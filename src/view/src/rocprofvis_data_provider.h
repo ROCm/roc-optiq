@@ -233,6 +233,11 @@ public:
         const std::function<void(uint64_t, const std::string&, const RequestInfo&)>&
             callback);
     void SetSummaryDataReadyCallback(const std::function<void()>& callback);
+    // Fired when an in-place add/remove-trace-source op completes: (path, is_add, success).
+    // Lets the owner commit the source-list/tab change (or surface an error) only once the
+    // async op has actually finished, rather than optimistically at request time.
+    void SetSourceMutationDoneCallback(
+        const std::function<void(const std::string&, bool, bool)>& callback);
     void SetTraceLoadedCallback(
         const std::function<void(const std::string&, uint64_t)>& callback);
     void SetSaveTraceCallback(const std::function<void(bool)>& callback);
@@ -330,6 +335,8 @@ private:
     // Completion handler for an in-place RemoveTraceSource. Refreshes the timeline model from
     // the (now smaller) controller, same as the add path.
     void ProcessRemoveTraceSource(RequestInfo& req);
+    // Report add/remove-trace-source completion to the owner via m_source_mutation_done_callback.
+    void NotifySourceMutationDone(bool success);
     void ProcessEventExtendedRequest(RequestInfo& req);
     void ProcessEventFlowDetailsRequest(RequestInfo& req);
     void ProcessEventCallStackRequest(RequestInfo& req);
@@ -376,6 +383,11 @@ private:
         m_track_data_ready_callback;
     // Called when a new trace is loaded
     std::function<void(const std::string&, uint64_t)> m_trace_data_ready_callback;
+    // Called when an in-place add/remove-trace-source op completes: (path, is_add, success).
+    std::function<void(const std::string&, bool, bool)> m_source_mutation_done_callback;
+    // The file being added/removed, remembered so the completion callback can report it.
+    std::string m_pending_source_mutation_path;
+    bool        m_pending_source_mutation_is_add = false;
     // called when event data is ready
     std::function<void(uint64_t, const std::string&, bool)>
         m_event_data_ready_callback;

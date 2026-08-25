@@ -50,8 +50,10 @@ void Timeline::RemoveGraph(Graph* graph)
 
 void Timeline::RecomputeExtents()
 {
+    // -DBL_MAX, not DBL_MIN (the smallest positive normal), is the correct lower bound for a
+    // running max.
     m_min_ts = DBL_MAX;
-    m_max_ts = DBL_MIN;
+    m_max_ts = -DBL_MAX;
     for(Graph* graph : m_graphs)
     {
         double min_ts = 0;

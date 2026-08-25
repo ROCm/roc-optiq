@@ -38,6 +38,9 @@ constexpr float    SCROLL_SPEED                  = 100.0f;
 constexpr uint64_t DEFAULT_LOADING_TIMER         = 150;  // milliseconds
 constexpr float    ARTIFICIAL_SCROLLBAR_HEIGHT   = 18.0f;
 constexpr float    SIDEBAR_SPLITTER_WIDTH        = 5.0f;
+// How long the visible range must be stable before it is pushed to the analysis model, so panning
+// or zooming does not re-arm every stat and cancel in-flight fetches each frame.
+constexpr std::chrono::milliseconds ANALYSIS_RANGE_DEBOUNCE{ 250 };
 constexpr const char* HIDDEN_TRACKS_MENU_POPUP_NAME = "HiddenTracksMenu";
 // Build a text block mirroring the on-hover tooltip (name, timing, and id)
 // for the clipboard.
@@ -2870,7 +2873,7 @@ TimelineView::RenderTraceView()
             m_analysis_range_committed = false;
         }
         else if(!m_analysis_range_committed &&
-                (now - m_analysis_range_changed_at) >= std::chrono::milliseconds(250))
+                (now - m_analysis_range_changed_at) >= ANALYSIS_RANGE_DEBOUNCE)
         {
             m_data_provider.DataModel().GetAnalysis().SetAnalysisRange(vmin, vmax);
             m_analysis_range_committed = true;
@@ -3435,9 +3438,27 @@ TimelineViewProjectSettings::TimelineViewProjectSettings(const std::string& proj
 TimelineViewProjectSettings::~TimelineViewProjectSettings() {}
 
 jt::Json&
-TimelineViewProjectSettings::TrackOrderJson() const
+TimelineViewProjectSettings::TrackOrderJson()
 {
     return m_settings_json[JSON_KEY_GROUP_TIMELINE][JSON_KEY_TIMELINE_TRACK_ORDER];
+}
+
+jt::Json*
+TimelineViewProjectSettings::FindTrackOrder() const
+{
+    // contains()/isObject() guard every step so a read never inserts an empty node into the
+    // shared project settings (operator[] would). m_settings_json is a non-const referent, so
+    // returning a mutable pointer from this const method is well-formed.
+    if(!m_settings_json.isObject() || !m_settings_json.contains(JSON_KEY_GROUP_TIMELINE))
+    {
+        return nullptr;
+    }
+    jt::Json& timeline = m_settings_json[JSON_KEY_GROUP_TIMELINE];
+    if(!timeline.isObject() || !timeline.contains(JSON_KEY_TIMELINE_TRACK_ORDER))
+    {
+        return nullptr;
+    }
+    return &timeline[JSON_KEY_TIMELINE_TRACK_ORDER];
 }
 
 void
@@ -3459,12 +3480,12 @@ TimelineViewProjectSettings::Valid() const
 {
     // MakeGraphView drives the order restore off OrderedTrackIds(); this override exists only
     // to satisfy the ProjectSetting interface. Report valid when a non-empty long array.
-    jt::Json& order = TrackOrderJson();
-    if(!order.isArray() || order.getArray().empty())
+    jt::Json* order = FindTrackOrder();
+    if(order == nullptr || !order->isArray() || order->getArray().empty())
     {
         return false;
     }
-    for(jt::Json& track_id : order.getArray())
+    for(jt::Json& track_id : order->getArray())
     {
         if(!track_id.isLong())
         {
@@ -3478,10 +3499,10 @@ std::vector<uint64_t>
 TimelineViewProjectSettings::OrderedTrackIds() const
 {
     std::vector<uint64_t> ids;
-    jt::Json&             order = TrackOrderJson();
-    if(order.isArray())
+    jt::Json*             order = FindTrackOrder();
+    if(order != nullptr && order->isArray())
     {
-        std::vector<jt::Json>& arr = order.getArray();
+        std::vector<jt::Json>& arr = order->getArray();
         ids.reserve(arr.size());
         for(jt::Json& track_id : arr)
         {

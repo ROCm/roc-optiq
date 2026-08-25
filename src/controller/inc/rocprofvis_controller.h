@@ -41,6 +41,10 @@ rocprofvis_result_t rocprofvis_controller_load_async(rocprofvis_controller_t* co
 * @brief Incrementally add one more trace file to an already-loaded system trace, reading
 *        only that file's metadata and appending its tracks. Existing tracks and their
 *        cached data are preserved (the existing files are not reprocessed).
+* @warning The caller MUST have no other async request in flight on this controller when this
+*          is called: it mutates the shared track/graph/topology state and deletes objects that
+*          concurrent fetch jobs would otherwise be reading (use-after-free). Cancel and await
+*          all outstanding futures first (the View does this via DataProvider::FreeRequests).
 * @param controller a system trace controller handle
 * @param filename path of the trace file to add
 * @param future signals completion; poll like any other async request
@@ -51,6 +55,9 @@ rocprofvis_result_t rocprofvis_controller_add_trace_source(rocprofvis_controller
 * @brief Drop one already-merged trace file from a system trace in place, freeing its data
 *        without reloading the remaining files. Surviving tracks and their cached data are
 *        preserved.
+* @warning Same quiescence requirement as rocprofvis_controller_add_trace_source: no other async
+*          request may be in flight on this controller (this frees tracks/graphs a concurrent
+*          fetch could still be using). Cancel and await all outstanding futures first.
 * @param controller a system trace controller handle
 * @param filename path of the trace file to remove
 * @param future signals completion; poll like any other async request

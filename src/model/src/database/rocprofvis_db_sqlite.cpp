@@ -303,19 +303,36 @@ void SqliteDatabase::CloseDbNode(uint32_t db_node_id)
         return;
     }
     auto& node = m_db_nodes[db_node_id];
-    if(!node->m_connections_inuse.empty())
-    {
-        ReleaseConnection(*node->m_connections_inuse.begin());
-    }
-    for(auto it = node->m_available_connections.begin(); it != node->m_available_connections.end(); ++it)
-    {
-        sqlite3_close(*it);
-    }
-    node->m_available_connections.clear();
-    node->m_connections_inuse.clear();
+    std::lock_guard<std::mutex> lock(node->m_mutex);
+    CloseNodeConnections(*node);
     // Clear the path so FindDbNodeIndex cannot resolve a re-added file to this dead (tombstoned)
     // slot, and so no query path can reopen the removed file's connection on demand.
     node->filepath.clear();
+}
+
+bool SqliteDatabase::CloseNodeConnections(rocprofvis_db_sqlite_db_node_t& node)
+{
+    // Close every connection in both pools - not just the first in-use one - so no sqlite3* is
+    // leaked when a node is torn down with connections still checked out. sqlite3_close_v2 defers
+    // the close if any statement is still live, so it is safe even without full quiescence.
+    bool ok = true;
+    for(sqlite3* connection : node.m_available_connections)
+    {
+        if(sqlite3_close_v2(connection) != SQLITE_OK)
+        {
+            ok = false;
+        }
+    }
+    for(sqlite3* connection : node.m_connections_inuse)
+    {
+        if(sqlite3_close_v2(connection) != SQLITE_OK)
+        {
+            ok = false;
+        }
+    }
+    node.m_available_connections.clear();
+    node.m_connections_inuse.clear();
+    return ok;
 }
 
 rocprofvis_dm_result_t SqliteDatabase::Close()
@@ -323,25 +340,22 @@ rocprofvis_dm_result_t SqliteDatabase::Close()
     rocprofvis_dm_result_t result = kRocProfVisDmResultSuccess;
     for (auto & node : m_db_nodes)
     {
-        if (node->m_connections_inuse.size() != 1)
+        // Skip nodes already torn down by an in-place remove (tombstoned: path cleared).
+        if (node->filepath.empty())
+        {
+            continue;
+        }
+        std::lock_guard<std::mutex> lock(node->m_mutex);
+        // At shutdown only the long-lived service connection should still be in use.
+        if (node->m_connections_inuse.size() > 1)
         {
             spdlog::debug("Error : At the time of closing only one active connection should remain!");
             result = kRocProfVisDmResultUnknownError;
         }
-        // A node may have no in-use connection at close time; guard the begin() deref.
-        if (!node->m_connections_inuse.empty())
+        if (!CloseNodeConnections(*node))
         {
-            ReleaseConnection(*node->m_connections_inuse.begin());
-        }
-
-        for (auto it = node->m_available_connections.begin(); it != node->m_available_connections.end(); ++it)
-        {
-            if (sqlite3_close(*it) != SQLITE_OK)
-            {
-                spdlog::debug("Can't close database connection:");
-                spdlog::debug(sqlite3_errmsg(*it));
-                result = kRocProfVisDmResultUnknownError;
-            }
+            spdlog::debug("Can't close one or more database connections");
+            result = kRocProfVisDmResultUnknownError;
         }
     }
     return result;

@@ -47,19 +47,8 @@ CompareSourceColor(size_t source_index, SettingsManager& settings)
     return wheel[source_index % wheel.size()];
 }
 
-float
-CompareSourceBadgeWidth(const TrackInfo* track_info)
-{
-    if(!track_info || track_info->compare_source.id.empty())
-    {
-        return 0.0f;
-    }
-    return ImGui::CalcTextSize(track_info->compare_source.id.c_str()).x +
-           2.0f * ImGui::GetStyle().FramePadding.x;
-}
-
 void
-RenderCompareSourceBadge(const TrackInfo* track_info, SettingsManager& settings)
+RenderCompareSourceStrip(const TrackInfo* track_info, SettingsManager& settings)
 {
     if(!track_info || track_info->compare_source.id.empty())
     {
@@ -67,16 +56,27 @@ RenderCompareSourceBadge(const TrackInfo* track_info, SettingsManager& settings)
     }
 
     const CompareSourceInfo& source = track_info->compare_source;
-    ImU32                    color  = CompareSourceColor(track_info->file_id, settings);
-    float                    width  = CompareSourceBadgeWidth(track_info);
+    const ImU32              color  = CompareSourceColor(track_info->file_id, settings);
 
-    ImGui::PushID("compare_source_badge");
-    ImGui::PushStyleColor(ImGuiCol_Button, color);
-    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, color);
-    ImGui::PushStyleColor(ImGuiCol_ButtonActive, color);
-    ImGui::PushStyleColor(ImGuiCol_Text, settings.GetColor(Colors::kTextOnAccent));
-    ImGui::Button(source.id.c_str(), ImVec2(width, 0.0f));
-    ImGui::PopStyleColor(4);
+    // A thin colored strip (one distinct color per source file, same wheel as the badge)
+    // vertically centered in the row, standing in for the full file-name text. The name is
+    // shown on hover instead.
+    const float  strip_width  = 4.0f;
+    const float  row_height   = ImGui::GetFrameHeight();
+    const float  strip_height = row_height * 0.6f;
+    const ImVec2 origin       = ImGui::GetCursorScreenPos();
+    const float  y_offset     = (row_height - strip_height) * 0.5f;
+
+    // Reserve the strip's footprint (full row height so it hover-aligns with the row) and use
+    // the reserved item as the hover target for the tooltip.
+    ImGui::Dummy(ImVec2(strip_width, row_height));
+
+    ImDrawList* draw_list = ImGui::GetWindowDrawList();
+    draw_list->AddRectFilled(
+        ImVec2(origin.x, origin.y + y_offset),
+        ImVec2(origin.x + strip_width, origin.y + y_offset + strip_height), color,
+        strip_width * 0.5f);
+
     if(ImGui::IsItemHovered())
     {
         std::string tooltip = "Source";
@@ -90,7 +90,6 @@ RenderCompareSourceBadge(const TrackInfo* track_info, SettingsManager& settings)
         }
         SetTooltipStyled("%s", tooltip.c_str());
     }
-    ImGui::PopID();
 }
 
 TrackItem::TrackItem(DataProvider& dp, uint64_t id, TimelineTrackOptions& track_options,
@@ -436,14 +435,10 @@ TrackItem::RenderMetaArea()
 
         UpdateMetaScaleAreaSize();
 
-        float compare_badge_width = CompareSourceBadgeWidth(m_track_metadata);
-        if(compare_badge_width > 0.0f)
-        {
-            compare_badge_width += ImGui::GetStyle().ItemSpacing.x;
-        }
+        // The source file is indicated only by the colored strip in the topology sidebar; the
+        // timeline meta area shows just the track name (no source badge).
         float available_for_text = content_size.x - m_meta_area_scale_width -
-                                   m_reorder_grip_width - compare_badge_width -
-                                   GetMetaAreaTrailingWidth();
+                                   m_reorder_grip_width - GetMetaAreaTrailingWidth();
 
         if(available_for_text < 0.0f) available_for_text = 0.0f;
 
@@ -455,11 +450,6 @@ TrackItem::RenderMetaArea()
 
         ImGui::BeginGroup();
         ImGui::PushStyleColor(ImGuiCol_Text, m_settings.GetColor(Colors::kTextMain));
-        if(compare_badge_width > 0.0f)
-        {
-            RenderCompareSourceBadge(m_track_metadata, m_settings);
-            ImGui::SameLine();
-        }
         if(available_for_text > 0.0f)
         {
             const ImVec2 label_start = ImGui::GetCursorScreenPos();

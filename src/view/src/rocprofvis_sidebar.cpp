@@ -352,7 +352,7 @@ SideBar::RenderTrackItem(const uint64_t& index, bool show_eye_button)
 
     if(track_info && !track_info->compare_source.id.empty())
     {
-        RenderCompareSourceBadge(track_info, m_settings);
+        RenderCompareSourceStrip(track_info, m_settings);
         ImGui::SameLine();
     }
 

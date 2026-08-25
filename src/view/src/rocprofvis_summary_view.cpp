@@ -96,11 +96,12 @@ SummaryView::Update()
 {
     // Any (re)load (incl. the Add cycle kReady->kLoading->kReady) invalidates the one-shot
     // summary fetch so it recomputes against the new trace set instead of the pre-add one.
-    if(m_data_provider.GetState() == ProviderState::kLoading)
+    const ProviderState state = m_data_provider.GetState();
+    if(state == ProviderState::kLoading)
     {
         m_fetched = false;
     }
-    if(m_data_provider.GetState() == ProviderState::kReady)
+    if(state == ProviderState::kReady)
     {
         if(m_kernel_instance_table)
         {

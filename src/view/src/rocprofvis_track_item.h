@@ -25,11 +25,10 @@ class TimelineTrackOptions;
 class TimePixelTransform;
 class TimelineSelection;
 
-// Compare-source (A/B) badge shared by the timeline meta area and the sidebar.
+// Source-file indicator: a thin colored strip (one color per source file) with the file name
+// shown on hover. Used by the topology sidebar to disambiguate merged sources.
 void
-RenderCompareSourceBadge(const TrackInfo* track_info, SettingsManager& settings);
-float
-CompareSourceBadgeWidth(const TrackInfo* track_info);
+RenderCompareSourceStrip(const TrackInfo* track_info, SettingsManager& settings);
 
 enum class TrackDataRequestState
 {

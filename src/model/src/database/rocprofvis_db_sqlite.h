@@ -272,6 +272,10 @@ class SqliteDatabase : public Database
         // Close and free one db node's sqlite connections (used by in-place remove). The
         // node slot is kept (emptied) so higher node ids stay stable.
         void CloseDbNode(uint32_t db_node_id);
+        // Close every connection in both of a node's pools (available + in-use), clearing the
+        // pools. Uses sqlite3_close_v2 so a still-busy handle is closed lazily rather than
+        // leaked. Returns false if any close reported an error. Caller must hold node.m_mutex.
+        bool CloseNodeConnections(rocprofvis_db_sqlite_db_node_t& node);
         virtual MetadataVersionControl* GetMetadataVersionControl() { return nullptr; };
 
         // --------------------------------Null value handlers-------------------------------------- 

@@ -24,7 +24,9 @@
 #include "rocprofvis_view_module.h"
 #include "widgets/rocprofvis_debug_window.h"
 #include "widgets/rocprofvis_log_viewer.h"
-#include "rocprofvis_ai_assistant.h"
+#ifdef ROCPROFVIS_ENABLE_AGENTIC_PROFILING
+#    include "agenticprofiling/rocprofvis_ai_assistant.h"
+#endif
 #include "widgets/rocprofvis_dialog.h"
 #include "widgets/rocprofvis_gui_helpers.h"
 #include "widgets/rocprofvis_widget.h"
@@ -174,7 +176,9 @@ AppWindow::~AppWindow()
     AppMonitor::DestroyInstance();
 
     LogViewer::DestroyInstance();
+#ifdef ROCPROFVIS_ENABLE_AGENTIC_PROFILING
     AssistantPanel::DestroyInstance();
+#endif
 }
 
 bool
@@ -667,7 +671,9 @@ AppWindow::Update()
     AppMonitor::GetInstance()->Update();
     EventManager::GetInstance()->DispatchEvents();
     LogViewer::GetInstance()->Poll();
+#ifdef ROCPROFVIS_ENABLE_AGENTIC_PROFILING
     AssistantPanel::GetInstance()->Update();
+#endif
     DebugWindow::GetInstance()->ClearTransient();
     m_tab_container->Update();
 #ifdef ROCPROFVIS_ENABLE_PROFILER
@@ -774,10 +780,11 @@ AppWindow::Render()
 
     if(m_main_view)
     {
+#ifdef ROCPROFVIS_ENABLE_AGENTIC_PROFILING
         // The assistant docks against the right edge, so the main view gets the
         // remaining width. DockedWidth() is zero while the panel is closed.
-        AssistantPanel* assistant     = AssistantPanel::GetInstance();
-        const float     dock_width    = assistant->DockedWidth();
+        AssistantPanel* assistant  = AssistantPanel::GetInstance();
+        const float     dock_width = assistant->DockedWidth();
         if(dock_width > 0.0f)
         {
             ImGui::BeginChild("##main_view_area", ImVec2(-dock_width, 0.0f));
@@ -790,6 +797,9 @@ AppWindow::Render()
         {
             m_main_view->Render();
         }
+#else
+        m_main_view->Render();
+#endif
     }
 
     if(m_open_about_dialog)
@@ -1265,7 +1275,9 @@ AppWindow::RenderViewMenu(Project* project)
         ImGui::Separator();
         ImGui::MenuItem("Show Log Viewer", nullptr,
                         LogViewer::GetInstance()->VisiblePtr());
+#ifdef ROCPROFVIS_ENABLE_AGENTIC_PROFILING
         ImGui::MenuItem("Ask Optiq", nullptr, AssistantPanel::GetInstance()->VisiblePtr());
+#endif
         ImGui::EndMenu();
     }
 }

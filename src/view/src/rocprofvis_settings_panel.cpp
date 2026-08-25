@@ -4,7 +4,9 @@
 #include "rocprofvis_settings_panel.h"
 #include "icons/rocprovfis_icon_defines.h"
 #include "imgui.h"
-#include "remote/rocprofvis_secret_store.h"
+#ifdef ROCPROFVIS_ENABLE_AGENTIC_PROFILING
+#    include "remote/rocprofvis_secret_store.h"
+#endif
 #include "rocprofvis_font_manager.h"
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_utils.h"
@@ -99,10 +101,12 @@ SettingsPanel::Render()
             {
                 m_category = Other;
             }
+#ifdef ROCPROFVIS_ENABLE_AGENTIC_PROFILING
             if(ImGui::Selectable("Assistant", m_category == Assistant))
             {
                 m_category = Assistant;
             }
+#endif
             if(ImGui::Selectable("Hotkeys", m_category == Hotkeys))
             {
                 m_category = Hotkeys;
@@ -130,11 +134,13 @@ SettingsPanel::Render()
                     RenderOtherSettings();
                     break;
                 }
+#ifdef ROCPROFVIS_ENABLE_AGENTIC_PROFILING
                 case Assistant:
                 {
                     RenderAssistantSettings();
                     break;
                 }
+#endif
                 case Hotkeys:
                 {
                     RenderHotkeySettings();
@@ -169,11 +175,13 @@ SettingsPanel::Render()
                     {
                         break;
                     }
+#ifdef ROCPROFVIS_ENABLE_AGENTIC_PROFILING
                     case Assistant:
                     {
                         ResetAssistantOptions();
                         break;
                     }
+#endif
                     case Hotkeys:
                     {
                         ResetHotkeySettings();
@@ -200,6 +208,7 @@ SettingsPanel::Render()
                     m_settings.SaveHotkeySettings();
                     m_hotkeys_changed = false;
                 }
+#ifdef ROCPROFVIS_ENABLE_AGENTIC_PROFILING
                 const std::string assistant_route = ActiveAssistantProviderName();
                 if(!m_usersettings.assistant.providers.empty() &&
                    m_usersettings.assistant.active <
@@ -219,6 +228,7 @@ SettingsPanel::Render()
                 }
                 m_assistant_token_draft.clear();
                 m_assistant_clear_token = false;
+#endif
                 ImGui::CloseCurrentPopup();
             }
             ImGui::SameLine();
@@ -234,8 +244,10 @@ SettingsPanel::Render()
                 }
                 m_settings_changed = true;
                 m_should_open      = false;
+#ifdef ROCPROFVIS_ENABLE_AGENTIC_PROFILING
                 m_assistant_token_draft.clear();
                 m_assistant_clear_token = false;
+#endif
                 ImGui::CloseCurrentPopup();
             }
             ImGui::EndPopup();
@@ -430,6 +442,7 @@ SettingsPanel::RenderOtherSettings()
     m_settings_changed = true;
 }
 
+#ifdef ROCPROFVIS_ENABLE_AGENTIC_PROFILING
 // The Assistant page: endpoint URL, model, and the API key field.
 void
 SettingsPanel::RenderAssistantSettings()
@@ -569,6 +582,7 @@ SettingsPanel::ResetAssistantOptions()
     m_assistant_clear_token = false;
     m_settings_changed      = true;
 }
+#endif  // ROCPROFVIS_ENABLE_AGENTIC_PROFILING
 
 void
 SettingsPanel::ResetDisplayOptions()

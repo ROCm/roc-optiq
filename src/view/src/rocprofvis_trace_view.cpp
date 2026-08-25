@@ -4,7 +4,9 @@
 #include "rocprofvis_trace_view.h"
 #include "icons/rocprovfis_icon_defines.h"
 #include "imgui.h"
-#include "rocprofvis_ai_assistant.h"
+#ifdef ROCPROFVIS_ENABLE_AGENTIC_PROFILING
+#    include "agenticprofiling/rocprofvis_ai_assistant.h"
+#endif
 #include "rocprofvis_click_manager.h"
 #include "rocprofvis_analysis_view.h"
 #include "rocprofvis_annotations.h"
@@ -944,8 +946,10 @@ TraceView::RenderToolbar()
             SetTooltipStyled("Show Minimap");
         }
         VerticalSeparator(&m_settings_manager);
+#ifdef ROCPROFVIS_ENABLE_AGENTIC_PROFILING
         AssistantPanel::RenderToolbarButton();
         VerticalSeparator(&m_settings_manager);
+#endif
     }
 
     ImGui::PushStyleColor(ImGuiCol_Button, ImGui::ColorConvertU32ToFloat4(

@@ -5,7 +5,9 @@
 #include "rocprofvis_hotkey_manager.h"
 #include "imgui.h"
 #include "implot.h"
-#include "remote/rocprofvis_secret_store.h"
+#ifdef ROCPROFVIS_ENABLE_AGENTIC_PROFILING
+#    include "remote/rocprofvis_secret_store.h"
+#endif
 #include "rocprofvis_core.h"
 #include "rocprofvis_event_manager.h"
 #include "rocprofvis_font_manager.h"
@@ -1162,6 +1164,7 @@ SettingsManager::DeserializeAppWindowSettings(jt::Json& json)
                            m_appwindowsettings.show_summary);
 }
 
+#ifdef ROCPROFVIS_ENABLE_AGENTIC_PROFILING
 namespace
 {
 // Credential-store entry for one provider. Keys written before routes existed
@@ -1258,6 +1261,7 @@ SettingsManager::ClearAssistantToken(const std::string& provider_name)
     SecretStore::Erase(ASSISTANT_TOKEN_SECRET_KEY);
     return erased;
 }
+#endif  // ROCPROFVIS_ENABLE_AGENTIC_PROFILING
 
 }  // namespace View
 }  // namespace RocProfVis

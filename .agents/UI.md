@@ -77,7 +77,8 @@ When humans and `CODING.md` disagree with this file, `CODING.md` wins.
   `src/app/src/rocprofvis_imgui_backend.cpp`.
 - **Persistence / parsing:** SQLite (`thirdparty/sqlite3/`), jsoncpp, yaml-cpp.
 - **HTTPS (Ask Optiq):** cpp-httplib (`thirdparty/cpp-httplib/`) with vendored
-  mbedTLS. Targets the OpenAI chat-completions API.
+  mbedTLS. Targets the OpenAI chat-completions API. Built only under
+  `ROCPROFVIS_ENABLE_AGENTIC_PROFILING` (default OFF).
 - **Logging:** spdlog (`thirdparty/spdlog/`). Use `spdlog::info/warn/error`,
   never `std::cout` / `printf` / `iostream`.
 - **File dialog:** Native via `nativefiledialog-extended` on most platforms,
@@ -1711,10 +1712,31 @@ Use these instead of writing your own.
   glyph. Adding a new icon requires updating both files and the
   ranges array.
 
-### Ask Optiq assistant (`rocprofvis_ai_*.{h,cpp}`)
+### Ask Optiq assistant (`agenticprofiling/rocprofvis_ai_*.{h,cpp}`)
 
 An in-app LLM analyst that reads the open trace through the normal
-view APIs and drives the UI the way a user would. Four files, layered:
+view APIs and drives the UI the way a user would.
+
+**Gated behind `ROCPROFVIS_ENABLE_AGENTIC_PROFILING`, default OFF**, the
+same way remote and profiler launch are gated. Everything in
+`src/view/src/agenticprofiling/` is left out of `VIEW_FILES` when the
+option is off, and so are `cpp-httplib`, mbedTLS, and `SecretStore`
+unless remote asks for them - which is why a default clone needs no
+`thirdparty/mbedtls` submodule. Every call site outside the folder is
+wrapped in `#ifdef`, so adding a new one means adding a guard: they are
+in `AppWindow` (destroy, `Update()`, the docked-render branch, the
+View-menu item), the `TraceView` and `ComputeView` toolbars, and
+`SettingsPanel` (the category, its switch cases, and the OK/Cancel token
+handling).
+
+One deliberate asymmetry: `AssistantProvider`/`AssistantSettings` and
+their JSON serialization in `SettingsManager` stay compiled either way,
+so a settings file written by an assistant-enabled build survives a
+round trip through one without it. Only the four `*AssistantToken`
+methods are guarded, because they are the sole users of `SecretStore`
+outside remote.
+
+Four files, layered:
 
 - `rocprofvis_ai_client.{h,cpp}` - `AssistantChatCall`. One POST to an
   OpenAI chat-completions endpoint over cpp-httplib, plus the reply
@@ -2558,16 +2580,21 @@ For fast lookup. Each entry: class -> file -> one-line role.
 
 ### Ask Optiq assistant
 
-- `AssistantPanel` -> `rocprofvis_ai_assistant.h` -> Docked chat panel
-  and turn loop.
-- `OptiqActions`, `OptiqPanel` -> `rocprofvis_ai_actions.h` -> The only
-  code that mutates the UI on the assistant's behalf.
+All under `agenticprofiling/`, compiled only with
+`ROCPROFVIS_ENABLE_AGENTIC_PROFILING`.
+
+- `AssistantPanel` -> `agenticprofiling/rocprofvis_ai_assistant.h` ->
+  Docked chat panel and turn loop.
+- `OptiqActions`, `OptiqPanel` ->
+  `agenticprofiling/rocprofvis_ai_actions.h` -> The only code that
+  mutates the UI on the assistant's behalf.
 - `AssistantToolContext`, `AssistantFetchState`,
   `AssistantToolStartResult`, `StartAssistantTool`,
   `FinishAssistantFetch`, `BuildAssistantToolsJson`,
-  `BuildAssistantBriefing` -> `rocprofvis_ai_tools.h`.
+  `BuildAssistantBriefing` -> `agenticprofiling/rocprofvis_ai_tools.h`.
 - `AssistantChatCall`, `AssistantChatRequest`, `AssistantChatResult`,
-  `AssistantMessage`, `AssistantToolCall` -> `rocprofvis_ai_client.h`.
+  `AssistantMessage`, `AssistantToolCall` ->
+  `agenticprofiling/rocprofvis_ai_client.h`.
 - `AssistantSettings`, `AssistantProvider` ->
   `rocprofvis_settings_manager.h` -> Saved URL and model; the token
   itself lives in `SecretStore`.

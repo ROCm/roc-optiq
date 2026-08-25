@@ -373,11 +373,15 @@ public:
 
     // Assistant API token, one per provider. Stored in the OS credential vault
     // when available, otherwise held in process memory only. Never written to
-    // settings JSON.
+    // settings JSON. Guarded because these are the only users of SecretStore
+    // outside remote; the provider URL and model above stay compiled either way,
+    // so a settings file survives a build that has the assistant switched off.
+#ifdef ROCPROFVIS_ENABLE_AGENTIC_PROFILING
     bool HasAssistantToken(const std::string& provider_name) const;
     bool GetAssistantToken(const std::string& provider_name, std::string& out_token) const;
     bool SetAssistantToken(const std::string& provider_name, const std::string& token);
     bool ClearAssistantToken(const std::string& provider_name);
+#endif
 
     // Constant for event height;
     const float GetEventLevelHeight() const;

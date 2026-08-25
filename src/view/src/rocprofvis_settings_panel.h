@@ -26,22 +26,26 @@ private:
         Display,
         Units,
         Other,
+#ifdef ROCPROFVIS_ENABLE_AGENTIC_PROFILING
         Assistant,
+#endif
         Hotkeys
     };
 
     void RenderDisplayOptions();
     void RenderUnitOptions();
     void RenderOtherSettings();
-    void RenderAssistantSettings();
     void RenderHotkeySettings();
 
     void ResetDisplayOptions();
     void ResetUnitOptions();
     void ResetHotkeySettings();
+#ifdef ROCPROFVIS_ENABLE_AGENTIC_PROFILING
+    void RenderAssistantSettings();
     void ResetAssistantOptions();
     // Name of the saved endpoint, used to key its stored API key.
     std::string ActiveAssistantProviderName() const;
+#endif
     void StealChord(HotkeyActionId from, ImGuiKeyChord chord);
 
     bool ResetButton();

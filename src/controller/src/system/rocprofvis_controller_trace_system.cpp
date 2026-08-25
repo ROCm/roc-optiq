@@ -22,6 +22,7 @@
 #include <cfloat>
 #include <cstdint>
 #include <cstring>
+#include <memory>
 #include <set>
 
 namespace RocProfVis
@@ -106,6 +107,11 @@ rocprofvis_result_t SystemTrace::Init()
     catch(const std::exception&)
     {
         spdlog::error("Failed to allocate trace tables & memory manager");
+        delete m_event_table;  m_event_table  = nullptr;
+        delete m_sample_table; m_sample_table = nullptr;
+        delete m_search_table; m_search_table = nullptr;
+        delete m_summary;      m_summary      = nullptr;
+        delete m_mem_mgmt;     m_mem_mgmt     = nullptr;
         result = kRocProfVisResultMemoryAllocError;
     }
     return result;
@@ -157,13 +163,13 @@ rocprofvis_result_t SystemTrace::LoadRocpd(Future* future)
 
     try
     {
-        m_timeline        = new Timeline(0);
         size_t trace_size = 0;
         m_dm_handle       = rocprofvis_dm_create_trace();
         if(!GetDMHandle())
         {
             return kRocProfVisResultMemoryAllocError;
         }
+        m_timeline = new Timeline(0);
 
         rocprofvis_dm_database_t db = nullptr;
         rocprofvis_result_t result = OpenRocpdDatabase(db);
@@ -293,8 +299,8 @@ SystemTrace::LoadRocpdTrack(rocprofvis_dm_track_t dm_track_handle,
     rocprofvis_controller_track_type_t type =
         dm_track_type == kRocProfVisDmPmcTrack ? kRPVControllerTrackTypeSamples
                                                : kRPVControllerTrackTypeEvents;
-    Track* track = new Track(type, track_id, dm_track_handle, this);
-    Track* track_ptr = track;
+    std::unique_ptr<Track> track =
+        std::make_unique<Track>(type, track_id, dm_track_handle, this);
 
     rocprofvis_result_t result = track->FillBounds();
     if(result != kRocProfVisResultSuccess)
@@ -319,7 +325,8 @@ SystemTrace::LoadRocpdTrack(rocprofvis_dm_track_t dm_track_handle,
                                      ? sizeof(Event)
                                      : sizeof(Sample));
 
-    m_tracks.push_back(track);
+    Track* track_ptr = track.release();
+    m_tracks.push_back(track_ptr);
     return AddRocpdGraph(track_ptr, dm_track_type, track_id, graph_index);
 }
 
@@ -430,8 +437,8 @@ SystemTrace::ValidateRocpdTrackTopology() const
 
         if(!linked)
         {
-            spdlog::error("Track {} has no matching topology node", track->GetId());
-            return kRocProfVisResultNotLoaded;
+            spdlog::warn("Track {} (type {}) has no matching topology node",
+                         track->GetId(), dm_track_type);
         }
     }
     return kRocProfVisResultSuccess;

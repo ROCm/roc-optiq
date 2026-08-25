@@ -241,12 +241,15 @@ list(APPEND VIEW_FILES
     src/view/src/agenticprofiling/rocprofvis_ai_assistant.h
     src/view/src/agenticprofiling/rocprofvis_ai_client.cpp
     src/view/src/agenticprofiling/rocprofvis_ai_client.h
+    src/view/src/agenticprofiling/rocprofvis_ai_data_tools.cpp
     src/view/src/agenticprofiling/rocprofvis_ai_tool_query.cpp
     src/view/src/agenticprofiling/rocprofvis_ai_tool_query.h
     src/view/src/agenticprofiling/rocprofvis_ai_tool_schema.cpp
     src/view/src/agenticprofiling/rocprofvis_ai_tool_schema.h
     src/view/src/agenticprofiling/rocprofvis_ai_tools.cpp
     src/view/src/agenticprofiling/rocprofvis_ai_tools.h
+    src/view/src/agenticprofiling/rocprofvis_ai_tools_internal.h
+    src/view/src/agenticprofiling/rocprofvis_ai_ui_tools.cpp
 )
 endif(ROCPROFVIS_ENABLE_AGENTIC_PROFILING)
 

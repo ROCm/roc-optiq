@@ -447,6 +447,9 @@ File: `src/view/src/rocprofvis_appwindow.{h,cpp}`. Owns global UI state:
   `m_file_dialog_preference`.
 - `void ShowPathPickerDialog(...)` - folder picker used by workflows
   such as profiler output selection.
+- `void ApplyPanelVisibilitySettings()` - applies the global toolbar,
+  details, topology, and histogram flags to every live layout. The
+  View menu and programmatic UI actions must both use this path.
 - `void ShowProfilerLauncher()` - lazy-opens the optional profiler
   launcher (`ROCPROFVIS_ENABLE_PROFILER`).
 - `Project* GetCurrentProject() / GetProject(id)` - lookup helpers.
@@ -1739,31 +1742,66 @@ round trip through one without it. Only the four `*AssistantToken`
 methods are guarded, because they are the sole users of `SecretStore`
 outside remote.
 
-Four files, layered:
+Layered, transport at the bottom and the panel at the top:
 
 - `rocprofvis_ai_client.{h,cpp}` - `AssistantChatCall`. One POST to an
   OpenAI chat-completions endpoint over cpp-httplib, plus the reply
   parser (including a "harmony" inline tool-call fallback). Knows
   nothing about traces.
-- `rocprofvis_ai_tools.{h,cpp}` - the tools the model may call:
-  `StartAssistantTool` dispatches by name and returns either a finished
-  result or a set of `DataProvider` request ids for the panel to poll;
-  `FinishAssistantFetch` formats the rows once they land.
-  `BuildAssistantToolsJson` publishes the schema. Reads go through
+- `rocprofvis_ai_tool_schema.{h,cpp}` - `BuildAssistantToolsJson`, the
+  description of the tool set the model receives. Builds JSON out of
+  string literals and touches no view state, which is what makes it
+  safe to call from the HTTP worker thread while the UI thread draws.
+  The tool descriptions here are the only instructions the model gets
+  about what each tool is for, so they are product behaviour rather
+  than incidental text.
+- `rocprofvis_ai_tool_query.{h,cpp}` - turns query-shaped tool
+  arguments into the SQL fragments `DataProvider` takes. The one place
+  a bad argument could become bad SQL, so it treats model input as
+  hostile: column and operator whitelists rather than escaping, quoted
+  string literals, and escaped `LIKE` wildcards paired with an explicit
+  `ESCAPE` clause.
+- `rocprofvis_ai_tools.{h,cpp}` - the public executor surface plus
+  `StartAssistantTool`, which parses the arguments, refuses everything
+  but `offer_next_steps` when no trace is ready, then searches the UI
+  handler table and the data handler table in that order. Also defines
+  the handful of helpers both body files need. Reads go through
   `DataProvider` and the view-side models only - never SQLite, never
-  `src/model/`. `offer_next_steps` is a UI side-effect rather than a
-  read: it fills the stacked follow-up buttons under the chat.
-  Unprompted UI mutation is `goto` (zoom and select events) plus
-  `flow_arrows` with `visible=true` alongside a selection, since the
-  arrows only draw for a selected event and would otherwise stay
-  invisible to a user who had switched them off. Notes, bookmarks,
-  measure pins, panels, tabs, arrow restyling, and reset_view wait until
-  the user asked.
+  `src/model/`.
+- `rocprofvis_ai_tools_internal.h` - private wiring between the three
+  executor files: the shared helpers and the two handler-table
+  accessors. Nothing outside `agenticprofiling/` includes it.
+- `rocprofvis_ai_ui_tools.cpp` - the tools that change Optiq rather
+  than read it: `goto`, `show_panel`, `switch_tab`, `flow_arrows`,
+  `annotate`, `bookmark`, `measure`, `reset_view`, and
+  `offer_next_steps`. Every one goes through `OptiqActions` and answers
+  in the same call, so none of them park a fetch or touch a request id.
+  `offer_next_steps` is a UI side-effect rather than a read: it fills
+  the stacked follow-up buttons under the chat. Unprompted UI mutation
+  is `goto` (zoom and select events) plus `flow_arrows` with
+  `visible=true` alongside a selection, since the arrows only draw for
+  a selected event and would otherwise stay invisible to a user who had
+  switched them off. Notes, bookmarks, measure pins, panels, tabs,
+  arrow restyling, and reset_view wait until the user asked.
+- `rocprofvis_ai_data_tools.cpp` - the tools that read the trace, every
+  formatter they use, and `FinishAssistantFetch`. Most of these cannot
+  answer in one call: they queue a fetch and hand the panel a set of
+  `DataProvider` request ids to poll, then format the rows once they
+  land. Those request ids are shared with the normal UI, which is why
+  each body checks `IsRequestPending` before issuing its own query and
+  reports whether it actually started the fetch.
 - `rocprofvis_ai_actions.{h,cpp}` - `OptiqActions`, the only place that
   mutates the UI. Every method reproduces one real interaction (a
   click, a drag, a menu item) including the event traffic the rest of
   the app listens for. **Add a capability here, as one method, rather
   than wiring widgets from inside a tool.**
+
+**Adding a tool is three edits, and none of them is the dispatcher:** a
+schema entry in `rocprofvis_ai_tool_schema.cpp`, a body in whichever of
+`rocprofvis_ai_ui_tools.cpp` or `rocprofvis_ai_data_tools.cpp` matches
+what it touches, and an entry in that same file's own handler table. A
+body without a schema entry is unreachable; a schema entry without a
+body comes back to the model as an unknown tool.
 - `rocprofvis_ai_assistant.{h,cpp}` - `AssistantPanel`, a lazy
   singleton like `LogViewer`. Owns the transcript, the docked column,
   and the turn loop. The composer shows **Explain this view** on an
@@ -1875,6 +1913,11 @@ Rules that are easy to get wrong here:
 - **Tools only ever run from `Update()`.** They toggle panel
   visibility and rebuild layout, so running them from `Render()` would
   mutate widgets halfway through the frame that draws them.
+- **A tool only formats rows from a fetch it started.** Several table
+  request IDs and result slots are shared with the normal UI. If a tool
+  finds one busy, it waits for that owner and retries its own query
+  against the original timeout deadline. It returns a timeout rather
+  than treating the other query's rows as its own.
 - **HTTP runs on a worker via `std::async`, and must stay cancellable.**
   `AssistantChatCall::Cancel()` closes the socket; `CancelPendingRequest()`
   is what lets the panel be destroyed without blocking on a
@@ -2707,8 +2750,22 @@ All under `agenticprofiling/`, compiled only with
   mutates the UI on the assistant's behalf.
 - `AssistantToolContext`, `AssistantFetchState`,
   `AssistantToolStartResult`, `StartAssistantTool`,
-  `FinishAssistantFetch`, `BuildAssistantToolsJson`,
-  `BuildAssistantBriefing` -> `agenticprofiling/rocprofvis_ai_tools.h`.
+  `FinishAssistantFetch`, `BuildAssistantBriefing` ->
+  `agenticprofiling/rocprofvis_ai_tools.h`. The dispatcher lives in
+  `rocprofvis_ai_tools.cpp`; the bodies are split by what they touch
+  into `rocprofvis_ai_ui_tools.cpp` and
+  `rocprofvis_ai_data_tools.cpp`, each owning its own handler table.
+- `AssistantToolEntry`, `AssistantToolTable`,
+  `GetAssistantUiToolHandlers`, `GetAssistantDataToolHandlers` ->
+  `agenticprofiling/rocprofvis_ai_tools_internal.h` -> Private to the
+  folder; do not include it from elsewhere.
+- `BuildAssistantToolsJson`, `AssistantToolStatusLabel` ->
+  `agenticprofiling/rocprofvis_ai_tool_schema.h` -> Thread-safe, reads
+  no view state.
+- `BuildAssistantWhereClause`, `AssistantGroupByFromArgs`,
+  `ResolveAssistantSortColumn` ->
+  `agenticprofiling/rocprofvis_ai_tool_query.h` -> Model arguments to
+  SQL fragments, via whitelists.
 - `AssistantChatCall`, `AssistantChatRequest`, `AssistantChatResult`,
   `AssistantMessage`, `AssistantToolCall` ->
   `agenticprofiling/rocprofvis_ai_client.h`.

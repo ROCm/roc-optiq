@@ -21,9 +21,7 @@
 #include "rocprofvis_core_string_utils.h"
 #include <cfloat>
 #include <cstdint>
-#include <cstdlib>
 #include <cstring>
-#include <map>
 #include <set>
 
 namespace RocProfVis
@@ -46,25 +44,7 @@ struct DataModelFutureDeleter
 };
 
 using DataModelFuturePtr = std::unique_ptr<void, DataModelFutureDeleter>;
-
-void insert_track_lookup(std::multimap<uint64_t, Track*>& track_lookup,
-                         Track& track, uint64_t instance_id,
-                         const std::string& value)
-{
-    char*    end = nullptr;
-    uint64_t id  = std::strtoull(value.c_str(), &end, 10);
-    track_lookup.insert({ id | instance_id, &track });
 }
-}
-
-struct SystemTrace::track_lookup_t
-{
-    std::multimap<uint64_t, Track*> queue_to_track;
-    std::multimap<uint64_t, Track*> stream_to_track;
-    std::multimap<uint64_t, Track*> thread_to_track;
-    std::multimap<uint64_t, Track*> sample_thread_to_track;
-    std::multimap<uint64_t, Track*> counter_to_track;
-};
 
 SystemTrace::SystemTrace(const std::string& filename, const std::string& config_path)
 : Trace(__kRPVControllerSystemPropertiesFirst, __kRPVControllerSystemPropertiesLast, filename)
@@ -270,88 +250,6 @@ SystemTrace::ReadRocpdMetadata(rocprofvis_dm_database_t database, Future* future
 }
 
 rocprofvis_result_t
-SystemTrace::ReadRocpdTrackExtData(Track& track, uint64_t dm_track_type,
-                                   track_lookup_t& track_lookup)
-{
-    uint64_t instance_id =
-        rocprofvis_dm_get_property_as_uint64(
-            track.GetDmHandle(), kRPVDMTrackInstanceIdUInt64, 0) << 48;
-
-    uint64_t num_ext_data = track.GetExtDataNumberOfEntries();
-    for(uint32_t idx = 0; idx < num_ext_data; idx++)
-    {
-        std::string category;
-        std::string name;
-        std::string value;
-
-        rocprofvis_result_t result = ReadRocpdTrackExtDataEntry(
-            track, idx, category, name, value);
-        if(result != kRocProfVisResultSuccess)
-        {
-            return result;
-        }
-
-        UpdateRocpdTrackLookup(track, dm_track_type, instance_id, category, name,
-                               value, track_lookup);
-        spdlog::debug("{} {} {}", category.c_str(), name.c_str(), value.c_str());
-    }
-    return kRocProfVisResultSuccess;
-}
-
-rocprofvis_result_t
-SystemTrace::ReadRocpdTrackExtDataEntry(Track& track, uint32_t index,
-                                        std::string& category, std::string& name,
-                                        std::string& value)
-{
-    category = track.GetExtDataCategory(index);
-    name     = track.GetExtDataName(index);
-    value    = track.GetExtDataValue(index);
-    return kRocProfVisResultSuccess;
-}
-
-void
-SystemTrace::UpdateRocpdTrackLookup(Track& track, uint64_t dm_track_type,
-                                    uint64_t instance_id,
-                                    const std::string& category,
-                                    const std::string& name,
-                                    const std::string& value,
-                                    track_lookup_t& track_lookup)
-{
-    if(name != "id")
-    {
-        return;
-    }
-
-    if(category == "Queue")
-    {
-        insert_track_lookup(track_lookup.queue_to_track, track, instance_id, value);
-        return;
-    }
-
-    if(category == "Stream")
-    {
-        insert_track_lookup(track_lookup.stream_to_track, track, instance_id, value);
-        return;
-    }
-
-    if(category == "Thread")
-    {
-        std::multimap<uint64_t, Track*>& thread_lookup =
-            dm_track_type == kRocProfVisDmRegionSampleTrack
-                ? track_lookup.sample_thread_to_track
-                : track_lookup.thread_to_track;
-        insert_track_lookup(thread_lookup, track, instance_id, value);
-        return;
-    }
-
-    if(category == "PMC")
-    {
-        insert_track_lookup(
-            track_lookup.counter_to_track, track, instance_id, value);
-    }
-}
-
-rocprofvis_result_t
 SystemTrace::AddRocpdGraph(Track* track, uint64_t dm_track_type, uint64_t track_id,
                            uint64_t& graph_index)
 {
@@ -390,8 +288,7 @@ SystemTrace::AddRocpdGraph(Track* track, uint64_t dm_track_type, uint64_t track_
 rocprofvis_result_t
 SystemTrace::LoadRocpdTrack(rocprofvis_dm_track_t dm_track_handle,
                             uint64_t dm_track_type, uint64_t track_id,
-                            size_t& trace_size, uint64_t& graph_index,
-                            track_lookup_t& track_lookup)
+                            size_t& trace_size, uint64_t& graph_index)
 {
     rocprofvis_controller_track_type_t type =
         dm_track_type == kRocProfVisDmPmcTrack ? kRPVControllerTrackTypeSamples
@@ -422,12 +319,6 @@ SystemTrace::LoadRocpdTrack(rocprofvis_dm_track_t dm_track_handle,
                                      ? sizeof(Event)
                                      : sizeof(Sample));
 
-    result = ReadRocpdTrackExtData(*track, dm_track_type, track_lookup);
-    if(result != kRocProfVisResultSuccess)
-    {
-        return result;
-    }
-
     m_tracks.push_back(track);
     return AddRocpdGraph(track_ptr, dm_track_type, track_id, graph_index);
 }
@@ -440,8 +331,7 @@ SystemTrace::LoadRocpdTracks(size_t& trace_size)
             rocprofvis_dm_get_property_as_uint64(
                 GetDMHandle(), kRPVDMNumberOfTracksUInt64, 0));
 
-    track_lookup_t track_lookup;
-    uint64_t       graph_index = 0;
+    uint64_t graph_index = 0;
     for(rocprofvis_db_num_of_tracks_t i = 0; i < num_tracks; i++)
     {
         rocprofvis_dm_track_t dm_track_handle =
@@ -472,7 +362,7 @@ SystemTrace::LoadRocpdTracks(size_t& trace_size)
 
         rocprofvis_result_t result =
             LoadRocpdTrack(dm_track_handle, dm_track_type, track_id, trace_size,
-                           graph_index, track_lookup);
+                           graph_index);
         if(result != kRocProfVisResultSuccess)
         {
             return result;
@@ -494,6 +384,56 @@ SystemTrace::LoadRocpdTopology()
 
     DbgPrintTopologyNodeData(dm_topology_root, 1);
     m_topology_root = new TopologyRoot(dm_topology_root, this);
+    return ValidateRocpdTrackTopology();
+}
+
+rocprofvis_result_t
+SystemTrace::ValidateRocpdTrackTopology() const
+{
+    for(Track* track : m_tracks)
+    {
+        uint64_t dm_track_type = rocprofvis_dm_get_property_as_uint64(
+            track->GetDmHandle(), kRPVDMTrackCategoryEnumUInt64, 0);
+        bool linked = false;
+        switch(dm_track_type)
+        {
+            case kRocProfVisDmRegionTrack:
+            case kRocProfVisDmRegionMainTrack:
+            case kRocProfVisDmRegionSampleTrack:
+            {
+                linked = track->GetThread() != nullptr;
+                break;
+            }
+            case kRocProfVisDmKernelDispatchTrack:
+            case kRocProfVisDmMemoryAllocationTrack:
+            case kRocProfVisDmMemoryCopyTrack:
+            {
+                linked = track->GetQueue() != nullptr;
+                break;
+            }
+            case kRocProfVisDmStreamTrack:
+            {
+                linked = track->GetStream() != nullptr;
+                break;
+            }
+            case kRocProfVisDmPmcTrack:
+            {
+                linked = track->GetCounter() != nullptr;
+                break;
+            }
+            default:
+            {
+                linked = true;
+                break;
+            }
+        }
+
+        if(!linked)
+        {
+            spdlog::error("Track {} has no matching topology node", track->GetId());
+            return kRocProfVisResultNotLoaded;
+        }
+    }
     return kRocProfVisResultSuccess;
 }
 

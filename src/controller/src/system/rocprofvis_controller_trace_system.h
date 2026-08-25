@@ -101,6 +101,17 @@ private:
 
 private:
     rocprofvis_result_t LoadRocpd(Future* future);
+    rocprofvis_result_t OpenRocpdDatabase(rocprofvis_dm_database_t& database);
+    rocprofvis_result_t ReadRocpdMetadata(rocprofvis_dm_database_t database,
+                                          Future* future);
+    rocprofvis_result_t LoadRocpdTracks(size_t& trace_size);
+    rocprofvis_result_t LoadRocpdTrack(rocprofvis_dm_track_t dm_track_handle,
+                                      uint64_t dm_track_type, uint64_t track_id,
+                                      size_t& trace_size, uint64_t& graph_index);
+    rocprofvis_result_t AddRocpdGraph(Track* track, uint64_t dm_track_type,
+                                      uint64_t track_id, uint64_t& graph_index);
+    rocprofvis_result_t LoadRocpdTopology();
+    rocprofvis_result_t ValidateRocpdTrackTopology() const;
 
     void DbgPrintTopologyNodeData(rocprofvis_dm_topology_node node, int level);
 

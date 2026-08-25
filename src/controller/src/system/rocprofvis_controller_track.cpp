@@ -78,28 +78,28 @@ uint64_t
 Track::GetExtDataNumberOfEntries() const
 {
     return rocprofvis_dm_get_property_as_uint64(
-        m_dm_handle, kRPVDMNumberOfTrackExtDataRecordsUInt64, 0);
+        GetDmHandle(), kRPVDMNumberOfTrackExtDataRecordsUInt64, 0);
 }
 
 std::string
 Track::GetExtDataCategory(uint64_t index) const
 {
     return rocprofvis_dm_get_property_as_charptr(
-        m_dm_handle, kRPVDMTrackExtDataCategoryCharPtrIndexed, index);
+        GetDmHandle(), kRPVDMTrackExtDataCategoryCharPtrIndexed, index);
 }
 
 std::string
 Track::GetExtDataName(uint64_t index) const
 {
     return rocprofvis_dm_get_property_as_charptr(
-        m_dm_handle, kRPVDMTrackExtDataNameCharPtrIndexed, index);
+        GetDmHandle(), kRPVDMTrackExtDataNameCharPtrIndexed, index);
 }
 
 std::string
 Track::GetExtDataValue(uint64_t index) const
 {
     return rocprofvis_dm_get_property_as_charptr(
-        m_dm_handle, kRPVDMTrackExtDataValueCharPtrIndexed, index);
+        GetDmHandle(), kRPVDMTrackExtDataValueCharPtrIndexed, index);
 }
 
 Handle* Track::GetContext(void)
@@ -129,7 +129,7 @@ rocprofvis_result_t Track::GetBucketValues(size_t buckets_num, Array& array) {
     for (int i = 0; i < buckets_num; i++)
     {
         uint64_t value = rocprofvis_dm_get_property_as_uint64(
-            m_dm_handle, kRPVDMTrackHistogramBucketValueDoubleIndexed, i);
+            GetDmHandle(), kRPVDMTrackHistogramBucketValueDoubleIndexed, i);
         result = array.SetDouble(kRPVControllerArrayEntryIndexed, i, static_cast<double>(value));
     }
     return result;
@@ -138,29 +138,34 @@ rocprofvis_result_t Track::GetBucketValues(size_t buckets_num, Array& array) {
 rocprofvis_result_t Track::FetchSegments(double start, double end, void* user_ptr, Future* future, FetchSegmentsFunc func)
 {
     rocprofvis_result_t result = kRocProfVisResultOutOfRange;
-    if(m_bounds.start_timestamp <= end && m_bounds.end_timestamp >= start)
+    if(GetStartTimestamp() <= end && GetEndTimestamp() >= start)
     {
-        if (m_segments.GetSegmentDuration() == 0)
+        if(GetSegments()->GetSegmentDuration() == 0)
         {
-            uint32_t num_segments = (uint32_t)ceil((m_bounds.end_timestamp - m_bounds.start_timestamp) / kSegmentDuration);
-            m_segments.SetContext(this);
-            m_segments.Init(m_bounds.start_timestamp, kSegmentDuration, num_segments, m_bounds.num_entries);
+            uint32_t num_segments = (uint32_t)ceil(
+                (GetEndTimestamp() - GetStartTimestamp()) / kSegmentDuration);
+            GetSegments()->SetContext(this);
+            GetSegments()->Init(
+                GetStartTimestamp(), kSegmentDuration, num_segments,
+                GetNumberOfEntries());
         }
 
-        start = std::max(start, m_bounds.start_timestamp);
-        end   = std::min(end, m_bounds.end_timestamp);
+        start = std::max(start, GetStartTimestamp());
+        end   = std::min(end, GetEndTimestamp());
 
         std::vector<std::pair<uint32_t, uint32_t>> fetch_ranges;
 
-        uint32_t start_index = (uint32_t) floor((start - m_bounds.start_timestamp) / kSegmentDuration);
-        uint32_t end_index   = (uint32_t) ceil((end - m_bounds.start_timestamp) / kSegmentDuration);
+        uint32_t start_index = (uint32_t) floor(
+            (start - GetStartTimestamp()) / kSegmentDuration);
+        uint32_t end_index = (uint32_t) ceil(
+            (end - GetStartTimestamp()) / kSegmentDuration);
 
         {
-            std::unique_lock lock(*m_segments.GetMutex());
+            std::unique_lock lock(*GetSegments()->GetMutex());
             m_state_changed.wait(lock, [&] {
                 for(uint32_t i = start_index; i < end_index; i++)
                 {
-                    if(m_segments.IsProcessed(i))
+                    if(GetSegments()->IsProcessed(i))
                     {
                         return false;
                     }
@@ -169,9 +174,9 @@ rocprofvis_result_t Track::FetchSegments(double start, double end, void* user_pt
             });
             for(uint32_t i = start_index; i < end_index; i++)
             {
-                if(!m_segments.IsValid(i))
+                if(!GetSegments()->IsValid(i))
                 {
-                    m_segments.SetProcessed(i, true);
+                    GetSegments()->SetProcessed(i, true);
                     if(fetch_ranges.size())
                     {
                         auto& last_range = fetch_ranges.back();
@@ -203,20 +208,20 @@ rocprofvis_result_t Track::FetchSegments(double start, double end, void* user_pt
                 else
                 {
                     double fetch_start =
-                        m_bounds.start_timestamp + (range.first * kSegmentDuration);
+                        GetStartTimestamp() + (range.first * kSegmentDuration);
                     double fetch_end =
-                        m_bounds.start_timestamp + ((range.second + 1) * kSegmentDuration);
+                        GetStartTimestamp() + ((range.second + 1) * kSegmentDuration);
 
                     result = FetchFromDataModel(fetch_start, fetch_end, future);
-                    spdlog::debug("FetchFromDataModel for track {} ({}-{}) = {}, cancelled={}",m_id,fetch_start, fetch_end,(uint32_t)result, future->IsCancelled());
+                    spdlog::debug("FetchFromDataModel for track {} ({}-{}) = {}, cancelled={}",GetId(),fetch_start, fetch_end,(uint32_t)result, future->IsCancelled());
 
                 }
                 {
-                    std::unique_lock lock(*m_segments.GetMutex());
+                    std::unique_lock lock(*GetSegments()->GetMutex());
                     for(uint32_t i = range.first; i <= range.second; i++)
                     {
-                        m_segments.SetProcessed(i, false);
-                        m_segments.SetValid(i, result == kRocProfVisResultSuccess );
+                        GetSegments()->SetProcessed(i, false);
+                        GetSegments()->SetValid(i, result == kRocProfVisResultSuccess );
                     }
                 }
                 m_state_changed.notify_all();
@@ -228,11 +233,11 @@ rocprofvis_result_t Track::FetchSegments(double start, double end, void* user_pt
         }
 
         {
-            std::unique_lock lock(*m_segments.GetMutex());
+            std::unique_lock lock(*GetSegments()->GetMutex());
             m_state_changed.wait(lock, [&] {
                 for(uint32_t i = start_index; i < end_index; i++)
                 {
-                    if(m_segments.IsProcessed(i))
+                    if(GetSegments()->IsProcessed(i))
                     {
                         return false;
                     }
@@ -247,7 +252,7 @@ rocprofvis_result_t Track::FetchSegments(double start, double end, void* user_pt
         // and must be re-requested when the track comes back into view.
         if(result != kRocProfVisResultCancelled)
         {
-            result = m_segments.FetchSegments(start, end, user_ptr, future, func);
+            result = GetSegments()->FetchSegments(start, end, user_ptr, future, func);
         }
     }
 
@@ -287,11 +292,11 @@ rocprofvis_result_t Track::FetchFromDataModel(double start, double end, Future* 
     rocprofvis_result_t result = kRocProfVisResultOutOfRange;
 
     rocprofvis_dm_trace_t trace = rocprofvis_dm_get_property_as_handle(
-        m_dm_handle, kRPVDMTrackTraceHandle, 0);
+        GetDmHandle(), kRPVDMTrackTraceHandle, 0);
     rocprofvis_dm_database_t db = rocprofvis_dm_get_property_as_handle(
-        m_dm_handle, kRPVDMTrackDatabaseHandle, 0);
+        GetDmHandle(), kRPVDMTrackDatabaseHandle, 0);
     uint64_t dm_track_type = rocprofvis_dm_get_property_as_uint64(
-        m_dm_handle, kRPVDMTrackCategoryEnumUInt64, 0);
+        GetDmHandle(), kRPVDMTrackCategoryEnumUInt64, 0);
 
     const fetch_range_t fetch_range = CalculateFetchRange(start, end);
     constexpr uint32_t thread_max_events = 1000000;
@@ -316,11 +321,11 @@ Track::fetch_range_t
 Track::CalculateFetchRange(double start, double end) const
 {
     fetch_range_t range;
-    range.start = m_bounds.start_timestamp +
-                  (std::floor((start - m_bounds.start_timestamp) / kSegmentDuration) *
+    range.start = GetStartTimestamp() +
+                  (std::floor((start - GetStartTimestamp()) / kSegmentDuration) *
                    kSegmentDuration);
-    range.end = m_bounds.start_timestamp +
-                (std::ceil((end - m_bounds.start_timestamp) / kSegmentDuration) *
+    range.end = GetStartTimestamp() +
+                (std::ceil((end - GetStartTimestamp()) / kSegmentDuration) *
                  kSegmentDuration);
     return range;
 }
@@ -329,7 +334,8 @@ uint32_t
 Track::GetNumberOfEventsForTimeRange(double start, double end)
 {
     rocprofvis_dm_trace_t trace =
-        rocprofvis_dm_get_property_as_handle(m_dm_handle, kRPVDMTrackTraceHandle, 0);
+        rocprofvis_dm_get_property_as_handle(
+            GetDmHandle(), kRPVDMTrackTraceHandle, 0);
     uint64_t start_time =
         rocprofvis_dm_get_property_as_uint64(trace, kRPVDMStartTimeUInt64, 0);
     size_t bucket_size =
@@ -341,7 +347,7 @@ Track::GetNumberOfEventsForTimeRange(double start, double end)
     for(uint64_t i = start_bucket; i <= end_bucket; i++)
     {
         num_events += static_cast<uint32_t>(rocprofvis_dm_get_property_as_uint64(
-            m_dm_handle, kRPVDMTrackHistogramBucketEventDensityUInt64Indexed, i));
+            GetDmHandle(), kRPVDMTrackHistogramBucketEventDensityUInt64Indexed, i));
     }
     return num_events;
 }
@@ -422,7 +428,7 @@ Track::ProcessTraceReadRequest(rocprofvis_dm_trace_t trace,
     }
 
     rocprofvis_dm_slice_t data = rocprofvis_dm_get_property_as_handle(
-        m_dm_handle, kRPVDMSliceHandleTimed,
+        GetDmHandle(), kRPVDMSliceHandleTimed,
         rocprofvis_dm_hash_combine_timestamp(
             request.start, request.end, kRocProfVisDmHashedTimestampTagTrackSlice));
     if(nullptr == data)
@@ -462,7 +468,7 @@ Track::ProcessTraceReadRequest(rocprofvis_dm_trace_t trace,
 
     if(kRocProfVisDmResultSuccess !=
        rocprofvis_dm_delete_time_slice_handle(
-           trace, static_cast<rocprofvis_dm_track_id_t>(m_id), data))
+           trace, static_cast<rocprofvis_dm_track_id_t>(GetId()), data))
     {
         result = kRocProfVisResultUnknownError;
     }
@@ -497,7 +503,8 @@ Track::ProcessEventRecords(rocprofvis_dm_slice_t data,
 
         uint64_t event_id = rocprofvis_dm_get_property_as_uint64(
             data, kRPVDMEventIdUInt64Indexed, record_index);
-        Event* new_event = m_ctx->GetMemoryManager()->NewEvent(
+        Event* new_event = static_cast<SystemTrace*>(GetContext())
+                               ->GetMemoryManager()->NewEvent(
             event_id, timestamp, timestamp + duration, GetSegments());
         if(new_event)
         {
@@ -505,30 +512,40 @@ Track::ProcessEventRecords(rocprofvis_dm_slice_t data,
                 kRPVControllerEventLevel, 0,
                 rocprofvis_dm_get_property_as_uint64(
                     data, kRPVDMEventLevelUInt64Indexed, record_index));
-            result = new_event->SetString(
-                kRPVControllerEventCategory, 0,
-                rocprofvis_dm_get_property_as_charptr(
-                    data, kRPVDMEventTypeStringCharPtrIndexed, record_index));
-            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-
-            result = new_event->SetString(
-                kRPVControllerEventName, 0,
-                rocprofvis_dm_get_property_as_charptr(
-                    data, kRPVDMEventSymbolStringCharPtrIndexed, record_index));
-            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-
-            result = SetObject(
-                kRPVControllerTrackEntry, index++, (rocprofvis_handle_t*)new_event);
+            if(result == kRocProfVisResultSuccess)
+            {
+                result = new_event->SetString(
+                    kRPVControllerEventCategory, 0,
+                    rocprofvis_dm_get_property_as_charptr(
+                        data, kRPVDMEventTypeStringCharPtrIndexed, record_index));
+            }
+            if(result == kRocProfVisResultSuccess)
+            {
+                result = new_event->SetString(
+                    kRPVControllerEventName, 0,
+                    rocprofvis_dm_get_property_as_charptr(
+                        data, kRPVDMEventSymbolStringCharPtrIndexed, record_index));
+            }
+            if(result == kRocProfVisResultSuccess)
+            {
+                result = SetObject(
+                    kRPVControllerTrackEntry, index++,
+                    (rocprofvis_handle_t*)new_event);
+            }
             if(result == kRocProfVisResultOutOfRange)
             {
                 spdlog::warn(
                     "Track::FetchFromDataModel: Skipping Event "
                     "id {} on track id {}, event is out of range",
-                    event_id, m_id);
+                    event_id, GetId());
             }
             else
             {
                 ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+                if(result != kRocProfVisResultSuccess)
+                {
+                    break;
+                }
             }
         }
         else
@@ -575,7 +592,8 @@ Track::ProcessPmcSampleRecords(rocprofvis_dm_slice_t data,
             continue;
         }
 
-        Sample* new_sample = m_ctx->GetMemoryManager()->NewSample(
+        Sample* new_sample = static_cast<SystemTrace*>(GetContext())
+                                 ->GetMemoryManager()->NewSample(
             kRPVControllerPrimitiveTypeDouble, sample_id++, last_timestamp, GetSegments());
         if(new_sample)
         {
@@ -611,7 +629,7 @@ Track::GetInclusiveMemoryUsage(uint64_t* value)
 
     *value = sizeof(Track);
     rocprofvis_result_t result = kRocProfVisResultSuccess;
-    for(auto& pair : m_segments.GetSegments())
+    for(auto& pair : GetSegments()->GetSegments())
     {
         *value += sizeof(pair);
         uint64_t entry_size = 0;
@@ -643,7 +661,7 @@ rocprofvis_result_t Track::GetUInt64(rocprofvis_property_t property, uint64_t in
             {
                 *value = sizeof(Track);
                 result = kRocProfVisResultSuccess;
-                for(auto& pair : m_segments.GetSegments())
+                for(auto& pair : GetSegments()->GetSegments())
                 {
                     *value += sizeof(pair);
                 }
@@ -657,13 +675,13 @@ rocprofvis_result_t Track::GetUInt64(rocprofvis_property_t property, uint64_t in
             }
             case kRPVControllerTrackType:
             {
-                *value = m_type;
+                *value = GetTrackType();
                 result = kRocProfVisResultSuccess;
                 break;
             }
             case kRPVControllerTrackNumberOfEntries:
             {
-                *value = m_bounds.num_entries;
+                *value = GetNumberOfEntries();
                 result = kRocProfVisResultSuccess;
                 break;
             }
@@ -694,7 +712,7 @@ rocprofvis_result_t Track::GetUInt64(rocprofvis_property_t property, uint64_t in
             case kRPVControllerTrackHistogramBucketDensityIndexed:
             {
                 *value = rocprofvis_dm_get_property_as_uint64(
-                    m_dm_handle, kRPVDMTrackHistogramBucketEventDensityUInt64Indexed, index);
+                    GetDmHandle(), kRPVDMTrackHistogramBucketEventDensityUInt64Indexed, index);
                 result = kRocProfVisResultSuccess;
                 break;
             }
@@ -720,21 +738,21 @@ rocprofvis_result_t Track::GetUInt64(rocprofvis_property_t property, uint64_t in
             case kRPVControllerTrackInstanceId:
             {
                 *value = rocprofvis_dm_get_property_as_uint64(
-                    m_dm_handle, kRPVDMTrackInstanceIdUInt64, 0);
+                    GetDmHandle(), kRPVDMTrackInstanceIdUInt64, 0);
                 result = kRocProfVisResultSuccess;
                 break;
             }
             case kRPVControllerTrackFileId:
             {
                 *value = rocprofvis_dm_get_property_as_uint64(
-                    m_dm_handle, kRPVDMTrackFileIdUInt64, 0);
+                    GetDmHandle(), kRPVDMTrackFileIdUInt64, 0);
                 result = kRocProfVisResultSuccess;
                 break;
             }
             case kRPVControllerTrackOrderRanking:
             {
                 *value = rocprofvis_dm_get_property_as_uint64(
-                    m_dm_handle, kRPVDMTrackOrderRankingUInt64, 0);
+                    GetDmHandle(), kRPVDMTrackOrderRankingUInt64, 0);
                 result = kRocProfVisResultSuccess;
                 break;
             }
@@ -758,13 +776,13 @@ rocprofvis_result_t Track::GetDouble(rocprofvis_property_t property, uint64_t in
         {
             case kRPVControllerTrackMinTimestamp:
             {
-                *value = m_bounds.start_timestamp;
+                *value = GetStartTimestamp();
                 result = kRocProfVisResultSuccess;
                 break;
             }
             case kRPVControllerTrackMaxTimestamp:
             {
-                *value = m_bounds.end_timestamp;
+                *value = GetEndTimestamp();
                 result = kRocProfVisResultSuccess;
                 break;
             }
@@ -783,7 +801,7 @@ rocprofvis_result_t Track::GetDouble(rocprofvis_property_t property, uint64_t in
             case kRPVControllerTrackHistogramBucketValueIndexed:
             {
                 *value = rocprofvis_dm_get_property_as_double(
-                    m_dm_handle, kRPVDMTrackHistogramBucketValueDoubleIndexed, index);
+                    GetDmHandle(), kRPVDMTrackHistogramBucketValueDoubleIndexed, index);
                 result = kRocProfVisResultSuccess;
                 break;
             }  
@@ -812,25 +830,25 @@ rocprofvis_result_t Track::GetObject(rocprofvis_property_t property, uint64_t in
             }
             case kRPVControllerTrackThread:
             {
-                *value = (rocprofvis_handle_t*)m_topology_links.thread;
+                *value = (rocprofvis_handle_t*)GetThread();
                 result = kRocProfVisResultSuccess;
                 break;
             }
             case kRPVControllerTrackQueue:
             {
-                *value = (rocprofvis_handle_t*)m_topology_links.queue;
+                *value = (rocprofvis_handle_t*)GetQueue();
                 result = kRocProfVisResultSuccess;
                 break;
             }
             case kRPVControllerTrackStream:
             {
-                *value = (rocprofvis_handle_t*) m_topology_links.stream;
+                *value = (rocprofvis_handle_t*)GetStream();
                 result = kRocProfVisResultSuccess;
                 break;
             }
             case kRPVControllerTrackCounter:
             {
-                *value = (rocprofvis_handle_t*)m_topology_links.counter;
+                *value = (rocprofvis_handle_t*)GetCounter();
                 result = kRocProfVisResultSuccess;
                 break;
             }
@@ -1007,12 +1025,12 @@ rocprofvis_result_t Track::SetObject(rocprofvis_property_t property, uint64_t in
             case kRPVControllerTrackEntry:
             {
                 // Start & end timestamps must be configured
-                ROCPROFVIS_ASSERT(m_bounds.start_timestamp >= 0.0 &&
-                                  m_bounds.start_timestamp < m_bounds.end_timestamp);
+                ROCPROFVIS_ASSERT(GetStartTimestamp() >= 0.0 &&
+                                  GetStartTimestamp() < GetEndTimestamp());
                 Handle* object = (Handle*)value;
                 auto object_type = object->GetType();
-                if (((m_type == kRPVControllerTrackTypeEvents) && (object_type == kRPVControllerObjectTypeEvent))
-                    || ((m_type == kRPVControllerTrackTypeSamples) && (object_type == kRPVControllerObjectTypeSample)))
+                if (((GetTrackType() == kRPVControllerTrackTypeEvents) && (object_type == kRPVControllerObjectTypeEvent))
+                    || ((GetTrackType() == kRPVControllerTrackTypeSamples) && (object_type == kRPVControllerObjectTypeSample)))
                 {
                     uint64_t              level = 0;
                     uint64_t              event_id = 0;
@@ -1044,36 +1062,36 @@ rocprofvis_result_t Track::SetObject(rocprofvis_property_t property, uint64_t in
 
                     if (result == kRocProfVisResultSuccess)
                     {
-                        if(timestamp.first >= m_bounds.start_timestamp &&
-                           timestamp.second <= m_bounds.end_timestamp)
+                        if(timestamp.first >= GetStartTimestamp() &&
+                           timestamp.second <= GetEndTimestamp())
                         {
-                            std::pair<double, double> relative  = { timestamp.first - m_bounds.start_timestamp,
-                                                    timestamp.second - m_bounds.start_timestamp };
+                            std::pair<double, double> relative  = { timestamp.first - GetStartTimestamp(),
+                                                    timestamp.second - GetStartTimestamp() };
                             std::pair<double, double> range = {floor(relative.first / kSegmentDuration),
                                                     floor(relative.second / kSegmentDuration)};
                             
-                            std::unique_lock lock(*m_segments.GetMutex());
+                            std::unique_lock lock(*GetSegments()->GetMutex());
 
                             for (double current_segment = range.first; current_segment <= range.second; current_segment++)
                             {
 
                                 double segment_start =
-                                    m_bounds.start_timestamp +
+                                    GetStartTimestamp() +
                                     (current_segment * kSegmentDuration);
                                 double segment_end = segment_start + kSegmentDuration;
 
-                                if(m_segments.GetSegments().find(segment_start) ==
-                                   m_segments.GetSegments().end())
+                                if(GetSegments()->GetSegments().find(segment_start) ==
+                                   GetSegments()->GetSegments().end())
                                 {
 
                                     std::unique_ptr<Segment> segment =
-                                        std::make_unique<Segment>(m_type, &m_segments);
+                                        std::make_unique<Segment>(GetTrackType(), GetSegments());
                                     segment->SetStartEndTimestamps(segment_start,
                                                                    segment_end);
                                     segment->SetMinTimestamp(timestamp.first);
                                     segment->SetMaxTimestamp(timestamp.second);
-                                    result = m_segments.Insert(segment_start,
-                                                                     std::move(segment));
+                                    result = GetSegments()->Insert(segment_start,
+                                                                   std::move(segment));
                                     if(result == kRocProfVisResultDuplicate) {
                                         spdlog::warn("Segment already exists at {}",
                                                 segment_start);
@@ -1085,7 +1103,7 @@ rocprofvis_result_t Track::SetObject(rocprofvis_property_t property, uint64_t in
                                 {
 
                                     std::unique_ptr<Segment>& segment =
-                                        m_segments.GetSegments()[segment_start];
+                                        GetSegments()->GetSegments()[segment_start];
                                     segment->SetMinTimestamp(
                                         std::min(segment->GetMinTimestamp(), timestamp.first));
                                     segment->SetMaxTimestamp(std::max(
@@ -1221,34 +1239,34 @@ Track::FillBounds()
     uint64_t       end_timestamp   = 0;
 
     rocprofvis_dm_result_t dm_result = rocprofvis_dm_get_property_as_uint64(
-        m_dm_handle, kRPVDMTrackNumRecordsUInt64, 0, &bounds.num_entries);
+        GetDmHandle(), kRPVDMTrackNumRecordsUInt64, 0, &bounds.num_entries);
     if(dm_result == kRocProfVisDmResultSuccess)
     {
         dm_result = rocprofvis_dm_get_property_as_uint64(
-            m_dm_handle, kRPVDMTrackMinimumTimestampUInt64, 0, &start_timestamp);
+            GetDmHandle(), kRPVDMTrackMinimumTimestampUInt64, 0, &start_timestamp);
     }
     if(dm_result == kRocProfVisDmResultSuccess)
     {
         dm_result = rocprofvis_dm_get_property_as_uint64(
-            m_dm_handle, kRPVDMTrackMaximumTimestampUInt64, 0, &end_timestamp);
+            GetDmHandle(), kRPVDMTrackMaximumTimestampUInt64, 0, &end_timestamp);
     }
     if(dm_result == kRocProfVisDmResultSuccess)
     {
         dm_result = rocprofvis_dm_get_property_as_double(
-            m_dm_handle, kRPVDMTrackMinimumValueDouble, 0, &bounds.min_value);
+            GetDmHandle(), kRPVDMTrackMinimumValueDouble, 0, &bounds.min_value);
     }
     if(dm_result == kRocProfVisDmResultSuccess)
     {
         dm_result = rocprofvis_dm_get_property_as_double(
-            m_dm_handle, kRPVDMTrackMaximumValueDouble, 0, &bounds.max_value);
+            GetDmHandle(), kRPVDMTrackMaximumValueDouble, 0, &bounds.max_value);
     }
 
     if(dm_result == kRocProfVisDmResultSuccess &&
-       m_type == kRPVControllerTrackTypeSamples)
+       GetTrackType() == kRPVControllerTrackTypeSamples)
     {
         rocprofvis_dm_trace_t trace = nullptr;
         dm_result = rocprofvis_dm_get_property_as_handle(
-            m_dm_handle, kRPVDMTrackTraceHandle, 0, &trace);
+            GetDmHandle(), kRPVDMTrackTraceHandle, 0, &trace);
         if(dm_result == kRocProfVisDmResultSuccess)
         {
             dm_result = rocprofvis_dm_get_property_as_uint64(
@@ -1278,21 +1296,21 @@ Track::FillMetadata()
     uint64_t         dm_track_type = 0;
 
     rocprofvis_dm_result_t dm_result = rocprofvis_dm_get_property_as_charptr(
-        m_dm_handle, kRPVDMTrackCategoryEnumCharPtr, 0, &category);
+        GetDmHandle(), kRPVDMTrackCategoryEnumCharPtr, 0, &category);
     if(dm_result == kRocProfVisDmResultSuccess)
     {
         dm_result = rocprofvis_dm_get_property_as_charptr(
-            m_dm_handle, kRPVDMTrackMainProcessNameCharPtr, 0, &main_name);
+            GetDmHandle(), kRPVDMTrackMainProcessNameCharPtr, 0, &main_name);
     }
     if(dm_result == kRocProfVisDmResultSuccess)
     {
         dm_result = rocprofvis_dm_get_property_as_charptr(
-            m_dm_handle, kRPVDMTrackSubProcessNameCharPtr, 0, &sub_name);
+            GetDmHandle(), kRPVDMTrackSubProcessNameCharPtr, 0, &sub_name);
     }
     if(dm_result == kRocProfVisDmResultSuccess)
     {
         dm_result = rocprofvis_dm_get_property_as_uint64(
-            m_dm_handle, kRPVDMTrackCategoryEnumUInt64, 0, &dm_track_type);
+            GetDmHandle(), kRPVDMTrackCategoryEnumUInt64, 0, &dm_track_type);
     }
 
     rocprofvis_result_t result = kRocProfVisResultUnknownError;
@@ -1369,17 +1387,17 @@ Track::FillTopologyIds()
     track_topology_ids_t topology_ids;
 
     rocprofvis_dm_result_t dm_result = rocprofvis_dm_get_property_as_uint64(
-        m_dm_handle, kRPVDMTrackNodeIdUInt64, 0, &topology_ids.node_id);
+        GetDmHandle(), kRPVDMTrackNodeIdUInt64, 0, &topology_ids.node_id);
     if(dm_result == kRocProfVisDmResultSuccess)
     {
         dm_result = rocprofvis_dm_get_property_as_uint64(
-            m_dm_handle, kRPVDMTrackProcessIdUInt64, 0,
+            GetDmHandle(), kRPVDMTrackProcessIdUInt64, 0,
             &topology_ids.agent_id_or_pid);
     }
     if(dm_result == kRocProfVisDmResultSuccess)
     {
         dm_result = rocprofvis_dm_get_property_as_uint64(
-            m_dm_handle, kRPVDMTrackSubProcessIdUInt64, 0,
+            GetDmHandle(), kRPVDMTrackSubProcessIdUInt64, 0,
             &topology_ids.queue_id_or_tid);
     }
 

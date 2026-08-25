@@ -166,7 +166,7 @@ rocprofvis_result_t SystemTrace::LoadRocpd(Future* future)
         m_timeline        = std::make_unique<Timeline>(0);
         size_t trace_size = 0;
         m_dm_handle       = rocprofvis_dm_create_trace();
-        if(!m_dm_handle)
+        if(!GetDMHandle())
         {
             return kRocProfVisResultMemoryAllocError;
         }
@@ -224,7 +224,7 @@ SystemTrace::OpenRocpdDatabase(rocprofvis_dm_database_t& database)
     }
 
     rocprofvis_dm_result_t dm_result = rocprofvis_dm_bind_trace_to_database(
-        m_dm_handle, database, m_config_path.c_str());
+        GetDMHandle(), database, m_config_path.c_str());
     return dm_result == kRocProfVisDmResultSuccess
                ? kRocProfVisResultSuccess
                : kRocProfVisResultUnknownError;
@@ -425,7 +425,7 @@ SystemTrace::LoadRocpdTracks(size_t& trace_size)
     rocprofvis_db_num_of_tracks_t num_tracks =
         static_cast<rocprofvis_db_num_of_tracks_t>(
             rocprofvis_dm_get_property_as_uint64(
-                m_dm_handle, kRPVDMNumberOfTracksUInt64, 0));
+                GetDMHandle(), kRPVDMNumberOfTracksUInt64, 0));
 
     track_lookup_t track_lookup;
     uint64_t       graph_index = 0;
@@ -433,7 +433,7 @@ SystemTrace::LoadRocpdTracks(size_t& trace_size)
     {
         rocprofvis_dm_track_t dm_track_handle =
             rocprofvis_dm_get_property_as_handle(
-                m_dm_handle, kRPVDMTrackHandleIndexed, i);
+                GetDMHandle(), kRPVDMTrackHandleIndexed, i);
         if(!dm_track_handle)
         {
             return kRocProfVisResultUnknownError;
@@ -473,7 +473,7 @@ SystemTrace::LoadRocpdTopology()
 {
     rocprofvis_dm_topology_node dm_topology_root =
         rocprofvis_dm_get_property_as_handle(
-            m_dm_handle, kRPVDMTopologyHandle, 0);
+            GetDMHandle(), kRPVDMTopologyHandle, 0);
     if(!dm_topology_root)
     {
         return kRocProfVisResultUnknownError;
@@ -523,7 +523,7 @@ rocprofvis_result_t SystemTrace::SaveTrimmedTrace(Future& future, double start, 
 {
     rocprofvis_result_t error = kRocProfVisResultUnknownError;
 
-    rocprofvis_dm_trace_t dm_handle = m_dm_handle;
+    rocprofvis_dm_trace_t dm_handle = GetDMHandle();
     std::string path_str = path;
     future.Set(JobSystem::Get().IssueJob([start, end, path_str, dm_handle](Future* future) -> rocprofvis_result_t {
                               (void) future;
@@ -568,7 +568,7 @@ rocprofvis_result_t SystemTrace::CleanupTraceDatabase(Future& future, bool rebui
 {
     rocprofvis_result_t error = kRocProfVisResultUnknownError;
 
-    rocprofvis_dm_trace_t dm_handle = m_dm_handle;
+    rocprofvis_dm_trace_t dm_handle = GetDMHandle();
     future.Set(JobSystem::Get().IssueJob([rebuild, dm_handle](Future* future) -> rocprofvis_result_t {
         (void) future;
         rocprofvis_result_t result = kRocProfVisResultUnknownError;
@@ -630,7 +630,7 @@ rocprofvis_result_t SystemTrace::AsyncFetch(Event& event, Future& future, Array&
                   rocprofvis_property_t property)
 {
     rocprofvis_result_t error = kRocProfVisResultUnknownError;
-    rocprofvis_dm_trace_t dm_handle = m_dm_handle;
+    rocprofvis_dm_trace_t dm_handle = GetDMHandle();
     future.Set(JobSystem::Get().IssueJob([&event, &array, property, dm_handle](Future* future) -> rocprofvis_result_t {
                               (void) future;
                               rocprofvis_result_t result = kRocProfVisResultUnknownError;
@@ -669,21 +669,21 @@ rocprofvis_result_t SystemTrace::AsyncFetch(rocprofvis_property_t property, Futu
                 {
                     const uint64_t& event_id = index;
                     result = Event::FetchDataModelExtendedDataProperty(event_id, array,
-                                                                       m_dm_handle);
+                                                                       GetDMHandle());
                     break;
                 }
                 case kRPVControllerSystemEventDataCallStackIndexed:
                 {
                     const uint64_t& event_id = index;
                     result = Event::FetchDataModelStackTraceProperty(event_id, array,
-                                                                     m_dm_handle);
+                                                                     GetDMHandle());
                     break;
                 }
                 case kRPVControllerSystemEventDataFlowControlIndexed:
                 {
                     const uint64_t& event_id = index;
                     result = Event::FetchDataModelFlowTraceProperty(event_id, array,
-                                                                    m_dm_handle);
+                                                                    GetDMHandle());
                     break;
                 }
                 case kRPVControllerSystemBucketDataValueIndexed:
@@ -736,7 +736,7 @@ rocprofvis_result_t SystemTrace::AsyncFetch(Table& table, Arguments& args, Futur
 rocprofvis_result_t SystemTrace::TableExportCSV(Table& table, Arguments& args, Future& future, const char* path)
 {
     rocprofvis_result_t   error     = kRocProfVisResultUnknownError;
-    rocprofvis_dm_trace_t dm_handle = m_dm_handle;
+    rocprofvis_dm_trace_t dm_handle = GetDMHandle();
     std::string path_str = path; 
 
     future.Set(JobSystem::Get().IssueJob([&table, dm_handle, &args, path_str](Future* future) -> rocprofvis_result_t {
@@ -754,7 +754,7 @@ rocprofvis_result_t SystemTrace::TableExportCSV(Table& table, Arguments& args, F
 rocprofvis_result_t SystemTrace::AsyncFetch(Summary& summary, Arguments& args, Future& future, SummaryMetrics& output)
 {
     rocprofvis_result_t   error     = kRocProfVisResultUnknownError;
-    rocprofvis_dm_trace_t dm_handle = m_dm_handle;
+    rocprofvis_dm_trace_t dm_handle = GetDMHandle();
 
     future.Set(JobSystem::Get().IssueJob([&summary, dm_handle, &args, &output](Future* future) -> rocprofvis_result_t {
             rocprofvis_result_t result = kRocProfVisResultUnknownError;
@@ -843,14 +843,14 @@ rocprofvis_result_t SystemTrace::GetUInt64(rocprofvis_property_t property, uint6
             case kRPVControllerSystemGetHistogramBucketsNumber:
             {
                 *value = rocprofvis_dm_get_property_as_uint64(
-                    m_dm_handle, kRPVDMHistogramNumBuckets, 0);
+                    GetDMHandle(), kRPVDMHistogramNumBuckets, 0);
                 result = kRocProfVisResultSuccess;
                 break;
             }
             case kRPVControllerSystemGetHistogramBucketSize:
             {
                 *value = rocprofvis_dm_get_property_as_uint64(
-                    m_dm_handle, kRPVDMHistogramBucketSize, 0);
+                    GetDMHandle(), kRPVDMHistogramBucketSize, 0);
                 result = kRocProfVisResultSuccess;
                 break;
             }
@@ -977,9 +977,9 @@ rocprofvis_result_t SystemTrace::SetUInt64(rocprofvis_property_t property, uint6
         }
         case kRPVControllerSystemNotifySelected:
         {
-            if(value > 0 && m_mem_mgmt != nullptr)
+            if(value > 0 && GetMemoryManager() != nullptr)
             {
-                m_mem_mgmt->Configure(2.0);
+                GetMemoryManager()->Configure(2.0);
             }
             break;
         }

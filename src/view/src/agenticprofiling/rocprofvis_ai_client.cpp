@@ -76,8 +76,8 @@ enum class EndpointFlavour
     kAzure
 };
 
-// Azure-style bases name the deployment in the path. The AMD internal gateway
-// (llm-api.amd.com/azure) is one of these.
+// Azure-style bases name the deployment in the path, which is what the /azure,
+// /engines/ and /openai/deployments segments below identify.
 EndpointFlavour
 FlavourFromUrl(const std::string& url)
 {

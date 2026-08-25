@@ -1854,8 +1854,8 @@ Rules that are easy to get wrong here:
 - **Two endpoint shapes, decided by `EndpointFlavour`.** Stock OpenAI
   gets `/chat/completions` appended, names the model in the body, sends
   `Authorization: Bearer`, and uses `max_completion_tokens`. Azure-style
-  bases (`/azure`, `/engines/`, `/openai/deployments`) - which is what
-  the AMD internal gateway `llm-api.amd.com/azure` is - take the
+  bases, recognised by an `/azure`, `/engines/`, or `/openai/deployments`
+  segment in the URL, take the
   deployment from the Model field into the path, send
   `Ocp-Apim-Subscription-Key`, omit `model` from the body, and use
   `max_tokens` at a lower cap - that is all their API version accepts,

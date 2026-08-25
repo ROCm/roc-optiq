@@ -16,7 +16,6 @@ View ROCm Systems Profiler trace data in ROCm Optiq
 .. |bar| image:: ../images/bar-view.png
 .. |table| image:: ../images/table-view.png
 .. |node| image:: ../images/node-menu.png
-.. |gpu| image:: ../images/gpu-menu.png
 .. |mini| image:: ../images/minimap-icon.png
 .. |make| image:: ../images/make-selection.png
 .. |remove| image:: ../images/remove-time.png
@@ -384,7 +383,6 @@ Once a kernel is selected, the dispatch details display in a table below the cha
 You can also select the **Node** and **GPU** from the drop-down menus to focus on the expected node and GPU:
 
 |node|
-|gpu| 
 
 .. _minimap:
 

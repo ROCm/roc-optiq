@@ -1,6 +1,6 @@
 # Changelog for ROCm Optiq
 
-Documentation for rocSPARSE is available at [https://rocm.docs.amd.com/projects/roc-optiq/en/latest/](https://rocm.docs.amd.com/projects/roc-optiq/en/latest/)
+Documentation for ROCm Optiq is available at [https://rocm.docs.amd.com/projects/roc-optiq/en/latest/](https://rocm.docs.amd.com/projects/roc-optiq/en/latest/)
 
 ## ROCm Optiq 1.0.0
 

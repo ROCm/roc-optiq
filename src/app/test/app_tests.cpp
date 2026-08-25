@@ -1369,10 +1369,7 @@ void RegisterAppTests(ImGuiTestEngine* e)
         // (Launch/Dispatch/MemoryCopy/MemoryAllocate/LaunchSample -- see
         // EventSearch::Search). If the sample db changes, update it to a term the
         // new db contains.
-        char* buf = es->TextInput();
-        IM_CHECK(buf != nullptr);
-        if (buf == nullptr) return;
-        snprintf(buf, es->TextInputLimit(), "%s", "hipLaunchKernel");
+        es->TextInput() = "hipLaunchKernel";
         es->Search();
         ctx->Yield(2);
         IM_CHECK(es->Searched() == true);

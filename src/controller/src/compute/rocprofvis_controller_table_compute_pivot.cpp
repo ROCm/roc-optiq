@@ -20,6 +20,8 @@ namespace RocProfVis
 namespace Controller
 {
 
+constexpr const char* PIVOT_TABLE_TITLE = "Kernel Metrics Matrix";
+
 ComputePivotTable::ComputePivotTable(const uint64_t id)
 : Table(id, __kRPVControllerTablePropertiesFirst, __kRPVControllerTablePropertiesLast)
 , m_workload_id(0)
@@ -262,6 +264,7 @@ ComputePivotTable::Fetch(rocprofvis_dm_trace_t dm_handle, uint64_t index, uint64
                             }
                             m_rows[k] = std::move(row);
                         }
+                        m_num_items = m_rows.size();
                     }
                 }
                 rocprofvis_db_future_free(db_future);
@@ -320,52 +323,6 @@ ComputePivotTable::ExportCSV(rocprofvis_dm_trace_t dm_handle, Arguments& args,
 }
 
 rocprofvis_result_t
-ComputePivotTable::GetUInt64(rocprofvis_property_t property, uint64_t index,
-                             uint64_t* value)
-{
-    rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
-    if(value)
-    {
-        switch(property)
-        {
-            case kRPVControllerTableId:
-            {
-                *value = m_id;
-                result = kRocProfVisResultSuccess;
-                break;
-            }
-            case kRPVControllerTableNumColumns:
-            {
-                *value = m_columns.size();
-                result = kRocProfVisResultSuccess;
-                break;
-            }
-            case kRPVControllerTableNumRows:
-            {
-                *value = m_rows.size();
-                result = kRocProfVisResultSuccess;
-                break;
-            }
-            case kRPVControllerTableColumnTypeIndexed:
-            {
-                if(index < m_columns.size())
-                {
-                    *value = m_columns[index].m_type;
-                    result = kRocProfVisResultSuccess;
-                }
-                break;
-            }
-            default:
-            {
-                result = UnhandledProperty(property);
-                break;
-            }
-        }
-    }
-    return result;
-}
-
-rocprofvis_result_t
 ComputePivotTable::GetString(rocprofvis_property_t property, uint64_t index, char* value,
                              uint32_t* length)
 {
@@ -374,44 +331,15 @@ ComputePivotTable::GetString(rocprofvis_property_t property, uint64_t index, cha
     {
         switch(property)
         {
-            case kRPVControllerTableColumnHeaderIndexed:
-            {
-                if(index < m_columns.size())
-                {
-                    if(!value && length)
-                    {
-                        *length = static_cast<uint32_t>(m_columns[index].m_name.size());
-                        result  = kRocProfVisResultSuccess;
-                    }
-                    else if(value && length && *length > 0)
-                    {
-                        const std::string& name = m_columns[index].m_name;
-                        const size_t copy = std::min(name.size(), static_cast<size_t>(*length));
-                        if (copy > 0) std::memcpy(value, name.data(), copy);
-                        result = kRocProfVisResultSuccess;
-                    }
-                }
-                break;
-            }
             case kRPVControllerTableTitle:
             {
-                std::string title = "Kernel Metrics Matrix";
-                if(!value && length)
-                {
-                    *length = static_cast<uint32_t>(title.size());
-                    result  = kRocProfVisResultSuccess;
-                }
-                else if(value && length && *length > 0)
-                {
-                    const size_t copy = std::min(title.size(), static_cast<size_t>(*length));
-                    if (copy > 0) std::memcpy(value, title.data(), copy);
-                    result = kRocProfVisResultSuccess;
-                }
+                result = GetStringImpl(value, length, PIVOT_TABLE_TITLE,
+                                       static_cast<uint32_t>(strlen(PIVOT_TABLE_TITLE)));
                 break;
             }
             default:
             {
-                result = UnhandledProperty(property);
+                result = Table::GetString(property, index, value, length);
                 break;
             }
         }

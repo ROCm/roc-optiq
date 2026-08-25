@@ -10,6 +10,7 @@ View ROCm Compute Profiler analysis data in ROCm Optiq
 
 .. |eye| image:: ../images/eye.png
 .. |gear| image:: ../images/gear.png
+.. |hideTable| image:: ../images/hideTable.png
 
 ROCm Optiq provides intuitive, interactive profiling analysis for compute workloads by moving from a high-level performance summary to detailed kernel- and metric-level analysis. 
 It enables rapid identification of performance hotspots and interactive exploration of kernel-level metrics for a profiled workload.
@@ -157,7 +158,7 @@ The **Kernel Selection Table** displays kernel information, including names and 
 
 - The Duration column enables you to sort (ascending or descending).  
 - Selecting a kernel through the **Kernel Selection Table** or kernel selector drop-down updates the Memory Chart, System Speed-of-Light, Kernel-level Roofline Analysis, and Table View accordingly. 
-- You can hide this table by clicking |eye| to maximize space for charts.
+- You can hide this table by clicking |hideTable| to maximize space for charts.
 - To show or hide bar charts for metric values in the **Kernel Selection Table**, select **Show Bar Charts** or **Hide Bar Charts**.  
 - To show or hide bar charts for a specific metric, right-click the metric's column header and select **Show Bar Chart** or **Hide Bar Charts**. 
 - Hover over a clipped kernel name to view the full name in a tooltip. 

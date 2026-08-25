@@ -1228,16 +1228,8 @@ void RegisterAppTests(ImGuiTestEngine* e)
     t = IM_REGISTER_TEST(e, "app", "sys_track_details_populates_on_select");
     t->TestFunc = [](ImGuiTestContext* ctx)
     {
-        AppWindow* app = AppWindow::GetInstance();
-        Project* project = app->GetCurrentProject();
-        IM_CHECK(project != nullptr);
-        if (project == nullptr) return;
-        TraceView* tv = dynamic_cast<TraceView*>(project->GetView().get());
-        if (tv == nullptr)
-        {
-            ctx->LogWarning("SKIP: no trace view loaded (open a system/trace profile to exercise this)");
-            return;
-        }
+        TraceView* tv = GetTraceViewOrSkip(ctx);
+        if (!tv) return;
         AnalysisView* av = TraceViewTestPeer{*tv}.AnalysisViewPtr();
         IM_CHECK(av != nullptr);
         if (av == nullptr) return;

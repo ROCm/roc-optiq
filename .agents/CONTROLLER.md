@@ -551,15 +551,15 @@ into SQLite directly, only through `rocprofvis_dm_*` calls.
 root system-trace controller. It owns:
 
 ```cpp
-std::vector<Track*>   m_tracks;
+std::vector<std::unique_ptr<Track>> m_tracks;
 std::vector<Node*>    m_nodes;          // legacy flat node list
-Timeline*             m_timeline;
-SystemTable*          m_event_table;
-SystemTable*          m_sample_table;
-SystemTable*          m_search_table;
-Summary*              m_summary;
-MemoryManager*        m_mem_mgmt;
-TopologyNode*         m_topology_root;
+std::unique_ptr<Timeline>         m_timeline;
+std::unique_ptr<SystemTable>      m_event_table;
+std::unique_ptr<SystemTable>      m_sample_table;
+std::unique_ptr<EventSearchTable> m_search_table;
+std::unique_ptr<Summary>          m_summary;
+std::unique_ptr<MemoryManager>    m_mem_mgmt;
+std::unique_ptr<TopologyNode>     m_topology_root;
 ```
 
 Five `AsyncFetch(...)` overloads cover everything the View asks for:
@@ -596,6 +596,9 @@ segments inside `[start, end]` that are not yet loaded get a
 `FetchFromDataModel` call, then segments emit their cached events /
 samples into the output array. `FetchSegments(...)` is the lower-level
 hook that lets `Graph` reuse the segment iteration logic.
+`FillBounds()`, `FillMetadata()`, and `FillTopologyIds()` snapshot the
+corresponding track data from the model before the track is added to
+the trace.
 
 Track properties are exposed under
 `rocprofvis_controller_track_properties_t` (start at `0x30000000`):

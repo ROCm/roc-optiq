@@ -94,18 +94,32 @@ SystemTrace::SystemTrace(const std::vector<std::string>& filenames)
 
 }
 
-SystemTrace::~SystemTrace() = default;
+SystemTrace::~SystemTrace()
+{
+    delete m_mem_mgmt;
+    m_mem_mgmt = nullptr;
+    delete m_timeline;
+    delete m_event_table;
+    delete m_sample_table;
+    delete m_search_table;
+    delete m_summary;
+    delete m_topology_root;
+    for (Track* track : m_tracks)
+    {
+        delete track;
+    }
+}
 
 rocprofvis_result_t SystemTrace::Init()
 {
     rocprofvis_result_t result = kRocProfVisResultUnknownError;
     try
     {
-        m_event_table = std::make_unique<SystemTable>(0);
-        m_sample_table = std::make_unique<SystemTable>(1);
-        m_search_table = std::make_unique<EventSearchTable>(2);
-        m_summary = std::make_unique<Summary>(this);
-        m_mem_mgmt = std::make_unique<MemoryManager>(m_id);
+        m_event_table = new SystemTable(0);
+        m_sample_table = new SystemTable(1);
+        m_search_table = new EventSearchTable(2);
+        m_summary = new Summary(this);
+        m_mem_mgmt = new MemoryManager(m_id);
 
         result = kRocProfVisResultSuccess;
     }
@@ -118,7 +132,7 @@ rocprofvis_result_t SystemTrace::Init()
 }
 
 MemoryManager* SystemTrace::GetMemoryManager(){
-    return m_mem_mgmt.get();
+    return m_mem_mgmt;
 }
 
 std::mutex& SystemTrace::GetTableMutex(rocprofvis_dm_table_use_case_enum_t use_case)
@@ -163,7 +177,7 @@ rocprofvis_result_t SystemTrace::LoadRocpd(Future* future)
 
     try
     {
-        m_timeline        = std::make_unique<Timeline>(0);
+        m_timeline        = new Timeline(0);
         size_t trace_size = 0;
         m_dm_handle       = rocprofvis_dm_create_trace();
         if(!GetDMHandle())
@@ -382,9 +396,8 @@ SystemTrace::LoadRocpdTrack(rocprofvis_dm_track_t dm_track_handle,
     rocprofvis_controller_track_type_t type =
         dm_track_type == kRocProfVisDmPmcTrack ? kRPVControllerTrackTypeSamples
                                                : kRPVControllerTrackTypeEvents;
-    std::unique_ptr<Track> track =
-        std::make_unique<Track>(type, track_id, dm_track_handle, this);
-    Track* track_ptr = track.get();
+    Track* track = new Track(type, track_id, dm_track_handle, this);
+    Track* track_ptr = track;
 
     rocprofvis_result_t result = track->FillBounds();
     if(result != kRocProfVisResultSuccess)
@@ -415,7 +428,7 @@ SystemTrace::LoadRocpdTrack(rocprofvis_dm_track_t dm_track_handle,
         return result;
     }
 
-    m_tracks.push_back(std::move(track));
+    m_tracks.push_back(track);
     return AddRocpdGraph(track_ptr, dm_track_type, track_id, graph_index);
 }
 
@@ -480,7 +493,7 @@ SystemTrace::LoadRocpdTopology()
     }
 
     DbgPrintTopologyNodeData(dm_topology_root, 1);
-    m_topology_root = std::make_unique<TopologyRoot>(dm_topology_root, this);
+    m_topology_root = new TopologyRoot(dm_topology_root, this);
     return kRocProfVisResultSuccess;
 }
 
@@ -786,9 +799,9 @@ rocprofvis_result_t SystemTrace::GetUInt64(rocprofvis_property_t property, uint6
             case kRPVControllerCommonMemoryUsageInclusive:
             {
                 *value = sizeof(Trace);
-                *value += m_tracks.size() * sizeof(std::unique_ptr<Track>);
+                *value += m_tracks.size() * sizeof(Track*);
                 result = kRocProfVisResultSuccess;
-                for(const std::unique_ptr<Track>& track : m_tracks)
+                for(auto& track : m_tracks)
                 {
                     uint64_t entry_size = 0;
                     result = track->GetInclusiveMemoryUsage(&entry_size);
@@ -812,7 +825,7 @@ rocprofvis_result_t SystemTrace::GetUInt64(rocprofvis_property_t property, uint6
             case kRPVControllerCommonMemoryUsageExclusive:
             {
                 *value = sizeof(Trace);
-                *value += m_tracks.size() * sizeof(std::unique_ptr<Track>);
+                *value += m_tracks.size() * sizeof(Track*);
                 result = kRocProfVisResultSuccess;
                 break;
             }
@@ -873,25 +886,25 @@ rocprofvis_result_t SystemTrace::GetObject(rocprofvis_property_t property, uint6
         {
             case kRPVControllerSystemTimeline:
             {
-                *value = (rocprofvis_handle_t*)m_timeline.get();
+                *value = (rocprofvis_handle_t*)m_timeline;
                 result = kRocProfVisResultSuccess;
                 break;
             }
             case kRPVControllerSystemEventTable:
             {
-                *value = (rocprofvis_handle_t*)m_event_table.get();
+                *value = (rocprofvis_handle_t*)m_event_table;
                 result = kRocProfVisResultSuccess;
                 break;
             }
             case kRPVControllerSystemSampleTable:
             {
-                *value = (rocprofvis_handle_t*)m_sample_table.get();
+                *value = (rocprofvis_handle_t*)m_sample_table;
                 result = kRocProfVisResultSuccess;
                 break;
             }
             case kRPVControllerSystemSearchResultsTable:
             {
-                *value = (rocprofvis_handle_t*)m_search_table.get();
+                *value = (rocprofvis_handle_t*)m_search_table;
                 result = kRocProfVisResultSuccess;
                 break;
             }
@@ -905,11 +918,11 @@ rocprofvis_result_t SystemTrace::GetObject(rocprofvis_property_t property, uint6
             case kRPVControllerSystemTrackById:
             {
                 result = kRocProfVisResultOutOfRange;
-                for(const std::unique_ptr<Track>& track : m_tracks)
+                for (auto* track : m_tracks)
                 {
                     if(track != nullptr && track->GetId() == index)
                     {
-                        *value = (rocprofvis_handle_t*)track.get();
+                        *value = (rocprofvis_handle_t*)track;
                         result = kRocProfVisResultSuccess;
                         break;
                     }
@@ -920,7 +933,7 @@ rocprofvis_result_t SystemTrace::GetObject(rocprofvis_property_t property, uint6
             {
                 if(index < m_tracks.size())
                 {
-                    *value = (rocprofvis_handle_t*)m_tracks[index].get();
+                    *value = (rocprofvis_handle_t*)m_tracks[index];
                     result = kRocProfVisResultSuccess;
                 }
                 else
@@ -937,7 +950,7 @@ rocprofvis_result_t SystemTrace::GetObject(rocprofvis_property_t property, uint6
             }
             case kRPVControllerSystemSummary:
             {
-                *value = (rocprofvis_handle_t*)m_summary.get();
+                *value = (rocprofvis_handle_t*)m_summary;
                 result = kRocProfVisResultSuccess;
                 break;
             }
@@ -966,6 +979,11 @@ rocprofvis_result_t SystemTrace::SetUInt64(rocprofvis_property_t property, uint6
         {
             if (m_tracks.size() != value)
             {
+                for (uint64_t i = value; i < m_tracks.size(); i++)
+                {
+                    delete m_tracks[i];
+                    m_tracks[i] = nullptr;
+                }
                 m_tracks.resize(value);
                 result = m_tracks.size() == value ? kRocProfVisResultSuccess : kRocProfVisResultMemoryAllocError;
             }
@@ -1009,9 +1027,10 @@ rocprofvis_result_t SystemTrace::SetObject(rocprofvis_property_t property, uint6
                 TimelineRef timeline(value);
                 if(timeline.IsValid())
                 {
-                    if(m_timeline.get() != timeline.Get())
+                    if(m_timeline != timeline.Get())
                     {
-                        m_timeline.reset(timeline.Get());
+                        delete m_timeline;
+                        m_timeline = timeline.Get();
                     }
                     result = kRocProfVisResultSuccess;
                 }
@@ -1022,9 +1041,10 @@ rocprofvis_result_t SystemTrace::SetObject(rocprofvis_property_t property, uint6
                 SystemTableRef table(value);
                 if(table.IsValid())
                 {
-                    if(m_event_table.get() != table.Get())
+                    if(m_event_table != table.Get())
                     {
-                        m_event_table.reset(table.Get());
+                        delete m_event_table;
+                        m_event_table = table.Get();
                     }
                     result = kRocProfVisResultSuccess;
                 }
@@ -1035,9 +1055,10 @@ rocprofvis_result_t SystemTrace::SetObject(rocprofvis_property_t property, uint6
                 SystemTableRef table(value);
                 if(table.IsValid())
                 {
-                    if(m_sample_table.get() != table.Get())
+                    if(m_sample_table != table.Get())
                     {
-                        m_sample_table.reset(table.Get());
+                        delete m_sample_table;
+                        m_sample_table = table.Get();
                     }
                     result = kRocProfVisResultSuccess;
                 }
@@ -1050,9 +1071,10 @@ rocprofvis_result_t SystemTrace::SetObject(rocprofvis_property_t property, uint6
                 {
                     EventSearchTable* search_table =
                         static_cast<EventSearchTable*>(table.Get());
-                    if(m_search_table.get() != search_table)
+                    if(m_search_table != search_table)
                     {
-                        m_search_table.reset(search_table);
+                        delete m_search_table;
+                        m_search_table = search_table;
                     }
                     result = kRocProfVisResultSuccess;
                 }
@@ -1071,10 +1093,7 @@ rocprofvis_result_t SystemTrace::SetObject(rocprofvis_property_t property, uint6
                 {
                     if(index < m_tracks.size())
                     {
-                        if(m_tracks[index].get() != track.Get())
-                        {
-                            m_tracks[index].reset(track.Get());
-                        }
+                        m_tracks[index] = track.Get();
                         result = kRocProfVisResultSuccess;
                     }
                     else

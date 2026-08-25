@@ -242,6 +242,7 @@ AppWindow::Init()
     layout_items.push_back(main_area_item);
     layout_items.push_back(status_bar_item);
     m_main_view = std::make_shared<VFixedContainer>(layout_items);
+    ApplyPanelVisibilitySettings();
 
     m_default_padding = ImGui::GetStyle().WindowPadding;
     m_default_spacing = ImGui::GetStyle().ItemSpacing;
@@ -1214,6 +1215,43 @@ AppWindow::RenderEditMenu(Project* project)
 }
 
 void
+AppWindow::ApplyPanelVisibilitySettings()
+{
+    const AppWindowSettings& settings =
+        SettingsManager::GetInstance().GetAppWindowSettings();
+
+    if(m_main_view)
+    {
+        LayoutItem* tool_bar_item = m_main_view->GetMutableAt(m_tool_bar_index);
+        if(tool_bar_item)
+        {
+            tool_bar_item->m_visible = settings.show_toolbar;
+        }
+    }
+
+    if(!m_tab_container)
+    {
+        return;
+    }
+
+    for(const TabItem* tab : m_tab_container->GetTabs())
+    {
+        if(tab == nullptr)
+        {
+            continue;
+        }
+        std::shared_ptr<TraceView> trace_view =
+            std::dynamic_pointer_cast<TraceView>(tab->m_widget);
+        if(trace_view)
+        {
+            trace_view->SetAnalysisViewVisibility(settings.show_details_panel);
+            trace_view->SetSidebarViewVisibility(settings.show_sidebar);
+            trace_view->SetHistogramVisibility(settings.show_histogram);
+        }
+    }
+}
+
+void
 AppWindow::RenderViewMenu(Project* project)
 {
     (void) project;
@@ -1224,11 +1262,7 @@ AppWindow::RenderViewMenu(Project* project)
             SettingsManager::GetInstance().GetAppWindowSettings();
         if(ImGui::MenuItem("Show Tool Bar", nullptr, &settings.show_toolbar))
         {
-            LayoutItem* tool_bar_item = m_main_view->GetMutableAt(m_tool_bar_index);
-            if(tool_bar_item)
-            {
-                tool_bar_item->m_visible = settings.show_toolbar;
-            }
+            ApplyPanelVisibilitySettings();
         }
 #ifndef __APPLE__
         if(ImGui::MenuItem("Fullscreen", "F11", m_is_fullscreen))
@@ -1245,34 +1279,15 @@ AppWindow::RenderViewMenu(Project* project)
         if(ImGui::MenuItem("Show Advanced Details Panel", nullptr,
                            &settings.show_details_panel))
         {
-            for(const auto& tab : m_tab_container->GetTabs())
-            {
-                auto trace_view_tab =
-                    std::dynamic_pointer_cast<RocProfVis::View::TraceView>(tab->m_widget);
-                if(trace_view_tab)
-                    trace_view_tab->SetAnalysisViewVisibility(
-                        settings.show_details_panel);
-            }
+            ApplyPanelVisibilitySettings();
         }
         if(ImGui::MenuItem("Show System Topology Panel", nullptr, &settings.show_sidebar))
         {
-            for(const auto& tab : m_tab_container->GetTabs())
-            {
-                auto trace_view_tab =
-                    std::dynamic_pointer_cast<RocProfVis::View::TraceView>(tab->m_widget);
-                if(trace_view_tab)
-                    trace_view_tab->SetSidebarViewVisibility(settings.show_sidebar);
-            }
+            ApplyPanelVisibilitySettings();
         }
         if(ImGui::MenuItem("Show Timeline Overview", nullptr, &settings.show_histogram))
         {
-            for(const auto& tab : m_tab_container->GetTabs())
-            {
-                auto trace_view_tab =
-                    std::dynamic_pointer_cast<RocProfVis::View::TraceView>(tab->m_widget);
-                if(trace_view_tab)
-                    trace_view_tab->SetHistogramVisibility(settings.show_histogram);
-            }
+            ApplyPanelVisibilitySettings();
         }
         ImGui::MenuItem("Show Summary", nullptr, &settings.show_summary);
 

@@ -214,13 +214,14 @@ OptiqActions::PanelNameList()
 //                         widget that was seeded from it at construction, so
 //                         both have to move: the setting is what survives a
 //                         restart, the widget is what redraws now.
+//  - kSettingAndAppWindow persisted and mirrored on the AppWindow layout.
 //  - kSettingOnly         persisted only; whoever draws it re-reads the flag
 //                         every frame, so there is no widget to miss.
 //  - kLogViewer           its own singleton, independent of any trace.
 //
-// The first two need a TraceView. A compute trace has none, so those panels
-// report failure there rather than moving a global setting that would then
-// surprise the next system trace the user opens.
+// Only trace-local panels need the active tab to be a TraceView. Setting-backed
+// panels follow the View menu: they update every open system trace even when a
+// compute tab is in front.
 namespace
 {
 
@@ -228,6 +229,7 @@ enum class PanelBacking
 {
     kTraceViewOnly,
     kSettingAndTraceView,
+    kSettingAndAppWindow,
     kSettingOnly,
     kLogViewer
 };
@@ -242,20 +244,18 @@ BackingOf(OptiqPanel panel)
         case OptiqPanel::kHistogram:
         case OptiqPanel::kTopology:
         case OptiqPanel::kDetails:     return PanelBacking::kSettingAndTraceView;
-        case OptiqPanel::kSummary:
-        case OptiqPanel::kToolbar:     return PanelBacking::kSettingOnly;
+        case OptiqPanel::kToolbar:     return PanelBacking::kSettingAndAppWindow;
+        case OptiqPanel::kSummary:     return PanelBacking::kSettingOnly;
         case OptiqPanel::kLogViewer:   return PanelBacking::kLogViewer;
         default:                       return PanelBacking::kSettingOnly;
     }
 }
 
-// True when this panel cannot be touched without a TraceView to touch.
+// True when this panel cannot be touched without the active TraceView.
 bool
-NeedsTraceView(OptiqPanel panel)
+NeedsActiveTraceView(OptiqPanel panel)
 {
-    const PanelBacking backing = BackingOf(panel);
-    return backing == PanelBacking::kTraceViewOnly ||
-           backing == PanelBacking::kSettingAndTraceView;
+    return BackingOf(panel) == PanelBacking::kTraceViewOnly;
 }
 
 }  // namespace
@@ -264,7 +264,7 @@ NeedsTraceView(OptiqPanel panel)
 bool
 OptiqActions::ShowPanel(OptiqPanel panel, bool visible)
 {
-    if(NeedsTraceView(panel) && m_trace_view == nullptr)
+    if(NeedsActiveTraceView(panel) && m_trace_view == nullptr)
     {
         return false;
     }
@@ -287,19 +287,19 @@ OptiqActions::ShowPanel(OptiqPanel panel, bool visible)
         case OptiqPanel::kHistogram:
         {
             app_settings.show_histogram = visible;
-            m_trace_view->SetHistogramVisibility(visible);
+            AppWindow::GetInstance()->ApplyPanelVisibilitySettings();
             return true;
         }
         case OptiqPanel::kTopology:
         {
             app_settings.show_sidebar = visible;
-            m_trace_view->SetSidebarViewVisibility(visible);
+            AppWindow::GetInstance()->ApplyPanelVisibilitySettings();
             return true;
         }
         case OptiqPanel::kDetails:
         {
             app_settings.show_details_panel = visible;
-            m_trace_view->SetAnalysisViewVisibility(visible);
+            AppWindow::GetInstance()->ApplyPanelVisibilitySettings();
             return true;
         }
         case OptiqPanel::kSummary:
@@ -310,6 +310,7 @@ OptiqActions::ShowPanel(OptiqPanel panel, bool visible)
         case OptiqPanel::kToolbar:
         {
             app_settings.show_toolbar = visible;
+            AppWindow::GetInstance()->ApplyPanelVisibilitySettings();
             return true;
         }
         case OptiqPanel::kLogViewer:
@@ -332,7 +333,7 @@ OptiqActions::ShowPanel(OptiqPanel panel, bool visible)
 bool
 OptiqActions::IsPanelVisible(OptiqPanel panel, bool& visible_out) const
 {
-    if(NeedsTraceView(panel) && m_trace_view == nullptr)
+    if(NeedsActiveTraceView(panel) && m_trace_view == nullptr)
     {
         return false;
     }

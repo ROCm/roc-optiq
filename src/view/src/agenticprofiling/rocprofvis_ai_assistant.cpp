@@ -55,9 +55,6 @@ constexpr float  ASSISTANT_DOT_SPACING    = 4.0f;
 constexpr float  ASSISTANT_DOT_SPEED      = 5.0f;
 // Covers a whole self-directed investigation, not a single lookup.
 constexpr uint32_t ASSISTANT_MAX_TOOL_ROUNDS = 20;
-// How many times one tool may re-run after piggybacking on someone else's fetch.
-// Without a cap, a request id that stays busy would spin the tool forever.
-constexpr uint32_t ASSISTANT_MAX_FETCH_RETRIES     = 2;
 constexpr int      ASSISTANT_FETCH_TIMEOUT_SECONDS = 45;
 constexpr size_t   ASSISTANT_CHART_MAX_BINS        = 64;
 constexpr size_t   ASSISTANT_CHART_MIN_BINS        = 16;
@@ -1004,6 +1001,9 @@ AssistantPanel::BeginFetchWait(const AssistantToolStartResult& started,
                                const std::string& tool_call_id,
                                const std::string& tool_name, bool warmup)
 {
+    const std::chrono::steady_clock::time_point started_at =
+        m_fetch_retries > 0 && !warmup ? m_fetch_wait.started
+                                        : std::chrono::steady_clock::now();
     m_phase                    = Phase::kToolWait;
     m_fetch_wait.active        = true;
     m_fetch_wait.started_fetch = started.started_fetch;
@@ -1013,13 +1013,24 @@ AssistantPanel::BeginFetchWait(const AssistantToolStartResult& started,
     m_fetch_wait.tool_call_id  = tool_call_id;
     m_fetch_wait.tool_name     = tool_name;
     m_fetch_wait.prefix        = started.content;
-    m_fetch_wait.started       = std::chrono::steady_clock::now();
+    m_fetch_wait.started       = started_at;
 }
 
 // Hands one tool's output back to the model and moves on to the next.
 void
 AssistantPanel::FinishCurrentTool(const std::string& content)
 {
+    // Warmup parks a fetch with no tool call. An empty queue here must never
+    // fall through to ContinueAfterTools, or an HTTP turn starts without the
+    // queued user message.
+    if(m_fetch_wait.warmup)
+    {
+        ResetTurn();
+        AppendLine(Speaker::kStatus,
+                   "The trace closed before the summary finished loading.");
+        return;
+    }
+
     if(m_next_call_index >= m_pending_calls.size())
     {
         ContinueAfterTools();
@@ -1083,7 +1094,24 @@ AssistantPanel::PollToolFetch()
     const AssistantToolContext context = MakeToolContext();
     if(context.data_provider == nullptr)
     {
+        // Warmup has no pending tool call, so FinishCurrentTool would wrongly
+        // treat the empty queue as "tools done" and start an HTTP turn.
+        if(m_fetch_wait.warmup)
+        {
+            ResetTurn();
+            AppendLine(Speaker::kStatus,
+                       "The trace closed before the summary finished loading.");
+            return;
+        }
         FinishCurrentTool("The trace closed while a tool was running.");
+        return;
+    }
+
+    if(!m_fetch_wait.warmup && CurrentProjectId() != m_turn_project_id)
+    {
+        FinishCurrentTool("The trace in front changed, so this tool's pending "
+                          "data belongs to a different trace. Run it again on "
+                          "the current trace.");
         return;
     }
 
@@ -1097,10 +1125,18 @@ AssistantPanel::PollToolFetch()
     }
 
     // The warmup has no tool call to answer, so the queued question goes out
-    // whether it landed or timed out.
+    // whether it landed or timed out — but only on the same trace it started on.
     if(m_fetch_wait.warmup)
     {
         m_fetch_wait = FetchWait();
+        if(CurrentProjectId() != m_turn_project_id)
+        {
+            ResetTurn();
+            AppendLine(Speaker::kStatus,
+                       "The trace in front changed before the summary finished "
+                       "loading. Ask again on this trace.");
+            return;
+        }
         BeginQueuedTurn();
         return;
     }
@@ -1111,12 +1147,19 @@ AssistantPanel::PollToolFetch()
         return;
     }
 
-    // The rows that landed answer someone else's query, so re-run the tool to
-    // issue its own. Bounded, in case that request id never goes quiet.
+    // The rows that landed answer someone else's query, so never format them as
+    // this tool's result. Re-run until we issue our own query, bounded by the
+    // original wait deadline even though BeginFetchWait runs again.
     if(!m_fetch_wait.started_fetch &&
-       m_fetch_wait.fetch.kind != AssistantFetchKind::kSummary &&
-       m_fetch_retries < ASSISTANT_MAX_FETCH_RETRIES)
+       m_fetch_wait.fetch.kind != AssistantFetchKind::kSummary)
     {
+        if(timed_out)
+        {
+            FinishCurrentTool("Timed out waiting to run " + m_fetch_wait.tool_name +
+                              " because its shared data request remained busy.");
+            return;
+        }
+
         ++m_fetch_retries;
         m_fetch_wait.active = false;
         RunNextTool();

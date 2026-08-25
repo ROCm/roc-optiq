@@ -85,6 +85,11 @@ public:
     Project* GetProject(const std::string& id);
     Project* GetCurrentProject();
 
+    // Applies the global panel settings to every live layout. Both the View
+    // menu and programmatic UI actions use this path so their behavior stays
+    // identical.
+    void ApplyPanelVisibilitySettings();
+
     // Open traces, as tabs. Exposed so the assistant can switch between them
     // through OptiqActions.
     std::shared_ptr<TabContainer> GetTabContainer() const;

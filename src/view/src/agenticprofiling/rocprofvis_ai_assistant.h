@@ -154,6 +154,7 @@ private:
     // Set when the tool budget runs out: the next request goes out without
     // tools, so the model has to write up what it already gathered.
     bool     m_force_final;
+    // Keeps contention retries on the first wait's timeout deadline.
     uint32_t m_fetch_retries;
     // The trace the turn started on, which is what catches the user switching
     // tabs mid-investigation.

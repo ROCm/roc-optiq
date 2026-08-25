@@ -37,6 +37,10 @@ Documentation for ROCm Optiq is available at [https://rocm.docs.amd.com/projects
 - Added a RenderScheduler to drive lazy-render wake-ups.
 - Adopted ImGui's built-in DPI handling, replacing the previous custom solution.
 
+##### Miscellaneous
+- Time format setting now shows a live preview and clearer **Timecode** option labels (e.g. **hh:mm:ss.ns**).
+- Cleaned up log messages.
+
 ##### Experimental (not yet released)
 
 These features are in progress and available for preview only (build from src); behavior and UI are subject to change.

@@ -5,9 +5,13 @@
 #include "rocprofvis_hotkey_manager.h"
 #include "imgui.h"
 #include "implot.h"
+#ifdef ROCPROFVIS_ENABLE_AGENTIC_PROFILING
+#    include "remote/rocprofvis_secret_store.h"
+#endif
 #include "rocprofvis_core.h"
 #include "rocprofvis_event_manager.h"
 #include "rocprofvis_font_manager.h"
+#include "rocprofvis_json_utils.h"
 #include "rocprofvis_settings_panel.h"
 #include "rocprofvis_utils.h"
 
@@ -499,6 +503,8 @@ SettingsManager::SaveSettingsJson()
     SerializeOtherSettings(settings_json);
     SerializeHotkeySettings(settings_json);
     SerializeProfilerSettings(settings_json);
+    SerializeAssistantSettings(settings_json);
+    SerializeAppWindowSettings(settings_json);
 
     std::ofstream out_file(m_json_path);
     if(out_file.is_open())
@@ -529,6 +535,8 @@ SettingsManager::LoadSettingsJson()
         DeserializeOtherSettings(result.second);
         DeserializeHotkeySettings(result.second);
         DeserializeProfilerSettings(result.second);
+        DeserializeAssistantSettings(result.second);
+        DeserializeAppWindowSettings(result.second);
     }
     else
     {
@@ -616,7 +624,8 @@ SettingsManager::SettingsManager()
 , m_usersettings_default(
       { DisplaySettings{ false, 6, true, false }, UnitSettings{ TimeFormat::kTimecode },
         false, false, LOG_VIEWER_MAX_ENTRIES_DEFAULT,
-        LogViewerSettings{ LOG_VIEWER_DEFAULT_LEVEL_MASK, true, false, false, false } })
+        LogViewerSettings{ LOG_VIEWER_DEFAULT_LEVEL_MASK, true, false, false, false },
+        AssistantSettings{} })
 , m_usersettings(m_usersettings_default)
 , m_appwindowsettings({ AppWindowSettings{ true, true, true, true, false } })
 , m_json_path(GetStandardConfigPath())
@@ -1020,6 +1029,234 @@ SettingsManager::DeserializeProfilerSettings(jt::Json& json)
         }
     }
 }
+
+// Writes the saved endpoints. The API keys live in the credential store.
+void
+SettingsManager::SerializeAssistantSettings(jt::Json& json)
+{
+    jt::Json& as = json[JSON_KEY_GROUP_SETTINGS][JSON_KEY_SETTINGS_CATEGORY_ASSISTANT];
+    int       i  = 0;
+    for(const AssistantProvider& provider : m_usersettings.assistant.providers)
+    {
+        jt::Json& entry = as[JSON_KEY_SETTINGS_ASSISTANT_PROVIDERS][i++];
+        entry[JSON_KEY_SETTINGS_ASSISTANT_NAME]         = provider.name;
+        entry[JSON_KEY_SETTINGS_ASSISTANT_ENDPOINT_URL] = provider.endpoint_url;
+        entry[JSON_KEY_SETTINGS_ASSISTANT_MODEL]        = provider.model;
+    }
+    as[JSON_KEY_SETTINGS_ASSISTANT_ACTIVE] =
+        static_cast<int>(m_usersettings.assistant.active);
+}
+
+// Reads the saved endpoints, upgrading the pre-provider single-endpoint shape.
+void
+SettingsManager::DeserializeAssistantSettings(jt::Json& json)
+{
+    jt::Json& as = json[JSON_KEY_GROUP_SETTINGS][JSON_KEY_SETTINGS_CATEGORY_ASSISTANT];
+
+    if(as[JSON_KEY_SETTINGS_ASSISTANT_PROVIDERS].isArray())
+    {
+        m_usersettings.assistant.providers.clear();
+        for(jt::Json& entry : as[JSON_KEY_SETTINGS_ASSISTANT_PROVIDERS].getArray())
+        {
+            if(!entry.isObject())
+            {
+                continue;
+            }
+            AssistantProvider provider;
+            if(entry[JSON_KEY_SETTINGS_ASSISTANT_NAME].isString())
+            {
+                provider.name = entry[JSON_KEY_SETTINGS_ASSISTANT_NAME].getString();
+            }
+            if(entry[JSON_KEY_SETTINGS_ASSISTANT_ENDPOINT_URL].isString())
+            {
+                provider.endpoint_url =
+                    entry[JSON_KEY_SETTINGS_ASSISTANT_ENDPOINT_URL].getString();
+            }
+            if(entry[JSON_KEY_SETTINGS_ASSISTANT_MODEL].isString())
+            {
+                provider.model = entry[JSON_KEY_SETTINGS_ASSISTANT_MODEL].getString();
+            }
+            m_usersettings.assistant.providers.push_back(provider);
+        }
+        for(AssistantProvider& provider : m_usersettings.assistant.providers)
+        {
+            ApplyAssistantEndpointDefaults(provider);
+        }
+    }
+    else if(as[JSON_KEY_SETTINGS_ASSISTANT_ENDPOINT_URL].isString())
+    {
+        // Written before routes were configurable: fold the single endpoint
+        // into the list under the default name, so the key already in the
+        // credential store keeps working.
+        AssistantProvider provider;
+        provider.name         = ASSISTANT_DEFAULT_PROVIDER_NAME;
+        provider.endpoint_url = as[JSON_KEY_SETTINGS_ASSISTANT_ENDPOINT_URL].getString();
+        if(as[JSON_KEY_SETTINGS_ASSISTANT_MODEL].isString())
+        {
+            provider.model = as[JSON_KEY_SETTINGS_ASSISTANT_MODEL].getString();
+        }
+        ApplyAssistantEndpointDefaults(provider);
+        m_usersettings.assistant.providers.clear();
+        m_usersettings.assistant.providers.push_back(provider);
+    }
+
+    m_usersettings.assistant.active = 0;
+    if(as[JSON_KEY_SETTINGS_ASSISTANT_ACTIVE].isLong())
+    {
+        const int64_t active = as[JSON_KEY_SETTINGS_ASSISTANT_ACTIVE].getLong();
+        if(active > 0 &&
+           static_cast<size_t>(active) < m_usersettings.assistant.providers.size())
+        {
+            m_usersettings.assistant.active = static_cast<size_t>(active);
+        }
+    }
+}
+
+// The endpoint the assistant should post to, or nullptr when none is saved.
+const AssistantProvider*
+SettingsManager::GetActiveAssistantProvider() const
+{
+    const std::vector<AssistantProvider>& providers = m_usersettings.assistant.providers;
+    if(m_usersettings.assistant.active >= providers.size())
+    {
+        return nullptr;
+    }
+    return &providers[m_usersettings.assistant.active];
+}
+
+// Persists panel visibility, so the View menu survives a restart.
+void
+SettingsManager::SerializeAppWindowSettings(jt::Json& json)
+{
+    jt::Json& aw = json[JSON_KEY_GROUP_SETTINGS][JSON_KEY_SETTINGS_CATEGORY_APP_WINDOW];
+    aw[JSON_KEY_SETTINGS_APP_WINDOW_TOOLBAR]       = m_appwindowsettings.show_toolbar;
+    aw[JSON_KEY_SETTINGS_APP_WINDOW_DETAILS_PANEL] =
+        m_appwindowsettings.show_details_panel;
+    aw[JSON_KEY_SETTINGS_APP_WINDOW_SIDEBAR]   = m_appwindowsettings.show_sidebar;
+    aw[JSON_KEY_SETTINGS_APP_WINDOW_HISTOGRAM] = m_appwindowsettings.show_histogram;
+    aw[JSON_KEY_SETTINGS_APP_WINDOW_SUMMARY]   = m_appwindowsettings.show_summary;
+}
+
+// Restores panel visibility, keeping the built-in default for missing keys.
+void
+SettingsManager::DeserializeAppWindowSettings(jt::Json& json)
+{
+    jt::Json& aw = json[JSON_KEY_GROUP_SETTINGS][JSON_KEY_SETTINGS_CATEGORY_APP_WINDOW];
+    m_appwindowsettings.show_toolbar =
+        JsonUtils::GetBool(aw, JSON_KEY_SETTINGS_APP_WINDOW_TOOLBAR,
+                           m_appwindowsettings.show_toolbar);
+    m_appwindowsettings.show_details_panel =
+        JsonUtils::GetBool(aw, JSON_KEY_SETTINGS_APP_WINDOW_DETAILS_PANEL,
+                           m_appwindowsettings.show_details_panel);
+    m_appwindowsettings.show_sidebar =
+        JsonUtils::GetBool(aw, JSON_KEY_SETTINGS_APP_WINDOW_SIDEBAR,
+                           m_appwindowsettings.show_sidebar);
+    m_appwindowsettings.show_histogram =
+        JsonUtils::GetBool(aw, JSON_KEY_SETTINGS_APP_WINDOW_HISTOGRAM,
+                           m_appwindowsettings.show_histogram);
+    m_appwindowsettings.show_summary =
+        JsonUtils::GetBool(aw, JSON_KEY_SETTINGS_APP_WINDOW_SUMMARY,
+                           m_appwindowsettings.show_summary);
+}
+
+#ifdef ROCPROFVIS_ENABLE_AGENTIC_PROFILING
+namespace
+{
+// Credential-store entry for one provider. Keys written before routes existed
+// live under the bare prefix, which GetAssistantToken still falls back to.
+std::string
+AssistantTokenKey(const std::string& provider_name)
+{
+    if(provider_name.empty())
+    {
+        return ASSISTANT_TOKEN_SECRET_KEY;
+    }
+    return std::string(ASSISTANT_TOKEN_SECRET_KEY) + "/" + provider_name;
+}
+}  // namespace
+
+// True when a key is already saved for this endpoint.
+bool
+SettingsManager::HasAssistantToken(const std::string& provider_name) const
+{
+    std::string unused;
+    return GetAssistantToken(provider_name, unused);
+}
+
+// Reads the key from the credential store, this session's memory, or the
+// pre-provider entry, in that order.
+bool
+SettingsManager::GetAssistantToken(const std::string& provider_name,
+                                   std::string&       out_token) const
+{
+    out_token.clear();
+    const std::string key = AssistantTokenKey(provider_name);
+    if(SecretStore::IsAvailable() && SecretStore::Get(key, out_token) &&
+       !out_token.empty())
+    {
+        return true;
+    }
+
+    const std::map<std::string, std::string>::const_iterator session =
+        m_assistant_token_session.find(provider_name);
+    if(session != m_assistant_token_session.end() && !session->second.empty())
+    {
+        out_token = session->second;
+        return true;
+    }
+
+    // Fall back to the key stored before providers were configurable, so an
+    // upgrade does not make the user re-enter it.
+    out_token.clear();
+    if(key != ASSISTANT_TOKEN_SECRET_KEY && SecretStore::IsAvailable() &&
+       SecretStore::Get(ASSISTANT_TOKEN_SECRET_KEY, out_token) && !out_token.empty())
+    {
+        return true;
+    }
+    out_token.clear();
+    return false;
+}
+
+// Saves the key, or clears it when the token is empty.
+bool
+SettingsManager::SetAssistantToken(const std::string& provider_name,
+                                   const std::string& token)
+{
+    if(token.empty())
+    {
+        return ClearAssistantToken(provider_name);
+    }
+
+    m_assistant_token_session[provider_name] = token;
+    if(SecretStore::IsAvailable())
+    {
+        return SecretStore::Set(AssistantTokenKey(provider_name), token);
+    }
+    return true;
+}
+
+// Forgets the key everywhere it could be stored.
+bool
+SettingsManager::ClearAssistantToken(const std::string& provider_name)
+{
+    m_assistant_token_session.erase(provider_name);
+    if(!SecretStore::IsAvailable())
+    {
+        return true;
+    }
+
+    const std::string key     = AssistantTokenKey(provider_name);
+    const bool        erased  = SecretStore::Erase(key);
+    if(key == ASSISTANT_TOKEN_SECRET_KEY)
+    {
+        return erased;
+    }
+    // Also drop the pre-provider key, otherwise GetAssistantToken would fall
+    // back to it and the key would look like it survived being cleared.
+    SecretStore::Erase(ASSISTANT_TOKEN_SECRET_KEY);
+    return erased;
+}
+#endif  // ROCPROFVIS_ENABLE_AGENTIC_PROFILING
 
 }  // namespace View
 }  // namespace RocProfVis

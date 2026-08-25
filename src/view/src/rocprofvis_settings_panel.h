@@ -26,6 +26,9 @@ private:
         Display,
         Units,
         Other,
+#ifdef ROCPROFVIS_ENABLE_AGENTIC_PROFILING
+        Assistant,
+#endif
         Hotkeys
     };
 
@@ -37,6 +40,12 @@ private:
     void ResetDisplayOptions();
     void ResetUnitOptions();
     void ResetHotkeySettings();
+#ifdef ROCPROFVIS_ENABLE_AGENTIC_PROFILING
+    void RenderAssistantSettings();
+    void ResetAssistantOptions();
+    // Name of the saved endpoint, used to key its stored API key.
+    std::string ActiveAssistantProviderName() const;
+#endif
     void StealChord(HotkeyActionId from, ImGuiKeyChord chord);
 
     bool ResetButton();
@@ -59,6 +68,10 @@ private:
     HotkeyActionId m_rebinding_action  = HotkeyActionId::kCount;
     bool           m_rebinding_primary = true;
     bool           m_hotkeys_changed   = false;
+
+    std::string m_assistant_token_draft;
+    bool        m_assistant_show_token     = false;
+    bool        m_assistant_clear_token    = false;
 };
 
 }  // namespace View

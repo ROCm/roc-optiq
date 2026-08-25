@@ -77,6 +77,34 @@ public:
     friend struct TraceViewTestPeer;
     void                               SetSidebarViewVisibility(bool visibility);
     void                               SetHistogramVisibility(bool visibility);
+    void                               SetMinimapVisibility(bool visibility);
+    bool                               IsMinimapVisible() const;
+    // Flow arrows between linked events, as driven by the toolbar's eye and
+    // tree/chain buttons.
+    void                               SetFlowArrowsVisible(bool visible);
+    bool                               AreFlowArrowsVisible() const;
+    void                               SetFlowRenderChained(bool chained);
+    // Zooms the visible window, as opposed to just selecting a range.
+    void                               ZoomToRange(double start_ns, double end_ns);
+    // Pins a sticky note on the timeline. Persisted with the project.
+    bool AddNote(double time_ns, const std::string& title, const std::string& text,
+                 double v_min, double v_max, uint64_t track_id);
+    // The details panel's tab strip (Event Table, Top Events, Annotations, ...).
+    std::vector<std::string> ListAnalysisTabs();
+    bool                     SelectAnalysisTab(const std::string& name);
+    std::string              ActiveAnalysisTab();
+
+    // Remaining toolbar actions, so everything on the strip is reachable.
+    void             ResetView();
+    void             SetAnnotationsVisible(bool visible);
+    bool             AreAnnotationsVisible() const;
+    std::vector<int> ListBookmarks() const;
+    bool             SaveBookmark(int slot);
+    bool             GotoBookmark(int slot);
+    bool             RemoveBookmark(int slot);
+    // Drops both measurement pins on a span and shows the measurement bar.
+    bool             MeasureRange(double start_ns, double end_ns);
+    void             ClearMeasurement();
 
 private:
     void HandleHotKeys();
@@ -99,7 +127,8 @@ private:
     std::shared_ptr<Minimap>           m_minimap;
 
     LayoutItem::Ptr m_sidebar_item;
-    LayoutItem::Ptr m_analysis_item;
+    LayoutItem::Ptr                 m_analysis_item;
+    std::shared_ptr<AnalysisView>   m_analysis_view;
 
     DataProvider m_data_provider;
     bool         m_view_created;

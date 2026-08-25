@@ -25,8 +25,12 @@ constexpr const char* EVENT_ID_COLUMN_NAME  = "id";
 constexpr const char* FOUND_ENTRIES_TEXT    = "Found %llu item(s) on %llu track(s)";
 
 constexpr const char* SHARED_APPLY_LABEL  = "Apply to Both";
-constexpr float       SHARED_LABEL_GAP    = 2.0f;
-constexpr float       SHARED_COMBO_GLYPHS = 12.0f;
+constexpr const char* GROUP_BY_NONE_LABEL = "-- None --";
+constexpr const char* SHARED_GROUP_BY_TOOLTIP =
+    "Aggregate both tables by a column, or leave as -- None --. Columns tagged "
+    "(A) or (B) exist on only that source and are not applied to the other.";
+constexpr float SHARED_LABEL_GAP    = 2.0f;
+constexpr float SHARED_COMBO_GLYPHS = 12.0f;
 
 MultiTrackTable::MultiTrackTable(DataProvider& dp, TableType table_type,
                                  rocprofvis_controller_table_type_t request_table_type,
@@ -126,7 +130,8 @@ MultiTrackTable::GetIncludedTrackCount() const
 }
 
 void
-MultiTrackTable::RenderSharedFilterControls()
+MultiTrackTable::RenderSharedFilterControls(const std::vector<std::string>& column_names,
+                                            const std::vector<std::string>& column_labels)
 {
     // Same shape as the per table form: a label column, the group by combo, the
     // apply button on the right, then a filter input filling the row.
@@ -139,6 +144,64 @@ MultiTrackTable::RenderSharedFilterControls()
     const float apply_width =
         ImGui::CalcTextSize(SHARED_APPLY_LABEL).x + style.FramePadding.x * 2.0f;
 
+    std::vector<std::string> names  = column_names;
+    std::vector<std::string> labels = column_labels;
+    if(labels.size() < names.size())
+    {
+        labels.resize(names.size());
+        for(size_t i = 0; i < names.size(); i++)
+        {
+            if(labels[i].empty())
+            {
+                labels[i] = names[i];
+            }
+        }
+    }
+    else if(labels.size() > names.size())
+    {
+        labels.resize(names.size());
+    }
+    if(!m_pending_filter_options.group_by.empty())
+    {
+        bool found = false;
+        for(size_t i = 0; i < names.size(); i++)
+        {
+            if(names[i] == m_pending_filter_options.group_by)
+            {
+                found = true;
+                break;
+            }
+        }
+        if(!found)
+        {
+            names.push_back(m_pending_filter_options.group_by);
+            labels.push_back(m_pending_filter_options.group_by);
+        }
+    }
+
+    std::vector<std::string> combo_items;
+    combo_items.reserve(labels.size() + 1);
+    combo_items.push_back(GROUP_BY_NONE_LABEL);
+    for(size_t i = 0; i < labels.size(); i++)
+    {
+        combo_items.push_back(labels[i]);
+    }
+    std::vector<const char*> combo_items_ptr(combo_items.size());
+    for(size_t i = 0; i < combo_items.size(); i++)
+    {
+        combo_items_ptr[i] = combo_items[i].c_str();
+    }
+
+    m_group_by_selection_index = 0;
+    for(size_t i = 0; i < names.size(); i++)
+    {
+        if(names[i] == m_pending_filter_options.group_by)
+        {
+            m_group_by_selection_index = static_cast<int>(i + 1);
+            break;
+        }
+    }
+
     ImGui::Spacing();
 
     ImGui::AlignTextToFramePadding();
@@ -147,18 +210,23 @@ MultiTrackTable::RenderSharedFilterControls()
     ImGui::SetNextItemWidth(ImGui::GetFontSize() * SHARED_COMBO_GLYPHS);
     PushComboStyles();
     if(ImGui::Combo("##shared_group_by", &m_group_by_selection_index,
-                    m_group_by_choices_ptr.data(),
-                    static_cast<int>(m_group_by_choices_ptr.size())))
+                    combo_items_ptr.data(), static_cast<int>(combo_items_ptr.size())))
     {
-        m_pending_filter_options.group_by =
-            m_group_by_selection_index == 0
-                ? ""
-                : m_group_by_choices_ptr[m_group_by_selection_index];
+        if(m_group_by_selection_index <= 0 ||
+           static_cast<size_t>(m_group_by_selection_index) > names.size())
+        {
+            m_pending_filter_options.group_by = "";
+        }
+        else
+        {
+            m_pending_filter_options.group_by =
+                names[static_cast<size_t>(m_group_by_selection_index) - 1];
+        }
     }
     PopComboStyles();
     if(ImGui::IsItemHovered())
     {
-        SetTooltipStyled("Aggregate both tables by a column, or leave as -- None --.");
+        SetTooltipStyled(SHARED_GROUP_BY_TOOLTIP);
     }
 
     ImGui::SameLine();
@@ -504,40 +572,25 @@ MultiTrackTable::Update()
 {
     if(m_data_changed)
     {
-        const std::vector<std::string>& column_names =
-            m_table_model().GetTableHeader(m_table_type);
-
+        if(!m_last_fetch_grouped)
+        {
+            RebuildEligibleGroupByColumns();
+        }
         if(m_filter_options.group_by == "")
         {
             m_group_by_selection_index = 0;
             m_group_by_choices.clear();
-
-            // Create a list of choices for the combo box for selecting the group
-            // column. Populate the combo box with column names but filter out empty
-            // and internal columns (those starting with '_')
-            m_group_by_choices.reserve(column_names.size() + 1);
-            m_group_by_choices.push_back("-- None --");
-
-            // Filter out columns
-            for(size_t i = 0; i < column_names.size(); i++)
+            m_group_by_choices.push_back(GROUP_BY_NONE_LABEL);
+            for(size_t i = 0; i < m_eligible_group_by_columns.size(); i++)
             {
-                const auto& col = column_names[i];
-                if(col.empty() || col[0] == '_')
-                {
-                    continue;  // Skip empty or internal columns
-                }
-                // skip event id column too
-                if(i == m_important_column_idxs[ImportantColumns::kDbEventId])
-                {
-                    continue;
-                }
-                m_group_by_choices.push_back(col);
+                m_group_by_choices.push_back(m_eligible_group_by_columns[i]);
             }
         }
         else
         {
             std::string selected_option = m_filter_options.group_by;
             m_group_by_choices.resize(2);
+            m_group_by_choices[0]             = GROUP_BY_NONE_LABEL;
             m_group_by_choices[1]             = selected_option;
             m_pending_filter_options.group_by = selected_option;
             m_group_by_selection_index        = 1;
@@ -670,17 +723,80 @@ MultiTrackTable::FetchSelectionData()
     }
     else
     {
+        FilterOptions request_filter = m_filter_options;
+        AdjustFilterForRequest(request_filter);
+        m_last_fetch_grouped = !request_filter.group_by.empty();
         // Fetch table data for the selected tracks. The request waits its turn when
         // the other compare source is holding the controller table.
         QueueTableRequest(std::make_shared<TrackTableRequestParams>(
             m_request_table_type, included_tracks, start_ns, end_ns,
-            m_filter_options.where, m_filter_options.filter,
-            m_filter_options.group_by.c_str(), m_filter_options.group_columns, 0,
-            m_fetch_chunk_size, m_sort_column_index, m_sort_order, "", m_table_type,
-            m_request_id));
+            request_filter.where, request_filter.filter, request_filter.group_by.c_str(),
+            request_filter.group_columns, 0, m_fetch_chunk_size, m_sort_column_index,
+            m_sort_order, "", m_table_type, m_request_id));
     }
     // Update the included tracks for this table type
     m_included_tracks = std::move(included_tracks);
+}
+
+const std::vector<std::string>&
+MultiTrackTable::EligibleGroupByColumns() const
+{
+    return m_eligible_group_by_columns;
+}
+
+void
+MultiTrackTable::RebuildEligibleGroupByColumns()
+{
+    // Same skip rules as the per-table combo: empty names, internal '_'
+    // columns, and the event id column.
+    const std::vector<std::string>& column_names =
+        m_table_model().GetTableHeader(m_table_type);
+    m_eligible_group_by_columns.clear();
+    m_eligible_group_by_columns.reserve(column_names.size());
+    for(size_t i = 0; i < column_names.size(); i++)
+    {
+        const std::string& col = column_names[i];
+        if(col.empty() || col[0] == '_')
+        {
+            continue;
+        }
+        if(i == m_important_column_idxs[ImportantColumns::kDbEventId])
+        {
+            continue;
+        }
+        m_eligible_group_by_columns.push_back(col);
+    }
+}
+
+bool
+MultiTrackTable::HasEligibleGroupByColumn(const std::string& name) const
+{
+    if(name.empty())
+    {
+        return false;
+    }
+    for(size_t i = 0; i < m_eligible_group_by_columns.size(); i++)
+    {
+        if(m_eligible_group_by_columns[i] == name)
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+void
+MultiTrackTable::AdjustFilterForRequest(FilterOptions& filter) const
+{
+    if(filter.group_by.empty())
+    {
+        return;
+    }
+    if(!HasEligibleGroupByColumn(filter.group_by))
+    {
+        filter.group_by.clear();
+        filter.group_columns[0] = '\0';
+    }
 }
 
 bool

@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <memory>
 #include <string>
+#include <vector>
 
 #include "imgui.h"
 #include "widgets/rocprofvis_widget.h"
@@ -69,6 +70,16 @@ EndCompareCard();
 void
 RenderCompareCardTitle(const CompareSourceInfo& source, SettingsManager& settings,
                        const std::string& summary = "");
+
+/* Union of eligible group-by columns from the two sources, A then B-only.
+ * Shared names keep the raw column text; names that exist on only one source
+ * are tagged (A) or (B) in labels_out. names_out is what the query uses.
+ */
+void
+BuildCompareGroupByChoices(const std::vector<std::string>& columns_a,
+                           const std::vector<std::string>& columns_b,
+                           std::vector<std::string>&       names_out,
+                           std::vector<std::string>&       labels_out);
 
 }  // namespace View
 }  // namespace RocProfVis

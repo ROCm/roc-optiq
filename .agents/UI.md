@@ -1096,7 +1096,11 @@ The bottom-right tabbed panel. Hosts, in source order:
   for the Event and Sample tables; `BuildCompareGroup` and
   `RenderCompareTab` are reused for both. The table pairs share one
   filter/aggregation form (`RenderSharedFilterControls` /
-  `ApplySharedFiltersFrom`) without pooling results. `TopEventsView`
+  `ApplySharedFiltersFrom`) without pooling results. The group-by combo
+  is the union of each source's last ungrouped header (`BuildCompareGroupByChoices`);
+  columns that exist on only one source are tagged (A) or (B), and
+  `AdjustFilterForRequest` drops a group-by that the sending table does
+  not have. `TopEventsView`
   renders each category header once with A/B tables side by side
   (per-source analysis-table slots `kAnalysisTop*TableB`). `EventsView`
   and `TrackDetails` partition their selected-item cards into A/B
@@ -1125,6 +1129,11 @@ stay identical:
   elided source name, optional right-aligned summary, separator.
   `MultiTrackTable::SetHeaderRenderer` + `RenderCard` draw a table
   inside such a card.
+- `BuildCompareGroupByChoices(columns_a, columns_b, names, labels)` -
+  union of group-by column names for the shared combo (A's order, then
+  B-only). `names` is what the query uses; `labels` tags A-only / B-only
+  columns. Each table still filters with its own header in non-compare
+  views.
 
 ### `EventsView` (`rocprofvis_events_view.{h,cpp}`)
 
@@ -1141,7 +1150,10 @@ via `AddCopyRowCellMenuItems`.
 
 `InfiniteScrollTable` subclass that aggregates rows across multiple
 selected tracks. Supports `group_by_choices`, custom filter store,
-optional compare-source filtering, and context menu copy.
+optional compare-source filtering, and context menu copy. Eligible
+group-by columns are cached from the last ungrouped header so compare
+mode can union A and B without changing the per-table combo used in
+non-compare views.
 
 ### `TrackDetails` (`rocprofvis_track_details.{h,cpp}`)
 
@@ -2535,7 +2547,8 @@ For fast lookup. Each entry: class -> file -> one-line role.
 - `TopEventsView`, `TopEventsView::TopEventsTable` ->
   `rocprofvis_top_events_view.h` -> Category-specific top-event tables.
 - `IsCompareTrace`, `MakeCompareSplit`, `BeginCompareCard`,
-  `EndCompareCard`, `RenderCompareCardTitle` ->
+  `EndCompareCard`, `RenderCompareCardTitle`,
+  `BuildCompareGroupByChoices` ->
   `rocprofvis_compare_panes.h` -> Shared chrome of the A/B compare
   layouts.
 - `EventSearch` -> `rocprofvis_event_search.h` -> Toolbar event search.

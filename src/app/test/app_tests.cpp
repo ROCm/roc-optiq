@@ -1660,6 +1660,62 @@ void RegisterAppTests(ImGuiTestEngine* e)
         ctx->Yield(2);
     };
 
+    t = IM_REGISTER_TEST(e, "app", "sys_track_details_populates_on_select");
+    t->TestFunc = [](ImGuiTestContext* ctx)
+    {
+        TraceView* tv = GetTraceViewOrSkip(ctx);
+        if (!tv) return;
+        AnalysisView* av = TraceViewTestPeer{*tv}.AnalysisViewPtr();
+        IM_CHECK(av != nullptr);
+        if (av == nullptr) return;
+        TrackDetails* td = AnalysisViewTestPeer{*av}.TrackDetailsPtr();
+        IM_CHECK(td != nullptr);
+        if (td == nullptr) return;
+        TimelineView* tlv = TraceViewTestPeer{*tv}.TimelineViewPtr();
+        IM_CHECK(tlv != nullptr);
+        if (tlv == nullptr) return;
+        std::shared_ptr<TimelineSelection> sel = tv->GetTimelineSelection();
+        IM_CHECK(sel != nullptr);
+        if (sel == nullptr) return;
+
+        // Tracks appear once the timeline's data fetch drains, so poll for a
+        // displayed flame track before reaching in for one to select.
+        FlameTrackItem* track = nullptr;
+        for (int i = 0; i < 60 && track == nullptr; i++)
+        {
+            std::vector<FlameTrackItem*> flames =
+                TimelineViewTestPeer{*tlv}.DisplayedFlameTracks();
+            if (!flames.empty()) { track = flames.front(); break; }
+            ctx->Yield(2);
+        }
+        if (track == nullptr)
+        {
+            ctx->LogWarning("SKIP: no displayed flame track to select");
+            return;
+        }
+        const uint64_t track_id = track->GetID();
+
+        // Selection dispatches async through EventManager, so poll after every drive.
+        // The reused process may carry a prior test's selection, so reset first.
+        sel->UnselectAllTracks();
+        for (int i = 0; i < 60 && TrackDetailsTestPeer{*td}.DetailCount() != 0; i++) ctx->Yield(2);
+        IM_CHECK(TrackDetailsTestPeer{*td}.DetailCount() == 0);
+
+        // Select that exact track by identity, the same call a track-header click makes.
+        sel->SelectTrack(*track);
+        for (int i = 0; i < 60 && TrackDetailsTestPeer{*td}.DetailCount() == 0; i++) ctx->Yield(2);
+        IM_CHECK(TrackDetailsTestPeer{*td}.DetailCount() == 1);
+        IM_CHECK(TrackDetailsTestPeer{*td}.HasTrack(track_id));
+
+        sel->UnselectTrack(*track);
+        for (int i = 0; i < 60 && TrackDetailsTestPeer{*td}.DetailCount() != 0; i++) ctx->Yield(2);
+        IM_CHECK(TrackDetailsTestPeer{*td}.DetailCount() == 0);
+
+        // Leave a clean selection for following tests.
+        sel->UnselectAllTracks();
+        ctx->Yield(2);
+    };
+
     t = IM_REGISTER_TEST(e, "app", "sys_timeline_measure_tool");
     t->TestFunc = [](ImGuiTestContext* ctx)
     {
@@ -2028,5 +2084,71 @@ void RegisterAppTests(ImGuiTestEngine* e)
         fs::remove(rpv_path, ec);
         ctx->PopupCloseAll();
         ctx->Yield(2);
+    };
+
+    t = IM_REGISTER_TEST(e, "app", "sys_measurement_clear_button");
+    t->TestFunc = [](ImGuiTestContext* ctx)
+    {
+        TraceView* tv = GetTraceViewOrSkip(ctx);
+        if (!tv) return;
+        TimelineView* tlv = TraceViewTestPeer{*tv}.TimelineViewPtr();
+        IM_CHECK(tlv != nullptr);
+        if (tlv == nullptr) return;
+        MeasurementController* mc = TraceViewTestPeer{*tv}.MeasurementControllerPtr();
+        IM_CHECK(mc != nullptr);
+        if (mc == nullptr) return;
+
+        // Two distinct timestamps inside the visible range to form a measurement.
+        const ViewCoords coords = tlv->GetViewCoords();
+        const double     span   = coords.v_max_x - coords.v_min_x;
+        IM_CHECK(span > 0.0);
+        if (span <= 0.0) return;
+        const double t0 = coords.v_min_x + span * 0.25;
+        const double t1 = coords.v_min_x + span * 0.75;
+
+        // Baseline: measurement state persists on the TraceView across tests in the
+        // reused process. Reset to inactive with no points; this also guarantees the
+        // "Measure" entry button is the one rendered (Exit/Clear render only in mode).
+        mc->ExitMeasurementMode();
+        mc->ClearMeasurement();
+        ctx->Yield(2);
+        IM_CHECK(mc->IsMeasurementMode() == false);
+
+        ctx->SetRef("Main Window");
+
+        // Enter measurement mode with a real click on the toolbar "Measure" button
+        // (PushID("measure_start") + Button("Measure")).
+        ctx->ItemClick("**/measure_start/Measure");
+        ctx->Yield(2);
+        IM_CHECK(mc->IsMeasurementMode() == true);
+        if (mc->IsMeasurementMode() == false) return;
+
+        // Place two points via the same controller call the freehand click handler
+        // drives; headless bar clicks don't reach the flame track's deferred-click
+        // measurement path reliably. The button under test (Clear) is a real click.
+        mc->SetFreehandMeasurementPoint(t0);
+        mc->SetFreehandMeasurementPoint(t1);
+        ctx->Yield(2);
+        const MeasurementState placed_state = mc->GetMeasurementState();
+
+        // Clear with a real click on the toolbar "Clear" button (renders only once a
+        // point exists). ClearMeasurement keeps mode active but drops both points.
+        ctx->ItemClick("**/Clear");
+        ctx->Yield(2);
+
+        // Capture, restore, THEN assert: IM_CHECK early-returns on failure, so leaving
+        // measurement mode active would leak into later tests.
+        const MeasurementState cleared_state = mc->GetMeasurementState();
+        const bool no_points = !mc->GetPoint(0).valid && !mc->GetPoint(1).valid;
+
+        mc->ExitMeasurementMode();
+        mc->ClearMeasurement();
+        ctx->Yield(2);
+        const bool inactive_after = (mc->IsMeasurementMode() == false);
+
+        IM_CHECK(placed_state == MeasurementState::kComplete);
+        IM_CHECK(cleared_state == MeasurementState::kWaitingForFirst);
+        IM_CHECK(no_points);
+        IM_CHECK(inactive_after);
     };
 }

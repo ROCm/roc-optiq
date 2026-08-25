@@ -18,6 +18,7 @@
 #include "rocprofvis_summary_view.h"
 #include "rocprofvis_timeline_track_options.h"
 #include "rocprofvis_timeline_view.h"
+#include "rocprofvis_track_details.h"
 #include "rocprofvis_trace_view.h"
 #include "compute/rocprofvis_compute_kernel_details.h"
 #include "compute/rocprofvis_compute_kernel_metric_table.h"
@@ -44,7 +45,23 @@ struct EventsViewTestPeer
 struct AnalysisViewTestPeer
 {
     const AnalysisView& v;
-    EventsView* EventsViewPtr() const { return v.m_events_view.get(); }
+    EventsView*   EventsViewPtr() const { return v.m_events_view.get(); }
+    TrackDetails* TrackDetailsPtr() const { return v.m_track_details.get(); }
+};
+
+// TrackDetails holds one DetailItem per selected track (emplace_front on select,
+// removed/cleared on deselect). Tests confirm the RIGHT track populated by id,
+// not merely a non-empty pane.
+struct TrackDetailsTestPeer
+{
+    const TrackDetails& v;
+    size_t DetailCount() const { return v.m_track_details.size(); }
+    bool   HasTrack(uint64_t track_id) const
+    {
+        for(const auto& item : v.m_track_details)
+            if(item.track_id == track_id) return true;
+        return false;
+    }
 };
 
 struct MinimapTestPeer

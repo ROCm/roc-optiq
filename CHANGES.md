@@ -57,6 +57,7 @@ These features are in progress and available for preview only (build from src); 
 - Fixed data-flow arrow starting from level zero on `.rpd` traces.
 - Fixed the Systems multi-node summary window showing data only for the first node in the `.yaml`.
 - Fixed loading workload Speed-of-Light for compute schema < 1.3.0; query builders now report and skip unsupported queries.
+- Fixed editing for counter/line track min/max Y-axis value: It now accepts unit-free and abbreviated input (e.g. "25M", "30M bytes"), keep a readable minimum width, and highlight the value on hover.
 
 ## Optiq Beta 0.5.0
 

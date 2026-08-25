@@ -481,6 +481,51 @@ void RegisterAppTests(ImGuiTestEngine* e)
         IM_CHECK(TabContainerTestPeer{*tc}.ActiveTabIndex() == target_idx);
     };
 
+    t = IM_REGISTER_TEST(e, "app", "compute_workload_details_populates");
+    t->TestFunc = [](ImGuiTestContext* ctx)
+    {
+        ComputeView* cv = GetComputeViewOrSkip(ctx);
+        if (!cv) return;
+        TabContainer* tc = ComputeViewTestPeer{*cv}.TabContainerPtr();
+        if (tc == nullptr)
+        {
+            ctx->LogWarning("SKIP: compute view has no tab container");
+            return;
+        }
+
+        const std::vector<const TabItem*> tabs = tc->GetTabs();
+        ComputeWorkloadView* wv = nullptr;
+        std::string          wv_label;
+        for (const TabItem* tab : tabs)
+        {
+            if (tab->m_id == "compute_workload_view")
+            {
+                wv       = dynamic_cast<ComputeWorkloadView*>(tab->m_widget.get());
+                wv_label = tab->m_label;
+                break;
+            }
+        }
+        if (wv == nullptr)
+        {
+            ctx->LogWarning("SKIP: no Workload Details tab in this build");
+            return;
+        }
+
+        // m_workload_info populates in Render(), so the tab must be active first.
+        ctx->ItemClick(("//Main Window/**/" + wv_label).c_str());
+        ctx->Yield(3);
+
+        ComputeWorkloadViewTestPeer peer{*wv};
+        IM_CHECK(peer.WorkloadInfoPtr() != nullptr);
+        if (peer.WorkloadInfoPtr() == nullptr) return;
+
+        // Both panels fill only when the render gate passes: 2 cols, non-empty.
+        IM_CHECK(peer.SystemInfoCols() == 2);
+        IM_CHECK(peer.SystemInfoRows() > 0);
+        IM_CHECK(peer.ProfilingConfigCols() == 2);
+        IM_CHECK(peer.ProfilingConfigRows() > 0);
+    };
+
     t = IM_REGISTER_TEST(e, "app", "compute_workload_auto_selected");
     t->TestFunc = [](ImGuiTestContext* ctx)
     {
@@ -496,6 +541,251 @@ void RegisterAppTests(ImGuiTestEngine* e)
         ctx->Yield(3);
         IM_CHECK(sel->GetSelectedWorkload() != ComputeSelection::INVALID_SELECTION_ID);
         IM_CHECK(sel->GetSelectedKernel() != ComputeSelection::INVALID_SELECTION_ID);
+    };
+
+    t = IM_REGISTER_TEST(e, "app", "compute_comparison_target_kernel_computes_delta");
+    t->TestFunc = [](ImGuiTestContext* ctx)
+    {
+        ComputeView* cv = GetComputeViewOrSkip(ctx);
+        if (!cv) return;
+        TabContainer* tc = ComputeViewTestPeer{*cv}.TabContainerPtr();
+        if (tc == nullptr)
+        {
+            ctx->LogWarning("SKIP: compute view has no tab container");
+            return;
+        }
+
+        const std::vector<const TabItem*> tabs = tc->GetTabs();
+        ComputeComparisonView* comp = nullptr;
+        std::string            comp_label;
+        for (const TabItem* tab : tabs)
+        {
+            if (tab->m_id == "compute_comparison_view")
+            {
+                comp       = dynamic_cast<ComputeComparisonView*>(tab->m_widget.get());
+                comp_label = tab->m_label;
+                break;
+            }
+        }
+        if (comp == nullptr)
+        {
+            ctx->LogWarning("SKIP: no Baseline Comparison tab in this build");
+            return;
+        }
+
+        ComputeSelection* sel = ComputeViewTestPeer{*cv}.ComputeSelectionPtr();
+        IM_CHECK(sel != nullptr);
+        if (sel == nullptr) return;
+        const uint32_t workload = sel->GetSelectedWorkload();
+        const uint32_t baseline_kernel = sel->GetSelectedKernel();
+        IM_CHECK(workload != ComputeSelection::INVALID_SELECTION_ID);
+        IM_CHECK(baseline_kernel != ComputeSelection::INVALID_SELECTION_ID);
+
+        ctx->ItemClick(("//Main Window/**/" + comp_label).c_str());
+        ctx->Yield(3);
+
+        ComputeComparisonViewTestPeer peer{*comp};
+
+        // The toolbar combos live in a nested child window the "//Main Window/**/"
+        // wildcard can't reach. Find it by name fragment, click relative to it, and
+        // re-find after each Yield (window pointers don't survive a rebuild).
+        auto set_ref_to_toolbar = [&]() -> bool
+        {
+            ImGuiContext* g = ImGui::GetCurrentContext();
+            for (ImGuiWindow* w : g->Windows)
+            {
+                if (w->WasActive && strstr(w->Name, "TabContainer") &&
+                    strstr(w->Name, "/toolbar_"))
+                {
+                    ctx->SetRef(w);
+                    return true;
+                }
+            }
+            return false;
+        };
+
+        // Pick the target workload first; it enables the kernel combo.
+        IM_CHECK(set_ref_to_toolbar());
+        ctx->ItemClick("##TargetWorkloads");
+        ctx->Yield(1);
+        {
+            ImGuiTestItemList items;
+            ctx->GatherItems(&items, "//$FOCUSED");
+            IM_CHECK(items.GetSize() >= 1);
+            if (items.GetSize() < 1) return;
+            ctx->ItemClick(items[0]->ID);
+        }
+        ctx->Yield(2);
+
+        // Index into the target workload's kernels (not baseline's): that combo's
+        // order is the gathered-item order we click by index below.
+        const uint32_t target_workload = peer.TargetWorkloadId();
+        std::vector<const KernelInfo*> kernels =
+            cv->GetDataProvider()->ComputeModel().GetKernelInfoList(target_workload);
+        int target_idx = -1;
+        for (int i = 0; i < static_cast<int>(kernels.size()); i++)
+        {
+            if (kernels[i] != nullptr && kernels[i]->id != baseline_kernel)
+            {
+                target_idx = i;
+                break;
+            }
+        }
+        if (target_idx < 0)
+        {
+            ctx->LogWarning("SKIP: target workload has no kernel distinct from the baseline");
+            return;
+        }
+
+        IM_CHECK(set_ref_to_toolbar());
+        ctx->ItemClick("##target_kernels");
+        ctx->Yield(1);
+        {
+            ImGuiTestItemList items;
+            ctx->GatherItems(&items, "//$FOCUSED");
+            IM_CHECK(target_idx < items.GetSize());
+            if (target_idx >= items.GetSize()) return;
+            ctx->ItemClick(items[target_idx]->ID);
+        }
+        ctx->Yield(2);
+        ctx->SetRef("//Main Window");
+
+        // Baseline and target fetch sequentially, so a "while pending" drain can
+        // slip through the gap between them. Poll the final end state instead.
+        const uint32_t want_kernel = kernels[target_idx]->id;
+        for (int i = 0; i < 300; i++)
+        {
+            if (peer.TargetKernelId() == want_kernel && !peer.RequestsPending() &&
+                peer.CategoryCount() > 0 && peer.HasDifferenceColumn())
+                break;
+            ctx->Yield(2);
+        }
+
+        IM_CHECK(peer.TargetKernelId() == want_kernel);
+        IM_CHECK(peer.CategoryCount() > 0);
+        IM_CHECK(peer.HasDifferenceColumn());
+    };
+
+    t = IM_REGISTER_TEST(e, "app", "compute_table_view_pin_persists_across_kernel_switch");
+    t->TestFunc = [](ImGuiTestContext* ctx)
+    {
+        ComputeView* cv = GetComputeViewOrSkip(ctx);
+        if (!cv) return;
+        TabContainer* tc = ComputeViewTestPeer{*cv}.TabContainerPtr();
+        IM_CHECK(tc != nullptr);
+        if (tc == nullptr) return;
+
+        const std::vector<const TabItem*> tabs = tc->GetTabs();
+        ComputeTableView* tbl = nullptr;
+        for (const TabItem* tab : tabs)
+        {
+            if (tab->m_id == "compute_table_view")
+            {
+                tbl = dynamic_cast<ComputeTableView*>(tab->m_widget.get());
+                break;
+            }
+        }
+        if (tbl == nullptr)
+        {
+            ctx->LogWarning("SKIP: no Table View tab in this build");
+            return;
+        }
+
+        ComputeSelection* sel = ComputeViewTestPeer{*cv}.ComputeSelectionPtr();
+        IM_CHECK(sel != nullptr);
+        if (sel == nullptr) return;
+        const uint32_t workload = sel->GetSelectedWorkload();
+        const uint32_t baseline_kernel = sel->GetSelectedKernel();
+        IM_CHECK(workload != ComputeSelection::INVALID_SELECTION_ID);
+        IM_CHECK(baseline_kernel != ComputeSelection::INVALID_SELECTION_ID);
+
+        std::vector<const KernelInfo*> kernels =
+            cv->GetDataProvider()->ComputeModel().GetKernelInfoList(workload);
+        if (kernels.size() < 2)
+        {
+            ctx->LogWarning("SKIP: workload has fewer than two kernels to switch between");
+            return;
+        }
+
+        tc->SetActiveTab("compute_table_view");
+        ctx->Yield(3);
+        ComputeTableViewTestPeer peer{*tbl};
+        for (int i = 0; i < 200 && (peer.FetchPending() || peer.TableWidgetCount() == 0); i++)
+            ctx->Yield(2);
+        IM_CHECK(peer.TableWidgetCount() > 0);
+        if (peer.TableWidgetCount() == 0) return;
+
+        // Metric tables sit in a nested child window the "//Main Window/**/"
+        // wildcard can't reach; grab the innermost "_table" one.
+        auto find_table_window = [&]() -> ImGuiWindow*
+        {
+            ImGuiWindow* found = nullptr;
+            for (ImGuiWindow* w : ImGui::GetCurrentContext()->Windows)
+                if (w->WasActive && strstr(w->Name, "_table") &&
+                    strstr(w->Name, "TabContainer"))
+                    found = w;  // keep last = deepest
+            return found;
+        };
+        ImGuiWindow* table_win = find_table_window();
+        IM_CHECK(table_win != nullptr);
+        if (table_win == nullptr) return;
+
+        // Each metric row starts with an empty-label pin Checkbox("") in column 0,
+        // followed by the metric-id cell (label like "0.1.3:Duration"). So the pin
+        // control is the empty-label item just before a cell whose label starts with
+        // a digit and contains a dot.
+        ctx->SetRef(table_win);
+        ImGuiTestItemList items;
+        ctx->GatherItems(&items, "");
+        ImGuiID pin_checkbox = 0;
+        for (int i = 1; i < items.GetSize(); i++)
+        {
+            const char* lbl = items[i]->DebugLabel;
+            const bool looks_like_id =
+                lbl[0] >= '0' && lbl[0] <= '9' && strchr(lbl, '.') != nullptr;
+            if (looks_like_id && items[i - 1]->DebugLabel[0] == '\0')
+            {
+                pin_checkbox = items[i - 1]->ID;
+                break;
+            }
+        }
+        IM_CHECK(pin_checkbox != 0);
+        if (pin_checkbox == 0) { ctx->SetRef("//Main Window"); return; }
+
+        IM_CHECK(peer.PinnedCount() == 0);
+        ctx->ItemClick(pin_checkbox);
+        ctx->Yield(3);
+        ctx->SetRef("//Main Window");
+
+        // Remember what got pinned so we can check it survives the kernel switch.
+        IM_CHECK(peer.PinnedCount() == 1);
+        if (peer.PinnedCount() != 1) return;
+        const MetricId pinned = peer.FirstPinned();
+
+        // Switch kernels: the table refetches, but pins should persist
+        // (ComputeTableView::RestoreMetricPining).
+        uint32_t other_kernel = ComputeSelection::INVALID_SELECTION_ID;
+        for (const KernelInfo* k : kernels)
+            if (k != nullptr && k->id != baseline_kernel) { other_kernel = k->id; break; }
+        IM_CHECK(other_kernel != ComputeSelection::INVALID_SELECTION_ID);
+
+        // Wait for the refetch to START before draining: SelectKernel's event fires
+        // a frame later, so an immediate drain would see no pending fetch and exit.
+        sel->SelectKernel(other_kernel);
+        for (int i = 0; i < 20 && !peer.FetchPending(); i++) ctx->Yield(1);
+        for (int i = 0; i < 300 && (peer.FetchPending() || peer.TableWidgetCount() == 0); i++)
+            ctx->Yield(2);
+
+        const bool still_pinned = peer.IsPinned(pinned);
+
+        // Restore before asserting: IM_CHECK aborts on failure, and pins + kernel
+        // selection are shared across compute tests.
+        sel->SelectKernel(baseline_kernel);
+        ctx->Yield(3);
+        for (int i = 0; i < 200 && peer.FetchPending(); i++) ctx->Yield(2);
+        if (peer.IsPinned(pinned)) peer.Unpin(pinned);
+
+        IM_CHECK(still_pinned);
     };
 
     t = IM_REGISTER_TEST(e, "app", "sys_timeline_pan_hotkey");

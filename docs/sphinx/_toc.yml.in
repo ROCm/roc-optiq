@@ -4,7 +4,8 @@ defaults:
 root: index
 
 subtrees:
-- entries:
+- caption: At a glance
+  entries:
   - file: what-is-optiq.rst
     title: What is ROCm Optiq?
 
@@ -20,12 +21,14 @@ subtrees:
   - file: how-to/view-analysis
     title: View ROCm Compute Profiler analysis data in ROCm Optiq
   - file: how-to/customize-views
-    title: Customize your project
+    title: Customize ROCm Optiq
 
 - caption: Reference
   entries:
   - file: reference/cli-support
     title: Command-line support
+  - file: reference/keyboard-shortcuts
+    title: Systems Profiler trace view keyboard shortcuts
 
 - caption: About
   entries:

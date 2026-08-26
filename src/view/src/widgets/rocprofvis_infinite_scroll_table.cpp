@@ -26,6 +26,8 @@ constexpr const char* END_TS_COLUMN_NAME         = "end";
 constexpr const char* DURATION_COLUMN_NAME       = "duration";
 constexpr const char* FILTER_TEXT_HINT_STR       = "Filter: hipLaunchKernel";
 constexpr const char* FILTER_TEXT_HINT_NUMERICAL = "Filter: {>, <, =, >=, <=, !=} 30";
+constexpr const char* FILTER_TEXT_HINT_TIME =
+    "Filter: {>, <, =, >=, <=, !=} {Nanoseconds}";
 
 InfiniteScrollTable::InfiniteScrollTable(
     DataProvider& dp, TableType table_type,
@@ -156,6 +158,7 @@ InfiniteScrollTable::Update()
         ROCPROFVIS_ASSERT(columns.size() == column_types.size());
         m_displayed_filter_row_inputs.resize(columns.size());
         std::unordered_set<FilterInput*> active_filter_row_inputs;
+        size_t                           j = 0;
         for(size_t i = 0; i < m_displayed_filter_row_inputs.size(); i++)
         {
             if(m_filter_row_inputs.count(columns[i]))
@@ -167,7 +170,36 @@ InfiniteScrollTable::Update()
             }
             else
             {
-                m_filter_row_inputs[columns[i]] = { columns[i], column_types[i], "" };
+                const char* tooltip;
+                switch(column_types[i])
+                {
+                    case kRPVControllerPrimitiveTypeUInt64:
+                    {
+                        if((j < m_time_column_indices.size() &&
+                            m_time_column_indices[j] == i))
+                        {
+                            tooltip = FILTER_TEXT_HINT_TIME;
+                            j++;
+                        }
+                        else
+                        {
+                            tooltip = FILTER_TEXT_HINT_NUMERICAL;
+                        }
+                        break;
+                    }
+                    case kRPVControllerPrimitiveTypeDouble:
+                    {
+                        tooltip = FILTER_TEXT_HINT_NUMERICAL;
+                        break;
+                    }
+                    default:
+                    {
+                        tooltip = FILTER_TEXT_HINT_STR;
+                        break;
+                    }
+                }
+                m_filter_row_inputs[columns[i]] = { columns[i], column_types[i], "",
+                                                    tooltip };
             }
             m_displayed_filter_row_inputs[i] = &m_filter_row_inputs.at(columns[i]);
         }
@@ -394,13 +426,7 @@ InfiniteScrollTable::Render()
                         ImGui::TableNextColumn();
                         ImGui::PushID(static_cast<int>(i));
                         std::pair<bool, bool> filter_input = InputTextWithClear(
-                            "",
-                            (m_displayed_filter_row_inputs[i]->column_type ==
-                                 kRPVControllerPrimitiveTypeUInt64 ||
-                             m_displayed_filter_row_inputs[i]->column_type ==
-                                 kRPVControllerPrimitiveTypeDouble)
-                                ? FILTER_TEXT_HINT_NUMERICAL
-                                : FILTER_TEXT_HINT_STR,
+                            "", m_displayed_filter_row_inputs[i]->tooltip,
                             m_displayed_filter_row_inputs[i]->input,
                             m_settings.GetFontManager().GetFont(FontType::kIcon),
                             m_settings.GetColor(Colors::kBgMain), style,

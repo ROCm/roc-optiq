@@ -135,6 +135,7 @@ private:
         std::string                            column_name;
         rocprofvis_controller_primitive_type_t column_type;
         std::string                            input;
+        const char*                            tooltip;
     };
 
     void FetchData();

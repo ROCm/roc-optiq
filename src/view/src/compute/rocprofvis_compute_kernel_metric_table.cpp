@@ -1,4 +1,4 @@
-// Copyright (c) 2024 Advanced Micro Devices, Inc. All rights reserved.
+// Copyright Advanced Micro Devices, Inc.
 // SPDX-License-Identifier: MIT
 
 #include "rocprofvis_compute_kernel_metric_table.h"
@@ -1008,9 +1008,9 @@ KernelMetricTable::ValidateFilterExpression(const char* expr, bool is_numeric_co
 
     if(is_numeric_column)
     {
-        // Must be: operator + number, or just number
+        // Must be: operator + number
         // Check for operators followed by numbers
-        static const std::vector<std::string> ops = {">=", "<=", "!=", "<>", ">", "<", "="};
+        static const std::vector<std::string> ops = {">=", "<=", "!=", ">", "<", "="};
         for(const auto& op : ops)
         {
             if(trimmed.find(op) == 0)
@@ -1020,15 +1020,14 @@ KernelMetricTable::ValidateFilterExpression(const char* expr, bool is_numeric_co
                 value.erase(0, value.find_first_not_of(" \t\n\r"));
                 value.erase(value.find_last_not_of(" \t\n\r") + 1);
                 // Check if value is numeric
-                if(!value.empty() && (std::isdigit(value[0]) || value[0] == '-' || value[0] == '.'))
+                if(!value.empty() && (std::isdigit(value[0]) || value[0] == '.'))
                 {
                     return true;
                 }
                 return false;
             }
         }
-        // If no operator, check if it's just a number
-        return !trimmed.empty() && (std::isdigit(trimmed[0]) || trimmed[0] == '-' || trimmed[0] == '.');
+        return false;
     }
     else
     {

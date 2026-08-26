@@ -49,13 +49,9 @@ public:
     // (the dialog) assembles this from its LaunchConfig + execution cache.
     struct LaunchRequest
     {
-        rocprofvis_profiler_type_t profiler_type = kRPVProfilerTypeRocprofSysRun;
-        std::string                profiler_path;
-        std::string                target_executable;
-        std::string                target_args;
-        std::string                output_directory;
-        std::string                profiler_args;
-        std::vector<std::pair<std::string, std::string>> env_vars;
+        // What to run: binary, argv, env, working directory. Handed to the
+        // session as-is.
+        ProfilerLaunchSpec         spec;
 
         bool                       is_remote       = false;
         bool                       auto_load_trace = true;

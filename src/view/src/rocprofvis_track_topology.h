@@ -106,6 +106,7 @@ public:
     bool                 Dirty();
     const TopologyModel& GetTopology() const;
     const SidebarTree&   GetSidebarTree() const;
+    const std::vector<uint64_t>& GetTrackIdsInTreeOrder() const;
     void FormatCells();
 
 private:
@@ -133,8 +134,9 @@ private:
     EventManager::SubscriptionToken m_metadata_changed_event_token;
     EventManager::SubscriptionToken m_format_changed_token;
 
-    TopologyModel m_topology;
-    SidebarTree   m_sidebar_tree;
+    TopologyModel         m_topology;
+    SidebarTree           m_sidebar_tree;
+    std::vector<uint64_t> m_track_order;
 };
 
 }  // namespace View

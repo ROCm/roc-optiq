@@ -129,8 +129,7 @@ public:
     const char* DisplayName() const override;
 
     std::vector<ToolOption> GetTools() const override;
-    std::string GetDefaultBinary(std::string const& tool_id) const override;
-    std::vector<TabDescriptor> GetTabs(std::string const& tool_id) const override;
+    std::vector<TabDescriptor> GetTabs(rocprofvis_profiler_tool_t tool) const override;
 
     std::string Validate(LaunchConfig const& config) const override;
 
@@ -152,15 +151,17 @@ public:
     std::string ParseTraceOutputPath(std::string const& profiler_stdout) const override;
 
 private:
-    void RenderGeneralTraceOptions();
-    void RenderBackendsTab();
-    void RenderSamplingTab();
-    void RenderRocmTab();
-    void RenderPerfettoTab();
-    void RenderProcessSamplingTab();
-    void RenderParallelismTab();
-    void RenderInstrumentTab();
-    void RenderAdvancedTab();
+    // Each returns true if the user changed a setting this frame - see
+    // TabDescriptor::render_fn, which is what these are bound to.
+    bool RenderGeneralTraceOptions();
+    bool RenderBackendsTab();
+    bool RenderSamplingTab();
+    bool RenderRocmTab();
+    bool RenderPerfettoTab();
+    bool RenderProcessSamplingTab();
+    bool RenderParallelismTab();
+    bool RenderInstrumentTab();
+    bool RenderAdvancedTab();
 
     static std::string JoinEnabledKeys(
         std::map<std::string, bool> const& m,

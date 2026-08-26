@@ -1036,6 +1036,11 @@ Renders the topology tree in the left pane:
   `DataProvider`.
 - The active-node accent mirrors timeline node coloring when
   `SettingsManager::ShowNodeColors()` is enabled.
+- `SettingsManager::CompactSidebar()` drops the per-row eye and
+  scroll-to-track buttons (leaf and branch) so labels sit flush against
+  the tree. Nothing is reserved in their place; the context menus below
+  remain the way to toggle visibility and jump to a track, and hidden
+  tracks stay marked by their dimmed label.
 - Right-click a leaf track (`##track_ctx`): Go to Track, Hide/Show
   Track, Show All Tracks, Hide All But This Track, and Show/Hide
   Selected Tracks (enabled when
@@ -1533,6 +1538,10 @@ through this** - never hardcode `IM_COL32(...)` in feature code.
   `SettingsManager::ShowNodeColors()` enables node color-coding (only
   when the trace has more than one node). It tints the track's node
   pill and the sidebar tree connectors, not the chart lane itself.
+- `DisplaySettings::compact_sidebar` /
+  `SettingsManager::CompactSidebar()` hides the topology sidebar's
+  per-row icons in favor of the right-click menus (see `SideBar` in
+  section 9).
 - `UserSettings::log_viewer` stores level mask, entry limit, search and
   presentation preferences for `LogViewer`.
 - `GetInternalSettings()` -> recent files (`MAX_RECENT_FILES = 5`).
@@ -1555,9 +1564,12 @@ through this** - never hardcode `IM_COL32(...)` in feature code.
   `GetEventLevelSpacing()` is the gap between stacked event boxes, so
   a box is one row height minus that spacing.
   **Reuse these instead of magic numbers.**
-- `GetProfilerSettings()` / `SaveProfilerSettings()` persist launcher
-  paths, auto-load behavior, recent targets, and last profiler/preset/
-  SSH-connection IDs.
+- `GetProfilerSettings()` / `SaveProfilerSettings()` persist the launcher's
+  output directory, auto-load behavior, recent targets, and last
+  profiler/preset/SSH-connection IDs. Deliberately **not** a path to a
+  profiler binary: which binary runs is chosen by a tool enum, so a settings
+  file that is edited, corrupted, or copied from another machine cannot
+  decide what gets executed. Do not add one back as a convenience.
 
 JSON keys are constants in this header
 (`JSON_KEY_SETTINGS_DISPLAY_DARK_MODE` etc.).
@@ -1762,11 +1774,25 @@ sessions are **not** `Project`s until a produced trace is handed to
 `AppWindow::OpenFile()`.
 
 **Backends (`IProfilerBackend`, `rocprofvis_profiler_backend.h`).** The
-pluggable extension point. Methods: `Id`, `DisplayName`, `GetTools`,
-`GetDefaultBinary`, `GetTabs` (returns `TabDescriptor`s that each carry
+pluggable extension point. Methods: `Id`, `DisplayName`, `GetTools`
+(each `ToolOption` carries a `rocprofvis_profiler_tool_t` directly -
+backends name a tool and never a path, so binary names live only in the
+controller's tool table), `GetTabs` (takes the selected tool; returns
+`TabDescriptor`s that each carry
 an ImGui `render_fn` - the backend supplies renderers, the dialog draws
-the tab bar), `Validate` (empty string = OK), `FlattenToExecution`
-(curated settings -> env + argv; caller then merges `extra_env`),
+the tab bar. **`render_fn` returns whether the user changed a setting
+this frame**, and every control in a tab must OR in its ImGui return
+value: that bool is the launcher's only signal that the command preview
+has gone stale, so an unreported change leaves the preview displaying a
+command the settings no longer describe. (Only the preview - launching
+rebuilds the cache unconditionally.) Do not try to infer this from
+`ImGui::IsAnyItemActive()`: it stays true while a field merely holds
+focus, and it is already false by the frame after a checkbox toggles,
+since `ButtonBehavior` clears `ActiveId` in the same frame it reports
+the press), `Validate` (empty string = OK), `FlattenToExecution`
+(curated settings -> env + the **complete** argv after `argv[0]`,
+including `extra_argv`, the output flag in this profiler's spelling, and
+the target plus its arguments; caller then merges `extra_env`),
 `LoadSettings`/`SaveSettings` (the JSON `backend_payload`), `ExportCfg`
 (native config text), and the default-implemented `GetWarnings`
 (`WarningMessage { Level {kInfo,kWarning,kError}, text }`) and
@@ -1775,8 +1801,8 @@ structs: `ToolOption`, `TabDescriptor`, `WarningMessage`.
 
 **`RocprofSysBackend`** is the only backend registered today (the
 `ProfilerLauncherDialog` ctor pushes one). `Id()` = `"rocprof-sys"`.
-Tools: `run` (`rocprof-sys-run`), `sample` (`rocprof-sys-sample`),
-`instrument` (`rocprof-sys-instrument`). Tabs: Quick, Sampling, ROCm,
+Tools: `kRPVProfilerToolRocprofSysRun`, `…SysSample`, `…SysInstrument`.
+Tabs: Quick, Sampling, ROCm,
 Process Sampling, Parallelism, Advanced, plus Instrument (only when the
 tool is `instrument`); the dialog appends a shared "Raw Env Vars" tab.
 Perfetto options are nested inside Advanced, not a top-level tab.
@@ -1785,11 +1811,38 @@ sampling, ROCm domains, Perfetto, process sampling, parallelism,
 advanced, instrument) plus 11 built-in rocprof-sys `--preset=` names.
 
 **`LaunchConfig` (`rocprofvis_launch_config.h`)** is the serializable
-payload: `profiler_id`, `tool_id`, `connection` (`ConnectionType
+payload: `profiler_id`, `tool`, `connection` (`ConnectionType
 {kLocal, kSsh}`), `ssh_connection_ref` (an `SshConnectionConfig::id`,
 never inline credentials), `target` (`TargetSpec {executable, arguments,
 working_directory, output_directory, auto_load_trace}`), `extra_env`,
 `extra_argv`, and `backend_payload` (the backend's JSON).
+`TargetSpec::working_directory` is honored at launch but has no UI field,
+so today it is only reachable through a saved profile. The same header
+provides `SplitArguments`, which word-splits `TargetSpec::arguments` the
+way a shell would (quote-aware, no expansion) - backends must use it
+rather than splitting on whitespace, or a quoted argument containing
+spaces is torn into several - plus the tool helpers `GetToolBinaryName`,
+`ToolFromInt`, and `ResolveToolPath` (see 13.2). Note that `LaunchConfig`
+holds no profiler binary path: `tool` is an enum, so a saved profile
+cannot name an executable.
+
+`tool` is persisted as the enum's **integer** value, which makes
+`rocprofvis_profiler_tool_t` append-only - renumbering or reusing a value
+would silently repoint every saved profile at a different tool, and that is
+a launch-the-wrong-thing bug rather than a load error. `FromJson` runs the
+stored integer through `ToolFromInt`, which bounds it with the enum's own
+`__kRPVProfilerToolLast` sentinel (the same `__k...Last` idiom the rest of
+`rocprofvis_controller_enums.h` uses) and yields `kRPVProfilerToolNone`
+otherwise, so a corrupted value or one from a newer build is never cast
+blindly into the enum. The dialog then resolves `None` through
+`SyncToolWithBackend`.
+
+It also holds `tool_directory`, an optional absolute directory to find the
+tools in for a ROCm install in a non-standard location - a directory only,
+since the filename stays the controller's to choose. It lives on the
+profile rather than in app settings because a remote profile needs a
+directory on the *remote* host, which a machine-local setting could not
+express.
 
 **Two independent preset systems - do not conflate:**
 - `LaunchPresetManager` - named Optiq launch profiles in the
@@ -1804,7 +1857,7 @@ working_directory, output_directory, auto_load_trace}`), `extra_env`,
 
 **Shared form helpers (`rocprofvis_launch_shared_tabs.h`)** - reuse
 these instead of re-authoring launcher UI: `RenderTargetSection`,
-`RenderRawEnvVarsTab`, `BuildCommandPreviewString`,
+`RenderToolLocationSection`, `RenderRawEnvVarsTab`, `BuildCommandPreviewString`,
 `RenderCommandPreview`, `RenderOutputConsole` (+ `ConsoleStatusLevel
 {kIdle, kRunning, kSuccess, kError}`), `RenderSavedProfileBar`. The
 connection-mode selector and SSH UI live in the dialog
@@ -1817,6 +1870,17 @@ preview, rebuilt on a dirty flag). `AppWindow::ShowProfilerLauncher()`
 lazily creates it; the only entry point is `File > Launch Profiler...`
 (`#ifdef ROCPROFVIS_ENABLE_PROFILER`).
 
+There is deliberately **no** selected-tool index beside `m_config.tool` -
+the enum is the only copy. An earlier version kept an `m_tool_index` in
+step by searching `GetTools()` for the config's tool id after each profile
+load, which silently did nothing when the profile named a tool the backend
+did not offer: the combo then showed the stale index's tool while the
+launch ran the fallback. `SyncToolWithBackend()` replaces both copies of
+that search - it forces `m_config.tool` to something the current backend
+offers, warns when it has to substitute, and is called after a backend
+switch and after every profile load. Anything that changes either the
+backend or the config must call it.
+
 **`ProfilerSessionBase`** owns the controller `config`/`profiler`/
 `future` handles and the `AppMonitor` op id. `GetState`, `GetOutput`,
 `GetExitCode`, `Cancel`, `Close`, and `GetOperationId` forward to the
@@ -1824,6 +1888,58 @@ lazily creates it; the only entry point is `File > Launch Profiler...`
 `MonitorOperationType::ProfilerSession` op; `FreeProfilerObjects()`
 handles teardown (see 13.4). Subclasses set `m_extra_teardown` for
 resources that must outlive the profiler worker.
+
+`Launch` and `BuildConfig` take a **`ProfilerLaunchSpec`** (same header):
+`tool` (a `rocprofvis_profiler_tool_t` - the controller resolves it to
+`argv[0]`; the View never supplies a path), `tool_directory` (where to look
+for it, see below), `profiler_argv` (the complete argument
+list from `FlattenToExecution`, one entry per argv entry - the controller
+never re-splits it), `env_vars`, `working_directory` (applied to the child
+process only), and `output_directory`, which deliberately does **not**
+reach the command line and currently has no reader in the controller at
+all - the backend emits the output flag itself, because profilers spell it
+differently and some take none. A struct rather than a parameter list
+because a transposed pair of the string fields would compile cleanly and
+launch the wrong command.
+
+There is deliberately **no `target_executable`** on the spec. It used to be
+carried as metadata and was read by nothing; the target reaches the child
+only as argv entries the backend emits, so the View is the single owner of
+it. Do not re-add it to give the controller "context" - that recreates a
+second source of truth for a value the command line already carries.
+
+**Tool selection never involves a path from the UI.** The combo hands back
+a `rocprofvis_profiler_tool_t` straight from `GetTools`, and the launcher
+calls `View::ResolveToolPath`
+(`rocprofvis_launch_config.h`, wrapping
+`rocprofvis_profiler_tool_resolve_path`) purely to show the resolved
+absolute path in the command preview and to report a missing tool before
+Launch is pressed; the launch passes the enum and the controller resolves
+again. **`ResolveToolPath` answers a question about the local machine
+only**, so `RefreshExecutionCache` skips it entirely in SSH mode and
+previews what the remote will run - `<tool_directory>/<name>` or the bare
+name for the remote `$PATH`, joined with `'/'` because the remote is
+addressed as POSIX. Resolving locally for a remote run would report the
+wrong machine's install and print a path that is not what executes.
+
+`LaunchConfig::tool_directory` is edited in the Advanced window via the
+shared `RenderToolLocationSection`, placed above the backend tabs because
+it belongs to the profile rather than to any one backend; in local mode the
+field also shows the absolute path the selection currently resolves to. A
+set directory is repeated above the command preview by
+`RenderToolResolutionNotice`, so a profile imported from elsewhere cannot
+silently run a different build. If the tool is not in the configured
+directory the launch fails rather than falling back to `$ROCM_PATH` or
+`$PATH`.
+
+No path to a profiler binary is persisted anywhere. An earlier development
+build kept one in `ProfilerSettings`, which meant an edited or shared
+settings file became the `argv[0]` of the next launch; it was deleted rather
+than sanitized. A directory on the profile is a different proposition
+because the filename still comes from the controller's tool table, so the
+worst a bad value can do is name a directory that lacks the tool - and the
+launcher shows an active directory before Launch, so an imported profile
+cannot redirect a run unnoticed.
 
 ### 13.3 Local vs remote profiling workflows
 
@@ -2212,6 +2328,16 @@ for nearly every common pattern.
 
 ## 18. Common Pitfalls
 
+- **Culling timeline rows against `m_scroll_position_y`.** `SetScrollY`
+  only takes effect on the next `Begin`, so that member can be a frame
+  ahead of the layout the rows are placed with. Track positions come
+  from `ImGui::GetCursorPos()`, so cull and hit-test against
+  `ImGui::GetScrollY()` inside `Graph View Main` or rows draw at the
+  wrong offset for a frame while scrolling. ImGui also rounds
+  `window->Scroll` to whole pixels: keep `m_previous_scroll_position`
+  as a `float` and treat a sub-pixel gap as already applied, or a
+  leftover fraction looks like a pending wheel request and overwrites
+  the scrollbar.
 - **Forgetting to unsubscribe.** If you `Subscribe` to an event, store
   the token and `Unsubscribe` in your destructor. Otherwise the
   EventManager will dispatch into a dead `this`.
@@ -2499,13 +2625,14 @@ For fast lookup. Each entry: class -> file -> one-line role.
   `profiler/rocprofvis_profiler_backend.h`.
 - `RocprofSysBackend`, `RocprofSysSettings` ->
   `profiler/rocprofvis_rocprof_sys_backend.h`.
-- `LaunchConfig`, `TargetSpec`, `ConnectionType` ->
+- `LaunchConfig`, `TargetSpec`, `ConnectionType`, `SplitArguments`,
+  `GetToolBinaryName`, `ToolFromInt`, `ResolveToolPath` ->
   `profiler/rocprofvis_launch_config.h`.
 - `LaunchPresetManager`, `PresetInfo` ->
   `profiler/rocprofvis_launch_preset_manager.h`.
-- `ProfilerSessionBase`, `ProfilerSession` -> matching `profiler/`
-  headers. `RemoteProfilerSession` additionally requires
-  `ROCPROFVIS_ENABLE_REMOTE`.
+- `ProfilerLaunchSpec`, `ProfilerSessionBase`, `ProfilerSession` ->
+  matching `profiler/` headers. `RemoteProfilerSession` additionally
+  requires `ROCPROFVIS_ENABLE_REMOTE`.
 - `ProfilerLaunchOrchestrator` ->
   `profiler/rocprofvis_profiler_launch_orchestrator.h`.
 - `ProfilerLauncherDialog` ->

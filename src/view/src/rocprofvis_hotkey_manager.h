@@ -23,6 +23,7 @@ enum class HotkeyActionId
     kScrollDown,
     kClearSelection,
     kToggleMark,
+    kZoomToSelection,
     kBookmarkSave0,
     kBookmarkSave1,
     kBookmarkSave2,

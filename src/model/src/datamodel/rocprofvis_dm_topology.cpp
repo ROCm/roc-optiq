@@ -43,7 +43,8 @@ rocprofvis_dm_result_t   TopologyNode::SetBasicProperty(const char* name, rocpro
 			it->second == kRPVControllerQueueId ||
 			it->second == kRPVControllerCounterId ||
 			it->second == kRPVControllerProcessorId || 
-			it->second == kRPVControllerStreamId;
+			it->second == kRPVControllerStreamId ||
+			it->second == kRPVControllerThreadId;
 		switch (type)
 		{
 		case kRPVTopologyDataTypeInt:
@@ -560,7 +561,7 @@ std::string TopologyNodeThread::GetNodeName() {
 	if (it != m_properties.end())
 	{
 		name += "(";
-		name += std::to_string(std::get<std::uint64_t>(it->second));
+		name += std::to_string(std::get<std::uint64_t>(it->second) & TOPOLOGY_ID_MASK);
 		name += ")";
 	}
 

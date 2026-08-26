@@ -51,8 +51,7 @@ struct SshConnectionInfo
 };
 
 /*
- * ProfilerConfig - Configuration for launching a profiler
- * Derives from Handle so it participates in the Reference<> validation pattern.
+ * Launch config. Handle so it participates in Reference<> validation.
  */
 class ProfilerConfig : public Handle
 {
@@ -62,12 +61,10 @@ public:
 
     rocprofvis_controller_object_type_t GetType(void) final;
 
-    rocprofvis_result_t SetProfilerType(rocprofvis_profiler_type_t type);
-    rocprofvis_result_t SetProfilerPath(char const* path);
-    rocprofvis_result_t SetTargetExecutable(char const* path);
-    rocprofvis_result_t SetTargetArgs(char const* args);
-    rocprofvis_result_t SetProfilerArgs(char const* args);
+    rocprofvis_result_t SetTool(rocprofvis_profiler_tool_t tool);
+    rocprofvis_result_t SetToolDirectory(char const* directory);
     rocprofvis_result_t SetOutputDirectory(char const* path);
+    rocprofvis_result_t SetWorkingDirectory(char const* path);
     rocprofvis_result_t AddEnvVar(char const* name, char const* value);
     rocprofvis_result_t AddProfilerArg(char const* arg);
     rocprofvis_result_t SetConnectionLocal();
@@ -75,12 +72,25 @@ public:
                                          int port, char const* identity_file,
                                          char const* remote_stage_dir);
 
-    rocprofvis_profiler_type_t GetProfilerType() const { return m_profiler_type; }
-    std::string const& GetProfilerPath() const { return m_profiler_path; }
-    std::string const& GetTargetExecutable() const { return m_target_executable; }
-    std::string const& GetTargetArgs() const { return m_target_args; }
-    std::string const& GetProfilerArgs() const { return m_profiler_args; }
+    rocprofvis_profiler_tool_t GetTool() const { return m_tool; }
+    std::string const& GetToolDirectory() const { return m_tool_directory; }
+
+    // Local absolute path for argv[0]. Must succeed before exec.
+    rocprofvis_result_t ResolveToolPath();
+
+    // Remote argv[0]: "<tool_directory>/<name>" (POSIX join) or the bare name.
+    // A missing remote tool is still the shell's "command not found".
+    rocprofvis_result_t ResolveToolPathRemote();
+
+    // Local-only: the directory exists, so a bad cwd is a launch error, not
+    // child exit 126. Remote cwd cannot be checked from here.
+    rocprofvis_result_t ValidateWorkingDirectory() const;
+
+    // argv[0]; empty until ResolveToolPath or ResolveToolPathRemote succeeds.
+    std::string const& GetResolvedToolPath() const { return m_resolved_tool_path; }
+
     std::string const& GetOutputDirectory() const { return m_output_directory; }
+    std::string const& GetWorkingDirectory() const { return m_working_directory; }
 
     std::vector<std::pair<std::string, std::string>> const& GetEnvVars() const { return m_env_vars; }
     std::vector<std::string> const& GetProfilerArgv() const { return m_profiler_argv; }
@@ -89,12 +99,15 @@ public:
     SshConnectionInfo const& GetSshInfo() const { return m_ssh_info; }
 
 private:
-    rocprofvis_profiler_type_t m_profiler_type;
-    std::string m_profiler_path;
-    std::string m_target_executable;
-    std::string m_target_args;
-    std::string m_profiler_args;
+    // Named tool; filename comes from the tool table, never from a caller path.
+    rocprofvis_profiler_tool_t m_tool;
+    std::string m_tool_directory;      // search dir only; empty = default search
+    std::string m_resolved_tool_path;  // argv[0] after resolve
+    // Not on argv (see BuildArgv). Unread for now; kept for a later per-stage
+    // artifact destination. See rocprofvis_profiler_config_set_output_directory.
     std::string m_output_directory;
+    // Child cwd only (chdir after fork / lpCurrentDirectory / remote "cd").
+    std::string m_working_directory;
 
     std::vector<std::pair<std::string, std::string>> m_env_vars;
     std::vector<std::string> m_profiler_argv;
@@ -103,10 +116,6 @@ private:
     SshConnectionInfo m_ssh_info;
 };
 
-/*
- * LocalProfilerExecutor - Platform-specific local process execution
- * Implements IProfilerExecutor for launching profiler processes on the local machine.
- */
 class LocalProfilerExecutor : public IProfilerExecutor
 {
 public:
@@ -140,9 +149,6 @@ private:
     std::string m_output_buffer;
 };
 
-/*
- * ProfilerProcessController - Manages profiler execution lifecycle
- */
 class ProfilerProcessController
 {
 public:
@@ -152,12 +158,8 @@ public:
     rocprofvis_result_t LaunchAsync(ProfilerConfig const* config);
 
 #ifdef ROCPROFVIS_ENABLE_REMOTE
-    // TEMPORARY (remote/SSH): remote variant runs the profiler over the supplied
-    // (already connected and authenticated) SSH connection via an
-    // SshProfilerExecutor. The connection is borrowed; the caller
-    // (View/SshSession) owns its lifetime. `future` is the bound profiler
-    // future, observed by the remote exec loop for cancellation; it is borrowed
-    // and may be null.
+    // TEMPORARY (remote/SSH): borrowed connected SshConnection; `future` is
+    // observed for cancel and may be null. Caller owns both lifetimes.
     rocprofvis_result_t LaunchAsyncRemote(ProfilerConfig const* config,
                                           SshConnection*        connection,
                                           Future*               future);
@@ -173,15 +175,10 @@ public:
 
     rocprofvis_result_t Cancel();
 
-    // Called by the C ABI immediately BEFORE the monitor job is issued, so the
-    // destructor knows a JobSystem job holding a raw pointer to this controller
-    // (and its executor) is in flight.
+    // C ABI calls this just before issuing the monitor job (raw `this` in flight).
     void BeginMonitorJob();
-    // Called via a shared_ptr scope-guard captured in the job lambda, when the
-    // Job object is destroyed (in ~Future at future_free). This fires whether or
-    // not ExecuteJob ever ran - a job cancelled before it is dequeued never runs
-    // its function - so it reliably releases a destructor blocked below. Safe to
-    // call more than once (idempotent).
+    // Fired when the Job is destroyed (~Future), even if ExecuteJob never ran.
+    // Unblocks the destructor. Idempotent.
     void EndMonitorJob();
 
     static rocprofvis_result_t ExecuteJob(ProfilerProcessController* controller, Future* future);
@@ -197,26 +194,17 @@ private:
     int m_exit_code;
     std::mutex m_mutex;
 
-    // Guards the "a monitor job references this controller" flag. The destructor
-    // cancels the run and blocks on m_job_cv until the owning Job object is
-    // destroyed (at future_free), so the controller/executor are never destroyed
-    // out from under ExecuteJob. Contract: the bound future must be freed before
-    // (or concurrently with) the profiler; the view teardown frees the future
-    // first, so the wait returns without blocking.
+    // Destructor waits on m_job_cv until the monitor Job is destroyed. Free the
+    // bound future before (or with) the profiler; the View already does.
     std::mutex              m_job_mutex;
     std::condition_variable m_job_cv;
     bool                    m_job_active = false;
 };
 
 /*
- * ProfilerSession - C-ABI handle that owns one ProfilerProcessController plus
- * a weak reference to the Future bound at launch time.
- *
- * The session is what rocprofvis_profiler_t maps to. It exists for the
- * lifetime the caller wants to query profiler state, independent of the
- * Future lifetime: status queries (get_state/output/trace_path/exit_code)
- * are routed through the session, not the future. Cancelling the session
- * forwards to both the controller and the bound future.
+ * C-ABI handle (rocprofvis_profiler_t): owns the controller and a non-owning
+ * pointer to the Future bound at launch. Status queries go through the session;
+ * Cancel forwards to both controller and future.
  */
 class ProfilerSession : public Handle
 {
@@ -229,8 +217,7 @@ public:
     ProfilerProcessController& GetController() { return m_controller; }
     ProfilerProcessController const& GetController() const { return m_controller; }
 
-    // Bound at launch_async; non-owning. The caller frees the future via
-    // rocprofvis_controller_future_free independent of this session.
+    // Non-owning; caller frees via rocprofvis_controller_future_free.
     void SetBoundFuture(Future* future) { m_bound_future = future; }
     Future* GetBoundFuture() const { return m_bound_future; }
 

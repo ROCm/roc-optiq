@@ -216,6 +216,8 @@ rocprofvis_dm_result_t rocprofvis_db_build_event_search_query(
     rocprofvis_dm_num_string_table_filters_t num_string_table_filters, 
     rocprofvis_dm_string_table_filters_t string_table_filters,
     bool include_substring,
+    bool include_category,
+    bool partial_matching,
     rocprofvis_dm_charptr_t sort_column,
     rocprofvis_dm_sort_order_t sort_order,
     uint64_t max_count, 

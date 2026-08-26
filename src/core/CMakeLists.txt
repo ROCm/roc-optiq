@@ -15,3 +15,8 @@ file(GLOB COMMON_SRC CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp")
 
 add_library(${TARGET_NAME} ${COMMON_SRC})
 target_link_libraries(${TARGET_NAME} PRIVATE spdlog)
+
+# Match model's -DTEST so TimeRecorder symbols used by PROFILE actually exist.
+if(TEST)
+target_compile_definitions(${TARGET_NAME} PRIVATE TEST)
+endif(TEST)

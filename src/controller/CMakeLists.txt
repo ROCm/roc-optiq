@@ -56,6 +56,7 @@ if(ROCPROFVIS_ENABLE_PROFILER)
 list(APPEND rocprofvis_controller_source_files
     src/profiler/rocprofvis_controller_profiler_process.cpp
     src/profiler/rocprofvis_controller_profiler_cmdline.cpp
+    src/profiler/rocprofvis_controller_profiler_tool.cpp
     src/profiler/rocprofvis_profiler.cpp
 )
 endif(ROCPROFVIS_ENABLE_PROFILER)
@@ -140,4 +141,15 @@ if(BUILD_TESTING)
     add_test(NAME ${COMPUTE_TEST_NAME} COMMAND ${COMPUTE_TEST_NAME} --input_file "${CMAKE_SOURCE_DIR}/sample/rocprof_compute_23ed6f36.db")
     set_tests_properties(${COMPUTE_TEST_NAME} PROPERTIES RUN_SERIAL ON)
     set_tests_properties(${COMPUTE_TEST_NAME} PROPERTIES WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}")
+
+    # TEMPORARY (profiler launch): remove this guard when the profiler feature
+    # graduates.
+    if(ROCPROFVIS_ENABLE_PROFILER)
+        set(PROFILER_TEST_NAME ${PROJECT_NAME}-profiler-tests)
+        add_executable(${PROFILER_TEST_NAME} tests/rocprofvis_controller_profiler_tests.cpp)
+        target_link_libraries(${PROFILER_TEST_NAME} PRIVATE ${PROJECT_NAME})
+        target_link_libraries(${PROFILER_TEST_NAME} PRIVATE Catch2::Catch2WithMain)
+        add_test(NAME ${PROFILER_TEST_NAME} COMMAND ${PROFILER_TEST_NAME})
+        set_tests_properties(${PROFILER_TEST_NAME} PROPERTIES WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}")
+    endif(ROCPROFVIS_ENABLE_PROFILER)
 endif()

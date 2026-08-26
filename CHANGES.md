@@ -11,6 +11,7 @@ Documentation for ROCm Optiq is available at [https://rocm.docs.amd.com/projects
 ##### Timeline and navigation
 
 - Zoom-to-fit for measurements and time-range selections: right-click the timeline and choose "Zoom to Measurement" or "Zoom to Time Range Selection" to fit that span to the timeline width, with the markers landing on the left and right edges.
+- "Zoom to Selection" hotkey (default `Z`) to fit the timeline to the current region, time-range, or event selection.
 
 ##### Tracks and topology
 
@@ -22,6 +23,7 @@ Documentation for ROCm Optiq is available at [https://rocm.docs.amd.com/projects
 - More compact flame-chart events, with fixed resize/expand behavior.
 - Display incremental Y-axis scale ticks for counter tracks when expanded.
 - Display unrounded/untruncated track statistics in Track Details tab.
+- Setting to hide the eye / go-to-track icons on topology sidebar rows (actions remain available from the row context menu).
 
 ##### Annotations
 
@@ -31,6 +33,7 @@ Documentation for ROCm Optiq is available at [https://rocm.docs.amd.com/projects
 
 - Roofline single-click filtering for kernels, memory levels, and bandwidth peaks.
 - Roofline line-thickness preference.
+- Re-ordered top level tabs.
 
 ##### Rendering and performance
 
@@ -58,6 +61,15 @@ These features are in progress and available for preview only (build from src); 
 - Fixed the Systems multi-node summary window showing data only for the first node in the `.yaml`.
 - Fixed loading workload Speed-of-Light for compute schema < 1.3.0; query builders now report and skip unsupported queries.
 - Fixed editing for counter/line track min/max Y-axis value: It now accepts unit-free and abbreviated input (e.g. "25M", "30M bytes"), keep a readable minimum width, and highlight the value on hover.
+- Fixed crash when invalid filter used in kernel selection table.
+- Fixed crash when adding a counter with `pmc_id` 0.
+- Fixed roofline precision fallback when FP32 ceilings are missing, and kernel markers vanishing when all durations are zero.
+- JobSystem fixes.
+- Fixed timeline tracks that could keep spinning, or show incomplete data, after scrolling or zooming quickly while track data was still loading (including a deadlock when cancelling counter-track queries).
+- Fix memory corruption issue when a trace is closed.
+- Fix handling non-finite numbers when comparing compute metrics.
+- Fix timeline flicker when scrolling via mouse wheel.
+- Fix handling analysis .db files with incomplete roofline data. (Missing compute ceilings).
 
 ## Optiq Beta 0.5.0
 

@@ -17,6 +17,10 @@ add_subdirectory(yaml-cpp)
 # nor a crypto dependency. Remove this guard when remote graduates.
 if(ROCPROFVIS_ENABLE_REMOTE)
 
+# mbedtls/libssh2 set BUILD_TESTING OFF; restore after so imgui_te is still built.
+set(_prev_build_testing ${BUILD_TESTING})
+set(_prev_build_examples ${BUILD_EXAMPLES})
+
 set(ENABLE_ZLIB_COMPRESSION OFF)
 # Default to the vendored mbedTLS backend so the out-of-the-box build needs no
 # system OpenSSL. OpenSSL is opt-in via -DCRYPTO_BACKEND=OpenSSL and is then
@@ -108,6 +112,9 @@ if (CRYPTO_BACKEND STREQUAL "mbedTLS")
     	mbedcrypto
 	)
 endif()
+
+set(BUILD_TESTING ${_prev_build_testing})
+set(BUILD_EXAMPLES ${_prev_build_examples})
 
 endif() # ROCPROFVIS_ENABLE_REMOTE
 

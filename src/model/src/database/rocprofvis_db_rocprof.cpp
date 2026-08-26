@@ -172,8 +172,7 @@ int RocprofDatabase::ProcessTrack(rocprofvis_dm_track_params_t& track_params, st
             }
             else
             {
-                if(track_params.track_indentifiers.id[TRACK_ID_QUEUE] > 0)
-                    if (CachedTables(db_instance->GuidIndex())->PopulateTrackExtendedDataTemplate(this, db_instance->GuidIndex(), "PMC", track_params.track_indentifiers.id[TRACK_ID_COUNTER]) != kRocProfVisDmResultSuccess) return 1;
+                if (CachedTables(db_instance->GuidIndex())->PopulateTrackExtendedDataTemplate(this, db_instance->GuidIndex(), "PMC", track_params.track_indentifiers.id[TRACK_ID_COUNTER]) != kRocProfVisDmResultSuccess) return 1;
             }
         }
     }
@@ -1736,71 +1735,125 @@ rocprofvis_dm_result_t RocprofDatabase::SaveTrimmedData(rocprofvis_dm_timestamp_
 }
 
 rocprofvis_dm_result_t RocprofDatabase::BuildTableStringIdFilter( rocprofvis_dm_num_string_table_filters_t num_string_table_filters, 
-    rocprofvis_dm_string_table_filters_t string_table_filters, bool include_substring, table_string_id_filter_map_t& filter)
+    rocprofvis_dm_string_table_filters_t string_table_filters, bool include_substring, bool include_category, bool partial_matching, table_string_id_filter_map_t& filter)
 {
     rocprofvis_dm_result_t result = kRocProfVisDmResultNotLoaded;
     if(num_string_table_filters > 0)
     {
         std::vector<rocprofvis_dm_index_t> string_indices;
-        result = BindObject()->FuncGetStringIndices(BindObject()->trace_object, num_string_table_filters, string_table_filters, include_substring, string_indices);
+        result = BindObject()->FuncGetStringIndices(BindObject()->trace_object, num_string_table_filters, string_table_filters, include_substring, partial_matching, string_indices);
         ROCPROFVIS_ASSERT_RETURN(result == kRocProfVisDmResultSuccess, result);
-        std::unordered_map<uint32_t, std::string> string_ids;
-        std::unordered_map<uint32_t, std::string> kernel_ids;
+        std::unordered_map<uint32_t, std::string> name_or_category;
+        std::unordered_map<uint32_t, std::string> kernel_symbol;
+        std::string mem_alloc_types;
         for(const rocprofvis_dm_index_t& index : string_indices)
         {
             std::vector<rocprofvis_db_string_id_t> string_id_array;
             result = StringIndexToId(index, string_id_array);
             ROCPROFVIS_ASSERT_RETURN(result == kRocProfVisDmResultSuccess && string_id_array.size() > 0, result);
-            for (auto string_id_obj : string_id_array)
+            for (const auto& string_id_obj : string_id_array)
             {
                 
                 if (string_id_obj.m_string_type == rocprofvis_db_string_type_t::kRPVStringTypeKernelSymbol)
                 {
-                    auto it = kernel_ids.find(string_id_obj.m_guid_id);
-                    if (it == kernel_ids.end())
+                    auto it = kernel_symbol.find(string_id_obj.m_guid_id);
+                    if (it == kernel_symbol.end())
                     {
-                        kernel_ids[string_id_obj.m_guid_id]=std::to_string(string_id_obj.m_string_id);
+                        kernel_symbol[string_id_obj.m_guid_id]=std::to_string(string_id_obj.m_string_id);
                     }
                     else
                     {
-                        kernel_ids[string_id_obj.m_guid_id] += std::string(", ") + std::to_string(string_id_obj.m_string_id);
+                        kernel_symbol[string_id_obj.m_guid_id] += std::string(", ") + std::to_string(string_id_obj.m_string_id);
                     }
                 }
                 else
                 {
-                    auto it = string_ids.find(string_id_obj.m_guid_id);
-                    if (it == string_ids.end())
+                    auto it = name_or_category.find(string_id_obj.m_guid_id);
+                    if (it == name_or_category.end())
                     {
-                        string_ids[string_id_obj.m_guid_id]=std::to_string(string_id_obj.m_string_id);
+                        name_or_category[string_id_obj.m_guid_id]=std::to_string(string_id_obj.m_string_id);
                     }
                     else
                     {
-                        string_ids[string_id_obj.m_guid_id] += std::string(", ") + std::to_string(string_id_obj.m_string_id);
+                        name_or_category[string_id_obj.m_guid_id] += std::string(", ") + std::to_string(string_id_obj.m_string_id);
                     }
                 }
             }
         }
-
-
-        if (string_ids.size() > 0)
+        for(const std::string& type : Builder::mem_alloc_types)
         {
-            for (auto it = string_ids.begin(); it != string_ids.end(); ++it)
+            bool match = !partial_matching;
+            for(rocprofvis_dm_num_string_table_filters_t i = 0; i < num_string_table_filters; i ++)
             {
-                filter[kRocProfVisDmOperationLaunch][it->first] = " SAMPLE.id IS NULL AND R.name_id IN (" + it->second;
-                filter[kRocProfVisDmOperationDispatch][it->first] = " (K.region_name_id IN (" + it->second;
-                filter[kRocProfVisDmOperationLaunchSample][it->first] = "R.name_id IN (" + it->second;
+                std::string_view target_sv = string_table_filters[i];
+                if(include_substring)
+                {
+                    match = std::search(type.begin(), type.end(), target_sv.begin(), target_sv.end(),
+                                [](unsigned char c1, unsigned char c2) {
+                                    return std::tolower(c1) == std::tolower(c2);
+                                }) != type.end();
+                }
+                else
+                {
+                    match = type.size() == target_sv.size() &&
+                            std::equal(type.begin(), type.end(), target_sv.begin(),
+                                [](unsigned char c1, unsigned char c2) {
+                                    return std::tolower(c1) == std::tolower(c2);
+                                });
+                }
+                if(match == partial_matching)
+                {
+                    break;
+                }
+            }
+            if(match)
+            {
+                mem_alloc_types += mem_alloc_types.empty() ? '\'' + type + '\'' : ", '" + type + '\'';
+            }
+        }
 
-                auto k_it = kernel_ids.find(it->first);
-                if (k_it != kernel_ids.end())
+        if(mem_alloc_types.size())
+        {                
+            for(GuidInfo& instance : DbInstances())
+            {
+                filter[kRocProfVisDmOperationMemoryAllocate][instance.first.GuidIndex()] =  std::string(Builder::M_TYPE_REFERENCE) + " IN (" + mem_alloc_types;
+            }            
+        }
+        if (name_or_category.size() > 0)
+        {
+            for (auto it = name_or_category.begin(); it != name_or_category.end(); ++it)
+            {
+                filter[kRocProfVisDmOperationLaunch][it->first] = " SAMPLE.id IS NULL AND (R.name_id IN (" + it->second;
+                filter[kRocProfVisDmOperationDispatch][it->first] = " (K.region_name_id IN (" + it->second;
+                filter[kRocProfVisDmOperationMemoryCopy][it->first] = " (M.name_id IN (" + it->second;
+                filter[kRocProfVisDmOperationLaunchSample][it->first] = " (R.name_id IN (" + it->second;
+                
+                auto k_it = kernel_symbol.find(it->first);
+                if (k_it != kernel_symbol.end())
                 {
                     filter[kRocProfVisDmOperationDispatch][it->first] += ") OR K.kernel_id IN (" + k_it->second;
                 }
-                filter[kRocProfVisDmOperationDispatch][it->first] += ") ";
+
+                if(include_category)
+                {
+                    filter[kRocProfVisDmOperationLaunch][it->first] += ") OR E.category_id IN (" + it->second;
+                    filter[kRocProfVisDmOperationDispatch][it->first] += ") OR E.category_id IN (" + it->second;
+                    filter[kRocProfVisDmOperationMemoryAllocate][it->first] = filter[kRocProfVisDmOperationMemoryAllocate][it->first].empty() ? 
+                        " E.category_id IN (" + it->second :
+                        "(" + filter[kRocProfVisDmOperationMemoryAllocate][it->first] + ") OR E.category_id IN (" + it->second + ")";
+                    filter[kRocProfVisDmOperationMemoryCopy][it->first] += ") OR E.category_id IN (" + it->second;
+                    filter[kRocProfVisDmOperationLaunchSample][it->first] += ") OR E.category_id IN (" + it->second;
+                }
+
+                filter[kRocProfVisDmOperationLaunch][it->first] += ")";
+                filter[kRocProfVisDmOperationDispatch][it->first] += ")";
+                filter[kRocProfVisDmOperationMemoryCopy][it->first] += ")";
+                filter[kRocProfVisDmOperationLaunchSample][it->first] += ")";                
             }
         }
         else
         {
-            for (auto it = kernel_ids.begin(); it != kernel_ids.end(); ++it)
+            for (auto it = kernel_symbol.begin(); it != kernel_symbol.end(); ++it)
             {
                 filter[kRocProfVisDmOperationDispatch][it->first] = " K.kernel_id IN (" + it->second;
             }

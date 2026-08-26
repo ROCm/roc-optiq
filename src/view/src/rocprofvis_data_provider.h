@@ -224,14 +224,10 @@ public:
         const std::function<void(const RequestInfo&, uint64_t, const std::string&)>&
             callback);
 
-    /*
-     * Moves a graph inside the controller's timeline to a specified index and updates the
-     * indexes of m_track_metadata.
-     * @param track_id: The id of the track to move
-     * @param index: The desired index of the track.
-     * @return: True if operation is successful.
-     */
-    bool SetGraphIndex(uint64_t track_id, uint64_t index);
+    // Sets each track's TrackInfo::index from its position in ordered_track_ids (a
+    // full permutation) and fires the metadata-changed callback. Does not touch the
+    // controller's graph order.
+    bool SetTrackIndex(const std::vector<uint64_t>& ordered_track_ids);
 
     bool SaveTrimmedTrace(const std::string& path, double start_ns, double end_ns);
 
@@ -411,10 +407,8 @@ private:
                                               rocprofvis_handle_t* roofline_handle,
                                               bandwidth_ridge_map& bandwidth_ridge);
 
-    inline void LoadRoofLineNumKernels(WorkloadInfo&        workload,
-                                       rocprofvis_handle_t* roofline_handle,
-                                       compute_ridge_map&   compute_ridge,
-                                       bandwidth_ridge_map& bandwidth_ridge);
+    inline void LoadRoofLineKernels(WorkloadInfo&        workload,
+                                    rocprofvis_handle_t* roofline_handle);
 
     void ProcessMetricsRequest(RequestInfo& req);
     void ProcessMetricPivotTable(RequestInfo& req);

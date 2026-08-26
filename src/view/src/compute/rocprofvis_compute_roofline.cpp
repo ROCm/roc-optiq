@@ -23,6 +23,7 @@ constexpr float       HOVER_LINE_WEIGHT_BOOST         = 2.0f;
 constexpr float       LINE_THICKNESS_DEFAULT          = 1.0f;
 constexpr float       LINE_THICKNESS_MIN              = 1.0f;
 constexpr float       LINE_THICKNESS_MAX              = 6.0f;
+constexpr float       KERNEL_MARKER_WEIGHT_DEFAULT    = 1.0f;
 constexpr const char* DISPLAY_NAMES_CEILING_COMPUTE[] = {
     "Peak MFMA FP4",   // kRPVControllerRooflineCeilingComputeMFMAFP4
     "Peak MFMA FP6",   // kRPVControllerRooflineCeilingComputeMFMAFP6
@@ -260,11 +261,13 @@ Roofline::Update()
                         std::string(
                             DISPLAY_NAMES_KERNEL_INTENSITY[intensity.second.type]) +
                             ": " + kernel.second.name,
-                        static_cast<float>(
-                            static_cast<double>(
-                                kernel.second
-                                    .dispatch_metrics[KernelInfo::DurationTotal]) /
-                            static_cast<double>(kernel_duration_scale)) });
+                        kernel_duration_scale > 0
+                            ? static_cast<float>(
+                                  static_cast<double>(
+                                      kernel.second
+                                          .dispatch_metrics[KernelInfo::DurationTotal]) /
+                                  static_cast<double>(kernel_duration_scale))
+                            : KERNEL_MARKER_WEIGHT_DEFAULT });
                 }
             }
             // Build filter dropdown options from what the workload actually has;
@@ -302,7 +305,21 @@ Roofline::Update()
                     m_available_bandwidths.emplace_back(bandwidth);
                 }
             }
-            ApplyPreset(PresetModel::FP32);
+            // Prefer FP32, then descend in precision, using FP64 as a last resort.
+            static constexpr PresetModel::Type PRESET_FALLBACK_ORDER[] = {
+                PresetModel::FP32, PresetModel::FP16, PresetModel::FP8,
+                PresetModel::FP6,  PresetModel::FP4,  PresetModel::FP64,
+            };
+            PresetModel::Type selected_preset = PresetModel::FP32;
+            for(PresetModel::Type candidate : PRESET_FALLBACK_ORDER)
+            {
+                if(!m_presets[candidate].item_indices.empty())
+                {
+                    selected_preset = candidate;
+                    break;
+                }
+            }
+            ApplyPreset(selected_preset);
         }
         m_workload_changed = false;
     }

@@ -61,9 +61,7 @@ ProfilerLauncherDialog::ProfilerLauncherDialog(AppWindow* app_window)
     , m_run_end_time(0.0)
     , m_last_seen_state(kRPVProfilerStateIdle)
     , m_backend_index(0)
-    , m_tool_index(0)
     , m_config()
-    , m_profiler_path_override()
     , m_execution_cache()
     , m_preset_manager()
     , m_current_preset_name()
@@ -74,7 +72,7 @@ ProfilerLauncherDialog::ProfilerLauncherDialog(AppWindow* app_window)
     m_backends.push_back(std::make_unique<RocprofSysBackend>());
 
     m_config.profiler_id = m_backends[0]->Id();
-    m_config.tool_id = m_backends[0]->GetTools()[0].id;
+    SyncToolWithBackend();
     m_backends[0]->LoadSettings(jt::Json());
     m_config.backend_payload = m_backends[0]->SaveSettings();
 
@@ -210,10 +208,10 @@ void ProfilerLauncherDialog::RenderConfigureView()
 #else
         tags.push_back("Local");
 #endif
-        auto tools = backend->GetTools();
-        if (m_tool_index >= 0 && m_tool_index < static_cast<int>(tools.size()))
+        std::string const tool_name = CurrentToolDisplayName();
+        if (!tool_name.empty())
         {
-            tags.push_back(tools[m_tool_index].display_name);
+            tags.push_back(tool_name);
         }
         std::vector<std::string> backend_tags = backend->GetSummaryTags(m_config);
         tags.insert(tags.end(), backend_tags.begin(), backend_tags.end());
@@ -358,10 +356,10 @@ std::string ProfilerLauncherDialog::BuildRunSummary() const
     if (m_backend_index >= 0 && m_backend_index < static_cast<int>(m_backends.size()))
     {
         ss << m_backends[m_backend_index]->DisplayName();
-        auto tools = m_backends[m_backend_index]->GetTools();
-        if (m_tool_index >= 0 && m_tool_index < static_cast<int>(tools.size()))
+        std::string const tool_name = CurrentToolDisplayName();
+        if (!tool_name.empty())
         {
-            ss << " (" << tools[m_tool_index].display_name << ")";
+            ss << " (" << tool_name << ")";
         }
     }
 
@@ -430,16 +428,14 @@ void ProfilerLauncherDialog::RenderToolbar()
     ImGui::Text("Tool:");
     ImGui::SameLine();
     ImGui::PushItemWidth(120);
-    if (ImGui::BeginCombo("##ToolSelector",
-                          tools[m_tool_index].display_name.c_str()))
+    if (ImGui::BeginCombo("##ToolSelector", CurrentToolDisplayName().c_str()))
     {
-        for (size_t i = 0; i < tools.size(); i++)
+        for (auto const& option : tools)
         {
-            bool selected = (static_cast<int>(i) == m_tool_index);
-            if (ImGui::Selectable(tools[i].display_name.c_str(), selected))
+            if (ImGui::Selectable(option.display_name.c_str(), option.tool == m_config.tool))
             {
-                m_tool_index = static_cast<int>(i);
-                m_config.tool_id = tools[i].id;
+                m_config.tool = option.tool;
+                m_execution_cache_dirty = true;
             }
         }
         ImGui::EndCombo();
@@ -461,16 +457,8 @@ void ProfilerLauncherDialog::RenderToolbar()
             m_config = loaded;
             m_execution_cache_dirty = true;
             m_backends[m_backend_index]->LoadSettings(m_config.backend_payload);
+            SyncToolWithBackend();
             backend = m_backends[m_backend_index].get();
-            tools = backend->GetTools();
-            for (size_t i = 0; i < tools.size(); i++)
-            {
-                if (tools[i].id == m_config.tool_id)
-                {
-                    m_tool_index = static_cast<int>(i);
-                    break;
-                }
-            }
 #ifdef ROCPROFVIS_ENABLE_REMOTE
             // Resolve the profile's referenced SSH connection (if any) so the
             // remote section reflects the saved connection.
@@ -491,7 +479,7 @@ void ProfilerLauncherDialog::RenderMainContent()
 
     // Backend tabs are split into "general" (shown here) and "advanced" (opened
     // in a separate window), so the common path stays clean.
-    auto tabs = backend->GetTabs(m_config.tool_id);
+    auto tabs = backend->GetTabs(m_config.tool);
     std::vector<TabDescriptor const*> general_tabs;
     std::vector<TabDescriptor const*> advanced_tabs;
     for (auto const& tab : tabs)
@@ -568,7 +556,7 @@ void ProfilerLauncherDialog::RenderMainContent()
     LaunchCardHeader(ICON_CHART_BAR, "Profiling Options");
     if (general_tabs.size() == 1)
     {
-        general_tabs[0]->render_fn();
+        m_execution_cache_dirty |= general_tabs[0]->render_fn();
     }
     else if (!general_tabs.empty())
     {
@@ -578,7 +566,7 @@ void ProfilerLauncherDialog::RenderMainContent()
             {
                 if (ImGui::BeginTabItem(tab->display_name.c_str()))
                 {
-                    tab->render_fn();
+                    m_execution_cache_dirty |= tab->render_fn();
                     ImGui::EndTabItem();
                 }
             }
@@ -631,10 +619,39 @@ void ProfilerLauncherDialog::RenderMainContent()
     ImGui::PushStyleColor(ImGuiCol_Border, settings.GetColor(Colors::kPanelBorderSubtle));
     ImGui::BeginChild("cfg_preview", ImVec2(0.0f, 0.0f),
                       ImGuiChildFlags_Borders | ImGuiChildFlags_AlwaysUseWindowPadding);
+    RenderToolResolutionNotice();
     RenderCommandPreview(m_execution_cache.command_preview);
     ImGui::EndChild();
     ImGui::PopStyleColor(2);
     ImGui::PopStyleVar(2);
+}
+
+void ProfilerLauncherDialog::RenderToolResolutionNotice()
+{
+    SettingsManager& settings = SettingsManager::Get();
+
+    if (!m_execution_cache.resolve_error.empty())
+    {
+        // Said here rather than only on Launch, because "the profiler is not
+        // installed" is not something the user should discover by pressing a
+        // button. The command preview below still shows the bare tool name, so
+        // this line is what explains why it has no path.
+        ImGui::PushStyleColor(ImGuiCol_Text, settings.GetColor(Colors::kTextError));
+        ImGui::TextWrapped("%s", m_execution_cache.resolve_error.c_str());
+        ImGui::PopStyleColor();
+        return;
+    }
+
+    // A tool directory travels with the profile, so a profile from elsewhere can
+    // arrive with one set. Showing it means an imported profile cannot quietly
+    // run a different build of the tool than the user expects.
+    if (!m_config.tool_directory.empty())
+    {
+        ImGui::PushStyleColor(ImGuiCol_Text, settings.GetColor(Colors::kTextWarning));
+        ImGui::TextWrapped("Using tools from %s%s", m_config.tool_directory.c_str(),
+                           IsSshMode() ? " on the remote host" : "");
+        ImGui::PopStyleColor();
+    }
 }
 
 void ProfilerLauncherDialog::RenderAdvancedWindow()
@@ -665,7 +682,37 @@ void ProfilerLauncherDialog::RenderAdvancedWindow()
         ImGui::TextDisabled("Fine-grained settings, applied on top of the selected preset.");
         ImGui::Spacing();
 
-        auto tabs = backend->GetTabs(m_config.tool_id);
+        // Where the tools live is a property of the launch profile rather than of
+        // any one backend, so it sits above the backend tabs.
+        std::function<void()> on_browse_tool_dir;
+#ifdef ROCPROFVIS_ENABLE_REMOTE
+        if (IsSshMode())
+        {
+            on_browse_tool_dir = [this]()
+            {
+                ApplySelectedConnection();
+                EnsureRemoteFileBrowser();
+                m_remote_file_browser->Open(
+                    m_config.tool_directory, RemoteFileBrowser::PickMode::kDirectory,
+                    [this](const std::string& path)
+                    {
+                        m_config.tool_directory = path;
+                        m_execution_cache_dirty = true;
+                    });
+            };
+        }
+#endif
+        if (RenderToolLocationSection(m_config.tool_directory, m_config.connection, m_app_window,
+                                      IsSshMode() ? std::string() : m_execution_cache.argv0,
+                                      on_browse_tool_dir))
+        {
+            m_execution_cache_dirty = true;
+        }
+        ImGui::Spacing();
+        ImGui::Separator();
+        ImGui::Spacing();
+
+        auto tabs = backend->GetTabs(m_config.tool);
         if (ImGui::BeginTabBar("AdvancedWindowTabs"))
         {
             for (auto const& tab : tabs)
@@ -678,7 +725,7 @@ void ProfilerLauncherDialog::RenderAdvancedWindow()
                 {
                     ImGui::Spacing();
                     ImGui::BeginChild("adv_scroll", ImVec2(0.0f, 0.0f), ImGuiChildFlags_None);
-                    tab.render_fn();
+                    m_execution_cache_dirty |= tab.render_fn();
                     ImGui::EndChild();
                     ImGui::EndTabItem();
                 }
@@ -896,14 +943,17 @@ void ProfilerLauncherDialog::RenderRemoteSection()
     // binary choice.
     ImGui::TableSetColumnIndex(1);
     bool is_local = (m_config.connection == ConnectionType::kLocal);
+
     if (ImGui::RadioButton("This machine", is_local))
     {
-        m_config.connection = ConnectionType::kLocal;
+        m_config.connection     = ConnectionType::kLocal;
+        m_execution_cache_dirty = true;
     }
     ImGui::SameLine();
     if (ImGui::RadioButton("Remote (SSH)", !is_local))
     {
-        m_config.connection = ConnectionType::kSsh;
+        m_config.connection     = ConnectionType::kSsh;
+        m_execution_cache_dirty = true;
     }
 
     if (IsSshMode())
@@ -1136,13 +1186,11 @@ void ProfilerLauncherDialog::Update()
 {
     if (m_show_window)
     {
-        // Only rebuild the (allocation-heavy) execution cache / command preview
-        // when inputs may have changed: an explicit dirty request, or while the
-        // user is actively editing a widget (ImGui::IsAnyItemActive reflects the
-        // previous frame here, so the deactivation frame is still captured). This
-        // covers the backend-owned settings tabs without instrumenting each
-        // widget individually.
-        if (m_execution_cache_dirty || ImGui::IsAnyItemActive())
+        // Rebuild the (allocation-heavy) execution cache / command preview only
+        // when a control reported an actual change - every widget, including the
+        // backend-owned settings tabs, ORs its ImGui return value into the dirty
+        // flag. 
+        if (m_execution_cache_dirty)
         {
             RefreshExecutionCache();
             m_execution_cache_dirty = false;
@@ -1170,14 +1218,54 @@ void ProfilerLauncherDialog::Update()
     }
 }
 
-rocprofvis_profiler_type_t ProfilerLauncherDialog::ResolveProfilerType() const
+void ProfilerLauncherDialog::SyncToolWithBackend()
 {
-    if (m_config.tool_id == "instrument")
+    if (m_backends.empty())
     {
-        return kRPVProfilerTypeRocprofSysInstrument;
+        m_config.tool = kRPVProfilerToolNone;
+        return;
     }
-    // "run" / "sample" / default
-    return kRPVProfilerTypeRocprofSysRun;
+
+    std::vector<ToolOption> tools = m_backends[m_backend_index]->GetTools();
+    if (tools.empty())
+    {
+        m_config.tool = kRPVProfilerToolNone;
+        return;
+    }
+
+    for (auto const& option : tools)
+    {
+        if (option.tool == m_config.tool)
+        {
+            return;
+        }
+    }
+
+    // Reached for a fresh config, and for a profile saved against a different
+    // profiler or by a build that knew a tool this one does not. Reported rather
+    // than silently substituted: the user asked for a specific tool.
+    if (m_config.tool != kRPVProfilerToolNone)
+    {
+        spdlog::warn("Launch profile names a tool that {} does not offer; using {} instead",
+                     m_backends[m_backend_index]->Id(), tools[0].display_name);
+    }
+    m_config.tool = tools[0].tool;
+}
+
+std::string ProfilerLauncherDialog::CurrentToolDisplayName() const
+{
+    if (m_backends.empty())
+    {
+        return std::string();
+    }
+    for (auto const& option : m_backends[m_backend_index]->GetTools())
+    {
+        if (option.tool == m_config.tool)
+        {
+            return option.display_name;
+        }
+    }
+    return std::string();
 }
 
 void ProfilerLauncherDialog::OnLaunchClicked()
@@ -1231,21 +1319,38 @@ void ProfilerLauncherDialog::OnLaunchClicked()
     m_process_output_stripped.clear();
     m_output_text.clear();
 
+    // Re-resolve rather than reuse the memo: the user may have installed ROCm or
+    // corrected the tool directory since it was taken, and a launch is the one
+    // place where an out-of-date answer would be acted on rather than displayed.
+    RefreshToolPath(true);
     RefreshExecutionCache();
+
+    // A tool that cannot be found is reported here rather than left to fail
+    // mid-launch. resolve_error is only ever set for a local run, since remote
+    // resolution happens on the other host (RefreshExecutionCache).
+    if (!m_execution_cache.resolve_error.empty())
+    {
+        m_error_message = "Error: " + m_execution_cache.resolve_error;
+        return;
+    }
+    if (m_execution_cache.tool == kRPVProfilerToolNone)
+    {
+        m_error_message = "Error: no profiler tool selected";
+        return;
+    }
 
     // Assemble the run request from the config / execution cache, then hand off
     // to the orchestrator. The backend scraper resolves the produced trace path
     // from the profiler's stdout (local and remote).
     ProfilerLaunchOrchestrator::LaunchRequest request;
-    request.profiler_type     = ResolveProfilerType();
-    request.profiler_path     = m_execution_cache.profiler_path;
-    request.target_executable = m_config.target.executable;
-    request.target_args       = m_config.target.arguments;
-    request.output_directory  = m_config.target.output_directory;
-    request.profiler_args     = m_execution_cache.profiler_args;
-    request.env_vars          = m_execution_cache.env_vars;
-    request.is_remote         = is_remote;
-    request.auto_load_trace   = m_config.target.auto_load_trace;
+    request.spec.tool              = m_execution_cache.tool;
+    request.spec.tool_directory    = m_config.tool_directory;
+    request.spec.output_directory  = m_config.target.output_directory;
+    request.spec.working_directory = m_config.target.working_directory;
+    request.spec.profiler_argv     = m_execution_cache.argv;
+    request.spec.env_vars          = m_execution_cache.env_vars;
+    request.is_remote              = is_remote;
+    request.auto_load_trace        = m_config.target.auto_load_trace;
 #ifdef ROCPROFVIS_ENABLE_REMOTE
     request.remote_uri        = is_remote ? m_remote_uri : nullptr;
 #endif
@@ -1423,6 +1528,49 @@ void ProfilerLauncherDialog::ComputeConsoleStatus(std::string&        out_label,
     }
 }
 
+void ProfilerLauncherDialog::RefreshToolPath(bool force)
+{
+    bool const ssh = IsSshMode();
+    if (!force && m_tool_path.populated && m_tool_path.tool == m_config.tool &&
+        m_tool_path.ssh == ssh && m_tool_path.directory == m_config.tool_directory)
+    {
+        return;
+    }
+
+    m_tool_path.tool      = m_config.tool;
+    m_tool_path.directory = m_config.tool_directory;
+    m_tool_path.ssh       = ssh;
+    m_tool_path.populated = true;
+    m_tool_path.error.clear();
+
+    std::string const& tool_directory = m_config.tool_directory;
+    if (ssh)
+    {
+        // The tool is on the remote host, so this machine's filesystem says
+        // nothing about it - resolving here would report a local install (or its
+        // absence) for a command that runs elsewhere. Show exactly what the
+        // remote will run, which is what ProfilerConfig::ResolveToolPathRemote
+        // composes: <tool_directory>/<name>, or the bare name for the remote
+        // $PATH. Joined with '/' because the remote is addressed as POSIX.
+        std::string const name = GetToolBinaryName(m_config.tool);
+        m_tool_path.argv0 = tool_directory.empty()
+                                ? name
+                                : (tool_directory.back() == '/' ? tool_directory + name
+                                                                : tool_directory + "/" + name);
+    }
+    else
+    {
+        m_tool_path.argv0 =
+            ResolveToolPath(m_config.tool, tool_directory, m_tool_path.error);
+        if (m_tool_path.argv0.empty())
+        {
+            // Keep the preview a command line rather than "<not found>"; the
+            // notice above it carries the reason.
+            m_tool_path.argv0 = GetToolBinaryName(m_config.tool);
+        }
+    }
+}
+
 void ProfilerLauncherDialog::RefreshExecutionCache()
 {
     if (m_backends.empty())
@@ -1435,7 +1583,12 @@ void ProfilerLauncherDialog::RefreshExecutionCache()
     m_config.backend_payload = backend->SaveSettings();
 
     ExecutionCache cache;
-    cache.profiler_path = GetProfilerPath();
+    cache.tool = m_config.tool;
+
+    RefreshToolPath(false);
+    cache.argv0         = m_tool_path.argv0;
+    cache.resolve_error = m_tool_path.error;
+
     backend->FlattenToExecution(m_config, cache.curated_env_vars, cache.argv);
 
     cache.env_vars = cache.curated_env_vars;
@@ -1444,26 +1597,8 @@ void ProfilerLauncherDialog::RefreshExecutionCache()
         cache.env_vars.emplace_back(kv.first, kv.second);
     }
 
-    for (size_t i = 0; i < cache.argv.size(); i++)
-    {
-        if (i > 0)
-        {
-            cache.profiler_args += " ";
-        }
-        cache.profiler_args += cache.argv[i];
-    }
-
-    for (auto const& arg : m_config.extra_argv)
-    {
-        if (!cache.profiler_args.empty())
-        {
-            cache.profiler_args += " ";
-        }
-        cache.profiler_args += arg;
-    }
-
-    cache.command_preview = BuildCommandPreviewString(
-        m_config, cache.profiler_path, cache.env_vars, cache.argv);
+    cache.command_preview =
+        BuildCommandPreviewString(cache.argv0, cache.env_vars, cache.argv);
 
     m_execution_cache = std::move(cache);
 }
@@ -1475,9 +1610,11 @@ void ProfilerLauncherDialog::SwitchBackend(int index)
         return;
     }
     m_backend_index = index;
-    m_tool_index = 0;
     m_config.profiler_id = m_backends[index]->Id();
-    m_config.tool_id = m_backends[index]->GetTools()[0].id;
+    // Not carried across: a tool belongs to one profiler, so the new backend's
+    // default is the only sensible selection.
+    m_config.tool = kRPVProfilerToolNone;
+    SyncToolWithBackend();
     m_backends[index]->LoadSettings(jt::Json());
     m_config.backend_payload = m_backends[index]->SaveSettings();
     m_execution_cache_dirty = true;
@@ -1488,7 +1625,6 @@ void ProfilerLauncherDialog::LoadFromSettings()
     SettingsManager& settings = SettingsManager::Get();
     ProfilerSettings& ps = settings.GetProfilerSettings();
 
-    m_profiler_path_override = ps.profiler_path;
     m_config.target.output_directory = ps.profiler_output_directory;
     m_config.target.auto_load_trace = ps.auto_load_trace;
     m_current_preset_name = ps.last_preset_name;
@@ -1520,16 +1656,7 @@ void ProfilerLauncherDialog::LoadFromSettings()
             m_config = loaded;
             m_execution_cache_dirty = true;
             m_backends[m_backend_index]->LoadSettings(m_config.backend_payload);
-            IProfilerBackend const* backend = m_backends[m_backend_index].get();
-            std::vector<ToolOption> tools = backend->GetTools();
-            for (size_t i = 0; i < tools.size(); i++)
-            {
-                if (tools[i].id == m_config.tool_id)
-                {
-                    m_tool_index = static_cast<int>(i);
-                    break;
-                }
-            }
+            SyncToolWithBackend();
 #ifdef ROCPROFVIS_ENABLE_REMOTE
             // A ref to a since-deleted connection is left unbound rather than
             // remapped onto whichever connection is selected.
@@ -1552,7 +1679,6 @@ void ProfilerLauncherDialog::SaveToSettings()
     SettingsManager& settings = SettingsManager::Get();
     ProfilerSettings& ps = settings.GetProfilerSettings();
 
-    ps.profiler_path = m_profiler_path_override;
     ps.profiler_output_directory = m_config.target.output_directory;
     ps.auto_load_trace = m_config.target.auto_load_trace;
     ps.last_preset_name = m_current_preset_name;
@@ -1612,16 +1738,6 @@ void ProfilerLauncherDialog::AddRecentTarget(std::string const& exe)
     }
 
     settings.SaveProfilerSettings();
-}
-
-std::string ProfilerLauncherDialog::GetProfilerPath() const
-{
-    if (!m_profiler_path_override.empty())
-    {
-        return m_profiler_path_override;
-    }
-    IProfilerBackend const* backend = m_backends[m_backend_index].get();
-    return backend->GetDefaultBinary(m_config.tool_id);
 }
 
 }  // namespace View

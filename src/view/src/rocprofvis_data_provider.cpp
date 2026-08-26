@@ -286,47 +286,51 @@ DataProvider::SetRequestProgressUpdateCallback(
 }
 
 bool
-DataProvider::SetGraphIndex(uint64_t track_id, uint64_t index)
+DataProvider::SetTrackIndex(const std::vector<uint64_t>& ordered_track_ids)
 {
-    rocprofvis_result_t result = kRocProfVisResultUnknownError;
-    TimelineModel& tlm = m_model.GetTimeline();
-    uint64_t num_graphs = tlm.GetTrackCount();
-
-    if(m_state == ProviderState::kReady)
+    if(m_state != ProviderState::kReady)
     {
-        ROCPROFVIS_ASSERT(index < num_graphs);
-        const TrackInfo* metadata = tlm.GetTrack(track_id);
-        ROCPROFVIS_ASSERT(metadata);
-        result = rocprofvis_controller_set_object(m_trace_timeline,
-                                                  kRPVControllerTimelineGraphIndexed,
-                                                  index, metadata->graph_handle);
-        if(result == kRocProfVisResultSuccess)
-        {
-            rocprofvis_handle_t* graph = nullptr;
-            for(int i = 0; i < num_graphs; i++)
-            {
-                result = rocprofvis_controller_get_object(
-                    m_trace_timeline, kRPVControllerTimelineGraphIndexed, i, &graph);
-                if(result == kRocProfVisResultSuccess && graph)
-                {
-                    uint64_t id = 0;
-                    result      = rocprofvis_controller_get_uint64(
-                        graph, kRPVControllerGraphId, 0, &id);
-                    if(result == kRocProfVisResultSuccess)
-                    {
-                        metadata = tlm.GetTrack(id);
-                        ROCPROFVIS_ASSERT(metadata && metadata->graph_handle == graph);
-                        tlm.GetMutableTrackMetadata()[id].index = i;
-                    }
-                }
-            }
-            if(m_track_metadata_changed_callback)
-            {
-                m_track_metadata_changed_callback(m_model.GetTraceFilePath());
-            }
-        }
+        return false;
     }
-    return (result == kRocProfVisResultSuccess);
+
+    TimelineModel&                           tlm      = m_model.GetTimeline();
+    std::unordered_map<uint64_t, TrackInfo>& metadata = tlm.GetMutableTrackMetadata();
+
+    // Require a full permutation so no two tracks share an index.
+    if(ordered_track_ids.size() != metadata.size())
+    {
+        spdlog::warn("SetTrackIndex ignored: expected {} track ids, got {}",
+                     metadata.size(), ordered_track_ids.size());
+        return false;
+    }
+
+    // Resolve every id up front so a bad order can't leave the metadata
+    // half-reindexed (some tracks new indexes, the rest stale). We only mutate
+    // once the whole order is confirmed valid.
+    std::vector<TrackInfo*> ordered_metadata;
+    ordered_metadata.reserve(ordered_track_ids.size());
+    for(uint64_t track_id : ordered_track_ids)
+    {
+        auto it = metadata.find(track_id);
+        if(it == metadata.end())
+        {
+            spdlog::warn("SetTrackIndex ignored: unknown track id {}", track_id);
+            return false;
+        }
+        ordered_metadata.push_back(&it->second);
+    }
+
+    uint64_t index = 0;
+    for(TrackInfo* info : ordered_metadata)
+    {
+        info->index = index++;
+    }
+
+    if(m_track_metadata_changed_callback)
+    {
+        m_track_metadata_changed_callback(m_model.GetTraceFilePath());
+    }
+    return true;
 }
 
 bool
@@ -2110,10 +2114,20 @@ DataProvider::FetchEventSearch(const EventSearchRequestParams& table_params)
                 ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
             }
 
-            // set matching behavior in request
+            // set matching behavior in request...
             result = rocprofvis_controller_set_uint64(
                 args, kRPVControllerTableArgsStringTableFiltersIncludeSubstrings, 0,
                 table_params.m_include_substrings ? 1 : 0);
+            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+
+            result = rocprofvis_controller_set_uint64(
+                args, kRPVControllerTableArgsStringTableFiltersIncludeCategory, 0,
+                table_params.m_include_category ? 1 : 0);
+            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+
+            result = rocprofvis_controller_set_uint64(
+                args, kRPVControllerTableArgsStringTableFiltersPartialMatching, 0,
+                table_params.m_partial_matching ? 1 : 0);
             ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
         }
         else
@@ -3611,7 +3625,18 @@ DataProvider::ProcessGraphRequest(RequestInfo& req)
     auto track_params = std::dynamic_pointer_cast<TrackRequestParams>(req.custom_params);
     if(!track_params)
     {
-        spdlog::error("Track request params are not set or invalid");
+        // Note: if this is a real response to a fetch request then the UI track item will not
+        // be updated. (loading icon will remain spinning).
+        spdlog::error("Track request params are not set or invalid, cannot process data!");
+        rocprofvis_controller_array_free(req.request_array);
+        req.request_array = nullptr;
+
+        // call the new data ready callback with INVALID_INDEX to indicate an error
+        if(m_track_data_ready_callback)
+        {
+            m_track_data_ready_callback(INVALID_INDEX, m_model.GetTraceFilePath(), req);
+        }
+
         return;
     }
 
@@ -3643,30 +3668,44 @@ DataProvider::ProcessGraphRequest(RequestInfo& req)
                       track_params->m_track_id, item_count, min_ts, max_ts);
     }
     else
-    {
-        spdlog::warn("Graph request failed with code {}", req.response_code);
+    { 
+        // Silence out of range warnings as they are shown for empty areas of the track.
+        if(req.response_code != kRocProfVisResultOutOfRange)
+        {
+            spdlog::warn("Graph request failed with code {}", req.response_code);
+        }
     }
 
     // use the track type to determine what type of data is present in the graph array
     const TrackInfo* metadata = m_model.GetTimeline().GetTrack(track_params->m_track_id);
     ROCPROFVIS_ASSERT(metadata);
 
-    switch(metadata->track_type)
+    if(metadata)
     {
-        case kRPVControllerTrackTypeEvents:
+        switch(metadata->track_type)
         {
-            CreateRawEventData(*track_params, req);
-            break;
+            case kRPVControllerTrackTypeEvents:
+            {
+                CreateRawEventData(*track_params, req);
+                break;
+            }
+            case kRPVControllerTrackTypeSamples:
+            {
+                CreateRawSampleData(*track_params, req);
+                break;
+            }
+            default:
+            {
+                spdlog::error("Unknown track type for track id {}, cannot process data!",
+                              track_params->m_track_id);
+                break;
+            }
         }
-        case kRPVControllerTrackTypeSamples:
-        {
-            CreateRawSampleData(*track_params, req);
-            break;
-        }
-        default:
-        {
-            break;
-        }
+    }
+    else
+    {
+        spdlog::error("Track metadata not found for track id {}, cannot process data!",
+                      track_params->m_track_id);
     }
 
     // free the array
@@ -3701,9 +3740,11 @@ DataProvider::CreateRawSampleData(const TrackRequestParams& params,
     }
     else
     {
-        // TODO: review the controller return codes to see if anycase should be escalated
-        // to a warning
-        spdlog::warn("Sample track data request failed with code {}", req.response_code);
+        // Silence out of range warnings as they are shown for empty areas of the track.         
+        if(req.response_code != kRocProfVisResultOutOfRange)
+        {
+            spdlog::warn("Sample track data request failed with code {}", req.response_code);
+        }
         count = 0;
     }
 
@@ -3730,12 +3771,28 @@ DataProvider::CreateRawSampleData(const TrackRequestParams& params,
                           existing_raw_data->GetDataGroupID());
             return;
         }
-        m_model.GetTimeline().FreeTrackData(params.m_track_id);
-        spdlog::debug("Replacing existing track data with id {}", params.m_track_id);
+
+        spdlog::debug(
+            "Replacing existing track data from group {} with group {} for id {}",
+            existing_raw_data->GetDataGroupID(), params.m_data_group_id,
+            params.m_track_id);
+        if(!m_model.GetTimeline().FreeTrackData(params.m_track_id, true))
+        {
+            spdlog::warn("Failed to free existing track data with id {}", params.m_track_id);
+        }
     }
 
     if(!raw_sample_data)
     {
+        // The track was unloaded and its requests cancelled. Creating an empty
+        // object here would make the track look loaded and block a refetch.
+        if(req.response_code == kRocProfVisResultCancelled)
+        {
+            spdlog::debug("Dropping cancelled response for sample track {}",
+                          params.m_track_id);
+            return;
+        }
+
         spdlog::debug("Create sample track {} data with {} entries", params.m_track_id,
                       count);
         raw_sample_data =
@@ -3808,9 +3865,11 @@ DataProvider::CreateRawEventData(const TrackRequestParams& params, const Request
     }
     else
     {
-        // TODO: review the controller return codes to see if anycase should be escalated
-        // to a warning
-        spdlog::warn("Event track data request failed with code {}", req.response_code);
+        // Silence out of range warnings as they are shown for empty areas of the track.         
+        if(req.response_code != kRocProfVisResultOutOfRange)
+        {
+            spdlog::warn("Event track data request failed with code {}", req.response_code);
+        }
         count = 0;
     }
 
@@ -3842,11 +3901,23 @@ DataProvider::CreateRawEventData(const TrackRequestParams& params, const Request
             "Replacing existing track data from group {} with group {} for id {}",
             existing_raw_data->GetDataGroupID(), params.m_data_group_id,
             params.m_track_id);
-        m_model.GetTimeline().FreeTrackData(params.m_track_id);
+        if(!m_model.GetTimeline().FreeTrackData(params.m_track_id, true))
+        {
+            spdlog::warn("Failed to free existing track data with id {}", params.m_track_id);
+        }
     }
 
     if(!raw_event_data)
     {
+        // The track was unloaded and its requests cancelled. Creating an empty
+        // object here would make the track look loaded and block a refetch.
+        if(req.response_code == kRocProfVisResultCancelled)
+        {
+            spdlog::debug("Dropping cancelled response for event track {}",
+                          params.m_track_id);
+            return;
+        }
+
         spdlog::debug("Creating event track {} data with {} entries", params.m_track_id,
                       count);
         raw_event_data =
@@ -4916,7 +4987,7 @@ DataProvider::LoadRoofLine(WorkloadInfo& workload, rocprofvis_handle_t* workload
 
     LoadRoofLineCeilingsBandwidth(workload, roofline_handle, bandwidth_ridge);
 
-    LoadRoofLineNumKernels(workload, roofline_handle, compute_ridge, bandwidth_ridge);
+    LoadRoofLineKernels(workload, roofline_handle);
 }
 
 inline void
@@ -4987,33 +5058,44 @@ DataProvider::LoadRoofLineCeilingsCompute(WorkloadInfo&        workload,
         ceiling.compute_type =
             static_cast<rocprofvis_controller_roofline_ceiling_compute_type_t>(
                 uint64_data);
-        ROCPROFVIS_ASSERT(compute_ridge.count(ceiling.compute_type) > 0);
-        for(const std::pair<const rocprofvis_controller_roofline_ceiling_bandwidth_type_t,
-                            Point>& ridge : compute_ridge.at(ceiling.compute_type))
+        if(compute_ridge.count(ceiling.compute_type) > 0)
         {
-            ceiling.bandwidth_type = ridge.first;
-            ceiling.position.p1    = ridge.second;
-            result                 = rocprofvis_controller_get_double(
-                roofline_handle, kRPVControllerRooflineCeilingComputeXIndexed, j,
-                &double_data);
-            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-            ceiling.position.p2.x = double_data;
-            result                = rocprofvis_controller_get_double(
-                roofline_handle, kRPVControllerRooflineCeilingComputeYIndexed, j,
-                &double_data);
-            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-            ceiling.position.p2.y = double_data;
-            result                = rocprofvis_controller_get_double(
-                roofline_handle, kRPVControllerRooflineCeilingComputeThroughputIndexed, j,
-                &double_data);
-            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-            ceiling.throughput = double_data;
-            workload.roofline.max.x =
-                std::max(workload.roofline.max.x, ceiling.position.p2.x);
-            workload.roofline.max.y =
-                std::max(workload.roofline.max.y, ceiling.position.p2.y);
-            workload.roofline
-                .ceiling_compute[ceiling.compute_type][ceiling.bandwidth_type] = ceiling;
+            for(const std::pair<
+                    const rocprofvis_controller_roofline_ceiling_bandwidth_type_t, Point>&
+                    ridge : compute_ridge.at(ceiling.compute_type))
+            {
+                ceiling.bandwidth_type = ridge.first;
+                ceiling.position.p1    = ridge.second;
+                result                 = rocprofvis_controller_get_double(
+                    roofline_handle, kRPVControllerRooflineCeilingComputeXIndexed, j,
+                    &double_data);
+                ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+                ceiling.position.p2.x = double_data;
+                result                = rocprofvis_controller_get_double(
+                    roofline_handle, kRPVControllerRooflineCeilingComputeYIndexed, j,
+                    &double_data);
+                ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+                ceiling.position.p2.y = double_data;
+                result                = rocprofvis_controller_get_double(
+                    roofline_handle,
+                    kRPVControllerRooflineCeilingComputeThroughputIndexed, j,
+                    &double_data);
+                ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+                ceiling.throughput = double_data;
+                workload.roofline.max.x =
+                    std::max(workload.roofline.max.x, ceiling.position.p2.x);
+                workload.roofline.max.y =
+                    std::max(workload.roofline.max.y, ceiling.position.p2.y);
+                workload.roofline
+                    .ceiling_compute[ceiling.compute_type][ceiling.bandwidth_type] =
+                    ceiling;
+            }
+        }
+        else
+        {
+            spdlog::warn("DataProvider::LoadRoofLineCeilingsBandwidth - No ridge point "
+                         "found for ceiling type {}",
+                         static_cast<uint32_t>(ceiling.bandwidth_type));       
         }
     }
 }
@@ -5040,43 +5122,51 @@ DataProvider::LoadRoofLineCeilingsBandwidth(WorkloadInfo&        workload,
         ceiling.bandwidth_type =
             static_cast<rocprofvis_controller_roofline_ceiling_bandwidth_type_t>(
                 uint64_data);
-        ROCPROFVIS_ASSERT(bandwidth_ridge.count(ceiling.bandwidth_type) > 0);
-        for(const std::pair<const rocprofvis_controller_roofline_ceiling_compute_type_t,
-                            Point>& ridge : bandwidth_ridge.at(ceiling.bandwidth_type))
+        if(bandwidth_ridge.count(ceiling.bandwidth_type) > 0)
         {
-            ceiling.compute_type = ridge.first;
-            result               = rocprofvis_controller_get_double(
-                roofline_handle, kRPVControllerRooflineCeilingBandwidthXIndexed, j,
-                &double_data);
-            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-            ceiling.position.p1.x = double_data;
-            result                = rocprofvis_controller_get_double(
-                roofline_handle, kRPVControllerRooflineCeilingBandwidthYIndexed, j,
-                &double_data);
-            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-            ceiling.position.p1.y = double_data;
-            ceiling.position.p2   = ridge.second;
-            result                = rocprofvis_controller_get_double(
-                roofline_handle, kRPVControllerRooflineCeilingBandwidthThroughputIndexed,
-                j, &double_data);
-            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-            ceiling.throughput = double_data;
-            workload.roofline.min.x =
-                std::min(workload.roofline.min.x, ceiling.position.p1.x);
-            workload.roofline.min.y =
-                std::min(workload.roofline.min.y, ceiling.position.p1.y);
-            workload.roofline
-                .ceiling_bandwidth[ceiling.bandwidth_type][ceiling.compute_type] =
-                ceiling;
+            for(const std::pair<
+                    const rocprofvis_controller_roofline_ceiling_compute_type_t, Point>&
+                    ridge : bandwidth_ridge.at(ceiling.bandwidth_type))
+            {
+                ceiling.compute_type = ridge.first;
+                result               = rocprofvis_controller_get_double(
+                    roofline_handle, kRPVControllerRooflineCeilingBandwidthXIndexed, j,
+                    &double_data);
+                ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+                ceiling.position.p1.x = double_data;
+                result                = rocprofvis_controller_get_double(
+                    roofline_handle, kRPVControllerRooflineCeilingBandwidthYIndexed, j,
+                    &double_data);
+                ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+                ceiling.position.p1.y = double_data;
+                ceiling.position.p2   = ridge.second;
+                result                = rocprofvis_controller_get_double(
+                    roofline_handle,
+                    kRPVControllerRooflineCeilingBandwidthThroughputIndexed, j,
+                    &double_data);
+                ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+                ceiling.throughput = double_data;
+                workload.roofline.min.x =
+                    std::min(workload.roofline.min.x, ceiling.position.p1.x);
+                workload.roofline.min.y =
+                    std::min(workload.roofline.min.y, ceiling.position.p1.y);
+                workload.roofline
+                    .ceiling_bandwidth[ceiling.bandwidth_type][ceiling.compute_type] =
+                    ceiling;
+            }
+        }
+        else
+        {
+            spdlog::warn("DataProvider::LoadRoofLineCeilingsCompute - No ridge point "
+                         "found for ceiling type {}",
+                         static_cast<uint32_t>(ceiling.compute_type));
         }
     }
 }
 
 inline void
-DataProvider::LoadRoofLineNumKernels(WorkloadInfo&        workload,
-                                     rocprofvis_handle_t* roofline_handle,
-                                     compute_ridge_map&   compute_ridge,
-                                     bandwidth_ridge_map& bandwidth_ridge)
+DataProvider::LoadRoofLineKernels(WorkloadInfo&        workload,
+                                  rocprofvis_handle_t* roofline_handle)
 {
     uint64_t num_entries = 0;
     double   double_data = 0.0;
@@ -5086,34 +5176,43 @@ DataProvider::LoadRoofLineNumKernels(WorkloadInfo&        workload,
     ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
     for(uint64_t j = 0; j < num_entries; j++)
     {
-        KernelInfo::Roofline::Intensity intensity;
-        result = rocprofvis_controller_get_uint64(
-            roofline_handle, kRPVControllerRooflineKernelIntensityTypeIndexed, j,
-            &uint64_data);
-        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-        intensity.type =
-            static_cast<rocprofvis_controller_roofline_kernel_intensity_type_t>(
-                uint64_data);
-        result = rocprofvis_controller_get_double(
-            roofline_handle, kRPVControllerRooflineKernelIntensityXIndexed, j,
-            &double_data);
-        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-        intensity.position.x = double_data;
-        result               = rocprofvis_controller_get_double(
-            roofline_handle, kRPVControllerRooflineKernelIntensityYIndexed, j,
-            &double_data);
-        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-        intensity.position.y = double_data;
         uint32_t kernel_id;
         result = rocprofvis_controller_get_uint64(
             roofline_handle, kRPVControllerRooflineKernelIdIndexed, j, &uint64_data);
         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
         kernel_id = static_cast<uint32_t>(uint64_data);
-        ROCPROFVIS_ASSERT(workload.kernels.count(kernel_id));
-        workload.roofline.max.y = std::max(workload.roofline.max.y, intensity.position.y);
-        workload.roofline.min.y = std::min(workload.roofline.min.y, intensity.position.y);
-        workload.kernels[kernel_id].roofline.intensities[intensity.type] =
-            std::move(intensity);
+        if(workload.kernels.count(kernel_id))
+        {
+            KernelInfo::Roofline::Intensity intensity;
+            result = rocprofvis_controller_get_uint64(
+                roofline_handle, kRPVControllerRooflineKernelIntensityTypeIndexed, j,
+                &uint64_data);
+            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+            intensity.type =
+                static_cast<rocprofvis_controller_roofline_kernel_intensity_type_t>(
+                    uint64_data);
+            result = rocprofvis_controller_get_double(
+                roofline_handle, kRPVControllerRooflineKernelIntensityXIndexed, j,
+                &double_data);
+            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+            intensity.position.x = double_data;
+            result               = rocprofvis_controller_get_double(
+                roofline_handle, kRPVControllerRooflineKernelIntensityYIndexed, j,
+                &double_data);
+            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+            intensity.position.y = double_data;
+            workload.roofline.max.y =
+                std::max(workload.roofline.max.y, intensity.position.y);
+            workload.roofline.min.y =
+                std::min(workload.roofline.min.y, intensity.position.y);
+            workload.kernels[kernel_id].roofline.intensities[intensity.type] =
+                std::move(intensity);
+        }
+        else
+        {
+            spdlog::warn("DataProvider::LoadRoofLineKernels - Unexpected kernel id {}",
+                         kernel_id);
+        }
     }
 }
 

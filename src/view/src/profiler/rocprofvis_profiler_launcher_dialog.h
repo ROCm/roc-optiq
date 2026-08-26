@@ -50,10 +50,34 @@ private:
     {
         std::vector<std::pair<std::string, std::string>> curated_env_vars;
         std::vector<std::pair<std::string, std::string>> env_vars;
+        // Complete argument list for the profiler process, as emitted by the
+        // backend. Both the launch and the command preview read this, so what
+        // is shown is what runs.
         std::vector<std::string>                         argv;
-        std::string                                      profiler_path;
-        std::string                                      profiler_args;
+        rocprofvis_profiler_tool_t                       tool = kRPVProfilerToolNone;
+        // argv[0] as the run will see it: for a local run the absolute path
+        // resolved on this machine, for a remote one what the remote will resolve
+        // (<tool_directory>/<name>, or the bare name for its $PATH). Display only
+        // - the launch passes the tool enum and the controller resolves it again.
+        std::string                                      argv0;
+        // Why local resolution failed, if it did. Always empty for a remote run:
+        // the tool lives on a filesystem this machine cannot search, so this
+        // machine's answer would be about the wrong host.
+        std::string                                      resolve_error;
         std::string                                      command_preview;
+    };
+
+    // Memoized argv[0]. Resolving it is a controller call that searches the
+    // filesystem, so it is not redone for edits that cannot affect it.
+    struct ToolPathCache
+    {
+        rocprofvis_profiler_tool_t tool = kRPVProfilerToolNone;
+        std::string                directory;
+        bool                       ssh       = false;
+        bool                       populated = false;
+
+        std::string argv0;
+        std::string error;
     };
 
     void OnLaunchClicked();
@@ -64,6 +88,7 @@ private:
     void HandleStateTransition(rocprofvis_profiler_state_t new_state);
     void RebuildComposedOutput();
     void RefreshExecutionCache();
+    void RefreshToolPath(bool force);
 
     bool IsSshMode() const
     {
@@ -74,7 +99,14 @@ private:
         return false;
 #endif
     }
-    rocprofvis_profiler_type_t ResolveProfilerType() const;
+    // Forces m_config.tool to be one the current backend actually offers, falling
+    // back to its first tool. Call after anything that can change either side of
+    // that pairing - a backend switch, or loading a profile that may name a tool
+    // this backend does not have (or none at all). Without it the combo could
+    // display one tool while the launch ran another.
+    void SyncToolWithBackend();
+    // Display name of the currently selected tool, for the combo and the title.
+    std::string CurrentToolDisplayName() const;
 
     // Top-level view routing: the dialog is either in "configure" mode (author
     // the launch) or "run" mode (a focused output console shown once a run has
@@ -84,6 +116,9 @@ private:
 
     void RenderToolbar();
     void RenderMainContent();
+    // One line above the command preview: why the tool could not be resolved, or
+    // that a configured tool directory is deciding which build runs.
+    void RenderToolResolutionNotice();
     // Deeper, less-common backend settings, shown in a separate floating window
     // opened from the "Advanced Options..." button.
     void RenderAdvancedWindow();
@@ -118,7 +153,6 @@ private:
     void EnsureRemoteFileBrowser();
 #endif
     void AddRecentTarget(std::string const& exe);
-    std::string GetProfilerPath() const;
 
     AppWindow* m_app_window;
 
@@ -169,15 +203,14 @@ private:
     // Backend system
     std::vector<std::unique_ptr<IProfilerBackend>> m_backends;
     int m_backend_index;
-    int m_tool_index;
 
     // Config
     LaunchConfig m_config;
-    std::string m_profiler_path_override;
     ExecutionCache m_execution_cache;
+    ToolPathCache  m_tool_path;
     // Rebuild m_execution_cache (SaveSettings/flatten/preview - all allocating)
-    // only when inputs may have changed, not every frame. Set on open / backend
-    // switch / preset load, and while the user is actively editing a field.
+    // only when a control reported an actual change, not every frame. Also set
+    // on open / backend switch / preset load.
     bool m_execution_cache_dirty = true;
 
     // Presets

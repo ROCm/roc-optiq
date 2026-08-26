@@ -9,7 +9,7 @@
 Install ROCm Optiq
 ******************
 
-Install ROCm Optiq for Linux, Windows, or macOS using the installation files in the `https://github.com/ROCm/roc-optiq <https://github.com/ROCm/roc-optiq>`_  GitHub repository.
+Install ROCm Optiq for Linux, Windows, or macOS using the installation files on the `release page <https://github.com/ROCm/roc-optiq/releases>`_ of the GitHub repository.
 
 .. _requirements:
 
@@ -183,12 +183,12 @@ The following selector lists all the operating systems and installation methods 
 
    The relevant fields are ``ID`` and ``VERSION_ID``.
 
-Installation
-============
+Install
+=======
 
 .. selected-content:: os=windows
 
-   1. Download the ``.msi`` installer from the `ROCm Optiq GitHub Releases <https://github.com/ROCm/roc-optiq/releases>`__ page and follow the instructions in the install wizard.
+   1. Download the ``.msi`` installer from the `ROCm Optiq GitHub Releases <https://github.com/ROCm/roc-optiq/releases/tag/v1.0.0-optiq>`__ page and follow the instructions in the install wizard.
 
       .. image:: ../images/wizard.png
          :width: 500
@@ -303,7 +303,7 @@ Installation
 
 .. selected-content:: os=macos
 
-   1. Download the ``.zip`` from the `ROCm Optiq GitHub Releases <https://github.com/ROCm/roc-optiq/releases>`__ page.
+   1. Download the ``.zip`` from the `ROCm Optiq GitHub Releases <https://github.com/ROCm/roc-optiq/releases/tag/v1.0.0-optiq>`__ page.
    2. Unzip it, then drag and drop ``roc-optiq.app`` from the extracted folder to the ``Applications`` folder.
    3. Launch ROCm Optiq from **Applications**.
 

@@ -128,9 +128,8 @@ AnalysisModel::RegisterTrack(const TrackInfo& track)
     }
     else
     {
-        // Refresh the cached pointer: a graph-view rebuild destroys and recreates every
-        // TrackInfo, but the stat store persists (keyed by track id). Without this the cached
-        // pointer would dangle and SetCounter/QueueStatistics would read freed memory.
+        // Refresh the cached track pointer: a graph-view rebuild recreates every TrackInfo, but
+        // the stat store persists by id - without this the pointer would dangle (use-after-free).
         store        = &m_track_stats.at(track.id);
         store->track = &track;
     }

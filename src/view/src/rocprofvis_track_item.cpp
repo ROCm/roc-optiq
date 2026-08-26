@@ -97,8 +97,7 @@ TrackItem::TrackItem(DataProvider& dp, uint64_t id, TimelineTrackOptions& track_
                      std::shared_ptr<TimelineSelection>  timeline_selection)
 : m_track_metadata(nullptr)
 , m_track_statistics(nullptr)
-// Start dirty so a freshly-created track item applies an already-kReady analysis stat on its
-// first Update (after a rebuild the stat survives but the pill label must be re-applied).
+// Start dirty so a rebuilt item re-applies its surviving kReady pill on the first Update.
 , m_track_statistics_dirty(true)
 , m_track_id(id)
 , m_track_content_height(0.0f)
@@ -1115,9 +1114,8 @@ TrackItem::RequestAnalysis()
                 start_ts = m_tpt->GetVMinX();
                 end_ts   = m_tpt->GetVMaxX();
             }
-            // Clamp to the track's own [min_ts, max_ts]. In a merged view a track only has
-            // data in its window; requesting the full global range yields an empty slice
-            // (OutOfRange) for shorter files, so the pill never populates.
+            // Clamp to the track's own [min_ts, max_ts]: in a merged view the global range past
+            // a shorter file's window yields an empty (OutOfRange) slice, so the pill never fills.
             if(m_track_metadata)
             {
                 start_ts = std::max(start_ts, m_track_metadata->min_ts);

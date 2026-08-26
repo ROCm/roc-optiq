@@ -771,9 +771,8 @@ rocprofvis_dm_result_t RocprofDatabase::PopulateUnusedAgents(uint32_t db_instanc
     rocprofvis_dm_result_t result = kRocProfVisDmResultSuccess;
     const char* table_name = "Agent";
     TableCache* table = (TableCache*)CachedTables(db_instance)->GetTableHandle(table_name);
-    // Collect the (node, agent) pairs actually used by this instance's device tracks in a
-    // single pass, so the per-agent-row check below is O(log) instead of re-scanning every
-    // track for each agent row (which was O(agents * total_tracks) and grew with each add).
+    // Precompute the (node, agent) pairs used by device tracks once, so the per-agent-row check
+    // below is O(log) instead of O(agents * tracks) (which grew with every add).
     std::set<std::pair<uint64_t, uint64_t>> in_use_agents;
     for (int track_id = 0; track_id < NumTracks(); track_id++)
     {

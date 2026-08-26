@@ -341,7 +341,6 @@ DataProvider::SetGraphOrder(const std::vector<uint64_t>& ordered_ids)
         return false;
     }
     TimelineModel& tlm = m_model.GetTimeline();
-    // Place each graph at its target position in one pass.
     for(size_t i = 0; i < ordered_ids.size(); i++)
     {
         const TrackInfo* metadata = tlm.GetTrack(ordered_ids[i]);
@@ -621,9 +620,8 @@ DataProvider::AddTraceSource(const std::string& file_path)
         return false;
     }
 
-    // QUIESCE: cancel + await + free all in-flight fetch requests so no worker thread is
-    // reading the trace while the controller injects the new file. This is the critical
-    // step - without it, per-frame track/graph fetches race the trace mutation and crash.
+    // Quiesce: cancel + await + free all in-flight fetches before the controller injects the new
+    // file, so no worker thread races the trace mutation (which would crash).
     FreeRequests();
 
     rocprofvis_controller_future_t* future = rocprofvis_controller_future_alloc();
@@ -793,9 +791,8 @@ DataProvider::RemoveTraceSource(const std::string& file_path)
         return false;
     }
 
-    // QUIESCE: cancel + await + free all in-flight fetch requests so no worker thread is
-    // reading the trace (or holding pooled data for a track we are about to free) while the
-    // controller mutates it.
+    // Quiesce: cancel + await + free all in-flight fetches before the controller mutates the
+    // trace, so no worker thread reads (or holds pooled data for) a track we are about to free.
     FreeRequests();
 
     rocprofvis_controller_future_t* future = rocprofvis_controller_future_alloc();
@@ -1272,11 +1269,9 @@ DataProvider::HandleLoadTrackMetaData()
     tlm.FreeAllTrackData();
     uint64_t num_graphs = tlm.GetTrackCount();
 
-    // A source badge only helps when 2+ distinct source files are merged into this view. Rather
-    // than a separate controller pass to detect that (the main loop below already reads each
-    // track's file id), collect the distinct file ids here and resolve each file's badge once,
-    // then stamp the tracks in a cheap in-memory post-pass. Robust for combined opens and
-    // in-place add/remove alike, since the controller keys each track by its own source file id.
+    // A source badge only applies when 2+ files merge. Collect the distinct file ids in the main
+    // loop below (which already reads each track's file id) and resolve each file's badge once,
+    // then stamp tracks in a cheap in-memory post-pass - no extra controller round-trips.
     std::unordered_set<uint64_t>                    distinct_source_files;
     std::unordered_map<uint64_t, CompareSourceInfo> source_badge_by_file;
 
@@ -1501,10 +1496,8 @@ DataProvider::HandleLoadTrackMetaData()
             }
             else
             {
-                // Merged view candidate. Record this file id and resolve its badge (file name +
-                // full path) once per distinct file; the badge is actually applied below only if
-                // 2+ files turn out to have contributed. The source path is thus read at most
-                // once per file instead of once per track.
+                // Record this file id and resolve its badge once per distinct file (source path
+                // read once per file, not per track); applied below only if 2+ files contributed.
                 distinct_source_files.insert(track_info.file_id);
                 if(source_badge_by_file.find(track_info.file_id) ==
                    source_badge_by_file.end())

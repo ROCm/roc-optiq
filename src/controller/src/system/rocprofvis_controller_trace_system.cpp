@@ -593,7 +593,6 @@ rocprofvis_result_t SystemTrace::RemoveTraceSource(Future& future, const std::st
                                 }
                             }
 
-                            // Remove and delete the track.
                             for(auto it = m_tracks.begin(); it != m_tracks.end(); ++it)
                             {
                                 if(*it == track)

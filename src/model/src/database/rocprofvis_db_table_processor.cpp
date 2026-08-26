@@ -71,9 +71,8 @@ namespace DataModel
     {
         m_timer.pause();
         rocprofvis_dm_result_t result = kRocProfVisDmResultInvalidParameter;
-        // Per-phase wall-clock, so a slow merged fetch can be attributed to the DB fetch vs.
-        // the in-memory merge vs. the filter/sort/emit stage. Logged once per call ([PROFILE],
-        // debug level) - it is one line per fetch, not per row, so it does not spam the log.
+        // Per-phase wall-clock, logged once per fetch ([PROFILE], debug) to attribute a slow
+        // merged fetch to DB fetch vs. merge vs. filter/sort/emit.
         long long profile_fetch_ms   = 0;
         long long profile_merge_ms   = 0;
         long long profile_process_ms = 0;
@@ -111,13 +110,9 @@ namespace DataModel
                 std::vector<std::pair<DbInstance*, std::string>> new_queries;
                 for (const std::pair<const uint32_t, std::unordered_map<std::string, rocprofvis_db_compound_query_info>>& track : queries)
                 {
-                    // Only (re)fetch tracks newly added to the selection. Rows for tracks that
-                    // were already selected still live in m_merged_table and are reused; removed
-                    // tracks are dropped by RemoveRowsForSetOfTracks below. So adding or removing
-                    // one small track no longer re-queries every selected track. When the query
-                    // itself changed, added_tracks == m_tracks-invalidated set (all tracks, since
-                    // query_updated forces removed=all/added=all above), so this still refetches
-                    // everything - which is required for correctness when the SQL changes.
+                    // Only (re)fetch newly added tracks; existing tracks' rows stay in
+                    // m_merged_table and removed tracks are dropped below. On a query change
+                    // added_tracks is all tracks, so the SQL change still refetches everything.
                     if (added_tracks.find(track.first) == added_tracks.end())
                     {
                         continue;
@@ -293,8 +288,7 @@ namespace DataModel
 
         if (row_index < m_merged_table.RowCount())
         { 
-            // Reference, not a copy: GetMergedColumns() returns a const& to a vector of
-            // MergedColumnDef (each holds a std::string), and this runs once per emitted row.
+            // const& (not a copy): runs once per emitted row; MergedColumnDef owns a std::string.
             const auto& columns = m_merged_table.GetMergedColumns();
             uint8_t op = m_merged_table.GetOperationValue(row_index);
             int column_counter = 0;
@@ -528,10 +522,8 @@ namespace DataModel
                 ROCPROFVIS_ASSERT_MSG_RETURN(db_instance != nullptr, ERROR_NODE_KEY_CANNOT_BE_NULL, );
                 if (row_index < m_merged_table.RowCount())
                 {
-                    // Reference, not a copy: this lambda is called for every row of the whole
-                    // merged table during the (multithreaded) filter pass, so copying the
-                    // column vector (each MergedColumnDef owns a std::string) per row was a
-                    // large, needless allocation cost. GetMergedColumns() returns a const&.
+                    // const& (not a copy): called for every row during the filter pass, so
+                    // copying this vector (each MergedColumnDef owns a std::string) was costly.
                     const auto& columns = m_merged_table.GetMergedColumns();
                     uint8_t op = m_merged_table.GetOperationValue(row_index);
                     for (int column_index = 0; column_index < m_merged_table.MergedColumnCount(); column_index++)

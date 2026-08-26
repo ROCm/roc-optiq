@@ -1126,7 +1126,6 @@ AppWindow::OpenCombined(const std::vector<std::string>& files)
     {
         return;
     }
-    // A single file is just a normal open; merging only applies to 2+ files.
     if(files.size() == 1)
     {
         OpenFile(files.front());

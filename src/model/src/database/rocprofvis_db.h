@@ -533,7 +533,6 @@ class Database
         // True unless the instance has been removed in place. Consulted by steady-state read
         // paths (queries/slices) so a tombstoned instance is skipped even outside a load.
         bool IsInstanceActive(uint32_t file_index) const { return m_removed_file_indices.count(file_index) == 0; }
-        // Tombstone a file-node index so it is skipped by all subsequent processing.
         void MarkFileIndexRemoved(uint32_t file_index) { m_removed_file_indices.insert(file_index); }
         bool IsIncrementalLoad() const { return !m_load_only_file_indices.empty(); }
         // The GuidIndices of the instances that the current metadata read will process.

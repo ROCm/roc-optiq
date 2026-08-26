@@ -2853,12 +2853,9 @@ TimelineView::RenderTraceView()
         const auto   now  = std::chrono::steady_clock::now();
         if(m_had_time_range_selection)
         {
-            // The selection was just cleared. The analysis range still holds that (now removed)
-            // selection - the selection handler committed it, bypassing this debounce's local
-            // bookkeeping - so the visible-range bookkeeping below can wrongly conclude "nothing
-            // changed". Clearing a selection is a discrete action (not a continuous drag), so
-            // commit the visible range immediately - no debounce delay - to refresh pills back
-            // to visible-range stats without a perceptible lag.
+            // Selection just cleared: the analysis range still holds it (committed by the
+            // selection handler, outside this debounce), so commit the visible range immediately
+            // - a discrete action needs no debounce - to revert pills to visible-range stats.
             m_analysis_range_min        = vmin;
             m_analysis_range_max        = vmax;
             m_analysis_range_changed_at = now;

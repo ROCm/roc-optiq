@@ -272,9 +272,8 @@ QueryManager::BuildCompoundQuery(
     size_t thread_count = std::thread::hardware_concurrency();
     bool   event_table  = false;
 
-    // Total event count across all operations. It is used to size each big track's parallel
-    // split proportionally, but it does not depend on the track, so compute it once here rather
-    // than re-summing it for every large track inside the loop below.
+    // Total events across all operations, used to size each big track's parallel split. Track-
+    // independent, so compute once here rather than re-summing per large track below.
     uint64_t total_events = 0;
     for(int op = kRocProfVisDmOperationLaunch; op < kRocProfVisDmNumOperation; op++)
     {

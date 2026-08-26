@@ -60,17 +60,20 @@ get_content_scale(GLFWwindow* window)
 
     if(scale <= 1.0f)
     {
-        GLFWmonitor*       monitor  = RocProfVis::View::get_current_monitor(window);
-        const GLFWvidmode* mode     = glfwGetVideoMode(monitor);
-        int                width_mm = 0;
-        int                height_mm = 0;
-        glfwGetMonitorPhysicalSize(monitor, &width_mm, &height_mm);
-
-        if(mode != nullptr && width_mm > 0)
+        GLFWmonitor* monitor = RocProfVis::View::get_current_monitor(window);
+        if(monitor != nullptr)
         {
-            const float dpi = (static_cast<float>(mode->width) * MM_PER_INCH) /
-                              static_cast<float>(width_mm);
-            scale = std::floor(dpi / BASE_DPI + SNAP_BIAS);
+            const GLFWvidmode* mode      = glfwGetVideoMode(monitor);
+            int                width_mm  = 0;
+            int                height_mm = 0;
+            glfwGetMonitorPhysicalSize(monitor, &width_mm, &height_mm);
+
+            if(mode != nullptr && width_mm > 0)
+            {
+                const float dpi = (static_cast<float>(mode->width) * MM_PER_INCH) /
+                                  static_cast<float>(width_mm);
+                scale = std::floor(dpi / BASE_DPI + SNAP_BIAS);
+            }
         }
     }
 

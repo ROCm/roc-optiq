@@ -33,6 +33,7 @@ You can adjust the settings in your ROCm Compute Profiler and ROCm Systems Profi
 Select **Edit** > **Preferences** to adjust these global settings for ROCm Optiq from the **Settings** menu: 
 
 - The application theme display (Light or Dark mode).
+- Disabling **Compact topology sidebar** in the **Display Settings** tab controls whether the |eye| (show/hide track) and |scroll| (go to track) icons display in the sidebar of the :ref:`topology`.
 - The font scaling: automatic based on the display DPI, or customized using the font size control:
 
   .. image:: ../images/settings.png
@@ -50,8 +51,6 @@ Select **Edit** > **Preferences** to adjust these global settings for ROCm Optiq
   .. image:: ../images/hotkeys.png
      :width: 600
      :alt: ROCm Optiq Settings panel showing the hotkey configuration table for customizing keyboard shortcuts
-
-- Disabling **Compact topology sidebar** in the **Display Settings** tab controls whether the |eye| (show/hide track) and |scroll| (go to track) icons display in the sidebar of the :ref:`topology`.
 
 Show/hide panels
 ================

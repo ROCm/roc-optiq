@@ -200,7 +200,7 @@ Installation
          :width: 500
          :alt: ROCm Optiq installer license agreement screen
 
-   3. Launch ``roc-optiq.msi`` from the installation directory or the Start menu.
+   3. Launch ``roc-optiq.exe`` from the installation directory or the Start menu.
 
 .. selected-content:: os=linux distro=ubuntu method=apt
    :heading: Install using apt

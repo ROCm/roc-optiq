@@ -312,7 +312,7 @@ This section provides an interface for multiple data perspectives, offering gran
      - Right-click on a table row and select **Go To Event** to navigate to the **Timeline View** to the highlighted event.
      - :ref:`time-range-filter` using the **Timeline View** to filter the rows to data contained within the selected time range.
 
-- **Sample Table**: Presents all performance counter data points associated with the selected tracks. Similar to the **Event Table**, it supports time-range selection and SQL-like query capabilities for detailed performance analysis. It supports the **Aggregate by Column** drop-down to group the results by the selected column.
+- **Sample Table**: Presents all performance counter data points associated with the selected tracks. Similar to the **Event Table**, it supports time-range selection and SQL-like query capabilities for detailed performance analysis. It supports the **Aggregate** drop-down to group the results by the selected column.
 - **Event Details**: Shows extended information about the event that is not shown in the timeline or the **Event Table**. It shows raw database information such as id, category, duration, associated queue/stream, correlation IDs and API method parameters. It also shows flow, call stack information, and function call arguments, if available.  
 
   - The **Flow Data** displays all events logically connected to the selected event in the execution sequence. You can navigate any of the connected events on the timeline, with vertical track centering and highlight feedback, by right clicking and selecting **Go To Event**. The navigation makes it easier to follow the execution flow across queues and tracks. 
@@ -325,7 +325,7 @@ This section provides an interface for multiple data perspectives, offering gran
   - You can right-click a row or cell of **Track Details** to **Copy Row Data** or **Copy Cell Data**. 
 
 - **Annotations**: Displays user-created annotations, enabling easier navigation across critical points within large traces, enhancing collaboration and knowledge sharing. See :ref:`annotation` for more info.
-- **Top Events**: Provides analysis for the events of each operation type (instrumented Thread, Sampled thread, Dispatch, memory allocation, memory copy) from the selected tracks aggregated by event name. Available metrics are event count (invocations) and total/average/min/max duration. If you select tracks of different types, each type will be shown in a separate table. Each table has its own System Table instance and can be sorted individually. If you make a time-range selection, Top Events are limited to that selected time-range. 
+- **Top Events**: Provides analysis for the events of each operation type (Instrumented Thread, Sampled Thread, Dispatch, Memory Allocation, Memory Copy) from the selected tracks aggregated by event name. Available metrics are event count (invocations) and total/average/min/max duration. If you select tracks of different types, each type will be shown in a separate table. Each table has its own System Table instance and can be sorted individually. If you make a time-range selection, Top Events are limited to that selected time-range. 
 
   .. image:: ../images/top-events.png
      :width: 600

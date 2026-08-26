@@ -20,7 +20,7 @@ View ROCm Systems Profiler trace data in ROCm Optiq
 .. |make| image:: ../images/make-selection.png
 .. |remove| image:: ../images/remove-time.png
 
-ROCm Optiq provides a detailed view of a *trace*: a complete record of profiling data captured during an application run, including all event tracks, sample counters, and metadata. It captures what happened, when it happened, and often how long it took.
+ROCm Optiq provides a detailed view of a *trace*: a complete record of profiling data captured during an application run, including all event tracks, sample counters, and metadata.
 
 Traces contain event tracks and counter tracks:
 
@@ -325,7 +325,7 @@ This section provides an interface for multiple data perspectives, offering gran
   - You can right-click a row or cell of **Track Details** to **Copy Row Data** or **Copy Cell Data**. 
 
 - **Annotations**: Displays user-created annotations, enabling easier navigation across critical points within large traces, enhancing collaboration and knowledge sharing. See :ref:`annotation` for more info.
-- **Top Events**: Provides analysis for the events of each operation type (Instrumented Thread, Sampled Thread, Dispatch, Memory Allocation, Memory Copy) from the selected tracks aggregated by event name. Available metrics are event count (invocations) and total/average/min/max duration. If you select tracks of different types, each type will be shown in a separate table. Each table has its own System Table instance and can be sorted individually. If you make a time-range selection, Top Events are limited to that selected time-range. 
+- **Top Events**: Provides analysis for the events of each operation type (Instrumented Thread, Sampled Thread, Dispatch, Memory Allocation, Memory Copy) from the selected tracks aggregated by event name. Available metrics are event count (invocations) and total/average/min/max duration. If you select tracks of different types, each type will be shown in a separate table. If you make a time-range selection, Top Events are limited to that selected time-range. 
 
   .. image:: ../images/top-events.png
      :width: 600

@@ -12,7 +12,7 @@ View ROCm Compute Profiler analysis data in ROCm Optiq
 .. |gear| image:: ../images/gear.png
 .. |hideTable| image:: ../images/hideTable.png
 
-ROCm Optiq provides intuitive, interactive profiling analysis for compute workloads by moving from a high-level performance summary to detailed kernel- and metric-level analysis. 
+ROCm Optiq provides intuitive, interactive profiling analysis for compute workloads by moving from a high-level performance summary to detailed kernel-level analysis. 
 It enables rapid identification of performance hotspots and interactive exploration of kernel-level metrics for a profiled workload.
 
 .. note::
@@ -114,8 +114,6 @@ Showing where kernels are positioned relative to these rooflines helps determine
   .. image:: ../images/Roofline-legend.png
      :width: 400
      :alt: Roofline chart legend and menu repositioned to the inside bottom-right of the chart area
-
-- Roofline chart now supports LDS (Local Data Share) Intensity points in addition to L1, L2, and HBM. Use the chart menu to show or hide LDS intensity markers. This requires ROCm Compute Profiler analysis database schema 1.4.0 with non-zero ``lds_cache_data`` (ROCm 7.14.0 or later). 
 
 
 Summary View -- System Speed-of-Light

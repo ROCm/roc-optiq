@@ -30,11 +30,12 @@ Change settings
 
 You can adjust the settings in your ROCm Compute Profiler and ROCm Systems Profiler projects.
 
-Select **Edit** > **Preferences** to adjust these global settings for ROCm Optiq from the **Settings** menu: 
+Use the **Edit** > **Preferences** menu to open the **Settings** dialog. The following settings can be adjusted: 
 
-- The application theme display (Light or Dark mode).
-- Disabling **Compact topology sidebar** in the **Display Settings** tab controls whether the |eye| (show/hide track) and |scroll| (go to track) icons display in the sidebar of the :ref:`topology`.
-- The font scaling: automatic based on the display DPI, or customized using the font size control:
+- The application theme (Light or Dark).
+- The multi-node decorators visibility. This controls whether to enable node colors in the:ref:`topology` view and node labels in the track descriptions.
+- The topology sidebar icon button visibility. This controls whether the |eye| (show/hide track) and |scroll| (go to track) icon buttons display in the sidebar of the :ref:`topology`.
+- The font size.
 
   .. image:: ../images/settings.png
      :width: 600
@@ -111,10 +112,9 @@ To add an annotation:
 
 .. tip::
 
-  - Edit or delete the annotation by clicking |pen|.
   - View the complete list of annotations in the **Annotations** tab of the :ref:`advanced` section.
   - Check the **Visibility** option in the **Annotations** tab to toggle the visibility of individual annotations.
-  - Clicking a row in the annotations list displays the selected annotation.
+  - Clicking a row in the annotations list brings the selected annotation into view on the timeline.
 
 Create bookmarks
 ----------------
@@ -191,16 +191,16 @@ Chain mode displays events in a linked sequence, emphasizing dependencies and ex
 .. image:: ../images/chain-mode.png
    :width: 800
    :alt: Timeline View in Chain mode showing events linked in sequence to emphasize dependencies and execution order
-
-Render mode shows events in a fan-out style, highlighting parallelism and branching. This helps visualize concurrency and how multiple operations originate from a single source.
+   
+Fan mode shows events in a fan-out style, highlighting parallelism and branching. This helps visualize concurrency and how multiple operations originate from a single source.
 
 .. image:: ../images/fan-mode.png
    :width: 800
-   :alt: Timeline View in Render (fan) mode showing events fanning out from a single source to highlight parallelism
+   :alt: Timeline View in Fan mode showing events fanning out from a single source to highlight parallelism
 
 .. note::
 
-  Chain mode and Render mode are visualization modes for relations. They don't represent the actual kernel scheduling flow.
+  Chain mode and Fan mode are visualization modes for relations. They don't represent the actual kernel scheduling flow.
 
 Save a project file
 -------------------

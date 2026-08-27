@@ -14,6 +14,8 @@
  * usually park a fetch for the panel to poll. That is the line worth drawing,
  * because it is also the line between a tool that can run on any trace and one
  * that has to reason about request ids and pending rows.
+ * rocprofvis_ai_script_tools.cpp is a third case: the model writes Python that
+ * computes the answer, so what comes back is a conclusion rather than rows.
  *
  * Each body file owns its own handler table and hands it to the dispatcher in
  * rocprofvis_ai_tools.cpp, so a tool body stays next to the entry that
@@ -62,10 +64,19 @@ struct AssistantToolTable
     size_t                    count   = 0;
 };
 
-// The tables StartAssistantTool searches. Defined by the two body files, so
-// neither of them has to know the other exists.
+// The tables StartAssistantTool searches. Defined by the body files, so none of
+// them has to know the others exist.
 AssistantToolTable GetAssistantUiToolHandlers();
 AssistantToolTable GetAssistantDataToolHandlers();
+// Empty when scripting is not built in, which is how the tool disappears
+// without the dispatcher knowing anything about the option.
+AssistantToolTable GetAssistantScriptToolHandlers();
+
+// Formats a finished script run, or the decision that stopped it. Lives beside
+// the tool that started it, and is reached through FinishAssistantFetch like
+// every other fetch kind. AssistantScriptFetchPending is the panel-facing half
+// and is declared in rocprofvis_ai_tools.h.
+std::string FinishAssistantScriptFetch(const AssistantToolContext& context);
 
 // --- Helpers both halves need, defined beside the dispatcher ---------------
 

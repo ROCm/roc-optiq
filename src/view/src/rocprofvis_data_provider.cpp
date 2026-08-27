@@ -1404,6 +1404,13 @@ DataProvider::ExecuteScript(const std::string& source, const std::vector<uint64_
         return false;
     }
 
+    // The previous run's output is not this run's output, and a caller that
+    // polls could otherwise read the old text as though the new script had
+    // already answered.
+    m_script_result_text.clear();
+    m_script_result_error.clear();
+    m_script_result_ok = false;
+
     rocprofvis_controller_arguments_t* context =
         BuildScriptContext(track_ids, start_ts, end_ts);
     rocprofvis_controller_future_t*        future        = rocprofvis_controller_future_alloc();
@@ -1468,8 +1475,19 @@ DataProvider::ProcessExecuteScriptRequest(RequestInfo& req)
         rocprofvis_controller_arguments_free(req.request_args);
         req.request_args = nullptr;
     }
+    m_script_result_text  = text;
+    m_script_result_error = error;
+    m_script_result_ok    = success;
     EventManager::GetInstance()->AddEvent(std::make_shared<ScriptExecuteCompleteEvent>(
         success, text, error, GetTraceFilePath()));
+}
+
+bool
+DataProvider::GetLastScriptResult(std::string& text_out, std::string& error_out) const
+{
+    text_out  = m_script_result_text;
+    error_out = m_script_result_error;
+    return m_script_result_ok;
 }
 #endif
 

@@ -86,6 +86,9 @@ private:
         std::string           tool_name;
         std::string           prefix;
         std::chrono::steady_clock::time_point started;
+        // Zero takes the default fetch deadline. A tool waiting on the user
+        // rather than on a query sets its own, much longer.
+        uint32_t              timeout_seconds = 0;
     };
 
     AssistantPanel();

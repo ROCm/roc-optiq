@@ -40,7 +40,10 @@ enum class AssistantFetchKind
     // counter samples, and search results.
     kDataTable,
     kEventDetails,
-    kTrackStatistics
+    kTrackStatistics,
+    // A Python analysis script, which answers with its own text rather than
+    // rows to format.
+    kScript
 };
 
 // What the tools may touch on the trace in front. Rebuilt for every call, so it
@@ -86,6 +89,9 @@ struct AssistantToolStartResult
     // When true, replace the stacked follow-up buttons under the transcript.
     bool                     set_next_steps = false;
     std::vector<std::string> next_steps;
+    // How long the panel waits before calling this a timeout. Zero takes the
+    // default, which suits a query; a tool waiting on the user needs longer.
+    uint32_t                 timeout_seconds = 0;
 };
 
 // One track's row from the minimap, in [0,1]. The rows of a set share one
@@ -113,6 +119,12 @@ std::string BuildAssistantBriefing(const AssistantToolContext& context);
 AssistantToolStartResult StartAssistantTool(const AssistantToolContext& context,
                                             const std::string&          tool_name,
                                             const std::string&          arguments_json);
+
+// Whether a parked kScript fetch is still waiting - on the user reading the
+// script, or on the run they approved. That wait has no request id behind it,
+// so the panel asks here rather than polling the data provider. Always false
+// when scripting is not built in.
+bool AssistantScriptFetchPending(const AssistantToolContext& context);
 
 // Formats the rows of a fetch that has landed.
 std::string FinishAssistantFetch(const AssistantToolContext& context,

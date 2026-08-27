@@ -48,6 +48,9 @@ const AssistantToolLabel ASSISTANT_TOOL_LABELS[] = {
     { "measure", "Measuring..." },
     { "reset_view", "Resetting the view..." },
     { "offer_next_steps", "Offering next steps..." },
+#ifdef ROCPROFVIS_ENABLE_SCRIPTING
+    { "run_analysis_script", "Running an analysis script..." },
+#endif
 };
 
 // Builds a JSON string array, for the enum of a tool parameter.
@@ -431,6 +434,58 @@ BuildAssistantToolsJson()
             "as the last tool of an investigation, then write your answer in the "
             "response after it. Do not list those same options in the prose.",
             next_params);
+
+#ifdef ROCPROFVIS_ENABLE_SCRIPTING
+    // This description is the only account the model gets of what a script may
+    // use. Anything left out of it gets invented, so it names the whole surface
+    // rather than summarizing it.
+    jt::Json script_params = ObjectParams();
+    AddParam(script_params, "script", "string",
+             "Python source, shown to the user before it runs. Report findings "
+             "with optiq.result.text(...); nothing else is returned.");
+    script_params["required"][0] = "script";
+    AddTool(tools, 20, "run_analysis_script",
+            "Offer a Python script that analyses this trace. It does not run on "
+            "its own: the editor opens with your source and the user presses Run "
+            "or Reject, so write it to be read as well as executed - clear names, "
+            "and a comment where the intent is not obvious. You get back what it "
+            "computed, or that they declined.\n"
+            "Use it when the answer needs arithmetic across many rows - gaps "
+            "between events, totals, percentiles, overlap between two tracks, "
+            "per-name rollups, call-depth analysis - because one script costs a "
+            "fraction of paging the same rows back through the other tools. For a "
+            "single lookup the other tools are cheaper.\n"
+            "Available inside the script, and nothing else: optiq.selection.tracks, "
+            "optiq.selection.start, optiq.selection.end, optiq.trace.tracks, and "
+            "optiq.result.text(str), which is the only way to report anything. A "
+            "track has id, type, name, sub_name, min_time, max_time, num_entries, "
+            "and events(start=None, end=None). An event has id, start, end, level "
+            "(nesting depth, 0 on samples), name, category, and value (counter "
+            "reading, None on interval events). optiq.table() opens a private query "
+            "table with fetch(tracks=, start=, end=, where=, group=, sort_column=, "
+            "sort_order=, start_index=, count=, type='events' or 'samples') "
+            "returning a list of dicts keyed by column name. Constants: "
+            "optiq.TRACK_TYPE_EVENTS, optiq.TRACK_TYPE_SAMPLES, "
+            "optiq.SORT_ASCENDING, optiq.SORT_DESCENDING.\n"
+            "The Python is ordinary and most of it works: def, class, "
+            "dataclasses, comprehensions, generators, lambda, f-strings, "
+            "try/except, and print(...), which writes a line to the result just "
+            "like optiq.result.text. math, statistics, json, re, itertools, "
+            "functools, operator, collections, heapq, decimal, fractions, "
+            "dataclasses, typing, enum, datetime, textwrap and string are "
+            "already imported - use them without an import line.\n"
+            "What is not there: open, os, sys, subprocess, pathlib, numpy, "
+            "pandas, and any other third-party package; also eval, exec, "
+            "getattr, globals, input and compile. Importing anything outside the "
+            "list above raises ImportError. There is no file, network, or shell "
+            "access of any kind, so do not write a script that saves, loads, or "
+            "downloads - report the numbers instead.\n"
+            "A script is stopped after 30 seconds, so narrow the window and "
+            "compute rather than walking every event in the trace. If it raises, "
+            "the traceback comes back to you naming the line: fix that line and "
+            "offer it again.",
+            script_params);
+#endif
 
     return tools;
 }

@@ -3,6 +3,7 @@
 
 #include "rocprofvis_script_editor.h"
 
+#include <algorithm>
 #include <cfloat>
 #include <fstream>
 #include <iterator>
@@ -11,16 +12,16 @@
 
 #include "imgui.h"
 
+#include "icons/rocprovfis_icon_defines.h"
+#include "model/rocprofvis_timeline_model.h"
 #include "rocprofvis_appwindow.h"
 #include "rocprofvis_data_provider.h"
 #include "rocprofvis_events.h"
+#include "rocprofvis_font_manager.h"
 #include "rocprofvis_notification_manager.h"
-#include "rocprofvis_project.h"
 #include "rocprofvis_requests.h"
-#include "rocprofvis_root_view.h"
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_timeline_selection.h"
-#include "rocprofvis_trace_view.h"
 #include "widgets/rocprofvis_gui_helpers.h"
 
 namespace RocProfVis
@@ -28,12 +29,25 @@ namespace RocProfVis
 namespace View
 {
 
-constexpr float SCRIPT_EDITOR_DEFAULT_WIDTH  = 760.0f;
-constexpr float SCRIPT_EDITOR_DEFAULT_HEIGHT = 520.0f;
-constexpr float SCRIPT_EDITOR_MIN_WIDTH      = 420.0f;
-constexpr float SCRIPT_EDITOR_MIN_HEIGHT     = 280.0f;
-constexpr float SCRIPT_EDITOR_OUTPUT_HEIGHT  = 160.0f;
-constexpr float SCRIPT_EDITOR_SOURCE_MIN_HEIGHT = 80.0f;
+// Compact Ask Optiq vocabulary: same cards, less chrome, so Source keeps the
+// vertical room. Padding is intentionally tighter than the assistant dock.
+constexpr ImVec2 SCRIPT_WINDOW_PADDING        = ImVec2(10.0f, 8.0f);
+constexpr ImVec2 SCRIPT_CARD_PADDING          = ImVec2(10.0f, 6.0f);
+constexpr ImVec2 SCRIPT_ITEM_SPACING          = ImVec2(8.0f, 6.0f);
+constexpr ImVec2 SCRIPT_BUTTON_PADDING        = ImVec2(8.0f, 3.0f);
+constexpr float  SCRIPT_HEADER_ICON_SCALE     = 0.72f;
+constexpr float  SCRIPT_ACTION_ICON_SCALE     = 0.48f;
+constexpr float  SCRIPT_EDITOR_INSET_ROUNDING = 5.0f;
+constexpr float  SCRIPT_WORKSPACE_GAP         = 8.0f;
+constexpr float  SCRIPT_TWO_COLUMN_MIN_WIDTH  = 720.0f;
+constexpr float  SCRIPT_RESULT_WIDTH_RATIO    = 0.34f;
+constexpr float  SCRIPT_RESULT_MIN_WIDTH      = 260.0f;
+constexpr float  SCRIPT_RESULT_MAX_WIDTH      = 380.0f;
+constexpr float  SCRIPT_STACKED_SOURCE_RATIO  = 0.66f;
+constexpr float  SCRIPT_DOT_RADIUS            = 2.0f;
+constexpr int    SCRIPT_DOT_COUNT             = 3;
+constexpr float  SCRIPT_DOT_SPACING           = 3.0f;
+constexpr float  SCRIPT_DOT_SPEED             = 5.0f;
 
 // Even-spacing sample from SCRIPTING.md so the first Run does something
 // visible against a loaded system trace.
@@ -60,31 +74,16 @@ char const* const kDefaultScript =
     "        optiq.result.text('max_dev=' + str(max_dev))\n"
     "        optiq.result.text('even' if even else 'uneven')\n";
 
-ScriptEditor* ScriptEditor::s_instance = nullptr;
-
-ScriptEditor*
-ScriptEditor::GetInstance()
-{
-    if(!s_instance)
-    {
-        s_instance = new ScriptEditor();
-    }
-    return s_instance;
-}
-
-void
-ScriptEditor::DestroyInstance()
-{
-    delete s_instance;
-    s_instance = nullptr;
-}
-
-ScriptEditor::ScriptEditor()
-: m_visible(false)
+ScriptEditor::ScriptEditor(DataProvider&                      data_provider,
+                           std::shared_ptr<TimelineSelection> timeline_selection)
+: m_data_provider(data_provider)
+, m_timeline_selection(timeline_selection)
 , m_running(false)
 , m_progress_percent(0)
 , m_source(kDefaultScript)
-, m_status("Idle")
+, m_output_is_error(false)
+, m_status("Ready")
+, m_approval(ScriptApproval::kNone)
 , m_complete_token(EventManager::InvalidSubscriptionToken)
 , m_progress_token(EventManager::InvalidSubscriptionToken)
 {
@@ -95,15 +94,23 @@ ScriptEditor::ScriptEditor()
         [this](std::shared_ptr<RocEvent> e) {
             std::shared_ptr<ScriptExecuteCompleteEvent> event =
                 std::dynamic_pointer_cast<ScriptExecuteCompleteEvent>(e);
-            if(!event)
+            // Closing any tab posts one of these from cleanup, so a script
+            // running here must only be answered by its own trace.
+            if(!event || m_running_source_id.empty() ||
+               event->GetSourceId() != m_running_source_id)
             {
                 return;
             }
-            m_running            = false;
-            m_progress_percent   = 0;
-            m_running_project_id.clear();
-            m_output = event->GetText();
-            if(!event->Succeeded())
+            m_running          = false;
+            m_progress_percent = 0;
+            m_running_source_id.clear();
+            if(m_approval == ScriptApproval::kRunning)
+            {
+                m_approval = ScriptApproval::kFinished;
+            }
+            m_output          = event->GetText();
+            m_output_is_error = !event->Succeeded();
+            if(m_output_is_error)
             {
                 if(!m_output.empty())
                 {
@@ -123,7 +130,9 @@ ScriptEditor::ScriptEditor()
         [this](std::shared_ptr<RocEvent> e) {
             std::shared_ptr<RequestProgressUpdateEvent> event =
                 std::dynamic_pointer_cast<RequestProgressUpdateEvent>(e);
-            if(!event || event->GetRequestType() != RequestType::kExecuteScript)
+            if(!event || event->GetRequestType() != RequestType::kExecuteScript ||
+               m_running_source_id.empty() ||
+               event->GetSourceId() != m_running_source_id)
             {
                 return;
             }
@@ -144,74 +153,158 @@ ScriptEditor::~ScriptEditor()
 }
 
 void
-ScriptEditor::ToggleVisible()
+ScriptEditor::ProposeScript(const std::string& source)
 {
-    m_visible = !m_visible;
+    m_source = source;
+    m_file_path.clear();
+    m_output.clear();
+    m_output_is_error  = false;
+    m_progress_percent = 0;
+    m_running          = false;
+    m_approval         = ScriptApproval::kPending;
+    m_status           = "Waiting for you";
 }
 
-bool*
-ScriptEditor::VisiblePtr()
+ScriptApproval
+ScriptEditor::ProposalState() const
 {
-    return &m_visible;
+    return m_approval;
 }
 
 void
-ScriptEditor::RenderToolbarButton()
+ScriptEditor::ClearProposal()
 {
-    SettingsManager& settings = SettingsManager::GetInstance();
-    ImGui::PushStyleColor(ImGuiCol_Button,
-                          ImGui::ColorConvertU32ToFloat4(settings.GetColor(Colors::kBgFrame)));
-    ImGui::PushStyleColor(
-        ImGuiCol_ButtonHovered,
-        ImGui::ColorConvertU32ToFloat4(settings.GetColor(Colors::kButtonHovered)));
-    ImGui::PushStyleColor(
-        ImGuiCol_ButtonActive,
-        ImGui::ColorConvertU32ToFloat4(settings.GetColor(Colors::kButtonActive)));
-    ImGui::PushStyleColor(ImGuiCol_Text,
-                          ImGui::ColorConvertU32ToFloat4(settings.GetColor(Colors::kTextMain)));
-    if(ImGui::Button("Script"))
-    {
-        GetInstance()->ToggleVisible();
-    }
-    ImGui::PopStyleColor(4);
-    if(ImGui::IsItemHovered())
-    {
-        SetTooltipStyled("Open the Python script editor");
-    }
+    m_approval = ScriptApproval::kNone;
+}
+
+void
+ScriptEditor::Reject()
+{
+    m_approval = ScriptApproval::kRejected;
+    m_status   = "Not run";
 }
 
 void
 ScriptEditor::Render()
 {
-    if(!m_visible)
+    SettingsManager& settings = SettingsManager::GetInstance();
+
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, SCRIPT_WINDOW_PADDING);
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, SCRIPT_ITEM_SPACING);
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, settings.GetColor(Colors::kBgMain));
+    // The toolbar is pinned; each workspace pane owns its own scrolling.
+    ImGui::BeginChild("##script_tab", ImVec2(0.0f, 0.0f), ImGuiChildFlags_None,
+                      ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+
+    RenderHeaderCard();
+    RenderProposalBanner();
+
+    // Details panels are normally much wider than they are tall. Spend that
+    // width on a source/result workspace, and stack only when genuinely narrow.
+    const ImVec2 workspace_size = ImGui::GetContentRegionAvail();
+    if(workspace_size.x >= SCRIPT_TWO_COLUMN_MIN_WIDTH)
     {
-        return;
+        const float result_width =
+            std::clamp(workspace_size.x * SCRIPT_RESULT_WIDTH_RATIO,
+                       SCRIPT_RESULT_MIN_WIDTH, SCRIPT_RESULT_MAX_WIDTH);
+        const float source_width =
+            std::max(1.0f, workspace_size.x - result_width - SCRIPT_WORKSPACE_GAP);
+
+        RenderSource(ImVec2(source_width, workspace_size.y));
+        ImGui::SameLine(0.0f, SCRIPT_WORKSPACE_GAP);
+        RenderOutput(ImVec2(0.0f, workspace_size.y));
+    }
+    else
+    {
+        const float panes_height =
+            std::max(2.0f, workspace_size.y - SCRIPT_WORKSPACE_GAP);
+        const float source_height = panes_height * SCRIPT_STACKED_SOURCE_RATIO;
+
+        RenderSource(ImVec2(0.0f, source_height));
+        RenderOutput(ImVec2(0.0f, panes_height - source_height));
     }
 
-    ImGui::SetNextWindowSize(ImVec2(SCRIPT_EDITOR_DEFAULT_WIDTH, SCRIPT_EDITOR_DEFAULT_HEIGHT),
-                             ImGuiCond_FirstUseEver);
-    ImGui::SetNextWindowSizeConstraints(
-        ImVec2(SCRIPT_EDITOR_MIN_WIDTH, SCRIPT_EDITOR_MIN_HEIGHT), ImVec2(FLT_MAX, FLT_MAX));
-    if(ImGui::Begin("Script Editor", &m_visible))
+    ImGui::EndChild();
+    ImGui::PopStyleColor();
+    ImGui::PopStyleVar(2);
+}
+
+// What the script is, in one dim line: where it came from, or what is loaded.
+std::string
+ScriptEditor::SubtitleText() const
+{
+    if(!m_file_path.empty())
     {
-        RenderToolbar();
-        ImGui::Separator();
-        RenderSource();
-        ImGui::Separator();
-        RenderOutput();
+        return m_file_path;
     }
-    ImGui::End();
+    switch(m_approval)
+    {
+    case ScriptApproval::kPending: return "Written by Ask Optiq";
+    case ScriptApproval::kRejected: return "Declined - not run";
+    case ScriptApproval::kRunning:
+    case ScriptApproval::kFinished: return "Ran from Ask Optiq";
+    case ScriptApproval::kFailedToStart: return "Could not be started";
+    case ScriptApproval::kNone: break;
+    }
+    return "Python analysis over this trace";
 }
 
 void
-ScriptEditor::RenderToolbar()
+ScriptEditor::RenderHeaderCard()
 {
-    bool can_run = CanRun();
+    SettingsManager&  settings = SettingsManager::GetInstance();
+    const ImGuiStyle& style    = settings.GetDefaultStyle();
+    ImFont*           icon_font =
+        settings.GetFontManager().GetFont(FontType::kIcon);
+
+    BeginPanelCard("##script_header", PanelCardTone::kFrame, SCRIPT_CARD_PADDING, true,
+                   &settings);
+
+    const bool awaiting_decision = m_approval == ScriptApproval::kPending;
+    const float gap              = style.ItemInnerSpacing.x;
+    const float header_icon_size =
+        ImGui::GetFontSize() * SCRIPT_HEADER_ICON_SCALE;
+
+    // One compact row: title + dim subtitle share the line with the actions.
+    ImGui::AlignTextToFramePadding();
+    PanelIcon(awaiting_decision ? ICON_COMPASS : ICON_EDIT,
+              awaiting_decision ? Colors::kAccent : Colors::kTextDim, &settings,
+              header_icon_size);
+    ImGui::SameLine(0.0f, gap);
+    ImGui::AlignTextToFramePadding();
+    ImGui::TextUnformatted("Script");
+    ImGui::SameLine(0.0f, gap * 2.0f);
+    ImGui::AlignTextToFramePadding();
+    PanelFieldLabel(SubtitleText().c_str(), false, &settings);
+
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, SCRIPT_BUTTON_PADDING);
+    const float button_height = ImGui::GetFrameHeight();
+    const float icon_size     = button_height;
+    const float action_icon_font_size =
+        ImGui::GetFontSize() * SCRIPT_ACTION_ICON_SCALE;
+    const float run_width =
+        ImGui::CalcTextSize("Run").x + SCRIPT_BUTTON_PADDING.x * 2.0f + 4.0f;
+    const float second_width =
+        ImGui::CalcTextSize(awaiting_decision ? "Reject" : "Cancel").x +
+        SCRIPT_BUTTON_PADDING.x * 2.0f;
+    const float actions_gap = 6.0f;
+    const float actions_width =
+        run_width + second_width + icon_size * 2.0f + actions_gap * 3.0f;
+
+    ImGui::SameLine(0.0f, 0.0f);
+    const float leftover = ImGui::GetContentRegionAvail().x - actions_width;
+    if(leftover > 0.0f)
+    {
+        ImGui::Dummy(ImVec2(leftover, 0.0f));
+        ImGui::SameLine(0.0f, 0.0f);
+    }
+
+    const bool can_run = CanRun();
     if(!can_run)
     {
         ImGui::BeginDisabled();
     }
-    if(ImGui::Button("Run"))
+    if(AccentButton("Run", ImVec2(run_width, button_height), &settings))
     {
         Run();
     }
@@ -225,177 +318,283 @@ ScriptEditor::RenderToolbar()
         {
             SetTooltipStyled("A script is already running");
         }
+        else if(awaiting_decision)
+        {
+            SetTooltipStyled("Run the script Ask Optiq wrote, against this trace");
+        }
         else
         {
-            SetTooltipStyled("Run against the open trace (open a loaded trace first)");
+            SetTooltipStyled("Run against this trace (wait for it to finish loading)");
         }
     }
 
-    ImGui::SameLine();
-    if(!m_running)
+    ImGui::SameLine(0.0f, actions_gap);
+    if(awaiting_decision)
     {
-        ImGui::BeginDisabled();
+        if(ColoredButton("Reject", settings.GetColor(Colors::kBgFrame),
+                         settings.GetColor(Colors::kButtonHovered),
+                         settings.GetColor(Colors::kButtonActive),
+                         settings.GetColor(Colors::kTextMain),
+                         "Do not run it. Ask Optiq is told you declined and carries "
+                         "on without it.",
+                         ImVec2(second_width, button_height)))
+        {
+            Reject();
+        }
     }
-    if(ImGui::Button("Cancel"))
+    else
     {
-        Cancel();
-    }
-    if(!m_running)
-    {
-        ImGui::EndDisabled();
+        if(!m_running)
+        {
+            ImGui::BeginDisabled();
+        }
+        if(ColoredButton("Cancel", settings.GetColor(Colors::kBgFrame),
+                         settings.GetColor(Colors::kButtonHovered),
+                         settings.GetColor(Colors::kButtonActive),
+                         settings.GetColor(Colors::kTextMain), nullptr,
+                         ImVec2(second_width, button_height)))
+        {
+            Cancel();
+        }
+        if(!m_running)
+        {
+            ImGui::EndDisabled();
+        }
     }
 
-    ImGui::SameLine();
-    if(ImGui::Button("Load"))
+    ImGui::SameLine(0.0f, actions_gap);
+    if(IconButton(ICON_FOLDER, icon_font, ImVec2(icon_size, icon_size), "Open a .py file",
+                  false, ImVec2(0.0f, 0.0f), settings.GetColor(Colors::kButton),
+                  settings.GetColor(Colors::kButtonHovered),
+                  settings.GetColor(Colors::kButtonActive), "##script_load",
+                  action_icon_font_size))
     {
         LoadFromFile();
     }
-    ImGui::SameLine();
-    if(ImGui::Button("Save"))
+    ImGui::SameLine(0.0f, actions_gap);
+    if(IconButton(ICON_DOCUMENT, icon_font, ImVec2(icon_size, icon_size),
+                  "Save this script to a .py file", false, ImVec2(0.0f, 0.0f),
+                  settings.GetColor(Colors::kButton),
+                  settings.GetColor(Colors::kButtonHovered),
+                  settings.GetColor(Colors::kButtonActive), "##script_save",
+                  action_icon_font_size))
     {
         SaveToFile();
     }
+    ImGui::PopStyleVar();
 
-    ImGui::SameLine();
-    ImGui::TextUnformatted(m_status.c_str());
+    EndPanelCard();
+}
+
+void
+ScriptEditor::RenderProposalBanner()
+{
+    if(m_approval != ScriptApproval::kPending)
+    {
+        return;
+    }
+
+    SettingsManager&  settings = SettingsManager::GetInstance();
+    const ImGuiStyle& style    = settings.GetDefaultStyle();
+
+    BeginPanelCard("##script_proposal", PanelCardTone::kPanel, SCRIPT_CARD_PADDING, true,
+                   &settings);
+    ImGui::AlignTextToFramePadding();
+    PanelIcon(ICON_COMPASS, Colors::kAccent, &settings,
+              ImGui::GetFontSize() * SCRIPT_HEADER_ICON_SCALE);
+    ImGui::SameLine(0.0f, style.ItemInnerSpacing.x);
+    ImGui::AlignTextToFramePadding();
+    ImGui::PushStyleColor(ImGuiCol_Text, settings.GetColor(Colors::kTextWarning));
+    ImGui::TextUnformatted("Ask Optiq wrote this - Run or Reject.");
+    ImGui::PopStyleColor();
+    EndPanelCard();
+}
+
+void
+ScriptEditor::RenderSource(const ImVec2& size)
+{
+    SettingsManager&  settings = SettingsManager::GetInstance();
+    const ImGuiStyle& style    = settings.GetDefaultStyle();
+
+    ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, PANEL_CARD_ROUNDING);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, SCRIPT_CARD_PADDING);
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(6.0f, 4.0f));
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, settings.GetColor(Colors::kBgPanel));
+    ImGui::PushStyleColor(ImGuiCol_Border, settings.GetColor(Colors::kPanelBorderSubtle));
+    ImGui::BeginChild("##script_source_card", size, ImGuiChildFlags_Borders,
+                      ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+
+    PanelFieldLabel("Source", false, &settings);
+    ImGui::SameLine(0.0f, style.ItemInnerSpacing.x * 2.0f);
+    ImGui::PushStyleColor(ImGuiCol_Text, settings.GetColor(Colors::kTextDim));
+    ImGui::TextUnformatted("Python");
+    ImGui::PopStyleColor();
+
+    const float editor_height = std::max(1.0f, ImGui::GetContentRegionAvail().y);
+
+    ImGui::PushFont(settings.GetFontManager().GetFont(FontType::kCode), 0.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, SCRIPT_EDITOR_INSET_ROUNDING);
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(8.0f, 6.0f));
+    ImGui::PushStyleColor(ImGuiCol_FrameBg, settings.GetColor(Colors::kBgMain));
+    ImGui::PushStyleColor(ImGuiCol_Text, settings.GetColor(Colors::kTextMain));
+    // Negative x fills the card; the inset well is the code surface.
+    InputTextMultilineString("##script_source", m_source,
+                             ImVec2(-FLT_MIN, editor_height),
+                             ImGuiInputTextFlags_AllowTabInput);
+    ImGui::PopStyleColor(2);
+    ImGui::PopStyleVar(2);
+    ImGui::PopFont();
+
+    ImGui::EndChild();
+    ImGui::PopStyleColor(2);
+    ImGui::PopStyleVar(3);
+}
+
+void
+ScriptEditor::RenderOutput(const ImVec2& size)
+{
+    SettingsManager&  settings = SettingsManager::GetInstance();
+    const ImGuiStyle& style    = settings.GetDefaultStyle();
+
+    ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, PANEL_CARD_ROUNDING);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, SCRIPT_CARD_PADDING);
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(6.0f, 4.0f));
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, settings.GetColor(Colors::kBgFrame));
+    ImGui::PushStyleColor(ImGuiCol_Border, settings.GetColor(Colors::kPanelBorderSubtle));
+    ImGui::BeginChild("##script_result_card", size, ImGuiChildFlags_Borders,
+                      ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+
+    PanelFieldLabel("Result", false, &settings);
+
+    Colors status_color = Colors::kTextDim;
     if(m_running)
     {
-        ImGui::SameLine();
-        ImGui::Text("(%u%%)", static_cast<unsigned>(m_progress_percent));
+        status_color = Colors::kAccent;
     }
-    if(!m_file_path.empty())
+    else if(m_output_is_error)
     {
-        ImGui::SameLine();
-        ImGui::TextDisabled("%s", m_file_path.c_str());
+        status_color = Colors::kTextError;
     }
-}
-
-void
-ScriptEditor::RenderSource()
-{
-    // InputTextMultiline treats size.x == 0 as the default item width (~65% of
-    // the window). Negative x means remaining content width, matching Output.
-    ImVec2 size(-FLT_MIN, ImGui::GetContentRegionAvail().y - SCRIPT_EDITOR_OUTPUT_HEIGHT);
-    if(size.y < SCRIPT_EDITOR_SOURCE_MIN_HEIGHT)
+    else if(m_status == "Done")
     {
-        size.y = SCRIPT_EDITOR_SOURCE_MIN_HEIGHT;
+        status_color = Colors::kTextSuccess;
     }
-    InputTextMultilineString("##script_source", m_source, size,
-                             ImGuiInputTextFlags_AllowTabInput);
-}
 
-void
-ScriptEditor::RenderOutput()
-{
-    ImGui::TextUnformatted("Output");
-    ImGui::BeginChild("##script_output", ImVec2(0.0f, 0.0f), ImGuiChildFlags_Borders,
-                      ImGuiWindowFlags_HorizontalScrollbar);
-    ImGui::TextUnformatted(m_output.empty() ? "(no output)" : m_output.c_str());
+    ImGui::SameLine(0.0f, style.ItemInnerSpacing.x * 2.0f);
+    if(m_running)
+    {
+        RenderLoadingIndicatorDots(SCRIPT_DOT_RADIUS, SCRIPT_DOT_COUNT, SCRIPT_DOT_SPACING,
+                                   settings.GetColor(Colors::kAccent), SCRIPT_DOT_SPEED);
+        ImGui::SameLine(0.0f, style.ItemInnerSpacing.x);
+    }
+    ImGui::PushStyleColor(ImGuiCol_Text, settings.GetColor(status_color));
+    ImGui::TextUnformatted(m_status.c_str());
+    ImGui::PopStyleColor();
+    if(m_running && m_progress_percent > 0)
+    {
+        ImGui::SameLine(0.0f, style.ItemInnerSpacing.x);
+        ImGui::PushStyleColor(ImGuiCol_Text, settings.GetColor(Colors::kTextDim));
+        ImGui::Text("%u%%", static_cast<unsigned>(m_progress_percent));
+        ImGui::PopStyleColor();
+    }
+
+    ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, SCRIPT_EDITOR_INSET_ROUNDING);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8.0f, 6.0f));
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, settings.GetColor(Colors::kBgMain));
+    ImGui::PushStyleColor(ImGuiCol_Border, settings.GetColor(Colors::kPanelBorderSubtle));
+    ImGui::BeginChild("##script_result_body",
+                      ImVec2(0.0f, std::max(1.0f, ImGui::GetContentRegionAvail().y)),
+                      ImGuiChildFlags_Borders, ImGuiWindowFlags_HorizontalScrollbar);
+
+    ImGui::PushFont(settings.GetFontManager().GetFont(FontType::kCode), 0.0f);
+    if(m_output.empty())
+    {
+        ImGui::PushStyleColor(ImGuiCol_Text, settings.GetColor(Colors::kTextDim));
+        ImGui::TextWrapped("Nothing yet. Press Run to execute the script against this "
+                           "trace.");
+        ImGui::PopStyleColor();
+    }
+    else
+    {
+        ImGui::PushStyleColor(ImGuiCol_Text,
+                              settings.GetColor(m_output_is_error ? Colors::kTextError
+                                                                  : Colors::kTextMain));
+        ImGui::TextUnformatted(m_output.c_str());
+        ImGui::PopStyleColor();
+    }
+    ImGui::PopFont();
+
     ImGui::EndChild();
-}
+    ImGui::PopStyleColor(2);
+    ImGui::PopStyleVar(2);
 
-DataProvider*
-ScriptEditor::CurrentDataProvider() const
-{
-    AppWindow* app = AppWindow::GetInstance();
-    if(!app || !app->GetCurrentProject())
-    {
-        return nullptr;
-    }
-    return DataProviderForProject(app->GetCurrentProject()->GetID());
-}
-
-DataProvider*
-ScriptEditor::DataProviderForProject(const std::string& project_id) const
-{
-    AppWindow* app = AppWindow::GetInstance();
-    if(!app)
-    {
-        return nullptr;
-    }
-    Project* project = app->GetProject(project_id);
-    if(!project)
-    {
-        return nullptr;
-    }
-    RootView* root_view = dynamic_cast<RootView*>(project->GetView().get());
-    if(!root_view)
-    {
-        return nullptr;
-    }
-    return root_view->GetDataProvider();
+    ImGui::EndChild();
+    ImGui::PopStyleColor(2);
+    ImGui::PopStyleVar(3);
 }
 
 bool
 ScriptEditor::CanRun() const
 {
-    if(m_running)
-    {
-        return false;
-    }
-    DataProvider* provider = CurrentDataProvider();
-    return provider && provider->GetState() == ProviderState::kReady;
+    return !m_running && m_data_provider.GetState() == ProviderState::kReady;
 }
 
 void
 ScriptEditor::Run()
 {
-    AppWindow* app = AppWindow::GetInstance();
-    if(!app || !app->GetCurrentProject())
-    {
-        m_status = "Open a trace first";
-        NotificationManager::GetInstance().Show("Open a trace before running a script",
-                                                NotificationLevel::Warning);
-        return;
-    }
-    Project*      project  = app->GetCurrentProject();
-    DataProvider* provider = CurrentDataProvider();
-    if(!provider || provider->GetState() != ProviderState::kReady)
+    if(m_data_provider.GetState() != ProviderState::kReady)
     {
         m_status = "Trace still loading";
         return;
     }
+    m_output_is_error = false;
 
     std::vector<uint64_t> track_ids;
     double                start_ts   = 0.0;
     double                end_ts     = 0.0;
     bool                  have_range = false;
-    TraceView* trace_view = dynamic_cast<TraceView*>(project->GetView().get());
-    if(trace_view && trace_view->GetTimelineSelection())
+    if(m_timeline_selection)
     {
-        TimelineSelection* selection = trace_view->GetTimelineSelection().get();
-        selection->GetSelectedTracks(track_ids);
-        have_range = selection->GetSelectedTimeRange(start_ts, end_ts);
+        m_timeline_selection->GetSelectedTracks(track_ids);
+        have_range = m_timeline_selection->GetSelectedTimeRange(start_ts, end_ts);
     }
     if(!have_range)
     {
-        start_ts = provider->DataModel().GetTimeline().GetStartTime();
-        end_ts   = provider->DataModel().GetTimeline().GetEndTime();
+        start_ts = m_data_provider.DataModel().GetTimeline().GetStartTime();
+        end_ts   = m_data_provider.DataModel().GetTimeline().GetEndTime();
     }
 
     m_output.clear();
+    m_output_is_error  = false;
     m_progress_percent = 0;
-    if(!provider->ExecuteScript(m_source, track_ids, start_ts, end_ts))
+    if(!m_data_provider.ExecuteScript(m_source, track_ids, start_ts, end_ts))
     {
-        m_status = "Could not start script";
+        m_status          = "Could not start";
+        m_output_is_error = true;
+        // An approved script that never started still has to answer the
+        // assistant, or it waits out the whole approval deadline for a run
+        // that was never going to happen.
+        if(m_approval == ScriptApproval::kPending)
+        {
+            m_approval = ScriptApproval::kFailedToStart;
+        }
         NotificationManager::GetInstance().Show("Could not start the script",
                                                 NotificationLevel::Error);
         return;
     }
-    m_running            = true;
-    m_running_project_id = project->GetID();
-    m_status             = "Running";
+    if(m_approval == ScriptApproval::kPending)
+    {
+        m_approval = ScriptApproval::kRunning;
+    }
+    m_running           = true;
+    m_running_source_id = m_data_provider.GetTraceFilePath();
+    m_status            = "Running";
 }
 
 void
 ScriptEditor::Cancel()
 {
-    DataProvider* provider = DataProviderForProject(m_running_project_id);
-    if(!provider)
-    {
-        return;
-    }
-    provider->CancelScript();
+    m_data_provider.CancelScript();
     m_status = "Cancelling";
 }
 
@@ -436,16 +635,16 @@ ScriptEditor::ReadFile(const std::string& path)
     {
         return;
     }
-    std::ifstream in(path, std::ios::binary);
-    if(!in)
+    std::ifstream file(path, std::ios::binary);
+    if(!file.is_open())
     {
-        NotificationManager::GetInstance().Show("Could not read script file",
+        m_status = "Could not open file";
+        NotificationManager::GetInstance().Show("Could not open " + path,
                                                 NotificationLevel::Error);
         return;
     }
-    std::string text((std::istreambuf_iterator<char>(in)),
-                     std::istreambuf_iterator<char>());
-    m_source    = std::move(text);
+    m_source.assign((std::istreambuf_iterator<char>(file)),
+                    std::istreambuf_iterator<char>());
     m_file_path = path;
     m_status    = "Loaded";
 }
@@ -457,14 +656,15 @@ ScriptEditor::WriteFile(const std::string& path)
     {
         return;
     }
-    std::ofstream out(path, std::ios::binary);
-    if(!out)
+    std::ofstream file(path, std::ios::binary);
+    if(!file.is_open())
     {
-        NotificationManager::GetInstance().Show("Could not write script file",
+        m_status = "Could not write file";
+        NotificationManager::GetInstance().Show("Could not write " + path,
                                                 NotificationLevel::Error);
         return;
     }
-    out.write(m_source.data(), static_cast<std::streamsize>(m_source.size()));
+    file.write(m_source.data(), static_cast<std::streamsize>(m_source.size()));
     m_file_path = path;
     m_status    = "Saved";
 }

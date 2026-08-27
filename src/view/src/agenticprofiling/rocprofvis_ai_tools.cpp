@@ -203,7 +203,8 @@ StartAssistantTool(const AssistantToolContext& context, const std::string& tool_
     }
 
     const AssistantToolTable tables[] = { GetAssistantUiToolHandlers(),
-                                          GetAssistantDataToolHandlers() };
+                                          GetAssistantDataToolHandlers(),
+                                          GetAssistantScriptToolHandlers() };
     for(const AssistantToolTable& table : tables)
     {
         for(size_t i = 0; i < table.count; ++i)

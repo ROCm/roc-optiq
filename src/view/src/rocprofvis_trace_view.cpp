@@ -797,6 +797,38 @@ TraceView::ActiveAnalysisTab()
     return m_analysis_view ? m_analysis_view->ActiveTab() : std::string();
 }
 
+#ifdef ROCPROFVIS_ENABLE_SCRIPTING
+bool
+TraceView::ProposeScript(const std::string& source)
+{
+    if(!m_analysis_view || !m_analysis_view->GetScriptEditor())
+    {
+        return false;
+    }
+    m_analysis_view->GetScriptEditor()->ProposeScript(source);
+    return true;
+}
+
+ScriptApproval
+TraceView::ScriptProposalState() const
+{
+    if(!m_analysis_view || !m_analysis_view->GetScriptEditor())
+    {
+        return ScriptApproval::kNone;
+    }
+    return m_analysis_view->GetScriptEditor()->ProposalState();
+}
+
+void
+TraceView::ClearScriptProposal()
+{
+    if(m_analysis_view && m_analysis_view->GetScriptEditor())
+    {
+        m_analysis_view->GetScriptEditor()->ClearProposal();
+    }
+}
+#endif
+
 void
 TraceView::ResetView()
 {
@@ -983,10 +1015,6 @@ TraceView::RenderToolbar()
 #ifdef ROCPROFVIS_ENABLE_AGENTIC_PROFILING
         VerticalSeparator(&m_settings_manager);
         AssistantPanel::RenderToolbarButton();
-#endif
-#ifdef ROCPROFVIS_ENABLE_SCRIPTING
-        VerticalSeparator(&m_settings_manager);
-        ScriptEditor::RenderToolbarButton();
 #endif
         VerticalSeparator(&m_settings_manager);
     }

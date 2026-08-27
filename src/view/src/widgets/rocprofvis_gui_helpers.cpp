@@ -227,7 +227,7 @@ GetResponsiveWindowSize(ImVec2 desired_size, ImVec2 min_size, float viewport_mar
 bool
 IconButton(const char* icon, ImFont* icon_font, ImVec2 size, const char* tooltip,
            bool frameless, ImVec2 frame_padding, ImU32 bg_color, ImU32 bg_color_hover,
-           ImU32 bg_color_active, const char* id)
+           ImU32 bg_color_active, const char* id, float font_size)
 {
     if(id && strlen(id) > 0)
     {
@@ -251,7 +251,7 @@ IconButton(const char* icon, ImFont* icon_font, ImVec2 size, const char* tooltip
         ImGui::PushStyleColor(ImGuiCol_ButtonHovered, bg_color_hover);
         ImGui::PushStyleColor(ImGuiCol_ButtonActive, bg_color_active);
     }
-    ImGui::PushFont(icon_font, 0.0f);
+    ImGui::PushFont(icon_font, font_size);
     bool clicked = ImGui::Button(icon, size);
     ImGui::PopFont();
     if(tooltip && strlen(tooltip) > 0 && BeginItemTooltipStyled())
@@ -634,14 +634,17 @@ PanelFieldLabel(const char* text, bool align_to_frame, SettingsManager* settings
 }
 
 void
-PanelIcon(const char* glyph, Colors color, SettingsManager* settings)
+PanelIcon(const char* glyph, Colors color, SettingsManager* settings, float font_size)
 {
     if(!settings)
     {
         settings = &SettingsManager::GetInstance();
     }
-    ImGui::PushFont(settings->GetFontManager().GetFont(FontType::kIcon),
-                    ImGui::GetFontSize());
+    if(font_size <= 0.0f)
+    {
+        font_size = ImGui::GetFontSize();
+    }
+    ImGui::PushFont(settings->GetFontManager().GetFont(FontType::kIcon), font_size);
     ImGui::PushStyleColor(ImGuiCol_Text, settings->GetColor(color));
     ImGui::TextUnformatted(glyph);
     ImGui::PopStyleColor();

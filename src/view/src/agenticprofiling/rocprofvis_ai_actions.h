@@ -16,6 +16,9 @@ class ComputeSelection;
 class DataProvider;
 class TimelineSelection;
 class TraceView;
+#ifdef ROCPROFVIS_ENABLE_SCRIPTING
+enum class ScriptApproval : uint8_t;
+#endif
 
 // Panels the assistant can open and close, named the way the View menu names
 // them so the model and the user are talking about the same thing.
@@ -82,6 +85,16 @@ public:
     std::vector<std::string> ListAnalysisTabs() const;
     std::string              ActiveAnalysisTab() const;
     bool                     SelectAnalysisTab(const std::string& name);
+
+#ifdef ROCPROFVIS_ENABLE_SCRIPTING
+    // --- Scripts ----------------------------------------------------------
+
+    // Puts a script in the Script tab and brings the user to it. Nothing runs:
+    // they press Run or Reject, and ScriptProposalState reports which.
+    bool           ProposeScript(const std::string& source);
+    ScriptApproval ScriptProposalState() const;
+    void           ClearScriptProposal();
+#endif
 
     // --- Timeline options -------------------------------------------------
 

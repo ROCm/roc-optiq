@@ -11,7 +11,8 @@ This is a planned feature. Enable with
 Phase 1 **read path** (query-table alloc, `optiq.trace` / `selection` /
 `table().fetch()` / `Track.events()`, Catch2 against a sample trace),
 and Phase 1b (DataProvider execute + floating script editor) are in
-tree.
+tree. The `run_analysis_script` half of Phase 3 is also in tree; the
+vendored CPython half is not.
 
 ---
 
@@ -112,7 +113,7 @@ rocprofvis_result_t rocprofvis_python_exec(
     char const* source,
     void (*prepare_globals)(void* py_dict, void* user),
     void* user);
-void rocprofvis_python_interrupt(void);   // PyErr_SetInterrupt
+void rocprofvis_python_interrupt(void);   // raise into interpreter thread
 void rocprofvis_python_shutdown(void);
 ```
 
@@ -123,6 +124,53 @@ exec dict. The runtime never includes `rocprofvis_controller.h`.
 **Thread:** one long-lived interpreter thread, owned by this lib (not
 by `JobSystem`). Controller posts `{source, prepare, user}` to that
 thread and completes the script `Future` when `exec` returns.
+
+**Deadline:** a second thread in the same lib arms a wall-clock
+deadline around each `PyRun_String`. `rocprofvis_python_exec` takes the
+budget; 0 means the built-in default. Nothing else bounds a script: one
+loop that never ends holds the only interpreter thread forever, and the
+caller would just see a future that never completes.
+
+**Do not use `PyErr_SetInterrupt` here, and do not add it back.** It
+trips the SIGINT flag for `PyErr_CheckSignals` to act on, but the
+isolated config sets `install_signal_handlers` to 0, so nothing is
+registered to handle it. CPython refuses the signal - `OSError: Signal
+2 ignored due to race condition`, printed once per eval-loop tick - and
+that ignored-handler path **clears the error indicator on its way
+out**, wiping any exception already raised. Pairing it with the raise
+below is strictly worse than the raise alone; that combination was
+tried and the timeout tests caught it. Delivery is
+`PyThreadState_SetAsyncExc` against the interpreter thread's Python id,
+which does not involve signal handling and lands the next time that
+thread runs a bytecode.
+
+Three more details are load-bearing. The raise is **repeated** on an
+interval rather than sent once, because a bare `except:` swallows the
+first one - which model-written code does. It is delivered from the
+watchdog, under the GIL, so whoever asked to cancel (usually the UI
+thread) never blocks on it. And `Shutdown` brings the deadline forward
+instead of letting the watchdog exit on the stop flag, since it joins
+the interpreter thread and a hung script would otherwise hold that join
+open.
+
+A run stopped by the deadline reports an **error**, not
+`kRocProfVisPythonCancelled`: a timeout is a script to fix, and only an
+explicit cancel is a cancellation.
+
+One gap worth knowing: a script parked inside `wait_inner` has released
+the GIL, so the raise only lands once that fetch returns and control is
+back in bytecode. The fetch bounds itself, so this has not needed
+solving, but it is why a timeout is not instant on a query-heavy
+script.
+
+**Errors carry the traceback.** `FormatPythonError` runs the failing
+exception through the stdlib `traceback` module, so the message names
+the line that raised. The script's import allowlist does not apply to
+it, because that `__import__` only exists in the script globals, not to
+C callers. This is what lets a failed script be *fixed* rather than
+abandoned - by a user reading the editor, and by the assistant, which
+gets the same text back as its tool result and can correct the line and
+call again.
 
 **Hard rule:** never `exec` a user script on a `JobSystem` worker.
 `track_fetch_async` / `table_fetch_async` already `IssueJob`. Waiting
@@ -251,25 +299,79 @@ fetch), not a parallel-only event channel.
   `rocprofvis_script_cancel` **then** `future_cancel` (script jobs are
   not on JobSystem). Closing a tab posts `ScriptExecuteCompleteEvent`
   from cleanup so the editor does not stay on Running.
-- **Script editor** (`widgets/rocprofvis_script_editor.*`): floating
-  `ImGui::Begin` overlay like `LogViewer`, not a docked column. Open
-  from `View > Show Script Editor` (checkable) and a **Script** toolbar
-  button next to Ask Optiq on TraceView and ComputeView. Run / Cancel /
+- **Script editor** (`widgets/rocprofvis_script_editor.*`): the
+  **Script tab** of the details panel, built and owned by `AnalysisView`
+  beside Event Table / Top Events / Annotations. It is a plain
+  `RocWidget` - no `ImGui::Begin`, no singleton, no visibility flag -
+  because a docked tab is what the rest of the panel is and a floating
+  window was one more thing to find and manage. Run / Reject or Cancel /
   Load / Save; Load/Save use `AppWindow` file dialogs with a `.py`
   filter. Source is `InputTextMultiline` (via `InputTextMultilineString`);
   the result pane is `optiq.result.text` / error text. No syntax
   highlighting in v1.
-- Run uses the **current tab's** ready `DataProvider`. Empty track
-  selection means all tracks; time range is the timeline selection or
-  the full trace. Compute traces can open the editor; `Track.events()` /
-  `optiq.table()` are system-oriented and may error in Python.
+- **One editor per trace**, because `AnalysisView` is per trace. That is
+  what lets `Run` go straight to its own `DataProvider` and
+  `TimelineSelection` instead of asking which tab is in front, and it
+  means source and output belong to the trace the user is looking at.
+  Empty track selection means all tracks; time range is the timeline
+  selection or the full trace.
+- **Compute traces have no Script tab.** They have no `AnalysisView`,
+  and `Track.events()` / `optiq.table()` are system-oriented anyway -
+  `run_analysis_script` already refuses a compute trace. Give
+  `ComputeView` its own tab when the compute bindings land, not before.
 - Phase 2: page a script-owned table handle with `InfiniteScrollTable`
   using a **unique** request id (not `EVENT_TABLE_REQUEST_ID`).
 
-Ask Optiq (Phase 3): tool `run_analysis_script { "script": "..." }`
-calls the same `ExecuteScript`. Show the generated source in the
-editor so the user can audit it. Do not add a second interpreter path.
-UI mutation stays in `OptiqActions`.
+Ask Optiq: the tool `run_analysis_script { "script": "..." }` lives in
+`view/src/agenticprofiling/rocprofvis_ai_script_tools.cpp` and calls
+the same `ExecuteScript`. There is no second interpreter path, and UI
+mutation still belongs to `OptiqActions`. Four things it relies on:
+
+- **Nothing the model writes runs unattended.** The tool *offers* a
+  script; it never executes one. `OptiqActions::ProposeScript` fills the
+  Script tab, selects it - which opens the details panel through the
+  same `SelectAnalysisTab` the model uses for any other tab - and parks.
+  The user reads the source and presses **Run** or **Reject**, and the
+  tab drives the run through exactly the path a hand-written script
+  takes, so there is one execution path rather than two. Selecting the
+  tab is part of offering: a question the user cannot see is one the
+  assistant would wait on until the deadline. Rejection is reported as a
+  decision rather than a failure, and the prompt tells the model not to
+  offer the same script back.
+- **The assistant never holds the widget.** It reaches the editor
+  through `OptiqActions` -> `TraceView` -> `AnalysisView`, the same
+  chain as every other UI action, so nothing in `agenticprofiling/`
+  keeps a pointer to a view that a closing tab could take away.
+- **The wait is on a person, so it gets its own deadline.**
+  `AssistantToolStartResult::timeout_seconds` overrides the 45s a fetch
+  runs under; the script tool asks for 300. The panel also routes a
+  timed-out `kScript` fetch back through
+  `FinishAssistantScriptFetch` rather than reporting a generic timeout,
+  because only that side knows whether the user never answered or the
+  run was abandoned, and it has an outstanding offer to clear.
+- **`ScriptApproval` is the whole state machine.** `kPending` ->
+  `kRunning` -> `kFinished` on approval, `kRejected` on refusal, and
+  `kFailedToStart` when an approved run could not begin - which exists
+  so a script that never started still answers the assistant instead of
+  waiting out the full five minutes. `AssistantScriptFetchPending` is
+  true for `kPending` and `kRunning` only.
+- **An offer is pinned to its trace.** `Run` refuses when the tab in
+  front is not the trace the script was written against, the same
+  mistake `m_turn_project_id` guards elsewhere.
+- **Events are filtered by source id.** `ScriptExecuteCompleteEvent` is
+  posted from tab-close cleanup as well as from a real run, so the
+  editor answers only events carrying the trace it is tracking.
+  Without that, closing any other tab drops the editor out of Running
+  and wipes its output.
+- **`DataProvider` keeps the last result.** The editor listens for the
+  completion event, but a caller that polls the request id instead -
+  which is how every assistant tool waits - finds the result handle
+  already freed. `GetLastScriptResult` outlives the request and is
+  cleared when the next script starts, so a poller can never read the
+  previous run's text as this one's answer.
+- **One script per trace.** `EXECUTE_SCRIPT_REQUEST_ID` is a single
+  slot, and the user's own run owns it just as much as the
+  assistant's. The tool reports that rather than queueing.
 
 ---
 
@@ -305,7 +407,21 @@ replace with a scratch-dir helper later. No numpy in v1 (stdlib +
 `optiq` is enough). Vendoring numpy is an explicit later choice: ship
 a matching wheel, still no pip.
 
-Also: timeout + `PyErr_SetInterrupt`; fresh exec dict every run;
+**Keep the builtin set coherent with the allowlist.** A `class`
+statement compiles to `__build_class__`, so leaving that out of
+`kSafeBuiltinNames` made every class fail with a bare `NameError` - and
+took `dataclasses` and `enum` down with it, since both are used by
+declaring a class, while still being advertised as importable. The
+class machinery (`__build_class__`, `type`, `object`, `super`,
+`property`, `staticmethod`, `classmethod`) is in the set for that
+reason. `print` is not a builtin here: the bindings put one in the
+script globals that appends to the result, because there is no stdout
+and a bare `NameError` on the first line anyone writes is not a useful
+guardrail. When adding a module to the allowlist, check what its normal
+use actually needs - `rocprofvis_controller_script_tests.cpp` has a
+case per promise, and the tool description is written from it.
+
+Also: exec deadline (see 3); fresh exec dict every run;
 document that scripts have **trace read** access in-process.
 
 A real sandbox (Wasm or a locked-down child) would require RPC for
@@ -368,10 +484,22 @@ without using the Event Table singleton.
 **Done when:** Ask Optiq can generate a script, the user can see it,
 and a release build does not require a system Python.
 
-- Tool `run_analysis_script` on the Phase 1/2 execute path.
-- Composer / editor shows the source before or as it runs.
+- ~~Tool `run_analysis_script` on the Phase 1/2 execute path.~~ In
+  tree, along with the exec deadline and tracebacks that make an
+  unattended script safe to run and possible to fix.
+- ~~Editor shows the source before or as it runs.~~ In tree via
+  `ShowGeneratedScript`.
 - Vendor embeddable CPython into the package; CI builds against it.
 - Tighten restriction (optional RestrictedPython, scratch-dir `open`).
+- Decide about raw `where` / `group`. `Table.fetch` passes those
+  strings to the table args untouched, while the assistant's own
+  `BuildAssistantWhereClause` whitelists columns, quotes literals, and
+  escapes `LIKE` wildcards precisely because model input is hostile. A
+  script is now a second way for a model to reach the same query
+  layer, and it skips all of that. The blast radius looks small - trace
+  data the user already opened, read-only - but confirm what the DB
+  layer does with a hostile fragment and either accept it in writing or
+  route these through the existing query builder.
 
 ### Phase 4 — Widen the analysis surface
 

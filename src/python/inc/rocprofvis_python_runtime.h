@@ -27,7 +27,8 @@ typedef void (*rocprofvis_python_prepare_globals_t)(void* py_dict, void* user);
 
 /*
  * Called on the interpreter thread after exec, with the GIL released.
- * error_message is valid only during the callback.
+ * error_message is valid only during the callback. On failure it carries
+ * the formatted traceback, so the line that raised can be read off it.
  */
 typedef void (*rocprofvis_python_done_t)(void* user, rocprofvis_python_result_t result,
                                          char const* error_message);
@@ -43,16 +44,25 @@ rocprofvis_python_result_t rocprofvis_python_init(char const* runtime_root);
 /*
  * Posts source to the interpreter thread and returns immediately. done
  * is invoked when exec finishes (or if posting fails, it is not called
- * and the return value is the error).
+ * and the return value is the error). Scripts are queued and run one at
+ * a time.
+ *
+ * timeout_ms bounds the run; 0 uses the built-in default. A script that
+ * outstays it is interrupted and reported as an error rather than a
+ * cancellation, because a timeout is a script to fix and only an
+ * explicit interrupt is a cancellation.
  */
 rocprofvis_python_result_t rocprofvis_python_exec(
     char const*                         source,
     rocprofvis_python_prepare_globals_t prepare_globals, void* user,
-    rocprofvis_python_done_t done);
+    rocprofvis_python_done_t done, unsigned long long timeout_ms);
 
 /*
- * Requests the current script to stop (PyErr_SetInterrupt). Does not
- * wait. No-op if idle.
+ * Requests the current script to stop by raising KeyboardInterrupt in
+ * the interpreter thread. Returns immediately; delivery happens on the
+ * runtime's own thread, so the caller never waits on the GIL. No-op if
+ * idle, and not guaranteed - a script can catch the exception, so the
+ * request is repeated until the script actually ends.
  */
 void rocprofvis_python_interrupt(void);
 

@@ -218,10 +218,27 @@ Disallowed imports fail with `ImportError` (for example `os`,
 
 ### Builtins
 
-A reduced builtin set is provided (`len`, `range`, `sum`, `min`,
-`max`, `sorted`, `enumerate`, exceptions, and similar). There is no
-`print`, `open`, `exec`, `eval`, or `__import__` except the restricted
-one used by `import`.
+A reduced builtin set is provided: `len`, `range`, `sum`, `min`,
+`max`, `abs`, `round`, `sorted`, `enumerate`, `zip`, `map`, `filter`,
+`any`, `all`, `int`, `float`, `str`, `bool`, `list`, `dict`, `set`,
+`tuple`, `bytes`, `isinstance`, `type`, the common exceptions, and the
+class machinery (`object`, `super`, `property`, `staticmethod`,
+`classmethod`).
+
+The language itself is ordinary Python. Functions, **classes**,
+comprehensions, generators, `lambda`, f-strings, decorators, and
+`try`/`except` all work, which is what makes the allowlisted
+`dataclasses` and `enum` modules usable - both are used by declaring a
+class.
+
+`print(...)` works and appends a line to the result, exactly like
+`optiq.result.text(...)`. There is no stdout behind it; `sep=` is
+honoured and `end=` is ignored, because a result is a list of lines
+rather than a character stream.
+
+Not provided: `open`, `eval`, `exec`, `compile`, `getattr`, `globals`,
+`locals`, `input`, and `__import__` except the restricted one used by
+`import`.
 
 ---
 
@@ -492,6 +509,11 @@ optiq.result.text(str(len(rows)))
 - Cancel (Stop in the editor) interrupts the interpreter. In-flight
   fetches are cancelled between wait slices. Cancel is best-effort;
   the script may still finish the current Python statement.
+- A script is stopped after 30 seconds and reported as an error saying
+  it timed out. That is a wall clock, so narrow the time range and
+  compute rather than walking every event in a large trace.
+- Errors carry the full traceback, including the line number in your
+  script, so the failing line can be read straight off the output.
 
 The UI shows the joined `optiq.result.text` output on success, or the
 error message on failure.

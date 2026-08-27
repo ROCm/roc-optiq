@@ -249,6 +249,7 @@ list(APPEND VIEW_FILES
     src/view/src/agenticprofiling/rocprofvis_ai_client.cpp
     src/view/src/agenticprofiling/rocprofvis_ai_client.h
     src/view/src/agenticprofiling/rocprofvis_ai_data_tools.cpp
+    src/view/src/agenticprofiling/rocprofvis_ai_script_tools.cpp
     src/view/src/agenticprofiling/rocprofvis_ai_tool_query.cpp
     src/view/src/agenticprofiling/rocprofvis_ai_tool_query.h
     src/view/src/agenticprofiling/rocprofvis_ai_tool_schema.cpp

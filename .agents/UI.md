@@ -1809,6 +1809,23 @@ Layered, transport at the bottom and the panel at the top:
   land. Those request ids are shared with the normal UI, which is why
   each body checks `IsRequestPending` before issuing its own query and
   reports whether it actually started the fetch.
+- `rocprofvis_ai_script_tools.cpp` - `run_analysis_script`, which is
+  neither of the above: the model writes Python, the interpreter
+  computes the answer, and what comes back is a conclusion rather than
+  rows to format. It exists because arithmetic over many rows costs a
+  page of context through the data tools and one number through a
+  script. **It offers rather than runs** - `OptiqActions::ProposeScript`
+  fills the Script tab of the details panel and selects it, and the user
+  presses Run or Reject, so the model cannot execute code unattended.
+  That wait is on a person, so the tool sets its own `timeout_seconds`
+  instead of the 45s a fetch gets, and the panel asks
+  `AssistantScriptFetchPending` rather than polling a request id,
+  because an approval has no request behind it. **Compiled only when `ROCPROFVIS_ENABLE_SCRIPTING` is also
+  on**; with it off the handler table is empty, the schema never
+  registers the tool, and the prompt never names it, so the model is
+  not offered something that would always fail. It owns
+  `AssistantFetchKind::kScript` and the `FinishAssistantScriptFetch`
+  that `FinishAssistantFetch` delegates to.
 - `rocprofvis_ai_actions.{h,cpp}` - `OptiqActions`, the only place that
   mutates the UI. Every method reproduces one real interaction (a
   click, a drag, a menu item) including the event traffic the rest of
@@ -1817,10 +1834,13 @@ Layered, transport at the bottom and the panel at the top:
 
 **Adding a tool is three edits, and none of them is the dispatcher:** a
 schema entry in `rocprofvis_ai_tool_schema.cpp`, a body in whichever of
-`rocprofvis_ai_ui_tools.cpp` or `rocprofvis_ai_data_tools.cpp` matches
-what it touches, and an entry in that same file's own handler table. A
-body without a schema entry is unreachable; a schema entry without a
-body comes back to the model as an unknown tool.
+`rocprofvis_ai_ui_tools.cpp`, `rocprofvis_ai_data_tools.cpp`, or
+`rocprofvis_ai_script_tools.cpp` matches what it touches, and an entry
+in that same file's own handler table. A body without a schema entry is
+unreachable; a schema entry without a body comes back to the model as an
+unknown tool. The label list at the top of the schema file has to grow
+with it, since that is what `AssistantToolNameList` reports and what the
+panel shows as a status line.
 - `rocprofvis_ai_assistant.{h,cpp}` - `AssistantPanel`, a lazy
   singleton like `LogViewer`. Owns the transcript, the docked column,
   and the turn loop. The composer shows **Explain this view** on an
@@ -1855,6 +1875,14 @@ Rules that are easy to get wrong here:
   model stops calling tools, `BeginFinalAnswer` discards that draft and
   spends one more round with tools off, which is the only prose the
   user reads.
+- **`ASSISTANT_SCRIPT_PROMPT` is appended, not merged.** The base
+  prompt names its tools in one line, so it must never name a tool the
+  build might not have. The scripting paragraph is a second constant
+  concatenated in `StartHttpRequest` under the same `#ifdef` that
+  registers the tool, and it says only *when* to reach for a script -
+  what a script may call is in the tool's schema description, which is
+  the one place the model reads about an API. Say it once, in the place
+  that ships with the tool.
 - **The diagnostic knowledge lives in `ASSISTANT_SYSTEM_PROMPT`, for
   now.** Its `WHAT TO LOOK FOR` list is the catalogue of things worth
   checking (idle GPU, launch-bound, transfer cost, register spilling,
@@ -2754,8 +2782,9 @@ For fast lookup. Each entry: class -> file -> one-line role.
   `rocprofvis_presets.h`.
 - `LogViewer` -> `widgets/rocprofvis_log_viewer.h` -> User-facing
   application log overlay.
-- `ScriptEditor` -> `widgets/rocprofvis_script_editor.h` -> Floating
-  Python analysis editor (scripting flag).
+- `ScriptEditor`, `ScriptApproval` ->
+  `widgets/rocprofvis_script_editor.h` -> The Script tab of the details
+  panel, one per trace, owned by `AnalysisView` (scripting flag).
 - `ProfilesDocument` -> `rocprofvis_profiles_document.h` -> Shared
   `profiles.json` owner.
 - `JsonUtils` -> `rocprofvis_json_utils.h` -> Typed JSON/file helpers.
@@ -2775,12 +2804,18 @@ All under `agenticprofiling/`, compiled only with
   `FinishAssistantFetch`, `BuildAssistantBriefing` ->
   `agenticprofiling/rocprofvis_ai_tools.h`. The dispatcher lives in
   `rocprofvis_ai_tools.cpp`; the bodies are split by what they touch
-  into `rocprofvis_ai_ui_tools.cpp` and
-  `rocprofvis_ai_data_tools.cpp`, each owning its own handler table.
+  into `rocprofvis_ai_ui_tools.cpp`, `rocprofvis_ai_data_tools.cpp`,
+  and `rocprofvis_ai_script_tools.cpp`, each owning its own handler
+  table.
 - `AssistantToolEntry`, `AssistantToolTable`,
-  `GetAssistantUiToolHandlers`, `GetAssistantDataToolHandlers` ->
+  `GetAssistantUiToolHandlers`, `GetAssistantDataToolHandlers`,
+  `GetAssistantScriptToolHandlers`, `FinishAssistantScriptFetch` ->
   `agenticprofiling/rocprofvis_ai_tools_internal.h` -> Private to the
   folder; do not include it from elsewhere.
+- `run_analysis_script` -> `agenticprofiling/rocprofvis_ai_script_tools.cpp`
+  -> Runs model-written Python through `DataProvider::ExecuteScript`.
+  Needs `ROCPROFVIS_ENABLE_SCRIPTING` as well; the table is empty
+  otherwise.
 - `BuildAssistantToolsJson`, `AssistantToolStatusLabel` ->
   `agenticprofiling/rocprofvis_ai_tool_schema.h` -> Thread-safe, reads
   no view state.

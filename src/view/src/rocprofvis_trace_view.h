@@ -28,6 +28,9 @@ class EventSearch;
 class SummaryView;
 class Minimap;
 class MeasurementController;
+#ifdef ROCPROFVIS_ENABLE_SCRIPTING
+enum class ScriptApproval : uint8_t;
+#endif
 
 class SystemTraceProjectSettings : public ProjectSetting
 {
@@ -93,6 +96,14 @@ public:
     std::vector<std::string> ListAnalysisTabs();
     bool                     SelectAnalysisTab(const std::string& name);
     std::string              ActiveAnalysisTab();
+
+#ifdef ROCPROFVIS_ENABLE_SCRIPTING
+    // The Script tab, reached the same way as the rest of the details panel so
+    // the assistant never holds a widget of its own.
+    bool           ProposeScript(const std::string& source);
+    ScriptApproval ScriptProposalState() const;
+    void           ClearScriptProposal();
+#endif
 
     // Remaining toolbar actions, so everything on the strip is reachable.
     void             ResetView();

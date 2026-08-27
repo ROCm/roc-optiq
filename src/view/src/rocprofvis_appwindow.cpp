@@ -27,9 +27,6 @@
 #ifdef ROCPROFVIS_ENABLE_AGENTIC_PROFILING
 #    include "agenticprofiling/rocprofvis_ai_assistant.h"
 #endif
-#ifdef ROCPROFVIS_ENABLE_SCRIPTING
-#    include "widgets/rocprofvis_script_editor.h"
-#endif
 #include "widgets/rocprofvis_dialog.h"
 #include "widgets/rocprofvis_gui_helpers.h"
 #include "widgets/rocprofvis_widget.h"
@@ -179,9 +176,6 @@ AppWindow::~AppWindow()
     AppMonitor::DestroyInstance();
 
     LogViewer::DestroyInstance();
-#ifdef ROCPROFVIS_ENABLE_SCRIPTING
-    ScriptEditor::DestroyInstance();
-#endif
 #ifdef ROCPROFVIS_ENABLE_AGENTIC_PROFILING
     AssistantPanel::DestroyInstance();
 #endif
@@ -844,9 +838,6 @@ AppWindow::Render()
     RenderFileDialog();
 
     LogViewer::GetInstance()->Render();
-#ifdef ROCPROFVIS_ENABLE_SCRIPTING
-    ScriptEditor::GetInstance()->Render();
-#endif
 #ifdef ROCPROFVIS_DEVELOPER_MODE
     RenderDebugOuput();
 #endif
@@ -1305,10 +1296,6 @@ AppWindow::RenderViewMenu(Project* project)
                         LogViewer::GetInstance()->VisiblePtr());
 #ifdef ROCPROFVIS_ENABLE_AGENTIC_PROFILING
         ImGui::MenuItem("Ask Optiq", nullptr, AssistantPanel::GetInstance()->VisiblePtr());
-#endif
-#ifdef ROCPROFVIS_ENABLE_SCRIPTING
-        ImGui::MenuItem("Show Script Editor", nullptr,
-                        ScriptEditor::GetInstance()->VisiblePtr());
 #endif
         ImGui::EndMenu();
     }

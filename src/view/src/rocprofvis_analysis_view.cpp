@@ -9,6 +9,9 @@
 #include "rocprofvis_multi_track_table.h"
 #include "rocprofvis_top_events_view.h"
 #include "rocprofvis_track_details.h"
+#ifdef ROCPROFVIS_ENABLE_SCRIPTING
+#    include "widgets/rocprofvis_script_editor.h"
+#endif
 
 namespace RocProfVis
 {
@@ -79,6 +82,16 @@ AnalysisView::AnalysisView(DataProvider& dp, std::shared_ptr<TrackTopology> topo
     tab_item.m_widget    = m_annotation_view;
     m_tab_container->AddTab(tab_item);
 
+#ifdef ROCPROFVIS_ENABLE_SCRIPTING
+    // Last, because it is the only tab that writes rather than reads.
+    m_script_editor = std::make_shared<ScriptEditor>(dp, timeline_selection);
+    tab_item.m_label     = "Script";
+    tab_item.m_id        = "script_editor";
+    tab_item.m_can_close = false;
+    tab_item.m_widget    = m_script_editor;
+    m_tab_container->AddTab(tab_item);
+#endif
+
     m_tab_container->SetAllowToolTips(false);
     m_tab_container->SetActiveTab(0);
 
@@ -141,6 +154,14 @@ AnalysisView::ListTabs()
     }
     return names;
 }
+
+#ifdef ROCPROFVIS_ENABLE_SCRIPTING
+std::shared_ptr<ScriptEditor>
+AnalysisView::GetScriptEditor() const
+{
+    return m_script_editor;
+}
+#endif
 
 std::string
 AnalysisView::ActiveTab()

@@ -17,6 +17,9 @@
 #include "rocprofvis_trace_view.h"
 #include "widgets/rocprofvis_log_viewer.h"
 #include "widgets/rocprofvis_notification_manager.h"
+#ifdef ROCPROFVIS_ENABLE_SCRIPTING
+#    include "widgets/rocprofvis_script_editor.h"
+#endif
 
 namespace RocProfVis
 {
@@ -491,6 +494,38 @@ OptiqActions::SelectAnalysisTab(const std::string& name)
 {
     return m_trace_view != nullptr && m_trace_view->SelectAnalysisTab(name);
 }
+
+#ifdef ROCPROFVIS_ENABLE_SCRIPTING
+// Fills the Script tab and brings the user to it. Selecting the tab is part of
+// offering: a question the user cannot see is one the assistant would wait on
+// forever.
+bool
+OptiqActions::ProposeScript(const std::string& source)
+{
+    if(m_trace_view == nullptr || !m_trace_view->ProposeScript(source))
+    {
+        return false;
+    }
+    m_trace_view->SelectAnalysisTab("Script");
+    return true;
+}
+
+ScriptApproval
+OptiqActions::ScriptProposalState() const
+{
+    return m_trace_view != nullptr ? m_trace_view->ScriptProposalState()
+                                   : ScriptApproval::kNone;
+}
+
+void
+OptiqActions::ClearScriptProposal()
+{
+    if(m_trace_view != nullptr)
+    {
+        m_trace_view->ClearScriptProposal();
+    }
+}
+#endif
 
 // Shows or hides the arrows linking an event to what it launched or waited on.
 bool

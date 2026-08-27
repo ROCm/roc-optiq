@@ -188,8 +188,10 @@ ScriptEngine::ExecuteAsync(rocprofvis_controller_t* controller, char const* sour
                 std::lock_guard<std::mutex> lock(m_mutex);
                 m_sessions[future] = session;
             }
+            // Zero takes the runtime's own deadline, which is the one users
+            // and the assistant both run under.
             rocprofvis_python_result_t python_result = rocprofvis_python_exec(
-                source, optiq_prepare_globals, session, on_python_done);
+                source, optiq_prepare_globals, session, on_python_done, 0);
             if(python_result == kRocProfVisPythonSuccess)
             {
                 result = script_result;

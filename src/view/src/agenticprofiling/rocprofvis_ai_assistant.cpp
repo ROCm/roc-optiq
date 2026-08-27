@@ -309,6 +309,37 @@ constexpr const char* ASSISTANT_SYSTEM_PROMPT =
     "and do not spell the options out again in the prose - one line inviting the "
     "user to go deeper is enough.";
 
+#ifdef ROCPROFVIS_ENABLE_SCRIPTING
+// Appended to the prompt only when scripting is built in, so the base prompt
+// never names a tool this build cannot run. What a script may use is in the
+// tool's own schema description; this is only about when to reach for one.
+constexpr const char* ASSISTANT_SCRIPT_PROMPT =
+    "\nRUNNING A SCRIPT. You also have run_analysis_script, which executes "
+    "Python against this trace and hands back only what it computed. Reach for "
+    "it when the answer lives in arithmetic over many rows rather than in the "
+    "rows themselves: the gaps between every dispatch, a percentile, the "
+    "overlap between two tracks, totals grouped by name, self time by call "
+    "depth. Reading a thousand rows to add them up is what it exists to "
+    "replace.\n"
+    "Keep using the ordinary tools for everything else. A single lookup, a "
+    "top-ten list, one event's details - those are already one call, and a "
+    "script would be slower and no more accurate. trace_overview still comes "
+    "first either way, because a script that knows the busy window reads far "
+    "less of the trace.\n"
+    "Have the script report the finding, not its working out: a handful of "
+    "numbers you can use in a sentence, not a dump of the rows it walked. If it "
+    "fails you get the traceback, so fix the line it names and offer it again "
+    "rather than abandoning the approach. Numbers a script computed are "
+    "evidence like any other; say that you worked them out from the trace, and "
+    "never present a figure the script did not actually produce.\n"
+    "The user has to approve a script before it runs, so it is read as well as "
+    "executed: keep it short, name things plainly, and say in one line what it "
+    "is about to do. Tell them you are offering one and why, rather than "
+    "narrating that you called a tool. If they decline, that is an answer - "
+    "take the other route or answer with what you have, and do not offer the "
+    "same script back to them.";
+#endif
+
 }  // namespace
 
 AssistantPanel* AssistantPanel::s_instance = nullptr;
@@ -729,6 +760,9 @@ AssistantPanel::StartHttpRequest()
     AssistantMessage system_message;
     system_message.role = "system";
     system_message.content = ASSISTANT_SYSTEM_PROMPT;
+#ifdef ROCPROFVIS_ENABLE_SCRIPTING
+    system_message.content += ASSISTANT_SCRIPT_PROMPT;
+#endif
     request.messages.push_back(system_message);
     request.messages.insert(request.messages.end(), m_conversation.begin(),
                             m_conversation.end());
@@ -1014,6 +1048,7 @@ AssistantPanel::BeginFetchWait(const AssistantToolStartResult& started,
     m_fetch_wait.tool_name     = tool_name;
     m_fetch_wait.prefix        = started.content;
     m_fetch_wait.started       = started_at;
+    m_fetch_wait.timeout_seconds = started.timeout_seconds;
 }
 
 // Hands one tool's output back to the model and moves on to the next.
@@ -1069,6 +1104,12 @@ AssistantPanel::ContinueAfterTools()
 bool
 AssistantPanel::AnyFetchPending(const AssistantToolContext& context) const
 {
+    // A script waits on the user reading it, then on the run they approved.
+    // Neither has a request id, so the tool answers for itself.
+    if(m_fetch_wait.fetch.kind == AssistantFetchKind::kScript)
+    {
+        return AssistantScriptFetchPending(context);
+    }
     for(uint64_t request_id : m_fetch_wait.request_ids)
     {
         if(context.data_provider->IsRequestPending(request_id))
@@ -1117,8 +1158,11 @@ AssistantPanel::PollToolFetch()
 
     const std::chrono::seconds elapsed = std::chrono::duration_cast<std::chrono::seconds>(
         std::chrono::steady_clock::now() - m_fetch_wait.started);
+    const int64_t deadline = m_fetch_wait.timeout_seconds > 0
+                                 ? static_cast<int64_t>(m_fetch_wait.timeout_seconds)
+                                 : ASSISTANT_FETCH_TIMEOUT_SECONDS;
     const bool pending   = AnyFetchPending(context);
-    const bool timed_out = elapsed.count() >= ASSISTANT_FETCH_TIMEOUT_SECONDS;
+    const bool timed_out = elapsed.count() >= deadline;
     if(pending && !timed_out)
     {
         return;
@@ -1141,7 +1185,10 @@ AssistantPanel::PollToolFetch()
         return;
     }
 
-    if(pending)
+    // A script is answered by its own tool even when the wait runs out: only
+    // that side knows whether the user never replied or the run was abandoned,
+    // and it has an outstanding offer to clear either way.
+    if(pending && m_fetch_wait.fetch.kind != AssistantFetchKind::kScript)
     {
         FinishCurrentTool("Timed out waiting for " + m_fetch_wait.tool_name + ".");
         return;

@@ -16,9 +16,6 @@
 #ifdef ROCPROFVIS_ENABLE_AGENTIC_PROFILING
 #    include "agenticprofiling/rocprofvis_ai_assistant.h"
 #endif
-#ifdef ROCPROFVIS_ENABLE_SCRIPTING
-#    include "widgets/rocprofvis_script_editor.h"
-#endif
 #include "rocprofvis_compute_workload_view.h"
 #include "rocprofvis_event_manager.h"
 #include "rocprofvis_settings_manager.h"
@@ -103,6 +100,17 @@ ComputeView::ComputeView()
             // Trigger new table data event to update the UI.
             EventManager::GetInstance()->AddEvent(
                 std::make_shared<TableDataEvent>(trace_path, request_id, response_code));
+        });
+
+    // Same forwarding TraceView installs. Without it a compute tab runs
+    // requests that report no progress at all, which the script editor shows
+    // as a run stuck at zero.
+    m_data_provider.SetRequestProgressUpdateCallback(
+        [this](const RequestInfo& request, uint64_t pct, const std::string& message) {
+            EventManager::GetInstance()->AddEvent(
+                std::make_shared<RequestProgressUpdateEvent>(
+                    request.request_id, request.request_type, pct, message,
+                    m_data_provider.GetTraceFilePath()));
         });
 }
 
@@ -277,10 +285,6 @@ ComputeView::RenderToolbar()
 #ifdef ROCPROFVIS_ENABLE_AGENTIC_PROFILING
     VerticalSeparator(&m_settings_manager);
     AssistantPanel::RenderToolbarButton();
-#endif
-#ifdef ROCPROFVIS_ENABLE_SCRIPTING
-    VerticalSeparator(&m_settings_manager);
-    ScriptEditor::RenderToolbarButton();
 #endif
 
     // pop content style

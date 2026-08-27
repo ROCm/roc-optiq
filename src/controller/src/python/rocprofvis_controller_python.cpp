@@ -1424,6 +1424,70 @@ PyMethodDef kResultMethods[] = {
     {"text", result_text, METH_VARARGS, "Append a text item to the script result."},
     {nullptr, nullptr, 0, nullptr}};
 
+/*
+ * print(*values, sep=' ', end='\n') writing into the script result.
+ *
+ * The sandbox has no stdout, so the real print is not available and reaching
+ * for it - which is the first thing anyone writes, model or human - used to
+ * fail with a bare NameError. Sending it to the same place as
+ * optiq.result.text costs nothing and makes ordinary Python work.
+ *
+ * end is accepted and ignored: a result is a list of lines rather than a
+ * character stream, so every call is one line.
+ */
+PyObject*
+script_print(PyObject* self, PyObject* args, PyObject* kwargs)
+{
+    ScriptResult* result = result_from_module(self);
+    if(!result)
+    {
+        PyErr_SetString(PyExc_RuntimeError, "optiq result session is missing");
+        return nullptr;
+    }
+
+    char const* separator = " ";
+    if(kwargs)
+    {
+        PyObject* sep_obj = PyDict_GetItemString(kwargs, "sep");
+        if(sep_obj && PyUnicode_Check(sep_obj))
+        {
+            char const* sep_utf8 = PyUnicode_AsUTF8(sep_obj);
+            if(sep_utf8)
+            {
+                separator = sep_utf8;
+            }
+        }
+    }
+
+    std::string      line;
+    Py_ssize_t const count = PyTuple_Size(args);
+    for(Py_ssize_t i = 0; i < count; i++)
+    {
+        PyObject* text = PyObject_Str(PyTuple_GetItem(args, i));
+        if(!text)
+        {
+            return nullptr;
+        }
+        char const* utf8 = PyUnicode_AsUTF8(text);
+        if(utf8)
+        {
+            if(i > 0)
+            {
+                line += separator;
+            }
+            line += utf8;
+        }
+        Py_DECREF(text);
+    }
+
+    result->AppendText(line.c_str());
+    Py_RETURN_NONE;
+}
+
+PyMethodDef kPrintMethod = {"print", reinterpret_cast<PyCFunction>(script_print),
+                            METH_VARARGS | METH_KEYWORDS,
+                            "Append a line to the script result."};
+
 PyObject*
 make_result_module(ScriptResult* script_result)
 {
@@ -1478,6 +1542,19 @@ optiq_prepare_globals(void* py_dict, void* script_session)
     if(result_mod)
     {
         PyObject_SetAttrString(optiq, "result", result_mod);
+        // Bound to the result module so it reaches the same ScriptResult, and
+        // put straight into globals so plain print(...) resolves before the
+        // restricted builtins are consulted.
+        PyObject* print_fn = PyCFunction_New(&kPrintMethod, result_mod);
+        if(print_fn)
+        {
+            PyDict_SetItemString(globals, "print", print_fn);
+            Py_DECREF(print_fn);
+        }
+        else
+        {
+            PyErr_Clear();
+        }
         Py_DECREF(result_mod);
     }
 

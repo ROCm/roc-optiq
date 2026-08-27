@@ -9,7 +9,11 @@
 #include <catch2/catch_session.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <cfloat>
+#include <chrono>
+#include <condition_variable>
+#include <cstdint>
 #include <functional>
+#include <mutex>
 #include <string>
 #include <thread>
 
@@ -77,6 +81,48 @@ load_sample_controller()
         return nullptr;
     }
     return controller;
+}
+
+// What one direct-to-runtime exec reported. The deadline lives in the runtime,
+// so these tests go straight at it rather than through the script ABI, which
+// always asks for the production timeout.
+struct exec_outcome_t
+{
+    std::mutex                 mutex;
+    std::condition_variable    done_cv;
+    bool                       done   = false;
+    rocprofvis_python_result_t result = kRocProfVisPythonSuccess;
+    std::string                error;
+};
+
+void
+on_exec_done(void* user, rocprofvis_python_result_t result, char const* error_message)
+{
+    exec_outcome_t* outcome = static_cast<exec_outcome_t*>(user);
+    {
+        std::lock_guard<std::mutex> lock(outcome->mutex);
+        outcome->result = result;
+        outcome->error  = error_message ? error_message : "";
+        outcome->done   = true;
+    }
+    outcome->done_cv.notify_all();
+}
+
+// Runs source with an explicit deadline and blocks until it reports back.
+// Returns false when the run never completed, which is the failure this is
+// looking for: a deadline that does not fire leaves the interpreter wedged.
+bool
+run_with_timeout(char const* source, uint64_t timeout_ms, exec_outcome_t& outcome,
+                 uint64_t wait_budget_ms)
+{
+    if(rocprofvis_python_exec(source, nullptr, &outcome, on_exec_done, timeout_ms) !=
+       kRocProfVisPythonSuccess)
+    {
+        return false;
+    }
+    std::unique_lock<std::mutex> lock(outcome.mutex);
+    return outcome.done_cv.wait_for(lock, std::chrono::milliseconds(wait_budget_ms),
+                                    [&outcome]() { return outcome.done; });
 }
 
 rocprofvis_handle_t*
@@ -185,6 +231,159 @@ TEST_CASE("Script execute runs on the interpreter thread")
 
     rocprofvis_script_result_free(result);
     rocprofvis_controller_future_free(future);
+}
+
+TEST_CASE("Script execute stops a script that never ends")
+{
+    // Nothing in this script yields, calls a binding, or raises. Only the
+    // deadline can end it, so if the wait below expires the interpreter thread
+    // is wedged for the life of the process.
+    exec_outcome_t outcome;
+    REQUIRE(run_with_timeout("while True:\n    pass\n", 500, outcome, 15000));
+
+    std::lock_guard<std::mutex> lock(outcome.mutex);
+    // A timeout is a script to go and fix, so it is an error rather than a
+    // cancellation, and it says how long it was given.
+    REQUIRE(outcome.result == kRocProfVisPythonError);
+    REQUIRE(outcome.error.find("timed out") != std::string::npos);
+}
+
+TEST_CASE("Script execute stops a script that swallows the interrupt")
+{
+    // A bare except catches the first KeyboardInterrupt and keeps going, which
+    // model-written code does. The interrupt has to be re-sent for the deadline
+    // to mean anything.
+    exec_outcome_t outcome;
+    REQUIRE(run_with_timeout("while True:\n"
+                             "    try:\n"
+                             "        pass\n"
+                             "    except Exception:\n"
+                             "        pass\n",
+                             500, outcome, 15000));
+
+    std::lock_guard<std::mutex> lock(outcome.mutex);
+    REQUIRE(outcome.result == kRocProfVisPythonError);
+    REQUIRE(outcome.error.find("timed out") != std::string::npos);
+}
+
+TEST_CASE("Script execute survives a script that outstayed its deadline")
+{
+    // The stopped script must not leave a raise pending for whatever runs
+    // next, which is what the clear at the top of each exec is for.
+    exec_outcome_t timed_out;
+    REQUIRE(run_with_timeout("while True:\n    pass\n", 500, timed_out, 15000));
+
+    exec_outcome_t healthy;
+    REQUIRE(run_with_timeout("x = 1 + 1\n", 0, healthy, 15000));
+
+    std::lock_guard<std::mutex> lock(healthy.mutex);
+    REQUIRE(healthy.result == kRocProfVisPythonSuccess);
+    REQUIRE(healthy.error.empty());
+}
+
+TEST_CASE("Script error carries the traceback and the failing line")
+{
+    rocprofvis_controller_future_t*        future = rocprofvis_controller_future_alloc();
+    rocprofvis_controller_script_result_t* result = nullptr;
+    REQUIRE(future);
+
+    rocprofvis_result_t error = rocprofvis_script_execute_async(
+        nullptr, "def inner():\n    raise ValueError('boom')\ninner()\n", nullptr,
+        future, &result);
+    REQUIRE(error == kRocProfVisResultSuccess);
+    REQUIRE(wait_for_script(future) == kRocProfVisResultSuccess);
+
+    // Without the traceback the author only learns that something raised, which
+    // is not enough to fix the line that did it.
+    std::string message = get_handle_string(result, kRPVControllerScriptResultErrorMessage);
+    REQUIRE(message.find("ValueError") != std::string::npos);
+    REQUIRE(message.find("boom") != std::string::npos);
+    REQUIRE(message.find("Traceback") != std::string::npos);
+    REQUIRE(message.find("inner") != std::string::npos);
+
+    rocprofvis_script_result_free(result);
+    rocprofvis_controller_future_free(future);
+}
+
+// Runs source through the real script ABI and returns the result text, with
+// any error message appended so a failure says why rather than just comparing
+// unequal.
+namespace
+{
+std::string
+run_script_text(char const* source)
+{
+    rocprofvis_controller_future_t*        future = rocprofvis_controller_future_alloc();
+    rocprofvis_controller_script_result_t* result = nullptr;
+    if(!future)
+    {
+        return "no future";
+    }
+    std::string out;
+    if(rocprofvis_script_execute_async(nullptr, source, nullptr, future, &result) ==
+           kRocProfVisResultSuccess &&
+       wait_for_script(future) == kRocProfVisResultSuccess)
+    {
+        out = get_handle_string(result, kRPVControllerScriptResultText);
+        const std::string error =
+            get_handle_string(result, kRPVControllerScriptResultErrorMessage);
+        if(!error.empty())
+        {
+            out += "|ERROR:" + error;
+        }
+    }
+    if(result)
+    {
+        rocprofvis_script_result_free(result);
+    }
+    rocprofvis_controller_future_free(future);
+    return out;
+}
+}  // namespace
+
+TEST_CASE("Script print writes into the result")
+{
+    // print is the first thing anyone writes, so it goes to the result rather
+    // than failing on a sandbox with no stdout.
+    REQUIRE(run_script_text("print('hello')") == "hello");
+    REQUIRE(run_script_text("print('a', 1, 2.5)") == "a 1 2.5");
+    REQUIRE(run_script_text("print('a', 'b', sep='-')") == "a-b");
+}
+
+TEST_CASE("Script can define classes and use the allowlisted modules")
+{
+    // A `class` statement compiles to __build_class__. Without it every class
+    // fails, and dataclasses and enum go with it, since both are used by
+    // declaring a class. The tool description promises these work.
+    REQUIRE(run_script_text("class C:\n"
+                            "    def __init__(self):\n"
+                            "        self.x = 7\n"
+                            "print(C().x)\n") == "7");
+    REQUIRE(run_script_text("@dataclasses.dataclass\n"
+                            "class P:\n"
+                            "    x: int\n"
+                            "print(P(3).x)\n") == "3");
+    REQUIRE(run_script_text("class E(enum.Enum):\n"
+                            "    A = 1\n"
+                            "print(E.A.value)\n") == "1");
+    REQUIRE(run_script_text("P = collections.namedtuple('P', 'a b')\n"
+                            "print(P(1, 2).a)\n") == "1");
+    REQUIRE(run_script_text("print(statistics.median([1, 3, 2]))") == "2");
+    REQUIRE(run_script_text("print(json.dumps({'a': 1}))") == "{\"a\": 1}");
+}
+
+TEST_CASE("Script sandbox still refuses the dangerous builtins")
+{
+    // Adding the class machinery must not have opened anything else up.
+    char const* const blocked[] = { "open('x')",    "eval('1')",  "exec('x=1')",
+                                    "getattr(1,'real')", "globals()",  "input()",
+                                    "compile('1','<s>','eval')" };
+    for(char const* source : blocked)
+    {
+        const std::string out = run_script_text(source);
+        INFO("source: " << source << " gave: " << out);
+        REQUIRE(out.find("ERROR:") != std::string::npos);
+    }
 }
 
 TEST_CASE("Script execute rejects disallowed imports")

@@ -2006,6 +2006,10 @@ FinishAssistantFetch(const AssistantToolContext& context,
     {
         return FormatTrackStatistics(context, fetch.track_id);
     }
+    if(fetch.kind == AssistantFetchKind::kScript)
+    {
+        return FinishAssistantScriptFetch(context);
+    }
     if(fetch.kind == AssistantFetchKind::kMetrics)
     {
         ComputeDataModel& model = context.data_provider->ComputeModel();

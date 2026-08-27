@@ -240,6 +240,13 @@ public:
     bool ExecuteScript(const std::string& source, const std::vector<uint64_t>& track_ids,
                        double start_ts, double end_ts);
     bool CancelScript();
+
+    // What the last script on this provider produced, kept after its request
+    // is gone. The editor reads the completion event, but a caller that polls
+    // the request id instead - the assistant's script tool - has nothing left
+    // to read by the time it notices the request finished. Returns false when
+    // no script has run, or the script failed.
+    bool GetLastScriptResult(std::string& text_out, std::string& error_out) const;
 #endif
 
     bool CleanupDatabase(bool rebuild);
@@ -369,6 +376,13 @@ private:
     std::string m_progress_mesage;
     // Current loading status progress in percents
     uint64_t m_progress_percent;
+#ifdef ROCPROFVIS_ENABLE_SCRIPTING
+    // Result of the last script, outliving its request. See
+    // GetLastScriptResult.
+    std::string m_script_result_text;
+    std::string m_script_result_error;
+    bool        m_script_result_ok = false;
+#endif
 
     void ProcessLoadComputeTrace(RequestInfo& req);
     inline void LoadWorkload(uint64_t workload_index);

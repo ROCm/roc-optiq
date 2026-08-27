@@ -76,7 +76,8 @@ IconButton(const char* icon, ImFont* icon_font, ImVec2 size = ImVec2(0, 0),
            const char* tooltip = nullptr, bool frameless = true,
            ImVec2 frame_padding = ImVec2(0, 0), ImU32 bg_color = IM_COL32(0, 0, 0, 0),
            ImU32 bg_color_hover  = IM_COL32(0, 0, 0, 0),
-           ImU32 bg_color_active = IM_COL32(0, 0, 0, 0), const char* id = nullptr);
+           ImU32 bg_color_active = IM_COL32(0, 0, 0, 0), const char* id = nullptr,
+           float font_size = 0.0f);
 
 bool
 IsMouseReleasedWithDragCheck(ImGuiMouseButton button, float drag_threshold = 5.0f);
@@ -187,7 +188,8 @@ PanelFieldLabel(const char* text, bool align_to_frame = true,
 // Renders an icon-font glyph tinted with a theme color; advances the cursor
 // like TextUnformatted.
 void
-PanelIcon(const char* glyph, Colors color, SettingsManager* settings = nullptr);
+PanelIcon(const char* glyph, Colors color, SettingsManager* settings = nullptr,
+          float font_size = 0.0f);
 
 // Accent-colored primary action button (accent fill + on-accent text). Returns
 // true when clicked.

@@ -435,10 +435,6 @@ private:
 
     ComputeDataModel m_compute_model;
 
-    // Code View permits one PC sampling request per trace. Completed data is
-    // accepted only when it belongs to the latest submitted selection.
-    uint32_t m_pc_sampling_generation = 0;
-
     std::function<void(const std::string&, uint64_t, bool)> m_metrics_fetch_callback;
     std::function<void(const std::string&, PcSamplingRequestKind, uint32_t, uint64_t,
                        uint32_t, bool)>

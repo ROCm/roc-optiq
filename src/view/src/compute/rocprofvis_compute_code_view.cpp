@@ -1,7 +1,7 @@
 // Copyright Advanced Micro Devices, Inc.
 // SPDX-License-Identifier: MIT
 
-#include "rocprofvis_compute_isa_view.h"
+#include "rocprofvis_compute_code_view.h"
 #include "rocprofvis_compute_selection.h"
 #include "rocprofvis_data_provider.h"
 #include "rocprofvis_events.h"
@@ -11,7 +11,6 @@
 #include <algorithm>
 #include <string>
 #include <unordered_map>
-#include <utility>
 
 namespace RocProfVis
 {
@@ -111,10 +110,9 @@ ComputeIsaView::LoadData(uint32_t kernel_id)
     }
     if(m_current_workload_id == ComputeSelection::INVALID_SELECTION_ID)
     {
+        m_pending_isa_fetch = m_pending_source_fetch = m_pending_stall_fetch = false;
         if(m_fetch_in_progress)
-        {
             m_data_provider.CancelRequest(m_active_request_id);
-        }
         ClearSelectionData();
         return;
     }
@@ -124,10 +122,9 @@ ComputeIsaView::LoadData(uint32_t kernel_id)
     if(!kernel_info)
     {
         m_current_workload_id = ComputeSelection::INVALID_SELECTION_ID;
+        m_pending_isa_fetch = m_pending_source_fetch = m_pending_stall_fetch = false;
         if(m_fetch_in_progress)
-        {
             m_data_provider.CancelRequest(m_active_request_id);
-        }
         ClearSelectionData();
         return;
     }
@@ -157,7 +154,9 @@ ComputeIsaView::ClearSelectionData()
     m_loaded_source_files.clear();
     m_current_source_file_uuid = 0;
     m_current_code_object_uuid = ComputeSelection::INVALID_SELECTION_ID;
-    ClearPendingPcSamplingFetches();
+    m_pending_isa_fetch        = false;
+    m_pending_source_fetch     = false;
+    m_pending_stall_fetch      = false;
     m_isa_data_loaded          = false;
     m_stall_data_loaded        = false;
     m_source_code->ChangeStallVisibility(false);
@@ -170,75 +169,56 @@ ComputeIsaView::QueuePcSamplingFetch(PcSamplingRequestKind kind)
 {
     switch(kind)
     {
-        case PcSamplingRequestKind::kIsa:
-        {
-            m_pending_isa_fetch = true;
-            break;
-        }
-        case PcSamplingRequestKind::kSource:
-        {
-            m_pending_source_fetch = true;
-            break;
-        }
-        case PcSamplingRequestKind::kStalls:
-        {
-            m_pending_stall_fetch = true;
-            break;
-        }
+        case PcSamplingRequestKind::kIsa: m_pending_isa_fetch = true; break;
+        case PcSamplingRequestKind::kSource: m_pending_source_fetch = true; break;
+        case PcSamplingRequestKind::kStalls: m_pending_stall_fetch = true; break;
     }
 }
 
 void
-ComputeIsaView::ClearPendingPcSamplingFetches()
+ComputeIsaView::FetchPendingPcSampling()
 {
-    m_pending_isa_fetch    = false;
-    m_pending_source_fetch = false;
-    m_pending_stall_fetch  = false;
-}
-
-bool
-ComputeIsaView::HasValidPcSamplingSelection() const
-{
-    return m_current_kernel_id != ComputeSelection::INVALID_SELECTION_ID &&
-           m_current_workload_id != ComputeSelection::INVALID_SELECTION_ID;
-}
-
-bool
-ComputeIsaView::TryTakeNextPendingPcSamplingFetch(PcSamplingRequestKind& kind)
-{
-    bool found = true;
-    if(std::exchange(m_pending_isa_fetch, false))
+    if(m_current_kernel_id == ComputeSelection::INVALID_SELECTION_ID ||
+       m_current_workload_id == ComputeSelection::INVALID_SELECTION_ID)
     {
-        kind = PcSamplingRequestKind::kIsa;
+        m_pending_isa_fetch = m_pending_source_fetch = m_pending_stall_fetch = false;
+        if(m_fetch_in_progress)
+            m_data_provider.CancelRequest(m_active_request_id);
+        return;
     }
-    else if(std::exchange(m_pending_source_fetch, false))
+
+    if(m_fetch_in_progress) return;
+
+    PcSamplingRequestKind kind;
+    if(m_pending_isa_fetch)
     {
-        kind = PcSamplingRequestKind::kSource;
+        kind                = PcSamplingRequestKind::kIsa;
+        m_pending_isa_fetch = false;
     }
-    else if(std::exchange(m_pending_stall_fetch, false))
+    else if(m_pending_source_fetch)
     {
-        kind = PcSamplingRequestKind::kStalls;
+        kind                   = PcSamplingRequestKind::kSource;
+        m_pending_source_fetch = false;
+    }
+    else if(m_pending_stall_fetch)
+    {
+        kind                  = PcSamplingRequestKind::kStalls;
+        m_pending_stall_fetch = false;
     }
     else
     {
-        found = false;
+        return;
     }
-    return found;
-}
 
-void
-ComputeIsaView::SubmitPcSamplingFetch(PcSamplingRequestKind kind)
-{
     const uint64_t request_id =
         RequestIdBuilder::MakeRequestId(RequestType::kFetchPcSampling);
     const uint64_t source_file_uuid =
         kind == PcSamplingRequestKind::kSource ? m_current_source_file_uuid : 0;
 
     ++m_fetch_generation;
-    const PcSamplingRequestParams params(kind, m_current_workload_id,
-                                         m_current_kernel_id, source_file_uuid,
-                                         m_fetch_generation);
-    if(m_data_provider.FetchPcSampling(params))
+    if(m_data_provider.FetchPcSampling(
+           PcSamplingRequestParams(kind, m_current_workload_id, m_current_kernel_id,
+                                   source_file_uuid, m_fetch_generation)))
     {
         m_active_request_id   = request_id;
         m_active_request_kind = kind;
@@ -248,33 +228,6 @@ ComputeIsaView::SubmitPcSamplingFetch(PcSamplingRequestKind kind)
     {
         QueuePcSamplingFetch(kind);
     }
-}
-
-void
-ComputeIsaView::FetchPendingPcSampling()
-{
-    if(!HasValidPcSamplingSelection())
-    {
-        ClearPendingPcSamplingFetches();
-        if(m_fetch_in_progress)
-        {
-            m_data_provider.CancelRequest(m_active_request_id);
-        }
-        return;
-    }
-
-    if(m_fetch_in_progress)
-    {
-        return;
-    }
-
-    PcSamplingRequestKind kind = PcSamplingRequestKind::kIsa;
-    if(!TryTakeNextPendingPcSamplingFetch(kind))
-    {
-        return;
-    }
-
-    SubmitPcSamplingFetch(kind);
 }
 
 void

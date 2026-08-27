@@ -4441,8 +4441,6 @@ DataProvider::FetchPcSampling(const PcSamplingRequestParams& params)
 
     if(result == kRocProfVisResultSuccess)
     {
-        m_pc_sampling_generation = params.m_generation;
-
         m_requests.emplace(
             request_id,
             RequestInfo{ request_id, future, nullptr, pc_handle, args,
@@ -4472,8 +4470,6 @@ DataProvider::ProcessLoadComputeTrace(RequestInfo& req)
         }
         return;
     }
-    m_pc_sampling_generation = 0;
-
     uint64_t            num_workloads = 0;
     rocprofvis_result_t result        = rocprofvis_controller_get_uint64(
         m_trace_controller, kRPVControllerNumWorkloads, 0, &num_workloads);
@@ -5530,11 +5526,7 @@ DataProvider::ProcessPcSamplingRequest(RequestInfo& req)
     rocprofvis_handle_t* pc_handle = req.request_obj_handle;
     uint64_t             completed_source_file_uuid = params->m_source_file_uuid;
 
-    // Discard results that belong to a superseded Code View selection.
-    const bool is_current_generation =
-        m_pc_sampling_generation == params->m_generation;
-
-    if(success && pc_handle && is_current_generation)
+    if(success && pc_handle)
     {
         KernelInfo* kernel = m_compute_model.GetKernelInfoMutable(
             params->m_workload_id, params->m_kernel_id);
@@ -5568,12 +5560,6 @@ DataProvider::ProcessPcSamplingRequest(RequestInfo& req)
             }
         }
     }
-    else if(success && !is_current_generation)
-    {
-        spdlog::debug("PC sampling result for kernel {} generation {} discarded (current: {})",
-                      params->m_kernel_id, params->m_generation,
-                      m_pc_sampling_generation);
-    }
     else if(!success)
     {
         spdlog::warn("PC sampling request failed with code {}", req.response_code);
@@ -5585,8 +5571,7 @@ DataProvider::ProcessPcSamplingRequest(RequestInfo& req)
     {
         m_pc_sampling_fetch_callback(m_model.GetTraceFilePath(), params->m_kind,
                                      params->m_kernel_id, completed_source_file_uuid,
-                                     params->m_generation,
-                                     success && is_current_generation);
+                                     params->m_generation, success);
     }
 }
 

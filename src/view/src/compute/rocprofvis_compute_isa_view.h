@@ -47,6 +47,10 @@ private:
     void ClearSelectionData();
     void LoadSourceFileList(const PcSamplingData& data);
     void QueuePcSamplingFetch(PcSamplingRequestKind kind);
+    void ClearPendingPcSamplingFetches();
+    bool HasValidPcSamplingSelection() const;
+    bool TryTakeNextPendingPcSamplingFetch(PcSamplingRequestKind& kind);
+    void SubmitPcSamplingFetch(PcSamplingRequestKind kind);
     void FetchPendingPcSampling();
     void RefreshCodeWidgets();
     void OnPcSamplingReady(PcSamplingRequestKind kind, uint32_t kernel_id,

@@ -367,10 +367,14 @@ ComputeIsaView::RefreshCodeWidgets()
 }
 
 void
-ComputeIsaView::Render()
+ComputeIsaView::Update()
 {
     FetchPendingPcSampling();
+}
 
+void
+ComputeIsaView::Render()
+{
     RenderControlPanel();
 
     ImGui::PushFont(m_settings.GetFontManager().GetFont(FontType::kCode), 0.0f);

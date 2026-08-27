@@ -36,6 +36,7 @@ public:
     explicit ComputeIsaView(DataProvider& data_provider);
     ~ComputeIsaView();
 
+    void Update() override;
     void Render() override;
 private:
     void RenderControlPanel();

@@ -250,6 +250,7 @@ list(APPEND VIEW_FILES
     src/view/src/agenticprofiling/rocprofvis_ai_client.h
     src/view/src/agenticprofiling/rocprofvis_ai_data_tools.cpp
     src/view/src/agenticprofiling/rocprofvis_ai_script_tools.cpp
+    src/view/src/agenticprofiling/rocprofvis_ai_settings.cpp
     src/view/src/agenticprofiling/rocprofvis_ai_tool_query.cpp
     src/view/src/agenticprofiling/rocprofvis_ai_tool_query.h
     src/view/src/agenticprofiling/rocprofvis_ai_tool_schema.cpp
@@ -257,6 +258,7 @@ list(APPEND VIEW_FILES
     src/view/src/agenticprofiling/rocprofvis_ai_tools.cpp
     src/view/src/agenticprofiling/rocprofvis_ai_tools.h
     src/view/src/agenticprofiling/rocprofvis_ai_tools_internal.h
+    src/view/src/agenticprofiling/rocprofvis_ai_trace_view_actions.cpp
     src/view/src/agenticprofiling/rocprofvis_ai_ui_tools.cpp
 )
 endif(ROCPROFVIS_ENABLE_AGENTIC_PROFILING)
@@ -272,6 +274,7 @@ endif()
 
 if(ROCPROFVIS_ENABLE_SCRIPTING)
 list(APPEND VIEW_FILES
+    src/view/src/rocprofvis_data_provider_script.cpp
     src/view/src/widgets/rocprofvis_script_editor.cpp
     src/view/src/widgets/rocprofvis_script_editor.h
 )

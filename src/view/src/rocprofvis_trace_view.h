@@ -80,15 +80,21 @@ public:
     friend struct TraceViewTestPeer;
     void                               SetSidebarViewVisibility(bool visibility);
     void                               SetHistogramVisibility(bool visibility);
-    void                               SetMinimapVisibility(bool visibility);
-    bool                               IsMinimapVisible() const;
+
+#ifdef ROCPROFVIS_ENABLE_AGENTIC_PROFILING
+    // Everything below reproduces one toolbar or menu interaction on behalf of
+    // OptiqActions, and nothing else in the app calls it. The bodies live in
+    // agenticprofiling/rocprofvis_ai_trace_view_actions.cpp; move one back here
+    // if a menu or toolbar ever needs it.
+    void SetMinimapVisibility(bool visibility);
+    bool IsMinimapVisible() const;
     // Flow arrows between linked events, as driven by the toolbar's eye and
     // tree/chain buttons.
-    void                               SetFlowArrowsVisible(bool visible);
-    bool                               AreFlowArrowsVisible() const;
-    void                               SetFlowRenderChained(bool chained);
+    void SetFlowArrowsVisible(bool visible);
+    bool AreFlowArrowsVisible() const;
+    void SetFlowRenderChained(bool chained);
     // Zooms the visible window, as opposed to just selecting a range.
-    void                               ZoomToRange(double start_ns, double end_ns);
+    void ZoomToRange(double start_ns, double end_ns);
     // Pins a sticky note on the timeline. Persisted with the project.
     bool AddNote(double time_ns, const std::string& title, const std::string& text,
                  double v_min, double v_max, uint64_t track_id);
@@ -97,15 +103,14 @@ public:
     bool                     SelectAnalysisTab(const std::string& name);
     std::string              ActiveAnalysisTab();
 
-#ifdef ROCPROFVIS_ENABLE_SCRIPTING
+#    ifdef ROCPROFVIS_ENABLE_SCRIPTING
     // The Script tab, reached the same way as the rest of the details panel so
     // the assistant never holds a widget of its own.
     bool           ProposeScript(const std::string& source);
     ScriptApproval ScriptProposalState() const;
     void           ClearScriptProposal();
-#endif
+#    endif
 
-    // Remaining toolbar actions, so everything on the strip is reachable.
     void             ResetView();
     void             SetAnnotationsVisible(bool visible);
     bool             AreAnnotationsVisible() const;
@@ -116,6 +121,7 @@ public:
     // Drops both measurement pins on a span and shows the measurement bar.
     bool             MeasureRange(double start_ns, double end_ns);
     void             ClearMeasurement();
+#endif  // ROCPROFVIS_ENABLE_AGENTIC_PROFILING
 
 private:
     void HandleHotKeys();

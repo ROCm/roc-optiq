@@ -382,7 +382,8 @@ BuildAssistantToolsJson()
 
     jt::Json note_params = ObjectParams();
     AddParam(note_params, "time_ns", "number",
-             "Where on the timeline to pin the note.");
+             "Absolute timestamp to pin the note at, in nanoseconds. Take it "
+             "from data you read this turn, not from an earlier window.");
     AddParam(note_params, "title", "string", "Short heading, a few words.");
     AddParam(note_params, "text", "string",
              "What you found here and why it matters.");
@@ -393,7 +394,15 @@ BuildAssistantToolsJson()
     note_params["required"][2] = "text";
     AddTool(tools, 15, "annotate",
             "Pin a sticky note on the timeline. Notes are saved with the project. "
-            "Only call this when the user asked you to leave a note.",
+            "Only call this when the user asked you to leave a note.\n"
+            "The note goes at an absolute timestamp, and the user can pan, zoom "
+            "or change the selection between your turns - so a number you "
+            "worked out earlier may no longer be where they are looking. The "
+            "reply tells you where the note actually landed and whether that is "
+            "outside the current selection; if it is, either say so plainly or "
+            "call goto for that range and annotate again. Do not describe a "
+            "note as marking the selected interval unless the reply confirms "
+            "it does.",
             note_params);
 
     jt::Json bookmark_params = ObjectParams();
@@ -467,6 +476,28 @@ BuildAssistantToolsJson()
             "returning a list of dicts keyed by column name. Constants: "
             "optiq.TRACK_TYPE_EVENTS, optiq.TRACK_TYPE_SAMPLES, "
             "optiq.SORT_ASCENDING, optiq.SORT_DESCENDING.\n"
+            "Exact types, because guessing these is what fails first. tracks= "
+            "takes Track objects straight from optiq.trace.tracks or "
+            "optiq.selection.tracks, never their ids - a list of ints raises "
+            "TypeError. where=, group= and sort_column= are single strings or "
+            "None, never lists or dicts. fetch also drops any track whose type "
+            "does not match type=, so passing sample tracks with type='events' "
+            "ends in 'fetch requires at least one matching track'. Row values are "
+            "typed per column and a column you expect to be a number is often "
+            "str, so call float(...) or int(...) before any arithmetic rather "
+            "than adding a cell directly. event.name and event.category are "
+            "free-form strings that came out of this trace: read a few and see "
+            "what they actually say instead of testing against a category name "
+            "you assumed, because a filter that matches nothing looks exactly "
+            "like a track with no events.\n"
+            "One counting trap. The same GPU work is usually visible on more "
+            "than one track, so walking every track and concatenating events "
+            "counts each dispatch several times - a total that comes out a clean "
+            "multiple of the expected one is this, not a discovery. Work on a "
+            "single track, or deduplicate on event id, and check the total "
+            "against get_summary or top_events before you report it: if a script "
+            "disagrees with the aggregated tools, the script is wrong until you "
+            "have shown otherwise.\n"
             "The Python is ordinary and most of it works: def, class, "
             "dataclasses, comprehensions, generators, lambda, f-strings, "
             "try/except, and print(...), which writes a line to the result just "

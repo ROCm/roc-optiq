@@ -846,14 +846,8 @@ RocProfVis::View::strip_ansi_for_display(std::string const& text)
     return out;
 }
 
-std::string
-RocProfVis::View::to_lower_copy(const std::string& value)
+bool
+RocProfVis::View::is_usable_time_range(double start_ns, double end_ns)
 {
-    std::string lowered;
-    lowered.reserve(value.size());
-    for(char c : value)
-    {
-        lowered += static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-    }
-    return lowered;
+    return std::isfinite(start_ns) && std::isfinite(end_ns) && end_ns > start_ns;
 }

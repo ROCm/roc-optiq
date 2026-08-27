@@ -22,10 +22,10 @@ namespace Controller
 namespace
 {
 
-float const    kSliceWaitSeconds         = 0.05f;
-uint64_t const kDefaultTableFetchCount   = 10000;
-char const* const kSessionCapsuleName    = "rocprofvis.script_session";
-char const* const kResultCapsuleName     = "rocprofvis.script_result";
+float const       SLICE_WAIT_SECONDS        = 0.05f;
+uint64_t const    DEFAULT_TABLE_FETCH_COUNT = 10000;
+char const* const SESSION_CAPSULE_NAME      = "rocprofvis.script_session";
+char const* const RESULT_CAPSULE_NAME       = "rocprofvis.script_result";
 
 struct EventObject
 {
@@ -89,7 +89,7 @@ session_from_module(PyObject* module)
         if(capsule)
         {
             session = static_cast<ScriptEngine::Session*>(
-                PyCapsule_GetPointer(capsule, kSessionCapsuleName));
+                PyCapsule_GetPointer(capsule, SESSION_CAPSULE_NAME));
             Py_DECREF(capsule);
         }
         else
@@ -110,7 +110,7 @@ result_from_module(PyObject* module)
         if(capsule)
         {
             result = static_cast<ScriptResult*>(
-                PyCapsule_GetPointer(capsule, kResultCapsuleName));
+                PyCapsule_GetPointer(capsule, RESULT_CAPSULE_NAME));
             Py_DECREF(capsule);
         }
         else
@@ -172,6 +172,66 @@ py_handle_string(rocprofvis_handle_t* object, rocprofvis_property_t property)
                                        static_cast<Py_ssize_t>(text.size()));
 }
 
+PyObject*
+py_handle_uint64(rocprofvis_handle_t* object, rocprofvis_property_t property)
+{
+    uint64_t value = 0;
+    rocprofvis_controller_get_uint64(object, property, 0, &value);
+    return PyLong_FromUnsignedLongLong(value);
+}
+
+PyObject*
+py_handle_double(rocprofvis_handle_t* object, rocprofvis_property_t property)
+{
+    double value = 0.0;
+    rocprofvis_controller_get_double(object, property, 0, &value);
+    return PyFloat_FromDouble(value);
+}
+
+struct uint64_arg_t
+{
+    rocprofvis_property_t property;
+    uint64_t              value;
+};
+
+struct double_arg_t
+{
+    rocprofvis_property_t property;
+    double                value;
+};
+
+struct string_arg_t
+{
+    rocprofvis_property_t property;
+    char const*           value;
+};
+
+// Writes a whole argument bank, stopping at the first setter that fails. A null
+// string is written as empty, which is what the table args expect.
+rocprofvis_result_t
+set_fetch_args(rocprofvis_controller_arguments_t* args, const uint64_arg_t* uints,
+               size_t uint_count, const double_arg_t* doubles, size_t double_count,
+               const string_arg_t* strings, size_t string_count)
+{
+    rocprofvis_result_t result = kRocProfVisResultSuccess;
+    for(size_t i = 0; i < uint_count && result == kRocProfVisResultSuccess; ++i)
+    {
+        result = rocprofvis_controller_set_uint64(args, uints[i].property, 0,
+                                                  uints[i].value);
+    }
+    for(size_t i = 0; i < double_count && result == kRocProfVisResultSuccess; ++i)
+    {
+        result = rocprofvis_controller_set_double(args, doubles[i].property, 0,
+                                                  doubles[i].value);
+    }
+    for(size_t i = 0; i < string_count && result == kRocProfVisResultSuccess; ++i)
+    {
+        result = rocprofvis_controller_set_string(
+            args, strings[i].property, 0, strings[i].value ? strings[i].value : "");
+    }
+    return result;
+}
+
 void
 copy_progress(ScriptEngine::Session* session, rocprofvis_controller_future_t* inner)
 {
@@ -212,7 +272,7 @@ wait_inner(ScriptEngine::Session* session, rocprofvis_controller_future_t* inner
     while(wait_result == kRocProfVisResultTimeout)
     {
         Py_BEGIN_ALLOW_THREADS
-        wait_result = rocprofvis_controller_future_wait(inner, kSliceWaitSeconds);
+        wait_result = rocprofvis_controller_future_wait(inner, SLICE_WAIT_SECONDS);
         Py_END_ALLOW_THREADS
         if(PyErr_CheckSignals() < 0)
         {
@@ -651,17 +711,13 @@ track_dealloc(TrackObject* self)
 PyObject*
 track_get_id(TrackObject* self, void*)
 {
-    uint64_t id = 0;
-    rocprofvis_controller_get_uint64(self->track, kRPVControllerTrackId, 0, &id);
-    return PyLong_FromUnsignedLongLong(id);
+    return py_handle_uint64(self->track, kRPVControllerTrackId);
 }
 
 PyObject*
 track_get_type(TrackObject* self, void*)
 {
-    uint64_t type = 0;
-    rocprofvis_controller_get_uint64(self->track, kRPVControllerTrackType, 0, &type);
-    return PyLong_FromUnsignedLongLong(type);
+    return py_handle_uint64(self->track, kRPVControllerTrackType);
 }
 
 PyObject*
@@ -679,28 +735,19 @@ track_get_sub_name(TrackObject* self, void*)
 PyObject*
 track_get_min_time(TrackObject* self, void*)
 {
-    double value = 0.0;
-    rocprofvis_controller_get_double(self->track, kRPVControllerTrackMinTimestamp, 0,
-                                     &value);
-    return PyFloat_FromDouble(value);
+    return py_handle_double(self->track, kRPVControllerTrackMinTimestamp);
 }
 
 PyObject*
 track_get_max_time(TrackObject* self, void*)
 {
-    double value = 0.0;
-    rocprofvis_controller_get_double(self->track, kRPVControllerTrackMaxTimestamp, 0,
-                                     &value);
-    return PyFloat_FromDouble(value);
+    return py_handle_double(self->track, kRPVControllerTrackMaxTimestamp);
 }
 
 PyObject*
 track_get_num_entries(TrackObject* self, void*)
 {
-    uint64_t value = 0;
-    rocprofvis_controller_get_uint64(self->track, kRPVControllerTrackNumberOfEntries, 0,
-                                     &value);
-    return PyLong_FromUnsignedLongLong(value);
+    return py_handle_uint64(self->track, kRPVControllerTrackNumberOfEntries);
 }
 
 PyObject*
@@ -952,7 +999,10 @@ append_tracks_from_sequence(PyObject* sequence, uint64_t want_type,
         if(!PyObject_TypeCheck(item, reinterpret_cast<PyTypeObject*>(g_track_type)))
         {
             Py_DECREF(item);
-            PyErr_SetString(PyExc_TypeError, "tracks must contain optiq.Track");
+            PyErr_SetString(PyExc_TypeError,
+                            "tracks must contain optiq.Track objects, not ids - "
+                            "pass the tracks from optiq.trace.tracks or "
+                            "optiq.selection.tracks directly");
             return 0;
         }
         TrackObject* track = reinterpret_cast<TrackObject*>(item);
@@ -1048,7 +1098,7 @@ table_fetch(TableObject* self, PyObject* args, PyObject* kwargs)
     unsigned long long sort_column  = 0;
     unsigned long long sort_order   = kRPVControllerSortOrderAscending;
     unsigned long long start_index  = 0;
-    unsigned long long count        = kDefaultTableFetchCount;
+    unsigned long long count        = DEFAULT_TABLE_FETCH_COUNT;
     PyObject*          type_obj     = Py_None;
     if(!PyArg_ParseTupleAndKeywords(args, kwargs, "|OOOzzzzKKKKO:fetch", keywords,
                                     &tracks_obj, &start_obj, &end_obj, &where_text,
@@ -1114,65 +1164,29 @@ table_fetch(TableObject* self, PyObject* args, PyObject* kwargs)
     if(track_count == 0)
     {
         rocprofvis_controller_arguments_free(fetch_args);
-        PyErr_SetString(PyExc_RuntimeError, "fetch requires at least one matching track");
+        PyErr_SetString(PyExc_RuntimeError,
+                        "fetch found no track matching type=, which drops every "
+                        "track of the other kind - check type= against "
+                        "track.type and optiq.TRACK_TYPE_EVENTS/SAMPLES");
         return nullptr;
     }
-    if(result == kRocProfVisResultSuccess)
-    {
-        result = rocprofvis_controller_set_uint64(
-            fetch_args, kRPVControllerTableArgsNumTracks, 0, track_count);
-    }
-    if(result == kRocProfVisResultSuccess)
-    {
-        result = rocprofvis_controller_set_double(
-            fetch_args, kRPVControllerTableArgsStartTime, 0, start);
-    }
-    if(result == kRocProfVisResultSuccess)
-    {
-        result = rocprofvis_controller_set_double(fetch_args, kRPVControllerTableArgsEndTime,
-                                                  0, end);
-    }
-    if(result == kRocProfVisResultSuccess)
-    {
-        result = rocprofvis_controller_set_uint64(
-            fetch_args, kRPVControllerTableArgsSortColumn, 0, sort_column);
-    }
-    if(result == kRocProfVisResultSuccess)
-    {
-        result = rocprofvis_controller_set_uint64(
-            fetch_args, kRPVControllerTableArgsSortOrder, 0, sort_order);
-    }
-    if(result == kRocProfVisResultSuccess)
-    {
-        result = rocprofvis_controller_set_uint64(
-            fetch_args, kRPVControllerTableArgsStartIndex, 0, start_index);
-    }
-    if(result == kRocProfVisResultSuccess)
-    {
-        result = rocprofvis_controller_set_uint64(
-            fetch_args, kRPVControllerTableArgsStartCount, 0, count);
-    }
-    if(result == kRocProfVisResultSuccess)
-    {
-        result = rocprofvis_controller_set_string(fetch_args, kRPVControllerTableArgsWhere,
-                                                  0, where_text ? where_text : "");
-    }
-    if(result == kRocProfVisResultSuccess)
-    {
-        result = rocprofvis_controller_set_string(fetch_args, kRPVControllerTableArgsFilter,
-                                                  0, filter_text ? filter_text : "");
-    }
-    if(result == kRocProfVisResultSuccess)
-    {
-        result = rocprofvis_controller_set_string(fetch_args, kRPVControllerTableArgsGroup,
-                                                  0, group_text ? group_text : "");
-    }
-    if(result == kRocProfVisResultSuccess)
-    {
-        result = rocprofvis_controller_set_string(
-            fetch_args, kRPVControllerTableArgsGroupColumns, 0,
-            group_columns_text ? group_columns_text : "");
-    }
+    const uint64_arg_t uint_args[] = {
+        {kRPVControllerTableArgsNumTracks, track_count},
+        {kRPVControllerTableArgsSortColumn, sort_column},
+        {kRPVControllerTableArgsSortOrder, sort_order},
+        {kRPVControllerTableArgsStartIndex, start_index},
+        {kRPVControllerTableArgsStartCount, count}};
+    const double_arg_t double_args[] = {{kRPVControllerTableArgsStartTime, start},
+                                        {kRPVControllerTableArgsEndTime, end}};
+    const string_arg_t string_args[] = {
+        {kRPVControllerTableArgsWhere, where_text},
+        {kRPVControllerTableArgsFilter, filter_text},
+        {kRPVControllerTableArgsGroup, group_text},
+        {kRPVControllerTableArgsGroupColumns, group_columns_text}};
+
+    result = set_fetch_args(fetch_args, uint_args, sizeof(uint_args) / sizeof(uint_args[0]),
+                            double_args, sizeof(double_args) / sizeof(double_args[0]),
+                            string_args, sizeof(string_args) / sizeof(string_args[0]));
     if(result != kRocProfVisResultSuccess)
     {
         rocprofvis_controller_arguments_free(fetch_args);
@@ -1502,7 +1516,7 @@ make_result_module(ScriptResult* script_result)
         else
         {
             PyObject* capsule =
-                PyCapsule_New(script_result, kResultCapsuleName, nullptr);
+                PyCapsule_New(script_result, RESULT_CAPSULE_NAME, nullptr);
             if(capsule)
             {
                 PyObject_SetAttrString(result_mod, "_result", capsule);
@@ -1558,7 +1572,7 @@ optiq_prepare_globals(void* py_dict, void* script_session)
         Py_DECREF(result_mod);
     }
 
-    PyObject* session_capsule = PyCapsule_New(session, kSessionCapsuleName, nullptr);
+    PyObject* session_capsule = PyCapsule_New(session, SESSION_CAPSULE_NAME, nullptr);
     if(session_capsule)
     {
         PyObject_SetAttrString(optiq, "_session", session_capsule);

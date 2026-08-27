@@ -326,6 +326,8 @@ constexpr const char* ASSISTANT_SCRIPT_PROMPT =
     "script would be slower and no more accurate. trace_overview still comes "
     "first either way, because a script that knows the busy window reads far "
     "less of the trace.\n"
+    "If the aggregated tools cannot answer at the resolution asked for, say so "
+    "and offer a script rather than answering approximately.\n"
     "Have the script report the finding, not its working out: a handful of "
     "numbers you can use in a sentence, not a dump of the rows it walked. If it "
     "fails you get the traceback, so fix the line it names and offer it again "
@@ -344,7 +346,6 @@ constexpr const char* ASSISTANT_SCRIPT_PROMPT =
 
 AssistantPanel* AssistantPanel::s_instance = nullptr;
 
-// Created on first use, like the other global overlays.
 AssistantPanel*
 AssistantPanel::GetInstance()
 {
@@ -355,7 +356,6 @@ AssistantPanel::GetInstance()
     return s_instance;
 }
 
-// Tears the panel down. AppWindow calls this on the way out.
 void
 AssistantPanel::DestroyInstance()
 {
@@ -363,7 +363,6 @@ AssistantPanel::DestroyInstance()
     s_instance = nullptr;
 }
 
-// Starts closed and idle; the metrics client id is fixed for the app's life.
 AssistantPanel::AssistantPanel()
 : m_visible(false)
 , m_scroll_to_bottom(false)
@@ -386,28 +385,24 @@ AssistantPanel::~AssistantPanel()
     CancelPendingRequest();
 }
 
-// Flips the panel open or closed, for the toolbar button and the View menu.
 void
 AssistantPanel::ToggleVisible()
 {
     m_visible = !m_visible;
 }
 
-// The visibility flag itself, so ImGui::MenuItem can tick and toggle it.
 bool*
 AssistantPanel::VisiblePtr()
 {
     return &m_visible;
 }
 
-// True while a turn is running, which is what disables the composer.
 bool
 AssistantPanel::Busy() const
 {
     return m_phase != Phase::kIdle || m_pending.valid();
 }
 
-// Adds a transcript line and scrolls to it.
 void
 AssistantPanel::AppendLine(Speaker speaker, const std::string& text)
 {
@@ -439,8 +434,6 @@ AssistantPanel::AppendChart(uint64_t track_id)
     m_scroll_to_bottom = true;
 }
 
-// Draws what the timeline shows: the event-density histogram, then the busiest
-// minimap rows under it.
 void
 AssistantPanel::RenderActivityChart(uint64_t track_id)
 {
@@ -583,7 +576,6 @@ AssistantPanel::RenderActivityChart(uint64_t track_id)
     ImGui::TextDisabled("Busiest tracks. Hover for names.");
 }
 
-// Replaces the working line under the transcript.
 void
 AssistantPanel::SetStatus(const std::string& text)
 {
@@ -591,7 +583,6 @@ AssistantPanel::SetStatus(const std::string& text)
     m_scroll_to_bottom = true;
 }
 
-// The "Ask Optiq" button, shared by the system and compute toolbars.
 void
 AssistantPanel::RenderToolbarButton()
 {
@@ -664,7 +655,6 @@ AssistantPanel::MakeToolContext() const
     return context;
 }
 
-// Identifies the trace in front, so a tab change mid-turn can be spotted.
 std::string
 AssistantPanel::CurrentProjectId() const
 {
@@ -676,7 +666,6 @@ AssistantPanel::CurrentProjectId() const
     return app->GetCurrentProject()->GetID();
 }
 
-// Wraps the question in the briefing that orients the model on this trace.
 std::string
 AssistantPanel::BuildUserPrompt(const std::string& question, bool include_briefing) const
 {
@@ -700,7 +689,6 @@ AssistantPanel::BuildUserPrompt(const std::string& question, bool include_briefi
     return out.str();
 }
 
-// Drops everything about the current turn, including any request in flight.
 void
 AssistantPanel::ResetTurn()
 {
@@ -734,7 +722,6 @@ AssistantPanel::CancelPendingRequest()
     m_call.reset();
 }
 
-// Posts the conversation so far to the configured endpoint, on a worker thread.
 void
 AssistantPanel::StartHttpRequest()
 {
@@ -778,7 +765,6 @@ AssistantPanel::StartHttpRequest()
     });
 }
 
-// Sends the question that was held back while the summary preloaded.
 void
 AssistantPanel::BeginQueuedTurn()
 {
@@ -826,7 +812,6 @@ AssistantPanel::TryStartSummaryWarmup(const std::string& question, bool explain_
     return true;
 }
 
-// Starts a turn from the composer, or from the "Explain this view" button.
 void
 AssistantPanel::SendCurrentInput(bool explain_view)
 {
@@ -884,7 +869,6 @@ AssistantPanel::SendCurrentInput(bool explain_view)
     StartHttpRequest();
 }
 
-// Takes the model's reply: either run the tools it asked for, or print the answer.
 void
 AssistantPanel::HandleHttpResult(const AssistantChatResult& result)
 {
@@ -979,7 +963,6 @@ AssistantPanel::BeginFinalAnswer()
     StartHttpRequest();
 }
 
-// Runs the next queued tool, or goes back to the model when the queue is empty.
 void
 AssistantPanel::RunNextTool()
 {
@@ -1029,7 +1012,6 @@ AssistantPanel::RunNextTool()
     FinishCurrentTool(started.content);
 }
 
-// Parks the turn until the fetches a tool just queued have landed.
 void
 AssistantPanel::BeginFetchWait(const AssistantToolStartResult& started,
                                const std::string& tool_call_id,
@@ -1051,21 +1033,12 @@ AssistantPanel::BeginFetchWait(const AssistantToolStartResult& started,
     m_fetch_wait.timeout_seconds = started.timeout_seconds;
 }
 
-// Hands one tool's output back to the model and moves on to the next.
+// Hands one tool's output back to the model and moves on to the next. Warmup
+// never arrives here: it has no tool call to answer, so PollToolFetch takes
+// every exit itself rather than let an empty queue look like "tools done".
 void
 AssistantPanel::FinishCurrentTool(const std::string& content)
 {
-    // Warmup parks a fetch with no tool call. An empty queue here must never
-    // fall through to ContinueAfterTools, or an HTTP turn starts without the
-    // queued user message.
-    if(m_fetch_wait.warmup)
-    {
-        ResetTurn();
-        AppendLine(Speaker::kStatus,
-                   "The trace closed before the summary finished loading.");
-        return;
-    }
-
     if(m_next_call_index >= m_pending_calls.size())
     {
         ContinueAfterTools();
@@ -1089,7 +1062,6 @@ AssistantPanel::FinishCurrentTool(const std::string& content)
     RunNextTool();
 }
 
-// Every tool has answered, so ask the model what it makes of them.
 void
 AssistantPanel::ContinueAfterTools()
 {
@@ -1100,7 +1072,6 @@ AssistantPanel::ContinueAfterTools()
     StartHttpRequest();
 }
 
-// True while any request the waiting tool depends on is still outstanding.
 bool
 AssistantPanel::AnyFetchPending(const AssistantToolContext& context) const
 {
@@ -1120,8 +1091,6 @@ AssistantPanel::AnyFetchPending(const AssistantToolContext& context) const
     return false;
 }
 
-// Checks on the fetches the current tool is waiting for, and formats them once
-// they land.
 void
 AssistantPanel::PollToolFetch()
 {
@@ -1250,7 +1219,6 @@ AssistantPanel::Render()
     RenderDocked();
 }
 
-// Width to reserve on the right of the main view, splitter included.
 float
 AssistantPanel::DockedWidth() const
 {
@@ -1287,7 +1255,6 @@ AssistantPanel::RenderSplitter()
                                             : Colors::kSplitterColor));
 }
 
-// Draws the panel as a column on the right: header, transcript, composer.
 void
 AssistantPanel::RenderDocked()
 {
@@ -1322,7 +1289,6 @@ AssistantPanel::RenderDocked()
     ImGui::PopStyleVar(2);
 }
 
-// The title row and the configuration warning.
 void
 AssistantPanel::RenderHeaderCard()
 {
@@ -1397,7 +1363,6 @@ AssistantPanel::RenderHeaderCard()
     EndPanelCard();
 }
 
-// The scrolling conversation, with the working indicator pinned under it.
 void
 AssistantPanel::RenderTranscript()
 {
@@ -1456,7 +1421,6 @@ AssistantPanel::RenderTranscript()
     ImGui::PopStyleVar(3);
 }
 
-// Draws one transcript entry: a message, an error notice, or an activity chart.
 void
 AssistantPanel::RenderMessageCard(size_t index, const ChatLine& line)
 {
@@ -1591,7 +1555,6 @@ AssistantPanel::RenderSuggestedActions()
     ImGui::Spacing();
 }
 
-// The input row: text box, Send, and the button that clears the conversation.
 void
 AssistantPanel::RenderComposer()
 {

@@ -1,16 +1,10 @@
 // Copyright Advanced Micro Devices, Inc.
 // SPDX-License-Identifier: MIT
 
-// The tools that read the trace rather than change it, and everything that
-// formats what they read. Most of these cannot answer in one call: they queue a
-// fetch on the data provider and hand the panel a set of request ids to poll,
-// and FinishAssistantFetch at the bottom of this file is what turns the rows
-// into text once they land.
-//
-// Those request ids and result slots are shared with the normal UI, which is
-// why every body here checks IsRequestPending before issuing its own query and
-// reports whether it actually started the fetch. The panel needs that flag to
-// know whether the rows that arrive are its own.
+// Tools that read the trace, and the formatters that turn what they read into
+// text. Request ids and result slots are shared with the normal UI, so every
+// body here checks IsRequestPending before issuing a query and reports whether
+// it started the fetch; the panel needs that to know the rows are its own.
 #include "rocprofvis_ai_tools_internal.h"
 
 #include <algorithm>
@@ -37,6 +31,7 @@
 #include "rocprofvis_ai_tool_schema.h"
 #include "rocprofvis_c_interface_types.h"
 #include "rocprofvis_controller_enums.h"
+#include "rocprofvis_core_string_utils.h"
 #include "rocprofvis_data_provider.h"
 #include "rocprofvis_json_utils.h"
 #include "rocprofvis_requests.h"
@@ -129,6 +124,14 @@ ClampRowLimit(int32_t requested)
     return std::min(static_cast<size_t>(requested), ASSISTANT_MAX_ROW_LIMIT);
 }
 
+// The "limit" argument every row-returning tool accepts, already clamped.
+size_t
+RowLimitFromArgs(const jt::Json& args)
+{
+    return ClampRowLimit(JsonUtils::GetInt(
+        args, "limit", static_cast<int32_t>(ASSISTANT_DEFAULT_ROW_LIMIT)));
+}
+
 // Clamps how far a tool may page in, for the same reason as ClampRowLimit: the
 // number comes from the model and reaches the database unchanged otherwise.
 uint64_t
@@ -187,19 +190,15 @@ AppendGpuMetrics(std::ostringstream& out, const SummaryInfo::GPUMetrics& gpu)
 std::string
 TrimResult(std::string text)
 {
-    if(text.size() > ASSISTANT_MAX_RESULT_CHARS)
-    {
-        text.resize(ASSISTANT_MAX_RESULT_CHARS);
-        text += "\n... truncated ...\n";
-    }
-    return text;
+    return TrimAssistantText(std::move(text), ASSISTANT_MAX_RESULT_CHARS,
+                             "\n... truncated ...\n");
 }
 
 // Maps a category name, plus the synonyms the model likes, to its table spec.
 const TopEventsSpec*
 FindTopEventsSpec(const std::string& category)
 {
-    const std::string lowered = to_lower_copy(category);
+    const std::string lowered = Core::String::to_lower_copy(category);
     std::string       key     = lowered;
     if(key == "kernel" || key == "kernels" || key == "dispatch_events")
     {
@@ -398,18 +397,18 @@ TracksFromArgs(const AssistantToolContext& context, const jt::Json& args,
     tracks.reserve(std::min(entries.size(), ASSISTANT_MAX_TRACKS));
     for(jt::Json& entry : entries)
     {
-        uint64_t track_id = 0;
-        if(entry.isLong())
+        uint64_t track_id = INVALID_UINT64_INDEX;
+        if(entry.isLong() && entry.getLong() >= 0)
         {
             track_id = static_cast<uint64_t>(entry.getLong());
         }
         else if(entry.isDouble())
         {
-            track_id = static_cast<uint64_t>(entry.getDouble());
+            track_id = JsonU64FromDouble(entry.getDouble(), INVALID_UINT64_INDEX);
         }
-        else
+        if(track_id == INVALID_UINT64_INDEX)
         {
-            error_out = "Every track_ids entry must be a number.";
+            error_out = "Every track_ids entry must be a non-negative number.";
             return std::vector<uint64_t>();
         }
 
@@ -892,17 +891,7 @@ FormatSystemSummary(const AssistantToolContext& context)
 std::string
 FormatComputeKernels(const AssistantToolContext& context, size_t limit)
 {
-    ComputeDataModel& model = context.data_provider->ComputeModel();
-    uint32_t workload_id    = ComputeSelection::INVALID_SELECTION_ID;
-    if(context.compute_selection != nullptr)
-    {
-        workload_id = context.compute_selection->GetSelectedWorkload();
-    }
-    const WorkloadInfo* workload = model.GetWorkload(workload_id);
-    if(workload == nullptr && !model.GetWorkloadList().empty())
-    {
-        workload = model.GetWorkloadList().front();
-    }
+    const WorkloadInfo* workload = SelectedComputeWorkload(context);
     if(workload == nullptr)
     {
         return "No compute workload is loaded.";
@@ -1001,6 +990,22 @@ PendingResult(uint64_t request_id, const AssistantFetchState& fetch,
 {
     return PendingResult(std::vector<uint64_t>{ request_id }, fetch, status,
                          started_fetch);
+}
+
+// The tail every table-backed tool shares. A refused fetch is only a failure
+// when nothing is in flight: otherwise a request the UI or another tool started
+// answers this one too, and waiting on it beats issuing a duplicate that the
+// shared request id would drop.
+AssistantToolStartResult
+FetchStartedResult(const AssistantToolContext& context, uint64_t request_id,
+                   const AssistantFetchState& fetch, const std::string& tool_name,
+                   bool queued)
+{
+    if(!queued && !context.data_provider->IsRequestPending(request_id))
+    {
+        return DoneResult("Could not queue the " + tool_name + " fetch.", "Fetch failed");
+    }
+    return PendingResult(request_id, fetch, AssistantToolStatusLabel(tool_name), queued);
 }
 
 }  // namespace
@@ -1202,7 +1207,6 @@ GetAssistantActivityRows(const AssistantToolContext& context, size_t bin_count,
 namespace
 {
 
-// Implements the trace_overview tool.
 AssistantToolStartResult
 ToolTraceOverview(const AssistantToolContext& context, const jt::Json& args,
                   const std::string&)
@@ -1229,10 +1233,8 @@ ToolTraceOverview(const AssistantToolContext& context, const jt::Json& args,
     return result;
 }
 
-// Implements the get_summary tool.
 AssistantToolStartResult
-ToolGetSummary(const AssistantToolContext& context, const jt::Json& args,
-               const std::string&)
+ToolGetSummary(const AssistantToolContext& context, const jt::Json&, const std::string&)
 {
     if(context.is_compute)
     {
@@ -1271,10 +1273,8 @@ ToolGetSummary(const AssistantToolContext& context, const jt::Json& args,
                       "Summary unavailable");
 }
 
-// Implements the list_tracks tool.
 AssistantToolStartResult
-ToolListTracks(const AssistantToolContext& context, const jt::Json& args,
-               const std::string&)
+ToolListTracks(const AssistantToolContext& context, const jt::Json&, const std::string&)
 {
     if(context.is_compute)
     {
@@ -1331,7 +1331,6 @@ ToolListTracks(const AssistantToolContext& context, const jt::Json& args,
     return DoneResult(TrimResult(out.str()), "Listed tracks");
 }
 
-// Implements the top_events tool.
 AssistantToolStartResult
 ToolTopEvents(const AssistantToolContext& context, const jt::Json& args,
               const std::string& tool_name)
@@ -1351,9 +1350,7 @@ ToolTopEvents(const AssistantToolContext& context, const jt::Json& args,
             "instrumented, or sampled.",
             "Bad category");
     }
-    const size_t limit =
-        ClampRowLimit(JsonUtils::GetInt(args, "limit",
-                                        static_cast<int32_t>(ASSISTANT_DEFAULT_ROW_LIMIT)));
+    const size_t limit = RowLimitFromArgs(args);
 
     std::string track_error;
     const std::vector<uint64_t> tracks =
@@ -1400,15 +1397,9 @@ ToolTopEvents(const AssistantToolContext& context, const jt::Json& args,
                           JsonUtils::GetString(args, "sort_by", ""),
                           ASSISTANT_DURATION_COLUMN),
         AssistantSortOrderFromArgs(args, kRPVControllerSortOrderDescending)));
-    if(!queued && !context.data_provider->IsRequestPending(spec->request_id))
-    {
-        return DoneResult("Could not queue the top_events fetch.", "Fetch failed");
-    }
-    return PendingResult(spec->request_id, fetch,
-                         AssistantToolStatusLabel(tool_name), queued);
+    return FetchStartedResult(context, spec->request_id, fetch, tool_name, queued);
 }
 
-// Implements the kernel_instances tool.
 AssistantToolStartResult
 ToolKernelInstances(const AssistantToolContext& context, const jt::Json& args,
                     const std::string& tool_name)
@@ -1424,9 +1415,7 @@ ToolKernelInstances(const AssistantToolContext& context, const jt::Json& args,
     {
         return DoneResult("kernel_instances needs kernel_name.", "Missing kernel_name");
     }
-    const size_t limit =
-        ClampRowLimit(JsonUtils::GetInt(args, "limit",
-                                        static_cast<int32_t>(ASSISTANT_DEFAULT_ROW_LIMIT)));
+    const size_t limit = RowLimitFromArgs(args);
 
     std::string       query_error;
     const std::string where = BuildAssistantWhereClause(args, query_error);
@@ -1458,15 +1447,9 @@ ToolKernelInstances(const AssistantToolContext& context, const jt::Json& args,
         ResolveAssistantSortColumn(tables, TableType::kSummaryKernelTable,
                           JsonUtils::GetString(args, "sort_by", ""), 0),
         AssistantSortOrderFromArgs(args, kRPVControllerSortOrderAscending)));
-    if(!queued && !context.data_provider->IsRequestPending(request_id))
-    {
-        return DoneResult("Could not queue the kernel_instances fetch.", "Fetch failed");
-    }
-    return PendingResult(request_id, fetch, AssistantToolStatusLabel(tool_name),
-                         queued);
+    return FetchStartedResult(context, request_id, fetch, tool_name, queued);
 }
 
-// Implements the kernel_metrics tool.
 AssistantToolStartResult
 ToolKernelMetrics(const AssistantToolContext& context, const jt::Json& args,
                   const std::string& tool_name)
@@ -1478,11 +1461,12 @@ ToolKernelMetrics(const AssistantToolContext& context, const jt::Json& args,
         std::ostringstream out;
         const std::vector<SummaryInfo::KernelMetrics>& kernels =
             context.data_provider->DataModel().GetSummary().GetSummaryData().gpu.top_kernels;
-        bool found = false;
+        const std::string needle = Core::String::to_lower_copy(kernel_name);
+        bool              found  = false;
         for(const SummaryInfo::KernelMetrics& kernel : kernels)
         {
             if(kernel_name.empty() || kernel.name == kernel_name ||
-               to_lower_copy(kernel.name).find(to_lower_copy(kernel_name)) !=
+               Core::String::to_lower_copy(kernel.name).find(needle) !=
                    std::string::npos)
             {
                 out << "name=" << kernel.name << " calls=" << kernel.invocations
@@ -1504,17 +1488,7 @@ ToolKernelMetrics(const AssistantToolContext& context, const jt::Json& args,
         return DoneResult(out.str(), "Read kernel summary stats");
     }
 
-    ComputeDataModel& model = context.data_provider->ComputeModel();
-    uint32_t workload_id    = ComputeSelection::INVALID_SELECTION_ID;
-    if(context.compute_selection != nullptr)
-    {
-        workload_id = context.compute_selection->GetSelectedWorkload();
-    }
-    const WorkloadInfo* workload = model.GetWorkload(workload_id);
-    if(workload == nullptr && !model.GetWorkloadList().empty())
-    {
-        workload = model.GetWorkloadList().front();
-    }
+    const WorkloadInfo* workload = SelectedComputeWorkload(context);
     if(workload == nullptr)
     {
         return DoneResult("No compute workload is loaded.", "No workload");
@@ -1576,11 +1550,11 @@ ToolKernelMetrics(const AssistantToolContext& context, const jt::Json& args,
         return DoneResult(TrimResult(out.str()), "Read kernel dispatch stats");
     }
 
-    const std::string needle = to_lower_copy(metric_name);
+    const std::string needle = Core::String::to_lower_copy(metric_name);
     std::vector<MetricsRequestParams::MetricID> metric_ids;
     for(const AvailableMetrics::Entry& entry : workload->available_metrics.list)
     {
-        if(to_lower_copy(entry.name).find(needle) == std::string::npos)
+        if(Core::String::to_lower_copy(entry.name).find(needle) == std::string::npos)
         {
             continue;
         }
@@ -1600,7 +1574,8 @@ ToolKernelMetrics(const AssistantToolContext& context, const jt::Json& args,
         return DoneResult(TrimResult(out.str()), "Metric not found");
     }
 
-    model.ClearKernelMetricValues(context.metrics_client_id);
+    context.data_provider->ComputeModel().ClearKernelMetricValues(
+        context.metrics_client_id);
     const uint64_t request_id = RequestIdBuilder::MakeClientRequestId(
         RequestType::kFetchMetrics, context.metrics_client_id);
     AssistantFetchState metrics_fetch =
@@ -1685,9 +1660,7 @@ ToolTrackRows(const AssistantToolContext& context, const jt::Json& args,
         return DoneResult(query_error, "Bad query argument");
     }
 
-    const size_t limit =
-        ClampRowLimit(JsonUtils::GetInt(args, "limit",
-                                        static_cast<int32_t>(ASSISTANT_DEFAULT_ROW_LIMIT)));
+    const size_t limit = RowLimitFromArgs(args);
     double start_ns = 0.0;
     double end_ns   = 0.0;
     TimeRangeFromArgs(context, args, start_ns, end_ns);
@@ -1707,16 +1680,9 @@ ToolTrackRows(const AssistantToolContext& context, const jt::Json& args,
         OffsetFromArgs(args), static_cast<uint64_t>(limit),
         ResolveAssistantSortColumn(tables, type, JsonUtils::GetString(args, "sort_by", ""), 0),
         AssistantSortOrderFromArgs(args, kRPVControllerSortOrderAscending)));
-    if(!queued && !context.data_provider->IsRequestPending(request_id))
-    {
-        return DoneResult("Could not queue the " + tool_name + " fetch.",
-                          "Fetch failed");
-    }
-    return PendingResult(request_id, fetch, AssistantToolStatusLabel(tool_name),
-                         queued);
+    return FetchStartedResult(context, request_id, fetch, tool_name, queued);
 }
 
-// Implements the event_details tool.
 AssistantToolStartResult
 ToolEventDetails(const AssistantToolContext& context, const jt::Json& args,
                  const std::string& tool_name)
@@ -1772,7 +1738,6 @@ ToolEventDetails(const AssistantToolContext& context, const jt::Json& args,
                          true);
 }
 
-// Implements the track_statistics tool.
 AssistantToolStartResult
 ToolTrackStatistics(const AssistantToolContext& context, const jt::Json& args,
                     const std::string& tool_name)
@@ -1836,7 +1801,6 @@ ToolTrackStatistics(const AssistantToolContext& context, const jt::Json& args,
     return PendingResult(request_id, fetch, AssistantToolStatusLabel(tool_name), true);
 }
 
-// Implements the search_events tool.
 AssistantToolStartResult
 ToolSearchEvents(const AssistantToolContext& context, const jt::Json& args,
                  const std::string& tool_name)
@@ -1894,9 +1858,9 @@ ToolSearchEvents(const AssistantToolContext& context, const jt::Json& args,
     }
 
     const bool contains =
-        to_lower_copy(JsonUtils::GetString(args, "match", "contains")) != "equals";
+        Core::String::to_lower_copy(JsonUtils::GetString(args, "match", "contains")) != "equals";
     const bool any_term =
-        to_lower_copy(JsonUtils::GetString(args, "combine", "all")) == "any";
+        Core::String::to_lower_copy(JsonUtils::GetString(args, "combine", "all")) == "any";
     const bool include_category =
         JsonUtils::GetBool(args, "include_category", false);
 
@@ -1907,9 +1871,7 @@ ToolSearchEvents(const AssistantToolContext& context, const jt::Json& args,
         return DoneResult(query_error, "Bad query argument");
     }
 
-    const size_t limit =
-        ClampRowLimit(JsonUtils::GetInt(args, "limit",
-                                        static_cast<int32_t>(ASSISTANT_DEFAULT_ROW_LIMIT)));
+    const size_t limit = RowLimitFromArgs(args);
     double start_ns = 0.0;
     double end_ns   = 0.0;
     TimeRangeFromArgs(context, args, start_ns, end_ns, false);
@@ -1931,12 +1893,7 @@ ToolSearchEvents(const AssistantToolContext& context, const jt::Json& args,
         ResolveAssistantSortColumn(tables, TableType::kEventSearchTable,
                           JsonUtils::GetString(args, "sort_by", ""), 1),
         AssistantSortOrderFromArgs(args, kRPVControllerSortOrderAscending)));
-    if(!queued && !context.data_provider->IsRequestPending(request_id))
-    {
-        return DoneResult("Could not queue the search.", "Fetch failed");
-    }
-    return PendingResult(request_id, fetch, AssistantToolStatusLabel(tool_name),
-                         queued);
+    return FetchStartedResult(context, request_id, fetch, tool_name, queued);
 }
 
 const AssistantToolEntry k_data_tool_handlers[] = {

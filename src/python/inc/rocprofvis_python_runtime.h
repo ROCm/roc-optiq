@@ -15,7 +15,6 @@ typedef enum rocprofvis_python_result_t
     kRocProfVisPythonInvalidArgument  = 2,
     kRocProfVisPythonCancelled        = 3,
     kRocProfVisPythonNotInitialized   = 4,
-    kRocProfVisPythonBusy             = 5,
 } rocprofvis_python_result_t;
 
 /*

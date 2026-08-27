@@ -9,6 +9,7 @@
 // matching schema entry in rocprofvis_ai_tool_schema.cpp.
 #include "rocprofvis_ai_tools_internal.h"
 
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
@@ -21,9 +22,9 @@
 #include "model/compute/rocprofvis_compute_data_model.h"
 #include "model/rocprofvis_timeline_model.h"
 #include "rocprofvis_ai_tool_schema.h"
+#include "rocprofvis_core_string_utils.h"
 #include "rocprofvis_data_provider.h"
 #include "rocprofvis_timeline_selection.h"
-#include "rocprofvis_utils.h"
 
 namespace RocProfVis
 {
@@ -71,6 +72,20 @@ DoneResult(const std::string& content, const std::string& status)
     return result;
 }
 
+// Narrows a JSON number to an id. A double that is negative, not finite, or
+// too large to represent is rejected rather than cast: those conversions are
+// undefined, not merely wrong.
+uint64_t
+JsonU64FromDouble(double value, uint64_t default_value)
+{
+    constexpr double MAX_EXACT_U64 = 18446744073709549568.0;
+    if(!std::isfinite(value) || value < 0.0 || value > MAX_EXACT_U64)
+    {
+        return default_value;
+    }
+    return static_cast<uint64_t>(value);
+}
+
 // Reads an unsigned id from JSON, however the model chose to encode it.
 uint64_t
 JsonU64(const jt::Json& json, const std::string& key, uint64_t default_value)
@@ -88,12 +103,11 @@ JsonU64(const jt::Json& json, const std::string& key, uint64_t default_value)
     }
     if(value.isDouble())
     {
-        const double raw = value.getDouble();
-        return raw < 0.0 ? default_value : static_cast<uint64_t>(raw);
+        return JsonU64FromDouble(value.getDouble(), default_value);
     }
     if(value.isString())
     {
-        char*              end  = nullptr;
+        char*              end    = nullptr;
         unsigned long long parsed = std::strtoull(value.getString().c_str(), &end, 10);
         if(end != nullptr && end != value.getString().c_str())
         {
@@ -101,6 +115,20 @@ JsonU64(const jt::Json& json, const std::string& key, uint64_t default_value)
         }
     }
     return default_value;
+}
+
+// Caps a tool result so one big answer cannot fill the model's context. The
+// head is what is kept: a result that runs long leads with its summary and
+// puts the rows after it.
+std::string
+TrimAssistantText(std::string text, size_t max_chars, const char* truncation_note)
+{
+    if(text.size() > max_chars)
+    {
+        text.resize(max_chars);
+        text += truncation_note;
+    }
+    return text;
 }
 
 // Rejects a model-supplied array that is longer than anything a tool can use.
@@ -133,6 +161,25 @@ SelectedOrFullTimeRange(const AssistantToolContext& context, double& start_ns,
     }
 }
 
+// The workload a compute tool should read: whichever one is selected, or the
+// first loaded when nothing is. Null when the trace has none at all.
+const WorkloadInfo*
+SelectedComputeWorkload(const AssistantToolContext& context)
+{
+    ComputeDataModel& model       = context.data_provider->ComputeModel();
+    uint32_t          workload_id = ComputeSelection::INVALID_SELECTION_ID;
+    if(context.compute_selection != nullptr)
+    {
+        workload_id = context.compute_selection->GetSelectedWorkload();
+    }
+    const WorkloadInfo* workload = model.GetWorkload(workload_id);
+    if(workload == nullptr && !model.GetWorkloadList().empty())
+    {
+        workload = model.GetWorkloadList().front();
+    }
+    return workload;
+}
+
 // Finds a kernel by id, then exact name, then a case-insensitive substring.
 const KernelInfo*
 FindComputeKernel(const WorkloadInfo& workload, const std::string& name, uint32_t id)
@@ -156,14 +203,14 @@ FindComputeKernel(const WorkloadInfo& workload, const std::string& name, uint32_
             return kernel;
         }
     }
-    const std::string lowered = to_lower_copy(name);
+    const std::string lowered = Core::String::to_lower_copy(name);
     for(const KernelInfo* kernel : workload.ordered_kernels)
     {
         if(kernel == nullptr)
         {
             continue;
         }
-        if(to_lower_copy(kernel->name).find(lowered) != std::string::npos)
+        if(Core::String::to_lower_copy(kernel->name).find(lowered) != std::string::npos)
         {
             return kernel;
         }

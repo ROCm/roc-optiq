@@ -16,9 +16,9 @@
 #endif
 
 #include "json.h"
+#include "rocprofvis_core_string_utils.h"
 #include "spdlog/spdlog.h"
 
-#include <cctype>
 #include <cstring>
 #include <string>
 #include <utility>
@@ -243,19 +243,6 @@ SplitUrl(const std::string& url, std::string& origin_out, std::string& path_out)
     return true;
 }
 
-// Lowercased copy, so a scheme or host typed in capitals still matches.
-std::string
-ToLowerAscii(const std::string& value)
-{
-    std::string lowered;
-    lowered.reserve(value.size());
-    for(char c : value)
-    {
-        lowered += static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-    }
-    return lowered;
-}
-
 // The host of an origin ("https://host:port"), with the port and any IPv6
 // brackets removed. Empty when the origin has no scheme separator.
 std::string
@@ -289,7 +276,7 @@ HostFromOrigin(const std::string& origin)
 bool
 OriginIsLoopback(const std::string& origin)
 {
-    const std::string host = ToLowerAscii(HostFromOrigin(origin));
+    const std::string host = Core::String::to_lower_copy(HostFromOrigin(origin));
     return host == "localhost" || host == "::1" ||
            host.compare(0, 4, "127.") == 0;
 }
@@ -300,11 +287,10 @@ OriginIsLoopback(const std::string& origin)
 bool
 OriginMayCarryToken(const std::string& origin)
 {
-    return ToLowerAscii(origin).compare(0, 8, "https://") == 0 ||
+    return Core::String::to_lower_copy(origin).compare(0, 8, "https://") == 0 ||
            OriginIsLoopback(origin);
 }
 
-// Reads one string field, or empty when it is missing or the wrong type.
 std::string
 JsonString(jt::Json& node, const char* key)
 {
@@ -778,7 +764,6 @@ InterpretResponse(const httplib::Response& response, const std::string& url,
 
 }  // namespace
 
-// Posts the conversation and blocks until the endpoint answers.
 AssistantChatResult
 AssistantChatCall::Send(const AssistantChatRequest& request)
 {

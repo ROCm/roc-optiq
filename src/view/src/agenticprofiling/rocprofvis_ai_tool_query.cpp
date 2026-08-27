@@ -8,8 +8,8 @@
 #include <string>
 #include <vector>
 
+#include "rocprofvis_core_string_utils.h"
 #include "rocprofvis_json_utils.h"
-#include "rocprofvis_utils.h"
 
 namespace RocProfVis
 {
@@ -244,7 +244,7 @@ BuildAssistantWhereClause(const jt::Json& args, std::string& error_out)
         }
 
         const QueryOperator* op =
-            FindQueryOperator(to_lower_copy(JsonUtils::GetString(entry, "op", "=")));
+            FindQueryOperator(Core::String::to_lower_copy(JsonUtils::GetString(entry, "op", "=")));
         if(op == nullptr)
         {
             error_out = "Unknown filter op. Use =, !=, <, <=, >, >=, contains, "
@@ -306,10 +306,10 @@ ResolveAssistantSortColumn(const TablesModel& tables, TableType type,
         return fallback;
     }
     const std::vector<std::string>& header  = tables.GetTableHeader(type);
-    const std::string               lowered = to_lower_copy(name);
+    const std::string               lowered = Core::String::to_lower_copy(name);
     for(size_t i = 0; i < header.size(); ++i)
     {
-        if(to_lower_copy(header[i]) == lowered)
+        if(Core::String::to_lower_copy(header[i]) == lowered)
         {
             return static_cast<uint64_t>(i);
         }
@@ -321,7 +321,7 @@ rocprofvis_controller_sort_order_t
 AssistantSortOrderFromArgs(const jt::Json&                    args,
                            rocprofvis_controller_sort_order_t fallback)
 {
-    const std::string order = to_lower_copy(JsonUtils::GetString(args, "sort_order", ""));
+    const std::string order = Core::String::to_lower_copy(JsonUtils::GetString(args, "sort_order", ""));
     if(order == "asc" || order == "ascending")
     {
         return kRPVControllerSortOrderAscending;

@@ -38,12 +38,13 @@ constexpr ImVec2 SCRIPT_BUTTON_PADDING        = ImVec2(8.0f, 3.0f);
 constexpr float  SCRIPT_HEADER_ICON_SCALE     = 0.72f;
 constexpr float  SCRIPT_ACTION_ICON_SCALE     = 0.48f;
 constexpr float  SCRIPT_EDITOR_INSET_ROUNDING = 5.0f;
-constexpr float  SCRIPT_WORKSPACE_GAP         = 8.0f;
 constexpr float  SCRIPT_TWO_COLUMN_MIN_WIDTH  = 720.0f;
-constexpr float  SCRIPT_RESULT_WIDTH_RATIO    = 0.34f;
-constexpr float  SCRIPT_RESULT_MIN_WIDTH      = 260.0f;
-constexpr float  SCRIPT_RESULT_MAX_WIDTH      = 380.0f;
-constexpr float  SCRIPT_STACKED_SOURCE_RATIO  = 0.66f;
+// Share of the workspace the Result pane starts with. Both layouts use it, so
+// dragging the split wide and then narrowing the panel keeps the proportion.
+constexpr float SCRIPT_DEFAULT_RESULT_RATIO = 0.34f;
+constexpr float SCRIPT_SPLITTER_THICKNESS   = 6.0f;
+constexpr float SCRIPT_PANE_MIN_WIDTH       = 180.0f;
+constexpr float SCRIPT_PANE_MIN_HEIGHT      = 60.0f;
 constexpr float  SCRIPT_DOT_RADIUS            = 2.0f;
 constexpr int    SCRIPT_DOT_COUNT             = 3;
 constexpr float  SCRIPT_DOT_SPACING           = 3.0f;
@@ -79,6 +80,7 @@ ScriptEditor::ScriptEditor(DataProvider&                      data_provider,
 : m_data_provider(data_provider)
 , m_timeline_selection(timeline_selection)
 , m_running(false)
+, m_result_ratio(SCRIPT_DEFAULT_RESULT_RATIO)
 , m_progress_percent(0)
 , m_source(kDefaultScript)
 , m_output_is_error(false)
@@ -202,31 +204,78 @@ ScriptEditor::Render()
     // Details panels are normally much wider than they are tall. Spend that
     // width on a source/result workspace, and stack only when genuinely narrow.
     const ImVec2 workspace_size = ImGui::GetContentRegionAvail();
-    if(workspace_size.x >= SCRIPT_TWO_COLUMN_MIN_WIDTH)
-    {
-        const float result_width =
-            std::clamp(workspace_size.x * SCRIPT_RESULT_WIDTH_RATIO,
-                       SCRIPT_RESULT_MIN_WIDTH, SCRIPT_RESULT_MAX_WIDTH);
-        const float source_width =
-            std::max(1.0f, workspace_size.x - result_width - SCRIPT_WORKSPACE_GAP);
+    const bool   columns        = workspace_size.x >= SCRIPT_TWO_COLUMN_MIN_WIDTH;
+    const float  extent         = columns ? workspace_size.x : workspace_size.y;
+    const float  min_pane =
+        columns ? SCRIPT_PANE_MIN_WIDTH : SCRIPT_PANE_MIN_HEIGHT;
 
-        RenderSource(ImVec2(source_width, workspace_size.y));
-        ImGui::SameLine(0.0f, SCRIPT_WORKSPACE_GAP);
+    // Columns are laid out with SameLine(0, 0), but stacking pays the item
+    // spacing twice, above and below the handle.
+    const float spacing =
+        columns ? 0.0f : SCRIPT_ITEM_SPACING.y * 2.0f;
+
+    // Neither pane may be dragged shut. The upper bound is written as a max so a
+    // panel too small to hold both minimums still yields a usable number rather
+    // than an inverted range.
+    const float panes =
+        std::max(1.0f, extent - SCRIPT_SPLITTER_THICKNESS - spacing);
+    const float result = std::clamp(panes * m_result_ratio, std::min(min_pane, panes),
+                                    std::max(min_pane, panes - min_pane));
+    const float source = std::max(1.0f, panes - result);
+
+    if(columns)
+    {
+        RenderSource(ImVec2(source, workspace_size.y));
+        ImGui::SameLine(0.0f, 0.0f);
+        RenderSplitter(true, extent, workspace_size.y);
+        ImGui::SameLine(0.0f, 0.0f);
         RenderOutput(ImVec2(0.0f, workspace_size.y));
     }
     else
     {
-        const float panes_height =
-            std::max(2.0f, workspace_size.y - SCRIPT_WORKSPACE_GAP);
-        const float source_height = panes_height * SCRIPT_STACKED_SOURCE_RATIO;
-
-        RenderSource(ImVec2(0.0f, source_height));
-        RenderOutput(ImVec2(0.0f, panes_height - source_height));
+        RenderSource(ImVec2(0.0f, source));
+        RenderSplitter(false, extent, workspace_size.x);
+        RenderOutput(ImVec2(0.0f, result));
     }
 
     ImGui::EndChild();
     ImGui::PopStyleColor();
     ImGui::PopStyleVar(2);
+}
+
+// Drag handle between Source and Result, the same shape as the Ask Optiq dock
+// splitter. Both layouts write the same ratio, so the split the user chose
+// survives the panel getting narrow enough to flip to stacked and back.
+void
+ScriptEditor::RenderSplitter(bool columns, float split_extent, float cross_length)
+{
+    SettingsManager& settings = SettingsManager::GetInstance();
+    const ImVec2     origin   = ImGui::GetCursorScreenPos();
+    const ImVec2     size     = columns
+                                    ? ImVec2(SCRIPT_SPLITTER_THICKNESS, cross_length)
+                                    : ImVec2(cross_length, SCRIPT_SPLITTER_THICKNESS);
+
+    ImGui::InvisibleButton("##script_splitter", size);
+    const bool hovered = ImGui::IsItemHovered();
+    const bool active  = ImGui::IsItemActive();
+    if(hovered || active)
+    {
+        ImGui::SetMouseCursor(columns ? ImGuiMouseCursor_ResizeEW
+                                      : ImGuiMouseCursor_ResizeNS);
+    }
+    if(active && split_extent > 0.0f)
+    {
+        // Result is the second pane either way, so dragging towards it shrinks
+        // it and the delta is subtracted.
+        const float delta =
+            columns ? ImGui::GetIO().MouseDelta.x : ImGui::GetIO().MouseDelta.y;
+        m_result_ratio = std::clamp(m_result_ratio - delta / split_extent, 0.0f, 1.0f);
+    }
+
+    ImGui::GetWindowDrawList()->AddRectFilled(
+        origin, ImVec2(origin.x + size.x, origin.y + size.y),
+        settings.GetColor(hovered || active ? Colors::kAccent
+                                            : Colors::kSplitterColor));
 }
 
 // What the script is, in one dim line: where it came from, or what is loaded.
@@ -594,7 +643,15 @@ ScriptEditor::Run()
 void
 ScriptEditor::Cancel()
 {
-    m_data_provider.CancelScript();
+    if(!m_data_provider.CancelScript())
+    {
+        // Nothing left to cancel, so no completion event is coming and the
+        // editor would sit on Running forever.
+        m_running = false;
+        m_running_source_id.clear();
+        m_status = "Not running";
+        return;
+    }
     m_status = "Cancelling";
 }
 

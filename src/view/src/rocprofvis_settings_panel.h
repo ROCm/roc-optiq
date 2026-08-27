@@ -43,6 +43,8 @@ private:
     void ResetDisplayOptions();
     void ResetUnitOptions();
     void ResetHotkeySettings();
+    // The Assistant page. Defined in
+    // agenticprofiling/rocprofvis_ai_settings_page.cpp.
 #ifdef ROCPROFVIS_ENABLE_AGENTIC_PROFILING
     void RenderAssistantSettings();
     void ResetAssistantOptions();

@@ -2,20 +2,12 @@
 // SPDX-License-Identifier: MIT
 
 // The tool that hands a Python script to the interpreter and waits for what it
-// worked out. It is neither a UI tool nor a table read, which is why it sits
-// apart from rocprofvis_ai_ui_tools.cpp and rocprofvis_ai_data_tools.cpp: the
-// model writes the analysis instead of asking for rows, and what comes back is
-// a conclusion rather than a table to format.
+// worked out. The model writes the analysis instead of asking for rows, so what
+// comes back is a conclusion rather than a table to format: use it for what has
+// to be computed over many rows, and leave small lookups to the data tools.
 //
-// That is the whole point of it. Reading a thousand dispatches to find the gaps
-// between them costs a thousand rows of context and arithmetic the model has to
-// do in prose; the same question asked as a script costs one number. Use it for
-// what has to be computed over many rows, and leave the ordinary lookups to the
-// data tools, which are cheaper for anything small.
-//
-// Everything here is compiled only when scripting is built in. With the option
-// off the handler table is empty and the schema never registers the tool, so
-// the model is not offered something that would always fail.
+// With scripting off the handler table is empty and the schema never registers
+// the tool, so the model is not offered something that would always fail.
 #include "rocprofvis_ai_tools_internal.h"
 
 #include <cstddef>
@@ -57,20 +49,6 @@ constexpr uint32_t ASSISTANT_SCRIPT_APPROVAL_TIMEOUT_SECONDS = 300;
 // its working out instead of its result.
 constexpr size_t ASSISTANT_MAX_SCRIPT_OUTPUT_CHARS = 8000;
 
-// Keeps the head of the output: a script that dumps rows puts its summary
-// first and the dump after it.
-std::string
-TrimScriptOutput(const std::string& text)
-{
-    if(text.size() <= ASSISTANT_MAX_SCRIPT_OUTPUT_CHARS)
-    {
-        return text;
-    }
-    return text.substr(0, ASSISTANT_MAX_SCRIPT_OUTPUT_CHARS) +
-           "\n... truncated. Have the script report totals rather than rows ...";
-}
-
-// Implements the run_analysis_script tool.
 AssistantToolStartResult
 ToolRunAnalysisScript(const AssistantToolContext& context, const jt::Json& args,
                       const std::string&)
@@ -110,10 +88,9 @@ ToolRunAnalysisScript(const AssistantToolContext& context, const jt::Json& args,
     }
 
     // Offer it, do not run it. Writing code is the one thing the model does
-    // that executes, so the user reads it and decides; the Script tab drives
-    // the run from there, through exactly the path a hand-written script
-    // takes. That tab owns the trace and the selection, so nothing about the
-    // run has to be worked out here.
+    // that executes, so the user reads it and decides. The Script tab drives
+    // the run from there, through the path a hand-written script takes, and it
+    // owns the trace and the selection the run needs.
     OptiqActions actions(context.data_provider, context.timeline_selection,
                          context.compute_selection, context.trace_view);
     if(!actions.ProposeScript(source))
@@ -216,7 +193,9 @@ FinishAssistantScriptFetch(const AssistantToolContext& context)
         return "The script ran but reported nothing. Call optiq.result.text(...) "
                "with the numbers it worked out.";
     }
-    return TrimScriptOutput(text);
+    return TrimAssistantText(
+        text, ASSISTANT_MAX_SCRIPT_OUTPUT_CHARS,
+        "\n... truncated. Have the script report totals rather than rows ...");
 }
 
 #else

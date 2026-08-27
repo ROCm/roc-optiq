@@ -17,16 +17,14 @@ namespace View
  * from the code that runs it.
  *
  * Nothing here touches view state or the data model: it builds JSON out of
- * string literals. That is what makes it safe to call from the HTTP worker
- * thread while the UI thread carries on drawing, and it is why the two halves
- * live in different files - the schema is what the model is told, the tool
- * bodies in rocprofvis_ai_tools.cpp are what actually happens.
+ * string literals, which is what makes it safe to call from the HTTP worker
+ * thread while the UI thread carries on drawing.
  *
- * The tool descriptions here are the only instructions the model gets about
- * what each tool is for, so they are part of the product's behaviour rather
- * than incidental text. A tool added in rocprofvis_ai_tools.cpp without a
- * matching entry here is unreachable, and one added here without a body comes
- * back to the model as an unknown tool.
+ * These descriptions are the only instructions the model gets about what each
+ * tool is for, so they are part of the product's behaviour rather than
+ * incidental text. A tool body registered in one of the *_tools.cpp handler
+ * tables without a matching entry here is unreachable, and one added here
+ * without a body comes back to the model as an unknown tool.
  */
 
 // The tool schema sent with every request. Thread-safe: reads no view state.

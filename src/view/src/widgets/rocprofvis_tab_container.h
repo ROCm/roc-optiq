@@ -39,11 +39,11 @@ public:
 
     const std::vector<const TabItem*> GetTabs();
 
-    // Finds a tab by the label the user sees, ignoring case. An exact label
-    // wins; failing that, a substring match is accepted only when the name is
-    // long enough to mean something and picks out exactly one tab. Returns
-    // nullptr when nothing matches and when several do, so an ambiguous name is
-    // refused rather than resolved to whichever tab happens to come first.
+    // Finds a tab by the label the user sees, ignoring case. An exact match
+    // wins; a substring is accepted only when it is long enough to mean
+    // something and picks out exactly one tab. Returns nullptr when nothing
+    // matches and when several do, so an ambiguous name is refused rather than
+    // resolved to whichever tab happens to come first.
     const TabItem* FindTabByLabel(const std::string& label) const;
 
     // Shortest name that may be matched as a substring rather than in full.

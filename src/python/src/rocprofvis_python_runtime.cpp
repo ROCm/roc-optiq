@@ -28,20 +28,19 @@ namespace Python
 namespace
 {
 
-// How long a script may run before the runtime stops it. Nothing else bounds
-// exec: a loop that never ends holds the one interpreter thread forever, and
-// the caller only learns about it by noticing the future never completes.
-uint64_t const kScriptTimeoutMs = 30000;
+// Nothing else bounds exec: a loop that never ends holds the one interpreter
+// thread forever, and the caller only sees a future that never completes.
+uint64_t const SCRIPT_TIMEOUT_MS = 30000;
 
 // A script that catches KeyboardInterrupt swallows the first stop, so keep
-// raising it rather than assuming one is enough.
-uint64_t const kInterruptRetryMs = 1000;
+// raising rather than assuming one is enough.
+uint64_t const INTERRUPT_RETRY_MS = 1000;
 
-// Enough traceback for whoever wrote the script - a user or a model - to find
-// the failing line, without pasting a runaway recursion into the transcript.
-size_t const kMaxErrorChars = 4000;
+// Enough traceback to find the failing line, without pasting a runaway
+// recursion into the transcript.
+size_t const MAX_ERROR_CHARS = 4000;
 
-char const* const kAllowlistedModules[] = {
+char const* const ALLOWLISTED_MODULES[] = {
     "math",       "statistics", "decimal",     "fractions", "itertools",
     "functools",  "operator",   "collections", "heapq",     "dataclasses",
     "typing",     "enum",       "json",        "re",        "datetime",
@@ -58,7 +57,7 @@ is_allowlisted(char const* name)
     char const* dot = std::strchr(name, '.');
     size_t      top_len =
         dot ? static_cast<size_t>(dot - name) : std::strlen(name);
-    for(char const* allowed : kAllowlistedModules)
+    for(char const* allowed : ALLOWLISTED_MODULES)
     {
         if(std::strlen(allowed) == top_len &&
            std::strncmp(name, allowed, top_len) == 0)
@@ -96,11 +95,11 @@ restricted_import(PyObject* self, PyObject* args, PyObject* kwargs)
                                       fromlist ? fromlist : Py_None, level);
 }
 
-PyMethodDef kImportMethod = {
+PyMethodDef IMPORT_METHOD = {
     "__import__", reinterpret_cast<PyCFunction>(restricted_import),
     METH_VARARGS | METH_KEYWORDS, nullptr};
 
-char const* const kSafeBuiltinNames[] = {
+char const* const SAFE_BUILTIN_NAMES[] = {
     "None",       "True",      "False",      "abs",        "all",
     "any",        "bool",      "chr",        "dict",       "divmod",
     "enumerate",  "filter",    "float",      "format",     "frozenset",
@@ -110,11 +109,10 @@ char const* const kSafeBuiltinNames[] = {
     "ord",        "pow",       "range",      "repr",       "reversed",
     "round",      "set",       "slice",      "sorted",     "str",
     "sum",        "tuple",     "zip",        "bytes",
-    // The class machinery. __build_class__ is what a `class` statement
-    // compiles down to, so without it every class in a script fails with a
-    // bare "NameError: __build_class__ not found" - and that took the
-    // allowlisted dataclasses and enum modules down with it, since both are
-    // used by defining a class. The rest are what a class body reaches for.
+    // The class machinery. A `class` statement compiles to __build_class__, so
+    // without it every class fails with a bare NameError - which also takes
+    // down the allowlisted dataclasses and enum, since both are used by
+    // declaring a class. The rest is what a class body reaches for.
     "__build_class__", "type", "object", "super", "property", "staticmethod",
     "classmethod",
     "Exception",  "ValueError",
@@ -123,25 +121,21 @@ char const* const kSafeBuiltinNames[] = {
     "ZeroDivisionError", "AssertionError", "AttributeError", "NameError",
 };
 
-// Keeps the end of a long message: the exception line and the frame it was
-// raised in are last, and those are what the reader needs.
+// Keeps the tail, not the head: the exception line and the frame that raised
+// it come last, and those are what the reader needs.
 std::string
 TrimErrorTail(std::string const& text)
 {
-    if(text.size() <= kMaxErrorChars)
+    if(text.size() <= MAX_ERROR_CHARS)
     {
         return text;
     }
     return "... earlier frames omitted ...\n" +
-           text.substr(text.size() - kMaxErrorChars);
+           text.substr(text.size() - MAX_ERROR_CHARS);
 }
 
-/*
- * Renders the exception being handled the way the interpreter would print it,
- * with the traceback and line numbers. Requires the GIL, and clears the error
- * indicator. Falls back to the exception text alone if the traceback module
- * cannot be reached, which still beats reporting nothing.
- */
+// Renders the exception being handled the way the interpreter would print it,
+// traceback and all. Requires the GIL, and clears the error indicator.
 std::string
 FormatPythonError()
 {
@@ -201,8 +195,6 @@ FormatPythonError()
     return text.empty() ? std::string("script error") : TrimErrorTail(text);
 }
 
-// Says how long a run lasted in whichever unit reads naturally, so the message
-// is usable at a 30 second production deadline and at a short one in a test.
 std::string
 DescribeDuration(uint64_t milliseconds)
 {
@@ -395,7 +387,7 @@ Runtime::MakeScriptGlobals()
         Py_DECREF(globals);
         return nullptr;
     }
-    for(char const* name : kSafeBuiltinNames)
+    for(char const* name : SAFE_BUILTIN_NAMES)
     {
         PyObject* value = PyDict_GetItemString(builtins, name);
         if(value)
@@ -404,8 +396,7 @@ Runtime::MakeScriptGlobals()
         }
     }
 
-    PyObject* import_fn =
-        PyCFunction_New(&kImportMethod, nullptr);
+    PyObject* import_fn = PyCFunction_New(&IMPORT_METHOD, nullptr);
     if(import_fn)
     {
         PyDict_SetItemString(safe, "__import__", import_fn);
@@ -421,7 +412,7 @@ Runtime::MakeScriptGlobals()
         Py_DECREF(script_name);
     }
 
-    for(char const* name : kAllowlistedModules)
+    for(char const* name : ALLOWLISTED_MODULES)
     {
         if(std::strcmp(name, "optiq") == 0)
         {
@@ -447,18 +438,16 @@ Runtime::MakeScriptGlobals()
  * Deliberately not PyErr_SetInterrupt. That trips the SIGINT flag for
  * PyErr_CheckSignals to act on, but the isolated config sets
  * install_signal_handlers to 0, so no Python-level handler is registered for
- * it. CPython then refuses the signal outright - "OSError: Signal 2 ignored
- * due to race condition" - and, because that runs through the ignored-handler
- * path, it clears the error indicator on its way out. Pairing the two is worse
- * than either alone: the failed signal wipes the exception set here.
+ * it. CPython then refuses the signal - "OSError: Signal 2 ignored due to race
+ * condition" - and that ignored-handler path clears the error indicator on its
+ * way out, wiping the exception set here.
  *
- * Raising into the thread does not involve signal handling at all, and takes
- * effect the next time that thread runs a bytecode, which is what stops a loop
- * that never ends. A script parked in a fetch has released the GIL, so it only
- * sees this once the binding hands control back to the interpreter.
+ * Raising into the thread takes effect the next time that thread runs a
+ * bytecode. A script parked in a fetch has released the GIL, so it only sees
+ * this once the binding hands control back to the interpreter.
  *
  * Needs the GIL, so it runs on the watchdog rather than on whoever asked to
- * cancel - which is usually the UI thread, and must not wait on it.
+ * cancel - usually the UI thread, which must not wait on it.
  */
 void
 Runtime::RaiseInInterpreter()
@@ -479,10 +468,10 @@ Runtime::RaiseInInterpreter()
     }
 
     PyGILState_STATE gil = PyGILState_Ensure();
-    // Holding the GIL means the interpreter thread is not between scripts, so
-    // this is the last point at which "is it still running" can be asked and
-    // acted on together. Without it a script that finished while this thread
-    // was waiting would leave the raise pending for the next one.
+    // Under the GIL the interpreter thread cannot be between scripts, so "is it
+    // still running" and the raise happen together. Without that, a script
+    // which finished while the watchdog waited would leave a raise pending for
+    // whatever ran next.
     bool still_running = false;
     {
         std::lock_guard<std::mutex> lock(m_mutex);
@@ -490,12 +479,16 @@ Runtime::RaiseInInterpreter()
     }
     if(still_running)
     {
-        PyThreadState_SetAsyncExc(ident, PyExc_KeyboardInterrupt);
+        // More than one means the exception was set on several frames, which
+        // CPython requires be reverted before it is safe to try again.
+        if(PyThreadState_SetAsyncExc(ident, PyExc_KeyboardInterrupt) > 1)
+        {
+            PyThreadState_SetAsyncExc(ident, nullptr);
+        }
     }
     PyGILState_Release(gil);
 }
 
-// Arms the deadline for the script about to run.
 void
 Runtime::BeginExecDeadline(uint64_t timeout_ms)
 {
@@ -508,7 +501,7 @@ Runtime::BeginExecDeadline(uint64_t timeout_ms)
     m_watchdog_cv.notify_all();
 }
 
-// Disarms it, reporting whether the watchdog had already fired.
+// Returns whether the watchdog had already fired.
 bool
 Runtime::EndExecDeadline()
 {
@@ -526,15 +519,20 @@ Runtime::ExecWork(WorkItem& item)
 
     PyGILState_STATE gil = PyGILState_Ensure();
     // The watchdog can fire between the last script ending and this one
-    // starting, so drop anything still pending rather than letting it land on
-    // a script that has not run a line yet. Passing null clears the async
+    // starting, so drop anything still pending rather than letting it land on a
+    // script that has not run a line yet. Passing null clears the async
     // exception; PyErr_Clear alone does not reach it.
     PyErr_CheckSignals();
     PyErr_Clear();
     PyThreadState_SetAsyncExc(PyThread_get_thread_ident(), nullptr);
 
     PyObject* globals = MakeScriptGlobals();
-    if(globals)
+    if(!globals)
+    {
+        error = PyErr_Occurred() ? FormatPythonError()
+                                 : "could not build the script environment";
+    }
+    else
     {
         if(item.prepare_globals)
         {
@@ -542,7 +540,7 @@ Runtime::ExecWork(WorkItem& item)
         }
 
         const uint64_t timeout_ms =
-            item.timeout_ms == 0 ? kScriptTimeoutMs : item.timeout_ms;
+            item.timeout_ms == 0 ? SCRIPT_TIMEOUT_MS : item.timeout_ms;
         BeginExecDeadline(timeout_ms);
         PyObject* py_result =
             PyRun_String(item.source.c_str(), Py_file_input, globals, globals);
@@ -586,13 +584,10 @@ Runtime::ExecWork(WorkItem& item)
     }
 }
 
-/*
- * Stops a script that has outstayed its deadline, and delivers an explicit
- * cancel on behalf of whoever asked for one. Both go out through
- * RaiseInInterpreter, and both are re-sent on an interval: a script that
- * catches KeyboardInterrupt - which model-written code does - swallows the
- * first one, so a single raise is not enough to assume it stopped.
- */
+// Stops a script that has outstayed its deadline, and delivers an explicit
+// cancel on behalf of whoever asked for one. Both go out through
+// RaiseInInterpreter, and both are re-sent on an interval because a bare
+// `except:` swallows the first raise.
 void
 Runtime::WatchdogMain()
 {
@@ -615,24 +610,22 @@ Runtime::WatchdogMain()
                 continue;
             }
 
-            // Shutting down with a script still running: bring the deadline
-            // forward, because Shutdown joins the interpreter thread and a
-            // script that never ends would hold the join open. Clamped rather
-            // than zeroed so this still fires at most once per retry.
+            // Shutdown joins the interpreter thread, so a script that never
+            // ends would hold the join open. Clamped rather than zeroed so
+            // this still fires at most once per retry.
             if(m_stop)
             {
                 const std::chrono::steady_clock::time_point soon =
                     std::chrono::steady_clock::now() +
-                    std::chrono::milliseconds(kInterruptRetryMs);
+                    std::chrono::milliseconds(INTERRUPT_RETRY_MS);
                 if(m_next_interrupt > soon)
                 {
                     m_next_interrupt = soon;
                 }
             }
 
-            // Waking without the predicate means the deadline passed with the
-            // script still running. Stopping is not part of the predicate: a
-            // hung script has to be interrupted, not left behind.
+            // Stopping is deliberately not part of the predicate: a hung
+            // script has to be interrupted, not left behind.
             const bool woke_early =
                 m_watchdog_cv.wait_until(lock, m_next_interrupt, [this]() {
                     return !m_exec_active || m_interrupt_requested;
@@ -645,16 +638,15 @@ Runtime::WatchdogMain()
                 continue;
             }
 
-            // Woken early means someone asked to cancel, which is delivered
-            // the same way but is not a timeout, so the run still reports as
-            // cancelled rather than as a script to go and fix.
+            // Woken early means an explicit cancel, delivered the same way but
+            // reported as cancelled rather than as a script to go and fix.
             if(!woke_early)
             {
                 m_exec_timed_out = true;
             }
             m_interrupt_requested = false;
             m_next_interrupt      = std::chrono::steady_clock::now() +
-                               std::chrono::milliseconds(kInterruptRetryMs);
+                               std::chrono::milliseconds(INTERRUPT_RETRY_MS);
             fire                  = true;
         }
         if(fire)
@@ -718,7 +710,10 @@ Runtime::Init(char const* runtime_root)
     std::unique_lock<std::mutex> lock(m_mutex);
     if(m_running)
     {
-        return kRocProfVisPythonSuccess;
+        // A failed startup leaves m_running set but no thread draining the
+        // queue, so reporting success here would park every later script on a
+        // future that can never complete.
+        return m_init_ok ? kRocProfVisPythonSuccess : m_init_result;
     }
     m_runtime_root = runtime_root ? runtime_root : "";
     m_stop         = false;

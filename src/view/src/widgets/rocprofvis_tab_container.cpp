@@ -5,7 +5,7 @@
 #include "rocprofvis_gui_helpers.h"
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_event_manager.h"
-#include "rocprofvis_utils.h"
+#include "rocprofvis_core_string_utils.h"
 #include <algorithm>
 
 namespace RocProfVis
@@ -378,10 +378,10 @@ TabContainer::FindTabByLabel(const std::string& label) const
         return nullptr;
     }
 
-    const std::string needle = to_lower_copy(label);
+    const std::string needle = Core::String::to_lower_copy(label);
     for(const TabItem& tab : m_tabs)
     {
-        if(to_lower_copy(tab.m_label) == needle)
+        if(Core::String::to_lower_copy(tab.m_label) == needle)
         {
             return &tab;
         }
@@ -395,7 +395,7 @@ TabContainer::FindTabByLabel(const std::string& label) const
     const TabItem* single_match = nullptr;
     for(const TabItem& tab : m_tabs)
     {
-        if(to_lower_copy(tab.m_label).find(needle) == std::string::npos)
+        if(Core::String::to_lower_copy(tab.m_label).find(needle) == std::string::npos)
         {
             continue;
         }

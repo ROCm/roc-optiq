@@ -1033,12 +1033,12 @@ SettingsManager::DeserializeProfilerSettings(jt::Json& json)
     }
 }
 
-// Writes the saved endpoints. The API keys live in the credential store.
+// The API keys are deliberately absent: those live in the credential store.
 void
 SettingsManager::SerializeAssistantSettings(jt::Json& json)
 {
     jt::Json& as = json[JSON_KEY_GROUP_SETTINGS][JSON_KEY_SETTINGS_CATEGORY_ASSISTANT];
-    int       i  = 0;
+    int32_t   i  = 0;
     for(const AssistantProvider& provider : m_usersettings.assistant.providers)
     {
         jt::Json& entry = as[JSON_KEY_SETTINGS_ASSISTANT_PROVIDERS][i++];
@@ -1050,7 +1050,7 @@ SettingsManager::SerializeAssistantSettings(jt::Json& json)
         static_cast<int>(m_usersettings.assistant.active);
 }
 
-// Reads the saved endpoints, upgrading the pre-provider single-endpoint shape.
+// Also upgrades the pre-provider single-endpoint shape.
 void
 SettingsManager::DeserializeAssistantSettings(jt::Json& json)
 {
@@ -1115,7 +1115,6 @@ SettingsManager::DeserializeAssistantSettings(jt::Json& json)
     }
 }
 
-// The endpoint the assistant should post to, or nullptr when none is saved.
 const AssistantProvider*
 SettingsManager::GetActiveAssistantProvider() const
 {
@@ -1127,7 +1126,6 @@ SettingsManager::GetActiveAssistantProvider() const
     return &providers[m_usersettings.assistant.active];
 }
 
-// Persists panel visibility, so the View menu survives a restart.
 void
 SettingsManager::SerializeAppWindowSettings(jt::Json& json)
 {
@@ -1140,7 +1138,6 @@ SettingsManager::SerializeAppWindowSettings(jt::Json& json)
     aw[JSON_KEY_SETTINGS_APP_WINDOW_SUMMARY]   = m_appwindowsettings.show_summary;
 }
 
-// Restores panel visibility, keeping the built-in default for missing keys.
 void
 SettingsManager::DeserializeAppWindowSettings(jt::Json& json)
 {
@@ -1161,132 +1158,6 @@ SettingsManager::DeserializeAppWindowSettings(jt::Json& json)
         JsonUtils::GetBool(aw, JSON_KEY_SETTINGS_APP_WINDOW_SUMMARY,
                            m_appwindowsettings.show_summary);
 }
-
-#ifdef ROCPROFVIS_ENABLE_AGENTIC_PROFILING
-namespace
-{
-// Credential-store entry for one endpoint. Every endpoint gets its own entry,
-// so a key configured for one host can never be sent to another.
-std::string
-AssistantTokenKey(const std::string& provider_name)
-{
-    if(provider_name.empty())
-    {
-        return ASSISTANT_TOKEN_SECRET_KEY;
-    }
-    return std::string(ASSISTANT_TOKEN_SECRET_KEY) + "/" + provider_name;
-}
-}  // namespace
-
-// Moves a key written before endpoints were named onto the first endpoint, so
-// an upgrade does not make the user re-enter it.
-//
-// This runs once at load and then deletes the unnamed entry. Reading it as a
-// live fallback instead would mean any endpoint without a key of its own
-// inherited this one, which is how a key for one provider would end up being
-// posted to a different provider's host.
-void
-SettingsManager::MigrateLegacyAssistantToken()
-{
-    if(!SecretStore::IsAvailable() || m_usersettings.assistant.providers.empty())
-    {
-        return;
-    }
-
-    std::string legacy_token;
-    if(!SecretStore::Get(ASSISTANT_TOKEN_SECRET_KEY, legacy_token) ||
-       legacy_token.empty())
-    {
-        return;
-    }
-
-    // The single endpoint that existed before the list did is the first one.
-    const std::string key =
-        AssistantTokenKey(m_usersettings.assistant.providers.front().name);
-    if(key == ASSISTANT_TOKEN_SECRET_KEY)
-    {
-        return;
-    }
-
-    std::string existing_token;
-    const bool  already_migrated =
-        SecretStore::Get(key, existing_token) && !existing_token.empty();
-    if(!already_migrated && !SecretStore::Set(key, legacy_token))
-    {
-        // Leave the old entry alone rather than destroying the only copy.
-        spdlog::warn("Could not migrate the saved assistant key; leaving it in place");
-        return;
-    }
-    SecretStore::Erase(ASSISTANT_TOKEN_SECRET_KEY);
-}
-
-// True when a key is already saved for this endpoint.
-bool
-SettingsManager::HasAssistantToken(const std::string& provider_name) const
-{
-    std::string unused;
-    return GetAssistantToken(provider_name, unused);
-}
-
-// Reads this endpoint's key from the credential store, or from this session's
-// memory when no store is available. Never falls through to another endpoint's
-// key: an endpoint with nothing saved has no key.
-bool
-SettingsManager::GetAssistantToken(const std::string& provider_name,
-                                   std::string&       out_token) const
-{
-    out_token.clear();
-    if(SecretStore::IsAvailable() &&
-       SecretStore::Get(AssistantTokenKey(provider_name), out_token) &&
-       !out_token.empty())
-    {
-        return true;
-    }
-
-    out_token.clear();
-    const std::map<std::string, std::string>::const_iterator session =
-        m_assistant_token_session.find(provider_name);
-    if(session != m_assistant_token_session.end() && !session->second.empty())
-    {
-        out_token = session->second;
-        return true;
-    }
-    return false;
-}
-
-// Saves the key, or clears it when the token is empty.
-bool
-SettingsManager::SetAssistantToken(const std::string& provider_name,
-                                   const std::string& token)
-{
-    if(token.empty())
-    {
-        return ClearAssistantToken(provider_name);
-    }
-
-    if(SecretStore::IsAvailable())
-    {
-        // The vault owns it now. A second copy in process memory would only
-        // widen the window where the key can be read back out.
-        m_assistant_token_session.erase(provider_name);
-        return SecretStore::Set(AssistantTokenKey(provider_name), token);
-    }
-    m_assistant_token_session[provider_name] = token;
-    return true;
-}
-
-// Forgets this endpoint's key. Other endpoints keep theirs.
-bool
-SettingsManager::ClearAssistantToken(const std::string& provider_name)
-{
-    m_assistant_token_session.erase(provider_name);
-    if(!SecretStore::IsAvailable())
-    {
-        return true;
-    }
-    return SecretStore::Erase(AssistantTokenKey(provider_name));
-}
-#endif  // ROCPROFVIS_ENABLE_AGENTIC_PROFILING
 
 }  // namespace View
 }  // namespace RocProfVis

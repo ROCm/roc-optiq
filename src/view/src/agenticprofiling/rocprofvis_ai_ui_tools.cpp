@@ -3,12 +3,10 @@
 
 // The tools that change Optiq rather than read it. Every body here goes through
 // OptiqActions and answers in the same call, so none of them park a fetch or
-// touch a request id - that is what the data tools in
-// rocprofvis_ai_data_tools.cpp do. Adding a capability belongs in
-// rocprofvis_ai_actions.h as one method, not as wiring inside a tool here.
+// touch a request id. Adding a capability belongs in rocprofvis_ai_actions.h as
+// one method, not as wiring inside a tool here.
 #include "rocprofvis_ai_tools_internal.h"
 
-#include <cctype>
 #include <cmath>
 #include <sstream>
 #include <string>
@@ -20,6 +18,7 @@
 #include "compute/rocprofvis_compute_selection.h"
 #include "model/compute/rocprofvis_compute_data_model.h"
 #include "rocprofvis_ai_actions.h"
+#include "rocprofvis_core_string_utils.h"
 #include "rocprofvis_data_provider.h"
 #include "rocprofvis_json_utils.h"
 #include "rocprofvis_settings_manager.h"
@@ -44,25 +43,6 @@ Actions(const AssistantToolContext& context)
 {
     return OptiqActions(context.data_provider, context.timeline_selection,
                         context.compute_selection, context.trace_view);
-}
-
-// Strips leading and trailing whitespace from a follow-up the model offered.
-std::string
-TrimCopy(std::string value)
-{
-    size_t start = 0;
-    while(start < value.size() &&
-          std::isspace(static_cast<unsigned char>(value[start])) != 0)
-    {
-        ++start;
-    }
-    size_t end = value.size();
-    while(end > start &&
-          std::isspace(static_cast<unsigned char>(value[end - 1])) != 0)
-    {
-        --end;
-    }
-    return value.substr(start, end - start);
 }
 
 // Reads the stacked follow-up buttons out of offer_next_steps arguments.
@@ -92,7 +72,7 @@ OfferNextStepsResult(const jt::Json& args)
         {
             continue;
         }
-        std::string step = TrimCopy(entry.getString());
+        std::string step = Core::String::trim_copy(entry.getString());
         if(step.empty())
         {
             continue;
@@ -115,8 +95,8 @@ OfferNextStepsResult(const jt::Json& args)
     return result;
 }
 
-// Implements the offer_next_steps tool. The only one that runs without a trace,
-// since it just puts buttons under the chat.
+// The only tool that runs without a trace, since it just puts buttons under
+// the chat.
 AssistantToolStartResult
 ToolOfferNextSteps(const AssistantToolContext&, const jt::Json& args,
                    const std::string&)
@@ -124,7 +104,6 @@ ToolOfferNextSteps(const AssistantToolContext&, const jt::Json& args,
     return OfferNextStepsResult(args);
 }
 
-// Implements the show_panel tool.
 AssistantToolStartResult
 ToolShowPanel(const AssistantToolContext& context, const jt::Json& args,
               const std::string&)
@@ -150,10 +129,8 @@ ToolShowPanel(const AssistantToolContext& context, const jt::Json& args,
                       visible ? "Opened a panel" : "Closed a panel");
 }
 
-// Implements the reset_view tool.
 AssistantToolStartResult
-ToolResetView(const AssistantToolContext& context, const jt::Json& args,
-              const std::string&)
+ToolResetView(const AssistantToolContext& context, const jt::Json&, const std::string&)
 {
     if(!Actions(context).ResetView())
     {
@@ -163,7 +140,6 @@ ToolResetView(const AssistantToolContext& context, const jt::Json& args,
     return DoneResult("Zoomed back out to the whole trace.", "Reset the view");
 }
 
-// Implements the measure tool.
 AssistantToolStartResult
 ToolMeasure(const AssistantToolContext& context, const jt::Json& args,
             const std::string&)
@@ -196,13 +172,12 @@ ToolMeasure(const AssistantToolContext& context, const jt::Json& args,
         "Measured a span");
 }
 
-// Implements the bookmark tool.
 AssistantToolStartResult
 ToolBookmark(const AssistantToolContext& context, const jt::Json& args,
              const std::string&)
 {
     OptiqActions      actions = Actions(context);
-    const std::string action  = to_lower_copy(JsonUtils::GetString(args, "action", "list"));
+    const std::string action  = Core::String::to_lower_copy(JsonUtils::GetString(args, "action", "list"));
     const std::vector<int> slots = actions.ListBookmarks();
 
     std::ostringstream saved;
@@ -263,7 +238,6 @@ ToolBookmark(const AssistantToolContext& context, const jt::Json& args,
                       "Bad action");
 }
 
-// Implements the annotate tool.
 AssistantToolStartResult
 ToolAnnotate(const AssistantToolContext& context, const jt::Json& args,
              const std::string&)
@@ -282,6 +256,28 @@ ToolAnnotate(const AssistantToolContext& context, const jt::Json& args,
                           "Missing arguments");
     }
 
+    SettingsManager& settings    = SettingsManager::GetInstance();
+    const TimeFormat time_format = settings.GetUserSettings().unit_settings.time_format;
+
+    // A note is pinned at an absolute timestamp, but the model worked that
+    // number out on an earlier turn and the user can pan, zoom or reselect in
+    // between. Check the anchor against the trace before pinning, and say where
+    // it actually landed, so a stale number cannot be reported as the spot
+    // under discussion.
+    const TimelineModel& timeline = context.data_provider->DataModel().GetTimeline();
+    if(time_ns < timeline.GetStartTime() || time_ns > timeline.GetEndTime())
+    {
+        return DoneResult(
+            "time_ns " + nanosecond_to_formatted_str(time_ns, time_format, true) +
+                " is outside this trace, which runs " +
+                nanosecond_to_formatted_str(timeline.GetStartTime(), time_format, true) +
+                " .. " +
+                nanosecond_to_formatted_str(timeline.GetEndTime(), time_format, true) +
+                ". Re-read the timestamp from the data rather than reusing one "
+                "from an earlier trace or turn.",
+            "Note failed");
+    }
+
     double view_start = 0.0;
     double view_end   = 0.0;
     SelectedOrFullTimeRange(context, view_start, view_end);
@@ -290,11 +286,25 @@ ToolAnnotate(const AssistantToolContext& context, const jt::Json& args,
     {
         return DoneResult("Could not pin a note on this trace.", "Note failed");
     }
-    return DoneResult("Pinned a note titled \"" + title + "\" on the timeline.",
-                      "Left a note");
+
+    std::ostringstream out;
+    out << "Pinned a note titled \"" << title << "\" at "
+        << nanosecond_to_formatted_str(time_ns, time_format, true) << ".";
+    const bool selected = context.timeline_selection != nullptr &&
+                          context.timeline_selection->HasValidTimeRangeSelection();
+    if(selected && (time_ns < view_start || time_ns > view_end))
+    {
+        // The user moved on, or the model reused a timestamp from an earlier
+        // window. Either way the note is not where the conversation is.
+        out << " Note that this is outside the selected range ("
+            << nanosecond_to_formatted_str(view_start, time_format, true) << " .. "
+            << nanosecond_to_formatted_str(view_end, time_format, true)
+            << "), so say where the note went rather than calling it the "
+               "selected interval, or call goto first and annotate again.";
+    }
+    return DoneResult(out.str(), "Left a note");
 }
 
-// Implements the switch_tab tool.
 AssistantToolStartResult
 ToolSwitchTab(const AssistantToolContext& context, const jt::Json& args,
               const std::string&)
@@ -344,7 +354,6 @@ ToolSwitchTab(const AssistantToolContext& context, const jt::Json& args,
     return DoneResult(out.str(), "No matching tab");
 }
 
-// Implements the flow_arrows tool.
 AssistantToolStartResult
 ToolFlowArrows(const AssistantToolContext& context, const jt::Json& args,
                const std::string&)
@@ -357,7 +366,7 @@ ToolFlowArrows(const AssistantToolContext& context, const jt::Json& args,
                           "Not available");
     }
 
-    const std::string style = to_lower_copy(JsonUtils::GetString(args, "style", ""));
+    const std::string style = Core::String::to_lower_copy(JsonUtils::GetString(args, "style", ""));
     if(style == "chain" || style == "fan")
     {
         actions.SetFlowRenderChained(style == "chain");
@@ -377,7 +386,6 @@ ToolFlowArrows(const AssistantToolContext& context, const jt::Json& args,
     return DoneResult(message, visible ? "Flow arrows on" : "Flow arrows off");
 }
 
-// Implements the goto tool.
 AssistantToolStartResult
 ToolGoto(const AssistantToolContext& context, const jt::Json& args,
          const std::string&)
@@ -400,13 +408,7 @@ ToolGoto(const AssistantToolContext& context, const jt::Json& args,
         {
             return DoneResult("Compute selection is not available.", "goto failed");
         }
-        ComputeDataModel& model = context.data_provider->ComputeModel();
-        uint32_t workload_id    = context.compute_selection->GetSelectedWorkload();
-        const WorkloadInfo* workload = model.GetWorkload(workload_id);
-        if(workload == nullptr && !model.GetWorkloadList().empty())
-        {
-            workload = model.GetWorkloadList().front();
-        }
+        const WorkloadInfo* workload = SelectedComputeWorkload(context);
         if(workload == nullptr)
         {
             return DoneResult("No compute workload is loaded.", "goto failed");

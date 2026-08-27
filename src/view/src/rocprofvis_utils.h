@@ -305,14 +305,14 @@ std::string
 strip_ansi_for_display(std::string const& text);
 
 /**
- * @brief Returns a lowercased copy, for case-insensitive matching of names the
- *        user or a tool argument supplied.
+ * @brief True when a time range is one the view can be driven to.
  *
- * Only ASCII is folded, which is what the callers need: they compare against
- * panel names, tab labels, and column names that are all ASCII literals.
+ * Non-finite values have to be rejected explicitly: every comparison against
+ * NaN is false, so an `end <= start` guard on its own lets NaN and infinity
+ * through into the view transform.
  */
-std::string
-to_lower_copy(const std::string& value);
+bool
+is_usable_time_range(double start_ns, double end_ns);
 
 }  // namespace View
 }  // namespace RocProfVis

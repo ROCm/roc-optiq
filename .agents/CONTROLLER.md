@@ -354,7 +354,7 @@ Every public object type (`SystemTrace`, `Track`, `Graph`, `Event`,
 `Sample`, `SampleLOD`, `FlowControl`, `CallStack`, `ExtData`, `Future`,
 `Array`, `Arguments`, `Table`, `Summary`, `SummaryMetrics`,
 `TopologyNode` and friends, plus the compute-only `ComputeTrace`,
-`Workload`, `Kernel`, `Roofline`, `MetricsContainer`,
+`Workload`, `Kernel`, `PcSampling`, `Roofline`, `MetricsContainer`,
 `ComputeTable`, `ComputePivotTable`, `Plot`, `ComputePlot`,
 `PlotSeries`) inherits from `Handle`.
 
@@ -913,6 +913,37 @@ caches, fabric, etc.). `Setup()` loads the CSV into `m_metrics_map`;
 It pivots metric values into a `kernel x metric` matrix and exposes
 the result like any other table.
 
+### 6.8 `PcSampling` (`rocprofvis_controller_pc_sampling.{h,cpp}`)
+
+Object type `kRPVControllerObjectTypePCSampling = 30`. Each `Kernel`
+owns one `PcSampling` handle (accessed via
+`kRPVControllerKernelPcSampling`). Data is split into three independent
+layers, each with its own `std::recursive_mutex` so a completed ISA
+pane stays readable while source or stall data loads:
+
+| Layer   | Mutex                | Data vectors |
+|---------|----------------------|--------------|
+| ISA     | `m_isa_data_mutex`   | `m_code_object_store`, `m_kernel_symbols`, `m_instruction_lines` |
+| Source  | `m_source_data_mutex`| `m_source_files`, `m_source_lines`, `m_instruction_source_lines` |
+| Stalls  | `m_stalls_data_mutex`| `m_pc_sample_states`, `m_pc_sample_stall_reasons`, `m_pc_sample_stall_reason_lookups`, `m_instruction_type_lookups`, `m_instruction_samples`, `m_instruction_sample_lookups` |
+
+Per-layer cached booleans (`m_code_object_store_loaded`,
+`m_kernel_symbols_loaded`, `m_instruction_lines_loaded`,
+`m_instruction_source_lines_loaded`, `m_source_files_loaded`,
+`m_pc_sample_states_loaded`, `m_stalls_loaded`,
+`m_instruction_samples_loaded`) prevent repeated queries.
+
+`GetLayerMutex(DataLayer)` and `GetPropertyMutex(property)` route
+locking to the right mutex for each property ID.
+
+`QueryToPropertyEnum(rocprofvis_db_compute_column_enum_t, property&,
+type&)` is the internal helper `ComputeTrace` uses to map a DB column
+enum to the right `kRPVControllerPCSampling*` property ID.
+
+Property bank: `rocprofvis_controller_pc_sampling_data_properties_t`
+(base `__kRPVControllerPCSamplingPropertiesFirst`), covering 60+
+property IDs across the three data layers.
+
 ### 6.7 `ComputePlot`, `Plot`, `PlotSeries`
 Files: `rocprofvis_controller_plot.{h,cpp}`,
 `rocprofvis_controller_plot_compute.{h,cpp}`,
@@ -1097,11 +1128,15 @@ Property bank starting points (`uint32_t` enum bases):
 | Summary Metrics                       | `0xF0000000` |
 | Common (memory usage, etc.)           | `0xFFFF0000` |
 
-Compute-side banks start at the
+Compute-side banks (including `PcSampling`) start at the
 `__kRPVControllerComputePropertiesFirst` family. The auto-incrementing
 `__first / __last` brackets in each enum are an extension hint - if
 you add a new property to an existing bank, declare it inside the
 brackets.
+
+`PcSampling` uses `__kRPVControllerPCSamplingPropertiesFirst` as its
+base (auto-incremented after the other compute banks); it does not have
+a fixed hex offset like the system banks above.
 
 When you add a new object type:
 
@@ -1291,6 +1326,7 @@ free" sequence.
 - `rocprofvis_controller_trace_compute.{h,cpp}` -> `ComputeTrace`.
 - `rocprofvis_controller_workload.{h,cpp}` -> `Workload`.
 - `rocprofvis_controller_kernel.{h,cpp}` -> `Kernel`.
+- `rocprofvis_controller_pc_sampling.{h,cpp}` -> `PcSampling` (three-layer PC sampling data; owned by `Kernel`).
 - `rocprofvis_controller_roofline.{h,cpp}` -> `Roofline`.
 - `rocprofvis_controller_metrics_container.{h,cpp}` -> `MetricsContainer`.
 - `rocprofvis_controller_table_compute.{h,cpp}` -> `ComputeTable`

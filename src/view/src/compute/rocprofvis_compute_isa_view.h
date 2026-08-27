@@ -130,13 +130,13 @@ public:
     void ChangeStallVisibility(bool show) { m_show_stall = show; };
 
 protected:
-    void CalculateLineNumberWidth(uint32_t count);
+    void CalculateLineNumberWidth(size_t count);
     void PushStyles();
 
     bool m_show_stall = false;
 
     LineSelection& m_line_selection;
-    uint32_t       m_line_num_width  = 0;
+    float          m_line_num_width  = 0.0f;
     uint32_t       m_line_num_digits = 1;
 
     SettingsManager& m_settings;

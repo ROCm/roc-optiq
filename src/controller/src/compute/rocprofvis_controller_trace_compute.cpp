@@ -345,7 +345,8 @@ ComputeTrace::AsyncFetchPcSamplingIsaData(Arguments& args, Future& future,
 
     future.Set(JobSystem::Get().IssueJob(
         [this, &output, kernel_id](Future* future) -> rocprofvis_result_t {
-            std::unique_lock<std::recursive_mutex> data_lock(output.GetDataMutex());
+            std::unique_lock<std::recursive_mutex> data_lock(
+                output.GetLayerMutex(PcSampling::DataLayer::kIsa));
             if(future->IsCancelled()) return kRocProfVisResultCancelled;
             rocprofvis_dm_database_t db = rocprofvis_dm_get_property_as_handle(
                 m_dm_handle, kRPVDMDatabaseHandle, 0);
@@ -378,7 +379,8 @@ ComputeTrace::AsyncFetchPcSamplingSource(Arguments& args, Future& future,
     future.Set(JobSystem::Get().IssueJob(
         [this, &output, kernel_id,
          source_file_uuid](Future* future) -> rocprofvis_result_t {
-            std::unique_lock<std::recursive_mutex> data_lock(output.GetDataMutex());
+            std::unique_lock<std::recursive_mutex> data_lock(
+                output.GetLayerMutex(PcSampling::DataLayer::kSource));
             if(future->IsCancelled()) return kRocProfVisResultCancelled;
             rocprofvis_dm_database_t db = rocprofvis_dm_get_property_as_handle(
                 m_dm_handle, kRPVDMDatabaseHandle, 0);
@@ -406,7 +408,8 @@ ComputeTrace::AsyncFetchPcSamplingStalls(Arguments& args, Future& future,
 
     future.Set(JobSystem::Get().IssueJob(
         [this, &output, kernel_id](Future* future) -> rocprofvis_result_t {
-            std::unique_lock<std::recursive_mutex> data_lock(output.GetDataMutex());
+            std::unique_lock<std::recursive_mutex> data_lock(
+                output.GetLayerMutex(PcSampling::DataLayer::kStalls));
             if(future->IsCancelled()) return kRocProfVisResultCancelled;
             rocprofvis_dm_database_t db = rocprofvis_dm_get_property_as_handle(
                 m_dm_handle, kRPVDMDatabaseHandle, 0);

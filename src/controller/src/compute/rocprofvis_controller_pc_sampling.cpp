@@ -14,9 +14,37 @@ PcSampling::PcSampling()
 
 PcSampling::~PcSampling() {}
 
-std::recursive_mutex& PcSampling::GetDataMutex()
+std::recursive_mutex& PcSampling::GetLayerMutex(DataLayer layer)
 {
-    return m_data_mutex;
+    switch(layer)
+    {
+        case DataLayer::kIsa: return m_isa_data_mutex;
+        case DataLayer::kSource: return m_source_data_mutex;
+        case DataLayer::kStalls: return m_stalls_data_mutex;
+    }
+
+    return m_stalls_data_mutex;
+}
+
+std::recursive_mutex& PcSampling::GetPropertyMutex(rocprofvis_property_t property)
+{
+    const auto property_value = static_cast<uint32_t>(property);
+    const auto in_range       = [property_value](auto first, auto last) {
+        return property_value >= static_cast<uint32_t>(first) &&
+               property_value <= static_cast<uint32_t>(last);
+    };
+
+    if(in_range(kRPVControllerPCSamplingNumCodeObjects,
+                kRPVControllerPCSamplingInstructionLineInstruction))
+        return m_isa_data_mutex;
+
+    if(in_range(kRPVControllerPCSamplingNumSourceFiles,
+                kRPVControllerPCSamplingSourceLineContent) ||
+       in_range(kRPVControllerPCSamplingNumInstructionSourceLines,
+                kRPVControllerPCSamplingInstructionSourceLineFrameIndex))
+        return m_source_data_mutex;
+
+    return m_stalls_data_mutex;
 }
 
 rocprofvis_controller_object_type_t PcSampling::GetType(void)
@@ -26,7 +54,7 @@ rocprofvis_controller_object_type_t PcSampling::GetType(void)
 
 rocprofvis_result_t PcSampling::GetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t* value)
 {
-    std::lock_guard<std::recursive_mutex> lock(m_data_mutex);
+    std::lock_guard<std::recursive_mutex> lock(GetPropertyMutex(property));
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     if(value)
     {
@@ -465,7 +493,7 @@ rocprofvis_result_t PcSampling::GetUInt64(rocprofvis_property_t property, uint64
 
 rocprofvis_result_t PcSampling::SetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t value)
 {
-    std::lock_guard<std::recursive_mutex> lock(m_data_mutex);
+    std::lock_guard<std::recursive_mutex> lock(GetPropertyMutex(property));
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     switch(property)
     {
@@ -900,7 +928,7 @@ rocprofvis_result_t PcSampling::SetUInt64(rocprofvis_property_t property, uint64
 
 rocprofvis_result_t PcSampling::GetDouble(rocprofvis_property_t property, uint64_t index, double* value)
 {
-    std::lock_guard<std::recursive_mutex> lock(m_data_mutex);
+    std::lock_guard<std::recursive_mutex> lock(GetPropertyMutex(property));
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     if(value)
     {
@@ -936,7 +964,7 @@ rocprofvis_result_t PcSampling::GetDouble(rocprofvis_property_t property, uint64
 
 rocprofvis_result_t PcSampling::SetDouble(rocprofvis_property_t property, uint64_t index, double value)
 {
-    std::lock_guard<std::recursive_mutex> lock(m_data_mutex);
+    std::lock_guard<std::recursive_mutex> lock(GetPropertyMutex(property));
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     switch(property)
     {
@@ -969,7 +997,7 @@ rocprofvis_result_t PcSampling::SetDouble(rocprofvis_property_t property, uint64
 
 rocprofvis_result_t PcSampling::GetString(rocprofvis_property_t property, uint64_t index, char* value, uint32_t* length)
 {
-    std::lock_guard<std::recursive_mutex> lock(m_data_mutex);
+    std::lock_guard<std::recursive_mutex> lock(GetPropertyMutex(property));
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     if(length)
     {
@@ -1046,7 +1074,7 @@ rocprofvis_result_t PcSampling::GetString(rocprofvis_property_t property, uint64
 
 rocprofvis_result_t PcSampling::SetString(rocprofvis_property_t property, uint64_t index, char const* value)
 {
-    std::lock_guard<std::recursive_mutex> lock(m_data_mutex);
+    std::lock_guard<std::recursive_mutex> lock(GetPropertyMutex(property));
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     switch(property)
     {

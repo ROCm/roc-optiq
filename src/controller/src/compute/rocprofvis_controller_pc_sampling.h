@@ -36,7 +36,15 @@ public:
 private:
     friend class ComputeTrace;
 
-    std::recursive_mutex& GetDataMutex();
+    enum class DataLayer
+    {
+        kIsa,
+        kSource,
+        kStalls,
+    };
+
+    std::recursive_mutex& GetLayerMutex(DataLayer layer);
+    std::recursive_mutex& GetPropertyMutex(rocprofvis_property_t property);
 
     struct SourceLine
     {
@@ -146,7 +154,11 @@ private:
     bool m_stalls_loaded                                                        = false;
     bool m_instruction_samples_loaded                                           = false;
 
-    std::recursive_mutex m_data_mutex;
+    // Fetches populate independent data sets. Layer-owned locks allow consumers
+    // to read a completed layer while unrelated layers are still loading.
+    std::recursive_mutex m_isa_data_mutex;
+    std::recursive_mutex m_source_data_mutex;
+    std::recursive_mutex m_stalls_data_mutex;
 
 };
 

@@ -116,6 +116,7 @@ DataProvider::FreeRequests()
     cleanup_work.trace_file_path = m_model.GetTraceFilePath();
     cleanup_work.requests        = std::move(m_requests);
     m_requests.clear();
+    m_pc_sampling_replacements.clear();
 
     CleanupDetachedResources(std::move(cleanup_work));
 }
@@ -135,6 +136,7 @@ DataProvider::DetachCleanupWork()
     cleanup_work.controller      = m_trace_controller;
 
     m_requests.clear();
+    m_pc_sampling_replacements.clear();
     m_trace_controller = nullptr;
     m_trace_timeline   = nullptr;
     m_model.Clear();
@@ -2336,6 +2338,10 @@ DataProvider::IsRequestPending(uint64_t request_id) const
 bool
 DataProvider::CancelRequest(uint64_t request_id)
 {
+    // Discard any queued replacement so it is not submitted after the active
+    // future completes — otherwise a stale selection can be re-launched.
+    m_pc_sampling_replacements.erase(request_id);
+
     auto it = m_requests.find(request_id);
     if(it != m_requests.end())
     {

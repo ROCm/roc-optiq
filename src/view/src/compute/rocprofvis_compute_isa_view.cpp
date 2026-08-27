@@ -7,6 +7,7 @@
 #include "rocprofvis_events.h"
 #include "rocprofvis_font_manager.h"
 #include "rocprofvis_requests.h"
+#include "spdlog/spdlog.h"
 
 #include <algorithm>
 #include <string>
@@ -53,6 +54,7 @@ ComputeIsaView::ComputeIsaView(DataProvider& data_provider)
 
 ComputeIsaView::~ComputeIsaView()
 {
+    m_data_provider.SetFetchPcSamplingCallback(nullptr);
     EventManager::GetInstance()->Unsubscribe(
         static_cast<int>(RocEvents::kComputeKernelSelectionChanged),
         m_kernel_selection_changed_token);
@@ -161,6 +163,9 @@ ComputeIsaView::FetchStateFor(PcSamplingLayer layer)
         case PcSamplingLayer::kSource: return m_source;
         case PcSamplingLayer::kStalls: return m_stalls;
     }
+    spdlog::error("FetchStateFor: unhandled PcSamplingLayer value {}",
+                  static_cast<uint32_t>(layer));
+    ROCPROFVIS_ASSERT(false);
     return m_isa;
 }
 
@@ -485,10 +490,10 @@ BaseCodeWidget::BaseCodeWidget(LineSelection& selection)
 }
 
 void
-BaseCodeWidget::CalculateLineNumberWidth(uint32_t count)
+BaseCodeWidget::CalculateLineNumberWidth(size_t count)
 {
     m_line_num_digits = 1;
-    for(uint32_t number = count; number >= 10; number /= 10)
+    for(size_t number = count; number >= 10; number /= 10)
         m_line_num_digits++;
 
     m_line_num_width =
@@ -574,7 +579,7 @@ SourceCodeWidget::Load(const PcSamplingData& data, uint64_t source_file_uuid)
         max_line_number = std::max(max_line_number, source_line.line_number);
     }
 
-    CalculateLineNumberWidth(static_cast<uint32_t>(max_line_number));
+    CalculateLineNumberWidth(static_cast<size_t>(max_line_number));
 }
 
 void
@@ -608,7 +613,7 @@ SourceCodeWidget::Render()
     PushStyles();
 
     ImGuiListClipper clipper;
-    clipper.Begin(m_lines.size());
+    clipper.Begin(static_cast<int>(m_lines.size()));
 
     while(clipper.Step())
     {
@@ -651,7 +656,7 @@ SourceCodeWidget::RenderLine(uint32_t index, uint32_t columns_count)
     ImGui::SameLine(0.0f, 0.0f);
     ImGui::PopID();
 
-    ImGui::TextColored(m_line_num_color, "%*llu", m_line_num_digits,
+    ImGui::TextColored(m_line_num_color, "%*llu", static_cast<int>(m_line_num_digits),
                        static_cast<unsigned long long>(display_num));
 
     int col = 1;
@@ -775,7 +780,7 @@ IsaCodeWidget::Render()
     PushStyles();
 
     ImGuiListClipper clipper;
-    clipper.Begin(m_entries.size());
+    clipper.Begin(static_cast<int>(m_entries.size()));
     while(clipper.Step())
     {
         for(uint32_t i = clipper.DisplayStart; i < clipper.DisplayEnd; i++)
@@ -821,7 +826,7 @@ IsaCodeWidget::RenderLine(uint32_t index, uint32_t columns_count)
     ImGui::SameLine(0.0f, 0.0f);
     ImGui::PopID();
 
-    ImGui::TextColored(m_line_num_color, "%*u", m_line_num_digits, index + 1);
+    ImGui::TextColored(m_line_num_color, "%*u", static_cast<int>(m_line_num_digits), index + 1);
 
     ImGui::TableSetColumnIndex(++column);
     ImGui::TextUnformatted(isa_row.instruction.c_str());

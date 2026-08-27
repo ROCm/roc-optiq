@@ -95,3 +95,12 @@ typedef enum profiler_hub_flow_direction_t
     kProfilerHubDirectionOutgoing,
     kProfilerHubDirectionIncoming,
 } profiler_hub_flow_direction_t;    
+
+// Database type
+typedef enum profiler_hub_db_type_t {
+    // not supported by profiler hub
+    kDbNotSupported, 
+    // supported by profiler hub
+    kDbSupported,
+
+} profiler_hub_db_type_t;

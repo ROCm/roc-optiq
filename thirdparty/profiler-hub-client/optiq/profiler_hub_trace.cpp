@@ -232,17 +232,19 @@ namespace profiler_hub::interface
         return kPprofilerHubDataTypeUndefined;
     }
 
-	profiler_hub_result_t profiler_hub_trace_t::detect_trace(std::string trace_path) {
+    profiler_hub_db_type_t profiler_hub_trace_t::detect_trace(std::string trace_path) {
 		return missing_t::detect_trace(trace_path);
 	}
 
-	profiler_hub_result_t profiler_hub_trace_t::open_trace(future_t * future, uint32_t histogram_bucket_count) {
-
-        profiler_hub_result_t result = kProfilerHubStatusNotLoaded;
+	profiler_hub_result_t profiler_hub_trace_t::open_trace(future_t * future) {
+        missing_t::check_missing_client(m_client_trace);
+        profiler_hub_result_t result = kProfilerHubStatusInvalidArgument;
 		// initialize and compile trace metadata
+        future->show_progress(m_trace_path.c_str(), 80, "Read trace", kProfilerHubAsyncBusy);
         m_storage = std::make_unique<profiler_hub::storage_t>(m_trace_path, "");
         m_reader = std::make_shared<profiler_hub::reader_t>(std::move(m_storage));
 
+        future->show_progress(m_trace_path.c_str(), 1, "Add instances", kProfilerHubAsyncBusy);
 		auto& trace_instances = missing_t::get_trace_instances();
 		for (auto& instance : trace_instances)
 		{
@@ -253,6 +255,7 @@ namespace profiler_hub::interface
             }
 		}
 
+        future->show_progress(m_trace_path.c_str(), 1, "Add strings", kProfilerHubAsyncBusy);
 		auto & string_table = missing_t::get_trace_string_table();
 		for (auto& [id, string] : string_table)
 		{
@@ -262,6 +265,8 @@ namespace profiler_hub::interface
                 return result;
             }
 		}
+
+        future->show_progress(m_trace_path.c_str(), 3, "Add tracks", kProfilerHubAsyncBusy);
 
 		auto & tracks = m_reader->get_tracks();
 		for (auto& track : tracks)
@@ -299,9 +304,10 @@ namespace profiler_hub::interface
             }
 		}
 
+        future->show_progress(m_trace_path.c_str(), 3, "Add track histograms", kProfilerHubAsyncBusy);
 		for (auto& track : tracks)
 		{
-			auto & track_histogram = missing_t::get_track_histogram(track);
+			auto & track_histogram = missing_t::get_track_histogram(track, m_histogram_bucket_count);
 			for (auto& bucket : track_histogram)
 			{
 				result = client::interface::AddTrackHistogramBucket(m_client_trace, track->id.value, bucket.get_bucket_number(), bucket.get_events_count(), bucket.get_bucket_value());
@@ -321,6 +327,10 @@ namespace profiler_hub::interface
             uint64_t timestamp_start,
             uint64_t timestamp_end)
     {
+        if (!m_client_trace)
+        {
+            throw missing_error_t("fatal error: client trace cannot be null!");
+        }
         profiler_hub_result_t result = kProfilerHubStatusNotLoaded;
         reader_types::event_filter_t filter = { {timestamp_start, timestamp_end} };
         auto& tracks = m_reader->get_tracks();
@@ -441,6 +451,7 @@ namespace profiler_hub::interface
         profiler_hub_instance_id_t instance,
         profiler_hub_event_operation_t operation,
         profiler_hub_event_id_t event_id) {
+        missing_t::check_missing_client(m_client_trace);
         profiler_hub_result_t result = kProfilerHubStatusNotLoaded;
         auto & flow_endpoints = m_reader->get_flows_for_event(reader_types::detail::event_id_access::make(operation, event_id));
         profiler_hub_flowtrace_handle_t flow_container = client::interface::AddEventFlowTraceContainer(m_client_trace, instance, operation, event_id);
@@ -493,6 +504,7 @@ namespace profiler_hub::interface
         profiler_hub_instance_id_t instance,
         profiler_hub_event_operation_t operation,
         profiler_hub_event_id_t event_id) {
+        missing_t::check_missing_client(m_client_trace);
         profiler_hub_result_t result = kProfilerHubStatusNotLoaded;
         auto & event_info = m_reader->get_event_info(reader_types::detail::event_id_access::make(operation, event_id));
         if (event_info.has_value())
@@ -549,6 +561,7 @@ namespace profiler_hub::interface
         profiler_hub_instance_id_t instance,
         profiler_hub_event_operation_t operation,
         profiler_hub_event_id_t event_id) {
+        missing_t::check_missing_client(m_client_trace);
         profiler_hub_result_t result = kProfilerHubStatusNotLoaded;
         profiler_hub_call_stack_handle_t call_stack_container = client::interface::AddEventCallStackContainer(m_client_trace, instance, operation, event_id);
         auto & call_stack = m_reader->get_call_stack(reader_types::detail::event_id_access::make(operation, event_id));
@@ -571,5 +584,13 @@ namespace profiler_hub::interface
         return result;
     }
 
+
+    profiler_hub_result_t trim_trace_database(
+        future_t* future,
+        uint64_t timestamp_start,
+        uint64_t timestamp_end)
+    {
+        return missing_t::trim_trace_database(timestamp_start, timestamp_end);
+    }
     
 }

@@ -93,10 +93,6 @@ namespace profiler_hub
         // @return the same status value that was stored, or an error code on failure.
         profiler_hub_result_t set_promise(profiler_hub_result_t status);
 
-        // It's suggested to use one future_t per operation
-        // If you did want to support reuse — say, for a task queue where the same object 
-        // dispatches many sequential jobs — you would need to reset the pair before each run
-        void future_t::reset();
 
         // -------------------------------------------------------------------------
         // Interruption
@@ -123,7 +119,7 @@ namespace profiler_hub
         // @param action  – human-readable description of the ongoing operation.
         // @param status  – current operation status.
         void show_progress(const char* db_name,
-                           double    step,
+                           double    weight,
                            const char* action,
                            profiler_hub_async_status_t  status);
 

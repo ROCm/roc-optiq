@@ -6,10 +6,12 @@
 #include "widgets/rocprofvis_widget.h"
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_event_manager.h"
+#include "rocprofvis_compute_selection.h"
 #include "widgets/rocprofvis_split_containers.h"
 #include "model/compute/rocprofvis_compute_model_types.h"
 
 #include <map>
+#include <memory>
 #include <set>
 #include <string>
 #include <vector>
@@ -22,12 +24,47 @@ namespace View
 class SourceCodeWidget;
 class IsaCodeWidget;
 class DataProvider;
-enum class PcSamplingRequestKind : uint32_t;
+enum class PcSamplingLayer : uint32_t;
 
 struct LineSelection
 {
     uint64_t hovered_line  = 0;
     uint64_t selected_line = 0;
+};
+
+struct KindFetchState
+{
+    bool queued    = false;  // waiting to submit to DataProvider
+    bool in_flight = false;  // submitted, awaiting callback
+    bool loaded    = false;  // data received and applied to model
+};
+
+struct IsaPane : KindFetchState
+{
+    uint64_t                       code_object_uuid = ComputeSelection::INVALID_SELECTION_ID;
+    std::shared_ptr<IsaCodeWidget> widget;
+
+    void ResetFetch()
+    {
+        static_cast<KindFetchState&>(*this) = {};
+        code_object_uuid = ComputeSelection::INVALID_SELECTION_ID;
+    }
+};
+
+struct SourcePane : KindFetchState
+{
+    uint64_t                                        selected_uuid = 0;
+    std::map<std::string /*path*/, uint64_t /*id*/> files;
+    std::set<uint64_t>                              loaded_uuids;
+    std::shared_ptr<SourceCodeWidget>               widget;
+
+    void ResetFetch()
+    {
+        static_cast<KindFetchState&>(*this) = {};
+        selected_uuid = 0;
+        files.clear();
+        loaded_uuids.clear();
+    }
 };
 
 class ComputeIsaView : public RocWidget
@@ -47,41 +84,32 @@ private:
     void ClearCodeData();
     void ClearSelectionData();
     void LoadSourceFileList(const PcSamplingData& data);
-    void QueuePcSamplingFetch(PcSamplingRequestKind kind);
-    void ClearPendingPcSamplingFetches();
+    void QueuePcSamplingFetch(PcSamplingLayer layer);
+    void            ClearPendingPcSamplingFetches();
+    void            CancelInFlightFetches();
+    KindFetchState& FetchStateFor(PcSamplingLayer layer);
     bool HasValidPcSamplingSelection() const;
-    bool TryTakeNextPendingPcSamplingFetch(PcSamplingRequestKind& kind);
-    void SubmitPcSamplingFetch(PcSamplingRequestKind kind);
+    bool TryTakeNextPendingPcSamplingFetch(PcSamplingLayer& layer);
+    void SubmitPcSamplingFetch(PcSamplingLayer layer);
     void FetchPendingPcSampling();
     void RefreshCodeWidgets();
-    void OnPcSamplingReady(PcSamplingRequestKind kind, uint32_t kernel_id,
+    void OnPcSamplingReady(PcSamplingLayer layer, uint32_t kernel_id,
                            uint64_t source_file_uuid, uint32_t generation, bool success);
 
     SettingsManager&                  m_settings;
     DataProvider&                     m_data_provider;
 
-    std::shared_ptr<SourceCodeWidget> m_source_code;
-    std::shared_ptr<IsaCodeWidget>    m_isa_code;
     LayoutItem::Ptr                   m_source_layout_item;
     std::shared_ptr<HSplitContainer>  m_horizontal_split_container;
 
-    uint64_t                          m_current_source_file_uuid;
-    uint64_t                          m_current_code_object_uuid;
     uint32_t                          m_current_kernel_id;
     uint32_t                          m_current_workload_id;
     uint32_t                          m_fetch_generation = 0;
-    uint64_t                          m_active_request_id = 0;
-    PcSamplingRequestKind             m_active_request_kind;
-    bool                              m_fetch_in_progress = false;
-    bool                              m_pending_isa_fetch    = false;
-    bool                              m_pending_source_fetch = false;
-    bool                              m_pending_stall_fetch  = false;
-    bool                              m_isa_data_loaded      = false;
-    bool                              m_stall_data_loaded    = false;
+    IsaPane                           m_isa;
+    SourcePane                        m_source;
+    KindFetchState                    m_stalls;
 
-    std::map<std::string /*file_path*/, uint64_t /*file_id*/> m_source_files;
-    std::set<uint64_t>                                        m_loaded_source_files;
-    LineSelection                   m_line_selection;
+    LineSelection                     m_line_selection;
 
     float m_control_panel_height;
 

@@ -23,20 +23,17 @@ ComputeIsaView::ComputeIsaView(DataProvider& data_provider)
 , m_settings(SettingsManager::GetInstance())
 , m_data_provider(data_provider)
 , m_control_panel_height(0.0f)
-, m_current_source_file_uuid(0)
-, m_current_code_object_uuid(ComputeSelection::INVALID_SELECTION_ID)
 , m_current_kernel_id(ComputeSelection::INVALID_SELECTION_ID)
 , m_current_workload_id(ComputeSelection::INVALID_SELECTION_ID)
-, m_active_request_kind(PcSamplingRequestKind::kIsa)
 , m_show_metadata_enabled(false)
 {
-    m_source_code = std::make_shared<SourceCodeWidget>(m_line_selection);
-    m_isa_code    = std::make_shared<IsaCodeWidget>(m_line_selection);
+    m_isa.widget    = std::make_shared<IsaCodeWidget>(m_line_selection);
+    m_source.widget = std::make_shared<SourceCodeWidget>(m_line_selection);
 
-    auto isa_item           = LayoutItem::CreateFromWidget(m_isa_code);
+    auto isa_item           = LayoutItem::CreateFromWidget(m_isa.widget);
     isa_item->m_child_flags = ImGuiChildFlags_None;
 
-    m_source_layout_item                = LayoutItem::CreateFromWidget(m_source_code);
+    m_source_layout_item                = LayoutItem::CreateFromWidget(m_source.widget);
     m_source_layout_item->m_child_flags = ImGuiChildFlags_None;
     m_source_layout_item->m_visible     = false;
 
@@ -48,9 +45,9 @@ ComputeIsaView::ComputeIsaView(DataProvider& data_provider)
     SubscribeToEvents();
 
     m_data_provider.SetFetchPcSamplingCallback(
-        [this](const std::string&, PcSamplingRequestKind kind, uint32_t kernel_id,
+        [this](const std::string&, PcSamplingLayer layer, uint32_t kernel_id,
                uint64_t source_file_uuid, uint32_t generation, bool success) {
-            OnPcSamplingReady(kind, kernel_id, source_file_uuid, generation, success);
+            OnPcSamplingReady(layer, kernel_id, source_file_uuid, generation, success);
         });
 }
 
@@ -111,10 +108,7 @@ ComputeIsaView::LoadData(uint32_t kernel_id)
     }
     if(m_current_workload_id == ComputeSelection::INVALID_SELECTION_ID)
     {
-        if(m_fetch_in_progress)
-        {
-            m_data_provider.CancelRequest(m_active_request_id);
-        }
+        CancelInFlightFetches();
         ClearSelectionData();
         return;
     }
@@ -124,76 +118,64 @@ ComputeIsaView::LoadData(uint32_t kernel_id)
     if(!kernel_info)
     {
         m_current_workload_id = ComputeSelection::INVALID_SELECTION_ID;
-        if(m_fetch_in_progress)
-        {
-            m_data_provider.CancelRequest(m_active_request_id);
-        }
+        CancelInFlightFetches();
         ClearSelectionData();
         return;
     }
 
+    CancelInFlightFetches();
     // Start with the only data needed by the always-visible ISA pane. Optional
     // source and stall data follows only when its corresponding UI is visible.
     ClearSelectionData();
-    QueuePcSamplingFetch(PcSamplingRequestKind::kIsa);
+    ++m_fetch_generation;
+    QueuePcSamplingFetch(PcSamplingLayer::kIsa);
     if(m_source_layout_item->m_visible)
-        QueuePcSamplingFetch(PcSamplingRequestKind::kSource);
-    if(m_show_metadata_enabled) QueuePcSamplingFetch(PcSamplingRequestKind::kStalls);
-    if(m_fetch_in_progress)
-        m_data_provider.CancelRequest(m_active_request_id);
+        QueuePcSamplingFetch(PcSamplingLayer::kSource);
+    if(m_show_metadata_enabled) QueuePcSamplingFetch(PcSamplingLayer::kStalls);
 }
 
 void
 ComputeIsaView::ClearCodeData()
 {
-    m_source_code->Load({}, 0);
-    m_isa_code->Load({}, 0);
+    m_source.widget->Load({}, 0);
+    m_isa.widget->Load({}, 0);
 }
 
 void
 ComputeIsaView::ClearSelectionData()
 {
-    m_source_files.clear();
-    m_loaded_source_files.clear();
-    m_current_source_file_uuid = 0;
-    m_current_code_object_uuid = ComputeSelection::INVALID_SELECTION_ID;
-    ClearPendingPcSamplingFetches();
-    m_isa_data_loaded          = false;
-    m_stall_data_loaded        = false;
-    m_source_code->ChangeStallVisibility(false);
-    m_isa_code->ChangeStallVisibility(false);
+    m_isa.ResetFetch();
+    m_source.ResetFetch();
+    m_stalls = {};
+    m_source.widget->ChangeStallVisibility(false);
+    m_isa.widget->ChangeStallVisibility(false);
     ClearCodeData();
 }
 
-void
-ComputeIsaView::QueuePcSamplingFetch(PcSamplingRequestKind kind)
+KindFetchState&
+ComputeIsaView::FetchStateFor(PcSamplingLayer layer)
 {
-    switch(kind)
+    switch(layer)
     {
-        case PcSamplingRequestKind::kIsa:
-        {
-            m_pending_isa_fetch = true;
-            break;
-        }
-        case PcSamplingRequestKind::kSource:
-        {
-            m_pending_source_fetch = true;
-            break;
-        }
-        case PcSamplingRequestKind::kStalls:
-        {
-            m_pending_stall_fetch = true;
-            break;
-        }
+        case PcSamplingLayer::kIsa:    return m_isa;
+        case PcSamplingLayer::kSource: return m_source;
+        case PcSamplingLayer::kStalls: return m_stalls;
     }
+    return m_isa;
+}
+
+void
+ComputeIsaView::QueuePcSamplingFetch(PcSamplingLayer layer)
+{
+    FetchStateFor(layer).queued = true;
 }
 
 void
 ComputeIsaView::ClearPendingPcSamplingFetches()
 {
-    m_pending_isa_fetch    = false;
-    m_pending_source_fetch = false;
-    m_pending_stall_fetch  = false;
+    m_isa.queued    = false;
+    m_source.queued = false;
+    m_stalls.queued = false;
 }
 
 bool
@@ -203,51 +185,50 @@ ComputeIsaView::HasValidPcSamplingSelection() const
            m_current_workload_id != ComputeSelection::INVALID_SELECTION_ID;
 }
 
-bool
-ComputeIsaView::TryTakeNextPendingPcSamplingFetch(PcSamplingRequestKind& kind)
+void
+ComputeIsaView::CancelInFlightFetches()
 {
-    bool found = true;
-    if(std::exchange(m_pending_isa_fetch, false))
+    if(m_isa.in_flight)
+        m_data_provider.CancelRequest(DataProvider::FETCH_PC_SAMPLING_ISA_REQUEST_ID);
+    if(m_source.in_flight)
+        m_data_provider.CancelRequest(DataProvider::FETCH_PC_SAMPLING_SOURCE_REQUEST_ID);
+    if(m_stalls.in_flight)
+        m_data_provider.CancelRequest(DataProvider::FETCH_PC_SAMPLING_STALLS_REQUEST_ID);
+}
+
+bool
+ComputeIsaView::TryTakeNextPendingPcSamplingFetch(PcSamplingLayer& layer)
+{
+    if(std::exchange(m_isa.queued, false))
     {
-        kind = PcSamplingRequestKind::kIsa;
+        layer = PcSamplingLayer::kIsa;
+        return true;
     }
-    else if(std::exchange(m_pending_source_fetch, false))
+    if(std::exchange(m_source.queued, false))
     {
-        kind = PcSamplingRequestKind::kSource;
+        layer = PcSamplingLayer::kSource;
+        return true;
     }
-    else if(std::exchange(m_pending_stall_fetch, false))
+    if(std::exchange(m_stalls.queued, false))
     {
-        kind = PcSamplingRequestKind::kStalls;
+        layer = PcSamplingLayer::kStalls;
+        return true;
     }
-    else
-    {
-        found = false;
-    }
-    return found;
+    return false;
 }
 
 void
-ComputeIsaView::SubmitPcSamplingFetch(PcSamplingRequestKind kind)
+ComputeIsaView::SubmitPcSamplingFetch(PcSamplingLayer layer)
 {
-    const uint64_t request_id =
-        RequestIdBuilder::MakeRequestId(RequestType::kFetchPcSampling);
     const uint64_t source_file_uuid =
-        kind == PcSamplingRequestKind::kSource ? m_current_source_file_uuid : 0;
-
-    ++m_fetch_generation;
-    const PcSamplingRequestParams params(kind, m_current_workload_id,
+        layer == PcSamplingLayer::kSource ? m_source.selected_uuid : 0;
+    const PcSamplingRequestParams params(layer, m_current_workload_id,
                                          m_current_kernel_id, source_file_uuid,
                                          m_fetch_generation);
     if(m_data_provider.FetchPcSampling(params))
-    {
-        m_active_request_id   = request_id;
-        m_active_request_kind = kind;
-        m_fetch_in_progress   = true;
-    }
+        FetchStateFor(layer).in_flight = true;
     else
-    {
-        QueuePcSamplingFetch(kind);
-    }
+        QueuePcSamplingFetch(layer);
 }
 
 void
@@ -256,50 +237,35 @@ ComputeIsaView::FetchPendingPcSampling()
     if(!HasValidPcSamplingSelection())
     {
         ClearPendingPcSamplingFetches();
-        if(m_fetch_in_progress)
-        {
-            m_data_provider.CancelRequest(m_active_request_id);
-        }
+        CancelInFlightFetches();
         return;
     }
 
-    if(m_fetch_in_progress)
-    {
-        return;
-    }
-
-    PcSamplingRequestKind kind = PcSamplingRequestKind::kIsa;
-    if(!TryTakeNextPendingPcSamplingFetch(kind))
-    {
-        return;
-    }
-
-    SubmitPcSamplingFetch(kind);
+    PcSamplingLayer layer = PcSamplingLayer::kIsa;
+    while(TryTakeNextPendingPcSamplingFetch(layer))
+        SubmitPcSamplingFetch(layer);
 }
 
 void
-ComputeIsaView::OnPcSamplingReady(PcSamplingRequestKind kind, uint32_t kernel_id,
+ComputeIsaView::OnPcSamplingReady(PcSamplingLayer layer, uint32_t kernel_id,
                                    uint64_t source_file_uuid, uint32_t generation,
                                    bool success)
 {
-    const uint64_t request_id =
-        RequestIdBuilder::MakeRequestId(RequestType::kFetchPcSampling);
-    if(!m_fetch_in_progress || request_id != m_active_request_id ||
-       generation != m_fetch_generation || kind != m_active_request_kind)
-    {
+    if(generation != m_fetch_generation)
         return;
-    }
 
-    m_fetch_in_progress = false;
+    KindFetchState& state = FetchStateFor(layer);
+    if(!state.in_flight) return;
+    state.in_flight = false;
 
     if(kernel_id != m_current_kernel_id ||
-       (kind == PcSamplingRequestKind::kSource && m_current_source_file_uuid != 0 &&
-        source_file_uuid != m_current_source_file_uuid))
+       (layer == PcSamplingLayer::kSource && m_source.selected_uuid != 0 &&
+        source_file_uuid != m_source.selected_uuid))
         return;
 
     if(!success)
     {
-        if(kind == PcSamplingRequestKind::kStalls) m_show_metadata_enabled = false;
+        if(layer == PcSamplingLayer::kStalls) m_show_metadata_enabled = false;
         return;
     }
 
@@ -308,16 +274,13 @@ ComputeIsaView::OnPcSamplingReady(PcSamplingRequestKind kind, uint32_t kernel_id
     if(!kernel_info)
         return;
 
-    switch(kind)
+    state.loaded = true;
+    if(layer == PcSamplingLayer::kSource)
     {
-        case PcSamplingRequestKind::kIsa: m_isa_data_loaded = true; break;
-        case PcSamplingRequestKind::kSource:
-            m_current_source_file_uuid = source_file_uuid;
-            LoadSourceFileList(kernel_info->pc_sampling_data);
-            if(m_current_source_file_uuid != 0)
-                m_loaded_source_files.insert(m_current_source_file_uuid);
-            break;
-        case PcSamplingRequestKind::kStalls: m_stall_data_loaded = true; break;
+        m_source.selected_uuid = source_file_uuid;
+        LoadSourceFileList(kernel_info->pc_sampling_data);
+        if(m_source.selected_uuid != 0)
+            m_source.loaded_uuids.insert(m_source.selected_uuid);
     }
     RefreshCodeWidgets();
 }
@@ -325,22 +288,22 @@ ComputeIsaView::OnPcSamplingReady(PcSamplingRequestKind kind, uint32_t kernel_id
 void
 ComputeIsaView::LoadSourceFileList(const PcSamplingData& data)
 {
-    m_source_files.clear();
-    for (auto& file : data.source_files)
-        m_source_files.emplace(file.file_path, file.source_file_uuid);
+    m_source.files.clear();
+    for(auto& file : data.source_files)
+        m_source.files.emplace(file.file_path, file.source_file_uuid);
 
     bool selection_valid = false;
-    for(const auto& [path, id] : m_source_files)
+    for(const auto& [path, id] : m_source.files)
     {
-        if(id == m_current_source_file_uuid)
+        if(id == m_source.selected_uuid)
         {
             selection_valid = true;
             break;
         }
     }
     if(!selection_valid)
-        m_current_source_file_uuid =
-            m_source_files.empty() ? 0 : m_source_files.begin()->second;
+        m_source.selected_uuid =
+            m_source.files.empty() ? 0 : m_source.files.begin()->second;
 }
 
 void
@@ -351,19 +314,19 @@ ComputeIsaView::RefreshCodeWidgets()
     if(!kernel_info) return;
 
     const PcSamplingData& data = kernel_info->pc_sampling_data;
-    if(m_isa_data_loaded && !data.code_objects.empty())
-        m_current_code_object_uuid = data.code_objects[0].code_object_uuid;
-    if(m_isa_data_loaded &&
-       m_current_code_object_uuid != ComputeSelection::INVALID_SELECTION_ID)
-        m_isa_code->Load(data, m_current_code_object_uuid);
+    if(m_isa.loaded && !data.code_objects.empty())
+        m_isa.code_object_uuid = data.code_objects[0].code_object_uuid;
+    if(m_isa.loaded &&
+       m_isa.code_object_uuid != ComputeSelection::INVALID_SELECTION_ID)
+        m_isa.widget->Load(data, m_isa.code_object_uuid);
 
     if(m_source_layout_item->m_visible &&
-       m_loaded_source_files.count(m_current_source_file_uuid))
-        m_source_code->Load(data, m_current_source_file_uuid);
+       m_source.loaded_uuids.count(m_source.selected_uuid))
+        m_source.widget->Load(data, m_source.selected_uuid);
 
-    const bool show_stalls = m_show_metadata_enabled && m_stall_data_loaded;
-    m_source_code->ChangeStallVisibility(show_stalls);
-    m_isa_code->ChangeStallVisibility(show_stalls);
+    const bool show_stalls = m_show_metadata_enabled && m_stalls.loaded;
+    m_source.widget->ChangeStallVisibility(show_stalls);
+    m_isa.widget->ChangeStallVisibility(show_stalls);
 }
 
 void
@@ -425,14 +388,14 @@ ComputeIsaView::RenderControlPanel()
         m_source_layout_item->m_visible = !m_source_layout_item->m_visible;
         if(m_source_layout_item->m_visible)
         {
-            if(!m_loaded_source_files.count(m_current_source_file_uuid))
-                QueuePcSamplingFetch(PcSamplingRequestKind::kSource);
+            if(!m_source.loaded_uuids.count(m_source.selected_uuid))
+                QueuePcSamplingFetch(PcSamplingLayer::kSource);
             else
                 RefreshCodeWidgets();
         }
         else
         {
-            m_pending_source_fetch = false;
+            m_source.queued = false;
         }
     }
 
@@ -440,11 +403,11 @@ ComputeIsaView::RenderControlPanel()
     if(ImGui::Button(m_show_metadata_enabled ? hide_stalls_str : show_stalls_str))
     {
         m_show_metadata_enabled = !m_show_metadata_enabled;
-        if(m_show_metadata_enabled && !m_stall_data_loaded)
-            QueuePcSamplingFetch(PcSamplingRequestKind::kStalls);
+        if(m_show_metadata_enabled && !m_stalls.loaded)
+            QueuePcSamplingFetch(PcSamplingLayer::kStalls);
         else
         {
-            if(!m_show_metadata_enabled) m_pending_stall_fetch = false;
+            if(!m_show_metadata_enabled) m_stalls.queued = false;
             RefreshCodeWidgets();
         }
     }
@@ -465,17 +428,17 @@ void
 ComputeIsaView::RenderSourceFileDropdown()
 {
     constexpr const float DROPDAWN_SIZE = 300.0f;
-    if(!m_source_layout_item->m_visible || m_source_files.empty()) return;
+    if(!m_source_layout_item->m_visible || m_source.files.empty()) return;
 
     auto filename_of = [](const std::string& str) -> const char* {
         const auto pos = str.find_last_of("/\\");
         return pos == std::string::npos ? str.c_str() : str.c_str() + pos + 1;
     };
 
-    const auto selected_file_it = std::find_if(m_source_files.begin(), m_source_files.end(),
-        [this](const auto& pair) { return pair.second == m_current_source_file_uuid; });
+    const auto selected_file_it = std::find_if(m_source.files.begin(), m_source.files.end(),
+        [this](const auto& pair) { return pair.second == m_source.selected_uuid; });
 
-    const char* preview = selected_file_it != m_source_files.end()
+    const char* preview = selected_file_it != m_source.files.end()
                                     ? filename_of(selected_file_it->first)
                                     : "<none>";
 
@@ -486,17 +449,17 @@ ComputeIsaView::RenderSourceFileDropdown()
     ImGui::SetNextItemWidth(DROPDAWN_SIZE);
     if(ImGui::BeginCombo("##source_file", preview))
     {
-        for(const auto& [path, id] : m_source_files)
+        for(const auto& [path, id] : m_source.files)
         {
-            const bool selected = (id == m_current_source_file_uuid);
+            const bool selected = (id == m_source.selected_uuid);
             if(ImGui::Selectable(filename_of(path), selected) && !selected)
             {
-                m_current_source_file_uuid = id;
-                m_source_code->Load({}, 0);
-                if(m_loaded_source_files.count(id))
+                m_source.selected_uuid = id;
+                m_source.widget->Load({}, 0);
+                if(m_source.loaded_uuids.count(id))
                     RefreshCodeWidgets();
                 else
-                    QueuePcSamplingFetch(PcSamplingRequestKind::kSource);
+                    QueuePcSamplingFetch(PcSamplingLayer::kSource);
             }
             if(selected)
                 ImGui::SetItemDefaultFocus();

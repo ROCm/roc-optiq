@@ -60,6 +60,15 @@ const uint64_t DataProvider::FETCH_COMPUTE_TRACE_REQUEST_ID =
     RequestIdBuilder::MakeRequestId(RequestType::kFetchComputeTrace);
 const uint64_t DataProvider::METRIC_PIVOT_TABLE_REQUEST_ID =
     RequestIdBuilder::MakeRequestId(RequestType::kFetchMetricPivotTable);
+const uint64_t DataProvider::FETCH_PC_SAMPLING_ISA_REQUEST_ID =
+    RequestIdBuilder::MakeClientRequestId(RequestType::kFetchPcSampling,
+        static_cast<uint64_t>(PcSamplingLayer::kIsa));
+const uint64_t DataProvider::FETCH_PC_SAMPLING_SOURCE_REQUEST_ID =
+    RequestIdBuilder::MakeClientRequestId(RequestType::kFetchPcSampling,
+        static_cast<uint64_t>(PcSamplingLayer::kSource));
+const uint64_t DataProvider::FETCH_PC_SAMPLING_STALLS_REQUEST_ID =
+    RequestIdBuilder::MakeClientRequestId(RequestType::kFetchPcSampling,
+        static_cast<uint64_t>(PcSamplingLayer::kStalls));
 
 DataProvider::DataProvider()
 : m_state(ProviderState::kInit)
@@ -4358,7 +4367,7 @@ void DataProvider::SetFetchMetricsCallback(
 
 void
 DataProvider::SetFetchPcSamplingCallback(
-    const std::function<void(const std::string&, PcSamplingRequestKind, uint32_t,
+    const std::function<void(const std::string&, PcSamplingLayer, uint32_t,
                              uint64_t, uint32_t, bool)>& callback)
 {
     m_pc_sampling_fetch_callback = callback;
@@ -4374,23 +4383,14 @@ DataProvider::FetchPcSampling(const PcSamplingRequestParams& params)
         return false;
     }
 
-    // This provider permits only one PC sampling request at a time. Selection
-    // identity is retained in PcSamplingRequestParams and checked on completion.
     const uint64_t request_id =
-        RequestIdBuilder::MakeRequestId(RequestType::kFetchPcSampling);
+        RequestIdBuilder::MakeClientRequestId(RequestType::kFetchPcSampling,
+            static_cast<uint64_t>(params.m_layer));
 
-    for(const std::pair<const uint64_t, RequestInfo>& entry : m_requests)
+    if(m_requests.count(request_id))
     {
-        const RequestInfo& request = entry.second;
-        if(request.request_type != RequestType::kFetchPcSampling)
-        {
-            continue;
-        }
-
-        // Code View uses latest-selection-wins semantics. The active request is
-        // allowed to finish cancellation before the deferred replacement is
-        // submitted, so only one PC sampling request exists per trace.
-        spdlog::debug("PC sampling request already pending for this trace");
+        spdlog::debug("PC sampling {} request already pending",
+                      static_cast<uint32_t>(params.m_layer));
         return false;
     }
 
@@ -4423,17 +4423,17 @@ DataProvider::FetchPcSampling(const PcSamplingRequestParams& params)
                                      params.m_source_file_uuid);
 
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
-    switch(params.m_kind)
+    switch(params.m_layer)
     {
-        case PcSamplingRequestKind::kIsa:
+        case PcSamplingLayer::kIsa:
             result = rocprofvis_controller_pc_sampling_fetch_mandatorys_async(
                 m_trace_controller, args, future, pc_handle);
             break;
-        case PcSamplingRequestKind::kSource:
+        case PcSamplingLayer::kSource:
             result = rocprofvis_controller_pc_sampling_fetch_source_async(
                 m_trace_controller, args, future, pc_handle);
             break;
-        case PcSamplingRequestKind::kStalls:
+        case PcSamplingLayer::kStalls:
             result = rocprofvis_controller_pc_sampling_fetch_stalls_async(
                 m_trace_controller, args, future, pc_handle);
             break;
@@ -5532,12 +5532,12 @@ DataProvider::ProcessPcSamplingRequest(RequestInfo& req)
             params->m_workload_id, params->m_kernel_id);
         if(kernel)
         {
-            switch(params->m_kind)
+            switch(params->m_layer)
             {
-                case PcSamplingRequestKind::kIsa:
+                case PcSamplingLayer::kIsa:
                     LoadPcSamplingCodeObjects(*kernel, pc_handle);
                     break;
-                case PcSamplingRequestKind::kSource:
+                case PcSamplingLayer::kSource:
                     LoadPcSamplingSourceFiles(*kernel, pc_handle,
                                               params->m_source_file_uuid);
                     LoadPcSamplingInstructionSourceLines(*kernel, pc_handle);
@@ -5549,7 +5549,7 @@ DataProvider::ProcessPcSamplingRequest(RequestInfo& req)
                                 .source_file_uuid;
                     }
                     break;
-                case PcSamplingRequestKind::kStalls:
+                case PcSamplingLayer::kStalls:
                     LoadPcSamplingStates(*kernel, pc_handle);
                     LoadPcSamplingStallReasons(*kernel, pc_handle);
                     LoadPcSamplingStallReasonLookups(*kernel, pc_handle);
@@ -5569,7 +5569,7 @@ DataProvider::ProcessPcSamplingRequest(RequestInfo& req)
 
     if(m_pc_sampling_fetch_callback)
     {
-        m_pc_sampling_fetch_callback(m_model.GetTraceFilePath(), params->m_kind,
+        m_pc_sampling_fetch_callback(m_model.GetTraceFilePath(), params->m_layer,
                                      params->m_kernel_id, completed_source_file_uuid,
                                      params->m_generation, success);
     }

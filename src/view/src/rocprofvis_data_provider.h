@@ -66,6 +66,9 @@ public:
     static const uint64_t ANALYSIS_TOP_LAUNCH_SAMPLED_TABLE_REQUEST_ID;
     static const uint64_t FETCH_COMPUTE_TRACE_REQUEST_ID;
     static const uint64_t METRIC_PIVOT_TABLE_REQUEST_ID;
+    static const uint64_t FETCH_PC_SAMPLING_ISA_REQUEST_ID;
+    static const uint64_t FETCH_PC_SAMPLING_SOURCE_REQUEST_ID;
+    static const uint64_t FETCH_PC_SAMPLING_STALLS_REQUEST_ID;
 
     DataProvider();
     ~DataProvider();
@@ -251,7 +254,7 @@ public:
     void SetFetchMetricsCallback(
         const std::function<void(const std::string&, uint64_t, bool)>& callback);
     void SetFetchPcSamplingCallback(
-        const std::function<void(const std::string&, PcSamplingRequestKind, uint32_t,
+        const std::function<void(const std::string&, PcSamplingLayer, uint32_t,
                                  uint64_t, uint32_t, bool)>& callback);
 
 private:
@@ -436,7 +439,7 @@ private:
     ComputeDataModel m_compute_model;
 
     std::function<void(const std::string&, uint64_t, bool)> m_metrics_fetch_callback;
-    std::function<void(const std::string&, PcSamplingRequestKind, uint32_t, uint64_t,
+    std::function<void(const std::string&, PcSamplingLayer, uint32_t, uint64_t,
                        uint32_t, bool)>
         m_pc_sampling_fetch_callback;
 };

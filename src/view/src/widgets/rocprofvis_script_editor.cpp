@@ -52,7 +52,7 @@ constexpr float  SCRIPT_DOT_SPEED             = 5.0f;
 
 // Even-spacing sample from SCRIPTING.md so the first Run does something
 // visible against a loaded system trace.
-char const* const kDefaultScript =
+char const* const DEFAULT_SCRIPT =
     "track = None\n"
     "for t in optiq.selection.tracks:\n"
     "    if t.type == optiq.TRACK_TYPE_EVENTS and t.num_entries > 0:\n"
@@ -82,7 +82,7 @@ ScriptEditor::ScriptEditor(DataProvider&                      data_provider,
 , m_running(false)
 , m_result_ratio(SCRIPT_DEFAULT_RESULT_RATIO)
 , m_progress_percent(0)
-, m_source(kDefaultScript)
+, m_source(DEFAULT_SCRIPT)
 , m_output_is_error(false)
 , m_status("Ready")
 , m_approval(ScriptApproval::kNone)
@@ -96,8 +96,10 @@ ScriptEditor::ScriptEditor(DataProvider&                      data_provider,
         [this](std::shared_ptr<RocEvent> e) {
             std::shared_ptr<ScriptExecuteCompleteEvent> event =
                 std::dynamic_pointer_cast<ScriptExecuteCompleteEvent>(e);
-            // Closing any tab posts one of these from cleanup, so a script
-            // running here must only be answered by its own trace.
+            // One of these is posted for whichever trace finished a script, and
+            // every editor hears all of them. Answer only for the trace this
+            // editor started a run on, or another trace finishing would drop
+            // this one out of Running and overwrite its output.
             if(!event || m_running_source_id.empty() ||
                event->GetSourceId() != m_running_source_id)
             {

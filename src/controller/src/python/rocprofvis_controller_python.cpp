@@ -1269,24 +1269,46 @@ PyType_Slot g_table_slots[] = {{Py_tp_dealloc, reinterpret_cast<void*>(table_dea
 PyType_Spec g_table_spec = {"optiq.Table", sizeof(TableObject), 0, Py_TPFLAGS_DEFAULT,
                             g_table_slots};
 
+/*
+ * Builds the optiq types, all of them or none.
+ *
+ * Testing only g_event_type would make a partial failure permanent and silent:
+ * the first call reports failure having built some of the set, and every call
+ * after it takes the early exit and reports success while the rest are still
+ * null - which the make_* helpers below then dereference. Checking the whole
+ * set on the way in and clearing it on the way out means a failed attempt is
+ * retried rather than remembered, and callers never see a half-built set.
+ */
 int
 ensure_types(void)
 {
-    int ok = 1;
-    if(!g_event_type)
+    if(g_event_type && g_track_type && g_trace_type && g_selection_type && g_table_type)
     {
-        g_event_type = PyType_FromSpec(&g_event_spec);
-        g_track_type = PyType_FromSpec(&g_track_spec);
-        g_trace_type = PyType_FromSpec(&g_trace_spec);
-        g_selection_type = PyType_FromSpec(&g_selection_spec);
-        g_table_type = PyType_FromSpec(&g_table_spec);
-        if(!g_event_type || !g_track_type || !g_trace_type || !g_selection_type ||
-           !g_table_type)
-        {
-            ok = 0;
-        }
+        return 1;
     }
-    return ok;
+
+    Py_CLEAR(g_event_type);
+    Py_CLEAR(g_track_type);
+    Py_CLEAR(g_trace_type);
+    Py_CLEAR(g_selection_type);
+    Py_CLEAR(g_table_type);
+
+    g_event_type     = PyType_FromSpec(&g_event_spec);
+    g_track_type     = PyType_FromSpec(&g_track_spec);
+    g_trace_type     = PyType_FromSpec(&g_trace_spec);
+    g_selection_type = PyType_FromSpec(&g_selection_spec);
+    g_table_type     = PyType_FromSpec(&g_table_spec);
+    if(g_event_type && g_track_type && g_trace_type && g_selection_type && g_table_type)
+    {
+        return 1;
+    }
+
+    Py_CLEAR(g_event_type);
+    Py_CLEAR(g_track_type);
+    Py_CLEAR(g_trace_type);
+    Py_CLEAR(g_selection_type);
+    Py_CLEAR(g_table_type);
+    return 0;
 }
 
 PyObject*
@@ -1535,6 +1557,9 @@ optiq_prepare_globals(void* py_dict, void* script_session)
     PyObject*              globals = static_cast<PyObject*>(py_dict);
     ScriptEngine::Session* session =
         static_cast<ScriptEngine::Session*>(script_session);
+    // The interpreter calls this as a script starts, which is the only moment
+    // the engine can learn which session an interrupt would now land on.
+    ScriptEngine::Get().BeginSession(session);
     if(!globals || !session || !session->result)
     {
         return;
@@ -1642,6 +1667,17 @@ optiq_prepare_globals(void* py_dict, void* script_session)
     }
 
     PyDict_SetItemString(globals, "optiq", optiq);
+    // Also registered as a real module so `import optiq` works, which the
+    // allowlist and PYTHON.md both say it does. Without this the name resolves
+    // from globals but the import statement goes looking on disk and fails,
+    // and a script written the way the documentation describes gets an
+    // ImportError for the one module it is supposed to be able to import.
+    // Replaced on every run, so a script never sees the previous run's trace.
+    PyObject* modules = PyImport_GetModuleDict();
+    if(modules)
+    {
+        PyDict_SetItemString(modules, "optiq", optiq);
+    }
     Py_DECREF(optiq);
 }
 

@@ -210,8 +210,16 @@ std::string
 BuildAssistantWhereClause(const jt::Json& args, std::string& error_out)
 {
     jt::Json& mutable_args = const_cast<jt::Json&>(args);
-    if(!mutable_args.contains("filters") || !mutable_args["filters"].isArray())
+    if(!mutable_args.contains("filters"))
     {
+        return std::string();
+    }
+    // Present but the wrong shape is a mistake, not "no filters". Ignoring it
+    // would run the unfiltered query and report the answer as though it had
+    // been filtered - the same trap the per-entry check below exists for.
+    if(!mutable_args["filters"].isArray())
+    {
+        error_out = "filters must be an array of {column, op, value} objects.";
         return std::string();
     }
 
@@ -315,6 +323,27 @@ ResolveAssistantSortColumn(const TablesModel& tables, TableType type,
         }
     }
     return fallback;
+}
+
+uint64_t
+ResolveAssistantSortColumnNamed(const TablesModel& tables, TableType type,
+                                const std::string& name,
+                                const std::string& fallback_name,
+                                uint64_t           fallback_index)
+{
+    // Ask for the column by name first. An index is only right for the column
+    // order the table happens to have today, and a wrong one sorts by something
+    // else without saying so. The index stays as a last resort for the first
+    // query of a session, when no header has been read yet.
+    const uint64_t resolved = ResolveAssistantSortColumn(tables, type, name,
+                                                         ASSISTANT_SORT_COLUMN_UNKNOWN);
+    if(resolved != ASSISTANT_SORT_COLUMN_UNKNOWN)
+    {
+        return resolved;
+    }
+    const uint64_t by_name = ResolveAssistantSortColumn(tables, type, fallback_name,
+                                                        ASSISTANT_SORT_COLUMN_UNKNOWN);
+    return by_name == ASSISTANT_SORT_COLUMN_UNKNOWN ? fallback_index : by_name;
 }
 
 rocprofvis_controller_sort_order_t

@@ -55,6 +55,11 @@ constexpr float  ASSISTANT_DOT_SPACING    = 4.0f;
 constexpr float  ASSISTANT_DOT_SPEED      = 5.0f;
 // Covers a whole self-directed investigation, not a single lookup.
 constexpr uint32_t ASSISTANT_MAX_TOOL_ROUNDS = 20;
+// How much of the conversation travels upstream. Every round re-sends all of
+// it, so this bounds what a long session costs per round instead of letting the
+// bill grow with the square of its length. Comfortably more than one full tool
+// budget, so a single turn is never cut short by it.
+constexpr size_t   ASSISTANT_MAX_CONVERSATION_MESSAGES = 60;
 constexpr int      ASSISTANT_FETCH_TIMEOUT_SECONDS = 45;
 constexpr size_t   ASSISTANT_CHART_MAX_BINS        = 64;
 constexpr size_t   ASSISTANT_CHART_MIN_BINS        = 16;
@@ -760,6 +765,8 @@ AssistantPanel::StartHttpRequest()
     settings.GetAssistantToken(endpoint.name, request.api_token);
     request.enable_tools = !m_force_final;
 
+    TrimConversation();
+
     AssistantMessage system_message;
     system_message.role = "system";
     system_message.content = ASSISTANT_SYSTEM_PROMPT;
@@ -786,7 +793,7 @@ AssistantPanel::BeginQueuedTurn()
 {
     AssistantMessage user_message;
     user_message.role    = "user";
-    user_message.content = BuildUserPrompt(m_queued_question, true);
+    user_message.content = BuildUserPrompt(m_queued_question, NeedsBriefing());
     m_conversation.push_back(user_message);
     m_queued_question.clear();
     m_queued_explain_view = false;
@@ -880,9 +887,64 @@ AssistantPanel::SendCurrentInput(bool explain_view)
 
     AssistantMessage user_message;
     user_message.role    = "user";
-    user_message.content = BuildUserPrompt(question, true);
+    user_message.content = BuildUserPrompt(question, NeedsBriefing());
     m_conversation.push_back(user_message);
     StartHttpRequest();
+}
+
+/*
+ * Whether this turn should carry the briefing again.
+ *
+ * The briefing is topology, selection and summary headline for the trace in
+ * front. Repeating it on every follow-up costs its length once per turn for the
+ * rest of the session, and puts several copies in context that disagree about
+ * the selection - the model then has to guess which is current. Send it when
+ * there is no conversation to refer back to, or when the trace it described is
+ * no longer the one being asked about.
+ */
+bool
+AssistantPanel::NeedsBriefing()
+{
+    const std::string project_id = CurrentProjectId();
+    if(!m_conversation.empty() && project_id == m_briefed_project_id)
+    {
+        return false;
+    }
+    m_briefed_project_id = project_id;
+    return true;
+}
+
+/*
+ * Drops the oldest exchanges once the transcript sent upstream gets long.
+ *
+ * Every round re-sends the whole conversation, so an investigation that runs
+ * for many tool rounds pays for its own history again each time. Cuts land only
+ * on a user message: an assistant message carrying tool_calls and the tool
+ * replies answering it have to travel together, and an orphan of either kind is
+ * rejected by the endpoint. If no safe cut exists the history is left alone -
+ * growing is better than sending something malformed.
+ */
+void
+AssistantPanel::TrimConversation()
+{
+    if(m_conversation.size() <= ASSISTANT_MAX_CONVERSATION_MESSAGES)
+    {
+        return;
+    }
+
+    size_t drop = m_conversation.size() - ASSISTANT_MAX_CONVERSATION_MESSAGES;
+    while(drop < m_conversation.size() && m_conversation[drop].role != "user")
+    {
+        ++drop;
+    }
+    if(drop == 0 || drop >= m_conversation.size())
+    {
+        return;
+    }
+    spdlog::info("Assistant history trimmed: dropping {} of {} messages", drop,
+                 m_conversation.size());
+    m_conversation.erase(m_conversation.begin(),
+                         m_conversation.begin() + static_cast<ptrdiff_t>(drop));
 }
 
 void

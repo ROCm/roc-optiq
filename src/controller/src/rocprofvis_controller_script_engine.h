@@ -48,6 +48,9 @@ public:
         ScriptResult*                      result     = nullptr;
         rocprofvis_controller_t*           controller = nullptr;
         rocprofvis_controller_arguments_t* context    = nullptr;
+        // Set by Cancel. Read when the session starts, because a cancel can
+        // arrive while it is still queued behind another script.
+        bool                               cancelled  = false;
     };
 
     static ScriptEngine& Get();
@@ -58,6 +61,11 @@ public:
                                      Future* future, ScriptResult*& result);
 
     rocprofvis_result_t Cancel(Future* future);
+
+    // Called as a session begins executing, from the bindings' prepare hook.
+    // The interrupt is process-global, so the engine has to know which session
+    // it would land on before it sends one.
+    void BeginSession(Session* session);
 
     void DropSession(Session* session);
 
@@ -72,6 +80,10 @@ private:
 
     std::mutex                            m_mutex;
     std::unordered_map<Future*, Session*> m_sessions;
+    // The session the interpreter is running right now, or null between runs.
+    // Scripts run one at a time, but several traces can each have one queued,
+    // so "cancel this future" is not the same as "stop whatever is running".
+    Session*                              m_running = nullptr;
 };
 
 }  // namespace Controller

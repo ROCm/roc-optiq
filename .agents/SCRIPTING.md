@@ -297,8 +297,9 @@ fetch), not a parallel-only event channel.
   `rocprofvis_script_execute_async`, polls the Future each frame,
   forwards `kRPVControllerFutureProgressPercentage`. Cancel calls
   `rocprofvis_script_cancel` **then** `future_cancel` (script jobs are
-  not on JobSystem). Closing a tab posts `ScriptExecuteCompleteEvent`
-  from cleanup so the editor does not stay on Running.
+  not on JobSystem). Tab-close cleanup cancels and frees but posts no
+  event: it runs off the UI thread, after the editor is already gone,
+  so there is nobody left to tell.
 - **Script editor** (`widgets/rocprofvis_script_editor.*`): the
   **Script tab** of the details panel, built and owned by `AnalysisView`
   beside Event Table / Top Events / Annotations. It is a plain
@@ -358,11 +359,11 @@ mutation still belongs to `OptiqActions`. Four things it relies on:
 - **An offer is pinned to its trace.** `Run` refuses when the tab in
   front is not the trace the script was written against, the same
   mistake `m_turn_project_id` guards elsewhere.
-- **Events are filtered by source id.** `ScriptExecuteCompleteEvent` is
-  posted from tab-close cleanup as well as from a real run, so the
-  editor answers only events carrying the trace it is tracking.
-  Without that, closing any other tab drops the editor out of Running
-  and wipes its output.
+- **Events are filtered by source id.** Every editor hears every
+  `ScriptExecuteCompleteEvent`, and there is one editor per trace, so
+  each answers only events carrying the trace it started a run on.
+  Without that, a script finishing on any other trace would drop this
+  editor out of Running and wipe its output.
 - **`DataProvider` keeps the last result.** The editor listens for the
   completion event, but a caller that polls the request id instead -
   which is how every assistant tool waits - finds the result handle
@@ -377,8 +378,25 @@ mutation still belongs to `OptiqActions`. Four things it relies on:
 
 ## 7. Embedding and restriction
 
-In-process CPython is **not a jail**. The goal is to stop mistakes and
-a prompt-injected agent, not a hostile local user.
+In-process CPython is **not a jail**, and nothing below turns it into
+one. Write the threat model down rather than inferring it from the
+length of the allowlist:
+
+- **What these measures stop:** a script that reaches for the wrong
+  thing by accident, and the casual `import os` / `open(...)` an
+  unaware author (or a model imitating ordinary Python) would write.
+- **What they do not stop:** someone who is trying. The interpreter
+  shares the process with the UI, the controller, and the open trace.
+  A determined escape ends in arbitrary code in that process.
+- **The boundary that actually holds is approval.** Model-authored
+  scripts are offered, never executed (§6), so a human reads the source
+  before it runs. Treat that gate as the security control and
+  everything here as defence behind it. If a future change ever runs a
+  generated script unattended, this section is no longer sufficient and
+  the isolation question has to be reopened.
+
+Do not describe the allowlist as containment in user-facing text.
+[`PYTHON.md`](../PYTHON.md) says the same thing to script authors.
 
 **No system Python at runtime.** Vendor a known CPython (Windows
 embeddable zip; `libpython` + stdlib tree/zip on Linux/macOS). Build
@@ -421,11 +439,45 @@ guardrail. When adding a module to the allowlist, check what its normal
 use actually needs - `rocprofvis_controller_script_tests.cpp` has a
 case per promise, and the tool description is written from it.
 
+**Source screen (parse tree).** The allowlist and the builtin set do
+not bound reachability on their own, because an allowlisted module is a
+real module object. Two expressions are enough to leave:
+
+```python
+json.dumps.__globals__['__builtins__']['__import__']('os')
+().__class__.__base__.__subclasses__()
+```
+
+`__globals__` walks from any function back to the unrestricted
+builtins; `__class__` walks from any instance to `object` and
+everything already imported. Before a script runs,
+`Runtime::ScreenSource` parses it and refuses a denylist of
+interpreter-internal names (`__globals__`, `__class__`, `__subclasses__`,
+`__code__`, `__dict__`, …) in **attribute or name position**. Attribute
+access is the only way to walk either chain, since `getattr`, `vars`,
+`eval` and `__import__` are all withheld, so screening names closes the
+published routes without an AST rewrite.
+
+Three things to keep in mind when touching it:
+
+- It screens **names, not values**. It cannot know what an expression
+  evaluates to and does not try. Adding `getattr` to the builtins would
+  defeat it completely.
+- It must not refuse ordinary code. `__init__` and `__name__` are not
+  on the denylist because defining `__init__` is how the allowlisted
+  `dataclasses` and `enum` are used at all.
+- It **fails closed**. A runtime that cannot compile the screen refuses
+  to initialize, so the guardrail can never be silently absent.
+
+This raises the cost of an escape. It does not make one impossible, and
+it is not a reason to soften the framing above.
+
 Also: exec deadline (see 3); fresh exec dict every run;
 document that scripts have **trace read** access in-process.
 
 A real sandbox (Wasm or a locked-down child) would require RPC for
-the controller ABI. Out of scope until the threat model changes.
+the controller ABI. Out of scope until the threat model changes -
+which running a generated script without approval would do.
 
 ---
 
@@ -491,15 +543,28 @@ and a release build does not require a system Python.
   `ShowGeneratedScript`.
 - Vendor embeddable CPython into the package; CI builds against it.
 - Tighten restriction (optional RestrictedPython, scratch-dir `open`).
-- Decide about raw `where` / `group`. `Table.fetch` passes those
-  strings to the table args untouched, while the assistant's own
-  `BuildAssistantWhereClause` whitelists columns, quotes literals, and
-  escapes `LIKE` wildcards precisely because model input is hostile. A
-  script is now a second way for a model to reach the same query
-  layer, and it skips all of that. The blast radius looks small - trace
-  data the user already opened, read-only - but confirm what the DB
-  layer does with a hostile fragment and either accept it in writing or
-  route these through the existing query builder.
+- ~~Decide about raw `where` / `group`.~~ **Decided: they stay raw, and
+  approval is why.** `Table.fetch` passes those strings to the table
+  args untouched, while the assistant's own `BuildAssistantWhereClause`
+  whitelists columns, quotes literals and escapes `LIKE` wildcards,
+  because a tool call arrives without anyone reading it. A script does
+  not: `run_analysis_script` only ever *offers* source, and a person
+  reads it before it runs (§6). Whitelisting a script's `where` would
+  therefore buy nothing against a model - the same person would have
+  approved the script either way - while taking the query language away
+  from the users the feature exists for, who are writing analysis by
+  hand against columns the whitelist does not name.
+
+  What this rests on, and what would change it:
+
+  - The reader is the control. If a generated script ever runs
+    unattended, this decision is void and these strings need the query
+    builder - along with the rest of §7.
+  - The reach is read-only trace data the user already opened. A script
+    has no wider access through `where` than it already has through
+    `Track.events()`.
+  - Say so in [`PYTHON.md`](../PYTHON.md), so a script author knows the
+    fragment reaches the query layer as written.
 
 ### Phase 4 — Widen the analysis surface
 

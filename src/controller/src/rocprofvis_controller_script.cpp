@@ -143,6 +143,10 @@ ScriptEngine::DropSession(Session* session)
         {
             m_sessions.erase(session->future);
         }
+        if(m_running == session)
+        {
+            m_running = nullptr;
+        }
     }
     delete session;
 }
@@ -209,22 +213,53 @@ ScriptEngine::ExecuteAsync(rocprofvis_controller_t* controller, char const* sour
     return error;
 }
 
+// Marks a session as running. The engine needs this because the runtime's
+// interrupt is process-global: it stops whichever script is executing, not a
+// named one, so cancelling a queued script would otherwise kill an unrelated
+// one that happened to be running. A session cancelled while it was still
+// queued is interrupted here instead, on its way in.
+void
+ScriptEngine::BeginSession(Session* session)
+{
+    bool interrupt_now = false;
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        m_running     = session;
+        interrupt_now = session != nullptr && session->cancelled;
+    }
+    if(interrupt_now)
+    {
+        rocprofvis_python_interrupt();
+    }
+}
+
 rocprofvis_result_t
 ScriptEngine::Cancel(Future* future)
 {
-    rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
+    rocprofvis_result_t result       = kRocProfVisResultInvalidArgument;
+    bool                interrupt_now = false;
     if(future)
     {
         std::lock_guard<std::mutex> lock(m_mutex);
-        if(m_sessions.find(future) != m_sessions.end())
+        auto                        it = m_sessions.find(future);
+        if(it != m_sessions.end())
         {
-            rocprofvis_python_interrupt();
-            result = kRocProfVisResultSuccess;
+            it->second->cancelled = true;
+            // Only reach for the interrupt when this session is the one the
+            // interpreter is on. Otherwise it is still queued, and BeginSession
+            // will deliver the stop when its turn comes - interrupting now
+            // would land on somebody else's script.
+            interrupt_now = it->second == m_running;
+            result        = kRocProfVisResultSuccess;
         }
         else
         {
             result = kRocProfVisResultNotLoaded;
         }
+    }
+    if(interrupt_now)
+    {
+        rocprofvis_python_interrupt();
     }
     return result;
 }

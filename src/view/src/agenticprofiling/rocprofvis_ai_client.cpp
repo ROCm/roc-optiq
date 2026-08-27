@@ -40,6 +40,11 @@ constexpr int  ASSISTANT_HTTP_NOT_FOUND            = 404;
 constexpr char ASSISTANT_JSON_CONTENT_TYPE[]       = "application/json";
 constexpr char ASSISTANT_CHAT_COMPLETIONS_SUFFIX[] = "/chat/completions";
 
+// How many tools one reply may ask for. Generous next to what an investigation
+// actually needs, and a ceiling on how much work a single malformed or hostile
+// response can start. The inline "harmony" path below has its own, smaller cap.
+constexpr size_t ASSISTANT_MAX_TOOL_CALLS_PER_ROUND = 16;
+
 // Stock OpenAI: the key is a bearer token and the model is named in the body.
 constexpr char ASSISTANT_OPENAI_AUTH_HEADER[] = "Authorization";
 constexpr char ASSISTANT_OPENAI_AUTH_PREFIX[] = "Bearer ";
@@ -459,9 +464,20 @@ ParseToolCalls(jt::Json& message, std::vector<AssistantToolCall>& calls)
     }
 
     std::vector<jt::Json>& nodes = message["tool_calls"].getArray();
-    calls.reserve(nodes.size());
+    calls.reserve(std::min(nodes.size(), ASSISTANT_MAX_TOOL_CALLS_PER_ROUND));
     for(size_t i = 0; i < nodes.size(); ++i)
     {
+        // A round is one batch of tools the panel runs before answering, so an
+        // endpoint returning hundreds would turn one reply into a long run of
+        // queries against the trace. Take what a real round needs and drop the
+        // rest; the model can ask again next round.
+        if(calls.size() >= ASSISTANT_MAX_TOOL_CALLS_PER_ROUND)
+        {
+            spdlog::warn("Assistant reply carried {} tool calls; using the first {}",
+                         nodes.size(), ASSISTANT_MAX_TOOL_CALLS_PER_ROUND);
+            break;
+        }
+
         jt::Json& node = nodes[i];
         if(!node.isObject() || !node.contains("function"))
         {

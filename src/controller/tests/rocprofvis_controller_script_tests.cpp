@@ -386,6 +386,55 @@ TEST_CASE("Script sandbox still refuses the dangerous builtins")
     }
 }
 
+TEST_CASE("Script sandbox refuses the interpreter-internal attributes")
+{
+    // Neither the import allowlist nor the reduced builtins bound these on
+    // their own: an allowlisted module is a real module object, so __globals__
+    // walks from any function on it back to the unrestricted builtins, and
+    // __class__ walks from any instance to object.__subclasses__(). The parse
+    // tree screen is what refuses them, and each of these is a published
+    // escape rather than a hypothetical one.
+    char const* const blocked[] = {
+        "json.dumps.__globals__['__builtins__']['__import__']('os')",
+        "().__class__.__base__.__subclasses__()",
+        "x = (1).__class__",
+        "math.sqrt.__self__",
+        "[].__dict__",
+        "__builtins__",
+        "def f(): pass\nf.__code__",
+    };
+    for(char const* source : blocked)
+    {
+        const std::string out = run_script_text(source);
+        INFO("source: " << source << " gave: " << out);
+        REQUIRE(out.find("ERROR:") != std::string::npos);
+        REQUIRE(out.find("not available to optiq scripts") != std::string::npos);
+    }
+}
+
+TEST_CASE("Script screen leaves ordinary dunder use alone")
+{
+    // The screen refuses names, so it must not refuse the ones a normal script
+    // writes. Defining __init__ is how the allowlisted dataclasses and enum are
+    // used at all, and __name__ is in the script globals on purpose.
+    REQUIRE(run_script_text("class P:\n"
+                            "    def __init__(self):\n"
+                            "        self.a = 7\n"
+                            "print(P().a)") == "7");
+    REQUIRE(run_script_text("print(len([1, 2, 3]))") == "3");
+    REQUIRE(run_script_text("print(__name__)") == "__optiq_script__");
+}
+
+TEST_CASE("Script screen reports a syntax error with its line")
+{
+    // Screening parses first, so a broken script is refused before it runs.
+    // The parser's own message is what comes back, so it still names the line.
+    const std::string out = run_script_text("def f(:\n    pass");
+    INFO("got: " << out);
+    REQUIRE(out.find("ERROR:") != std::string::npos);
+    REQUIRE(out.find("SyntaxError") != std::string::npos);
+}
+
 TEST_CASE("Script execute rejects disallowed imports")
 {
     rocprofvis_controller_future_t*        future = rocprofvis_controller_future_alloc();

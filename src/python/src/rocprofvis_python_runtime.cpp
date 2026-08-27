@@ -121,6 +121,49 @@ char const* const SAFE_BUILTIN_NAMES[] = {
     "ZeroDivisionError", "AssertionError", "AttributeError", "NameError",
 };
 
+/*
+ * Source screen, run over the parse tree before a script executes.
+ *
+ * Neither the import allowlist nor the reduced builtins bound what a script can
+ * reach, because an allowlisted module is a real module object: from any
+ * function on it, __globals__ leads back to the unrestricted builtins, and from
+ * any instance, __class__ leads to object.__subclasses__() and everything the
+ * interpreter has already imported. Both are one expression:
+ *
+ *   json.dumps.__globals__['__builtins__']['__import__']('os')
+ *   ().__class__.__base__.__subclasses__()
+ *
+ * Attribute access is the only way to walk either chain - getattr, vars, eval
+ * and __import__ are all withheld - so refusing these names by parse tree
+ * closes the published routes without an AST rewrite. Names, not values: the
+ * screen cannot know what an expression evaluates to, and does not try.
+ *
+ * This raises the cost of an escape; it does not make one impossible. See the
+ * threat model in .agents/SCRIPTING.md - approval before a run is the boundary
+ * that matters, and this is defence behind it.
+ */
+char const* const SOURCE_SCREEN_SOURCE = R"PY(
+import ast
+
+_BLOCKED = frozenset((
+    '__globals__', '__builtins__', '__subclasses__', '__bases__', '__base__',
+    '__mro__', '__class__', '__code__', '__closure__', '__func__', '__self__',
+    '__dict__', '__getattribute__', '__getattr__', '__setattr__',
+    '__delattr__', '__reduce__', '__reduce_ex__', '__import__', '__loader__',
+    '__spec__', '__init_subclass__', '__subclasshook__', '__wrapped__',
+))
+
+def _screen(source):
+    for node in ast.walk(ast.parse(source)):
+        if isinstance(node, ast.Attribute):
+            if node.attr in _BLOCKED:
+                return (node.attr, getattr(node, 'lineno', 0))
+        elif isinstance(node, ast.Name):
+            if node.id in _BLOCKED:
+                return (node.id, getattr(node, 'lineno', 0))
+    return None
+)PY";
+
 // Keeps the tail, not the head: the exception line and the frame that raised
 // it come last, and those are what the reader needs.
 std::string
@@ -251,6 +294,8 @@ private:
     void FinalizeInterpreter();
     void ExecWork(WorkItem& item);
     PyObject* MakeScriptGlobals();
+    bool      BuildSourceScreen();
+    bool      ScreenSource(std::string const& source, std::string& error);
 
     std::string                m_runtime_root;
     std::thread                m_thread;
@@ -276,6 +321,10 @@ private:
     // Python's own id for the interpreter thread, which is what
     // PyThreadState_SetAsyncExc addresses. Written once during init.
     unsigned long                         m_py_thread_ident = 0;
+
+    // Compiled once at init and owned by the interpreter thread: the parse-tree
+    // screen every script passes through before it runs.
+    PyObject*                             m_screen_fn = nullptr;
 };
 
 wchar_t*
@@ -359,6 +408,15 @@ Runtime::InitializeInterpreter()
                       status.err_msg ? status.err_msg : "unknown");
         return false;
     }
+
+    // Compiled once, here, rather than per exec. ScreenSource fails closed
+    // without it, so a runtime that cannot build the screen is not usable.
+    if(!BuildSourceScreen())
+    {
+        spdlog::error("Python init failed: could not compile the script screen");
+        FinalizeInterpreter();
+        return false;
+    }
     return true;
 }
 
@@ -367,8 +425,96 @@ Runtime::FinalizeInterpreter()
 {
     if(Py_IsInitialized())
     {
+        Py_CLEAR(m_screen_fn);
         Py_FinalizeEx();
     }
+    m_screen_fn = nullptr;
+}
+
+// Compiles the screen into a throwaway module dict with the real builtins, so
+// it keeps working when a script is handed the reduced set. Runs on the
+// interpreter thread with the GIL held.
+bool
+Runtime::BuildSourceScreen()
+{
+    PyObject* globals = PyDict_New();
+    if(!globals)
+    {
+        PyErr_Clear();
+        return false;
+    }
+    PyDict_SetItemString(globals, "__builtins__", PyEval_GetBuiltins());
+
+    PyObject* code = PyRun_String(SOURCE_SCREEN_SOURCE, Py_file_input, globals, globals);
+    if(!code)
+    {
+        PyErr_Clear();
+        Py_DECREF(globals);
+        return false;
+    }
+    Py_DECREF(code);
+
+    // Borrowed from the dict, so hold a reference of our own before it goes.
+    PyObject* screen = PyDict_GetItemString(globals, "_screen");
+    Py_XINCREF(screen);
+    m_screen_fn = screen;
+    Py_DECREF(globals);
+    return m_screen_fn != nullptr;
+}
+
+/*
+ * Refuses a script that names one of the interpreter-internal attributes.
+ * Returns false and fills error when the script must not run.
+ *
+ * A SyntaxError here is reported the same way, because the script was never
+ * going to run: the message is the parser's own, so it still names the line.
+ */
+bool
+Runtime::ScreenSource(std::string const& source, std::string& error)
+{
+    if(!m_screen_fn)
+    {
+        // Without the screen there is no guardrail to enforce, and running
+        // anyway would silently drop it. Fail closed.
+        error = "the script screen is unavailable, so the script was not run";
+        return false;
+    }
+
+    PyObject* found = PyObject_CallFunction(m_screen_fn, "s#", source.c_str(),
+                                            static_cast<Py_ssize_t>(source.size()));
+    if(!found)
+    {
+        error = FormatPythonError();
+        return false;
+    }
+    if(found == Py_None)
+    {
+        Py_DECREF(found);
+        return true;
+    }
+
+    char const*   name = nullptr;
+    long long     line = 0;
+    PyObject*     name_obj = PyTuple_Check(found) && PyTuple_GET_SIZE(found) == 2
+                                 ? PyTuple_GET_ITEM(found, 0)
+                                 : nullptr;
+    PyObject*     line_obj = name_obj ? PyTuple_GET_ITEM(found, 1) : nullptr;
+    if(name_obj)
+    {
+        name = PyUnicode_AsUTF8(name_obj);
+    }
+    if(line_obj)
+    {
+        line = PyLong_AsLongLong(line_obj);
+    }
+    PyErr_Clear();
+
+    error = "line " + std::to_string(line) + ": '" +
+            std::string(name ? name : "?") +
+            "' is not available to optiq scripts. It reaches interpreter "
+            "internals rather than trace data; use the documented optiq API.";
+    Py_DECREF(found);
+    return false;
 }
 
 PyObject*
@@ -526,11 +672,14 @@ Runtime::ExecWork(WorkItem& item)
     PyErr_Clear();
     PyThreadState_SetAsyncExc(PyThread_get_thread_ident(), nullptr);
 
-    PyObject* globals = MakeScriptGlobals();
+    PyObject* globals = ScreenSource(item.source, error) ? MakeScriptGlobals() : nullptr;
     if(!globals)
     {
-        error = PyErr_Occurred() ? FormatPythonError()
-                                 : "could not build the script environment";
+        if(error.empty())
+        {
+            error = PyErr_Occurred() ? FormatPythonError()
+                                     : "could not build the script environment";
+        }
     }
     else
     {

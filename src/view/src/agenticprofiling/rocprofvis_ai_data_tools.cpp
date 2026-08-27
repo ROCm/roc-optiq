@@ -61,43 +61,49 @@ constexpr size_t   ASSISTANT_MAX_SEARCH_TERMS = 8;
 constexpr size_t   ASSISTANT_OVERVIEW_BINS    = 32;
 constexpr size_t   ASSISTANT_OVERVIEW_TRACKS  = 12;
 constexpr double   ASSISTANT_OVERVIEW_SCALE   = 100.0;
+// Where Duration sits in an events table today. Only reached when no header has
+// been read yet, because the column is resolved by name first - see
+// ResolveAssistantSortColumnNamed.
 constexpr uint64_t ASSISTANT_DURATION_COLUMN  = 2;
 
 // Furthest a tool may page into a result set. limit is clamped too, but without
 // a ceiling here the model could ask the database to skip billions of rows.
 constexpr uint64_t ASSISTANT_MAX_OFFSET = 1000000;
 
+// The categories top_events accepts. The model slot and request id are not
+// per-category: the assistant waits on one table at a time, so its five
+// categories share one of each, and neither is the tab's.
 struct TopEventsSpec
 {
     const char*                        key;
     rocprofvis_controller_table_type_t controller_type;
-    TableType                          table_type;
-    uint64_t                           request_id;
     rocprofvis_dm_event_operation_t    op;
 };
 
 const TopEventsSpec k_top_event_specs[] = {
     { "dispatch", kRPVControllerTableTypeDispatchEvents,
-      TableType::kAnalysisTopDispatchEventsTable,
-      DataProvider::ANALYSIS_TOP_DISPATCH_EVENTS_TABLE_REQUEST_ID,
       kRocProfVisDmOperationDispatch },
     { "memory_copy", kRPVControllerTableTypeMemoryCopyEvents,
-      TableType::kAnalysisTopMemoryCopyEventsTable,
-      DataProvider::ANALYSIS_TOP_MEMORY_COPY_EVENTS_TABLE_REQUEST_ID,
       kRocProfVisDmOperationMemoryCopy },
     { "memory_alloc", kRPVControllerTableTypeMemoryAllocationEvents,
-      TableType::kAnalysisTopMemoryAllocationEventsTable,
-      DataProvider::ANALYSIS_TOP_MEMORY_ALLOCATION_EVENTS_TABLE_REQUEST_ID,
       kRocProfVisDmOperationMemoryAllocate },
     { "instrumented", kRPVControllerTableTypeInstrumentedEvents,
-      TableType::kAnalysisTopInstrumentedEventsTable,
-      DataProvider::ANALYSIS_TOP_INSTRUMENTED_EVENTS_TABLE_REQUEST_ID,
       kRocProfVisDmOperationLaunch },
     { "sampled", kRPVControllerTableTypeSampledEvents,
-      TableType::kAnalysisTopSampledEventsTable,
-      DataProvider::ANALYSIS_TOP_LAUNCH_SAMPLED_TABLE_REQUEST_ID,
       kRocProfVisDmOperationLaunchSample },
 };
+
+// Stamps a table read as the assistant's. That is what routes it to its own
+// request id, its own controller table, and its own model slot, so asking a
+// question never rewrites the rows, sort or row count a tab is showing.
+// Every FetchTable call in this file goes through here.
+template <typename Params>
+Params
+AsAssistantRead(Params params)
+{
+    params.m_client_id = DataProvider::ASSISTANT_CLIENT_ID;
+    return params;
+}
 
 // Reports whether a column name is one of the model's internal "__" names.
 bool
@@ -1379,25 +1385,28 @@ ToolTopEvents(const AssistantToolContext& context, const jt::Json& args,
     double end_ns   = 0.0;
     TimeRangeFromArgs(context, args, start_ns, end_ns);
 
+    const uint64_t request_id = DataProvider::ASSISTANT_TOP_EVENTS_TABLE_REQUEST_ID;
     const AssistantFetchState fetch =
-        TableFetch(AssistantFetchKind::kTopEvents, spec->table_type, limit);
-    if(context.data_provider->IsRequestPending(spec->request_id))
+        TableFetch(AssistantFetchKind::kTopEvents, TableType::kAssistantTopEventsTable,
+                   limit);
+    if(context.data_provider->IsRequestPending(request_id))
     {
-        return PendingResult(spec->request_id, fetch,
-                             AssistantToolStatusLabel(tool_name), false);
+        return PendingResult(request_id, fetch, AssistantToolStatusLabel(tool_name),
+                             false);
     }
 
-    const TablesModel& tables =
-        context.data_provider->DataModel().GetAnalysis().GetTables();
-    const bool queued = context.data_provider->FetchTable(TrackTableRequestParams(
-        spec->controller_type, tracks, start_ns, end_ns, where.c_str(), "",
-        group_by.c_str(), "", OffsetFromArgs(args),
-        static_cast<uint64_t>(limit),
-        ResolveAssistantSortColumn(tables, spec->table_type,
-                          JsonUtils::GetString(args, "sort_by", ""),
-                          ASSISTANT_DURATION_COLUMN),
-        AssistantSortOrderFromArgs(args, kRPVControllerSortOrderDescending)));
-    return FetchStartedResult(context, spec->request_id, fetch, tool_name, queued);
+    const TablesModel& tables = context.data_provider->DataModel().GetTables();
+    const bool queued = context.data_provider->FetchTable(AsAssistantRead(
+        TrackTableRequestParams(
+            spec->controller_type, tracks, start_ns, end_ns, where.c_str(), "",
+            group_by.c_str(), "", OffsetFromArgs(args),
+            static_cast<uint64_t>(limit),
+            ResolveAssistantSortColumnNamed(
+                tables, TableType::kAssistantTopEventsTable,
+                JsonUtils::GetString(args, "sort_by", ""), "Duration",
+                ASSISTANT_DURATION_COLUMN),
+            AssistantSortOrderFromArgs(args, kRPVControllerSortOrderDescending))));
+    return FetchStartedResult(context, request_id, fetch, tool_name, queued);
 }
 
 AssistantToolStartResult
@@ -1428,10 +1437,11 @@ ToolKernelInstances(const AssistantToolContext& context, const jt::Json& args,
     double end_ns   = 0.0;
     TimeRangeFromArgs(context, args, start_ns, end_ns);
 
-    const uint64_t request_id = DataProvider::SUMMARY_KERNEL_INSTANCE_TABLE_REQUEST_ID;
-    const AssistantFetchState fetch =
-        TableFetch(AssistantFetchKind::kKernelInstances, TableType::kSummaryKernelTable,
-                   limit);
+    const uint64_t request_id =
+        DataProvider::ASSISTANT_SUMMARY_KERNEL_INSTANCE_TABLE_REQUEST_ID;
+    const AssistantFetchState fetch = TableFetch(
+        AssistantFetchKind::kKernelInstances, TableType::kAssistantSummaryKernelTable,
+        limit);
     if(context.data_provider->IsRequestPending(request_id))
     {
         return PendingResult(request_id, fetch, AssistantToolStatusLabel(tool_name),
@@ -1439,14 +1449,15 @@ ToolKernelInstances(const AssistantToolContext& context, const jt::Json& args,
     }
 
     const TablesModel& tables = context.data_provider->DataModel().GetTables();
-    const bool queued = context.data_provider->FetchTable(EventSearchRequestParams(
-        kRPVControllerTableTypeSummaryKernelInstances,
-        { kRocProfVisDmOperationDispatch }, start_ns, end_ns, where.c_str(), false,
-        false, false, { kernel_name }, OffsetFromArgs(args),
-        static_cast<uint64_t>(limit),
-        ResolveAssistantSortColumn(tables, TableType::kSummaryKernelTable,
-                          JsonUtils::GetString(args, "sort_by", ""), 0),
-        AssistantSortOrderFromArgs(args, kRPVControllerSortOrderAscending)));
+    const bool queued = context.data_provider->FetchTable(AsAssistantRead(
+        EventSearchRequestParams(
+            kRPVControllerTableTypeSummaryKernelInstances,
+            { kRocProfVisDmOperationDispatch }, start_ns, end_ns, where.c_str(), false,
+            false, false, { kernel_name }, OffsetFromArgs(args),
+            static_cast<uint64_t>(limit),
+            ResolveAssistantSortColumn(tables, TableType::kAssistantSummaryKernelTable,
+                                       JsonUtils::GetString(args, "sort_by", ""), 0),
+            AssistantSortOrderFromArgs(args, kRPVControllerSortOrderAscending))));
     return FetchStartedResult(context, request_id, fetch, tool_name, queued);
 }
 
@@ -1613,10 +1624,11 @@ ToolTrackRows(const AssistantToolContext& context, const jt::Json& args,
             "Wrong trace kind");
     }
 
-    const bool      events   = tool_name == "track_events";
-    const TableType type     = events ? TableType::kEventTable : TableType::kSampleTable;
-    const uint64_t request_id = events ? DataProvider::EVENT_TABLE_REQUEST_ID
-                                       : DataProvider::SAMPLE_TABLE_REQUEST_ID;
+    const bool      events = tool_name == "track_events";
+    const TableType type   = events ? TableType::kAssistantEventTable
+                                    : TableType::kAssistantSampleTable;
+    const uint64_t request_id = events ? DataProvider::ASSISTANT_EVENT_TABLE_REQUEST_ID
+                                       : DataProvider::ASSISTANT_SAMPLE_TABLE_REQUEST_ID;
     const rocprofvis_controller_track_type_t wanted =
         events ? kRPVControllerTrackTypeEvents : kRPVControllerTrackTypeSamples;
 
@@ -1674,12 +1686,14 @@ ToolTrackRows(const AssistantToolContext& context, const jt::Json& args,
     }
 
     const TablesModel& tables = context.data_provider->DataModel().GetTables();
-    const bool queued = context.data_provider->FetchTable(TrackTableRequestParams(
-        events ? kRPVControllerTableTypeEvents : kRPVControllerTableTypeSamples,
-        tracks, start_ns, end_ns, where.c_str(), "", group_by.c_str(), "",
-        OffsetFromArgs(args), static_cast<uint64_t>(limit),
-        ResolveAssistantSortColumn(tables, type, JsonUtils::GetString(args, "sort_by", ""), 0),
-        AssistantSortOrderFromArgs(args, kRPVControllerSortOrderAscending)));
+    const bool queued = context.data_provider->FetchTable(AsAssistantRead(
+        TrackTableRequestParams(
+            events ? kRPVControllerTableTypeEvents : kRPVControllerTableTypeSamples,
+            tracks, start_ns, end_ns, where.c_str(), "", group_by.c_str(), "",
+            OffsetFromArgs(args), static_cast<uint64_t>(limit),
+            ResolveAssistantSortColumn(tables, type,
+                                       JsonUtils::GetString(args, "sort_by", ""), 0),
+            AssistantSortOrderFromArgs(args, kRPVControllerSortOrderAscending))));
     return FetchStartedResult(context, request_id, fetch, tool_name, queued);
 }
 
@@ -1876,9 +1890,9 @@ ToolSearchEvents(const AssistantToolContext& context, const jt::Json& args,
     double end_ns   = 0.0;
     TimeRangeFromArgs(context, args, start_ns, end_ns, false);
 
-    const uint64_t            request_id = DataProvider::EVENT_SEARCH_REQUEST_ID;
+    const uint64_t            request_id = DataProvider::ASSISTANT_EVENT_SEARCH_REQUEST_ID;
     const AssistantFetchState fetch = TableFetch(
-        AssistantFetchKind::kDataTable, TableType::kEventSearchTable, limit);
+        AssistantFetchKind::kDataTable, TableType::kAssistantSearchTable, limit);
     if(context.data_provider->IsRequestPending(request_id))
     {
         return PendingResult(request_id, fetch, AssistantToolStatusLabel(tool_name),
@@ -1886,13 +1900,14 @@ ToolSearchEvents(const AssistantToolContext& context, const jt::Json& args,
     }
 
     const TablesModel& tables = context.data_provider->DataModel().GetTables();
-    const bool queued = context.data_provider->FetchTable(EventSearchRequestParams(
-        kRPVControllerTableTypeSearchResults, ops, start_ns, end_ns, where.c_str(),
-        contains, include_category, any_term, terms, OffsetFromArgs(args),
-        static_cast<uint64_t>(limit),
-        ResolveAssistantSortColumn(tables, TableType::kEventSearchTable,
-                          JsonUtils::GetString(args, "sort_by", ""), 1),
-        AssistantSortOrderFromArgs(args, kRPVControllerSortOrderAscending)));
+    const bool queued = context.data_provider->FetchTable(AsAssistantRead(
+        EventSearchRequestParams(
+            kRPVControllerTableTypeSearchResults, ops, start_ns, end_ns, where.c_str(),
+            contains, include_category, any_term, terms, OffsetFromArgs(args),
+            static_cast<uint64_t>(limit),
+            ResolveAssistantSortColumn(tables, TableType::kAssistantSearchTable,
+                                       JsonUtils::GetString(args, "sort_by", ""), 1),
+            AssistantSortOrderFromArgs(args, kRPVControllerSortOrderAscending))));
     return FetchStartedResult(context, request_id, fetch, tool_name, queued);
 }
 
@@ -1940,8 +1955,9 @@ FinishAssistantFetch(const AssistantToolContext& context,
     }
     if(fetch.kind == AssistantFetchKind::kTopEvents)
     {
-        const TablesModel& tables =
-            context.data_provider->DataModel().GetAnalysis().GetTables();
+        // The assistant's slots all live in the main model, including this one.
+        // The analysis model belongs to the Top Events tab.
+        const TablesModel& tables = context.data_provider->DataModel().GetTables();
         if(tables.GetTableData(fetch.table_type).empty() &&
            tables.GetTableHeader(fetch.table_type).empty())
         {

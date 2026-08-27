@@ -509,6 +509,15 @@ rocprofvis_controller_graph_t* rocprofvis_controller_graph_alloc(rocprofvis_cont
 rocprofvis_controller_table_t* rocprofvis_controller_table_alloc(void);
 
 /*
+* Allocates a private search-results table, the shape event search and the
+* summary kernel-instance table use. Like table_alloc, this is not the
+* controller's own singleton, so fetching through it does not overwrite what
+* another reader is showing.
+* @returns The table or nullptr
+*/
+rocprofvis_controller_table_t* rocprofvis_controller_search_table_alloc(void);
+
+/*
 * Allocates a sample
 * @param track The owning track or nullptr
 * @returns The sample or nullptr

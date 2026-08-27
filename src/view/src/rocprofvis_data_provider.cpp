@@ -64,6 +64,24 @@ const uint64_t DataProvider::FETCH_COMPUTE_TRACE_REQUEST_ID =
     RequestIdBuilder::MakeRequestId(RequestType::kFetchComputeTrace);
 const uint64_t DataProvider::METRIC_PIVOT_TABLE_REQUEST_ID =
     RequestIdBuilder::MakeRequestId(RequestType::kFetchMetricPivotTable);
+// Same request types as the UI ids above, tagged with a client id so the two
+// are distinct keys in m_requests. One slot per kind is enough because a client
+// waits on one table fetch at a time.
+const uint64_t DataProvider::ASSISTANT_EVENT_TABLE_REQUEST_ID =
+    RequestIdBuilder::MakeClientRequestId(RequestType::kFetchTrackEventTable,
+                                          DataProvider::ASSISTANT_CLIENT_ID);
+const uint64_t DataProvider::ASSISTANT_SAMPLE_TABLE_REQUEST_ID =
+    RequestIdBuilder::MakeClientRequestId(RequestType::kFetchTrackSampleTable,
+                                          DataProvider::ASSISTANT_CLIENT_ID);
+const uint64_t DataProvider::ASSISTANT_EVENT_SEARCH_REQUEST_ID =
+    RequestIdBuilder::MakeClientRequestId(RequestType::kFetchEventSearchTable,
+                                          DataProvider::ASSISTANT_CLIENT_ID);
+const uint64_t DataProvider::ASSISTANT_SUMMARY_KERNEL_INSTANCE_TABLE_REQUEST_ID =
+    RequestIdBuilder::MakeClientRequestId(RequestType::kFetchSummaryKernelInstanceTable,
+                                          DataProvider::ASSISTANT_CLIENT_ID);
+const uint64_t DataProvider::ASSISTANT_TOP_EVENTS_TABLE_REQUEST_ID =
+    RequestIdBuilder::MakeClientRequestId(RequestType::kFetchAnalysisTopEventsTable,
+                                          DataProvider::ASSISTANT_CLIENT_ID);
 #ifdef ROCPROFVIS_ENABLE_SCRIPTING
 const uint64_t DataProvider::EXECUTE_SCRIPT_REQUEST_ID =
     RequestIdBuilder::MakeRequestId(RequestType::kExecuteScript);
@@ -125,6 +143,14 @@ DataProvider::GetPendingRequestCount() const
     return m_requests.size();
 }
 
+namespace
+{
+// How long trace-close waits for work already in flight. Long enough that any
+// real query or fetch finishes; short enough that a script refusing to stop
+// does not hold the application open.
+constexpr float CLEANUP_WAIT_SECONDS = 10.0f;
+}  // namespace
+
 DataProviderCleanupWork
 DataProvider::DetachCleanupWork()
 {
@@ -132,6 +158,11 @@ DataProvider::DetachCleanupWork()
     cleanup_work.trace_file_path = m_model.GetTraceFilePath();
     cleanup_work.requests        = std::move(m_requests);
     cleanup_work.controller      = m_trace_controller;
+    for(const auto& entry : m_client_tables)
+    {
+        cleanup_work.client_tables.push_back(entry.second);
+    }
+    m_client_tables.clear();
 
     m_requests.clear();
     m_trace_controller = nullptr;
@@ -150,6 +181,9 @@ DataProvider::CleanupDetachedResources(DataProviderCleanupWork cleanup_work)
     DataProviderCleanupResult cleanup_result;
     cleanup_result.trace_file_path = cleanup_work.trace_file_path;
     cleanup_result.request_count   = cleanup_work.requests.size();
+    // Set when something would not stop in time. Everything it still reads
+    // through - its tables, its controller - has to outlive this cleanup.
+    bool abandoned = false;
 
     for(auto& item : cleanup_work.requests)
     {
@@ -180,12 +214,32 @@ DataProvider::CleanupDetachedResources(DataProviderCleanupWork cleanup_work)
 
         if(req.request_future)
         {
-            rocprofvis_result_t result =
-                rocprofvis_controller_future_wait(req.request_future, FLT_MAX);
+            // Bounded, because this runs on the way out and a script is the one
+            // request that can refuse to stop: the watchdog raises
+            // KeyboardInterrupt on an interval, but a bare `except:` in a loop
+            // swallows every one of them, and waiting forever on that would
+            // hang the exit. Everything else finishes well inside the budget.
+            rocprofvis_result_t result = rocprofvis_controller_future_wait(
+                req.request_future, CLEANUP_WAIT_SECONDS);
             if(result != kRocProfVisResultSuccess)
             {
-                spdlog::warn("Failed to wait for request {}: {}", req.request_id,
-                             static_cast<int>(result));
+                // The work is still running and still writing through these
+                // handles, so freeing them now would be a use-after-free on
+                // whichever thread owns it. Abandon them instead. This leaks a
+                // future, its arguments and its result once for a run that
+                // would not stop - bounded, and the alternative is a crash on
+                // exit or an app that will not close.
+                spdlog::error("Request {} of type {} did not stop within {}s; leaving "
+                              "its handles allocated rather than freeing them under "
+                              "the thread still using them",
+                              req.request_id, static_cast<int>(req.request_type),
+                              CLEANUP_WAIT_SECONDS);
+                req.request_future     = nullptr;
+                req.request_array      = nullptr;
+                req.request_args       = nullptr;
+                req.request_obj_handle = nullptr;
+                abandoned              = true;
+                continue;
             }
 
             rocprofvis_controller_future_free(req.request_future);
@@ -219,6 +273,28 @@ DataProvider::CleanupDetachedResources(DataProviderCleanupWork cleanup_work)
     }
 
     cleanup_work.requests.clear();
+
+    if(abandoned)
+    {
+        // Whatever would not stop is still reading the trace through this
+        // controller and these tables. Tearing them down now is the crash that
+        // this whole path exists to avoid, so they outlive the trace instead.
+        spdlog::error("Leaving the controller for {} allocated: work is still running "
+                      "against it",
+                      cleanup_work.trace_file_path);
+        cleanup_work.client_tables.clear();
+        cleanup_work.controller = nullptr;
+        return cleanup_result;
+    }
+
+    // After the requests, because a fetch in flight reads through one of these,
+    // and before the controller, because they are its tables.
+    for(rocprofvis_handle_t* table : cleanup_work.client_tables)
+    {
+        rocprofvis_controller_table_free(
+            reinterpret_cast<rocprofvis_controller_table_t*>(table));
+    }
+    cleanup_work.client_tables.clear();
 
     if(cleanup_work.controller)
     {
@@ -1686,6 +1762,148 @@ DataProvider::FetchTable(const TableRequestParams& table_params)
     }
 }
 
+namespace
+{
+
+// The operation an analysis table is filtered to. Only meaningful for the five
+// top-events types; everything else allocates a plain table.
+rocprofvis_dm_event_operation_t
+AnalysisOperationFor(rocprofvis_controller_table_type_t table_type)
+{
+    switch(table_type)
+    {
+        case kRPVControllerTableTypeInstrumentedEvents: return kRocProfVisDmOperationLaunch;
+        case kRPVControllerTableTypeDispatchEvents: return kRocProfVisDmOperationDispatch;
+        case kRPVControllerTableTypeMemoryAllocationEvents:
+            return kRocProfVisDmOperationMemoryAllocate;
+        case kRPVControllerTableTypeMemoryCopyEvents:
+            return kRocProfVisDmOperationMemoryCopy;
+        case kRPVControllerTableTypeSampledEvents:
+            return kRocProfVisDmOperationLaunchSample;
+        default: return kRocProfVisDmOperationNoOp;
+    }
+}
+
+}  // namespace
+
+// Which request id a fetch occupies. Client 0 is the UI and keeps the shared
+// ids; anything else gets its own so a tab loading does not block it, and it
+// does not block a tab.
+uint64_t
+DataProvider::ClientTableRequestId(const TableRequestParams& table_params) const
+{
+    if(table_params.m_client_id == 0)
+    {
+        return 0;  // Caller falls back to the shared id for this table type.
+    }
+    ROCPROFVIS_ASSERT(table_params.m_client_id == ASSISTANT_CLIENT_ID);
+    switch(table_params.m_table_type)
+    {
+        case kRPVControllerTableTypeEvents: return ASSISTANT_EVENT_TABLE_REQUEST_ID;
+        case kRPVControllerTableTypeSamples: return ASSISTANT_SAMPLE_TABLE_REQUEST_ID;
+        case kRPVControllerTableTypeSearchResults:
+            return ASSISTANT_EVENT_SEARCH_REQUEST_ID;
+        case kRPVControllerTableTypeSummaryKernelInstances:
+            return ASSISTANT_SUMMARY_KERNEL_INSTANCE_TABLE_REQUEST_ID;
+        default: return ASSISTANT_TOP_EVENTS_TABLE_REQUEST_ID;
+    }
+}
+
+// The controller table a non-UI client fetches through. Allocated on first use
+// and kept until the controller goes, so repeated questions reuse one table
+// rather than churning a row cache.
+rocprofvis_handle_t*
+DataProvider::ClientTableHandle(const TableRequestParams& table_params)
+{
+    const rocprofvis_dm_event_operation_t op =
+        AnalysisOperationFor(table_params.m_table_type);
+    const auto key = std::make_tuple(table_params.m_client_id,
+                                     static_cast<uint64_t>(table_params.m_table_type),
+                                     static_cast<uint64_t>(op));
+    auto it = m_client_tables.find(key);
+    if(it != m_client_tables.end())
+    {
+        return it->second;
+    }
+
+    rocprofvis_handle_t* handle = nullptr;
+    if(op != kRocProfVisDmOperationNoOp)
+    {
+        if(rocprofvis_analysis_events_table_alloc(op, &handle) !=
+           kRocProfVisResultSuccess)
+        {
+            handle = nullptr;
+        }
+    }
+    else if(table_params.m_table_type == kRPVControllerTableTypeSearchResults ||
+            table_params.m_table_type == kRPVControllerTableTypeSummaryKernelInstances)
+    {
+        handle = reinterpret_cast<rocprofvis_handle_t*>(
+            rocprofvis_controller_search_table_alloc());
+    }
+    else
+    {
+        handle =
+            reinterpret_cast<rocprofvis_handle_t*>(rocprofvis_controller_table_alloc());
+    }
+
+    if(!handle)
+    {
+        spdlog::error("Could not allocate a private table for client {}",
+                      table_params.m_client_id);
+        return nullptr;
+    }
+    m_client_tables.emplace(key, handle);
+    return handle;
+}
+
+// Which model slot the finished rows land in. The assistant's slots exist so
+// that a tab never re-renders because a background reader asked something.
+TableType
+DataProvider::ClientTableSlot(rocprofvis_controller_table_type_t table_type,
+                              uint64_t client_id, bool& is_analysis_model)
+{
+    is_analysis_model = false;
+    if(client_id != 0)
+    {
+        switch(table_type)
+        {
+            case kRPVControllerTableTypeEvents: return TableType::kAssistantEventTable;
+            case kRPVControllerTableTypeSamples: return TableType::kAssistantSampleTable;
+            case kRPVControllerTableTypeSearchResults:
+                return TableType::kAssistantSearchTable;
+            case kRPVControllerTableTypeSummaryKernelInstances:
+                return TableType::kAssistantSummaryKernelTable;
+            default: return TableType::kAssistantTopEventsTable;
+        }
+    }
+
+    switch(table_type)
+    {
+        case kRPVControllerTableTypeEvents: return TableType::kEventTable;
+        case kRPVControllerTableTypeSamples: return TableType::kSampleTable;
+        case kRPVControllerTableTypeSearchResults: return TableType::kEventSearchTable;
+        case kRPVControllerTableTypeSummaryKernelInstances:
+            return TableType::kSummaryKernelTable;
+        case kRPVControllerTableTypeInstrumentedEvents:
+            is_analysis_model = true;
+            return TableType::kAnalysisTopInstrumentedEventsTable;
+        case kRPVControllerTableTypeDispatchEvents:
+            is_analysis_model = true;
+            return TableType::kAnalysisTopDispatchEventsTable;
+        case kRPVControllerTableTypeMemoryAllocationEvents:
+            is_analysis_model = true;
+            return TableType::kAnalysisTopMemoryAllocationEventsTable;
+        case kRPVControllerTableTypeMemoryCopyEvents:
+            is_analysis_model = true;
+            return TableType::kAnalysisTopMemoryCopyEventsTable;
+        case kRPVControllerTableTypeSampledEvents:
+            is_analysis_model = true;
+            return TableType::kAnalysisTopSampledEventsTable;
+        default: return TableType::__kTableTypeCount;
+    }
+}
+
 bool
 DataProvider::FetchTrackTable(const TrackTableRequestParams& table_params)
 {
@@ -1701,6 +1919,10 @@ DataProvider::FetchTrackTable(const TrackTableRequestParams& table_params)
     if(export_to_file)
     {
         request_id = TABLE_EXPORT_REQUEST_ID;
+    }
+    else if(table_params.m_client_id != 0)
+    {
+        request_id = ClientTableRequestId(table_params);
     }
     else
     {
@@ -1762,9 +1984,18 @@ DataProvider::FetchTrackTable(const TrackTableRequestParams& table_params)
         std::vector<uint64_t> filtered_track_ids;
         if(SetupCommonTableArguments(args, table_params))
         {
-            // get the table handle
-            switch(table_params.m_table_type)
+            // get the table handle. A non-UI client reads through its own so
+            // that its rows and the tab's cannot overwrite each other.
+            if(table_params.m_client_id != 0)
             {
+                table_handle = ClientTableHandle(table_params);
+                result       = table_handle ? kRocProfVisResultSuccess
+                                            : kRocProfVisResultUnknownError;
+            }
+            else
+            {
+                switch(table_params.m_table_type)
+                {
                 case kRPVControllerTableTypeEvents:
                     result = rocprofvis_controller_get_object(
                         m_trace_controller, kRPVControllerSystemEventTable, 0,
@@ -1796,6 +2027,7 @@ DataProvider::FetchTrackTable(const TrackTableRequestParams& table_params)
                         m_trace_controller, &table_handle);
                     break;
                 default: break;
+                }
             }
             ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
             ROCPROFVIS_ASSERT(table_handle);
@@ -2055,6 +2287,10 @@ DataProvider::FetchEventSearch(const EventSearchRequestParams& table_params)
     {
         request_id = TABLE_EXPORT_REQUEST_ID;
     }
+    else if(table_params.m_client_id != 0)
+    {
+        request_id = ClientTableRequestId(table_params);
+    }
     else
     {
         switch(table_params.m_table_type)
@@ -2090,8 +2326,15 @@ DataProvider::FetchEventSearch(const EventSearchRequestParams& table_params)
         std::vector<rocprofvis_dm_event_operation_t> filtered_op_types;
         if(SetupCommonTableArguments(args, table_params))
         {
-            // get the table handle
-            if(table_params.m_table_type == kRPVControllerTableTypeSearchResults)
+            // get the table handle. A non-UI client reads through its own so
+            // that its rows and the tab's cannot overwrite each other.
+            if(table_params.m_client_id != 0)
+            {
+                table_handle = ClientTableHandle(table_params);
+                result       = table_handle ? kRocProfVisResultSuccess
+                                            : kRocProfVisResultUnknownError;
+            }
+            else if(table_params.m_table_type == kRPVControllerTableTypeSearchResults)
             {
                 result = rocprofvis_controller_get_object(
                     m_trace_controller, kRPVControllerSystemSearchResultsTable, 0,
@@ -3500,70 +3743,19 @@ DataProvider::ProcessTableRequest(RequestInfo& req)
             table_params = nullptr;
         }
 
-        TablesModel* table_model     = nullptr;
-        TableType    table_type_enum = TableType::kEventTable;
-        switch(table_type)
+        // The client that asked decides where the rows land: the UI writes the
+        // slots the tabs render, and anything else writes its own.
+        const uint64_t client_id = table_params ? table_params->m_client_id : 0;
+        bool           is_analysis_model = false;
+        const TableType table_type_enum =
+            ClientTableSlot(table_type, client_id, is_analysis_model);
+        if(table_type_enum == TableType::__kTableTypeCount)
         {
-            case kRPVControllerTableTypeEvents:
-            {
-                table_type_enum = TableType::kEventTable;
-                table_model     = &m_model.GetTables();
-                break;
-            }
-            case kRPVControllerTableTypeSamples:
-            {
-                table_type_enum = TableType::kSampleTable;
-                table_model     = &m_model.GetTables();
-                break;
-            }
-            case kRPVControllerTableTypeSearchResults:
-            {
-                table_type_enum = TableType::kEventSearchTable;
-                table_model     = &m_model.GetTables();
-                break;
-            }
-            case kRPVControllerTableTypeSummaryKernelInstances:
-            {
-                table_type_enum = TableType::kSummaryKernelTable;
-                table_model     = &m_model.GetTables();
-                break;
-            }
-            case kRPVControllerTableTypeInstrumentedEvents:
-            {
-                table_type_enum = TableType::kAnalysisTopInstrumentedEventsTable;
-                table_model     = &m_model.GetAnalysis().GetTables();
-                break;
-            }
-            case kRPVControllerTableTypeDispatchEvents:
-            {
-                table_type_enum = TableType::kAnalysisTopDispatchEventsTable;
-                table_model     = &m_model.GetAnalysis().GetTables();
-                break;
-            }
-            case kRPVControllerTableTypeMemoryAllocationEvents:
-            {
-                table_type_enum = TableType::kAnalysisTopMemoryAllocationEventsTable;
-                table_model     = &m_model.GetAnalysis().GetTables();
-                break;
-            }
-            case kRPVControllerTableTypeMemoryCopyEvents:
-            {
-                table_type_enum = TableType::kAnalysisTopMemoryCopyEventsTable;
-                table_model     = &m_model.GetAnalysis().GetTables();
-                break;
-            }
-            case kRPVControllerTableTypeSampledEvents:
-            {
-                table_type_enum = TableType::kAnalysisTopSampledEventsTable;
-                table_model     = &m_model.GetAnalysis().GetTables();
-                break;
-            }
-            default:
-            {
-                spdlog::error("Unsupported table type: {}", static_cast<int>(table_type));
-                return;
-            }
+            spdlog::error("Unsupported table type: {}", static_cast<int>(table_type));
+            return;
         }
+        TablesModel* table_model = is_analysis_model ? &m_model.GetAnalysis().GetTables()
+                                                     : &m_model.GetTables();
         ROCPROFVIS_ASSERT(table_model);
         TablesModel& tables = *table_model;
         tables.SetTableData(table_type_enum, std::move(table_data));

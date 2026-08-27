@@ -132,6 +132,8 @@ private:
     std::string          CurrentProjectId() const;
     std::string          BuildUserPrompt(const std::string& question,
                                          bool               include_briefing) const;
+    bool                 NeedsBriefing();
+    void                 TrimConversation();
     bool                 Busy() const;
 
     static AssistantPanel* s_instance;
@@ -162,6 +164,9 @@ private:
     // The trace the turn started on, which is what catches the user switching
     // tabs mid-investigation.
     std::string m_turn_project_id;
+    // The trace the briefing in the conversation describes. A follow-up about
+    // the same trace does not repeat it; a different one does.
+    std::string m_briefed_project_id;
     uint64_t    m_metrics_client_id;
     FetchWait   m_fetch_wait;
     // Clickable follow-ups from offer_next_steps. Cleared on a new turn.

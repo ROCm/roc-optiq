@@ -65,6 +65,11 @@ rocprofvis_result_t rocprofvis_analysis_get_instrumented_events_table(rocprofvis
     return error;
 }
 
+rocprofvis_result_t rocprofvis_analysis_events_table_alloc(rocprofvis_dm_event_operation_t op, rocprofvis_handle_t** table)
+{
+    return RocProfVis::Controller::Analysis::GetInstance().AllocEventsTable(op, table);
+}
+
 rocprofvis_result_t rocprofvis_analysis_get_dispatch_events_table(rocprofvis_controller_t* controller, rocprofvis_handle_t** table)
 {
     rocprofvis_result_t error = kRocProfVisResultInvalidArgument;
@@ -535,6 +540,16 @@ Analysis::~Analysis()
         FreeTraceData(trace.first);
     }
     m_data.clear();
+}
+
+rocprofvis_result_t Analysis::AllocEventsTable(rocprofvis_dm_event_operation_t op, rocprofvis_handle_t** table)
+{
+    if(!table)
+    {
+        return kRocProfVisResultInvalidArgument;
+    }
+    *table = (rocprofvis_handle_t*)new EventsTable(0, op);
+    return kRocProfVisResultSuccess;
 }
 
 rocprofvis_result_t Analysis::GetOrAllocateEventsTable(EventsTable*& slot, rocprofvis_dm_event_operation_t op, rocprofvis_handle_t** table)

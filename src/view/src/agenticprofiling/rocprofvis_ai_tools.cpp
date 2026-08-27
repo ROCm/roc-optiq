@@ -9,6 +9,8 @@
 // matching schema entry in rocprofvis_ai_tool_schema.cpp.
 #include "rocprofvis_ai_tools_internal.h"
 
+#include <cctype>
+#include <cerrno>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
@@ -107,12 +109,32 @@ JsonU64(const jt::Json& json, const std::string& key, uint64_t default_value)
     }
     if(value.isString())
     {
-        char*              end    = nullptr;
-        unsigned long long parsed = std::strtoull(value.getString().c_str(), &end, 10);
-        if(end != nullptr && end != value.getString().c_str())
+        // Whole string or nothing. strtoull alone would read "12abc" as 12 and
+        // "-1" as UINT64_MAX, and an id the model half-meant is worse than one
+        // it did not give: the tool would answer confidently about the wrong
+        // row instead of saying it could not read the argument.
+        const std::string& text = value.getString();
+        size_t             first = text.find_first_not_of(" \t\n\r");
+        if(first == std::string::npos || text[first] == '-' || text[first] == '+')
         {
-            return static_cast<uint64_t>(parsed);
+            return default_value;
         }
+        errno                     = 0;
+        char*              end    = nullptr;
+        unsigned long long parsed = std::strtoull(text.c_str() + first, &end, 10);
+        if(end == nullptr || end == text.c_str() + first || errno == ERANGE)
+        {
+            return default_value;
+        }
+        while(*end != '\0' && std::isspace(static_cast<unsigned char>(*end)))
+        {
+            ++end;
+        }
+        if(*end != '\0')
+        {
+            return default_value;
+        }
+        return static_cast<uint64_t>(parsed);
     }
     return default_value;
 }

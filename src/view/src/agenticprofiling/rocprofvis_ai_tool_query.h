@@ -44,10 +44,22 @@ std::string BuildAssistantWhereClause(const jt::Json& args, std::string& error_o
 // not one we allow, and does nothing when error_out is already set.
 std::string AssistantGroupByFromArgs(const jt::Json& args, std::string& error_out);
 
+// Stands in for "this table has no such column", so a caller can tell a real
+// column 0 from a lookup that found nothing.
+constexpr uint64_t ASSISTANT_SORT_COLUMN_UNKNOWN = UINT64_MAX;
+
 // Turns a "sort_by" column name into its index in the table's own header,
 // falling back when the name is absent or does not name a column of this table.
 uint64_t ResolveAssistantSortColumn(const TablesModel& tables, TableType type,
                                     const std::string& name, uint64_t fallback);
+
+// The same, for a tool whose own default is a column rather than a position:
+// tries the model's sort_by, then fallback_name, and only then fallback_index.
+// Naming the default keeps it correct if the table's column order changes.
+uint64_t ResolveAssistantSortColumnNamed(const TablesModel& tables, TableType type,
+                                         const std::string& name,
+                                         const std::string& fallback_name,
+                                         uint64_t           fallback_index);
 
 // Reads "sort_order", keeping the calling tool's own default when absent.
 rocprofvis_controller_sort_order_t AssistantSortOrderFromArgs(

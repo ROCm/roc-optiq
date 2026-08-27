@@ -429,6 +429,8 @@ private:
     void DeserializeProfilerSettings(jt::Json& json);
     void SerializeAssistantSettings(jt::Json& json);
     void DeserializeAssistantSettings(jt::Json& json);
+    // The endpoint name is the credential-store key, so it has to be unique.
+    void MakeAssistantProviderNamesUnique();
     void SerializeAppWindowSettings(jt::Json& json);
     void DeserializeAppWindowSettings(jt::Json& json);
 

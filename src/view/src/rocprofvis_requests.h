@@ -171,6 +171,12 @@ public:
     std::string                        m_group_columns;
     std::string                        m_export_to_file_path;
 
+    // Who asked. 0 is the UI, which owns the shared request ids, the shared
+    // controller tables, and the model slots the tabs render from. A non-zero
+    // client is routed to its own of each, so a background reader cannot
+    // overwrite what the user is looking at. See DataProvider::ASSISTANT_CLIENT_ID.
+    uint64_t                           m_client_id = 0;
+
 protected:
     // Constructed only via derives...
     TableRequestParams(const TableRequestParams& table_params)            = default;

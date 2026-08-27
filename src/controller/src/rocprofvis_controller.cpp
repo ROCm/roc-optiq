@@ -21,6 +21,7 @@
 #include "system/rocprofvis_controller_timeline.h"
 #include "system/rocprofvis_controller_trace_system.h"
 #include "system/rocprofvis_controller_table_system.h"
+#include "system/rocprofvis_controller_table_system_search.h"
 #include "system/rocprofvis_controller_graph.h"
 #include "system/rocprofvis_controller_summary.h"
 #include "system/rocprofvis_controller_summary_metrics.h"
@@ -307,6 +308,12 @@ rocprofvis_controller_table_t* rocprofvis_controller_table_alloc(void)
 {
     RocProfVis::Controller::SystemTable* table =
         new RocProfVis::Controller::SystemTable(0);
+    return (rocprofvis_controller_table_t*)table;
+}
+rocprofvis_controller_table_t* rocprofvis_controller_search_table_alloc(void)
+{
+    RocProfVis::Controller::EventSearchTable* table =
+        new RocProfVis::Controller::EventSearchTable(0);
     return (rocprofvis_controller_table_t*)table;
 }
 rocprofvis_controller_summary_metrics_t* rocprofvis_controller_summary_metrics_alloc(void)

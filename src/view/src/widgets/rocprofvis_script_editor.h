@@ -88,8 +88,9 @@ private:
     std::string m_status;
     std::string m_file_path;
     // Trace the running script belongs to, which is what the completion and
-    // progress events carry. Without it, closing any other tab posts a
-    // completion that drops this editor out of Running and wipes its output.
+    // progress events carry. Every editor hears every event, so without it a
+    // script finishing on another trace would drop this one out of Running and
+    // wipe its output. Empty when nothing is running here.
     std::string    m_running_source_id;
     ScriptApproval m_approval;
 

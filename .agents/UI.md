@@ -802,7 +802,7 @@ Ask Optiq offers a script through `OptiqActions::ProposeScript`, which
 fills this tab and selects it; nothing runs until the user presses Run
 or Reject. `ScriptApproval` is that state machine, and
 `ScriptExecuteCompleteEvent` is filtered by trace source id because
-tab-close cleanup posts one too.
+every editor hears every one of them.
 
 ## 8. Track Item Hierarchy
 

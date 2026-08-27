@@ -19,6 +19,7 @@
 #include <cmath>
 #include <cstdlib>
 #include <fstream>
+#include <set>
 
 namespace RocProfVis
 {
@@ -1051,6 +1052,45 @@ SettingsManager::SerializeAssistantSettings(jt::Json& json)
 }
 
 // Also upgrades the pre-provider single-endpoint shape.
+/*
+ * Makes every endpoint name distinct, and gives an unnamed one a name.
+ *
+ * The name is the credential-store key, so two endpoints sharing one would
+ * share a key: the token entered for one host would be posted to the other's.
+ * Nothing in the UI creates a duplicate, but a hand-edited settings file can,
+ * and that is exactly the case where the mistake is invisible. Suffixing is
+ * better than dropping the endpoint, which would silently lose a configuration.
+ */
+void
+SettingsManager::MakeAssistantProviderNamesUnique()
+{
+    std::set<std::string> taken;
+    for(AssistantProvider& provider : m_usersettings.assistant.providers)
+    {
+        if(provider.name.empty())
+        {
+            provider.name = ASSISTANT_DEFAULT_PROVIDER_NAME;
+        }
+        if(taken.insert(provider.name).second)
+        {
+            continue;
+        }
+        const std::string base = provider.name;
+        for(size_t suffix = 2;; ++suffix)
+        {
+            const std::string candidate = base + " (" + std::to_string(suffix) + ")";
+            if(taken.insert(candidate).second)
+            {
+                spdlog::warn("Assistant endpoint \"{}\" was duplicated; renamed to \"{}\" "
+                             "so the two do not share one stored key",
+                             base, candidate);
+                provider.name = candidate;
+                break;
+            }
+        }
+    }
+}
+
 void
 SettingsManager::DeserializeAssistantSettings(jt::Json& json)
 {
@@ -1085,6 +1125,7 @@ SettingsManager::DeserializeAssistantSettings(jt::Json& json)
         {
             ApplyAssistantEndpointDefaults(provider);
         }
+        MakeAssistantProviderNamesUnique();
     }
     else if(as[JSON_KEY_SETTINGS_ASSISTANT_ENDPOINT_URL].isString())
     {

@@ -10,14 +10,17 @@ namespace profiler_hub::interface
 	class profiler_hub_trace_t
 	{
 	public:
-		profiler_hub_trace_t(client_trace_handle_t client_trace, std::string trace_path, std::string config_path) :
-			m_client_trace(client_trace), m_trace_path(trace_path), m_config_path(config_path) {
+		profiler_hub_trace_t(std::string trace_path) :
+			m_client_trace(nullptr), m_trace_path(trace_path), m_config_path(nullptr), m_histogram_bucket_count(300) {
+		}
+
+		void set_trace_properties(client_trace_handle_t client_trace, std::string config_path, size_t histogram_bucket_count) { 
+			m_client_trace = client_trace; m_config_path = config_path; m_histogram_bucket_count = histogram_bucket_count;
 		}
 
 		profiler_hub_result_t 
 			open_trace(
-				future_t * future, 
-				uint32_t histogram_bucket_count);
+				future_t * future);
 
 		profiler_hub_result_t 
 			get_time_slice(
@@ -67,7 +70,13 @@ namespace profiler_hub::interface
 				profiler_hub_event_id_t event_id);
 
 
-		static profiler_hub_result_t detect_trace(std::string trace_path);
+		static profiler_hub_db_type_t 
+			detect_trace(std::string trace_path);
+
+		profiler_hub_result_t trim_trace_database(
+			future_t* future, 
+			uint64_t timestamp_start, 
+			uint64_t timestamp_end);
 
 		profiler_hub::storage_t* get_storage() { return m_storage.get(); }
 		profiler_hub::reader_t* get_reader() { return m_reader.get(); }
@@ -92,6 +101,7 @@ namespace profiler_hub::interface
 		client_trace_handle_t m_client_trace;
 		std::string m_trace_path;
 		std::string m_config_path;
+		size_t m_histogram_bucket_count;
 		std::unique_ptr<profiler_hub::storage_t> m_storage;
 		std::shared_ptr<profiler_hub::reader_t>  m_reader;
 	};

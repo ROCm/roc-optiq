@@ -66,18 +66,6 @@ static std::atomic<uint64_t> s_next_id{1};
         return status;
     }
 
-    void future_t::reset()
-    {
-        // worker must be finished before reset
-        if (m_worker.joinable())
-            m_worker.join();
-
-        m_promise = std::promise<profiler_hub_result_t>{};
-        m_future  = m_promise.get_future();
-        m_progress.store(0.0, std::memory_order_relaxed);
-        m_interrupt_status.store(false, std::memory_order_release);
-    }
-
     // -----------------------------------------------------------------------------
     // Interruption
     // -----------------------------------------------------------------------------

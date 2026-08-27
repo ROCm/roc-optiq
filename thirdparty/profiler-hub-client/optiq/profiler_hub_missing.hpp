@@ -1,9 +1,11 @@
 #pragma once
 
+#include "profiler_hub_interface_types.h"
 #include <stdexcept>
 #include <string>
 #include <string_view>
 #include <vector>
+#include <variant>
 
 
 namespace profiler_hub::missing_types
@@ -106,16 +108,20 @@ public:
         return {};
     }
 
-    static profiler_hub_result_t detect_trace(std::string& file_name)
+    static profiler_hub_db_type_t detect_trace(std::string& file_name)
     {
         throw_missing("trace detection");
-        return kProfilerHubStatusNotSupported;
+        return profiler_hub_db_type_t::kDbNotSupported;
     }
 
-    static std::vector<track_histogram_bucket_t> get_track_histogram(profiler_hub::reader_types::track_info_ptr_t & track)
+    static std::vector<track_histogram_bucket_t> get_track_histogram(profiler_hub::reader_types::track_info_ptr_t & track, size_t histogram_bucket_count)
     {
         throw_missing("track histogram");
         return {};
+    }
+
+    static profiler_hub_result_t trim_trace_database(uint64_t timestamp_start, uint64_t timestamp_end) {
+        throw_missing("trimming trace database");
     }
 
     static missing_types::table_ptr_t get_event_table(
@@ -152,6 +158,14 @@ public:
         return "";
     }
 
+    [[noreturn]] static void check_missing_client(void * client)
+    {
+        if (client == nullptr)
+        {
+            throw missing_error_t("fatal error: client trace cannot be null!");
+        }
+    }
+
 protected:
     // Throws missing_error_t with a standardised message.
     // @param feature – short description of the missing feature or method.
@@ -159,6 +173,7 @@ protected:
     {
         throw missing_error_t("not implemented: " + std::string(feature));
     }
+
 
 };
 

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "profiler_hub_interface_types.h"
+#include "profiler_hub_future.hpp"
 
 namespace profiler_hub::interface
 {
@@ -9,7 +9,7 @@ namespace profiler_hub::interface
     {
         // Allocate future object for asynchronous operations. 
         // Returns future object handle
-        profiler_hub_future_handle_t FutureAlloc();
+        profiler_hub_future_handle_t FutureAlloc(progress_callback_t progress_callback);
 
         // Delete future object after asynchronous operation is completed
         profiler_hub_result_t FutureFree(
@@ -29,32 +29,34 @@ namespace profiler_hub::interface
             profiler_hub_future_handle_t future
         );
 
-        // Reset future for next asynchronous operation
-        profiler_hub_result_t FutureReset(
-            profiler_hub_future_handle_t future
-        );
-
         // Detects if trace file format is supported by profiler hub
         // trace_file_path - path to the trace file
-        profiler_hub_result_t DetectTrace(
-            profiler_hub_future_handle_t future, 
-            profiler_hub_string_t trace_file_path
-        );
-
+	profiler_hub_db_type_t DetectTrace(
+		profiler_hub_string_t trace_file_path
+	);
         // Opens trace, read and compile metadata. 
         // This method should build tracks, collect node/instance information, cache information tables, calculate levels, build histograms, etc.
         // client_trace - client trace reference
         // trace_file_path - path to the trace file
+
+    profiler_hub_trace_handle_t OpenTrace(
+            profiler_hub_string_t trace_file_path 
+        );
+
+        // Set trace properties, just a setter for trace parameters, historically separated from constructor 
         // config_dir_path - path to the location temporary files should be stored
         // histogram_bucket_count - caller should decide density of the histogram 
-        // trace - output trace handle
-        profiler_hub_result_t OpenTrace(
-            profiler_hub_future_handle_t future, 
+        profiler_hub_result_t SetTraceProperties(
+            profiler_hub_trace_handle_t trace,
             client_trace_handle_t client_trace,
-            profiler_hub_string_t trace_file_path, 
-            profiler_hub_string_t config_dir_path, 
-            size_t histogram_bucket_count,
-            profiler_hub_trace_handle_t* trace // OUT
+            profiler_hub_string_t config_dir_path,
+            size_t histogram_bucket_count
+        );
+
+        // Read trace
+        profiler_hub_result_t ReadTraceMetadata(
+            profiler_hub_future_handle_t future_handle,
+            profiler_hub_trace_handle_t trace
         );
 
         // Close trace, destroy trace-related objects 
@@ -79,7 +81,7 @@ namespace profiler_hub::interface
             profiler_hub_property_category_t category,
             uint64_t row_key,
             profiler_hub_string_t property_tag,
-            profiler_hub_optional_string_t value // OUT
+            profiler_hub_optional_t value // OUT
         );
 
         // time slice request
@@ -122,6 +124,7 @@ namespace profiler_hub::interface
         profiler_hub_result_t GetSearchTimeSlice(
             profiler_hub_future_handle_t future,
             profiler_hub_trace_handle_t trace,
+            profiler_hub_instance_id_t instance,
             profiler_hub_table_handle_t table_handle,
             size_t num_operations,
             profiler_hub_event_operation_t * operations,
@@ -169,6 +172,16 @@ namespace profiler_hub::interface
             profiler_hub_event_operation_t operation,
             profiler_hub_event_id_t event_id
         );
+
+        // trim trace database to time range specified in parameters
+        // trace - handle of a trace, considering single profiler hub instance handles multiple traces. 
+        // timestamp_start - trim start
+        // timestamp_end - trim end
+        profiler_hub_result_t TrimTraceDatabase(
+            profiler_hub_future_handle_t future_handle,
+            profiler_hub_trace_handle_t trace,
+            uint64_t timestamp_start,
+            uint64_t timestamp_end);
 
     }
 

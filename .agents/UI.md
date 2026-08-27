@@ -402,7 +402,7 @@ AppWindow (singleton, RocWidget)
 |   |                 +-- ComputeTableView
 |   |                 +-- ComputeWorkloadView
 |   |                 +-- ComputeComparisonView
-|   |                 +-- (ComputeCodeView / ComputeTester, dev mode only)
+|   |                 +-- (ComputeIsaView / ComputeTester, dev mode only)
 |   +-- [2] status bar (RocCustomWidget calling AppWindow::RenderStatusBar)
 +-- WelcomePage              : empty-state landing page
 +-- CompareFilesDialog       : two-trace compare modal (File > Compare, dev mode)
@@ -1224,7 +1224,7 @@ The compute analogue of `TraceView`. Owns:
   - `ComputeTableView` - hierarchical metric tables.
   - `ComputeWorkloadView` - system info + profiling config tables.
   - `ComputeComparisonView` - baseline vs target comparison.
-  - `ComputeCodeView` - dev-only source/ISA correlation.
+  - `ComputeIsaView` - dev-only source/ISA correlation.
   - `ComputeTester` - dev-mode scratchpad
     (`#ifdef ROCPROFVIS_DEVELOPER_MODE`).
 - `m_data_provider` - same `DataProvider` type as `TraceView`, but its
@@ -1342,7 +1342,7 @@ Internal scratchpad UI for exercising the metric / roofline APIs.
 Behind `#ifdef ROCPROFVIS_DEVELOPER_MODE`. Not user-facing - keep
 production code from depending on it.
 
-### `ComputeCodeView` (`rocprofvis_compute_code_view.{h,cpp}`)
+### `ComputeIsaView` (`rocprofvis_compute_isa_view.{h,cpp}`)
 
 Correlates source code and ISA through `SourceCodeWidget` and
 `IsaCodeWidget`, which both derive from `BaseCodeWidget` and share a
@@ -1351,18 +1351,28 @@ ISA (and vice versa). The ISA pane is the always-visible primary pane;
 the optional source-code pane is shown on the right through the
 `Show Source Code` / `Hide Source Code` control.
 `RenderControlPanel()` hosts the source-file dropdown, and
-`FetchPcSamplingForCurrentFile()` re-fetches PC samples on file/kernel
-change. PC-sampling data is fetched through `PcSamplingRequestParams` /
-`DataProvider::FetchPcSampling`; its default request uses the controller's
-mandatory fetch to load ISA rows only. The DataProvider groups those rows by
-their code-object IDs so the ISA pane does not depend on the optional
-code-object metadata query. Do not query the model directly from this view.
+PC-sampling data is fetched through `PcSamplingRequestParams` /
+`DataProvider::FetchPcSampling` in three independent stages:
 
-Schema 2.0 can omit source and correlation tables. In that case the
-dropdown contains the synthetic `ISA only` entry (ID 0), and the
-controller skips only the source-line stage. Keep the source-side types
-and stages intact so future schema tables can restore the split
-source/ISA presentation.
+- `kIsa` runs when the view opens or its kernel changes and loads only the
+  code-object, kernel-symbol, and ISA-line data needed by the primary pane.
+- `kSource` runs when the source pane is shown or a different source file is
+  selected. It loads source-file metadata, ISA/source correlations, and the
+  selected file's source lines. Source-file ID 0 asks the controller to choose
+  the first available file.
+- `kStalls` runs when stall columns are shown and loads sample states, stall
+  reasons, and instruction-sample metadata.
+
+Only one PC-sampling request may be active per trace, so
+`QueuePcSamplingFetch()` retains later stages and submits them in ISA, source,
+then stall order. Results are cached per kernel (and per source-file ID
+for source lines); toggling a pane or column does not repeat a completed fetch. The
+DataProvider updates only the model portion owned by the completed stage and
+the view refreshes only after checking the request kind, kernel, and generation.
+Do not query the model directly from this view.
+
+Older traces can omit one or more PC-sampling tables. A failed optional source,
+stall, or comment request is isolated from the already-loaded ISA pane.
 
 ### Compute data plumbing
 
@@ -2470,8 +2480,8 @@ For fast lookup. Each entry: class -> file -> one-line role.
   `compute/rocprofvis_compute_summary.h`.
 - `ComputeTester` (dev only) ->
   `compute/rocprofvis_compute_tester.h`.
-- `ComputeCodeView`, `SourceCodeWidget`, `IsaCodeWidget` (dev only) ->
-  `compute/rocprofvis_compute_code_view.h`.
+- `ComputeIsaView`, `SourceCodeWidget`, `IsaCodeWidget` (dev only) ->
+  `compute/rocprofvis_compute_isa_view.h`.
 - `ComputeDataProvider`, `ComputeTableModel`, `ComputeTableCellModel`,
   `ComputePlotModel`, `ComputePlotAxisModel`, `ComputePlotSeriesModel`,
   `ComputeMetricModel` -> `compute/rocprofvis_compute_data_provider.h`.

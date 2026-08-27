@@ -1,7 +1,7 @@
 // Copyright Advanced Micro Devices, Inc.
 // SPDX-License-Identifier: MIT
 
-#include "rocprofvis_compute_code_view.h"
+#include "rocprofvis_compute_isa_view.h"
 #include "rocprofvis_compute_selection.h"
 #include "rocprofvis_data_provider.h"
 #include "rocprofvis_events.h"
@@ -17,7 +17,7 @@ namespace RocProfVis
 namespace View
 {
 
-ComputeCodeView::ComputeCodeView(DataProvider& data_provider)
+ComputeIsaView::ComputeIsaView(DataProvider& data_provider)
 : RocWidget()
 , m_settings(SettingsManager::GetInstance())
 , m_data_provider(data_provider)
@@ -53,7 +53,7 @@ ComputeCodeView::ComputeCodeView(DataProvider& data_provider)
         });
 }
 
-ComputeCodeView::~ComputeCodeView()
+ComputeIsaView::~ComputeIsaView()
 {
     EventManager::GetInstance()->Unsubscribe(
         static_cast<int>(RocEvents::kComputeKernelSelectionChanged),
@@ -64,7 +64,7 @@ ComputeCodeView::~ComputeCodeView()
 }
 
 void
-ComputeCodeView::SubscribeToEvents()
+ComputeIsaView::SubscribeToEvents()
 {
     auto workload_changed = [this](std::shared_ptr<RocEvent> e) {
         auto event = std::dynamic_pointer_cast<ComputeSelectionChangedEvent>(e);
@@ -84,13 +84,13 @@ ComputeCodeView::SubscribeToEvents()
 }
 
 void
-ComputeCodeView::SelectWorkload(uint32_t workload_id)
+ComputeIsaView::SelectWorkload(uint32_t workload_id)
 {
     m_current_workload_id = workload_id;
 }
 
 void
-ComputeCodeView::LoadData(uint32_t kernel_id)
+ComputeIsaView::LoadData(uint32_t kernel_id)
 {
     m_current_kernel_id = kernel_id;
 
@@ -141,14 +141,14 @@ ComputeCodeView::LoadData(uint32_t kernel_id)
 }
 
 void
-ComputeCodeView::ClearCodeData()
+ComputeIsaView::ClearCodeData()
 {
     m_source_code->Load({}, 0);
     m_isa_code->Load({}, 0);
 }
 
 void
-ComputeCodeView::ClearSelectionData()
+ComputeIsaView::ClearSelectionData()
 {
     m_source_files.clear();
     m_loaded_source_files.clear();
@@ -165,7 +165,7 @@ ComputeCodeView::ClearSelectionData()
 }
 
 void
-ComputeCodeView::QueuePcSamplingFetch(PcSamplingRequestKind kind)
+ComputeIsaView::QueuePcSamplingFetch(PcSamplingRequestKind kind)
 {
     switch(kind)
     {
@@ -176,7 +176,7 @@ ComputeCodeView::QueuePcSamplingFetch(PcSamplingRequestKind kind)
 }
 
 void
-ComputeCodeView::FetchPendingPcSampling()
+ComputeIsaView::FetchPendingPcSampling()
 {
     if(m_current_kernel_id == ComputeSelection::INVALID_SELECTION_ID ||
        m_current_workload_id == ComputeSelection::INVALID_SELECTION_ID)
@@ -231,7 +231,7 @@ ComputeCodeView::FetchPendingPcSampling()
 }
 
 void
-ComputeCodeView::OnPcSamplingReady(PcSamplingRequestKind kind, uint32_t kernel_id,
+ComputeIsaView::OnPcSamplingReady(PcSamplingRequestKind kind, uint32_t kernel_id,
                                    uint64_t source_file_uuid, uint32_t generation,
                                    bool success)
 {
@@ -276,7 +276,7 @@ ComputeCodeView::OnPcSamplingReady(PcSamplingRequestKind kind, uint32_t kernel_i
 }
 
 void
-ComputeCodeView::LoadSourceFileList(const PcSamplingData& data)
+ComputeIsaView::LoadSourceFileList(const PcSamplingData& data)
 {
     m_source_files.clear();
     for (auto& file : data.source_files)
@@ -297,7 +297,7 @@ ComputeCodeView::LoadSourceFileList(const PcSamplingData& data)
 }
 
 void
-ComputeCodeView::RefreshCodeWidgets()
+ComputeIsaView::RefreshCodeWidgets()
 {
     const KernelInfo* kernel_info = m_data_provider.ComputeModel().GetKernelInfo(
         m_current_workload_id, m_current_kernel_id);
@@ -320,7 +320,7 @@ ComputeCodeView::RefreshCodeWidgets()
 }
 
 void
-ComputeCodeView::Render()
+ComputeIsaView::Render()
 {
     FetchPendingPcSampling();
 
@@ -334,7 +334,7 @@ ComputeCodeView::Render()
 }
 
 void
-ComputeCodeView::RenderControlPanel()
+ComputeIsaView::RenderControlPanel()
 {
     constexpr const char* hide_source_code_str = "Hide Source Code";
     constexpr const char* show_source_code_str = "Show Source Code";
@@ -411,7 +411,7 @@ ComputeCodeView::RenderControlPanel()
 }
 
 void
-ComputeCodeView::RenderSourceFileDropdown()
+ComputeIsaView::RenderSourceFileDropdown()
 {
     constexpr const float DROPDAWN_SIZE = 300.0f;
     if(!m_source_layout_item->m_visible || m_source_files.empty()) return;

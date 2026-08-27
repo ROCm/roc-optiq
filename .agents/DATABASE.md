@@ -1116,11 +1116,16 @@ The compute-side counterpart. One method per
 - `GetComputeKernelSourceFiles`
 - `GetComputeSourceFileSourceLines`
 - `GetComputeKernelCodeObjects`
-- `GetComputeKernelIsaToIsaDeps`
-- `GetComputeKernelIsaLines`
-- `GetComputeKernelIsaToSourceDeps`
-- `GetComputeKernelSamplingStates`
-- `GetComputeKernelSamplingStateReasonCounts`
+- `GetComputeKernelSymbols`
+- `GetComputeKernelInstructionLines`
+- `GetComputeKernelInstructionComments`
+- `GetComputeKernelInstructionSourceLines`
+- `GetComputeKernelPcSampleStates`
+- `GetComputeKernelPcSampleStallReasons`
+- `GetComputeKernelPcSampleStallReasonLookups`
+- `GetComputeKernelInstructionTypeLookups`
+- `GetComputeKernelInstructionSamples`
+- `GetComputeKernelInstructionSampleLookups`
 
 All of them share the signature
 `rocprofvis_dm_result_t GetComputeX(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params, rocprofvis_dm_string_t& query)`
@@ -1149,14 +1154,17 @@ The gate is `1.2.0` for every method except
 reads `compute_workload_metric_view` unconditionally and that view does
 not exist earlier.
 
-The PC-sampling block targets schema 2.0 and is version-gated at
-`2.0.0`. Its current tables are `compute_code_object_store`,
+The current PC-sampling block targets schema 2.2 and is version-gated at
+`2.2.0`. Its current tables are `compute_code_object_store`,
 `compute_instruction_line`, `compute_pc_sample_state`, and
 `compute_pc_sample_stall_reason`. Source and ISA-correlation tables
 are planned but absent from the initial schema, so those query builders
 currently return correctly shaped empty result sets. `CreateIndexes`
 probes `compute_pc_sample_state` before adding the new instruction,
 state, and stall-reason indexes.
+
+`GetComputeKernelInstructionLines` selects the fields needed for the initial
+Code View.
 
 Historical pre-2.0 behavior: the source / ISA / PC-sampling block (`GetComputeKernelSourceFiles`
 through `GetComputeKernelSamplingStateReasonCounts`) is **not**

@@ -58,9 +58,9 @@ public:
     rocprofvis_result_t AsyncFetchPcSampling(Arguments&  args,
                                              Future&     future,
                                              PcSampling& output);
-    rocprofvis_result_t AsyncFetchPcSamplingMandatorys(Arguments&  args,
-                                                       Future&     future,
-                                                       PcSampling& output);
+    rocprofvis_result_t AsyncFetchPcSamplingIsaData(Arguments&  args,
+                                                    Future&     future,
+                                                    PcSampling& output);
     rocprofvis_result_t AsyncFetchPcSamplingSource(Arguments& args, Future& future,
                                                    PcSampling& output);
     rocprofvis_result_t AsyncFetchPcSamplingStalls(Arguments& args, Future& future,

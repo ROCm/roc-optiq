@@ -375,8 +375,8 @@ rocprofvis_result_t ComputeTrace::AsyncFetchPcSampling(Arguments& args, Future& 
 }
 
 rocprofvis_result_t
-ComputeTrace::AsyncFetchPcSamplingMandatorys(Arguments& args, Future& future,
-                                             PcSampling& output)
+ComputeTrace::AsyncFetchPcSamplingIsaData(Arguments& args, Future& future,
+                                          PcSampling& output)
 {
     uint64_t kernel_id = 0;
     if(kRocProfVisResultSuccess !=

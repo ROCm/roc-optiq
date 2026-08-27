@@ -540,7 +540,7 @@ rocprofvis_result_t rocprofvis_controller_pc_sampling_fetch_mandatorys_async(
     RocProfVis::Controller::PcSamplingRef pc_sampling(output);
     if(trace.IsValid() && args_ref.IsValid() && future.IsValid() && pc_sampling.IsValid())
     {
-        error = trace->AsyncFetchPcSamplingMandatorys(*args_ref, *future, *pc_sampling);
+        error = trace->AsyncFetchPcSamplingIsaData(*args_ref, *future, *pc_sampling);
     }
     return error;
 }

@@ -30,11 +30,11 @@ struct LineSelection
     uint64_t selected_line = 0;
 };
 
-class ComputeCodeView : public RocWidget
+class ComputeIsaView : public RocWidget
 {
 public:
-    explicit ComputeCodeView(DataProvider& data_provider);
-    ~ComputeCodeView();
+    explicit ComputeIsaView(DataProvider& data_provider);
+    ~ComputeIsaView();
 
     void Render() override;
 private:

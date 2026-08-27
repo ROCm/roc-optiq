@@ -149,7 +149,7 @@ is what lets the `Handle::Get*/Set*` overrides on each subclass key off
 
 ### 2.4 Async fetch surface
 
-Six async fetchers exist, all returning immediately and signalling
+The primary async fetchers all return immediately and signal
 completion through a `rocprofvis_controller_future_t`:
 
 ```c
@@ -161,6 +161,17 @@ rocprofvis_controller_summary_fetch_async(...);                  // summary metr
 rocprofvis_controller_get_indexed_property_async(...);           // event/table/system props
 rocprofvis_controller_metric_fetch_async(...);                   // compute metric values
 rocprofvis_controller_create_analysis_view_async(...);           // analytic views (placeholder)
+```
+
+PC-sampling data has one compatibility fetch plus three stage-specific
+fetchers. Code View uses the stage-specific APIs so opening optional UI does
+not block the initial ISA display:
+
+```c
+rocprofvis_controller_pc_sampling_fetch_mandatorys_async(...); // ISA dependencies + lines
+rocprofvis_controller_pc_sampling_fetch_source_async(...);     // source metadata/correlation/lines
+rocprofvis_controller_pc_sampling_fetch_stalls_async(...);     // states/reasons/instruction samples
+rocprofvis_controller_pc_sampling_fetch_all_async(...);        // all three stages
 ```
 
 Two more async surface APIs sit on the controller handle directly,
@@ -791,6 +802,13 @@ rocprofvis_result_t AsyncFetch(Arguments&, Future&, MetricsContainer&);
 rocprofvis_result_t AsyncFetch(Table&, Arguments&, Future&, Array&);
 ```
 
+PC sampling uses `AsyncFetchPcSamplingIsaData`,
+`AsyncFetchPcSamplingSource`, and `AsyncFetchPcSamplingStalls` for the three
+on-demand stages.
+`AsyncFetchPcSampling` is the compatibility all-data path and runs those same
+stage helpers in sequence. Each helper checks the cache flags on the
+kernel-owned `PcSampling` handle before querying the database.
+
 Internal helper `ExecuteQuery(...)` runs a database query through the
 compute model layer and dispatches rows into a callback. The nested
 `MetricID` class formats `"category.table.entry"` strings the View can
@@ -822,13 +840,15 @@ A kernel within a workload. Carries `m_id`, `m_name`,
 
 Each kernel also owns a `PcSampling` handle. The
 `rocprofvis_controller_pc_sampling_fetch_mandatorys_async` path calls
-`ComputeTrace::AsyncFetchPcSamplingMandatorys` to load only ISA-line rows.
-The full `rocprofvis_controller_pc_sampling_fetch_all_async` path loads code
-objects, optional ISA/source dependency rows, sampling states, stall-reason
-counts, and source lines in addition to those ISA rows. Source file ID 0 is
-reserved by the View as the schema-2.0 `ISA only` sentinel; the controller
-skips only the source-line query for that value while retaining the source
-stage for tables planned for a later schema.
+`ComputeTrace::AsyncFetchPcSamplingIsaData` to load the code objects, kernel
+symbols, and ISA lines needed for the initial Code View. The source fetch loads
+source-file metadata, instruction/source mappings, and the requested source
+file's lines. Source file ID 0 selects the first available source file. The
+stall fetch independently loads PC sample states, stall-reason counts, and
+instruction-sample metadata. The full
+`rocprofvis_controller_pc_sampling_fetch_all_async` compatibility path invokes
+all three stages in sequence. Per-table flags on `PcSampling` prevent repeated
+queries while allowing source files to be fetched separately.
 
 ### 6.4 `Roofline` (`rocprofvis_controller_roofline.{h,cpp}`)
 

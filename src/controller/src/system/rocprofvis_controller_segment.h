@@ -75,7 +75,9 @@ public:
 
     void SetMaxTimestamp(double value);
 
-    void Insert(double timestamp, uint8_t level, Handle* event);
+    // Returns false when this level already holds an entry at this timestamp,
+    // meaning the object was not stored and the caller still owns it.
+    bool Insert(double timestamp, uint8_t level, Handle* event);
 
     rocprofvis_result_t Fetch(double start, double end, std::vector<Data>& array, uint64_t& index, std::unordered_set<uint64_t>* event_id_set, SegmentLRUParams* lru_params);
 

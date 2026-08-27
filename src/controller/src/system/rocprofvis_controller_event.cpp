@@ -55,7 +55,10 @@ Event::~Event()
 bool
 Event::IsDeletable()
 {
-    return --m_retain_counter <= 0;
+    // A zero count means no segment holds it and the caller is releasing an
+    // object it still owns. Decrementing there would wrap this unsigned counter
+    // to 255 and make the object permanently undeletable.
+    return (m_retain_counter == 0) ? true : --m_retain_counter == 0;
 }
 
 void

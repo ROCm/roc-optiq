@@ -99,11 +99,22 @@ void Segment::SetMaxTimestamp(double value)
     m_max_timestamp = value;
 }
 
-void Segment::Insert(double timestamp, uint8_t level, Handle* event)
+bool Segment::Insert(double timestamp, uint8_t level, Handle* event)
 {
     std::unique_lock<std::shared_mutex> lock(m_mutex);
-    event->IncreaseRetainCounter();
-    m_entries[level].insert(std::make_pair(timestamp, event));
+    auto insert_result = m_entries[level].insert(std::make_pair(timestamp, event));
+    if(insert_result.second)
+    {
+        // Retain only what the map actually stored. Retaining a pointer the map
+        // dropped left the object with a count no teardown could ever balance,
+        // so it kept its pool slot forever and a pool is only released once
+        // every slot is free.
+        event->IncreaseRetainCounter();
+    }
+    // Freeing a rejected object here is not safe: callers insert one object into
+    // every segment it spans and keep using it afterwards. Whoever owns the
+    // object decides, so report whether it was stored and let them release it.
+    return insert_result.second;
 }
 
 rocprofvis_result_t Segment::Fetch(double start, double end, std::vector<Data>& array, uint64_t& index, std::unordered_set<uint64_t>* event_id_set, SegmentLRUParams* lru_params)

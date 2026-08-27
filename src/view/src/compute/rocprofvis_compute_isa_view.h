@@ -118,12 +118,6 @@ private:
     bool m_show_metadata_enabled;
 };
 
-struct CodeLine
-{
-    std::string content;
-    float       stall;
-};
-
 class BaseCodeWidget : public RocWidget
 {
 public:

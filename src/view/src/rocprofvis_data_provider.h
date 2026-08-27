@@ -438,6 +438,10 @@ private:
 
     ComputeDataModel m_compute_model;
 
+    // Stores a pending replacement submission for a PC sampling layer whose
+    // in-flight request is being cancelled. Keyed by the per-layer request ID.
+    std::unordered_map<uint64_t, PcSamplingRequestParams> m_pc_sampling_replacements;
+
     std::function<void(const std::string&, uint64_t, bool)> m_metrics_fetch_callback;
     std::function<void(const std::string&, PcSamplingLayer, uint32_t, uint64_t,
                        uint32_t, bool)>

@@ -2385,9 +2385,23 @@ DataProvider::HandleRequests()
 
                 rocprofvis_controller_future_free(req.request_future);
                 req.request_future = nullptr;
+                const uint64_t    erased_id   = req.request_id;
+                const RequestType erased_type = req.request_type;
                 ProcessRequest(req);
                 // remove request from processing container
                 it = m_requests.erase(it);
+                // If a PC sampling replacement was queued while this layer was
+                // in-flight, submit it now that the slot is free.
+                if(erased_type == RequestType::kFetchPcSampling)
+                {
+                    auto replacement = m_pc_sampling_replacements.find(erased_id);
+                    if(replacement != m_pc_sampling_replacements.end())
+                    {
+                        PcSamplingRequestParams pending = std::move(replacement->second);
+                        m_pc_sampling_replacements.erase(replacement);
+                        FetchPcSampling(pending);
+                    }
+                }
             }
             else
             {
@@ -4389,9 +4403,14 @@ DataProvider::FetchPcSampling(const PcSamplingRequestParams& params)
 
     if(m_requests.count(request_id))
     {
-        spdlog::debug("PC sampling {} request already pending",
+        // A same-layer request is still in flight (or being cancelled). Store the
+        // new params as a replacement — HandleRequests will submit it automatically
+        // once the old future clears, eliminating the retry loop in the view.
+        rocprofvis_controller_future_cancel(m_requests.at(request_id).request_future);
+        m_pc_sampling_replacements.insert_or_assign(request_id, params);
+        spdlog::debug("PC sampling {} request queued as replacement",
                       static_cast<uint32_t>(params.m_layer));
-        return false;
+        return true;
     }
 
     rocprofvis_controller_future_t*    future = rocprofvis_controller_future_alloc();

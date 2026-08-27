@@ -32,10 +32,8 @@ namespace Controller
 MemoryManager::MemoryManager(uint64_t id)
 : m_lru_storage_memory_used(0)
 , m_lru_mgmt_shutdown(false)
-, m_lru_configured(false)
 , m_mem_mgmt_initialized(false)
 , m_mem_block_size(1024)
-, m_lru_size_limit(0)
 , m_id(id)
 , m_trace_weight(1.0)
 { 
@@ -321,13 +319,7 @@ MemoryManager::AddLRUReference(SegmentTimeline* owner, Segment* reference, uint3
         lru = std::make_unique<LRUMember>();
     }
 
-    // A null array means "make this segment evictable" without naming a reader,
-    // which is what the cancelled-fetch path needs. Recording it would leave an
-    // entry CheckInUse can never match against the in-use lookup.
-    if(array_ptr != nullptr)
-    {
-        lru->m_array_ptr.insert(array_ptr);
-    }
+    lru->m_array_ptr.insert(array_ptr);
 
 }
 
@@ -387,26 +379,20 @@ MemoryManager::ManageLRU()
                 thread_running = false;
             }
             else
-            {
+            {                
                 m_lru_configured = false;
                 std::vector<std::pair<SegmentTimeline*, LRUOwnerMember*>> sorted_entries;
 
                 {
-                    // The sort has to stay inside this lock. Its comparator reads
-                    // LRUOwnerMember::m_timestamp, which AddLRUReference rewrites
-                    // under this same mutex on every fetch. Sorting outside the lock
-                    // let those keys change mid-sort, which breaks the strict weak
-                    // ordering std::sort requires and walks its unguarded insertion
-                    // pass off the end of the buffer.
                     std::unique_lock lock(m_lru_mutex);
                     for(auto& [handle, member_ptr] : m_lru_array)
                         sorted_entries.emplace_back(handle, member_ptr.get());
-
-                    std::sort(sorted_entries.begin(), sorted_entries.end(),
-                              [](const auto& a, const auto& b) {
-                                  return a.second->m_timestamp < b.second->m_timestamp;
-                              });
                 }
+
+                std::sort(sorted_entries.begin(), sorted_entries.end(),
+                          [](const auto& a, const auto& b) {
+                              return a.second->m_timestamp < b.second->m_timestamp;
+                          });
 
                 uint64_t ts = std::chrono::time_point_cast<std::chrono::nanoseconds>(
                         std::chrono::system_clock::now())
@@ -450,6 +436,7 @@ MemoryManager::ManageLRU()
                         break;
                     }
                 }
+
             }
             UnlockTimelines(locked);
         }
@@ -528,9 +515,8 @@ static_assert(std::is_base_of<Handle, SampleLOD>::value,
               "Pooled SampleLOD must derive from Handle");
 
 void MemoryManager::CleanUp() {
-    // Removing a segment destroys the pooled objects it owns, which re-enters
-    // Delete() and takes m_pool_mutex. That has to happen before this function
-    // acquires the same non-recursive mutex below.
+    std::lock_guard<std::mutex> lock(m_pool_mutex);
+
     for(auto& [owner, member_ptr] : m_lru_array)
     {
         for(auto& [segment, lru] : member_ptr.get()->m_lru_segment_array)
@@ -538,8 +524,6 @@ void MemoryManager::CleanUp() {
             owner->Remove(segment);
         }
     }
-
-    std::lock_guard<std::mutex> lock(m_pool_mutex);
     
     for(auto it = m_object_pools.begin(); it != m_object_pools.end(); ++it)
     {
@@ -613,14 +597,6 @@ void
 MemoryManager::Delete(Handle* handle, SegmentTimeline* owner)
 {
     if(!handle->IsDeletable()) return;
-
-    // Everything below reads and mutates the shared pool state: m_short_tracks,
-    // m_object_pools, m_current_pool, and the pool's own bitmask, and it can
-    // delete the pool outright. New{Event,Sample,SampleLOD} and CleanUp do that
-    // work under this mutex; this function did not, so an eviction here could
-    // free a pool while another thread was still allocating from it. Tracks that
-    // share kShortTracksMemoryPoolIdentifier make that collision routine.
-    std::lock_guard<std::mutex> lock(m_pool_mutex);
 
     uint64_t pool_idetifier = uint64_t(owner);
 

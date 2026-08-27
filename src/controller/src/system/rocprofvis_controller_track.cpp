@@ -878,7 +878,6 @@ rocprofvis_result_t Track::SetObject(rocprofvis_property_t property, uint64_t in
                 ROCPROFVIS_ASSERT(m_start_timestamp >= 0.0 && m_start_timestamp < m_end_timestamp);
                 Handle* object = (Handle*)value;
                 auto object_type = object->GetType();
-                bool stored_in_segment = false;
                 if (((m_type == kRPVControllerTrackTypeEvents) && (object_type == kRPVControllerObjectTypeEvent))
                     || ((m_type == kRPVControllerTrackTypeSamples) && (object_type == kRPVControllerObjectTypeSample)))
                 {
@@ -946,24 +945,7 @@ rocprofvis_result_t Track::SetObject(rocprofvis_property_t property, uint64_t in
                                         spdlog::warn("Segment already exists at {}",
                                                 segment_start);
                                         result = kRocProfVisResultSuccess;
-                                    }
-
-                                    // Register at creation rather than waiting for
-                                    // the read pass in Segment::Fetch. Only
-                                    // registered segments are ever evicted, and a
-                                    // request that is cancelled after populating
-                                    // its segments never reaches that pass, which
-                                    // left them retained for the life of the
-                                    // process. No reader is named, so this only
-                                    // makes the segment reclaimable.
-                                    if(result == kRocProfVisResultSuccess &&
-                                       m_ctx != nullptr &&
-                                       m_ctx->GetMemoryManager() != nullptr)
-                                    {
-                                        auto& created = m_segments.GetSegments()[segment_start];
-                                        m_ctx->GetMemoryManager()->AddLRUReference(
-                                            &m_segments, created.get(), 0, nullptr);
-                                    }
+                                    }                                                               
                                 }
 
                                 if(result == kRocProfVisResultSuccess)
@@ -977,20 +959,20 @@ rocprofvis_result_t Track::SetObject(rocprofvis_property_t property, uint64_t in
                                         segment->GetMaxTimestamp(), timestamp.second));
                                     if (range.second-range.first == 0)
                                     {
-                                        stored_in_segment |= segment->Insert(timestamp.first, static_cast<uint8_t>(level), object);
+                                        segment->Insert(timestamp.first, static_cast<uint8_t>(level), object);
                                     } else
                                     if (object_type == kRPVControllerObjectTypeEvent)
                                     {
                                         if (current_segment == range.first)
                                         {
-                                            stored_in_segment |= segment->Insert(timestamp.first, static_cast<uint8_t>(level), object);
+                                            segment->Insert(timestamp.first, static_cast<uint8_t>(level), object);
                                         }
                                         else
                                         {
                                             if (object_type == kRPVControllerObjectTypeEvent)
                                             {
                                                 Event* event = (Event*)object;
-                                                stored_in_segment |= segment->Insert(timestamp.first, static_cast<uint8_t>(level), event);
+                                                segment->Insert(timestamp.first, static_cast<uint8_t>(level), event);
                                             }
                                         }
                                     }
@@ -998,7 +980,7 @@ rocprofvis_result_t Track::SetObject(rocprofvis_property_t property, uint64_t in
                                     {
                                         if (current_segment == range.first)
                                         {
-                                            stored_in_segment |= segment->Insert(timestamp.first, static_cast<uint8_t>(level), object);
+                                            segment->Insert(timestamp.first, static_cast<uint8_t>(level), object);
                                         }
                                     }
                                 }
@@ -1008,19 +990,6 @@ rocprofvis_result_t Track::SetObject(rocprofvis_property_t property, uint64_t in
                         {
                             result = kRocProfVisResultOutOfRange;
                         }
-                    }
-
-                    if(!stored_in_segment && m_ctx != nullptr &&
-                       m_ctx->GetMemoryManager() != nullptr &&
-                       !m_ctx->GetMemoryManager()->IsShuttingDown())
-                    {
-                        // No segment kept this object, either because the level
-                        // already had an entry at this timestamp or because it
-                        // fell outside the track range. The caller handed it
-                        // over and does not touch it again, so release it here;
-                        // otherwise its pool slot stays marked for the life of
-                        // the process and pins the whole pool.
-                        m_ctx->GetMemoryManager()->Delete(object, GetSegments());
                     }
                 }
                 break;

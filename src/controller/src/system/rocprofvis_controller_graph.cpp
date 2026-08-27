@@ -46,7 +46,6 @@ Graph::Insert(uint32_t lod, double timestamp, uint8_t level, Handle* object)
     auto&               segments        = m_lods[lod];
     double              start_timestamp = 0;
     double              end_timestamp   = 0;
-    bool                stored_in_segment = false;
 
     result = GetDouble(kRPVControllerGraphStartTimestamp, 0, &start_timestamp);
     result = (result == kRocProfVisResultSuccess)
@@ -97,18 +96,6 @@ Graph::Insert(uint32_t lod, double timestamp, uint8_t level, Handle* object)
                       segments.GetSegments().end())
                          ? kRocProfVisResultSuccess
                          : kRocProfVisResultMemoryAllocError;
-
-            // Same reason as the track path: LOD segments are only registered
-            // when Graph::Fetch reads them, so generation followed by a
-            // cancelled or superseded request left them unreclaimable. No
-            // reader is named, so this only makes the segment evictable.
-            if(result == kRocProfVisResultSuccess && m_ctx != nullptr &&
-               m_ctx->GetMemoryManager() != nullptr)
-            {
-                auto& created = segments.GetSegments()[segment_start];
-                m_ctx->GetMemoryManager()->AddLRUReference(&segments, created.get(), lod,
-                                                           nullptr);
-            }
         }
 
         if(result == kRocProfVisResultSuccess)
@@ -125,22 +112,12 @@ Graph::Insert(uint32_t lod, double timestamp, uint8_t level, Handle* object)
                 object->GetDouble(kRPVControllerSampleEndTimestamp, 0, &max_timestamp);
             }
             segment->SetMaxTimestamp(std::max(segment->GetMaxTimestamp(), max_timestamp));
-            stored_in_segment = segment->Insert(timestamp, level, object);
+            segment->Insert(timestamp, level, object);
         }
     }
     else
     {
         result = kRocProfVisResultOutOfRange;
-    }
-
-    if(!stored_in_segment && m_ctx != nullptr && m_ctx->GetMemoryManager() != nullptr &&
-       !m_ctx->GetMemoryManager()->IsShuttingDown())
-    {
-        // Every caller hands over an object it just built for this LOD and does
-        // not use it again, so when no segment keeps it (the level already had
-        // an entry at this timestamp, or it fell outside the graph range) it has
-        // to be released here or its pool slot stays marked for good.
-        m_ctx->GetMemoryManager()->Delete(object, &segments);
     }
 }
 

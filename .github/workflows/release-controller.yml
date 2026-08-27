@@ -9,12 +9,14 @@ on:
         type: boolean
         default: true
       s3_bucket_env:
-        description: 'Specify the S3 bucket environment to use for release. Options: dev, prod'
+        description: 'Specify the S3 bucket environment to use for release.'
         type: choice
         default: 'dev'
         options:
           - dev
-          - legacy
+          - nightly
+          - rc
+          - stable-staging
       rocm_version:
         description: 'Specify the ROCm version to build with in ManyLinux for release.'
         type: string

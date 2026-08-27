@@ -48,7 +48,7 @@ TopologyNode::TopologyNode(rocprofvis_dm_topology_node dm_topology_node, Trace* 
         {
             rocprofvis_controller_topology_node_type_t child_node_type = (rocprofvis_controller_topology_node_type_t)rocprofvis_dm_get_property_as_uint64(dm_child_node, kRPVControllerTopologyNodeType, 0);
             TopologyNode* child_node = nullptr;
-            Track* child_track;
+            Track* child_track = nullptr;
             switch (child_node_type)
             {
             case kRPVControllerTopologyNodeSytemNode:

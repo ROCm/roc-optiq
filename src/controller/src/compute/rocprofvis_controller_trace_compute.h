@@ -55,9 +55,6 @@ public:
                                    Arguments& args,
                                    Future&    future,
                                    Array&     array);
-    rocprofvis_result_t AsyncFetchPcSampling(Arguments&  args,
-                                             Future&     future,
-                                             PcSampling& output);
     rocprofvis_result_t AsyncFetchPcSamplingIsaData(Arguments&  args,
                                                     Future&     future,
                                                     PcSampling& output);

@@ -332,48 +332,6 @@ rocprofvis_result_t ComputeTrace::AsyncFetch(Table& table, Arguments& args, Futu
     return error;
 }
 
-rocprofvis_result_t ComputeTrace::AsyncFetchPcSampling(Arguments& args, Future& future, PcSampling& output)
-{
-    uint64_t kernel_id        = 0;
-    uint64_t source_file_uuid = 0;
-    if(kRocProfVisResultSuccess !=
-           args.GetUInt64(kRPVControllerPcSamplingArgsKernelId, 0, &kernel_id) ||
-       kRocProfVisResultSuccess !=
-           args.GetUInt64(kRPVControllerPcSamplingArgsSourceFileUuid, 0,
-                          &source_file_uuid))
-    {
-        return kRocProfVisResultInvalidArgument;
-    }
-
-    future.Set(JobSystem::Get().IssueJob(
-        [this, &output, kernel_id,
-         source_file_uuid](Future* future) -> rocprofvis_result_t {
-            std::unique_lock<std::recursive_mutex> data_lock(output.GetDataMutex());
-            if(future->IsCancelled()) return kRocProfVisResultCancelled;
-
-            rocprofvis_dm_database_t db = rocprofvis_dm_get_property_as_handle(
-                m_dm_handle, kRPVDMDatabaseHandle, 0);
-            rocprofvis_dm_result_t dm_result =
-                FetchPcSamplingIsaData(db, future, kernel_id, output);
-            if(dm_result == kRocProfVisDmResultSuccess)
-            {
-                dm_result = FetchPcSamplingSourceData(db, future, kernel_id,
-                                                      source_file_uuid, output);
-            }
-            if(dm_result == kRocProfVisDmResultSuccess)
-            {
-                dm_result = FetchPcSamplingStallData(db, future, kernel_id, output);
-            }
-            if(future->IsCancelled()) return kRocProfVisResultCancelled;
-            return dm_result == kRocProfVisDmResultSuccess
-                       ? kRocProfVisResultSuccess
-                       : kRocProfVisResultUnknownError;
-        },
-        &future));
-
-    return future.IsValid() ? kRocProfVisResultSuccess : kRocProfVisResultUnknownError;
-}
-
 rocprofvis_result_t
 ComputeTrace::AsyncFetchPcSamplingIsaData(Arguments& args, Future& future,
                                           PcSampling& output)

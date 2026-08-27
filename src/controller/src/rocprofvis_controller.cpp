@@ -513,22 +513,6 @@ rocprofvis_result_t rocprofvis_controller_metric_fetch_async(
     return error;
 }
 
-rocprofvis_result_t rocprofvis_controller_pc_sampling_fetch_all_async(
-    rocprofvis_controller_t* controller, rocprofvis_controller_arguments_t* args,
-    rocprofvis_controller_future_t* result, rocprofvis_handle_t* output)
-{
-    rocprofvis_result_t error = kRocProfVisResultInvalidArgument;
-    RocProfVis::Controller::ComputeTraceRef trace(controller);
-    RocProfVis::Controller::ArgumentsRef args_ref(args);
-    RocProfVis::Controller::FutureRef future(result);
-    RocProfVis::Controller::PcSamplingRef pc_sampling(output);
-    if(trace.IsValid() && args_ref.IsValid() && future.IsValid() && pc_sampling.IsValid())
-    {
-        error = trace->AsyncFetchPcSampling(*args_ref, *future, *pc_sampling);
-    }
-    return error;
-}
-
 rocprofvis_result_t rocprofvis_controller_pc_sampling_fetch_mandatorys_async(
     rocprofvis_controller_t* controller, rocprofvis_controller_arguments_t* args,
     rocprofvis_controller_future_t* result, rocprofvis_handle_t* output)

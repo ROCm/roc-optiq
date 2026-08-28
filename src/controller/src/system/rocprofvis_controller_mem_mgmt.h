@@ -173,7 +173,8 @@ namespace RocProfVis
 
             void            ManageLRU();
             void*           Allocate(size_t size, rocprofvis_object_type_t type, SegmentTimeline *owner);
-            void            CleanUp();
+            // Timelines in `skip` are left alone; a worker still holds their lock.
+            void            CleanUp(const std::vector<SegmentTimeline*>& skip);
             static void     UpdateSizeLimit();
             // Queries physical memory and applies the environment overrides. Runs
             // once per process; callers must hold s_lru_config_mutex.

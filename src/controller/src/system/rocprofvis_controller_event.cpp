@@ -9,6 +9,7 @@
 #include "rocprofvis_controller_flow_control.h"
 #include "rocprofvis_controller_call_stack.h"
 #include "rocprofvis_controller_string_table.h"
+#include "rocprofvis_core_assert.h"
 #include "json.h"
 #include <cstring>
 
@@ -55,7 +56,15 @@ Event::~Event()
 bool
 Event::IsDeletable()
 {
-    return --m_retain_counter <= 0;
+    // m_retain_counter is unsigned, so decrementing past zero would wrap to 255 and
+    // the event would never be reported deletable again - a permanently leaked pool
+    // slot. Reaching zero here means the retain/release pairing is broken.
+    ROCPROFVIS_ASSERT(m_retain_counter > 0);
+    if(m_retain_counter > 0)
+    {
+        m_retain_counter--;
+    }
+    return m_retain_counter == 0;
 }
 
 void

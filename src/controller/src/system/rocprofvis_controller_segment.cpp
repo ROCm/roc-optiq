@@ -102,8 +102,18 @@ void Segment::SetMaxTimestamp(double value)
 void Segment::Insert(double timestamp, uint8_t level, Handle* event)
 {
     std::unique_lock<std::shared_mutex> lock(m_mutex);
-    event->IncreaseRetainCounter();
-    m_entries[level].insert(std::make_pair(timestamp, event));
+    // std::map::insert is a no-op when this (level, timestamp) is already taken, which
+    // happens routinely: an event is inserted into every segment its duration spans, so
+    // fetching a range re-offers long events to neighbouring segments that already hold
+    // a copy from an earlier fetch. Only retain when the entry was actually stored -
+    // retaining on a dropped insert orphans the object, because the segment does not
+    // reference it and so never releases it, and its pool slot leaks for the life of
+    // the trace. This is deliberately silent; the drop rate is high enough that logging
+    // it per entry drowns the log.
+    if(m_entries[level].insert(std::make_pair(timestamp, event)).second)
+    {
+        event->IncreaseRetainCounter();
+    }
 }
 
 rocprofvis_result_t Segment::Fetch(double start, double end, std::vector<Data>& array, uint64_t& index, std::unordered_set<uint64_t>* event_id_set, SegmentLRUParams* lru_params)
@@ -458,6 +468,89 @@ SegmentTimeline::GetMaxNumItems() const
 
 std::shared_mutex* SegmentTimeline::GetMutex() {
     return &m_mutex;
+}
+
+bool
+wait_for_segment_claims(SegmentTimeline& timeline, std::condition_variable_any& cv,
+                        std::unique_lock<std::shared_mutex>& lock, uint32_t first_segment,
+                        uint32_t last_segment, Future* future)
+{
+    bool cancelled = false;
+    bool claimed   = true;
+
+    while(claimed && !cancelled)
+    {
+        claimed = false;
+        for(uint32_t index = first_segment; index < last_segment; index++)
+        {
+            if(timeline.IsProcessed(index))
+            {
+                claimed = true;
+                break;
+            }
+        }
+
+        if(claimed)
+        {
+            // Bounded so that a peer request which never clears its claim degrades
+            // into a cancellable wait rather than parking this thread for good.
+            cancelled = (future != nullptr) && future->IsCancelled();
+            if(!cancelled)
+            {
+                cv.wait_for(lock, std::chrono::milliseconds(kSegmentClaimPollMs));
+            }
+        }
+    }
+
+    return !cancelled;
+}
+
+SegmentClaim::SegmentClaim(SegmentTimeline& timeline, std::condition_variable_any& cv,
+                           std::vector<std::pair<uint32_t, uint32_t>> const& ranges)
+: m_timeline(timeline)
+, m_cv(cv)
+, m_ranges(ranges)
+, m_released(0)
+{
+}
+
+SegmentClaim::~SegmentClaim()
+{
+    if(m_released < m_ranges.size())
+    {
+        // Unwound before the fetch published these ranges. Clear the claim and leave
+        // them invalid so the next request reloads them.
+        {
+            std::unique_lock<std::shared_mutex> lock(*m_timeline.GetMutex());
+            for(size_t range = m_released; range < m_ranges.size(); range++)
+            {
+                for(uint32_t index = m_ranges[range].first;
+                    index <= m_ranges[range].second; index++)
+                {
+                    m_timeline.SetProcessed(index, false);
+                }
+            }
+        }
+        m_cv.notify_all();
+    }
+}
+
+void
+SegmentClaim::ReleaseNext(bool valid)
+{
+    if(m_released < m_ranges.size())
+    {
+        std::pair<uint32_t, uint32_t> const& range = m_ranges[m_released++];
+        {
+            std::unique_lock<std::shared_mutex> lock(*m_timeline.GetMutex());
+            for(uint32_t index = range.first; index <= range.second; index++)
+            {
+                m_timeline.SetProcessed(index, false);
+                m_timeline.SetValid(index, valid);
+            }
+        }
+        m_cv.notify_all();
+    }
 }
 
 rocprofvis_result_t SegmentTimeline::Remove(Segment* target)

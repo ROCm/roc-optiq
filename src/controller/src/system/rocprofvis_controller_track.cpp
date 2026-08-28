@@ -96,39 +96,30 @@ rocprofvis_result_t Track::FetchSegments(double start, double end, void* user_pt
         uint32_t start_index = (uint32_t) floor((start - m_start_timestamp) / kSegmentDuration);
         uint32_t end_index   = (uint32_t) ceil((end - m_start_timestamp) / kSegmentDuration);
 
+        SegmentClaim claim(m_segments, m_cv, fetch_ranges);
+
         {
             std::unique_lock lock(*m_segments.GetMutex());
-            m_cv.wait(lock, [&] {
-                for(uint32_t i = start_index; i < end_index; i++)
-                {
-                    if(m_segments.IsProcessed(i))
-                    {
-                        return false;
-                    }
-                }
-                return true;
-            });
+            if(!wait_for_segment_claims(m_segments, m_cv, lock, start_index, end_index,
+                                        future))
+            {
+                return kRocProfVisResultCancelled;
+            }
             for(uint32_t i = start_index; i < end_index; i++)
             {
                 if(!m_segments.IsValid(i))
                 {
-                    m_segments.SetProcessed(i, true);
-                    if(fetch_ranges.size())
+                    // The range is recorded before the bit is set so that a throw from
+                    // push_back cannot leave a claim the guard does not know to clear.
+                    if(fetch_ranges.size() && fetch_ranges.back().second == i - 1)
                     {
-                        auto& last_range = fetch_ranges.back();
-                        if(last_range.second == i - 1)
-                        {
-                            last_range.second = i;
-                        }
-                        else
-                        {
-                            fetch_ranges.push_back(std::make_pair(i, i));
-                        }
+                        fetch_ranges.back().second = i;
                     }
                     else
                     {
                         fetch_ranges.push_back(std::make_pair(i, i));
                     }
+                    m_segments.SetProcessed(i, true);
                 }
             }
         }
@@ -152,15 +143,7 @@ rocprofvis_result_t Track::FetchSegments(double start, double end, void* user_pt
                     spdlog::debug("FetchFromDataModel for track {} ({}-{}) = {}, cancelled={}",m_id,fetch_start, fetch_end,(uint32_t)result, future->IsCancelled());
 
                 }
-                {
-                    std::unique_lock lock(*m_segments.GetMutex());
-                    for(uint32_t i = range.first; i <= range.second; i++)
-                    {
-                        m_segments.SetProcessed(i, false);
-                        m_segments.SetValid(i, result == kRocProfVisResultSuccess );
-                    }
-                }
-                m_cv.notify_all();
+                claim.ReleaseNext(result == kRocProfVisResultSuccess);
             }
         }
         else
@@ -170,16 +153,11 @@ rocprofvis_result_t Track::FetchSegments(double start, double end, void* user_pt
 
         {
             std::unique_lock lock(*m_segments.GetMutex());
-            m_cv.wait(lock, [&] {
-                for(uint32_t i = start_index; i < end_index; i++)
-                {
-                    if(m_segments.IsProcessed(i))
-                    {
-                        return false;
-                    }
-                }
-                return true;
-            });
+            if(!wait_for_segment_claims(m_segments, m_cv, lock, start_index, end_index,
+                                        future))
+            {
+                return kRocProfVisResultCancelled;
+            }
         }
 
         // Walking the segments would report kRocProfVisResultOutOfRange for a

@@ -248,6 +248,10 @@ Graph::GenerateLODEvent(std::vector<Event*> & events, uint32_t lod_to_generate, 
             event_id, event_min, event_max,
             &m_lods[lod_to_generate]);
         ROCPROFVIS_ASSERT(level != UINT64_MAX);
+        if(event == nullptr)
+        {
+            return kRocProfVisResultMemoryAllocError;
+        }
         event->SetUInt64(kRPVControllerEventLevel, 0, level);
         event->SetString(kRPVControllerEventName, 0, combined_name.c_str());
         event->SetUInt64(kRPVControllerEventTopCombinedNameStrIndex, 0,
@@ -433,6 +437,10 @@ Graph::GenerateLOD(uint32_t lod_to_generate, double start_ts, double end_ts,
                                 SampleLOD* new_sample = m_ctx->GetMemoryManager()->NewSampleLOD(
                                     (rocprofvis_controller_primitive_type_t)type, 0,
                                     sample_insert_ts, samples, &m_lods[lod_to_generate]);
+                                if(new_sample == nullptr)
+                                {
+                                    return kRocProfVisResultMemoryAllocError;
+                                }
                                 new_sample->SetDouble(
                                     kRPVControllerSampleEndTimestamp, 0, sample_last_ts);
                                 Insert(lod_to_generate, sample_insert_ts, 0, new_sample);
@@ -461,6 +469,10 @@ Graph::GenerateLOD(uint32_t lod_to_generate, double start_ts, double end_ts,
             SampleLOD* new_sample = m_ctx->GetMemoryManager()->NewSampleLOD(
                 (rocprofvis_controller_primitive_type_t)type, 0,
                 sample_insert_ts, samples, &m_lods[lod_to_generate]);
+            if(new_sample == nullptr)
+            {
+                return kRocProfVisResultMemoryAllocError;
+            }
             new_sample->SetDouble(
                 kRPVControllerSampleEndTimestamp, 0, sample_last_ts);
             Insert(lod_to_generate, sample_insert_ts, 0, new_sample);
@@ -520,39 +532,32 @@ Graph::GenerateLOD(uint32_t lod_to_generate, double start, double end, Future* f
                 std::vector<std::pair<uint32_t, uint32_t>> fetch_ranges;
                 uint32_t start_index = (uint32_t)floor((start - min_ts) / segment_duration);
                 uint32_t end_index = (uint32_t)ceil((end - min_ts) / segment_duration);
+
+                SegmentClaim claim(it->second, m_cv, fetch_ranges);
+
                 {
                     std::unique_lock lock(*it->second.GetMutex());
-                    m_cv.wait(lock, [&] {
-                        for(uint32_t i = start_index; i < end_index; i++)
-                        {
-                            if(it->second.IsProcessed(i))
-                            {
-                                return false;
-                            }
-                        }
-                        return true;
-                    });
+                    if(!wait_for_segment_claims(it->second, m_cv, lock, start_index,
+                                                end_index, future))
+                    {
+                        return kRocProfVisResultCancelled;
+                    }
                     for(uint32_t i = start_index; i < end_index; i++)
                     {
                         if(!it->second.IsValid(i))
                         {
-                            it->second.SetProcessed(i, true);
-                            if(fetch_ranges.size())
+                            // The range is recorded before the bit is set so that a
+                            // throw from push_back cannot leave a claim the guard does
+                            // not know to clear.
+                            if(fetch_ranges.size() && fetch_ranges.back().second == i - 1)
                             {
-                                auto& last_range = fetch_ranges.back();
-                                if(last_range.second == i - 1)
-                                {
-                                    last_range.second = i;
-                                }
-                                else
-                                {
-                                    fetch_ranges.push_back(std::make_pair(i, i));
-                                }
+                                fetch_ranges.back().second = i;
                             }
                             else
                             {
                                 fetch_ranges.push_back(std::make_pair(i, i));
                             }
+                            it->second.SetProcessed(i, true);
                         }
                     }
                 }
@@ -590,17 +595,7 @@ Graph::GenerateLOD(uint32_t lod_to_generate, double start, double end, Future* f
                             result = GenerateLOD(lod_to_generate, fetch_start, fetch_end,
                                                  args.m_entries, future);                            
                         }
-                        {
-                            std::unique_lock lock(*it->second.GetMutex());
-                            for(uint32_t i = range.first; i <= range.second; i++)
-                            {
-                                it->second.SetProcessed(i, false);
-                                it->second.SetValid(i,
-                                                    result == kRocProfVisResultSuccess);
-                            }
-                            
-                        }
-                        m_cv.notify_all();
+                        claim.ReleaseNext(result == kRocProfVisResultSuccess);
                         ((SystemTrace*)m_track->GetContext())->GetMemoryManager()->CancelArrayOwnership(&args.m_entries, kRocProfVisOwnerTypeTrack);
                     }
                 }
@@ -611,16 +606,11 @@ Graph::GenerateLOD(uint32_t lod_to_generate, double start, double end, Future* f
 
                  {
                     std::unique_lock lock(*it->second.GetMutex());
-                    m_cv.wait(lock, [&] {
-                        for(uint32_t i = start_index; i < end_index; i++)
-                        {
-                            if(it->second.IsProcessed(i))
-                            {
-                                return false;
-                            }
-                        }
-                        return true;
-                    });
+                    if(!wait_for_segment_claims(it->second, m_cv, lock, start_index,
+                                                end_index, future))
+                    {
+                        return kRocProfVisResultCancelled;
+                    }
                 }
             }
         }

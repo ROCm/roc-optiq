@@ -467,12 +467,15 @@ MemoryManager::ManageLRU()
 
             if(m_lru_mgmt_shutdown)
             {
-                CleanUp();
+                CleanUp(couldnt_take_lock);
                 thread_running = false;
             }
             else
-            {                
-                m_lru_configured = false;
+            {
+                {
+                    std::unique_lock lock(m_lru_cond_mutex);
+                    m_lru_configured = false;
+                }
                 std::vector<std::pair<SegmentTimeline*, LRUOwnerMember*>> sorted_entries;
 
                 {
@@ -584,14 +587,21 @@ MemoryManager::Allocate(size_t size, rocprofvis_object_type_t type, SegmentTimel
             current_pool = nullptr;
         }
     }
+    void* ptr = nullptr;
     if(current_pool != nullptr)
     {
-        char* ptr = (char*) current_pool->m_base + (first_zero_bit * size);
+        ptr = (char*) current_pool->m_base + (first_zero_bit * size);
         current_pool->m_bitmask.Set(first_zero_bit);
-        return ptr;
     }
-    throw std::runtime_error("Allocation problem!");
-    return nullptr;
+    else
+    {
+        // Every New*() caller already handles a null slot by reporting
+        // kRocProfVisResultMemoryAllocError. Throwing from here would unwind
+        // through the fetch paths and leave their segment claims set forever.
+        spdlog::error("Memory manager: no pool slot for a {} byte object on owner {}",
+                      size, (void*) owner);
+    }
+    return ptr;
 }
 
 // The pool teardown below reinterpret_casts each live slot to Handle* and
@@ -606,17 +616,28 @@ static_assert(std::is_base_of<Handle, Sample>::value,
 static_assert(std::is_base_of<Handle, SampleLOD>::value,
               "Pooled SampleLOD must derive from Handle");
 
-void MemoryManager::CleanUp() {
-    std::lock_guard<std::mutex> lock(m_pool_mutex);
-
+void MemoryManager::CleanUp(const std::vector<SegmentTimeline*>& skip) {
+    // Drop the segments before taking m_pool_mutex. ~Segment sees IsShuttingDown()
+    // and so skips the per-object Delete path, but keeping this outside the lock
+    // means that is an optimization rather than a re-entrancy requirement.
     for(auto& [owner, member_ptr] : m_lru_array)
     {
+        if(std::find(skip.begin(), skip.end(), owner) != skip.end())
+        {
+            // A worker still holds this timeline. Remove() erases from m_segments
+            // with no lock of its own, so doing it here would corrupt the map the
+            // reader is walking. The segments are released when the owning Track is
+            // destroyed, which by then finds a null memory manager and just clears.
+            continue;
+        }
         for(auto& [segment, lru] : member_ptr.get()->m_lru_segment_array)
         {
             owner->Remove(segment);
         }
     }
-    
+
+    std::lock_guard<std::mutex> lock(m_pool_mutex);
+
     for(auto it = m_object_pools.begin(); it != m_object_pools.end(); ++it)
     {
         for(auto it1 : it->second)
@@ -688,7 +709,16 @@ MemoryManager::NewSampleLOD(rocprofvis_controller_primitive_type_t type, uint64_
 void
 MemoryManager::Delete(Handle* handle, SegmentTimeline* owner)
 {
-    if(!handle->IsDeletable()) return;
+    // m_object_pools, m_current_pool and m_short_tracks are all mutated by
+    // Allocate() on job-system threads while the LRU thread evicts through here.
+    // The pool maps are shared by every timeline, so the per-timeline locks the
+    // evictor holds do not serialize this - the mutex has to.
+    std::lock_guard<std::mutex> lock(m_pool_mutex);
+
+    if(!handle->IsDeletable())
+    {
+        return;
+    }
 
     uint64_t pool_idetifier = uint64_t(owner);
 

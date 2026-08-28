@@ -8,6 +8,7 @@
 #include "rocprofvis_controller_handle.h"
 #include "rocprofvis_controller_mem_mgmt.h"
 #include <bitset>
+#include <condition_variable>
 #include <map>
 #include <vector>
 #include <memory>
@@ -138,6 +139,46 @@ private:
     Handle*                                    m_ctx;
     mutable std::shared_mutex                  m_mutex;
 
+};
+
+// How long a fetch path sleeps between re-checks while another request holds the
+// claim on a segment it needs.
+constexpr uint32_t kSegmentClaimPollMs = 50;
+
+// Blocks until no segment in [first_segment, last_segment) is claimed by another
+// request. Returns false if `future` was cancelled while waiting. The caller must
+// own `lock`; it is released while waiting and re-acquired before returning.
+bool wait_for_segment_claims(SegmentTimeline& timeline, std::condition_variable_any& cv,
+                             std::unique_lock<std::shared_mutex>& lock,
+                             uint32_t first_segment, uint32_t last_segment,
+                             Future* future);
+
+// Owns the "processed" claim a fetch path takes on a set of segment ranges.
+//
+// Track::FetchSegments and Graph::GenerateLOD mark segments processed to reserve
+// them, read from the model with the timeline unlocked, then clear the claim. If a
+// claim is ever dropped without being cleared - an early return, or an allocation
+// failure unwinding the stack - every later request for those segments waits on the
+// condition variable forever. Making the claim an object means that cannot happen.
+class SegmentClaim
+{
+    SegmentClaim(SegmentClaim const& other) = delete;
+    SegmentClaim& operator=(SegmentClaim const& other) = delete;
+
+public:
+    SegmentClaim(SegmentTimeline& timeline, std::condition_variable_any& cv,
+                 std::vector<std::pair<uint32_t, uint32_t>> const& ranges);
+    ~SegmentClaim();
+
+    // Clears the next claimed range and publishes whether its data loaded. Takes
+    // the timeline lock and wakes anything waiting on the claim.
+    void ReleaseNext(bool valid);
+
+private:
+    SegmentTimeline&                                  m_timeline;
+    std::condition_variable_any&                      m_cv;
+    std::vector<std::pair<uint32_t, uint32_t>> const& m_ranges;
+    size_t                                            m_released;
 };
 
 }

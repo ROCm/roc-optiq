@@ -529,7 +529,9 @@ ToolGoto(const AssistantToolContext& context, const jt::Json& args,
     {
         return DoneResult(
             "goto needs either start_ns and end_ns (end > start), or the "
-            "__uuid of an event to put the view on.",
+            "__uuid of an event to put the view on, passed as a quoted string. "
+            "A 19-digit uuid sent as a number is rejected rather than rounded, "
+            "since rounding it would silently select another event.",
             "goto failed");
     }
 

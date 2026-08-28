@@ -240,9 +240,11 @@ MakeAssistantToolsJson()
     AddParam(goto_params, "track_id", "integer",
              "__trackId of the event. Pass it whenever you pass event_uuid; without "
              "it the flow arrows cannot be drawn.");
-    AddParam(goto_params, "event_uuid", "integer",
-             "__uuid of the event to select. Selecting it expands its flow arrows "
-             "and call stack, the same as clicking it.");
+    AddParam(goto_params, "event_uuid", "string",
+             "__uuid of the event to select, copied digit for digit as a quoted "
+             "string. These run to 19 digits and lose their low bits if sent as "
+             "a number, which silently names a different event. Selecting it "
+             "expands its flow arrows and call stack, the same as clicking it.");
     AddParam(goto_params, "kernel_name", "string",
              "On compute traces, select this kernel in the UI.");
     AddParam(goto_params, "kernel_id", "integer",
@@ -250,7 +252,8 @@ MakeAssistantToolsJson()
 
     jt::Json goto_event_item = ObjectParams();
     AddParam(goto_event_item, "track_id", "integer", "Track the event lives on.");
-    AddParam(goto_event_item, "event_uuid", "integer", "__uuid of the event.");
+    AddParam(goto_event_item, "event_uuid", "string",
+             "__uuid of the event, as a quoted string.");
     goto_event_item["required"][0] = "event_uuid";
     AddParam(goto_params, "events", "array",
              "Events to light up on the timeline, from the __trackId and __uuid "
@@ -293,9 +296,11 @@ MakeAssistantToolsJson()
             track_samples_params);
 
     jt::Json event_details_params = ObjectParams();
-    AddParam(event_details_params, "event_uuid", "integer",
-             "Event uuid from the __uuid column of track_events, top_events, or "
-             "kernel_instances.");
+    AddParam(event_details_params, "event_uuid", "string",
+             "Event uuid from the __uuid column of track_events, kernel_instances "
+             "or search_events, copied digit for digit as a quoted string. These "
+             "run to 19 digits and lose their low bits if sent as a number, which "
+             "silently asks about a different event.");
     AddParam(event_details_params, "track_id", "integer",
              "Optional owning track id, which fills in the event name and duration.");
     event_details_params["required"][0] = "event_uuid";

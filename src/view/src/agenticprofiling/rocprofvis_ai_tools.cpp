@@ -74,14 +74,29 @@ DoneResult(const std::string& content, const std::string& status)
     return result;
 }
 
-// Narrows a JSON number to an id. A double that is negative, not finite, or
-// too large to represent is rejected rather than cast: those conversions are
-// undefined, not merely wrong.
+/*
+ * Narrows a JSON number to an id, refusing anything a double cannot hold
+ * exactly.
+ *
+ * A double carries 53 bits of mantissa, so every integer above 2^53 is stored
+ * as the nearest representable one. An event uuid packs an id, a node and an
+ * operation into 64 bits and lands around 2^61, where the gap between
+ * representable doubles is 512 - so a uuid that arrives as a JSON number comes
+ * back rounded to the nearest multiple of 512. That is not a near miss: it
+ * names a different event, and the tools then answered confidently about it.
+ * goto selected an event the timeline had never heard of, and event_details
+ * returned another kernel's arguments and flow links.
+ *
+ * Rejecting here turns that into a tool error the model can see and correct,
+ * rather than a wrong answer nothing downstream can detect. Ids should arrive
+ * as strings - see the string branch of JsonU64, which is exact - and the
+ * schema asks for them that way.
+ */
 uint64_t
 JsonU64FromDouble(double value, uint64_t default_value)
 {
-    constexpr double MAX_EXACT_U64 = 18446744073709549568.0;
-    if(!std::isfinite(value) || value < 0.0 || value > MAX_EXACT_U64)
+    constexpr double MAX_EXACT_INTEGER = 9007199254740992.0;  // 2^53
+    if(!std::isfinite(value) || value < 0.0 || value > MAX_EXACT_INTEGER)
     {
         return default_value;
     }

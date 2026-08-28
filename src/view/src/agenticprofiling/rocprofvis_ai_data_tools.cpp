@@ -133,6 +133,19 @@ KeepInternalColumn(const std::string& name)
     return name == "__uuid" || name == "__trackId" || name == "__streamTrackId";
 }
 
+// Reports whether a column must be quoted when it is written out for the model.
+//
+// A uuid packs an id, a node and an operation into 64 bits and prints as 19
+// digits. Sent back as a JSON number it is parsed through a double, whose
+// mantissa runs out at 2^53, so it returns rounded to the nearest multiple of
+// 512 - a different event, answered about confidently. Quoting the value here
+// is what makes the model quote it back, and a quoted id is read exactly.
+bool
+ColumnNeedsQuoting(const std::string& name)
+{
+    return name == "__uuid";
+}
+
 // Clamps a requested row count so one tool call cannot ask for the world.
 size_t
 ClampRowLimit(int32_t requested)
@@ -487,7 +500,9 @@ FormatTableSnapshot(const TablesModel& tables, TableType type, size_t limit)
             {
                 continue;
             }
-            out << " " << header[column_index] << "=" << data[row][column_index];
+            const std::string& name  = header[column_index];
+            const char*        quote = ColumnNeedsQuoting(name) ? "\"" : "";
+            out << " " << name << "=" << quote << data[row][column_index] << quote;
         }
         out << "\n";
     }
@@ -1751,8 +1766,11 @@ ToolEventDetails(const AssistantToolContext& context, const jt::Json& args,
         JsonU64(args, "event_uuid", JsonU64(args, "event_id", 0));
     if(event_uuid == 0)
     {
-        return DoneResult("event_details needs event_uuid from the __uuid column.",
-                          "Missing event_uuid");
+        return DoneResult(
+            "event_details needs event_uuid from the __uuid column, passed as a "
+            "quoted string. A 19-digit uuid sent as a number is rejected rather "
+            "than rounded, since rounding it would silently name another event.",
+            "Missing event_uuid");
     }
 
     const std::vector<uint64_t> request_ids = {

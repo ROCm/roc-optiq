@@ -2539,4 +2539,47 @@ void RegisterAppTests(ImGuiTestEngine* e)
 
         IM_CHECK(rows_after != rows_before);
     };
+
+    t = IM_REGISTER_TEST(e, "app", "sys_event_search_multi_substring");
+    t->TestFunc = [](ImGuiTestContext* ctx)
+    {
+        TraceView* tv = GetTraceViewOrSkip(ctx);
+        if (!tv) return;
+        EventSearch* es = TraceViewTestPeer{*tv}.EventSearchPtr();
+        IM_CHECK(es != nullptr);
+        if (es == nullptr) return;
+
+        // Clear so the searched flag starts from a known baseline (the harness
+        // reuses one process interactively).
+        es->Clear();
+        ctx->Yield(2);
+        IM_CHECK(es->Searched() == false);
+
+        // Quote-delimited segments make EventSearch::Search split the input into
+        // several terms instead of one, which is the multi-term parse this test
+        // covers. "hip" and "Launch" are both substrings of hipLaunchKernel (proven
+        // searchable in this db by sys_event_search_finds_results), so the query is
+        // non-empty even though the default options AND-combine the terms
+        // (m_partial_matching defaults to false).
+        // Type into the real search field. RenderEventSearch runs the search on the
+        // frame the focused field sees Enter, so Enter is what issues the query.
+        ctx->SetRef("Main Window");
+        ctx->ItemInput("**/search_bar/##input_text_with_clear");
+        ctx->KeyCharsReplaceEnter("\"hip\"\"Launch\"");
+        ctx->Yield(2);
+        IM_CHECK(es->Searched() == true);
+
+        // The fetch is deferred. Let it drain (Update re-runs Search when the
+        // request completes) before reading the result count.
+        for (int i = 0; i < 60 && EventSearchTestPeer{*es}.RequestPending(); i++) ctx->Yield(2);
+        ctx->Yield(5);
+        IM_CHECK(EventSearchTestPeer{*es}.ResultCount() > 0);
+
+        // The X button is the clear path. IconButton pushes the glyph as an id and
+        // draws it as the button, so the ref ends in the glyph twice.
+        const std::string clear_ref =
+            std::string("**/search_bar/") + ICON_X_CIRCLED + "/" + ICON_X_CIRCLED;
+        ctx->ItemClick(clear_ref.c_str());
+        ctx->Yield(2);
+    };
 }

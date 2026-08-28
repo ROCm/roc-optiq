@@ -32,9 +32,9 @@ html_theme_options = {
 
 
 # This section turns on/off article info
-setting_all_article_info = True
-all_article_info_os = ["windows", "linux"]
-all_article_info_author = ""
+setting_all_article_info = False
+#all_article_info_os = ["windows", "linux"]
+#all_article_info_author = ""
 
 # Dynamically extract component version
 #with open('../CMakeLists.txt', encoding='utf-8') as f:

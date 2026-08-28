@@ -61,10 +61,24 @@ constexpr size_t   ASSISTANT_MAX_SEARCH_TERMS = 8;
 constexpr size_t   ASSISTANT_OVERVIEW_BINS    = 32;
 constexpr size_t   ASSISTANT_OVERVIEW_TRACKS  = 12;
 constexpr double   ASSISTANT_OVERVIEW_SCALE   = 100.0;
-// Where Duration sits in an events table today. Only reached when no header has
-// been read yet, because the column is resolved by name first - see
-// ResolveAssistantSortColumnNamed.
-constexpr uint64_t ASSISTANT_DURATION_COLUMN  = 2;
+/*
+ * Where the duration column sits in each table today.
+ *
+ * Only reached on the first query of a session: the column is resolved by name
+ * first, but that reads the header off a table nothing has fetched into yet, so
+ * the very first call has no header to search and lands here. A fallback that
+ * names the wrong column does not fail - it silently sorts by something else,
+ * which is how "the slowest instance" came back as a 2.9 us row while the
+ * summary reported a 427 us maximum.
+ *
+ * These are per table because the layouts differ:
+ *   top events       name Invocations DurationTotal DurationAvg ...
+ *   kernel instances id __uuid category name stream queue node PID TID
+ *                    AgentAbsoluteIndex AgentType AgentTypeIndex AgentName
+ *                    start end duration ...
+ */
+constexpr uint64_t ASSISTANT_DURATION_COLUMN                 = 2;
+constexpr uint64_t ASSISTANT_KERNEL_INSTANCE_DURATION_COLUMN = 15;
 
 // Furthest a tool may page into a result set. limit is clamped too, but without
 // a ceiling here the model could ask the database to skip billions of rows.
@@ -1477,8 +1491,8 @@ ToolKernelInstances(const AssistantToolContext& context, const jt::Json& args,
             // the outlier.
             ResolveAssistantSortColumnNamed(
                 tables, TableType::kAssistantSummaryKernelTable,
-                JsonUtils::GetString(args, "sort_by", ""), "Duration",
-                ASSISTANT_DURATION_COLUMN),
+                JsonUtils::GetString(args, "sort_by", ""), "duration",
+                ASSISTANT_KERNEL_INSTANCE_DURATION_COLUMN),
             AssistantSortOrderFromArgs(args, kRPVControllerSortOrderDescending))));
     return FetchStartedResult(context, request_id, fetch, tool_name, queued);
 }

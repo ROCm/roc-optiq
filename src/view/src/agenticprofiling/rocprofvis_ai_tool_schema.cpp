@@ -127,7 +127,10 @@ AddQueryParams(jt::Json& params)
     params["properties"]["filters"]["items"] = filter_item;
 
     AddParam(params, "sort_by", "string",
-             "Column name to sort by. Call once without it to see the columns.");
+             "Column name to sort by. Call once without it to see the columns. "
+             "Every time column - start, end, duration - is in nanoseconds, so "
+             "convert before quoting one: 427747 is 427.7 microseconds, not "
+             "milliseconds.");
     AddParam(params, "sort_order", "string", "asc or desc.");
     params["properties"]["sort_order"]["enum"] = MakeStringEnum({ "asc", "desc" });
     AddParam(params, "limit", "integer", "Rows to return (default 20, max 200).");

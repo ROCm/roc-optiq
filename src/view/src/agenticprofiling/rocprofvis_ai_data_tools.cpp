@@ -1435,7 +1435,14 @@ ToolKernelInstances(const AssistantToolContext& context, const jt::Json& args,
 
     double start_ns = 0.0;
     double end_ns   = 0.0;
-    TimeRangeFromArgs(context, args, start_ns, end_ns);
+    // Whole trace unless the model asks for a window, the same as search_events
+    // and for the same reason: this is a lookup by name, not a read of what is
+    // on screen. Defaulting to the selection scoped it to whatever range the
+    // last goto happened to leave behind, so asking for a kernel's instances
+    // could return nothing while that kernel ran hundreds of times just outside
+    // the window - indistinguishable, to the model, from a kernel that does not
+    // exist.
+    TimeRangeFromArgs(context, args, start_ns, end_ns, false);
 
     const uint64_t request_id =
         DataProvider::ASSISTANT_SUMMARY_KERNEL_INSTANCE_TABLE_REQUEST_ID;
@@ -1452,12 +1459,27 @@ ToolKernelInstances(const AssistantToolContext& context, const jt::Json& args,
     const bool queued = context.data_provider->FetchTable(AsAssistantRead(
         EventSearchRequestParams(
             kRPVControllerTableTypeSummaryKernelInstances,
-            { kRocProfVisDmOperationDispatch }, start_ns, end_ns, where.c_str(), false,
+            // The true is include_substrings. Exact-match could not find a real
+            // dispatch: the stored name is the full mangled signature, so
+            // anything short of the whole
+            // "ncclDevKernel_Generic(ncclDevKernelArgsStorage<4096ul>)" matched
+            // nothing and came back as bare column headers with no rows. The
+            // schema already promises "exact or unique kernel name"; this is
+            // what makes the second half of that true.
+            { kRocProfVisDmOperationDispatch }, start_ns, end_ns, where.c_str(), true,
             false, false, { kernel_name }, OffsetFromArgs(args),
             static_cast<uint64_t>(limit),
-            ResolveAssistantSortColumn(tables, TableType::kAssistantSummaryKernelTable,
-                                       JsonUtils::GetString(args, "sort_by", ""), 0),
-            AssistantSortOrderFromArgs(args, kRPVControllerSortOrderAscending))));
+            // Slowest first, like top_events. This tool is nearly always asked
+            // "which run of this kernel was the bad one", and the row the model
+            // points the user at is whichever comes back first - so a default
+            // of column 0 ascending handed back an instance picked by name or
+            // id, with no relation to duration, while the model described it as
+            // the outlier.
+            ResolveAssistantSortColumnNamed(
+                tables, TableType::kAssistantSummaryKernelTable,
+                JsonUtils::GetString(args, "sort_by", ""), "Duration",
+                ASSISTANT_DURATION_COLUMN),
+            AssistantSortOrderFromArgs(args, kRPVControllerSortOrderDescending))));
     return FetchStartedResult(context, request_id, fetch, tool_name, queued);
 }
 
@@ -1691,8 +1713,14 @@ ToolTrackRows(const AssistantToolContext& context, const jt::Json& args,
             events ? kRPVControllerTableTypeEvents : kRPVControllerTableTypeSamples,
             tracks, start_ns, end_ns, where.c_str(), "", group_by.c_str(), "",
             OffsetFromArgs(args), static_cast<uint64_t>(limit),
-            ResolveAssistantSortColumn(tables, type,
-                                       JsonUtils::GetString(args, "sort_by", ""), 0),
+            // Ask for the column by name, keeping the index only for the first
+            // query of a session, before any header has been read. "id" is
+            // column 0 of the event table today; naming it means a reordered
+            // table sorts by the same thing rather than silently by whatever
+            // moved into that slot. A sample table without an "id" column falls
+            // through to the index unchanged.
+            ResolveAssistantSortColumnNamed(
+                tables, type, JsonUtils::GetString(args, "sort_by", ""), "id", 0),
             AssistantSortOrderFromArgs(args, kRPVControllerSortOrderAscending))));
     return FetchStartedResult(context, request_id, fetch, tool_name, queued);
 }
@@ -1905,8 +1933,11 @@ ToolSearchEvents(const AssistantToolContext& context, const jt::Json& args,
             kRPVControllerTableTypeSearchResults, ops, start_ns, end_ns, where.c_str(),
             contains, include_category, any_term, terms, OffsetFromArgs(args),
             static_cast<uint64_t>(limit),
-            ResolveAssistantSortColumn(tables, TableType::kAssistantSearchTable,
-                                       JsonUtils::GetString(args, "sort_by", ""), 1),
+            // "__uuid" is column 1 of the search table today - see the note on
+            // track rows for why the name leads and the index only trails.
+            ResolveAssistantSortColumnNamed(tables, TableType::kAssistantSearchTable,
+                                            JsonUtils::GetString(args, "sort_by", ""),
+                                            "__uuid", 1),
             AssistantSortOrderFromArgs(args, kRPVControllerSortOrderAscending))));
     return FetchStartedResult(context, request_id, fetch, tool_name, queued);
 }

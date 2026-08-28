@@ -8,7 +8,6 @@
 #include <vector>
 
 #include "rocprofvis_ai_actions.h"
-#include "rocprofvis_ai_tool_query.h"
 
 namespace RocProfVis
 {
@@ -158,10 +157,14 @@ AssistantToolNameList()
     return out.str();
 }
 
-// Builds the tool schema sent with every request. The descriptions here are
-// the only instructions the model gets about what each tool is for.
+namespace
+{
+
+// Assembles the tool schema. The descriptions here are the only instructions
+// the model gets about what each tool is for. Reads nothing but these
+// literals, which is what lets the result be built once and shared.
 jt::Json
-BuildAssistantToolsJson()
+MakeAssistantToolsJson()
 {
     jt::Json tools;
 
@@ -180,9 +183,14 @@ BuildAssistantToolsJson()
     AddQueryParams(top_params);
     top_params["required"][0] = "category";
     AddTool(tools, 1, "top_events",
-            "Rank the hottest events of one category, optionally narrowed to named "
-            "tracks, an explicit time window, and column filters. Uses the same "
-            "analysis tables as View > Top Events. Does not run raw SQL.",
+            "Rank the hottest event names of one category, optionally narrowed to "
+            "named tracks, an explicit time window, and column filters. Uses the "
+            "same analysis tables as View > Top Events. Does not run raw SQL.\n"
+            "This is an aggregate: rows are name, Invocations, DurationTotal, "
+            "DurationAvg, DurationMin, DurationMax. It does NOT return __uuid or "
+            "__trackId, so its rows cannot be passed to goto or event_details. "
+            "Use it to find which name is worth chasing, then call "
+            "kernel_instances or search_events on that name to get a real event.",
             top_params);
 
     jt::Json inst_params = ObjectParams();
@@ -192,8 +200,12 @@ BuildAssistantToolsJson()
     AddQueryParams(inst_params);
     inst_params["required"][0] = "kernel_name";
     AddTool(tools, 2, "kernel_instances",
-            "List individual GPU dispatches for one kernel name, with timestamps "
-            "and track ids that goto can use.",
+            "List individual GPU dispatches for one kernel name, with the "
+            "__uuid, __trackId and timestamps that goto needs to select one. "
+            "This is how you get from a name in the summary to a real event. "
+            "Searches the whole trace unless you pass start_ns/end_ns, so it "
+            "finds instances wherever they ran; sort by duration to put the "
+            "slowest first.",
             inst_params);
 
     jt::Json metrics_params = ObjectParams();
@@ -215,7 +227,12 @@ BuildAssistantToolsJson()
             tracks_params);
 
     jt::Json goto_params = ObjectParams();
-    AddParam(goto_params, "start_ns", "number", "Range start in nanoseconds.");
+    AddParam(goto_params, "start_ns", "number",
+             "Range start in nanoseconds. When you also pass an event, use that "
+             "event's own start and end from its row, not a wider window around "
+             "it: the timeline merges neighbouring events into one bar until it "
+             "is zoomed in far enough, and a merged bar cannot be selected. "
+             "Optional - omitted, the event's own span is looked up instead.");
     AddParam(goto_params, "end_ns", "number", "Range end in nanoseconds.");
     AddParam(goto_params, "track_id", "integer",
              "__trackId of the event. Pass it whenever you pass event_uuid; without "
@@ -244,12 +261,13 @@ BuildAssistantToolsJson()
 
     AddTool(tools, 5, "goto",
             "Point the UI at what you are talking about: move the timeline to a "
-            "range, highlight the specific events behind your claim, and expand "
-            "the first one's connecting arrows. Call this on your own whenever you "
+            "range, select the event behind your claim as the focal point, and "
+            "highlight any others around it. Call this on your own whenever you "
             "name a window or an outlier, so the user sees exactly what you saw. "
             "A range on its own only scrolls the view - pass event_uuid and "
-            "track_id, or nothing gets highlighted and no arrows appear. Do not "
-            "use it to pin notes or change other UI.",
+            "track_id, or nothing is selected and no arrows appear. The first "
+            "event you name is the one that gets selected, so lead with the "
+            "clearest example. Do not use it to pin notes or change other UI.",
             goto_params);
 
     jt::Json track_events_params = ObjectParams();
@@ -538,6 +556,19 @@ BuildAssistantToolsJson()
             script_params);
 #endif
 
+    return tools;
+}
+
+}  // namespace
+
+// The schema goes out with every tools-on round and never varies, so it is
+// assembled once instead of being rebuilt from several hundred literals on the
+// worker thread each time. Function-local static initialisation is thread-safe,
+// and the caller still gets its own copy to put in the request body.
+jt::Json
+BuildAssistantToolsJson()
+{
+    static const jt::Json tools = MakeAssistantToolsJson();
     return tools;
 }
 

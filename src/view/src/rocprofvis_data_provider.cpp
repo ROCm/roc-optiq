@@ -4248,6 +4248,16 @@ DataProvider::FetchEvent(uint64_t track_id, uint64_t event_id)
 {
     EventInfo event_info{};
     event_info.track_id = INVALID_UINT64_INDEX;
+    // The caller already knows which event this is, so record it before looking
+    // anything up. The scan below only finds the event when its track chunk is
+    // loaded, and the extended-data fetch that follows fills in the name and
+    // timestamps but never the id - so an event reached by uuid alone used to
+    // keep the zero it was constructed with while every other field came out
+    // right. That zero reaches the flow list, which copies basic_info.id into
+    // the entry standing for the event itself, the call stack frames, which are
+    // synthesised against it as owner, and the "Event ID" the events view puts
+    // on screen.
+    event_info.basic_info.id.uuid = event_id;
     const RawTrackEventData* event_track =
         dynamic_cast<const RawTrackEventData*>(m_model.GetTimeline().GetTrackData(track_id));
     if(event_track)
@@ -4256,7 +4266,6 @@ DataProvider::FetchEvent(uint64_t track_id, uint64_t event_id)
         {
             if(event.m_id.uuid == event_id)
             {
-                event_info.basic_info.id.uuid  = event.m_id.uuid;
                 event_info.basic_info.start_ts = event.m_start_ts;
                 // only set values below if this is single event, not a combined event
                 if(event.m_child_count == 1)

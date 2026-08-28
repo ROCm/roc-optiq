@@ -13,9 +13,6 @@
 #    include "rocprofvis_compute_tester.h"
 #endif
 #include "icons/rocprovfis_icon_defines.h"
-#ifdef ROCPROFVIS_ENABLE_AGENTIC_PROFILING
-#    include "agenticprofiling/rocprofvis_ai_assistant.h"
-#endif
 #include "rocprofvis_compute_workload_view.h"
 #include "rocprofvis_event_manager.h"
 #include "rocprofvis_settings_manager.h"
@@ -247,12 +244,6 @@ ComputeView::GetToolbar()
     return m_tool_bar;
 }
 
-std::shared_ptr<ComputeSelection>
-ComputeView::GetComputeSelection() const
-{
-    return m_compute_selection;
-}
-
 void
 ComputeView::RenderToolbar()
 {
@@ -288,11 +279,6 @@ ComputeView::RenderToolbar()
     ImGui::SameLine();
     m_toolbar_available_width =
         std::max(0.0f, m_toolbar_available_width + ImGui::GetContentRegionAvail().x);
-
-#ifdef ROCPROFVIS_ENABLE_AGENTIC_PROFILING
-    VerticalSeparator(&m_settings_manager);
-    AssistantPanel::RenderToolbarButton();
-#endif
 
     // pop content style
     ImGui::PopStyleVar(2);

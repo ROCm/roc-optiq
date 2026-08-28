@@ -7,7 +7,6 @@
 #include <cmath>
 #include <memory>
 
-#include "compute/rocprofvis_compute_selection.h"
 #include "rocprofvis_appwindow.h"
 #include "rocprofvis_data_provider.h"
 #include "rocprofvis_event_manager.h"
@@ -158,10 +157,9 @@ NeedsActiveTraceView(OptiqPanel panel)
 
 OptiqActions::OptiqActions(DataProvider*      data_provider,
                            TimelineSelection* timeline_selection,
-                           ComputeSelection*  compute_selection, TraceView* trace_view)
+                           TraceView*         trace_view)
 : m_data_provider(data_provider)
 , m_timeline_selection(timeline_selection)
-, m_compute_selection(compute_selection)
 , m_trace_view(trace_view)
 {}
 
@@ -277,12 +275,6 @@ bool
 OptiqActions::HasTimeline() const
 {
     return m_data_provider != nullptr && m_timeline_selection != nullptr;
-}
-
-bool
-OptiqActions::HasCompute() const
-{
-    return m_data_provider != nullptr && m_compute_selection != nullptr;
 }
 
 std::string
@@ -581,17 +573,6 @@ OptiqActions::NavigateToEvent(uint64_t track_id, uint64_t event_uuid, double sta
         return false;
     }
     m_timeline_selection->NavigateToEvent(track_id, event_uuid, start_ns, duration_ns);
-    return true;
-}
-
-bool
-OptiqActions::SelectKernel(uint32_t kernel_id)
-{
-    if(!HasCompute())
-    {
-        return false;
-    }
-    m_compute_selection->SelectKernel(kernel_id);
     return true;
 }
 

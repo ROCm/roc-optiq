@@ -213,14 +213,10 @@ MakeAssistantToolsJson()
 
     jt::Json metrics_params = ObjectParams();
     AddParam(metrics_params, "kernel_name", "string",
-             "Kernel name (compute traces) or summary kernel name (system traces).");
-    AddParam(metrics_params, "kernel_id", "integer",
-             "Kernel id from get_summary, instead of the name, on a compute trace.");
-    AddParam(metrics_params, "metric_name", "string",
-             "Optional substring of a hardware metric to fetch on a compute trace.");
+             "Summary kernel name, from get_summary or top_events.");
     AddTool(tools, 3, "kernel_metrics",
-            "Return duration/call stats for a kernel. On compute traces, can also "
-            "fetch named hardware metrics. On system traces, returns summary stats.",
+            "Return duration and call statistics for one kernel from the trace "
+            "summary: invocations, total, min, max, and share of GPU time.",
             metrics_params);
 
     jt::Json tracks_params = ObjectParams();
@@ -245,11 +241,6 @@ MakeAssistantToolsJson()
              "string. These run to 19 digits and lose their low bits if sent as "
              "a number, which silently names a different event. Selecting it "
              "expands its flow arrows and call stack, the same as clicking it.");
-    AddParam(goto_params, "kernel_name", "string",
-             "On compute traces, select this kernel in the UI.");
-    AddParam(goto_params, "kernel_id", "integer",
-             "On compute traces, select this kernel id instead of the name.");
-
     jt::Json goto_event_item = ObjectParams();
     AddParam(goto_event_item, "track_id", "integer", "Track the event lives on.");
     AddParam(goto_event_item, "event_uuid", "string",

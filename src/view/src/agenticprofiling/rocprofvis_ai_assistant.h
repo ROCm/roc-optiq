@@ -163,7 +163,6 @@ private:
     // The trace the briefing in the conversation describes. A follow-up about
     // the same trace does not repeat it; a different one does.
     std::string m_briefed_project_id;
-    uint64_t    m_metrics_client_id;
     FetchWait   m_fetch_wait;
     // Clickable follow-ups from offer_next_steps. Cleared on a new turn.
     std::vector<std::string> m_next_steps;

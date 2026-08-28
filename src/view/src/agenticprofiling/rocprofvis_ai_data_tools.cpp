@@ -19,8 +19,6 @@
 
 #include "json.h"
 
-#include "compute/rocprofvis_compute_selection.h"
-#include "model/compute/rocprofvis_compute_data_model.h"
 #include "model/rocprofvis_analysis_model.h"
 #include "model/rocprofvis_common_defs.h"
 #include "model/rocprofvis_summary_model.h"
@@ -49,8 +47,6 @@ namespace
 
 constexpr size_t   ASSISTANT_MAX_TRACKS       = 32;
 constexpr size_t   ASSISTANT_MAX_LIST_TRACKS  = 80;
-constexpr size_t   ASSISTANT_MAX_METRIC_NAMES = 40;
-constexpr size_t   ASSISTANT_MAX_METRIC_FETCH = 8;
 constexpr size_t   ASSISTANT_TOP_KERNEL_LIMIT = 10;
 constexpr size_t   ASSISTANT_MAX_RESULT_CHARS = 20000;
 constexpr size_t   ASSISTANT_MAX_CALL_STACK   = 40;
@@ -931,52 +927,6 @@ FormatSystemSummary(const AssistantToolContext& context)
     return out.str();
 }
 
-// Renders a compute workload's kernels, ranked by total duration.
-std::string
-FormatComputeKernels(const AssistantToolContext& context, size_t limit)
-{
-    const WorkloadInfo* workload = SelectedComputeWorkload(context);
-    if(workload == nullptr)
-    {
-        return "No compute workload is loaded.";
-    }
-
-    std::vector<const KernelInfo*> kernels = workload->ordered_kernels;
-    std::sort(kernels.begin(), kernels.end(),
-              [](const KernelInfo* a, const KernelInfo* b) {
-                  if(a == nullptr || b == nullptr)
-                  {
-                      return b == nullptr;
-                  }
-                  return a->dispatch_metrics[KernelInfo::DurationTotal] >
-                         b->dispatch_metrics[KernelInfo::DurationTotal];
-              });
-
-    std::ostringstream out;
-    out << "workload: " << workload->name << "\n";
-    out << "top_kernels:\n";
-    const size_t count = std::min(kernels.size(), limit);
-    if(count == 0)
-    {
-        out << "  (none)\n";
-        return out.str();
-    }
-    for(size_t i = 0; i < count; ++i)
-    {
-        const KernelInfo* kernel = kernels[i];
-        if(kernel == nullptr)
-        {
-            continue;
-        }
-        out << "  " << (i + 1) << ". id=" << kernel->id << " " << kernel->name
-            << "  duration_total_ns=" << kernel->dispatch_metrics[KernelInfo::DurationTotal]
-            << "  calls=" << kernel->dispatch_metrics[KernelInfo::InvocationCount]
-            << "  mean_ns=" << kernel->dispatch_metrics[KernelInfo::DurationMean]
-            << "\n";
-    }
-    return out.str();
-}
-
 // Appends one operation name to a comma-separated list, if the track has it.
 void
 AppendOpName(std::ostringstream& out, bool& first, rocprofvis_dm_event_operation_t op,
@@ -1066,13 +1016,6 @@ BuildAssistantBriefing(const AssistantToolContext& context)
 
     std::ostringstream out;
     out << "trace_name: " << context.trace_name << "\n";
-    if(context.is_compute)
-    {
-        out << "kind: compute_trace\n";
-        out << FormatComputeKernels(context, ASSISTANT_TOP_KERNEL_LIMIT);
-        return out.str();
-    }
-
     out << "kind: system_trace\n";
     const TopologyDataModel& topology = context.data_provider->DataModel().GetTopology();
     const std::vector<const NodeInfo*> nodes = topology.GetNodeList();
@@ -1255,12 +1198,6 @@ AssistantToolStartResult
 ToolTraceOverview(const AssistantToolContext& context, const jt::Json& args,
                   const std::string&)
 {
-    if(context.is_compute)
-    {
-        return DoneResult(
-            "Compute traces have no timeline. Call get_summary instead.",
-            "Wrong trace kind");
-    }
     const int32_t requested_bins = JsonUtils::GetInt(
         args, "bins", static_cast<int32_t>(ASSISTANT_OVERVIEW_BINS));
     const size_t bins =
@@ -1280,11 +1217,6 @@ ToolTraceOverview(const AssistantToolContext& context, const jt::Json& args,
 AssistantToolStartResult
 ToolGetSummary(const AssistantToolContext& context, const jt::Json&, const std::string&)
 {
-    if(context.is_compute)
-    {
-        return DoneResult(FormatComputeKernels(context, ASSISTANT_TOP_KERNEL_LIMIT),
-                          "Read compute kernel stats");
-    }
     const AssistantFetchState summary_fetch =
         TableFetch(AssistantFetchKind::kSummary, TableType::kSummaryKernelTable,
                    ASSISTANT_DEFAULT_ROW_LIMIT);
@@ -1320,11 +1252,6 @@ ToolGetSummary(const AssistantToolContext& context, const jt::Json&, const std::
 AssistantToolStartResult
 ToolListTracks(const AssistantToolContext& context, const jt::Json&, const std::string&)
 {
-    if(context.is_compute)
-    {
-        return DoneResult("Compute traces have no timeline tracks. Use kernel_metrics.",
-                          "No timeline tracks");
-    }
     const std::vector<const TrackInfo*> tracks =
         context.data_provider->DataModel().GetTimeline().GetTrackList();
     std::ostringstream out;
@@ -1379,12 +1306,6 @@ AssistantToolStartResult
 ToolTopEvents(const AssistantToolContext& context, const jt::Json& args,
               const std::string& tool_name)
 {
-    if(context.is_compute)
-    {
-        return DoneResult(
-            "top_events is for system traces. Use get_summary / kernel_metrics.",
-            "Wrong trace kind");
-    }
     const std::string category = JsonUtils::GetString(args, "category", "dispatch");
     const TopEventsSpec* spec  = FindTopEventsSpec(category);
     if(spec == nullptr)
@@ -1451,12 +1372,6 @@ AssistantToolStartResult
 ToolKernelInstances(const AssistantToolContext& context, const jt::Json& args,
                     const std::string& tool_name)
 {
-    if(context.is_compute)
-    {
-        return DoneResult(
-            "kernel_instances is for system traces. Use kernel_metrics on compute traces.",
-            "Wrong trace kind");
-    }
     const std::string kernel_name = JsonUtils::GetString(args, "kernel_name", "");
     if(kernel_name.empty())
     {
@@ -1523,152 +1438,36 @@ ToolKernelInstances(const AssistantToolContext& context, const jt::Json& args,
 
 AssistantToolStartResult
 ToolKernelMetrics(const AssistantToolContext& context, const jt::Json& args,
-                  const std::string& tool_name)
+                  const std::string&)
 {
     const std::string kernel_name = JsonUtils::GetString(args, "kernel_name", "");
-    const std::string metric_name = JsonUtils::GetString(args, "metric_name", "");
-    if(!context.is_compute)
-    {
-        std::ostringstream out;
-        const std::vector<SummaryInfo::KernelMetrics>& kernels =
-            context.data_provider->DataModel().GetSummary().GetSummaryData().gpu.top_kernels;
-        const std::string needle = Core::String::to_lower_copy(kernel_name);
-        bool              found  = false;
-        for(const SummaryInfo::KernelMetrics& kernel : kernels)
-        {
-            if(kernel_name.empty() || kernel.name == kernel_name ||
-               Core::String::to_lower_copy(kernel.name).find(needle) !=
-                   std::string::npos)
-            {
-                out << "name=" << kernel.name << " calls=" << kernel.invocations
-                    << " sum_ns=" << kernel.exec_time_sum
-                    << " min_ns=" << kernel.exec_time_min
-                    << " max_ns=" << kernel.exec_time_max
-                    << " pct=" << kernel.exec_time_pct << "\n";
-                found = true;
-                if(!kernel_name.empty())
-                {
-                    break;
-                }
-            }
-        }
-        if(!found)
-        {
-            out << "Kernel not in the current summary. Call get_summary first.\n";
-        }
-        return DoneResult(out.str(), "Read kernel summary stats");
-    }
-
-    const WorkloadInfo* workload = SelectedComputeWorkload(context);
-    if(workload == nullptr)
-    {
-        return DoneResult("No compute workload is loaded.", "No workload");
-    }
-
-    uint32_t selected_kernel = ComputeSelection::INVALID_SELECTION_ID;
-    if(context.compute_selection != nullptr)
-    {
-        selected_kernel = context.compute_selection->GetSelectedKernel();
-    }
-    const uint32_t kernel_id_arg = static_cast<uint32_t>(
-        JsonU64(args, "kernel_id", selected_kernel));
-    const KernelInfo* kernel =
-        FindComputeKernel(*workload, kernel_name, kernel_id_arg);
-    if(kernel == nullptr && selected_kernel != ComputeSelection::INVALID_SELECTION_ID)
-    {
-        kernel = FindComputeKernel(*workload, "", selected_kernel);
-    }
-    if(kernel == nullptr)
-    {
-        return DoneResult("Could not find that kernel. Call get_summary.",
-                          "Unknown kernel");
-    }
-
     std::ostringstream out;
-    out << "kernel_id=" << kernel->id << " name=" << kernel->name << "\n";
-    out << "invocation_count=" << kernel->dispatch_metrics[KernelInfo::InvocationCount]
-        << "\n";
-    out << "duration_total_ns=" << kernel->dispatch_metrics[KernelInfo::DurationTotal]
-        << "\n";
-    out << "duration_min_ns=" << kernel->dispatch_metrics[KernelInfo::DurationMin]
-        << "\n";
-    out << "duration_max_ns=" << kernel->dispatch_metrics[KernelInfo::DurationMax]
-        << "\n";
-    out << "duration_mean_ns=" << kernel->dispatch_metrics[KernelInfo::DurationMean]
-        << "\n";
-    out << "duration_median_ns="
-        << kernel->dispatch_metrics[KernelInfo::DurationMedian] << "\n";
-
-    if(metric_name.empty())
+    const std::vector<SummaryInfo::KernelMetrics>& kernels =
+        context.data_provider->DataModel().GetSummary().GetSummaryData().gpu.top_kernels;
+    const std::string needle = Core::String::to_lower_copy(kernel_name);
+    bool              found  = false;
+    for(const SummaryInfo::KernelMetrics& kernel : kernels)
     {
-        out << "available_metrics:\n";
-        size_t listed = 0;
-        for(const AvailableMetrics::Entry& entry : workload->available_metrics.list)
+        if(kernel_name.empty() || kernel.name == kernel_name ||
+           Core::String::to_lower_copy(kernel.name).find(needle) != std::string::npos)
         {
-            out << "  " << entry.name;
-            if(!entry.unit.empty())
+            out << "name=" << kernel.name << " calls=" << kernel.invocations
+                << " sum_ns=" << kernel.exec_time_sum
+                << " min_ns=" << kernel.exec_time_min
+                << " max_ns=" << kernel.exec_time_max
+                << " pct=" << kernel.exec_time_pct << "\n";
+            found = true;
+            if(!kernel_name.empty())
             {
-                out << " (" << entry.unit << ")";
-            }
-            out << "\n";
-            ++listed;
-            if(listed >= ASSISTANT_MAX_METRIC_NAMES)
-            {
-                out << "  ... more metrics omitted; pass metric_name to fetch a subset\n";
                 break;
             }
         }
-        return DoneResult(TrimResult(out.str()), "Read kernel dispatch stats");
     }
-
-    const std::string needle = Core::String::to_lower_copy(metric_name);
-    std::vector<MetricsRequestParams::MetricID> metric_ids;
-    for(const AvailableMetrics::Entry& entry : workload->available_metrics.list)
+    if(!found)
     {
-        if(Core::String::to_lower_copy(entry.name).find(needle) == std::string::npos)
-        {
-            continue;
-        }
-        MetricsRequestParams::MetricID id;
-        id.category_id = entry.category_id;
-        id.table_id    = entry.table_id;
-        id.entry_id    = entry.id;
-        metric_ids.push_back(id);
-        if(metric_ids.size() >= ASSISTANT_MAX_METRIC_FETCH)
-        {
-            break;
-        }
+        out << "Kernel not in the current summary. Call get_summary first.\n";
     }
-    if(metric_ids.empty())
-    {
-        out << "No available metric name contains \"" << metric_name << "\".\n";
-        return DoneResult(TrimResult(out.str()), "Metric not found");
-    }
-
-    context.data_provider->ComputeModel().ClearKernelMetricValues(
-        context.metrics_client_id);
-    const uint64_t request_id = RequestIdBuilder::MakeClientRequestId(
-        RequestType::kFetchMetrics, context.metrics_client_id);
-    AssistantFetchState metrics_fetch =
-        TableFetch(AssistantFetchKind::kMetrics, TableType::kSummaryKernelTable,
-                   ASSISTANT_DEFAULT_ROW_LIMIT);
-    metrics_fetch.kernel_id = kernel->id;
-    if(context.data_provider->IsRequestPending(request_id))
-    {
-        return PendingResult(request_id, metrics_fetch,
-                             AssistantToolStatusLabel(tool_name), false);
-    }
-    const bool queued = context.data_provider->FetchMetrics(MetricsRequestParams(
-        workload->id, { kernel->id }, metric_ids, context.metrics_client_id));
-    if(!queued && !context.data_provider->IsRequestPending(request_id))
-    {
-        out << "Could not queue the metric fetch.\n";
-        return DoneResult(TrimResult(out.str()), "Fetch failed");
-    }
-    AssistantToolStartResult pending = PendingResult(
-        request_id, metrics_fetch, AssistantToolStatusLabel(tool_name), queued);
-    pending.content = out.str();
-    return pending;
+    return DoneResult(out.str(), "Read kernel summary stats");
 }
 
 // Implements track_events and track_samples, which differ only in which table
@@ -1677,13 +1476,6 @@ AssistantToolStartResult
 ToolTrackRows(const AssistantToolContext& context, const jt::Json& args,
                 const std::string& tool_name)
 {
-    if(context.is_compute)
-    {
-        return DoneResult(
-            "Compute traces have no timeline tracks. Use kernel_metrics.",
-            "Wrong trace kind");
-    }
-
     const bool      events = tool_name == "track_events";
     const TableType type   = events ? TableType::kAssistantEventTable
                                     : TableType::kAssistantSampleTable;
@@ -1767,10 +1559,6 @@ AssistantToolStartResult
 ToolEventDetails(const AssistantToolContext& context, const jt::Json& args,
                  const std::string& tool_name)
 {
-    if(context.is_compute)
-    {
-        return DoneResult("event_details is for system traces.", "Wrong trace kind");
-    }
     const uint64_t event_uuid =
         JsonU64(args, "event_uuid", JsonU64(args, "event_id", 0));
     if(event_uuid == 0)
@@ -1825,11 +1613,6 @@ AssistantToolStartResult
 ToolTrackStatistics(const AssistantToolContext& context, const jt::Json& args,
                     const std::string& tool_name)
 {
-    if(context.is_compute)
-    {
-        return DoneResult("track_statistics is for system traces.",
-                          "Wrong trace kind");
-    }
     const uint64_t track_id = JsonU64(args, "track_id", INVALID_UINT64_INDEX);
     const TrackInfo* track =
         context.data_provider->DataModel().GetTimeline().GetTrack(track_id);
@@ -1888,14 +1671,6 @@ AssistantToolStartResult
 ToolSearchEvents(const AssistantToolContext& context, const jt::Json& args,
                  const std::string& tool_name)
 {
-    if(context.is_compute)
-    {
-        return DoneResult(
-            "search_events is for system traces. Use kernel_metrics on compute "
-            "traces.",
-            "Wrong trace kind");
-    }
-
     std::vector<std::string> terms = JsonUtils::GetStringArray(args, "terms");
     const std::string        single = JsonUtils::GetString(args, "query", "");
     if(terms.empty() && !single.empty())
@@ -2054,40 +1829,6 @@ FinishAssistantFetch(const AssistantToolContext& context,
     if(fetch.kind == AssistantFetchKind::kScript)
     {
         return FinishAssistantScriptFetch(context);
-    }
-    if(fetch.kind == AssistantFetchKind::kMetrics)
-    {
-        ComputeDataModel& model = context.data_provider->ComputeModel();
-        const std::vector<std::shared_ptr<MetricValue>>* values =
-            model.GetKernelMetricsData(context.metrics_client_id, fetch.kernel_id);
-        if(values == nullptr || values->empty())
-        {
-            return "Metric fetch finished with no values.";
-        }
-        std::ostringstream out;
-        out << "fetched_metrics:\n";
-        size_t shown = 0;
-        for(const std::shared_ptr<MetricValue>& value : *values)
-        {
-            if(!value)
-            {
-                continue;
-            }
-            const char* metric_name = value->entry != nullptr ? value->entry->name.c_str()
-                                                              : "(unnamed)";
-            out << "  " << metric_name;
-            for(const std::pair<const std::string, double>& named : value->values)
-            {
-                out << " " << named.first << "=" << named.second;
-            }
-            out << "\n";
-            ++shown;
-            if(shown >= ASSISTANT_MAX_METRIC_FETCH * 4)
-            {
-                break;
-            }
-        }
-        return TrimResult(out.str());
     }
     return "Fetch finished with nothing to report.";
 }

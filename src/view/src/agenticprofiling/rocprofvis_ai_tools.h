@@ -22,7 +22,6 @@ namespace View
 
 class DataProvider;
 class TimelineSelection;
-class ComputeSelection;
 class TraceView;
 
 constexpr size_t ASSISTANT_DEFAULT_ROW_LIMIT = 20;
@@ -41,7 +40,6 @@ enum class AssistantFetchKind
     kSummary,
     kTopEvents,
     kKernelInstances,
-    kMetrics,
     // Any table read back out of TraceDataModel::GetTables(): track events,
     // counter samples, and search results.
     kDataTable,
@@ -61,13 +59,11 @@ enum class AssistantFetchKind
 // is never held across a frame.
 struct AssistantToolContext
 {
-    DataProvider*       data_provider       = nullptr;
-    TimelineSelection*  timeline_selection  = nullptr;
-    ComputeSelection*   compute_selection   = nullptr;
-    TraceView*          trace_view          = nullptr;
-    bool                is_compute          = false;
-    std::string         trace_name;
-    uint64_t            metrics_client_id   = 0;
+    DataProvider*      data_provider      = nullptr;
+    TimelineSelection* timeline_selection = nullptr;
+    TraceView*         trace_view         = nullptr;
+    bool               is_compute         = false;
+    std::string        trace_name;
 };
 
 // Everything FinishAssistantFetch needs to format a completed fetch. Carried

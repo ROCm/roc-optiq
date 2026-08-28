@@ -12,7 +12,6 @@ namespace RocProfVis
 namespace View
 {
 
-class ComputeSelection;
 class DataProvider;
 class TimelineSelection;
 class TraceView;
@@ -53,10 +52,9 @@ class OptiqActions
 {
 public:
     OptiqActions(DataProvider* data_provider, TimelineSelection* timeline_selection,
-                 ComputeSelection* compute_selection, TraceView* trace_view);
+                 TraceView* trace_view);
 
     bool HasTimeline() const;
-    bool HasCompute() const;
 
     // --- Panels -----------------------------------------------------------
 
@@ -151,16 +149,11 @@ public:
     bool NavigateToEvent(uint64_t track_id, uint64_t event_uuid, double start_ns,
                          double duration_ns);
 
-    // --- Compute ----------------------------------------------------------
-
-    bool SelectKernel(uint32_t kernel_id);
-
 private:
     std::string SourceId() const;
 
     DataProvider*      m_data_provider;
     TimelineSelection* m_timeline_selection;
-    ComputeSelection*  m_compute_selection;
     TraceView*         m_trace_view;
 };
 

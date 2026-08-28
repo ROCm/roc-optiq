@@ -20,11 +20,8 @@
 
 #include "json.h"
 
-#include "compute/rocprofvis_compute_selection.h"
-#include "model/compute/rocprofvis_compute_data_model.h"
 #include "model/rocprofvis_timeline_model.h"
 #include "rocprofvis_ai_tool_schema.h"
-#include "rocprofvis_core_string_utils.h"
 #include "rocprofvis_data_provider.h"
 #include "rocprofvis_timeline_selection.h"
 
@@ -198,63 +195,6 @@ SelectedOrFullTimeRange(const AssistantToolContext& context, double& start_ns,
     }
 }
 
-// The workload a compute tool should read: whichever one is selected, or the
-// first loaded when nothing is. Null when the trace has none at all.
-const WorkloadInfo*
-SelectedComputeWorkload(const AssistantToolContext& context)
-{
-    ComputeDataModel& model       = context.data_provider->ComputeModel();
-    uint32_t          workload_id = ComputeSelection::INVALID_SELECTION_ID;
-    if(context.compute_selection != nullptr)
-    {
-        workload_id = context.compute_selection->GetSelectedWorkload();
-    }
-    const WorkloadInfo* workload = model.GetWorkload(workload_id);
-    if(workload == nullptr && !model.GetWorkloadList().empty())
-    {
-        workload = model.GetWorkloadList().front();
-    }
-    return workload;
-}
-
-// Finds a kernel by id, then exact name, then a case-insensitive substring.
-const KernelInfo*
-FindComputeKernel(const WorkloadInfo& workload, const std::string& name, uint32_t id)
-{
-    if(id != ComputeSelection::INVALID_SELECTION_ID)
-    {
-        const auto it = workload.kernels.find(id);
-        if(it != workload.kernels.end())
-        {
-            return &it->second;
-        }
-    }
-    if(name.empty())
-    {
-        return nullptr;
-    }
-    for(const KernelInfo* kernel : workload.ordered_kernels)
-    {
-        if(kernel != nullptr && kernel->name == name)
-        {
-            return kernel;
-        }
-    }
-    const std::string lowered = Core::String::to_lower_copy(name);
-    for(const KernelInfo* kernel : workload.ordered_kernels)
-    {
-        if(kernel == nullptr)
-        {
-            continue;
-        }
-        if(Core::String::to_lower_copy(kernel->name).find(lowered) != std::string::npos)
-        {
-            return kernel;
-        }
-    }
-    return nullptr;
-}
-
 // Dispatches one named tool call, returning either a finished result or a
 // pending fetch the panel polls until the rows land. The UI tools are searched
 // first: they are the cheap ones, and none of them share a name with a query.
@@ -278,6 +218,16 @@ StartAssistantTool(const AssistantToolContext& context, const std::string& tool_
         if(context.data_provider == nullptr)
         {
             return DoneResult("No trace is open.", "No trace");
+        }
+        // Ask Optiq reads system traces. Refused once here rather than in every
+        // tool: the panel is a singleton, so a compute tab can be in front even
+        // when the panel was opened on a system trace.
+        if(context.is_compute)
+        {
+            return DoneResult(
+                "This is a compute trace, and Ask Optiq reads system traces. Tell "
+                "the user to open a system trace to ask about it.",
+                "Compute trace");
         }
         // Park rather than fail. Loading a large trace takes far longer than a
         // round trip to the model, so answering "not ready" straight away only

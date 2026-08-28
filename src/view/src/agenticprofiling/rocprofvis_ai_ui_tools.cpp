@@ -15,8 +15,6 @@
 
 #include "json.h"
 
-#include "compute/rocprofvis_compute_selection.h"
-#include "model/compute/rocprofvis_compute_data_model.h"
 #include "rocprofvis_ai_actions.h"
 #include "rocprofvis_core_string_utils.h"
 #include "rocprofvis_data_provider.h"
@@ -42,7 +40,7 @@ OptiqActions
 Actions(const AssistantToolContext& context)
 {
     return OptiqActions(context.data_provider, context.timeline_selection,
-                        context.compute_selection, context.trace_view);
+                        context.trace_view);
 }
 
 // Reads the stacked follow-up buttons out of offer_next_steps arguments.
@@ -242,11 +240,6 @@ AssistantToolStartResult
 ToolAnnotate(const AssistantToolContext& context, const jt::Json& args,
              const std::string&)
 {
-    if(context.is_compute)
-    {
-        return DoneResult("Notes are a timeline feature, so system traces only.",
-                          "Wrong trace kind");
-    }
     const double      time_ns = JsonUtils::GetDouble(args, "time_ns", -1.0);
     const std::string title   = JsonUtils::GetString(args, "title", "");
     const std::string text    = JsonUtils::GetString(args, "text", "");
@@ -401,31 +394,6 @@ ToolGoto(const AssistantToolContext& context, const jt::Json& args,
     const uint64_t event_uuid =
         JsonU64(args, "event_uuid",
                 JsonU64(args, "event_id", TimelineSelection::INVALID_SELECTION_ID));
-    const std::string kernel_name = JsonUtils::GetString(args, "kernel_name", "");
-
-    if(context.is_compute)
-    {
-        if(context.compute_selection == nullptr)
-        {
-            return DoneResult("Compute selection is not available.", "goto failed");
-        }
-        const WorkloadInfo* workload = SelectedComputeWorkload(context);
-        if(workload == nullptr)
-        {
-            return DoneResult("No compute workload is loaded.", "goto failed");
-        }
-        const uint32_t kernel_id = static_cast<uint32_t>(
-            JsonU64(args, "kernel_id", ComputeSelection::INVALID_SELECTION_ID));
-        const KernelInfo* kernel = FindComputeKernel(*workload, kernel_name, kernel_id);
-        if(kernel == nullptr)
-        {
-            return DoneResult("Could not find that kernel to select.", "goto failed");
-        }
-        Actions(context).SelectKernel(kernel->id);
-        return DoneResult(std::string("Selected compute kernel ") + kernel->name,
-                          "Selected kernel");
-    }
-
     if(context.timeline_selection == nullptr)
     {
         return DoneResult("Timeline selection is not available.", "goto failed");

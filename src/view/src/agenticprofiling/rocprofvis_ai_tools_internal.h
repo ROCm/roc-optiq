@@ -30,9 +30,6 @@ namespace RocProfVis
 namespace View
 {
 
-struct KernelInfo;
-struct WorkloadInfo;
-
 // One tool body. Each takes the context for the trace in front and the
 // already-parsed arguments; the name it was called by is passed too, but only
 // the shared track_events / track_samples body has any use for it.
@@ -92,14 +89,6 @@ bool CheckArrayLength(const std::vector<jt::Json>& entries,
 // Yields the selected time range, or the whole trace if nothing is selected.
 void SelectedOrFullTimeRange(const AssistantToolContext& context, double& start_ns,
                              double& end_ns);
-
-// Finds a kernel by id, then exact name, then a case-insensitive substring.
-const KernelInfo* FindComputeKernel(const WorkloadInfo& workload,
-                                    const std::string& name, uint32_t id);
-
-// The workload a compute tool should read: the selected one, or the first
-// loaded when nothing is. Null when the trace has none at all.
-const WorkloadInfo* SelectedComputeWorkload(const AssistantToolContext& context);
 
 }  // namespace View
 }  // namespace RocProfVis

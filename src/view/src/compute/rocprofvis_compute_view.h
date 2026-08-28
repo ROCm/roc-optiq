@@ -34,8 +34,6 @@ public:
     std::shared_ptr<RocWidget> GetToolbar() override;
     std::optional<DataProviderCleanupWork> DetachProviderCleanup() override;
 
-    std::shared_ptr<ComputeSelection> GetComputeSelection() const;
-
     friend struct ComputeViewTestPeer;
 
 private:

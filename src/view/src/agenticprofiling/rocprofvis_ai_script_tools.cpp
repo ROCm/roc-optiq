@@ -68,16 +68,6 @@ ToolRunAnalysisScript(const AssistantToolContext& context, const jt::Json& args,
                           "Script too long");
     }
 
-    // optiq.table() and Track.events() read a system trace, so a script on a
-    // compute tab would fail inside Python after a round trip. Say so now.
-    if(context.is_compute)
-    {
-        return DoneResult("Scripts read system traces. This tab is a compute "
-                          "trace, so use kernel_metrics and the compute tools "
-                          "instead.",
-                          "Not a system trace");
-    }
-
     // One script at a time per trace, and the user's own run owns the slot just
     // as much as this one does.
     if(context.data_provider->IsRequestPending(DataProvider::EXECUTE_SCRIPT_REQUEST_ID))
@@ -92,7 +82,7 @@ ToolRunAnalysisScript(const AssistantToolContext& context, const jt::Json& args,
     // the run from there, through the path a hand-written script takes, and it
     // owns the trace and the selection the run needs.
     OptiqActions actions(context.data_provider, context.timeline_selection,
-                         context.compute_selection, context.trace_view);
+                         context.trace_view);
     if(!actions.ProposeScript(source))
     {
         return DoneResult("There is no script editor on this trace, so the "
@@ -134,7 +124,7 @@ bool
 AssistantScriptFetchPending(const AssistantToolContext& context)
 {
     const OptiqActions actions(context.data_provider, context.timeline_selection,
-                               context.compute_selection, context.trace_view);
+                               context.trace_view);
     const ScriptApproval state = actions.ScriptProposalState();
     return state == ScriptApproval::kPending || state == ScriptApproval::kRunning;
 }
@@ -144,7 +134,7 @@ std::string
 FinishAssistantScriptFetch(const AssistantToolContext& context)
 {
     OptiqActions actions(context.data_provider, context.timeline_selection,
-                         context.compute_selection, context.trace_view);
+                         context.trace_view);
     const ScriptApproval state = actions.ScriptProposalState();
     actions.ClearScriptProposal();
 

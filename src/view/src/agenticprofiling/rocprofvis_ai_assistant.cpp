@@ -16,8 +16,6 @@
 #include "imgui.h"
 #include "spdlog/spdlog.h"
 
-#include "compute/rocprofvis_compute_selection.h"
-#include "compute/rocprofvis_compute_view.h"
 #include "icons/rocprovfis_icon_defines.h"
 #include "model/rocprofvis_summary_model.h"
 #include "rocprofvis_ai_prompts.h"
@@ -110,7 +108,6 @@ AssistantPanel::AssistantPanel()
 , m_tool_round(0)
 , m_force_final(false)
 , m_fetch_retries(0)
-, m_metrics_client_id(IdGenerator::GetInstance().GenerateId())
 {
     m_widget_name = GenUniqueName("AssistantPanel");
 }
@@ -183,7 +180,6 @@ AssistantToolContext
 AssistantPanel::MakeToolContext() const
 {
     AssistantToolContext context;
-    context.metrics_client_id = m_metrics_client_id;
 
     AppWindow* app = AppWindow::GetInstance();
     if(app == nullptr)
@@ -197,21 +193,13 @@ AssistantPanel::MakeToolContext() const
     }
 
     context.trace_name = project->GetName();
+    context.is_compute = project->GetTraceType() == Project::Compute;
     RootView* root_view = dynamic_cast<RootView*>(project->GetView().get());
     if(root_view != nullptr)
     {
         context.data_provider = root_view->GetDataProvider();
     }
-    if(project->GetTraceType() == Project::Compute)
-    {
-        context.is_compute = true;
-        ComputeView* compute_view = dynamic_cast<ComputeView*>(project->GetView().get());
-        if(compute_view != nullptr && compute_view->GetComputeSelection())
-        {
-            context.compute_selection = compute_view->GetComputeSelection().get();
-        }
-    }
-    else if(project->GetTraceType() == Project::System)
+    if(project->GetTraceType() == Project::System)
     {
         TraceView* trace_view = dynamic_cast<TraceView*>(project->GetView().get());
         context.trace_view    = trace_view;

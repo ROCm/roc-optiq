@@ -1750,6 +1750,14 @@ Use these instead of writing your own.
 An in-app LLM analyst that reads the open trace through the normal
 view APIs and drives the UI the way a user would.
 
+**System traces only.** Every tool reads the timeline, the tracks, or
+the GPU summary, so `StartAssistantTool` turns a compute trace away once
+- beside its "no trace open" check - rather than having each tool test
+for it. The panel is a singleton shared across tabs, which is what makes
+that guard necessary rather than cosmetic: the user can open it on a
+system trace and then bring a compute tab to the front. `ComputeView`
+does not offer the toolbar button.
+
 **Gated behind `ROCPROFVIS_ENABLE_AGENTIC_PROFILING`, default OFF**, the
 same way remote and profiler launch are gated. Everything in
 `src/view/src/agenticprofiling/` is left out of `VIEW_FILES` when the
@@ -1759,9 +1767,8 @@ neither the `thirdparty/cpp-httplib` nor the `thirdparty/mbedtls`
 submodule. Every call site outside the folder is
 wrapped in `#ifdef`, so adding a new one means adding a guard: they are
 in `AppWindow` (destroy, `Update()`, the docked-render branch, the
-View-menu item), the `TraceView` and `ComputeView` toolbars, and
-`SettingsPanel` (the category, its switch cases, and the OK/Cancel token
-handling).
+View-menu item), the `TraceView` toolbar, and `SettingsPanel` (the
+category, its switch cases, and the OK/Cancel token handling).
 
 One deliberate asymmetry: `AssistantProvider`/`AssistantSettings` and
 their JSON serialization in `SettingsManager` stay compiled either way,
@@ -1862,12 +1869,11 @@ Integration points:
 - `AppWindow` destroys it (`AssistantPanel::DestroyInstance()`), calls
   `Update()` once a frame, reserves `DockedWidth()` on the right of the
   main view, and renders it with `RenderDocked()`. The View menu binds
-  `VisiblePtr()`; `TraceView` and `ComputeView` toolbars call
-  `RenderToolbarButton()`.
-- `TraceView`, `AnalysisView`, and `ComputeView` expose the plain
-  accessors `OptiqActions` needs (`ZoomToRange`, `SelectAnalysisTab`,
-  `ListBookmarks`, `GetComputeSelection`, and friends). Reuse those
-  rather than reaching into their members.
+  `VisiblePtr()`; the `TraceView` toolbar calls `RenderToolbarButton()`.
+- `TraceView` and `AnalysisView` expose the plain accessors
+  `OptiqActions` needs (`ZoomToRange`, `SelectAnalysisTab`,
+  `ListBookmarks`, and friends). Reuse those rather than reaching into
+  their members.
 
 Rules that are easy to get wrong here:
 

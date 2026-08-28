@@ -2644,4 +2644,125 @@ void RegisterAppTests(ImGuiTestEngine* e)
         IM_CHECK(message.find(expected_path) != std::string::npos);
         IM_CHECK(still_missing);
     };
+
+    // AIPROFVIS-81: Event Details dropped the argument list for HIP API events.
+    // Presence/shape only -- the args come back asynchronously through the
+    // controller, with no single table to build a value oracle from.
+    t = IM_REGISTER_TEST(e, "app", "sys_event_details_shows_hip_args");
+    t->TestFunc = [](ImGuiTestContext* ctx)
+    {
+        TraceView* tv = GetTraceViewOrSkip(ctx);
+        if (!tv) return;
+        AnalysisView* av = TraceViewTestPeer{*tv}.AnalysisViewPtr();
+        IM_CHECK(av != nullptr);
+        if (av == nullptr) return;
+        EventsView* ev = AnalysisViewTestPeer{*av}.EventsViewPtr();
+        IM_CHECK(ev != nullptr);
+        if (ev == nullptr) return;
+        TimelineView* tlv = TraceViewTestPeer{*tv}.TimelineViewPtr();
+        IM_CHECK(tlv != nullptr);
+        if (tlv == nullptr) return;
+        std::shared_ptr<TimelineSelection> sel = tv->GetTimelineSelection();
+        IM_CHECK(sel != nullptr);
+        if (sel == nullptr) return;
+
+        // A stray modal swallows hover for the windows beneath it, which would make
+        // the canvas click a no-op. Close any open popup before clicking the timeline.
+        ctx->PopupCloseAll();
+        ctx->Yield(2);
+
+        // A prior test may have left an event selected. The clear is dispatched
+        // through EventManager, so yield before asserting the empty baseline.
+        TraceViewTestPeer{*tv}.ClearEventSelection();
+        ctx->Yield(3);
+        IM_CHECK(EventsViewTestPeer{*ev}.EventItemCount() == 0);
+
+        // Only HIP API events carry the call's argument list, so restrict the
+        // search to Launch-type tracks. Chart items populate after the track's
+        // data fetch drains, so poll for one that has events.
+        FlameTrackItem* flame = nullptr;
+        for (int i = 0; i < 60 && flame == nullptr; i++)
+        {
+            for (FlameTrackItem* candidate :
+                 TimelineViewTestPeer{*tlv}.DisplayedFlameTracks())
+            {
+                const TrackInfo* info = candidate->GetTrackInfo();
+                if (info == nullptr ||
+                    info->operation_types.count(kRocProfVisDmOperationLaunch) == 0)
+                    continue;
+                if (FlameTrackItemTestPeer{*candidate}.ChartItemCount() > 0)
+                {
+                    flame = candidate;
+                    break;
+                }
+            }
+            if (flame == nullptr) ctx->Yield(2);
+        }
+        if (flame == nullptr)
+        {
+            ctx->LogWarning("SKIP: no HIP-API event with args to inspect in this trace");
+            return;
+        }
+
+        // Gather bars from the HIP track's own FV window, not the first track's, so
+        // the clicked bar belongs to the Launch-type track asserted on above. The
+        // window id is 0 until that track has rendered, so poll for it.
+        ImVec2 event_center(0.0f, 0.0f);
+        bool   have_center = false;
+        for (int i = 0; i < 60 && !have_center; i++)
+        {
+            ctx->Yield(2);
+            have_center = FirstEventScreenCenter(
+                ctx, FlameTrackItemTestPeer{*flame}.FlameWindowId(), event_center);
+        }
+        IM_CHECK(have_center);
+        if (!have_center) return;
+
+        // Selection is deferred a frame, so move/release with the mouse parked.
+        ctx->MouseMoveToPos(event_center);
+        ctx->Yield(2);
+        ctx->MouseDown(0);
+        ctx->Yield(1);
+        ctx->MouseUp(0);
+        ctx->Yield(3);
+
+        // The click lands on the widest bar, so there is no pre-chosen event. Assert
+        // the selected event carries named args, not that a specific event was
+        // selected. The event details, and with them the args, arrive
+        // asynchronously. New items are emplace_front'ed, but scan every cached item
+        // rather than relying on that ordering.
+        size_t arg_item  = 0;
+        size_t arg_count = 0;
+        for (int i = 0; i < 60 && arg_count == 0; i++)
+        {
+            ctx->Yield(2);
+            EventsViewTestPeer peer{*ev};
+            for (size_t idx = 0; idx < peer.EventItemCount(); idx++)
+            {
+                if (peer.ArgCount(idx) > 0)
+                {
+                    arg_item  = idx;
+                    arg_count = peer.ArgCount(idx);
+                    break;
+                }
+            }
+        }
+        bool have_named_arg = false;
+        for (size_t a = 0; a < arg_count; a++)
+        {
+            if (!EventsViewTestPeer{*ev}.ArgName(arg_item, a).empty())
+            {
+                have_named_arg = true;
+                break;
+            }
+        }
+
+        // Restore before asserting: IM_CHECK early-returns on failure, which
+        // would otherwise leak a selected event into later tests.
+        TraceViewTestPeer{*tv}.ClearEventSelection();
+        ctx->Yield(2);
+
+        IM_CHECK(arg_count > 0);
+        IM_CHECK(have_named_arg);
+    };
 }

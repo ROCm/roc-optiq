@@ -478,11 +478,13 @@ MessageChars(const AssistantMessage& message)
  * Every round re-sends the whole conversation, so an investigation that runs
  * for many tool rounds pays for its own history again each time.
  *
- * Whole exchanges go first, which is the cheapest thing to lose. Those cuts
- * land only on a user message: an assistant message carrying tool_calls and the
- * tool replies answering it have to travel together, and an orphan of either
- * kind is rejected by the endpoint. If no safe cut exists the history is left
- * alone - growing is better than sending something malformed.
+ * Whole earlier exchanges go first, which is the cheapest thing to lose. Those
+ * cuts land only on a user message: an assistant message carrying tool_calls
+ * and the tool replies answering it have to travel together, and an orphan of
+ * either kind is rejected by the endpoint. They also stop at the start of the
+ * live turn, whose replies are the evidence the answer is about to be written
+ * from. If no safe cut exists the history is left alone - growing is better
+ * than sending something malformed, or something gutted.
  *
  * That pass alone cannot bound one investigation, which is a single question
  * followed by round after round of tool replies and so never reaches a second
@@ -496,12 +498,35 @@ AssistantPanel::TrimConversation()
 {
     if(m_conversation.size() > ASSISTANT_MAX_CONVERSATION_MESSAGES)
     {
+        // Where the live investigation begins. Everything from here on is what
+        // the answer is about to be written from, so the drop pass may not
+        // reach into it however long it has run - only whole earlier exchanges
+        // are cheap enough to lose.
+        //
+        // Finding it means the last user message, except on the final round:
+        // BeginFinalAnswer appends a "write it up now" nudge in the user role,
+        // and that nudge is the only later user message a single investigation
+        // ever produces. Cutting to it dropped the question and every tool
+        // reply, and asked the model to write up numbers that were no longer
+        // there - which it rightly refused to do.
+        size_t       turn_start = 0;
+        size_t       user_seen  = 0;
+        const size_t wanted     = m_force_final ? 2 : 1;
+        for(size_t i = m_conversation.size(); i-- > 0;)
+        {
+            if(m_conversation[i].role == "user" && ++user_seen == wanted)
+            {
+                turn_start = i;
+                break;
+            }
+        }
+
         size_t drop = m_conversation.size() - ASSISTANT_MAX_CONVERSATION_MESSAGES;
-        while(drop < m_conversation.size() && m_conversation[drop].role != "user")
+        while(drop < turn_start && m_conversation[drop].role != "user")
         {
             ++drop;
         }
-        if(drop > 0 && drop < m_conversation.size())
+        if(drop > 0 && drop < turn_start)
         {
             spdlog::info("Assistant history trimmed: dropping {} of {} messages", drop,
                          m_conversation.size());

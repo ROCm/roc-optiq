@@ -232,6 +232,33 @@ bool ClickGearMenuItem(ImGuiTestContext* ctx, ImGuiWindow* menu, const char* lab
     return false;
 }
 
+// The track sidebar renders into a child window whose name embeds the split
+// container's address, so there is no stable ref to it. Scan the active windows.
+// Other views build left/right splits too, so a match only counts once the
+// sidebar's own "Project" tree node is found inside it.
+ImGuiWindow* FindSidebarWindow(ImGuiTestContext* ctx)
+{
+    for(ImGuiWindow* w : ImGui::GetCurrentContext()->Windows)
+    {
+        if(!w->WasActive || strstr(w->Name, "LeftColumn") == nullptr) continue;
+        if(ctx->ItemExists(ImHashStr("Project", 0, w->ID))) return w;
+    }
+    return nullptr;
+}
+
+// Resolve a track's sidebar row button by id, not by DebugLabel. ImGui only
+// records a label for items that pass clipping, and the sidebar scrolls, so a row
+// below the fold gathers with an empty label. The button's id is the track name
+// hashed over the row's id scope, stable at any scroll position. ItemClick scrolls
+// the row into view on its own.
+ImGuiID TrackButtonId(ImGuiTestItemList& items, const std::string& name)
+{
+    for(int i = 0; i < items.GetSize(); i++)
+        if(items[i]->ID == ImHashStr(name.c_str(), 0, items[i]->ParentID))
+            return items[i]->ID;
+    return 0;
+}
+
 // Restores show_summary when it goes out of scope. The Summary tests set it
 // true to drive their load path; without this, that state would leak into
 // later tests and cover the timeline.
@@ -2150,5 +2177,158 @@ void RegisterAppTests(ImGuiTestEngine* e)
         IM_CHECK(cleared_state == MeasurementState::kWaitingForFirst);
         IM_CHECK(no_points);
         IM_CHECK(inactive_after);
+    };
+
+    // AIPROFVIS-117: deselecting one of several selected tracks left the Event
+    // Table showing the old row set.
+    t = IM_REGISTER_TEST(e, "app", "sys_event_table_updates_on_track_deselect");
+    t->TestFunc = [](ImGuiTestContext* ctx)
+    {
+        TraceView* tv = GetTraceViewOrSkip(ctx);
+        if (!tv) return;
+        TimelineView* tlv = TraceViewTestPeer{*tv}.TimelineViewPtr();
+        IM_CHECK(tlv != nullptr);
+        if (tlv == nullptr) return;
+        std::shared_ptr<TimelineSelection> sel = tv->GetTimelineSelection();
+        IM_CHECK(sel != nullptr);
+        if (sel == nullptr) return;
+        DataProvider* dp = tv->GetDataProvider();
+        IM_CHECK(dp != nullptr);
+        if (dp == nullptr) return;
+
+        AppWindowSettings& settings = SettingsManager::GetInstance().GetAppWindowSettings();
+        const bool prev_details_panel = settings.show_details_panel;
+        settings.show_details_panel   = true;
+        tv->SetAnalysisViewVisibility(true);
+
+        // Selection is driven by clicking sidebar rows, so the panel has to stay up.
+        const bool prev_sidebar = settings.show_sidebar;
+        settings.show_sidebar   = true;
+        tv->SetSidebarViewVisibility(true);
+
+        // A prior test may have left a time range. The table fetch is bounded by it,
+        // so clear it for the measurement and put it back in restore().
+        double     prev_range_start = 0.0;
+        double     prev_range_end   = 0.0;
+        const bool had_range = sel->GetSelectedTimeRange(prev_range_start, prev_range_end);
+
+        // Track selection dispatches through EventManager on a later frame, and the
+        // table refetch it triggers is async, so every drive is followed by this.
+        auto drain = [&]() {
+            ctx->Yield(3);
+            for (int polls = 0; polls < 120 &&
+                 dp->IsRequestPending(DataProvider::EVENT_TABLE_REQUEST_ID); polls++)
+                ctx->Yield(2);
+            ctx->Yield(5);
+        };
+        auto row_count = [&]() -> uint64_t {
+            return dp->DataModel().GetTables().GetTableTotalRowCount(TableType::kEventTable);
+        };
+        auto restore = [&]() {
+            sel->UnselectAllTracks();
+            if (had_range) sel->SelectTimeRange(prev_range_start, prev_range_end);
+            else           sel->ClearTimeRange();
+            ctx->Yield(3);
+            settings.show_details_panel = prev_details_panel;
+            tv->SetAnalysisViewVisibility(prev_details_panel);
+            settings.show_sidebar = prev_sidebar;
+            tv->SetSidebarViewVisibility(prev_sidebar);
+            ctx->Yield(2);
+        };
+
+        // Tracks appear once the timeline's data fetch drains.
+        std::vector<FlameTrackItem*> flames;
+        for (int i = 0; i < 60 && flames.empty(); i++)
+        {
+            flames = TimelineViewTestPeer{*tlv}.DisplayedFlameTracks();
+            if (flames.empty()) ctx->Yield(2);
+        }
+        if (flames.empty())
+        {
+            restore();
+            ctx->LogWarning("SKIP: no displayed flame track to select");
+            return;
+        }
+
+        sel->UnselectAllTracks();
+        sel->ClearTimeRange();
+        drain();
+
+        // Every select and deselect below is a click on the track's sidebar row,
+        // whose button runs ToggleSelectTrack, so the same click selects an
+        // unselected track and deselects a selected one.
+        ImGuiWindow* sidebar = FindSidebarWindow(ctx);
+        if (sidebar == nullptr) restore();
+        IM_CHECK(sidebar != nullptr);
+        ctx->SetRef(sidebar);
+        ImGuiTestItemList sidebar_items;
+        ctx->GatherItems(&sidebar_items, "");
+
+        // Resolve every candidate's row up front. If none resolves, the sidebar
+        // could not be driven at all, a broken click path rather than a thin trace,
+        // so fail here instead of falling through to the data-shortage SKIP below.
+        std::vector<ImGuiID> buttons(flames.size(), 0);
+        size_t               resolved = 0;
+        for (size_t i = 0; i < flames.size(); i++)
+        {
+            buttons[i] = TrackButtonId(sidebar_items, flames[i]->GetName());
+            if (buttons[i] != 0) resolved++;
+        }
+        if (resolved == 0) restore();
+        IM_CHECK(resolved > 0);
+
+        // Only tracks the Event Table actually draws rows from can produce a
+        // deselect delta. The table unions per-track row sets that are disjoint by
+        // construction, so dropping a track whose own contribution is non-empty must
+        // change the total. Measuring each candidate alone is what rules out a false
+        // pass from picking a B that contributes nothing (a non-event track, or an
+        // event track with no events in range), where count_A == count_AB and the
+        // assertion below would hold even with the bug present.
+        FlameTrackItem* track_a  = nullptr;
+        FlameTrackItem* track_b  = nullptr;
+        ImGuiID         button_a = 0;
+        ImGuiID         button_b = 0;
+        const size_t    kMaxCandidates = 12;
+        for (size_t i = 0; i < flames.size() && i < kMaxCandidates && track_b == nullptr; i++)
+        {
+            if (buttons[i] == 0) continue;
+            ctx->ItemClick(buttons[i]);
+            drain();
+            // Two same-named tracks resolve to one row, so a click lands on only one
+            // of them. The selection model says which, and only then is the count
+            // that track's own total.
+            const uint64_t rows = sel->IsTrackSelected(*flames[i]) ? row_count() : 0;
+            ctx->ItemClick(buttons[i]);  // same button toggles the track back off
+            drain();
+            if (rows == 0) continue;
+            if (track_a == nullptr) { track_a = flames[i]; button_a = buttons[i]; }
+            else                    { track_b = flames[i]; button_b = buttons[i]; }
+        }
+        if (track_b == nullptr)
+        {
+            restore();
+            ctx->LogWarning("SKIP: need two populated tracks to observe a deselect delta");
+            return;
+        }
+
+        sel->UnselectAllTracks();
+        drain();
+        ctx->ItemClick(button_a);
+        drain();
+        ctx->ItemClick(button_b);
+        drain();
+        const uint64_t count_ab = row_count();
+
+        ctx->ItemClick(button_b);  // toggles B back off, leaving only A selected
+        drain();
+        const uint64_t count_a = row_count();
+
+        // Capture, restore, THEN assert: IM_CHECK early-returns on failure, so a
+        // leaked selection or open panel would follow into later tests.
+        restore();
+
+        IM_CHECK(count_ab > 0);
+        IM_CHECK(count_a > 0);
+        IM_CHECK(count_a != count_ab);
     };
 }

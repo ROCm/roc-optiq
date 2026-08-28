@@ -1893,6 +1893,35 @@ AppWindow::UpdateNativeFileDialog()
     }
 }
 
+// Build the NFD filter list into caller-owned vectors. items[i] points into extensions[i] and
+// file_filters[i].m_name, so the caller must keep both (and file_filters) alive for the NFD call.
+static void
+BuildNfdFilters(const std::vector<FileFilter>&  file_filters,
+                std::vector<std::string>&       extensions,
+                std::vector<nfdu8filteritem_t>& items)
+{
+    extensions.reserve(file_filters.size());
+    items.reserve(file_filters.size());
+    for(size_t i = 0; i < file_filters.size(); ++i)
+    {
+        std::string extensions_str;
+        for(size_t j = 0; j < file_filters[i].m_extensions.size(); ++j)
+        {
+            extensions_str += file_filters[i].m_extensions[j];
+            if(j < file_filters[i].m_extensions.size() - 1)
+            {
+                extensions_str += ",";
+            }
+        }
+        extensions.push_back(std::move(extensions_str));
+    }
+    // Build items after extensions is fully grown so extensions[i].c_str() stays valid.
+    for(size_t i = 0; i < file_filters.size(); ++i)
+    {
+        items.push_back({ file_filters[i].m_name.c_str(), extensions[i].c_str() });
+    }
+}
+
 void
 AppWindow::ShowNativeFileDialog(const std::vector<FileFilter>&   file_filters,
                                 const std::string&               initial_path,
@@ -1932,29 +1961,11 @@ AppWindow::ShowNativeFileDialog(const std::vector<FileFilter>&   file_filters,
         }
         nfdu8char_t* outPath = nullptr;
 
-        nfdu8filteritem_t*       filters = nullptr;
-        std::vector<std::string> extension_stings;
-        if(!file_filters.empty())
-        {
-            filters = new nfdu8filteritem_t[file_filters.size()];
-            for(size_t i = 0; i < file_filters.size(); ++i)
-            {
-                std::string extensions_str;
-                for(size_t j = 0; j < file_filters[i].m_extensions.size(); ++j)
-                {
-                    extensions_str += file_filters[i].m_extensions[j];
-                    if(j < file_filters[i].m_extensions.size() - 1)
-                    {
-                        extensions_str += ",";
-                    }
-                }
-                extension_stings.push_back(std::move(extensions_str));
-            }
-            for(size_t i = 0; i < file_filters.size(); ++i)
-            {
-                filters[i] = { file_filters[i].m_name.c_str(), extension_stings[i].c_str() };
-            }
-        }
+        std::vector<std::string>       filter_extensions;
+        std::vector<nfdu8filteritem_t> filter_items;
+        BuildNfdFilters(file_filters, filter_extensions, filter_items);
+        const nfdu8filteritem_t* filters =
+            filter_items.empty() ? nullptr : filter_items.data();
 
         nfdresult_t result;
         if(path_picker)
@@ -1987,10 +1998,6 @@ AppWindow::ShowNativeFileDialog(const std::vector<FileFilter>&   file_filters,
                 args.defaultPath = initial_path.c_str();
             }
             result = NFD_OpenDialogU8_With(&outPath, &args);
-        }
-        if(filters != nullptr)
-        {
-            delete[] filters;
         }
         std::string file_path;
         if(result == NFD_OKAY)
@@ -2072,30 +2079,11 @@ AppWindow::ShowNativeFilesDialog(
             return results;
         }
 
-        nfdu8filteritem_t*       filters = nullptr;
-        std::vector<std::string> extension_stings;
-        if(!file_filters.empty())
-        {
-            filters = new nfdu8filteritem_t[file_filters.size()];
-            for(size_t i = 0; i < file_filters.size(); ++i)
-            {
-                std::string extensions_str;
-                for(size_t j = 0; j < file_filters[i].m_extensions.size(); ++j)
-                {
-                    extensions_str += file_filters[i].m_extensions[j];
-                    if(j < file_filters[i].m_extensions.size() - 1)
-                    {
-                        extensions_str += ",";
-                    }
-                }
-                extension_stings.push_back(std::move(extensions_str));
-            }
-            for(size_t i = 0; i < file_filters.size(); ++i)
-            {
-                filters[i] = { file_filters[i].m_name.c_str(),
-                               extension_stings[i].c_str() };
-            }
-        }
+        std::vector<std::string>       filter_extensions;
+        std::vector<nfdu8filteritem_t> filter_items;
+        BuildNfdFilters(file_filters, filter_extensions, filter_items);
+        const nfdu8filteritem_t* filters =
+            filter_items.empty() ? nullptr : filter_items.data();
 
         const nfdpathset_t*   path_set = nullptr;
         nfdopendialogu8args_t args     = {};
@@ -2106,11 +2094,6 @@ AppWindow::ShowNativeFilesDialog(
             args.defaultPath = initial_path.c_str();
         }
         nfdresult_t result = NFD_OpenDialogMultipleU8_With(&path_set, &args);
-        if(filters != nullptr)
-        {
-            delete[] filters;
-        }
-
         if(result == NFD_OKAY && path_set != nullptr)
         {
             nfdpathsetsize_t count = 0;

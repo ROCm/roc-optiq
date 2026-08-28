@@ -194,6 +194,14 @@ MemoryManager::Configure(double weight)
     UpdateSizeLimit();
 }
 
+void
+MemoryManager::GrowTraceSize(size_t additional_size)
+{
+    std::unique_lock lock(s_lru_config_mutex);
+    m_trace_size += additional_size;
+    UpdateSizeLimit();
+}
+
 
 //std::unordered_map<Segment*, std::unique_ptr<LRUMember>>::iterator
 //MemoryManager::GetDefaultLRUIterator()

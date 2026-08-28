@@ -194,6 +194,20 @@ rocprofvis_dm_database_t rocprofvis_db_open_database_multi(
                                      nullptr);
         files.push_back(filenames[i]);
     }
+    // Combined open assumes rocprof sqlite (the single-file path autodetects per type). Reject
+    // anything else up front so we don't silently merge broken/empty data.
+    for (const std::string& file : files)
+    {
+        std::vector<std::string> detected_multinode;
+        rocprofvis_db_type_t     type =
+            RocProfVis::DataModel::RocprofDatabase::Detect(file.c_str(), detected_multinode);
+        if (type != rocprofvis_db_type_t::kRocprofSqlite &&
+            type != rocprofvis_db_type_t::kRocprofMultinodeSqlite)
+        {
+            spdlog::error("Combined open rejected: '{}' is not a rocprof sqlite trace", file);
+            return nullptr;
+        }
+    }
     try {
         RocProfVis::DataModel::Database* db =
             new RocProfVis::DataModel::RocprofDatabase(files.front().c_str(), files);

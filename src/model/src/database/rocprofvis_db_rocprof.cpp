@@ -305,9 +305,8 @@ rocprofvis_dm_result_t RocprofDatabase::CreateMemoryActivityTable(Future* future
 
     rocprofvis_dm_result_t result = kRocProfVisDmResultSuccess;
 
-    for (auto& guid_info : DbInstances())
+    for (auto& guid_info : ParticipatingInstances())
     {
-        if (!ShouldProcessInstance(guid_info.first.FileIndex())) continue;
         const char* pmc_table_name = "PMC";
         std::map<uint32_t, uint64_t> allocated_memory_per_agent;
         std::map<uint32_t, uint64_t> pmc_id_per_agent;
@@ -459,9 +458,8 @@ uint64_t RocprofDatabase::GetMemoryActivityTableSchemaHash()
 rocprofvis_dm_result_t RocprofDatabase::CreateAgentFriendlyMemoryAllocationTable(Future* future)
 {
     rocprofvis_dm_result_t result = kRocProfVisDmResultSuccess;
-    for (auto& guid_info : DbInstances())
+    for (auto& guid_info : ParticipatingInstances())
     {
-        if (!ShouldProcessInstance(guid_info.first.FileIndex())) continue;
         std::string from = "rocpd_memory_allocate_";
         std::string to = m_metadata_version_control.GetTableName(m_metadata_version_control.kRocOptiqTableMemoryAllocate);
         std::string original_m_alloc_table = from + GuidAt(guid_info.first.GuidIndex());
@@ -579,9 +577,8 @@ RocprofDatabase::CreateIndexes()
     auto task = [&](uint32_t db_node_id) {
         result = ExecuteTransaction( vec, db_node_id);
         };
-    for (auto& guid_info : DbInstances())
+    for (auto& guid_info : ParticipatingInstances())
     {
-        if (!ShouldProcessInstance(guid_info.first.FileIndex())) continue;
         if (file_node_id == -1)
         {
             file_node_id = guid_info.first.FileIndex();
@@ -694,9 +691,8 @@ rocprofvis_dm_result_t RocprofDatabase::LoadMemoryActivityData(Future* future) {
         future->DeleteSubFuture(sub_future);
         };
 
-    for (auto& guid_info : DbInstances())
+    for (auto& guid_info : ParticipatingInstances())
     {
-        if (!ShouldProcessInstance(guid_info.first.FileIndex())) continue;
         std::string table_name = m_metadata_version_control.GetTableName(m_metadata_version_control.kRocOptiqTableMemoryActivity) + GuidAt(guid_info.first.GuidIndex());
         if (false == m_metadata_version_control.MustRebuild(guid_info.first.FileIndex(), m_metadata_version_control.kRocOptiqTableMemoryActivity))
         {
@@ -865,9 +861,8 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
         // only processes the newly added node, and it must match what is already loaded.
         std::string version = IsIncrementalLoad() ? m_db_version : std::string();
         const std::string existing_version = version;
-        for (auto& guid_info : DbInstances())
+        for (auto& guid_info : ParticipatingInstances())
         {
-            if (!ShouldProcessInstance(guid_info.first.FileIndex())) continue;
             // CallbackParseMetadata writes m_db_version for this instance.
             result = ExecuteSQLQuery(future, &guid_info.first, "SELECT * FROM rocpd_metadata_%GUID%;", &CallbackParseMetadata);
             if (result != kRocProfVisDmResultSuccess) break;
@@ -895,9 +890,8 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
         CreateIndexes();
 
         //pre-create cache tables
-        for (auto& guid_info : DbInstances())
+        for (auto& guid_info : ParticipatingInstances())
         {
-            if (!ShouldProcessInstance(guid_info.first.FileIndex())) continue;
             CachedTables(guid_info.first.GuidIndex());
         }
 
@@ -972,9 +966,8 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
                     future->DeleteSubFuture(sub_future);
                     m_add_track_mutex.unlock(db_instance->GuidIndex());
                 };
-            for (auto& guid_info : DbInstances())
+            for (auto& guid_info : ParticipatingInstances())
             {
-                if (!ShouldProcessInstance(guid_info.first.FileIndex())) continue;
                 threads.emplace_back(task, &guid_info.first);
             }
             for (auto& t : threads)
@@ -1004,9 +997,8 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
                     future->DeleteSubFuture(sub_future);
                     m_add_track_mutex.unlock(db_instance->GuidIndex());
                 };
-            for (auto& guid_info : DbInstances())
+            for (auto& guid_info : ParticipatingInstances())
             {
-                if (!ShouldProcessInstance(guid_info.first.FileIndex())) continue;
                 threads.emplace_back(task, &guid_info.first);
             }
             for (auto& t : threads)
@@ -1034,9 +1026,8 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
                     future->DeleteSubFuture(sub_future);
                     m_add_track_mutex.unlock(db_instance->GuidIndex());
                 };
-            for (auto& guid_info : DbInstances())
+            for (auto& guid_info : ParticipatingInstances())
             {
-                if (!ShouldProcessInstance(guid_info.first.FileIndex())) continue;
                 threads.emplace_back(task, &guid_info.first);
             }
             for (auto& t : threads)
@@ -1064,9 +1055,8 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
                     future->DeleteSubFuture(sub_future);
                     m_add_track_mutex.unlock(db_instance->GuidIndex());
                 };
-            for (auto& guid_info : DbInstances())
+            for (auto& guid_info : ParticipatingInstances())
             {
-                if (!ShouldProcessInstance(guid_info.first.FileIndex())) continue;
                 threads.emplace_back(task, &guid_info.first);
             }
             for (auto& t : threads)
@@ -1104,9 +1094,8 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
                     future->DeleteSubFuture(sub_future);
                     m_add_track_mutex.unlock(db_instance->GuidIndex());
                 };
-            for (auto& guid_info : DbInstances())
+            for (auto& guid_info : ParticipatingInstances())
             {
-                if (!ShouldProcessInstance(guid_info.first.FileIndex())) continue;
                 threads.emplace_back(task, &guid_info.first);
             }
             for (auto& t : threads)
@@ -1135,9 +1124,8 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
                     future->DeleteSubFuture(sub_future);
                     m_add_track_mutex.unlock(db_instance->GuidIndex());
                 };
-            for (auto& guid_info : DbInstances())
+            for (auto& guid_info : ParticipatingInstances())
             {
-                if (!ShouldProcessInstance(guid_info.first.FileIndex())) continue;
                 threads.emplace_back(task, &guid_info.first);
             }
             for (auto& t : threads)
@@ -1166,9 +1154,8 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
                     future->DeleteSubFuture(sub_future);
                     m_add_track_mutex.unlock(db_instance->GuidIndex());
                 };
-            for (auto& guid_info : DbInstances())
+            for (auto& guid_info : ParticipatingInstances())
             {
-                if (!ShouldProcessInstance(guid_info.first.FileIndex())) continue;
                 threads.emplace_back(task, &guid_info.first);
             }
             for (auto& t : threads)
@@ -1196,9 +1183,8 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
                     future->DeleteSubFuture(sub_future);
                     m_add_track_mutex.unlock(db_instance->GuidIndex());
                 };
-            for (auto& guid_info : DbInstances())
+            for (auto& guid_info : ParticipatingInstances())
             {
-                if (!ShouldProcessInstance(guid_info.first.FileIndex())) continue;
                 threads.emplace_back(task, &guid_info.first);
             }
             for (auto& t : threads)
@@ -1210,9 +1196,8 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
         CreateTracksOrderRanking();
 
           
-        for (auto& guid_info : DbInstances())
+        for (auto& guid_info : ParticipatingInstances())
         {
-            if (!ShouldProcessInstance(guid_info.first.FileIndex())) continue;
             result = PopulateUnusedAgents( guid_info.first.GuidIndex());
             if (result != kRocProfVisDmResultSuccess) break;
         }
@@ -1248,9 +1233,8 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
                         ", id, string FROM rocpd_string_%GUID% ORDER BY id; ").c_str(), &CallBackAddString);
                     future->DeleteSubFuture(sub_future);
                 };
-            for (auto& guid_info : DbInstances())
+            for (auto& guid_info : ParticipatingInstances())
             {
-                if (!ShouldProcessInstance(guid_info.first.FileIndex())) continue;
                 threads.emplace_back(task, &guid_info.first);
             }
             for (auto& t : threads)
@@ -1269,9 +1253,8 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
                         ", id, display_name FROM rocpd_info_kernel_symbol_%GUID%;").c_str(), &CallBackAddString);
                     future->DeleteSubFuture(sub_future);
                 };
-            for (auto& guid_info : DbInstances())
+            for (auto& guid_info : ParticipatingInstances())
             {
-                if (!ShouldProcessInstance(guid_info.first.FileIndex())) continue;
                 threads.emplace_back(task, &guid_info.first);
             }
             for (auto& t : threads)
@@ -1290,9 +1273,8 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
 
         ShowProgress(10, "Calculating event levels", kRPVDbBusy, future);
         guid_list_t calculate_level_for_guids;
-        for (auto& guid_info : DbInstances())
+        for (auto& guid_info : ParticipatingInstances())
         {
-            if (!ShouldProcessInstance(guid_info.first.FileIndex())) continue;
             if (m_metadata_version_control.MustRebuildLevels(guid_info.first.FileIndex()))
             {
                 calculate_level_for_guids.push_back(guid_info);
@@ -1336,9 +1318,8 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
 
             for (auto prop : table_properties)
             {
-                for (auto& guid_info : DbInstances())
+                for (auto& guid_info : ParticipatingInstances())
                 {
-                    if (!ShouldProcessInstance(guid_info.first.FileIndex())) continue;
                     CreateSQLTable(
                         (prop.first + guid_info.second).c_str(), s_level_schema_params,
                         m_event_levels[prop.second][guid_info.first.GuidIndex()].size(),

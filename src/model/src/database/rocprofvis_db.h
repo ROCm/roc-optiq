@@ -520,6 +520,10 @@ class Database
         // slots (deque/track/db-node) are kept so surviving instances' indices/ids stay
         // stable, but their heavy data is freed and they are skipped by read/query paths.
         std::set<uint32_t> m_removed_file_indices;
+        // Guards the two index sets above against a concurrent read racing an in-place add/remove.
+        // Defense-in-depth (that path also quiesces fetches); taken as a leaf lock - never held
+        // while acquiring another lock - to stay deadlock-free.
+        mutable std::shared_mutex m_index_sets_mutex;
 
 
     protected:
@@ -529,12 +533,12 @@ class Database
         // Incremental-load gate: true when this file-node index should be processed by the
         // current metadata read. Always true during a normal full load (filter empty).
         // A tombstoned (removed) instance is never processed.
-        bool ShouldProcessInstance(uint32_t file_index) const { return m_removed_file_indices.count(file_index) == 0 && (m_load_only_file_indices.empty() || m_load_only_file_indices.count(file_index) > 0); }
+        bool ShouldProcessInstance(uint32_t file_index) const { std::shared_lock<std::shared_mutex> lock(m_index_sets_mutex); return m_removed_file_indices.count(file_index) == 0 && (m_load_only_file_indices.empty() || m_load_only_file_indices.count(file_index) > 0); }
         // True unless the instance has been removed in place. Consulted by steady-state read
         // paths (queries/slices) so a tombstoned instance is skipped even outside a load.
-        bool IsInstanceActive(uint32_t file_index) const { return m_removed_file_indices.count(file_index) == 0; }
-        void MarkFileIndexRemoved(uint32_t file_index) { m_removed_file_indices.insert(file_index); }
-        bool IsIncrementalLoad() const { return !m_load_only_file_indices.empty(); }
+        bool IsInstanceActive(uint32_t file_index) const { std::shared_lock<std::shared_mutex> lock(m_index_sets_mutex); return m_removed_file_indices.count(file_index) == 0; }
+        void MarkFileIndexRemoved(uint32_t file_index) { std::unique_lock<std::shared_mutex> lock(m_index_sets_mutex); m_removed_file_indices.insert(file_index); }
+        bool IsIncrementalLoad() const { std::shared_lock<std::shared_mutex> lock(m_index_sets_mutex); return !m_load_only_file_indices.empty(); }
         // The GuidIndices of the instances that the current metadata read will process.
         // On a full load this is every instance; on an incremental add it is just the newly
         // added file's instance(s). Used to seed OrderedMutex so ordering does not wait on
@@ -566,10 +570,36 @@ class Database
             }
             return list;
         }
+        // Range over DbInstances() yielding only instances the current read should process, so
+        // loops need not repeat the ShouldProcessInstance() skip. Yields references into the real
+        // m_db_instances (stable &guid_info.first), unlike the copying ParticipatingGuidList().
+        class ParticipatingInstanceRange {
+        public:
+            explicit ParticipatingInstanceRange(Database& db) : m_db(db) {}
+            class Iterator {
+            public:
+                Iterator(Database& db, guid_list_t::iterator it) : m_db(db), m_it(it) { Advance(); }
+                GuidInfo&  operator*() const { return *m_it; }
+                Iterator&  operator++() { ++m_it; Advance(); return *this; }
+                bool       operator!=(const Iterator& other) const { return m_it != other.m_it; }
+            private:
+                void Advance() {
+                    while (m_it != m_db.m_db_instances.end() &&
+                           !m_db.ShouldProcessInstance(m_it->first.FileIndex())) { ++m_it; }
+                }
+                Database&             m_db;
+                guid_list_t::iterator m_it;
+            };
+            Iterator begin() { return Iterator(m_db, m_db.m_db_instances.begin()); }
+            Iterator end() { return Iterator(m_db, m_db.m_db_instances.end()); }
+        private:
+            Database& m_db;
+        };
+        ParticipatingInstanceRange ParticipatingInstances() { return ParticipatingInstanceRange(*this); }
         // Scope the next metadata read to a single new file node (incremental add), or clear
         // the scope to restore full-load behavior.
-        void SetIncrementalLoadFileIndex(uint32_t file_index) { m_load_only_file_indices.clear(); m_load_only_file_indices.insert(file_index); }
-        void ClearIncrementalLoad() { m_load_only_file_indices.clear(); }
+        void SetIncrementalLoadFileIndex(uint32_t file_index) { std::unique_lock<std::shared_mutex> lock(m_index_sets_mutex); m_load_only_file_indices.clear(); m_load_only_file_indices.insert(file_index); }
+        void ClearIncrementalLoad() { std::unique_lock<std::shared_mutex> lock(m_index_sets_mutex); m_load_only_file_indices.clear(); }
         std::string GuidAt(int index) { return index < m_db_instances.size() ? m_db_instances[index].second : std::string(); }
         std::string GuidSymAt(int index) { std::string s = GuidAt(index); std::replace(s.begin(), s.end(), '_', '-'); return s; }
         DbInstance* DbInstancePtrAt(int index) { return index < m_db_instances.size() ? &m_db_instances[index].first : nullptr; }

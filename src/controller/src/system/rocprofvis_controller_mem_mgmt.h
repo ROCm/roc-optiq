@@ -139,6 +139,9 @@ namespace RocProfVis
             rocprofvis_result_t CancelArrayOwnership(void* array_ptr,
                                                     rocprofvis_owner_type_t type);
             void                Configure(double weight);
+            // Enlarge this trace's accounted size on in-place add and re-balance the memory budget
+            // across traces; otherwise the LRU limit stays sized for the pre-add trace.
+            void                GrowTraceSize(size_t additional_size);
 
             void                Delete(Handle* handle, SegmentTimeline* owner);
             // Drop all LRU bookkeeping for a timeline owner that is about to be destroyed

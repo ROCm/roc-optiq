@@ -1144,6 +1144,9 @@ rocprofvis_dm_result_t ProfileDatabase::BuildHistogram(Future* future, uint32_t 
     std::string histogram_query_suffix = GetHistogramQuerySuffix();
 
     const char* histogram_table_name = GetMetadataVersionControl()->GetHistogramTableName();
+    // Records the bucket size the cached histogram was built with. Bucket size depends on the
+    // longest loaded file, so a different combination must rebuild rather than reuse it.
+    const std::string bucket_size_table_name = std::string(histogram_table_name) + "_bucket_size";
     
 
     for (auto& file_node : m_db_nodes)
@@ -1153,7 +1156,22 @@ rocprofvis_dm_result_t ProfileDatabase::BuildHistogram(Future* future, uint32_t 
         if (!ShouldProcessInstance(file_node->node_id)) continue;
         std::vector<store_params> v;
         TemporaryDbInstance db_instance(file_node->node_id);
-        if (false == GetMetadataVersionControl()->MustRebuildHistogram(file_node->node_id))
+        bool reuse = (false == GetMetadataVersionControl()->MustRebuildHistogram(file_node->node_id));
+        if (reuse)
+        {
+            // Reuse only when the stored bucket size still matches this session's; a changed
+            // combination changes the bucket size and must rebuild.
+            uint64_t cached_bucket_size = 0;
+            if (!CheckTableExists(bucket_size_table_name, file_node->node_id) ||
+                ExecuteSQLQuery(future, &db_instance,
+                                (std::string("SELECT bucket_size FROM ") + bucket_size_table_name).c_str(),
+                                &CallbackGetValue, cached_bucket_size) != kRocProfVisDmResultSuccess ||
+                cached_bucket_size != bucket_size)
+            {
+                reuse = false;
+            }
+        }
+        if (reuse)
         {
             result = ExecuteSQLQuery(future, &db_instance, (std::string("SELECT * FROM ") + histogram_table_name).c_str(), &CallBackLoadHistogram);
         }
@@ -1266,6 +1284,21 @@ rocprofvis_dm_result_t ProfileDatabase::BuildHistogram(Future* future, uint32_t 
                         sqlite3_bind_double(stmt, 5, p.bucket_value);
                     },
                     file_node->node_id);
+
+                if (kRocProfVisDmResultSuccess == result)
+                {
+                    // Persist the bucket size for the next open's reuse check. Swept with the
+                    // histogram on cleanup/trim via the roc_optiq_histogram prefix.
+                    SQLInsertParams bucket_size_schema = { { "id", "INTEGER PRIMARY KEY" },
+                                                           { "bucket_size", "INTEGER" } };
+                    CreateSQLTable(
+                        bucket_size_table_name.c_str(), bucket_size_schema, 1,
+                        [&](sqlite3_stmt* stmt, int) {
+                            sqlite3_bind_int(stmt, 1, 0);
+                            sqlite3_bind_int64(stmt, 2, static_cast<sqlite3_int64>(bucket_size));
+                        },
+                        file_node->node_id);
+                }
 
             }        
         }      

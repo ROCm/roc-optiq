@@ -328,6 +328,9 @@ private:
     void UpdateRequestProgress(RequestInfo& req);
 
     void ProcessRequest(RequestInfo& req);
+    // Rebuild the timeline model (topology, histogram, time range, track metadata) from the
+    // controller. Shared by initial load and add/remove completion; false if timeline unreadable.
+    bool RebuildTimelineFromController();
     void ProcessLoadSystemTrace(RequestInfo& req);
     // Completion handler for an incremental AddTraceSource: refreshes the timeline model
     // from the controller without wiping the existing view if the add failed.
@@ -337,6 +340,13 @@ private:
     void ProcessRemoveTraceSource(RequestInfo& req);
     // Report add/remove-trace-source completion to the owner via m_source_mutation_done_callback.
     void NotifySourceMutationDone(bool success);
+    // Shared setup for in-place add/remove: guard readiness, quiesce fetches, issue the controller
+    // call, and queue the completion request. is_add selects add vs remove.
+    bool StartTraceSourceMutation(rocprofvis_result_t (*controller_fn)(
+                                      rocprofvis_controller_t*, char const*,
+                                      rocprofvis_controller_future_t*),
+                                  const std::string& file_path, bool is_add,
+                                  uint64_t request_id, RequestType request_type);
     void ProcessEventExtendedRequest(RequestInfo& req);
     void ProcessEventFlowDetailsRequest(RequestInfo& req);
     void ProcessEventCallStackRequest(RequestInfo& req);

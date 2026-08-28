@@ -87,11 +87,9 @@ public:
     // agenticprofiling/rocprofvis_ai_trace_view_actions.cpp; move one back here
     // if a menu or toolbar ever needs it.
     void SetMinimapVisibility(bool visibility);
-    bool IsMinimapVisible() const;
     // Flow arrows between linked events, as driven by the toolbar's eye and
     // tree/chain buttons.
     void SetFlowArrowsVisible(bool visible);
-    bool AreFlowArrowsVisible() const;
     void SetFlowRenderChained(bool chained);
     // Zooms the visible window, as opposed to just selecting a range.
     void ZoomToRange(double start_ns, double end_ns);
@@ -113,7 +111,6 @@ public:
 
     void             ResetView();
     void             SetAnnotationsVisible(bool visible);
-    bool             AreAnnotationsVisible() const;
     std::vector<int> ListBookmarks() const;
     bool             SaveBookmark(int slot);
     bool             GotoBookmark(int slot);

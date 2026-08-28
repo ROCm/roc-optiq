@@ -273,71 +273,6 @@ OptiqActions::ShowPanel(OptiqPanel panel, bool visible)
     }
 }
 
-// Reads a panel's current visibility, so a tool can report it without toggling.
-// Fails wherever ShowPanel would, so the two never disagree about whether this
-// panel is reachable at all.
-bool
-OptiqActions::IsPanelVisible(OptiqPanel panel, bool& visible_out) const
-{
-    if(NeedsActiveTraceView(panel) && m_trace_view == nullptr)
-    {
-        return false;
-    }
-
-    const AppWindowSettings& app_settings =
-        SettingsManager::GetInstance().GetAppWindowSettings();
-
-    switch(panel)
-    {
-        case OptiqPanel::kMinimap:
-        {
-            visible_out = m_trace_view->IsMinimapVisible();
-            return true;
-        }
-        case OptiqPanel::kAnnotations:
-        {
-            visible_out = m_trace_view->AreAnnotationsVisible();
-            return true;
-        }
-        case OptiqPanel::kHistogram:
-        {
-            visible_out = app_settings.show_histogram;
-            return true;
-        }
-        case OptiqPanel::kTopology:
-        {
-            visible_out = app_settings.show_sidebar;
-            return true;
-        }
-        case OptiqPanel::kDetails:
-        {
-            visible_out = app_settings.show_details_panel;
-            return true;
-        }
-        case OptiqPanel::kSummary:
-        {
-            visible_out = app_settings.show_summary;
-            return true;
-        }
-        case OptiqPanel::kToolbar:
-        {
-            visible_out = app_settings.show_toolbar;
-            return true;
-        }
-        case OptiqPanel::kLogViewer:
-        {
-            LogViewer* log_viewer = LogViewer::GetInstance();
-            if(log_viewer == nullptr)
-            {
-                return false;
-            }
-            visible_out = *log_viewer->VisiblePtr();
-            return true;
-        }
-        default: return false;
-    }
-}
-
 bool
 OptiqActions::HasTimeline() const
 {
@@ -473,17 +408,6 @@ OptiqActions::SetFlowArrowsVisible(bool visible)
 }
 
 bool
-OptiqActions::AreFlowArrowsVisible(bool& visible_out) const
-{
-    if(m_trace_view == nullptr)
-    {
-        return false;
-    }
-    visible_out = m_trace_view->AreFlowArrowsVisible();
-    return true;
-}
-
-bool
 OptiqActions::SetFlowRenderChained(bool chained)
 {
     if(m_trace_view == nullptr)
@@ -573,13 +497,6 @@ OptiqActions::AddNote(double time_ns, const std::string& title, const std::strin
     return m_trace_view->AddNote(time_ns, title, text, v_min, v_max, track_id);
 }
 
-void
-OptiqActions::Notify(const std::string& message, bool is_warning)
-{
-    NotificationManager::GetInstance().Show(
-        message, is_warning ? NotificationLevel::Warning : NotificationLevel::Info);
-}
-
 bool
 OptiqActions::SelectRange(double start_ns, double end_ns)
 {
@@ -588,17 +505,6 @@ OptiqActions::SelectRange(double start_ns, double end_ns)
         return false;
     }
     m_timeline_selection->SelectTimeRange(start_ns, end_ns);
-    return true;
-}
-
-bool
-OptiqActions::ClearRange()
-{
-    if(!HasTimeline())
-    {
-        return false;
-    }
-    m_timeline_selection->ClearTimeRange();
     return true;
 }
 
@@ -630,18 +536,6 @@ OptiqActions::ScrollToTrack(uint64_t track_id)
 }
 
 bool
-OptiqActions::RevealTrackInTopology(uint64_t track_id)
-{
-    if(m_data_provider == nullptr)
-    {
-        return false;
-    }
-    EventManager::GetInstance()->AddEvent(std::make_shared<ScrollToTrackEvent>(
-        static_cast<int>(RocEvents::kRevealTrackInTopology), track_id, SourceId()));
-    return true;
-}
-
-bool
 OptiqActions::ClickEvent(uint64_t track_id, uint64_t event_uuid)
 {
     if(!HasTimeline() || event_uuid == TimelineSelection::INVALID_SELECTION_ID)
@@ -650,28 +544,6 @@ OptiqActions::ClickEvent(uint64_t track_id, uint64_t event_uuid)
     }
     m_timeline_selection->UnselectAllEvents();
     m_timeline_selection->SelectTrackEvent(track_id, event_uuid);
-    return true;
-}
-
-bool
-OptiqActions::ShiftClickEvent(uint64_t track_id, uint64_t event_uuid)
-{
-    if(!HasTimeline() || event_uuid == TimelineSelection::INVALID_SELECTION_ID)
-    {
-        return false;
-    }
-    m_timeline_selection->SelectTrackEvent(track_id, event_uuid);
-    return true;
-}
-
-bool
-OptiqActions::ClearEventSelection()
-{
-    if(!HasTimeline())
-    {
-        return false;
-    }
-    m_timeline_selection->UnselectAllEvents();
     return true;
 }
 
@@ -720,17 +592,6 @@ OptiqActions::SelectKernel(uint32_t kernel_id)
         return false;
     }
     m_compute_selection->SelectKernel(kernel_id);
-    return true;
-}
-
-bool
-OptiqActions::SelectWorkload(uint32_t workload_id)
-{
-    if(!HasCompute())
-    {
-        return false;
-    }
-    m_compute_selection->SelectWorkload(workload_id);
     return true;
 }
 

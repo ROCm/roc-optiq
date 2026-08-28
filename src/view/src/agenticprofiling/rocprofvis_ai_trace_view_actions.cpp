@@ -62,12 +62,6 @@ TraceView::SetMinimapVisibility(bool visibility)
     m_show_minimap_popup = visibility;
 }
 
-bool
-TraceView::IsMinimapVisible() const
-{
-    return m_show_minimap_popup;
-}
-
 void
 TraceView::SetFlowArrowsVisible(bool visible)
 {
@@ -76,13 +70,6 @@ TraceView::SetFlowArrowsVisible(bool visible)
         m_timeline_view->GetArrowLayer().SetFlowDisplayMode(
             visible ? FlowDisplayMode::kShowAll : FlowDisplayMode::kHide);
     }
-}
-
-bool
-TraceView::AreFlowArrowsVisible() const
-{
-    return m_timeline_view && m_timeline_view->GetArrowLayer().GetFlowDisplayMode() ==
-                                  FlowDisplayMode::kShowAll;
 }
 
 void
@@ -173,12 +160,6 @@ TraceView::SetAnnotationsVisible(bool visible)
     {
         m_annotations->SetVisible(visible);
     }
-}
-
-bool
-TraceView::AreAnnotationsVisible() const
-{
-    return m_annotations && m_annotations->IsVisibile();
 }
 
 std::vector<int>

@@ -64,7 +64,6 @@ public:
     // that need both the persisted setting and a live widget update are paired
     // up here, so callers do not have to know which ones those are.
     bool ShowPanel(OptiqPanel panel, bool visible);
-    bool IsPanelVisible(OptiqPanel panel, bool& visible_out) const;
 
     // Accepts what a user would call the panel, not just its canonical name:
     // "navbar" and "tree" both mean topology. Case, spacing and punctuation are
@@ -101,7 +100,6 @@ public:
     // Flow arrows between linked events, and whether they fan out from the
     // selected event or chain through the sequence.
     bool SetFlowArrowsVisible(bool visible);
-    bool AreFlowArrowsVisible(bool& visible_out) const;
     bool SetFlowRenderChained(bool chained);
 
     // Zoom the visible window, rather than only selecting a range.
@@ -113,10 +111,6 @@ public:
     // the one action that outlives the conversation.
     bool AddNote(double time_ns, const std::string& title, const std::string& text,
                  double v_min, double v_max, uint64_t track_id);
-
-    // Raises a toast, for telling the user something without them reading the
-    // panel.
-    void Notify(const std::string& message, bool is_warning = false);
 
     // --- Remaining toolbar actions ----------------------------------------
 
@@ -133,14 +127,12 @@ public:
 
     // Drag-select a time range, the same as dragging on the ruler.
     bool SelectRange(double start_ns, double end_ns);
-    bool ClearRange();
 
     // Move the visible window without changing the selection.
     bool ShowRange(double start_ns, double end_ns);
 
-    // Scroll a track into view, and reveal it in the topology sidebar.
+    // Scroll a track into view.
     bool ScrollToTrack(uint64_t track_id);
-    bool RevealTrackInTopology(uint64_t track_id);
 
     // --- Events -----------------------------------------------------------
 
@@ -150,10 +142,6 @@ public:
     // DataProvider::FetchEvent - the duplicate collides on the shared request
     // id and gets dropped.
     bool ClickEvent(uint64_t track_id, uint64_t event_uuid);
-
-    // Like ClickEvent but additive, the same as clicking with multi-select held.
-    bool ShiftClickEvent(uint64_t track_id, uint64_t event_uuid);
-    bool ClearEventSelection();
 
     // Make an event glow until something clears it.
     bool HighlightEvent(uint64_t track_id, uint64_t event_uuid);
@@ -166,7 +154,6 @@ public:
     // --- Compute ----------------------------------------------------------
 
     bool SelectKernel(uint32_t kernel_id);
-    bool SelectWorkload(uint32_t workload_id);
 
 private:
     std::string SourceId() const;

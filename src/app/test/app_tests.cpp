@@ -2372,4 +2372,171 @@ void RegisterAppTests(ImGuiTestEngine* e)
         IM_CHECK(count_a > 0);
         IM_CHECK(count_a != count_ab);
     };
+
+    // Advanced Details "Aggregate": picking a group-by column and clicking Submit
+    // re-runs the event-table query with a GROUP BY, collapsing raw rows into
+    // grouped ones, so the total row count changes.
+    t = IM_REGISTER_TEST(e, "app", "sys_event_table_aggregate_changes_rows");
+    t->TestFunc = [](ImGuiTestContext* ctx)
+    {
+        TraceView* tv = GetTraceViewOrSkip(ctx);
+        if (!tv) return;
+        TimelineView* tlv = TraceViewTestPeer{*tv}.TimelineViewPtr();
+        IM_CHECK(tlv != nullptr);
+        if (tlv == nullptr) return;
+        std::shared_ptr<TimelineSelection> sel = tv->GetTimelineSelection();
+        IM_CHECK(sel != nullptr);
+        if (sel == nullptr) return;
+        DataProvider* dp = tv->GetDataProvider();
+        IM_CHECK(dp != nullptr);
+        if (dp == nullptr) return;
+
+        // The Event Table and its Aggregate controls only register with the Test
+        // Engine while the Advanced Details panel renders, so force it open.
+        const bool details_visible =
+            SettingsManager::GetInstance().GetAppWindowSettings().show_details_panel;
+        tv->SetAnalysisViewVisibility(true);
+
+        // The table is filled by clicking sidebar rows, so that panel has to stay up.
+        const bool sidebar_visible =
+            SettingsManager::GetInstance().GetAppWindowSettings().show_sidebar;
+        tv->SetSidebarViewVisibility(true);
+        ctx->Yield(3);
+
+        // Every drive re-queries the table asynchronously. Wait for the request to
+        // be issued, drain it, then let the model settle before reading a count.
+        auto drain_event_table = [&]()
+        {
+            ctx->Yield(3);
+            for (int i = 0; i < 200 &&
+                 dp->IsRequestPending(DataProvider::EVENT_TABLE_REQUEST_ID); i++)
+                ctx->Yield(2);
+            ctx->Yield(5);
+        };
+        auto restore = [&]()
+        {
+            sel->UnselectAllTracks();
+            tv->SetAnalysisViewVisibility(details_visible);
+            tv->SetSidebarViewVisibility(sidebar_visible);
+            ctx->Yield(3);
+        };
+
+        // Only event ("flame") tracks feed the Event Table. Select them all so it
+        // holds raw rows to aggregate.
+        std::vector<FlameTrackItem*> flames;
+        for (int i = 0; i < 60; i++)
+        {
+            flames = TimelineViewTestPeer{*tlv}.DisplayedFlameTracks();
+            if (!flames.empty()) break;
+            ctx->Yield(2);
+        }
+        if (flames.empty())
+        {
+            ctx->LogWarning("SKIP: no displayed flame track to fill the event table");
+            restore();
+            return;
+        }
+        sel->UnselectAllTracks();
+        drain_event_table();
+
+        // A missing sidebar is a broken click path, not a thin trace, so fail rather
+        // than SKIP (the flame-track shortage above is the legitimate data SKIP).
+        ImGuiWindow* sidebar = FindSidebarWindow(ctx);
+        if (sidebar == nullptr) restore();
+        IM_CHECK(sidebar != nullptr);
+        ctx->SetRef(sidebar);
+        ImGuiTestItemList sidebar_items;
+        ctx->GatherItems(&sidebar_items, "");
+
+        // Fill the table by clicking each flame track's sidebar row. Same-named rows
+        // share one button id and the button toggles, so click the distinct ids once
+        // each. A duplicate-named pair fills from one of the two, which still holds
+        // raw rows to aggregate.
+        std::vector<ImGuiID> track_buttons;
+        for (FlameTrackItem* flame : flames)
+        {
+            const ImGuiID id = TrackButtonId(sidebar_items, flame->GetName());
+            if (id == 0) continue;
+            bool queued = false;
+            for (ImGuiID q : track_buttons) queued = queued || (q == id);
+            if (!queued) track_buttons.push_back(id);
+        }
+        if (track_buttons.empty())
+        {
+            ctx->LogWarning("SKIP: no flame track row button found in the sidebar");
+            restore();
+            return;
+        }
+        for (ImGuiID id : track_buttons) ctx->ItemClick(id);
+        drain_event_table();
+
+        const TablesModel& tables = dp->DataModel().GetTables();
+        const uint64_t rows_before = tables.GetTableTotalRowCount(TableType::kEventTable);
+        if (rows_before == 0)
+        {
+            ctx->LogWarning("SKIP: event table is empty, nothing to aggregate");
+            restore();
+            return;
+        }
+
+        ctx->SetRef("Main Window");
+        // ImGui::Combo() never reports its label to the Test Engine, so the
+        // "**/##group_by" wildcard cannot resolve it. The combo and the Submit
+        // button are added under the same table id stack, so hash the combo's
+        // label over Submit's parent id to reach it.
+        const ImGuiTestItemInfo submit =
+            ctx->ItemInfo("**/Submit", ImGuiTestOpFlags_NoError);
+        const ImGuiID group_by_id = ImHashStr("##group_by", 0, submit.ParentID);
+        if (submit.ID == 0 || !ctx->ItemExists(group_by_id))
+        {
+            ctx->LogWarning("SKIP: Aggregate controls are not registered with the "
+                            "Test Engine");
+            restore();
+            return;
+        }
+
+        // The options are Selectables in the combo popup, which DO carry labels.
+        // "-- None --" is the ungrouped state we restore to; any other entry is a
+        // groupable column, so take the first one.
+        const char* none_label = "-- None --";
+        ctx->ItemClick(group_by_id);
+        ctx->Yield(3);
+        ImGuiTestItemList options;
+        ctx->GatherItems(&options, "//$FOCUSED");
+        ImGuiID none_id   = 0;
+        ImGuiID column_id = 0;
+        for (int i = 0; i < options.GetSize(); i++)
+        {
+            if (strcmp(options[i]->DebugLabel, none_label) == 0)
+                none_id = options[i]->ID;
+            else if (column_id == 0)
+                column_id = options[i]->ID;
+        }
+        if (none_id == 0 || column_id == 0)
+        {
+            ctx->LogWarning("SKIP: group-by combo popup offers no column to group on");
+            ctx->PopupCloseAll();
+            restore();
+            return;
+        }
+
+        ctx->ItemClick(column_id);
+        ctx->Yield(3);
+        ctx->ItemClick("**/Submit");
+        drain_event_table();
+
+        const uint64_t rows_after = tables.GetTableTotalRowCount(TableType::kEventTable);
+
+        // Restore BEFORE asserting: IM_CHECK early-returns on failure, and a live
+        // group-by would leak into every later event-table test.
+        ctx->ItemClick(group_by_id);
+        ctx->Yield(3);
+        ctx->ItemClick(none_id);
+        ctx->Yield(3);
+        ctx->ItemClick("**/Submit");
+        drain_event_table();
+        restore();
+
+        IM_CHECK(rows_after != rows_before);
+    };
 }

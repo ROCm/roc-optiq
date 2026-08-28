@@ -390,10 +390,11 @@ AssistantToolStartResult
 ToolGoto(const AssistantToolContext& context, const jt::Json& args,
          const std::string&)
 {
-    const double start_ns =
-        JsonUtils::GetDouble(args, "start_ns",
-                             JsonUtils::GetDouble(args, "start", -1.0));
-    const double end_ns =
+    // Not const: an event's own bounds stand in when the model names the event
+    // it cares about but leaves the window out.
+    double start_ns = JsonUtils::GetDouble(
+        args, "start_ns", JsonUtils::GetDouble(args, "start", -1.0));
+    double end_ns =
         JsonUtils::GetDouble(args, "end_ns", JsonUtils::GetDouble(args, "end", -1.0));
     const uint64_t track_id =
         JsonU64(args, "track_id", TimelineSelection::INVALID_SELECTION_ID);
@@ -425,31 +426,14 @@ ToolGoto(const AssistantToolContext& context, const jt::Json& args,
                           "Selected kernel");
     }
 
-    // isfinite is doing real work here: NaN fails all three comparisons
-    // below, so without it a NaN bound would be accepted as a valid range.
-    if(!std::isfinite(start_ns) || !std::isfinite(end_ns) || start_ns < 0.0 ||
-       end_ns <= start_ns)
-    {
-        return DoneResult(
-            "goto needs start_ns and end_ns (end > start) from kernel_instances "
-            "or the selected range.",
-            "goto failed");
-    }
     if(context.timeline_selection == nullptr)
     {
         return DoneResult("Timeline selection is not available.", "goto failed");
     }
 
-    OptiqActions actions = Actions(context);
-    actions.SelectRange(start_ns, end_ns);
-    const bool zoom = JsonUtils::GetBool(args, "zoom", false);
-    if(zoom)
-    {
-        actions.ZoomToRange(start_ns, end_ns);
-    }
-
     // The model may name one event via track_id/event_uuid or several via
-    // events[]; both shapes collapse to this list.
+    // events[]; both shapes collapse to this list. Gathered before the range is
+    // settled, because an event can supply the range the model left out.
     std::vector<std::pair<uint64_t, uint64_t>> targets;
     if(event_uuid != TimelineSelection::INVALID_SELECTION_ID)
     {
@@ -485,55 +469,133 @@ ToolGoto(const AssistantToolContext& context, const jt::Json& args,
         }
     }
 
-    // Highlighting comes before navigating, so the view is framed on an
-    // event that actually took rather than on whichever the model listed
-    // first. Clicking that one is also what makes the trace view load its
-    // details, flow arrows, and call stack - NavigateToEvent only frames.
-    size_t                        highlighted = 0;
-    std::pair<uint64_t, uint64_t> first_highlighted(0, 0);
+    // isfinite is doing real work here: NaN fails all three comparisons, so
+    // without it a NaN bound would be accepted as a valid range.
+    bool has_range = std::isfinite(start_ns) && std::isfinite(end_ns) &&
+                     start_ns >= 0.0 && end_ns > start_ns;
+
+    // Naming the culprit event but no window is the obvious way to call this,
+    // so derive the window from the events rather than refusing. Only works for
+    // events the view has already loaded; when it does not, the selection below
+    // still happens and only the framing is skipped.
+    if(!has_range && !targets.empty())
+    {
+        std::vector<uint64_t> ids;
+        ids.reserve(targets.size());
+        for(const std::pair<uint64_t, uint64_t>& target : targets)
+        {
+            ids.push_back(target.second);
+        }
+        double found_start = 0.0;
+        double found_end   = 0.0;
+        if(context.data_provider->DataModel().GetEvents().GetEventTimeRange(
+               ids, found_start, found_end) &&
+           std::isfinite(found_start) && std::isfinite(found_end) &&
+           found_start >= 0.0 && found_end > found_start)
+        {
+            start_ns  = found_start;
+            end_ns    = found_end;
+            has_range = true;
+        }
+    }
+
+    if(!has_range && targets.empty())
+    {
+        return DoneResult(
+            "goto needs either start_ns and end_ns (end > start), or the "
+            "__uuid of an event to put the view on.",
+            "goto failed");
+    }
+
+    OptiqActions actions = Actions(context);
+    const bool   zoom    = JsonUtils::GetBool(args, "zoom", false);
+    if(has_range)
+    {
+        actions.SelectRange(start_ns, end_ns);
+        if(zoom)
+        {
+            actions.ZoomToRange(start_ns, end_ns);
+        }
+    }
+
+    // The first event that takes becomes the focal point: it is clicked, which
+    // is what makes the trace view load its details, flow arrows and call
+    // stack. Everything after it is only highlighted, as context around it.
+    //
+    // The focal event is deliberately not highlighted as well. Where the two
+    // overlap the highlight border wins, so highlighting the clicked event
+    // would draw it exactly like the rest and leave the user a wall of equally
+    // bright boxes with nothing to look at. Marking it before navigating also
+    // frames the view on an event that actually took, rather than on whichever
+    // one the model happened to list first.
+    size_t                        marked     = 0;
+    bool                          have_focus = false;
+    std::pair<uint64_t, uint64_t> focus(0, 0);
     if(!targets.empty())
     {
         actions.ClearHighlights();
         for(const std::pair<uint64_t, uint64_t>& target : targets)
         {
-            if(!actions.HighlightEvent(target.first, target.second))
+            if(!have_focus)
             {
+                if(!actions.ClickEvent(target.first, target.second))
+                {
+                    continue;
+                }
+                have_focus = true;
+                focus      = target;
+                actions.ScrollToTrack(target.first);
+                ++marked;
                 continue;
             }
-            if(highlighted == 0)
+            if(actions.HighlightEvent(target.first, target.second))
             {
-                first_highlighted = target;
-                actions.ClickEvent(target.first, target.second);
-                actions.ScrollToTrack(target.first);
+                ++marked;
             }
-            ++highlighted;
         }
     }
 
-    if(highlighted > 0)
+    // Framing needs a window. Without one the selection above still stands, so
+    // the user has their focal point even though the view did not move.
+    if(has_range)
     {
-        actions.NavigateToEvent(first_highlighted.first, first_highlighted.second,
-                                start_ns, end_ns - start_ns);
-    }
-    else
-    {
-        actions.ShowRange(start_ns, end_ns);
+        if(have_focus)
+        {
+            actions.NavigateToEvent(focus.first, focus.second, start_ns,
+                                    end_ns - start_ns);
+        }
+        else
+        {
+            actions.ShowRange(start_ns, end_ns);
+        }
     }
 
     SettingsManager& settings    = SettingsManager::GetInstance();
     const TimeFormat time_format = settings.GetUserSettings().unit_settings.time_format;
     std::ostringstream out;
-    out << "Moved the timeline to "
-        << nanosecond_to_formatted_str(start_ns, time_format, true) << " .. "
-        << nanosecond_to_formatted_str(end_ns, time_format, true);
-    if(zoom)
+    if(has_range)
     {
-        out << ", zoomed in";
+        out << "Moved the timeline to "
+            << nanosecond_to_formatted_str(start_ns, time_format, true) << " .. "
+            << nanosecond_to_formatted_str(end_ns, time_format, true);
+        if(zoom)
+        {
+            out << ", zoomed in";
+        }
     }
-    if(highlighted > 0)
+    else
     {
-        out << " and highlighted " << highlighted
-            << " event(s) there, with flow arrows expanded on the first";
+        out << "Left the timeline where it was, because no window was given and "
+               "that event is not loaded in the view yet";
+    }
+    if(have_focus)
+    {
+        out << " and selected one event as the focal point, so its details, flow "
+               "arrows and call stack are loaded";
+        if(marked > 1)
+        {
+            out << ", with " << (marked - 1) << " more highlighted around it";
+        }
     }
     else if(!targets.empty())
     {

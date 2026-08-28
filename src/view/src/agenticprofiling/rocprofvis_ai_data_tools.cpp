@@ -67,18 +67,27 @@ constexpr double   ASSISTANT_OVERVIEW_SCALE   = 100.0;
  * Only reached on the first query of a session: the column is resolved by name
  * first, but that reads the header off a table nothing has fetched into yet, so
  * the very first call has no header to search and lands here. A fallback that
- * names the wrong column does not fail - it silently sorts by something else,
- * which is how "the slowest instance" came back as a 2.9 us row while the
- * summary reported a 427 us maximum.
+ * names the wrong column does not fail - the controller sorts by whatever is at
+ * that index, so the tool answers confidently about the wrong row.
+ *
+ * COUNT EVERY COLUMN, INCLUDING THE ONES NOT PRINTED. These index the table's
+ * own header, and FormatTableSnapshot drops the "__" service columns on the way
+ * out - so the position a column appears at in a tool result is not its index
+ * here. The kernel instance table carries __op at 0, which is why duration is
+ * 16 and not the 15 it looks like in a printed row. Sorting by 15 asks for
+ * "end", and descending "end" returns the last dispatch of the trace rather
+ * than the longest: the slowest matvec came back as a 116 us instance that
+ * happened to run last, while the true maximum was 12.77 ms.
  *
  * These are per table because the layouts differ:
  *   top events       name Invocations DurationTotal DurationAvg ...
- *   kernel instances id __uuid category name stream queue node PID TID
+ *                    (no __op, so DurationTotal really is 2)
+ *   kernel instances __op id __uuid category name stream queue node PID TID
  *                    AgentAbsoluteIndex AgentType AgentTypeIndex AgentName
  *                    start end duration ...
  */
 constexpr uint64_t ASSISTANT_DURATION_COLUMN                 = 2;
-constexpr uint64_t ASSISTANT_KERNEL_INSTANCE_DURATION_COLUMN = 15;
+constexpr uint64_t ASSISTANT_KERNEL_INSTANCE_DURATION_COLUMN = 16;
 
 // Furthest a tool may page into a result set. limit is clamped too, but without
 // a ceiling here the model could ask the database to skip billions of rows.

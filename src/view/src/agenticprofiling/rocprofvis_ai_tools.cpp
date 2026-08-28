@@ -264,10 +264,18 @@ StartAssistantTool(const AssistantToolContext& context, const std::string& tool_
         {
             return DoneResult("No trace is open.", "No trace");
         }
+        // Park rather than fail. Loading a large trace takes far longer than a
+        // round trip to the model, so answering "not ready" straight away only
+        // teaches it to retry into the same wall, or to answer without the data
+        // it asked for.
         if(context.data_provider->GetState() != ProviderState::kReady)
         {
-            return DoneResult("The trace is still loading. Wait and try again.",
-                              "Trace not ready");
+            AssistantToolStartResult waiting;
+            waiting.pending         = true;
+            waiting.fetch.kind      = AssistantFetchKind::kTraceLoading;
+            waiting.status_line     = "Waiting for the trace to finish loading...";
+            waiting.timeout_seconds = ASSISTANT_TRACE_LOADING_TIMEOUT_SECONDS;
+            return waiting;
         }
     }
 

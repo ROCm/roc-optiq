@@ -4,7 +4,6 @@
 #pragma once
 
 #include "rocprofvis_ai_client.h"
-#include "rocprofvis_ai_tool_schema.h"
 #include "rocprofvis_ai_tools.h"
 #include "rocprofvis_widget.h"
 
@@ -82,7 +81,6 @@ private:
         bool                  warmup = false;
         std::vector<uint64_t> request_ids;
         AssistantFetchState   fetch;
-        std::string           tool_call_id;
         std::string           tool_name;
         std::string           prefix;
         std::chrono::steady_clock::time_point started;
@@ -121,12 +119,11 @@ private:
     // prose instead of reaching for another call.
     void BeginFinalAnswer();
     void BeginFetchWait(const AssistantToolStartResult& started,
-                        const std::string& tool_call_id, const std::string& tool_name,
-                        bool warmup);
+                        const std::string& tool_name, bool warmup);
     void FinishCurrentTool(const std::string& content);
     void ContinueAfterTools();
     void BeginQueuedTurn();
-    bool TryStartSummaryWarmup(const std::string& question, bool explain_view);
+    bool TryStartSummaryWarmup(const std::string& question);
     bool AnyFetchPending(const AssistantToolContext& context) const;
     AssistantToolContext MakeToolContext() const;
     std::string          CurrentProjectId() const;
@@ -151,7 +148,6 @@ private:
     std::vector<ChatLine> m_lines;
 
     std::string                    m_queued_question;
-    bool                           m_queued_explain_view;
     std::vector<AssistantMessage>  m_conversation;
     std::vector<AssistantToolCall> m_pending_calls;
     size_t                         m_next_call_index;

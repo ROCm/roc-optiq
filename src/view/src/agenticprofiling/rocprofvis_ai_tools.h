@@ -28,6 +28,12 @@ class TraceView;
 constexpr size_t ASSISTANT_DEFAULT_ROW_LIMIT = 20;
 constexpr size_t ASSISTANT_MAX_ROW_LIMIT     = 200;
 
+// How long a tool may wait for a trace to finish opening. Sized for a large
+// file on a slow disk rather than for a query, because this wait is the load
+// itself. Still bounded, so a load that never finishes cannot park the turn
+// forever.
+constexpr uint32_t ASSISTANT_TRACE_LOADING_TIMEOUT_SECONDS = 600;
+
 // What a parked fetch is waiting on, which decides how its rows get formatted.
 enum class AssistantFetchKind
 {
@@ -43,7 +49,12 @@ enum class AssistantFetchKind
     kTrackStatistics,
     // A Python analysis script, which answers with its own text rather than
     // rows to format.
-    kScript
+    kScript,
+    // The trace was still loading when the tool was called. Nothing has been
+    // queried yet: the panel parks until the trace is ready and then runs the
+    // tool for real, so a big file is waited out rather than reported as a
+    // failure the model answers around.
+    kTraceLoading
 };
 
 // What the tools may touch on the trace in front. Rebuilt for every call, so it

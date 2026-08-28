@@ -2582,4 +2582,66 @@ void RegisterAppTests(ImGuiTestEngine* e)
         ctx->ItemClick(clear_ref.c_str());
         ctx->Yield(2);
     };
+
+    // AIPROFVIS-297: opening a .rpv whose referenced trace is gone must fail with a
+    // message naming the missing trace, and must not create a file at that path.
+    // AppWindow::OpenFile discards the Project it built on a failed open, so the test
+    // owns the Project and calls Open() directly to read the error off it.
+    t = IM_REGISTER_TEST(e, "app", "sys_project_missing_source_db_error");
+    t->TestFunc = [](ImGuiTestContext* ctx)
+    {
+        namespace fs = std::filesystem;
+
+        // Open() reports the failure through the app's message dialog.
+        AppWindow* app = AppWindow::GetInstance();
+        IM_CHECK(app != nullptr);
+        if (app == nullptr) return;
+
+        std::error_code ec;
+        const fs::path missing_db = fs::temp_directory_path() / "rocprofvis_missing_source_zzq.db";
+        fs::remove(missing_db, ec);
+        IM_CHECK(!fs::exists(missing_db));
+
+        // Write a temp .rpv referencing the missing db by absolute path, escaped so
+        // the JSON stays valid.
+        const fs::path rpv_path = fs::temp_directory_path() / "rocprofvis_missing_source.rpv";
+        std::string escaped;
+        for (char c : missing_db.string())
+        {
+            if (c == '\\' || c == '"') escaped.push_back('\\');
+            escaped.push_back(c);
+        }
+        {
+            std::ofstream out(rpv_path);
+            IM_CHECK(out.is_open());
+            if (!out.is_open()) return;
+            out << "{\"general\": {\"version\": \"1.0\", \"trace_path\": \""
+                << escaped << "\"}}";
+        }
+
+        Project     proj;
+        std::string path   = rpv_path.string();
+        const Project::OpenResult result = proj.Open(path);
+        const std::string message = ProjectTestPeer{proj}.OpenErrorMessage();
+
+        // OpenProject resolves the trace through weakly_canonical, so match the
+        // message against the same form rather than the raw path.
+        const std::string expected_path = fs::weakly_canonical(missing_db).string();
+
+        // The guard that replaced the old open attempt: no empty db is left behind.
+        const bool still_missing = !fs::exists(missing_db) && !fs::exists(expected_path);
+
+        fs::remove(rpv_path, ec);
+
+        // The failed Open queued an error dialog, which does not actually open until
+        // the next Render. Yield so it opens, then close it, otherwise it leaks into
+        // later tests and blocks their input.
+        ctx->Yield(2);
+        ctx->PopupCloseAll();
+        ctx->Yield(2);
+
+        IM_CHECK(result == Project::OpenResult::Failed);
+        IM_CHECK(message.find(expected_path) != std::string::npos);
+        IM_CHECK(still_missing);
+    };
 }

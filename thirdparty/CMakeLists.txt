@@ -43,10 +43,17 @@ if(ROCPROFVIS_NEED_MBEDTLS)
     set(BUILD_TESTING ${_prev_mbedtls_build_testing})
 endif(ROCPROFVIS_NEED_MBEDTLS)
 
-# TEMPORARY (agentic profiling): cpp-httplib v0.53.1 (MIT), the in-process HTTPS
-# client. TLS via vendored mbedTLS so the GUI never shells out to curl.exe,
-# which flashes a console on Windows and takes the request down with it.
+# TEMPORARY (agentic profiling): cpp-httplib (MIT), the in-process HTTPS
+# client, a submodule pinned to v0.53.1. TLS via vendored mbedTLS so the GUI
+# never shells out to curl.exe, which flashes a console on Windows and takes
+# the request down with it. Upstream keeps httplib.h at its repo root and we
+# compile it header-only, so its own CMakeLists is deliberately not added.
 if(ROCPROFVIS_ENABLE_AGENTIC_PROFILING)
+if(NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/cpp-httplib/httplib.h)
+    message(FATAL_ERROR
+        "ROCPROFVIS_ENABLE_AGENTIC_PROFILING is ON but thirdparty/cpp-httplib is "
+        "empty. Run: git submodule update --init thirdparty/cpp-httplib")
+endif()
 add_library(cpp-httplib INTERFACE)
 target_include_directories(cpp-httplib INTERFACE
     ${CMAKE_CURRENT_SOURCE_DIR}/cpp-httplib

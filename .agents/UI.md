@@ -79,8 +79,9 @@ When humans and `CODING.md` disagree with this file, `CODING.md` wins.
 - **Render backend:** Vulkan (preferred) with OpenGL fallback. Selected by
   `src/app/src/rocprofvis_imgui_backend.cpp`.
 - **Persistence / parsing:** SQLite (`thirdparty/sqlite3/`), jsoncpp, yaml-cpp.
-- **HTTPS (Ask Optiq):** cpp-httplib (`thirdparty/cpp-httplib/`) with vendored
-  mbedTLS. Targets the OpenAI chat-completions API. Built only under
+- **HTTPS (Ask Optiq):** cpp-httplib (`thirdparty/cpp-httplib/`, a submodule
+  pinned to v0.53.1) with vendored mbedTLS. Targets the OpenAI
+  chat-completions API. Built only under
   `ROCPROFVIS_ENABLE_AGENTIC_PROFILING` (default OFF).
 - **Logging:** spdlog (`thirdparty/spdlog/`). Use `spdlog::info/warn/error`,
   never `std::cout` / `printf` / `iostream`.
@@ -1753,8 +1754,9 @@ view APIs and drives the UI the way a user would.
 same way remote and profiler launch are gated. Everything in
 `src/view/src/agenticprofiling/` is left out of `VIEW_FILES` when the
 option is off, and so are `cpp-httplib`, mbedTLS, and `SecretStore`
-unless remote asks for them - which is why a default clone needs no
-`thirdparty/mbedtls` submodule. Every call site outside the folder is
+unless remote asks for them - which is why a default clone needs
+neither the `thirdparty/cpp-httplib` nor the `thirdparty/mbedtls`
+submodule. Every call site outside the folder is
 wrapped in `#ifdef`, so adding a new one means adding a guard: they are
 in `AppWindow` (destroy, `Update()`, the docked-render branch, the
 View-menu item), the `TraceView` and `ComputeView` toolbars, and

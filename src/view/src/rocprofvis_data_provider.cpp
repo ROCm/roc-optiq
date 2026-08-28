@@ -3572,6 +3572,26 @@ DataProvider::ProcessTableRequest(RequestInfo& req)
         rocprofvis_handle_t* table_handle = nullptr;
         rocprofvis_result_t  result       = kRocProfVisResultUnknownError;
 
+        std::shared_ptr<TableRequestParams> table_params =
+            std::dynamic_pointer_cast<TableRequestParams>(req.custom_params);
+        if(!table_params)
+        {
+            spdlog::warn("Table request params are not set or invalid");
+        }
+
+        // Read back through the table the request was issued against. A non-UI
+        // client queried its own, so resolving the shared one here would take
+        // the column list off a table nobody ran this query on - which reads as
+        // zero columns, and turns a page of real rows into blank cells.
+        const bool client_table = table_params && table_params->m_client_id != 0;
+        if(client_table)
+        {
+            table_handle = ClientTableHandle(*table_params);
+            result       = table_handle ? kRocProfVisResultSuccess
+                                        : kRocProfVisResultUnknownError;
+        }
+        else
+        {
         switch(table_type)
         {
             case kRPVControllerTableTypeEvents:
@@ -3639,6 +3659,7 @@ DataProvider::ProcessTableRequest(RequestInfo& req)
                 spdlog::error("Unsupported table type: {}", static_cast<int>(table_type));
                 return;
             }
+        }
         }
 
         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
@@ -3733,14 +3754,6 @@ DataProvider::ProcessTableRequest(RequestInfo& req)
                 row_data.push_back(std::move(column_value));
             }
             table_data.push_back(std::move(row_data));
-        }
-
-        std::shared_ptr<TableRequestParams> table_params =
-            std::dynamic_pointer_cast<TableRequestParams>(req.custom_params);
-        if(!table_params)
-        {
-            spdlog::warn("Table request params are not set or invalid");
-            table_params = nullptr;
         }
 
         // The client that asked decides where the rows land: the UI writes the

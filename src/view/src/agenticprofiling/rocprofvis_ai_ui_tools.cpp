@@ -469,6 +469,32 @@ ToolGoto(const AssistantToolContext& context, const jt::Json& args,
         }
     }
 
+    // Naming one event as event_uuid and again inside events[] is the natural
+    // way to write "this is the one I mean, and here is the set", so the same
+    // uuid arrives twice. Left in, the second copy highlights the event the
+    // first copy selected, the highlight border wins where they overlap, and
+    // the focal point disappears back into the group it was supposed to stand
+    // out from.
+    std::vector<std::pair<uint64_t, uint64_t>> unique_targets;
+    unique_targets.reserve(targets.size());
+    for(const std::pair<uint64_t, uint64_t>& target : targets)
+    {
+        bool seen = false;
+        for(const std::pair<uint64_t, uint64_t>& kept : unique_targets)
+        {
+            if(kept.second == target.second)
+            {
+                seen = true;
+                break;
+            }
+        }
+        if(!seen)
+        {
+            unique_targets.push_back(target);
+        }
+    }
+    targets.swap(unique_targets);
+
     // isfinite is doing real work here: NaN fails all three comparisons, so
     // without it a NaN bound would be accepted as a valid range.
     bool has_range = std::isfinite(start_ns) && std::isfinite(end_ns) &&

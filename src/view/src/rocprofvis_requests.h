@@ -195,6 +195,7 @@ protected:
     , m_group_columns(group_cols)
     , m_export_to_file_path(export_to_file_path)
     {}
+    TableRequestParams() = default;
 };
 
 class TrackTableRequestParams : public TableRequestParams
@@ -219,6 +220,7 @@ public:
                          export_to_file_path)
     , m_track_ids(track_ids)
     {}
+    TrackTableRequestParams() = default;
 };
 
 class EventSearchRequestParams : public TableRequestParams
@@ -254,6 +256,8 @@ public:
     , m_include_category(include_category)
     , m_partial_matching(partial_matching)
     {}
+
+    EventSearchRequestParams() = default;
 };
 
 // Event request parameters

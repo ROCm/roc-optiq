@@ -154,12 +154,13 @@ TrackDetails::Render()
                             ImGui::SameLine(0.0f, style.ItemSpacing.x);
                             if(detail.track)
                             {
-                                ImGui::TextUnformatted(detail.track->info->name.c_str());
+                                ImGui::TextUnformatted(
+                                    detail.track->info->GetName().c_str());
                             }
                             else if(detail.stream_track)
                             {
                                 ImGui::TextUnformatted(
-                                    detail.stream_track->info->name.c_str());
+                                    detail.stream_track->info->GetName().c_str());
                             }
                         }
                         ImGui::EndGroup();
@@ -194,14 +195,14 @@ TrackDetails::Render()
                         if(detail.track)
                         {
                             ImGui::Text("%s: %s", TRACK_PREFIX[detail.track_type],
-                                        detail.track->info->name.c_str());
+                                        detail.track->info->GetName().c_str());
                             RenderTable(detail.track->info_table, "##td_track_table",
                                         detail.stats);
                         }
                         else if(detail.stream_track)
                         {
                             ImGui::Text("%s: %s", TRACK_PREFIX[detail.track_type],
-                                        detail.stream_track->info->name.c_str());
+                                        detail.stream_track->info->GetName().c_str());
                             RenderTable(detail.stream_track->info_table,
                                         "##td_stream_table", detail.stats);
                         }

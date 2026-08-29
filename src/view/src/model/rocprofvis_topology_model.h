@@ -5,8 +5,10 @@
 
 #include "rocprofvis_model_types.h"
 
-#include <unordered_map>
 #include <map>
+#include <memory>
+#include <string>
+#include <unordered_map>
 #include <vector>
 
 namespace RocProfVis
@@ -14,97 +16,278 @@ namespace RocProfVis
 namespace View
 {
 
+enum class TopologyNodeType : uint32_t
+{
+    kRoot,
+    kNode,
+    kProcessor,
+    kProcess,
+    kThread,
+    kStream,
+    kQueue,
+    kCounter
+};
+
+class TopologyTree;
 
 /**
- * @brief Manages static system topology information.
- * 
- * This model holds hardware and process hierarchy data that is typically
- * loaded once at trace initialization and rarely changes.
+ * @brief Base for every level of the system topology.
+ *
+ * Nodes are owned by the TopologyTree arena, never by their parent. That is
+ * what lets a node be reached from more than one place: a queue sits under its
+ * processor (the structural parent) and is also referenced by every stream
+ * that dispatches to it (a secondary parent).
  */
-class TopologyDataModel
+class TopologyNode
 {
 public:
-    TopologyDataModel() = default;
-    ~TopologyDataModel() = default;
+    TopologyNode(TopologyNodeType type, uint64_t id);
+    virtual ~TopologyNode() = default;
 
-    // Node access
-    const NodeInfo* GetNode(uint64_t node_id) const;
-    std::vector<const NodeInfo*> GetNodeList() const;
-    void AddNode(uint64_t node_id, NodeInfo&& node);
-    void ClearNodes();
-    size_t NodeCount() const { return m_nodes.size(); }
+    TopologyNodeType   GetNodeType() const { return m_type; }
+    uint64_t           GetId() const { return m_id; }
+    const std::string& GetName() const { return m_name; }
+    void               SetName(const std::string& name) { m_name = name; }
 
-    // Stable 1-based display index for a node (nodes ordered by ascending id).
-    // Returns 0 if the node id is unknown.
-    size_t GetNodeDisplayIndex(uint64_t node_id) const;
+    // Display string built once at load; the sidebar reads it every frame.
+    const std::string& GetHeader() const { return m_header; }
+    void               SetHeader(const std::string& header) { m_header = header; }
 
-    // Device access
-    const DeviceInfo* GetDevice(uint64_t device_id) const;
-    void AddDevice(uint64_t device_id, DeviceInfo&& device);
-    void ClearDevices();
-    size_t DeviceCount() const { return m_devices.size(); }
+    TopologyNode* GetParent() const { return m_parent; }
+    // Nearest ancestor of the given type, walking structural parents only.
+    TopologyNode* GetParent(TopologyNodeType type) const;
 
-    // Process access
-    const ProcessInfo* GetProcess(uint64_t process_id) const;
-    void AddProcess(uint64_t process_id, ProcessInfo&& process);
-    void ClearProcesses();
-    size_t ProcessCount() const { return m_processes.size(); }
+    // Streams that dispatch to this queue. Empty at every other level.
+    const std::vector<TopologyNode*>& GetSecondaryParents() const
+    {
+        return m_secondary_parents;
+    }
 
-    // Thread access (instrumented)
-    const ThreadInfo* GetInstrumentedThread(uint64_t thread_id) const;
-    void AddInstrumentedThread(uint64_t thread_id, ThreadInfo&& thread);
-    void ClearInstrumentedThreads();
-    size_t InstrumentedThreadCount() const { return m_instrumented_threads.size(); }
+    const std::vector<TopologyNode*>& GetChildren(TopologyNodeType type) const;
+    size_t                            GetChildCount(TopologyNodeType type) const;
 
-    // Thread access (sampled)
-    const ThreadInfo* GetSampledThread(uint64_t thread_id) const;
-    void AddSampledThread(uint64_t thread_id, ThreadInfo&& thread);
-    void ClearSampledThreads();
-    size_t SampledThreadCount() const { return m_sampled_threads.size(); }
+    // Referenced but not owned: the processors and queues a stream dispatches to.
+    const std::vector<TopologyNode*>& GetLinkedChildren(TopologyNodeType type) const;
 
-    // Queue access
-    const QueueInfo* GetQueue(uint64_t queue_id, uint64_t device_id) const;
-    void AddQueue(uint64_t queue_id, QueueInfo&& queue);
-    void ClearQueues();
-    size_t QueueCount() const { return m_queues.size(); }
-
-    // Stream access
-    const StreamInfo* GetStream(uint64_t stream_id) const;
-    void AddStream(uint64_t stream_id, StreamInfo&& stream);
-    void ClearStreams();
-    size_t StreamCount() const { return m_streams.size(); }
-
-    // Counter access
-    const CounterInfo* GetCounter(uint64_t counter_id) const;
-    void AddCounter(uint64_t counter_id, CounterInfo&& counter);
-    void ClearCounters();
-    size_t CounterCount() const { return m_counters.size(); }
-    
-    // Clear all topology data
-    void Clear();
-
-    // Helpers
-
-    bool GetDeviceTypeLabel(const DeviceInfo& device_info, std::string& label_out) const;
-
-    // Debug
-    std::string TopologyToString();
-    std::string DeviceInfoToString(const DeviceInfo* device_info, int indent = 0) const;
-    std::string ProcessInfoToString(const ProcessInfo* process_info, int indent = 0) const;
-    std::string ThreadInfoToString(const ThreadInfo* thread_info, int indent = 0) const;
-    std::string QueueInfoToString(const QueueInfo* queue_info, int indent = 0) const;
-    std::string StreamInfoToString(const StreamInfo* stream_info, int indent = 0) const;
-    std::string CounterInfoToString(const CounterInfo* counter_info, int indent = 0) const;
+    /*
+     * Timeline identity of the track this node draws as, or INVALID_UINT64_INDEX
+     * for interior nodes. Only the id is stored: the track's *position* on the
+     * timeline changes on every sort/drag, so it is resolved through
+     * TimelineModel at the point of use instead of being cached here.
+     */
+    bool     HasTrack() const;
+    uint64_t GetTrackId() const { return m_track_id; }
 
 private:
-    std::unordered_map<uint64_t, NodeInfo>    m_nodes;
-    std::unordered_map<uint64_t, DeviceInfo>  m_devices;
-    std::unordered_map<uint64_t, ProcessInfo> m_processes;
-    std::unordered_map<uint64_t, ThreadInfo>  m_instrumented_threads;
-    std::unordered_map<uint64_t, ThreadInfo>  m_sampled_threads;
-    std::map<std::pair<uint64_t,uint64_t>, QueueInfo>   m_queues;
-    std::unordered_map<uint64_t, StreamInfo>  m_streams;
-    std::unordered_map<uint64_t, CounterInfo> m_counters;
+    friend class TopologyTree;  // wires edges and binds tracks
+
+    static const std::vector<TopologyNode*>& EmptyChildList();
+
+    TopologyNodeType                                       m_type;
+    uint64_t                                               m_id;
+    std::string                                            m_name;
+    std::string                                            m_header;
+    TopologyNode*                                          m_parent;
+    std::map<TopologyNodeType, std::vector<TopologyNode*>> m_children;
+    std::map<TopologyNodeType, std::vector<TopologyNode*>> m_linked_children;
+    std::vector<TopologyNode*>                             m_secondary_parents;
+    uint64_t                                               m_track_id;
+};
+
+struct NodeInfo : public TopologyNode
+{
+    explicit NodeInfo(uint64_t id)
+    : TopologyNode(TopologyNodeType::kNode, id)
+    , display_index(0)
+    {}
+
+    std::string host_name;
+    std::string os_name;
+    std::string os_release;
+    std::string os_version;
+    // 1-based position in controller order, used for the node color wheel and
+    // the "[2] hostname" labels. Assigned once while the tree is built.
+    size_t display_index;
+};
+
+struct ProcessorInfo : public TopologyNode
+{
+    explicit ProcessorInfo(uint64_t id)
+    : TopologyNode(TopologyNodeType::kProcessor, id)
+    , type(kRPVControllerProcessorTypeUndefined)
+    , type_index(0)
+    {}
+
+    // The id carries the source-instance bits for multinode/compare traces.
+    TopologyId GetTopologyId() const
+    {
+        TopologyId id;
+        id.value = GetId();
+        return id;
+    }
+
+    std::string                            product_name;
+    rocprofvis_controller_processor_type_t type;
+    uint64_t                               type_index;  // GPU0, GPU1, ...
+};
+
+struct ProcessInfo : public TopologyNode
+{
+    explicit ProcessInfo(uint64_t id)
+    : TopologyNode(TopologyNodeType::kProcess, id)
+    , start_time(0.0)
+    , end_time(0.0)
+    {}
+
+    double      start_time;
+    double      end_time;
+    std::string command;
+    std::string environment;
+};
+
+struct ThreadInfo : public TopologyNode
+{
+    enum class Kind
+    {
+        kInstrumented,
+        kSampled
+    };
+
+    ThreadInfo(uint64_t id, Kind thread_kind)
+    : TopologyNode(TopologyNodeType::kThread, id)
+    , kind(thread_kind)
+    , tid(0)
+    , start_time(0.0)
+    , end_time(0.0)
+    {}
+
+    Kind     kind;
+    uint64_t tid;
+    double   start_time;
+    double   end_time;
+};
+
+struct QueueInfo : public TopologyNode
+{
+    explicit QueueInfo(uint64_t id)
+    : TopologyNode(TopologyNodeType::kQueue, id)
+    {}
+
+    // Owning processor id. Queue ids are only unique within a processor, so
+    // this is half of the queue lookup key.
+    uint64_t GetProcessorId() const;
+};
+
+struct StreamInfo : public TopologyNode
+{
+    explicit StreamInfo(uint64_t id)
+    : TopologyNode(TopologyNodeType::kStream, id)
+    {}
+
+    // Processors and queues reached through GetLinkedChildren(); the stream
+    // does not own them.
+};
+
+struct CounterInfo : public TopologyNode
+{
+    explicit CounterInfo(uint64_t id)
+    : TopologyNode(TopologyNodeType::kCounter, id)
+    {}
+
+    uint64_t GetProcessorId() const;
+
+    std::string description;
+    std::string units;
+    std::string value_type;
+};
+
+/**
+ * @brief The system topology, as a tree.
+ *
+ * Built once when a trace loads by walking the controller's topology, which is
+ * already a parent-linked tree. The arena owns every node; the per-type maps
+ * are lookup shortcuts over that tree, not structure.
+ */
+class TopologyTree
+{
+public:
+    TopologyTree();
+    ~TopologyTree() = default;
+
+    const TopologyNode* GetRoot() const { return m_root; }
+
+    // Construction. Each factory allocates into the arena and wires the
+    // structural edge, so a node can never exist unparented.
+    NodeInfo*      AddNode(uint64_t node_id);
+    ProcessorInfo* AddProcessor(NodeInfo* parent, TopologyId processor_id);
+    ProcessInfo*   AddProcess(NodeInfo* parent, uint64_t process_id);
+    ThreadInfo*    AddThread(ProcessInfo* parent, uint64_t thread_id, ThreadInfo::Kind kind);
+    StreamInfo*    AddStream(ProcessInfo* parent, uint64_t stream_id);
+    QueueInfo*     AddQueue(ProcessorInfo* parent, uint64_t queue_id);
+    CounterInfo*   AddCounter(ProcessorInfo* parent, uint64_t counter_id);
+
+    /*
+     * Second edge: the controller repeats a stream's processors and queues as
+     * its own subtree. Link the existing nodes instead of duplicating them.
+     * Both are idempotent.
+     */
+    void LinkStreamProcessor(StreamInfo* stream, ProcessorInfo* processor);
+    void LinkStreamQueue(StreamInfo* stream, QueueInfo* queue);
+
+    void BindTrack(TopologyNode* node, uint64_t track_id);
+
+    /*
+     * Ranks nodes by ascending id and stores the 1-based rank on each NodeInfo.
+     * Call once after the tree is built; the rank drives the node color wheel
+     * and the "[2] hostname" labels, which must stay stable across sessions.
+     */
+    void AssignNodeDisplayIndices();
+
+    // Lookup shortcuts.
+    const NodeInfo*      GetNode(uint64_t node_id) const;
+    const ProcessorInfo* GetProcessor(uint64_t processor_id) const;
+    const ProcessInfo*   GetProcess(uint64_t process_id) const;
+    const QueueInfo*     GetQueue(uint64_t queue_id, uint64_t processor_id) const;
+    const StreamInfo*    GetStream(uint64_t stream_id) const;
+    const CounterInfo*   GetCounter(uint64_t counter_id) const;
+    const ThreadInfo*    GetInstrumentedThread(uint64_t thread_id) const;
+    const ThreadInfo*    GetSampledThread(uint64_t thread_id) const;
+
+    ProcessorInfo* GetProcessorMutable(uint64_t processor_id) const;
+    QueueInfo*     GetQueueMutable(uint64_t queue_id, uint64_t processor_id) const;
+
+    const TopologyNode* FindByTrackId(uint64_t track_id) const;
+
+    const std::vector<TopologyNode*>& GetNodes() const;
+    size_t                            NodeCount() const { return m_node_index.size(); }
+    size_t                            ProcessCount() const { return m_process_index.size(); }
+    // 1-based display rank, or 0 if the node id is unknown.
+    size_t GetNodeDisplayIndex(uint64_t node_id) const;
+
+    bool GetProcessorTypeLabel(const ProcessorInfo& processor_info,
+                               std::string&         label_out) const;
+
+    void Clear();
+
+    // Debug
+    std::string ToString() const;
+
+private:
+    void        Attach(TopologyNode* parent, TopologyNode* child);
+    std::string ToString(const TopologyNode& node, int indent) const;
+
+    // The arena owns every node; all parent/child edges are non-owning.
+    std::vector<std::unique_ptr<TopologyNode>>          m_storage;
+    TopologyNode*                                       m_root;
+    std::unordered_map<uint64_t, NodeInfo*>             m_node_index;
+    std::unordered_map<uint64_t, ProcessorInfo*>        m_processor_index;
+    std::unordered_map<uint64_t, ProcessInfo*>          m_process_index;
+    std::unordered_map<uint64_t, StreamInfo*>           m_stream_index;
+    std::unordered_map<uint64_t, CounterInfo*>          m_counter_index;
+    std::unordered_map<uint64_t, ThreadInfo*>           m_instrumented_thread_index;
+    std::unordered_map<uint64_t, ThreadInfo*>           m_sampled_thread_index;
+    std::map<std::pair<uint64_t, uint64_t>, QueueInfo*> m_queue_index;
+    std::unordered_map<uint64_t, TopologyNode*>         m_track_index;
 };
 
 }  // namespace View

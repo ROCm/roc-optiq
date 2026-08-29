@@ -32,9 +32,9 @@ struct InfoTable
 
 struct IterableModel
 {
-    const IterableInfo*    info;
-    InfoTable              info_table;
-    uint64_t               graph_index;
+    const TopologyNode* info;
+    InfoTable           info_table;
+    uint64_t            graph_index;
 };
 
 struct ProcessorModel;
@@ -67,7 +67,7 @@ struct ProcessModel
 };
 struct ProcessorModel
 {
-    const DeviceInfo*                           info;
+    const ProcessorInfo*                         info;
     InfoTable                                    info_table;
     std::string                                  header;
     std::string                                  queue_header;
@@ -115,6 +115,13 @@ private:
      * Runs once on trace to load to avoid repeating operations on static data.
      */
     void UpdateTopology();
+    void BuildProcessorModels(NodeModel& node_model, const NodeInfo& node_info);
+    void BuildProcessModels(NodeModel& node_model, const NodeInfo& node_info);
+    void BuildStreamModels(ProcessModel& process_model, const ProcessInfo& process_info);
+    void BuildThreadModels(ProcessModel& process_model, const ProcessInfo& process_info);
+    InfoTable       MakeProcessorTable(const ProcessorInfo& processor_info) const;
+    InfoTable       MakeQueueTable(const ProcessorInfo& processor_info) const;
+    InfoTable::Cell MakeTimeCell(double timestamp);
     /*
      * Binds tree nodes to a timeline view graph.
      * Runs on graph index change.

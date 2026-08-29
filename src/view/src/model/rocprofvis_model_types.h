@@ -154,77 +154,8 @@ struct EventInfo
     std::vector<CallStackData> call_stack_info;
 };
 
-// Topology Information
-struct NodeInfo
-{
-    uint64_t              id;
-    std::string           host_name;
-    std::string           os_name;
-    std::string           os_release;
-    std::string           os_version;
-    std::vector<uint64_t> device_ids;   // IDs of this node's devices
-    std::vector<uint64_t> process_ids;  // IDs of this node's processes
-};
-
-struct DeviceInfo
-{
-    TopologyId                             id;
-    std::string                            product_name;
-    rocprofvis_controller_processor_type_t type;        // GPU/CPU
-    uint64_t                               type_index;  // GPU0, GPU1...etc
-    std::vector<uint64_t>                  queue_ids;   // IDs of this process' queues
-    std::vector<uint64_t>                  counter_ids; // IDs of this process' counters
-};
-
-struct ProcessInfo
-{
-    uint64_t    id;
-    double      start_time;
-    double      end_time;
-    std::string command;
-    std::string environment;
-    std::vector<uint64_t>
-        instrumented_thread_ids;  // IDs of this process' instrumented threads
-    std::vector<uint64_t> sampled_thread_ids;  // IDs of this process' sampled threads
-    std::vector<uint64_t> stream_ids;          // IDs of this process' streams
-};
-
-struct IterableInfo
-{
-    uint64_t    id;
-    std::string name;
-};
-
-struct ThreadInfo : public IterableInfo
-{
-    double   start_time;
-    double   end_time;
-    uint64_t tid;
-};
-
-struct QueueInfo : public IterableInfo
-{
-    uint64_t device_id;  // ID of owning device.
-};
-
-struct StreamDeviceInfo
-{
-    uint64_t                  id;
-    std::vector<uint64_t>     queue_ids;   // IDs of this process' queues
-};
-
-struct StreamInfo : public IterableInfo
-{
-    std::vector<StreamDeviceInfo> processors;   
-};
-
-struct CounterInfo : public IterableInfo
-{
-    uint64_t    device_id;  // ID of owning device.
-    std::string description;
-    std::string units;
-    std::string value_type;
-};
+// Topology types (NodeInfo, ProcessorInfo, ProcessInfo, ...) live with the tree
+// that owns them, in rocprofvis_topology_model.h.
 
 // Summary Information
 struct SummaryInfo

@@ -17,6 +17,19 @@ namespace View
 namespace
 {
 
+// The lut entries point into the model vector, so they can only be taken once
+// that vector has stopped growing.
+void
+BuildLut(std::vector<IterableModel>&                   models,
+         std::unordered_map<uint64_t, IterableModel*>& lut)
+{
+    lut.clear();
+    for(IterableModel& model : models)
+    {
+        lut[model.info->GetId()] = &model;
+    }
+}
+
 TreeNode*
 AddBranchNode(TreeNode* parent, NodeType type, const std::string& label,
               bool collapsable = true, bool show_eye_button = true,
@@ -73,8 +86,7 @@ BuildLeafList(TreeNode* parent, NodeType type, const std::string& label,
     {
         if(item.info)
         {
-            AddLeafNode(target, track_list,
-                        item.graph_index, item.info->name);
+            AddLeafNode(target, track_list, item.graph_index, item.info->GetName());
         }
     }
 }
@@ -129,9 +141,9 @@ BuildProcessTree(TreeNode* parent, const ProcessModel& process,
             }
 
             bool      has_processors = !stream.processors.empty();
-            LeafNode* stream_leaf    = AddLeafNode(stream_list, track_list,
-                                                   stream.graph_index, stream.info->name,
-                                                   has_processors);
+            LeafNode* stream_leaf =
+                AddLeafNode(stream_list, track_list, stream.graph_index,
+                            stream.info->GetName(), has_processors);
             for(const auto& processor : stream.processors)
             {
                 BuildProcessorTree(stream_leaf, processor, track_list,
@@ -250,333 +262,33 @@ TrackTopology::UpdateTopology()
 {
     if(m_topology_dirty && m_data_provider.GetState() == ProviderState::kReady)
     {
-        const auto& topology_data = m_data_provider.DataModel().GetTopology();
+        const TopologyTree& tree = m_data_provider.DataModel().GetTopology();
 
         m_topology.nodes.clear();
         m_topology.node_lut.clear();
-        std::vector<const NodeInfo*> node_infos = topology_data.GetNodeList();
-        m_topology.nodes.resize(node_infos.size());
-        m_topology.node_header = "Nodes (" + std::to_string(node_infos.size()) + ")";
-        for(int i = 0; i < node_infos.size(); i++)
+
+        const std::vector<TopologyNode*>& nodes = tree.GetNodes();
+        m_topology.nodes.resize(nodes.size());
+        m_topology.node_header = "Nodes (" + std::to_string(nodes.size()) + ")";
+
+        for(size_t i = 0; i < nodes.size(); i++)
         {
-            const NodeInfo* node_info = node_infos[i];
-            if(node_info)
-            {
-                m_topology.node_lut[node_info->id] = &m_topology.nodes[i];
-                m_topology.nodes[i].info           = node_info;
-                m_topology.nodes[i].info_table     = InfoTable{
-                        { { InfoTable::Cell{ "OS", false },
-                            InfoTable::Cell{ node_infos[i]->os_name, false } },
-                          { InfoTable::Cell{ "OS Release", false },
-                            InfoTable::Cell{ node_infos[i]->os_release, false } },
-                          { InfoTable::Cell{ "OS Version", false },
-                            InfoTable::Cell{ node_infos[i]->os_version, false } } }
-                };
-                const std::vector<uint64_t>& processor_ids = node_infos[i]->device_ids;
-                m_topology.nodes[i].processors.resize(processor_ids.size());
-                m_topology.nodes[i].processor_header =
-                    "Processors (" + std::to_string(processor_ids.size()) + ")";
-                for (int j = 0; j < processor_ids.size(); j++)
-                {
-                    m_topology.nodes[i].processor_lut[processor_ids[j]] =
-                        &m_topology.nodes[i].processors[j];
-                    const DeviceInfo* processor_info =
-                        topology_data.GetDevice(processor_ids[j]);
-                    if (processor_info)
-                    {
-                        m_topology.nodes[i].processors[j].info       = processor_info;
-                        m_topology.nodes[i].processors[j].info_table = InfoTable{
-                            { { InfoTable::Cell{ "Processor type", false },
-                            InfoTable::Cell{ DeviceTypeString(processor_info->type), false } },
-                            { InfoTable::Cell{ "Processor index", false },
-                            InfoTable::Cell{ std::to_string(processor_info->type_index), false } },
-                            { InfoTable::Cell{ "Product name", false },
-                            InfoTable::Cell{ processor_info->product_name, false } } }
-                        };
-                        m_topology.nodes[i].processors[j].header =
-                            "[" + std::to_string(processor_info->id.fields.id) + "] " + 
-                            DeviceTypeString(processor_info->type) + 
-                            std::to_string(processor_info->type_index) + ": "+
-                            processor_info->product_name;
+            const NodeInfo& node_info  = static_cast<const NodeInfo&>(*nodes[i]);
+            NodeModel&      node_model = m_topology.nodes[i];
 
-                        const std::vector<uint64_t>& queue_ids = processor_info->queue_ids;
-                        m_topology.nodes[i].processors[j].queues.resize(queue_ids.size());
-                        m_topology.nodes[i].processors[j].queue_header =
-                            "Queues (" + std::to_string(queue_ids.size()) + ")";
-                        for(int k = 0; k < queue_ids.size(); k++)
-                        {
-                            m_topology.nodes[i].processors[j].queue_lut[queue_ids[k]] =
-                                &m_topology.nodes[i].processors[j].queues[k];
-                            const QueueInfo* queue_info =
-                                topology_data.GetQueue(queue_ids[k], processor_info->id.value);
-                            if(queue_info)
-                            {
-                                const DeviceInfo* device_info =
-                                    topology_data.GetDevice(queue_info->device_id);
-                                m_topology.nodes[i].processors[j].queues[k].info =
-                                    queue_info;
-                                if(device_info)
-                                {
-                                    m_topology.nodes[i]
-                                        .processors[j]
-                                        .queues[k]
-                                        .info_table = InfoTable{
-                                            { { InfoTable::Cell{
-                                                DeviceTypeString(device_info->type) +
-                                                " " +
-                                        std::to_string(
-                                            device_info->type_index),
-                                        false },
-                                        InfoTable::Cell{ device_info->product_name,
-                                        false } } }
-                                    };
-                                }
-                            }
-                        }
+            m_topology.node_lut[node_info.GetId()] = &node_model;
+            node_model.info                        = &node_info;
+            node_model.info_table                  = InfoTable{
+                { { InfoTable::Cell{ "OS", false },
+                    InfoTable::Cell{ node_info.os_name, false } },
+                  { InfoTable::Cell{ "OS Release", false },
+                    InfoTable::Cell{ node_info.os_release, false } },
+                  { InfoTable::Cell{ "OS Version", false },
+                    InfoTable::Cell{ node_info.os_version, false } } }
+            };
 
-                        const std::vector<uint64_t>& counter_ids =
-                            processor_info->counter_ids;
-                        m_topology.nodes[i].processors[j].counters.resize(
-                            counter_ids.size());
-                        m_topology.nodes[i].processors[j].counter_header =
-                            "Counters (" + std::to_string(counter_ids.size()) + ")";
-                        for(int k = 0; k < counter_ids.size(); k++)
-                        {
-                            m_topology.nodes[i].processors[j].counter_lut[counter_ids[k]] =
-                                &m_topology.nodes[i].processors[j].counters[k];
-                            const CounterInfo* counter_info =
-                                topology_data.GetCounter(counter_ids[k]);
-                            if(counter_info)
-                            {
-                                m_topology.nodes[i].processors[j].counters[k].info =
-                                    counter_info;
-                                m_topology.nodes[i].processors[j].counters[k].info_table =
-                                    InfoTable{
-                                        { { InfoTable::Cell{ "Description", false },
-                                        InfoTable::Cell{ counter_info->description,
-                                        false } },
-                                        { InfoTable::Cell{ "Value Type", false },
-                                        InfoTable::Cell{ counter_info->value_type,
-                                        false } } }
-                                    };
-                            }
-                        }
-                    }
-                }
-                const std::vector<uint64_t>& process_ids = node_infos[i]->process_ids;
-                m_topology.nodes[i].processes.resize(process_ids.size());
-                m_topology.nodes[i].process_header =
-                    "Processes (" + std::to_string(process_ids.size()) + ")";
-                for(int j = 0; j < process_ids.size(); j++)
-                {
-                    m_topology.nodes[i].process_lut[process_ids[j]] =
-                        &m_topology.nodes[i].processes[j];
-                    const ProcessInfo* process_info =
-                        topology_data.GetProcess(process_ids[j]);
-                    if(process_info)
-                    {
-                        m_topology.nodes[i].processes[j].info       = process_info;
-                        m_topology.nodes[i].processes[j].info_table = InfoTable{
-                            { { InfoTable::Cell{ "Start Time", false },
-                                InfoTable::Cell{
-                                    std::to_string(process_info->start_time), false, true,
-                                    [this](const std::string& raw,
-                                           std::string&       formatted_out) {
-                                        return FormatTimeCell(raw, formatted_out);
-                                    } } },
-                              { InfoTable::Cell{ "End Time", false },
-                                InfoTable::Cell{
-                                    std::to_string(process_info->end_time), false, true,
-                                    [this](const std::string& raw,
-                                           std::string&       formatted_out) {
-                                        return FormatTimeCell(raw, formatted_out);
-                                    } } },
-                              { InfoTable::Cell{ "Command", false },
-                                InfoTable::Cell{ process_info->command, false } },
-                              { InfoTable::Cell{ "Environment", false },
-                                InfoTable::Cell{ process_info->environment, false } } }
-                        };
-                        m_topology.nodes[i].processes[j].header =
-                            process_info->command + 
-                            " (" + std::to_string(process_info->id) + ")";
-
-                        const std::vector<uint64_t>& stream_ids = process_info->stream_ids;
-                        m_topology.nodes[i].processes[j].streams.resize(stream_ids.size());
-                        m_topology.nodes[i].processes[j].stream_header =
-                            "Streams (" + std::to_string(stream_ids.size()) + ")";
-                        for(int k = 0; k < stream_ids.size(); k++)
-                        {
-                            StreamModel* stream = &m_topology.nodes[i].processes[j].streams[k];
-                            m_topology.nodes[i].processes[j].stream_lut[stream_ids[k]] = stream;
-                            const StreamInfo* stream_info = topology_data.GetStream(stream_ids[k]);
-                            if(stream_info)
-                            {
-                                m_topology.nodes[i].processes[j].streams[k].info = stream_info;
-                                const std::vector<StreamDeviceInfo>& stream_processors = stream_info->processors;
-                                stream->processors.resize(stream_processors.size());
-                                    
-                                for (int processor_index = 0; processor_index < stream_processors.size(); processor_index++)
-                                {
-                                    stream->processor_lut[stream_processors[processor_index].id] = &stream->processors[processor_index];
-                                    const DeviceInfo* processor_info =
-                                        topology_data.GetDevice(stream_processors[processor_index].id);
-                                    if (processor_info)
-                                    {
-                                        stream->processors[processor_index].info       = processor_info;
-                                        stream->processors[processor_index].info_table = InfoTable{
-                                            { { InfoTable::Cell{ "Processor type", false },
-                                            InfoTable::Cell{ DeviceTypeString(processor_info->type), false } },
-                                            { InfoTable::Cell{ "Processor index", false },
-                                            InfoTable::Cell{ std::to_string(processor_info->type_index), false } },
-                                            { InfoTable::Cell{ "Product name", false },
-                                            InfoTable::Cell{ processor_info->product_name, false } } }
-                                        };
-                                        stream->processors[processor_index].header =
-                                            DeviceTypeString(processor_info->type) +
-                                            std::to_string(processor_info->type_index);
-
-                                        const std::vector<uint64_t>& queue_ids = stream_processors[processor_index].queue_ids;
-                                        stream->processors[processor_index].queues.resize(queue_ids.size());
-                                        for(int queue_index = 0; queue_index < queue_ids.size(); queue_index++)
-                                        {
-                                            stream->processors[processor_index].queue_lut[queue_ids[queue_index]] =
-                                                &stream->processors[processor_index].queues[queue_index];
-                                            const QueueInfo* queue_info =
-                                                topology_data.GetQueue(queue_ids[queue_index],processor_info->id.value);
-                                            if(queue_info)
-                                            {
-                                                const DeviceInfo* device_info =
-                                                    topology_data.GetDevice(queue_info->device_id);
-                                                stream->processors[processor_index].queues[queue_index].info =
-                                                    queue_info;
-                                                if(device_info)
-                                                {
-                                                    stream->processors[processor_index]
-                                                        .queues[queue_index]
-                                                        .info_table = InfoTable{
-                                                            { { InfoTable::Cell{
-                                                                DeviceTypeString(device_info->type) +
-                                                                " " +
-                                                        std::to_string(
-                                                            device_info->type_index),
-                                                        false },
-                                                        InfoTable::Cell{ device_info->product_name,
-                                                        false } } }
-                                                    };
-                                                }
-
-                                                const auto& track_list = m_data_provider.DataModel().GetTimeline().GetTrackList();
-                                                for (const TrackInfo* track : track_list)
-                                                {
-                                                    if (track)
-                                                    {
-                                                        if (track->topology.type == TrackInfo::TrackType::Queue && 
-                                                            track->topology.id.value == queue_info->id && 
-                                                            track->topology.device_id == queue_info->device_id)
-                                                        {
-                                                            stream->processors[processor_index].queues[queue_index].graph_index = track->index;
-                                                            break;
-                                                        }
-                                                    }
-                                                }
-                                                       
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-
-                        const std::vector<uint64_t>& instrumented_thread_ids =
-                            process_info->instrumented_thread_ids;
-                        m_topology.nodes[i].processes[j].instrumented_threads.resize(
-                            instrumented_thread_ids.size());
-                        m_topology.nodes[i].processes[j].instrumented_thread_header =
-                            "Threads (" + std::to_string(instrumented_thread_ids.size()) +
-                            ")";
-                        for(int k = 0; k < instrumented_thread_ids.size(); k++)
-                        {
-                            m_topology.nodes[i]
-                                .processes[j]
-                                .instrumented_thread_lut[instrumented_thread_ids[k]] =
-                                &m_topology.nodes[i].processes[j].instrumented_threads[k];
-                            const ThreadInfo* thread_info =
-                                topology_data.GetInstrumentedThread(instrumented_thread_ids[k]);
-                            if(thread_info)
-                            {
-                                m_topology.nodes[i]
-                                    .processes[j]
-                                    .instrumented_threads[k]
-                                    .info = thread_info;
-                                m_topology.nodes[i]
-                                    .processes[j]
-                                    .instrumented_threads[k]
-                                    .info_table = InfoTable{ {
-                                    { InfoTable::Cell{ "Start Time", false },
-                                      InfoTable::Cell{
-                                          std::to_string(thread_info->start_time), false,
-                                          true,
-                                          [this](const std::string& raw,
-                                                 std::string&       formatted_out) {
-                                              return FormatTimeCell(raw, formatted_out);
-                                          } } },
-                                    { InfoTable::Cell{ "End Time", false },
-                                      InfoTable::Cell{
-                                          std::to_string(thread_info->end_time), false,
-                                          true,
-                                          [this](const std::string& raw,
-                                                 std::string&       formatted_out) {
-                                              return FormatTimeCell(raw, formatted_out);
-                                          } } },
-                                } };
-                            }
-                        }
-
-                        const std::vector<uint64_t>& sampled_thread_ids =
-                            process_info->sampled_thread_ids;
-                        m_topology.nodes[i].processes[j].sampled_threads.resize(
-                            sampled_thread_ids.size());
-                        m_topology.nodes[i].processes[j].sampled_thread_header =
-                            "Sampled Threads (" +
-                            std::to_string(sampled_thread_ids.size()) + ")";
-                        for(int k = 0; k < sampled_thread_ids.size(); k++)
-                        {
-                            m_topology.nodes[i]
-                                .processes[j]
-                                .sampled_thread_lut[sampled_thread_ids[k]] =
-                                &m_topology.nodes[i].processes[j].sampled_threads[k];
-                            const ThreadInfo* thread_info =
-                                topology_data.GetSampledThread(sampled_thread_ids[k]);
-                            if(thread_info)
-                            {
-                                m_topology.nodes[i].processes[j].sampled_threads[k].info =
-                                    thread_info;
-                                m_topology.nodes[i]
-                                    .processes[j]
-                                    .sampled_threads[k]
-                                    .info_table = InfoTable{ {
-                                    { InfoTable::Cell{ "Start Time", false },
-                                      InfoTable::Cell{
-                                          std::to_string(thread_info->start_time), false,
-                                          true,
-                                          [this](const std::string& raw,
-                                                 std::string&       formatted_out) {
-                                              return FormatTimeCell(raw, formatted_out);
-                                          } } },
-                                    { InfoTable::Cell{ "End Time", false },
-                                      InfoTable::Cell{
-                                          std::to_string(thread_info->end_time), false,
-                                          true,
-                                          [this](const std::string& raw,
-                                                 std::string&       formatted_out) {
-                                              return FormatTimeCell(raw, formatted_out);
-                                          } } },
-                                } };
-                            }
-                        }
-                    }
-                }
-            }
+            BuildProcessorModels(node_model, node_info);
+            BuildProcessModels(node_model, node_info);
         }
         FormatCells();
         m_topology_dirty = false;
@@ -584,6 +296,231 @@ TrackTopology::UpdateTopology()
             std::make_shared<RocEvent>(static_cast<int>(RocEvents::kTopologyChanged),
                                        m_data_provider.GetTraceFilePath()));
     }
+}
+
+void
+TrackTopology::BuildProcessorModels(NodeModel& node_model, const NodeInfo& node_info)
+{
+    const std::vector<TopologyNode*>& processors =
+        node_info.GetChildren(TopologyNodeType::kProcessor);
+
+    node_model.processors.resize(processors.size());
+    node_model.processor_header = "Processors (" + std::to_string(processors.size()) + ")";
+
+    for(size_t i = 0; i < processors.size(); i++)
+    {
+        const ProcessorInfo& processor_info =
+            static_cast<const ProcessorInfo&>(*processors[i]);
+        ProcessorModel& processor_model = node_model.processors[i];
+
+        node_model.processor_lut[processor_info.GetId()] = &processor_model;
+        processor_model.info                             = &processor_info;
+        processor_model.info_table                       = MakeProcessorTable(processor_info);
+        processor_model.header =
+            "[" + std::to_string(processor_info.GetTopologyId().fields.id) + "] " +
+            DeviceTypeString(processor_info.type) +
+            std::to_string(processor_info.type_index) + ": " +
+            processor_info.product_name;
+
+        const std::vector<TopologyNode*>& queues =
+            processor_info.GetChildren(TopologyNodeType::kQueue);
+        processor_model.queues.resize(queues.size());
+        processor_model.queue_header = "Queues (" + std::to_string(queues.size()) + ")";
+        for(size_t j = 0; j < queues.size(); j++)
+        {
+            processor_model.queue_lut[queues[j]->GetId()] = &processor_model.queues[j];
+            processor_model.queues[j].info                = queues[j];
+            processor_model.queues[j].info_table          = MakeQueueTable(processor_info);
+        }
+
+        const std::vector<TopologyNode*>& counters =
+            processor_info.GetChildren(TopologyNodeType::kCounter);
+        processor_model.counters.resize(counters.size());
+        processor_model.counter_header =
+            "Counters (" + std::to_string(counters.size()) + ")";
+        for(size_t j = 0; j < counters.size(); j++)
+        {
+            const CounterInfo& counter_info =
+                static_cast<const CounterInfo&>(*counters[j]);
+            processor_model.counter_lut[counter_info.GetId()] =
+                &processor_model.counters[j];
+            processor_model.counters[j].info       = &counter_info;
+            processor_model.counters[j].info_table = InfoTable{
+                { { InfoTable::Cell{ "Description", false },
+                    InfoTable::Cell{ counter_info.description, false } },
+                  { InfoTable::Cell{ "Value Type", false },
+                    InfoTable::Cell{ counter_info.value_type, false } } }
+            };
+        }
+    }
+}
+
+void
+TrackTopology::BuildProcessModels(NodeModel& node_model, const NodeInfo& node_info)
+{
+    const std::vector<TopologyNode*>& processes =
+        node_info.GetChildren(TopologyNodeType::kProcess);
+
+    node_model.processes.resize(processes.size());
+    node_model.process_header = "Processes (" + std::to_string(processes.size()) + ")";
+
+    for(size_t i = 0; i < processes.size(); i++)
+    {
+        const ProcessInfo& process_info = static_cast<const ProcessInfo&>(*processes[i]);
+        ProcessModel&      process_model = node_model.processes[i];
+
+        node_model.process_lut[process_info.GetId()] = &process_model;
+        process_model.info                           = &process_info;
+        process_model.info_table                     = InfoTable{
+            { { InfoTable::Cell{ "Start Time", false },
+                MakeTimeCell(process_info.start_time) },
+              { InfoTable::Cell{ "End Time", false },
+                MakeTimeCell(process_info.end_time) },
+              { InfoTable::Cell{ "Command", false },
+                InfoTable::Cell{ process_info.command, false } },
+              { InfoTable::Cell{ "Environment", false },
+                InfoTable::Cell{ process_info.environment, false } } }
+        };
+        process_model.header =
+            process_info.command + " (" + std::to_string(process_info.GetId()) + ")";
+
+        BuildStreamModels(process_model, process_info);
+        BuildThreadModels(process_model, process_info);
+    }
+}
+
+void
+TrackTopology::BuildStreamModels(ProcessModel&      process_model,
+                                 const ProcessInfo& process_info)
+{
+    const std::vector<TopologyNode*>& streams =
+        process_info.GetChildren(TopologyNodeType::kStream);
+
+    process_model.streams.resize(streams.size());
+    process_model.stream_header = "Streams (" + std::to_string(streams.size()) + ")";
+
+    const TimelineModel& timeline = m_data_provider.DataModel().GetTimeline();
+
+    for(size_t i = 0; i < streams.size(); i++)
+    {
+        const StreamInfo& stream_info  = static_cast<const StreamInfo&>(*streams[i]);
+        StreamModel&      stream_model = process_model.streams[i];
+
+        process_model.stream_lut[stream_info.GetId()] = &stream_model;
+        stream_model.info                             = &stream_info;
+
+        // A stream shows the processors it dispatches to, and under each one
+        // only the queues that stream actually used.
+        const std::vector<TopologyNode*>& stream_processors =
+            stream_info.GetLinkedChildren(TopologyNodeType::kProcessor);
+        const std::vector<TopologyNode*>& stream_queues =
+            stream_info.GetLinkedChildren(TopologyNodeType::kQueue);
+
+        stream_model.processors.resize(stream_processors.size());
+        for(size_t j = 0; j < stream_processors.size(); j++)
+        {
+            const ProcessorInfo& processor_info =
+                static_cast<const ProcessorInfo&>(*stream_processors[j]);
+            ProcessorModel& processor_model = stream_model.processors[j];
+
+            stream_model.processor_lut[processor_info.GetId()] = &processor_model;
+            processor_model.info                               = &processor_info;
+            processor_model.info_table = MakeProcessorTable(processor_info);
+            processor_model.header     = DeviceTypeString(processor_info.type) +
+                                     std::to_string(processor_info.type_index);
+
+            for(TopologyNode* queue : stream_queues)
+            {
+                if(queue->GetParent() != &processor_info)
+                {
+                    continue;
+                }
+                processor_model.queues.push_back(IterableModel{});
+                IterableModel& queue_model = processor_model.queues.back();
+                queue_model.info           = queue;
+                queue_model.info_table     = MakeQueueTable(processor_info);
+
+                const TrackInfo* track = timeline.GetTrack(queue->GetTrackId());
+                if(track)
+                {
+                    queue_model.graph_index = track->index;
+                }
+            }
+            BuildLut(processor_model.queues, processor_model.queue_lut);
+        }
+    }
+}
+
+void
+TrackTopology::BuildThreadModels(ProcessModel&      process_model,
+                                 const ProcessInfo& process_info)
+{
+    const std::vector<TopologyNode*>& threads =
+        process_info.GetChildren(TopologyNodeType::kThread);
+
+    for(TopologyNode* node : threads)
+    {
+        const ThreadInfo& thread_info = static_cast<const ThreadInfo&>(*node);
+        const bool        instrumented =
+            thread_info.kind == ThreadInfo::Kind::kInstrumented;
+
+        std::vector<IterableModel>& models = instrumented
+                                                 ? process_model.instrumented_threads
+                                                 : process_model.sampled_threads;
+
+        models.push_back(IterableModel{});
+        IterableModel& thread_model = models.back();
+        thread_model.info           = &thread_info;
+        thread_model.info_table     = InfoTable{
+            { { InfoTable::Cell{ "Start Time", false },
+                MakeTimeCell(thread_info.start_time) },
+              { InfoTable::Cell{ "End Time", false },
+                MakeTimeCell(thread_info.end_time) } }
+        };
+    }
+
+    BuildLut(process_model.instrumented_threads, process_model.instrumented_thread_lut);
+    BuildLut(process_model.sampled_threads, process_model.sampled_thread_lut);
+
+    process_model.instrumented_thread_header =
+        "Threads (" + std::to_string(process_model.instrumented_threads.size()) + ")";
+    process_model.sampled_thread_header =
+        "Sampled Threads (" + std::to_string(process_model.sampled_threads.size()) + ")";
+}
+
+InfoTable
+TrackTopology::MakeProcessorTable(const ProcessorInfo& processor_info) const
+{
+    return InfoTable{
+        { { InfoTable::Cell{ "Processor type", false },
+            InfoTable::Cell{ DeviceTypeString(processor_info.type), false } },
+          { InfoTable::Cell{ "Processor index", false },
+            InfoTable::Cell{ std::to_string(processor_info.type_index), false } },
+          { InfoTable::Cell{ "Product name", false },
+            InfoTable::Cell{ processor_info.product_name, false } } }
+    };
+}
+
+InfoTable
+TrackTopology::MakeQueueTable(const ProcessorInfo& processor_info) const
+{
+    return InfoTable{
+        { { InfoTable::Cell{ DeviceTypeString(processor_info.type) + " " +
+                                 std::to_string(processor_info.type_index),
+                             false },
+            InfoTable::Cell{ processor_info.product_name, false } } }
+    };
+}
+
+InfoTable::Cell
+TrackTopology::MakeTimeCell(double timestamp)
+{
+    return InfoTable::Cell{
+        std::to_string(timestamp), false, true,
+        [this](const std::string& raw, std::string& formatted_out) {
+            return FormatTimeCell(raw, formatted_out);
+        }
+    };
 }
 
 void
@@ -805,9 +742,9 @@ TrackTopology::BuildSidebarTree()
                 continue;
             }
 
-            TopologyDataModel& tdm        = m_data_provider.DataModel().GetTopology();
-            const bool         multi_node = tdm.NodeCount() > 1;
-            const size_t       node_index = tdm.GetNodeDisplayIndex(node.info->id);
+            TopologyTree& tdm        = m_data_provider.DataModel().GetTopology();
+            const bool    multi_node = tdm.NodeCount() > 1;
+            const size_t  node_index = tdm.GetNodeDisplayIndex(node.info->GetId());
             const std::string  node_label =
                 (multi_node && node_index > 0)
                     ? "[" + std::to_string(node_index) + "] " + node.info->host_name

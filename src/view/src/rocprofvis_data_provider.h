@@ -250,16 +250,12 @@ public:
         const std::function<void(const std::string&, uint32_t, uint32_t, uint32_t, bool)>& callback);
 
 private:
-    struct ProcessChildCount
+    // A stream's processors/queues are resolved after every node is walked, so
+    // the controller handle is parked here until then.
+    struct PendingStreamLink
     {
-        size_t thread_count;
-        size_t stream_count;
-    };
-
-    struct ProcessorChildCount
-    {
-        size_t queue_count;
-        size_t counter_count;
+        StreamInfo*          stream;
+        rocprofvis_handle_t* handle;
     };
 
     bool FetchTrackTable(const TrackTableRequestParams& table_params);
@@ -267,17 +263,26 @@ private:
     /* Helper called by FetchEvent()*/
     bool FetchEventExtData(uint64_t event_id);
 
+    // Builds the topology tree by walking the controller's topology top-down.
     void HandleLoadSystemTopology();
-    bool ParseNodeData(rocprofvis_handle_t* node_handle, NodeInfo& node_info);
-    bool ParseDeviceData(rocprofvis_handle_t* processor_handle, DeviceInfo& device_info,
-                          DataProvider::ProcessorChildCount& processor_child_count);
-    bool ParseProcessData(rocprofvis_handle_t* process_handle, ProcessInfo& process_info,
-                          ProcessChildCount& process_child_count);
-    bool ParseQueueData(rocprofvis_handle_t* queue_handle, QueueInfo& queue_info);
-    bool ParseThreadData(rocprofvis_handle_t* thread_handle, ThreadInfo& thread_info,
-                         uint64_t& thread_type);
-    bool ParseCounterData(rocprofvis_handle_t* counter_handle, CounterInfo& counter_info);
-    bool ParseStreamData(rocprofvis_handle_t* stream_handle, StreamInfo& stream_info);
+    void LoadProcessors(rocprofvis_handle_t* node_handle, NodeInfo& node);
+    void LoadQueues(rocprofvis_handle_t* processor_handle, ProcessorInfo& processor);
+    void LoadCounters(rocprofvis_handle_t* processor_handle, ProcessorInfo& processor);
+    void LoadProcesses(rocprofvis_handle_t* node_handle, NodeInfo& node);
+    void LoadThreads(rocprofvis_handle_t* process_handle, ProcessInfo& process);
+    void LoadStreams(rocprofvis_handle_t* process_handle, ProcessInfo& process);
+    void LinkStreamTopology();
+    // Resolves the track a topology node draws as. False when it has none, which
+    // is how a non-drawable queue/stream/counter is filtered out of the tree.
+    bool GetTopologyTrackId(rocprofvis_handle_t* topology_handle,
+                            rocprofvis_property_t track_property, uint64_t& track_id);
+
+    void ParseNodeData(rocprofvis_handle_t* node_handle, NodeInfo& node_info);
+    void ParseProcessorData(rocprofvis_handle_t* processor_handle,
+                            ProcessorInfo&       processor_info);
+    void ParseProcessData(rocprofvis_handle_t* process_handle, ProcessInfo& process_info);
+    void ParseThreadData(rocprofvis_handle_t* thread_handle, ThreadInfo& thread_info);
+    void ParseCounterData(rocprofvis_handle_t* counter_handle, CounterInfo& counter_info);
 
     void HandleLoadTrackMetaData();
     // Reorders the timeline so compared traces' counterpart tracks (A, B, ...) sit
@@ -325,6 +330,8 @@ private:
     TraceDataModel m_model;
 
     std::unordered_map<int64_t, RequestInfo> m_requests;
+    // Cleared at the end of every topology load; see LinkStreamTopology().
+    std::vector<PendingStreamLink> m_pending_stream_links;
     // Called when track metadata has changed
     std::function<void(const std::string&)> m_track_metadata_changed_callback;
     // Called when table data has changed

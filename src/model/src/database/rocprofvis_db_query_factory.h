@@ -45,6 +45,14 @@ public:
     std::string GetRocprofMemoryCopySliceQueryForStream();
     std::string GetRocprofMemoryCopyTableQuery();
 
+    // KFD (Kernel Fusion Driver) events. These live in rocpd_region and are
+    // grouped onto per-GPU tracks; the owning GPU agent and the human-readable
+    // sub-label are resolved from rocpd_arg joined to rocpd_info_agent.
+    std::string GetRocprofKfdTrackQuery();
+    std::string GetRocprofKfdLevelQuery();
+    std::string GetRocprofKfdSliceQuery();
+    std::string GetRocprofKfdTableQuery();
+
     std::string GetRocprofPerformanceCountersTrackQuery();
     std::string GetRocprofPerformanceCountersLevelQuery();
     std::string GetRocprofPerformanceCountersSliceQuery();
@@ -86,6 +94,12 @@ public:
     std::string GetPerfettoPerformanceCountersTableQuery();
 
 private:
+    // Shared building blocks for the KFD queries so the track / level / slice
+    // queries all compute the owning GPU agent and the sub-label identically
+    // (BuildSliceQueryMap matches events to tracks by these exact expressions).
+    std::vector<std::string> GetRocprofKfdFromClause();
+    static const char* GetRocprofKfdOwningAgentExpr();
+    static const char* GetRocprofKfdLabelExpr();
 
     SqliteDatabase* m_db;
 };

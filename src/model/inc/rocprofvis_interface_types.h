@@ -105,12 +105,14 @@ typedef enum rocprofvis_dm_track_category_t {
     kRocProfVisDmRegionMainTrack = 0x100,
     // Object is region sample track
     kRocProfVisDmRegionSampleTrack = 0x200,
+    // Object is KFD track (kernel fusion driver events: page fault, page migrate, queue, etc.)
+    kRocProfVisDmKfdTrack = 0x400,
 
     kRocProfVisDmLaunchTrack = kRocProfVisDmRegionTrack | kRocProfVisDmRegionMainTrack | kRocProfVisDmRegionSampleTrack,
     kRocProfVisDmDispatchTrack = kRocProfVisDmKernelDispatchTrack | kRocProfVisDmMemoryAllocationTrack | kRocProfVisDmMemoryCopyTrack,
-    kRocProfVisDmEventTrack = kRocProfVisDmLaunchTrack | kRocProfVisDmDispatchTrack,
+    kRocProfVisDmEventTrack = kRocProfVisDmLaunchTrack | kRocProfVisDmDispatchTrack | kRocProfVisDmKfdTrack,
     kRocProfVisDmCounterTrack = kRocProfVisDmPmcTrack,
-    kRocProfVisDmAgentTrack = kRocProfVisDmDispatchTrack | kRocProfVisDmCounterTrack,
+    kRocProfVisDmAgentTrack = kRocProfVisDmDispatchTrack | kRocProfVisDmCounterTrack | kRocProfVisDmKfdTrack,
     kRocProfVisDmProcessTrack = kRocProfVisDmEventTrack | kRocProfVisDmCounterTrack
 } rocprofvis_dm_track_category_t;
 
@@ -128,8 +130,10 @@ typedef enum rocprofvis_dm_event_operation_t {
     kRocProfVisDmOperationMemoryCopy = 4,
     // Memory copy event
     kRocProfVisDmOperationLaunchSample = 5,
+    // KFD event (page fault, page migrate, queue, event queue, unmap, dropped events)
+    kRocProfVisDmOperationKfd = 6,
     // Number of operations
-    kRocProfVisDmNumOperation = kRocProfVisDmOperationLaunchSample + 1,
+    kRocProfVisDmNumOperation = kRocProfVisDmOperationKfd + 1,
     kRocProfVisDmMultipleOperations,
 } rocprofvis_dm_event_operation_t;
 

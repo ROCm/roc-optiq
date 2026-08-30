@@ -171,6 +171,7 @@ rocprofvis_dm_charptr_t  Track::CategoryString(){
         case kRocProfVisDmSQTTTrack: return "Shader Execution";
         case kRocProfVisDmNICTrack: return "Network Activity";
         case kRocProfVisDmStreamTrack: return "GPU Stream";
+        case kRocProfVisDmKfdTrack: return "KFD";
     }
     return "Invalid track";
 }

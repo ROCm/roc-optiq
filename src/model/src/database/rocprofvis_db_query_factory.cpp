@@ -31,6 +31,9 @@ namespace DataModel
                 
                 { Builder::From("rocpd_region", "R"),
                 Builder::InnerJoin("rocpd_track", "T", "T.id = R.track_id"),
+                // Exclude KFD events; they are rendered on dedicated per-GPU KFD tracks.
+                Builder::InnerJoin("rocpd_event", "KE", "KE.id = R.event_id"),
+                Builder::InnerJoin("rocpd_string", "KCAT", "KCAT.id = KE.category_id AND KCAT.string NOT LIKE 'rocm_kfd_%'"),
                 is_sample_track ? Builder::InnerJoin("rocpd_sample", "SAMPLE", "SAMPLE.event_id = R.event_id") : 
                                   Builder::LeftJoin("rocpd_sample", "SAMPLE", "SAMPLE.event_id = R.event_id")},
                 { is_sample_track ? Builder::Blank() : Builder::Where("SAMPLE.id", " IS ", "NULL") },
@@ -48,6 +51,9 @@ namespace DataModel
                 Builder::StoreConfigVersion()
                 },
                 { Builder::From("rocpd_region", "R"),
+                // Exclude KFD events; they are rendered on dedicated per-GPU KFD tracks.
+                Builder::InnerJoin("rocpd_event", "KE", "KE.id = R.event_id"),
+                Builder::InnerJoin("rocpd_string", "KCAT", "KCAT.id = KE.category_id AND KCAT.string NOT LIKE 'rocm_kfd_%'"),
                 is_sample_track ? Builder::InnerJoin("rocpd_sample", "SAMPLE", "SAMPLE.event_id = R.event_id") : 
                                   Builder::LeftJoin("rocpd_sample", "SAMPLE", "SAMPLE.event_id = R.event_id")},
                 { is_sample_track ? Builder::Blank() : Builder::Where("SAMPLE.id", " IS ", "NULL") },
@@ -143,6 +149,125 @@ namespace DataModel
                 },
                 { Builder::From("rocpd_memory_copy") } }));
         }
+    }
+
+/*************************************************************************************************
+*                               KFD (kernel fusion driver) track/level/slice/table queries
+*
+* KFD events are stored as rocpd_region rows. The owning GPU agent and a human
+* readable sub-label are resolved from rocpd_arg (name 'agent' for single-agent
+* events; 'src_agent'/'dst_agent' for page migrations) joined to
+* rocpd_info_agent on logical_index. This targets the rocprofiler-systems rocpd
+* schema (direct rocpd_region start/end columns, arguments in rocpd_arg).
+**************************************************************************************************/
+
+    const char* QueryFactory::GetRocprofKfdOwningAgentExpr()
+    {
+        // Single-agent events use their agent. Migrations bucket under the GPU
+        // endpoint: host->device -> dst agent; otherwise (device->host, device->
+        // device) the src agent (which is a GPU).
+        return "CASE WHEN AG.value IS NOT NULL THEN IA.id "
+               "WHEN IAS.type = 'CPU' THEN IAD.id ELSE IAS.id END";
+    }
+
+    const char* QueryFactory::GetRocprofKfdLabelExpr()
+    {
+        return "CASE CAT.string "
+               "WHEN 'rocm_kfd_page_fault' THEN 'Page Fault' "
+               "WHEN 'rocm_kfd_queue' THEN 'Queue' "
+               "WHEN 'rocm_kfd_event_queue' THEN 'Event Queue' "
+               "WHEN 'rocm_kfd_event_unmap_from_gpu' THEN 'Unmap from GPU' "
+               "WHEN 'rocm_kfd_event_dropped_events' THEN 'Dropped Events' "
+               "WHEN 'rocm_kfd_page_migrate' THEN 'Page Migrate [' || IAS.type || ' ' || "
+               "IAS.type_index || ' -> ' || IAD.type || ' ' || IAD.type_index || ']' "
+               "ELSE CAT.string END";
+    }
+
+    std::vector<std::string> QueryFactory::GetRocprofKfdFromClause()
+    {
+        return {
+            Builder::From("rocpd_region", "R"),
+            Builder::InnerJoin("rocpd_event", "E", "E.id = R.event_id"),
+            Builder::InnerJoin("rocpd_string", "CAT", "CAT.id = E.category_id AND CAT.string LIKE 'rocm_kfd_%'"),
+            Builder::LeftJoin("rocpd_arg", "AG", "AG.event_id = R.event_id AND AG.name = 'agent'"),
+            Builder::LeftJoin("rocpd_arg", "SRC", "SRC.event_id = R.event_id AND SRC.name = 'src_agent'"),
+            Builder::LeftJoin("rocpd_arg", "DST", "DST.event_id = R.event_id AND DST.name = 'dst_agent'"),
+            Builder::LeftJoin("rocpd_info_agent", "IA", "IA.logical_index = CAST(AG.value AS INTEGER)"),
+            Builder::LeftJoin("rocpd_info_agent", "IAS", "IAS.logical_index = CAST(SRC.value AS INTEGER)"),
+            Builder::LeftJoin("rocpd_info_agent", "IAD", "IAD.logical_index = CAST(DST.value AS INTEGER)")
+        };
+    }
+
+    std::string QueryFactory::GetRocprofKfdTrackQuery() {
+        return Builder::Select(rocprofvis_db_sqlite_region_track_query_format(
+            { { Builder::QParam("R.nid", Builder::NODE_ID_SERVICE_NAME),
+            Builder::QParam(GetRocprofKfdOwningAgentExpr(), Builder::AGENT_ID_SERVICE_NAME),
+            Builder::QParam(GetRocprofKfdLabelExpr(), Builder::QUEUE_ID_SERVICE_NAME),
+            Builder::QParam("R.pid", Builder::PROCESS_ID_PUBLIC_NAME),
+            Builder::QParamCategory(kRocProfVisDmKfdTrack),
+            Builder::QParamOperation(kRocProfVisDmOperationKfd),
+            Builder::StoreConfigVersion()
+            },
+            GetRocprofKfdFromClause(),
+            { } }));
+    }
+
+    std::string QueryFactory::GetRocprofKfdLevelQuery() {
+        return Builder::Select(rocprofvis_db_sqlite_level_query_format(
+            { { Builder::QParamOperation(kRocProfVisDmOperationKfd),
+            Builder::QParam("R.start", Builder::START_SERVICE_NAME),
+            Builder::QParam("R.end", Builder::END_SERVICE_NAME),
+            Builder::QParam("R.id"),
+            Builder::QParam("R.nid", Builder::NODE_ID_SERVICE_NAME),
+            Builder::QParam(GetRocprofKfdOwningAgentExpr(), Builder::AGENT_ID_SERVICE_NAME),
+            Builder::QParam(GetRocprofKfdLabelExpr(), Builder::QUEUE_ID_SERVICE_NAME),
+            Builder::SpaceSaver(0),
+            Builder::QParam("R.pid", Builder::PROCESS_ID_SERVICE_NAME)
+            },
+            GetRocprofKfdFromClause() }));
+    }
+
+    std::string QueryFactory::GetRocprofKfdSliceQuery() {
+        std::vector<std::string> from = GetRocprofKfdFromClause();
+        from.push_back(Builder::LeftJoin(Builder::LevelTable("kfd"), "L", "R.id = L.eid"));
+        return Builder::Select(rocprofvis_db_sqlite_slice_query_format(
+            { { Builder::QParamOperation(kRocProfVisDmOperationKfd),
+            Builder::QParam("R.start", Builder::START_SERVICE_NAME),
+            Builder::QParam("R.end", Builder::END_SERVICE_NAME),
+            Builder::QParam("E.category_id"),
+            Builder::QParam("R.name_id"),
+            Builder::QParam("R.id"),
+            Builder::QParam("R.nid", Builder::NODE_ID_SERVICE_NAME),
+            Builder::QParam(GetRocprofKfdOwningAgentExpr(), Builder::AGENT_ID_SERVICE_NAME),
+            Builder::QParam(GetRocprofKfdLabelExpr(), Builder::QUEUE_ID_SERVICE_NAME),
+            Builder::QParam("L.level", Builder::EVENT_LEVEL_SERVICE_NAME),
+            Builder::QParamCategory(kRocProfVisDmKfdTrack)
+            },
+            from }));
+    }
+
+    std::string QueryFactory::GetRocprofKfdTableQuery() {
+        return Builder::Select(rocprofvis_db_sqlite_launch_table_query_format(
+            { m_db,
+            { Builder::QParamOperation(kRocProfVisDmOperationKfd),
+            Builder::QParam("R.id", Builder::ID_PUBLIC_NAME),
+            Builder::QParam("R.id", Builder::DB_ID_PUBLIC_NAME),
+            Builder::QParam("E.category_id", Builder::CATEGORY_REFERENCE),
+            Builder::QParam("R.name_id", Builder::EVENT_NAME_REFERENCE),
+            Builder::QParam("R.nid", Builder::NODE_ID_SERVICE_NAME),
+            Builder::QParam("P.pid", Builder::PROCESS_ID_PUBLIC_NAME),
+            Builder::QParam("T.tid", Builder::THREAD_ID_PUBLIC_NAME),
+            Builder::QParam("R.start", Builder::START_SERVICE_NAME),
+            Builder::QParam("R.end", Builder::END_SERVICE_NAME),
+            Builder::QParam("(R.end-R.start)", Builder::DURATION_PUBLIC_NAME),
+            Builder::QParam("R.pid", Builder::PROCESS_ID_SERVICE_NAME),
+            Builder::QParam("R.tid", Builder::THREAD_ID_SERVICE_NAME),
+            Builder::QParam("-1", Builder::STREAM_ID_SERVICE_NAME) },
+            { Builder::From("rocpd_region", "R"),
+            Builder::InnerJoin("rocpd_event", "E", "E.id = R.event_id"),
+            Builder::InnerJoin("rocpd_string", "CAT", "CAT.id = E.category_id AND CAT.string LIKE 'rocm_kfd_%'"),
+            Builder::InnerJoin("rocpd_info_process", "P", "P.id = R.pid"),
+            Builder::InnerJoin("rocpd_info_thread", "T", "T.id = R.tid") } }));
     }
 
     std::string QueryFactory::GetRocprofPerformanceCountersTrackQuery() {
@@ -368,6 +493,9 @@ namespace DataModel
                 Builder::InnerJoin("rocpd_track", "T", "T.id = R.track_id"),
                 Builder::InnerJoin("rocpd_timestamp", "TS", "TS.id = R.start_id"),
                 Builder::InnerJoin("rocpd_timestamp", "TE", "TE.id = R.end_id"),
+                // Exclude KFD events; their levels are computed on the KFD tracks.
+                Builder::InnerJoin("rocpd_event", "KE", "KE.id = R.event_id"),
+                Builder::InnerJoin("rocpd_string", "KCAT", "KCAT.id = KE.category_id AND KCAT.string NOT LIKE 'rocm_kfd_%'"),
                 is_sample_track ? Builder::InnerJoin("rocpd_sample", "SAMPLE", "SAMPLE.event_id = R.event_id") : 
                                   Builder::LeftJoin("rocpd_sample", "SAMPLE", "SAMPLE.event_id = R.event_id")
                 } }));
@@ -385,6 +513,9 @@ namespace DataModel
                 Builder::SpaceSaver(0),
                 Builder::SpaceSaver(0) },
                 { Builder::From("rocpd_region", "R"),
+                // Exclude KFD events; their levels are computed on the KFD tracks.
+                Builder::InnerJoin("rocpd_event", "KE", "KE.id = R.event_id"),
+                Builder::InnerJoin("rocpd_string", "KCAT", "KCAT.id = KE.category_id AND KCAT.string NOT LIKE 'rocm_kfd_%'"),
                 is_sample_track ? Builder::InnerJoin("rocpd_sample", "SAMPLE", "SAMPLE.event_id = R.event_id") : 
                                   Builder::LeftJoin("rocpd_sample", "SAMPLE", "SAMPLE.event_id = R.event_id")
                 } }));
@@ -621,6 +752,8 @@ namespace DataModel
                 },
                 { Builder::From("rocpd_region", "R"),
                 Builder::InnerJoin("rocpd_event", "E", "E.id = R.event_id"),
+                // Exclude KFD events; they are rendered on dedicated per-GPU KFD tracks.
+                Builder::InnerJoin("rocpd_string", "KCAT", "KCAT.id = E.category_id AND KCAT.string NOT LIKE 'rocm_kfd_%'"),
                 Builder::InnerJoin("rocpd_track", "T", "T.id = R.track_id"),
                 Builder::InnerJoin("rocpd_timestamp", "TS", "TS.id = R.start_id"),
                 Builder::InnerJoin("rocpd_timestamp", "TE", "TE.id = R.end_id"),
@@ -646,6 +779,8 @@ namespace DataModel
                 },
                 { Builder::From("rocpd_region", "R"),
                 Builder::InnerJoin("rocpd_event", "E", "E.id = R.event_id"),
+                // Exclude KFD events; they are rendered on dedicated per-GPU KFD tracks.
+                Builder::InnerJoin("rocpd_string", "KCAT", "KCAT.id = E.category_id AND KCAT.string NOT LIKE 'rocm_kfd_%'"),
                 is_sample_track ? Builder::InnerJoin("rocpd_sample", "SAMPLE", "SAMPLE.event_id = R.event_id") : 
                                   Builder::LeftJoin("rocpd_sample", "SAMPLE", "SAMPLE.event_id = R.event_id"),
                 Builder::LeftJoin(Builder::LevelTable(is_sample_track ? "launch_sample":"launch"), "L", "R.id = L.eid") } }));
@@ -1056,6 +1191,8 @@ namespace DataModel
                 Builder::QParam("-1", Builder::STREAM_ID_SERVICE_NAME) },
                 { Builder::From("rocpd_region", "R"),
                 Builder::InnerJoin("rocpd_event", "E", "E.id = R.event_id"),
+                // Exclude KFD events; they are shown via the dedicated KFD table query.
+                Builder::InnerJoin("rocpd_string", "KCAT", "KCAT.id = E.category_id AND KCAT.string NOT LIKE 'rocm_kfd_%'"),
                 Builder::InnerJoin("rocpd_track", "T", "T.id = R.track_id"),
                 Builder::InnerJoin("rocpd_timestamp", "TS", "TS.id = R.start_id"),
                 Builder::InnerJoin("rocpd_timestamp", "TE", "TE.id = R.end_id"),
@@ -1086,6 +1223,8 @@ namespace DataModel
                 is_sample_track ? Builder::InnerJoin("rocpd_sample", "SAMPLE", "SAMPLE.event_id = R.event_id") : 
                 Builder::LeftJoin("rocpd_sample", "SAMPLE", "SAMPLE.event_id = R.event_id"),
                 Builder::InnerJoin("rocpd_event", "E", "E.id = R.event_id"),
+                // Exclude KFD events; they are shown via the dedicated KFD table query.
+                Builder::InnerJoin("rocpd_string", "KCAT", "KCAT.id = E.category_id AND KCAT.string NOT LIKE 'rocm_kfd_%'"),
                 Builder::InnerJoin("rocpd_info_process", "P", "P.id = R.pid"),
                 Builder::InnerJoin("rocpd_info_thread", "T", "T.id = R.tid") } }));
         }

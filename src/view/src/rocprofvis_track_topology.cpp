@@ -732,6 +732,15 @@ TrackTopology::UpdateGraphs()
                 {
                     case TrackInfo::TrackType::Queue:
                     {
+                        // KFD sub-lanes are queue-shaped but are not backed by a
+                        // rocpd_info_queue row, so they have no queue_lut entry.
+                        // Keep them out of the queue tree to avoid a null deref;
+                        // they still render as timeline lanes from the track list.
+                        if(track->category == "KFD")
+                        {
+                            m_topology.uncategorized_graph_indices.push_back(index);
+                            break;
+                        }
                         m_topology.node_lut[node_id]
                             ->processor_lut[processor_id]
                             ->queue_lut[id]

@@ -341,6 +341,21 @@ public:
     bool DoesThisNodeMatchIdentifiers(rocprofvis_dm_track_identifiers_t* track_identifiers) override;
 };
 
+// KFD sub-lane under a GPU processor node. Keyed by the human-readable KFD label
+// (a string carried in the queue slot), e.g. "Page Fault" or
+// "Page Migrate [CPU 0 -> GPU 0]".
+class TopologyNodeKfd : public TopologyNodeQueue {
+public:
+    TopologyNodeKfd(rocprofvis_dm_track_identifiers_t* track_identifiers, TopologyNode* ctx) :
+        TopologyNodeQueue(track_identifiers, ctx),
+        m_label(track_identifiers->name[TRACK_ID_QUEUE]) {}
+    ~TopologyNodeKfd() {};
+    std::string GetNodeName() override { return m_label; }
+    bool DoesThisNodeMatchIdentifiers(rocprofvis_dm_track_identifiers_t* track_identifiers) override;
+private:
+    std::string m_label;
+};
+
 class TopologyNodeStream : public TopologyNode, public TopologyTrackRefence {
 public:
 

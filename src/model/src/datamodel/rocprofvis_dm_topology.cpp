@@ -397,7 +397,8 @@ rocprofvis_dm_result_t TopologyNodeSystemNode::AddNode(rocprofvis_dm_track_ident
 	if (track_identifiers->category == kRocProfVisDmKernelDispatchTrack || 
 	track_identifiers->category == kRocProfVisDmMemoryAllocationTrack || 
 	track_identifiers->category == kRocProfVisDmMemoryCopyTrack ||
-    track_identifiers->category == kRocProfVisDmPmcTrack)
+    track_identifiers->category == kRocProfVisDmPmcTrack ||
+    track_identifiers->category == kRocProfVisDmKfdTrack)
 	{
 			m_children.push_back(std::make_unique<TopologyNodeProcessor>(track_identifiers,this));
 			return m_children.back()->AddNode(track_identifiers);
@@ -504,6 +505,10 @@ rocprofvis_dm_result_t TopologyNodeProcessor::AddNode(rocprofvis_dm_track_identi
 		else if (track_identifiers->category == kRocProfVisDmPmcTrack)
 		{
 		    m_children.push_back(std::make_unique<TopologyNodeCounter>(track_identifiers, this));
+		}
+		else if (track_identifiers->category == kRocProfVisDmKfdTrack)
+		{
+		    m_children.push_back(std::make_unique<TopologyNodeKfd>(track_identifiers, this));
 		}
 		else
 		{
@@ -723,6 +728,27 @@ bool TopologyNodeKernelDispatch::DoesThisNodeMatchIdentifiers(rocprofvis_dm_trac
 	if (result)
 	{
 		result = track_identifiers->category == kRocProfVisDmKernelDispatchTrack;
+	}
+	return result;
+}
+
+bool TopologyNodeKfd::DoesThisNodeMatchIdentifiers(rocprofvis_dm_track_identifiers_t* track_identifiers)
+{
+	// KFD sub-lanes under a GPU are distinguished by their human-readable label
+	// (e.g. "Page Fault", "Page Migrate [CPU 0 -> GPU 0]") carried as a string in
+	// the queue slot, not by a numeric queue id.
+	bool result = track_identifiers->category == kRocProfVisDmKfdTrack;
+	if (result)
+	{
+		result = m_db_instance == track_identifiers->db_instance;
+	}
+	if (result)
+	{
+		result = m_pid == track_identifiers->process_id;
+	}
+	if (result)
+	{
+		result = m_label == track_identifiers->name[TRACK_ID_QUEUE];
 	}
 	return result;
 }

@@ -117,7 +117,8 @@ int RocprofDatabase::ProcessTrack(rocprofvis_dm_track_params_t& track_params, st
         else if(track_params.track_indentifiers.category == kRocProfVisDmKernelDispatchTrack ||
             track_params.track_indentifiers.category == kRocProfVisDmMemoryAllocationTrack ||
             track_params.track_indentifiers.category == kRocProfVisDmMemoryCopyTrack ||
-            track_params.track_indentifiers.category == kRocProfVisDmPmcTrack)
+            track_params.track_indentifiers.category == kRocProfVisDmPmcTrack ||
+            track_params.track_indentifiers.category == kRocProfVisDmKfdTrack)
         {
             track_params.track_indentifiers.name[TRACK_ID_AGENT] = CachedTables(db_instance->GuidIndex())->GetTableCell("Agent", track_params.track_indentifiers.id[TRACK_ID_AGENT], "product_name");
             track_params.track_indentifiers.name[TRACK_ID_AGENT] += "(";
@@ -129,10 +130,11 @@ int RocprofDatabase::ProcessTrack(rocprofvis_dm_track_params_t& track_params, st
             {
                 track_params.track_indentifiers.name[TRACK_ID_QUEUE] = CachedTables(db_instance->GuidIndex())->GetTableCell("Queue", track_params.track_indentifiers.id[TRACK_ID_QUEUE], "name");
             }
-            else {
+            else if(track_params.track_indentifiers.category == kRocProfVisDmPmcTrack) {
                 track_params.track_indentifiers.name[TRACK_ID_QUEUE] = CachedTables(db_instance->GuidIndex())->GetTableCell("PMC", track_params.track_indentifiers.id[TRACK_ID_QUEUE], "symbol");
             }
-
+            // KFD tracks carry their human-readable label (e.g. "Page Migrate [CPU 0 -> GPU 0]")
+            // as a string already stored in name[TRACK_ID_QUEUE] by CallBackAddTrack.
         }
         else if(track_params.track_indentifiers.category == kRocProfVisDmStreamTrack)
         {
@@ -161,7 +163,8 @@ int RocprofDatabase::ProcessTrack(rocprofvis_dm_track_params_t& track_params, st
         else if(track_params.track_indentifiers.category == kRocProfVisDmKernelDispatchTrack ||
             track_params.track_indentifiers.category == kRocProfVisDmMemoryAllocationTrack ||
             track_params.track_indentifiers.category == kRocProfVisDmMemoryCopyTrack ||
-            track_params.track_indentifiers.category == kRocProfVisDmPmcTrack)
+            track_params.track_indentifiers.category == kRocProfVisDmPmcTrack ||
+            track_params.track_indentifiers.category == kRocProfVisDmKfdTrack)
         {
             if (CachedTables(db_instance->GuidIndex())->PopulateTrackExtendedDataTemplate(this, db_instance->GuidIndex(), "Agent", track_params.track_indentifiers.id[TRACK_ID_AGENT]) != kRocProfVisDmResultSuccess) return 1; 
             if(track_params.track_indentifiers.category == kRocProfVisDmKernelDispatchTrack ||
@@ -170,7 +173,7 @@ int RocprofDatabase::ProcessTrack(rocprofvis_dm_track_params_t& track_params, st
             {
                 if (CachedTables(db_instance->GuidIndex())->PopulateTrackExtendedDataTemplate(this, db_instance->GuidIndex(), "Queue", track_params.track_indentifiers.id[TRACK_ID_QUEUE]) != kRocProfVisDmResultSuccess) return 1;
             }
-            else
+            else if(track_params.track_indentifiers.category == kRocProfVisDmPmcTrack)
             {
                 if (CachedTables(db_instance->GuidIndex())->PopulateTrackExtendedDataTemplate(this, db_instance->GuidIndex(), "PMC", track_params.track_indentifiers.id[TRACK_ID_COUNTER]) != kRocProfVisDmResultSuccess) return 1;
             }
@@ -1141,6 +1144,35 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
             load_id++;
         }
 
+        ShowProgress(5, "Adding KFD tracks", kRPVDbBusy, future );
+        {
+            std::vector<std::thread> threads;
+            m_add_track_mutex.init(NumDbInstances());
+            auto task = [&](DbInstance* db_instance)
+                {
+                    Future* sub_future = future->AddSubFuture();
+                    result = ExecuteSQLQuery(sub_future, db_instance, load_id,
+                    { 
+                        m_query_factory.GetRocprofKfdTrackQuery(),
+                        "",
+                        m_query_factory.GetRocprofKfdLevelQuery(),
+                        m_query_factory.GetRocprofKfdSliceQuery(),
+                        "",
+                        m_query_factory.GetRocprofKfdTableQuery(),
+                    },
+                    &CallBackAddTrack, &CallBackLoadTrack);
+                    future->DeleteSubFuture(sub_future);
+                    m_add_track_mutex.unlock(db_instance->GuidIndex());
+                };
+            for (auto& guid_info : DbInstances())
+            {
+                threads.emplace_back(task, &guid_info.first);
+            }
+            for (auto& t : threads)
+                t.join();
+            load_id++;
+        }
+
         ShowProgress(5, "Adding memory allocation activity tracks", kRPVDbBusy, future );
         {
             std::vector<std::thread> threads;
@@ -1241,7 +1273,8 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
             {m_metadata_version_control.GetTableName(m_metadata_version_control.kRocOptiqTableRegionSampleLevel),kRocProfVisDmOperationLaunchSample},
             {m_metadata_version_control.GetTableName(m_metadata_version_control.kRocOptiqTableKernelDispatchLevel), kRocProfVisDmOperationDispatch},
             {m_metadata_version_control.GetTableName(m_metadata_version_control.kRocOptiqTableMemoryAllocLevel),kRocProfVisDmOperationMemoryAllocate},
-            {m_metadata_version_control.GetTableName(m_metadata_version_control.kRocOptiqTableMemoryCopyLevel), kRocProfVisDmOperationMemoryCopy} 
+            {m_metadata_version_control.GetTableName(m_metadata_version_control.kRocOptiqTableMemoryCopyLevel), kRocProfVisDmOperationMemoryCopy}, 
+            {m_metadata_version_control.GetTableName(m_metadata_version_control.kRocOptiqTableKfdLevel), kRocProfVisDmOperationKfd} 
         };
 
         ShowProgress(10, "Calculating event levels", kRPVDbBusy, future);
@@ -1885,6 +1918,10 @@ rocprofvis_dm_string_t RocprofDatabase::GetEventOperationQuery(const rocprofvis_
         case kRocProfVisDmOperationLaunchSample:
         {
             return m_query_factory.GetRocprofRegionTableQuery(true);
+        }
+        case kRocProfVisDmOperationKfd:
+        {
+            return m_query_factory.GetRocprofKfdTableQuery();
         }
         default:
         {

@@ -78,6 +78,14 @@ namespace DataModel
             kRocOptiqTableVersionMemoryCopyLevel, 
             std::hash<std::string>{}(db->m_query_factory.GetRocprofMemoryCopyLevelQuery()+db->GetLevelSchemaHashStr()),
         };
+        m_roc_optiq_table_properties[kRocOptiqTableKfdLevel] = {
+            "roc_optiq_event_levels_kfd_",
+            kRocOptiqTablePerGuid,
+            kRocOptiqTableDisposeWhenTrimmed,
+            kRocOptiqTableDependentOnAllLevelTables,
+            kRocOptiqTableVersionKfdLevel,
+            std::hash<std::string>{}(db->m_query_factory.GetRocprofKfdLevelQuery()+db->GetLevelSchemaHashStr()),
+        };
         m_roc_optiq_table_properties[kRocOptiqTableHistogram] = {
             "roc_optiq_histogram",
             kRocOptiqTablePerFile,

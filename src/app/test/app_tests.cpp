@@ -65,9 +65,10 @@ namespace
     }
 
     // Reach the Kernel Selection Table on the Compute tab and drive its first fetch.
-    // Returns the table (fills *out_cv / *out_table_win) or nullptr on skip/fail.
-    // out_table_win is optional (pass nullptr if unused). *out_prev_tab receives the tab
-    // id that was active before the switch, so the caller can restore it.
+    // Returns the table (fills *out_cv / *out_table_win) or nullptr on skip/fail. The
+    // sort and filter tests rely on table_win->ChildId being the ImGuiTable id their
+    // header and filter labels hash against. *out_prev_tab receives the tab id that was
+    // active before the switch, so the caller can restore it.
     KernelMetricTable* ReachKernelTableOrSkip(ImGuiTestContext* ctx, ComputeView** out_cv,
                                               ImGuiWindow** out_table_win,
                                               std::string* out_prev_tab = nullptr)
@@ -1832,8 +1833,9 @@ void RegisterAppTests(ImGuiTestEngine* e)
     t->TestFunc = [](ImGuiTestContext* ctx)
     {
         ComputeView* cv        = nullptr;
+        ImGuiWindow* table_win = nullptr;
         std::string  prev_tab;
-        KernelMetricTable* kt  = ReachKernelTableOrSkip(ctx, &cv, nullptr, &prev_tab);
+        KernelMetricTable* kt  = ReachKernelTableOrSkip(ctx, &cv, &table_win, &prev_tab);
         // The helper switched the compute tab. Restore it on every exit path. prev_tab
         // is non-empty only once cv is valid, so this is safe even when kt is null.
         auto restore_tab = [&]() {
@@ -1844,13 +1846,14 @@ void RegisterAppTests(ImGuiTestEngine* e)
         DataProvider* dp = cv->GetDataProvider();
         if (dp == nullptr) { restore_tab(); IM_CHECK(dp != nullptr); return; }
 
-        KernelMetricTableTestPeer peer{*kt};
-
         // Click the Duration column header to trigger a sort. The Test Engine's usual
-        // TableClickHeader can't reach this custom header row, so click the real id the
-        // widget captured for this header during render. The click runs the real sort
-        // path: it sets the sort spec, which kicks off an async re-sort.
-        const ImGuiID header_id = peer.DurationHeaderId();
+        // TableClickHeader can't reach it. That helper finds a header by an id seeded
+        // from the column number, which the stock header row sets up but this custom
+        // header row does not. Instead, rebuild the id the way ImGui did, from the
+        // label plus the table's own id (table_win->ChildId), and click that. The
+        // click runs the real sort path: it sets the sort spec, which kicks off an
+        // async re-sort.
+        const ImGuiID header_id = ctx->GetID("Duration (ns)", table_win->ChildId);
         if (!ctx->ItemExists(header_id))
         {
             restore_tab();
@@ -1858,6 +1861,7 @@ void RegisterAppTests(ImGuiTestEngine* e)
             return;
         }
 
+        KernelMetricTableTestPeer peer{*kt};
         // Duration is the default sort column. Capture the starting sort so the two
         // toggles below leave the table exactly as it started.
         const int orig_col   = peer.SortColumnIndex();
@@ -1932,8 +1936,9 @@ void RegisterAppTests(ImGuiTestEngine* e)
     t->TestFunc = [](ImGuiTestContext* ctx)
     {
         ComputeView* cv        = nullptr;
+        ImGuiWindow* table_win = nullptr;
         std::string  prev_tab;
-        KernelMetricTable* kt  = ReachKernelTableOrSkip(ctx, &cv, nullptr, &prev_tab);
+        KernelMetricTable* kt  = ReachKernelTableOrSkip(ctx, &cv, &table_win, &prev_tab);
         // The helper switched the compute tab. Restore it on every exit path. prev_tab
         // is non-empty only once cv is valid, so this is safe even when kt is null.
         auto restore_tab = [&]() {
@@ -1944,11 +1949,11 @@ void RegisterAppTests(ImGuiTestEngine* e)
         DataProvider* dp = cv->GetDataProvider();
         if (dp == nullptr) { restore_tab(); IM_CHECK(dp != nullptr); return; }
 
-        KernelMetricTableTestPeer peer{*kt};
-
-        // Address the Duration column's filter box by the real input id the widget
-        // captured for that column during render.
-        const ImGuiID filter_id = peer.ColumnFilterId(2);  // Duration column index
+        // Address the Duration column's filter box by rebuilding its ImGui id. The box
+        // hashes PushID(column index) + "##filter" (rocprofvis_compute_kernel_metric_
+        // table.cpp:886,897); in a Test Engine path, PushID(2) is spelled "$$2", so
+        // GetID("$$2/##filter", table id) reconstructs the real input id for column 2.
+        const ImGuiID filter_id = ctx->GetID("$$2/##filter", table_win->ChildId);
         if (!ctx->ItemExists(filter_id))
         {
             restore_tab();

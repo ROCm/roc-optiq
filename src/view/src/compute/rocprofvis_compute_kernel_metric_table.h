@@ -113,14 +113,6 @@ private:
     CellMenuTarget m_cell_menu;
 
     std::unique_ptr<Preset> m_preset;
-
-#ifdef IMGUI_ENABLE_TEST_ENGINE
-    // Real ImGui ids captured during Render so UI tests address the sort header
-    // and per-column filter inputs directly, instead of rebuilding ImGui's id
-    // hash by hand. 0 / empty until the table has rendered at least once.
-    ImGuiID              m_test_duration_header_id = 0;
-    std::vector<ImGuiID> m_test_column_filter_ids;
-#endif
 };
 
 }  // namespace View

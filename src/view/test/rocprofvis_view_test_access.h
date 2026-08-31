@@ -179,19 +179,6 @@ struct KernelMetricTableTestPeer
     const KernelMetricTable& v;
     int SortColumnIndex() const { return v.m_sort_column_index; }
     int SortOrder() const { return v.m_sort_order; }
-
-    // Real ImGui ids captured during Render (0 until the table has drawn once),
-    // so tests click the sort header and type into a column filter without
-    // reconstructing ImGui's id hash. ColumnFilterId returns 0 for an
-    // out-of-range column.
-    ImGuiID DurationHeaderId() const { return v.m_test_duration_header_id; }
-    ImGuiID ColumnFilterId(int column_index) const
-    {
-        if(column_index < 0 ||
-           column_index >= static_cast<int>(v.m_test_column_filter_ids.size()))
-            return 0;
-        return v.m_test_column_filter_ids[column_index];
-    }
 };
 
 // EventSearch's state lives in its protected base InfiniteScrollTable, so this

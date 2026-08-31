@@ -127,6 +127,7 @@ public:
 
     void           AutoScrollForAnnotationDrag(ImVec2 content_origin);
     void           RenderMeasurement(ImDrawList* draw_list, ImVec2 window_position);
+    void           HandleMeasurementLabelInput();
     ViewCoords                          GetViewCoords() const;
     std::shared_ptr<TimePixelTransform> GetTransform() const;
 

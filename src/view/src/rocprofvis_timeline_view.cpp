@@ -530,6 +530,40 @@ TimelineView::AutoScrollForAnnotationDrag(ImVec2 content_origin)
 }
 
 void
+TimelineView::HandleMeasurementLabelInput()
+{
+    // Submit the duration label as a real item in the input-capable "Graph View
+    // Main" (track rows are NoMouseInputs) so ImGui resolves z-order against
+    // annotations, the scrubber and other windows. RenderMeasurement refreshes the
+    // rect later this frame, so we hit-test last frame's.
+    if(!m_measure_label_duration.valid) return;
+
+    const ImVec2 mn = m_measure_label_duration.min;
+    const ImVec2 mx = m_measure_label_duration.max;
+
+    const ImVec2 cursor_backup = ImGui::GetCursorScreenPos();
+    ImGui::SetCursorScreenPos(mn);
+    ImGui::SetNextItemAllowOverlap();
+    ImGui::InvisibleButton("##measure_duration_label", ImVec2(mx.x - mn.x, mx.y - mn.y));
+    const bool hovered = ImGui::IsItemHovered();
+    const bool active  = ImGui::IsItemActive();
+    ImGui::SetCursorScreenPos(cursor_backup);
+
+    m_dragging_measure_label = active;
+    if(hovered || active)
+    {
+        ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeNS);
+        // Block the layers below and win focus so flame-track clicks defer to us.
+        m_stop_user_interaction = true;
+        TimelineFocusManager::GetInstance().RequestLayerFocus(Layer::kInteractiveLayer);
+    }
+    if(active)
+    {
+        m_measure_label_offset_y += ImGui::GetIO().MouseDelta.y;
+    }
+}
+
+void
 TimelineView::RenderMeasurement(ImDrawList* draw_list, ImVec2 window_position)
 {
     MeasurementController& fm = *m_measurement;
@@ -566,11 +600,14 @@ TimelineView::RenderMeasurement(ImDrawList* draw_list, ImVec2 window_position)
     ImU32 label_text = settings.GetColor(Colors::kMeasurementLabelText);
 
     float top = window_position.y;
-    float bot = window_position.y + m_track_height_sum;
 
     float visible_bot = window_position.y + m_scroll_position_y +
                         m_tpt->GetGraphSizeY() - m_ruler_height -
                         ARTIFICIAL_SCROLLBAR_HEIGHT;
+
+    // Run the rulers to the viewport bottom (not just the last track) so short
+    // traces still meet the centered label; max() leaves tall traces unchanged.
+    float bot = std::max(window_position.y + m_track_height_sum, visible_bot);
     float visible_center_y = m_scroll_position_y +
                              (m_tpt->GetGraphSizeY() - m_ruler_height -
                               ARTIFICIAL_SCROLLBAR_HEIGHT) / 2.0f;
@@ -626,6 +663,12 @@ TimelineView::RenderMeasurement(ImDrawList* draw_list, ImVec2 window_position)
         m_measure_label_duration.valid = true;
     };
 
+    // The interactive-content child clips at m_track_height_sum, cutting off labels
+    // that fall below the last track on short traces. Clip to the full visible graph
+    // area instead (a no-op on tall/scrolled traces).
+    draw_list->PushClipRect(ImVec2(graph_min_x, visible_top),
+                            ImVec2(graph_max_x, visible_bot + RULER_LABEL_PAD_Y), false);
+
     // Draw the full-height ruler lines first; labels go on top of them below.
     int         valid_count = 0;
     float       px[2]       = {};
@@ -653,6 +696,7 @@ TimelineView::RenderMeasurement(ImDrawList* draw_list, ImVec2 window_position)
                 draw_ruler_label(i, px[i], ruler_bottom_y, ts_str[i].c_str());
         m_measure_label_offset_y = 0.0f;
         m_dragging_measure_label = false;
+        draw_list->PopClipRect();
         return;
     }
 
@@ -698,30 +742,10 @@ TimelineView::RenderMeasurement(ImDrawList* draw_list, ImVec2 window_position)
     }
     draw_label(label_cx, line_y, delta_str.c_str());
 
-    // Vertical-only drag; claim interaction so the click doesn't fall through.
-    if(m_measure_label_duration.valid)
-    {
-        bool hovered = ImGui::IsMouseHoveringRect(m_measure_label_duration.min,
-                                                  m_measure_label_duration.max);
-        if(hovered || m_dragging_measure_label)
-        {
-            ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeNS);
-            m_stop_user_interaction = true;
-            TimelineFocusManager::GetInstance().RequestLayerFocus(Layer::kInteractiveLayer);
-        }
-        if(hovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left))
-        {
-            m_dragging_measure_label = true;
-        }
-        if(m_dragging_measure_label && ImGui::IsMouseDown(ImGuiMouseButton_Left))
-        {
-            m_measure_label_offset_y += ImGui::GetIO().MouseDelta.y;
-        }
-        if(!ImGui::IsMouseDown(ImGuiMouseButton_Left))
-        {
-            m_dragging_measure_label = false;
-        }
-    }
+    draw_list->PopClipRect();
+
+    // Drag interaction lives in HandleMeasurementLabelInput(); here we only draw and
+    // capture m_measure_label_duration for its hit-test next frame.
 }
 
 ImVec2
@@ -1874,6 +1898,8 @@ TimelineView::RenderGraphView()
     m_reordering_track_id = INVALID_TRACK_ID;
     // Re-set each frame by RenderReorderingTrack while in the auto-scroll zone.
     m_reorder_auto_scrolling = false;
+
+    HandleMeasurementLabelInput();
 
     for(int index = 0; index < m_tracks->size(); index++)
     {
@@ -3251,17 +3277,6 @@ TimelineView::RenderTraceView()
 
     m_stop_user_interaction |= !ImGui::IsWindowHovered(
         ImGuiHoveredFlags_ChildWindows | ImGuiHoveredFlags_NoPopupHierarchy);
-
-    // Claim label focus before the tracks render: flame-track clicks are focus-
-    // arbitrated and evaluated at the end of RenderGraphView, so claiming later (in
-    // RenderScrubber) would be a frame too late and the click would fall through.
-    if(m_dragging_measure_label ||
-       (m_measure_label_duration.valid &&
-        ImGui::IsMouseHoveringRect(m_measure_label_duration.min,
-                                   m_measure_label_duration.max)))
-    {
-        TimelineFocusManager::GetInstance().RequestLayerFocus(Layer::kInteractiveLayer);
-    }
 
     RenderGrid();
 

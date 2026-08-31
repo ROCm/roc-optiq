@@ -11,9 +11,7 @@
 #include "rocprofvis_controller_trace_compute.h"
 #include "rocprofvis_core_assert.h"
 #include "spdlog/spdlog.h"
-#include <algorithm>
 #include <cstdlib>
-#include <cstring>
 
 namespace RocProfVis
 {
@@ -333,8 +331,7 @@ ComputePivotTable::GetString(rocprofvis_property_t property, uint64_t index, cha
         {
             case kRPVControllerTableTitle:
             {
-                result = GetStringImpl(value, length, PIVOT_TABLE_TITLE,
-                                       static_cast<uint32_t>(strlen(PIVOT_TABLE_TITLE)));
+                result = GetStdStringImpl(value, length, "Kernel Metrics Matrix");
                 break;
             }
             default:

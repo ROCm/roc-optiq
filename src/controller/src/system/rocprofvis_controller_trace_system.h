@@ -83,6 +83,7 @@ public:
     rocprofvis_result_t SetObject(rocprofvis_property_t property, uint64_t index, rocprofvis_handle_t* value) final;
 
     MemoryManager* GetMemoryManager();
+    void SetMemoryManager(MemoryManager* memory_manager);
 
     std::mutex& GetTableMutex(rocprofvis_dm_table_use_case_enum_t use_case);
 

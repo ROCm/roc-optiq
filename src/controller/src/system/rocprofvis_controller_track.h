@@ -44,9 +44,41 @@ public:
     uint64_t GetId() const;
     uint64_t GetNumberOfEntries() const;
     uint64_t GetExtDataNumberOfEntries() const;
+    uint64_t GetNodeId() const;
+    uint64_t GetAgentIdOrPid() const;
+    uint64_t GetQueueIdOrTid() const;
+    uint64_t GetNumberOfOperationTypes() const;
+    rocprofvis_dm_event_operation_t GetOperationType(uint64_t index) const;
 
     double GetStartTimestamp() const;
     double GetEndTimestamp() const;
+    double GetMinValue() const;
+    double GetMaxValue() const;
+
+    const std::string& GetCategory() const;
+    const std::string& GetMainName() const;
+    const std::string& GetSubName() const;
+
+    void SetTrackType(rocprofvis_controller_track_type_t type);
+    void SetDmHandle(rocprofvis_dm_track_t dm_handle);
+
+    void SetId(uint64_t id);
+    void SetNumberOfEntries(uint64_t number_of_entries);
+    void SetNodeId(uint64_t node_id);
+    void SetAgentIdOrPid(uint64_t agent_id_or_pid);
+    void SetQueueIdOrTid(uint64_t queue_id_or_tid);
+    void SetNumberOfOperationTypes(uint64_t number_of_operation_types);
+    void SetOperationType(uint64_t index,
+                          rocprofvis_dm_event_operation_t operation_type);
+
+    void SetStartTimestamp(double start_timestamp);
+    void SetEndTimestamp(double end_timestamp);
+    void SetMinValue(double min_value);
+    void SetMaxValue(double max_value);
+
+    void SetCategory(const std::string& category);
+    void SetMainName(const std::string& main_name);
+    void SetSubName(const std::string& sub_name);
 
     std::string GetExtDataCategory(uint64_t index) const;
     std::string GetExtDataName(uint64_t index) const;

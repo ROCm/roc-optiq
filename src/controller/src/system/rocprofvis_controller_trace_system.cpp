@@ -77,8 +77,8 @@ SystemTrace::SystemTrace(const std::vector<std::string>& filenames)
 
 SystemTrace::~SystemTrace()
 {
-    delete m_mem_mgmt;
-    m_mem_mgmt = nullptr;
+    delete GetMemoryManager();
+    SetMemoryManager(nullptr);
     delete m_timeline;
     delete m_event_table;
     delete m_sample_table;
@@ -100,7 +100,7 @@ rocprofvis_result_t SystemTrace::Init()
         m_sample_table = new SystemTable(1);
         m_search_table = new EventSearchTable(2);
         m_summary = new Summary(this);
-        m_mem_mgmt = new MemoryManager(m_id);
+        SetMemoryManager(new MemoryManager(m_id));
 
         result = kRocProfVisResultSuccess;
     }
@@ -111,7 +111,8 @@ rocprofvis_result_t SystemTrace::Init()
         delete m_sample_table; m_sample_table = nullptr;
         delete m_search_table; m_search_table = nullptr;
         delete m_summary;      m_summary      = nullptr;
-        delete m_mem_mgmt;     m_mem_mgmt     = nullptr;
+        delete GetMemoryManager();
+        SetMemoryManager(nullptr);
         result = kRocProfVisResultMemoryAllocError;
     }
     return result;
@@ -119,6 +120,12 @@ rocprofvis_result_t SystemTrace::Init()
 
 MemoryManager* SystemTrace::GetMemoryManager(){
     return m_mem_mgmt;
+}
+
+void
+SystemTrace::SetMemoryManager(MemoryManager* memory_manager)
+{
+    m_mem_mgmt = memory_manager;
 }
 
 std::mutex& SystemTrace::GetTableMutex(rocprofvis_dm_table_use_case_enum_t use_case)
@@ -164,7 +171,7 @@ rocprofvis_result_t SystemTrace::LoadRocpd(Future* future)
     try
     {
         size_t trace_size = 0;
-        m_dm_handle       = rocprofvis_dm_create_trace();
+        SetDMHandle(rocprofvis_dm_create_trace());
         if(!GetDMHandle())
         {
             return kRocProfVisResultMemoryAllocError;

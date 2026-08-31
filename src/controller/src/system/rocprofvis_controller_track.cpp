@@ -62,6 +62,37 @@ Track::GetNumberOfEntries() const
     return m_bounds.num_entries;
 }
 
+uint64_t
+Track::GetNodeId() const
+{
+    return m_topology_ids.node_id;
+}
+
+uint64_t
+Track::GetAgentIdOrPid() const
+{
+    return m_topology_ids.agent_id_or_pid;
+}
+
+uint64_t
+Track::GetQueueIdOrTid() const
+{
+    return m_topology_ids.queue_id_or_tid;
+}
+
+uint64_t
+Track::GetNumberOfOperationTypes() const
+{
+    return m_metadata.operation_types.size();
+}
+
+rocprofvis_dm_event_operation_t
+Track::GetOperationType(uint64_t index) const
+{
+    ROCPROFVIS_ASSERT(index < m_metadata.operation_types.size());
+    return m_metadata.operation_types[index];
+}
+
 double
 Track::GetStartTimestamp() const
 {
@@ -72,6 +103,134 @@ double
 Track::GetEndTimestamp() const
 {
     return m_bounds.end_timestamp;
+}
+
+double
+Track::GetMinValue() const
+{
+    return m_bounds.min_value;
+}
+
+double
+Track::GetMaxValue() const
+{
+    return m_bounds.max_value;
+}
+
+const std::string&
+Track::GetCategory() const
+{
+    return m_metadata.category;
+}
+
+const std::string&
+Track::GetMainName() const
+{
+    return m_metadata.main_name;
+}
+
+const std::string&
+Track::GetSubName() const
+{
+    return m_metadata.sub_name;
+}
+
+void
+Track::SetTrackType(rocprofvis_controller_track_type_t type)
+{
+    m_type = type;
+}
+
+void
+Track::SetDmHandle(rocprofvis_dm_track_t dm_handle)
+{
+    m_dm_handle = dm_handle;
+}
+
+void
+Track::SetId(uint64_t id)
+{
+    m_id = id;
+}
+
+void
+Track::SetNumberOfEntries(uint64_t number_of_entries)
+{
+    m_bounds.num_entries = number_of_entries;
+}
+
+void
+Track::SetNodeId(uint64_t node_id)
+{
+    m_topology_ids.node_id = node_id;
+}
+
+void
+Track::SetAgentIdOrPid(uint64_t agent_id_or_pid)
+{
+    m_topology_ids.agent_id_or_pid = agent_id_or_pid;
+}
+
+void
+Track::SetQueueIdOrTid(uint64_t queue_id_or_tid)
+{
+    m_topology_ids.queue_id_or_tid = queue_id_or_tid;
+}
+
+void
+Track::SetNumberOfOperationTypes(uint64_t number_of_operation_types)
+{
+    m_metadata.operation_types.resize(number_of_operation_types);
+}
+
+void
+Track::SetOperationType(uint64_t index,
+                        rocprofvis_dm_event_operation_t operation_type)
+{
+    ROCPROFVIS_ASSERT(index < m_metadata.operation_types.size());
+    m_metadata.operation_types[index] = operation_type;
+}
+
+void
+Track::SetStartTimestamp(double start_timestamp)
+{
+    m_bounds.start_timestamp = start_timestamp;
+}
+
+void
+Track::SetEndTimestamp(double end_timestamp)
+{
+    m_bounds.end_timestamp = end_timestamp;
+}
+
+void
+Track::SetMinValue(double min_value)
+{
+    m_bounds.min_value = min_value;
+}
+
+void
+Track::SetMaxValue(double max_value)
+{
+    m_bounds.max_value = max_value;
+}
+
+void
+Track::SetCategory(const std::string& category)
+{
+    m_metadata.category = category;
+}
+
+void
+Track::SetMainName(const std::string& main_name)
+{
+    m_metadata.main_name = main_name;
+}
+
+void
+Track::SetSubName(const std::string& sub_name)
+{
+    m_metadata.sub_name = sub_name;
 }
 
 uint64_t
@@ -113,15 +272,53 @@ Track::GetSegments()
     return &m_segments;
 }
 
-Thread*  Track::GetThread()  const { return m_topology_links.thread; }
-Queue*   Track::GetQueue()   const { return m_topology_links.queue; }
-Stream*  Track::GetStream()  const { return m_topology_links.stream; }
-Counter* Track::GetCounter() const { return m_topology_links.counter; }
+Thread*
+Track::GetThread() const
+{
+    return m_topology_links.thread;
+}
 
-void Track::SetThread(Thread* thread)   { m_topology_links.thread  = thread; }
-void Track::SetQueue(Queue* queue)      { m_topology_links.queue   = queue; }
-void Track::SetStream(Stream* stream)   { m_topology_links.stream  = stream; }
-void Track::SetCounter(Counter* counter){ m_topology_links.counter = counter; }
+Queue*
+Track::GetQueue() const
+{
+    return m_topology_links.queue;
+}
+
+Stream*
+Track::GetStream() const
+{
+    return m_topology_links.stream;
+}
+
+Counter*
+Track::GetCounter() const
+{
+    return m_topology_links.counter;
+}
+
+void
+Track::SetThread(Thread* thread)
+{
+    m_topology_links.thread = thread;
+}
+
+void
+Track::SetQueue(Queue* queue)
+{
+    m_topology_links.queue = queue;
+}
+
+void
+Track::SetStream(Stream* stream)
+{
+    m_topology_links.stream = stream;
+}
+
+void
+Track::SetCounter(Counter* counter)
+{
+    m_topology_links.counter = counter;
+}
 
 rocprofvis_result_t Track::GetBucketValues(size_t buckets_num, Array& array) {
 
@@ -693,19 +890,19 @@ rocprofvis_result_t Track::GetUInt64(rocprofvis_property_t property, uint64_t in
             }
             case kRPVControllerTrackNode:
             {
-                *value = m_topology_ids.node_id;
+                *value = GetNodeId();
                 result = kRocProfVisResultSuccess;
                 break;
             }
             case kRPVControllerTrackAgentIdOrPid:
             {
-                *value = m_topology_ids.agent_id_or_pid;
+                *value = GetAgentIdOrPid();
                 result = kRocProfVisResultSuccess;
                 break;
             }     
             case kRPVControllerTrackQueueIdOrTid:
             {
-                *value = m_topology_ids.queue_id_or_tid;
+                *value = GetQueueIdOrTid();
                 result = kRocProfVisResultSuccess;
                 break;
             }  
@@ -718,15 +915,15 @@ rocprofvis_result_t Track::GetUInt64(rocprofvis_property_t property, uint64_t in
             }
             case kRPVControllerTrackNumberOfOperationTypes:
             {
-                *value = m_metadata.operation_types.size();
+                *value = GetNumberOfOperationTypes();
                 result = kRocProfVisResultSuccess;
                 break;
             }
             case kRPVControllerTrackOperationTypeIndexed:
             {
-                if(index < m_metadata.operation_types.size())
+                if(index < GetNumberOfOperationTypes())
                 {
-                    *value = m_metadata.operation_types[index];
+                    *value = GetOperationType(index);
                     result = kRocProfVisResultSuccess;
                 }
                 else
@@ -788,13 +985,13 @@ rocprofvis_result_t Track::GetDouble(rocprofvis_property_t property, uint64_t in
             }
             case kRPVControllerTrackMinValue:
             {
-                *value = m_bounds.min_value;
+                *value = GetMinValue();
                 result = kRocProfVisResultSuccess;
                 break;
             }
             case kRPVControllerTrackMaxValue:
             {
-                *value = m_bounds.max_value;
+                *value = GetMaxValue();
                 result = kRocProfVisResultSuccess;
                 break;
             }
@@ -869,17 +1066,17 @@ rocprofvis_result_t Track::GetString(rocprofvis_property_t property, uint64_t in
     {
         case kRPVControllerTrackCategory:
         {
-            result = GetStdStringImpl(value, length, m_metadata.category);
+            result = GetStdStringImpl(value, length, GetCategory());
             break;
         }
         case kRPVControllerTrackMainName:
         {
-            result = GetStdStringImpl(value, length, m_metadata.main_name);
+            result = GetStdStringImpl(value, length, GetMainName());
             break;
         }
         case kRPVControllerTrackSubName:
         {
-            result = GetStdStringImpl(value, length, m_metadata.sub_name);
+            result = GetStdStringImpl(value, length, GetSubName());
             break;
         }
         case kRPVControllerTrackExtDataCategoryIndexed:
@@ -919,45 +1116,46 @@ rocprofvis_result_t Track::SetUInt64(rocprofvis_property_t property, uint64_t in
         }
         case kRPVControllerTrackType:
         {
-            m_type = (rocprofvis_controller_track_type_t)value;
+            SetTrackType(static_cast<rocprofvis_controller_track_type_t>(value));
             result = kRocProfVisResultSuccess;
             break;
         }
         case kRPVControllerTrackNumberOfEntries:
         {
-            m_bounds.num_entries = value;
-            result  = kRocProfVisResultSuccess;
+            SetNumberOfEntries(value);
+            result = kRocProfVisResultSuccess;
             break;
         }
         case kRPVControllerTrackNode:
         {
-            m_topology_ids.node_id = value;
+            SetNodeId(value);
             result = kRocProfVisResultSuccess;
             break;
         }
         case kRPVControllerTrackAgentIdOrPid:
         {
-            m_topology_ids.agent_id_or_pid = value;
+            SetAgentIdOrPid(value);
             result = kRocProfVisResultSuccess;
             break;
         }
         case kRPVControllerTrackQueueIdOrTid:
         {
-            m_topology_ids.queue_id_or_tid = value;
+            SetQueueIdOrTid(value);
             result = kRocProfVisResultSuccess;
             break;
         }
         case kRPVControllerTrackNumberOfOperationTypes:
         {
-            m_metadata.operation_types.resize(value);
+            SetNumberOfOperationTypes(value);
             result = kRocProfVisResultSuccess;
             break;
         }
         case kRPVControllerTrackOperationTypeIndexed:
         {
-            if(index < m_metadata.operation_types.size())
+            if(index < GetNumberOfOperationTypes())
             {
-                m_metadata.operation_types[index] = (rocprofvis_dm_event_operation_t)value;
+                SetOperationType(
+                    index, static_cast<rocprofvis_dm_event_operation_t>(value));
                 result = kRocProfVisResultSuccess;
             }
             else
@@ -983,25 +1181,25 @@ rocprofvis_result_t Track::SetDouble(rocprofvis_property_t property, uint64_t in
     {
         case kRPVControllerTrackMinTimestamp:
         {
-            m_bounds.start_timestamp = value;
+            SetStartTimestamp(value);
             result = kRocProfVisResultSuccess;
             break;
         }
         case kRPVControllerTrackMaxTimestamp:
         {
-            m_bounds.end_timestamp = value;
+            SetEndTimestamp(value);
             result = kRocProfVisResultSuccess;
             break;
         }
         case kRPVControllerTrackMinValue:
         {
-            m_bounds.min_value = value;
+            SetMinValue(value);
             result            = kRocProfVisResultSuccess;
             break;
         }
         case kRPVControllerTrackMaxValue:
         {
-            m_bounds.max_value = value;
+            SetMaxValue(value);
             result          = kRocProfVisResultSuccess;
             break;
         }
@@ -1150,8 +1348,8 @@ rocprofvis_result_t Track::SetObject(rocprofvis_property_t property, uint64_t in
                 ThreadRef ref(value);
                 if(ref.IsValid())
                 {
-                    m_topology_links.thread = ref.Get();
-                    result                  = kRocProfVisResultSuccess;
+                    SetThread(ref.Get());
+                    result = kRocProfVisResultSuccess;
                 }
                 break;
             }
@@ -1160,8 +1358,8 @@ rocprofvis_result_t Track::SetObject(rocprofvis_property_t property, uint64_t in
                 QueueRef ref(value);
                 if(ref.IsValid())
                 {
-                    m_topology_links.queue = ref.Get();
-                    result                 = kRocProfVisResultSuccess;
+                    SetQueue(ref.Get());
+                    result = kRocProfVisResultSuccess;
                 }
                 break;
             }
@@ -1170,8 +1368,8 @@ rocprofvis_result_t Track::SetObject(rocprofvis_property_t property, uint64_t in
                 StreamRef ref(value);
                 if(ref.IsValid())
                 {
-                    m_topology_links.stream = ref.Get();
-                    result                  = kRocProfVisResultSuccess;
+                    SetStream(ref.Get());
+                    result = kRocProfVisResultSuccess;
                 }
                 break;
             }
@@ -1180,8 +1378,8 @@ rocprofvis_result_t Track::SetObject(rocprofvis_property_t property, uint64_t in
                 CounterRef ref(value);
                 if(ref.IsValid())
                 {
-                    m_topology_links.counter = ref.Get();
-                    result                   = kRocProfVisResultSuccess;
+                    SetCounter(ref.Get());
+                    result = kRocProfVisResultSuccess;
                 }
                 break;
             }
@@ -1205,19 +1403,19 @@ rocprofvis_result_t Track::SetString(rocprofvis_property_t property, uint64_t in
         {
             case kRPVControllerTrackCategory:
             {
-                m_metadata.category = value;
+                SetCategory(value);
                 result = kRocProfVisResultSuccess;
                 break;
             }
             case kRPVControllerTrackMainName:
             {
-                m_metadata.main_name = value;
+                SetMainName(value);
                 result = kRocProfVisResultSuccess;
                 break;
             }
             case kRPVControllerTrackSubName:
             {
-                m_metadata.sub_name = value;
+                SetSubName(value);
                 result = kRocProfVisResultSuccess;
                 break;
             }
@@ -1279,8 +1477,12 @@ Track::FillBounds()
     {
         bounds.start_timestamp = static_cast<double>(start_timestamp);
         bounds.end_timestamp   = static_cast<double>(end_timestamp);
-        m_bounds               = bounds;
-        result                 = kRocProfVisResultSuccess;
+        SetNumberOfEntries(bounds.num_entries);
+        SetStartTimestamp(bounds.start_timestamp);
+        SetEndTimestamp(bounds.end_timestamp);
+        SetMinValue(bounds.min_value);
+        SetMaxValue(bounds.max_value);
+        result = kRocProfVisResultSuccess;
     }
 
     return result;
@@ -1374,8 +1576,15 @@ Track::FillMetadata()
             }
         }
 
-        m_metadata = metadata;
-        result     = kRocProfVisResultSuccess;
+        SetCategory(metadata.category);
+        SetMainName(metadata.main_name);
+        SetSubName(metadata.sub_name);
+        SetNumberOfOperationTypes(metadata.operation_types.size());
+        for(uint64_t index = 0; index < metadata.operation_types.size(); ++index)
+        {
+            SetOperationType(index, metadata.operation_types[index]);
+        }
+        result = kRocProfVisResultSuccess;
     }
 
     return result;
@@ -1404,8 +1613,10 @@ Track::FillTopologyIds()
     rocprofvis_result_t result = kRocProfVisResultUnknownError;
     if(dm_result == kRocProfVisDmResultSuccess)
     {
-        m_topology_ids = topology_ids;
-        result         = kRocProfVisResultSuccess;
+        SetNodeId(topology_ids.node_id);
+        SetAgentIdOrPid(topology_ids.agent_id_or_pid);
+        SetQueueIdOrTid(topology_ids.queue_id_or_tid);
+        result = kRocProfVisResultSuccess;
     }
 
     return result;

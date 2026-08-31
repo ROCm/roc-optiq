@@ -589,7 +589,7 @@ rocprofvis_result_t ComputeTrace::LoadRocpd(Future* future)
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     QueryArgumentStore query_arguments;
     QueryDataStore     query_output;
-    m_dm_handle = rocprofvis_dm_create_trace();
+    SetDMHandle(rocprofvis_dm_create_trace());
     if(nullptr != m_dm_handle)
     {
         rocprofvis_dm_database_t db = rocprofvis_db_open_database(m_trace_file.c_str(), kComputeSqlite);

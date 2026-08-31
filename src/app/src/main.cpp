@@ -17,6 +17,8 @@
 #include "rocprofvis_platform_helpers.h"
 #endif
 #include <GLFW/glfw3.h>
+#include <algorithm>
+#include <cmath>
 #include <filesystem>
 #include <iostream>
 #include <stdio.h>
@@ -38,6 +40,46 @@ static RocProfVis::View::FullscreenState g_fullscreen_state = {};
 static int       g_frames_to_render        = 1;
 constexpr int    RENDER_FRAMES_AFTER_INPUT = 4;
 constexpr double IDLE_WAIT_TIMEOUT_SECONDS = 1.0;
+
+#ifdef __linux__
+// GLFW's X11 backend takes the content scale from the global Xft.dpi resource,
+// which GNOME leaves at 96 for XWayland clients however it scales each monitor.
+// Fall back to the monitor's physical DPI so ImGui's DPI font scaling has a
+// truthful value to work with.
+static float
+get_content_scale(GLFWwindow* window)
+{
+    constexpr float BASE_DPI    = 96.0f;
+    constexpr float MM_PER_INCH = 25.4f;
+    // Bias so a monitor slightly denser than a whole step still snaps up to it.
+    constexpr float SNAP_BIAS = 0.25f;
+
+    float scale  = 1.0f;
+    float yscale = 1.0f;
+    glfwGetWindowContentScale(window, &scale, &yscale);
+
+    if(scale <= 1.0f)
+    {
+        GLFWmonitor* monitor = RocProfVis::View::get_current_monitor(window);
+        if(monitor != nullptr)
+        {
+            const GLFWvidmode* mode      = glfwGetVideoMode(monitor);
+            int                width_mm  = 0;
+            int                height_mm = 0;
+            glfwGetMonitorPhysicalSize(monitor, &width_mm, &height_mm);
+
+            if(mode != nullptr && width_mm > 0)
+            {
+                const float dpi = (static_cast<float>(mode->width) * MM_PER_INCH) /
+                                  static_cast<float>(width_mm);
+                scale = std::floor(dpi / BASE_DPI + SNAP_BIAS);
+            }
+        }
+    }
+
+    return std::max(scale, 1.0f);
+}
+#endif
 
 static void
 drop_callback(GLFWwindow* window, int count, const char* paths[])
@@ -341,6 +383,16 @@ main(int argc, char** argv)
                 glfwSetWindowSizeCallback(window, window_size_change_callback);
                 glfwSetKeyCallback(window, key_callback);
 
+#ifdef __linux__
+                // GLFW_SCALE_TO_MONITOR sized the window using the scale GLFW
+                // knew about, so redo it with the corrected one.
+                const float initial_scale = get_content_scale(window);
+                glfwSetWindowSize(
+                    window,
+                    static_cast<int>(RocProfVis::View::DEFAULT_WINDOWED_WIDTH * initial_scale),
+                    static_cast<int>(RocProfVis::View::DEFAULT_WINDOWED_HEIGHT * initial_scale));
+#endif
+
                 RocProfVis::View::init_fullscreen_state(window, g_fullscreen_state);
                 glfwShowWindow(window);
 
@@ -350,6 +402,10 @@ main(int argc, char** argv)
                 io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
                 io.ConfigDpiScaleFonts               = true;
                 io.ConfigWindowsMoveFromTitleBarOnly = true;
+#ifdef __linux__
+                // Set from get_content_scale() each frame instead.
+                io.ConfigDpiScaleFonts = false;
+#endif
 
                 ImGui::StyleColorsLight();
 
@@ -432,6 +488,12 @@ main(int argc, char** argv)
                         ImGui_ImplGlfw_Sleep(10);
                         continue;
                     }
+
+#ifdef __linux__
+                    // Re-read every frame so moving the window between monitors
+                    // of different density rescales the UI.
+                    ImGui::GetStyle().FontScaleDpi = get_content_scale(window);
+#endif
 
                     backend.m_new_frame(&backend);
                     ImGui::NewFrame();

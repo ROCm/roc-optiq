@@ -329,14 +329,6 @@ ComputePivotTable::GetString(rocprofvis_property_t property, uint64_t index, cha
     {
         switch(property)
         {
-            case kRPVControllerTableColumnHeaderIndexed:
-            {
-                if(index < m_columns.size())
-                {
-                    result = GetStdStringImpl(value, length, m_columns[index].m_name);
-                }
-                break;
-            }
             case kRPVControllerTableTitle:
             {
                 result = GetStdStringImpl(value, length, "Kernel Metrics Matrix");

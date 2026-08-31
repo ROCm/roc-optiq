@@ -455,6 +455,10 @@ KernelMetricTable::Render()
                     if(col < PERMANENT_COLUMN_COUNT)
                     {
                         ImGui::TableHeader(ImGui::TableGetColumnName(col));
+#ifdef IMGUI_ENABLE_TEST_ENGINE
+                        if(col == DURATION_COLUMN_INDEX)
+                            m_test_duration_header_id = ImGui::GetItemID();
+#endif
                         RenderBarChartContextMenu(col);
                         continue;
                     }
@@ -899,6 +903,12 @@ KernelMetricTable::RenderColumnFilter(int column_index)
     {
         filter.is_active = (strlen(filter.filter_text) > 0);
     }
+
+#ifdef IMGUI_ENABLE_TEST_ENGINE
+    if(m_test_column_filter_ids.size() != total_columns)
+        m_test_column_filter_ids.resize(total_columns, 0);
+    m_test_column_filter_ids[column_index] = ImGui::GetItemID();
+#endif
 
     ImGui::PopClipRect();
     ImGui::PopID();

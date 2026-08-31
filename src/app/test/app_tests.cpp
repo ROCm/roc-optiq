@@ -1545,6 +1545,34 @@ void RegisterAppTests(ImGuiTestEngine* e)
         const char* kSubmitRef = "//Main Window/**/Submit";
         if (ctx->ItemExists(kTabRef)) ctx->ItemClick(kTabRef);
         ctx->Yield(2);
+
+        // The SQL WHERE filter box and Submit button render only in Advanced filter
+        // mode. The table defaults to Basic (per-column) mode. Open the funnel "Filter
+        // Mode" menu and pick Advanced so the predicate below has widgets to drive. The
+        // funnel button lives in the table's "##status" child window.
+        ImGuiWindow* status_win = nullptr;
+        for (ImGuiWindow* w : ImGui::GetCurrentContext()->Windows)
+            if (w->WasActive && strstr(w->Name, "multitrack_table") && strstr(w->Name, "##status"))
+            { status_win = w; break; }
+        if (status_win != nullptr)
+        {
+            ctx->SetRef(status_win);
+            ImGuiTestItemList status_items;
+            ctx->GatherItems(&status_items, "");
+            ImGuiID funnel_id = 0;
+            for (int i = 0; i < status_items.GetSize(); i++)
+                if (strstr(status_items[i]->DebugLabel, ICON_FUNNEL))
+                { funnel_id = status_items[i]->ID; break; }
+            if (funnel_id != 0)
+            {
+                ctx->ItemClick(funnel_id);
+                ctx->Yield(2);
+                if (ctx->ItemExists("//$FOCUSED/Advanced")) ctx->ItemClick("//$FOCUSED/Advanced");
+                ctx->Yield(2);
+            }
+            ctx->SetRef("//Main Window");
+        }
+
         // Restore before asserting: an abort here must not leak the open panel and
         // selected tracks into later tests.
         if (!ctx->ItemExists(kFilterRef) || !ctx->ItemExists(kSubmitRef))

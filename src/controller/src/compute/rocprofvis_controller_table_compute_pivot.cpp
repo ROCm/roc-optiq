@@ -11,9 +11,7 @@
 #include "rocprofvis_controller_trace_compute.h"
 #include "rocprofvis_core_assert.h"
 #include "spdlog/spdlog.h"
-#include <algorithm>
 #include <cstdlib>
-#include <cstring>
 
 namespace RocProfVis
 {
@@ -378,35 +376,13 @@ ComputePivotTable::GetString(rocprofvis_property_t property, uint64_t index, cha
             {
                 if(index < m_columns.size())
                 {
-                    if(!value && length)
-                    {
-                        *length = static_cast<uint32_t>(m_columns[index].m_name.size());
-                        result  = kRocProfVisResultSuccess;
-                    }
-                    else if(value && length && *length > 0)
-                    {
-                        const std::string& name = m_columns[index].m_name;
-                        const size_t copy = std::min(name.size(), static_cast<size_t>(*length));
-                        if (copy > 0) std::memcpy(value, name.data(), copy);
-                        result = kRocProfVisResultSuccess;
-                    }
+                    result = GetStdStringImpl(value, length, m_columns[index].m_name);
                 }
                 break;
             }
             case kRPVControllerTableTitle:
             {
-                std::string title = "Kernel Metrics Matrix";
-                if(!value && length)
-                {
-                    *length = static_cast<uint32_t>(title.size());
-                    result  = kRocProfVisResultSuccess;
-                }
-                else if(value && length && *length > 0)
-                {
-                    const size_t copy = std::min(title.size(), static_cast<size_t>(*length));
-                    if (copy > 0) std::memcpy(value, title.data(), copy);
-                    result = kRocProfVisResultSuccess;
-                }
+                result = GetStdStringImpl(value, length, "Kernel Metrics Matrix");
                 break;
             }
             default:

@@ -664,15 +664,21 @@ void RegisterAppTests(ImGuiTestEngine* e)
         }
 
         const std::vector<const TabItem*> tabs = tc->GetTabs();
-        ComputeComparisonView* comp = nullptr;
+        ComparisonTable* comp = nullptr;
         std::string            comp_label;
         for (const TabItem* tab : tabs)
         {
             if (tab->m_id == "compute_comparison_view")
             {
-                comp       = dynamic_cast<ComputeComparisonView*>(tab->m_widget.get());
-                comp_label = tab->m_label;
-                break;
+                ComputeComparisonView* view =
+                    dynamic_cast<ComputeComparisonView*>(tab->m_widget.get());
+                if (view)
+                {
+                    ComputeComparisonViewTestPeer peer{*view};
+                    comp = peer.ComparisonTablePtr();
+                    comp_label = tab->m_label;
+                    break;
+                }               
             }
         }
         if (comp == nullptr)
@@ -692,7 +698,7 @@ void RegisterAppTests(ImGuiTestEngine* e)
         ctx->ItemClick(("//Main Window/**/" + comp_label).c_str());
         ctx->Yield(3);
 
-        ComputeComparisonViewTestPeer peer{*comp};
+        ComputeComparisonTableTestPeer peer{*comp};
 
         // The toolbar combos live in a nested child window the "//Main Window/**/"
         // wildcard can't reach. Find it by name fragment, click relative to it, and
@@ -703,7 +709,7 @@ void RegisterAppTests(ImGuiTestEngine* e)
             for (ImGuiWindow* w : g->Windows)
             {
                 if (w->WasActive && strstr(w->Name, "TabContainer") &&
-                    strstr(w->Name, "/toolbar_"))
+                    strstr(w->Name, "/compare_target_toolbar"))
                 {
                     ctx->SetRef(w);
                     return true;

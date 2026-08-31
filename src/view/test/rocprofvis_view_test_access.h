@@ -167,20 +167,26 @@ struct ComputeWorkloadViewTestPeer
 struct ComputeComparisonViewTestPeer
 {
     ComputeComparisonView& v;
-    uint32_t TargetWorkloadId() const { return v.m_target_workload_id; }
-    uint32_t TargetKernelId() const { return v.m_target_kernel_id; }
-    size_t   CategoryCount() const { return v.m_categories.size(); }
+    ComparisonTable* ComparisonTablePtr() const { return v.m_comparison_table.get(); }
+};
+
+struct ComputeComparisonTableTestPeer
+{
+    ComparisonTable& t;
+    uint32_t TargetWorkloadId() const { return t.m_target_workload_id; }
+    uint32_t TargetKernelId() const { return t.m_target_kernel_id; }
+    size_t   CategoryCount() const { return t.m_categories.size(); }
     // True while either the baseline or target metrics fetch is still pending.
     bool RequestsPending() const
     {
-        return v.m_data_provider.IsRequestPending(v.m_baseline_request_id) ||
-               v.m_data_provider.IsRequestPending(v.m_target_request_id);
+        return t.m_data_provider.IsRequestPending(t.m_baseline_request_id) ||
+               t.m_data_provider.IsRequestPending(t.m_target_request_id);
     }
     // True once a built table has a "Difference##" column, i.e. deltas were
     // actually computed (not just tables allocated).
     bool HasDifferenceColumn() const
     {
-        for(const auto& category : v.m_categories)
+        for(const auto& category : t.m_categories)
         {
             for(const auto& table : category.tables)
             {

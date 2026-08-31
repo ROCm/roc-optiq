@@ -40,11 +40,16 @@ private:
         kMixed
     };
 
-    void               RenderTrackItem(const uint64_t& index,
+    // Track ids are stable, their position in m_tracks is not, so a track's
+    // metadata provides its current index. Callers that already hold the
+    // metadata use TrackFromMetadata to avoid looking it up twice per row.
+    TrackItem*         TrackFromMetadata(const TrackInfo* info) const;
+    TrackItem*         FindTrack(const uint64_t& track_id) const;
+    void               RenderTrackItem(const uint64_t& track_id,
                                        bool show_eye_button = true);
     void               ScrollToTrack(TrackItem& track);
     void               SetTrackVisibility(TrackItem& track, bool visible);
-    void               HideAllButTrack(const uint64_t& index);
+    void               HideAllButTrack(const uint64_t& track_id);
     void               ApplyAllTrackVisibility(bool visible);
     void               ApplySelectedTrackVisibility(bool visible);
     bool               HasTrackVisibility(bool visible) const;

@@ -16,14 +16,13 @@ class DataProvider;
 class EventsView;
 class MultiTrackTable;
 class TopEventsView;
-class TrackTopology;
 class TrackDetails;
 class TimelineSelection;
 
 class AnalysisView : public RocWidget
 {
 public:
-    AnalysisView(DataProvider& dp, std::shared_ptr<TrackTopology> topology,
+    AnalysisView(DataProvider&                       dp,
                  std::shared_ptr<TimelineSelection>  timeline_selection,
                  std::shared_ptr<AnnotationsManager> annotation_manager);
     ~AnalysisView();

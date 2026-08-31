@@ -338,15 +338,25 @@ TopologyTree::GetProcessorTypeLabel(const ProcessorInfo& processor_info,
     switch(processor_info.type)
     {
         case kRPVControllerProcessorTypeCPU:
-            label_out = "CPU" + std::to_string(processor_info.type_index);
-            return true;
         case kRPVControllerProcessorTypeGPU:
-            label_out = "GPU" + std::to_string(processor_info.type_index);
-            return true;
         case kRPVControllerProcessorTypeNIC:
-            label_out = "NIC" + std::to_string(processor_info.type_index);
+            label_out = GetProcessorTypeName(processor_info.type) +
+                        std::to_string(processor_info.type_index);
             return true;
         default: return false;
+    }
+}
+
+const char*
+TopologyTree::GetProcessorTypeName(
+    rocprofvis_controller_processor_type_t processor_type)
+{
+    switch(processor_type)
+    {
+        case kRPVControllerProcessorTypeGPU: return "GPU";
+        case kRPVControllerProcessorTypeCPU: return "CPU";
+        case kRPVControllerProcessorTypeNIC: return "NIC";
+        default: return "Undefined";
     }
 }
 

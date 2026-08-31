@@ -905,6 +905,12 @@ DataProvider::ParseProcessorData(rocprofvis_handle_t* processor_handle,
                                               kRPVControllerProcessorTypeIndex, 0,
                                               &processor_info.type_index);
     ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+
+    // "[0] GPU0: AMD Instinct MI300X"
+    processor_info.SetHeader(
+        "[" + std::to_string(processor_info.GetTopologyId().fields.id) + "] " +
+        TopologyTree::GetProcessorTypeName(processor_info.type) +
+        std::to_string(processor_info.type_index) + ": " + processor_info.product_name);
 }
 
 void
@@ -921,6 +927,8 @@ DataProvider::ParseProcessData(rocprofvis_handle_t* process_handle,
     process_info.environment =
         GetString(process_handle, kRPVControllerProcessEnvironment, 0);
     process_info.SetName(process_info.command);
+    process_info.SetHeader(process_info.command + " (" +
+                           std::to_string(process_info.GetId()) + ")");
 }
 
 void

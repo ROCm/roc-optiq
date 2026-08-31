@@ -295,7 +295,7 @@ TraceView::CreateView()
     auto sidebar =
         std::make_shared<SideBar>(m_track_topology, m_timeline_selection,
                                   m_timeline_view->GetTracks(), m_data_provider);
-    auto analysis = std::make_shared<AnalysisView>(m_data_provider, m_track_topology,
+    auto analysis = std::make_shared<AnalysisView>(m_data_provider,
                                                    m_timeline_selection, m_annotations);
 
     m_sidebar_item            = LayoutItem::CreateFromWidget(sidebar);

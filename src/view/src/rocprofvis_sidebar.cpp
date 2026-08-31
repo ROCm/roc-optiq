@@ -299,17 +299,36 @@ void
 SideBar::Update()
 {}
 
-void
-SideBar::RenderTrackItem(const uint64_t& index, bool show_eye_button)
+TrackItem*
+SideBar::TrackFromMetadata(const TrackInfo* info) const
 {
-    if(!m_tracks || index >= m_tracks->size() || !(*m_tracks)[index])
+    if(!info || !m_tracks || info->index >= m_tracks->size())
+    {
+        return nullptr;
+    }
+    TrackItem* track = (*m_tracks)[info->index];
+    return (track && track->GetID() == info->id) ? track : nullptr;
+}
+
+TrackItem*
+SideBar::FindTrack(const uint64_t& track_id) const
+{
+    return TrackFromMetadata(
+        m_data_provider.DataModel().GetTimeline().GetTrack(track_id));
+}
+
+void
+SideBar::RenderTrackItem(const uint64_t& track_id, bool show_eye_button)
+{
+    const TrackInfo* track_info =
+        m_data_provider.DataModel().GetTimeline().GetTrack(track_id);
+    TrackItem*       item = TrackFromMetadata(track_info);
+    if(!item)
     {
         return;
     }
 
-    TrackItem&       track = *(*m_tracks)[index];
-    const TrackInfo* track_info =
-        m_data_provider.DataModel().GetTimeline().GetTrack(track.GetID());
+    TrackItem& track = *item;
 
     // Compact mode drops the row buttons entirely; the context menu below still
     // toggles visibility and goes to the track.
@@ -402,7 +421,7 @@ SideBar::RenderTrackItem(const uint64_t& index, bool show_eye_button)
         }
         if(ImGui::MenuItem("Hide All But This Track"))
         {
-            HideAllButTrack(index);
+            HideAllButTrack(track_id);
         }
 
         ImGui::Separator();
@@ -446,21 +465,20 @@ SideBar::SetTrackVisibility(TrackItem& track, bool visible)
 }
 
 void
-SideBar::HideAllButTrack(const uint64_t& index)
+SideBar::HideAllButTrack(const uint64_t& track_id)
 {
-    if(!m_tracks || index >= m_tracks->size())
+    if(!m_tracks)
     {
         return;
     }
 
-    for(uint64_t i = 0; i < m_tracks->size(); ++i)
+    for(TrackItem* track : *m_tracks)
     {
-        TrackItem* track = (*m_tracks)[i];
         if(!track)
         {
             continue;
         }
-        SetTrackVisibility(*track, i == index);
+        SetTrackVisibility(*track, track->GetID() == track_id);
     }
     EventManager::GetInstance()->AddEvent(
         std::make_shared<RocEvent>(static_cast<int>(RocEvents::kTrackVisibilityChanged),
@@ -541,14 +559,14 @@ SideBar::MergeEyeButtonState(EyeButtonState lhs, EyeButtonState rhs) const
 SideBar::EyeButtonState
 SideBar::GetLeafState(const LeafNode& leaf) const
 {
-    if(!m_tracks || leaf.graph_index >= m_tracks->size())
+    const TrackItem* track = FindTrack(leaf.track_id);
+    if(!track)
     {
         return EyeButtonState::kAllHidden;
     }
 
-    return (*m_tracks)[leaf.graph_index]->IsDisplayed()
-               ? EyeButtonState::kAllVisible
-               : EyeButtonState::kAllHidden;
+    return track->IsDisplayed() ? EyeButtonState::kAllVisible
+                                : EyeButtonState::kAllHidden;
 }
 
 SideBar::EyeButtonState
@@ -609,7 +627,7 @@ SideBar::ApplyVisibility(const TreeNode& node, bool visible)
         return;
     }
 
-    std::unordered_set<uint64_t> visited_graphs;
+    std::unordered_set<uint64_t> visited_tracks;
     std::vector<const TreeNode*> stack = { &node };
 
     while(!stack.empty())
@@ -631,10 +649,9 @@ SideBar::ApplyVisibility(const TreeNode& node, bool visible)
         if(current->IsLeaf())
         {
             const LeafNode& leaf = static_cast<const LeafNode&>(*current);
-            if(leaf.graph_index < m_tracks->size() &&
-               visited_graphs.insert(leaf.graph_index).second)
+            if(visited_tracks.insert(leaf.track_id).second)
             {
-                TrackItem* track = (*m_tracks)[leaf.graph_index];
+                TrackItem* track = FindTrack(leaf.track_id);
                 if(track && track->IsDisplayed() != visible)
                 {
                     track->SetDisplay(visible);
@@ -666,7 +683,7 @@ SideBar::RenderLeafNode(const LeafNode& leaf)
         m_reveal_active && leaf.track_id == m_reveal_track_id;
     const ImVec2 row_min          = ImGui::GetCursorScreenPos();
 
-    RenderTrackItem(leaf.graph_index, leaf.show_eye_button);
+    RenderTrackItem(leaf.track_id, leaf.show_eye_button);
 
     if(is_reveal_match)
     {

@@ -264,8 +264,12 @@ public:
     // 1-based display rank, or 0 if the node id is unknown.
     size_t GetNodeDisplayIndex(uint64_t node_id) const;
 
+    // "GPU0", "CPU1". False (and label_out untouched) for an undefined type.
     bool GetProcessorTypeLabel(const ProcessorInfo& processor_info,
                                std::string&         label_out) const;
+    // "GPU", "CPU", "NIC", or "Undefined".
+    static const char* GetProcessorTypeName(
+        rocprofvis_controller_processor_type_t processor_type);
 
     void Clear();
 

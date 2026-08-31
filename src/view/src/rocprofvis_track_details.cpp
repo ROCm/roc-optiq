@@ -8,7 +8,7 @@
 #include "rocprofvis_events.h"
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_timeline_selection.h"
-#include "rocprofvis_track_topology.h"
+#include "rocprofvis_utils.h"
 #include "widgets/rocprofvis_gui_helpers.h"
 #include "widgets/rocprofvis_widget.h"
 
@@ -28,16 +28,16 @@ constexpr const char* TRACK_PREFIX[] = { "Unknown", "Queue",  "Stream",
 // BeginTable scopes ids per table, so a single constant is unambiguous.
 constexpr const char* CELL_CONTEXT_MENU_ID = "##track_details_cell_menu";
 
-TrackDetails::TrackDetails(DataProvider& dp, std::shared_ptr<TrackTopology> topology,
+TrackDetails::TrackDetails(DataProvider&                      dp,
                            std::shared_ptr<TimelineSelection> timeline_selection)
-: m_track_topology(topology)
-, m_data_provider(dp)
+: m_data_provider(dp)
 , m_timeline_selection(timeline_selection)
 , m_settings(SettingsManager::GetInstance())
 , m_selection_dirty(false)
 , m_data_valid(false)
 , m_topology_changed_event_token(EventManager::InvalidSubscriptionToken)
 , m_track_metadata_changed_event_token(EventManager::InvalidSubscriptionToken)
+, m_time_format_changed_token(EventManager::InvalidSubscriptionToken)
 {
     auto topology_changed_event_handler = [this](std::shared_ptr<RocEvent> event) {
         if(event)
@@ -52,12 +52,15 @@ TrackDetails::TrackDetails(DataProvider& dp, std::shared_ptr<TrackTopology> topo
     m_topology_changed_event_token = EventManager::GetInstance()->Subscribe(
         static_cast<int>(RocEvents::kTopologyChanged), topology_changed_event_handler);
 
+    // Track names carry metadata (compare labels, pid suffixes), so a metadata
+    // change means the resolved details have to be rebuilt, not just redrawn.
     auto metadata_changed_event_handler = [this](std::shared_ptr<RocEvent> event) {
         if(event)
         {
             if(m_data_provider.GetTraceFilePath() == event->GetSourceId())
             {
-                m_data_valid = false;
+                m_data_valid      = false;
+                m_selection_dirty = true;
             }
         }
     };
@@ -65,6 +68,16 @@ TrackDetails::TrackDetails(DataProvider& dp, std::shared_ptr<TrackTopology> topo
     m_track_metadata_changed_event_token = EventManager::GetInstance()->Subscribe(
         static_cast<int>(RocEvents::kTrackMetadataChanged),
         metadata_changed_event_handler);
+
+    m_time_format_changed_token = EventManager::GetInstance()->Subscribe(
+        static_cast<int>(RocEvents::kTimeFormatChanged),
+        [this](std::shared_ptr<RocEvent> e) {
+            (void) e;
+            for(DetailItem& item : m_track_details)
+            {
+                FormatTimeCells(item);
+            }
+        });
 }
 
 TrackDetails::~TrackDetails() {
@@ -75,12 +88,15 @@ TrackDetails::~TrackDetails() {
     EventManager::GetInstance()->Unsubscribe(
         static_cast<int>(RocEvents::kTrackMetadataChanged),
         m_track_metadata_changed_event_token);
+
+    EventManager::GetInstance()->Unsubscribe(
+        static_cast<int>(RocEvents::kTimeFormatChanged), m_time_format_changed_token);
 }
 
 void
 TrackDetails::Render()
 {
-    if(m_data_valid && !m_selection_dirty && !m_track_topology->Dirty())
+    if(m_data_valid && !m_selection_dirty)
     {
         const ImGuiStyle& style = m_settings.GetDefaultStyle();
         ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, style.ChildRounding);
@@ -110,8 +126,7 @@ TrackDetails::Render()
                 if(ImGui::CollapsingHeader(detail.track_name.c_str(),
                                            ImGuiTreeNodeFlags_DefaultOpen))
                 {
-                    if(detail.parents.node || detail.parents.process || detail.track ||
-                       detail.stream_track)
+                    if(detail.parents.node || detail.parents.process || detail.track)
                     {
                         ImGui::BeginChild("topology", ImVec2(0.0f, 0.0f),
                                           ImGuiChildFlags_Borders |
@@ -133,7 +148,7 @@ TrackDetails::Render()
                         {
                             ImGui::SameLine();
                             ImGui::TextUnformatted(
-                                detail.parents.node->info->host_name.c_str());
+                                detail.parents.node->host_name.c_str());
                         }
                         if(detail.parents.process)
                         {
@@ -143,25 +158,16 @@ TrackDetails::Render()
                             ImGui::PopFont();
                             ImGui::SameLine(0.0f, style.ItemSpacing.x);
                             ImGui::TextUnformatted(
-                                detail.parents.process->header.c_str());
+                                detail.parents.process->GetHeader().c_str());
                         }
-                        if(detail.track || detail.stream_track)
+                        if(detail.track)
                         {
                             ImGui::PushFont(icons);
                             ImGui::SameLine(0.0f, style.ItemSpacing.x);
                             ImGui::TextUnformatted(ICON_ARROW_FORWARD);
                             ImGui::PopFont();
                             ImGui::SameLine(0.0f, style.ItemSpacing.x);
-                            if(detail.track)
-                            {
-                                ImGui::TextUnformatted(
-                                    detail.track->info->GetName().c_str());
-                            }
-                            else if(detail.stream_track)
-                            {
-                                ImGui::TextUnformatted(
-                                    detail.stream_track->info->GetName().c_str());
-                            }
+                            ImGui::TextUnformatted(detail.track->GetName().c_str());
                         }
                         ImGui::EndGroup();
                         if(ImGui::IsItemClicked())
@@ -173,39 +179,26 @@ TrackDetails::Render()
                             if(detail.parents.node)
                             {
                                 ImGui::Text("Node: %s",
-                                            detail.parents.node->info->host_name.c_str());
-                                RenderTable(detail.parents.node->info_table,
-                                            "##td_node_table");
+                                            detail.parents.node->host_name.c_str());
+                                RenderTable(detail.node_table, "##td_node_table");
                             }
                             if(detail.parents.process)
                             {
                                 ImGui::Text("Process: %s",
-                                            detail.parents.process->header.c_str());
-                                RenderTable(detail.parents.process->info_table,
-                                            "##td_process_table");
+                                            detail.parents.process->GetHeader().c_str());
+                                RenderTable(detail.process_table, "##td_process_table");
                             }
                         }
                         ImGui::EndChild();
                     }
-                    if(detail.track || detail.stream_track)
+                    if(detail.track)
                     {
                         ImGui::BeginChild("track", ImVec2(0.0f, 0.0f),
                                           ImGuiChildFlags_Borders |
                                               ImGuiChildFlags_AutoResizeY);
-                        if(detail.track)
-                        {
-                            ImGui::Text("%s: %s", TRACK_PREFIX[detail.track_type],
-                                        detail.track->info->GetName().c_str());
-                            RenderTable(detail.track->info_table, "##td_track_table",
-                                        detail.stats);
-                        }
-                        else if(detail.stream_track)
-                        {
-                            ImGui::Text("%s: %s", TRACK_PREFIX[detail.track_type],
-                                        detail.stream_track->info->GetName().c_str());
-                            RenderTable(detail.stream_track->info_table,
-                                        "##td_stream_table", detail.stats);
-                        }
+                        ImGui::Text("%s: %s", TRACK_PREFIX[detail.track_type],
+                                    detail.track->GetName().c_str());
+                        RenderTable(detail.track_table, "##td_track_table", detail.stats);
                         ImGui::EndChild();
                     }
                 }
@@ -221,9 +214,8 @@ TrackDetails::Render()
 void
 TrackDetails::Update()
 {
-    if(m_selection_dirty && !m_track_topology->Dirty())
+    if(m_selection_dirty && m_data_provider.GetState() == ProviderState::kReady)
     {
-        const TopologyModel&  topology = m_track_topology->GetTopology();
         std::list<DetailItem> uncategorized_tracks;
         for(DetailItem& item : m_track_details)
         {
@@ -231,74 +223,8 @@ TrackDetails::Update()
                 m_data_provider.DataModel().GetTimeline().GetTrack(item.track_id);
             if(metadata && metadata->topology.type != TrackInfo::TrackType::Unknown)
             {
-                item.track_name =
-                    m_data_provider.DataModel().BuildTrackName(item.track_id);
-                item.track_type              = metadata->topology.type;
-                const uint64_t& node_id      = metadata->topology.node_id;
-                const uint64_t& process_id   = metadata->topology.process_id;
-                const uint64_t& processor_id = metadata->topology.device_id;
-                const uint64_t& type_id      = metadata->topology.id.value;
-                if(topology.node_lut.count(node_id) > 0)
-                {
-                    NodeModel& node   = *topology.node_lut.at(node_id);
-                    item.parents.node = &node;
-                    if(node.process_lut.count(process_id) > 0)
-                    {
-                        ProcessModel& process = *node.process_lut.at(process_id);
-                        item.parents.process  = &process;
-                        switch(metadata->topology.type)
-                        {
-                            case TrackInfo::TrackType::InstrumentedThread:
-                            {
-                                if(process.instrumented_thread_lut.count(type_id) > 0)
-                                {
-                                    item.track =
-                                        process.instrumented_thread_lut.at(type_id);
-                                }
-                                break;
-                            }
-                            case TrackInfo::TrackType::SampledThread:
-                            {
-                                if(process.sampled_thread_lut.count(type_id) > 0)
-                                {
-                                    item.track = process.sampled_thread_lut.at(type_id);
-                                }
-                                break;
-                            }
-                            case TrackInfo::TrackType::Stream:
-                            {
-                                if(process.stream_lut.count(type_id) > 0)
-                                {
-                                    item.stream_track = process.stream_lut.at(type_id);
-                                }
-                                break;
-                            }
-                        }
-                    }
-                    if(node.processor_lut.count(processor_id) > 0)
-                    {
-                        ProcessorModel& processor = *node.processor_lut.at(processor_id);
-                        switch(metadata->topology.type)
-                        {
-                            case TrackInfo::TrackType::Queue:
-                            {
-                                if(processor.queue_lut.count(type_id) > 0)
-                                {
-                                    item.track = processor.queue_lut.at(type_id);
-                                }
-                                break;
-                            }
-                            case TrackInfo::TrackType::Counter:
-                            {
-                                if(processor.counter_lut.count(type_id) > 0)
-                                {
-                                    item.track = processor.counter_lut.at(type_id);
-                                }
-                                break;
-                            }
-                        }
-                    }
-                }
+                Resolve(item, *metadata);
+                BuildTables(item);
                 item.stats =
                     m_data_provider.DataModel().GetAnalysis().RegisterTrack(*metadata);
             }
@@ -317,6 +243,133 @@ TrackDetails::Update()
 }
 
 /*
+ * Locates the topology nodes behind one selected track.
+ *
+ * The track's own node comes from the track id it was bound to at load. Node
+ * and process come from the track metadata rather than by walking up from the
+ * track, because a queue's ancestors are processor -> node: it has no process
+ * ancestor, but the pane still shows the process that dispatched to it.
+ */
+void
+TrackDetails::Resolve(DetailItem& item, const TrackInfo& metadata)
+{
+    const TopologyTree& tree = m_data_provider.DataModel().GetTopology();
+
+    item.track_name       = m_data_provider.DataModel().BuildTrackName(item.track_id);
+    item.track_type       = metadata.topology.type;
+    item.track            = tree.FindByTrackId(item.track_id);
+    item.parents.node     = tree.GetNode(metadata.topology.node_id);
+    item.parents.process  = tree.GetProcess(metadata.topology.process_id);
+}
+
+void
+TrackDetails::BuildTables(DetailItem& item)
+{
+    item.node_table.cells.clear();
+    item.process_table.cells.clear();
+    item.track_table.cells.clear();
+
+    if(const NodeInfo* node = item.parents.node)
+    {
+        item.node_table.cells = {
+            { DetailsTable::Cell{ "OS" }, DetailsTable::Cell{ node->os_name } },
+            { DetailsTable::Cell{ "OS Release" },
+              DetailsTable::Cell{ node->os_release } },
+            { DetailsTable::Cell{ "OS Version" },
+              DetailsTable::Cell{ node->os_version } }
+        };
+    }
+
+    if(const ProcessInfo* process = item.parents.process)
+    {
+        item.process_table.cells = {
+            { DetailsTable::Cell{ "Start Time" },
+              DetailsTable::Cell{ std::to_string(process->start_time), false, true } },
+            { DetailsTable::Cell{ "End Time" },
+              DetailsTable::Cell{ std::to_string(process->end_time), false, true } },
+            { DetailsTable::Cell{ "Command" }, DetailsTable::Cell{ process->command } },
+            { DetailsTable::Cell{ "Environment" },
+              DetailsTable::Cell{ process->environment } }
+        };
+    }
+
+    if(item.track)
+    {
+        switch(item.track->GetNodeType())
+        {
+            case TopologyNodeType::kQueue:
+            {
+                // A queue's own properties are its processor's.
+                const ProcessorInfo* processor = static_cast<const ProcessorInfo*>(
+                    item.track->GetParent(TopologyNodeType::kProcessor));
+                if(processor)
+                {
+                    const std::string processor_label =
+                        std::string(
+                            TopologyTree::GetProcessorTypeName(processor->type)) +
+                        " " + std::to_string(processor->type_index);
+                    item.track_table.cells = {
+                        { DetailsTable::Cell{ processor_label },
+                          DetailsTable::Cell{ processor->product_name } }
+                    };
+                }
+                break;
+            }
+            case TopologyNodeType::kCounter:
+            {
+                const CounterInfo& counter =
+                    static_cast<const CounterInfo&>(*item.track);
+                item.track_table.cells = {
+                    { DetailsTable::Cell{ "Description" },
+                      DetailsTable::Cell{ counter.description } },
+                    { DetailsTable::Cell{ "Value Type" },
+                      DetailsTable::Cell{ counter.value_type } }
+                };
+                break;
+            }
+            case TopologyNodeType::kThread:
+            {
+                const ThreadInfo& thread = static_cast<const ThreadInfo&>(*item.track);
+                item.track_table.cells   = {
+                    { DetailsTable::Cell{ "Start Time" },
+                      DetailsTable::Cell{ std::to_string(thread.start_time), false,
+                                            true } },
+                    { DetailsTable::Cell{ "End Time" },
+                      DetailsTable::Cell{ std::to_string(thread.end_time), false, true } }
+                };
+                break;
+            }
+            default: break;  // Streams have no properties of their own.
+        }
+    }
+
+    FormatTimeCells(item);
+}
+
+void
+TrackDetails::FormatTimeCells(DetailItem& item)
+{
+    const TimeFormat time_format =
+        m_settings.GetUserSettings().unit_settings.time_format;
+
+    for(DetailsTable* table :
+        { &item.node_table, &item.process_table, &item.track_table })
+    {
+        for(std::vector<DetailsTable::Cell>& row : table->cells)
+        {
+            for(DetailsTable::Cell& cell : row)
+            {
+                if(cell.is_time)
+                {
+                    cell.formatted = nanosecond_to_formatted_str(
+                        std::stod(cell.data), time_format, true);
+                }
+            }
+        }
+    }
+}
+
+/*
  * Renders a two-column info table for the selected track details.
  *
  * Each row carries a full-row right-click hit-box plus per-cell capture so the
@@ -327,7 +380,7 @@ TrackDetails::Update()
  * menu popup does not collide with the other tables drawn in the same pane).
  */
 void
-TrackDetails::RenderTable(InfoTable& table, const char* table_id,
+TrackDetails::RenderTable(DetailsTable& table, const char* table_id,
                           const AnalysisTrackStatistics* stats)
 {
     if((!table.cells.empty() && table.cells[0].size() == 2) || stats)
@@ -379,11 +432,10 @@ TrackDetails::RenderTable(InfoTable& table, const char* table_id,
                 {
                     ImGui::PushID(c);
                     PositionCell(c);
-                    const char* data             = table.cells[r][c].data.c_str();
-                    if(table.cells[r][c].needs_format) {
-                        data = table.cells[r][c].formatted.c_str();
-                    }
-                    
+                    const char* data = table.cells[r][c].is_time
+                                           ? table.cells[r][c].formatted.c_str()
+                                           : table.cells[r][c].data.c_str();
+
                     bool&       expand           = table.cells[r][c].expand;
                     ImVec2      cursor_pos_local = ImGui::GetCursorPos();
                     ImVec2      cursor_pos_abs   = ImGui::GetCursorScreenPos();
@@ -477,9 +529,9 @@ TrackDetails::RenderTable(InfoTable& table, const char* table_id,
                     row_cells.reserve(cols);
                     for(int c = 0; c < cols; c++)
                     {
-                        const InfoTable::Cell& cell = table.cells[m_cell_menu.row][c];
-                        row_cells.push_back(cell.needs_format ? cell.formatted
-                                                              : cell.data);
+                        const DetailsTable::Cell& cell =
+                            table.cells[m_cell_menu.row][c];
+                        row_cells.push_back(cell.is_time ? cell.formatted : cell.data);
                     }
                     AddCopyRowCellMenuItems(row_cells.data(), cols, m_cell_menu.column);
                 }

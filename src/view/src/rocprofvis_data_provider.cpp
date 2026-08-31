@@ -3374,13 +3374,21 @@ DataProvider::ProcessTableRequest(RequestInfo& req)
             table_handle, kRPVControllerTableNumRows, 0, &total_num_rows);
         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
-        // get the column names
-        std::vector<std::string> column_names;
+        // get the column names and types
+        std::vector<std::string>                            column_names;
+        std::vector<rocprofvis_controller_primitive_type_t> column_types;
         column_names.reserve(num_columns);
+        column_types.reserve(num_columns);
         for(int i = 0; i < num_columns; i++)
         {
             column_names.emplace_back(
                 GetString(table_handle, kRPVControllerTableColumnHeaderIndexed, i));
+            uint64_t column_type;
+            result = rocprofvis_controller_get_uint64(
+                table_handle, kRPVControllerTableColumnTypeIndexed, i, &column_type);
+            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+            column_types.emplace_back(
+                static_cast<rocprofvis_controller_primitive_type_t>(column_type));
         }
 
         uint64_t num_rows = 0;
@@ -3409,7 +3417,7 @@ DataProvider::ProcessTableRequest(RequestInfo& req)
             {
                 uint64_t column_type = 0;
                 result               = rocprofvis_controller_get_uint64(
-                    table_handle, kRPVControllerTableColumnTypeIndexed, j, &column_type);
+                    row_array, kRPVControllerArrayEntryTypeIndexed, j, &column_type);
                 ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
                 std::string column_value = "";
                 switch(column_type)
@@ -3530,7 +3538,8 @@ DataProvider::ProcessTableRequest(RequestInfo& req)
         tables.SetTableData(table_type_enum, std::move(table_data));
         tables.SetTableParams(table_type_enum, table_params);
         tables.SetTableTotalRowCount(table_type_enum, total_num_rows);
-        tables.SetTableHeader(table_type_enum,  std::move(column_names));
+        tables.SetTableHeader(table_type_enum, std::move(column_names));
+        tables.SetTableColumnTypes(table_type_enum, std::move(column_types));
     }
     else
     {

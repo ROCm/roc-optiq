@@ -82,7 +82,7 @@ bool
 IsMouseReleasedWithDragCheck(ImGuiMouseButton button, float drag_threshold = 5.0f);
 
 std::pair<bool, bool>
-InputTextWithClear(const char* id, const char* hint, char* buf, size_t buf_size,
+InputTextWithClear(const char* id, const char* hint, std::string& str,
                    ImFont* icon_font, ImU32 bg_color, const ImGuiStyle& style,
                    float width = 0);
 
@@ -114,7 +114,7 @@ enum Alignment
     Alignment_Right,
 };
 
-void
+bool
 ElidedText(const char* text, float available_width, float tooltip_width = 0.0f,
            Alignment alignment                     = Alignment_Left,
            bool      imgui_AlignTextToFramePadding = false);

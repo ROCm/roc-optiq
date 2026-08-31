@@ -18,6 +18,8 @@ namespace RocProfVis
 namespace Controller
 {
 
+constexpr const char* PIVOT_TABLE_TITLE = "Kernel Metrics Matrix";
+
 ComputePivotTable::ComputePivotTable(const uint64_t id)
 : Table(id, __kRPVControllerTablePropertiesFirst, __kRPVControllerTablePropertiesLast)
 , m_workload_id(0)
@@ -260,6 +262,7 @@ ComputePivotTable::Fetch(rocprofvis_dm_trace_t dm_handle, uint64_t index, uint64
                             }
                             m_rows[k] = std::move(row);
                         }
+                        m_num_items = m_rows.size();
                     }
                 }
                 rocprofvis_db_future_free(db_future);
@@ -318,52 +321,6 @@ ComputePivotTable::ExportCSV(rocprofvis_dm_trace_t dm_handle, Arguments& args,
 }
 
 rocprofvis_result_t
-ComputePivotTable::GetUInt64(rocprofvis_property_t property, uint64_t index,
-                             uint64_t* value)
-{
-    rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
-    if(value)
-    {
-        switch(property)
-        {
-            case kRPVControllerTableId:
-            {
-                *value = m_id;
-                result = kRocProfVisResultSuccess;
-                break;
-            }
-            case kRPVControllerTableNumColumns:
-            {
-                *value = m_columns.size();
-                result = kRocProfVisResultSuccess;
-                break;
-            }
-            case kRPVControllerTableNumRows:
-            {
-                *value = m_rows.size();
-                result = kRocProfVisResultSuccess;
-                break;
-            }
-            case kRPVControllerTableColumnTypeIndexed:
-            {
-                if(index < m_columns.size())
-                {
-                    *value = m_columns[index].m_type;
-                    result = kRocProfVisResultSuccess;
-                }
-                break;
-            }
-            default:
-            {
-                result = UnhandledProperty(property);
-                break;
-            }
-        }
-    }
-    return result;
-}
-
-rocprofvis_result_t
 ComputePivotTable::GetString(rocprofvis_property_t property, uint64_t index, char* value,
                              uint32_t* length)
 {
@@ -387,7 +344,7 @@ ComputePivotTable::GetString(rocprofvis_property_t property, uint64_t index, cha
             }
             default:
             {
-                result = UnhandledProperty(property);
+                result = Table::GetString(property, index, value, length);
                 break;
             }
         }

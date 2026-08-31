@@ -133,8 +133,8 @@ TopEventsView::TopEventsTable::TopEventsTable(
 : MultiTrackTable(
       dp, table_type, request_table_type, request_id,
       [&dp]() -> const TablesModel& { return dp.DataModel().GetAnalysis().GetTables(); },
-      [&dp]() -> TablesModel& { return dp.DataModel().GetAnalysis().GetTables(); }, false,
-      timeline_selection, 2, kRPVControllerSortOrderDescending)
+      [&dp]() -> TablesModel& { return dp.DataModel().GetAnalysis().GetTables(); },
+      timeline_selection, kNone, 2, kRPVControllerSortOrderDescending)
 , m_duration_column_indices({ INVALID_UINT64_INDEX, INVALID_UINT64_INDEX,
                               INVALID_UINT64_INDEX, INVALID_UINT64_INDEX })
 , m_op(op)

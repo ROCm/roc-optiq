@@ -36,6 +36,8 @@ public:
 
     void HandleTrackSelectionChanged(const uint64_t track_id, const bool selected);
 
+    friend struct TrackDetailsTestPeer;
+
 private:
     struct DetailItem
     {

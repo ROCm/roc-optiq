@@ -1473,6 +1473,129 @@ void RegisterAppTests(ImGuiTestEngine* e)
         ctx->Yield(2);
     };
 
+    t = IM_REGISTER_TEST(e, "app", "sys_event_search_navigate_selects_event");
+    t->TestFunc = [](ImGuiTestContext* ctx)
+    {
+        TraceView* tv = GetTraceViewOrSkip(ctx);
+        if (!tv) return;
+        EventSearch* es = TraceViewTestPeer{*tv}.EventSearchPtr();
+        IM_CHECK(es != nullptr);
+        if (es == nullptr) return;
+        std::shared_ptr<TimelineSelection> sel = tv->GetTimelineSelection();
+        IM_CHECK(sel != nullptr);
+        if (sel == nullptr) return;
+
+        // Clean baseline: the harness reuses one process, so an earlier test may
+        // have left a selection, a highlight, or a stale search behind.
+        TraceViewTestPeer{*tv}.ClearEventSelection();
+        sel->UnhighlightAllEvents();
+        es->Clear();
+        ctx->Yield(3);
+        std::vector<uint64_t> ids;
+        sel->GetSelectedEvents(ids);
+        IM_CHECK(ids.empty());
+        IM_CHECK(sel->HasHighlightedEvents() == false);
+
+        // Same term as sys_event_search_finds_results -- see the note there about
+        // its coupling to the CI sample db.
+        es->TextInput() = "hipLaunchKernel";
+        es->Search();
+        ctx->Yield(2);
+        // The fetch is deferred; let it drain before reading the result count.
+        for (int i = 0; i < 60 && EventSearchTestPeer{*es}.RequestPending(); i++) ctx->Yield(2);
+        ctx->Yield(5);
+        if (EventSearchTestPeer{*es}.ResultCount() == 0)
+        {
+            ctx->LogWarning("SKIP: search returned no result row to click");
+            return;
+        }
+
+        // Rows only exist while the popup is drawn. Search() requests the popup
+        // itself; Show() is the no-op safety net if it is already open.
+        es->Show();
+        ctx->Yield(5);
+
+        // The popup is opened with NoFocusOnAppearing so "//$FOCUSED" does not
+        // resolve to it; find the results child window by name instead.
+        ImGuiWindow* results = nullptr;
+        for (ImGuiWindow* w : ImGui::GetCurrentContext()->Windows)
+            if (w->WasActive && strstr(w->Name, "Event Search Table")) { results = w; break; }
+        IM_CHECK(results != nullptr);
+        if (results == nullptr) return;
+
+        ctx->SetRef(results);
+        ImGuiTestItemList items;
+        ctx->GatherItems(&items, "");
+
+        // Gather order is submission order, so the first result row comes first.
+        // Rows are identified structurally, not by label: event names are long and
+        // full of special characters, whereas the row hit-box is the only
+        // "PushID(row); Selectable("")" item in the table -- a widget whose label
+        // hashes to its own ID stack seed, i.e. ID == ParentID. Column headers and
+        // cell widgets both fail that test, as do the (tall, narrow) column
+        // resize borders.
+        int row_idx = -1;
+        for (int i = 0; i < items.GetSize() && row_idx < 0; i++)
+            if (items[i]->ID == items[i]->ParentID &&
+                items[i]->RectFull.GetWidth() > items[i]->RectFull.GetHeight())
+                row_idx = i;
+        IM_CHECK(row_idx >= 0);
+        if (row_idx < 0) return;
+        const ImGuiTestItemInfo* row = items[row_idx];
+
+        // The row hit-box spans all columns but each cell widget is drawn on top of
+        // it with AllowOverlap, so the row's centre hovers a cell, not the row.
+        // Aim at the widest gap between the row's left edge and the cell widgets
+        // that follow it (cell padding). Gaps are bounded on the right by a cell so
+        // they stay inside the visible part of the row; the row rect itself extends
+        // past the popup's right edge.
+        float click_x = 0.0f;
+        float widest  = 0.0f;
+        float prev_x  = row->RectFull.Min.x;
+        for (int i = row_idx + 1; i < items.GetSize(); i++)
+        {
+            const ImGuiTestItemInfo* cell = items[i];
+            if (cell->ID == cell->ParentID) break;  // start of the next row
+            if (cell->RectFull.Min.x - prev_x > widest)
+            {
+                widest  = cell->RectFull.Min.x - prev_x;
+                click_x = (prev_x + cell->RectFull.Min.x) * 0.5f;
+            }
+            prev_x = cell->RectFull.Max.x;
+        }
+        IM_CHECK(widest > 0.0f);
+        if (widest <= 0.0f) return;
+
+        ctx->MouseMoveToPos(ImVec2(click_x, row->RectFull.GetCenter().y));
+        ctx->Yield(3);
+        // An AllowOverlap item only accepts a press when it was already the hovered
+        // item on the previous frame, so this is both the precondition for the
+        // click and the proof that it lands on the row rather than on a cell.
+        IM_CHECK(ImGui::GetCurrentContext()->HoveredIdPreviousFrame == row->ID);
+        ctx->MouseClick(ImGuiMouseButton_Left);
+        // Let RowSelected -> SelectedRowNavigateEvent run.
+        ctx->Yield(3);
+
+        // Clicking a result navigates: TimelineSelection::NavigateToEvent scrolls
+        // the owning track into view, retargets the time range, and marks the
+        // event via HighlightTrackEvent -- it does not add to the selected-event
+        // set (only a flame-track click does that), so the highlight is what the
+        // navigate path actually produces. Assert presence rather than a specific
+        // uuid: the row -> event mapping is not known here.
+        IM_CHECK(sel->HasHighlightedEvents());
+        IM_CHECK(sel->GetLastHighlightedEventId() != TimelineSelection::INVALID_SELECTION_ID);
+
+        sel->UnhighlightAllEvents();
+        TraceViewTestPeer{*tv}.ClearEventSelection();
+        es->Clear();
+        ctx->Yield(2);
+        // Navigating retargeted the time range and scrolled to the event's track.
+        // Put the timeline back on the default view for the tests that follow.
+        ctx->SetRef("Main Window");
+        ctx->ItemClick("**/Reset View");
+        ctx->Yield(3);
+    };
+
     t = IM_REGISTER_TEST(e, "app", "sys_summary_pie_kernel_select");
     t->TestFunc = [](ImGuiTestContext* ctx)
     {

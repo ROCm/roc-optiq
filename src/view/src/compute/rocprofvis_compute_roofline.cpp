@@ -4,6 +4,7 @@
 #include "rocprofvis_compute_roofline.h"
 #include "icons/rocprovfis_icon_defines.h"
 #include "implot/implot.h"
+#include "rocprofvis_compute_selection.h"
 #include "rocprofvis_data_provider.h"
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_utils.h"
@@ -11,19 +12,28 @@
 #include <algorithm>
 #include <cfloat>
 #include <cmath>
+#include <limits>
 
 namespace RocProfVis
 {
 namespace View
 {
 
-constexpr float       IMPLOT_LEGEND_ICON_SHRINK       = 2.0f;  // Implot_internal.h
+constexpr float       IMPLOT_LEGEND_ICON_SHRINK       = 2.0f;         // Implot_internal.h
+constexpr float       IMPLOT_MARKER_BASE              = 0.86602540f;  // implot_items.cpp
+constexpr float       IMPLOT_MARKER_SCALE_FACTOR      = 1.15470054f;  // 2 / sqrt(3)
+constexpr double      MIN_X                           = 0.01;         // roofline_calc.py
+constexpr double      MAX_X                           = 1000.00;      // roofline_calc.py
 constexpr float       HOVER_THESHOLD                  = 8.0f;
 constexpr float       HOVER_LINE_WEIGHT_BOOST         = 2.0f;
 constexpr float       LINE_THICKNESS_DEFAULT          = 1.0f;
 constexpr float       LINE_THICKNESS_MIN              = 1.0f;
 constexpr float       LINE_THICKNESS_MAX              = 6.0f;
 constexpr float       KERNEL_MARKER_WEIGHT_DEFAULT    = 1.0f;
+constexpr float       DASHED_LINE_SEGMENT_LENGTH      = 6.0f;
+constexpr float       DASHED_LINE_SEGMENT_GAP         = 4.0f;
+constexpr float       DASHED_LINE_SEGMENT_CAP         = 512.0f;
+constexpr float       LEGEND_HOVER_COLOR_ALPHA        = 0.75f;
 constexpr const char* DISPLAY_NAMES_CEILING_COMPUTE[] = {
     "Peak MFMA FP4",   // kRPVControllerRooflineCeilingComputeMFMAFP4
     "Peak MFMA FP6",   // kRPVControllerRooflineCeilingComputeMFMAFP6
@@ -46,52 +56,76 @@ constexpr const char* DISPLAY_NAMES_CEILING_BANDWIDTH[] = {
     "Peak L1",   // kRPVControllerRooflineCeilingTypeBandwidthL1
     "Peak LDS",  // kRPVControllerRooflineCeilingTypeBandwidthLDS
 };
-constexpr const char* DISPLAY_NAMES_KERNEL_INTENSITY[] = {
-    "HBM Intensity",  // kRPVControllerRooflineKernelIntensityTypeHBM
-    "L2 Intensity",   // kRPVControllerRooflineKernelIntensityTypeL2
-    "L1 Intensity",   // kRPVControllerRooflineKernelIntensityTypeL1
-    "LDS Intensity",  // kRPVControllerRooflineKernelIntensityTypeLDS
+constexpr const std::pair<const char*, ImPlotMarker> DISPLAY_PROPS_KERNEL_INTENSITY[] = {
+    { "HBM Intensity",
+      ImPlotMarker_Circle },  // kRPVControllerRooflineKernelIntensityTypeHBM
+    { "L2 Intensity",
+      ImPlotMarker_Square },  // kRPVControllerRooflineKernelIntensityTypeL2
+    { "L1 Intensity",
+      ImPlotMarker_Diamond },             // kRPVControllerRooflineKernelIntensityTypeL1
+    { "LDS Intensity", ImPlotMarker_Up }  // kRPVControllerRooflineKernelIntensityTypeLDS
 };
-constexpr const char* MEMORY_LEVEL_NAMES[] = { "HBM", "L2", "L1", "LDS" };
-constexpr const char* FILTER_OPTION_ALL    = "All";
-// Shown by every dropdown once visibility has been hand-edited via Custom, so
-// the toolbar does not claim a selection that no longer matches the plot.
-constexpr const char* FILTER_OPTION_CUSTOM = "-";
-constexpr const char* DISPLAY_NAMES_PRESET[] = {
-    "FP4",   // PresetModel::Type::FP4
-    "FP6",   // PresetModel::Type::FP6
-    "FP8",   // PresetModel::Type::FP8
-    "FP16",  // PresetModel::Type::FP16
-    "FP32",  // PresetModel::Type::FP32
-    "FP64",  // PresetModel::Type::FP64
+constexpr const char* DISPLAY_NAMES_FILTER_BANDWIDTH[] = {
+    "All",  // FilterModel::BandwidthType::All
+    "HBM",  // FilterModel::BandwidthType::HBM
+    "L2",   // FilterModel::BandwidthType::L2
+    "L1",   // FilterModel::BandwidthType::L1
+    "LDS"   // FilterModel::BandwidthType::LDS
 };
+constexpr const char* DISPLAY_NAMES_FILTER_COMPUTE[] = {
+    "All",   // FilterModel::ComputeType::All
+    "FP4",   // FilterModel::ComputeType::FP4
+    "FP6",   // FilterModel::ComputeType::FP6
+    "FP8",   // FilterModel::ComputeType::FP8
+    "FP16",  // FilterModel::ComputeType::FP16
+    "FP32",  // FilterModel::ComputeType::FP32
+    "FP64",  // FilterModel::ComputeType::FP64
+};
+constexpr const char* HINT_FOCUS         = "Click chart to enable zoom/pan";
+constexpr const char* HINT_EMPTY_GENERIC = "No data available.";
+constexpr const char* HINT_EMPTY_PRIMARY_KERNEL =
+    "No data available for baseline kernel.";
+constexpr const char* HINT_EMPTY_SECONDARY_KERNEL =
+    "No data available for target kernel.";
+constexpr const char* HINT_EMPTY_COMPARE_INIT = "Select a kernel for comparison.";
+constexpr const char* DELTA                   = "\xCE\x94";
 
-constexpr const char* CHART_ZOOM_HINT = "Click chart to enable zoom";
-
-Roofline::Roofline(DataProvider& data_provider, KernelMode kernel_mode)
-: m_data_provider(data_provider)
-, m_settings(SettingsManager::GetInstance())
+Roofline::Roofline(DataProvider& data_provider, Mode mode)
+: m_requested_primary_workload_id(ComputeSelection::INVALID_SELECTION_ID)
+, m_requested_secondary_workload_id(ComputeSelection::INVALID_SELECTION_ID)
+, m_requested_primary_kernel_id(ComputeSelection::INVALID_SELECTION_ID)
+, m_requested_kernel_secondary_id(ComputeSelection::INVALID_SELECTION_ID)
 , m_show_menus(true)
 , m_menus_mode(Legend)
 , m_menus_placement(InsideTopRight)
 , m_scale_intensity(true)
 , m_line_thickness(LINE_THICKNESS_DEFAULT)
-, m_active_preset(PresetModel::FP32)
-, m_memory_peak_filter(std::nullopt)
-, m_menus_rendered_height(0.0f)
-, m_hovered_item_distance(FLT_MAX)
+, m_ceiling_labels(true)
+, m_alternate_ceiling_source(false)
+, m_active_filter_ceiling_compute(std::numeric_limits<size_t>::max())
+, m_active_filter_ceiling_bandwidth(0)
+, m_active_filter_intensity_kernel(0)
+, m_active_filter_intensity_bandwidth(0)
+, m_custom_ceiling_compute(false)
+, m_custom_ceiling_bandwidth(false)
+, m_custom_intensity(false)
+, m_mode(mode)
 , m_workload_changed(false)
+, m_workload_primary(nullptr)
+, m_workload_secondary(nullptr)
+, m_ceiling_source(nullptr)
 , m_kernel_changed(false)
-, m_kernel_mode(kernel_mode)
+, m_kernel_primary(nullptr)
+, m_kernel_secondary(nullptr)
 , m_options_changed(false)
-, m_plot_zoom_enabled(false)
-, m_workload(nullptr)
-, m_requested_workload_id(0)
-, m_kernel(nullptr)
-, m_requested_kernel_id(0)
-, m_isolated_kernel(nullptr)
-, m_isolated_bandwidth(std::nullopt)
-, m_custom_visibility(false)
+, m_plot_nav_enabled(false)
+, m_hovered_item_idx(std::nullopt)
+, m_hovered_item_distance(FLT_MAX)
+, m_bounding_box_ceiling({ { DBL_MAX, DBL_MAX }, { -DBL_MAX, -DBL_MAX } })
+, m_bounding_box_intensity({ { DBL_MAX, DBL_MAX }, { -DBL_MAX, -DBL_MAX } })
+, m_menus_rendered_height(0.0f)
+, m_data_provider(data_provider)
+, m_settings(SettingsManager::GetInstance())
 {
     m_widget_name = GenUniqueName("roofline");
     m_items.resize(static_cast<size_t>(__KRPVControllerRooflineCeilingComputeTypeLast +
@@ -104,8 +138,13 @@ Roofline::Roofline(DataProvider& data_provider, KernelMode kernel_mode)
         rocprofvis_controller_roofline_ceiling_compute_type_t type =
             static_cast<rocprofvis_controller_roofline_ceiling_compute_type_t>(i);
         model_subtype.compute = type;
-        m_items[type]         = { model_type, model_subtype, nullptr,
-                                  nullptr,    false,         DISPLAY_NAMES_CEILING_COMPUTE[type],
+        m_items[type]         = { model_type,
+                                  model_subtype,
+                                  ItemModel::Info(),
+                                  ItemModel::ParentInfo(),
+                                  {},
+                                  std::bitset<ItemModel::Visible::Count>("10"),
+                                  DISPLAY_NAMES_CEILING_COMPUTE[type],
                                   1.0f };
     }
     model_type = ItemModel::CeilingBandwidth;
@@ -116,14 +155,42 @@ Roofline::Roofline(DataProvider& data_provider, KernelMode kernel_mode)
             static_cast<rocprofvis_controller_roofline_ceiling_bandwidth_type_t>(i);
         model_subtype.bandwidth                                        = type;
         m_items[__KRPVControllerRooflineCeilingComputeTypeLast + type] = {
-            model_type, model_subtype, nullptr,
-            nullptr,    false,         DISPLAY_NAMES_CEILING_BANDWIDTH[type],
+            model_type,
+            model_subtype,
+            ItemModel::Info(),
+            ItemModel::ParentInfo(),
+            {},
+            std::bitset<ItemModel::Visible::Count>("10"),
+            DISPLAY_NAMES_CEILING_BANDWIDTH[type],
             1.0f
         };
     }
-    m_presets = { { PresetModel::FP4, {} },  { PresetModel::FP6, {} },
-                  { PresetModel::FP8, {} },  { PresetModel::FP16, {} },
-                  { PresetModel::FP32, {} }, { PresetModel::FP64, {} } };
+    m_filters_ceiling_compute = {
+        { DISPLAY_NAMES_FILTER_COMPUTE[FilterModel::ComputeType::ComputeTypeAll], {} },
+        { DISPLAY_NAMES_FILTER_COMPUTE[FilterModel::ComputeType::FP4], {} },
+        { DISPLAY_NAMES_FILTER_COMPUTE[FilterModel::ComputeType::FP6], {} },
+        { DISPLAY_NAMES_FILTER_COMPUTE[FilterModel::ComputeType::FP8], {} },
+        { DISPLAY_NAMES_FILTER_COMPUTE[FilterModel::ComputeType::FP16], {} },
+        { DISPLAY_NAMES_FILTER_COMPUTE[FilterModel::ComputeType::FP32], {} },
+        { DISPLAY_NAMES_FILTER_COMPUTE[FilterModel::ComputeType::FP64], {} }
+    };
+    m_filters_ceiling_bandwidth = {
+        { DISPLAY_NAMES_FILTER_BANDWIDTH[FilterModel::BandwidthType::BandwidthTypeAll],
+          {} },
+        { DISPLAY_NAMES_FILTER_BANDWIDTH[FilterModel::BandwidthType::HBM], {} },
+        { DISPLAY_NAMES_FILTER_BANDWIDTH[FilterModel::BandwidthType::L2], {} },
+        { DISPLAY_NAMES_FILTER_BANDWIDTH[FilterModel::BandwidthType::L1], {} },
+        { DISPLAY_NAMES_FILTER_BANDWIDTH[FilterModel::BandwidthType::LDS], {} }
+    };
+    m_filters_intensity_kernel    = { { "All", {} } };
+    m_filters_intensity_bandwidth = {
+        { DISPLAY_NAMES_FILTER_BANDWIDTH[FilterModel::BandwidthType::BandwidthTypeAll],
+          {} },
+        { DISPLAY_NAMES_FILTER_BANDWIDTH[FilterModel::BandwidthType::HBM], {} },
+        { DISPLAY_NAMES_FILTER_BANDWIDTH[FilterModel::BandwidthType::L2], {} },
+        { DISPLAY_NAMES_FILTER_BANDWIDTH[FilterModel::BandwidthType::L1], {} },
+        { DISPLAY_NAMES_FILTER_BANDWIDTH[FilterModel::BandwidthType::LDS], {} }
+    };
 }
 
 void
@@ -131,217 +198,66 @@ Roofline::Update()
 {
     if(m_workload_changed)
     {
-        // Kernel pointers are rebuilt below, so drop any stale filters.
-        m_isolated_kernel    = nullptr;
-        m_isolated_bandwidth = std::nullopt;
-        m_memory_peak_filter = std::nullopt;
-        m_workload =
-            m_data_provider.ComputeModel().GetWorkload(m_requested_workload_id);
-        if(m_workload)
+        m_workload_primary =
+            m_data_provider.ComputeModel().GetWorkload(m_requested_primary_workload_id);
+        m_workload_secondary =
+            m_data_provider.ComputeModel().GetWorkload(m_requested_secondary_workload_id);
+        m_ceiling_source =
+            m_alternate_ceiling_source ? &m_workload_secondary : &m_workload_primary;
+        if(*m_ceiling_source)
         {
-            m_items.resize(__KRPVControllerRooflineCeilingComputeTypeLast +
-                           __KRPVControllerRooflineCeilingBandwidthTypeLast);
-            for(PresetModel& preset : m_presets)
+            UpdateCeilings(*m_ceiling_source);
+            if(m_mode == AllKernels && !m_kernel_changed)
             {
-                preset.item_indices.clear();
+                m_kernel_changed = true;
             }
-            // Discover ceilings...
-            for(size_t i = 0; i < m_items.size(); i++)
-            {
-                switch(m_items[i].type)
-                {
-                    case ItemModel::Type::CeilingCompute:
-                    {
-                        if(m_workload->roofline.ceiling_compute.count(
-                               m_items[i].subtype.compute) > 0)
-                        {
-                            m_items[i].info.ceiling =
-                                &m_workload->roofline.ceiling_compute
-                                     .at(m_items[i].subtype.compute)
-                                     .begin()
-                                     ->second;
-                            m_items[i].parent_info.workload = m_workload;
-                            // Assign to presets...
-                            switch(m_items[i].subtype.compute)
-                            {
-                                case kRPVControllerRooflineCeilingComputeMFMAFP4:
-                                {
-                                    m_presets[PresetModel::FP4].item_indices.emplace_back(
-                                        i);
-                                    break;
-                                }
-                                case kRPVControllerRooflineCeilingComputeMFMAFP6:
-                                {
-                                    m_presets[PresetModel::FP6].item_indices.emplace_back(
-                                        i);
-                                    break;
-                                }
-                                case kRPVControllerRooflineCeilingComputeMFMAFP8:
-                                {
-                                    m_presets[PresetModel::FP8].item_indices.emplace_back(
-                                        i);
-                                    break;
-                                }
-                                case kRPVControllerRooflineCeilingComputeVALUFP16:
-                                case kRPVControllerRooflineCeilingComputeMFMAFP16:
-                                case kRPVControllerRooflineCeilingComputeMFMABF16:
-                                {
-                                    m_presets[PresetModel::FP16]
-                                        .item_indices.emplace_back(i);
-                                    break;
-                                }
-                                case kRPVControllerRooflineCeilingComputeVALUFP32:
-                                case kRPVControllerRooflineCeilingComputeMFMAFP32:
-                                {
-                                    m_presets[PresetModel::FP32]
-                                        .item_indices.emplace_back(i);
-                                    break;
-                                }
-                                case kRPVControllerRooflineCeilingComputeVALUFP64:
-                                case kRPVControllerRooflineCeilingComputeMFMAFP64:
-                                {
-                                    m_presets[PresetModel::FP64]
-                                        .item_indices.emplace_back(i);
-                                    break;
-                                }
-                            }
-                        }
-                        else
-                        {
-                            m_items[i].info.ceiling         = nullptr;
-                            m_items[i].parent_info.workload = nullptr;
-                        }
-                        break;
-                    }
-                    case ItemModel::Type::CeilingBandwidth:
-                    {
-                        if(m_workload->roofline.ceiling_bandwidth.count(
-                               m_items[i].subtype.bandwidth) > 0)
-                        {
-                            m_items[i].info.ceiling =
-                                &m_workload->roofline.ceiling_bandwidth
-                                     .at(m_items[i].subtype.bandwidth)
-                                     .begin()
-                                     ->second;
-                            m_items[i].parent_info.workload = m_workload;
-                        }
-                        else
-                        {
-                            m_items[i].info.ceiling         = nullptr;
-                            m_items[i].parent_info.workload = nullptr;
-                        }
-                        break;
-                    }
-                }
-            }
-            // Discover kernels...
-            uint64_t kernel_duration_scale = 0;
-            for(const std::pair<const uint32_t, KernelInfo>& kernel : m_workload->kernels)
-            {
-                kernel_duration_scale =
-                    std::max(kernel_duration_scale,
-                             kernel.second.dispatch_metrics[KernelInfo::DurationTotal]);
-            }
-            ItemModel::Type       model_type = ItemModel::Intensity;
-            ItemModel::SubType    model_subtype;
-            ItemModel::Info       model_info;
-            ItemModel::ParentInfo model_parent_info;
-            for(const std::pair<const uint32_t, KernelInfo>& kernel : m_workload->kernels)
-            {
-                model_parent_info.kernel = &kernel.second;
-                for(const std::pair<
-                        const rocprofvis_controller_roofline_kernel_intensity_type_t,
-                        KernelInfo::Roofline::Intensity>& intensity :
-                    kernel.second.roofline.intensities)
-                {
-                    model_subtype.intensity = intensity.second.type;
-                    model_info.intensity    = &intensity.second;
-                    m_items.emplace_back(ItemModel{
-                        model_type, model_subtype, model_info, model_parent_info, false,
-                        std::string(
-                            DISPLAY_NAMES_KERNEL_INTENSITY[intensity.second.type]) +
-                            ": " + kernel.second.name,
-                        kernel_duration_scale > 0
-                            ? static_cast<float>(
-                                  static_cast<double>(
-                                      kernel.second
-                                          .dispatch_metrics[KernelInfo::DurationTotal]) /
-                                  static_cast<double>(kernel_duration_scale))
-                            : KERNEL_MARKER_WEIGHT_DEFAULT });
-                }
-            }
-            // Build filter dropdown options from what the workload actually has;
-            // empty memory levels should not be offered.
-            m_available_intensities.clear();
-            m_available_bandwidths.clear();
-            bool intensity_present[IM_ARRAYSIZE(MEMORY_LEVEL_NAMES)] = {};
-            for(const std::pair<const uint32_t, KernelInfo>& kernel : m_workload->kernels)
-            {
-                for(const std::pair<
-                        const rocprofvis_controller_roofline_kernel_intensity_type_t,
-                        KernelInfo::Roofline::Intensity>& intensity :
-                    kernel.second.roofline.intensities)
-                {
-                    intensity_present[intensity.second.type] = true;
-                }
-            }
-            for(uint32_t i = 0; i < IM_ARRAYSIZE(MEMORY_LEVEL_NAMES); i++)
-            {
-                if(intensity_present[i])
-                {
-                    m_available_intensities.emplace_back(
-                        static_cast<
-                            rocprofvis_controller_roofline_kernel_intensity_type_t>(i));
-                }
-            }
-            for(uint32_t i = __KRPVControllerRooflineCeilingBandwidthTypeFirst;
-                i < __KRPVControllerRooflineCeilingBandwidthTypeLast; i++)
-            {
-                rocprofvis_controller_roofline_ceiling_bandwidth_type_t bandwidth =
-                    static_cast<rocprofvis_controller_roofline_ceiling_bandwidth_type_t>(
-                        i);
-                if(m_workload->roofline.ceiling_bandwidth.count(bandwidth) > 0)
-                {
-                    m_available_bandwidths.emplace_back(bandwidth);
-                }
-            }
-            // Prefer FP32, then descend in precision, using FP64 as a last resort.
-            static constexpr PresetModel::Type PRESET_FALLBACK_ORDER[] = {
-                PresetModel::FP32, PresetModel::FP16, PresetModel::FP8,
-                PresetModel::FP6,  PresetModel::FP4,  PresetModel::FP64,
-            };
-            PresetModel::Type selected_preset = PresetModel::FP32;
-            for(PresetModel::Type candidate : PRESET_FALLBACK_ORDER)
-            {
-                if(!m_presets[candidate].item_indices.empty())
-                {
-                    selected_preset = candidate;
-                    break;
-                }
-            }
-            ApplyPreset(selected_preset);
+            ApplyFilters();
         }
         m_workload_changed = false;
     }
     if(m_kernel_changed)
     {
-        m_kernel = nullptr;
-        if(m_workload && m_workload->kernels.count(m_requested_kernel_id) > 0)
+        m_kernel_primary   = nullptr;
+        m_kernel_secondary = nullptr;
+        if(m_workload_primary)
         {
-            m_kernel = &m_workload->kernels.at(m_requested_kernel_id);
+            if(m_mode == AllKernels)
+            {
+                UpdateIntensities(m_workload_primary, m_workload_primary->ordered_kernels,
+                                  false);
+            }
+            else if((m_mode == SingleKernel || m_mode == Compare) &&
+                    m_workload_primary->kernels.count(m_requested_primary_kernel_id))
+            {
+                m_kernel_primary =
+                    &m_workload_primary->kernels.at(m_requested_primary_kernel_id);
+                std::vector<const KernelInfo*> kernels = { m_kernel_primary };
+                UpdateIntensities(m_workload_primary, kernels, false);
+                if(m_mode == Compare && m_workload_secondary &&
+                   m_workload_secondary->kernels.count(m_requested_kernel_secondary_id))
+                {
+                    m_kernel_secondary = &m_workload_secondary->kernels.at(
+                        m_requested_kernel_secondary_id);
+                    kernels = { m_kernel_secondary };
+                    UpdateIntensities(m_workload_secondary, kernels, true);
+                    UpdateDeltas();
+                }
+            }
+            ApplyFilters();
         }
-        RecomputeVisibility();
         m_kernel_changed = false;
     }
-    if(m_options_changed)
+    if(m_options_changed && m_ceiling_source && *m_ceiling_source)
     {
         // Determine combination of ceiling variations that are continuous...
         ItemModel* ceiling_ridge_compute   = nullptr;
         ItemModel* ceiling_ridge_bandwidth = nullptr;
+        std::array<bool, __kRPVControllerRooflineKernelIntensityTypeLast> delta_visible;
+        std::fill(delta_visible.begin(), delta_visible.end(), true);
         for(ItemModel& item : m_items)
         {
             if(item.type == ItemModel::Type::CeilingCompute && item.info.ceiling &&
-               item.visible)
+               item.visible[ItemModel::Visible::Plot])
             {
                 if(!ceiling_ridge_compute ||
                    (ceiling_ridge_compute &&
@@ -352,7 +268,7 @@ Roofline::Update()
                 }
             }
             else if(item.type == ItemModel::Type::CeilingBandwidth && item.info.ceiling &&
-                    item.visible)
+                    item.visible[ItemModel::Visible::Plot])
             {
                 if(!ceiling_ridge_bandwidth ||
                    (ceiling_ridge_bandwidth &&
@@ -362,24 +278,50 @@ Roofline::Update()
                     ceiling_ridge_bandwidth = &item;
                 }
             }
+            else if(m_mode == Compare)
+            {
+                if(item.type == ItemModel::Type::Intensity && item.info.intensity)
+                {
+                    delta_visible[item.subtype.intensity] &=
+                        item.visible[ItemModel::Visible::Plot];
+                }
+                else if(item.type == ItemModel::Type::IntensityDelta)
+                {
+                    item.visible[ItemModel::Visible::Plot] =
+                        delta_visible[item.subtype.intensity];
+                }
+            }
         }
         if(ceiling_ridge_bandwidth || ceiling_ridge_compute)
         {
             for(ItemModel& item : m_items)
             {
                 if(ceiling_ridge_bandwidth &&
-                   item.type == ItemModel::Type::CeilingCompute && item.info.ceiling)
+                   item.type == ItemModel::Type::CeilingCompute && item.info.ceiling &&
+                   (*m_ceiling_source)
+                           ->roofline.ceiling_compute.count(item.subtype.compute) > 0 &&
+                   (*m_ceiling_source)
+                           ->roofline.ceiling_compute.at(item.subtype.compute)
+                           .count(ceiling_ridge_bandwidth->subtype.bandwidth) > 0)
                 {
                     item.info.ceiling =
-                        &m_workload->roofline.ceiling_compute.at(item.subtype.compute)
+                        &(*m_ceiling_source)
+                             ->roofline.ceiling_compute.at(item.subtype.compute)
                              .at(ceiling_ridge_bandwidth->subtype.bandwidth);
                 }
                 else if(ceiling_ridge_compute &&
                         item.type == ItemModel::Type::CeilingBandwidth &&
-                        item.info.ceiling)
+                        item.info.ceiling &&
+                        (*m_ceiling_source)
+                                ->roofline.ceiling_bandwidth.count(
+                                    item.subtype.bandwidth) > 0 &&
+                        (*m_ceiling_source)
+                                ->roofline.ceiling_bandwidth.at(item.subtype.bandwidth)
+                                .count(ceiling_ridge_compute->subtype.compute) > 0)
                 {
                     item.info.ceiling =
-                        &m_workload->roofline.ceiling_bandwidth.at(item.subtype.bandwidth)
+                        &(*m_ceiling_source)
+                             ->roofline.ceiling_bandwidth.at(item.subtype.bandwidth)
                              .at(ceiling_ridge_compute->subtype.compute);
                 }
             }
@@ -397,27 +339,47 @@ Roofline::Render()
     ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding,
                         m_settings.GetDefaultStyle().ChildRounding);
     ImGui::BeginChild("roofline_card", ImVec2(0, 0),
-                      ImGuiChildFlags_Borders |
-                          ImGuiChildFlags_AlwaysUseWindowPadding);
+                      ImGuiChildFlags_Borders | ImGuiChildFlags_AlwaysUseWindowPadding);
     SectionTitle("Roofline Analysis");
-    bool has_roofline =
-        m_workload && !m_workload->roofline.ceiling_bandwidth.empty() &&
-        !m_workload->roofline.ceiling_compute.empty() &&
-        !(m_kernel_mode == SingleKernel &&
-          (!m_kernel || m_kernel->roofline.intensities.empty()));
-    if(has_roofline)
+    bool ceiling_empty = !(m_ceiling_source && *m_ceiling_source) ||
+                         (*m_ceiling_source)->roofline.ceiling_bandwidth.empty() ||
+                         (*m_ceiling_source)->roofline.ceiling_compute.empty();
+    bool primary_kernel_empty =
+        m_mode == AllKernels
+            ? m_items.size() <= __KRPVControllerRooflineCeilingComputeTypeLast +
+                                    __KRPVControllerRooflineCeilingBandwidthTypeLast
+            : !m_kernel_primary || m_kernel_primary->roofline.intensities.empty();
+    bool secondary_kernel_empty =
+        m_mode == Compare
+            ? !m_kernel_secondary || m_kernel_secondary->roofline.intensities.empty()
+            : false;
+    const ImGuiStyle& style = ImGui::GetStyle();
+    if(!(ceiling_empty || primary_kernel_empty || secondary_kernel_empty))
     {
-        RenderToolbar();
+        float filter_width =
+            (ImGui::GetContentRegionAvail().x -
+             style.ItemSpacing.x * (m_mode == AllKernels ? 3.0f : 2.0f)) /
+            (m_mode == AllKernels ? 4.0f : 3.0f);
+        FilterCombo("Compute Peak", filter_width, style, m_filters_ceiling_compute,
+                    m_custom_ceiling_compute, m_active_filter_ceiling_compute);
+        ImGui::SameLine();
+        FilterCombo("Bandwidth Peak", filter_width, style, m_filters_ceiling_bandwidth,
+                    m_custom_ceiling_bandwidth, m_active_filter_ceiling_bandwidth);
+        if(m_mode == AllKernels)
+        {
+            ImGui::SameLine();
+            FilterCombo("Kernel", filter_width, style, m_filters_intensity_kernel,
+                        m_custom_intensity, m_active_filter_intensity_kernel);
+        }
+        ImGui::SameLine();
+        FilterCombo("Kernel Bandwidth", filter_width, style,
+                    m_filters_intensity_bandwidth, m_custom_intensity,
+                    m_active_filter_intensity_bandwidth);
     }
     ImGui::BeginChild("roofline");
     const ImVec2       region     = ImGui::GetContentRegionAvail();
-    const ImGuiStyle&  style      = ImGui::GetStyle();
     const ImPlotStyle& plot_style = ImPlot::GetStyle();
-    if(!m_workload ||
-       (m_workload->roofline.ceiling_bandwidth.empty() ||
-        m_workload->roofline.ceiling_compute.empty()) ||
-       m_kernel_mode == SingleKernel &&
-           (!m_kernel || m_kernel->roofline.intensities.empty()))
+    if(ceiling_empty || primary_kernel_empty || secondary_kernel_empty)
     {
         ImGui::GetWindowDrawList()->AddRect(
             ImGui::GetCursorScreenPos() +
@@ -428,8 +390,26 @@ Roofline::Render()
                        plot_style.PlotBorderSize + plot_style.PlotPadding.y +
                            ImGui::GetFrameHeightWithSpacing()),
             ImGui::GetColorU32(style.Colors[ImGuiCol_TableBorderStrong]));
-        ImGui::SetCursorPos((region - ImGui::CalcTextSize("No data available.")) * 0.5f);
-        ImGui::TextDisabled("No data available.");
+        const char* hint = HINT_EMPTY_GENERIC;
+        if(m_mode == Compare)
+        {
+            if(m_requested_secondary_workload_id ==
+                   ComputeSelection::INVALID_SELECTION_ID ||
+               m_requested_kernel_secondary_id == ComputeSelection::INVALID_SELECTION_ID)
+            {
+                hint = HINT_EMPTY_COMPARE_INIT;
+            }
+            else if(primary_kernel_empty)
+            {
+                hint = HINT_EMPTY_PRIMARY_KERNEL;
+            }
+            else if(secondary_kernel_empty)
+            {
+                hint = HINT_EMPTY_SECONDARY_KERNEL;
+            }
+        }
+        ImGui::SetCursorPos((region - ImGui::CalcTextSize(hint)) * 0.5f);
+        ImGui::TextDisabled("%s", hint);
     }
     else
     {
@@ -466,8 +446,9 @@ Roofline::Render()
         ImPlot::PushStyleColor(ImPlotCol_Crosshairs,
                                ThemeColor(m_settings, Colors::kSelectionBorder, 0.72f));
         ImPlot::PushColormap(m_settings.GetFlameColormapName());
-        ImGui::PushID(m_workload->id);
+        ImGui::PushID((*m_ceiling_source)->id);
         bool   menus_outside = (m_menus_placement == Outside) && m_show_menus;
+        bool   plot_hovered  = false;
         ImVec2 plot_pos;
         ImVec2 plot_size;
 
@@ -478,7 +459,7 @@ Roofline::Render()
         {
             ImPlotAxisFlags axis_flags =
                 ImPlotAxisFlags_NoSideSwitch | ImPlotAxisFlags_NoHighlight;
-            if(!m_plot_zoom_enabled)
+            if(!m_plot_nav_enabled)
             {
                 axis_flags |= ImPlotAxisFlags_Lock;
             }
@@ -487,44 +468,45 @@ Roofline::Render()
 
             ImPlot::SetupAxisScale(ImAxis_X1, ImPlotScale_Log10);
             ImPlot::SetupAxisScale(ImAxis_Y1, ImPlotScale_Log10);
-            ImPlot::SetupAxisLimits(ImAxis_X1, m_workload->roofline.min.x,
-                                    m_workload->roofline.max.x);
-            ImPlot::SetupAxisLimits(ImAxis_Y1, m_workload->roofline.min.y / 10,
-                                    m_workload->roofline.max.y * 10);
-            ImPlot::SetupAxisLimitsConstraints(ImAxis_X1, m_workload->roofline.min.x,
-                                               m_workload->roofline.max.x);
-            ImPlot::SetupAxisLimitsConstraints(ImAxis_Y1, m_workload->roofline.min.y / 10,
-                                               m_workload->roofline.max.y * 10);
+            ImPlotPoint axis_min(std::min(m_bounding_box_ceiling.first.x,
+                                          m_bounding_box_intensity.first.x) /
+                                     10.0,
+                                 std::min(m_bounding_box_ceiling.first.y,
+                                          m_bounding_box_intensity.first.y) /
+                                     10.0);
+            ImPlotPoint axis_max(std::max(m_bounding_box_ceiling.second.x,
+                                          m_bounding_box_intensity.second.x) *
+                                     10.0,
+                                 std::max(m_bounding_box_ceiling.second.y,
+                                          m_bounding_box_intensity.second.y) *
+                                     10.0);
+            ImPlot::SetupAxisLimits(ImAxis_X1, axis_min.x, axis_max.x);
+            ImPlot::SetupAxisLimits(ImAxis_Y1, axis_min.y, axis_max.y);
+            ImPlot::SetupAxisLimitsConstraints(ImAxis_X1, axis_min.x, axis_max.x);
+            ImPlot::SetupAxisLimitsConstraints(ImAxis_Y1, axis_min.y, axis_max.y);
+            ImPlot::PushStyleVar(ImPlotStyleVar_MarkerSize, 0.0f);
+            ImPlot::PlotScatter("tl_hint", &axis_min.x, &axis_max.y, 1);
+            ImPlot::PlotScatter("br_hint", &axis_max.x, &axis_min.y, 1);
+            ImPlot::PopStyleVar();
+            plot_hovered = ImPlot::IsPlotHovered();
+            plot_pos     = ImPlot::GetPlotPos();
+            plot_size    = ImPlot::GetPlotSize();
             PlotHoverIdx();
-            int item_count = static_cast<int>(m_items.size());
-            for(int i = 0; i < item_count; i++)
+            for(size_t i = 0; i < m_items.size(); i++)
             {
-                bool display = false;
-                switch(m_items[i].type)
+                if(ItemValid(m_items[i]) && m_items[i].visible[ItemModel::Visible::Plot])
                 {
-                    case ItemModel::Type::CeilingCompute:
-                    case ItemModel::Type::CeilingBandwidth:
-                    {
-                        display = m_items[i].info.ceiling;
-                        break;
-                    }
-                    case ItemModel::Type::Intensity:
-                    {
-                        display = m_items[i].info.intensity;
-                    }
-                }
-                display &= m_items[i].visible;
-                if(display)
-                {
-                    ImGui::PushID(i);
-                    bool hovered = m_hovered_item_idx && m_hovered_item_idx.value() == i;
+                    ImGui::PushID(static_cast<int>(i));
+                    bool hovered = plot_hovered && m_hovered_item_idx &&
+                                   m_hovered_item_idx.value() == i;
                     switch(m_items[i].type)
                     {
                         case ItemModel::Type::CeilingCompute:
                         case ItemModel::Type::CeilingBandwidth:
                         {
                             ImPlot::SetNextLineStyle(
-                                ImPlot::GetColormapColor(i),
+                                ImGui::ColorConvertU32ToFloat4(
+                                    ItemColor(m_items[i], hovered, false)),
                                 hovered ? m_line_thickness + HOVER_LINE_WEIGHT_BOOST
                                         : m_line_thickness);
                             ImPlot::PlotLineG(
@@ -549,29 +531,162 @@ Roofline::Render()
                                     }
                                     return point;
                                 },
-                                (void*) &m_items[i].info.ceiling->position, 2);
+                                (void*) &m_items[i].info.ceiling->position, 2,
+                                ImPlotItemFlags_NoFit);
+                            if(m_ceiling_labels)
+                            {
+                                if(m_items[i].type == ItemModel::Type::CeilingCompute &&
+                                   m_items[i].info.ceiling->position.p1.x <
+                                       ImPlot::GetPlotLimits().X.Max)
+                                {
+                                    ImPlot::Annotation(
+                                        ImPlot::GetPlotLimits().X.Max,
+                                        m_items[i].info.ceiling->position.p1.y,
+                                        ImPlot::GetLastItemColor(), ImVec2(-1.0f, 0.0f),
+                                        false, m_items[i].label.c_str());
+                                }
+                                else if(m_items[i].type ==
+                                            ItemModel::Type::CeilingBandwidth &&
+                                        m_items[i].info.ceiling->position.p2.x >
+                                            ImPlot::GetPlotLimits().X.Min)
+                                {
+                                    ImPlot::Annotation(
+                                        ImPlot::GetPlotLimits().X.Min,
+                                        m_items[i].info.ceiling->throughput *
+                                            ImPlot::GetPlotLimits().X.Min,
+                                        ImPlot::GetLastItemColor(), ImVec2(1.0f, 0.0f),
+                                        false, m_items[i].label.c_str());
+                                }
+                            }
                             break;
                         }
                         case ItemModel::Type::Intensity:
                         {
+                            ImVec4 marker_color = ImGui::ColorConvertU32ToFloat4(
+                                ItemColor(m_items[i], hovered, false));
                             ImPlot::SetNextMarkerStyle(
-                                IMPLOT_AUTO,
+                                DISPLAY_PROPS_KERNEL_INTENSITY[m_items[i]
+                                                                   .subtype.intensity]
+                                    .second,
                                 plot_style.MarkerSize +
-                                    (m_scale_intensity && m_kernel_mode == AllKernels
+                                    (m_scale_intensity && m_mode == AllKernels
                                          ? m_items[i].weight
                                          : 0.0f) *
                                         2.0f * plot_style.MarkerSize +
                                     (hovered ? plot_style.MarkerSize : 0.0f),
-                                ImPlot::GetColormapColor(i), IMPLOT_AUTO,
-                                ImPlot::GetColormapColor(i));
-                            ImPlot::PlotScatter(
-                                "", &m_items[i].info.intensity->position.x,
-                                &m_items[i].info.intensity->position.y, 1);
+                                marker_color, IMPLOT_AUTO, marker_color);
+                            ImPlot::PlotScatter("",
+                                                &m_items[i].info.intensity->position.x,
+                                                &m_items[i].info.intensity->position.y, 1,
+                                                ImPlotItemFlags_NoFit);
+                            break;
+                        }
+                        case ItemModel::Type::IntensityDelta:
+                        {
+                            ImVec2 baseline_pos = ImPlot::PlotToPixels(
+                                ImPlotPoint(m_items[i].info.delta.baseline->position.x,
+                                            m_items[i].info.delta.baseline->position.y));
+                            ImVec2 target_pos = ImPlot::PlotToPixels(
+                                ImPlotPoint(m_items[i].info.delta.target->position.x,
+                                            m_items[i].info.delta.target->position.y));
+                            ImVec2 direction = target_pos - baseline_pos;
+                            float  length    = std::sqrt(direction.x * direction.x +
+                                                         direction.y * direction.y);
+                            // Draw arrow...
+                            float radius = (plot_style.MarkerSize +
+                                            (m_line_thickness - LINE_THICKNESS_DEFAULT) +
+                                            (hovered ? HOVER_LINE_WEIGHT_BOOST : 0.0f)) *
+                                           IMPLOT_MARKER_SCALE_FACTOR;
+                            if(length > 0.0f)
+                            {
+                                direction      = direction / length;
+                                ImU32 color    = ItemColor(m_items[i], hovered, false);
+                                float dash_end = length;
+                                ImPlot::PushPlotClipRect();
+                                if(length > 3.0f * radius)
+                                {
+                                    ImVec2 normal = ImVec2(-direction.y, direction.x);
+                                    ImVec2 center =
+                                        target_pos -
+                                        direction * (plot_style.MarkerSize + radius);
+                                    ImPlot::GetPlotDrawList()->AddTriangleFilled(
+                                        center + direction * radius,
+                                        center + (normal * IMPLOT_MARKER_BASE -
+                                                  direction * 0.5f) *
+                                                     radius,
+                                        center - (normal * IMPLOT_MARKER_BASE +
+                                                  direction * 0.5f) *
+                                                     radius,
+                                        color);
+                                    // Stop short of the arrow so dashes do not show
+                                    // through it.
+                                    dash_end =
+                                        length - plot_style.MarkerSize - 1.5f * radius;
+                                }
+                                // Determine clip region...
+                                // (Since dashed line is manually
+                                // draw, we need to manually clip inside plot bounds)
+                                ImVec2 plot_min = ImPlot::GetPlotPos();
+                                ImVec2 plot_max = plot_min + ImPlot::GetPlotSize();
+                                float x_low = (plot_min.x - baseline_pos.x) / direction.x;
+                                float x_high =
+                                    (plot_max.x - baseline_pos.x) / direction.x;
+                                float y_low = (plot_min.y - baseline_pos.y) / direction.y;
+                                float y_high =
+                                    (plot_max.y - baseline_pos.y) / direction.y;
+                                float dash_enter =
+                                    std::max(0.0f, std::max(std::min(x_low, x_high),
+                                                            std::min(y_low, y_high)));
+                                float dash_exit =
+                                    std::min(dash_end, std::min(std::max(x_low, x_high),
+                                                                std::max(y_low, y_high)));
+                                float dash_begin =
+                                    std::floor(dash_enter / (DASHED_LINE_SEGMENT_LENGTH +
+                                                             DASHED_LINE_SEGMENT_GAP)) *
+                                    (DASHED_LINE_SEGMENT_LENGTH +
+                                     DASHED_LINE_SEGMENT_GAP);
+                                float dash_limit = dash_exit - dash_begin;
+                                // Draw dashed line...
+                                ImVec2 dash_origin =
+                                    baseline_pos + direction * dash_begin;
+                                int dash_count =
+                                    dash_limit > 0.0f
+                                        ? static_cast<int>(std::min(
+                                              dash_limit / (DASHED_LINE_SEGMENT_LENGTH +
+                                                            DASHED_LINE_SEGMENT_GAP) +
+                                                  1.0f,
+                                              DASHED_LINE_SEGMENT_CAP))
+                                        : 0;
+                                for(int dash = 0; dash < dash_count; dash++)
+                                {
+                                    ImPlot::GetPlotDrawList()->AddLine(
+                                        dash_origin +
+                                            direction *
+                                                (dash * (DASHED_LINE_SEGMENT_LENGTH +
+                                                         DASHED_LINE_SEGMENT_GAP)),
+                                        dash_origin +
+                                            direction *
+                                                std::min(
+                                                    dash * (DASHED_LINE_SEGMENT_LENGTH +
+                                                            DASHED_LINE_SEGMENT_GAP) +
+                                                        DASHED_LINE_SEGMENT_LENGTH,
+                                                    dash_limit),
+                                        color,
+                                        hovered
+                                            ? m_line_thickness + HOVER_LINE_WEIGHT_BOOST
+                                            : m_line_thickness);
+                                }
+                                ImPlot::PopPlotClipRect();
+                            }
                             break;
                         }
                     }
                     if(hovered)
                     {
+                        if(ImGui::IsMouseClicked(ImGuiMouseButton_Left))
+                        {
+                            ApplyItemFilter(m_items[i]);
+                        }
                         ImGui::PushStyleVar(
                             ImGuiStyleVar_WindowPadding,
                             m_settings.GetDefaultIMGUIStyle().WindowPadding);
@@ -587,11 +702,14 @@ Roofline::Render()
                                         ImGui::GetCursorScreenPos(),
                                         ImGui::GetCursorScreenPos() +
                                             ImGui::CalcTextSize(m_items[i].label.c_str()),
-                                        ImGui::GetColorU32(ImPlot::GetColormapColor(i)));
+                                        ItemColor(m_items[i], hovered, false));
                                     ImGui::TextUnformatted(m_items[i].label.c_str());
-                                    ImGui::Text(
-                                        "%.0f GFLOP/s",
-                                        std::round(m_items[i].info.ceiling->throughput));
+                                    std::isfinite(m_items[i].info.ceiling->throughput)
+                                        ? ImGui::Text(
+                                              "%.0f GFLOP/s",
+                                              std::round(
+                                                  m_items[i].info.ceiling->throughput))
+                                        : ImGui::TextUnformatted("N/A");
                                     break;
                                 }
                                 case ItemModel::Type::CeilingBandwidth:
@@ -600,11 +718,14 @@ Roofline::Render()
                                         ImGui::GetCursorScreenPos(),
                                         ImGui::GetCursorScreenPos() +
                                             ImGui::CalcTextSize(m_items[i].label.c_str()),
-                                        ImGui::GetColorU32(ImPlot::GetColormapColor(i)));
+                                        ItemColor(m_items[i], hovered, false));
                                     ImGui::TextUnformatted(m_items[i].label.c_str());
-                                    ImGui::Text(
-                                        "%.0f GB/s",
-                                        std::round(m_items[i].info.ceiling->throughput));
+                                    std::isfinite(m_items[i].info.ceiling->throughput)
+                                        ? ImGui::Text(
+                                              "%.0f GB/s",
+                                              std::round(
+                                                  m_items[i].info.ceiling->throughput))
+                                        : ImGui::TextUnformatted("N/A");
                                     break;
                                 }
                                 case ItemModel::Type::Intensity:
@@ -614,12 +735,14 @@ Roofline::Render()
                                         ImGui::GetCursorScreenPos(),
                                         ImGui::GetCursorScreenPos() +
                                             ImGui::CalcTextSize(
-                                                DISPLAY_NAMES_KERNEL_INTENSITY
-                                                    [m_items[i].subtype.intensity]),
-                                        ImGui::GetColorU32(ImPlot::GetColormapColor(i)));
+                                                DISPLAY_PROPS_KERNEL_INTENSITY
+                                                    [m_items[i].subtype.intensity]
+                                                        .first),
+                                        ItemColor(m_items[i], hovered, false));
                                     ImGui::TextUnformatted(
-                                        DISPLAY_NAMES_KERNEL_INTENSITY
-                                            [m_items[i].subtype.intensity]);
+                                        DISPLAY_PROPS_KERNEL_INTENSITY
+                                            [m_items[i].subtype.intensity]
+                                                .first);
                                     ImVec2 reserved_pos = ImGui::GetCursorPos();
                                     ImGui::NewLine();
                                     ImGui::Text(
@@ -637,15 +760,113 @@ Roofline::Render()
                                                 .unit_settings.time_format,
                                             true)
                                             .c_str());
-                                    ImGui::Text("Arithmetic Intensity: %f FLOP/Byte",
-                                                m_items[i].info.intensity->position.x);
-                                    ImGui::Text("Performance: %f GFLOP/s",
-                                                m_items[i].info.intensity->position.y);
+                                    std::isfinite(m_items[i].info.intensity->position.x)
+                                        ? ImGui::Text(
+                                              "Arithmetic Intensity: %f FLOP/Byte",
+                                              m_items[i].info.intensity->position.x)
+                                        : ImGui::TextUnformatted(
+                                              "Arithmetic Intensity: N/A");
+                                    std::isfinite(m_items[i].info.intensity->position.y)
+                                        ? ImGui::Text(
+                                              "Performance: %f GFLOP/s",
+                                              m_items[i].info.intensity->position.y)
+                                        : ImGui::TextUnformatted("Performance: N/A");
                                     ImGui::EndGroup();
                                     ImGui::SetCursorPos(reserved_pos);
                                     ElidedText(
                                         m_items[i].parent_info.kernel->name.c_str(),
                                         ImGui::GetItemRectSize().x);
+                                    break;
+                                }
+                                case ItemModel::Type::IntensityDelta:
+                                {
+                                    const uint64_t& target_invocations =
+                                        m_items[i]
+                                            .parent_info.delta.target->dispatch_metrics
+                                                [KernelInfo::InvocationCount];
+                                    const uint64_t& baseline_invocations =
+                                        m_items[i]
+                                            .parent_info.delta.baseline->dispatch_metrics
+                                                [KernelInfo::InvocationCount];
+                                    const uint64_t& target_duration =
+                                        m_items[i]
+                                            .parent_info.delta.target
+                                            ->dispatch_metrics[KernelInfo::DurationTotal];
+                                    const uint64_t& baseline_duration =
+                                        m_items[i]
+                                            .parent_info.delta.baseline
+                                            ->dispatch_metrics[KernelInfo::DurationTotal];
+                                    const double& target_ai =
+                                        m_items[i].info.delta.target->position.x;
+                                    const double& baseline_ai =
+                                        m_items[i].info.delta.baseline->position.x;
+                                    const double& target_perf =
+                                        m_items[i].info.delta.target->position.y;
+                                    const double& baseline_perf =
+                                        m_items[i].info.delta.baseline->position.y;
+                                    ImGui::GetWindowDrawList()->AddRectFilled(
+                                        ImGui::GetCursorScreenPos(),
+                                        ImGui::GetCursorScreenPos() +
+                                            ImGui::CalcTextSize(m_items[i].label.c_str()),
+                                        ItemColor(m_items[i], hovered, false));
+                                    ImGui::TextUnformatted(m_items[i].label.c_str());
+                                    ImGui::Text(
+                                        "%s Invocation(s): %+lld (%+.1f%%)", DELTA,
+                                        static_cast<long long>(target_invocations) -
+                                            static_cast<long long>(baseline_invocations),
+                                        baseline_invocations != 0
+                                            ? 100.0 *
+                                                  (static_cast<double>(
+                                                       target_invocations) -
+                                                   static_cast<double>(
+                                                       baseline_invocations)) /
+                                                  static_cast<double>(
+                                                      baseline_invocations)
+                                            : 0.0);
+                                    ImGui::Text(
+                                        "%s Duration: %s%s (%+.1f%%)", DELTA,
+                                        target_duration == baseline_duration  ? ""
+                                        : target_duration > baseline_duration ? "+"
+                                                                              : "-",
+                                        nanosecond_to_formatted_str(
+                                            static_cast<double>(
+                                                target_duration > baseline_duration
+                                                    ? target_duration - baseline_duration
+                                                    : baseline_duration -
+                                                          target_duration),
+                                            m_settings.GetUserSettings()
+                                                .unit_settings.time_format,
+                                            true)
+                                            .c_str(),
+                                        baseline_duration != 0
+                                            ? 100.0 *
+                                                  (static_cast<double>(target_duration) -
+                                                   static_cast<double>(
+                                                       baseline_duration)) /
+                                                  static_cast<double>(baseline_duration)
+                                            : 0.0);
+                                    std::isfinite(baseline_ai) && std::isfinite(target_ai)
+                                        ? ImGui::Text(
+                                              "%s Arithmetic Intensity: %+f FLOP/Byte "
+                                              "(%+.1f%%)",
+                                              DELTA, target_ai - baseline_ai,
+                                              baseline_ai != 0.0
+                                                  ? 100.0 * (target_ai - baseline_ai) /
+                                                        baseline_ai
+                                                  : 0.0)
+                                        : ImGui::Text("%s Arithmetic Intensity: N/A",
+                                                      DELTA);
+                                    std::isfinite(baseline_perf) &&
+                                            std::isfinite(target_perf)
+                                        ? ImGui::Text(
+                                              "%s Performance: %+f GFLOP/s (%+.1f%%)",
+                                              DELTA, target_perf - baseline_perf,
+                                              baseline_perf != 0.0
+                                                  ? 100.0 *
+                                                        (target_perf - baseline_perf) /
+                                                        baseline_perf
+                                                  : 0.0)
+                                        : ImGui::Text("%s Performance: N/A", DELTA);
                                     break;
                                 }
                             }
@@ -656,58 +877,31 @@ Roofline::Render()
                     ImGui::PopID();
                 }
             }
-            plot_pos  = ImPlot::GetPlotPos();
-            plot_size = ImPlot::GetPlotSize();
             ImPlot::EndPlot();
         }
         ImGui::PopID();
-        bool roofline_hovered = plot_size.x > 0.0f && plot_size.y > 0.0f &&
-                                ImGui::IsMouseHoveringRect(
-                                    plot_pos, plot_pos + plot_size, false);
-        if(!m_plot_zoom_enabled && roofline_hovered)
+        if(!m_plot_nav_enabled && plot_hovered)
         {
-            ImVec2      hint_size = ImGui::CalcTextSize(CHART_ZOOM_HINT);
-            ImVec2      hint_pos = plot_pos +
-                              ImVec2(plot_size.x - hint_size.x, 0.0f) * 0.5f +
-                              ImVec2(0.0f, plot_style.PlotPadding.y);
+            ImVec2 hint_size = ImGui::CalcTextSize(HINT_FOCUS);
+            ImVec2 hint_pos  = plot_pos + ImVec2(plot_size.x - hint_size.x, 0.0f) * 0.5f +
+                               ImVec2(0.0f, plot_style.PlotPadding.y);
             ImGui::GetWindowDrawList()->AddText(
                 hint_pos, ImGui::GetColorU32(style.Colors[ImGuiCol_TextDisabled]),
-                CHART_ZOOM_HINT);
+                HINT_FOCUS);
         }
         bool menus_item_hovered = false;
-        RenderMenus(region, plot_pos, plot_size, style, plot_style, menus_item_hovered);
-        bool dot_hovered =
-            !menus_item_hovered && m_kernel_mode == AllKernels && m_hovered_item_idx &&
-            m_items[m_hovered_item_idx.value()].type == ItemModel::Type::Intensity;
-        bool bandwidth_line_hovered =
-            !menus_item_hovered && m_hovered_item_idx &&
-            m_items[m_hovered_item_idx.value()].type ==
-                ItemModel::Type::CeilingBandwidth;
-        // Drag check so panning a zoomed plot is not treated as a click.
-        if(roofline_hovered && IsMouseReleasedWithDragCheck(ImGuiMouseButton_Left))
-        {
-            if(dot_hovered)
-            {
-                ToggleKernelIsolation(
-                    m_items[m_hovered_item_idx.value()].parent_info.kernel);
-            }
-            else if(bandwidth_line_hovered)
-            {
-                ToggleBandwidthIsolation(
-                    m_items[m_hovered_item_idx.value()].subtype.bandwidth);
-            }
-        }
-        if(!m_plot_zoom_enabled && roofline_hovered && !dot_hovered &&
-           !bandwidth_line_hovered && !menus_item_hovered &&
+        RenderMenus(region, plot_pos, plot_size, style, plot_style, menus_item_hovered,
+                    plot_hovered);
+        if(!m_plot_nav_enabled && plot_hovered &&
            ImGui::IsMouseClicked(ImGuiMouseButton_Left))
         {
-            m_plot_zoom_enabled = true;
+            m_plot_nav_enabled = true;
         }
-        else if(m_plot_zoom_enabled &&
+        else if(m_plot_nav_enabled &&
                 (ImGui::IsKeyPressed(ImGuiKey_Escape) ||
-                 (ImGui::IsMouseClicked(ImGuiMouseButton_Left) && !roofline_hovered)))
+                 (ImGui::IsMouseClicked(ImGuiMouseButton_Left) && !plot_hovered)))
         {
-            m_plot_zoom_enabled = false;
+            m_plot_nav_enabled = false;
         }
         if(!menus_item_hovered)
         {
@@ -726,202 +920,276 @@ Roofline::Render()
 void
 Roofline::SetWorkload(uint32_t id)
 {
-    m_requested_workload_id = id;
-    m_workload_changed      = true;
+    m_requested_primary_workload_id = id;
+    m_workload_changed              = true;
 }
 
 void
 Roofline::SetKernel(uint32_t id)
 {
-    m_requested_kernel_id = id;
-    m_kernel_changed      = true;
+    m_requested_primary_kernel_id = id;
+    m_kernel_changed              = true;
 }
 
 void
-Roofline::RenderToolbar()
+Roofline::SetCompareTarget(uint32_t workload_id, uint32_t kernel_id)
 {
-    const ImGuiStyle& style = ImGui::GetStyle();
-    int               count = 1;  // Compute peak is always present.
-    if(!m_available_bandwidths.empty())
-    {
-        count++;
-    }
-    if(m_kernel_mode == AllKernels)
-    {
-        count++;
-    }
-    if(!m_available_intensities.empty())
-    {
-        count++;
-    }
-    float cell = (ImGui::GetContentRegionAvail().x -
-                  style.ItemSpacing.x * static_cast<float>(count - 1)) /
-                 static_cast<float>(count);
-    cell = std::max(cell, ImGui::GetFontSize() * 4.0f);
+    m_requested_secondary_workload_id = workload_id;
+    m_requested_kernel_secondary_id   = kernel_id;
+    m_workload_changed                = true;
+    m_kernel_changed                  = true;
+}
 
-    // Draw "<label>" to the left, then size the next combo to fill the cell.
-    auto label_cell = [&](const char* label) {
-        ImGui::AlignTextToFramePadding();
-        ImGui::TextUnformatted(label);
-        ImGui::SameLine();
-        float combo_width = cell - ImGui::GetItemRectSize().x - style.ItemSpacing.x;
-        ImGui::SetNextItemWidth(std::max(combo_width, ImGui::GetFontSize() * 2.0f));
-    };
-
-    // Compute peak (preset)...
-    ImGui::BeginGroup();
-    ImGui::PushID("compute_peak");
-    label_cell("Compute peak");
-    PushComboStyles();
-    if(ImGui::BeginCombo("##compute_peak",
-                         m_custom_visibility ? FILTER_OPTION_CUSTOM
-                                             : DISPLAY_NAMES_PRESET[m_active_preset]))
+void
+Roofline::UpdateCeilings(const WorkloadInfo* workload)
+{
+    for(FilterModel& filter : m_filters_ceiling_compute)
     {
-        for(PresetModel& preset : m_presets)
+        filter.item_idx.clear();
+    }
+    for(FilterModel& filter : m_filters_ceiling_bandwidth)
+    {
+        filter.item_idx.clear();
+    }
+    m_bounding_box_ceiling = { { DBL_MAX, DBL_MAX }, { -DBL_MAX, -DBL_MAX } };
+    ROCPROFVIS_ASSERT(__KRPVControllerRooflineCeilingComputeTypeLast +
+                          __KRPVControllerRooflineCeilingBandwidthTypeLast <=
+                      m_items.size());
+    for(size_t i = 0; i < __KRPVControllerRooflineCeilingComputeTypeLast +
+                              __KRPVControllerRooflineCeilingBandwidthTypeLast;
+        i++)
+    {
+        switch(m_items[i].type)
         {
-            if(!preset.item_indices.empty() &&
-               ImGui::Selectable(DISPLAY_NAMES_PRESET[preset.type],
-                                 preset.type == m_active_preset))
+            case ItemModel::Type::CeilingCompute:
             {
-                ApplyPreset(preset.type);
+                const WorkloadInfo::Roofline::Ceiling* ceiling = nullptr;
+                if(workload->roofline.ceiling_compute.count(m_items[i].subtype.compute) >
+                       0 &&
+                   !workload->roofline.ceiling_compute.at(m_items[i].subtype.compute)
+                        .empty())
+                {
+                    ceiling =
+                        &workload->roofline.ceiling_compute.at(m_items[i].subtype.compute)
+                             .begin()
+                             ->second;
+                }
+                if(ceiling && std::isfinite(ceiling->position.p1.x) &&
+                   std::isfinite(ceiling->position.p1.y) &&
+                   std::isfinite(ceiling->position.p2.x) &&
+                   std::isfinite(ceiling->position.p2.y) &&
+                   std::isfinite(ceiling->throughput))
+                {
+                    m_items[i].info.ceiling         = ceiling;
+                    m_items[i].parent_info.workload = workload;
+                    FilterModel::ComputeType filter_type =
+                        FilterComputeType(m_items[i].subtype.compute);
+                    if(filter_type != FilterModel::ComputeType::ComputeTypeUnknown)
+                    {
+                        m_items[i].filter_idx[FilterModel::Type::CeilingCompute] =
+                            static_cast<size_t>(filter_type);
+                        m_filters_ceiling_compute[filter_type].item_idx.insert(i);
+                        m_filters_ceiling_compute
+                            [FilterModel::ComputeType::ComputeTypeAll]
+                                .item_idx.insert(i);
+                    }
+                    m_bounding_box_ceiling.second.y =
+                        std::max(m_bounding_box_ceiling.second.y,
+                                 m_items[i].info.ceiling->position.p1.y);
+                }
+                else
+                {
+                    m_items[i].info.ceiling         = nullptr;
+                    m_items[i].parent_info.workload = nullptr;
+                }
+                break;
+            }
+            case ItemModel::Type::CeilingBandwidth:
+            {
+                const WorkloadInfo::Roofline::Ceiling* ceiling = nullptr;
+                if(workload->roofline.ceiling_bandwidth.count(
+                       m_items[i].subtype.bandwidth) > 0 &&
+                   !workload->roofline.ceiling_bandwidth.at(m_items[i].subtype.bandwidth)
+                        .empty())
+                {
+                    ceiling = &workload->roofline.ceiling_bandwidth
+                                   .at(m_items[i].subtype.bandwidth)
+                                   .begin()
+                                   ->second;
+                }
+                if(ceiling && std::isfinite(ceiling->position.p1.x) &&
+                   std::isfinite(ceiling->position.p1.y) &&
+                   std::isfinite(ceiling->position.p2.x) &&
+                   std::isfinite(ceiling->position.p2.y) &&
+                   std::isfinite(ceiling->throughput))
+                {
+                    m_items[i].info.ceiling         = ceiling;
+                    m_items[i].parent_info.workload = workload;
+                    FilterModel::BandwidthType filter_type =
+                        FilterBandwidthType(m_items[i].subtype.bandwidth);
+                    if(filter_type != FilterModel::BandwidthType::BandwidthTypeUnknown)
+                    {
+                        m_items[i].filter_idx[FilterModel::Type::CeilingBandwidth] =
+                            static_cast<size_t>(filter_type);
+                        m_filters_ceiling_bandwidth[filter_type].item_idx.insert(i);
+                        m_filters_ceiling_bandwidth
+                            [FilterModel::BandwidthType::BandwidthTypeAll]
+                                .item_idx.insert(i);
+                    }
+                    m_bounding_box_ceiling.first.y =
+                        std::min(m_bounding_box_ceiling.first.y,
+                                 m_items[i].info.ceiling->throughput * MIN_X);
+                }
+                else
+                {
+                    m_items[i].info.ceiling         = nullptr;
+                    m_items[i].parent_info.workload = nullptr;
+                }
+                break;
             }
         }
-        ImGui::EndCombo();
     }
-    PopComboStyles();
-    ImGui::PopID();
-    ImGui::EndGroup();
+}
 
-    // Bandwidth peak...
-    if(!m_available_bandwidths.empty())
+void
+Roofline::UpdateIntensities(const WorkloadInfo*                   workload,
+                            const std::vector<const KernelInfo*>& kernels, bool append)
+{
+    if(!append)
     {
-        ImGui::SameLine();
-        ImGui::BeginGroup();
-        ImGui::PushID("bandwidth_peak");
-        label_cell("Bandwidth peak");
-        PushComboStyles();
-        if(ImGui::BeginCombo("##bandwidth_peak",
-                             m_custom_visibility ? FILTER_OPTION_CUSTOM
-                             : m_isolated_bandwidth
-                                 ? MEMORY_LEVEL_NAMES[m_isolated_bandwidth.value()]
-                                 : FILTER_OPTION_ALL))
+        m_items.resize(__KRPVControllerRooflineCeilingComputeTypeLast +
+                       __KRPVControllerRooflineCeilingBandwidthTypeLast);
+        m_filters_intensity_kernel.resize(1);
+        m_filters_intensity_kernel[0].item_idx.clear();
+        for(FilterModel& filter : m_filters_intensity_bandwidth)
         {
-            if(ImGui::Selectable(FILTER_OPTION_ALL, !m_isolated_bandwidth))
-            {
-                m_isolated_bandwidth = std::nullopt;
-                RecomputeVisibility();
-            }
-            for(rocprofvis_controller_roofline_ceiling_bandwidth_type_t bandwidth :
-                m_available_bandwidths)
-            {
-                if(ImGui::Selectable(MEMORY_LEVEL_NAMES[bandwidth],
-                                     m_isolated_bandwidth &&
-                                         m_isolated_bandwidth.value() == bandwidth))
-                {
-                    m_isolated_bandwidth = bandwidth;
-                    RecomputeVisibility();
-                }
-            }
-            ImGui::EndCombo();
+            filter.item_idx.clear();
         }
-        PopComboStyles();
-        ImGui::PopID();
-        ImGui::EndGroup();
+        m_bounding_box_intensity         = { { MIN_X * 10.0, DBL_MAX },
+                                             { MAX_X / 10.0, -DBL_MAX } };
+        m_active_filter_intensity_kernel = 0;
     }
-
-    // Kernel (workload roofline only)...
-    if(m_kernel_mode == AllKernels)
+    uint64_t kernel_duration_scale = 0;
+    for(const KernelInfo* kernel : workload->ordered_kernels)
     {
-        ImGui::SameLine();
-        ImGui::BeginGroup();
-        ImGui::PushID("kernel");
-        label_cell("Kernel");
-        PushComboStyles();
-        if(ImGui::BeginCombo("##kernel",
-                             m_custom_visibility ? FILTER_OPTION_CUSTOM
-                             : m_isolated_kernel  ? m_isolated_kernel->name.c_str()
-                                                  : FILTER_OPTION_ALL))
-        {
-            if(ImGui::Selectable(FILTER_OPTION_ALL, !m_isolated_kernel))
-            {
-                m_isolated_kernel = nullptr;
-                RecomputeVisibility();
-            }
-            for(const KernelInfo* kernel : m_workload->ordered_kernels)
-            {
-                // Kernels without roofline data do not belong in this list.
-                if(kernel->roofline.intensities.empty())
-                {
-                    continue;
-                }
-                // Long/mangled names: elide so the popup stays the toolbar width.
-                ImGui::PushID(kernel);
-                ImVec2 pos     = ImGui::GetCursorPos();
-                bool   clicked = ImGui::Selectable("", m_isolated_kernel == kernel);
-                ImGui::SetCursorPos(pos);
-                ElidedText(kernel->name.c_str(), ImGui::GetContentRegionAvail().x, cell);
-                if(clicked)
-                {
-                    m_isolated_kernel = kernel;
-                    RecomputeVisibility();
-                }
-                ImGui::PopID();
-            }
-            ImGui::EndCombo();
-        }
-        PopComboStyles();
-        ImGui::PopID();
-        ImGui::EndGroup();
+        kernel_duration_scale = std::max(
+            kernel_duration_scale, kernel->dispatch_metrics[KernelInfo::DurationTotal]);
     }
-
-    // Kernel bandwidth (intensity memory level)...
-    if(!m_available_intensities.empty())
+    ItemModel::SubType    model_subtype;
+    ItemModel::Info       model_info;
+    ItemModel::ParentInfo model_parent_info;
+    for(const KernelInfo* kernel : kernels)
     {
-        ImGui::SameLine();
-        ImGui::BeginGroup();
-        ImGui::PushID("kernel_bandwidth");
-        label_cell("Kernel bandwidth");
-        PushComboStyles();
-        if(ImGui::BeginCombo("##kernel_bandwidth",
-                             m_custom_visibility ? FILTER_OPTION_CUSTOM
-                             : m_memory_peak_filter
-                                 ? MEMORY_LEVEL_NAMES[m_memory_peak_filter.value()]
-                                 : FILTER_OPTION_ALL))
+        model_parent_info.kernel = kernel;
+        std::unordered_set<size_t> kernel_filter_items;
+        for(const std::pair<const rocprofvis_controller_roofline_kernel_intensity_type_t,
+                            KernelInfo::Roofline::Intensity>& intensity :
+            kernel->roofline.intensities)
         {
-            if(ImGui::Selectable(FILTER_OPTION_ALL, !m_memory_peak_filter))
+            model_subtype.intensity = intensity.second.type;
+            model_info.intensity    = &intensity.second;
+            FilterModel::BandwidthType filter_type =
+                FilterBandwidthType(model_subtype.intensity);
+            if(filter_type != FilterModel::BandwidthType::BandwidthTypeUnknown &&
+               std::isfinite(intensity.second.position.x) &&
+               std::isfinite(intensity.second.position.y))
             {
-                m_memory_peak_filter = std::nullopt;
-                RecomputeVisibility();
+                m_items.emplace_back(ItemModel{
+                    ItemModel::Intensity,
+                    model_subtype,
+                    model_info,
+                    model_parent_info,
+                    { { FilterModel::Type::IntensityKernel,
+                        m_filters_intensity_kernel.size() },
+                      { FilterModel::Type::IntensityBandwidth,
+                        static_cast<size_t>(filter_type) } },
+                    std::bitset<ItemModel::Visible::Count>("10"),
+                    std::string(
+                        DISPLAY_PROPS_KERNEL_INTENSITY[intensity.second.type].first) +
+                        ": " + kernel->name,
+                    kernel_duration_scale > 0
+                        ? static_cast<float>(
+                              static_cast<double>(
+                                  kernel->dispatch_metrics[KernelInfo::DurationTotal]) /
+                              static_cast<double>(kernel_duration_scale))
+                        : KERNEL_MARKER_WEIGHT_DEFAULT });
+                m_bounding_box_intensity = { { std::min(m_bounding_box_intensity.first.x,
+                                                        intensity.second.position.x),
+                                               std::min(m_bounding_box_intensity.first.y,
+                                                        intensity.second.position.y) },
+                                             { std::max(m_bounding_box_intensity.second.x,
+                                                        intensity.second.position.x),
+                                               std::max(m_bounding_box_intensity.second.y,
+                                                        intensity.second.position.y) } };
+                m_filters_intensity_bandwidth[filter_type].item_idx.insert(
+                    m_items.size() - 1);
+                m_filters_intensity_bandwidth
+                    [FilterModel::BandwidthType::BandwidthTypeAll]
+                        .item_idx.insert(m_items.size() - 1);
+                kernel_filter_items.insert(m_items.size() - 1);
+                m_filters_intensity_kernel[0].item_idx.insert(m_items.size() - 1);
             }
-            for(rocprofvis_controller_roofline_kernel_intensity_type_t level :
-                m_available_intensities)
-            {
-                if(ImGui::Selectable(MEMORY_LEVEL_NAMES[level],
-                                     m_memory_peak_filter &&
-                                         m_memory_peak_filter.value() == level))
-                {
-                    m_memory_peak_filter = level;
-                    RecomputeVisibility();
-                }
-            }
-            ImGui::EndCombo();
         }
-        PopComboStyles();
-        ImGui::PopID();
-        ImGui::EndGroup();
+        if(kernel_filter_items.size())
+        {
+            m_filters_intensity_kernel.emplace_back(
+                FilterModel{ kernel->name.c_str(), std::move(kernel_filter_items) });
+        }
+    }
+}
+
+void
+Roofline::UpdateDeltas()
+{
+    ItemModel::SubType    sub_type;
+    ItemModel::Info       model_info;
+    ItemModel::ParentInfo parent_info;
+    for(const std::pair<const rocprofvis_controller_roofline_kernel_intensity_type_t,
+                        KernelInfo::Roofline::Intensity>& intensity :
+        m_kernel_primary->roofline.intensities)
+    {
+        if(m_kernel_secondary->roofline.intensities.count(intensity.first) &&
+           !(m_kernel_secondary->roofline.intensities.at(intensity.first).position ==
+             intensity.second.position))
+        {
+            sub_type.intensity = intensity.first;
+            model_info.delta   = { &intensity.second,
+                                   &m_kernel_secondary->roofline.intensities.at(
+                                       intensity.first) };
+            parent_info.delta  = { m_kernel_primary, m_kernel_secondary };
+            FilterModel::BandwidthType filter_type =
+                FilterBandwidthType(sub_type.intensity);
+            if(filter_type != FilterModel::BandwidthType::BandwidthTypeUnknown &&
+               std::isfinite(model_info.delta.baseline->position.x) &&
+               std::isfinite(model_info.delta.baseline->position.y) &&
+               std::isfinite(model_info.delta.target->position.x) &&
+               std::isfinite(model_info.delta.target->position.y))
+            {
+                m_items.emplace_back(ItemModel{
+                    ItemModel::IntensityDelta,
+                    std::move(sub_type),
+                    std::move(model_info),
+                    std::move(parent_info),
+                    { { FilterModel::Type::IntensityBandwidth,
+                        static_cast<size_t>(filter_type) } },
+                    std::bitset<ItemModel::Visible::Count>("01"),
+                    DELTA + std::string(
+                                DISPLAY_PROPS_KERNEL_INTENSITY[intensity.first].first),
+                    1.0f });
+            }
+        }
     }
 }
 
 void
 Roofline::RenderMenus(ImVec2 region, ImVec2 plot_pos, ImVec2 plot_size,
-                       const ImGuiStyle& style, const ImPlotStyle& plot_style,
-                       bool& item_hovered)
+                      const ImGuiStyle& style, const ImPlotStyle& plot_style,
+                      bool& item_hovered, bool& plot_hovered)
 {
     plot_pos -= ImGui::GetWindowPos();
     float menus_width      = region.x * 0.25f;
-    float button_size       = ImGui::GetFrameHeight();
-    float max_menus_height  = plot_size.y - plot_style.PlotPadding.y * 2.0f -
-                              button_size;
+    float button_size      = ImGui::GetFrameHeight();
+    float max_menus_height = plot_size.y - plot_style.PlotPadding.y * 2.0f - button_size;
 
     bool menus_on_right = m_menus_placement == InsideTopRight ||
                           m_menus_placement == InsideBottomRight ||
@@ -999,6 +1267,7 @@ Roofline::RenderMenus(ImVec2 region, ImVec2 plot_pos, ImVec2 plot_size,
     {
         m_show_menus = !m_show_menus;
     }
+    plot_hovered |= ImGui::IsItemHovered();
     if(m_show_menus)
     {
         if(m_menus_placement == Outside)
@@ -1015,21 +1284,22 @@ Roofline::RenderMenus(ImVec2 region, ImVec2 plot_pos, ImVec2 plot_size,
         // Draw the icon manually so it stays centered: ImGui::Button left-clamps
         // a glyph that is wider than the (main-font-sized) button.
         const char* mode_icon    = m_menus_mode == Legend ? ICON_GEAR : ICON_LIST;
-        ImVec2      mode_min      = ImGui::GetCursorScreenPos();
-        ImVec2      mode_size     = ImVec2(button_size, button_size);
-        bool        mode_clicked  = ImGui::InvisibleButton("menu_mode", mode_size);
-        ImU32       mode_bg =
-            ImGui::IsItemActive()    ? ImGui::GetColorU32(ImGuiCol_ButtonActive)
-            : ImGui::IsItemHovered() ? ImGui::GetColorU32(ImGuiCol_ButtonHovered)
-                                     : ImGui::GetColorU32(ImGuiCol_Button);
+        ImVec2      mode_min     = ImGui::GetCursorScreenPos();
+        ImVec2      mode_size    = ImVec2(button_size, button_size);
+        bool        mode_clicked = ImGui::InvisibleButton("menu_mode", mode_size);
+        plot_hovered |= ImGui::IsItemHovered();
+        ImU32 mode_bg = ImGui::IsItemActive() ? ImGui::GetColorU32(ImGuiCol_ButtonActive)
+                        : ImGui::IsItemHovered()
+                            ? ImGui::GetColorU32(ImGuiCol_ButtonHovered)
+                            : ImGui::GetColorU32(ImGuiCol_Button);
         ImDrawList* mode_draw = ImGui::GetWindowDrawList();
         mode_draw->AddRectFilled(mode_min, mode_min + mode_size, mode_bg,
                                  style.FrameRounding);
         if(style.FrameBorderSize > 0.0f)
         {
             mode_draw->AddRect(mode_min, mode_min + mode_size,
-                               ImGui::GetColorU32(ImGuiCol_Border), style.FrameRounding, 0,
-                               style.FrameBorderSize);
+                               ImGui::GetColorU32(ImGuiCol_Border), style.FrameRounding,
+                               0, style.FrameBorderSize);
         }
         ImGui::PushFont(m_settings.GetFontManager().GetFont(FontType::kIcon), 0.0f);
         ImVec2 mode_icon_size = ImGui::CalcTextSize(mode_icon);
@@ -1061,16 +1331,19 @@ Roofline::RenderMenus(ImVec2 region, ImVec2 plot_pos, ImVec2 plot_size,
         float header_height = ImGui::GetItemRectSize().y + 2 * style.WindowPadding.y;
         float footer_height =
             (m_menus_mode == Legend ? 0.0f
-                                    : (m_kernel_mode == AllKernels ? 6 : 5) *
+                                    : (m_mode == AllKernels ? 7
+                                       : m_mode == Compare  ? 8
+                                                            : 6) *
                                           ImGui::GetFrameHeightWithSpacing()) +
             2 * style.WindowPadding.y;
+        float sv_height = max_menus_height - header_height - footer_height;
         ImGui::SetNextWindowSizeConstraints(
             ImVec2(menus_content_width, 0),
             ImVec2(menus_content_width,
-                   max_menus_height - header_height - footer_height));
+                   sv_height > ImGui::GetTextLineHeight() ? sv_height : -1.0f));
         ImGui::BeginChild("menus_scroll_view", ImVec2(menus_content_width, 0),
                           ImGuiChildFlags_AutoResizeY);
-        float icon_width = ImGui::GetFontSize();
+        plot_hovered |= ImGui::IsWindowHovered(ImGuiHoveredFlags_RootAndChildWindows);
         scroll_bar_width = std::max(scroll_bar_width,
                                     ImGui::GetScrollMaxY() ? style.ScrollbarSize : 0.0f);
         ImGui::BeginChild("menus_scroll_view_content",
@@ -1079,34 +1352,16 @@ Roofline::RenderMenus(ImVec2 region, ImVec2 plot_pos, ImVec2 plot_size,
                           ImGuiWindowFlags_NoScrollWithMouse);
         bool empty = true;
 
-        int item_count = static_cast<int>(m_items.size());
-        for(int i = 0; i < item_count; i++)
+        for(size_t i = 0; i < m_items.size(); i++)
         {
-            bool display = false;
-            switch(m_items[i].type)
-            {
-                case ItemModel::Type::CeilingCompute:
-                case ItemModel::Type::CeilingBandwidth:
-                {
-                    display = m_items[i].info.ceiling;
-                    break;
-                }
-                case ItemModel::Type::Intensity:
-                {
-                    // The menu always lists the full data set; in single-kernel
-                    // mode that data set is just the selected kernel.
-                    display = m_items[i].info.intensity &&
-                              (m_kernel_mode == SingleKernel
-                                   ? m_items[i].parent_info.kernel == m_kernel
-                                   : true);
-                    break;
-                }
-            }
-            if(display &&
-               (m_menus_mode == Legend && m_items[i].visible || m_menus_mode == Options))
+            if(ItemValid(m_items[i]) &&
+               ((m_menus_mode == Legend && m_items[i].visible[ItemModel::Visible::Plot] &&
+                 m_items[i].visible[ItemModel::Visible::Menus]) ||
+                (m_menus_mode == Options &&
+                 m_items[i].visible[ItemModel::Visible::Menus])))
             {
                 empty = false;
-                ImGui::PushID(i);
+                ImGui::PushID(static_cast<int>(i));
                 ImGui::PushStyleColor(ImGuiCol_Header,
                                       m_settings.GetColor(Colors::kSelection));
                 ImGui::PushStyleColor(ImGuiCol_HeaderHovered,
@@ -1117,40 +1372,87 @@ Roofline::RenderMenus(ImVec2 region, ImVec2 plot_pos, ImVec2 plot_size,
                 bool   row_clicked = ImGui::Selectable(
                     "", false,
                     m_hovered_item_idx && m_hovered_item_idx.value() == i
-                          ? ImGuiSelectableFlags_Highlight
-                          : ImGuiSelectableFlags_None);
+                        ? ImGuiSelectableFlags_Highlight
+                        : ImGuiSelectableFlags_None);
                 bool row_hovered = ImGui::IsItemHovered();
                 ImGui::SetCursorPos(pos);
-                ImGui::BeginDisabled(m_menus_mode == Options && !m_items[i].visible);
+                ImGui::BeginDisabled(m_menus_mode == Options &&
+                                     !m_items[i].visible.test(ItemModel::Visible::Plot));
                 if(m_menus_mode == Legend)
                 {
+                    float  icon_width  = ImGui::GetTextLineHeight();
+                    ImVec2 icon_center = ImGui::GetCursorScreenPos() +
+                                         ImVec2(icon_width, icon_width) * 0.5f;
+                    float icon_radius = icon_width * 0.5f - 2 * IMPLOT_LEGEND_ICON_SHRINK;
                     switch(m_items[i].type)
                     {
                         case ItemModel::Type::CeilingCompute:
                         case ItemModel::Type::CeilingBandwidth:
                         {
-                            ImGui::GetWindowDrawList()->AddRectFilled(
-                                ImGui::GetCursorScreenPos() +
-                                    ImVec2(2 * IMPLOT_LEGEND_ICON_SHRINK,
-                                           2 * IMPLOT_LEGEND_ICON_SHRINK),
-                                ImGui::GetCursorScreenPos() +
-                                    ImVec2(icon_width - 2 * IMPLOT_LEGEND_ICON_SHRINK,
-                                           icon_width - 2 * IMPLOT_LEGEND_ICON_SHRINK),
-                                ImGui::GetColorU32(
-                                    ImGui::GetColorU32(ImPlot::GetColormapColor(i)),
-                                    row_hovered ? 0.75f : 1.0f));
+                            ImGui::GetWindowDrawList()->AddLine(
+                                icon_center - ImVec2(icon_radius, 0.0f),
+                                icon_center + ImVec2(icon_radius, 0.0f),
+                                ItemColor(m_items[i], row_hovered, true),
+                                icon_radius * 0.5f);
                             break;
                         }
                         case ItemModel::Type::Intensity:
                         {
-                            ImGui::GetWindowDrawList()->AddCircleFilled(
-                                ImGui::GetCursorScreenPos() +
-                                    ImVec2(icon_width, icon_width) * 0.5f,
-                                icon_width * 0.5f - 2 * IMPLOT_LEGEND_ICON_SHRINK,
-                                ImGui::GetColorU32(
-                                    ImGui::GetColorU32(ImPlot::GetColormapColor(i)),
-                                    row_hovered ? 0.75f : 1.0f),
-                                10);
+                            ImU32 color = ItemColor(m_items[i], row_hovered, true);
+                            switch(DISPLAY_PROPS_KERNEL_INTENSITY[m_items[i]
+                                                                      .subtype.intensity]
+                                       .second)
+                            {
+                                case ImPlotMarker_Circle:
+                                {
+                                    ImGui::GetWindowDrawList()->AddCircleFilled(
+                                        icon_center, icon_radius, color, 10);
+                                    break;
+                                }
+                                case ImPlotMarker_Square:
+                                {
+                                    ImGui::GetWindowDrawList()->AddRectFilled(
+                                        icon_center - ImVec2(icon_radius, icon_radius) /
+                                                          IMPLOT_MARKER_SCALE_FACTOR,
+                                        icon_center + ImVec2(icon_radius, icon_radius) /
+                                                          IMPLOT_MARKER_SCALE_FACTOR,
+                                        color);
+                                    break;
+                                }
+                                case ImPlotMarker_Diamond:
+                                {
+                                    ImGui::GetWindowDrawList()->AddQuadFilled(
+                                        icon_center + ImVec2(0.0f, -icon_radius),
+                                        icon_center + ImVec2(icon_radius, 0.0f),
+                                        icon_center + ImVec2(0.0f, icon_radius),
+                                        icon_center + ImVec2(-icon_radius, 0.0f), color);
+                                    break;
+                                }
+                                case ImPlotMarker_Up:
+                                {
+                                    ImGui::GetWindowDrawList()->AddTriangleFilled(
+                                        icon_center + ImVec2(0.0f, -icon_radius),
+                                        icon_center + ImVec2(icon_radius, icon_radius),
+                                        icon_center + ImVec2(-icon_radius, icon_radius),
+                                        color);
+                                    break;
+                                }
+                            }
+                            break;
+                        }
+                        case ItemModel::Type::IntensityDelta:
+                        {
+                            ImU32 color = ItemColor(m_items[i], row_hovered, true);
+                            ImGui::GetWindowDrawList()->AddLine(
+                                icon_center - ImVec2(icon_radius, 0.0f),
+                                icon_center -
+                                    ImVec2(DASHED_LINE_SEGMENT_GAP * 0.5f, 0.0f),
+                                color, icon_radius * 0.5f);
+                            ImGui::GetWindowDrawList()->AddLine(
+                                icon_center +
+                                    ImVec2(DASHED_LINE_SEGMENT_GAP * 0.5f, 0.0f),
+                                icon_center + ImVec2(icon_radius, 0.0f), color,
+                                icon_radius * 0.5f);
                             break;
                         }
                     }
@@ -1158,9 +1460,11 @@ Roofline::RenderMenus(ImVec2 region, ImVec2 plot_pos, ImVec2 plot_size,
                 }
                 else
                 {
-                    ImGui::PushFont(m_settings.GetFontManager().GetFont(FontType::kIcon), 0.0f);
-                    ImGui::TextUnformatted(m_items[i].visible ? ICON_EYE
-                                                              : ICON_EYE_SLASH);
+                    ImGui::PushFont(m_settings.GetFontManager().GetFont(FontType::kIcon),
+                                    0.0f);
+                    ImGui::TextUnformatted(m_items[i].visible[ItemModel::Visible::Plot]
+                                               ? ICON_EYE
+                                               : ICON_EYE_SLASH);
                     ImGui::PopFont();
                     ImGui::SameLine();
                 }
@@ -1175,18 +1479,30 @@ Roofline::RenderMenus(ImVec2 region, ImVec2 plot_pos, ImVec2 plot_size,
                     {
                         if(m_menus_mode == Options)
                         {
-                            m_items[i].visible  = !m_items[i].visible;
-                            m_custom_visibility = true;
-                            m_options_changed   = true;
+                            m_items[i].visible.flip(ItemModel::Visible::Plot);
+                            switch(m_items[i].type)
+                            {
+                                case ItemModel::Type::CeilingCompute:
+                                {
+                                    m_custom_ceiling_compute = true;
+                                    break;
+                                }
+                                case ItemModel::Type::CeilingBandwidth:
+                                {
+                                    m_custom_ceiling_bandwidth = true;
+                                    break;
+                                }
+                                case ItemModel::Type::Intensity:
+                                {
+                                    m_custom_intensity = true;
+                                    break;
+                                }
+                            }
+                            m_options_changed = true;
                         }
-                        else if(m_kernel_mode == AllKernels &&
-                                m_items[i].type == ItemModel::Type::Intensity)
+                        else
                         {
-                            ToggleKernelIsolation(m_items[i].parent_info.kernel);
-                        }
-                        else if(m_items[i].type == ItemModel::Type::CeilingBandwidth)
-                        {
-                            ToggleBandwidthIsolation(m_items[i].subtype.bandwidth);
+                            ApplyItemFilter(m_items[i]);
                         }
                     }
                 }
@@ -1203,7 +1519,7 @@ Roofline::RenderMenus(ImVec2 region, ImVec2 plot_pos, ImVec2 plot_size,
         if(m_menus_mode == Options)
         {
             ImGui::SeparatorText("Options");
-            if(m_kernel_mode == AllKernels)
+            if(m_mode == AllKernels)
             {
                 ImGui::PushID("kernel_scale");
                 ImGui::Checkbox("", &m_scale_intensity);
@@ -1212,6 +1528,68 @@ Roofline::RenderMenus(ImVec2 region, ImVec2 plot_pos, ImVec2 plot_size,
                            ImGui::GetContentRegionAvail().x, plot_size.x * 0.5f,
                            Alignment_Left, true);
                 ImGui::PopID();
+            }
+            ImGui::PushID("ceiling_label");
+            ImGui::Checkbox("", &m_ceiling_labels);
+            ImGui::SameLine();
+            ElidedText("Show peak labels", ImGui::GetContentRegionAvail().x,
+                       plot_size.x * 0.5f, Alignment_Left, true);
+            ImGui::PopID();
+            if(m_mode == Compare && m_workload_primary != m_workload_secondary)
+            {
+                ElidedText("Peak Source", ImGui::GetContentRegionAvail().x,
+                           plot_size.x * 0.5f, Alignment_Left, true);
+                ImGui::GetWindowDrawList()->AddRectFilled(
+                    ImGui::GetCursorScreenPos(),
+                    ImGui::GetCursorScreenPos() +
+                        ImVec2(ImGui::GetContentRegionAvail().x, ImGui::GetFrameHeight()),
+                    m_settings.GetColor(Colors::kButton),
+                    m_settings.GetDefaultStyle().FrameRounding);
+                if(ColoredButton("Baseline",
+                                 m_settings.GetColor(!m_alternate_ceiling_source
+                                                         ? Colors::kAccent
+                                                         : Colors::kButton),
+                                 m_settings.GetColor(!m_alternate_ceiling_source
+                                                         ? Colors::kAccent
+                                                         : Colors::kButtonHovered),
+                                 m_settings.GetColor(!m_alternate_ceiling_source
+                                                         ? Colors::kAccent
+                                                         : Colors::kButtonActive),
+                                 m_settings.GetColor(!m_alternate_ceiling_source
+                                                         ? Colors::kTextOnAccent
+                                                         : Colors::kTextMain),
+                                 "Source hardware peaks from baseline workload.",
+                                 ImVec2(ImGui::GetContentRegionAvail().x * 0.5f,
+                                        ImGui::GetFrameHeight())) &&
+                   m_alternate_ceiling_source)
+                {
+                    m_alternate_ceiling_source = false;
+                    m_workload_changed         = true;
+                    m_options_changed          = true;
+                }
+                ImGui::SameLine(0.0f, 0.0f);
+                if(ColoredButton("Target",
+                                 m_settings.GetColor(m_alternate_ceiling_source
+                                                         ? Colors::kAccent
+                                                         : Colors::kButton),
+                                 m_settings.GetColor(m_alternate_ceiling_source
+                                                         ? Colors::kAccent
+                                                         : Colors::kButtonHovered),
+                                 m_settings.GetColor(m_alternate_ceiling_source
+                                                         ? Colors::kAccent
+                                                         : Colors::kButtonActive),
+                                 m_settings.GetColor(m_alternate_ceiling_source
+                                                         ? Colors::kTextOnAccent
+                                                         : Colors::kTextMain),
+                                 "Source hardware peaks from target workload.",
+                                 ImVec2(ImGui::GetContentRegionAvail().x,
+                                        ImGui::GetFrameHeight())) &&
+                   !m_alternate_ceiling_source)
+                {
+                    m_alternate_ceiling_source = true;
+                    m_workload_changed         = true;
+                    m_options_changed          = true;
+                }
             }
             ImGui::PushID("line_thickness");
             ElidedText("Line thickness", ImGui::GetContentRegionAvail().x,
@@ -1251,16 +1629,52 @@ Roofline::RenderMenus(ImVec2 region, ImVec2 plot_pos, ImVec2 plot_size,
 }
 
 void
+Roofline::FilterCombo(const char* label, const float width, const ImGuiStyle& style,
+                      const std::vector<FilterModel>& filters, bool& custom_override,
+                      size_t& active_idx)
+{
+    ImGui::PushID(label);
+    ImGui::AlignTextToFramePadding();
+    ImGui::TextUnformatted(label);
+    ImGui::SameLine();
+    ImGui::SetNextItemWidth(width - ImGui::GetItemRectSize().x - style.ItemSpacing.x);
+    PushComboStyles();
+    if(ImGui::BeginCombo("", custom_override ? "-" : filters[active_idx].name))
+    {
+        for(size_t i = 0; i < filters.size(); i++)
+        {
+            if(!filters[i].item_idx.empty())
+            {
+                ImGui::PushID(static_cast<int>(i));
+                if(ImGui::Selectable("", i == active_idx))
+                {
+                    active_idx      = i;
+                    custom_override = false;
+                    ApplyFilters();
+                }
+                ImGui::SameLine(ImGui::GetCursorPosX());
+                ElidedText(filters[i].name, ImGui::GetContentRegionAvail().x,
+                           ImGui::GetContentRegionAvail().x);
+                ImGui::PopID();
+            }
+        }
+        ImGui::EndCombo();
+    }
+    PopComboStyles();
+    ImGui::PopID();
+}
+
+void
 Roofline::PlotHoverIdx()
 {
     if(ImPlot::IsPlotHovered())
     {
         ImVec2 mouse_pos = ImGui::GetMousePos();
-        float  distance  = FLT_MAX;
         // Pick the closest visible item after plotting all candidates.
         for(size_t i = 0; i < m_items.size(); i++)
         {
-            if(m_items[i].visible)
+            float distance = FLT_MAX;
+            if(m_items[i].visible[ItemModel::Visible::Plot])
             {
                 switch(m_items[i].type)
                 {
@@ -1269,34 +1683,20 @@ Roofline::PlotHoverIdx()
                     {
                         if(m_items[i].info.ceiling)
                         {
-                            ImVec2 p1_pos = ImPlot::PlotToPixels(
-                                ImPlotPoint(m_items[i].info.ceiling->position.p1.x,
-                                            m_items[i].info.ceiling->position.p1.y));
-                            ImVec2 p2_pos = ImPlot::PlotToPixels(
-                                ImPlotPoint(m_items[i].info.ceiling->position.p2.x,
-                                            m_items[i].info.ceiling->position.p2.y));
-                            ImVec2 line_direction =
-                                ImVec2(p2_pos.x - p1_pos.x, p2_pos.y - p1_pos.y);
-                            ImVec2 point_to_mouse =
-                                ImVec2(mouse_pos.x - p1_pos.x, mouse_pos.y - p1_pos.y);
-                            float projection =
-                                std::clamp((point_to_mouse.x * line_direction.x +
-                                            point_to_mouse.y * line_direction.y) /
-                                               (line_direction.x * line_direction.x +
-                                                line_direction.y * line_direction.y),
-                                           0.0f, 1.0f);
-                            ImVec2 closest_point =
-                                ImVec2(p1_pos.x + projection * line_direction.x,
-                                       p1_pos.y + projection * line_direction.y);
-                            float dx = mouse_pos.x - closest_point.x;
-                            float dy = mouse_pos.y - closest_point.y;
-                            distance = std::sqrt(dx * dx + dy * dy);
+                            distance = PointDistanceFromLine(
+                                mouse_pos,
+                                ImPlot::PlotToPixels(
+                                    ImPlotPoint(m_items[i].info.ceiling->position.p1.x,
+                                                m_items[i].info.ceiling->position.p1.y)),
+                                ImPlot::PlotToPixels(
+                                    ImPlotPoint(m_items[i].info.ceiling->position.p2.x,
+                                                m_items[i].info.ceiling->position.p2.y)));
                         }
                         break;
                     }
                     case ItemModel::Type::Intensity:
                     {
-                        if(m_items[i].info.ceiling)
+                        if(m_items[i].info.intensity)
                         {
                             ImVec2 closest_point = ImPlot::PlotToPixels(
                                 ImPlotPoint(m_items[i].info.intensity->position.x,
@@ -1304,6 +1704,21 @@ Roofline::PlotHoverIdx()
                             float dx = mouse_pos.x - closest_point.x;
                             float dy = mouse_pos.y - closest_point.y;
                             distance = std::sqrt(dx * dx + dy * dy);
+                        }
+                        break;
+                    }
+                    case ItemModel::Type::IntensityDelta:
+                    {
+                        if(m_items[i].info.delta.baseline && m_items[i].info.delta.target)
+                        {
+                            distance = PointDistanceFromLine(
+                                mouse_pos,
+                                ImPlot::PlotToPixels(ImPlotPoint(
+                                    m_items[i].info.delta.baseline->position.x,
+                                    m_items[i].info.delta.baseline->position.y)),
+                                ImPlot::PlotToPixels(ImPlotPoint(
+                                    m_items[i].info.delta.target->position.x,
+                                    m_items[i].info.delta.target->position.y)));
                         }
                         break;
                     }
@@ -1318,76 +1733,354 @@ Roofline::PlotHoverIdx()
     }
 }
 
-void
-Roofline::ApplyPreset(PresetModel::Type type)
+float
+Roofline::PointDistanceFromLine(ImVec2 point, ImVec2 line_p1, ImVec2 line_p2) const
 {
-    m_active_preset = type;
-    RecomputeVisibility();
+    ImVec2 line_direction = ImVec2(line_p2.x - line_p1.x, line_p2.y - line_p1.y);
+    ImVec2 point_to_line  = ImVec2(point.x - line_p1.x, point.y - line_p1.y);
+    float  projection     = std::clamp(
+        (point_to_line.x * line_direction.x + point_to_line.y * line_direction.y) /
+            (line_direction.x * line_direction.x + line_direction.y * line_direction.y),
+        0.0f, 1.0f);
+    ImVec2 closest_point = ImVec2(line_p1.x + projection * line_direction.x,
+                                  line_p1.y + projection * line_direction.y);
+    float  dx            = point.x - closest_point.x;
+    float  dy            = point.y - closest_point.y;
+    return std::sqrt(dx * dx + dy * dy);
+}
+
+bool
+Roofline::ItemValid(const ItemModel& item) const
+{
+    bool valid = false;
+    switch(item.type)
+    {
+        case ItemModel::Type::CeilingCompute:
+        case ItemModel::Type::CeilingBandwidth:
+        {
+            valid = item.info.ceiling;
+            break;
+        }
+        case ItemModel::Type::Intensity:
+        {
+            valid = item.info.intensity && item.parent_info.kernel;
+            break;
+        }
+        case ItemModel::Type::IntensityDelta:
+        {
+            valid = item.info.delta.baseline && item.info.delta.target;
+            break;
+        }
+    }
+    return valid;
+}
+
+ImU32
+Roofline::ItemColor(const ItemModel& item, bool hovered, bool legend) const
+{
+    ImU32 color = 0;
+    switch(item.type)
+    {
+        case ItemModel::Type::CeilingCompute:
+        {
+            color = ImGui::GetColorU32(
+                ImPlot::GetColormapColor(static_cast<int>(item.subtype.compute)));
+            break;
+        }
+        case ItemModel::Type::CeilingBandwidth:
+        {
+            color = ImGui::GetColorU32(ImPlot::GetColormapColor(
+                static_cast<int>(__KRPVControllerRooflineCeilingComputeTypeLast +
+                                 item.subtype.bandwidth)));
+            break;
+        }
+        case ItemModel::Type::Intensity:
+        {
+            color = m_mode == Compare
+                        ? m_settings.GetColor(item.parent_info.kernel == m_kernel_primary
+                                                  ? Colors::kComparisonBase
+                                                  : Colors::kComparisonTarget)
+                        : ImGui::GetColorU32(ImPlot::GetColormapColor(
+                              static_cast<int>(item.parent_info.kernel->id)));
+            break;
+        }
+        case ItemModel::Type::IntensityDelta:
+        {
+            if(item.info.delta.target->position.y == item.info.delta.baseline->position.y)
+            {
+                color = m_settings.GetColor(Colors::kTextDim);
+            }
+            else if(item.info.delta.target->position.y >
+                    item.info.delta.baseline->position.y)
+            {
+                color = m_settings.GetColor(Colors::kComparisonGreater);
+            }
+            else
+            {
+                color = m_settings.GetColor(Colors::kComparisonLesser);
+            }
+            break;
+        }
+    }
+    return ImGui::GetColorU32(color, legend && hovered ? LEGEND_HOVER_COLOR_ALPHA : 1.0f);
 }
 
 void
-Roofline::RecomputeVisibility()
+Roofline::ApplyItemFilter(const ItemModel& item)
 {
-    for(ItemModel& item : m_items)
+    switch(item.type)
     {
-        switch(item.type)
+        case ItemModel::Type::CeilingCompute:
+        {
+            if(item.filter_idx.count(FilterModel::Type::CeilingCompute) > 0)
+            {
+                m_active_filter_ceiling_compute =
+                    m_active_filter_ceiling_compute ==
+                            item.filter_idx.at(FilterModel::Type::CeilingCompute)
+                        ? static_cast<size_t>(FilterModel::ComputeType::ComputeTypeAll)
+                        : item.filter_idx.at(FilterModel::Type::CeilingCompute);
+                m_custom_ceiling_compute = false;
+                ApplyFilters();
+            }
+            break;
+        }
+        case ItemModel::Type::CeilingBandwidth:
+        {
+            if(item.filter_idx.count(FilterModel::Type::CeilingBandwidth) > 0)
+            {
+                m_active_filter_ceiling_bandwidth =
+                    m_active_filter_ceiling_bandwidth ==
+                            item.filter_idx.at(FilterModel::Type::CeilingBandwidth)
+                        ? static_cast<size_t>(
+                              FilterModel::BandwidthType::BandwidthTypeAll)
+                        : item.filter_idx.at(FilterModel::Type::CeilingBandwidth);
+                m_custom_ceiling_bandwidth = false;
+                ApplyFilters();
+            }
+            break;
+        }
+        case ItemModel::Type::Intensity:
+        case ItemModel::Type::IntensityDelta:
+        {
+            if(m_mode == AllKernels &&
+               item.filter_idx.count(FilterModel::Type::IntensityKernel) > 0)
+            {
+                m_active_filter_intensity_kernel =
+                    m_active_filter_intensity_kernel ==
+                            item.filter_idx.at(FilterModel::Type::IntensityKernel)
+                        ? static_cast<size_t>(0)
+                        : item.filter_idx.at(FilterModel::Type::IntensityKernel);
+                m_custom_intensity = false;
+                ApplyFilters();
+            }
+            else if(m_mode != AllKernels &&
+                    item.filter_idx.count(FilterModel::Type::IntensityBandwidth) > 0)
+            {
+                m_active_filter_intensity_bandwidth =
+                    m_active_filter_intensity_bandwidth ==
+                            item.filter_idx.at(FilterModel::Type::IntensityBandwidth)
+                        ? static_cast<size_t>(
+                              FilterModel::BandwidthType::BandwidthTypeAll)
+                        : item.filter_idx.at(FilterModel::Type::IntensityBandwidth);
+                m_custom_intensity = false;
+                ApplyFilters();
+            }
+            break;
+        }
+    }
+}
+
+void
+Roofline::ApplyFilters()
+{
+    if(m_active_filter_ceiling_compute >= m_filters_ceiling_compute.size() ||
+       m_filters_ceiling_compute[m_active_filter_ceiling_compute].item_idx.empty())
+    {
+        m_active_filter_ceiling_compute = static_cast<size_t>(
+            m_filters_ceiling_compute[FilterModel::ComputeType::FP32].item_idx.size()
+                ? FilterModel::ComputeType::FP32
+            : m_filters_ceiling_compute[FilterModel::ComputeType::FP16].item_idx.size()
+                ? FilterModel::ComputeType::FP16
+            : m_filters_ceiling_compute[FilterModel::ComputeType::FP8].item_idx.size()
+                ? FilterModel::ComputeType::FP8
+            : m_filters_ceiling_compute[FilterModel::ComputeType::FP4].item_idx.size()
+                ? FilterModel::ComputeType::FP4
+            : m_filters_ceiling_compute[FilterModel::ComputeType::FP64].item_idx.size()
+                ? FilterModel::ComputeType::FP64
+                : 0);
+    }
+    if(m_active_filter_ceiling_bandwidth >= m_filters_ceiling_bandwidth.size() ||
+       m_filters_ceiling_bandwidth[m_active_filter_ceiling_bandwidth].item_idx.empty())
+    {
+        m_active_filter_ceiling_bandwidth = 0;
+    }
+    if(m_active_filter_intensity_kernel >= m_filters_intensity_kernel.size() ||
+       m_filters_intensity_kernel[m_active_filter_intensity_kernel].item_idx.empty())
+    {
+        m_active_filter_intensity_kernel = 0;
+    }
+    if(m_active_filter_intensity_bandwidth >= m_filters_intensity_bandwidth.size() ||
+       m_filters_intensity_bandwidth[m_active_filter_intensity_bandwidth]
+           .item_idx.empty())
+    {
+        m_active_filter_intensity_bandwidth = 0;
+    }
+    for(size_t i = 0; i < m_items.size(); i++)
+    {
+        switch(m_items[i].type)
         {
             case ItemModel::Type::CeilingCompute:
             {
-                // Enabled below from the active preset.
-                item.visible = false;
+                m_items[i].visible[ItemModel::Visible::Plot] =
+                    m_filters_ceiling_compute[m_active_filter_ceiling_compute]
+                        .item_idx.count(i);
                 break;
             }
             case ItemModel::Type::CeilingBandwidth:
             {
-                item.visible = !m_isolated_bandwidth ||
-                               item.subtype.bandwidth == m_isolated_bandwidth.value();
+                m_items[i].visible[ItemModel::Visible::Plot] =
+                    m_filters_ceiling_bandwidth[m_active_filter_ceiling_bandwidth]
+                        .item_idx.count(i);
                 break;
             }
             case ItemModel::Type::Intensity:
             {
-                bool level_ok = !m_memory_peak_filter ||
-                                item.subtype.intensity == m_memory_peak_filter.value();
-                bool kernel_ok =
-                    m_kernel_mode == SingleKernel
-                        ? item.parent_info.kernel == m_kernel
-                        : (!m_isolated_kernel ||
-                           item.parent_info.kernel == m_isolated_kernel);
-                item.visible = level_ok && kernel_ok;
+                m_items[i].visible[ItemModel::Visible::Plot] =
+                    m_filters_intensity_kernel[m_active_filter_intensity_kernel]
+                        .item_idx.count(i) &&
+                    m_filters_intensity_bandwidth[m_active_filter_intensity_bandwidth]
+                        .item_idx.count(i);
+                break;
+            }
+            default:
+            {
                 break;
             }
         }
     }
-    for(const size_t& item_idx : m_presets[m_active_preset].item_indices)
-    {
-        m_items[item_idx].visible = true;
-    }
-    // Visibility now matches the dropdown selections again.
-    m_custom_visibility = false;
-    // Visibility can change which ceilings are shown, so recompute the ridges.
     m_options_changed = true;
 }
 
-void
-Roofline::ToggleKernelIsolation(const KernelInfo* kernel)
+Roofline::FilterModel::ComputeType
+Roofline::FilterComputeType(
+    rocprofvis_controller_roofline_ceiling_compute_type_t type) const
 {
-    m_isolated_kernel = (kernel && m_isolated_kernel != kernel) ? kernel : nullptr;
-    RecomputeVisibility();
+    Roofline::FilterModel::ComputeType filter_type;
+    switch(type)
+    {
+        case kRPVControllerRooflineCeilingComputeMFMAFP4:
+        {
+            filter_type = FilterModel::ComputeType::FP4;
+            break;
+        }
+        case kRPVControllerRooflineCeilingComputeMFMAFP6:
+        {
+            filter_type = FilterModel::ComputeType::FP6;
+            break;
+        }
+        case kRPVControllerRooflineCeilingComputeMFMAFP8:
+        {
+            filter_type = FilterModel::ComputeType::FP8;
+            break;
+        }
+        case kRPVControllerRooflineCeilingComputeVALUFP16:
+        case kRPVControllerRooflineCeilingComputeMFMAFP16:
+        case kRPVControllerRooflineCeilingComputeMFMABF16:
+        {
+            filter_type = FilterModel::ComputeType::FP16;
+            break;
+        }
+        case kRPVControllerRooflineCeilingComputeVALUFP32:
+        case kRPVControllerRooflineCeilingComputeMFMAFP32:
+        {
+            filter_type = FilterModel::ComputeType::FP32;
+            break;
+        }
+        case kRPVControllerRooflineCeilingComputeVALUFP64:
+        case kRPVControllerRooflineCeilingComputeMFMAFP64:
+        {
+            filter_type = FilterModel::ComputeType::FP64;
+            break;
+        }
+        default:
+        {
+            filter_type = Roofline::FilterModel::ComputeType::ComputeTypeUnknown;
+            break;
+        }
+    }
+    return filter_type;
 }
 
-void
-Roofline::ToggleBandwidthIsolation(
-    rocprofvis_controller_roofline_ceiling_bandwidth_type_t bandwidth)
+Roofline::FilterModel::BandwidthType
+Roofline::FilterBandwidthType(
+    rocprofvis_controller_roofline_ceiling_bandwidth_type_t type) const
 {
-    if(m_isolated_bandwidth && m_isolated_bandwidth.value() == bandwidth)
+    Roofline::FilterModel::BandwidthType filter_type;
+    switch(type)
     {
-        m_isolated_bandwidth = std::nullopt;
+        case kRPVControllerRooflineCeilingTypeBandwidthHBM:
+        {
+            filter_type = FilterModel::BandwidthType::HBM;
+            break;
+        }
+        case kRPVControllerRooflineCeilingTypeBandwidthL2:
+        {
+            filter_type = FilterModel::BandwidthType::L2;
+            break;
+        }
+        case kRPVControllerRooflineCeilingTypeBandwidthL1:
+        {
+            filter_type = FilterModel::BandwidthType::L1;
+            break;
+        }
+        case kRPVControllerRooflineCeilingTypeBandwidthLDS:
+        {
+            filter_type = FilterModel::BandwidthType::LDS;
+            break;
+        }
+        default:
+        {
+            filter_type = Roofline::FilterModel::BandwidthType::BandwidthTypeUnknown;
+            break;
+        }
     }
-    else
+    return filter_type;
+}
+
+Roofline::FilterModel::BandwidthType
+Roofline::FilterBandwidthType(
+    rocprofvis_controller_roofline_kernel_intensity_type_t type) const
+{
+    Roofline::FilterModel::BandwidthType filter_type;
+    switch(type)
     {
-        m_isolated_bandwidth = bandwidth;
+        case kRPVControllerRooflineKernelIntensityTypeHBM:
+        {
+            filter_type = FilterModel::BandwidthType::HBM;
+            break;
+        }
+        case kRPVControllerRooflineKernelIntensityTypeL2:
+        {
+            filter_type = FilterModel::BandwidthType::L2;
+            break;
+        }
+        case kRPVControllerRooflineKernelIntensityTypeL1:
+        {
+            filter_type = FilterModel::BandwidthType::L1;
+            break;
+        }
+        case kRPVControllerRooflineKernelIntensityTypeLDS:
+        {
+            filter_type = FilterModel::BandwidthType::LDS;
+            break;
+        }
+        default:
+        {
+            filter_type = Roofline::FilterModel::BandwidthType::BandwidthTypeUnknown;
+            break;
+        }
     }
-    RecomputeVisibility();
+    return filter_type;
 }
 
 }  // namespace View

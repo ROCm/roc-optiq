@@ -457,6 +457,94 @@ void RegisterAppTests(ImGuiTestEngine* e)
         IM_CHECK(fabs(restored.v_max_x - saved.v_max_x) < tol);
     };
 
+    t = IM_REGISTER_TEST(e, "app", "sys_bookmark_multiple_slots");
+    t->TestFunc = [](ImGuiTestContext* ctx)
+    {
+        TraceView* tv = GetTraceViewOrSkip(ctx);
+        if (!tv) return;
+        TimelineView* tlv = TraceViewTestPeer{*tv}.TimelineViewPtr();
+        IM_CHECK(tlv != nullptr);
+        if (tlv == nullptr) return;
+
+        // Slots are additive here (1 then 2), so a prior run's leftovers would
+        // break the count assertions in a persistent process (the interactive
+        // harness reuses one process; headless is fresh each run).
+        TraceViewTestPeer{*tv}.ClearBookmarks();
+        ctx->Yield(1);
+        IM_CHECK(TraceViewTestPeer{*tv}.BookmarkCount() == 0);
+
+        // HandleHotKeys is gated on IsWindowFocused(RootAndChildWindows) for
+        // "Main Window", so focus it explicitly and click an event to land the
+        // cursor in-graph before sending any chord.
+        ctx->Yield(3);
+        ImVec2 event_center(0.0f, 0.0f);
+        bool   have_center = FirstEventScreenCenter(
+            ctx, TimelineViewTestPeer{*tlv}.FirstFlameWindowId(), event_center);
+        IM_CHECK(have_center);
+        if (!have_center) return;
+
+        ctx->WindowFocus("Main Window");
+        ctx->MouseMoveToPos(event_center);
+        ctx->MouseClick(0);
+        ctx->Yield(2);
+
+        // Slot 1 captures the starting range.
+        ctx->KeyPress(ImGuiMod_Ctrl | ImGuiKey_1);
+        ctx->Yield(3);
+        IM_CHECK(TraceViewTestPeer{*tv}.BookmarkCount() == 1);
+        const ViewCoords saved1     = tlv->GetViewCoords();
+        const double     saved1_span = saved1.v_max_x - saved1.v_min_x;
+        IM_CHECK(saved1_span > 0.0);
+        if (saved1_span <= 0.0) return;
+
+        // Zoom in so slot 2 is saved at a genuinely different range.
+        ctx->MouseMoveToPos(event_center);
+        ctx->KeyPress(ImGuiKey_W);
+        ctx->Yield(3);
+        if ((tlv->GetViewCoords().v_max_x - tlv->GetViewCoords().v_min_x) >= saved1_span)
+        {
+            ctx->LogWarning("SKIP: view did not zoom in, no headroom for a second distinct slot");
+            TraceViewTestPeer{*tv}.ClearBookmarks();
+            ctx->Yield(2);
+            return;
+        }
+
+        ctx->KeyPress(ImGuiMod_Ctrl | ImGuiKey_2);
+        ctx->Yield(3);
+        IM_CHECK(TraceViewTestPeer{*tv}.BookmarkCount() == 2);
+        const ViewCoords saved2      = tlv->GetViewCoords();
+        const double     saved2_span = saved2.v_max_x - saved2.v_min_x;
+        IM_CHECK(saved2_span > 0.0);
+        if (saved2_span <= 0.0) return;
+
+        // Leave the view at a third range so neither restore can pass by accident.
+        ctx->MouseMoveToPos(event_center);
+        ctx->KeyPress(ImGuiKey_W);
+        ctx->Yield(3);
+
+        // Restore reconstructs the range from the saved span through a float, so
+        // compare within a small relative tolerance rather than exactly.
+        ctx->MouseMoveToPos(event_center);
+        ctx->KeyPress(ImGuiKey_1);
+        ctx->Yield(3);
+        const ViewCoords restored1 = tlv->GetViewCoords();
+        const double     tol1      = saved1_span * 0.01;
+        IM_CHECK(fabs(restored1.v_min_x - saved1.v_min_x) < tol1);
+        IM_CHECK(fabs(restored1.v_max_x - saved1.v_max_x) < tol1);
+
+        // Slot 2 must still hold its own range, not the one slot 1 just restored.
+        ctx->MouseMoveToPos(event_center);
+        ctx->KeyPress(ImGuiKey_2);
+        ctx->Yield(3);
+        const ViewCoords restored2 = tlv->GetViewCoords();
+        const double     tol2      = saved2_span * 0.01;
+        IM_CHECK(fabs(restored2.v_min_x - saved2.v_min_x) < tol2);
+        IM_CHECK(fabs(restored2.v_max_x - saved2.v_max_x) < tol2);
+
+        TraceViewTestPeer{*tv}.ClearBookmarks();
+        ctx->Yield(2);
+    };
+
     t = IM_REGISTER_TEST(e, "app", "sys_event_multi_select");
     t->TestFunc = [](ImGuiTestContext* ctx)
     {

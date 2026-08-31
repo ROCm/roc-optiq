@@ -127,6 +127,7 @@ public:
 
     void           AutoScrollForAnnotationDrag(ImVec2 content_origin);
     void           RenderMeasurement(ImDrawList* draw_list, ImVec2 window_position);
+    void           HandleMeasurementLabelInput();
     ViewCoords                          GetViewCoords() const;
     std::shared_ptr<TimePixelTransform> GetTransform() const;
 
@@ -305,6 +306,11 @@ private:
     MeasurementLabelRect       m_measure_label_end;
     MeasurementLabelRect       m_measure_label_duration;
     MeasurementCopyTarget      m_measure_copy_target;
+
+    // Session-only drag state for the floating measurement duration label (moves
+    // vertically only); its rect is captured each frame for the hit-test.
+    float                      m_measure_label_offset_y = 0.0f;
+    bool                       m_dragging_measure_label = false;
 
     ImVec2                     m_context_menu_pos = ImVec2(0.0f, 0.0f);
 

@@ -41,6 +41,8 @@ constexpr float    SCROLL_APPLY_TOLERANCE_PX     = 1.0f;
 constexpr uint64_t DEFAULT_LOADING_TIMER         = 150;  // milliseconds
 constexpr float    ARTIFICIAL_SCROLLBAR_HEIGHT   = 18.0f;
 constexpr float    SIDEBAR_SPLITTER_WIDTH        = 5.0f;
+constexpr float    LABEL_PADDING                 = 4.0f;
+constexpr float    LABEL_ROUNDING                = 6.0f;
 // Thickness (px) of the selection boundary markers on the overview histogram.
 constexpr float    OVERVIEW_MARKER_THICKNESS     = 2.0f;
 // Overview duration bracket: end-cap half-height and label gap (px).
@@ -528,6 +530,40 @@ TimelineView::AutoScrollForAnnotationDrag(ImVec2 content_origin)
 }
 
 void
+TimelineView::HandleMeasurementLabelInput()
+{
+    // Submit the duration label as a real item in the input-capable "Graph View
+    // Main" (track rows are NoMouseInputs) so ImGui resolves z-order against
+    // annotations, the scrubber and other windows. RenderMeasurement refreshes the
+    // rect later this frame, so we hit-test last frame's.
+    if(!m_measure_label_duration.valid) return;
+
+    const ImVec2 mn = m_measure_label_duration.min;
+    const ImVec2 mx = m_measure_label_duration.max;
+
+    const ImVec2 cursor_backup = ImGui::GetCursorScreenPos();
+    ImGui::SetCursorScreenPos(mn);
+    ImGui::SetNextItemAllowOverlap();
+    ImGui::InvisibleButton("##measure_duration_label", ImVec2(mx.x - mn.x, mx.y - mn.y));
+    const bool hovered = ImGui::IsItemHovered();
+    const bool active  = ImGui::IsItemActive();
+    ImGui::SetCursorScreenPos(cursor_backup);
+
+    m_dragging_measure_label = active;
+    if(hovered || active)
+    {
+        ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeNS);
+        // Block the layers below and win focus so flame-track clicks defer to us.
+        m_stop_user_interaction = true;
+        TimelineFocusManager::GetInstance().RequestLayerFocus(Layer::kInteractiveLayer);
+    }
+    if(active)
+    {
+        m_measure_label_offset_y += ImGui::GetIO().MouseDelta.y;
+    }
+}
+
+void
 TimelineView::RenderMeasurement(ImDrawList* draw_list, ImVec2 window_position)
 {
     MeasurementController& fm = *m_measurement;
@@ -540,42 +576,55 @@ TimelineView::RenderMeasurement(ImDrawList* draw_list, ImVec2 window_position)
 
     const auto& p1 = fm.GetPoint(0);
     const auto& p2 = fm.GetPoint(1);
-    if(!p1.valid && !p2.valid) return;
+    if(!p1.valid && !p2.valid)
+    {
+        // No measurement: drop any manual label offset (session-only).
+        m_measure_label_offset_y = 0.0f;
+        m_dragging_measure_label = false;
+        return;
+    }
 
-    SettingsManager& settings     = SettingsManager::GetInstance();
-    ImU32            color        = settings.GetColor(Colors::kMeasurementColor);
-    float            level_height = settings.GetEventLevelHeight();
-    const auto&      time_format  = settings.GetUserSettings().unit_settings.time_format;
+    SettingsManager& settings    = SettingsManager::GetInstance();
+    ImU32            color       = settings.GetColor(Colors::kMeasurementColor);
+    const auto&      time_format = settings.GetUserSettings().unit_settings.time_format;
 
-    constexpr float CURVE_THICK         = 2.5f;
-    constexpr float VLINE_THICK         = 1.5f;
-    constexpr float LABEL_PAD           = 8.0f;
-    constexpr float LABEL_ROUND         = 6.0f;
-    constexpr float RULER_LABEL_PAD_X   = 4.0f;
-    constexpr float RULER_LABEL_PAD_Y   = 2.0f;
-    constexpr float RULER_LABEL_ROUND   = 3.0f;
-    constexpr float DELTA_LABEL_OFFSET  = 20.0f;
+    constexpr float CURVE_THICK       = 2.5f;
+    constexpr float VLINE_THICK       = 1.5f;
+    constexpr float RULER_LABEL_PAD_X = 4.0f;
+    constexpr float RULER_LABEL_PAD_Y = 2.0f;
+    constexpr float RULER_LABEL_ROUND = 3.0f;
     ImU32 label_bg   = settings.GetColor(Colors::kMeasurementLabelBg);
+    // Opaque fill so underlying lines don't bleed through the labels.
+    ImU32 label_bg_opaque = label_bg | IM_COL32_A_MASK;
     ImU32 label_edge = settings.GetColor(Colors::kMeasurementLabelEdge);
     ImU32 label_text = settings.GetColor(Colors::kMeasurementLabelText);
 
     float top = window_position.y;
-    float bot = window_position.y + m_track_height_sum;
 
     float visible_bot = window_position.y + m_scroll_position_y +
                         m_tpt->GetGraphSizeY() - m_ruler_height -
                         ARTIFICIAL_SCROLLBAR_HEIGHT;
+
+    // Run the rulers to the viewport bottom (not just the last track) so short
+    // traces still meet the centered label; max() leaves tall traces unchanged.
+    float bot = std::max(window_position.y + m_track_height_sum, visible_bot);
     float visible_center_y = m_scroll_position_y +
                              (m_tpt->GetGraphSizeY() - m_ruler_height -
                               ARTIFICIAL_SCROLLBAR_HEIGHT) / 2.0f;
-    float label_y = visible_bot - ImGui::CalcTextSize("0").y - LABEL_PAD;
+    float label_y     = visible_bot - ImGui::CalcTextSize("0").y - LABEL_PADDING;
+    float visible_top = window_position.y + m_scroll_position_y;
+
+    // Left ruler timestamp sits at the top, right one at the bottom, so they don't
+    // overlap when the rulers are close together.
+    float ruler_top_y    = visible_top + RULER_LABEL_PAD_Y;
+    float ruler_bottom_y = label_y;
 
     float graph_min_x = window_position.x;
     float graph_max_x = window_position.x + m_tpt->GetGraphSizeX();
 
-    // Draws a small timestamp label centered on a ruler line, capturing its rect
-    // (index 0 = start ruler, 1 = end ruler) for the context-menu hit-test.
-    auto draw_ruler_label = [&](int index, float x, const char* text) {
+    // Draws a ruler timestamp centered on x at height y, capturing its rect
+    // (index 0 = start, 1 = end) for the context menu.
+    auto draw_ruler_label = [&](int index, float x, float y, const char* text) {
         ImVec2 sz = ImGui::CalcTextSize(text);
         float  lx = x - sz.x * 0.5f;
 
@@ -586,10 +635,10 @@ TimelineView::RenderMeasurement(ImDrawList* draw_list, ImVec2 window_position)
             lx = std::clamp(lx, label_min_x, label_max_x);
         }
 
-        ImVec2 mn(lx - RULER_LABEL_PAD_X, label_y - RULER_LABEL_PAD_Y);
-        ImVec2 mx(lx + sz.x + RULER_LABEL_PAD_X, label_y + sz.y + RULER_LABEL_PAD_Y);
-        draw_list->AddRectFilled(mn, mx, label_bg, RULER_LABEL_ROUND);
-        draw_list->AddText(ImVec2(lx, label_y), label_text, text);
+        ImVec2 mn(lx - RULER_LABEL_PAD_X, y - RULER_LABEL_PAD_Y);
+        ImVec2 mx(lx + sz.x + RULER_LABEL_PAD_X, y + sz.y + RULER_LABEL_PAD_Y);
+        draw_list->AddRectFilled(mn, mx, label_bg_opaque, RULER_LABEL_ROUND);
+        draw_list->AddText(ImVec2(lx, y), label_text, text);
 
         MeasurementLabelRect& rect = (index == 0) ? m_measure_label_start : m_measure_label_end;
         rect.min   = mn;
@@ -597,18 +646,16 @@ TimelineView::RenderMeasurement(ImDrawList* draw_list, ImVec2 window_position)
         rect.valid = true;
     };
 
-    // Draws a boxed label, Y-clamped to stay within visible area, capturing its
-    // rect as the duration label for the context-menu hit-test.
+    // Draws the boxed duration label centered at (cx, cy), capturing its rect for
+    // the context menu.
     auto draw_label = [&](float cx, float cy, const char* text) {
-        ImVec2 sz     = ImGui::CalcTextSize(text);
-        float  half_h = sz.y * 0.5f + LABEL_PAD;
-        cy            = std::clamp(cy, top + half_h, visible_bot - half_h);
-        float  lx     = cx - sz.x * 0.5f;
-        float  ly     = cy - sz.y * 0.5f;
-        ImVec2 mn(lx - LABEL_PAD, ly - LABEL_PAD);
-        ImVec2 mx(lx + sz.x + LABEL_PAD, ly + sz.y + LABEL_PAD);
-        draw_list->AddRectFilled(mn, mx, label_bg, LABEL_ROUND);
-        draw_list->AddRect(mn, mx, label_edge, LABEL_ROUND, 0, 1.0f);
+        ImVec2 sz = ImGui::CalcTextSize(text);
+        float  lx = cx - sz.x * 0.5f;
+        float  ly = cy - sz.y * 0.5f;
+        ImVec2 mn(lx - LABEL_PADDING, ly - LABEL_PADDING);
+        ImVec2 mx(lx + sz.x + LABEL_PADDING, ly + sz.y + LABEL_PADDING);
+        draw_list->AddRectFilled(mn, mx, label_bg_opaque, LABEL_ROUNDING);
+        draw_list->AddRect(mn, mx, label_edge, LABEL_ROUNDING, 0, 1.0f);
         draw_list->AddText(ImVec2(lx, ly), label_text, text);
 
         m_measure_label_duration.min   = mn;
@@ -616,41 +663,61 @@ TimelineView::RenderMeasurement(ImDrawList* draw_list, ImVec2 window_position)
         m_measure_label_duration.valid = true;
     };
 
-    // Resolves Y position for a measurement point
-    auto point_y = [&](const MeasurementPoint& pt) -> float {
-        if(pt.freehand) return visible_center_y;
-        auto it = m_track_position_y.find(pt.track_id);
-        if(it != m_track_position_y.end())
-            return it->second + level_height * pt.level + level_height * 0.5f;
-        return visible_center_y;
-    };
+    // The interactive-content child clips at m_track_height_sum, cutting off labels
+    // that fall below the last track on short traces. Clip to the full visible graph
+    // area instead (a no-op on tall/scrolled traces).
+    draw_list->PushClipRect(ImVec2(graph_min_x, visible_top),
+                            ImVec2(graph_max_x, visible_bot + RULER_LABEL_PAD_Y), false);
 
-    // Draw ruler + label for each valid point
-    int valid_count = 0;
-    float px[2]     = {};
+    // Draw the full-height ruler lines first; labels go on top of them below.
+    int         valid_count = 0;
+    float       px[2]       = {};
+    bool        pt_valid[2] = { false, false };
+    std::string ts_str[2];
     for(int i = 0; i < 2; ++i)
     {
         const auto& pt = fm.GetPoint(i);
         if(!pt.valid) continue;
         ++valid_count;
+        pt_valid[i] = true;
 
-        double eff     = fm.GetEffectiveTimestamp(i);
-        px[i]          = window_position.x + m_tpt->RawTimeToPixel(eff);
+        double eff = fm.GetEffectiveTimestamp(i);
+        px[i]      = window_position.x + m_tpt->RawTimeToPixel(eff);
         draw_list->AddLine(ImVec2(px[i], top), ImVec2(px[i], bot), color, VLINE_THICK);
-
-        std::string ts_str =
+        ts_str[i] =
             nanosecond_to_formatted_str(eff - m_tpt->GetMinX(), time_format, true);
-        draw_ruler_label(i, px[i], ts_str.c_str());
     }
 
-    if(valid_count < 2) return;
+    // Single (in-progress) measurement: just draw its timestamp and stop.
+    if(valid_count < 2)
+    {
+        for(int i = 0; i < 2; ++i)
+            if(pt_valid[i])
+                draw_ruler_label(i, px[i], ruler_bottom_y, ts_str[i].c_str());
+        m_measure_label_offset_y = 0.0f;
+        m_dragging_measure_label = false;
+        draw_list->PopClipRect();
+        return;
+    }
 
-    // Freehand notch markers at original event edges
+    // The duration label and connecting line share one vertical position, so
+    // dragging the label moves the line too. Clamp the offset to the visible area.
+    double      delta     = std::abs(fm.GetEffectiveTimestamp(1) - fm.GetEffectiveTimestamp(0));
+    std::string delta_str = nanosecond_to_formatted_str(delta, time_format, true);
+    float       label_cx  = (px[0] + px[1]) * 0.5f;
+    float       base_cy   = window_position.y + visible_center_y;
+    float       half_h    = ImGui::CalcTextSize(delta_str.c_str()).y * 0.5f + LABEL_PADDING;
+    float       off_lo    = (visible_top + half_h) - base_cy;
+    float       off_hi    = (visible_bot - half_h) - base_cy;
+    if(off_lo <= off_hi)
+        m_measure_label_offset_y = std::clamp(m_measure_label_offset_y, off_lo, off_hi);
+    float line_y = base_cy + m_measure_label_offset_y;
+
+    // All lines first (notches + connecting line), so the labels sit on top.
     if(fm.IsFreehandMode())
     {
         constexpr float NOTCH_H   = 10.0f;
         ImU32           notch_col = settings.GetColor(Colors::kMeasurementNotch);
-        float           mid_y     = window_position.y + visible_center_y;
 
         for(int i = 0; i < 2; ++i)
         {
@@ -659,20 +726,26 @@ TimelineView::RenderMeasurement(ImDrawList* draw_list, ImVec2 window_position)
             for(double ts : { pt.timestamp, pt.timestamp + pt.duration })
             {
                 float nx = window_position.x + m_tpt->RawTimeToPixel(ts);
-                draw_list->AddLine(ImVec2(nx, mid_y - NOTCH_H),
-                                   ImVec2(nx, mid_y + NOTCH_H), notch_col, 1.0f);
+                draw_list->AddLine(ImVec2(nx, line_y - NOTCH_H),
+                                   ImVec2(nx, line_y + NOTCH_H), notch_col, 1.0f);
             }
         }
     }
-
-    // Straight horizontal line connecting the two rulers
-    float line_y = window_position.y + visible_center_y;
     draw_list->AddLine(ImVec2(px[0], line_y), ImVec2(px[1], line_y), color, CURVE_THICK);
 
-    // Delta label at midpoint
-    double      delta     = std::abs(fm.GetEffectiveTimestamp(1) - fm.GetEffectiveTimestamp(0));
-    std::string delta_str = nanosecond_to_formatted_str(delta, time_format, true);
-    draw_label((px[0] + px[1]) * 0.5f, line_y + DELTA_LABEL_OFFSET, delta_str.c_str());
+    // Then the labels on top: left ruler at top, right at bottom, duration on line.
+    {
+        int left  = (px[0] <= px[1]) ? 0 : 1;
+        int right = 1 - left;
+        draw_ruler_label(left, px[left], ruler_top_y, ts_str[left].c_str());
+        draw_ruler_label(right, px[right], ruler_bottom_y, ts_str[right].c_str());
+    }
+    draw_label(label_cx, line_y, delta_str.c_str());
+
+    draw_list->PopClipRect();
+
+    // Drag interaction lives in HandleMeasurementLabelInput(); here we only draw and
+    // capture m_measure_label_duration for its hit-test next frame.
 }
 
 ImVec2
@@ -1639,12 +1712,11 @@ TimelineView::RenderScrubber(ImVec2 screen_pos)
 
         ImVec2 label_size = ImGui::CalcTextSize(label.c_str());
 
-        constexpr float label_padding = 4.0f;
         ImVec2 rect_pos1 = ImVec2(mouse_position.x, screen_pos.y + container_size.y -
                                                         label_size.y - m_ruler_padding);
-        ImVec2 rect_pos2 = ImVec2(mouse_position.x + label_size.x + label_padding * 2,
+        ImVec2 rect_pos2 = ImVec2(mouse_position.x + label_size.x + LABEL_PADDING * 2,
                                   screen_pos.y + container_size.y - m_ruler_padding);
-        ImVec2 text_pos  = ImVec2(rect_pos1.x + label_padding, rect_pos1.y);
+        ImVec2 text_pos  = ImVec2(rect_pos1.x + LABEL_PADDING, rect_pos1.y);
 
         draw_list->AddRectFilled(rect_pos1, rect_pos2,
                                  m_settings.GetColor(Colors::kScrubberNumberColor));
@@ -1826,6 +1898,8 @@ TimelineView::RenderGraphView()
     m_reordering_track_id = INVALID_TRACK_ID;
     // Re-set each frame by RenderReorderingTrack while in the auto-scroll zone.
     m_reorder_auto_scrolling = false;
+
+    HandleMeasurementLabelInput();
 
     for(int index = 0; index < m_tracks->size(); index++)
     {

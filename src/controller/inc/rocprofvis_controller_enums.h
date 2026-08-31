@@ -1261,10 +1261,12 @@ typedef enum rocprofvis_controller_roofline_ceiling_bandwidth_type_t : uint32_t
 */
 typedef enum rocprofvis_controller_roofline_kernel_intensity_type_t : uint32_t
 {
-    kRPVControllerRooflineKernelIntensityTypeHBM,
+    __kRPVControllerRooflineKernelIntensityTypeFirst,
+    kRPVControllerRooflineKernelIntensityTypeHBM = __kRPVControllerRooflineKernelIntensityTypeFirst,
     kRPVControllerRooflineKernelIntensityTypeL2,
     kRPVControllerRooflineKernelIntensityTypeL1,
     kRPVControllerRooflineKernelIntensityTypeLDS,
+    __kRPVControllerRooflineKernelIntensityTypeLast,
 } rocprofvis_controller_roofline_kernel_intensity_type_t;
 
 /*

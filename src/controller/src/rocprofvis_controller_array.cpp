@@ -76,6 +76,19 @@ rocprofvis_result_t Array::GetUInt64(rocprofvis_property_t property, uint64_t in
                 }
                 break;
             }
+            case kRPVControllerArrayEntryTypeIndexed:
+            {
+                if(index < m_array.size())
+                {
+                    *value = static_cast<uint64_t>(m_array[index].GetType());
+                    result = kRocProfVisResultSuccess;
+                }
+                else
+                {
+                    result = kRocProfVisResultInvalidArgument;
+                }
+                break;
+            }
             case kRPVControllerArrayNumEntries:
             {
                 *value = m_array.size();

@@ -598,6 +598,8 @@ typedef enum rocprofvis_controller_array_properties_t : uint32_t
     kRPVControllerArrayNumEntries = __kRPVControllerArrayPropertiesFirst,
     // Indexed entry.
     kRPVControllerArrayEntryIndexed,
+    // Primitive type of the indexed entry.
+    kRPVControllerArrayEntryTypeIndexed,
     __kRPVControllerArrayPropertiesLast
 } rocprofvis_controller_array_properties_t;
 /* JSON: RPVArray

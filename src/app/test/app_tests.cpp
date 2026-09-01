@@ -18,10 +18,14 @@
 #include "rocprofvis_summary_view.h"
 #include "icons/rocprovfis_icon_defines.h"
 #include <algorithm>
+#include <chrono>
+#include <cstdint>
+#include <iostream>
 #include <string>
 #include <filesystem>
 #include <fstream>
 #include <unordered_set>
+#include <vector>
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_utils.h"
 #include "rocprofvis_data_provider.h"
@@ -33,6 +37,9 @@
 #include "widgets/rocprofvis_tab_container.h"
 #include "rocprofvis_view_test_access.h"
 using namespace RocProfVis::View;
+
+std::atomic<bool> g_soak_paused{ false };
+std::atomic<bool> g_soak_exit_requested{ false };
 
 namespace
 {
@@ -331,6 +338,39 @@ struct TabStateGuard
         if(ctx) ctx->Yield(3);
     }
 };
+// Blocks while the pause switch is set, handing the application back to the user.
+// Setting ImGuiTestRunFlags_GuiFuncOnly is what does the real work: the Test
+// Engine only discards the backend's mouse and keyboard events while it believes
+// it is driving the test, so raising this flag is what makes the app respond to
+// the real cursor again. The app keeps rendering throughout, and the previous
+// flags are restored on resume so the driver carries on where it left off.
+void SoakWaitWhilePaused(ImGuiTestContext* ctx)
+{
+    if(!g_soak_paused.load()) return;
+
+    const ImGuiTestRunFlags saved_flags = ctx->RunFlags;
+    ctx->RunFlags |= ImGuiTestRunFlags_GuiFuncOnly;
+    std::cout << "[soak] paused, app is interactive - press F9 again to resume\n"
+              << std::flush;
+
+    while(g_soak_paused.load() && !g_soak_exit_requested.load() && !ctx->IsError())
+    {
+        ctx->Yield();
+    }
+
+    ctx->RunFlags = saved_flags;
+    std::cout << "[soak] resumed\n" << std::flush;
+}
+
+// A point inside the graph lane, addressed by fraction so the same call lands
+// correctly at any window size. Callers stay near the vertical middle to keep
+// clear of the ruler along the top edge.
+ImVec2 GraphPoint(const ImVec2& graph_min, const ImVec2& graph_max, float x_fraction,
+                  float y_fraction)
+{
+    return ImVec2(graph_min.x + (graph_max.x - graph_min.x) * x_fraction,
+                  graph_min.y + (graph_max.y - graph_min.y) * y_fraction);
+}
 }  // namespace
 
 void RegisterAppTests(ImGuiTestEngine* e)
@@ -3020,5 +3060,214 @@ void RegisterAppTests(ImGuiTestEngine* e)
 
         IM_CHECK(arg_count > 0);
         IM_CHECK(have_named_arg);
+    };
+
+    // Continuously switches between the open files and zooms and pans whichever
+    // timeline is in front, until the process is killed.
+    //
+    // This is a stress driver for reproducing hangs, not a correctness test: it
+    // asserts nothing about where the view ends up, it only keeps the view range
+    // changing so the track refetch path is under constant churn, and keeps
+    // swapping which trace is in front so several traces have work in flight.
+    // Each iteration announces itself on stdout before acting, so when the app
+    // wedges the last "[soak]" line names the file and the operation that did it.
+    //
+    // Its "soak" category keeps it out of the normal --run-tests sweep (which
+    // would never terminate); run it with --soak. Point -f at a directory to
+    // open a whole corpus as tabs.
+    t = IM_REGISTER_TEST(e, "soak", "timeline_zoom_pan");
+    t->TestFunc = [](ImGuiTestContext* ctx)
+    {
+        AppWindow* app = AppWindow::GetInstance();
+        IM_CHECK(app != nullptr);
+        if (app == nullptr) return;
+        TabContainer* tabs = AppWindowTestPeer{*app}.TabContainerPtr();
+        IM_CHECK(tabs != nullptr);
+        if (tabs == nullptr) return;
+
+        // Binds the viewport that the raw MouseMoveToPos calls below target.
+        ctx->SetRef("Main Window");
+
+        // Fixed seed: when a run wedges, re-running replays the same sequence up
+        // to that point.
+        uint32_t rng_state = 0x9e3779b9u;
+        auto next_random = [&rng_state]() -> uint32_t
+        {
+            rng_state = rng_state * 1664525u + 1013904223u;
+            return rng_state;
+        };
+        auto random_fraction = [&next_random]() -> float
+        {
+            return static_cast<float>(next_random() >> 8) / static_cast<float>(1 << 24);
+        };
+
+        const std::chrono::steady_clock::time_point started = std::chrono::steady_clock::now();
+        auto elapsed_seconds = [&started]() -> double
+        {
+            return std::chrono::duration<double>(std::chrono::steady_clock::now() -
+                                                 started).count();
+        };
+
+        std::cout << "[soak] started, ctrl-c to stop\n" << std::flush;
+
+        // How many timeline operations to run on one file before moving to the
+        // next. Small enough that every open trace gets driven regularly, large
+        // enough that each one has real work in flight when the switch happens.
+        constexpr uint64_t OPS_PER_TAB = 5;
+        size_t             tab_cursor  = 0;
+
+        // Runs until the process is killed. IsError() is the only exit: once the
+        // context is in an error state every ctx call short-circuits, so carrying
+        // on would spin without driving anything.
+        for (uint64_t iteration = 0; !ctx->IsError() && !g_soak_exit_requested.load();
+             iteration++)
+        {
+            SoakWaitWhilePaused(ctx);
+
+            // Re-read the tab list every time: files opened from a directory
+            // finish loading at different moments, so tabs keep appearing well
+            // after the first iterations.
+            const std::vector<const TabItem*> open_tabs = tabs->GetTabs();
+            if (open_tabs.empty())
+            {
+                std::cout << "[soak] iter " << iteration << " t+" << elapsed_seconds()
+                          << "s waiting for a file to finish opening\n" << std::flush;
+                ctx->SleepNoSkip(1.0f, 1.0f / 60.0f);
+                continue;
+            }
+
+            if (tab_cursor >= open_tabs.size()) tab_cursor = 0;
+            if (iteration % OPS_PER_TAB == 0 && open_tabs.size() > 1)
+            {
+                tab_cursor = (tab_cursor + 1) % open_tabs.size();
+                std::cout << "[soak] iter " << iteration << " t+" << elapsed_seconds()
+                          << "s switch-tab -> " << open_tabs[tab_cursor]->m_label
+                          << " (" << (tab_cursor + 1) << "/" << open_tabs.size() << ")\n"
+                          << std::flush;
+                tabs->SetActiveTab(static_cast<int>(tab_cursor));
+                // Selection is applied on the next frame, and the newly fronted
+                // view has to draw before its lane rect exists.
+                ctx->Yield(5);
+            }
+
+            // Report whichever tab actually ended up in front: opening a file
+            // selects it, so the front tab is not always the one last asked for.
+            const TabItem*    active_tab  = tabs->GetActiveTab();
+            const std::string active_name = active_tab ? active_tab->m_label : "<none>";
+
+            // Only the active tab's view renders, so everything below has to come
+            // from the project that is currently in front rather than from
+            // anything cached on a previous iteration.
+            Project*   project = app->GetCurrentProject();
+            TraceView* tv = project ? dynamic_cast<TraceView*>(project->GetView().get())
+                                    : nullptr;
+            if (tv == nullptr)
+            {
+                // A compute profile (or a tab still opening) has no timeline to
+                // drive; leave it in front briefly and move on to the next file.
+                std::cout << "[soak] iter " << iteration << " t+" << elapsed_seconds()
+                          << "s no timeline on " << active_name << ", skipping\n"
+                          << std::flush;
+                ctx->SleepNoSkip(0.3f, 1.0f / 60.0f);
+                continue;
+            }
+
+            TimelineView* tlv = TraceViewTestPeer{*tv}.TimelineViewPtr();
+            ImVec2        graph_min(0.0f, 0.0f), graph_max(0.0f, 0.0f);
+            if (tlv == nullptr ||
+                !TimelineViewTestPeer{*tlv}.GraphScreenRect(graph_min, graph_max))
+            {
+                ctx->Yield(5);
+                continue;
+            }
+
+            std::shared_ptr<TimePixelTransform> tpt = tlv->GetTransform();
+            // Bounds are per trace, so they are read fresh for whichever file is
+            // in front rather than captured once at startup.
+            const double min_x      = tpt ? tpt->GetMinX() : 0.0;
+            const double max_x      = tpt ? tpt->GetMaxX() : 0.0;
+            const double full_range = tpt ? tpt->GetRangeX() : 0.0;
+            if (full_range <= 0.0)
+            {
+                ctx->Yield(5);
+                continue;
+            }
+
+            const float  anchor = 0.05f + random_fraction() * 0.90f;
+            const ImVec2 cursor = GraphPoint(graph_min, graph_max, anchor, 0.5f);
+            const uint32_t op   = next_random() % 6;
+            static const char* const OP_NAMES[] = { "zoom-in", "zoom-out", "wheel-pan",
+                                                    "drag-pan", "jump", "whole-trace" };
+
+            // Printed before the operation runs, and flushed, so a hang leaves
+            // the culprit as the last line rather than losing it in the buffer.
+            std::cout << "[soak] iter " << iteration << " t+" << elapsed_seconds() << "s "
+                      << OP_NAMES[op] << " on " << active_name
+                      << " view [" << tpt->GetVMinX() << ", " << tpt->GetVMaxX()
+                      << "] zoom " << tpt->GetZoom()
+                      << " scroll " << tlv->GetScrollPosition() << "\n"
+                      << std::flush;
+
+            switch (op)
+            {
+            case 0:
+                ctx->MouseMoveToPos(cursor);
+                for (int i = 0; i < 8; i++) ctx->MouseWheelY(1.0f);
+                break;
+
+            case 1:
+                ctx->MouseMoveToPos(cursor);
+                for (int i = 0; i < 8; i++) ctx->MouseWheelY(-1.0f);
+                break;
+
+            case 2:
+            {
+                ctx->MouseMoveToPos(cursor);
+                const float direction = (next_random() & 1u) ? 1.0f : -1.0f;
+                for (int i = 0; i < 6; i++) ctx->MouseWheelX(direction * 3.0f);
+                break;
+            }
+
+            case 3:
+                // Diagonal, so the same gesture pans the time axis and scrolls
+                // the track stack, which loads and unloads tracks as it goes.
+                ctx->MouseMoveToPos(cursor);
+                ctx->MouseDown(0);
+                ctx->MouseMoveToPos(GraphPoint(graph_min, graph_max, random_fraction(),
+                                               0.25f + random_fraction() * 0.5f));
+                ctx->MouseUp(0);
+                break;
+
+            case 4:
+            {
+                // A jump to an unrelated window invalidates every track's data
+                // at once, which is the heaviest refetch the view can be asked
+                // for. Widths run from the whole trace down to a thin slice.
+                const double width = full_range * (0.0005 + random_fraction() * 0.9);
+                const double start = min_x + (full_range - width) * random_fraction();
+                tlv->SetViewableRangeNS(start, start + width);
+                ctx->Yield(2);
+                break;
+            }
+
+            default:
+                tlv->SetViewableRangeNS(min_x, max_x);
+                ctx->Yield(2);
+                break;
+            }
+
+            // Vary how long the view is left alone. Refetches are debounced
+            // ~150 ms after the last interaction, so a no-pause iteration keeps
+            // superseding requests that were never issued, a short pause lets
+            // them start and then cuts them off, and a long pause lets them
+            // land. The middle case is the one that puts an in-flight request
+            // and a new one against each other.
+            switch (next_random() % 3)
+            {
+            case 0:  ctx->Yield(2); break;
+            case 1:  ctx->SleepNoSkip(0.2f, 1.0f / 60.0f); break;
+            default: ctx->SleepNoSkip(0.6f, 1.0f / 60.0f); break;
+            }
+        }
     };
 }

@@ -3325,6 +3325,16 @@ TimelineView::RenderTraceView()
     m_tpt->SetGraphSize(subcomponent_size_main.x - m_sidebar_size - width_adjustment,
                         subcomponent_size_main.y);
 
+#ifdef IMGUI_ENABLE_TEST_ENGINE
+    {
+        ImVec2 container_pos  = ImGui::GetWindowPos();
+        m_test_graph_area_min = ImVec2(container_pos.x + m_sidebar_size, container_pos.y);
+        m_test_graph_area_max =
+            ImVec2(m_test_graph_area_min.x + m_tpt->GetGraphSizeX(),
+                   container_pos.y + m_tpt->GetGraphSizeY());
+    }
+#endif
+
     m_stop_user_interaction |= !ImGui::IsWindowHovered(
         ImGuiHoveredFlags_ChildWindows | ImGuiHoveredFlags_NoPopupHierarchy);
 

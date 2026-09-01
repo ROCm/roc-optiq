@@ -330,6 +330,15 @@ private:
     bool                         m_topology_sort_pending;
     // Menu-requested sort, applied in Update() (not mid-render). Empty if none.
     std::optional<TrackSortMode> m_pending_sort_mode;
+#ifdef IMGUI_ENABLE_TEST_ENGINE
+    // Screen-space rect of the graph lane, i.e. the area right of the sidebar
+    // that HandleTopSurfaceTouch hit-tests for wheel-zoom and drag-pan. Captured
+    // in RenderTraceView rather than in the input handler so it stays current on
+    // frames where input handling is skipped (unhovered, resizing). Tests aim
+    // the cursor with it so they drive the same rect the app reacts to.
+    ImVec2 m_test_graph_area_min = ImVec2(0.0f, 0.0f);
+    ImVec2 m_test_graph_area_max = ImVec2(0.0f, 0.0f);
+#endif
 };
 
 }  // namespace View

@@ -441,50 +441,64 @@ TopologyTree::Clear()
         std::make_unique<TopologyNode>(TopologyNodeType::kRoot, 0);
     m_root = root.get();
     m_storage.push_back(std::move(root));
+
+    /*
+     * Dropping the arena invalidates every node pointer consumers hold, so a
+     * clear has to move the revision exactly like a rebuild does. The load that
+     * follows a clear bumps it again from Finalize().
+     */
+    m_revision++;
+}
+
+const char*
+TopologyTree::GetNodeTypeName(TopologyNodeType type)
+{
+    switch(type)
+    {
+        case TopologyNodeType::kRoot: return "Root";
+        case TopologyNodeType::kNode: return "Node";
+        case TopologyNodeType::kProcessor: return "Processor";
+        case TopologyNodeType::kProcess: return "Process";
+        case TopologyNodeType::kThread: return "Thread";
+        case TopologyNodeType::kStream: return "Stream";
+        case TopologyNodeType::kQueue: return "Queue";
+        case TopologyNodeType::kCounter: return "Counter";
+    }
+    return "Unknown";
 }
 
 std::string
 TopologyTree::ToString() const
 {
-    return ToString(*m_root, 0);
+    std::ostringstream out;
+    WriteNode(out, *m_root, 0);
+    return out.str();
 }
 
-std::string
-TopologyTree::ToString(const TopologyNode& node, int indent) const
+void
+TopologyTree::WriteNode(std::ostringstream& out, const TopologyNode& node,
+                        int indent) const
 {
-    static const std::map<TopologyNodeType, const char*> TYPE_NAMES = {
-        { TopologyNodeType::kRoot, "Root" },
-        { TopologyNodeType::kNode, "Node" },
-        { TopologyNodeType::kProcessor, "Processor" },
-        { TopologyNodeType::kProcess, "Process" },
-        { TopologyNodeType::kThread, "Thread" },
-        { TopologyNodeType::kStream, "Stream" },
-        { TopologyNodeType::kQueue, "Queue" },
-        { TopologyNodeType::kCounter, "Counter" }
-    };
-
-    std::ostringstream ss;
-    ss << std::string(indent, ' ') << TYPE_NAMES.at(node.GetNodeType()) << " "
-       << node.GetId();
+    out << std::string(indent, ' ') << GetNodeTypeName(node.GetNodeType()) << " "
+        << node.GetId();
     if(!node.GetName().empty())
     {
-        ss << " (" << node.GetName() << ")";
+        out << " (" << node.GetName() << ")";
     }
     if(node.HasTrack())
     {
-        ss << " track=" << node.GetTrackId();
+        out << " track=" << node.GetTrackId();
     }
-    ss << std::endl;
+    out << '\n';
 
     for(const std::pair<const TopologyNodeType, std::vector<TopologyNode*>>& group :
         node.m_children)
     {
         for(const TopologyNode* child : group.second)
         {
-            ss << ToString(*child, indent + 2);
+            WriteNode(out, *child, indent + 2);
         }
     }
-    return ss.str();
 }
 
 }  // namespace View

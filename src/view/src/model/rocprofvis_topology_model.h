@@ -5,6 +5,7 @@
 
 #include "rocprofvis_model_types.h"
 
+#include <iosfwd>
 #include <map>
 #include <memory>
 #include <string>
@@ -240,10 +241,11 @@ public:
     void Finalize();
 
     /*
-     * Changes each time the tree is rebuilt. Consumers that project the tree
-     * (the sidebar, the details pane) remember the revision they last built
-     * against instead of sharing a dirty flag, so a rebuild of one does not
-     * force a rebuild of the other.
+     * Changes each time the tree is rebuilt or cleared. Consumers that project
+     * the tree (the sidebar, the details pane) remember the revision they last
+     * built against instead of sharing a dirty flag, so a rebuild of one does
+     * not force a rebuild of the other. Consumers that hold node pointers must
+     * treat a change as invalidating them: Clear() frees the arena.
      */
     uint64_t GetRevision() const { return m_revision; }
 
@@ -284,12 +286,17 @@ public:
 
     void Clear();
 
-    // Debug
+    // Debug. Walks the whole tree, so only call it when the output is wanted.
     std::string ToString() const;
 
 private:
-    void        Attach(TopologyNode* parent, TopologyNode* child);
-    std::string ToString(const TopologyNode& node, int indent) const;
+    void Attach(TopologyNode* parent, TopologyNode* child);
+    static const char* GetNodeTypeName(TopologyNodeType type);
+    /*
+     * Appends one node and its subtree to out. Streaming into a single buffer
+     * keeps the walk linear; returning a string per level made it quadratic.
+     */
+    void WriteNode(std::ostringstream& out, const TopologyNode& node, int indent) const;
     /*
      * Ranks nodes by ascending id and stores the 1-based rank on each NodeInfo.
      * The rank drives the node color wheel and the "[2] hostname" labels, which

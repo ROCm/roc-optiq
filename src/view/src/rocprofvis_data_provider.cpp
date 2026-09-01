@@ -589,7 +589,12 @@ DataProvider::HandleLoadSystemTopology()
     LinkStreamTopology();
     topology.Finalize();
 
-    spdlog::debug("\n" + topology.ToString());
+    // Dumping the tree walks every node and builds a string for it, so skip the
+    // work entirely rather than handing spdlog a message it would discard.
+    if(spdlog::should_log(spdlog::level::debug))
+    {
+        spdlog::debug("\n{}", topology.ToString());
+    }
 }
 
 void
@@ -637,17 +642,18 @@ DataProvider::LoadQueues(rocprofvis_handle_t* processor_handle, ProcessorInfo& p
             processor_handle, kRPVControllerProcessorQueueIndexed, i, &queue_handle);
         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess && queue_handle);
 
-        // A queue with no track is not drawable, so it stays out of the tree.
-        uint64_t track_id = 0;
-        if(!GetTopologyTrackId(queue_handle, kRPVControllerQueueTrack, track_id))
-        {
-            continue;
-        }
-
         uint64_t queue_id = 0;
         result = rocprofvis_controller_get_uint64(queue_handle, kRPVControllerQueueId, 0,
                                                   &queue_id);
         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+
+        // A queue with no track is not drawable, so it stays out of the tree.
+        uint64_t track_id = 0;
+        if(!GetTopologyTrackId(queue_handle, kRPVControllerQueueTrack, track_id))
+        {
+            spdlog::debug("Topology: queue {} has no track, not added", queue_id);
+            continue;
+        }
 
         QueueInfo* queue = topology.AddQueue(&processor, queue_id);
         queue->SetName(GetString(queue_handle, kRPVControllerQueueName, 0));
@@ -672,16 +678,18 @@ DataProvider::LoadCounters(rocprofvis_handle_t* processor_handle,
             processor_handle, kRPVControllerProcessorCounterIndexed, i, &counter_handle);
         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess && counter_handle);
 
-        uint64_t track_id = 0;
-        if(!GetTopologyTrackId(counter_handle, kRPVControllerCounterTrack, track_id))
-        {
-            continue;
-        }
-
         uint64_t counter_id = 0;
         result = rocprofvis_controller_get_uint64(counter_handle,
                                                   kRPVControllerCounterId, 0, &counter_id);
         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+
+        // A counter with no track is not drawable, so it stays out of the tree.
+        uint64_t track_id = 0;
+        if(!GetTopologyTrackId(counter_handle, kRPVControllerCounterTrack, track_id))
+        {
+            spdlog::debug("Topology: counter {} has no track, not added", counter_id);
+            continue;
+        }
 
         CounterInfo* counter = topology.AddCounter(&processor, counter_id);
         ParseCounterData(counter_handle, *counter);
@@ -748,17 +756,21 @@ DataProvider::LoadThreads(rocprofvis_handle_t* process_handle, ProcessInfo& proc
                                                   &thread_id);
         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
+        // A thread with no track is not drawable, so it stays out of the tree,
+        // like a queue/stream/counter without one.
+        uint64_t track_id = 0;
+        if(!GetTopologyTrackId(thread_handle, kRPVControllerThreadTrack, track_id))
+        {
+            spdlog::debug("Topology: thread {} has no track, not added", thread_id);
+            continue;
+        }
+
         const ThreadInfo::Kind kind = thread_type == kRPVControllerThreadTypeInstrumented
                                           ? ThreadInfo::Kind::kInstrumented
                                           : ThreadInfo::Kind::kSampled;
         ThreadInfo* thread = topology.AddThread(&process, thread_id, kind);
         ParseThreadData(thread_handle, *thread);
-
-        uint64_t track_id = 0;
-        if(GetTopologyTrackId(thread_handle, kRPVControllerThreadTrack, track_id))
-        {
-            topology.BindTrack(thread, track_id);
-        }
+        topology.BindTrack(thread, track_id);
     }
 }
 
@@ -778,16 +790,18 @@ DataProvider::LoadStreams(rocprofvis_handle_t* process_handle, ProcessInfo& proc
             process_handle, kRPVControllerProcessStreamIndexed, i, &stream_handle);
         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess && stream_handle);
 
-        uint64_t track_id = 0;
-        if(!GetTopologyTrackId(stream_handle, kRPVControllerStreamTrack, track_id))
-        {
-            continue;
-        }
-
         uint64_t stream_id = 0;
         result = rocprofvis_controller_get_uint64(stream_handle, kRPVControllerStreamId, 0,
                                                   &stream_id);
         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+
+        // A stream with no track is not drawable, so it stays out of the tree.
+        uint64_t track_id = 0;
+        if(!GetTopologyTrackId(stream_handle, kRPVControllerStreamTrack, track_id))
+        {
+            spdlog::debug("Topology: stream {} has no track, not added", stream_id);
+            continue;
+        }
 
         StreamInfo* stream = topology.AddStream(&process, stream_id);
         stream->SetName(GetString(stream_handle, kRPVControllerStreamName, 0));

@@ -197,17 +197,24 @@ TrackDetails::Render()
 void
 TrackDetails::Update()
 {
-    if(m_data_provider.GetState() != ProviderState::kReady)
-    {
-        return;
-    }
-
-    // A rebuilt topology invalidates the nodes the details items point at.
+    /*
+     * A rebuilt or cleared topology invalidates the nodes the details items
+     * point at. Checked before the readiness gate below, so the items are
+     * marked unusable even while a reload is in flight: the arena they point
+     * into is freed the moment the trace is cleared, which happens long before
+     * the provider is ready again.
+     */
     const uint64_t revision = m_data_provider.DataModel().GetTopology().GetRevision();
     if(revision != m_topology_revision)
     {
         m_topology_revision = revision;
         m_selection_dirty   = true;
+        m_data_valid        = false;
+    }
+
+    if(m_data_provider.GetState() != ProviderState::kReady)
+    {
+        return;
     }
 
     if(m_selection_dirty)

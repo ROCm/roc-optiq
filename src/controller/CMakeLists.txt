@@ -150,11 +150,14 @@ if(BUILD_TESTING)
     if(ROCPROFVIS_ENABLE_PROFILER)
         set(PROFILER_TEST_NAME ${PROJECT_NAME}-profiler-tests)
         # rocprofvis_controller_profiler_pipeline_tests.cpp is deliberately not
-        # here yet: it drives the stage C ABI, which does not exist until the
-        # pipeline loop lands.
+        # here yet: it drives the stage C ABI, which does not exist until
+        # Phase 2. The loop it would exercise is covered meanwhile by
+        # rocprofvis_controller_profiler_pipeline_loop_tests.cpp, which uses the
+        # controller's C++ classes directly.
         add_executable(${PROFILER_TEST_NAME}
             tests/rocprofvis_controller_profiler_tests.cpp
-            tests/rocprofvis_controller_profiler_scrape_tests.cpp)
+            tests/rocprofvis_controller_profiler_scrape_tests.cpp
+            tests/rocprofvis_controller_profiler_pipeline_loop_tests.cpp)
         target_link_libraries(${PROFILER_TEST_NAME} PRIVATE ${PROJECT_NAME})
         target_link_libraries(${PROFILER_TEST_NAME} PRIVATE Catch2::Catch2WithMain)
         add_test(NAME ${PROFILER_TEST_NAME} COMMAND ${PROFILER_TEST_NAME})

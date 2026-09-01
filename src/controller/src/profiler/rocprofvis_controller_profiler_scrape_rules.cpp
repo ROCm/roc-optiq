@@ -28,11 +28,11 @@ struct RuleRow
 };
 
 /*
- * Pattern style, enforced by review (see PROFILER_PIPELINE.md 4.3.2): anchors
- * where possible, lazy and bounded quantifiers, no nested quantifiers, and no
- * alternation inside an unbounded repeat. These run against untrusted tool
- * output on three different std::regex implementations, and a pattern that
- * backtracks catastrophically is a hang, not an exception.
+ * Pattern style, enforced by review: anchors where possible, lazy and bounded
+ * quantifiers, no nested quantifiers, and no alternation inside an unbounded
+ * repeat. These run against untrusted tool output on three different
+ * std::regex implementations, and a pattern that backtracks catastrophically is
+ * a hang, not an exception.
  */
 
 // rocprof-compute profile. The name is encoded in the output directory, so
@@ -230,14 +230,18 @@ void Apply(ProfilerStageSpec& stage, std::string& out_artifact_key)
     }
 }
 
-void ApplyAll(std::vector<ProfilerStageSpec>& stages, std::string& out_artifact_key)
+void ApplyAll(std::vector<ProfilerStageSpec>& stages,
+              std::vector<std::string>&       out_stage_artifact_keys,
+              std::string&                    out_artifact_key)
 {
     out_artifact_key.clear();
+    out_stage_artifact_keys.assign(stages.size(), std::string());
 
-    for (ProfilerStageSpec& stage : stages)
+    for (size_t i = 0; i < stages.size(); ++i)
     {
         std::string stage_artifact_key;
-        Apply(stage, stage_artifact_key);
+        Apply(stages[i], stage_artifact_key);
+        out_stage_artifact_keys[i] = stage_artifact_key;
         if (!stage_artifact_key.empty())
         {
             out_artifact_key = stage_artifact_key;

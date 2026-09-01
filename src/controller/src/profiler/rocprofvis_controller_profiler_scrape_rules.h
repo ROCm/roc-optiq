@@ -60,8 +60,14 @@ void Apply(ProfilerStageSpec& stage, std::string& out_artifact_key);
  * Applies rules to every stage. out_artifact_key is the artifact key of the
  * last stage that declares one, which is the file a pipeline is understood to
  * have produced; a config that sets its own artifact key overrides it.
+ *
+ * out_stage_artifact_keys is that same key per stage, parallel to `stages`.
+ * Relocation needs it: a stage moves the file *it* produced, which in a
+ * multi-stage pipeline is not the one the pipeline reports.
  */
-void ApplyAll(std::vector<ProfilerStageSpec>& stages, std::string& out_artifact_key);
+void ApplyAll(std::vector<ProfilerStageSpec>& stages,
+              std::vector<std::string>&       out_stage_artifact_keys,
+              std::string&                    out_artifact_key);
 
 /*
  * "3.1.0" -> 3, 1, 0. Leading numeric components only, so "4.0.0-rc1" and

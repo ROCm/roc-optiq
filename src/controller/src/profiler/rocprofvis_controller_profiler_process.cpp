@@ -3,6 +3,7 @@
 
 #include "rocprofvis_controller_profiler_process.h"
 #include "rocprofvis_controller_profiler_cmdline.h"
+#include "rocprofvis_controller_profiler_scrape_rules.h"
 #include "rocprofvis_controller_profiler_tool.h"
 // TEMPORARY (remote/SSH): remove guard when remote graduates.
 #ifdef ROCPROFVIS_ENABLE_REMOTE
@@ -29,6 +30,24 @@ namespace RocProfVis
 {
 namespace Controller
 {
+
+namespace
+{
+
+// Controller-authored line in the run output, marked so it is not mistaken for
+// something the profiler said. Matches the scrape engine's own sink format.
+void append_diagnostic(std::string& output_text, std::string const& text)
+{
+    if (!output_text.empty() && output_text.back() != '\n')
+    {
+        output_text.push_back('\n');
+    }
+    output_text += "[optiq] ";
+    output_text += text;
+    output_text.push_back('\n');
+}
+
+} // namespace
 
 // ==================================================================================
 // ProfilerConfig Implementation
@@ -206,6 +225,41 @@ rocprofvis_result_t ProfilerConfig::SetConnectionSsh(char const* host, char cons
     m_ssh_info.identity_file = identity_file ? identity_file : "";
     m_ssh_info.remote_stage_dir = remote_stage_dir ? remote_stage_dir : "";
     return kRocProfVisResultSuccess;
+}
+
+rocprofvis_result_t ProfilerConfig::AddStage(ProfilerStageSpec const& stage)
+{
+    if (stage.tool == kRPVProfilerToolNone)
+    {
+        spdlog::error("Profiler stage '{}' names no tool", stage.label);
+        return kRocProfVisResultInvalidArgument;
+    }
+    m_stages.push_back(stage);
+    return kRocProfVisResultSuccess;
+}
+
+rocprofvis_result_t ProfilerConfig::SetArtifactKey(char const* key)
+{
+    if (key == nullptr)
+    {
+        return kRocProfVisResultInvalidArgument;
+    }
+    m_artifact_key = key;
+    return kRocProfVisResultSuccess;
+}
+
+void ProfilerConfig::ApplyStage(ProfilerStageSpec const& stage,
+                                std::string const&       resolved_tool_path)
+{
+    m_tool                = stage.tool;
+    m_tool_directory      = stage.tool_directory;
+    m_resolved_tool_path  = resolved_tool_path;
+    m_working_directory   = stage.working_directory;
+    m_profiler_argv       = stage.argv;
+    m_env_vars            = stage.env;
+    // A stage's own list is not the pipeline's; carrying it would make the
+    // per-stage config look like a pipeline and invite a nested launch.
+    m_stages.clear();
 }
 
 // ==================================================================================
@@ -746,6 +800,200 @@ void ProfilerProcessController::EndMonitorJob()
     m_job_cv.notify_all();
 }
 
+rocprofvis_result_t ProfilerProcessController::PreparePipeline(bool resolve_tools_locally)
+{
+    m_stages.clear();
+    m_stage_tool_paths.clear();
+    m_stage_artifact_keys.clear();
+    m_stage_states.clear();
+    m_current_stage = 0;
+    m_failing_stage = -1;
+
+    if (m_config->GetStages().empty())
+    {
+        // A config with no stages is the flat tool/argv/env/cwd every caller
+        // uses today. Wrapping it as a one-element pipeline means there is only
+        // one execution path to maintain, and no banner keeps its console
+        // byte-identical to before.
+        ProfilerStageSpec stage;
+        stage.tool              = m_config->GetTool();
+        stage.tool_directory    = m_config->GetToolDirectory();
+        stage.argv              = m_config->GetProfilerArgv();
+        stage.working_directory = m_config->GetWorkingDirectory();
+        stage.env               = m_config->GetEnvVars();
+        m_stages.push_back(std::move(stage));
+        m_emit_banners = false;
+    }
+    else
+    {
+        m_stages       = m_config->GetStages();
+        m_emit_banners = m_stages.size() > 1;
+    }
+
+    ProfilerScrapeRules::ApplyAll(m_stages, m_stage_artifact_keys, m_artifact_key);
+    if (!m_config->GetArtifactKey().empty())
+    {
+        m_artifact_key = m_config->GetArtifactKey();
+    }
+
+    rocprofvis_result_t compiled = m_scrape.Compile(m_stages);
+    if (compiled != kRocProfVisResultSuccess)
+    {
+        return compiled;
+    }
+    m_scrape.SetDiagnosticSink(&m_output_text);
+
+    m_stage_states.assign(m_stages.size(), kRPVProfilerStateIdle);
+    m_stage_tool_paths.assign(m_stages.size(), std::string());
+
+    if (!resolve_tools_locally)
+    {
+        // Remote drives its own executor and cannot use StartStageLocked, which
+        // would spawn a local process for stage 1. Multi-stage remote is Phase 6.
+        if (m_stages.size() > 1)
+        {
+            spdlog::error("Remote profiler launches are single-stage for now ({} requested)",
+                          m_stages.size());
+            return kRocProfVisResultNotSupported;
+        }
+        m_stage_tool_paths[0] = m_config->GetResolvedToolPath();
+        return kRocProfVisResultSuccess;
+    }
+
+    // Every tool up front. A missing analyze binary must not be discovered
+    // after a capture that took twenty minutes, and attributing it to its own
+    // stage is what lets the caller say which one is misconfigured.
+    for (size_t i = 0; i < m_stages.size(); ++i)
+    {
+        rocprofvis_result_t resolved = ProfilerTool::ResolvePath(
+            m_stages[i].tool, m_stages[i].tool_directory, m_stage_tool_paths[i]);
+        if (resolved != kRocProfVisResultSuccess)
+        {
+            m_failing_stage = static_cast<int32_t>(i);
+            m_scrape.SkipRemainingFrom(0);
+            spdlog::error("Profiler stage {} tool could not be resolved", i);
+            return resolved;
+        }
+    }
+
+    return kRocProfVisResultSuccess;
+}
+
+rocprofvis_result_t ProfilerProcessController::StartStageLocked(uint32_t stage_index)
+{
+    m_current_stage = stage_index;
+
+    ProfilerStageSpec stage = m_stages[stage_index];
+
+    // Substituted into the stage we keep, so EndStage resolves relative paths
+    // against the directory the child actually ran in.
+    std::string error_message;
+    rocprofvis_result_t substituted =
+        resolve_stage_placeholders(stage.argv, m_scrape, error_message);
+    if (substituted == kRocProfVisResultSuccess)
+    {
+        // The working directory and env values carry the same tokens: steering
+        // compute's analyze means pointing its cwd at a directory that an
+        // earlier stage reported.
+        std::vector<std::string> deferred;
+        deferred.push_back(stage.working_directory);
+        for (auto const& kv : stage.env)
+        {
+            deferred.push_back(kv.second);
+        }
+        substituted = resolve_stage_placeholders(deferred, m_scrape, error_message);
+        if (substituted == kRocProfVisResultSuccess)
+        {
+            stage.working_directory = deferred[0];
+            for (size_t i = 0; i < stage.env.size(); ++i)
+            {
+                stage.env[i].second = deferred[i + 1];
+            }
+        }
+    }
+
+    if (substituted != kRocProfVisResultSuccess)
+    {
+        m_failing_stage = static_cast<int32_t>(stage_index);
+        m_stage_states[stage_index] = kRPVProfilerStateFailed;
+        m_scrape.SkipRemainingFrom(stage_index);
+        append_diagnostic(m_output_text, error_message);
+        spdlog::error("Profiler stage {}: {}", stage_index, error_message);
+        return substituted;
+    }
+
+    m_stages[stage_index] = stage;
+
+    m_stage_config = std::make_unique<ProfilerConfig>(*m_config);
+    m_stage_config->ApplyStage(stage, m_stage_tool_paths[stage_index]);
+
+    // Fail here rather than as child exit 126 after chdir.
+    rocprofvis_result_t working_directory_valid = m_stage_config->ValidateWorkingDirectory();
+    if (working_directory_valid != kRocProfVisResultSuccess)
+    {
+        m_failing_stage = static_cast<int32_t>(stage_index);
+        m_stage_states[stage_index] = kRPVProfilerStateFailed;
+        m_scrape.SkipRemainingFrom(stage_index);
+        // Checking up front means no process is created, so there is no child
+        // output to explain the failure; the console still has to say why.
+        append_diagnostic(m_output_text,
+                          "The working directory '" + stage.working_directory +
+                              "' does not exist, so nothing was run.");
+        return working_directory_valid;
+    }
+
+    if (m_emit_banners)
+    {
+        std::string banner = "=== Stage " + std::to_string(stage_index + 1) + "/" +
+                             std::to_string(m_stages.size());
+        if (!stage.label.empty())
+        {
+            banner += ": " + stage.label;
+        }
+        banner += " ===";
+        if (!m_output_text.empty() && m_output_text.back() != '\n')
+        {
+            m_output_text.push_back('\n');
+        }
+        m_output_text += banner;
+        m_output_text.push_back('\n');
+    }
+
+    for (auto const& kv : stage.env)
+    {
+        spdlog::info("Profiler env: {}={}", kv.first, kv.second);
+    }
+
+    if (!stage.working_directory.empty())
+    {
+        spdlog::info("Profiler working directory: {}", stage.working_directory);
+    }
+
+    spdlog::info("Profiler launch: {}",
+                 Cmdline::ToDisplayString(Cmdline::BuildArgv(*m_stage_config)));
+
+    // The previous stage's executor has already stopped; releasing it here,
+    // under the lock, is what keeps GetOutput from ever seeing a half-swapped
+    // pair.
+    m_executor = std::make_unique<LocalProfilerExecutor>();
+    m_scrape.BeginStage(stage_index);
+
+    if (!m_executor->Start(*m_stage_config))
+    {
+        spdlog::error("ProfilerProcessController::StartStageLocked: failed to start process "
+                      "(executable='{}')", m_stage_config->GetResolvedToolPath());
+        m_failing_stage = static_cast<int32_t>(stage_index);
+        m_stage_states[stage_index] = kRPVProfilerStateFailed;
+        m_scrape.SkipRemainingFrom(stage_index);
+        m_executor.reset();
+        return kRocProfVisResultUnknownError;
+    }
+
+    m_stage_states[stage_index] = kRPVProfilerStateRunning;
+    spdlog::info("Profiler stage {} launched successfully", stage_index);
+    return kRocProfVisResultSuccess;
+}
+
 rocprofvis_result_t ProfilerProcessController::LaunchAsync(ProfilerConfig const* config)
 {
     if (config == nullptr)
@@ -770,48 +1018,22 @@ rocprofvis_result_t ProfilerProcessController::LaunchAsync(ProfilerConfig const*
         return kRocProfVisResultNotSupported;
     }
 
-    // Resolve before spawn so a missing tool is ToolNotFound, not child exit 127.
-    rocprofvis_result_t resolved = m_config->ResolveToolPath();
-    if (resolved != kRocProfVisResultSuccess)
+    std::lock_guard<std::mutex> lock(m_mutex);
+
+    rocprofvis_result_t prepared = PreparePipeline(true);
+    if (prepared != kRocProfVisResultSuccess)
     {
         m_state = kRPVProfilerStateFailed;
-        return resolved;
+        return prepared;
     }
 
-    // Same for cwd: fail here rather than as child exit 126 after chdir.
-    rocprofvis_result_t working_directory_valid = m_config->ValidateWorkingDirectory();
-    if (working_directory_valid != kRocProfVisResultSuccess)
+    rocprofvis_result_t started = StartStageLocked(0);
+    if (started != kRocProfVisResultSuccess)
     {
         m_state = kRPVProfilerStateFailed;
-        return working_directory_valid;
+        return started;
     }
 
-    m_executor = std::make_unique<LocalProfilerExecutor>();
-
-    for (auto const& kv : m_config->GetEnvVars())
-    {
-        spdlog::info("Profiler env: {}={}", kv.first, kv.second);
-    }
-
-    if (!m_config->GetWorkingDirectory().empty())
-    {
-        spdlog::info("Profiler working directory: {}", m_config->GetWorkingDirectory());
-    }
-
-    spdlog::info("Profiler launch: {}", Cmdline::ToDisplayString(Cmdline::BuildArgv(*m_config)));
-
-    bool launched = m_executor->Start(*m_config);
-
-    if (!launched)
-    {
-        spdlog::error("ProfilerProcessController::LaunchAsync: failed to start process "
-                      "(executable='{}')", m_config->GetResolvedToolPath());
-        m_state = kRPVProfilerStateFailed;
-        m_executor.reset();
-        return kRocProfVisResultUnknownError;
-    }
-
-    spdlog::info("Profiler process launched successfully");
     m_state = kRPVProfilerStateRunning;
     return kRocProfVisResultSuccess;
 }
@@ -845,20 +1067,35 @@ rocprofvis_result_t ProfilerProcessController::LaunchAsyncRemote(ProfilerConfig 
         return resolved;
     }
 
+    std::lock_guard<std::mutex> lock(m_mutex);
+
+    // Remote runs one stage, but it goes through the same bookkeeping so the
+    // scrape engine and the stage getters behave identically either way.
+    rocprofvis_result_t prepared = PreparePipeline(false);
+    if (prepared != kRocProfVisResultSuccess)
+    {
+        m_state = kRPVProfilerStateFailed;
+        return prepared;
+    }
+
     // Worker reads `future` after Start; ABI binds the job immediately after this.
     m_executor = std::make_unique<SshProfilerExecutor>(connection, future);
+    m_scrape.BeginStage(0);
 
     bool launched = m_executor->Start(*m_config);
     if (!launched)
     {
         spdlog::error("ProfilerProcessController::LaunchAsyncRemote: failed to start remote profiler");
-        m_state = kRPVProfilerStateFailed;
+        m_stage_states[0] = kRPVProfilerStateFailed;
+        m_failing_stage   = 0;
+        m_state           = kRPVProfilerStateFailed;
         m_executor.reset();
         return kRocProfVisResultUnknownError;
     }
 
     spdlog::info("Remote profiler launched successfully");
-    m_state = kRPVProfilerStateRunning;
+    m_stage_states[0] = kRPVProfilerStateRunning;
+    m_state           = kRPVProfilerStateRunning;
     return kRocProfVisResultSuccess;
 }
 #endif  // ROCPROFVIS_ENABLE_REMOTE
@@ -868,19 +1105,35 @@ rocprofvis_profiler_state_t ProfilerProcessController::GetState() const
     return m_state;
 }
 
+void ProfilerProcessController::DrainExecutorLocked()
+{
+    if (!m_executor)
+    {
+        return;
+    }
+
+    std::string new_output = m_executor->ReadOutput();
+    if (new_output.empty())
+    {
+        return;
+    }
+
+    // Appended before feeding, so a diagnostic the engine injects lands after
+    // the output that provoked it rather than in front of it.
+    m_output_text += new_output;
+    m_scrape.Feed(new_output);
+}
+
+bool ProfilerProcessController::ExecutorRunning() const
+{
+    std::lock_guard<std::mutex> lock(m_mutex);
+    return m_executor && m_executor->IsRunning();
+}
+
 std::string ProfilerProcessController::GetOutput()
 {
     std::lock_guard<std::mutex> lock(m_mutex);
-
-    if (m_executor)
-    {
-        std::string new_output = m_executor->ReadOutput();
-        if (!new_output.empty())
-        {
-            m_output_text += new_output;
-        }
-    }
-
+    DrainExecutorLocked();
     return m_output_text;
 }
 
@@ -897,6 +1150,8 @@ int ProfilerProcessController::GetExitCode() const
 
 rocprofvis_result_t ProfilerProcessController::Cancel()
 {
+    std::lock_guard<std::mutex> lock(m_mutex);
+
     if (m_state != kRPVProfilerStateRunning)
     {
         return kRocProfVisResultNotSupported;
@@ -904,6 +1159,14 @@ rocprofvis_result_t ProfilerProcessController::Cancel()
 
     if (m_executor && m_executor->Cancel())
     {
+        if (m_current_stage < m_stage_states.size())
+        {
+            m_stage_states[m_current_stage] = kRPVProfilerStateCancelled;
+        }
+        // From this stage on, not just after it: the current stage is abandoned
+        // mid-flight, so whatever it had not yet printed is as unavailable as
+        // the stages that never start.
+        m_scrape.SkipRemainingFrom(m_current_stage);
         m_state = kRPVProfilerStateCancelled;
         return kRocProfVisResultSuccess;
     }
@@ -911,29 +1174,199 @@ rocprofvis_result_t ProfilerProcessController::Cancel()
     return kRocProfVisResultUnknownError;
 }
 
+void ProfilerProcessController::RelocateArtifactLocked(uint32_t stage_index)
+{
+    ProfilerStageSpec const& stage = m_stages[stage_index];
+    if (stage.relocate_to.empty())
+    {
+        return;
+    }
+
+    std::string const& key = m_stage_artifact_keys[stage_index];
+    if (key.empty())
+    {
+        return;
+    }
+
+    std::string source;
+    if (!m_scrape.GetStageValue(stage_index, key, source) || source.empty())
+    {
+        return;
+    }
+
+    std::filesystem::path const source_path(source);
+    std::error_code             ec;
+    std::filesystem::create_directories(stage.relocate_to, ec);
+
+    std::filesystem::path const dest_path =
+        std::filesystem::path(stage.relocate_to) / source_path.filename();
+
+    // Checked rather than left to rename, which would silently overwrite on
+    // POSIX. Whatever is already there was not produced by this run.
+    if (std::filesystem::exists(dest_path))
+    {
+        std::string const text = "Could not move the artifact to '" + dest_path.string() +
+                                 "' because a file is already there; leaving it at the original "
+                                 "path '" + source + "'";
+        spdlog::warn("{}", text);
+        append_diagnostic(m_output_text, text);
+        return;
+    }
+
+    ec.clear();
+    std::filesystem::rename(source_path, dest_path, ec);
+    if (ec)
+    {
+        // rename cannot cross filesystems, which a scratch directory under
+        // /tmp and a destination on a home volume routinely do.
+        std::error_code copy_ec;
+        std::filesystem::copy_file(source_path, dest_path,
+                                   std::filesystem::copy_options::none, copy_ec);
+        if (copy_ec)
+        {
+            // The run succeeded and a valid file exists; reporting the path it
+            // is actually at beats reporting a path that holds nothing.
+            std::string const text = "Could not move the artifact to '" + dest_path.string() +
+                                     "' (" + copy_ec.message() +
+                                     "); leaving it at the original path '" + source + "'";
+            spdlog::warn("{}", text);
+            append_diagnostic(m_output_text, text);
+            return;
+        }
+
+        std::error_code remove_ec;
+        std::filesystem::remove(source_path, remove_ec);
+        if (remove_ec)
+        {
+            spdlog::warn("Copied the artifact to '{}' but could not remove '{}': {}",
+                         dest_path.string(), source, remove_ec.message());
+        }
+    }
+
+    spdlog::info("Moved the artifact to '{}'", dest_path.string());
+    m_scrape.SetValue(stage_index, key, dest_path.string());
+}
+
+void ProfilerProcessController::FinishStageLocked(int exit_code)
+{
+    m_exit_code = exit_code;
+
+    m_scrape.EndStage(m_stages[m_current_stage].working_directory);
+
+    if (exit_code != 0)
+    {
+        m_stage_states[m_current_stage] = kRPVProfilerStateFailed;
+        m_failing_stage                 = static_cast<int32_t>(m_current_stage);
+        m_scrape.SkipRemainingFrom(m_current_stage + 1);
+        m_state = kRPVProfilerStateFailed;
+        spdlog::error("Profiler stage {} exited with code {}", m_current_stage, exit_code);
+        return;
+    }
+
+    m_stage_states[m_current_stage] = kRPVProfilerStateCompleted;
+    RelocateArtifactLocked(m_current_stage);
+
+    if (m_current_stage + 1 >= m_stages.size())
+    {
+        m_state = kRPVProfilerStateCompleted;
+        spdlog::info("Profiler completed successfully");
+        return;
+    }
+
+    if (StartStageLocked(m_current_stage + 1) != kRocProfVisResultSuccess)
+    {
+        m_state = kRPVProfilerStateFailed;
+    }
+}
+
 void ProfilerProcessController::UpdateState()
 {
+    std::lock_guard<std::mutex> lock(m_mutex);
+
     if (m_state != kRPVProfilerStateRunning)
     {
         return;
     }
 
-    if (m_executor && !m_executor->IsRunning())
+    if (!m_executor || m_executor->IsRunning())
     {
-        int exit_code = m_executor->GetExitCode();
-        m_exit_code = exit_code;
-
-        if (exit_code == 0)
-        {
-            m_state = kRPVProfilerStateCompleted;
-            spdlog::info("Profiler completed successfully");
-        }
-        else
-        {
-            m_state = kRPVProfilerStateFailed;
-            spdlog::error("Profiler process exited with code {}", exit_code);
-        }
+        return;
     }
+
+    // Everything the stage printed before exiting has to reach the engine
+    // before EndStage decides what went unmatched.
+    DrainExecutorLocked();
+    FinishStageLocked(m_executor->GetExitCode());
+}
+
+uint32_t ProfilerProcessController::GetStageCount() const
+{
+    std::lock_guard<std::mutex> lock(m_mutex);
+    return static_cast<uint32_t>(m_stages.size());
+}
+
+rocprofvis_result_t ProfilerProcessController::GetStageState(
+    uint32_t stage_index, rocprofvis_profiler_state_t& out) const
+{
+    std::lock_guard<std::mutex> lock(m_mutex);
+    if (stage_index >= m_stage_states.size())
+    {
+        return kRocProfVisResultInvalidArgument;
+    }
+    out = m_stage_states[stage_index];
+    return kRocProfVisResultSuccess;
+}
+
+int32_t ProfilerProcessController::GetFailingStage() const
+{
+    std::lock_guard<std::mutex> lock(m_mutex);
+    return m_failing_stage;
+}
+
+rocprofvis_result_t ProfilerProcessController::ScrapedValueLocked(std::string const& key,
+                                                                 std::string&       out) const
+{
+    rocprofvis_profiler_scrape_status_t status = kRPVProfilerScrapePending;
+
+    rocprofvis_result_t declared = m_scrape.GetStatus(key, status);
+    if (declared != kRocProfVisResultSuccess)
+    {
+        return declared;
+    }
+
+    switch (status)
+    {
+        case kRPVProfilerScrapeResolved:
+            return m_scrape.GetValue(key, out);
+        case kRPVProfilerScrapePending:
+            return kRocProfVisResultPending;
+        default:
+            return kRocProfVisResultNotAvailable;
+    }
+}
+
+rocprofvis_result_t ProfilerProcessController::GetArtifactPath(std::string& out) const
+{
+    std::lock_guard<std::mutex> lock(m_mutex);
+    if (m_artifact_key.empty())
+    {
+        return kRocProfVisResultNotAvailable;
+    }
+    return ScrapedValueLocked(m_artifact_key, out);
+}
+
+rocprofvis_result_t ProfilerProcessController::GetScrapedValue(std::string const& key,
+                                                              std::string&       out) const
+{
+    std::lock_guard<std::mutex> lock(m_mutex);
+    return ScrapedValueLocked(key, out);
+}
+
+rocprofvis_result_t ProfilerProcessController::GetScrapeStatus(
+    std::string const& key, rocprofvis_profiler_scrape_status_t& out) const
+{
+    std::lock_guard<std::mutex> lock(m_mutex);
+    return m_scrape.GetStatus(key, out);
 }
 
 rocprofvis_result_t ProfilerProcessController::ExecuteJob(ProfilerProcessController* controller, Future* future)
@@ -961,8 +1394,9 @@ rocprofvis_result_t ProfilerProcessController::ExecuteJob(ProfilerProcessControl
     }
 
     // Do not resolve the future until the executor worker has stopped. Cancel()
-    // only signals it; teardown keys on the future.
-    while (controller->m_executor && controller->m_executor->IsRunning())
+    // only signals it; teardown keys on the future. m_executor is the last
+    // stage's by now, which is the one that has to be observed.
+    while (controller->ExecutorRunning())
     {
         controller->GetOutput();
         std::this_thread::sleep_for(std::chrono::milliseconds(50));

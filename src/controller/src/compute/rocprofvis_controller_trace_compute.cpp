@@ -657,6 +657,15 @@ rocprofvis_result_t ComputeTrace::LoadRocpd(Future* future)
                                             }
                                         }
                                     }
+                                    else if(column.first == kRPVComputeColumnWorkloadMemoryChart)
+                                    {
+                                        // Store the memory-chart layout as raw JSON; the view parses it.
+                                        const char* layout = data_store.rows[i][column.second.value()];
+                                        if(layout)
+                                        {
+                                            m_workloads[i]->SetString(kRPVControllerWorkloadMemoryChartLayout, 0, layout);
+                                        }
+                                    }
                                 }
                             }
                         });

@@ -61,6 +61,7 @@ private:
     std::string m_sub_name;
     JsonData m_system_info;
     JsonData m_profiling_config;
+    std::string m_memory_chart_layout;
     std::vector<MetricDefinition> m_available_metrics;
     std::vector<MetricValueName>  m_metric_value_names;
     std::vector<Kernel*> m_kernels;

@@ -174,6 +174,11 @@ rocprofvis_result_t Workload::GetString(rocprofvis_property_t property, uint64_t
                 result = GetStdStringImpl(value, length, m_name);
                 break;
             }
+            case kRPVControllerWorkloadMemoryChartLayout:
+            {
+                result = GetStdStringImpl(value, length, m_memory_chart_layout);
+                break;
+            }
             case kRPVControllerWorkloadSystemInfoEntryNameIndexed:
             {
                 if(index < m_system_info.keys.size())
@@ -490,6 +495,12 @@ rocprofvis_result_t Workload::SetString(rocprofvis_property_t property, uint64_t
         case kRPVControllerWorkloadName:
         {
             m_name = value;
+            result = kRocProfVisResultSuccess;
+            break;
+        }
+        case kRPVControllerWorkloadMemoryChartLayout:
+        {
+            m_memory_chart_layout = value;
             result = kRocProfVisResultSuccess;
             break;
         }

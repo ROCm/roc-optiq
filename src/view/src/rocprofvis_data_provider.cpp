@@ -4574,6 +4574,9 @@ DataProvider::LoadWorkload(uint64_t workload_index)
 
     LoadProfilingConfig(workload, workload_handle);
 
+    workload.memory_chart_layout =
+        GetString(workload_handle, kRPVControllerWorkloadMemoryChartLayout, 0);
+
     LoadMetricList(workload, workload_handle);
 
     LoadValueNames(workload, workload_handle);

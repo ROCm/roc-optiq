@@ -19,6 +19,8 @@ namespace RocProfVis
 namespace View
 {
 
+constexpr uint64_t INVALID_SOURCE_LINE_NUMBER = 0;
+
 ComputeIsaView::ComputeIsaView(DataProvider& data_provider)
 : RocWidget()
 , m_settings(SettingsManager::GetInstance())
@@ -524,7 +526,7 @@ void
 SourceCodeWidget::Load(const PcSamplingData& data, uint64_t source_file_uuid)
 {
     m_lines.clear();
-    m_line_selection = {0, 0};
+    m_line_selection = {LineSelection::UNSELECTED, LineSelection::UNSELECTED};
 
     const SourceFile* source_file = nullptr;
     for(const auto& file : data.source_files)
@@ -567,6 +569,11 @@ SourceCodeWidget::Load(const PcSamplingData& data, uint64_t source_file_uuid)
     uint64_t max_line_number = 0;
     for(const auto& source_line : source_file->source_lines)
     {
+        if(source_line.line_number == INVALID_SOURCE_LINE_NUMBER)
+        {
+            continue;
+        }
+
         float stall_percent = 0.0f;
         const auto counts_it = counts_by_source_line.find(source_line.source_line_uuid);
         if(counts_it != counts_by_source_line.end() && counts_it->second.total != 0)
@@ -814,14 +821,18 @@ IsaCodeWidget::RenderLine(uint32_t index, uint32_t columns_count)
     int column = 0;
     ImGui::TableSetColumnIndex(column);
     ImGui::PushID(static_cast<int>(isa_row.id));
-    if(ImGui::Selectable("##row", row_selected,
-                         ImGuiSelectableFlags_SpanAllColumns,
+    if(ImGui::Selectable("##row", row_selected, ImGuiSelectableFlags_SpanAllColumns,
                          ImVec2(0.0f, ImGui::GetTextLineHeight())))
     {
-        m_line_selection.selected_line = isa_row.source_line_id;
+        if(isa_row.source_line_id != LineSelection::UNSELECTED)
+        {
+            m_line_selection.selected_line = isa_row.source_line_id;
+        }
     }
     if(ImGui::IsItemHovered())
+    {
         m_line_selection.hovered_line = isa_row.source_line_id;
+    }
 
     ImGui::SameLine(0.0f, 0.0f);
     ImGui::PopID();

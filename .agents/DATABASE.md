@@ -1168,11 +1168,12 @@ not exist earlier.
 The current PC-sampling block targets schema 2.2 and is version-gated at
 `2.2.0`. Its current tables are `compute_code_object_store`,
 `compute_instruction_line`, `compute_pc_sample_state`, and
-`compute_pc_sample_stall_reason`. Source and ISA-correlation tables
-are planned but absent from the initial schema, so those query builders
-currently return correctly shaped empty result sets. `CreateIndexes`
-probes `compute_pc_sample_state` before adding the new instruction,
-state, and stall-reason indexes.
+`compute_pc_sample_stall_reason`, plus the source-file, source-line, and
+instruction/source correlation tables. Source and correlation queries omit
+records whose source line number is NULL or zero so unknown locations are not
+presented as selectable source correlations. `CreateIndexes` probes
+`compute_pc_sample_state` before adding the new instruction, state, and
+stall-reason indexes.
 
 `GetComputeKernelInstructionLines` selects the fields needed for the
 initial ISA display (formerly "Code View").

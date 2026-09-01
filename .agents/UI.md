@@ -1373,6 +1373,9 @@ Do not query the model directly from this view.
 
 Older traces can omit one or more PC-sampling tables. A failed optional source,
 stall, or comment request is isolated from the already-loaded ISA pane.
+Source records with unknown or zero line numbers are omitted. ISA instructions
+that lack a valid source line remain visible and mouse-hoverable but cannot be
+selected for source correlation; hovering them clears the source-line hover.
 
 ### Compute data plumbing
 

@@ -395,7 +395,7 @@ namespace DataModel
 					"COALESCE(content, '') AS source_line_content FROM compute_source_line "
 					"WHERE source_file_uuid = ";
 				query_out += params[0].param_str;
-				query_out += " ORDER BY line_number";
+				query_out += " AND COALESCE(line_number, 0) > 0 ORDER BY line_number";
 				result = kRocProfVisDmResultSuccess;
 			}
 		}
@@ -464,10 +464,12 @@ namespace DataModel
 					"COALESCE(isl.frame_index, 0) AS instruction_source_line_frame_index "
 					"FROM compute_instruction_source_line isl "
 					"JOIN compute_instruction_line il ON il.instruction_uuid = isl.instruction_uuid "
+					"JOIN compute_source_line sl ON sl.source_line_uuid = isl.source_line_uuid "
 					"JOIN compute_kernel_symbol ks ON ks.kernel_symbol_uuid = il.kernel_symbol_uuid "
 					"WHERE ks.kernel_uuid = ";
 				query_out += params[0].param_str;
-				query_out += " ORDER BY isl.instruction_uuid, isl.frame_index";
+				query_out += " AND COALESCE(sl.line_number, 0) > 0"
+					" ORDER BY isl.instruction_uuid, isl.frame_index";
 				result = kRocProfVisDmResultSuccess;
 			}
 		}

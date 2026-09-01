@@ -28,6 +28,7 @@ enum class PcSamplingLayer : uint32_t;
 
 struct LineSelection
 {
+    static constexpr uint64_t UNSELECTED = 0;
     uint64_t hovered_line  = 0;
     uint64_t selected_line = 0;
 };

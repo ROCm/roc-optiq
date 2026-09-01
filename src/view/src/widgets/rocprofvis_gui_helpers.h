@@ -114,15 +114,19 @@ enum Alignment
     Alignment_Right,
 };
 
+// Ellipsis appended to shortened text, so every caller renders the same marker.
+inline constexpr const char* TEXT_ELLIPSIS = "...";
+
 bool
 ElidedText(const char* text, float available_width, float tooltip_width = 0.0f,
            Alignment alignment                     = Alignment_Left,
            bool      imgui_AlignTextToFramePadding = false);
 
-// Trims text to a single line fitting max_width (and max_chars), appending "..."
-// when shortened. Uses the current font for measurement.
+// Trims text to fit max_width (current font), appending TEXT_ELLIPSIS when
+// shortened. max_chars optionally caps the character count.
 std::string
-ElideWithEllipsis(const std::string& text, float max_width, size_t max_chars);
+ElideWithEllipsis(const std::string& text, float max_width,
+                  size_t max_chars = std::string::npos);
 
 void
 CenterNextTextItem(const char* text);

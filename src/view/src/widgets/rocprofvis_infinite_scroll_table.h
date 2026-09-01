@@ -143,6 +143,13 @@ private:
     void RenderContextMenu();
     void ProcessSortOrFilterRequest(uint64_t frame_count);
 
+    // Sizes non-user-resized columns to their widest cached value (capped). Call
+    // while the table is active.
+    void FitColumnsToContent();
+
+    // Flags columns the user manually resized so FitColumnsToContent skips them.
+    void DetectUserColumnResizes();
+
     int      m_fetch_pad_items;
     int      m_fetch_threshold_items;
     uint64_t m_fetch_start_row;
@@ -154,6 +161,11 @@ private:
     // Internal state flags below
     bool     m_open_context_menu;
     bool     m_skip_data_fetch;
+    bool     m_refit_pending;    // Fresh content-change data is loaded; re-fit columns.
+    bool     m_refit_requested;  // A content change (filter/selection) is in flight.
+    bool     m_columns_emptied;  // Table went empty; the next fit forgets manual sizes.
+    std::vector<bool>  m_user_sized_columns;  // Columns the user manually resized.
+    std::vector<float> m_column_fit_widths;   // Width last auto-fit per column (-1 = none).
     uint64_t m_last_total_row_count;
     ImVec2   m_last_table_size;
 

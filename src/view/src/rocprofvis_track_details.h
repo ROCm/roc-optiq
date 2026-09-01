@@ -94,8 +94,9 @@ private:
     std::list<DetailItem>              m_track_details;
     bool                               m_data_valid;
     CellMenuTarget                     m_cell_menu;
+    // Revision of the topology tree the resolved items point into.
+    uint64_t                           m_topology_revision;
 
-    EventManager::SubscriptionToken m_topology_changed_event_token;
     EventManager::SubscriptionToken m_track_metadata_changed_event_token;
     EventManager::SubscriptionToken m_time_format_changed_token;
 };

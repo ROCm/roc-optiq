@@ -1713,6 +1713,48 @@ void RegisterAppTests(ImGuiTestEngine* e)
         ctx->Yield(2);
     };
 
+    // The sidebar projects the model's topology tree into its rows, and the
+    // timeline derives "sort by topology" from that same tree. Both are built
+    // after the load drains, so poll rather than assuming the first frame.
+    t = IM_REGISTER_TEST(e, "app", "sys_sidebar_topology_tree_populates");
+    t->TestFunc = [](ImGuiTestContext* ctx)
+    {
+        TraceView* tv = GetTraceViewOrSkip(ctx);
+        if (!tv) return;
+        SideBar* sb = TraceViewTestPeer{*tv}.SideBarPtr();
+        IM_CHECK(sb != nullptr);
+        if (sb == nullptr) return;
+        TimelineView* tlv = TraceViewTestPeer{*tv}.TimelineViewPtr();
+        IM_CHECK(tlv != nullptr);
+        if (tlv == nullptr) return;
+
+        for (int i = 0; i < 60 && SideBarTestPeer{*sb}.LeafCount() == 0; i++) ctx->Yield(2);
+        IM_CHECK(SideBarTestPeer{*sb}.HasTree());
+
+        const size_t track_count = TimelineViewTestPeer{*tlv}.TrackCount();
+        IM_CHECK(track_count > 0);
+        if (track_count == 0) return;
+
+        // Every row must name a real track. A leaf carries a track id, so a stale
+        // or unbound one would silently render an empty row.
+        const std::vector<uint64_t> leaf_ids = SideBarTestPeer{*sb}.LeafTrackIds();
+        IM_CHECK(!leaf_ids.empty());
+        const TimelineModel& tlm = tv->GetDataProvider()->DataModel().GetTimeline();
+        for (uint64_t track_id : leaf_ids)
+        {
+            IM_CHECK(tlm.GetTrack(track_id) != nullptr);
+        }
+
+        // The topology sort is only applied if it is a full permutation of the
+        // current tracks, so a partial order would silently fall back to Default.
+        std::vector<uint64_t> order = TimelineViewTestPeer{*tlv}.TopologyOrder();
+        IM_CHECK_EQ(order.size(), track_count);
+        const size_t ordered_count = order.size();
+        std::sort(order.begin(), order.end());
+        order.erase(std::unique(order.begin(), order.end()), order.end());
+        IM_CHECK_EQ(order.size(), ordered_count);
+    };
+
     t = IM_REGISTER_TEST(e, "app", "sys_timeline_measure_tool");
     t->TestFunc = [](ImGuiTestContext* ctx)
     {

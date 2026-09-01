@@ -35,23 +35,10 @@ TrackDetails::TrackDetails(DataProvider&                      dp,
 , m_settings(SettingsManager::GetInstance())
 , m_selection_dirty(false)
 , m_data_valid(false)
-, m_topology_changed_event_token(EventManager::InvalidSubscriptionToken)
+, m_topology_revision(0)
 , m_track_metadata_changed_event_token(EventManager::InvalidSubscriptionToken)
 , m_time_format_changed_token(EventManager::InvalidSubscriptionToken)
 {
-    auto topology_changed_event_handler = [this](std::shared_ptr<RocEvent> event) {
-        if(event)
-        {
-            if(m_data_provider.GetTraceFilePath() == event->GetSourceId())
-            {
-                m_selection_dirty = true;
-            }
-        }
-    };
-
-    m_topology_changed_event_token = EventManager::GetInstance()->Subscribe(
-        static_cast<int>(RocEvents::kTopologyChanged), topology_changed_event_handler);
-
     // Track names carry metadata (compare labels, pid suffixes), so a metadata
     // change means the resolved details have to be rebuilt, not just redrawn.
     auto metadata_changed_event_handler = [this](std::shared_ptr<RocEvent> event) {
@@ -81,10 +68,6 @@ TrackDetails::TrackDetails(DataProvider&                      dp,
 }
 
 TrackDetails::~TrackDetails() {
-    EventManager::GetInstance()->Unsubscribe(
-        static_cast<int>(RocEvents::kTopologyChanged),
-        m_topology_changed_event_token);
-
     EventManager::GetInstance()->Unsubscribe(
         static_cast<int>(RocEvents::kTrackMetadataChanged),
         m_track_metadata_changed_event_token);
@@ -214,7 +197,20 @@ TrackDetails::Render()
 void
 TrackDetails::Update()
 {
-    if(m_selection_dirty && m_data_provider.GetState() == ProviderState::kReady)
+    if(m_data_provider.GetState() != ProviderState::kReady)
+    {
+        return;
+    }
+
+    // A rebuilt topology invalidates the nodes the details items point at.
+    const uint64_t revision = m_data_provider.DataModel().GetTopology().GetRevision();
+    if(revision != m_topology_revision)
+    {
+        m_topology_revision = revision;
+        m_selection_dirty   = true;
+    }
+
+    if(m_selection_dirty)
     {
         std::list<DetailItem> uncategorized_tracks;
         for(DetailItem& item : m_track_details)

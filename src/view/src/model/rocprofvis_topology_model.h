@@ -64,7 +64,6 @@ public:
     }
 
     const std::vector<TopologyNode*>& GetChildren(TopologyNodeType type) const;
-    size_t                            GetChildCount(TopologyNodeType type) const;
 
     // Referenced but not owned: the processors and queues a stream dispatches to.
     const std::vector<TopologyNode*>& GetLinkedChildren(TopologyNodeType type) const;
@@ -214,8 +213,6 @@ public:
     TopologyTree();
     ~TopologyTree() = default;
 
-    const TopologyNode* GetRoot() const { return m_root; }
-
     // Construction. Each factory allocates into the arena and wires the
     // structural edge, so a node can never exist unparented.
     NodeInfo*      AddNode(uint64_t node_id);
@@ -237,21 +234,35 @@ public:
     void BindTrack(TopologyNode* node, uint64_t track_id);
 
     /*
-     * Ranks nodes by ascending id and stores the 1-based rank on each NodeInfo.
-     * Call once after the tree is built; the rank drives the node color wheel
-     * and the "[2] hostname" labels, which must stay stable across sessions.
+     * Derives everything that depends on the finished tree (node display ranks,
+     * track order) and bumps the revision. Call once when the load walk is done.
      */
-    void AssignNodeDisplayIndices();
+    void Finalize();
+
+    /*
+     * Changes each time the tree is rebuilt. Consumers that project the tree
+     * (the sidebar, the details pane) remember the revision they last built
+     * against instead of sharing a dirty flag, so a rebuild of one does not
+     * force a rebuild of the other.
+     */
+    uint64_t GetRevision() const { return m_revision; }
+
+    /*
+     * Track ids in topology order: per node, each processor's queues then
+     * counters, then each process's streams and threads. Deduped, so a queue
+     * reached from both its processor and a stream appears once. Drives the
+     * timeline's "sort by topology"; tracks the controller never tied to a
+     * topology node are not in here.
+     */
+    const std::vector<uint64_t>& GetTrackOrder() const { return m_track_order; }
 
     // Lookup shortcuts.
     const NodeInfo*      GetNode(uint64_t node_id) const;
     const ProcessorInfo* GetProcessor(uint64_t processor_id) const;
     const ProcessInfo*   GetProcess(uint64_t process_id) const;
     const QueueInfo*     GetQueue(uint64_t queue_id, uint64_t processor_id) const;
-    const StreamInfo*    GetStream(uint64_t stream_id) const;
     const CounterInfo*   GetCounter(uint64_t counter_id) const;
-    const ThreadInfo*    GetInstrumentedThread(uint64_t thread_id) const;
-    const ThreadInfo*    GetSampledThread(uint64_t thread_id) const;
+    const ThreadInfo*    GetThread(uint64_t thread_id, ThreadInfo::Kind kind) const;
 
     ProcessorInfo* GetProcessorMutable(uint64_t processor_id) const;
     QueueInfo*     GetQueueMutable(uint64_t queue_id, uint64_t processor_id) const;
@@ -279,14 +290,22 @@ public:
 private:
     void        Attach(TopologyNode* parent, TopologyNode* child);
     std::string ToString(const TopologyNode& node, int indent) const;
+    /*
+     * Ranks nodes by ascending id and stores the 1-based rank on each NodeInfo.
+     * The rank drives the node color wheel and the "[2] hostname" labels, which
+     * must stay stable across sessions.
+     */
+    void AssignNodeDisplayIndices();
+    void BuildTrackOrder();
 
     // The arena owns every node; all parent/child edges are non-owning.
     std::vector<std::unique_ptr<TopologyNode>>          m_storage;
     TopologyNode*                                       m_root;
+    uint64_t                                            m_revision;
+    std::vector<uint64_t>                               m_track_order;
     std::unordered_map<uint64_t, NodeInfo*>             m_node_index;
     std::unordered_map<uint64_t, ProcessorInfo*>        m_processor_index;
     std::unordered_map<uint64_t, ProcessInfo*>          m_process_index;
-    std::unordered_map<uint64_t, StreamInfo*>           m_stream_index;
     std::unordered_map<uint64_t, CounterInfo*>          m_counter_index;
     std::unordered_map<uint64_t, ThreadInfo*>           m_instrumented_thread_index;
     std::unordered_map<uint64_t, ThreadInfo*>           m_sampled_thread_index;

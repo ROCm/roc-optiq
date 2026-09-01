@@ -587,7 +587,7 @@ DataProvider::HandleLoadSystemTopology()
     // Streams reference processors and queues that only exist once every node
     // has been walked, so the second edges are wired in a follow-up pass.
     LinkStreamTopology();
-    topology.AssignNodeDisplayIndices();
+    topology.Finalize();
 
     spdlog::debug("\n" + topology.ToString());
 }

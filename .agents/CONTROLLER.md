@@ -727,9 +727,9 @@ File: `rocprofvis_controller_topology.{h,cpp}`.
 - `m_track` - the optional `Track*` that this leaf node represents.
 
 `GetParent(type)` walks up the chain to the nearest ancestor of a
-given type. The View's `TrackTopology` mirrors this tree exactly when
-populating the side-bar; do not add a new topology kind without also
-extending `TopologyNode`.
+given type. The View mirrors this tree into its own `TopologyTree`
+(`src/view/src/model/rocprofvis_topology_model.h`) at load; do not add a
+new topology kind without also extending both.
 
 ### 5.8 `FlowControl`, `CallStack`, `ExtData`, `ArgumentData`
 Files: `rocprofvis_controller_flow_control.h`,

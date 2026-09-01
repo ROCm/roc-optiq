@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <sstream>
+#include <unordered_set>
 
 namespace RocProfVis
 {
@@ -45,12 +46,6 @@ TopologyNode::GetChildren(TopologyNodeType type) const
     return (it != m_children.end()) ? it->second : EmptyChildList();
 }
 
-size_t
-TopologyNode::GetChildCount(TopologyNodeType type) const
-{
-    return GetChildren(type).size();
-}
-
 const std::vector<TopologyNode*>&
 TopologyNode::GetLinkedChildren(TopologyNodeType type) const
 {
@@ -81,6 +76,7 @@ CounterInfo::GetProcessorId() const
 
 TopologyTree::TopologyTree()
 : m_root(nullptr)
+, m_revision(0)
 {
     Clear();
 }
@@ -101,6 +97,84 @@ TopologyTree::AddNode(uint64_t node_id)
     Attach(m_root, node);
     m_node_index[node_id] = node;
     return node;
+}
+
+void
+TopologyTree::Finalize()
+{
+    AssignNodeDisplayIndices();
+    BuildTrackOrder();
+    m_revision++;
+}
+
+/*
+ * Flattens the tree into the order the sidebar presents it in, which is the
+ * order "sort by topology" reproduces on the timeline. Deduped: a queue is
+ * reached from its processor and again from every stream that dispatched to it.
+ */
+void
+TopologyTree::BuildTrackOrder()
+{
+    m_track_order.clear();
+    std::unordered_set<uint64_t> seen;
+
+    const auto emit = [&](const TopologyNode* node) {
+        if(node->HasTrack() && seen.insert(node->GetTrackId()).second)
+        {
+            m_track_order.push_back(node->GetTrackId());
+        }
+    };
+
+    const auto emit_threads = [&](const TopologyNode* process, ThreadInfo::Kind kind) {
+        for(const TopologyNode* thread : process->GetChildren(TopologyNodeType::kThread))
+        {
+            if(static_cast<const ThreadInfo*>(thread)->kind == kind)
+            {
+                emit(thread);
+            }
+        }
+    };
+
+    for(const TopologyNode* node : GetNodes())
+    {
+        for(const TopologyNode* processor : node->GetChildren(TopologyNodeType::kProcessor))
+        {
+            for(const TopologyNode* queue : processor->GetChildren(TopologyNodeType::kQueue))
+            {
+                emit(queue);
+            }
+            for(const TopologyNode* counter :
+                processor->GetChildren(TopologyNodeType::kCounter))
+            {
+                emit(counter);
+            }
+        }
+
+        for(const TopologyNode* process : node->GetChildren(TopologyNodeType::kProcess))
+        {
+            for(const TopologyNode* stream : process->GetChildren(TopologyNodeType::kStream))
+            {
+                emit(stream);
+                // The queues shown inline under a stream. Normally all already
+                // emitted above, but a stream can reach a processor on a node
+                // this walk has not visited yet.
+                for(const TopologyNode* processor :
+                    stream->GetLinkedChildren(TopologyNodeType::kProcessor))
+                {
+                    for(const TopologyNode* queue :
+                        stream->GetLinkedChildren(TopologyNodeType::kQueue))
+                    {
+                        if(queue->GetParent() == processor)
+                        {
+                            emit(queue);
+                        }
+                    }
+                }
+            }
+            emit_threads(process, ThreadInfo::Kind::kInstrumented);
+            emit_threads(process, ThreadInfo::Kind::kSampled);
+        }
+    }
 }
 
 void
@@ -174,7 +248,6 @@ TopologyTree::AddStream(ProcessInfo* parent, uint64_t stream_id)
     StreamInfo*                 stream = owned.get();
     m_storage.push_back(std::move(owned));
     Attach(parent, stream);
-    m_stream_index[stream_id] = stream;
     return stream;
 }
 
@@ -285,14 +358,6 @@ TopologyTree::GetQueueMutable(uint64_t queue_id, uint64_t processor_id) const
     return (it != m_queue_index.end()) ? it->second : nullptr;
 }
 
-const StreamInfo*
-TopologyTree::GetStream(uint64_t stream_id) const
-{
-    std::unordered_map<uint64_t, StreamInfo*>::const_iterator it =
-        m_stream_index.find(stream_id);
-    return (it != m_stream_index.end()) ? it->second : nullptr;
-}
-
 const CounterInfo*
 TopologyTree::GetCounter(uint64_t counter_id) const
 {
@@ -301,20 +366,18 @@ TopologyTree::GetCounter(uint64_t counter_id) const
     return (it != m_counter_index.end()) ? it->second : nullptr;
 }
 
+/*
+ * Thread ids are only unique within a kind: the same tid can be both an
+ * instrumented and a sampled thread, so the two are indexed separately.
+ */
 const ThreadInfo*
-TopologyTree::GetInstrumentedThread(uint64_t thread_id) const
+TopologyTree::GetThread(uint64_t thread_id, ThreadInfo::Kind kind) const
 {
-    std::unordered_map<uint64_t, ThreadInfo*>::const_iterator it =
-        m_instrumented_thread_index.find(thread_id);
-    return (it != m_instrumented_thread_index.end()) ? it->second : nullptr;
-}
-
-const ThreadInfo*
-TopologyTree::GetSampledThread(uint64_t thread_id) const
-{
-    std::unordered_map<uint64_t, ThreadInfo*>::const_iterator it =
-        m_sampled_thread_index.find(thread_id);
-    return (it != m_sampled_thread_index.end()) ? it->second : nullptr;
+    const std::unordered_map<uint64_t, ThreadInfo*>& index =
+        (kind == ThreadInfo::Kind::kInstrumented) ? m_instrumented_thread_index
+                                                  : m_sampled_thread_index;
+    std::unordered_map<uint64_t, ThreadInfo*>::const_iterator it = index.find(thread_id);
+    return (it != index.end()) ? it->second : nullptr;
 }
 
 const TopologyNode*
@@ -366,12 +429,12 @@ TopologyTree::Clear()
     m_node_index.clear();
     m_processor_index.clear();
     m_process_index.clear();
-    m_stream_index.clear();
     m_counter_index.clear();
     m_instrumented_thread_index.clear();
     m_sampled_thread_index.clear();
     m_queue_index.clear();
     m_track_index.clear();
+    m_track_order.clear();
     m_storage.clear();
 
     std::unique_ptr<TopologyNode> root =

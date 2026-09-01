@@ -1225,15 +1225,18 @@ TimelineView::Update()
         }
 
         // Apply a topology sort deferred until the order was ready; fall back to
-        // Default if the cached order isn't a full permutation of the current tracks.
-        if(m_topology_sort_pending && m_sort_mode == TrackSortMode::kTopology &&
-           m_topology_order && !m_topology_order->empty())
+        // Default if the derived order isn't a full permutation of the current tracks.
+        if(m_topology_sort_pending && m_sort_mode == TrackSortMode::kTopology)
         {
-            if(!ApplyTrackOrder(*m_topology_order))
+            const std::vector<uint64_t> topology_order = BuildTopologyOrder();
+            if(!topology_order.empty())
             {
-                m_sort_mode = TrackSortMode::kDefault;
+                if(!ApplyTrackOrder(topology_order))
+                {
+                    m_sort_mode = TrackSortMode::kDefault;
+                }
+                m_topology_sort_pending = false;
             }
-            m_topology_sort_pending = false;
         }
 
         if(!m_reorder_request.handled)
@@ -2402,10 +2405,35 @@ TimelineView::MakeGraphView()
     LoadSortSettings();
 }
 
-void
-TimelineView::SetTopologyOrder(const std::vector<uint64_t>* order)
+std::vector<uint64_t>
+TimelineView::BuildTopologyOrder() const
 {
-    m_topology_order = order;
+    const TimelineModel&         timeline = m_data_provider.DataModel().GetTimeline();
+    const std::vector<uint64_t>& topology_order =
+        m_data_provider.DataModel().GetTopology().GetTrackOrder();
+    if(topology_order.empty())
+    {
+        return {};
+    }
+
+    std::vector<uint64_t>        order;
+    std::unordered_set<uint64_t> placed;
+    order.reserve(timeline.GetTrackCount());
+    for(uint64_t track_id : topology_order)
+    {
+        if(timeline.GetTrack(track_id) && placed.insert(track_id).second)
+        {
+            order.push_back(track_id);
+        }
+    }
+    for(const TrackInfo* track : timeline.GetTrackList())
+    {
+        if(track && placed.insert(track->id).second)
+        {
+            order.push_back(track->id);
+        }
+    }
+    return order;
 }
 
 void
@@ -2415,9 +2443,10 @@ TimelineView::SortTracksBy(TrackSortMode mode)
     {
         case TrackSortMode::kTopology:
         {
-            if(m_topology_order && !m_topology_order->empty())
+            const std::vector<uint64_t> topology_order = BuildTopologyOrder();
+            if(!topology_order.empty())
             {
-                if(!ApplyTrackOrder(*m_topology_order))
+                if(!ApplyTrackOrder(topology_order))
                 {
                     return;
                 }

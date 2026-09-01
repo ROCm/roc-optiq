@@ -43,12 +43,13 @@ on:
       s3_bucket_env:
         description: 'S3 bucket environment to upload artifacts to'
         type: choice
-        default: 'dev'
+        default: 'legacy-nightly'
         options:
           - dev
           - nightly
           - rc
           - stable-staging
+          - legacy-nightly
   workflow_call:
     inputs:
       cmake_config_preset:
@@ -90,7 +91,7 @@ on:
       s3_bucket_env:
         description: 'S3 bucket environment to upload artifacts to'
         type: string
-        default: 'dev'
+        default: 'legacy-nightly'
 
 env:
   BUILD_DIR: "build"
@@ -197,6 +198,11 @@ jobs:
             stable-staging)
               echo "S3_BUCKET=${{ secrets.AWS_STABLE_STAGING_EXTRAS_S3_BUCKET }}" >> "$GITHUB_ENV"
               echo "S3_ROLE_ARN=${{ secrets.AWS_STABLE_STAGING_EXTRAS_ROLE_ARN }}" >> "$GITHUB_ENV"
+              ;;
+            legacy-nightly)
+              echo "S3_BUCKET=${{ secrets.AWS_S3_BUCKET }}" >> "$GITHUB_ENV"
+              echo "S3_ROLE_ARN=${{ secrets.AWS_ROLE_ARN }}" >> "$GITHUB_ENV"
+              echo "S3_ROOT_DIRECTORY=nightly/$(date +%Y_%m_%d)/manylinux" >> "$GITHUB_ENV"
               ;;
             *)
               echo "Unknown s3_bucket_env: ${{ inputs.s3_bucket_env }}"

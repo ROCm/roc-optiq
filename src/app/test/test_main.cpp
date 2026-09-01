@@ -20,12 +20,57 @@
 #include "rocprofvis_platform_helpers.h"
 #endif
 #include <GLFW/glfw3.h>
+#include <algorithm>
+#include <filesystem>
 #include <iostream>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string>
+#include <system_error>
+#include <vector>
 
 // Frames left to render before the loop may sleep; see RENDER_FRAMES_AFTER_INPUT.
 static int g_frames_to_render = 1;
+
+// Directory expansion only picks up rocpd trace databases, by filename prefix.
+// A trace directory typically also holds compute profiles and other formats,
+// which open into views a timeline soak cannot drive.
+static const char* const TRACE_FILE_PREFIX = "rocpd";
+
+// Resolves the -f argument to the list of files to open. A plain file is passed
+// through untouched, whatever its name; a directory expands to the rocpd trace
+// databases directly inside it, sorted so repeated runs open the same set in the
+// same tab order. Matching on the ".db" extension also excludes the "-shm" and
+// "-wal" sidecars SQLite leaves next to an open database.
+static std::vector<std::string>
+collect_trace_paths(const std::string& path)
+{
+    std::error_code error;
+    if(!std::filesystem::is_directory(path, error))
+    {
+        return { path };
+    }
+
+    std::vector<std::string> paths;
+    for(const std::filesystem::directory_entry& entry :
+        std::filesystem::directory_iterator(path, error))
+    {
+        if(!entry.is_regular_file(error) || entry.path().extension() != ".db")
+        {
+            continue;
+        }
+        if(entry.path().filename().string().rfind(TRACE_FILE_PREFIX, 0) != 0)
+        {
+            continue;
+        }
+        paths.push_back(entry.path().string());
+    }
+    std::sort(paths.begin(), paths.end());
+
+    spdlog::info("Opening {} '{}*.db' trace(s) from directory {}", paths.size(),
+                 TRACE_FILE_PREFIX, path);
+    return paths;
+}
 
 static void
 parse_command_line_args(int argc, char** argv, RocProfVis::App::CLIParser& cli_parser,
@@ -35,6 +80,12 @@ parse_command_line_args(int argc, char** argv, RocProfVis::App::CLIParser& cli_p
     result &= cli_parser.AddOption(
         "t", "run-tests",
         "Run all registered UI tests headlessly, print results, and exit", false);
+    result &= cli_parser.AddOption(
+        "s", "soak",
+        "Run the soak drivers instead of the test suite: continuously exercise "
+        "the loaded view until interrupted. Use with -f to pick the trace, or a "
+        "directory to open every rocpd*.db trace in it at once",
+        false);
     ROCPROFVIS_ASSERT(result);
 
     cli_parser.Parse(argc, argv);
@@ -139,15 +190,23 @@ main(int argc, char** argv)
                 if(cli_parser.WasOptionFound("file") &&
                    !cli_parser.GetOptionValue("file").empty())
                 {
-                    // If the user inputted a filepath open it here.
-                    rocprofvis_view_open_files({ cli_parser.GetOptionValue("file") });
+                    // If the user inputted a filepath open it here. A directory
+                    // opens every trace inside it at once, one tab per file, so a
+                    // soak run can be pointed at a whole corpus.
+                    rocprofvis_view_open_files(
+                        collect_trace_paths(cli_parser.GetOptionValue("file")));
                 }
 
                 ImGuiTestEngine_Start(engine, ImGui::GetCurrentContext());
                 RegisterAppTests(engine);
 
-                const bool run_tests_headless =
-                    cli_parser.WasOptionFound("run-tests");
+                // The soak drivers live in their own "soak" category so the
+                // normal sweep can exclude them - they never terminate. Running
+                // with --soak inverts that: only the soak drivers are queued.
+                const bool  run_soak    = cli_parser.WasOptionFound("soak");
+                const char* test_filter = run_soak ? "soak" : "-soak";
+                const bool  run_tests_headless =
+                    cli_parser.WasOptionFound("run-tests") || run_soak;
                 bool headless_tests_queued = false;
                 int headless_settle_frames = 0;
                 // Upper bound (~50s @60fps), not a tuned value: a view that never
@@ -194,9 +253,11 @@ main(int argc, char** argv)
                                              "{} frames; queueing tests anyway",
                                              kHeadlessSettleFrameCap);
                             }
-                            // File load settled (or cap hit): queue every registered test.
+                            // File load settled (or cap hit): queue the selected
+                            // tests - everything but the soak drivers, or only
+                            // them under --soak.
                             ImGuiTestEngine_QueueTests(
-                                engine, ImGuiTestGroup_Tests, nullptr,
+                                engine, ImGuiTestGroup_Tests, test_filter,
                                 ImGuiTestRunFlags_RunFromCommandLine);
                             headless_tests_queued = true;
                         }

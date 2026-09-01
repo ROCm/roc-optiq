@@ -241,7 +241,12 @@ target_include_directories(imgui PUBLIC ${Vulkan_INCLUDE_DIR})
 
 # Second imgui built from the SAME sources WITH the test-engine define.
 # Only the test exe links this; production never sees it.
-if(BUILD_TESTING AND ROCPROFVIS_ENABLE_UI_TESTS)
+# BUILD_TESTING is read from the cache: the vendored crypto backends above set it
+# OFF as a plain variable to suppress their own test targets, and that shadows the
+# cache for the rest of this directory. The root CMakeLists guards the test
+# executable on the unshadowed value, so this must match it or imgui_te goes
+# missing and the test build fails on a bare "imgui.h: No such file".
+if($CACHE{BUILD_TESTING} AND ROCPROFVIS_ENABLE_UI_TESTS)
     add_library(imgui_te STATIC
         imgui/imgui.cpp
         imgui/imgui_draw.cpp

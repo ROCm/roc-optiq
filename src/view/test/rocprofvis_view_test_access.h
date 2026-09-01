@@ -374,6 +374,16 @@ struct TimelineViewTestPeer
     float SidebarSize() const { return v.m_sidebar_size; }
     void  SetSidebarSize(float size) const { const_cast<TimelineView&>(v).m_sidebar_size = size; }
 
+    // Screen rect of the graph lane, the region the timeline hit-tests for
+    // wheel-zoom and drag-pan. Returns false until the timeline has rendered a
+    // frame, at which point the rect is non-empty.
+    bool GraphScreenRect(ImVec2& out_min, ImVec2& out_max) const
+    {
+        out_min = v.m_test_graph_area_min;
+        out_max = v.m_test_graph_area_max;
+        return out_max.x > out_min.x && out_max.y > out_min.y;
+    }
+
     FlameTrackItem* FirstFlameTrack() const
     {
         if(!v.m_tracks) return nullptr;

@@ -64,6 +64,63 @@ namespace
         return cv;
     }
 
+    // Reach the Kernel Selection Table on the Compute tab and drive its first fetch.
+    // Returns the table (fills *out_cv / *out_table_win) or nullptr on skip/fail. The
+    // sort and filter tests rely on table_win->ChildId being the ImGuiTable id their
+    // header and filter labels hash against. *out_prev_tab receives the tab id that was
+    // active before the switch, so the caller can restore it.
+    KernelMetricTable* ReachKernelTableOrSkip(ImGuiTestContext* ctx, ComputeView** out_cv,
+                                              ImGuiWindow** out_table_win,
+                                              std::string* out_prev_tab = nullptr)
+    {
+        ComputeView* cv = GetComputeViewOrSkip(ctx);
+        if (cv == nullptr) return nullptr;
+        // Fill out_cv before switching tabs so the caller can restore the tab even if
+        // this helper fails a check after the switch.
+        if (out_cv) *out_cv = cv;
+        TabContainer* tc = ComputeViewTestPeer{*cv}.TabContainerPtr();
+        IM_CHECK_RETV(tc != nullptr, nullptr);
+
+        // The kernel metric table renders only while the "Kernel Details" tab is active.
+        // Capture the current tab before switching so the caller can restore it.
+        if (out_prev_tab != nullptr)
+        {
+            const TabItem* prev = tc->GetActiveTab();
+            if (prev != nullptr) *out_prev_tab = prev->m_id;
+        }
+        tc->SetActiveTab("compute_kernel_details_view");
+        ctx->Yield(3);
+        const TabItem* tab = tc->GetActiveTab();
+        IM_CHECK_RETV(tab != nullptr, nullptr);
+        ComputeKernelDetailsView* kd =
+            dynamic_cast<ComputeKernelDetailsView*>(tab->m_widget.get());
+        IM_CHECK_RETV(kd != nullptr, nullptr);
+        KernelMetricTable* kt = ComputeKernelDetailsViewTestPeer{*kd}.KernelMetricTablePtr();
+        IM_CHECK_RETV(kt != nullptr, nullptr);
+
+        // The initial auto-select fires before this view subscribes, so the table
+        // starts empty. Drive the fetch here for the already-selected workload.
+        ComputeSelection* sel = ComputeViewTestPeer{*cv}.ComputeSelectionPtr();
+        IM_CHECK_RETV(sel != nullptr, nullptr);
+        const uint32_t workload = sel->GetSelectedWorkload();
+        IM_CHECK_RETV(workload != ComputeSelection::INVALID_SELECTION_ID, nullptr);
+        kt->FetchData(workload);
+
+        // The table registers its inner ImGui window (name contains
+        // "kernel_selection_table") only once BeginTable runs on non-empty data.
+        ImGuiWindow* table_win = nullptr;
+        for (int i = 0; i < 120 && table_win == nullptr; i++)
+        {
+            ctx->Yield(2);
+            for (ImGuiWindow* w : ImGui::GetCurrentContext()->Windows)
+                if (strstr(w->Name, "kernel_selection_table")) { table_win = w; break; }
+        }
+        IM_CHECK_RETV(table_win != nullptr, nullptr);
+
+        if (out_table_win) *out_table_win = table_win;
+        return kt;
+    }
+
 // Flame-graph event bars are raw draw_list rects registered with the Test
 // Engine via IMGUI_TEST_ENGINE_ITEM_ADD under the track's "FV" child window.
 // These helpers gather that window's bars and pick reliably clickable targets
@@ -1384,6 +1441,189 @@ void RegisterAppTests(ImGuiTestEngine* e)
         ctx->Yield(2);
     };
 
+    // Type a filter predicate into the Event Table's real text box, click its real
+    // Submit, and check that the displayed row count drops.
+    t = IM_REGISTER_TEST(e, "app", "sys_event_table_filter_restricts_rows");
+    t->TestFunc = [](ImGuiTestContext* ctx)
+    {
+        TraceView* tv = GetTraceViewOrSkip(ctx);
+        if (!tv) return;
+        std::shared_ptr<TimelineSelection> sel = tv->GetTimelineSelection();
+        IM_CHECK(sel != nullptr);
+        if (sel == nullptr) return;
+        TimelineView* tlv = TraceViewTestPeer{*tv}.TimelineViewPtr();
+        IM_CHECK(tlv != nullptr);
+        if (tlv == nullptr) return;
+        DataProvider* dp = tv->GetDataProvider();
+        IM_CHECK(dp != nullptr);
+        if (dp == nullptr) return;
+
+        // The Event Table lives in the Advanced Details panel, and its widgets only
+        // register with the Test Engine while that panel is visible. Force it open (it
+        // is on by default, but a saved layout could have hidden it) and restore the
+        // previous state at the end.
+        const bool details_prev =
+            SettingsManager::GetInstance().GetAppWindowSettings().show_details_panel;
+        tv->SetAnalysisViewVisibility(true);
+        ctx->Yield(3);
+
+        // Fetch scope follows the selection, so clear it to bring every row into
+        // scope. Capture what was selected first; restore() puts it back on every
+        // exit path so nothing leaks into later tests in this reused process.
+        double range_start = 0.0, range_end = 0.0;
+        const bool had_range = sel->GetSelectedTimeRange(range_start, range_end);
+        auto restore = [&]() {
+            sel->UnselectAllTracks();
+            if (had_range) sel->SelectTimeRange(range_start, range_end);
+            else sel->ClearTimeRange();
+            tv->SetAnalysisViewVisibility(details_prev);
+        };
+        sel->ClearTimeRange();
+        sel->UnselectAllTracks();
+        ctx->Yield(3);
+
+        // Wait for the timeline's flame (event) tracks to load.
+        std::vector<FlameTrackItem*> flames;
+        for (int i = 0; i < 120 && flames.empty(); i++)
+        {
+            flames = TimelineViewTestPeer{*tlv}.DisplayedFlameTracks();
+            if (flames.empty()) ctx->Yield(2);
+        }
+        if (flames.empty())
+        {
+            ctx->LogWarning("SKIP: no flame tracks loaded to populate the Event Table");
+            restore();
+            return;
+        }
+
+        // Select only the HIP-region tracks (their one operation is Launch). Skip GPU
+        // dispatch and stream tracks: their events are all over 1ms, so `duration > 2000`
+        // would match every row and the filter would not visibly shrink the set.
+        int region_track_count = 0;
+        const TimelineModel& tlm = dp->DataModel().GetTimeline();
+        for (FlameTrackItem* flame : flames)
+        {
+            if (flame == nullptr) continue;
+            const TrackInfo* ti = tlm.GetTrack(flame->GetID());
+            if (ti == nullptr) continue;
+            if (ti->operation_types.size() == 1 &&
+                ti->operation_types.count(kRocProfVisDmOperationLaunch) == 1)
+            {
+                sel->SelectTrack(*flame);
+                region_track_count++;
+            }
+        }
+        if (region_track_count == 0)
+        {
+            ctx->LogWarning("SKIP: no HIP region track to exercise the filter");
+            restore();
+            return;
+        }
+
+        // Drain the async fetch triggered by the track selection before reading the
+        // row count.
+        ctx->Yield(3);
+        for (int i = 0; i < 120 &&
+                        dp->IsRequestPending(DataProvider::EVENT_TABLE_REQUEST_ID);
+             i++)
+            ctx->Yield(2);
+        ctx->Yield(5);
+
+        const uint64_t unfiltered =
+            dp->DataModel().GetTables().GetTableTotalRowCount(TableType::kEventTable);
+        if (unfiltered == 0)
+        {
+            ctx->LogWarning("SKIP: Event Table has no rows to filter");
+            restore();
+            return;
+        }
+
+        // The Event Table is the analysis view's default tab. Click it to be sure it
+        // is the active one, then check the filter widgets resolve before driving them
+        // rather than relying on a wildcard match.
+        const char* kTabRef    = "//Main Window/**/Event Table";
+        const char* kFilterRef = "//Main Window/**/filters/##input_text_with_clear";
+        const char* kSubmitRef = "//Main Window/**/Submit";
+        if (ctx->ItemExists(kTabRef)) ctx->ItemClick(kTabRef);
+        ctx->Yield(2);
+
+        // The SQL WHERE filter box and Submit button render only in Advanced filter
+        // mode. The table defaults to Basic (per-column) mode. Open the funnel "Filter
+        // Mode" menu and pick Advanced so the predicate below has widgets to drive. The
+        // funnel button lives in the table's "##status" child window.
+        ImGuiWindow* status_win = nullptr;
+        for (ImGuiWindow* w : ImGui::GetCurrentContext()->Windows)
+            if (w->WasActive && strstr(w->Name, "multitrack_table") && strstr(w->Name, "##status"))
+            { status_win = w; break; }
+        if (status_win != nullptr)
+        {
+            ctx->SetRef(status_win);
+            ImGuiTestItemList status_items;
+            ctx->GatherItems(&status_items, "");
+            ImGuiID funnel_id = 0;
+            for (int i = 0; i < status_items.GetSize(); i++)
+                if (strstr(status_items[i]->DebugLabel, ICON_FUNNEL))
+                { funnel_id = status_items[i]->ID; break; }
+            if (funnel_id != 0)
+            {
+                ctx->ItemClick(funnel_id);
+                ctx->Yield(2);
+                if (ctx->ItemExists("//$FOCUSED/Advanced")) ctx->ItemClick("//$FOCUSED/Advanced");
+                ctx->Yield(2);
+            }
+            ctx->SetRef("//Main Window");
+        }
+
+        // Restore before asserting: an abort here must not leak the open panel and
+        // selected tracks into later tests.
+        if (!ctx->ItemExists(kFilterRef) || !ctx->ItemExists(kSubmitRef))
+        {
+            restore();
+            IM_CHECK(ctx->ItemExists(kFilterRef));
+            IM_CHECK(ctx->ItemExists(kSubmitRef));
+            return;
+        }
+
+        // Type the predicate into the text box and click Submit.
+        ctx->ItemInput(kFilterRef);
+        ctx->KeyCharsReplace("duration > 2000");
+        ctx->ItemClick(kSubmitRef);
+
+        // Submit queues an async refetch. Drain it before reading the filtered count.
+        ctx->Yield(3);
+        for (int i = 0; i < 120 &&
+                        dp->IsRequestPending(DataProvider::EVENT_TABLE_REQUEST_ID);
+             i++)
+            ctx->Yield(2);
+        ctx->Yield(5);
+
+        const uint64_t filtered =
+            dp->DataModel().GetTables().GetTableTotalRowCount(TableType::kEventTable);
+
+        ctx->LogInfo("event table filter: unfiltered=%llu filtered=%llu",
+                     (unsigned long long) unfiltered, (unsigned long long) filtered);
+
+        // Restore before the asserts. Clear the filter and drop the selection now, so
+        // that if an IM_CHECK below fails and returns, it cannot leave a filtered
+        // Event Table behind for later tests in this reused process.
+        ctx->ItemInput(kFilterRef);
+        ctx->KeyCharsReplace("");
+        ctx->ItemClick(kSubmitRef);
+        ctx->Yield(3);
+        for (int i = 0; i < 120 &&
+                        dp->IsRequestPending(DataProvider::EVENT_TABLE_REQUEST_ID);
+             i++)
+            ctx->Yield(2);
+        restore();
+        ctx->Yield(2);
+
+        // The filter shrank the displayed rows. The Event Table is virtualized
+        // (rows fetched in scroll-sized chunks), so the displayed set is not the full
+        // row set to count against. This asserts the drop the user sees, not an exact
+        // count.
+        IM_CHECK(filtered < unfiltered);
+    };
+
     t = IM_REGISTER_TEST(e, "app", "sys_summary_pie_kernel_select");
     t->TestFunc = [](ImGuiTestContext* ctx)
     {
@@ -1587,6 +1827,251 @@ void RegisterAppTests(ImGuiTestEngine* e)
             const double cur  = std::strtod(rows[r][2].c_str(), nullptr);
             IM_CHECK(prev >= cur);
         }
+    };
+
+    t = IM_REGISTER_TEST(e, "app", "compute_kernel_table_sort_by_duration");
+    t->TestFunc = [](ImGuiTestContext* ctx)
+    {
+        ComputeView* cv        = nullptr;
+        ImGuiWindow* table_win = nullptr;
+        std::string  prev_tab;
+        KernelMetricTable* kt  = ReachKernelTableOrSkip(ctx, &cv, &table_win, &prev_tab);
+        // The helper switched the compute tab. Restore it on every exit path. prev_tab
+        // is non-empty only once cv is valid, so this is safe even when kt is null.
+        auto restore_tab = [&]() {
+            if (!prev_tab.empty())
+                ComputeViewTestPeer{*cv}.TabContainerPtr()->SetActiveTab(prev_tab);
+        };
+        if (kt == nullptr) { restore_tab(); return; }
+        DataProvider* dp = cv->GetDataProvider();
+        if (dp == nullptr) { restore_tab(); IM_CHECK(dp != nullptr); return; }
+
+        // Click the Duration column header to trigger a sort. The Test Engine's usual
+        // TableClickHeader can't reach it. That helper finds a header by an id seeded
+        // from the column number, which the stock header row sets up but this custom
+        // header row does not. Instead, rebuild the id the way ImGui did, from the
+        // label plus the table's own id (table_win->ChildId), and click that. The
+        // click runs the real sort path: it sets the sort spec, which kicks off an
+        // async re-sort.
+        const ImGuiID header_id = ctx->GetID("Duration (ns)", table_win->ChildId);
+        if (!ctx->ItemExists(header_id))
+        {
+            restore_tab();
+            IM_CHECK(ctx->ItemExists(header_id));
+            return;
+        }
+
+        KernelMetricTableTestPeer peer{*kt};
+        // Duration is the default sort column. Capture the starting sort so the two
+        // toggles below leave the table exactly as it started.
+        const int orig_col   = peer.SortColumnIndex();
+        const int orig_order = peer.SortOrder();
+
+        // Read the Duration column in display order as plain ns numbers. Empty or
+        // non-numeric cells are skipped, though a permanent column should not have any.
+        auto read_durations = [dp]() {
+            std::vector<double> out;
+            const std::vector<std::vector<std::string>>& rows =
+                dp->ComputeModel().GetKernelSelectionTable().GetTableData();
+            for (const std::vector<std::string>& row : rows)
+                if (row.size() > 2 && !row[2].empty())
+                    out.push_back(std::strtod(row[2].c_str(), nullptr));
+            return out;
+        };
+        auto drain = [ctx, dp]() {
+            ctx->Yield(3);  // let the sort-spec change dispatch the async refetch
+            for (int i = 0; i < 120 &&
+                 dp->IsRequestPending(DataProvider::METRIC_PIVOT_TABLE_REQUEST_ID); i++)
+                ctx->Yield(2);
+            ctx->Yield(5);  // let HandleNewData apply the re-sorted rows
+        };
+
+        if (read_durations().size() < 2)
+        {
+            ctx->LogWarning("SKIP: fewer than two kernel rows to verify sort order");
+            restore_tab();
+            return;
+        }
+
+        // First click flips the sort direction and triggers an async re-sort.
+        ctx->ItemClick(header_id);
+        drain();
+        const int                 col1   = peer.SortColumnIndex();
+        const int                 order1 = peer.SortOrder();
+        const std::vector<double> after1 = read_durations();
+
+        // Second click flips it back to the original order.
+        ctx->ItemClick(header_id);
+        drain();
+        const int                 col2   = peer.SortColumnIndex();
+        const int                 order2 = peer.SortOrder();
+        const std::vector<double> after2 = read_durations();
+
+        // The two toggles restored the sort order; restore the tab too before the
+        // asserts, since an IM_CHECK failure returns early.
+        restore_tab();
+
+        // Check the actual order of the values, not just the sort-direction flag: a
+        // flag flipped over still-unsorted rows would pass falsely.
+        auto check_monotonic = [](const std::vector<double>& v, int order) {
+            for (size_t i = 1; i < v.size(); i++)
+                if (order == kRPVControllerSortOrderAscending)
+                    IM_CHECK(v[i - 1] <= v[i]);
+                else
+                    IM_CHECK(v[i - 1] >= v[i]);
+        };
+
+        IM_CHECK(orig_col == 2);          // Duration column index
+        IM_CHECK(col1 == 2);
+        IM_CHECK(order1 != orig_order);   // direction flipped by the first click
+        check_monotonic(after1, order1);
+
+        IM_CHECK(col2 == 2);
+        IM_CHECK(order2 != order1);       // flipped again by the second click
+        IM_CHECK(order2 == orig_order);   // ...back to where we started
+        check_monotonic(after2, order2);
+    };
+
+    t = IM_REGISTER_TEST(e, "app", "compute_kernel_table_filter_duration");
+    t->TestFunc = [](ImGuiTestContext* ctx)
+    {
+        ComputeView* cv        = nullptr;
+        ImGuiWindow* table_win = nullptr;
+        std::string  prev_tab;
+        KernelMetricTable* kt  = ReachKernelTableOrSkip(ctx, &cv, &table_win, &prev_tab);
+        // The helper switched the compute tab. Restore it on every exit path. prev_tab
+        // is non-empty only once cv is valid, so this is safe even when kt is null.
+        auto restore_tab = [&]() {
+            if (!prev_tab.empty())
+                ComputeViewTestPeer{*cv}.TabContainerPtr()->SetActiveTab(prev_tab);
+        };
+        if (kt == nullptr) { restore_tab(); return; }
+        DataProvider* dp = cv->GetDataProvider();
+        if (dp == nullptr) { restore_tab(); IM_CHECK(dp != nullptr); return; }
+
+        // Address the Duration column's filter box by rebuilding its ImGui id. The box
+        // hashes PushID(column index) + "##filter" (rocprofvis_compute_kernel_metric_
+        // table.cpp:886,897); in a Test Engine path, PushID(2) is spelled "$$2", so
+        // GetID("$$2/##filter", table id) reconstructs the real input id for column 2.
+        const ImGuiID filter_id = ctx->GetID("$$2/##filter", table_win->ChildId);
+        if (!ctx->ItemExists(filter_id))
+        {
+            restore_tab();
+            IM_CHECK(ctx->ItemExists(filter_id));
+            return;
+        }
+
+        // Apply and Clear are plain buttons in the table's "toolbar" child window.
+        // Find that window (its name carries both the card and toolbar segments), then
+        // address the buttons by label seeded on the window's id.
+        ImGuiWindow* toolbar_win = nullptr;
+        for (ImGuiWindow* w : ImGui::GetCurrentContext()->Windows)
+            if (strstr(w->Name, "kernel_metric_table_card") && strstr(w->Name, "toolbar"))
+            { toolbar_win = w; break; }
+        if (toolbar_win == nullptr)
+        {
+            restore_tab();
+            IM_CHECK(toolbar_win != nullptr);
+            return;
+        }
+        const ImGuiID apply_id = ctx->GetID("Apply Filters", toolbar_win->ID);
+        const ImGuiID clear_id = ctx->GetID("Clear All Filters", toolbar_win->ID);
+        if (!ctx->ItemExists(apply_id) || !ctx->ItemExists(clear_id))
+        {
+            restore_tab();
+            IM_CHECK(ctx->ItemExists(apply_id));
+            IM_CHECK(ctx->ItemExists(clear_id));
+            return;
+        }
+
+        auto drain = [ctx, dp]() {
+            ctx->Yield(3);  // let ApplyFilters/ClearAllFilters dispatch the refetch
+            for (int i = 0; i < 120 &&
+                 dp->IsRequestPending(DataProvider::METRIC_PIVOT_TABLE_REQUEST_ID); i++)
+                ctx->Yield(2);
+            ctx->Yield(5);  // let HandleNewData apply the refetched rows
+        };
+        auto row_count = [dp]() {
+            return dp->ComputeModel().GetKernelSelectionTable().GetTableData().size();
+        };
+
+        // Start from a cleared filter so the baseline is unfiltered regardless of
+        // leftover state in the reused process.
+        ctx->ItemClick(clear_id);
+        drain();
+
+        // Snapshot the unfiltered Duration values, used both to pick a threshold that
+        // is sure to split the rows and to work out the expected filtered count without
+        // Optiq's filter SQL. Skip if any row has no Duration to filter on.
+        std::vector<double> durs;
+        {
+            const std::vector<std::vector<std::string>>& rows =
+                dp->ComputeModel().GetKernelSelectionTable().GetTableData();
+            for (const std::vector<std::string>& row : rows)
+            {
+                if (row.size() <= 2 || row[2].empty())
+                {
+                    ctx->LogWarning("SKIP: a kernel row has no Duration value to filter on");
+                    restore_tab();
+                    return;
+                }
+                durs.push_back(std::strtod(row[2].c_str(), nullptr));
+            }
+        }
+        const size_t unfiltered_count = durs.size();
+        if (unfiltered_count < 2)
+        {
+            ctx->LogWarning("SKIP: fewer than two kernel rows to split with a filter");
+            restore_tab();
+            return;
+        }
+
+        double dmin = durs[0], dmax = durs[0], sum = 0.0;
+        for (double d : durs)
+        {
+            if (d < dmin) dmin = d;
+            if (d > dmax) dmax = d;
+            sum += d;
+        }
+        if (dmin == dmax)
+        {
+            ctx->LogWarning("SKIP: all kernel Durations equal; no numeric filter splits them");
+            restore_tab();
+            return;
+        }
+        // The mean sits strictly between min and max, so "> mean" keeps at least one
+        // row and drops at least one. Use the same integer threshold in both the typed
+        // predicate and the expected-count math so the comparison is exact.
+        const long long threshold = static_cast<long long>(sum / static_cast<double>(unfiltered_count));
+        size_t expected = 0;
+        for (double d : durs)
+            if (d > static_cast<double>(threshold)) expected++;
+        if (expected == 0 || expected >= unfiltered_count)
+        {
+            ctx->LogWarning("SKIP: derived Duration threshold does not split the row set");
+            restore_tab();
+            return;
+        }
+        const std::string predicate = ">" + std::to_string(threshold);
+
+        // Type the predicate into the Duration filter input, then apply it.
+        ctx->ItemInput(filter_id);
+        ctx->KeyChars(predicate.c_str());
+        ctx->Yield(2);  // let InputText commit the buffer before Apply deactivates it
+        ctx->ItemClick(apply_id);
+        drain();
+        const size_t filtered_count = row_count();
+
+        // Restore the unfiltered set and the tab before asserting so a failure can't
+        // leak filter or tab state into later tests.
+        ctx->ItemClick(clear_id);
+        drain();
+        const size_t cleared_count = row_count();
+        restore_tab();
+
+        IM_CHECK(filtered_count < unfiltered_count);   // the filter dropped rows
+        IM_CHECK(filtered_count == expected);          // exact, independently derived
+        IM_CHECK(cleared_count == unfiltered_count);   // clear restored the full set
     };
 
     t = IM_REGISTER_TEST(e, "app", "sys_timeline_select_named_track_event");

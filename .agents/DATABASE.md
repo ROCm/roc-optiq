@@ -1171,7 +1171,9 @@ The current PC-sampling block targets schema 2.2 and is version-gated at
 `compute_pc_sample_stall_reason`, plus the source-file, source-line, and
 instruction/source correlation tables. Source and correlation queries omit
 records whose source line number is NULL or zero so unknown locations are not
-presented as selectable source correlations. `CreateIndexes` probes
+presented as selectable source correlations. Correlation rows also return the
+owning source-file UUID so the UI can navigate mappings across files.
+`CreateIndexes` probes
 `compute_pc_sample_state` before adding the new instruction, state, and
 stall-reason indexes.
 

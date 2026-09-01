@@ -1094,6 +1094,7 @@ typedef enum rocprofvis_controller_pc_sampling_data_properties_t
     kRPVControllerPCSamplingNumInstructionSampleLookups,
     kRPVControllerPCSamplingInstructionSampleLookupRecordUuid,
     kRPVControllerPCSamplingInstructionSampleLookupText,
+    kRPVControllerPCSamplingInstructionSourceLineSourceFileUuid,
     __kRPVControllerPCSamplingPropertiesLast
 
 } rocprofvis_controller_pc_sampling_data_properties_t;

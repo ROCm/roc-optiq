@@ -20,6 +20,7 @@ namespace View
 {
 
 constexpr uint64_t INVALID_SOURCE_LINE_NUMBER = 0;
+constexpr uint32_t NO_SCROLL_TARGET = 0;
 
 ComputeIsaView::ComputeIsaView(DataProvider& data_provider)
 : RocWidget()
@@ -151,6 +152,7 @@ ComputeIsaView::ClearSelectionData()
     m_isa.ResetFetch();
     m_source.ResetFetch();
     m_stalls = {};
+    m_line_selection = {};
     m_source.widget->ChangeStallVisibility(false);
     m_isa.widget->ChangeStallVisibility(false);
     ClearCodeData();
@@ -314,6 +316,39 @@ ComputeIsaView::LoadSourceFileList(const PcSamplingData& data)
 }
 
 void
+ComputeIsaView::SelectSourceFile(uint64_t source_file_uuid)
+{
+    if(source_file_uuid == m_source.selected_uuid) return;
+
+    m_source.selected_uuid = source_file_uuid;
+    m_source.widget->Load({}, 0);
+    if(m_source.loaded_uuids.count(source_file_uuid))
+        RefreshCodeWidgets();
+    else
+        QueuePcSamplingFetch(PcSamplingLayer::kSource);
+}
+
+void
+ComputeIsaView::SelectSourceFileForScroll()
+{
+    const uint64_t source_file_uuid = m_line_selection.source_scroll_file;
+    if(source_file_uuid == LineSelection::UNSELECTED) return;
+
+    m_line_selection.source_scroll_file = LineSelection::UNSELECTED;
+    const bool source_file_exists = std::any_of(
+        m_source.files.begin(), m_source.files.end(),
+        [source_file_uuid](const auto& file) { return file.second == source_file_uuid; });
+    if(!source_file_exists)
+    {
+        m_line_selection.source_scroll_line = LineSelection::UNSELECTED;
+        return;
+    }
+
+    m_source_layout_item->m_visible = true;
+    SelectSourceFile(source_file_uuid);
+}
+
+void
 ComputeIsaView::RefreshCodeWidgets()
 {
     const KernelInfo* kernel_info = m_data_provider.ComputeModel().GetKernelInfo(
@@ -339,6 +374,7 @@ ComputeIsaView::RefreshCodeWidgets()
 void
 ComputeIsaView::Update()
 {
+    SelectSourceFileForScroll();
     FetchPendingPcSampling();
 }
 
@@ -461,12 +497,8 @@ ComputeIsaView::RenderSourceFileDropdown()
             const bool selected = (id == m_source.selected_uuid);
             if(ImGui::Selectable(filename_of(path), selected) && !selected)
             {
-                m_source.selected_uuid = id;
-                m_source.widget->Load({}, 0);
-                if(m_source.loaded_uuids.count(id))
-                    RefreshCodeWidgets();
-                else
-                    QueuePcSamplingFetch(PcSamplingLayer::kSource);
+                m_line_selection = {};
+                SelectSourceFile(id);
             }
             if(selected)
                 ImGui::SetItemDefaultFocus();
@@ -526,7 +558,6 @@ void
 SourceCodeWidget::Load(const PcSamplingData& data, uint64_t source_file_uuid)
 {
     m_lines.clear();
-    m_line_selection = {LineSelection::UNSELECTED, LineSelection::UNSELECTED};
 
     const SourceFile* source_file = nullptr;
     for(const auto& file : data.source_files)
@@ -621,12 +652,16 @@ SourceCodeWidget::Render()
 
     ImGuiListClipper clipper;
     clipper.Begin(static_cast<int>(m_lines.size()));
+    const uint32_t scroll_target = GetScrollTarget(clipper);
 
     while(clipper.Step())
     {
         for(int i = clipper.DisplayStart; i < clipper.DisplayEnd; i++)
         {
             RenderLine(i, columns_count);
+            if(scroll_target != NO_SCROLL_TARGET &&
+               static_cast<uint32_t>(i) + 1 == scroll_target)
+                ImGui::SetScrollHereY(0.0f);
         }
     }
 
@@ -634,6 +669,26 @@ SourceCodeWidget::Render()
     ImGui::PopStyleVar();
 
     ImGui::EndTable();
+}
+
+uint32_t
+SourceCodeWidget::GetScrollTarget(ImGuiListClipper& clipper)
+{
+    uint32_t scroll_target = NO_SCROLL_TARGET;
+    if(m_line_selection.source_scroll_line != LineSelection::UNSELECTED)
+    {
+        for(uint32_t i = 0; i < m_lines.size(); ++i)
+        {
+            if(m_lines[i].id == m_line_selection.source_scroll_line)
+            {
+                scroll_target = i + 1;
+                m_line_selection.source_scroll_line = LineSelection::UNSELECTED;
+                clipper.IncludeItemByIndex(static_cast<int>(i));
+                break;
+            }
+        }
+    }
+    return scroll_target;
 }
 
 void
@@ -651,6 +706,7 @@ SourceCodeWidget::RenderLine(uint32_t index, uint32_t columns_count)
                          ImVec2(0.0f, ImGui::GetTextLineHeight())))
     {
         m_line_selection.selected_line = source_row.id;
+        m_line_selection.isa_scroll_line = source_row.id;
     }
     if(ImGui::IsItemHovered()) m_line_selection.hovered_line = source_row.id;
 
@@ -688,7 +744,6 @@ void
 IsaCodeWidget::Load(const PcSamplingData& data, uint64_t code_object_uuid)
 {
     m_entries.clear();
-    m_line_selection = {0, 0};
 
     const CodeObjectStore* code_object = nullptr;
     for(const auto& code_obj : data.code_objects)
@@ -702,12 +757,18 @@ IsaCodeWidget::Load(const PcSamplingData& data, uint64_t code_object_uuid)
     if(!code_object)
         return;
 
-    // Build frame-0 source-line lookup: instruction_uuid -> source_line_uuid.
-    std::unordered_map<uint64_t, uint64_t> source_by_isa;
+    struct SourceLocation
+    {
+        uint64_t source_line_id = 0;
+        uint64_t source_file_id = 0;
+    };
+    std::unordered_map<uint64_t, SourceLocation> source_by_isa;
     for(const InstructionSourceLine& dep : data.instruction_source_lines)
     {
         if(dep.frame_index == 0)
-            source_by_isa.emplace(dep.instruction_uuid, dep.source_line_uuid);
+            source_by_isa.emplace(
+                dep.instruction_uuid,
+                SourceLocation{ dep.source_line_uuid, dep.source_file_uuid });
     }
 
     struct InstructionSampleCounts
@@ -731,9 +792,13 @@ IsaCodeWidget::Load(const PcSamplingData& data, uint64_t code_object_uuid)
         for(const InstructionLine& instruction_line : kernel_symbol.instruction_lines)
         {
             uint64_t source_line_id = 0;
+            uint64_t source_file_id = 0;
             if(const auto sit = source_by_isa.find(instruction_line.instruction_uuid);
                sit != source_by_isa.end())
-                source_line_id = sit->second;
+            {
+                source_line_id = sit->second.source_line_id;
+                source_file_id = sit->second.source_file_id;
+            }
 
             const InstructionSampleCounts* counts = nullptr;
             if(const auto counts_it = counts_by_instruction.find(instruction_line.instruction_uuid);
@@ -742,6 +807,7 @@ IsaCodeWidget::Load(const PcSamplingData& data, uint64_t code_object_uuid)
 
             m_entries.push_back({ instruction_line.instruction,
                                   instruction_line.instruction_uuid, source_line_id,
+                                  source_file_id,
                                   counts ? counts->issue_count : 0,
                                   counts ? counts->stall_count : 0,
                                   counts ? counts->total_count : 0 });
@@ -788,11 +854,14 @@ IsaCodeWidget::Render()
 
     ImGuiListClipper clipper;
     clipper.Begin(static_cast<int>(m_entries.size()));
+    const uint32_t scroll_target = GetScrollTarget(clipper);
     while(clipper.Step())
     {
         for(uint32_t i = clipper.DisplayStart; i < clipper.DisplayEnd; i++)
         {
             RenderLine(i, columns_count);
+            if(scroll_target != NO_SCROLL_TARGET && i + 1 == scroll_target)
+                ImGui::SetScrollHereY(0.0f);
         }
     }
 
@@ -800,6 +869,26 @@ IsaCodeWidget::Render()
     ImGui::PopStyleVar();
 
     ImGui::EndTable();
+}
+
+uint32_t
+IsaCodeWidget::GetScrollTarget(ImGuiListClipper& clipper)
+{
+    uint32_t scroll_target = NO_SCROLL_TARGET;
+    if(m_line_selection.isa_scroll_line != LineSelection::UNSELECTED)
+    {
+        for(uint32_t i = 0; i < m_entries.size(); ++i)
+        {
+            if(m_entries[i].source_line_id == m_line_selection.isa_scroll_line)
+            {
+                scroll_target = i + 1;
+                m_line_selection.isa_scroll_line = LineSelection::UNSELECTED;
+                clipper.IncludeItemByIndex(static_cast<int>(i));
+                break;
+            }
+        }
+    }
+    return scroll_target;
 }
 
 void
@@ -827,6 +916,8 @@ IsaCodeWidget::RenderLine(uint32_t index, uint32_t columns_count)
         if(isa_row.source_line_id != LineSelection::UNSELECTED)
         {
             m_line_selection.selected_line = isa_row.source_line_id;
+            m_line_selection.source_scroll_line = isa_row.source_line_id;
+            m_line_selection.source_scroll_file = isa_row.source_file_id;
         }
     }
     if(ImGui::IsItemHovered())

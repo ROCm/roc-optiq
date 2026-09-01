@@ -41,7 +41,8 @@ std::recursive_mutex& PcSampling::GetPropertyMutex(rocprofvis_property_t propert
     if(in_range(kRPVControllerPCSamplingNumSourceFiles,
                 kRPVControllerPCSamplingSourceLineContent) ||
        in_range(kRPVControllerPCSamplingNumInstructionSourceLines,
-                kRPVControllerPCSamplingInstructionSourceLineFrameIndex))
+                kRPVControllerPCSamplingInstructionSourceLineFrameIndex) ||
+       property == kRPVControllerPCSamplingInstructionSourceLineSourceFileUuid)
         return m_source_data_mutex;
 
     return m_stalls_data_mutex;
@@ -278,6 +279,15 @@ rocprofvis_result_t PcSampling::GetUInt64(rocprofvis_property_t property, uint64
                 if(index < m_instruction_source_lines.size())
                 {
                     *value = m_instruction_source_lines[index].source_line_uuid;
+                    result = kRocProfVisResultSuccess;
+                }
+                break;
+            }
+            case kRPVControllerPCSamplingInstructionSourceLineSourceFileUuid:
+            {
+                if(index < m_instruction_source_lines.size())
+                {
+                    *value = m_instruction_source_lines[index].source_file_uuid;
                     result = kRocProfVisResultSuccess;
                 }
                 break;
@@ -715,6 +725,15 @@ rocprofvis_result_t PcSampling::SetUInt64(rocprofvis_property_t property, uint64
             if(index < m_instruction_source_lines.size())
             {
                 m_instruction_source_lines[index].source_line_uuid = value;
+                result = kRocProfVisResultSuccess;
+            }
+            break;
+        }
+        case kRPVControllerPCSamplingInstructionSourceLineSourceFileUuid:
+        {
+            if(index < m_instruction_source_lines.size())
+            {
+                m_instruction_source_lines[index].source_file_uuid = value;
                 result = kRocProfVisResultSuccess;
             }
             break;
@@ -1302,6 +1321,12 @@ bool PcSampling::QueryToPropertyEnum(rocprofvis_db_compute_column_enum_t in, roc
         case kRPVComputeColumnPcSamplingInstructionSourceLineSourceLineUuid:
         {
             property = kRPVControllerPCSamplingInstructionSourceLineSourceLineUuid;
+            type = kRPVControllerPrimitiveTypeUInt64;
+            break;
+        }
+        case kRPVComputeColumnPcSamplingInstructionSourceLineSourceFileUuid:
+        {
+            property = kRPVControllerPCSamplingInstructionSourceLineSourceFileUuid;
             type = kRPVControllerPrimitiveTypeUInt64;
             break;
         }

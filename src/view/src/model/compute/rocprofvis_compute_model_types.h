@@ -68,6 +68,7 @@ struct InstructionSourceLine
 {
     uint64_t instruction_uuid = 0;
     uint64_t source_line_uuid = 0;
+    uint64_t source_file_uuid = 0;
     uint64_t frame_index      = 0;
 };
 

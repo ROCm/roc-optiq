@@ -29,8 +29,11 @@ enum class PcSamplingLayer : uint32_t;
 struct LineSelection
 {
     static constexpr uint64_t UNSELECTED = 0;
-    uint64_t hovered_line  = 0;
-    uint64_t selected_line = 0;
+    uint64_t hovered_line       = UNSELECTED;
+    uint64_t selected_line      = UNSELECTED;
+    uint64_t source_scroll_line = UNSELECTED;
+    uint64_t source_scroll_file = UNSELECTED;
+    uint64_t isa_scroll_line    = UNSELECTED;
 };
 
 struct KindFetchState
@@ -85,6 +88,8 @@ private:
     void ClearCodeData();
     void ClearSelectionData();
     void LoadSourceFileList(const PcSamplingData& data);
+    void SelectSourceFile(uint64_t source_file_uuid);
+    void SelectSourceFileForScroll();
     void QueuePcSamplingFetch(PcSamplingLayer layer);
     void            ClearPendingPcSamplingFetches();
     void            CancelInFlightFetches();
@@ -161,6 +166,7 @@ public:
     uint64_t GetHoveredLine()  const { return m_line_selection.hovered_line; }
 
 private:
+    uint32_t GetScrollTarget(ImGuiListClipper& clipper);
     void RenderLine(uint32_t index, uint32_t column_count);
 
     struct SourceRow
@@ -183,6 +189,7 @@ public:
     void Load(const PcSamplingData& data, uint64_t code_object_uuid);
 
 private:
+    uint32_t GetScrollTarget(ImGuiListClipper& clipper);
     void RenderLine(uint32_t index, uint32_t column_count);
 
     struct IsaRow
@@ -190,6 +197,7 @@ private:
         std::string instruction;
         uint64_t    id                  = 0;
         uint64_t    source_line_id      = 0;
+        uint64_t    source_file_id      = 0;
         uint64_t    issue_count         = 0;
         uint64_t    stall_count         = 0;
         uint64_t    total_count         = 0;

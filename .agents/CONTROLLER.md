@@ -843,8 +843,10 @@ Each kernel also owns a `PcSampling` handle. The
 `ComputeTrace::AsyncFetchPcSamplingIsaData` to load the code objects, kernel
 symbols, and ISA lines needed for the initial Code View. The source fetch loads
 source-file metadata, instruction/source mappings, and the requested source
-file's lines. Source file ID 0 selects the first available source file. The
-stall fetch independently loads PC sample states, stall-reason counts, and
+file's lines. Each instruction/source mapping includes the owning source-file
+UUID so Code View can switch files for cross-pane navigation. Source file ID 0
+selects the first available source file. The stall fetch independently loads
+PC sample states, stall-reason counts, and
 instruction-sample metadata. The full
 `rocprofvis_controller_pc_sampling_fetch_all_async` compatibility path invokes
 all three stages in sequence. Per-table flags on `PcSampling` prevent repeated
@@ -942,7 +944,8 @@ enum to the right `kRPVControllerPCSampling*` property ID.
 
 Property bank: `rocprofvis_controller_pc_sampling_data_properties_t`
 (base `__kRPVControllerPCSamplingPropertiesFirst`), covering 60+
-property IDs across the three data layers.
+property IDs across the three data layers. Instruction/source correlation
+properties include both source-line and owning source-file UUIDs.
 
 ### 6.7 `ComputePlot`, `Plot`, `PlotSeries`
 Files: `rocprofvis_controller_plot.{h,cpp}`,

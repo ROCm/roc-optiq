@@ -1376,6 +1376,10 @@ stall, or comment request is isolated from the already-loaded ISA pane.
 Source records with unknown or zero line numbers are omitted. ISA instructions
 that lack a valid source line remain visible and mouse-hoverable but cannot be
 selected for source correlation; hovering them clears the source-line hover.
+Clicking a correlated ISA or source row scrolls the opposite code pane so its
+first corresponding row is the top visible line. If an ISA row maps to a
+different source file, the view selects that file and fetches its lines before
+performing the scroll.
 
 ### Compute data plumbing
 

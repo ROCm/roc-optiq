@@ -4835,6 +4835,9 @@ DataProvider::LoadPcSamplingInstructionSourceLines(KernelInfo&          kernel,
             pc_handle, kRPVControllerPCSamplingInstructionSourceLineSourceLineUuid, i,
             &source_line.source_line_uuid);
         rocprofvis_controller_get_uint64(
+            pc_handle, kRPVControllerPCSamplingInstructionSourceLineSourceFileUuid, i,
+            &source_line.source_file_uuid);
+        rocprofvis_controller_get_uint64(
             pc_handle, kRPVControllerPCSamplingInstructionSourceLineFrameIndex, i,
             &source_line.frame_index);
     }

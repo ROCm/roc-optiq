@@ -574,6 +574,7 @@ typedef enum rocprofvis_db_compute_column_enum_t
     kRPVComputeColumnPcSamplingInstructionSampleCount,
     kRPVComputeColumnPcSamplingInstructionSampleLookupRecordUuid,
     kRPVComputeColumnPcSamplingInstructionSampleLookupText,
+    kRPVComputeColumnPcSamplingInstructionSourceLineSourceFileUuid,
 } rocprofvis_db_compute_column_enum_t;
 
 // Compute database query use case enumerations

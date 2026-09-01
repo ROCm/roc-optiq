@@ -579,6 +579,7 @@ ComputeTrace::FetchInstructionSourceLines(rocprofvis_dm_database_t db, Future* f
             { kRPVComputeColumnPcSamplingInstructionSourceLineInstructionUuid, std::nullopt },
             { kRPVComputeColumnPcSamplingInstructionSourceLineSourceLineUuid,  std::nullopt },
             { kRPVComputeColumnPcSamplingInstructionSourceLineFrameIndex,      std::nullopt },
+            { kRPVComputeColumnPcSamplingInstructionSourceLineSourceFileUuid,  std::nullopt },
         }, {}
     };
     return ExecuteQuery(

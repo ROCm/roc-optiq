@@ -93,6 +93,7 @@ namespace DataModel
 		{"instruction_source_line_instruction_uuid", kRPVComputeColumnPcSamplingInstructionSourceLineInstructionUuid},
 		{"instruction_source_line_source_line_uuid", kRPVComputeColumnPcSamplingInstructionSourceLineSourceLineUuid},
 		{"instruction_source_line_frame_index", kRPVComputeColumnPcSamplingInstructionSourceLineFrameIndex},
+		{"instruction_source_line_source_file_uuid", kRPVComputeColumnPcSamplingInstructionSourceLineSourceFileUuid},
 		{"pc_sample_state_active_thread_percent", kRPVComputeColumnPcSampleStateActiveThreadPercent},
 		{"pc_sample_state_wave_occupancy_percent", kRPVComputeColumnPcSampleStateWaveOccupancyPercent},
 		{"pc_sample_state_dispatch_uuid", kRPVComputeColumnPcSampleStateDispatchUuid},
@@ -461,7 +462,8 @@ namespace DataModel
 					"SELECT isl.instruction_source_line_uuid, "
 					"isl.instruction_uuid AS instruction_source_line_instruction_uuid, "
 					"isl.source_line_uuid AS instruction_source_line_source_line_uuid, "
-					"COALESCE(isl.frame_index, 0) AS instruction_source_line_frame_index "
+					"COALESCE(isl.frame_index, 0) AS instruction_source_line_frame_index, "
+					"sl.source_file_uuid AS instruction_source_line_source_file_uuid "
 					"FROM compute_instruction_source_line isl "
 					"JOIN compute_instruction_line il ON il.instruction_uuid = isl.instruction_uuid "
 					"JOIN compute_source_line sl ON sl.source_line_uuid = isl.source_line_uuid "

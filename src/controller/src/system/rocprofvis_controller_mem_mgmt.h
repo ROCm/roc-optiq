@@ -103,7 +103,8 @@ namespace RocProfVis
 
         struct LRUMember
         {
-            std::set<void*>  m_array_ptr;
+            // Arrays that depend on this segment. AddLRUReference adds, CheckInUse drops.
+            std::unordered_set<uint64_t>  m_array_ids;
         };
 
 
@@ -131,12 +132,16 @@ namespace RocProfVis
 
             virtual ~MemoryManager();
 
-            void AddLRUReference(SegmentTimeline* owner,
-                                                    Segment* reference, uint32_t lod,
-                                                    void* array_ptr);
-            rocprofvis_result_t EnterArrayOwnership(void* array_ptr,
+            /* Makes the segment an eviction candidate and records that `array_id`
+               depends on it. The segment stays pinned while that array is entered.
+               @param array_id: the fetch result array the segment was created for or
+                                read into. */
+            void                AddLRUReference(SegmentTimeline* owner, Segment* reference,
+                                                uint64_t array_id);
+
+            rocprofvis_result_t EnterArrayOwnership(uint64_t array_id,
                                                    rocprofvis_owner_type_t type);
-            rocprofvis_result_t CancelArrayOwnership(void* array_ptr,
+            rocprofvis_result_t CancelArrayOwnership(uint64_t array_id,
                                                     rocprofvis_owner_type_t type);
             void                Configure(double weight);
 
@@ -150,7 +155,7 @@ namespace RocProfVis
         private:
 
             uint64_t                                                    m_id;
-            std::unordered_set<void*>                                   m_lru_inuse_lookup[kRocProfVisNumberOfOwnerTypes];
+            std::unordered_set<uint64_t>                                m_lru_inuse_lookup[kRocProfVisNumberOfOwnerTypes];
             std::map <SegmentTimeline*, std::unique_ptr<LRUOwnerMember>>  m_lru_array;
             std::condition_variable                                     m_lru_cv;
             std::thread                                                 m_lru_thread;

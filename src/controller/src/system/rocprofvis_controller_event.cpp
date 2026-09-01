@@ -55,7 +55,7 @@ Event::~Event()
 bool
 Event::IsDeletable()
 {
-    return --m_retain_counter <= 0;
+    return (m_retain_counter == 0) ? true : --m_retain_counter == 0;
 }
 
 void

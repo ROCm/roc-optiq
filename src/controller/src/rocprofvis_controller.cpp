@@ -714,11 +714,14 @@ void rocprofvis_controller_array_free(rocprofvis_controller_array_t* object)
     RocProfVis::Controller::ArrayRef array(object);
     if (array.IsValid())
     {
-        if(array.Get()->GetContext() &&
-           ((RocProfVis::Controller::SystemTrace*) array.Get()->GetContext())->GetMemoryManager())
+        if(array.Get()->GetContext())
         {
-            ((RocProfVis::Controller::SystemTrace*)array.Get()->GetContext())->GetMemoryManager()->CancelArrayOwnership(&array.Get()->GetVector(),
-                                      RocProfVis::Controller::kRocProfVisOwnerTypeGraph);
+            RocProfVis::Controller::MemoryManager* mgr = ((RocProfVis::Controller::SystemTrace*) array.Get()->GetContext())->GetMemoryManager();
+            if(mgr)
+            {
+                mgr->CancelArrayOwnership(array.Get()->GetArrayId(), RocProfVis::Controller::kRocProfVisOwnerTypeTrack);
+                mgr->CancelArrayOwnership(array.Get()->GetArrayId(), RocProfVis::Controller::kRocProfVisOwnerTypeGraph);           
+            }
         }
         delete array.Get();
     }

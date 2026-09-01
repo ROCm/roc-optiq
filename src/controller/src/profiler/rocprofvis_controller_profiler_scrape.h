@@ -106,16 +106,23 @@ public:
     void SkipRemainingFrom(uint32_t first_unstarted_stage);
 
     rocprofvis_result_t GetValue(std::string const& key, std::string& out) const;
-    // Callers must treat an unknown key as an error before reading a status;
-    // HasKey is the only way to tell "no such key" from "never matched".
-    rocprofvis_profiler_scrape_status_t GetStatus(std::string const& key) const;
-    bool                                HasKey(std::string const& key) const;
 
-    bool                                GetStageValue(uint32_t           stage_index,
-                                                      std::string const& key,
-                                                      std::string&       out) const;
-    rocprofvis_profiler_scrape_status_t GetStageStatus(uint32_t           stage_index,
-                                                       std::string const& key) const;
+    /*
+     * Status of `key`, or kRocProfVisResultInvalidArgument when no stage
+     * declares it. An unknown key is reported separately from a key that never
+     * matched: the first is a caller naming something that does not exist, the
+     * second is the tool not printing what we expected, and conflating them
+     * points whoever is debugging at the wrong layer. `out` is untouched on
+     * failure.
+     */
+    rocprofvis_result_t GetStatus(std::string const&                   key,
+                                  rocprofvis_profiler_scrape_status_t& out) const;
+    rocprofvis_result_t GetStageStatus(uint32_t                             stage_index,
+                                       std::string const&                   key,
+                                       rocprofvis_profiler_scrape_status_t& out) const;
+
+    bool HasKey(std::string const& key) const;
+    bool GetStageValue(uint32_t stage_index, std::string const& key, std::string& out) const;
 
     void SetValue(uint32_t stage_index, std::string const& key, std::string const& value);
 
@@ -135,14 +142,23 @@ private:
         size_t       index_in_key = 0;
     };
 
+    void emit_line(std::string const& line);
     void match_line(std::string const& raw_line);
+    void sink_line(std::string const& text);
     void inject_diagnostic(std::string const& text);
-    // The last stage declaring `key`, or npos-equivalent via a null return.
+    // The last stage declaring `key`, or null when no stage does.
     ProfilerScrapeSlot const* find_latest(std::string const& key) const;
 
     std::vector<std::vector<CompiledRule>>              m_rules;
     std::map<ProfilerScrapeSlotKey, ProfilerScrapeSlot> m_slots;
+    // Bytes of the current line that have arrived without a terminator yet.
     std::string                                         m_remainder;
+    // Set when that line passed the byte cap and was dropped, so its tail is
+    // discarded rather than matched as if it were a line of its own.
+    bool                                                m_line_overflow = false;
+    // Lines in this stage too long to scan. Only interesting alongside a key
+    // that never matched, which is the one case where it explains something.
+    size_t                                              m_lines_skipped   = 0;
     uint32_t                                            m_current_stage   = 0;
     std::string*                                        m_diagnostic_sink = nullptr;
 };

@@ -154,25 +154,33 @@ void ProfilerScrapeEngine::SetDiagnosticSink(std::string* output_text)
     m_diagnostic_sink = output_text;
 }
 
+void ProfilerScrapeEngine::sink_line(std::string const& text)
+{
+    if (m_diagnostic_sink == nullptr)
+    {
+        return;
+    }
+    if (!m_diagnostic_sink->empty() && m_diagnostic_sink->back() != '\n')
+    {
+        m_diagnostic_sink->push_back('\n');
+    }
+    *m_diagnostic_sink += "[optiq] ";
+    *m_diagnostic_sink += text;
+    m_diagnostic_sink->push_back('\n');
+}
+
 void ProfilerScrapeEngine::inject_diagnostic(std::string const& text)
 {
     spdlog::error("{}", text);
-    if (m_diagnostic_sink != nullptr)
-    {
-        if (!m_diagnostic_sink->empty() && m_diagnostic_sink->back() != '\n')
-        {
-            m_diagnostic_sink->push_back('\n');
-        }
-        *m_diagnostic_sink += "[optiq] ";
-        *m_diagnostic_sink += text;
-        m_diagnostic_sink->push_back('\n');
-    }
+    sink_line(text);
 }
 
 void ProfilerScrapeEngine::BeginStage(uint32_t stage_index)
 {
     m_current_stage = stage_index;
     m_remainder.clear();
+    m_line_overflow = false;
+    m_lines_skipped = 0;
 }
 
 void ProfilerScrapeEngine::Feed(std::string const& chunk)
@@ -187,24 +195,59 @@ void ProfilerScrapeEngine::Feed(std::string const& chunk)
     size_t start = 0;
     while (start < m_remainder.size())
     {
-        size_t const nl = m_remainder.find('\n', start);
-        if (nl == std::string::npos)
+        // '\r' ends a line as much as '\n' does. Not for the profilers' own
+        // output - both log whole lines - but the profiled application shares
+        // this stream, and a progress bar that redraws in place is ordinary in
+        // the ML workloads this tool profiles. Treating only '\n' as a
+        // terminator would make such a run one unbounded line.
+        size_t const term = m_remainder.find_first_of("\r\n", start);
+        if (term == std::string::npos)
         {
             break;
         }
-        std::string line = m_remainder.substr(start, nl - start);
-        if (!line.empty() && line.back() == '\r')
+        // A '\r' at the very end may be the first half of a CRLF split across
+        // chunks. Wait for the next byte rather than emitting a short line and
+        // then a spurious empty one.
+        if (m_remainder[term] == '\r' && term + 1 >= m_remainder.size())
         {
-            line.pop_back();
+            break;
         }
-        match_line(line);
-        start = nl + 1;
+
+        emit_line(m_remainder.substr(start, term - start));
+
+        start = term + 1;
+        if (m_remainder[term] == '\r' && m_remainder[start] == '\n')
+        {
+            ++start;
+        }
     }
 
     if (start > 0)
     {
         m_remainder.erase(0, start);
     }
+
+    // Past the cap this line can never match, so stop holding it. Dropping the
+    // tail bounds the buffer at one line rather than letting output with no
+    // terminator at all grow for the length of the run.
+    if (m_remainder.size() > kProfilerScrapeLineMaxBytes)
+    {
+        m_remainder.clear();
+        m_line_overflow = true;
+    }
+}
+
+void ProfilerScrapeEngine::emit_line(std::string const& line)
+{
+    if (m_line_overflow)
+    {
+        // The head of this line was already discarded; the tail on its own
+        // would match rules against a fragment.
+        m_line_overflow = false;
+        ++m_lines_skipped;
+        return;
+    }
+    match_line(line);
 }
 
 void ProfilerScrapeEngine::match_line(std::string const& raw_line)
@@ -214,6 +257,7 @@ void ProfilerScrapeEngine::match_line(std::string const& raw_line)
 
     if (line.size() > kProfilerScrapeLineMaxBytes)
     {
+        ++m_lines_skipped;
         return;
     }
 
@@ -297,13 +341,22 @@ void ProfilerScrapeEngine::EndStage(std::string const& working_directory)
     if (!m_remainder.empty())
     {
         std::string line = m_remainder;
-        if (!line.empty() && line.back() == '\r')
+        if (line.back() == '\r')
         {
             line.pop_back();
         }
-        match_line(line);
+        emit_line(line);
         m_remainder.clear();
     }
+    if (m_line_overflow)
+    {
+        // Output that ran past the cap and then stopped without a terminator,
+        // so no later line arrived to account for it.
+        ++m_lines_skipped;
+        m_line_overflow = false;
+    }
+
+    std::string unmatched_keys;
 
     for (auto& kv : m_slots)
     {
@@ -342,8 +395,28 @@ void ProfilerScrapeEngine::EndStage(std::string const& working_directory)
             else if (slot.status == kRPVProfilerScrapePending)
             {
                 slot.status = kRPVProfilerScrapeUnmatched;
+                if (!unmatched_keys.empty())
+                {
+                    unmatched_keys += "', '";
+                }
+                unmatched_keys += key;
             }
         }
+    }
+
+    // Long lines are ordinary on their own - compute prints demangled kernel
+    // names - so they are only worth reporting when something also went
+    // missing. Saying it once per stage keeps a chatty target from burying the
+    // rest of the log.
+    if (m_lines_skipped > 0 && !unmatched_keys.empty())
+    {
+        std::string const text =
+            "'" + unmatched_keys + "' not found in the profiler output, and " +
+            std::to_string(m_lines_skipped) + " line(s) were too long to scan (over " +
+            std::to_string(kProfilerScrapeLineMaxBytes) +
+            " bytes); the value may have been on one of them";
+        spdlog::warn("{}", text);
+        sink_line(text);
     }
 }
 
@@ -394,14 +467,16 @@ rocprofvis_result_t ProfilerScrapeEngine::GetValue(std::string const& key, std::
     }
 }
 
-rocprofvis_profiler_scrape_status_t ProfilerScrapeEngine::GetStatus(std::string const& key) const
+rocprofvis_result_t ProfilerScrapeEngine::GetStatus(
+    std::string const& key, rocprofvis_profiler_scrape_status_t& out) const
 {
     ProfilerScrapeSlot const* slot = find_latest(key);
     if (slot == nullptr)
     {
-        return kRPVProfilerScrapeUnmatched;
+        return kRocProfVisResultInvalidArgument;
     }
-    return slot->status;
+    out = slot->status;
+    return kRocProfVisResultSuccess;
 }
 
 bool ProfilerScrapeEngine::HasKey(std::string const& key) const
@@ -421,15 +496,17 @@ bool ProfilerScrapeEngine::GetStageValue(uint32_t stage_index, std::string const
     return true;
 }
 
-rocprofvis_profiler_scrape_status_t ProfilerScrapeEngine::GetStageStatus(
-    uint32_t stage_index, std::string const& key) const
+rocprofvis_result_t ProfilerScrapeEngine::GetStageStatus(
+    uint32_t stage_index, std::string const& key,
+    rocprofvis_profiler_scrape_status_t& out) const
 {
     auto it = m_slots.find(ProfilerScrapeSlotKey(stage_index, key));
     if (it == m_slots.end())
     {
-        return kRPVProfilerScrapeUnmatched;
+        return kRocProfVisResultInvalidArgument;
     }
-    return it->second.status;
+    out = it->second.status;
+    return kRocProfVisResultSuccess;
 }
 
 void ProfilerScrapeEngine::SetValue(uint32_t stage_index, std::string const& key,
@@ -551,8 +628,19 @@ rocprofvis_result_t resolve_stage_placeholders(std::vector<std::string>&    argv
             std::string value;
             if (!scrape.GetStageValue(stage_index, key, value))
             {
-                error_message =
-                    placeholder_error_message(key, scrape.GetStageStatus(stage_index, key));
+                rocprofvis_profiler_scrape_status_t status = kRPVProfilerScrapePending;
+                if (scrape.GetStageStatus(stage_index, key, status) !=
+                    kRocProfVisResultSuccess)
+                {
+                    // No rule in that stage produces this key at all, so this
+                    // is a bad placeholder rather than missing tool output.
+                    error_message = "Placeholder '{stage" + std::to_string(stage_index) + "." +
+                                    key + "}' names a value that no stage produces.";
+                }
+                else
+                {
+                    error_message = placeholder_error_message(key, status);
+                }
                 return kRocProfVisResultInvalidArgument;
             }
             resolved += value;

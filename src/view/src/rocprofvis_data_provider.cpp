@@ -4451,7 +4451,7 @@ DataProvider::FetchPcSampling(const PcSamplingRequestParams& params)
     switch(params.m_layer)
     {
         case PcSamplingLayer::kIsa:
-            result = rocprofvis_controller_pc_sampling_fetch_mandatorys_async(
+            result = rocprofvis_controller_pc_sampling_fetch_isa_lines_async(
                 m_trace_controller, args, future, pc_handle);
             break;
         case PcSamplingLayer::kSource:

@@ -299,7 +299,7 @@ rocprofvis_result_t rocprofvis_controller_metric_fetch_async(rocprofvis_controll
  * @param output The PC sampling handle to write to
  * @returns kRocProfVisResultSuccess or an error code.
  */
-rocprofvis_result_t rocprofvis_controller_pc_sampling_fetch_mandatorys_async(rocprofvis_controller_t* controller, rocprofvis_controller_arguments_t* args, rocprofvis_controller_future_t* result, rocprofvis_handle_t* output);
+rocprofvis_result_t rocprofvis_controller_pc_sampling_fetch_isa_lines_async(rocprofvis_controller_t* controller, rocprofvis_controller_arguments_t* args, rocprofvis_controller_future_t* result, rocprofvis_handle_t* output);
 
 /*
  * Fetch PC sampling source-file metadata, instruction/source mappings, and source

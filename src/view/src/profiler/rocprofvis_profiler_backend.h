@@ -81,12 +81,14 @@ public:
      *
      * argv_out receives every argument after argv[0] (the profiler binary), in
      * the exact order and form the process will see it: the backend's own flags,
-     * config.extra_argv, the output path in whatever spelling this profiler
-     * uses, and the target executable plus its arguments (word-split with
+     * config.extra_argv, any output-path flag this profiler uses on the command
+     * line (some tools take the path only as an environment variable, or not at
+     * all), and the target executable plus its arguments (word-split with
      * SplitArguments) wherever this profiler expects them. Command-line shape
-     * varies enough between profilers that no part of it is synthesized for the
-     * backend downstream - what is emitted here is what runs, and it is also
-     * what the command preview renders, so the two cannot drift apart.
+     * varies enough between profilers - and between tools of the same profiler -
+     * that no part of it is synthesized for the backend downstream. What is
+     * emitted here is what runs, and it is also what the command preview
+     * renders, so the two cannot drift apart.
      *
      * Each entry becomes one argv entry verbatim; nothing is re-split on
      * whitespace or interpreted by a shell, so paths and arguments containing

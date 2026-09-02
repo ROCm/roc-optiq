@@ -137,6 +137,8 @@ jobs:
       - name: Install OpenSSL
         if: inputs.crypto_backend == 'OpenSSL'
         run: |
+          dnf install -y 'dnf-command(config-manager)'
+          dnf config-manager --set-enabled crb
           dnf install -y openssl-devel
 
       - name: Build, Make, and Verify Installation

@@ -101,6 +101,22 @@ jobs:
       upload_to_s3: ${{ github.event_name == 'schedule' || github.event.inputs.upload_to_s3 == 'true' }}
       s3_root_directory: ${{ github.event_name == 'schedule' && 'nightly' || 'test' }}
 
+  ci-redhat-experimental:
+    name: RedHat CI - Experimental
+    needs: setup
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.enable_ci_redhat }}
+    uses: ./.github/workflows/ci-redhat.yml
+    secrets: inherit
+    with:
+      os_version: ${{ needs.setup.outputs.redhat-os-versions }}
+      upload_to_github: ${{ github.event_name == 'schedule' || github.event.inputs.upload_to_github == 'true' }}
+      upload_to_s3: ${{ github.event_name == 'schedule' || github.event.inputs.upload_to_s3 == 'true' }}
+      s3_root_directory: ${{ github.event_name == 'schedule' && 'nightly' || 'test' }}
+      # EXPERIMENTAL FLAGS
+      crypto_backend: 'OpenSSL'
+      enable_profiler: true
+      enable_remote: true
+
   ci-ubuntu:
     name: Ubuntu CI
     needs: setup

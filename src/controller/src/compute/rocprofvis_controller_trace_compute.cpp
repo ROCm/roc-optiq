@@ -1233,7 +1233,11 @@ rocprofvis_dm_result_t ComputeTrace::ExecuteQuery(rocprofvis_dm_database_t      
                             rocprofvis_dm_table_t table_handle = rocprofvis_dm_get_property_as_handle(dm, kRPVDMTableHandleByID, table_id);
                             if(table_handle)
                             {
-                                if(!controller_future || (controller_future && !controller_future->IsCancelled()))
+                                if(controller_future && controller_future->IsCancelled())
+                                {
+                                    result = kRocProfVisDmResultDbAbort;
+                                }
+                                else
                                 {
                                     uint64_t num_columns = rocprofvis_dm_get_property_as_uint64(table_handle, kRPVDMNumberOfTableColumnsUInt64, 0);
                                     uint64_t num_rows = rocprofvis_dm_get_property_as_uint64(table_handle, kRPVDMNumberOfTableRowsUInt64, 0);

@@ -103,7 +103,7 @@ namespace RocProfVis
 
         struct LRUMember
         {
-            // Arrays that depend on this segment. AddLRUReference adds, CheckInUse drops.
+            // Arrays that depend on this segment.
             std::unordered_set<uint64_t>  m_array_ids;
         };
 

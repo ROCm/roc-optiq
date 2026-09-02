@@ -241,22 +241,29 @@ bool
 MemoryManager::CheckInUse(LRUMember* lru)
 {
     bool is_in_use = false;
-
-    std::unique_lock lru_lock(m_lru_mutex);
-    std::unique_lock track_lock(m_lru_inuse_mutex[kRocProfVisOwnerTypeTrack]);
-    std::unique_lock graph_lock(m_lru_inuse_mutex[kRocProfVisOwnerTypeGraph]);
-
-    for(auto it = lru->m_array_ids.begin(); it != lru->m_array_ids.end();)
     {
-        if(m_lru_inuse_lookup[kRocProfVisOwnerTypeTrack].count(*it) > 0 ||
-           m_lru_inuse_lookup[kRocProfVisOwnerTypeGraph].count(*it) > 0)
+        std::unique_lock lock(m_lru_inuse_mutex[kRocProfVisOwnerTypeTrack]);
+        for(auto array_id : lru->m_array_ids)
         {
-            is_in_use = true;
-            ++it;
+            auto inuse = m_lru_inuse_lookup[kRocProfVisOwnerTypeTrack].find(array_id);
+            if(inuse != m_lru_inuse_lookup[kRocProfVisOwnerTypeTrack].end())
+            {
+                is_in_use = true;
+                break;
+            }
         }
-        else
+    }
+    if (!is_in_use)
+    {
+        std::unique_lock lock(m_lru_inuse_mutex[kRocProfVisOwnerTypeGraph]);
+        for(auto array_id : lru->m_array_ids)
         {
-            it = lru->m_array_ids.erase(it);
+            auto inuse = m_lru_inuse_lookup[kRocProfVisOwnerTypeGraph].find(array_id);
+            if(inuse != m_lru_inuse_lookup[kRocProfVisOwnerTypeGraph].end())
+            {
+                is_in_use = true;
+                break;
+            }
         }
     }
     return is_in_use;
@@ -398,9 +405,7 @@ MemoryManager::ManageLRU()
                         .count();
                 for(auto& [owner, member] : sorted_entries)
                 {
-                    if(couldnt_take_lock.size() > 0 &&
-                       std::find(couldnt_take_lock.begin(), couldnt_take_lock.end(),
-                                 owner) != couldnt_take_lock.end())
+                    if(std::find(locked.begin(), locked.end(), owner) == locked.end())
                     {
                         continue;
                     }

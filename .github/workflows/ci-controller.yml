@@ -108,7 +108,7 @@ jobs:
   ci-redhat-experimental:
     name: RedHat CI - Experimental
     needs: setup
-    if: ${{ github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.enable_ci_experimental) }}
+    if: ${{ github.event_name != 'workflow_dispatch' || (inputs.enable_ci_redhat && inputs.enable_ci_experimental) }}
     uses: ./.github/workflows/ci-redhat.yml
     secrets: inherit
     with:
@@ -137,7 +137,7 @@ jobs:
   ci-ubuntu-experimental:
     name: Ubuntu CI - Experimental
     needs: setup
-    if: ${{ github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.enable_ci_experimental) }}
+    if: ${{ github.event_name != 'workflow_dispatch' || (inputs.enable_ci_ubuntu && inputs.enable_ci_experimental) }}
     uses: ./.github/workflows/ci-ubuntu.yml
     secrets: inherit
     with:
@@ -166,7 +166,7 @@ jobs:
   ci-windows-experimental:
     name: Windows CI - Experimental
     needs: setup
-    if: ${{ github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.enable_ci_experimental) }}
+    if: ${{ github.event_name != 'workflow_dispatch' || (inputs.enable_ci_windows && inputs.enable_ci_experimental) }}
     uses: ./.github/workflows/ci-windows.yml
     secrets: inherit
     with:
@@ -194,7 +194,7 @@ jobs:
   ci-mac-experimental:
     name: macOS CI - Experimental
     needs: setup
-    if: ${{ github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.enable_ci_experimental) }}
+    if: ${{ github.event_name != 'workflow_dispatch' || (inputs.enable_ci_mac && inputs.enable_ci_experimental) }}
     uses: ./.github/workflows/ci-mac.yml
     secrets: inherit
     with:

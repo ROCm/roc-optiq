@@ -37,6 +37,7 @@ on:
           - nightly
           - rc
           - release
+          - nightly-experimental
       release_version:
         description: 'Manually specify a release version to use in the S3 bucket path. Defaults to YYYY_MM_DD timestamp if left empty.'
         type: string

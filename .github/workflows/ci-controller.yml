@@ -25,7 +25,7 @@ on:
         type: boolean
         default: true
       enable_ci_experimental:
-        description: 'Run Experimental CI? (all platforms)'
+        description: 'Run Experimental CI?'
         type: boolean
         default: false
       enable_ci_asan:

@@ -21,7 +21,7 @@
 #include <iostream>
 #include <stdio.h>
 #include <stdlib.h>
-#ifdef __linux__
+#if defined(__linux__) && defined(ROCPROFVIS_MULTI_WINDOW)
 #    include <unordered_map>
 #endif
 
@@ -33,7 +33,7 @@ static bool                             g_file_was_dropped = false;
 static rocprofvis_view_render_options_t g_render_options =
     rocprofvis_view_render_options_t::kRocProfVisViewRenderOption_None;
 
-#ifdef __linux__
+#if defined(__linux__) && defined(ROCPROFVIS_MULTI_WINDOW)
 // Per-frame snapshot of the "intended" (drag-target) position that
 // UpdateMouseMovingWindowNewFrame() wrote into viewport->Pos before we
 // snap it to the actual OS position.  Populated in the post-NewFrame
@@ -171,7 +171,7 @@ mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
 }
 #endif
 
-#ifdef __linux__
+#if defined(__linux__) && defined(ROCPROFVIS_MULTI_WINDOW)
 // Resolve the post-drag click-through workaround from the stored preference,
 // updating it first when --drag-repair was passed. Must run after the view is
 // initialized, because that is what loads the settings file.
@@ -224,7 +224,9 @@ parse_command_line_args(int argc, char** argv, RocProfVis::View::CLIParser& cli_
         "Set file dialog backend: 'auto' (default), 'native' (system file "
         "dialog), or 'imgui' (built-in). Use 'imgui' when running over SSH",
         true);
-#ifdef __linux__
+// The workaround only has anything to repair when panels can be dragged into
+// their own OS window, so the option is absent from a build without it.
+#if defined(__linux__) && defined(ROCPROFVIS_MULTI_WINDOW)
     result &= cli_parser.AddOption(
         "r", "drag-repair",
         "Linux post-drag click-through fix for floating windows "
@@ -417,7 +419,7 @@ main(int argc, char** argv)
                     app_notification_callback(window, notification);
                 }, fd_pref);
 
-#ifdef __linux__
+#if defined(__linux__) && defined(ROCPROFVIS_MULTI_WINDOW)
                 configure_drag_repair(cli_parser);
 #endif
 
@@ -512,7 +514,7 @@ main(int argc, char** argv)
                     backend.m_new_frame(&backend);
                     ImGui::NewFrame();
 
-#ifdef __linux__
+#if defined(__linux__) && defined(ROCPROFVIS_MULTI_WINDOW)
                     // Hook A: snap secondary viewport Pos to the actual
                     // OS window position before user code runs, so
                     // hit-testing and rendering agree with reality when
@@ -557,7 +559,7 @@ main(int argc, char** argv)
                     if(io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
                     {
                         GLFWwindow* backup_current_context = glfwGetCurrentContext();
-#ifdef __linux__
+#if defined(__linux__) && defined(ROCPROFVIS_MULTI_WINDOW)
                         // Hook B: restore the drag-target Pos we
                         // temporarily replaced with the OS pos in Hook A
                         // so UpdatePlatformWindows() still transmits the

@@ -255,7 +255,8 @@ public:
         const std::function<void(const std::string&, uint64_t, bool)>& callback);
     void SetFetchPcSamplingCallback(
         const std::function<void(const std::string&, PcSamplingLayer, uint32_t,
-                                 uint64_t, uint32_t, bool)>& callback);
+                                 uint64_t, uint32_t, uint64_t,
+                                 rocprofvis_result_t)>& callback);
 
 private:
     struct ProcessChildCount
@@ -434,7 +435,7 @@ private:
 
     std::function<void(const std::string&, uint64_t, bool)> m_metrics_fetch_callback;
     std::function<void(const std::string&, PcSamplingLayer, uint32_t, uint64_t,
-                       uint32_t, bool)>
+                       uint32_t, uint64_t, rocprofvis_result_t)>
         m_pc_sampling_fetch_callback;
 };
 

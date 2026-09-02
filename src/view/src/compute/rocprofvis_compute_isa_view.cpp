@@ -50,8 +50,10 @@ ComputeIsaView::ComputeIsaView(DataProvider& data_provider)
 
     m_data_provider.SetFetchPcSamplingCallback(
         [this](const std::string&, PcSamplingLayer layer, uint32_t kernel_id,
-               uint64_t source_file_uuid, uint32_t generation, bool success) {
-            OnPcSamplingReady(layer, kernel_id, source_file_uuid, generation, success);
+               uint64_t source_file_uuid, uint32_t generation,
+               uint64_t request_token, rocprofvis_result_t result) {
+            OnPcSamplingReady(layer, kernel_id, source_file_uuid, generation,
+                              request_token, result);
         });
 }
 
@@ -158,7 +160,7 @@ ComputeIsaView::ClearSelectionData()
     ClearCodeData();
 }
 
-KindFetchState&
+FetchStateType&
 ComputeIsaView::FetchStateFor(PcSamplingLayer layer)
 {
     switch(layer)
@@ -176,7 +178,9 @@ ComputeIsaView::FetchStateFor(PcSamplingLayer layer)
 void
 ComputeIsaView::QueuePcSamplingFetch(PcSamplingLayer layer)
 {
-    FetchStateFor(layer).queued = true;
+    FetchStateType& state = FetchStateFor(layer);
+    state.queued           = true;
+    state.request_token    = ++m_next_request_token;
 }
 
 void
@@ -229,13 +233,14 @@ ComputeIsaView::TryTakeNextPendingPcSamplingFetch(PcSamplingLayer& layer)
 void
 ComputeIsaView::SubmitPcSamplingFetch(PcSamplingLayer layer)
 {
+    FetchStateType& state = FetchStateFor(layer);
     const uint64_t source_file_uuid =
         layer == PcSamplingLayer::kSource ? m_source.selected_uuid : 0;
     const PcSamplingRequestParams params(layer, m_current_workload_id,
-                                         m_current_kernel_id, source_file_uuid,
-                                         m_fetch_generation);
+                                          m_current_kernel_id, source_file_uuid,
+                                          m_fetch_generation, state.request_token);
     if(m_data_provider.FetchPcSampling(params))
-        FetchStateFor(layer).in_flight = true;
+        state.in_flight = true;
     else
         QueuePcSamplingFetch(layer);
 }
@@ -258,21 +263,25 @@ ComputeIsaView::FetchPendingPcSampling()
 void
 ComputeIsaView::OnPcSamplingReady(PcSamplingLayer layer, uint32_t kernel_id,
                                    uint64_t source_file_uuid, uint32_t generation,
-                                   bool success)
+                                   uint64_t request_token, rocprofvis_result_t result)
 {
     if(generation != m_fetch_generation)
         return;
 
-    KindFetchState& state = FetchStateFor(layer);
-    if(!state.in_flight) return;
-    state.in_flight = false;
-
+    FetchStateType& state = FetchStateFor(layer);
+    if(request_token != state.request_token)
+        return;
     if(kernel_id != m_current_kernel_id ||
        (layer == PcSamplingLayer::kSource && m_source.selected_uuid != 0 &&
         source_file_uuid != m_source.selected_uuid))
         return;
+    if(!state.in_flight) return;
+    state.in_flight = false;
 
-    if(!success)
+    if(result == kRocProfVisResultCancelled)
+        return;
+
+    if(result != kRocProfVisResultSuccess)
     {
         if(layer == PcSamplingLayer::kStalls) m_show_metadata_enabled = false;
         return;
@@ -323,7 +332,17 @@ ComputeIsaView::SelectSourceFile(uint64_t source_file_uuid)
     m_source.selected_uuid = source_file_uuid;
     m_source.widget->Load({}, 0);
     if(m_source.loaded_uuids.count(source_file_uuid))
+    {
+        m_source.queued        = false;
+        m_source.request_token = ++m_next_request_token;
+        if(m_source.in_flight)
+        {
+            m_data_provider.CancelRequest(
+                DataProvider::FETCH_PC_SAMPLING_SOURCE_REQUEST_ID);
+            m_source.in_flight = false;
+        }
         RefreshCodeWidgets();
+    }
     else
         QueuePcSamplingFetch(PcSamplingLayer::kSource);
 }

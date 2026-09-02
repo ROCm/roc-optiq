@@ -2393,6 +2393,8 @@ DataProvider::HandleRequests()
                 req.request_future = nullptr;
                 const uint64_t    erased_id   = req.request_id;
                 const RequestType erased_type = req.request_type;
+                // Keep the replacement marker visible while processing so a
+                // superseded PC sampling completion cannot update the model or UI.
                 ProcessRequest(req);
                 // remove request from processing container
                 it = m_requests.erase(it);
@@ -2405,7 +2407,14 @@ DataProvider::HandleRequests()
                     {
                         PcSamplingRequestParams pending = std::move(replacement->second);
                         m_pc_sampling_replacements.erase(replacement);
-                        FetchPcSampling(pending);
+                        if(!FetchPcSampling(pending) && m_pc_sampling_fetch_callback)
+                        {
+                            m_pc_sampling_fetch_callback(
+                                m_model.GetTraceFilePath(), pending.m_layer,
+                                pending.m_kernel_id, pending.m_source_file_uuid,
+                                pending.m_generation, pending.m_request_token,
+                                kRocProfVisResultUnknownError);
+                        }
                     }
                 }
             }
@@ -4388,7 +4397,8 @@ void DataProvider::SetFetchMetricsCallback(
 void
 DataProvider::SetFetchPcSamplingCallback(
     const std::function<void(const std::string&, PcSamplingLayer, uint32_t,
-                             uint64_t, uint32_t, bool)>& callback)
+                             uint64_t, uint32_t, uint64_t,
+                             rocprofvis_result_t)>& callback)
 {
     m_pc_sampling_fetch_callback = callback;
 }
@@ -5387,6 +5397,14 @@ DataProvider::ProcessPcSamplingRequest(RequestInfo& req)
     if(!params)
         return;
 
+    if(m_pc_sampling_replacements.count(req.request_id))
+    {
+        req.request_obj_handle = nullptr;
+        spdlog::debug("Discarding superseded PC sampling {} request",
+                      static_cast<uint32_t>(params->m_layer));
+        return;
+    }
+
     const bool           success   = (req.response_code == kRocProfVisResultSuccess);
     rocprofvis_handle_t* pc_handle = req.request_obj_handle;
     uint64_t             completed_source_file_uuid = params->m_source_file_uuid;
@@ -5430,8 +5448,9 @@ DataProvider::ProcessPcSamplingRequest(RequestInfo& req)
     if(m_pc_sampling_fetch_callback)
     {
         m_pc_sampling_fetch_callback(m_model.GetTraceFilePath(), params->m_layer,
-                                     params->m_kernel_id, completed_source_file_uuid,
-                                     params->m_generation, success);
+                                      params->m_kernel_id, completed_source_file_uuid,
+                                      params->m_generation, params->m_request_token,
+                                      static_cast<rocprofvis_result_t>(req.response_code));
     }
 }
 

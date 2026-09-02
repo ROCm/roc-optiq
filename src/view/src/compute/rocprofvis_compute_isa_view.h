@@ -36,26 +36,27 @@ struct LineSelection
     uint64_t isa_scroll_line    = UNSELECTED;
 };
 
-struct KindFetchState
+struct FetchStateType
 {
-    bool queued    = false;  // waiting to submit to DataProvider
-    bool in_flight = false;  // submitted, awaiting callback
-    bool loaded    = false;  // data received and applied to model
+    bool     queued        = false;  // waiting to submit to DataProvider
+    bool     in_flight     = false;  // submitted, awaiting callback
+    bool     loaded        = false;  // data received and applied to model
+    uint64_t request_token = 0;      // identifies the latest request for this layer
 };
 
-struct IsaPane : KindFetchState
+struct IsaPane : FetchStateType
 {
     uint64_t                       code_object_uuid = ComputeSelection::INVALID_SELECTION_ID;
     std::shared_ptr<IsaCodeWidget> widget;
 
     void ResetFetch()
     {
-        static_cast<KindFetchState&>(*this) = {};
+        static_cast<FetchStateType&>(*this) = {};
         code_object_uuid = ComputeSelection::INVALID_SELECTION_ID;
     }
 };
 
-struct SourcePane : KindFetchState
+struct SourcePane : FetchStateType
 {
     uint64_t                                        selected_uuid = 0;
     std::map<std::string /*path*/, uint64_t /*id*/> files;
@@ -64,7 +65,7 @@ struct SourcePane : KindFetchState
 
     void ResetFetch()
     {
-        static_cast<KindFetchState&>(*this) = {};
+        static_cast<FetchStateType&>(*this) = {};
         selected_uuid = 0;
         files.clear();
         loaded_uuids.clear();
@@ -93,14 +94,15 @@ private:
     void QueuePcSamplingFetch(PcSamplingLayer layer);
     void            ClearPendingPcSamplingFetches();
     void            CancelInFlightFetches();
-    KindFetchState& FetchStateFor(PcSamplingLayer layer);
+    FetchStateType& FetchStateFor(PcSamplingLayer layer);
     bool HasValidPcSamplingSelection() const;
     bool TryTakeNextPendingPcSamplingFetch(PcSamplingLayer& layer);
     void SubmitPcSamplingFetch(PcSamplingLayer layer);
     void FetchPendingPcSampling();
     void RefreshCodeWidgets();
     void OnPcSamplingReady(PcSamplingLayer layer, uint32_t kernel_id,
-                           uint64_t source_file_uuid, uint32_t generation, bool success);
+                           uint64_t source_file_uuid, uint32_t generation,
+                           uint64_t request_token, rocprofvis_result_t result);
 
     SettingsManager&                  m_settings;
     DataProvider&                     m_data_provider;
@@ -111,9 +113,10 @@ private:
     uint32_t                          m_current_kernel_id;
     uint32_t                          m_current_workload_id;
     uint32_t                          m_fetch_generation = 0;
+    uint64_t                          m_next_request_token = 0;
     IsaPane                           m_isa;
     SourcePane                        m_source;
-    KindFetchState                    m_stalls;
+    FetchStateType                    m_stalls;
 
     LineSelection                     m_line_selection;
 

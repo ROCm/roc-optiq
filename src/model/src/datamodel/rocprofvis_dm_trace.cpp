@@ -71,9 +71,9 @@ rocprofvis_dm_result_t Trace::DeleteSliceAtTimeRange(rocprofvis_dm_timestamp_t s
 }
 
 rocprofvis_dm_result_t
-Trace::DeleteSliceByHandle(rocprofvis_dm_track_id_t track, rocprofvis_dm_handle_t slice)
+Trace::DeleteSliceByHandle(rocprofvis_dm_track_id_t track, rocprofvis_dm_handle_t slice, bool force)
 {  
-    return m_tracks[track].get()->DeleteSliceByHandle(slice);
+    return m_tracks[track].get()->DeleteSliceByHandle(slice, force);
 }
 
 rocprofvis_dm_result_t Trace::DeleteAllSlices(){
@@ -649,7 +649,9 @@ Trace::RemoveSlice(const rocprofvis_dm_trace_t    trace_object,
 {
     ROCPROFVIS_ASSERT_MSG_RETURN(trace_object, ERROR_TRACE_CANNOT_BE_NULL, kRocProfVisDmResultUnknownError);
     Trace*                 trace  = (Trace*) trace_object; 
-    return trace->DeleteSliceByHandle(track_id, object);
+    // Owner discarding its own slice after an aborted read: force past the incomplete-slice guard
+    // (which only protects against *other* threads freeing a slice mid-populate).
+    return trace->DeleteSliceByHandle(track_id, object, /*force=*/true);
 }      
 
 

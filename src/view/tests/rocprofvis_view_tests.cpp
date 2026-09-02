@@ -24,8 +24,18 @@
 #include <thread>
 #include <vector>
 
-std::string g_input_file   = "sample/rocpd-transpose.db";
-std::string g_input_file_b = "";
+// Input traces, repeatable (pass --input_file per file). Index 0 is the primary trace (defaults to
+// the bundled sample); 1, 2, ... are extra traces for the multi-trace view suites, which skip when
+// too few are given. Adding a trace needs no new global or flag - just one more --input_file.
+std::vector<std::string> g_input_traces;
+
+// The i-th --input_file (by reference so callers may take .c_str()), or "" when not supplied.
+static const std::string&
+InputFile(size_t index = 0)
+{
+    static const std::string kEmpty;
+    return index < g_input_traces.size() ? g_input_traces[index] : kEmpty;
+}
 
 int
 main(int argc, char** argv)
@@ -34,15 +44,21 @@ main(int argc, char** argv)
 
     using namespace Catch::Clara;
     auto cli = session.cli() |
-               Opt(g_input_file, "input_file")["--input_file"]("Path to input file") |
-               Opt(g_input_file_b, "input_file_b")["--input_file_b"](
-                   "Second trace for the multi-trace view integrity suite");
+               Opt(g_input_traces, "input_file")["--input_file"](
+                   "Path to an input trace; repeat the flag to supply extra traces for the "
+                   "multi-trace view suites");
     session.cli(cli);
 
     int returnCode = session.applyCommandLine(argc, argv);
     if(returnCode != 0)
     {
         return returnCode;
+    }
+
+    // Default the primary trace so the single-file suites still run with no arguments.
+    if(g_input_traces.empty())
+    {
+        g_input_traces.push_back("sample/rocpd-transpose.db");
     }
     return session.run();
 }
@@ -245,8 +261,8 @@ struct ViewIntegrityFixture
 
 TEST_CASE_PERSISTENT_FIXTURE(ViewIntegrityFixture, "In-place multi-trace view integrity")
 {
-    const std::string file_a = g_input_file;
-    const std::string file_b = g_input_file_b;
+    const std::string file_a = InputFile();
+    const std::string file_b = InputFile(1);
 
     SECTION("reference single-open view snapshots of both files")
     {
@@ -373,4 +389,66 @@ TEST_CASE_PERSISTENT_FIXTURE(ViewIntegrityFixture, "In-place multi-trace view in
         RequireConsistent(result);
         RequireViewEqual(result, single_a);
     }
+}
+
+// Reproduces "merged view of two traces, then add a third in place" through the real DataProvider
+// (headless). Matches a user-reported crash. Needs three --input_file traces.
+TEST_CASE("In-place add a third trace to a combined view (view models)")
+{
+    if(InputFile().empty() || InputFile(1).empty() || InputFile(2).empty())
+    {
+        WARN("Needs three --input_file traces; skipping.");
+        return;
+    }
+    std::vector<const char*> ptrs{ InputFile().c_str(), InputFile(1).c_str() };
+    rocprofvis_controller_t* controller =
+        rocprofvis_controller_alloc_compare(ptrs.data(), ptrs.size());
+    REQUIRE(controller != nullptr);
+    DataProvider provider;
+    REQUIRE(provider.FetchTrace(controller, InputFile()));
+    PumpToReady(provider);
+
+    ViewSnapshot before = SnapshotView(provider);
+    RequireConsistent(before);
+
+    const bool added = provider.AddTraceSource(InputFile(2));
+    PumpToReady(provider);
+
+    ViewSnapshot after = SnapshotView(provider);
+    RequireConsistent(after);
+    if(added)
+    {
+        REQUIRE(after.track_count >= before.track_count);
+    }
+
+    // Drive the render data path headlessly: fetch every track over the full range and pump to
+    // completion - the segment fetch/merge/process work SnapshotView doesn't reach.
+    TimelineModel&        tlm = provider.DataModel().GetTimeline();
+    const double          s   = tlm.GetStartTime();
+    const double          e   = tlm.GetEndTime();
+    std::vector<uint64_t> ids;
+    for(const TrackInfo* t : tlm.GetTrackList())
+    {
+        if(t)
+        {
+            ids.push_back(t->id);
+        }
+    }
+    for(uint64_t id : ids)
+    {
+        std::pair<bool, uint64_t> r =
+            provider.FetchTrack(static_cast<uint32_t>(id), s, e, 2000, 0);
+        if(!r.first)
+        {
+            continue;
+        }
+        auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(60);
+        while(provider.IsRequestPending(r.second) &&
+              std::chrono::steady_clock::now() < deadline)
+        {
+            provider.Update();
+            std::this_thread::sleep_for(std::chrono::milliseconds(2));
+        }
+    }
+    SUCCEED("fetched all tracks after 3-way add without crashing");
 }

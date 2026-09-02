@@ -1013,6 +1013,19 @@ AppWindow::RenderFileDialog()
 void
 AppWindow::OpenFile(std::string file_path)
 {
+    // Merged/compare views live in Recents as their synthetic id (no file on disk); rebuild the
+    // view instead of trying to open the id as a path.
+    if(file_path.rfind("combined://", 0) == 0)
+    {
+        OpenCombined(SettingsManager::ParseRecentFileList(file_path));
+        return;
+    }
+    if(file_path.rfind("compare://", 0) == 0)
+    {
+        OpenCompare(SettingsManager::ParseRecentFileList(file_path));
+        return;
+    }
+
     // While the Compare dialog is up, dropped/opened files fill its slots rather than
     // opening standalone trace tabs behind the modal.
     if(m_compare_files_dialog->IsOpen())
@@ -1431,7 +1444,11 @@ AppWindow::RenderFileMenu(Project* project)
         {
             for(std::string file : recent_files)
             {
-                if(ImGui::MenuItem(file.c_str(), nullptr))
+                ImGui::PushID(file.c_str());
+                const bool clicked =
+                    ImGui::MenuItem(SettingsManager::RecentDisplayName(file).c_str(), nullptr);
+                ImGui::PopID();
+                if(clicked)
                 {
                     OpenFile(file);
                     break;
@@ -1683,6 +1700,18 @@ AppWindow::HandleTabClosed(std::shared_ptr<RocEvent> e)
             {
                 m_main_view->GetMutableAt(m_tool_bar_index)->m_item =
                     root_view->GetToolbar();
+            }
+        }
+        // A merged view has no file on disk; record its synthetic id in Recents on close so it can
+        // be reopened (single traces are recorded on open, .rpv projects on save).
+        Project* closing = project_it->second.get();
+        if(closing && !closing->IsProject() && !closing->IsCompare() &&
+           closing->GetTraceType() == Project::System)
+        {
+            const std::vector<std::string> sources = closing->GetSourceFiles();
+            if(sources.size() >= 2)
+            {
+                SettingsManager::GetInstance().AddRecentFile(MakeCombinedId(sources));
             }
         }
         spdlog::debug("Tab closed: {}", tab_closed_event->GetTabId());

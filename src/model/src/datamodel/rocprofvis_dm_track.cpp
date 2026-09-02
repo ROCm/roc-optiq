@@ -71,6 +71,9 @@ rocprofvis_dm_result_t Track::DeleteSliceAtTime(rocprofvis_dm_timestamp_t start,
         rocprofvis_dm_index_t                          index = 0;
         rocprofvis_dm_result_t result = GetSliceIndexAtTime(start, end, index);
         if(result != kRocProfVisDmResultSuccess) return result;
+        // Don't free a slice another worker is still populating (concurrent fetches can resolve to
+        // it by range hash) - that is a use-after-free. Leave it until it completes.
+        if(!m_slices[index]->IsComplete()) return kRocProfVisDmResultSuccess;
         slice = m_slices[index];
         m_slices.erase(m_slices.begin() + index);
     }
@@ -78,7 +81,7 @@ rocprofvis_dm_result_t Track::DeleteSliceAtTime(rocprofvis_dm_timestamp_t start,
 }
 
 rocprofvis_dm_result_t
-Track::DeleteSliceByHandle(rocprofvis_dm_slice_t slice)
+Track::DeleteSliceByHandle(rocprofvis_dm_slice_t slice, bool force)
 {
     TimedLock<std::unique_lock<std::shared_mutex>> lock(*Mutex(), __func__, this);
     std::shared_ptr<TrackSlice>                    item;
@@ -87,6 +90,13 @@ Track::DeleteSliceByHandle(rocprofvis_dm_slice_t slice)
         [slice](const std::shared_ptr<TrackSlice>& ptr) { return ptr.get() == slice; });
     if(it != m_slices.end())
     {
+        // Don't free a slice another worker is still populating (concurrent fetches resolve to it
+        // by range hash) - that is a use-after-free. Only the owner (force) drops its own
+        // incomplete slice.
+        if(!force && !(*it)->IsComplete())
+        {
+            return kRocProfVisDmResultSuccess;
+        }
         item = *it;
         m_slices.erase(it);
         return kRocProfVisDmResultSuccess;

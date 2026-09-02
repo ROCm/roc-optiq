@@ -166,10 +166,9 @@ TimelineModel::UpdateHistogram(const std::vector<TrackItem*>& tracks)
             }
         }
 
-        if(m_histogram_max_value_global == DBL_MIN)
         {
-            /*This block only exists to get the global maximum value for
-             * normalization*/
+            // Recompute the global normalization baseline on every track-set change (load,
+            // add/remove, visibility); a stale baseline over-/under-normalizes a merged view.
             std::vector<double> global_sum_histogram(m_histogram.size(), 0.0);
 
             m_minimap_global_min = DBL_MAX;

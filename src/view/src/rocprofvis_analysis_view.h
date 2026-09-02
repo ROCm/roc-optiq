@@ -34,6 +34,7 @@ public:
 
 private:
     void HandleTimelineSelectionChanged(std::shared_ptr<RocEvent> e);
+    void HandleTrackMetadataChanged(std::shared_ptr<RocEvent> e);
 
     // True if the given widget is the tab currently shown. Used to fetch table data only for
     // the visible tab so a single selection change does not fire every table's (potentially
@@ -54,6 +55,7 @@ private:
     EventManager::SubscriptionToken m_timeline_track_selection_changed_token;
     EventManager::SubscriptionToken m_timeline_range_selection_changed_token;
     EventManager::SubscriptionToken m_timeline_event_selection_changed_token;
+    EventManager::SubscriptionToken m_track_metadata_changed_token;
 
     // Per-table "missed a selection while hidden" flags, plus the last active tab, so a table
     // tab can lazily catch up (refetch) when it becomes visible instead of every table

@@ -23,10 +23,18 @@
 #include <unordered_map>
 #include <vector>
 
-std::string g_input_file = "sample/trace_70b_1024_32.rpd";
-// Optional second, schema-compatible trace used by the multi-trace merge integrity suite. When
-// empty that suite skips (it needs two distinct files to exercise a real merge).
-std::string g_input_file_b = "";
+// Input traces, repeatable (pass --input_file per file). Index 0 is the primary trace (defaults to
+// the bundled sample); 1, 2, ... are extra traces for the merge/add suites, which skip when too
+// few are given. Adding a trace needs no new global or flag - just one more --input_file.
+std::vector<std::string> g_input_traces;
+
+// The i-th --input_file (by reference so callers may take .c_str()), or "" when not supplied.
+static const std::string&
+InputFile(size_t index = 0)
+{
+    static const std::string kEmpty;
+    return index < g_input_traces.size() ? g_input_traces[index] : kEmpty;
+}
 
 int
 main(int argc, char** argv)
@@ -35,9 +43,9 @@ main(int argc, char** argv)
 
     using namespace Catch::Clara;
     auto cli = session.cli() |
-               Opt(g_input_file, "input_file")["--input_file"]("Path to input file") |
-               Opt(g_input_file_b, "input_file_b")["--input_file_b"](
-                   "Second trace for the multi-trace merge integrity suite");
+               Opt(g_input_traces, "input_file")["--input_file"](
+                   "Path to an input trace; repeat the flag to supply extra traces for the "
+                   "multi-trace merge/add suites");
 
     // Now pass the new composite back to Catch2 so it uses that
     session.cli(cli);
@@ -47,8 +55,14 @@ main(int argc, char** argv)
     if(returnCode != 0)  // Indicates a command line error
         return returnCode;
 
+    // Default the primary trace so the single-file suites still run with no arguments.
+    if(g_input_traces.empty())
+    {
+        g_input_traces.push_back("sample/trace_70b_1024_32.rpd");
+    }
+
     std::string log_file = "Testing/Temporary/rocprofvis_controller_system_tests/" +
-                           std::filesystem::path(g_input_file).filename().string() +
+                           std::filesystem::path(InputFile()).filename().string() +
                            ".txt";
     rocprofvis_core_enable_log(log_file.c_str(), spdlog::level::trace);
 
@@ -151,7 +165,7 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture, "System Trace Controll
     SECTION("Create Controller")
     {       
         spdlog::info("Allocating Controller");
-        m_controller = rocprofvis_controller_alloc(g_input_file.c_str(), nullptr);
+        m_controller = rocprofvis_controller_alloc(InputFile().c_str(), nullptr);
         REQUIRE(nullptr != m_controller);
     }
 
@@ -163,7 +177,7 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture, "System Trace Controll
         rocprofvis_controller_future_t* future = rocprofvis_controller_future_alloc();
         REQUIRE(future != nullptr);
 
-        spdlog::info("Load trace: {0}", g_input_file);
+        spdlog::info("Load trace: {0}", InputFile());
         rocprofvis_result_t result =
             rocprofvis_controller_load_async(m_controller, future);
         REQUIRE(result == kRocProfVisResultSuccess);
@@ -3173,7 +3187,7 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture, "System Trace Controll
     // Fixture Reads: m_controller
     SECTION("Database Cleanup")
     {
-        uint64_t initial_size = std::filesystem::file_size(g_input_file);
+        uint64_t initial_size = std::filesystem::file_size(InputFile());
         spdlog::info("Initial DB file size: {0} bytes", initial_size);
         REQUIRE(initial_size > 0);
 
@@ -3193,7 +3207,7 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture, "System Trace Controll
         REQUIRE(result == kRocProfVisResultSuccess);
         REQUIRE(future_result == kRocProfVisResultSuccess);
 
-        uint64_t final_size = std::filesystem::file_size(g_input_file);
+        uint64_t final_size = std::filesystem::file_size(InputFile());
         spdlog::info("Final DB file size: {0} bytes", final_size);
 
         rocprofvis_controller_future_free(future);
@@ -3447,6 +3461,7 @@ struct TraceSnapshot
     uint64_t                       total_entries = 0;
     double                         min_ts        = 0.0;
     double                         max_ts        = 0.0;
+    uint64_t                       histogram_bucket_count = 0;
     std::vector<TrackFingerprint>  tracks;  // sorted
     std::map<std::string, KernelAgg> kernels;
 };
@@ -3576,6 +3591,9 @@ SnapshotController(rocprofvis_controller_t* controller)
                                          &snap.max_ts);
     }
 
+    rocprofvis_controller_get_uint64(controller, kRPVControllerSystemGetHistogramBucketsNumber, 0,
+                                     &snap.histogram_bucket_count);
+
     for(uint64_t i = 0; i < snap.track_count; i++)
     {
         rocprofvis_handle_t* track = nullptr;
@@ -3684,6 +3702,8 @@ RequireSnapshotsEqual(const TraceSnapshot& actual, const TraceSnapshot& expected
     REQUIRE(actual.track_count == expected.track_count);
     REQUIRE(actual.num_nodes == expected.num_nodes);
     REQUIRE(actual.total_entries == expected.total_entries);
+    REQUIRE(actual.min_ts == expected.min_ts);
+    REQUIRE(actual.max_ts == expected.max_ts);
     REQUIRE(actual.tracks == expected.tracks);
     RequireKernelsEqual(actual.kernels, expected.kernels);
 }
@@ -3732,8 +3752,8 @@ struct MultiTraceIntegrityFixture
 // "remove the original" leave the other file's data - with no duplicate-id artifacts.
 TEST_CASE_PERSISTENT_FIXTURE(MultiTraceIntegrityFixture, "In-place multi-trace data integrity")
 {
-    const std::string file_a = g_input_file;
-    const std::string file_b = g_input_file_b;
+    const std::string file_a = InputFile();
+    const std::string file_b = InputFile(1);
 
     SECTION("reference single-open snapshots of both files")
     {
@@ -3811,7 +3831,11 @@ TEST_CASE_PERSISTENT_FIXTURE(MultiTraceIntegrityFixture, "In-place multi-trace d
         REQUIRE(live != nullptr);
         REQUIRE(SourceOpAndWait(&rocprofvis_controller_add_trace_source, live, file_b));
         REQUIRE(SourceOpAndWait(&rocprofvis_controller_remove_trace_source, live, file_b));
-        RequireSnapshotsEqual(SnapshotController(live), single_a);
+        TraceSnapshot restored = SnapshotController(live);
+        RequireSnapshotsEqual(restored, single_a);
+        // Removing the added trace must shrink the bucket count back: the model recomputes
+        // trace_duration over survivors instead of keeping the larger merged value.
+        REQUIRE(restored.histogram_bucket_count == single_a.histogram_bucket_count);
         rocprofvis_controller_free(live);
     }
 
@@ -3861,18 +3885,50 @@ TEST_CASE_PERSISTENT_FIXTURE(MultiTraceIntegrityFixture, "In-place multi-trace d
     }
 }
 
+// Reproduces "merged view of two traces, then add a third in place" - the flow that crashed for a
+// user. Needs three --input_file traces.
+TEST_CASE("In-place add a third trace to a combined view")
+{
+    if(InputFile().empty() || InputFile(1).empty() || InputFile(2).empty())
+    {
+        WARN("Needs three --input_file traces; skipping.");
+        return;
+    }
+    bool                     timed_out = false;
+    rocprofvis_controller_t* combined =
+        OpenCombinedAndLoad({ InputFile(), InputFile(1) }, timed_out);
+    REQUIRE(combined != nullptr);
+    TraceSnapshot before = SnapshotController(combined);
+    REQUIRE(before.track_count > 0);
+
+    const bool added =
+        SourceOpAndWait(&rocprofvis_controller_add_trace_source, combined, InputFile(2));
+    // Whether or not the third trace is compatible, the add must not crash and must leave the view
+    // in a consistent, queryable state.
+    TraceSnapshot after = SnapshotController(combined);
+    if(added)
+    {
+        REQUIRE(after.track_count >= before.track_count);
+    }
+    else
+    {
+        REQUIRE(after.track_count == before.track_count);
+    }
+    rocprofvis_controller_free(combined);
+}
+
 // Profiling harness: opens the two input files as one MERGED trace and times an Event Table
 // fetch over all event tracks. The model emits "[PROFILE]" phase timings (DB fetch / merge /
 // sort / process) so we can see where the wall-clock goes. Needs --input_file / --input_file_b.
 TEST_CASE("Merged table fetch profile")
 {
-    if(g_input_file.empty() || g_input_file_b.empty())
+    if(InputFile().empty() || InputFile(1).empty())
     {
         WARN("Merged table fetch profile needs --input_file and --input_file_b; skipping.");
         return;
     }
 
-    const char* const files[] = { g_input_file.c_str(), g_input_file_b.c_str() };
+    const char* const files[] = { InputFile().c_str(), InputFile(1).c_str() };
     auto t_alloc0 = std::chrono::steady_clock::now();
     rocprofvis_controller_t* controller = rocprofvis_controller_alloc_compare(files, 2);
     REQUIRE(controller != nullptr);
@@ -4186,7 +4242,7 @@ TEST_CASE("Incremental track selection equals full refetch")
     };
 
     // Incrementally build a selection on one controller: {A} -> {A,B} (adds B) -> {A} (removes B).
-    rocprofvis_controller_t* inc = OpenSingleAndLoad(g_input_file);
+    rocprofvis_controller_t* inc = OpenSingleAndLoad(InputFile());
     REQUIRE(inc != nullptr);
 
     std::vector<rocprofvis_handle_t*> inc_tracks;
@@ -4218,7 +4274,7 @@ TEST_CASE("Incremental track selection equals full refetch")
 
     // Reference: the same {A,B} selection fetched from scratch on a fresh controller (its table
     // processor has no cached tracks, so it queries both A and B together - the full path).
-    rocprofvis_controller_t* ref = OpenSingleAndLoad(g_input_file);
+    rocprofvis_controller_t* ref = OpenSingleAndLoad(InputFile());
     REQUIRE(ref != nullptr);
     std::vector<rocprofvis_handle_t*> ref_tracks;
     double                            ref_min = 0.0, ref_max = 0.0;

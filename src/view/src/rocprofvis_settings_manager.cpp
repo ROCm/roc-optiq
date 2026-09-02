@@ -14,6 +14,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
+#include <filesystem>
 #include <fstream>
 
 namespace RocProfVis
@@ -756,6 +757,55 @@ void
 SettingsManager::ClearRecentFiles()
 {
     m_internalsettings.recent_files.clear();
+}
+
+std::vector<std::string>
+SettingsManager::ParseRecentFileList(const std::string& entry)
+{
+    std::vector<std::string> files;
+    const size_t             scheme_end = entry.find("://");
+    if(scheme_end == std::string::npos)
+    {
+        return files;
+    }
+    size_t start = scheme_end + 3;
+    while(start <= entry.size())
+    {
+        const size_t bar = entry.find('|', start);
+        std::string  f =
+            entry.substr(start, bar == std::string::npos ? std::string::npos : bar - start);
+        if(!f.empty())
+        {
+            files.push_back(std::move(f));
+        }
+        if(bar == std::string::npos)
+        {
+            break;
+        }
+        start = bar + 1;
+    }
+    return files;
+}
+
+std::string
+SettingsManager::RecentDisplayName(const std::string& entry)
+{
+    const std::vector<std::string> files = ParseRecentFileList(entry);
+    if(!files.empty())
+    {
+        const std::string first = std::filesystem::path(files.front()).stem().string();
+        if(files.size() == 1)
+        {
+            return first;
+        }
+        if(files.size() == 2)
+        {
+            return first + " + " + std::filesystem::path(files[1]).stem().string();
+        }
+        return first + " +" + std::to_string(files.size() - 1) + " more";
+    }
+    const std::filesystem::path fp(entry);
+    return fp.filename().empty() ? entry : fp.filename().string();
 }
 
 void

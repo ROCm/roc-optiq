@@ -99,8 +99,10 @@ public:
     rocprofvis_dm_result_t                              DeleteSliceAtTime(rocprofvis_dm_timestamp_t start, rocprofvis_dm_timestamp_t end);
     // Method to delete slice by handle
     // @param slice - handle to slice
+    // @param force - owner dropping its own slice passes true; others pass false so a slice still
+    //                being populated is left intact (freeing it would be a use-after-free).
     // @return status of operation
-    rocprofvis_dm_result_t                              DeleteSliceByHandle(rocprofvis_dm_slice_t slice);
+    rocprofvis_dm_result_t                              DeleteSliceByHandle(rocprofvis_dm_slice_t slice, bool force = false);
     // Method to delete all slices
     // @return status of operation
     rocprofvis_dm_result_t                              DeleteAllSlices();

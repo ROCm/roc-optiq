@@ -50,6 +50,9 @@ public:
     bool GetSelectedTimeRange(double& start_ts_out, double& end_ts_out) const;
     void ClearTimeRange();
     bool HasValidTimeRangeSelection() const;
+    // Clamp the active time-range selection to the new extents after an add/remove (clears it if it
+    // no longer overlaps) so downstream queries don't run past the trace end.
+    void ClampTimeRangeToExtents(double range_min, double range_max);
 
     void SelectTrackEvent(uint64_t track_id, uint64_t event_id);
     void UnselectTrackEvent(uint64_t track_id, uint64_t event_id);

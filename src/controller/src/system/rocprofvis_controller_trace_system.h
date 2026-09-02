@@ -118,6 +118,11 @@ private:
                                                  rocprofvis_dm_timestamp_t end_time,
                                                  uint64_t& graph_index, size_t& trace_size);
 
+    // Re-pin every sample/counter track's max timestamp to the current data-model end. Their end
+    // is the trace end (not their last reading), so an add/remove must re-pin it or the timeline
+    // window won't follow the new extent.
+    void ClampSampleTracksToTraceEnd();
+
     void DbgPrintTopologyNodeData(rocprofvis_dm_topology_node node, int level);
 
 };

@@ -1455,6 +1455,30 @@ rocprofvis_dm_result_t  RocprofDatabase::RemoveNode(rocprofvis_db_filename_t fil
         }
     }
 
+    // Recompute merged duration over survivors so the histogram bucket count shrinks when the
+    // longest trace is removed (bucket size stays fixed); else it keeps spanning the gone tail.
+    if (auto* props = TraceProperties())
+    {
+        rocprofvis_dm_timestamp_t max_duration = 0;
+        for (auto& gi : DbInstances())
+        {
+            if (!IsInstanceActive(gi.first.FileIndex())) continue;
+            const uint32_t guid = gi.first.GuidIndex();
+            if (guid < props->db_inst_start_time.size() && guid < props->db_inst_end_time.size() &&
+                props->db_inst_end_time[guid] > props->db_inst_start_time[guid])
+            {
+                max_duration = std::max(
+                    max_duration, props->db_inst_end_time[guid] - props->db_inst_start_time[guid]);
+            }
+        }
+        props->trace_duration = max_duration;
+        if (props->histogram_bucket_size > 0)
+        {
+            props->histogram_bucket_count =
+                (max_duration + props->histogram_bucket_size) / props->histogram_bucket_size;
+        }
+    }
+
     // Close and free this file's SQLite connections; its data is no longer queried. The user's
     // .db file itself is not modified (no tables dropped).
     CloseDbNode(static_cast<uint32_t>(file_index));

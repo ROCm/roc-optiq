@@ -2248,6 +2248,11 @@ TimelineView::MakeGraphView()
     const TimelineModel& tlm = m_data_provider.DataModel().GetTimeline();
     m_tpt->SetMinMaxX(tlm.GetStartTime(), tlm.GetEndTime());
 
+    if(m_timeline_selection)
+    {
+        m_timeline_selection->ClampTimeRangeToExtents(tlm.GetStartTime(), tlm.GetEndTime());
+    }
+
     m_last_data_req_v_width = m_tpt->GetVWidth();
 
     /*This section makes the charts both line and flamechart are constructed here*/
@@ -2336,6 +2341,17 @@ TimelineView::MakeGraphView()
 
     // Keep the track list dense (drop any unfilled trailing slots).
     m_tracks->resize(ordered.size());
+
+    // ResetView() zeroed the graph width/pixel mapping. The overview ruler renders before the main
+    // timeline restores it, and the grid ruler only recomputes on a size/zoom change, so after an
+    // add/remove both draw garbled until the next input (redraw is on demand). Restore the size,
+    // refresh the transform, and force a grid-interval recompute so both are correct this frame.
+    if(m_last_graph_size.x > 0.0f && m_last_graph_size.y > 0.0f)
+    {
+        m_tpt->SetGraphSize(m_last_graph_size.x, m_last_graph_size.y);
+    }
+    m_tpt->ComputePixelMapping();
+    m_recalculate_grid_interval = true;
 
     m_data_provider.DataModel().GetTimeline().UpdateHistogram(*m_tracks.get());
     UpdateMaxMetaAreaSize();

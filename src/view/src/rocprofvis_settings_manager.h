@@ -296,6 +296,12 @@ public:
     void              AddRecentFile(const std::string& file_path);
     void              RemoveRecentFile(const std::string& file_path);
     void              ClearRecentFiles();
+    // Split a recents entry that is a merged/compare view id ("<scheme>://a|b|c") into its
+    // source files; empty for a plain file path (no scheme).
+    static std::vector<std::string> ParseRecentFileList(const std::string& entry);
+    // Human-readable label for a recents entry: "a + b" / "a +N more" for a merged/compare id,
+    // otherwise the file name.
+    static std::string RecentDisplayName(const std::string& entry);
 
     AppWindowSettings& GetAppWindowSettings();
 

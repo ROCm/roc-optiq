@@ -110,6 +110,22 @@ MemoryManager* SystemTrace::GetMemoryManager(){
     return m_mem_mgmt;
 }
 
+void SystemTrace::ClampSampleTracksToTraceEnd()
+{
+    const double new_end = static_cast<double>(
+        rocprofvis_dm_get_property_as_uint64(m_dm_handle, kRPVDMEndTimeUInt64, 0));
+    for(Track* track : m_tracks)
+    {
+        uint64_t track_type = 0;
+        if(track->GetUInt64(kRPVControllerTrackType, 0, &track_type) ==
+               kRocProfVisResultSuccess &&
+           track_type == kRPVControllerTrackTypeSamples)
+        {
+            track->SetDouble(kRPVControllerTrackMaxTimestamp, 0, new_end);
+        }
+    }
+}
+
 std::mutex& SystemTrace::GetTableMutex(rocprofvis_dm_table_use_case_enum_t use_case)
 {
     return m_table_mutex[use_case];
@@ -450,9 +466,13 @@ rocprofvis_result_t SystemTrace::AddTraceSource(Future& future, const std::strin
                         {
                             m_files.pop_back();
                         }
-                        else if(GetMemoryManager())
+                        else
                         {
-                            GetMemoryManager()->GrowTraceSize(trace_size);
+                            ClampSampleTracksToTraceEnd();
+                            if(GetMemoryManager())
+                            {
+                                GetMemoryManager()->GrowTraceSize(trace_size);
+                            }
                         }
                     }
                     future->RemoveDependentFuture(object2wait);
@@ -607,6 +627,8 @@ rocprofvis_result_t SystemTrace::RemoveTraceSource(Future& future, const std::st
                             }
                             delete track;
                         }
+
+                        ClampSampleTracksToTraceEnd();
 
                         // The grow-only path never shrinks the timeline window; recompute it.
                         m_timeline->RecomputeExtents();

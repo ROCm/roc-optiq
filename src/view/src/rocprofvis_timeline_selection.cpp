@@ -128,6 +128,32 @@ TimelineSelection::HasValidTimeRangeSelection() const
 }
 
 void
+TimelineSelection::ClampTimeRangeToExtents(double range_min, double range_max)
+{
+    if(!HasValidTimeRangeSelection() || range_max <= range_min)
+    {
+        return;
+    }
+    const double lo = std::min(m_selected_range_start, m_selected_range_end);
+    const double hi = std::max(m_selected_range_start, m_selected_range_end);
+    // No overlap with the new extents (e.g. the removed trace was the one it covered): drop it.
+    if(hi <= range_min || lo >= range_max)
+    {
+        ClearTimeRange();
+        return;
+    }
+    const double clamped_lo = std::max(lo, range_min);
+    const double clamped_hi = std::min(hi, range_max);
+    if(clamped_lo >= clamped_hi)
+    {
+        ClearTimeRange();
+        return;
+    }
+    // SelectTimeRange only fires a change event if the endpoints actually moved.
+    SelectTimeRange(clamped_lo, clamped_hi);
+}
+
+void
 TimelineSelection::SelectTrackEvent(uint64_t track_id, uint64_t event_id)
 {
     if(m_selected_event_ids.count(event_id) == 0)

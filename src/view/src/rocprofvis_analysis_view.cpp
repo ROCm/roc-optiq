@@ -97,6 +97,10 @@ AnalysisView::AnalysisView(DataProvider& dp, std::shared_ptr<TrackTopology> topo
     m_timeline_event_selection_changed_token = EventManager::GetInstance()->Subscribe(
         static_cast<int>(RocEvents::kTimelineEventSelectionChanged),
         time_line_selection_changed_handler);
+
+    m_track_metadata_changed_token = EventManager::GetInstance()->Subscribe(
+        static_cast<int>(RocEvents::kTrackMetadataChanged),
+        [this](std::shared_ptr<RocEvent> e) { this->HandleTrackMetadataChanged(e); });
 }
 
 AnalysisView::~AnalysisView()
@@ -111,6 +115,9 @@ AnalysisView::~AnalysisView()
     EventManager::GetInstance()->Unsubscribe(
         static_cast<int>(RocEvents::kTimelineEventSelectionChanged),
         m_timeline_event_selection_changed_token);
+    EventManager::GetInstance()->Unsubscribe(
+        static_cast<int>(RocEvents::kTrackMetadataChanged),
+        m_track_metadata_changed_token);
 }
 
 void
@@ -150,6 +157,21 @@ AnalysisView::Update()
                 TimelineSelection::INVALID_SELECTION_ID, false);
         }
     }
+}
+
+void
+AnalysisView::HandleTrackMetadataChanged(std::shared_ptr<RocEvent> e)
+{
+    if(!e || e->GetSourceId() != m_data_provider.GetTraceFilePath())
+    {
+        return;
+    }
+    // Track set changed (add/remove): flag every table stale and reset the active tab so Update()
+    // refetches - removed rows drop and new tracks appear without a manual reselect.
+    m_event_table_needs_refresh  = true;
+    m_sample_table_needs_refresh = true;
+    m_top_events_needs_refresh   = true;
+    m_last_active_tab_widget     = nullptr;
 }
 
 bool

@@ -5,6 +5,7 @@
 
 #include "rocprofvis_common_types.h"
 #include "rocprofvis_dm_base.h"
+#include <atomic>
 #include <bitset>
 #include <map>
 
@@ -86,6 +87,9 @@ class TrackSlice : public DmBase {
 
         virtual void SetComplete();
         void WaitComplete();
+        // True once the worker finished populating this slice. Lock-free so a deleter can skip a
+        // slice still being filled (freeing it then is a use-after-free).
+        bool IsComplete() const { return m_complete.load(); }
 
         // Pure virtual method to get event timestamp value by provided index of record
         // @param index - index of the record
@@ -195,7 +199,7 @@ class TrackSlice : public DmBase {
         mutable std::shared_mutex                   m_lock;
         std::map<void*, MemoryPool*>                m_object_pools;
         MemoryPool*                                 m_current_pool;
-        bool                                        m_complete;
+        std::atomic<bool>                           m_complete;
         std::condition_variable_any                 m_cv;
 
         void  Cleanup();

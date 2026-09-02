@@ -70,8 +70,10 @@ class Trace : public DmBase{
         // Method to delete a time slice with provided handle
         // param track - track id to delete slice from
         // @param slice - handle
+        // @param force - true when the owner discards its own slice; false (default) so concurrent
+        //                deleters skip a slice another worker is still populating.
         // @return status of operation
-        rocprofvis_dm_result_t DeleteSliceByHandle(rocprofvis_dm_track_id_t track, rocprofvis_dm_handle_t   slice);
+        rocprofvis_dm_result_t DeleteSliceByHandle(rocprofvis_dm_track_id_t track, rocprofvis_dm_handle_t   slice, bool force = false);
         // Method to delete all time slices
         // @return status of operation 
         rocprofvis_dm_result_t                          DeleteAllSlices();

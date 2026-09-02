@@ -571,9 +571,7 @@ WelcomePage::RenderLeftCard()
                 }
                 ++shown;
 
-                const std::filesystem::path fp(file);
-                const std::string fname =
-                    fp.filename().empty() ? file : fp.filename().string();
+                const std::string fname = SettingsManager::RecentDisplayName(file);
 
                 ImGui::PushID(file.c_str());
                 if(ImGui::Selectable(fname.c_str(), false,

@@ -458,12 +458,14 @@ ComputeTrace::FetchPcSamplingSourceData(rocprofvis_dm_database_t db, Future* fut
         result = FetchSourceFiles(db, future, kernel_id, output);
         if(result == kRocProfVisDmResultSuccess) output.m_source_files_loaded = true;
     }
+    if(future && future->IsCancelled()) return kRocProfVisDmResultDbAbort;
     if(result == kRocProfVisDmResultSuccess && !output.m_instruction_source_lines_loaded)
     {
         result = FetchInstructionSourceLines(db, future, kernel_id, output);
         if(result == kRocProfVisDmResultSuccess)
             output.m_instruction_source_lines_loaded = true;
     }
+    if(future && future->IsCancelled()) return kRocProfVisDmResultDbAbort;
 
     uint64_t selected_source_file_uuid = source_file_uuid;
     if(selected_source_file_uuid == 0 && !output.m_source_files.empty())
@@ -623,14 +625,6 @@ ComputeTrace::FetchStalls(rocprofvis_dm_database_t db, Future* future,
                           uint64_t kernel_id, PcSampling& output)
 {
     rocprofvis_dm_result_t result = kRocProfVisDmResultSuccess;
-    if(!output.m_pc_sample_states_loaded)
-    {
-        result = FetchPcSampleStates(db, future, kernel_id, output);
-        if(result == kRocProfVisDmResultSuccess)
-        {
-            output.m_pc_sample_states_loaded = true;
-        }
-    }
 
     if(result == kRocProfVisDmResultSuccess)
     {

@@ -168,10 +168,9 @@ fetchers. Code View uses the stage-specific APIs so opening optional UI does
 not block the initial ISA display:
 
 ```c
-rocprofvis_controller_pc_sampling_fetch_mandatorys_async(...); // ISA dependencies + lines
-rocprofvis_controller_pc_sampling_fetch_source_async(...);     // source metadata/correlation/lines
-rocprofvis_controller_pc_sampling_fetch_stalls_async(...);     // states/reasons/instruction samples
-rocprofvis_controller_pc_sampling_fetch_all_async(...);        // all three stages
+rocprofvis_controller_pc_sampling_fetch_isa_lines_async(...); // ISA dependencies + lines
+rocprofvis_controller_pc_sampling_fetch_source_async(...);    // source metadata/correlation/lines
+rocprofvis_controller_pc_sampling_fetch_stalls_async(...);    // states/reasons/instruction samples
 ```
 
 Two more async surface APIs sit on the controller handle directly,

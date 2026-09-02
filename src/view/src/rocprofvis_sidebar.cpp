@@ -29,6 +29,8 @@ constexpr float MENU_PAD_Y  = 6.0f;
 // ImGui offsets a framed tree node's label by FontSize + FramePadding.x * this
 // factor (see TreeNodeBehavior); used to place the inline device lead arrow.
 constexpr float FRAMED_LABEL_PAD_MULT = 3.0f;
+// Lead-arrow slot width used if the font reports a zero-width space.
+constexpr int DEFAULT_LEAD_ARROW_PAD = 2;
 
 // Matches TimelineSelection::HIGHLIGHT_TIMEOUT_S so reveal and "go to event"
 // pulse for the same duration.
@@ -351,6 +353,24 @@ SideBar::BuildRevealPath(const TreeNode& node, bool in_processors)
     return contains_match;
 }
 
+/*
+ * Width of the lead-arrow slot, in spaces of the current font. Depends only on
+ * the font and style, so one measurement serves every row in the frame.
+ */
+int
+SideBar::MeasureLeadArrowPad() const
+{
+    ImGui::PushFont(m_settings.GetFontManager().GetFont(FontType::kIcon), 0.0f);
+    const float arrow_w = ImGui::CalcTextSize(ICON_ARROW_FORWARD).x;
+    ImGui::PopFont();
+
+    const float gap     = ImGui::GetStyle().ItemInnerSpacing.x;
+    const float space_w = ImGui::CalcTextSize(" ").x;
+    // Rounded up, so the glyph always clears the start of the label.
+    return (space_w > 0.0f) ? static_cast<int>((arrow_w + gap) / space_w) + 1
+                            : DEFAULT_LEAD_ARROW_PAD;
+}
+
 void
 SideBar::DrawRevealPulse(const ImVec2& row_min, const ImVec2& row_max) const
 {
@@ -413,6 +433,11 @@ SideBar::Render()
         ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding,
                             m_settings.GetDefaultStyle().FrameRounding);
         ImGui::PushStyleVar(ImGuiStyleVar_IndentSpacing, 14.0f);
+
+        // Derived from the font and style, so it is the same for every row.
+        // Measured here, after the style is pushed, rather than per branch node.
+        m_lead_arrow_pad = MeasureLeadArrowPad();
+
         ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(0, 0, 0, 0));
         ImGui::PushStyleColor(ImGuiCol_HeaderHovered,
                               ImGui::ColorConvertU32ToFloat4(
@@ -1025,40 +1050,26 @@ SideBar::RenderBranchNode(const TreeNode& node, const TreeNode* state_node,
         }
         const ImVec2 node_pos = ImGui::GetCursorScreenPos();
 
-        // Lead arrow: pad the label to open a slot after the chevron, then draw
-        // the glyph at the label's start (keeps the chevron in place).
-        std::string display_label   = node.label;
-        ImFont*     lead_arrow_font = nullptr;
-        float       lead_arrow_size = 0.0f;
-        float       lead_arrow_x    = 0.0f;
+        /*
+         * Lead arrow: blank out a slot after the chevron with %*s, then draw the
+         * glyph into it. The icon font is a separate ImFont rather than a range
+         * merged into the text font (merging rendered corrupted glyphs on
+         * Linux), so the arrow cannot just be part of the label string.
+         */
+        const int pad = node.show_lead_arrow ? m_lead_arrow_pad : 0;
+        open = ImGui::TreeNodeEx(node.label.c_str(), HEADER_FLAGS, "%*s%s", pad, "",
+                                 node.label.c_str());
+
         if(node.show_lead_arrow)
         {
-            ImFont* icon_font = m_settings.GetFontManager().GetFont(FontType::kIcon);
-            ImGui::PushFont(icon_font, 0.0f);
-            const float arrow_w = ImGui::CalcTextSize(ICON_ARROW_FORWARD).x;
-            lead_arrow_font     = icon_font;
-            lead_arrow_size     = ImGui::GetFontSize();
-            ImGui::PopFont();
-
-            const float gap     = ImGui::GetStyle().ItemInnerSpacing.x;
-            const float space_w = ImGui::CalcTextSize(" ").x;
-            const int   pad =
-                (space_w > 0.0f) ? static_cast<int>((arrow_w + gap) / space_w) + 1 : 2;
-            display_label.insert(0, static_cast<size_t>(pad), ' ');
-            lead_arrow_x = node_pos.x + ImGui::GetFontSize() +
-                           ImGui::GetStyle().FramePadding.x * FRAMED_LABEL_PAD_MULT;
-        }
-
-        open = ImGui::TreeNodeEx(node.label.c_str(), HEADER_FLAGS, "%s",
-                                 display_label.c_str());
-
-        if(lead_arrow_font)
-        {
+            ImFont*     icon_font = m_settings.GetFontManager().GetFont(FontType::kIcon);
+            const float arrow_size = ImGui::GetFontSize();
+            const float arrow_x    = node_pos.x + arrow_size +
+                                  ImGui::GetStyle().FramePadding.x * FRAMED_LABEL_PAD_MULT;
             const float cy =
                 (ImGui::GetItemRectMin().y + ImGui::GetItemRectMax().y) * 0.5f;
             ImGui::GetWindowDrawList()->AddText(
-                lead_arrow_font, lead_arrow_size,
-                ImVec2(lead_arrow_x, cy - lead_arrow_size * 0.5f),
+                icon_font, arrow_size, ImVec2(arrow_x, cy - arrow_size * 0.5f),
                 ImGui::GetColorU32(ImGuiCol_Text), ICON_ARROW_FORWARD);
         }
 

@@ -80,6 +80,7 @@ private:
     void               RenderTreeChildren(const TreeNode& node);
     EyeButtonState     DrawEyeButton(EyeButtonState eye_button_state);
     void               InvalidateEyeStateCache(const TreeNode& node);
+    int                MeasureLeadArrowPad() const;
 
     // "Reveal in topology": locate a track's leaf, expand only the ancestors
     // needed to see it, scroll it into view, and pulse-highlight the row.
@@ -92,6 +93,8 @@ private:
     std::shared_ptr<std::vector<TrackItem*>> m_tracks;
     DataProvider&                            m_data_provider;
     ImU32                                    m_active_node_color;
+    // Remeasured once per Render(), shared by every lead-arrow row that frame.
+    int                                      m_lead_arrow_pad = 0;
     EventManager::SubscriptionToken          m_track_visibility_token;
     EventManager::SubscriptionToken          m_metadata_changed_token;
 

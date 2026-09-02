@@ -466,11 +466,20 @@ struct FetchEventsArgs
 
 rocprofvis_result_t Track::Fetch(double start, double end, Array& array, uint64_t& index, Future* future)
 {
+    SystemTrace*   trace = (SystemTrace*) GetContext();
+    MemoryManager* mgr   = trace ? trace->GetMemoryManager() : nullptr;
+
+    if(mgr)
+    {
+        mgr->EnterArrayOwnership(array.GetArrayId(), kRocProfVisOwnerTypeTrack);
+    }
+    m_segments.AddActiveArray(array.GetArrayId());
+
     FetchEventsArgs args;
     args.m_array = &array;
     args.m_index = &index;
-    args.lru_params.m_ctx   = (SystemTrace*)GetContext();
-    args.lru_params.m_lod      = 0;
+    args.lru_params.m_ctx   = trace;
+    args.lru_params.m_array_id = array.GetArrayId();
     array.SetContext(GetContext());
 
     rocprofvis_result_t result = FetchSegments(start, end, &args, future, [](double start, double end, Segment& segment, void* user_ptr, SegmentTimeline* owner) -> rocprofvis_result_t
@@ -480,6 +489,8 @@ rocprofvis_result_t Track::Fetch(double start, double end, Array& array, uint64_
         rocprofvis_result_t result = segment.Fetch(start, end, args->m_array->GetVector(), *args->m_index, &args->m_event_ids, &args->lru_params);
         return result;
     });
+
+    m_segments.RemoveActiveArray(array.GetArrayId());
 
     return result;
 }
@@ -1227,6 +1238,7 @@ rocprofvis_result_t Track::SetObject(rocprofvis_property_t property, uint64_t in
                                   GetStartTimestamp() < GetEndTimestamp());
                 Handle* object = (Handle*)value;
                 auto object_type = object->GetType();
+				bool stored_in_segment = false;
                 if (((GetTrackType() == kRPVControllerTrackTypeEvents) && (object_type == kRPVControllerObjectTypeEvent))
                     || ((GetTrackType() == kRPVControllerTrackTypeSamples) && (object_type == kRPVControllerObjectTypeSample)))
                 {
@@ -1308,20 +1320,20 @@ rocprofvis_result_t Track::SetObject(rocprofvis_property_t property, uint64_t in
                                         segment->GetMaxTimestamp(), timestamp.second));
                                     if (range.second-range.first == 0)
                                     {
-                                        segment->Insert(timestamp.first, static_cast<uint8_t>(level), object);
+                                        stored_in_segment |= segment->Insert(timestamp.first, static_cast<uint8_t>(level), object);
                                     } else
                                     if (object_type == kRPVControllerObjectTypeEvent)
                                     {
                                         if (current_segment == range.first)
                                         {
-                                            segment->Insert(timestamp.first, static_cast<uint8_t>(level), object);
+                                            stored_in_segment |= segment->Insert(timestamp.first, static_cast<uint8_t>(level), object);
                                         }
                                         else
                                         {
                                             if (object_type == kRPVControllerObjectTypeEvent)
                                             {
                                                 Event* event = (Event*)object;
-                                                segment->Insert(timestamp.first, static_cast<uint8_t>(level), event);
+                                                stored_in_segment |= segment->Insert(timestamp.first, static_cast<uint8_t>(level), event);
                                             }
                                         }
                                     }
@@ -1329,7 +1341,7 @@ rocprofvis_result_t Track::SetObject(rocprofvis_property_t property, uint64_t in
                                     {
                                         if (current_segment == range.first)
                                         {
-                                            segment->Insert(timestamp.first, static_cast<uint8_t>(level), object);
+                                            stored_in_segment |= segment->Insert(timestamp.first, static_cast<uint8_t>(level), object);
                                         }
                                     }
                                 }
@@ -1339,6 +1351,13 @@ rocprofvis_result_t Track::SetObject(rocprofvis_property_t property, uint64_t in
                         {
                             result = kRocProfVisResultOutOfRange;
                         }
+                    }
+
+                    if(!stored_in_segment && m_ctx && m_ctx->GetMemoryManager() &&
+                       !m_ctx->GetMemoryManager()->IsShuttingDown())
+                    {
+                        // No segment kept the object...
+                        m_ctx->GetMemoryManager()->Delete(object, GetSegments());
                     }
                 }
                 break;

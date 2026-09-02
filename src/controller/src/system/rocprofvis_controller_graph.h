@@ -20,7 +20,7 @@ class Future;
 class Graph : public Handle
 {
     rocprofvis_result_t GenerateLOD(uint32_t lod_to_generate, double start_ts, double end_ts, std::vector<Data>& entries, Future* future);
-    rocprofvis_result_t GenerateLOD(uint32_t lod_to_generate, double start, double end, Future* future);
+    rocprofvis_result_t GenerateLOD(uint32_t lod_to_generate, double start, double end, Future* future, uint64_t array_id);
     void Insert(uint32_t lod, double timestamp, uint8_t level, Handle* object);
 
 public:

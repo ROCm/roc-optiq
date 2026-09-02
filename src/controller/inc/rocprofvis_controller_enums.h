@@ -1033,8 +1033,14 @@ typedef enum rocprofvis_controller_kernel_properties_t : uint32_t
 typedef enum rocprofvis_controller_pc_sampling_data_properties_t
 : uint32_t
 {
-    __kRPVControllerPCSamplingPropertiesFirst,
-    kRPVControllerPCSamplingNumSourceFiles = __kRPVControllerPCSamplingPropertiesFirst,
+    kRPVPCSamplingSourceGroup = 0x10000000u,
+    kRPVPCSamplingIsaGroup    = 0x20000000u,
+    kRPVPCSamplingStallsGroup = 0x30000000u,
+
+    __kRPVControllerPCSamplingPropertiesFirst = kRPVPCSamplingSourceGroup,
+
+    // Source layer
+    kRPVControllerPCSamplingNumSourceFiles = kRPVPCSamplingSourceGroup,
     kRPVControllerPCSamplingSourceFileUuid,
     kRPVControllerPCSamplingSourceFileWorkloadId,
     kRPVControllerPCSamplingSourceFilePath,
@@ -1044,7 +1050,15 @@ typedef enum rocprofvis_controller_pc_sampling_data_properties_t
     kRPVControllerPCSamplingSourceLineSourceFileUuid,
     kRPVControllerPCSamplingSourceLineNumber,
     kRPVControllerPCSamplingSourceLineContent,
-    kRPVControllerPCSamplingNumCodeObjects,
+    kRPVControllerPCSamplingNumInstructionSourceLines,
+    kRPVControllerPCSamplingInstructionSourceLineUuid,
+    kRPVControllerPCSamplingInstructionSourceLineInstructionUuid,
+    kRPVControllerPCSamplingInstructionSourceLineSourceLineUuid,
+    kRPVControllerPCSamplingInstructionSourceLineFrameIndex,
+    kRPVControllerPCSamplingInstructionSourceLineSourceFileUuid,
+
+    // ISA layer
+    kRPVControllerPCSamplingNumCodeObjects = kRPVPCSamplingIsaGroup,
     kRPVControllerPCSamplingCodeObjectUuid,
     kRPVControllerPCSamplingCodeObjectWorkloadId,
     kRPVControllerPCSamplingCodeObjectPid,
@@ -1061,12 +1075,9 @@ typedef enum rocprofvis_controller_pc_sampling_data_properties_t
     kRPVControllerPCSamplingInstructionLineInstructionTypeUuid,
     kRPVControllerPCSamplingInstructionLineCodeObjectOffset,
     kRPVControllerPCSamplingInstructionLineInstruction,
-    kRPVControllerPCSamplingNumInstructionSourceLines,
-    kRPVControllerPCSamplingInstructionSourceLineUuid,
-    kRPVControllerPCSamplingInstructionSourceLineInstructionUuid,
-    kRPVControllerPCSamplingInstructionSourceLineSourceLineUuid,
-    kRPVControllerPCSamplingInstructionSourceLineFrameIndex,
-    kRPVControllerPCSamplingNumPcSampleStates,
+
+    // Stalls layer
+    kRPVControllerPCSamplingNumPcSampleStates = kRPVPCSamplingStallsGroup,
     kRPVControllerPCSamplingPcSampleStateUuid,
     kRPVControllerPCSamplingPcSampleStateInstructionUuid,
     kRPVControllerPCSamplingPcSampleStateTotalCount,
@@ -1094,7 +1105,7 @@ typedef enum rocprofvis_controller_pc_sampling_data_properties_t
     kRPVControllerPCSamplingNumInstructionSampleLookups,
     kRPVControllerPCSamplingInstructionSampleLookupRecordUuid,
     kRPVControllerPCSamplingInstructionSampleLookupText,
-    kRPVControllerPCSamplingInstructionSourceLineSourceFileUuid,
+
     __kRPVControllerPCSamplingPropertiesLast
 
 } rocprofvis_controller_pc_sampling_data_properties_t;

@@ -489,7 +489,7 @@ ComputeIsaView::RenderControlPanel()
 void
 ComputeIsaView::RenderSourceFileDropdown()
 {
-    constexpr const float DROPDAWN_SIZE = 300.0f;
+    constexpr const float DROPDOWN_SIZE = 300.0f;
     if(!m_source_layout_item->m_visible || m_source.files.empty()) return;
 
     auto filename_of = [](const std::string& str) -> const char* {
@@ -508,7 +508,7 @@ ComputeIsaView::RenderSourceFileDropdown()
     ImGui::TextUnformatted("Source file:");
     ImGui::SameLine();
 
-    ImGui::SetNextItemWidth(DROPDAWN_SIZE);
+    ImGui::SetNextItemWidth(DROPDOWN_SIZE);
     if(ImGui::BeginCombo("##source_file", preview))
     {
         for(const auto& [path, id] : m_source.files)

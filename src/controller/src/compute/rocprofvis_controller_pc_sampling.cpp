@@ -28,24 +28,13 @@ std::recursive_mutex& PcSampling::GetLayerMutex(DataLayer layer)
 
 std::recursive_mutex& PcSampling::GetPropertyMutex(rocprofvis_property_t property)
 {
-    const auto property_value = static_cast<uint32_t>(property);
-    const auto in_range       = [property_value](auto first, auto last) {
-        return property_value >= static_cast<uint32_t>(first) &&
-               property_value <= static_cast<uint32_t>(last);
-    };
-
-    if(in_range(kRPVControllerPCSamplingNumCodeObjects,
-                kRPVControllerPCSamplingInstructionLineInstruction))
-        return m_isa_data_mutex;
-
-    if(in_range(kRPVControllerPCSamplingNumSourceFiles,
-                kRPVControllerPCSamplingSourceLineContent) ||
-       in_range(kRPVControllerPCSamplingNumInstructionSourceLines,
-                kRPVControllerPCSamplingInstructionSourceLineFrameIndex) ||
-       property == kRPVControllerPCSamplingInstructionSourceLineSourceFileUuid)
-        return m_source_data_mutex;
-
-    return m_stalls_data_mutex;
+    switch(static_cast<uint32_t>(property) & 0xF0000000u)
+    {
+        case kRPVPCSamplingSourceGroup: return m_source_data_mutex;
+        case kRPVPCSamplingIsaGroup:    return m_isa_data_mutex;
+        case kRPVPCSamplingStallsGroup: return m_stalls_data_mutex;
+        default:                        return m_stalls_data_mutex;
+    }
 }
 
 rocprofvis_controller_object_type_t PcSampling::GetType(void)

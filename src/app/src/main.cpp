@@ -346,7 +346,7 @@ main(int argc, char** argv)
 #endif
 
     glfwSetErrorCallback(glfw_error_callback);
-#ifdef __linux__
+#if defined(__linux__) && defined(ROCPROFVIS_MULTI_WINDOW)
     // Force X11 on Linux for multi-viewport and window positioning support
     // Wayland does not support window positioning which is required for ImGui viewports
     glfwInitHint(GLFW_PLATFORM, GLFW_PLATFORM_X11);
@@ -381,6 +381,7 @@ main(int argc, char** argv)
                 glfwSetWindowCloseCallback(window, close_callback);
                 glfwSetWindowSizeCallback(window, window_size_change_callback);
 
+#ifdef ROCPROFVIS_MULTI_WINDOW
                 // A fullscreen GLFW window iconifies itself whenever it loses
                 // input focus while GLFW_AUTO_ICONIFY is set, which is the
                 // default. Multi-viewport puts panels that have been dragged out
@@ -388,6 +389,7 @@ main(int argc, char** argv)
                 // away from the main window and would minimize the entire app,
                 // leaving only the floating panel on screen.
                 glfwSetWindowAttrib(window, GLFW_AUTO_ICONIFY, GLFW_FALSE);
+#endif
 
                 RocProfVis::View::init_fullscreen_state(window, g_fullscreen_state);
                 glfwShowWindow(window);
@@ -396,9 +398,11 @@ main(int argc, char** argv)
                 ImGui::CreateContext();
                 ImGuiIO& io = ImGui::GetIO();
                 io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
+#ifdef ROCPROFVIS_MULTI_WINDOW
                 // Multi-viewport lets panels be dragged out into their own OS
                 // window. Docking is intentionally left disabled.
                 io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
+#endif
                 // ConfigDpiScaleViewports is deliberately left off. It rescales a
                 // window every time its viewport reports a new DPI, which upstream
                 // documents as a resizing feedback loop for a window straddling a

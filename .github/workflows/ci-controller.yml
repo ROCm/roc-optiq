@@ -24,6 +24,10 @@ on:
         description: 'Run macOS CI?'
         type: boolean
         default: true
+      enable_ci_experimental:
+        description: 'Run Experimental CI? (all platforms)'
+        type: boolean
+        default: false
       enable_ci_asan:
         description: 'Run Ubuntu ASAN?'
         type: boolean
@@ -104,7 +108,7 @@ jobs:
   ci-redhat-experimental:
     name: RedHat CI - Experimental
     needs: setup
-    if: ${{ github.event_name != 'workflow_dispatch' || inputs.enable_ci_redhat }}
+    if: ${{ github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.enable_ci_experimental) }}
     uses: ./.github/workflows/ci-redhat.yml
     secrets: inherit
     with:
@@ -133,7 +137,7 @@ jobs:
   ci-ubuntu-experimental:
     name: Ubuntu CI - Experimental
     needs: setup
-    if: ${{ github.event_name != 'workflow_dispatch' || inputs.enable_ci_ubuntu }}
+    if: ${{ github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.enable_ci_experimental) }}
     uses: ./.github/workflows/ci-ubuntu.yml
     secrets: inherit
     with:
@@ -162,7 +166,7 @@ jobs:
   ci-windows-experimental:
     name: Windows CI - Experimental
     needs: setup
-    if: ${{ github.event_name != 'workflow_dispatch' || inputs.enable_ci_windows }}
+    if: ${{ github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.enable_ci_experimental) }}
     uses: ./.github/workflows/ci-windows.yml
     secrets: inherit
     with:
@@ -190,7 +194,7 @@ jobs:
   ci-mac-experimental:
     name: macOS CI - Experimental
     needs: setup
-    if: ${{ github.event_name != 'workflow_dispatch' || inputs.enable_ci_mac }}
+    if: ${{ github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.enable_ci_experimental) }}
     uses: ./.github/workflows/ci-mac.yml
     secrets: inherit
     with:

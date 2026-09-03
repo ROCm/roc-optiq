@@ -85,11 +85,12 @@ struct SideBarTestPeer
     }
 
 private:
+    // A leaf is not necessarily childless: a stream row carries its inline
+    // processor subtree, so both walks recurse through leaves as well.
     static size_t CountLeaves(const TreeNode* node)
     {
         if(node == nullptr) return 0;
-        if(node->IsLeaf()) return 1;
-        size_t count = 0;
+        size_t count = node->IsLeaf() ? 1 : 0;
         for(const auto& child : node->children) count += CountLeaves(child.get());
         return count;
     }
@@ -99,7 +100,6 @@ private:
         if(node->IsLeaf())
         {
             ids.push_back(static_cast<const LeafNode*>(node)->track_id);
-            return;
         }
         for(const auto& child : node->children) CollectLeaves(child.get(), ids);
     }

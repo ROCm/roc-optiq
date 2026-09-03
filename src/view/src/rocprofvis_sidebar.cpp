@@ -11,6 +11,7 @@
 #include "rocprofvis_track_item.h"
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_timeline_selection.h"
+#include "spdlog/spdlog.h"
 
 #include <cmath>
 #include <unordered_set>
@@ -219,6 +220,31 @@ BuildProcessBranch(TreeNode* parent, const ProcessInfo& process,
     BuildLeafList(process_node, NodeType::kSampledThreadList,
                   "Sampled Threads (" + std::to_string(sampled.size()) + ")", sampled,
                   timeline, true);
+}
+
+/*
+ * Track ids that already have a row. A track can legitimately appear more than
+ * once (a queue sits under its processor and again under every stream that
+ * dispatched to it), hence a set.
+ *
+ * A leaf is not necessarily childless: a stream row carries its inline
+ * processor subtree, so the walk has to recurse through leaves too.
+ */
+void
+CollectLeafTrackIds(const TreeNode* node, std::unordered_set<uint64_t>& out)
+{
+    if(node == nullptr)
+    {
+        return;
+    }
+    if(node->IsLeaf())
+    {
+        out.insert(static_cast<const LeafNode*>(node)->track_id);
+    }
+    for(const std::unique_ptr<TreeNode>& child : node->children)
+    {
+        CollectLeafTrackIds(child.get(), out);
+    }
 }
 
 }  // namespace
@@ -586,14 +612,32 @@ SideBar::BuildTree()
         }
     }
 
-    // Tracks the controller never tied to a topology node still need a home.
-    std::vector<const TrackInfo*> uncategorized;
-    for(const TrackInfo* track : timeline.GetTrackList())
+    /*
+     * Every track needs exactly one home. Bucket by "the topology walk emitted
+     * no row for it" rather than by track type: a track can be typed (Queue,
+     * Stream, ...) and still have no row, because its queue or processor was not
+     * reachable from any node during the load walk - which is why
+     * LinkStreamTopology() tolerates a failed processor lookup. Keying off the
+     * type would leave such a track with no row at all.
+     */
+    std::unordered_set<uint64_t> placed;
+    CollectLeafTrackIds(root_node, placed);
+
+    std::vector<const TrackInfo*>       uncategorized;
+    const std::vector<const TrackInfo*> track_list = timeline.GetTrackList();
+    for(const TrackInfo* track : track_list)
     {
-        if(track && track->topology.type == TrackInfo::TrackType::Unknown)
+        if(track == nullptr || placed.count(track->id) > 0)
         {
-            uncategorized.push_back(track);
+            continue;
         }
+        if(track->topology.type != TrackInfo::TrackType::Unknown)
+        {
+            spdlog::debug("Sidebar: track {} is typed {} but the topology tree has "
+                          "no node bound to it; listing it as uncategorized",
+                          track->id, static_cast<int>(track->topology.type));
+        }
+        uncategorized.push_back(track);
     }
     if(!uncategorized.empty())
     {

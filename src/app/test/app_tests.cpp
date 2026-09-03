@@ -1745,6 +1745,18 @@ void RegisterAppTests(ImGuiTestEngine* e)
             IM_CHECK(tlm.GetTrack(track_id) != nullptr);
         }
 
+        // And the converse: every track needs a row. A typed track whose topology
+        // node is missing must still land under Uncategorized, not disappear.
+        std::vector<uint64_t> placed = leaf_ids;
+        std::sort(placed.begin(), placed.end());
+        placed.erase(std::unique(placed.begin(), placed.end()), placed.end());
+        for (const TrackInfo* track : tlm.GetTrackList())
+        {
+            IM_CHECK(track != nullptr);
+            if (track == nullptr) continue;
+            IM_CHECK(std::binary_search(placed.begin(), placed.end(), track->id));
+        }
+
         // The topology sort is only applied if it is a full permutation of the
         // current tracks, so a partial order would silently fall back to Default.
         std::vector<uint64_t> order = TimelineViewTestPeer{*tlv}.TopologyOrder();

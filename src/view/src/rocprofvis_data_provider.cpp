@@ -843,6 +843,10 @@ DataProvider::LinkStreamTopology()
             ProcessorInfo* processor = topology.GetProcessorMutable(processor_id);
             if(!processor)
             {
+                spdlog::warn("Topology: stream {} references processor {} that is not "
+                             "indexed under any node; the stream will render without "
+                             "its inline queue rows",
+                             pending.stream->GetId(), processor_id);
                 continue;
             }
             topology.LinkStreamProcessor(pending.stream, processor);

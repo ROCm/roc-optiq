@@ -108,6 +108,10 @@ CMake options worth knowing:
 - `ROCPROFVIS_ENABLE_REMOTE` - enables SSH connection, browse, transfer,
   and remote-trace UI (default off). Remote profiling needs both remote
   and profiler support.
+- `ROCPROFVIS_ENABLE_TRACE_COMPARE` - enables the in-development trace
+  comparison UI (default off).
+- `ROCPROFVIS_MULTI_WINDOW` - enables the in-development multi-window
+  support (default off).
 - `USE_NATIVE_FILE_DIALOG` - off disables `nativefiledialog-extended`.
 
 The CLI flag `--file-dialog={auto|imgui|native}` overrides dialog selection

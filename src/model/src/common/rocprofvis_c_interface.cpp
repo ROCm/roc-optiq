@@ -205,7 +205,7 @@ rocprofvis_dm_database_t rocprofvis_db_open_database_multi(
                                                 nullptr);
         }
     }
-    catch (std::exception ex)
+    catch (const std::exception& ex)
     {
         ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN(
             RocProfVis::DataModel::ERROR_MEMORY_ALLOCATION_FAILURE, nullptr);

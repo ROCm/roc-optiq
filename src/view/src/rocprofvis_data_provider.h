@@ -12,9 +12,11 @@
 
 
 #include <functional>
+#include <map>
 #include <memory>
 #include <optional>
 #include <string>
+#include <tuple>
 #include <unordered_map>
 #include <vector>
 
@@ -36,6 +38,9 @@ struct DataProviderCleanupWork
     std::string                           trace_file_path;
     std::unordered_map<int64_t, RequestInfo> requests;
     rocprofvis_controller_t*              controller = nullptr;
+    // Privately allocated tables travel with the controller they were read
+    // through, because they must be freed before it is.
+    std::vector<rocprofvis_handle_t*>     client_tables;
 };
 
 struct DataProviderCleanupResult
@@ -69,6 +74,22 @@ public:
     static const uint64_t FETCH_PC_SAMPLING_ISA_REQUEST_ID;
     static const uint64_t FETCH_PC_SAMPLING_SOURCE_REQUEST_ID;
     static const uint64_t FETCH_PC_SAMPLING_STALLS_REQUEST_ID;
+
+    // Ask Optiq's table reads. A background reader sharing the ids above would
+    // be refused whenever a tab happened to be loading, and - worse - would
+    // overwrite the rows that tab is showing once it was not. Its own client id
+    // gives it its own request ids, its own controller tables, and its own
+    // model slots, so the two never meet. Anything else that reads tables
+    // without being a tab wants the same treatment and a client id of its own.
+    static constexpr uint64_t ASSISTANT_CLIENT_ID = 1;
+    static const uint64_t ASSISTANT_EVENT_TABLE_REQUEST_ID;
+    static const uint64_t ASSISTANT_SAMPLE_TABLE_REQUEST_ID;
+    static const uint64_t ASSISTANT_EVENT_SEARCH_REQUEST_ID;
+    static const uint64_t ASSISTANT_SUMMARY_KERNEL_INSTANCE_TABLE_REQUEST_ID;
+    static const uint64_t ASSISTANT_TOP_EVENTS_TABLE_REQUEST_ID;
+#ifdef ROCPROFVIS_ENABLE_SCRIPTING
+    static const uint64_t EXECUTE_SCRIPT_REQUEST_ID;
+#endif
 
     DataProvider();
     ~DataProvider();
@@ -234,6 +255,20 @@ public:
 
     bool SaveTrimmedTrace(const std::string& path, double start_ns, double end_ns);
 
+#ifdef ROCPROFVIS_ENABLE_SCRIPTING
+    // Runs source on the interpreter thread. track_ids empty means all
+    // tracks; start/end are the visible or selected time range.
+    bool ExecuteScript(const std::string& source, const std::vector<uint64_t>& track_ids,
+                       double start_ts, double end_ts);
+    bool CancelScript();
+
+    // What the last script produced, kept after its request is gone: a caller
+    // that polls the request id rather than listening for the completion event
+    // has nothing left to read by the time it notices the request finished.
+    // False when no script has run, or the script failed.
+    bool GetLastScriptResult(std::string& text_out, std::string& error_out) const;
+#endif
+
     bool CleanupDatabase(bool rebuild);
 
     void SetCleanupDatabaseCallback(const std::function<void(bool)>& callback);
@@ -269,6 +304,18 @@ private:
 
     bool FetchTrackTable(const TrackTableRequestParams& table_params);
     bool FetchEventSearch(const EventSearchRequestParams& table_params);
+
+    /*
+     * The request id, table handle and model slot a table fetch should use.
+     * For the UI (client 0) these are the shared ones; for any other client
+     * they are private, so the two can be in flight at once without either
+     * reading the other's rows.
+     */
+    uint64_t             ClientTableRequestId(const TableRequestParams& table_params) const;
+    rocprofvis_handle_t* ClientTableHandle(const TableRequestParams& table_params);
+    static TableType     ClientTableSlot(rocprofvis_controller_table_type_t table_type,
+                                         uint64_t                          client_id,
+                                         bool&                             is_analysis_model);
     /* Helper called by FetchEvent()*/
     bool FetchEventExtData(uint64_t event_id);
 
@@ -301,6 +348,11 @@ private:
     void ProcessTableRequest(RequestInfo& req);
     void ProcessTableExportRequest(RequestInfo& req);
     void ProcessSaveTrimmedTraceRequest(RequestInfo& req);
+#ifdef ROCPROFVIS_ENABLE_SCRIPTING
+    void ProcessExecuteScriptRequest(RequestInfo& req);
+    rocprofvis_controller_arguments_t* BuildScriptContext(
+        const std::vector<uint64_t>& track_ids, double start_ts, double end_ts);
+#endif
     void ProcessCleanupDatabaseRequest(RequestInfo& req);
     void ProcessSummaryRequest(RequestInfo& req);
     void ProcessAnalysisTrackStatisticsRequest(RequestInfo& req);
@@ -358,6 +410,18 @@ private:
     std::string m_progress_mesage;
     // Current loading status progress in percents
     uint64_t m_progress_percent;
+    // Tables allocated for a non-UI client, keyed by (client id, controller
+    // table type, operation). Built on first use and kept for the life of the
+    // controller, since a client asks the same few questions repeatedly and
+    // reallocating per fetch would throw away the row cache each time.
+    std::map<std::tuple<uint64_t, uint64_t, uint64_t>, rocprofvis_handle_t*>
+        m_client_tables;
+#ifdef ROCPROFVIS_ENABLE_SCRIPTING
+    // Outlives the request it came from. See GetLastScriptResult.
+    std::string m_script_result_text;
+    std::string m_script_result_error;
+    bool        m_script_result_ok = false;
+#endif
 
     void ProcessLoadComputeTrace(RequestInfo& req);
     inline void LoadWorkload(uint64_t workload_index);

@@ -15,6 +15,7 @@ namespace View
 class DataProvider;
 class EventsView;
 class MultiTrackTable;
+class ScriptEditor;
 class TopEventsView;
 class TrackTopology;
 class TrackDetails;
@@ -29,6 +30,19 @@ public:
     ~AnalysisView();
     void Render() override;
     void Update() override;
+
+    // The tab strip along the bottom: Event Table, Sample Table, Event Details,
+    // Track Details, Top Events, Annotations, and Script when scripting is
+    // built in. Matched on the visible label.
+    std::vector<std::string> ListTabs();
+    bool                     SelectTab(const std::string& name);
+    std::string              ActiveTab();
+
+#ifdef ROCPROFVIS_ENABLE_SCRIPTING
+    // The Script tab's editor, for the assistant to offer a script through.
+    // Null only if the tab was never built.
+    std::shared_ptr<ScriptEditor> GetScriptEditor() const;
+#endif
 
     friend struct AnalysisViewTestPeer;
 
@@ -45,6 +59,9 @@ private:
     std::shared_ptr<TrackDetails>   m_track_details;
     std::shared_ptr<AnnotationView> m_annotation_view;
     std::shared_ptr<TopEventsView>  m_top_events_view;
+#ifdef ROCPROFVIS_ENABLE_SCRIPTING
+    std::shared_ptr<ScriptEditor> m_script_editor;
+#endif
 
     EventManager::SubscriptionToken m_timeline_track_selection_changed_token;
     EventManager::SubscriptionToken m_timeline_range_selection_changed_token;

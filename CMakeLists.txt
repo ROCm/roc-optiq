@@ -35,6 +35,8 @@ option(ROCPROFVIS_ENABLE_UI_TESTS "Build view-layer Dear ImGui UI tests" OFF)
 # graduate.
 option(ROCPROFVIS_ENABLE_PROFILER "Build with in-app profiler launch support (in development)" OFF)
 option(ROCPROFVIS_ENABLE_REMOTE "Build with remote/SSH support (in development)" OFF)
+option(ROCPROFVIS_ENABLE_AGENTIC_PROFILING "Build with the Ask Optiq assistant (in development)" OFF)
+option(ROCPROFVIS_ENABLE_SCRIPTING "Build with embedded Python analysis scripts (in development)" OFF)
 
 # The two flags are independent: profiler launch builds without remote (the
 # SSH connection UI inside the launcher is compiled out via
@@ -58,6 +60,12 @@ endif(ROCPROFVIS_ENABLE_PROFILER)
 if(ROCPROFVIS_ENABLE_REMOTE)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DROCPROFVIS_ENABLE_REMOTE")
 endif(ROCPROFVIS_ENABLE_REMOTE)
+if(ROCPROFVIS_ENABLE_AGENTIC_PROFILING)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DROCPROFVIS_ENABLE_AGENTIC_PROFILING")
+endif(ROCPROFVIS_ENABLE_AGENTIC_PROFILING)
+if(ROCPROFVIS_ENABLE_SCRIPTING)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DROCPROFVIS_ENABLE_SCRIPTING")
+endif(ROCPROFVIS_ENABLE_SCRIPTING)
 if(ROCPROFVIS_ENABLE_INTERNAL_BANNER)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DROCPROFVIS_ENABLE_INTERNAL_BANNER")
 endif(ROCPROFVIS_ENABLE_INTERNAL_BANNER)
@@ -90,6 +98,9 @@ if(PERFETTO_AVAILABLE)
 endif()
 add_subdirectory(src/core)
 add_subdirectory(src/model)
+if(ROCPROFVIS_ENABLE_SCRIPTING)
+    add_subdirectory(src/python)
+endif()
 add_subdirectory(src/controller)
 
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src/model/inc)
@@ -117,8 +128,8 @@ set(VIEW_FILES
     src/view/src/rocprofvis_stickynote.cpp
     src/view/src/rocprofvis_click_manager.cpp
     src/view/src/rocprofvis_measurement_controller.cpp
-    src/view/src/rocprofvis_analysis_view.cpp 
-    src/view/src/rocprofvis_trace_view.cpp 
+    src/view/src/rocprofvis_analysis_view.cpp
+    src/view/src/rocprofvis_trace_view.cpp
     src/view/src/rocprofvis_top_events_view.cpp
     src/view/src/rocprofvis_line_track_item.cpp 
     src/view/src/rocprofvis_timeline_view.cpp 
@@ -183,6 +194,15 @@ set(VIEW_FILES
     src/view/src/widgets/rocprofvis_query_builder.cpp
 )
 
+# SecretStore is shared: SSH passwords need it, and so does the assistant's API
+# token, so it is compiled when either feature is on and left out otherwise.
+if(ROCPROFVIS_ENABLE_REMOTE OR ROCPROFVIS_ENABLE_AGENTIC_PROFILING)
+list(APPEND VIEW_FILES
+    src/view/src/remote/rocprofvis_secret_store.cpp
+    src/view/src/remote/rocprofvis_secret_store.h
+)
+endif()
+
 
 # TEMPORARY (profiler launch): profiler UI + backends + app monitor. Remove
 # this guard when the profiler feature graduates.
@@ -213,8 +233,6 @@ endif(ROCPROFVIS_ENABLE_PROFILER)
 if(ROCPROFVIS_ENABLE_REMOTE)
 list(APPEND VIEW_FILES
     src/view/src/remote/rocprofvis_ssh_uri.cpp
-    src/view/src/remote/rocprofvis_secret_store.cpp
-    src/view/src/remote/rocprofvis_secret_store.h
     src/view/src/remote/rocprofvis_ssh_connection_config.cpp
     src/view/src/remote/rocprofvis_ssh_connection_config.h
     src/view/src/remote/rocprofvis_ssh_connection_store.cpp
@@ -233,12 +251,48 @@ list(APPEND VIEW_FILES
 )
 endif(ROCPROFVIS_ENABLE_REMOTE)
 
+# TEMPORARY (agentic profiling): the Ask Optiq assistant. Remove this guard
+# when the feature graduates.
+if(ROCPROFVIS_ENABLE_AGENTIC_PROFILING)
+list(APPEND VIEW_FILES
+    src/view/src/agenticprofiling/rocprofvis_ai_actions.cpp
+    src/view/src/agenticprofiling/rocprofvis_ai_actions.h
+    src/view/src/agenticprofiling/rocprofvis_ai_assistant.cpp
+    src/view/src/agenticprofiling/rocprofvis_ai_assistant.h
+    src/view/src/agenticprofiling/rocprofvis_ai_assistant_render.cpp
+    src/view/src/agenticprofiling/rocprofvis_ai_client.cpp
+    src/view/src/agenticprofiling/rocprofvis_ai_client.h
+    src/view/src/agenticprofiling/rocprofvis_ai_data_tools.cpp
+    src/view/src/agenticprofiling/rocprofvis_ai_prompts.cpp
+    src/view/src/agenticprofiling/rocprofvis_ai_prompts.h
+    src/view/src/agenticprofiling/rocprofvis_ai_script_tools.cpp
+    src/view/src/agenticprofiling/rocprofvis_ai_settings.cpp
+    src/view/src/agenticprofiling/rocprofvis_ai_tool_query.cpp
+    src/view/src/agenticprofiling/rocprofvis_ai_tool_query.h
+    src/view/src/agenticprofiling/rocprofvis_ai_tool_schema.cpp
+    src/view/src/agenticprofiling/rocprofvis_ai_tool_schema.h
+    src/view/src/agenticprofiling/rocprofvis_ai_tools.cpp
+    src/view/src/agenticprofiling/rocprofvis_ai_tools.h
+    src/view/src/agenticprofiling/rocprofvis_ai_tools_internal.h
+    src/view/src/agenticprofiling/rocprofvis_ai_trace_view_actions.cpp
+    src/view/src/agenticprofiling/rocprofvis_ai_ui_tools.cpp
+)
+endif(ROCPROFVIS_ENABLE_AGENTIC_PROFILING)
+
 # TEMPORARY (remote profiling): the remote profiler session bridges the
 # profiler and remote features, so it needs both flags.
 if(ROCPROFVIS_ENABLE_PROFILER AND ROCPROFVIS_ENABLE_REMOTE)
 list(APPEND VIEW_FILES
     src/view/src/profiler/rocprofvis_remote_profiler_session.cpp
     src/view/src/profiler/rocprofvis_remote_profiler_session.h
+)
+endif()
+
+if(ROCPROFVIS_ENABLE_SCRIPTING)
+list(APPEND VIEW_FILES
+    src/view/src/rocprofvis_data_provider_script.cpp
+    src/view/src/widgets/rocprofvis_script_editor.cpp
+    src/view/src/widgets/rocprofvis_script_editor.h
 )
 endif()
 
@@ -334,6 +388,16 @@ target_link_libraries(${TARGET_NAME} PRIVATE ${TARGET_NAME}-core)
 target_link_libraries(${TARGET_NAME} PRIVATE spdlog)
 target_link_libraries(${TARGET_NAME} PRIVATE sqlite3)
 target_link_libraries(${TARGET_NAME} PRIVATE json)
+if(ROCPROFVIS_ENABLE_AGENTIC_PROFILING)
+    target_link_libraries(${TARGET_NAME} PRIVATE cpp-httplib)
+    # httplib.h is one 21k-line header, which overruns the default section limit.
+    if(MSVC)
+        set_source_files_properties(
+            src/view/src/agenticprofiling/rocprofvis_ai_client.cpp PROPERTIES
+            COMPILE_OPTIONS "/bigobj"
+        )
+    endif()
+endif(ROCPROFVIS_ENABLE_AGENTIC_PROFILING)
 
 if(BUILD_TESTING AND ROCPROFVIS_ENABLE_UI_TESTS)
     # Fail at configure if imgui_te was dropped (e.g. BUILD_TESTING shadowed).
@@ -409,6 +473,9 @@ if(BUILD_TESTING AND ROCPROFVIS_ENABLE_UI_TESTS)
         "${Vulkan_LIBRARIES}"
         OpenGL::GL
     )
+    if(ROCPROFVIS_ENABLE_AGENTIC_PROFILING)
+        target_link_libraries(${TEST_TARGET} PRIVATE cpp-httplib)
+    endif(ROCPROFVIS_ENABLE_AGENTIC_PROFILING)
     if(USE_NATIVE_FILE_DIALOG)
         target_link_libraries(${TEST_TARGET} PRIVATE nfd)
         target_compile_definitions(${TEST_TARGET} PRIVATE ROCPROFVIS_HAVE_NATIVE_FILE_DIALOG)
@@ -434,32 +501,45 @@ endif()
 if (CRYPTO_BACKEND STREQUAL "OpenSSL")
 target_link_libraries(${TARGET_NAME} PRIVATE libssh2_static OpenSSL::SSL OpenSSL::Crypto)
 endif()
+endif(ROCPROFVIS_ENABLE_REMOTE)
 
-# SecretStore backends: link the OS credential-vault APIs. On Linux libsecret
-# is optional; when absent, SecretStore compiles a stub that reports itself
-# unavailable and the app falls back to prompting for SSH secrets at connect
-# time (never persisting them in plaintext).
+# SecretStore backends: the OS credential-vault APIs, linked only when something
+# actually stores a secret - SSH passwords under remote, the API token under
+# agentic profiling. On Linux libsecret is optional; when absent, SecretStore
+# compiles a stub that reports itself unavailable and secrets stay in process
+# memory only.
+if(ROCPROFVIS_ENABLE_REMOTE OR ROCPROFVIS_ENABLE_AGENTIC_PROFILING)
+set(ROCPROFVIS_SECRET_STORE_TARGETS ${TARGET_NAME})
+if(TARGET ${TARGET_NAME}-tests)
+    list(APPEND ROCPROFVIS_SECRET_STORE_TARGETS ${TARGET_NAME}-tests)
+endif()
 if(WIN32)
-    target_link_libraries(${TARGET_NAME} PRIVATE Advapi32)
+    foreach(secret_target ${ROCPROFVIS_SECRET_STORE_TARGETS})
+        target_link_libraries(${secret_target} PRIVATE Advapi32)
+    endforeach()
 elseif(APPLE)
-    target_link_libraries(${TARGET_NAME} PRIVATE "-framework Security" "-framework CoreFoundation")
+    foreach(secret_target ${ROCPROFVIS_SECRET_STORE_TARGETS})
+        target_link_libraries(${secret_target} PRIVATE "-framework Security" "-framework CoreFoundation")
+    endforeach()
 else()
     find_package(PkgConfig QUIET)
     if(PkgConfig_FOUND)
         pkg_check_modules(LIBSECRET QUIET libsecret-1)
     endif()
     if(LIBSECRET_FOUND)
-        target_include_directories(${TARGET_NAME} PRIVATE ${LIBSECRET_INCLUDE_DIRS})
-        target_link_libraries(${TARGET_NAME} PRIVATE ${LIBSECRET_LIBRARIES})
-        target_compile_definitions(${TARGET_NAME} PRIVATE ROCPROFVIS_HAVE_LIBSECRET)
+        foreach(secret_target ${ROCPROFVIS_SECRET_STORE_TARGETS})
+            target_include_directories(${secret_target} PRIVATE ${LIBSECRET_INCLUDE_DIRS})
+            target_link_libraries(${secret_target} PRIVATE ${LIBSECRET_LIBRARIES})
+            target_compile_definitions(${secret_target} PRIVATE ROCPROFVIS_HAVE_LIBSECRET)
+        endforeach()
     else()
         message(WARNING
-            "libsecret-1 not found: SSH passwords will not be persisted on this "
-            "Linux build (users are prompted at connect time). Install "
-            "libsecret-1-dev / libsecret-devel to enable secure credential storage.")
+            "libsecret-1 not found: assistant tokens and SSH passwords will not "
+            "be persisted on this Linux build. Install libsecret-1-dev / "
+            "libsecret-devel to enable secure credential storage.")
     endif()
 endif()
-endif(ROCPROFVIS_ENABLE_REMOTE)
+endif()
 
 if(APPLE)
     # rocprofvis_platform_helpers_macos.mm uses AppKit (+[NSEvent modifierFlags]).

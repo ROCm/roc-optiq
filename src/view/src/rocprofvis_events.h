@@ -33,6 +33,7 @@ enum class RocEvents
     kTimeFormatChanged,
     kTopologyChanged,
     kRequestProgressUpdate,
+    kScriptExecuteComplete,
     kProfilerStatusChanged,
     kRemoteStatusChanged,
     kRevealTrackInTopology,
@@ -56,6 +57,7 @@ enum class RocEventType
     kRangeEvent,
     kNavigationEvent,
     kRequestProgressUpdateEvent,
+    kScriptExecuteCompleteEvent,
     kProfilerStatusEvent,
     kRemoteStatusEvent,
     kComputeSelectionChangedEvent,
@@ -331,6 +333,21 @@ private:
     RequestType m_request_type;
     uint64_t    m_progress_percent;
     std::string m_message;
+};
+
+class ScriptExecuteCompleteEvent : public RocEvent
+{
+public:
+    ScriptExecuteCompleteEvent(bool success, const std::string& text,
+                               const std::string& error, const std::string& source_id);
+    bool               Succeeded() const;
+    const std::string& GetText() const;
+    const std::string& GetError() const;
+
+private:
+    bool        m_success;
+    std::string m_text;
+    std::string m_error;
 };
 
 // Emitted by AppMonitor when a monitored profiler session changes state.

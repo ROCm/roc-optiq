@@ -5,6 +5,7 @@
 #include "rocprofvis_gui_helpers.h"
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_event_manager.h"
+#include "rocprofvis_core_string_utils.h"
 #include <algorithm>
 
 namespace RocProfVis
@@ -367,6 +368,44 @@ TabContainer::GetTabs()
         tabs.push_back(t);
     }
     return tabs;
+}
+
+const TabItem*
+TabContainer::FindTabByLabel(const std::string& label) const
+{
+    if(label.empty())
+    {
+        return nullptr;
+    }
+
+    const std::string needle = Core::String::to_lower_copy(label);
+    for(const TabItem& tab : m_tabs)
+    {
+        if(Core::String::to_lower_copy(tab.m_label) == needle)
+        {
+            return &tab;
+        }
+    }
+
+    if(needle.size() < MIN_SUBSTRING_LABEL_MATCH)
+    {
+        return nullptr;
+    }
+
+    const TabItem* single_match = nullptr;
+    for(const TabItem& tab : m_tabs)
+    {
+        if(Core::String::to_lower_copy(tab.m_label).find(needle) == std::string::npos)
+        {
+            continue;
+        }
+        if(single_match != nullptr)
+        {
+            return nullptr;
+        }
+        single_match = &tab;
+    }
+    return single_match;
 }
 
 }  // namespace View

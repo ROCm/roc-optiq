@@ -11,10 +11,75 @@ set(YAML_CPP_BUILD_TESTS OFF CACHE BOOL "Disable yaml-cpp tests")
 set(YAML_CPP_BUILD_TOOLS OFF CACHE BOOL "Disable yaml-cpp tools")
 add_subdirectory(yaml-cpp)
 
-# TEMPORARY (remote/SSH): the crypto backend + libssh2 stack and its git
-# submodules (thirdparty/libssh2, thirdparty/mbedtls) are only built when
-# remote support is enabled, so the default build needs neither the submodules
-# nor a crypto dependency. Remove this guard when remote graduates.
+# TEMPORARY (remote/SSH + agentic profiling): mbedTLS serves two independent
+# features - it is the default crypto backend for libssh2, and cpp-httplib links
+# it for the assistant's in-process HTTPS. Either one alone is reason to build
+# it, and CMake rejects a second add_subdirectory, so the decision is made once
+# here. Default to the vendored backend so the out-of-the-box build needs no
+# system OpenSSL; OpenSSL is opt-in via -DCRYPTO_BACKEND=OpenSSL and is then
+# resolved as an external dependency (find_package below), not vendored.
+set(CRYPTO_BACKEND "mbedTLS" CACHE STRING "Crypto backend (OpenSSL or mbedTLS)")
+
+set(ROCPROFVIS_NEED_MBEDTLS OFF)
+if(ROCPROFVIS_ENABLE_AGENTIC_PROFILING)
+    set(ROCPROFVIS_NEED_MBEDTLS ON)
+endif()
+if(ROCPROFVIS_ENABLE_REMOTE AND CRYPTO_BACKEND STREQUAL "mbedTLS")
+    set(ROCPROFVIS_NEED_MBEDTLS ON)
+endif()
+
+if(ROCPROFVIS_NEED_MBEDTLS)
+    set(ENABLE_PROGRAMS OFF CACHE BOOL "" FORCE)
+    set(ENABLE_TESTING OFF CACHE BOOL "" FORCE)
+    set(ENABLE_DOCUMENTATION OFF CACHE BOOL "" FORCE)
+    set(MBEDTLS_FATAL_WARNINGS OFF CACHE BOOL "" FORCE)
+    set(_prev_mbedtls_build_testing ${BUILD_TESTING})
+    set(_prev_skip_install_rules ${CMAKE_SKIP_INSTALL_RULES})
+    set(BUILD_TESTING OFF)
+    set(BUILD_EXAMPLES OFF)
+    set(CMAKE_SKIP_INSTALL_RULES ON)
+    add_subdirectory(mbedtls EXCLUDE_FROM_ALL)
+    set(CMAKE_SKIP_INSTALL_RULES ${_prev_skip_install_rules})
+    set(BUILD_TESTING ${_prev_mbedtls_build_testing})
+endif(ROCPROFVIS_NEED_MBEDTLS)
+
+# TEMPORARY (agentic profiling): cpp-httplib (MIT), the in-process HTTPS
+# client, a submodule pinned to v0.53.1. TLS via vendored mbedTLS so the GUI
+# never shells out to curl.exe, which flashes a console on Windows and takes
+# the request down with it. Upstream keeps httplib.h at its repo root and we
+# compile it header-only, so its own CMakeLists is deliberately not added.
+if(ROCPROFVIS_ENABLE_AGENTIC_PROFILING)
+if(NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/cpp-httplib/httplib.h)
+    message(FATAL_ERROR
+        "ROCPROFVIS_ENABLE_AGENTIC_PROFILING is ON but thirdparty/cpp-httplib is "
+        "empty. Run: git submodule update --init thirdparty/cpp-httplib")
+endif()
+add_library(cpp-httplib INTERFACE)
+target_include_directories(cpp-httplib INTERFACE
+    ${CMAKE_CURRENT_SOURCE_DIR}/cpp-httplib
+    ${CMAKE_CURRENT_SOURCE_DIR}/mbedtls/include
+)
+target_compile_definitions(cpp-httplib INTERFACE
+    CPPHTTPLIB_MBEDTLS_SUPPORT
+    CPPHTTPLIB_NO_EXCEPTIONS
+)
+target_link_libraries(cpp-httplib INTERFACE mbedtls mbedx509 mbedcrypto)
+if(WIN32)
+    target_link_libraries(cpp-httplib INTERFACE crypt32 ws2_32)
+endif()
+if(APPLE)
+    target_compile_definitions(cpp-httplib INTERFACE
+        CPPHTTPLIB_USE_CERTS_FROM_MACOSX_KEYCHAIN
+    )
+    target_link_libraries(cpp-httplib INTERFACE
+        "-framework Security" "-framework CoreFoundation"
+    )
+endif()
+endif(ROCPROFVIS_ENABLE_AGENTIC_PROFILING)
+
+# TEMPORARY (remote/SSH): libssh2 and its crypto-backend selection stay gated
+# until remote graduates. mbedTLS itself is handled above, since the assistant
+# needs it too.
 if(ROCPROFVIS_ENABLE_REMOTE)
 
 # mbedtls/libssh2 set BUILD_TESTING OFF; restore after so imgui_te is still built.
@@ -22,25 +87,10 @@ set(_prev_build_testing ${BUILD_TESTING})
 set(_prev_build_examples ${BUILD_EXAMPLES})
 
 set(ENABLE_ZLIB_COMPRESSION OFF)
-# Default to the vendored mbedTLS backend so the out-of-the-box build needs no
-# system OpenSSL. OpenSSL is opt-in via -DCRYPTO_BACKEND=OpenSSL and is then
-# resolved as an external dependency (find_package below), not vendored.
-set(CRYPTO_BACKEND "mbedTLS" CACHE STRING "Crypto backend (OpenSSL or mbedTLS)")
 
 if (CRYPTO_BACKEND STREQUAL "mbedTLS")
 
 	unset(ROCPROFVIS_OPENSSL_VERSION_MAJOR CACHE)
-
-	set(ENABLE_PROGRAMS OFF CACHE BOOL "" FORCE)
-	set(ENABLE_TESTING OFF CACHE BOOL "" FORCE)
-	set(ENABLE_DOCUMENTATION OFF CACHE BOOL "" FORCE)
-	set(MBEDTLS_FATAL_WARNINGS OFF CACHE BOOL "" FORCE)
-	set(BUILD_TESTING OFF)
-	set(BUILD_EXAMPLES OFF)
-	set(_prev_skip_install_rules ${CMAKE_SKIP_INSTALL_RULES})
-	set(CMAKE_SKIP_INSTALL_RULES ON)
-	add_subdirectory(mbedtls EXCLUDE_FROM_ALL)
-    set(CMAKE_SKIP_INSTALL_RULES ${_prev_skip_install_rules})
 	set(CRYPTO_BACKEND mbedTLS CACHE STRING "" FORCE)
 
     	set(ENABLE_MBEDTLS ON CACHE BOOL "" FORCE)

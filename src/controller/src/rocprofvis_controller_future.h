@@ -37,6 +37,8 @@ public:
     // Handlers for getters.
     rocprofvis_result_t GetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t* value) final;
     rocprofvis_result_t GetString(rocprofvis_property_t property, uint64_t index, char* value, uint32_t* length) final;
+    rocprofvis_result_t SetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t value) final;
+    rocprofvis_result_t SetString(rocprofvis_property_t property, uint64_t index, char const* value) final;
 
     void ResetProgress();
     static void ProgressCallback(rocprofvis_db_filename_t db_filename, rocprofvis_db_future_id_t db_future_id, rocprofvis_db_progress_percent_t progress_percent, rocprofvis_db_status_t status, rocprofvis_db_status_message_t message, void* user_data);

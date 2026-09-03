@@ -4,6 +4,12 @@
 #include "rocprofvis_trace_view.h"
 #include "icons/rocprovfis_icon_defines.h"
 #include "imgui.h"
+#ifdef ROCPROFVIS_ENABLE_AGENTIC_PROFILING
+#    include "agenticprofiling/rocprofvis_ai_assistant.h"
+#endif
+#ifdef ROCPROFVIS_ENABLE_SCRIPTING
+#    include "widgets/rocprofvis_script_editor.h"
+#endif
 #include "rocprofvis_click_manager.h"
 #include "rocprofvis_analysis_view.h"
 #include "rocprofvis_annotations.h"
@@ -24,6 +30,8 @@
 #include "widgets/rocprofvis_dialog.h"
 #include "widgets/rocprofvis_gui_helpers.h"
 #include "widgets/rocprofvis_notification_manager.h"
+
+#include <cmath>
 
 namespace RocProfVis
 {
@@ -196,6 +204,7 @@ TraceView::~TraceView()
     m_data_provider.SetTraceLoadedCallback(nullptr);
     m_data_provider.SetSaveTraceCallback(nullptr);
     m_data_provider.SetCleanupDatabaseCallback(nullptr);
+    m_data_provider.SetRequestProgressUpdateCallback(nullptr);
 
     EventManager::GetInstance()->Unsubscribe(static_cast<int>(RocEvents::kTabSelected),
                                              m_tabselected_event_token);
@@ -297,6 +306,7 @@ TraceView::CreateView()
                                   m_timeline_view->GetTracks(), m_data_provider);
     auto analysis = std::make_shared<AnalysisView>(m_data_provider, m_track_topology,
                                                    m_timeline_selection, m_annotations);
+    m_analysis_view = analysis;
 
     m_sidebar_item            = LayoutItem::CreateFromWidget(sidebar);
     m_sidebar_item->m_visible = m_settings_manager.GetAppWindowSettings().show_sidebar;
@@ -343,6 +353,9 @@ TraceView::DestroyView()
     m_sidebar_item->m_item       = nullptr;
     m_horizontal_split_container = nullptr;
     m_analysis_item->m_item      = nullptr;
+    // Dropped with the rest: the analysis-tab accessors below go through this
+    // pointer, and a detached view would answer them from a dead layout.
+    m_analysis_view              = nullptr;
     m_view_created               = false;
 }
 
@@ -694,6 +707,7 @@ TraceView::SetHistogramVisibility(bool visibility)
     }
 }
 
+
 void
 TraceView::RenderToolbar()
 {
@@ -753,6 +767,10 @@ TraceView::RenderToolbar()
         {
             SetTooltipStyled("Show Minimap");
         }
+#ifdef ROCPROFVIS_ENABLE_AGENTIC_PROFILING
+        VerticalSeparator(&m_settings_manager);
+        AssistantPanel::RenderToolbarButton();
+#endif
         VerticalSeparator(&m_settings_manager);
     }
 

@@ -138,7 +138,11 @@ jobs:
         if: inputs.crypto_backend == 'OpenSSL'
         run: |
           dnf install -y 'dnf-command(config-manager)'
-          dnf config-manager --set-enabled crb
+          if [ "${{ matrix.os-version }}" = "8" ]; then
+            dnf config-manager --set-enabled powertools
+          else
+            dnf config-manager --set-enabled crb
+          fi
           dnf install -y openssl-devel
 
       - name: Build, Make, and Verify Installation

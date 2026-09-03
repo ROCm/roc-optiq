@@ -29,12 +29,30 @@ struct DetailsTable
 {
     struct Cell
     {
+        /*
+         * A kText cell renders data verbatim. Every other kind holds its raw
+         * magnitude in value and renders formatted, which is derived from
+         * value whenever the unit settings change.
+         */
+        enum class Kind
+        {
+            kText,
+            kTimeNs
+        };
+
         std::string data;
         bool        expand = false;
-        // Timestamps are kept raw in data and rendered from formatted, which is
-        // rebuilt when the time-unit setting changes.
-        bool        is_time = false;
+        Kind        kind   = Kind::kText;
+        double      value  = 0.0;
         std::string formatted{};
+
+        static Cell Time(double time_ns)
+        {
+            Cell cell;
+            cell.kind  = Kind::kTimeNs;
+            cell.value = time_ns;
+            return cell;
+        }
     };
 
     std::vector<std::vector<Cell>> cells;
@@ -80,9 +98,9 @@ private:
 
     void Resolve(DetailItem& item, const TrackInfo& metadata);
     void BuildTables(DetailItem& item);
-    // Rebuilds the display string of the item's time cells from the current
-    // time-unit setting.
-    void FormatTimeCells(DetailItem& item);
+    // Rebuilds the display string of the item's valued cells from the current
+    // unit settings.
+    void FormatValueCells(DetailItem& item);
 
     void RenderTable(DetailsTable& table, const char* table_id,
                      const AnalysisTrackStatistics* = nullptr);

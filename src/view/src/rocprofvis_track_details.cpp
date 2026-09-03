@@ -62,7 +62,7 @@ TrackDetails::TrackDetails(DataProvider&                      dp,
             (void) e;
             for(DetailItem& item : m_track_details)
             {
-                FormatTimeCells(item);
+                FormatValueCells(item);
             }
         });
 }
@@ -287,9 +287,9 @@ TrackDetails::BuildTables(DetailItem& item)
     {
         item.process_table.cells = {
             { DetailsTable::Cell{ "Start Time" },
-              DetailsTable::Cell{ std::to_string(process->start_time), false, true } },
+              DetailsTable::Cell::Time(process->start_time) },
             { DetailsTable::Cell{ "End Time" },
-              DetailsTable::Cell{ std::to_string(process->end_time), false, true } },
+              DetailsTable::Cell::Time(process->end_time) },
             { DetailsTable::Cell{ "Command" }, DetailsTable::Cell{ process->command } },
             { DetailsTable::Cell{ "Environment" },
               DetailsTable::Cell{ process->environment } }
@@ -335,10 +335,9 @@ TrackDetails::BuildTables(DetailItem& item)
                 const ThreadInfo& thread = static_cast<const ThreadInfo&>(*item.track);
                 item.track_table.cells   = {
                     { DetailsTable::Cell{ "Start Time" },
-                      DetailsTable::Cell{ std::to_string(thread.start_time), false,
-                                            true } },
+                      DetailsTable::Cell::Time(thread.start_time) },
                     { DetailsTable::Cell{ "End Time" },
-                      DetailsTable::Cell{ std::to_string(thread.end_time), false, true } }
+                      DetailsTable::Cell::Time(thread.end_time) }
                 };
                 break;
             }
@@ -346,11 +345,11 @@ TrackDetails::BuildTables(DetailItem& item)
         }
     }
 
-    FormatTimeCells(item);
+    FormatValueCells(item);
 }
 
 void
-TrackDetails::FormatTimeCells(DetailItem& item)
+TrackDetails::FormatValueCells(DetailItem& item)
 {
     const TimeFormat time_format =
         m_settings.GetUserSettings().unit_settings.time_format;
@@ -362,10 +361,13 @@ TrackDetails::FormatTimeCells(DetailItem& item)
         {
             for(DetailsTable::Cell& cell : row)
             {
-                if(cell.is_time)
+                switch(cell.kind)
                 {
-                    cell.formatted = nanosecond_to_formatted_str(
-                        std::stod(cell.data), time_format, true);
+                    case DetailsTable::Cell::Kind::kTimeNs:
+                        cell.formatted =
+                            nanosecond_to_formatted_str(cell.value, time_format, true);
+                        break;
+                    case DetailsTable::Cell::Kind::kText: break;
                 }
             }
         }
@@ -435,9 +437,10 @@ TrackDetails::RenderTable(DetailsTable& table, const char* table_id,
                 {
                     ImGui::PushID(c);
                     PositionCell(c);
-                    const char* data = table.cells[r][c].is_time
-                                           ? table.cells[r][c].formatted.c_str()
-                                           : table.cells[r][c].data.c_str();
+                    const char* data =
+                        table.cells[r][c].kind == DetailsTable::Cell::Kind::kText
+                            ? table.cells[r][c].data.c_str()
+                            : table.cells[r][c].formatted.c_str();
 
                     bool&       expand           = table.cells[r][c].expand;
                     ImVec2      cursor_pos_local = ImGui::GetCursorPos();
@@ -534,7 +537,9 @@ TrackDetails::RenderTable(DetailsTable& table, const char* table_id,
                     {
                         const DetailsTable::Cell& cell =
                             table.cells[m_cell_menu.row][c];
-                        row_cells.push_back(cell.is_time ? cell.formatted : cell.data);
+                        row_cells.push_back(
+                            cell.kind == DetailsTable::Cell::Kind::kText ? cell.data
+                                                                         : cell.formatted);
                     }
                     AddCopyRowCellMenuItems(row_cells.data(), cols, m_cell_menu.column);
                 }

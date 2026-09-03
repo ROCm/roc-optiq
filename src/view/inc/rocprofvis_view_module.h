@@ -64,5 +64,15 @@ rocprofvis_get_application_log_path();
 bool
 rocprofvis_view_is_remote_display_session();
 
+// Stored preference for the Linux/Wayland post-drag click-through workaround.
+// Only meaningful on Linux; the setter persists the value so the --drag-repair
+// flag does not have to be passed on every launch. Both require the view to
+// have been initialized.
+bool
+rocprofvis_view_get_drag_repair_enabled();
+
+void
+rocprofvis_view_set_drag_repair_enabled(bool enabled);
+
 bool
 rocprofvis_view_wants_continuous_render();

@@ -487,17 +487,13 @@ SystemTable::UnpackArguments(Arguments& args, TableArguments*& out) const
                     result = args.GetObject(kRPVControllerTableArgsTracksIndexed, i, track_ref.GetHandleAddress());
                     if (track_ref.IsValid())
                     {
-                        uint64_t test_type = 0;
-                        result = track_ref->GetUInt64(kRPVControllerTrackType, 0, &test_type);
-                        if (test_type == track_type)
+                        rocprofvis_controller_track_type_t test_type =
+                            track_ref->GetTrackType();
+                        if(test_type == track_type)
                         {
-                            uint64_t track_id = 0;
-                            result = track_ref->GetUInt64(kRPVControllerTrackId, 0, &track_id);
-                            if(result == kRocProfVisResultSuccess)
-                            {
-                                ROCPROFVIS_ASSERT(track_id <= UINT32_MAX);
-                                tracks.push_back((uint32_t)track_id);
-                            }
+                            uint64_t track_id = track_ref->GetId();
+                            ROCPROFVIS_ASSERT(track_id <= UINT32_MAX);
+                            tracks.push_back((uint32_t) track_id);
                         }
                         else
                         {

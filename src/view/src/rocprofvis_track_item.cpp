@@ -600,7 +600,11 @@ TrackItem::RenderResizeBar(const ImVec2& parent_size)
         ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeNS);
     }
 
-    if(ImGui::BeginDragDropSource(ImGuiDragDropFlags_None))
+    // Resize with a plain drag rather than a drag-drop source. The drag-drop
+    // system is shared with track reordering and with ImGui's own window
+    // dragging under multi-viewport, so using it here would publish a
+    // payload-less drag that those consumers cannot tell apart.
+    if(ImGui::IsItemActive() && ImGui::IsMouseDragging(ImGuiMouseButton_Left))
     {
         if(m_options)
         {
@@ -610,11 +614,6 @@ TrackItem::RenderResizeBar(const ImVec2& parent_size)
             m_track_height_changed = true;
         }
         ImGui::ResetMouseDragDelta();
-        ImGui::EndDragDropSource();
-    }
-    if(ImGui::BeginDragDropTarget())
-    {
-        ImGui::EndDragDropTarget();
     }
     ImGui::EndChild();  // end resize handle
     ImGui::PopStyleColor();

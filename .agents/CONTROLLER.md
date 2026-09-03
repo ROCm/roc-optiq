@@ -149,7 +149,7 @@ is what lets the `Handle::Get*/Set*` overrides on each subclass key off
 
 ### 2.4 Async fetch surface
 
-Six async fetchers exist, all returning immediately and signalling
+The primary async fetchers all return immediately and signal
 completion through a `rocprofvis_controller_future_t`:
 
 ```c
@@ -161,6 +161,16 @@ rocprofvis_controller_summary_fetch_async(...);                  // summary metr
 rocprofvis_controller_get_indexed_property_async(...);           // event/table/system props
 rocprofvis_controller_metric_fetch_async(...);                   // compute metric values
 rocprofvis_controller_create_analysis_view_async(...);           // analytic views (placeholder)
+```
+
+PC-sampling data has one compatibility fetch plus three stage-specific
+fetchers. Code View uses the stage-specific APIs so opening optional UI does
+not block the initial ISA display:
+
+```c
+rocprofvis_controller_pc_sampling_fetch_isa_lines_async(...); // ISA dependencies + lines
+rocprofvis_controller_pc_sampling_fetch_source_async(...);    // source metadata/correlation/lines
+rocprofvis_controller_pc_sampling_fetch_stalls_async(...);    // states/reasons/instruction samples
 ```
 
 Two more async surface APIs sit on the controller handle directly,
@@ -343,15 +353,25 @@ Every public object type (`SystemTrace`, `Track`, `Graph`, `Event`,
 `Sample`, `SampleLOD`, `FlowControl`, `CallStack`, `ExtData`, `Future`,
 `Array`, `Arguments`, `Table`, `Summary`, `SummaryMetrics`,
 `TopologyNode` and friends, plus the compute-only `ComputeTrace`,
-`Workload`, `Kernel`, `Roofline`, `MetricsContainer`,
+`Workload`, `Kernel`, `PcSampling`, `Roofline`, `MetricsContainer`,
 `ComputeTable`, `ComputePivotTable`, `Plot`, `ComputePlot`,
 `PlotSeries`) inherits from `Handle`.
 
 `m_first_prop_index` / `m_last_prop_index` form a guard band so an
-unhandled getter falls back to `UnhandledProperty(property)` (which
-returns `kRocProfVisResultInvalidArgument`). The `GetStdStringImpl`
-macro is the canonical way to copy a `std::string` into the caller's
-buffer with proper sizing.
+unhandled getter falls back to `UnhandledProperty(property)`. A property
+inside the handle's bank returns `kRocProfVisResultInvalidType`; a
+property outside the bank returns `kRocProfVisResultInvalidEnum`.
+
+The protected method
+`GetStdStringImpl(value, length, std::string_view)` is the canonical
+string-copy helper. Passing a null buffer (or a zero buffer length)
+queries the payload byte count; otherwise it performs a bounded copy
+without appending a terminator. It replaced the old `GetStdStringImpl`
+macro and `GetStringImpl` helper.
+Derived classes should keep their generic property overrides private
+and expose dedicated typed accessors for controller-internal C++ callers;
+the public virtual methods remain available through `Handle` for C ABI
+dispatch.
 
 ### 4.2 `Reference<>` template
 File: `rocprofvis_controller_reference.h`.
@@ -551,34 +571,44 @@ into SQLite directly, only through `rocprofvis_dm_*` calls.
 root system-trace controller. It owns:
 
 ```cpp
-std::vector<Track*>   m_tracks;
-std::vector<Node*>    m_nodes;          // legacy flat node list
-Timeline*             m_timeline;
-SystemTable*          m_event_table;
-SystemTable*          m_sample_table;
-SystemTable*          m_search_table;
-Summary*              m_summary;
-MemoryManager*        m_mem_mgmt;
-TopologyNode*         m_topology_root;
+std::vector<Track*>  m_tracks;
+Timeline*            m_timeline;
+SystemTable*         m_event_table;
+SystemTable*         m_sample_table;
+EventSearchTable*    m_search_table;
+Summary*             m_summary;
+MemoryManager*       m_mem_mgmt;
+TopologyNode*        m_topology_root;
 ```
 
-Five `AsyncFetch(...)` overloads cover everything the View asks for:
+`LoadRocpd` is a staged load pipeline implemented by private helpers:
+`OpenRocpdDatabase` opens and binds the SQLite database;
+`ReadRocpdMetadata` issues `rocprofvis_db_read_metadata_async` and
+waits; `LoadRocpdTracks` filters supported model tracks and calls
+`LoadRocpdTrack`; `LoadRocpdTrack` snapshots track state and calls
+`AddRocpdGraph`; and `LoadRocpdTopology` constructs the `TopologyNode`
+tree before calling `ValidateRocpdTrackTopology`. Track and graph
+objects stay under local `unique_ptr` ownership until their setup
+succeeds, then ownership is transferred to `SystemTrace` / `Timeline`.
+
+Six `AsyncFetch(...)` overloads cover everything the View asks for:
 
 ```cpp
 rocprofvis_result_t AsyncFetch(Track&,    Future&, Array&, double s, double e);
 rocprofvis_result_t AsyncFetch(Graph&,    Future&, Array&, double s, double e, uint32_t pixels);
 rocprofvis_result_t AsyncFetch(Event&,    Future&, Array&, rocprofvis_property_t);
-rocprofvis_result_t AsyncFetch(Table&,    Future&, Array&, uint64_t index, uint64_t count);
 rocprofvis_result_t AsyncFetch(Table&,    Arguments&, Future&, Array&);
 rocprofvis_result_t AsyncFetch(Summary&,  Arguments&, Future&, SummaryMetrics&);
 rocprofvis_result_t AsyncFetch(rocprofvis_property_t, Future&, Array&,
                                uint64_t index, uint64_t count);
 ```
 
-Each one creates a `Job` that, on a worker thread, walks the model
-layer (`rocprofvis_dm_*`), fills the caller's `Array` /
-`SummaryMetrics`, and returns. The View's `DataProvider` polls the
-`Future` once per frame.
+Track and graph requests delegate through `Timeline`; the other
+overloads schedule a `Job` directly. On a worker thread they walk the
+model layer (`rocprofvis_dm_*`) and fill the caller's `Array` or
+`SummaryMetrics`. `TableExportCSV(...)` is the corresponding async
+table-export path. The View's `DataProvider` polls the `Future` once
+per frame.
 
 ### 5.1 `Track` (`rocprofvis_controller_track.{h,cpp}`)
 
@@ -586,16 +616,48 @@ Represents a single horizontal lane in the timeline (queue, stream,
 instrumented thread, sampled thread, counter). Carries:
 
 - `m_type` (`rocprofvis_controller_track_type_t`: `Samples` or `Events`).
+- `m_bounds` - entry count, timestamps, and sample-value bounds cached
+  at load time.
+- `m_metadata` - category, display names, and operation types cached at
+  load time.
+- `m_topology_ids` - node plus process/agent and thread/queue IDs.
 - `m_segments` (a `SegmentTimeline`, see section 7).
-- `m_thread`, `m_queue`, `m_stream`, `m_counter` - the linked
-  `TopologyNode*`s, may be null.
+- `m_topology_links` — struct holding `Thread*`, `Queue*`, `Stream*`,
+  `Counter*`; set after topology construction via `SetThread` /
+  `SetQueue` / `SetStream` / `SetCounter`. Access via the typed
+  getters `GetThread()`, `GetQueue()`, `GetStream()`, `GetCounter()`.
 - `m_dm_handle` - the model-layer track reference.
+- `m_state_changed` - condition variable that coordinates concurrent
+  requests for the same missing segment range.
 
-`Fetch(start, end, array, index, future)` walks the segment cache:
-segments inside `[start, end]` that are not yet loaded get a
-`FetchFromDataModel` call, then segments emit their cached events /
-samples into the output array. `FetchSegments(...)` is the lower-level
-hook that lets `Graph` reuse the segment iteration logic.
+Typed accessors (prefer these over the generic property API for
+internal C++ code): `GetId()`, `GetTrackType()`,
+`GetStartTimestamp()`, `GetEndTimestamp()`, `GetNumberOfEntries()`,
+the extended-data getters, `GetThread()`, `GetQueue()`, `GetStream()`,
+`GetCounter()`, and `GetInclusiveMemoryUsage()`. The generic
+`Get*` / `Set*` overrides on `Track` are private; use the typed setters
+(`SetThread`, `SetQueue`, `SetStream`, `SetCounter`) when wiring
+topology links.
+
+`FillBounds()`, `FillMetadata()`, and `FillTopologyIds()` snapshot the
+corresponding track data from the model before the track is added to
+the trace. A failure in any snapshot step aborts that track's load.
+
+`Fetch(start, end, array, index, future)` delegates cache coordination
+to `Track::FetchSegments`. That method claims contiguous missing ranges
+with `SegmentTimeline`'s processed bits, waits on `m_state_changed` when
+another request owns a range, calls `FetchFromDataModel`, marks the
+range valid only on success, and finally walks the resident segments.
+`Graph` reuses this path to obtain raw LOD-0 entries.
+
+`FetchFromDataModel` is split into focused helpers. It aligns the
+request with `CalculateFetchRange`, estimates density from the track
+histogram, schedules model reads with `ScheduleTraceReadRequests`, and
+then waits and dispatches each returned slice through
+`ProcessTraceReadRequest`. `ProcessEventRecords` and
+`ProcessPmcSampleRecords` allocate pooled controller objects and insert
+them into the segment timeline. Model slices and dependent futures are
+released after processing, including cancellation/error paths.
 
 Track properties are exposed under
 `rocprofvis_controller_track_properties_t` (start at `0x30000000`):
@@ -653,7 +715,10 @@ caller's `Array`.
 `GenerateLODEvent` coalesces a vector of `Event*` into a single
 synthetic event whose `m_combined_top_name` is the longest contained
 event name. `CombineEventInfo` produces the shared display label and
-the `max_duration_str_index`.
+the `max_duration_str_index`. Controller-internal graph logic reads
+track type, bounds, and entry count through `Track`'s typed getters.
+LOD generation propagates invalid data/reference failures instead of
+depending on assertions alone.
 
 ### 5.4 `Timeline` (`rocprofvis_controller_timeline.{h,cpp}`)
 
@@ -729,7 +794,15 @@ File: `rocprofvis_controller_topology.{h,cpp}`.
 `GetParent(type)` walks up the chain to the nearest ancestor of a
 given type. The View mirrors this tree into its own `TopologyTree`
 (`src/view/src/model/rocprofvis_topology_model.h`) at load; do not add a
-new topology kind without also extending both.
+new topology kind without also extending both. Track-to-topology links
+come from the model node's `kRPVControllerTopologyNodeTrack` ID while the
+controller tree is constructed. The ID is resolved through
+`kRPVControllerSystemTrackIndexed`, then the typed `Track::Set*` method
+for the leaf kind records the reverse link. Track extended-data records
+are not a secondary wiring source. `SystemTrace::LoadRocpdTopology`
+checks whether every supported track received the expected thread,
+queue, stream, or counter link and logs incomplete topology without
+failing the trace load.
 
 ### 5.8 `FlowControl`, `CallStack`, `ExtData`, `ArgumentData`
 Files: `rocprofvis_controller_flow_control.h`,
@@ -791,6 +864,13 @@ rocprofvis_result_t AsyncFetch(Arguments&, Future&, MetricsContainer&);
 rocprofvis_result_t AsyncFetch(Table&, Arguments&, Future&, Array&);
 ```
 
+PC sampling uses `AsyncFetchPcSamplingIsaData`,
+`AsyncFetchPcSamplingSource`, and `AsyncFetchPcSamplingStalls` for the three
+on-demand stages.
+`AsyncFetchPcSampling` is the compatibility all-data path and runs those same
+stage helpers in sequence. Each helper checks the cache flags on the
+kernel-owned `PcSampling` handle before querying the database.
+
 Internal helper `ExecuteQuery(...)` runs a database query through the
 compute model layer and dispatches rows into a callback. The nested
 `MetricID` class formats `"category.table.entry"` strings the View can
@@ -819,6 +899,20 @@ A kernel within a workload. Carries `m_id`, `m_name`,
 `m_invocation_count`, and the duration set
 (`total/min/max/median/mean`). Property bank:
 `rocprofvis_controller_kernel_properties_t`.
+
+Each kernel also owns a `PcSampling` handle. The
+`rocprofvis_controller_pc_sampling_fetch_mandatorys_async` path calls
+`ComputeTrace::AsyncFetchPcSamplingIsaData` to load the code objects, kernel
+symbols, and ISA lines needed for the initial Code View. The source fetch loads
+source-file metadata, instruction/source mappings, and the requested source
+file's lines. Each instruction/source mapping includes the owning source-file
+UUID so Code View can switch files for cross-pane navigation. Source file ID 0
+selects the first available source file. The stall fetch independently loads
+PC sample states, stall-reason counts, and
+instruction-sample metadata. The full
+`rocprofvis_controller_pc_sampling_fetch_all_async` compatibility path invokes
+all three stages in sequence. Per-table flags on `PcSampling` prevent repeated
+queries while allowing source files to be fetched separately.
 
 ### 6.4 `Roofline` (`rocprofvis_controller_roofline.{h,cpp}`)
 
@@ -883,6 +977,38 @@ caches, fabric, etc.). `Setup()` loads the CSV into `m_metrics_map`;
 It pivots metric values into a `kernel x metric` matrix and exposes
 the result like any other table.
 
+### 6.8 `PcSampling` (`rocprofvis_controller_pc_sampling.{h,cpp}`)
+
+Object type `kRPVControllerObjectTypePCSampling = 30`. Each `Kernel`
+owns one `PcSampling` handle (accessed via
+`kRPVControllerKernelPcSampling`). Data is split into three independent
+layers, each with its own `std::recursive_mutex` so a completed ISA
+pane stays readable while source or stall data loads:
+
+| Layer   | Mutex                | Data vectors |
+|---------|----------------------|--------------|
+| ISA     | `m_isa_data_mutex`   | `m_code_object_store`, `m_kernel_symbols`, `m_instruction_lines` |
+| Source  | `m_source_data_mutex`| `m_source_files`, `m_source_lines`, `m_instruction_source_lines` |
+| Stalls  | `m_stalls_data_mutex`| `m_pc_sample_states`, `m_pc_sample_stall_reasons`, `m_pc_sample_stall_reason_lookups`, `m_instruction_type_lookups`, `m_instruction_samples`, `m_instruction_sample_lookups` |
+
+Per-layer cached booleans (`m_code_object_store_loaded`,
+`m_kernel_symbols_loaded`, `m_instruction_lines_loaded`,
+`m_instruction_source_lines_loaded`, `m_source_files_loaded`,
+`m_pc_sample_states_loaded`, `m_stalls_loaded`,
+`m_instruction_samples_loaded`) prevent repeated queries.
+
+`GetLayerMutex(DataLayer)` and `GetPropertyMutex(property)` route
+locking to the right mutex for each property ID.
+
+`QueryToPropertyEnum(rocprofvis_db_compute_column_enum_t, property&,
+type&)` is the internal helper `ComputeTrace` uses to map a DB column
+enum to the right `kRPVControllerPCSampling*` property ID.
+
+Property bank: `rocprofvis_controller_pc_sampling_data_properties_t`
+(base `__kRPVControllerPCSamplingPropertiesFirst`), covering 60+
+property IDs across the three data layers. Instruction/source correlation
+properties include both source-line and owning source-file UUIDs.
+
 ### 6.7 `ComputePlot`, `Plot`, `PlotSeries`
 Files: `rocprofvis_controller_plot.{h,cpp}`,
 `rocprofvis_controller_plot_compute.{h,cpp}`,
@@ -924,11 +1050,14 @@ tracks) holding `map<level, map<timestamp, Handle*>>`. `Insert(...)`
 adds an event/sample, `Fetch(start, end, array, ...)` emits the
 matching items into the caller's array.
 
-`FetchSegments(start, end, user_ptr, future, func)` is the standard
-"walk the cache, populate missing ones" loop. The callback `func`
-gets called once per missing segment so the caller can fetch the
-data from the model layer. This is reused by `Track::Fetch` and
-`Graph::GenerateLOD` so the loading logic only lives in one place.
+`SegmentTimeline::FetchSegments(start, end, user_ptr, future, func)`
+walks resident segments overlapping the requested range and invokes
+`func` for each one. It does not populate missing data. Raw-track cache
+population and duplicate-request coordination live in
+`Track::FetchSegments`; graph LOD cache population lives in
+`Graph::GenerateLOD`. Both use the timeline's valid/processed bitsets
+and condition variables before delegating the final resident-segment
+walk to `SegmentTimeline::FetchSegments`.
 
 ### 7.2 `MemoryManager`
 
@@ -1004,16 +1133,18 @@ extern "C" entry (rocprofvis_controller.cpp):
     SystemTraceRef trace(controller); TrackRef track_ref(track); ...
     if (all valid) trace->AsyncFetch(*track_ref, *future, *array, start, end);
 
-SystemTrace::AsyncFetch:
+SystemTrace::AsyncFetch -> Timeline::AsyncFetch:
     JobSystem::Get().IssueJob([=](Future* f) {
         // worker thread:
-        track_ref.FetchSegments(start, end, ...) // hits Segment cache
-        for each missing segment:
-            Track::FetchFromDataModel(...) -> rocprofvis_dm_*
-            MemoryManager::NewEvent(...) / NewSample(...) -> pooled
-            segment->Insert(ts, level, handle);
-        segment->Fetch(start, end, array, ...);
-        MemoryManager::EnterArrayOwnership(array, Graph or Track);
+        track_ref.Fetch(...) -> Track::FetchSegments(...)
+        for each unclaimed missing range:
+            Track::FetchFromDataModel(...)
+                -> ScheduleTraceReadRequests(...) -> rocprofvis_dm_*
+                -> ProcessEventRecords(...) / ProcessPmcSampleRecords(...)
+                -> MemoryManager::NewEvent(...) / NewSample(...)
+                -> segment->Insert(ts, level, handle);
+        SegmentTimeline::FetchSegments(...)
+            -> segment->Fetch(start, end, array, ...);
         return kRocProfVisResultSuccess;
     }, future);
 
@@ -1067,11 +1198,15 @@ Property bank starting points (`uint32_t` enum bases):
 | Summary Metrics                       | `0xF0000000` |
 | Common (memory usage, etc.)           | `0xFFFF0000` |
 
-Compute-side banks start at the
+Compute-side banks (including `PcSampling`) start at the
 `__kRPVControllerComputePropertiesFirst` family. The auto-incrementing
 `__first / __last` brackets in each enum are an extension hint - if
 you add a new property to an existing bank, declare it inside the
 brackets.
+
+`PcSampling` uses `__kRPVControllerPCSamplingPropertiesFirst` as its
+base (auto-incremented after the other compute banks); it does not have
+a fixed hex offset like the system banks above.
 
 When you add a new object type:
 
@@ -1100,9 +1235,11 @@ These supplement `CODING.md`. When the two disagree, `CODING.md` wins.
   (close blocks with the trailing `// namespace Controller / //
   namespace RocProfVis` comments).
 - **No exceptions** across the C ABI boundary (and avoid them
-  internally). Return `rocprofvis_result_t`. The only existing
-  `try/catch` is at the entry of `rocprofvis_controller_alloc` and it
-  logs and falls through to `nullptr`.
+  internally). Return `rocprofvis_result_t`. Existing allocation, load,
+  worker, and parsing boundaries catch locally and translate to a result
+  code (for example `rocprofvis_controller_alloc`, `JobSystem`, and
+  `SystemTrace::LoadRocpd`); do the same when a throwing dependency
+  cannot be avoided.
 - **Logging:** `spdlog::info/warn/error` only. Never `std::cout` /
   `printf` / `iostream`.
 - **Asserts:** `ROCPROFVIS_ASSERT` for runtime invariants;
@@ -1136,7 +1273,12 @@ These supplement `CODING.md`. When the two disagree, `CODING.md` wins.
 | Mark an array as in-use so segments survive eviction    | `MemoryManager::EnterArrayOwnership(arr, kRocProfVisOwnerTypeGraph)`    |
 | Release an array's in-use grip                          | `MemoryManager::CancelArrayOwnership(arr, type)` (called by `array_free`) |
 | Walk segments inside `[start, end]`                     | `SegmentTimeline::FetchSegments(start, end, user_ptr, future, func)`    |
+| Populate missing raw-track segments                     | `Track::FetchSegments(...)` / `Track::Fetch(...)`                       |
+| Read controller-internal track state                    | `Track` typed getters; reserve generic properties for C ABI dispatch    |
 | Identify a topology node's nearest typed ancestor       | `TopologyNode::GetParent(rocprofvis_controller_object_type_t)`          |
+| Get a track's linked topology node                      | `Track::GetThread()` / `GetQueue()` / `GetStream()` / `GetCounter()`   |
+| Wire a topology node to a track                         | `Track::SetThread()` / `SetQueue()` / `SetStream()` / `SetCounter()`   |
+| RAII-wrap a `rocprofvis_db_future_t`                    | `DataModelFuturePtr` (file-scope in `rocprofvis_controller_trace_system.cpp`) |
 | Implement a new table                                   | Subclass `Table`, override `Setup` / `Fetch` / `ExportCSV`              |
 | Implement a new system table use case                   | Add to `rocprofvis_dm_table_use_case_enum_t` and switch in `SystemTable` |
 | Implement a new compute pre-baked table                 | Add a `ComputeTableDefinition` row in `COMPUTE_TABLE_DEFINITIONS`       |
@@ -1159,6 +1301,13 @@ These supplement `CODING.md`. When the two disagree, `CODING.md` wins.
   `CancelArrayOwnership` in `array_free`.
 - **`reinterpret_cast` from `rocprofvis_handle_t*`.** Always use a
   `Reference<>` so the type tag is checked.
+- **Calling a derived class's generic property override internally.**
+  Keep those overrides private and add/use a typed getter or setter;
+  generic properties are the C ABI bridge, not the controller's C++
+  object interface.
+- **Treating `SegmentTimeline::FetchSegments` as a loader.** It only
+  walks resident segments. Use `Track::FetchSegments` when missing
+  raw-track ranges must be coordinated and populated.
 - **Spawning `std::thread` from a fetch.** Use
   `JobSystem::Get().IssueJob`. The only legitimate non-job thread is
   `MemoryManager::m_lru_thread`.
@@ -1261,6 +1410,7 @@ free" sequence.
 - `rocprofvis_controller_trace_compute.{h,cpp}` -> `ComputeTrace`.
 - `rocprofvis_controller_workload.{h,cpp}` -> `Workload`.
 - `rocprofvis_controller_kernel.{h,cpp}` -> `Kernel`.
+- `rocprofvis_controller_pc_sampling.{h,cpp}` -> `PcSampling` (three-layer PC sampling data; owned by `Kernel`).
 - `rocprofvis_controller_roofline.{h,cpp}` -> `Roofline`.
 - `rocprofvis_controller_metrics_container.{h,cpp}` -> `MetricsContainer`.
 - `rocprofvis_controller_table_compute.{h,cpp}` -> `ComputeTable`

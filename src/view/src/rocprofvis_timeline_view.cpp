@@ -1359,7 +1359,10 @@ TimelineView::RenderSplitter()
             m_settings.GetColor(Colors::kAccent));
     }
 
-    if(ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceNoPreviewTooltip))
+    // Resize with a plain drag rather than a drag-drop source, so the splitter
+    // does not publish a payload-less drag that track reordering and ImGui's
+    // multi-viewport window dragging would both see.
+    if(ImGui::IsItemActive() && ImGui::IsMouseDragging(ImGuiMouseButton_Left))
     {
         ImVec2 drag_delta = ImGui::GetMouseDragDelta(ImGuiMouseButton_Left);
 
@@ -1372,12 +1375,7 @@ TimelineView::RenderSplitter()
                                         2 * ImGui::GetFrameHeightWithSpacing(),
                                     SIDEBAR_WIDTH_MAX);
         ImGui::ResetMouseDragDelta();
-        ImGui::EndDragDropSource();
         m_resize_activity |= true;
-    }
-    if(ImGui::BeginDragDropTarget())
-    {
-        ImGui::EndDragDropTarget();
     }
 
     ImGui::EndChild();
@@ -1969,10 +1967,14 @@ TimelineView::RenderTrack(int track_index, bool request_data,
             // Save distance for book keeping
             track_item->SetDistanceToView(std::max(std::max(delta_bottom, delta_top), 0.0f));
 
-            // This item is being reordered if there is an active payload and its id
-            // matches the payload's id.
-            bool is_reordering = ImGui::GetDragDropPayload() &&
-                                 m_reorder_request.track_id == track_item->GetID();
+            // This item is being reordered if there is an active reorder payload
+            // and its id matches the payload's id. Matching on the payload type
+            // keeps unrelated drags (e.g. ImGui window moves under
+            // multi-viewport) from being treated as a reorder.
+            const ImGuiPayload* payload = ImGui::GetDragDropPayload();
+            bool                is_reordering =
+                payload && payload->IsDataType("reorder_request") &&
+                m_reorder_request.track_id == track_item->GetID();
 
             // Check if the track is visible
             bool is_visible =

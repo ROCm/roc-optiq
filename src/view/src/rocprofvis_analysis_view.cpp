@@ -56,14 +56,16 @@ AnalysisView::AnalysisView(DataProvider& dp, std::shared_ptr<TrackTopology> topo
             dp, TableType::kEventTable, kRPVControllerTableTypeEvents,
             DataProvider::EVENT_TABLE_REQUEST_ID,
             [&dp]() -> const TablesModel& { return dp.DataModel().GetTables(); },
-            [&dp]() -> TablesModel& { return dp.DataModel().GetTables(); }, true,
-            timeline_selection));
+            [&dp]() -> TablesModel& { return dp.DataModel().GetTables(); },
+            timeline_selection,
+            MultiTrackTable::FilterMode::kBasic | MultiTrackTable::FilterMode::kAdvanced));
         m_sample_group.tables.push_back(std::make_shared<MultiTrackTable>(
             dp, TableType::kSampleTable, kRPVControllerTableTypeSamples,
             DataProvider::SAMPLE_TABLE_REQUEST_ID,
             [&dp]() -> const TablesModel& { return dp.DataModel().GetTables(); },
-            [&dp]() -> TablesModel& { return dp.DataModel().GetTables(); }, true,
-            timeline_selection));
+            [&dp]() -> TablesModel& { return dp.DataModel().GetTables(); },
+            timeline_selection,
+            MultiTrackTable::FilterMode::kBasic | MultiTrackTable::FilterMode::kAdvanced));
     }
 
     m_tab_container = std::make_shared<TabContainer>();
@@ -192,9 +194,9 @@ AnalysisView::BuildCompareGroup(CompareGroup&                                   
             RequestIdBuilder::MakeClientRequestId(request_type,
                                                   COMPARE_CLIENT_ID[source]),
             [&dp]() -> const TablesModel& { return dp.DataModel().GetTables(); },
-            [&dp]() -> TablesModel& { return dp.DataModel().GetTables(); }, false,
-            timeline_selection, TABLE_DEFAULT_SORT_COLUMN,
-            kRPVControllerSortOrderAscending,
+            [&dp]() -> TablesModel& { return dp.DataModel().GetTables(); },
+            timeline_selection, MultiTrackTable::FilterMode::kNone,
+            TABLE_DEFAULT_SORT_COLUMN, kRPVControllerSortOrderAscending,
             std::string(friendly_name) + " " + COMPARE_SOURCE_LABEL[source], "", source));
         // The card title carries the counts, and the filter form is shared.
         group.tables[source]->SetDisplaySummary(false);

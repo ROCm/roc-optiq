@@ -66,15 +66,14 @@ protected:
         kNumTimeColumns
     };
 
-    constexpr static size_t FILTER_SIZE = 256;
     struct FilterOptions
     {
-        char        where[FILTER_SIZE];
         std::string group_by;
-        char        group_columns[FILTER_SIZE];
-        char        filter[FILTER_SIZE];
+        std::string group_columns;
+        std::string filter;
     };
 
+    virtual void UpdateFetchParams(std::shared_ptr<TableRequestParams>& params) const;
     virtual void FormatData() const;
     virtual void IndexColumns();
     virtual void RowSelected(const ImGuiMouseButton mouse_button);
@@ -88,20 +87,18 @@ protected:
                                                            size_t stream_id_column_index) const;
     void                          SelectedRowContextMenu();
 
+    // Signal for data fetch, caller should prepare to recieve UpdateFetchParams. 
+    void RequestFetch();
+    void RequestFilter();
+
     void FormatTimeColumns() const;
     void ExportToFile() const;
-    /* Sends a table request, keeping it for Update() to reissue when the
-     * controller table it needs is busy. Returns whether it went out now.
-     * Held by pointer so the concrete params type survives, which is what
-     * DataProvider::FetchTable dispatches on.
-     */
-    bool QueueTableRequest(const std::shared_ptr<TableRequestParams>& params);
-    // Drops a request kept by QueueTableRequest, once it is out or obsolete.
-    void ClearQueuedTableRequest();
     /* Whether this table is waiting on data: either a request is out with the
-     * controller, or QueueTableRequest is holding one until the table frees up.
+     * controller, or one is held until the controller table frees up.
      */
     bool TableRequestInFlight() const;
+    // Drops a fetch still waiting for its turn, once it is obsolete.
+    void CancelFetch();
     /* When false the body draws without its own frame, so a parent that already
      * draws one around the title and the table supplies the only border.
      */
@@ -114,8 +111,12 @@ protected:
     // a no-op so non-compare tables keep the values the user applied.
     virtual void AdjustFilterForRequest(FilterOptions&) const {}
 
+    // Filter row...
+    const std::string& ActiveFilterRowClause() const;
+    void               DisplayFilterRow(bool display);
+    void               ResetFilterRow();
+
     FilterOptions                      m_filter_options;
-    FilterOptions                      m_pending_filter_options;
     uint64_t                           m_sort_column_index;
     uint64_t                           m_default_sort_column_index;
     rocprofvis_controller_sort_order_t m_sort_order;
@@ -137,8 +138,7 @@ protected:
     uint64_t m_fetch_chunk_size;
 
     bool m_data_changed;
-    bool m_filter_requested;
-    // True when the last queued request included a group_by. Grouped results
+    // True when the last request sent included a group_by. Grouped results
     // must not rebuild the eligible column cache from the aggregate header.
     bool m_last_fetch_grouped;
 
@@ -151,24 +151,44 @@ protected:
     bool m_draw_border;
 
 private:
+    struct FilterInput
+    {
+        std::string                            column_name;
+        rocprofvis_controller_primitive_type_t column_type;
+        std::string                            input;
+        const char*                            tooltip;
+    };
+
+    void FetchData();
     void RenderCell(const std::string* cell_text, int row, int column);
     void RenderContextMenu();
-    void ProcessSortOrFilterRequest(rocprofvis_controller_sort_order_t sort_order,
-                                    uint64_t sort_column_index, uint64_t frame_count);
+    void ProcessSortOrFilterRequest(uint64_t frame_count);
 
-    int m_fetch_pad_items;
-    int m_fetch_threshold_items;
+    int      m_fetch_pad_items;
+    int      m_fetch_threshold_items;
+    uint64_t m_fetch_start_row;
+    bool     m_fetch_data;
+    bool     m_fetch_cancelled;
+
+    bool m_filter_requested;
 
     // Internal state flags below
-    bool                                m_open_context_menu;
-    bool                                m_skip_data_fetch;
-    bool                                m_retry_fetch;
-    bool                                m_pending_sort;
-    uint64_t                            m_pending_sort_column;
-    rocprofvis_controller_sort_order_t  m_pending_sort_order;
-    std::shared_ptr<TableRequestParams> m_retry_params;
-    uint64_t                            m_last_total_row_count;
-    ImVec2                              m_last_table_size;
+    bool                               m_open_context_menu;
+    bool                               m_skip_data_fetch;
+    bool                               m_pending_sort;
+    uint64_t                           m_pending_sort_column;
+    rocprofvis_controller_sort_order_t m_pending_sort_order;
+    uint64_t                           m_last_total_row_count;
+    ImVec2                             m_last_table_size;
+
+    // Filter row...
+    bool                                         m_display_filter_row;
+    bool                                         m_reset_filter_row;
+    bool                                         m_update_filter_row;
+    std::vector<FilterInput*>                    m_displayed_filter_row_inputs;
+    std::string                                  m_active_filter_row_clause;
+    std::unordered_set<FilterInput*>             m_active_filter_row_inputs;
+    std::unordered_map<std::string, FilterInput> m_filter_row_inputs;
 
     std::string m_no_data_text;
     std::string m_export_notification_id;

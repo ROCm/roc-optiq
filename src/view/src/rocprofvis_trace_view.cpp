@@ -1133,7 +1133,7 @@ TraceView::RenderEventSearch()
         float reserved = options_width >= m_event_search->Width() ? 0.0f : options_width;
         std::pair<bool, bool> search_bar = InputTextWithClear(
             "search_bar", "Search: hipLaunchKernel or \"hip\"\"kernel\"",
-            m_event_search->TextInput(), m_event_search->TextInputLimit(),
+            m_event_search->TextInput(),
             settings.GetFontManager().GetFont(FontType::kIcon),
             settings.GetColor(Colors::kBgMain), settings.GetDefaultStyle(),
             m_event_search->Width() - reserved);

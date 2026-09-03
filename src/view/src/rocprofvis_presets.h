@@ -4,6 +4,7 @@
 #pragma once
 #include "json.h"
 #include <filesystem>
+#include <string>
 #include <unordered_map>
 #include <vector>
 
@@ -181,7 +182,7 @@ private:
 
     float m_pos_x;
     float m_pos_y;
-    char  m_text_input[256];
+    std::string m_text_input;
 
     PresetManager&       m_presets;
     NotificationManager& m_notifications;

@@ -290,9 +290,9 @@ TopEventsView::TopEventsTable::TopEventsTable(
 : MultiTrackTable(
       dp, table_type, request_table_type, request_id,
       [&dp]() -> const TablesModel& { return dp.DataModel().GetAnalysis().GetTables(); },
-      [&dp]() -> TablesModel& { return dp.DataModel().GetAnalysis().GetTables(); }, false,
-      timeline_selection, TOTAL_DURATION_SORT_COLUMN, kRPVControllerSortOrderDescending,
-      "", "", source_file_id)
+      [&dp]() -> TablesModel& { return dp.DataModel().GetAnalysis().GetTables(); },
+      timeline_selection, kNone, TOTAL_DURATION_SORT_COLUMN,
+      kRPVControllerSortOrderDescending, "", "", source_file_id)
 , m_duration_column_indices({ INVALID_UINT64_INDEX, INVALID_UINT64_INDEX,
                               INVALID_UINT64_INDEX, INVALID_UINT64_INDEX })
 , m_op(op)

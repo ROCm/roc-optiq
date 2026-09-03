@@ -20,6 +20,13 @@ namespace View
 class MultiTrackTable : public InfiniteScrollTable
 {
 public:
+    enum FilterMode
+    {
+        kNone     = 0,
+        kBasic    = 1 << 0,
+        kAdvanced = 1 << 1,
+    };
+
     using FilterSubmitCallback = std::function<void(const MultiTrackTable&)>;
     using SortSyncCallback     = std::function<void(const MultiTrackTable&)>;
 
@@ -28,8 +35,8 @@ public:
                     uint64_t                                  request_id,
                     const std::function<const TablesModel&()> table_model,
                     const std::function<TablesModel&()>       table_model_mutable,
-                    bool                                      display_filters,
                     std::shared_ptr<TimelineSelection>        timeline_selection,
+                    int                                available_filter_modes    = kNone,
                     uint64_t                           default_sort_column_index = 1,
                     rocprofvis_controller_sort_order_t default_sort_order =
                         kRPVControllerSortOrderAscending,
@@ -74,6 +81,7 @@ public:
 
 protected:
     virtual bool IncludeTrack(uint64_t track_id) const;
+    virtual void UpdateFetchParams(std::shared_ptr<TableRequestParams>& params) const override;
     void         FormatData() const override;
     void         IndexColumns() override;
     void         RowSelected(const ImGuiMouseButton mouse_button) override;
@@ -88,12 +96,14 @@ protected:
 
 private:
     void FetchSelectionData();
+    void ApplyFilter(bool reset);
     void SubmitFilters();
-    bool XButton(const char* id) const;
+    // Moves the staged group-by and filter into the applied options, keeping the
+    // two from being sent together.
+    void CommitAdvancedFilter();
     void RebuildEligibleGroupByColumns();
     bool HasEligibleGroupByColumn(const std::string& name) const;
 
-    bool                  m_display_filters;
     bool                  m_display_summary;
     FilterSubmitCallback  m_filter_submit_callback;
     SortSyncCallback      m_sort_sync_callback;
@@ -106,7 +116,10 @@ private:
     // grouped fetches so a later request still knows the original schema.
     std::vector<std::string> m_eligible_group_by_columns;
 
-    char m_filter_store[FILTER_SIZE];
+    int           m_available_filter_modes;
+    FilterMode    m_filter_mode;
+    FilterOptions m_filter_advanced;
+    std::string   m_filter_store;
 };
 
 }  // namespace View

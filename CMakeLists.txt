@@ -324,6 +324,13 @@ target_link_libraries(${TARGET_NAME} PRIVATE sqlite3)
 target_link_libraries(${TARGET_NAME} PRIVATE json)
 
 if(BUILD_TESTING AND ROCPROFVIS_ENABLE_UI_TESTS)
+    # Fail at configure if imgui_te was dropped (e.g. BUILD_TESTING shadowed).
+    if(NOT TARGET imgui_te)
+        message(FATAL_ERROR
+            "ROCPROFVIS_ENABLE_UI_TESTS is ON but imgui_te was not created. "
+            "Check that BUILD_TESTING is still set in thirdparty/CMakeLists.txt.")
+    endif()
+
     set(IMGUI_TEST_ENGINE_DIR
         ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/imgui_test_engine/imgui_test_engine)
     add_library(imgui_test_engine STATIC
@@ -364,12 +371,17 @@ if(BUILD_TESTING AND ROCPROFVIS_ENABLE_UI_TESTS)
         ${CMAKE_CURRENT_SOURCE_DIR}/src/view/src
         ${CMAKE_CURRENT_SOURCE_DIR}/src/view/src/model
         ${CMAKE_CURRENT_SOURCE_DIR}/src/view/src/icons
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/view/src/widgets
         ${CMAKE_CURRENT_SOURCE_DIR}/src/view/test
         ${Vulkan_INCLUDE_DIRS}
         ${Vulkan_INCLUDE_DIR}
         ${CMAKE_CURRENT_SOURCE_DIR}/src/model/inc
         ${CMAKE_CURRENT_SOURCE_DIR}/src/core/inc
     )
+    # TEMPORARY (profiler launch): remove when the profiler feature graduates.
+    if(ROCPROFVIS_ENABLE_PROFILER)
+    target_include_directories(${TEST_TARGET} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/view/src/profiler)
+    endif(ROCPROFVIS_ENABLE_PROFILER)
     target_link_libraries(${TEST_TARGET} PRIVATE
         imgui_te
         imgui_test_engine

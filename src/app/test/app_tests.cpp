@@ -161,6 +161,77 @@ bool TwoStackedEventScreenCenters(ImGuiTestContext* ctx, unsigned int flame_wind
     return false;
 }
 
+// Opens the "Track Options" gear menu for the flame track whose FV child window
+// is fv_id and returns the submenu window (nullptr on failure). Pass the fv_id
+// of the track the caller asserts on, so the menu and the assertion target the
+// same track. Menu entries are matched by DebugLabel substring: their labels
+// carry icon-padding spaces and their ids change every run. Caller must
+// PopupCloseAll().
+ImGuiWindow* OpenTrackGearMenu(ImGuiTestContext* ctx, unsigned int fv_id)
+{
+    if(fv_id == 0)
+    {
+        ctx->LogWarning("SKIP: no rendered flame track to open a gear menu on");
+        return nullptr;
+    }
+    ImGuiWindow* fv = ImGui::FindWindowByID(fv_id);
+    if(fv == nullptr || fv->ParentWindow == nullptr) return nullptr;
+
+    // A track's FV and MetaData Area windows are the two children of one
+    // per-track container, so the sibling of this FV is the right meta window.
+    ImGuiWindow* container = fv->ParentWindow;
+    ImGuiWindow* meta      = nullptr;
+    for(ImGuiWindow* w : ImGui::GetCurrentContext()->Windows)
+    {
+        if(w->WasActive && w->ParentWindow == container &&
+           strstr(w->Name, "MetaData Area"))
+        {
+            meta = w;
+            break;
+        }
+    }
+    if(meta == nullptr)
+    {
+        ctx->LogWarning("SKIP: flame track has no MetaData Area window");
+        return nullptr;
+    }
+
+    ctx->MouseMoveToPos(ImVec2(meta->Pos.x + meta->Size.x * 0.5f,
+                               meta->Pos.y + meta->Size.y * 0.5f));
+    ctx->MouseClick(ImGuiMouseButton_Right);
+    ctx->Yield(3);
+
+    ImGuiTestItemList items;
+    ctx->GatherItems(&items, "//$FOCUSED");
+    ImGuiID gear_id = 0;
+    for(int i = 0; i < items.GetSize(); i++)
+        if(strstr(items[i]->DebugLabel, "Track Options")) { gear_id = items[i]->ID; break; }
+    if(gear_id == 0) return nullptr;
+
+    ctx->ItemClick(gear_id);
+    ctx->Yield(3);
+
+    for(ImGuiWindow* w : ImGui::GetCurrentContext()->Windows)
+        if(w->WasActive && strstr(w->Name, "Track Options###Menu")) return w;
+    return nullptr;
+}
+
+// Clicks a control in an open gear submenu whose label contains `label`.
+// Returns false if no gathered item matches.
+bool ClickGearMenuItem(ImGuiTestContext* ctx, ImGuiWindow* menu, const char* label)
+{
+    ctx->SetRef(menu);
+    ImGuiTestItemList items;
+    ctx->GatherItems(&items, "");
+    for(int i = 0; i < items.GetSize(); i++)
+        if(strstr(items[i]->DebugLabel, label))
+        {
+            ctx->ItemClick(items[i]->ID);
+            return true;
+        }
+    return false;
+}
+
 // Restores show_summary when it goes out of scope. The Summary tests set it
 // true to drive their load path; without this, that state would leak into
 // later tests and cover the timeline.
@@ -174,6 +245,42 @@ struct ShowSummaryGuard
     ~ShowSummaryGuard()
     {
         SettingsManager::GetInstance().GetAppWindowSettings().show_summary = prev;
+    }
+};
+
+// Restores the tab set and active tab that existed when constructed, so a test
+// that opens extra dbs (sys_shared_db_open_dedups_and_switches) doesn't leave
+// stray tabs and a changed current project for the next test. The kTabClosed
+// event that frees the project is queued, so the destructor yields to drain it.
+struct TabStateGuard
+{
+    ImGuiTestContext* ctx;
+    TabContainer*     tc;
+    std::vector<std::string> start_ids;
+    std::string              start_active_id;
+
+    TabStateGuard(ImGuiTestContext* c, TabContainer* t) : ctx(c), tc(t)
+    {
+        if(!tc) return;
+        for(const TabItem* tab : tc->GetTabs()) start_ids.push_back(tab->m_id);
+        const TabItem* active = tc->GetActiveTab();
+        if(active) start_active_id = active->m_id;
+    }
+
+    ~TabStateGuard()
+    {
+        if(!tc) return;
+        std::vector<std::string> to_close;
+        for(const TabItem* tab : tc->GetTabs())
+        {
+            bool was_present = false;
+            for(const std::string& id : start_ids)
+                if(id == tab->m_id) { was_present = true; break; }
+            if(!was_present) to_close.push_back(tab->m_id);
+        }
+        for(const std::string& id : to_close) tc->RemoveTab(id);
+        if(!start_active_id.empty()) tc->SetActiveTab(start_active_id);
+        if(ctx) ctx->Yield(3);
     }
 };
 }  // namespace
@@ -481,6 +588,51 @@ void RegisterAppTests(ImGuiTestEngine* e)
         IM_CHECK(TabContainerTestPeer{*tc}.ActiveTabIndex() == target_idx);
     };
 
+    t = IM_REGISTER_TEST(e, "app", "compute_workload_details_populates");
+    t->TestFunc = [](ImGuiTestContext* ctx)
+    {
+        ComputeView* cv = GetComputeViewOrSkip(ctx);
+        if (!cv) return;
+        TabContainer* tc = ComputeViewTestPeer{*cv}.TabContainerPtr();
+        if (tc == nullptr)
+        {
+            ctx->LogWarning("SKIP: compute view has no tab container");
+            return;
+        }
+
+        const std::vector<const TabItem*> tabs = tc->GetTabs();
+        ComputeWorkloadView* wv = nullptr;
+        std::string          wv_label;
+        for (const TabItem* tab : tabs)
+        {
+            if (tab->m_id == "compute_workload_view")
+            {
+                wv       = dynamic_cast<ComputeWorkloadView*>(tab->m_widget.get());
+                wv_label = tab->m_label;
+                break;
+            }
+        }
+        if (wv == nullptr)
+        {
+            ctx->LogWarning("SKIP: no Workload Details tab in this build");
+            return;
+        }
+
+        // m_workload_info populates in Render(), so the tab must be active first.
+        ctx->ItemClick(("//Main Window/**/" + wv_label).c_str());
+        ctx->Yield(3);
+
+        ComputeWorkloadViewTestPeer peer{*wv};
+        IM_CHECK(peer.WorkloadInfoPtr() != nullptr);
+        if (peer.WorkloadInfoPtr() == nullptr) return;
+
+        // Both panels fill only when the render gate passes: 2 cols, non-empty.
+        IM_CHECK(peer.SystemInfoCols() == 2);
+        IM_CHECK(peer.SystemInfoRows() > 0);
+        IM_CHECK(peer.ProfilingConfigCols() == 2);
+        IM_CHECK(peer.ProfilingConfigRows() > 0);
+    };
+
     t = IM_REGISTER_TEST(e, "app", "compute_workload_auto_selected");
     t->TestFunc = [](ImGuiTestContext* ctx)
     {
@@ -496,6 +648,251 @@ void RegisterAppTests(ImGuiTestEngine* e)
         ctx->Yield(3);
         IM_CHECK(sel->GetSelectedWorkload() != ComputeSelection::INVALID_SELECTION_ID);
         IM_CHECK(sel->GetSelectedKernel() != ComputeSelection::INVALID_SELECTION_ID);
+    };
+
+    t = IM_REGISTER_TEST(e, "app", "compute_comparison_target_kernel_computes_delta");
+    t->TestFunc = [](ImGuiTestContext* ctx)
+    {
+        ComputeView* cv = GetComputeViewOrSkip(ctx);
+        if (!cv) return;
+        TabContainer* tc = ComputeViewTestPeer{*cv}.TabContainerPtr();
+        if (tc == nullptr)
+        {
+            ctx->LogWarning("SKIP: compute view has no tab container");
+            return;
+        }
+
+        const std::vector<const TabItem*> tabs = tc->GetTabs();
+        ComputeComparisonView* comp = nullptr;
+        std::string            comp_label;
+        for (const TabItem* tab : tabs)
+        {
+            if (tab->m_id == "compute_comparison_view")
+            {
+                comp       = dynamic_cast<ComputeComparisonView*>(tab->m_widget.get());
+                comp_label = tab->m_label;
+                break;
+            }
+        }
+        if (comp == nullptr)
+        {
+            ctx->LogWarning("SKIP: no Baseline Comparison tab in this build");
+            return;
+        }
+
+        ComputeSelection* sel = ComputeViewTestPeer{*cv}.ComputeSelectionPtr();
+        IM_CHECK(sel != nullptr);
+        if (sel == nullptr) return;
+        const uint32_t workload = sel->GetSelectedWorkload();
+        const uint32_t baseline_kernel = sel->GetSelectedKernel();
+        IM_CHECK(workload != ComputeSelection::INVALID_SELECTION_ID);
+        IM_CHECK(baseline_kernel != ComputeSelection::INVALID_SELECTION_ID);
+
+        ctx->ItemClick(("//Main Window/**/" + comp_label).c_str());
+        ctx->Yield(3);
+
+        ComputeComparisonViewTestPeer peer{*comp};
+
+        // The toolbar combos live in a nested child window the "//Main Window/**/"
+        // wildcard can't reach. Find it by name fragment, click relative to it, and
+        // re-find after each Yield (window pointers don't survive a rebuild).
+        auto set_ref_to_toolbar = [&]() -> bool
+        {
+            ImGuiContext* g = ImGui::GetCurrentContext();
+            for (ImGuiWindow* w : g->Windows)
+            {
+                if (w->WasActive && strstr(w->Name, "TabContainer") &&
+                    strstr(w->Name, "/toolbar_"))
+                {
+                    ctx->SetRef(w);
+                    return true;
+                }
+            }
+            return false;
+        };
+
+        // Pick the target workload first; it enables the kernel combo.
+        IM_CHECK(set_ref_to_toolbar());
+        ctx->ItemClick("##TargetWorkloads");
+        ctx->Yield(1);
+        {
+            ImGuiTestItemList items;
+            ctx->GatherItems(&items, "//$FOCUSED");
+            IM_CHECK(items.GetSize() >= 1);
+            if (items.GetSize() < 1) return;
+            ctx->ItemClick(items[0]->ID);
+        }
+        ctx->Yield(2);
+
+        // Index into the target workload's kernels (not baseline's): that combo's
+        // order is the gathered-item order we click by index below.
+        const uint32_t target_workload = peer.TargetWorkloadId();
+        std::vector<const KernelInfo*> kernels =
+            cv->GetDataProvider()->ComputeModel().GetKernelInfoList(target_workload);
+        int target_idx = -1;
+        for (int i = 0; i < static_cast<int>(kernels.size()); i++)
+        {
+            if (kernels[i] != nullptr && kernels[i]->id != baseline_kernel)
+            {
+                target_idx = i;
+                break;
+            }
+        }
+        if (target_idx < 0)
+        {
+            ctx->LogWarning("SKIP: target workload has no kernel distinct from the baseline");
+            return;
+        }
+
+        IM_CHECK(set_ref_to_toolbar());
+        ctx->ItemClick("##target_kernels");
+        ctx->Yield(1);
+        {
+            ImGuiTestItemList items;
+            ctx->GatherItems(&items, "//$FOCUSED");
+            IM_CHECK(target_idx < items.GetSize());
+            if (target_idx >= items.GetSize()) return;
+            ctx->ItemClick(items[target_idx]->ID);
+        }
+        ctx->Yield(2);
+        ctx->SetRef("//Main Window");
+
+        // Baseline and target fetch sequentially, so a "while pending" drain can
+        // slip through the gap between them. Poll the final end state instead.
+        const uint32_t want_kernel = kernels[target_idx]->id;
+        for (int i = 0; i < 300; i++)
+        {
+            if (peer.TargetKernelId() == want_kernel && !peer.RequestsPending() &&
+                peer.CategoryCount() > 0 && peer.HasDifferenceColumn())
+                break;
+            ctx->Yield(2);
+        }
+
+        IM_CHECK(peer.TargetKernelId() == want_kernel);
+        IM_CHECK(peer.CategoryCount() > 0);
+        IM_CHECK(peer.HasDifferenceColumn());
+    };
+
+    t = IM_REGISTER_TEST(e, "app", "compute_table_view_pin_persists_across_kernel_switch");
+    t->TestFunc = [](ImGuiTestContext* ctx)
+    {
+        ComputeView* cv = GetComputeViewOrSkip(ctx);
+        if (!cv) return;
+        TabContainer* tc = ComputeViewTestPeer{*cv}.TabContainerPtr();
+        IM_CHECK(tc != nullptr);
+        if (tc == nullptr) return;
+
+        const std::vector<const TabItem*> tabs = tc->GetTabs();
+        ComputeTableView* tbl = nullptr;
+        for (const TabItem* tab : tabs)
+        {
+            if (tab->m_id == "compute_table_view")
+            {
+                tbl = dynamic_cast<ComputeTableView*>(tab->m_widget.get());
+                break;
+            }
+        }
+        if (tbl == nullptr)
+        {
+            ctx->LogWarning("SKIP: no Table View tab in this build");
+            return;
+        }
+
+        ComputeSelection* sel = ComputeViewTestPeer{*cv}.ComputeSelectionPtr();
+        IM_CHECK(sel != nullptr);
+        if (sel == nullptr) return;
+        const uint32_t workload = sel->GetSelectedWorkload();
+        const uint32_t baseline_kernel = sel->GetSelectedKernel();
+        IM_CHECK(workload != ComputeSelection::INVALID_SELECTION_ID);
+        IM_CHECK(baseline_kernel != ComputeSelection::INVALID_SELECTION_ID);
+
+        std::vector<const KernelInfo*> kernels =
+            cv->GetDataProvider()->ComputeModel().GetKernelInfoList(workload);
+        if (kernels.size() < 2)
+        {
+            ctx->LogWarning("SKIP: workload has fewer than two kernels to switch between");
+            return;
+        }
+
+        tc->SetActiveTab("compute_table_view");
+        ctx->Yield(3);
+        ComputeTableViewTestPeer peer{*tbl};
+        for (int i = 0; i < 200 && (peer.FetchPending() || peer.TableWidgetCount() == 0); i++)
+            ctx->Yield(2);
+        IM_CHECK(peer.TableWidgetCount() > 0);
+        if (peer.TableWidgetCount() == 0) return;
+
+        // Metric tables sit in a nested child window the "//Main Window/**/"
+        // wildcard can't reach; grab the innermost "_table" one.
+        auto find_table_window = [&]() -> ImGuiWindow*
+        {
+            ImGuiWindow* found = nullptr;
+            for (ImGuiWindow* w : ImGui::GetCurrentContext()->Windows)
+                if (w->WasActive && strstr(w->Name, "_table") &&
+                    strstr(w->Name, "TabContainer"))
+                    found = w;  // keep last = deepest
+            return found;
+        };
+        ImGuiWindow* table_win = find_table_window();
+        IM_CHECK(table_win != nullptr);
+        if (table_win == nullptr) return;
+
+        // Each metric row starts with an empty-label pin Checkbox("") in column 0,
+        // followed by the metric-id cell (label like "0.1.3:Duration"). So the pin
+        // control is the empty-label item just before a cell whose label starts with
+        // a digit and contains a dot.
+        ctx->SetRef(table_win);
+        ImGuiTestItemList items;
+        ctx->GatherItems(&items, "");
+        ImGuiID pin_checkbox = 0;
+        for (int i = 1; i < items.GetSize(); i++)
+        {
+            const char* lbl = items[i]->DebugLabel;
+            const bool looks_like_id =
+                lbl[0] >= '0' && lbl[0] <= '9' && strchr(lbl, '.') != nullptr;
+            if (looks_like_id && items[i - 1]->DebugLabel[0] == '\0')
+            {
+                pin_checkbox = items[i - 1]->ID;
+                break;
+            }
+        }
+        IM_CHECK(pin_checkbox != 0);
+        if (pin_checkbox == 0) { ctx->SetRef("//Main Window"); return; }
+
+        IM_CHECK(peer.PinnedCount() == 0);
+        ctx->ItemClick(pin_checkbox);
+        ctx->Yield(3);
+        ctx->SetRef("//Main Window");
+
+        // Remember what got pinned so we can check it survives the kernel switch.
+        IM_CHECK(peer.PinnedCount() == 1);
+        if (peer.PinnedCount() != 1) return;
+        const MetricId pinned = peer.FirstPinned();
+
+        // Switch kernels: the table refetches, but pins should persist
+        // (ComputeTableView::RestoreMetricPining).
+        uint32_t other_kernel = ComputeSelection::INVALID_SELECTION_ID;
+        for (const KernelInfo* k : kernels)
+            if (k != nullptr && k->id != baseline_kernel) { other_kernel = k->id; break; }
+        IM_CHECK(other_kernel != ComputeSelection::INVALID_SELECTION_ID);
+
+        // Wait for the refetch to START before draining: SelectKernel's event fires
+        // a frame later, so an immediate drain would see no pending fetch and exit.
+        sel->SelectKernel(other_kernel);
+        for (int i = 0; i < 20 && !peer.FetchPending(); i++) ctx->Yield(1);
+        for (int i = 0; i < 300 && (peer.FetchPending() || peer.TableWidgetCount() == 0); i++)
+            ctx->Yield(2);
+
+        const bool still_pinned = peer.IsPinned(pinned);
+
+        // Restore before asserting: IM_CHECK aborts on failure, and pins + kernel
+        // selection are shared across compute tests.
+        sel->SelectKernel(baseline_kernel);
+        ctx->Yield(3);
+        for (int i = 0; i < 200 && peer.FetchPending(); i++) ctx->Yield(2);
+        if (peer.IsPinned(pinned)) peer.Unpin(pinned);
+
+        IM_CHECK(still_pinned);
     };
 
     t = IM_REGISTER_TEST(e, "app", "sys_timeline_pan_hotkey");
@@ -657,28 +1054,39 @@ void RegisterAppTests(ImGuiTestEngine* e)
         IM_CHECK(flame != nullptr);
         if (flame == nullptr) return;
 
-        // Compact Mode is a per-track gear option whose checkbox lives in a popup
-        // with no stable widget id, so drive it through the same side-effecting
-        // path the checkbox uses. Turning it on shrinks the per-event level
-        // height; assert both the flag and the height follow, then restore.
+        // Click the real "Compact Mode" checkbox so the test covers the menu
+        // wiring, not just the field. Turning it on shrinks the level height.
+        const unsigned int fv_id = FlameTrackItemTestPeer{*flame}.FlameWindowId();
         const bool  orig_compact = flame->IsCompactMode();
         const float orig_height  = FlameTrackItemTestPeer{*flame}.LevelHeight();
 
-        // Capture observations, restore, THEN assert: IM_CHECK early-returns on
-        // failure, so asserting before the restore would leak the flipped state
-        // (per-track flag, shared across the process) into later tests.
-        FlameTrackItemTestPeer{*flame}.SetCompactMode(!orig_compact);
+        ImGuiWindow* menu = OpenTrackGearMenu(ctx, fv_id);
+        if (menu == nullptr) return;  // logged skip inside the helper
+        const bool clicked_on = ClickGearMenuItem(ctx, menu, "Compact Mode");
+        ctx->PopupCloseAll();
         ctx->Yield(2);
+        IM_CHECK(clicked_on);
+        if (!clicked_on) return;
+
         const bool  on_compact = flame->IsCompactMode();
         const float on_height  = FlameTrackItemTestPeer{*flame}.LevelHeight();
 
-        FlameTrackItemTestPeer{*flame}.SetCompactMode(orig_compact);
+        // Toggle back through the checkbox to restore state for later tests. A
+        // peer restore backstops it in case the second click fails to register.
+        ImGuiWindow* menu2       = OpenTrackGearMenu(ctx, fv_id);
+        bool         clicked_off = false;
+        if (menu2 != nullptr) clicked_off = ClickGearMenuItem(ctx, menu2, "Compact Mode");
+        ctx->PopupCloseAll();
+        ctx->Yield(2);
+        if (flame->IsCompactMode() != orig_compact)
+            FlameTrackItemTestPeer{*flame}.SetCompactMode(orig_compact);
         ctx->Yield(2);
         const bool  back_compact = flame->IsCompactMode();
         const float back_height  = FlameTrackItemTestPeer{*flame}.LevelHeight();
 
         IM_CHECK(on_compact != orig_compact);
         IM_CHECK(on_height != orig_height);
+        IM_CHECK(clicked_off);
         IM_CHECK(back_compact == orig_compact);
         IM_CHECK(back_height == orig_height);
     };
@@ -748,31 +1156,56 @@ void RegisterAppTests(ImGuiTestEngine* e)
         IM_CHECK(flame != nullptr);
         if (flame == nullptr) return;
 
-        // "Color by Name / Time Level / No Color" are gear-menu radio buttons in
-        // a popup with no stable path; each sets the track's event color mode.
-        // Drive that field directly and assert it changes, then restore.
-        const EventTrackOptions::EventColorMode orig =
-            FlameTrackItemTestPeer{*flame}.GetEventColorMode();
-        const EventTrackOptions::EventColorMode other =
-            (orig == EventTrackOptions::EventColorMode::kByTimeLevel)
-                ? EventTrackOptions::EventColorMode::kByEventName
-                : EventTrackOptions::EventColorMode::kByTimeLevel;
+        using ColorMode = EventTrackOptions::EventColorMode;
+        auto label_for = [](ColorMode m) -> const char* {
+            switch (m)
+            {
+                case ColorMode::kByEventName: return "Color by Name";
+                case ColorMode::kByTimeLevel: return "Color by Time Level";
+                case ColorMode::kNone:        return "No Color";
+                default:                      return nullptr;  // kMixed has no radio
+            }
+        };
 
-        // Capture, restore, THEN assert: IM_CHECK early-returns on failure, so
-        // asserting before the restore would leak the changed color mode (shared
-        // per-track state) into later tests in the same process.
-        FlameTrackItemTestPeer{*flame}.SetEventColorMode(other);
-        ctx->Yield(2);
-        const EventTrackOptions::EventColorMode changed =
-            FlameTrackItemTestPeer{*flame}.GetEventColorMode();
+        // Click the real color-mode radio so the test covers the menu wiring,
+        // not just the field. Switch to a different mode, then restore the
+        // original by clicking its radio.
+        const ColorMode orig  = FlameTrackItemTestPeer{*flame}.GetEventColorMode();
+        const ColorMode other = (orig == ColorMode::kByTimeLevel)
+                                    ? ColorMode::kByEventName
+                                    : ColorMode::kByTimeLevel;
+        const char* orig_label = label_for(orig);
+        if (orig_label == nullptr)
+        {
+            ctx->LogWarning("SKIP: track color mode has no radio to restore to (kMixed)");
+            return;
+        }
+        const unsigned int fv_id = FlameTrackItemTestPeer{*flame}.FlameWindowId();
 
-        FlameTrackItemTestPeer{*flame}.SetEventColorMode(orig);
+        ImGuiWindow* menu = OpenTrackGearMenu(ctx, fv_id);
+        if (menu == nullptr) return;  // logged skip inside the helper
+        const bool clicked_other = ClickGearMenuItem(ctx, menu, label_for(other));
+        ctx->PopupCloseAll();
         ctx->Yield(2);
-        const EventTrackOptions::EventColorMode restored =
-            FlameTrackItemTestPeer{*flame}.GetEventColorMode();
+        IM_CHECK(clicked_other);
+        if (!clicked_other) return;
+        const ColorMode changed = FlameTrackItemTestPeer{*flame}.GetEventColorMode();
+
+        // Restore the original mode through its radio. A peer restore backstops
+        // it in case the click fails to register.
+        ImGuiWindow* menu2       = OpenTrackGearMenu(ctx, fv_id);
+        bool         clicked_orig = false;
+        if (menu2 != nullptr) clicked_orig = ClickGearMenuItem(ctx, menu2, orig_label);
+        ctx->PopupCloseAll();
+        ctx->Yield(2);
+        if (FlameTrackItemTestPeer{*flame}.GetEventColorMode() != orig)
+            FlameTrackItemTestPeer{*flame}.SetEventColorMode(orig);
+        ctx->Yield(2);
+        const ColorMode restored = FlameTrackItemTestPeer{*flame}.GetEventColorMode();
 
         IM_CHECK(changed == other);
         IM_CHECK(changed != orig);
+        IM_CHECK(clicked_orig);
         IM_CHECK(restored == orig);
     };
 
@@ -931,13 +1364,12 @@ void RegisterAppTests(ImGuiTestEngine* e)
         ctx->Yield(2);
         IM_CHECK(es->Searched() == false);
 
-        // hipLaunchKernel is a launch region present in the trace; write it into
-        // the production search buffer and run the search the same way the input
-        // field's submit does.
-        char* buf = es->TextInput();
-        IM_CHECK(buf != nullptr);
-        if (buf == nullptr) return;
-        snprintf(buf, es->TextInputLimit(), "%s", "hipLaunchKernel");
+        // The search term is coupled to the CI sample db (sample/rocpd-transpose.db):
+        // it must name an event that exists AND is a searchable op type
+        // (Launch/Dispatch/MemoryCopy/MemoryAllocate/LaunchSample -- see
+        // EventSearch::Search). If the sample db changes, update it to a term the
+        // new db contains.
+        es->TextInput() = "hipLaunchKernel";
         es->Search();
         ctx->Yield(2);
         IM_CHECK(es->Searched() == true);
@@ -1222,6 +1654,62 @@ void RegisterAppTests(ImGuiTestEngine* e)
 
         // Leave a clean selection for following tests.
         sel->UnselectAllEvents();
+        ctx->Yield(2);
+    };
+
+    t = IM_REGISTER_TEST(e, "app", "sys_track_details_populates_on_select");
+    t->TestFunc = [](ImGuiTestContext* ctx)
+    {
+        TraceView* tv = GetTraceViewOrSkip(ctx);
+        if (!tv) return;
+        AnalysisView* av = TraceViewTestPeer{*tv}.AnalysisViewPtr();
+        IM_CHECK(av != nullptr);
+        if (av == nullptr) return;
+        TrackDetails* td = AnalysisViewTestPeer{*av}.TrackDetailsPtr();
+        IM_CHECK(td != nullptr);
+        if (td == nullptr) return;
+        TimelineView* tlv = TraceViewTestPeer{*tv}.TimelineViewPtr();
+        IM_CHECK(tlv != nullptr);
+        if (tlv == nullptr) return;
+        std::shared_ptr<TimelineSelection> sel = tv->GetTimelineSelection();
+        IM_CHECK(sel != nullptr);
+        if (sel == nullptr) return;
+
+        // Tracks appear once the timeline's data fetch drains, so poll for a
+        // displayed flame track before reaching in for one to select.
+        FlameTrackItem* track = nullptr;
+        for (int i = 0; i < 60 && track == nullptr; i++)
+        {
+            std::vector<FlameTrackItem*> flames =
+                TimelineViewTestPeer{*tlv}.DisplayedFlameTracks();
+            if (!flames.empty()) { track = flames.front(); break; }
+            ctx->Yield(2);
+        }
+        if (track == nullptr)
+        {
+            ctx->LogWarning("SKIP: no displayed flame track to select");
+            return;
+        }
+        const uint64_t track_id = track->GetID();
+
+        // Selection dispatches async through EventManager, so poll after every drive.
+        // The reused process may carry a prior test's selection, so reset first.
+        sel->UnselectAllTracks();
+        for (int i = 0; i < 60 && TrackDetailsTestPeer{*td}.DetailCount() != 0; i++) ctx->Yield(2);
+        IM_CHECK(TrackDetailsTestPeer{*td}.DetailCount() == 0);
+
+        // Select that exact track by identity, the same call a track-header click makes.
+        sel->SelectTrack(*track);
+        for (int i = 0; i < 60 && TrackDetailsTestPeer{*td}.DetailCount() == 0; i++) ctx->Yield(2);
+        IM_CHECK(TrackDetailsTestPeer{*td}.DetailCount() == 1);
+        IM_CHECK(TrackDetailsTestPeer{*td}.HasTrack(track_id));
+
+        sel->UnselectTrack(*track);
+        for (int i = 0; i < 60 && TrackDetailsTestPeer{*td}.DetailCount() != 0; i++) ctx->Yield(2);
+        IM_CHECK(TrackDetailsTestPeer{*td}.DetailCount() == 0);
+
+        // Leave a clean selection for following tests.
+        sel->UnselectAllTracks();
         ctx->Yield(2);
     };
 
@@ -1519,6 +2007,10 @@ void RegisterAppTests(ImGuiTestEngine* e)
         IM_CHECK(app != nullptr);
         if (app == nullptr) return;
 
+        // Construct before opening anything so the guard captures the startup
+        // tab set as the state to restore.
+        TabStateGuard tab_guard(ctx, AppWindowTestPeer{*app}.TabContainerPtr());
+
         // Sample dbs resolve relative to the working directory (the repo root).
         // Skip if either is missing.
         auto resolve_sample = [](const char* rel) -> std::string {
@@ -1584,10 +2076,76 @@ void RegisterAppTests(ImGuiTestEngine* e)
         IM_CHECK(app->GetProject(rpv_path.string()) == nullptr);
 
         // Remove the temp .rpv and dismiss the dedup popup so it can't cover
-        // later tests. The tabs stay open (no safe close hook).
+        // later tests. tab_guard restores the tab set on scope exit.
         std::error_code ec;
         fs::remove(rpv_path, ec);
         ctx->PopupCloseAll();
         ctx->Yield(2);
+    };
+
+    t = IM_REGISTER_TEST(e, "app", "sys_measurement_clear_button");
+    t->TestFunc = [](ImGuiTestContext* ctx)
+    {
+        TraceView* tv = GetTraceViewOrSkip(ctx);
+        if (!tv) return;
+        TimelineView* tlv = TraceViewTestPeer{*tv}.TimelineViewPtr();
+        IM_CHECK(tlv != nullptr);
+        if (tlv == nullptr) return;
+        MeasurementController* mc = TraceViewTestPeer{*tv}.MeasurementControllerPtr();
+        IM_CHECK(mc != nullptr);
+        if (mc == nullptr) return;
+
+        // Two distinct timestamps inside the visible range to form a measurement.
+        const ViewCoords coords = tlv->GetViewCoords();
+        const double     span   = coords.v_max_x - coords.v_min_x;
+        IM_CHECK(span > 0.0);
+        if (span <= 0.0) return;
+        const double t0 = coords.v_min_x + span * 0.25;
+        const double t1 = coords.v_min_x + span * 0.75;
+
+        // Baseline: measurement state persists on the TraceView across tests in the
+        // reused process. Reset to inactive with no points; this also guarantees the
+        // "Measure" entry button is the one rendered (Exit/Clear render only in mode).
+        mc->ExitMeasurementMode();
+        mc->ClearMeasurement();
+        ctx->Yield(2);
+        IM_CHECK(mc->IsMeasurementMode() == false);
+
+        ctx->SetRef("Main Window");
+
+        // Enter measurement mode with a real click on the toolbar "Measure" button
+        // (PushID("measure_start") + Button("Measure")).
+        ctx->ItemClick("**/measure_start/Measure");
+        ctx->Yield(2);
+        IM_CHECK(mc->IsMeasurementMode() == true);
+        if (mc->IsMeasurementMode() == false) return;
+
+        // Place two points via the same controller call the freehand click handler
+        // drives; headless bar clicks don't reach the flame track's deferred-click
+        // measurement path reliably. The button under test (Clear) is a real click.
+        mc->SetFreehandMeasurementPoint(t0);
+        mc->SetFreehandMeasurementPoint(t1);
+        ctx->Yield(2);
+        const MeasurementState placed_state = mc->GetMeasurementState();
+
+        // Clear with a real click on the toolbar "Clear" button (renders only once a
+        // point exists). ClearMeasurement keeps mode active but drops both points.
+        ctx->ItemClick("**/Clear");
+        ctx->Yield(2);
+
+        // Capture, restore, THEN assert: IM_CHECK early-returns on failure, so leaving
+        // measurement mode active would leak into later tests.
+        const MeasurementState cleared_state = mc->GetMeasurementState();
+        const bool no_points = !mc->GetPoint(0).valid && !mc->GetPoint(1).valid;
+
+        mc->ExitMeasurementMode();
+        mc->ClearMeasurement();
+        ctx->Yield(2);
+        const bool inactive_after = (mc->IsMeasurementMode() == false);
+
+        IM_CHECK(placed_state == MeasurementState::kComplete);
+        IM_CHECK(cleared_state == MeasurementState::kWaitingForFirst);
+        IM_CHECK(no_points);
+        IM_CHECK(inactive_after);
     };
 }

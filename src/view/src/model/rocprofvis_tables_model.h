@@ -54,6 +54,8 @@ public:
     TableInfo&       GetTable(TableType type);
 
     const std::vector<std::string>&              GetTableHeader(TableType type) const;
+    const std::vector<rocprofvis_controller_primitive_type_t>& GetTableColumnTypes(
+        TableType type) const;
     const std::vector<std::vector<std::string>>& GetTableData(TableType type) const;
     const std::vector<FormattedColumnInfo>& GetFormattedTableData(TableType type) const;
     std::vector<FormattedColumnInfo>&       GetMutableFormattedTableData(TableType type);
@@ -63,6 +65,9 @@ public:
 
     // Table modification
     void SetTableHeader(TableType type, std::vector<std::string>&& header);
+    void SetTableColumnTypes(
+        TableType                                             type,
+        std::vector<rocprofvis_controller_primitive_type_t>&& column_types);
     void SetTableData(TableType type, std::vector<std::vector<std::string>>&& data);
     void SetTableParams(TableType type, std::shared_ptr<TableRequestParams> params);
     void SetTableTotalRowCount(TableType type, uint64_t count);

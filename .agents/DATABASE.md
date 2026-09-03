@@ -889,6 +889,13 @@ right node (via `FindRelevantPropertyNode` /
 `FindRelevantTopologyNode`) and writes the value into
 `m_properties[property_id]`.
 
+For a topology leaf associated with a track,
+`kRPVControllerTopologyNodeTrack` is a uint64 property containing the
+model track ID. The controller mirror resolves that ID through its
+indexed track collection while constructing the topology tree, then
+wires the typed thread/queue/stream/counter reverse link on the
+controller `Track`.
+
 `TopologyReferenceNode` is used when a downstream node (e.g. a
 stream's processor) is logically a reference into another part of
 the tree; its `GetPropertyAs*` overrides forward to the referenced

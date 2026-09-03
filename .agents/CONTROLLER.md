@@ -149,7 +149,7 @@ is what lets the `Handle::Get*/Set*` overrides on each subclass key off
 
 ### 2.4 Async fetch surface
 
-Six async fetchers exist, all returning immediately and signalling
+The primary async fetchers all return immediately and signal
 completion through a `rocprofvis_controller_future_t`:
 
 ```c
@@ -161,6 +161,16 @@ rocprofvis_controller_summary_fetch_async(...);                  // summary metr
 rocprofvis_controller_get_indexed_property_async(...);           // event/table/system props
 rocprofvis_controller_metric_fetch_async(...);                   // compute metric values
 rocprofvis_controller_create_analysis_view_async(...);           // analytic views (placeholder)
+```
+
+PC-sampling data has one compatibility fetch plus three stage-specific
+fetchers. Code View uses the stage-specific APIs so opening optional UI does
+not block the initial ISA display:
+
+```c
+rocprofvis_controller_pc_sampling_fetch_isa_lines_async(...); // ISA dependencies + lines
+rocprofvis_controller_pc_sampling_fetch_source_async(...);    // source metadata/correlation/lines
+rocprofvis_controller_pc_sampling_fetch_stalls_async(...);    // states/reasons/instruction samples
 ```
 
 Two more async surface APIs sit on the controller handle directly,
@@ -343,7 +353,7 @@ Every public object type (`SystemTrace`, `Track`, `Graph`, `Event`,
 `Sample`, `SampleLOD`, `FlowControl`, `CallStack`, `ExtData`, `Future`,
 `Array`, `Arguments`, `Table`, `Summary`, `SummaryMetrics`,
 `TopologyNode` and friends, plus the compute-only `ComputeTrace`,
-`Workload`, `Kernel`, `Roofline`, `MetricsContainer`,
+`Workload`, `Kernel`, `PcSampling`, `Roofline`, `MetricsContainer`,
 `ComputeTable`, `ComputePivotTable`, `Plot`, `ComputePlot`,
 `PlotSeries`) inherits from `Handle`.
 
@@ -854,6 +864,13 @@ rocprofvis_result_t AsyncFetch(Arguments&, Future&, MetricsContainer&);
 rocprofvis_result_t AsyncFetch(Table&, Arguments&, Future&, Array&);
 ```
 
+PC sampling uses `AsyncFetchPcSamplingIsaData`,
+`AsyncFetchPcSamplingSource`, and `AsyncFetchPcSamplingStalls` for the three
+on-demand stages.
+`AsyncFetchPcSampling` is the compatibility all-data path and runs those same
+stage helpers in sequence. Each helper checks the cache flags on the
+kernel-owned `PcSampling` handle before querying the database.
+
 Internal helper `ExecuteQuery(...)` runs a database query through the
 compute model layer and dispatches rows into a callback. The nested
 `MetricID` class formats `"category.table.entry"` strings the View can
@@ -882,6 +899,20 @@ A kernel within a workload. Carries `m_id`, `m_name`,
 `m_invocation_count`, and the duration set
 (`total/min/max/median/mean`). Property bank:
 `rocprofvis_controller_kernel_properties_t`.
+
+Each kernel also owns a `PcSampling` handle. The
+`rocprofvis_controller_pc_sampling_fetch_mandatorys_async` path calls
+`ComputeTrace::AsyncFetchPcSamplingIsaData` to load the code objects, kernel
+symbols, and ISA lines needed for the initial Code View. The source fetch loads
+source-file metadata, instruction/source mappings, and the requested source
+file's lines. Each instruction/source mapping includes the owning source-file
+UUID so Code View can switch files for cross-pane navigation. Source file ID 0
+selects the first available source file. The stall fetch independently loads
+PC sample states, stall-reason counts, and
+instruction-sample metadata. The full
+`rocprofvis_controller_pc_sampling_fetch_all_async` compatibility path invokes
+all three stages in sequence. Per-table flags on `PcSampling` prevent repeated
+queries while allowing source files to be fetched separately.
 
 ### 6.4 `Roofline` (`rocprofvis_controller_roofline.{h,cpp}`)
 
@@ -945,6 +976,38 @@ caches, fabric, etc.). `Setup()` loads the CSV into `m_metrics_map`;
 
 It pivots metric values into a `kernel x metric` matrix and exposes
 the result like any other table.
+
+### 6.8 `PcSampling` (`rocprofvis_controller_pc_sampling.{h,cpp}`)
+
+Object type `kRPVControllerObjectTypePCSampling = 30`. Each `Kernel`
+owns one `PcSampling` handle (accessed via
+`kRPVControllerKernelPcSampling`). Data is split into three independent
+layers, each with its own `std::recursive_mutex` so a completed ISA
+pane stays readable while source or stall data loads:
+
+| Layer   | Mutex                | Data vectors |
+|---------|----------------------|--------------|
+| ISA     | `m_isa_data_mutex`   | `m_code_object_store`, `m_kernel_symbols`, `m_instruction_lines` |
+| Source  | `m_source_data_mutex`| `m_source_files`, `m_source_lines`, `m_instruction_source_lines` |
+| Stalls  | `m_stalls_data_mutex`| `m_pc_sample_states`, `m_pc_sample_stall_reasons`, `m_pc_sample_stall_reason_lookups`, `m_instruction_type_lookups`, `m_instruction_samples`, `m_instruction_sample_lookups` |
+
+Per-layer cached booleans (`m_code_object_store_loaded`,
+`m_kernel_symbols_loaded`, `m_instruction_lines_loaded`,
+`m_instruction_source_lines_loaded`, `m_source_files_loaded`,
+`m_pc_sample_states_loaded`, `m_stalls_loaded`,
+`m_instruction_samples_loaded`) prevent repeated queries.
+
+`GetLayerMutex(DataLayer)` and `GetPropertyMutex(property)` route
+locking to the right mutex for each property ID.
+
+`QueryToPropertyEnum(rocprofvis_db_compute_column_enum_t, property&,
+type&)` is the internal helper `ComputeTrace` uses to map a DB column
+enum to the right `kRPVControllerPCSampling*` property ID.
+
+Property bank: `rocprofvis_controller_pc_sampling_data_properties_t`
+(base `__kRPVControllerPCSamplingPropertiesFirst`), covering 60+
+property IDs across the three data layers. Instruction/source correlation
+properties include both source-line and owning source-file UUIDs.
 
 ### 6.7 `ComputePlot`, `Plot`, `PlotSeries`
 Files: `rocprofvis_controller_plot.{h,cpp}`,
@@ -1135,11 +1198,15 @@ Property bank starting points (`uint32_t` enum bases):
 | Summary Metrics                       | `0xF0000000` |
 | Common (memory usage, etc.)           | `0xFFFF0000` |
 
-Compute-side banks start at the
+Compute-side banks (including `PcSampling`) start at the
 `__kRPVControllerComputePropertiesFirst` family. The auto-incrementing
 `__first / __last` brackets in each enum are an extension hint - if
 you add a new property to an existing bank, declare it inside the
 brackets.
+
+`PcSampling` uses `__kRPVControllerPCSamplingPropertiesFirst` as its
+base (auto-incremented after the other compute banks); it does not have
+a fixed hex offset like the system banks above.
 
 When you add a new object type:
 
@@ -1343,6 +1410,7 @@ free" sequence.
 - `rocprofvis_controller_trace_compute.{h,cpp}` -> `ComputeTrace`.
 - `rocprofvis_controller_workload.{h,cpp}` -> `Workload`.
 - `rocprofvis_controller_kernel.{h,cpp}` -> `Kernel`.
+- `rocprofvis_controller_pc_sampling.{h,cpp}` -> `PcSampling` (three-layer PC sampling data; owned by `Kernel`).
 - `rocprofvis_controller_roofline.{h,cpp}` -> `Roofline`.
 - `rocprofvis_controller_metrics_container.{h,cpp}` -> `MetricsContainer`.
 - `rocprofvis_controller_table_compute.{h,cpp}` -> `ComputeTable`

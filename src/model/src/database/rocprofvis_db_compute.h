@@ -39,11 +39,15 @@ namespace DataModel
         rocprofvis_dm_result_t GetComputeKernelSourceFiles(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params, rocprofvis_dm_string_t& query_out);
         rocprofvis_dm_result_t GetComputeSourceFileSourceLines(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params, rocprofvis_dm_string_t& query_out);
         rocprofvis_dm_result_t GetComputeKernelCodeObjects(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params, rocprofvis_dm_string_t& query_out);
-        rocprofvis_dm_result_t GetComputeKernelIsaToIsaDeps(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params, rocprofvis_dm_string_t& query_out);
-        rocprofvis_dm_result_t GetComputeKernelIsaLines(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params, rocprofvis_dm_string_t& query_out);
-        rocprofvis_dm_result_t GetComputeKernelIsaToSourceDeps(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params, rocprofvis_dm_string_t& query_out);
-        rocprofvis_dm_result_t GetComputeKernelSamplingStates(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params, rocprofvis_dm_string_t& query_out);
-        rocprofvis_dm_result_t GetComputeKernelSamplingStateReasonCounts(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params, rocprofvis_dm_string_t& query_out);
+        rocprofvis_dm_result_t GetComputeKernelSymbols(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params, rocprofvis_dm_string_t& query_out);
+        rocprofvis_dm_result_t GetComputeKernelInstructionLines(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params, rocprofvis_dm_string_t& query_out);
+        rocprofvis_dm_result_t GetComputeKernelInstructionSourceLines(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params, rocprofvis_dm_string_t& query_out);
+        rocprofvis_dm_result_t GetComputeKernelPcSampleStates(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params, rocprofvis_dm_string_t& query_out);
+        rocprofvis_dm_result_t GetComputeKernelPcSampleStallReasons(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params, rocprofvis_dm_string_t& query_out);
+        rocprofvis_dm_result_t GetComputeKernelPcSampleStallReasonLookups(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params, rocprofvis_dm_string_t& query_out);
+        rocprofvis_dm_result_t GetComputeKernelInstructionTypeLookups(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params, rocprofvis_dm_string_t& query_out);
+        rocprofvis_dm_result_t GetComputeKernelInstructionSamples(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params, rocprofvis_dm_string_t& query_out);
+        rocprofvis_dm_result_t GetComputeKernelInstructionSampleLookups(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params, rocprofvis_dm_string_t& query_out);
     private:
         MetricIdFormat ClassifyMetricIdFormat(const std::string& s);
         std::string SanitizeMetricValueName(const std::string& name);

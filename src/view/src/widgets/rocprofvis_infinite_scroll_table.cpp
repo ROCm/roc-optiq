@@ -25,12 +25,10 @@ constexpr uint64_t    FETCH_CHUNK_SIZE           = 1000;
 constexpr const char* START_TS_COLUMN_NAME       = "start";
 constexpr const char* END_TS_COLUMN_NAME         = "end";
 constexpr const char* DURATION_COLUMN_NAME       = "duration";
-constexpr const char* FILTER_TEXT_HINT_STR       = "Filter: hipLaunchKernel";
-constexpr const char* FILTER_TEXT_HINT_NUMERICAL = "Filter: {>, <, =, >=, <=, !=} 30";
-constexpr const char* FILTER_TEXT_HINT_TIME =
-    "Filter: {>, <, =, >=, <=, !=} {Nanoseconds}";
+constexpr const char* FILTER_INPUT_PLACEHOLDER = "Filter";
+constexpr const char* FILTER_OPERATORS         = "> < = >= <= !=";
 
-// Cap on a column's fitted width, in multiples of the current font size.
+constexpr float MIN_COLUMN_WIDTH_EM     = 6.0f;
 constexpr float MAX_COLUMN_FIT_WIDTH_EM = 40.0f;
 
 InfiniteScrollTable::InfiniteScrollTable(
@@ -68,6 +66,7 @@ InfiniteScrollTable::InfiniteScrollTable(
 , m_data_changed(true)
 , m_refit_pending(false)
 , m_refit_requested(false)
+, m_grow_pending(false)
 , m_columns_emptied(false)
 , m_filter_requested(false)
 , m_fetch_data(false)
@@ -165,7 +164,6 @@ InfiniteScrollTable::Update()
         ROCPROFVIS_ASSERT(columns.size() == column_types.size());
         m_displayed_filter_row_inputs.resize(columns.size());
         std::unordered_set<FilterInput*> active_filter_row_inputs;
-        size_t                           j = 0;
         for(size_t i = 0; i < m_displayed_filter_row_inputs.size(); i++)
         {
             if(m_filter_row_inputs.count(columns[i]))
@@ -177,36 +175,12 @@ InfiniteScrollTable::Update()
             }
             else
             {
-                const char* tooltip;
-                switch(column_types[i])
-                {
-                    case kRPVControllerPrimitiveTypeUInt64:
-                    {
-                        if((j < m_time_column_indices.size() &&
-                            m_time_column_indices[j] == i))
-                        {
-                            tooltip = FILTER_TEXT_HINT_TIME;
-                            j++;
-                        }
-                        else
-                        {
-                            tooltip = FILTER_TEXT_HINT_NUMERICAL;
-                        }
-                        break;
-                    }
-                    case kRPVControllerPrimitiveTypeDouble:
-                    {
-                        tooltip = FILTER_TEXT_HINT_NUMERICAL;
-                        break;
-                    }
-                    default:
-                    {
-                        tooltip = FILTER_TEXT_HINT_STR;
-                        break;
-                    }
-                }
+                const bool is_time =
+                    i == m_time_column_indices[kTimeStartNs] ||
+                    i == m_time_column_indices[kTimeEndNs] ||
+                    i == m_time_column_indices[kDurationNs];
                 m_filter_row_inputs[columns[i]] = { columns[i], column_types[i], "",
-                                                    tooltip };
+                                                    is_time };
             }
             m_displayed_filter_row_inputs[i] = &m_filter_row_inputs.at(columns[i]);
         }
@@ -256,15 +230,21 @@ InfiniteScrollTable::HandleNewTableData(std::shared_ptr<RocEvent> e)
         m_update_filter_row = m_display_filter_row;
         IndexColumns();
 
-        // Re-fit columns only for a content change (select/filter), not a sort or
-        // scroll page - else sorting would fit to whatever loaded at the top.
+        // A content change (select/filter) re-fits the columns fresh; any other
+        // page-in of this table's data just lets columns grow to newly loaded values.
         std::shared_ptr<TableDataEvent> table_event =
             std::dynamic_pointer_cast<TableDataEvent>(e);
-        if(table_event && table_event->GetRequestID() == m_request_id &&
-           m_refit_requested)
+        if(table_event && table_event->GetRequestID() == m_request_id)
         {
-            m_refit_pending   = true;
-            m_refit_requested = false;
+            if(m_refit_requested)
+            {
+                m_refit_pending   = true;
+                m_refit_requested = false;
+            }
+            else
+            {
+                m_grow_pending = true;
+            }
         }
     }
 }
@@ -310,8 +290,9 @@ InfiniteScrollTable::Render()
         m_last_total_row_count = total_row_count;
     }
 
-    // Emptying the table forgets manual sizes so the next content re-fits fresh.
-    if(total_row_count == 0)
+    // Only a fully cleared table (all tracks deselected -> no columns) forgets
+    // manual widths. A filter that matches no rows keeps them.
+    if(column_names.empty())
     {
         m_columns_emptied = true;
     }
@@ -445,8 +426,14 @@ InfiniteScrollTable::Render()
 
                 if(m_refit_pending)
                 {
-                    FitColumnsToContent();
+                    FitColumnsToContent(false);  // fresh fit (may shrink)
                     m_refit_pending = false;
+                    m_grow_pending  = false;
+                }
+                else if(m_grow_pending)
+                {
+                    FitColumnsToContent(true);  // scroll page-in: grow only
+                    m_grow_pending = false;
                 }
 
                 if(m_display_filter_row)
@@ -459,11 +446,15 @@ InfiniteScrollTable::Render()
                         ImGui::TableNextColumn();
                         ImGui::PushID(static_cast<int>(i));
                         std::pair<bool, bool> filter_input = InputTextWithClear(
-                            "", m_displayed_filter_row_inputs[i]->tooltip,
+                            "", FILTER_INPUT_PLACEHOLDER,
                             m_displayed_filter_row_inputs[i]->input,
                             m_settings.GetFontManager().GetFont(FontType::kIcon),
                             m_settings.GetColor(Colors::kBgMain), style,
                             ImGui::GetContentRegionAvail().x);
+                        if(ImGui::IsItemHovered())
+                        {
+                            RenderFilterHelpTooltip(*m_displayed_filter_row_inputs[i]);
+                        }
                         if(filter_input.second)
                         {
                             m_displayed_filter_row_inputs[i]->input.clear();
@@ -735,7 +726,7 @@ InfiniteScrollTable::FetchData()
 }
 
 void
-InfiniteScrollTable::FitColumnsToContent()
+InfiniteScrollTable::FitColumnsToContent(bool grow_only)
 {
     ImGuiTable* table = ImGui::GetCurrentTable();
     if(!table)
@@ -756,32 +747,35 @@ InfiniteScrollTable::FitColumnsToContent()
         return;
     }
 
-    // Forget manual sizes when the column set changes or the table was emptied.
-    const int cols = table->ColumnsCount;
-    if(m_columns_emptied || static_cast<int>(m_user_sized_columns.size()) != cols)
+    // Only a full table clear (all tracks deselected) forgets manual widths;
+    // adding or removing columns keeps every surviving column's sizing by name.
+    if(m_columns_emptied)
     {
-        m_user_sized_columns.assign(cols, false);
-        m_column_fit_widths.assign(cols, -1.0f);
+        m_user_sized_columns.clear();
+        m_column_fit_widths.clear();
         m_columns_emptied = false;
     }
 
+    const float min_width = ImGui::GetFontSize() * MIN_COLUMN_WIDTH_EM;
     const float max_width = ImGui::GetFontSize() * MAX_COLUMN_FIT_WIDTH_EM;
     const float padding   = ImGui::GetStyle().ItemSpacing.x;
-    const int   column_count = std::min(static_cast<int>(column_names.size()), cols);
+    const int   column_count =
+        std::min(static_cast<int>(column_names.size()), table->ColumnsCount);
 
     for(int c = 0; c < column_count; c++)
     {
-        if(column_names[c].empty() || column_names[c][0] == '_')
+        const std::string& name = column_names[c];
+        if(name.empty() || name[0] == '_')
         {
             continue;  // Internal / hidden column.
         }
-        if(m_user_sized_columns[c])
+        if(m_user_sized_columns.count(name))
         {
             continue;  // Respect the user's manual width.
         }
 
-        // Header label plus room for the sort arrow, then the widest cached cell.
-        float width = ImGui::CalcTextSize(column_names[c].c_str()).x + ImGui::GetFontSize();
+        // Header label plus room for the sort arrow, then the widest loaded cell.
+        float content = ImGui::CalcTextSize(name.c_str()).x + ImGui::GetFontSize();
 
         const FormattedColumnInfo* formatting =
             (c < static_cast<int>(formatted.size())) ? &formatted[c] : nullptr;
@@ -797,13 +791,21 @@ InfiniteScrollTable::FitColumnsToContent()
             {
                 value = &formatting->formatted_row_value[row];
             }
-            width = std::max(width, ImGui::CalcTextSize(value->c_str()).x);
+            content = std::max(content, ImGui::CalcTextSize(value->c_str()).x);
         }
 
-        width                          = std::min(width, max_width) + padding;
+        const float width = std::min(std::max(content + padding, min_width), max_width);
+
+        // grow_only: keep the wider width so columns never shrink mid-scroll.
+        const auto it = m_column_fit_widths.find(name);
+        if(grow_only && it != m_column_fit_widths.end() && width <= it->second)
+        {
+            continue;
+        }
+
         table->Columns[c].WidthRequest = width;
         table->Columns[c].AutoFitQueue = 0;
-        m_column_fit_widths[c]         = width;
+        m_column_fit_widths[name]      = width;
     }
 }
 
@@ -816,19 +818,27 @@ InfiniteScrollTable::DetectUserColumnResizes()
         return;
     }
 
+    const std::vector<std::string>& column_names =
+        m_table_model().GetTableHeader(m_table_type);
     const int count =
-        std::min(table->ColumnsCount, static_cast<int>(m_column_fit_widths.size()));
+        std::min(table->ColumnsCount, static_cast<int>(column_names.size()));
     for(int c = 0; c < count; c++)
     {
-        if(m_user_sized_columns[c] || m_column_fit_widths[c] < 0.0f)
+        const std::string& name = column_names[c];
+        if(name.empty() || m_user_sized_columns.count(name))
         {
             continue;
         }
+        const auto it = m_column_fit_widths.find(name);
+        if(it == m_column_fit_widths.end())
+        {
+            continue;  // No auto-fit applied yet; nothing to compare against.
+        }
         // WidthRequest only diverges from our applied value on a user drag.
-        const float delta = table->Columns[c].WidthRequest - m_column_fit_widths[c];
+        const float delta = table->Columns[c].WidthRequest - it->second;
         if(delta > 0.5f || delta < -0.5f)
         {
-            m_user_sized_columns[c] = true;
+            m_user_sized_columns.insert(name);
         }
     }
 }
@@ -869,6 +879,29 @@ InfiniteScrollTable::RenderCell(const std::string* cell_text, int row, int colum
                             ImGuiHoveredFlags_AllowWhenOverlappedByItem))
     {
         m_hovered_row = row;
+    }
+}
+
+void
+InfiniteScrollTable::RenderFilterHelpTooltip(const FilterInput& input) const
+{
+    if(input.is_time)
+    {
+        SetTooltipStyled("Compare against a time in nanoseconds.\n"
+                         "Operators: %s\nExample: > 1000000",
+                         FILTER_OPERATORS);
+    }
+    else if(input.column_type == kRPVControllerPrimitiveTypeUInt64 ||
+            input.column_type == kRPVControllerPrimitiveTypeDouble)
+    {
+        SetTooltipStyled("Compare against a numeric value.\n"
+                         "Operators: %s\nExample: >= 30",
+                         FILTER_OPERATORS);
+    }
+    else
+    {
+        SetTooltipStyled("Match rows that contain this text (case-insensitive).\n"
+                         "Example: hipLaunchKernel");
     }
 }
 

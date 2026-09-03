@@ -11,6 +11,8 @@
 #include <functional>
 #include <memory>
 #include <string>
+#include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 namespace RocProfVis
@@ -135,7 +137,7 @@ private:
         std::string                            column_name;
         rocprofvis_controller_primitive_type_t column_type;
         std::string                            input;
-        const char*                            tooltip;
+        bool                                   is_time;  // Value is a timestamp (ns).
     };
 
     void FetchData();
@@ -143,9 +145,13 @@ private:
     void RenderContextMenu();
     void ProcessSortOrFilterRequest(uint64_t frame_count);
 
-    // Sizes non-user-resized columns to their widest cached value (capped). Call
-    // while the table is active.
-    void FitColumnsToContent();
+    // Hover tooltip explaining how to filter a column, with an example.
+    void RenderFilterHelpTooltip(const FilterInput& input) const;
+
+    // Sizes non-user-resized columns to their widest loaded value, clamped to
+    // [MIN_COLUMN_WIDTH_EM, MAX_COLUMN_FIT_WIDTH_EM]. With grow_only, columns only
+    // grow (scroll page-in); otherwise they fit fresh. Call while the table is active.
+    void FitColumnsToContent(bool grow_only);
 
     // Flags columns the user manually resized so FitColumnsToContent skips them.
     void DetectUserColumnResizes();
@@ -163,9 +169,11 @@ private:
     bool     m_skip_data_fetch;
     bool     m_refit_pending;    // Fresh content-change data is loaded; re-fit columns.
     bool     m_refit_requested;  // A content change (filter/selection) is in flight.
+    bool     m_grow_pending;     // A scroll page loaded; grow columns to fit it.
     bool     m_columns_emptied;  // Table went empty; the next fit forgets manual sizes.
-    std::vector<bool>  m_user_sized_columns;  // Columns the user manually resized.
-    std::vector<float> m_column_fit_widths;   // Width last auto-fit per column (-1 = none).
+    // Keyed by column name so adding/removing columns never disturbs existing sizing.
+    std::unordered_set<std::string>        m_user_sized_columns;  // User-resized columns.
+    std::unordered_map<std::string, float> m_column_fit_widths;   // Last auto-fit width.
     uint64_t m_last_total_row_count;
     ImVec2   m_last_table_size;
 

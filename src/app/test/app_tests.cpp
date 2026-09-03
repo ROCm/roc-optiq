@@ -20,6 +20,7 @@
 #include <string>
 #include <filesystem>
 #include <fstream>
+#include <unordered_set>
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_utils.h"
 #include "rocprofvis_data_provider.h"
@@ -1759,12 +1760,45 @@ void RegisterAppTests(ImGuiTestEngine* e)
 
         // The topology sort is only applied if it is a full permutation of the
         // current tracks, so a partial order would silently fall back to Default.
-        std::vector<uint64_t> order = TimelineViewTestPeer{*tlv}.TopologyOrder();
-        IM_CHECK_EQ(order.size(), track_count);
-        const size_t ordered_count = order.size();
-        std::sort(order.begin(), order.end());
-        order.erase(std::unique(order.begin(), order.end()), order.end());
-        IM_CHECK_EQ(order.size(), ordered_count);
+        const std::vector<uint64_t> topology_order = TimelineViewTestPeer{*tlv}.TopologyOrder();
+        IM_CHECK_EQ(topology_order.size(), track_count);
+        {
+            std::vector<uint64_t> unique_order = topology_order;
+            std::sort(unique_order.begin(), unique_order.end());
+            unique_order.erase(std::unique(unique_order.begin(), unique_order.end()),
+                               unique_order.end());
+            IM_CHECK_EQ(unique_order.size(), topology_order.size());
+        }
+
+        // "Sort by topology" must reproduce the sidebar's row order: both walk the
+        // same tree, and both append what the tree does not cover (Uncategorized)
+        // in track-list order. Compared against the sidebar's rows reduced to
+        // first appearance, since a queue is drawn under its processor and again
+        // under each stream.
+        std::vector<uint64_t>        rows;
+        std::unordered_set<uint64_t> seen_rows;
+        rows.reserve(leaf_ids.size());
+        for (uint64_t track_id : leaf_ids)
+        {
+            if (seen_rows.insert(track_id).second) rows.push_back(track_id);
+        }
+        IM_CHECK_EQ(rows.size(), topology_order.size());
+        for (size_t i = 0; i < rows.size() && i < topology_order.size(); i++)
+        {
+            IM_CHECK_EQ(rows[i], topology_order[i]);
+        }
+
+        // Node rows ascend by id, and the rank behind the node labels and colors
+        // is that row position, so the two cannot drift apart.
+        const std::vector<TopologyNode*>& topo_nodes =
+            tv->GetDataProvider()->DataModel().GetTopology().GetNodes();
+        for (size_t i = 0; i < topo_nodes.size(); i++)
+        {
+            IM_CHECK(topo_nodes[i] != nullptr);
+            if (topo_nodes[i] == nullptr) continue;
+            if (i > 0) IM_CHECK(topo_nodes[i - 1]->GetId() < topo_nodes[i]->GetId());
+            IM_CHECK_EQ(static_cast<const NodeInfo*>(topo_nodes[i])->display_index, i + 1);
+        }
     };
 
     t = IM_REGISTER_TEST(e, "app", "sys_timeline_measure_tool");

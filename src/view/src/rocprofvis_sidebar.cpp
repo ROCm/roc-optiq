@@ -223,12 +223,10 @@ BuildProcessBranch(TreeNode* parent, const ProcessInfo& process,
 }
 
 /*
- * Track ids that already have a row. A track can legitimately appear more than
- * once (a queue sits under its processor and again under every stream that
- * dispatched to it), hence a set.
- *
- * A leaf is not necessarily childless: a stream row carries its inline
- * processor subtree, so the walk has to recurse through leaves too.
+ * Collects the track ids that already have a row. A set, because a track can
+ * legitimately appear more than once - a queue sits under its processor and
+ * again under every stream that dispatched to it. The walk recurses through
+ * leaves as well: a stream row carries its inline processor subtree.
  */
 void
 CollectLeafTrackIds(const TreeNode* node, std::unordered_set<uint64_t>& out)
@@ -613,12 +611,10 @@ SideBar::BuildTree()
     }
 
     /*
-     * Every track needs exactly one home. Bucket by "the topology walk emitted
-     * no row for it" rather than by track type: a track can be typed (Queue,
-     * Stream, ...) and still have no row, because its queue or processor was not
-     * reachable from any node during the load walk - which is why
-     * LinkStreamTopology() tolerates a failed processor lookup. Keying off the
-     * type would leave such a track with no row at all.
+     * Every track needs at least one row. Bucket on "the walk emitted no row for
+     * it" rather than on track type: a track can be typed (Queue, Stream, ...)
+     * and still have none, because its queue or processor was unreachable during
+     * the load walk, so keying off the type would drop it entirely.
      */
     std::unordered_set<uint64_t> placed;
     CollectLeafTrackIds(root_node, placed);

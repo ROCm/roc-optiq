@@ -728,9 +728,9 @@ TrackItem::SetDefaultPillLabel(const TrackInfo* track_info)
 {
     TopologyTree& tdm = m_data_provider.DataModel().GetTopology();
 
-    // Get Processor type label from using track's agent_or_pid, ex: "GPU0".
-    // The associated processor in topology is unreliable, so we use agent_or_pid to find
-    // the processor. This may be empty for some tracks.
+    // Processor type label from the track's agent_or_pid, ex: "GPU0". The
+    // processor the topology associates with the track is unreliable here, hence
+    // the id lookup. Stays empty when no processor matches.
     std::string          device_type_label;
     const ProcessorInfo* processor_info = tdm.GetProcessor(track_info->agent_or_pid);
     if(processor_info)

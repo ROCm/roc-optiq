@@ -647,7 +647,6 @@ DataProvider::LoadQueues(rocprofvis_handle_t* processor_handle, ProcessorInfo& p
                                                   &queue_id);
         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
-        // A queue with no track is not drawable, so it stays out of the tree.
         uint64_t track_id = 0;
         if(!GetTopologyTrackId(queue_handle, kRPVControllerQueueTrack, track_id))
         {
@@ -683,7 +682,6 @@ DataProvider::LoadCounters(rocprofvis_handle_t* processor_handle,
                                                   kRPVControllerCounterId, 0, &counter_id);
         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
-        // A counter with no track is not drawable, so it stays out of the tree.
         uint64_t track_id = 0;
         if(!GetTopologyTrackId(counter_handle, kRPVControllerCounterTrack, track_id))
         {
@@ -756,8 +754,6 @@ DataProvider::LoadThreads(rocprofvis_handle_t* process_handle, ProcessInfo& proc
                                                   &thread_id);
         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
-        // A thread with no track is not drawable, so it stays out of the tree,
-        // like a queue/stream/counter without one.
         uint64_t track_id = 0;
         if(!GetTopologyTrackId(thread_handle, kRPVControllerThreadTrack, track_id))
         {
@@ -795,7 +791,6 @@ DataProvider::LoadStreams(rocprofvis_handle_t* process_handle, ProcessInfo& proc
                                                   &stream_id);
         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
 
-        // A stream with no track is not drawable, so it stays out of the tree.
         uint64_t track_id = 0;
         if(!GetTopologyTrackId(stream_handle, kRPVControllerStreamTrack, track_id))
         {
@@ -812,8 +807,8 @@ DataProvider::LoadStreams(rocprofvis_handle_t* process_handle, ProcessInfo& proc
 
 /*
  * The controller repeats a stream's processors and queues as a subtree of the
- * stream. Those are the same devices and queues already hanging off the node,
- * so resolve them by id and record the second edge instead of duplicating.
+ * stream. They are the same nodes already in the tree under their own node, so
+ * resolve them by id and record a second edge instead of duplicating them.
  */
 void
 DataProvider::LinkStreamTopology()

@@ -273,7 +273,7 @@ private:
     void LoadStreams(rocprofvis_handle_t* process_handle, ProcessInfo& process);
     void LinkStreamTopology();
     // Resolves the track a topology node draws as. False when it has none, which
-    // is how a non-drawable queue/stream/counter is filtered out of the tree.
+    // is how a non-drawable queue, stream, counter or thread stays out of the tree.
     bool GetTopologyTrackId(rocprofvis_handle_t* topology_handle,
                             rocprofvis_property_t track_property, uint64_t& track_id);
 

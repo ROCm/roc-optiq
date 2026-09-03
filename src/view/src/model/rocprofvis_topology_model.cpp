@@ -102,15 +102,17 @@ TopologyTree::AddNode(uint64_t node_id)
 void
 TopologyTree::Finalize()
 {
-    AssignNodeDisplayIndices();
+    // Before BuildTrackOrder(): it walks GetNodes(), so the node order has to
+    // be settled first for the track order to match the rows.
+    OrderNodes();
     BuildTrackOrder();
     m_revision++;
 }
 
 /*
- * Flattens the tree into the order the sidebar presents it in, which is the
- * order "sort by topology" reproduces on the timeline. Deduped: a queue is
- * reached from its processor and again from every stream that dispatched to it.
+ * Flattens the tree into the order the sidebar presents it in. Deduped: a queue
+ * is reached from its processor and again from every stream that dispatched to
+ * it.
  */
 void
 TopologyTree::BuildTrackOrder()
@@ -178,18 +180,23 @@ TopologyTree::BuildTrackOrder()
 }
 
 void
-TopologyTree::AssignNodeDisplayIndices()
+TopologyTree::OrderNodes()
 {
-    std::vector<uint64_t> ids;
-    ids.reserve(m_node_index.size());
-    for(const std::pair<const uint64_t, NodeInfo*>& entry : m_node_index)
+    std::map<TopologyNodeType, std::vector<TopologyNode*>>::iterator it =
+        m_root->m_children.find(TopologyNodeType::kNode);
+    if(it == m_root->m_children.end())
     {
-        ids.push_back(entry.first);
+        return;
     }
-    std::sort(ids.begin(), ids.end());
-    for(size_t rank = 0; rank < ids.size(); rank++)
+
+    std::vector<TopologyNode*>& nodes = it->second;
+    std::sort(nodes.begin(), nodes.end(),
+              [](const TopologyNode* lhs, const TopologyNode* rhs) {
+                  return lhs->GetId() < rhs->GetId();
+              });
+    for(size_t rank = 0; rank < nodes.size(); rank++)
     {
-        m_node_index[ids[rank]]->display_index = rank + 1;
+        static_cast<NodeInfo*>(nodes[rank])->display_index = rank + 1;
     }
 }
 

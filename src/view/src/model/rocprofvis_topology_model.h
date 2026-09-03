@@ -105,8 +105,8 @@ struct NodeInfo : public TopologyNode
     std::string os_name;
     std::string os_release;
     std::string os_version;
-    // 1-based position in controller order, used for the node color wheel and
-    // the "[2] hostname" labels. Assigned once while the tree is built.
+    // 1-based row position, ranked by ascending node id. The sidebar and the
+    // timeline's node pills label and color-code nodes by it. Set by Finalize().
     size_t display_index;
 };
 
@@ -235,8 +235,8 @@ public:
     void BindTrack(TopologyNode* node, uint64_t track_id);
 
     /*
-     * Derives everything that depends on the finished tree (node display ranks,
-     * track order) and bumps the revision. Call once when the load walk is done.
+     * Derives everything that depends on the finished tree (node row order and
+     * ranks, track order) and bumps the revision. Call once after the load walk.
      */
     void Finalize();
 
@@ -250,11 +250,11 @@ public:
     uint64_t GetRevision() const { return m_revision; }
 
     /*
-     * Track ids in topology order: per node, each processor's queues then
-     * counters, then each process's streams and threads. Deduped, so a queue
-     * reached from both its processor and a stream appears once. Drives the
-     * timeline's "sort by topology"; tracks the controller never tied to a
-     * topology node are not in here.
+     * Track ids in the order the sidebar draws its rows: per node by ascending
+     * id, each processor's queues then counters, then each process's streams and
+     * threads. Deduped, so a queue reached from both its processor and a stream
+     * appears once. Drives the timeline's "sort by topology"; tracks the
+     * controller never tied to a topology node are absent.
      */
     const std::vector<uint64_t>& GetTrackOrder() const { return m_track_order; }
 
@@ -271,6 +271,8 @@ public:
 
     const TopologyNode* FindByTrackId(uint64_t track_id) const;
 
+    // Nodes by ascending id: the sidebar's row order, and what GetTrackOrder()
+    // is built from.
     const std::vector<TopologyNode*>& GetNodes() const;
     size_t                            NodeCount() const { return m_node_index.size(); }
     size_t                            ProcessCount() const { return m_process_index.size(); }
@@ -298,11 +300,15 @@ private:
      */
     void WriteNode(std::ostringstream& out, const TopologyNode& node, int indent) const;
     /*
-     * Ranks nodes by ascending id and stores the 1-based rank on each NodeInfo.
-     * The rank drives the node color wheel and the "[2] hostname" labels, which
-     * must stay stable across sessions.
+     * Sorts the node rows by ascending id and ranks them in that order.
+     *
+     * The controller lists nodes by whichever one's first track was registered
+     * first, which is incidental to the db's row order; the id is the only key
+     * here stable across sessions and platforms. Taking the rank from the row
+     * position keeps the labels, the node colors and GetTrackOrder() from
+     * drifting away from the rows.
      */
-    void AssignNodeDisplayIndices();
+    void OrderNodes();
     void BuildTrackOrder();
 
     // The arena owns every node; all parent/child edges are non-owning.

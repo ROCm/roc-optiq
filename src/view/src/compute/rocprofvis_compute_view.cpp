@@ -171,11 +171,11 @@ ComputeView::CreateView()
                 std::make_shared<ComputeWorkloadView>(m_data_provider, m_compute_selection),
                 false});
 
-#ifdef ROCPROFVIS_DEVELOPER_MODE
-
     m_isa_view = std::make_shared<ComputeIsaView>(m_data_provider);
     m_tab_container->AddTab(
         TabItem{"ISA View", "isa_view", m_isa_view, false});
+
+#ifdef ROCPROFVIS_DEVELOPER_MODE
 
     m_tab_container->AddTab(
         TabItem{"Compute Tester", "compute_tester_view",

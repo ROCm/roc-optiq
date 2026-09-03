@@ -1019,13 +1019,18 @@ the sidebar owns only the *projection* of it that it draws:
   metadata changed (labels moved). `BuildTree()` walks the tree and
   emits a `SidebarTree` of `TreeNode` / `LeafNode` (defined in
   `rocprofvis_tree_node.h`, `enum class NodeType` for the kind).
+- Every timeline track gets at least one row. After walking the tree,
+  `BuildTree()` buckets any track it emitted no row for under an
+  "Uncategorized" list - keyed on that rather than on
+  `TrackInfo::TrackType`, since a typed track whose queue or processor
+  was unreachable at load still needs a home.
 - Everything purely presentational lives here and not on the tree:
   group headers ("Queues (4)"), the eye-state cache, node color
   swatches, and the inline processor subtree shown under a stream.
 - A `LeafNode` carries a `track_id`, never a position. Positions change
   on drag-reorder; ids do not. Rows resolve to a `TrackItem*` through
   the timeline metadata each frame (`FindTrack` / `TrackFromMetadata`).
-- Tracks are leaves; branches are nodes/processes/devices.
+- Tracks are leaves; branches are nodes/processes/processors.
 - `EyeButtonState` (`kAllVisible|kAllHidden|kMixed`) is computed
   recursively to drive the show/hide eye icon at each level.
 - `ApplyVisibility(node, visible)` toggles every leaf below `node` and
@@ -1108,10 +1113,11 @@ Shows aggregated info per selected track, sourced from the data model's
 `TopologyTree`. On a selection change `Resolve()` locates the track's
 node in the tree (by track id) plus its parent node/process, and
 `BuildTables()` turns those into the `DetailsTable`s it renders - built
-for the selected tracks only, not precomputed for the trace. Cells
-flagged `is_time` are reformatted in place on `kTimeFormatChanged`, and
-a change of `TopologyTree::GetRevision()` re-resolves, since a rebuilt
-tree invalidates the node pointers.
+for the selected tracks only, not precomputed for the trace. Each cell
+carries a `Kind`; any kind other than `kText` holds a raw value and is
+reformatted in place on `kTimeFormatChanged`. A change of
+`TopologyTree::GetRevision()` re-resolves, since a rebuilt tree
+invalidates the node pointers.
 Real queue/counter statistics come from `AnalysisTrackStatistics`, the
 same cache used by track pills.
 
@@ -1398,9 +1404,9 @@ controller results.
     event_node, event_op)`.
   - `struct EventInfo` and its parts: `BasicEventData`, `EventArg`,
     `EventExtData`, `EventFlowData`, `CallStackData`.
-  - Topology types: `NodeInfo`, `DeviceInfo`, `ProcessInfo`,
-    `IterableInfo`, `ThreadInfo`, `QueueInfo`, `StreamDeviceInfo`,
-    `StreamInfo`, `CounterInfo`.
+  - No topology types: `NodeInfo`, `ProcessorInfo`, `ProcessInfo`,
+    `ThreadInfo`, `StreamInfo`, `QueueInfo` and `CounterInfo` live with
+    the tree that owns them, in `rocprofvis_topology_model.h`.
   - `struct SummaryInfo` with `KernelMetrics`, `GPUMetrics`,
     `CPUMetrics`, `AggregateMetrics`.
   - `struct TableInfo`, `FormattedColumnInfo`,
@@ -1437,11 +1443,13 @@ controller results.
   - A node that maps to a timeline track carries its `track_id`
     (`BindTrack`, `HasTrack`), and per-node display headers
     (`SetHeader`) are cached at load, not rebuilt per frame.
-  - `Finalize()` closes the load: it ranks nodes
-    (`GetNodeDisplayIndex`, used by the color wheel and "[2] hostname"
-    labels), builds `GetTrackOrder()` (drives the timeline's "sort by
-    topology"), and bumps `GetRevision()`, which is how the sidebar and
-    Track Details know to rebuild what they derive from the tree.
+  - `Finalize()` closes the load: it sorts the node rows by ascending id
+    and takes each node's rank from that position
+    (`GetNodeDisplayIndex`, which the node labels and color wheel use),
+    builds `GetTrackOrder()` (drives the timeline's "sort by topology",
+    and equals the sidebar's row order), and bumps `GetRevision()`,
+    which is how the sidebar and Track Details know to rebuild what
+    they derive from the tree.
 - `rocprofvis_timeline_model.{h,cpp}` - `TimelineModel`: track
   metadata + raw track data + histogram + minimap. Use the typed
   raw-data helpers (`GetTrackData`, `FreeTrackData`,
@@ -2578,9 +2586,7 @@ For fast lookup. Each entry: class -> file -> one-line role.
 - `AnalysisModel` -> `model/rocprofvis_analysis_model.h`.
 - `INVALID_UINT64_INDEX` -> `model/rocprofvis_common_defs.h`.
 - `TrackInfo`, `EventInfo`, `BasicEventData`, `EventArg`,
-  `EventExtData`, `EventFlowData`, `CallStackData`, `NodeInfo`,
-  `DeviceInfo`, `ProcessInfo`, `IterableInfo`, `ThreadInfo`,
-  `QueueInfo`, `StreamInfo`, `StreamDeviceInfo`, `CounterInfo`,
+  `EventExtData`, `EventFlowData`, `CallStackData`,
   `SummaryInfo` (with `KernelMetrics`/`GPUMetrics`/`CPUMetrics`/
   `AggregateMetrics`), `TableInfo`, `FormattedColumnInfo`,
   `TraceEventId`, `TopologyId`, `CompareSourceInfo`,

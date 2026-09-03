@@ -402,7 +402,8 @@ AppWindow (singleton, RocWidget)
 |   |                 +-- ComputeTableView
 |   |                 +-- ComputeWorkloadView
 |   |                 +-- ComputeComparisonView
-|   |                 +-- (ComputeIsaView / ComputeTester, dev mode only)
+|   |                 +-- ComputeIsaView
+|   |                 +-- (ComputeTester, dev mode only)
 |   +-- [2] status bar (RocCustomWidget calling AppWindow::RenderStatusBar)
 +-- WelcomePage              : empty-state landing page
 +-- CompareFilesDialog       : two-trace compare modal (File > Compare, dev mode)
@@ -1229,7 +1230,7 @@ The compute analogue of `TraceView`. Owns:
   - `ComputeTableView` - hierarchical metric tables.
   - `ComputeWorkloadView` - system info + profiling config tables.
   - `ComputeComparisonView` - baseline vs target comparison.
-  - `ComputeIsaView` - dev-only source/ISA correlation.
+  - `ComputeIsaView` - source/ISA correlation and PC-sampling counts.
   - `ComputeTester` - dev-mode scratchpad
     (`#ifdef ROCPROFVIS_DEVELOPER_MODE`).
 - `m_data_provider` - same `DataProvider` type as `TraceView`, but its
@@ -1355,9 +1356,10 @@ Correlates source code and ISA through `SourceCodeWidget` and
 ISA (and vice versa). The ISA pane is the always-visible primary pane;
 the optional source-code pane is shown on the right through the
 `Show Source Code` / `Hide Source Code` control.
-`RenderControlPanel()` hosts the source-file dropdown, and
-PC-sampling data is fetched through `PcSamplingRequestParams` /
-`DataProvider::FetchPcSampling` in three independent stages:
+`RenderControlPanel()` hosts the source-file dropdown and the `Show Source
+Code` / `Show Stalls` controls. PC-sampling data is fetched through
+`PcSamplingRequestParams` / `DataProvider::FetchPcSampling` in three
+independent layers:
 
 - `kIsa` runs when the view opens or its kernel changes and loads only the
   code-object, kernel-symbol, and ISA-line data needed by the primary pane.
@@ -1365,19 +1367,31 @@ PC-sampling data is fetched through `PcSamplingRequestParams` /
   selected. It loads source-file metadata, ISA/source correlations, and the
   selected file's source lines. Source-file ID 0 asks the controller to choose
   the first available file.
-- `kStalls` runs when stall columns are shown and loads sample states, stall
-  reasons, and instruction-sample metadata.
+- `kStalls` runs when the user selects `Show Stalls`. The controller loads PC
+  sample states, stall-reason rows and lookups, instruction types, and
+  instruction-sample rows and lookups. The current view projection consumes
+  only each state's instruction UUID and total, issue, and stall counts.
 
-Only one PC-sampling request may be active per trace, so
-`QueuePcSamplingFetch()` retains later stages and submits them in ISA, source,
-then stall order. Results are cached per kernel (and per source-file ID
-for source lines); toggling a pane or column does not repeat a completed fetch. The
-DataProvider updates only the model portion owned by the completed stage and
-the view refreshes only after checking the request kind, kernel, and generation.
-Do not query the model directly from this view.
+`FetchPendingPcSampling()` submits all queued layers; ISA, source, and stalls
+use distinct `DataProvider` request IDs and may be in flight together. A newer
+request for the same layer cancels and replaces the older one. Controller data
+is cached on the kernel-owned `PcSampling` object, including source lines by
+source-file UUID. `DataProvider` updates only the view-model portion owned by
+the completed layer. `ComputeIsaView` accepts the callback only when its layer,
+kernel, selection generation, request token, and (for source) selected file
+still match. Do not query the controller or model directly from this view.
 
-Older traces can omit one or more PC-sampling tables. A failed optional source,
-stall, or comment request is isolated from the already-loaded ISA pane.
+The ISA table is always present. `Show Stalls` adds Total Count, Issue Count,
+and Stall Count columns, aggregated by instruction UUID across returned sample
+states. The source table is optional; its Stalls column is
+`100 * sum(stall_count) / sum(total_count)` for instructions mapped to the
+source line at `frame_index == 0`. Stall-reason text, instruction-sample
+metadata, active-thread percentage, wave-occupancy percentage, and dispatch
+UUID are available on the controller handle but are not currently represented
+in `PcSamplingData` or rendered by `ComputeIsaView`.
+
+PC-sampling queries require compute schema 2.2 or newer. A failed source or
+stall request is isolated from an already-loaded ISA pane.
 Source records with unknown or zero line numbers are omitted. ISA instructions
 that lack a valid source line remain visible and mouse-hoverable but cannot be
 selected for source correlation; hovering them clears the source-line hover.
@@ -2309,6 +2323,7 @@ adding **anything** new, check this list and reuse if at all possible.
 | Drive a virtualized table                     | Subclass `InfiniteScrollTable`                                                                 |
 | Pick a metric (Compute)                       | `QueryBuilder` + `KernelMetricTable::SetExternalQuery`                                         |
 | Display SOL / pinned compute metrics          | `MetricTable` / `PinnedMetricTable` / `MetricTableWidget`                                      |
+| Fetch data for ISA View                       | `PcSamplingRequestParams` + `DataProvider::FetchPcSampling`; extend `PcSamplingData` for new rendered fields |
 | Add a bookmark or save view state             | The `Project` + `ProjectSetting` system, JSON keys in `rocprofvis_project.h`                   |
 | Save user-customizable layouts (Compute)      | `PresetComponent` + `PresetManager` + `PresetBrowser`                                          |
 | Save profiler launch profiles                 | `LaunchPresetManager` + `ProfilesDocument`                                                     |
@@ -2613,15 +2628,17 @@ For fast lookup. Each entry: class -> file -> one-line role.
   `compute/rocprofvis_compute_summary.h`.
 - `ComputeTester` (dev only) ->
   `compute/rocprofvis_compute_tester.h`.
-- `ComputeIsaView`, `SourceCodeWidget`, `IsaCodeWidget` (dev only) ->
+- `ComputeIsaView`, `BaseCodeWidget`, `SourceCodeWidget`, `IsaCodeWidget` ->
   `compute/rocprofvis_compute_isa_view.h`.
 - `ComputeDataProvider`, `ComputeTableModel`, `ComputeTableCellModel`,
   `ComputePlotModel`, `ComputePlotAxisModel`, `ComputePlotSeriesModel`,
   `ComputeMetricModel` -> `compute/rocprofvis_compute_data_provider.h`.
 - `ComputeDataModel`, `ComputeKernelSelectionTable` ->
   `model/compute/rocprofvis_compute_data_model.h`.
-- `AvailableMetrics`, `KernelInfo`, `WorkloadInfo`, `MetricValue`,
-  `MetricId`, `MetricIdHash`, `Point`, `ComputeTableInfo` ->
+- `AvailableMetrics`, `PcSampleState`, `InstructionSourceLine`,
+  `InstructionLine`, `KernelSymbol`, `CodeObjectStore`, `SourceLine`,
+  `SourceFile`, `PcSamplingData`, `KernelInfo`, `WorkloadInfo`,
+  `MetricValue`, `MetricId`, `MetricIdHash`, `Point`, `ComputeTableInfo` ->
   `model/compute/rocprofvis_compute_model_types.h`.
 
 ### Remote UI (`#ifdef ROCPROFVIS_ENABLE_REMOTE`)

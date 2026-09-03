@@ -43,8 +43,8 @@ source wins; please update this file in the same change.
 - **Does NOT own:** SQLite I/O (that is `src/model/`), ImGui rendering
   (that is `src/view/`).
 - **Linked by:** the View through `DataProvider`
-  (`src/view/src/rocprofvis_data_provider.h`) and from Python via the
-  CFFI build script in `src/model/python/`.
+  (`src/view/src/rocprofvis_data_provider.h`). Python CFFI binds the model
+  library directly and does not use this controller ABI.
 - **Build flags:**
   - `BUILD_TESTING` - builds `roc-optiq-controller-system-tests` and
     `roc-optiq-controller-compute-tests` (Catch2). Tests are wired
@@ -163,9 +163,8 @@ rocprofvis_controller_metric_fetch_async(...);                   // compute metr
 rocprofvis_controller_create_analysis_view_async(...);           // analytic views (placeholder)
 ```
 
-PC-sampling data has one compatibility fetch plus three stage-specific
-fetchers. Code View uses the stage-specific APIs so opening optional UI does
-not block the initial ISA display:
+PC-sampling data has three layer-specific fetchers. ISA View uses them so
+optional source and sampling-state data do not block the initial ISA display:
 
 ```c
 rocprofvis_controller_pc_sampling_fetch_isa_lines_async(...); // ISA dependencies + lines
@@ -866,10 +865,11 @@ rocprofvis_result_t AsyncFetch(Table&, Arguments&, Future&, Array&);
 
 PC sampling uses `AsyncFetchPcSamplingIsaData`,
 `AsyncFetchPcSamplingSource`, and `AsyncFetchPcSamplingStalls` for the three
-on-demand stages.
-`AsyncFetchPcSampling` is the compatibility all-data path and runs those same
-stage helpers in sequence. Each helper checks the cache flags on the
-kernel-owned `PcSampling` handle before querying the database.
+on-demand layers. Each schedules a controller `Job`, locks only its layer on
+the kernel-owned `PcSampling` handle, and calls the corresponding synchronous
+stage helper. The helper creates model DB futures through `ExecuteQuery`, adds
+them as dependent controller futures, waits for their result on the worker,
+copies the temporary model table into `QueryDataStore`, and deletes that table.
 
 Internal helper `ExecuteQuery(...)` runs a database query through the
 compute model layer and dispatches rows into a callback. The nested
@@ -901,18 +901,23 @@ A kernel within a workload. Carries `m_id`, `m_name`,
 `rocprofvis_controller_kernel_properties_t`.
 
 Each kernel also owns a `PcSampling` handle. The
-`rocprofvis_controller_pc_sampling_fetch_mandatorys_async` path calls
+`rocprofvis_controller_pc_sampling_fetch_isa_lines_async` path calls
 `ComputeTrace::AsyncFetchPcSamplingIsaData` to load the code objects, kernel
-symbols, and ISA lines needed for the initial Code View. The source fetch loads
+symbols, and ISA lines needed for the initial ISA View. The source fetch loads
 source-file metadata, instruction/source mappings, and the requested source
 file's lines. Each instruction/source mapping includes the owning source-file
-UUID so Code View can switch files for cross-pane navigation. Source file ID 0
+UUID so ISA View can switch files for cross-pane navigation. Source file ID 0
 selects the first available source file. The stall fetch independently loads
 PC sample states, stall-reason counts, and
-instruction-sample metadata. The full
-`rocprofvis_controller_pc_sampling_fetch_all_async` compatibility path invokes
-all three stages in sequence. Per-table flags on `PcSampling` prevent repeated
-queries while allowing source files to be fetched separately.
+instruction-sample metadata. Per-table flags on `PcSampling` prevent repeated
+queries while `m_source_line_cache` stores source lines separately by file UUID.
+
+Only `kRPVControllerPcSamplingArgsKernelId` is required by the ISA and stall
+entry points. The source entry point additionally requires
+`kRPVControllerPcSamplingArgsSourceFileUuid`; zero selects the first source
+file. `kRPVControllerPcSamplingArgsWorkloadId` remains in the public enum but
+is not read by these controller methods. The View uses its workload ID before
+the call to resolve the workload, kernel, and kernel-owned `PcSampling` handles.
 
 ### 6.4 `Roofline` (`rocprofvis_controller_roofline.{h,cpp}`)
 
@@ -977,7 +982,7 @@ caches, fabric, etc.). `Setup()` loads the CSV into `m_metrics_map`;
 It pivots metric values into a `kernel x metric` matrix and exposes
 the result like any other table.
 
-### 6.8 `PcSampling` (`rocprofvis_controller_pc_sampling.{h,cpp}`)
+### 6.7 `PcSampling` (`rocprofvis_controller_pc_sampling.{h,cpp}`)
 
 Object type `kRPVControllerObjectTypePCSampling = 30`. Each `Kernel`
 owns one `PcSampling` handle (accessed via
@@ -991,7 +996,7 @@ pane stays readable while source or stall data loads:
 | Source  | `m_source_data_mutex`| `m_source_files`, `m_source_lines`, `m_instruction_source_lines` |
 | Stalls  | `m_stalls_data_mutex`| `m_pc_sample_states`, `m_pc_sample_stall_reasons`, `m_pc_sample_stall_reason_lookups`, `m_instruction_type_lookups`, `m_instruction_samples`, `m_instruction_sample_lookups` |
 
-Per-layer cached booleans (`m_code_object_store_loaded`,
+Cached query-group booleans (`m_code_object_store_loaded`,
 `m_kernel_symbols_loaded`, `m_instruction_lines_loaded`,
 `m_instruction_source_lines_loaded`, `m_source_files_loaded`,
 `m_pc_sample_states_loaded`, `m_stalls_loaded`,
@@ -1005,11 +1010,13 @@ type&)` is the internal helper `ComputeTrace` uses to map a DB column
 enum to the right `kRPVControllerPCSampling*` property ID.
 
 Property bank: `rocprofvis_controller_pc_sampling_data_properties_t`
-(base `__kRPVControllerPCSamplingPropertiesFirst`), covering 60+
-property IDs across the three data layers. Instruction/source correlation
-properties include both source-line and owning source-file UUIDs.
+(guarded by `__kRPVControllerPCSamplingPropertiesFirst` and
+`__kRPVControllerPCSamplingPropertiesLast`). Its three groups have fixed high
+nibbles: source `0x10000000`, ISA `0x20000000`, and stalls `0x30000000`.
+Instruction/source correlation properties include both source-line and owning
+source-file UUIDs.
 
-### 6.7 `ComputePlot`, `Plot`, `PlotSeries`
+### 6.8 `ComputePlot`, `Plot`, `PlotSeries`
 Files: `rocprofvis_controller_plot.{h,cpp}`,
 `rocprofvis_controller_plot_compute.{h,cpp}`,
 `rocprofvis_controller_plot_series.{h,cpp}`.
@@ -1198,15 +1205,17 @@ Property bank starting points (`uint32_t` enum bases):
 | Summary Metrics                       | `0xF0000000` |
 | Common (memory usage, etc.)           | `0xFFFF0000` |
 
-Compute-side banks (including `PcSampling`) start at the
+Most compute-side banks start at the
 `__kRPVControllerComputePropertiesFirst` family. The auto-incrementing
 `__first / __last` brackets in each enum are an extension hint - if
 you add a new property to an existing bank, declare it inside the
 brackets.
 
-`PcSampling` uses `__kRPVControllerPCSamplingPropertiesFirst` as its
-base (auto-incremented after the other compute banks); it does not have
-a fixed hex offset like the system banks above.
+`PcSampling` is the exception: its source, ISA, and stalls groups start at
+fixed values `0x10000000`, `0x20000000`, and `0x30000000`. Its
+`__kRPVControllerPCSamplingPropertiesFirst` / `Last` sentinels guard the full
+range across those groups, while `GetPropertyMutex` uses the high nibble to
+select the layer lock.
 
 When you add a new object type:
 
@@ -1283,6 +1292,7 @@ These supplement `CODING.md`. When the two disagree, `CODING.md` wins.
 | Implement a new system table use case                   | Add to `rocprofvis_dm_table_use_case_enum_t` and switch in `SystemTable` |
 | Implement a new compute pre-baked table                 | Add a `ComputeTableDefinition` row in `COMPUTE_TABLE_DEFINITIONS`       |
 | Implement a new compute plot                            | Add a `ComputeTablePlotDefinition` row in `COMPUTE_PLOT_DEFINITIONS`    |
+| Fetch one PC-sampling layer                             | Use the matching `ComputeTrace::AsyncFetchPcSampling*` method and the kernel-owned `PcSampling` handle |
 | Implement a new analysis function                       | Extend `Analysis` and add a free function in `rocprofvis_controller_analysis.h` |
 | Add a new object type                                   | See section 9 (six-step recipe)                                         |
 | Add a new property to an existing object type           | Append to that bank's enum inside the `__first / __last` brackets       |
@@ -1344,6 +1354,10 @@ Catch2 tests live in `src/controller/tests/`:
   `sample/rocprof_compute_23ed6f36.db`. Tests the compute load,
   workload + kernel + roofline + metric-fetch + pivot-table flows.
 
+The compute controller test currently does not exercise the PC-sampling ABI.
+Changes to the three PC-sampling fetchers or their property bank should add
+coverage for the matching schema-2.2 fixture.
+
 Both binaries accept `--input_file <path>` (parsed by Catch2 + Clara).
 Logs land in `Testing/Temporary/rocprofvis_controller_*_tests/`.
 
@@ -1362,7 +1376,7 @@ free" sequence.
 - `rocprofvis_controller_enums.h` -> `rocprofvis_result_t`,
   `rocprofvis_controller_object_type_t`,
   `rocprofvis_controller_primitive_type_t`, sort orders, table types,
-  table arguments, etc.
+  table arguments, and PC-sampling property groups/arguments.
 
 ### Core building blocks (`src/controller/src/`)
 

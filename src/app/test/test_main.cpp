@@ -86,6 +86,13 @@ parse_command_line_args(int argc, char** argv, RocProfVis::App::CLIParser& cli_p
         "the loaded view until interrupted. Use with -f to pick the trace, or a "
         "directory to open every rocpd*.db trace in it at once",
         false);
+    result &= cli_parser.AddOption(
+        "l", "log-level",
+        "Override the log level: 'trace', 'debug', 'info', 'warn', 'error'. "
+        "Defaults to debug in debug builds. A soak running for days at debug "
+        "produces gigabytes an hour and rotates its own earlier output away, so "
+        "prefer 'info' for long runs - the periodic memory samples are info",
+        true);
     ROCPROFVIS_ASSERT(result);
 
     cli_parser.Parse(argc, argv);
@@ -108,6 +115,39 @@ main(int argc, char** argv)
         return app_result_code;
     }
 
+    // Applied after parsing rather than through enable_application_log, which
+    // runs before the command line is read and is guarded against a second call.
+    // Only the level is overridden; the sinks and log path stay as that set them.
+    if(cli_parser.WasOptionFound("log-level"))
+    {
+        const std::string requested = cli_parser.GetOptionValue("log-level");
+        if(requested == "trace")
+        {
+            spdlog::set_level(spdlog::level::trace);
+        }
+        else if(requested == "debug")
+        {
+            spdlog::set_level(spdlog::level::debug);
+        }
+        else if(requested == "info")
+        {
+            spdlog::set_level(spdlog::level::info);
+        }
+        else if(requested == "warn")
+        {
+            spdlog::set_level(spdlog::level::warn);
+        }
+        else if(requested == "error")
+        {
+            spdlog::set_level(spdlog::level::err);
+        }
+        else
+        {
+            std::cout << "Unknown log level '" << requested
+                      << "', keeping the build default" << std::endl;
+        }
+    }
+
     rocprofvis_imgui_backend_preference_t    backend_pref = kRPVBackendAuto;
     rocprofvis_view_file_dialog_preference_t fd_pref      = kRocProfVisViewFileDialog_Auto;
     if(!RocProfVis::App::parse_backend_preference(cli_parser, backend_pref) ||
@@ -115,7 +155,6 @@ main(int argc, char** argv)
     {
         return 1;
     }
-
 #ifdef __APPLE__
     RocProfVis::Platform::configure_bundled_vulkan_icd();
 #endif

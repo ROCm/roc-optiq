@@ -287,7 +287,6 @@ PresetBrowser::PresetBrowser()
 , m_presets_list_changed(false)
 , m_pos_x(0.0f)
 , m_pos_y(0.0f)
-, m_text_input("\0")
 , m_presets(PresetManager::GetInstance())
 , m_notifications(NotificationManager::GetInstance())
 , m_settings(SettingsManager::GetInstance())
@@ -452,16 +451,15 @@ PresetBrowser::Render()
             }
             ImGui::EndChild();
             std::pair<bool, bool> input = InputTextWithClear(
-                "create", "New Preset Name", m_text_input,
-                static_cast<size_t>(IM_ARRAYSIZE(m_text_input)), icons,
+                "create", "New Preset Name", m_text_input, icons,
                 m_settings.GetColor(Colors::kBgMain), style,
                 ImGui::GetContentRegionAvail().x - edit_width - style.ItemSpacing.x);
             if(input.second)
             {
-                m_text_input[0] = '\0';
+                m_text_input.clear();
             }
             ImGui::SameLine();
-            ImGui::BeginDisabled(strlen(m_text_input) == 0);
+            ImGui::BeginDisabled(m_text_input.empty());
             if(IconButton(
                    ICON_ADD_NOTE, icons, ImVec2(0.0f, 0.0f),
                    "Create preset of current customizations", false, style.FramePadding,
@@ -481,29 +479,29 @@ PresetBrowser::Render()
                     case PresetManager::Success:
                     {
                         m_notifications.Show("Preset created: " +
-                                                 std::string(m_text_input),
+                                                 m_text_input,
                                              NotificationLevel::Success);
-                        m_text_input[0] = '\0';
+                        m_text_input.clear();
                         break;
                     }
                     case PresetManager::ErrorOverwrite:
                     {
                         m_notifications.Show("Preset already exists: " +
-                                                 std::string(m_text_input),
+                                                 m_text_input,
                                              NotificationLevel::Warning);
                         break;
                     }
                     case PresetManager::ErrorPresetEmpty:
                     {
                         m_notifications.Show("No customizations to create preset: " +
-                                                 std::string(m_text_input),
+                                                 m_text_input,
                                              NotificationLevel::Warning);
                         break;
                     }
                     default:
                     {
                         m_notifications.Show("Failed to create preset: " +
-                                                 std::string(m_text_input),
+                                                 m_text_input,
                                              NotificationLevel::Error);
                     }
                     break;

@@ -272,11 +272,12 @@ struct FormattedColumnInfo
 
 struct TableInfo
 {
-    std::shared_ptr<TableRequestParams>   table_params;
-    std::vector<std::string>              table_header;
-    std::vector<std::vector<std::string>> table_data;
-    std::vector<FormattedColumnInfo>      formatted_column_data;
-    uint64_t                              total_row_count;
+    std::shared_ptr<TableRequestParams>                 table_params;
+    std::vector<std::string>                            table_header;
+    std::vector<rocprofvis_controller_primitive_type_t> table_column_types;
+    std::vector<std::vector<std::string>>               table_data;
+    std::vector<FormattedColumnInfo>                    formatted_column_data;
+    uint64_t                                            total_row_count;
 };
 
 struct AnalysisTrackStatistics

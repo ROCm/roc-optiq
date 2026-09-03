@@ -18,7 +18,7 @@
 #include "rocprofvis_settings_manager.h"
 #include "widgets/rocprofvis_gui_helpers.h"
 #include "widgets/rocprofvis_notification_manager.h"
-#include "rocprofvis_compute_code_view.h"
+#include "rocprofvis_compute_isa_view.h"
 
 #include "spdlog/spdlog.h"
 
@@ -189,11 +189,11 @@ ComputeView::CreateView()
                 std::make_shared<ComputeWorkloadView>(m_data_provider, m_compute_selection),
                 false});
 
-#ifdef ROCPROFVIS_DEVELOPER_MODE
-
-    m_code_view = std::make_shared<ComputeCodeView>(m_data_provider);
+    m_isa_view = std::make_shared<ComputeIsaView>(m_data_provider);
     m_tab_container->AddTab(
-        TabItem{"Source Code View", "compute_code_view", m_code_view, false});
+        TabItem{"ISA View", "isa_view", m_isa_view, false});
+
+#ifdef ROCPROFVIS_DEVELOPER_MODE
 
     m_tab_container->AddTab(
         TabItem{"Compute Tester", "compute_tester_view",
@@ -207,7 +207,7 @@ void
 ComputeView::DestroyView()
 {
     m_view_created = false;
-    m_code_view    = nullptr;
+    m_isa_view     = nullptr;
 }
 
 bool

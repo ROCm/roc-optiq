@@ -36,6 +36,13 @@ static rocprofvis_view_render_options_t g_render_options =
 // Fullscreen state (initialized after window creation)
 static RocProfVis::View::FullscreenState g_fullscreen_state = {};
 
+#ifndef __APPLE__
+// Set by F11 or by the View's fullscreen menu item, and applied once at the end
+// of the frame. Resizing the window part-way through a frame would leave the
+// already-built draw data describing the previous size.
+static bool g_toggle_fullscreen_requested = false;
+#endif
+
 // Lazy rendering: after each OS event render a few frames so animations and the
 // deferred event dispatch settle, then sleep until the next event when idle.
 static int       g_frames_to_render        = 1;
@@ -76,7 +83,7 @@ app_notification_callback(GLFWwindow* window, int notification)
             static_cast<int>(rocprofvis_view_notification_t::
                                  kRocProfVisViewNotification_Toggle_Fullscreen))
     {
-        RocProfVis::View::toggle_fullscreen(window, g_fullscreen_state);
+        g_toggle_fullscreen_requested = true;
     }
 #endif
 }
@@ -154,25 +161,6 @@ mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
     }
 }
 #endif
-
-static void
-key_callback(GLFWwindow* window, int key, int scancode, int action, int mods)
-{
-    (void) scancode;
-    (void) mods;
-
-#ifndef __APPLE__
-    // Toggle fullscreen with F11
-    if(key == GLFW_KEY_F11 && action == GLFW_PRESS)
-    {
-        RocProfVis::View::toggle_fullscreen(window, g_fullscreen_state);
-    }
-#else
-    (void) window;
-    (void) key;
-    (void) action;
-#endif
-}
 
 static void
 print_version()
@@ -346,7 +334,6 @@ main(int argc, char** argv)
                 glfwSetDropCallback(window, drop_callback);
                 glfwSetWindowCloseCallback(window, close_callback);
                 glfwSetWindowSizeCallback(window, window_size_change_callback);
-                glfwSetKeyCallback(window, key_callback);
 
                 RocProfVis::View::init_fullscreen_state(window, g_fullscreen_state);
                 glfwShowWindow(window);
@@ -488,6 +475,11 @@ main(int argc, char** argv)
                         g_frames_to_render = RENDER_FRAMES_AFTER_INPUT;
                     }
 
+                    // Correct the windowed geometry if the window manager did
+                    // not honour the one requested when fullscreen was left.
+                    RocProfVis::View::settle_windowed_geometry(window,
+                                                               g_fullscreen_state);
+
 #ifdef __APPLE__
                     // Clear any phantom-stuck modifier (e.g. Control left down
                     // after a Mission Control gesture) before the frame renders.
@@ -512,6 +504,17 @@ main(int argc, char** argv)
                     {
                         ImGuiTestEngine_ShowTestEngineWindows(engine, nullptr);
                     }
+
+#ifndef __APPLE__
+                    // Matches main.cpp: F11 is read from ImGui's key state rather
+                    // than a GLFW key callback, which the ImGui backend only
+                    // chains for the main window.
+                    if(ImGui::IsKeyPressed(ImGuiKey_F11, false))
+                    {
+                        g_toggle_fullscreen_requested = true;
+                    }
+#endif
+
                     rocprofvis_view_render(g_render_options);
                     g_render_options = rocprofvis_view_render_options_t::
                         kRocProfVisViewRenderOption_None;
@@ -527,6 +530,17 @@ main(int argc, char** argv)
                         backend.m_present(&backend);
                     }
                     ImGuiTestEngine_PostSwap(engine);
+
+#ifndef __APPLE__
+                    // Applied after the frame so the window is never resized
+                    // part-way through one.
+                    if(g_toggle_fullscreen_requested)
+                    {
+                        g_toggle_fullscreen_requested = false;
+                        RocProfVis::View::toggle_fullscreen(window, g_fullscreen_state);
+                        g_frames_to_render = RENDER_FRAMES_AFTER_INPUT;
+                    }
+#endif
 
                     if(g_frames_to_render > 0)
                     {

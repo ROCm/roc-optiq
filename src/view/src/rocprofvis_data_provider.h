@@ -71,6 +71,9 @@ public:
     static const uint64_t ANALYSIS_TOP_LAUNCH_SAMPLED_TABLE_REQUEST_ID;
     static const uint64_t FETCH_COMPUTE_TRACE_REQUEST_ID;
     static const uint64_t METRIC_PIVOT_TABLE_REQUEST_ID;
+    static const uint64_t FETCH_PC_SAMPLING_ISA_REQUEST_ID;
+    static const uint64_t FETCH_PC_SAMPLING_SOURCE_REQUEST_ID;
+    static const uint64_t FETCH_PC_SAMPLING_STALLS_REQUEST_ID;
 
     // Ask Optiq's table reads. A background reader sharing the ids above would
     // be refused whenever a tab happened to be loading, and - worse - would
@@ -282,7 +285,9 @@ public:
     void SetFetchMetricsCallback(
         const std::function<void(const std::string&, uint64_t, bool)>& callback);
     void SetFetchPcSamplingCallback(
-        const std::function<void(const std::string&, uint32_t, uint32_t, uint32_t, bool)>& callback);
+        const std::function<void(const std::string&, PcSamplingLayer, uint32_t,
+                                 uint64_t, uint32_t, uint64_t,
+                                 rocprofvis_result_t)>& callback);
 
 private:
     struct ProcessChildCount
@@ -431,21 +436,23 @@ private:
     inline void LoadKernels(WorkloadInfo&        workload,
                                rocprofvis_handle_t* workload_handle);
     inline void LoadPcSamplingCodeObjects(KernelInfo&          kernel,
-                                          rocprofvis_handle_t* pc_handle);
+                                           rocprofvis_handle_t* pc_handle);
+    inline void LoadPcSamplingKernelSymbol(KernelSymbol&        kernel_symbol,
+                                           rocprofvis_handle_t* pc_handle,
+                                           uint64_t             index);
     inline void LoadPcSamplingSourceFiles(KernelInfo&          kernel,
-                                          rocprofvis_handle_t* pc_handle);
-    inline void LoadPcSamplingIsaLine(IsaLine&             isa_line,
+                                          rocprofvis_handle_t* pc_handle,
+                                          uint64_t refreshed_source_file_uuid);
+    inline void LoadPcSamplingInstructionLine(InstructionLine&             instruction_line,
                                       rocprofvis_handle_t* pc_handle,
                                       uint64_t             index);
     inline void LoadPcSamplingSourceLine(SourceLine&          source_line,
                                          rocprofvis_handle_t* pc_handle,
                                          uint64_t             index);
-    inline void LoadPcSamplingJunctions(KernelInfo&          kernel,
-                                        rocprofvis_handle_t* pc_handle);
+    inline void LoadPcSamplingInstructionSourceLines(
+        KernelInfo& kernel, rocprofvis_handle_t* pc_handle);
     inline void LoadPcSamplingStates(KernelInfo&          kernel,
-                                           rocprofvis_handle_t* pc_handle);
-    inline void LoadPcSamplingStallReasonCounts(KernelInfo&          kernel,
-                                                rocprofvis_handle_t* pc_handle);
+                                     rocprofvis_handle_t* pc_handle);
     inline void LoadRoofLine(WorkloadInfo& workload, rocprofvis_handle_t* workload_handle);
 
     using compute_ridge_map = std::unordered_map<
@@ -480,12 +487,13 @@ private:
 
     ComputeDataModel m_compute_model;
 
-    // Code View permits one PC sampling request per trace. Completed data is
-    // accepted only when it belongs to the latest submitted selection.
-    uint32_t m_pc_sampling_generation = 0;
+    // Stores a pending replacement submission for a PC sampling layer whose
+    // in-flight request is being cancelled. Keyed by the per-layer request ID.
+    std::unordered_map<uint64_t, PcSamplingRequestParams> m_pc_sampling_replacements;
 
     std::function<void(const std::string&, uint64_t, bool)> m_metrics_fetch_callback;
-    std::function<void(const std::string&, uint32_t, uint32_t, uint32_t, bool)>
+    std::function<void(const std::string&, PcSamplingLayer, uint32_t, uint64_t,
+                       uint32_t, uint64_t, rocprofvis_result_t)>
         m_pc_sampling_fetch_callback;
 };
 

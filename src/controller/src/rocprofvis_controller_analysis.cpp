@@ -202,15 +202,9 @@ rocprofvis_result_t Analysis::AsyncFetchQueueUtilization(SystemTrace* trace, Tra
     rocprofvis_result_t result = kRocProfVisResultUnknownError;
     future->Set(JobSystem::Get().IssueJob([this, trace, track, start, end, output](Future* future) -> rocprofvis_result_t {
         rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
-        rocprofvis_handle_t* queue_handle = nullptr;
-        result = track->GetObject(kRPVControllerTrackQueue, 0, &queue_handle);
-        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-        if(queue_handle)
+        if(track->GetQueue())
         {
-            rocprofvis_dm_result_t dm_result = kRocProfVisDmResultUnknownError;
-            uint64_t track_id = 0;
-            result = track->GetUInt64(kRPVControllerTrackId, 0, &track_id);
-            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+            uint64_t               track_id  = track->GetId();
             rocprofvis_dm_track_t dm_track = track->GetDmHandle();
             rocprofvis_dm_database_t db = rocprofvis_dm_get_property_as_handle(dm_track, kRPVDMTrackDatabaseHandle, 0);
             ROCPROFVIS_ASSERT(db);            
@@ -219,6 +213,7 @@ rocprofvis_result_t Analysis::AsyncFetchQueueUtilization(SystemTrace* trace, Tra
             uint64_t range_start = (uint64_t)floor(start);
             uint64_t range_end = (uint64_t)ceil(end);
             bool     range_empty = true;
+            rocprofvis_dm_result_t dm_result   = kRocProfVisDmResultUnknownError;
             dm_result = rocprofvis_db_read_trace_slice_async(db, range_start, range_end, kRocProfVisDmHashedTimestampTagAnalysis, 1, (rocprofvis_db_track_selection_t)&track_id, object2wait);
             ROCPROFVIS_ASSERT(dm_result == kRocProfVisDmResultSuccess);
             future->AddDependentFuture(object2wait);
@@ -291,6 +286,7 @@ rocprofvis_result_t Analysis::AsyncFetchQueueUtilization(SystemTrace* trace, Tra
             }
             future->RemoveDependentFuture(object2wait);
             rocprofvis_db_future_free(object2wait);
+            result = kRocProfVisResultSuccess;
         }
         return future->IsCancelled() ? kRocProfVisResultCancelled : result;
     }, future));
@@ -306,16 +302,11 @@ rocprofvis_result_t Analysis::AsyncFetchCounterStatistics(SystemTrace* trace, Tr
     rocprofvis_result_t result = kRocProfVisResultUnknownError;
     future->Set(JobSystem::Get().IssueJob([this, trace, track, start, end, output](Future* future) -> rocprofvis_result_t {
         rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
-        rocprofvis_handle_t* counter_handle = nullptr;
-        result = track->GetObject(kRPVControllerTrackCounter, 0, &counter_handle);
-        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-        if(counter_handle)
+        if(track->GetCounter())
         {
-            rocprofvis_dm_result_t dm_result = kRocProfVisDmResultUnknownError;
-            uint64_t track_id = 0;
-            result = track->GetUInt64(kRPVControllerTrackId, 0, &track_id);
-            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-            rocprofvis_dm_track_t dm_track = track->GetDmHandle();
+            rocprofvis_dm_result_t   dm_result = kRocProfVisDmResultUnknownError;
+            uint64_t                 track_id = track->GetId();
+            rocprofvis_dm_track_t    dm_track = track->GetDmHandle();
             rocprofvis_dm_database_t db = rocprofvis_dm_get_property_as_handle(dm_track, kRPVDMTrackDatabaseHandle, 0);
             ROCPROFVIS_ASSERT(db);
             rocprofvis_db_future_t object2wait = rocprofvis_db_future_alloc(nullptr);
@@ -396,6 +387,7 @@ rocprofvis_result_t Analysis::AsyncFetchCounterStatistics(SystemTrace* trace, Tr
             }
             future->RemoveDependentFuture(object2wait);
             rocprofvis_db_future_free(object2wait);
+            result = kRocProfVisResultSuccess;
         }
         return future->IsCancelled() ? kRocProfVisResultCancelled : result;
     }, future));
@@ -487,14 +479,11 @@ rocprofvis_result_t Analysis::EventsTable::UnpackArguments(Arguments& args, Tabl
             ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
             if(track_ref.IsValid())
             {
-                uint64_t track_type = 0;
-                result = track_ref->GetUInt64(kRPVControllerTrackType, 0, &track_type);
-                ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-                if(kRPVControllerTrackTypeEvents == rocprofvis_controller_track_type_t(track_type))
+                rocprofvis_controller_track_type_t track_type =
+                    track_ref->GetTrackType();
+                if(kRPVControllerTrackTypeEvents == track_type)
                 {
-                    uint64_t track_id = 0;
-                    result = track_ref->GetUInt64(kRPVControllerTrackId, 0, &track_id);
-                    ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+                    uint64_t track_id = track_ref->GetId();
                     tracks.push_back((uint32_t)track_id);
                 }
             }

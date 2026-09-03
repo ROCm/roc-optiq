@@ -402,8 +402,13 @@ TraceView::Render()
             popup_style.PushPopupStyles();
             popup_style.PushTitlebarColors();
 
+            // Size on appearance only. Under multi-viewport this window can be
+            // dragged out into its own OS window, while GetResponsiveWindowSize()
+            // always clamps to the main viewport, so re-applying the size every
+            // frame would hold a detached window to the wrong monitor's bounds.
             ImGui::SetNextWindowSize(
-                GetResponsiveWindowSize(MINIMAP_POPUP_SIZE, MINIMAP_POPUP_MIN_SIZE));
+                GetResponsiveWindowSize(MINIMAP_POPUP_SIZE, MINIMAP_POPUP_MIN_SIZE),
+                ImGuiCond_Appearing);
             if(ImGui::Begin("Minimap", &m_show_minimap_popup,
                             ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse))
             {
@@ -1140,7 +1145,7 @@ TraceView::RenderEventSearch()
         float reserved = options_width >= m_event_search->Width() ? 0.0f : options_width;
         std::pair<bool, bool> search_bar = InputTextWithClear(
             "search_bar", "Search: hipLaunchKernel or \"hip\"\"kernel\"",
-            m_event_search->TextInput(), m_event_search->TextInputLimit(),
+            m_event_search->TextInput(),
             settings.GetFontManager().GetFont(FontType::kIcon),
             settings.GetColor(Colors::kBgMain), settings.GetDefaultStyle(),
             m_event_search->Width() - reserved);

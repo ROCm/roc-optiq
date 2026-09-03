@@ -44,6 +44,13 @@ option(ROCPROFVIS_ENABLE_SCRIPTING "Build with embedded Python analysis scripts 
 # remote-profiling glue (RemoteProfilerSession / SshProfilerExecutor) is only
 # built when BOTH are enabled.
 
+# TEMPORARY: gate the in-development trace-compare and multi-window features
+# until they ship. Both default OFF so release builds exclude their UI and
+# dependent sources. Remove these options and unwrap their guards when the
+# features graduate.
+option(ROCPROFVIS_ENABLE_TRACE_COMPARE "Build with trace comparison support (in development)" OFF)
+option(ROCPROFVIS_MULTI_WINDOW "Build with multi-window support (in development)" OFF)
+
 if(ROCPROFVIS_DEVELOPER_MODE)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DROCPROFVIS_DEVELOPER_MODE")
 endif(ROCPROFVIS_DEVELOPER_MODE)
@@ -62,6 +69,12 @@ endif(ROCPROFVIS_ENABLE_SCRIPTING)
 if(ROCPROFVIS_ENABLE_INTERNAL_BANNER)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DROCPROFVIS_ENABLE_INTERNAL_BANNER")
 endif(ROCPROFVIS_ENABLE_INTERNAL_BANNER)
+if(ROCPROFVIS_ENABLE_TRACE_COMPARE)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DROCPROFVIS_ENABLE_TRACE_COMPARE")
+endif(ROCPROFVIS_ENABLE_TRACE_COMPARE)
+if(ROCPROFVIS_MULTI_WINDOW)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DROCPROFVIS_MULTI_WINDOW")
+endif(ROCPROFVIS_MULTI_WINDOW)
 
 # Set GLFW library type based on option
 if(GLFW_LINK_STATIC)
@@ -174,7 +187,7 @@ set(VIEW_FILES
     src/view/src/compute/rocprofvis_compute_workload_view.cpp
     src/view/src/compute/rocprofvis_compute_kernel_metric_table.cpp
     src/view/src/compute/rocprofvis_compute_comparison.cpp
-    src/view/src/compute/rocprofvis_compute_code_view.cpp
+    src/view/src/compute/rocprofvis_compute_isa_view.cpp
     src/view/src/compute/rocprofvis_compute_tester.cpp
     src/view/src/model/compute/rocprofvis_compute_data_model.cpp
     src/view/src/widgets/rocprofvis_compute_widget.cpp
@@ -306,7 +319,8 @@ set(APP_FILES
     src/app/src/rocprofvis_imgui_vulkan.cpp
     src/app/src/rocprofvis_imgui_opengl.cpp
     src/app/src/glfw_util.cpp
-    src/app/src/rocprofvis_cli_parser.cpp)
+    src/app/src/rocprofvis_cli_parser.cpp
+    src/app/src/rocprofvis_platform_helpers.cpp)
 if(APPLE)
     list(APPEND APP_FILES src/app/src/rocprofvis_platform_helpers_macos.mm)
 endif()

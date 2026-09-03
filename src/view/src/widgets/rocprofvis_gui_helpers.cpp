@@ -50,10 +50,22 @@ bool
 InputTextStringWithHint(const char* id, const char* hint, std::string& str,
                         ImGuiInputTextFlags flags)
 {
-    str.reserve(std::max(str.size() + 1, static_cast<size_t>(256)));
-    return ImGui::InputTextWithHint(id, hint, str.data(), str.capacity() + 1,
-                                    flags | ImGuiInputTextFlags_CallbackResize,
-                                    StringResizeCallback, static_cast<void*>(&str));
+    bool input_changed = InputTextString(id, str, flags);
+    if(str.empty())
+    {
+        const float& padding = ImGui::GetStyle().FramePadding.x;
+        ImGui::BeginDisabled();
+        ImGui::SetCursorScreenPos(
+            ImVec2(ImGui::GetItemRectMin().x + padding, ImGui::GetItemRectMin().y));
+        if(ElidedText(hint, ImGui::GetItemRectSize().x - 2.0f * padding, 0.0f,
+                   Alignment_Left, true) && BeginItemTooltipStyled())
+        {
+            ImGui::TextUnformatted(hint);
+            EndTooltipStyled();
+        }
+        ImGui::EndDisabled();
+    }
+    return input_changed;
 }
 
 bool
@@ -283,9 +295,8 @@ IsMouseReleasedWithDragCheck(ImGuiMouseButton button, float drag_threshold)
 }
 
 std::pair<bool, bool>
-InputTextWithClear(const char* id, const char* hint, char* buf,
-                                     size_t buf_size, ImFont* icon_font, ImU32 bg_color,
-                                     const ImGuiStyle& style, float width)
+InputTextWithClear(const char* id, const char* hint, std::string& str, ImFont* icon_font,
+                   ImU32 bg_color, const ImGuiStyle& style, float width)
 {
     bool input_cleared = false;
     ImGui::BeginGroup();
@@ -293,13 +304,13 @@ InputTextWithClear(const char* id, const char* hint, char* buf,
     ImGui::PushID(id);
     ImGui::PushStyleColor(ImGuiCol_FrameBg, bg_color);
     ImGui::SetNextItemWidth(width);
-    bool input_changed =
-        ImGui::InputTextWithHint("##input_text_with_clear", hint, buf, buf_size);
+    bool input_changed = InputTextStringWithHint("##input_text_with_clear", hint, str, 
+                                                  ImGuiInputTextFlags_AutoSelectAll);
     ImGui::PopStyleColor();
-    if(strlen(buf) > 0)
+    if(!str.empty())
     {
         ImGui::PushFont(icon_font, 0.0f);
-        if(width >= ImGui::CalcTextSize(ICON_X_CIRCLED).x + 2 * style.FramePadding.x)
+        if(width >= 2.0f * (ImGui::CalcTextSize(ICON_X_CIRCLED).x + style.FramePadding.x))
         {
             ImGui::SameLine();
             ImGui::SetCursorScreenPos(
@@ -382,7 +393,7 @@ EndTooltipStyled()
     ImGui::PopStyleColor(2);
 }
 
-void
+bool
 ElidedText(const char* text, float available_width, float tooltip_width,
            Alignment alignment, bool imgui_AlignTextToFramePadding)
 {
@@ -390,16 +401,15 @@ ElidedText(const char* text, float available_width, float tooltip_width,
     SettingsManager& settings   = SettingsManager::GetInstance();
     float            text_width = ImGui::CalcTextSize(text).x;
     ImVec2           elide_size = ImGui::CalcTextSize(" [...]");
-    float  scroll_bar_width     = (ImGui::GetScrollMaxY() != 0.0f) ? style.ScrollbarSize : 0.0f;
-    bool   elide                = text_width + scroll_bar_width > available_width;
-    ImVec2 elide_pos;
+    bool             elide      = text_width > available_width;
+    ImVec2           elide_pos;
     // Dynamically sized containers do not adapt to clip rect...
     // Use a window to restrict our size and provide sizing hint to client.
     // Do not take input to avoid interfering with client.
     ImGui::BeginChild("elided",
                       ImVec2(available_width, imgui_AlignTextToFramePadding
-                                                  ? ImGui::GetFrameHeightWithSpacing()
-                                                  : ImGui::GetFontSize()),
+                                                  ? ImGui::GetFrameHeight()
+                                                  : ImGui::GetTextLineHeight()),
                       ImGuiChildFlags_None,
                       ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoInputs);
 
@@ -409,11 +419,11 @@ ElidedText(const char* text, float available_width, float tooltip_width,
     }
     if(elide)
     {
-        ImGui::PushClipRect(ImGui::GetCursorScreenPos(),
-                            ImGui::GetCursorScreenPos() +
-                                ImVec2(available_width - scroll_bar_width - elide_size.x,
-                                       ImGui::GetFrameHeightWithSpacing()),
-                            true);
+        ImGui::PushClipRect(
+            ImGui::GetCursorScreenPos(),
+            ImGui::GetCursorScreenPos() +
+                ImVec2(available_width - elide_size.x, ImGui::GetFrameHeight()),
+            true);
     }
     else if(alignment == Alignment_Right)
     {
@@ -427,31 +437,30 @@ ElidedText(const char* text, float available_width, float tooltip_width,
     if(elide)
     {
         ImGui::PopClipRect();
-        ImGui::SameLine(available_width - scroll_bar_width - elide_size.x);
+        ImGui::SameLine();
+        ImGui::SetCursorPosX(available_width - elide_size.x);
         elide_pos = ImGui::GetCursorScreenPos();
         ImGui::TextUnformatted(" [...]");
     }
     ImGui::EndChild();
-    if(elide)
+    if(elide && tooltip_width > 0.0f)
     {
         ImGui::SetCursorScreenPos(elide_pos);
         ImGui::InvisibleButton("elide_hover", elide_size);
-        if(tooltip_width > 0.0f)
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
+                            settings.GetDefaultStyle().WindowPadding);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding,
+                            settings.GetDefaultStyle().FrameRounding);
+        if(ImGui::BeginItemTooltip())
         {
-            ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
-                                settings.GetDefaultIMGUIStyle().WindowPadding);
-            ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding,
-                                settings.GetDefaultStyle().FrameRounding);
-            if(ImGui::BeginItemTooltip())
-            {
-                ImGui::PushTextWrapPos(tooltip_width);
-                ImGui::TextWrapped("%s", text);
-                ImGui::PopTextWrapPos();
-                ImGui::EndTooltip();
-            }
-            ImGui::PopStyleVar(2);
+            ImGui::PushTextWrapPos(tooltip_width);
+            ImGui::TextWrapped("%s", text);
+            ImGui::PopTextWrapPos();
+            ImGui::EndTooltip();
         }
+        ImGui::PopStyleVar(2);
     }
+    return elide;
 }
 
 std::string
@@ -775,8 +784,12 @@ DrawInternalBuildBanner(const char* text /*= "Internal Build"*/)
 {
     if(!text || !*text) return;
 
-    ImDrawList*   dl   = ImGui::GetForegroundDrawList();
-    const ImVec2& disp = ImGui::GetIO().DisplaySize;
+    // Draw into the main viewport so the banner stays on the primary OS window
+    // instead of following whichever viewport is currently active.
+    ImGuiViewport* viewport = ImGui::GetMainViewport();
+    ImDrawList*    dl       = ImGui::GetForegroundDrawList(viewport);
+    const ImVec2&  vp_pos   = viewport->Pos;
+    const ImVec2&  vp_size  = viewport->Size;
 
     // Parameters. Scale with the font so the banner tracks ImGui's DPI font scaling.
     const float            ui_scale         = ImGui::GetFontSize() / BASE_DESIGN_FONT_SIZE;
@@ -803,7 +816,8 @@ DrawInternalBuildBanner(const char* text /*= "Internal Build"*/)
     const float half_thick = ribbon_thickness * 0.5f;
 
     // Center a rotated rectangle so it visually emerges from the top-right corner
-    ImVec2 center = ImVec2(disp.x - half_len * 0.5f, half_len * 0.5f);
+    ImVec2 center =
+        ImVec2(vp_pos.x + vp_size.x - half_len * 0.5f, vp_pos.y + half_len * 0.5f);
 
     // Axis‑aligned rect (local space before rotation)
     ImVec2 local[4] = { ImVec2(-half_len, -half_thick), ImVec2(half_len, -half_thick),

@@ -165,7 +165,6 @@ class KernelInstanceTable : public InfiniteScrollTable
 public:
     KernelInstanceTable(DataProvider&                      dp,
                         std::shared_ptr<TimelineSelection> timeline_selection);
-    void Update() override;
     void Render() override;
 
     void  ToggleSelectKernel(const std::string& kernel_name, const uint64_t* node_id,
@@ -174,17 +173,15 @@ public:
     float MinHeight() const;
 
 private:
+    void UpdateFetchParams(std::shared_ptr<TableRequestParams>& params) const override;
     void FormatData() const override;
     void IndexColumns() override;
     void RowSelected(const ImGuiMouseButton mouse_button) override;
-
-    void Fetch();
 
     std::string m_kernel_name;
     std::string m_where;
 
     bool m_fetched;
-    bool m_fetch_deferred;
 };
 
 }  // namespace View

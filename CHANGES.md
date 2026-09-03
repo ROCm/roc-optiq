@@ -34,6 +34,7 @@ Documentation for ROCm Optiq is available at [https://rocm.docs.amd.com/projects
 - Roofline single-click filtering for kernels, memory levels, and bandwidth peaks.
 - Roofline line-thickness preference.
 - Re-ordered top level tabs.
+- Added an ISA View for PC-sampled kernels, with optional source correlation and on-demand total, issue, and stall counts.
 
 ##### Rendering and performance
 

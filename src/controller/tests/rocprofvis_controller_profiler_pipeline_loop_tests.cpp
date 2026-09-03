@@ -440,6 +440,59 @@ TEST_CASE("Cancelling mid-pipeline abandons the later stages", "[profiler][pipel
     CHECK(status_of(controller, "trace_db") == kRPVProfilerScrapeStageSkipped);
 }
 
+TEST_CASE("Cancelling keeps what the stage had already reported", "[profiler][pipeline]")
+{
+    ScratchToolDir tool_dir(kRPVProfilerToolRocprofSysRun);
+    ScratchDir     cwd("cancel cwd");
+
+    // The path is relative, as rocprof-compute's "Created file:" is: turning it
+    // into something usable needs the stage's working directory, which is what
+    // ending the stage does. A cancelled capture has still written the file it
+    // named, so dropping the name loses a real artifact.
+    ProfilerStageSpec stage =
+        shell_stage("Capture", tool_dir, "echo \"Database: 'partial.db'\"; sleep 30");
+    stage.working_directory = cwd.Path();
+
+    ProfilerConfig config;
+    REQUIRE(config.AddStage(stage) == kRocProfVisResultSuccess);
+
+    ProfilerProcessController controller;
+    REQUIRE(controller.LaunchAsync(&config) == kRocProfVisResultSuccess);
+
+    std::thread monitor(
+        [&controller] { ProfilerProcessController::ExecuteJob(&controller, nullptr); });
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(200));
+    REQUIRE(controller.Cancel() == kRocProfVisResultSuccess);
+    monitor.join();
+
+    CHECK(controller.GetState() == kRPVProfilerStateCancelled);
+    CHECK(status_of(controller, "trace_db") == kRPVProfilerScrapeResolved);
+
+    std::string artifact;
+    REQUIRE(controller.GetArtifactPath(artifact) == kRocProfVisResultSuccess);
+    CHECK(artifact == (std::filesystem::path(cwd.Path()) / "partial.db").string());
+}
+
+TEST_CASE("Cancelling a finished run reports that there was nothing to stop",
+          "[profiler][pipeline]")
+{
+    ScratchToolDir tool_dir(kRPVProfilerToolRocprofSysRun);
+
+    ProfilerConfig config;
+    REQUIRE(config.AddStage(shell_stage("Only", tool_dir, "echo done")) ==
+            kRocProfVisResultSuccess);
+
+    ProfilerProcessController controller;
+    PipelineResult            run = run_pipeline(controller, config);
+    REQUIRE(run.state == kRPVProfilerStateCompleted);
+
+    // Separating this from a failure to stop is the point: the user clicked
+    // Cancel a moment too late, which is not an error to report.
+    CHECK(controller.Cancel() == kRocProfVisResultNotSupported);
+    CHECK(controller.GetState() == kRPVProfilerStateCompleted);
+}
+
 TEST_CASE("A completed run with nothing scraped reports no artifact",
           "[profiler][pipeline]")
 {

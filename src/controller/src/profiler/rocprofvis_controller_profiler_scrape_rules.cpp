@@ -51,12 +51,19 @@ constexpr RuleRow kComputeAnalyze[] = {
     {kKeyAnalysisDb, R"(Created file:\s*(\S.*?)\s*$)", 1, ScrapePolicy::kFirstMatch},
 };
 
-// rocprof-sys run and sample. Last match wins: the tool names the database
-// again when it finalizes, and the earlier mentions can be other files.
-// The second row is a bare-token sweep, reached only when the labelled form
-// never matched, so a wording change degrades instead of failing.
+// rocprof-sys run and sample. Last match wins within a row: the tool names the
+// database again when it finalizes, and the earlier mentions can be other
+// files.
+//
+// Row order is the preference order, and it is the same one the View's
+// ParseTraceOutputPath documents, so the two readers cannot pick different
+// files off the same log: the "Database:" log line first, then the Output
+// Summary box's "File:", then a bare-token sweep for a tool that labels
+// neither. Collapsing the first two into one alternation would let a later
+// summary line outrank the database line, which is the disagreement.
 constexpr RuleRow kRocprofSysTrace[] = {
-    {kKeyTraceDb, R"((?:Database:|File:)\s*'?([^\s'"]+\.db)\b)", 1, ScrapePolicy::kLastMatch},
+    {kKeyTraceDb, R"(Database:\s*'?([^\s'"]+\.db)\b)", 1, ScrapePolicy::kLastMatch},
+    {kKeyTraceDb, R"(File:\s*'?([^\s'"]+\.db)\b)", 1, ScrapePolicy::kLastMatch},
     {kKeyTraceDb, R"(([^\s'"]+\.db)\b)", 1, ScrapePolicy::kLastMatch},
 };
 

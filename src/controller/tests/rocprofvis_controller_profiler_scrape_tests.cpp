@@ -114,6 +114,29 @@ TEST_CASE("Scrape engine extracts compute and rocprof-sys fixtures", "[profiler]
     }
 }
 
+TEST_CASE("Output that arrives after a stage ends does not revise it", "[profiler][scrape]")
+{
+    ProfilerStageSpec stage;
+    stage.scrape_rules.push_back(make_rule("path", R"(Database:\s*(\S+))"));
+
+    ProfilerScrapeEngine engine;
+    REQUIRE(engine.Compile({stage}) == kRocProfVisResultSuccess);
+    engine.BeginStage(0);
+    engine.EndStage("");
+    REQUIRE(status_of(engine, "path") == kRPVProfilerScrapeUnmatched);
+
+    // A pipe still holds bytes after the process that wrote them is gone, so a
+    // drain can land after the stage was ended. Matching them would revise a
+    // verdict the caller may already have read, and after a cancel it would
+    // resolve a stage that was reported as abandoned.
+    engine.Feed("Database: /tmp/too-late.db\n");
+    CHECK(status_of(engine, "path") == kRPVProfilerScrapeUnmatched);
+
+    // Ending twice settles nothing further either.
+    engine.EndStage("");
+    CHECK(status_of(engine, "path") == kRPVProfilerScrapeUnmatched);
+}
+
 TEST_CASE("First-match vs last-match policy is applied within one rule", "[profiler][scrape]")
 {
     ProfilerStageSpec first_stage;
@@ -579,6 +602,29 @@ TEST_CASE("The shipped rocprof-sys rules read a real database line", "[profiler]
     // The labelled rule is listed first, so it wins over the bare sweep even
     // though the sweep also matched a later line.
     CHECK(value == "/tmp/real.db");
+}
+
+TEST_CASE("The shipped rocprof-sys rules prefer Database: over a later File:",
+          "[profiler][rules]")
+{
+    ProfilerStageSpec stage;
+    stage.tool = kRPVProfilerToolRocprofSysRun;
+    std::string artifact_key;
+    ProfilerScrapeRules::Apply(stage, artifact_key);
+
+    ProfilerScrapeEngine engine;
+    REQUIRE(engine.Compile({stage}) == kRocProfVisResultSuccess);
+    engine.BeginStage(0);
+    engine.Feed("[database][info] Database: /run/rocpd-1234-0.db\n");
+    engine.Feed("|  RocPD database  |  File: /run/summary-copy.db  |\n");
+    engine.EndStage("");
+
+    std::string value;
+    REQUIRE(engine.GetValue(artifact_key, value) == kRocProfVisResultSuccess);
+    // Same preference order the View's ParseTraceOutputPath documents. The two
+    // read the same log, so a tool that prints both labels must not lead them
+    // to different files.
+    CHECK(value == "/run/rocpd-1234-0.db");
 }
 
 TEST_CASE("The shipped compute rules read progress and the output directory",

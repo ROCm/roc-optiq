@@ -147,12 +147,7 @@ std::string SshProfilerExecutor::DrainBridgeOutput()
 std::string SshProfilerExecutor::ReadOutput()
 {
     std::lock_guard<std::mutex> lock(m_output_mutex);
-    std::string chunk = DrainBridgeOutput();
-    if (!chunk.empty())
-    {
-        m_output_buffer += chunk;
-    }
-    return chunk;
+    return DrainBridgeOutput();
 }
 
 int SshProfilerExecutor::GetExitCode() const

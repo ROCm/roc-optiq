@@ -167,8 +167,10 @@ private:
 
     std::atomic<bool> m_is_running;
     int m_exit_code;
+    // Serialises the pipe drain. The controller accumulates the text itself;
+    // keeping a second copy here would double a long run's output in memory
+    // for no reader.
     std::mutex m_output_mutex;
-    std::string m_output_buffer;
 };
 
 class ProfilerProcessController
@@ -268,6 +270,14 @@ private:
     std::string m_output_text;
     int m_exit_code;
     mutable std::mutex m_mutex;
+    /*
+     * Set by Cancel before it drops m_mutex to kill the child, and never
+     * cleared while that run is ending. It makes Cancel the sole owner of the
+     * ending: UpdateState stops finalising, so the stage cannot be settled
+     * twice, and no later stage can be started by a boundary that was already
+     * in flight when the user asked to stop.
+     */
+    std::atomic<bool> m_cancel_requested{false};
 
     std::vector<ProfilerStageSpec>           m_stages;
     std::vector<std::string>                 m_stage_tool_paths;

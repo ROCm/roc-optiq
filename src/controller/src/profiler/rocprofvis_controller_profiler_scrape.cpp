@@ -82,6 +82,7 @@ rocprofvis_result_t ProfilerScrapeEngine::Compile(std::vector<ProfilerStageSpec>
     m_slots.clear();
     m_remainder.clear();
     m_current_stage = 0;
+    m_stage_open    = false;
 
     m_rules.resize(stages.size());
 
@@ -181,11 +182,12 @@ void ProfilerScrapeEngine::BeginStage(uint32_t stage_index)
     m_remainder.clear();
     m_line_overflow = false;
     m_lines_skipped = 0;
+    m_stage_open    = true;
 }
 
 void ProfilerScrapeEngine::Feed(std::string const& chunk)
 {
-    if (chunk.empty() || m_current_stage >= m_rules.size())
+    if (chunk.empty() || !m_stage_open || m_current_stage >= m_rules.size())
     {
         return;
     }
@@ -338,6 +340,12 @@ void ProfilerScrapeEngine::match_line(std::string const& raw_line)
 
 void ProfilerScrapeEngine::EndStage(std::string const& working_directory)
 {
+    if (!m_stage_open)
+    {
+        return;
+    }
+    m_stage_open = false;
+
     if (!m_remainder.empty())
     {
         std::string line = m_remainder;

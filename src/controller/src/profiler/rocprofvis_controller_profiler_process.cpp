@@ -459,48 +459,43 @@ int LocalProfilerExecutor::GetExitCode() const
     return m_exit_code;
 }
 
+// Drain one pipe until it reports nothing pending. Reading a single buffer per
+// call would cap a stage at 4 KiB per poll and, worse, leave bytes behind after
+// the child exited: the caller ends the stage as soon as the process is gone,
+// so whatever is still in the pipe would never be read at all.
+static void read_pipe_available(HANDLE pipe, std::string& output)
+{
+    if (pipe == nullptr)
+    {
+        return;
+    }
+
+    char buffer[4096];
+    for (;;)
+    {
+        DWORD bytes_available = 0;
+        if (!PeekNamedPipe(pipe, nullptr, 0, nullptr, &bytes_available, nullptr) ||
+            bytes_available == 0)
+        {
+            return;
+        }
+
+        DWORD bytes_read = 0;
+        if (!ReadFile(pipe, buffer, sizeof(buffer), &bytes_read, nullptr) || bytes_read == 0)
+        {
+            return;
+        }
+        output.append(buffer, bytes_read);
+    }
+}
+
 std::string LocalProfilerExecutor::ReadOutput()
 {
     std::lock_guard<std::mutex> lock(m_output_mutex);
 
     std::string output;
-    DWORD bytes_available = 0;
-    char buffer[4096];
-
-    if (m_stdout_read_handle)
-    {
-        if (PeekNamedPipe(m_stdout_read_handle, nullptr, 0, nullptr, &bytes_available, nullptr))
-        {
-            if (bytes_available > 0)
-            {
-                DWORD bytes_read = 0;
-                if (ReadFile(m_stdout_read_handle, buffer, sizeof(buffer) - 1, &bytes_read, nullptr))
-                {
-                    buffer[bytes_read] = '\0';
-                    output += buffer;
-                }
-            }
-        }
-    }
-
-    if (m_stderr_read_handle)
-    {
-        bytes_available = 0;
-        if (PeekNamedPipe(m_stderr_read_handle, nullptr, 0, nullptr, &bytes_available, nullptr))
-        {
-            if (bytes_available > 0)
-            {
-                DWORD bytes_read = 0;
-                if (ReadFile(m_stderr_read_handle, buffer, sizeof(buffer) - 1, &bytes_read, nullptr))
-                {
-                    buffer[bytes_read] = '\0';
-                    output += buffer;
-                }
-            }
-        }
-    }
-
-    m_output_buffer += output;
+    read_pipe_available(m_stdout_read_handle, output);
+    read_pipe_available(m_stderr_read_handle, output);
     return output;
 }
 
@@ -740,24 +735,21 @@ std::string LocalProfilerExecutor::ReadOutput()
     if (m_stdout_fd != -1)
     {
         ssize_t bytes_read;
-        while ((bytes_read = read(m_stdout_fd, buffer, sizeof(buffer) - 1)) > 0)
+        while ((bytes_read = read(m_stdout_fd, buffer, sizeof(buffer))) > 0)
         {
-            buffer[bytes_read] = '\0';
-            output += buffer;
+            output.append(buffer, static_cast<size_t>(bytes_read));
         }
     }
 
     if (m_stderr_fd != -1)
     {
         ssize_t bytes_read;
-        while ((bytes_read = read(m_stderr_fd, buffer, sizeof(buffer) - 1)) > 0)
+        while ((bytes_read = read(m_stderr_fd, buffer, sizeof(buffer))) > 0)
         {
-            buffer[bytes_read] = '\0';
-            output += buffer;
+            output.append(buffer, static_cast<size_t>(bytes_read));
         }
     }
 
-    m_output_buffer += output;
     return output;
 }
 
@@ -806,8 +798,9 @@ rocprofvis_result_t ProfilerProcessController::PreparePipeline(bool resolve_tool
     m_stage_tool_paths.clear();
     m_stage_artifact_keys.clear();
     m_stage_states.clear();
-    m_current_stage = 0;
-    m_failing_stage = -1;
+    m_current_stage    = 0;
+    m_failing_stage    = -1;
+    m_cancel_requested = false;
 
     if (m_config->GetStages().empty())
     {
@@ -1145,33 +1138,77 @@ void ProfilerProcessController::ClearOutput()
 
 int ProfilerProcessController::GetExitCode() const
 {
+    // Written under m_mutex when a stage ends, read from the UI thread through
+    // the C ABI.
+    std::lock_guard<std::mutex> lock(m_mutex);
     return m_exit_code;
 }
 
 rocprofvis_result_t ProfilerProcessController::Cancel()
 {
+    IProfilerExecutor* executor = nullptr;
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
+
+        if (m_state != kRPVProfilerStateRunning || m_cancel_requested)
+        {
+            return kRocProfVisResultNotSupported;
+        }
+
+        if (!m_executor)
+        {
+            return kRocProfVisResultUnknownError;
+        }
+
+        m_cancel_requested = true;
+        executor           = m_executor.get();
+    }
+
+    /*
+     * Killing happens with m_mutex released. It is not quick: the executor
+     * gives the child a SIGTERM grace period and then blocks in waitpid, which
+     * a process stuck in a driver call does not leave promptly. GetOutput takes
+     * the same lock, so holding it here would freeze the console the user is
+     * watching for as long as the child takes to die.
+     *
+     * Reading the raw pointer outside the lock is safe because m_cancel_requested
+     * is already set: the only code that replaces m_executor is a stage
+     * boundary, and that now declines to start anything once cancel is
+     * requested.
+     */
+    bool const stopped = executor->Cancel();
+
     std::lock_guard<std::mutex> lock(m_mutex);
 
-    if (m_state != kRPVProfilerStateRunning)
+    if (!stopped)
     {
-        return kRocProfVisResultNotSupported;
+        // Nothing to kill - the child had already exited and been reaped. Hand
+        // the ending back to UpdateState, which will settle the stage normally.
+        m_cancel_requested = false;
+        return kRocProfVisResultUnknownError;
     }
 
-    if (m_executor && m_executor->Cancel())
-    {
-        if (m_current_stage < m_stage_states.size())
-        {
-            m_stage_states[m_current_stage] = kRPVProfilerStateCancelled;
-        }
-        // From this stage on, not just after it: the current stage is abandoned
-        // mid-flight, so whatever it had not yet printed is as unavailable as
-        // the stages that never start.
-        m_scrape.SkipRemainingFrom(m_current_stage);
-        m_state = kRPVProfilerStateCancelled;
-        return kRocProfVisResultSuccess;
-    }
+    // Whatever the child managed to print before it died is still real, and on
+    // POSIX the pipe outlives it. Draining and ending the stage here is what
+    // resolves those values against the stage's working directory; leaving it
+    // to UpdateState would not work, since it no longer finalises a cancelled
+    // run.
+    DrainExecutorLocked();
+    m_scrape.EndStage(m_stages[m_current_stage].working_directory);
 
-    return kRocProfVisResultUnknownError;
+    m_exit_code = executor->GetExitCode();
+
+    if (m_current_stage < m_stage_states.size())
+    {
+        m_stage_states[m_current_stage] = kRPVProfilerStateCancelled;
+    }
+    // The stages after this one never start, so nothing they declare can
+    // arrive. The current stage keeps what it scraped: a capture killed part
+    // way through still names the file it was writing, and that file is on
+    // disk.
+    m_scrape.SkipRemainingFrom(m_current_stage + 1);
+    m_state = kRPVProfilerStateCancelled;
+    return kRocProfVisResultSuccess;
 }
 
 void ProfilerProcessController::RelocateArtifactLocked(uint32_t stage_index)
@@ -1284,6 +1321,21 @@ void ProfilerProcessController::UpdateState()
     std::lock_guard<std::mutex> lock(m_mutex);
 
     if (m_state != kRPVProfilerStateRunning)
+    {
+        return;
+    }
+
+    /*
+     * Cancel is mid-flight, with m_mutex released while it kills the child. It
+     * ends the stage itself once the child is gone, so finalising here as well
+     * would settle the same stage twice and race the verdict.
+     *
+     * This is also what keeps a stage boundary from starting the next stage
+     * after the user has asked to stop: advancing only ever happens below, and
+     * Cancel can only set this flag while holding m_mutex, so a boundary is
+     * either committed before the cancel or abandoned by it, never both.
+     */
+    if (m_cancel_requested)
     {
         return;
     }

@@ -65,8 +65,8 @@ private:
     std::thread       m_worker;
     std::atomic<bool> m_is_running;
     std::atomic<int>  m_exit_code;
+    // Serialises the bridge drain. The controller accumulates the text itself.
     std::mutex        m_output_mutex;
-    std::string       m_output_buffer;
 };
 
 } // namespace Controller

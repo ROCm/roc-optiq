@@ -101,7 +101,13 @@ public:
     rocprofvis_result_t Compile(std::vector<ProfilerStageSpec> const& stages);
 
     void BeginStage(uint32_t stage_index);
+    // Ignored outside a BeginStage/EndStage pair. A pipe still holds bytes
+    // after the child that wrote them has exited, so a drain can land after
+    // the stage was ended; matching them would revise a verdict already
+    // reported, including turning a stage abandoned by Cancel back into a
+    // resolved one.
     void Feed(std::string const& chunk);
+    // Idempotent: settles every slot the stage declares, then closes it.
     void EndStage(std::string const& working_directory);
     void SkipRemainingFrom(uint32_t first_unstarted_stage);
 
@@ -160,6 +166,7 @@ private:
     // that never matched, which is the one case where it explains something.
     size_t                                              m_lines_skipped   = 0;
     uint32_t                                            m_current_stage   = 0;
+    bool                                                m_stage_open      = false;
     std::string*                                        m_diagnostic_sink = nullptr;
 };
 

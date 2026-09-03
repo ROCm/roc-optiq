@@ -3,11 +3,13 @@
 
 #pragma once
 #include "model/rocprofvis_model_types.h"
+#include "model/rocprofvis_topology_model.h"
 #include "rocprofvis_event_manager.h"
 #include "widgets/rocprofvis_gui_helpers.h"
 #include "widgets/rocprofvis_widget.h"
 #include <list>
 #include <string>
+#include <vector>
 
 namespace RocProfVis
 {
@@ -16,20 +18,50 @@ namespace View
 
 class DataProvider;
 class SettingsManager;
-class TrackTopology;
 class TimelineSelection;
-struct NodeModel;
-struct ProcessModel;
-struct ProcessorModel;
-struct IterableModel;
-struct StreamModel;
-struct InfoTable;
+
+/*
+ * Two-column property table for one topology node. Built per selected track,
+ * so it covers the handful of tracks the pane actually shows rather than the
+ * whole trace.
+ */
+struct DetailsTable
+{
+    struct Cell
+    {
+        /*
+         * A kText cell renders data verbatim. Every other kind holds its raw
+         * magnitude in value and renders formatted, which is derived from
+         * value whenever the unit settings change.
+         */
+        enum class Kind
+        {
+            kText,
+            kTimeNs
+        };
+
+        std::string data;
+        bool        expand = false;
+        Kind        kind   = Kind::kText;
+        double      value  = 0.0;
+        std::string formatted{};
+
+        static Cell Time(double time_ns)
+        {
+            Cell cell;
+            cell.kind  = Kind::kTimeNs;
+            cell.value = time_ns;
+            return cell;
+        }
+    };
+
+    std::vector<std::vector<Cell>> cells;
+};
 
 class TrackDetails : public RocWidget
 {
 public:
-    TrackDetails(DataProvider& dp, std::shared_ptr<TrackTopology> topology,
-                 std::shared_ptr<TimelineSelection> timeline_selection);
+    TrackDetails(DataProvider& dp, std::shared_ptr<TimelineSelection> timeline_selection);
     ~TrackDetails();
     virtual void Render() override;
     virtual void Update() override;
@@ -43,18 +75,20 @@ private:
     {
         struct Parents
         {
-            NodeModel*    node;
-            ProcessModel* process;
-            bool          expand;
+            const NodeInfo*    node    = nullptr;
+            const ProcessInfo* process = nullptr;
+            bool               expand  = false;
         };
 
         const uint64_t                 track_id;
-        TrackInfo::TrackType           track_type;
+        TrackInfo::TrackType           track_type = TrackInfo::TrackType::Unknown;
         std::string                    track_name;
         Parents                        parents;
-        IterableModel*                 track;
-        StreamModel*                   stream_track;
-        const AnalysisTrackStatistics* stats;
+        const TopologyNode*            track = nullptr;
+        DetailsTable                   node_table;
+        DetailsTable                   process_table;
+        DetailsTable                   track_table;
+        const AnalysisTrackStatistics* stats = nullptr;
 
         bool operator==(const DetailItem& other) const
         {
@@ -62,10 +96,15 @@ private:
         }
     };
 
-    void RenderTable(InfoTable& table, const char* table_id,
+    void Resolve(DetailItem& item, const TrackInfo& metadata);
+    void BuildTables(DetailItem& item);
+    // Rebuilds the display string of the item's valued cells from the current
+    // unit settings.
+    void FormatValueCells(DetailItem& item);
+
+    void RenderTable(DetailsTable& table, const char* table_id,
                      const AnalysisTrackStatistics* = nullptr);
 
-    std::shared_ptr<TrackTopology>     m_track_topology;
     DataProvider&                      m_data_provider;
     std::shared_ptr<TimelineSelection> m_timeline_selection;
     SettingsManager&                   m_settings;
@@ -73,9 +112,11 @@ private:
     std::list<DetailItem>              m_track_details;
     bool                               m_data_valid;
     CellMenuTarget                     m_cell_menu;
+    // Revision of the topology tree the resolved items point into.
+    uint64_t                           m_topology_revision;
 
-    EventManager::SubscriptionToken m_topology_changed_event_token;
     EventManager::SubscriptionToken m_track_metadata_changed_event_token;
+    EventManager::SubscriptionToken m_time_format_changed_token;
 };
 
 }  // namespace View

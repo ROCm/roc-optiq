@@ -18,7 +18,6 @@
 #include "rocprofvis_summary_view.h"
 #include "rocprofvis_timeline_selection.h"
 #include "rocprofvis_timeline_view.h"
-#include "rocprofvis_track_topology.h"
 #include "rocprofvis_utils.h"
 #include "spdlog/spdlog.h"
 #include "widgets/rocprofvis_dialog.h"
@@ -40,7 +39,6 @@ TraceView::TraceView()
 , m_show_minimap_popup(false)
 , m_timeline_selection(nullptr)
 , m_measurement(std::make_shared<MeasurementController>())
-, m_track_topology(nullptr)
 , m_popup_info({ false, "", "" })
 , m_tabselected_event_token(EventManager::InvalidSubscriptionToken)
 , m_event_selection_changed_event_token(EventManager::InvalidSubscriptionToken)
@@ -252,9 +250,9 @@ TraceView::Update()
     {
         m_timeline_view->Update();
     }
-    if(m_track_topology)
+    if(m_sidebar_item && m_sidebar_item->m_item)
     {
-        m_track_topology->Update();
+        m_sidebar_item->m_item->Update();
     }
     if(m_analysis_item->m_item)
     {
@@ -281,21 +279,18 @@ TraceView::CreateView()
         std::make_shared<AnnotationsManager>(m_data_provider.GetTraceFilePath());
     m_measurement          = std::make_shared<MeasurementController>();
     m_timeline_selection    = std::make_shared<TimelineSelection>(m_data_provider);
-    m_track_topology        = std::make_shared<TrackTopology>(m_data_provider);
     m_timeline_view         = std::make_shared<TimelineView>(m_data_provider,
                                                              m_timeline_selection,
                                                              m_measurement, m_annotations);
-    m_timeline_view->SetTopologyOrder(&m_track_topology->GetTrackIdsInTreeOrder());
     m_summary_view = std::make_shared<SummaryView>(m_data_provider, m_timeline_selection);
     m_event_search = std::make_shared<EventSearch>(m_data_provider, m_timeline_selection);
     m_minimap               = std::make_shared<Minimap>(m_data_provider, m_timeline_view.get());
     auto m_histogram_widget = std::make_shared<RocCustomWidget>(
         [this]() { m_timeline_view->RenderHeader(); });
 
-    auto sidebar =
-        std::make_shared<SideBar>(m_track_topology, m_timeline_selection,
-                                  m_timeline_view->GetTracks(), m_data_provider);
-    auto analysis = std::make_shared<AnalysisView>(m_data_provider, m_track_topology,
+    auto sidebar = std::make_shared<SideBar>(
+        m_timeline_selection, m_timeline_view->GetTracks(), m_data_provider);
+    auto analysis = std::make_shared<AnalysisView>(m_data_provider,
                                                    m_timeline_selection, m_annotations);
 
     m_sidebar_item            = LayoutItem::CreateFromWidget(sidebar);

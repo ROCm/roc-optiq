@@ -3,6 +3,7 @@
 
 #include "rocprofvis_sidebar.h"
 #include "icons/rocprovfis_icon_defines.h"
+#include "model/rocprofvis_topology_model.h"
 #include "widgets/rocprofvis_gui_helpers.h"
 #include "rocprofvis_data_provider.h"
 #include "rocprofvis_events.h"
@@ -10,6 +11,7 @@
 #include "rocprofvis_track_item.h"
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_timeline_selection.h"
+#include "spdlog/spdlog.h"
 
 #include <cmath>
 #include <unordered_set>
@@ -28,6 +30,8 @@ constexpr float MENU_PAD_Y  = 6.0f;
 // ImGui offsets a framed tree node's label by FontSize + FramePadding.x * this
 // factor (see TreeNodeBehavior); used to place the inline device lead arrow.
 constexpr float FRAMED_LABEL_PAD_MULT = 3.0f;
+// Lead-arrow slot width used if the font reports a zero-width space.
+constexpr int DEFAULT_LEAD_ARROW_PAD = 2;
 
 // Matches TimelineSelection::HIGHLIGHT_TIMEOUT_S so reveal and "go to event"
 // pulse for the same duration.
@@ -58,6 +62,190 @@ DrawTreeArrow(ImDrawList* draw_list, float cx, float cy, float font_size, bool o
                                      ImVec2(cx - 0.75f * r, cy - 0.866f * r), col);
     }
 }
+
+namespace
+{
+
+TreeNode*
+AddBranchNode(TreeNode* parent, NodeType type, const std::string& label,
+              bool collapsable = true, bool show_eye_button = true)
+{
+    auto node             = std::make_unique<TreeNode>(type, label, collapsable);
+    node->show_eye_button = show_eye_button;
+    return parent->AddChild(std::move(node));
+}
+
+/*
+ * Adds a row for one track. The topology name wins when it has one; tracks
+ * that only exist on the timeline (the uncategorized list) fall back to the
+ * name the timeline gave them.
+ */
+LeafNode*
+AddLeafNode(TreeNode* parent, uint64_t track_id, const std::string& topology_label,
+            const TimelineModel& timeline, bool render_children_inline = false)
+{
+    std::string label = topology_label;
+    if(label.empty())
+    {
+        const TrackInfo* track = timeline.GetTrack(track_id);
+        if(track)
+        {
+            label = track->main_name;
+        }
+    }
+
+    auto leaf                    = std::make_unique<LeafNode>(label, track_id);
+    leaf->render_children_inline = render_children_inline;
+    LeafNode* raw                = leaf.get();
+    parent->AddChild(std::move(leaf));
+    return raw;
+}
+
+void
+BuildLeafList(TreeNode* parent, NodeType type, const std::string& label,
+              const std::vector<TopologyNode*>& items, const TimelineModel& timeline,
+              bool show_list_header)
+{
+    if(items.empty())
+    {
+        return;
+    }
+
+    TreeNode* target = parent;
+    if(show_list_header)
+    {
+        target = AddBranchNode(parent, type, label);
+    }
+    for(const TopologyNode* item : items)
+    {
+        AddLeafNode(target, item->GetTrackId(), item->GetName(), timeline);
+    }
+}
+
+/*
+ * Builds a processor subtree. Queues are passed in rather than read from the
+ * processor because a processor shown under a stream lists only the queues that
+ * stream dispatched to.
+ *
+ * In that inline position show_controls is false: the row becomes a plain
+ * "GPU0" lead-in with no eye button and no intermediate list headers, and
+ * breaks_visibility_chain isolates it from ancestor bulk-visibility toggles.
+ */
+void
+BuildProcessorBranch(TreeNode* parent, const ProcessorInfo& processor,
+                     const std::vector<TopologyNode*>& queues,
+                     const std::vector<TopologyNode*>& counters,
+                     const TimelineModel& timeline, bool show_controls,
+                     bool breaks_chain = false)
+{
+    const std::string label =
+        show_controls ? processor.GetHeader()
+                      : TopologyTree::GetProcessorTypeName(processor.type) +
+                            std::to_string(processor.type_index);
+
+    TreeNode* node =
+        AddBranchNode(parent, NodeType::kProcessor, label, true, show_controls);
+    node->breaks_visibility_chain = breaks_chain;
+    node->show_lead_arrow         = !show_controls;
+
+    BuildLeafList(node, NodeType::kQueueList,
+                  "Queues (" + std::to_string(queues.size()) + ")", queues, timeline,
+                  show_controls);
+    BuildLeafList(node, NodeType::kCounterList,
+                  "Counters (" + std::to_string(counters.size()) + ")", counters,
+                  timeline, show_controls);
+}
+
+void
+BuildProcessBranch(TreeNode* parent, const ProcessInfo& process,
+                   const TimelineModel& timeline)
+{
+    TreeNode* process_node =
+        AddBranchNode(parent, NodeType::kProcess, process.GetHeader());
+
+    const std::vector<TopologyNode*>& streams =
+        process.GetChildren(TopologyNodeType::kStream);
+    if(!streams.empty())
+    {
+        TreeNode* stream_list =
+            AddBranchNode(process_node, NodeType::kStreamList,
+                          "Streams (" + std::to_string(streams.size()) + ")");
+        for(const TopologyNode* stream : streams)
+        {
+            const std::vector<TopologyNode*>& stream_processors =
+                stream->GetLinkedChildren(TopologyNodeType::kProcessor);
+            const std::vector<TopologyNode*>& stream_queues =
+                stream->GetLinkedChildren(TopologyNodeType::kQueue);
+
+            LeafNode* stream_leaf =
+                AddLeafNode(stream_list, stream->GetTrackId(), stream->GetName(),
+                            timeline, !stream_processors.empty());
+
+            for(const TopologyNode* node : stream_processors)
+            {
+                const ProcessorInfo& processor =
+                    static_cast<const ProcessorInfo&>(*node);
+                std::vector<TopologyNode*> queues;
+                for(TopologyNode* queue : stream_queues)
+                {
+                    if(queue->GetParent() == &processor)
+                    {
+                        queues.push_back(queue);
+                    }
+                }
+                BuildProcessorBranch(stream_leaf, processor, queues, {}, timeline,
+                                     false, true);
+            }
+        }
+    }
+
+    std::vector<TopologyNode*> instrumented;
+    std::vector<TopologyNode*> sampled;
+    for(TopologyNode* node : process.GetChildren(TopologyNodeType::kThread))
+    {
+        const ThreadInfo& thread = static_cast<const ThreadInfo&>(*node);
+        if(thread.kind == ThreadInfo::Kind::kInstrumented)
+        {
+            instrumented.push_back(node);
+        }
+        else
+        {
+            sampled.push_back(node);
+        }
+    }
+
+    BuildLeafList(process_node, NodeType::kInstrumentedThreadList,
+                  "Threads (" + std::to_string(instrumented.size()) + ")", instrumented,
+                  timeline, true);
+    BuildLeafList(process_node, NodeType::kSampledThreadList,
+                  "Sampled Threads (" + std::to_string(sampled.size()) + ")", sampled,
+                  timeline, true);
+}
+
+/*
+ * Collects the track ids that already have a row. A set, because a track can
+ * legitimately appear more than once - a queue sits under its processor and
+ * again under every stream that dispatched to it. The walk recurses through
+ * leaves as well: a stream row carries its inline processor subtree.
+ */
+void
+CollectLeafTrackIds(const TreeNode* node, std::unordered_set<uint64_t>& out)
+{
+    if(node == nullptr)
+    {
+        return;
+    }
+    if(node->IsLeaf())
+    {
+        out.insert(static_cast<const LeafNode*>(node)->track_id);
+    }
+    for(const std::unique_ptr<TreeNode>& child : node->children)
+    {
+        CollectLeafTrackIds(child.get(), out);
+    }
+}
+
+}  // namespace
 
 class TreeConnector
 {
@@ -90,28 +278,34 @@ private:
     float       m_prev_y     = 0;
 };
 
-SideBar::SideBar(std::shared_ptr<TrackTopology>         topology,
-                 std::shared_ptr<TimelineSelection>     timeline_selection,
+SideBar::SideBar(std::shared_ptr<TimelineSelection>       timeline_selection,
                  std::shared_ptr<std::vector<TrackItem*>> tracks,
-                 DataProvider&                          dp)
+                 DataProvider&                           dp)
 : m_settings(SettingsManager::GetInstance())
-, m_track_topology(topology)
 , m_timeline_selection(timeline_selection)
 , m_tracks(tracks)
 , m_data_provider(dp)
 , m_active_node_color(0)
 , m_track_visibility_token(EventManager::InvalidSubscriptionToken)
+, m_metadata_changed_token(EventManager::InvalidSubscriptionToken)
 {
     m_track_visibility_token = EventManager::GetInstance()->Subscribe(
         static_cast<int>(RocEvents::kTrackVisibilityChanged),
         [this](std::shared_ptr<RocEvent> e) {
             if(e && e->GetSourceId() == m_data_provider.GetTraceFilePath())
             {
-                const SidebarTree& sidebar_tree = m_track_topology->GetSidebarTree();
-                if(sidebar_tree.root)
+                if(m_sidebar_tree.root)
                 {
-                    InvalidateEyeStateCache(*sidebar_tree.root);
+                    InvalidateEyeStateCache(*m_sidebar_tree.root);
                 }
+            }
+        });
+    m_metadata_changed_token = EventManager::GetInstance()->Subscribe(
+        static_cast<int>(RocEvents::kTrackMetadataChanged),
+        [this](std::shared_ptr<RocEvent> e) {
+            if(e && e->GetSourceId() == m_data_provider.GetTraceFilePath())
+            {
+                m_rebuild_pending = true;
             }
         });
     m_reveal_track_token = EventManager::GetInstance()->Subscribe(
@@ -123,6 +317,8 @@ SideBar::~SideBar()
 {
     EventManager::GetInstance()->Unsubscribe(
         static_cast<int>(RocEvents::kTrackVisibilityChanged), m_track_visibility_token);
+    EventManager::GetInstance()->Unsubscribe(
+        static_cast<int>(RocEvents::kTrackMetadataChanged), m_metadata_changed_token);
     EventManager::GetInstance()->Unsubscribe(
         static_cast<int>(RocEvents::kRevealTrackInTopology), m_reveal_track_token);
 }
@@ -181,6 +377,24 @@ SideBar::BuildRevealPath(const TreeNode& node, bool in_processors)
     return contains_match;
 }
 
+/*
+ * Width of the lead-arrow slot, in spaces of the current font. Depends only on
+ * the font and style, so one measurement serves every row in the frame.
+ */
+int
+SideBar::MeasureLeadArrowPad() const
+{
+    ImGui::PushFont(m_settings.GetFontManager().GetFont(FontType::kIcon), 0.0f);
+    const float arrow_w = ImGui::CalcTextSize(ICON_ARROW_FORWARD).x;
+    ImGui::PopFont();
+
+    const float gap     = ImGui::GetStyle().ItemInnerSpacing.x;
+    const float space_w = ImGui::CalcTextSize(" ").x;
+    // Rounded up, so the glyph always clears the start of the label.
+    return (space_w > 0.0f) ? static_cast<int>((arrow_w + gap) / space_w) + 1
+                            : DEFAULT_LEAD_ARROW_PAD;
+}
+
 void
 SideBar::DrawRevealPulse(const ImVec2& row_min, const ImVec2& row_max) const
 {
@@ -202,9 +416,9 @@ SideBar::DrawRevealPulse(const ImVec2& row_min, const ImVec2& row_max) const
 void
 SideBar::Render()
 {
-    if(!m_track_topology->Dirty())
+    if(m_sidebar_tree.root)
     {
-        const SidebarTree& sidebar_tree = m_track_topology->GetSidebarTree();
+        const SidebarTree& sidebar_tree = m_sidebar_tree;
         if(m_reveal_active)
         {
             double elapsed = std::chrono::duration<double>(
@@ -243,6 +457,11 @@ SideBar::Render()
         ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding,
                             m_settings.GetDefaultStyle().FrameRounding);
         ImGui::PushStyleVar(ImGuiStyleVar_IndentSpacing, 14.0f);
+
+        // Derived from the font and style, so it is the same for every row.
+        // Measured here, after the style is pushed, rather than per branch node.
+        m_lead_arrow_pad = MeasureLeadArrowPad();
+
         ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(0, 0, 0, 0));
         ImGui::PushStyleColor(ImGuiCol_HeaderHovered,
                               ImGui::ColorConvertU32ToFloat4(
@@ -297,19 +516,169 @@ SideBar::Render()
 
 void
 SideBar::Update()
-{}
-
-void
-SideBar::RenderTrackItem(const uint64_t& index, bool show_eye_button)
 {
-    if(!m_tracks || index >= m_tracks->size() || !(*m_tracks)[index])
+    if(m_data_provider.GetState() != ProviderState::kReady)
     {
         return;
     }
 
-    TrackItem&       track = *(*m_tracks)[index];
+    const uint64_t revision =
+        m_data_provider.DataModel().GetTopology().GetRevision();
+    if(revision == m_built_revision && !m_rebuild_pending)
+    {
+        return;
+    }
+
+    BuildTree();
+    m_built_revision  = revision;
+    m_rebuild_pending = false;
+}
+
+void
+SideBar::BuildTree()
+{
+    m_sidebar_tree = {};
+    // The reveal state holds node pointers into the tree being replaced.
+    m_reveal_path.clear();
+    m_reveal_leaf               = nullptr;
+    m_reveal_leaf_in_processors = false;
+
+    auto root             = std::make_unique<TreeNode>(NodeType::kRoot, "Project", true);
+    root->show_eye_button = false;
+
+    TreeNode*            root_node = root.get();
+    const TopologyTree&  topology  = m_data_provider.DataModel().GetTopology();
+    const TimelineModel& timeline  = m_data_provider.DataModel().GetTimeline();
+
+    const std::vector<TopologyNode*>& nodes = topology.GetNodes();
+    if(!nodes.empty())
+    {
+        TreeNode* node_list =
+            AddBranchNode(root_node, NodeType::kNodeList,
+                          "Nodes (" + std::to_string(nodes.size()) + ")");
+        const bool multi_node = nodes.size() > 1;
+
+        for(const TopologyNode* node : nodes)
+        {
+            const NodeInfo&   node_info  = static_cast<const NodeInfo&>(*node);
+            const size_t      node_index = node_info.display_index;
+            const std::string node_label =
+                (multi_node && node_index > 0)
+                    ? "[" + std::to_string(node_index) + "] " + node_info.host_name
+                    : node_info.host_name;
+
+            TreeNode* node_branch =
+                AddBranchNode(node_list, NodeType::kNode, node_label);
+            if(multi_node && node_index > 0)
+            {
+                const size_t wheel_size = m_settings.GetColorWheel().size();
+                node_branch->show_color_swatch = true;
+                node_branch->color_index = wheel_size ? (node_index - 1) % wheel_size : 0;
+            }
+
+            const std::vector<TopologyNode*>& processors =
+                node_info.GetChildren(TopologyNodeType::kProcessor);
+            if(!processors.empty())
+            {
+                TreeNode* processor_list = AddBranchNode(
+                    node_branch, NodeType::kProcessorList,
+                    "Processors (" + std::to_string(processors.size()) + ")");
+                for(const TopologyNode* processor : processors)
+                {
+                    BuildProcessorBranch(
+                        processor_list, static_cast<const ProcessorInfo&>(*processor),
+                        processor->GetChildren(TopologyNodeType::kQueue),
+                        processor->GetChildren(TopologyNodeType::kCounter), timeline,
+                        true);
+                }
+            }
+
+            const std::vector<TopologyNode*>& processes =
+                node_info.GetChildren(TopologyNodeType::kProcess);
+            if(!processes.empty())
+            {
+                TreeNode* process_list =
+                    AddBranchNode(node_branch, NodeType::kProcessList,
+                                  "Processes (" + std::to_string(processes.size()) + ")");
+                for(const TopologyNode* process : processes)
+                {
+                    BuildProcessBranch(process_list,
+                                       static_cast<const ProcessInfo&>(*process),
+                                       timeline);
+                }
+            }
+        }
+    }
+
+    /*
+     * Every track needs at least one row. Bucket on "the walk emitted no row for
+     * it" rather than on track type: a track can be typed (Queue, Stream, ...)
+     * and still have none, because its queue or processor was unreachable during
+     * the load walk, so keying off the type would drop it entirely.
+     */
+    std::unordered_set<uint64_t> placed;
+    CollectLeafTrackIds(root_node, placed);
+
+    std::vector<const TrackInfo*>       uncategorized;
+    const std::vector<const TrackInfo*> track_list = timeline.GetTrackList();
+    for(const TrackInfo* track : track_list)
+    {
+        if(track == nullptr || placed.count(track->id) > 0)
+        {
+            continue;
+        }
+        if(track->topology.type != TrackInfo::TrackType::Unknown)
+        {
+            spdlog::debug("Sidebar: track {} is typed {} but the topology tree has "
+                          "no node bound to it; listing it as uncategorized",
+                          track->id, static_cast<int>(track->topology.type));
+        }
+        uncategorized.push_back(track);
+    }
+    if(!uncategorized.empty())
+    {
+        TreeNode* uncategorized_list =
+            AddBranchNode(root_node, NodeType::kUncategorizedList, "Uncategorized",
+                          !nodes.empty(), false);
+        for(const TrackInfo* track : uncategorized)
+        {
+            AddLeafNode(uncategorized_list, track->id, "", timeline);
+        }
+    }
+
+    m_sidebar_tree.root = std::move(root);
+}
+
+TrackItem*
+SideBar::TrackFromMetadata(const TrackInfo* info) const
+{
+    if(!info || !m_tracks || info->index >= m_tracks->size())
+    {
+        return nullptr;
+    }
+    TrackItem* track = (*m_tracks)[info->index];
+    return (track && track->GetID() == info->id) ? track : nullptr;
+}
+
+TrackItem*
+SideBar::FindTrack(const uint64_t& track_id) const
+{
+    return TrackFromMetadata(
+        m_data_provider.DataModel().GetTimeline().GetTrack(track_id));
+}
+
+void
+SideBar::RenderTrackItem(const uint64_t& track_id, bool show_eye_button)
+{
     const TrackInfo* track_info =
-        m_data_provider.DataModel().GetTimeline().GetTrack(track.GetID());
+        m_data_provider.DataModel().GetTimeline().GetTrack(track_id);
+    TrackItem*       item = TrackFromMetadata(track_info);
+    if(!item)
+    {
+        return;
+    }
+
+    TrackItem& track = *item;
 
     // Compact mode drops the row buttons entirely; the context menu below still
     // toggles visibility and goes to the track.
@@ -402,7 +771,7 @@ SideBar::RenderTrackItem(const uint64_t& index, bool show_eye_button)
         }
         if(ImGui::MenuItem("Hide All But This Track"))
         {
-            HideAllButTrack(index);
+            HideAllButTrack(track_id);
         }
 
         ImGui::Separator();
@@ -446,21 +815,20 @@ SideBar::SetTrackVisibility(TrackItem& track, bool visible)
 }
 
 void
-SideBar::HideAllButTrack(const uint64_t& index)
+SideBar::HideAllButTrack(const uint64_t& track_id)
 {
-    if(!m_tracks || index >= m_tracks->size())
+    if(!m_tracks)
     {
         return;
     }
 
-    for(uint64_t i = 0; i < m_tracks->size(); ++i)
+    for(TrackItem* track : *m_tracks)
     {
-        TrackItem* track = (*m_tracks)[i];
         if(!track)
         {
             continue;
         }
-        SetTrackVisibility(*track, i == index);
+        SetTrackVisibility(*track, track->GetID() == track_id);
     }
     EventManager::GetInstance()->AddEvent(
         std::make_shared<RocEvent>(static_cast<int>(RocEvents::kTrackVisibilityChanged),
@@ -541,14 +909,14 @@ SideBar::MergeEyeButtonState(EyeButtonState lhs, EyeButtonState rhs) const
 SideBar::EyeButtonState
 SideBar::GetLeafState(const LeafNode& leaf) const
 {
-    if(!m_tracks || leaf.graph_index >= m_tracks->size())
+    const TrackItem* track = FindTrack(leaf.track_id);
+    if(!track)
     {
         return EyeButtonState::kAllHidden;
     }
 
-    return (*m_tracks)[leaf.graph_index]->IsDisplayed()
-               ? EyeButtonState::kAllVisible
-               : EyeButtonState::kAllHidden;
+    return track->IsDisplayed() ? EyeButtonState::kAllVisible
+                                : EyeButtonState::kAllHidden;
 }
 
 SideBar::EyeButtonState
@@ -609,7 +977,7 @@ SideBar::ApplyVisibility(const TreeNode& node, bool visible)
         return;
     }
 
-    std::unordered_set<uint64_t> visited_graphs;
+    std::unordered_set<uint64_t> visited_tracks;
     std::vector<const TreeNode*> stack = { &node };
 
     while(!stack.empty())
@@ -631,10 +999,9 @@ SideBar::ApplyVisibility(const TreeNode& node, bool visible)
         if(current->IsLeaf())
         {
             const LeafNode& leaf = static_cast<const LeafNode&>(*current);
-            if(leaf.graph_index < m_tracks->size() &&
-               visited_graphs.insert(leaf.graph_index).second)
+            if(visited_tracks.insert(leaf.track_id).second)
             {
-                TrackItem* track = (*m_tracks)[leaf.graph_index];
+                TrackItem* track = FindTrack(leaf.track_id);
                 if(track && track->IsDisplayed() != visible)
                 {
                     track->SetDisplay(visible);
@@ -666,7 +1033,7 @@ SideBar::RenderLeafNode(const LeafNode& leaf)
         m_reveal_active && leaf.track_id == m_reveal_track_id;
     const ImVec2 row_min          = ImGui::GetCursorScreenPos();
 
-    RenderTrackItem(leaf.graph_index, leaf.show_eye_button);
+    RenderTrackItem(leaf.track_id, leaf.show_eye_button);
 
     if(is_reveal_match)
     {
@@ -723,40 +1090,26 @@ SideBar::RenderBranchNode(const TreeNode& node, const TreeNode* state_node,
         }
         const ImVec2 node_pos = ImGui::GetCursorScreenPos();
 
-        // Lead arrow: pad the label to open a slot after the chevron, then draw
-        // the glyph at the label's start (keeps the chevron in place).
-        std::string display_label   = node.label;
-        ImFont*     lead_arrow_font = nullptr;
-        float       lead_arrow_size = 0.0f;
-        float       lead_arrow_x    = 0.0f;
+        /*
+         * Lead arrow: blank out a slot after the chevron with %*s, then draw the
+         * glyph into it. The icon font is a separate ImFont rather than a range
+         * merged into the text font (merging rendered corrupted glyphs on
+         * Linux), so the arrow cannot just be part of the label string.
+         */
+        const int pad = node.show_lead_arrow ? m_lead_arrow_pad : 0;
+        open = ImGui::TreeNodeEx(node.label.c_str(), HEADER_FLAGS, "%*s%s", pad, "",
+                                 node.label.c_str());
+
         if(node.show_lead_arrow)
         {
-            ImFont* icon_font = m_settings.GetFontManager().GetFont(FontType::kIcon);
-            ImGui::PushFont(icon_font, 0.0f);
-            const float arrow_w = ImGui::CalcTextSize(ICON_ARROW_FORWARD).x;
-            lead_arrow_font     = icon_font;
-            lead_arrow_size     = ImGui::GetFontSize();
-            ImGui::PopFont();
-
-            const float gap     = ImGui::GetStyle().ItemInnerSpacing.x;
-            const float space_w = ImGui::CalcTextSize(" ").x;
-            const int   pad =
-                (space_w > 0.0f) ? static_cast<int>((arrow_w + gap) / space_w) + 1 : 2;
-            display_label.insert(0, static_cast<size_t>(pad), ' ');
-            lead_arrow_x = node_pos.x + ImGui::GetFontSize() +
-                           ImGui::GetStyle().FramePadding.x * FRAMED_LABEL_PAD_MULT;
-        }
-
-        open = ImGui::TreeNodeEx(node.label.c_str(), HEADER_FLAGS, "%s",
-                                 display_label.c_str());
-
-        if(lead_arrow_font)
-        {
+            ImFont*     icon_font = m_settings.GetFontManager().GetFont(FontType::kIcon);
+            const float arrow_size = ImGui::GetFontSize();
+            const float arrow_x    = node_pos.x + arrow_size +
+                                  ImGui::GetStyle().FramePadding.x * FRAMED_LABEL_PAD_MULT;
             const float cy =
                 (ImGui::GetItemRectMin().y + ImGui::GetItemRectMax().y) * 0.5f;
             ImGui::GetWindowDrawList()->AddText(
-                lead_arrow_font, lead_arrow_size,
-                ImVec2(lead_arrow_x, cy - lead_arrow_size * 0.5f),
+                icon_font, arrow_size, ImVec2(arrow_x, cy - arrow_size * 0.5f),
                 ImGui::GetColorU32(ImGuiCol_Text), ICON_ARROW_FORWARD);
         }
 

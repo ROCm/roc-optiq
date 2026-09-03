@@ -725,16 +725,16 @@ TrackItem::FetchHelper()
 void
 TrackItem::SetDefaultPillLabel(const TrackInfo* track_info)
 {
-    TopologyDataModel& tdm = m_data_provider.DataModel().GetTopology();
+    TopologyTree& tdm = m_data_provider.DataModel().GetTopology();
 
-    // Get Processor (device) type label from using track's agent_or_pid, ex: "GPU0".
-    // The associated device in topology is unreliable, so we use agent_or_pid to find the
-    // device. This may be empty for some tracks.
-    std::string       device_type_label;
-    const DeviceInfo* device_info = tdm.GetDevice(track_info->agent_or_pid);
-    if(device_info)
+    // Processor type label from the track's agent_or_pid, ex: "GPU0". The
+    // processor the topology associates with the track is unreliable here, hence
+    // the id lookup. Stays empty when no processor matches.
+    std::string          device_type_label;
+    const ProcessorInfo* processor_info = tdm.GetProcessor(track_info->agent_or_pid);
+    if(processor_info)
     {
-        tdm.GetDeviceTypeLabel(*device_info, device_type_label);
+        tdm.GetProcessorTypeLabel(*processor_info, device_type_label);
     }
     Pill* pill = AddPill(true, false);
     switch(track_info->topology.type)
@@ -763,7 +763,8 @@ TrackItem::SetDefaultPillLabel(const TrackInfo* track_info)
         case TrackInfo::TrackType::InstrumentedThread:
         {
             if(const ThreadInfo* thread_info =
-                   tdm.GetInstrumentedThread(track_info->topology.id.value);
+                   tdm.GetThread(track_info->topology.id.value,
+                                 ThreadInfo::Kind::kInstrumented);
                thread_info && thread_info->tid == track_info->topology.process_id)
             {
                 pill->Activate();
@@ -795,9 +796,9 @@ TrackItem::SetDefaultPillLabel(const TrackInfo* track_info)
         case TrackInfo::TrackType::Counter:
         {
             // Get product label from topology model, ex: "AMD Radeon RX 6800 XT"
-            if(device_info)
+            if(processor_info)
             {
-                pill->SetTooltip(device_info->product_name);
+                pill->SetTooltip(processor_info->product_name);
             }
             break;
         }
@@ -813,7 +814,7 @@ TrackItem::SetDefaultPillLabel(const TrackInfo* track_info)
 void
 TrackItem::SetMetaAreaLabel(const TrackInfo* track_info)
 {
-    TopologyDataModel& tdm = m_data_provider.DataModel().GetTopology();
+    TopologyTree& tdm = m_data_provider.DataModel().GetTopology();
 
     std::string process_id_str = std::to_string(track_info->topology.process_id);
 
@@ -840,11 +841,13 @@ TrackItem::SetMetaAreaLabel(const TrackInfo* track_info)
                 process_name_path += process_info->command;
             }
 
-            std::string       thread_id;
-            const ThreadInfo* thread_info =
+            std::string             thread_id;
+            const ThreadInfo::Kind  kind =
                 (track_info->topology.type == TrackInfo::TrackType::SampledThread)
-                    ? tdm.GetSampledThread(track_info->topology.id.value)
-                    : tdm.GetInstrumentedThread(track_info->topology.id.value);
+                    ? ThreadInfo::Kind::kSampled
+                    : ThreadInfo::Kind::kInstrumented;
+            const ThreadInfo* thread_info =
+                tdm.GetThread(track_info->topology.id.value, kind);
             if(thread_info)
             {
                 thread_id = std::to_string(thread_info->tid);
@@ -945,7 +948,7 @@ TrackItem::SetMetaAreaLabel(const TrackInfo* track_info)
 void
 TrackItem::SetNodeColor(const TrackInfo* track_info)
 {
-    TopologyDataModel& tdm = m_data_provider.DataModel().GetTopology();
+    TopologyTree& tdm = m_data_provider.DataModel().GetTopology();
 
     // Node decorations only make sense on multi-node traces; a single-node
     // trace looks exactly as it did before this feature.

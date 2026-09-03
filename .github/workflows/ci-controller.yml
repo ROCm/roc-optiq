@@ -24,6 +24,10 @@ on:
         description: 'Run macOS CI?'
         type: boolean
         default: true
+      enable_ci_experimental:
+        description: 'Run Experimental CI?'
+        type: boolean
+        default: false
       enable_ci_asan:
         description: 'Run Ubuntu ASAN?'
         type: boolean
@@ -105,6 +109,23 @@ jobs:
       upload_to_s3: ${{ github.event_name == 'schedule' || github.event.inputs.upload_to_s3 == 'true' }}
       s3_root_directory: ${{ github.event_name == 'schedule' && 'nightly' || 'test' }}
 
+  ci-redhat-experimental:
+    name: RedHat CI - Experimental
+    needs: setup
+    if: ${{ github.event_name != 'workflow_dispatch' || (inputs.enable_ci_redhat && inputs.enable_ci_experimental) }}
+    uses: ./.github/workflows/ci-redhat.yml
+    secrets: inherit
+    with:
+      os_version: ${{ needs.setup.outputs.redhat-os-versions }}
+      upload_to_github: ${{ github.event_name == 'schedule' || github.event.inputs.upload_to_github == 'true' }}
+      upload_to_s3: ${{ github.event_name == 'schedule' || github.event.inputs.upload_to_s3 == 'true' }}
+      s3_root_directory: ${{ github.event_name == 'schedule' && 'nightly-experimental' || 'test' }}
+      artifact_suffix: '-experimental'
+      # EXPERIMENTAL FLAGS
+      crypto_backend: 'OpenSSL'
+      enable_profiler: true
+      enable_remote: true
+
   ci-ubuntu:
     name: Ubuntu CI
     needs: setup
@@ -118,6 +139,24 @@ jobs:
       upload_to_s3: ${{ github.event_name == 'schedule' || github.event.inputs.upload_to_s3 == 'true' }}
       s3_root_directory: ${{ github.event_name == 'schedule' && 'nightly' || 'test' }}
 
+  ci-ubuntu-experimental:
+    name: Ubuntu CI - Experimental
+    needs: setup
+    if: ${{ github.event_name != 'workflow_dispatch' || (inputs.enable_ci_ubuntu && inputs.enable_ci_experimental) }}
+    uses: ./.github/workflows/ci-ubuntu.yml
+    secrets: inherit
+    with:
+      os_version: ${{ needs.setup.outputs.ubuntu-os-versions }}
+      enable_ui_tests: true
+      upload_to_github: ${{ github.event_name == 'schedule' || github.event.inputs.upload_to_github == 'true' }}
+      upload_to_s3: ${{ github.event_name == 'schedule' || github.event.inputs.upload_to_s3 == 'true' }}
+      s3_root_directory: ${{ github.event_name == 'schedule' && 'nightly-experimental' || 'test' }}
+      artifact_suffix: '-experimental'
+      # EXPERIMENTAL FLAGS
+      crypto_backend: 'OpenSSL'
+      enable_profiler: true
+      enable_remote: true
+
   ci-windows:
     name: Windows CI
     needs: setup
@@ -130,6 +169,23 @@ jobs:
       upload_to_s3: ${{ github.event_name == 'schedule' || github.event.inputs.upload_to_s3 == 'true' }}
       s3_root_directory: ${{ github.event_name == 'schedule' && 'nightly' || 'test' }}
 
+  ci-windows-experimental:
+    name: Windows CI - Experimental
+    needs: setup
+    if: ${{ github.event_name != 'workflow_dispatch' || (inputs.enable_ci_windows && inputs.enable_ci_experimental) }}
+    uses: ./.github/workflows/ci-windows.yml
+    secrets: inherit
+    with:
+      os_version: ${{ needs.setup.outputs.windows-os-versions }}
+      upload_to_github: ${{ github.event_name == 'schedule' || github.event.inputs.upload_to_github == 'true' }}
+      upload_to_s3: ${{ github.event_name == 'schedule' || github.event.inputs.upload_to_s3 == 'true' }}
+      s3_root_directory: ${{ github.event_name == 'schedule' && 'nightly-experimental' || 'test' }}
+      artifact_suffix: '-experimental'
+      # EXPERIMENTAL FLAGS
+      crypto_backend: 'OpenSSL'
+      enable_profiler: true
+      enable_remote: true
+
   ci-mac:
     name: macOS CI
     needs: setup
@@ -141,6 +197,23 @@ jobs:
       upload_to_github: ${{ github.event_name == 'schedule' || github.event.inputs.upload_to_github == 'true' }}
       upload_to_s3: ${{ github.event_name == 'schedule' || github.event.inputs.upload_to_s3 == 'true' }}
       s3_root_directory: ${{ github.event_name == 'schedule' && 'nightly' || 'test' }}
+
+  ci-mac-experimental:
+    name: macOS CI - Experimental
+    needs: setup
+    if: ${{ github.event_name != 'workflow_dispatch' || (inputs.enable_ci_mac && inputs.enable_ci_experimental) }}
+    uses: ./.github/workflows/ci-mac.yml
+    secrets: inherit
+    with:
+      os_version: ${{ needs.setup.outputs.mac-os-versions }}
+      upload_to_github: ${{ github.event_name == 'schedule' || github.event.inputs.upload_to_github == 'true' }}
+      upload_to_s3: ${{ github.event_name == 'schedule' || github.event.inputs.upload_to_s3 == 'true' }}
+      s3_root_directory: ${{ github.event_name == 'schedule' && 'nightly-experimental' || 'test' }}
+      artifact_suffix: '-experimental'
+      # EXPERIMENTAL FLAGS
+      crypto_backend: 'OpenSSL'
+      enable_profiler: true
+      enable_remote: true
 
   ci-asan:
     name: Ubuntu ASAN
@@ -162,3 +235,20 @@ jobs:
       upload_to_github: ${{ github.event_name == 'schedule' || github.event.inputs.upload_to_github == 'true' }}
       upload_to_s3: ${{ github.event_name == 'schedule' || github.event.inputs.upload_to_s3 == 'true' }}
       s3_bucket_env: 'legacy-nightly'
+
+  ci-manylinux-experimental:
+    name: ManyLinux CI - Experimental
+    needs: setup
+    if: ${{ github.event_name != 'workflow_dispatch' || (inputs.enable_ci_manylinux && inputs.enable_ci_experimental) }}
+    uses: ./.github/workflows/ci-manylinux.yml
+    secrets: inherit
+    with:
+      upload_to_github: ${{ github.event_name == 'schedule' || github.event.inputs.upload_to_github == 'true' }}
+      upload_to_s3: ${{ github.event_name == 'schedule' || github.event.inputs.upload_to_s3 == 'true' }}
+      s3_bucket_env: 'legacy-nightly'
+      s3_root_directory: 'nightly-experimental'
+      artifact_suffix: '-experimental'
+      # EXPERIMENTAL FLAGS
+      crypto_backend: 'OpenSSL'
+      enable_profiler: true
+      enable_remote: true

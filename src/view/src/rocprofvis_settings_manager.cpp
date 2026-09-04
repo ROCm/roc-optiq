@@ -995,6 +995,9 @@ void
 SettingsManager::DeserializeProfilerSettings(jt::Json& json)
 {
     jt::Json& ps = json[JSON_KEY_GROUP_SETTINGS][JSON_KEY_SETTINGS_CATEGORY_PROFILER];
+    // A "profiler_path" key written by an older development build is read by
+    // nothing: the path is no longer part of the launch input, so a settings file
+    // cannot name the binary to execute.
     if(ps[JSON_KEY_SETTINGS_PROFILER_OUTPUT_DIR].isString())
     {
         m_profilersettings.profiler_output_directory = ps[JSON_KEY_SETTINGS_PROFILER_OUTPUT_DIR].getString();

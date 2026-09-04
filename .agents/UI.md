@@ -1822,8 +1822,10 @@ focus, and it is already false by the frame after a checkbox toggles,
 since `ButtonBehavior` clears `ActiveId` in the same frame it reports
 the press), `Validate` (empty string = OK), `FlattenToExecution`
 (curated settings -> env + the **complete** argv after `argv[0]`,
-including `extra_argv`, the output flag in this profiler's spelling, and
-the target plus its arguments; caller then merges `extra_env`),
+including `extra_argv`, any output-path flag this profiler uses, and
+the target plus its arguments; some tools put the output path only in
+env, or nowhere - do not assume `--output`. Caller then merges
+`extra_env`),
 `LoadSettings`/`SaveSettings` (the JSON `backend_payload`), `ExportCfg`
 (native config text), and the default-implemented `GetWarnings`
 (`WarningMessage { Level {kInfo,kWarning,kError}, text }`) and
@@ -1833,13 +1835,35 @@ structs: `ToolOption`, `TabDescriptor`, `WarningMessage`.
 **`RocprofSysBackend`** is the only backend registered today (the
 `ProfilerLauncherDialog` ctor pushes one). `Id()` = `"rocprof-sys"`.
 Tools: `kRPVProfilerToolRocprofSysRun`, `…SysSample`, `…SysInstrument`.
-Tabs: Quick, Sampling, ROCm,
+Tabs: General, Sampling, ROCm,
 Process Sampling, Parallelism, Advanced, plus Instrument (only when the
 tool is `instrument`); the dialog appends a shared "Raw Env Vars" tab.
 Perfetto options are nested inside Advanced, not a top-level tab.
 `RocprofSysSettings` holds the serializable backend state (backends,
 sampling, ROCm domains, Perfetto, process sampling, parallelism,
 advanced, instrument) plus 11 built-in rocprof-sys `--preset=` names.
+
+`FlattenToExecution` is per-tool, not one run-shaped argv for every
+binary. Shared `EmitCuratedEnv` writes `ROCPROFSYS_*` (including
+`ROCPROFSYS_OUTPUT_PATH` from the Output folder field). Then:
+
+- **Run and Sample** share `FlattenRunOrSample`: `--preset=`, `--trace=`
+  (to override preset precedence), `--output <dir>`, `--`, target plus
+  `SplitArguments` of its args. `rocprof-sys-sample` registers the same
+  common argv as run; it forces sampling inside the binary, so Flatten
+  does not special-case Sample.
+- **Instrument** is one-shot **runtime** instrumentation
+  (`FlattenInstrumentRuntime`): `-I` / `-E` / `--min-instructions` when
+  set, then `--` plus the full target command. It does **not** emit
+  `--preset`, `--trace`, or `--output`. `-o`/`--output` is a rewritten-
+  binary filename on this tool and switches Dyninst into rewrite-and-
+  stop, which is a later two-stage mode, not the Output folder. Perfetto
+  enablement is `ROCPROFSYS_TRACE` in env. A leftover `--preset` selection
+  is ignored and `GetWarnings` says so; choose Custom or switch tool.
+
+`extra_argv` stays the override hatch on every tool (last profiler flags,
+still ahead of `--`). Putting `-o <file>` there is how a power user would
+opt into rewrite on Instrument; do not strip it.
 
 **`LaunchConfig` (`rocprofvis_launch_config.h`)** is the serializable
 payload: `profiler_id`, `tool`, `connection` (`ConnectionType
@@ -1928,8 +1952,9 @@ list from `FlattenToExecution`, one entry per argv entry - the controller
 never re-splits it), `env_vars`, `working_directory` (applied to the child
 process only), and `output_directory`, which deliberately does **not**
 reach the command line and currently has no reader in the controller at
-all - the backend emits the output flag itself, because profilers spell it
-differently and some take none. A struct rather than a parameter list
+all - the backend emits any output flag itself, because profilers spell it
+differently and some take none (rocprof-sys-instrument one-shot uses
+`ROCPROFSYS_OUTPUT_PATH` only). A struct rather than a parameter list
 because a transposed pair of the string fields would compile cleanly and
 launch the wrong command.
 
@@ -2422,6 +2447,11 @@ for nearly every common pattern.
 - **Confusing remote display detection with remote I/O.**
   `is_remote_display_session()` selects a file-dialog backend; it does
   not represent an `SshSession`.
+- **Assuming every rocprof-sys tool accepts `--output` / `--preset`.**
+  Those flags are run/sample only. On instrument, `--output` is a
+  rewritten-binary filename and `--preset` is a parse error. One-shot
+  instrument uses `ROCPROFSYS_OUTPUT_PATH` (and `ROCPROFSYS_TRACE`) in
+  env. Do not restore a single run-shaped argv for every tool.
 
 ## 19. Quick Reference Index of Every UI Class
 

@@ -181,15 +181,20 @@ void ProfilerLaunchOrchestrator::Cancel()
     }
 #endif
 
-    if(m_profiler_session.Cancel())
+    rocprofvis_result_t const cancelled = m_profiler_session.Cancel();
+    if(cancelled == kRocProfVisResultSuccess)
     {
         m_profiler_state = kRPVProfilerStateCancelled;
         m_is_running     = false;
     }
-    else
+    else if(cancelled != kRocProfVisResultNotSupported)
     {
         m_launch_error = "Failed to cancel profiler";
     }
+    // NotSupported: the run finished between the click and the call, so there
+    // was nothing to stop. Reporting a failure there would be wrong, and
+    // forcing the state to Cancelled would overwrite the real outcome; Update()
+    // reports it on the next poll.
 }
 
 void ProfilerLaunchOrchestrator::Close()

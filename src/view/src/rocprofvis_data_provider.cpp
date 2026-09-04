@@ -1689,6 +1689,10 @@ DataProvider::FetchTrackTable(const TrackTableRequestParams& table_params)
     {
         request_id = TABLE_EXPORT_REQUEST_ID;
     }
+    else if(table_params.m_request_id != TableRequestParams::INFER_REQUEST_ID)
+    {
+        request_id = table_params.m_request_id;
+    }
     else
     {
         switch(table_params.m_table_type)
@@ -1735,6 +1739,14 @@ DataProvider::FetchTrackTable(const TrackTableRequestParams& table_params)
                 return false;
             }
         }
+    }
+
+    // System tables are mutable controller objects. Keep requests targeting the same
+    // table type serialized so one source cannot replace the table metadata while the
+    // other source's response is being copied into its view model.
+    if(IsTableRequestPending(table_params.m_table_type))
+    {
+        return false;
     }
 
     auto it = m_requests.find(request_id);
@@ -2344,6 +2356,21 @@ DataProvider::IsRequestPending(uint64_t request_id) const
     if(it != m_requests.end())
     {
         return true;
+    }
+    return false;
+}
+
+bool
+DataProvider::IsTableRequestPending(rocprofvis_controller_table_type_t table_type) const
+{
+    for(const std::pair<const int64_t, RequestInfo>& item : m_requests)
+    {
+        std::shared_ptr<TableRequestParams> params =
+            std::dynamic_pointer_cast<TableRequestParams>(item.second.custom_params);
+        if(params && params->m_table_type == table_type)
+        {
+            return true;
+        }
     }
     return false;
 }
@@ -3570,6 +3597,14 @@ DataProvider::ProcessTableRequest(RequestInfo& req)
                 spdlog::error("Unsupported table type: {}", static_cast<int>(table_type));
                 return;
             }
+        }
+        // Compare mode feeds one controller table type into two view slots, so the
+        // request says which of them its rows belong to. Both slots live in the
+        // model the controller table type already picked above.
+        if(table_params &&
+           table_params->m_view_table_type != TableType::__kTableTypeCount)
+        {
+            table_type_enum = table_params->m_view_table_type;
         }
         ROCPROFVIS_ASSERT(table_model);
         TablesModel& tables = *table_model;

@@ -1091,6 +1091,53 @@ The bottom-right tabbed panel. Hosts, in source order:
   - `AnnotationView` - sticky-note list.
 - Listens to track / range / event selection events to keep tabs in
   sync.
+- **Compare mode (two compare sources).** Every applicable tab splits
+  into side-by-side, source-filtered A/B views; only `AnnotationView`
+  stays single (notes are project-wide). The chrome of those panes is
+  shared, see `rocprofvis_compare_panes.{h,cpp}` below - do not hand
+  roll another split or card. `AnalysisView::CompareGroup` bundles the
+  A/B `MultiTrackTable`s, their `HSplitContainer`, and the tab layout
+  for the Event and Sample tables; `BuildCompareGroup` and
+  `RenderCompareTab` are reused for both. The table pairs share one
+  filter/aggregation form (`RenderSharedFilterControls` /
+  `ApplySharedFiltersFrom`) without pooling results. The group-by combo
+  is the union of each source's last ungrouped header (`BuildCompareGroupByChoices`);
+  columns that exist on only one source are tagged (A) or (B), and
+  `AdjustFilterForRequest` drops a group-by that the sending table does
+  not have. `TopEventsView`
+  renders each category header once with A/B tables side by side
+  (per-source analysis-table slots `kAnalysisTop*TableB`). `EventsView`
+  and `TrackDetails` partition their selected-item cards into A/B
+  columns by each item's `TrackInfo::file_id`. A/B routing uses distinct
+  client request IDs plus per-source `TablesModel` slots
+  (`kCompareEventTableA/B`, `kCompareSampleTableA/B`); the two sources
+  hit the same controller table type, so a fetch that loses the race is
+  deferred and retried (`InfiniteScrollTable::QueueTableRequest`).
+
+### Compare panes (`rocprofvis_compare_panes.{h,cpp}`)
+
+The pieces every side-by-side view needs, so the four compare layouts
+stay identical:
+
+- `COMPARE_SOURCE_A` / `COMPARE_SOURCE_B` / `COMPARE_SOURCE_COUNT` and
+  `COMPARE_SOURCE_LABEL` - source order, which is also what
+  `TrackInfo::file_id` counts.
+- `IsCompareTrace(model)` - whether the trace was opened as an A/B
+  project. Use it instead of probing `GetCompareSource()` twice.
+- `MakeCompareSplit(pane_a, pane_b)` - the even `HSplitContainer` with
+  borderless, inset items, because each pane draws its own card.
+- `BeginCompareCard` / `EndCompareCard` - the bordered, padded surface
+  holding one source's content, styled like the panel it sits in (the
+  dialog `BeginPanelCard` look does not fit here).
+- `RenderCompareCardTitle(source, settings, summary)` - source badge,
+  elided source name, optional right-aligned summary, separator.
+  `MultiTrackTable::SetHeaderRenderer` + `RenderCard` draw a table
+  inside such a card.
+- `BuildCompareGroupByChoices(columns_a, columns_b, names, labels)` -
+  union of group-by column names for the shared combo (A's order, then
+  B-only). `names` is what the query uses; `labels` tags A-only / B-only
+  columns. Each table still filters with its own header in non-compare
+  views.
 
 ### `EventsView` (`rocprofvis_events_view.{h,cpp}`)
 
@@ -1106,8 +1153,11 @@ via `AddCopyRowCellMenuItems`.
 ### `MultiTrackTable` (`rocprofvis_multi_track_table.{h,cpp}`)
 
 `InfiniteScrollTable` subclass that aggregates rows across multiple
-selected tracks. Supports `group_by_choices`, custom filter store, and
-context menu copy.
+selected tracks. Supports `group_by_choices`, custom filter store,
+optional compare-source filtering, and context menu copy. Eligible
+group-by columns are cached from the last ungrouped header so compare
+mode can union A and B without changing the per-table combo used in
+non-compare views.
 
 ### `TrackDetails` (`rocprofvis_track_details.{h,cpp}`)
 
@@ -1463,9 +1513,11 @@ controller results.
 - `rocprofvis_summary_model.{h,cpp}` - `SummaryModel`: holds the
   computed `SummaryInfo::AggregateMetrics`.
 - `rocprofvis_tables_model.{h,cpp}` - `TablesModel`: `enum class
-  TableType { kSampleTable, kEventTable, kEventSearchTable,
-  kSummaryKernelTable, kAnalysisTop* }` and the table cache addressed
-  by it.
+  TableType { kSampleTable, kEventTable, kCompareEventTableA/B,
+  kCompareSampleTableA/B, kEventSearchTable, kSummaryKernelTable,
+  kAnalysisTop*, kAnalysisTop*TableB }` and the table cache addressed
+  by it. The `*A/B` and `*TableB` slots hold the two compare sources'
+  results so independent A/B tables never overwrite each other.
 - `rocprofvis_analysis_model.{h,cpp}` - `AnalysisModel`: per-track
   queue/counter statistic cache plus analysis tables, using the
   `AnalysisTrackStatistics` state machine.
@@ -2112,7 +2164,16 @@ Things to honor in any new data path:
    `RootView::DetachProviderCleanup()` to return any in-flight work;
    `AppWindow` will drain it asynchronously
    (`StartProviderCleanup` / `UpdateProviderCleanups`).
-6. **SSH/profiler work goes through `AppMonitor`.** Do not poll
+6. **System table controllers are mutable.** Requests for the same
+   `rocprofvis_controller_table_type_t` must stay serialized. Independent
+   views use client request IDs plus `TableRequestParams::m_view_table_type`
+   to route each completed response into its own `TablesModel` slot.
+   `DataProvider::FetchTable` refuses a request while that table type is
+   busy, so go through `InfiniteScrollTable::QueueTableRequest`, which
+   holds the refused request and reissues it from `Update()`. A held
+   request keeps asking `RenderScheduler` for frames, because the lazy
+   render loop would otherwise sleep before the reissue ever runs.
+7. **SSH/profiler work goes through `AppMonitor`.** Do not poll
    controller futures in a dialog or block `Render()`. Subscribe to
    typed status events, filter by operation ID, and use deferred
    teardown for resources that outlive the UI owner.
@@ -2516,6 +2577,11 @@ For fast lookup. Each entry: class -> file -> one-line role.
   event/sample table.
 - `TopEventsView`, `TopEventsView::TopEventsTable` ->
   `rocprofvis_top_events_view.h` -> Category-specific top-event tables.
+- `IsCompareTrace`, `MakeCompareSplit`, `BeginCompareCard`,
+  `EndCompareCard`, `RenderCompareCardTitle`,
+  `BuildCompareGroupByChoices` ->
+  `rocprofvis_compare_panes.h` -> Shared chrome of the A/B compare
+  layouts.
 - `EventSearch` -> `rocprofvis_event_search.h` -> Toolbar event search.
 - `AnnotationView` -> `rocprofvis_annotation_view.h` -> Sticky-note
   list tab.

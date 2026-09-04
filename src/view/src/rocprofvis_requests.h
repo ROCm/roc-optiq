@@ -6,9 +6,12 @@
 #include <chrono>
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
+#include "model/rocprofvis_tables_model.h"
 #include "rocprofvis_controller_analysis.h"
 #include "rocprofvis_controller_enums.h"
 #include "rocprofvis_controller_types.h"
@@ -157,6 +160,8 @@ public:
 class TableRequestParams : public RequestParamsBase
 {
 public:
+    static constexpr uint64_t INFER_REQUEST_ID = 0;
+
     rocprofvis_controller_table_type_t m_table_type;  // type of the table
     double   m_start_ts;           // starting time stamp of the data in the table
     double   m_end_ts;             // ending time stamp of the data in the table
@@ -169,6 +174,10 @@ public:
     std::string                        m_group;
     std::string                        m_group_columns;
     std::string                        m_export_to_file_path;
+    // TablesModel slot; __kTableTypeCount means infer.
+    TableType m_view_table_type;
+    // Packed client request ID; zero means infer.
+    uint64_t m_request_id;
 
 protected:
     // Constructed only via derives...
@@ -181,7 +190,9 @@ protected:
         uint64_t start_row = -1, uint64_t req_row_count = -1,
         uint64_t                           sort_column_index = 0,
         rocprofvis_controller_sort_order_t sort_order = kRPVControllerSortOrderAscending,
-        std::string                        export_to_file_path = "")
+        std::string export_to_file_path = "",
+        TableType   view_table_type     = TableType::__kTableTypeCount,
+        uint64_t    request_id          = INFER_REQUEST_ID)
     : m_table_type(table_type)
     , m_start_ts(start_ts)
     , m_end_ts(end_ts)
@@ -194,6 +205,8 @@ protected:
     , m_group(group)
     , m_group_columns(group_cols)
     , m_export_to_file_path(export_to_file_path)
+    , m_view_table_type(view_table_type)
+    , m_request_id(request_id)
     {}
     TableRequestParams() = default;
 };
@@ -214,10 +227,12 @@ public:
         uint64_t start_row = -1, uint64_t req_row_count = -1,
         uint64_t                           sort_column_index = 0,
         rocprofvis_controller_sort_order_t sort_order = kRPVControllerSortOrderAscending,
-        std::string                        export_to_file_path = "")
+        std::string                        export_to_file_path = "",
+        TableType view_table_type = TableType::__kTableTypeCount,
+        uint64_t  request_id      = INFER_REQUEST_ID)
     : TableRequestParams(table_type, start_ts, end_ts, where, filter, group, group_cols, start_row,
                          req_row_count, sort_column_index, sort_order,
-                         export_to_file_path)
+                         export_to_file_path, view_table_type, request_id)
     , m_track_ids(track_ids)
     {}
     TrackTableRequestParams() = default;

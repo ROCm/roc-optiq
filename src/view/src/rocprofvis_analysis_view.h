@@ -2,9 +2,18 @@
 // SPDX-License-Identifier: MIT
 
 #pragma once
+#include <array>
+#include <cstddef>
+#include <string>
+#include <vector>
+
+#include "model/rocprofvis_tables_model.h"
 #include "rocprofvis_annotation_view.h"
 #include "rocprofvis_annotations.h"
+#include "rocprofvis_compare_panes.h"
+#include "rocprofvis_controller_enums.h"
 #include "rocprofvis_event_manager.h"
+#include "rocprofvis_requests.h"
 #include "widgets/rocprofvis_tab_container.h"
 
 namespace RocProfVis
@@ -19,6 +28,7 @@ class TopEventsView;
 class TrackTopology;
 class TrackDetails;
 class TimelineSelection;
+class HSplitContainer;
 
 class AnalysisView : public RocWidget
 {
@@ -33,12 +43,33 @@ public:
     friend struct AnalysisViewTestPeer;
 
 private:
+    // One pooled table, or an A/B pair sharing a filter, backing a tab.
+    struct CompareGroup
+    {
+        std::vector<std::shared_ptr<MultiTrackTable>> tables;  // 1 pooled, or 2 (A/B)
+        std::shared_ptr<HSplitContainer>              split;   // compare only
+        std::shared_ptr<RocWidget>                    layout;  // compare only
+        std::string                                   noun;    // "events" / "samples"
+    };
+
     void HandleTimelineSelectionChanged(std::shared_ptr<RocEvent> e);
+    // Builds the A/B tables of one tab, their shared filter and their layout.
+    void BuildCompareGroup(CompareGroup&                                      group,
+                           const std::array<TableType, COMPARE_SOURCE_COUNT>& types,
+                           rocprofvis_controller_table_type_t request_table_type,
+                           RequestType request_type, const char* friendly_name,
+                           const char* noun, const char* child_id,
+                           std::shared_ptr<TimelineSelection> timeline_selection);
+    void RenderCompareTab(CompareGroup& group, const char* child_id);
+    void RenderCompareSourceTitle(const CompareGroup& group, size_t source_index);
+
+    std::shared_ptr<RocWidget> TabWidgetFor(CompareGroup& group) const;
 
     DataProvider& m_data_provider;
 
-    std::shared_ptr<MultiTrackTable> m_event_table;
-    std::shared_ptr<MultiTrackTable> m_sample_table;
+    bool         m_compare_mode;
+    CompareGroup m_event_group;
+    CompareGroup m_sample_group;
 
     std::shared_ptr<TabContainer>   m_tab_container;
     std::shared_ptr<EventsView>     m_events_view;

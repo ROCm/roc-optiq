@@ -7,6 +7,8 @@
 #include "widgets/rocprofvis_gui_helpers.h"
 #include "widgets/rocprofvis_widget.h"
 #include <list>
+#include <memory>
+#include <optional>
 #include <string>
 
 namespace RocProfVis
@@ -18,6 +20,7 @@ class DataProvider;
 class SettingsManager;
 class TrackTopology;
 class TimelineSelection;
+class HSplitContainer;
 struct NodeModel;
 struct ProcessModel;
 struct ProcessorModel;
@@ -65,6 +68,12 @@ private:
     void RenderTable(InfoTable& table, const char* table_id,
                      const AnalysisTrackStatistics* = nullptr);
 
+    /* Renders the selected tracks' cards and returns how many were drawn. In
+     * compare mode source_index limits a column to one source's tracks.
+     */
+    size_t RenderDetailList(std::optional<uint64_t> source_index);
+    void   RenderSourceColumn(size_t source_index);
+
     std::shared_ptr<TrackTopology>     m_track_topology;
     DataProvider&                      m_data_provider;
     std::shared_ptr<TimelineSelection> m_timeline_selection;
@@ -73,6 +82,9 @@ private:
     std::list<DetailItem>              m_track_details;
     bool                               m_data_valid;
     CellMenuTarget                     m_cell_menu;
+
+    bool                             m_compare_mode;
+    std::shared_ptr<HSplitContainer> m_detail_split;
 
     EventManager::SubscriptionToken m_topology_changed_event_token;
     EventManager::SubscriptionToken m_track_metadata_changed_event_token;

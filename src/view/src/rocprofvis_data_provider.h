@@ -190,6 +190,7 @@ public:
     bool FetchAnalysisTrackStatistics(const AnalysisTrackStatisticsRequestParams& params);
 
     bool IsRequestPending(uint64_t request_id) const;
+    bool IsTableRequestPending(rocprofvis_controller_table_type_t table_type) const;
 
     /* Cancels a pending request.
      * @param request_id: The id of the request to cancel.

@@ -81,7 +81,7 @@ private:
     void   GenerateYAxisTicks(float plot_height, std::vector<double>& out_ticks) const;
     // Refreshes m_grid_ticks only when the track height or Y range has changed.
     void   UpdateYAxisTicks();
-    bool   ExtractPointsFromData();
+    void   ExtractPointsFromData() override;
     float  CalculateMissingX(float x1, float y1, float x2, float y2, float known_y);
     void   BoxPlotRender(float graph_width);
     void   RenderHighlightBand(ImDrawList* draw_list, const ImVec2& cursor_position,

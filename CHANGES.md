@@ -1,11 +1,20 @@
-## Optiq 1.0.0
+# Changelog for ROCm Optiq
 
-### Features and Improvements
+Documentation for ROCm Optiq is available at [https://rocm.docs.amd.com/projects/roc-optiq/en/latest/](https://rocm.docs.amd.com/projects/roc-optiq/en/latest/)
 
-**Timeline and navigation**
+## ROCm Optiq 1.0.0
+
+### Added
+
+#### Features and Improvements
+
+##### Timeline and navigation
+
 - Zoom-to-fit for measurements and time-range selections: right-click the timeline and choose "Zoom to Measurement" or "Zoom to Time Range Selection" to fit that span to the timeline width, with the markers landing on the left and right edges.
+- "Zoom to Selection" hotkey (default `Z`) to fit the timeline to the current region, time-range, or event selection.
 
-**Tracks and topology**
+##### Tracks and topology
+
 - Color-code tracks and the sidebar topology by node for easier multi-node navigation.
 - Improve how Stream nodes are display in the sidebar topology tree.
 - "Reveal in topology" right-click action on a track.
@@ -14,26 +23,35 @@
 - More compact flame-chart events, with fixed resize/expand behavior.
 - Display incremental Y-axis scale ticks for counter tracks when expanded.
 - Display unrounded/untruncated track statistics in Track Details tab.
+- Setting to hide the eye / go-to-track icons on topology sidebar rows (actions remain available from the row context menu).
 
-**Annotations**
+##### Annotations
+
 - Annotation UX enhancements: lock, go-to-anchor, cross-highlight, text wrapping, and placement fixes.
 
-**Compute profiling**
+##### Compute profiling
+
 - Roofline single-click filtering for kernels, memory levels, and bandwidth peaks.
 - Roofline line-thickness preference.
+- Re-ordered top level tabs.
 
-**Rendering and performance**
+##### Rendering and performance
+
 - Added a RenderScheduler to drive lazy-render wake-ups.
 - Adopted ImGui's built-in DPI handling, replacing the previous custom solution.
 
-### Experimental (not yet released)
+##### Miscellaneous
+- Time format setting now shows a live preview and clearer **Timecode** option labels (e.g. **hh:mm:ss.ns**).
+- Cleaned up log messages.
+
+##### Experimental (not yet released)
 
 These features are in progress and available for preview only (build from src); behavior and UI are subject to change.
 
 - **Profiler launch**: launch the ROCm profiler locally or on a remote host, with remote file access/browsing and an SSH-based remote profiling workflow (redesigned remote profile panels and profiler launcher UI).
 - **New trace formats**: load Perfetto and Chrome (JSON) traces.
 
-### Fixes
+### Resolved Issues
 
 - Fixed inconsistent kernel highlight color in the compute summary view.
 - Fixed welcome-page links firing through overlaying modal dialogs (links are now real ImGui buttons that respect hover ownership).
@@ -42,7 +60,16 @@ These features are in progress and available for preview only (build from src); 
 - Fixed data-flow arrow starting from level zero on `.rpd` traces.
 - Fixed the Systems multi-node summary window showing data only for the first node in the `.yaml`.
 - Fixed loading workload Speed-of-Light for compute schema < 1.3.0; query builders now report and skip unsupported queries.
+- Fixed editing for counter/line track min/max Y-axis value: It now accepts unit-free and abbreviated input (e.g. "25M", "30M bytes"), keep a readable minimum width, and highlight the value on hover.
+- Fixed crash when invalid filter used in kernel selection table.
+- Fixed crash when adding a counter with `pmc_id` 0.
+- Fixed roofline precision fallback when FP32 ceilings are missing, and kernel markers vanishing when all durations are zero.
 - JobSystem fixes.
+- Fixed timeline tracks that could keep spinning, or show incomplete data, after scrolling or zooming quickly while track data was still loading (including a deadlock when cancelling counter-track queries).
+- Fix memory corruption issue when a trace is closed.
+- Fix handling non-finite numbers when comparing compute metrics.
+- Fix timeline flicker when scrolling via mouse wheel.
+- Fix handling analysis .db files with incomplete roofline data. (Missing compute ceilings).
 
 ## Optiq Beta 0.5.0
 

@@ -541,13 +541,15 @@ rocprofvis_dm_result_t RocpdDatabase::SaveTrimmedData(rocprofvis_dm_timestamp_t 
 rocprofvis_dm_result_t RocpdDatabase::BuildTableStringIdFilter(rocprofvis_dm_num_string_table_filters_t num_string_table_filters,
     rocprofvis_dm_string_table_filters_t     string_table_filters,
     bool                                     include_substring,
+    bool                                     include_category,
+    bool                                     partial_matching,
     table_string_id_filter_map_t&            filter)
 {
     rocprofvis_dm_result_t result = kRocProfVisDmResultNotLoaded;
     if(num_string_table_filters > 0)
     {
         std::vector<rocprofvis_dm_index_t> string_indices;
-        result = BindObject()->FuncGetStringIndices(BindObject()->trace_object, num_string_table_filters, string_table_filters, include_substring, string_indices);
+        result = BindObject()->FuncGetStringIndices(BindObject()->trace_object, num_string_table_filters, string_table_filters, include_substring, partial_matching, string_indices);
         ROCPROFVIS_ASSERT_RETURN(result == kRocProfVisDmResultSuccess, result);
         std::string string;
         for(const rocprofvis_dm_index_t& index : string_indices)
@@ -565,8 +567,14 @@ rocprofvis_dm_result_t RocpdDatabase::BuildTableStringIdFilter(rocprofvis_dm_num
         }
         if(!string.empty())
         {
-            filter[kRocProfVisDmOperationLaunch][0] =  std::string(Builder::EVENT_NAME_REFERENCE_RPD) + " IN(" + string;
-            filter[kRocProfVisDmOperationDispatch][0] = std::string(Builder::CATEGORY_REFERENCE_RPD) + " IN (" + string + ") OR " + Builder::EVENT_NAME_REFERENCE_RPD + " IN(" + string;
+            filter[kRocProfVisDmOperationLaunch][0] = std::string(Builder::EVENT_NAME_REFERENCE_RPD) + " IN (" + string;
+            filter[kRocProfVisDmOperationDispatch][0] = "(" + std::string(Builder::EVENT_NAME_REFERENCE_RPD) + " IN (" + string;
+
+            if(include_category)
+            {
+                filter[kRocProfVisDmOperationDispatch][0] += ") OR " + std::string(Builder::CATEGORY_REFERENCE_RPD) + " IN (" + string;
+            }
+            filter[kRocProfVisDmOperationDispatch][0] += ")";
         }
     }   
     return result;

@@ -453,6 +453,8 @@ SettingsManager::SerializeDisplaySettings(jt::Json& json)
         m_usersettings.display_settings.font_size_index;
     ds[JSON_KEY_SETTINGS_DISPLAY_NODE_COLORS] =
         m_usersettings.display_settings.show_node_colors;
+    ds[JSON_KEY_SETTINGS_DISPLAY_COMPACT_SIDEBAR] =
+        m_usersettings.display_settings.compact_sidebar;
 }
 
 void
@@ -476,6 +478,11 @@ SettingsManager::DeserializeDisplaySettings(jt::Json& json)
         {
             m_usersettings.display_settings.show_node_colors =
                 ds[JSON_KEY_SETTINGS_DISPLAY_NODE_COLORS].getBool();
+        }
+        if(ds[JSON_KEY_SETTINGS_DISPLAY_COMPACT_SIDEBAR].isBool())
+        {
+            m_usersettings.display_settings.compact_sidebar =
+                ds[JSON_KEY_SETTINGS_DISPLAY_COMPACT_SIDEBAR].getBool();
         }
     }
 }
@@ -607,9 +614,10 @@ SettingsManager::GetContrastColormapName() const
 SettingsManager::SettingsManager()
 : m_color_store(nullptr)
 , m_usersettings_default(
-      { DisplaySettings{ false, 6, true }, UnitSettings{ TimeFormat::kTimecode },
+      { DisplaySettings{ false, 6, true, false }, UnitSettings{ TimeFormat::kTimecode },
         false, false, LOG_VIEWER_MAX_ENTRIES_DEFAULT,
-        LogViewerSettings{ LOG_VIEWER_DEFAULT_LEVEL_MASK, true, false, false, false } })
+        LogViewerSettings{ LOG_VIEWER_DEFAULT_LEVEL_MASK, true, false, false, false },
+        false })
 , m_usersettings(m_usersettings_default)
 , m_appwindowsettings({ AppWindowSettings{ true, true, true, true, false } })
 , m_json_path(GetStandardConfigPath())
@@ -792,6 +800,7 @@ SettingsManager::SerializeOtherSettings(jt::Json& json)
 
     os[JSON_KEY_SETTINGS_DONT_ASK_BEFORE_EXIT] = m_usersettings.dont_ask_before_exit;
     os[JSON_KEY_SETTINGS_DONT_ASK_BEFORE_TAB_CLOSE] = m_usersettings.dont_ask_before_tab_closing;
+    os[JSON_KEY_SETTINGS_LINUX_DRAG_REPAIR]         = m_usersettings.linux_drag_repair;
     os[JSON_KEY_SETTINGS_LOG_VIEWER_MAX_ENTRIES] = m_usersettings.log_viewer_max_entries;
 
     os[JSON_KEY_SETTINGS_LOG_VIEWER_LEVEL_MASK]    = m_usersettings.log_viewer.level_mask;
@@ -814,6 +823,11 @@ SettingsManager::DeserializeOtherSettings(jt::Json& json)
     {
         m_usersettings.dont_ask_before_tab_closing =
             static_cast<bool>(os[JSON_KEY_SETTINGS_DONT_ASK_BEFORE_TAB_CLOSE].getBool());
+    }
+    if(os[JSON_KEY_SETTINGS_LINUX_DRAG_REPAIR].isBool())
+    {
+        m_usersettings.linux_drag_repair =
+            static_cast<bool>(os[JSON_KEY_SETTINGS_LINUX_DRAG_REPAIR].getBool());
     }
     if(os[JSON_KEY_SETTINGS_LOG_VIEWER_MAX_ENTRIES].isLong())
     {

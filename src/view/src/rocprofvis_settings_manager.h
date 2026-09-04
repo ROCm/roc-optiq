@@ -24,6 +24,7 @@ typedef struct DisplaySettings
     bool use_dark_mode;
     int  font_size_index;
     bool show_node_colors;  // color-code timeline tracks by node
+    bool compact_sidebar;   // drop the per-row icons in the topology sidebar
 
 } DisplaySettings;
 
@@ -51,6 +52,11 @@ typedef struct UserSettings
     bool              dont_ask_before_exit;
     int               log_viewer_max_entries;
     LogViewerSettings log_viewer;
+    // Linux/Wayland only: repair pointer routing after a floating window is
+    // dragged, at the cost of a brief flicker on each drag-release. Set with
+    // --drag-repair and ignored on other platforms. See
+    // raise_dragged_viewport_after_release() in rocprofvis_platform_helpers.cpp.
+    bool              linux_drag_repair;
 } UserSettings;
 
 typedef struct InternalSettings
@@ -227,9 +233,10 @@ constexpr const char* JSON_KEY_SETTINGS_CATEGORY_UNITS    = "units";
 constexpr const char* JSON_KEY_SETTINGS_CATEGORY_OTHER    = "other";
 constexpr const char* JSON_KEY_SETTINGS_CATEGORY_INTERNAL = "internal";
 
-constexpr const char* JSON_KEY_SETTINGS_DISPLAY_DARK_MODE   = "use_dark_mode";
-constexpr const char* JSON_KEY_SETTINGS_DISPLAY_FONT_SIZE   = "font_size_index";
-constexpr const char* JSON_KEY_SETTINGS_DISPLAY_NODE_COLORS = "show_node_colors";
+constexpr const char* JSON_KEY_SETTINGS_DISPLAY_DARK_MODE       = "use_dark_mode";
+constexpr const char* JSON_KEY_SETTINGS_DISPLAY_FONT_SIZE       = "font_size_index";
+constexpr const char* JSON_KEY_SETTINGS_DISPLAY_NODE_COLORS     = "show_node_colors";
+constexpr const char* JSON_KEY_SETTINGS_DISPLAY_COMPACT_SIDEBAR = "compact_sidebar";
 
 constexpr const char* JSON_KEY_SETTINGS_UNITS_TIME_FORMAT = "time_format";
 
@@ -238,6 +245,7 @@ constexpr size_t      MAX_RECENT_FILES                       = 5;
 
 constexpr const char* JSON_KEY_SETTINGS_DONT_ASK_BEFORE_EXIT = "dont_ask_before_exit";
 constexpr const char* JSON_KEY_SETTINGS_DONT_ASK_BEFORE_TAB_CLOSE = "dont_ask_before_tab_close";
+constexpr const char* JSON_KEY_SETTINGS_LINUX_DRAG_REPAIR         = "linux_drag_repair";
 
 constexpr const char* JSON_KEY_SETTINGS_LOG_VIEWER_MAX_ENTRIES = "log_viewer_max_entries";
 // Bounds for the log viewer's in-memory cache size. Older lines fall off the
@@ -276,6 +284,7 @@ public:
 
     // Styling
     bool ShowNodeColors() const { return m_usersettings.display_settings.show_node_colors; }
+    bool CompactSidebar() const { return m_usersettings.display_settings.compact_sidebar; }
     ImU32                     GetColor(Colors color) const;
     const std::vector<ImU32>& GetColorWheel() const;
     const std::vector<ImU32>& GetHighlightedEventColorWheel() const;

@@ -153,6 +153,7 @@ constexpr const char* JSON_KEY_TIMELINE_BOOKMARK_Z       = "z";
 
 constexpr const char* JSON_KEY_TIMELINE_TRACK                    = "tracks";
 constexpr const char* JSON_KEY_TIMELINE_TRACK_ORDER              = "order";
+constexpr const char* JSON_KEY_TIMELINE_SORT_MODE                = "sort_mode";
 constexpr const char* JSON_KEY_TIMELINE_TRACK_DISPLAY            = "display";
 constexpr const char* JSON_KEY_TIMELINE_TRACK_HEIGHT             = "height";
 constexpr const char* JSON_KEY_TIMELINE_TRACK_COMPACT_MODE       = "compact_mode";

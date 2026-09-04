@@ -30,7 +30,8 @@ struct TabDescriptor
 {
     std::string id;
     std::string display_name;
-    std::function<void()> render_fn;
+    // Returns true if the user changed a setting this frame
+    std::function<bool()> render_fn;
     // false => shown in the always-visible "General Options" area of the
     // launcher; true => tucked under the collapsible "Advanced Options" section.
     bool advanced = false;

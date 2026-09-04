@@ -211,7 +211,9 @@ class QueryManager : public SqliteDatabase
             rocprofvis_dm_num_string_table_filters_t num_string_table_filters, 
             rocprofvis_dm_string_table_filters_t string_table_filters,
             bool include_substring,
-            rocprofvis_dm_charptr_t sort_column, 
+            bool include_category,
+            bool partial_matching,
+            rocprofvis_dm_charptr_t sort_column,
             rocprofvis_dm_sort_order_t sort_order,
             uint64_t max_count, 
             uint64_t offset,
@@ -243,12 +245,16 @@ class QueryManager : public SqliteDatabase
         // @param num_string_table_filters - number of filter strings
         // @param string_table_filters - array of filter strings
         // @param include_substring - when true a string matches if it contains the filter, when false it has to equal the filter.
+        // @param include_category - when true the filters are matched against the event category as well as the event name, when false only against the event name.
+        // @param partial_matching - when true a string matches if it matches any of the filters, when false it has to match all of them.
         // @param filter - output string containing WHERE clause
         // @return status of operation
         virtual rocprofvis_dm_result_t BuildTableStringIdFilter(
             rocprofvis_dm_num_string_table_filters_t num_string_table_filters, 
             rocprofvis_dm_string_table_filters_t string_table_filters,
             bool include_substring,
+            bool include_category,
+            bool partial_matching,
             table_string_id_filter_map_t& filter) = 0;
 
         // needs to be overriden in all adapters. Used by public interface method. 

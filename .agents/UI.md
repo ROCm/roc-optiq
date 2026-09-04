@@ -108,6 +108,10 @@ CMake options worth knowing:
 - `ROCPROFVIS_ENABLE_REMOTE` - enables SSH connection, browse, transfer,
   and remote-trace UI (default off). Remote profiling needs both remote
   and profiler support.
+- `ROCPROFVIS_ENABLE_TRACE_COMPARE` - enables the in-development trace
+  comparison UI (default off).
+- `ROCPROFVIS_MULTI_WINDOW` - enables the in-development multi-window
+  support (default off).
 - `USE_NATIVE_FILE_DIALOG` - off disables `nativefiledialog-extended`.
 
 The CLI flag `--file-dialog={auto|imgui|native}` overrides dialog selection
@@ -402,7 +406,7 @@ AppWindow (singleton, RocWidget)
 |   |                 +-- ComputeTableView
 |   |                 +-- ComputeWorkloadView
 |   |                 +-- ComputeComparisonView
-|   |                 +-- (ComputeCodeView / ComputeTester, dev mode only)
+|   |                 +-- (ComputeIsaView / ComputeTester, dev mode only)
 |   +-- [2] status bar (RocCustomWidget calling AppWindow::RenderStatusBar)
 +-- WelcomePage              : empty-state landing page
 +-- CompareFilesDialog       : two-trace compare modal (File > Compare, dev mode)
@@ -1036,6 +1040,11 @@ Renders the topology tree in the left pane:
   `DataProvider`.
 - The active-node accent mirrors timeline node coloring when
   `SettingsManager::ShowNodeColors()` is enabled.
+- `SettingsManager::CompactSidebar()` drops the per-row eye and
+  scroll-to-track buttons (leaf and branch) so labels sit flush against
+  the tree. Nothing is reserved in their place; the context menus below
+  remain the way to toggle visibility and jump to a track, and hidden
+  tracks stay marked by their dimmed label.
 - Right-click a leaf track (`##track_ctx`): Go to Track, Hide/Show
   Track, Show All Tracks, Hide All But This Track, and Show/Hide
   Selected Tracks (enabled when
@@ -1224,7 +1233,7 @@ The compute analogue of `TraceView`. Owns:
   - `ComputeTableView` - hierarchical metric tables.
   - `ComputeWorkloadView` - system info + profiling config tables.
   - `ComputeComparisonView` - baseline vs target comparison.
-  - `ComputeCodeView` - dev-only source/ISA correlation.
+  - `ComputeIsaView` - dev-only source/ISA correlation.
   - `ComputeTester` - dev-mode scratchpad
     (`#ifdef ROCPROFVIS_DEVELOPER_MODE`).
 - `m_data_provider` - same `DataProvider` type as `TraceView`, but its
@@ -1342,17 +1351,44 @@ Internal scratchpad UI for exercising the metric / roofline APIs.
 Behind `#ifdef ROCPROFVIS_DEVELOPER_MODE`. Not user-facing - keep
 production code from depending on it.
 
-### `ComputeCodeView` (`rocprofvis_compute_code_view.{h,cpp}`) - dev only
+### `ComputeIsaView` (`rocprofvis_compute_isa_view.{h,cpp}`)
 
 Correlates source code and ISA through `SourceCodeWidget` and
 `IsaCodeWidget`, which both derive from `BaseCodeWidget` and share a
 `LineSelection` so selecting a source line highlights the correlated
-ISA (and vice versa), laid out in an `HSplitContainer`.
+ISA (and vice versa). The ISA pane is the always-visible primary pane;
+the optional source-code pane is shown on the right through the
+`Show Source Code` / `Hide Source Code` control.
 `RenderControlPanel()` hosts the source-file dropdown, and
-`FetchPcSamplingForCurrentFile()` re-fetches PC samples on file/kernel
-change. PC-sampling data is fetched through `PcSamplingRequestParams` /
-`DataProvider::FetchPcSampling`; do not query the model directly from
-this view.
+PC-sampling data is fetched through `PcSamplingRequestParams` /
+`DataProvider::FetchPcSampling` in three independent stages:
+
+- `kIsa` runs when the view opens or its kernel changes and loads only the
+  code-object, kernel-symbol, and ISA-line data needed by the primary pane.
+- `kSource` runs when the source pane is shown or a different source file is
+  selected. It loads source-file metadata, ISA/source correlations, and the
+  selected file's source lines. Source-file ID 0 asks the controller to choose
+  the first available file.
+- `kStalls` runs when stall columns are shown and loads sample states, stall
+  reasons, and instruction-sample metadata.
+
+Only one PC-sampling request may be active per trace, so
+`QueuePcSamplingFetch()` retains later stages and submits them in ISA, source,
+then stall order. Results are cached per kernel (and per source-file ID
+for source lines); toggling a pane or column does not repeat a completed fetch. The
+DataProvider updates only the model portion owned by the completed stage and
+the view refreshes only after checking the request kind, kernel, and generation.
+Do not query the model directly from this view.
+
+Older traces can omit one or more PC-sampling tables. A failed optional source,
+stall, or comment request is isolated from the already-loaded ISA pane.
+Source records with unknown or zero line numbers are omitted. ISA instructions
+that lack a valid source line remain visible and mouse-hoverable but cannot be
+selected for source correlation; hovering them clears the source-line hover.
+Clicking a correlated ISA or source row scrolls the opposite code pane so its
+first corresponding row is the top visible line. If an ISA row maps to a
+different source file, the view selects that file and fetches its lines before
+performing the scroll.
 
 ### Compute data plumbing
 
@@ -1533,6 +1569,10 @@ through this** - never hardcode `IM_COL32(...)` in feature code.
   `SettingsManager::ShowNodeColors()` enables node color-coding (only
   when the trace has more than one node). It tints the track's node
   pill and the sidebar tree connectors, not the chart lane itself.
+- `DisplaySettings::compact_sidebar` /
+  `SettingsManager::CompactSidebar()` hides the topology sidebar's
+  per-row icons in favor of the right-click menus (see `SideBar` in
+  section 9).
 - `UserSettings::log_viewer` stores level mask, entry limit, search and
   presentation preferences for `LogViewer`.
 - `GetInternalSettings()` -> recent files (`MAX_RECENT_FILES = 5`).
@@ -1771,7 +1811,16 @@ backends name a tool and never a path, so binary names live only in the
 controller's tool table), `GetTabs` (takes the selected tool; returns
 `TabDescriptor`s that each carry
 an ImGui `render_fn` - the backend supplies renderers, the dialog draws
-the tab bar), `Validate` (empty string = OK), `FlattenToExecution`
+the tab bar. **`render_fn` returns whether the user changed a setting
+this frame**, and every control in a tab must OR in its ImGui return
+value: that bool is the launcher's only signal that the command preview
+has gone stale, so an unreported change leaves the preview displaying a
+command the settings no longer describe. (Only the preview - launching
+rebuilds the cache unconditionally.) Do not try to infer this from
+`ImGui::IsAnyItemActive()`: it stays true while a field merely holds
+focus, and it is already false by the frame after a checkbox toggles,
+since `ButtonBehavior` clears `ActiveId` in the same frame it reports
+the press), `Validate` (empty string = OK), `FlattenToExecution`
 (curated settings -> env + the **complete** argv after `argv[0]`,
 including `extra_argv`, any output-path flag this profiler uses, and
 the target plus its arguments; some tools put the output path only in
@@ -2335,6 +2384,16 @@ for nearly every common pattern.
 
 ## 18. Common Pitfalls
 
+- **Culling timeline rows against `m_scroll_position_y`.** `SetScrollY`
+  only takes effect on the next `Begin`, so that member can be a frame
+  ahead of the layout the rows are placed with. Track positions come
+  from `ImGui::GetCursorPos()`, so cull and hit-test against
+  `ImGui::GetScrollY()` inside `Graph View Main` or rows draw at the
+  wrong offset for a frame while scrolling. ImGui also rounds
+  `window->Scroll` to whole pixels: keep `m_previous_scroll_position`
+  as a `float` and treat a sub-pixel gap as already applied, or a
+  leftover fraction looks like a pending wheel request and overwrites
+  the scrollbar.
 - **Forgetting to unsubscribe.** If you `Subscribe` to an event, store
   the token and `Unsubscribe` in your destructor. Otherwise the
   EventManager will dispatch into a dead `this`.
@@ -2588,8 +2647,8 @@ For fast lookup. Each entry: class -> file -> one-line role.
   `compute/rocprofvis_compute_summary.h`.
 - `ComputeTester` (dev only) ->
   `compute/rocprofvis_compute_tester.h`.
-- `ComputeCodeView`, `SourceCodeWidget`, `IsaCodeWidget` (dev only) ->
-  `compute/rocprofvis_compute_code_view.h`.
+- `ComputeIsaView`, `SourceCodeWidget`, `IsaCodeWidget` (dev only) ->
+  `compute/rocprofvis_compute_isa_view.h`.
 - `ComputeDataProvider`, `ComputeTableModel`, `ComputeTableCellModel`,
   `ComputePlotModel`, `ComputePlotAxisModel`, `ComputePlotSeriesModel`,
   `ComputeMetricModel` -> `compute/rocprofvis_compute_data_provider.h`.

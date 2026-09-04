@@ -12,7 +12,7 @@
       wix extension add WixToolset.UI.wixext
 
   Variables supplied by CMake via -d flags:
-      Version    = 3-part MSI version: Major.Minor.(Patch*1000+Build), e.g. 0.5.1
+      Version    = 3-part MSI version: Major.Minor.Patch, e.g. 1.0.0
       ExeFile    = absolute path to roc-optiq.exe
       LicenseRtf = absolute path to the RTF license shown in the installer UI
       BannerBmp  = absolute path to the 493x58 banner bitmap

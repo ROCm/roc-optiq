@@ -2,9 +2,10 @@
 // SPDX-License-Identifier: MIT
 
 #include "rocprofvis_event_search.h"
+#include "icons/rocprovfis_icon_defines.h"
 #include "rocprofvis_common_defs.h"
 #include "rocprofvis_settings_manager.h"
-#include "spdlog/spdlog.h"
+#include "rocprofvis_timeline_selection.h"
 #include "widgets/rocprofvis_gui_helpers.h"
 #include "widgets/rocprofvis_notification_manager.h"
 
@@ -13,12 +14,17 @@ namespace RocProfVis
 namespace View
 {
 
-constexpr uint64_t    MAX_RESULTS_DISPLAYED = 5;
-constexpr const char* TRACK_ID_COLUMN_NAME  = "__trackId";
-constexpr const char* STREAM_ID_COLUMN_NAME = "__streamTrackId";
-constexpr const char* ID_COLUMN_NAME        = "__uuid";
-constexpr const char* EVENT_ID_COLUMN_NAME  = "id";
-constexpr const char* NAME_COLUMN_NAME      = "name";
+constexpr uint64_t    MAX_RESULTS_DISPLAYED           = 5;
+constexpr const char* TRACK_ID_COLUMN_NAME            = "__trackId";
+constexpr const char* STREAM_ID_COLUMN_NAME           = "__streamTrackId";
+constexpr const char* ID_COLUMN_NAME                  = "__uuid";
+constexpr const char* EVENT_ID_COLUMN_NAME            = "id";
+constexpr const char* NAME_COLUMN_NAME                = "name";
+constexpr const char* CATEGORY_COLUMN_NAME            = "category";
+constexpr bool        DEFAULT_INCLUDE_SUBSTRINGS      = true;
+constexpr bool        DEFAULT_INCLUDE_CATEGORY        = false;
+constexpr bool        DEFAULT_PARTIAL_MATCHING        = false;
+constexpr bool        DEFAULT_RESPECT_RANGE_SELECTION = false;
 
 EventSearch::EventSearch(DataProvider&                      dp,
                          std::shared_ptr<TimelineSelection> timeline_selection)
@@ -28,21 +34,55 @@ EventSearch::EventSearch(DataProvider&                      dp,
       [&dp]() -> const TablesModel& { return dp.DataModel().GetTables(); },
       [&dp]() -> TablesModel& { return dp.DataModel().GetTables(); }, timeline_selection,
       1, kRPVControllerSortOrderAscending, "Event Search Table", "")
+, m_show_options(false)
+, m_include_substrings(DEFAULT_INCLUDE_SUBSTRINGS)
+, m_include_category(DEFAULT_INCLUDE_CATEGORY)
+, m_partial_matching(DEFAULT_PARTIAL_MATCHING)
+, m_respect_range_selection(DEFAULT_RESPECT_RANGE_SELECTION)
 , m_should_open(false)
 , m_should_close(false)
+, m_is_open(false)
 , m_focus_text_input(false)
 , m_search_deferred(false)
 , m_searched(false)
+, m_options_changed(false)
+, m_advanced_active(false)
 , m_width(1000.0f)
-, m_text_input("\0")
-{}
+, m_time_range_changed_token(EventManager::InvalidSubscriptionToken)
+{
+    m_time_range_changed_token = EventManager::GetInstance()->Subscribe(
+        static_cast<int>(RocEvents::kTimelineTimeRangeChanged),
+        [this](std::shared_ptr<RocEvent> e) {
+            if(e && e->GetSourceId() == m_data_provider.GetTraceFilePath() &&
+               m_respect_range_selection)
+            {
+                m_search_deferred = m_searched;
+            }
+        });
+}
+
+EventSearch::~EventSearch()
+{
+    EventManager::GetInstance()->Unsubscribe(
+        static_cast<int>(RocEvents::kTimelineTimeRangeChanged),
+        m_time_range_changed_token);
+}
 
 void
 EventSearch::Update()
 {
-    if(m_search_deferred && !m_data_provider.IsRequestPending(m_request_id))
+    if(m_is_open && m_search_deferred && !m_data_provider.IsRequestPending(m_request_id))
     {
         Search();
+        m_search_deferred = false;
+    }
+    if(m_options_changed)
+    {
+        m_advanced_active = m_include_substrings != DEFAULT_INCLUDE_SUBSTRINGS ||
+                            m_include_category != DEFAULT_INCLUDE_CATEGORY ||
+                            m_partial_matching != DEFAULT_PARTIAL_MATCHING ||
+                            m_respect_range_selection != DEFAULT_RESPECT_RANGE_SELECTION;
+        m_options_changed = false;
     }
     if(m_data_changed)
     {
@@ -52,6 +92,7 @@ EventSearch::Update()
         for(size_t i = 0; i < column_names.size(); i++)
         {
             if(i != m_important_column_idxs[kDbEventId] &&
+               i != m_important_column_idxs[kCategory] &&
                i != m_important_column_idxs[kName] &&
                i != m_time_column_indices[kTimeStartNs] &&
                i != m_time_column_indices[kDurationNs])
@@ -73,7 +114,8 @@ EventSearch::Render()
         m_should_close = false;
     }
 
-    if(Open())
+    m_is_open = ImGui::IsPopupOpen("event_search");
+    if(m_is_open)
     {
         const TablesModel& tm    = m_table_model();
         const ImGuiStyle&  style = m_settings.GetDefaultStyle();
@@ -83,14 +125,16 @@ EventSearch::Render()
         ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, style.ChildRounding);
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
                             ImVec2(style.WindowPadding.x, style.WindowPadding.y * 0.75f));
-        ImGui::SetNextWindowSize(ImVec2(m_width, Height()));
+        ImGui::SetNextWindowSize(ImVec2(m_width, 0.0f));
         if(ImGui::BeginPopup("event_search", ImGuiWindowFlags_NoFocusOnAppearing))
         {
-            if(m_data_provider.IsRequestPending(m_request_id) ||
-               tm.GetTableTotalRowCount(m_table_type) > 0)
+            const uint64_t& row_count = tm.GetTableTotalRowCount(m_table_type);
+            if(m_data_provider.IsRequestPending(m_request_id) || row_count > 0)
             {
-                ImGui::SetNextWindowSize(ImGui::GetContentRegionAvail() -
-                                         ImVec2(0, ImGui::GetFrameHeightWithSpacing()));
+                ImGui::SetNextWindowSize(
+                    ImVec2(0.0f, (m_horizontal_scroll ? style.ScrollbarSize : 0.0f) +
+                                     (1.0f + std::min(row_count, MAX_RESULTS_DISPLAYED)) *
+                                         TableRowHeight()));
                 ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
                 InfiniteScrollTable::Render();
                 ImGui::PopStyleVar();
@@ -109,6 +153,209 @@ EventSearch::Render()
                             tm.GetTableTotalRowCount(m_table_type));
 #endif
             }
+            if(m_show_options)
+            {
+                ImGui::SeparatorText("Advanced");
+                ImGui::PushFont(m_settings.GetFontManager().GetFont(FontType::kIcon));
+                ImGui::SameLine(ImGui::GetContentRegionMax().x -
+                                style.SeparatorTextPadding.x -
+                                ImGui::CalcTextSize(ICON_ARROWS_CYCLE).x -
+                                2.0f * style.FramePadding.x);
+                ImGui::PopFont();
+                if(IconButton(ICON_ARROWS_CYCLE,
+                              m_settings.GetFontManager().GetFont(FontType::kIcon),
+                              ImVec2(0, 0), "Reset to Defaults", false,
+                              style.FramePadding, m_settings.GetColor(Colors::kBgPanel),
+                              m_settings.GetColor(Colors::kBgPanel),
+                              m_settings.GetColor(Colors::kBgPanel)) &&
+                   m_advanced_active)
+                {
+                    ResetOptions();
+                    m_options_changed = true;
+                    m_search_deferred = m_searched;
+                }
+                ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding,
+                                    m_settings.GetDefaultStyle().ChildRounding);
+                ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing,
+                                    m_settings.GetDefaultStyle().ItemSpacing);
+                ImGui::PushStyleColor(ImGuiCol_ChildBg,
+                                      m_settings.GetColor(Colors::kBgPanel));
+                ImGui::PushStyleColor(ImGuiCol_Border,
+                                      m_settings.GetColor(Colors::kBorderColor));
+                ImGui::BeginChild("advanced_search", ImVec2(0, 0),
+                                  ImGuiChildFlags_Borders | ImGuiChildFlags_AutoResizeY);
+                ImGui::BeginGroup();
+                ImGui::AlignTextToFramePadding();
+                ImGui::TextUnformatted("Match Criteria:");
+                ImGui::AlignTextToFramePadding();
+                ImGui::TextUnformatted("Multiple Terms:");
+                ImGui::AlignTextToFramePadding();
+                ImGui::TextUnformatted("Search Range:");
+                ImGui::EndGroup();
+                ImGui::SameLine();
+                ImGui::BeginGroup();
+                ImGui::GetWindowDrawList()->AddRectFilled(
+                    ImGui::GetCursorScreenPos(),
+                    ImGui::GetCursorScreenPos() +
+                        ImVec2(ImGui::CalcTextSize("Contains").x +
+                                   ImGui::CalcTextSize("Equals").x +
+                                   4.0f * m_settings.GetDefaultStyle().FramePadding.x,
+                               ImGui::GetFrameHeight()),
+                    m_settings.GetColor(Colors::kButton),
+                    m_settings.GetDefaultStyle().FrameRounding);
+                if(ColoredButton(
+                       "Contains",
+                       m_settings.GetColor(m_include_substrings ? Colors::kAccent
+                                                                : Colors::kButton),
+                       m_settings.GetColor(m_include_substrings ? Colors::kAccent
+                                                                : Colors::kButtonHovered),
+                       m_settings.GetColor(m_include_substrings ? Colors::kAccent
+                                                                : Colors::kButtonActive),
+                       m_settings.GetColor(m_include_substrings ? Colors::kTextOnAccent
+                                                                : Colors::kTextMain),
+                       "Include events whose names contain search term(s).") &&
+                   !m_include_substrings)
+                {
+                    m_include_substrings = true;
+                    m_options_changed    = true;
+                    m_search_deferred    = m_searched;
+                }
+                ImGui::SameLine(0.0f, 0.0f);
+                if(ColoredButton(
+                       "Equals",
+                       m_settings.GetColor(!m_include_substrings ? Colors::kAccent
+                                                                 : Colors::kButton),
+                       m_settings.GetColor(!m_include_substrings
+                                               ? Colors::kAccent
+                                               : Colors::kButtonHovered),
+                       m_settings.GetColor(!m_include_substrings ? Colors::kAccent
+                                                                 : Colors::kButtonActive),
+                       m_settings.GetColor(!m_include_substrings ? Colors::kTextOnAccent
+                                                                 : Colors::kTextMain),
+                       "Include events whose names equal search term(s).") &&
+                   m_include_substrings)
+                {
+                    m_include_substrings = false;
+                    m_options_changed    = true;
+                    m_search_deferred    = m_searched;
+                }
+                ImGui::GetWindowDrawList()->AddRectFilled(
+                    ImGui::GetCursorScreenPos(),
+                    ImGui::GetCursorScreenPos() +
+                        ImVec2(ImGui::CalcTextSize("AND").x +
+                                   ImGui::CalcTextSize("OR").x +
+                                   4.0f * m_settings.GetDefaultStyle().FramePadding.x,
+                               ImGui::GetFrameHeight()),
+                    m_settings.GetColor(Colors::kButton),
+                    m_settings.GetDefaultStyle().FrameRounding);
+                if(ColoredButton(
+                       "AND",
+                       m_settings.GetColor(!m_partial_matching ? Colors::kAccent
+                                                               : Colors::kButton),
+                       m_settings.GetColor(!m_partial_matching ? Colors::kAccent
+                                                               : Colors::kButtonHovered),
+                       m_settings.GetColor(!m_partial_matching ? Colors::kAccent
+                                                               : Colors::kButtonActive),
+                       m_settings.GetColor(!m_partial_matching ? Colors::kTextOnAccent
+                                                               : Colors::kTextMain),
+                       "Include events whose names match all search terms.") &&
+                   m_partial_matching)
+                {
+                    m_partial_matching = false;
+                    m_options_changed  = true;
+                    m_search_deferred  = m_searched;
+                }
+                ImGui::SameLine(0.0f, 0.0f);
+                if(ColoredButton(
+                       "OR",
+                       m_settings.GetColor(m_partial_matching ? Colors::kAccent
+                                                              : Colors::kButton),
+                       m_settings.GetColor(m_partial_matching ? Colors::kAccent
+                                                              : Colors::kButtonHovered),
+                       m_settings.GetColor(m_partial_matching ? Colors::kAccent
+                                                              : Colors::kButtonActive),
+                       m_settings.GetColor(m_partial_matching ? Colors::kTextOnAccent
+                                                              : Colors::kTextMain),
+                       "Include events whose names match any search terms.") &&
+                   !m_partial_matching)
+                {
+                    m_partial_matching = true;
+                    m_options_changed  = true;
+                    m_search_deferred  = m_searched;
+                }
+                ImGui::GetWindowDrawList()->AddRectFilled(
+                    ImGui::GetCursorScreenPos(),
+                    ImGui::GetCursorScreenPos() +
+                        ImVec2(ImGui::CalcTextSize("Whole Trace").x +
+                                   ImGui::CalcTextSize("Selected Time Range").x +
+                                   4.0f * m_settings.GetDefaultStyle().FramePadding.x,
+                               ImGui::GetFrameHeight()),
+                    m_settings.GetColor(Colors::kButton),
+                    m_settings.GetDefaultStyle().FrameRounding);
+                if(ColoredButton("Whole Trace",
+                                 m_settings.GetColor(!m_respect_range_selection
+                                                         ? Colors::kAccent
+                                                         : Colors::kButton),
+                                 m_settings.GetColor(!m_respect_range_selection
+                                                         ? Colors::kAccent
+                                                         : Colors::kButtonHovered),
+                                 m_settings.GetColor(!m_respect_range_selection
+                                                         ? Colors::kAccent
+                                                         : Colors::kButtonActive),
+                                 m_settings.GetColor(!m_respect_range_selection
+                                                         ? Colors::kTextOnAccent
+                                                         : Colors::kTextMain),
+                                 "Consider all events.") &&
+                   m_respect_range_selection)
+                {
+                    m_respect_range_selection = false;
+                    m_options_changed         = true;
+                    m_search_deferred =
+                        m_searched && m_timeline_selection &&
+                        m_timeline_selection->HasValidTimeRangeSelection();
+                }
+                ImGui::SameLine(0.0f, 0.0f);
+                if(ColoredButton("Selected Time Range",
+                                 m_settings.GetColor(m_respect_range_selection
+                                                         ? Colors::kAccent
+                                                         : Colors::kButton),
+                                 m_settings.GetColor(m_respect_range_selection
+                                                         ? Colors::kAccent
+                                                         : Colors::kButtonHovered),
+                                 m_settings.GetColor(m_respect_range_selection
+                                                         ? Colors::kAccent
+                                                         : Colors::kButtonActive),
+                                 m_settings.GetColor(m_respect_range_selection
+                                                         ? Colors::kTextOnAccent
+                                                         : Colors::kTextMain),
+                                 "Consider events inside the selected time "
+                                 "range (when available).") &&
+                   !m_respect_range_selection)
+                {
+                    m_respect_range_selection = true;
+                    m_options_changed         = true;
+                    m_search_deferred =
+                        m_searched && m_timeline_selection &&
+                        m_timeline_selection->HasValidTimeRangeSelection();
+                }
+                ImGui::EndGroup();
+                ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(0.0f, 0.0f));
+                if(ImGui::Checkbox("Search Event Categories", &m_include_category))
+                {
+                    m_options_changed = true;
+                    m_search_deferred = m_searched;
+                }
+                if(BeginItemTooltipStyled())
+                {
+                    ImGui::TextUnformatted("Consider event categories (when "
+                                           "available) in addition to event names.");
+                    EndTooltipStyled();
+                }
+                ImGui::PopStyleVar();
+                ImGui::EndChild();
+                ImGui::PopStyleColor(2);
+                ImGui::PopStyleVar(2);
+            }
             if(m_should_close)
             {
                 ImGui::CloseCurrentPopup();
@@ -123,7 +370,7 @@ EventSearch::Render()
 void
 EventSearch::Show()
 {
-    if(!Open())
+    if(!m_is_open)
     {
         m_should_open = true;
     }
@@ -132,16 +379,16 @@ EventSearch::Show()
 void
 EventSearch::Search()
 {
-    size_t input_length = strlen(m_text_input);
+    size_t input_length = m_text_input.size();
     if(input_length > 0)
     {
-        bool                     valid = false;
-        std::vector<std::string> terms;
+        bool valid = false;
+        m_terms.clear();
         if(m_text_input[0] == '"')
         {
             std::string term;
             bool        open_quote = true;
-            for(int i = 1; i < input_length; i++)
+            for(size_t i = 1; i < input_length; i++)
             {
                 if(m_text_input[i] == '"')
                 {
@@ -149,7 +396,7 @@ EventSearch::Search()
                     {
                         if(!term.empty())
                         {
-                            terms.emplace_back(term);
+                            m_terms.emplace_back(term);
                             term = "";
                         }
                         open_quote = false;
@@ -164,24 +411,16 @@ EventSearch::Search()
                     term += m_text_input[i];
                 }
             }
-            valid = !terms.empty() && !open_quote;
+            valid = !m_terms.empty() && !open_quote;
         }
         else
         {
-            terms.emplace_back(m_text_input);
+            m_terms.emplace_back(m_text_input);
             valid = true;
         }
         if(valid)
         {
-            const TimelineModel& timeline = m_data_provider.DataModel().GetTimeline();
-            m_data_provider.CancelRequest(m_request_id);
-            m_search_deferred =
-                !m_data_provider.FetchTable(EventSearchRequestParams(
-                    m_request_table_type,
-                    { kRocProfVisDmOperationLaunch, kRocProfVisDmOperationDispatch,
-                      kRocProfVisDmOperationLaunchSample },
-                    timeline.GetStartTime(), timeline.GetEndTime(), "", true, { terms },
-                    0, m_fetch_chunk_size, m_sort_column_index, m_sort_order));
+            RequestFetch();
             m_searched    = true;
             m_should_open = true;
         }
@@ -198,9 +437,31 @@ EventSearch::Clear()
 {
     m_data_provider.CancelRequest(m_request_id);
     m_table_model_mutable().ClearTable(m_table_type);
-    m_text_input[0] = '\0';
-    m_searched      = false;
-    m_should_close  = true;
+    m_terms.clear();
+    m_text_input.clear();
+    m_searched = false;
+    if(!m_show_options)
+    {
+        m_should_close = true;
+    }
+}
+
+void
+EventSearch::ToggleOptions()
+{
+    if(m_is_open)
+    {
+        m_show_options = !m_show_options;
+        if(!m_show_options && !m_searched)
+        {
+            m_should_close = true;
+        }
+    }
+    else
+    {
+        m_show_options = true;
+        Show();
+    }
 }
 
 void
@@ -209,16 +470,10 @@ EventSearch::SetWidth(float width)
     m_width = std::max(0.0f, width);
 }
 
-char*
+std::string&
 EventSearch::TextInput()
 {
     return m_text_input;
-}
-
-size_t
-EventSearch::TextInputLimit() const
-{
-    return IM_ARRAYSIZE(m_text_input);
 }
 
 bool
@@ -231,7 +486,7 @@ EventSearch::FocusTextInput()
     }
     else
     {
-        m_focus_text_input = Open() && !ImGui::IsItemFocused() &&
+        m_focus_text_input = m_is_open && !ImGui::IsItemFocused() &&
                              ImGui::IsMouseHoveringRect(ImGui::GetItemRectMin(),
                                                         ImGui::GetItemRectMax()) &&
                              ImGui::IsMouseClicked(ImGuiMouseButton_Left);
@@ -240,21 +495,65 @@ EventSearch::FocusTextInput()
 }
 
 bool
-EventSearch::Open() const
-{
-    return ImGui::IsPopupOpen("event_search");
-}
-
-bool
 EventSearch::Searched() const
 {
     return m_searched;
+}
+
+bool
+EventSearch::Advanced() const
+{
+    return m_advanced_active;
 }
 
 float
 EventSearch::Width() const
 {
     return m_width;
+}
+
+void
+EventSearch::ResetOptions()
+{
+    m_include_substrings      = DEFAULT_INCLUDE_SUBSTRINGS;
+    m_include_category        = DEFAULT_INCLUDE_CATEGORY;
+    m_partial_matching        = DEFAULT_PARTIAL_MATCHING;
+    m_respect_range_selection = DEFAULT_RESPECT_RANGE_SELECTION;
+}
+
+void
+EventSearch::UpdateFetchParams(std::shared_ptr<TableRequestParams>& params) const
+{
+    if(!params)
+    {
+        params = std::make_shared<EventSearchRequestParams>();
+    }
+    InfiniteScrollTable::UpdateFetchParams(params);
+    if(params)
+    {
+        std::shared_ptr<EventSearchRequestParams> search_params =
+            std::static_pointer_cast<EventSearchRequestParams>(params);
+        const TimelineModel& timeline = m_data_provider.DataModel().GetTimeline();
+        double               start_ts;
+        double               end_ts;
+        if(!(m_respect_range_selection && m_timeline_selection &&
+             m_timeline_selection->GetSelectedTimeRange(start_ts, end_ts)))
+        {
+            start_ts = timeline.GetStartTime();
+            end_ts   = timeline.GetEndTime();
+        }
+        search_params->m_op_types             = { kRocProfVisDmOperationLaunch,
+                                                  kRocProfVisDmOperationDispatch,
+                                                  kRocProfVisDmOperationMemoryCopy,
+                                                  kRocProfVisDmOperationMemoryAllocate,
+                                                  kRocProfVisDmOperationLaunchSample };
+        search_params->m_string_table_filters = m_terms;
+        search_params->m_include_substrings   = m_include_substrings;
+        search_params->m_include_category     = m_include_category;
+        search_params->m_partial_matching     = m_partial_matching;
+        params->m_start_ts                    = start_ts;
+        params->m_end_ts                      = end_ts;
+    }
 }
 
 void
@@ -298,6 +597,10 @@ EventSearch::IndexColumns()
             {
                 m_important_column_idxs[kDbEventId] = i;
             }
+            else if(m_include_category && col == CATEGORY_COLUMN_NAME)
+            {
+                m_important_column_idxs[kCategory] = i;
+            }
             else if(col == NAME_COLUMN_NAME)
             {
                 m_important_column_idxs[kName] = i;
@@ -321,24 +624,6 @@ EventSearch::RowSelected(const ImGuiMouseButton mouse_button)
         SelectedRowContextMenu();
     }
     InfiniteScrollTable::RowSelected(mouse_button);
-}
-
-float
-EventSearch::Height() const
-{
-    const ImGuiStyle& style = ImGui::GetStyle();
-    float             height;
-    uint64_t          results = m_table_model().GetTableTotalRowCount(m_table_type);
-    if(results > 0)
-    {
-        height = (m_horizontal_scroll ? style.ScrollbarSize : 0.0f) +
-                 (1.0f + std::min(results, MAX_RESULTS_DISPLAYED)) * TableRowHeight();
-    }
-    else
-    {
-        height = m_data_provider.IsRequestPending(m_request_id) ? TableRowHeight() : 0.0f;
-    }
-    return height + ImGui::GetFrameHeightWithSpacing() + 2.0f * style.WindowPadding.y;
 }
 
 }  // namespace View

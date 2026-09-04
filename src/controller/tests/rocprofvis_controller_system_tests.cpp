@@ -746,8 +746,7 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture, "System Trace Controll
                                   num_columns);
                     uint64_t column_type = 0;
                     result               = rocprofvis_controller_get_uint64(
-                        table_handle, kRPVControllerTableColumnTypeIndexed, j,
-                        &column_type);
+                        row_array, kRPVControllerArrayEntryTypeIndexed, j, &column_type);
                     REQUIRE(result == kRocProfVisResultSuccess);
 
                     switch(column_type)
@@ -1046,8 +1045,7 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture, "System Trace Controll
                                   num_columns);
                     uint64_t column_type = 0;
                     result               = rocprofvis_controller_get_uint64(
-                        table_handle, kRPVControllerTableColumnTypeIndexed, j,
-                        &column_type);
+                        row_array, kRPVControllerArrayEntryTypeIndexed, j, &column_type);
                     REQUIRE(result == kRocProfVisResultSuccess);
 
                     switch(column_type)
@@ -3068,6 +3066,14 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture, "System Trace Controll
 
         result = rocprofvis_controller_set_uint64(args, kRPVControllerTableArgsStringTableFiltersIncludeSubstrings,
                                                   0, 1);
+        REQUIRE(result == kRocProfVisResultSuccess);
+
+        result = rocprofvis_controller_set_uint64(args, kRPVControllerTableArgsStringTableFiltersIncludeCategory,
+                                                  0, 0);
+        REQUIRE(result == kRocProfVisResultSuccess);
+
+        result = rocprofvis_controller_set_uint64(args, kRPVControllerTableArgsStringTableFiltersPartialMatching,
+                                                  0, 0);
         REQUIRE(result == kRocProfVisResultSuccess);
 
         spdlog::info("Allocating Array");

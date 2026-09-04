@@ -25,11 +25,15 @@ namespace DataModel
 		{kRPVComputeFetchKernelSourceFiles, "Fetch source files for a kernel"},
 		{kRPVComputeFetchSourceFileSourceLines, "Fetch source lines for a source file"},
 		{kRPVComputeFetchKernelCodeObjects, "Fetch code objects for a kernel"},
-		{kRPVComputeFetchKernelIsaToIsaDeps, "Fetch all ISA-to-ISA dependency edges for a kernel"},
-		{kRPVComputeFetchKernelIsaLines, "Fetch all ISA lines for a kernel"},
-		{kRPVComputeFetchKernelIsaToSourceDeps, "Fetch all ISA-to-source-line mappings for a kernel"},
-		{kRPVComputeFetchKernelSamplingStates, "Fetch all PC sampling states for a kernel"},
-		{kRPVComputeFetchKernelSamplingStateReasonCounts, "Fetch all stall reason counts for a kernel"}
+		{kRPVComputeFetchKernelInstructionLines, "Fetch all ISA lines for a kernel"},
+		{kRPVComputeFetchKernelInstructionSourceLines, "Fetch instruction-to-source-line mappings for a kernel"},
+		{kRPVComputeFetchKernelPcSampleStates, "Fetch all PC sampling states for a kernel"},
+		{kRPVComputeFetchKernelPcSampleStallReasons, "Fetch all PC sampling stall reasons for a kernel"},
+		{kRPVComputeFetchKernelPcSampleStallReasonLookups, "Fetch all PC sampling stall reason lookups for a kernel"},
+		{kRPVComputeFetchKernelSymbols, "Fetch all kernel symbols for a kernel"},
+		{kRPVComputeFetchKernelInstructionTypeLookups, "Fetch instruction types for a kernel"},
+		{kRPVComputeFetchKernelInstructionSamples, "Fetch instruction samples for a kernel"},
+		{kRPVComputeFetchKernelInstructionSampleLookups, "Fetch instruction sample types for a kernel"}
 	};
 
 	static const std::unordered_map<std::string, rocprofvis_db_compute_column_enum_t> ColumnNameToEnum {
@@ -63,38 +67,55 @@ namespace DataModel
 		{"value", kRPVComputeColumnMetricValue},
 		{"unit", kRPVComputeColumnMetricUnit},
 		{"__id", kRPVComputeColumnDynamicKernelUUID},
-		{"id", kRPVComputeColumnPcSamplingSourceFileId},
-		{"file_path", kRPVComputeColumnPcSamplingSourceFilePath},
-		{"content_checksum", kRPVComputeColumnPcSamplingSourceFileChecksum},
-		{"source_line_id", kRPVComputeColumnPcSamplingSourceLineId},
-		{"source_file_id", kRPVComputeColumnPcSamplingSourceLineFileId},
-		{"line_number", kRPVComputeColumnPcSamplingSourceLineNumber},
-		{"content", kRPVComputeColumnPcSamplingSourceLineContent},
+		{"source_file_uuid", kRPVComputeColumnPcSamplingSourceFileUuid},
+		{"source_file_workload_id", kRPVComputeColumnPcSamplingSourceFileWorkloadId},
+		{"source_file_path", kRPVComputeColumnPcSamplingSourceFilePath},
+		{"source_file_md5_checksum", kRPVComputeColumnPcSamplingSourceFileMd5Checksum},
+		{"source_line_uuid", kRPVComputeColumnPcSamplingSourceLineUuid},
+		{"source_line_source_file_uuid", kRPVComputeColumnPcSamplingSourceLineSourceFileUuid},
+		{"source_line_number", kRPVComputeColumnPcSamplingSourceLineNumber},
+		{"source_line_content", kRPVComputeColumnPcSamplingSourceLineContent},
+		{"code_object_uuid", kRPVComputeColumnPcSamplingCodeObjectUuid},
+		{"code_object_workload_id", kRPVComputeColumnPcSamplingCodeObjectWorkloadId},
+		{"code_object_pid", kRPVComputeColumnPcSamplingCodeObjectPid},
 		{"code_object_id", kRPVComputeColumnPcSamplingCodeObjectId},
-		{"uri", kRPVComputeColumnPcSamplingCodeObjectUri},
-		{"code_object_checksum", kRPVComputeColumnPcSamplingCodeObjectChecksum},
-		{"isa_line_id", kRPVComputeColumnPcSamplingIsaLineId},
-		{"isa_code_object_id", kRPVComputeColumnPcSamplingIsaLineCodeObjectId},
-		{"code_object_offset", kRPVComputeColumnPcSamplingIsaLineCodeObjectOffset},
-		{"instruction_type_id", kRPVComputeColumnPcSamplingIsaLineInstructionTypeId},
-		{"instruction", kRPVComputeColumnPcSamplingIsaLineInstruction},
-		{"comment", kRPVComputeColumnPcSamplingIsaLineComment},
-		{"dependent_isa_line_id", kRPVComputeColumnPcSamplingIsaToIsaDependentIsaLineId},
-		{"dependency_isa_line_id", kRPVComputeColumnPcSamplingIsaToIsaDependencyIsaLineId},
-		{"isa_to_source_isa_line_id", kRPVComputeColumnPcSamplingIsaToSourceIsaLineId},
-		{"isa_to_source_source_line_id", kRPVComputeColumnPcSamplingIsaToSourceSourceLineId},
-		{"depth", kRPVComputeColumnPcSamplingIsaToSourceDepth},
-		{"sampling_state_id", kRPVComputeColumnPcSamplingStateId},
-		{"sampling_state_isa_line_id", kRPVComputeColumnPcSamplingStateIsaLineId},
-		{"dispatch_id", kRPVComputeColumnPcSamplingStateDispatchId},
-		{"active_threads_percent", kRPVComputeColumnPcSamplingStateActiveThreadsPercent},
-		{"wave_occupancy_percent", kRPVComputeColumnPcSamplingStateWaveOccupancyPercent},
-		{"issued_count", kRPVComputeColumnPcSamplingStateIssuedCount},
-		{"stalled_count", kRPVComputeColumnPcSamplingStateStalledCount},
-		{"total_count", kRPVComputeColumnPcSamplingStateTotalCount},
-		{"stall_reason_sampling_state_id", kRPVComputeColumnPcSamplingStallReasonSamplingStateId},
-		{"stall_reason_id", kRPVComputeColumnPcSamplingStallReasonId},
-		{"stall_reason_count", kRPVComputeColumnPcSamplingStallReasonCount},
+		{"code_object_load_base", kRPVComputeColumnPcSamplingCodeObjectLoadBase},
+		{"instruction_line_uuid", kRPVComputeColumnPcSamplingInstructionLineUuid},
+		{"instruction_line_kernel_symbol_uuid", kRPVComputeColumnPcSamplingInstructionLineKernelSymbolUuid},
+		{"instruction_line_instruction_type_uuid", kRPVComputeColumnPcSamplingInstructionLineInstructionTypeUuid},
+		{"instruction_line_code_object_offset", kRPVComputeColumnPcSamplingInstructionLineCodeObjectOffset},
+		{"instruction_line_instruction", kRPVComputeColumnPcSamplingInstructionLineInstruction},
+		{"kernel_symbol_uuid", kRPVComputeColumnPcSamplingKernelSymbolUuid},
+		{"kernel_symbol_code_object_uuid", kRPVComputeColumnPcSamplingKernelSymbolCodeObjectUuid},
+		{"kernel_symbol_kernel_uuid", kRPVComputeColumnPcSamplingKernelSymbolKernelUuid},
+		{"kernel_symbol_code_object_offset", kRPVComputeColumnPcSamplingKernelSymbolCodeObjectOffset},
+		{"instruction_source_line_uuid", kRPVComputeColumnPcSamplingInstructionSourceLineUuid},
+		{"instruction_source_line_instruction_uuid", kRPVComputeColumnPcSamplingInstructionSourceLineInstructionUuid},
+		{"instruction_source_line_source_line_uuid", kRPVComputeColumnPcSamplingInstructionSourceLineSourceLineUuid},
+		{"instruction_source_line_frame_index", kRPVComputeColumnPcSamplingInstructionSourceLineFrameIndex},
+		{"instruction_source_line_source_file_uuid", kRPVComputeColumnPcSamplingInstructionSourceLineSourceFileUuid},
+		{"pc_sample_state_active_thread_percent", kRPVComputeColumnPcSampleStateActiveThreadPercent},
+		{"pc_sample_state_wave_occupancy_percent", kRPVComputeColumnPcSampleStateWaveOccupancyPercent},
+		{"pc_sample_state_dispatch_uuid", kRPVComputeColumnPcSampleStateDispatchUuid},
+		{"pc_sample_stall_reason_lookup_uuid", kRPVComputeColumnPcSampleStallReasonLookupUuid},
+		{"pc_sample_stall_reason_lookup_record_uuid", kRPVComputeColumnPcSampleStallReasonLookupRecordUuid},
+		{"pc_sample_stall_reason_lookup_text", kRPVComputeColumnPcSampleStallReasonLookupText},
+		{"instruction_type_lookup_uuid", kRPVComputeColumnPcSamplingInstructionTypeLookupUuid},
+		{"instruction_type_lookup_text", kRPVComputeColumnPcSamplingInstructionTypeLookupText},
+		{"instruction_sample_uuid", kRPVComputeColumnPcSamplingInstructionSampleUuid},
+		{"instruction_sample_state_uuid", kRPVComputeColumnPcSamplingInstructionSampleStateUuid},
+		{"instruction_sample_lookup_uuid", kRPVComputeColumnPcSamplingInstructionSampleLookupUuid},
+		{"instruction_sample_count", kRPVComputeColumnPcSamplingInstructionSampleCount},
+		{"instruction_sample_lookup_record_uuid", kRPVComputeColumnPcSamplingInstructionSampleLookupRecordUuid},
+		{"instruction_sample_lookup_text", kRPVComputeColumnPcSamplingInstructionSampleLookupText},
+		{"pc_sample_state_uuid", kRPVComputeColumnPcSampleStateUuid},
+		{"pc_sample_state_instruction_uuid", kRPVComputeColumnPcSampleStateInstructionUuid},
+		{"pc_sample_state_total_count", kRPVComputeColumnPcSampleStateTotalCount},
+		{"pc_sample_state_issue_count", kRPVComputeColumnPcSampleStateIssueCount},
+		{"pc_sample_state_stall_count", kRPVComputeColumnPcSampleStateStallCount},
+		{"pc_sample_stall_reason_uuid", kRPVComputeColumnPcSampleStallReasonUuid},
+		{"pc_sample_stall_reason_state_uuid", kRPVComputeColumnPcSampleStallReasonStateUuid},
+		{"pc_sample_stall_reason_count", kRPVComputeColumnPcSampleStallReasonCount},
 	};
 
 	static const std::unordered_map<std::string, rocprofvis_db_compute_column_enum_t> RooflineBenchParamToEnum{
@@ -295,15 +316,22 @@ namespace DataModel
 
 	rocprofvis_dm_result_t ComputeQueryFactory::GetComputeKernelSourceFiles(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params, rocprofvis_dm_string_t& query_out) {
 		rocprofvis_dm_result_t result = kRocProfVisDmResultNotSupported;
-		if (IsVersionGreaterOrEqual("1.2.0"))
+		if (IsVersionGreaterOrEqual("2.2.0"))
 		{
 			result = kRocProfVisDmResultInvalidParameter;
 			if (num > 0 && params != nullptr)
 			{
 				query_out =
-					"SELECT kernel_id AS kernel_uuid, id, file_path, content_checksum "
-					"FROM source_files "
-					"WHERE kernel_id IN (";
+					"SELECT DISTINCT ks.kernel_uuid, sf.source_file_uuid, "
+					"sf.workload_id AS source_file_workload_id, "
+					"COALESCE(sf.file_path, '') AS source_file_path, "
+					"COALESCE(sf.md5_checksum, '') AS source_file_md5_checksum "
+					"FROM compute_source_file sf "
+					"JOIN compute_source_line sl ON sl.source_file_uuid = sf.source_file_uuid "
+					"JOIN compute_instruction_source_line isl ON isl.source_line_uuid = sl.source_line_uuid "
+					"JOIN compute_instruction_line il ON il.instruction_uuid = isl.instruction_uuid "
+					"JOIN compute_kernel_symbol ks ON ks.kernel_symbol_uuid = il.kernel_symbol_uuid "
+					"WHERE ks.kernel_uuid IN (";
 				for (uint32_t i = 0; i < num; i++)
 				{
 					if (params[i].param_type != kRPVComputeParamKernelId || params[i].param_str == nullptr)
@@ -315,21 +343,17 @@ namespace DataModel
 					const char* end = params[i].param_str + std::strlen(params[i].param_str);
 					const std::from_chars_result conversion =
 						std::from_chars(params[i].param_str, end, kernel_id);
-					if (params[i].param_str == end || conversion.ec != std::errc() ||
-						conversion.ptr != end)
+					if (params[i].param_str == end || conversion.ec != std::errc() || conversion.ptr != end)
 					{
 						query_out.clear();
 						break;
 					}
-					if (i > 0)
-					{
-						query_out += ",";
-					}
+					if (i > 0) query_out += ",";
 					query_out += std::to_string(kernel_id);
 				}
 				if (!query_out.empty())
 				{
-					query_out += ") ORDER BY kernel_id, id";
+					query_out += ") ORDER BY ks.kernel_uuid, sf.source_file_uuid";
 					result = kRocProfVisDmResultSuccess;
 				}
 			}
@@ -337,19 +361,42 @@ namespace DataModel
 		return result;
 	}
 
-	rocprofvis_dm_result_t ComputeQueryFactory::GetComputeSourceFileSourceLines(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params, rocprofvis_dm_string_t& query_out) {
+	rocprofvis_dm_result_t ComputeQueryFactory::GetComputeKernelSymbols(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params, rocprofvis_dm_string_t& query_out) {
 		rocprofvis_dm_result_t result = kRocProfVisDmResultNotSupported;
-		if (IsVersionGreaterOrEqual("1.2.0"))
+		if (IsVersionGreaterOrEqual("2.2.0"))
 		{
 			result = kRocProfVisDmResultInvalidParameter;
-			if (num == 1 && params != nullptr && params[0].param_type == kRPVComputeParamSourceFileId)
+			if (num == 1 && params != nullptr && params[0].param_type == kRPVComputeParamKernelId)
 			{
 				query_out =
-					"SELECT id AS source_line_id, source_file_id, line_number, content "
-					"FROM source_lines "
-					"WHERE source_file_id = ";
+					"SELECT kernel_symbol_uuid, "
+					"code_object_uuid AS kernel_symbol_code_object_uuid, "
+					"kernel_uuid AS kernel_symbol_kernel_uuid, "
+					"COALESCE(code_object_offset, 0) AS kernel_symbol_code_object_offset "
+					"FROM compute_kernel_symbol WHERE kernel_uuid = ";
 				query_out += params[0].param_str;
-				query_out += " ORDER BY line_number";
+				query_out += " ORDER BY code_object_offset, kernel_symbol_uuid";
+				result = kRocProfVisDmResultSuccess;
+			}
+		}
+		return result;
+	}
+
+	rocprofvis_dm_result_t ComputeQueryFactory::GetComputeSourceFileSourceLines(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params, rocprofvis_dm_string_t& query_out) {
+		rocprofvis_dm_result_t result = kRocProfVisDmResultNotSupported;
+		if (IsVersionGreaterOrEqual("2.2.0"))
+		{
+			result = kRocProfVisDmResultInvalidParameter;
+			if (num == 1 && params != nullptr && params[0].param_type == kRPVComputeParamSourceFileUuid)
+			{
+				query_out =
+					"SELECT source_line_uuid, "
+					"source_file_uuid AS source_line_source_file_uuid, "
+					"COALESCE(line_number, 0) AS source_line_number, "
+					"COALESCE(content, '') AS source_line_content FROM compute_source_line "
+					"WHERE source_file_uuid = ";
+				query_out += params[0].param_str;
+				query_out += " AND COALESCE(line_number, 0) > 0 ORDER BY line_number";
 				result = kRocProfVisDmResultSuccess;
 			}
 		}
@@ -358,121 +405,224 @@ namespace DataModel
 
 	rocprofvis_dm_result_t ComputeQueryFactory::GetComputeKernelCodeObjects(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params, rocprofvis_dm_string_t& query_out) {
 		rocprofvis_dm_result_t result = kRocProfVisDmResultNotSupported;
-		if (IsVersionGreaterOrEqual("1.2.0"))
+		if (IsVersionGreaterOrEqual("2.2.0"))
 		{
 			result = kRocProfVisDmResultInvalidParameter;
 			if (num == 1 && params != nullptr && params[0].param_type == kRPVComputeParamKernelId)
 			{
 				query_out =
-					"SELECT id AS code_object_id, uri, content_checksum AS code_object_checksum "
-					"FROM code_objects "
-					"WHERE kernel_id = ";
+					"SELECT DISTINCT co.code_object_uuid, "
+					"co.workload_id AS code_object_workload_id, "
+					"COALESCE(co.pid, 0) AS code_object_pid, "
+					"COALESCE(co.code_object_id, 0) AS code_object_id, "
+					"COALESCE(co.load_base, 0) AS code_object_load_base "
+					"FROM compute_code_object_store co "
+					"JOIN compute_kernel_symbol ks ON ks.code_object_uuid = co.code_object_uuid "
+					"WHERE ks.kernel_uuid = ";
 				query_out += params[0].param_str;
+				query_out += " ORDER BY co.code_object_uuid";
 				result = kRocProfVisDmResultSuccess;
 			}
 		}
 		return result;
 	}
 
-	rocprofvis_dm_result_t ComputeQueryFactory::GetComputeKernelIsaToIsaDeps(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params, rocprofvis_dm_string_t& query_out) {
+	rocprofvis_dm_result_t ComputeQueryFactory::GetComputeKernelInstructionLines(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params, rocprofvis_dm_string_t& query_out) {
 		rocprofvis_dm_result_t result = kRocProfVisDmResultNotSupported;
-		if (IsVersionGreaterOrEqual("1.2.0"))
+		if (IsVersionGreaterOrEqual("2.2.0"))
 		{
 			result = kRocProfVisDmResultInvalidParameter;
 			if (num == 1 && params != nullptr && params[0].param_type == kRPVComputeParamKernelId)
 			{
 				query_out =
-					"SELECT j.dependent_isa_line_id, j.dependency_isa_line_id "
-					"FROM isa_line_to_isa_line_junction j "
-					"JOIN isa_lines il ON il.id = j.dependent_isa_line_id "
-					"JOIN code_objects co ON co.id = il.code_object_id "
-					"WHERE co.kernel_id = ";
+					"SELECT il.instruction_uuid AS instruction_line_uuid, "
+					"il.kernel_symbol_uuid AS instruction_line_kernel_symbol_uuid, "
+					"COALESCE(il.instruction_type_uuid, 0) AS instruction_line_instruction_type_uuid, "
+					"COALESCE(il.code_object_offset, 0) AS instruction_line_code_object_offset, "
+					"COALESCE(il.instruction, '') AS instruction_line_instruction "
+					"FROM compute_instruction_line il "
+					"JOIN compute_kernel_symbol ks ON ks.kernel_symbol_uuid = il.kernel_symbol_uuid "
+					"WHERE ks.kernel_uuid = ";
 				query_out += params[0].param_str;
+				query_out += " ORDER BY il.kernel_symbol_uuid, il.code_object_offset, il.instruction_uuid";
 				result = kRocProfVisDmResultSuccess;
 			}
 		}
 		return result;
 	}
 
-	rocprofvis_dm_result_t ComputeQueryFactory::GetComputeKernelIsaLines(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params, rocprofvis_dm_string_t& query_out) {
+	rocprofvis_dm_result_t ComputeQueryFactory::GetComputeKernelInstructionSourceLines(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params, rocprofvis_dm_string_t& query_out) {
 		rocprofvis_dm_result_t result = kRocProfVisDmResultNotSupported;
-		if (IsVersionGreaterOrEqual("1.2.0"))
+		if (IsVersionGreaterOrEqual("2.2.0"))
 		{
 			result = kRocProfVisDmResultInvalidParameter;
 			if (num == 1 && params != nullptr && params[0].param_type == kRPVComputeParamKernelId)
 			{
 				query_out =
-					"SELECT il.id AS isa_line_id, il.code_object_id AS isa_code_object_id, "
-					"il.code_object_offset, il.instruction_type_id, il.instruction, il.comment "
-					"FROM isa_lines il "
-					"JOIN code_objects co ON co.id = il.code_object_id "
-					"WHERE co.kernel_id = ";
+					"SELECT isl.instruction_source_line_uuid, "
+					"isl.instruction_uuid AS instruction_source_line_instruction_uuid, "
+					"isl.source_line_uuid AS instruction_source_line_source_line_uuid, "
+					"COALESCE(isl.frame_index, 0) AS instruction_source_line_frame_index, "
+					"sl.source_file_uuid AS instruction_source_line_source_file_uuid "
+					"FROM compute_instruction_source_line isl "
+					"JOIN compute_instruction_line il ON il.instruction_uuid = isl.instruction_uuid "
+					"JOIN compute_source_line sl ON sl.source_line_uuid = isl.source_line_uuid "
+					"JOIN compute_kernel_symbol ks ON ks.kernel_symbol_uuid = il.kernel_symbol_uuid "
+					"WHERE ks.kernel_uuid = ";
 				query_out += params[0].param_str;
+				query_out += " AND COALESCE(sl.line_number, 0) > 0"
+					" ORDER BY isl.instruction_uuid, isl.frame_index";
 				result = kRocProfVisDmResultSuccess;
 			}
 		}
 		return result;
 	}
 
-	rocprofvis_dm_result_t ComputeQueryFactory::GetComputeKernelIsaToSourceDeps(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params, rocprofvis_dm_string_t& query_out) {
+	rocprofvis_dm_result_t ComputeQueryFactory::GetComputeKernelPcSampleStates(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params, rocprofvis_dm_string_t& query_out) {
 		rocprofvis_dm_result_t result = kRocProfVisDmResultNotSupported;
-		if (IsVersionGreaterOrEqual("1.2.0"))
+		if (IsVersionGreaterOrEqual("2.2.0"))
 		{
 			result = kRocProfVisDmResultInvalidParameter;
 			if (num == 1 && params != nullptr && params[0].param_type == kRPVComputeParamKernelId)
 			{
 				query_out =
-					"SELECT j.isa_line_id AS isa_to_source_isa_line_id, "
-					"j.source_line_id AS isa_to_source_source_line_id, j.depth "
-					"FROM isa_line_to_source_line_junction j "
-					"JOIN isa_lines il ON il.id = j.isa_line_id "
-					"JOIN code_objects co ON co.id = il.code_object_id "
-					"WHERE co.kernel_id = ";
+					"SELECT s.pc_sample_state_uuid, "
+					"s.instruction_uuid AS pc_sample_state_instruction_uuid, "
+					"COALESCE(s.total_count, 0) AS pc_sample_state_total_count, "
+					"COALESCE(s.issue_count, 0) AS pc_sample_state_issue_count, "
+					"COALESCE(s.stall_count, 0) AS pc_sample_state_stall_count, "
+					"COALESCE(s.active_thread_percent, 0.0) AS pc_sample_state_active_thread_percent, "
+					"COALESCE(s.wave_occupancy_percent, 0.0) AS pc_sample_state_wave_occupancy_percent, "
+					"COALESCE(s.dispatch_uuid, 0) AS pc_sample_state_dispatch_uuid "
+					"FROM compute_pc_sample_state s "
+					"JOIN compute_instruction_line il ON il.instruction_uuid = s.instruction_uuid "
+					"JOIN compute_kernel_symbol ks ON ks.kernel_symbol_uuid = il.kernel_symbol_uuid "
+					"WHERE ks.kernel_uuid = ";
 				query_out += params[0].param_str;
+				query_out += " ORDER BY s.pc_sample_state_uuid";
 				result = kRocProfVisDmResultSuccess;
 			}
 		}
 		return result;
 	}
 
-	rocprofvis_dm_result_t ComputeQueryFactory::GetComputeKernelSamplingStates(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params, rocprofvis_dm_string_t& query_out) {
+	rocprofvis_dm_result_t ComputeQueryFactory::GetComputeKernelPcSampleStallReasons(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params, rocprofvis_dm_string_t& query_out) {
 		rocprofvis_dm_result_t result = kRocProfVisDmResultNotSupported;
-		if (IsVersionGreaterOrEqual("1.2.0"))
+		if (IsVersionGreaterOrEqual("2.2.0"))
 		{
 			result = kRocProfVisDmResultInvalidParameter;
 			if (num == 1 && params != nullptr && params[0].param_type == kRPVComputeParamKernelId)
 			{
 				query_out =
-					"SELECT s.id AS sampling_state_id, s.isa_line AS sampling_state_isa_line_id, "
-					"s.dispatch_id, s.active_threads_percent, s.wave_occupancy_percent, "
-					"s.issued_count, s.stalled_count, s.total_count "
-					"FROM pc_sampling_states_per_line s "
-					"JOIN isa_lines il ON il.id = s.isa_line "
-					"JOIN code_objects co ON co.id = il.code_object_id "
-					"WHERE co.kernel_id = ";
+					"SELECT r.pc_sample_stall_reason_uuid, "
+					"r.pc_sample_state_uuid AS pc_sample_stall_reason_state_uuid, "
+					"r.pc_sample_stall_reason_lookup_uuid, "
+					"COALESCE(r.count, 0) AS pc_sample_stall_reason_count "
+					"FROM compute_pc_sample_stall_reason r "
+					"JOIN compute_pc_sample_state s ON s.pc_sample_state_uuid = r.pc_sample_state_uuid "
+					"JOIN compute_instruction_line il ON il.instruction_uuid = s.instruction_uuid "
+					"JOIN compute_kernel_symbol ks ON ks.kernel_symbol_uuid = il.kernel_symbol_uuid "
+					"WHERE ks.kernel_uuid = ";
 				query_out += params[0].param_str;
+				query_out += " ORDER BY r.pc_sample_stall_reason_uuid";
 				result = kRocProfVisDmResultSuccess;
 			}
 		}
 		return result;
 	}
 
-	rocprofvis_dm_result_t ComputeQueryFactory::GetComputeKernelSamplingStateReasonCounts(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params, rocprofvis_dm_string_t& query_out) {
+	rocprofvis_dm_result_t ComputeQueryFactory::GetComputeKernelPcSampleStallReasonLookups(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params, rocprofvis_dm_string_t& query_out) {
 		rocprofvis_dm_result_t result = kRocProfVisDmResultNotSupported;
-		if (IsVersionGreaterOrEqual("1.2.0"))
+		if (IsVersionGreaterOrEqual("2.2.0"))
 		{
 			result = kRocProfVisDmResultInvalidParameter;
 			if (num == 1 && params != nullptr && params[0].param_type == kRPVComputeParamKernelId)
 			{
 				query_out =
-					"SELECT r.pc_sampling_states_per_line_id AS stall_reason_sampling_state_id, "
-					"r.stall_reason_id, r.count AS stall_reason_count "
-					"FROM pc_sampling_stall_reason r "
-					"JOIN pc_sampling_states_per_line s ON s.id = r.pc_sampling_states_per_line_id "
-					"JOIN isa_lines il ON il.id = s.isa_line "
-					"JOIN code_objects co ON co.id = il.code_object_id "
-					"WHERE co.kernel_id = ";
+					"SELECT DISTINCT l.pc_sample_stall_reason_lookup_uuid "
+					"AS pc_sample_stall_reason_lookup_record_uuid, "
+					"COALESCE(l.text, '') AS pc_sample_stall_reason_lookup_text "
+					"FROM compute_pc_sample_stall_reason_lookup l "
+					"JOIN compute_pc_sample_stall_reason r ON "
+					"r.pc_sample_stall_reason_lookup_uuid = l.pc_sample_stall_reason_lookup_uuid "
+					"JOIN compute_pc_sample_state s ON s.pc_sample_state_uuid = r.pc_sample_state_uuid "
+					"JOIN compute_instruction_line il ON il.instruction_uuid = s.instruction_uuid "
+					"JOIN compute_kernel_symbol ks ON ks.kernel_symbol_uuid = il.kernel_symbol_uuid "
+					"WHERE ks.kernel_uuid = ";
 				query_out += params[0].param_str;
+				query_out += " ORDER BY l.pc_sample_stall_reason_lookup_uuid";
+				result = kRocProfVisDmResultSuccess;
+			}
+		}
+		return result;
+	}
+
+	rocprofvis_dm_result_t ComputeQueryFactory::GetComputeKernelInstructionTypeLookups(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params, rocprofvis_dm_string_t& query_out) {
+		rocprofvis_dm_result_t result = kRocProfVisDmResultNotSupported;
+		if (IsVersionGreaterOrEqual("2.2.0"))
+		{
+			result = kRocProfVisDmResultInvalidParameter;
+			if (num == 1 && params != nullptr && params[0].param_type == kRPVComputeParamKernelId)
+			{
+				query_out =
+					"SELECT DISTINCT l.instruction_type_lookup_uuid, "
+					"COALESCE(l.text, '') AS instruction_type_lookup_text "
+					"FROM compute_instruction_type_lookup l "
+					"JOIN compute_instruction_line il ON il.instruction_type_uuid = l.instruction_type_lookup_uuid "
+					"JOIN compute_kernel_symbol ks ON ks.kernel_symbol_uuid = il.kernel_symbol_uuid "
+					"WHERE ks.kernel_uuid = ";
+				query_out += params[0].param_str;
+				query_out += " ORDER BY l.instruction_type_lookup_uuid";
+				result = kRocProfVisDmResultSuccess;
+			}
+		}
+		return result;
+	}
+
+	rocprofvis_dm_result_t ComputeQueryFactory::GetComputeKernelInstructionSamples(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params, rocprofvis_dm_string_t& query_out) {
+		rocprofvis_dm_result_t result = kRocProfVisDmResultNotSupported;
+		if (IsVersionGreaterOrEqual("2.2.0"))
+		{
+			result = kRocProfVisDmResultInvalidParameter;
+			if (num == 1 && params != nullptr && params[0].param_type == kRPVComputeParamKernelId)
+			{
+				query_out =
+					"SELECT sm.instruction_sample_uuid, "
+					"sm.pc_sample_state_uuid AS instruction_sample_state_uuid, "
+					"sm.instruction_sample_lookup_uuid, "
+					"COALESCE(sm.count, 0) AS instruction_sample_count "
+					"FROM compute_instruction_sample sm "
+					"JOIN compute_pc_sample_state s ON s.pc_sample_state_uuid = sm.pc_sample_state_uuid "
+					"JOIN compute_instruction_line il ON il.instruction_uuid = s.instruction_uuid "
+					"JOIN compute_kernel_symbol ks ON ks.kernel_symbol_uuid = il.kernel_symbol_uuid "
+					"WHERE ks.kernel_uuid = ";
+				query_out += params[0].param_str;
+				query_out += " ORDER BY sm.instruction_sample_uuid";
+				result = kRocProfVisDmResultSuccess;
+			}
+		}
+		return result;
+	}
+
+	rocprofvis_dm_result_t ComputeQueryFactory::GetComputeKernelInstructionSampleLookups(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params, rocprofvis_dm_string_t& query_out) {
+		rocprofvis_dm_result_t result = kRocProfVisDmResultNotSupported;
+		if (IsVersionGreaterOrEqual("2.2.0"))
+		{
+			result = kRocProfVisDmResultInvalidParameter;
+			if (num == 1 && params != nullptr && params[0].param_type == kRPVComputeParamKernelId)
+			{
+				query_out =
+					"SELECT DISTINCT l.instruction_sample_lookup_uuid "
+					"AS instruction_sample_lookup_record_uuid, "
+					"COALESCE(l.text, '') AS instruction_sample_lookup_text "
+					"FROM compute_instruction_sample_lookup l "
+					"JOIN compute_instruction_sample sm ON sm.instruction_sample_lookup_uuid = l.instruction_sample_lookup_uuid "
+					"JOIN compute_pc_sample_state s ON s.pc_sample_state_uuid = sm.pc_sample_state_uuid "
+					"JOIN compute_instruction_line il ON il.instruction_uuid = s.instruction_uuid "
+					"JOIN compute_kernel_symbol ks ON ks.kernel_symbol_uuid = il.kernel_symbol_uuid "
+					"WHERE ks.kernel_uuid = ";
+				query_out += params[0].param_str;
+				query_out += " ORDER BY l.instruction_sample_lookup_uuid";
 				result = kRocProfVisDmResultSuccess;
 			}
 		}
@@ -903,13 +1053,13 @@ void ComputeQueryFactory::ParseMetricParam(std::string metric_str, uint32_t work
 		{
 			vec.push_back("CREATE INDEX IF NOT EXISTS idx_metric_value_metric_uuid ON compute_metric_value(metric_uuid);");
 		}
-		if (CheckTableExists("pc_sampling_states_per_line", file_node_id))
+		if (CheckTableExists("compute_pc_sample_state", file_node_id))
 		{
-			vec.push_back("CREATE INDEX IF NOT EXISTS idx_pc_sampling_code_objects_kernel ON code_objects(kernel_id);");
-			vec.push_back("CREATE INDEX IF NOT EXISTS idx_pc_sampling_source_files_kernel ON source_files(kernel_id);");
-			vec.push_back("CREATE INDEX IF NOT EXISTS idx_pc_sampling_source_lines_file_line ON source_lines(source_file_id, line_number);");
-			vec.push_back("CREATE INDEX IF NOT EXISTS idx_pc_sampling_states_isa_line ON pc_sampling_states_per_line(isa_line);");
-			vec.push_back("CREATE INDEX IF NOT EXISTS idx_pc_sampling_reason_state ON pc_sampling_stall_reason(pc_sampling_states_per_line_id);");
+			vec.push_back("CREATE INDEX IF NOT EXISTS idx_instruction_line_kernel_symbol ON compute_instruction_line(kernel_symbol_uuid);");
+			vec.push_back("CREATE INDEX IF NOT EXISTS idx_kernel_symbol_kernel ON compute_kernel_symbol(kernel_uuid);");
+			vec.push_back("CREATE INDEX IF NOT EXISTS idx_kernel_symbol_code_object ON compute_kernel_symbol(code_object_uuid);");
+			vec.push_back("CREATE INDEX IF NOT EXISTS idx_pc_sample_state_instruction ON compute_pc_sample_state(instruction_uuid);");
+			vec.push_back("CREATE INDEX IF NOT EXISTS idx_pc_sample_stall_reason_state ON compute_pc_sample_stall_reason(pc_sample_state_uuid);");
 		}
 		
 	    threads.emplace_back(task, file_node_id);      
@@ -1018,20 +1168,32 @@ void ComputeQueryFactory::ParseMetricParam(std::string metric_str, uint32_t work
 		case kRPVComputeFetchKernelCodeObjects:
 			result = m_query_factory.GetComputeKernelCodeObjects(num, params, query);
 			break;
-		case kRPVComputeFetchKernelIsaToIsaDeps:
-			result = m_query_factory.GetComputeKernelIsaToIsaDeps(num, params, query);
+		case kRPVComputeFetchKernelSymbols:
+			result = m_query_factory.GetComputeKernelSymbols(num, params, query);
 			break;
-		case kRPVComputeFetchKernelIsaLines:
-			result = m_query_factory.GetComputeKernelIsaLines(num, params, query);
+		case kRPVComputeFetchKernelInstructionTypeLookups:
+			result = m_query_factory.GetComputeKernelInstructionTypeLookups(num, params, query);
 			break;
-		case kRPVComputeFetchKernelIsaToSourceDeps:
-			result = m_query_factory.GetComputeKernelIsaToSourceDeps(num, params, query);
+		case kRPVComputeFetchKernelInstructionSamples:
+			result = m_query_factory.GetComputeKernelInstructionSamples(num, params, query);
 			break;
-		case kRPVComputeFetchKernelSamplingStates:
-			result = m_query_factory.GetComputeKernelSamplingStates(num, params, query);
+		case kRPVComputeFetchKernelInstructionSampleLookups:
+			result = m_query_factory.GetComputeKernelInstructionSampleLookups(num, params, query);
 			break;
-		case kRPVComputeFetchKernelSamplingStateReasonCounts:
-			result = m_query_factory.GetComputeKernelSamplingStateReasonCounts(num, params, query);
+		case kRPVComputeFetchKernelInstructionLines:
+			result = m_query_factory.GetComputeKernelInstructionLines(num, params, query);
+			break;
+		case kRPVComputeFetchKernelInstructionSourceLines:
+			result = m_query_factory.GetComputeKernelInstructionSourceLines(num, params, query);
+			break;
+		case kRPVComputeFetchKernelPcSampleStates:
+			result = m_query_factory.GetComputeKernelPcSampleStates(num, params, query);
+			break;
+		case kRPVComputeFetchKernelPcSampleStallReasons:
+			result = m_query_factory.GetComputeKernelPcSampleStallReasons(num, params, query);
+			break;
+		case kRPVComputeFetchKernelPcSampleStallReasonLookups:
+			result = m_query_factory.GetComputeKernelPcSampleStallReasonLookups(num, params, query);
 			break;
 		default:
 			break;
@@ -1079,11 +1241,15 @@ void ComputeQueryFactory::ParseMetricParam(std::string metric_str, uint32_t work
 				case kRPVComputeFetchKernelSourceFiles:
 				case kRPVComputeFetchSourceFileSourceLines:
 				case kRPVComputeFetchKernelCodeObjects:
-				case kRPVComputeFetchKernelIsaToIsaDeps:
-				case kRPVComputeFetchKernelIsaLines:
-				case kRPVComputeFetchKernelIsaToSourceDeps:
-				case kRPVComputeFetchKernelSamplingStates:
-				case kRPVComputeFetchKernelSamplingStateReasonCounts:
+				case kRPVComputeFetchKernelSymbols:
+				case kRPVComputeFetchKernelInstructionTypeLookups:
+				case kRPVComputeFetchKernelInstructionSamples:
+				case kRPVComputeFetchKernelInstructionSampleLookups:
+				case kRPVComputeFetchKernelInstructionLines:
+				case kRPVComputeFetchKernelInstructionSourceLines:
+				case kRPVComputeFetchKernelPcSampleStates:
+				case kRPVComputeFetchKernelPcSampleStallReasons:
+				case kRPVComputeFetchKernelPcSampleStallReasonLookups:
 					callback = CallbackGetComputeGeneric;
 					break;
 				case kRPVComputeFetchWorkloadRooflineCeiling:
@@ -1562,15 +1728,21 @@ void ComputeQueryFactory::ParseMetricParam(std::string metric_str, uint32_t work
 		if (plan.contains("filters"))
 		{
 			auto& obj = plan["filters"].getObject();
-
-			for (auto& s : obj)
+			try
 			{
-				size_t column_index = std::atoll(s.first.c_str());
-				columns[column_index].filter = FilterExpression::Parse(columns[column_index].name + " " + s.second.getString());
-				columns[column_index].has_filter = true;
+				for (auto& s : obj)
+				{
+					size_t column_index = std::atoll(s.first.c_str());
+					columns[column_index].filter = FilterExpression::Parse(columns[column_index].name + " " + s.second.getString());
+					columns[column_index].has_filter = true;
+				}
+			}
+			catch (const std::exception& e)
+			{
+				spdlog::error("Error: {} ", e.what());
+				return kRocProfVisDmResultInvalidParameter;
 			}
 		}
-			
 
 		if (plan.contains("metric_selectors"))
 		{
@@ -1638,16 +1810,25 @@ void ComputeQueryFactory::ParseMetricParam(std::string metric_str, uint32_t work
 				columns[column_index++].eval_value = value;
 			}
 			bool passed_evaluation = true;
-			for (auto column : columns)
-			{
-				if (column.has_filter)
+			try
+            {
+				
+				for (auto column : columns)
 				{
-					if (!column.filter.Evaluate({ {column.name, column.eval_value} }))
+					if (column.has_filter)
 					{
-						passed_evaluation = false;
-						break;
+						if (!column.filter.Evaluate({ {column.name, column.eval_value} }))
+						{
+							passed_evaluation = false;
+							break;
+						}
 					}
-				}
+				}			
+			}
+			catch (const std::exception& e)
+			{
+				spdlog::error("Error: {} ", e.what());
+				return kRocProfVisDmResultInvalidParameter;
 			}
 			if (passed_evaluation)
 			{

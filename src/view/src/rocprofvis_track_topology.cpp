@@ -7,6 +7,8 @@
 #include "rocprofvis_utils.h"
 #include "rocprofvis_settings_manager.h"
 
+#include <unordered_set>
+
 namespace RocProfVis
 {
 namespace View
@@ -146,6 +148,30 @@ BuildProcessTree(TreeNode* parent, const ProcessModel& process,
                   process.sampled_threads, track_list);
 }
 
+// Flattens leaf track ids in tree order, deduping repeats (a track can appear more
+// than once, e.g. a device's queues under both the processor list and a stream).
+void
+CollectLeafTrackIds(const TreeNode* node, std::vector<uint64_t>& out,
+                    std::unordered_set<uint64_t>& seen)
+{
+    if(!node)
+    {
+        return;
+    }
+    if(node->IsLeaf())
+    {
+        const uint64_t track_id = static_cast<const LeafNode*>(node)->track_id;
+        if(seen.insert(track_id).second)
+        {
+            out.push_back(track_id);
+        }
+    }
+    for(const auto& child : node->children)
+    {
+        CollectLeafTrackIds(child.get(), out, seen);
+    }
+}
+
 }  // namespace
 
 TrackTopology::TrackTopology(DataProvider& dp)
@@ -211,6 +237,12 @@ const SidebarTree&
 TrackTopology::GetSidebarTree() const
 {
     return m_sidebar_tree;
+}
+
+const std::vector<uint64_t>&
+TrackTopology::GetTrackIdsInTreeOrder() const
+{
+    return m_track_order;
 }
 
 void
@@ -823,6 +855,12 @@ TrackTopology::BuildSidebarTree()
     }
 
     m_sidebar_tree.root = std::move(root);
+
+    // Cache the flattened, deduped leaf order so "Sort by topology" is an O(1)
+    // lookup of a clean permutation rather than a fresh tree walk each time.
+    m_track_order.clear();
+    std::unordered_set<uint64_t> seen;
+    CollectLeafTrackIds(m_sidebar_tree.root.get(), m_track_order, seen);
 }
 
 }  // namespace View

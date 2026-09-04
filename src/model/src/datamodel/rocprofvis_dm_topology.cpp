@@ -42,8 +42,9 @@ rocprofvis_dm_result_t   TopologyNode::SetBasicProperty(const char* name, rocpro
 		bool is_topology_id =
 			it->second == kRPVControllerQueueId ||
 			it->second == kRPVControllerCounterId ||
-			it->second == kRPVControllerProcessorId || 
-			it->second == kRPVControllerStreamId;
+			it->second == kRPVControllerProcessorId ||
+			it->second == kRPVControllerStreamId ||
+			it->second == kRPVControllerThreadId;
 		switch (type)
 		{
 		case kRPVTopologyDataTypeInt:
@@ -315,12 +316,12 @@ rocprofvis_dm_result_t TopologyNode::GetPropertyAsCharPtr(rocprofvis_dm_property
 			auto it = m_properties.begin();
 			std::advance(it, index);
 			if (std::holds_alternative<std::string>(it->second)) {
-				*value = (char*)std::get<std::string>(it->second).c_str();
+				*value = const_cast<char*>(std::get<std::string>(it->second).c_str());
 				return kRocProfVisDmResultSuccess;
 			}
 			else
 			{
-				*value = "";
+				*value = const_cast<char*>("");
 				return kRocProfVisDmResultSuccess;
 			}
 			ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN(ERROR_INVALID_PROPERTY_GETTER, kRocProfVisDmResultInvalidProperty);
@@ -329,12 +330,12 @@ rocprofvis_dm_result_t TopologyNode::GetPropertyAsCharPtr(rocprofvis_dm_property
 		{
 			auto it = m_properties.find(static_cast<unsigned int>(index));
 			if (it!=m_properties.end() && std::holds_alternative<std::string>(it->second)) {
-				*value = (char*)std::get<std::string>(it->second).c_str();
+				*value = const_cast<char*>(std::get<std::string>(it->second).c_str());
 				return kRocProfVisDmResultSuccess;
 			}
 			else
 			{
-				*value = "";
+				*value = const_cast<char*>("");
 				return kRocProfVisDmResultSuccess;
 			}
 			ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN(ERROR_INVALID_PROPERTY_GETTER, kRocProfVisDmResultInvalidProperty);
@@ -560,7 +561,7 @@ std::string TopologyNodeThread::GetNodeName() {
 	if (it != m_properties.end())
 	{
 		name += "(";
-		name += std::to_string(std::get<std::uint64_t>(it->second));
+		name += std::to_string(std::get<std::uint64_t>(it->second) & TOPOLOGY_ID_MASK);
 		name += ")";
 	}
 

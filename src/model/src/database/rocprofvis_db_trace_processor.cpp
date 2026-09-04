@@ -971,22 +971,32 @@ namespace RocProfVis
         rocprofvis_dm_num_string_table_filters_t num_string_table_filters, 
         rocprofvis_dm_string_table_filters_t string_table_filters, 
         bool include_substring,
+        bool include_category,
+        bool partial_matching,
         table_string_id_filter_map_t& filter)
     {
-        (void)include_substring;
         rocprofvis_dm_result_t result = kRocProfVisDmResultNotLoaded;
         if (num_string_table_filters > 0)
         {
             std::string query = "( ";
             for (int i = 0; i < num_string_table_filters; i++)
             {
-                if (i > 0) {
-                    query += " AND ";
+                if (i > 0) 
+                {
+                    query += partial_matching ? " OR " : " AND ";
                 }
-                query += "name LIKE '%" + std::string(string_table_filters[i]) + "%'";
+                query += include_substring ? "(name " : "(LOWER(name) ";
+                query += include_substring ? "LIKE '%" + std::string(string_table_filters[i]) + "%'" : "= LOWER('" + std::string(string_table_filters[i]) + "')";
+
+                if (include_category)
+                {
+                    query += " OR LOWER(category) ";
+                    query += include_substring ? "LIKE '%" + std::string(string_table_filters[i]) + "%'" : "= LOWER('" + std::string(string_table_filters[i]) + "')";
+                }
+                query += ")";
             }
 
-            filter[kRocProfVisDmOperationLaunch][0] = query;
+            filter[kRocProfVisDmOperationLaunch][0] = std::move(query);
             result = kRocProfVisDmResultSuccess;
         }
         return result;

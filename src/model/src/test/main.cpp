@@ -217,13 +217,13 @@ int main(int argc, char** argv)
                                                 rocprofvis_dm_hash_combine_timestamp(start_time, end_time, kRocProfVisDmHashedTimestampTagTrackSlice);
                                             rocprofvis_dm_slice_t slice = rocprofvis_dm_get_property_as_handle(track, kRPVDMSliceHandleTimed, hash_time);
                                             uint64_t num_records = rocprofvis_dm_get_property_as_uint64(slice, kRPVDMNumberOfRecordsUInt64, 0);
-                                            printf(ANSI_COLOR_MAGENTA "Track %d has %lld records, read time - %13.9f, number of rows processed = %ld\n" ANSI_COLOR_RESET, i, num_records, diff.count(), num_rows);
+                                            printf(ANSI_COLOR_MAGENTA "Track %d has %lld records, read time - %13.9f, number of rows processed = %u\n" ANSI_COLOR_RESET, i, num_records, diff.count(), num_rows);
                                             rocprofvis_dm_delete_all_time_slices(trace);
                                         }
                                     }
                                 }
                             }
-                            printf(ANSI_COLOR_MAGENTA "Whole trace read time - %13.9f,  number of rows processed = %ld\n" ANSI_COLOR_RESET, whole_trace_readtime,total_num_rows);
+                            printf(ANSI_COLOR_MAGENTA "Whole trace read time - %13.9f,  number of rows processed = %u\n" ANSI_COLOR_RESET, whole_trace_readtime,total_num_rows);
                             
                             
                             if (num_tracks > 0)
@@ -239,7 +239,7 @@ int main(int argc, char** argv)
                                         auto t2 = std::chrono::steady_clock::now();
                                         std::chrono::duration<double> diff = t2 - t1;
                                         uint32_t num_rows = ((RocProfVis::DataModel::Future*)object2wait)->GetProcessedRowsCount();
-                                        printf(ANSI_COLOR_MAGENTA "Whole trace read time - %13.9f, number of rows processed = %ld\n" ANSI_COLOR_RESET, diff.count(), num_rows);
+                                        printf(ANSI_COLOR_MAGENTA "Whole trace read time - %13.9f, number of rows processed = %u\n" ANSI_COLOR_RESET, diff.count(), num_rows);
                                         CheckMemoryFootprint(trace);
                                         PrintHeader("Time slice content, up to %d records", LIST_SIZE_LIMIT);
                                         int first_track = std::rand() % num_tracks;

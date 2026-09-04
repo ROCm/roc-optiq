@@ -750,7 +750,9 @@ AppWindow::Render()
 
     ImGui::Begin("Main Window", nullptr,
                  ImGuiWindowFlags_MenuBar | ImGuiWindowFlags_NoTitleBar |
-                     ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoBringToFrontOnFocus);
+                     ImGuiWindowFlags_NoResize |
+                     ImGuiWindowFlags_NoBringToFrontOnFocus |
+                     ImGuiWindowFlags_NoDocking);
 
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(14, m_default_spacing.y));
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(12, 6));
@@ -1226,7 +1228,7 @@ AppWindow::RenderViewMenu(Project* project)
                     trace_view_tab->SetSidebarViewVisibility(settings.show_sidebar);
             }
         }
-        if(ImGui::MenuItem("Show Histogram", nullptr, &settings.show_histogram))
+        if(ImGui::MenuItem("Show Timeline Overview", nullptr, &settings.show_histogram))
         {
             for(const auto& tab : m_tab_container->GetTabs())
             {

@@ -1013,6 +1013,9 @@ rocprofvis_result_t ProfilerProcessController::LaunchAsync(ProfilerConfig const*
 
     std::lock_guard<std::mutex> lock(m_mutex);
 
+    // Resolving every stage's tool, validating its working directory, logging
+    // the launch and starting the process all happen inside the pipeline now,
+    // so a flat config and a staged one take the same path.
     rocprofvis_result_t prepared = PreparePipeline(true);
     if (prepared != kRocProfVisResultSuccess)
     {

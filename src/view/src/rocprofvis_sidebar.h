@@ -94,7 +94,7 @@ private:
     DataProvider&                            m_data_provider;
     ImU32                                    m_active_node_color;
     // Remeasured once per Render(), shared by every lead-arrow row that frame.
-    int                                      m_lead_arrow_pad = 0;
+    int                                      m_lead_arrow_pad;
     EventManager::SubscriptionToken          m_track_visibility_token;
     EventManager::SubscriptionToken          m_metadata_changed_token;
 
@@ -102,17 +102,17 @@ private:
     // Revision of the topology tree m_sidebar_tree was built from. Row labels
     // also come from track metadata, so a metadata change rebuilds too even
     // when the topology itself has not moved.
-    uint64_t    m_built_revision = 0;
-    bool        m_rebuild_pending = true;
+    uint64_t    m_built_revision;
+    bool        m_rebuild_pending;
 
     EventManager::SubscriptionToken       m_reveal_track_token;
-    uint64_t                              m_reveal_track_id = 0;
-    bool                                  m_reveal_active   = false;
-    int                                   m_reveal_scroll_frames = 0;
+    uint64_t                              m_reveal_track_id;
+    bool                                  m_reveal_active;
+    int                                   m_reveal_scroll_frames;
     std::chrono::steady_clock::time_point m_reveal_start;
     std::unordered_set<const TreeNode*>   m_reveal_path;
-    const LeafNode*                       m_reveal_leaf = nullptr;
-    bool                                  m_reveal_leaf_in_processors = false;
+    const LeafNode*                       m_reveal_leaf;
+    bool                                  m_reveal_leaf_in_processors;
 };
 
 }  // namespace View

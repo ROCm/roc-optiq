@@ -286,8 +286,17 @@ SideBar::SideBar(std::shared_ptr<TimelineSelection>       timeline_selection,
 , m_tracks(tracks)
 , m_data_provider(dp)
 , m_active_node_color(0)
+, m_lead_arrow_pad(0)
 , m_track_visibility_token(EventManager::InvalidSubscriptionToken)
 , m_metadata_changed_token(EventManager::InvalidSubscriptionToken)
+, m_built_revision(0)
+, m_rebuild_pending(true)
+, m_reveal_track_token(EventManager::InvalidSubscriptionToken)
+, m_reveal_track_id(0)
+, m_reveal_active(false)
+, m_reveal_scroll_frames(0)
+, m_reveal_leaf(nullptr)
+, m_reveal_leaf_in_processors(false)
 {
     m_track_visibility_token = EventManager::GetInstance()->Subscribe(
         static_cast<int>(RocEvents::kTrackVisibilityChanged),

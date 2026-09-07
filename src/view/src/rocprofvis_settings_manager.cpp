@@ -157,7 +157,7 @@ constexpr std::array LIGHT_THEME_COLORS = {
     IM_COL32(140, 150, 170, 28),   // Colors::kGridColor
     IM_COL32(120, 162, 220, 255),  // Colors::kGridRed
     IM_COL32(54, 132, 214, 255),   // Colors::kSelectionBorder
-    IM_COL32(54, 132, 214, 34),    // Colors::kSelection
+    IM_COL32(54, 132, 214, 52),    // Colors::kSelection
     IM_COL32(140, 148, 168, 255),  // Colors::kBoundBox
     IM_COL32(247, 248, 250, 255),  // Colors::kFillerColor
     IM_COL32(190, 196, 208, 255),  // Colors::kScrollBarColor

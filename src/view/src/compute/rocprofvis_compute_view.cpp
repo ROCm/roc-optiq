@@ -172,8 +172,9 @@ ComputeView::CreateView()
                 false});
 
     m_tab_container->AddTab(
-        TabItem{"Source Code View", "compute_code_view",
-                std::make_shared<ComputeCodeView>(m_data_provider), false});
+        TabItem{"ISA View", "isa_view",
+                                     std::make_shared<ComputeIsaView>(m_data_provider),
+                                     false });
 
 #ifdef ROCPROFVIS_DEVELOPER_MODE
     m_tab_container->AddTab(

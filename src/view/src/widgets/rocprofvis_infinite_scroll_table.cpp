@@ -252,9 +252,12 @@ InfiniteScrollTable::UpdateFetchParams(std::shared_ptr<TableRequestParams>& para
 }
 
 void
-InfiniteScrollTable::CancelFetch()
+InfiniteScrollTable::CancelFetch(bool clear_pending /*= false*/)
 {
-    m_fetch_data = false;
+    if(clear_pending)
+    {
+        m_fetch_data = false;
+    }
     // Cancellation is asynchronous: the request stays with the provider until its
     // future resolves, so latch it the way FetchData does rather than re-cancelling
     // on every frame until then.
@@ -743,12 +746,7 @@ InfiniteScrollTable::FetchData()
     // Cancel pending requests.
     if(m_data_provider.IsRequestPending(m_request_id))
     {
-        if(!m_fetch_cancelled)
-        {
-            spdlog::debug("Cancelling previous table request: {}", m_widget_name);
-            m_data_provider.CancelRequest(m_request_id);
-            m_fetch_cancelled = true;
-        }
+        CancelFetch();
         // The retry below is the only thing that will send this request, and it
         // needs a frame to run in, so hold the lazy render loop open.
         RenderScheduler::GetInstance().RequestRender();

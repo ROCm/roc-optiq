@@ -750,7 +750,7 @@ MultiTrackTable::FetchSelectionData()
         m_table_model_mutable().ClearTable(m_table_type);
         // There is nothing left to ask for, and no later fetch will come along to
         // retire the outstanding one, so drop it here.
-        CancelFetch();
+        CancelFetch(true);
     }
     else
     {

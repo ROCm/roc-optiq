@@ -3578,7 +3578,14 @@ DataProvider::ProcessTableRequest(RequestInfo& req)
     }
     else
     {
-        spdlog::warn("Table request failed with code {}", req.response_code);
+        if(req.response_code != kRocProfVisResultCancelled)
+        {
+            spdlog::warn("Table request failed with code {}", req.response_code);
+        }
+        else
+        {
+            spdlog::debug("Table request cancelled, code {}", req.response_code);
+        }
     }
 
     // free the array

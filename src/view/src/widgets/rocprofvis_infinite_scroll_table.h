@@ -101,7 +101,7 @@ protected:
      * one already with the controller, so a late response cannot refill a table that
      * has since been cleared.
      */
-    void CancelFetch();
+    void CancelFetch(bool clear_pending = false);
     /* When false the body draws without its own frame, so a parent that already
      * draws one around the title and the table supplies the only border.
      */

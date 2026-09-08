@@ -1172,6 +1172,12 @@ The gate is `1.2.0` for every method except
 reads `compute_workload_metric_view` unconditionally and that view does
 not exist earlier.
 
+Metric-value queries distinguish invalid requests from unavailable data. A
+request that supplies a valid workload/kernel and at least one metric selector,
+but whose selectors do not resolve in that workload, builds a successful
+zero-row query. Mixed requests return the metrics that resolve. Omitting metric
+selectors entirely remains an invalid parameter error.
+
 The current PC-sampling block targets schema 2.2 and is version-gated at
 `2.2.0`. Its current tables are `compute_code_object_store`,
 `compute_instruction_line`, `compute_pc_sample_state`, and

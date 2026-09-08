@@ -147,6 +147,11 @@ ComputeTableView::FetchAllMetrics()
             metric_ids.push_back({ cat->id, tbl->id, std::nullopt });
     }
 
+    if(metric_ids.empty())
+    {
+        return;
+    }
+
     bool success = m_data_provider.FetchMetrics(
         MetricsRequestParams(workload->id, kernel_ids, metric_ids, m_client_id));
 

@@ -703,6 +703,10 @@ bool LocalProfilerExecutor::Cancel()
 
     if (kill(m_process_id, SIGTERM) != 0)
     {
+        // Logged because the caller can only report "could not cancel": a
+        // denied signal (EPERM, or a sandbox refusing it) is indistinguishable
+        // from an already-dead child without knowing the errno.
+        spdlog::error("Could not signal profiler process {}: errno {}", m_process_id, errno);
         m_process_id = -1;  // gone already
         m_is_running = false;
         return false;

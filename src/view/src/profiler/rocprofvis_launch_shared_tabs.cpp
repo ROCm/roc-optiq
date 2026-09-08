@@ -44,14 +44,18 @@ constexpr float kToggleKnobInset    = 2.0f;   // knob padding inside the track
 // form instead of a column of tall panels.
 constexpr float kCardPadY = 5.0f;
 
-// A dimmed "(?)" that shows a wrapped tooltip on hover.
+// Minimum height for the run-output console child.
+constexpr float kMinOutputConsoleHeight = 60.0f;
+
+// A dimmed "(?)" tooltip marker, frame-aligned to sit level with its field.
 void HelpTip(const char* tooltip)
 {
     ImGui::SameLine();
+    ImGui::AlignTextToFramePadding();
     ImGui::TextDisabled("(?)");
     if (ImGui::BeginItemTooltip())
     {
-        ImGui::PushTextWrapPos(ImGui::GetFontSize() * 25.0f);
+        ImGui::PushTextWrapPos(ImGui::GetFontSize() * kLaunchTooltipWrapEm);
         ImGui::TextUnformatted(tooltip);
         ImGui::PopTextWrapPos();
         ImGui::EndTooltip();
@@ -123,7 +127,24 @@ void LaunchCardHeader(const char* icon, const char* title, const char* help)
 
     if (help && help[0])
     {
-        HelpTip(help);
+        // Center the "(?)" on the larger title font (frame-padding alignment
+        // would leave it sitting low against the bigger header text).
+        const float title_cy =
+            (ImGui::GetItemRectMin().y + ImGui::GetItemRectMax().y) * 0.5f;
+        ImGui::SameLine();
+        const ImVec2 q_sz = ImGui::CalcTextSize("(?)");
+        const ImVec2 q_at(ImGui::GetCursorScreenPos().x, title_cy - q_sz.y * 0.5f);
+        ImGui::GetWindowDrawList()->AddText(q_at, settings.GetColor(Colors::kTextDim),
+                                            "(?)");
+        ImGui::Dummy(q_sz);
+        if (ImGui::IsMouseHoveringRect(q_at, ImVec2(q_at.x + q_sz.x, q_at.y + q_sz.y)))
+        {
+            ImGui::BeginTooltip();
+            ImGui::PushTextWrapPos(ImGui::GetFontSize() * kLaunchTooltipWrapEm);
+            ImGui::TextUnformatted(help);
+            ImGui::PopTextWrapPos();
+            ImGui::EndTooltip();
+        }
     }
     ImGui::Unindent(kAccentBarWidth + kAccentBarGap);
 }
@@ -242,6 +263,11 @@ void LaunchSubHeader(const char* text, const char* help)
 {
     SettingsManager& settings = SettingsManager::Get();
     ImGui::Spacing();
+    // Frame-align the label so its trailing "(?)" lines up with it.
+    if (help && help[0])
+    {
+        ImGui::AlignTextToFramePadding();
+    }
     ImGui::PushStyleColor(ImGuiCol_Text, settings.GetColor(Colors::kAccent));
     ImGui::TextUnformatted(text);
     ImGui::PopStyleColor();
@@ -310,6 +336,11 @@ bool ToggleSwitch(const char* label, bool* value)
     return changed;
 }
 
+float ToggleSwitchWidth()
+{
+    return ImGui::GetFrameHeight() * kToggleHeightScale * kToggleWidthScale;
+}
+
 bool RenderTargetSection(TargetSpec& target, ConnectionType connection, AppWindow* app_window,
                          const std::function<void()>& on_remote_browse_program,
                          const std::function<void()>& on_remote_browse_output)
@@ -327,8 +358,10 @@ bool RenderTargetSection(TargetSpec& target, ConnectionType connection, AppWindo
     SettingsManager&  settings      = SettingsManager::Get();
     ProfilerSettings& prof_settings = settings.GetProfilerSettings();
 
-    const float label_w  = 105.0f;
-    const float browse_w = 84.0f;
+    // Size the label column to the widest label so nothing clips at high DPI.
+    const float label_w  = std::max(kLaunchLabelColumnMinWidth,
+        ImGui::CalcTextSize("Output folder").x + ImGui::GetStyle().ItemSpacing.x * 2.0f);
+    const float browse_w = kLaunchActionButtonWidth;
     const float spacing  = ImGui::GetStyle().ItemSpacing.x;
     const float arrow_w  = ImGui::GetFrameHeight();
 
@@ -349,32 +382,8 @@ bool RenderTargetSection(TargetSpec& target, ConnectionType connection, AppWindo
         modified = true;
     }
 
-    ImGui::SameLine();
-    // Disabled only in remote mode without a remote-browse handler; local mode
-    // and remote-with-handler both keep the button live.
-    const bool exe_disabled = is_remote && !remote_browse_exe;
-    if (exe_disabled)
-    {
-        ImGui::BeginDisabled();
-    }
-    if (ImGui::Button("Browse##TargetExe", ImVec2(browse_w, 0)))
-    {
-        if (remote_browse_exe)
-        {
-            on_remote_browse_program();
-        }
-        else if (!is_remote && app_window)
-        {
-            app_window->ShowOpenFileDialog(
-                "Choose Program", {}, "",
-                [&target](std::string const& path) { target.executable = path; });
-        }
-    }
-    if (exe_disabled)
-    {
-        ImGui::EndDisabled();
-    }
-
+    // Recent-targets dropdown sits before Browse so Browse stays right-anchored
+    // and lines up with the Output folder row's Browse.
     if (has_recent)
     {
         ImGui::SameLine();
@@ -409,11 +418,38 @@ bool RenderTargetSection(TargetSpec& target, ConnectionType connection, AppWindo
         }
     }
 
+    ImGui::SameLine();
+    // Disabled only in remote mode without a remote-browse handler; local mode
+    // and remote-with-handler both keep the button live.
+    const bool exe_disabled = is_remote && !remote_browse_exe;
+    if (exe_disabled)
+    {
+        ImGui::BeginDisabled();
+    }
+    if (ImGui::Button("Browse##TargetExe", ImVec2(browse_w, 0)))
+    {
+        if (remote_browse_exe)
+        {
+            on_remote_browse_program();
+        }
+        else if (!is_remote && app_window)
+        {
+            app_window->ShowOpenFileDialog(
+                "Choose Program", {}, "",
+                [&target](std::string const& path) { target.executable = path; });
+        }
+    }
+    if (exe_disabled)
+    {
+        ImGui::EndDisabled();
+    }
+
     // --- Arguments (free-form, passed verbatim to the program) ----------------
     ImGui::AlignTextToFramePadding();
     ImGui::TextUnformatted("Arguments");
     ImGui::SameLine(label_w);
-    ImGui::SetNextItemWidth(-FLT_MIN);
+    // Reserve the Browse-row trailing width so this box's right edge lines up.
+    ImGui::SetNextItemWidth(-(browse_w + spacing));
     if (InputTextStringWithHint(
             "##TargetArgs", "e.g.  --iterations 100 --input data.bin", target.arguments))
     {
@@ -475,8 +511,10 @@ bool RenderToolLocationSection(std::string& tool_directory, ConnectionType conne
     const bool is_remote     = (connection == ConnectionType::kSsh);
     const bool remote_browse = is_remote && static_cast<bool>(on_remote_browse_directory);
 
-    const float label_w  = 105.0f;
-    const float browse_w = 84.0f;
+    // Size the label column to fit its label (matches RenderTargetSection).
+    const float label_w  = std::max(kLaunchLabelColumnMinWidth,
+        ImGui::CalcTextSize("Tools folder").x + ImGui::GetStyle().ItemSpacing.x * 2.0f);
+    const float browse_w = kLaunchActionButtonWidth;
     const float spacing  = ImGui::GetStyle().ItemSpacing.x;
 
     ImGui::AlignTextToFramePadding();
@@ -649,7 +687,9 @@ bool RenderOutputConsole(
 
     FontManager&     fonts       = settings.GetFontManager();
     ImGuiWindowFlags output_flags = ImGuiWindowFlags_HorizontalScrollbar;
-    float output_height = std::max(ImGui::GetContentRegionAvail().y - 30.0f, 60.0f);
+    // Fill the remaining height (no uneven bottom gap below the console).
+    float output_height =
+        std::max(ImGui::GetContentRegionAvail().y, kMinOutputConsoleHeight);
 
     // Terminal-style panel: darker background, soft corners, monospaced text.
     ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, settings.GetDefaultStyle().ChildRounding);

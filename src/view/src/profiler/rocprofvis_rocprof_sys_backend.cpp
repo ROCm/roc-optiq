@@ -130,11 +130,13 @@ namespace
 
 void HelpMarker(char const* env_var, char const* desc)
 {
+    // Frame-align so the "(?)" sits level with the field/toggle/label it follows.
     ImGui::SameLine();
+    ImGui::AlignTextToFramePadding();
     ImGui::TextDisabled("(?)");
     if (ImGui::BeginItemTooltip())
     {
-        ImGui::PushTextWrapPos(ImGui::GetFontSize() * 25.0f);
+        ImGui::PushTextWrapPos(ImGui::GetFontSize() * kLaunchTooltipWrapEm);
         ImGui::TextUnformatted(env_var);
         ImGui::Separator();
         ImGui::TextUnformatted(desc);
@@ -160,10 +162,8 @@ constexpr int   kCheckboxMaxCols  = 4;
 // Duration on one line).
 constexpr float kPresetLabelW    = 110.0f;
 constexpr float kPresetComboW    = 240.0f;
-constexpr float kOutputColW      = 160.0f;
-constexpr float kTraceInlineNumW = 85.0f;   // Delay / Duration inputs (share a row)
-constexpr float kTraceFieldGapX  = 16.0f;   // gap between Delay and Duration
-constexpr float kTraceRegionTrail = 26.0f;  // width reserved for the Region (?)
+constexpr float kOutputColW      = 160.0f;  // OUTPUT FORMAT column minimum width
+constexpr float kTraceInlineNumW = 85.0f;   // Delay / Duration numeric inputs
 
 // Renders a label in a fixed-width column and sizes the next item so a whole
 // column of controls lines up regardless of label length.
@@ -1133,26 +1133,31 @@ bool RocprofSysBackend::RenderGeneralTraceOptions()
 {
     bool changed = false;
 
-    // Delay + Duration share a row; Region takes the next.
+    // Stack Delay / Duration / Region in their own rows sharing a fixed label
+    // column, so their input boxes align and survive a compressed pane.
+    const ImGuiStyle& gs      = ImGui::GetStyle();
+    const float       label_w = ImGui::CalcTextSize("Duration (s)").x + gs.ItemSpacing.x * 2.0f;
+
     ImGui::AlignTextToFramePadding();
     ImGui::TextUnformatted("Delay (s)");
-    ImGui::SameLine();
+    ImGui::SameLine(label_w);
     ImGui::SetNextItemWidth(kTraceInlineNumW);
     changed |=
         ImGui::InputDouble("##TraceDelay", &m_settings.trace_delay, 0.0, 0.0, "%.2f");
 
-    ImGui::SameLine(0.0f, kTraceFieldGapX);
     ImGui::AlignTextToFramePadding();
     ImGui::TextUnformatted("Duration (s)");
-    ImGui::SameLine();
+    ImGui::SameLine(label_w);
     ImGui::SetNextItemWidth(kTraceInlineNumW);
     changed |= ImGui::InputDouble("##TraceDuration", &m_settings.trace_duration, 0.0,
                                   0.0, "%.2f");
 
     ImGui::AlignTextToFramePadding();
     ImGui::TextUnformatted("Region");
-    ImGui::SameLine();
-    ImGui::SetNextItemWidth(-kTraceRegionTrail);
+    ImGui::SameLine(label_w);
+    // Reserve room for the trailing "(?)" so it neither overlaps nor clips.
+    const float region_trail = gs.ItemSpacing.x * 2.0f + ImGui::CalcTextSize("(?)").x;
+    ImGui::SetNextItemWidth(-region_trail);
     changed |= InputTextStringWithHint("##TraceRegion",
                                        "ROCTX regions (comma-separated)",
                                        m_settings.trace_region);
@@ -1222,26 +1227,53 @@ bool RocprofSysBackend::RenderBackendsTab()
         }
     }
 
-    // Output format and the trace window sit side by side.
-    if (ImGui::BeginTable("general_split", 2, ImGuiTableFlags_None))
-    {
-        ImGui::TableSetupColumn("##out", ImGuiTableColumnFlags_WidthFixed, kOutputColW);
-        ImGui::TableSetupColumn("##trace", ImGuiTableColumnFlags_WidthStretch);
+    // Output format and the trace window sit side by side, stacking vertically
+    // when the pane is too narrow to keep both columns usable. The OUTPUT FORMAT
+    // column is sized to fit its widest row (the "ROCpd database" toggle + "(?)").
+    const ImGuiStyle& gs       = ImGui::GetStyle();
+    const float       toggle_w = ToggleSwitchWidth();
+    const float output_col_w =
+        std::max(kOutputColW, toggle_w + gs.ItemSpacing.x +
+                                  ImGui::CalcTextSize("ROCpd database").x +
+                                  gs.ItemSpacing.x + ImGui::CalcTextSize("(?)").x +
+                                  gs.ItemSpacing.x);
 
-        ImGui::TableNextColumn();
+    auto render_output_format = [&]() {
         LaunchSubHeader("OUTPUT FORMAT");
         changed |= ToggleSwitch("Perfetto trace", &m_settings.trace_backend);
         HelpMarker("ROCPROFSYS_TRACE", "Enable the Perfetto trace backend");
         changed |= ToggleSwitch("ROCpd database", &m_settings.use_rocpd);
         HelpMarker("ROCPROFSYS_USE_ROCPD", "Enable ROCpd SQLite output");
-
-        ImGui::TableNextColumn();
+    };
+    auto render_trace_window = [&]() {
         ImGui::BeginDisabled(has_preset);
         LaunchSubHeader("TRACE WINDOW");
         changed |= RenderGeneralTraceOptions();
         ImGui::EndDisabled();
+    };
+
+    // A usable trace column needs its label column plus a numeric input.
+    const float trace_min = ImGui::CalcTextSize("Duration (s)").x +
+                            gs.ItemSpacing.x * 3.0f + kTraceInlineNumW;
+    if (ImGui::GetContentRegionAvail().x >= output_col_w + trace_min &&
+        ImGui::BeginTable("general_split", 2, ImGuiTableFlags_None))
+    {
+        ImGui::TableSetupColumn("##out", ImGuiTableColumnFlags_WidthFixed, output_col_w);
+        ImGui::TableSetupColumn("##trace", ImGuiTableColumnFlags_WidthStretch);
+
+        ImGui::TableNextColumn();
+        render_output_format();
+
+        ImGui::TableNextColumn();
+        render_trace_window();
 
         ImGui::EndTable();
+    }
+    else
+    {
+        render_output_format();
+        ImGui::Spacing();
+        render_trace_window();
     }
 
     if (has_preset)
@@ -1338,6 +1370,7 @@ bool RocprofSysBackend::RenderRocmTab()
 
     BeginPresetLockedSection(m_settings.rocprof_preset);
 
+    ImGui::AlignTextToFramePadding();
     ImGui::Text("ROCm Domains:");
     HelpMarker("ROCPROFSYS_ROCM_DOMAINS",
                "ROCm SDK domains to trace (checked = enabled)");
@@ -1436,6 +1469,7 @@ bool RocprofSysBackend::RenderPerfettoTab()
     bool has_enable  = AnyEnabled(m_settings.enable_categories);
     bool has_disable = AnyEnabled(m_settings.disable_categories);
 
+    ImGui::AlignTextToFramePadding();
     ImGui::Text("Enable Categories (allowlist):");
     HelpMarker("ROCPROFSYS_ENABLE_CATEGORIES",
                "Perfetto categories to enable (mutually exclusive with disable list)");
@@ -1452,6 +1486,7 @@ bool RocprofSysBackend::RenderPerfettoTab()
 
     ImGui::Spacing();
 
+    ImGui::AlignTextToFramePadding();
     ImGui::Text("Disable Categories (denylist):");
     HelpMarker("ROCPROFSYS_DISABLE_CATEGORIES",
                "Perfetto categories to disable (mutually exclusive with enable list)");
@@ -1497,6 +1532,7 @@ bool RocprofSysBackend::RenderProcessSamplingTab()
 
     ImGui::Separator();
 
+    ImGui::AlignTextToFramePadding();
     ImGui::Text("AMD SMI Metrics:");
     HelpMarker("ROCPROFSYS_AMD_SMI_METRICS",
                "GPU metrics to collect (checked = enabled)");

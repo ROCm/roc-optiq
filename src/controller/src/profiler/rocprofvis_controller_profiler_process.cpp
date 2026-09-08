@@ -34,6 +34,17 @@ namespace Controller
 namespace
 {
 
+/*
+ * No status has been read from the child yet. Deliberately not 0: IsRunning()
+ * reports "not running" without reading a status when the process was never
+ * started or has already been reaped, and UpdateState() passes GetExitCode()
+ * straight to FinishStageLocked, which reads 0 as a stage that succeeded - so a
+ * zero default turns "we never learned how it ended" into "it ended well", and
+ * a pipeline advances to the next stage on the strength of it.
+ * SshProfilerExecutor already uses -1 for the same reason.
+ */
+constexpr int EXIT_CODE_NO_STATUS = -1;
+
 // Controller-authored line in the run output, marked so it is not mistaken for
 // something the profiler said. Matches the scrape engine's own sink format.
 void append_diagnostic(std::string& output_text, std::string const& text)
@@ -275,7 +286,7 @@ LocalProfilerExecutor::LocalProfilerExecutor()
     , m_stderr_read_handle(nullptr)
     , m_stderr_write_handle(nullptr)
     , m_is_running(false)
-    , m_exit_code(0)
+    , m_exit_code(EXIT_CODE_NO_STATUS)
 {
 }
 
@@ -527,6 +538,8 @@ static void set_exit_code_from_status(int status, int& exit_code)
     {
         exit_code = EXIT_CODE_SIGNAL_BASE + WTERMSIG(status);
     }
+    // Any other status leaves exit_code alone, which on a child whose status
+    // was never read is EXIT_CODE_NO_STATUS rather than a success.
 }
 
 LocalProfilerExecutor::LocalProfilerExecutor()
@@ -534,7 +547,7 @@ LocalProfilerExecutor::LocalProfilerExecutor()
     , m_stdout_fd(-1)
     , m_stderr_fd(-1)
     , m_is_running(false)
-    , m_exit_code(0)
+    , m_exit_code(EXIT_CODE_NO_STATUS)
 {
 }
 

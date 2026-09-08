@@ -303,7 +303,14 @@ void ProfilerScrapeEngine::match_line(std::string const& raw_line)
         catch (std::regex_error const& e)
         {
             rule.disabled = true;
-            slot.status   = kRPVProfilerScrapeRuleFailed;
+            // Only when the slot has nothing to lose. Rules sharing a key are
+            // all tried, so a lower-index rule can throw after a higher one has
+            // already matched, and this throw says nothing about that value.
+            // Reporting failure over it would discard a path the tool printed.
+            if (!slot.has_match)
+            {
+                slot.status = kRPVProfilerScrapeRuleFailed;
+            }
             if (!rule.logged_error)
             {
                 rule.logged_error = true;
@@ -316,7 +323,10 @@ void ProfilerScrapeEngine::match_line(std::string const& raw_line)
         catch (...)
         {
             rule.disabled = true;
-            slot.status   = kRPVProfilerScrapeRuleFailed;
+            if (!slot.has_match)
+            {
+                slot.status = kRPVProfilerScrapeRuleFailed;
+            }
             if (!rule.logged_error)
             {
                 rule.logged_error = true;

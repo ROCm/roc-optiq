@@ -136,7 +136,7 @@ namespace DataModel
             }
 
 
-            if (kRocProfVisDmResultSuccess == result && m_merged_table.RowCount() > 0)
+            if (kRocProfVisDmResultSuccess == result && m_merged_table.RowCount() > 0 && !future->Interrupted())
             {
                 result = ProcessCompoundQuery(handle, commands, !same_queries);
                 m_tracks = tracks;

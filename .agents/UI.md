@@ -1321,7 +1321,9 @@ bar-chart columns. Public:
 
 The hierarchical category-tab view. `RebuildTabs()` fills sub-tabs
 from `AvailableMetrics::Category`/`Table`/`Entry`. Pinning is
-delegated to `PinnedMetricTable`. Persistent via nested `Preset`.
+delegated to `PinnedMetricTable`. If a workload has no available metric
+tables, `FetchAllMetrics()` leaves the view empty without submitting an
+invalid zero-selector request. Persistent via nested `Preset`.
 
 ### `ComputeComparisonView` (`rocprofvis_compute_comparison.{h,cpp}`)
 

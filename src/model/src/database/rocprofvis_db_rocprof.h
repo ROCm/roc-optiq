@@ -11,21 +11,6 @@ namespace RocProfVis
 namespace DataModel
 {
 
-typedef struct rocprofvis_db_string_id_hash_t
-{
-    size_t operator()(const rocprofvis_db_string_id_t& s) const noexcept
-    {
-        size_t h1 = std::hash<uint64_t>{}(s.m_string_id);
-        size_t h2 = std::hash<uint32_t>{}(s.m_guid_id);
-        size_t h3 = std::hash<rocprofvis_db_string_type_t>{}(s.m_string_type);
-
-        size_t seed = h1;
-        seed ^= h2 + 0x9e3779b97f4a7c15ULL + (seed << 6) + (seed >> 2);
-        seed ^= h3 + 0x9e3779b97f4a7c15ULL + (seed << 6) + (seed >> 2);
-        return seed;
-    }
-} rocprofvis_db_string_id_hash_t;
-
 typedef enum rocprofvis_db_memalloc_type_t : uint8_t
 {
     kRPVMemActivityAlloc,
@@ -140,6 +125,7 @@ protected:
 
     uint64_t GetMemoryActivityTableSchemaHash();
     std::string GetLevelSchemaHashStr();
+    std::string GetProcessorIDSubquery(rocprofvis_dm_processor_identifiers_ptr processor) override;
 
 private:
 

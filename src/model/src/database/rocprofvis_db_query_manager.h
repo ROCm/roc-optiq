@@ -4,6 +4,7 @@
 #pragma once
 
 #include "rocprofvis_db_sqlite.h"
+#include "rocprofvis_db_systems.h"
 #include "sqlite3.h" 
 #include <set>
 #include <mutex>
@@ -48,41 +49,33 @@ typedef enum rocprofvis_db_sqlite_query_type_t
     kRPVNumSourceQueryTypes = 6
 } rocprofvis_db_sqlite_query_type_t;
 
-typedef enum rocprofvis_dm_track_search_id_t
-{
-    kRPVTrackSearchIdThreads,
-    kRPVTrackSearchIdThreadSamples,
-    kRPVTrackSearchIdDispatches,
-    kRPVTrackSearchIdMemAllocs,
-    kRPVTrackSearchIdMemCopies,
-    kRPVTrackSearchIdCounters,
-    kRPVTrackSearchIdStreams,
-    kRPVTrackSearchIdUnknown,
-} rocprofvis_dm_track_search_id_t;
-
-typedef enum rocprofvis_db_compound_table_type {
-    kRPVTableDataTypeEvent,
-    kRPVTableDataTypeSample,
-    kRPVTableDataTypeSearch,
-    kRPVTableDataTypesNum
-} rocprofvis_db_compound_table_type;
-
-typedef std::map<uint64_t, std::map<std::string, rocprofvis_event_data_category_enum_t>> rocprofvis_event_data_category_map_t;
+// type of map array for generating time slice query for multiple tracks
+typedef std::unordered_map<std::string, std::unordered_map<uint32_t,std::string>> slice_query_map_t;
+// type of map array for storing string id filters for op table queries 
+typedef std::unordered_map<rocprofvis_dm_event_operation_t, std::unordered_map<uint32_t, std::string>> table_string_id_filter_map_t;
 
 // class for any Sqlite database methods and properties 
-class QueryManager : public SqliteDatabase
+class QueryManager : public SystemDatabase, public SqliteDatabase
 {
     friend class TableProcessor;
     friend class PackedTable;
     friend class TrackLookup;
+
     public:
         // Database constructor
         // @param path - full path to database file
         QueryManager( rocprofvis_db_filename_t path, RpvSqliteExecuteQueryCallback callback_add_any_record) : 
-                        SqliteDatabase(path), m_callback_add_any_record(callback_add_any_record),
+                        SystemDatabase(path), SqliteDatabase(this), m_callback_add_any_record(callback_add_any_record),
             m_table_processor{TableProcessor(this),TableProcessor(this),TableProcessor(this)} {};
         // SqliteDatabase destructor, must be defined as virtual to free resources of derived classes 
         virtual ~QueryManager() {};
+
+        // Method to open sqlite database
+        // @return status of operation
+        rocprofvis_dm_result_t Open() override { return OpenAsSqlite(); };
+        // Method to close sqlite database
+        // @return status of operation
+        rocprofvis_dm_result_t Close()  override { return CloseAsSqlite(); };
 
         // worker method to execute database query
         // @param query - database query 
@@ -153,6 +146,15 @@ class QueryManager : public SqliteDatabase
             bool count_only,
             rocprofvis_dm_string_t& query);
 
+        rocprofvis_dm_result_t
+            BuildTableSqlSubQuery(
+                rocprofvis_dm_timestamp_t start,
+                rocprofvis_dm_timestamp_t end,
+                rocprofvis_db_track_selection_t tracks,
+                std::vector<slice_query_map_t>& slice_query_map_array,
+                rocprofvis_dm_charptr_t where,
+                rocprofvis_dm_string_t& query);
+
         // method to build a query to read time slice of records for table view 
         // @param use_case - the method is multi-use, this is enumeration of use cases
         // @param start - start timestamp of time slice 
@@ -176,7 +178,7 @@ class QueryManager : public SqliteDatabase
             rocprofvis_dm_timestamp_t end,
             rocprofvis_db_num_of_tracks_t num,
             rocprofvis_db_track_selection_t tracks,
-            rocprofvis_dm_charptr_t where,
+            rocprofvis_dm_processor_identifiers_ptr processor,
             rocprofvis_dm_charptr_t filter,
             rocprofvis_dm_charptr_t group,
             rocprofvis_dm_charptr_t group_cols, 
@@ -207,7 +209,7 @@ class QueryManager : public SqliteDatabase
             rocprofvis_dm_timestamp_t end,
             rocprofvis_db_num_of_tracks_t num,
             rocprofvis_db_track_selection_t ops,
-            rocprofvis_dm_charptr_t where,
+            rocprofvis_dm_processor_identifiers_ptr processor,
             rocprofvis_dm_num_string_table_filters_t num_string_table_filters, 
             rocprofvis_dm_string_table_filters_t string_table_filters,
             bool include_substring,
@@ -241,12 +243,9 @@ class QueryManager : public SqliteDatabase
             rocprofvis_dm_track_params_t* props,
             rocprofvis_db_query_type_t query_type) = 0;
 
-        // Searches for strings matching the passed in list of filter strings and builds a WHERE IN clause for the table query.
+        // Searches for strings containing the passed in list of filter strings and builds a WHERE IN clause for the table query.
         // @param num_string_table_filters - number of filter strings
         // @param string_table_filters - array of filter strings
-        // @param include_substring - when true a string matches if it contains the filter, when false it has to equal the filter.
-        // @param include_category - when true the filters are matched against the event category as well as the event name, when false only against the event name.
-        // @param partial_matching - when true a string matches if it matches any of the filters, when false it has to match all of them.
         // @param filter - output string containing WHERE clause
         // @return status of operation
         virtual rocprofvis_dm_result_t BuildTableStringIdFilter(
@@ -256,17 +255,6 @@ class QueryManager : public SqliteDatabase
             bool include_category,
             bool partial_matching,
             table_string_id_filter_map_t& filter) = 0;
-
-        // needs to be overriden in all adapters. Used by public interface method. 
-        rocprofvis_dm_result_t BuildComputeQuery(
-            rocprofvis_db_compute_use_case_enum_t use_case, rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params,
-            rocprofvis_dm_string_t& query) override {
-            (void) use_case;
-            (void) num;
-            (void) params;
-            (void) query;
-            ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN("Systems database does not build compute query", kRocProfVisDmResultNotSupported);
-        }
 
         // Get prefix an suffix part of histogram calculation query
         std::string GetHistogramQueryPrefix(uint64_t bucket_size);
@@ -345,32 +333,23 @@ class QueryManager : public SqliteDatabase
             std::function<std::string(rocprofvis_dm_track_params_t*, rocprofvis_dm_charptr_t)> func_prepare,
             std::function<void(rocprofvis_dm_track_params_t*)> func_clear,
             guid_list_t run_for_db_instances);
-      
+    
         // executes set of queries asynchronously
-        rocprofvis_dm_result_t ExecuteQueriesAsync(
+        rocprofvis_dm_result_t GetEventTablesAsync(
             std::vector<std::pair<DbInstance*, std::string>>& queries,
             Future* parent,
             rocprofvis_dm_handle_t handle,
-            RpvSqliteExecuteQueryCallback callback);
+            RpvCallback callback) override;
 
-        // needs to be defined as override. Used by public interface method
-        rocprofvis_dm_result_t  ExecuteComputeQuery(
-            rocprofvis_db_compute_use_case_enum_t use_case,
-            rocprofvis_dm_charptr_t query,
-            Future* future) override {
-            (void) use_case;
-            (void) query;
-            (void) future;
-            ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN("Systems database does not support compute query", kRocProfVisDmResultNotSupported);
-        }
-
-        StringTable& StringTableReference() { return m_string_table; };
-
-        virtual rocprofvis_dm_result_t RemapStringId(uint64_t id, rocprofvis_db_string_type_t type, uint32_t node, uint64_t & result) = 0;
-        virtual void GetTrackIdentifierIndices(int column_index, char** azColName, rocprofvis_db_sqlite_track_identifier_index_t& track_ids_indices) = 0;
-        virtual bool FindTrack(rocprofvis_dm_track_category_t category, uint64_t id_process, uint64_t id_subprocess, uint32_t db_instance, uint32_t& out_track) = 0;
         virtual rocprofvis_dm_track_category_t GetRegionTrackCategory()    = 0;
         virtual const rocprofvis_event_data_category_map_t* GetCategoryEnumMap() = 0;
+        virtual std::string GetProcessorIDSubquery(rocprofvis_dm_processor_identifiers_ptr processor) { return std::string(); }
+
+        //--------------------------------------Table accessors-----------------------------------------------------------------
+        std::string TableColumnText(void* func, void* handle, char** azColName, int index) override;
+        int TableColumnInt(void* func, void* handle, char** azColName, int index) override;
+        int64_t TableColumnInt64(void* func, void* handle, char** azColName, int index) override;
+        double TableColumnDouble(void* func, void* handle, char** azColName, int index) override;
 
     private:
 
@@ -382,7 +361,7 @@ class QueryManager : public SqliteDatabase
 
     protected:
         TableProcessor m_table_processor[kRPVTableDataTypesNum];
-        StringTable m_string_table;
+
        
 };
 

@@ -145,7 +145,7 @@ class GoogleTraceProcessor : public QueryManager
         // ---------------------------------- Helpers ----------------------------------------
         rocprofvis_dm_result_t RemapStringId(uint64_t id, rocprofvis_db_string_type_t type, uint32_t node, uint64_t& result) override { result = id; return kRocProfVisDmResultSuccess; };
         rocprofvis_dm_track_category_t GetRegionTrackCategory() override { return kRocProfVisDmRegionTrack; }
-        void GetTrackIdentifierIndices(int column_index, char** azColName, rocprofvis_db_sqlite_track_identifier_index_t& track_ids_indices) override;
+        void GetTrackIdentifierIndices(int column_index, char** azColName, rocprofvis_db_track_identifier_index_t& track_ids_indices) override;
         bool FindTrack(rocprofvis_dm_track_category_t category, uint64_t id_process, uint64_t id_subprocess, uint32_t db_instance, uint32_t& out_track) override;
 
      private:

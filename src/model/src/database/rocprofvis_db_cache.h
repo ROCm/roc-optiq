@@ -19,6 +19,7 @@ typedef std::map<uint64_t, table_dict_t> table_map_t;
 typedef std::map<std::string, table_map_t> ref_map_t;
 
 class Database;
+class SystemDatabase;
 
 // Helper class to manage cached information tables (node, agent, queue, process, thread information)
 
@@ -70,7 +71,7 @@ class DatabaseCache
         void* GetTableHandle(const char* table_name);
       
         // Populate track extended data objects and topology tree with table content
-        rocprofvis_dm_result_t PopulateTrackExtendedDataTemplate(Database * db, uint32_t node_id, std::string table_name, uint64_t instance_id ); 
+        rocprofvis_dm_result_t PopulateTrackExtendedDataTemplate(SystemDatabase * db, uint32_t node_id, std::string table_name, uint64_t instance_id ); 
         // Populate track extended data objects and topology tree with table content
         rocprofvis_dm_result_t PopulateTrackTopologyData(Database * db, rocprofvis_dm_track_identifiers_t * track_indentifiers, uint32_t db_instance_id, std::string table_name, uint64_t process_id );
         // Get amount of memory used by the cached values map

@@ -4,6 +4,7 @@
 #include "rocprofvis_db_version.h"
 #include "rocprofvis_db_rocprof.h"
 #include "rocprofvis_db_rocpd.h"
+#include <sstream>
 
 namespace RocProfVis
 {
@@ -301,6 +302,56 @@ namespace DataModel
         }
         return result;
 	}
+
+    void DatabaseVersion::SetVersion(const char* version) {
+        m_db_version = ConvertVersionStringToInt(version);
+    }
+
+    std::vector<uint32_t>
+        DatabaseVersion::ConvertVersionStringToInt(const char* version)
+    {
+        std::vector<uint32_t> version_array;
+        std::stringstream ss(version);
+        std::string       token;
+        while(std::getline(ss, token, '.'))
+        {
+            version_array.push_back(std::stoi(token));
+        }
+        return version_array;
+    }
+
+    bool DatabaseVersion::IsVersionEqual(const char* version)
+    {
+        std::vector<uint32_t> db_version = ConvertVersionStringToInt(version);
+
+        for (int i = 0; i < db_version.size(); i++)
+        {
+            uint32_t token = (m_db_version.size() > i) ? m_db_version[i] : 0;
+            if(db_version[i] != token)
+            {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    bool DatabaseVersion::IsVersionGreaterOrEqual(const char* version) 
+    {
+        std::vector<uint32_t> db_version = ConvertVersionStringToInt(version);
+
+        for(int i = 0; i < db_version.size(); i++)
+        {
+            uint32_t token = (m_db_version.size() > i) ? m_db_version[i] : 0;
+            if(token > db_version[i])
+            {
+                return true;
+            } else if (token < db_version[i])
+            {
+                return false;
+            }
+        }
+        return true;
+    }
 
 }  // namespace DataModel
 }  // namespace RocProfVis

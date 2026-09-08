@@ -4,8 +4,6 @@ project(datamodel VERSION 0.1.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 
-add_subdirectory(../../thirdparty/sqlite3 thirdparty/sqlite3)
-
 include_directories(inc ${CMAKE_CURRENT_SOURCE_DIR}/src/common ${CMAKE_CURRENT_SOURCE_DIR}/src/database ${CMAKE_CURRENT_SOURCE_DIR}/src/datamodel ${CMAKE_CURRENT_SOURCE_DIR}/../controller/inc)
 
 set(CPACK_PROJECT_NAME ${PROJECT_NAME})
@@ -39,11 +37,25 @@ set(WRAPPER_SOURCE
         ${CMAKE_CURRENT_SOURCE_DIR}/src/database/rocprofvis_db_trace_processor_dll.cpp)
 list(REMOVE_ITEM DATABASE_SRC ${WRAPPER_SOURCE})
 
+if(NOT PROFILER_HUB_BUILD_ROC_OPTIQ_IFACE_LIB)
+message(STATUS "Profiler-hub disabled")
+add_subdirectory(../../thirdparty/sqlite3 thirdparty/sqlite3)
+set(PROFILER_HUB_IFACE_SRC 
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/database/profiler_hub_lib_interface.cpp 
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/database/rocprofvis_db_profiler_hub.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/database/rocprofvis_db_profiler_hub_client.cpp)
+list(REMOVE_ITEM DATABASE_SRC ${PROFILER_HUB_IFACE_SRC})
+else()
+message(STATUS "Profiler-hub enabled")
+add_definitions(-DUSE_PROFILER_HUB)
+endif()
+
 add_library(${PROJECT_NAME} ${DATAMODEL_SRC} ${DATABASE_SRC} ${COMMON_SRC} )
 target_include_directories(${PROJECT_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../core/inc)
 target_include_directories(${PROJECT_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../../thirdparty/jsoncpp)
 target_include_directories(${PROJECT_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../../thirdparty/perfetto/trace_processor/include)
 target_include_directories(${PROJECT_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../../thirdparty/perfetto/trace_processor/gen/build_config)
+
 
 # Only needed on Windows when Perfetto is available
 if(WIN32 AND PERFETTO_AVAILABLE)
@@ -55,7 +67,14 @@ if(WIN32 AND PERFETTO_AVAILABLE)
 endif()
 
 target_link_libraries(${PROJECT_NAME} roc-optiq-core)
+if(PROFILER_HUB_BUILD_ROC_OPTIQ_IFACE_LIB)
+target_link_libraries(${PROJECT_NAME} profiler-hub)
+target_link_libraries(${PROJECT_NAME} optiq_interface)
+target_include_directories(${PROJECT_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../../thirdparty/profiler-hub-client/optiq)
+get_target_property(SQLITE3_INCLUDE_DIR profiler-hub-sqlite3-static INCLUDE_DIRECTORIES)
+else()
 target_link_libraries(${PROJECT_NAME} sqlite3)
+endif()
 target_link_libraries(${PROJECT_NAME} spdlog)
 target_link_libraries(${PROJECT_NAME} yaml-cpp)
 target_link_libraries(${PROJECT_NAME} json)
@@ -110,6 +129,23 @@ if(BUILD_TESTING)
     add_test(NAME ${SYSTEM_TEST_NAME}-DB COMMAND ${SYSTEM_TEST_NAME} --input_file "${CMAKE_SOURCE_DIR}/sample/rocpd-transpose.db")
     set_tests_properties(${SYSTEM_TEST_NAME}-DB PROPERTIES RUN_SERIAL ON)
     set_tests_properties(${SYSTEM_TEST_NAME}-DB PROPERTIES WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}")
+
+    if(PROFILER_HUB_BUILD_ROC_OPTIQ_IFACE_LIB)
+    add_executable(${PROFILER_HUB_TEST_NAME} src/tests/rocprofvis_dm_profiler_hub_tests.cpp)
+    target_include_directories(${PROFILER_HUB_TEST_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../core/inc)
+    target_include_directories(${PROFILER_HUB_TEST_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../../thirdparty/jsoncpp)
+    target_include_directories(${PROFILER_HUB_TEST_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../../thirdparty/profiler-hub-client/optiq)
+    target_link_libraries(${PROFILER_HUB_TEST_NAME} PRIVATE ${PROJECT_NAME})
+    target_link_libraries(${PROFILER_HUB_TEST_NAME} PRIVATE Catch2::Catch2WithMain)
+    target_link_libraries(${PROFILER_HUB_TEST_NAME} PRIVATE roc-optiq-core)
+    target_link_libraries(${PROFILER_HUB_TEST_NAME} PRIVATE spdlog)
+    target_link_libraries(${PROFILER_HUB_TEST_NAME} PRIVATE optiq_interface)
+    target_link_libraries(${PROFILER_HUB_TEST_NAME} PRIVATE json)	
+    add_test(NAME ${PROFILER_HUB_TEST_NAME}-DB COMMAND ${SYSTEM_TEST_NAME} --input_file "${CMAKE_SOURCE_DIR}/sample/rocpd-transpose.db")
+    set_tests_properties(${PROFILER_HUB_TEST_NAME}-DB PROPERTIES RUN_SERIAL ON)
+    set_tests_properties(${PROFILER_HUB_TEST_NAME}-DB PROPERTIES WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}")
+    endif()
+
 	add_executable(${COMPUTE_TEST_NAME} src/tests/rocprofvis_dm_compute_tests.cpp)
     target_include_directories(${COMPUTE_TEST_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../core/inc)
     target_include_directories(${COMPUTE_TEST_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../../thirdparty/jsoncpp)

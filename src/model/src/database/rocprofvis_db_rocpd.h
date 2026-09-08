@@ -106,6 +106,8 @@ protected:
 
     std::string GetLevelSchemaHashStr();
 
+    std::string GetProcessorIDSubquery(rocprofvis_dm_processor_identifiers_ptr processor) override;
+
 private:
 
     // ------------------------------SQL query callbacks--------------------------------------

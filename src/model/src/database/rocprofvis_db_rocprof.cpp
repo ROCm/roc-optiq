@@ -78,7 +78,7 @@ int RocprofDatabase::CallbackParseMetadata(void* data, int argc, sqlite3_stmt* s
     ROCPROFVIS_ASSERT_MSG_RETURN(data, ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL, 1);
     void* func = (void*)&CallbackParseMetadata;
     rocprofvis_dm_track_params_t track_params = {0};
-    rocprofvis_db_sqlite_callback_parameters* callback_params = (rocprofvis_db_sqlite_callback_parameters*)data;
+    rocprofvis_db_query_callback_parameters* callback_params = (rocprofvis_db_query_callback_parameters*)data;
     RocprofDatabase* db = (RocprofDatabase*)callback_params->db;
     std::string tag = db->Sqlite3ColumnText(func, stmt, azColName, 1);
     if (tag == "schema_version")
@@ -191,7 +191,7 @@ int RocprofDatabase::CallbackCaptureMemoryActivity(void* data, int argc, sqlite3
     ROCPROFVIS_ASSERT_MSG_RETURN(argc==rocprofvis_db_sqlite_memory_alloc_activity_query_format::NUM_PARAMS, ERROR_DATABASE_QUERY_PARAMETERS_MISMATCH, 1);
     ROCPROFVIS_ASSERT_MSG_RETURN(data, ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL, 1);
     void*  func = (void*)&CallbackCaptureMemoryActivity;
-    rocprofvis_db_sqlite_callback_parameters* callback_params = (rocprofvis_db_sqlite_callback_parameters*)data;
+    rocprofvis_db_query_callback_parameters* callback_params = (rocprofvis_db_query_callback_parameters*)data;
     ROCPROFVIS_ASSERT_MSG_RETURN(callback_params->db_instance != nullptr, ERROR_NODE_KEY_CANNOT_BE_NULL, 1);
     RocprofDatabase* db = (RocprofDatabase*)callback_params->db;
     if(callback_params->future->Interrupted()) return SQLITE_ABORT;
@@ -522,7 +522,7 @@ int RocprofDatabase::CallBackAddString(void *data, int argc, sqlite3_stmt* stmt,
     ROCPROFVIS_ASSERT_MSG_RETURN(argc==3, ERROR_DATABASE_QUERY_PARAMETERS_MISMATCH, 1);
     ROCPROFVIS_ASSERT_MSG_RETURN(data, ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL, 1);
     void*  func = (void*)&CallBackAddString;
-    rocprofvis_db_sqlite_callback_parameters* callback_params = (rocprofvis_db_sqlite_callback_parameters*)data;
+    rocprofvis_db_query_callback_parameters* callback_params = (rocprofvis_db_query_callback_parameters*)data;
     ROCPROFVIS_ASSERT_MSG_RETURN(callback_params->db_instance != nullptr, ERROR_NODE_KEY_CANNOT_BE_NULL, 1);
     RocprofDatabase* db = (RocprofDatabase*)callback_params->db;
     if(callback_params->future->Interrupted()) return SQLITE_ABORT;
@@ -547,8 +547,8 @@ RocprofDatabase::CallbackNodeEnumeration(void* data, int argc, sqlite3_stmt* stm
     (void) argc;
     ROCPROFVIS_ASSERT_MSG_RETURN(data, ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL, 1);
     void*  func = (void*)&CallbackNodeEnumeration;
-    rocprofvis_db_sqlite_callback_parameters* callback_params =
-        (rocprofvis_db_sqlite_callback_parameters*) data;
+    rocprofvis_db_query_callback_parameters* callback_params =
+        (rocprofvis_db_query_callback_parameters*) data;
     RocprofDatabase* db = (RocprofDatabase*) callback_params->db;
     guid_list_t*     guid_list = (guid_list_t*) callback_params->handle;
     std::string      table_name_befor_guid = callback_params->query[kRPVCacheTableName];
@@ -640,6 +640,23 @@ RocprofDatabase::CreateIndexes()
     return kRocProfVisDmResultSuccess;
 }
 
+
+std::string RocprofDatabase::GetProcessorIDSubquery(rocprofvis_dm_processor_identifiers_ptr processor)
+{
+    std::string where_str;
+    if(processor)
+    {
+        if(processor->node_id)
+        {
+            where_str = std::string(Builder::NODE_ID_SERVICE_NAME) +" = " + std::to_string(*processor->node_id);
+            if(processor->agent_id)
+            {
+                where_str += std::string(" AND ") + Builder::AGENT_ID_SERVICE_NAME + " = " + std::to_string(*processor->agent_id & TOPOLOGY_ID_MASK);
+            }
+        }
+    }
+    return where_str;
+}
 
 rocprofvis_dm_result_t RocprofDatabase::GenerateInterdependencyTables(Future* future) {
 

@@ -33,6 +33,35 @@ Future::~Future(){
     }
 }
 
+#ifdef USE_PROFILER_HUB
+profiler_hub_future_handle_t Future::AddProfilerHubFuture()
+{
+    profiler_hub_future_handle_t handle = profiler_hub_future_alloc((profiler_hub::progress_callback_t)m_progress_callback);
+    std::unique_lock lock(m_mutex);
+    m_ph_futures.push_back(handle);
+    return handle;
+}
+
+void   
+Future::DeleteProfilerHubFuture(profiler_hub_future_handle_t ph_future) {
+
+    std::unique_lock lock(m_mutex);
+    auto it = std::find_if(m_ph_futures.begin(), m_ph_futures.end(), [&](profiler_hub_future_handle_t & f) { return f == ph_future; });
+    if (it != m_ph_futures.end())
+    {
+        m_ph_futures.erase(it);
+        profiler_hub_future_free(ph_future);
+    }
+}
+
+profiler_hub_result_t   
+Future::WaitAndDeleteProfilerHubFuture(profiler_hub_future_handle_t ph_future) {
+    profiler_hub_result_t result = profiler_hub_future_wait(ph_future, UINT64_MAX);
+    DeleteProfilerHubFuture(ph_future);
+    return result;
+}
+#endif
+
 Future* Future::AddSubFuture() {
     Future* sub_feature = (Future*)rocprofvis_db_future_alloc(nullptr);
     std::unique_lock lock(m_mutex);
@@ -69,13 +98,17 @@ void
 Future::SetInterrupted()
 {
     std::unique_lock lock(m_mutex);
-    if (m_sub_futures.size() > 0)
+
+    for (auto future : m_sub_futures)
     {
-        for (auto future : m_sub_futures)
-        {
-            future->SetInterrupted();
-        }
+        future->SetInterrupted();
     }
+#ifdef USE_PROFILER_HUB
+    for (auto future : m_ph_futures)
+    {
+        rocprofvis_db_future_cancel(future);
+    }
+#endif
     if (m_db != nullptr && m_connection != nullptr)
     {
         m_db->InterruptQuery(m_connection);

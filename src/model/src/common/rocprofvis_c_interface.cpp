@@ -3,6 +3,7 @@
 
 #include "rocprofvis_c_interface.h"
 #include "rocprofvis_core_profile.h"
+#include "rocprofvis_db_profiler_hub.h"
 #include "rocprofvis_db_rocpd.h"
 #include "rocprofvis_db_rocprof.h"
 #include "rocprofvis_dm_trace.h"
@@ -59,6 +60,26 @@ rocprofvis_dm_database_t rocprofvis_db_open_database(
     PROFILE;
     std::vector<std::string> multinode_files;
     if (db_type == rocprofvis_db_type_t::kAutodetect) {
+#ifdef USE_PROFILER_HUB
+        profiler_hub_db_type_t ph_db_type = profiler_hub_db_identify_type(filename);
+        if (ph_db_type == kDbSupported)
+        {
+            try {
+                RocProfVis::DataModel::Database* db = new RocProfVis::DataModel::ProfilerHub(filename);
+                if (kRocProfVisDmResultSuccess == db->Open()) {
+                    return db;
+                } else {
+                    ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN("Error! Failed to open database via Profiler Hub!",
+                        nullptr);
+                }
+            }
+            catch(std::exception ex)
+            {
+                ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN(
+                    RocProfVis::DataModel::ERROR_MEMORY_ALLOCATION_FAILURE, nullptr);
+            }
+        }
+#endif
 #ifdef ROCPROFVIS_PERFETTO_ENABLED
         db_type = RocProfVis::DataModel::GoogleTraceProcessor::Detect(filename);
         if (db_type == rocprofvis_db_type_t::kAutodetect)
@@ -195,7 +216,7 @@ rocprofvis_dm_database_t rocprofvis_db_open_database_multi(
         files.push_back(filenames[i]);
     }
     try {
-        RocProfVis::DataModel::Database* db =
+        RocProfVis::DataModel::SystemDatabase* db =
             new RocProfVis::DataModel::RocprofDatabase(files.front().c_str(), files);
         if (kRocProfVisDmResultSuccess == db->Open()) {
             return db;
@@ -369,7 +390,7 @@ rocprofvis_dm_result_t rocprofvis_db_read_trace_slice_async(
     ROCPROFVIS_ASSERT_MSG_RETURN(database,
                                  RocProfVis::DataModel::ERROR_DATABASE_CANNOT_BE_NULL,
                                  kRocProfVisDmResultInvalidParameter);
-    RocProfVis::DataModel::Database* db = (RocProfVis::DataModel::Database*) database;
+    RocProfVis::DataModel::SystemDatabase* db = (RocProfVis::DataModel::SystemDatabase*) database;
     return db->ReadTraceSliceAsync(start,end,tag,num,tracks,object);
 }
 
@@ -387,7 +408,7 @@ rocprofvis_db_read_trace_pmc_slice_async(
     ROCPROFVIS_ASSERT_MSG_RETURN(database,
                                  RocProfVis::DataModel::ERROR_DATABASE_CANNOT_BE_NULL,
                                  kRocProfVisDmResultInvalidParameter);
-    RocProfVis::DataModel::Database* db = (RocProfVis::DataModel::Database*) database;
+    RocProfVis::DataModel::SystemDatabase* db = (RocProfVis::DataModel::SystemDatabase*) database;
     return db->ReadTracePMCSliceAsync(start,end,tag,track,left_neighbor,right_neighbor,object);
 }
 
@@ -395,7 +416,7 @@ rocprofvis_dm_result_t rocprofvis_db_build_table_query(
     rocprofvis_dm_database_t database, rocprofvis_dm_table_use_case_enum_t use_case,
     rocprofvis_dm_timestamp_t start, rocprofvis_dm_timestamp_t end, 
     rocprofvis_db_num_of_tracks_t num, rocprofvis_db_track_selection_t tracks, 
-    rocprofvis_dm_charptr_t where, rocprofvis_dm_charptr_t filter, 
+    rocprofvis_dm_processor_identifiers_ptr processor, rocprofvis_dm_charptr_t filter, 
     rocprofvis_dm_charptr_t group, rocprofvis_dm_charptr_t group_cols, 
     rocprofvis_dm_charptr_t sort_column, rocprofvis_dm_sort_order_t sort_order, 
     uint64_t max_count, uint64_t offset, bool count_only, 
@@ -407,12 +428,12 @@ rocprofvis_dm_result_t rocprofvis_db_build_table_query(
                                  kRocProfVisDmResultInvalidParameter);
     ROCPROFVIS_ASSERT_MSG_RETURN(out_query, "Error! Query cannot be null.",
                                  kRocProfVisDmResultInvalidParameter);
-    RocProfVis::DataModel::Database* db = (RocProfVis::DataModel::Database*) database;
+    RocProfVis::DataModel::SystemDatabase* db = (RocProfVis::DataModel::SystemDatabase*) database;
     std::string query;
     rocprofvis_dm_result_t result = db->BuildTableQuery(use_case, 
                                                         start, end, 
                                                         num, tracks, 
-                                                        where, filter, 
+                                                        processor, filter, 
                                                         group, group_cols, 
                                                         sort_column, sort_order, 
                                                         max_count, offset, count_only, query);
@@ -432,7 +453,7 @@ rocprofvis_dm_result_t rocprofvis_db_build_event_search_query(
     rocprofvis_dm_database_t database, 
     rocprofvis_dm_timestamp_t start, rocprofvis_dm_timestamp_t end, 
     rocprofvis_db_num_of_tracks_t num, rocprofvis_db_track_selection_t ops,
-    rocprofvis_dm_charptr_t where,
+    rocprofvis_dm_processor_identifiers_ptr processor,
     rocprofvis_dm_num_string_table_filters_t num_string_table_filters, rocprofvis_dm_string_table_filters_t string_table_filters, 
     bool include_substring, bool include_category, bool partial_matching,
     rocprofvis_dm_charptr_t sort_column, rocprofvis_dm_sort_order_t sort_order,
@@ -445,11 +466,11 @@ rocprofvis_dm_result_t rocprofvis_db_build_event_search_query(
                                  kRocProfVisDmResultInvalidParameter);
     ROCPROFVIS_ASSERT_MSG_RETURN(out_query, "Error! Query cannot be null.",
                                  kRocProfVisDmResultInvalidParameter);
-    RocProfVis::DataModel::Database* db = (RocProfVis::DataModel::Database*) database;
+    RocProfVis::DataModel::SystemDatabase* db = (RocProfVis::DataModel::SystemDatabase*) database;
     std::string query;
     rocprofvis_dm_result_t result = db->BuildEventSearchQuery(start, end, 
                                                               num, ops,
-                                                              where,
+                                                              processor,
                                                               num_string_table_filters, string_table_filters,
                                                               include_substring, include_category, partial_matching,
                                                               sort_column, sort_order,
@@ -477,7 +498,7 @@ rocprofvis_dm_result_t rocprofvis_db_build_compute_query(
         kRocProfVisDmResultInvalidParameter);
     ROCPROFVIS_ASSERT_MSG_RETURN(out_query, "Error! Query cannot be null.",
         kRocProfVisDmResultInvalidParameter);
-    RocProfVis::DataModel::Database* db = (RocProfVis::DataModel::Database*) database;
+    RocProfVis::DataModel::ComputeDatabase* db = (RocProfVis::DataModel::ComputeDatabase*) database;
     std::string query;
     rocprofvis_dm_result_t result = db->BuildComputeQuery(use_case, num, params, query);
     if (result == kRocProfVisDmResultSuccess)
@@ -506,7 +527,7 @@ rocprofvis_dm_result_t rocprofvis_db_export_table_csv_async(
                                  kRocProfVisDmResultInvalidParameter);
     ROCPROFVIS_ASSERT_MSG_RETURN(file_path, "Error! Output path cannot be null.",
                                 kRocProfVisDmResultInvalidParameter);
-    RocProfVis::DataModel::Database* db = (RocProfVis::DataModel::Database*) database;
+    RocProfVis::DataModel::SystemDatabase* db = (RocProfVis::DataModel::SystemDatabase*) database;
     return db->ExportTableCSVAsync(query, file_path, object);
 }
 
@@ -524,7 +545,7 @@ rocprofvis_dm_result_t rocprofvis_db_trim_save_async(rocprofvis_dm_database_t da
                                  kRocProfVisDmResultInvalidParameter);
     ROCPROFVIS_ASSERT_MSG_RETURN(new_db_path, "Error! Database path cannot be null.",
                                  kRocProfVisDmResultInvalidParameter);
-    RocProfVis::DataModel::Database* db = (RocProfVis::DataModel::Database*) database;
+    RocProfVis::DataModel::SystemDatabase* db = (RocProfVis::DataModel::SystemDatabase*) database;
     return db->SaveTrimmedDataAsync(start, end, new_db_path, object);
 }
 
@@ -554,7 +575,7 @@ rocprofvis_dm_result_t  rocprofvis_db_read_event_property_async(
     ROCPROFVIS_ASSERT_MSG_RETURN(database,
                                  RocProfVis::DataModel::ERROR_DATABASE_CANNOT_BE_NULL,
                                  kRocProfVisDmResultInvalidParameter);
-    RocProfVis::DataModel::Database* db = (RocProfVis::DataModel::Database*) database;
+    RocProfVis::DataModel::SystemDatabase* db = (RocProfVis::DataModel::SystemDatabase*) database;
     return db->ReadEventPropertyAsync(type, event_id, object);
 }
 
@@ -583,7 +604,7 @@ rocprofvis_dm_result_t  rocprofvis_db_execute_query_async(
     ROCPROFVIS_ASSERT_MSG_RETURN(database,
                                  RocProfVis::DataModel::ERROR_DATABASE_CANNOT_BE_NULL,
                                  kRocProfVisDmResultInvalidParameter);
-    RocProfVis::DataModel::Database* db = (RocProfVis::DataModel::Database*) database;
+    RocProfVis::DataModel::SystemDatabase* db = (RocProfVis::DataModel::SystemDatabase*) database;
     return db->ExecuteQueryAsync(query, description, object, id);
 }
 
@@ -612,7 +633,7 @@ rocprofvis_dm_result_t  rocprofvis_db_execute_compute_query_async(
     ROCPROFVIS_ASSERT_MSG_RETURN(database,
         RocProfVis::DataModel::ERROR_DATABASE_CANNOT_BE_NULL,
         kRocProfVisDmResultInvalidParameter);
-    RocProfVis::DataModel::Database* db = (RocProfVis::DataModel::Database*) database;
+    RocProfVis::DataModel::ComputeDatabase* db = (RocProfVis::DataModel::ComputeDatabase*) database;
     return db->ExecuteComputeQueryAsync(use_case, query, object, id);
 }
 

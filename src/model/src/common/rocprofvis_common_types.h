@@ -92,7 +92,8 @@ typedef enum rocprofvis_db_system_source_type_t
 {
     kRPVSystemSourceRocpd,
     kRPVSystemSourceRocprof,
-    kRPVSystemSourcePerfetto
+    kRPVSystemSourcePerfetto,
+    kRPVSystemSourceProfillerHub
 }rocprofvis_db_system_source_type_t;
 
 typedef struct rocprofvis_dm_track_identifiers_t

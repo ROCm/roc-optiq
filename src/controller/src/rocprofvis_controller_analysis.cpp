@@ -505,7 +505,7 @@ rocprofvis_result_t Analysis::EventsTable::UnpackArguments(Arguments& args, Tabl
     result = args.GetUInt64(kRPVControllerTableArgsSortOrder, 0, &sort_order);
     sys_out->m_sort_column = sort_column_index;
     sys_out->m_sort_order = (rocprofvis_controller_sort_order_t)sort_order;
-    sys_out->m_where = "";
+    sys_out->m_processor = nullptr;
     sys_out->m_filter = "__op = " + std::to_string(m_op);
     sys_out->m_group = (m_op == kRocProfVisDmOperationLaunchSample) ? "name, COUNT(*) AS Invocations, SUM(duration) AS DurationTotal" :
         "name, COUNT(*) AS Invocations, SUM(duration) AS DurationTotal, AVG(duration) AS DurationAvg, MIN(duration) AS DurationMin, MAX(duration) AS DurationMax";

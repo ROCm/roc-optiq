@@ -154,7 +154,7 @@ class ProfileDatabase : public QueryManager
         uint64_t GetHistogramQueryAndSchemaHash();
 
         // get indeces of colums representing track identifiers
-        void GetTrackIdentifierIndices(int column_index, char** azColName, rocprofvis_db_sqlite_track_identifier_index_t& track_ids_indices) override;
+        void GetTrackIdentifierIndices(int column_index, char** azColName, rocprofvis_db_track_identifier_index_t& track_ids_indices) override;
 
         // process track discovery data and populate track parameters
         virtual int ProcessTrack(rocprofvis_dm_track_params_t& track_params, std::vector<rocprofvis_dm_string_t> & newqueries) = 0;

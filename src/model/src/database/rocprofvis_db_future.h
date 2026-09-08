@@ -4,6 +4,7 @@
 #pragma once
 
 #include "rocprofvis_common_types.h"
+#include "profiler_hub_lib_interface.h"
 #include <atomic>
 #include <future>
 #include <thread>
@@ -112,6 +113,12 @@ class Future
         void                                DeleteSubFuture(Future* sub_future);
         rocprofvis_dm_result_t              WaitAndDeleteSubFuture(Future* sub_future);
 
+#ifdef USE_PROFILER_HUB
+        profiler_hub_future_handle_t        AddProfilerHubFuture();
+        void                                DeleteProfilerHubFuture(profiler_hub_future_handle_t ph_future);
+        profiler_hub_result_t               WaitAndDeleteProfilerHubFuture(profiler_hub_future_handle_t ph_future);
+#endif
+
     private:
         static std::atomic<uint64_t> s_counter;
         // unique identifier for this future
@@ -137,6 +144,9 @@ class Future
         std::string           m_async_query;
         std::vector<Future*>  m_sub_futures;
         std::array<RuntimeValue, static_cast<size_t>(kRPVFutureRuntimeStorageSize)> m_runtime_storage;
+#ifdef USE_PROFILER_HUB
+        std::vector<profiler_hub_future_handle_t> m_ph_futures;
+#endif
 };
 
 }  // namespace DataModel

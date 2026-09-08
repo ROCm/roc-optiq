@@ -136,19 +136,21 @@ typedef enum rocprofvis_dm_event_operation_t {
 // Database type
 typedef enum rocprofvis_db_type_t {
     // input file auto-detection
-    kAutodetect = 0, 
+    kAutodetect, 
+    // supported by profiler hub
+    kProfilerHub ,
     // old schema Rocpd database
-	kRocpdSqlite = 1,
+	kRocpdSqlite ,
     // new schema Rocprof database
-	kRocprofSqlite = 2,
+	kRocprofSqlite,
     // new schema Rocprof multinode database
-    kRocprofMultinodeSqlite = 3,
+    kRocprofMultinodeSqlite,
     // compute database
-    kComputeSqlite = 4,
+    kComputeSqlite,
     // chrom trace or perfetto
-    kChromeTrace = 5,
-    kPerfettoTrace = 6,
-    kGoogleSqlite = 7
+    kChromeTrace,
+    kPerfettoTrace,
+    kGoogleSqlite
 
 } rocprofvis_db_type_t;
 
@@ -429,6 +431,12 @@ typedef enum rocprofvis_dm_sort_order_t {
     // Descending sort order
     kRPVDMSortOrderDesc,
 } rocprofvis_dm_sort_order_t;
+
+typedef struct rocprofvis_dm_processor_identifiers_t
+{
+    uint64_t* node_id;
+    uint64_t* agent_id;
+} rocprofvis_dm_processor_identifiers_t,  * rocprofvis_dm_processor_identifiers_ptr;
 
 // Tags for hrocprofvis_dm_hashed_timestamp
 typedef enum rocprofvis_dm_hashed_timestamp_tag_t

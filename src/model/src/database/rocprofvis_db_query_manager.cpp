@@ -39,7 +39,7 @@ int QueryManager::CallbackGetValue(void* data, int argc, sqlite3_stmt* stmt, cha
     ROCPROFVIS_ASSERT_MSG_RETURN(argc==1, ERROR_DATABASE_QUERY_PARAMETERS_MISMATCH, 1);
     ROCPROFVIS_ASSERT_MSG_RETURN(data, ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL, 1);
     void*  func = (void*)&CallbackGetValue;
-    rocprofvis_db_sqlite_callback_parameters* callback_params = (rocprofvis_db_sqlite_callback_parameters*)data;
+    rocprofvis_db_query_callback_parameters* callback_params = (rocprofvis_db_query_callback_parameters*)data;
     QueryManager* db = (QueryManager*) callback_params->db;
     std::string * string_ptr = (rocprofvis_dm_string_t*)callback_params->handle;
     ROCPROFVIS_ASSERT_MSG_RETURN(string_ptr, ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL, 1);
@@ -52,8 +52,8 @@ int QueryManager::CallbackMakeHistogramPerTrack(void* data, int argc, sqlite3_st
     ROCPROFVIS_ASSERT_MSG_RETURN(argc == 4, ERROR_DATABASE_QUERY_PARAMETERS_MISMATCH, 1);
     ROCPROFVIS_ASSERT_MSG_RETURN(data, ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL, 1);
     void *func = (void*)&CallbackMakeHistogramPerTrack;
-    rocprofvis_db_sqlite_callback_parameters* callback_params =
-        (rocprofvis_db_sqlite_callback_parameters*) data;
+    rocprofvis_db_query_callback_parameters* callback_params =
+        (rocprofvis_db_query_callback_parameters*) data;
     QueryManager* db = (QueryManager*) callback_params->db;
     if(callback_params->future->Interrupted()) return SQLITE_ABORT;
     uint32_t index                             = db->Sqlite3ColumnInt(func, stmt, azColName, 3);
@@ -67,7 +67,7 @@ int QueryManager::CallbackMakeHistogramPerTrack(void* data, int argc, sqlite3_st
 
 int QueryManager::CallbackRunQuery(void *data, int argc, sqlite3_stmt* stmt, char **azColName){
     ROCPROFVIS_ASSERT_MSG_RETURN(data, ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL, 1);
-    rocprofvis_db_sqlite_callback_parameters* callback_params = (rocprofvis_db_sqlite_callback_parameters*)data;
+    rocprofvis_db_query_callback_parameters* callback_params = (rocprofvis_db_query_callback_parameters*)data;
     QueryManager* db = (QueryManager*)callback_params->db;
     void* func = (void*)&CallbackRunQuery;
     if (callback_params->future->Interrupted()) return 1;
@@ -216,9 +216,6 @@ rocprofvis_dm_event_operation_t QueryManager::GetTableQueryOperation(std::string
     return kRocProfVisDmOperationNoOp;
 }
 
-
-
-
 bool QueryManager::IsEmptyRange(uint32_t track, uint64_t start, uint64_t end) {
     if (TABLE_QUERY_UNPACK_OP_TYPE(track) != 0)
         return false;
@@ -269,6 +266,54 @@ QueryManager::BuildCompoundQuery(
 {
     query = "";
 
+    BuildTableSqlSubQuery(
+        start, 
+        end, 
+        tracks, 
+        slice_query_map_array, 
+        where, 
+        query);
+    if(query.empty())
+    {
+        return kRocProfVisDmResultSuccess;
+    }
+    bool sample_query = false;
+    if(TABLE_QUERY_UNPACK_OP_TYPE(tracks[0]) == 0)
+    {
+        sample_query =
+            TrackPropertiesAt(tracks[0])->track_indentifiers.category ==
+            kRocProfVisDmPmcTrack;
+    }
+    else
+    {
+        sample_query =
+            (rocprofvis_dm_event_operation_t) TABLE_QUERY_UNPACK_OP_TYPE(
+                tracks[0]) == kRocProfVisDmOperationNoOp;
+    }
+    return TableProcessor::BuildTableSemanticSubQuery(
+        use_case,  
+        filter, 
+        group, 
+        group_cols, 
+        sort_column, 
+        sort_order, 
+        max_count, 
+        offset, 
+        count_only, 
+        sample_query,
+        query);
+
+}
+
+rocprofvis_dm_result_t
+QueryManager::BuildTableSqlSubQuery(
+    rocprofvis_dm_timestamp_t start,
+    rocprofvis_dm_timestamp_t end,
+    rocprofvis_db_track_selection_t tracks,
+    std::vector<slice_query_map_t>& slice_query_map_array, 
+    rocprofvis_dm_charptr_t where,
+    rocprofvis_dm_string_t& query)
+{
     size_t thread_count = std::thread::hardware_concurrency();
     bool   event_table  = false;
     for(int i = 0; i < slice_query_map_array.size(); i++)
@@ -340,119 +385,7 @@ QueryManager::BuildCompoundQuery(
             }
         }
     }
-    if(query.empty())
-    {
-        return kRocProfVisDmResultSuccess;
-    }
-    query += "-- CMD: TYPE ";
-    switch(use_case)
-    {
-    case kRPVDMTableUseCaseEventTrackTable:
-    {
-        query += std::to_string(kRPVTableDataTypeEvent);
-        break;
-    }
-    case kRPVDMTableUseCaseSampleTrackTable:
-    {
-        query += std::to_string(kRPVTableDataTypeSample);
-        break;
-    }
-    case kRPVDMTableUseCaseEventSearch:
-    {
-        query += std::to_string(kRPVTableDataTypeSearch);
-        break;
-    }
-    default:
-    {
-        return kRocProfVisDmResultInvalidParameter;
-        break;
-    }
-    }
-    query += "\n";
-
-    if(group && strlen(group))
-    {
-        query += "-- CMD: GROUP ";
-        if(group_cols && strlen(group_cols))
-        {
-            if(!FilterExpression::StartsWithSubstring(group, group_cols))
-            {
-                query += group_cols;
-                query += ", ";
-            }
-            query += group;
-        }
-        else
-        {
-            query += group;
-            bool sample_query = false;
-            if(TABLE_QUERY_UNPACK_OP_TYPE(tracks[0]) == 0)
-            {
-                sample_query =
-                    TrackPropertiesAt(tracks[0])->track_indentifiers.category ==
-                    kRocProfVisDmPmcTrack;
-            }
-            else
-            {
-                sample_query =
-                    (rocprofvis_dm_event_operation_t) TABLE_QUERY_UNPACK_OP_TYPE(
-                        tracks[0]) == kRocProfVisDmOperationNoOp;
-            }
-            if(sample_query)
-            {
-                query += ", COUNT(*) as count, AVG(value) as avg_value, MIN(value) as "
-                    "min_value, MAX(value) as max_value";
-            }
-            else
-            {
-                query += ", COUNT(*) as num_invocations, AVG(duration) as avg_duration, "
-                    "MIN(duration) as min_duration, MAX(duration) as max_duration";
-            }
-        }
-        query += "\n";
-    }
-
-    if(filter && strlen(filter))
-    {
-        query += "-- CMD: FILTER ";
-        query += filter;
-        query += "\n";
-    }
-
-    if(sort_column && strlen(sort_column))
-    {
-        query += "-- CMD: SORT";
-        if(sort_order == kRPVDMSortOrderAsc)
-        {
-            query += " ASC ";
-        }
-        else
-        {
-            query += " DESC ";
-        }
-        query += sort_column;
-        query += "\n";
-    }
-    if(count_only)
-    {
-        query += "-- CMD: COUNT";
-        query += "\n";
-    }
-    else
-    {
-        if(max_count)
-        {
-            query += "-- CMD: LIMIT ";
-            query += std::to_string(max_count);
-            query += "\n";
-        }
-        if(offset)
-        {
-            query += "-- CMD: OFFSET ";
-            query += std::to_string(offset);
-            query += "\n";
-        }
-    }
+   
     return kRocProfVisDmResultSuccess;
 }
 
@@ -462,7 +395,7 @@ QueryManager::BuildTableQuery(
     rocprofvis_dm_table_use_case_enum_t use_case, 
     rocprofvis_dm_timestamp_t start, rocprofvis_dm_timestamp_t end, 
     rocprofvis_db_num_of_tracks_t num, rocprofvis_db_track_selection_t tracks, 
-    rocprofvis_dm_charptr_t where, rocprofvis_dm_charptr_t filter,
+    rocprofvis_dm_processor_identifiers_ptr processor, rocprofvis_dm_charptr_t filter,
     rocprofvis_dm_charptr_t group, rocprofvis_dm_charptr_t group_cols,
     rocprofvis_dm_charptr_t sort_column, rocprofvis_dm_sort_order_t sort_order,
     uint64_t max_count, uint64_t offset, bool count_only, rocprofvis_dm_string_t& query)
@@ -502,7 +435,7 @@ QueryManager::BuildTableQuery(
         return kRocProfVisDmResultSuccess;    
     }
     return BuildCompoundQuery(use_case, start, end, num, tracks, slice_query_map_array,
-        where, filter, group, group_cols, sort_column, sort_order,
+        GetProcessorIDSubquery(processor).c_str(), filter, group, group_cols, sort_column, sort_order,
         max_count, offset, count_only, query);
 }
 
@@ -510,7 +443,7 @@ rocprofvis_dm_result_t
 QueryManager::BuildEventSearchQuery(
     rocprofvis_dm_timestamp_t start, rocprofvis_dm_timestamp_t end,
     rocprofvis_db_num_of_tracks_t num, rocprofvis_db_track_selection_t ops,
-    rocprofvis_dm_charptr_t where,
+    rocprofvis_dm_processor_identifiers_ptr processor,
     rocprofvis_dm_num_string_table_filters_t num_string_table_filters, rocprofvis_dm_string_table_filters_t string_table_filters,
     bool include_substring, bool include_category, bool partial_matching,
     rocprofvis_dm_charptr_t sort_column, rocprofvis_dm_sort_order_t sort_order,
@@ -551,7 +484,7 @@ QueryManager::BuildEventSearchQuery(
         return kRocProfVisDmResultSuccess;
     }
     return BuildCompoundQuery(kRPVDMTableUseCaseEventSearch, start, end, num, ops, slice_query_map_array,
-        where, nullptr, nullptr, nullptr, sort_column, sort_order,
+        GetProcessorIDSubquery(processor).c_str(), nullptr, nullptr, nullptr, sort_column, sort_order,
         max_count, offset, count_only, query);
 }
 
@@ -864,11 +797,17 @@ QueryManager::ExecuteQueryForAllTracksAsync(
 
             try
             {
-                futures.back()->SetWorker(std::move(
-                    std::thread(QueryManager::ExecuteSQLQueryStatic, this,
-                        futures.back(),
+                Future* future = futures.back();
+                const char* query = future->GetAsyncQueryPtr();
+                future->SetWorker(std::move(
+                    std::thread([this,
+                        future,
                         db_instance,
-                        futures.back()->GetAsyncQueryPtr(), callback)));
+                        query, callback]{
+                        return future->SetPromise(
+                            ExecuteSQLQuery(future, db_instance, query, callback)
+                        );
+                        })));
             }
             catch (const std::exception& ex)
             {
@@ -898,11 +837,11 @@ QueryManager::ExecuteQueryForAllTracksAsync(
 }
 
 rocprofvis_dm_result_t
-QueryManager::ExecuteQueriesAsync(
+QueryManager::GetEventTablesAsync(
     std::vector<std::pair<DbInstance*, std::string>>& queries,
     Future* parent,
     rocprofvis_dm_handle_t handle,
-    RpvSqliteExecuteQueryCallback callback)
+    RpvCallback callback)
 {
     rocprofvis_dm_result_t result = kRocProfVisDmResultSuccess;
     // Register each worker as a sub-future of the parent so it is reachable by
@@ -915,11 +854,15 @@ QueryManager::ExecuteQueriesAsync(
         futures[i] = parent->AddSubFuture();
         try
         {
+            Future* future = futures[i];
+            DbInstance* db_instance = queries[i].first;
+            const char* query = queries[i].second.c_str();
             futures[i]->SetWorker(std::move(
-                std::thread(ExecuteSQLQueryStaticWithHandle, this,
-                    futures[i],
-                    queries[i].first,
-                    queries[i].second.c_str(), handle, i, callback)));
+                std::thread([this, future, db_instance, query, handle, i, callback]{
+                    return future->SetPromise(
+                        ExecuteSQLQuery(future, db_instance, query, handle, i, (RpvSqliteExecuteQueryCallback)callback)
+                    );
+                    })));
         } catch(const std::exception& ex)
         {
             // The worker thread never started, so the sub-future's promise will
@@ -1061,6 +1004,19 @@ rocprofvis_dm_result_t QueryManager::ExportTableCSV(rocprofvis_dm_charptr_t quer
         ShowProgress(0, "CSV export failed", kRPVDbError, future);
     }
     return future->SetPromise(result);
+}
+
+std::string QueryManager::TableColumnText(void* func, void* handle, char** azColName, int index) {
+    return Sqlite3ColumnText(func, (sqlite3_stmt*)handle, azColName, index);
+}
+int QueryManager::TableColumnInt(void* func, void* handle, char** azColName, int index) {
+    return Sqlite3ColumnInt(func, (sqlite3_stmt*)handle, azColName, index);
+}
+int64_t QueryManager::TableColumnInt64(void* func, void* handle, char** azColName, int index) {
+    return Sqlite3ColumnInt64(func, (sqlite3_stmt*)handle, azColName, index);
+}
+double QueryManager::TableColumnDouble(void* func, void* handle, char** azColName, int index) {
+    return Sqlite3ColumnDouble(func, (sqlite3_stmt*)handle, azColName, index);
 }
 
 

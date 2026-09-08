@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 #include "rocprofvis_db_cache.h"
-#include "rocprofvis_db.h"
+#include "rocprofvis_db_systems.h"
 #include "rocprofvis_db_query_builder.h"
 
 namespace RocProfVis
@@ -151,7 +151,13 @@ namespace DataModel
         return &tables[table_name];
     }
 
-    rocprofvis_dm_result_t DatabaseCache::PopulateTrackExtendedDataTemplate(Database * db, uint32_t db_instance_id, std::string table_name, uint64_t process_id ){
+    rocprofvis_dm_size_t DatabaseCache::GetMemoryFootprint()
+    {
+        size_t size = 0;
+        return size;
+    }
+
+    rocprofvis_dm_result_t DatabaseCache::PopulateTrackExtendedDataTemplate(SystemDatabase * db, uint32_t db_instance_id, std::string table_name, uint64_t process_id ){
         rocprofvis_dm_track_params_t* track_properties = db->TrackPropertiesLast();
         TableCache& table = tables[table_name];
         uint32_t num_columns = table.NumColumns();

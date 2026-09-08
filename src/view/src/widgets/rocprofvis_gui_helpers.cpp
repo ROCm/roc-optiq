@@ -456,16 +456,33 @@ ElidedText(const char* text, float available_width, float tooltip_width,
 std::string
 ElideWithEllipsis(const std::string& text, float max_width, size_t max_chars)
 {
-    std::string out       = text.substr(0, max_chars);
-    bool        truncated = text.size() > max_chars;
-    while(!out.empty() && ImGui::CalcTextSize((out + "...").c_str()).x > max_width)
+    // Optional hard character cap first.
+    const std::string capped =
+        (max_chars < text.size()) ? text.substr(0, max_chars) : text;
+    bool truncated = capped.size() < text.size();
+
+    // Trim to fit max_width in one pass (CalcTextSizeA reports where it stopped).
+    const char* begin      = capped.c_str();
+    const char* end        = begin + capped.size();
+    const float ellipsis_w = ImGui::CalcTextSize(TEXT_ELLIPSIS).x;
+    const char* remaining  = begin;
+    ImGui::GetFont()->CalcTextSizeA(ImGui::GetFontSize(),
+                                    std::max(max_width - ellipsis_w, 0.0f), 0.0f, begin,
+                                    end, &remaining);
+    if(remaining < end)
     {
-        out.pop_back();
         truncated = true;
     }
+    // Keep at least one character so a shortened value is not just the ellipsis.
+    if(remaining == begin && end > begin)
+    {
+        remaining = begin + 1;
+    }
+
+    std::string out(begin, remaining);
     if(truncated)
     {
-        out += "...";
+        out += TEXT_ELLIPSIS;
     }
     return out;
 }

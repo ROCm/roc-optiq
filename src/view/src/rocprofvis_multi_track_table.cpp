@@ -470,17 +470,8 @@ MultiTrackTable::FetchSelectionData()
             m_included_tracks.push_back(track_id);
         }
     }
-
-    // if no tracks match the table type, clear the table
-    if(m_included_tracks.empty())
-    {
-        m_table_model_mutable().ClearTable(m_table_type);
-    }
-    else
-    {
-        // Fetch table data for the selected tracks
-        RequestFetch();
-    }
+    // Fetch table data for the selected tracks
+    RequestFetch();
 }
 
 void

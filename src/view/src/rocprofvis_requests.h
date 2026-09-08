@@ -170,6 +170,8 @@ public:
     std::string                        m_group_columns;
     std::string                        m_export_to_file_path;
 
+    virtual bool Empty() { return false; };
+
 protected:
     // Constructed only via derives...
     TableRequestParams(const TableRequestParams& table_params)            = default;
@@ -221,6 +223,8 @@ public:
     , m_track_ids(track_ids)
     {}
     TrackTableRequestParams() = default;
+
+    bool Empty() override { return m_track_ids.empty(); };
 };
 
 class EventSearchRequestParams : public TableRequestParams
@@ -258,6 +262,8 @@ public:
     {}
 
     EventSearchRequestParams() = default;
+
+    bool Empty() override { return m_op_types.empty(); };
 };
 
 // Event request parameters

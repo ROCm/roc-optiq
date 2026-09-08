@@ -680,18 +680,25 @@ InfiniteScrollTable::FetchData()
         UpdateFetchParams(table_params);
         if(table_params)
         {
-            // Fetch the event table with the updated params
-            m_fetch_data = !m_data_provider.FetchTable(*table_params);
-            if(m_fetch_data)
+            if(table_params->Empty())
             {
-                // reprocess it later (it's ok to replace the
-                // previous one as the new one reflects the latest state)
-                spdlog::warn("Failed to queue table request for: {}", m_widget_name);
+                m_table_model_mutable().ClearTable(m_table_type);
             }
             else
             {
-                spdlog::debug("Submitted table request: {}", m_widget_name);
-                m_fetch_cancelled = false;
+                // Fetch the event table with the updated params
+                m_fetch_data = !m_data_provider.FetchTable(*table_params);
+                if(m_fetch_data)
+                {
+                    // reprocess it later (it's ok to replace the
+                    // previous one as the new one reflects the latest state)
+                    spdlog::warn("Failed to queue table request for: {}", m_widget_name);
+                }
+                else
+                {
+                    spdlog::debug("Submitted table request: {}", m_widget_name);
+                    m_fetch_cancelled = false;
+                }
             }
         }
         else

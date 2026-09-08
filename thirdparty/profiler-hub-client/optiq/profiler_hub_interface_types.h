@@ -26,6 +26,7 @@ typedef uint32_t profiler_hub_track_id_t;
 typedef uint64_t profiler_hub_event_id_t;
 typedef uint32_t profiler_hub_string_id_t;
 typedef uint32_t profiler_hub_event_level_t;
+typedef uint64_t profiler_hub_row_id_t;
 
 // Error status, the list to be updated during development
 typedef enum profiler_hub_result_t {
@@ -104,3 +105,8 @@ typedef enum profiler_hub_db_type_t {
     kDbSupported,
 
 } profiler_hub_db_type_t;
+
+typedef enum profiler_hub_string_source_t {
+    kProfilerHubStringNameOrCategory,
+    kProfilerHubStringKernelSymbol,
+} profiler_hub_string_source_t;

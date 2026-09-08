@@ -97,33 +97,23 @@ namespace profiler_hub::client::interface
             double bucket_value
         );
 
-        // Add track extended info
+        // Reports info property to a caller
         // trace - handle of a trace, considering single profiler hub instance handles multiple traces.
-        // track_id - track id, the combination of trace+track_id can be replaced with track_handler, but then AddTrack has to return the handler and profiler-hub must keep it for reference
         // category - can be table name from where extended data has been taken, or synthesized
         // name - can be column name from where extended data has been taken, or synthesized
         // type - SQL type, as described in profiler_hub_value_type_t
+        // instance - what trace instance the track belongs to
         // value - value as a void pointer to a value , will be cast based on type
-        profiler_hub_result_t  AddTrackExtendedInfo(
+        profiler_hub_result_t  AddInfoProperty(
             client_trace_handle_t trace,
-            profiler_hub_track_id_t track_id,
+            profiler_hub_instance_id_t instance,
             profiler_hub_string_t category,
             profiler_hub_string_t name,
             profiler_hub_value_type_t type,
+            profiler_hub_row_id_t row_id,
             profiler_hub_value_handle_t value
         );
 
-        // Add time slice container for requested track and time window
-        // trace - handle of a trace, considering single profiler hub instance handles multiple traces.
-        // track_id - track id, the combination of trace+track_id can be replaced with track_handler, but then AddTrack has to return the handler and profiler-hub must keep it for reference
-        // timestamp_start - requested time start
-        // timestamp_end - requested time end
-        profiler_hub_timeslice_handle_t AddTimeSliceContainer(
-            client_trace_handle_t trace,
-            profiler_hub_track_id_t track_id,
-            uint64_t timestamp_start,
-            uint64_t timestamp_end
-        );
 
         // Add Event record to time slice container
         // container - time slice container handle
@@ -135,6 +125,8 @@ namespace profiler_hub::client::interface
         // symbol_id - index of symbol in string table, be ready to remap database table string index into data-model string table
         // level - event level for event stacking. The same level should be used to generate call stack trace. It seems to be most reliable and universal way, unlike parent_id/parent_stack_id combination
         profiler_hub_result_t AddEventRecord(
+            client_trace_handle_t trace,
+            profiler_hub_instance_id_t instance,
             profiler_hub_timeslice_handle_t container,
             profiler_hub_event_operation_t operation,
             profiler_hub_event_id_t event_id,
@@ -150,6 +142,8 @@ namespace profiler_hub::client::interface
         // timestamp - start time of the counter sample
         // value - counter sample value
         profiler_hub_result_t AddPmcRecord(
+            client_trace_handle_t trace,
+            profiler_hub_instance_id_t instance,
             profiler_hub_timeslice_handle_t container,
             uint64_t timestamp,
             double value
@@ -158,60 +152,28 @@ namespace profiler_hub::client::interface
         // Add an empty row to table processor container
         // container - table processor container handle
         profiler_hub_table_row_handle_t AddTableRowContainer(
-            profiler_hub_table_handle_t container
-        );
-
-        // Add column name and type to the table processor container
-        // container - table processor container handle
-        // name - column name
-        // type - column SQL type, as enumerated in profiler_hub_value_type_t
-        profiler_hub_result_t AddTableColumn(
-            profiler_hub_table_handle_t container,
-            profiler_hub_string_t name,
-            profiler_hub_value_type_t type
-        );
-
-        // Add table cell value as string. Although all strings should be converted to string table index inside profiler-hub
-        // container - table row container handle
-        // column_index - column index
-        // value - value as string
-        profiler_hub_result_t AddTableCellAsString(
-            profiler_hub_table_row_handle_t container,
-            uint32_t column_index,
-            profiler_hub_string_t value
-        );
-
-        // Add table cell value as integer. 
-        // container - table row container handle
-        // column_index - column index
-        // value - value as integer
-        profiler_hub_result_t AddTableCellAsInt(
-            profiler_hub_table_row_handle_t container,
-            uint32_t column_index,
-            uint64_t value
-        );
-
-        // Add table cell value as floating point. 
-        // container - table row container handle
-        // column_index - column index
-        // value - value as double
-        profiler_hub_result_t AddTableCellAsDouble(
-            profiler_hub_table_row_handle_t container,
-            uint32_t column_index,
-            double value
-        );
-
-        // Add flow trace container
-        // trace - handle of a trace, considering single profiler hub instance handles multiple traces.
-        // instance - multi-node instance,
-        // operation - event operation, as described in profiler_hub_event_operation_t
-        // event_id - event id relative to operation
-        profiler_hub_flowtrace_handle_t AddEventFlowTraceContainer(
             client_trace_handle_t trace,
-            profiler_hub_instance_id_t instance,
-            profiler_hub_event_operation_t operation,
-            profiler_hub_event_id_t event_id
+            profiler_hub_table_handle_t container,
+            size_t num_columns
         );
+
+
+        // Add table cell value
+        // container - table row container handle
+        // column_index - column index
+        // column_name - column name
+        // column_type - column value type
+        // value - value as string
+        profiler_hub_result_t AddTableCell(
+            client_trace_handle_t trace,
+            profiler_hub_table_row_handle_t container,
+            uint32_t column_index,
+            profiler_hub_string_t column_name,
+            profiler_hub_value_type_t column_type,
+            profiler_hub_value_handle_t value
+        );
+
+      
 
         // Add flow trace endpoint
         // container - flow trace container handle
@@ -224,27 +186,17 @@ namespace profiler_hub::client::interface
         // symbol_id - endpoint symbol id
         // level - endpoint level
         profiler_hub_result_t AddEventDataFlowEndPoint(
+            client_trace_handle_t trace,
             profiler_hub_flowtrace_handle_t container,
             profiler_hub_event_operation_t operation,
             profiler_hub_event_id_t event_id,
+            profiler_hub_track_id_t track_id,
             profiler_hub_flow_direction_t direction,
             uint64_t timestamp,
             uint64_t duration,
             profiler_hub_string_id_t category_id,
             profiler_hub_string_id_t symbol_id,
             profiler_hub_event_level_t level
-        );
-
-        // Add extended data container
-        // trace - handle of a trace, considering single profiler hub instance handles multiple traces.
-        // instance - multi-node instance, based on GUID when applicable
-        // operation - event operation, as described in profiler_hub_event_operation_t
-        // event_id - event id relative to operation
-        profiler_hub_ext_data_handle_t AddEventExtDataContainer(
-            client_trace_handle_t trace,
-            profiler_hub_instance_id_t instance,
-            profiler_hub_event_operation_t operation,
-            profiler_hub_event_id_t event_id
         );
 
         // Add extended data record
@@ -254,6 +206,8 @@ namespace profiler_hub::client::interface
         // type - SQL type, as described in profiler_hub_value_type_t
         // value - pointer to a value of type
         profiler_hub_result_t  AddEventExtendedInfo(
+            client_trace_handle_t trace,
+            profiler_hub_instance_id_t instance,
             profiler_hub_ext_data_handle_t container,
             profiler_hub_string_t category,
             profiler_hub_string_t name,
@@ -268,6 +222,8 @@ namespace profiler_hub::client::interface
         // level - event level
         // stream_level - event level on stream track, set to -1 if event doesn't belong to any stream
         profiler_hub_result_t  AddEventEssentialInfo(
+            client_trace_handle_t trace,
+            profiler_hub_instance_id_t instance,
             profiler_hub_ext_data_handle_t container,
             profiler_hub_track_id_t track_id,
             profiler_hub_track_id_t stream_track_id,
@@ -281,6 +237,8 @@ namespace profiler_hub::client::interface
         // name - argument name
         // type - argument type
         profiler_hub_result_t  AddEventArgumentsInfo(
+            client_trace_handle_t trace,
+            profiler_hub_instance_id_t instance,
             profiler_hub_ext_data_handle_t container,
             uint32_t position,
             profiler_hub_string_t name,
@@ -288,17 +246,6 @@ namespace profiler_hub::client::interface
             profiler_hub_string_t value
         );
 
-        // Add event call stack container
-        // trace - handle of a trace, considering single profiler hub instance handles multiple traces.
-        // instance - multi-node instance, based on GUID when applicable
-        // operation - event operation, as described in profiler_hub_event_operation_t
-        // event_id - event id relative to operation
-        profiler_hub_call_stack_handle_t AddEventCallStackContainer(
-            client_trace_handle_t trace,
-            profiler_hub_instance_id_t instance,
-            profiler_hub_event_operation_t operation,
-            profiler_hub_event_id_t event_id
-        );
 
         // Add call stack frame to container
         // container - call stack container
@@ -307,6 +254,8 @@ namespace profiler_hub::client::interface
         // line - stack frame code line
         // depth - stack frame depth
         profiler_hub_result_t  AddEventCallStackFrame(
+            client_trace_handle_t trace,
+            profiler_hub_instance_id_t instance,
             profiler_hub_call_stack_handle_t container,
             profiler_hub_string_t function,
             profiler_hub_string_t file,

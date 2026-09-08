@@ -64,8 +64,9 @@ namespace profiler_hub::missing_types
         std::optional<reader_types::sort_t> sort{ std::nullopt };  ///< Sort order
 
         /// Which event types to include (empty = all)
-        std::vector<reader_types::event_type_t> types;
+        reader_types::event_type_t type;
         std::vector<std::string> search_strings;
+        profiler_hub_instance_id_t instance;
     };
 }
 
@@ -100,10 +101,9 @@ public:
 
     static std::unordered_map<size_t, std::string> get_trace_string_table()
     {
-        // string table may have trings from different sqlite tables, e.g. rocpd_string and rocpd_info_kernel_symbol
-        // so, there are two options for profiler hub:
-        // 1) put all the strings into single string table, then, when string id is among requested fields, do proper remapping
-        // 2) have multiple methods get_trace_string_table(), get_trace_kernel_symbols_table() to provide original mapping and rely on caller to do remapping
+        // string table may have strings from different sqlite tables, e.g. rocpd_string and rocpd_info_kernel_symbol, maybe more
+        // put all the strings into single string table, then do proper remapping when send string id to a client
+
         throw_missing("string table");
         return {};
     }
@@ -120,8 +120,19 @@ public:
         return {};
     }
 
-    static profiler_hub_result_t trim_trace_database(uint64_t timestamp_start, uint64_t timestamp_end) {
+    static profiler_hub_result_t trim_trace_database(uint64_t timestamp_start, uint64_t timestamp_end, profiler_hub_string_t new_path) {
         throw_missing("trimming trace database");
+        return kProfilerHubStatusNotSupported;
+    }
+
+    static reader_types::counter_timeline_event_list_t missing_t::get_counter_events_for_track(
+        reader_types::track_info_ptr_t      track,
+        const reader_types::event_filter_t& filter,
+        bool left_neighbor,
+        bool right_neighbor)
+    {
+        throw_missing("performance counter events");
+        return {};
     }
 
     static missing_types::table_ptr_t get_event_table(

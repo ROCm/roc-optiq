@@ -68,6 +68,7 @@ namespace profiler_hub::interface
 			return kProfilerHubStatusInvalidArgument;
 		}
 		ph_trace->set_trace_properties(client_trace, config_dir_path, histogram_bucket_count);
+		return kProfilerHubStatusSuccess;
 	}
 
 	profiler_hub_result_t ReadTraceMetadata(
@@ -105,50 +106,12 @@ namespace profiler_hub::interface
 		return kProfilerHubStatusSuccess;
 	}
 
-	profiler_hub_value_type_t GetProperty(
-		profiler_hub_trace_handle_t trace,
-		profiler_hub_instance_id_t instance,
-		profiler_hub_property_category_t category,
-		uint64_t row_key,
-		profiler_hub_string_t property_tag,
-		profiler_hub_optional_t value // OUT
-	) {
-		profiler_hub_trace_t* ph_trace = static_cast<profiler_hub_trace_t*>(trace);
-		if (ph_trace == nullptr)
-		{
-			return kPprofilerHubDataTypeUndefined;
-		}
-		if (value == nullptr)
-		{
-			return kPprofilerHubDataTypeUndefined;
-		}
-
-		switch (category)
-		{
-		case kProfilerHubPropertyNode:
-			return ph_trace->get_node_info_by_tag(row_key, property_tag, value);
-		case kProfilerHubPropertyProcess:
-			return ph_trace->get_process_info_by_tag(row_key, property_tag, value);
-		case kProfilerHubPropertyThread:
-			return ph_trace->get_thread_info_by_tag(row_key, property_tag, value);
-		case kProfilerHubPropertyAgent:
-			return ph_trace->get_agent_info_by_tag(row_key, property_tag, value);
-		case kProfilerHubPropertyQueue:
-			return ph_trace->get_queue_info_by_tag(row_key, property_tag, value);
-		case kProfilerHubPropertyStream:
-			return ph_trace->get_stream_info_by_tag(row_key, property_tag, value);
-		case kProfilerHubPropertyCounter:
-			return ph_trace->get_pmc_info_by_tag(row_key, property_tag, value);
-		}
-
-		return kPprofilerHubDataTypeUndefined;
-		
-	}
 
 	profiler_hub_result_t GetTimeSlice(
 		profiler_hub_future_handle_t future_handle,
 		profiler_hub_trace_handle_t trace,
 		profiler_hub_track_id_t track_id,
+		profiler_hub_timeslice_handle_t slice_container,
 		uint64_t timestamp_start,
 		uint64_t timestamp_end
 	) {
@@ -162,9 +125,37 @@ namespace profiler_hub::interface
 		{
 			return kProfilerHubStatusInvalidArgument;
 		}
-		std::thread worker([ph_trace, future, track_id, timestamp_start, timestamp_end]()
+		std::thread worker([ph_trace, future, track_id, slice_container, timestamp_start, timestamp_end]()
 			{
-				future->set_promise(ph_trace->get_time_slice(future, track_id, timestamp_start, timestamp_end));
+				future->set_promise(ph_trace->get_time_slice(future, track_id, slice_container, timestamp_start, timestamp_end));
+			});
+		future->set_worker(std::move(worker));
+		return kProfilerHubStatusSuccess;
+	}
+
+	profiler_hub_result_t GetPmcTimeSlice(
+		profiler_hub_future_handle_t future_handle,
+		profiler_hub_trace_handle_t trace,
+		profiler_hub_track_id_t track_id,
+		profiler_hub_timeslice_handle_t slice_container,
+		uint64_t timestamp_start,
+		uint64_t timestamp_end,
+		bool left_neighbor,
+		bool right_neighbor
+	) {
+		future_t* future = static_cast<future_t*>(future_handle);
+		if (future == nullptr)
+		{
+			return kProfilerHubStatusInvalidArgument;
+		}
+		profiler_hub_trace_t* ph_trace = static_cast<profiler_hub_trace_t*>(trace);
+		if (ph_trace == nullptr)
+		{
+			return kProfilerHubStatusInvalidArgument;
+		}
+		std::thread worker([ph_trace, future, track_id, slice_container, timestamp_start, timestamp_end, left_neighbor, right_neighbor]()
+			{
+				future->set_promise(ph_trace->get_pmc_time_slice(future, track_id, slice_container, timestamp_start, timestamp_end, left_neighbor, right_neighbor));
 			});
 		future->set_worker(std::move(worker));
 		return kProfilerHubStatusSuccess;
@@ -201,8 +192,7 @@ namespace profiler_hub::interface
 		profiler_hub_trace_handle_t trace,
 		profiler_hub_instance_id_t instance,
 		profiler_hub_table_handle_t table_handle,
-		size_t num_operations,
-		profiler_hub_event_operation_t* operations,
+		profiler_hub_event_operation_t operation,
 		uint64_t timestamp_start,
 		uint64_t timestamp_end,
 		size_t num_search_strings,
@@ -218,9 +208,9 @@ namespace profiler_hub::interface
 		{
 			return kProfilerHubStatusInvalidArgument;
 		}
-		std::thread worker([ph_trace, future, table_handle, num_operations, operations, timestamp_start, timestamp_end, num_search_strings, string_filters]()
+		std::thread worker([ph_trace, future, table_handle, operation, timestamp_start, timestamp_end, num_search_strings, string_filters, instance]()
 			{
-				future->set_promise(ph_trace->get_search_time_slice(future, table_handle, num_operations, operations, timestamp_start, timestamp_end, num_search_strings, string_filters));
+				future->set_promise(ph_trace->get_search_time_slice(future, instance, table_handle, operation, timestamp_start, timestamp_end, num_search_strings, string_filters));
 			});
 		future->set_worker(std::move(worker));
 		return kProfilerHubStatusSuccess;
@@ -231,6 +221,7 @@ namespace profiler_hub::interface
 		profiler_hub_future_handle_t future_handle,
 		profiler_hub_trace_handle_t trace,
 		profiler_hub_instance_id_t instance,
+		profiler_hub_flowtrace_handle_t container,
 		profiler_hub_event_operation_t operation,
 		profiler_hub_event_id_t event_id
 	) {
@@ -244,9 +235,9 @@ namespace profiler_hub::interface
 		{
 			return kProfilerHubStatusInvalidArgument;
 		}
-		std::thread worker([ph_trace, future, instance, operation, event_id]()
+		std::thread worker([ph_trace, future, instance, container, operation, event_id]()
 			{
-				future->set_promise(ph_trace->get_data_flow_for_event(future, instance, operation, event_id));
+				future->set_promise(ph_trace->get_data_flow_for_event(future, instance, container, operation, event_id));
 			});
 		future->set_worker(std::move(worker));
 		return kProfilerHubStatusSuccess;
@@ -256,6 +247,7 @@ namespace profiler_hub::interface
 		profiler_hub_future_handle_t future_handle,
 		profiler_hub_trace_handle_t trace,
 		profiler_hub_instance_id_t instance,
+		profiler_hub_ext_data_handle_t container,
 		profiler_hub_event_operation_t operation,
 		profiler_hub_event_id_t event_id
 	) {
@@ -269,9 +261,9 @@ namespace profiler_hub::interface
 		{
 			return kProfilerHubStatusInvalidArgument;
 		}
-		std::thread worker([ph_trace, future, instance, operation, event_id]()
+		std::thread worker([ph_trace, future, instance, container, operation, event_id]()
 			{
-				future->set_promise(ph_trace->get_event_details(future, instance, operation, event_id));
+				future->set_promise(ph_trace->get_event_details(future, instance, container, operation, event_id));
 			});
 		future->set_worker(std::move(worker));
 		return kProfilerHubStatusSuccess;
@@ -281,6 +273,7 @@ namespace profiler_hub::interface
 		profiler_hub_future_handle_t future_handle,
 		profiler_hub_trace_handle_t trace,
 		profiler_hub_instance_id_t instance,
+		profiler_hub_call_stack_handle_t container,
 		profiler_hub_event_operation_t operation,
 		profiler_hub_event_id_t event_id
 	) {
@@ -294,9 +287,9 @@ namespace profiler_hub::interface
 		{
 			return kProfilerHubStatusInvalidArgument;
 		}
-		std::thread worker([ph_trace, future, instance, operation, event_id]()
+		std::thread worker([ph_trace, future, instance, container, operation, event_id]()
 			{
-				future->set_promise(ph_trace->get_event_stack_trace(future, instance, operation, event_id));
+				future->set_promise(ph_trace->get_event_stack_trace(future, instance, container, operation, event_id));
 			});
 		future->set_worker(std::move(worker));
 		return kProfilerHubStatusSuccess;
@@ -306,7 +299,8 @@ namespace profiler_hub::interface
 		profiler_hub_future_handle_t future_handle,
 		profiler_hub_trace_handle_t trace,
 		uint64_t timestamp_start,
-		uint64_t timestamp_end)
+		uint64_t timestamp_end,
+		profiler_hub_string_t new_path)
 	{
 		future_t* future = static_cast<future_t*>(future_handle);
 		if (future == nullptr)
@@ -318,9 +312,9 @@ namespace profiler_hub::interface
 		{
 			return kProfilerHubStatusInvalidArgument;
 		}
-		std::thread worker([ph_trace, future, timestamp_start, timestamp_end]()
+		std::thread worker([ph_trace, future, timestamp_start, timestamp_end, new_path]()
 			{
-				future->set_promise(ph_trace->trim_trace_database(future, timestamp_start, timestamp_end));
+				future->set_promise(ph_trace->trim_trace_database(future, timestamp_start, timestamp_end, new_path));
 			});
 		future->set_worker(std::move(worker));
 		return kProfilerHubStatusSuccess;

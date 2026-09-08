@@ -64,27 +64,8 @@ namespace profiler_hub::interface
             profiler_hub_trace_handle_t trace
         );
 
-        // Gets information tables property specified by caller
-        // Information tables list can be bigger that tables provided by schema
-        // Missing tables must be synthesized
-        // Use data-model code for reference
-        // trace - trace handle
-        // instance - multi-node instance, determined by GUID
-        // category - determines which cached table to use
-        // row_key - cached table row primary key
-        // property_tag - column name, usually provided by schema, sometimes synthesized
-        // value - return as string
-        // returns value type, kProfilerHubDataTypeUndefined if undefined
-        profiler_hub_value_type_t GetProperty(
-            profiler_hub_trace_handle_t trace,
-            profiler_hub_instance_id_t instance,
-            profiler_hub_property_category_t category,
-            uint64_t row_key,
-            profiler_hub_string_t property_tag,
-            profiler_hub_optional_t value // OUT
-        );
 
-        // time slice request
+        // event time slice request
         // trace - handle of a trace, considering single profiler hub instance handles multiple traces. 
         // track_id - it seems most practical to query time slice for single track, this method does not take instance id, because a single track must belong to single trace instance
         // timestamp_start - time-slice start
@@ -93,9 +74,29 @@ namespace profiler_hub::interface
             profiler_hub_future_handle_t future,
             profiler_hub_trace_handle_t trace,
             profiler_hub_track_id_t track_id,
+            profiler_hub_timeslice_handle_t slice_container,
             uint64_t timestamp_start,
             uint64_t timestamp_end
         );
+
+        // performance time slice request
+        // trace - handle of a trace, considering single profiler hub instance handles multiple traces. 
+        // track_id - it seems most practical to query time slice for single track, this method does not take instance id, because a single track must belong to single trace instance
+        // timestamp_start - time-slice start
+        // timestamp_end - time-slice end
+        // left_neighbor - start from sample to the left of timestamp_start
+        // right_neighbor - take extra sample to the right of timestamp_end
+        profiler_hub_result_t GetPmcTimeSlice(
+            profiler_hub_future_handle_t future,
+            profiler_hub_trace_handle_t trace,
+            profiler_hub_track_id_t track_id,
+            profiler_hub_timeslice_handle_t slice_container,
+            uint64_t timestamp_start,
+            uint64_t timestamp_end,
+            bool left_neghbor,
+            bool right_neighbor
+        );
+
 
         // get events data for the Table view. The rows will be post processed, aligned, grouped, filtered in the data-model
         // trace - handle of a trace, considering single profiler hub instance handles multiple traces. 
@@ -126,8 +127,7 @@ namespace profiler_hub::interface
             profiler_hub_trace_handle_t trace,
             profiler_hub_instance_id_t instance,
             profiler_hub_table_handle_t table_handle,
-            size_t num_operations,
-            profiler_hub_event_operation_t * operations,
+            profiler_hub_event_operation_t operation,
             uint64_t timestamp_start,
             uint64_t timestamp_end,
             size_t num_search_strings,
@@ -143,6 +143,7 @@ namespace profiler_hub::interface
             profiler_hub_future_handle_t future,
             profiler_hub_trace_handle_t trace,
             profiler_hub_instance_id_t instance,
+            profiler_hub_flowtrace_handle_t container,
             profiler_hub_event_operation_t operation,
             profiler_hub_event_id_t event_id
         );
@@ -156,6 +157,7 @@ namespace profiler_hub::interface
             profiler_hub_future_handle_t future,
             profiler_hub_trace_handle_t trace,
             profiler_hub_instance_id_t instance,
+            profiler_hub_ext_data_handle_t container,
             profiler_hub_event_operation_t operation,
             profiler_hub_event_id_t event_id
         );
@@ -169,6 +171,7 @@ namespace profiler_hub::interface
             profiler_hub_future_handle_t future,
             profiler_hub_trace_handle_t trace,
             profiler_hub_instance_id_t instance,
+            profiler_hub_call_stack_handle_t container,
             profiler_hub_event_operation_t operation,
             profiler_hub_event_id_t event_id
         );
@@ -177,11 +180,13 @@ namespace profiler_hub::interface
         // trace - handle of a trace, considering single profiler hub instance handles multiple traces. 
         // timestamp_start - trim start
         // timestamp_end - trim end
+        // new_path - file path to save trimmed database
         profiler_hub_result_t TrimTraceDatabase(
             profiler_hub_future_handle_t future_handle,
             profiler_hub_trace_handle_t trace,
             uint64_t timestamp_start,
-            uint64_t timestamp_end);
+            uint64_t timestamp_end,
+            profiler_hub_string_t new_path);
 
     }
 

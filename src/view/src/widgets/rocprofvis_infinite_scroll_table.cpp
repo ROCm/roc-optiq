@@ -255,6 +255,15 @@ void
 InfiniteScrollTable::CancelFetch()
 {
     m_fetch_data = false;
+    // Cancellation is asynchronous: the request stays with the provider until its
+    // future resolves, so latch it the way FetchData does rather than re-cancelling
+    // on every frame until then.
+    if(!m_fetch_cancelled && m_data_provider.IsRequestPending(m_request_id))
+    {
+        spdlog::debug("Cancelling table request, no longer needed: {}", m_widget_name);
+        m_data_provider.CancelRequest(m_request_id);
+        m_fetch_cancelled = true;
+    }
 }
 
 bool

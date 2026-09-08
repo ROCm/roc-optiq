@@ -97,7 +97,10 @@ protected:
      * controller, or one is held until the controller table frees up.
      */
     bool TableRequestInFlight() const;
-    // Drops a fetch still waiting for its turn, once it is obsolete.
+    /* Drops this table's fetch once it is obsolete: one still waiting its turn, and
+     * one already with the controller, so a late response cannot refill a table that
+     * has since been cleared.
+     */
     void CancelFetch();
     /* When false the body draws without its own frame, so a parent that already
      * draws one around the title and the table supplies the only border.

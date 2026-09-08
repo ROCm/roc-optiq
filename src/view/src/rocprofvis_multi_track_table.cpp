@@ -748,7 +748,8 @@ MultiTrackTable::FetchSelectionData()
     if(m_included_tracks.empty())
     {
         m_table_model_mutable().ClearTable(m_table_type);
-        // There is nothing left to ask for, so drop a fetch still waiting its turn.
+        // There is nothing left to ask for, and no later fetch will come along to
+        // retire the outstanding one, so drop it here.
         CancelFetch();
     }
     else

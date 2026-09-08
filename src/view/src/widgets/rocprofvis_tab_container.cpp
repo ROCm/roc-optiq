@@ -6,11 +6,14 @@
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_event_manager.h"
 #include <algorithm>
+#include <utility>
 
 namespace RocProfVis
 {
 namespace View
 {
+
+constexpr const char* TAB_CONTEXT_MENU_NAME = "##tab_ctx";
 
 TabContainer::TabContainer()
 : m_active_tab_index(s_invalid_index)
@@ -49,6 +52,47 @@ void
 TabContainer::EnableSendChangeEvent(bool enable)
 {
     m_enable_send_change_event = enable;
+}
+
+void
+TabContainer::SetTabContextMenuCallback(std::function<void(const TabItem&)> callback)
+{
+    m_tab_context_menu_callback = std::move(callback);
+}
+
+void
+TabContainer::RenderTabContextMenu()
+{
+    if(!m_tab_context_menu_callback || m_context_menu_tab_id.empty())
+    {
+        return;
+    }
+
+    auto it = std::find_if(m_tabs.begin(), m_tabs.end(), [this](const TabItem& tab) {
+        return tab.m_id == m_context_menu_tab_id;
+    });
+    if(it == m_tabs.end())
+    {
+        // The tab went away while its menu was open.
+        m_context_menu_tab_id.clear();
+        return;
+    }
+
+    // The menu would otherwise inherit the tightened spacing Render() pushes for
+    // the tab strip.
+    const ImGuiStyle& style = SettingsManager::GetInstance().GetDefaultStyle();
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, style.WindowPadding);
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, style.ItemSpacing);
+    if(ImGui::BeginPopup(TAB_CONTEXT_MENU_NAME))
+    {
+        m_tab_context_menu_callback(*it);
+        ImGui::EndPopup();
+    }
+    else
+    {
+        m_context_menu_tab_id.clear();
+    }
+    ImGui::PopStyleVar(2);
 }
 
 void
@@ -109,7 +153,8 @@ TabContainer::Render()
     int new_selected_tab = m_active_tab_index;
     if(!m_tabs.empty())
     {
-        int index_to_remove = s_invalid_index;
+        int         index_to_remove   = s_invalid_index;
+        std::string right_clicked_tab;
         // Distinguish unselected tabs from the surrounding panel.
         ImGui::PushStyleColor(ImGuiCol_Tab, settings.GetColor(Colors::kButton));
         ImGui::PushStyleColor(ImGuiCol_TabHovered,
@@ -152,6 +197,15 @@ TabContainer::Render()
                 bool tab_selected = ImGui::BeginTabItem(tab.m_label.c_str(), p_open, flags);
 
                 ImGui::PopStyleColor();
+
+                // The tab header is the last item here, but the popup is only opened
+                // once the bar is done so that its id does not depend on the per-tab
+                // id pushed above.
+                if(m_tab_context_menu_callback &&
+                   ImGui::IsItemClicked(ImGuiMouseButton_Right))
+                {
+                    right_clicked_tab = tab.m_id;
+                }
 
                 if(tab_selected)
                 {
@@ -198,6 +252,13 @@ TabContainer::Render()
             ImGui::EndTabBar();
         }
         ImGui::PopStyleColor(5);
+
+        if(!right_clicked_tab.empty())
+        {
+            m_context_menu_tab_id = right_clicked_tab;
+            ImGui::OpenPopup(TAB_CONTEXT_MENU_NAME);
+        }
+        RenderTabContextMenu();
 
         // Check if the active tab has changed
         if(m_active_tab_index != new_selected_tab)

@@ -9,6 +9,7 @@
 #endif
 #include "ImGuiFileDialog.h"
 
+#include "icons/rocprovfis_icon_defines.h"
 #include "rocprofvis_appmonitor.h"
 #include "rocprofvis_controller.h"
 #include "rocprofvis_events.h"
@@ -214,6 +215,8 @@ AppWindow::Init()
     m_tab_container->SetEventSourceName(TAB_CONTAINER_SRC_NAME);
     m_tab_container->EnableSendCloseEvent(true);
     m_tab_container->EnableSendChangeEvent(true);
+    m_tab_container->SetTabContextMenuCallback(
+        [this](const TabItem& tab) { RenderTabContextMenu(tab); });
 
     main_area_item.m_item = std::make_shared<RocCustomWidget>([this]() {
         if(m_shutdown_requested)
@@ -342,6 +345,92 @@ void
 AppWindow::SetTabLabel(const std::string& label, const std::string& id)
 {
     m_tab_container->SetTabLabel(label, id);
+}
+
+void
+AppWindow::RenderTabContextMenu(const TabItem& tab)
+{
+    auto copy_to_clipboard = [](const std::string& text, const std::string& message) {
+        ImGui::SetClipboardText(text.c_str());
+        NotificationManager::GetInstance().Show(message, NotificationLevel::Info);
+    };
+
+    // A compare tab covers several traces and is keyed by a synthetic "compare://"
+    // id, so each action fans out into a submenu listing the sources by the same
+    // A / B badge the timeline and sidebar use.
+    const std::vector<CompareSourceInfo>* sources = GetTabCompareSources(tab);
+    if(sources)
+    {
+        auto render_copy_menu = [&](const char* menu_label, bool full_path) {
+            if(!IconBeginMenu(ICON_COPY, menu_label))
+            {
+                return;
+            }
+
+            const std::string message =
+                full_path ? "File path was copied" : "File name was copied";
+            std::string every_value;
+            for(const CompareSourceInfo& source : *sources)
+            {
+                const std::string file_name =
+                    std::filesystem::path(source.path).filename().string();
+                const std::string& value = full_path ? source.path : file_name;
+                if(!every_value.empty())
+                {
+                    every_value += '\n';
+                }
+                every_value += value;
+
+                if(IconMenuItem(ICON_COPY, (source.id + ": " + file_name).c_str()))
+                {
+                    copy_to_clipboard(value, message);
+                }
+            }
+
+            ImGui::Separator();
+            if(IconMenuItem(ICON_COPY, "All"))
+            {
+                copy_to_clipboard(every_value, full_path ? "File paths were copied"
+                                                         : "File names were copied");
+            }
+            ImGui::EndMenu();
+        };
+
+        render_copy_menu("Copy file name", false);
+        render_copy_menu("Copy full path", true);
+        return;
+    }
+
+    // A project tab is labelled with the file name and identified by the full path.
+    if(IconMenuItem(ICON_COPY, "Copy file name"))
+    {
+        copy_to_clipboard(tab.m_label, "File name was copied");
+    }
+    if(IconMenuItem(ICON_COPY, "Copy full path"))
+    {
+        copy_to_clipboard(tab.m_id, "File path was copied");
+    }
+}
+
+const std::vector<CompareSourceInfo>*
+AppWindow::GetTabCompareSources(const TabItem& tab)
+{
+    const std::vector<CompareSourceInfo>* sources = nullptr;
+
+    Project* project = GetProject(tab.m_id);
+    if(project && project->GetTraceType() == Project::System)
+    {
+        TraceView* trace_view = dynamic_cast<TraceView*>(project->GetView().get());
+        if(trace_view && trace_view->GetDataProvider())
+        {
+            const TraceDataModel& model = trace_view->GetDataProvider()->DataModel();
+            if(model.HasCompareSources())
+            {
+                sources = &model.GetCompareSources();
+            }
+        }
+    }
+    return sources;
 }
 
 void

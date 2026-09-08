@@ -475,6 +475,14 @@ State of note:
   inline by `AppWindow::Render()` before this view, not slotted in.
 - `m_tab_container` (`shared_ptr<TabContainer>`) - the project tabs;
   source name is `TAB_CONTAINER_SRC_NAME` (`"MainTabContainer"`).
+  `RenderTabContextMenu(tab)` is wired in as its context-menu callback
+  and offers "Copy file name" (the tab label) and "Copy full path" (the
+  tab id, which is what the tab tooltip shows). A compare tab has no
+  single file - its id is the synthetic `compare://a|b` - so
+  `GetTabCompareSources(tab)` pulls the `CompareSourceInfo` list off the
+  project's `TraceDataModel` and both entries become submenus listing
+  each source by its A / B badge, plus an "All" entry that copies every
+  value one per line.
 - `m_projects` (`unordered_map<string, unique_ptr<Project>>`) - one
   entry per normal trace path or synthetic compare ID.
 - `m_provider_cleanup_jobs` - async cleanup of in-flight `DataProvider`
@@ -620,6 +628,12 @@ splitter dragging.
   with `SetEventSourceName(...)`. Toggle close/change events via
   `EnableSendCloseEvent` / `EnableSendChangeEvent`. Used in `AppWindow`
   for the project tabs and in `ComputeView` for sub-tabs.
+- `SetTabContextMenuCallback(cb)` - opt into a right-click menu on the
+  tab headers. The container tracks which tab was right-clicked (by id,
+  so closing a tab cannot retarget an open menu), opens the popup after
+  the tab bar with default spacing restored, and calls `cb` with that
+  `TabItem` to fill in the entries. Without a callback tabs have no
+  context menu.
 
 ### 7.6 `rocprofvis_gui_helpers.{h,cpp}` - low-level UI helpers
 

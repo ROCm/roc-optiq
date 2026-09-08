@@ -133,6 +133,11 @@ private:
 
     void RenderFileDialog();
     void RenderAboutDialog();
+    // Fills the right-click menu of a project tab with its copy actions.
+    void RenderTabContextMenu(const TabItem& tab);
+    // Tagged sources (A, B, ...) of the compare project behind a tab, or nullptr
+    // when the tab is not a compare project.
+    const std::vector<CompareSourceInfo>* GetTabCompareSources(const TabItem& tab);
     void RenderStatusBar();
     void UpdateStatusBar();
 

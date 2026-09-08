@@ -97,9 +97,14 @@ protected:
      * controller, or one is held until the controller table frees up.
      */
     bool TableRequestInFlight() const;
-    /* Drops this table's fetch once it is obsolete: one still waiting its turn, and
-     * one already with the controller, so a late response cannot refill a table that
-     * has since been cleared.
+    /* Cancels the request this table has with the controller, so a late response
+     * cannot refill a table whose selection has already moved on. Cancellation is
+     * asynchronous and only issued once, so calling this every frame is safe.
+     *
+     * A fetch that is queued but not yet sent is left alone by default, which is
+     * what FetchData wants when it retires the outstanding request to make room for
+     * the one it is about to send. Pass clear_pending when nothing will replace it -
+     * the selection emptied - so the queued fetch is dropped as well.
      */
     void CancelFetch(bool clear_pending = false);
     /* When false the body draws without its own frame, so a parent that already

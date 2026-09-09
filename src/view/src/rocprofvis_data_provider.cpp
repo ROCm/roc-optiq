@@ -4712,11 +4712,22 @@ DataProvider::LoadMetricList(WorkloadInfo& workload, rocprofvis_handle_t* worklo
         table.id   = workload.available_metrics.list[j].table_id;
         table.name = GetString(workload_handle,
                                kRPVControllerWorkloadAvailableMetricTableNameIndexed, j);
-        // Last position of id is not returned, for now assume index...
-        workload.available_metrics.list[j].id =
-            static_cast<uint32_t>(table.entries.size());
-        table.entries.insert({ static_cast<uint32_t>(table.entries.size()),
-                               workload.available_metrics.list[j] });
+        // Metric values are keyed by the trailing component of their
+        // "category.table.entry" id, so the definitions have to use that same id.
+        // Row position is not a valid substitute: the definition query is served
+        // from the UNIQUE(workload_id, metric_id) index, which orders rows by
+        // metric_id as a string ("3.1.10" before "3.1.2"). Databases that predate
+        // the column report no entry id, so fall back to positional numbering.
+        uint32_t entry_id = static_cast<uint32_t>(table.entries.size());
+        if(rocprofvis_controller_get_uint64(
+               workload_handle, kRPVControllerWorkloadAvailableMetricEntryIdIndexed, j,
+               &uint64_data) == kRocProfVisResultSuccess &&
+           uint64_data != UINT32_MAX)
+        {
+            entry_id = static_cast<uint32_t>(uint64_data);
+        }
+        workload.available_metrics.list[j].id = entry_id;
+        table.entries.insert({ entry_id, workload.available_metrics.list[j] });
     }
 }
 

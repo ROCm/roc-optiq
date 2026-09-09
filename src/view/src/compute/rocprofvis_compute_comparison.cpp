@@ -279,9 +279,13 @@ ComputeComparisonView::FetchMetrics()
                     metric_ids.push_back({ category->id, table->id, std::nullopt });
                 }
             }
-            // Retry later if busy...
-            m_retry_fetch |= !m_data_provider.FetchMetrics(MetricsRequestParams(
-                baseline_workload_id, kernel_ids, metric_ids, m_client_id_baseline));
+            if(!metric_ids.empty())
+            {
+                // Retry later if busy...
+                m_retry_fetch |= !m_data_provider.FetchMetrics(MetricsRequestParams(
+                    baseline_workload_id, kernel_ids, metric_ids,
+                    m_client_id_baseline));
+            }
         }
         kernel_ids = { m_target_kernel_id };
         metric_ids.clear();
@@ -300,9 +304,13 @@ ComputeComparisonView::FetchMetrics()
                     metric_ids.push_back({ category->id, table->id, std::nullopt });
                 }
             }
-            // Retry later if busy...
-            m_retry_fetch |= !m_data_provider.FetchMetrics(MetricsRequestParams(
-                m_target_workload_id, kernel_ids, metric_ids, m_client_id_target));
+            if(!metric_ids.empty())
+            {
+                // Retry later if busy...
+                m_retry_fetch |= !m_data_provider.FetchMetrics(MetricsRequestParams(
+                    m_target_workload_id, kernel_ids, metric_ids,
+                    m_client_id_target));
+            }
         }
     }
 }

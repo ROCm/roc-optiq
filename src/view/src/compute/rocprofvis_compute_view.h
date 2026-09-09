@@ -39,6 +39,7 @@ private:
     void RenderToolbar();
     void RenderWorkloadSelection();
     void RenderPresets();
+    void InitializeMetricTabStates();
 
     bool  m_view_created;
     float m_toolbar_available_width;

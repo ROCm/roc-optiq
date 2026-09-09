@@ -1193,6 +1193,11 @@ stall-reason indexes.
 `GetComputeKernelInstructionLines` selects the fields needed for the
 initial ISA display (formerly "Code View").
 
+`GetComputeWorkloadTopKernels` also returns `has_isa_lines`. For schema
+2.2 and newer it derives the value from kernel-symbol/instruction-line
+relationships; older schemas return zero. This metadata supports one-time
+ISA tab initialization without loading the ISA rows eagerly.
+
 Inner `IsVersionGreaterOrEqual("1.3.0")` / `"1.4.0"` tests inside a
 method still select between schema variants and are separate from the
 gate.

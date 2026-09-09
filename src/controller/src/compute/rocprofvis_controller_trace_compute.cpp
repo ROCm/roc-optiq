@@ -999,6 +999,7 @@ rocprofvis_result_t ComputeTrace::LoadRocpd(Future* future)
                                                 { kRPVComputeColumnKernelDurationsMedian, std::nullopt },
                                                 { kRPVComputeColumnKernelDurationsMin, std::nullopt },
                                                 { kRPVComputeColumnKernelDurationsMax, std::nullopt },
+                                                { kRPVComputeColumnKernelHasIsaLines, std::nullopt },
                                             },
                                             {}
                                         };

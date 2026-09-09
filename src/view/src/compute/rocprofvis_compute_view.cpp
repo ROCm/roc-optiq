@@ -21,11 +21,25 @@
 #include "rocprofvis_compute_isa_view.h"
 
 #include "spdlog/spdlog.h"
+#include <algorithm>
 
 namespace RocProfVis
 {
 namespace View
 {
+
+namespace
+{
+constexpr const char* TABLE_VIEW_TAB_ID = "compute_table_view";
+constexpr const char* COMPARISON_VIEW_TAB_ID = "compute_comparison_view";
+constexpr const char* ISA_VIEW_TAB_ID = "isa_view";
+constexpr const char* TABLE_VIEW_DISABLED_TOOLTIP =
+    "This database file has no available metrics, so Table View is inactive.";
+constexpr const char* COMPARISON_VIEW_DISABLED_TOOLTIP =
+    "This database file has no available metrics, so Baseline Comparison is inactive.";
+constexpr const char* ISA_VIEW_DISABLED_TOOLTIP =
+    "This database file has no ISA lines, so ISA View is inactive.";
+}  // namespace
 
 ComputeView::ComputeView()
 : m_view_created(false)
@@ -61,6 +75,7 @@ ComputeView::ComputeView()
                     spdlog::warn("Selection manager not available, workload not selected");
                 }
             }
+            InitializeMetricTabStates();
         }
     });
 
@@ -158,13 +173,13 @@ ComputeView::CreateView()
                                                            m_compute_selection),
                 false});
     m_tab_container->AddTab(
-        TabItem{"Table View", "compute_table_view",
+        TabItem{"Table View", TABLE_VIEW_TAB_ID,
                 std::make_shared<ComputeTableView>(m_data_provider, m_compute_selection),
                 false});
     m_tab_container->AddTab(
-        TabItem{"Baseline Comparison", "compute_comparison_view",
+        TabItem{"Baseline Comparison", COMPARISON_VIEW_TAB_ID,
                 std::make_shared<ComputeComparisonView>(m_data_provider,
-                                                        m_compute_selection),
+                                                         m_compute_selection),
                 false});
     m_tab_container->AddTab(
         TabItem{"Workload Details", "compute_workload_view",
@@ -172,9 +187,8 @@ ComputeView::CreateView()
                 false});
 
     m_tab_container->AddTab(
-        TabItem{"ISA View", "isa_view",
-                                     std::make_shared<ComputeIsaView>(m_data_provider),
-                                     false });
+        TabItem{"ISA View", ISA_VIEW_TAB_ID,
+                std::make_shared<ComputeIsaView>(m_data_provider), false});
 
 #ifdef ROCPROFVIS_DEVELOPER_MODE
     m_tab_container->AddTab(
@@ -183,6 +197,43 @@ ComputeView::CreateView()
                 false});
 #endif
     m_tab_container->SetAllowToolTips(false);
+    InitializeMetricTabStates();
+}
+
+void
+ComputeView::InitializeMetricTabStates()
+{
+    if(!m_tab_container)
+    {
+        return;
+    }
+
+    const std::vector<const WorkloadInfo*>& workloads =
+        m_data_provider.ComputeModel().GetWorkloadList();
+    const auto has_available_metrics = [](const WorkloadInfo* workload) {
+        return workload &&
+               std::any_of(workload->available_metrics.ordered_categories.begin(),
+                           workload->available_metrics.ordered_categories.end(),
+                           [](const AvailableMetrics::Category* category) {
+                               return category && !category->ordered_tables.empty();
+                           });
+    };
+    const bool database_has_metrics = std::any_of(
+        workloads.begin(), workloads.end(), has_available_metrics);
+    const auto has_isa_lines = [](const WorkloadInfo* workload) {
+        return workload &&
+               std::any_of(workload->kernels.begin(), workload->kernels.end(),
+                           [](const auto& kernel) { return kernel.second.has_isa_lines; });
+    };
+    const bool database_has_isa_lines =
+        std::any_of(workloads.begin(), workloads.end(), has_isa_lines);
+
+    m_tab_container->SetTabEnabled(TABLE_VIEW_TAB_ID, database_has_metrics,
+                                   TABLE_VIEW_DISABLED_TOOLTIP);
+    m_tab_container->SetTabEnabled(COMPARISON_VIEW_TAB_ID, database_has_metrics,
+                                   COMPARISON_VIEW_DISABLED_TOOLTIP);
+    m_tab_container->SetTabEnabled(ISA_VIEW_TAB_ID, database_has_isa_lines,
+                                   ISA_VIEW_DISABLED_TOOLTIP);
 }
 
 void

@@ -51,6 +51,7 @@ namespace DataModel
 		{"duration_ns_median", kRPVComputeColumnKernelDurationsMedian},
 		{"duration_ns_min", kRPVComputeColumnKernelDurationsMin},
 		{"duration_ns_max", kRPVComputeColumnKernelDurationsMax},
+		{"has_isa_lines", kRPVComputeColumnKernelHasIsaLines},
 		{"total_flops", kRPVComputeColumnRooflineTotalFlops},
 		{"l1_cache_data", kRPVComputeColumnRooflineL1CacheData},
 		{"l2_cache_data", kRPVComputeColumnRooflineL2CacheData},
@@ -186,13 +187,32 @@ namespace DataModel
 					"compute_workload.name AS workload_name,"
 					"compute_kernel.kernel_name AS kernel_name,"
 					"compute_dispatch.dispatch_id AS dispatch_id,"
-					"(compute_dispatch.end_timestamp - compute_dispatch.start_timestamp) AS duration_ns "
+					"(compute_dispatch.end_timestamp - compute_dispatch.start_timestamp) AS duration_ns,";
+				if (IsVersionGreaterOrEqual("2.2.0"))
+				{
+					query_out += "CASE WHEN isa.kernel_uuid IS NULL THEN 0 ELSE 1 END AS has_isa_lines ";
+				}
+				else
+				{
+					query_out += "0 AS has_isa_lines ";
+				}
+				query_out +=
 					"FROM compute_dispatch "
 					"JOIN compute_kernel "
 					"ON compute_dispatch.kernel_uuid = compute_kernel.kernel_uuid "
 					"JOIN compute_workload "
-					"ON compute_kernel.workload_id = compute_workload.workload_id "
-					"WHERE compute_workload.workload_id = ";
+					"ON compute_kernel.workload_id = compute_workload.workload_id ";
+				if (IsVersionGreaterOrEqual("2.2.0"))
+				{
+					query_out +=
+						"LEFT JOIN ("
+						"SELECT DISTINCT ks.kernel_uuid "
+						"FROM compute_kernel_symbol ks "
+						"JOIN compute_instruction_line il "
+						"ON il.kernel_symbol_uuid = ks.kernel_symbol_uuid"
+						") isa ON isa.kernel_uuid = compute_kernel.kernel_uuid ";
+				}
+				query_out += "WHERE compute_workload.workload_id = ";
 				query_out += params[0].param_str;
 				result = kRocProfVisDmResultSuccess;
 			}
@@ -1584,11 +1604,13 @@ void ComputeQueryFactory::ParseMetricParam(std::string metric_str, uint32_t work
 		uint32_t kernel_uuid = db->Sqlite3ColumnInt(func, stmt, azColName, 0);
 		std::string kernel_name = db->Sqlite3ColumnText(func, stmt, azColName, 3);
 		uint64_t duration = db->Sqlite3ColumnInt64(func, stmt, azColName, 5);
+		bool has_isa_lines = db->Sqlite3ColumnInt(func, stmt, azColName, 6) != 0;
 		auto& s = db->m_kernel_stats[kernel_uuid];
 		s.count++;
 		s.sum += duration;
 		s.min = std::min(s.min, duration);
 		s.max = std::max(s.max, duration);
+		s.has_isa_lines = s.has_isa_lines || has_isa_lines;
 		s.name = kernel_name;
 		s.durations.push_back(duration);
 
@@ -1641,7 +1663,8 @@ void ComputeQueryFactory::ParseMetricParam(std::string metric_str, uint32_t work
 			{"duration_ns_mean",kRPVDataTypeDouble},
 			{"duration_ns_min",kRPVDataTypeInt},
 			{"duration_ns_max",kRPVDataTypeInt},
-			{"duration_ns_median",kRPVDataTypeDouble} };
+			{"duration_ns_median",kRPVDataTypeDouble},
+			{"has_isa_lines",kRPVDataTypeInt} };
 
 		for (auto& column : columns)
 		{
@@ -1685,6 +1708,8 @@ void ComputeQueryFactory::ParseMetricParam(std::string metric_str, uint32_t work
 				result = BindObject()->FuncAddTableRowCell(row, std::to_string(s.max).c_str());
 				if (kRocProfVisDmResultSuccess != result) break;
 				result = BindObject()->FuncAddTableRowCell(row, std::to_string(s.median).c_str());
+				if (kRocProfVisDmResultSuccess != result) break;
+				result = BindObject()->FuncAddTableRowCell(row, s.has_isa_lines ? "1" : "0");
 				if (kRocProfVisDmResultSuccess != result) break;
 			}
 		}

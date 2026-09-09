@@ -62,6 +62,7 @@ namespace DataModel
         uint64_t max = 0;
         double mean = 0;
         double median = 0;
+        bool has_isa_lines = false;
         std::string name;
         std::vector<uint64_t> durations;
     };

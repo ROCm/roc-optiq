@@ -898,8 +898,9 @@ Property bank: `rocprofvis_controller_workload_properties_t`.
 ### 6.3 `Kernel` (`rocprofvis_controller_kernel.{h,cpp}`)
 
 A kernel within a workload. Carries `m_id`, `m_name`,
-`m_invocation_count`, and the duration set
-(`total/min/max/median/mean`). Property bank:
+`m_invocation_count`, the duration set (`total/min/max/median/mean`),
+and `m_has_isa_lines`, which lets the View determine ISA availability
+without eagerly fetching PC-sampling rows. Property bank:
 `rocprofvis_controller_kernel_properties_t`.
 
 Each kernel also owns a `PcSampling` handle. The

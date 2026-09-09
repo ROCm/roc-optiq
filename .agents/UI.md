@@ -619,7 +619,11 @@ splitter dragging.
   `kTabClosed` / `kTabSelected` `RocEvent`s. Set the event source name
   with `SetEventSourceName(...)`. Toggle close/change events via
   `EnableSendCloseEvent` / `EnableSendChangeEvent`. Used in `AppWindow`
-  for the project tabs and in `ComputeView` for sub-tabs.
+  for the project tabs and in `ComputeView` for sub-tabs. `TabItem::m_enabled`
+  controls whether a tab is dimmed and selectable; disabled tabs may provide
+  `m_disabled_tooltip`. `SetTabEnabled(id, enabled, disabled_tooltip)` updates
+  both properties at runtime. Programmatic selection ignores disabled tabs, and
+  disabling the active tab selects the first enabled tab.
 
 ### 7.6 `rocprofvis_gui_helpers.{h,cpp}` - low-level UI helpers
 
@@ -1293,7 +1297,9 @@ Hand-laid block diagram of the GPU memory hierarchy. Each block
 `x/y/w/h` and helpers `Right/Bottom/MidX/MidY`. Renders metric values
 inline via `DrawMetricRow`. The catalog of supported chart-only
 metrics is `enum MemChartMetric` (maps 1:1 to entries in compute
-metric table 3.1).
+metric table 3.1). Metrics are fetched only while both workload and
+kernel selections are valid; clearing the kernel selection resets the
+chart without submitting a request.
 
 Metric values bind data-driven: `METRIC_NAME_MAP` maps a compute
 metric `entry->name` to a `MemChartMetric` slot, and
@@ -1323,11 +1329,18 @@ The hierarchical category-tab view. `RebuildTabs()` fills sub-tabs
 from `AvailableMetrics::Category`/`Table`/`Entry`. Pinning is
 delegated to `PinnedMetricTable`. If a workload has no available metric
 tables, `FetchAllMetrics()` leaves the view empty without submitting an
-invalid zero-selector request. Persistent via nested `Preset`.
+invalid zero-selector request. After trace metadata loads, `ComputeView`
+disables the top-level Table View tab when the database has no available
+metric tables and shows the no-metrics tooltip. Persistent via nested `Preset`.
 
 ### `ComputeComparisonView` (`rocprofvis_compute_comparison.{h,cpp}`)
 
 Cross-workload / cross-kernel diff view. Notable nested types:
+- `FetchMetrics()` skips baseline or target requests when the corresponding
+  workload has no available metric tables, avoiding invalid zero-selector
+  requests. After trace metadata loads, `ComputeView` disables the top-level
+  Baseline Comparison tab when no workload in the database has an available
+  metric table. This state is initialized once rather than recomputed per frame.
 - `Table` - bespoke comparison table (`Row { id, entry, values_map,
   cells, display_props, tags, selected }`, `Column { Selection |
   MetricID | MetricName | Unit | Value }`, freeze rows/columns,
@@ -1361,6 +1374,9 @@ Correlates source code and ISA through `SourceCodeWidget` and
 ISA (and vice versa). The ISA pane is the always-visible primary pane;
 the optional source-code pane is shown on the right through the
 `Show Source Code` / `Hide Source Code` control.
+After trace metadata loads, `ComputeView` disables the ISA View tab and
+shows a tooltip when no kernel in the database has ISA lines. The availability
+flag is initialized once with the other data-dependent tab states.
 `RenderControlPanel()` hosts the source-file dropdown, and
 PC-sampling data is fetched through `PcSamplingRequestParams` /
 `DataProvider::FetchPcSampling` in three independent stages:

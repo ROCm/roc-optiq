@@ -7,7 +7,9 @@
 #include <catch2/catch_session.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <cfloat>
+#include <cstdint>
 #include <filesystem>
+#include <string>
 #include <unordered_map>
 
 std::string g_input_file =
@@ -46,9 +48,10 @@ struct RocProfVisControllerFixture
     {
         struct Entry
         {
-            uint64_t category_id = 0;
-            uint64_t table_id    = 0;
-            uint64_t id          = 0;
+            uint64_t    category_id = 0;
+            uint64_t    table_id    = 0;
+            uint64_t    id          = 0;
+            std::string name;
         };
         struct Table
         {
@@ -366,17 +369,38 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture,
                 category.id       = category_id;
                 auto& table       = category.tables[table_id];
                 table.id          = table_id;
-                uint64_t entry_id = static_cast<uint64_t>(table.entry_count++);
+                uint64_t entry_id = 0;
+                result            = rocprofvis_controller_get_uint64(
+                    workload.handle, kRPVControllerWorkloadAvailableMetricEntryIdIndexed,
+                    j, &entry_id);
+                REQUIRE(result == kRocProfVisResultSuccess);
+                REQUIRE(entry_id != static_cast<uint64_t>(UINT32_MAX));
+                table.entry_count++;
 
-                workload.available_metrics.list.push_back(
-                    AvailableMetrics::Entry{ category_id, table_id, entry_id });
+                workload.available_metrics.list.push_back(AvailableMetrics::Entry{
+                    category_id, table_id, entry_id, metric_name });
 
                 spdlog::info("  Metric {0}: cat={1}({2}) tbl={3}({4}) name={5}", entry_id,
                              category_id, category_name, table_id, table_name,
                              metric_name);
+
+                if(metric_name == "SALU" && category_id == 3 && table_id == 1)
+                {
+                    REQUIRE(entry_id == 2);
+                }
             }
 
             REQUIRE(!workload.available_metrics.list.empty());
+            bool saw_salu = false;
+            for(const auto& e : workload.available_metrics.list)
+            {
+                if(e.name == "SALU" && e.category_id == 3 && e.table_id == 1)
+                {
+                    saw_salu = true;
+                    REQUIRE(e.id == 2);
+                }
+            }
+            REQUIRE(saw_salu);
         }
     }
 
@@ -827,6 +851,20 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture,
                 REQUIRE(result == kRocProfVisResultSuccess);
                 REQUIRE(!metric_id.empty());
 
+                len    = 0;
+                result = rocprofvis_controller_get_string(
+                    output, kRPVControllerMetricsContainerMetricNameIndexed, i, nullptr,
+                    &len);
+                REQUIRE(result == kRocProfVisResultSuccess);
+
+                std::string metric_name;
+                metric_name.resize(len);
+                result = rocprofvis_controller_get_string(
+                    output, kRPVControllerMetricsContainerMetricNameIndexed, i,
+                    const_cast<char*>(metric_name.c_str()), &len);
+                REQUIRE(result == kRocProfVisResultSuccess);
+                REQUIRE(!metric_name.empty());
+
                 auto     cat_end = metric_id.find('.');
                 auto     tbl_end = metric_id.find('.', cat_end + 1);
                 uint64_t parsed_cat_id =
@@ -852,6 +890,7 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture,
                     if(e.category_id == parsed_cat_id && e.table_id == parsed_tbl_id &&
                        e.id == parsed_entry_id)
                     {
+                        REQUIRE(e.name == metric_name);
                         entry_found = true;
                         break;
                     }
@@ -992,6 +1031,20 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture,
                     REQUIRE(result == kRocProfVisResultSuccess);
                     REQUIRE(!metric_id.empty());
 
+                    len    = 0;
+                    result = rocprofvis_controller_get_string(
+                        output, kRPVControllerMetricsContainerMetricNameIndexed, i, nullptr,
+                        &len);
+                    REQUIRE(result == kRocProfVisResultSuccess);
+
+                    std::string metric_name;
+                    metric_name.resize(len);
+                    result = rocprofvis_controller_get_string(
+                        output, kRPVControllerMetricsContainerMetricNameIndexed, i,
+                        const_cast<char*>(metric_name.c_str()), &len);
+                    REQUIRE(result == kRocProfVisResultSuccess);
+                    REQUIRE(!metric_name.empty());
+
                     auto     cat_end = metric_id.find('.');
                     auto     tbl_end = metric_id.find('.', cat_end + 1);
                     uint64_t parsed_cat_id =
@@ -1017,6 +1070,7 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture,
                         if(e.category_id == parsed_cat_id &&
                            e.table_id == parsed_tbl_id && e.id == parsed_entry_id)
                         {
+                            REQUIRE(e.name == metric_name);
                             entry_found = true;
                             break;
                         }

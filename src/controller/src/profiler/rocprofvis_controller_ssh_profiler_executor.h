@@ -54,7 +54,11 @@ public:
     bool IsRunning() override;
     std::string ReadOutput() override;
     int GetExitCode() const override;
-    bool Cancel() override;
+    CancelOutcome Cancel() override;
+    // HasPendingTeardown() is deliberately not overridden: the default,
+    // IsRunning(), is exactly right here. The worker thread is still inside
+    // ExecuteCommand on a borrowed connection, and the future must not resolve
+    // until it has unwound.
 
 private:
     // Pulls any newly-streamed stdout out of the connection's SshBridge.

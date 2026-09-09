@@ -448,21 +448,35 @@ bool LocalProfilerExecutor::IsRunning()
     return true;
 }
 
-bool LocalProfilerExecutor::Cancel()
+CancelOutcome LocalProfilerExecutor::Cancel()
 {
     if (m_process_handle == nullptr)
     {
-        return false;
+        return CancelOutcome::kNotRunning;
     }
 
     if (TerminateProcess(m_process_handle, 1))
     {
         m_is_running = false;
         m_exit_code = 1;
-        return true;
+        return CancelOutcome::kStopped;
     }
 
-    return false;
+    DWORD const terminate_error = GetLastError();
+    DWORD       exit_code       = 0;
+    if (GetExitCodeProcess(m_process_handle, &exit_code) && exit_code != STILL_ACTIVE)
+    {
+        // Already exited: keep the handle for CloseHandles, but stop tracking
+        // it as running so UpdateState can settle the stage.
+        m_is_running = false;
+        m_exit_code  = static_cast<int>(exit_code);
+        return CancelOutcome::kNotRunning;
+    }
+
+    // Access denied or similar: the child is still running. Forgetting the
+    // handle here would leave it untracked.
+    spdlog::error("Could not terminate profiler process: error {}", terminate_error);
+    return CancelOutcome::kRefused;
 }
 
 int LocalProfilerExecutor::GetExitCode() const
@@ -694,22 +708,41 @@ bool LocalProfilerExecutor::IsRunning()
     return true;
 }
 
-bool LocalProfilerExecutor::Cancel()
+CancelOutcome LocalProfilerExecutor::Cancel()
 {
     if (m_process_id == -1)
     {
-        return false;
+        return CancelOutcome::kNotRunning;
     }
 
     if (kill(m_process_id, SIGTERM) != 0)
     {
-        // Logged because the caller can only report "could not cancel": a
-        // denied signal (EPERM, or a sandbox refusing it) is indistinguishable
-        // from an already-dead child without knowing the errno.
+        if (errno == ESRCH)
+        {
+            // The pid is gone outright, which should not be reachable: a zombie
+            // still holds its slot and would accept the signal, and one already
+            // reaped by IsRunning() would have left m_process_id == -1 for the
+            // guard above. The waitpid is therefore defensive - it collects a
+            // status only if one somehow remains, and otherwise m_exit_code
+            // stays EXIT_CODE_NO_STATUS so UpdateState does not read the stage
+            // as having succeeded.
+            int   status = 0;
+            pid_t result = waitpid(m_process_id, &status, WNOHANG);
+            if (result == m_process_id)
+            {
+                set_exit_code_from_status(status, m_exit_code);
+            }
+            m_process_id = -1;
+            m_is_running = false;
+            return CancelOutcome::kNotRunning;
+        }
+
+        // EPERM and anything else: the child is still running. Forgetting the
+        // pid here would leave it untracked, and UpdateState would then treat
+        // a missing status as the stage having ended. SIGKILL is not worth
+        // trying - it faces the same permission check.
         spdlog::error("Could not signal profiler process {}: errno {}", m_process_id, errno);
-        m_process_id = -1;  // gone already
-        m_is_running = false;
-        return false;
+        return CancelOutcome::kRefused;
     }
 
     // SIGTERM grace, then SIGKILL. Always reap so the child is not a zombie.
@@ -734,7 +767,7 @@ bool LocalProfilerExecutor::Cancel()
 
     m_process_id = -1;
     m_is_running = false;
-    return true;
+    return CancelOutcome::kStopped;
 }
 
 int LocalProfilerExecutor::GetExitCode() const
@@ -823,8 +856,10 @@ rocprofvis_result_t ProfilerProcessController::PreparePipeline(bool resolve_tool
     {
         // A config with no stages is the flat tool/argv/env/cwd every caller
         // uses today. Wrapping it as a one-element pipeline means there is only
-        // one execution path to maintain, and no banner keeps its console
-        // byte-identical to before.
+        // one execution path to maintain. Banners stay off so a flat run is
+        // not prefixed with "Stage 1/1"; scrape diagnostics can still appear
+        // in the console when a key is missing (and, if so, when lines were
+        // too long to scan).
         ProfilerStageSpec stage;
         stage.tool              = m_config->GetTool();
         stage.tool_directory    = m_config->GetToolDirectory();
@@ -1137,10 +1172,10 @@ void ProfilerProcessController::DrainExecutorLocked()
     m_scrape.Feed(new_output);
 }
 
-bool ProfilerProcessController::ExecutorRunning() const
+bool ProfilerProcessController::ExecutorTeardownPending() const
 {
     std::lock_guard<std::mutex> lock(m_mutex);
-    return m_executor && m_executor->IsRunning();
+    return m_executor && m_executor->HasPendingTeardown();
 }
 
 std::string ProfilerProcessController::GetOutput()
@@ -1196,15 +1231,42 @@ rocprofvis_result_t ProfilerProcessController::Cancel()
      * boundary, and that now declines to start anything once cancel is
      * requested.
      */
-    bool const stopped = executor->Cancel();
+    CancelOutcome const outcome = executor->Cancel();
 
     std::lock_guard<std::mutex> lock(m_mutex);
 
-    if (!stopped)
+    if (outcome == CancelOutcome::kNotRunning)
     {
-        // Nothing to kill - the child had already exited and been reaped. Hand
-        // the ending back to UpdateState, which will settle the stage normally.
+        // The child had already exited. Hand the ending back to UpdateState,
+        // which settles the stage on the status the executor collected.
         m_cancel_requested = false;
+        return kRocProfVisResultUnknownError;
+    }
+
+    if (outcome == CancelOutcome::kRefused)
+    {
+        // The process is still running and cannot be stopped. Settling the run
+        // here is the only honest end: handing it back to UpdateState would
+        // report Running for the rest of that process's life, and the monitor
+        // job no longer waits on an executor it cannot end. m_cancel_requested
+        // stays set - the ending is not going back to UpdateState, and a second
+        // Cancel on a finished run should say NotSupported.
+        DrainExecutorLocked();
+        m_scrape.EndStage(m_stages[m_current_stage].working_directory);
+
+        if (m_current_stage < m_stage_states.size())
+        {
+            m_stage_states[m_current_stage] = kRPVProfilerStateFailed;
+            m_failing_stage                 = static_cast<int32_t>(m_current_stage);
+        }
+        m_scrape.SkipRemainingFrom(m_current_stage + 1);
+
+        // No exit code is coming, so m_exit_code stays at "no status" rather
+        // than borrowing a number that would read as a real result.
+        append_diagnostic(m_output_text,
+                          "The profiler process could not be stopped and is still running; "
+                          "Optiq has stopped monitoring it.");
+        m_state = kRPVProfilerStateFailed;
         return kRocProfVisResultUnknownError;
     }
 
@@ -1465,10 +1527,13 @@ rocprofvis_result_t ProfilerProcessController::ExecuteJob(ProfilerProcessControl
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
 
-    // Do not resolve the future until the executor worker has stopped. Cancel()
-    // only signals it; teardown keys on the future. m_executor is the last
-    // stage's by now, which is the one that has to be observed.
-    while (controller->ExecutorRunning())
+    // Do not resolve the future while an executor still has teardown pending:
+    // Cancel() only signals a remote worker, and teardown keys on the future,
+    // so resolving early would free the borrowed connection under it. This asks
+    // "would tearing down now break something" rather than "is a process still
+    // alive", so a local child that refused to die does not hold the run open.
+    // m_executor is the last stage's by now, which is the one to observe.
+    while (controller->ExecutorTeardownPending())
     {
         controller->GetOutput();
         std::this_thread::sleep_for(std::chrono::milliseconds(50));

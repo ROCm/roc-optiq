@@ -148,7 +148,15 @@ public:
     bool IsRunning() override;
     std::string ReadOutput() override;
     int GetExitCode() const override;
-    bool Cancel() override;
+    CancelOutcome Cancel() override;
+
+    /*
+     * Nothing here outlives the executor: there is no worker thread, and the
+     * pipes are its own and close with it. So a child that could not be killed
+     * must not hold the run's future open - waiting on it would defer teardown
+     * for the whole remaining life of a process we have already given up on.
+     */
+    bool HasPendingTeardown() override { return false; }
 
 private:
     void CloseHandles();
@@ -256,7 +264,7 @@ private:
     void                FinishStageLocked(int exit_code);
     void                RelocateArtifactLocked(uint32_t stage_index);
     void                DrainExecutorLocked();
-    bool                ExecutorRunning() const;
+    bool                ExecutorTeardownPending() const;
     // Maps a slot's scrape status onto the getter contract: Success with the
     // value when resolved, Pending while it may still arrive, NotAvailable once
     // it cannot, InvalidArgument when no stage declares the key at all.

@@ -15,6 +15,7 @@
 #include "rocprofvis_flame_track_item.h"
 #include "rocprofvis_measurement_controller.h"
 #include "rocprofvis_minimap.h"
+#include "rocprofvis_project.h"
 #include "rocprofvis_summary_view.h"
 #include "rocprofvis_timeline_track_options.h"
 #include "rocprofvis_timeline_view.h"
@@ -36,10 +37,42 @@ namespace RocProfVis
 namespace View
 {
 
+struct ProjectTestPeer
+{
+    const Project& v;
+    std::string OpenErrorMessage() const { return v.m_open_error_message; }
+};
+
 struct EventsViewTestPeer
 {
     const EventsView& v;
     size_t EventItemCount() const { return v.m_event_items.size(); }
+
+    // Args live on each cached event's EventInfo (populated async by the
+    // controller); info is null until it arrives, so every reach is guarded.
+    size_t ArgCount(size_t item_idx) const
+    {
+        size_t i = 0;
+        for(const auto& item : v.m_event_items)
+        {
+            if(i++ == item_idx)
+                return item.info ? item.info->args.size() : 0;
+        }
+        return 0;
+    }
+    std::string ArgName(size_t item_idx, size_t arg_idx) const
+    {
+        size_t i = 0;
+        for(const auto& item : v.m_event_items)
+        {
+            if(i++ == item_idx)
+            {
+                if(!item.info || arg_idx >= item.info->args.size()) return std::string();
+                return item.info->args[arg_idx].name;
+            }
+        }
+        return std::string();
+    }
 };
 
 struct AnalysisViewTestPeer

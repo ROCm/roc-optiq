@@ -232,6 +232,33 @@ bool ClickGearMenuItem(ImGuiTestContext* ctx, ImGuiWindow* menu, const char* lab
     return false;
 }
 
+// The track sidebar renders into a child window whose name embeds the split
+// container's address, so there is no stable ref to it. Scan the active windows.
+// Other views build left/right splits too, so a match only counts once the
+// sidebar's own "Project" tree node is found inside it.
+ImGuiWindow* FindSidebarWindow(ImGuiTestContext* ctx)
+{
+    for(ImGuiWindow* w : ImGui::GetCurrentContext()->Windows)
+    {
+        if(!w->WasActive || strstr(w->Name, "LeftColumn") == nullptr) continue;
+        if(ctx->ItemExists(ImHashStr("Project", 0, w->ID))) return w;
+    }
+    return nullptr;
+}
+
+// Resolve a track's sidebar row button by id, not by DebugLabel. ImGui only
+// records a label for items that pass clipping, and the sidebar scrolls, so a row
+// below the fold gathers with an empty label. The button's id is the track name
+// hashed over the row's id scope, stable at any scroll position. ItemClick scrolls
+// the row into view on its own.
+ImGuiID TrackButtonId(ImGuiTestItemList& items, const std::string& name)
+{
+    for(int i = 0; i < items.GetSize(); i++)
+        if(items[i]->ID == ImHashStr(name.c_str(), 0, items[i]->ParentID))
+            return items[i]->ID;
+    return 0;
+}
+
 // Restores show_summary when it goes out of scope. The Summary tests set it
 // true to drive their load path; without this, that state would leak into
 // later tests and cover the timeline.
@@ -1384,6 +1411,47 @@ void RegisterAppTests(ImGuiTestEngine* e)
         ctx->Yield(2);
     };
 
+    t = IM_REGISTER_TEST(e, "app", "sys_event_search_zero_result_and_clear");
+    t->TestFunc = [](ImGuiTestContext* ctx)
+    {
+        TraceView* tv = GetTraceViewOrSkip(ctx);
+        if (!tv) return;
+        EventSearch* es = TraceViewTestPeer{*tv}.EventSearchPtr();
+        IM_CHECK(es != nullptr);
+        if (es == nullptr) return;
+
+        // Clear so the searched flag starts from a known baseline (the harness
+        // reuses one process interactively).
+        es->Clear();
+        ctx->Yield(2);
+        IM_CHECK(es->Searched() == false);
+
+        // A nonsense token no event name can contain, so the empty-result path is
+        // exercised deterministically regardless of which db the harness was given.
+        // Type into the real search field. RenderEventSearch runs the search on the
+        // frame the focused field sees Enter, so Enter is what issues the query.
+        ctx->SetRef("Main Window");
+        ctx->ItemInput("**/search_bar/##input_text_with_clear");
+        ctx->KeyCharsReplaceEnter("zzq_no_such_event_zzq");
+        ctx->Yield(2);
+        IM_CHECK(es->Searched() == true);
+
+        // The fetch is deferred. Let it drain (Update re-runs Search when the
+        // request completes) before reading the result count.
+        for (int i = 0; i < 60 && EventSearchTestPeer{*es}.RequestPending(); i++) ctx->Yield(2);
+        ctx->Yield(5);
+        IM_CHECK(EventSearchTestPeer{*es}.ResultCount() == 0);
+
+        // The X button is the clear path. IconButton pushes the glyph as an id and
+        // draws it as the button, so the ref ends in the glyph twice.
+        const std::string clear_ref =
+            std::string("**/search_bar/") + ICON_X_CIRCLED + "/" + ICON_X_CIRCLED;
+        ctx->ItemClick(clear_ref.c_str());
+        ctx->Yield(2);
+        IM_CHECK(es->Searched() == false);
+        IM_CHECK(EventSearchTestPeer{*es}.ResultCount() == 0);
+    };
+
     t = IM_REGISTER_TEST(e, "app", "sys_summary_pie_kernel_select");
     t->TestFunc = [](ImGuiTestContext* ctx)
     {
@@ -2147,5 +2215,551 @@ void RegisterAppTests(ImGuiTestEngine* e)
         IM_CHECK(cleared_state == MeasurementState::kWaitingForFirst);
         IM_CHECK(no_points);
         IM_CHECK(inactive_after);
+    };
+
+    // AIPROFVIS-117: deselecting one of several selected tracks left the Event
+    // Table showing the old row set.
+    t = IM_REGISTER_TEST(e, "app", "sys_event_table_updates_on_track_deselect");
+    t->TestFunc = [](ImGuiTestContext* ctx)
+    {
+        TraceView* tv = GetTraceViewOrSkip(ctx);
+        if (!tv) return;
+        TimelineView* tlv = TraceViewTestPeer{*tv}.TimelineViewPtr();
+        IM_CHECK(tlv != nullptr);
+        if (tlv == nullptr) return;
+        std::shared_ptr<TimelineSelection> sel = tv->GetTimelineSelection();
+        IM_CHECK(sel != nullptr);
+        if (sel == nullptr) return;
+        DataProvider* dp = tv->GetDataProvider();
+        IM_CHECK(dp != nullptr);
+        if (dp == nullptr) return;
+
+        AppWindowSettings& settings = SettingsManager::GetInstance().GetAppWindowSettings();
+        const bool prev_details_panel = settings.show_details_panel;
+        settings.show_details_panel   = true;
+        tv->SetAnalysisViewVisibility(true);
+
+        // Selection is driven by clicking sidebar rows, so the panel has to stay up.
+        const bool prev_sidebar = settings.show_sidebar;
+        settings.show_sidebar   = true;
+        tv->SetSidebarViewVisibility(true);
+
+        // A prior test may have left a time range. The table fetch is bounded by it,
+        // so clear it for the measurement and put it back in restore().
+        double     prev_range_start = 0.0;
+        double     prev_range_end   = 0.0;
+        const bool had_range = sel->GetSelectedTimeRange(prev_range_start, prev_range_end);
+
+        // Track selection dispatches through EventManager on a later frame, and the
+        // table refetch it triggers is async, so every drive is followed by this.
+        auto drain = [&]() {
+            ctx->Yield(3);
+            for (int polls = 0; polls < 120 &&
+                 dp->IsRequestPending(DataProvider::EVENT_TABLE_REQUEST_ID); polls++)
+                ctx->Yield(2);
+            ctx->Yield(5);
+        };
+        auto row_count = [&]() -> uint64_t {
+            return dp->DataModel().GetTables().GetTableTotalRowCount(TableType::kEventTable);
+        };
+        auto restore = [&]() {
+            sel->UnselectAllTracks();
+            if (had_range) sel->SelectTimeRange(prev_range_start, prev_range_end);
+            else           sel->ClearTimeRange();
+            ctx->Yield(3);
+            settings.show_details_panel = prev_details_panel;
+            tv->SetAnalysisViewVisibility(prev_details_panel);
+            settings.show_sidebar = prev_sidebar;
+            tv->SetSidebarViewVisibility(prev_sidebar);
+            ctx->Yield(2);
+        };
+
+        // Tracks appear once the timeline's data fetch drains.
+        std::vector<FlameTrackItem*> flames;
+        for (int i = 0; i < 60 && flames.empty(); i++)
+        {
+            flames = TimelineViewTestPeer{*tlv}.DisplayedFlameTracks();
+            if (flames.empty()) ctx->Yield(2);
+        }
+        if (flames.empty())
+        {
+            restore();
+            ctx->LogWarning("SKIP: no displayed flame track to select");
+            return;
+        }
+
+        sel->UnselectAllTracks();
+        sel->ClearTimeRange();
+        drain();
+
+        // Every select and deselect below is a click on the track's sidebar row,
+        // whose button runs ToggleSelectTrack, so the same click selects an
+        // unselected track and deselects a selected one.
+        ImGuiWindow* sidebar = FindSidebarWindow(ctx);
+        if (sidebar == nullptr) restore();
+        IM_CHECK(sidebar != nullptr);
+        ctx->SetRef(sidebar);
+        ImGuiTestItemList sidebar_items;
+        ctx->GatherItems(&sidebar_items, "");
+
+        // Resolve every candidate's row up front. If none resolves, the sidebar
+        // could not be driven at all, a broken click path rather than a thin trace,
+        // so fail here instead of falling through to the data-shortage SKIP below.
+        std::vector<ImGuiID> buttons(flames.size(), 0);
+        size_t               resolved = 0;
+        for (size_t i = 0; i < flames.size(); i++)
+        {
+            buttons[i] = TrackButtonId(sidebar_items, flames[i]->GetName());
+            if (buttons[i] != 0) resolved++;
+        }
+        if (resolved == 0) restore();
+        IM_CHECK(resolved > 0);
+
+        // Only tracks the Event Table actually draws rows from can produce a
+        // deselect delta. The table unions per-track row sets that are disjoint by
+        // construction, so dropping a track whose own contribution is non-empty must
+        // change the total. Measuring each candidate alone is what rules out a false
+        // pass from picking a B that contributes nothing (a non-event track, or an
+        // event track with no events in range), where count_A == count_AB and the
+        // assertion below would hold even with the bug present.
+        FlameTrackItem* track_a  = nullptr;
+        FlameTrackItem* track_b  = nullptr;
+        ImGuiID         button_a = 0;
+        ImGuiID         button_b = 0;
+        const size_t    kMaxCandidates = 12;
+        for (size_t i = 0; i < flames.size() && i < kMaxCandidates && track_b == nullptr; i++)
+        {
+            if (buttons[i] == 0) continue;
+            ctx->ItemClick(buttons[i]);
+            drain();
+            // Two same-named tracks resolve to one row, so a click lands on only one
+            // of them. The selection model says which, and only then is the count
+            // that track's own total.
+            const uint64_t rows = sel->IsTrackSelected(*flames[i]) ? row_count() : 0;
+            ctx->ItemClick(buttons[i]);  // same button toggles the track back off
+            drain();
+            if (rows == 0) continue;
+            if (track_a == nullptr) { track_a = flames[i]; button_a = buttons[i]; }
+            else                    { track_b = flames[i]; button_b = buttons[i]; }
+        }
+        if (track_b == nullptr)
+        {
+            restore();
+            ctx->LogWarning("SKIP: need two populated tracks to observe a deselect delta");
+            return;
+        }
+
+        sel->UnselectAllTracks();
+        drain();
+        ctx->ItemClick(button_a);
+        drain();
+        ctx->ItemClick(button_b);
+        drain();
+        const uint64_t count_ab = row_count();
+
+        ctx->ItemClick(button_b);  // toggles B back off, leaving only A selected
+        drain();
+        const uint64_t count_a = row_count();
+
+        // Capture, restore, THEN assert: IM_CHECK early-returns on failure, so a
+        // leaked selection or open panel would follow into later tests.
+        restore();
+
+        IM_CHECK(count_ab > 0);
+        IM_CHECK(count_a > 0);
+        IM_CHECK(count_a != count_ab);
+    };
+
+    // Advanced Details "Aggregate": picking a group-by column and clicking Submit
+    // re-runs the event-table query with a GROUP BY, collapsing raw rows into
+    // grouped ones, so the total row count changes.
+    t = IM_REGISTER_TEST(e, "app", "sys_event_table_aggregate_changes_rows");
+    t->TestFunc = [](ImGuiTestContext* ctx)
+    {
+        TraceView* tv = GetTraceViewOrSkip(ctx);
+        if (!tv) return;
+        TimelineView* tlv = TraceViewTestPeer{*tv}.TimelineViewPtr();
+        IM_CHECK(tlv != nullptr);
+        if (tlv == nullptr) return;
+        std::shared_ptr<TimelineSelection> sel = tv->GetTimelineSelection();
+        IM_CHECK(sel != nullptr);
+        if (sel == nullptr) return;
+        DataProvider* dp = tv->GetDataProvider();
+        IM_CHECK(dp != nullptr);
+        if (dp == nullptr) return;
+
+        // The Event Table and its Aggregate controls only register with the Test
+        // Engine while the Advanced Details panel renders, so force it open.
+        const bool details_visible =
+            SettingsManager::GetInstance().GetAppWindowSettings().show_details_panel;
+        tv->SetAnalysisViewVisibility(true);
+
+        // The table is filled by clicking sidebar rows, so that panel has to stay up.
+        const bool sidebar_visible =
+            SettingsManager::GetInstance().GetAppWindowSettings().show_sidebar;
+        tv->SetSidebarViewVisibility(true);
+        ctx->Yield(3);
+
+        // Every drive re-queries the table asynchronously. Wait for the request to
+        // be issued, drain it, then let the model settle before reading a count.
+        auto drain_event_table = [&]()
+        {
+            ctx->Yield(3);
+            for (int i = 0; i < 200 &&
+                 dp->IsRequestPending(DataProvider::EVENT_TABLE_REQUEST_ID); i++)
+                ctx->Yield(2);
+            ctx->Yield(5);
+        };
+        auto restore = [&]()
+        {
+            sel->UnselectAllTracks();
+            tv->SetAnalysisViewVisibility(details_visible);
+            tv->SetSidebarViewVisibility(sidebar_visible);
+            ctx->Yield(3);
+        };
+
+        // Only event ("flame") tracks feed the Event Table. Select them all so it
+        // holds raw rows to aggregate.
+        std::vector<FlameTrackItem*> flames;
+        for (int i = 0; i < 60; i++)
+        {
+            flames = TimelineViewTestPeer{*tlv}.DisplayedFlameTracks();
+            if (!flames.empty()) break;
+            ctx->Yield(2);
+        }
+        if (flames.empty())
+        {
+            ctx->LogWarning("SKIP: no displayed flame track to fill the event table");
+            restore();
+            return;
+        }
+        sel->UnselectAllTracks();
+        drain_event_table();
+
+        // A missing sidebar is a broken click path, not a thin trace, so fail rather
+        // than SKIP (the flame-track shortage above is the legitimate data SKIP).
+        ImGuiWindow* sidebar = FindSidebarWindow(ctx);
+        if (sidebar == nullptr) restore();
+        IM_CHECK(sidebar != nullptr);
+        ctx->SetRef(sidebar);
+        ImGuiTestItemList sidebar_items;
+        ctx->GatherItems(&sidebar_items, "");
+
+        // Fill the table by clicking each flame track's sidebar row. Same-named rows
+        // share one button id and the button toggles, so click the distinct ids once
+        // each. A duplicate-named pair fills from one of the two, which still holds
+        // raw rows to aggregate.
+        std::vector<ImGuiID> track_buttons;
+        for (FlameTrackItem* flame : flames)
+        {
+            const ImGuiID id = TrackButtonId(sidebar_items, flame->GetName());
+            if (id == 0) continue;
+            bool queued = false;
+            for (ImGuiID q : track_buttons) queued = queued || (q == id);
+            if (!queued) track_buttons.push_back(id);
+        }
+        if (track_buttons.empty())
+        {
+            ctx->LogWarning("SKIP: no flame track row button found in the sidebar");
+            restore();
+            return;
+        }
+        for (ImGuiID id : track_buttons) ctx->ItemClick(id);
+        drain_event_table();
+
+        const TablesModel& tables = dp->DataModel().GetTables();
+        const uint64_t rows_before = tables.GetTableTotalRowCount(TableType::kEventTable);
+        if (rows_before == 0)
+        {
+            ctx->LogWarning("SKIP: event table is empty, nothing to aggregate");
+            restore();
+            return;
+        }
+
+        ctx->SetRef("Main Window");
+        // ImGui::Combo() never reports its label to the Test Engine, so the
+        // "**/##group_by" wildcard cannot resolve it. The combo and the Submit
+        // button are added under the same table id stack, so hash the combo's
+        // label over Submit's parent id to reach it.
+        const ImGuiTestItemInfo submit =
+            ctx->ItemInfo("**/Submit", ImGuiTestOpFlags_NoError);
+        const ImGuiID group_by_id = ImHashStr("##group_by", 0, submit.ParentID);
+        if (submit.ID == 0 || !ctx->ItemExists(group_by_id))
+        {
+            ctx->LogWarning("SKIP: Aggregate controls are not registered with the "
+                            "Test Engine");
+            restore();
+            return;
+        }
+
+        // The options are Selectables in the combo popup, which DO carry labels.
+        // "-- None --" is the ungrouped state we restore to; any other entry is a
+        // groupable column, so take the first one.
+        const char* none_label = "-- None --";
+        ctx->ItemClick(group_by_id);
+        ctx->Yield(3);
+        ImGuiTestItemList options;
+        ctx->GatherItems(&options, "//$FOCUSED");
+        ImGuiID none_id   = 0;
+        ImGuiID column_id = 0;
+        for (int i = 0; i < options.GetSize(); i++)
+        {
+            if (strcmp(options[i]->DebugLabel, none_label) == 0)
+                none_id = options[i]->ID;
+            else if (column_id == 0)
+                column_id = options[i]->ID;
+        }
+        if (none_id == 0 || column_id == 0)
+        {
+            ctx->LogWarning("SKIP: group-by combo popup offers no column to group on");
+            ctx->PopupCloseAll();
+            restore();
+            return;
+        }
+
+        ctx->ItemClick(column_id);
+        ctx->Yield(3);
+        ctx->ItemClick("**/Submit");
+        drain_event_table();
+
+        const uint64_t rows_after = tables.GetTableTotalRowCount(TableType::kEventTable);
+
+        // Restore BEFORE asserting: IM_CHECK early-returns on failure, and a live
+        // group-by would leak into every later event-table test.
+        ctx->ItemClick(group_by_id);
+        ctx->Yield(3);
+        ctx->ItemClick(none_id);
+        ctx->Yield(3);
+        ctx->ItemClick("**/Submit");
+        drain_event_table();
+        restore();
+
+        IM_CHECK(rows_after != rows_before);
+    };
+
+    t = IM_REGISTER_TEST(e, "app", "sys_event_search_multi_substring");
+    t->TestFunc = [](ImGuiTestContext* ctx)
+    {
+        TraceView* tv = GetTraceViewOrSkip(ctx);
+        if (!tv) return;
+        EventSearch* es = TraceViewTestPeer{*tv}.EventSearchPtr();
+        IM_CHECK(es != nullptr);
+        if (es == nullptr) return;
+
+        // Clear so the searched flag starts from a known baseline (the harness
+        // reuses one process interactively).
+        es->Clear();
+        ctx->Yield(2);
+        IM_CHECK(es->Searched() == false);
+
+        // Quote-delimited segments make EventSearch::Search split the input into
+        // several terms instead of one, which is the multi-term parse this test
+        // covers. "hip" and "Launch" are both substrings of hipLaunchKernel (proven
+        // searchable in this db by sys_event_search_finds_results), so the query is
+        // non-empty even though the default options AND-combine the terms
+        // (m_partial_matching defaults to false).
+        // Type into the real search field. RenderEventSearch runs the search on the
+        // frame the focused field sees Enter, so Enter is what issues the query.
+        ctx->SetRef("Main Window");
+        ctx->ItemInput("**/search_bar/##input_text_with_clear");
+        ctx->KeyCharsReplaceEnter("\"hip\"\"Launch\"");
+        ctx->Yield(2);
+        IM_CHECK(es->Searched() == true);
+
+        // The fetch is deferred. Let it drain (Update re-runs Search when the
+        // request completes) before reading the result count.
+        for (int i = 0; i < 60 && EventSearchTestPeer{*es}.RequestPending(); i++) ctx->Yield(2);
+        ctx->Yield(5);
+        IM_CHECK(EventSearchTestPeer{*es}.ResultCount() > 0);
+
+        // The X button is the clear path. IconButton pushes the glyph as an id and
+        // draws it as the button, so the ref ends in the glyph twice.
+        const std::string clear_ref =
+            std::string("**/search_bar/") + ICON_X_CIRCLED + "/" + ICON_X_CIRCLED;
+        ctx->ItemClick(clear_ref.c_str());
+        ctx->Yield(2);
+    };
+
+    // AIPROFVIS-297: opening a .rpv whose referenced trace is gone must fail with a
+    // message naming the missing trace, and must not create a file at that path.
+    // AppWindow::OpenFile discards the Project it built on a failed open, so the test
+    // owns the Project and calls Open() directly to read the error off it.
+    t = IM_REGISTER_TEST(e, "app", "sys_project_missing_source_db_error");
+    t->TestFunc = [](ImGuiTestContext* ctx)
+    {
+        namespace fs = std::filesystem;
+
+        // Open() reports the failure through the app's message dialog.
+        AppWindow* app = AppWindow::GetInstance();
+        IM_CHECK(app != nullptr);
+        if (app == nullptr) return;
+
+        std::error_code ec;
+        const fs::path missing_db = fs::temp_directory_path() / "rocprofvis_missing_source_zzq.db";
+        fs::remove(missing_db, ec);
+        IM_CHECK(!fs::exists(missing_db));
+
+        // Write a temp .rpv referencing the missing db by absolute path, escaped so
+        // the JSON stays valid.
+        const fs::path rpv_path = fs::temp_directory_path() / "rocprofvis_missing_source.rpv";
+        std::string escaped;
+        for (char c : missing_db.string())
+        {
+            if (c == '\\' || c == '"') escaped.push_back('\\');
+            escaped.push_back(c);
+        }
+        {
+            std::ofstream out(rpv_path);
+            IM_CHECK(out.is_open());
+            if (!out.is_open()) return;
+            out << "{\"general\": {\"version\": \"1.0\", \"trace_path\": \""
+                << escaped << "\"}}";
+        }
+
+        Project     proj;
+        std::string path   = rpv_path.string();
+        const Project::OpenResult result = proj.Open(path);
+        const std::string message = ProjectTestPeer{proj}.OpenErrorMessage();
+
+        // OpenProject resolves the trace through weakly_canonical, so match the
+        // message against the same form rather than the raw path.
+        const std::string expected_path = fs::weakly_canonical(missing_db).string();
+
+        // The guard that replaced the old open attempt: no empty db is left behind.
+        const bool still_missing = !fs::exists(missing_db) && !fs::exists(expected_path);
+
+        fs::remove(rpv_path, ec);
+
+        // The failed Open queued an error dialog, which does not actually open until
+        // the next Render. Yield so it opens, then close it, otherwise it leaks into
+        // later tests and blocks their input.
+        ctx->Yield(2);
+        ctx->PopupCloseAll();
+        ctx->Yield(2);
+
+        IM_CHECK(result == Project::OpenResult::Failed);
+        IM_CHECK(message.find(expected_path) != std::string::npos);
+        IM_CHECK(still_missing);
+    };
+
+    // AIPROFVIS-81: Event Details dropped the argument list for HIP API events.
+    // Presence/shape only -- the args come back asynchronously through the
+    // controller, with no single table to build a value oracle from.
+    t = IM_REGISTER_TEST(e, "app", "sys_event_details_shows_hip_args");
+    t->TestFunc = [](ImGuiTestContext* ctx)
+    {
+        TraceView* tv = GetTraceViewOrSkip(ctx);
+        if (!tv) return;
+        AnalysisView* av = TraceViewTestPeer{*tv}.AnalysisViewPtr();
+        IM_CHECK(av != nullptr);
+        if (av == nullptr) return;
+        EventsView* ev = AnalysisViewTestPeer{*av}.EventsViewPtr();
+        IM_CHECK(ev != nullptr);
+        if (ev == nullptr) return;
+        TimelineView* tlv = TraceViewTestPeer{*tv}.TimelineViewPtr();
+        IM_CHECK(tlv != nullptr);
+        if (tlv == nullptr) return;
+        std::shared_ptr<TimelineSelection> sel = tv->GetTimelineSelection();
+        IM_CHECK(sel != nullptr);
+        if (sel == nullptr) return;
+
+        // A stray modal swallows hover for the windows beneath it, which would make
+        // the canvas click a no-op. Close any open popup before clicking the timeline.
+        ctx->PopupCloseAll();
+        ctx->Yield(2);
+
+        // A prior test may have left an event selected. The clear is dispatched
+        // through EventManager, so yield before asserting the empty baseline.
+        TraceViewTestPeer{*tv}.ClearEventSelection();
+        ctx->Yield(3);
+        IM_CHECK(EventsViewTestPeer{*ev}.EventItemCount() == 0);
+
+        // Only HIP API events carry the call's argument list, so restrict the
+        // search to Launch-type tracks. Chart items populate after the track's
+        // data fetch drains, so poll for one that has events.
+        FlameTrackItem* flame = nullptr;
+        for (int i = 0; i < 60 && flame == nullptr; i++)
+        {
+            for (FlameTrackItem* candidate :
+                 TimelineViewTestPeer{*tlv}.DisplayedFlameTracks())
+            {
+                const TrackInfo* info = candidate->GetTrackInfo();
+                if (info == nullptr ||
+                    info->operation_types.count(kRocProfVisDmOperationLaunch) == 0)
+                    continue;
+                if (FlameTrackItemTestPeer{*candidate}.ChartItemCount() > 0)
+                {
+                    flame = candidate;
+                    break;
+                }
+            }
+            if (flame == nullptr) ctx->Yield(2);
+        }
+        if (flame == nullptr)
+        {
+            ctx->LogWarning("SKIP: no HIP-API event with args to inspect in this trace");
+            return;
+        }
+
+        // Gather bars from the HIP track's own FV window, not the first track's, so
+        // the clicked bar belongs to the Launch-type track asserted on above. The
+        // window id is 0 until that track has rendered, so poll for it.
+        ImVec2 event_center(0.0f, 0.0f);
+        bool   have_center = false;
+        for (int i = 0; i < 60 && !have_center; i++)
+        {
+            ctx->Yield(2);
+            have_center = FirstEventScreenCenter(
+                ctx, FlameTrackItemTestPeer{*flame}.FlameWindowId(), event_center);
+        }
+        IM_CHECK(have_center);
+        if (!have_center) return;
+
+        // Selection is deferred a frame, so move/release with the mouse parked.
+        ctx->MouseMoveToPos(event_center);
+        ctx->Yield(2);
+        ctx->MouseDown(0);
+        ctx->Yield(1);
+        ctx->MouseUp(0);
+        ctx->Yield(3);
+
+        // The click lands on the widest bar, so there is no pre-chosen event. Assert
+        // the selected event carries named args, not that a specific event was
+        // selected. The event details, and with them the args, arrive
+        // asynchronously. New items are emplace_front'ed, but scan every cached item
+        // rather than relying on that ordering.
+        size_t arg_item  = 0;
+        size_t arg_count = 0;
+        for (int i = 0; i < 60 && arg_count == 0; i++)
+        {
+            ctx->Yield(2);
+            EventsViewTestPeer peer{*ev};
+            for (size_t idx = 0; idx < peer.EventItemCount(); idx++)
+            {
+                if (peer.ArgCount(idx) > 0)
+                {
+                    arg_item  = idx;
+                    arg_count = peer.ArgCount(idx);
+                    break;
+                }
+            }
+        }
+        bool have_named_arg = false;
+        for (size_t a = 0; a < arg_count; a++)
+        {
+            if (!EventsViewTestPeer{*ev}.ArgName(arg_item, a).empty())
+            {
+                have_named_arg = true;
+                break;
+            }
+        }
+
+        // Restore before asserting: IM_CHECK early-returns on failure, which
+        // would otherwise leak a selected event into later tests.
+        TraceViewTestPeer{*tv}.ClearEventSelection();
+        ctx->Yield(2);
+
+        IM_CHECK(arg_count > 0);
+        IM_CHECK(have_named_arg);
     };
 }

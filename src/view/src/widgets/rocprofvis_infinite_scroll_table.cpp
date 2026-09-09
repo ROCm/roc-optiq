@@ -45,7 +45,6 @@ InfiniteScrollTable::InfiniteScrollTable(
 , m_open_context_menu(false)
 , m_skip_data_fetch(false)
 , m_pending_sort(false)
-, m_pending_sort_column(0)
 , m_pending_sort_order(kRPVControllerSortOrderAscending)
 , m_table_type(table_type)
 , m_request_table_type(request_table_type)
@@ -276,12 +275,39 @@ InfiniteScrollTable::TableRequestInFlight() const
 }
 
 void
-InfiniteScrollTable::SetPendingSort(uint64_t                           column_index,
+InfiniteScrollTable::SetPendingSort(const std::string&                 column_name,
                                     rocprofvis_controller_sort_order_t order)
 {
     m_pending_sort        = true;
-    m_pending_sort_column = column_index;
+    m_pending_sort_column = column_name;
     m_pending_sort_order  = order;
+}
+
+const std::string&
+InfiniteScrollTable::SortColumnName() const
+{
+    static const std::string        no_column;
+    const std::vector<std::string>& column_names =
+        m_table_model().GetTableHeader(m_table_type);
+    if(m_sort_column_index >= column_names.size())
+    {
+        return no_column;
+    }
+    return column_names[m_sort_column_index];
+}
+
+size_t
+InfiniteScrollTable::ColumnIndexOf(const std::string& column_name) const
+{
+    const std::vector<std::string>& column_names =
+        m_table_model().GetTableHeader(m_table_type);
+    const auto column =
+        std::find(column_names.begin(), column_names.end(), column_name);
+    if(column == column_names.end())
+    {
+        return INVALID_UINT64_INDEX;
+    }
+    return static_cast<size_t>(std::distance(column_names.begin(), column));
 }
 
 void
@@ -457,13 +483,19 @@ InfiniteScrollTable::Render()
                 // table that cannot sort ignore this, so hold it until it can land.
                 if(m_pending_sort && (table_flags & ImGuiTableFlags_Sortable))
                 {
-                    // Dirties the specs, so the block below refetches as if clicked.
-                    ImGui::TableSetColumnSortDirection(
-                        static_cast<int>(m_pending_sort_column),
-                        m_pending_sort_order == kRPVControllerSortOrderAscending
-                            ? ImGuiSortDirection_Ascending
-                            : ImGuiSortDirection_Descending,
-                        false);
+                    // Resolved against the same header that set the columns up
+                    // above, so the index handed to ImGui is always one it owns.
+                    const size_t column = ColumnIndexOf(m_pending_sort_column);
+                    if(column != INVALID_UINT64_INDEX)
+                    {
+                        // Dirties the specs, so the block below refetches as if clicked.
+                        ImGui::TableSetColumnSortDirection(
+                            static_cast<int>(column),
+                            m_pending_sort_order == kRPVControllerSortOrderAscending
+                                ? ImGuiSortDirection_Ascending
+                                : ImGuiSortDirection_Descending,
+                            false);
+                    }
                     m_pending_sort = false;
                 }
 

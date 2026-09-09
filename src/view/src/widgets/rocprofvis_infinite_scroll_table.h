@@ -111,9 +111,17 @@ protected:
      * draws one around the title and the table supplies the only border.
      */
     void SetDrawBorder(bool draw);
-    // Applies an externally chosen sort on the next render.
-    void         SetPendingSort(uint64_t column_index,
-                                rocprofvis_controller_sort_order_t order);
+    /* Applies an externally chosen sort on the next render. Named rather than
+     * indexed because the caller may be looking at a table with a different
+     * schema; the name is resolved against this table's own header, and a sort on
+     * a column this table does not have is dropped.
+     */
+    void SetPendingSort(const std::string&                 column_name,
+                        rocprofvis_controller_sort_order_t order);
+    // The header cell this table sorts by, empty until the header arrives.
+    const std::string& SortColumnName() const;
+    // Position of a header cell in this table, INVALID_UINT64_INDEX if absent.
+    size_t ColumnIndexOf(const std::string& column_name) const;
     virtual void OnSortChanged() {}
     // Drops or rewrites filter fields that this table cannot send. Default is
     // a no-op so non-compare tables keep the values the user applied.
@@ -184,7 +192,7 @@ private:
     bool                               m_open_context_menu;
     bool                               m_skip_data_fetch;
     bool                               m_pending_sort;
-    uint64_t                           m_pending_sort_column;
+    std::string                        m_pending_sort_column;
     rocprofvis_controller_sort_order_t m_pending_sort_order;
     uint64_t                           m_last_total_row_count;
     ImVec2                             m_last_table_size;

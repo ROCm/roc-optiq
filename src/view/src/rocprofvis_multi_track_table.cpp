@@ -91,12 +91,17 @@ MultiTrackTable::SetFilterSubmitCallback(const FilterSubmitCallback& callback)
 void
 MultiTrackTable::ApplySharedSortFrom(const MultiTrackTable& source)
 {
-    if(m_sort_column_index == source.m_sort_column_index &&
-       m_sort_order == source.m_sort_order)
+    // The two panes can be showing traces whose schemas differ, the same way the
+    // group-by choices can, so follow the peer by column name: the same column may
+    // sit at another index here, or be missing entirely, in which case this pane
+    // keeps the sort it already has.
+    const std::string& source_column = source.SortColumnName();
+    if(source_column.empty() ||
+       (source_column == SortColumnName() && m_sort_order == source.m_sort_order))
     {
         return;
     }
-    SetPendingSort(source.m_sort_column_index, source.m_sort_order);
+    SetPendingSort(source_column, source.m_sort_order);
 }
 
 void

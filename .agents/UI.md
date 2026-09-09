@@ -1108,7 +1108,8 @@ The bottom-right tabbed panel. Hosts, in source order:
   client request IDs plus per-source `TablesModel` slots
   (`kCompareEventTableA/B`, `kCompareSampleTableA/B`); the two sources
   hit the same controller table type, so a fetch that loses the race is
-  deferred and retried (`InfiniteScrollTable::QueueTableRequest`).
+  held in `InfiniteScrollTable::m_fetch_data` and reissued from
+  `Update()` on a later frame.
 
 ### Compare panes (`rocprofvis_compare_panes.{h,cpp}`)
 
@@ -2138,10 +2139,10 @@ Things to honor in any new data path:
    views use client request IDs plus `TableRequestParams::m_view_table_type`
    to route each completed response into its own `TablesModel` slot.
    `DataProvider::FetchTable` refuses a request while that table type is
-   busy, so go through `InfiniteScrollTable::QueueTableRequest`, which
-   holds the refused request and reissues it from `Update()`. A held
-   request keeps asking `RenderScheduler` for frames, because the lazy
-   render loop would otherwise sleep before the reissue ever runs.
+   busy. `InfiniteScrollTable::FetchData` records the refusal by leaving
+   `m_fetch_data` set, and `Update()` reissues it on a later frame. A
+   held request keeps asking `RenderScheduler` for frames, because the
+   lazy render loop would otherwise sleep before the reissue ever runs.
 7. **SSH/profiler work goes through `AppMonitor`.** Do not poll
    controller futures in a dialog or block `Render()`. Subscribe to
    typed status events, filter by operation ID, and use deferred

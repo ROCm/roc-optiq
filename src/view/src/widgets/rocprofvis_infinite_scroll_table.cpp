@@ -861,9 +861,12 @@ InfiniteScrollTable::RenderContextMenu()
             m_important_column_idxs[kTrackId], m_important_column_idxs[kStreamId]);
         if(target_track_id != INVALID_UINT64_INDEX)
         {
+            // Keyed on the controller table type, not the view slot: compare mode
+            // puts sample rows in kCompareSampleTableA/B as well.
+            const bool is_sample_table =
+                m_request_table_type == kRPVControllerTableTypeSamples;
             if(IconMenuItem(ICON_ARROW_FORWARD,
-                            m_table_type == TableType::kSampleTable ? "Go To Sample"
-                                                                    : "Go To Event",
+                            is_sample_table ? "Go To Sample" : "Go To Event",
                             target_track_id != INVALID_UINT64_INDEX))
             {
                 SelectedRowNavigateEvent(m_important_column_idxs[kTrackId],

@@ -6,6 +6,8 @@
 #include "rocprofvis_root_view.h"
 #include "widgets/rocprofvis_tab_container.h"
 
+#include <string>
+
 namespace RocProfVis
 {
 namespace View
@@ -48,6 +50,8 @@ private:
     std::unique_ptr<PresetBrowser>    m_preset_browser;
 
     std::shared_ptr<TabContainer> m_tab_container;
+
+    std::string m_database_error_message;
 
     DataProvider                     m_data_provider;
     std::shared_ptr<RocCustomWidget> m_tool_bar;

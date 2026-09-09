@@ -588,6 +588,36 @@ void RegisterAppTests(ImGuiTestEngine* e)
         IM_CHECK(TabContainerTestPeer{*tc}.ActiveTabIndex() == target_idx);
     };
 
+    t = IM_REGISTER_TEST(e, "app", "compute_view_empty_model_shows_database_error");
+    t->TestFunc = [](ImGuiTestContext*)
+    {
+        ComputeView empty_view;
+        empty_view.CreateView();
+
+        ComputeViewTestPeer peer{empty_view};
+        IM_CHECK(peer.TabContainerPtr() == nullptr);
+        IM_CHECK(peer.ComputeSelectionPtr() == nullptr);
+        IM_CHECK(peer.DatabaseErrorMessage().find("no compute workloads") !=
+                 std::string::npos);
+    };
+
+    t = IM_REGISTER_TEST(e, "app", "compute_view_workload_without_kernel_shows_error");
+    t->TestFunc = [](ImGuiTestContext*)
+    {
+        ComputeView empty_view;
+        WorkloadInfo workload{};
+        workload.id   = 1;
+        workload.name = "Empty workload";
+        empty_view.GetDataProvider()->ComputeModel().AddWorkload(workload);
+        empty_view.CreateView();
+
+        ComputeViewTestPeer peer{empty_view};
+        IM_CHECK(peer.TabContainerPtr() == nullptr);
+        IM_CHECK(peer.ComputeSelectionPtr() == nullptr);
+        IM_CHECK(peer.DatabaseErrorMessage().find("none of them contains kernel data") !=
+                 std::string::npos);
+    };
+
     t = IM_REGISTER_TEST(e, "app", "compute_workload_details_populates");
     t->TestFunc = [](ImGuiTestContext* ctx)
     {
@@ -605,7 +635,7 @@ void RegisterAppTests(ImGuiTestEngine* e)
         std::string          wv_label;
         for (const TabItem* tab : tabs)
         {
-            if (tab->m_id == "compute_workload_view")
+            if (tab->m_id == ComputeWorkloadView::TAB_ID)
             {
                 wv       = dynamic_cast<ComputeWorkloadView*>(tab->m_widget.get());
                 wv_label = tab->m_label;
@@ -667,7 +697,7 @@ void RegisterAppTests(ImGuiTestEngine* e)
         std::string            comp_label;
         for (const TabItem* tab : tabs)
         {
-            if (tab->m_id == "compute_comparison_view")
+            if (tab->m_id == ComputeComparisonView::TAB_ID)
             {
                 comp       = dynamic_cast<ComputeComparisonView*>(tab->m_widget.get());
                 comp_label = tab->m_label;
@@ -786,7 +816,7 @@ void RegisterAppTests(ImGuiTestEngine* e)
         ComputeTableView* tbl = nullptr;
         for (const TabItem* tab : tabs)
         {
-            if (tab->m_id == "compute_table_view")
+            if (tab->m_id == ComputeTableView::TAB_ID)
             {
                 tbl = dynamic_cast<ComputeTableView*>(tab->m_widget.get());
                 break;
@@ -814,7 +844,7 @@ void RegisterAppTests(ImGuiTestEngine* e)
             return;
         }
 
-        tc->SetActiveTab("compute_table_view");
+        tc->SetActiveTab(ComputeTableView::TAB_ID);
         ctx->Yield(3);
         ComputeTableViewTestPeer peer{*tbl};
         for (int i = 0; i < 200 && (peer.FetchPending() || peer.TableWidgetCount() == 0); i++)
@@ -1527,7 +1557,7 @@ void RegisterAppTests(ImGuiTestEngine* e)
 
         // The kernel metric table renders only while the "Kernel Details" tab is
         // active (TabContainer renders just the active tab's content).
-        tc->SetActiveTab("compute_kernel_details_view");
+        tc->SetActiveTab(ComputeKernelDetailsView::TAB_ID);
         ctx->Yield(3);
         const TabItem* tab = tc->GetActiveTab();
         IM_CHECK(tab != nullptr);

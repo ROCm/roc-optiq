@@ -30,15 +30,41 @@ namespace View
 
 namespace
 {
-constexpr const char* TABLE_VIEW_TAB_ID = "compute_table_view";
-constexpr const char* COMPARISON_VIEW_TAB_ID = "compute_comparison_view";
-constexpr const char* ISA_VIEW_TAB_ID = "isa_view";
-constexpr const char* TABLE_VIEW_DISABLED_TOOLTIP =
-    "This database file has no available metrics, so Table View is inactive.";
-constexpr const char* COMPARISON_VIEW_DISABLED_TOOLTIP =
-    "This database file has no available metrics, so Baseline Comparison is inactive.";
-constexpr const char* ISA_VIEW_DISABLED_TOOLTIP =
-    "This database file has no ISA lines, so ISA View is inactive.";
+void
+RenderInvalidDatabaseMessage(const std::string& file_path,
+                             const std::string& error_message)
+{
+    SettingsManager& settings = SettingsManager::GetInstance();
+    const ImVec2     available_region = ImGui::GetContentRegionAvail();
+    const float message_width = std::max(0.0f, std::min(760.0f, available_region.x));
+
+    ImGui::SetCursorPosY(ImGui::GetCursorPosY() +
+                         std::max(0.0f, available_region.y * 0.25f));
+    ImGui::SetCursorPosX(ImGui::GetCursorPosX() +
+                         std::max(0.0f, (available_region.x - message_width) * 0.5f));
+    ImGui::BeginGroup();
+
+    ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + message_width);
+    ImGui::PushFont(nullptr,
+                    settings.GetFontManager().GetFontSize(FontSize::kLarge));
+    ImGui::PushStyleColor(ImGuiCol_Text, settings.GetColor(Colors::kTextError));
+    ImGui::TextWrapped("Compute database cannot be displayed");
+    ImGui::PopStyleColor();
+    ImGui::PopFont();
+
+    ImGui::Spacing();
+    ImGui::TextWrapped("%s", error_message.c_str());
+    if(!file_path.empty())
+    {
+        ImGui::Spacing();
+        ImGui::PushStyleColor(ImGuiCol_Text, settings.GetColor(Colors::kTextDim));
+        ImGui::TextWrapped("File: %s", file_path.c_str());
+        ImGui::PopStyleColor();
+    }
+    ImGui::PopTextWrapPos();
+
+    ImGui::EndGroup();
+}
 }  // namespace
 
 ComputeView::ComputeView()
@@ -58,24 +84,6 @@ ComputeView::ComputeView()
             spdlog::error("Failed to load trace: {}", response_code);
             NotificationManager::GetInstance().Show("Failed to load trace: " + trace_path,
                                                     NotificationLevel::Error);
-        }
-        else
-        {
-            // select the first workload by default when a trace is loaded
-            const std::vector<const WorkloadInfo*>& workloads =
-                m_data_provider.ComputeModel().GetWorkloadList();
-            if(!workloads.empty())
-            {
-                if(m_compute_selection)
-                {
-                    m_compute_selection->SelectWorkload(workloads.front()->id);
-                }
-                else
-                {
-                    spdlog::warn("Selection manager not available, workload not selected");
-                }
-            }
-            InitializeMetricTabStates();
         }
     });
 
@@ -129,13 +137,14 @@ ComputeView::Update()
 {
     m_data_provider.Update();
 
-    if(!m_view_created)
+    auto new_state = m_data_provider.GetState();
+
+    if(!m_view_created &&
+       (new_state == ProviderState::kReady || new_state == ProviderState::kError))
     {
         CreateView();
         m_view_created = true;
     }
-
-    auto new_state = m_data_provider.GetState();
 
     if(new_state == ProviderState::kReady)
     {
@@ -153,46 +162,77 @@ ComputeView::Update()
 void
 ComputeView::CreateView()
 {
-    m_compute_selection = std::make_shared<ComputeSelection>(m_data_provider);
-    // Data provider may load before the UI is ready; pick first workload if so.
+    m_database_error_message.clear();
+    m_compute_selection.reset();
+    m_preset_browser.reset();
+    m_tab_container.reset();
+
+    if(m_data_provider.GetState() == ProviderState::kError)
+    {
+        m_database_error_message =
+            "The file could not be loaded as a compatible compute profiling "
+            "database. Its schema may be invalid or unsupported, or required "
+            "compute-profile data may be missing.";
+        return;
+    }
+
     const std::vector<const WorkloadInfo*>& workloads =
         m_data_provider.ComputeModel().GetWorkloadList();
-    if(!workloads.empty())
+    if(workloads.empty())
     {
-        m_compute_selection->SelectWorkload(workloads.front()->id);
+        m_database_error_message =
+            "The file contains no compute workloads. A compute profile must contain "
+            "at least one workload and one kernel before it can be displayed.";
+        return;
     }
+
+    const auto workload_with_kernels =
+        std::find_if(workloads.begin(), workloads.end(), [](const WorkloadInfo* workload) {
+            return workload && !workload->kernels.empty();
+        });
+    if(workload_with_kernels == workloads.end())
+    {
+        m_database_error_message =
+            "The file contains compute workloads, but none of them contains kernel "
+            "data. A compute profile must contain at least one workload with a kernel "
+            "before it can be displayed.";
+        return;
+    }
+
+    m_compute_selection = std::make_shared<ComputeSelection>(m_data_provider);
+    m_compute_selection->SelectWorkload((*workload_with_kernels)->id);
     m_preset_browser = std::make_unique<PresetBrowser>();
     m_tab_container = std::make_shared<TabContainer>();
     m_tab_container->AddTab(
-        TabItem{"Summary View", "compute_summary_view",
+        TabItem{"Summary View", ComputeSummaryView::TAB_ID,
                 std::make_shared<ComputeSummaryView>(m_data_provider, m_compute_selection),
                 false});
     m_tab_container->AddTab(
-        TabItem{"Kernel Details", "compute_kernel_details_view",
+        TabItem{"Kernel Details", ComputeKernelDetailsView::TAB_ID,
                 std::make_shared<ComputeKernelDetailsView>(m_data_provider,
                                                            m_compute_selection),
                 false});
     m_tab_container->AddTab(
-        TabItem{"Table View", TABLE_VIEW_TAB_ID,
+        TabItem{"Table View", ComputeTableView::TAB_ID,
                 std::make_shared<ComputeTableView>(m_data_provider, m_compute_selection),
                 false});
     m_tab_container->AddTab(
-        TabItem{"Baseline Comparison", COMPARISON_VIEW_TAB_ID,
+        TabItem{"Baseline Comparison", ComputeComparisonView::TAB_ID,
                 std::make_shared<ComputeComparisonView>(m_data_provider,
                                                          m_compute_selection),
                 false});
     m_tab_container->AddTab(
-        TabItem{"Workload Details", "compute_workload_view",
+        TabItem{"Workload Details", ComputeWorkloadView::TAB_ID,
                 std::make_shared<ComputeWorkloadView>(m_data_provider, m_compute_selection),
                 false});
 
     m_tab_container->AddTab(
-        TabItem{"ISA View", ISA_VIEW_TAB_ID,
+        TabItem{"ISA View", ComputeIsaView::TAB_ID,
                 std::make_shared<ComputeIsaView>(m_data_provider), false});
 
 #ifdef ROCPROFVIS_DEVELOPER_MODE
     m_tab_container->AddTab(
-        TabItem{"Compute Tester", "compute_tester_view",
+        TabItem{"Compute Tester", ComputeTester::TAB_ID,
                 std::make_shared<ComputeTester>(m_data_provider, m_compute_selection),
                 false});
 #endif
@@ -228,18 +268,20 @@ ComputeView::InitializeMetricTabStates()
     const bool database_has_isa_lines =
         std::any_of(workloads.begin(), workloads.end(), has_isa_lines);
 
-    m_tab_container->SetTabEnabled(TABLE_VIEW_TAB_ID, database_has_metrics,
-                                   TABLE_VIEW_DISABLED_TOOLTIP);
-    m_tab_container->SetTabEnabled(COMPARISON_VIEW_TAB_ID, database_has_metrics,
-                                   COMPARISON_VIEW_DISABLED_TOOLTIP);
-    m_tab_container->SetTabEnabled(ISA_VIEW_TAB_ID, database_has_isa_lines,
-                                   ISA_VIEW_DISABLED_TOOLTIP);
+    m_tab_container->SetTabEnabled(ComputeTableView::TAB_ID, database_has_metrics,
+                                   ComputeTableView::DISABLED_TOOLTIP);
+    m_tab_container->SetTabEnabled(ComputeComparisonView::TAB_ID,
+                                   database_has_metrics,
+                                   ComputeComparisonView::DISABLED_TOOLTIP);
+    m_tab_container->SetTabEnabled(ComputeIsaView::TAB_ID, database_has_isa_lines,
+                                   ComputeIsaView::DISABLED_TOOLTIP);
 }
 
 void
 ComputeView::DestroyView()
 {
     m_view_created = false;
+    m_database_error_message.clear();
 }
 
 bool
@@ -256,6 +298,11 @@ ComputeView::Render()
     if(m_data_provider.GetState() == ProviderState::kLoading)
     {
         RenderLoadingScreen(m_data_provider.GetProgressMessage());
+    }
+    else if(!m_database_error_message.empty())
+    {
+        RenderInvalidDatabaseMessage(m_data_provider.GetTraceFilePath(),
+                                     m_database_error_message);
     }
     else
     {

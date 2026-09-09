@@ -5,6 +5,7 @@
 #include "rocprofvis_core.h"
 #include <catch2/catch_session.hpp>
 #include <catch2/catch_test_macros.hpp>
+#include <algorithm>
 #include <cstdarg>
 #include <cstdio>
 #include <filesystem>
@@ -404,6 +405,7 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisDMFixture, "Compute Trace Data-Model Test
 
             REQUIRE(kernels.columns.count(kRPVComputeColumnKernelUUID) > 0);
             REQUIRE(kernels.columns.count(kRPVComputeColumnKernelName) > 0);
+            REQUIRE(kernels.columns.count(kRPVComputeColumnKernelHasIsaLines) > 0);
 
             for(size_t i = 0; i < kernels.rows.size(); i++)
             {
@@ -411,8 +413,13 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisDMFixture, "Compute Trace Data-Model Test
                     kernels.rows[i][kernels.columns.at(kRPVComputeColumnKernelUUID)];
                 const std::string& name =
                     kernels.rows[i][kernels.columns.at(kRPVComputeColumnKernelName)];
+                const std::string& has_isa_lines =
+                    kernels
+                        .rows[i][kernels.columns.at(kRPVComputeColumnKernelHasIsaLines)];
                 REQUIRE(!uuid.empty());
-                spdlog::info("  Kernel {}: uuid={}, name={}", i, uuid, name);
+                REQUIRE((has_isa_lines == "0" || has_isa_lines == "1"));
+                spdlog::info("  Kernel {}: uuid={}, name={}, has_isa_lines={}", i, uuid,
+                             name, has_isa_lines);
                 workload.kernel_uuids.push_back(uuid);
             }
         }
@@ -597,6 +604,93 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisDMFixture, "Compute Trace Data-Model Test
                     spdlog::info("FetchMetricValuesByWorkload unsupported");
                 }
             }
+        }
+    }
+
+    // Missing metrics are valid unavailable data, not malformed requests. Both
+    // kernel and workload queries should complete successfully with no rows,
+    // while a mixed request should still return its available metric values.
+    // Fixture Reads: m_db, m_trace, m_workloads[].id, m_workloads[].kernel_uuids
+    SECTION("Missing Metric Values Return Empty Results")
+    {
+        PrintHeader("Fetch missing metric values");
+        constexpr const char* missing_metric_id =
+            "4294967295.4294967295.4294967295";
+
+        const auto workload_it = std::find_if(
+            m_workloads.begin(), m_workloads.end(),
+            [](const WorkloadInfo& workload) {
+                return !workload.kernel_uuids.empty();
+            });
+        REQUIRE(workload_it != m_workloads.end());
+
+        rocprofvis_dm_table_id_t table_id = 0;
+        rocprofvis_dm_result_t dm_result = ExecuteComputeQuery(
+            m_db, kRPVComputeFetchMetricValues,
+            { { kRPVComputeParamKernelId, workload_it->kernel_uuids.front() },
+              { kRPVComputeParamMetricId, missing_metric_id } },
+            table_id);
+        REQUIRE(kRocProfVisDmResultSuccess == dm_result);
+        ComputeQueryResult kernel_values = ParseComputeQueryResult(m_trace, table_id);
+        REQUIRE(kernel_values.rows.empty());
+
+        dm_result = ExecuteComputeQuery(
+            m_db, kRPVComputeFetchMetricValues,
+            { { kRPVComputeParamKernelId, "4294967295" },
+              { kRPVComputeParamMetricId, missing_metric_id } },
+            table_id);
+        REQUIRE(kRocProfVisDmResultInvalidParameter == dm_result);
+
+        if(!workload_it->metric_prefixes.empty())
+        {
+            const std::string& existing_metric_id =
+                *workload_it->metric_prefixes.begin();
+            dm_result = ExecuteComputeQuery(
+                m_db, kRPVComputeFetchMetricValues,
+                { { kRPVComputeParamKernelId, workload_it->kernel_uuids.front() },
+                  { kRPVComputeParamMetricId, existing_metric_id } },
+                table_id);
+            REQUIRE(kRocProfVisDmResultSuccess == dm_result);
+            ComputeQueryResult existing_values =
+                ParseComputeQueryResult(m_trace, table_id);
+
+            dm_result = ExecuteComputeQuery(
+                m_db, kRPVComputeFetchMetricValues,
+                { { kRPVComputeParamKernelId, workload_it->kernel_uuids.front() },
+                  { kRPVComputeParamMetricId, existing_metric_id },
+                  { kRPVComputeParamMetricId, missing_metric_id } },
+                table_id);
+            REQUIRE(kRocProfVisDmResultSuccess == dm_result);
+            ComputeQueryResult mixed_values =
+                ParseComputeQueryResult(m_trace, table_id);
+            REQUIRE(mixed_values.columns == existing_values.columns);
+            REQUIRE(mixed_values.rows == existing_values.rows);
+        }
+
+        dm_result = ExecuteComputeQuery(
+            m_db, kRPVComputeFetchMetricValuesByWorkload,
+            { { kRPVComputeParamWorkloadId, workload_it->id },
+              { kRPVComputeParamMetricId, missing_metric_id } },
+            table_id);
+        if(kRocProfVisDmResultSuccess == dm_result)
+        {
+            ComputeQueryResult workload_values =
+                ParseComputeQueryResult(m_trace, table_id);
+            REQUIRE(workload_values.rows.empty());
+        }
+        else
+        {
+            REQUIRE(kRocProfVisDmResultNotSupported == dm_result);
+        }
+
+        dm_result = ExecuteComputeQuery(
+            m_db, kRPVComputeFetchMetricValuesByWorkload,
+            { { kRPVComputeParamWorkloadId, "4294967295" },
+              { kRPVComputeParamMetricId, missing_metric_id } },
+            table_id);
+        if(kRocProfVisDmResultNotSupported != dm_result)
+        {
+            REQUIRE(kRocProfVisDmResultInvalidParameter == dm_result);
         }
     }
 

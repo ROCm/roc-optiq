@@ -1243,6 +1243,18 @@ The compute analogue of `TraceView`. Owns:
 - `m_data_provider` - same `DataProvider` type as `TraceView`, but its
   `ComputeModel()` accessor exposes the compute data model.
 
+Each fixed compute sub-view owns its `TAB_ID` as a public static constant.
+Views that can be disabled also own their `DISABLED_TOOLTIP`; use these
+constants when adding, selecting, disabling, or testing their tabs.
+
+`Update()` waits until the provider reaches `kReady` or `kError` before
+creating the content. `CreateView()` validates the loaded model before it
+constructs any selection state or tabs. A provider load error, an empty
+workload list, or a model in which no workload has a kernel renders a large
+error message directly in the compute view instead of creating the tab
+container. The message distinguishes the failed condition and includes the
+database path.
+
 `LoadTrace`, `CreateView`, `DestroyView`, `GetToolbar`,
 `DetachProviderCleanup` mirror `TraceView`.
 

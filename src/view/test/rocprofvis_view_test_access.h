@@ -89,6 +89,10 @@ struct ComputeViewTestPeer
     ComputeView& v;
     TabContainer*     TabContainerPtr() const { return v.m_tab_container.get(); }
     ComputeSelection* ComputeSelectionPtr() const { return v.m_compute_selection.get(); }
+    const std::string& DatabaseErrorMessage() const
+    {
+        return v.m_database_error_message;
+    }
 };
 
 struct ComputeKernelDetailsViewTestPeer

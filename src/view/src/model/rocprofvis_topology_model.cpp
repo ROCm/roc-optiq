@@ -332,15 +332,16 @@ TopologyTree::GetNode(uint64_t node_id) const
 const ProcessorInfo*
 TopologyTree::GetProcessor(uint64_t processor_id) const
 {
-    return GetProcessorMutable(processor_id);
-}
-
-ProcessorInfo*
-TopologyTree::GetProcessorMutable(uint64_t processor_id) const
-{
     std::unordered_map<uint64_t, ProcessorInfo*>::const_iterator it =
         m_processor_index.find(processor_id);
     return (it != m_processor_index.end()) ? it->second : nullptr;
+}
+
+ProcessorInfo*
+TopologyTree::GetProcessorMutable(uint64_t processor_id)
+{
+    return const_cast<ProcessorInfo*>(
+        static_cast<const TopologyTree*>(this)->GetProcessor(processor_id));
 }
 
 const ProcessInfo*
@@ -354,15 +355,16 @@ TopologyTree::GetProcess(uint64_t process_id) const
 const QueueInfo*
 TopologyTree::GetQueue(uint64_t queue_id, uint64_t processor_id) const
 {
-    return GetQueueMutable(queue_id, processor_id);
-}
-
-QueueInfo*
-TopologyTree::GetQueueMutable(uint64_t queue_id, uint64_t processor_id) const
-{
     std::map<std::pair<uint64_t, uint64_t>, QueueInfo*>::const_iterator it =
         m_queue_index.find({ queue_id, processor_id });
     return (it != m_queue_index.end()) ? it->second : nullptr;
+}
+
+QueueInfo*
+TopologyTree::GetQueueMutable(uint64_t queue_id, uint64_t processor_id)
+{
+    return const_cast<QueueInfo*>(
+        static_cast<const TopologyTree*>(this)->GetQueue(queue_id, processor_id));
 }
 
 const CounterInfo*

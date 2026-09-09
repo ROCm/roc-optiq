@@ -266,8 +266,8 @@ public:
     const CounterInfo*   GetCounter(uint64_t counter_id) const;
     const ThreadInfo*    GetThread(uint64_t thread_id, ThreadInfo::Kind kind) const;
 
-    ProcessorInfo* GetProcessorMutable(uint64_t processor_id) const;
-    QueueInfo*     GetQueueMutable(uint64_t queue_id, uint64_t processor_id) const;
+    ProcessorInfo* GetProcessorMutable(uint64_t processor_id);
+    QueueInfo*     GetQueueMutable(uint64_t queue_id, uint64_t processor_id);
 
     const TopologyNode* FindByTrackId(uint64_t track_id) const;
 

@@ -497,8 +497,7 @@ main(int argc, char** argv)
                 }
                 else
                 {
-                    // Plain launch (no file argument): reopen the previous session's
-                    // tab groups and tabs. No-op when there is no saved session.
+                    // No file argument: reopen the previous session.
                     rocprofvis_view_restore_session();
                 }
 

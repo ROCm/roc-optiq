@@ -46,8 +46,7 @@ rocprofvis_view_destroy();
 void
 rocprofvis_view_open_files(const std::vector<std::string>& file_paths);
 
-// Restores the previous session (open tab groups + tabs) saved on last shutdown.
-// Call on a plain launch (no file argument); a no-op when there is no saved session.
+// Reopens the previous session (saved on last shutdown). No-op if none was saved.
 void
 rocprofvis_view_restore_session();
 

@@ -78,10 +78,8 @@ const std::vector<std::string> COMPARE_EXTENSIONS = { "db" };
 const std::vector<std::string> PROJECT_GROUP_EXTENSIONS = { "rpv" };
 constexpr const char*          PROJECT_GROUP_EXTENSION  = ".rpv";
 
-// The previous session (all open tab groups + ungrouped tabs, with per-item
-// settings) is snapshotted here in the app config dir on graceful shutdown, and
-// restored on the next plain launch (no file argument). A distinct name/extension
-// keeps it out of the user-facing .rpv project space.
+// Session snapshot file, in the app config dir. Not a .rpv, to keep it out of the
+// user-facing project space.
 constexpr const char* SESSION_FILE_NAME = "last_session.json";
 
 constexpr const char* CLEANUP_MESSAGE = "Waiting for requests to finish cleanup...";
@@ -675,9 +673,6 @@ std::string
 AppWindow::OpenItemFromSettings(const jt::Json&              settings,
                                 const std::filesystem::path& base_dir)
 {
-    // Restore a single tab from its embedded settings JSON (trace paths resolved
-    // relative to base_dir) and hand it a tab. Returns the opened/duplicate item id,
-    // or an empty string on failure (e.g. the trace was moved or deleted).
     std::unique_ptr<ProjectItem> new_item = std::make_unique<ProjectItem>();
     std::string                  out_id;
     ProjectItem::OpenResult open_result   = new_item->OpenFromSettingsJson(settings, base_dir, out_id);
@@ -751,9 +746,7 @@ AppWindow::OpenProjectGroupFile(const std::string& file_path)
             std::string opened_id;
             if(!item["settings"].isNull())
             {
-                // New format: the item carries its full settings; restore it (with its
-                // track heights/order, bookmarks, annotations) through the settings
-                // path, then hand it a tab.
+                // New format: the item carries its full per-view settings.
                 opened_id = OpenItemFromSettings(item["settings"], dir);
             }
             else if(item["files"].isArray())
@@ -874,10 +867,7 @@ AppWindow::OpenProjectGroupFile(const std::string& file_path)
 void
 AppWindow::SaveSession()
 {
-    // Snapshot the whole workspace (tab groups + ungrouped tabs, each with its full
-    // per-view settings) so the next plain launch can reopen it exactly. Paths are
-    // stored relative to the config dir. Called from BeginAppShutdown before the
-    // items are torn down.
+    // Paths are stored relative to the config dir so the snapshot is relocatable.
     std::filesystem::path config_dir   = get_application_config_path(true);
     std::filesystem::path session_path = config_dir / SESSION_FILE_NAME;
 
@@ -926,7 +916,7 @@ AppWindow::SaveSession()
     {
         if(GetProjectForItem(tab->m_id))
         {
-            continue;  // grouped items are saved under their project above
+            continue;  // grouped items are saved under their project
         }
         ProjectItem* item = GetItem(tab->m_id);
         if(!item)
@@ -940,7 +930,7 @@ AppWindow::SaveSession()
     std::error_code ec;
     if(project_index == 0 && ungrouped_index == 0)
     {
-        // Nothing open: clear any stale session so the next launch starts clean.
+        // Nothing open: drop any stale session.
         std::filesystem::remove(session_path, ec);
         return;
     }
@@ -956,8 +946,7 @@ AppWindow::SaveSession()
 void
 AppWindow::RestoreSession()
 {
-    // Reopen the previous session (see SaveSession). Missing traces are skipped
-    // silently so a moved/deleted file never blocks startup.
+    // Missing traces are skipped silently so a moved/deleted file never blocks startup.
     std::filesystem::path config_dir   = get_application_config_path(true);
     std::filesystem::path session_path = config_dir / SESSION_FILE_NAME;
     if(!std::filesystem::exists(session_path))
@@ -1048,7 +1037,7 @@ AppWindow::RestoreSession()
                 }
             }
 
-            // Drop a project that restored nothing (all traces missing / already open).
+            // Drop a project that restored nothing.
             Project* group = GetProjectById(project_id);
             if(group && group->GetItemIds().empty() && group->GetClosedItems().empty())
             {
@@ -1594,8 +1583,7 @@ AppWindow::BeginAppShutdown()
     m_shutdown_start          = std::chrono::steady_clock::now();
     m_disable_app_interaction = true;
 
-    // Snapshot the session while the items/views are still alive (SaveSession reads
-    // each item's live settings), so the next plain launch can restore it.
+    // Snapshot the session while items/views are still alive.
     SaveSession();
 
     NotificationManager::GetInstance().ShowPersistent(

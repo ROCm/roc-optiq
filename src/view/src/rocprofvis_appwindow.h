@@ -102,9 +102,8 @@ public:
     // Opens two trace files as a single compare project (combined timeline, A/B tags).
     void OpenCompare(const std::string& first_file, const std::string& second_file);
 
-    // Restores the previous session (all tab groups + ungrouped tabs, with per-item
-    // settings) saved on the last graceful shutdown. Called on a plain launch (no
-    // file argument); a no-op when no session file exists.
+    // Reopens the workspace (tab groups + tabs, with per-item settings) saved on the
+    // last shutdown. Called on a plain launch; a no-op when no session was saved.
     void RestoreSession();
 
     // Stable, file-derived project id/key for a compare of the given source files.
@@ -164,12 +163,11 @@ private:
     void     HandleSaveProjectGroup(const std::string& project_id);
     void     SaveProjectGroup(const std::string& project_id, const std::string& save_path);
     void     OpenProjectGroupFile(const std::string& file_path);
-    // Opens one tab from its embedded settings JSON (paths relative to base_dir) and
+    // Opens one tab from its embedded settings JSON (paths relative to base_dir);
     // returns the opened/duplicate item id, or "" on failure. Shared by the project
     // loader and session restore.
     std::string OpenItemFromSettings(const jt::Json& settings, const std::filesystem::path& base_dir);
-    // Whole-workspace session snapshot/restore (see RestoreSession). SaveSession runs
-    // during BeginAppShutdown while items are still alive.
+    // Snapshots the whole workspace to the session file; run during BeginAppShutdown.
     void        SaveSession();
     void     AssignItemToProject(const std::string& item_id, const std::string& project_id);
     void     RemoveItemFromProjectMembership(const std::string& item_id);

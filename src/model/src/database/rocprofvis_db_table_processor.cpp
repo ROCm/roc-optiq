@@ -1,22 +1,5 @@
-// Copyright (c) 2025 Advanced Micro Devices, Inc. All rights reserved.
-//
-// Permission is hereby granted, free of charge, to any person obtaining a copy
-// of m_db software and associated documentation files (the "Software"), to deal
-// in the Software without restriction, including without limitation the rights
-// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-// copies of the Software, and to permit persons to whom the Software is
-// furnished to do so, subject to the following conditions:
-//
-// The above copyright notice and m_db permission notice shall be included in all
-// copies or substantial portions of the Software.
-//
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-// SOFTWARE.
+// Copyright Advanced Micro Devices, Inc.
+// SPDX-License-Identifier: MIT
 
 #include "rocprofvis_db_table_processor.h"
 #include "rocprofvis_db_expression_filter.h"
@@ -383,6 +366,8 @@ namespace DataModel
             else
             {
                 result = m_db->BindObject()->FuncAddTableColumn(table, column.m_name.c_str());
+                if (result == kRocProfVisDmResultSuccess)
+                    result = m_db->BindObject()->FuncAddTableColumnType(table, Builder::PublicColumnDataType(column.m_name));
                 column_index++;
                 if (result != kRocProfVisDmResultSuccess)
                     break;
@@ -410,7 +395,19 @@ namespace DataModel
             }
             else
             {
+                rocprofvis_db_data_type_t type = kRPVDataTypeDouble;
+                if (column.command == FilterExpression::SqlCommand::Count)
+                {
+                    type = kRPVDataTypeInt;
+                }
+                else
+                if (column.command == FilterExpression::SqlCommand::Column)
+                {
+                    type = Builder::PublicColumnDataType(column.column);
+                }
                 result = m_db->BindObject()->FuncAddTableColumn(table, column.public_name.c_str());
+                if (result == kRocProfVisDmResultSuccess)
+                    result = m_db->BindObject()->FuncAddTableColumnType(table, type);
                 column_index++;
                 if (result != kRocProfVisDmResultSuccess)
                     break;
@@ -533,6 +530,10 @@ namespace DataModel
             rocprofvis_dm_result_t result = m_db->BindObject()->FuncAddTableColumn(table, "NumRecords");
             if (kRocProfVisDmResultSuccess == result)
             {
+                result = m_db->BindObject()->FuncAddTableColumnType(table, kRPVDataTypeInt);
+            }
+            if (kRocProfVisDmResultSuccess == result)
+            {
                 result = m_db->BindObject()->FuncAddTableRowCell(row, std::to_string(num_rows).c_str());
             }
             return result;
@@ -609,7 +610,7 @@ namespace DataModel
                                 try {
                                     valid = lfilter.Evaluate(row_map);
                                 }
-                                catch (std::runtime_error err)
+                                catch (const std::runtime_error& err)
                                 {
                                     valid = false;
                                     eptr = std::current_exception();
@@ -639,11 +640,10 @@ namespace DataModel
                                 std::rethrow_exception(eptr);
                             }
                     }
-                    catch (std::runtime_error e)
+                    catch (const std::runtime_error& e)
                     {
                         spdlog::error("Error: {} ", e.what());
                         m_filter_lookup.clear();
-                        filtered = false;
                     }
 
                 }

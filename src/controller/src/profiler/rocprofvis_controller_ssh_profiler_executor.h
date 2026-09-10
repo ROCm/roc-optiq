@@ -30,6 +30,17 @@ class Future;
  *
  * This class lives in its own translation unit so the libssh2 / winsock headers
  * pulled in by the SSH client stay isolated from the profiler process code.
+ *
+ * NOTE (remote OS): the remote host is assumed to be POSIX, which holds today
+ * because the ROCm profilers ship on Linux only. If they gain Windows support,
+ * driving a Windows remote takes more than selecting a different tool: the
+ * command is serialized by Cmdline::ToPosixShellCommand, which single-quotes
+ * every token and prefixes "cd '<dir>' &&" for /bin/sh, and cmd.exe or
+ * PowerShell would not treat those quotes as quoting at all.
+ * ProfilerConfig::ResolveToolPathRemote requires a leading '/' and joins with
+ * '/', and the launcher's remote command preview reproduces that same
+ * composition, so those three have to be reworked together or the preview and
+ * the executed command stop matching.
  */
 class SshProfilerExecutor : public IProfilerExecutor
 {

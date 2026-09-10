@@ -5,6 +5,7 @@
 #include "rocprofvis_click_manager.h"
 #include "widgets/rocprofvis_gui_helpers.h"
 #include "rocprofvis_settings_manager.h"
+#include "rocprofvis_timeline_selection.h"
 #include "rocprofvis_timeline_track_options.h"
 #include "rocprofvis_utils.h"
 #include "spdlog/spdlog.h"
@@ -301,10 +302,15 @@ LineTrackItem::Update()
 {
     if(m_track_statistics)
     {
+        // Blue only while a time-range selection narrows the data.
+        const bool ranged =
+            m_timeline_selection && m_timeline_selection->HasValidTimeRangeSelection();
         for(size_t i = 0; i < m_pills_analysis.size(); i++)
         {
             if(m_pills_analysis[i])
             {
+                m_pills_analysis[i]->SetTextColor(
+                    ranged ? std::optional<Colors>(Colors::kAccent) : std::nullopt);
                 if(m_track_statistics->state == AnalysisTrackStatistics::kReady &&
                    m_track_statistics_dirty)
                 {
@@ -353,7 +359,7 @@ LineTrackItem::ReleaseData()
     return false;
 }
 
-bool
+void
 LineTrackItem::ExtractPointsFromData()
 {
     const RawTrackData* rtd = m_data_provider.DataModel().GetTimeline().GetTrackData(m_track_id);
@@ -362,10 +368,8 @@ LineTrackItem::ExtractPointsFromData()
     // response was processed
     if(!rtd)
     {
-        spdlog::error("No raw track data found for track {}", m_track_id);
-        // Reset the request state to idle
-        m_request_state = TrackDataRequestState::kIdle;
-        return false;
+        spdlog::debug("No raw track data found for track {}", m_track_id);
+        return;
     }
 
     const RawTrackSampleData* sample_track = dynamic_cast<const RawTrackSampleData*>(rtd);
@@ -373,24 +377,17 @@ LineTrackItem::ExtractPointsFromData()
     {
         spdlog::debug("Invalid track data type for track {}", m_track_id);
         m_request_state = TrackDataRequestState::kError;
-        return false;
-    }
-
-    if(sample_track->AllDataReady())
-    {
-        m_request_state = TrackDataRequestState::kIdle;
+        return;
     }
 
     if(sample_track->GetData().empty())
     {
         spdlog::debug("No data for track {}", m_track_id);
-        return false;
+        return;
     }
     const std::vector<TraceCounter>& track_data = sample_track->GetData();
 
     m_data = track_data;
-
-    return true;
 }
 
 float

@@ -16,6 +16,7 @@
 #include "widgets/rocprofvis_widget.h"
 #include <map>
 #include <memory>
+#include <optional>
 #include <string>
 #include <unordered_map>
 #include <utility>
@@ -70,9 +71,15 @@ public:
                                 TimelineView&      timeline_view);
     ~TimelineViewProjectSettings() override;
     void ToJson() override;
+    // True when the persisted "order" list is a valid full permutation of the
+    // current tracks (the remembered custom order).
     bool Valid() const override;
 
-    uint64_t TrackID(int index) const;
+    // The stored sort mode, if present; older projects only stored the "order"
+    // list, which is treated as the custom order on load.
+    bool                  HasSortSettings() const;
+    int                   SortMode() const;
+    std::vector<uint64_t> CustomOrder() const;
 
 private:
     TimelineView& m_timeline_view;
@@ -97,8 +104,10 @@ public:
     void ScrollToTrack(const uint64_t& track_id);
     void SetViewableRangeNS(double start_ns, double end_ns);
     void MoveToPosition(double start_ns, double end_ns, double y_position, bool center);
+    void ZoomToTimeRangeSelection();
     void RenderGraphPoints();
-    void RenderHistogram();
+    void RenderHeader();
+    void RenderHistogram(float total_height, float graph_origin_x);
     void RenderTraceView();
 
     void           RenderGrid();
@@ -129,6 +138,40 @@ public:
     TimelineArrow& GetArrowLayer();
 
 private:
+    // How the timeline track order is derived. Persisted as an int, so keep the
+    // explicit values stable.
+    enum class TrackSortMode
+    {
+        kTopology = 0,  // Match the sidebar topology tree order.
+        kDefault  = 1,  // Natural load order captured when the trace opened.
+        kCustom   = 2,  // The user's manual (drag-reordered) order; one remembered slot.
+    };
+
+    // Reorder the tracks according to the given sort mode. If topology order isn't
+    // available yet (the tree is still building at load), the sort is deferred and
+    // retried from Update().
+    void          SortTracksBy(TrackSortMode mode);
+    /*
+     * Full permutation of the current tracks in topology order. The topology
+     * tree only knows the tracks it owns, so anything it does not cover (the
+     * sidebar's "Uncategorized" rows) is appended in current index order to
+     * keep the result a valid permutation. Empty until the topology is loaded.
+     */
+    std::vector<uint64_t> BuildTopologyOrder() const;
+    bool          HasCustomOrder() const { return !m_custom_order.empty(); }
+
+    // Reindexes each TrackInfo and rebuilds m_tracks to match order, which must be
+    // a full permutation of the current track ids. View-only: never syncs the
+    // controller graph order. Returns false (and leaves state untouched) if the
+    // order is rejected downstream.
+    bool ApplyTrackOrder(const std::vector<uint64_t>& order);
+    // Rebuilds the m_tracks pointer vector from the current TrackInfo::index values.
+    void RebuildTrackVectorFromMetadata();
+    // Restores the persisted sort selection (and remembered custom order) after a
+    // trace loads.
+    void LoadSortSettings();
+    // Renders the "Sort tracks by" options inside an open popup.
+    void RenderTrackSortMenu();
     enum class MeasurementRulerDragTarget
     {
         kNone,
@@ -175,12 +218,16 @@ private:
 
     void CalculateTrackCounts();
     void BuildTrackCountLabels();
+    void RenderTrackInfo(float available_width);
     void RenderTrackStats(float available_width);
 
     void UpdateMaxMetaAreaSize(bool update_tracks = false);
 
     void RenderTrack(int track_index, bool request_data, ImGuiWindowFlags window_flags,
                      ImVec2 container_size);
+    // Right-click menu for restoring hidden tracks, from the empty space below
+    // the last track.
+    void RenderEmptyTrackAreaMenu();
     bool IsRequestDataNeeded();
     void RequestDataIfEmpty(TrackItem* track_item, bool request_data);
     void RenderNormalTrack(TrackItem* track_item, int track_index, ImGuiWindowFlags window_flags,
@@ -195,7 +242,6 @@ private:
     void                            CopySelectedEventDetails();
     void                            ZoomToTimeSpan(double start_ns, double end_ns);
     void                            ZoomToMeasurement();
-    void                            ZoomToTimeRangeSelection();
 
     TrackLayout                     BuildTrackLayout();
     EventManager::SubscriptionToken m_scroll_to_track_token;
@@ -216,7 +262,7 @@ private:
     float                               m_scroll_position_y;
     float                               m_content_max_y_scroll;
     bool                                m_can_drag_to_pan;
-    double                              m_previous_scroll_position;
+    float                               m_previous_scroll_position;
     bool                                m_meta_map_made;
     bool                                m_resize_activity;
     bool                                m_reorder_auto_scrolling;
@@ -236,6 +282,7 @@ private:
     float                               m_last_zoom;
     std::unordered_map<uint64_t, float> m_track_position_y;  // Track index to height
     float                               m_track_height_sum;
+    size_t                              m_hidden_track_count;
     std::shared_ptr<TimelineSelection>  m_timeline_selection;
     std::shared_ptr<MeasurementController> m_measurement;
     std::shared_ptr<AnnotationsManager> m_annotations;
@@ -267,6 +314,17 @@ private:
     TimelineViewProjectSettings m_project_settings;
     LoadingTimer                m_loading_timer;
     TrackTypeCounts             m_track_counts;
+
+    // Track sort state. m_default_order is captured once when the trace loads;
+    // m_custom_order is the single remembered manual ordering. Topology order is
+    // derived from the topology tree on demand; m_topology_sort_pending is set
+    // when a topology sort is requested before that tree is available.
+    TrackSortMode                m_sort_mode;
+    std::vector<uint64_t>        m_default_order;
+    std::vector<uint64_t>        m_custom_order;
+    bool                         m_topology_sort_pending;
+    // Menu-requested sort, applied in Update() (not mid-render). Empty if none.
+    std::optional<TrackSortMode> m_pending_sort_mode;
 };
 
 }  // namespace View

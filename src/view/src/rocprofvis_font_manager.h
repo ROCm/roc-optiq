@@ -24,6 +24,7 @@ enum class FontType
 
 enum class FontSize
 {
+    kXSmall,
     kSmall,
     kMedium,
     kMedLarge,

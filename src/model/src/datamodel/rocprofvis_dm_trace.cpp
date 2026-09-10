@@ -422,11 +422,12 @@ rocprofvis_dm_result_t Trace::GetStringIndices(
     rocprofvis_dm_num_string_table_filters_t num,
     rocprofvis_dm_string_table_filters_t substrings,
     bool include_substring,
+    bool partial_matching,
     std::vector<rocprofvis_dm_index_t>& indices)
 {
     ROCPROFVIS_ASSERT_MSG(object, ERROR_TRACE_CANNOT_BE_NULL);
     Trace* trace = (Trace*)object;
-    return trace->SearchStringIndices(num, substrings, include_substring, indices);
+    return trace->SearchStringIndices(num, substrings, include_substring, partial_matching, indices);
 }
 
 void Trace::MetadataLoaded(const rocprofvis_dm_trace_t object)
@@ -773,7 +774,7 @@ rocprofvis_dm_charptr_t Trace::GetStringAt(rocprofvis_dm_index_t index){
     return m_strings[index].c_str();
 }
 
-rocprofvis_dm_result_t Trace::SearchStringIndices(rocprofvis_dm_num_string_table_filters_t num, rocprofvis_dm_string_table_filters_t targets, bool include_substring, std::vector<rocprofvis_dm_index_t>& indices)
+rocprofvis_dm_result_t Trace::SearchStringIndices(rocprofvis_dm_num_string_table_filters_t num, rocprofvis_dm_string_table_filters_t targets, bool include_substring, bool partial_matching, std::vector<rocprofvis_dm_index_t>& indices)
 {
     ROCPROFVIS_ASSERT_MSG_RETURN(m_parameters.metadata_loaded, ERROR_METADATA_IS_NOT_LOADED, kRocProfVisDmResultNotLoaded);
     for(int i = 0; i < num; i ++)
@@ -783,7 +784,7 @@ rocprofvis_dm_result_t Trace::SearchStringIndices(rocprofvis_dm_num_string_table
     for(int i = 0; i < m_strings.size(); i ++)
     {
         std::string_view sv = m_strings[i];
-        bool match = true;
+        bool match = !partial_matching;
         for(int j = 0; j < num; j ++)
         {
             std::string_view target_sv = targets[j];
@@ -802,7 +803,7 @@ rocprofvis_dm_result_t Trace::SearchStringIndices(rocprofvis_dm_num_string_table
                                 return std::tolower(c1) == std::tolower(c2);
                             });
             }
-            if(!match)
+            if(match == partial_matching)
             {
                 break;
             }
@@ -920,8 +921,8 @@ const char*  Trace::GetPropertySymbol(rocprofvis_dm_property_t property) {
             return "kRPVDMStackTraceHandleByEventID";
         case kRPVDMExtInfoHandleByEventID:
             return "kRPVDMExtInfoHandleByEventID";
-        case kRPVDMTableHandleIndexed:
-            return "kRPVDMTableHandleIndexed";
+        case kRPVDMTableHandleByID:
+            return "kRPVDMTableHandleByID";
         case kRPVDMHistogramNumBuckets:
             return "kRPVDMHistogramNumBuckets";
         case kRPVDMHistogramBucketSize:

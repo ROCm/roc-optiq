@@ -65,7 +65,7 @@ When humans and `CODING.md` disagree with this file, `CODING.md` wins.
 
 ## 1. Project Identity
 
-- **Name:** ROCm Optiq (Beta) - `roc-optiq`
+- **Name:** ROCm Optiq - `roc-optiq`
 - **Owner:** AMD / ROCm
 - **License:** MIT (`LICENSE.md`)
 - **Language:** C++17. Public C library headers use C11.
@@ -108,6 +108,10 @@ CMake options worth knowing:
 - `ROCPROFVIS_ENABLE_REMOTE` - enables SSH connection, browse, transfer,
   and remote-trace UI (default off). Remote profiling needs both remote
   and profiler support.
+- `ROCPROFVIS_ENABLE_TRACE_COMPARE` - enables the in-development trace
+  comparison UI (default off).
+- `ROCPROFVIS_MULTI_WINDOW` - enables the in-development multi-window
+  support (default off).
 - `USE_NATIVE_FILE_DIALOG` - off disables `nativefiledialog-extended`.
 
 The CLI flag `--file-dialog={auto|imgui|native}` overrides dialog selection
@@ -392,7 +396,6 @@ AppWindow (singleton, RocWidget)
 |   |         |   +-- AnnotationsManager (per-project, drives StickyNote items)
 |   |         |   +-- MeasurementController (two-point timeline measurement)
 |   |         |   +-- TimelineSelection (per-project, owns selection state)
-|   |         |   +-- TrackTopology    (per-project, owns sidebar tree)
 |   |         |
 |   |         \-- ComputeView : RootView                 (compute trace)
 |   |             +-- m_tool_bar       : RocCustomWidget (slotted into [0])
@@ -402,7 +405,7 @@ AppWindow (singleton, RocWidget)
 |   |                 +-- ComputeTableView
 |   |                 +-- ComputeWorkloadView
 |   |                 +-- ComputeComparisonView
-|   |                 +-- (ComputeCodeView / ComputeTester, dev mode only)
+|   |                 +-- (ComputeIsaView / ComputeTester, dev mode only)
 |   +-- [2] status bar (RocCustomWidget calling AppWindow::RenderStatusBar)
 +-- WelcomePage              : empty-state landing page
 +-- CompareFilesDialog       : two-trace compare modal (File > Compare, dev mode)
@@ -831,7 +834,7 @@ menu also copies the track name / ID; the hover tooltip (Node ID +
 Process ID) is scoped to the name-label hitbox only.
 
 State of note: `m_track_metadata` (`const TrackInfo*` from
-`TrackTopology`), `m_track_statistics`, `m_options` (the track's
+`TimelineModel`), `m_track_statistics`, `m_options` (the track's
 `TrackOptions`, which owns the persisted height), `m_pills` (multiple
 labels/statistics in the meta area), `m_request_queue`, and
 `m_pending_requests`. `SetNodeColor()` and the node pill implement the
@@ -914,8 +917,6 @@ Composition (members):
 - `m_timeline_selection` (`shared_ptr<TimelineSelection>`) - holds the
   currently selected tracks/events/time-range. Always pass this around
   to children rather than reinventing selection state.
-- `m_track_topology` (`shared_ptr<TrackTopology>`) - rebuilds the
-  hierarchical sidebar tree on metadata changes.
 - `m_annotations` (`shared_ptr<AnnotationsManager>`) - sticky-note
   annotations.
 - `m_measurement` (`shared_ptr<MeasurementController>`) - two-point,
@@ -1011,24 +1012,29 @@ Public:
   `PixelToTime(x)` / `NormalizeTime(t)` / `DenormalizeTime(t)`.
 - Read accessors for everything.
 
-### `TrackTopology` (`rocprofvis_track_topology.{h,cpp}`)
-
-Builds the hierarchical sidebar model and maps tracks back to nodes.
-Run inside `Update()` when track metadata changes
-(`kTrackMetadataChanged`). Exposes:
-
-- `Update()`, `Dirty()`, `FormatCells()`.
-- `GetTopology()` returning the full `TopologyModel` (Node ->
-  Process/Processor -> Stream/Queue/Counter/Thread...).
-- `GetSidebarTree()` returning a `SidebarTree` made of `TreeNode` and
-  `LeafNode` (defined in `rocprofvis_tree_node.h`,
-  `enum class NodeType` for the kind).
-
 ### `SideBar` (`rocprofvis_sidebar.{h,cpp}`)
 
-Renders the topology tree in the left pane:
+Renders the topology tree in the left pane. The topology itself lives in
+the data model as a `TopologyTree` (see the UI models section below);
+the sidebar owns only the *projection* of it that it draws:
 
-- Tracks are leaves; branches are nodes/processes/devices.
+- `Update()` rebuilds that projection when
+  `TopologyTree::GetRevision()` changes (a trace loaded) or track
+  metadata changed (labels moved). `BuildTree()` walks the tree and
+  emits a `SidebarTree` of `TreeNode` / `LeafNode` (defined in
+  `rocprofvis_tree_node.h`, `enum class NodeType` for the kind).
+- Every timeline track gets at least one row. After walking the tree,
+  `BuildTree()` buckets any track it emitted no row for under an
+  "Uncategorized" list - keyed on that rather than on
+  `TrackInfo::TrackType`, since a typed track whose queue or processor
+  was unreachable at load still needs a home.
+- Everything purely presentational lives here and not on the tree:
+  group headers ("Queues (4)"), the eye-state cache, node color
+  swatches, and the inline processor subtree shown under a stream.
+- A `LeafNode` carries a `track_id`, never a position. Positions change
+  on drag-reorder; ids do not. Rows resolve to a `TrackItem*` through
+  the timeline metadata each frame (`FindTrack` / `TrackFromMetadata`).
+- Tracks are leaves; branches are nodes/processes/processors.
 - `EyeButtonState` (`kAllVisible|kAllHidden|kMixed`) is computed
   recursively to drive the show/hide eye icon at each level.
 - `ApplyVisibility(node, visible)` toggles every leaf below `node` and
@@ -1036,6 +1042,11 @@ Renders the topology tree in the left pane:
   `DataProvider`.
 - The active-node accent mirrors timeline node coloring when
   `SettingsManager::ShowNodeColors()` is enabled.
+- `SettingsManager::CompactSidebar()` drops the per-row eye and
+  scroll-to-track buttons (leaf and branch) so labels sit flush against
+  the tree. Nothing is reserved in their place; the context menus below
+  remain the way to toggle visibility and jump to a track, and hidden
+  tracks stay marked by their dimmed label.
 - Right-click a leaf track (`##track_ctx`): Go to Track, Hide/Show
   Track, Show All Tracks, Hide All But This Track, and Show/Hide
   Selected Tracks (enabled when
@@ -1102,10 +1113,15 @@ context menu copy.
 
 ### `TrackDetails` (`rocprofvis_track_details.{h,cpp}`)
 
-Shows aggregated info per selected track, sourced from
-`TrackTopology::GetTopology()`. `DetailItem` collects pointers into
-the topology models (node, process, processor, queue, thread, stream,
-counter) for the track, then renders an `InfoTable`.
+Shows aggregated info per selected track, sourced from the data model's
+`TopologyTree`. On a selection change `Resolve()` locates the track's
+node in the tree (by track id) plus its parent node/process, and
+`BuildTables()` turns those into the `DetailsTable`s it renders - built
+for the selected tracks only, not precomputed for the trace. Each cell
+carries a `Kind`; any kind other than `kText` holds a raw value and is
+reformatted in place on `kTimeFormatChanged`. A change of
+`TopologyTree::GetRevision()` re-resolves, since a rebuilt tree
+invalidates the node pointers.
 Real queue/counter statistics come from `AnalysisTrackStatistics`, the
 same cache used by track pills.
 
@@ -1224,7 +1240,7 @@ The compute analogue of `TraceView`. Owns:
   - `ComputeTableView` - hierarchical metric tables.
   - `ComputeWorkloadView` - system info + profiling config tables.
   - `ComputeComparisonView` - baseline vs target comparison.
-  - `ComputeCodeView` - dev-only source/ISA correlation.
+  - `ComputeIsaView` - dev-only source/ISA correlation.
   - `ComputeTester` - dev-mode scratchpad
     (`#ifdef ROCPROFVIS_DEVELOPER_MODE`).
 - `m_data_provider` - same `DataProvider` type as `TraceView`, but its
@@ -1371,17 +1387,44 @@ Internal scratchpad UI for exercising the metric / roofline APIs.
 Behind `#ifdef ROCPROFVIS_DEVELOPER_MODE`. Not user-facing - keep
 production code from depending on it.
 
-### `ComputeCodeView` (`rocprofvis_compute_code_view.{h,cpp}`) - dev only
+### `ComputeIsaView` (`rocprofvis_compute_isa_view.{h,cpp}`)
 
 Correlates source code and ISA through `SourceCodeWidget` and
 `IsaCodeWidget`, which both derive from `BaseCodeWidget` and share a
 `LineSelection` so selecting a source line highlights the correlated
-ISA (and vice versa), laid out in an `HSplitContainer`.
+ISA (and vice versa). The ISA pane is the always-visible primary pane;
+the optional source-code pane is shown on the right through the
+`Show Source Code` / `Hide Source Code` control.
 `RenderControlPanel()` hosts the source-file dropdown, and
-`FetchPcSamplingForCurrentFile()` re-fetches PC samples on file/kernel
-change. PC-sampling data is fetched through `PcSamplingRequestParams` /
-`DataProvider::FetchPcSampling`; do not query the model directly from
-this view.
+PC-sampling data is fetched through `PcSamplingRequestParams` /
+`DataProvider::FetchPcSampling` in three independent stages:
+
+- `kIsa` runs when the view opens or its kernel changes and loads only the
+  code-object, kernel-symbol, and ISA-line data needed by the primary pane.
+- `kSource` runs when the source pane is shown or a different source file is
+  selected. It loads source-file metadata, ISA/source correlations, and the
+  selected file's source lines. Source-file ID 0 asks the controller to choose
+  the first available file.
+- `kStalls` runs when stall columns are shown and loads sample states, stall
+  reasons, and instruction-sample metadata.
+
+Only one PC-sampling request may be active per trace, so
+`QueuePcSamplingFetch()` retains later stages and submits them in ISA, source,
+then stall order. Results are cached per kernel (and per source-file ID
+for source lines); toggling a pane or column does not repeat a completed fetch. The
+DataProvider updates only the model portion owned by the completed stage and
+the view refreshes only after checking the request kind, kernel, and generation.
+Do not query the model directly from this view.
+
+Older traces can omit one or more PC-sampling tables. A failed optional source,
+stall, or comment request is isolated from the already-loaded ISA pane.
+Source records with unknown or zero line numbers are omitted. ISA instructions
+that lack a valid source line remain visible and mouse-hoverable but cannot be
+selected for source correlation; hovering them clears the source-line hover.
+Clicking a correlated ISA or source row scrolls the opposite code pane so its
+first corresponding row is the top visible line. If an ISA row maps to a
+different source file, the view selects that file and fetches its lines before
+performing the scroll.
 
 ### Compute data plumbing
 
@@ -1421,9 +1464,9 @@ controller results.
     event_node, event_op)`.
   - `struct EventInfo` and its parts: `BasicEventData`, `EventArg`,
     `EventExtData`, `EventFlowData`, `CallStackData`.
-  - Topology types: `NodeInfo`, `DeviceInfo`, `ProcessInfo`,
-    `IterableInfo`, `ThreadInfo`, `QueueInfo`, `StreamDeviceInfo`,
-    `StreamInfo`, `CounterInfo`.
+  - No topology types: `NodeInfo`, `ProcessorInfo`, `ProcessInfo`,
+    `ThreadInfo`, `StreamInfo`, `QueueInfo` and `CounterInfo` live with
+    the tree that owns them, in `rocprofvis_topology_model.h`.
   - `struct SummaryInfo` with `KernelMetrics`, `GPUMetrics`,
     `CPUMetrics`, `AggregateMetrics`.
   - `struct TableInfo`, `FormattedColumnInfo`,
@@ -1437,16 +1480,36 @@ controller results.
     `SetTooltip(FullLabel())`; Track Details uses `FullValue()`.
 
 - `rocprofvis_trace_data_model.{h,cpp}` - the **`TraceDataModel`
-  facade**: aggregates `TopologyDataModel`, `TimelineModel`,
+  facade**: aggregates `TopologyTree`, `TimelineModel`,
   `TablesModel`, `SummaryModel`, `EventModel`, `AnalysisModel`. Use
   `DataProvider::DataModel()` to access it. Compare projects call
   `SetCompareSources()`; use `HasCompareSources()` /
   `GetCompareSource()` instead of inferring provenance from IDs.
-- `rocprofvis_topology_model.{h,cpp}` - holds the eight
-  `unordered_map<uint64_t, *Info>` (nodes, devices, processes,
-  instrumented threads, sampled threads, queues, streams, counters)
-  and helpers like `GetDeviceByInfoId`, `GetDeviceTypeLabel`,
-  `TopologyToString` (debug).
+- `rocprofvis_topology_model.{h,cpp}` - **`TopologyTree`**: the system
+  topology as an actual tree, mirrored from the controller's at load.
+  `TopologyNode` is the base; `NodeInfo`, `ProcessorInfo`,
+  `ProcessInfo`, `ThreadInfo`, `StreamInfo`, `QueueInfo`, `CounterInfo`
+  are the kinds. Structure and ownership:
+  - The tree owns every node in one arena (`m_storage`); all
+    parent/child edges are non-owning pointers. The per-type maps
+    (`GetNode`, `GetProcessor`, `GetProcess`, `GetQueue`, `GetCounter`,
+    `GetThread`, `FindByTrackId`) are lookup shortcuts over that tree,
+    not structure.
+  - `GetChildren(type)` is the structural edge. `GetLinkedChildren(type)`
+    is the second edge: the controller repeats a stream's processors and
+    queues under the stream, so those are *linked* rather than
+    duplicated, and a queue therefore has one parent plus secondary
+    parents.
+  - A node that maps to a timeline track carries its `track_id`
+    (`BindTrack`, `HasTrack`), and per-node display headers
+    (`SetHeader`) are cached at load, not rebuilt per frame.
+  - `Finalize()` closes the load: it sorts the node rows by ascending id
+    and takes each node's rank from that position
+    (`GetNodeDisplayIndex`, which the node labels and color wheel use),
+    builds `GetTrackOrder()` (drives the timeline's "sort by topology",
+    and equals the sidebar's row order), and bumps `GetRevision()`,
+    which is how the sidebar and Track Details know to rebuild what
+    they derive from the tree.
 - `rocprofvis_timeline_model.{h,cpp}` - `TimelineModel`: track
   metadata + raw track data + histogram + minimap. Use the typed
   raw-data helpers (`GetTrackData`, `FreeTrackData`,
@@ -1518,7 +1581,7 @@ The full list is in `rocprofvis_events.h`. Examples used widely:
 `kTimelineEventSelectionChanged`, `kTimelineEventHighlightChanged`,
 `kHandleUserGraphNavigationEvent`, `kTrackMetadataChanged`,
 `kFontSizeChanged`, `kSetViewRange`,
-`kGoToTimelineSpot`, `kTimeFormatChanged`, `kTopologyChanged`,
+`kGoToTimelineSpot`, `kTimeFormatChanged`,
 `kRequestProgressUpdate`, `kProfilerStatusChanged`,
 `kRemoteStatusChanged`. Compute-only:
 `kComputeWorkloadSelectionChanged`,
@@ -1562,6 +1625,10 @@ through this** - never hardcode `IM_COL32(...)` in feature code.
   `SettingsManager::ShowNodeColors()` enables node color-coding (only
   when the trace has more than one node). It tints the track's node
   pill and the sidebar tree connectors, not the chart lane itself.
+- `DisplaySettings::compact_sidebar` /
+  `SettingsManager::CompactSidebar()` hides the topology sidebar's
+  per-row icons in favor of the right-click menus (see `SideBar` in
+  section 9).
 - `UserSettings::log_viewer` stores level mask, entry limit, search and
   presentation preferences for `LogViewer`.
 - `GetInternalSettings()` -> recent files (`MAX_RECENT_FILES = 5`).
@@ -1584,9 +1651,12 @@ through this** - never hardcode `IM_COL32(...)` in feature code.
   `GetEventLevelSpacing()` is the gap between stacked event boxes, so
   a box is one row height minus that spacing.
   **Reuse these instead of magic numbers.**
-- `GetProfilerSettings()` / `SaveProfilerSettings()` persist launcher
-  paths, auto-load behavior, recent targets, and last profiler/preset/
-  SSH-connection IDs.
+- `GetProfilerSettings()` / `SaveProfilerSettings()` persist the launcher's
+  output directory, auto-load behavior, recent targets, and last
+  profiler/preset/SSH-connection IDs. Deliberately **not** a path to a
+  profiler binary: which binary runs is chosen by a tool enum, so a settings
+  file that is edited, corrupted, or copied from another machine cannot
+  decide what gets executed. Do not add one back as a convenience.
 
 JSON keys are constants in this header
 (`JSON_KEY_SETTINGS_DISPLAY_DARK_MODE` etc.).
@@ -1791,11 +1861,25 @@ sessions are **not** `Project`s until a produced trace is handed to
 `AppWindow::OpenFile()`.
 
 **Backends (`IProfilerBackend`, `rocprofvis_profiler_backend.h`).** The
-pluggable extension point. Methods: `Id`, `DisplayName`, `GetTools`,
-`GetDefaultBinary`, `GetTabs` (returns `TabDescriptor`s that each carry
+pluggable extension point. Methods: `Id`, `DisplayName`, `GetTools`
+(each `ToolOption` carries a `rocprofvis_profiler_tool_t` directly -
+backends name a tool and never a path, so binary names live only in the
+controller's tool table), `GetTabs` (takes the selected tool; returns
+`TabDescriptor`s that each carry
 an ImGui `render_fn` - the backend supplies renderers, the dialog draws
-the tab bar), `Validate` (empty string = OK), `FlattenToExecution`
-(curated settings -> env + argv; caller then merges `extra_env`),
+the tab bar. **`render_fn` returns whether the user changed a setting
+this frame**, and every control in a tab must OR in its ImGui return
+value: that bool is the launcher's only signal that the command preview
+has gone stale, so an unreported change leaves the preview displaying a
+command the settings no longer describe. (Only the preview - launching
+rebuilds the cache unconditionally.) Do not try to infer this from
+`ImGui::IsAnyItemActive()`: it stays true while a field merely holds
+focus, and it is already false by the frame after a checkbox toggles,
+since `ButtonBehavior` clears `ActiveId` in the same frame it reports
+the press), `Validate` (empty string = OK), `FlattenToExecution`
+(curated settings -> env + the **complete** argv after `argv[0]`,
+including `extra_argv`, the output flag in this profiler's spelling, and
+the target plus its arguments; caller then merges `extra_env`),
 `LoadSettings`/`SaveSettings` (the JSON `backend_payload`), `ExportCfg`
 (native config text), and the default-implemented `GetWarnings`
 (`WarningMessage { Level {kInfo,kWarning,kError}, text }`) and
@@ -1804,8 +1888,8 @@ structs: `ToolOption`, `TabDescriptor`, `WarningMessage`.
 
 **`RocprofSysBackend`** is the only backend registered today (the
 `ProfilerLauncherDialog` ctor pushes one). `Id()` = `"rocprof-sys"`.
-Tools: `run` (`rocprof-sys-run`), `sample` (`rocprof-sys-sample`),
-`instrument` (`rocprof-sys-instrument`). Tabs: Quick, Sampling, ROCm,
+Tools: `kRPVProfilerToolRocprofSysRun`, `…SysSample`, `…SysInstrument`.
+Tabs: Quick, Sampling, ROCm,
 Process Sampling, Parallelism, Advanced, plus Instrument (only when the
 tool is `instrument`); the dialog appends a shared "Raw Env Vars" tab.
 Perfetto options are nested inside Advanced, not a top-level tab.
@@ -1814,11 +1898,38 @@ sampling, ROCm domains, Perfetto, process sampling, parallelism,
 advanced, instrument) plus 11 built-in rocprof-sys `--preset=` names.
 
 **`LaunchConfig` (`rocprofvis_launch_config.h`)** is the serializable
-payload: `profiler_id`, `tool_id`, `connection` (`ConnectionType
+payload: `profiler_id`, `tool`, `connection` (`ConnectionType
 {kLocal, kSsh}`), `ssh_connection_ref` (an `SshConnectionConfig::id`,
 never inline credentials), `target` (`TargetSpec {executable, arguments,
 working_directory, output_directory, auto_load_trace}`), `extra_env`,
 `extra_argv`, and `backend_payload` (the backend's JSON).
+`TargetSpec::working_directory` is honored at launch but has no UI field,
+so today it is only reachable through a saved profile. The same header
+provides `SplitArguments`, which word-splits `TargetSpec::arguments` the
+way a shell would (quote-aware, no expansion) - backends must use it
+rather than splitting on whitespace, or a quoted argument containing
+spaces is torn into several - plus the tool helpers `GetToolBinaryName`,
+`ToolFromInt`, and `ResolveToolPath` (see 13.2). Note that `LaunchConfig`
+holds no profiler binary path: `tool` is an enum, so a saved profile
+cannot name an executable.
+
+`tool` is persisted as the enum's **integer** value, which makes
+`rocprofvis_profiler_tool_t` append-only - renumbering or reusing a value
+would silently repoint every saved profile at a different tool, and that is
+a launch-the-wrong-thing bug rather than a load error. `FromJson` runs the
+stored integer through `ToolFromInt`, which bounds it with the enum's own
+`__kRPVProfilerToolLast` sentinel (the same `__k...Last` idiom the rest of
+`rocprofvis_controller_enums.h` uses) and yields `kRPVProfilerToolNone`
+otherwise, so a corrupted value or one from a newer build is never cast
+blindly into the enum. The dialog then resolves `None` through
+`SyncToolWithBackend`.
+
+It also holds `tool_directory`, an optional absolute directory to find the
+tools in for a ROCm install in a non-standard location - a directory only,
+since the filename stays the controller's to choose. It lives on the
+profile rather than in app settings because a remote profile needs a
+directory on the *remote* host, which a machine-local setting could not
+express.
 
 **Two independent preset systems - do not conflate:**
 - `LaunchPresetManager` - named Optiq launch profiles in the
@@ -1833,7 +1944,7 @@ working_directory, output_directory, auto_load_trace}`), `extra_env`,
 
 **Shared form helpers (`rocprofvis_launch_shared_tabs.h`)** - reuse
 these instead of re-authoring launcher UI: `RenderTargetSection`,
-`RenderRawEnvVarsTab`, `BuildCommandPreviewString`,
+`RenderToolLocationSection`, `RenderRawEnvVarsTab`, `BuildCommandPreviewString`,
 `RenderCommandPreview`, `RenderOutputConsole` (+ `ConsoleStatusLevel
 {kIdle, kRunning, kSuccess, kError}`), `RenderSavedProfileBar`. The
 connection-mode selector and SSH UI live in the dialog
@@ -1846,6 +1957,17 @@ preview, rebuilt on a dirty flag). `AppWindow::ShowProfilerLauncher()`
 lazily creates it; the only entry point is `File > Launch Profiler...`
 (`#ifdef ROCPROFVIS_ENABLE_PROFILER`).
 
+There is deliberately **no** selected-tool index beside `m_config.tool` -
+the enum is the only copy. An earlier version kept an `m_tool_index` in
+step by searching `GetTools()` for the config's tool id after each profile
+load, which silently did nothing when the profile named a tool the backend
+did not offer: the combo then showed the stale index's tool while the
+launch ran the fallback. `SyncToolWithBackend()` replaces both copies of
+that search - it forces `m_config.tool` to something the current backend
+offers, warns when it has to substitute, and is called after a backend
+switch and after every profile load. Anything that changes either the
+backend or the config must call it.
+
 **`ProfilerSessionBase`** owns the controller `config`/`profiler`/
 `future` handles and the `AppMonitor` op id. `GetState`, `GetOutput`,
 `GetExitCode`, `Cancel`, `Close`, and `GetOperationId` forward to the
@@ -1853,6 +1975,58 @@ lazily creates it; the only entry point is `File > Launch Profiler...`
 `MonitorOperationType::ProfilerSession` op; `FreeProfilerObjects()`
 handles teardown (see 13.4). Subclasses set `m_extra_teardown` for
 resources that must outlive the profiler worker.
+
+`Launch` and `BuildConfig` take a **`ProfilerLaunchSpec`** (same header):
+`tool` (a `rocprofvis_profiler_tool_t` - the controller resolves it to
+`argv[0]`; the View never supplies a path), `tool_directory` (where to look
+for it, see below), `profiler_argv` (the complete argument
+list from `FlattenToExecution`, one entry per argv entry - the controller
+never re-splits it), `env_vars`, `working_directory` (applied to the child
+process only), and `output_directory`, which deliberately does **not**
+reach the command line and currently has no reader in the controller at
+all - the backend emits the output flag itself, because profilers spell it
+differently and some take none. A struct rather than a parameter list
+because a transposed pair of the string fields would compile cleanly and
+launch the wrong command.
+
+There is deliberately **no `target_executable`** on the spec. It used to be
+carried as metadata and was read by nothing; the target reaches the child
+only as argv entries the backend emits, so the View is the single owner of
+it. Do not re-add it to give the controller "context" - that recreates a
+second source of truth for a value the command line already carries.
+
+**Tool selection never involves a path from the UI.** The combo hands back
+a `rocprofvis_profiler_tool_t` straight from `GetTools`, and the launcher
+calls `View::ResolveToolPath`
+(`rocprofvis_launch_config.h`, wrapping
+`rocprofvis_profiler_tool_resolve_path`) purely to show the resolved
+absolute path in the command preview and to report a missing tool before
+Launch is pressed; the launch passes the enum and the controller resolves
+again. **`ResolveToolPath` answers a question about the local machine
+only**, so `RefreshExecutionCache` skips it entirely in SSH mode and
+previews what the remote will run - `<tool_directory>/<name>` or the bare
+name for the remote `$PATH`, joined with `'/'` because the remote is
+addressed as POSIX. Resolving locally for a remote run would report the
+wrong machine's install and print a path that is not what executes.
+
+`LaunchConfig::tool_directory` is edited in the Advanced window via the
+shared `RenderToolLocationSection`, placed above the backend tabs because
+it belongs to the profile rather than to any one backend; in local mode the
+field also shows the absolute path the selection currently resolves to. A
+set directory is repeated above the command preview by
+`RenderToolResolutionNotice`, so a profile imported from elsewhere cannot
+silently run a different build. If the tool is not in the configured
+directory the launch fails rather than falling back to `$ROCM_PATH` or
+`$PATH`.
+
+No path to a profiler binary is persisted anywhere. An earlier development
+build kept one in `ProfilerSettings`, which meant an edited or shared
+settings file became the `argv[0]` of the next launch; it was deleted rather
+than sanitized. A directory on the profile is a different proposition
+because the filename still comes from the controller's tool table, so the
+worst a bad value can do is name a directory that lacks the tool - and the
+launcher shows an active directory before Launch, so an imported profile
+cannot redirect a run unnoticed.
 
 ### 13.3 Local vs remote profiling workflows
 
@@ -2241,6 +2415,16 @@ for nearly every common pattern.
 
 ## 18. Common Pitfalls
 
+- **Culling timeline rows against `m_scroll_position_y`.** `SetScrollY`
+  only takes effect on the next `Begin`, so that member can be a frame
+  ahead of the layout the rows are placed with. Track positions come
+  from `ImGui::GetCursorPos()`, so cull and hit-test against
+  `ImGui::GetScrollY()` inside `Graph View Main` or rows draw at the
+  wrong offset for a frame while scrolling. ImGui also rounds
+  `window->Scroll` to whole pixels: keep `m_previous_scroll_position`
+  as a `float` and treat a sub-pixel gap as already applied, or a
+  leftover fraction looks like a pending wheel request and overwrites
+  the scrollbar.
 - **Forgetting to unsubscribe.** If you `Subscribe` to an event, store
   the token and `Unsubscribe` in your destructor. Otherwise the
   EventManager will dispatch into a dead `this`.
@@ -2344,9 +2528,8 @@ For fast lookup. Each entry: class -> file -> one-line role.
   rendering, fan/chain styles.
 - `Minimap` -> `rocprofvis_minimap.h` -> Density mini-map and viewport
   navigator.
-- `TrackTopology` -> `rocprofvis_track_topology.h` -> Hierarchical
-  topology builder + sidebar tree.
-- `SideBar` -> `rocprofvis_sidebar.h` -> Topology tree renderer.
+- `SideBar` -> `rocprofvis_sidebar.h` -> Topology pane: projects the
+  model's `TopologyTree` into a `SidebarTree` and renders it.
 - `MeasurementController`, `MeasurementPoint`, `MeasurementState`,
   `MeasureEdge` -> `rocprofvis_measurement_controller.h` -> Timeline
   measurement state and anchors.
@@ -2454,7 +2637,8 @@ For fast lookup. Each entry: class -> file -> one-line role.
 ### View-side models
 
 - `TraceDataModel` -> `model/rocprofvis_trace_data_model.h` -> Facade.
-- `TopologyDataModel` -> `model/rocprofvis_topology_model.h`.
+- `TopologyTree`, `TopologyNode` and the `*Info` node kinds ->
+  `model/rocprofvis_topology_model.h`.
 - `TimelineModel` -> `model/rocprofvis_timeline_model.h`.
 - `EventModel` -> `model/rocprofvis_event_model.h`.
 - `SummaryModel` -> `model/rocprofvis_summary_model.h`.
@@ -2462,9 +2646,7 @@ For fast lookup. Each entry: class -> file -> one-line role.
 - `AnalysisModel` -> `model/rocprofvis_analysis_model.h`.
 - `INVALID_UINT64_INDEX` -> `model/rocprofvis_common_defs.h`.
 - `TrackInfo`, `EventInfo`, `BasicEventData`, `EventArg`,
-  `EventExtData`, `EventFlowData`, `CallStackData`, `NodeInfo`,
-  `DeviceInfo`, `ProcessInfo`, `IterableInfo`, `ThreadInfo`,
-  `QueueInfo`, `StreamInfo`, `StreamDeviceInfo`, `CounterInfo`,
+  `EventExtData`, `EventFlowData`, `CallStackData`,
   `SummaryInfo` (with `KernelMetrics`/`GPUMetrics`/`CPUMetrics`/
   `AggregateMetrics`), `TableInfo`, `FormattedColumnInfo`,
   `TraceEventId`, `TopologyId`, `CompareSourceInfo`,
@@ -2493,8 +2675,8 @@ For fast lookup. Each entry: class -> file -> one-line role.
   `compute/rocprofvis_compute_summary.h`.
 - `ComputeTester` (dev only) ->
   `compute/rocprofvis_compute_tester.h`.
-- `ComputeCodeView`, `SourceCodeWidget`, `IsaCodeWidget` (dev only) ->
-  `compute/rocprofvis_compute_code_view.h`.
+- `ComputeIsaView`, `SourceCodeWidget`, `IsaCodeWidget` (dev only) ->
+  `compute/rocprofvis_compute_isa_view.h`.
 - `ComputeDataProvider`, `ComputeTableModel`, `ComputeTableCellModel`,
   `ComputePlotModel`, `ComputePlotAxisModel`, `ComputePlotSeriesModel`,
   `ComputeMetricModel` -> `compute/rocprofvis_compute_data_provider.h`.
@@ -2532,13 +2714,14 @@ For fast lookup. Each entry: class -> file -> one-line role.
   `profiler/rocprofvis_profiler_backend.h`.
 - `RocprofSysBackend`, `RocprofSysSettings` ->
   `profiler/rocprofvis_rocprof_sys_backend.h`.
-- `LaunchConfig`, `TargetSpec`, `ConnectionType` ->
+- `LaunchConfig`, `TargetSpec`, `ConnectionType`, `SplitArguments`,
+  `GetToolBinaryName`, `ToolFromInt`, `ResolveToolPath` ->
   `profiler/rocprofvis_launch_config.h`.
 - `LaunchPresetManager`, `PresetInfo` ->
   `profiler/rocprofvis_launch_preset_manager.h`.
-- `ProfilerSessionBase`, `ProfilerSession` -> matching `profiler/`
-  headers. `RemoteProfilerSession` additionally requires
-  `ROCPROFVIS_ENABLE_REMOTE`.
+- `ProfilerLaunchSpec`, `ProfilerSessionBase`, `ProfilerSession` ->
+  matching `profiler/` headers. `RemoteProfilerSession` additionally
+  requires `ROCPROFVIS_ENABLE_REMOTE`.
 - `ProfilerLaunchOrchestrator` ->
   `profiler/rocprofvis_profiler_launch_orchestrator.h`.
 - `ProfilerLauncherDialog` ->

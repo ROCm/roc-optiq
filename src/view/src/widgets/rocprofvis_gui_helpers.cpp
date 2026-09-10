@@ -7,7 +7,9 @@
 #include "rocprofvis_utils.h"
 #include "spdlog/spdlog.h"
 #include "widgets/rocprofvis_notification_manager.h"
+#include "widgets/rocprofvis_widget.h"
 #include <algorithm>
+#include <cfloat>
 #include <cmath>
 
 namespace RocProfVis
@@ -48,10 +50,22 @@ bool
 InputTextStringWithHint(const char* id, const char* hint, std::string& str,
                         ImGuiInputTextFlags flags)
 {
-    str.reserve(std::max(str.size() + 1, static_cast<size_t>(256)));
-    return ImGui::InputTextWithHint(id, hint, str.data(), str.capacity() + 1,
-                                    flags | ImGuiInputTextFlags_CallbackResize,
-                                    StringResizeCallback, static_cast<void*>(&str));
+    bool input_changed = InputTextString(id, str, flags);
+    if(str.empty())
+    {
+        const float& padding = ImGui::GetStyle().FramePadding.x;
+        ImGui::BeginDisabled();
+        ImGui::SetCursorScreenPos(
+            ImVec2(ImGui::GetItemRectMin().x + padding, ImGui::GetItemRectMin().y));
+        if(ElidedText(hint, ImGui::GetItemRectSize().x - 2.0f * padding, 0.0f,
+                   Alignment_Left, true) && BeginItemTooltipStyled())
+        {
+            ImGui::TextUnformatted(hint);
+            EndTooltipStyled();
+        }
+        ImGui::EndDisabled();
+    }
+    return input_changed;
 }
 
 ImVec2
@@ -271,9 +285,8 @@ IsMouseReleasedWithDragCheck(ImGuiMouseButton button, float drag_threshold)
 }
 
 std::pair<bool, bool>
-InputTextWithClear(const char* id, const char* hint, char* buf,
-                                     size_t buf_size, ImFont* icon_font, ImU32 bg_color,
-                                     const ImGuiStyle& style, float width)
+InputTextWithClear(const char* id, const char* hint, std::string& str, ImFont* icon_font,
+                   ImU32 bg_color, const ImGuiStyle& style, float width)
 {
     bool input_cleared = false;
     ImGui::BeginGroup();
@@ -281,13 +294,13 @@ InputTextWithClear(const char* id, const char* hint, char* buf,
     ImGui::PushID(id);
     ImGui::PushStyleColor(ImGuiCol_FrameBg, bg_color);
     ImGui::SetNextItemWidth(width);
-    bool input_changed =
-        ImGui::InputTextWithHint("##input_text_with_clear", hint, buf, buf_size);
+    bool input_changed = InputTextStringWithHint("##input_text_with_clear", hint, str, 
+                                                  ImGuiInputTextFlags_AutoSelectAll);
     ImGui::PopStyleColor();
-    if(strlen(buf) > 0)
+    if(!str.empty())
     {
         ImGui::PushFont(icon_font, 0.0f);
-        if(width >= ImGui::CalcTextSize(ICON_X_CIRCLED).x + 2 * style.FramePadding.x)
+        if(width >= 2.0f * (ImGui::CalcTextSize(ICON_X_CIRCLED).x + style.FramePadding.x))
         {
             ImGui::SameLine();
             ImGui::SetCursorScreenPos(
@@ -370,7 +383,7 @@ EndTooltipStyled()
     ImGui::PopStyleColor(2);
 }
 
-void
+bool
 ElidedText(const char* text, float available_width, float tooltip_width,
            Alignment alignment, bool imgui_AlignTextToFramePadding)
 {
@@ -378,16 +391,15 @@ ElidedText(const char* text, float available_width, float tooltip_width,
     SettingsManager& settings   = SettingsManager::GetInstance();
     float            text_width = ImGui::CalcTextSize(text).x;
     ImVec2           elide_size = ImGui::CalcTextSize(" [...]");
-    float  scroll_bar_width     = (ImGui::GetScrollMaxY() != 0.0f) ? style.ScrollbarSize : 0.0f;
-    bool   elide                = text_width + scroll_bar_width > available_width;
-    ImVec2 elide_pos;
+    bool             elide      = text_width > available_width;
+    ImVec2           elide_pos;
     // Dynamically sized containers do not adapt to clip rect...
     // Use a window to restrict our size and provide sizing hint to client.
     // Do not take input to avoid interfering with client.
     ImGui::BeginChild("elided",
                       ImVec2(available_width, imgui_AlignTextToFramePadding
-                                                  ? ImGui::GetFrameHeightWithSpacing()
-                                                  : ImGui::GetFontSize()),
+                                                  ? ImGui::GetFrameHeight()
+                                                  : ImGui::GetTextLineHeight()),
                       ImGuiChildFlags_None,
                       ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoInputs);
 
@@ -397,11 +409,11 @@ ElidedText(const char* text, float available_width, float tooltip_width,
     }
     if(elide)
     {
-        ImGui::PushClipRect(ImGui::GetCursorScreenPos(),
-                            ImGui::GetCursorScreenPos() +
-                                ImVec2(available_width - scroll_bar_width - elide_size.x,
-                                       ImGui::GetFrameHeightWithSpacing()),
-                            true);
+        ImGui::PushClipRect(
+            ImGui::GetCursorScreenPos(),
+            ImGui::GetCursorScreenPos() +
+                ImVec2(available_width - elide_size.x, ImGui::GetFrameHeight()),
+            true);
     }
     else if(alignment == Alignment_Right)
     {
@@ -415,31 +427,30 @@ ElidedText(const char* text, float available_width, float tooltip_width,
     if(elide)
     {
         ImGui::PopClipRect();
-        ImGui::SameLine(available_width - scroll_bar_width - elide_size.x);
+        ImGui::SameLine();
+        ImGui::SetCursorPosX(available_width - elide_size.x);
         elide_pos = ImGui::GetCursorScreenPos();
         ImGui::TextUnformatted(" [...]");
     }
     ImGui::EndChild();
-    if(elide)
+    if(elide && tooltip_width > 0.0f)
     {
         ImGui::SetCursorScreenPos(elide_pos);
         ImGui::InvisibleButton("elide_hover", elide_size);
-        if(tooltip_width > 0.0f)
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
+                            settings.GetDefaultStyle().WindowPadding);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding,
+                            settings.GetDefaultStyle().FrameRounding);
+        if(ImGui::BeginItemTooltip())
         {
-            ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
-                                settings.GetDefaultIMGUIStyle().WindowPadding);
-            ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding,
-                                settings.GetDefaultStyle().FrameRounding);
-            if(ImGui::BeginItemTooltip())
-            {
-                ImGui::PushTextWrapPos(tooltip_width);
-                ImGui::TextWrapped("%s", text);
-                ImGui::PopTextWrapPos();
-                ImGui::EndTooltip();
-            }
-            ImGui::PopStyleVar(2);
+            ImGui::PushTextWrapPos(tooltip_width);
+            ImGui::TextWrapped("%s", text);
+            ImGui::PopTextWrapPos();
+            ImGui::EndTooltip();
         }
+        ImGui::PopStyleVar(2);
     }
+    return elide;
 }
 
 std::string
@@ -643,15 +654,114 @@ AccentButton(const char* label, ImVec2 size, SettingsManager* settings)
     {
         settings = &SettingsManager::GetInstance();
     }
-    ImGui::PushStyleColor(ImGuiCol_Button, settings->GetColor(Colors::kAccent));
-    ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
-                          settings->GetColor(Colors::kAccentHover));
-    ImGui::PushStyleColor(ImGuiCol_ButtonActive,
-                          settings->GetColor(Colors::kAccentActive));
-    ImGui::PushStyleColor(ImGuiCol_Text, settings->GetColor(Colors::kTextOnAccent));
+    return ColoredButton(label, settings->GetColor(Colors::kAccent),
+                         settings->GetColor(Colors::kAccentHover),
+                         settings->GetColor(Colors::kAccentActive),
+                         settings->GetColor(Colors::kTextOnAccent), nullptr, size);
+}
+
+bool
+ColoredButton(const char* label, ImU32 color, ImU32 hovered_color, ImU32 active_color,
+              ImU32 text_color, const char* tooltip, ImVec2 size)
+{
+    ImGui::PushStyleColor(ImGuiCol_Button, color);
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, hovered_color);
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive, active_color);
+    ImGui::PushStyleColor(ImGuiCol_Text, text_color);
     bool clicked = ImGui::Button(label, size);
     ImGui::PopStyleColor(4);
+    if(tooltip && strlen(tooltip) > 0 && BeginItemTooltipStyled())
+    {
+        ImGui::TextUnformatted(tooltip);
+        EndTooltipStyled();
+    }
     return clicked;
+}
+
+void
+RenderRemoteDownloadPopup(const char* popup_id, const char* file_name,
+                          uint64_t downloaded, uint64_t total, bool finished,
+                          bool& show)
+{
+    if(!show)
+    {
+        return;
+    }
+
+    SettingsManager&  settings = SettingsManager::GetInstance();
+    const ImGuiStyle& style    = ImGui::GetStyle();
+
+    PopUpStyle popup_style;
+    popup_style.PushPopupStyles();
+    popup_style.PushTitlebarColors();
+    popup_style.CenterPopup();
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 12.0f);
+    ImGui::SetNextWindowSize(ImVec2(440.0f, 0.0f));
+
+    if(ImGui::BeginPopupModal(popup_id, nullptr,
+                              ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove |
+                                  ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoScrollbar))
+    {
+        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(style.ItemSpacing.x, 4.0f));
+
+        BeginPanelCard("##remote_dl_header", PanelCardTone::kFrame, ImVec2(16.0f, 10.0f), true,
+                       &settings);
+        {
+            PanelIcon(ICON_ARROW_DOWN, Colors::kAccent, &settings);
+            ImGui::SameLine(0.0f, style.ItemInnerSpacing.x);
+            ImGui::BeginGroup();
+            ImGui::PushFont(nullptr, settings.GetFontManager().GetFontSize(FontSize::kMedLarge));
+            ImGui::TextUnformatted("Remote Download");
+            ImGui::PopFont();
+            ImGui::PushStyleColor(ImGuiCol_Text, settings.GetColor(Colors::kTextDim));
+            ImGui::TextUnformatted("Fetching the trace over SSH.");
+            ImGui::PopStyleColor();
+            ImGui::EndGroup();
+        }
+        EndPanelCard();
+
+        BeginPanelCard("##remote_dl_body", PanelCardTone::kPanel, ImVec2(14.0f, 10.0f), true,
+                       &settings);
+        {
+            ImGui::TextWrapped("%s", file_name ? file_name : "");
+            ImGui::Spacing();
+            if(total > 0)
+            {
+                float frac = static_cast<float>(downloaded) / static_cast<float>(total);
+                if(frac > 1.0f)
+                {
+                    frac = 1.0f;
+                }
+                std::string label = std::to_string(downloaded / 1024) + " / " +
+                                    std::to_string(total / 1024) + " KiB";
+                ImGui::ProgressBar(frac, ImVec2(-FLT_MIN, 0.0f), label.c_str());
+            }
+            else
+            {
+                PanelFieldLabel("Starting...", false, &settings);
+            }
+        }
+        EndPanelCard();
+
+        if(finished)
+        {
+            ImGui::CloseCurrentPopup();
+            show = false;
+        }
+
+        ImGui::PopStyleVar();  // ItemSpacing
+        ImGui::EndPopup();
+    }
+    else
+    {
+        // Popup not actually open (e.g. dismissed); clear the flag so it can be
+        // reopened on the next download.
+        show = false;
+    }
+
+    ImGui::PopStyleVar(2);  // WindowPadding, WindowRounding
+    popup_style.PopStyles();
 }
 
 #ifdef ROCPROFVIS_ENABLE_INTERNAL_BANNER
@@ -661,8 +771,12 @@ DrawInternalBuildBanner(const char* text /*= "Internal Build"*/)
 {
     if(!text || !*text) return;
 
-    ImDrawList*   dl   = ImGui::GetForegroundDrawList();
-    const ImVec2& disp = ImGui::GetIO().DisplaySize;
+    // Draw into the main viewport so the banner stays on the primary OS window
+    // instead of following whichever viewport is currently active.
+    ImGuiViewport* viewport = ImGui::GetMainViewport();
+    ImDrawList*    dl       = ImGui::GetForegroundDrawList(viewport);
+    const ImVec2&  vp_pos   = viewport->Pos;
+    const ImVec2&  vp_size  = viewport->Size;
 
     // Parameters. Scale with the font so the banner tracks ImGui's DPI font scaling.
     const float            ui_scale         = ImGui::GetFontSize() / BASE_DESIGN_FONT_SIZE;
@@ -689,7 +803,8 @@ DrawInternalBuildBanner(const char* text /*= "Internal Build"*/)
     const float half_thick = ribbon_thickness * 0.5f;
 
     // Center a rotated rectangle so it visually emerges from the top-right corner
-    ImVec2 center = ImVec2(disp.x - half_len * 0.5f, half_len * 0.5f);
+    ImVec2 center =
+        ImVec2(vp_pos.x + vp_size.x - half_len * 0.5f, vp_pos.y + half_len * 0.5f);
 
     // Axis‑aligned rect (local space before rotation)
     ImVec2 local[4] = { ImVec2(-half_len, -half_thick), ImVec2(half_len, -half_thick),
@@ -724,26 +839,20 @@ DrawInternalBuildBanner(const char* text /*= "Internal Build"*/)
 }
 #endif // ROCPROFVIS_ENABLE_INTERNAL_BANNER
 
-// Menu icon spacing, in multiples of the font size.
-inline constexpr float MENU_ICON_GAP_EM       = 0.7f;
-inline constexpr float MENU_NO_ICON_INDENT_EM = 1.0f;
+inline constexpr float MENU_ICON_COLUMN_EM = 1.0f;
+inline constexpr float MENU_ICON_GAP_EM    = 0.7f;
 
 static float
-MenuIconWidth(const char* icon)
+MenuIconColumnWidth()
 {
-    const float font_size = ImGui::GetFontSize();
-    if(!icon || icon[0] == '\0')
-        return font_size * MENU_NO_ICON_INDENT_EM;
-
-    ImFont* icon_font = SettingsManager::GetInstance().GetFontManager().GetFont(FontType::kIcon);
-    return icon_font->CalcTextSizeA(font_size, FLT_MAX, -1.0f, icon).x;
+    return ImGui::GetFontSize() * MENU_ICON_COLUMN_EM;
 }
 
 // Pads the label with leading spaces to leave room for the left-aligned icon.
 static std::string
-MenuLabelWithIconPadding(const char* icon, const char* label)
+MenuLabelWithIconPadding(const char* label)
 {
-    const float offset  = MenuIconWidth(icon) + ImGui::GetFontSize() * MENU_ICON_GAP_EM;
+    const float offset  = MenuIconColumnWidth() + ImGui::GetFontSize() * MENU_ICON_GAP_EM;
     const float space_w = ImGui::CalcTextSize(" ").x;
     const int   pad     = space_w > 0.0f ? static_cast<int>(std::ceil(offset / space_w)) : 1;
     std::string padded(static_cast<size_t>(std::max(pad, 1)), ' ');
@@ -769,13 +878,13 @@ DrawMenuItemIcon(ImDrawList* draw_list, const char* icon, const ImVec2& row_star
 }
 
 bool
-IconMenuItem(const char* icon, const char* label, bool enabled)
+IconMenuItem(const char* icon, const char* label, bool enabled, bool selected)
 {
     ImDrawList*  draw_list    = ImGui::GetWindowDrawList();
     const ImVec2 row_start    = ImGui::GetCursorScreenPos();
-    std::string  padded_label = MenuLabelWithIconPadding(icon, label);
+    std::string  padded_label = MenuLabelWithIconPadding(label);
 
-    bool clicked = ImGui::MenuItem(padded_label.c_str(), nullptr, false, enabled);
+    bool clicked = ImGui::MenuItem(padded_label.c_str(), nullptr, selected, enabled);
     DrawMenuItemIcon(draw_list, icon, row_start, enabled);
 
     if(clicked)
@@ -788,7 +897,7 @@ IconBeginMenu(const char* icon, const char* label)
 {
     ImDrawList*  draw_list    = ImGui::GetWindowDrawList();
     const ImVec2 row_start    = ImGui::GetCursorScreenPos();
-    std::string  padded_label = MenuLabelWithIconPadding(icon, label);
+    std::string  padded_label = MenuLabelWithIconPadding(label);
 
     bool open = ImGui::BeginMenu(padded_label.c_str());
     DrawMenuItemIcon(draw_list, icon, row_start, true);

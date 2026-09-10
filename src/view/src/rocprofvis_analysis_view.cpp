@@ -15,7 +15,7 @@ namespace RocProfVis
 namespace View
 {
 
-AnalysisView::AnalysisView(DataProvider& dp, std::shared_ptr<TrackTopology> topology,
+AnalysisView::AnalysisView(DataProvider&                       dp,
                            std::shared_ptr<TimelineSelection>  timeline_selection,
                            std::shared_ptr<AnnotationsManager> annotation_manager)
 : m_data_provider(dp)
@@ -23,17 +23,17 @@ AnalysisView::AnalysisView(DataProvider& dp, std::shared_ptr<TrackTopology> topo
       dp, TableType::kEventTable, kRPVControllerTableTypeEvents,
       DataProvider::EVENT_TABLE_REQUEST_ID,
       [&dp]() -> const TablesModel& { return dp.DataModel().GetTables(); },
-      [&dp]() -> TablesModel& { return dp.DataModel().GetTables(); }, true,
-      timeline_selection))
+      [&dp]() -> TablesModel& { return dp.DataModel().GetTables(); }, timeline_selection,
+      MultiTrackTable::FilterMode::kBasic | MultiTrackTable::FilterMode::kAdvanced))
 , m_sample_table(std::make_shared<MultiTrackTable>(
       dp, TableType::kSampleTable, kRPVControllerTableTypeSamples,
       DataProvider::SAMPLE_TABLE_REQUEST_ID,
       [&dp]() -> const TablesModel& { return dp.DataModel().GetTables(); },
-      [&dp]() -> TablesModel& { return dp.DataModel().GetTables(); }, true,
-      timeline_selection))
+      [&dp]() -> TablesModel& { return dp.DataModel().GetTables(); }, timeline_selection,
+      MultiTrackTable::FilterMode::kBasic | MultiTrackTable::FilterMode::kAdvanced))
 , m_events_view(std::make_shared<EventsView>(dp, timeline_selection))
 , m_annotation_view(std::make_shared<AnnotationView>(dp, annotation_manager))
-, m_track_details(std::make_shared<TrackDetails>(dp, topology, timeline_selection))
+, m_track_details(std::make_shared<TrackDetails>(dp, timeline_selection))
 , m_top_events_view(std::make_shared<TopEventsView>(dp, timeline_selection))
 {
     m_widget_name = GenUniqueName("Analysis View");

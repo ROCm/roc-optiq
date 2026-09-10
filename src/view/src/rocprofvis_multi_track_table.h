@@ -16,13 +16,20 @@ namespace View
 class MultiTrackTable : public InfiniteScrollTable
 {
 public:
+    enum FilterMode
+    {
+        kNone     = 0,
+        kBasic    = 1 << 0,
+        kAdvanced = 1 << 1,
+    };
+
     MultiTrackTable(DataProvider& dp, TableType table_type,
                     rocprofvis_controller_table_type_t        request_table_type,
                     uint64_t                                  request_id,
                     const std::function<const TablesModel&()> table_model,
                     const std::function<TablesModel&()>       table_model_mutable,
-                    bool                                      display_filters,
                     std::shared_ptr<TimelineSelection>        timeline_selection,
+                    int                                available_filter_modes    = kNone,
                     uint64_t                           default_sort_column_index = 1,
                     rocprofvis_controller_sort_order_t default_sort_order =
                         kRPVControllerSortOrderAscending,
@@ -39,6 +46,7 @@ public:
 
 protected:
     virtual bool IncludeTrack(uint64_t track_id) const;
+    virtual void UpdateFetchParams(std::shared_ptr<TableRequestParams>& params) const override;
     void         FormatData() const override;
     void         IndexColumns() override;
     void         RowSelected(const ImGuiMouseButton mouse_button) override;
@@ -48,16 +56,16 @@ protected:
 
 private:
     void FetchSelectionData();
-    bool XButton(const char* id) const;
-
-    bool m_retry_selection_fetch;
-    bool m_display_filters;
+    void ApplyFilter(bool reset);
 
     std::vector<std::string> m_group_by_choices;
     std::vector<const char*> m_group_by_choices_ptr;
     int                      m_group_by_selection_index;
 
-    char m_filter_store[FILTER_SIZE];
+    int           m_available_filter_modes;
+    FilterMode    m_filter_mode;
+    FilterOptions m_filter_advanced;
+    std::string   m_filter_store;
 };
 
 }  // namespace View

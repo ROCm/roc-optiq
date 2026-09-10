@@ -786,7 +786,7 @@ ComputeTopKernels::RenderTable(const ImPlotStyle& plot_style, TimeFormat time_fo
                 {
                     case KernelInfo::InvocationCount:
                     {
-                        ImGui::Text("%u", m_kernels[i]->dispatch_metrics[metric]);
+                        ImGui::Text("%llu", m_kernels[i]->dispatch_metrics[metric]);
                         break;
                     }
                     case KernelInfo::DurationTotal:

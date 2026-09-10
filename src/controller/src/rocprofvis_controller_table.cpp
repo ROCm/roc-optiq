@@ -25,6 +25,77 @@ rocprofvis_controller_object_type_t Table::GetType(void)
 	return kRPVControllerObjectTypeTable;
 }
 
+rocprofvis_result_t
+Table::GetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t* value)
+{
+    rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
+    if(value)
+    {
+        switch(property)
+        {
+            case kRPVControllerTableId:
+            {
+                *value = m_id;
+                result = kRocProfVisResultSuccess;
+                break;
+            }
+            case kRPVControllerTableNumColumns:
+            {
+                *value = m_columns.size();
+                result = kRocProfVisResultSuccess;
+                break;
+            }
+            case kRPVControllerTableNumRows:
+            {
+                *value = m_num_items;
+                result = kRocProfVisResultSuccess;
+                break;
+            }
+            case kRPVControllerTableColumnTypeIndexed:
+            {
+                if(index < m_columns.size())
+                {
+                    *value = m_columns[index].m_type;
+                    result = kRocProfVisResultSuccess;
+                }
+                break;
+            }
+            default:
+            {
+                result = UnhandledProperty(property);
+                break;
+            }
+        }
+    }
+    return result;
+}
+
+rocprofvis_result_t
+Table::GetString(rocprofvis_property_t property, uint64_t index, char* value, uint32_t* length)
+{
+    rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
+    if(length)
+    {
+        switch(property)
+        {
+            case kRPVControllerTableColumnHeaderIndexed:
+            {
+                if(index < m_columns.size())
+                {
+                    result = GetStdStringImpl(value, length, m_columns[index].m_name);
+                }
+                break;
+            }
+            default:
+            {
+                result = UnhandledProperty(property);
+                break;
+            }
+        }
+    }
+    return result;
+}
+
 void
 Table::Reset()
 {

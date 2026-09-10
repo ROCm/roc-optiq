@@ -31,9 +31,6 @@ public:
     rocprofvis_result_t SetupAndFetch(Trace& controller, Arguments& args, Array& array, Future* future) final;
     rocprofvis_result_t ExportCSV(rocprofvis_dm_trace_t dm_handle, Arguments& args, Future* future, const char* path) const final;
 
-    // Handlers for getters.
-    rocprofvis_result_t GetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t* value) final;
-    rocprofvis_result_t GetString(rocprofvis_property_t property, uint64_t index, char* value, uint32_t* length) final;
 
 protected:
     struct SystemTableArguments : TableArguments
@@ -59,6 +56,7 @@ protected:
 private:
     rocprofvis_result_t Setup(rocprofvis_dm_trace_t dm_handle, Arguments& args, Future* future) final;
     rocprofvis_result_t Fetch(rocprofvis_dm_trace_t dm_handle, uint64_t index, uint64_t count, Array& array, Future* future) final;
+    rocprofvis_controller_primitive_type_t PrimitiveType(rocprofvis_db_data_type_t db_data_type) const;
 
     std::vector<uint32_t> m_tracks;
     rocprofvis_dm_table_use_case_enum_t m_use_case;

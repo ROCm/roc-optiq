@@ -18,6 +18,7 @@ static const HotkeyActionInfo kActionTable[kHotkeyActionCount] = {
     {"Scroll Down",       "Timeline",  "scroll_down",        {ImGuiKey_DownArrow, ImGuiKey_None},       ActionType::kPress, true,  false},
     {"Clear Selection",   "Timeline",  "clear_selection",    {ImGuiKey_Escape,    ImGuiKey_None},       ActionType::kPress, true,  false},
     {"Toggle Mark",       "Timeline",  "toggle_mark",        {ImGuiKey_M,         ImGuiKey_None},       ActionType::kPress, true,  false},
+    {"Zoom to Selection", "Timeline",  "zoom_to_selection",  {ImGuiKey_Z,         ImGuiKey_None},       ActionType::kPress, false, false},
 
     {"Save Bookmark 0",  "Bookmarks", "bookmark_save_0",    {ImGuiKey_0 | ImGuiMod_Ctrl, ImGuiKey_None}, ActionType::kPress, false, false},
     {"Save Bookmark 1",  "Bookmarks", "bookmark_save_1",    {ImGuiKey_1 | ImGuiMod_Ctrl, ImGuiKey_None}, ActionType::kPress, false, false},

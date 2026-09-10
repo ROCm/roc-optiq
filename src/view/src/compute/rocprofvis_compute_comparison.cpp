@@ -465,7 +465,9 @@ ComputeComparisonView::UpdateMetrics()
                                                      std::nullopt } });
                             row_value[0].emplace_back(Table::Value{
                                 DIFFERENCE_COLUMN_PREFIX + value_name,
-                                valid_match && baseline_value && target_value
+                                valid_match && baseline_value && target_value &&
+                                        std::isfinite(rounded_baseline) &&
+                                        std::isfinite(rounded_target)
                                     ? std::make_optional(rounded_target -
                                                          rounded_baseline)
                                     : std::nullopt,
@@ -474,6 +476,8 @@ ComputeComparisonView::UpdateMetrics()
                             row_value[0].emplace_back(Table::Value{
                                 DIFFERENCE_PCT_COLUMN_PREFIX + value_name,
                                 valid_match && baseline_value && target_value &&
+                                        std::isfinite(rounded_baseline) &&
+                                        std::isfinite(rounded_target) &&
                                         rounded_baseline != 0.0
                                     ? std::make_optional(
                                           std::round((rounded_target - rounded_baseline) /

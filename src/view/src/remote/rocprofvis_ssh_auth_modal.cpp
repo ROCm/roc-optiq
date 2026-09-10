@@ -79,7 +79,7 @@ bool RenderSshAuthModal(SshSession* ssh_session)
         // auto-closes and a fresh request re-opens it (no wedged latch).
         if(!ImGui::IsPopupOpen("SSH Authentication"))
         {
-            spdlog::info("[ssh-ui] kbdint pending: {} prompt(s); calling OpenPopup",
+            spdlog::debug("[ssh-ui] kbdint pending: {} prompt(s); calling OpenPopup",
                          req->prompts.size());
             ImGui::OpenPopup("SSH Authentication");
         }

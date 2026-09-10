@@ -74,7 +74,7 @@ private:
     void DrawBox(ImVec2 start_position, ChartItem& flame, float duration,
                  ImDrawList* draw_list, bool use_highlight_color);
 
-    bool ExtractPointsFromData() override;
+    void ExtractPointsFromData() override;
     bool ExtractChildInfo(ChartItem& item);
     bool ParseChildInfo(const std::string& combined_name, ChildEventInfo& out_info);
 

@@ -71,7 +71,9 @@ void RenderConfigChips(const char* lead_label, std::vector<std::string> const& t
 void StatusPill(const char* label, ImU32 bg_color);
 
 /**
- * Renders the Target section: executable, arguments, working dir, output dir.
+ * Renders the Target section: executable, arguments, output dir. TargetSpec::
+ * working_directory is deliberately not exposed here - it is honored at launch
+ * but currently only settable through a saved profile.
  * The connection-mode selector lives in the launcher dialog (ProfilerLauncher
  * Dialog::RenderRemoteSection), next to the dialog-owned SSH options; the mode
  * is passed in here so labels read "Remote ...".
@@ -87,11 +89,31 @@ bool RenderTargetSection(TargetSpec& target, ConnectionType connection, AppWindo
                          const std::function<void()>& on_remote_browse_output  = {});
 
 /**
- * Builds the displayed command line from cached execution inputs.
+ * Renders the "where are the profiler tools" row: an optional directory that
+ * replaces the default $ROCM_PATH/bin then $PATH search, for a ROCm install in a
+ * non-standard location.
+ *
+ * Note this is a *directory*, never a path to an executable - the filename comes
+ * from the controller's tool table, so nothing the user types here can name a
+ * different program to run. In remote mode it is a directory on the remote host,
+ * so the local path picker does not apply and Browse is driven by the supplied
+ * callback (disabled when none is given), matching RenderTargetSection.
+ * `resolved_hint`, when non-empty, is shown beneath the field as the absolute
+ * path this selection currently resolves to.
+ * Returns true if the field was modified.
+ */
+bool RenderToolLocationSection(std::string& tool_directory, ConnectionType connection,
+                               AppWindow* app_window, std::string const& resolved_hint,
+                               const std::function<void()>& on_remote_browse_directory = {});
+
+/**
+ * Renders the command that will actually run, from the same inputs handed to
+ * the launch: the resolved binary, the merged env block, and the complete argv
+ * produced by IProfilerBackend::FlattenToExecution. For display only - tokens
+ * are not shell-quoted.
  */
 std::string BuildCommandPreviewString(
-    LaunchConfig const& config,
-    std::string const& profiler_path,
+    std::string const& tool_path,
     std::vector<std::pair<std::string, std::string>> const& env_vars,
     std::vector<std::string> const& argv);
 

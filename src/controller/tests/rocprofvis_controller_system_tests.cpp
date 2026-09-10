@@ -67,7 +67,11 @@ TEST_CASE("Memory Manager LRU Eviction")
     mm_a.Init(trace_size);
     mm_a.Configure(1.0);
 
-    int dummy_array = 0;
+    // Stands in for an in-flight request's result array. Entered while the segments
+    // are built, then cancelled so the LRU is allowed to reclaim them.
+    uint64_t dummy_array_id = 1;
+    mm_a.EnterArrayOwnership(dummy_array_id,
+                             RocProfVis::Controller::kRocProfVisOwnerTypeTrack);
 
     for(uint32_t i = 0; i < num_segments; i++)
     {
@@ -93,7 +97,7 @@ TEST_CASE("Memory Manager LRU Eviction")
         REQUIRE(result == kRocProfVisResultSuccess);
 
         timeline.SetValid(i, true);
-        mm_a.AddLRUReference(&timeline, seg_ptr, 0, &dummy_array);
+        mm_a.AddLRUReference(&timeline, seg_ptr, dummy_array_id);
     }
 
     spdlog::info("Validating segments are valid after insertion");
@@ -105,6 +109,10 @@ TEST_CASE("Memory Manager LRU Eviction")
     RocProfVis::Controller::MemoryManager mm_b(2);
     mm_b.Init(trace_size);
     mm_b.Configure(DBL_MAX);
+
+    // Nothing is evictable until the request that built the segments finishes.
+    mm_a.CancelArrayOwnership(dummy_array_id,
+                              RocProfVis::Controller::kRocProfVisOwnerTypeTrack);
 
     spdlog::info("Wait for LRU eviction");
     auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(10);
@@ -746,8 +754,7 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture, "System Trace Controll
                                   num_columns);
                     uint64_t column_type = 0;
                     result               = rocprofvis_controller_get_uint64(
-                        table_handle, kRPVControllerTableColumnTypeIndexed, j,
-                        &column_type);
+                        row_array, kRPVControllerArrayEntryTypeIndexed, j, &column_type);
                     REQUIRE(result == kRocProfVisResultSuccess);
 
                     switch(column_type)
@@ -1046,8 +1053,7 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture, "System Trace Controll
                                   num_columns);
                     uint64_t column_type = 0;
                     result               = rocprofvis_controller_get_uint64(
-                        table_handle, kRPVControllerTableColumnTypeIndexed, j,
-                        &column_type);
+                        row_array, kRPVControllerArrayEntryTypeIndexed, j, &column_type);
                     REQUIRE(result == kRocProfVisResultSuccess);
 
                     switch(column_type)
@@ -3068,6 +3074,14 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture, "System Trace Controll
 
         result = rocprofvis_controller_set_uint64(args, kRPVControllerTableArgsStringTableFiltersIncludeSubstrings,
                                                   0, 1);
+        REQUIRE(result == kRocProfVisResultSuccess);
+
+        result = rocprofvis_controller_set_uint64(args, kRPVControllerTableArgsStringTableFiltersIncludeCategory,
+                                                  0, 0);
+        REQUIRE(result == kRocProfVisResultSuccess);
+
+        result = rocprofvis_controller_set_uint64(args, kRPVControllerTableArgsStringTableFiltersPartialMatching,
+                                                  0, 0);
         REQUIRE(result == kRocProfVisResultSuccess);
 
         spdlog::info("Allocating Array");

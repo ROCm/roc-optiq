@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 #include "rocprofvis_raw_track_data.h"
+#include "spdlog/spdlog.h"
 
 using namespace RocProfVis::View;
 
@@ -102,6 +103,7 @@ template <typename T>
 bool TemplatedRawTrackData<T>::AddChunk(size_t chunk_index, const std::vector<T> &&chunk_data) {
         // Prevent adding same chunk index
         if (m_chunk_info.count(chunk_index)) {
+            spdlog::error("Chunk index {} already exists for track ID {}", chunk_index, GetTrackID());
             return false;
         }
 

@@ -215,6 +215,7 @@ class Builder
         static constexpr const char* STREAM_PUBLIC_NAME = "stream";
         static constexpr const char* QUEUE_PUBLIC_NAME = "queue";
         static constexpr const char* NAME_PUBLIC_NAME = "name";
+        static constexpr const char* ARGS_PUBLIC_NAME = "arguments";
         static constexpr const char* NODE_PUBLIC_NAME = "node";
         static constexpr const char* SRC_ADDRESS_PUBLIC_NAME = "SrcAddr";
 
@@ -245,6 +246,7 @@ class Builder
         static constexpr const char* CATEGORY_REFERENCE_RPD = "_s_cat_rpd";
         static constexpr const char* EVENT_NAME_REFERENCE = "_s_name";
         static constexpr const char* EVENT_NAME_REFERENCE_RPD = "_s_name_rpd";
+        static constexpr const char* EVENT_ARGS_RPD = "_s_arguments_rpd";
         static constexpr const char* STREAM_NAME_REFERENCE = "_st_name";
         static constexpr const char* QUEUE_NAME_REFERENCE = "_q_name";
         static constexpr const char* SYMBOL_NAME_REFERENCE = "_sy_name";
@@ -327,6 +329,7 @@ class Builder
             SCHEMA_INDEX_EVENT_SYMBOL,
             SCHEMA_INDEX_EVENT_NAME_RPD,
             SCHEMA_INDEX_EVENT_NAME_PERFETTO,
+            SCHEMA_INDEX_EVENT_ARGS_RPD,
             SCHEMA_INDEX_MEM_TYPE,
             SCHEMA_INDEX_STREAM_NAME,
             SCHEMA_INDEX_QUEUE_NAME,
@@ -370,12 +373,13 @@ class Builder
             {DB_ID_PUBLIC_NAME, {DB_ID_PUBLIC_NAME, ColumnType::Qword, SCHEMA_INDEX_EVENT_DB_ID}},
             {ID_PUBLIC_NAME, {ID_PUBLIC_NAME, ColumnType::Qword, SCHEMA_INDEX_EVENT_ID}},
             {CATEGORY_REFERENCE, {CATEGORY_PUBLIC_NAME, ColumnType::Word, SCHEMA_INDEX_CATEGORY}},
-            {CATEGORY_REFERENCE_RPD, {CATEGORY_PUBLIC_NAME, ColumnType::Word, SCHEMA_INDEX_CATEGORY_RPD}},
+            {CATEGORY_REFERENCE_RPD, {CATEGORY_PUBLIC_NAME, ColumnType::Qword, SCHEMA_INDEX_CATEGORY_RPD}},
             {CATEGORY_REFERENCE_PERFETTO, {CATEGORY_PUBLIC_NAME, ColumnType::Word, SCHEMA_INDEX_CATEGORY_PERFETTO}},
             {EVENT_NAME_REFERENCE, {NAME_PUBLIC_NAME, ColumnType::Dword, SCHEMA_INDEX_EVENT_NAME}},
             {SYMBOL_NAME_REFERENCE, {NAME_PUBLIC_NAME, ColumnType::Dword, SCHEMA_INDEX_EVENT_SYMBOL}},
             {EVENT_NAME_REFERENCE_RPD, {NAME_PUBLIC_NAME, ColumnType::Qword, SCHEMA_INDEX_EVENT_NAME_RPD}},
             {EVENT_NAME_REFERENCE_PERFETTO, {NAME_PUBLIC_NAME, ColumnType::Qword, SCHEMA_INDEX_EVENT_NAME_PERFETTO}},
+            {EVENT_ARGS_RPD, {ARGS_PUBLIC_NAME, ColumnType::Qword, SCHEMA_INDEX_EVENT_ARGS_RPD}},
             {M_TYPE_REFERENCE, {NAME_PUBLIC_NAME, ColumnType::Byte, SCHEMA_INDEX_MEM_TYPE}},
             {STREAM_NAME_REFERENCE, {STREAM_PUBLIC_NAME, ColumnType::Word,SCHEMA_INDEX_STREAM_NAME}},
             {QUEUE_NAME_REFERENCE, {QUEUE_PUBLIC_NAME, ColumnType::Byte,SCHEMA_INDEX_QUEUE_NAME}},
@@ -414,7 +418,59 @@ class Builder
             {STREAM_TRACK_ID_PUBLIC_NAME,{STREAM_TRACK_ID_PUBLIC_NAME, TRACK_ID_TYPE,SCHEMA_INDEX_STREAM_TRACK_ID}},
         };
 
+        // Data types of public columns...
+        inline static std::unordered_map<std::string, rocprofvis_db_data_type_t> public_column_types = {
+            {OPERATION_SERVICE_NAME, kRPVDataTypeInt},
+            {DB_ID_PUBLIC_NAME, kRPVDataTypeInt},
+            {ID_PUBLIC_NAME, kRPVDataTypeInt},
+            {CATEGORY_PUBLIC_NAME, kRPVDataTypeString},
+            {NAME_PUBLIC_NAME, kRPVDataTypeString},
+            {ARGS_PUBLIC_NAME, kRPVDataTypeString},
+            {STREAM_PUBLIC_NAME, kRPVDataTypeString},
+            {QUEUE_PUBLIC_NAME, kRPVDataTypeString},
+            {NODE_PUBLIC_NAME, kRPVDataTypeInt},
+            {PROCESS_ID_PUBLIC_NAME, kRPVDataTypeInt},
+            {THREAD_ID_PUBLIC_NAME, kRPVDataTypeInt},
+            {AGENT_ABS_INDEX_PUBLIC_NAME, kRPVDataTypeInt},
+            {AGENT_TYPE_PUBLIC_NAME, kRPVDataTypeString},
+            {AGENT_TYPE_INDEX_PUBLIC_NAME, kRPVDataTypeInt},
+            {AGENT_NAME_PUBLIC_NAME, kRPVDataTypeString},
+            {START_PUBLIC_NAME, kRPVDataTypeInt},
+            {END_PUBLIC_NAME, kRPVDataTypeInt},
+            {DURATION_PUBLIC_NAME, kRPVDataTypeInt},
+            {GRID_SIZEX_PUBLIC_NAME, kRPVDataTypeInt},
+            {GRID_SIZEY_PUBLIC_NAME, kRPVDataTypeInt},
+            {GRID_SIZEZ_PUBLIC_NAME, kRPVDataTypeInt},
+            {WORKGROUP_SIZEX_PUBLIC_NAME, kRPVDataTypeInt},
+            {WORKGROUP_SIZEY_PUBLIC_NAME, kRPVDataTypeInt},
+            {WORKGROUP_SIZEZ_PUBLIC_NAME, kRPVDataTypeInt},
+            {LDS_SIZE_PUBLIC_NAME, kRPVDataTypeInt},
+            {SCRATCH_SIZE_PUBLIC_NAME, kRPVDataTypeInt},
+            {STATIC_LDS_SIZE_PUBLIC_NAME, kRPVDataTypeInt},
+            {STATIC_SCRATCH_SIZE_PUBLIC_NAME, kRPVDataTypeInt},
+            {SIZE_PUBLIC_NAME, kRPVDataTypeInt},
+            {ADDRESS_PUBLIC_NAME, kRPVDataTypeInt},
+            {LEVEL_REFERENCE, kRPVDataTypeString},
+            {AGENT_SRC_ABS_INDEX_PUBLIC_NAME, kRPVDataTypeInt},
+            {AGENT_SRC_TYPE_PUBLIC_NAME, kRPVDataTypeString},
+            {AGENT_SRC_TYPE_INDEX_PUBLIC_NAME, kRPVDataTypeInt},
+            {AGENT_SRC_NAME_PUBLIC_NAME, kRPVDataTypeString},
+            {SRC_ADDRESS_PUBLIC_NAME, kRPVDataTypeInt},
+            {COUNTER_ID_PUBLIC_NAME, kRPVDataTypeString},
+            {COUNTER_VALUE_PUBLIC_NAME, kRPVDataTypeDouble},
+            {TRACK_ID_PUBLIC_NAME, kRPVDataTypeInt},
+            {STREAM_TRACK_ID_PUBLIC_NAME, kRPVDataTypeInt},
+        };
 
+        static rocprofvis_db_data_type_t PublicColumnDataType(const std::string& name)
+        {
+            rocprofvis_db_data_type_t result = kRPVDataTypeString;
+            if (public_column_types.count(name) > 0)
+            {
+                result = public_column_types.at(name);
+            }
+            return result;
+        }
 
         static std::optional<std::string> FindColumnNameByIndex(const std::unordered_map<std::string, ColumnData>& m, const uint8_t& index) {
             for (const auto& [key, val] : m) {

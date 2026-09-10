@@ -113,7 +113,7 @@ namespace Controller
         void** abstract)
     {
         auto* ctx = static_cast<KbdintCtx*>(*abstract);
-        spdlog::info("[ssh] kbdint callback fired: name_len={} instr_len={} num_prompts={} ctx={}",
+        spdlog::debug("[ssh] kbdint callback fired: name_len={} instr_len={} num_prompts={} ctx={}",
             name_len, instruction_len, num_prompts,
             static_cast<void*>(ctx));
         if(!ctx || !ctx->bridge) return;
@@ -124,7 +124,7 @@ namespace Controller
         // continue without touching the UI.
         if(num_prompts == 0)
         {
-            spdlog::info("[ssh] kbdint callback: zero-prompt round (info/banner), auto-acking");
+            spdlog::debug("[ssh] kbdint callback: zero-prompt round (info/banner), auto-acking");
             return;
         }
 
@@ -141,10 +141,10 @@ namespace Controller
             req.prompts.push_back(std::move(p));
         }
 
-        spdlog::info("[ssh] kbdint callback: posting {} prompt(s) to UI bridge, blocking...",
+        spdlog::debug("[ssh] kbdint callback: posting {} prompt(s) to UI bridge, blocking...",
             num_prompts);
         auto answer = ctx->bridge->AskPrompts(req);
-        spdlog::info("[ssh] kbdint callback: bridge returned (cancelled={})", !answer.has_value());
+        spdlog::debug("[ssh] kbdint callback: bridge returned (cancelled={})", !answer.has_value());
         if(!answer)
         {
             ctx->was_cancelled = true;
@@ -225,7 +225,7 @@ namespace Controller
 
         bool        have_pub = std::filesystem::exists(pub_path);
         std::string pub      = pub_path.string();
-        spdlog::info("[ssh] trying publickey: priv={} pub={} have_passphrase={}",
+        spdlog::debug("[ssh] trying publickey: priv={} pub={} have_passphrase={}",
             priv_path, have_pub ? pub_path.string().c_str() : std::string("(derived from priv)"),
             !passphrase.empty());
         int rc = libssh2_userauth_publickey_fromfile(
@@ -272,12 +272,12 @@ namespace Controller
         LIBSSH2_AGENT* agent = libssh2_agent_init(connection->GetSession());
         if(!agent)
         {
-            spdlog::info("[ssh] agent: init failed (libssh2 built without agent support?)");
+            spdlog::debug("[ssh] agent: init failed (libssh2 built without agent support?)");
             return false;
         }
         if(libssh2_agent_connect(agent) != 0)
         {
-            spdlog::info("[ssh] agent: connect failed (no $SSH_AUTH_SOCK or agent not running)");
+            spdlog::debug("[ssh] agent: connect failed (no $SSH_AUTH_SOCK or agent not running)");
             libssh2_agent_free(agent);
             return false;
         }
@@ -303,7 +303,7 @@ namespace Controller
                 break;
             }
             identity_count++;
-            spdlog::info("[ssh] agent: trying identity '{}'",
+            spdlog::debug("[ssh] agent: trying identity '{}'",
                 identity->comment ? identity->comment : "(no comment)");
 
             rc = libssh2_agent_userauth(agent, user.c_str(), identity);
@@ -325,12 +325,12 @@ namespace Controller
             }
             char* msg = nullptr;
             libssh2_session_last_error(connection->GetSession(), &msg, nullptr, 0);
-            spdlog::info("[ssh] agent: identity rejected: {}", msg ? msg : "(no message)");
+            spdlog::debug("[ssh] agent: identity rejected: {}", msg ? msg : "(no message)");
             prev = identity;
         }
         if(!ok && identity_count == 0)
         {
-            spdlog::info("[ssh] agent: connected but no identities loaded (run 'ssh-add')");
+            spdlog::debug("[ssh] agent: connected but no identities loaded (run 'ssh-add')");
         }
 
         libssh2_agent_disconnect(agent);
@@ -517,7 +517,7 @@ namespace Controller
             return SshClient::Result::SocketError;
         }
 
-        spdlog::info("[ssh] TCP connected");
+        spdlog::debug("[ssh] TCP connected");
 
         connection->SetSession(libssh2_session_init());
         if (!connection->GetSession())
@@ -579,14 +579,14 @@ namespace Controller
         {
             KnownHosts kh(connection->GetSession());
             bool       loaded = kh.Load();
-            spdlog::info("[ssh] known_hosts loaded={} path={} fingerprint={}",
+            spdlog::debug("[ssh] known_hosts loaded={} path={} fingerprint={}",
                 loaded, kh.Path(), FormatHostKeyFingerprint(connection->GetSession()));
             KnownHostMatch m = kh.Check(connection->GetHost(), connection->GetPort());
             const char* mstr = m == KnownHostMatch::Match    ? "Match"
                 : m == KnownHostMatch::Mismatch ? "Mismatch"
                 : m == KnownHostMatch::NotFound ? "NotFound"
                 : "Failure";
-            spdlog::info("[ssh] host key check: {}", mstr);
+            spdlog::debug("[ssh] host key check: {}", mstr);
 
             if(m == KnownHostMatch::NotFound || m == KnownHostMatch::Mismatch)
             {
@@ -643,7 +643,7 @@ namespace Controller
         // ---- auth ----
         char* methods = libssh2_userauth_list(connection->GetSession(), user.c_str(),
             static_cast<unsigned int>(user.size()));
-        spdlog::info("[ssh] server auth methods: {}", methods ? methods : "(none)");
+        spdlog::debug("[ssh] server auth methods: {}", methods ? methods : "(none)");
 
         bool tried_password = false;
         bool tried_kbdint   = false;
@@ -662,18 +662,18 @@ namespace Controller
                 }
             }
             // 1b) ssh-agent - handles encrypted keys without us needing a passphrase.
-            spdlog::info("[ssh] trying ssh-agent");
+            spdlog::debug("[ssh] trying ssh-agent");
             if (TryAgent(connection, user, future))
             {
                 return Result::Success;
             }
             // 1c) default on-disk identity files
-            spdlog::info("[ssh] trying default identity files");
+            spdlog::debug("[ssh] trying default identity files");
             for(const auto& p : DefaultKeyPaths())
             {
                 if(!std::filesystem::exists(p))
                 {
-                    spdlog::info("[ssh]   default key absent: {}", p);
+                    spdlog::debug("[ssh]   default key absent: {}", p);
                     continue;
                 }
                 if (IsCancelRequested(connection, future))
@@ -688,7 +688,7 @@ namespace Controller
         }
         else
         {
-            spdlog::info("[ssh] server does not advertise publickey");
+            spdlog::debug("[ssh] server does not advertise publickey");
         }
         if (IsCancelRequested(connection, future))
         {
@@ -705,7 +705,7 @@ namespace Controller
             std::string effective_password = password;
             if(effective_password.empty())
             {
-                spdlog::info("[ssh] no password supplied; prompting UI for password");
+                spdlog::debug("[ssh] no password supplied; prompting UI for password");
                 PromptRequest req;
                 std::string target = user.empty() ? connection->GetHost()
                                                    : user + "@" + connection->GetHost();
@@ -720,7 +720,7 @@ namespace Controller
                 if(!answer)
                 {
                     err = "password prompt cancelled by user";
-                    spdlog::info("[ssh] {}", err);
+                    spdlog::debug("[ssh] {}", err);
                     connection->GetSshBridge()->SaveError(err);
                     connection->Disconnect();
                     return Result::AuthError;
@@ -733,7 +733,7 @@ namespace Controller
 
             if(!effective_password.empty())
             {
-                spdlog::info("[ssh] trying password auth");
+                spdlog::debug("[ssh] trying password auth");
                 tried_password = true;
                 auth_rc = libssh2_userauth_password(connection->GetSession(), user.c_str(),
                     effective_password.c_str());
@@ -763,7 +763,7 @@ namespace Controller
         }
         else
         {
-            spdlog::info("[ssh] skipping password auth (server does not advertise password)");
+            spdlog::debug("[ssh] skipping password auth (server does not advertise password)");
         }
 
         if (IsCancelRequested(connection, future))
@@ -775,7 +775,7 @@ namespace Controller
         auto kbd_ctx = std::make_shared<KbdintCtx>(KbdintCtx{connection->GetSshBridge(), false});
         if(MethodListed(methods, "keyboard-interactive"))
         {
-            spdlog::info("[ssh] trying keyboard-interactive auth (will route prompts to UI)");
+            spdlog::debug("[ssh] trying keyboard-interactive auth (will route prompts to UI)");
             tried_kbdint = true;
             // libssh2's session abstract slot: stash kbd_ctx so the C callback can find it.
             void** abstract = libssh2_session_abstract(connection->GetSession());
@@ -795,7 +795,7 @@ namespace Controller
             if(kbd_ctx->was_cancelled)
             {
                 err = "kbdint cancelled by user";
-                spdlog::info("[ssh] {}", err);
+                spdlog::debug("[ssh] {}", err);
                 connection->GetSshBridge()->SaveError(err);
                 connection->Disconnect();
                 return Result::AuthError;
@@ -1050,7 +1050,7 @@ namespace Controller
             if(m >> cached_size >> cached_mtime &&
                 cached_size == remote_size && cached_mtime == remote_mtime)
             {
-                spdlog::info("[ssh] already up-to-date: {}", local_path);
+                spdlog::debug("[ssh] already up-to-date: {}", local_path);
 
                 connection->GetSshBridge()->SetFileStat(remote_path, fileinfo.st_size, fileinfo.st_mtime, fileinfo.st_size);
                 libssh2_channel_free(channel);
@@ -1184,6 +1184,68 @@ namespace Controller
         return Result::Success;
     }
 
+    // SFTP teardown can report EAGAIN on a non-blocking session, so closing a
+    // handle needs the same bounded socket wait as the rest of the transport.
+    class SftpSessionGuard
+    {
+    public:
+        SftpSessionGuard(SshConnection* connection, LIBSSH2_SFTP* sftp)
+            : m_connection(connection)
+            , m_sftp(sftp)
+        {
+        }
+
+        ~SftpSessionGuard()
+        {
+            while (m_sftp != nullptr &&
+                   libssh2_sftp_shutdown(m_sftp) == LIBSSH2_ERROR_EAGAIN)
+            {
+                if (!SshClient::WaitSocket(m_connection))
+                {
+                    spdlog::warn("[ssh] network failure while shutting down SFTP");
+                    break;
+                }
+            }
+        }
+
+        SftpSessionGuard(const SftpSessionGuard&) = delete;
+        SftpSessionGuard& operator=(const SftpSessionGuard&) = delete;
+
+    private:
+        SshConnection* m_connection;
+        LIBSSH2_SFTP*  m_sftp;
+    };
+
+    class SftpDirGuard
+    {
+    public:
+        SftpDirGuard(SshConnection* connection, LIBSSH2_SFTP_HANDLE* dir)
+            : m_connection(connection)
+            , m_dir(dir)
+        {
+        }
+
+        ~SftpDirGuard()
+        {
+            while (m_dir != nullptr &&
+                   libssh2_sftp_closedir(m_dir) == LIBSSH2_ERROR_EAGAIN)
+            {
+                if (!SshClient::WaitSocket(m_connection))
+                {
+                    spdlog::warn("[ssh] network failure while closing remote directory");
+                    break;
+                }
+            }
+        }
+
+        SftpDirGuard(const SftpDirGuard&) = delete;
+        SftpDirGuard& operator=(const SftpDirGuard&) = delete;
+
+    private:
+        SshConnection*       m_connection;
+        LIBSSH2_SFTP_HANDLE* m_dir;
+    };
+
     SshClient::Result SshClient::BrowseRemoteDirectory(SshConnection * connection, const std::string& path, Future* future)
     {
         std::string output;
@@ -1203,55 +1265,57 @@ namespace Controller
             return Result::SessionError;
         }
 
-
-        LIBSSH2_SFTP* sftp = NULL;
+        // Non-blocking from the start so the init loop below can honour a cancel
+        // instead of stalling inside libssh2.
+        libssh2_session_set_blocking(connection->GetSession(), 0);
 
         // --- Init SFTP (non-blocking) ---
-        while ((sftp = libssh2_sftp_init(connection->GetSession())) == NULL) {
+        LIBSSH2_SFTP* sftp = nullptr;
+        while ((sftp = libssh2_sftp_init(connection->GetSession())) == nullptr)
+        {
             int err = libssh2_session_last_errno(connection->GetSession());
-
-            if (err == LIBSSH2_ERROR_EAGAIN) {
-                if (!WaitSocket(connection))
-                {
-                    output = "Network failure while initializing SFTP";
-                    connection->GetSshBridge()->SaveError(output);
-                    break;
-                }
-            } else {
+            if (err != LIBSSH2_ERROR_EAGAIN)
+            {
                 output = "SFTP init failed: " + std::to_string(err);
                 connection->GetSshBridge()->SaveError(output);
                 return Result::SessionError;
             }
-            if (IsCancelRequested(connection, future))
+            if (!WaitSocket(connection))
             {
-                break;
-            }
-        }
-
-        LIBSSH2_SFTP_HANDLE* dir = NULL;
-
-        libssh2_session_set_blocking(connection->GetSession(), 0);
-
-
-        while ((dir = libssh2_sftp_opendir(sftp, path.c_str())) == NULL) {
-            if (libssh2_session_last_errno(connection->GetSession()) == LIBSSH2_ERROR_EAGAIN) {
-                if (!WaitSocket(connection))
-                {
-                    output = "Network failure while opening remote directory";
-                    connection->GetSshBridge()->SaveError(output);
-                    break;
-                }
-            } else {
-                output = "Unable to open directory ";
+                output = "Network failure while initializing SFTP";
                 connection->GetSshBridge()->SaveError(output);
-                libssh2_sftp_shutdown(sftp);
                 return Result::SessionError;
             }
             if (IsCancelRequested(connection, future))
             {
-                break;
+                return Result::Cancelled;
             }
         }
+
+        SftpSessionGuard sftp_guard(connection, sftp);
+
+        LIBSSH2_SFTP_HANDLE* dir = nullptr;
+        while ((dir = libssh2_sftp_opendir(sftp, path.c_str())) == nullptr)
+        {
+            if (libssh2_session_last_errno(connection->GetSession()) != LIBSSH2_ERROR_EAGAIN)
+            {
+                output = "Unable to open directory " + path;
+                connection->GetSshBridge()->SaveError(output);
+                return Result::SessionError;
+            }
+            if (!WaitSocket(connection))
+            {
+                output = "Network failure while opening remote directory";
+                connection->GetSshBridge()->SaveError(output);
+                return Result::SessionError;
+            }
+            if (IsCancelRequested(connection, future))
+            {
+                return Result::Cancelled;
+            }
+        }
+
+        SftpDirGuard dir_guard(connection, dir);
 
         constexpr size_t SFTP_NAME_BUFFER_SIZE = 512;
         char mem[SFTP_NAME_BUFFER_SIZE];
@@ -1264,89 +1328,75 @@ namespace Controller
             char real_path[SFTP_NAME_BUFFER_SIZE];
             int  real_rc;
             while ((real_rc = libssh2_sftp_realpath(sftp, path.c_str(), real_path,
-                                                    sizeof(real_path) - 1)) == LIBSSH2_ERROR_EAGAIN) {
-                if (IsCancelRequested(connection, future) || !WaitSocket(connection)) {
+                                                    sizeof(real_path) - 1)) == LIBSSH2_ERROR_EAGAIN)
+            {
+                if (IsCancelRequested(connection, future) || !WaitSocket(connection))
+                {
                     break;
                 }
             }
-            if (real_rc > 0) {
+            if (real_rc > 0)
+            {
                 connection->GetSshBridge()->SetResolvedPath(
                     std::string(real_path, static_cast<size_t>(real_rc)));
             }
         }
 
-        while (true) {
-            int rc;
+        while (true)
+        {
             if (IsCancelRequested(connection, future))
             {
-                break;
+                return Result::Cancelled;
             }
 
-            do {
+            int rc;
+            do
+            {
                 // Reserve the final byte for the NUL terminator written below:
                 // libssh2_sftp_readdir returns the filename length capped at the
                 // buffer size we pass, so bounding it to size-1 keeps mem[rc]
                 // in range even when the name would otherwise fill the buffer.
                 rc = libssh2_sftp_readdir(dir, mem, sizeof(mem) - 1, &attrs);
 
-                if (rc == LIBSSH2_ERROR_EAGAIN) {
-                    if (!WaitSocket(connection))
-                    {
-                        output = "Network failure while reading remote directory content";
-                        connection->GetSshBridge()->SaveError(output);
-                        break;
-                    }
+                if (rc == LIBSSH2_ERROR_EAGAIN && !WaitSocket(connection))
+                {
+                    output = "Network failure while reading remote directory content";
+                    connection->GetSshBridge()->SaveError(output);
+                    return Result::ReadError;
                 }
 
             } while (rc == LIBSSH2_ERROR_EAGAIN);
 
-            if (rc > 0) {
-                mem[rc] = '\0';
-
-                if (strcmp(mem, ".") == 0 || strcmp(mem, "..") == 0)
-                    continue;
-
-                int isDir = 0;
-                if (attrs.flags & LIBSSH2_SFTP_ATTR_PERMISSIONS) {
-                    isDir = LIBSSH2_SFTP_S_ISDIR(attrs.permissions);
-                }
-
-                connection->GetSshBridge()->SetFileInfo(mem, attrs.filesize, attrs.mtime, isDir);
-
+            if (rc == 0)
+            {
+                break;  // done
             }
-            else if (rc == 0) {
-                break; // done
-            }
-            else {
+            if (rc < 0)
+            {
                 output = "Directory read error";
                 connection->GetSshBridge()->SaveError(output);
-                break;
+                return Result::ReadError;
             }
-        }
 
+            mem[rc] = '\0';
 
-        while (libssh2_sftp_closedir(dir) == LIBSSH2_ERROR_EAGAIN) {
-            if (!WaitSocket(connection))
+            if (strcmp(mem, ".") == 0 || strcmp(mem, "..") == 0)
             {
-                output = "Network failure while closing remote directory";
-                connection->GetSshBridge()->SaveError(output);
-                break;
+                continue;
             }
-        }
 
-        while (libssh2_sftp_shutdown(sftp) == LIBSSH2_ERROR_EAGAIN) {
-            if (!WaitSocket(connection))
+            int is_dir = 0;
+            if (attrs.flags & LIBSSH2_SFTP_ATTR_PERMISSIONS)
             {
-                output = "Network failure while shutting down SFTP";
-                connection->GetSshBridge()->SaveError(output);
-                break;
+                is_dir = LIBSSH2_SFTP_S_ISDIR(attrs.permissions);
             }
-        }
 
+            connection->GetSshBridge()->SetFileInfo(mem, attrs.filesize, attrs.mtime, is_dir);
+        }
 
         if (IsCancelRequested(connection, future))
         {
-            return SshClient::Result::Cancelled;
+            return Result::Cancelled;
         }
 
         return Result::Success;

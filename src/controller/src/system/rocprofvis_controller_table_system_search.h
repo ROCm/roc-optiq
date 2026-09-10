@@ -29,6 +29,8 @@ protected:
     {       
         std::vector<std::string> m_string_table_filters;
         bool                     m_include_substrings;
+        bool                     m_include_category;
+        bool                     m_partial_matching;
     };
 
     rocprofvis_result_t UnpackArguments(Arguments& args, TableArguments*& out) const override;
@@ -42,6 +44,8 @@ protected:
 private:
     std::vector<std::string> m_string_table_filters;
     bool                     m_include_substrings;
+    bool                     m_include_category;
+    bool                     m_partial_matching;
 
 };
 

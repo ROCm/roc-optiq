@@ -8,52 +8,26 @@ on:
         description: 'WARNING: This is enabled by default. Only uncheck this if you are planning on triggering a release!'
         type: boolean
         default: true
-      release_version:
-        description: 'Specify the release version. This will be used in the S3 file path: /release/<RELEASE_VERSION/'
+      s3_bucket_env:
+        description: 'Specify the S3 bucket environment to use for release.'
+        type: choice
+        default: 'dev'
+        options:
+          - dev
+          - nightly
+          - rc
+          - stable-staging
+      rocm_version:
+        description: 'Specify the ROCm version to build with in ManyLinux for release.'
         type: string
-        default: ''
+        default: '10'
 
 jobs:
-  release-redhat:
-    name: RedHat Release
-    uses: ./.github/workflows/ci-redhat.yml
+  release-manylinux:
+    name: ManyLinux Release
+    uses: ./.github/workflows/ci-manylinux.yml
     secrets: inherit
     with:
-      os_version: '[ "8", "9", "10" ]'
       upload_to_github: ${{ !inputs.dry_run }}
       upload_to_s3: ${{ !inputs.dry_run }}
-      s3_root_directory: release
-      release_version: ${{ inputs.release_version }}
-
-  release-ubuntu:
-    name: Ubuntu Release
-    uses: ./.github/workflows/ci-ubuntu.yml
-    secrets: inherit
-    with:
-      os_version: '[ "22.04", "24.04", "26.04" ]'
-      upload_to_github: ${{ !inputs.dry_run }}
-      upload_to_s3: ${{ !inputs.dry_run }}
-      s3_root_directory: release
-      release_version: ${{ inputs.release_version }}
-
-  release-windows:
-    name: Windows Release
-    uses: ./.github/workflows/ci-windows.yml
-    secrets: inherit
-    with:
-      os_version: '[ "2022" ]'
-      upload_to_github: ${{ !inputs.dry_run }}
-      upload_to_s3: ${{ !inputs.dry_run }}
-      s3_root_directory: release
-      release_version: ${{ inputs.release_version }}
-
-  release-mac:
-    name: macOS Release
-    uses: ./.github/workflows/ci-mac.yml
-    secrets: inherit
-    with:
-      os_version: '[ "14", "15", "26" ]'
-      upload_to_github: ${{ !inputs.dry_run }}
-      upload_to_s3: ${{ !inputs.dry_run }}
-      s3_root_directory: release
-      release_version: ${{ inputs.release_version }}
+      s3_bucket_env: ${{ inputs.s3_bucket_env }}

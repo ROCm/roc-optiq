@@ -55,7 +55,7 @@ Event::~Event()
 bool
 Event::IsDeletable()
 {
-    return --m_retain_counter <= 0;
+    return (m_retain_counter == 0) ? true : --m_retain_counter == 0;
 }
 
 void
@@ -628,20 +628,17 @@ rocprofvis_result_t Event::GetString(rocprofvis_property_t property, uint64_t in
     {
         case kRPVControllerEventName:
         {
-            char const* name     = StringTable::Get().GetString(m_name);
-            result = GetStringImpl(value, length, name, static_cast<uint32_t>(strlen(name)));
+            result = GetStdStringImpl(value, length, StringTable::Get().GetString(m_name));
             break;
         }
         case kRPVControllerEventCategory:
         {
-            char const* category = StringTable::Get().GetString(m_category);
-            result = GetStringImpl(value, length, category, static_cast<uint32_t>(strlen(category)));
+            result = GetStdStringImpl(value, length, StringTable::Get().GetString(m_category));
             break;
         }
         case kRPVControllerEventTopCombinedName:
         {
-            char const* combined_name = StringTable::Get().GetString(m_combined_top_name);
-            result = GetStringImpl(value, length, combined_name, static_cast<uint32_t>(strlen(combined_name)));
+            result = GetStdStringImpl(value, length, StringTable::Get().GetString(m_combined_top_name));
             break;
         }
         default:

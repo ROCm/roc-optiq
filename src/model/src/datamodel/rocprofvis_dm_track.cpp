@@ -378,9 +378,9 @@ const char*  Track::GetPropertySymbol(rocprofvis_dm_property_t property) {
             return "kRPVDMTrackMinimumTimestampUInt64";
         case kRPVDMTrackMaximumTimestampUInt64:
             return "kRPVDMTrackMaximumTimestampUInt64";
-        case kRPVDMTrackMinimumLevelDouble:
+        case kRPVDMTrackMinimumValueDouble:
             return "kRPVDMTrackMinimumValueDouble";
-        case kRPVDMTrackMaximumLevelDouble:
+        case kRPVDMTrackMaximumValueDouble:
             return "kRPVDMTrackMaximumValueDouble";
         default:
             return "Unknown property";

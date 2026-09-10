@@ -205,7 +205,7 @@ rocprofvis_dm_database_t rocprofvis_db_open_database_multi(
                                                 nullptr);
         }
     }
-    catch (std::exception ex)
+    catch (const std::exception& ex)
     {
         ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN(
             RocProfVis::DataModel::ERROR_MEMORY_ALLOCATION_FAILURE, nullptr);
@@ -433,7 +433,8 @@ rocprofvis_dm_result_t rocprofvis_db_build_event_search_query(
     rocprofvis_dm_timestamp_t start, rocprofvis_dm_timestamp_t end, 
     rocprofvis_db_num_of_tracks_t num, rocprofvis_db_track_selection_t ops,
     rocprofvis_dm_charptr_t where,
-    rocprofvis_dm_num_string_table_filters_t num_string_table_filters, rocprofvis_dm_string_table_filters_t string_table_filters, bool include_substring,
+    rocprofvis_dm_num_string_table_filters_t num_string_table_filters, rocprofvis_dm_string_table_filters_t string_table_filters, 
+    bool include_substring, bool include_category, bool partial_matching,
     rocprofvis_dm_charptr_t sort_column, rocprofvis_dm_sort_order_t sort_order,
     uint64_t max_count, uint64_t offset, bool count_only, 
     char** out_query)
@@ -450,7 +451,7 @@ rocprofvis_dm_result_t rocprofvis_db_build_event_search_query(
                                                               num, ops,
                                                               where,
                                                               num_string_table_filters, string_table_filters,
-                                                              include_substring,
+                                                              include_substring, include_category, partial_matching,
                                                               sort_column, sort_order,
                                                               max_count, offset, count_only, query);
     if (result == kRocProfVisDmResultSuccess)

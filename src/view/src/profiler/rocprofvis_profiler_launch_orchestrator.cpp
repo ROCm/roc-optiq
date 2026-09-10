@@ -105,14 +105,7 @@ bool ProfilerLaunchOrchestrator::Launch(const LaunchRequest& request)
 
 bool ProfilerLaunchOrchestrator::LaunchLocal(const LaunchRequest& request)
 {
-    bool success = m_profiler_session.Launch(
-        request.profiler_type,
-        request.profiler_path,
-        request.target_executable,
-        request.target_args,
-        request.output_directory,
-        request.profiler_args,
-        request.env_vars);
+    bool success = m_profiler_session.Launch(request.spec);
 
     if(!success)
     {
@@ -157,14 +150,7 @@ bool ProfilerLaunchOrchestrator::LaunchRemote(const LaunchRequest& request)
             return parse_trace ? parse_trace(profiler_stdout) : std::string();
         });
 
-    bool success = m_remote_session->Launch(
-        request.profiler_type,
-        request.profiler_path,
-        request.target_executable,
-        request.target_args,
-        request.output_directory,
-        request.profiler_args,
-        request.env_vars);
+    bool success = m_remote_session->Launch(request.spec);
 
     if(!success)
     {

@@ -3,6 +3,7 @@
 
 #pragma once
 #include "imgui.h"
+#include <cstdint>
 #include <functional>
 #include <string>
 #include <string_view>
@@ -81,7 +82,7 @@ bool
 IsMouseReleasedWithDragCheck(ImGuiMouseButton button, float drag_threshold = 5.0f);
 
 std::pair<bool, bool>
-InputTextWithClear(const char* id, const char* hint, char* buf, size_t buf_size,
+InputTextWithClear(const char* id, const char* hint, std::string& str,
                    ImFont* icon_font, ImU32 bg_color, const ImGuiStyle& style,
                    float width = 0);
 
@@ -113,7 +114,7 @@ enum Alignment
     Alignment_Right,
 };
 
-void
+bool
 ElidedText(const char* text, float available_width, float tooltip_width = 0.0f,
            Alignment alignment                     = Alignment_Left,
            bool      imgui_AlignTextToFramePadding = false);
@@ -190,6 +191,20 @@ bool
 AccentButton(const char* label, ImVec2 size = ImVec2(0.0f, 0.0f),
              SettingsManager* settings = nullptr);
 
+// Colored button. Returns true when clicked.
+bool
+ColoredButton(const char* label, ImU32 color, ImU32 hovered_color, ImU32 active_color,
+              ImU32 text_color, const char* tooltip = nullptr,
+              ImVec2 size = ImVec2(0.0f, 0.0f));
+
+// Remote download progress modal, shared by the SSH test dialog and the
+// profiler launcher. The caller opens the popup (ImGui::OpenPopup) and owns
+// show, which is cleared once finished. A total of 0 renders "Starting...".
+void
+RenderRemoteDownloadPopup(const char* popup_id, const char* file_name,
+                          uint64_t downloaded, uint64_t total, bool finished,
+                          bool& show);
+
 float
 TableRowHeight();
 
@@ -210,8 +225,10 @@ CopyableTextUnformatted(
 
 // Renders a selectable menu item with an icon (from the icon font) followed by a text label.
 // Returns true when clicked. Intended for use inside BeginPopup/BeginPopupContextItem blocks.
+// Pass selected = true to show a trailing check mark (e.g. radio-style option groups).
 bool
-IconMenuItem(const char* icon, const char* label, bool enabled = true);
+IconMenuItem(const char* icon, const char* label, bool enabled = true,
+             bool selected = false);
 
 // Opens a submenu entry with a leading icon (from the icon font) before the label.
 // Returns true when the submenu is open; call ImGui::EndMenu() only when it returns true.

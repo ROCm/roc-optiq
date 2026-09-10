@@ -12,18 +12,11 @@ namespace View
 {
 
 bool
-ProfilerSession::Launch(rocprofvis_profiler_type_t profiler_type,
-                        const std::string&         profiler_path,
-                        const std::string&         target_executable,
-                        const std::string&         target_args,
-                        const std::string&         output_directory,
-                        const std::string&         profiler_args,
-                        const std::vector<std::pair<std::string, std::string>>& env_vars)
+ProfilerSession::Launch(const ProfilerLaunchSpec& spec)
 {
     Close();
 
-    if(!BuildConfig(profiler_type, profiler_path, target_executable, target_args,
-                    output_directory, profiler_args, env_vars))
+    if(!BuildConfig(spec))
     {
         return false;
     }

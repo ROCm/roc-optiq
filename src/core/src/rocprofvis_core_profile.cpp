@@ -30,7 +30,7 @@ TimeRecorder::TimeRecorder(const char* function, const char* property, uint64_t 
 TimeRecorder::~TimeRecorder() {
     auto t = std::chrono::steady_clock::now();
     std::chrono::duration<double> diff = t - m_start_time;
-    spdlog::info("{0:13.9f} seconds | {1}", diff.count(), m_function.c_str());   
+    spdlog::debug("{0:13.9f} seconds | {1}", diff.count(), m_function.c_str());   
 }
 
 #endif

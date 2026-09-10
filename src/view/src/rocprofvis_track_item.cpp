@@ -117,6 +117,7 @@ TrackItem::TrackItem(DataProvider& dp, uint64_t id, TimelineTrackOptions& track_
 , m_timeline_selection(timeline_selection)
 , m_chunk_duration_ns(DEFAULT_CHUNK_DURATION)
 , m_group_id_counter(0)
+, m_cancel_requested(false)
 , m_meta_area_label("")
 , m_has_node_color(false)
 , m_node_color_index(0)
@@ -192,7 +193,7 @@ TrackItem::GetMetaAreaMinHeight() const
 
     if(pill_height > 0.0f)
     {
-        const float title_row_height = fonts.GetFontSize(FontSize::kDefault) +
+        const float title_row_height = ImGui::GetTextLineHeight() +
                                        2.0f * META_FRAME_PADDING_Y + META_ITEM_SPACING_Y;
         min_height = title_row_height + pill_height + chrome;
     }
@@ -215,7 +216,7 @@ TrackItem::GetTrackHeight() const
 }
 
 const std::string&
-TrackItem::GetName()
+TrackItem::GetName() const
 {
     return m_name;
 }
@@ -524,7 +525,7 @@ TrackItem::RenderMetaArea()
 
     if(meta_area_hovered && ImGui::IsMouseClicked(ImGuiMouseButton_Right))
     {
-        m_timeline_track_options.InitContextMenu(*this);
+        m_timeline_track_options.InitTrackOptionsSubmenu(*this);
         ImGui::OpenPopup(TRACK_COPY_MENU_POPUP_NAME);
     }
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, style.WindowPadding);
@@ -554,8 +555,28 @@ TrackItem::RenderMetaArea()
         ImGui::Separator();
         if(IconBeginMenu(ICON_GEAR, "Track Options"))
         {
-            m_timeline_track_options.RenderContextMenu();
+            m_timeline_track_options.RenderTrackOptionsSubmenu();
             ImGui::EndMenu();
+        }
+        ImGui::Separator();
+        // Also expose sorting here so it stays reachable when the header is hidden.
+        if(m_timeline_track_options.ShowTrackSortSubmenu())
+        {
+            if(IconBeginMenu(ICON_LIST, "Sort Tracks"))
+            {
+                m_timeline_track_options.RenderTrackSortSubmenu();
+                ImGui::EndMenu();
+            }
+        }
+        // Restore hidden tracks without needing the topology side bar. The entry
+        // is only shown when something is actually hidden.
+        if(m_timeline_track_options.ShowHiddenTracksSubmenu())
+        {
+            if(IconBeginMenu(ICON_EYE, "Show Hidden Tracks"))
+            {
+                m_timeline_track_options.RenderHiddenTracksSubmenu();
+                ImGui::EndMenu();
+            }
         }
         ImGui::EndPopup();
     }
@@ -579,7 +600,11 @@ TrackItem::RenderResizeBar(const ImVec2& parent_size)
         ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeNS);
     }
 
-    if(ImGui::BeginDragDropSource(ImGuiDragDropFlags_None))
+    // Resize with a plain drag rather than a drag-drop source. The drag-drop
+    // system is shared with track reordering and with ImGui's own window
+    // dragging under multi-viewport, so using it here would publish a
+    // payload-less drag that those consumers cannot tell apart.
+    if(ImGui::IsItemActive() && ImGui::IsMouseDragging(ImGuiMouseButton_Left))
     {
         if(m_options)
         {
@@ -589,11 +614,6 @@ TrackItem::RenderResizeBar(const ImVec2& parent_size)
             m_track_height_changed = true;
         }
         ImGui::ResetMouseDragDelta();
-        ImGui::EndDragDropSource();
-    }
-    if(ImGui::BeginDragDropTarget())
-    {
-        ImGui::EndDragDropTarget();
     }
     ImGui::EndChild();  // end resize handle
     ImGui::PopStyleColor();
@@ -610,8 +630,8 @@ TrackItem::RequestData(double min, double max, float width)
 
     for(size_t i = 0; i < chunk_count; ++i)
     {
-        double chunk_start = min + i * TimeConstants::minute_in_ns;
-        double chunk_end   = std::min(chunk_start + TimeConstants::minute_in_ns, max);
+        double chunk_start = min + i * m_chunk_duration_ns;
+        double chunk_end   = std::min(chunk_start + m_chunk_duration_ns, max);
 
         double chunk_range = chunk_end - chunk_start;
         float  percentage  = static_cast<float>(chunk_range / range);
@@ -644,12 +664,9 @@ TrackItem::RequestData(double min, double max, float width)
             "Fetch request deferred for track {}, requests are already pending...",
             m_track_id);
 
-        for(const auto& [request_id, req] : m_pending_requests)
-        {
-            spdlog::debug("RequestData: Found pending request {} for track {}",
-                          request_id, m_track_id);
-            m_data_provider.CancelRequest(request_id);
-        }
+        // The queue is fetched once the pending requests have drained and the
+        // state returns to idle.
+        CancelPendingRequests();
     }
 }
 
@@ -708,16 +725,16 @@ TrackItem::FetchHelper()
 void
 TrackItem::SetDefaultPillLabel(const TrackInfo* track_info)
 {
-    TopologyDataModel& tdm = m_data_provider.DataModel().GetTopology();
+    TopologyTree& tdm = m_data_provider.DataModel().GetTopology();
 
-    // Get Processor (device) type label from using track's agent_or_pid, ex: "GPU0".
-    // The associated device in topology is unreliable, so we use agent_or_pid to find the
-    // device. This may be empty for some tracks.
-    std::string       device_type_label;
-    const DeviceInfo* device_info = tdm.GetDevice(track_info->agent_or_pid);
-    if(device_info)
+    // Processor type label from the track's agent_or_pid, ex: "GPU0". The
+    // processor the topology associates with the track is unreliable here, hence
+    // the id lookup. Stays empty when no processor matches.
+    std::string          device_type_label;
+    const ProcessorInfo* processor_info = tdm.GetProcessor(track_info->agent_or_pid);
+    if(processor_info)
     {
-        tdm.GetDeviceTypeLabel(*device_info, device_type_label);
+        tdm.GetProcessorTypeLabel(*processor_info, device_type_label);
     }
     Pill* pill = AddPill(true, false);
     switch(track_info->topology.type)
@@ -746,7 +763,8 @@ TrackItem::SetDefaultPillLabel(const TrackInfo* track_info)
         case TrackInfo::TrackType::InstrumentedThread:
         {
             if(const ThreadInfo* thread_info =
-                   tdm.GetInstrumentedThread(track_info->topology.id.value);
+                   tdm.GetThread(track_info->topology.id.value,
+                                 ThreadInfo::Kind::kInstrumented);
                thread_info && thread_info->tid == track_info->topology.process_id)
             {
                 pill->Activate();
@@ -778,9 +796,9 @@ TrackItem::SetDefaultPillLabel(const TrackInfo* track_info)
         case TrackInfo::TrackType::Counter:
         {
             // Get product label from topology model, ex: "AMD Radeon RX 6800 XT"
-            if(device_info)
+            if(processor_info)
             {
-                pill->SetTooltip(device_info->product_name);
+                pill->SetTooltip(processor_info->product_name);
             }
             break;
         }
@@ -796,7 +814,7 @@ TrackItem::SetDefaultPillLabel(const TrackInfo* track_info)
 void
 TrackItem::SetMetaAreaLabel(const TrackInfo* track_info)
 {
-    TopologyDataModel& tdm = m_data_provider.DataModel().GetTopology();
+    TopologyTree& tdm = m_data_provider.DataModel().GetTopology();
 
     std::string process_id_str = std::to_string(track_info->topology.process_id);
 
@@ -823,11 +841,13 @@ TrackItem::SetMetaAreaLabel(const TrackInfo* track_info)
                 process_name_path += process_info->command;
             }
 
-            std::string       thread_id;
-            const ThreadInfo* thread_info =
+            std::string             thread_id;
+            const ThreadInfo::Kind  kind =
                 (track_info->topology.type == TrackInfo::TrackType::SampledThread)
-                    ? tdm.GetSampledThread(track_info->topology.id.value)
-                    : tdm.GetInstrumentedThread(track_info->topology.id.value);
+                    ? ThreadInfo::Kind::kSampled
+                    : ThreadInfo::Kind::kInstrumented;
+            const ThreadInfo* thread_info =
+                tdm.GetThread(track_info->topology.id.value, kind);
             if(thread_info)
             {
                 thread_id = std::to_string(thread_info->tid);
@@ -928,7 +948,7 @@ TrackItem::SetMetaAreaLabel(const TrackInfo* track_info)
 void
 TrackItem::SetNodeColor(const TrackInfo* track_info)
 {
-    TopologyDataModel& tdm = m_data_provider.DataModel().GetTopology();
+    TopologyTree& tdm = m_data_provider.DataModel().GetTopology();
 
     // Node decorations only make sense on multi-node traces; a single-node
     // trace looks exactly as it did before this feature.
@@ -964,60 +984,101 @@ TrackItem::AddPill(bool shown, bool active)
     return m_pills.back().get();
 }
 
-bool
+void
 TrackItem::HandleTrackDataChanged(uint64_t request_id, uint64_t response_code)
 {
-    (void) response_code;  // Unused at the moment
-    bool result = false;
     if(!m_pending_requests.erase(request_id))
     {
-        spdlog::warn("Failed to erase pending request {}", request_id);
+        spdlog::debug("Response {} is not pending on track {}", request_id, m_track_id);
     }
 
-    result = ExtractPointsFromData();
+    // If the request was successful, extract the points from the data
+    if(response_code == kRocProfVisResultSuccess ||
+       response_code == kRocProfVisResultOutOfRange)
+    {
+        ExtractPointsFromData();
+    }
 
-    return result;
+    // If there are no more pending requests, set the request state to idle
+    if(m_pending_requests.empty())
+    {
+        m_cancel_requested = false;
+        if(m_request_state == TrackDataRequestState::kRequesting)
+        {
+            m_request_state = TrackDataRequestState::kIdle;
+        }
+    }
 }
 
 bool
-TrackItem::HasData()
+TrackItem::HasData() const
 {
     return m_data_provider.DataModel().GetTimeline().GetTrackData(m_track_id) != nullptr;
 }
 
 bool
+TrackItem::AllDataReady() const
+{
+    const RawTrackData* data =
+        m_data_provider.DataModel().GetTimeline().GetTrackData(m_track_id);
+    return data != nullptr && data->AllDataReady();
+}
+
+bool
 TrackItem::ReleaseData()
 {
-    bool result =
-        m_data_provider.DataModel().GetTimeline().FreeTrackData(m_track_id, true);
-    if(!result)
+    bool result = true;
+
+    // Having nothing to free is not a failure: the track can be unloaded while
+    // its first response is still in flight.
+    if(HasData())
     {
-        spdlog::warn("Failed to release data for track {}", m_track_id);
+        result = m_data_provider.DataModel().GetTimeline().FreeTrackData(m_track_id, true);
+        if(!result)
+        {
+            spdlog::warn("Failed to release data for track {}", m_track_id);
+        }
     }
 
-    // Clear pending requests
-    for(auto it = m_pending_requests.begin(); it != m_pending_requests.end();)
-    {
-        const auto request_id = it->first;
-        if(m_data_provider.CancelRequest(request_id))
-        {
-            it = m_pending_requests.erase(it);
-        }
-        else
-        {
-            spdlog::warn("Failed to cancel pending request {} for track {}", request_id,
-                         m_track_id);
-            ++it;
-        }
-    }
+    // Chunks that were queued but never issued can simply be dropped.
+    m_request_queue.clear();
+    CancelPendingRequests();
 
     return result;
+}
+
+void
+TrackItem::CancelPendingRequests()
+{
+    // Cancelling only asks the controller to stop early: the request stays in
+    // flight and leaves m_pending_requests when its future resolves. Ask once,
+    // otherwise every frame re-cancels the same ids while they drain.
+    if(m_cancel_requested || m_pending_requests.empty())
+    {
+        return;
+    }
+
+    for(const auto& [request_id, req] : m_pending_requests)
+    {
+        if(!m_data_provider.CancelRequest(request_id))
+        {
+            spdlog::debug("Failed to cancel pending request {} for track {}", request_id,
+                          m_track_id);
+        }
+    }
+    m_cancel_requested = true;
 }
 
 bool
 TrackItem::HasPendingRequests() const
 {
     return !m_pending_requests.empty();
+}
+
+bool
+TrackItem::HasPendingRequest(uint64_t request_id) const
+{
+    return m_pending_requests.find(request_id) != m_pending_requests.end();
 }
 
 void
@@ -1123,6 +1184,7 @@ Pill::Pill(bool shown, bool active)
 : m_show_pill_label(shown)
 , m_active(active)
 , m_accent_color(std::nullopt)
+, m_text_color(std::nullopt)
 , m_sizing(kCompact)
 , m_compact_label("")
 , m_ext_label("")
@@ -1171,6 +1233,12 @@ void
 Pill::SetAccentColor(size_t accent_color)
 {
     m_accent_color = accent_color;
+}
+
+void
+Pill::SetTextColor(std::optional<Colors> color)
+{
+    m_text_color = color;
 }
 
 void
@@ -1242,7 +1310,9 @@ Pill::Render(const ImVec2& pos, SettingsManager& settings, Sizing sizing)
     {
         draw_list->AddRectFilled(win_pos + pos, win_pos + pos + Size(),
                                  settings.GetColor(Colors::kBgFrame), m_height * 0.5f);
-        ImGui::PushStyleColor(ImGuiCol_Text, settings.GetColor(Colors::kTextMain));
+        ImGui::PushStyleColor(
+            ImGuiCol_Text,
+            settings.GetColor(m_text_color.value_or(Colors::kTextMain)));
     }
     else
     {

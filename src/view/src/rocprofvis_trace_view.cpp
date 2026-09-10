@@ -18,7 +18,6 @@
 #include "rocprofvis_summary_view.h"
 #include "rocprofvis_timeline_selection.h"
 #include "rocprofvis_timeline_view.h"
-#include "rocprofvis_track_topology.h"
 #include "rocprofvis_utils.h"
 #include "spdlog/spdlog.h"
 #include "widgets/rocprofvis_dialog.h"
@@ -40,7 +39,6 @@ TraceView::TraceView()
 , m_show_minimap_popup(false)
 , m_timeline_selection(nullptr)
 , m_measurement(std::make_shared<MeasurementController>())
-, m_track_topology(nullptr)
 , m_popup_info({ false, "", "" })
 , m_tabselected_event_token(EventManager::InvalidSubscriptionToken)
 , m_event_selection_changed_event_token(EventManager::InvalidSubscriptionToken)
@@ -57,7 +55,7 @@ TraceView::TraceView()
         (void)trace_path;                                    
         if(!success)
         {
-            spdlog::debug("Failed to fetch event data for event ID: {}", event_id);
+            spdlog::warn("Failed to fetch event data for event ID: {}", event_id);
             return;
         }
 
@@ -252,9 +250,9 @@ TraceView::Update()
     {
         m_timeline_view->Update();
     }
-    if(m_track_topology)
+    if(m_sidebar_item && m_sidebar_item->m_item)
     {
-        m_track_topology->Update();
+        m_sidebar_item->m_item->Update();
     }
     if(m_analysis_item->m_item)
     {
@@ -281,7 +279,6 @@ TraceView::CreateView()
         std::make_shared<AnnotationsManager>(m_data_provider.GetTraceFilePath());
     m_measurement          = std::make_shared<MeasurementController>();
     m_timeline_selection    = std::make_shared<TimelineSelection>(m_data_provider);
-    m_track_topology        = std::make_shared<TrackTopology>(m_data_provider);
     m_timeline_view         = std::make_shared<TimelineView>(m_data_provider,
                                                              m_timeline_selection,
                                                              m_measurement, m_annotations);
@@ -289,12 +286,11 @@ TraceView::CreateView()
     m_event_search = std::make_shared<EventSearch>(m_data_provider, m_timeline_selection);
     m_minimap               = std::make_shared<Minimap>(m_data_provider, m_timeline_view.get());
     auto m_histogram_widget = std::make_shared<RocCustomWidget>(
-        [this]() { m_timeline_view->RenderHistogram(); });
+        [this]() { m_timeline_view->RenderHeader(); });
 
-    auto sidebar =
-        std::make_shared<SideBar>(m_track_topology, m_timeline_selection,
-                                  m_timeline_view->GetTracks(), m_data_provider);
-    auto analysis = std::make_shared<AnalysisView>(m_data_provider, m_track_topology,
+    auto sidebar = std::make_shared<SideBar>(
+        m_timeline_selection, m_timeline_view->GetTracks(), m_data_provider);
+    auto analysis = std::make_shared<AnalysisView>(m_data_provider,
                                                    m_timeline_selection, m_annotations);
 
     m_sidebar_item            = LayoutItem::CreateFromWidget(sidebar);
@@ -388,8 +384,13 @@ TraceView::Render()
             popup_style.PushPopupStyles();
             popup_style.PushTitlebarColors();
 
+            // Size on appearance only. Under multi-viewport this window can be
+            // dragged out into its own OS window, while GetResponsiveWindowSize()
+            // always clamps to the main viewport, so re-applying the size every
+            // frame would hold a detached window to the wrong monitor's bounds.
             ImGui::SetNextWindowSize(
-                GetResponsiveWindowSize(MINIMAP_POPUP_SIZE, MINIMAP_POPUP_MIN_SIZE));
+                GetResponsiveWindowSize(MINIMAP_POPUP_SIZE, MINIMAP_POPUP_MIN_SIZE),
+                ImGuiCond_Appearing);
             if(ImGui::Begin("Minimap", &m_show_minimap_popup,
                             ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse))
             {
@@ -461,6 +462,14 @@ TraceView::HandleHotKeys()
                     "Bookmark slot " + idx + " not assigned",
                     NotificationLevel::Warning);
             }
+        }
+    }
+
+    if(hk.WasActionTriggered(HotkeyActionId::kZoomToSelection))
+    {
+        if(m_timeline_view)
+        {
+            m_timeline_view->ZoomToTimeRangeSelection();
         }
     }
 }
@@ -1105,12 +1114,18 @@ TraceView::RenderEventSearch()
         {
             ImGui::SetKeyboardFocusHere();
         }
+        ImGui::BeginGroup();
+        ImGui::PushFont(settings.GetFontManager().GetFont(FontType::kIcon));
+        float options_width = ImGui::CalcTextSize(ICON_ELLIPSIS).x +
+                              2.0f * m_settings_manager.GetDefaultStyle().FramePadding.x;
+        ImGui::PopFont();
+        float reserved = options_width >= m_event_search->Width() ? 0.0f : options_width;
         std::pair<bool, bool> search_bar = InputTextWithClear(
             "search_bar", "Search: hipLaunchKernel or \"hip\"\"kernel\"",
-            m_event_search->TextInput(), m_event_search->TextInputLimit(),
+            m_event_search->TextInput(),
             settings.GetFontManager().GetFont(FontType::kIcon),
             settings.GetColor(Colors::kBgMain), settings.GetDefaultStyle(),
-            m_event_search->Width());
+            m_event_search->Width() - reserved);
         if(ImGui::IsItemClicked() && m_event_search->Searched())
         {
             m_event_search->Show();
@@ -1123,6 +1138,29 @@ TraceView::RenderEventSearch()
         {
             m_event_search->Clear();
         }
+        if(reserved > 0.0f)
+        {
+            ImGui::SameLine();
+            ImGui::PushStyleColor(ImGuiCol_Text,
+                                  settings.GetColor(m_event_search->Advanced()
+                                                        ? Colors::kTextOnAccent
+                                                        : Colors::kTextMain));
+            if(IconButton(
+                   ICON_ELLIPSIS, settings.GetFontManager().GetFont(FontType::kIcon),
+                   ImVec2(0, ImGui::GetFrameHeightWithSpacing()),
+                   m_event_search->Advanced() ? "Advanced (Active)" : "Advanced", false,
+                   m_settings_manager.GetDefaultStyle().FramePadding,
+                   settings.GetColor(m_event_search->Advanced() ? Colors::kAccent
+                                                                : Colors::kBgMain),
+                   settings.GetColor(m_event_search->Advanced() ? Colors::kAccentHover
+                                                                : Colors::kButtonHovered),
+                   settings.GetColor(Colors::kButtonActive)))
+            {
+                m_event_search->ToggleOptions();
+            }
+            ImGui::PopStyleColor();
+        }
+        ImGui::EndGroup();
         if(m_event_search->FocusTextInput())
         {
             ImGui::GetIO().MouseClicked[0] = false;

@@ -12,6 +12,8 @@ namespace Controller
 EventSearchTable::EventSearchTable(uint64_t id)
 : SystemTable(id)
 , m_include_substrings(true)
+, m_include_category(false)
+, m_partial_matching(false)
 {
 }
 
@@ -24,6 +26,8 @@ void EventSearchTable::Reset()
     SystemTable::Reset();
     m_string_table_filters.clear();
     m_include_substrings = true;
+    m_include_category = false;
+    m_partial_matching = false;
 }
 
 rocprofvis_result_t
@@ -39,6 +43,8 @@ EventSearchTable::UnpackArguments(Arguments& args, TableArguments*& out) const
     {
         uint64_t num_string_table_filters = 0;
         uint64_t include_substrings = 1;
+        uint64_t include_category = 0;
+        uint64_t partial_matching = 0;
         std::vector<std::string> string_table_filters;
         uint64_t table_type = static_cast<uint64_t>(kRPVControllerTableTypeSearchResults);
 
@@ -70,11 +76,21 @@ EventSearchTable::UnpackArguments(Arguments& args, TableArguments*& out) const
             {
                 result = args.GetUInt64(kRPVControllerTableArgsStringTableFiltersIncludeSubstrings, 0, &include_substrings);
             }
+            if(result == kRocProfVisResultSuccess)
+            {
+                result = args.GetUInt64(kRPVControllerTableArgsStringTableFiltersIncludeCategory, 0, &include_category);
+            }
+            if(result == kRocProfVisResultSuccess)
+            {
+                result = args.GetUInt64(kRPVControllerTableArgsStringTableFiltersPartialMatching, 0, &partial_matching);
+            }
         }
         if(result == kRocProfVisResultSuccess)
         {
             search_out->m_string_table_filters = std::move(string_table_filters);
             search_out->m_include_substrings = include_substrings != 0;
+            search_out->m_include_category = include_category != 0;
+            search_out->m_partial_matching = partial_matching != 0;
         }
     }
 	return result;
@@ -91,6 +107,8 @@ EventSearchTable::GetCurrentArguments(TableArguments*& out) const
     SystemTable::GetCurrentArguments(out);    
     search_out->m_string_table_filters = m_string_table_filters;
     search_out->m_include_substrings = m_include_substrings;
+    search_out->m_include_category = m_include_category;
+    search_out->m_partial_matching = m_partial_matching;
 }
 
 void
@@ -100,13 +118,15 @@ EventSearchTable::SetCurrentArguments(TableArguments& in)
     SystemTable::SetCurrentArguments(search_in);
     m_string_table_filters = search_in.m_string_table_filters;
     m_include_substrings = search_in.m_include_substrings;
+    m_include_category = search_in.m_include_category;
+    m_partial_matching = search_in.m_partial_matching;
 }
 
 bool
 EventSearchTable::ArgumentsChanged(SystemTableArguments& in) const
 {
     EventSearchTableArguments& search_in = (EventSearchTableArguments&)in;
-    return SystemTable::ArgumentsChanged(search_in) || m_string_table_filters != search_in.m_string_table_filters || m_include_substrings != search_in.m_include_substrings;
+    return SystemTable::ArgumentsChanged(search_in) || m_string_table_filters != search_in.m_string_table_filters || m_include_substrings != search_in.m_include_substrings || m_include_category != search_in.m_include_category || m_partial_matching != search_in.m_partial_matching;
 }
 
 rocprofvis_result_t
@@ -133,7 +153,7 @@ EventSearchTable::BuildQuery(rocprofvis_dm_database_t db, TableArguments& args, 
                                                     static_cast<rocprofvis_db_num_of_tracks_t>(arguments.m_tracks.size()), arguments.m_tracks.data(),
                                                     arguments.m_where.c_str(),
                                                     static_cast<rocprofvis_dm_num_string_table_filters_t>(string_table_filters_ptr.size()), string_table_filters_ptr.data(),
-                                                    arguments.m_include_substrings,
+                                                    arguments.m_include_substrings, arguments.m_include_category, arguments.m_partial_matching,
                                                     sort_column, (rocprofvis_dm_sort_order_t)arguments.m_sort_order,
                                                     count_only ? 0 : count, count_only ? 0 : index, count_only, out);
     return result;

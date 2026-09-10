@@ -403,7 +403,10 @@ void
 SshTestDialog::RenderProgressPopup()
 {
     SshSession* ssh_session = m_orchestrator ? m_orchestrator->GetSession() : nullptr;
-    if(!ssh_session) return;
+    if(!ssh_session)
+    {
+        return;
+    }
 
     if(auto fetch = ssh_session->GetFileStat()->ConsumeIfUpdated())
     {
@@ -416,85 +419,12 @@ SshTestDialog::RenderProgressPopup()
         }
     }
 
-    if(m_show_progress_popup)
-    {
-        SettingsManager&  settings = SettingsManager::GetInstance();
-        const ImGuiStyle& style    = ImGui::GetStyle();
-
-        PopUpStyle popup_style;
-        popup_style.PushPopupStyles();
-        popup_style.PushTitlebarColors();
-        popup_style.CenterPopup();
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 12.0f);
-        ImGui::SetNextWindowSize(ImVec2(440, 0));
-
-        if(ImGui::BeginPopupModal("Remote Download", nullptr,
-            ImGuiWindowFlags_AlwaysAutoResize |
-            ImGuiWindowFlags_NoMove |
-            ImGuiWindowFlags_NoTitleBar |
-            ImGuiWindowFlags_NoScrollbar))
-        {
-            const auto& fetch = m_last_progress;
-
-            uint64_t done  = fetch.downloaded;
-            uint64_t total = fetch.size;
-
-            ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing,
-                                ImVec2(style.ItemSpacing.x, 4.0f));
-
-            BeginPanelCard("##remote_dl_header", PanelCardTone::kFrame, ImVec2(16.0f, 10.0f),
-                           true, &settings);
-            {
-                PanelIcon(ICON_ARROW_DOWN, Colors::kAccent, &settings);
-                ImGui::SameLine(0.0f, style.ItemInnerSpacing.x);
-                ImGui::BeginGroup();
-                ImGui::PushFont(nullptr,
-                                settings.GetFontManager().GetFontSize(FontSize::kMedLarge));
-                ImGui::TextUnformatted("Remote Download");
-                ImGui::PopFont();
-                ImGui::PushStyleColor(ImGuiCol_Text, settings.GetColor(Colors::kTextDim));
-                ImGui::TextUnformatted("Fetching the trace over SSH.");
-                ImGui::PopStyleColor();
-                ImGui::EndGroup();
-            }
-            EndPanelCard();
-
-            BeginPanelCard("##remote_dl_body", PanelCardTone::kPanel, ImVec2(14.0f, 10.0f),
-                           true, &settings);
-            {
-                ImGui::TextWrapped("%s", fetch.name.c_str());
-                ImGui::Spacing();
-                if(total > 0)
-                {
-                    float frac = static_cast<float>(done) / static_cast<float>(total);
-
-                    std::string label =
-                        std::to_string(done / 1024) + " / " +
-                        std::to_string(total / 1024) + " KiB";
-
-                    ImGui::ProgressBar(frac, ImVec2(-FLT_MIN, 0), label.c_str());
-                }
-                else
-                {
-                    PanelFieldLabel("Connecting...", false, &settings);
-                }
-            }
-            EndPanelCard();
-
-            if(total > 0 && done >= total)
-            {
-                ImGui::CloseCurrentPopup();
-                m_show_progress_popup = false;
-            }
-
-            ImGui::PopStyleVar();  // ItemSpacing
-            ImGui::EndPopup();
-        }
-
-        ImGui::PopStyleVar(2);  // WindowPadding, WindowRounding
-        popup_style.PopStyles();
-    }
+    // The download phase is done once every reported byte has arrived.
+    const bool finished =
+        m_last_progress.size > 0 && m_last_progress.downloaded >= m_last_progress.size;
+    RenderRemoteDownloadPopup("Remote Download", m_last_progress.name.c_str(),
+                              m_last_progress.downloaded, m_last_progress.size, finished,
+                              m_show_progress_popup);
 }
 
 void

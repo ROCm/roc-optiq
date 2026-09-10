@@ -18,76 +18,54 @@ namespace Cmdline
 {
 
 /*
- * Shared command-line composition helpers for profiler launches.
- *
- * The argv schema (order and conventions) is defined once here so that every
- * sink - POSIX execvp, Windows CreateProcessA, and the future SSH executor -
- * produces the same logical command from a given ProfilerConfig.
- *
- * Typical usage:
+ * Shared argv/env composition for every launch sink (execvp, CreateProcessA,
+ * SSH). Typical use:
  *
  *   auto argv = BuildArgv(config);
  *   auto env  = BuildEnv(config);
- *
- *   // POSIX local:  pass argv to execvp / posix_spawnp directly.
- *   // Windows:      auto cmd = ToWindowsCommandLine(argv);
- *   // SSH remote:   auto cmd = ToPosixShellCommand(argv, env);
- *   // Logging/UI:   auto s   = ToDisplayString(argv, env);
+ *   // POSIX:  execvp / posix_spawnp
+ *   // Windows: ToWindowsCommandLine(argv)
+ *   // SSH:     ToPosixShellCommand(argv, env, working_dir)
+ *   // Log/UI:  ToDisplayString(argv, env)
  */
 
 /*
- * Build the canonical argv from a ProfilerConfig. argv[0] is the profiler
- * executable path; argv[1..] are the arguments in the order:
- *   1. Explicit profiler argv entries (config.GetProfilerArgv()).
- *   2. Legacy whitespace-split profiler_args (config.GetProfilerArgs()).
- *   3. "--output <output_directory>" if set.
- *   4. "--" "<target_executable>" if set.
- *   5. Whitespace-split target args (config.GetTargetArgs()).
- *
- * The whitespace-split behavior for legacy profiler_args / target_args is
- * preserved for backwards compatibility with existing callers; new callers
- * should prefer AddProfilerArg() so tokens containing spaces survive.
+ * argv[0] = resolved tool path, argv[1..] = AddProfilerArg entries in order.
+ * Pass-through: no flags are synthesized (output path, "--", target), and
+ * nothing is split on whitespace. output_directory is not on argv; add it
+ * explicitly if the profiler needs it.
  */
 std::vector<std::string> BuildArgv(ProfilerConfig const& config);
 
 /*
- * Return the env vars from the config as a vector of (name, value) pairs.
- * Currently a pass-through; exists as a seam for future per-executor tweaks.
+ * Env vars from the config. Pass-through; a seam for per-executor tweaks.
  */
 std::vector<std::pair<std::string, std::string>> BuildEnv(ProfilerConfig const& config);
 
 /*
- * True if `name` is a valid POSIX environment variable name
- * ([A-Za-z_][A-Za-z0-9_]*). Malformed names must be kept out of the remote
- * shell command (ToPosixShellCommand) because the name is emitted unquoted and
- * would otherwise allow shell-syntax injection.
+ * True if `name` is [A-Za-z_][A-Za-z0-9_]*. Invalid names are rejected because
+ * ToPosixShellCommand emits the name unquoted.
  */
 bool IsValidEnvName(std::string const& name);
 
 /*
- * Serialize argv (and optional env) into a single string suitable for a POSIX
- * /bin/sh interpreter - i.e. ssh user@host "<this>" or sh -c "<this>". Each
- * token is single-quoted; embedded single quotes are emitted as '\''. Env
- * pairs are prepended as KEY='VALUE'.
+ * POSIX /bin/sh command: each token single-quoted (embedded ' as '\''),
+ * env as KEY='VALUE'. Non-empty working_dir prefixes "cd '<dir>' && " so a
+ * missing directory fails the launch instead of running in the wrong cwd.
  */
 std::string ToPosixShellCommand(
     std::vector<std::string> const&                         argv,
-    std::vector<std::pair<std::string, std::string>> const& env = {});
+    std::vector<std::pair<std::string, std::string>> const& env = {},
+    std::string const&                                      working_dir = std::string());
 
 /*
- * Serialize argv into a single string suitable for the lpCommandLine
- * parameter of Windows CreateProcessA/W. Tokens are quoted following the
- * MSVC CommandLineToArgvW reverse rules: backslash-doubling before quotes,
- * double-quote-wrapping for tokens containing whitespace/quotes.
- *
- * Does not include env vars (Windows passes env via a separate block).
+ * CreateProcessA lpCommandLine string (CommandLineToArgvW reverse quoting).
+ * Env is a separate block on Windows, not included here.
  */
 std::string ToWindowsCommandLine(std::vector<std::string> const& argv);
 
 /*
- * Format argv + env as a human-readable single string for logging and the
- * launcher dialog's preamble. Not safe to feed back to a real shell - use
- * the platform-specific serializers above for that.
+ * Human-readable argv+env for logs and the launcher preamble. Not shell-safe.
  */
 std::string ToDisplayString(
     std::vector<std::string> const&                         argv,

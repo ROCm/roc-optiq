@@ -78,6 +78,12 @@ const std::vector<std::string> COMPARE_EXTENSIONS = { "db" };
 const std::vector<std::string> PROJECT_GROUP_EXTENSIONS = { "rpv" };
 constexpr const char*          PROJECT_GROUP_EXTENSION  = ".rpv";
 
+// The previous session (all open tab groups + ungrouped tabs, with per-item
+// settings) is snapshotted here in the app config dir on graceful shutdown, and
+// restored on the next plain launch (no file argument). A distinct name/extension
+// keeps it out of the user-facing .rpv project space.
+constexpr const char* SESSION_FILE_NAME = "last_session.json";
+
 constexpr const char* CLEANUP_MESSAGE = "Waiting for requests to finish cleanup...";
 constexpr const char* CLOSING_MESSAGE = "Closing...";
 
@@ -665,6 +671,31 @@ AppWindow::SaveProjectGroup(const std::string& project_id, const std::string& sa
     }
 }
 
+std::string
+AppWindow::OpenItemFromSettings(const jt::Json&              settings,
+                                const std::filesystem::path& base_dir)
+{
+    // Restore a single tab from its embedded settings JSON (trace paths resolved
+    // relative to base_dir) and hand it a tab. Returns the opened/duplicate item id,
+    // or an empty string on failure (e.g. the trace was moved or deleted).
+    std::unique_ptr<ProjectItem> new_item = std::make_unique<ProjectItem>();
+    std::string                  out_id;
+    ProjectItem::OpenResult open_result   = new_item->OpenFromSettingsJson(settings, base_dir, out_id);
+    if(open_result == ProjectItem::OpenResult::Success)
+    {
+        TabItem tab{ new_item->GetName(), new_item->GetID(), new_item->GetView(), true };
+        m_tab_container->AddTab(std::move(tab));
+        std::string opened_id = new_item->GetID();
+        m_items[opened_id]    = std::move(new_item);
+        return opened_id;
+    }
+    if(open_result == ProjectItem::OpenResult::Duplicate)
+    {
+        return out_id;
+    }
+    return std::string();
+}
+
 void
 AppWindow::OpenProjectGroupFile(const std::string& file_path)
 {
@@ -723,22 +754,7 @@ AppWindow::OpenProjectGroupFile(const std::string& file_path)
                 // New format: the item carries its full settings; restore it (with its
                 // track heights/order, bookmarks, annotations) through the settings
                 // path, then hand it a tab.
-                std::unique_ptr<ProjectItem> new_item    = std::make_unique<ProjectItem>();
-                std::string           out_id;
-                ProjectItem::OpenResult      open_result =
-                    new_item->OpenFromSettingsJson(item["settings"], dir, out_id);
-                if(open_result == ProjectItem::OpenResult::Success)
-                {
-                    TabItem tab{ new_item->GetName(), new_item->GetID(),
-                                 new_item->GetView(), true };
-                    m_tab_container->AddTab(std::move(tab));
-                    opened_id          = new_item->GetID();
-                    m_items[opened_id] = std::move(new_item);
-                }
-                else if(open_result == ProjectItem::OpenResult::Duplicate)
-                {
-                    opened_id = out_id;
-                }
+                opened_id = OpenItemFromSettings(item["settings"], dir);
             }
             else if(item["files"].isArray())
             {
@@ -825,22 +841,7 @@ AppWindow::OpenProjectGroupFile(const std::string& file_path)
     {
         // Old single-item .rpv: the whole file is one item's settings; open it as the
         // project's single tab (settings restored).
-        std::unique_ptr<ProjectItem> new_item = std::make_unique<ProjectItem>();
-        std::string                  out_id;
-        ProjectItem::OpenResult      open_result =
-            new_item->OpenFromSettingsJson(root, dir, out_id);
-        std::string opened_id;
-        if(open_result == ProjectItem::OpenResult::Success)
-        {
-            TabItem tab{ new_item->GetName(), new_item->GetID(), new_item->GetView(), true };
-            m_tab_container->AddTab(std::move(tab));
-            opened_id          = new_item->GetID();
-            m_items[opened_id] = std::move(new_item);
-        }
-        else if(open_result == ProjectItem::OpenResult::Duplicate)
-        {
-            opened_id = out_id;
-        }
+        std::string opened_id = OpenItemFromSettings(root, dir);
         if(!opened_id.empty())
         {
             Project* group = GetProjectById(project_id);
@@ -867,6 +868,213 @@ AppWindow::OpenProjectGroupFile(const std::string& file_path)
     }
 
     SettingsManager::GetInstance().AddRecentFile(file_path);
+    RefreshTabGroups();
+}
+
+void
+AppWindow::SaveSession()
+{
+    // Snapshot the whole workspace (tab groups + ungrouped tabs, each with its full
+    // per-view settings) so the next plain launch can reopen it exactly. Paths are
+    // stored relative to the config dir. Called from BeginAppShutdown before the
+    // items are torn down.
+    std::filesystem::path config_dir   = get_application_config_path(true);
+    std::filesystem::path session_path = config_dir / SESSION_FILE_NAME;
+
+    jt::Json root;
+    root            = "";
+    root["version"] = "1.0";
+
+    size_t project_index = 0;
+    for(const std::unique_ptr<Project>& project : m_projects)
+    {
+        char color_buf[16];
+        std::snprintf(color_buf, sizeof(color_buf), "%08X",
+                      static_cast<unsigned int>(project->GetColor()));
+        root["projects"][project_index]["name"]  = project->GetName();
+        root["projects"][project_index]["color"] = std::string(color_buf);
+        size_t item_index                        = 0;
+        for(const std::string& member_id : project->GetItemIds())
+        {
+            ProjectItem* member = GetItem(member_id);
+            if(!member)
+            {
+                continue;
+            }
+            root["projects"][project_index]["items"][item_index]["settings"] =
+                member->ExportSettingsJson(config_dir);
+            item_index++;
+        }
+        size_t closed_index = 0;
+        for(const Project::ClosedItem& closed : project->GetClosedItems())
+        {
+            root["projects"][project_index]["closed"][closed_index]["name"] = closed.name;
+            for(size_t j = 0; j < closed.files.size(); j++)
+            {
+                root["projects"][project_index]["closed"][closed_index]["files"][j] =
+                    std::filesystem::proximate(closed.files[j], config_dir).generic_string();
+            }
+            closed_index++;
+        }
+        project_index++;
+    }
+
+    // Ungrouped tabs, kept in strip order.
+    size_t                            ungrouped_index = 0;
+    const std::vector<const TabItem*> tabs            = m_tab_container->GetTabs();
+    for(const TabItem* tab : tabs)
+    {
+        if(GetProjectForItem(tab->m_id))
+        {
+            continue;  // grouped items are saved under their project above
+        }
+        ProjectItem* item = GetItem(tab->m_id);
+        if(!item)
+        {
+            continue;
+        }
+        root["ungrouped"][ungrouped_index]["settings"] = item->ExportSettingsJson(config_dir);
+        ungrouped_index++;
+    }
+
+    std::error_code ec;
+    if(project_index == 0 && ungrouped_index == 0)
+    {
+        // Nothing open: clear any stale session so the next launch starts clean.
+        std::filesystem::remove(session_path, ec);
+        return;
+    }
+
+    std::ofstream file(session_path);
+    if(file.is_open())
+    {
+        file << root.toStringPretty() << "\n";
+        file.close();
+    }
+}
+
+void
+AppWindow::RestoreSession()
+{
+    // Reopen the previous session (see SaveSession). Missing traces are skipped
+    // silently so a moved/deleted file never blocks startup.
+    std::filesystem::path config_dir   = get_application_config_path(true);
+    std::filesystem::path session_path = config_dir / SESSION_FILE_NAME;
+    if(!std::filesystem::exists(session_path))
+    {
+        return;
+    }
+    std::ifstream file(session_path);
+    if(!file.is_open())
+    {
+        return;
+    }
+    std::string json_string;
+    std::string line;
+    while(std::getline(file, line))
+    {
+        json_string += line;
+    }
+    file.close();
+
+    std::pair<jt::Json::Status, jt::Json> parsed = jt::Json::parse(json_string);
+    if(parsed.first != jt::Json::success)
+    {
+        return;
+    }
+    jt::Json&                 root    = parsed.second;
+    const std::vector<ImU32>& palette = SettingsManager::GetInstance().GetColorWheel();
+
+    if(root["projects"].isArray())
+    {
+        for(jt::Json& project_json : root["projects"].getArray())
+        {
+            std::string name =
+                project_json["name"].isString() ? project_json["name"].getString() : "Project";
+            ImU32 color = palette.empty() ? 0 : palette[0];
+            if(project_json["color"].isString())
+            {
+                color = static_cast<ImU32>(std::stoul(project_json["color"].getString(), nullptr, 16));
+            }
+            Project*    project    = CreateProjectNamed(name, color);
+            std::string project_id = project->GetID();
+
+            if(project_json["items"].isArray())
+            {
+                for(jt::Json& item_json : project_json["items"].getArray())
+                {
+                    if(item_json["settings"].isNull())
+                    {
+                        continue;
+                    }
+                    std::string opened_id = OpenItemFromSettings(item_json["settings"], config_dir);
+                    if(!opened_id.empty())
+                    {
+                        Project* group = GetProjectById(project_id);
+                        if(group)
+                        {
+                            group->AddItem(opened_id);
+                        }
+                    }
+                }
+            }
+            if(project_json["closed"].isArray())
+            {
+                for(jt::Json& closed_json : project_json["closed"].getArray())
+                {
+                    Project::ClosedItem closed;
+                    closed.name = closed_json["name"].isString() ? closed_json["name"].getString()
+                                                                 : std::string();
+                    if(closed_json["files"].isArray())
+                    {
+                        for(jt::Json& entry : closed_json["files"].getArray())
+                        {
+                            if(entry.isString())
+                            {
+                                closed.files.push_back(
+                                    std::filesystem::weakly_canonical(config_dir / entry.getString())
+                                        .string());
+                            }
+                        }
+                    }
+                    if(!closed.files.empty())
+                    {
+                        Project* group = GetProjectById(project_id);
+                        if(group)
+                        {
+                            group->AddClosedItem(closed);
+                        }
+                    }
+                }
+            }
+
+            // Drop a project that restored nothing (all traces missing / already open).
+            Project* group = GetProjectById(project_id);
+            if(group && group->GetItemIds().empty() && group->GetClosedItems().empty())
+            {
+                for(size_t idx = 0; idx < m_projects.size(); idx++)
+                {
+                    if(m_projects[idx]->GetID() == project_id)
+                    {
+                        m_projects.erase(m_projects.begin() + idx);
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
+    if(root["ungrouped"].isArray())
+    {
+        for(jt::Json& item_json : root["ungrouped"].getArray())
+        {
+            if(!item_json["settings"].isNull())
+            {
+                OpenItemFromSettings(item_json["settings"], config_dir);
+            }
+        }
+    }
+
     RefreshTabGroups();
 }
 
@@ -1385,6 +1593,10 @@ AppWindow::BeginAppShutdown()
     m_shutdown_requested      = true;
     m_shutdown_start          = std::chrono::steady_clock::now();
     m_disable_app_interaction = true;
+
+    // Snapshot the session while the items/views are still alive (SaveSession reads
+    // each item's live settings), so the next plain launch can restore it.
+    SaveSession();
 
     NotificationManager::GetInstance().ShowPersistent(
         APP_SHUTDOWN_NOTIFICATION_ID,

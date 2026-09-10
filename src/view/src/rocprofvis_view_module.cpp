@@ -54,6 +54,12 @@ rocprofvis_view_open_files(const std::vector<std::string>& file_paths)
 }
 
 void
+rocprofvis_view_restore_session()
+{
+    AppWindow::GetInstance()->RestoreSession();
+}
+
+void
 rocprofvis_view_set_fullscreen_state(bool is_fullscreen)
 {
     AppWindow::GetInstance()->SetFullscreenState(is_fullscreen);

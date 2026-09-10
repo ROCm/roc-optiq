@@ -21,11 +21,17 @@
 
 #include <atomic>
 #include <chrono>
+#include <filesystem>
 #include <functional>
 #include <future>
 #include <memory>
 #include <thread>
 #include <vector>
+
+namespace jt
+{
+class Json;
+}
 
 namespace RocProfVis
 {
@@ -96,6 +102,11 @@ public:
     // Opens two trace files as a single compare project (combined timeline, A/B tags).
     void OpenCompare(const std::string& first_file, const std::string& second_file);
 
+    // Restores the previous session (all tab groups + ungrouped tabs, with per-item
+    // settings) saved on the last graceful shutdown. Called on a plain launch (no
+    // file argument); a no-op when no session file exists.
+    void RestoreSession();
+
     // Stable, file-derived project id/key for a compare of the given source files.
     // Used as the tab id and the m_items key for both fresh and reopened compares.
     static std::string MakeCompareId(const std::vector<std::string>& files);
@@ -153,6 +164,13 @@ private:
     void     HandleSaveProjectGroup(const std::string& project_id);
     void     SaveProjectGroup(const std::string& project_id, const std::string& save_path);
     void     OpenProjectGroupFile(const std::string& file_path);
+    // Opens one tab from its embedded settings JSON (paths relative to base_dir) and
+    // returns the opened/duplicate item id, or "" on failure. Shared by the project
+    // loader and session restore.
+    std::string OpenItemFromSettings(const jt::Json& settings, const std::filesystem::path& base_dir);
+    // Whole-workspace session snapshot/restore (see RestoreSession). SaveSession runs
+    // during BeginAppShutdown while items are still alive.
+    void        SaveSession();
     void     AssignItemToProject(const std::string& item_id, const std::string& project_id);
     void     RemoveItemFromProjectMembership(const std::string& item_id);
     void     UngroupProject(const std::string& project_id);

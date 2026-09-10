@@ -21,6 +21,7 @@
 
 #include <atomic>
 #include <chrono>
+#include <functional>
 #include <future>
 #include <memory>
 #include <thread>
@@ -36,6 +37,7 @@ class MessageDialog;
 #ifdef ROCPROFVIS_ENABLE_PROFILER
 class ProfilerLauncherDialog;  // TEMPORARY (profiler launch)
 #endif
+class ProjectItem;
 class Project;
 class WelcomePage;
 
@@ -82,16 +84,20 @@ public:
                             const std::string&               initial_path,
                             std::function<void(std::string)> callback);
                             
-    Project* GetProject(const std::string& id);
-    Project* GetCurrentProject();
+    ProjectItem* GetItem(const std::string& id);
+    ProjectItem* GetCurrentItem();
 
     void OpenFile(std::string file_path);
+
+    // Opens a batch of files. When more than one file is opened together they are
+    // auto-grouped into a new project (Chrome-style tab group).
+    void OpenFiles(const std::vector<std::string>& file_paths);
 
     // Opens two trace files as a single compare project (combined timeline, A/B tags).
     void OpenCompare(const std::string& first_file, const std::string& second_file);
 
     // Stable, file-derived project id/key for a compare of the given source files.
-    // Used as the tab id and the m_projects key for both fresh and reopened compares.
+    // Used as the tab id and the m_items key for both fresh and reopened compares.
     static std::string MakeCompareId(const std::vector<std::string>& files);
 
     void ShowCloseConfirm();
@@ -126,10 +132,49 @@ private:
 
     void RenderDisableScreen();
     void RenderShutdownState();
-    void RenderFileMenu(Project* project);
-    void RenderEditMenu(Project* project);
-    void RenderViewMenu(Project* project);
+    void RenderFileMenu(ProjectItem* project);
+    void RenderEditMenu(ProjectItem* project);
+    void RenderViewMenu(ProjectItem* project);
     void RenderHelpMenu();
+
+    // Project (Chrome-style tab group) management. A Project owns an ordered set of
+    // open ProjectItem tab-ids plus a memory of closed items for reopening.
+    Project* GetProjectById(const std::string& project_id);
+    Project* GetProjectForItem(const std::string& item_id);
+    // Creates a project with the lowest free "Project N" name and matching color.
+    Project* CreateProject();
+    // Creates a project with an explicit name/color (used when loading a saved
+    // project-group file).
+    Project* CreateProjectNamed(const std::string& name, ImU32 color);
+    // Saves / loads a whole project group (name, color, member filelists) to disk.
+    // Group files reuse the .rpv extension; IsProjectGroupFile inspects the JSON to
+    // tell a group .rpv apart from a single-item .rpv.
+    bool     IsProjectGroupFile(const std::string& file_path);
+    void     HandleSaveProjectGroup(const std::string& project_id);
+    void     SaveProjectGroup(const std::string& project_id, const std::string& save_path);
+    void     OpenProjectGroupFile(const std::string& file_path);
+    void     AssignItemToProject(const std::string& item_id, const std::string& project_id);
+    void     RemoveItemFromProjectMembership(const std::string& item_id);
+    void     UngroupProject(const std::string& project_id);
+    void     CloseProjectTabs(const std::string& project_id);
+    void     ReopenClosedItem(const std::string& project_id, size_t closed_index);
+    // Pushes each Project's color/label onto its tabs and reorders tabs so group
+    // members are contiguous. Must run outside the tab container's Render().
+    void     RefreshTabGroups();
+    void     ReorderTabsForGroups();
+    // Reorders each Project's member list to match the current on-screen tab order
+    // (invoked after the user drag-reorders tabs).
+    void     SyncProjectOrderToTabs();
+    // Emits the tab right-click group menu (registered as the tab context callback).
+    void     RenderTabGroupContextMenu(const std::string& item_id);
+    // Emits the shared per-project menu body (rename, color, add/open/closed items,
+    // save, ungroup, close) used by both File > Projects and the group chip menu.
+    void     RenderProjectMenuBody(Project* project);
+    // Emits the project-level menu for the tab-strip group chip (registered as the
+    // chip context callback).
+    void     RenderProjectChipContextMenu(const std::string& group_id);
+    // Emits the File > Projects submenu.
+    void     RenderProjectsMenu();
 
     void RenderFileDialog();
     void RenderAboutDialog();
@@ -145,7 +190,7 @@ private:
     void HandleSaveAsFile();
     void ConfigureFileDialogBackend();
     void BeginAppShutdown();
-    void DetachProjectProviderCleanup(Project& project, ProviderCleanupReason reason);
+    void DetachItemProviderCleanup(ProjectItem& project, ProviderCleanupReason reason);
     void StartProviderCleanup(DataProviderCleanupWork cleanup_work,
                               const std::string&    label,
                               ProviderCleanupReason reason);
@@ -175,7 +220,16 @@ private:
     ImVec2 m_default_padding;
     ImVec2 m_default_spacing;
 
-    std::unordered_map<std::string, std::unique_ptr<Project>> m_projects;
+    std::unordered_map<std::string, std::unique_ptr<ProjectItem>> m_items;
+
+    // Chrome-style tab groups. Each Project references a subset of m_items by id.
+    std::vector<std::unique_ptr<Project>> m_projects;
+    size_t                                m_next_project_color = 0;
+    int                                   m_project_counter    = 0;
+    // Project mutations (create/assign/ungroup/close/reopen) are queued here and
+    // applied at the end of Render(), because reordering tabs or editing m_projects
+    // while the tab bar / menus are being drawn is unsafe.
+    std::function<void()>                 m_pending_project_action;
 
     EventManager::SubscriptionToken m_tabclosed_event_token;
     EventManager::SubscriptionToken m_tabselected_event_token;

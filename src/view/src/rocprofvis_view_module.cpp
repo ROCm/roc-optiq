@@ -49,10 +49,8 @@ rocprofvis_view_destroy()
 void
 rocprofvis_view_open_files(const std::vector<std::string>& file_paths)
 {
-    for(const std::string& path : file_paths)
-    {
-        AppWindow::GetInstance()->OpenFile(path);
-    }
+    // Opening several files at once auto-groups them into a new project.
+    AppWindow::GetInstance()->OpenFiles(file_paths);
 }
 
 void

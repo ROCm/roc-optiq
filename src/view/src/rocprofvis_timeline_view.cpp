@@ -3845,16 +3845,16 @@ TimelineView::UpdateMaxMetaAreaSize(bool update_tracks)
     }
 }
 
-TimelineViewProjectSettings::TimelineViewProjectSettings(const std::string& project_id,
+TimelineViewProjectItemSettings::TimelineViewProjectItemSettings(const std::string& project_id,
                                                          TimelineView&      timeline_view)
-: ProjectSetting(project_id)
+: ProjectItemSetting(project_id)
 , m_timeline_view(timeline_view)
 {}
 
-TimelineViewProjectSettings::~TimelineViewProjectSettings() {}
+TimelineViewProjectItemSettings::~TimelineViewProjectItemSettings() {}
 
 void
-TimelineViewProjectSettings::ToJson()
+TimelineViewProjectItemSettings::ToJson()
 {
     // Persist the remembered custom order (reusing the track "order" key) and the
     // active sort mode. The custom order is the only ordering that can't be derived
@@ -3870,7 +3870,7 @@ TimelineViewProjectSettings::ToJson()
 }
 
 bool
-TimelineViewProjectSettings::Valid() const
+TimelineViewProjectItemSettings::Valid() const
 {
     jt::Json& node =
         m_settings_json[JSON_KEY_GROUP_TIMELINE][JSON_KEY_TIMELINE_TRACK_ORDER];
@@ -3904,20 +3904,20 @@ TimelineViewProjectSettings::Valid() const
 }
 
 bool
-TimelineViewProjectSettings::HasSortSettings() const
+TimelineViewProjectItemSettings::HasSortSettings() const
 {
     return m_settings_json[JSON_KEY_GROUP_TIMELINE][JSON_KEY_TIMELINE_SORT_MODE].isLong();
 }
 
 int
-TimelineViewProjectSettings::SortMode() const
+TimelineViewProjectItemSettings::SortMode() const
 {
     return static_cast<int>(
         m_settings_json[JSON_KEY_GROUP_TIMELINE][JSON_KEY_TIMELINE_SORT_MODE].getLong());
 }
 
 std::vector<uint64_t>
-TimelineViewProjectSettings::CustomOrder() const
+TimelineViewProjectItemSettings::CustomOrder() const
 {
     std::vector<uint64_t> order;
     jt::Json&             node =

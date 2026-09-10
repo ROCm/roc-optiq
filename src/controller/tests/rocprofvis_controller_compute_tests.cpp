@@ -7,7 +7,6 @@
 #include <catch2/catch_session.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <cfloat>
-#include <cstdint>
 #include <filesystem>
 #include <string>
 #include <unordered_map>
@@ -374,7 +373,6 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture,
                     workload.handle, kRPVControllerWorkloadAvailableMetricEntryIdIndexed,
                     j, &entry_id);
                 REQUIRE(result == kRocProfVisResultSuccess);
-                REQUIRE(entry_id != static_cast<uint64_t>(UINT32_MAX));
                 table.entry_count++;
 
                 workload.available_metrics.list.push_back(AvailableMetrics::Entry{

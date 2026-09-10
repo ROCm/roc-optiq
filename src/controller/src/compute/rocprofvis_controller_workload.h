@@ -42,14 +42,9 @@ private:
         std::vector<std::string> values;
     };
     struct MetricDefinition {
-        static constexpr uint32_t kUnknownEntryId = UINT32_MAX;
-
         uint32_t category_id = 0;
         uint32_t table_id = 0;
-        // Trailing component of the "category.table.entry" metric id. Left as
-        // kUnknownEntryId when the database predates the column, so consumers can
-        // fall back to positional numbering.
-        uint32_t entry_id = kUnknownEntryId;
+        uint32_t entry_id = 0;
         size_t category_name_idx = 0;
         size_t table_name_idx = 0;
         size_t name_idx = 0;

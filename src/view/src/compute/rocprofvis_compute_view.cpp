@@ -13,6 +13,7 @@
 #    include "rocprofvis_compute_tester.h"
 #endif
 #include "icons/rocprovfis_icon_defines.h"
+#include "rocprofvis_appwindow.h"
 #include "rocprofvis_compute_workload_view.h"
 #include "rocprofvis_event_manager.h"
 #include "rocprofvis_settings_manager.h"
@@ -28,51 +29,13 @@ namespace RocProfVis
 namespace View
 {
 
-namespace
-{
-void
-RenderInvalidDatabaseMessage(const std::string& file_path,
-                             const std::string& error_message)
-{
-    SettingsManager& settings = SettingsManager::GetInstance();
-    const ImVec2     available_region = ImGui::GetContentRegionAvail();
-    const float message_width = std::max(0.0f, std::min(760.0f, available_region.x));
-
-    ImGui::SetCursorPosY(ImGui::GetCursorPosY() +
-                         std::max(0.0f, available_region.y * 0.25f));
-    ImGui::SetCursorPosX(ImGui::GetCursorPosX() +
-                         std::max(0.0f, (available_region.x - message_width) * 0.5f));
-    ImGui::BeginGroup();
-
-    ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + message_width);
-    ImGui::PushFont(nullptr,
-                    settings.GetFontManager().GetFontSize(FontSize::kLarge));
-    ImGui::PushStyleColor(ImGuiCol_Text, settings.GetColor(Colors::kTextError));
-    ImGui::TextWrapped("Compute database cannot be displayed");
-    ImGui::PopStyleColor();
-    ImGui::PopFont();
-
-    ImGui::Spacing();
-    ImGui::TextWrapped("%s", error_message.c_str());
-    if(!file_path.empty())
-    {
-        ImGui::Spacing();
-        ImGui::PushStyleColor(ImGuiCol_Text, settings.GetColor(Colors::kTextDim));
-        ImGui::TextWrapped("File: %s", file_path.c_str());
-        ImGui::PopStyleColor();
-    }
-    ImGui::PopTextWrapPos();
-
-    ImGui::EndGroup();
-}
-}  // namespace
-
 ComputeView::ComputeView()
 : m_view_created(false)
 , m_toolbar_available_width(0.0f)
 , m_compute_selection(nullptr)
 , m_preset_browser(nullptr)
 , m_tab_container(nullptr)
+, m_popup_info({ false, "", "" })
 {
     m_tool_bar = std::make_shared<RocCustomWidget>([this]() { this->RenderToolbar(); });
     m_widget_name = GenUniqueName("ComputeView");
@@ -82,8 +45,11 @@ ComputeView::ComputeView()
         if(response_code != kRocProfVisResultSuccess)
         {
             spdlog::error("Failed to load trace: {}", response_code);
-            NotificationManager::GetInstance().Show("Failed to load trace: " + trace_path,
-                                                    NotificationLevel::Error);
+            QueueDatabaseErrorDialog(
+                trace_path,
+                "The file could not be loaded as a compatible compute profiling "
+                "database. Its schema may be invalid or unsupported, or required "
+                "compute-profile data may be missing.");
         }
     });
 
@@ -162,17 +128,20 @@ ComputeView::Update()
 void
 ComputeView::CreateView()
 {
-    m_database_error_message.clear();
     m_compute_selection.reset();
     m_preset_browser.reset();
     m_tab_container.reset();
 
     if(m_data_provider.GetState() == ProviderState::kError)
     {
-        m_database_error_message =
-            "The file could not be loaded as a compatible compute profiling "
-            "database. Its schema may be invalid or unsupported, or required "
-            "compute-profile data may be missing.";
+        if(!m_popup_info.show_popup)
+        {
+            QueueDatabaseErrorDialog(
+                m_data_provider.GetTraceFilePath(),
+                "The file could not be loaded as a compatible compute profiling "
+                "database. Its schema may be invalid or unsupported, or required "
+                "compute-profile data may be missing.");
+        }
         return;
     }
 
@@ -180,9 +149,10 @@ ComputeView::CreateView()
         m_data_provider.ComputeModel().GetWorkloadList();
     if(workloads.empty())
     {
-        m_database_error_message =
+        QueueDatabaseErrorDialog(
+            m_data_provider.GetTraceFilePath(),
             "The file contains no compute workloads. A compute profile must contain "
-            "at least one workload and one kernel before it can be displayed.";
+            "at least one workload and one kernel before it can be displayed.");
         return;
     }
 
@@ -192,10 +162,11 @@ ComputeView::CreateView()
         });
     if(workload_with_kernels == workloads.end())
     {
-        m_database_error_message =
+        QueueDatabaseErrorDialog(
+            m_data_provider.GetTraceFilePath(),
             "The file contains compute workloads, but none of them contains kernel "
             "data. A compute profile must contain at least one workload with a kernel "
-            "before it can be displayed.";
+            "before it can be displayed.");
         return;
     }
 
@@ -281,7 +252,7 @@ void
 ComputeView::DestroyView()
 {
     m_view_created = false;
-    m_database_error_message.clear();
+    m_popup_info    = { false, "", "" };
     m_tab_container.reset();
     m_compute_selection.reset();
     m_preset_browser.reset();
@@ -302,11 +273,6 @@ ComputeView::Render()
     {
         RenderLoadingScreen(m_data_provider.GetProgressMessage());
     }
-    else if(!m_database_error_message.empty())
-    {
-        RenderInvalidDatabaseMessage(m_data_provider.GetTraceFilePath(),
-                                     m_database_error_message);
-    }
     else
     {
         if(m_preset_browser)
@@ -317,6 +283,29 @@ ComputeView::Render()
         {
             m_tab_container->Render();
         }
+    }
+
+    if(m_popup_info.show_popup)
+    {
+        m_popup_info.show_popup = false;
+        AppWindow*        app_window = AppWindow::GetInstance();
+        const std::string project_id = m_data_provider.GetTraceFilePath();
+        app_window->ShowMessageDialog(
+            m_popup_info.title, m_popup_info.message,
+            [app_window, project_id]() { app_window->CloseProjectTab(project_id); });
+    }
+}
+
+void
+ComputeView::QueueDatabaseErrorDialog(const std::string& file_path,
+                                      const std::string& message)
+{
+    m_popup_info.show_popup = true;
+    m_popup_info.title      = "Invalid Compute Database";
+    m_popup_info.message    = message;
+    if(!file_path.empty())
+    {
+        m_popup_info.message += "\n\nFile: " + file_path;
     }
 }
 

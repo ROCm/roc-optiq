@@ -5,6 +5,8 @@
 #include "rocprofvis_gui_helpers.h"
 #include "rocprofvis_widget.h"
 
+#include <utility>
+
 namespace RocProfVis
 {
 namespace View
@@ -106,10 +108,12 @@ ConfirmationDialog::DrawCheckboxOption()
 }
 
 void
-MessageDialog::Show(const std::string& title, const std::string& message)
+MessageDialog::Show(const std::string& title, const std::string& message,
+                    std::function<void()> on_close_callback)
 {
     m_title       = title;
     m_message     = message;
+    m_on_close    = std::move(on_close_callback);
     m_should_open = true;
 }
 
@@ -144,7 +148,12 @@ MessageDialog::Render()
             ImGui::Separator();
             if(ImGui::Button("Close"))
             {
+                std::function<void()> on_close = std::move(m_on_close);
                 ImGui::CloseCurrentPopup();
+                if(on_close)
+                {
+                    on_close();
+                }
             }
             ImGui::EndPopup();
         }

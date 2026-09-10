@@ -588,7 +588,7 @@ void RegisterAppTests(ImGuiTestEngine* e)
         IM_CHECK(TabContainerTestPeer{*tc}.ActiveTabIndex() == target_idx);
     };
 
-    t = IM_REGISTER_TEST(e, "app", "compute_view_empty_model_shows_database_error");
+    t = IM_REGISTER_TEST(e, "app", "compute_view_empty_model_queues_error_dialog");
     t->TestFunc = [](ImGuiTestContext*)
     {
         ComputeView empty_view;
@@ -597,11 +597,12 @@ void RegisterAppTests(ImGuiTestEngine* e)
         ComputeViewTestPeer peer{empty_view};
         IM_CHECK(peer.TabContainerPtr() == nullptr);
         IM_CHECK(peer.ComputeSelectionPtr() == nullptr);
-        IM_CHECK(peer.DatabaseErrorMessage().find("no compute workloads") !=
-                 std::string::npos);
+        IM_CHECK(peer.PopupPending());
+        IM_CHECK(peer.PopupTitle() == "Invalid Compute Database");
+        IM_CHECK(peer.PopupMessage().find("no compute workloads") != std::string::npos);
     };
 
-    t = IM_REGISTER_TEST(e, "app", "compute_view_workload_without_kernel_shows_error");
+    t = IM_REGISTER_TEST(e, "app", "compute_view_workload_without_kernel_queues_dialog");
     t->TestFunc = [](ImGuiTestContext*)
     {
         ComputeView empty_view;
@@ -614,7 +615,9 @@ void RegisterAppTests(ImGuiTestEngine* e)
         ComputeViewTestPeer peer{empty_view};
         IM_CHECK(peer.TabContainerPtr() == nullptr);
         IM_CHECK(peer.ComputeSelectionPtr() == nullptr);
-        IM_CHECK(peer.DatabaseErrorMessage().find("none of them contains kernel data") !=
+        IM_CHECK(peer.PopupPending());
+        IM_CHECK(peer.PopupTitle() == "Invalid Compute Database");
+        IM_CHECK(peer.PopupMessage().find("none of them contains kernel data") !=
                  std::string::npos);
     };
 

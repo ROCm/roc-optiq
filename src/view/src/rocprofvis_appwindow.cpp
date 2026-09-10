@@ -388,9 +388,19 @@ AppWindow::ShowConfirmationDialog(const std::string& title, const std::string& m
 }
 
 void
-AppWindow::ShowMessageDialog(const std::string& title, const std::string& message) const
+AppWindow::ShowMessageDialog(const std::string& title, const std::string& message,
+                             std::function<void()> on_close_callback) const
 {
-    m_message_dialog->Show(title, message);
+    m_message_dialog->Show(title, message, std::move(on_close_callback));
+}
+
+void
+AppWindow::CloseProjectTab(const std::string& project_id)
+{
+    if(m_tab_container)
+    {
+        m_tab_container->RemoveTab(project_id);
+    }
 }
 
 void

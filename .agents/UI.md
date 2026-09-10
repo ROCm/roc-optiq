@@ -1250,10 +1250,12 @@ constants when adding, selecting, disabling, or testing their tabs.
 `Update()` waits until the provider reaches `kReady` or `kError` before
 creating the content. `CreateView()` validates the loaded model before it
 constructs any selection state or tabs. A provider load error, an empty
-workload list, or a model in which no workload has a kernel renders a large
-error message directly in the compute view instead of creating the tab
-container. The message distinguishes the failed condition and includes the
-database path.
+workload list, or a model in which no workload has a kernel queues the shared
+application message dialog, matching `TraceView` load-error handling, instead
+of creating the tab container. The dialog distinguishes the failed condition
+and includes the database path. Closing this dialog removes the failed
+project's tab through the normal `TabContainer` close-event path so provider
+cleanup still runs.
 
 `LoadTrace`, `CreateView`, `DestroyView`, `GetToolbar`,
 `DetachProviderCleanup` mirror `TraceView`.

@@ -42,6 +42,8 @@ private:
     void RenderWorkloadSelection();
     void RenderPresets();
     void InitializeMetricTabStates();
+    void QueueDatabaseErrorDialog(const std::string& file_path,
+                                  const std::string& message);
 
     bool  m_view_created;
     float m_toolbar_available_width;
@@ -51,7 +53,14 @@ private:
 
     std::shared_ptr<TabContainer> m_tab_container;
 
-    std::string m_database_error_message;
+    typedef struct popup_info_t
+    {
+        bool        show_popup;
+        std::string title;
+        std::string message;
+    } popup_info_t;
+
+    popup_info_t m_popup_info;
 
     DataProvider                     m_data_provider;
     std::shared_ptr<RocCustomWidget> m_tool_bar;

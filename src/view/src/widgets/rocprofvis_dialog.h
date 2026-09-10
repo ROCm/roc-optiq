@@ -36,12 +36,14 @@ private:
 
 class MessageDialog {
 public:
-    void Show(const std::string& title, const std::string& message);
+    void Show(const std::string& title, const std::string& message,
+              std::function<void()> on_close_callback = nullptr);
     void Render();
 private:
-    std::string m_title;
-    std::string m_message;
-    bool m_should_open = false;
+    std::string           m_title;
+    std::string           m_message;
+    std::function<void()> m_on_close;
+    bool                  m_should_open = false;
 };
 
 }  // namespace View

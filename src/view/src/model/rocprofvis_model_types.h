@@ -154,9 +154,6 @@ struct EventInfo
     std::vector<CallStackData> call_stack_info;
 };
 
-// Topology types (NodeInfo, ProcessorInfo, ProcessInfo, ...) live with the tree
-// that owns them, in rocprofvis_topology_model.h.
-
 // Summary Information
 struct SummaryInfo
 {

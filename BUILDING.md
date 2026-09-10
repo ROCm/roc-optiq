@@ -6,6 +6,7 @@ This document describes how to build ROCm Optiq (roc-optiq) on Windows, Linux, a
 
 1. Clone the repository with submodules:
    - `git clone --recursive <repo-url>`
+   - The `thirdparty/mbedtls` submodule is only needed when you enable remote/SSH or agentic profiling, and `thirdparty/cpp-httplib` only for agentic profiling (see the options below). If you already have a non-recursive clone, run `git submodule update --init --recursive`.
 2. Ensure CMake presets are available (see [CMakePresets.json](CMakePresets.json)).
 3. Use the appropriate configure and build presets for your platform.
 
@@ -231,6 +232,28 @@ cmake --build build/macos-release --preset "macOS Release Build" --parallel 4
 
 ---
 
+## Agentic profiling (Ask Optiq)
+
+The in-app assistant is opt-in and **disabled by default** (the feature set is
+in development). Enable it at configure time with
+`-DROCPROFVIS_ENABLE_AGENTIC_PROFILING=ON`. When enabled, the build pulls in
+`cpp-httplib` for in-process HTTPS, mbedTLS to back it, and the OS credential
+vault used to hold the API token; with the option off, none of the three is
+compiled and the panel, its toolbar buttons, its View-menu entry, and its
+settings page are all absent. Sources live under
+`src/view/src/agenticprofiling/`.
+
+`cpp-httplib` and mbedTLS are both submodules, so a non-recursive clone must
+initialize them before configuring with this option on:
+`git submodule update --init thirdparty/cpp-httplib thirdparty/mbedtls`.
+Configure fails with an explicit message if `thirdparty/cpp-httplib` is still
+empty.
+
+Saved endpoint URLs and model names round-trip through `settings.json` whether
+or not the option is on, so switching between builds does not discard an
+assistant configuration. The API token itself lives in the OS credential store
+and is only reachable from a build with the option enabled.
+
 ## Remote / SSH support
 
 Remote/SSH connectivity and remote profiling are opt-in and **disabled by
@@ -243,7 +266,7 @@ persist SSH secrets. Each of these has its own dependency notes below.
 
 The SSH and remote-profiling features use `libssh2`, which needs a crypto backend selected at configure time via `CRYPTO_BACKEND`.
 
-- **Default: `mbedTLS`** — vendored under `thirdparty/mbedtls` and linked statically. This is the default build and requires **no extra dependency to install** and **nothing extra to deploy**. While remote features are disabled by default this is what ships.
+- **Default: `mbedTLS`** — vendored under `thirdparty/mbedtls` and linked statically. This is the default build and requires **no extra dependency to install** and **nothing extra to deploy**. While remote features are disabled by default this is what ships. mbedTLS is also built when `ROCPROFVIS_ENABLE_AGENTIC_PROFILING` is on, independently of `ROCPROFVIS_ENABLE_REMOTE`, because the Ask Optiq assistant links it through `cpp-httplib` for in-process HTTPS; with both options off it is not built at all.
 - **Opt-in: `OpenSSL`** — configure with `-DCRYPTO_BACKEND=OpenSSL`. OpenSSL is **not** vendored; it is resolved as an external dependency via `find_package(OpenSSL)`, the same way the Vulkan SDK is treated. Install a system OpenSSL first:
 
 | Platform | Install | Notes |

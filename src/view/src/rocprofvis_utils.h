@@ -304,5 +304,15 @@ is_remote_display_session();
 std::string
 strip_ansi_for_display(std::string const& text);
 
+/**
+ * @brief True when a time range is one the view can be driven to.
+ *
+ * Non-finite values have to be rejected explicitly: every comparison against
+ * NaN is false, so an `end <= start` guard on its own lets NaN and infinity
+ * through into the view transform.
+ */
+bool
+is_usable_time_range(double start_ns, double end_ns);
+
 }  // namespace View
 }  // namespace RocProfVis

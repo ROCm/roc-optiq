@@ -45,6 +45,18 @@ void Job::Cancel()
     m_condition_variable.notify_all();
 }
 
+void Job::Complete(rocprofvis_result_t result)
+{
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        if(m_result == kRocProfVisResultPending)
+        {
+            m_result = result;
+        }
+    }
+    m_condition_variable.notify_all();
+}
+
 rocprofvis_result_t Job::GetResult() const
 {
     std::lock_guard<std::mutex> lock(m_mutex);

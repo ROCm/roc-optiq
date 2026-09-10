@@ -24,6 +24,9 @@
 #include "rocprofvis_view_module.h"
 #include "widgets/rocprofvis_debug_window.h"
 #include "widgets/rocprofvis_log_viewer.h"
+#ifdef ROCPROFVIS_ENABLE_AGENTIC_PROFILING
+#    include "agenticprofiling/rocprofvis_ai_assistant.h"
+#endif
 #include "widgets/rocprofvis_dialog.h"
 #include "widgets/rocprofvis_gui_helpers.h"
 #include "widgets/rocprofvis_widget.h"
@@ -173,6 +176,9 @@ AppWindow::~AppWindow()
     AppMonitor::DestroyInstance();
 
     LogViewer::DestroyInstance();
+#ifdef ROCPROFVIS_ENABLE_AGENTIC_PROFILING
+    AssistantPanel::DestroyInstance();
+#endif
 }
 
 bool
@@ -236,6 +242,7 @@ AppWindow::Init()
     layout_items.push_back(main_area_item);
     layout_items.push_back(status_bar_item);
     m_main_view = std::make_shared<VFixedContainer>(layout_items);
+    ApplyPanelVisibilitySettings();
 
     m_default_padding = ImGui::GetStyle().WindowPadding;
     m_default_spacing = ImGui::GetStyle().ItemSpacing;
@@ -665,6 +672,9 @@ AppWindow::Update()
     AppMonitor::GetInstance()->Update();
     EventManager::GetInstance()->DispatchEvents();
     LogViewer::GetInstance()->Poll();
+#ifdef ROCPROFVIS_ENABLE_AGENTIC_PROFILING
+    AssistantPanel::GetInstance()->Update();
+#endif
     DebugWindow::GetInstance()->ClearTransient();
     m_tab_container->Update();
 #ifdef ROCPROFVIS_ENABLE_PROFILER
@@ -773,7 +783,30 @@ AppWindow::Render()
 
     if(m_main_view)
     {
+#ifdef ROCPROFVIS_ENABLE_AGENTIC_PROFILING
+        // The assistant docks against the right edge, so the main view gets the
+        // remaining width. DockedWidth() is zero while the panel is closed, and
+        // a zero width here means "all of it".
+        //
+        // The main view goes inside this child either way, open or closed.
+        // ImGui scopes widget ids by window, so entering the child only when
+        // the panel happened to be open would give every widget in the main
+        // view a different id in each case - and table column widths, tree
+        // expansion, and scroll positions would all reset each time the user
+        // toggled the panel.
+        AssistantPanel* assistant  = AssistantPanel::GetInstance();
+        const float     dock_width = assistant->DockedWidth();
+        ImGui::BeginChild("##main_view_area", ImVec2(-dock_width, 0.0f));
         m_main_view->Render();
+        ImGui::EndChild();
+        if(dock_width > 0.0f)
+        {
+            ImGui::SameLine(0.0f, 0.0f);
+            assistant->RenderDocked();
+        }
+#else
+        m_main_view->Render();
+#endif
     }
 
     if(m_open_about_dialog)
@@ -922,6 +955,12 @@ AppWindow::RenderFileDialog()
         ImGuiFileDialog::Instance()->Close();
     }
     ImGui::PopStyleVar(3);
+}
+
+std::shared_ptr<TabContainer>
+AppWindow::GetTabContainer() const
+{
+    return m_tab_container;
 }
 
 void
@@ -1178,6 +1217,43 @@ AppWindow::RenderEditMenu(Project* project)
 }
 
 void
+AppWindow::ApplyPanelVisibilitySettings()
+{
+    const AppWindowSettings& settings =
+        SettingsManager::GetInstance().GetAppWindowSettings();
+
+    if(m_main_view)
+    {
+        LayoutItem* tool_bar_item = m_main_view->GetMutableAt(m_tool_bar_index);
+        if(tool_bar_item)
+        {
+            tool_bar_item->m_visible = settings.show_toolbar;
+        }
+    }
+
+    if(!m_tab_container)
+    {
+        return;
+    }
+
+    for(const TabItem* tab : m_tab_container->GetTabs())
+    {
+        if(tab == nullptr)
+        {
+            continue;
+        }
+        std::shared_ptr<TraceView> trace_view =
+            std::dynamic_pointer_cast<TraceView>(tab->m_widget);
+        if(trace_view)
+        {
+            trace_view->SetAnalysisViewVisibility(settings.show_details_panel);
+            trace_view->SetSidebarViewVisibility(settings.show_sidebar);
+            trace_view->SetHistogramVisibility(settings.show_histogram);
+        }
+    }
+}
+
+void
 AppWindow::RenderViewMenu(Project* project)
 {
     (void) project;
@@ -1188,11 +1264,7 @@ AppWindow::RenderViewMenu(Project* project)
             SettingsManager::GetInstance().GetAppWindowSettings();
         if(ImGui::MenuItem("Show Tool Bar", nullptr, &settings.show_toolbar))
         {
-            LayoutItem* tool_bar_item = m_main_view->GetMutableAt(m_tool_bar_index);
-            if(tool_bar_item)
-            {
-                tool_bar_item->m_visible = settings.show_toolbar;
-            }
+            ApplyPanelVisibilitySettings();
         }
 #ifndef __APPLE__
         if(ImGui::MenuItem("Fullscreen", "F11", m_is_fullscreen))
@@ -1209,40 +1281,24 @@ AppWindow::RenderViewMenu(Project* project)
         if(ImGui::MenuItem("Show Advanced Details Panel", nullptr,
                            &settings.show_details_panel))
         {
-            for(const auto& tab : m_tab_container->GetTabs())
-            {
-                auto trace_view_tab =
-                    std::dynamic_pointer_cast<RocProfVis::View::TraceView>(tab->m_widget);
-                if(trace_view_tab)
-                    trace_view_tab->SetAnalysisViewVisibility(
-                        settings.show_details_panel);
-            }
+            ApplyPanelVisibilitySettings();
         }
         if(ImGui::MenuItem("Show System Topology Panel", nullptr, &settings.show_sidebar))
         {
-            for(const auto& tab : m_tab_container->GetTabs())
-            {
-                auto trace_view_tab =
-                    std::dynamic_pointer_cast<RocProfVis::View::TraceView>(tab->m_widget);
-                if(trace_view_tab)
-                    trace_view_tab->SetSidebarViewVisibility(settings.show_sidebar);
-            }
+            ApplyPanelVisibilitySettings();
         }
         if(ImGui::MenuItem("Show Timeline Overview", nullptr, &settings.show_histogram))
         {
-            for(const auto& tab : m_tab_container->GetTabs())
-            {
-                auto trace_view_tab =
-                    std::dynamic_pointer_cast<RocProfVis::View::TraceView>(tab->m_widget);
-                if(trace_view_tab)
-                    trace_view_tab->SetHistogramVisibility(settings.show_histogram);
-            }
+            ApplyPanelVisibilitySettings();
         }
         ImGui::MenuItem("Show Summary", nullptr, &settings.show_summary);
 
         ImGui::Separator();
         ImGui::MenuItem("Show Log Viewer", nullptr,
                         LogViewer::GetInstance()->VisiblePtr());
+#ifdef ROCPROFVIS_ENABLE_AGENTIC_PROFILING
+        ImGui::MenuItem("Ask Optiq", nullptr, AssistantPanel::GetInstance()->VisiblePtr());
+#endif
         ImGui::EndMenu();
     }
 }

@@ -282,6 +282,9 @@ ComputeView::DestroyView()
 {
     m_view_created = false;
     m_database_error_message.clear();
+    m_tab_container.reset();
+    m_compute_selection.reset();
+    m_preset_browser.reset();
 }
 
 bool

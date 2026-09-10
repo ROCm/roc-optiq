@@ -4776,8 +4776,7 @@ DataProvider::LoadKernels(WorkloadInfo& workload, rocprofvis_handle_t* workload_
         kernel.dispatch_metrics = {};
         result = rocprofvis_controller_get_uint64(
             kernel_handle, kRPVControllerKernelHasIsaLines, 0, &uint64_data);
-        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-        kernel.has_isa_lines = uint64_data != 0;
+        kernel.has_isa_lines = (result == kRocProfVisResultSuccess) && (uint64_data != 0);
         result                  = rocprofvis_controller_get_uint64(
             kernel_handle, kRPVControllerKernelInvocationCount, 0, &uint64_data);
         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);

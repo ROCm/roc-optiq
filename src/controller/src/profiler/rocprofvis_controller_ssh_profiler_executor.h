@@ -54,7 +54,11 @@ public:
     bool IsRunning() override;
     std::string ReadOutput() override;
     int GetExitCode() const override;
-    bool Cancel() override;
+    CancelOutcome Cancel() override;
+    // HasPendingTeardown() is deliberately not overridden: the default,
+    // IsRunning(), is exactly right here. The worker thread is still inside
+    // ExecuteCommand on a borrowed connection, and the future must not resolve
+    // until it has unwound.
 
 private:
     // Pulls any newly-streamed stdout out of the connection's SshBridge.
@@ -65,8 +69,8 @@ private:
     std::thread       m_worker;
     std::atomic<bool> m_is_running;
     std::atomic<int>  m_exit_code;
+    // Serialises the bridge drain. The controller accumulates the text itself.
     std::mutex        m_output_mutex;
-    std::string       m_output_buffer;
 };
 
 } // namespace Controller

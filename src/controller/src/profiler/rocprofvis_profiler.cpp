@@ -372,16 +372,21 @@ rocprofvis_result_t rocprofvis_profiler_cancel(rocprofvis_profiler_t* profiler)
         return kRocProfVisResultInvalidArgument;
     }
 
-    session_ref->GetController().Cancel();
+    // Reported rather than swallowed: NotSupported means the run had already
+    // finished or was already stopping, which is a different answer for the
+    // caller than "asked, and it stopped".
+    rocprofvis_result_t const result = session_ref->GetController().Cancel();
 
     // Forward cancellation to the bound future so any waiter (e.g. job system
-    // wait, view-side future_wait) unblocks promptly.
+    // wait, view-side future_wait) unblocks promptly. Done even when the
+    // controller had nothing to stop, so a waiter is never left hanging on a
+    // run that is already over.
     if (RocProfVis::Controller::Future* bound = session_ref->GetBoundFuture())
     {
         bound->Cancel();
     }
 
-    return kRocProfVisResultSuccess;
+    return result;
 }
 
 }

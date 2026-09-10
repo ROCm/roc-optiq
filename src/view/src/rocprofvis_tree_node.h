@@ -67,16 +67,16 @@ public:
 class LeafNode : public TreeNode
 {
 public:
-    LeafNode(const std::string& lbl, uint64_t graph_idx, uint64_t trk_id)
+    LeafNode(const std::string& lbl, uint64_t trk_id)
     : TreeNode(NodeType::kLeaf, lbl, false)
-    , graph_index(graph_idx)
     , track_id(trk_id)
     {}
 
     bool IsLeaf() const override { return true; }
 
-    uint64_t graph_index = 0;
-    uint64_t track_id    = 0;
+    // Timeline identity, not position: a leaf keeps pointing at the same track
+    // when the timeline is sorted or reordered.
+    uint64_t track_id = 0;
 };
 
 struct SidebarTree

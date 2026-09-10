@@ -15,6 +15,7 @@
 #include "rocprofvis_flame_track_item.h"
 #include "rocprofvis_measurement_controller.h"
 #include "rocprofvis_minimap.h"
+#include "rocprofvis_sidebar.h"
 #include "rocprofvis_summary_view.h"
 #include "rocprofvis_timeline_track_options.h"
 #include "rocprofvis_timeline_view.h"
@@ -61,6 +62,46 @@ struct TrackDetailsTestPeer
         for(const auto& item : v.m_track_details)
             if(item.track_id == track_id) return true;
         return false;
+    }
+};
+
+// SideBar projects the model's TopologyTree into the rows it renders. The tree
+// is rebuilt from Update(), so tests poll LeafCount() rather than assuming it is
+// populated on the first frame.
+struct SideBarTestPeer
+{
+    const SideBar& v;
+
+    bool   HasTree() const { return v.m_sidebar_tree.root != nullptr; }
+    size_t LeafCount() const { return CountLeaves(v.m_sidebar_tree.root.get()); }
+
+    // Track ids of every leaf, including the repeats (a queue appears under its
+    // processor and again under each stream that dispatched to it).
+    std::vector<uint64_t> LeafTrackIds() const
+    {
+        std::vector<uint64_t> ids;
+        CollectLeaves(v.m_sidebar_tree.root.get(), ids);
+        return ids;
+    }
+
+private:
+    // A leaf is not necessarily childless: a stream row carries its inline
+    // processor subtree, so both walks recurse through leaves as well.
+    static size_t CountLeaves(const TreeNode* node)
+    {
+        if(node == nullptr) return 0;
+        size_t count = node->IsLeaf() ? 1 : 0;
+        for(const auto& child : node->children) count += CountLeaves(child.get());
+        return count;
+    }
+    static void CollectLeaves(const TreeNode* node, std::vector<uint64_t>& ids)
+    {
+        if(node == nullptr) return;
+        if(node->IsLeaf())
+        {
+            ids.push_back(static_cast<const LeafNode*>(node)->track_id);
+        }
+        for(const auto& child : node->children) CollectLeaves(child.get(), ids);
     }
 };
 
@@ -282,6 +323,11 @@ struct TimelineViewTestPeer
 
     float MaxYScroll() const { return v.m_content_max_y_scroll; }
 
+    // Topology sort order, derived from the model's TopologyTree. Must be a full
+    // permutation of the current tracks or ApplyTrackOrder rejects it.
+    std::vector<uint64_t> TopologyOrder() const { return v.BuildTopologyOrder(); }
+    size_t                TrackCount() const { return v.m_tracks ? v.m_tracks->size() : 0; }
+
     // Sidebar width, resized by dragging the "##MovePositionLineVert" splitter.
     float SidebarSize() const { return v.m_sidebar_size; }
     void  SetSidebarSize(float size) const { const_cast<TimelineView&>(v).m_sidebar_size = size; }
@@ -342,6 +388,11 @@ struct TraceViewTestPeer
         return dynamic_cast<AnalysisView*>(v.m_analysis_item->m_item.get());
     }
     TimelineView* TimelineViewPtr() const { return v.m_timeline_view.get(); }
+    SideBar*      SideBarPtr() const
+    {
+        if(v.m_sidebar_item == nullptr) return nullptr;
+        return dynamic_cast<SideBar*>(v.m_sidebar_item->m_item.get());
+    }
     MeasurementController* MeasurementControllerPtr() const { return v.m_measurement.get(); }
     Minimap*      MinimapPtr() const { return v.m_minimap.get(); }
     EventSearch*  EventSearchPtr() const { return v.m_event_search.get(); }

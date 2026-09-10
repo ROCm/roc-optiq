@@ -42,13 +42,14 @@ private:
         std::vector<std::string> values;
     };
     struct MetricDefinition {
-        uint32_t category_id;
-        uint32_t table_id;
-        size_t category_name_idx;
-        size_t table_name_idx;
-        size_t name_idx;
-        size_t description_idx;
-        size_t unit_idx;
+        uint32_t category_id = 0;
+        uint32_t table_id = 0;
+        uint32_t entry_id = 0;
+        size_t category_name_idx = 0;
+        size_t table_name_idx = 0;
+        size_t name_idx = 0;
+        size_t description_idx = 0;
+        size_t unit_idx = 0;
     };
     struct MetricValueName {
         uint32_t category_id;

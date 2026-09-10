@@ -293,7 +293,10 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisDMFixture, "Compute Trace Data-Model Test
     }
 
     // Fetches the metric catalog for each workload. Builds unique metric prefixes
-    // (tableId.subTableId) and reconstructs full metric IDs (tableId.subTableId.entryId).
+    // (tableId.subTableId) and full metric IDs from the parsed category, table, and
+    // entry components. Asserts that entry_id is the trailing metric_id component
+    // rather than the row index — SQLite serves this query from UNIQUE(workload_id,
+    // metric_id), which orders "3.1.10" before "3.1.2".
     // Fixture Reads:  m_db, m_trace, m_workloads[].id
     // Fixture Writes: m_workloads[].metric_prefixes, m_workloads[].full_metric_ids
     SECTION("Fetch Workload Metrics Definition")
@@ -316,30 +319,44 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisDMFixture, "Compute Trace Data-Model Test
             REQUIRE(metrics.columns.count(kRPVComputeColumnMetricName) > 0);
             REQUIRE(metrics.columns.count(kRPVComputeColumnTableId) > 0);
             REQUIRE(metrics.columns.count(kRPVComputeColumnSubTableId) > 0);
+            REQUIRE(metrics.columns.count(kRPVComputeColumnEntryId) > 0);
 
             int table_id_col     = metrics.columns.at(kRPVComputeColumnTableId);
             int sub_table_id_col = metrics.columns.at(kRPVComputeColumnSubTableId);
+            int entry_id_col     = metrics.columns.at(kRPVComputeColumnEntryId);
 
-            std::map<std::string, int> prefix_entry_count;
+            std::map<std::string, std::set<std::string>> prefix_entry_ids;
+            bool saw_salu = false;
             for(size_t i = 0; i < metrics.rows.size(); i++)
             {
                 const std::string& name =
                     metrics.rows[i][metrics.columns.at(kRPVComputeColumnMetricName)];
-                const std::string& tid  = metrics.rows[i][table_id_col];
-                const std::string& stid = metrics.rows[i][sub_table_id_col];
+                const std::string& tid      = metrics.rows[i][table_id_col];
+                const std::string& stid     = metrics.rows[i][sub_table_id_col];
+                const std::string& entry_id = metrics.rows[i][entry_id_col];
                 REQUIRE(!name.empty());
-                spdlog::info("  Metric {}: name={}, tableId={}, subTableId={}", i, name,
-                             tid, stid);
+                spdlog::info("  Metric {}: name={}, tableId={}, subTableId={}, entryId={}",
+                             i, name, tid, stid, entry_id);
 
                 if(!tid.empty() && !stid.empty())
                 {
+                    REQUIRE(!entry_id.empty());
+                    REQUIRE(entry_id.find_first_not_of("0123456789") ==
+                            std::string::npos);
+
                     std::string prefix = tid + "." + stid;
+                    REQUIRE(prefix_entry_ids[prefix].insert(entry_id).second);
                     workload.metric_prefixes.insert(prefix);
-                    int entry_id = prefix_entry_count[prefix]++;
-                    workload.full_metric_ids.push_back(prefix + "." +
-                                                       std::to_string(entry_id));
+                    workload.full_metric_ids.push_back(prefix + "." + entry_id);
+
+                    if(name == "SALU" && prefix == "3.1")
+                    {
+                        saw_salu = true;
+                        REQUIRE(entry_id == "2");
+                    }
                 }
             }
+            REQUIRE(saw_salu);
         }
     }
 

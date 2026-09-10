@@ -114,6 +114,19 @@ rocprofvis_result_t Workload::GetUInt64(rocprofvis_property_t property, uint64_t
                 }
                 break;
             }
+            case kRPVControllerWorkloadAvailableMetricEntryIdIndexed:
+            {
+                if(index < m_available_metrics.size())
+                {
+                    *value = m_available_metrics[index].entry_id;
+                    result = kRocProfVisResultSuccess;
+                }
+                else
+                {
+                    result = kRocProfVisResultOutOfRange;
+                }
+                break;
+            }
             case kRPVControllerWorkloadNumMetricValueNames:
             {
                 *value = m_metric_value_names.size();
@@ -381,6 +394,19 @@ rocprofvis_result_t Workload::SetUInt64(rocprofvis_property_t property, uint64_t
             if(index < m_available_metrics.size())
             {
                 m_available_metrics[index].table_id = (uint32_t)value;
+                result = kRocProfVisResultSuccess;
+            }
+            else
+            {
+                result = kRocProfVisResultOutOfRange;
+            }
+            break;
+        }
+        case kRPVControllerWorkloadAvailableMetricEntryIdIndexed:
+        {
+            if(index < m_available_metrics.size())
+            {
+                m_available_metrics[index].entry_id = (uint32_t)value;
                 result = kRocProfVisResultSuccess;
             }
             else
@@ -658,6 +684,12 @@ bool Workload::QueryToPropertyEnum(rocprofvis_db_compute_column_enum_t in, rocpr
         case kRPVComputeColumnSubTableId:
         {
             property = kRPVControllerWorkloadAvailableMetricTableIdIndexed;
+            type = kRPVControllerPrimitiveTypeUInt64;
+            break;
+        }
+        case kRPVComputeColumnEntryId:
+        {
+            property = kRPVControllerWorkloadAvailableMetricEntryIdIndexed;
             type = kRPVControllerPrimitiveTypeUInt64;
             break;
         }

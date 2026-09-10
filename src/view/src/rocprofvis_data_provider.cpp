@@ -4709,11 +4709,13 @@ DataProvider::LoadMetricList(WorkloadInfo& workload, rocprofvis_handle_t* worklo
         table.id   = workload.available_metrics.list[j].table_id;
         table.name = GetString(workload_handle,
                                kRPVControllerWorkloadAvailableMetricTableNameIndexed, j);
-        // Last position of id is not returned, for now assume index...
-        workload.available_metrics.list[j].id =
-            static_cast<uint32_t>(table.entries.size());
-        table.entries.insert({ static_cast<uint32_t>(table.entries.size()),
-                               workload.available_metrics.list[j] });
+        result = rocprofvis_controller_get_uint64(
+            workload_handle, kRPVControllerWorkloadAvailableMetricEntryIdIndexed, j,
+            &uint64_data);
+        ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+        uint32_t entry_id = static_cast<uint32_t>(uint64_data);
+        workload.available_metrics.list[j].id = entry_id;
+        table.entries.insert({ entry_id, workload.available_metrics.list[j] });
     }
 }
 

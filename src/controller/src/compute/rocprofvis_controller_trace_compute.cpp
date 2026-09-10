@@ -923,6 +923,7 @@ rocprofvis_result_t ComputeTrace::LoadRocpd(Future* future)
                                             { kRPVComputeColumnMetricDescription, std::nullopt },
                                             { kRPVComputeColumnTableId, std::nullopt },
                                             { kRPVComputeColumnSubTableId, std::nullopt },
+                                            { kRPVComputeColumnEntryId, std::nullopt },
                                             { kRPVComputeColumnMetricTableName, std::nullopt },
                                             { kRPVComputeColumnMetricSubTableName, std::nullopt },
                                             { kRPVComputeColumnMetricUnit, std::nullopt },

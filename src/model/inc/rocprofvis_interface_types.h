@@ -513,6 +513,7 @@ typedef enum rocprofvis_db_compute_column_enum_t
     kRPVComputeColumnMetricId,
     kRPVComputeColumnTableId,
     kRPVComputeColumnSubTableId,
+    kRPVComputeColumnEntryId,
     kRPVComputeColumnMetricTableName,
     kRPVComputeColumnMetricSubTableName,
 

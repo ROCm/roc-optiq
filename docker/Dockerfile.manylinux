@@ -1,0 +1,24 @@
+FROM ghcr.io/rocm/therock_build_manylinux_x86_64:latest
+
+WORKDIR /tmp
+SHELL [ "/bin/bash", "-c" ]
+
+RUN yum install -y \
+    vulkan-loader-devel \
+    mesa-libGL-devel \
+    libX11-devel \
+    libXrandr-devel \
+    libXinerama-devel \
+    libXcursor-devel \
+    libXi-devel \
+    dpkg-dev \
+    createrepo_c \
+    rpm-build \
+    dbus-devel \
+    wayland-devel \
+    libxkbcommon-devel \
+    openssl-devel && \
+    yum clean all
+
+WORKDIR /home
+SHELL [ "/bin/bash", "--login", "-c" ]

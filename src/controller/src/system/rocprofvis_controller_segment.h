@@ -34,7 +34,7 @@ struct SegmentLRUParams
 {
     SystemTrace* m_ctx;
     SegmentTimeline* m_owner;
-    uint32_t m_lod;
+    uint64_t m_array_id;
 };
 
 struct SegmentItemKey
@@ -75,7 +75,9 @@ public:
 
     void SetMaxTimestamp(double value);
 
-    void Insert(double timestamp, uint8_t level, Handle* event);
+    // Returns false when this level already holds an entry at this timestamp,
+    // meaning the object was not stored and the caller still owns it.
+    bool Insert(double timestamp, uint8_t level, Handle* event);
 
     rocprofvis_result_t Fetch(double start, double end, std::vector<Data>& array, uint64_t& index, std::unordered_set<uint64_t>* event_id_set, SegmentLRUParams* lru_params);
 
@@ -127,6 +129,13 @@ public:
     double GetSegmentDuration() const;
     size_t GetMaxNumItems() const;
 
+    /* Marks a fetch result array as currently populating this timeline. Segments
+       created while it is registered are retained by it, so they cannot be evicted
+       before the fetch that produced them has handed them to the caller. Must be
+       paired with RemoveActiveArray. */
+    void AddActiveArray(uint64_t array_id);
+    void RemoveActiveArray(uint64_t array_id);
+
 private:
     std::map<double, std::unique_ptr<Segment>> m_segments;
     BitSet                                     m_valid_segments;
@@ -136,6 +145,7 @@ private:
     uint32_t                                   m_num_segments;
     size_t                                     m_max_num_items;
     Handle*                                    m_ctx;
+    std::unordered_set<uint64_t>               m_active_array_ids;
     mutable std::shared_mutex                  m_mutex;
 
 };

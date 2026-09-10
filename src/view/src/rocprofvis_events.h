@@ -31,7 +31,6 @@ enum class RocEvents
     kSetViewRange,
     kGoToTimelineSpot,
     kTimeFormatChanged,
-    kTopologyChanged,
     kRequestProgressUpdate,
     kProfilerStatusChanged,
     kRemoteStatusChanged,

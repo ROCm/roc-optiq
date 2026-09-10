@@ -6,6 +6,7 @@
 #include "rocprofvis_controller.h"
 #include "rocprofvis_controller_handle.h"
 #include "rocprofvis_controller_data.h"
+#include <atomic>
 #include <vector>
 
 namespace RocProfVis
@@ -22,6 +23,8 @@ public:
     virtual ~Array();
 
     std::vector<Data>& GetVector(void);
+
+    uint64_t GetArrayId(void) const;
 
     void SetContext(Handle* ctx);
     Handle* GetContext(void) override;
@@ -57,6 +60,9 @@ public:
 private:
     std::vector<Data> m_array;
     Trace*            m_ctx;
+    uint64_t          m_array_id;
+
+    inline static std::atomic<uint64_t> s_next_array_id{1};
 };
 
 }

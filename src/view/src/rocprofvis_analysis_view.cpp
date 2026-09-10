@@ -23,13 +23,13 @@ constexpr uint64_t TABLE_DEFAULT_SORT_COLUMN = 1;
 // Middle dot between the row and track counts of a card summary.
 constexpr const char* SUMMARY_SEPARATOR = " \xC2\xB7 ";
 
-AnalysisView::AnalysisView(DataProvider& dp, std::shared_ptr<TrackTopology> topology,
+AnalysisView::AnalysisView(DataProvider&                       dp,
                            std::shared_ptr<TimelineSelection>  timeline_selection,
                            std::shared_ptr<AnnotationsManager> annotation_manager)
 : m_data_provider(dp)
 , m_compare_mode(false)
 , m_events_view(std::make_shared<EventsView>(dp, timeline_selection))
-, m_track_details(std::make_shared<TrackDetails>(dp, topology, timeline_selection))
+, m_track_details(std::make_shared<TrackDetails>(dp, timeline_selection))
 , m_annotation_view(std::make_shared<AnnotationView>(dp, annotation_manager))
 , m_top_events_view(std::make_shared<TopEventsView>(dp, timeline_selection))
 {

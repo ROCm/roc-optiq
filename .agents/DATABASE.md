@@ -126,13 +126,20 @@ typedef rocprofvis_dm_handle_t rocprofvis_db_instance_t;
 rocprofvis_db_type_t       rocprofvis_db_identify_type(const char* filename);
 rocprofvis_dm_database_t   rocprofvis_db_open_database(const char* filename,
                                                        rocprofvis_db_type_t);
+rocprofvis_dm_database_t   rocprofvis_db_open_database_multi(const char** filenames,
+                                                             size_t count);
 rocprofvis_dm_size_t       rocprofvis_db_get_memory_footprint(rocprofvis_dm_database_t);
 ```
 
 `rocprofvis_db_type_t` values: `kAutodetect`, `kRocpdSqlite`,
-`kRocprofSqlite`, `kRocprofMultinodeSqlite`, `kComputeSqlite`. The
-`Detect` helper on `ProfileDatabase` sniffs the file (and any sibling
-`.db`s for multinode) and returns the right type.
+`kRocprofSqlite`, `kRocprofMultinodeSqlite`, `kComputeSqlite`,
+`kChromeTrace`, `kPerfettoTrace`, `kGoogleSqlite`. The `Detect` helper
+on `ProfileDatabase` sniffs the file (and any sibling `.db`s for
+multinode) and returns the right type. Chrome and Perfetto trace formats
+are experimental (loaded via their respective adapters).
+
+`rocprofvis_db_open_database_multi` opens multiple trace files as one
+combined database; used by the Compare workflow.
 
 ### 2.3 Future / async API (separate from controller futures)
 
@@ -1017,6 +1024,10 @@ sniffs:
 - **`kComputeSqlite`** - rocprof-compute schema. Decoded by
   `ComputeDatabase`. No timeline / event slices; instead, workload +
   kernel + metric matrices.
+- **`kChromeTrace` / `kPerfettoTrace` / `kGoogleSqlite`** -
+  experimental Chrome JSON and Perfetto trace formats. Loaded via their
+  respective database adapters. These are the "New trace formats"
+  experimental feature listed in CHANGES.md.
 
 The list of recognized extensions is exercised at the application
 layer (`AppWindow` and `Project`). Adding a new format means adding a
@@ -1123,11 +1134,16 @@ The compute-side counterpart. One method per
 - `GetComputeKernelSourceFiles`
 - `GetComputeSourceFileSourceLines`
 - `GetComputeKernelCodeObjects`
-- `GetComputeKernelIsaToIsaDeps`
-- `GetComputeKernelIsaLines`
-- `GetComputeKernelIsaToSourceDeps`
-- `GetComputeKernelSamplingStates`
-- `GetComputeKernelSamplingStateReasonCounts`
+- `GetComputeKernelSymbols`
+- `GetComputeKernelInstructionLines`
+- `GetComputeKernelInstructionComments`
+- `GetComputeKernelInstructionSourceLines`
+- `GetComputeKernelPcSampleStates`
+- `GetComputeKernelPcSampleStallReasons`
+- `GetComputeKernelPcSampleStallReasonLookups`
+- `GetComputeKernelInstructionTypeLookups`
+- `GetComputeKernelInstructionSamples`
+- `GetComputeKernelInstructionSampleLookups`
 
 All of them share the signature
 `rocprofvis_dm_result_t GetComputeX(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params, rocprofvis_dm_string_t& query)`
@@ -1156,23 +1172,20 @@ The gate is `1.2.0` for every method except
 reads `compute_workload_metric_view` unconditionally and that view does
 not exist earlier.
 
-The source / ISA / PC-sampling block (`GetComputeKernelSourceFiles`
-through `GetComputeKernelSamplingStateReasonCounts`) is **not**
-version-gated beyond that `1.2.0` floor. PC sampling is an optional
-capture feature, so its tables can be absent from a `1.3.0`+ database
-and present in an earlier one — a schema version tells you nothing
-about them.
+The current PC-sampling block targets schema 2.2 and is version-gated at
+`2.2.0`. Its current tables are `compute_code_object_store`,
+`compute_instruction_line`, `compute_pc_sample_state`, and
+`compute_pc_sample_stall_reason`, plus the source-file, source-line, and
+instruction/source correlation tables. Source and correlation queries omit
+records whose source line number is NULL or zero so unknown locations are not
+presented as selectable source correlations. Correlation rows also return the
+owning source-file UUID so the UI can navigate mappings across files.
+`CreateIndexes` probes
+`compute_pc_sample_state` before adding the new instruction, state, and
+stall-reason indexes.
 
-Their absence is **not** guarded at query-build time. The
-`CheckTableExists("pc_sampling_states_per_line", ...)` probe in
-`CreateIndexes` only decides whether the PC-sampling indexes are
-created; nothing consults it when a query is built. Against a database
-that lacks those tables these use cases still return
-`kRocProfVisDmResultSuccess` with a valid-looking query, and the
-failure surfaces later as a SQLite "no such table" error
-(`kRocProfVisDmResultDbAccessFailed`) rather than
-`kRocProfVisDmResultNotSupported`. Closing that gap needs a cached
-table-presence probe the factory can read, not a version gate.
+`GetComputeKernelInstructionLines` selects the fields needed for the
+initial ISA display (formerly "Code View").
 
 Inner `IsVersionGreaterOrEqual("1.3.0")` / `"1.4.0"` tests inside a
 method still select between schema variants and are separate from the

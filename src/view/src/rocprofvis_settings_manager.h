@@ -52,6 +52,11 @@ typedef struct UserSettings
     bool              dont_ask_before_exit;
     int               log_viewer_max_entries;
     LogViewerSettings log_viewer;
+    // Linux/Wayland only: repair pointer routing after a floating window is
+    // dragged, at the cost of a brief flicker on each drag-release. Set with
+    // --drag-repair and ignored on other platforms. See
+    // raise_dragged_viewport_after_release() in rocprofvis_platform_helpers.cpp.
+    bool              linux_drag_repair;
 } UserSettings;
 
 typedef struct InternalSettings
@@ -240,6 +245,7 @@ constexpr size_t      MAX_RECENT_FILES                       = 5;
 
 constexpr const char* JSON_KEY_SETTINGS_DONT_ASK_BEFORE_EXIT = "dont_ask_before_exit";
 constexpr const char* JSON_KEY_SETTINGS_DONT_ASK_BEFORE_TAB_CLOSE = "dont_ask_before_tab_close";
+constexpr const char* JSON_KEY_SETTINGS_LINUX_DRAG_REPAIR         = "linux_drag_repair";
 
 constexpr const char* JSON_KEY_SETTINGS_LOG_VIEWER_MAX_ENTRIES = "log_viewer_max_entries";
 // Bounds for the log viewer's in-memory cache size. Older lines fall off the

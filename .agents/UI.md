@@ -108,6 +108,10 @@ CMake options worth knowing:
 - `ROCPROFVIS_ENABLE_REMOTE` - enables SSH connection, browse, transfer,
   and remote-trace UI (default off). Remote profiling needs both remote
   and profiler support.
+- `ROCPROFVIS_ENABLE_TRACE_COMPARE` - enables the in-development trace
+  comparison UI (default off).
+- `ROCPROFVIS_MULTI_WINDOW` - enables the in-development multi-window
+  support (default off).
 - `USE_NATIVE_FILE_DIALOG` - off disables `nativefiledialog-extended`.
 
 The CLI flag `--file-dialog={auto|imgui|native}` overrides dialog selection
@@ -392,7 +396,6 @@ AppWindow (singleton, RocWidget)
 |   |         |   +-- AnnotationsManager (per-project, drives StickyNote items)
 |   |         |   +-- MeasurementController (two-point timeline measurement)
 |   |         |   +-- TimelineSelection (per-project, owns selection state)
-|   |         |   +-- TrackTopology    (per-project, owns sidebar tree)
 |   |         |
 |   |         \-- ComputeView : RootView                 (compute trace)
 |   |             +-- m_tool_bar       : RocCustomWidget (slotted into [0])
@@ -402,7 +405,7 @@ AppWindow (singleton, RocWidget)
 |   |                 +-- ComputeTableView
 |   |                 +-- ComputeWorkloadView
 |   |                 +-- ComputeComparisonView
-|   |                 +-- (ComputeCodeView / ComputeTester, dev mode only)
+|   |                 +-- (ComputeIsaView / ComputeTester, dev mode only)
 |   +-- [2] status bar (RocCustomWidget calling AppWindow::RenderStatusBar)
 +-- WelcomePage              : empty-state landing page
 +-- CompareFilesDialog       : two-trace compare modal (File > Compare, dev mode)
@@ -831,7 +834,7 @@ menu also copies the track name / ID; the hover tooltip (Node ID +
 Process ID) is scoped to the name-label hitbox only.
 
 State of note: `m_track_metadata` (`const TrackInfo*` from
-`TrackTopology`), `m_track_statistics`, `m_options` (the track's
+`TimelineModel`), `m_track_statistics`, `m_options` (the track's
 `TrackOptions`, which owns the persisted height), `m_pills` (multiple
 labels/statistics in the meta area), `m_request_queue`, and
 `m_pending_requests`. `SetNodeColor()` and the node pill implement the
@@ -914,8 +917,6 @@ Composition (members):
 - `m_timeline_selection` (`shared_ptr<TimelineSelection>`) - holds the
   currently selected tracks/events/time-range. Always pass this around
   to children rather than reinventing selection state.
-- `m_track_topology` (`shared_ptr<TrackTopology>`) - rebuilds the
-  hierarchical sidebar tree on metadata changes.
 - `m_annotations` (`shared_ptr<AnnotationsManager>`) - sticky-note
   annotations.
 - `m_measurement` (`shared_ptr<MeasurementController>`) - two-point,
@@ -1011,24 +1012,29 @@ Public:
   `PixelToTime(x)` / `NormalizeTime(t)` / `DenormalizeTime(t)`.
 - Read accessors for everything.
 
-### `TrackTopology` (`rocprofvis_track_topology.{h,cpp}`)
-
-Builds the hierarchical sidebar model and maps tracks back to nodes.
-Run inside `Update()` when track metadata changes
-(`kTrackMetadataChanged`). Exposes:
-
-- `Update()`, `Dirty()`, `FormatCells()`.
-- `GetTopology()` returning the full `TopologyModel` (Node ->
-  Process/Processor -> Stream/Queue/Counter/Thread...).
-- `GetSidebarTree()` returning a `SidebarTree` made of `TreeNode` and
-  `LeafNode` (defined in `rocprofvis_tree_node.h`,
-  `enum class NodeType` for the kind).
-
 ### `SideBar` (`rocprofvis_sidebar.{h,cpp}`)
 
-Renders the topology tree in the left pane:
+Renders the topology tree in the left pane. The topology itself lives in
+the data model as a `TopologyTree` (see the UI models section below);
+the sidebar owns only the *projection* of it that it draws:
 
-- Tracks are leaves; branches are nodes/processes/devices.
+- `Update()` rebuilds that projection when
+  `TopologyTree::GetRevision()` changes (a trace loaded) or track
+  metadata changed (labels moved). `BuildTree()` walks the tree and
+  emits a `SidebarTree` of `TreeNode` / `LeafNode` (defined in
+  `rocprofvis_tree_node.h`, `enum class NodeType` for the kind).
+- Every timeline track gets at least one row. After walking the tree,
+  `BuildTree()` buckets any track it emitted no row for under an
+  "Uncategorized" list - keyed on that rather than on
+  `TrackInfo::TrackType`, since a typed track whose queue or processor
+  was unreachable at load still needs a home.
+- Everything purely presentational lives here and not on the tree:
+  group headers ("Queues (4)"), the eye-state cache, node color
+  swatches, and the inline processor subtree shown under a stream.
+- A `LeafNode` carries a `track_id`, never a position. Positions change
+  on drag-reorder; ids do not. Rows resolve to a `TrackItem*` through
+  the timeline metadata each frame (`FindTrack` / `TrackFromMetadata`).
+- Tracks are leaves; branches are nodes/processes/processors.
 - `EyeButtonState` (`kAllVisible|kAllHidden|kMixed`) is computed
   recursively to drive the show/hide eye icon at each level.
 - `ApplyVisibility(node, visible)` toggles every leaf below `node` and
@@ -1158,10 +1164,15 @@ non-compare views.
 
 ### `TrackDetails` (`rocprofvis_track_details.{h,cpp}`)
 
-Shows aggregated info per selected track, sourced from
-`TrackTopology::GetTopology()`. `DetailItem` collects pointers into
-the topology models (node, process, processor, queue, thread, stream,
-counter) for the track, then renders an `InfoTable`.
+Shows aggregated info per selected track, sourced from the data model's
+`TopologyTree`. On a selection change `Resolve()` locates the track's
+node in the tree (by track id) plus its parent node/process, and
+`BuildTables()` turns those into the `DetailsTable`s it renders - built
+for the selected tracks only, not precomputed for the trace. Each cell
+carries a `Kind`; any kind other than `kText` holds a raw value and is
+reformatted in place on `kTimeFormatChanged`. A change of
+`TopologyTree::GetRevision()` re-resolves, since a rebuilt tree
+invalidates the node pointers.
 Real queue/counter statistics come from `AnalysisTrackStatistics`, the
 same cache used by track pills.
 
@@ -1280,7 +1291,7 @@ The compute analogue of `TraceView`. Owns:
   - `ComputeTableView` - hierarchical metric tables.
   - `ComputeWorkloadView` - system info + profiling config tables.
   - `ComputeComparisonView` - baseline vs target comparison.
-  - `ComputeCodeView` - dev-only source/ISA correlation.
+  - `ComputeIsaView` - dev-only source/ISA correlation.
   - `ComputeTester` - dev-mode scratchpad
     (`#ifdef ROCPROFVIS_DEVELOPER_MODE`).
 - `m_data_provider` - same `DataProvider` type as `TraceView`, but its
@@ -1398,17 +1409,44 @@ Internal scratchpad UI for exercising the metric / roofline APIs.
 Behind `#ifdef ROCPROFVIS_DEVELOPER_MODE`. Not user-facing - keep
 production code from depending on it.
 
-### `ComputeCodeView` (`rocprofvis_compute_code_view.{h,cpp}`) - dev only
+### `ComputeIsaView` (`rocprofvis_compute_isa_view.{h,cpp}`)
 
 Correlates source code and ISA through `SourceCodeWidget` and
 `IsaCodeWidget`, which both derive from `BaseCodeWidget` and share a
 `LineSelection` so selecting a source line highlights the correlated
-ISA (and vice versa), laid out in an `HSplitContainer`.
+ISA (and vice versa). The ISA pane is the always-visible primary pane;
+the optional source-code pane is shown on the right through the
+`Show Source Code` / `Hide Source Code` control.
 `RenderControlPanel()` hosts the source-file dropdown, and
-`FetchPcSamplingForCurrentFile()` re-fetches PC samples on file/kernel
-change. PC-sampling data is fetched through `PcSamplingRequestParams` /
-`DataProvider::FetchPcSampling`; do not query the model directly from
-this view.
+PC-sampling data is fetched through `PcSamplingRequestParams` /
+`DataProvider::FetchPcSampling` in three independent stages:
+
+- `kIsa` runs when the view opens or its kernel changes and loads only the
+  code-object, kernel-symbol, and ISA-line data needed by the primary pane.
+- `kSource` runs when the source pane is shown or a different source file is
+  selected. It loads source-file metadata, ISA/source correlations, and the
+  selected file's source lines. Source-file ID 0 asks the controller to choose
+  the first available file.
+- `kStalls` runs when stall columns are shown and loads sample states, stall
+  reasons, and instruction-sample metadata.
+
+Only one PC-sampling request may be active per trace, so
+`QueuePcSamplingFetch()` retains later stages and submits them in ISA, source,
+then stall order. Results are cached per kernel (and per source-file ID
+for source lines); toggling a pane or column does not repeat a completed fetch. The
+DataProvider updates only the model portion owned by the completed stage and
+the view refreshes only after checking the request kind, kernel, and generation.
+Do not query the model directly from this view.
+
+Older traces can omit one or more PC-sampling tables. A failed optional source,
+stall, or comment request is isolated from the already-loaded ISA pane.
+Source records with unknown or zero line numbers are omitted. ISA instructions
+that lack a valid source line remain visible and mouse-hoverable but cannot be
+selected for source correlation; hovering them clears the source-line hover.
+Clicking a correlated ISA or source row scrolls the opposite code pane so its
+first corresponding row is the top visible line. If an ISA row maps to a
+different source file, the view selects that file and fetches its lines before
+performing the scroll.
 
 ### Compute data plumbing
 
@@ -1448,9 +1486,9 @@ controller results.
     event_node, event_op)`.
   - `struct EventInfo` and its parts: `BasicEventData`, `EventArg`,
     `EventExtData`, `EventFlowData`, `CallStackData`.
-  - Topology types: `NodeInfo`, `DeviceInfo`, `ProcessInfo`,
-    `IterableInfo`, `ThreadInfo`, `QueueInfo`, `StreamDeviceInfo`,
-    `StreamInfo`, `CounterInfo`.
+  - No topology types: `NodeInfo`, `ProcessorInfo`, `ProcessInfo`,
+    `ThreadInfo`, `StreamInfo`, `QueueInfo` and `CounterInfo` live with
+    the tree that owns them, in `rocprofvis_topology_model.h`.
   - `struct SummaryInfo` with `KernelMetrics`, `GPUMetrics`,
     `CPUMetrics`, `AggregateMetrics`.
   - `struct TableInfo`, `FormattedColumnInfo`,
@@ -1464,16 +1502,36 @@ controller results.
     `SetTooltip(FullLabel())`; Track Details uses `FullValue()`.
 
 - `rocprofvis_trace_data_model.{h,cpp}` - the **`TraceDataModel`
-  facade**: aggregates `TopologyDataModel`, `TimelineModel`,
+  facade**: aggregates `TopologyTree`, `TimelineModel`,
   `TablesModel`, `SummaryModel`, `EventModel`, `AnalysisModel`. Use
   `DataProvider::DataModel()` to access it. Compare projects call
   `SetCompareSources()`; use `HasCompareSources()` /
   `GetCompareSource()` instead of inferring provenance from IDs.
-- `rocprofvis_topology_model.{h,cpp}` - holds the eight
-  `unordered_map<uint64_t, *Info>` (nodes, devices, processes,
-  instrumented threads, sampled threads, queues, streams, counters)
-  and helpers like `GetDeviceByInfoId`, `GetDeviceTypeLabel`,
-  `TopologyToString` (debug).
+- `rocprofvis_topology_model.{h,cpp}` - **`TopologyTree`**: the system
+  topology as an actual tree, mirrored from the controller's at load.
+  `TopologyNode` is the base; `NodeInfo`, `ProcessorInfo`,
+  `ProcessInfo`, `ThreadInfo`, `StreamInfo`, `QueueInfo`, `CounterInfo`
+  are the kinds. Structure and ownership:
+  - The tree owns every node in one arena (`m_storage`); all
+    parent/child edges are non-owning pointers. The per-type maps
+    (`GetNode`, `GetProcessor`, `GetProcess`, `GetQueue`, `GetCounter`,
+    `GetThread`, `FindByTrackId`) are lookup shortcuts over that tree,
+    not structure.
+  - `GetChildren(type)` is the structural edge. `GetLinkedChildren(type)`
+    is the second edge: the controller repeats a stream's processors and
+    queues under the stream, so those are *linked* rather than
+    duplicated, and a queue therefore has one parent plus secondary
+    parents.
+  - A node that maps to a timeline track carries its `track_id`
+    (`BindTrack`, `HasTrack`), and per-node display headers
+    (`SetHeader`) are cached at load, not rebuilt per frame.
+  - `Finalize()` closes the load: it sorts the node rows by ascending id
+    and takes each node's rank from that position
+    (`GetNodeDisplayIndex`, which the node labels and color wheel use),
+    builds `GetTrackOrder()` (drives the timeline's "sort by topology",
+    and equals the sidebar's row order), and bumps `GetRevision()`,
+    which is how the sidebar and Track Details know to rebuild what
+    they derive from the tree.
 - `rocprofvis_timeline_model.{h,cpp}` - `TimelineModel`: track
   metadata + raw track data + histogram + minimap. Use the typed
   raw-data helpers (`GetTrackData`, `FreeTrackData`,
@@ -1547,7 +1605,7 @@ The full list is in `rocprofvis_events.h`. Examples used widely:
 `kTimelineEventSelectionChanged`, `kTimelineEventHighlightChanged`,
 `kHandleUserGraphNavigationEvent`, `kTrackMetadataChanged`,
 `kFontSizeChanged`, `kSetViewRange`,
-`kGoToTimelineSpot`, `kTimeFormatChanged`, `kTopologyChanged`,
+`kGoToTimelineSpot`, `kTimeFormatChanged`,
 `kRequestProgressUpdate`, `kProfilerStatusChanged`,
 `kRemoteStatusChanged`. Compute-only:
 `kComputeWorkloadSelectionChanged`,
@@ -2503,9 +2561,8 @@ For fast lookup. Each entry: class -> file -> one-line role.
   rendering, fan/chain styles.
 - `Minimap` -> `rocprofvis_minimap.h` -> Density mini-map and viewport
   navigator.
-- `TrackTopology` -> `rocprofvis_track_topology.h` -> Hierarchical
-  topology builder + sidebar tree.
-- `SideBar` -> `rocprofvis_sidebar.h` -> Topology tree renderer.
+- `SideBar` -> `rocprofvis_sidebar.h` -> Topology pane: projects the
+  model's `TopologyTree` into a `SidebarTree` and renders it.
 - `MeasurementController`, `MeasurementPoint`, `MeasurementState`,
   `MeasureEdge` -> `rocprofvis_measurement_controller.h` -> Timeline
   measurement state and anchors.
@@ -2618,7 +2675,8 @@ For fast lookup. Each entry: class -> file -> one-line role.
 ### View-side models
 
 - `TraceDataModel` -> `model/rocprofvis_trace_data_model.h` -> Facade.
-- `TopologyDataModel` -> `model/rocprofvis_topology_model.h`.
+- `TopologyTree`, `TopologyNode` and the `*Info` node kinds ->
+  `model/rocprofvis_topology_model.h`.
 - `TimelineModel` -> `model/rocprofvis_timeline_model.h`.
 - `EventModel` -> `model/rocprofvis_event_model.h`.
 - `SummaryModel` -> `model/rocprofvis_summary_model.h`.
@@ -2626,9 +2684,7 @@ For fast lookup. Each entry: class -> file -> one-line role.
 - `AnalysisModel` -> `model/rocprofvis_analysis_model.h`.
 - `INVALID_UINT64_INDEX` -> `model/rocprofvis_common_defs.h`.
 - `TrackInfo`, `EventInfo`, `BasicEventData`, `EventArg`,
-  `EventExtData`, `EventFlowData`, `CallStackData`, `NodeInfo`,
-  `DeviceInfo`, `ProcessInfo`, `IterableInfo`, `ThreadInfo`,
-  `QueueInfo`, `StreamInfo`, `StreamDeviceInfo`, `CounterInfo`,
+  `EventExtData`, `EventFlowData`, `CallStackData`,
   `SummaryInfo` (with `KernelMetrics`/`GPUMetrics`/`CPUMetrics`/
   `AggregateMetrics`), `TableInfo`, `FormattedColumnInfo`,
   `TraceEventId`, `TopologyId`, `CompareSourceInfo`,
@@ -2653,8 +2709,8 @@ For fast lookup. Each entry: class -> file -> one-line role.
   `compute/rocprofvis_compute_summary.h`.
 - `ComputeTester` (dev only) ->
   `compute/rocprofvis_compute_tester.h`.
-- `ComputeCodeView`, `SourceCodeWidget`, `IsaCodeWidget` (dev only) ->
-  `compute/rocprofvis_compute_code_view.h`.
+- `ComputeIsaView`, `SourceCodeWidget`, `IsaCodeWidget` (dev only) ->
+  `compute/rocprofvis_compute_isa_view.h`.
 - `ComputeDataProvider`, `ComputeTableModel`, `ComputeTableCellModel`,
   `ComputePlotModel`, `ComputePlotAxisModel`, `ComputePlotSeriesModel`,
   `ComputeMetricModel` -> `compute/rocprofvis_compute_data_provider.h`.

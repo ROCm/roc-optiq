@@ -58,7 +58,7 @@ private:
     size_t m_category;
     size_t m_combined_top_name;
     uint8_t m_level;
-    uint8_t m_retain_counter;
+    uint32_t m_retain_counter;
 
 public:
     static rocprofvis_result_t FetchDataModelFlowTraceProperty(uint64_t event_id, Array& array, rocprofvis_dm_trace_t dm_trace_handle);

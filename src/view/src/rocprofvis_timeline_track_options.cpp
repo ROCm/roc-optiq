@@ -41,7 +41,7 @@ TrackOptions::TrackOptions(const TrackItem& track, TimelineTrackOptions& ctx,
 , m_settings(SettingsManager::GetInstance())
 , m_project_settings(project_id.empty()
                          ? nullptr
-                         : std::make_unique<TrackProjectSetting>(project_id, *this))
+                         : std::make_unique<TrackProjectItemSetting>(project_id, *this))
 {
     m_type_mask.set(TrackOptions::kTrack);
 }
@@ -53,7 +53,7 @@ TrackOptions::TrackOptions(const TrackOptions& other)
 , m_track_item(other.m_track_item)
 , m_ctx(other.m_ctx)
 , m_settings(other.m_settings)
-, m_project_settings(other.m_project_settings ? std::make_unique<TrackProjectSetting>(
+, m_project_settings(other.m_project_settings ? std::make_unique<TrackProjectItemSetting>(
                                                     *other.m_project_settings)
                                               : nullptr)
 {
@@ -161,26 +161,26 @@ TrackOptions::TypeMask() const
     return m_type_mask;
 }
 
-TrackOptions::TrackProjectSetting::TrackProjectSetting(const std::string& project_id,
+TrackOptions::TrackProjectItemSetting::TrackProjectItemSetting(const std::string& project_id,
                                                        TrackOptions&      options)
-: ProjectSetting(project_id)
+: ProjectItemSetting(project_id)
 , m_options(options)
 {}
 
 void
-TrackOptions::TrackProjectSetting::ToJson()
+TrackOptions::TrackProjectItemSetting::ToJson()
 {
     m_options.ToJson();
 }
 
 bool
-TrackOptions::TrackProjectSetting::Valid() const
+TrackOptions::TrackProjectItemSetting::Valid() const
 {
     return m_options.Valid();
 }
 
 jt::Json&
-TrackOptions::TrackProjectSetting::GetJson()
+TrackOptions::TrackProjectItemSetting::GetJson()
 {
     return m_settings_json;
 }

@@ -25,7 +25,7 @@
 #include "rocprofvis_appwindow.h"
 #include "rocprofvis_data_provider.h"
 #include "rocprofvis_events.h"
-#include "rocprofvis_project.h"
+#include "rocprofvis_project_item.h"
 #include "rocprofvis_render_scheduler.h"
 #include "rocprofvis_settings_manager.h"
 #include "widgets/rocprofvis_gui_helpers.h"
@@ -292,11 +292,11 @@ std::string
 AssistantPanel::CurrentProjectId() const
 {
     AppWindow* app = AppWindow::GetInstance();
-    if(app == nullptr || app->GetCurrentProject() == nullptr)
+    if(app == nullptr || app->GetCurrentItem() == nullptr)
     {
         return std::string();
     }
-    return app->GetCurrentProject()->GetID();
+    return app->GetCurrentItem()->GetID();
 }
 
 // The kind moves only here, together with the project, so the prompt and

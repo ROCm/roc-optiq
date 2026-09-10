@@ -85,6 +85,14 @@ struct TabItem
     bool                       m_can_close;
     bool                       m_enabled = true;
     std::string                m_disabled_tooltip;
+
+    // Chrome-style tab-group decoration. When m_group_color is non-zero this tab
+    // is drawn as part of a project group: tinted, underlined, and (for a run of
+    // adjacent tabs sharing m_group_id) covered by a spanning colored bar labeled
+    // with m_group_label. Zeroed for ungrouped tabs and generic sub-tab bars.
+    ImU32       m_group_color = 0;
+    std::string m_group_id;
+    std::string m_group_label;
 };
 
 class PopUpStyle

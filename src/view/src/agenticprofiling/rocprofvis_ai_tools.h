@@ -86,7 +86,7 @@ struct AssistantToolContext
     // Whether this trace's tab is the one in front. A tool that changes what
     // the user sees needs it, or it would change a tab they cannot see.
     bool in_front = false;
-    // Project::GetID(), which is what links and parked fetches name a trace by.
+    // ProjectItem::GetID(), which is what links and parked fetches name a trace by.
     std::string        project_id;
     std::string        trace_name;
 };
@@ -170,7 +170,7 @@ std::vector<double> GetAssistantActivityBins(const AssistantToolContext& context
 std::vector<AssistantActivityRow> GetAssistantActivityRows(
     const AssistantToolContext& context, size_t bin_count, size_t max_rows);
 
-// Resolves what the tools may touch on one open trace, by Project::GetID(). An
+// Resolves what the tools may touch on one open trace, by ProjectItem::GetID(). An
 // empty context when no such trace is open.
 AssistantToolContext
 MakeAssistantToolContext(const std::string& project_id);

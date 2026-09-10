@@ -34,6 +34,7 @@ constexpr float       DASHED_LINE_SEGMENT_LENGTH      = 6.0f;
 constexpr float       DASHED_LINE_SEGMENT_GAP         = 4.0f;
 constexpr float       DASHED_LINE_SEGMENT_CAP         = 512.0f;
 constexpr float       LEGEND_HOVER_COLOR_ALPHA        = 0.75f;
+constexpr double      SHADE_STEP_EPSILON              = 1e-9;
 constexpr const char* DISPLAY_NAMES_CEILING_COMPUTE[] = {
     "Peak MFMA FP4",   // kRPVControllerRooflineCeilingComputeMFMAFP4
     "Peak MFMA FP6",   // kRPVControllerRooflineCeilingComputeMFMAFP6
@@ -124,6 +125,7 @@ Roofline::Roofline(DataProvider& data_provider, Mode mode)
 , m_bounding_box_ceiling({ { DBL_MAX, DBL_MAX }, { -DBL_MAX, -DBL_MAX } })
 , m_bounding_box_intensity({ { DBL_MAX, DBL_MAX }, { -DBL_MAX, -DBL_MAX } })
 , m_menus_rendered_height(0.0f)
+, m_global_shade_ctx({})
 , m_data_provider(data_provider)
 , m_settings(SettingsManager::GetInstance())
 {
@@ -252,6 +254,8 @@ Roofline::Update()
         // Determine combination of ceiling variations that are continuous...
         ItemModel* ceiling_ridge_compute   = nullptr;
         ItemModel* ceiling_ridge_bandwidth = nullptr;
+        m_global_shade_ctx.ceiling_compute_visible_sorted.clear();
+        m_global_shade_ctx.ceiling_bandwidth_visible_sorted.clear();
         std::array<bool, __kRPVControllerRooflineKernelIntensityTypeLast> delta_visible;
         std::fill(delta_visible.begin(), delta_visible.end(), true);
         for(ItemModel& item : m_items)
@@ -266,6 +270,7 @@ Roofline::Update()
                 {
                     ceiling_ridge_compute = &item;
                 }
+                m_global_shade_ctx.ceiling_compute_visible_sorted.push_back(&item);
             }
             else if(item.type == ItemModel::Type::CeilingBandwidth && item.info.ceiling &&
                     item.visible[ItemModel::Visible::Plot])
@@ -277,6 +282,7 @@ Roofline::Update()
                 {
                     ceiling_ridge_bandwidth = &item;
                 }
+                m_global_shade_ctx.ceiling_bandwidth_visible_sorted.push_back(&item);
             }
             else if(m_mode == Compare)
             {
@@ -292,6 +298,18 @@ Roofline::Update()
                 }
             }
         }
+        std::stable_sort(m_global_shade_ctx.ceiling_compute_visible_sorted.begin(),
+                         m_global_shade_ctx.ceiling_compute_visible_sorted.end(),
+                         [](const ItemModel* a, const ItemModel* b) -> bool {
+                             return a->info.ceiling->throughput <
+                                    b->info.ceiling->throughput;
+                         });
+        std::stable_sort(m_global_shade_ctx.ceiling_bandwidth_visible_sorted.begin(),
+                         m_global_shade_ctx.ceiling_bandwidth_visible_sorted.end(),
+                         [](const ItemModel* a, const ItemModel* b) -> bool {
+                             return a->info.ceiling->throughput <
+                                    b->info.ceiling->throughput;
+                         });
         if(ceiling_ridge_bandwidth || ceiling_ridge_compute)
         {
             for(ItemModel& item : m_items)
@@ -502,8 +520,300 @@ Roofline::Render()
                     switch(m_items[i].type)
                     {
                         case ItemModel::Type::CeilingCompute:
+                        {
+                            ShadeInfo shade_info = { i, m_items, m_global_shade_ctx };
+                            // Mirror of the bandwidth bands. The floor is the highest
+                            // diagonal still below this ceiling, so it saw-tooths down
+                            // as each diagonal climbs past the ceiling, and flattens
+                            // onto the next lower compute ceiling once none are left.
+                            // Breakpoints are needed at both crossing families, or the
+                            // fill chords across the max() corner and leaves a wedge.
+                            const WorkloadInfo::Roofline::Ceiling* shade_ceiling =
+                                m_items[i].info.ceiling;
+                            double shade_floor_compute = 0.0;
+                            for(const ItemModel* lower :
+                                m_global_shade_ctx.ceiling_compute_visible_sorted)
+                            {
+                                if(lower->info.ceiling->throughput <
+                                   shade_ceiling->throughput)
+                                {
+                                    shade_floor_compute = lower->info.ceiling->throughput;
+                                }
+                            }
+                            std::array<double, ShadeInfo::MaxBreakpoints> breakpoints;
+                            size_t breakpoint_count = 0;
+                            double shade_left_x     = DBL_MAX;
+                            breakpoints[breakpoint_count++] =
+                                shade_ceiling->position.p2.x;
+                            for(const ItemModel* diagonal :
+                                m_global_shade_ctx.ceiling_bandwidth_visible_sorted)
+                            {
+                                if(breakpoint_count + 2 <= ShadeInfo::MaxBreakpoints)
+                                {
+                                    breakpoints[breakpoint_count++] =
+                                        shade_ceiling->throughput /
+                                        diagonal->info.ceiling->throughput;
+                                    shade_left_x = std::min(
+                                        shade_left_x, breakpoints[breakpoint_count - 1]);
+                                    if(shade_floor_compute > 0.0)
+                                    {
+                                        breakpoints[breakpoint_count++] =
+                                            shade_floor_compute /
+                                            diagonal->info.ceiling->throughput;
+                                    }
+                                }
+                            }
+                            std::sort(breakpoints.begin(),
+                                      breakpoints.begin() + breakpoint_count);
+                            shade_info.sample_count = 0;
+                            for(size_t b = 0; b < breakpoint_count; b++)
+                            {
+                                if(breakpoints[b] >= shade_left_x &&
+                                   breakpoints[b] <= shade_ceiling->position.p2.x &&
+                                   shade_info.sample_count + 2 <= ShadeInfo::MaxSamples)
+                                {
+                                    // Inclusive probe first: the floor steps down as a
+                                    // diagonal climbs past the ceiling, so the pair must
+                                    // close the run before reopening lower.
+                                    for(int side = 1; side >= -1; side -= 2)
+                                    {
+                                        double probe_y =
+                                            shade_ceiling->throughput *
+                                            (1.0 + side * SHADE_STEP_EPSILON);
+                                        double floor_y = shade_floor_compute;
+                                        for(const ItemModel* diagonal :
+                                            m_global_shade_ctx
+                                                .ceiling_bandwidth_visible_sorted)
+                                        {
+                                            if(diagonal->info.ceiling->throughput *
+                                                   breakpoints[b] <=
+                                               probe_y)
+                                            {
+                                                floor_y = std::max(
+                                                    floor_y,
+                                                    diagonal->info.ceiling->throughput *
+                                                        breakpoints[b]);
+                                            }
+                                        }
+                                        shade_info.sample_x[shade_info.sample_count] =
+                                            breakpoints[b];
+                                        shade_info
+                                            .sample_floor_y[shade_info.sample_count] =
+                                            std::min(floor_y, shade_ceiling->throughput);
+                                        shade_info.sample_count++;
+                                    }
+                                }
+                            }
+                            if(shade_info.sample_count > 0)
+                            {
+                                ImPlot::SetNextFillStyle(
+                                    ImGui::ColorConvertU32ToFloat4(
+                                        ItemColor(m_items[i], hovered, false)),
+                                    0.25f);
+                                ImPlot::PlotShadedG(
+                                    "shade",
+                                    [](int idx, void* user_data) -> ImPlotPoint {
+                                        const ShadeInfo* info =
+                                            static_cast<const ShadeInfo*>(user_data);
+                                        ImPlotPoint point(-1.0, -1.0);
+                                        if(info)
+                                        {
+                                            point.x = info->sample_x[idx];
+                                            point.y = info->items[info->item_idx]
+                                                          .info.ceiling->throughput;
+                                        }
+                                        return point;
+                                    },
+                                    (void*) &shade_info,
+                                    [](int idx, void* user_data) -> ImPlotPoint {
+                                        const ShadeInfo* info =
+                                            static_cast<const ShadeInfo*>(user_data);
+                                        ImPlotPoint point(-1.0, -1.0);
+                                        if(info)
+                                        {
+                                            point.x = info->sample_x[idx];
+                                            point.y = info->sample_floor_y[idx];
+                                        }
+                                        return point;
+                                    },
+                                    (void*) &shade_info,
+                                    static_cast<int>(shade_info.sample_count),
+                                    ImPlotItemFlags_NoFit);
+                            }
+                            ImPlot::SetNextLineStyle(
+                                ImGui::ColorConvertU32ToFloat4(
+                                    ItemColor(m_items[i], hovered, false)),
+                                hovered ? m_line_thickness + HOVER_LINE_WEIGHT_BOOST
+                                        : m_line_thickness);
+                            ImPlot::PlotLineG(
+                                "",
+                                [](int idx, void* user_data) -> ImPlotPoint {
+                                    const WorkloadInfo::Roofline::Line* line =
+                                        static_cast<const WorkloadInfo::Roofline::Line*>(
+                                            user_data);
+                                    ImPlotPoint point(-1.0, -1.0);
+                                    if(line)
+                                    {
+                                        if(idx == 0)
+                                        {
+                                            point.x = line->p1.x;
+                                            point.y = line->p1.y;
+                                        }
+                                        else
+                                        {
+                                            point.x = line->p2.x;
+                                            point.y = line->p2.y;
+                                        }
+                                    }
+                                    return point;
+                                },
+                                (void*) &m_items[i].info.ceiling->position, 2,
+                                ImPlotItemFlags_NoFit);
+                            if(m_ceiling_labels)
+                            {
+                                if(m_items[i].type == ItemModel::Type::CeilingCompute &&
+                                   m_items[i].info.ceiling->position.p1.x <
+                                       ImPlot::GetPlotLimits().X.Max)
+                                {
+                                    ImPlot::Annotation(
+                                        ImPlot::GetPlotLimits().X.Max,
+                                        m_items[i].info.ceiling->position.p1.y,
+                                        ImPlot::GetLastItemColor(), ImVec2(-1.0f, 0.0f),
+                                        false, m_items[i].label.c_str());
+                                }
+                                else if(m_items[i].type ==
+                                            ItemModel::Type::CeilingBandwidth &&
+                                        m_items[i].info.ceiling->position.p2.x >
+                                            ImPlot::GetPlotLimits().X.Min)
+                                {
+                                    ImPlot::Annotation(
+                                        ImPlot::GetPlotLimits().X.Min,
+                                        m_items[i].info.ceiling->throughput *
+                                            ImPlot::GetPlotLimits().X.Min,
+                                        ImPlot::GetLastItemColor(), ImVec2(1.0f, 0.0f),
+                                        false, m_items[i].label.c_str());
+                                }
+                            }
+                            break;
+                        }
                         case ItemModel::Type::CeilingBandwidth:
                         {
+                            ShadeInfo shade_info = { i, m_items, m_global_shade_ctx };
+                            // The floor is the highest line still below this diagonal:
+                            // max(lower diagonal, highest compute ceiling under it).
+                            // Breakpoints are needed where a compute ceiling overtakes
+                            // this diagonal AND where it crosses the one below, or the
+                            // fill chords across the max() corner and leaves a wedge.
+                            const WorkloadInfo::Roofline::Ceiling* shade_ceiling =
+                                m_items[i].info.ceiling;
+                            double shade_floor_throughput = 0.0;
+                            for(const ItemModel* lower :
+                                m_global_shade_ctx.ceiling_bandwidth_visible_sorted)
+                            {
+                                if(lower->info.ceiling->throughput <
+                                   shade_ceiling->throughput)
+                                {
+                                    shade_floor_throughput =
+                                        lower->info.ceiling->throughput;
+                                }
+                            }
+                            std::array<double, ShadeInfo::MaxBreakpoints> breakpoints;
+                            size_t breakpoint_count = 0;
+                            breakpoints[breakpoint_count++] =
+                                shade_ceiling->position.p1.x;
+                            breakpoints[breakpoint_count++] =
+                                shade_ceiling->position.p2.x;
+                            for(const ItemModel* compute :
+                                m_global_shade_ctx.ceiling_compute_visible_sorted)
+                            {
+                                if(breakpoint_count + 2 <= ShadeInfo::MaxBreakpoints)
+                                {
+                                    breakpoints[breakpoint_count++] =
+                                        compute->info.ceiling->throughput /
+                                        shade_ceiling->throughput;
+                                    if(shade_floor_throughput > 0.0)
+                                    {
+                                        breakpoints[breakpoint_count++] =
+                                            compute->info.ceiling->throughput /
+                                            shade_floor_throughput;
+                                    }
+                                }
+                            }
+                            std::sort(breakpoints.begin(),
+                                      breakpoints.begin() + breakpoint_count);
+                            shade_info.sample_count = 0;
+                            for(size_t b = 0; b < breakpoint_count; b++)
+                            {
+                                if(breakpoints[b] >= shade_ceiling->position.p1.x &&
+                                   breakpoints[b] <= shade_ceiling->position.p2.x &&
+                                   shade_info.sample_count + 2 <= ShadeInfo::MaxSamples)
+                                {
+                                    double ceiling_y =
+                                        shade_ceiling->throughput * breakpoints[b];
+                                    // Evaluate either side of the breakpoint so a step
+                                    // lands on two samples sharing an x, and renders
+                                    // vertically rather than as a ramp.
+                                    for(int side = -1; side <= 1; side += 2)
+                                    {
+                                        double probe_y =
+                                            ceiling_y * (1.0 + side * SHADE_STEP_EPSILON);
+                                        double floor_y =
+                                            shade_floor_throughput * breakpoints[b];
+                                        for(const ItemModel* compute :
+                                            m_global_shade_ctx
+                                                .ceiling_compute_visible_sorted)
+                                        {
+                                            if(compute->info.ceiling->throughput <=
+                                               probe_y)
+                                            {
+                                                floor_y = std::max(
+                                                    floor_y,
+                                                    compute->info.ceiling->throughput);
+                                            }
+                                        }
+                                        shade_info.sample_x[shade_info.sample_count] =
+                                            breakpoints[b];
+                                        shade_info
+                                            .sample_floor_y[shade_info.sample_count] =
+                                            std::min(floor_y, ceiling_y);
+                                        shade_info.sample_count++;
+                                    }
+                                }
+                            }
+                            ImPlot::SetNextFillStyle(
+                                ImGui::ColorConvertU32ToFloat4(
+                                    ItemColor(m_items[i], hovered, false)),
+                                0.25f);
+                            ImPlot::PlotShadedG(
+                                "shade",
+                                [](int idx, void* user_data) -> ImPlotPoint {
+                                    const ShadeInfo* info =
+                                        static_cast<const ShadeInfo*>(user_data);
+                                    ImPlotPoint point(-1.0, -1.0);
+                                    if(info)
+                                    {
+                                        point.x = info->sample_x[idx];
+                                        point.y = info->items[info->item_idx]
+                                                      .info.ceiling->throughput *
+                                                  point.x;
+                                    }
+                                    return point;
+                                },
+                                (void*) &shade_info,
+                                [](int idx, void* user_data) -> ImPlotPoint {
+                                    const ShadeInfo* info =
+                                        static_cast<const ShadeInfo*>(user_data);
+                                    ImPlotPoint point(-1.0, -1.0);
+                                    if(info)
+                                    {
+                                        point.x = info->sample_x[idx];
+                                        point.y = info->sample_floor_y[idx];
+                                    }
+                                    return point;
+                                },
+                                (void*) &shade_info,
+                                static_cast<int>(shade_info.sample_count),
+                                ImPlotItemFlags_NoFit);
                             ImPlot::SetNextLineStyle(
                                 ImGui::ColorConvertU32ToFloat4(
                                     ItemColor(m_items[i], hovered, false)),

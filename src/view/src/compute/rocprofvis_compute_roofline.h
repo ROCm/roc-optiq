@@ -5,6 +5,7 @@
 #include "compute/rocprofvis_compute_model_types.h"
 #include "rocprofvis_controller_enums.h"
 #include "widgets/rocprofvis_widget.h"
+#include <array>
 #include <bitset>
 #include <optional>
 #include <unordered_set>
@@ -137,6 +138,26 @@ private:
         std::string                                   label;
         float                                         weight;
     };
+    struct ShadeCtx
+    {
+        std::vector<const ItemModel*> ceiling_compute_visible_sorted;
+        std::vector<const ItemModel*> ceiling_bandwidth_visible_sorted;
+    };
+    struct ShadeInfo
+    {
+        // Both edges are sampled at the same x so every quad ImPlot builds has
+        // vertical sides. A breakpoint per crossing with the ceiling and with the
+        // floor, each emitted twice so a step renders vertically.
+        static constexpr size_t MaxBreakpoints =
+            2 * __KRPVControllerRooflineCeilingComputeTypeLast + 2;
+        static constexpr size_t MaxSamples = 2 * MaxBreakpoints;
+        size_t                            item_idx;
+        const std::vector<ItemModel>&     items;
+        const ShadeCtx&                   ctx;
+        std::array<double, MaxSamples>    sample_x;
+        std::array<double, MaxSamples>    sample_floor_y;
+        size_t                            sample_count;
+    };
 
     // Update components...
     void UpdateCeilings(const WorkloadInfo* workload);
@@ -209,6 +230,7 @@ private:
     std::pair<Point, Point> m_bounding_box_ceiling;
     std::pair<Point, Point> m_bounding_box_intensity;
     float                   m_menus_rendered_height;
+    ShadeCtx                m_global_shade_ctx;
 
     DataProvider&    m_data_provider;
     SettingsManager& m_settings;

@@ -10,17 +10,17 @@ namespace RocProfVis
 {
 namespace View
 {
-AnnotationsManagerProjectSettings::AnnotationsManagerProjectSettings(
+AnnotationsManagerProjectItemSettings::AnnotationsManagerProjectItemSettings(
     const std::string& project_id, AnnotationsManager& annotations_view)
-: ProjectSetting(project_id)
+: ProjectItemSetting(project_id)
 , m_annotations_manager(annotations_view)
 
 {}
 
-AnnotationsManagerProjectSettings::~AnnotationsManagerProjectSettings() {}
+AnnotationsManagerProjectItemSettings::~AnnotationsManagerProjectItemSettings() {}
 
 void
-AnnotationsManagerProjectSettings::FromJson()
+AnnotationsManagerProjectItemSettings::FromJson()
 {
     m_annotations_manager.Clear();
     std::vector<jt::Json>& annotation_vec =
@@ -77,7 +77,7 @@ AnnotationsManagerProjectSettings::FromJson()
 }
 
 void
-AnnotationsManagerProjectSettings::ToJson()
+AnnotationsManagerProjectItemSettings::ToJson()
 {
     const std::vector<StickyNote>& notes  = m_annotations_manager.GetStickyNotes();
     m_settings_json[JSON_KEY_ANNOTATIONS] = jt::Json();
@@ -104,7 +104,7 @@ AnnotationsManagerProjectSettings::ToJson()
 }
 
 bool
-AnnotationsManagerProjectSettings::Valid() const
+AnnotationsManagerProjectItemSettings::Valid() const
 {
     // Check that "annotations" exists and is an array
     if(!m_settings_json.contains(JSON_KEY_ANNOTATIONS) ||

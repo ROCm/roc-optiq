@@ -142,6 +142,7 @@ set(VIEW_FILES
     src/view/src/rocprofvis_timeline_selection.cpp
     src/view/src/rocprofvis_timeline_track_options.cpp
     src/view/src/rocprofvis_track_details.cpp
+    src/view/src/rocprofvis_project_item.cpp
     src/view/src/rocprofvis_project.cpp
     src/view/src/rocprofvis_multi_track_table.cpp
     src/view/src/rocprofvis_event_search.cpp

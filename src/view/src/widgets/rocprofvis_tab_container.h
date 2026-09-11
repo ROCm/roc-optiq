@@ -5,6 +5,11 @@
 
 #include "rocprofvis_widget.h"
 
+#include <functional>
+#include <string>
+#include <unordered_set>
+#include <vector>
+
 namespace RocProfVis
 {
 namespace View
@@ -30,6 +35,28 @@ public:
 
     void SetTabLabel(const std::string& label, const std::string& id);
 
+    // Sets (or clears, when color == 0) the Chrome-style project-group decoration
+    // for a tab. group_label is shown on the group's inline chip.
+    void SetTabGroup(const std::string& id, ImU32 color, const std::string& group_id,
+                     const std::string& group_label);
+
+    // Reorders tabs to match the given full ordering of ids (ids not present are
+    // left in their relative order at the end). Preserves the active tab.
+    void ReorderTabs(const std::vector<std::string>& ordered_ids);
+
+    // Callback invoked inside a right-click context popup for the given tab id.
+    // Used by AppWindow to render the project-group menu. The callback should emit
+    // ImGui menu items only (Begin/EndPopup is handled by the container).
+    void SetTabContextMenuCallback(std::function<void(const std::string&)> callback);
+
+    // Callback invoked inside a right-click context popup for a group chip, with the
+    // group id. Used by AppWindow to render the project-level menu.
+    void SetChipContextMenuCallback(std::function<void(const std::string&)> callback);
+
+    // Callback invoked (after the strip renders) when the user drag-reorders tabs,
+    // so the owner can sync any dependent order (e.g. project group membership).
+    void SetTabsReorderedCallback(std::function<void()> callback);
+
     const TabItem* GetActiveTab() const;
 
     friend struct TabContainerTestPeer;
@@ -46,10 +73,14 @@ public:
     void EnableSendChangeEvent(bool enable);
 
 private:
-    void                 ShowCloseTabConfirm(int tab_index);
-    void                 SendEvent(RocEvents event, const std::string& tab_id);
+    void ShowCloseTabConfirm(int tab_index);
+    void SendEvent(RocEvents event, const std::string& tab_id);
+    // Draws the custom tab strip (tabs + inline group chips) and handles selection,
+    // close, collapse, and drag-reordering of both individual tabs and whole groups.
+    void RenderTabStrip();
+
     std::vector<TabItem> m_tabs;
-    int                  m_active_tab_index;  // index of the currently active tab
+    int                  m_active_tab_index;   // index of the currently active tab
     int  m_set_active_tab_index;      // used to programmatically set the active tab
     int  m_pending_to_remove;
     bool m_allow_tool_tips;           // whether to show tooltips for tabs
@@ -60,8 +91,20 @@ private:
     // source name will be the m_widget_name
     std::string m_event_source_name;
 
-    std::unique_ptr<ConfirmationDialog> m_confirmation_dialog;
-    static constexpr int                s_invalid_index = -1;
+    std::unique_ptr<ConfirmationDialog>     m_confirmation_dialog;
+    std::function<void(const std::string&)> m_tab_context_menu_callback;
+    std::function<void(const std::string&)> m_chip_context_menu_callback;
+    std::function<void()>                   m_tabs_reordered_callback;
+
+    // Custom strip state: collapsed group ids + active drag operation.
+    std::unordered_set<std::string> m_collapsed_groups;
+    int         m_drag_kind                = 0;      // 0 none, 1 tab, 2 group
+    std::string m_drag_id;                           // dragged tab id or group id
+    bool        m_drag_active              = false;  // moved past the drag threshold
+    bool        m_drag_group_was_collapsed = false;  // restore state after a group drag
+    float       m_drag_grab_dx             = 0.0f;   // cursor offset within the grabbed item
+
+    static constexpr int s_invalid_index = -1;
 };
 
 }  // namespace View

@@ -495,6 +495,11 @@ main(int argc, char** argv)
                     // If the user inputted a filepath open it here.
                     rocprofvis_view_open_files({ cli_parser.GetOptionValue("file") });
                 }
+                else
+                {
+                    // No file argument: reopen the previous session.
+                    rocprofvis_view_restore_session();
+                }
 
                 ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
 

@@ -46,6 +46,10 @@ rocprofvis_view_destroy();
 void
 rocprofvis_view_open_files(const std::vector<std::string>& file_paths);
 
+// Reopens the previous session (saved on last shutdown). No-op if none was saved.
+void
+rocprofvis_view_restore_session();
+
 void
 rocprofvis_view_set_fullscreen_state(bool is_fullscreen);
 

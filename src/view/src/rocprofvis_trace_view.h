@@ -5,7 +5,7 @@
 #include "rocprofvis_annotations.h"
 #include "rocprofvis_data_provider.h"
 #include "rocprofvis_event_manager.h"
-#include "rocprofvis_project.h"
+#include "rocprofvis_project_item.h"
 #include "rocprofvis_root_view.h"
 #include "rocprofvis_timeline_view.h"
 #include "widgets/rocprofvis_split_containers.h"
@@ -28,11 +28,11 @@ class SummaryView;
 class Minimap;
 class MeasurementController;
 
-class SystemTraceProjectSettings : public ProjectSetting
+class SystemTraceProjectItemSettings : public ProjectItemSetting
 {
 public:
-    SystemTraceProjectSettings(const std::string& project_id, TraceView& view);
-    ~SystemTraceProjectSettings() override;
+    SystemTraceProjectItemSettings(const std::string& project_id, TraceView& view);
+    ~SystemTraceProjectItemSettings() override;
     void ToJson() override;
     bool Valid() const override;
 
@@ -44,7 +44,7 @@ private:
 
 class TraceView : public RootView
 {
-    friend SystemTraceProjectSettings;
+    friend SystemTraceProjectItemSettings;
 
 public:
     TraceView();
@@ -125,7 +125,7 @@ private:
 
     std::string m_save_notification_id;
 
-    std::unique_ptr<SystemTraceProjectSettings> m_project_settings;
+    std::unique_ptr<SystemTraceProjectItemSettings> m_project_settings;
 };
 
 }  // namespace View

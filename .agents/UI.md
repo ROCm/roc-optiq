@@ -219,15 +219,15 @@ Key invariants:
    the main thread inside the per-frame `Render()` traversal. Heavy work
    (queries, remote I/O, profiler runs, save, cleanup) is offloaded to
    controller futures, `AppMonitor`, or owned `std::future<...>` jobs.
-4. **Ownership is explicit.** Every `Project` owns one `DataProvider`. Every
+4. **Ownership is explicit.** Every `ProjectItem` owns one `DataProvider`. Every
    widget that subscribes to events stores its `EventManager::SubscriptionToken`
    and unsubscribes in its destructor.
 5. **Normal project state is keyed by trace path.** Compare projects are
    the exception: `AppWindow::MakeCompareId()` creates a synthetic ID
-   and `Project::OpenCompare()` persists both source paths.
+   and `ProjectItem::OpenCompare()` persists both source paths.
 6. **The app supports both system traces (`TraceView`) and compute traces
    (`ComputeView`)**, both deriving from `RootView` and selected by
-   `Project::TraceType`.
+   `ProjectItem::TraceType`.
 7. **Long-running UI operations are non-blocking.** SSH and profiler
    sessions register with `AppMonitor`; status changes become typed
    `RocEvent`s and teardown is deferred until controller futures resolve.
@@ -381,7 +381,7 @@ AppWindow (singleton, RocWidget)
 |   +-- [0] toolbar slot (RootView::GetToolbar(), per active project)
 |   +-- [1] main_area_item : RocCustomWidget
 |   |       renders m_tab_container OR WelcomePage if no tabs
-|   |       Per-tab widget = Project::GetView() = RootView
+|   |       Per-tab widget = ProjectItem::GetView() = RootView
 |   |         |
 |   |         +-- TraceView : RootView                 (system trace)
 |   |         |   +-- m_tool_bar      : RocCustomWidget (slotted into [0])
@@ -430,7 +430,7 @@ File: `src/view/src/rocprofvis_appwindow.{h,cpp}`. Owns global UI state:
   helpers). Called by `rocprofvis_view_init`.
 - `void Render()` / `void Update()` - per-frame entry points.
 - `void OpenFile(std::string file_path)` - opens a trace or `.rpv`
-  project. Routes via `Project::Open()` and adds a tab. A duplicate
+  project. Routes via `ProjectItem::Open()` and adds a tab. A duplicate
   open (`OpenResult::Duplicate`) focuses the existing tab and shows a
   "Trace Already Open" message rather than opening a second tab. While
   the Compare dialog is open, dropped/opened files fill its slots
@@ -449,7 +449,7 @@ File: `src/view/src/rocprofvis_appwindow.{h,cpp}`. Owns global UI state:
   such as profiler output selection.
 - `void ShowProfilerLauncher()` - lazy-opens the optional profiler
   launcher (`ROCPROFVIS_ENABLE_PROFILER`).
-- `Project* GetCurrentProject() / GetProject(id)` - lookup helpers.
+- `ProjectItem* GetCurrentItem() / GetItem(id)` - lookup helpers.
 - `BeginAppShutdown()` - graceful shutdown that drains async
   `DataProvider` cleanup jobs and `AppMonitor` operations. Use this
   rather than terminating the process.
@@ -462,7 +462,7 @@ File: `src/view/src/rocprofvis_appwindow.{h,cpp}`. Owns global UI state:
   (which itself covers the `LoadingTimer`, an in-progress sticky-note
   drag, and reorder auto-scroll).
 - `SetTabLabel(label, id)` - pushed to the `TabContainer` via the
-  `Project` system; useful when a child view wants to indicate dirty
+  `ProjectItem` system; useful when a child view wants to indicate dirty
   state.
 
 State of note:
@@ -472,10 +472,12 @@ State of note:
   index), `[1]` `RocCustomWidget` that renders `m_tab_container` or
   `WelcomePage`, `[2]` status bar. The ImGui menu bar is rendered
   inline by `AppWindow::Render()` before this view, not slotted in.
-- `m_tab_container` (`shared_ptr<TabContainer>`) - the project tabs;
+- `m_tab_container` (`shared_ptr<TabContainer>`) - the open-tab strip;
   source name is `TAB_CONTAINER_SRC_NAME` (`"MainTabContainer"`).
-- `m_projects` (`unordered_map<string, unique_ptr<Project>>`) - one
-  entry per normal trace path or synthetic compare ID.
+- `m_items` (`unordered_map<string, unique_ptr<ProjectItem>>`) - one
+  entry per open tab (normal trace path or synthetic compare ID).
+- `m_projects` (`vector<unique_ptr<Project>>`) - the Chrome-style tab
+  groups; each `Project` references a subset of `m_items` by id.
 - `m_provider_cleanup_jobs` - async cleanup of in-flight `DataProvider`
   requests when a tab closes or the app exits.
 - `m_status_message`, `m_status_show_busy_indicator` -
@@ -489,7 +491,7 @@ polls `LogViewer`. Keep controller polling and ImGui rendering on the
 main thread; callbacks may enqueue events from worker threads, but
 widgets consume them during normal frame dispatch.
 
-### `Project` - per-trace bundle
+### `ProjectItem` - per-tab bundle
 
 File: `rocprofvis_project.{h,cpp}`. Wraps everything tied to a single
 trace file:
@@ -502,18 +504,46 @@ trace file:
   `rocprofvis_controller_alloc_compare(file_ptrs.data(), count)`,
   then attaches compare-source metadata and the supplied synthetic ID.
 - `void Save()` / `void SaveAs(file_path)` - serializes registered
-  `ProjectSetting`s into a `.rpv`.
-- `void RegisterSetting(ProjectSetting*)` - any per-project state that
-  must persist participates by deriving from `ProjectSetting` and
+  `ProjectItemSetting`s into a single-item `.rpv`.
+- `jt::Json ExportSettingsJson(base_dir)` / `OpenFromSettingsJson(json,
+  base_dir, out_id)` - export/restore this item's full settings JSON so it
+  can be embedded in, and reopened from, a saved project group.
+- `void RegisterSetting(ProjectItemSetting*)` - any per-item state that
+  must persist participates by deriving from `ProjectItemSetting` and
   registering itself in its constructor. Examples:
-  `TimelineViewProjectSettings`, `SystemTraceProjectSettings`,
-  `AnnotationsManagerProjectSettings`, and the per-track `TrackOptions`
-  family (persisted via the nested `TrackOptions::TrackProjectSetting`).
+  `TimelineViewProjectItemSettings`, `SystemTraceProjectItemSettings`,
+  `AnnotationsManagerProjectItemSettings`, and the per-track `TrackOptions`
+  family (persisted via the nested `TrackOptions::TrackProjectItemSetting`).
 - `jt::Json& GetSettingsJson()` - the in-memory JSON tree. JSON keys
   used in `.rpv` files are the `JSON_KEY_*` constants in this header.
 - `TraceType GetTraceType()` - `Undefined | System | Compute`.
-- `GetID()` - the trace path for normal projects or synthetic compare
-  ID; used as event source ID and the `PresetManager` registration key.
+- `GetID()` - the trace path (or synthetic compare ID); used as event
+  source ID and the `PresetManager` registration key.
+
+### `Project` - tab group (Chrome-style)
+
+File: `rocprofvis_project.{h,cpp}`. A named, colored, ordered group of
+`ProjectItem`s (like a browser tab group), plus a memory of closed items
+for reopening. `AppWindow::m_projects` owns these; each references its
+members in `m_items` by id.
+
+- Members: `GetItemIds()` / `AddItem` / `RemoveItem` / `SetItemOrder`,
+  `GetName`/`SetName`, `GetColor`/`SetColor` (a color from
+  `SettingsManager::GetColorWheel()`), `IsCollapsed`/`SetCollapsed`,
+  `GetClosedItems`/`AddClosedItem`, and `GetFilePath`/`SetFilePath`/
+  `IsSaved` (the associated `.rpv`).
+- **A `.rpv` is always a project.** New files store `name`, `color`, and an
+  `items` array where each entry embeds a `ProjectItem`'s full settings
+  JSON (so track order/heights, bookmarks, annotations restore). Old
+  single-item `.rpv`s (no `items` array) open as a one-tab project.
+  `AppWindow::SaveProjectGroup` / `OpenProjectGroupFile` handle both, and
+  `Save` / `Save As` operate on the whole project when the active tab is
+  grouped.
+- `AppWindow` group ops: `CreateProject`, `AssignItemToProject`,
+  `RemoveItemFromProjectMembership`, `UngroupProject`, `CloseProjectTabs`,
+  `ReopenClosedItem`, and `RefreshTabGroups` (pushes color/label onto tabs
+  and keeps group members contiguous). `RenderProjectMenuBody` is shared by
+  the `File > Projects` submenu and the tab-strip chip context menu.
 
 ### `RootView` - polymorphic per-trace view
 
@@ -537,7 +567,7 @@ protected:
 Implementations: `TraceView` (system) and `ComputeView` (compute).
 When you add a new project type, you derive
 from `RootView`, fill `GetToolbar`, `RenderEditMenuOptions`, and
-`DetachProviderCleanup`, then teach `Project::Open` to instantiate it.
+`DetachProviderCleanup`, then teach `ProjectItem::Open` to instantiate it.
 
 ### `WelcomePage` and compare projects
 
@@ -547,7 +577,7 @@ from `RootView`, fill `GetToolbar`, `RenderEditMenuOptions`, and
   in `AppWindow`.
 - `CompareFilesDialog` (`rocprofvis_compare_files_dialog.{h,cpp}`)
   collects base and target traces. `AppWindow::OpenCompare()` routes
-  them through `Project::OpenCompare()`,
+  them through `ProjectItem::OpenCompare()`,
   `TraceDataModel::SetCompareSources()`, and per-track
   `CompareSourceInfo` badges/colors. `FileSlot {kFirst, kSecond}`
   identifies the two drop targets; while the dialog `IsOpen()`,
@@ -576,8 +606,9 @@ reusable types they expose.
   `std::function<void()>` callback. Used to host inline custom rendering
   inside a layout slot (toolbars, ad-hoc panels). Prefer this over
   defining a one-off `RocWidget` subclass for trivial content.
-- `struct TabItem` - `{ label, id, widget, can_close }`, the shape of a
-  tab.
+- `struct TabItem` - `{ label, id, widget, can_close }` plus optional
+  group fields (`group_color`, `group_id`, `group_label`) that drive the
+  inline group chip/tint when the tab belongs to a `Project`.
 - `class PopUpStyle` - RAII helper that pushes consistent popup colors,
   borders, and centering. Use this around `BeginPopupModal` instead of
   hand-rolling style pushes.
@@ -617,8 +648,17 @@ splitter dragging.
 - `class TabContainer : public RocWidget` - drives tabs and emits
   `kTabClosed` / `kTabSelected` `RocEvent`s. Set the event source name
   with `SetEventSourceName(...)`. Toggle close/change events via
-  `EnableSendCloseEvent` / `EnableSendChangeEvent`. Used in `AppWindow`
-  for the project tabs and in `ComputeView` for sub-tabs.
+  `EnableSendCloseEvent` / `EnableSendChangeEvent`.
+- It renders a **custom tab strip** (not ImGui's `BeginTabBar`) so it can
+  draw Chrome-style `Project` groups: an inline colored **chip** per group
+  (click to collapse/expand), tinted + underlined member tabs,
+  **drag-to-reorder** tabs, and **dragging a whole group** via its chip
+  (collapses while dragging, restores on drop) with a floating drag ghost.
+  `SetTabGroup`, `ReorderTabs`, and the `SetTabContextMenuCallback` /
+  `SetChipContextMenuCallback` / `SetTabsReorderedCallback` hooks wire it
+  to `AppWindow`'s project logic. Group decorations only draw when tabs
+  carry group info, so the plain sub-tab bar (e.g. `ComputeView`) is
+  unaffected.
 
 ### 7.6 `rocprofvis_gui_helpers.{h,cpp}` - low-level UI helpers
 
@@ -899,8 +939,8 @@ When you add a new track type:
 2. Implement `RenderChart`, `RenderMetaAreaScale`,
    `ExtractPointsFromData`, `ReleaseData`.
 3. Add a `TrackOptions` subclass if any per-track state must persist;
-   it self-registers a `ProjectSetting` via
-   `TrackOptions::TrackProjectSetting`.
+   it self-registers a `ProjectItemSetting` via
+   `TrackOptions::TrackProjectItemSetting`.
 4. Construct from `TimelineView::MakeGraphView()` based on
    `TrackInfo::TrackType` / `rocprofvis_controller_track_type_t`.
 
@@ -936,7 +976,7 @@ Composition (members):
   controls.
 - `m_bookmarks` - 10 saved view positions; `RenderBookmarkControls()`,
   `HandleHotKeys()` keyed via `HotkeyManager`.
-- `SystemTraceProjectSettings` - persists bookmarks via `Project`.
+- `SystemTraceProjectItemSettings` - persists bookmarks via `ProjectItem`.
 
 Public surface:
 - `LoadTrace(controller, file_path)` / `CreateView()` / `DestroyView()`.
@@ -1191,7 +1231,7 @@ fetched through the normal `DataProvider` + `TablesModel` pipeline.
   list of `StickyNote`s and the visibility flag, creates new notes
   inline via `CreateStickyNote`, and removes user-deleted notes via
   `RemoveNotesPendingDelete`. Persisted via
-  `AnnotationsManagerProjectSettings`.
+  `AnnotationsManagerProjectItemSettings`.
 - `StickyNote` (`rocprofvis_stickynote.{h,cpp}`) - one note. Carries
   position (time + track-relative y offset), optional track binding,
   lock state, size, text/title, and view-range metadata.
@@ -1206,7 +1246,7 @@ fetched through the normal `DataProvider` + `TablesModel` pipeline.
   lane. A note can be locked (`m_locked`), request "go to anchor"
   navigation (`WantsNavigate()` -> a `NavigationEvent`), and
   cross-highlight when its timeline marker is hovered. Persisted fields
-  (under `JSON_KEY_ANNOTATION_*` in `rocprofvis_project.h`): `time_ns`,
+  (under `JSON_KEY_ANNOTATION_*` in `rocprofvis_project_item.h`): `time_ns`,
   `y_offset`, `size_x/y`, `text`, `title`, `id`, `track_id`,
   `view_start_ns`/`view_end_ns`, `is_minimized`, `is_locked` (the
   expanded window's screen position is not persisted).
@@ -1761,13 +1801,13 @@ in `profiles.json`.
 - `profiles.json` currently stores SSH passwords/passphrases in
   plaintext. Treat it as sensitive and never log credentials.
 
-### `Project` settings serialization
+### `ProjectItem` settings serialization
 
-`Project::RegisterSetting(ProjectSetting*)` participates in `.rpv`
+`ProjectItem::RegisterSetting(ProjectItemSetting*)` participates in `.rpv`
 save/load. Implement `ToJson()` and `Valid()` on your subclass,
 construct passing `project_id`, and the base ctor registers with
-the owning `Project`. JSON keys for the system trace are listed in
-`rocprofvis_project.h` (`JSON_KEY_GENERAL_*`,
+the owning `ProjectItem`. JSON keys for the system trace are listed in
+`rocprofvis_project_item.h` (`JSON_KEY_GENERAL_*`,
 `JSON_KEY_TIMELINE_*`, `JSON_KEY_ANNOTATION_*`).
 
 ### `rocprofvis_utils.{h,cpp}` - shared utilities
@@ -1881,7 +1921,7 @@ renders) -> `ProfilerLaunchOrchestrator` (run engine, normalizes local
 vs remote) -> `ProfilerSession` / `RemoteProfilerSession` (both derive
 from `ProfilerSessionBase`) -> controller profiler C API
 (`rocprofvis_profiler.h`) -> `AppMonitor` -> status events. Profiler
-sessions are **not** `Project`s until a produced trace is handed to
+sessions are **not** `ProjectItem`s until a produced trace is handed to
 `AppWindow::OpenFile()`.
 
 **Backends (`IProfilerBackend`, `rocprofvis_profiler_backend.h`).** The
@@ -2327,7 +2367,7 @@ int GetId() const;
 
 ### Plain `/* ... */` blocks
 
-Used for internal helpers and on `Project::Open` / controller C
+Used for internal helpers and on `ProjectItem::Open` / controller C
 APIs. Example:
 
 ```cpp
@@ -2402,7 +2442,7 @@ adding **anything** new, check this list and reuse if at all possible.
 | Drive a virtualized table                     | Subclass `InfiniteScrollTable`                                                                 |
 | Pick a metric (Compute)                       | `QueryBuilder` + `KernelMetricTable::SetExternalQuery`                                         |
 | Display SOL / pinned compute metrics          | `MetricTable` / `PinnedMetricTable` / `MetricTableWidget`                                      |
-| Add a bookmark or save view state             | The `Project` + `ProjectSetting` system, JSON keys in `rocprofvis_project.h`                   |
+| Add a bookmark or save view state             | The `ProjectItem` + `ProjectItemSetting` system, JSON keys in `rocprofvis_project_item.h`                   |
 | Save user-customizable layouts (Compute)      | `PresetComponent` + `PresetManager` + `PresetBrowser`                                          |
 | Save profiler launch profiles                 | `LaunchPresetManager` + `ProfilesDocument`                                                     |
 | Convert ns to a display string                | `nanosecond_to_formatted_str(ns, settings_time_format, include_units)`                         |
@@ -2430,7 +2470,7 @@ adding **anything** new, check this list and reuse if at all possible.
 | Get a selection sentinel                      | `TimelineSelection::INVALID_SELECTION_ID` / `ComputeSelection::INVALID_SELECTION_ID`           |
 | Reuse a glyph                                 | One of the `ICON_*` macros in `icons/rocprovfis_icon_defines.h`                                |
 | Add a keyboard-driven label edit              | `EditableTextField` (used in `LineTrackItem::VerticalLimits`)                                  |
-| Persist a per-project flag/value              | Subclass `ProjectSetting`, register in ctor                                                    |
+| Persist a per-project flag/value              | Subclass `ProjectItemSetting`, register in ctor                                                    |
 | Read/write shared UI JSON safely              | `JsonUtils`                                                                                    |
 | Manage SSH connection profiles                | `SshConnectionStore` + `SshSettingsDialog` + `ProfilesDocument`                               |
 | Run SSH connect/auth/download/browse phases   | `SshSession` + `AppMonitor`                                                                    |
@@ -2520,8 +2560,10 @@ For fast lookup. Each entry: class -> file -> one-line role.
 
 - `AppWindow` -> `rocprofvis_appwindow.h` -> Singleton; menus, tabs,
   dialogs, status bar, project lifecycle.
-- `Project` / `ProjectSetting` -> `rocprofvis_project.h` -> Per-trace
-  bundle and serialization protocol.
+- `ProjectItem` / `ProjectItemSetting` -> `rocprofvis_project_item.h` ->
+  Per-tab bundle (one trace/compute/compare) and its settings protocol.
+- `Project` -> `rocprofvis_project.h` -> Chrome-style tab group: a named,
+  colored, ordered set of `ProjectItem`s (+ remembered closed items).
 - `RootView` -> `rocprofvis_root_view.h` -> Base for `TraceView` /
   `ComputeView`.
 - `FileFilter` (struct) -> `rocprofvis_appwindow.h` -> File-dialog
@@ -2538,7 +2580,7 @@ For fast lookup. Each entry: class -> file -> one-line role.
 ### Top-level views
 
 - `TraceView` -> `rocprofvis_trace_view.h` -> System-profile workspace.
-- `SystemTraceProjectSettings` -> same -> Persists bookmarks.
+- `SystemTraceProjectItemSettings` -> same -> Persists bookmarks.
 - `ComputeView` -> `compute/rocprofvis_compute_view.h` -> Compute
   workspace.
 
@@ -2546,7 +2588,7 @@ For fast lookup. Each entry: class -> file -> one-line role.
 
 - `TimelineView` -> `rocprofvis_timeline_view.h` -> Timeline grid +
   tracks + scrubber + interaction.
-- `TimelineViewProjectSettings` -> same -> Persists per-track display
+- `TimelineViewProjectItemSettings` -> same -> Persists per-track display
   and order.
 - `LoadingTimer` -> same -> Debounce for the loading indicator.
 - `ViewCoords` (struct) -> same -> `{ y, z, v_min_x, v_max_x }` for

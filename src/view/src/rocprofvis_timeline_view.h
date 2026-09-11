@@ -8,7 +8,7 @@
 #include "rocprofvis_controller_types.h"
 #include "rocprofvis_data_provider.h"
 #include "rocprofvis_event_manager.h"
-#include "rocprofvis_project.h"
+#include "rocprofvis_project_item.h"
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_time_to_pixel.h"
 #include "rocprofvis_timeline_arrow.h"
@@ -64,12 +64,12 @@ private:
     bool                                               m_started;
 };
 
-class TimelineViewProjectSettings : public ProjectSetting
+class TimelineViewProjectItemSettings : public ProjectItemSetting
 {
 public:
-    TimelineViewProjectSettings(const std::string& project_id,
+    TimelineViewProjectItemSettings(const std::string& project_id,
                                 TimelineView&      timeline_view);
-    ~TimelineViewProjectSettings() override;
+    ~TimelineViewProjectItemSettings() override;
     void ToJson() override;
     // True when the persisted "order" list is a valid full permutation of the
     // current tracks (the remembered custom order).
@@ -87,7 +87,7 @@ private:
 
 class TimelineView : public RocWidget
 {
-    friend TimelineViewProjectSettings;
+    friend TimelineViewProjectItemSettings;
 
 public:
     TimelineView(DataProvider& dp, std::shared_ptr<TimelineSelection> timeline_selection,
@@ -311,7 +311,7 @@ private:
 
     ImVec2                     m_context_menu_pos = ImVec2(0.0f, 0.0f);
 
-    TimelineViewProjectSettings m_project_settings;
+    TimelineViewProjectItemSettings m_project_settings;
     LoadingTimer                m_loading_timer;
     TrackTypeCounts             m_track_counts;
 

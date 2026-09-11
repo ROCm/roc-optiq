@@ -3,7 +3,7 @@
 
 #pragma once
 #include "model/rocprofvis_model_types.h"
-#include "rocprofvis_project.h"
+#include "rocprofvis_project_item.h"
 #include <array>
 #include <bitset>
 #include <functional>
@@ -43,7 +43,7 @@ public:
     // Part of aggregation, types dictate how to combine themselves
     virtual TrackOptions& operator&=(const TrackOptions& other);
 
-    // ProjectSetting interface...
+    // ProjectItemSetting interface...
     virtual void ToJson();
     virtual bool Valid() const;
     virtual void FromJson();
@@ -68,10 +68,10 @@ public:
     friend struct FlameTrackItemTestPeer;
 #endif
 protected:
-    class TrackProjectSetting : public ProjectSetting
+    class TrackProjectItemSetting : public ProjectItemSetting
     {
     public:
-        TrackProjectSetting(const std::string& project_id, TrackOptions& options);
+        TrackProjectItemSetting(const std::string& project_id, TrackOptions& options);
         void      ToJson() override final;
         bool      Valid() const override final;
         jt::Json& GetJson();
@@ -86,7 +86,7 @@ protected:
     const TrackItem&                     m_track_item;
     TimelineTrackOptions&                m_ctx;
     const SettingsManager&               m_settings;
-    std::unique_ptr<TrackProjectSetting> m_project_settings;
+    std::unique_ptr<TrackProjectItemSetting> m_project_settings;
 };
 
 class CounterTrackOptions : public TrackOptions

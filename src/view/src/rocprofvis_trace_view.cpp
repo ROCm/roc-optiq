@@ -239,7 +239,7 @@ TraceView::Update()
         {
             m_timeline_view->MakeGraphView();
         }
-        m_project_settings = std::make_unique<SystemTraceProjectSettings>(
+        m_project_settings = std::make_unique<SystemTraceProjectItemSettings>(
             m_data_provider.GetTraceFilePath(), *this);
         if(m_project_settings && m_project_settings->Valid())
         {
@@ -1180,16 +1180,16 @@ TraceView::RenderEventSearch()
     }
 }
 
-SystemTraceProjectSettings::SystemTraceProjectSettings(const std::string& project_id,
+SystemTraceProjectItemSettings::SystemTraceProjectItemSettings(const std::string& project_id,
                                                        TraceView&         view)
-: ProjectSetting(project_id)
+: ProjectItemSetting(project_id)
 , m_view(view)
 {}
 
-SystemTraceProjectSettings::~SystemTraceProjectSettings() {}
+SystemTraceProjectItemSettings::~SystemTraceProjectItemSettings() {}
 
 void
-SystemTraceProjectSettings::ToJson()
+SystemTraceProjectItemSettings::ToJson()
 {
     int i = 0;
     for(const auto& it : m_view.m_bookmarks)
@@ -1207,7 +1207,7 @@ SystemTraceProjectSettings::ToJson()
 }
 
 bool
-SystemTraceProjectSettings::Valid() const
+SystemTraceProjectItemSettings::Valid() const
 {
     bool valid = false;
     if(m_settings_json[JSON_KEY_GROUP_TIMELINE][JSON_KEY_TIMELINE_BOOKMARK].isArray())
@@ -1239,7 +1239,7 @@ SystemTraceProjectSettings::Valid() const
 }
 
 std::unordered_map<int, ViewCoords>
-SystemTraceProjectSettings::Bookmarks()
+SystemTraceProjectItemSettings::Bookmarks()
 {
     std::unordered_map<int, ViewCoords> bookmarks;
     for(jt::Json& bookmark :

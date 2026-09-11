@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: MIT
 
 #pragma once
-#include "json.h"
-#include <list>
-#include <memory>
+
+#include "imgui.h"
+#include <cstdint>
 #include <string>
 #include <vector>
 
@@ -13,193 +13,63 @@ namespace RocProfVis
 namespace View
 {
 
-class RocWidget;
-class ProjectSetting;
-
+// A Project is a Chrome-style "tab group": a named, colored, ordered collection
+// of Items (open tabs) plus a memory of Items that were closed but still belong
+// to the project so they can be reopened. A single tab is an ProjectItem
+// (rocprofvis_project_item.h); a Project groups several Items together.
 class Project
 {
 public:
-    enum OpenResult
+    // A member ProjectItem that was closed but is remembered so it can be reopened.
+    struct ClosedItem
     {
-        Success,
-        Duplicate,
-        Failed,
+        std::string              name;   // display label (file/tab name)
+        std::vector<std::string> files;  // filelist to reopen (1 = trace/compute, 2+ = compare)
     };
 
-    enum TraceType
-    {
-        Undefined,
-        System,
-        Compute,
-    };
+    Project(const std::string& id, const std::string& name, ImU32 color);
 
-    Project();
-    virtual ~Project();
+    const std::string& GetID() const;
+    const std::string& GetName() const;
+    void               SetName(const std::string& name);
+    ImU32              GetColor() const;
+    void               SetColor(ImU32 color);
+    // Reserved for the follow-up collapse/expand interaction.
+    bool               IsCollapsed() const;
+    void               SetCollapsed(bool collapsed);
 
-    /*
-     * Returns the ID of the project.
-     * (Internally this is the trace path)
-     */
-    std::string GetID() const;
-    /*
-     * Returns the file name of the project/trace.
-     */
-    std::string GetName() const;
-    /*
-     * Returns the RocWidget that renders the project.
-     */
-    std::shared_ptr<RocWidget> GetView();
-    /*
-     * Returns the trace type of the project.
-     */
-    TraceType GetTraceType() const;
-    /*
-     * Returns true if the project is saved as a project (as opposed to a trace).
-     */
-    bool IsProject() const;
+    // Open member ProjectItem ids, in group order.
+    const std::vector<std::string>& GetItemIds() const;
+    // Reorders the open members to match the given order (ids not currently members
+    // are ignored; any members omitted keep their relative order at the end).
+    void SetItemOrder(const std::vector<std::string>& ordered);
+    // Adds an open member if not already present. Returns true if it was added.
+    bool AddItem(const std::string& item_id);
+    // Removes an open member if present. Returns true if it was removed.
+    bool RemoveItem(const std::string& item_id);
+    bool ContainsItem(const std::string& item_id) const;
 
-    /*
-     * Opens a project or trace file and returns Success/Duplicate/Failed.
-     * @param file_path: The path of the file to open. If Duplicate is returned, this will
-     * be set to the path of the duplicate which can be used to identify and open the
-     * duplicate's tab.
-     */
-    OpenResult Open(std::string& file_path);
-    /*
-     * Opens two or more trace files as a single combined compare project. The traces
-     * overlay on one timeline and each track is tagged with its source (A, B, ...).
-     * @param project_id: Synthetic, stable id/key for the project (it has no single
-     * file path on disk).
-     * @param file_paths: The trace files to combine, tagged A, B, ... in order.
-     */
-    OpenResult OpenCompare(const std::string&              project_id,
-                           const std::vector<std::string>& file_paths);
-    /*
-     * Overwrites the project settings to the project file without further user input.
-     */
-    void Save();
-    /*
-     * Opens file dialog and saves the project settings to a specified file.
-     * @param file_path: The path of the file to save as.
-     */
-    void SaveAs(const std::string& file_path);
-    /*
-     * Clean up tasks prior to being deleted.
-     */
-    void Close();
-    /*
-     * Adds a participant to the project settings serialize/deserialize process.
-     * @param setting: The settings object to include in the serialize/deserialize
-     * process.
-     */
-    void RegisterSetting(ProjectSetting* setting);
-    /*
-     * Returns the project settings json.
-     */
-    jt::Json& GetSettingsJson();
+    const std::vector<ClosedItem>& GetClosedItems() const;
+    void                           AddClosedItem(const ClosedItem& item);
+    void                           RemoveClosedItemAt(size_t index);
+
+    // A project is empty (safe to delete) when it has neither open nor closed items.
+    bool Empty() const;
+
+    // The .rpv file this project was loaded from / last saved to (empty if never
+    // saved). Lets "Save" re-save the whole project without a dialog.
+    const std::string& GetFilePath() const;
+    void               SetFilePath(const std::string& file_path);
+    bool               IsSaved() const;
 
 private:
-    /*
-     * Opens a project + attached trace file and returns Success/Duplicate/Failed.
-     * @param file_path: The path of the file to open. If Duplicate is returned, this will
-     * be set to the path of the duplicate which can be used to identify and open the
-     * duplicate's tab.
-     */
-    OpenResult OpenProject(std::string& file_path);
-    /*
-     * Opens a trace file and returns Success/Duplicate/Failed.
-     * @param file_path: The path of the file to open. If Duplicate is returned, this will
-     * be set to the path of the duplicate which can be used to identify and open the
-     * duplicate's tab.
-     */
-    OpenResult OpenTrace(std::string& file_path);
-    /*
-     * Performs basic validation on the project settings for fields required to open a
-     * trace.
-     */
-    bool JsonValidForLoad(jt::Json& json);
-    /*
-     * Writes the project settings into m_project_file_path;
-     */
-    bool SaveSetttingsJson();
-
-    std::string                m_name;
-    std::string                m_project_file_path;
-    std::string                m_trace_file_path;
-    // Source trace files when this is a compare project (empty otherwise). Persisted to
-    // the .rpv so the compare can be reopened.
-    std::vector<std::string>   m_compare_files;
-    TraceType                  m_trace_type;
-    std::shared_ptr<RocWidget> m_view;
-    std::list<ProjectSetting*> m_settings;
-    jt::Json                   m_settings_json;
-    // Specific open-failure message; empty falls back to the generic one.
-    std::string                m_open_error_message;
-};
-
-constexpr const char* JSON_KEY_GROUP_GENERAL  = "general";
-constexpr const char* JSON_KEY_GROUP_TIMELINE = "timeline";
-
-constexpr const char* JSON_KEY_GENERAL_VERSION    = "version";
-constexpr const char* JSON_KEY_GENERAL_TRACE_PATH = "trace_path";
-constexpr const char* JSON_KEY_GENERAL_COMPARE_FILES = "compare_files";
-
-constexpr const char* JSON_KEY_TIMELINE_BOOKMARK         = "bookmarks";
-constexpr const char* JSON_KEY_TIMELINE_BOOKMARK_KEY     = "key";
-constexpr const char* JSON_KEY_TIMELINE_BOOKMARK_V_MIN_X = "view_start_ns ";
-constexpr const char* JSON_KEY_TIMELINE_BOOKMARK_V_MAX_X = "view_end_ns";
-constexpr const char* JSON_KEY_TIMELINE_BOOKMARK_Y       = "y";
-constexpr const char* JSON_KEY_TIMELINE_BOOKMARK_Z       = "z";
-
-constexpr const char* JSON_KEY_TIMELINE_TRACK                    = "tracks";
-constexpr const char* JSON_KEY_TIMELINE_TRACK_ORDER              = "order";
-constexpr const char* JSON_KEY_TIMELINE_SORT_MODE                = "sort_mode";
-constexpr const char* JSON_KEY_TIMELINE_TRACK_DISPLAY            = "display";
-constexpr const char* JSON_KEY_TIMELINE_TRACK_HEIGHT             = "height";
-constexpr const char* JSON_KEY_TIMELINE_TRACK_COMPACT_MODE       = "compact_mode";
-constexpr const char* JSON_KEY_TIMELINE_TRACK_COLOR              = "color";
-constexpr const char* JSON_KEY_TIMELINE_TRACK_COLOR_RANGE_MIN    = "color_min";
-constexpr const char* JSON_KEY_TIMELINE_TRACK_COLOR_RANGE_MAX    = "color_max";
-constexpr const char* JSON_KEY_TIMELINE_TRACK_BOX_PLOT           = "box_plot";
-constexpr const char* JSON_KEY_TIMELINE_TRACK_STRIPES            = "box_plot_stripes";
-constexpr const char* JSON_KEY_TIMELINE_TRACK_MIN                = "min";
-constexpr const char* JSON_KEY_TIMELINE_TRACK_MAX                = "max";
-constexpr const char* JSON_KEY_TIMELINE_TRACK_MEAN               = "mean";
-constexpr const char* JSON_KEY_TIMELINE_TRACK_STANDARD_DEVIATION = "standard_deviation";
-constexpr const char* JSON_KEY_TIMELINE_TRACK_QUEUE_UTILIZATION  = "queue_utilization";
-
-constexpr const char* JSON_KEY_ANNOTATIONS                 = "annotations";
-constexpr const char* JSON_KEY_ANNOTATION_TIME_NS          = "time_ns";
-constexpr const char* JSON_KEY_ANNOTATION_Y_OFFSET         = "y_offset";
-constexpr const char* JSON_KEY_ANNOTATION_SIZE_X           = "size_x";
-constexpr const char* JSON_KEY_ANNOTATION_SIZE_Y           = "size_y";
-constexpr const char* JSON_KEY_ANNOTATION_TEXT             = "text";
-constexpr const char* JSON_KEY_ANNOTATION_TITLE            = "title";
-constexpr const char* JSON_KEY_ANNOTATION_ID               = "id";
-constexpr const char* JSON_KEY_ANNOTATION_TRACK_ID         = "track_id";
-constexpr const char* JSON_KEY_TIMELINE_ANNOTATION_V_MIN_X = "view_start_ns";
-constexpr const char* JSON_KEY_TIMELINE_ANNOTATION_V_MAX_X = "view_end_ns";
-constexpr const char* JSON_KEY_ANNOTATION_IS_MINIMIZED     = "is_minimized";
-constexpr const char* JSON_KEY_ANNOTATION_IS_LOCKED        = "is_locked";
-
-class ProjectSetting
-{
-public:
-    ProjectSetting(const std::string project_id);
-    virtual ~ProjectSetting();
-    /*
-     * Called by the owning project during serialization. Implementation should update its
-     * project settings into m_settings_json.
-     */
-    virtual void ToJson() = 0;
-    /*
-     * Implementation should validate any fields it cares about before reading.
-     */
-    virtual bool Valid() const = 0;
-
-protected:
-    Project&  m_project;
-    jt::Json& m_settings_json;
+    std::string              m_id;
+    std::string              m_name;
+    ImU32                    m_color;
+    bool                     m_collapsed;
+    std::vector<std::string> m_item_ids;      // open members (tab ids), ordered
+    std::vector<ClosedItem>  m_closed_items;  // closed-but-remembered members
+    std::string              m_file_path;     // associated .rpv (empty = unsaved)
 };
 
 }  // namespace View

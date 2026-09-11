@@ -944,6 +944,12 @@ Composition (members):
   controls.
 - `m_bookmarks` - 10 saved view positions; `RenderBookmarkControls()`,
   `HandleHotKeys()` keyed via `HotkeyManager`.
+
+When a system database fails to load, `TraceView` queues the shared application
+message dialog from its provider callback. Closing that dialog removes the
+failed project tab by database-path ID through `AppWindow::CloseProjectTab`,
+which preserves the normal tab-close event and provider-cleanup flow. Save and
+database-cleanup messages do not close the project tab.
 - `SystemTraceProjectSettings` - persists bookmarks via `Project`.
 
 Public surface:
@@ -1258,7 +1264,9 @@ and includes the database path. Closing this dialog removes the failed
 project's tab through the normal `TabContainer` close-event path so provider
 cleanup still runs. Pending load-error dialogs are forwarded from `Update()`,
 which runs for every project tab, so an invalid background project does not
-have to become the active tab before its error is shown.
+have to become the active tab before its error is shown. A per-load terminal
+error latch prevents `CreateView()` from retrying every frame and queuing
+duplicate dialogs while the first dialog remains open.
 
 `LoadTrace`, `CreateView`, `DestroyView`, `GetToolbar`,
 `DetachProviderCleanup` mirror `TraceView`.

@@ -48,6 +48,7 @@ private:
     void ShowPendingDatabaseErrorDialog();
 
     bool  m_view_created;
+    bool  m_database_error_queued;
     float m_toolbar_available_width;
 
     std::shared_ptr<ComputeSelection> m_compute_selection;

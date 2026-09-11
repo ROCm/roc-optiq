@@ -110,9 +110,13 @@ TraceView::TraceView()
             if(response_code != kRocProfVisResultSuccess)
             {
                 spdlog::error("Failed to load trace: {}", response_code);
-                m_popup_info.show_popup = true;
-                m_popup_info.title      = "Error";
-                m_popup_info.message    = "Failed to load trace: " + trace_path;
+                AppWindow*        app_window = AppWindow::GetInstance();
+                const std::string project_id = trace_path;
+                app_window->ShowMessageDialog(
+                    "Error", "Failed to load trace: " + trace_path,
+                    [app_window, project_id]() {
+                        app_window->CloseProjectTab(project_id);
+                    });
             }
         });
 

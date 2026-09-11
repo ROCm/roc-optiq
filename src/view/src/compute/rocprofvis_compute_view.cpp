@@ -36,6 +36,7 @@ constexpr const char* INVALID_COMPUTE_DATABASE_MESSAGE =
 
 ComputeView::ComputeView()
 : m_view_created(false)
+, m_database_error_queued(false)
 , m_toolbar_available_width(0.0f)
 , m_compute_selection(nullptr)
 , m_preset_browser(nullptr)
@@ -106,7 +107,7 @@ ComputeView::Update()
 
     const ProviderState new_state = m_data_provider.GetState();
 
-    if(!m_view_created &&
+    if(!m_view_created && !m_database_error_queued &&
        (new_state == ProviderState::kReady || new_state == ProviderState::kError))
     {
         CreateView();
@@ -247,8 +248,9 @@ ComputeView::InitializeMetricTabStates(
 void
 ComputeView::DestroyView()
 {
-    m_view_created = false;
-    m_popup_info    = { false, "", "" };
+    m_view_created          = false;
+    m_database_error_queued = false;
+    m_popup_info            = { false, "", "" };
     m_tab_container.reset();
     m_compute_selection.reset();
     m_preset_browser.reset();
@@ -257,6 +259,9 @@ ComputeView::DestroyView()
 bool
 ComputeView::LoadTrace(rocprofvis_controller_t* controller, const std::string& file_path)
 {
+    m_database_error_queued = false;
+    m_popup_info            = { false, "", "" };
+
     bool result = false;
     result      = m_data_provider.FetchTrace(controller, file_path);
     return result;
@@ -286,11 +291,12 @@ void
 ComputeView::QueueDatabaseErrorDialog(const std::string& file_path,
                                       const std::string& message)
 {
-    if(m_popup_info.show_popup)
+    if(m_database_error_queued)
     {
         return;
     }
 
+    m_database_error_queued = true;
     m_popup_info.show_popup = true;
     m_popup_info.title      = "Invalid Compute Database";
     m_popup_info.message    = message;

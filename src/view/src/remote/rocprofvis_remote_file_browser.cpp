@@ -29,6 +29,10 @@ namespace View
 
 namespace
 {
+    // Interior padding for the file-listing card.
+    constexpr float kFileTableCardPadX = 10.0f;
+    constexpr float kFileTableCardPadY = 6.0f;
+
     // Formats a byte count as a compact human-readable size (e.g. "4.0 KiB").
     std::string format_file_size(uint64_t bytes)
     {
@@ -364,6 +368,9 @@ void RemoteFileBrowser::Render()
     PopUpStyle popup_style;
     popup_style.PushPopupStyles();
 
+    // Round to 12 px to match the app's other frameless pop-ups.
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 12.0f);
+
     ImGui::SetNextWindowSize(ImVec2(900, 600), ImGuiCond_FirstUseEver);
     ImGui::SetNextWindowSizeConstraints(ImVec2(640, 440), ImVec2(FLT_MAX, FLT_MAX));
 
@@ -510,12 +517,18 @@ void RemoteFileBrowser::Render()
                         accum += "/";
                         accum += segment;
 
+                        // Draw the separator centered in the crumb-button frame
+                        // height (icon-font metrics leave it high otherwise).
                         ImGui::SameLine(0, 2.0f);
                         ImGui::PushFont(icon_font, ImGui::GetFontSize());
-                        ImGui::PushStyleColor(ImGuiCol_Text, text_dim);
-                        ImGui::AlignTextToFramePadding();
-                        ImGui::TextUnformatted(ICON_CHEVRON_RIGHT);
-                        ImGui::PopStyleColor();
+                        const ImVec2 chevron_size = ImGui::CalcTextSize(ICON_CHEVRON_RIGHT);
+                        const float  chevron_frame = ImGui::GetFrameHeight();
+                        const ImVec2 chevron_pos   = ImGui::GetCursorScreenPos();
+                        ImGui::GetWindowDrawList()->AddText(
+                            ImVec2(chevron_pos.x,
+                                   chevron_pos.y + (chevron_frame - chevron_size.y) * 0.5f),
+                            text_dim, ICON_CHEVRON_RIGHT);
+                        ImGui::Dummy(ImVec2(chevron_size.x, chevron_frame));
                         ImGui::PopFont();
                         ImGui::SameLine(0, 2.0f);
 
@@ -640,9 +653,21 @@ void RemoteFileBrowser::Render()
             ImGuiTableFlags_BordersInnerH | ImGuiTableFlags_Resizable |
             ImGuiTableFlags_Sortable;
 
+        // Wrap the listing in a rounded, bordered card matching the header/footer
+        // cards; interior padding insets the rows from the border.
+        ImGui::PushStyleColor(ImGuiCol_ChildBg, settings.GetColor(Colors::kBgPanel));
+        ImGui::PushStyleColor(ImGuiCol_Border,
+                              settings.GetColor(Colors::kPanelBorderSubtle));
+        ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, PANEL_CARD_ROUNDING);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
+                            ImVec2(kFileTableCardPadX, kFileTableCardPadY));
+        ImGui::BeginChild("RemoteFilesCard", ImVec2(0.0f, -footer_reserve),
+                          ImGuiChildFlags_Borders | ImGuiChildFlags_AlwaysUseWindowPadding,
+                          ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+
         ImGui::PushStyleVar(ImGuiStyleVar_CellPadding,
                             ImVec2(style.CellPadding.x, style.CellPadding.y + 3.0f));
-        if (ImGui::BeginTable("RemoteFiles", 4, table_flags, ImVec2(0, -footer_reserve)))
+        if (ImGui::BeginTable("RemoteFiles", 4, table_flags, ImVec2(0, 0)))
         {
             ImGui::TableSetupScrollFreeze(0, 1);
             ImGui::TableSetupColumn("Name",
@@ -652,10 +677,14 @@ void RemoteFileBrowser::Render()
             ImGui::TableSetupColumn("Modified", ImGuiTableColumnFlags_WidthFixed, 150.0f);
             ImGui::TableHeadersRow();
 
-            // Selected and hovered rows use the accent color.
-            ImGui::PushStyleColor(ImGuiCol_Header, accent);
-            ImGui::PushStyleColor(ImGuiCol_HeaderHovered, accent_hover);
-            ImGui::PushStyleColor(ImGuiCol_HeaderActive, accent_active);
+            // Use the shared translucent selection tint (as every other table)
+            // so row text stays readable rather than washing out on opaque accent.
+            ImGui::PushStyleColor(ImGuiCol_Header,
+                                  settings.GetColor(Colors::kSelection));
+            ImGui::PushStyleColor(ImGuiCol_HeaderHovered,
+                                  settings.GetColor(Colors::kHighlightChart));
+            ImGui::PushStyleColor(ImGuiCol_HeaderActive,
+                                  settings.GetColor(Colors::kHighlightChart));
 
             // Sort the visible list; directories always sort before files.
             if (ImGuiTableSortSpecs* specs = ImGui::TableGetSortSpecs())
@@ -734,7 +763,7 @@ void RemoteFileBrowser::Render()
                         NavigateBrowserTo(posix_parent_path(m_browser_dir), true);
                     }
                 }
-                const ImU32 c = parent_selected ? text_on_accent : accent;
+                const ImU32 c = accent;
                 ImGui::SameLine(0, 0);
                 row_icon(ICON_FOLDER, c);
                 ImGui::PushStyleColor(ImGuiCol_Text, c);
@@ -810,12 +839,9 @@ void RemoteFileBrowser::Render()
                     ImGui::SetScrollHereY();
                 }
 
-                // Selected rows draw on the accent color; otherwise folders are
-                // accented and files use the default text with a dimmed icon.
-                const ImU32 icon_color =
-                    row_selected ? text_on_accent : (f.is_dir ? accent : text_dim);
-                const ImU32 name_color =
-                    row_selected ? text_on_accent : (f.is_dir ? accent : text_main);
+                // Folders accented; files use default text with a dimmed icon.
+                const ImU32 icon_color = f.is_dir ? accent : text_dim;
+                const ImU32 name_color = f.is_dir ? accent : text_main;
                 ImGui::SameLine(0, 0);
                 row_icon(f.is_dir ? ICON_FOLDER : ICON_DOCUMENT, icon_color);
                 // Directory rows show the name (folders with a trailing slash).
@@ -852,7 +878,10 @@ void RemoteFileBrowser::Render()
             ImGui::PopStyleColor(3);
             ImGui::EndTable();
         }
-        ImGui::PopStyleVar();
+        ImGui::PopStyleVar();  // CellPadding
+        ImGui::EndChild();     // RemoteFilesCard
+        ImGui::PopStyleVar(2);   // ChildRounding, WindowPadding
+        ImGui::PopStyleColor(2); // ChildBg, Border
         m_scroll_to_selected = false;
 
         // Footer: item count, selection summary, Cancel and Open.
@@ -1080,6 +1109,7 @@ void RemoteFileBrowser::Render()
         ImGui::EndPopup();
     }
 
+    ImGui::PopStyleVar();  // WindowRounding
     popup_style.PopStyles();
 }
 

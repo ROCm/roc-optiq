@@ -19,6 +19,12 @@ namespace View
 
 class AppWindow;
 
+// Shared launcher layout metrics (kept here so the Browse / Add action buttons
+// and form label columns line up across the Target and Arguments sections).
+inline constexpr float kLaunchActionButtonWidth   = 84.0f;
+inline constexpr float kLaunchLabelColumnMinWidth = 105.0f;
+inline constexpr float kLaunchTooltipWrapEm       = 25.0f;
+
 // =============================================================================
 // Modern launcher UI primitives
 //
@@ -44,6 +50,9 @@ void LaunchSubHeader(const char* text, const char* help = nullptr);
 // iOS-style animated on/off switch. Returns true on the frame it is toggled.
 // Draws the label (and keeps it clickable) to the right of the switch.
 bool ToggleSwitch(const char* label, bool* value);
+
+// Advance width of a ToggleSwitch, for laying out controls beside it.
+float ToggleSwitchWidth();
 
 // A small rounded "tag": tinted background + accent border + accent text.
 // Advances the cursor by the chip size (use SameLine to place several).

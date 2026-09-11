@@ -136,7 +136,28 @@ DataProvider::ExecuteScript(const std::string& source, const std::vector<uint64_
 bool
 DataProvider::CancelScript()
 {
-    return CancelRequest(EXECUTE_SCRIPT_REQUEST_ID);
+    // Script jobs are not on JobSystem, so CancelRequest / future_cancel cannot
+    // stop them. Ask the interpreter, then keep the request until on_python_done
+    // completes the future - HandleRequests still owns the result and context.
+    auto it = m_requests.find(EXECUTE_SCRIPT_REQUEST_ID);
+    if(it == m_requests.end() || !it->second.request_future)
+    {
+        return false;
+    }
+
+    rocprofvis_result_t result =
+        rocprofvis_script_cancel(it->second.request_future);
+    if(result == kRocProfVisResultSuccess)
+    {
+        return true;
+    }
+    if(result == kRocProfVisResultNotLoaded)
+    {
+        // DropSession already ran; the completion event is still coming.
+        return true;
+    }
+    spdlog::debug("script_cancel failed ({})", static_cast<int>(result));
+    return false;
 }
 
 void

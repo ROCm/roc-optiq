@@ -155,13 +155,23 @@ open.
 
 A run stopped by the deadline reports an **error**, not
 `kRocProfVisPythonCancelled`: a timeout is a script to fix, and only an
-explicit cancel is a cancellation.
+explicit cancel is a cancellation. Which one it was is decided by the
+script's own budget (`m_exec_deadline`), kept separately from the retry
+schedule (`m_next_interrupt`). Do not infer it from whether the
+watchdog woke early: after a cancel the watchdog reschedules itself
+1s out, and *that* wait expires normally, so every run cancelled by
+hand would be reported as a timeout - with the budget's duration in the
+message, since the text is built from `timeout_ms` and not from elapsed
+time. That bug shipped once; this is why the deadline is stored.
 
-One gap worth knowing: a script parked inside `wait_inner` has released
-the GIL, so the raise only lands once that fetch returns and control is
-back in bytecode. The fetch bounds itself, so this has not needed
-solving, but it is why a timeout is not instant on a query-heavy
-script.
+A script parked inside `wait_inner` has released the GIL, so the raise
+only lands once that fetch returns and control is back in bytecode.
+`wait_inner` therefore does not rely on the raise: it polls
+`Session::cancelled` (atomic, for this reason) each slice and cancels
+the inner fetch itself, which reaches the db layer. Cancel is still not
+instant on a query-heavy script - it takes as long as the db layer
+needs to honour the cancel - but it no longer waits out the whole
+fetch.
 
 **Errors carry the traceback.** `FormatPythonError` runs the failing
 exception through the stdlib `traceback` module, so the message names
@@ -272,14 +282,29 @@ Inside `track.events()` / `table.fetch()`:
 2. Slice-wait (`future_wait(inner, ~0.05s)`).
 3. Copy inner progress onto the **script session** Future so the view
    bar updates without Python running a callback.
-4. Check cancel / `PyErr_CheckSignals`.
+4. Check `Session::cancelled` / `PyErr_CheckSignals`; on either, cancel
+   the inner fetch once and keep slice-waiting until it completes. The
+   wait must run to completion even while stopping, because the caller
+   frees the inner Future on the way out and `~Future` deletes a job a
+   JobSystem worker may still be executing. Raise
+   `KeyboardInterrupt` only after the wait ends.
 5. On completion, copy rows/events into Python objects (or keep the
    array alive for the list). Do not leave live handles after
    `CloseController`.
 
 `wait(FLT_MAX)` is correct but silent: the script cannot react until
 the fetch ends. Slice-wait is the default so cancel and UI progress
-work. An optional `optiq.on_progress` runs between slices.
+work.
+
+`optiq.on_progress` (listed in §5's surface) is **not implemented**, and
+adding it would cost more than it looks. No binding currently re-enters
+Python bytecode, so the async `KeyboardInterrupt` can only land
+*between* binding calls - which is why cancel cannot leak: a binding
+either returns a Python object that owns its C handles, or takes its own
+error path and frees them. A progress callback runs bytecode in the
+middle of `track_events` / `table_fetch`, while `array`, `future` and
+`fetch_args` are live and owned by nobody but the C frame. Anyone adding
+it has to make those allocations exception-safe first.
 
 One outstanding inner wait per script in v1. Sequential fetches are
 enough.
@@ -295,11 +320,15 @@ fetch), not a parallel-only event channel.
 - `DataProvider::ExecuteScript(source, track_ids, start_ts, end_ts)`
   builds script-context `arguments_t`, calls
   `rocprofvis_script_execute_async`, polls the Future each frame,
-  forwards `kRPVControllerFutureProgressPercentage`. Cancel calls
-  `rocprofvis_script_cancel` **then** `future_cancel` (script jobs are
-  not on JobSystem). Tab-close cleanup cancels and frees but posts no
-  event: it runs off the UI thread, after the editor is already gone,
-  so there is nobody left to tell.
+  forwards `kRPVControllerFutureProgressPercentage`. Cancel is
+  `CancelScript`, which calls `rocprofvis_script_cancel` only - script
+  jobs are not on JobSystem, so `future_cancel` cannot stop them and
+  must not be treated as the answer. The session future stays Pending
+  until exec returns; the editor waits for `ScriptExecuteComplete`.
+  Tab-close cleanup also uses `rocprofvis_script_cancel` (not
+  `future_cancel`), then bound-waits and frees, but posts no event: it
+  runs off the UI thread, after the editor is already gone, so there is
+  nobody left to tell.
 - **Script editor** (`widgets/rocprofvis_script_editor.*`): the
   **Script tab** of the details panel, built and owned by `AnalysisView`
   beside Event Table / Top Events / Annotations. It is a plain

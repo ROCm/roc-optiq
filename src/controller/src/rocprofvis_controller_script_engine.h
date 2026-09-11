@@ -7,6 +7,7 @@
 #include "rocprofvis_controller_job_system.h"
 #include "rocprofvis_controller_script.h"
 
+#include <atomic>
 #include <mutex>
 #include <string>
 #include <unordered_map>
@@ -49,8 +50,10 @@ public:
         rocprofvis_controller_t*           controller = nullptr;
         rocprofvis_controller_arguments_t* context    = nullptr;
         // Set by Cancel. Read when the session starts, because a cancel can
-        // arrive while it is still queued behind another script.
-        bool                               cancelled  = false;
+        // arrive while it is still queued behind another script, and polled by
+        // the bindings' wait loop, which is outside the engine's lock - hence
+        // atomic rather than a plain bool.
+        std::atomic<bool>                  cancelled{false};
     };
 
     static ScriptEngine& Get();

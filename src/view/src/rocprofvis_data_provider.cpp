@@ -207,15 +207,20 @@ DataProvider::CleanupDetachedResources(DataProviderCleanupWork cleanup_work)
 #ifdef ROCPROFVIS_ENABLE_SCRIPTING
             if(req.request_type == RequestType::kExecuteScript)
             {
+                // Interpreter interrupt only. future_cancel looks in the
+                // JobSystem queue, which this job was never on.
                 rocprofvis_script_cancel(req.request_future);
             }
+            else
 #endif
-            rocprofvis_result_t result =
-                rocprofvis_controller_future_cancel(req.request_future);
-            if(result != kRocProfVisResultSuccess)
             {
-                spdlog::warn("Failed to cancel request {}: {}", req.request_id,
-                             static_cast<int>(result));
+                rocprofvis_result_t result =
+                    rocprofvis_controller_future_cancel(req.request_future);
+                if(result != kRocProfVisResultSuccess)
+                {
+                    spdlog::warn("Failed to cancel request {}: {}", req.request_id,
+                                 static_cast<int>(result));
+                }
             }
         }
     }
@@ -2628,13 +2633,6 @@ DataProvider::CancelRequest(uint64_t request_id)
     {
         spdlog::debug("Cancelling request id: {}", request_id);
         RequestInfo& request_info = it->second;
-#ifdef ROCPROFVIS_ENABLE_SCRIPTING
-        if(request_info.request_type == RequestType::kExecuteScript &&
-           request_info.request_future)
-        {
-            rocprofvis_script_cancel(request_info.request_future);
-        }
-#endif
         rocprofvis_result_t result =
             rocprofvis_controller_future_cancel(request_info.request_future);
         if(result == kRocProfVisResultSuccess)

@@ -799,7 +799,8 @@ tab.
 
 Run sends the source string through `DataProvider::ExecuteScript`
 (selected tracks / time range, or all tracks and the full trace).
-Cancel uses `CancelScript`. Load/Save go through `AppWindow` file
+Cancel uses `CancelScript` (interpreter interrupt, not
+`CancelRequest` / JobSystem). Load/Save go through `AppWindow` file
 dialogs with a `.py` filter. Output is `optiq.result.text` / the error
 string. No syntax highlighting; result tables are Phase 2.
 

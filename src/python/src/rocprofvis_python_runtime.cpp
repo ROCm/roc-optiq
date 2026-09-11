@@ -318,6 +318,9 @@ private:
     bool                                  m_exec_timed_out      = false;
     bool                                  m_interrupt_requested = false;
     std::chrono::steady_clock::time_point m_next_interrupt;
+    // The script's own budget, kept apart from m_next_interrupt because the
+    // latter is rescheduled on every retry. Only this one says "timed out".
+    std::chrono::steady_clock::time_point m_exec_deadline;
     // Python's own id for the interpreter thread, which is what
     // PyThreadState_SetAsyncExc addresses. Written once during init.
     unsigned long                         m_py_thread_ident = 0;
@@ -642,8 +645,9 @@ Runtime::BeginExecDeadline(uint64_t timeout_ms)
     m_exec_active         = true;
     m_exec_timed_out      = false;
     m_interrupt_requested = false;
-    m_next_interrupt      = std::chrono::steady_clock::now() +
-                       std::chrono::milliseconds(timeout_ms);
+    m_exec_deadline       = std::chrono::steady_clock::now() +
+                      std::chrono::milliseconds(timeout_ms);
+    m_next_interrupt = m_exec_deadline;
     m_watchdog_cv.notify_all();
 }
 
@@ -775,10 +779,9 @@ Runtime::WatchdogMain()
 
             // Stopping is deliberately not part of the predicate: a hung
             // script has to be interrupted, not left behind.
-            const bool woke_early =
-                m_watchdog_cv.wait_until(lock, m_next_interrupt, [this]() {
-                    return !m_exec_active || m_interrupt_requested;
-                });
+            m_watchdog_cv.wait_until(lock, m_next_interrupt, [this]() {
+                return !m_exec_active || m_interrupt_requested;
+            });
 
             if(!m_exec_active)
             {
@@ -787,9 +790,11 @@ Runtime::WatchdogMain()
                 continue;
             }
 
-            // Woken early means an explicit cancel, delivered the same way but
-            // reported as cancelled rather than as a script to go and fix.
-            if(!woke_early)
+            // A cancel is delivered the same way as a deadline, so the budget
+            // decides which one this is. Checking woke_early instead would call
+            // every retry tick after a cancel a timeout, since those waits
+            // expire normally.
+            if(std::chrono::steady_clock::now() >= m_exec_deadline)
             {
                 m_exec_timed_out = true;
             }

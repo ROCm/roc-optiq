@@ -268,18 +268,38 @@ int
 wait_inner(ScriptEngine::Session* session, rocprofvis_controller_future_t* inner)
 {
     int                 ok          = 0;
+    bool                stopping    = false;
     rocprofvis_result_t wait_result = kRocProfVisResultTimeout;
     while(wait_result == kRocProfVisResultTimeout)
     {
         Py_BEGIN_ALLOW_THREADS
         wait_result = rocprofvis_controller_future_wait(inner, SLICE_WAIT_SECONDS);
         Py_END_ALLOW_THREADS
-        if(PyErr_CheckSignals() < 0)
+        if(!stopping)
         {
-            rocprofvis_controller_future_cancel(inner);
-            return 0;
+            // A cancel is delivered as PyThreadState_SetAsyncExc, which does not
+            // land until the interpreter is back on bytecode, so watching only
+            // for a raised exception here would sit out the whole fetch. The
+            // engine's flag is visible straight away. Cancelling the fetch
+            // reaches the db layer, which is what actually shortens it.
+            if(PyErr_CheckSignals() < 0 ||
+               (session && session->cancelled.load(std::memory_order_relaxed)))
+            {
+                stopping = true;
+                rocprofvis_controller_future_cancel(inner);
+            }
         }
         copy_progress(session, inner);
+    }
+    // The wait runs to completion even while stopping: the caller frees this
+    // future on the way out, and that deletes a job a worker may still be on.
+    if(stopping)
+    {
+        if(!PyErr_Occurred())
+        {
+            PyErr_SetNone(PyExc_KeyboardInterrupt);
+        }
+        return 0;
     }
     if(wait_result == kRocProfVisResultSuccess)
     {

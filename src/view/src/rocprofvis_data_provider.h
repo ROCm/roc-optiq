@@ -260,6 +260,9 @@ public:
     // tracks; start/end are the visible or selected time range.
     bool ExecuteScript(const std::string& source, const std::vector<uint64_t>& track_ids,
                        double start_ts, double end_ts);
+    // Asks the interpreter to stop. True means a completion event is still
+    // coming - the session future is not a JobSystem job and stays Pending
+    // until exec returns. False means there is no in-flight script.
     bool CancelScript();
 
     // What the last script produced, kept after its request is gone: a caller

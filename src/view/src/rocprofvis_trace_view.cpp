@@ -232,7 +232,7 @@ TraceView::Update()
     if(!m_view_created)
     {
         CreateView();
-        m_view_created = true;
+        m_view_created = (m_timeline_view != nullptr);
     }
 
     auto new_state = m_data_provider.GetState();
@@ -275,6 +275,13 @@ TraceView::Update()
     if(m_minimap && m_show_minimap_popup)
     {
         m_minimap->Update();
+    }
+
+    if(m_popup_info.show_popup)
+    {
+        m_popup_info.show_popup = false;
+        AppWindow::GetInstance()->ShowMessageDialog(m_popup_info.title,
+                                                    m_popup_info.message);
     }
 }
 
@@ -408,13 +415,6 @@ TraceView::Render()
             ImGui::End();
             popup_style.PopStyles();
         }
-    }
-
-    if(m_popup_info.show_popup)
-    {
-        m_popup_info.show_popup = false;
-        AppWindow::GetInstance()->ShowMessageDialog(m_popup_info.title,
-                                                    m_popup_info.message);
     }
 
     if(m_summary_view)

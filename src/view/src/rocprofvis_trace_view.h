@@ -104,12 +104,12 @@ private:
     DataProvider m_data_provider;
     bool         m_view_created;
 
-    typedef struct popup_info_t
+    struct popup_info_t
     {
         bool        show_popup;
         std::string title;
         std::string message;
-    } popup_info_t;
+    };
 
     popup_info_t                        m_popup_info;
     bool                                m_show_minimap_popup;

@@ -47,9 +47,16 @@ private:
                                   const std::string& message);
     void ShowPendingDatabaseErrorDialog();
 
-    bool  m_view_created;
-    bool  m_database_error_queued;
-    float m_toolbar_available_width;
+    enum class ErrorDialogState
+    {
+        kNone,
+        kPending,
+        kShown
+    };
+
+    bool             m_view_created;
+    ErrorDialogState m_error_dialog_state;
+    float            m_toolbar_available_width;
 
     std::shared_ptr<ComputeSelection> m_compute_selection;
     std::unique_ptr<PresetBrowser>    m_preset_browser;
@@ -58,7 +65,6 @@ private:
 
     struct popup_info_t
     {
-        bool        show_popup;
         std::string title;
         std::string message;
     };

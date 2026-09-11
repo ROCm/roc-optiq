@@ -36,12 +36,12 @@ constexpr const char* INVALID_COMPUTE_DATABASE_MESSAGE =
 
 ComputeView::ComputeView()
 : m_view_created(false)
-, m_database_error_queued(false)
+, m_error_dialog_state(ErrorDialogState::kNone)
 , m_toolbar_available_width(0.0f)
 , m_compute_selection(nullptr)
 , m_preset_browser(nullptr)
 , m_tab_container(nullptr)
-, m_popup_info({ false, "", "" })
+, m_popup_info({})
 {
     m_tool_bar = std::make_shared<RocCustomWidget>([this]() { this->RenderToolbar(); });
     m_widget_name = GenUniqueName("ComputeView");
@@ -107,7 +107,7 @@ ComputeView::Update()
 
     const ProviderState new_state = m_data_provider.GetState();
 
-    if(!m_view_created && !m_database_error_queued &&
+    if(!m_view_created && m_error_dialog_state == ErrorDialogState::kNone &&
        (new_state == ProviderState::kReady || new_state == ProviderState::kError))
     {
         CreateView();
@@ -248,9 +248,9 @@ ComputeView::InitializeMetricTabStates(
 void
 ComputeView::DestroyView()
 {
-    m_view_created          = false;
-    m_database_error_queued = false;
-    m_popup_info            = { false, "", "" };
+    m_view_created       = false;
+    m_error_dialog_state = ErrorDialogState::kNone;
+    m_popup_info         = {};
     m_tab_container.reset();
     m_compute_selection.reset();
     m_preset_browser.reset();
@@ -259,8 +259,8 @@ ComputeView::DestroyView()
 bool
 ComputeView::LoadTrace(rocprofvis_controller_t* controller, const std::string& file_path)
 {
-    m_database_error_queued = false;
-    m_popup_info            = { false, "", "" };
+    m_error_dialog_state = ErrorDialogState::kNone;
+    m_popup_info         = {};
 
     bool result = false;
     result      = m_data_provider.FetchTrace(controller, file_path);
@@ -291,15 +291,14 @@ void
 ComputeView::QueueDatabaseErrorDialog(const std::string& file_path,
                                       const std::string& message)
 {
-    if(m_database_error_queued)
+    if(m_error_dialog_state != ErrorDialogState::kNone)
     {
         return;
     }
 
-    m_database_error_queued = true;
-    m_popup_info.show_popup = true;
-    m_popup_info.title      = "Invalid Compute Database";
-    m_popup_info.message    = message;
+    m_error_dialog_state = ErrorDialogState::kPending;
+    m_popup_info.title   = "Invalid Compute Database";
+    m_popup_info.message = message;
     if(!file_path.empty())
     {
         m_popup_info.message += "\n\nFile: " + file_path;
@@ -309,12 +308,12 @@ ComputeView::QueueDatabaseErrorDialog(const std::string& file_path,
 void
 ComputeView::ShowPendingDatabaseErrorDialog()
 {
-    if(!m_popup_info.show_popup)
+    if(m_error_dialog_state != ErrorDialogState::kPending)
     {
         return;
     }
 
-    m_popup_info.show_popup = false;
+    m_error_dialog_state      = ErrorDialogState::kShown;
     AppWindow*        app_window = AppWindow::GetInstance();
     const std::string project_id = m_data_provider.GetTraceFilePath();
     app_window->ShowMessageDialog(

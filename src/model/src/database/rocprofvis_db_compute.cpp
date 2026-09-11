@@ -180,6 +180,7 @@ namespace DataModel
 			result = kRocProfVisDmResultInvalidParameter;
 			if (num == 1 && params != nullptr && params[0].param_type == kRPVComputeParamWorkloadId)
 			{
+				const bool has_isa_schema = IsVersionGreaterOrEqual("2.2.0");
 				query_out =
 					"SELECT "
 					"compute_kernel.kernel_uuid AS kernel_uuid,"
@@ -188,7 +189,7 @@ namespace DataModel
 					"compute_kernel.kernel_name AS kernel_name,"
 					"compute_dispatch.dispatch_id AS dispatch_id,"
 					"(compute_dispatch.end_timestamp - compute_dispatch.start_timestamp) AS duration_ns,";
-				if (IsVersionGreaterOrEqual("2.2.0"))
+				if (has_isa_schema)
 				{
 					query_out += "CASE WHEN isa.kernel_uuid IS NULL THEN 0 ELSE 1 END AS has_isa_lines ";
 				}
@@ -202,7 +203,7 @@ namespace DataModel
 					"ON compute_dispatch.kernel_uuid = compute_kernel.kernel_uuid "
 					"JOIN compute_workload "
 					"ON compute_kernel.workload_id = compute_workload.workload_id ";
-				if (IsVersionGreaterOrEqual("2.2.0"))
+				if (has_isa_schema)
 				{
 					query_out +=
 						"LEFT JOIN ("
@@ -277,20 +278,26 @@ namespace DataModel
 			{
 				query_out = "SELECT DISTINCT value_name FROM ";
 				query_out += IsVersionGreaterOrEqual("1.3.0") ? "compute_workload_metric_value " : "compute_metric_value ";
-				query_out += "WHERE metric_uuid IN(";
 				std::string in_query;
-				for (auto& [metric_id, metric_uuid] : m_db->m_metric_uuid_lookup[std::atol(params[0].param_str)])
+				auto metric_lookup_it = m_db->m_metric_uuid_lookup.find(
+					std::atol(params[0].param_str));
+				if (metric_lookup_it != m_db->m_metric_uuid_lookup.end())
 				{
-					if (metric_id.find(params[1].param_str) == 0)
+					for (const auto& [metric_id, metric_uuid] : metric_lookup_it->second)
 					{
-						if (!in_query.empty())
+						if (metric_id.find(params[1].param_str) == 0)
 						{
-							in_query += ",";
+							if (!in_query.empty())
+							{
+								in_query += ",";
+							}
+							in_query += std::to_string(metric_uuid);
 						}
-						in_query += std::to_string(metric_uuid);
 					}
 				}
-				query_out += in_query + ")";
+				query_out += in_query.empty()
+					? "WHERE 0"
+					: "WHERE metric_uuid IN(" + in_query + ")";
 				result = kRocProfVisDmResultSuccess;
 			}
 		}
@@ -912,10 +919,16 @@ rocprofvis_dm_result_t ComputeQueryFactory::GetComputeKernelMetricsMatrix(
 
 void ComputeQueryFactory::ParseMetricParam(std::string metric_str, uint32_t workload_id, std::set<uint32_t>& metric_ids)
 {
+	auto metric_lookup_it = m_db->m_metric_uuid_lookup.find(workload_id);
+	if (metric_lookup_it == m_db->m_metric_uuid_lookup.end())
+	{
+		return;
+	}
+
 	//x.x.x format
 	if (2 == std::count(metric_str.begin(), metric_str.end(), '.'))
 	{
-		for (auto metric : m_db->m_metric_uuid_lookup[workload_id])
+		for (const auto& metric : metric_lookup_it->second)
 		{
 
 			if (metric.first == metric_str)
@@ -926,7 +939,7 @@ void ComputeQueryFactory::ParseMetricParam(std::string metric_str, uint32_t work
 	}
 	else
 	{
-		for (auto metric : m_db->m_metric_uuid_lookup[workload_id])
+		for (const auto& metric : metric_lookup_it->second)
 		{
 			if (metric.first.find(metric_str+".") == 0)
 			{
@@ -972,14 +985,16 @@ void ComputeQueryFactory::ParseMetricParam(std::string metric_str, uint32_t work
 			{
 				query = "SELECT metric_id, metric_name, kernel_uuid, value_name, value from ";
 				query += (IsVersionGreaterOrEqual("1.3.0")) ? "compute_kernel_metric_view " : "compute_metric_view ";
-				if (metric_ids.empty())
+				auto metric_lookup_it = m_db->m_metric_uuid_lookup.find(workload_id);
+				if (metric_ids.empty() ||
+					metric_lookup_it == m_db->m_metric_uuid_lookup.end())
 				{
 					query += "WHERE 0";
 					return kRocProfVisDmResultSuccess;
 				}
 				query += "WHERE ";
 				int count = 0;
-				if (metric_ids.size() < m_db->m_metric_uuid_lookup[workload_id].size())
+				if (metric_ids.size() < metric_lookup_it->second.size())
 				{
 					query += "metric_uuid IN(";
 					for (auto metric_id : metric_ids)
@@ -1029,12 +1044,15 @@ void ComputeQueryFactory::ParseMetricParam(std::string metric_str, uint32_t work
 					workload_id = std::atol(params[i].param_str);
 					workload_detected =
 						m_db->m_metric_uuid_lookup.count(workload_id) > 0;
-					for (const auto& kernel_workload : m_db->m_kernel_workload_lookup)
+					if (!workload_detected)
 					{
-						if (kernel_workload.second == workload_id)
+						for (const auto& kernel_workload : m_db->m_kernel_workload_lookup)
 						{
-							workload_detected = true;
-							break;
+							if (kernel_workload.second == workload_id)
+							{
+								workload_detected = true;
+								break;
+							}
 						}
 					}
 				} else
@@ -1048,14 +1066,16 @@ void ComputeQueryFactory::ParseMetricParam(std::string metric_str, uint32_t work
 			{
 				query = "SELECT metric_id, metric_name, workload_id, workload_name, value_name, value from ";
 				query += "compute_workload_metric_view ";
-				if (metric_ids.empty())
+				auto metric_lookup_it = m_db->m_metric_uuid_lookup.find(workload_id);
+				if (metric_ids.empty() ||
+					metric_lookup_it == m_db->m_metric_uuid_lookup.end())
 				{
 					query += "WHERE 0";
 					return kRocProfVisDmResultSuccess;
 				}
 				query += "WHERE ";
 				int count = 0;
-				if (metric_ids.size() < m_db->m_metric_uuid_lookup[workload_id].size())
+				if (metric_ids.size() < metric_lookup_it->second.size())
 				{
 					query += "metric_uuid IN(";
 					for (auto metric_id : metric_ids)
@@ -1605,14 +1625,14 @@ void ComputeQueryFactory::ParseMetricParam(std::string metric_str, uint32_t work
 		std::string kernel_name = db->Sqlite3ColumnText(func, stmt, azColName, 3);
 		uint64_t duration = db->Sqlite3ColumnInt64(func, stmt, azColName, 5);
 		bool has_isa_lines = db->Sqlite3ColumnInt(func, stmt, azColName, 6) != 0;
-		auto& s = db->m_kernel_stats[kernel_uuid];
-		s.count++;
-		s.sum += duration;
-		s.min = std::min(s.min, duration);
-		s.max = std::max(s.max, duration);
-		s.has_isa_lines = s.has_isa_lines || has_isa_lines;
-		s.name = kernel_name;
-		s.durations.push_back(duration);
+		KernelStats& stats = db->m_kernel_stats[kernel_uuid];
+		stats.count++;
+		stats.sum += duration;
+		stats.min = std::min(stats.min, duration);
+		stats.max = std::max(stats.max, duration);
+		stats.has_isa_lines = stats.has_isa_lines || has_isa_lines;
+		stats.name = kernel_name;
+		stats.durations.push_back(duration);
 
 		callback_params->future->CountThisRow();
 		return 0;

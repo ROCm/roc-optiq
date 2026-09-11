@@ -381,6 +381,27 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisDMFixture, "Compute Trace Data-Model Test
                 }
             }
         }
+
+        constexpr const char* missing_id = "4294967295";
+        dm_result = ExecuteComputeQuery(
+            m_db, kRPVComputeFetchWorkloadMetricValueNames,
+            { { kRPVComputeParamWorkloadId, missing_id },
+              { kRPVComputeParamMetricId, missing_id } },
+            table_id);
+        REQUIRE(kRocProfVisDmResultSuccess == dm_result);
+        ComputeQueryResult missing_value_names =
+            ParseComputeQueryResult(m_trace, table_id);
+        REQUIRE(missing_value_names.rows.empty());
+
+        dm_result = ExecuteComputeQuery(
+            m_db, kRPVComputeFetchMetricValuesByWorkload,
+            { { kRPVComputeParamWorkloadId, missing_id },
+              { kRPVComputeParamMetricId, missing_id } },
+            table_id);
+        if(kRocProfVisDmResultNotSupported != dm_result)
+        {
+            REQUIRE(kRocProfVisDmResultInvalidParameter == dm_result);
+        }
     }
 
     // Fetches the top kernels for each workload, storing their UUIDs in the fixture.

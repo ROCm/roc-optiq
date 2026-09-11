@@ -816,18 +816,26 @@ void RegisterAppTests(ImGuiTestEngine* e)
         if (tc == nullptr) return;
 
         const std::vector<const TabItem*> tabs = tc->GetTabs();
-        ComputeTableView* tbl = nullptr;
+        const TabItem*    table_tab = nullptr;
+        ComputeTableView* tbl       = nullptr;
         for (const TabItem* tab : tabs)
         {
             if (tab->m_id == ComputeTableView::TAB_ID)
             {
-                tbl = dynamic_cast<ComputeTableView*>(tab->m_widget.get());
+                table_tab = tab;
+                tbl       = dynamic_cast<ComputeTableView*>(tab->m_widget.get());
                 break;
             }
         }
         if (tbl == nullptr)
         {
             ctx->LogWarning("SKIP: no Table View tab in this build");
+            return;
+        }
+        if (!table_tab->m_enabled)
+        {
+            ctx->LogWarning(
+                "SKIP: Table View tab is disabled because the database has no metrics");
             return;
         }
 
@@ -849,6 +857,11 @@ void RegisterAppTests(ImGuiTestEngine* e)
 
         tc->SetActiveTab(ComputeTableView::TAB_ID);
         ctx->Yield(3);
+        const TabItem* active_tab = tc->GetActiveTab();
+        IM_CHECK(active_tab != nullptr);
+        if (active_tab == nullptr) return;
+        IM_CHECK(active_tab->m_id == ComputeTableView::TAB_ID);
+        if (active_tab->m_id != ComputeTableView::TAB_ID) return;
         ComputeTableViewTestPeer peer{*tbl};
         for (int i = 0; i < 200 && (peer.FetchPending() || peer.TableWidgetCount() == 0); i++)
             ctx->Yield(2);
@@ -1560,11 +1573,29 @@ void RegisterAppTests(ImGuiTestEngine* e)
 
         // The kernel metric table renders only while the "Kernel Details" tab is
         // active (TabContainer renders just the active tab's content).
+        const std::vector<const TabItem*> tabs = tc->GetTabs();
+        const auto kernel_details_it =
+            std::find_if(tabs.begin(), tabs.end(), [](const TabItem* tab) {
+                return tab && tab->m_id == ComputeKernelDetailsView::TAB_ID;
+            });
+        if (kernel_details_it == tabs.end())
+        {
+            ctx->LogWarning("SKIP: no Kernel Details tab in this build");
+            return;
+        }
+        if (!(*kernel_details_it)->m_enabled)
+        {
+            ctx->LogWarning("SKIP: Kernel Details tab is disabled");
+            return;
+        }
+
         tc->SetActiveTab(ComputeKernelDetailsView::TAB_ID);
         ctx->Yield(3);
         const TabItem* tab = tc->GetActiveTab();
         IM_CHECK(tab != nullptr);
         if (tab == nullptr) return;
+        IM_CHECK(tab->m_id == ComputeKernelDetailsView::TAB_ID);
+        if (tab->m_id != ComputeKernelDetailsView::TAB_ID) return;
         ComputeKernelDetailsView* kd =
             dynamic_cast<ComputeKernelDetailsView*>(tab->m_widget.get());
         IM_CHECK(kd != nullptr);

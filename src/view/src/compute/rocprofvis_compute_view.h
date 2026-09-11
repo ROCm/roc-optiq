@@ -41,7 +41,8 @@ private:
     void RenderToolbar();
     void RenderWorkloadSelection();
     void RenderPresets();
-    void InitializeMetricTabStates();
+    void InitializeMetricTabStates(
+        const std::vector<const WorkloadInfo*>& workloads);
     void QueueDatabaseErrorDialog(const std::string& file_path,
                                   const std::string& message);
 
@@ -53,12 +54,12 @@ private:
 
     std::shared_ptr<TabContainer> m_tab_container;
 
-    typedef struct popup_info_t
+    struct popup_info_t
     {
         bool        show_popup;
         std::string title;
         std::string message;
-    } popup_info_t;
+    };
 
     popup_info_t m_popup_info;
 

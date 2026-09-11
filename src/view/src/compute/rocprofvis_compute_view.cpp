@@ -29,6 +29,11 @@ namespace RocProfVis
 namespace View
 {
 
+constexpr const char* INVALID_COMPUTE_DATABASE_MESSAGE =
+    "The file could not be loaded as a compatible compute profiling "
+    "database. Its schema may be invalid or unsupported, or required "
+    "compute-profile data may be missing.";
+
 ComputeView::ComputeView()
 : m_view_created(false)
 , m_toolbar_available_width(0.0f)
@@ -45,11 +50,7 @@ ComputeView::ComputeView()
         if(response_code != kRocProfVisResultSuccess)
         {
             spdlog::error("Failed to load trace: {}", response_code);
-            QueueDatabaseErrorDialog(
-                trace_path,
-                "The file could not be loaded as a compatible compute profiling "
-                "database. Its schema may be invalid or unsupported, or required "
-                "compute-profile data may be missing.");
+            QueueDatabaseErrorDialog(trace_path, INVALID_COMPUTE_DATABASE_MESSAGE);
         }
     });
 
@@ -103,7 +104,7 @@ ComputeView::Update()
 {
     m_data_provider.Update();
 
-    auto new_state = m_data_provider.GetState();
+    const ProviderState new_state = m_data_provider.GetState();
 
     if(!m_view_created &&
        (new_state == ProviderState::kReady || new_state == ProviderState::kError))
@@ -136,11 +137,8 @@ ComputeView::CreateView()
     {
         if(!m_popup_info.show_popup)
         {
-            QueueDatabaseErrorDialog(
-                m_data_provider.GetTraceFilePath(),
-                "The file could not be loaded as a compatible compute profiling "
-                "database. Its schema may be invalid or unsupported, or required "
-                "compute-profile data may be missing.");
+            QueueDatabaseErrorDialog(m_data_provider.GetTraceFilePath(),
+                                     INVALID_COMPUTE_DATABASE_MESSAGE);
         }
         return;
     }
@@ -208,19 +206,18 @@ ComputeView::CreateView()
                 false});
 #endif
     m_tab_container->SetAllowToolTips(false);
-    InitializeMetricTabStates();
+    InitializeMetricTabStates(workloads);
 }
 
 void
-ComputeView::InitializeMetricTabStates()
+ComputeView::InitializeMetricTabStates(
+    const std::vector<const WorkloadInfo*>& workloads)
 {
     if(!m_tab_container)
     {
         return;
     }
 
-    const std::vector<const WorkloadInfo*>& workloads =
-        m_data_provider.ComputeModel().GetWorkloadList();
     const auto has_available_metrics = [](const WorkloadInfo* workload) {
         return workload &&
                std::any_of(workload->available_metrics.ordered_categories.begin(),

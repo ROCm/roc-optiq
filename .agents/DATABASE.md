@@ -1205,7 +1205,10 @@ gate.
 Internal helpers: `ClassifyMetricIdFormat(s)` decides whether a
 metric ID is `XY`, `XYZ`, or `Other`; `ParseMetricParam(...)`
 splits the `"category.table.entry:value_name"` selector into a set
-of metric IDs.
+of metric IDs. Read-only metric lookup paths use `find()` so a
+workload without metrics does not acquire a synthetic empty lookup
+entry; `operator[]` is reserved for populating the lookup while
+metadata is loaded.
 
 ### 8.4 `BuildTableQuery` flow
 

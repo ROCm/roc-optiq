@@ -950,9 +950,7 @@ IsaCodeWidget::RenderLine(uint32_t index, uint32_t columns_count)
         m_line_selection.hovered_this_frame = true;
     }
 
-    const bool line_selected = isa_row.source_line_id != 0 &&
-                               isa_row.source_line_id == m_line_selection.selected_line;
-    if(line_selected)
+    if(row_selected)
         ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0,
                                m_settings.GetColor(Colors::kSelection));
     else if(item_hovered || row_hovered)

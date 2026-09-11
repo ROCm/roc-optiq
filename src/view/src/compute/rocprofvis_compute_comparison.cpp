@@ -451,7 +451,8 @@ ComputeComparisonView::UpdateMetrics()
                         if(valid_match)
                         {
                             if(baseline_value && target_value &&
-                               rounded_baseline != rounded_target)
+                               std::fabs(rounded_baseline - rounded_target) >
+                                   (0.5 / ROUND_FACTOR))
                             {
                                 bg_color_baseline = Table::DisplayProps::Color{
                                     Colors::kComparisonBase, 255

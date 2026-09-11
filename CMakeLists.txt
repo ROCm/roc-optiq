@@ -271,6 +271,24 @@ if(APPLE)
     list(APPEND APP_FILES src/app/src/rocprofvis_platform_helpers_macos.mm)
 endif()
 
+# Embed the per-architecture Memory Chart JSON layouts (resources/memory_chart/*.json)
+# into a generated header at build time, so they are compiled in rather than
+# shipped as runtime assets. Editing a layout JSON re-runs the generator.
+set(MEMCHART_LAYOUT_DIR ${CMAKE_SOURCE_DIR}/resources/memory_chart)
+set(MEMCHART_HEADER ${CMAKE_SOURCE_DIR}/src/view/src/compute/rocprofvis_memory_chart_layouts_generated.h)
+file(GLOB MEMCHART_LAYOUT_JSON CONFIGURE_DEPENDS ${MEMCHART_LAYOUT_DIR}/*.json)
+add_custom_command(
+    OUTPUT ${MEMCHART_HEADER}
+    COMMAND ${CMAKE_COMMAND}
+        -DMEMCHART_DIR=${MEMCHART_LAYOUT_DIR}
+        -DMEMCHART_OUT=${MEMCHART_HEADER}
+        -P ${CMAKE_SOURCE_DIR}/cmake/embed_memory_chart_layouts.cmake
+    DEPENDS ${MEMCHART_LAYOUT_JSON} ${CMAKE_SOURCE_DIR}/cmake/embed_memory_chart_layouts.cmake
+    COMMENT "Embedding memory-chart layouts -> ${MEMCHART_HEADER}"
+    VERBATIM
+)
+add_custom_target(generate_memory_chart_layouts DEPENDS ${MEMCHART_HEADER})
+
 if(APPLE)
     add_executable(${TARGET_NAME} MACOSX_BUNDLE ${APP_FILES} src/app/src/main.cpp ${VIEW_FILES})
 else()
@@ -278,6 +296,7 @@ else()
 endif()
 
 add_dependencies(${TARGET_NAME} generate_icon_header)
+add_dependencies(${TARGET_NAME} generate_memory_chart_layouts)
 
 if(WIN32)
     set_target_properties(${TARGET_NAME} PROPERTIES WIN32_EXECUTABLE TRUE)
@@ -372,6 +391,7 @@ if(BUILD_TESTING AND ROCPROFVIS_ENABLE_UI_TESTS)
     set(TEST_TARGET ${TARGET_NAME}-tests)
     add_executable(${TEST_TARGET} ${APP_FILES} src/app/test/test_main.cpp ${VIEW_FILES} src/app/test/app_tests.cpp)
     add_dependencies(${TEST_TARGET} generate_icon_header)
+    add_dependencies(${TEST_TARGET} generate_memory_chart_layouts)
     target_compile_definitions(${TEST_TARGET} PRIVATE IMGUI_ENABLE_TEST_ENGINE)
     target_include_directories(${TEST_TARGET} PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/src/app/inc

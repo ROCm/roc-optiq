@@ -1309,15 +1309,22 @@ layout model and its parser live in
   optional title override, and a semantic `category`.
 - `MemChartMetricRef` - references a metric by its full dotted id
   `category.table.entry` (e.g. "3.1.0").
-- `MemChartLayout` - the parsed set of blocks + arrows plus
-  `metric_source`. No ImGui is pulled into the model file.
+- `MemChartLayout` - the parsed set of blocks + arrows plus a `version`.
+  No ImGui is pulled into the model file.
 
 This shape mirrors what the data team stores in the `compute_workload`
 table (block rows + arrow rows keyed by id). `LoadWorkloadLayout()`
-prefers the JSON blob in `compute_workload.memory_chart_extdata`; when
-absent it falls back to the embedded default (`kDefaultMemoryChartLayout`
-in `rocprofvis_memory_chart_default_layout.h`) and an optional runtime
-override at `<config-dir>/memory_chart.json`.
+resolves a layout in priority order: an optional dev override at
+`<config-dir>/memory_chart.json` -> the per-workload JSON blob in
+`compute_workload.memory_chart_extdata` -> an **architecture-specific
+embedded layout** (picked from the workload's `gpu_arch`, e.g. gfx950 or
+the gfx94x family) -> an embedded `default`. The embedded layouts are the
+per-arch JSON files under `resources/memory_chart/` (`gfx950.json`,
+`gfx94x.json`, `default.json`); at build time
+`cmake/embed_memory_chart_layouts.cmake` compiles them into
+`rocprofvis_memory_chart_layouts_generated.h` (registry
+`kMemChartEmbeddedLayouts`), so they ship inside the binary rather than as
+runtime assets. To change the chart, edit the JSON and rebuild.
 
 Each frame `Render()`:
 1. `ComputeLayout()` measures every block (`MeasureBlock`, auto width/
@@ -1331,13 +1338,15 @@ Each frame `Render()`:
    block-bottom connectors spread symmetrically. `ResolveLabelOverlaps()`
    then nudges overlapping labels.
 3. All arrow lines are drawn first, then blocks, then labels on top;
-   metric refs are resolved via `m_ptr_by_metric_id` (filled in
-   `UpdateMetrics()` from the `metric_source` category for the selected
-   kernel).
+   metric refs are resolved via `m_ptr_by_metric_id`, filled in
+   `UpdateMetrics()`. `FetchMemChartMetrics()` fetches every metric
+   category the layout references (a layout may span categories/tables,
+   e.g. `3.x` Memory Chart, `17.x` L2 Cache) for the selected kernel;
+   unresolved refs render as `N/A`.
 
-To change the chart: edit block/arrow rows (in the DB blob or the
-embedded default). C++ only needs to change for new routing behavior,
-not new blocks.
+To change the chart: edit the per-arch JSON under `resources/memory_chart/`
+(or the DB blob). C++ only needs to change for new routing behavior, not
+new blocks.
 
 ### `KernelMetricTable` (`rocprofvis_compute_kernel_metric_table.{h,cpp}`)
 
@@ -2662,8 +2671,9 @@ For fast lookup. Each entry: class -> file -> one-line role.
   `compute/rocprofvis_compute_memory_chart.h`. Data-driven; relational
   layout model (`MemChartLayout`, `MemChartBlock`, `MemChartArrow`,
   `MemChartMetricRef`) -> `compute/rocprofvis_memory_chart_model.h`;
-  embedded default JSON is inlined in the cpp; example JSON + schema ->
-  `resources/memory_chart/`.
+  per-arch layout JSON + schema -> `resources/memory_chart/`, embedded at
+  build time into `rocprofvis_memory_chart_layouts_generated.h` via
+  `cmake/embed_memory_chart_layouts.cmake`.
 - `KernelMetricTable` (+ nested `Preset`, `MetricInfo`,
   `ColumnFilter`) -> `compute/rocprofvis_compute_kernel_metric_table.h`.
 - `ComputeTableView` (+ nested `Preset`) ->

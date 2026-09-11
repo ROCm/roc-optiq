@@ -5,7 +5,7 @@
 
 #include "rocprofvis_compute_selection.h"
 #include "rocprofvis_data_provider.h"
-#include "rocprofvis_memory_chart_default_layout.h"
+#include "rocprofvis_memory_chart_layouts_generated.h"
 #include "rocprofvis_requests.h"
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_utils.h"
@@ -49,7 +49,6 @@ static constexpr float MAX_BLOCK_WIDTH   = 400.0f;
 static constexpr float MIN_BLOCK_HEIGHT  = 96.0f;
 static constexpr float EMPTY_BODY_H      = 40.0f;
 static constexpr float MIN_TARGET_HEIGHT = 460.0f;  // Floor for the common column height.
-static constexpr float MAX_TARGET_HEIGHT = 900.0f;
 static constexpr float GROUP_HEADER      = 26.0f;  // Title band of a group box.
 static constexpr float GROUP_PAD         = 9.0f;   // Inset of blocks inside a group box.
 static constexpr float GROUP_INNER_GAP   = 12.0f;  // Gap between blocks inside a group.
@@ -64,7 +63,8 @@ static constexpr float LEGEND_HEIGHT    = 28.0f;
 static constexpr float ARROW_THICKNESS   = 2.5f;
 static constexpr float ARROW_HEAD_SIZE   = 8.0f;
 static constexpr float ARROW_LABEL_ABOVE = 4.0f;
-static constexpr float ARROW_VERT_SPACE  = 26.0f;
+static constexpr float ARROW_VERT_SPACE  = 32.0f;  // Vertical pitch between fanned arrows/labels.
+static constexpr float ARROW_LABEL_VPAD  = 6.0f;   // Extra per-label room when sizing block height.
 static constexpr float ARROW_DASH_LENGTH = 6.0f;
 static constexpr float ARROW_DASH_GAP    = 4.0f;
 static constexpr float LANE_GAP          = 20.0f;
@@ -300,21 +300,69 @@ ComputeMemoryChartView::ComputeMemoryChartView(
 
 ComputeMemoryChartView::~ComputeMemoryChartView() {}
 
-void
-ComputeMemoryChartView::LoadLayout()
+// Embedded layout by exact registry key ("default", "gfx950", ...).
+static const char*
+FindEmbeddedLayout(const char* key)
 {
-    std::string error;
-    if(!MemChartLayout::ParseFromString(kDefaultMemoryChartLayout, m_layout, &error))
+    for(const MemChartEmbeddedLayout& entry : kMemChartEmbeddedLayouts)
     {
-        spdlog::error("Memory chart: failed to parse embedded layout: {}", error);
+        if(std::strcmp(entry.key, key) == 0) return entry.json;
     }
+    return nullptr;
+}
 
+static const char*
+DefaultEmbeddedLayout()
+{
+    const char* def = FindEmbeddedLayout("default");
+    return def ? def : kMemChartEmbeddedLayouts[0].json;
+}
+
+// Exact arch key first, then family (gfx94x/gfx950), then default.
+static const char*
+EmbeddedLayoutForArch(const std::string& arch)
+{
+    if(!arch.empty())
+    {
+        if(const char* exact = FindEmbeddedLayout(arch.c_str())) return exact;
+        if(arch.rfind("gfx94", 0) == 0)
+        {
+            if(const char* fam = FindEmbeddedLayout("gfx94x")) return fam;
+        }
+        else if(arch.rfind("gfx95", 0) == 0)
+        {
+            if(const char* fam = FindEmbeddedLayout("gfx950")) return fam;
+        }
+    }
+    return DefaultEmbeddedLayout();
+}
+
+// GPU arch (e.g. "gfx950") from the workload's system info. The controller
+// surfaces keys with underscores as spaces ("gpu_arch" -> "gpu arch").
+static std::string
+WorkloadArch(const WorkloadInfo* workload)
+{
+    if(!workload || workload->system_info.size() < 2) return "";
+    const std::vector<std::string>& names  = workload->system_info[0];
+    const std::vector<std::string>& values = workload->system_info[1];
+    for(size_t i = 0; i < names.size() && i < values.size(); ++i)
+    {
+        std::string key = names[i];
+        std::replace(key.begin(), key.end(), ' ', '_');
+        if(key == "gpu_arch") return values[i];
+    }
+    return "";
+}
+
+bool
+ComputeMemoryChartView::TryLoadOverrideFile()
+{
     std::string config_dir = get_application_config_path(false);
-    if(config_dir.empty()) return;
+    if(config_dir.empty()) return false;
 
     std::string   override_path = config_dir + "/" + OVERRIDE_FILE_NAME;
     std::ifstream file(override_path);
-    if(!file.good()) return;
+    if(!file.good()) return false;
 
     std::stringstream buffer;
     buffer << file.rdbuf();
@@ -325,18 +373,35 @@ ComputeMemoryChartView::LoadLayout()
     {
         m_layout = std::move(override_layout);
         spdlog::info("Memory chart: loaded override layout from {}", override_path);
+        return true;
     }
-    else
+    spdlog::warn("Memory chart: ignoring invalid override {} ({})", override_path,
+                 override_error);
+    return false;
+}
+
+void
+ComputeMemoryChartView::LoadLayout()
+{
+    // Dev override wins if present; otherwise the embedded default layout.
+    if(TryLoadOverrideFile()) return;
+
+    std::string error;
+    if(!MemChartLayout::ParseFromString(DefaultEmbeddedLayout(), m_layout, &error))
     {
-        spdlog::warn("Memory chart: ignoring invalid override {} ({})", override_path,
-                     override_error);
+        spdlog::error("Memory chart: failed to parse embedded default layout: {}", error);
     }
 }
 
 void
 ComputeMemoryChartView::LoadWorkloadLayout(uint32_t workload_id)
 {
+    // Priority: dev override file -> per-workload DB blob -> architecture-specific
+    // embedded layout -> embedded default.
+    if(TryLoadOverrideFile()) return;
+
     const WorkloadInfo* workload = m_data_provider.ComputeModel().GetWorkload(workload_id);
+
     if(workload && !workload->memory_chart_layout.empty())
     {
         MemChartLayout db_layout;
@@ -348,11 +413,21 @@ ComputeMemoryChartView::LoadWorkloadLayout(uint32_t workload_id)
                          workload_id);
             return;
         }
-        spdlog::warn("Memory chart: workload {} layout blob invalid ({}); using default",
+        spdlog::warn("Memory chart: workload {} layout blob invalid ({}); using embedded layout",
                      workload_id, error);
     }
-    // No usable DB layout for this workload: fall back to embedded/override.
-    LoadLayout();
+
+    const std::string arch   = WorkloadArch(workload);
+    const char*       layout = EmbeddedLayoutForArch(arch);
+    std::string       error;
+    if(MemChartLayout::ParseFromString(layout, m_layout, &error))
+    {
+        spdlog::info("Memory chart: using embedded layout for arch '{}' (workload {})",
+                     arch.empty() ? "default" : arch, workload_id);
+        return;
+    }
+    spdlog::error("Memory chart: failed to parse embedded layout for arch '{}': {}", arch,
+                  error);
 }
 
 // Category id (leading segment) of a dotted metric id "category.table.entry".
@@ -587,6 +662,54 @@ ComputeMemoryChartView::ComputeLayout(float available_width)
         MeasureBlock(block);
     }
 
+    // Grow each block so its fanned adjacent-arrow connectors and labels fit.
+    // Entry- and exit-side arrows sit in separate corridors, so a block only
+    // needs to fit the busier side. Top-level blocks only (layouts are flat).
+    {
+        std::map<int32_t, int> column_counts;
+        std::function<void(const std::vector<MemChartBlock>&)> count_columns =
+            [&](const std::vector<MemChartBlock>& blocks) {
+                for(const MemChartBlock& block : blocks)
+                {
+                    column_counts[block.column]++;
+                    count_columns(block.children);
+                }
+            };
+        count_columns(m_layout.blocks);
+
+        std::map<uint32_t, int> entry_anchored;  // arrows entering from the left
+        std::map<uint32_t, int> exit_anchored;   // arrows leaving to the right
+        for(const MemChartArrow& arrow : m_layout.arrows)
+        {
+            const MemChartBlock* from = m_layout.FindBlock(arrow.from);
+            const MemChartBlock* to   = m_layout.FindBlock(arrow.to);
+            if(!from || !to) continue;
+            int32_t dcol = to->column - from->column;
+            if(dcol != 1 && dcol != -1) continue;  // only adjacent arrows fan here
+            const MemChartBlock* left  = from->column < to->column ? from : to;
+            const MemChartBlock* right = from->column < to->column ? to : from;
+            if(column_counts[right->column] > 1)
+                entry_anchored[right->id]++;
+            else
+                exit_anchored[left->id]++;
+        }
+
+        // Height to stack n fanned arrows (slot = max of connector pitch, label).
+        auto required_arrow_height = [](int n) -> float {
+            if(n < 2) return 0.0f;
+            float slot = std::max(ARROW_VERT_SPACE,
+                                  ImGui::GetTextLineHeight() + ARROW_LABEL_ABOVE + ARROW_LABEL_VPAD);
+            return HeaderHeight() + BLOCK_BODY_TOP + static_cast<float>(n) * slot +
+                   BLOCK_TEXT_PAD;
+        };
+
+        for(MemChartBlock& block : m_layout.blocks)
+        {
+            int n    = std::max(entry_anchored[block.id], exit_anchored[block.id]);
+            block.h  = std::max(block.h, required_arrow_height(n));
+        }
+    }
+
     // Group TOP-LEVEL blocks by column, sorted by order. Nested blocks are laid
     // out recursively inside their parent.
     std::map<int32_t, std::vector<MemChartBlock*>> columns;
@@ -646,7 +769,8 @@ ComputeMemoryChartView::ComputeLayout(float available_width)
         }
         target_h = std::max(target_h, sum_h);
     }
-    target_h = std::min(target_h, MAX_TARGET_HEIGHT);
+    // No upper clamp: the chart scrolls, so let it grow to the tallest column's
+    // need (clamping would re-compress columns and overlap the labels again).
 
     // Position and stretch each column's top-level blocks to fill target height.
     float  cursor_x = CHART_PADDING + LEFT_MARGIN;

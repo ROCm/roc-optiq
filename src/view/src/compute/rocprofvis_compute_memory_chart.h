@@ -66,6 +66,9 @@ private:
     };
 
     void LoadLayout();
+    // Load the dev override file (<config-dir>/memory_chart.json) into m_layout.
+    // Returns true if a valid override was found and applied.
+    bool TryLoadOverrideFile();
     void ComputeLayout(float available_width);
     void MeasureBlock(MemChartBlock& block) const;
     // Recursively assign geometry: `conn_left`/`conn_right` are the top-level

@@ -1,0 +1,63 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "ROCm Optiq Memory Chart Layout",
+    "description": "Relational (blocks + arrows) layout for the compute Memory Chart. One file per GPU architecture family (e.g. gfx950.json, gfx94x.json) plus default.json. These files are embedded into the binary at build time (see cmake/embed_memory_chart_layouts.cmake); they are NOT shipped as runtime assets.",
+    "type": "object",
+    "required": ["version", "blocks"],
+    "additionalProperties": false,
+    "properties": {
+        "version": { "type": "integer", "minimum": 1 },
+        "blocks": { "type": "array", "items": { "$ref": "#/definitions/block" } },
+        "arrows": { "type": "array", "items": { "$ref": "#/definitions/arrow" } }
+    },
+    "definitions": {
+        "metricRef": {
+            "description": "Full dotted metric id 'category.table.entry' (e.g. '3.1.24'). Resolved against the selected kernel's compute metrics; unresolved refs render as N/A.",
+            "type": "string",
+            "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+        },
+        "category": {
+            "description": "Accent color bucket. Omit to infer from the label text.",
+            "type": "string",
+            "enum": ["read", "write", "atomic", "util", "hit", "stall", "misc"]
+        },
+        "contentItem": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+                "metric": { "$ref": "#/definitions/metricRef" },
+                "title": { "type": "string" },
+                "category": { "$ref": "#/definitions/category" },
+                "note": { "type": "string", "description": "Authoring note; ignored by the parser." }
+            }
+        },
+        "block": {
+            "type": "object",
+            "required": ["id"],
+            "additionalProperties": false,
+            "properties": {
+                "id": { "type": "integer", "minimum": 1 },
+                "column": { "type": "integer" },
+                "order": { "type": "integer" },
+                "title": { "type": "string" },
+                "content": { "type": "array", "items": { "$ref": "#/definitions/contentItem" } },
+                "children": { "type": "array", "items": { "$ref": "#/definitions/block" } },
+                "note": { "type": "string" }
+            }
+        },
+        "arrow": {
+            "type": "object",
+            "required": ["from", "to"],
+            "additionalProperties": false,
+            "properties": {
+                "from": { "type": "integer", "minimum": 1 },
+                "to": { "type": "integer", "minimum": 1 },
+                "direction": { "type": "string", "enum": ["forward", "backward", "both"] },
+                "metric": { "$ref": "#/definitions/metricRef" },
+                "title": { "type": "string" },
+                "category": { "$ref": "#/definitions/category" },
+                "note": { "type": "string" }
+            }
+        }
+    }
+}

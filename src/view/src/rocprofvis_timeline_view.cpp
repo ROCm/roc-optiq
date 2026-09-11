@@ -266,13 +266,25 @@ TimelineView::RenderInteractiveUI()
 
     m_arrow_layer.Render(draw_list, window_position, m_track_position_y, m_tracks, m_tpt);
 
-    RenderMeasurement(draw_list, window_position);
-
     RenderAnnotations(draw_list, window_position);
 
+    ImGui::EndChild();  // UI Interactive Content
+
+    // Measurement input + draw run here, as later siblings of the content child (above
+    // the anchors) but in the viewport-sized overlay, so the centered label isn't
+    // clipped on short traces. Input before draw so a drag lands this frame.
+    HandleMeasurementLabelInput();
+
+    // window_position is the content origin (viewport top - scroll); add scroll back.
+    ImGui::SetCursorScreenPos(
+        ImVec2(window_position.x, window_position.y + m_scroll_position_y));
+    ImGui::BeginChild("Measurement Overlay", ImVec2(overlay_width, overlay_height), false,
+                      ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_NoScrollbar);
+    RenderMeasurement(ImGui::GetWindowDrawList(), window_position);
     ImGui::EndChild();
+
     ImGui::PopStyleColor();
-    ImGui::EndChild();
+    ImGui::EndChild();  // UI Interactive Overlay
 }
 
 TrackLayout
@@ -532,33 +544,36 @@ TimelineView::AutoScrollForAnnotationDrag(ImVec2 content_origin)
 void
 TimelineView::HandleMeasurementLabelInput()
 {
-    // Submit the duration label as a real item in the input-capable "Graph View
-    // Main" (track rows are NoMouseInputs) so ImGui resolves z-order against
-    // annotations, the scrubber and other windows. RenderMeasurement refreshes the
-    // rect later this frame, so we hit-test last frame's.
+    // Hit-test last frame's rect; RenderMeasurement refreshes it later this frame.
     if(!m_measure_label_duration.valid) return;
 
-    const ImVec2 mn = m_measure_label_duration.min;
-    const ImVec2 mx = m_measure_label_duration.max;
+    const ImVec2 mn   = m_measure_label_duration.min;
+    const ImVec2 mx   = m_measure_label_duration.max;
+    const ImVec2 size = ImVec2(mx.x - mn.x, mx.y - mn.y);
 
-    const ImVec2 cursor_backup = ImGui::GetCursorScreenPos();
+    // The overlay is NoInputs, so the button needs its own input-capable child, sized
+    // to the label. Zero padding so the whole label is hittable.
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
     ImGui::SetCursorScreenPos(mn);
-    ImGui::SetNextItemAllowOverlap();
-    ImGui::InvisibleButton("##measure_duration_label", ImVec2(mx.x - mn.x, mx.y - mn.y));
+    ImGui::BeginChild("Measurement Label Input", size, false,
+                      ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+    ImGui::InvisibleButton("##measure_duration_label", size);
     const bool hovered = ImGui::IsItemHovered();
     const bool active  = ImGui::IsItemActive();
-    ImGui::SetCursorScreenPos(cursor_backup);
+    ImGui::EndChild();
+    ImGui::PopStyleVar();
 
     m_dragging_measure_label = active;
     if(hovered || active)
     {
         ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeNS);
-        // Block the layers below and win focus so flame-track clicks defer to us.
-        m_stop_user_interaction = true;
         TimelineFocusManager::GetInstance().RequestLayerFocus(Layer::kInteractiveLayer);
     }
+    // Block the layers below only while grabbing, not on hover, so wheel/keys still
+    // work; "active" fires on mouse-down like the scrubber/selection IsMouseClicked.
     if(active)
     {
+        m_stop_user_interaction = true;
         m_measure_label_offset_y += ImGui::GetIO().MouseDelta.y;
     }
 }
@@ -1898,8 +1913,6 @@ TimelineView::RenderGraphView()
     m_reordering_track_id = INVALID_TRACK_ID;
     // Re-set each frame by RenderReorderingTrack while in the auto-scroll zone.
     m_reorder_auto_scrolling = false;
-
-    HandleMeasurementLabelInput();
 
     for(int index = 0; index < m_tracks->size(); index++)
     {

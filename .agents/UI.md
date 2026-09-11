@@ -588,7 +588,8 @@ reusable types they expose.
   optional "don't ask again" checkbox bound to a `bool&` setting.
   Instantiate inside the owning widget; call `Show(...)` to request
   open and `Render()` from inside the owner's `Render()`.
-- `class MessageDialog` - one-button info popup.
+- `class MessageDialog` - one-button info popup. Requests are queued while a
+  message is already pending or open, so callers do not overwrite one another.
 
 ### 7.3 `rocprofvis_split_containers.{h,cpp}` - layout
 
@@ -618,7 +619,11 @@ splitter dragging.
   `kTabClosed` / `kTabSelected` `RocEvent`s. Set the event source name
   with `SetEventSourceName(...)`. Toggle close/change events via
   `EnableSendCloseEvent` / `EnableSendChangeEvent`. Used in `AppWindow`
-  for the project tabs and in `ComputeView` for sub-tabs.
+  for the project tabs and in `ComputeView` for sub-tabs. `TabItem::m_enabled`
+  controls whether a tab is dimmed and selectable; disabled tabs may provide
+  `m_disabled_tooltip`. `SetTabEnabled(id, enabled, disabled_tooltip)` updates
+  both properties at runtime. Programmatic selection ignores disabled tabs, and
+  disabling the active tab selects the first enabled tab.
 
 ### 7.6 `rocprofvis_gui_helpers.{h,cpp}` - low-level UI helpers
 
@@ -936,6 +941,12 @@ Composition (members):
   controls.
 - `m_bookmarks` - 10 saved view positions; `RenderBookmarkControls()`,
   `HandleHotKeys()` keyed via `HotkeyManager`.
+
+When a system database fails to load, `TraceView` queues the shared application
+message dialog from its provider callback. Closing that dialog removes the
+failed project tab by database-path ID through `AppWindow::CloseProjectTab`,
+which preserves the normal tab-close event and provider-cleanup flow. Save and
+database-cleanup messages do not close the project tab.
 - `SystemTraceProjectSettings` - persists bookmarks via `Project`.
 
 Public surface:
@@ -1246,6 +1257,24 @@ The compute analogue of `TraceView`. Owns:
 - `m_data_provider` - same `DataProvider` type as `TraceView`, but its
   `ComputeModel()` accessor exposes the compute data model.
 
+Each fixed compute sub-view owns its `TAB_ID` as a public static constant.
+Views that can be disabled also own their `DISABLED_TOOLTIP`; use these
+constants when adding, selecting, disabling, or testing their tabs.
+
+`Update()` waits until the provider reaches `kReady` or `kError` before
+creating the content. `CreateView()` validates the loaded model before it
+constructs any selection state or tabs. A provider load error, an empty
+workload list, or a model in which no workload has a kernel queues the shared
+application message dialog, matching `TraceView` load-error handling, instead
+of creating the tab container. The dialog distinguishes the failed condition
+and includes the database path. Closing this dialog removes the failed
+project's tab through the normal `TabContainer` close-event path so provider
+cleanup still runs. Pending load-error dialogs are forwarded from `Update()`,
+which runs for every project tab, so an invalid background project does not
+have to become the active tab before its error is shown. A per-load terminal
+error latch prevents `CreateView()` from retrying every frame and queuing
+duplicate dialogs while the first dialog remains open.
+
 `LoadTrace`, `CreateView`, `DestroyView`, `GetToolbar`,
 `DetachProviderCleanup` mirror `TraceView`.
 
@@ -1300,7 +1329,9 @@ Hand-laid block diagram of the GPU memory hierarchy. Each block
 `x/y/w/h` and helpers `Right/Bottom/MidX/MidY`. Renders metric values
 inline via `DrawMetricRow`. The catalog of supported chart-only
 metrics is `enum MemChartMetric` (maps 1:1 to entries in compute
-metric table 3.1).
+metric table 3.1). Metrics are fetched only while both workload and
+kernel selections are valid; clearing the kernel selection resets the
+chart without submitting a request.
 
 Metric values bind data-driven: `METRIC_NAME_MAP` maps a compute
 metric `entry->name` to a `MemChartMetric` slot, and
@@ -1328,11 +1359,20 @@ bar-chart columns. Public:
 
 The hierarchical category-tab view. `RebuildTabs()` fills sub-tabs
 from `AvailableMetrics::Category`/`Table`/`Entry`. Pinning is
-delegated to `PinnedMetricTable`. Persistent via nested `Preset`.
+delegated to `PinnedMetricTable`. If a workload has no available metric
+tables, `FetchAllMetrics()` leaves the view empty without submitting an
+invalid zero-selector request. After trace metadata loads, `ComputeView`
+disables the top-level Table View tab when the database has no available
+metric tables and shows the no-metrics tooltip. Persistent via nested `Preset`.
 
 ### `ComputeComparisonView` (`rocprofvis_compute_comparison.{h,cpp}`)
 
 Cross-workload / cross-kernel diff view. Notable nested types:
+- `FetchMetrics()` skips baseline or target requests when the corresponding
+  workload has no available metric tables, avoiding invalid zero-selector
+  requests. After trace metadata loads, `ComputeView` disables the top-level
+  Baseline Comparison tab when no workload in the database has an available
+  metric table. This state is initialized once rather than recomputed per frame.
 - `Table` - bespoke comparison table (`Row { id, entry, values_map,
   cells, display_props, tags, selected }`, `Column { Selection |
   MetricID | MetricName | Unit | Value }`, freeze rows/columns,
@@ -1366,6 +1406,9 @@ Correlates source code and ISA through `SourceCodeWidget` and
 ISA (and vice versa). The ISA pane is the always-visible primary pane;
 the optional source-code pane is shown on the right through the
 `Show Source Code` / `Hide Source Code` control.
+After trace metadata loads, `ComputeView` disables the ISA View tab and
+shows a tooltip when no kernel in the database has ISA lines. The availability
+flag is initialized once with the other data-dependent tab states.
 `RenderControlPanel()` hosts the source-file dropdown, and
 PC-sampling data is fetched through `PcSamplingRequestParams` /
 `DataProvider::FetchPcSampling` in three independent stages:

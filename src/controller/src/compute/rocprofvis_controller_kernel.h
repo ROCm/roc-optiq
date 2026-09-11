@@ -40,6 +40,7 @@ private:
     uint32_t m_duration_max;
     uint32_t m_duration_median;
     uint32_t m_duration_mean;
+    bool m_has_isa_lines;
     PcSampling m_pc_sampling_data;
 };
 

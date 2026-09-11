@@ -8,6 +8,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <cfloat>
 #include <filesystem>
+#include <limits>
 #include <string>
 #include <unordered_map>
 
@@ -550,10 +551,95 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture,
                 REQUIRE(result == kRocProfVisResultSuccess);
                 REQUIRE(duration_median > 0);
 
+                uint64_t has_isa_lines = 0;
+                result                 = rocprofvis_controller_get_uint64(
+                    kernel_handle, kRPVControllerKernelHasIsaLines, 0, &has_isa_lines);
+                REQUIRE(result == kRocProfVisResultSuccess);
+                REQUIRE((has_isa_lines == 0 || has_isa_lines == 1));
+
                 workload.kernels.push_back(KernelInfo{ kernel_id });
             }
 
             REQUIRE(!workload.kernels.empty());
+        }
+    }
+
+    // A metric table can be absent from a valid workload. The controller must
+    // preserve the model's successful empty result for both request sources.
+    // Fixture Reads: m_controller, m_workloads[].id, m_workloads[].kernels[].id
+    SECTION("Controller Missing Metrics Return Empty Results")
+    {
+        constexpr uint64_t missing_metric_component =
+            std::numeric_limits<uint32_t>::max();
+
+        for(const WorkloadInfo& workload : m_workloads)
+        {
+            REQUIRE(!workload.kernels.empty());
+
+            for(bool fetch_by_kernel : {true, false})
+            {
+                rocprofvis_controller_arguments_t* args =
+                    rocprofvis_controller_arguments_alloc();
+                REQUIRE(args != nullptr);
+
+                rocprofvis_result_t result = rocprofvis_controller_set_uint64(
+                    args, kRPVControllerMetricArgsWorkloadId, 0, workload.id);
+                REQUIRE(result == kRocProfVisResultSuccess);
+
+                result = rocprofvis_controller_set_uint64(
+                    args, kRPVControllerMetricArgsNumKernels, 0,
+                    fetch_by_kernel ? 1 : 0);
+                REQUIRE(result == kRocProfVisResultSuccess);
+                if(fetch_by_kernel)
+                {
+                    result = rocprofvis_controller_set_uint64(
+                        args, kRPVControllerMetricArgsKernelIdIndexed, 0,
+                        workload.kernels.front().id);
+                    REQUIRE(result == kRocProfVisResultSuccess);
+                }
+
+                result = rocprofvis_controller_set_uint64(
+                    args, kRPVControllerMetricArgsNumMetrics, 0, 1);
+                REQUIRE(result == kRocProfVisResultSuccess);
+                result = rocprofvis_controller_set_uint64(
+                    args, kRPVControllerMetricArgsMetricCategoryIdIndexed, 0,
+                    missing_metric_component);
+                REQUIRE(result == kRocProfVisResultSuccess);
+                result = rocprofvis_controller_set_uint64(
+                    args, kRPVControllerMetricArgsMetricTableIdIndexed, 0,
+                    missing_metric_component);
+                REQUIRE(result == kRocProfVisResultSuccess);
+
+                rocprofvis_controller_metrics_container_t* output =
+                    rocprofvis_controller_metrics_container_alloc();
+                rocprofvis_controller_future_t* future =
+                    rocprofvis_controller_future_alloc();
+                REQUIRE(output != nullptr);
+                REQUIRE(future != nullptr);
+
+                result = rocprofvis_controller_metric_fetch_async(
+                    m_controller, args, future, output);
+                REQUIRE(result == kRocProfVisResultSuccess);
+                result = rocprofvis_controller_future_wait(future, FLT_MAX);
+                REQUIRE(result == kRocProfVisResultSuccess);
+
+                uint64_t future_result = 0;
+                result = rocprofvis_controller_get_uint64(
+                    future, kRPVControllerFutureResult, 0, &future_result);
+                REQUIRE(result == kRocProfVisResultSuccess);
+                REQUIRE(future_result == kRocProfVisResultSuccess);
+
+                uint64_t num_metrics = 0;
+                result = rocprofvis_controller_get_uint64(
+                    output, kRPVControllerMetricsContainerNumMetrics, 0,
+                    &num_metrics);
+                REQUIRE(result == kRocProfVisResultSuccess);
+                REQUIRE(num_metrics == 0);
+
+                rocprofvis_controller_future_free(future);
+                rocprofvis_controller_metrics_container_free(output);
+                rocprofvis_controller_arguments_free(args);
+            }
         }
     }
 

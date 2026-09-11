@@ -874,7 +874,9 @@ kernel-owned `PcSampling` handle before querying the database.
 Internal helper `ExecuteQuery(...)` runs a database query through the
 compute model layer and dispatches rows into a callback. The nested
 `MetricID` class formats `"category.table.entry"` strings the View can
-parse back into typed metric refs.
+parse back into typed metric refs. A valid kernel/workload request for an
+unavailable metric completes successfully with an empty `MetricsContainer`;
+omitting metric selectors remains an invalid request.
 
 ### 6.2 `Workload` (`rocprofvis_controller_workload.{h,cpp}`)
 
@@ -896,8 +898,9 @@ Property bank: `rocprofvis_controller_workload_properties_t`.
 ### 6.3 `Kernel` (`rocprofvis_controller_kernel.{h,cpp}`)
 
 A kernel within a workload. Carries `m_id`, `m_name`,
-`m_invocation_count`, and the duration set
-(`total/min/max/median/mean`). Property bank:
+`m_invocation_count`, the duration set (`total/min/max/median/mean`),
+and `m_has_isa_lines`, which lets the View determine ISA availability
+without eagerly fetching PC-sampling rows. Property bank:
 `rocprofvis_controller_kernel_properties_t`.
 
 Each kernel also owns a `PcSampling` handle. The

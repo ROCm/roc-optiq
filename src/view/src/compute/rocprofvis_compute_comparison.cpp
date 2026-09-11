@@ -279,9 +279,21 @@ ComputeComparisonView::FetchMetrics()
                     metric_ids.push_back({ category->id, table->id, std::nullopt });
                 }
             }
-            // Retry later if busy...
-            m_retry_fetch |= !m_data_provider.FetchMetrics(MetricsRequestParams(
-                baseline_workload_id, kernel_ids, metric_ids, m_client_id_baseline));
+            if(!metric_ids.empty())
+            {
+                // Retry later if busy...
+                m_retry_fetch |= !m_data_provider.FetchMetrics(MetricsRequestParams(
+                    baseline_workload_id, kernel_ids, metric_ids,
+                    m_client_id_baseline));
+            }
+            else
+            {
+                // Workload has no metrics — clear stale data so UpdateMetrics()
+                // does not display results from the previously selected workload.
+                m_data_provider.ComputeModel().ClearKernelMetricValues(
+                    m_client_id_baseline);
+                m_data_changed = true;
+            }
         }
         kernel_ids = { m_target_kernel_id };
         metric_ids.clear();
@@ -300,9 +312,21 @@ ComputeComparisonView::FetchMetrics()
                     metric_ids.push_back({ category->id, table->id, std::nullopt });
                 }
             }
-            // Retry later if busy...
-            m_retry_fetch |= !m_data_provider.FetchMetrics(MetricsRequestParams(
-                m_target_workload_id, kernel_ids, metric_ids, m_client_id_target));
+            if(!metric_ids.empty())
+            {
+                // Retry later if busy...
+                m_retry_fetch |= !m_data_provider.FetchMetrics(MetricsRequestParams(
+                    m_target_workload_id, kernel_ids, metric_ids,
+                    m_client_id_target));
+            }
+            else
+            {
+                // Workload has no metrics — clear stale data so UpdateMetrics()
+                // does not display results from the previously selected workload.
+                m_data_provider.ComputeModel().ClearKernelMetricValues(
+                    m_client_id_target);
+                m_data_changed = true;
+            }
         }
     }
 }
@@ -310,258 +334,266 @@ ComputeComparisonView::FetchMetrics()
 void
 ComputeComparisonView::UpdateMetrics()
 {
-    // Do nothing unless we have data for baseline + target...
     uint32_t kernel_id = m_compute_selection->GetSelectedKernel();
-    if(m_data_provider.ComputeModel().GetKernelMetricsData(m_client_id_baseline,
-                                                           kernel_id) &&
-       m_data_provider.ComputeModel().GetKernelMetricsData(m_client_id_target,
-                                                           m_target_kernel_id))
+    const bool has_baseline = m_data_provider.ComputeModel().GetKernelMetricsData(
+        m_client_id_baseline, kernel_id) != nullptr;
+    const bool has_target = m_data_provider.ComputeModel().GetKernelMetricsData(
+        m_client_id_target, m_target_kernel_id) != nullptr;
+
+    if(!has_baseline || !has_target)
     {
-        uint32_t workload_id = m_compute_selection->GetSelectedWorkload();
-        if(m_data_provider.ComputeModel().GetKernelInfo(workload_id, kernel_id) &&
-           m_data_provider.ComputeModel().GetKernelInfo(m_target_workload_id,
-                                                        m_target_kernel_id))
+        // One or both sides have no metrics — clear the display so stale data
+        // from a previous selection is not shown as current results.
+        m_categories.clear();
+        m_tab_container.reset();
+        return;
+    }
+
+    uint32_t workload_id = m_compute_selection->GetSelectedWorkload();
+    if(m_data_provider.ComputeModel().GetKernelInfo(workload_id, kernel_id) &&
+       m_data_provider.ComputeModel().GetKernelInfo(m_target_workload_id,
+                                                    m_target_kernel_id))
+    {
+        m_categories.clear();
+        m_tab_container = std::make_unique<TabContainer>();
+        std::vector<const AvailableMetrics::Category*> baseline_categories =
+            m_data_provider.ComputeModel()
+                .GetWorkload(workload_id)
+                ->available_metrics.ordered_categories;
+        std::unordered_map<uint32_t, const AvailableMetrics::Entry*> row_entry;
+        std::unordered_map<uint32_t, std::vector<Table::Value>>      row_value;
+    // Go through our available metrics...
+        for(const AvailableMetrics::Category* category : baseline_categories)
         {
-            m_categories.clear();
-            m_tab_container = std::make_unique<TabContainer>();
-            std::vector<const AvailableMetrics::Category*> baseline_categories =
-                m_data_provider.ComputeModel()
-                    .GetWorkload(workload_id)
-                    ->available_metrics.ordered_categories;
-            std::unordered_map<uint32_t, const AvailableMetrics::Entry*> row_entry;
-            std::unordered_map<uint32_t, std::vector<Table::Value>>      row_value;
-            // Go through our available metrics...
-            for(const AvailableMetrics::Category* category : baseline_categories)
+            CategoryModel category_model{ category, {} };
+            category_model.tables.resize(category->ordered_tables.size());
+            bool empty = true;
+            for(size_t i = 0; i < category->ordered_tables.size(); i++)
             {
-                CategoryModel category_model{ category, {} };
-                category_model.tables.resize(category->ordered_tables.size());
-                bool empty = true;
-                for(size_t i = 0; i < category->ordered_tables.size(); i++)
+                category_model.tables[i] = std::make_shared<Table>(
+                    category->ordered_tables[i]->name,
+                    ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg |
+                        ImGuiTableFlags_ScrollX | ImGuiTableFlags_ScrollY,
+                    3, 1);
+                category_model.tables[i]->ReserveRows(
+                    category->ordered_tables[i]->ordered_entries.size());
+                // See if this metric is present in baseline and target..
+                ComputeDataModel::MetricValuesByEntryId* baseline_fetched_table =
+                    m_data_provider.ComputeModel().GetKernelMetricValuesByTable(
+                        m_client_id_baseline, kernel_id, category->id,
+                        category->ordered_tables[i]->id);
+                ComputeDataModel::MetricValuesByEntryId* target_fetched_table =
+                    m_data_provider.ComputeModel().GetKernelMetricValuesByTable(
+                        m_client_id_target, m_target_kernel_id, category->id,
+                        category->ordered_tables[i]->id);
+                for(size_t j = 0;
+                    j < category->ordered_tables[i]->ordered_entries.size(); j++)
                 {
-                    category_model.tables[i] = std::make_shared<Table>(
-                        category->ordered_tables[i]->name,
-                        ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg |
-                            ImGuiTableFlags_ScrollX | ImGuiTableFlags_ScrollY,
-                        3, 1);
-                    category_model.tables[i]->ReserveRows(
-                        category->ordered_tables[i]->ordered_entries.size());
-                    // See if this metric is present in baseline and target..
-                    ComputeDataModel::MetricValuesByEntryId* baseline_fetched_table =
-                        m_data_provider.ComputeModel().GetKernelMetricValuesByTable(
-                            m_client_id_baseline, kernel_id, category->id,
-                            category->ordered_tables[i]->id);
-                    ComputeDataModel::MetricValuesByEntryId* target_fetched_table =
-                        m_data_provider.ComputeModel().GetKernelMetricValuesByTable(
-                            m_client_id_target, m_target_kernel_id, category->id,
-                            category->ordered_tables[i]->id);
-                    for(size_t j = 0;
-                        j < category->ordered_tables[i]->ordered_entries.size(); j++)
+                    const AvailableMetrics::Entry& available_entry =
+                        *category->ordered_tables[i]->ordered_entries[j];
+                    const std::shared_ptr<MetricValue> fetched_baseline_entry =
+                        baseline_fetched_table
+                            ? baseline_fetched_table->count(available_entry.id)
+                                  ? baseline_fetched_table->at(available_entry.id)
+                                  : nullptr
+                            : nullptr;
+                    const std::shared_ptr<MetricValue> fetched_target_entry =
+                        target_fetched_table
+                            ? target_fetched_table->count(available_entry.id)
+                                  ? target_fetched_table->at(available_entry.id)
+                                  : nullptr
+                            : nullptr;
+                    row_entry.clear();
+                    row_value.clear();
+                    if(fetched_baseline_entry)
                     {
-                        const AvailableMetrics::Entry& available_entry =
-                            *category->ordered_tables[i]->ordered_entries[j];
-                        const std::shared_ptr<MetricValue> fetched_baseline_entry =
-                            baseline_fetched_table
-                                ? baseline_fetched_table->count(available_entry.id)
-                                      ? baseline_fetched_table->at(available_entry.id)
+                        row_entry[0] = fetched_baseline_entry.get()->entry;
+                    }
+                    if(fetched_target_entry)
+                    {
+                        row_entry[1] = fetched_target_entry.get()->entry;
+                    }
+                    bool valid_match = fetched_baseline_entry &&
+                                       fetched_target_entry &&
+                                       fetched_baseline_entry->entry->name ==
+                                           fetched_target_entry->entry->name;
+                    // Go through metric's values...
+                    for(const std::string& value_name :
+                        category->ordered_tables[i]->value_names)
+                    {
+                        const double* baseline_value =
+                            fetched_baseline_entry
+                                ? fetched_baseline_entry->values.count(value_name)
+                                      ? &fetched_baseline_entry->values.at(value_name)
                                       : nullptr
                                 : nullptr;
-                        const std::shared_ptr<MetricValue> fetched_target_entry =
-                            target_fetched_table
-                                ? target_fetched_table->count(available_entry.id)
-                                      ? target_fetched_table->at(available_entry.id)
+                        const double* target_value =
+                            fetched_target_entry
+                                ? fetched_target_entry->values.count(value_name)
+                                      ? &fetched_target_entry->values.at(value_name)
                                       : nullptr
                                 : nullptr;
-                        row_entry.clear();
-                        row_value.clear();
-                        if(fetched_baseline_entry)
+                        const double rounded_baseline =
+                            baseline_value
+                                ? std::round(*baseline_value * ROUND_FACTOR) /
+                                      ROUND_FACTOR
+                                : 0.0;
+                        const double rounded_target =
+                            target_value ? std::round(*target_value * ROUND_FACTOR) /
+                                               ROUND_FACTOR
+                                         : 0.0;
+                        // Setup customizations...
+                        std::optional<Table::DisplayProps::Color> bg_color_baseline;
+                        std::optional<Table::DisplayProps::Color> bg_color_target;
+                        std::optional<Table::DisplayProps::Color> bg_color_difference;
+                        std::optional<Table::DisplayProps::Color> text_color;
+                        std::optional<const char*>                icon;
+                        if(valid_match)
                         {
-                            row_entry[0] = fetched_baseline_entry.get()->entry;
-                        }
-                        if(fetched_target_entry)
-                        {
-                            row_entry[1] = fetched_target_entry.get()->entry;
-                        }
-                        bool valid_match = fetched_baseline_entry &&
-                                           fetched_target_entry &&
-                                           fetched_baseline_entry->entry->name ==
-                                               fetched_target_entry->entry->name;
-                        // Go through metric's values...
-                        for(const std::string& value_name :
-                            category->ordered_tables[i]->value_names)
-                        {
-                            const double* baseline_value =
-                                fetched_baseline_entry
-                                    ? fetched_baseline_entry->values.count(value_name)
-                                          ? &fetched_baseline_entry->values.at(value_name)
-                                          : nullptr
-                                    : nullptr;
-                            const double* target_value =
-                                fetched_target_entry
-                                    ? fetched_target_entry->values.count(value_name)
-                                          ? &fetched_target_entry->values.at(value_name)
-                                          : nullptr
-                                    : nullptr;
-                            const double rounded_baseline =
-                                baseline_value
-                                    ? std::round(*baseline_value * ROUND_FACTOR) /
-                                          ROUND_FACTOR
-                                    : 0.0;
-                            const double rounded_target =
-                                target_value ? std::round(*target_value * ROUND_FACTOR) /
-                                                   ROUND_FACTOR
-                                             : 0.0;
-                            // Setup customizations...
-                            std::optional<Table::DisplayProps::Color> bg_color_baseline;
-                            std::optional<Table::DisplayProps::Color> bg_color_target;
-                            std::optional<Table::DisplayProps::Color> bg_color_difference;
-                            std::optional<Table::DisplayProps::Color> text_color;
-                            std::optional<const char*>                icon;
-                            if(valid_match)
+                            if(baseline_value && target_value &&
+                               std::fabs(rounded_baseline - rounded_target) >
+                                   (0.5 / ROUND_FACTOR))
                             {
-                                if(baseline_value && target_value &&
-                                   rounded_baseline != rounded_target)
+                                bg_color_baseline = Table::DisplayProps::Color{
+                                    Colors::kComparisonBase, 255
+                                };
+                                bg_color_target = Table::DisplayProps::Color{
+                                    Colors::kComparisonTarget, 255
+                                };
+                                if(rounded_target > rounded_baseline)
                                 {
-                                    bg_color_baseline = Table::DisplayProps::Color{
-                                        Colors::kComparisonBase, 255
+                                    bg_color_difference = Table::DisplayProps::Color{
+                                        Colors::kComparisonGreater, 255
                                     };
-                                    bg_color_target = Table::DisplayProps::Color{
-                                        Colors::kComparisonTarget, 255
+                                    icon = ICON_ARROW_UP;
+                                }
+                                else
+                                {
+                                    bg_color_difference = Table::DisplayProps::Color{
+                                        Colors::kComparisonLesser, 255
                                     };
-                                    if(rounded_target > rounded_baseline)
-                                    {
-                                        bg_color_difference = Table::DisplayProps::Color{
-                                            Colors::kComparisonGreater, 255
-                                        };
-                                        icon = ICON_ARROW_UP;
-                                    }
-                                    else
-                                    {
-                                        bg_color_difference = Table::DisplayProps::Color{
-                                            Colors::kComparisonLesser, 255
-                                        };
-                                        icon = ICON_ARROW_DOWN;
-                                    }
+                                    icon = ICON_ARROW_DOWN;
                                 }
                             }
-                            else
-                            {
-                                text_color =
-                                    Table::DisplayProps::Color{ Colors::kTextDim, 255 };
-                            }
-                            // Merge baseline + target into one row if they match,
-                            // otherwise split into two separate rows...
-                            row_value[0].emplace_back(Table::Value{
-                                BASELINE_COLUMN_PREFIX + value_name,
-                                baseline_value ? std::make_optional(rounded_baseline)
-                                               : std::nullopt,
+                        }
+                        else
+                        {
+                            text_color =
+                                Table::DisplayProps::Color{ Colors::kTextDim, 255 };
+                        }
+                        // Merge baseline + target into one row if they match,
+                        // otherwise split into two separate rows...
+                        row_value[0].emplace_back(Table::Value{
+                            BASELINE_COLUMN_PREFIX + value_name,
+                            baseline_value ? std::make_optional(rounded_baseline)
+                                           : std::nullopt,
+                            Table::DisplayProps{ bg_color_baseline, text_color,
+                                                 std::nullopt } });
+                        row_value[0].emplace_back(Table::Value{
+                            TARGET_COLUMN_PREFIX + value_name,
+                            valid_match && target_value
+                                ? std::make_optional(rounded_target)
+                                : std::nullopt,
+                            Table::DisplayProps{ bg_color_target, text_color,
+                                                 std::nullopt } });
+                        row_value[0].emplace_back(Table::Value{
+                            DIFFERENCE_COLUMN_PREFIX + value_name,
+                            valid_match && baseline_value && target_value &&
+                                    std::isfinite(rounded_baseline) &&
+                                    std::isfinite(rounded_target)
+                                ? std::make_optional(rounded_target -
+                                                     rounded_baseline)
+                                : std::nullopt,
+                            Table::DisplayProps{ bg_color_difference, text_color,
+                                                 icon } });
+                        row_value[0].emplace_back(Table::Value{
+                            DIFFERENCE_PCT_COLUMN_PREFIX + value_name,
+                            valid_match && baseline_value && target_value &&
+                                    std::isfinite(rounded_baseline) &&
+                                    std::isfinite(rounded_target) &&
+                                    rounded_baseline != 0.0
+                                ? std::make_optional(
+                                      std::round((rounded_target - rounded_baseline) /
+                                                 rounded_baseline * 100 *
+                                                 ROUND_FACTOR) /
+                                      ROUND_FACTOR)
+                                : std::nullopt,
+                            Table::DisplayProps{ bg_color_difference, text_color,
+                                                 icon } });
+                        if(!valid_match && row_entry.count(1) > 0)
+                        {
+                            row_value[1].emplace_back(Table::Value{
+                                BASELINE_COLUMN_PREFIX + value_name, std::nullopt,
                                 Table::DisplayProps{ bg_color_baseline, text_color,
                                                      std::nullopt } });
-                            row_value[0].emplace_back(Table::Value{
+                            row_value[1].emplace_back(Table::Value{
                                 TARGET_COLUMN_PREFIX + value_name,
-                                valid_match && target_value
-                                    ? std::make_optional(rounded_target)
-                                    : std::nullopt,
+                                target_value ? std::make_optional(rounded_target)
+                                             : std::nullopt,
                                 Table::DisplayProps{ bg_color_target, text_color,
                                                      std::nullopt } });
-                            row_value[0].emplace_back(Table::Value{
-                                DIFFERENCE_COLUMN_PREFIX + value_name,
-                                valid_match && baseline_value && target_value &&
-                                        std::isfinite(rounded_baseline) &&
-                                        std::isfinite(rounded_target)
-                                    ? std::make_optional(rounded_target -
-                                                         rounded_baseline)
-                                    : std::nullopt,
-                                Table::DisplayProps{ bg_color_difference, text_color,
-                                                     icon } });
-                            row_value[0].emplace_back(Table::Value{
+                            row_value[1].emplace_back(Table::Value{
+                                DIFFERENCE_COLUMN_PREFIX + value_name, std::nullopt,
+                                Table::DisplayProps{ std::nullopt, text_color,
+                                                     std::nullopt } });
+                            row_value[1].emplace_back(Table::Value{
                                 DIFFERENCE_PCT_COLUMN_PREFIX + value_name,
-                                valid_match && baseline_value && target_value &&
-                                        std::isfinite(rounded_baseline) &&
-                                        std::isfinite(rounded_target) &&
-                                        rounded_baseline != 0.0
-                                    ? std::make_optional(
-                                          std::round((rounded_target - rounded_baseline) /
-                                                     rounded_baseline * 100 *
-                                                     ROUND_FACTOR) /
-                                          ROUND_FACTOR)
-                                    : std::nullopt,
-                                Table::DisplayProps{ bg_color_difference, text_color,
-                                                     icon } });
-                            if(!valid_match && row_entry.count(1) > 0)
-                            {
-                                row_value[1].emplace_back(Table::Value{
-                                    BASELINE_COLUMN_PREFIX + value_name, std::nullopt,
-                                    Table::DisplayProps{ bg_color_baseline, text_color,
-                                                         std::nullopt } });
-                                row_value[1].emplace_back(Table::Value{
-                                    TARGET_COLUMN_PREFIX + value_name,
-                                    target_value ? std::make_optional(rounded_target)
-                                                 : std::nullopt,
-                                    Table::DisplayProps{ bg_color_target, text_color,
-                                                         std::nullopt } });
-                                row_value[1].emplace_back(Table::Value{
-                                    DIFFERENCE_COLUMN_PREFIX + value_name, std::nullopt,
-                                    Table::DisplayProps{ std::nullopt, text_color,
-                                                         std::nullopt } });
-                                row_value[1].emplace_back(Table::Value{
-                                    DIFFERENCE_PCT_COLUMN_PREFIX + value_name,
-                                    std::nullopt,
-                                    Table::DisplayProps{ std::nullopt, text_color,
-                                                         std::nullopt } });
-                            }
-                        }
-                        for(uint32_t k = 0; k < row_value.size(); k++)
-                        {
-                            if(row_entry.count(k) > 0 && row_value.count(k))
-                            {
-                                category_model.tables[i]->AddRow(
-                                    row_entry.at(k), row_value.at(k),
-                                    valid_match
-                                        ? Table::DisplayProps{}
-                                        : Table::DisplayProps{ std::nullopt,
-                                                               Table::DisplayProps::Color{
-                                                                   Colors::kTextDim,
-                                                                   255 },
-                                                               std::nullopt },
-                                    valid_match ? std::nullopt
-                                                : std::make_optional<size_t>(
-                                                      ROW_TAG_INVALID_MATCH));
-                            }
+                                std::nullopt,
+                                Table::DisplayProps{ std::nullopt, text_color,
+                                                     std::nullopt } });
                         }
                     }
-                    // Setup the table (handlers, coloring..etc)
-                    category_model.tables[i]->SetRowSelectionHandler(
-                        [this](const Table& table, const size_t index, const bool state) {
-                            if(state)
-                            {
-                                AddPinnedMetric(table, index);
-                            }
-                            else
-                            {
-                                RemovePinnedMetric(table, index);
-                            }
-                        });
-                    empty &= category_model.tables[i]->Rows().empty();
-                    if(m_filter_common_metrics)
+                    for(uint32_t k = 0; k < row_value.size(); k++)
                     {
-                        category_model.tables[i]->ApplyRowFilter(ROW_TAG_INVALID_MATCH);
+                        if(row_entry.count(k) > 0 && row_value.count(k))
+                        {
+                            category_model.tables[i]->AddRow(
+                                row_entry.at(k), row_value.at(k),
+                                valid_match
+                                    ? Table::DisplayProps{}
+                                    : Table::DisplayProps{ std::nullopt,
+                                                           Table::DisplayProps::Color{
+                                                               Colors::kTextDim,
+                                                               255 },
+                                                           std::nullopt },
+                                valid_match ? std::nullopt
+                                            : std::make_optional<size_t>(
+                                                  ROW_TAG_INVALID_MATCH));
+                        }
                     }
                 }
-                // Make a tab for non empty categories...
-                if(!empty)
+                // Setup the table (handlers, coloring..etc)
+                category_model.tables[i]->SetRowSelectionHandler(
+                    [this](const Table& table, const size_t index, const bool state) {
+                        if(state)
+                        {
+                            AddPinnedMetric(table, index);
+                        }
+                        else
+                        {
+                            RemovePinnedMetric(table, index);
+                        }
+                    });
+                empty &= category_model.tables[i]->Rows().empty();
+                if(m_filter_common_metrics)
                 {
-                    m_categories.push_back(std::move(category_model));
-                    size_t i = m_categories.size() - 1;
-                    m_tab_container->AddTab(
-                        TabItem{ category->name, category->name,
-                                 std::make_shared<RocCustomWidget>(
-                                     [this, i]() { RenderCategory(i); }),
-                                 false });
+                    category_model.tables[i]->ApplyRowFilter(ROW_TAG_INVALID_MATCH);
                 }
             }
-            m_tab_container->SetAllowToolTips(true);
+            // Make a tab for non empty categories...
+            if(!empty)
+            {
+                m_categories.push_back(std::move(category_model));
+                size_t i = m_categories.size() - 1;
+                m_tab_container->AddTab(
+                    TabItem{ category->name, category->name,
+                             std::make_shared<RocCustomWidget>(
+                                 [this, i]() { RenderCategory(i); }),
+                             false });
+            }
         }
-    }
+        m_tab_container->SetAllowToolTips(true);
+        }
 }
 
 void

@@ -23,6 +23,11 @@ class VFixedContainer;
 class ComputeComparisonView : public RocWidget
 {
 public:
+    static constexpr const char* TAB_ID = "compute_comparison_view";
+    static constexpr const char* DISABLED_TOOLTIP =
+        "This database file has no available metrics, so Baseline Comparison is "
+        "inactive.";
+
     ComputeComparisonView(DataProvider&                     data_provider,
                           std::shared_ptr<ComputeSelection> compute_selection);
     ~ComputeComparisonView();

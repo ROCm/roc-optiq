@@ -130,6 +130,9 @@ struct ComputeViewTestPeer
     ComputeView& v;
     TabContainer*     TabContainerPtr() const { return v.m_tab_container.get(); }
     ComputeSelection* ComputeSelectionPtr() const { return v.m_compute_selection.get(); }
+    bool PopupPending() const { return v.m_error_dialog_state == ComputeView::ErrorDialogState::kPending; }
+    const std::string& PopupTitle() const { return v.m_popup_info.title; }
+    const std::string& PopupMessage() const { return v.m_popup_info.message; }
 };
 
 struct ComputeKernelDetailsViewTestPeer

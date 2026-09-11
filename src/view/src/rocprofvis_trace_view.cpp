@@ -108,9 +108,13 @@ TraceView::TraceView()
             if(response_code != kRocProfVisResultSuccess)
             {
                 spdlog::error("Failed to load trace: {}", response_code);
-                m_popup_info.show_popup = true;
-                m_popup_info.title      = "Error";
-                m_popup_info.message    = "Failed to load trace: " + trace_path;
+                AppWindow*        app_window = AppWindow::GetInstance();
+                const std::string project_id = trace_path;
+                app_window->ShowMessageDialog(
+                    "Error", "Failed to load trace: " + trace_path,
+                    [app_window, project_id]() {
+                        app_window->CloseProjectTab(project_id);
+                    });
             }
         });
 
@@ -226,7 +230,7 @@ TraceView::Update()
     if(!m_view_created)
     {
         CreateView();
-        m_view_created = true;
+        m_view_created = (m_timeline_view != nullptr);
     }
 
     auto new_state = m_data_provider.GetState();
@@ -269,6 +273,13 @@ TraceView::Update()
     if(m_minimap && m_show_minimap_popup)
     {
         m_minimap->Update();
+    }
+
+    if(m_popup_info.show_popup)
+    {
+        m_popup_info.show_popup = false;
+        AppWindow::GetInstance()->ShowMessageDialog(m_popup_info.title,
+                                                    m_popup_info.message);
     }
 }
 
@@ -399,13 +410,6 @@ TraceView::Render()
             ImGui::End();
             popup_style.PopStyles();
         }
-    }
-
-    if(m_popup_info.show_popup)
-    {
-        m_popup_info.show_popup = false;
-        AppWindow::GetInstance()->ShowMessageDialog(m_popup_info.title,
-                                                    m_popup_info.message);
     }
 
     if(m_summary_view)

@@ -138,6 +138,7 @@ struct KernelInfo
     };
     uint32_t                         id;
     std::string                      name;
+    bool                             has_isa_lines = false;
     std::array<uint64_t, NumMetrics> dispatch_metrics;
     Roofline                         roofline;
     PcSamplingData                   pc_sampling_data;

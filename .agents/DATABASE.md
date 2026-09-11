@@ -1172,6 +1172,12 @@ The gate is `1.2.0` for every method except
 reads `compute_workload_metric_view` unconditionally and that view does
 not exist earlier.
 
+Metric-value queries distinguish invalid requests from unavailable data. A
+request that supplies a valid workload/kernel and at least one metric selector,
+but whose selectors do not resolve in that workload, builds a successful
+zero-row query. Mixed requests return the metrics that resolve. Omitting metric
+selectors entirely remains an invalid parameter error.
+
 The current PC-sampling block targets schema 2.2 and is version-gated at
 `2.2.0`. Its current tables are `compute_code_object_store`,
 `compute_instruction_line`, `compute_pc_sample_state`, and
@@ -1187,6 +1193,11 @@ stall-reason indexes.
 `GetComputeKernelInstructionLines` selects the fields needed for the
 initial ISA display (formerly "Code View").
 
+`GetComputeWorkloadTopKernels` also returns `has_isa_lines`. For schema
+2.2 and newer it derives the value from kernel-symbol/instruction-line
+relationships; older schemas return zero. This metadata supports one-time
+ISA tab initialization without loading the ISA rows eagerly.
+
 Inner `IsVersionGreaterOrEqual("1.3.0")` / `"1.4.0"` tests inside a
 method still select between schema variants and are separate from the
 gate.
@@ -1194,7 +1205,10 @@ gate.
 Internal helpers: `ClassifyMetricIdFormat(s)` decides whether a
 metric ID is `XY`, `XYZ`, or `Other`; `ParseMetricParam(...)`
 splits the `"category.table.entry:value_name"` selector into a set
-of metric IDs.
+of metric IDs. Read-only metric lookup paths use `find()` so a
+workload without metrics does not acquire a synthetic empty lookup
+entry; `operator[]` is reserved for populating the lookup while
+metadata is loaded.
 
 ### 8.4 `BuildTableQuery` flow
 

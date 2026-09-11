@@ -21,6 +21,10 @@ class ComputeSelection;
 class ComputeTableView: public RocWidget
 {
 public:
+    static constexpr const char* TAB_ID = "compute_table_view";
+    static constexpr const char* DISABLED_TOOLTIP =
+        "This database file has no available metrics, so Table View is inactive.";
+
     ComputeTableView(DataProvider&                     data_provider,
                      std::shared_ptr<ComputeSelection> compute_selection);
     ~ComputeTableView();

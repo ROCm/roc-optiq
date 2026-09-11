@@ -26,6 +26,8 @@ class WorkloadMetricTableWidget;
 class ComputeSummaryView : public RocWidget
 {
 public:
+    static constexpr const char* TAB_ID = "compute_summary_view";
+
     ComputeSummaryView(DataProvider&                     data_provider,
                        std::shared_ptr<ComputeSelection> compute_selection);
     ~ComputeSummaryView();

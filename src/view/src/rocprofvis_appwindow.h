@@ -66,7 +66,10 @@ public:
 
     void ShowConfirmationDialog(const std::string& title, const std::string& message,
                                 std::function<void()> on_confirm_callback) const;
-    void ShowMessageDialog(const std::string& title, const std::string& message) const;
+    void ShowMessageDialog(const std::string& title, const std::string& message,
+                           std::function<void()> on_close_callback = nullptr) const;
+
+    void CloseProjectTab(const std::string& project_id);
 
     void ShowSaveFileDialog(const std::string&               title,
                             const std::vector<FileFilter>&   file_filters,

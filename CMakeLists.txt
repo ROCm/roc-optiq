@@ -102,6 +102,8 @@ set(VIEW_FILES
     src/view/src/rocprofvis_appwindow.h
     src/view/src/rocprofvis_compare_files_dialog.cpp
     src/view/src/rocprofvis_compare_files_dialog.h
+    src/view/src/rocprofvis_compare_panes.cpp
+    src/view/src/rocprofvis_compare_panes.h
     src/view/src/welcome/rocprofvis_welcome_page.cpp
     src/view/src/welcome/rocprofvis_welcome_page.h
     src/view/src/rocprofvis_annotation_view.cpp

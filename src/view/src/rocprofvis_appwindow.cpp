@@ -1238,7 +1238,21 @@ AppWindow::RenderViewMenu(Project* project)
                     trace_view_tab->SetHistogramVisibility(settings.show_histogram);
             }
         }
-        ImGui::MenuItem("Show Summary", nullptr, &settings.show_summary);
+        // Compare projects have no summary, so the toggle would do nothing there.
+        bool           summary_supported = true;
+        const TabItem* active_tab        = m_tab_container->GetActiveTab();
+        if(active_tab)
+        {
+            auto active_trace_view =
+                std::dynamic_pointer_cast<RocProfVis::View::TraceView>(
+                    active_tab->m_widget);
+            if(active_trace_view)
+            {
+                summary_supported = active_trace_view->SummarySupported();
+            }
+        }
+        ImGui::MenuItem("Show Summary", nullptr, &settings.show_summary,
+                        summary_supported);
 
         ImGui::Separator();
         ImGui::MenuItem("Show Log Viewer", nullptr,

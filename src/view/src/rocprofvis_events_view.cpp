@@ -3,7 +3,9 @@
 
 #include "rocprofvis_events_view.h"
 #include "icons/rocprovfis_icon_defines.h"
+#include "model/rocprofvis_model_types.h"
 #include "widgets/rocprofvis_gui_helpers.h"
+#include "rocprofvis_compare_panes.h"
 #include "rocprofvis_data_provider.h"
 #include "rocprofvis_font_manager.h"
 #include "rocprofvis_settings_manager.h"
@@ -29,6 +31,8 @@ constexpr int kCallStackColumnCount = 5;
 constexpr int kArgColumnCount       = 4;
 constexpr int kBasicColumnCount     = 2;
 constexpr int kExtColumnCount       = 2;
+
+constexpr const char* NO_DATA_TEXT = "No data available for the selected events.";
 
 namespace
 {
@@ -65,6 +69,8 @@ EventsView::EventsView(DataProvider&                      dp,
 , m_settings(SettingsManager::GetInstance())
 , m_timeline_selection(timeline_selection)
 , m_event_item_id(0)
+, m_compare_mode(false)
+, m_events_split(nullptr)
 {
     static_assert(CallStackHoverState::kInvalidId ==
                       TimelineSelection::INVALID_SELECTION_ID,
@@ -72,6 +78,16 @@ EventsView::EventsView(DataProvider&                      dp,
                   "TimelineSelection::INVALID_SELECTION_ID");
     m_flow_hover.Reset();
     m_frame_flow_hover.Reset();
+
+    m_compare_mode = IsCompareTrace(m_data_provider.DataModel());
+    if(m_compare_mode)
+    {
+        m_events_split = MakeCompareSplit(
+            std::make_shared<RocCustomWidget>(
+                [this]() { RenderSourceColumn(COMPARE_SOURCE_A); }),
+            std::make_shared<RocCustomWidget>(
+                [this]() { RenderSourceColumn(COMPARE_SOURCE_B); }));
+    }
 }
 
 EventsView::~EventsView()
@@ -96,8 +112,12 @@ EventsView::Render()
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, style.WindowPadding);
     ImGui::PushStyleColor(ImGuiCol_ChildBg, m_settings.GetColor(Colors::kBgPanel));
     ImGui::PushStyleColor(ImGuiCol_Border, m_settings.GetColor(Colors::kBorderColor));
+    // Compare cards draw their own borders, so keep the outer frame borderless.
     ImGui::BeginChild("events_view", ImVec2(0, 0),
-                      ImGuiChildFlags_Borders | ImGuiChildFlags_AlwaysUseWindowPadding);
+                      m_compare_mode
+                          ? ImGuiChildFlags_AlwaysUseWindowPadding
+                          : (ImGuiChildFlags_Borders |
+                             ImGuiChildFlags_AlwaysUseWindowPadding));
     m_frame_callstack_hover = {};
     m_frame_flow_hover.Reset();
     // Use subtler borders for nested event panes.
@@ -107,67 +127,20 @@ EventsView::Render()
                           m_settings.GetColor(Colors::kTableBorderOuter));
     ImGui::PushStyleColor(ImGuiCol_TableBorderLight,
                           m_settings.GetColor(Colors::kTableBorderInner));
-    if(m_event_items.empty())
+    if(m_compare_mode && m_events_split)
     {
-        CenterNextTextItem("No data available for the selected events.");
+        m_events_split->Render();
+    }
+    else if(m_event_items.empty())
+    {
+        CenterNextTextItem(NO_DATA_TEXT);
         ImGui::SetCursorPosY((ImGui::GetWindowHeight() - ImGui::GetTextLineHeight()) *
                              0.5f);
-        ImGui::TextDisabled("No data available for the selected events.");
+        ImGui::TextDisabled("%s", NO_DATA_TEXT);
     }
     else
     {
-        float x_button_width =
-            ImGui::CalcTextSize("X").x + ImGui::GetStyle().FramePadding.x;
-        for(EventItem& item : m_event_items)
-        {
-            if(item.info && item.contents)
-            {
-                bool deselect_event = false;
-                ImGui::PushID(item.id);
-                ImGui::SetNextItemAllowOverlap();
-
-                PushSectionHeaderStyle(m_settings);
-                bool event_open = ImGui::CollapsingHeader(
-                    item.header.c_str(), ImGuiTreeNodeFlags_DefaultOpen);
-                ImGui::PopStyleColor(3);
-
-                if(event_open)
-                {
-                    ImGui::SameLine();
-                    ImGui::Dummy(
-                        ImVec2(ImGui::GetContentRegionAvail().x - x_button_width, 0));
-                    ImGui::SameLine();
-                    deselect_event = XButton();
-
-                    ImGui::BeginChild("EventDetails", ImVec2(0, item.height),
-                                      ImGuiChildFlags_None);
-                    item.contents->Render();
-                    ImGui::EndChild();
-
-
-                    // Use the optimal height of the contents as the new height for the
-                    // next frame
-                    if(item.contents)
-                    {
-                        item.height = item.contents->GetOptimalHeight();
-                    }
-                }
-                else
-                {
-                    ImGui::SameLine();
-                    ImGui::Dummy(ImVec2(ImGui::GetContentRegionAvail().x - x_button_width,
-                                        ImGui::GetFrameHeightWithSpacing()));
-                    ImGui::SameLine();
-                    deselect_event = XButton();
-                }
-                if(deselect_event)
-                {
-                    m_timeline_selection->UnselectTrackEvent(item.info->track_id,
-                                                             item.info->basic_info.id.uuid);
-                }
-                ImGui::PopID();
-            }
-        }
+        RenderEventList(std::nullopt);
     }
     if(m_frame_callstack_hover.frame_event_id != m_callstack_hover.frame_event_id)
     {
@@ -201,6 +174,96 @@ EventsView::Render()
     ImGui::EndChild();
     ImGui::PopStyleColor(2);
     ImGui::PopStyleVar(2);
+}
+
+size_t
+EventsView::RenderEventList(std::optional<uint64_t> source_index)
+{
+    size_t rendered       = 0;
+    float  x_button_width = ImGui::CalcTextSize("X").x + ImGui::GetStyle().FramePadding.x;
+    for(EventItem& item : m_event_items)
+    {
+        if(!item.info || !item.contents)
+        {
+            continue;
+        }
+        if(source_index.has_value())
+        {
+            const TrackInfo* track_info =
+                m_data_provider.DataModel().GetTimeline().GetTrack(item.info->track_id);
+            if(!track_info || track_info->file_id != source_index.value())
+            {
+                continue;
+            }
+        }
+        ++rendered;
+        bool deselect_event = false;
+        ImGui::PushID(item.id);
+        ImGui::SetNextItemAllowOverlap();
+
+        PushSectionHeaderStyle(m_settings);
+        bool event_open =
+            ImGui::CollapsingHeader(item.header.c_str(), ImGuiTreeNodeFlags_DefaultOpen);
+        ImGui::PopStyleColor(3);
+
+        if(event_open)
+        {
+            ImGui::SameLine();
+            ImGui::Dummy(ImVec2(ImGui::GetContentRegionAvail().x - x_button_width, 0));
+            ImGui::SameLine();
+            deselect_event = XButton();
+
+            ImGui::BeginChild("EventDetails", ImVec2(0, item.height),
+                              ImGuiChildFlags_None);
+            item.contents->Render();
+            ImGui::EndChild();
+
+            // Use the optimal height of the contents as the new height for the next frame
+            if(item.contents)
+            {
+                item.height = item.contents->GetOptimalHeight();
+            }
+        }
+        else
+        {
+            ImGui::SameLine();
+            ImGui::Dummy(ImVec2(ImGui::GetContentRegionAvail().x - x_button_width,
+                                ImGui::GetFrameHeightWithSpacing()));
+            ImGui::SameLine();
+            deselect_event = XButton();
+        }
+        if(deselect_event)
+        {
+            m_timeline_selection->UnselectTrackEvent(item.info->track_id,
+                                                     item.info->basic_info.id.uuid);
+        }
+        ImGui::PopID();
+    }
+    return rendered;
+}
+
+void
+EventsView::RenderSourceColumn(size_t source_index)
+{
+    const CompareSourceInfo* source =
+        m_data_provider.DataModel().GetCompareSource(source_index);
+    if(!source)
+    {
+        return;
+    }
+
+    BeginCompareCard("##ev_source_card", m_settings);
+    RenderCompareCardTitle(*source, m_settings);
+
+    if(RenderEventList(source_index) == 0)
+    {
+        CenterNextTextItem(NO_DATA_TEXT);
+        ImGui::SetCursorPosY((ImGui::GetWindowHeight() - ImGui::GetTextLineHeight()) *
+                             0.5f);
+        ImGui::TextDisabled("%s", NO_DATA_TEXT);
+    }
+
+    EndCompareCard();
 }
 
 bool

@@ -4,12 +4,14 @@
 #include "rocprofvis_track_details.h"
 #include "icons/rocprovfis_icon_defines.h"
 #include "model/rocprofvis_model_types.h"
+#include "rocprofvis_compare_panes.h"
 #include "rocprofvis_data_provider.h"
 #include "rocprofvis_events.h"
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_timeline_selection.h"
 #include "rocprofvis_utils.h"
 #include "widgets/rocprofvis_gui_helpers.h"
+#include "widgets/rocprofvis_split_containers.h"
 #include "widgets/rocprofvis_widget.h"
 
 #include <string>
@@ -28,6 +30,8 @@ constexpr const char* TRACK_PREFIX[] = { "Unknown", "Queue",  "Stream",
 // BeginTable scopes ids per table, so a single constant is unambiguous.
 constexpr const char* CELL_CONTEXT_MENU_ID = "##track_details_cell_menu";
 
+constexpr const char* NO_DATA_TEXT = "No data available for the selected tracks.";
+
 TrackDetails::TrackDetails(DataProvider&                      dp,
                            std::shared_ptr<TimelineSelection> timeline_selection)
 : m_data_provider(dp)
@@ -36,9 +40,21 @@ TrackDetails::TrackDetails(DataProvider&                      dp,
 , m_selection_dirty(false)
 , m_data_valid(false)
 , m_topology_revision(0)
+, m_compare_mode(false)
+, m_detail_split(nullptr)
 , m_track_metadata_changed_event_token(EventManager::InvalidSubscriptionToken)
 , m_time_format_changed_token(EventManager::InvalidSubscriptionToken)
 {
+    m_compare_mode = IsCompareTrace(m_data_provider.DataModel());
+    if(m_compare_mode)
+    {
+        m_detail_split = MakeCompareSplit(
+            std::make_shared<RocCustomWidget>(
+                [this]() { RenderSourceColumn(COMPARE_SOURCE_A); }),
+            std::make_shared<RocCustomWidget>(
+                [this]() { RenderSourceColumn(COMPARE_SOURCE_B); }));
+    }
+
     // Track names carry metadata (compare labels, pid suffixes), so a metadata
     // change means the resolved details have to be rebuilt, not just redrawn.
     auto metadata_changed_event_handler = [this](std::shared_ptr<RocEvent> event) {
@@ -82,6 +98,20 @@ TrackDetails::Render()
     if(m_data_valid && !m_selection_dirty)
     {
         const ImGuiStyle& style = m_settings.GetDefaultStyle();
+
+        if(m_compare_mode && m_detail_split)
+        {
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, style.WindowPadding);
+            ImGui::BeginChild("track_details_compare", ImVec2(0, 0),
+                              ImGuiChildFlags_AlwaysUseWindowPadding,
+                              ImGuiWindowFlags_NoScrollbar |
+                                  ImGuiWindowFlags_NoScrollWithMouse);
+            m_detail_split->Render();
+            ImGui::EndChild();
+            ImGui::PopStyleVar();
+            return;
+        }
+
         ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, style.ChildRounding);
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, style.WindowPadding);
         ImGui::PushStyleColor(ImGuiCol_ChildBg, m_settings.GetColor(Colors::kBgPanel));
@@ -91,107 +121,142 @@ TrackDetails::Render()
                               ImGuiChildFlags_AlwaysUseWindowPadding);
         if(m_track_details.empty())
         {
-            CenterNextTextItem("No data available for the selected tracks.");
+            CenterNextTextItem(NO_DATA_TEXT);
             ImGui::SetCursorPosY((ImGui::GetWindowHeight() - ImGui::GetTextLineHeight()) *
                                  0.5f);
-            ImGui::TextDisabled("No data available for the selected tracks.");
+            ImGui::TextDisabled("%s", NO_DATA_TEXT);
         }
         else
         {
-            ImFont* icons = m_settings.GetFontManager().GetFont(FontType::kIcon);
-            ImGui::PushFont(icons);
-            ImVec2 icon_size = ImGui::CalcTextSize(ICON_CHEVRON_DOWN);
-            ImGui::PopFont();
-            int id = 0;
-            for(DetailItem& detail : m_track_details)
-            {
-                ImGui::PushID(id++);
-                if(ImGui::CollapsingHeader(detail.track_name.c_str(),
-                                           ImGuiTreeNodeFlags_DefaultOpen))
-                {
-                    if(detail.parents.node || detail.parents.process || detail.track)
-                    {
-                        ImGui::BeginChild("topology", ImVec2(0.0f, 0.0f),
-                                          ImGuiChildFlags_Borders |
-                                              ImGuiChildFlags_AutoResizeY);
-                        ImGui::BeginGroup();
-                        IconButton(
-                            detail.parents.expand ? ICON_CHEVRON_DOWN
-                                                  : ICON_CHEVRON_RIGHT,
-                            icons,
-                            ImVec2(icon_size.x + style.FramePadding.x * 2.0f,
-                                   icon_size.y + style.FramePadding.y * 2.0f),
-                            nullptr, false, style.FramePadding,
-                            SettingsManager::GetInstance().GetColor(Colors::kTransparent),
-                            SettingsManager::GetInstance().GetColor(
-                                Colors::kButtonHovered),
-                            SettingsManager::GetInstance().GetColor(
-                                Colors::kTransparent));
-                        if(detail.parents.node)
-                        {
-                            ImGui::SameLine();
-                            ImGui::TextUnformatted(
-                                detail.parents.node->host_name.c_str());
-                        }
-                        if(detail.parents.process)
-                        {
-                            ImGui::PushFont(icons);
-                            ImGui::SameLine(0.0f, style.ItemSpacing.x);
-                            ImGui::TextUnformatted(ICON_ARROW_FORWARD);
-                            ImGui::PopFont();
-                            ImGui::SameLine(0.0f, style.ItemSpacing.x);
-                            ImGui::TextUnformatted(
-                                detail.parents.process->GetHeader().c_str());
-                        }
-                        if(detail.track)
-                        {
-                            ImGui::PushFont(icons);
-                            ImGui::SameLine(0.0f, style.ItemSpacing.x);
-                            ImGui::TextUnformatted(ICON_ARROW_FORWARD);
-                            ImGui::PopFont();
-                            ImGui::SameLine(0.0f, style.ItemSpacing.x);
-                            ImGui::TextUnformatted(detail.track->GetName().c_str());
-                        }
-                        ImGui::EndGroup();
-                        if(ImGui::IsItemClicked())
-                        {
-                            detail.parents.expand = !detail.parents.expand;
-                        }
-                        if(detail.parents.expand)
-                        {
-                            if(detail.parents.node)
-                            {
-                                ImGui::Text("Node: %s",
-                                            detail.parents.node->host_name.c_str());
-                                RenderTable(detail.node_table, "##td_node_table");
-                            }
-                            if(detail.parents.process)
-                            {
-                                ImGui::Text("Process: %s",
-                                            detail.parents.process->GetHeader().c_str());
-                                RenderTable(detail.process_table, "##td_process_table");
-                            }
-                        }
-                        ImGui::EndChild();
-                    }
-                    if(detail.track)
-                    {
-                        ImGui::BeginChild("track", ImVec2(0.0f, 0.0f),
-                                          ImGuiChildFlags_Borders |
-                                              ImGuiChildFlags_AutoResizeY);
-                        ImGui::Text("%s: %s", TRACK_PREFIX[detail.track_type],
-                                    detail.track->GetName().c_str());
-                        RenderTable(detail.track_table, "##td_track_table", detail.stats);
-                        ImGui::EndChild();
-                    }
-                }
-                ImGui::PopID();
-            }
+            RenderDetailList(std::nullopt);
         }
         ImGui::EndChild();
         ImGui::PopStyleColor(2);
         ImGui::PopStyleVar(2);
     }
+}
+
+void
+TrackDetails::RenderSourceColumn(size_t source_index)
+{
+    const CompareSourceInfo* source =
+        m_data_provider.DataModel().GetCompareSource(source_index);
+    if(!source)
+    {
+        return;
+    }
+
+    BeginCompareCard("##td_source_card", m_settings);
+    RenderCompareCardTitle(*source, m_settings);
+
+    if(RenderDetailList(source_index) == 0)
+    {
+        CenterNextTextItem(NO_DATA_TEXT);
+        ImGui::SetCursorPosY((ImGui::GetWindowHeight() - ImGui::GetTextLineHeight()) *
+                             0.5f);
+        ImGui::TextDisabled("%s", NO_DATA_TEXT);
+    }
+
+    EndCompareCard();
+}
+
+size_t
+TrackDetails::RenderDetailList(std::optional<uint64_t> source_index)
+{
+    const ImGuiStyle& style = m_settings.GetDefaultStyle();
+    ImFont*           icons = m_settings.GetFontManager().GetFont(FontType::kIcon);
+    ImGui::PushFont(icons);
+    ImVec2 icon_size = ImGui::CalcTextSize(ICON_CHEVRON_DOWN);
+    ImGui::PopFont();
+    int    id       = 0;
+    size_t rendered = 0;
+    for(DetailItem& detail : m_track_details)
+    {
+        if(source_index.has_value())
+        {
+            const TrackInfo* track_info =
+                m_data_provider.DataModel().GetTimeline().GetTrack(detail.track_id);
+            if(!track_info || track_info->file_id != source_index.value())
+            {
+                continue;
+            }
+        }
+        ++rendered;
+        ImGui::PushID(id++);
+        if(ImGui::CollapsingHeader(detail.track_name.c_str(),
+                                   ImGuiTreeNodeFlags_DefaultOpen))
+        {
+            if(detail.parents.node || detail.parents.process || detail.track)
+            {
+                ImGui::BeginChild("topology", ImVec2(0.0f, 0.0f),
+                                  ImGuiChildFlags_Borders | ImGuiChildFlags_AutoResizeY);
+                ImGui::BeginGroup();
+                IconButton(
+                    detail.parents.expand ? ICON_CHEVRON_DOWN : ICON_CHEVRON_RIGHT, icons,
+                    ImVec2(icon_size.x + style.FramePadding.x * 2.0f,
+                           icon_size.y + style.FramePadding.y * 2.0f),
+                    nullptr, false, style.FramePadding,
+                    SettingsManager::GetInstance().GetColor(Colors::kTransparent),
+                    SettingsManager::GetInstance().GetColor(Colors::kButtonHovered),
+                    SettingsManager::GetInstance().GetColor(Colors::kTransparent));
+                if(detail.parents.node)
+                {
+                    ImGui::SameLine();
+                    ImGui::TextUnformatted(detail.parents.node->host_name.c_str());
+                }
+                if(detail.parents.process)
+                {
+                    ImGui::PushFont(icons);
+                    ImGui::SameLine(0.0f, style.ItemSpacing.x);
+                    ImGui::TextUnformatted(ICON_ARROW_FORWARD);
+                    ImGui::PopFont();
+                    ImGui::SameLine(0.0f, style.ItemSpacing.x);
+                    ImGui::TextUnformatted(detail.parents.process->GetHeader().c_str());
+                }
+                if(detail.track)
+                {
+                    ImGui::PushFont(icons);
+                    ImGui::SameLine(0.0f, style.ItemSpacing.x);
+                    ImGui::TextUnformatted(ICON_ARROW_FORWARD);
+                    ImGui::PopFont();
+                    ImGui::SameLine(0.0f, style.ItemSpacing.x);
+                    ImGui::TextUnformatted(detail.track->GetName().c_str());
+                }
+                ImGui::EndGroup();
+                if(ImGui::IsItemClicked())
+                {
+                    detail.parents.expand = !detail.parents.expand;
+                }
+                if(detail.parents.expand)
+                {
+                    if(detail.parents.node)
+                    {
+                        ImGui::Text("Node: %s",
+                                    detail.parents.node->host_name.c_str());
+                        RenderTable(detail.node_table, "##td_node_table");
+                    }
+                    if(detail.parents.process)
+                    {
+                        ImGui::Text("Process: %s",
+                                    detail.parents.process->GetHeader().c_str());
+                        RenderTable(detail.process_table, "##td_process_table");
+                    }
+                }
+                ImGui::EndChild();
+            }
+            if(detail.track)
+            {
+                ImGui::BeginChild("track", ImVec2(0.0f, 0.0f),
+                                  ImGuiChildFlags_Borders | ImGuiChildFlags_AutoResizeY);
+                ImGui::Text("%s: %s", TRACK_PREFIX[detail.track_type],
+                            detail.track->GetName().c_str());
+                RenderTable(detail.track_table, "##td_track_table", detail.stats);
+                ImGui::EndChild();
+            }
+        }
+        ImGui::PopID();
+    }
+    return rendered;
 }
 
 void

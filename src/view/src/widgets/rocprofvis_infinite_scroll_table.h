@@ -93,6 +93,39 @@ protected:
 
     void FormatTimeColumns() const;
     void ExportToFile() const;
+    /* Whether this table is waiting on data: either a request is out with the
+     * controller, or one is held until the controller table frees up.
+     */
+    bool TableRequestInFlight() const;
+    /* Cancels the request this table has with the controller, so a late response
+     * cannot refill a table whose selection has already moved on. Cancellation is
+     * asynchronous and only issued once, so calling this every frame is safe.
+     *
+     * A fetch that is queued but not yet sent is left alone by default, which is
+     * what FetchData wants when it retires the outstanding request to make room for
+     * the one it is about to send. Pass clear_pending when nothing will replace it -
+     * the selection emptied - so the queued fetch is dropped as well.
+     */
+    void CancelFetch(bool clear_pending = false);
+    /* When false the body draws without its own frame, so a parent that already
+     * draws one around the title and the table supplies the only border.
+     */
+    void SetDrawBorder(bool draw);
+    /* Applies an externally chosen sort on the next render. Named rather than
+     * indexed because the caller may be looking at a table with a different
+     * schema; the name is resolved against this table's own header, and a sort on
+     * a column this table does not have is dropped.
+     */
+    void SetPendingSort(const std::string&                 column_name,
+                        rocprofvis_controller_sort_order_t order);
+    // The header cell this table sorts by, empty until the header arrives.
+    const std::string& SortColumnName() const;
+    // Position of a header cell in this table, INVALID_UINT64_INDEX if absent.
+    size_t ColumnIndexOf(const std::string& column_name) const;
+    virtual void OnSortChanged() {}
+    // Drops or rewrites filter fields that this table cannot send. Default is
+    // a no-op so non-compare tables keep the values the user applied.
+    virtual void AdjustFilterForRequest(FilterOptions&) const {}
 
     // Filter row...
     const std::string& ActiveFilterRowClause() const;
@@ -121,6 +154,9 @@ protected:
     uint64_t m_fetch_chunk_size;
 
     bool m_data_changed;
+    // True when the last request sent included a group_by. Grouped results
+    // must not rebuild the eligible column cache from the aggregate header.
+    bool m_last_fetch_grouped;
 
     // Track the selected row for context menu actions
     int m_selected_row;
@@ -128,6 +164,7 @@ protected:
     int m_hovered_row;
 
     bool m_horizontal_scroll;
+    bool m_draw_border;
 
 private:
     struct FilterInput
@@ -152,10 +189,13 @@ private:
     bool m_filter_requested;
 
     // Internal state flags below
-    bool     m_open_context_menu;
-    bool     m_skip_data_fetch;
-    uint64_t m_last_total_row_count;
-    ImVec2   m_last_table_size;
+    bool                               m_open_context_menu;
+    bool                               m_skip_data_fetch;
+    bool                               m_pending_sort;
+    std::string                        m_pending_sort_column;
+    rocprofvis_controller_sort_order_t m_pending_sort_order;
+    uint64_t                           m_last_total_row_count;
+    ImVec2                             m_last_table_size;
 
     // Filter row...
     bool                                         m_display_filter_row;

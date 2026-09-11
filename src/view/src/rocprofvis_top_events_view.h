@@ -3,10 +3,12 @@
 
 #pragma once
 
+#include "rocprofvis_compare_panes.h"
 #include "rocprofvis_multi_track_table.h"
 #include "widgets/rocprofvis_widget.h"
 #include <array>
 #include <memory>
+#include <optional>
 #include <vector>
 
 namespace RocProfVis
@@ -38,10 +40,15 @@ private:
                        rocprofvis_controller_table_type_t request_table_type,
                        uint64_t                           request_id,
                        std::shared_ptr<TimelineSelection> timeline_selection,
-                       rocprofvis_dm_event_operation_t op, const char* header);
+                       rocprofvis_dm_event_operation_t op, const char* header,
+                       std::optional<uint64_t> source_file_id = std::nullopt);
         ~TopEventsTable();
 
+        // Draws its own collapsing header, sized to the rows it holds.
         void Render() override;
+        // Height that shows every row plus the table chrome, unclamped.
+        float ContentHeight() const;
+
         void HandleTrackSelectionChanged(uint64_t track_id, bool selected) override;
 
         bool Visible() const;
@@ -68,7 +75,24 @@ private:
         bool                                    m_visible;
     };
 
-    std::array<std::unique_ptr<TopEventsTable>, 5> m_tables;
+    // One event category, holding a single table or an A/B pair in compare mode.
+    struct Category
+    {
+        std::array<std::unique_ptr<TopEventsTable>, COMPARE_SOURCE_COUNT> tables;
+        const char* header = nullptr;
+    };
+
+    static constexpr size_t CATEGORY_COUNT = 5;
+
+    static bool AnyVisible(const Category& category);
+
+    // Draws one category header with the A/B cards of that category below it.
+    void RenderCategory(Category& category);
+    void RenderSourceTitle(size_t source_index);
+
+    DataProvider&                        m_data_provider;
+    bool                                 m_compare_mode;
+    std::array<Category, CATEGORY_COUNT> m_categories;
 };
 
 }  // namespace View

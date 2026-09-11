@@ -7,7 +7,10 @@
 #include "rocprofvis_event_manager.h"
 #include "widgets/rocprofvis_gui_helpers.h"
 #include "widgets/rocprofvis_widget.h"
+#include <cstddef>
 #include <list>
+#include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -19,6 +22,7 @@ namespace View
 class DataProvider;
 class SettingsManager;
 class TimelineSelection;
+class HSplitContainer;
 
 /*
  * Two-column property table for one topology node. Built per selected track,
@@ -105,6 +109,12 @@ private:
     void RenderTable(DetailsTable& table, const char* table_id,
                      const AnalysisTrackStatistics* = nullptr);
 
+    /* Renders the selected tracks' cards and returns how many were drawn. In
+     * compare mode source_index limits a column to one source's tracks.
+     */
+    size_t RenderDetailList(std::optional<uint64_t> source_index);
+    void   RenderSourceColumn(size_t source_index);
+
     DataProvider&                      m_data_provider;
     std::shared_ptr<TimelineSelection> m_timeline_selection;
     SettingsManager&                   m_settings;
@@ -114,6 +124,9 @@ private:
     CellMenuTarget                     m_cell_menu;
     // Revision of the topology tree the resolved items point into.
     uint64_t                           m_topology_revision;
+
+    bool                             m_compare_mode;
+    std::shared_ptr<HSplitContainer> m_detail_split;
 
     EventManager::SubscriptionToken m_track_metadata_changed_event_token;
     EventManager::SubscriptionToken m_time_format_changed_token;

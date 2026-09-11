@@ -46,28 +46,33 @@ CompareSourceColor(const CompareSourceInfo& source, SettingsManager& settings)
     return wheel[idx % wheel.size()];
 }
 
-float
-CompareSourceBadgeWidth(const TrackInfo* track_info)
+static float
+CompareSourceBadgeWidth(const CompareSourceInfo& source)
 {
-    if(!track_info || track_info->compare_source.id.empty())
+    if(source.id.empty())
     {
         return 0.0f;
     }
-    return ImGui::CalcTextSize(track_info->compare_source.id.c_str()).x +
+    return ImGui::CalcTextSize(source.id.c_str()).x +
            2.0f * ImGui::GetStyle().FramePadding.x;
 }
 
-void
-RenderCompareSourceBadge(const TrackInfo* track_info, SettingsManager& settings)
+float
+CompareSourceBadgeWidth(const TrackInfo* track_info)
 {
-    if(!track_info || track_info->compare_source.id.empty())
+    return track_info ? CompareSourceBadgeWidth(track_info->compare_source) : 0.0f;
+}
+
+void
+RenderCompareSourceBadge(const CompareSourceInfo& source, SettingsManager& settings)
+{
+    if(source.id.empty())
     {
         return;
     }
 
-    const CompareSourceInfo& source = track_info->compare_source;
-    ImU32                    color  = CompareSourceColor(source, settings);
-    float                    width  = CompareSourceBadgeWidth(track_info);
+    ImU32 color = CompareSourceColor(source, settings);
+    float width = CompareSourceBadgeWidth(source);
 
     ImGui::PushID("compare_source_badge");
     ImGui::PushStyleColor(ImGuiCol_Button, color);
@@ -90,6 +95,15 @@ RenderCompareSourceBadge(const TrackInfo* track_info, SettingsManager& settings)
         SetTooltipStyled("%s", tooltip.c_str());
     }
     ImGui::PopID();
+}
+
+void
+RenderCompareSourceBadge(const TrackInfo* track_info, SettingsManager& settings)
+{
+    if(track_info)
+    {
+        RenderCompareSourceBadge(track_info->compare_source, settings);
+    }
 }
 
 TrackItem::TrackItem(DataProvider& dp, uint64_t id, TimelineTrackOptions& track_options,

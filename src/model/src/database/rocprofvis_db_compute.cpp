@@ -1165,6 +1165,12 @@ void ComputeQueryFactory::ParseMetricParam(std::string metric_str, uint32_t work
 			std::string store_kernels_lookup_table_query = "SELECT kernel_uuid, workload_id FROM compute_kernel";
 			if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, &tmp_db_instance, store_kernels_lookup_table_query.c_str(), CallbackGetComputeKernelWorkloadLookupTable)) break;
 
+			// Populate workload IDs directly from compute_workload so that kernel-free
+			// workloads are included in the set and return a valid (empty) result instead
+			// of InvalidParameter when queried for metrics.
+			std::string store_workload_ids_query = "SELECT workload_id FROM compute_workload";
+			if (kRocProfVisDmResultSuccess != ExecuteSQLQuery(future, &tmp_db_instance, store_workload_ids_query.c_str(), CallbackStoreWorkloadIdSet)) break;
+
 			return future->SetPromise(kRocProfVisDmResultSuccess);
 		}
 		
@@ -1446,6 +1452,19 @@ void ComputeQueryFactory::ParseMetricParam(std::string metric_str, uint32_t work
 		uint32_t kernel_id = db->Sqlite3ColumnInt(func, stmt, azColName, 0);
 		uint32_t workload_id = db->Sqlite3ColumnInt(func, stmt, azColName, 1);
 		db->m_kernel_workload_lookup[kernel_id] = workload_id;
+		db->m_workload_id_set.insert(workload_id);
+		callback_params->future->CountThisRow();
+		return 0;
+	}
+
+	int ComputeDatabase::CallbackStoreWorkloadIdSet(void* data, int argc, sqlite3_stmt* stmt, char** azColName) {
+		(void) argc;
+		ROCPROFVIS_ASSERT_MSG_RETURN(data, ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL, 1);
+		rocprofvis_db_sqlite_callback_parameters* callback_params = (rocprofvis_db_sqlite_callback_parameters*)data;
+		ComputeDatabase* db = (ComputeDatabase*)callback_params->db;
+		void* func = (void*)&CallbackStoreWorkloadIdSet;
+		if (callback_params->future->Interrupted()) return 1;
+		uint32_t workload_id = db->Sqlite3ColumnInt(func, stmt, azColName, 0);
 		db->m_workload_id_set.insert(workload_id);
 		callback_params->future->CountThisRow();
 		return 0;

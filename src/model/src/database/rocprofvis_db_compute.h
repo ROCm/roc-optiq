@@ -225,6 +225,7 @@ namespace DataModel
 
         static int CallbackGetComputeGeneric(void* data, int argc, sqlite3_stmt* stmt, char** azColName);
         static int CallbackGetComputeKernelWorkloadLookupTable(void* data, int argc, sqlite3_stmt* stmt, char** azColName);
+        static int CallbackStoreWorkloadIdSet(void* data, int argc, sqlite3_stmt* stmt, char** azColName);
         static int CallbackGetComputeRooflineCeiling(void* data, int argc, sqlite3_stmt* stmt, char** azColName);
         static int CallbackGetComputeKernelMetricsMatrix(void* data, int argc, sqlite3_stmt* stmt, char** azColName);
         static int CallbackParseMetadata(void* data, int argc, sqlite3_stmt* stmt, char** azColName);

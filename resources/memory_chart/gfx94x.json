@@ -1,0 +1,56 @@
+{
+    "version": 1,
+    "blocks": [
+        { "id": 1, "column": 0, "title": "Kernel", "content": [] },
+
+        { "id": 10, "column": 1, "order": 0, "title": "VL1D", "content": [
+            { "metric": "3.1.24", "title": "Hit", "category": "hit" }
+        ]},
+        { "id": 11, "column": 1, "order": 1, "title": "LDS", "content": [
+            { "metric": "3.1.19", "title": "Util", "category": "util" }
+        ]},
+        { "id": 12, "column": 1, "order": 2, "title": "sL1D", "content": [
+            { "metric": "3.1.32", "title": "Hit", "category": "hit" }
+        ]},
+        { "id": 13, "column": 1, "order": 3, "title": "L1I", "content": [
+            { "metric": "3.1.38", "title": "Hit", "category": "hit" }
+        ]},
+
+        { "id": 20, "column": 2, "title": "L2", "content": [
+            { "metric": "3.1.44", "title": "Hit", "category": "hit" }
+        ]},
+
+        { "id": 30, "column": 3, "order": 0, "title": "Data Fabric", "content": [
+            { "metric": "3.1.53", "title": "HBM Rd",                   "category": "read" },
+            { "metric": "3.1.54", "title": "HBM Wr",                   "category": "write" },
+            { "metric": "17.2.1", "title": "HBM Read Traffic",         "category": "read" },
+            { "metric": "17.2.5", "title": "HBM Wr+Atomic Traffic",    "category": "write" },
+            { "metric": "17.2.2", "title": "Remote Read Traffic",      "category": "read" },
+            { "metric": "17.2.6", "title": "Remote Wr+Atomic Traffic", "category": "write" }
+        ]},
+        { "id": 31, "column": 3, "order": 1, "title": "MALL", "content": [] },
+        { "id": 32, "column": 3, "order": 2, "title": "UMC", "content": [] }
+    ],
+    "arrows": [
+        { "from": 1, "to": 10, "direction": "backward", "title": "Flat Read",     "category": "read",   "note": "pending metric id" },
+        { "from": 1, "to": 10, "direction": "forward",  "title": "Flat Write",    "category": "write",  "note": "pending metric id" },
+        { "from": 1, "to": 10, "direction": "both",     "title": "Flat Atomic",   "category": "atomic", "note": "pending metric id" },
+        { "from": 1, "to": 10, "direction": "backward", "title": "Buffer Read",   "category": "read",   "note": "pending metric id" },
+        { "from": 1, "to": 10, "direction": "forward",  "title": "Buffer Write",  "category": "write",  "note": "pending metric id" },
+        { "from": 1, "to": 10, "direction": "both",     "title": "Buffer Atomic", "category": "atomic", "note": "pending metric id" },
+
+        { "from": 1, "to": 11, "direction": "backward", "metric": "3.1.18", "title": "Req", "category": "read" },
+
+        { "from": 1, "to": 12, "direction": "backward", "metric": "3.1.31", "title": "Rd",    "category": "read" },
+        { "from": 1, "to": 13, "direction": "backward", "metric": "3.1.37", "title": "Fetch", "category": "read" },
+
+        { "from": 10, "to": 20, "direction": "backward", "metric": "3.1.28", "title": "Rd",     "category": "read" },
+        { "from": 10, "to": 20, "direction": "forward",  "metric": "3.1.29", "title": "Wr",     "category": "write" },
+        { "from": 10, "to": 20, "direction": "both",     "metric": "3.1.30", "title": "Atomic", "category": "atomic" },
+        { "from": 12, "to": 20, "direction": "backward", "metric": "3.1.34", "title": "Rd",     "category": "read" },
+        { "from": 13, "to": 20, "direction": "backward", "metric": "3.1.40", "title": "Rd",     "category": "read" },
+
+        { "from": 20, "to": 30, "direction": "backward", "metric": "17.1.3", "title": "Rd",        "category": "read" },
+        { "from": 20, "to": 30, "direction": "forward",  "metric": "17.1.4", "title": "Wr+Atomic", "category": "write" }
+    ]
+}

@@ -792,11 +792,11 @@ File: `rocprofvis_controller_topology.{h,cpp}`.
 - `m_track` - the optional `Track*` that this leaf node represents.
 
 `GetParent(type)` walks up the chain to the nearest ancestor of a
-given type. The View's `TrackTopology` mirrors this tree exactly when
-populating the side-bar; do not add a new topology kind without also
-extending `TopologyNode`. Track-to-topology links come from the model
-node's `kRPVControllerTopologyNodeTrack` ID while the controller tree is
-constructed. The ID is resolved through
+given type. The View mirrors this tree into its own `TopologyTree`
+(`src/view/src/model/rocprofvis_topology_model.h`) at load; do not add a
+new topology kind without also extending both. Track-to-topology links
+come from the model node's `kRPVControllerTopologyNodeTrack` ID while the
+controller tree is constructed. The ID is resolved through
 `kRPVControllerSystemTrackIndexed`, then the typed `Track::Set*` method
 for the leaf kind records the reverse link. Track extended-data records
 are not a secondary wiring source. `SystemTrace::LoadRocpdTopology`

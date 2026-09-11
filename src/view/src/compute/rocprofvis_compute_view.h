@@ -45,6 +45,7 @@ private:
         const std::vector<const WorkloadInfo*>& workloads);
     void QueueDatabaseErrorDialog(const std::string& file_path,
                                   const std::string& message);
+    void ShowPendingDatabaseErrorDialog();
 
     bool  m_view_created;
     float m_toolbar_available_width;

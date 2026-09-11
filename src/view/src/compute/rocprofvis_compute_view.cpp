@@ -110,7 +110,7 @@ ComputeView::Update()
        (new_state == ProviderState::kReady || new_state == ProviderState::kError))
     {
         CreateView();
-        m_view_created = true;
+        m_view_created = (m_tab_container != nullptr);
     }
 
     if(new_state == ProviderState::kReady)
@@ -124,6 +124,8 @@ ComputeView::Update()
             m_tab_container->Update();
         }
     }
+
+    ShowPendingDatabaseErrorDialog();
 }
 
 void
@@ -135,11 +137,8 @@ ComputeView::CreateView()
 
     if(m_data_provider.GetState() == ProviderState::kError)
     {
-        if(!m_popup_info.show_popup)
-        {
-            QueueDatabaseErrorDialog(m_data_provider.GetTraceFilePath(),
-                                     INVALID_COMPUTE_DATABASE_MESSAGE);
-        }
+        QueueDatabaseErrorDialog(m_data_provider.GetTraceFilePath(),
+                                 INVALID_COMPUTE_DATABASE_MESSAGE);
         return;
     }
 
@@ -281,22 +280,17 @@ ComputeView::Render()
             m_tab_container->Render();
         }
     }
-
-    if(m_popup_info.show_popup)
-    {
-        m_popup_info.show_popup = false;
-        AppWindow*        app_window = AppWindow::GetInstance();
-        const std::string project_id = m_data_provider.GetTraceFilePath();
-        app_window->ShowMessageDialog(
-            m_popup_info.title, m_popup_info.message,
-            [app_window, project_id]() { app_window->CloseProjectTab(project_id); });
-    }
 }
 
 void
 ComputeView::QueueDatabaseErrorDialog(const std::string& file_path,
                                       const std::string& message)
 {
+    if(m_popup_info.show_popup)
+    {
+        return;
+    }
+
     m_popup_info.show_popup = true;
     m_popup_info.title      = "Invalid Compute Database";
     m_popup_info.message    = message;
@@ -304,6 +298,22 @@ ComputeView::QueueDatabaseErrorDialog(const std::string& file_path,
     {
         m_popup_info.message += "\n\nFile: " + file_path;
     }
+}
+
+void
+ComputeView::ShowPendingDatabaseErrorDialog()
+{
+    if(!m_popup_info.show_popup)
+    {
+        return;
+    }
+
+    m_popup_info.show_popup = false;
+    AppWindow*        app_window = AppWindow::GetInstance();
+    const std::string project_id = m_data_provider.GetTraceFilePath();
+    app_window->ShowMessageDialog(
+        m_popup_info.title, m_popup_info.message,
+        [app_window, project_id]() { app_window->CloseProjectTab(project_id); });
 }
 
 std::shared_ptr<RocWidget>

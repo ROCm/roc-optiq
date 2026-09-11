@@ -239,7 +239,7 @@ TabContainer::Render()
         if(m_active_tab_index != new_selected_tab)
         {
             m_active_tab_index = new_selected_tab;
-            if(new_selected_tab < m_tabs.size() && m_enable_send_change_event)
+            if(new_selected_tab >= 0 && new_selected_tab < static_cast<int>(m_tabs.size()) && m_enable_send_change_event)
             {
                 SendEvent(RocEvents::kTabSelected, m_tabs[new_selected_tab].m_id);
             }

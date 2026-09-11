@@ -589,7 +589,8 @@ reusable types they expose.
   optional "don't ask again" checkbox bound to a `bool&` setting.
   Instantiate inside the owning widget; call `Show(...)` to request
   open and `Render()` from inside the owner's `Render()`.
-- `class MessageDialog` - one-button info popup.
+- `class MessageDialog` - one-button info popup. Requests are queued while a
+  message is already pending or open, so callers do not overwrite one another.
 
 ### 7.3 `rocprofvis_split_containers.{h,cpp}` - layout
 
@@ -1255,7 +1256,9 @@ application message dialog, matching `TraceView` load-error handling, instead
 of creating the tab container. The dialog distinguishes the failed condition
 and includes the database path. Closing this dialog removes the failed
 project's tab through the normal `TabContainer` close-event path so provider
-cleanup still runs.
+cleanup still runs. Pending load-error dialogs are forwarded from `Update()`,
+which runs for every project tab, so an invalid background project does not
+have to become the active tab before its error is shown.
 
 `LoadTrace`, `CreateView`, `DestroyView`, `GetToolbar`,
 `DetachProviderCleanup` mirror `TraceView`.

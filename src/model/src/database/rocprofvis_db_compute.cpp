@@ -1043,18 +1043,8 @@ void ComputeQueryFactory::ParseMetricParam(std::string metric_str, uint32_t work
 				{				
 					workload_id = std::atol(params[i].param_str);
 					workload_detected =
-						m_db->m_metric_uuid_lookup.count(workload_id) > 0;
-					if (!workload_detected)
-					{
-						for (const auto& kernel_workload : m_db->m_kernel_workload_lookup)
-						{
-							if (kernel_workload.second == workload_id)
-							{
-								workload_detected = true;
-								break;
-							}
-						}
-					}
+						m_db->m_metric_uuid_lookup.count(workload_id) > 0 ||
+						m_db->m_workload_id_set.count(workload_id) > 0;
 				} else
 					if (params[i].param_type == kRPVComputeParamMetricId && workload_detected)
 					{
@@ -1456,6 +1446,7 @@ void ComputeQueryFactory::ParseMetricParam(std::string metric_str, uint32_t work
 		uint32_t kernel_id = db->Sqlite3ColumnInt(func, stmt, azColName, 0);
 		uint32_t workload_id = db->Sqlite3ColumnInt(func, stmt, azColName, 1);
 		db->m_kernel_workload_lookup[kernel_id] = workload_id;
+		db->m_workload_id_set.insert(workload_id);
 		callback_params->future->CountThisRow();
 		return 0;
 	}

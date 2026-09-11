@@ -7,6 +7,8 @@
 #include "rocprofvis_shared_types.h"
 #include "json.h"
 
+#include <unordered_set>
+
 namespace RocProfVis
 {
 namespace DataModel
@@ -217,6 +219,7 @@ namespace DataModel
         std::map<uint32_t, std::map<uint32_t, std::string>> m_metric_id_lookup;
         std::map<uint32_t, std::vector<std::pair<std::string, uint32_t>>> m_metric_uuid_lookup;
         std::map<uint32_t, uint32_t> m_kernel_workload_lookup;
+        std::unordered_set<uint32_t> m_workload_id_set;
         uint32_t m_last_matrix_workload_id;
         std::string m_last_top_kernels_query;
 

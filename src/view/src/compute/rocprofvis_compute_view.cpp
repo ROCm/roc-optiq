@@ -297,11 +297,15 @@ ComputeView::RenderWorkloadSelection()
 
         for(const WorkloadInfo* workload : workloads)
         {
-            if(ImGui::Selectable(workload->name.c_str(),
-                                 workload_id == workload->id))
+            ImGui::PushID(static_cast<int>(workload->id));
+            if(ImGui::Selectable("", workload_id == workload->id))
             {
                 m_compute_selection->SelectWorkload(workload->id);
             }
+            ImGui::SameLine(ImGui::GetCursorPosX());
+            ElidedText(workload->name.c_str(), ImGui::GetContentRegionAvail().x,
+                       ImGui::GetContentRegionAvail().x);
+            ImGui::PopID();
         }
         ImGui::EndCombo();
     }
@@ -324,10 +328,15 @@ ComputeView::RenderWorkloadSelection()
     {
         for(const KernelInfo* info : kernel_info_list)
         {
-            if(ImGui::Selectable(info->name.c_str(), kernel_id == info->id))
+            ImGui::PushID(static_cast<int>(info->id));
+            if(ImGui::Selectable("", kernel_id == info->id))
             {
                 m_compute_selection->SelectKernel(info->id);
             }
+            ImGui::SameLine(ImGui::GetCursorPosX());
+            ElidedText(info->name.c_str(), ImGui::GetContentRegionAvail().x,
+                       ImGui::GetContentRegionAvail().x);
+            ImGui::PopID();
         }
         ImGui::EndCombo();
     }

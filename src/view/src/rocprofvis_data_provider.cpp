@@ -5114,8 +5114,6 @@ DataProvider::LoadRoofLineCeilingsRidge(WorkloadInfo&        workload,
     rocprofvis_result_t result      = rocprofvis_controller_get_uint64(
         roofline_handle, kRPVControllerRooflineNumCeilingsRidge, 0, &num_entries);
     ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-    workload.roofline.max = { DBL_MIN, DBL_MIN };
-    workload.roofline.min = { DBL_MAX, DBL_MAX };
 
     for(uint64_t j = 0; j < num_entries; j++)
     {
@@ -5194,10 +5192,6 @@ DataProvider::LoadRoofLineCeilingsCompute(WorkloadInfo&        workload,
                     &double_data);
                 ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
                 ceiling.throughput = double_data;
-                workload.roofline.max.x =
-                    std::max(workload.roofline.max.x, ceiling.position.p2.x);
-                workload.roofline.max.y =
-                    std::max(workload.roofline.max.y, ceiling.position.p2.y);
                 workload.roofline
                     .ceiling_compute[ceiling.compute_type][ceiling.bandwidth_type] =
                     ceiling;
@@ -5258,10 +5252,6 @@ DataProvider::LoadRoofLineCeilingsBandwidth(WorkloadInfo&        workload,
                     &double_data);
                 ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
                 ceiling.throughput = double_data;
-                workload.roofline.min.x =
-                    std::min(workload.roofline.min.x, ceiling.position.p1.x);
-                workload.roofline.min.y =
-                    std::min(workload.roofline.min.y, ceiling.position.p1.y);
                 workload.roofline
                     .ceiling_bandwidth[ceiling.bandwidth_type][ceiling.compute_type] =
                     ceiling;
@@ -5313,10 +5303,6 @@ DataProvider::LoadRoofLineKernels(WorkloadInfo&        workload,
                 &double_data);
             ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
             intensity.position.y = double_data;
-            workload.roofline.max.y =
-                std::max(workload.roofline.max.y, intensity.position.y);
-            workload.roofline.min.y =
-                std::min(workload.roofline.min.y, intensity.position.y);
             workload.kernels[kernel_id].roofline.intensities[intensity.type] =
                 std::move(intensity);
         }

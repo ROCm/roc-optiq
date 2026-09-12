@@ -67,8 +67,9 @@ public:
 
     // Called as a session begins executing, from the bindings' prepare hook.
     // The interrupt is process-global, so the engine has to know which session
-    // it would land on before it sends one.
-    void BeginSession(Session* session);
+    // it would land on before it sends one. False means this session was
+    // cancelled while queued and must not run.
+    bool BeginSession(Session* session);
 
     void DropSession(Session* session);
 

@@ -115,8 +115,8 @@ bool
 run_with_timeout(char const* source, uint64_t timeout_ms, exec_outcome_t& outcome,
                  uint64_t wait_budget_ms)
 {
-    if(rocprofvis_python_exec(source, nullptr, &outcome, on_exec_done, timeout_ms) !=
-       kRocProfVisPythonSuccess)
+    if(rocprofvis_python_exec(source, nullptr, nullptr, &outcome, on_exec_done,
+                              timeout_ms) != kRocProfVisPythonSuccess)
     {
         return false;
     }
@@ -279,6 +279,61 @@ TEST_CASE("Script execute survives a script that outstayed its deadline")
     std::lock_guard<std::mutex> lock(healthy.mutex);
     REQUIRE(healthy.result == kRocProfVisPythonSuccess);
     REQUIRE(healthy.error.empty());
+}
+
+// Scripts run one at a time on the single interpreter thread, so the second of
+// two is queued behind the first. A cancel arriving then has nothing to
+// interrupt - the runtime only raises once exec is under way - so it used to be
+// dropped, and the queued script ran anyway when its turn came.
+TEST_CASE("Script execute refuses a script cancelled while it was queued")
+{
+    rocprofvis_controller_future_t* first_future = rocprofvis_controller_future_alloc();
+    rocprofvis_controller_future_t* second_future = rocprofvis_controller_future_alloc();
+    rocprofvis_controller_script_result_t* first_result  = nullptr;
+    rocprofvis_controller_script_result_t* second_result = nullptr;
+    REQUIRE(first_future);
+    REQUIRE(second_future);
+
+    // Busy for long enough that the cancel below lands while this one still
+    // holds the interpreter, and far short of the production deadline.
+    char const* busy =
+        "total = 0\n"
+        "for i in range(1000000):\n"
+        "    total += i\n"
+        "optiq.result.text('first')\n";
+
+    REQUIRE(rocprofvis_script_execute_async(nullptr, busy, nullptr, first_future,
+                                            &first_result) == kRocProfVisResultSuccess);
+    REQUIRE(rocprofvis_script_execute_async(nullptr, "optiq.result.text('second')",
+                                            nullptr, second_future, &second_result) ==
+            kRocProfVisResultSuccess);
+
+    REQUIRE(rocprofvis_script_cancel(second_future) == kRocProfVisResultSuccess);
+
+    REQUIRE(wait_for_script(first_future) == kRocProfVisResultSuccess);
+    REQUIRE(wait_for_script(second_future) == kRocProfVisResultSuccess);
+
+    uint64_t first_code = kRocProfVisResultUnknownError;
+    REQUIRE(rocprofvis_controller_get_uint64(first_future, kRPVControllerFutureResult, 0,
+                                             &first_code) == kRocProfVisResultSuccess);
+    uint64_t second_code = kRocProfVisResultUnknownError;
+    REQUIRE(rocprofvis_controller_get_uint64(second_future, kRPVControllerFutureResult, 0,
+                                             &second_code) == kRocProfVisResultSuccess);
+
+    // The cancel has to land on the script it named. Reaching for the
+    // interpreter instead would have stopped the one actually running.
+    REQUIRE(first_code == kRocProfVisResultSuccess);
+    REQUIRE(get_handle_string(first_result, kRPVControllerScriptResultText) == "first");
+
+    // Cancelled rather than an error, and empty text proves it never ran at
+    // all rather than running and being stopped part way.
+    REQUIRE(second_code == kRocProfVisResultCancelled);
+    REQUIRE(get_handle_string(second_result, kRPVControllerScriptResultText).empty());
+
+    rocprofvis_script_result_free(first_result);
+    rocprofvis_script_result_free(second_result);
+    rocprofvis_controller_future_free(first_future);
+    rocprofvis_controller_future_free(second_future);
 }
 
 TEST_CASE("Script error carries the traceback and the failing line")

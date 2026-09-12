@@ -1571,62 +1571,79 @@ make_result_module(ScriptResult* script_result)
 
 }  // namespace
 
-void
+// Every failure here returns an error and leaves its reason set. Nothing is
+// allowed to carry on with part of an environment: the script would then
+// resolve `optiq` from the previous run's module, still sitting in sys.modules
+// with a freed session and a controller that may belong to a closed trace.
+rocprofvis_python_result_t
 optiq_prepare_globals(void* py_dict, void* script_session)
 {
     PyObject*              globals = static_cast<PyObject*>(py_dict);
     ScriptEngine::Session* session =
         static_cast<ScriptEngine::Session*>(script_session);
-    // The interpreter calls this as a script starts, which is the only moment
-    // the engine can learn which session an interrupt would now land on.
-    ScriptEngine::Get().BeginSession(session);
     if(!globals || !session || !session->result)
     {
-        return;
+        PyErr_SetString(PyExc_RuntimeError,
+                        "script session has no globals or no result to write to");
+        return kRocProfVisPythonError;
+    }
+    // The interpreter calls this as a script starts, which is the only moment
+    // the engine can learn which session an interrupt would now land on - and
+    // the only chance to notice one that was cancelled while it sat in the
+    // queue behind another script, which no interrupt could have reached.
+    if(!ScriptEngine::Get().BeginSession(session))
+    {
+        return kRocProfVisPythonCancelled;
     }
     if(!ensure_types())
     {
-        PyErr_Clear();
-        return;
+        // PyType_FromSpec left the reason set.
+        return kRocProfVisPythonError;
     }
 
     PyObject* optiq = PyModule_New("optiq");
     if(!optiq)
     {
-        PyErr_Clear();
-        return;
+        return kRocProfVisPythonError;
     }
 
     PyObject* result_mod = make_result_module(session->result);
-    if(result_mod)
+    if(!result_mod)
     {
-        PyObject_SetAttrString(optiq, "result", result_mod);
-        // Bound to the result module so it reaches the same ScriptResult, and
-        // put straight into globals so plain print(...) resolves before the
-        // restricted builtins are consulted.
-        PyObject* print_fn = PyCFunction_New(&kPrintMethod, result_mod);
-        if(print_fn)
+        Py_DECREF(optiq);
+        if(!PyErr_Occurred())
         {
-            PyDict_SetItemString(globals, "print", print_fn);
-            Py_DECREF(print_fn);
+            PyErr_SetString(PyExc_RuntimeError, "could not build optiq.result");
         }
-        else
-        {
-            PyErr_Clear();
-        }
-        Py_DECREF(result_mod);
+        return kRocProfVisPythonError;
     }
+    PyObject_SetAttrString(optiq, "result", result_mod);
+    // Bound to the result module so it reaches the same ScriptResult, and
+    // put straight into globals so plain print(...) resolves before the
+    // restricted builtins are consulted.
+    PyObject* print_fn = PyCFunction_New(&kPrintMethod, result_mod);
+    Py_DECREF(result_mod);
+    if(!print_fn)
+    {
+        Py_DECREF(optiq);
+        return kRocProfVisPythonError;
+    }
+    PyDict_SetItemString(globals, "print", print_fn);
+    Py_DECREF(print_fn);
 
     PyObject* session_capsule = PyCapsule_New(session, SESSION_CAPSULE_NAME, nullptr);
-    if(session_capsule)
+    if(!session_capsule)
     {
-        PyObject_SetAttrString(optiq, "_session", session_capsule);
-        Py_DECREF(session_capsule);
+        Py_DECREF(optiq);
+        return kRocProfVisPythonError;
     }
+    PyObject_SetAttrString(optiq, "_session", session_capsule);
+    Py_DECREF(session_capsule);
 
     if(PyModule_AddFunctions(optiq, kOptiqMethods) != 0)
     {
-        PyErr_Clear();
+        Py_DECREF(optiq);
+        return kRocProfVisPythonError;
     }
     add_uint_constant(optiq, "TRACK_TYPE_SAMPLES",
                       static_cast<uint64_t>(kRPVControllerTrackTypeSamples));
@@ -1644,45 +1661,43 @@ optiq_prepare_globals(void* py_dict, void* script_session)
     if(session->controller)
     {
         PyObject* trace = make_trace(session);
-        if(trace)
+        if(!trace)
         {
-            PyObject_SetAttrString(optiq, "trace", trace);
-            TraceObject* trace_obj = reinterpret_cast<TraceObject*>(trace);
-            double       start     = 0.0;
-            double       end       = 0.0;
-            if(!timeline_range(session->controller, &start, &end))
+            Py_DECREF(optiq);
+            if(!PyErr_Occurred())
             {
-                PyErr_Clear();
+                PyErr_SetString(PyExc_RuntimeError, "could not build optiq.trace");
             }
-            PyObject* selection =
-                make_selection(session, trace_obj->tracks, start, end);
-            if(selection)
-            {
-                PyObject_SetAttrString(optiq, "selection", selection);
-                Py_DECREF(selection);
-            }
-            else
-            {
-                PyErr_Clear();
-                Py_INCREF(Py_None);
-                PyObject_SetAttrString(optiq, "selection", Py_None);
-            }
-            Py_DECREF(trace);
+            return kRocProfVisPythonError;
         }
-        else
+        PyObject_SetAttrString(optiq, "trace", trace);
+        TraceObject* trace_obj = reinterpret_cast<TraceObject*>(trace);
+        double       start     = 0.0;
+        double       end       = 0.0;
+        if(!timeline_range(session->controller, &start, &end))
         {
+            // Left soft: a trace whose timeline will not answer still has
+            // tracks worth scripting against, and this only sets the default
+            // window. Everything above is structural and fails the run.
             PyErr_Clear();
-            Py_INCREF(Py_None);
-            PyObject_SetAttrString(optiq, "trace", Py_None);
-            Py_INCREF(Py_None);
-            PyObject_SetAttrString(optiq, "selection", Py_None);
         }
+        PyObject* selection = make_selection(session, trace_obj->tracks, start, end);
+        Py_DECREF(trace);
+        if(!selection)
+        {
+            Py_DECREF(optiq);
+            if(!PyErr_Occurred())
+            {
+                PyErr_SetString(PyExc_RuntimeError, "could not build optiq.selection");
+            }
+            return kRocProfVisPythonError;
+        }
+        PyObject_SetAttrString(optiq, "selection", selection);
+        Py_DECREF(selection);
     }
     else
     {
-        Py_INCREF(Py_None);
         PyObject_SetAttrString(optiq, "trace", Py_None);
-        Py_INCREF(Py_None);
         PyObject_SetAttrString(optiq, "selection", Py_None);
     }
 
@@ -1692,13 +1707,71 @@ optiq_prepare_globals(void* py_dict, void* script_session)
     // from globals but the import statement goes looking on disk and fails,
     // and a script written the way the documentation describes gets an
     // ImportError for the one module it is supposed to be able to import.
-    // Replaced on every run, so a script never sees the previous run's trace.
+    //
+    // sys.modules belongs to the interpreter, which outlives every run, so
+    // optiq_teardown_globals has to take this back out. Do not lean on the
+    // next run replacing it: there may not be a next run, the trace can be
+    // closed before there is, and a run whose prepare fails never reaches
+    // this line.
     PyObject* modules = PyImport_GetModuleDict();
     if(modules)
     {
         PyDict_SetItemString(modules, "optiq", optiq);
     }
     Py_DECREF(optiq);
+
+    // Asked again because building the environment above is not instant - it
+    // enumerates tracks and queries the timeline - and a cancel arriving in
+    // that stretch still has nothing to interrupt. Past this point the runtime
+    // marks exec active and both the watchdog and wait_inner can see a cancel,
+    // so the only gap left is the few instructions before exec begins, which a
+    // script that fetches or outstays its deadline is still stopped in.
+    if(session->cancelled.load(std::memory_order_relaxed))
+    {
+        return kRocProfVisPythonCancelled;
+    }
+    return kRocProfVisPythonSuccess;
+}
+
+void
+optiq_teardown_globals(void* py_dict, void* script_session)
+{
+    (void) script_session;
+    PyObject* globals = static_cast<PyObject*>(py_dict);
+    // Whatever the script left set is its reported result, and
+    // PyDict_DelItemString raises a KeyError of its own, so park the caller's
+    // exception for the duration.
+    PyObject* type      = nullptr;
+    PyObject* value     = nullptr;
+    PyObject* traceback = nullptr;
+    PyErr_Fetch(&type, &value, &traceback);
+
+    PyObject* modules = PyImport_GetModuleDict();
+    if(modules && PyDict_GetItemString(modules, "optiq"))
+    {
+        PyDict_DelItemString(modules, "optiq");
+    }
+
+    // Dropping that entry is not enough on its own. A script can park the
+    // module somewhere that also outlives the run - `json.keep = optiq`, say,
+    // and allowlisted modules stay in sys.modules for the life of the process.
+    // Emptying the module means a reference kept that way cannot reach the
+    // session, the result or the controller, each of which is freed as soon as
+    // this returns.
+    if(globals)
+    {
+        PyObject* optiq = PyDict_GetItemString(globals, "optiq");
+        if(optiq && PyModule_Check(optiq))
+        {
+            PyObject* dict = PyModule_GetDict(optiq);
+            if(dict)
+            {
+                PyDict_Clear(dict);
+            }
+        }
+    }
+
+    PyErr_Restore(type, value, traceback);
 }
 
 }  // namespace Controller

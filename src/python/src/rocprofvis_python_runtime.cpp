@@ -250,11 +250,12 @@ DescribeDuration(uint64_t milliseconds)
 
 struct WorkItem
 {
-    std::string                         source;
-    rocprofvis_python_prepare_globals_t prepare_globals;
-    void*                               user;
-    rocprofvis_python_done_t            done;
-    uint64_t                            timeout_ms;
+    std::string                          source;
+    rocprofvis_python_prepare_globals_t  prepare_globals;
+    rocprofvis_python_teardown_globals_t teardown_globals;
+    void*                                user;
+    rocprofvis_python_done_t             done;
+    uint64_t                             timeout_ms;
 };
 
 class Runtime
@@ -269,6 +270,7 @@ public:
     rocprofvis_python_result_t Init(char const* runtime_root);
     rocprofvis_python_result_t Post(char const* source,
                                     rocprofvis_python_prepare_globals_t prepare,
+                                    rocprofvis_python_teardown_globals_t teardown,
                                     void* user, rocprofvis_python_done_t done,
                                     uint64_t timeout_ms);
     void                       Interrupt();
@@ -687,45 +689,73 @@ Runtime::ExecWork(WorkItem& item)
     }
     else
     {
-        if(item.prepare_globals)
+        // Anything but success skips the run. A hook that could not finish the
+        // environment must not let the script go ahead: it would resolve
+        // `optiq` from whatever the last run left in sys.modules, which the
+        // interpreter keeps for the life of the process and whose session is
+        // long freed. The same door reports a script cancelled while it was
+        // still queued, which no interrupt can reach - the watchdog only
+        // raises once exec is under way.
+        const rocprofvis_python_result_t prepared =
+            item.prepare_globals ? item.prepare_globals(globals, item.user)
+                                 : kRocProfVisPythonSuccess;
+        if(prepared == kRocProfVisPythonCancelled)
         {
-            item.prepare_globals(globals, item.user);
-        }
-
-        const uint64_t timeout_ms =
-            item.timeout_ms == 0 ? SCRIPT_TIMEOUT_MS : item.timeout_ms;
-        BeginExecDeadline(timeout_ms);
-        PyObject* py_result =
-            PyRun_String(item.source.c_str(), Py_file_input, globals, globals);
-        const bool timed_out = EndExecDeadline();
-
-        if(py_result)
-        {
-            Py_DECREF(py_result);
-            result = kRocProfVisPythonSuccess;
-        }
-        else if(PyErr_ExceptionMatches(PyExc_KeyboardInterrupt))
-        {
+            result = kRocProfVisPythonCancelled;
+            error  = "script cancelled";
             PyErr_Clear();
-            if(timed_out)
-            {
-                // A timeout is a script that needs fixing, not a user walking
-                // away, so it is reported as a failure and says how long it ran.
-                result = kRocProfVisPythonError;
-                error =
-                    "script timed out after " + DescribeDuration(timeout_ms) +
-                    " and was stopped";
-            }
-            else
-            {
-                result = kRocProfVisPythonCancelled;
-                error  = "script cancelled";
-            }
+        }
+        else if(prepared != kRocProfVisPythonSuccess)
+        {
+            result = prepared;
+            error  = PyErr_Occurred() ? FormatPythonError()
+                                      : "could not build the script environment";
         }
         else
         {
-            error  = FormatPythonError();
-            result = kRocProfVisPythonError;
+            const uint64_t timeout_ms =
+                item.timeout_ms == 0 ? SCRIPT_TIMEOUT_MS : item.timeout_ms;
+            BeginExecDeadline(timeout_ms);
+            PyObject* py_result =
+                PyRun_String(item.source.c_str(), Py_file_input, globals, globals);
+            const bool timed_out = EndExecDeadline();
+
+            if(py_result)
+            {
+                Py_DECREF(py_result);
+                result = kRocProfVisPythonSuccess;
+            }
+            else if(PyErr_ExceptionMatches(PyExc_KeyboardInterrupt))
+            {
+                PyErr_Clear();
+                if(timed_out)
+                {
+                    // A timeout is a script that needs fixing, not a user walking
+                    // away, so it is reported as a failure and says how long it ran.
+                    result = kRocProfVisPythonError;
+                    error =
+                        "script timed out after " + DescribeDuration(timeout_ms) +
+                        " and was stopped";
+                }
+                else
+                {
+                    result = kRocProfVisPythonCancelled;
+                    error  = "script cancelled";
+                }
+            }
+            else
+            {
+                error  = FormatPythonError();
+                result = kRocProfVisPythonError;
+            }
+        }
+
+        // Before the globals go, and before `done` lets the caller free what
+        // the script was reading. Runs on the failed-prepare path too, since a
+        // hook can register part of an environment and then give up.
+        if(item.teardown_globals)
+        {
+            item.teardown_globals(globals, item.user);
         }
         Py_DECREF(globals);
     }
@@ -900,7 +930,8 @@ Runtime::Init(char const* runtime_root)
 
 rocprofvis_python_result_t
 Runtime::Post(char const* source, rocprofvis_python_prepare_globals_t prepare,
-              void* user, rocprofvis_python_done_t done, uint64_t timeout_ms)
+              rocprofvis_python_teardown_globals_t teardown, void* user,
+              rocprofvis_python_done_t done, uint64_t timeout_ms)
 {
     if(!source || !done)
     {
@@ -918,11 +949,12 @@ Runtime::Post(char const* source, rocprofvis_python_prepare_globals_t prepare,
             return kRocProfVisPythonNotInitialized;
         }
         WorkItem item;
-        item.source          = source;
-        item.prepare_globals = prepare;
-        item.user            = user;
-        item.done            = done;
-        item.timeout_ms      = timeout_ms;
+        item.source           = source;
+        item.prepare_globals  = prepare;
+        item.teardown_globals = teardown;
+        item.user             = user;
+        item.done             = done;
+        item.timeout_ms       = timeout_ms;
         m_queue.push(std::move(item));
     }
     m_cv.notify_one();
@@ -1000,11 +1032,12 @@ rocprofvis_python_init(char const* runtime_root)
 rocprofvis_python_result_t
 rocprofvis_python_exec(char const* source,
                        rocprofvis_python_prepare_globals_t prepare_globals,
+                       rocprofvis_python_teardown_globals_t teardown_globals,
                        void* user, rocprofvis_python_done_t done,
                        unsigned long long timeout_ms)
 {
-    return RocProfVis::Python::Runtime::Get().Post(source, prepare_globals,
-                                                   user, done, timeout_ms);
+    return RocProfVis::Python::Runtime::Get().Post(
+        source, prepare_globals, teardown_globals, user, done, timeout_ms);
 }
 
 void

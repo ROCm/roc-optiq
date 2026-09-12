@@ -111,7 +111,8 @@ C ABI sketch (owned by `roc-optiq-python`):
 rocprofvis_result_t rocprofvis_python_init(char const* runtime_root);
 rocprofvis_result_t rocprofvis_python_exec(
     char const* source,
-    void (*prepare_globals)(void* py_dict, void* user),
+    rocprofvis_python_result_t (*prepare_globals)(void* py_dict, void* user),
+    void                       (*teardown_globals)(void* py_dict, void* user),
     void* user);
 void rocprofvis_python_interrupt(void);   // raise into interpreter thread
 void rocprofvis_python_shutdown(void);
@@ -120,6 +121,44 @@ void rocprofvis_python_shutdown(void);
 `prepare_globals` is provided by the controller: it creates the
 `optiq` module and stuffs `optiq.trace` / `optiq.selection` into the
 exec dict. The runtime never includes `rocprofvis_controller.h`.
+
+**The two hooks are a pair, and both halves are load-bearing.**
+
+`prepare_globals` returns anything but `kRocProfVisPythonSuccess` to
+abort the run, and the value is reported as-is. Every failure inside
+`optiq_prepare_globals` takes that route with its reason left set. It
+used to return `void` and `PyErr_Clear()` its way past problems, which
+looks harmless and is not: the script then ran *without its own*
+`optiq`, so `import optiq` resolved out of `sys.modules` to the module
+the **previous** run installed, whose session is freed and whose
+controller may belong to a closed trace. Fail closed here. The one
+deliberate exception is `timeline_range`, which only supplies the
+default window.
+
+The same door is how a **queued** script reports
+`kRocProfVisPythonCancelled`. `ScriptEngine::BeginSession` returns
+false for a session cancelled before its turn came, and
+`optiq_prepare_globals` turns that into a cancelled result. Do not put
+the interrupt back here: it is a no-op until `m_exec_active`, which the
+runtime only sets after this hook returns, so raising from
+`BeginSession` silently dropped the cancel and the script ran anyway.
+`optiq_prepare_globals` asks a second time just before it returns
+success, because building the environment enumerates tracks and queries
+the timeline and a cancel can arrive during it. Past that point the
+watchdog and `wait_inner` both see cancels normally.
+
+`teardown_globals` runs on the interpreter thread with the GIL still
+held, after exec and before the globals dict is released - including
+when prepare returned 0. It deletes `optiq` from `sys.modules` and
+empties the module dict. Both are needed: deleting the entry handles
+the normal case, and emptying the module covers a script that parked it
+somewhere else that outlives the run (`json.keep = optiq` - allowlisted
+modules live in `sys.modules` for the whole process).
+
+This cannot be done from the `done` callback: `done` is documented as
+running with the GIL **released**, and it is also where `DropSession`
+frees the session. Teardown has to happen while both the GIL is held
+and the session is still alive, and `ExecWork` is the only such point.
 
 **Thread:** one long-lived interpreter thread, owned by this lib (not
 by `JobSystem`). Controller posts `{source, prepare, user}` to that

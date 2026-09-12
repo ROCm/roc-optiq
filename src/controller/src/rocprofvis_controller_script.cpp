@@ -195,7 +195,8 @@ ScriptEngine::ExecuteAsync(rocprofvis_controller_t* controller, char const* sour
             // Zero takes the runtime's own deadline, which is the one users
             // and the assistant both run under.
             rocprofvis_python_result_t python_result = rocprofvis_python_exec(
-                source, optiq_prepare_globals, session, on_python_done, 0);
+                source, optiq_prepare_globals, optiq_teardown_globals, session,
+                on_python_done, 0);
             if(python_result == kRocProfVisPythonSuccess)
             {
                 result = script_result;
@@ -216,21 +217,19 @@ ScriptEngine::ExecuteAsync(rocprofvis_controller_t* controller, char const* sour
 // Marks a session as running. The engine needs this because the runtime's
 // interrupt is process-global: it stops whichever script is executing, not a
 // named one, so cancelling a queued script would otherwise kill an unrelated
-// one that happened to be running. A session cancelled while it was still
-// queued is interrupted here instead, on its way in.
-void
+// one that happened to be running.
+//
+// Returns false when this session was cancelled while it was still queued,
+// and the caller must then refuse to run it. Interrupting here instead does
+// not work and used to be what this did: the raise is a no-op until the
+// runtime marks exec active, which does not happen until after this returns,
+// so the cancel was silently dropped and the script ran anyway.
+bool
 ScriptEngine::BeginSession(Session* session)
 {
-    bool interrupt_now = false;
-    {
-        std::lock_guard<std::mutex> lock(m_mutex);
-        m_running     = session;
-        interrupt_now = session != nullptr && session->cancelled;
-    }
-    if(interrupt_now)
-    {
-        rocprofvis_python_interrupt();
-    }
+    std::lock_guard<std::mutex> lock(m_mutex);
+    m_running = session;
+    return session != nullptr && !session->cancelled;
 }
 
 rocprofvis_result_t
@@ -246,9 +245,9 @@ ScriptEngine::Cancel(Future* future)
         {
             it->second->cancelled = true;
             // Only reach for the interrupt when this session is the one the
-            // interpreter is on. Otherwise it is still queued, and BeginSession
-            // will deliver the stop when its turn comes - interrupting now
-            // would land on somebody else's script.
+            // interpreter is on. Otherwise it is still queued, and the flag
+            // set above is enough: BeginSession reads it and refuses to start
+            // the script. Interrupting now would land on somebody else's.
             interrupt_now = it->second == m_running;
             result        = kRocProfVisResultSuccess;
         }

@@ -21,8 +21,36 @@ typedef enum rocprofvis_python_result_t
  * Called on the interpreter thread with the GIL held. py_dict is a
  * PyObject* globals mapping for this exec. The runtime never includes
  * controller headers; the controller uses this hook to inject optiq.
+ *
+ * Return kRocProfVisPythonSuccess to let the script run. Anything else
+ * skips execution and is reported through done as-is, which is how a
+ * run cancelled before it started reports kRocProfVisPythonCancelled
+ * rather than an error. The interrupt cannot do that job: it is a
+ * no-op until exec is under way, so a script cancelled while queued
+ * behind another one has nothing to interrupt yet.
+ *
+ * Never report success with a half-built environment. The interpreter
+ * outlives every script, so a script that runs without its own optiq
+ * resolves the name from whatever the previous run left in sys.modules,
+ * whose session and controller are gone. A hook that fails should
+ * leave a Python exception set, which becomes the reported message.
  */
-typedef void (*rocprofvis_python_prepare_globals_t)(void* py_dict, void* user);
+typedef rocprofvis_python_result_t (*rocprofvis_python_prepare_globals_t)(void* py_dict,
+                                                                         void* user);
+
+/*
+ * Called on the interpreter thread with the GIL held, after exec and
+ * before the globals mapping is released. Runs whether the script
+ * succeeded, failed, was cancelled, or never started - including when
+ * prepare_globals refused the run, which can leave part of an
+ * environment behind.
+ *
+ * This is where anything prepare_globals put into interpreter-wide
+ * state (sys.modules above all) has to be taken back out. That state
+ * lasts for the life of the process, while what it points at lasts for
+ * one run, and this hook is the only point where both are still true.
+ */
+typedef void (*rocprofvis_python_teardown_globals_t)(void* py_dict, void* user);
 
 /*
  * Called on the interpreter thread after exec, with the GIL released.
@@ -52,8 +80,9 @@ rocprofvis_python_result_t rocprofvis_python_init(char const* runtime_root);
  * explicit interrupt is a cancellation.
  */
 rocprofvis_python_result_t rocprofvis_python_exec(
-    char const*                         source,
-    rocprofvis_python_prepare_globals_t prepare_globals, void* user,
+    char const*                          source,
+    rocprofvis_python_prepare_globals_t  prepare_globals,
+    rocprofvis_python_teardown_globals_t teardown_globals, void* user,
     rocprofvis_python_done_t done, unsigned long long timeout_ms);
 
 /*

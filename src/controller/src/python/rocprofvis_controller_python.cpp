@@ -46,6 +46,8 @@ struct TrackObject
     rocprofvis_handle_t*     track;
     rocprofvis_controller_t* controller;
     ScriptEngine::Session*   session;
+    // The run these three pointers belong to. See check_generation below.
+    uint64_t                 generation;
 };
 
 struct TraceObject
@@ -71,6 +73,9 @@ struct TableObject
     rocprofvis_controller_t*       controller;
     ScriptEngine::Session*         session;
     PyObject*                      rows;
+    // The run controller and session belong to. See check_generation below.
+    // table itself is owned by this wrapper and stays good for its lifetime.
+    uint64_t                       generation;
 };
 
 PyObject* g_event_type     = nullptr;
@@ -78,6 +83,40 @@ PyObject* g_track_type     = nullptr;
 PyObject* g_trace_type     = nullptr;
 PyObject* g_selection_type = nullptr;
 PyObject* g_table_type     = nullptr;
+
+/*
+ * True while a wrapper still belongs to the run that is executing. Raises a
+ * RuntimeError before returning false, so a caller can return nullptr without
+ * setting a reason of its own.
+ *
+ * The controller, the session and every handle borrowed from the controller
+ * last one run; the interpreter lasts the whole process. A script can keep a
+ * wrapper past its run either by parking it on an allowlisted module, which
+ * stays in sys.modules for the life of the process, or by leaving it in a
+ * reference cycle the collector only breaks later - so the teardown hook,
+ * which can only reach the optiq module, does not catch every case.
+ *
+ * Nothing here dereferences the pointers, deliberately. Asking the ABI
+ * whether a handle is still good does not work, because it answers by calling
+ * a virtual through that handle: the check would be the use-after-free.
+ *
+ * Every method and getter that reads controller, session, or a handle from
+ * either has to call this first. Ones that only touch the wrapper's own
+ * Python state (Table.rows, Trace.tracks) do not - there is nothing stale to
+ * reach - and Event and Selection are copies of values, so they stay usable.
+ */
+bool
+check_generation(uint64_t generation)
+{
+    if(generation != ScriptEngine::Get().Generation())
+    {
+        PyErr_SetString(PyExc_RuntimeError,
+                        "this optiq object belongs to a previous script run and "
+                        "cannot be used - the trace it came from may be closed");
+        return false;
+    }
+    return true;
+}
 
 ScriptEngine::Session*
 session_from_module(PyObject* module)
@@ -728,46 +767,62 @@ track_dealloc(TrackObject* self)
     Py_TYPE(self)->tp_free(reinterpret_cast<PyObject*>(self));
 }
 
+// Every one of these reads a handle the controller owns, so they are as stale
+// as the controller once the run they came from is over.
 PyObject*
 track_get_id(TrackObject* self, void*)
 {
-    return py_handle_uint64(self->track, kRPVControllerTrackId);
+    return check_generation(self->generation)
+               ? py_handle_uint64(self->track, kRPVControllerTrackId)
+               : nullptr;
 }
 
 PyObject*
 track_get_type(TrackObject* self, void*)
 {
-    return py_handle_uint64(self->track, kRPVControllerTrackType);
+    return check_generation(self->generation)
+               ? py_handle_uint64(self->track, kRPVControllerTrackType)
+               : nullptr;
 }
 
 PyObject*
 track_get_name(TrackObject* self, void*)
 {
-    return py_handle_string(self->track, kRPVControllerTrackMainName);
+    return check_generation(self->generation)
+               ? py_handle_string(self->track, kRPVControllerTrackMainName)
+               : nullptr;
 }
 
 PyObject*
 track_get_sub_name(TrackObject* self, void*)
 {
-    return py_handle_string(self->track, kRPVControllerTrackSubName);
+    return check_generation(self->generation)
+               ? py_handle_string(self->track, kRPVControllerTrackSubName)
+               : nullptr;
 }
 
 PyObject*
 track_get_min_time(TrackObject* self, void*)
 {
-    return py_handle_double(self->track, kRPVControllerTrackMinTimestamp);
+    return check_generation(self->generation)
+               ? py_handle_double(self->track, kRPVControllerTrackMinTimestamp)
+               : nullptr;
 }
 
 PyObject*
 track_get_max_time(TrackObject* self, void*)
 {
-    return py_handle_double(self->track, kRPVControllerTrackMaxTimestamp);
+    return check_generation(self->generation)
+               ? py_handle_double(self->track, kRPVControllerTrackMaxTimestamp)
+               : nullptr;
 }
 
 PyObject*
 track_get_num_entries(TrackObject* self, void*)
 {
-    return py_handle_uint64(self->track, kRPVControllerTrackNumberOfEntries);
+    return check_generation(self->generation)
+               ? py_handle_uint64(self->track, kRPVControllerTrackNumberOfEntries)
+               : nullptr;
 }
 
 PyObject*
@@ -783,9 +838,16 @@ track_events(TrackObject* self, PyObject* args, PyObject* kwargs)
     {
         return nullptr;
     }
+    // The null test catches a wrapper that was never given a controller; the
+    // generation catches one whose controller has since been freed, which the
+    // pointer still looks fine for.
     if(!self->controller || !self->track)
     {
         PyErr_SetString(PyExc_RuntimeError, "track has no controller");
+        return nullptr;
+    }
+    if(!check_generation(self->generation))
+    {
         return nullptr;
     }
     double min_time = 0.0;
@@ -913,6 +975,7 @@ make_track(rocprofvis_handle_t* track, rocprofvis_controller_t* controller,
     object->track      = track;
     object->controller = controller;
     object->session    = session;
+    object->generation = ScriptEngine::Get().Generation();
     return reinterpret_cast<PyObject*>(object);
 }
 
@@ -1026,7 +1089,14 @@ append_tracks_from_sequence(PyObject* sequence, uint64_t want_type,
             return 0;
         }
         TrackObject* track = reinterpret_cast<TrackObject*>(item);
-        uint64_t     type  = 0;
+        // These come from the script, so a fetch on a live table can still be
+        // handed a track kept from an earlier run.
+        if(!check_generation(track->generation))
+        {
+            Py_DECREF(item);
+            return 0;
+        }
+        uint64_t type = 0;
         rocprofvis_controller_get_uint64(track->track, kRPVControllerTrackType, 0, &type);
         if(type == want_type)
         {
@@ -1131,6 +1201,13 @@ table_fetch(TableObject* self, PyObject* args, PyObject* kwargs)
     if(!self->controller || !self->table)
     {
         PyErr_SetString(PyExc_RuntimeError, "table has no controller");
+        return nullptr;
+    }
+    // As in track_events: the table handle belongs to this wrapper and stays
+    // good, but the controller it queries and the session the wait polls do
+    // not outlive the run that made them.
+    if(!check_generation(self->generation))
+    {
         return nullptr;
     }
     uint64_t table_type = static_cast<uint64_t>(kRPVControllerTableTypeEvents);
@@ -1446,6 +1523,7 @@ optiq_table(PyObject* self, PyObject*)
     object->controller = session->controller;
     object->session    = session;
     object->rows       = nullptr;
+    object->generation = ScriptEngine::Get().Generation();
     return reinterpret_cast<PyObject*>(object);
 }
 

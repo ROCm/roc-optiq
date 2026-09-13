@@ -73,6 +73,16 @@ public:
 
     void DropSession(Session* session);
 
+    // Which run is executing, counted up by every accepted BeginSession. The
+    // bindings stamp it into each wrapper they hand a script and compare it on
+    // the way back in, because a script can keep a wrapper past the end of its
+    // run - parked on an allowlisted module, which lives as long as the
+    // process, or held in a reference cycle the collector only breaks during a
+    // later run. Comparing the pointers instead is not an option: the ABI
+    // validates a handle by calling a virtual through it, so asking whether a
+    // freed controller is still good is itself the use-after-free.
+    uint64_t Generation() const { return m_generation.load(std::memory_order_relaxed); }
+
 private:
     ScriptEngine() = default;
     ~ScriptEngine() = default;
@@ -88,6 +98,10 @@ private:
     // Scripts run one at a time, but several traces can each have one queued,
     // so "cancel this future" is not the same as "stop whatever is running".
     Session*                              m_running = nullptr;
+    // Read outside the lock by every wrapper method, written on the
+    // interpreter thread as a run starts. Starts at 0, so the first run is 1
+    // and a wrapper that somehow never got stamped cannot match.
+    std::atomic<uint64_t>                 m_generation{0};
 };
 
 }  // namespace Controller

@@ -229,7 +229,14 @@ ScriptEngine::BeginSession(Session* session)
 {
     std::lock_guard<std::mutex> lock(m_mutex);
     m_running = session;
-    return session != nullptr && !session->cancelled;
+    if(session == nullptr || session->cancelled)
+    {
+        return false;
+    }
+    // Only an accepted run gets a generation, so the wrappers of a refused one
+    // are never stamped with a number a later run could match.
+    m_generation.fetch_add(1, std::memory_order_relaxed);
+    return true;
 }
 
 rocprofvis_result_t

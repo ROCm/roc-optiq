@@ -149,7 +149,7 @@ watchdog and `wait_inner` both see cancels normally.
 
 `teardown_globals` runs on the interpreter thread with the GIL still
 held, after exec and before the globals dict is released - including
-when prepare returned 0. It deletes `optiq` from `sys.modules` and
+when prepare refused the run. It deletes `optiq` from `sys.modules` and
 empties the module dict. Both are needed: deleting the entry handles
 the normal case, and emptying the module covers a script that parked it
 somewhere else that outlives the run (`json.keep = optiq` - allowlisted
@@ -159,6 +159,43 @@ This cannot be done from the `done` callback: `done` is documented as
 running with the GIL **released**, and it is also where `DropSession`
 frees the session. Teardown has to happen while both the GIL is held
 and the session is still alive, and `ExecWork` is the only such point.
+
+#### Run generation: wrappers that outlive their script
+
+Teardown can only reach the `optiq` module, and that is not every
+route. A script can park a *wrapper* on an allowlisted module
+(`import json; json.kept = optiq.table()`), or leave one in a reference
+cycle - the wrapper types are not GC-tracked, but a tracked container
+can hold one, and then its refcount only falls when the cyclic
+collector runs, during some later script or at `Py_FinalizeEx`. `gc` is
+not importable, so nothing can force it sooner.
+
+`TrackObject`, `TraceObject` and `TableObject` hold raw
+`rocprofvis_controller_t*` and `ScriptEngine::Session*`. The session
+dies with `DropSession`; the controller dies with the trace. So every
+entry point that reads either, or a handle borrowed from either, calls
+`check_generation(self->generation)` first, comparing the value stamped
+in at creation against `ScriptEngine::Generation()` - bumped by each
+accepted `BeginSession`. A mismatch raises `RuntimeError`.
+
+Do not be tempted to test the pointers instead. There is no handle
+registry: `Reference::IsValid()` answers by calling
+`m_object->GetType()`, a virtual through the pointer under test, so the
+check would *be* the use-after-free. `check_generation` deliberately
+dereferences nothing.
+
+Add the check to any new wrapper method that touches controller or
+session state, including helpers that take wrappers from the script -
+`append_tracks_from_sequence` needs it because a live table can be
+handed `tracks=[kept_track]`. Methods that only read the wrapper's own
+Python state (`Table.rows`, `Trace.tracks`) do not, and `EventObject` /
+`SelectionObject` are copies of values, so they stay usable.
+
+What is *not* a hazard, despite looking like one: `table_dealloc`
+running late. `~Table` and `~SystemTable` are empty and `Table` holds
+only value members, so `rocprofvis_controller_table_free` is
+self-contained whenever it runs, and the table handle is owned by the
+wrapper rather than borrowed from the trace.
 
 **Thread:** one long-lived interpreter thread, owned by this lib (not
 by `JobSystem`). Controller posts `{source, prepare, user}` to that

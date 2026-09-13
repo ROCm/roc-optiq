@@ -366,7 +366,7 @@ TEST_CASE("Script error carries the traceback and the failing line")
 namespace
 {
 std::string
-run_script_text(char const* source)
+run_script_text_on(rocprofvis_controller_t* controller, char const* source)
 {
     rocprofvis_controller_future_t*        future = rocprofvis_controller_future_alloc();
     rocprofvis_controller_script_result_t* result = nullptr;
@@ -375,7 +375,7 @@ run_script_text(char const* source)
         return "no future";
     }
     std::string out;
-    if(rocprofvis_script_execute_async(nullptr, source, nullptr, future, &result) ==
+    if(rocprofvis_script_execute_async(controller, source, nullptr, future, &result) ==
            kRocProfVisResultSuccess &&
        wait_for_script(future) == kRocProfVisResultSuccess)
     {
@@ -393,6 +393,12 @@ run_script_text(char const* source)
     }
     rocprofvis_controller_future_free(future);
     return out;
+}
+
+std::string
+run_script_text(char const* source)
+{
+    return run_script_text_on(nullptr, source);
 }
 }  // namespace
 
@@ -751,6 +757,50 @@ TEST_CASE("Script table.fetch does not use the UI event table")
 
     rocprofvis_script_result_free(result);
     rocprofvis_controller_future_free(future);
+    rocprofvis_controller_free(controller);
+}
+
+// The interpreter outlives every run, so a script can keep an optiq object
+// past the end of its own: parked on an allowlisted module, which stays in
+// sys.modules for the life of the process and which the teardown hook cannot
+// reach. The controller and session behind such an object are freed when its
+// run ends, and the pointers cannot be tested for that - the ABI validates a
+// handle by calling a virtual through it. The run generation is checked
+// instead. The controller here is deliberately kept alive for both runs, so a
+// regression shows up as a leaked object rather than as undefined behaviour.
+TEST_CASE("Script cannot use an optiq object kept from an earlier run")
+{
+    rocprofvis_controller_t* controller = load_sample_controller();
+    REQUIRE(controller);
+
+    REQUIRE(run_script_text_on(controller, "import json\n"
+                                           "json.kept_track = optiq.trace.tracks[0]\n"
+                                           "json.kept_table = optiq.table()\n"
+                                           "print('kept')\n") == "kept");
+
+    // Each check reports separately, so a failure names the route that leaked
+    // rather than just saying something did.
+    char const* reuse =
+        "import json\n"
+        "def refused(fn):\n"
+        "    try:\n"
+        "        fn()\n"
+        "        return 'LEAKED'\n"
+        "    except RuntimeError as e:\n"
+        "        return 'refused' if 'previous script run' in str(e) else 'WRONG:' + str(e)\n"
+        "print(refused(lambda: json.kept_track.name))\n"
+        "print(refused(lambda: json.kept_track.events()))\n"
+        "print(refused(lambda: json.kept_table.fetch()))\n"
+        "print(refused(lambda: optiq.table().fetch(tracks=[json.kept_track])))\n";
+    const std::string text = run_script_text_on(controller, reuse);
+    REQUIRE(text == "refused\nrefused\nrefused\nrefused");
+
+    // Objects made by this run still work, so the guard is not just refusing
+    // everything.
+    REQUIRE(run_script_text_on(controller,
+                               "print('ok' if optiq.trace.tracks[0].name is not None "
+                               "else 'no name')\n") == "ok");
+
     rocprofvis_controller_free(controller);
 }
 

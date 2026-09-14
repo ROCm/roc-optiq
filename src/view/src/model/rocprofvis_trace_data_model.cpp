@@ -33,16 +33,16 @@ TraceDataModel::BuildTrackName(uint64_t track_id) const
         return "";
     }
 
-    const TopologyDataModel& tdm = m_topology;
+    const TopologyTree& tdm = m_topology;
 
-    std::string       name;
-    std::string       device_type_label;
-    const DeviceInfo* device_info   = tdm.GetDevice(track_info->agent_or_pid);
-    const ProcessInfo* process_info = tdm.GetProcess(track_info->topology.process_id);
+    std::string          name;
+    std::string          processor_type_label;
+    const ProcessorInfo* processor_info = tdm.GetProcessor(track_info->agent_or_pid);
+    const ProcessInfo*   process_info = tdm.GetProcess(track_info->topology.process_id);
 
-    if(device_info)
+    if(processor_info)
     {
-        tdm.GetDeviceTypeLabel(*device_info, device_type_label);
+        tdm.GetProcessorTypeLabel(*processor_info, processor_type_label);
     }
 
     switch(track_info->topology.type)
@@ -61,17 +61,17 @@ TraceDataModel::BuildTrackName(uint64_t track_id) const
             }
             if(process_info && tdm.ProcessCount() > 1)
             {
-                name += " (PID:" + std::to_string(process_info->id) + ")";
+                name += " (PID:" + std::to_string(process_info->GetId()) + ")";
             }
             break;
         }
         case TrackInfo::TrackType::Stream:
         {
             name = track_info->main_name;
-            if(device_info)
+            if(processor_info)
             {
-                name +=
-                    " (" + device_type_label + ": " + device_info->product_name + ")";
+                name += " (" + processor_type_label + ": " +
+                        processor_info->product_name + ")";
             }
             break;
         }
@@ -92,7 +92,7 @@ TraceDataModel::BuildTrackName(uint64_t track_id) const
             name = track_info->sub_name;
             if(process_info && tdm.ProcessCount() > 1)
             {
-                name += " (PID:" + std::to_string(process_info->id) + ")";
+                name += " (PID:" + std::to_string(process_info->GetId()) + ")";
             }
             break;
         }

@@ -21,11 +21,17 @@ constexpr int DEFAULT_WINDOWED_HEIGHT = 720;
 // Structure to track fullscreen state
 struct FullscreenState
 {
-    bool is_fullscreen;
-    int  windowed_xpos;
-    int  windowed_ypos;
-    int  windowed_width;
-    int  windowed_height;
+    bool   is_fullscreen;
+    int    windowed_xpos;
+    int    windowed_ypos;
+    int    windowed_width;
+    int    windowed_height;
+    // Remaining corrective resizes allowed while putting the window back to the
+    // windowed geometry after leaving fullscreen, and the time at which to stop
+    // watching for the window manager to disturb it. See
+    // settle_windowed_geometry().
+    int    restore_attempts;
+    double restore_deadline;
 };
 
 // Initialize fullscreen state with current window position and size
@@ -36,6 +42,11 @@ GLFWmonitor* get_current_monitor(GLFWwindow* window);
 
 // Toggle between fullscreen and windowed mode
 void toggle_fullscreen(GLFWwindow* window, FullscreenState& state);
+
+// Re-apply the saved windowed geometry after a return from fullscreen, if the
+// window manager did not land the window where it was asked to. Call once per
+// frame from the render loop; it is a no-op unless a restore is outstanding.
+void settle_windowed_geometry(GLFWwindow* window, FullscreenState& state);
 
 // Sync fullscreen state with actual window state (in case of OS-initiated changes)
 void sync_fullscreen_state(GLFWwindow* window, int width, int height, FullscreenState& state);

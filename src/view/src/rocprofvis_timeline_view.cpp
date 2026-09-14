@@ -1225,15 +1225,18 @@ TimelineView::Update()
         }
 
         // Apply a topology sort deferred until the order was ready; fall back to
-        // Default if the cached order isn't a full permutation of the current tracks.
-        if(m_topology_sort_pending && m_sort_mode == TrackSortMode::kTopology &&
-           m_topology_order && !m_topology_order->empty())
+        // Default if the derived order isn't a full permutation of the current tracks.
+        if(m_topology_sort_pending && m_sort_mode == TrackSortMode::kTopology)
         {
-            if(!ApplyTrackOrder(*m_topology_order))
+            const std::vector<uint64_t> topology_order = BuildTopologyOrder();
+            if(!topology_order.empty())
             {
-                m_sort_mode = TrackSortMode::kDefault;
+                if(!ApplyTrackOrder(topology_order))
+                {
+                    m_sort_mode = TrackSortMode::kDefault;
+                }
+                m_topology_sort_pending = false;
             }
-            m_topology_sort_pending = false;
         }
 
         if(!m_reorder_request.handled)
@@ -1356,7 +1359,10 @@ TimelineView::RenderSplitter()
             m_settings.GetColor(Colors::kAccent));
     }
 
-    if(ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceNoPreviewTooltip))
+    // Resize with a plain drag rather than a drag-drop source, so the splitter
+    // does not publish a payload-less drag that track reordering and ImGui's
+    // multi-viewport window dragging would both see.
+    if(ImGui::IsItemActive() && ImGui::IsMouseDragging(ImGuiMouseButton_Left))
     {
         ImVec2 drag_delta = ImGui::GetMouseDragDelta(ImGuiMouseButton_Left);
 
@@ -1369,12 +1375,7 @@ TimelineView::RenderSplitter()
                                         2 * ImGui::GetFrameHeightWithSpacing(),
                                     SIDEBAR_WIDTH_MAX);
         ImGui::ResetMouseDragDelta();
-        ImGui::EndDragDropSource();
         m_resize_activity |= true;
-    }
-    if(ImGui::BeginDragDropTarget())
-    {
-        ImGui::EndDragDropTarget();
     }
 
     ImGui::EndChild();
@@ -1966,10 +1967,14 @@ TimelineView::RenderTrack(int track_index, bool request_data,
             // Save distance for book keeping
             track_item->SetDistanceToView(std::max(std::max(delta_bottom, delta_top), 0.0f));
 
-            // This item is being reordered if there is an active payload and its id
-            // matches the payload's id.
-            bool is_reordering = ImGui::GetDragDropPayload() &&
-                                 m_reorder_request.track_id == track_item->GetID();
+            // This item is being reordered if there is an active reorder payload
+            // and its id matches the payload's id. Matching on the payload type
+            // keeps unrelated drags (e.g. ImGui window moves under
+            // multi-viewport) from being treated as a reorder.
+            const ImGuiPayload* payload = ImGui::GetDragDropPayload();
+            bool                is_reordering =
+                payload && payload->IsDataType("reorder_request") &&
+                m_reorder_request.track_id == track_item->GetID();
 
             // Check if the track is visible
             bool is_visible =
@@ -2402,10 +2407,35 @@ TimelineView::MakeGraphView()
     LoadSortSettings();
 }
 
-void
-TimelineView::SetTopologyOrder(const std::vector<uint64_t>* order)
+std::vector<uint64_t>
+TimelineView::BuildTopologyOrder() const
 {
-    m_topology_order = order;
+    const TimelineModel&         timeline = m_data_provider.DataModel().GetTimeline();
+    const std::vector<uint64_t>& topology_order =
+        m_data_provider.DataModel().GetTopology().GetTrackOrder();
+    if(topology_order.empty())
+    {
+        return {};
+    }
+
+    std::vector<uint64_t>        order;
+    std::unordered_set<uint64_t> placed;
+    order.reserve(timeline.GetTrackCount());
+    for(uint64_t track_id : topology_order)
+    {
+        if(timeline.GetTrack(track_id) && placed.insert(track_id).second)
+        {
+            order.push_back(track_id);
+        }
+    }
+    for(const TrackInfo* track : timeline.GetTrackList())
+    {
+        if(track && placed.insert(track->id).second)
+        {
+            order.push_back(track->id);
+        }
+    }
+    return order;
 }
 
 void
@@ -2415,9 +2445,10 @@ TimelineView::SortTracksBy(TrackSortMode mode)
     {
         case TrackSortMode::kTopology:
         {
-            if(m_topology_order && !m_topology_order->empty())
+            const std::vector<uint64_t> topology_order = BuildTopologyOrder();
+            if(!topology_order.empty())
             {
-                if(!ApplyTrackOrder(*m_topology_order))
+                if(!ApplyTrackOrder(topology_order))
                 {
                     return;
                 }

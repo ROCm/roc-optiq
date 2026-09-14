@@ -41,12 +41,27 @@ public:
 
     rocprofvis_controller_object_type_t GetType(void) final;
 
-    rocprofvis_result_t GetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t* value) final;
-    rocprofvis_result_t GetObject(rocprofvis_property_t property, uint64_t index, rocprofvis_handle_t** value) final;
+    rocprofvis_result_t GetUInt64(rocprofvis_property_t property,
+                                  uint64_t              index,
+                                  uint64_t*             value) final;
+    rocprofvis_result_t GetObject(rocprofvis_property_t property,
+                                  uint64_t              index,
+                                  rocprofvis_handle_t** value) final;
 
-    rocprofvis_result_t AsyncFetch(Arguments& args, Future& future, MetricsContainer& output);
-    rocprofvis_result_t AsyncFetch(Table& table, Arguments& args, Future& future, Array& array);
-    rocprofvis_result_t AsyncFetchPcSampling(Arguments& args, Future& future, PcSampling& output);
+    rocprofvis_result_t AsyncFetch(Arguments&        args,
+                                   Future&           future,
+                                   MetricsContainer& output);
+    rocprofvis_result_t AsyncFetch(Table&     table,
+                                   Arguments& args,
+                                   Future&    future,
+                                   Array&     array);
+    rocprofvis_result_t AsyncFetchPcSamplingIsaData(Arguments&  args,
+                                                    Future&     future,
+                                                    PcSampling& output);
+    rocprofvis_result_t AsyncFetchPcSamplingSource(Arguments& args, Future& future,
+                                                   PcSampling& output);
+    rocprofvis_result_t AsyncFetchPcSamplingStalls(Arguments& args, Future& future,
+                                                   PcSampling& output);
 
 private:
     class MetricID
@@ -75,35 +90,81 @@ private:
 
     rocprofvis_result_t LoadRocpd(Future* future);
 
-    rocprofvis_dm_result_t FetchCodeObjectsAndIsaLines(rocprofvis_dm_database_t db,
-                                                       Future* future,
-                                                       uint64_t kernel_id,
-                                                       PcSampling& output);
-    rocprofvis_dm_result_t FetchIsaLineDepsAndStalls(rocprofvis_dm_database_t db,
-                                                     Future* future,
-                                                     uint64_t kernel_id,
-                                                     PcSampling& output);
-    rocprofvis_dm_result_t FetchSourceFileLines(rocprofvis_dm_database_t db,
-                                                Future* future,
-                                                uint64_t source_file_id,
-                                                PcSampling& output);
-    void StorePcSamplingRows(PcSampling& output,
-                             rocprofvis_property_t count_property,
-                             const QueryDataStore& data_store);
-    static bool ParseUInt64(const char* value, uint64_t& result);
+    rocprofvis_dm_result_t FetchCodeObjects(rocprofvis_dm_database_t db,
+                                            Future*                  future,
+                                            uint64_t                 kernel_id,
+                                            PcSampling&              output);
 
-    rocprofvis_result_t    SetObjectProperty(rocprofvis_handle_t*  object,
-                                             rocprofvis_property_t property, uint64_t index,
-                                             const char*                            value,
-                                             rocprofvis_controller_primitive_type_t type);
-    rocprofvis_dm_result_t ExecuteQuery(rocprofvis_dm_database_t db,
-                                        rocprofvis_dm_trace_t    dm,
-                                        rocprofvis_db_future_t   db_future,
-                                        Future*                  controller_future,
+    rocprofvis_dm_result_t FetchKernelSymbols(rocprofvis_dm_database_t db,
+                                              Future*                  future,
+                                              uint64_t                 kernel_id,
+                                              PcSampling&              output);
+
+    rocprofvis_dm_result_t FetchInstructionLines(rocprofvis_dm_database_t db,
+                                                  Future*                  future,
+                                                  uint64_t                 kernel_id,
+                                                  PcSampling&              output);
+
+    rocprofvis_dm_result_t FetchInstructionSourceLines(
+        rocprofvis_dm_database_t db,
+        Future*                  future,
+        uint64_t                 kernel_id,
+        PcSampling&              output);
+
+    rocprofvis_dm_result_t FetchPcSampleStates(rocprofvis_dm_database_t db,
+                                               Future*                  future,
+                                               uint64_t                 kernel_id,
+                                               PcSampling&              output);
+
+    rocprofvis_dm_result_t FetchStalls(rocprofvis_dm_database_t db,
+                                       Future*                  future,
+                                       uint64_t                 kernel_id,
+                                       PcSampling&              output);
+
+    rocprofvis_dm_result_t FetchInstructionSamples(rocprofvis_dm_database_t db,
+                                                   Future*                  future,
+                                                   uint64_t                 kernel_id,
+                                                   PcSampling&              output);
+
+    rocprofvis_dm_result_t FetchSourceFiles(rocprofvis_dm_database_t db, Future* future,
+                                            uint64_t kernel_id, PcSampling& output);
+
+    rocprofvis_dm_result_t FetchSourceFileLines(rocprofvis_dm_database_t db,
+                                                Future*                  future,
+                                                uint64_t                 source_file_uuid,
+                                                PcSampling&              output);
+
+    rocprofvis_dm_result_t FetchPcSamplingIsaData(rocprofvis_dm_database_t db,
+                                                  Future* future, uint64_t kernel_id,
+                                                  PcSampling& output);
+    rocprofvis_dm_result_t FetchPcSamplingSourceData(rocprofvis_dm_database_t db,
+                                                     Future* future, uint64_t kernel_id,
+                                                     uint64_t    source_file_uuid,
+                                                     PcSampling& output);
+    rocprofvis_dm_result_t FetchPcSamplingStallData(rocprofvis_dm_database_t db,
+                                                    Future* future, uint64_t kernel_id,
+                                                    PcSampling& output);
+    void StorePcSamplingRows(PcSampling&           output,
+                             rocprofvis_property_t count_property,
+                             const QueryDataStore&  data_store);
+
+    static bool ParseUInt64(const char* value,
+                            uint64_t&   result);
+
+    rocprofvis_result_t SetObjectProperty(rocprofvis_handle_t*                  object,
+                                          rocprofvis_property_t                 property,
+                                          uint64_t                              index,
+                                          const char*                           value,
+                                          rocprofvis_controller_primitive_type_t type);
+
+    rocprofvis_dm_result_t ExecuteQuery(rocprofvis_dm_database_t              db,
+                                        rocprofvis_dm_trace_t                 dm,
+                                        rocprofvis_db_future_t                db_future,
+                                        Future*                               controller_future,
                                         rocprofvis_db_compute_use_case_enum_t use_case,
-                                        QueryArgumentStore& argument_store,
-                                        QueryDataStore&     data_store,
-                                        QueryCallback       callback);
+                                        QueryArgumentStore&                   argument_store,
+                                        QueryDataStore&                       data_store,
+                                        QueryCallback                         callback);
 
     std::vector<Workload*> m_workloads;
     std::atomic<uint64_t> m_async_fetch_counter;

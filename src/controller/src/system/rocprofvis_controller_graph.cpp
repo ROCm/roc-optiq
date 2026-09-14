@@ -46,6 +46,7 @@ Graph::Insert(uint32_t lod, double timestamp, uint8_t level, Handle* object)
     auto&               segments        = m_lods[lod];
     double              start_timestamp = 0;
     double              end_timestamp   = 0;
+    bool                stored_in_segment = false;
 
     result = GetDouble(kRPVControllerGraphStartTimestamp, 0, &start_timestamp);
     result = (result == kRocProfVisResultSuccess)
@@ -111,12 +112,19 @@ Graph::Insert(uint32_t lod, double timestamp, uint8_t level, Handle* object)
                 object->GetDouble(kRPVControllerSampleEndTimestamp, 0, &max_timestamp);
             }
             segment->SetMaxTimestamp(std::max(segment->GetMaxTimestamp(), max_timestamp));
-            segment->Insert(timestamp, level, object);
+            stored_in_segment = segment->Insert(timestamp, level, object);
         }
     }
     else
     {
         result = kRocProfVisResultOutOfRange;
+    }
+
+    if(!stored_in_segment && m_ctx && m_ctx->GetMemoryManager() &&
+       !m_ctx->GetMemoryManager()->IsShuttingDown())
+    {
+        // No segment kept the object...
+        m_ctx->GetMemoryManager()->Delete(object, &segments);
     }
 }
 
@@ -480,7 +488,8 @@ struct FetchTrackSegmentArgs
 };
 
 rocprofvis_result_t
-Graph::GenerateLOD(uint32_t lod_to_generate, double start, double end, Future* future)
+Graph::GenerateLOD(uint32_t lod_to_generate, double start, double end, Future* future,
+                   uint64_t array_id)
 {
     rocprofvis_result_t result = kRocProfVisResultOutOfRange;
     if(lod_to_generate > 0)
@@ -500,17 +509,23 @@ Graph::GenerateLOD(uint32_t lod_to_generate, double start, double end, Future* f
             double segment_duration = std::min(std::min(kScalableSegmentDuration * scale, max_ts - min_ts),
                          kMaxSegmentDuration);
 
-            auto it = m_lods.find(lod_to_generate);
-            if(it == m_lods.end())
+            std::map<uint32_t, SegmentTimeline>::iterator it = m_lods.end();
             {
-                uint32_t num_segments = static_cast<uint32_t>(ceil((max_ts - min_ts) / segment_duration));
-                uint64_t num_items = m_track->GetNumberOfEntries();
                 std::lock_guard lock(m_mutex);
-                SegmentTimeline& segments = m_lods[lod_to_generate];
-                segments.SetContext(this);
-                segments.Init(min_ts, segment_duration, num_segments, num_items);    
+
                 it = m_lods.find(lod_to_generate);
+                if(it == m_lods.end())
+                {
+                    uint32_t num_segments = static_cast<uint32_t>(ceil((max_ts - min_ts) / segment_duration));
+                    uint64_t num_items = m_track->GetNumberOfEntries();
+                    SegmentTimeline& segments = m_lods[lod_to_generate];
+                    segments.SetContext(this);
+                    segments.Init(min_ts, segment_duration, num_segments, num_items);
+                    it = m_lods.find(lod_to_generate);
+                }
             }
+
+            it->second.AddActiveArray(array_id);
 
             start = std::max(start, min_ts);
             end   = std::min(end, max_ts);
@@ -565,8 +580,9 @@ Graph::GenerateLOD(uint32_t lod_to_generate, double start, double end, Future* f
                         FetchTrackSegmentArgs args;
                         args.m_index       = 0;
                     	args.m_lru_params.m_ctx      = (SystemTrace*)m_track->GetContext();
-                    	args.m_lru_params.m_lod      = 0;
-                        m_ctx->GetMemoryManager()->EnterArrayOwnership(&args.m_entries, kRocProfVisOwnerTypeTrack);
+                        args.m_lru_params.m_array_id = array_id;
+
+                        m_track->GetSegments()->AddActiveArray(array_id);
 
                         result = m_track->FetchSegments(
                             fetch_start, fetch_end, &args, future,
@@ -600,7 +616,8 @@ Graph::GenerateLOD(uint32_t lod_to_generate, double start, double end, Future* f
                             
                         }
                         m_cv.notify_all();
-                        ((SystemTrace*)m_track->GetContext())->GetMemoryManager()->CancelArrayOwnership(&args.m_entries, kRocProfVisOwnerTypeTrack);
+
+                        m_track->GetSegments()->RemoveActiveArray(array_id);
                     }
                 }
                 else
@@ -622,6 +639,8 @@ Graph::GenerateLOD(uint32_t lod_to_generate, double start, double end, Future* f
                     });
                 }
             }
+
+            it->second.RemoveActiveArray(array_id);
         }
     }
     return result;
@@ -653,9 +672,12 @@ rocprofvis_result_t
 Graph::Fetch(uint32_t pixels, double start, double end, Array& array, uint64_t& index, Future* future)
 {
     rocprofvis_result_t result = kRocProfVisResultUnknownError;
+    MemoryManager* mgr = m_ctx ? m_ctx->GetMemoryManager() : nullptr;
+
     // Zero out the array - we don't know how many entries we will add and we don't want
     // to report a non-zero value to the caller.
     array.GetVector().clear();
+
     if(m_track)
     {
         uint32_t lod      = 0;
@@ -669,7 +691,14 @@ Graph::Fetch(uint32_t pixels, double start, double end, Array& array, uint64_t& 
         // calculate data for LOD 1 even LOD 0 is requested
         lod = std::max(lod, (uint32_t)1);
 
-        result = GenerateLOD(lod, start, end, future);
+        if(mgr)
+        {
+            mgr->EnterArrayOwnership(array.GetArrayId(), kRocProfVisOwnerTypeGraph);
+        }
+
+        array.SetContext(m_ctx);
+
+        result = GenerateLOD(lod, start, end, future, array.GetArrayId());
 
         auto it = m_lods.find(lod);
         if((it != m_lods.end()) && (result == kRocProfVisResultSuccess))
@@ -678,9 +707,7 @@ Graph::Fetch(uint32_t pixels, double start, double end, Array& array, uint64_t& 
             args.m_array = &array;
             args.m_index = &index;
             args.m_lru_params.m_ctx = m_ctx;
-            args.m_lru_params.m_lod   = lod;
-            m_ctx->GetMemoryManager()->EnterArrayOwnership(&args.m_array->GetVector(), kRocProfVisOwnerTypeGraph);
-            array.SetContext(m_ctx);
+            args.m_lru_params.m_array_id = array.GetArrayId();
 
             result = it->second.FetchSegments(
                 start, end, &args, future,

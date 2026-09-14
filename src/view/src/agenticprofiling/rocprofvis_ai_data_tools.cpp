@@ -1017,23 +1017,24 @@ BuildAssistantBriefing(const AssistantToolContext& context)
     std::ostringstream out;
     out << "trace_name: " << context.trace_name << "\n";
     out << "kind: system_trace\n";
-    const TopologyDataModel& topology = context.data_provider->DataModel().GetTopology();
-    const std::vector<const NodeInfo*> nodes = topology.GetNodeList();
-    for(const NodeInfo* node : nodes)
+    const TopologyTree& topology = context.data_provider->DataModel().GetTopology();
+    for(const TopologyNode* node : topology.GetNodes())
     {
         if(node == nullptr)
         {
             continue;
         }
-        out << "node: " << node->host_name << "\n";
-        for(uint64_t device_id : node->device_ids)
+        const NodeInfo& node_info = static_cast<const NodeInfo&>(*node);
+        out << "node: " << node_info.host_name << "\n";
+        for(const TopologyNode* processor :
+            node_info.GetChildren(TopologyNodeType::kProcessor))
         {
-            const DeviceInfo* device = topology.GetDevice(device_id);
-            if(device == nullptr)
+            if(processor == nullptr)
             {
                 continue;
             }
-            out << "  device: " << device->product_name << "\n";
+            out << "  device: "
+                << static_cast<const ProcessorInfo&>(*processor).product_name << "\n";
         }
     }
 

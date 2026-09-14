@@ -13,12 +13,12 @@ namespace RocProfVis
 namespace View
 {
 
-class TopologyDataModel;
+class TopologyTree;
 
 class AnalysisModel
 {
 public:
-    AnalysisModel(const TopologyDataModel& topology);
+    AnalysisModel(const TopologyTree& topology);
     ~AnalysisModel() = default;
 
     void SetAnalysisRange(double start_ns, double end_ns);
@@ -43,7 +43,7 @@ private:
 
     TablesModel                                           m_tables;
     std::unordered_map<uint64_t, AnalysisTrackStatistics> m_track_stats;
-    const TopologyDataModel&                              m_topology;
+    const TopologyTree&                                   m_topology;
 };
 
 }  // namespace View

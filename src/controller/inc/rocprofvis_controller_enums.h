@@ -1001,6 +1001,7 @@ typedef enum rocprofvis_controller_workload_properties_t : uint32_t
     kRPVControllerWorkloadNumAvailableMetrics,
     kRPVControllerWorkloadAvailableMetricCategoryIdIndexed,
     kRPVControllerWorkloadAvailableMetricTableIdIndexed,
+    kRPVControllerWorkloadAvailableMetricEntryIdIndexed,
     kRPVControllerWorkloadAvailableMetricCategoryNameIndexed,
     kRPVControllerWorkloadAvailableMetricTableNameIndexed,
     kRPVControllerWorkloadAvailableMetricNameIndexed,

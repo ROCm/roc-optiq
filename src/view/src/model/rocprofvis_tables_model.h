@@ -17,6 +17,10 @@ enum class TableType
 {
     kSampleTable,
     kEventTable,
+    kCompareEventTableA,
+    kCompareEventTableB,
+    kCompareSampleTableA,
+    kCompareSampleTableB,
     kEventSearchTable,
     kSummaryKernelTable,
     kAnalysisTopInstrumentedEventsTable,
@@ -24,6 +28,12 @@ enum class TableType
     kAnalysisTopMemoryAllocationEventsTable,
     kAnalysisTopMemoryCopyEventsTable,
     kAnalysisTopSampledEventsTable,
+    // Source-B slots for compare mode; the types above serve as source A.
+    kAnalysisTopInstrumentedEventsTableB,
+    kAnalysisTopDispatchEventsTableB,
+    kAnalysisTopMemoryAllocationEventsTableB,
+    kAnalysisTopMemoryCopyEventsTableB,
+    kAnalysisTopSampledEventsTableB,
     // Ask Optiq reads the same queries the tabs above do, but it must never
     // write what a tab is rendering: the user would watch their rows, sort and
     // row count change under them because the assistant asked something. These

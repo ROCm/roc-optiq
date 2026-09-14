@@ -58,6 +58,7 @@ namespace DataModel
 		{"lds_cache_data", kRPVComputeColumnRooflineLDSCacheData},
 		{"table_id", kRPVComputeColumnTableId},
 		{"sub_table_id", kRPVComputeColumnSubTableId},
+		{"entry_id", kRPVComputeColumnEntryId},
 		{"table_name", kRPVComputeColumnMetricTableName},
 		{"sub_table_name", kRPVComputeColumnMetricSubTableName},
 		{"metric_id", kRPVComputeColumnMetricId},
@@ -234,6 +235,7 @@ namespace DataModel
 				query_out += "description as metric_description, ";
 				query_out += "substr(metric_id, 0, instr(metric_id, '.')) as table_id, ";
 				query_out += "metric_id as sub_table_id, "; //parsed in callback method
+				query_out += "metric_id as entry_id, "; //parsed in callback method
 				query_out += "table_name, ";
 				query_out += "sub_table_name, ";
 				query_out += "unit ";
@@ -1429,6 +1431,12 @@ void ComputeQueryFactory::ParseMetricParam(std::string metric_str, uint32_t work
 					auto first = column_text.find('.');
 					auto second = column_text.find('.', first + 1);
 					column_text = column_text.substr(first + 1, second - first - 1);
+				}
+				else if (strcmp(azColName[i], "entry_id") == 0)
+				{
+					auto first = column_text.find('.');
+					auto second = column_text.find('.', first + 1);
+					column_text = (second == std::string::npos) ? "" : column_text.substr(second + 1);
 				}
 				if (kRocProfVisDmResultSuccess != db->BindObject()->FuncAddTableRowCell(row, column_text.c_str())) return 1;
 			}

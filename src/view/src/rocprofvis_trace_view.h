@@ -20,7 +20,6 @@ class TimelineView;
 class SideBar;
 class AnalysisView;
 class TimelineSelection;
-class TrackTopology;
 class MessageDialog;
 class TraceView;
 class SettingsManager;
@@ -80,6 +79,10 @@ public:
     friend struct TraceViewTestPeer;
     void                               SetSidebarViewVisibility(bool visibility);
     void                               SetHistogramVisibility(bool visibility);
+    /* False for compare projects: the summary aggregates one trace's kernels and
+     * hardware, which has no meaning across two sources.
+     */
+    bool                               SummarySupported() const;
 
 #ifdef ROCPROFVIS_ENABLE_AGENTIC_PROFILING
     // Everything below reproduces one toolbar or menu interaction on behalf of
@@ -131,7 +134,6 @@ private:
     std::shared_ptr<TimelineView>      m_timeline_view;
     std::shared_ptr<TimelineSelection> m_timeline_selection;
     std::shared_ptr<MeasurementController> m_measurement;
-    std::shared_ptr<TrackTopology>     m_track_topology;
     std::shared_ptr<RocCustomWidget>   m_tool_bar;
     std::shared_ptr<HSplitContainer>   m_horizontal_split_container;
     std::shared_ptr<VSplitContainer>   m_vertical_split_container;

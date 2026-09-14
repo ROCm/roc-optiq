@@ -28,6 +28,8 @@ enum class Colors;
 
 // Compare-source (A/B) badge shared by the timeline meta area and the sidebar.
 void
+RenderCompareSourceBadge(const CompareSourceInfo& source, SettingsManager& settings);
+void
 RenderCompareSourceBadge(const TrackInfo* track_info, SettingsManager& settings);
 float
 CompareSourceBadgeWidth(const TrackInfo* track_info);

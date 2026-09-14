@@ -3,12 +3,16 @@
 
 #include "rocprofvis_top_events_view.h"
 #include "rocprofvis_common_defs.h"
+#include "rocprofvis_compare_panes.h"
 #include "rocprofvis_data_provider.h"
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_timeline_selection.h"
 #include "rocprofvis_utils.h"
 #include "spdlog/spdlog.h"
 #include "widgets/rocprofvis_gui_helpers.h"
+
+#include <algorithm>
+#include <string>
 
 namespace RocProfVis
 {
@@ -20,40 +24,109 @@ constexpr const char* TOP_EVENTS_DURATION_AVG_COLUMN   = "DurationAvg";
 constexpr const char* TOP_EVENTS_DURATION_MIN_COLUMN   = "DurationMin";
 constexpr const char* TOP_EVENTS_DURATION_MAX_COLUMN   = "DurationMax";
 
+constexpr const char* NO_DATA_TEXT = "No data available for the selected tracks.";
+
+// The tables open sorted on the total duration column, biggest first.
+constexpr uint64_t TOTAL_DURATION_SORT_COLUMN = 2;
+
+// One event category: the pooled table takes the shared request id, the compare
+// pair packs a client id into its own so the two fetches stay apart.
+struct CategoryDescription
+{
+    TableType                          table_type[COMPARE_SOURCE_COUNT];
+    rocprofvis_controller_table_type_t request_table_type;
+    RequestType                        request_type;
+    uint64_t                           request_id;
+    rocprofvis_dm_event_operation_t    op;
+    const char*                        header;
+};
+
 TopEventsView::TopEventsView(DataProvider&                      data_provider,
                              std::shared_ptr<TimelineSelection> timeline_selection)
-: m_tables(
-      { std::make_unique<TopEventsTable>(
-            data_provider, TableType::kAnalysisTopInstrumentedEventsTable,
-            kRPVControllerTableTypeInstrumentedEvents,
-            DataProvider::ANALYSIS_TOP_INSTRUMENTED_EVENTS_TABLE_REQUEST_ID,
-            timeline_selection, kRocProfVisDmOperationLaunch,
-            "Top Instrumented Thread Events"),
-        std::make_unique<TopEventsTable>(
-            data_provider, TableType::kAnalysisTopDispatchEventsTable,
-            kRPVControllerTableTypeDispatchEvents,
-            DataProvider::ANALYSIS_TOP_DISPATCH_EVENTS_TABLE_REQUEST_ID,
-            timeline_selection, kRocProfVisDmOperationDispatch, "Top Dispatch Events"),
-        std::make_unique<TopEventsTable>(
-            data_provider, TableType::kAnalysisTopMemoryAllocationEventsTable,
-            kRPVControllerTableTypeMemoryAllocationEvents,
-            DataProvider::ANALYSIS_TOP_MEMORY_ALLOCATION_EVENTS_TABLE_REQUEST_ID,
-            timeline_selection, kRocProfVisDmOperationMemoryAllocate,
-            "Top Memory Allocation Events"),
-        std::make_unique<TopEventsTable>(
-            data_provider, TableType::kAnalysisTopMemoryCopyEventsTable,
-            kRPVControllerTableTypeMemoryCopyEvents,
-            DataProvider::ANALYSIS_TOP_MEMORY_COPY_EVENTS_TABLE_REQUEST_ID,
-            timeline_selection, kRocProfVisDmOperationMemoryCopy,
-            "Top Memory Copy Events"),
-        std::make_unique<TopEventsTable>(
-            data_provider, TableType::kAnalysisTopSampledEventsTable,
-            kRPVControllerTableTypeSampledEvents,
-            DataProvider::ANALYSIS_TOP_LAUNCH_SAMPLED_TABLE_REQUEST_ID,
-            timeline_selection, kRocProfVisDmOperationLaunchSample,
-            "Top Sampled Thread Events") })
+: m_data_provider(data_provider)
+, m_compare_mode(false)
 {
-    m_widget_name = GenUniqueName("Top Events View");
+    // The categories in display order. Kept local because the request ids are
+    // DataProvider constants, which are not ready before main() runs.
+    const CategoryDescription descriptions[CATEGORY_COUNT] = {
+        { { TableType::kAnalysisTopInstrumentedEventsTable,
+            TableType::kAnalysisTopInstrumentedEventsTableB },
+          kRPVControllerTableTypeInstrumentedEvents,
+          RequestType::kFetchAnalysisTopEventsTable,
+          DataProvider::ANALYSIS_TOP_INSTRUMENTED_EVENTS_TABLE_REQUEST_ID,
+          kRocProfVisDmOperationLaunch,
+          "Top Instrumented Thread Events" },
+        { { TableType::kAnalysisTopDispatchEventsTable,
+            TableType::kAnalysisTopDispatchEventsTableB },
+          kRPVControllerTableTypeDispatchEvents,
+          RequestType::kFetchAnalysisTopDispatchEventsTable,
+          DataProvider::ANALYSIS_TOP_DISPATCH_EVENTS_TABLE_REQUEST_ID,
+          kRocProfVisDmOperationDispatch,
+          "Top Dispatch Events" },
+        { { TableType::kAnalysisTopMemoryAllocationEventsTable,
+            TableType::kAnalysisTopMemoryAllocationEventsTableB },
+          kRPVControllerTableTypeMemoryAllocationEvents,
+          RequestType::kFetchAnalysisTopMemoryAllocationEventsTable,
+          DataProvider::ANALYSIS_TOP_MEMORY_ALLOCATION_EVENTS_TABLE_REQUEST_ID,
+          kRocProfVisDmOperationMemoryAllocate,
+          "Top Memory Allocation Events" },
+        { { TableType::kAnalysisTopMemoryCopyEventsTable,
+            TableType::kAnalysisTopMemoryCopyEventsTableB },
+          kRPVControllerTableTypeMemoryCopyEvents,
+          RequestType::kFetchAnalysisTopMemoryCopyEventsTable,
+          DataProvider::ANALYSIS_TOP_MEMORY_COPY_EVENTS_TABLE_REQUEST_ID,
+          kRocProfVisDmOperationMemoryCopy,
+          "Top Memory Copy Events" },
+        { { TableType::kAnalysisTopSampledEventsTable,
+            TableType::kAnalysisTopSampledEventsTableB },
+          kRPVControllerTableTypeSampledEvents,
+          RequestType::kFetchAnalysisTopLaunchSampleEventsTable,
+          DataProvider::ANALYSIS_TOP_LAUNCH_SAMPLED_TABLE_REQUEST_ID,
+          kRocProfVisDmOperationLaunchSample,
+          "Top Sampled Thread Events" },
+    };
+
+    m_widget_name  = GenUniqueName("Top Events View");
+    m_compare_mode = IsCompareTrace(data_provider.DataModel());
+
+    for(size_t i = 0; i < m_categories.size(); i++)
+    {
+        const CategoryDescription& description = descriptions[i];
+        Category&                  category    = m_categories[i];
+        category.header                        = description.header;
+
+        if(!m_compare_mode)
+        {
+            category.tables[COMPARE_SOURCE_A] = std::make_unique<TopEventsTable>(
+                data_provider, description.table_type[COMPARE_SOURCE_A],
+                description.request_table_type, description.request_id,
+                timeline_selection, description.op, description.header);
+            continue;
+        }
+
+        for(size_t source = 0; source < COMPARE_SOURCE_COUNT; source++)
+        {
+            category.tables[source] = std::make_unique<TopEventsTable>(
+                data_provider, description.table_type[source],
+                description.request_table_type,
+                RequestIdBuilder::MakeClientRequestId(description.request_type,
+                                                      COMPARE_CLIENT_ID[source]),
+                timeline_selection, description.op, description.header, source);
+            category.tables[source]->SetDisplaySummary(false);
+            category.tables[source]->SetHeaderRenderer(
+                [this, source]() { RenderSourceTitle(source); });
+        }
+
+        // Either header can drive the sort, so sync both ways.
+        for(size_t source = 0; source < COMPARE_SOURCE_COUNT; source++)
+        {
+            const size_t peer = (source + 1) % COMPARE_SOURCE_COUNT;
+            category.tables[source]->SetSortSyncCallback(
+                [&category, peer](const MultiTrackTable& src) {
+                    category.tables[peer]->ApplySharedSortFrom(src);
+                });
+        }
+    }
 }
 
 TopEventsView::~TopEventsView() {}
@@ -61,12 +134,26 @@ TopEventsView::~TopEventsView() {}
 void
 TopEventsView::Update()
 {
-    for(std::unique_ptr<TopEventsTable>& table : m_tables)
+    for(Category& category : m_categories)
     {
-        if(table)
+        for(std::unique_ptr<TopEventsTable>& table : category.tables)
         {
-            table->Update();
+            if(table)
+            {
+                table->Update();
+            }
         }
+    }
+}
+
+void
+TopEventsView::RenderSourceTitle(size_t source_index)
+{
+    const CompareSourceInfo* source =
+        m_data_provider.DataModel().GetCompareSource(source_index);
+    if(source)
+    {
+        RenderCompareCardTitle(*source, SettingsManager::GetInstance());
     }
 }
 
@@ -81,34 +168,100 @@ TopEventsView::Render()
     ImGui::PushStyleColor(ImGuiCol_Border, settings.GetColor(Colors::kBorderColor));
     ImGui::BeginChild("top_events", ImVec2(0, 0), ImGuiChildFlags_Borders);
     bool no_data = true;
-    for(std::unique_ptr<TopEventsTable>& table : m_tables)
+    for(Category& category : m_categories)
     {
-        if(table)
+        no_data &= !AnyVisible(category);
+        if(m_compare_mode)
         {
-            table->Render();
-            no_data &= !table->Visible();
+            RenderCategory(category);
+        }
+        else if(category.tables[COMPARE_SOURCE_A])
+        {
+            category.tables[COMPARE_SOURCE_A]->Render();
         }
     }
     if(no_data)
     {
-        CenterNextTextItem("No data available for the selected tracks.");
+        CenterNextTextItem(NO_DATA_TEXT);
         ImGui::SetCursorPosY((ImGui::GetWindowHeight() - ImGui::GetTextLineHeight()) *
                              0.5f);
-        ImGui::TextDisabled("No data available for the selected tracks.");
+        ImGui::TextDisabled("%s", NO_DATA_TEXT);
     }
     ImGui::EndChild();
     ImGui::PopStyleColor(2);
     ImGui::PopStyleVar(2);
 }
 
+bool
+TopEventsView::AnyVisible(const Category& category)
+{
+    bool visible = false;
+    for(const std::unique_ptr<TopEventsTable>& table : category.tables)
+    {
+        visible = visible || (table && table->Visible());
+    }
+    return visible;
+}
+
+void
+TopEventsView::RenderCategory(Category& category)
+{
+    if(!AnyVisible(category))
+    {
+        return;
+    }
+
+    // The category header is drawn once, then both sources' cards below it.
+    ImGui::PushID(category.header);
+    if(ImGui::CollapsingHeader(category.header, ImGuiTreeNodeFlags_DefaultOpen))
+    {
+        const ImGuiStyle& style = SettingsManager::GetInstance().GetDefaultStyle();
+        float             content_height = 0.0f;
+        for(std::unique_ptr<TopEventsTable>& table : category.tables)
+        {
+            if(table)
+            {
+                content_height = std::max(content_height, table->ContentHeight());
+            }
+        }
+        // The cards carry a source title that the pooled tables do not have.
+        content_height += ImGui::GetFrameHeightWithSpacing();
+
+        const float region_height =
+            ImGui::GetWindowHeight() - 2.0f * style.WindowPadding.y;
+        const ImVec2 card_size(
+            (ImGui::GetContentRegionAvail().x - style.ItemSpacing.x) * COMPARE_EVEN_SPLIT,
+            std::min(region_height - ImGui::GetFrameHeightWithSpacing(), content_height));
+
+        for(size_t source = 0; source < category.tables.size(); source++)
+        {
+            if(!category.tables[source])
+            {
+                continue;
+            }
+            if(source > COMPARE_SOURCE_A)
+            {
+                ImGui::SameLine();
+            }
+            ImGui::PushID(static_cast<int>(source));
+            category.tables[source]->RenderCard(card_size);
+            ImGui::PopID();
+        }
+    }
+    ImGui::PopID();
+}
+
 void
 TopEventsView::HandleTrackSelectionChanged(uint64_t track_id, bool selected)
 {
-    for(std::unique_ptr<TopEventsTable>& table : m_tables)
+    for(Category& category : m_categories)
     {
-        if(table)
+        for(std::unique_ptr<TopEventsTable>& table : category.tables)
         {
-            table->HandleTrackSelectionChanged(track_id, selected);
+            if(table)
+            {
+                table->HandleTrackSelectionChanged(track_id, selected);
+            }
         }
     }
 }
@@ -116,11 +269,14 @@ TopEventsView::HandleTrackSelectionChanged(uint64_t track_id, bool selected)
 void
 TopEventsView::HandleTimeRangeSelectionChanged(double start_ns, double end_ns)
 {
-    for(std::unique_ptr<TopEventsTable>& table : m_tables)
+    for(Category& category : m_categories)
     {
-        if(table)
+        for(std::unique_ptr<TopEventsTable>& table : category.tables)
         {
-            table->HandleTimeRangeSelectionChanged(start_ns, end_ns);
+            if(table)
+            {
+                table->HandleTimeRangeSelectionChanged(start_ns, end_ns);
+            }
         }
     }
 }
@@ -129,12 +285,14 @@ TopEventsView::TopEventsTable::TopEventsTable(
     DataProvider& dp, TableType table_type,
     rocprofvis_controller_table_type_t request_table_type, uint64_t request_id,
     std::shared_ptr<TimelineSelection> timeline_selection,
-    rocprofvis_dm_event_operation_t op, const char* header)
+    rocprofvis_dm_event_operation_t op, const char* header,
+    std::optional<uint64_t> source_file_id)
 : MultiTrackTable(
       dp, table_type, request_table_type, request_id,
       [&dp]() -> const TablesModel& { return dp.DataModel().GetAnalysis().GetTables(); },
       [&dp]() -> TablesModel& { return dp.DataModel().GetAnalysis().GetTables(); },
-      timeline_selection, kNone, 2, kRPVControllerSortOrderDescending)
+      timeline_selection, kNone, TOTAL_DURATION_SORT_COLUMN,
+      kRPVControllerSortOrderDescending, "", "", source_file_id)
 , m_duration_column_indices({ INVALID_UINT64_INDEX, INVALID_UINT64_INDEX,
                               INVALID_UINT64_INDEX, INVALID_UINT64_INDEX })
 , m_op(op)
@@ -153,21 +311,26 @@ TopEventsView::TopEventsTable::Render()
     {
         const ImGuiStyle& style = ImGui::GetStyle();
         ImGui::PushID(static_cast<int>(m_op));
-        ImVec2 region_avail =
-            ImVec2(ImGui::GetContentRegionAvail().x,
-                   ImGui::GetWindowHeight() - 2.0f * style.WindowPadding.y);
+        const float region_height =
+            ImGui::GetWindowHeight() - 2.0f * style.WindowPadding.y;
         if(ImGui::CollapsingHeader(m_header, ImGuiTreeNodeFlags_DefaultOpen))
         {
             ImGui::SetNextWindowSize(
-                ImVec2(region_avail.x,
-                       std::min(region_avail.y - ImGui::GetFrameHeightWithSpacing(),
-                                (Rows() + 1) * TableRowHeight() +
-                                    ImGui::GetFrameHeightWithSpacing() +
-                                    2.0f * style.WindowPadding.y)));
+                ImVec2(ImGui::GetContentRegionAvail().x,
+                       std::min(region_height - ImGui::GetFrameHeightWithSpacing(),
+                                ContentHeight())));
             MultiTrackTable::Render();
         }
         ImGui::PopID();
     }
+}
+
+float
+TopEventsView::TopEventsTable::ContentHeight() const
+{
+    const ImGuiStyle& style = SettingsManager::GetInstance().GetDefaultStyle();
+    return (Rows() + 1) * TableRowHeight() + ImGui::GetFrameHeightWithSpacing() +
+           2.0f * style.WindowPadding.y;
 }
 
 void
@@ -193,6 +356,10 @@ TopEventsView::TopEventsTable::IncludeTrack(uint64_t track_id) const
     if(track_info)
     {
         include = track_info->operation_types.count(m_op) > 0;
+        if(include && m_source_file_id.has_value())
+        {
+            include = track_info->file_id == m_source_file_id.value();
+        }
     }
     return include;
 }

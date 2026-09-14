@@ -60,6 +60,24 @@ static constexpr float HEADER_SEP_GAP   = 6.0f;
 static constexpr float METRIC_VALUE_GAP = 14.0f;
 static constexpr float LEGEND_HEIGHT    = 28.0f;
 
+// Block frame drawing (DrawBlockRect).
+static constexpr float BLOCK_SHADOW_OFFSET_X    = 3.0f;   // Drop-shadow horizontal offset.
+static constexpr float BLOCK_SHADOW_OFFSET_Y    = 4.0f;   // Drop-shadow vertical offset.
+static constexpr float BLOCK_HIGHLIGHT_INSET    = 1.0f;   // Inset of the top highlight band from the block edge.
+static constexpr float BLOCK_HIGHLIGHT_BOTTOM   = 3.0f;   // Bottom offset of the top highlight band.
+static constexpr float BLOCK_HIGHLIGHT_ROUNDING = 2.0f;   // Corner rounding of the highlight band.
+static constexpr float BLOCK_HIGHLIGHT_ALPHA    = 0.55f;  // Alpha applied to the hot-border highlight.
+static constexpr float BLOCK_BORDER_THICKNESS   = 1.0f;   // Outline thickness of the block frame.
+
+// Block header drawing (DrawBlockHeader / HeaderHeight).
+static constexpr float HEADER_ACCENT_INSET    = 2.0f;   // Vertical inset of the title accent bar.
+static constexpr float HEADER_ACCENT_WIDTH    = 3.0f;   // Width of the title accent bar.
+static constexpr float HEADER_ACCENT_ROUNDING = 2.0f;   // Corner rounding of the accent bar.
+static constexpr float HEADER_TITLE_INDENT    = 9.0f;   // Title text indent from the block text pad.
+static constexpr float HEADER_TITLE_GAP       = 5.0f;   // Gap between the title text and the separator line.
+static constexpr float HEADER_SEP_ALPHA       = 0.55f;  // Alpha of the header separator line.
+static constexpr float HEADER_SEP_THICKNESS   = 1.0f;   // Thickness of the header separator line.
+
 static constexpr float ARROW_THICKNESS   = 2.5f;
 static constexpr float ARROW_HEAD_SIZE   = 8.0f;
 static constexpr float ARROW_LABEL_ABOVE = 4.0f;
@@ -70,6 +88,61 @@ static constexpr float ARROW_DASH_GAP    = 4.0f;
 static constexpr float LANE_GAP          = 20.0f;
 static constexpr int   MAX_DASH_ITERS    = 20000;
 static constexpr int   MAX_LABEL_PASSES  = 200;
+
+static constexpr float ARROW_GLOW_ALPHA      = 0.22f;  // Alpha of the soft underglow behind a dashed line.
+static constexpr float ARROW_GLOW_EXTRA      = 3.0f;   // Extra thickness of the underglow vs. the line.
+static constexpr float ARROW_HEAD_HALF_RATIO = 0.6f;   // Arrow-head half-width as a fraction of its length.
+
+// Arrow routing (BuildArrowRoutes).
+static constexpr float SAME_COL_LANE_BASE  = 12.0f;  // First same-column lane offset past the block edge.
+static constexpr float SAME_COL_LANE_STEP  = 14.0f;  // Horizontal pitch between stacked same-column lanes.
+static constexpr float SAME_COL_LABEL_GAP  = 6.0f;   // Label offset past a same-column lane.
+static constexpr float SKIP_MARGIN_RATIO   = 0.35f;  // Fraction of LEFT_MARGIN used by left-going skip routes.
+static constexpr float SKIP_LANE_PAD       = 24.0f;  // Clearance between spans sharing a highway lane.
+static constexpr float SKIP_LANE_LABEL_PAD = 12.0f;  // Extra pitch between highway lanes for the label.
+static constexpr float SKIP_HIGHWAY_DROP   = 30.0f;  // Drop below the blocks to the first highway lane.
+static constexpr float PORT_STEP           = 16.0f;  // Horizontal pitch between a block's bottom ports.
+static constexpr float PORT_EDGE_PAD       = 14.0f;  // Keep bottom ports this far from the block edges.
+
+// Floating label (DrawFloatingLabel / ResolveLabelOverlaps).
+static constexpr float LABEL_PAD_X            = 5.0f;   // Horizontal padding inside a floating label.
+static constexpr float LABEL_PAD_Y            = 2.0f;   // Vertical padding inside a floating label.
+static constexpr float LABEL_ROUNDING         = 4.0f;   // Corner rounding of a floating label.
+static constexpr float LABEL_BORDER_ALPHA     = 0.7f;   // Alpha of a floating label's border.
+static constexpr float LABEL_BORDER_THICKNESS = 1.0f;   // Border thickness of a floating label.
+static constexpr float LABEL_OVERLAP_NUDGE    = 2.0f;   // Downward nudge when de-overlapping labels.
+
+// Group box (DrawGroupBox).
+static constexpr float GROUP_FILL_ALPHA       = 0.35f;  // Alpha of a group box's fill.
+static constexpr float GROUP_BORDER_ALPHA     = 0.9f;   // Alpha of a group box's border.
+static constexpr float GROUP_BORDER_THICKNESS = 1.5f;   // Border thickness of a group box.
+static constexpr float GROUP_TITLE_TOP        = 6.0f;   // Title inset from the group box top.
+
+// Legend (DrawLegend).
+static constexpr float LEGEND_LABEL_GAP       = 12.0f;  // Gap after the "Legend:" caption.
+static constexpr float LEGEND_SWATCH_TOP      = 4.0f;   // Swatch top inset within the legend row.
+static constexpr float LEGEND_SWATCH_WIDTH    = 12.0f;  // Swatch width.
+static constexpr float LEGEND_SWATCH_BOTTOM   = 10.0f;  // Swatch bottom inset within the legend row.
+static constexpr float LEGEND_SWATCH_ROUNDING = 2.0f;   // Swatch corner rounding.
+static constexpr float LEGEND_TEXT_GAP        = 17.0f;  // Swatch-left to label-left (and swatch advance).
+static constexpr float LEGEND_ITEM_GAP        = 16.0f;  // Gap between legend items.
+
+// Metric row (DrawLeaf).
+static constexpr float ROW_INSET_X         = 6.0f;   // Horizontal inset of a metric row's hover rect.
+static constexpr float ROW_HOVER_INSET     = 2.0f;   // Vertical inset of a metric row's hover rect.
+static constexpr float ROW_HOVER_ALPHA     = 0.16f;  // Alpha of a metric row's hover highlight.
+static constexpr float ROW_HOVER_ROUNDING  = 4.0f;   // Corner rounding of a metric row's hover highlight.
+static constexpr float ROW_ACCENT_TOP      = 4.0f;   // Metric-row accent bar top offset.
+static constexpr float ROW_ACCENT_WIDTH    = 3.0f;   // Metric-row accent bar width.
+static constexpr float ROW_ACCENT_BOTTOM   = 12.0f;  // Metric-row accent bar bottom offset.
+static constexpr float ROW_ACCENT_ALPHA    = 0.85f;  // Metric-row accent bar alpha.
+static constexpr float ROW_ACCENT_ROUNDING = 2.0f;   // Metric-row accent bar corner rounding.
+static constexpr float ROW_LABEL_INDENT    = 7.0f;   // Metric-row label indent past the accent bar.
+
+// Block sizing / canvas / tooltip.
+static constexpr float BLOCK_CONTENT_EXTRA_W = 12.0f;   // Slack added to a leaf block's content width.
+static constexpr float CANVAS_BOTTOM_PAD     = 6.0f;    // Padding below the lowest route/label.
+static constexpr float TOOLTIP_MAX_WIDTH     = 300.0f;  // Max width of a metric tooltip.
 
 static constexpr const char* UNAVAILABLE_METRIC_TEXT = "N/A";
 
@@ -165,14 +238,14 @@ FormatMetricValueRaw(double value)
 static void
 DrawBlockRect(ImDrawList* draw_list, ImVec2 top_left, ImVec2 bottom_right)
 {
-    draw_list->AddRectFilled({top_left.x + 3.0f, top_left.y + 4.0f},
-                             {bottom_right.x + 3.0f, bottom_right.y + 4.0f},
+    draw_list->AddRectFilled({top_left.x + BLOCK_SHADOW_OFFSET_X, top_left.y + BLOCK_SHADOW_OFFSET_Y},
+                             {bottom_right.x + BLOCK_SHADOW_OFFSET_X, bottom_right.y + BLOCK_SHADOW_OFFSET_Y},
                              C().shadow, BLOCK_ROUNDING);
     draw_list->AddRectFilled(top_left, bottom_right, C().panel, BLOCK_ROUNDING);
-    draw_list->AddRectFilled({top_left.x + 1.0f, top_left.y + 1.0f},
-                             {bottom_right.x - 1.0f, top_left.y + 3.0f},
-                             ApplyAlpha(C().border_hot, 0.55f), 2.0f);
-    draw_list->AddRect(top_left, bottom_right, C().border, BLOCK_ROUNDING, 0, 1.0f);
+    draw_list->AddRectFilled({top_left.x + BLOCK_HIGHLIGHT_INSET, top_left.y + BLOCK_HIGHLIGHT_INSET},
+                             {bottom_right.x - BLOCK_HIGHLIGHT_INSET, top_left.y + BLOCK_HIGHLIGHT_BOTTOM},
+                             ApplyAlpha(C().border_hot, BLOCK_HIGHLIGHT_ALPHA), BLOCK_HIGHLIGHT_ROUNDING);
+    draw_list->AddRect(top_left, bottom_right, C().border, BLOCK_ROUNDING, 0, BLOCK_BORDER_THICKNESS);
 }
 
 static float
@@ -181,15 +254,15 @@ DrawBlockHeader(ImDrawList* draw_list, const char* title, float block_x, float b
 {
     float text_y = block_y + BLOCK_TEXT_PAD;
     float text_h = ImGui::CalcTextSize(title).y;
-    draw_list->AddRectFilled({block_x + BLOCK_TEXT_PAD, text_y + 2.0f},
-                             {block_x + BLOCK_TEXT_PAD + 3.0f, text_y + text_h - 2.0f},
-                             C().read, 2.0f);
-    draw_list->AddText(ImVec2(block_x + BLOCK_TEXT_PAD + 9.0f, text_y), C().text_main, title);
+    draw_list->AddRectFilled({block_x + BLOCK_TEXT_PAD, text_y + HEADER_ACCENT_INSET},
+                             {block_x + BLOCK_TEXT_PAD + HEADER_ACCENT_WIDTH, text_y + text_h - HEADER_ACCENT_INSET},
+                             C().read, HEADER_ACCENT_ROUNDING);
+    draw_list->AddText(ImVec2(block_x + BLOCK_TEXT_PAD + HEADER_TITLE_INDENT, text_y), C().text_main, title);
 
-    float line_y = text_y + text_h + 5.0f;
+    float line_y = text_y + text_h + HEADER_TITLE_GAP;
     draw_list->AddLine(ImVec2(block_x + BLOCK_TEXT_PAD, line_y),
                        ImVec2(block_x + block_w - BLOCK_TEXT_PAD, line_y),
-                       ApplyAlpha(C().border, 0.55f), 1.0f);
+                       ApplyAlpha(C().border, HEADER_SEP_ALPHA), HEADER_SEP_THICKNESS);
     return line_y + HEADER_SEP_GAP;
 }
 
@@ -197,7 +270,7 @@ DrawBlockHeader(ImDrawList* draw_list, const char* title, float block_x, float b
 static float
 HeaderHeight()
 {
-    return BLOCK_TEXT_PAD + ImGui::CalcTextSize("X").y + 5.0f + HEADER_SEP_GAP;
+    return BLOCK_TEXT_PAD + ImGui::CalcTextSize("X").y + HEADER_TITLE_GAP + HEADER_SEP_GAP;
 }
 
 static void
@@ -215,8 +288,8 @@ DrawDashedLine(ImDrawList* draw_list, ImVec2 from, ImVec2 to, ImU32 color)
         float  dash_end = std::min(cursor + ARROW_DASH_LENGTH, length);
         ImVec2 dash_from(from.x + dir.x * cursor, from.y + dir.y * cursor);
         ImVec2 dash_to(from.x + dir.x * dash_end, from.y + dir.y * dash_end);
-        draw_list->AddLine(dash_from, dash_to, ApplyAlpha(color, 0.22f),
-                           ARROW_THICKNESS + 3.0f);
+        draw_list->AddLine(dash_from, dash_to, ApplyAlpha(color, ARROW_GLOW_ALPHA),
+                           ARROW_THICKNESS + ARROW_GLOW_EXTRA);
         draw_list->AddLine(dash_from, dash_to, color, ARROW_THICKNESS);
         cursor = dash_end + ARROW_DASH_GAP;
     }
@@ -231,7 +304,7 @@ DrawArrowHead(ImDrawList* draw_list, ImVec2 tip, ImVec2 dir, ImU32 color)
     ImVec2 unit(dir.x / len, dir.y / len);
     ImVec2 perp(-unit.y, unit.x);
     float  head = ARROW_HEAD_SIZE;
-    float  half = head * 0.6f;
+    float  half = head * ARROW_HEAD_HALF_RATIO;
     ImVec2 base(tip.x - unit.x * head, tip.y - unit.y * head);
     ImVec2 a(base.x + perp.x * half, base.y + perp.y * half);
     ImVec2 b(base.x - perp.x * half, base.y - perp.y * half);
@@ -242,11 +315,12 @@ static void
 DrawFloatingLabel(ImDrawList* draw_list, ImVec2 pos, const char* text, ImU32 accent_color)
 {
     ImVec2 text_size = ImGui::CalcTextSize(text);
-    ImVec2 pad(5.0f, 2.0f);
+    ImVec2 pad(LABEL_PAD_X, LABEL_PAD_Y);
     ImVec2 min(pos.x - pad.x, pos.y - pad.y);
     ImVec2 max(pos.x + text_size.x + pad.x, pos.y + text_size.y + pad.y);
-    draw_list->AddRectFilled(min, max, C().bg, 4.0f);
-    draw_list->AddRect(min, max, ApplyAlpha(accent_color, 0.7f), 4.0f, 0, 1.0f);
+    draw_list->AddRectFilled(min, max, C().bg, LABEL_ROUNDING);
+    draw_list->AddRect(min, max, ApplyAlpha(accent_color, LABEL_BORDER_ALPHA), LABEL_ROUNDING, 0,
+                       LABEL_BORDER_THICKNESS);
     draw_list->AddText(pos, accent_color, text);
 }
 
@@ -254,13 +328,13 @@ static void
 DrawGroupBox(ImDrawList* draw_list, ImVec2 top_left, float w, float h, const char* title)
 {
     ImVec2 bottom_right(top_left.x + w, top_left.y + h);
-    draw_list->AddRectFilled(top_left, bottom_right, ApplyAlpha(C().panel_alt, 0.35f),
+    draw_list->AddRectFilled(top_left, bottom_right, ApplyAlpha(C().panel_alt, GROUP_FILL_ALPHA),
                              BLOCK_ROUNDING);
-    draw_list->AddRect(top_left, bottom_right, ApplyAlpha(C().border, 0.9f), BLOCK_ROUNDING,
-                       0, 1.5f);
+    draw_list->AddRect(top_left, bottom_right, ApplyAlpha(C().border, GROUP_BORDER_ALPHA),
+                       BLOCK_ROUNDING, 0, GROUP_BORDER_THICKNESS);
     if(title && title[0] != '\0')
     {
-        draw_list->AddText({top_left.x + BLOCK_TEXT_PAD, top_left.y + 6.0f}, C().text_dim,
+        draw_list->AddText({top_left.x + BLOCK_TEXT_PAD, top_left.y + GROUP_TITLE_TOP}, C().text_dim,
                            title);
     }
 }
@@ -279,13 +353,14 @@ DrawLegend(ImDrawList* draw_list, ImVec2 origin, float y)
 
     ImVec2 pos(origin.x + CHART_PADDING, origin.y + y);
     draw_list->AddText(pos, C().text_dim, "Legend:");
-    pos.x += ImGui::CalcTextSize("Legend:").x + 12.0f;
+    pos.x += ImGui::CalcTextSize("Legend:").x + LEGEND_LABEL_GAP;
     for(const LegendItem& item : legend)
     {
-        draw_list->AddRectFilled({pos.x, pos.y + 4.0f}, {pos.x + 12.0f, pos.y + 10.0f},
-                                 item.color, 2.0f);
-        draw_list->AddText({pos.x + 17.0f, pos.y}, C().text_dim, item.text);
-        pos.x += 17.0f + ImGui::CalcTextSize(item.text).x + 16.0f;
+        draw_list->AddRectFilled({pos.x, pos.y + LEGEND_SWATCH_TOP},
+                                 {pos.x + LEGEND_SWATCH_WIDTH, pos.y + LEGEND_SWATCH_BOTTOM},
+                                 item.color, LEGEND_SWATCH_ROUNDING);
+        draw_list->AddText({pos.x + LEGEND_TEXT_GAP, pos.y}, C().text_dim, item.text);
+        pos.x += LEGEND_TEXT_GAP + ImGui::CalcTextSize(item.text).x + LEGEND_ITEM_GAP;
     }
 }
 
@@ -591,7 +666,7 @@ ComputeMemoryChartView::MeasureBlock(MemChartBlock& block) const
         width = std::max(width, row_w);
     }
 
-    width += BLOCK_TEXT_PAD * 2.0f + 12.0f;
+    width += BLOCK_TEXT_PAD * 2.0f + BLOCK_CONTENT_EXTRA_W;
     block.w = std::min(std::max(width, MIN_BLOCK_WIDTH), MAX_BLOCK_WIDTH);
 
     float body = block.content.empty()
@@ -828,9 +903,9 @@ ComputeMemoryChartView::Render()
     {
         for(const std::pair<float, float>& p : route.points)
         {
-            max_bottom = std::max(max_bottom, p.second + 6.0f);
+            max_bottom = std::max(max_bottom, p.second + CANVAS_BOTTOM_PAD);
         }
-        max_bottom = std::max(max_bottom, route.label_y + route.label_h + 6.0f);
+        max_bottom = std::max(max_bottom, route.label_y + route.label_h + CANVAS_BOTTOM_PAD);
     }
 
     float canvas_w = max_right + CHART_PADDING;
@@ -917,21 +992,22 @@ ComputeMemoryChartView::DrawLeaf(ImDrawList* draw_list, ImVec2 origin,
         std::string value = MetricValueText(item.metric);
         ImU32       accent = ColorForCategory(item.category, label);
 
-        ImVec2 row_min(block_x + 6.0f, cursor_y - 2.0f);
-        ImVec2 row_max(block_x + block.w - 6.0f, cursor_y + ROW_HEIGHT - 2.0f);
+        ImVec2 row_min(block_x + ROW_INSET_X, cursor_y - ROW_HOVER_INSET);
+        ImVec2 row_max(block_x + block.w - ROW_INSET_X, cursor_y + ROW_HEIGHT - ROW_HOVER_INSET);
         if(ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows |
                                   ImGuiHoveredFlags_NoPopupHierarchy) &&
            ImGui::IsMouseHoveringRect(row_min, row_max))
         {
-            draw_list->AddRectFilled(row_min, row_max, ApplyAlpha(C().border_hot, 0.16f),
-                                     4.0f);
+            draw_list->AddRectFilled(row_min, row_max, ApplyAlpha(C().border_hot, ROW_HOVER_ALPHA),
+                                     ROW_HOVER_ROUNDING);
         }
 
-        draw_list->AddRectFilled({block_x + BLOCK_TEXT_PAD, cursor_y + 4.0f},
-                                 {block_x + BLOCK_TEXT_PAD + 3.0f, cursor_y + 12.0f},
-                                 ApplyAlpha(accent, 0.85f), 2.0f);
+        draw_list->AddRectFilled(
+            {block_x + BLOCK_TEXT_PAD, cursor_y + ROW_ACCENT_TOP},
+            {block_x + BLOCK_TEXT_PAD + ROW_ACCENT_WIDTH, cursor_y + ROW_ACCENT_BOTTOM},
+            ApplyAlpha(accent, ROW_ACCENT_ALPHA), ROW_ACCENT_ROUNDING);
         std::string label_text = label + ":";
-        DrawTextWithTooltip(draw_list, {block_x + BLOCK_TEXT_PAD + 7.0f, cursor_y},
+        DrawTextWithTooltip(draw_list, {block_x + BLOCK_TEXT_PAD + ROW_LABEL_INDENT, cursor_y},
                             C().text_dim, label_text.c_str(), item.metric, true, false);
 
         bool  available = IsAvailableMetricText(value);
@@ -1135,20 +1211,20 @@ ComputeMemoryChartView::BuildArrowRoutes(std::vector<ArrowRoute>& routes) const
         const MemChartBlock* to    = m_layout.FindBlock(arrow.to);
         if(!from || !to) continue;
 
-        float lane_x = std::max(from->conn_right, to->conn_right) + 12.0f +
-                       static_cast<float>(same_lane++) * 14.0f;
+        float lane_x = std::max(from->conn_right, to->conn_right) + SAME_COL_LANE_BASE +
+                       static_cast<float>(same_lane++) * SAME_COL_LANE_STEP;
         std::vector<std::pair<float, float>> pts = {{from->conn_right, from->MidY()},
                                                     {lane_x, from->MidY()},
                                                     {lane_x, to->MidY()},
                                                     {to->conn_right, to->MidY()}};
-        make_route(arrow, std::move(pts), lane_x + 6.0f,
+        make_route(arrow, std::move(pts), lane_x + SAME_COL_LABEL_GAP,
                    (from->MidY() + to->MidY()) * 0.5f);
     }
 
     // Skipping columns: route along packed "highway" lanes below the blocks.
     // Disjoint arrows share a lane; a shorter span nests nearer the blocks than
     // the span enclosing it. Left-going routes climb the reserved left margin.
-    const float margin_x = CHART_PADDING + LEFT_MARGIN * 0.35f;
+    const float margin_x = CHART_PADDING + LEFT_MARGIN * SKIP_MARGIN_RATIO;
 
     // Horizontal extent each skipping arrow occupies along the highway.
     struct SkipSpan
@@ -1180,7 +1256,6 @@ ComputeMemoryChartView::BuildArrowRoutes(std::vector<ArrowRoute>& routes) const
     });
 
     // First-fit packing: reuse the lowest lane clear of this span, else open one.
-    constexpr float                           SKIP_LANE_PAD = 24.0f;
     std::vector<std::vector<const SkipSpan*>> lanes;
     for(SkipSpan& span : spans)
     {
@@ -1212,7 +1287,7 @@ ComputeMemoryChartView::BuildArrowRoutes(std::vector<ArrowRoute>& routes) const
     // A label sits above its lane's line, so the pitch between lanes must exceed
     // the label height - otherwise a lane's label lands on the line above it.
     const float lane_pitch =
-        std::max(LANE_GAP, ImGui::GetTextLineHeight() + ARROW_LABEL_ABOVE + 12.0f);
+        std::max(LANE_GAP, ImGui::GetTextLineHeight() + ARROW_LABEL_ABOVE + SKIP_LANE_LABEL_PAD);
 
     // Spread each block's bottom connectors symmetrically about the centre so
     // drops don't stack. Ordered left-headed by increasing span then right-headed
@@ -1241,8 +1316,6 @@ ComputeMemoryChartView::BuildArrowRoutes(std::vector<ArrowRoute>& routes) const
 
     std::unordered_map<size_t, float> from_port_x;
     std::unordered_map<size_t, float> to_port_x;
-    constexpr float                   PORT_STEP     = 16.0f;
-    constexpr float                   PORT_EDGE_PAD = 14.0f;
     for(std::pair<const uint32_t, std::vector<BottomPort>>& kv : block_ports)
     {
         const MemChartBlock* block = m_layout.FindBlock(kv.first);
@@ -1271,7 +1344,7 @@ ComputeMemoryChartView::BuildArrowRoutes(std::vector<ArrowRoute>& routes) const
         if(!from || !to) continue;
 
         int   lane      = lane_of.count(index) ? lane_of[index] : 0;
-        float highway_y = blocks_bottom + 30.0f + static_cast<float>(lane) * lane_pitch;
+        float highway_y = blocks_bottom + SKIP_HIGHWAY_DROP + static_cast<float>(lane) * lane_pitch;
         float fx        = from_port_x.count(index) ? from_port_x[index] : from->MidX();
 
         if(to->column < from->column)
@@ -1316,7 +1389,7 @@ ComputeMemoryChartView::ResolveLabelOverlaps(std::vector<ArrowRoute>& routes) co
                 bool overlap_y = route.label_y < rect.w && rect.y < route.label_y + route.label_h;
                 if(overlap_x && overlap_y)
                 {
-                    route.label_y = rect.w + 2.0f;
+                    route.label_y = rect.w + LABEL_OVERLAP_NUDGE;
                     moved         = true;
                 }
             }
@@ -1420,13 +1493,12 @@ ComputeMemoryChartView::ShowMetricTooltip(ImVec2 hover_min, ImVec2 hover_max,
         // the tooltip entirely instead of drawing an empty box.
         if(!has_desc && !show_val) return;
 
-        constexpr float kTooltipMaxWidth = 300.0f;
         ImGui::SetNextWindowSizeConstraints(ImVec2(0, 0),
-                                            ImVec2(kTooltipMaxWidth, FLT_MAX));
+                                            ImVec2(TOOLTIP_MAX_WIDTH, FLT_MAX));
         BeginTooltipStyled();
         if(has_desc)
         {
-            ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + kTooltipMaxWidth);
+            ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + TOOLTIP_MAX_WIDTH);
             ImGui::TextUnformatted(metric->entry->description.c_str());
             ImGui::PopTextWrapPos();
         }

@@ -317,6 +317,11 @@ One translation unit may include `Python.h`. Every `rocprofvis_handle_t*`
 is a capsule (`owns=0` borrowed, `owns=1` for alloc'd future/array/table).
 Bindings call only the C ABI.
 
+Before adding a wrapper that stores a controller or a session, read
+§3's *Run generation* - every entry point that reads either needs
+`check_generation` first, and the reason it cannot simply test the
+pointers is not obvious.
+
 User-facing surface (injected as `optiq`, not imported from disk):
 
 ```python
@@ -558,16 +563,29 @@ builtins; `__class__` walks from any instance to `object` and
 everything already imported. Before a script runs,
 `Runtime::ScreenSource` parses it and refuses a denylist of
 interpreter-internal names (`__globals__`, `__class__`, `__subclasses__`,
-`__code__`, `__dict__`, …) in **attribute or name position**. Attribute
-access is the only way to walk either chain, since `getattr`, `vars`,
-`eval` and `__import__` are all withheld, so screening names closes the
-published routes without an AST rewrite.
+`__code__`, `__dict__`, …) in **attribute or name position**. The
+builtins withhold `getattr`, `vars`, `eval` and `__import__`, so an
+attribute expression is the only *syntactic* way to walk either chain,
+which is what makes screening names worth doing without an AST rewrite.
+
+It does **not** close every published route today, and earlier drafts of
+this file said it did. `operator` is allowlisted, and
+`operator.attrgetter` is `getattr` under another name with the
+interpreter-internal part in a string the screen never inspects:
+
+```python
+operator.attrgetter('__globals__')(json.dumps)['__builtins__']['__import__']('os')
+```
+
+See §11.
 
 Three things to keep in mind when touching it:
 
 - It screens **names, not values**. It cannot know what an expression
   evaluates to and does not try. Adding `getattr` to the builtins would
-  defeat it completely.
+  defeat it completely — and allowlisting a module that reaches
+  attributes by string, as `operator` does, is the same mistake by a
+  quieter route.
 - It must not refuse ordinary code. `__init__` and `__name__` are not
   on the denylist because defining `__init__` is how the allowlisted
   `dataclasses` and `enum` are used at all.
@@ -695,3 +713,93 @@ and a release build does not require a system Python.
 Phases 0, 1, and 1b are in tree. Next is Phase 2 (result tables in
 the view). Do not start Ask Optiq or vendored CPython until that
 presentation path is stable.
+
+---
+
+## 11. Known gaps
+
+Open as of the scripting work landing. Each is understood rather than
+suspected, so treat this as a work list and not a list of worries.
+Anything fixed should be deleted from here in the same change, with the
+reasoning moved to the section it belongs to.
+
+### Script editor (`src/view/src/widgets/rocprofvis_script_editor.cpp`)
+
+- **`ProposeScript` during a run corrupts approval state.** It resets
+  `m_source`, `m_output` and `m_approval` but leaves
+  `m_running_source_id` set and the request in flight. The old run's
+  completion event still matches that id, so it overwrites the new
+  offer's output while approval stays `kPending` and Ask Optiq waits
+  out its deadline. It also discards an unsaved draft without asking.
+  Cancel or refuse the propose while a run is live, and clear
+  `m_running_source_id` on every path that leaves Running.
+- **File dialogs capture raw `this`.** `LoadFromFile` / `SaveToFile`
+  hand `[this](std::string path)` to `AppWindow::ShowOpenFileDialog` /
+  `ShowSaveFileDialog`, which hold the callback until the user
+  confirms. Closing the trace tab destroys the `ScriptEditor` first,
+  and `UpdateNativeFileDialog` can then call into freed memory; tab
+  close does not clear `m_file_dialog_callback`. Wants a `weak_ptr` or
+  a generation token, or cancelling pending dialogs on teardown. It is
+  the same shape §3's run generation solves on the binding side: a
+  callback outliving the thing it points at.
+- **A cancelled run is reported to the model as a failure.**
+  `GetLastScriptResult` returns false for "never ran", "failed" and
+  "cancelled" alike, and `FinishAssistantScriptFetch` turns that into
+  *"The script failed:"*, so the assistant may try to fix and re-offer
+  a script the user deliberately stopped. It handles `kRejected`,
+  `kFailedToStart`, `kPending` and `kRunning` separately already;
+  cancel needs the same treatment.
+
+### Sandbox
+
+- **`operator.attrgetter` / `methodcaller` walk past the source
+  screen**, as described in §7. Either drop those two names from what
+  `operator` exposes, or refuse interpreter-internal names when they
+  appear as string literals in a call to them. Whichever way it goes,
+  §7 and `PYTHON.md` have to agree with the result. Approval is the
+  real control either way — this is about not overstating the screen.
+
+### Runtime (`src/python/`)
+
+- **A failed interpreter init is permanent.** `m_running` stays true
+  and the watchdog thread stays alive until process teardown, and a
+  later `Init` only replays the stored error rather than retrying. One
+  bad start disables scripting for the session.
+- **Trace close can abandon controller handles.** Deliberate: after
+  `CLEANUP_WAIT_SECONDS` the DataProvider gives up rather than free
+  memory a live script is reading. It is the right trade against a
+  use-after-free, but it is still an unbounded-in-principle leak if a
+  `bare except:` script never exits, and worth revisiting if the
+  interpreter ever gets a hard stop.
+
+### Build and shipping
+
+- **Not releasable yet.** `ROCPROFVIS_ENABLE_SCRIPTING=ON`
+  `find_package`s the *build machine's* Python and bakes
+  `ROCPROFVIS_PYTHON_HOME` and stdlib paths in at compile time. The
+  isolated `PyConfig` is right; the packaging is not. Phase 3's
+  vendored embeddable CPython is the prerequisite. Keep the flag OFF
+  in CI release jobs until it exists.
+- **Feature macros are set through `CMAKE_CXX_FLAGS`**, which leaks
+  them into thirdparty targets. Prefer `target_compile_definitions` on
+  the view, controller and python targets.
+
+### Docs
+
+- `PYTHON.md` tells users to open Script from the **compute** toolbar
+  (compute traces have no Script tab) and says `print` is unavailable
+  (it is injected into globals).
+- `optiq.on_progress` from §5 is still unimplemented, and implementing
+  it naively would break cancel-safety — see the note in §5.
+
+### Test gaps
+
+| Area | Missing |
+|------|---------|
+| Cancel | `rocprofvis_script_cancel` against a running `while True: pass` (the queued case is covered) |
+| Slice wait | Cancel or timeout arriving *during* `Track.events()` / `Table.fetch()` |
+| `import optiq` | Promised by the docs, never asserted |
+| Source screen | `operator.attrgetter('__globals__')(...)` |
+| Interrupt retry | A bare `except:` — the present test uses `except Exception:`, which does not catch `KeyboardInterrupt`, so the retry path is untested |
+| Session lifetime | The `__del__` / cyclic-GC route. The run-generation test covers a wrapper parked on an allowlisted module, not one freed late by the collector |
+| View | `ProposeScript` during a run; tab close with a file dialog open; `GetLastScriptResult` after cancel versus after an error |

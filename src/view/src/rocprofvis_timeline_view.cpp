@@ -563,7 +563,6 @@ TimelineView::HandleMeasurementLabelInput()
     ImGui::EndChild();
     ImGui::PopStyleVar();
 
-    m_dragging_measure_label = active;
     if(hovered || active)
     {
         ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeNS);
@@ -595,7 +594,6 @@ TimelineView::RenderMeasurement(ImDrawList* draw_list, ImVec2 window_position)
     {
         // No measurement: drop any manual label offset (session-only).
         m_measure_label_offset_y = 0.0f;
-        m_dragging_measure_label = false;
         return;
     }
 
@@ -608,11 +606,10 @@ TimelineView::RenderMeasurement(ImDrawList* draw_list, ImVec2 window_position)
     constexpr float RULER_LABEL_PAD_X = 4.0f;
     constexpr float RULER_LABEL_PAD_Y = 2.0f;
     constexpr float RULER_LABEL_ROUND = 3.0f;
-    ImU32 label_bg   = settings.GetColor(Colors::kMeasurementLabelBg);
     // Opaque fill so underlying lines don't bleed through the labels.
-    ImU32 label_bg_opaque = label_bg | IM_COL32_A_MASK;
-    ImU32 label_edge = settings.GetColor(Colors::kMeasurementLabelEdge);
-    ImU32 label_text = settings.GetColor(Colors::kMeasurementLabelText);
+    ImU32 label_bg_opaque = settings.GetColor(Colors::kMeasurementLabelBg) | IM_COL32_A_MASK;
+    ImU32 label_edge      = settings.GetColor(Colors::kMeasurementLabelEdge);
+    ImU32 label_text      = settings.GetColor(Colors::kMeasurementLabelText);
 
     float top = window_position.y;
 
@@ -710,7 +707,6 @@ TimelineView::RenderMeasurement(ImDrawList* draw_list, ImVec2 window_position)
             if(pt_valid[i])
                 draw_ruler_label(i, px[i], ruler_bottom_y, ts_str[i].c_str());
         m_measure_label_offset_y = 0.0f;
-        m_dragging_measure_label = false;
         draw_list->PopClipRect();
         return;
     }

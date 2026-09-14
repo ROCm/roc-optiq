@@ -239,7 +239,7 @@ jobs:
   ci-manylinux-experimental:
     name: ManyLinux CI - Experimental
     needs: setup
-    if: ${{ github.event_name != 'workflow_dispatch' || (inputs.enable_ci_manylinux && inputs.enable_ci_experimental) }}
+    if: ${{ github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.enable_ci_manylinux && inputs.enable_ci_experimental) }}
     uses: ./.github/workflows/ci-manylinux.yml
     secrets: inherit
     with:

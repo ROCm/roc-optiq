@@ -1271,7 +1271,8 @@ ComparisonTable::UpdateDifferenceHighlight(
 {
     for(const DifferenceGroup& group : groups)
     {
-        if(group.pct_value && group.value)
+        if(group.pct_value && group.value && group.pct_value->dbl_data &&
+           group.pct_value->display_props.bg_color && group.value->display_props.bg_color)
         {
             if(std::abs(group.pct_value->dbl_data.value()) > m_percentage_threshold)
             {

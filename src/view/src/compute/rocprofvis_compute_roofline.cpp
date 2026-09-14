@@ -1738,10 +1738,14 @@ Roofline::PointDistanceFromLine(ImVec2 point, ImVec2 line_p1, ImVec2 line_p2) co
 {
     ImVec2 line_direction = ImVec2(line_p2.x - line_p1.x, line_p2.y - line_p1.y);
     ImVec2 point_to_line  = ImVec2(point.x - line_p1.x, point.y - line_p1.y);
-    float  projection     = std::clamp(
-        (point_to_line.x * line_direction.x + point_to_line.y * line_direction.y) /
-            (line_direction.x * line_direction.x + line_direction.y * line_direction.y),
-        0.0f, 1.0f);
+    float  projection =
+        (line_direction.x * line_direction.x + line_direction.y * line_direction.y) > 0.0f
+            ? std::clamp((point_to_line.x * line_direction.x +
+                          point_to_line.y * line_direction.y) /
+                             (line_direction.x * line_direction.x +
+                              line_direction.y * line_direction.y),
+                         0.0f, 1.0f)
+            : 0.0f;
     ImVec2 closest_point = ImVec2(line_p1.x + projection * line_direction.x,
                                   line_p1.y + projection * line_direction.y);
     float  dx            = point.x - closest_point.x;

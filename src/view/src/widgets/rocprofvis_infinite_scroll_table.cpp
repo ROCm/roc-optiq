@@ -14,7 +14,6 @@
 #include "spdlog/spdlog.h"
 #include "widgets/rocprofvis_gui_helpers.h"
 #include "widgets/rocprofvis_notification_manager.h"
-#include "imgui_internal.h"
 #include <algorithm>
 #include <sstream>
 
@@ -33,6 +32,8 @@ constexpr const char* FILTER_OPERATORS         = "> < = >= <= !=";
 
 constexpr float MIN_COLUMN_WIDTH_EM     = 6.0f;
 constexpr float MAX_COLUMN_FIT_WIDTH_EM = 40.0f;
+
+constexpr float TOOLTIP_MAX_WIDTH = 600.0f;
 
 InfiniteScrollTable::InfiniteScrollTable(
     DataProvider& dp, TableType table_type,
@@ -979,7 +980,13 @@ InfiniteScrollTable::RenderCell(const std::string* cell_text, int row, int colum
 
     if(is_elided && ImGui::IsItemHovered())
     {
-        SetTooltipStyled("%s", cell_text->c_str());
+        ImGui::SetNextWindowSizeConstraints(ImVec2(0, 0),
+                                            ImVec2(TOOLTIP_MAX_WIDTH, FLT_MAX));
+        BeginTooltipStyled();
+        ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + TOOLTIP_MAX_WIDTH);
+        ImGui::TextUnformatted(cell_text->c_str());
+        ImGui::PopTextWrapPos();
+        EndTooltipStyled();
     }
 
     if(ImGui::IsItemClicked(ImGuiMouseButton_Right))

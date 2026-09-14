@@ -91,6 +91,21 @@ rocprofvis_result_t rocprofvis_analysis_get_memory_copy_events_table(rocprofvis_
 rocprofvis_result_t rocprofvis_analysis_get_sampled_events_table(rocprofvis_controller_t* controller, rocprofvis_handle_t** table);
 
 /*
+* Allocates a caller-owned events table filtered to one operation.
+*
+* The rocprofvis_analysis_get_*_events_table calls above hand back tables the
+* controller keeps per trace, so two readers of the same category share a row
+* cache: whoever fetches last is what both of them see. Use this instead when a
+* reader must not disturb what another one is showing.
+*
+* Free with rocprofvis_controller_table_free.
+* @param op The event operation the table is filtered to.
+* @param table Out-param that receives the table handle.
+* @returns kRocProfVisResultSuccess or an error code.
+*/
+rocprofvis_result_t rocprofvis_analysis_events_table_alloc(rocprofvis_dm_event_operation_t op, rocprofvis_handle_t** table);
+
+/*
 * Fetches rows for an analysis table.
 * @param controller The system trace controller instance.
 * @param table A table handle from one of the rocprofvis_analysis_get_*_events_table getters.
@@ -153,6 +168,11 @@ public:
     rocprofvis_result_t GetMemoryAllocationEventsTable(SystemTrace* trace, rocprofvis_handle_t** table);
     rocprofvis_result_t GetMemoryCopyEventsTable(SystemTrace* trace, rocprofvis_handle_t** table);
     rocprofvis_result_t GetLaunchSampleEventsTable(SystemTrace* trace, rocprofvis_handle_t** table);
+
+    // Unlike the Get* calls, the caller owns what comes back and frees it with
+    // rocprofvis_controller_table_free. Nothing is cached per trace, so two
+    // readers of the same operation do not share a row cache.
+    rocprofvis_result_t AllocEventsTable(rocprofvis_dm_event_operation_t op, rocprofvis_handle_t** table);
 
     void FreeTraceData(Trace* trace);
 

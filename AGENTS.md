@@ -11,13 +11,17 @@ live in `.agents/`:
 > - [`.agents/DATABASE.md`](./.agents/DATABASE.md) - deep dive on
 >   `src/model/` (SQLite adapters, query pipeline, packed table,
 >   data model, topology, metadata versioning)
+> - [`.agents/SCRIPTING.md`](./.agents/SCRIPTING.md) - planned in-app
+>   Python analysis (interpreter lib, controller ABI, phases)
 
 **If you are an AI coding assistant** (Cursor, Codex, Claude Code,
 Copilot agent, etc.), read `.agents/UI.md` in full before making
 non-trivial changes under `src/view/` or to UI-facing app integration.
 If your change touches `src/controller/`, also read
 `.agents/CONTROLLER.md`. If it touches `src/model/` (the database /
-data-model layer), also read `.agents/DATABASE.md`. Together these
+data-model layer), also read `.agents/DATABASE.md`. If it touches
+in-app Python scripting (`src/python/`, `rocprofvis_script_*`, or
+script UI), also read `.agents/SCRIPTING.md`. Together these
 guides are the single source of truth for:
 
 - Project identity, build, and repo layout
@@ -43,7 +47,9 @@ guides are the single source of truth for:
    deep dive (read when working on `src/controller/`)
 6. [`.agents/DATABASE.md`](./.agents/DATABASE.md) - database / model
    layer deep dive (read when working on `src/model/`)
-7. [`.github/CONTRIBUTING.md`](./.github/CONTRIBUTING.md) -
+7. [`.agents/SCRIPTING.md`](./.agents/SCRIPTING.md) - Python analysis
+   scripting design (read when working on `src/python/` or script ABI)
+8. [`.github/CONTRIBUTING.md`](./.github/CONTRIBUTING.md) -
    contribution workflow
 
 When `CODING.md` and the `.agents/` guides disagree, `CODING.md` wins.

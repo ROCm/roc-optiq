@@ -1343,7 +1343,8 @@ Roofline::RenderMenus(ImVec2 region, ImVec2 plot_pos, ImVec2 plot_size,
                    sv_height > ImGui::GetTextLineHeight() ? sv_height : -1.0f));
         ImGui::BeginChild("menus_scroll_view", ImVec2(menus_content_width, 0),
                           ImGuiChildFlags_AutoResizeY);
-        plot_hovered |= ImGui::IsWindowHovered(ImGuiHoveredFlags_RootAndChildWindows);
+        plot_hovered |= ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows |
+                                               ImGuiHoveredFlags_NoPopupHierarchy);
         scroll_bar_width = std::max(scroll_bar_width,
                                     ImGui::GetScrollMaxY() ? style.ScrollbarSize : 0.0f);
         ImGui::BeginChild("menus_scroll_view_content",

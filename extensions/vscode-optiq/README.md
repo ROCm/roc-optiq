@@ -38,10 +38,17 @@ you cannot check at a glance is not applied.
 cd extensions/vscode-optiq
 npm install
 npm run compile
+npx @vscode/vsce package --allow-missing-repository --skip-license
+code --install-extension optiq-loop-0.1.0.vsix   # or: cursor --install-extension
 ```
 
-Then load it: **Run and Debug > Run Extension** in VS Code, or package it with
-`npx @vscode/vsce package` and install the `.vsix`.
+Reload the window afterwards; it activates on startup and puts
+"Optiq loop attached" in the status bar.
+
+Install it in every window that should be able to edit - a Remote-SSH window
+runs its extensions on the remote host and will not see a local install. The
+Extensions view offers **Install in SSH: &lt;host&gt;** for that, or copy the
+`.vsix` over and run `code --install-extension` there.
 
 ## Configure the build
 

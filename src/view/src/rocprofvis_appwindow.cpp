@@ -2148,6 +2148,18 @@ AppWindow::ShowProfilerLauncher()
 }
 #endif  // ROCPROFVIS_ENABLE_PROFILER
 
+#ifdef ROCPROFVIS_ENABLE_CLOSED_LOOP
+ProfilerLauncherDialog*
+AppWindow::GetProfilerLauncher()
+{
+    if (!m_profiler_launcher_dialog)
+    {
+        m_profiler_launcher_dialog = std::make_unique<ProfilerLauncherDialog>(this);
+    }
+    return m_profiler_launcher_dialog.get();
+}
+#endif  // ROCPROFVIS_ENABLE_CLOSED_LOOP
+
 }  // namespace View
 }  // namespace RocProfVis
 

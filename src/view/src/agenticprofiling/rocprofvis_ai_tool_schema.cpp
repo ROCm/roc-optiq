@@ -50,6 +50,13 @@ const AssistantToolLabel ASSISTANT_TOOL_LABELS[] = {
 #ifdef ROCPROFVIS_ENABLE_SCRIPTING
     { "run_analysis_script", "Running an analysis script..." },
 #endif
+#ifdef ROCPROFVIS_ENABLE_CLOSED_LOOP
+    { "read_source", "Reading the source..." },
+    { "propose_code_change", "Offering a change..." },
+    { "list_launch_profiles", "Listing launch profiles..." },
+    { "propose_profile_run", "Offering a run..." },
+    { "loop_status", "Checking the loop..." },
+#endif
 };
 
 // Builds a JSON string array, for the enum of a tool parameter.
@@ -468,6 +475,13 @@ MakeAssistantToolsJson()
             "offer.",
             next_params);
 
+#if defined(ROCPROFVIS_ENABLE_SCRIPTING) || defined(ROCPROFVIS_ENABLE_CLOSED_LOOP)
+    // Optional tools are appended through a running index rather than a literal
+    // one: whichever of them a build has must land in consecutive slots, because
+    // a skipped index would leave a null in the array the model receives.
+    size_t next_tool = 20;
+#endif
+
 #ifdef ROCPROFVIS_ENABLE_SCRIPTING
     // This description is the only account the model gets of what a script may
     // use. Anything left out of it gets invented, so it names the whole surface
@@ -477,7 +491,7 @@ MakeAssistantToolsJson()
              "Python source, shown to the user before it runs. Report findings "
              "with optiq.result.text(...); nothing else is returned.");
     script_params["required"][0] = "script";
-    AddTool(tools, 20, "run_analysis_script",
+    AddTool(tools, next_tool++, "run_analysis_script",
             "Offer a Python script that analyses this trace. It does not run on "
             "its own: the editor opens with your source and the user presses Run "
             "or Reject, so write it to be read as well as executed - clear names, "
@@ -553,6 +567,71 @@ MakeAssistantToolsJson()
             "the traceback comes back to you naming the line: fix that line and "
             "offer it again.",
             script_params);
+#endif
+
+#ifdef ROCPROFVIS_ENABLE_CLOSED_LOOP
+    // The loop tools reach the editor and the profiler rather than the trace.
+    // Each says plainly that it only offers, because the whole contract is that
+    // nothing here happens without the user pressing Approve.
+    jt::Json read_params = ObjectParams();
+    AddParam(read_params, "file", "string",
+             "Path relative to the root of the workspace the editor has open.");
+    read_params["required"][0] = "file";
+    AddTool(tools, next_tool++, "read_source",
+            "Read a source file out of the editor's workspace. Always read before "
+            "you propose a change: what you match on has to be text that is "
+            "actually there. The file name comes from the call stack that "
+            "event_details returns for the event you are blaming.",
+            read_params);
+
+    jt::Json change_params = ObjectParams();
+    AddParam(change_params, "file", "string", "Path relative to the workspace root.");
+    AddParam(change_params, "find", "string",
+             "The exact text to replace, copied from read_source. Include enough "
+             "surrounding lines that it occurs exactly once in the file.");
+    AddParam(change_params, "replace", "string", "What to put in its place.");
+    AddParam(change_params, "why", "string",
+             "One line the user reads before deciding, naming the figure from the "
+             "trace that prompted it.");
+    change_params["required"][0] = "file";
+    change_params["required"][1] = "find";
+    change_params["required"][2] = "replace";
+    AddTool(tools, next_tool++, "propose_code_change",
+            "Offer one source change, and the build of the workspace behind it. "
+            "Nothing is written on your say-so: the user reads the change and "
+            "presses Approve or Reject. You get back whether it applied and "
+            "whether it built, with the compiler output when it did not - fix the "
+            "line that names and offer again. Only propose a change the trace "
+            "argues for, and say which number it should move.",
+            change_params);
+
+    jt::Json profiles_params = ObjectParams();
+    AddTool(tools, next_tool++, "list_launch_profiles",
+            "The launch profiles the user saved in File > Launch Profiler. A run "
+            "can only be offered by one of these names.",
+            profiles_params);
+
+    jt::Json run_params = ObjectParams();
+    AddParam(run_params, "profile", "string",
+             "A name from list_launch_profiles. You cannot name a command, a host, "
+             "or arguments: the profile already carries them.");
+    AddParam(run_params, "why", "string", "One line the user reads before deciding.");
+    run_params["required"][0] = "profile";
+    AddTool(tools, next_tool++, "propose_profile_run",
+            "Offer to profile again with a saved profile, local or over SSH. "
+            "Approved, it runs in the launcher the user already knows and opens "
+            "the trace it produced; from the second lap on it opens the comparison "
+            "against the previous one too. Offer it only once a change has been "
+            "applied and built, because re-profiling the same binary measures "
+            "nothing.",
+            run_params);
+
+    jt::Json loop_params = ObjectParams();
+    AddTool(tools, next_tool++, "loop_status",
+            "Whether an editor is attached, which workspace it has open, and the "
+            "traces this loop has produced. Call it before offering a change, and "
+            "whenever you want to quote a lap rather than guess at one.",
+            loop_params);
 #endif
 
     return tools;

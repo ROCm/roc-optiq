@@ -115,6 +115,9 @@ CMake options worth knowing:
 - `ROCPROFVIS_ENABLE_REMOTE` - enables SSH connection, browse, transfer,
   and remote-trace UI (default off). Remote profiling needs both remote
   and profiler support.
+- `ROCPROFVIS_ENABLE_CLOSED_LOOP` - enables the Ask Optiq closed loop
+  (default off). Configure fails unless `ROCPROFVIS_ENABLE_AGENTIC_PROFILING`
+  and `ROCPROFVIS_ENABLE_PROFILER` are both on.
 - `ROCPROFVIS_ENABLE_TRACE_COMPARE` - enables the in-development trace
   comparison UI (default off).
 - `ROCPROFVIS_MULTI_WINDOW` - enables the in-development multi-window
@@ -2118,6 +2121,106 @@ Rules that are easy to get wrong here:
   never in a log line.** `AssistantProvider` is the saved record in
   `UserSettings::assistant`, and holds only name, URL, and model.
 
+### Closed loop (`closedloop/rocprofvis_loop_*.{h,cpp}`)
+
+Profile, analyze, edit, profile again. The assistant's findings stop
+being advice and become a measured difference, because the same saved
+launch profile runs before and after the change.
+
+**Gated behind `ROCPROFVIS_ENABLE_CLOSED_LOOP`, default OFF**, and
+CMake *fails configure* unless `ROCPROFVIS_ENABLE_AGENTIC_PROFILING`
+and `ROCPROFVIS_ENABLE_PROFILER` are also on - it drives the assistant
+at one end and `ProfilerLauncherDialog` at the other, so a build with
+one of them missing could not link rather than merely misbehave.
+
+- `rocprofvis_loop_bridge.{h,cpp}` - `LoopBridge`, a
+  never-destroyed singleton. **This is to the loop what `OptiqActions`
+  is to the trace view: the one place that acts.** It holds the offer,
+  draws the ring and the Approve / Reject card, and - only once
+  approved - either POSTs to the editor or calls
+  `LaunchNamedPreset`. Add a capability here as one method.
+- `rocprofvis_loop_tools.cpp` - the five tools (`read_source`,
+  `propose_code_change`, `list_launch_profiles`,
+  `propose_profile_run`, `loop_status`) and their handler table.
+  **Compiled whenever the assistant is**, like
+  `rocprofvis_ai_script_tools.cpp`: with the loop off the table is
+  empty, so `StartAssistantTool` always has a fourth table to search
+  and the dispatcher knows nothing about the option.
+- `extensions/vscode-optiq/` - the editor half, installed separately.
+  Not built by CMake.
+
+**Optiq is the client, the extension is the server.** The extension
+listens on `127.0.0.1` with an ephemeral port and writes
+`optiq-ide.json` (port, per-session token, workspace, `remoteName`,
+`externalUrl`) into the Optiq config directory, removing it on shutdown
+- so a missing file is the honest answer to "is an editor attached".
+Both sides compute the config directory independently; the TS copy of
+`get_application_config_path()` is commented as such in both places and
+has to move with it.
+
+**Remote-SSH is reached through the profiling SSH pipeline, not a new
+one.** In a Remote-SSH window the extension host runs on the GPU box,
+so it writes its handshake on *that* filesystem and listens on *that*
+loopback. `Attach()` (behind `ROCPROFVIS_ENABLE_REMOTE`) builds a
+`RemoteUri` from the launch profile's `ssh_connection_ref` - or the
+only saved connection - and runs a `RemoteTraceOrchestrator` whose
+command is `cat "${XDG_CONFIG_HOME:-$HOME/.config}/rocm-optiq/optiq-ide.json"`.
+With no result path set the orchestrator stops after the execute phase,
+so the handshake arrives as `SshSession::GetExecutionOutput()` and
+nothing is downloaded. Auth prompts need no new UI: `AppWindow`'s
+`RenderSshAuthModals()` already walks `SshSession::ActiveSessions()`.
+Two things this leans on and must keep: **there is no SFTP upload and
+no port forwarding in the ABI** (`"Currently supports download only"`),
+which is why the editor stays the only writer and VS Code's own
+`asExternalUri` tunnel is what Optiq dials; and a handshake read off
+the remote is parsed with `require_tunnel`, because its bare `port`
+names a port on the *other* machine and honouring it would POST source
+at whatever happens to be listening on that number here. `Endpoint()`
+prefers a freshly-read local handshake over the attached remote one, so
+restarting a local editor needs no reattach, and every URL goes through
+`IsLoopbackUrl()`.
+
+**Nothing is written or launched without Approve.** `ProposeEdit` /
+`ProposeRun` park an offer and return empty; the refusal string they
+return instead is what the model is told when one cannot be made.
+`Render()` only sets `m_approve_requested` / `m_reject_requested`, and
+`Pending()` - polled from `AssistantPanel::Update()` - is what starts
+the work, so a tool never runs halfway through the frame drawing it.
+
+Rules that are easy to get wrong here:
+
+- **`AssistantFetchKind::kLoop` follows `kScript` everywhere.** It
+  needs the branch in `AnyFetchPending`, the exemption in the
+  `PollToolFetch` timeout (only that side knows whether the user simply
+  never answered, and it has an offer to clear), and the delegate in
+  `FinishAssistantFetch`. That last one sits **before** the
+  `data_provider == nullptr` check, because the loop spans traces and
+  an approved run still has a result if the tab it started on closed.
+- **A loop fetch is the one wait allowed to change the trace in
+  front.** The run opens the trace it produced, so `PollToolFetch`
+  re-pins `m_turn_project_id` for `kLoop` instead of abandoning the
+  turn the way it does for every other kind.
+- **Optional tools are appended with a running index.** The base twenty
+  use literals, but `run_analysis_script` and the loop tools share
+  `next_tool` in `MakeAssistantToolsJson`: a literal 20 plus a literal
+  21 would leave a null in the array whenever scripting was off.
+- **The model names a saved profile, never a command.**
+  `LaunchNamedPreset` is the whole launch surface, and it loads the
+  preset exactly as the saved-profile bar does. There is deliberately
+  no way to pass argv, a host, or a tool - a launch a model composed is
+  not one the user reviewed.
+- **The edit must match exactly once.** The extension refuses a `find`
+  string that appears zero or several times, because a change that
+  could land in two places is not one the user can check at a glance.
+- **`LoopBridge` is never destroyed on purpose.** An approved build can
+  still be running at exit, and `~future` would block shutdown on it.
+- **`loop_status` is also how an editor is found.** It answers at once
+  when one is already attached, and otherwise starts `Attach()` and
+  parks - which is why the prompt tells the model to call it before
+  offering a change. `kAttach` is the one `LoopAction` that needs no
+  approval: it reads one config file over a connection the user already
+  authorised for profiling.
+
 ## 13. Remote / SSH and Profiler Launch UI
 
 These optional UI slices are separate from trace-project tabs until a
@@ -2964,9 +3067,15 @@ All under `agenticprofiling/`, compiled only with
   table.
 - `AssistantToolEntry`, `AssistantToolTable`,
   `GetAssistantUiToolHandlers`, `GetAssistantDataToolHandlers`,
-  `GetAssistantScriptToolHandlers`, `FinishAssistantScriptFetch` ->
+  `GetAssistantScriptToolHandlers`, `GetAssistantLoopToolHandlers`,
+  `FinishAssistantScriptFetch`, `FinishAssistantLoopFetch` ->
   `agenticprofiling/rocprofvis_ai_tools_internal.h` -> Private to the
-  folder; do not include it from elsewhere.
+  folder, with one exception: `closedloop/rocprofvis_loop_tools.cpp`
+  includes it to define its own table.
+- `LoopBridge`, `LoopState`, `LoopAction` ->
+  `closedloop/rocprofvis_loop_bridge.h` -> The only code that acts on
+  the loop's behalf: the editor bridge, the lap ring, and the
+  Approve / Reject card. Needs `ROCPROFVIS_ENABLE_CLOSED_LOOP`.
 - `run_analysis_script` -> `agenticprofiling/rocprofvis_ai_script_tools.cpp`
   -> Runs model-written Python through `DataProvider::ExecuteScript`.
   Needs `ROCPROFVIS_ENABLE_SCRIPTING` as well; the table is empty

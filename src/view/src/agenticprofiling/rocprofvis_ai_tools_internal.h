@@ -58,10 +58,17 @@ struct AssistantToolTable
 AssistantToolTable GetAssistantUiToolHandlers();
 AssistantToolTable GetAssistantDataToolHandlers();
 AssistantToolTable GetAssistantScriptToolHandlers();
+// Lives in closedloop/, which is the only part of the tool set outside this
+// directory: it drives the editor and the profiler rather than the trace.
+AssistantToolTable GetAssistantLoopToolHandlers();
 
 // Formats a finished script run, or the decision that stopped it. Reached
 // through FinishAssistantFetch like every other fetch kind.
 std::string FinishAssistantScriptFetch(const AssistantToolContext& context);
+
+// The same for a closed-loop proposal: what the user decided, and what the
+// edit, build, or run they approved produced.
+std::string FinishAssistantLoopFetch();
 
 // --- Helpers both halves need, defined beside the dispatcher ---------------
 

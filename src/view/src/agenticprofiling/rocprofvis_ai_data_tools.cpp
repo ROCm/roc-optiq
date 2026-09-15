@@ -1790,6 +1790,12 @@ std::string
 FinishAssistantFetch(const AssistantToolContext& context,
                      const AssistantFetchState&  fetch)
 {
+    // Answered before the trace check: the loop spans traces, so a proposal the
+    // user approved still has a result even if the tab it started on has gone.
+    if(fetch.kind == AssistantFetchKind::kLoop)
+    {
+        return FinishAssistantLoopFetch();
+    }
     if(context.data_provider == nullptr)
     {
         return "No trace is open.";

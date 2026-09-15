@@ -786,6 +786,12 @@ AssistantPanel::AnyFetchPending(const AssistantToolContext& context) const
     {
         return AssistantScriptFetchPending(context);
     }
+    // A loop proposal waits on the user, then on the editor build or the
+    // profiler run they approved. None of those is a data request either.
+    if(m_fetch_wait.fetch.kind == AssistantFetchKind::kLoop)
+    {
+        return AssistantLoopFetchPending();
+    }
     // Nothing was queried yet: this tool is waiting on the trace itself, so the
     // provider's own state is what says whether the wait is over.
     if(m_fetch_wait.fetch.kind == AssistantFetchKind::kTraceLoading)
@@ -813,7 +819,11 @@ AssistantPanel::PollToolFetch()
     RenderScheduler::GetInstance().RequestRender();
 
     const AssistantToolContext context = MakeToolContext();
-    if(context.data_provider == nullptr)
+    // A loop proposal is the one wait that outlives the trace it started on:
+    // the user may well close it while a build runs. Every kLoop branch below
+    // answers without touching the provider, so it is allowed through.
+    if(context.data_provider == nullptr &&
+       m_fetch_wait.fetch.kind != AssistantFetchKind::kLoop)
     {
         // Warmup has no pending tool call, so FinishCurrentTool would wrongly
         // treat the empty queue as "tools done" and start an HTTP turn.
@@ -828,7 +838,14 @@ AssistantPanel::PollToolFetch()
         return;
     }
 
-    if(!m_fetch_wait.warmup && CurrentProjectId() != m_turn_project_id)
+    // A loop fetch is the one wait that is meant to change the trace in front:
+    // the run the user approved opens the trace it produced. Re-pin to it
+    // instead of abandoning the turn that asked for it.
+    if(m_fetch_wait.fetch.kind == AssistantFetchKind::kLoop)
+    {
+        m_turn_project_id = CurrentProjectId();
+    }
+    else if(!m_fetch_wait.warmup && CurrentProjectId() != m_turn_project_id)
     {
         FinishCurrentTool("The trace in front changed, so this tool's pending "
                           "data belongs to a different trace. Run it again on "
@@ -883,10 +900,11 @@ AssistantPanel::PollToolFetch()
         return;
     }
 
-    // A script is answered by its own tool even when the wait runs out: only
-    // that side knows whether the user never replied or the run was abandoned,
-    // and it has an outstanding offer to clear either way.
-    if(pending && m_fetch_wait.fetch.kind != AssistantFetchKind::kScript)
+    // A script and a loop proposal are answered by their own side even when the
+    // wait runs out: only that side knows whether the user never replied or the
+    // work was abandoned, and each has an outstanding offer to clear either way.
+    if(pending && m_fetch_wait.fetch.kind != AssistantFetchKind::kScript &&
+       m_fetch_wait.fetch.kind != AssistantFetchKind::kLoop)
     {
         FinishCurrentTool("Timed out waiting for " + m_fetch_wait.tool_name + ".");
         return;

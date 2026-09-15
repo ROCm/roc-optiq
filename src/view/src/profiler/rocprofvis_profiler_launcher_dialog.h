@@ -45,6 +45,25 @@ public:
     void Render();
     void Update();
 
+#ifdef ROCPROFVIS_ENABLE_CLOSED_LOOP
+    // What the closed loop is allowed to do with the launcher, and no more. It
+    // can name a profile the user already saved and read back how that run went;
+    // it cannot author a command line, a host, or a tool. Launching opens the
+    // dialog on its run view, so an assistant-started run is watched and
+    // cancelled exactly like a hand-started one.
+    std::vector<std::string> ListPresetNames() const;
+    bool                     LaunchNamedPreset(std::string const& name);
+    bool                     IsRunActive() const;
+    // Empty until a run produces a trace; cleared by the next launch, so it
+    // always describes the most recent run rather than any earlier one.
+    std::string              LastTracePath() const;
+    std::string              LastRunError() const;
+    // The SSH connection profile the loaded config runs against, so the loop can
+    // look for a Remote-SSH editor on the host it already profiles. Empty for a
+    // local profile.
+    std::string              CurrentSshConnectionId() const;
+#endif
+
 private:
     struct ExecutionCache
     {

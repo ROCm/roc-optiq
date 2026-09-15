@@ -23,6 +23,9 @@
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_timeline_selection.h"
 #include "widgets/rocprofvis_gui_helpers.h"
+#ifdef ROCPROFVIS_ENABLE_CLOSED_LOOP
+#    include "closedloop/rocprofvis_loop_bridge.h"
+#endif
 
 namespace RocProfVis
 {
@@ -626,6 +629,13 @@ AssistantPanel::RenderComposer()
 
     BeginPanelCard("##assistant_composer", PanelCardTone::kFrame, ASSISTANT_CARD_PADDING,
                    true, &settings);
+
+#ifdef ROCPROFVIS_ENABLE_CLOSED_LOOP
+    // The lap ring and any Approve / Reject card. Above the follow-ups because
+    // an open proposal is the one thing the user has to answer before anything
+    // else moves. It only records the answer; Update() acts on it.
+    LoopBridge::GetInstance().Render();
+#endif
 
     RenderSuggestedActions();
 

@@ -254,6 +254,40 @@ or not the option is on, so switching between builds does not discard an
 assistant configuration. The API token itself lives in the OS credential store
 and is only reachable from a build with the option enabled.
 
+## Closed loop (profile, edit, profile again)
+
+`-DROCPROFVIS_ENABLE_CLOSED_LOOP=ON` lets the assistant offer a source change
+and a re-profile, so a finding can be measured rather than only described. It
+is **disabled by default** and requires `-DROCPROFVIS_ENABLE_AGENTIC_PROFILING=ON`
+and `-DROCPROFVIS_ENABLE_PROFILER=ON`; configure fails with an explicit message
+otherwise. It pulls in no dependency the assistant did not already bring.
+
+Nothing is written or launched on the assistant's say-so. Each change and each
+run is a card in the Ask Optiq panel with **Approve** and **Reject**, and an
+approved run opens the profiler launcher so it is watched and cancelled like
+any other.
+
+The editor half is a VS Code / Cursor extension in
+[`extensions/vscode-optiq/`](extensions/vscode-optiq/README.md), installed
+separately and not built by CMake:
+
+```bash
+cd extensions/vscode-optiq
+npm install
+npm run compile
+```
+
+Set `optiq.buildCommand` in the editor's settings to whatever rebuilds your
+project.
+
+Two topologies work. With the editor on the same machine as Optiq, the
+extension writes its handshake where Optiq looks and everything is local. With
+the workspace open on the profiling host over **Remote-SSH**, the extension
+asks VS Code to forward its port back to your machine and Optiq reads the
+remote handshake over the SSH connection from your launch profile - so this
+needs `-DROCPROFVIS_ENABLE_REMOTE=ON` as well, and a saved SSH launch profile
+(or exactly one saved SSH connection) so Optiq knows which host to ask.
+
 ## Remote / SSH support
 
 Remote/SSH connectivity and remote profiling are opt-in and **disabled by

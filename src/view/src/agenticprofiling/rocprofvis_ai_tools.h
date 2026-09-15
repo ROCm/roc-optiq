@@ -48,6 +48,10 @@ enum class AssistantFetchKind
     // A Python analysis script, which answers with its own text rather than
     // rows to format.
     kScript,
+    // A closed-loop proposal: a source change, or a run of a saved launch
+    // profile. Like kScript the wait is on a person, and then on the build or
+    // the run they approved.
+    kLoop,
     // The trace was still loading when the tool was called. Nothing has been
     // queried yet: the panel parks until the trace is ready and then runs the
     // tool for real, so a big file is waited out rather than reported as a
@@ -132,6 +136,12 @@ AssistantToolStartResult StartAssistantTool(const AssistantToolContext& context,
 // so the panel asks here rather than polling the data provider. Always false
 // when scripting is not built in.
 bool AssistantScriptFetchPending(const AssistantToolContext& context);
+
+// The same question for a parked kLoop fetch: whether the proposal is still
+// with the user, or the edit-and-build / profiler run they approved is still
+// going. Takes no context because the loop spans traces rather than belonging
+// to one. Always false when the closed loop is not built in.
+bool AssistantLoopFetchPending();
 
 // Formats the rows of a fetch that has landed.
 std::string FinishAssistantFetch(const AssistantToolContext& context,

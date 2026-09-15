@@ -1393,6 +1393,77 @@ void ProfilerLauncherDialog::OnLaunchClicked()
     }
 }
 
+#ifdef ROCPROFVIS_ENABLE_CLOSED_LOOP
+std::vector<std::string> ProfilerLauncherDialog::ListPresetNames() const
+{
+    std::vector<std::string> names;
+    for (PresetInfo const& preset : m_preset_manager.ListPresets(m_config.profiler_id))
+    {
+        names.push_back(preset.name);
+    }
+    return names;
+}
+
+bool ProfilerLauncherDialog::LaunchNamedPreset(std::string const& name)
+{
+    // Same steps the saved-profile bar takes, so a profile launched from the
+    // assistant is configured exactly as one the user picked by hand.
+    LaunchConfig loaded;
+    if (!m_preset_manager.LoadPreset(name, m_config.profiler_id, loaded))
+    {
+        m_error_message = "No saved launch profile named \"" + name + "\".";
+        return false;
+    }
+
+    m_config                = loaded;
+    m_execution_cache_dirty = true;
+    m_backends[m_backend_index]->LoadSettings(m_config.backend_payload);
+    SyncToolWithBackend();
+    m_current_preset_name = name;
+#ifdef ROCPROFVIS_ENABLE_REMOTE
+    if (!m_config.ssh_connection_ref.empty() &&
+        m_connection_store.Get(m_config.ssh_connection_ref) != nullptr)
+    {
+        m_selected_connection_id = m_config.ssh_connection_ref;
+        ApplySelectedConnection();
+    }
+#endif
+
+    // Show before launching: Show() resets to the configuration view when
+    // nothing is running, and OnLaunchClicked is what swaps to the run view.
+    Show();
+    OnLaunchClicked();
+    return m_orchestrator.IsRunning();
+}
+
+bool ProfilerLauncherDialog::IsRunActive() const
+{
+    return m_orchestrator.IsRunning();
+}
+
+std::string ProfilerLauncherDialog::LastTracePath() const
+{
+    return m_orchestrator.GetTracePath();
+}
+
+std::string ProfilerLauncherDialog::LastRunError() const
+{
+    if (!m_error_message.empty())
+    {
+        return m_error_message;
+    }
+    // A remote run fails with a phase message ("SSH authentication failed") that
+    // the generic launch error does not carry.
+    std::string const remote = m_orchestrator.GetRemoteStatusMessage();
+    return remote.empty() ? m_orchestrator.GetLaunchError() : remote;
+}
+
+std::string ProfilerLauncherDialog::CurrentSshConnectionId() const
+{
+    return m_config.ssh_connection_ref;
+}
+#endif  // ROCPROFVIS_ENABLE_CLOSED_LOOP
+
 void ProfilerLauncherDialog::OnCancelClicked()
 {
     // Cancelling sets the orchestrator state to Cancelled; the epilogue line is

@@ -37,6 +37,17 @@ option(ROCPROFVIS_ENABLE_PROFILER "Build with in-app profiler launch support (in
 option(ROCPROFVIS_ENABLE_REMOTE "Build with remote/SSH support (in development)" OFF)
 option(ROCPROFVIS_ENABLE_AGENTIC_PROFILING "Build with the Ask Optiq assistant (in development)" OFF)
 option(ROCPROFVIS_ENABLE_SCRIPTING "Build with embedded Python analysis scripts (in development)" OFF)
+# TEMPORARY (closed loop): the assistant-driven profile -> edit -> profile cycle.
+# It drives the profiler launcher and the VS Code / Cursor extension, so it needs
+# both the assistant and profiler launch; the editor half lives in
+# extensions/vscode-optiq and is installed separately.
+option(ROCPROFVIS_ENABLE_CLOSED_LOOP "Build with the Ask Optiq closed loop (in development)" OFF)
+if(ROCPROFVIS_ENABLE_CLOSED_LOOP AND
+   NOT (ROCPROFVIS_ENABLE_AGENTIC_PROFILING AND ROCPROFVIS_ENABLE_PROFILER))
+    message(FATAL_ERROR
+        "ROCPROFVIS_ENABLE_CLOSED_LOOP requires ROCPROFVIS_ENABLE_AGENTIC_PROFILING "
+        "and ROCPROFVIS_ENABLE_PROFILER.")
+endif()
 
 # The two flags are independent: profiler launch builds without remote (the
 # SSH connection UI inside the launcher is compiled out via
@@ -66,6 +77,9 @@ endif(ROCPROFVIS_ENABLE_AGENTIC_PROFILING)
 if(ROCPROFVIS_ENABLE_SCRIPTING)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DROCPROFVIS_ENABLE_SCRIPTING")
 endif(ROCPROFVIS_ENABLE_SCRIPTING)
+if(ROCPROFVIS_ENABLE_CLOSED_LOOP)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DROCPROFVIS_ENABLE_CLOSED_LOOP")
+endif(ROCPROFVIS_ENABLE_CLOSED_LOOP)
 if(ROCPROFVIS_ENABLE_INTERNAL_BANNER)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DROCPROFVIS_ENABLE_INTERNAL_BANNER")
 endif(ROCPROFVIS_ENABLE_INTERNAL_BANNER)
@@ -277,8 +291,21 @@ list(APPEND VIEW_FILES
     src/view/src/agenticprofiling/rocprofvis_ai_tools_internal.h
     src/view/src/agenticprofiling/rocprofvis_ai_trace_view_actions.cpp
     src/view/src/agenticprofiling/rocprofvis_ai_ui_tools.cpp
+    # Always compiled with the assistant so the dispatcher has a table to
+    # search; the table is empty without ROCPROFVIS_ENABLE_CLOSED_LOOP.
+    src/view/src/closedloop/rocprofvis_loop_tools.cpp
 )
 endif(ROCPROFVIS_ENABLE_AGENTIC_PROFILING)
+
+# TEMPORARY (closed loop): the editor bridge and the lap ring. Guarded on its
+# own flag, which CMake has already checked implies the assistant and the
+# profiler launcher.
+if(ROCPROFVIS_ENABLE_CLOSED_LOOP)
+list(APPEND VIEW_FILES
+    src/view/src/closedloop/rocprofvis_loop_bridge.cpp
+    src/view/src/closedloop/rocprofvis_loop_bridge.h
+)
+endif(ROCPROFVIS_ENABLE_CLOSED_LOOP)
 
 # TEMPORARY (remote profiling): the remote profiler session bridges the
 # profiler and remote features, so it needs both flags.
@@ -393,8 +420,14 @@ if(ROCPROFVIS_ENABLE_AGENTIC_PROFILING)
     target_link_libraries(${TARGET_NAME} PRIVATE cpp-httplib)
     # httplib.h is one 21k-line header, which overruns the default section limit.
     if(MSVC)
+        set(ROCPROFVIS_HTTPLIB_SOURCES
+            src/view/src/agenticprofiling/rocprofvis_ai_client.cpp)
+        if(ROCPROFVIS_ENABLE_CLOSED_LOOP)
+            list(APPEND ROCPROFVIS_HTTPLIB_SOURCES
+                src/view/src/closedloop/rocprofvis_loop_bridge.cpp)
+        endif()
         set_source_files_properties(
-            src/view/src/agenticprofiling/rocprofvis_ai_client.cpp PROPERTIES
+            ${ROCPROFVIS_HTTPLIB_SOURCES} PROPERTIES
             COMPILE_OPTIONS "/bigobj"
         )
     endif()

@@ -107,6 +107,13 @@ public:
 #ifdef ROCPROFVIS_ENABLE_PROFILER
     void ShowProfilerLauncher();  // TEMPORARY (profiler launch)
 #endif
+#ifdef ROCPROFVIS_ENABLE_CLOSED_LOOP
+    // The launcher, created on demand. The closed loop drives the profiler
+    // through it rather than through a session of its own, so a run the
+    // assistant started shows up in the same console, with the same Cancel, as
+    // one the user started.
+    ProfilerLauncherDialog* GetProfilerLauncher();
+#endif
 
     void SetFullscreenState(bool is_fullscreen);
     bool GetFullscreenState() const;

@@ -37,6 +37,37 @@ constexpr float kSplitterWidth       = 6.0f;
 constexpr float kMinPreviewWidth     = 300.0f;
 constexpr float kMinFormWidth        = 320.0f;
 constexpr float kInitialPreviewRatio = 2.0f / 5.0f;
+
+// Inner padding for the advanced-window tab panels (matches the main cards).
+constexpr float kAdvancedTabPadX     = 14.0f;
+constexpr float kAdvancedTabPadY     = 10.0f;
+
+// In-body header (icon + title, trailing close "x", separator) that replaces the
+// native title bar on the frameless profiler windows. Returns true when closed.
+bool RenderDialogHeader(const char* icon, const char* title)
+{
+    SettingsManager&  settings = SettingsManager::Get();
+    FontManager&      fonts    = settings.GetFontManager();
+    const ImGuiStyle& style    = ImGui::GetStyle();
+
+    ImGui::PushFont(fonts.GetFont(FontType::kIcon), ImGui::GetFontSize());
+    ImGui::PushStyleColor(ImGuiCol_Text, settings.GetColor(Colors::kAccent));
+    ImGui::AlignTextToFramePadding();
+    ImGui::TextUnformatted(icon);
+    ImGui::PopStyleColor();
+    ImGui::PopFont();
+
+    ImGui::SameLine(0.0f, style.ItemInnerSpacing.x);
+    ImGui::AlignTextToFramePadding();
+    ImGui::TextUnformatted(title);
+
+    ImGui::SameLine();
+    ImGui::SetCursorPosX(ImGui::GetWindowContentRegionMax().x - ImGui::GetFrameHeight());
+    bool close_clicked = XButton("##dialog_close", "Close", &settings);
+
+    ImGui::Separator();
+    return close_clicked;
+}
 }  // namespace
 
 ProfilerLauncherDialog::ProfilerLauncherDialog(AppWindow* app_window)
@@ -139,10 +170,16 @@ void ProfilerLauncherDialog::Render()
 
     bool window_open = true;
     bool visible     = ImGui::Begin("Launch Profiler", &window_open,
-                                    ImGuiWindowFlags_NoScrollbar);
+                                    ImGuiWindowFlags_NoScrollbar |
+                                        ImGuiWindowFlags_NoTitleBar);
     if (visible)
     {
         ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, def.ItemSpacing);
+
+        if (RenderDialogHeader(ICON_CHART_BAR, "Launch Profiler"))
+        {
+            window_open = false;
+        }
 
         // The dialog is a small two-step wizard: author the run (configure), then
         // watch it (run). Splitting them keeps the configuration uncluttered and
@@ -582,6 +619,10 @@ void ProfilerLauncherDialog::RenderMainContent()
 
     if (!advanced_tabs.empty())
     {
+        ImGui::Spacing();
+        // Indent to line up with the cards' inner content (inset by card padding).
+        const float adv_indent = SettingsManager::Get().GetDefaultStyle().WindowPadding.x;
+        ImGui::Indent(adv_indent);
         if (ImGui::Button("Advanced Options...", ImVec2(180, 0)))
         {
             m_show_advanced_window = true;
@@ -590,6 +631,8 @@ void ProfilerLauncherDialog::RenderMainContent()
         {
             ImGui::SetTooltip("Sampling, ROCm domains, Perfetto, parallelism, logging");
         }
+        ImGui::Unindent(adv_indent);
+        ImGui::Spacing();
     }
     ImGui::EndChild();
 
@@ -674,10 +717,16 @@ void ProfilerLauncherDialog::RenderAdvancedWindow()
     ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, def.WindowRounding);
 
     bool open    = true;
-    bool visible = ImGui::Begin("Advanced Profiling Options", &open);
+    bool visible = ImGui::Begin("Advanced Profiling Options", &open,
+                                ImGuiWindowFlags_NoTitleBar);
     if (visible)
     {
         ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, def.ItemSpacing);
+
+        if (RenderDialogHeader(ICON_GEAR, "Advanced Profiling Options"))
+        {
+            open = false;
+        }
 
         ImGui::TextDisabled("Fine-grained settings, applied on top of the selected preset.");
         ImGui::Spacing();
@@ -724,9 +773,22 @@ void ProfilerLauncherDialog::RenderAdvancedWindow()
                 if (ImGui::BeginTabItem(tab.display_name.c_str()))
                 {
                     ImGui::Spacing();
-                    ImGui::BeginChild("adv_scroll", ImVec2(0.0f, 0.0f), ImGuiChildFlags_None);
+                    // Wrap the tab body in a padded card, matching the main dialog.
+                    SettingsManager& card_settings = SettingsManager::Get();
+                    ImGui::PushStyleColor(ImGuiCol_ChildBg,
+                                          card_settings.GetColor(Colors::kBgPanel));
+                    ImGui::PushStyleColor(ImGuiCol_Border,
+                                          card_settings.GetColor(Colors::kPanelBorderSubtle));
+                    ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, PANEL_CARD_ROUNDING);
+                    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
+                                        ImVec2(kAdvancedTabPadX, kAdvancedTabPadY));
+                    ImGui::BeginChild("adv_scroll", ImVec2(0.0f, 0.0f),
+                                      ImGuiChildFlags_Borders |
+                                          ImGuiChildFlags_AlwaysUseWindowPadding);
                     m_execution_cache_dirty |= tab.render_fn();
                     ImGui::EndChild();
+                    ImGui::PopStyleVar(2);
+                    ImGui::PopStyleColor(2);
                     ImGui::EndTabItem();
                 }
             }
@@ -770,14 +832,14 @@ void ProfilerLauncherDialog::RenderArgsEnvPanel()
                     "Passed to the profiler, one entry at a time (a flag, or a flag + value).");
 
     bool add_arg = false;
-    ImGui::SetNextItemWidth(-90.0f);
+    ImGui::SetNextItemWidth(-(kLaunchActionButtonWidth + style.ItemSpacing.x));
     if (InputTextStringWithHint("##ArgInput", "e.g.  --sampling-freq 500",
                                 m_arg_input, ImGuiInputTextFlags_EnterReturnsTrue))
     {
         add_arg = true;
     }
     ImGui::SameLine();
-    if (ImGui::Button("Add##Arg", ImVec2(80.0f, 0.0f)))
+    if (ImGui::Button("Add##Arg", ImVec2(kLaunchActionButtonWidth, 0.0f)))
     {
         add_arg = true;
     }
@@ -843,14 +905,14 @@ void ProfilerLauncherDialog::RenderArgsEnvPanel()
     ImGui::AlignTextToFramePadding();
     ImGui::TextUnformatted("=");
     ImGui::SameLine();
-    ImGui::SetNextItemWidth(-90.0f);
+    ImGui::SetNextItemWidth(-(kLaunchActionButtonWidth + style.ItemSpacing.x));
     if (InputTextStringWithHint("##EnvValue", "value", m_env_value_input,
                                 ImGuiInputTextFlags_EnterReturnsTrue))
     {
         add_env = true;
     }
     ImGui::SameLine();
-    if (ImGui::Button("Add##Env", ImVec2(80.0f, 0.0f)))
+    if (ImGui::Button("Add##Env", ImVec2(kLaunchActionButtonWidth, 0.0f)))
     {
         add_env = true;
     }
@@ -1079,7 +1141,7 @@ void ProfilerLauncherDialog::RenderButtonRow()
     {
         ImGui::BeginDisabled();
     }
-    if (AccentButton("Launch Profiler", ImVec2(160, 0)))
+    if (AccentButton("Launch Profiler", ImVec2(0, 0)))
     {
         OnLaunchClicked();
     }
@@ -1098,7 +1160,7 @@ void ProfilerLauncherDialog::RenderButtonRow()
     if (has_run_view && !m_output_text.empty())
     {
         ImGui::SameLine();
-        if (ImGui::Button(is_running ? "View Run" : "View Last Run", ImVec2(130, 0)))
+        if (ImGui::Button(is_running ? "View Run" : "View Last Run", ImVec2(0, 0)))
         {
             m_show_run_view = true;
         }
@@ -1154,7 +1216,8 @@ void ProfilerLauncherDialog::RenderRunButtonRow()
         }
 
         ImGui::SameLine();
-        if (ImGui::Button("Back to Configuration", ImVec2(190, 0)))
+        // Auto-size so the label is never clipped at high DPI.
+        if (ImGui::Button("Back to Configuration", ImVec2(0, 0)))
         {
             m_show_run_view = false;
         }

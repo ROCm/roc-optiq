@@ -51,19 +51,20 @@ InputTextStringWithHint(const char* id, const char* hint, std::string& str,
                         ImGuiInputTextFlags flags)
 {
     bool input_changed = InputTextString(id, str, flags);
-    if(str.empty())
+    if(str.empty() && hint && hint[0])
     {
-        const float& padding = ImGui::GetStyle().FramePadding.x;
-        ImGui::BeginDisabled();
-        ImGui::SetCursorScreenPos(
-            ImVec2(ImGui::GetItemRectMin().x + padding, ImGui::GetItemRectMin().y));
-        if(ElidedText(hint, ImGui::GetItemRectSize().x - 2.0f * padding, 0.0f,
-                   Alignment_Left, true) && BeginItemTooltipStyled())
-        {
-            ImGui::TextUnformatted(hint);
-            EndTooltipStyled();
-        }
-        ImGui::EndDisabled();
+        // Draw the placeholder as a decorative draw-list overlay (clipped,
+        // vertically centered). It must not add a layout item, or it would shift
+        // the caller's following SameLine() widget.
+        const ImVec2 mn  = ImGui::GetItemRectMin();
+        const ImVec2 mx  = ImGui::GetItemRectMax();
+        const float  pad = ImGui::GetStyle().FramePadding.x;
+        const float  th  = ImGui::GetTextLineHeight();
+        ImDrawList*  dl  = ImGui::GetWindowDrawList();
+        dl->PushClipRect(ImVec2(mn.x + pad, mn.y), ImVec2(mx.x - pad, mx.y), true);
+        dl->AddText(ImVec2(mn.x + pad, mn.y + ((mx.y - mn.y) - th) * 0.5f),
+                    ImGui::GetColorU32(ImGuiCol_TextDisabled), hint);
+        dl->PopClipRect();
     }
     return input_changed;
 }

@@ -9,6 +9,7 @@
 #include <array>
 #include <filesystem>
 #include <list>
+#include <map>
 #include <string>
 #include <vector>
 
@@ -44,6 +45,49 @@ typedef struct LogViewerSettings
     bool visible;
 } LogViewerSettings;
 
+// Chat endpoint. The settings panel asks for URL, model, and API key; how the
+// key and model are presented is worked out from the URL by the client, so
+// nothing about the endpoint shape is stored here.
+constexpr const char* ASSISTANT_DEFAULT_PROVIDER_NAME = "Default";
+constexpr const char* ASSISTANT_DEFAULT_MODEL         = "gpt-5.6-luna";
+
+// One saved endpoint. Name is the credential-store key, not a display label.
+typedef struct AssistantProvider
+{
+    std::string name = ASSISTANT_DEFAULT_PROVIDER_NAME;
+    std::string endpoint_url;
+    std::string model = ASSISTANT_DEFAULT_MODEL;
+} AssistantProvider;
+
+// Fills in an empty name or model, so a half-written settings file still runs.
+inline void
+ApplyAssistantEndpointDefaults(AssistantProvider& provider)
+{
+    if(provider.name.empty())
+    {
+        provider.name = ASSISTANT_DEFAULT_PROVIDER_NAME;
+    }
+    if(provider.model.empty())
+    {
+        provider.model = ASSISTANT_DEFAULT_MODEL;
+    }
+}
+
+// A provider with nothing configured but the defaults.
+inline AssistantProvider
+MakeDefaultAssistantProvider()
+{
+    AssistantProvider provider;
+    ApplyAssistantEndpointDefaults(provider);
+    return provider;
+}
+
+typedef struct AssistantSettings
+{
+    std::vector<AssistantProvider> providers;
+    size_t                         active = 0;
+} AssistantSettings;
+
 typedef struct UserSettings
 {
     DisplaySettings   display_settings;
@@ -52,6 +96,7 @@ typedef struct UserSettings
     bool              dont_ask_before_exit;
     int               log_viewer_max_entries;
     LogViewerSettings log_viewer;
+    AssistantSettings assistant;
     // Linux/Wayland only: repair pointer routing after a floating window is
     // dragged, at the cost of a brief flicker on each drag-release. Set with
     // --drag-repair and ignored on other platforms. See
@@ -264,6 +309,22 @@ constexpr const char* JSON_KEY_SETTINGS_LOG_VIEWER_VISIBLE       = "log_viewer_v
 // All six severity levels enabled (bits 0..5).
 constexpr int LOG_VIEWER_DEFAULT_LEVEL_MASK = 0x3F;
 
+constexpr const char* JSON_KEY_SETTINGS_CATEGORY_APP_WINDOW      = "app_window";
+constexpr const char* JSON_KEY_SETTINGS_APP_WINDOW_TOOLBAR       = "show_toolbar";
+constexpr const char* JSON_KEY_SETTINGS_APP_WINDOW_DETAILS_PANEL = "show_details_panel";
+constexpr const char* JSON_KEY_SETTINGS_APP_WINDOW_SIDEBAR       = "show_sidebar";
+constexpr const char* JSON_KEY_SETTINGS_APP_WINDOW_HISTOGRAM     = "show_histogram";
+constexpr const char* JSON_KEY_SETTINGS_APP_WINDOW_SUMMARY       = "show_summary";
+
+constexpr const char* JSON_KEY_SETTINGS_CATEGORY_ASSISTANT = "assistant";
+constexpr const char* JSON_KEY_SETTINGS_ASSISTANT_ENDPOINT_URL = "endpoint_url";
+constexpr const char* JSON_KEY_SETTINGS_ASSISTANT_MODEL        = "model";
+constexpr const char* JSON_KEY_SETTINGS_ASSISTANT_PROVIDERS    = "providers";
+constexpr const char* JSON_KEY_SETTINGS_ASSISTANT_ACTIVE       = "active";
+constexpr const char* JSON_KEY_SETTINGS_ASSISTANT_NAME         = "name";
+// OS credential-store key for the assistant API token. Never written to JSON.
+constexpr const char* ASSISTANT_TOKEN_SECRET_KEY = "assistant-api-token";
+
 constexpr const char* JSON_KEY_SETTINGS_CATEGORY_HOTKEYS = "hotkeys";
 constexpr const char* JSON_KEY_SETTINGS_CATEGORY_PROFILER = "profiler";
 constexpr const char* JSON_KEY_SETTINGS_PROFILER_OUTPUT_DIR = "profiler_output_directory";
@@ -317,6 +378,24 @@ public:
     ProfilerSettings& GetProfilerSettings();
     void SaveProfilerSettings();
 
+    // The route the assistant should use, or nullptr when none is configured.
+    const AssistantProvider* GetActiveAssistantProvider() const;
+
+    // Assistant API token, one per provider. Stored in the OS credential vault
+    // when available, otherwise held in process memory only. Never written to
+    // settings JSON. Guarded because these are the only users of SecretStore
+    // outside remote; the provider URL and model above stay compiled either way,
+    // so a settings file survives a build that has the assistant switched off.
+#ifdef ROCPROFVIS_ENABLE_AGENTIC_PROFILING
+    bool HasAssistantToken(const std::string& provider_name) const;
+    bool GetAssistantToken(const std::string& provider_name, std::string& out_token) const;
+    bool SetAssistantToken(const std::string& provider_name, const std::string& token);
+    bool ClearAssistantToken(const std::string& provider_name);
+    // Names the endpoint that owns a key saved before endpoints had names.
+    // Called once on load; see the definition for why it is not a live lookup.
+    void MigrateLegacyAssistantToken();
+#endif
+
     // Constant for event height;
     const float GetEventLevelHeight() const;
     const float GetEventLevelCompactHeight() const;
@@ -354,6 +433,12 @@ private:
     void DeserializeHotkeySettings(jt::Json& json);
     void SerializeProfilerSettings(jt::Json& json);
     void DeserializeProfilerSettings(jt::Json& json);
+    void SerializeAssistantSettings(jt::Json& json);
+    void DeserializeAssistantSettings(jt::Json& json);
+    // The endpoint name is the credential-store key, so it has to be unique.
+    void MakeAssistantProviderNamesUnique();
+    void SerializeAppWindowSettings(jt::Json& json);
+    void DeserializeAppWindowSettings(jt::Json& json);
 
     const std::array<ImU32, static_cast<size_t>(Colors::__kLastColor)>* m_color_store;
 
@@ -365,6 +450,8 @@ private:
     InternalSettings   m_internalsettings;
     AppWindowSettings  m_appwindowsettings;
     ProfilerSettings   m_profilersettings;
+    // Provider name -> token, used only when no OS credential store exists.
+    std::map<std::string, std::string> m_assistant_token_session;
 
     std::filesystem::path m_json_path;
 };

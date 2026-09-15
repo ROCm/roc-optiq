@@ -98,9 +98,27 @@ ComputeView::ComputeView()
             EventManager::GetInstance()->AddEvent(
                 std::make_shared<TableDataEvent>(trace_path, request_id, response_code));
         });
+
+    // The forwarding TraceView installs. Without it a compute tab runs requests
+    // that report no progress at all.
+    m_data_provider.SetRequestProgressUpdateCallback(
+        [this](const RequestInfo& request, uint64_t pct, const std::string& message) {
+            EventManager::GetInstance()->AddEvent(
+                std::make_shared<RequestProgressUpdateEvent>(
+                    request.request_id, request.request_type, pct, message,
+                    m_data_provider.GetTraceFilePath()));
+        });
 }
 
-ComputeView::~ComputeView() {}
+ComputeView::~ComputeView()
+{
+    // Every callback above captures this, and the provider outlives the view
+    // while its detached cleanup runs.
+    m_data_provider.SetTraceLoadedCallback(nullptr);
+    m_data_provider.SetFetchMetricsCallback(nullptr);
+    m_data_provider.SetTableDataReadyCallback(nullptr);
+    m_data_provider.SetRequestProgressUpdateCallback(nullptr);
+}
 
 std::optional<DataProviderCleanupWork>
 ComputeView::DetachProviderCleanup()

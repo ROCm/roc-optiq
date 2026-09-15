@@ -78,6 +78,8 @@ struct TabItem
     std::string                m_id;
     std::shared_ptr<RocWidget> m_widget;
     bool                       m_can_close;
+    bool                       m_enabled = true;
+    std::string                m_disabled_tooltip;
 };
 
 class PopUpStyle

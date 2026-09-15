@@ -409,18 +409,25 @@ ComputeMemoryChartView::FetchMemChartMetrics()
 
     m_data_provider.ComputeModel().ClearKernelMetricValues(m_client_id);
 
-    if(m_compute_selection)
+    if(!m_compute_selection)
     {
-        uint32_t workload_id = m_compute_selection->GetSelectedWorkload();
-        uint32_t kernel_id = m_compute_selection->GetSelectedKernel();
-
-        std::vector<uint32_t> kernel_ids = {kernel_id};
-        std::vector<MetricsRequestParams::MetricID> metric_ids;
-        metric_ids.push_back({MEMCHART_CATEGORY_ID, MEMCHART_TABLE_ID, std::nullopt});
-
-        m_data_provider.FetchMetrics(
-            MetricsRequestParams(workload_id, kernel_ids, metric_ids, m_client_id));
+        return;
     }
+
+    uint32_t workload_id = m_compute_selection->GetSelectedWorkload();
+    uint32_t kernel_id   = m_compute_selection->GetSelectedKernel();
+    if(workload_id == ComputeSelection::INVALID_SELECTION_ID ||
+       kernel_id == ComputeSelection::INVALID_SELECTION_ID)
+    {
+        return;
+    }
+
+    std::vector<uint32_t> kernel_ids = {kernel_id};
+    std::vector<MetricsRequestParams::MetricID> metric_ids;
+    metric_ids.push_back({MEMCHART_CATEGORY_ID, MEMCHART_TABLE_ID, std::nullopt});
+
+    m_data_provider.FetchMetrics(
+        MetricsRequestParams(workload_id, kernel_ids, metric_ids, m_client_id));
 }
 
 void 

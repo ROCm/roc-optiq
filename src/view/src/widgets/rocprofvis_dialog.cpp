@@ -5,6 +5,8 @@
 #include "rocprofvis_gui_helpers.h"
 #include "rocprofvis_widget.h"
 
+#include <utility>
+
 namespace RocProfVis
 {
 namespace View
@@ -40,7 +42,7 @@ ConfirmationDialog::Render()
         ImGui::SetNextWindowSize(
             GetResponsiveWindowSize(ImVec2(580.0f, 0.0f), ImVec2(360.0f, 0.0f)));
 
-        if(ImGui::BeginPopupModal(m_title.c_str(), NULL,
+        if(ImGui::BeginPopupModal(m_title.c_str(), nullptr,
                                   ImGuiWindowFlags_AlwaysAutoResize |
                                       ImGuiWindowFlags_NoSavedSettings))
         {
@@ -106,10 +108,19 @@ ConfirmationDialog::DrawCheckboxOption()
 }
 
 void
-MessageDialog::Show(const std::string& title, const std::string& message)
+MessageDialog::Show(const std::string& title, const std::string& message,
+                    std::function<void()> on_close_callback)
 {
+    if(m_should_open || m_is_open)
+    {
+        m_pending_messages.push_back(
+            { title, message, std::move(on_close_callback) });
+        return;
+    }
+
     m_title       = title;
     m_message     = message;
+    m_on_close    = std::move(on_close_callback);
     m_should_open = true;
 }
 
@@ -120,6 +131,7 @@ MessageDialog::Render()
     {
         ImGui::OpenPopup(m_title.c_str());
         m_should_open = false;
+        m_is_open     = true;
     }
 
     if(ImGui::IsPopupOpen(m_title.c_str(), ImGuiPopupFlags_None))
@@ -131,7 +143,7 @@ MessageDialog::Render()
         ImGui::SetNextWindowSize(
             GetResponsiveWindowSize(ImVec2(420.0f, 0.0f), ImVec2(300.0f, 0.0f)));
 
-        if(ImGui::BeginPopupModal(m_title.c_str(), NULL,
+        if(ImGui::BeginPopupModal(m_title.c_str(), nullptr,
                                   ImGuiWindowFlags_AlwaysAutoResize |
                                       ImGuiWindowFlags_NoSavedSettings))
         {
@@ -144,7 +156,22 @@ MessageDialog::Render()
             ImGui::Separator();
             if(ImGui::Button("Close"))
             {
+                std::function<void()> on_close = std::move(m_on_close);
                 ImGui::CloseCurrentPopup();
+                m_is_open = false;
+                if(!m_pending_messages.empty())
+                {
+                    message_info_t next_message = std::move(m_pending_messages.front());
+                    m_pending_messages.pop_front();
+                    m_title       = std::move(next_message.title);
+                    m_message     = std::move(next_message.message);
+                    m_on_close    = std::move(next_message.on_close);
+                    m_should_open = true;
+                }
+                if(on_close)
+                {
+                    on_close();
+                }
             }
             ImGui::EndPopup();
         }

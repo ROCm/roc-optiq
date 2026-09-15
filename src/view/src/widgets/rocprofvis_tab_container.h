@@ -29,6 +29,8 @@ public:
     void SetActiveTab(const std::string& id);
 
     void SetTabLabel(const std::string& label, const std::string& id);
+    void SetTabEnabled(const std::string& id, bool enabled,
+                       const std::string& disabled_tooltip);
 
     const TabItem* GetActiveTab() const;
 

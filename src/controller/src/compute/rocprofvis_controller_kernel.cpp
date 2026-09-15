@@ -11,6 +11,7 @@ namespace Controller
 Kernel::Kernel()
 : Handle(__kRPVControllerKernelPropertiesFirst, __kRPVControllerKernelPropertiesLast) 
 , m_id(0)
+, m_has_isa_lines(false)
 {}
 
 Kernel::~Kernel()
@@ -75,6 +76,12 @@ rocprofvis_result_t Kernel::GetUInt64(rocprofvis_property_t property, uint64_t i
             case kRPVControllerKernelDurationMean:
             {
                 *value = (uint64_t)m_duration_mean;
+                result = kRocProfVisResultSuccess;
+                break;
+            }
+            case kRPVControllerKernelHasIsaLines:
+            {
+                *value = m_has_isa_lines ? 1 : 0;
                 result = kRocProfVisResultSuccess;
                 break;
             }
@@ -178,6 +185,12 @@ rocprofvis_result_t Kernel::SetUInt64(rocprofvis_property_t property, uint64_t i
             result = kRocProfVisResultSuccess;
             break;
         }
+        case kRPVControllerKernelHasIsaLines:
+        {
+            m_has_isa_lines = value != 0;
+            result = kRocProfVisResultSuccess;
+            break;
+        }
         default:
         {
             result = UnhandledProperty(property);
@@ -258,6 +271,12 @@ bool Kernel::QueryToPropertyEnum(rocprofvis_db_compute_column_enum_t in, rocprof
         case kRPVComputeColumnKernelDurationsMax:
         {
             property = kRPVControllerKernelDurationMax;
+            type = kRPVControllerPrimitiveTypeUInt64;
+            break;
+        }
+        case kRPVComputeColumnKernelHasIsaLines:
+        {
+            property = kRPVControllerKernelHasIsaLines;
             type = kRPVControllerPrimitiveTypeUInt64;
             break;
         }

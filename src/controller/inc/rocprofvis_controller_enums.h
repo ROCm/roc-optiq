@@ -1033,6 +1033,7 @@ typedef enum rocprofvis_controller_kernel_properties_t : uint32_t
     kRPVControllerKernelDurationMedian,
     kRPVControllerKernelDurationMean,
     kRPVControllerKernelPcSampling,
+    kRPVControllerKernelHasIsaLines,
     __kRPVControllerKernelPropertiesLast
 } rocprofvis_controller_kernel_properties_t;
 

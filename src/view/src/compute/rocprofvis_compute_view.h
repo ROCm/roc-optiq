@@ -6,13 +6,14 @@
 #include "rocprofvis_root_view.h"
 #include "widgets/rocprofvis_tab_container.h"
 
+#include <string>
+
 namespace RocProfVis
 {
 namespace View
 {
 
 class ComputeSelection;
-class ComputeIsaView;
 class PresetBrowser;
 
 class ComputeView : public RootView
@@ -40,15 +41,35 @@ private:
     void RenderToolbar();
     void RenderWorkloadSelection();
     void RenderPresets();
+    void InitializeMetricTabStates(
+        const std::vector<const WorkloadInfo*>& workloads);
+    void QueueDatabaseErrorDialog(const std::string& file_path,
+                                  const std::string& message);
+    void ShowPendingDatabaseErrorDialog();
 
-    bool  m_view_created;
-    float m_toolbar_available_width;
+    enum class ErrorDialogState
+    {
+        kNone,
+        kPending,
+        kShown
+    };
+
+    bool             m_view_created;
+    ErrorDialogState m_error_dialog_state;
+    float            m_toolbar_available_width;
 
     std::shared_ptr<ComputeSelection> m_compute_selection;
     std::unique_ptr<PresetBrowser>    m_preset_browser;
-    std::shared_ptr<ComputeIsaView>   m_isa_view;
 
     std::shared_ptr<TabContainer> m_tab_container;
+
+    struct popup_info_t
+    {
+        std::string title;
+        std::string message;
+    };
+
+    popup_info_t m_popup_info;
 
     DataProvider                     m_data_provider;
     std::shared_ptr<RocCustomWidget> m_tool_bar;

@@ -279,13 +279,21 @@ private:
     int m_exit_code;
     mutable std::mutex m_mutex;
     /*
-     * Set by Cancel before it drops m_mutex to kill the child, and never
-     * cleared while that run is ending. It makes Cancel the sole owner of the
-     * ending: UpdateState stops finalising, so the stage cannot be settled
-     * twice, and no later stage can be started by a boundary that was already
-     * in flight when the user asked to stop.
+     * Set by Cancel before it drops m_mutex to kill the child. It makes Cancel
+     * the sole owner of the ending: UpdateState stops finalising, so the stage
+     * cannot be settled twice. Cleared again only when the child turns out to
+     * have already exited on its own, where the ending is handed back to
+     * UpdateState so the run reports the status the child really produced.
      */
     std::atomic<bool> m_cancel_requested{false};
+    /*
+     * Also set by Cancel, and never cleared for the rest of the run: the user
+     * has asked to stop, so no later stage may start. Separate from
+     * m_cancel_requested because the two answer different questions, and the
+     * case above is exactly where they differ - the ending goes back to
+     * UpdateState, but a stage boundary must still not advance the pipeline.
+     */
+    std::atomic<bool> m_stop_requested{false};
 
     std::vector<ProfilerStageSpec>           m_stages;
     std::vector<std::string>                 m_stage_tool_paths;

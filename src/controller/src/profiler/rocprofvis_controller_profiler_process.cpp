@@ -448,6 +448,11 @@ bool LocalProfilerExecutor::IsRunning()
     return true;
 }
 
+// How long Cancel() waits for a terminated child to actually go away. Bounded
+// because this runs with the controller's lock released but still blocks the
+// caller; the process is being killed forcibly, so exceeding this is pathological.
+static constexpr DWORD TERMINATE_WAIT_MS = 5000;
+
 CancelOutcome LocalProfilerExecutor::Cancel()
 {
     if (m_process_handle == nullptr)
@@ -455,10 +460,32 @@ CancelOutcome LocalProfilerExecutor::Cancel()
         return CancelOutcome::kNotRunning;
     }
 
-    if (TerminateProcess(m_process_handle, 1))
+    // The exit code the child is given is the "no status" sentinel rather than
+    // a plausible number: a cancelled run did not produce a result, and 1 is
+    // indistinguishable from a tool that genuinely failed. POSIX can report a
+    // true 128+SIGKILL because a signal really was delivered; there is no
+    // equivalent here, so saying nothing is the honest answer.
+    if (TerminateProcess(m_process_handle, static_cast<UINT>(EXIT_CODE_NO_STATUS)))
     {
+        // TerminateProcess only requests termination. Returning before the
+        // child is gone hands the caller a process that still holds its output
+        // files open, which on Windows is a sharing violation waiting for
+        // whoever opens them next. The POSIX path always reaps before reporting
+        // kStopped; this is the same promise.
+        WaitForSingleObject(m_process_handle, TERMINATE_WAIT_MS);
+
+        DWORD exit_code = 0;
+        if (GetExitCodeProcess(m_process_handle, &exit_code) && exit_code != STILL_ACTIVE)
+        {
+            m_exit_code = static_cast<int>(exit_code);
+        }
+        else
+        {
+            // Still not gone after the wait, so there is no status to report.
+            m_exit_code = EXIT_CODE_NO_STATUS;
+        }
+
         m_is_running = false;
-        m_exit_code = 1;
         return CancelOutcome::kStopped;
     }
 
@@ -851,6 +878,10 @@ rocprofvis_result_t ProfilerProcessController::PreparePipeline(bool resolve_tool
     m_current_stage    = 0;
     m_failing_stage    = -1;
     m_cancel_requested = false;
+    m_stop_requested   = false;
+    // A controller can be relaunched once its previous run is no longer
+    // Running, and nothing has run yet for this one.
+    m_exit_code        = EXIT_CODE_NO_STATUS;
 
     if (m_config->GetStages().empty())
     {
@@ -915,6 +946,9 @@ rocprofvis_result_t ProfilerProcessController::PreparePipeline(bool resolve_tool
         if (resolved != kRocProfVisResultSuccess)
         {
             m_failing_stage = static_cast<int32_t>(i);
+            // Leaving this Idle would have GetStageState report the stage
+            // GetFailingStage names as not yet started.
+            m_stage_states[i] = kRPVProfilerStateFailed;
             m_scrape.SkipRemainingFrom(0);
             spdlog::error("Profiler stage {} tool could not be resolved", i);
             return resolved;
@@ -927,6 +961,10 @@ rocprofvis_result_t ProfilerProcessController::PreparePipeline(bool resolve_tool
 rocprofvis_result_t ProfilerProcessController::StartStageLocked(uint32_t stage_index)
 {
     m_current_stage = stage_index;
+    // Nothing has run for this stage yet, and every early return below leaves
+    // it that way. Carrying the previous stage's code through would report it
+    // as this stage's result.
+    m_exit_code     = EXIT_CODE_NO_STATUS;
 
     ProfilerStageSpec stage = m_stages[stage_index];
 
@@ -1216,6 +1254,7 @@ rocprofvis_result_t ProfilerProcessController::Cancel()
         }
 
         m_cancel_requested = true;
+        m_stop_requested   = true;
         executor           = m_executor.get();
     }
 
@@ -1226,21 +1265,31 @@ rocprofvis_result_t ProfilerProcessController::Cancel()
      * the same lock, so holding it here would freeze the console the user is
      * watching for as long as the child takes to die.
      *
-     * Reading the raw pointer outside the lock is safe because m_cancel_requested
-     * is already set: the only code that replaces m_executor is a stage
-     * boundary, and that now declines to start anything once cancel is
-     * requested.
+     * Reading the raw pointer outside the lock is safe because
+     * m_cancel_requested is already set: the only code that replaces
+     * m_executor is a stage boundary in UpdateState, which returns without
+     * touching anything while that flag is set.
      */
     CancelOutcome const outcome = executor->Cancel();
 
     std::lock_guard<std::mutex> lock(m_mutex);
 
+    // m_current_stage indexes both vectors below without a bounds check. It is
+    // only ever set by StartStageLocked from an index PreparePipeline sized
+    // both vectors for, and reaching here means that stage started.
+
     if (outcome == CancelOutcome::kNotRunning)
     {
         // The child had already exited. Hand the ending back to UpdateState,
-        // which settles the stage on the status the executor collected.
+        // which settles the stage on the status the executor collected, so the
+        // run reports what the child really did rather than a cancellation.
+        // m_stop_requested stays set: the stage that finished keeps its result,
+        // but the boundary must not go on to start the next stage.
         m_cancel_requested = false;
-        return kRocProfVisResultUnknownError;
+        // The click landed a moment too late. That is not a failure to cancel,
+        // and reporting it as one is what put "Failed to cancel profiler" on
+        // screen after a run that had just finished normally.
+        return kRocProfVisResultNotSupported;
     }
 
     if (outcome == CancelOutcome::kRefused)
@@ -1254,11 +1303,8 @@ rocprofvis_result_t ProfilerProcessController::Cancel()
         DrainExecutorLocked();
         m_scrape.EndStage(m_stages[m_current_stage].working_directory);
 
-        if (m_current_stage < m_stage_states.size())
-        {
-            m_stage_states[m_current_stage] = kRPVProfilerStateFailed;
-            m_failing_stage                 = static_cast<int32_t>(m_current_stage);
-        }
+        m_stage_states[m_current_stage] = kRPVProfilerStateFailed;
+        m_failing_stage                 = static_cast<int32_t>(m_current_stage);
         m_scrape.SkipRemainingFrom(m_current_stage + 1);
 
         // No exit code is coming, so m_exit_code stays at "no status" rather
@@ -1280,10 +1326,7 @@ rocprofvis_result_t ProfilerProcessController::Cancel()
 
     m_exit_code = executor->GetExitCode();
 
-    if (m_current_stage < m_stage_states.size())
-    {
-        m_stage_states[m_current_stage] = kRPVProfilerStateCancelled;
-    }
+    m_stage_states[m_current_stage] = kRPVProfilerStateCancelled;
     // The stages after this one never start, so nothing they declare can
     // arrive. The current stage keeps what it scraped: a capture killed part
     // way through still names the file it was writing, and that file is on
@@ -1392,9 +1435,26 @@ void ProfilerProcessController::FinishStageLocked(int exit_code)
         return;
     }
 
+    if (m_stop_requested)
+    {
+        // The child exited on its own in the window between the user asking to
+        // stop and Cancel reaching it, so Cancel handed the ending back here.
+        // This stage keeps the result it earned, but starting the next one now
+        // would run work the user has already asked to abandon.
+        m_scrape.SkipRemainingFrom(m_current_stage + 1);
+        m_state = kRPVProfilerStateCancelled;
+        spdlog::info("Profiler stage {} finished as the run was cancelled; stage {} not started",
+                     m_current_stage, m_current_stage + 1);
+        return;
+    }
+
     if (StartStageLocked(m_current_stage + 1) != kRocProfVisResultSuccess)
     {
-        m_state = kRPVProfilerStateFailed;
+        // No process ran for the stage that failed to start, so the code from
+        // the stage that just succeeded must not be left standing as this run's
+        // result - a caller would read 0 and call a failed run successful.
+        m_exit_code = EXIT_CODE_NO_STATUS;
+        m_state     = kRPVProfilerStateFailed;
     }
 }
 

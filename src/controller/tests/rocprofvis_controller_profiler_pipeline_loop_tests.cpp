@@ -190,6 +190,13 @@ TEST_CASE("A missing tool in a later stage fails before the first one runs",
     rocprofvis_profiler_state_t first = kRPVProfilerStateRunning;
     REQUIRE(controller.GetStageState(0, first) == kRocProfVisResultSuccess);
     CHECK(first == kRPVProfilerStateIdle);
+
+    // The stage GetFailingStage names has to agree that it is the failure. A UI
+    // highlighting it would otherwise draw it as still waiting to run.
+    rocprofvis_profiler_state_t second = kRPVProfilerStateRunning;
+    REQUIRE(controller.GetStageState(1, second) == kRocProfVisResultSuccess);
+    CHECK(second == kRPVProfilerStateFailed);
+
     CHECK(controller.GetOutput().empty());
 }
 
@@ -339,6 +346,33 @@ TEST_CASE("A failing stage halts the pipeline and attributes the failure",
     // Both stages run rocprof-sys and so both declare trace_db; a key-only
     // query answers from the last, which never ran.
     CHECK(status_of(controller, "trace_db") == kRPVProfilerScrapeStageSkipped);
+}
+
+TEST_CASE("A stage that cannot start drops the previous stage's exit code",
+          "[profiler][pipeline]")
+{
+    ScratchToolDir tool_dir(kRPVProfilerToolRocprofSysRun);
+    ScratchDir     absent("stage cwd that is not there", false);
+
+    ProfilerConfig config;
+    REQUIRE(config.AddStage(shell_stage("First", tool_dir, "echo first")) ==
+            kRocProfVisResultSuccess);
+
+    // Rejected before a process exists, so no status is ever read for it.
+    ProfilerStageSpec second  = shell_stage("Second", tool_dir, "echo SHOULD_NOT_RUN");
+    second.working_directory  = absent.Path();
+    REQUIRE(config.AddStage(second) == kRocProfVisResultSuccess);
+
+    ProfilerProcessController controller;
+    PipelineResult            run = run_pipeline(controller, config);
+
+    CHECK(run.state == kRPVProfilerStateFailed);
+    // The first stage exited 0 and that code is still in hand when the second
+    // one fails to start. Reporting it would have a caller read a run that
+    // failed as one that succeeded.
+    CHECK(run.exit_code != 0);
+    CHECK(run.output.find("SHOULD_NOT_RUN") == std::string::npos);
+    CHECK(controller.GetFailingStage() == 1);
 }
 
 TEST_CASE("An unresolved placeholder fails the pipeline with an explanation",

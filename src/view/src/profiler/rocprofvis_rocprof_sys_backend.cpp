@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 #include "rocprofvis_rocprof_sys_backend.h"
+#include "rocprofvis_launch_config.h"
 #include "rocprofvis_launch_shared_tabs.h"
 #include "rocprofvis_gui_helpers.h"
 #include "rocprofvis_json_utils.h"
@@ -634,6 +635,15 @@ std::vector<WarningMessage> RocprofSysBackend::GetWarnings(
             "Consider binary rewrite mode or use the Sample tool"});
     }
 
+    // --preset is a run/sample flag; instrument would reject it as unknown.
+    if (config.tool == kRPVProfilerToolRocprofSysInstrument &&
+        !m_settings.rocprof_preset.empty())
+    {
+        warnings.push_back({WarningMessage::kWarning,
+            "Built-in presets are ignored by rocprof-sys-instrument "
+            "(--preset is a run/sample flag). Choose Custom or switch tool"});
+    }
+
     // Tool routing: run + sampling
     if (config.tool == kRPVProfilerToolRocprofSysRun && m_settings.use_sampling &&
         !m_settings.trace_backend)
@@ -662,7 +672,6 @@ std::vector<WarningMessage> RocprofSysBackend::GetWarnings(
 std::vector<std::string> RocprofSysBackend::GetSummaryTags(
     LaunchConfig const& config) const
 {
-    (void)config;
     std::vector<std::string> tags;
 
     // Output format (what the run will produce).
@@ -685,10 +694,18 @@ std::vector<std::string> RocprofSysBackend::GetSummaryTags(
     }
     tags.push_back(output);
 
-    // Active preset (or Custom when none is selected).
-    tags.push_back(m_settings.rocprof_preset.empty()
-                       ? std::string("Custom")
-                       : m_settings.rocprof_preset);
+    // Instrument does not accept --preset, so never label the run with a
+    // preset that FlattenToExecution will not emit.
+    if (config.tool == kRPVProfilerToolRocprofSysInstrument)
+    {
+        tags.push_back("Runtime instrumentation");
+    }
+    else
+    {
+        tags.push_back(m_settings.rocprof_preset.empty()
+                           ? std::string("Custom")
+                           : m_settings.rocprof_preset);
+    }
 
     return tags;
 }
@@ -697,10 +714,37 @@ std::vector<std::string> RocprofSysBackend::GetSummaryTags(
 // FlattenToExecution -- only emits non-default values
 // ==================================================================================
 
-void RocprofSysBackend::FlattenToExecution(
+// extra_argv is the override hatch: last among the profiler's own flags, still
+// ahead of "--". Tokens past the separator belong to the target.
+static void AppendExtraArgv(
+    LaunchConfig const& config, std::vector<std::string>& argv_out)
+{
+    for (auto const& arg : config.extra_argv)
+    {
+        argv_out.push_back(arg);
+    }
+}
+
+static void AppendTargetArgv(
+    LaunchConfig const& config, std::vector<std::string>& argv_out)
+{
+    if (config.target.executable.empty())
+    {
+        return;
+    }
+
+    argv_out.push_back("--");
+    argv_out.push_back(config.target.executable);
+
+    for (auto const& arg : SplitArguments(config.target.arguments))
+    {
+        argv_out.push_back(arg);
+    }
+}
+
+void RocprofSysBackend::EmitCuratedEnv(
     LaunchConfig const& config,
-    std::vector<std::pair<std::string, std::string>>& env_out,
-    std::vector<std::string>& argv_out) const
+    std::vector<std::pair<std::string, std::string>>& env_out) const
 {
     RocprofSysSettings defaults = RocprofSysSettings::FromJson(jt::Json());
 
@@ -734,13 +778,6 @@ void RocprofSysBackend::FlattenToExecution(
             env_out.emplace_back(env_name, std::to_string(val));
     };
 
-    // Emit --preset= in argv when a built-in preset is selected
-    if (!m_settings.rocprof_preset.empty())
-    {
-        argv_out.push_back("--preset=" + m_settings.rocprof_preset);
-    }
-
-    // Output path (always emit if set)
     if (!config.target.output_directory.empty())
     {
         env_out.emplace_back("ROCPROFSYS_OUTPUT_PATH", config.target.output_directory);
@@ -763,14 +800,6 @@ void RocprofSysBackend::FlattenToExecution(
     emit_bool_always("ROCPROFSYS_PROFILE", m_settings.profile);
     emit_bool_always("ROCPROFSYS_FLAT_PROFILE", m_settings.flat_profile);
     emit_bool_always("ROCPROFSYS_USE_ROCPD", m_settings.use_rocpd);
-
-    // Perfetto tracing — emit as CLI arg so it can override --preset precedence
-    bool has_preset = !m_settings.rocprof_preset.empty();
-    if (has_preset || m_settings.trace_backend != defaults.trace_backend)
-    {
-        argv_out.push_back(
-            std::string("--trace=") + (m_settings.trace_backend ? "true" : "false"));
-    }
 
     // Collection — defer to preset when at default
     emit_bool("ROCPROFSYS_USE_SAMPLING", m_settings.use_sampling, defaults.use_sampling);
@@ -874,35 +903,30 @@ void RocprofSysBackend::FlattenToExecution(
     // so PID suffixing is forced off whenever MPI is enabled.
     bool effective_use_pid = m_settings.use_pid && !m_settings.use_mpip;
     emit_bool("ROCPROFSYS_USE_PID", effective_use_pid, defaults.use_pid);
+}
 
-    // Instrument args
-    if (config.tool == kRPVProfilerToolRocprofSysInstrument)
+void RocprofSysBackend::FlattenRunOrSample(
+    LaunchConfig const& config,
+    std::vector<std::string>& argv_out) const
+{
+    // rocprof-sys-sample shares run's common argv (--preset, --trace, --output)
+    // via register_preset_and_domain_arguments. Sampling is forced inside the
+    // sample binary; Flatten does not special-case it.
+    if (!m_settings.rocprof_preset.empty())
     {
-        if (!m_settings.instr_include.empty())
-        {
-            argv_out.push_back("-I");
-            argv_out.push_back(m_settings.instr_include);
-        }
-        if (!m_settings.instr_exclude.empty())
-        {
-            argv_out.push_back("-E");
-            argv_out.push_back(m_settings.instr_exclude);
-        }
-        if (m_settings.min_instructions > 0)
-        {
-            argv_out.push_back("--min-instructions");
-            argv_out.push_back(std::to_string(m_settings.min_instructions));
-        }
+        argv_out.push_back("--preset=" + m_settings.rocprof_preset);
     }
 
-    // The user's raw escape hatch goes last among the profiler's own flags, so
-    // it can override anything emitted above, but still ahead of the "--"
-    // separator - past that point the tokens belong to the target, not to
-    // rocprof-sys.
-    for (auto const& arg : config.extra_argv)
+    // Perfetto tracing as CLI so it can override --preset precedence.
+    RocprofSysSettings defaults   = RocprofSysSettings::FromJson(jt::Json());
+    bool               has_preset = !m_settings.rocprof_preset.empty();
+    if (has_preset || m_settings.trace_backend != defaults.trace_backend)
     {
-        argv_out.push_back(arg);
+        argv_out.push_back(
+            std::string("--trace=") + (m_settings.trace_backend ? "true" : "false"));
     }
+
+    AppendExtraArgv(config, argv_out);
 
     if (!config.target.output_directory.empty())
     {
@@ -910,16 +934,56 @@ void RocprofSysBackend::FlattenToExecution(
         argv_out.push_back(config.target.output_directory);
     }
 
-    // Everything after "--" is the command rocprof-sys should run.
-    if (!config.target.executable.empty())
-    {
-        argv_out.push_back("--");
-        argv_out.push_back(config.target.executable);
+    AppendTargetArgv(config, argv_out);
+}
 
-        for (auto const& arg : SplitArguments(config.target.arguments))
-        {
-            argv_out.push_back(arg);
-        }
+void RocprofSysBackend::FlattenInstrumentRuntime(
+    LaunchConfig const& config,
+    std::vector<std::pair<std::string, std::string>>& env_out,
+    std::vector<std::string>& argv_out) const
+{
+    // rocprof-sys-instrument treats -o/--output as a rewritten-binary filename
+    // and then exits without running the app. One-shot runtime instrumentation
+    // therefore keeps the output folder on ROCPROFSYS_OUTPUT_PATH only.
+    // --preset and --trace are registered only on run/sample; passing them
+    // here is a parse error, so Perfetto enablement is env instead.
+    env_out.emplace_back("ROCPROFSYS_TRACE",
+                         m_settings.trace_backend ? "true" : "false");
+
+    if (!m_settings.instr_include.empty())
+    {
+        argv_out.push_back("-I");
+        argv_out.push_back(m_settings.instr_include);
+    }
+    if (!m_settings.instr_exclude.empty())
+    {
+        argv_out.push_back("-E");
+        argv_out.push_back(m_settings.instr_exclude);
+    }
+    if (m_settings.min_instructions > 0)
+    {
+        argv_out.push_back("--min-instructions");
+        argv_out.push_back(std::to_string(m_settings.min_instructions));
+    }
+
+    AppendExtraArgv(config, argv_out);
+    AppendTargetArgv(config, argv_out);
+}
+
+void RocprofSysBackend::FlattenToExecution(
+    LaunchConfig const& config,
+    std::vector<std::pair<std::string, std::string>>& env_out,
+    std::vector<std::string>& argv_out) const
+{
+    EmitCuratedEnv(config, env_out);
+
+    if (config.tool == kRPVProfilerToolRocprofSysInstrument)
+    {
+        FlattenInstrumentRuntime(config, env_out, argv_out);
+    }
+    else
+    {
+        FlattenRunOrSample(config, argv_out);
     }
 }
 

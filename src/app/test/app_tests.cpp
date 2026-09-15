@@ -778,6 +778,12 @@ void RegisterAppTests(ImGuiTestEngine* e)
             return false;
         };
 
+        // The tab opens on the Roofline view; the metric tables sit behind the
+        // Metrics toggle.
+        IM_CHECK(set_ref_to_toolbar());
+        ctx->ItemClick("Metrics");
+        ctx->Yield(2);
+
         // Pick the target workload first; it enables the kernel combo.
         IM_CHECK(set_ref_to_toolbar());
         ctx->ItemClick("##TargetWorkloads");

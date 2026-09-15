@@ -20,8 +20,6 @@ class ComparisonTable;
 class ComputeSelection;
 class Roofline;
 class TabContainer;
-class VFixedContainer;
-struct TabItem;
 
 class ComputeComparisonView : public RocWidget
 {
@@ -50,11 +48,16 @@ public:
     void UnsubscribeEvents();
 
 private:
+    enum View
+    {
+        ViewRoofline,
+        ViewMetrics,
+    };
+
     void RenderToolbar();
     void RenderContent();
     void InputChanged();
 
-    std::unique_ptr<VFixedContainer> m_layout;
     std::unique_ptr<Roofline>        m_comparison_roofline;
     std::unique_ptr<ComparisonTable> m_comparison_table;
 
@@ -62,6 +65,7 @@ private:
     SettingsManager&                  m_settings;
     std::shared_ptr<ComputeSelection> m_compute_selection;
 
+    View     m_view;
     uint32_t m_target_workload_id;
     uint32_t m_target_kernel_id;
 
@@ -84,6 +88,7 @@ public:
     void Render() override;
 
     void InputChanged(uint32_t target_workload_id, uint32_t target_kernel_id);
+    void RenderToolbar();
 
 private:
     class Table : public RocWidget
@@ -274,7 +279,6 @@ private:
     void FetchMetrics();
     void UpdateMetrics();
 
-    void RenderToolbar();
     void RenderCategory(const size_t i);
     void RenderPinnedMetrics() const;
     void RenderTables() const;
@@ -291,6 +295,7 @@ private:
     uint32_t m_target_kernel_id;
     bool     m_filter_common_metrics;
     float    m_percentage_threshold;
+    bool     m_show_pins;
 
     // Internal state...
     bool                         m_inputs_changed;
@@ -308,13 +313,10 @@ private:
     std::vector<CategoryModel> m_categories;
     std::vector<PinnedModel>   m_pinned_metrics;
 
-    // Layout...
-    std::unique_ptr<VFixedContainer> m_layout;
-    std::unique_ptr<TabContainer>    m_tab_container;
-    std::unique_ptr<Table>           m_pinned_table;
-    LayoutItem*                      m_pinned_item;
-    float                            m_max_pinned_height;
-    float                            m_toolbar_available_width;
+    // Widgets...
+    std::unique_ptr<TabContainer> m_tab_container;
+    std::unique_ptr<Table>        m_pinned_table;
+    float                         m_max_pinned_height;
 
     // Requests...
     uint64_t                          m_client_id_baseline;

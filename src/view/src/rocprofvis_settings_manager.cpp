@@ -108,10 +108,10 @@ constexpr std::array DARK_THEME_COLORS = {
     IM_COL32(70, 70, 70, 200),     // Colors::kMeasurementLabelEdge
     IM_COL32(255, 255, 255, 255),  // Colors::kMeasurementLabelText
     IM_COL32(255, 255, 255, 120),  // Colors::kMeasurementNotch
-    IM_COL32(42, 82, 118, 255),    // Colors::kComparisonBase
-    IM_COL32(26, 116, 112, 255),   // Colors::kComparisonTarget
+    IM_COL32(60, 114, 165, 255),   // Colors::kComparisonBase
+    IM_COL32(30, 124, 118, 255),   // Colors::kComparisonTarget
     IM_COL32(205, 170, 82, 255),   // Colors::kComparisonLesser
-    IM_COL32(92, 62, 132, 255),    // Colors::kComparisonGreater
+    IM_COL32(190, 150, 235, 255),  // Colors::kComparisonGreater
 
     // Centralized from view widgets (kept in Colors enum order):
     IM_COL32(29, 30, 38, 255),     // Colors::kMemChartBg

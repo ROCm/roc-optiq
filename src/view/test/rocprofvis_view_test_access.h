@@ -218,7 +218,7 @@ struct ComputeComparisonTableTestPeer
         return t.m_data_provider.IsRequestPending(t.m_baseline_request_id) ||
                t.m_data_provider.IsRequestPending(t.m_target_request_id);
     }
-    // True once a built table has a "Difference##" column, i.e. deltas were
+    // True once a built table has a "\xCE\x94 ##" column, i.e. deltas were
     // actually computed (not just tables allocated).
     bool HasDifferenceColumn() const
     {
@@ -229,7 +229,7 @@ struct ComputeComparisonTableTestPeer
                 if(!table) continue;
                 for(const std::string& name : table->OrderedValueNames())
                 {
-                    if(name.rfind("Difference##", 0) == 0) return true;
+                    if(name.rfind("\xCE\x94 ##", 0) == 0) return true;
                 }
             }
         }

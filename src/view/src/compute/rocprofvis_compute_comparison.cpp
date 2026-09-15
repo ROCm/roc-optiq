@@ -9,7 +9,6 @@
 #include "rocprofvis_requests.h"
 #include "rocprofvis_settings_manager.h"
 #include "widgets/rocprofvis_gui_helpers.h"
-#include "widgets/rocprofvis_split_containers.h"
 #include "widgets/rocprofvis_tab_container.h"
 #include <algorithm>
 #include <bitset>
@@ -29,10 +28,11 @@ constexpr ImGuiColorEditFlags LEGEND_FLAGS =
     ImGuiColorEditFlags_NoPicker | ImGuiColorEditFlags_NoInputs |
     ImGuiColorEditFlags_NoTooltip | ImGuiColorEditFlags_NoLabel;
 constexpr size_t      ROW_TAG_INVALID_MATCH        = 0;
+constexpr const char* DELTA                        = "\xCE\x94";
 constexpr const char* BASELINE_COLUMN_PREFIX       = "Baseline ";
 constexpr const char* TARGET_COLUMN_PREFIX         = "Target ";
-constexpr const char* DIFFERENCE_COLUMN_PREFIX     = "Difference##";
-constexpr const char* DIFFERENCE_PCT_COLUMN_PREFIX = "Difference (%)##";
+constexpr const char* DIFFERENCE_COLUMN_PREFIX     = "\xCE\x94 ##";
+constexpr const char* DIFFERENCE_PCT_COLUMN_PREFIX = "\xCE\x94 (%)##";
 constexpr const char* JSON_KEY_PINNED_METRICS      = "pins";
 constexpr const char* JSON_KEY_PINNED_METRICS_ID   = "id";
 constexpr const char* JSON_KEY_PINNED_METRICS_NAME = "name";
@@ -67,30 +67,19 @@ ComputeComparisonView::CreateTabItem(
 
 ComputeComparisonView::ComputeComparisonView(
     DataProvider& data_provider, std::shared_ptr<ComputeSelection> compute_selection)
-: m_layout(nullptr)
-, m_comparison_roofline(nullptr)
+: m_comparison_roofline(nullptr)
 , m_comparison_table(nullptr)
 , m_data_provider(data_provider)
 , m_settings(SettingsManager::GetInstance())
 , m_compute_selection(compute_selection)
+, m_view(ViewRoofline)
 , m_target_workload_id(ComputeSelection::INVALID_SELECTION_ID)
 , m_target_kernel_id(ComputeSelection::INVALID_SELECTION_ID)
 , m_toolbar_available_width(0)
 , m_workload_selection_changed_token(EventManager::InvalidSubscriptionToken)
 , m_kernel_selection_changed_token(EventManager::InvalidSubscriptionToken)
 {
-    m_widget_name = GenUniqueName("ComparisonView");
-    LayoutItem toolbar_item(-1, 0);
-    toolbar_item.m_child_flags = ImGuiChildFlags_AutoResizeY;
-    toolbar_item.m_item =
-        std::make_shared<RocCustomWidget>([this]() { RenderToolbar(); });
-    LayoutItem content_item(-1, 0);
-    content_item.m_item =
-        std::make_shared<RocCustomWidget>([this]() { RenderContent(); });
-    std::vector<LayoutItem> layout_items;
-    layout_items.push_back(toolbar_item);
-    layout_items.push_back(content_item);
-    m_layout              = std::make_unique<VFixedContainer>(layout_items);
+    m_widget_name         = GenUniqueName("ComparisonView");
     m_comparison_roofline = std::make_unique<Roofline>(data_provider, Roofline::Compare);
     m_comparison_table =
         std::make_unique<ComparisonTable>(data_provider, compute_selection);
@@ -102,23 +91,66 @@ ComputeComparisonView::~ComputeComparisonView() { UnsubscribeEvents(); }
 void
 ComputeComparisonView::Update()
 {
-    if(m_comparison_roofline)
+    switch(m_view)
     {
-        m_comparison_roofline->Update();
-    }
-    if(m_comparison_table)
-    {
-        m_comparison_table->Update();
+        case ViewRoofline:
+        {
+            if(m_comparison_roofline)
+            {
+                m_comparison_roofline->Update();
+            }
+            break;
+        }
+        case ViewMetrics:
+        {
+            if(m_comparison_table)
+            {
+                m_comparison_table->Update();
+            }
+            break;
+        }
+        default:
+        {
+            break;
+        }
     }
 }
 
 void
 ComputeComparisonView::Render()
 {
-    if(m_layout)
+    ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding,
+                        m_settings.GetDefaultStyle().ChildRounding);
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing,
+                        m_settings.GetDefaultStyle().ItemSpacing);
+    ImGui::BeginChild("comparison", ImVec2(0, 0), ImGuiChildFlags_AlwaysUseWindowPadding);
+    RenderToolbar();
+    ImGui::Spacing();
+    switch(m_view)
     {
-        m_layout->Render();
+        case ViewRoofline:
+        {
+            if(m_comparison_roofline)
+            {
+                m_comparison_roofline->Render();
+            }
+            break;
+        }
+        case ViewMetrics:
+        {
+            if(m_comparison_table)
+            {
+                m_comparison_table->Render();
+            }
+            break;
+        }
+        default:
+        {
+            break;
+        }
     }
+    ImGui::EndChild();
+    ImGui::PopStyleVar(2);
 }
 
 void
@@ -161,6 +193,7 @@ void
 ComputeComparisonView::RenderToolbar()
 {
     const ImGuiStyle& style = m_settings.GetDefaultStyle();
+    ImFont*           icons = m_settings.GetFontManager().GetFont(FontType::kIcon);
     ImGui::PushStyleColor(ImGuiCol_ChildBg, ImGui::ColorConvertU32ToFloat4(
                                                 m_settings.GetColor(Colors::kBgPanel)));
     ImGui::PushStyleColor(
@@ -169,13 +202,12 @@ ComputeComparisonView::RenderToolbar()
     ImGui::PushStyleVar(
         ImGuiStyleVar_WindowPadding,
         ImVec2(style.WindowPadding.x + 4.0f, style.WindowPadding.y + 2.0f));
-    ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 0.0f);
-    ImGui::BeginChild("compare_target_toolbar", ImVec2(-1, 0),
-                      ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Borders);
-
     ImGui::PushStyleVar(ImGuiStyleVar_FramePadding,
                         ImVec2(style.FramePadding.x, style.FramePadding.y + 1.0f));
     ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, style.FrameRounding);
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0.0f, 0.0f));
+    ImGui::BeginChild("compare_target_toolbar", ImVec2(-1, 0),
+                      ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Borders);
     ImGui::AlignTextToFramePadding();
     ImGui::TextUnformatted("Compare With:");
     ImGui::SameLine(0, style.ItemSpacing.x);
@@ -251,53 +283,114 @@ ComputeComparisonView::RenderToolbar()
     }
     PopComboStyles();
     ImGui::EndDisabled();
-    ImGui::SameLine();
+    VerticalSeparator(&m_settings);
+    ImGui::GetWindowDrawList()->AddRectFilled(
+        ImGui::GetCursorScreenPos(),
+        ImGui::GetCursorScreenPos() + ImVec2(2.0f * (ImGui::CalcTextSize("Roofline").x +
+                                                     2.0f * style.FramePadding.x),
+                                             ImGui::GetFrameHeight()),
+        m_settings.GetColor(Colors::kButton), m_settings.GetDefaultStyle().FrameRounding);
+    if(ColoredButton("Roofline",
+                     m_settings.GetColor(m_view == ViewRoofline ? Colors::kAccent
+                                                                : Colors::kButton),
+                     m_settings.GetColor(m_view == ViewRoofline ? Colors::kAccent
+                                                                : Colors::kButtonHovered),
+                     m_settings.GetColor(m_view == ViewRoofline ? Colors::kAccent
+                                                                : Colors::kButtonActive),
+                     m_settings.GetColor(m_view == ViewRoofline ? Colors::kTextOnAccent
+                                                                : Colors::kTextMain)) &&
+       m_view != ViewRoofline)
+    {
+        m_view = ViewRoofline;
+    }
+    ImGui::SameLine(0.0f, 0.0f);
+    if(ColoredButton(
+           "Metrics",
+           m_settings.GetColor(m_view == ViewMetrics ? Colors::kAccent : Colors::kButton),
+           m_settings.GetColor(m_view == ViewMetrics ? Colors::kAccent
+                                                     : Colors::kButtonHovered),
+           m_settings.GetColor(m_view == ViewMetrics ? Colors::kAccent
+                                                     : Colors::kButtonActive),
+           m_settings.GetColor(m_view == ViewMetrics ? Colors::kTextOnAccent
+                                                     : Colors::kTextMain),
+           nullptr, ImGui::GetItemRectSize()) &&
+       !m_view == ViewMetrics)
+    {
+        m_view = ViewMetrics;
+    }
     VerticalSeparator(&m_settings);
     if(m_toolbar_available_width > 0.0f)
     {
         ImGui::Dummy(
             ImVec2(m_toolbar_available_width, ImGui::GetFrameHeightWithSpacing()));
     }
-    ImGui::SameLine();
     VerticalSeparator(&m_settings);
-    ImVec4 bg_base =
-        ImGui::ColorConvertU32ToFloat4(m_settings.GetColor(Colors::kComparisonBase));
-    ImVec4 bg_target =
-        ImGui::ColorConvertU32ToFloat4(m_settings.GetColor(Colors::kComparisonTarget));
-    ImVec4 bg_lesser =
-        ImGui::ColorConvertU32ToFloat4(m_settings.GetColor(Colors::kComparisonLesser));
-    ImVec4 bg_greater =
-        ImGui::ColorConvertU32ToFloat4(m_settings.GetColor(Colors::kComparisonGreater));
-    ImGui::SameLine();
-    ImGui::ColorEdit4("b", &bg_base.x, LEGEND_FLAGS);
-    ImGui::SameLine(0.0f, style.FramePadding.x);
+    ImGui::ColorButton(
+        "b", ImGui::ColorConvertU32ToFloat4(m_settings.GetColor(Colors::kComparisonBase)),
+        LEGEND_FLAGS,
+        ImVec2(ImGui::CalcTextSize("Baseline").x + 2.0f * style.FramePadding.x,
+               ImGui::GetFrameHeight()));
+    ImGui::SameLine(ImGui::GetItemRectMin().x - ImGui::GetWindowPos().x +
+                    style.FramePadding.x);
     ImGui::TextUnformatted("Baseline");
-    ImGui::SameLine(0.0f, style.FramePadding.x);
-    ImGui::ColorEdit4("t", &bg_target.x, LEGEND_FLAGS);
-    ImGui::SameLine(0.0f, style.FramePadding.x);
+    ImGui::SameLine(ImGui::GetItemRectMax().x - ImGui::GetWindowPos().x +
+                    style.FramePadding.x);
+    ImGui::ColorButton(
+        "t",
+        ImGui::ColorConvertU32ToFloat4(m_settings.GetColor(Colors::kComparisonTarget)),
+        LEGEND_FLAGS,
+        ImVec2(ImGui::CalcTextSize("Target").x + 2.0f * style.FramePadding.x,
+               ImGui::GetFrameHeight()));
+    ImGui::SameLine(ImGui::GetItemRectMin().x - ImGui::GetWindowPos().x +
+                    style.FramePadding.x);
     ImGui::TextUnformatted("Target");
-    ImGui::SameLine(0.0f, style.FramePadding.x);
-    ImGui::ColorEdit4("d<", &bg_lesser.x, LEGEND_FLAGS);
-    ImGui::SameLine(0.0f, style.FramePadding.x);
-    ImGui::TextUnformatted("Difference");
+    ImGui::SameLine(ImGui::GetItemRectMax().x - ImGui::GetWindowPos().x +
+                    style.FramePadding.x);
+    float diff_width = ImGui::CalcTextSize(DELTA).x;
+    ImGui::PushFont(icons);
+    diff_width += ImGui::CalcTextSize(ICON_ARROW_DOWN).x;
+    ImGui::PopFont();
+    ImGui::ColorButton(
+        "d<",
+        ImGui::ColorConvertU32ToFloat4(m_settings.GetColor(Colors::kComparisonLesser)),
+        LEGEND_FLAGS,
+        ImVec2(diff_width + 2.0f * style.FramePadding.x, ImGui::GetFrameHeight()));
+    ImGui::SameLine(ImGui::GetItemRectMin().x - ImGui::GetWindowPos().x +
+                    style.FramePadding.x);
+    ImGui::TextUnformatted(DELTA);
     ImGui::SameLine();
-    ImGui::PushFont(m_settings.GetFontManager().GetFont(FontType::kIcon), 0.0f);
+    ImGui::PushFont(icons);
     ImGui::TextUnformatted(ICON_ARROW_DOWN);
     ImGui::PopFont();
-    ImGui::SameLine(0.0f, style.FramePadding.x);
-    ImGui::ColorEdit4("d>", &bg_greater.x, LEGEND_FLAGS);
-    ImGui::SameLine(0.0f, style.FramePadding.x);
-    ImGui::TextUnformatted("Difference");
+    ImGui::SameLine(ImGui::GetItemRectMax().x - ImGui::GetWindowPos().x +
+                    style.FramePadding.x);
+    ImGui::ColorButton(
+        "d>",
+        ImGui::ColorConvertU32ToFloat4(m_settings.GetColor(Colors::kComparisonGreater)),
+        LEGEND_FLAGS,
+        ImVec2(diff_width + 2.0f * style.FramePadding.x, ImGui::GetFrameHeight()));
+    ImGui::SameLine(ImGui::GetItemRectMin().x - ImGui::GetWindowPos().x +
+                    style.FramePadding.x);
+    ImGui::TextUnformatted(DELTA);
     ImGui::SameLine();
-    ImGui::PushFont(m_settings.GetFontManager().GetFont(FontType::kIcon), 0.0f);
+    ImGui::PushFont(icons);
     ImGui::TextUnformatted(ICON_ARROW_UP);
     ImGui::PopFont();
+    ImGui::SameLine(ImGui::GetItemRectMax().x - ImGui::GetWindowPos().x +
+                    style.FramePadding.x);
+    if(m_view == ViewMetrics && m_comparison_table)
+    {
+        m_comparison_table->RenderToolbar();
+    }
+    else
+    {
+        ImGui::Spacing();
+    }
     ImGui::SameLine();
     m_toolbar_available_width =
         std::max(0.0f, m_toolbar_available_width + ImGui::GetContentRegionAvail().x);
-    ImGui::PopStyleVar(2);
     ImGui::EndChild();
-    ImGui::PopStyleVar(2);
+    ImGui::PopStyleVar(4);
     ImGui::PopStyleColor(2);
 }
 
@@ -311,20 +404,28 @@ ComputeComparisonView::RenderContent()
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing,
                         m_settings.GetDefaultStyle().ItemSpacing);
     ImGui::BeginChild("comparison", ImVec2(0, 0), ImGuiChildFlags_AlwaysUseWindowPadding);
-    const float avail  = ImGui::GetContentRegionAvail().x;
-    const float aspect = ImGui::GetWindowWidth() / ImGui::GetWindowHeight();
-    if(m_comparison_roofline)
+    switch(m_view)
     {
-        ImGui::BeginChild("roofline_container", ImVec2(avail, avail / aspect));
-        m_comparison_roofline->Render();
-        ImGui::EndChild();
-    }
-    ImGui::Spacing();
-    if(m_comparison_table)
-    {
-        ImGui::BeginChild("table_container", ImVec2(avail, avail / aspect));
-        m_comparison_table->Render();
-        ImGui::EndChild();
+        case ViewRoofline:
+        {
+            if(m_comparison_roofline)
+            {
+                m_comparison_roofline->Render();
+            }
+            break;
+        }
+        case ViewMetrics:
+        {
+            if(m_comparison_table)
+            {
+                m_comparison_table->Render();
+            }
+            break;
+        }
+        default:
+        {
+            break;
+        }
     }
     ImGui::EndChild();
     ImGui::PopStyleVar(3);
@@ -366,11 +467,9 @@ ComparisonTable::ComparisonTable(DataProvider&                     data_provider
 , m_retry_fetch(false)
 , m_filter_common_metrics(false)
 , m_percentage_threshold(0.0f)
-, m_layout(nullptr)
-, m_toolbar_available_width(0.0f)
+, m_show_pins(true)
 , m_tab_container(nullptr)
 , m_pinned_table(nullptr)
-, m_pinned_item(nullptr)
 , m_max_pinned_height(FLT_MAX)
 , m_preset(nullptr)
 , m_metrics_fetched_token(EventManager::InvalidSubscriptionToken)
@@ -388,23 +487,6 @@ ComparisonTable::ComparisonTable(DataProvider&                     data_provider
                 RemovePinnedMetric(table, index);
             }
         });
-    LayoutItem toolbar_item(-1, 0);
-    toolbar_item.m_child_flags = ImGuiChildFlags_AutoResizeY;
-    toolbar_item.m_item =
-        std::make_shared<RocCustomWidget>([this]() { RenderToolbar(); });
-    LayoutItem pinned_item(-1, 0);
-    pinned_item.m_child_flags = ImGuiChildFlags_AutoResizeY;
-    pinned_item.m_item =
-        std::make_shared<RocCustomWidget>([this]() { RenderPinnedMetrics(); });
-    LayoutItem content_item(-1, 0);
-    content_item.m_item = std::make_shared<RocCustomWidget>([this]() { RenderTables(); });
-    std::vector<LayoutItem> layout_items;
-    layout_items.push_back(toolbar_item);
-    layout_items.push_back(pinned_item);
-    int pinned_index = static_cast<int>(layout_items.size() - 1);
-    layout_items.push_back(content_item);
-    m_layout              = std::make_unique<VFixedContainer>(layout_items);
-    m_pinned_item         = m_layout->GetMutableAt(pinned_index);
     m_baseline_request_id = RequestIdBuilder::MakeClientRequestId(
         RequestType::kFetchMetrics, m_client_id_baseline);
     m_target_request_id = RequestIdBuilder::MakeClientRequestId(
@@ -510,17 +592,26 @@ ComparisonTable::Render()
 {
     m_loading = m_data_provider.IsRequestPending(m_baseline_request_id) ||
                 m_data_provider.IsRequestPending(m_target_request_id);
+    m_max_pinned_height =
+        ImGui::GetContentRegionAvail().y * 0.5f - ImGui::GetFrameHeightWithSpacing();
     ImGui::PushStyleColor(ImGuiCol_ChildBg, m_settings.GetColor(Colors::kBgPanel));
     ImGui::PushStyleColor(ImGuiCol_Border, m_settings.GetColor(Colors::kBorderColor));
+    if(m_show_pins && m_pinned_table)
+    {
+        ImGui::BeginChild("pinned_card", ImVec2(0, 0),
+                          ImGuiChildFlags_Borders | ImGuiChildFlags_AutoResizeY);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0.0f, 0.02f));
+        ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 0.0f);
+        SectionTitle("Pinned Metrics");
+        RenderPinnedMetrics();
+        ImGui::PopStyleVar(3);
+        ImGui::EndChild();
+    }
     ImGui::BeginChild("table_card", ImVec2(0, 0), ImGuiChildFlags_Borders);
     ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 0.0f);
     SectionTitle("Metrics");
-    m_max_pinned_height =
-        ImGui::GetWindowHeight() * 0.5f - ImGui::GetFrameHeightWithSpacing();
-    if(m_layout)
-    {
-        m_layout->Render();
-    }
+    RenderTables();
     ImGui::PopStyleVar();
     ImGui::EndChild();
     ImGui::PopStyleColor(2);
@@ -532,6 +623,103 @@ ComparisonTable::InputChanged(uint32_t target_workload_id, uint32_t target_kerne
     m_target_workload_id = target_workload_id;
     m_target_kernel_id   = target_kernel_id;
     m_inputs_changed     = true;
+}
+
+void
+ComparisonTable::RenderToolbar()
+{
+    const ImGuiStyle& style        = m_settings.GetDefaultStyle();
+    ImFont*           icons        = m_settings.GetFontManager().GetFont(FontType::kIcon);
+    float             region_width = ImGui::GetWindowWidth();
+    ImGui::BeginDisabled(!m_tab_container);
+    ImGui::SetNextItemWidth(ImGui::CalcTextSize("100.0%").x +
+                            2.0f * style.FramePadding.x);
+    if(ImGui::DragFloat("##threshold_percentage", &m_percentage_threshold, 0.1f, 0.0f,
+                        100.0f, "%.1f%%", ImGuiSliderFlags_ClampOnInput))
+    {
+        m_highlight_changed = true;
+    }
+    if(BeginItemTooltipStyled())
+    {
+        ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + region_width * 0.25f);
+        ImGui::TextUnformatted(
+            "Highlight absolute percentage differences above this threshold.");
+        ImGui::TextUnformatted("Drag to adjust or double click to edit.");
+        ImGui::PopTextWrapPos();
+        EndTooltipStyled();
+    }
+    VerticalSeparator(&m_settings);
+    ImGui::TextUnformatted("Peerless Metrics");
+    ImGui::SameLine();
+    if(IconButton(m_filter_common_metrics ? ICON_EYE_SLASH : ICON_EYE, icons,
+                  ImVec2(0.0f, 0.0f), nullptr, false, style.FramePadding))
+    {
+        m_filter_common_metrics = !m_filter_common_metrics;
+        if(m_pinned_table)
+        {
+            if(m_filter_common_metrics)
+            {
+                m_pinned_table->ApplyRowFilter(ROW_TAG_INVALID_MATCH);
+            }
+            else
+            {
+                m_pinned_table->RemoveRowFilter(ROW_TAG_INVALID_MATCH);
+            }
+        }
+        for(CategoryModel& category_model : m_categories)
+        {
+            for(std::shared_ptr<Table>& table : category_model.tables)
+            {
+                if(table)
+                {
+                    if(m_filter_common_metrics)
+                    {
+                        table->ApplyRowFilter(ROW_TAG_INVALID_MATCH);
+                    }
+                    else
+                    {
+                        table->RemoveRowFilter(ROW_TAG_INVALID_MATCH);
+                    }
+                }
+            }
+        }
+    }
+    if(BeginItemTooltipStyled())
+    {
+        ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + region_width * 0.25f);
+        ImGui::TextUnformatted(
+            "Toggle displaying of peerless (grey-shaded) metrics, such "
+            "as architecture specific metrics "
+            "when comparing across GPU architectures.");
+        ImGui::PopTextWrapPos();
+        EndTooltipStyled();
+    }
+    ImGui::EndDisabled();
+    if(m_pinned_table)
+    {
+        VerticalSeparator(&m_settings);
+        ImGui::TextUnformatted("Pinned");
+        ImGui::SameLine();
+
+        float icon_font_size =
+            m_settings.GetFontManager().GetFontSize(FontSize::kDefault);
+        const char* icon = m_show_pins ? ICON_CHEVRON_DOWN : ICON_CHEVRON_LEFT;
+        ImGui::PushFont(icons, icon_font_size);
+        // use larger icon for consistent spacing
+        ImVec2 icon_size = ImGui::CalcTextSize(ICON_CHEVRON_DOWN);
+        ImGui::PopFont();
+
+        if(IconButton(icon, icons,
+                      ImVec2(icon_size.x + style.FramePadding.x * 2.0f,
+                             icon_size.y + style.FramePadding.y * 2.0f),
+                      m_show_pins ? "Hide pinned metrics" : "Show pinned metrics", false,
+                      style.FramePadding, m_settings.GetColor(Colors::kTransparent),
+                      m_settings.GetColor(Colors::kButtonHovered),
+                      m_settings.GetColor(Colors::kTransparent)))
+        {
+            m_show_pins = !m_show_pins;
+        }
+    }
 }
 
 void
@@ -888,134 +1076,6 @@ ComparisonTable::UpdateMetrics()
 }
 
 void
-ComparisonTable::RenderToolbar()
-{
-    const ImGuiStyle& style = m_settings.GetDefaultStyle();
-    ImGui::PushStyleColor(ImGuiCol_ChildBg, ImGui::ColorConvertU32ToFloat4(
-                                                m_settings.GetColor(Colors::kBgPanel)));
-    ImGui::PushStyleColor(
-        ImGuiCol_Border,
-        ImGui::ColorConvertU32ToFloat4(m_settings.GetColor(Colors::kBorderColor)));
-    ImGui::PushStyleVar(
-        ImGuiStyleVar_WindowPadding,
-        ImVec2(style.WindowPadding.x + 4.0f, style.WindowPadding.y + 2.0f));
-    ImGui::BeginChild("toolbar", ImVec2(-1, 0),
-                      ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Borders);
-    float region_width = ImGui::GetContentRegionAvail().x;
-    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding,
-                        ImVec2(style.FramePadding.x, style.FramePadding.y + 1.0f));
-    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, style.FrameRounding);
-    ImGui::AlignTextToFramePadding();
-    ImGui::TextUnformatted("Difference Threshold");
-    ImGui::SameLine(0.0f, style.FramePadding.x);
-    ImGui::SetNextItemWidth(ImGui::GetFrameHeight() * 3.0f);
-    ImGui::BeginDisabled(!m_tab_container);
-    if(ImGui::DragFloat("##threshold_percentage", &m_percentage_threshold, 0.1f, 0.0f,
-                        100.0f, "%.1f%%", ImGuiSliderFlags_ClampOnInput))
-    {
-        m_highlight_changed = true;
-    }
-    if(BeginItemTooltipStyled())
-    {
-        ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + region_width * 0.25f);
-        ImGui::TextUnformatted("Highlight absolute percentage differences above this "
-                               "threshold.\nDrag to adjust or double click to edit.");
-        ImGui::PopTextWrapPos();
-        EndTooltipStyled();
-    }
-    VerticalSeparator(&m_settings);
-    if(ImGui::Button(m_filter_common_metrics ? "Show Common Metrics" : "Show All Metrics",
-                     ImVec2(ImGui::CalcTextSize("Show Common Metrics").x +
-                                style.FramePadding.x * 2.0f,
-                            0)))
-    {
-        m_filter_common_metrics = !m_filter_common_metrics;
-        if(m_pinned_table)
-        {
-            if(m_filter_common_metrics)
-            {
-                m_pinned_table->ApplyRowFilter(ROW_TAG_INVALID_MATCH);
-            }
-            else
-            {
-                m_pinned_table->RemoveRowFilter(ROW_TAG_INVALID_MATCH);
-            }
-        }
-        for(CategoryModel& category_model : m_categories)
-        {
-            for(std::shared_ptr<Table>& table : category_model.tables)
-            {
-                if(table)
-                {
-                    if(m_filter_common_metrics)
-                    {
-                        table->ApplyRowFilter(ROW_TAG_INVALID_MATCH);
-                    }
-                    else
-                    {
-                        table->RemoveRowFilter(ROW_TAG_INVALID_MATCH);
-                    }
-                }
-            }
-        }
-    }
-    if(BeginItemTooltipStyled())
-    {
-        ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + region_width * 0.25f);
-        ImGui::TextUnformatted(
-            "Toggle displaying of mismatched (grey-shaded) metrics, such "
-            "as architecture specific metrics "
-            "when comparing across GPU architectures.");
-        ImGui::PopTextWrapPos();
-        EndTooltipStyled();
-    }
-    VerticalSeparator(&m_settings);
-    ImGui::EndDisabled();
-    ImGui::SameLine();
-    if(m_toolbar_available_width > 0.0f)
-    {
-        ImGui::Dummy(
-            ImVec2(m_toolbar_available_width, ImGui::GetFrameHeightWithSpacing()));
-    }
-    if(m_pinned_item)
-    {
-        ImGui::SameLine();
-        VerticalSeparator(&m_settings);
-        ImGui::TextUnformatted("Pinned");
-        ImGui::SameLine();
-
-        ImFont* icon_font = m_settings.GetFontManager().GetFont(FontType::kIcon);
-        float   icon_font_size =
-            m_settings.GetFontManager().GetFontSize(FontSize::kDefault);
-        const char* icon =
-            m_pinned_item->m_visible ? ICON_CHEVRON_DOWN : ICON_CHEVRON_LEFT;
-        ImGui::PushFont(icon_font, icon_font_size);
-        // use larger icon for consistent spacing
-        ImVec2 icon_size = ImGui::CalcTextSize(ICON_CHEVRON_DOWN);
-        ImGui::PopFont();
-
-        if(IconButton(
-               icon, icon_font,
-               ImVec2(icon_size.x + style.FramePadding.x * 2.0f,
-                      icon_size.y + style.FramePadding.y * 2.0f),
-               m_pinned_item->m_visible ? "Hide pinned metrics" : "Show pinned metrics",
-               false, style.FramePadding, m_settings.GetColor(Colors::kTransparent),
-               m_settings.GetColor(Colors::kButtonHovered),
-               m_settings.GetColor(Colors::kTransparent)))
-        {
-            m_pinned_item->m_visible = !m_pinned_item->m_visible;
-        }
-    }
-    ImGui::SameLine();
-    m_toolbar_available_width =
-        std::max(0.0f, m_toolbar_available_width + ImGui::GetContentRegionAvail().x);
-    ImGui::PopStyleVar(2);
-    ImGui::EndChild();
-    ImGui::PopStyleVar();
-    ImGui::PopStyleColor(2);
-}
-
-void
 ComparisonTable::RenderCategory(const size_t i)
 {
     ImGui::PushID(static_cast<int>(i));
@@ -1089,8 +1149,9 @@ ComparisonTable::RenderTables() const
     else if(!m_loading)
     {
         CenterNextTextItem("Select a kernel for comparison.");
-        ImGui::SetCursorPosY((ImGui::GetContentRegionAvail().y - ImGui::GetFontSize()) *
-                             0.5f);
+        ImGui::SetCursorPosY(ImGui::GetCursorPosY() +
+                             (ImGui::GetContentRegionAvail().y - ImGui::GetFontSize()) *
+                                 0.5f);
         ImGui::TextDisabled("Select a kernel for comparison.");
     }
     if(m_loading)

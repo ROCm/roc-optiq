@@ -108,6 +108,29 @@ function resolveInWorkspace(file: string): vscode.Uri | undefined {
     return vscode.Uri.joinPath(folders[0].uri, file);
 }
 
+// Enough candidates to recognise the right one, few enough that a vague query
+// does not come back as a directory listing.
+const MAX_FIND_RESULTS = 40;
+
+// Locates a file by name or fragment. Without this the assistant can only read
+// a path it was already told, which a trace often cannot supply - GPU call
+// stacks frequently carry no source file at all.
+async function findSource(query: string): Promise<object> {
+    if (!query) {
+        return { ok: false, error: 'find_source needs something to search for.' };
+    }
+    const pattern = query.includes('*') ? query : `**/*${query}*`;
+    const uris = await vscode.workspace.findFiles(
+        pattern,
+        '**/{node_modules,.git,build,out,dist,target,.venv}/**',
+        MAX_FIND_RESULTS
+    );
+    return {
+        ok: true,
+        files: uris.map((uri) => vscode.workspace.asRelativePath(uri, false))
+    };
+}
+
 async function readSource(file: string): Promise<object> {
     const uri = resolveInWorkspace(file);
     if (!uri) {
@@ -210,6 +233,8 @@ export function activate(context: vscode.ExtensionContext): void {
                 const request = body ? JSON.parse(body) : {};
                 if (req.url === '/read') {
                     reply(200, await readSource(request.file ?? ''));
+                } else if (req.url === '/find') {
+                    reply(200, await findSource(request.query ?? ''));
                 } else if (req.url === '/apply') {
                     reply(200, await applyChange(request));
                 } else {

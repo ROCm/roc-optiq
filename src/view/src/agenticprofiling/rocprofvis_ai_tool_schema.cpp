@@ -51,6 +51,7 @@ const AssistantToolLabel ASSISTANT_TOOL_LABELS[] = {
     { "run_analysis_script", "Running an analysis script..." },
 #endif
 #ifdef ROCPROFVIS_ENABLE_CLOSED_LOOP
+    { "find_source", "Searching the workspace..." },
     { "read_source", "Reading the source..." },
     { "propose_code_change", "Offering a change..." },
     { "list_launch_profiles", "Listing launch profiles..." },
@@ -573,15 +574,27 @@ MakeAssistantToolsJson()
     // The loop tools reach the editor and the profiler rather than the trace.
     // Each says plainly that it only offers, because the whole contract is that
     // nothing here happens without the user pressing Approve.
+    jt::Json find_params = ObjectParams();
+    AddParam(find_params, "query", "string",
+             "A file name, part of one, or a glob like **/*.cpp.");
+    find_params["required"][0] = "query";
+    AddTool(tools, next_tool++, "find_source",
+            "Find files in the editor's workspace by name. This is how you get a "
+            "path when the trace does not hand you one - GPU call stacks often "
+            "carry no source file at all. Never ask the user where something "
+            "lives: search for it, and read the likely candidate.",
+            find_params);
+
     jt::Json read_params = ObjectParams();
     AddParam(read_params, "file", "string",
-             "Path relative to the root of the workspace the editor has open.");
+             "Path relative to the root of the workspace the editor has open, as "
+             "find_source printed it.");
     read_params["required"][0] = "file";
     AddTool(tools, next_tool++, "read_source",
             "Read a source file out of the editor's workspace. Always read before "
             "you propose a change: what you match on has to be text that is "
-            "actually there. The file name comes from the call stack that "
-            "event_details returns for the event you are blaming.",
+            "actually there. Get the path from the call stack event_details "
+            "returns, or from find_source when it has none.",
             read_params);
 
     jt::Json change_params = ObjectParams();

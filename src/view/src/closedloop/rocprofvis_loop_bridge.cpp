@@ -658,6 +658,52 @@ LoopBridge::PollAttach()
 }
 
 std::string
+LoopBridge::FindSource(const std::string& query) const
+{
+    if(query.empty())
+    {
+        return "find_source needs a file name, or part of one, to search for.";
+    }
+
+    std::string url;
+    std::string token;
+    if(!Endpoint(url, token))
+    {
+        return LOOP_NO_EDITOR;
+    }
+
+    jt::Json body;
+    body["query"] = query;
+
+    jt::Json    reply;
+    std::string error;
+    if(!CallIde(url, token, "/find", body, LOOP_QUICK_TIMEOUT_SECONDS, reply, error))
+    {
+        return error;
+    }
+    if(!JsonUtils::GetBool(reply, "ok", false))
+    {
+        const std::string reason = JsonUtils::GetString(reply, "error", "");
+        return reason.empty() ? std::string("The editor could not search.") : reason;
+    }
+
+    const std::vector<std::string> files = JsonUtils::GetStringArray(reply, "files");
+    if(files.empty())
+    {
+        return "Nothing in the workspace matches \"" + query +
+               "\". Try a shorter fragment of the name.";
+    }
+
+    std::ostringstream out;
+    out << "Files matching \"" << query << "\":\n";
+    for(const std::string& file : files)
+    {
+        out << "  " << file << "\n";
+    }
+    return out.str();
+}
+
+std::string
 LoopBridge::ReadSource(const std::string& file) const
 {
     if(file.empty())

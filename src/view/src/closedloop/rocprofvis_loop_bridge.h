@@ -85,8 +85,9 @@ public:
     // What to tell the model, and clears the offer.
     std::string TakeResult();
 
-    // Read-only and answered in the same call: both are one loopback round trip
+    // Read-only and answered in the same call: each is one loopback round trip
     // rather than a query over the trace.
+    std::string FindSource(const std::string& query) const;
     std::string ReadSource(const std::string& file) const;
     std::string Status() const;
 

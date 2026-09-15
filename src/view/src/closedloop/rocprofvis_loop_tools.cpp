@@ -59,6 +59,14 @@ ParkedResult(const char* status, uint32_t timeout_seconds)
 }
 
 AssistantToolStartResult
+ToolFindSource(const AssistantToolContext&, const jt::Json& args, const std::string&)
+{
+    const std::string query = JsonUtils::GetString(args, "query", "");
+    return DoneResult(LoopBridge::GetInstance().FindSource(query),
+                      "Searching the workspace...");
+}
+
+AssistantToolStartResult
 ToolReadSource(const AssistantToolContext&, const jt::Json& args, const std::string&)
 {
     const std::string file = JsonUtils::GetString(args, "file", "");
@@ -127,6 +135,7 @@ ToolLoopStatus(const AssistantToolContext&, const jt::Json&, const std::string&)
 }
 
 const AssistantToolEntry k_loop_tool_handlers[] = {
+    { "find_source", ToolFindSource },
     { "read_source", ToolReadSource },
     { "propose_code_change", ToolProposeCodeChange },
     { "list_launch_profiles", ToolListLaunchProfiles },

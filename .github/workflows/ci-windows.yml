@@ -41,6 +41,7 @@ on:
           - nightly
           - rc
           - release
+          - nightly-experimental
       release_version:
         description: 'Manually specify a release version to use in the S3 bucket path. Defaults to YYYY_MM_DD timestamp if left empty.'
         type: string
@@ -57,6 +58,10 @@ on:
         description: 'Build with in-app profiler launch (ROCPROFVIS_ENABLE_PROFILER)'
         type: boolean
         default: false
+      artifact_suffix:
+        description: 'Suffix to append to artifact names (e.g. -experimental)'
+        type: string
+        default: ''
   workflow_call:
     inputs:
       os_version:
@@ -105,6 +110,10 @@ on:
         default: 'test'
       release_version:
         description: 'Manually specify a release version to use in the S3 bucket path. Defaults to YYYY_MM_DD timestamp if left empty.'
+        type: string
+        default: ''
+      artifact_suffix:
+        description: 'Suffix to append to artifact names (e.g. -experimental)'
         type: string
         default: ''
 
@@ -238,7 +247,7 @@ jobs:
         if: steps.run_tests.outcome == 'failure'
         uses: actions/upload-artifact@v7
         with:
-          name: test-logs-windows-${{ matrix.os-version }}
+          name: test-logs-windows-${{ matrix.os-version }}${{ inputs.artifact_suffix }}
           path: |
             ${{ env.BUILD_DIR }}/${{ inputs.cmake_config_preset }}/ctest-results.xml
             ${{ env.BUILD_DIR }}/${{ inputs.cmake_config_preset }}/Testing/Temporary/**
@@ -257,7 +266,7 @@ jobs:
         if: ${{ inputs.upload_to_github }}
         uses: actions/upload-artifact@v7
         with:
-          name: roc-optiq-windows-${{ matrix.os-version }}-release
+          name: roc-optiq-windows-${{ matrix.os-version }}-release${{ inputs.artifact_suffix }}
           path: | 
             ${{ env.DIST_DIR }}
           retention-days: 2

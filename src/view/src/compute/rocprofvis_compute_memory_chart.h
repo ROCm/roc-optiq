@@ -90,7 +90,8 @@ private:
     std::string        MetricLabel(const MemChartMetricRef& ref,
                                    const std::string&       title_override) const;
     std::string        MetricValueText(const MemChartMetricRef& ref,
-                                       bool include_unit = true) const;
+                                       bool include_unit = true,
+                                       const std::string& unit_override = "") const;
 
     void ShowMetricTooltip(ImVec2 hover_min, ImVec2 hover_max,
                            const MemChartMetricRef& ref, bool show_description,

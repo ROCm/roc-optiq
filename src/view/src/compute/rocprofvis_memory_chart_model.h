@@ -33,15 +33,16 @@ struct MemChartMetricRef
     std::string name;
 };
 
-// One line inside a block: a metric plus an optional label override. When no
-// override is given the metric's own name is used; the unit comes from the
-// metric entry. `category` (read/write/atomic/util/hit/stall/misc) selects the
-// accent color; when empty the color is inferred from the label text.
+// One line inside a block. All fields optional: `title` overrides the metric's
+// name, `unit` overrides the entry's unit suffix, and `category`
+// (read/write/atomic/util/hit/stall/misc) sets the accent color (else inferred
+// from the label).
 struct MemChartContentItem
 {
     MemChartMetricRef metric;
     std::string       title;
     std::string       category;
+    std::string       unit;
 };
 
 struct MemChartBlock

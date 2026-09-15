@@ -15,30 +15,30 @@
             { "metric": "3.1.17", "title": "Workgroups" }
         ]},
         { "id": 10, "column": 2, "order": 0, "title": "LDS", "content": [
-            { "metric": "3.1.19", "title": "Util" },
-            { "metric": "3.1.20", "title": "Latency" }
+            { "metric": "3.1.19", "title": "Util", "unit": "%" },
+            { "metric": "3.1.20", "title": "Latency", "unit": "cycles" }
         ]},
         { "id": 11, "column": 2, "order": 1, "title": "Vector L1 Cache", "content": [
-            { "metric": "3.1.24", "title": "Hit" },
-            { "metric": "3.1.25", "title": "Latency" },
-            { "metric": "3.1.26", "title": "Coalescing" },
-            { "metric": "3.1.27", "title": "Stall" }
+            { "metric": "3.1.24", "title": "Hit", "unit": "%" },
+            { "metric": "3.1.25", "title": "Latency", "unit": "cycles" },
+            { "metric": "3.1.26", "title": "Coalescing", "unit": "%" },
+            { "metric": "3.1.27", "title": "Stall", "unit": "cycles" }
         ]},
         { "id": 12, "column": 2, "order": 2, "title": "Scalar L1D Cache", "content": [
-            { "metric": "3.1.32", "title": "Hit" },
-            { "metric": "3.1.33", "title": "Latency" }
+            { "metric": "3.1.32", "title": "Hit", "unit": "%" },
+            { "metric": "3.1.33", "title": "Latency", "unit": "cycles" }
         ]},
         { "id": 13, "column": 2, "order": 3, "title": "Instr L1 Cache", "content": [
-            { "metric": "3.1.38", "title": "Hit" },
-            { "metric": "3.1.39", "title": "Latency" }
+            { "metric": "3.1.38", "title": "Hit", "unit": "%" },
+            { "metric": "3.1.39", "title": "Latency", "unit": "cycles" }
         ]},
         { "id": 20, "column": 3, "title": "L2 Cache", "content": [
             { "metric": "3.1.41", "title": "Rd" },
             { "metric": "3.1.42", "title": "Wr" },
             { "metric": "3.1.43", "title": "Atomic" },
-            { "metric": "3.1.44", "title": "Hit" },
-            { "metric": "3.1.45", "title": "Rd Latency" },
-            { "metric": "3.1.46", "title": "Wr Latency" }
+            { "metric": "3.1.44", "title": "Hit", "unit": "%" },
+            { "metric": "3.1.45", "title": "Rd Latency", "unit": "cycles" },
+            { "metric": "3.1.46", "title": "Wr Latency", "unit": "cycles" }
         ]},
         { "id": 30, "column": 4, "order": 0, "title": "xGMI / PCIe", "content": [] },
         { "id": 31, "column": 4, "order": 1, "title": "Fabric", "content": [

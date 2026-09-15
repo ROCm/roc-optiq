@@ -619,17 +619,24 @@ ComputeMemoryChartView::MetricLabel(const MemChartMetricRef& ref,
 }
 
 std::string
-ComputeMemoryChartView::MetricValueText(const MemChartMetricRef& ref,
-                                        bool include_unit) const
+ComputeMemoryChartView::MetricValueText(const MemChartMetricRef& ref, bool include_unit,
+                                        const std::string& unit_override) const
 {
     const MetricValue* metric = ResolveMetric(ref);
     if(!metric || metric->values.empty()) return UNAVAILABLE_METRIC_TEXT;
     std::string text = FormatMetricValue(metric->values.begin()->second);
-    if(include_unit && metric->entry && !metric->entry->unit.empty() &&
-       IsAvailableMetricText(text))
+    if(include_unit && IsAvailableMetricText(text))
     {
-        text += " ";
-        text += metric->entry->unit;
+        // The layout's unit takes priority; otherwise use the metric entry's unit
+        // (the curated Memory Chart table stores % metrics without a unit).
+        std::string unit = !unit_override.empty()
+                               ? unit_override
+                               : (metric->entry ? metric->entry->unit : std::string());
+        if(!unit.empty())
+        {
+            text += " ";
+            text += unit;
+        }
     }
     return text;
 }
@@ -660,7 +667,7 @@ ComputeMemoryChartView::MeasureBlock(MemChartBlock& block) const
     for(const MemChartContentItem& item : block.content)
     {
         std::string label = MetricLabel(item.metric, item.title);
-        std::string value = MetricValueText(item.metric);
+        std::string value = MetricValueText(item.metric, true, item.unit);
         float       row_w = ImGui::CalcTextSize(label.c_str()).x + METRIC_VALUE_GAP +
                       ImGui::CalcTextSize(value.c_str()).x;
         width = std::max(width, row_w);
@@ -989,7 +996,7 @@ ComputeMemoryChartView::DrawLeaf(ImDrawList* draw_list, ImVec2 origin,
     for(const MemChartContentItem& item : block.content)
     {
         std::string label = MetricLabel(item.metric, item.title);
-        std::string value = MetricValueText(item.metric);
+        std::string value = MetricValueText(item.metric, true, item.unit);
         ImU32       accent = ColorForCategory(item.category, label);
 
         ImVec2 row_min(block_x + ROW_INSET_X, cursor_y - ROW_HOVER_INSET);
@@ -1493,11 +1500,10 @@ ComputeMemoryChartView::ShowMetricTooltip(ImVec2 hover_min, ImVec2 hover_max,
         // the tooltip entirely instead of drawing an empty box.
         if(!has_desc && !show_val) return;
 
-        ImGui::SetNextWindowSizeConstraints(ImVec2(0, 0),
-                                            ImVec2(TOOLTIP_MAX_WIDTH, FLT_MAX));
         BeginTooltipStyled();
         if(has_desc)
         {
+            // Wrap and auto-size; a window max-width below the wrap pos clips text.
             ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + TOOLTIP_MAX_WIDTH);
             ImGui::TextUnformatted(metric->entry->description.c_str());
             ImGui::PopTextWrapPos();

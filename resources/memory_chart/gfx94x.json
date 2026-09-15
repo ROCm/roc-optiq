@@ -4,20 +4,20 @@
         { "id": 1, "column": 0, "title": "Kernel", "content": [] },
 
         { "id": 10, "column": 1, "order": 0, "title": "VL1D", "content": [
-            { "metric": "3.1.24", "title": "Hit", "category": "hit" }
+            { "metric": "3.1.24", "title": "Hit", "category": "hit", "unit": "%" }
         ]},
         { "id": 11, "column": 1, "order": 1, "title": "LDS", "content": [
-            { "metric": "3.1.19", "title": "Util", "category": "util" }
+            { "metric": "3.1.19", "title": "Util", "category": "util", "unit": "%" }
         ]},
         { "id": 12, "column": 1, "order": 2, "title": "sL1D", "content": [
-            { "metric": "3.1.32", "title": "Hit", "category": "hit" }
+            { "metric": "3.1.32", "title": "Hit", "category": "hit", "unit": "%" }
         ]},
         { "id": 13, "column": 1, "order": 3, "title": "L1I", "content": [
-            { "metric": "3.1.38", "title": "Hit", "category": "hit" }
+            { "metric": "3.1.38", "title": "Hit", "category": "hit", "unit": "%" }
         ]},
 
         { "id": 20, "column": 2, "title": "L2", "content": [
-            { "metric": "3.1.44", "title": "Hit", "category": "hit" }
+            { "metric": "3.1.44", "title": "Hit", "category": "hit", "unit": "%" }
         ]},
 
         { "id": 30, "column": 3, "order": 0, "title": "Data Fabric", "content": [

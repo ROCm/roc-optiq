@@ -97,6 +97,7 @@ ParseContentItem(jt::Json& element)
         item.metric   = ReadMetricRef(element, "metric");
         item.title    = ReadString(element, "title");
         item.category = ReadString(element, "category");
+        item.unit     = ReadString(element, "unit");
     }
     else
     {

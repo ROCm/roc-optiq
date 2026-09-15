@@ -28,6 +28,7 @@
                 "metric": { "$ref": "#/definitions/metricRef" },
                 "title": { "type": "string" },
                 "category": { "$ref": "#/definitions/category" },
+                "unit": { "type": "string", "description": "Unit suffix appended to the value (e.g. \"%\", \"cycles\", \"Gb/s\")." },
                 "note": { "type": "string", "description": "Authoring note; ignored by the parser." }
             }
         },

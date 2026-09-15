@@ -664,15 +664,21 @@ void RegisterAppTests(ImGuiTestEngine* e)
         }
 
         const std::vector<const TabItem*> tabs = tc->GetTabs();
-        ComputeComparisonView* comp = nullptr;
+        ComparisonTable* comp = nullptr;
         std::string            comp_label;
         for (const TabItem* tab : tabs)
         {
             if (tab->m_id == "compute_comparison_view")
             {
-                comp       = dynamic_cast<ComputeComparisonView*>(tab->m_widget.get());
-                comp_label = tab->m_label;
-                break;
+                ComputeComparisonView* view =
+                    dynamic_cast<ComputeComparisonView*>(tab->m_widget.get());
+                if (view)
+                {
+                    ComputeComparisonViewTestPeer peer{*view};
+                    comp = peer.ComparisonTablePtr();
+                    comp_label = tab->m_label;
+                    break;
+                }               
             }
         }
         if (comp == nullptr)
@@ -692,7 +698,7 @@ void RegisterAppTests(ImGuiTestEngine* e)
         ctx->ItemClick(("//Main Window/**/" + comp_label).c_str());
         ctx->Yield(3);
 
-        ComputeComparisonViewTestPeer peer{*comp};
+        ComputeComparisonTableTestPeer peer{*comp};
 
         // The toolbar combos live in a nested child window the "//Main Window/**/"
         // wildcard can't reach. Find it by name fragment, click relative to it, and
@@ -703,7 +709,7 @@ void RegisterAppTests(ImGuiTestEngine* e)
             for (ImGuiWindow* w : g->Windows)
             {
                 if (w->WasActive && strstr(w->Name, "TabContainer") &&
-                    strstr(w->Name, "/toolbar_"))
+                    strstr(w->Name, "/compare_target_toolbar_"))
                 {
                     ctx->SetRef(w);
                     return true;
@@ -725,8 +731,7 @@ void RegisterAppTests(ImGuiTestEngine* e)
         }
         ctx->Yield(2);
 
-        // Index into the target workload's kernels (not baseline's): that combo's
-        // order is the gathered-item order we click by index below.
+        // Choose a kernel from the target workload, not the baseline workload.
         const uint32_t target_workload = peer.TargetWorkloadId();
         std::vector<const KernelInfo*> kernels =
             cv->GetDataProvider()->ComputeModel().GetKernelInfoList(target_workload);
@@ -749,11 +754,15 @@ void RegisterAppTests(ImGuiTestEngine* e)
         ctx->ItemClick("##target_kernels");
         ctx->Yield(1);
         {
-            ImGuiTestItemList items;
-            ctx->GatherItems(&items, "//$FOCUSED");
-            IM_CHECK(target_idx < items.GetSize());
-            if (target_idx >= items.GetSize()) return;
-            ctx->ItemClick(items[target_idx]->ID);
+            ImGuiWindow* popup = ImGui::GetCurrentContext()->NavWindow;
+            IM_CHECK(popup != nullptr);
+            if (popup == nullptr) return;
+
+            // PushID(kernel_id) + Selectable("") uses this ID. GatherItems also
+            // includes decorative ElidedText children, so its index is not a kernel index.
+            const ImGuiID selectable_id =
+                popup->GetID(static_cast<int>(kernels[target_idx]->id));
+            ctx->ItemClick(selectable_id);
         }
         ctx->Yield(2);
         ctx->SetRef("//Main Window");

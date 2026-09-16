@@ -6,13 +6,23 @@ alongside this file. When `CODING.md` disagrees with this file,
 `CODING.md` wins. When this file disagrees with source, the source
 wins; update this file in the same change.
 
-This is a planned feature. Enable with
-`ROCPROFVIS_ENABLE_SCRIPTING=ON`. Phase 0 (runtime skeleton), the
-Phase 1 **read path** (query-table alloc, `optiq.trace` / `selection` /
+**This feature is partly shipped, not merely planned** - the phases
+below are a live roadmap, so check a phase's status before trusting its
+tense. Enable with `ROCPROFVIS_ENABLE_SCRIPTING=ON` (default OFF, "in
+development").
+
+In tree and working today: Phase 0 (runtime skeleton), the Phase 1
+**read path** (query-table alloc, `optiq.trace` / `selection` /
 `table().fetch()` / `Track.events()`, Catch2 against a sample trace),
-and Phase 1b (DataProvider execute + floating script editor) are in
-tree. The `run_analysis_script` half of Phase 3 is also in tree; the
-vendored CPython half is not.
+Phase 1b (DataProvider execute + the **docked Script tab**, not the
+floating editor this document originally planned), and the
+`run_analysis_script` half of Phase 3, which is how the Ask Optiq
+assistant offers a script. Not in tree: the vendored CPython half of
+Phase 3, and Phases 2 and 4 in full.
+
+Sections describing shipped phases document code you can read; sections
+describing Phase 2 and Phase 4 are design intent and may not match any
+source file. Section 8 has the authoritative per-phase status.
 
 ---
 
@@ -105,18 +115,45 @@ Table tab.
 
 ## 3. Interpreter library (`src/python/`)
 
-C ABI sketch (owned by `roc-optiq-python`):
+The C ABI, in full, from `src/python/inc/rocprofvis_python_runtime.h`.
+Note the return type is `rocprofvis_python_result_t`, **not**
+`rocprofvis_result_t` - the runtime shares no types with the controller:
 
 ```c
-rocprofvis_result_t rocprofvis_python_init(char const* runtime_root);
-rocprofvis_result_t rocprofvis_python_exec(
-    char const* source,
-    rocprofvis_python_result_t (*prepare_globals)(void* py_dict, void* user),
-    void                       (*teardown_globals)(void* py_dict, void* user),
-    void* user);
+typedef enum rocprofvis_python_result_t
+{
+    kRocProfVisPythonSuccess         = 0,
+    kRocProfVisPythonError           = 1,
+    kRocProfVisPythonInvalidArgument = 2,
+    kRocProfVisPythonCancelled       = 3,
+    kRocProfVisPythonNotInitialized  = 4,
+} rocprofvis_python_result_t;
+
+typedef rocprofvis_python_result_t (*rocprofvis_python_prepare_globals_t)(
+    void* py_dict, void* user);
+typedef void (*rocprofvis_python_teardown_globals_t)(void* py_dict, void* user);
+typedef void (*rocprofvis_python_done_t)(void* user,
+                                         rocprofvis_python_result_t result,
+                                         char const* error_message);
+
+rocprofvis_python_result_t rocprofvis_python_init(char const* runtime_root);
+rocprofvis_python_result_t rocprofvis_python_exec(
+    char const*                          source,
+    rocprofvis_python_prepare_globals_t  prepare_globals,
+    rocprofvis_python_teardown_globals_t teardown_globals, void* user,
+    rocprofvis_python_done_t done, unsigned long long timeout_ms);
 void rocprofvis_python_interrupt(void);   // raise into interpreter thread
 void rocprofvis_python_shutdown(void);
+unsigned long long rocprofvis_python_interpreter_thread_id(void);  // tests only
 ```
+
+`rocprofvis_python_exec` returns as soon as the work is queued; `done`
+is what reports the outcome, on the interpreter thread with the GIL
+released, and its `error_message` is valid only for the duration of the
+callback. `timeout_ms` of 0 takes the built-in `SCRIPT_TIMEOUT_MS`
+(30000). **A timeout is reported as an error, not a cancellation**,
+because a script that outstays its budget is a script to fix, while only
+an explicit `rocprofvis_python_interrupt` is a cancellation.
 
 `prepare_globals` is provided by the controller: it creates the
 `optiq` module and stuffs `optiq.trace` / `optiq.selection` into the
@@ -313,9 +350,18 @@ script's rows.
 
 ## 5. Bindings (`src/controller/src/python/`)
 
-One translation unit may include `Python.h`. Every `rocprofvis_handle_t*`
-is a capsule (`owns=0` borrowed, `owns=1` for alloc'd future/array/table).
-Bindings call only the C ABI.
+One translation unit may include `Python.h`. Bindings call only the C
+ABI.
+
+**There is no capsule-per-handle scheme, and no `owns` flag.** Earlier
+drafts of this section described one; it was never built. There are
+exactly two capsules, both created with a null destructor:
+`rocprofvis.script_session` (`SESSION_CAPSULE_NAME`) and
+`rocprofvis.script_result` (`RESULT_CAPSULE_NAME`), stashed as
+`optiq._session` and `optiq.result._result`. Controller handles are
+held as plain raw pointers inside `TrackObject` / `TraceObject` /
+`TableObject`, and what keeps them from outliving their run is not
+ownership tracking but `check_generation` - see §3's *Run generation*.
 
 Before adding a wrapper that stores a controller or a session, read
 §3's *Run generation* - every entry point that reads either needs
@@ -325,23 +371,39 @@ pointers is not obvious.
 User-facing surface (injected as `optiq`, not imported from disk):
 
 ```python
-optiq.trace                 # current rocprofvis_controller_t*
-optiq.selection             # tracks + time range from context args
+optiq.trace                 # optiq.Trace, or None
+optiq.selection             # optiq.Selection, or None: .tracks, .start, .end
 optiq.result.text(str)
-optiq.on_progress(cb)       # optional; default is none
+print(...)                  # injected; appends a line to the result
 
 t = optiq.table()           # table_alloc; NOT the UI singleton
-t.fetch(tracks=..., start=..., end=..., where=..., group=...)
+                            # refuses a compute trace
+t.fetch(tracks=, start=, end=, where=, filter=, group=, group_columns=,
+        sort_column=, sort_order=, start_index=, count=, type=)
 for row in t.rows():
     ...
 
-for e in optiq.selection.tracks[0].events():
+for e in optiq.selection.tracks[0].events(start=None, end=None):
     gap = e.end - e.start
 ```
 
-Property getters wrap `get_uint64` / `get_double` / `get_string` /
-`get_object` for a small set of names (`track.id`, `event.start`,
-…). Raw property ids can remain an escape hatch.
+All twelve `fetch` keywords are listed above; `count` defaults to
+`DEFAULT_TABLE_FETCH_COUNT` (10000). Six module constants come with it:
+`TRACK_TYPE_SAMPLES`, `TRACK_TYPE_EVENTS`, `TABLE_TYPE_EVENTS`,
+`TABLE_TYPE_SAMPLES`, `SORT_ASCENDING`, `SORT_DESCENDING`. `optiq` is
+also registered in `sys.modules`, so `import optiq` works even though
+nothing is on `sys.path`.
+
+**`optiq.on_progress` does not exist.** It appeared in earlier drafts
+and was never implemented; §5.1 below describes the polling that stands
+in for it.
+
+`Track` exposes `id`, `type`, `name`, `sub_name`, `min_time`,
+`max_time`, `num_entries` plus `events()`; `Trace` exposes `tracks`.
+Those getters wrap `get_uint64` / `get_double` / `get_string` /
+`get_object`. There is **no** raw-property escape hatch - an earlier
+draft said one "can remain", but scripts cannot reach arbitrary property
+ids.
 
 `Event` is a **copy**, not a live handle: `id`, `start`, `end`, `level`,
 `name`, `category`, `value`. `copy_event` fills it from the event
@@ -454,21 +516,28 @@ mutation still belongs to `OptiqActions`. Four things it relies on:
   chain as every other UI action, so nothing in `agenticprofiling/`
   keeps a pointer to a view that a closing tab could take away.
 - **The wait is on a person, so it gets its own deadline.**
-  `AssistantToolStartResult::timeout_seconds` overrides the 45s a fetch
-  runs under; the script tool asks for 300. The panel also routes a
+  `AssistantToolStartResult::timeout_seconds` overrides the default
+  fetch deadline (`ASSISTANT_FETCH_TIMEOUT_SECONDS`, 350s); the script
+  tool asks for 300 via
+  `ASSISTANT_SCRIPT_APPROVAL_TIMEOUT_SECONDS`. The panel also routes a
   timed-out `kScript` fetch back through
   `FinishAssistantScriptFetch` rather than reporting a generic timeout,
   because only that side knows whether the user never answered or the
   run was abandoned, and it has an outstanding offer to clear.
-- **`ScriptApproval` is the whole state machine.** `kPending` ->
-  `kRunning` -> `kFinished` on approval, `kRejected` on refusal, and
-  `kFailedToStart` when an approved run could not begin - which exists
-  so a script that never started still answers the assistant instead of
-  waiting out the full five minutes. `AssistantScriptFetchPending` is
-  true for `kPending` and `kRunning` only.
-- **An offer is pinned to its trace.** `Run` refuses when the tab in
-  front is not the trace the script was written against, the same
-  mistake `m_turn_project_id` guards elsewhere.
+- **`ScriptApproval` is the whole state machine.** Idle is `kNone`
+  (manual runs stay there). `kPending` -> `kRunning` -> `kFinished` on
+  approval, `kRejected` on refusal, and `kFailedToStart` when an
+  approved run could not begin - which exists so a script that never
+  started still answers the assistant instead of waiting out the full
+  five minutes. `AssistantScriptFetchPending` is true for `kPending`
+  and `kRunning` only.
+- **An offer is pinned to its trace by construction, not by a check.**
+  There is one `ScriptEditor` per trace and each holds its own
+  `m_data_provider`, so a run can only ever go to the trace the script
+  was written against. `Run()` itself tests only that the provider is
+  `ProviderState::kReady` - there is no "wrong tab in front" refusal, so
+  do not go looking for one. The cross-trace guard that *does* exist is
+  the assistant's `m_turn_project_id`, which is a different layer.
 - **Events are filtered by source id.** Every editor hears every
   `ScriptExecuteCompleteEvent`, and there is one editor per trace, so
   each answers only events carrying the trace it started a run on.
@@ -634,8 +703,10 @@ table (Catch2 + sample trace). Even-spacing is the acceptance script.
 
 ### Phase 1b — Minimal UI
 
-**Done when:** a floating editor can run a script and show text (including the
-even-spacing example).
+**Complete.** Shipped as the docked **Script tab** of the details panel
+rather than the floating editor planned here; see §6 for why. A script
+can be run from it and its text result shown, including the
+even-spacing example.
 
 - `DataProvider` request type + poll + progress callback.
 - Floating `ScriptEditor` (`InputTextMultiline` + text result, Load/Save,
@@ -663,7 +734,9 @@ and a release build does not require a system Python.
   tree, along with the exec deadline and tracebacks that make an
   unattended script safe to run and possible to fix.
 - ~~Editor shows the source before or as it runs.~~ In tree via
-  `ShowGeneratedScript`.
+  `ScriptEditor::ProposeScript`, reached through
+  `OptiqActions::ProposeScript`. (There is no `ShowGeneratedScript`;
+  earlier drafts named one.)
 - Vendor embeddable CPython into the package; CI builds against it.
 - Tighten restriction (optional RestrictedPython, scratch-dir `open`).
 - ~~Decide about raw `where` / `group`.~~ **Decided: they stay raw, and
@@ -708,11 +781,18 @@ and a release build does not require a system Python.
 
 ---
 
-## 10. Suggested first implementation slice
+## 10. What to pick up next
 
-Phases 0, 1, and 1b are in tree. Next is Phase 2 (result tables in
-the view). Do not start Ask Optiq or vendored CPython until that
-presentation path is stable.
+Phases 0, 1, and 1b are in tree, and so is the `run_analysis_script`
+half of Phase 3. The two open pieces are **Phase 2** (result tables in
+the view - `optiq.result` is text-only today) and the **vendored
+CPython** half of Phase 3, which is what would let the app ship without
+depending on a build-machine Python.
+
+This section used to read "Do not start Ask Optiq or vendored CPython
+until that presentation path is stable." Ask Optiq shipped first, so
+that ordering no longer describes the project; the sequencing advice is
+kept only as history.
 
 ---
 
@@ -786,9 +866,6 @@ reasoning moved to the section it belongs to.
 
 ### Docs
 
-- `PYTHON.md` tells users to open Script from the **compute** toolbar
-  (compute traces have no Script tab) and says `print` is unavailable
-  (it is injected into globals).
 - `optiq.on_progress` from §5 is still unimplemented, and implementing
   it naively would break cancel-safety — see the note in §5.
 

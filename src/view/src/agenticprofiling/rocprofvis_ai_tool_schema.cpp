@@ -640,10 +640,21 @@ MakeAssistantToolsJson()
             run_params);
 
     jt::Json loop_params = ObjectParams();
+    AddParam(loop_params, "editor", "string",
+             "Which editor to work through. Omit to take whichever is available, "
+             "local first. Pass remote when the trace came off another machine "
+             "and its source only exists there.");
+    loop_params["properties"]["editor"]["enum"] =
+        MakeStringEnum({ "local", "remote" });
     AddTool(tools, next_tool++, "loop_status",
             "Whether an editor is attached, which workspace it has open, and the "
-            "traces this loop has produced. Call it before offering a change, and "
-            "whenever you want to quote a lap rather than guess at one.",
+            "traces this loop has produced. This is also what attaches, so call "
+            "it before searching or offering a change.\n"
+            "Read the workspace it reports back. An editor open on the user's own "
+            "machine is not necessarily the one holding the code that was "
+            "profiled: if the path it names is unrelated to the workload in the "
+            "trace, call this again with editor=\"remote\" rather than searching "
+            "the wrong checkout.",
             loop_params);
 #endif
 

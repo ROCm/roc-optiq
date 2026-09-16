@@ -85,6 +85,10 @@ constexpr size_t LOOP_MAX_SOURCE_CHARS = 24000;
 constexpr char LOOP_HANDSHAKE_FILE[] = "optiq-ide.json";
 constexpr char LOOP_TOKEN_HEADER[]   = "X-Optiq-Token";
 constexpr char LOOP_JSON_TYPE[]      = "application/json";
+// Every route here exists in the extension that ships beside this file, so a
+// 404 means the editor is running an older one - which otherwise degrades into
+// a tool that silently answers nothing.
+constexpr int LOOP_HTTP_NOT_FOUND = 404;
 
 constexpr float LOOP_RING_RADIUS = 14.0f;
 constexpr float LOOP_RING_DOT    = 3.5f;
@@ -215,6 +219,16 @@ CallIde(const std::string& base_url, const std::string& token, const char* path,
         error_out = "The editor did not answer (" +
                     httplib::to_string(response.error()) +
                     "). Check that the workspace is still open.";
+        return false;
+    }
+
+    if(response->status == LOOP_HTTP_NOT_FOUND)
+    {
+        error_out =
+            "The attached editor is running an older Optiq extension that does "
+            "not have this feature. Tell the user to reload their editor window "
+            "(Developer: Reload Window); until they do, the loop cannot search "
+            "or change code.";
         return false;
     }
 
@@ -523,17 +537,29 @@ LoopBridge::RecordLap(const std::string& trace_path)
     }
 }
 
+void
+LoopBridge::SetEditorChoice(EditorChoice choice)
+{
+    m_editor_choice = choice;
+}
+
 bool
 LoopBridge::Endpoint(std::string& url_out, std::string& token_out) const
 {
-    IdeEndpoint local;
-    if(ReadLocalHandshake(local))
+    // Asked for the remote one, answer only with the remote one. Falling back
+    // to whatever editor happens to be open here would apply a change to a
+    // different checkout than the one that was profiled.
+    if(m_editor_choice != EditorChoice::kRemote)
     {
-        url_out   = local.url;
-        token_out = local.token;
-        return true;
+        IdeEndpoint local;
+        if(ReadLocalHandshake(local))
+        {
+            url_out   = local.url;
+            token_out = local.token;
+            return true;
+        }
     }
-    if(m_remote_attached)
+    if(m_editor_choice != EditorChoice::kLocal && m_remote_attached)
     {
         url_out   = m_remote_url;
         token_out = m_remote_token;
@@ -742,10 +768,18 @@ LoopBridge::Status() const
     std::ostringstream out;
 
     IdeEndpoint local;
-    if(ReadLocalHandshake(local))
+    const bool  local_open = ReadLocalHandshake(local);
+
+    if(local_open && m_editor_choice != EditorChoice::kRemote)
     {
         out << "editor: attached on this machine, workspace=" << local.workspace
             << "\n";
+        // The loop will edit and build in that workspace, which is only right if
+        // it is the code the trace came from. Said plainly so a trace profiled
+        // on another box is not quietly matched against the wrong checkout.
+        out << "note: if this is not the source the trace was built from, call "
+               "loop_status again with editor=\"remote\" to use the editor on "
+               "the profiling host instead\n";
     }
     else if(m_remote_attached)
     {
@@ -755,6 +789,13 @@ LoopBridge::Status() const
     else
     {
         out << "editor: not attached\n";
+        if(local_open)
+        {
+            out << "note: an editor is open on this machine (workspace="
+                << local.workspace
+                << ") but editor=\"remote\" was asked for and none was found "
+                   "there\n";
+        }
     }
 
     out << "laps: " << m_laps.size() << "\n";

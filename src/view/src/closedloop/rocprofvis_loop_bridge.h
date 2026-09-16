@@ -91,8 +91,22 @@ public:
     std::string ReadSource(const std::string& file) const;
     std::string Status() const;
 
-    // True once an editor has been located, locally or on the remote host.
+    // True once an editor has been located, under whichever preference is set.
     bool Attached() const;
+
+    // Which editor the loop works through. An editor open on this machine is
+    // not necessarily the one holding the code being profiled - the trace may
+    // have come off a remote box whose source is only there - so this is a
+    // choice rather than something to infer. kRemote never silently falls back
+    // to a local editor, because quietly editing the wrong checkout is worse
+    // than saying nothing is attached.
+    enum class EditorChoice : uint8_t
+    {
+        kAuto,
+        kLocal,
+        kRemote
+    };
+    void SetEditorChoice(EditorChoice choice);
 
     // Goes looking for an editor running under VS Code Remote-SSH: reads its
     // handshake over the SSH profile already configured for profiling. Returns
@@ -153,8 +167,9 @@ private:
     // A remote editor, once Attach() has found one. The URL is the tunnelled
     // localhost address VS Code handed the extension, so requests still never
     // leave this machine.
-    bool        m_remote_attached = false;
-    std::string m_remote_url;
+    EditorChoice m_editor_choice = EditorChoice::kAuto;
+    bool         m_remote_attached = false;
+    std::string  m_remote_url;
     std::string m_remote_token;
     std::string m_remote_workspace;
 

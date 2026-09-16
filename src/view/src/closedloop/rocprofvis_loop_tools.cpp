@@ -117,12 +117,27 @@ ToolProposeProfileRun(const AssistantToolContext&, const jt::Json& args,
 // the workspace may be open over Remote-SSH on the box being profiled - asks
 // that host over the SSH profile, which takes a connect and an authenticate.
 AssistantToolStartResult
-ToolLoopStatus(const AssistantToolContext&, const jt::Json&, const std::string&)
+ToolLoopStatus(const AssistantToolContext&, const jt::Json& args, const std::string&)
 {
-    LoopBridge& bridge = LoopBridge::GetInstance();
+    LoopBridge&       bridge = LoopBridge::GetInstance();
+    const std::string editor = JsonUtils::GetString(args, "editor", "");
+    if(editor == "remote")
+    {
+        bridge.SetEditorChoice(LoopBridge::EditorChoice::kRemote);
+    }
+    else if(editor == "local")
+    {
+        bridge.SetEditorChoice(LoopBridge::EditorChoice::kLocal);
+    }
+
     if(bridge.Attached())
     {
         return DoneResult(bridge.Status(), "Checking the loop...");
+    }
+    if(editor == "local")
+    {
+        return DoneResult("No editor is open on this machine.\n" + bridge.Status(),
+                          "No editor");
     }
 
     const std::string refused = bridge.Attach();

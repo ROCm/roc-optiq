@@ -34,6 +34,9 @@ It also pairs with sibling agent guides under `.agents/`:
   change touches `src/model/`. The brief model summary in section
   5 of this file is the high-level pass; `DATABASE.md` is the
   source of truth.
+- [`.agents/SCRIPTING.md`](./SCRIPTING.md) - planned in-app Python
+  analysis (editor sends source strings; controller owns execution).
+  Read this when adding script UI or Ask Optiq script tools.
 
 When humans and `CODING.md` disagree with this file, `CODING.md` wins.
 
@@ -52,7 +55,7 @@ When humans and `CODING.md` disagree with this file, `CODING.md` wins.
 9. Trace View Internals (System Profiler UI)
 10. Compute View Internals (Compute Profiler UI)
 11. UI Models (`src/view/src/model/`)
-12. Cross-cutting Services (Events, Monitoring, Settings, Logging, Persistence)
+12. Cross-cutting Services (Events, Monitoring, Settings, Logging, Persistence, Ask Optiq)
 13. Remote / SSH and Profiler Launch UI
 14. Data Flow: Requests, Remote Operations, and Profiler Runs
 15. Coding Conventions in this Repo
@@ -76,6 +79,10 @@ When humans and `CODING.md` disagree with this file, `CODING.md` wins.
 - **Render backend:** Vulkan (preferred) with OpenGL fallback. Selected by
   `src/app/src/rocprofvis_imgui_backend.cpp`.
 - **Persistence / parsing:** SQLite (`thirdparty/sqlite3/`), jsoncpp, yaml-cpp.
+- **HTTPS (Ask Optiq):** cpp-httplib (`thirdparty/cpp-httplib/`, a submodule
+  pinned to v0.53.1) with vendored mbedTLS. Targets the OpenAI
+  chat-completions API. Built only under
+  `ROCPROFVIS_ENABLE_AGENTIC_PROFILING` (default OFF).
 - **Logging:** spdlog (`thirdparty/spdlog/`). Use `spdlog::info/warn/error`,
   never `std::cout` / `printf` / `iostream`.
 - **File dialog:** Native via `nativefiledialog-extended` on most platforms,
@@ -405,7 +412,8 @@ AppWindow (singleton, RocWidget)
 |   |                 +-- ComputeTableView
 |   |                 +-- ComputeWorkloadView
 |   |                 +-- ComputeComparisonView
-|   |                 +-- (ComputeIsaView / ComputeTester, dev mode only)
+|   |                 +-- ComputeIsaView
+|   |                 +-- (ComputeTester, dev mode only)
 |   +-- [2] status bar (RocCustomWidget calling AppWindow::RenderStatusBar)
 +-- WelcomePage              : empty-state landing page
 +-- CompareFilesDialog       : two-trace compare modal (File > Compare, dev mode)
@@ -447,6 +455,9 @@ File: `src/view/src/rocprofvis_appwindow.{h,cpp}`. Owns global UI state:
   `m_file_dialog_preference`.
 - `void ShowPathPickerDialog(...)` - folder picker used by workflows
   such as profiler output selection.
+- `void ApplyPanelVisibilitySettings()` - applies the global toolbar,
+  details, topology, and histogram flags to every live layout. The
+  View menu and programmatic UI actions must both use this path.
 - `void ShowProfilerLauncher()` - lazy-opens the optional profiler
   launcher (`ROCPROFVIS_ENABLE_PROFILER`).
 - `Project* GetCurrentProject() / GetProject(id)` - lookup helpers.
@@ -780,6 +791,30 @@ subclassing this; don't roll your own.**
   at `get_application_log_path()`. `IsLiveUpdating()` feeds
   `AppWindow::WantsContinuousRender()`.
 
+### 7.15 `rocprofvis_script_editor.{h,cpp}` - Python analysis editor
+
+Gated on `ROCPROFVIS_ENABLE_SCRIPTING`. `class ScriptEditor` is the
+**Script tab** of the details panel, built and owned by `AnalysisView`
+beside Event Table / Top Events / Annotations. It is a plain
+`RocWidget` - no `ImGui::Begin`, no singleton, no visibility flag - so
+there is one editor per trace and `Run` reaches its own
+`DataProvider` and `TimelineSelection` without asking which tab is in
+front. Compute traces have no `AnalysisView`, so they have no Script
+tab.
+
+Run sends the source string through `DataProvider::ExecuteScript`
+(selected tracks / time range, or all tracks and the full trace).
+Cancel uses `CancelScript` (interpreter interrupt, not
+`CancelRequest` / JobSystem). Load/Save go through `AppWindow` file
+dialogs with a `.py` filter. Output is `optiq.result.text` / the error
+string. No syntax highlighting; result tables are Phase 2.
+
+Ask Optiq offers a script through `OptiqActions::ProposeScript`, which
+fills this tab and selects it; nothing runs until the user presses Run
+or Reject. `ScriptApproval` is that state machine, and
+`ScriptExecuteCompleteEvent` is filtered by trace source id because
+every editor hears every one of them.
+
 ## 8. Track Item Hierarchy
 
 Tracks are the horizontal lanes in the timeline. They live in
@@ -1104,6 +1139,54 @@ The bottom-right tabbed panel. Hosts, in source order:
   - `AnnotationView` - sticky-note list.
 - Listens to track / range / event selection events to keep tabs in
   sync.
+- **Compare mode (two compare sources).** Every applicable tab splits
+  into side-by-side, source-filtered A/B views; only `AnnotationView`
+  stays single (notes are project-wide). The chrome of those panes is
+  shared, see `rocprofvis_compare_panes.{h,cpp}` below - do not hand
+  roll another split or card. `AnalysisView::CompareGroup` bundles the
+  A/B `MultiTrackTable`s, their `HSplitContainer`, and the tab layout
+  for the Event and Sample tables; `BuildCompareGroup` and
+  `RenderCompareTab` are reused for both. The table pairs share one
+  filter/aggregation form (`RenderSharedFilterControls` /
+  `ApplySharedFiltersFrom`) without pooling results. The group-by combo
+  is the union of each source's last ungrouped header (`BuildCompareGroupByChoices`);
+  columns that exist on only one source are tagged (A) or (B), and
+  `AdjustFilterForRequest` drops a group-by that the sending table does
+  not have. `TopEventsView`
+  renders each category header once with A/B tables side by side
+  (per-source analysis-table slots `kAnalysisTop*TableB`). `EventsView`
+  and `TrackDetails` partition their selected-item cards into A/B
+  columns by each item's `TrackInfo::file_id`. A/B routing uses distinct
+  client request IDs plus per-source `TablesModel` slots
+  (`kCompareEventTableA/B`, `kCompareSampleTableA/B`); the two sources
+  hit the same controller table type, so a fetch that loses the race is
+  held in `InfiniteScrollTable::m_fetch_data` and reissued from
+  `Update()` on a later frame.
+
+### Compare panes (`rocprofvis_compare_panes.{h,cpp}`)
+
+The pieces every side-by-side view needs, so the four compare layouts
+stay identical:
+
+- `COMPARE_SOURCE_A` / `COMPARE_SOURCE_B` / `COMPARE_SOURCE_COUNT` and
+  `COMPARE_SOURCE_LABEL` - source order, which is also what
+  `TrackInfo::file_id` counts.
+- `IsCompareTrace(model)` - whether the trace was opened as an A/B
+  project. Use it instead of probing `GetCompareSource()` twice.
+- `MakeCompareSplit(pane_a, pane_b)` - the even `HSplitContainer` with
+  borderless, inset items, because each pane draws its own card.
+- `BeginCompareCard` / `EndCompareCard` - the bordered, padded surface
+  holding one source's content, styled like the panel it sits in (the
+  dialog `BeginPanelCard` look does not fit here).
+- `RenderCompareCardTitle(source, settings, summary)` - source badge,
+  elided source name, optional right-aligned summary, separator.
+  `MultiTrackTable::SetHeaderRenderer` + `RenderCard` draw a table
+  inside such a card.
+- `BuildCompareGroupByChoices(columns_a, columns_b, names, labels)` -
+  union of group-by column names for the shared combo (A's order, then
+  B-only). `names` is what the query uses; `labels` tags A-only / B-only
+  columns. Each table still filters with its own header in non-compare
+  views.
 
 ### `EventsView` (`rocprofvis_events_view.{h,cpp}`)
 
@@ -1119,8 +1202,11 @@ via `AddCopyRowCellMenuItems`.
 ### `MultiTrackTable` (`rocprofvis_multi_track_table.{h,cpp}`)
 
 `InfiniteScrollTable` subclass that aggregates rows across multiple
-selected tracks. Supports `group_by_choices`, custom filter store, and
-context menu copy.
+selected tracks. Supports `group_by_choices`, custom filter store,
+optional compare-source filtering, and context menu copy. Eligible
+group-by columns are cached from the last ungrouped header so compare
+mode can union A and B without changing the per-table combo used in
+non-compare views.
 
 ### `TrackDetails` (`rocprofvis_track_details.{h,cpp}`)
 
@@ -1251,7 +1337,7 @@ The compute analogue of `TraceView`. Owns:
   - `ComputeTableView` - hierarchical metric tables.
   - `ComputeWorkloadView` - system info + profiling config tables.
   - `ComputeComparisonView` - baseline vs target comparison.
-  - `ComputeIsaView` - dev-only source/ISA correlation.
+  - `ComputeIsaView` - source/ISA correlation and PC-sampling counts.
   - `ComputeTester` - dev-mode scratchpad
     (`#ifdef ROCPROFVIS_DEVELOPER_MODE`).
 - `m_data_provider` - same `DataProvider` type as `TraceView`, but its
@@ -1407,11 +1493,13 @@ ISA (and vice versa). The ISA pane is the always-visible primary pane;
 the optional source-code pane is shown on the right through the
 `Show Source Code` / `Hide Source Code` control.
 After trace metadata loads, `ComputeView` disables the ISA View tab and
-shows a tooltip when no kernel in the database has ISA lines. The availability
-flag is initialized once with the other data-dependent tab states.
-`RenderControlPanel()` hosts the source-file dropdown, and
-PC-sampling data is fetched through `PcSamplingRequestParams` /
-`DataProvider::FetchPcSampling` in three independent stages:
+shows a tooltip without constructing its widget when no kernel in the database
+has ISA lines. The availability flag is initialized once with the other
+data-dependent tab states.
+`RenderControlPanel()` hosts the source-file dropdown and the `Show Source
+Code` / `Show Stalls` controls. PC-sampling data is fetched through
+`PcSamplingRequestParams` / `DataProvider::FetchPcSampling` in three
+independent layers:
 
 - `kIsa` runs when the view opens or its kernel changes and loads only the
   code-object, kernel-symbol, and ISA-line data needed by the primary pane.
@@ -1419,19 +1507,31 @@ PC-sampling data is fetched through `PcSamplingRequestParams` /
   selected. It loads source-file metadata, ISA/source correlations, and the
   selected file's source lines. Source-file ID 0 asks the controller to choose
   the first available file.
-- `kStalls` runs when stall columns are shown and loads sample states, stall
-  reasons, and instruction-sample metadata.
+- `kStalls` runs when the user selects `Show Stalls`. The controller loads PC
+  sample states, stall-reason rows and lookups, instruction types, and
+  instruction-sample rows and lookups. The current view projection consumes
+  only each state's instruction UUID and total, issue, and stall counts.
 
-Only one PC-sampling request may be active per trace, so
-`QueuePcSamplingFetch()` retains later stages and submits them in ISA, source,
-then stall order. Results are cached per kernel (and per source-file ID
-for source lines); toggling a pane or column does not repeat a completed fetch. The
-DataProvider updates only the model portion owned by the completed stage and
-the view refreshes only after checking the request kind, kernel, and generation.
-Do not query the model directly from this view.
+`FetchPendingPcSampling()` submits all queued layers; ISA, source, and stalls
+use distinct `DataProvider` request IDs and may be in flight together. A newer
+request for the same layer cancels and replaces the older one. Controller data
+is cached on the kernel-owned `PcSampling` object, including source lines by
+source-file UUID. `DataProvider` updates only the view-model portion owned by
+the completed layer. `ComputeIsaView` accepts the callback only when its layer,
+kernel, selection generation, request token, and (for source) selected file
+still match. Do not query the controller or model directly from this view.
 
-Older traces can omit one or more PC-sampling tables. A failed optional source,
-stall, or comment request is isolated from the already-loaded ISA pane.
+The ISA table is always present. `Show Stalls` adds Total Count, Issue Count,
+and Stall Count columns, aggregated by instruction UUID across returned sample
+states. The source table is optional; its Stalls column is
+`100 * sum(stall_count) / sum(total_count)` for instructions mapped to the
+source line at `frame_index == 0`. Stall-reason text, instruction-sample
+metadata, active-thread percentage, wave-occupancy percentage, and dispatch
+UUID are available on the controller handle but are not currently represented
+in `PcSamplingData` or rendered by `ComputeIsaView`.
+
+PC-sampling queries require compute schema 2.2 or newer. A failed source or
+stall request is isolated from an already-loaded ISA pane.
 Source records with unknown or zero line numbers are omitted. ISA instructions
 that lack a valid source line remain visible and mouse-hoverable but cannot be
 selected for source correlation; hovering them clears the source-line hover.
@@ -1533,9 +1633,11 @@ controller results.
 - `rocprofvis_summary_model.{h,cpp}` - `SummaryModel`: holds the
   computed `SummaryInfo::AggregateMetrics`.
 - `rocprofvis_tables_model.{h,cpp}` - `TablesModel`: `enum class
-  TableType { kSampleTable, kEventTable, kEventSearchTable,
-  kSummaryKernelTable, kAnalysisTop* }` and the table cache addressed
-  by it.
+  TableType { kSampleTable, kEventTable, kCompareEventTableA/B,
+  kCompareSampleTableA/B, kEventSearchTable, kSummaryKernelTable,
+  kAnalysisTop*, kAnalysisTop*TableB }` and the table cache addressed
+  by it. The `*A/B` and `*TableB` slots hold the two compare sources'
+  results so independent A/B tables never overwrite each other.
 - `rocprofvis_analysis_model.{h,cpp}` - `AnalysisModel`: per-track
   queue/counter statistic cache plus analysis tables, using the
   `AnalysisTrackStatistics` state machine.
@@ -1812,6 +1914,253 @@ Use these instead of writing your own.
 - **Always reuse an existing icon constant** before adding a new
   glyph. Adding a new icon requires updating both files and the
   ranges array.
+
+### Ask Optiq assistant (`agenticprofiling/rocprofvis_ai_*.{h,cpp}`)
+
+An in-app LLM analyst that reads the open trace through the normal
+view APIs and drives the UI the way a user would.
+
+**System traces only.** Every tool reads the timeline, the tracks, or
+the GPU summary, so `StartAssistantTool` turns a compute trace away once
+- beside its "no trace open" check - rather than having each tool test
+for it. The panel is a singleton shared across tabs, which is what makes
+that guard necessary rather than cosmetic: the user can open it on a
+system trace and then bring a compute tab to the front. `ComputeView`
+does not offer the toolbar button.
+
+**Gated behind `ROCPROFVIS_ENABLE_AGENTIC_PROFILING`, default OFF**, the
+same way remote and profiler launch are gated. Everything in
+`src/view/src/agenticprofiling/` is left out of `VIEW_FILES` when the
+option is off, and so are `cpp-httplib`, mbedTLS, and `SecretStore`
+unless remote asks for them - which is why a default clone needs
+neither the `thirdparty/cpp-httplib` nor the `thirdparty/mbedtls`
+submodule. Every call site outside the folder is
+wrapped in `#ifdef`, so adding a new one means adding a guard: they are
+in `AppWindow` (destroy, `Update()`, the docked-render branch, the
+View-menu item), the `TraceView` toolbar, and `SettingsPanel` (the
+category, its switch cases, and the OK/Cancel token handling).
+
+One deliberate asymmetry: `AssistantProvider`/`AssistantSettings` and
+their JSON serialization in `SettingsManager` stay compiled either way,
+so a settings file written by an assistant-enabled build survives a
+round trip through one without it. Only the four `*AssistantToken`
+methods are guarded, because they are the sole users of `SecretStore`
+outside remote.
+
+Layered, transport at the bottom and the panel at the top:
+
+- `rocprofvis_ai_client.{h,cpp}` - `AssistantChatCall`. One POST to an
+  OpenAI chat-completions endpoint over cpp-httplib, plus the reply
+  parser (including a "harmony" inline tool-call fallback). Knows
+  nothing about traces.
+- `rocprofvis_ai_tool_schema.{h,cpp}` - `BuildAssistantToolsJson`, the
+  description of the tool set the model receives. Builds JSON out of
+  string literals and touches no view state, which is what makes it
+  safe to call from the HTTP worker thread while the UI thread draws.
+  The tool descriptions here are the only instructions the model gets
+  about what each tool is for, so they are product behaviour rather
+  than incidental text.
+- `rocprofvis_ai_tool_query.{h,cpp}` - turns query-shaped tool
+  arguments into the SQL fragments `DataProvider` takes. The one place
+  a bad argument could become bad SQL, so it treats model input as
+  hostile: column and operator whitelists rather than escaping, quoted
+  string literals, and escaped `LIKE` wildcards paired with an explicit
+  `ESCAPE` clause.
+- `rocprofvis_ai_tools.{h,cpp}` - the public executor surface plus
+  `StartAssistantTool`, which parses the arguments, refuses everything
+  but `offer_next_steps` when no trace is ready, then searches the UI
+  handler table and the data handler table in that order. Also defines
+  the handful of helpers both body files need. Reads go through
+  `DataProvider` and the view-side models only - never SQLite, never
+  `src/model/`.
+- `rocprofvis_ai_tools_internal.h` - private wiring between the three
+  executor files: the shared helpers and the two handler-table
+  accessors. Nothing outside `agenticprofiling/` includes it.
+- `rocprofvis_ai_ui_tools.cpp` - the tools that change Optiq rather
+  than read it: `goto`, `show_panel`, `switch_tab`, `flow_arrows`,
+  `annotate`, `bookmark`, `measure`, `reset_view`, and
+  `offer_next_steps`. Every one goes through `OptiqActions` and answers
+  in the same call, so none of them park a fetch or touch a request id.
+  `offer_next_steps` is a UI side-effect rather than a read: it fills
+  the stacked follow-up buttons under the chat. Unprompted UI mutation
+  is `goto` (zoom and select events) plus `flow_arrows` with
+  `visible=true` alongside a selection, since the arrows only draw for
+  a selected event and would otherwise stay invisible to a user who had
+  switched them off. Notes, bookmarks, measure pins, panels, tabs,
+  arrow restyling, and reset_view wait until the user asked.
+- `rocprofvis_ai_data_tools.cpp` - the tools that read the trace, every
+  formatter they use, and `FinishAssistantFetch`. Most of these cannot
+  answer in one call: they queue a fetch and hand the panel a set of
+  `DataProvider` request ids to poll, then format the rows once they
+  land. Those request ids are shared with the normal UI, which is why
+  each body checks `IsRequestPending` before issuing its own query and
+  reports whether it actually started the fetch.
+- `rocprofvis_ai_script_tools.cpp` - `run_analysis_script`, which is
+  neither of the above: the model writes Python, the interpreter
+  computes the answer, and what comes back is a conclusion rather than
+  rows to format. It exists because arithmetic over many rows costs a
+  page of context through the data tools and one number through a
+  script. **It offers rather than runs** - `OptiqActions::ProposeScript`
+  fills the Script tab of the details panel and selects it, and the user
+  presses Run or Reject, so the model cannot execute code unattended.
+  That wait is on a person, so the tool sets its own `timeout_seconds`
+  instead of the 45s a fetch gets, and the panel asks
+  `AssistantScriptFetchPending` rather than polling a request id,
+  because an approval has no request behind it. **Compiled only when `ROCPROFVIS_ENABLE_SCRIPTING` is also
+  on**; with it off the handler table is empty, the schema never
+  registers the tool, and the prompt never names it, so the model is
+  not offered something that would always fail. It owns
+  `AssistantFetchKind::kScript` and the `FinishAssistantScriptFetch`
+  that `FinishAssistantFetch` delegates to.
+- `rocprofvis_ai_actions.{h,cpp}` - `OptiqActions`, the only place that
+  mutates the UI. Every method reproduces one real interaction (a
+  click, a drag, a menu item) including the event traffic the rest of
+  the app listens for. **Add a capability here, as one method, rather
+  than wiring widgets from inside a tool.**
+
+**Adding a tool is three edits, and none of them is the dispatcher:** a
+schema entry in `rocprofvis_ai_tool_schema.cpp`, a body in whichever of
+`rocprofvis_ai_ui_tools.cpp`, `rocprofvis_ai_data_tools.cpp`, or
+`rocprofvis_ai_script_tools.cpp` matches what it touches, and an entry
+in that same file's own handler table. A body without a schema entry is
+unreachable; a schema entry without a body comes back to the model as an
+unknown tool. The label list at the top of the schema file has to grow
+with it, since that is what `AssistantToolNameList` reports and what the
+panel shows as a status line.
+- `rocprofvis_ai_assistant.{h,cpp}` - `AssistantPanel`, a lazy
+  singleton like `LogViewer`. Owns the transcript, the docked column,
+  and the turn loop. The composer shows **Explain this view** on an
+  empty chat, then replaces it with up to three stacked next-step
+  buttons from `offer_next_steps`. Clicking a step sends that text as
+  the next user message.
+
+Integration points:
+
+- `AppWindow` destroys it (`AssistantPanel::DestroyInstance()`), calls
+  `Update()` once a frame, reserves `DockedWidth()` on the right of the
+  main view, and renders it with `RenderDocked()`. The View menu binds
+  `VisiblePtr()`; the `TraceView` toolbar calls `RenderToolbarButton()`.
+- `TraceView` and `AnalysisView` expose the plain accessors
+  `OptiqActions` needs (`ZoomToRange`, `SelectAnalysisTab`,
+  `ListBookmarks`, and friends). Reuse those rather than reaching into
+  their members.
+
+Rules that are easy to get wrong here:
+
+- **A tool call and the written answer never arrive together.** When
+  the client finds an inline harmony call it drops the prose, because
+  what surrounds the call is the model's commentary on it rather than
+  an answer. So every tool - including UI-only ones like
+  `offer_next_steps` - goes through `BeginToolQueue` and answers the
+  model on the next round. A code path that consumes a tool call
+  without queueing it ends the turn with an empty transcript. The
+  harmony scan only runs on rounds where tools were offered, so a
+  literal `to=` in the final prose is not mistaken for a call.
+- **Tool rounds and the answer are separate HTTP calls.** When the
+  model stops calling tools, `BeginFinalAnswer` discards that draft and
+  spends one more round with tools off, which is the only prose the
+  user reads.
+- **`ASSISTANT_SCRIPT_PROMPT` is appended, not merged.** The base
+  prompt names its tools in one line, so it must never name a tool the
+  build might not have. The scripting paragraph is a second constant
+  concatenated in `StartHttpRequest` under the same `#ifdef` that
+  registers the tool, and it says only *when* to reach for a script -
+  what a script may call is in the tool's schema description, which is
+  the one place the model reads about an API. Say it once, in the place
+  that ships with the tool.
+- **The diagnostic knowledge lives in `ASSISTANT_SYSTEM_PROMPT`, for
+  now.** Its `WHAT TO LOOK FOR` list is the catalogue of things worth
+  checking (idle GPU, launch-bound, transfer cost, register spilling,
+  launch geometry, imbalance, and so on), each named alongside the tool
+  and columns that evidence it. Two consequences. Every entry must be
+  answerable with the tools and the column whitelist as they stand, or
+  the model will invent an argument that does not exist. And the list is
+  re-sent on every round of every turn, so it earns its tokens only
+  while it stays a one-line-per-check list - the moment thresholds need
+  arithmetic, move them into a C++ tool that returns findings, which is
+  both cheaper and testable.
+- **`AGREEING AND DISAGREEING` is the anti-sycophancy rule.** A question
+  with a claim inside it is a claim to check, not a premise to build on,
+  and the model holds its position when pushed unless a *number* moves -
+  "a user repeating themselves is not new evidence". Keep the concession
+  clause if you edit it: without an explicit "when they turn out to be
+  right, say so and move on", the rule pushes the model into
+  contrarianism, which is the same failure wearing a different hat.
+- **`LIMITS` must match what the data model actually records.** It
+  exists to stop confident answers the trace cannot support: there is no
+  interconnect capacity anywhere in the model, so link saturation is not
+  a claim Optiq can make, and flow links are per-event through
+  `event_details` rather than aggregable. Extend that section whenever a
+  tool's reach changes.
+- **A broad question gets an overview, not an investigation.** The
+  `TWO PASSES` section stops the model at `trace_overview` plus
+  `get_summary` - the histogram, minimap, and headline totals, none of
+  which cost a heavy query - and has it land on a one-line *suspicion*
+  in the user's phrasing ("I suspect the same buffer is being copied
+  back and forth"), then hand over through `offer_next_steps`. The
+  counterweight is `IT IS FINE IF NOTHING IS WRONG`: a checklist plus a
+  request for a suspicion will otherwise make the model find a culprit
+  in a perfectly healthy trace, so the prompt states outright that
+  "nothing here looks pathological" is a real answer and that a
+  suspicion has to rest on a figure it can name. It dives without asking only when the
+  user names something specific or has already said to go deeper.
+  Clicking a next-step button sends that text as the next user message,
+  so the hand-off needs no new machinery. This is the one place the
+  prompt permits ending on an offer, which is why several other
+  sections say "on an overview the range alone is enough" - an overview
+  has no `__uuid` values yet, and inviting `goto` to use them would
+  invite inventing them.
+- **`VOICE` names what to cut, not a word count.** A fixed budget made
+  the replies read as blunt, so length is back to matching what was
+  actually found - a short paragraph for a clean overview, more for a
+  real investigation. What keeps it from rambling is the explicit list
+  of things never worth words (greeting, sign-off, restating the
+  question, defining what a trace is, a closing paragraph that repeats
+  itself, a play-by-play of each tool call) plus the required closing
+  `Checked:` line, which gives tool attribution in one line instead of
+  narration throughout.
+- **The settings page is URL, model, and API key.** There is no
+  shipped endpoint URL. The default model is `ASSISTANT_DEFAULT_MODEL`
+  (`gpt-5.6-luna`). Nothing about the endpoint shape is persisted:
+  `AssistantProvider` holds only name, URL, and model, and the client
+  works the rest out from the URL.
+- **Two endpoint shapes, decided by `EndpointFlavour`.** Stock OpenAI
+  gets `/chat/completions` appended, names the model in the body, sends
+  `Authorization: Bearer`, and uses `max_completion_tokens`. Azure-style
+  bases, recognised by an `/azure`, `/engines/`, or `/openai/deployments`
+  segment in the URL, take the
+  deployment from the Model field into the path, send
+  `Ocp-Apim-Subscription-Key`, omit `model` from the body, and use
+  `max_tokens` at a lower cap - that is all their API version accepts,
+  and it counts visible output only. `/azure` posts
+  to `/azure/engines/<Model>/chat/completions`; `/openai` posts to
+  `/openai/deployments/<Model>/chat/completions` with `apiVersion`.
+  Everything that differs between the two keys off the flavour in one
+  place, rather than being sniffed at each use.
+- **`temperature` and `reasoning_effort` are never sent.** Reasoning
+  models reject a non-default temperature, and each model's own default
+  effort is what we want. Keeping the body free of model-specific
+  parameters is what lets any chat model be configured without the
+  client knowing anything about it.
+- **Tools only ever run from `Update()`.** They toggle panel
+  visibility and rebuild layout, so running them from `Render()` would
+  mutate widgets halfway through the frame that draws them.
+- **A tool only formats rows from a fetch it started.** Several table
+  request IDs and result slots are shared with the normal UI. If a tool
+  finds one busy, it waits for that owner and retries its own query
+  against the original timeout deadline. It returns a timeout rather
+  than treating the other query's rows as its own.
+- **HTTP runs on a worker via `std::async`, and must stay cancellable.**
+  `AssistantChatCall::Cancel()` closes the socket; `CancelPendingRequest()`
+  is what lets the panel be destroyed without blocking on a
+  two-minute read timeout.
+- **The tool context is rebuilt every call** (`MakeToolContext()`) from
+  `AppWindow::GetCurrentProject()`, so it never holds a dead provider.
+  The flip side is that the trace in front can change mid-turn, which
+  is what `m_turn_project_id` detects.
+- **The API key lives in `SecretStore`, never in settings JSON and
+  never in a log line.** `AssistantProvider` is the saved record in
+  `UserSettings::assistant`, and holds only name, URL, and model.
 
 ## 13. Remote / SSH and Profiler Launch UI
 
@@ -2182,7 +2531,16 @@ Things to honor in any new data path:
    `RootView::DetachProviderCleanup()` to return any in-flight work;
    `AppWindow` will drain it asynchronously
    (`StartProviderCleanup` / `UpdateProviderCleanups`).
-6. **SSH/profiler work goes through `AppMonitor`.** Do not poll
+6. **System table controllers are mutable.** Requests for the same
+   `rocprofvis_controller_table_type_t` must stay serialized. Independent
+   views use client request IDs plus `TableRequestParams::m_view_table_type`
+   to route each completed response into its own `TablesModel` slot.
+   `DataProvider::FetchTable` refuses a request while that table type is
+   busy. `InfiniteScrollTable::FetchData` records the refusal by leaving
+   `m_fetch_data` set, and `Update()` reissues it on a later frame. A
+   held request keeps asking `RenderScheduler` for frames, because the
+   lazy render loop would otherwise sleep before the reissue ever runs.
+7. **SSH/profiler work goes through `AppMonitor`.** Do not poll
    controller futures in a dialog or block `Render()`. Subscribe to
    typed status events, filter by operation ID, and use deferred
    teardown for resources that outlive the UI owner.
@@ -2383,6 +2741,7 @@ adding **anything** new, check this list and reuse if at all possible.
 | Drive a virtualized table                     | Subclass `InfiniteScrollTable`                                                                 |
 | Pick a metric (Compute)                       | `QueryBuilder` + `KernelMetricTable::SetExternalQuery`                                         |
 | Display SOL / pinned compute metrics          | `MetricTable` / `PinnedMetricTable` / `MetricTableWidget`                                      |
+| Fetch data for ISA View                       | `PcSamplingRequestParams` + `DataProvider::FetchPcSampling`; extend `PcSamplingData` for new rendered fields |
 | Add a bookmark or save view state             | The `Project` + `ProjectSetting` system, JSON keys in `rocprofvis_project.h`                   |
 | Save user-customizable layouts (Compute)      | `PresetComponent` + `PresetManager` + `PresetBrowser`                                          |
 | Save profiler launch profiles                 | `LaunchPresetManager` + `ProfilesDocument`                                                     |
@@ -2403,6 +2762,7 @@ adding **anything** new, check this list and reuse if at all possible.
 | Keep the lazy render loop awake               | `RootView::WantsContinuousRender` / `AppWindow::WantsContinuousRender`                         |
 | Monitor controller operations without blocking| `AppMonitor::AddOperation` + typed status events                                               |
 | Show application logs                         | `LogViewer` (not the developer-only `DebugWindow`)                                             |
+| Run an in-app Python analysis script          | `ScriptEditor`, the details panel's Script tab, owned by `AnalysisView` (`ROCPROFVIS_ENABLE_SCRIPTING`) |
 | Add a hotkey                                  | Add to `HotkeyActionId`, declare info, read with `WasActionTriggered / IsActionHeld`           |
 | Disambiguate clicks across timeline layers    | `TimelineFocusManager::RequestLayerFocus / EvaluateFocusedLayer`                               |
 | Encode a request ID                           | `RequestIdBuilder::MakeRequestId(...)` or `MakeTrackDataRequestId(...)`                        |
@@ -2585,6 +2945,11 @@ For fast lookup. Each entry: class -> file -> one-line role.
   event/sample table.
 - `TopEventsView`, `TopEventsView::TopEventsTable` ->
   `rocprofvis_top_events_view.h` -> Category-specific top-event tables.
+- `IsCompareTrace`, `MakeCompareSplit`, `BeginCompareCard`,
+  `EndCompareCard`, `RenderCompareCardTitle`,
+  `BuildCompareGroupByChoices` ->
+  `rocprofvis_compare_panes.h` -> Shared chrome of the A/B compare
+  layouts.
 - `EventSearch` -> `rocprofvis_event_search.h` -> Toolbar event search.
 - `AnnotationView` -> `rocprofvis_annotation_view.h` -> Sticky-note
   list tab.
@@ -2616,9 +2981,53 @@ For fast lookup. Each entry: class -> file -> one-line role.
   `rocprofvis_presets.h`.
 - `LogViewer` -> `widgets/rocprofvis_log_viewer.h` -> User-facing
   application log overlay.
+- `ScriptEditor`, `ScriptApproval` ->
+  `widgets/rocprofvis_script_editor.h` -> The Script tab of the details
+  panel, one per trace, owned by `AnalysisView` (scripting flag).
 - `ProfilesDocument` -> `rocprofvis_profiles_document.h` -> Shared
   `profiles.json` owner.
 - `JsonUtils` -> `rocprofvis_json_utils.h` -> Typed JSON/file helpers.
+
+### Ask Optiq assistant
+
+All under `agenticprofiling/`, compiled only with
+`ROCPROFVIS_ENABLE_AGENTIC_PROFILING`.
+
+- `AssistantPanel` -> `agenticprofiling/rocprofvis_ai_assistant.h` ->
+  Docked chat panel and turn loop.
+- `OptiqActions`, `OptiqPanel` ->
+  `agenticprofiling/rocprofvis_ai_actions.h` -> The only code that
+  mutates the UI on the assistant's behalf.
+- `AssistantToolContext`, `AssistantFetchState`,
+  `AssistantToolStartResult`, `StartAssistantTool`,
+  `FinishAssistantFetch`, `BuildAssistantBriefing` ->
+  `agenticprofiling/rocprofvis_ai_tools.h`. The dispatcher lives in
+  `rocprofvis_ai_tools.cpp`; the bodies are split by what they touch
+  into `rocprofvis_ai_ui_tools.cpp`, `rocprofvis_ai_data_tools.cpp`,
+  and `rocprofvis_ai_script_tools.cpp`, each owning its own handler
+  table.
+- `AssistantToolEntry`, `AssistantToolTable`,
+  `GetAssistantUiToolHandlers`, `GetAssistantDataToolHandlers`,
+  `GetAssistantScriptToolHandlers`, `FinishAssistantScriptFetch` ->
+  `agenticprofiling/rocprofvis_ai_tools_internal.h` -> Private to the
+  folder; do not include it from elsewhere.
+- `run_analysis_script` -> `agenticprofiling/rocprofvis_ai_script_tools.cpp`
+  -> Runs model-written Python through `DataProvider::ExecuteScript`.
+  Needs `ROCPROFVIS_ENABLE_SCRIPTING` as well; the table is empty
+  otherwise.
+- `BuildAssistantToolsJson`, `AssistantToolStatusLabel` ->
+  `agenticprofiling/rocprofvis_ai_tool_schema.h` -> Thread-safe, reads
+  no view state.
+- `BuildAssistantWhereClause`, `AssistantGroupByFromArgs`,
+  `ResolveAssistantSortColumn` ->
+  `agenticprofiling/rocprofvis_ai_tool_query.h` -> Model arguments to
+  SQL fragments, via whitelists.
+- `AssistantChatCall`, `AssistantChatRequest`, `AssistantChatResult`,
+  `AssistantMessage`, `AssistantToolCall` ->
+  `agenticprofiling/rocprofvis_ai_client.h`.
+- `AssistantSettings`, `AssistantProvider` ->
+  `rocprofvis_settings_manager.h` -> Saved URL and model; the token
+  itself lives in `SecretStore`.
 
 ### Events / pubsub
 
@@ -2685,15 +3094,17 @@ For fast lookup. Each entry: class -> file -> one-line role.
   `compute/rocprofvis_compute_summary.h`.
 - `ComputeTester` (dev only) ->
   `compute/rocprofvis_compute_tester.h`.
-- `ComputeIsaView`, `SourceCodeWidget`, `IsaCodeWidget` (dev only) ->
+- `ComputeIsaView`, `BaseCodeWidget`, `SourceCodeWidget`, `IsaCodeWidget` ->
   `compute/rocprofvis_compute_isa_view.h`.
 - `ComputeDataProvider`, `ComputeTableModel`, `ComputeTableCellModel`,
   `ComputePlotModel`, `ComputePlotAxisModel`, `ComputePlotSeriesModel`,
   `ComputeMetricModel` -> `compute/rocprofvis_compute_data_provider.h`.
 - `ComputeDataModel`, `ComputeKernelSelectionTable` ->
   `model/compute/rocprofvis_compute_data_model.h`.
-- `AvailableMetrics`, `KernelInfo`, `WorkloadInfo`, `MetricValue`,
-  `MetricId`, `MetricIdHash`, `Point`, `ComputeTableInfo` ->
+- `AvailableMetrics`, `PcSampleState`, `InstructionSourceLine`,
+  `InstructionLine`, `KernelSymbol`, `CodeObjectStore`, `SourceLine`,
+  `SourceFile`, `PcSamplingData`, `KernelInfo`, `WorkloadInfo`,
+  `MetricValue`, `MetricId`, `MetricIdHash`, `Point`, `ComputeTableInfo` ->
   `model/compute/rocprofvis_compute_model_types.h`.
 
 ### Remote UI (`#ifdef ROCPROFVIS_ENABLE_REMOTE`)
@@ -2754,7 +3165,7 @@ For fast lookup. Each entry: class -> file -> one-line role.
   `COPY_ROW_DATA_NOTIFICATION`, `XButton`, `SectionTitle`,
   `VerticalSeparator`, `ElidedText`, `ElideWithEllipsis`, `Alignment`,
   `CenterNextItem`, `InputTextWithClear`, `InputTextString`,
-  `InputTextStringWithHint`, `CellMenuTarget`, `RenderRowHitbox`,
+  `InputTextStringWithHint`, `InputTextMultilineString`, `CellMenuTarget`, `RenderRowHitbox`,
   `BeginCellContextMenu`, `EndCellContextMenu`,
   `BeginTooltipStyled`, `BeginItemTooltipStyled`,
   `EndTooltipStyled`, `SetTooltipStyled`, `ApplyAlpha`, `ThemeColor`,
@@ -2772,6 +3183,7 @@ For fast lookup. Each entry: class -> file -> one-line role.
   `rocprofvis_compute_widget.h`.
 - `DebugWindow` (dev only) -> `rocprofvis_debug_window.h`.
 - `LogViewer` -> `rocprofvis_log_viewer.h`.
+- `ScriptEditor` -> `rocprofvis_script_editor.h` (scripting flag).
 
 ### Tree types and constants
 

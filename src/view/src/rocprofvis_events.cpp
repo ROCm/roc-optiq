@@ -436,6 +436,36 @@ RequestProgressUpdateEvent::GetMessage() const
     return m_message;
 }
 
+ScriptExecuteCompleteEvent::ScriptExecuteCompleteEvent(bool success,
+                                                       const std::string& text,
+                                                       const std::string& error,
+                                                       const std::string& source_id)
+: RocEvent(static_cast<int>(RocEvents::kScriptExecuteComplete), source_id)
+, m_success(success)
+, m_text(text)
+, m_error(error)
+{
+    m_event_type = RocEventType::kScriptExecuteCompleteEvent;
+}
+
+bool
+ScriptExecuteCompleteEvent::Succeeded() const
+{
+    return m_success;
+}
+
+const std::string&
+ScriptExecuteCompleteEvent::GetText() const
+{
+    return m_text;
+}
+
+const std::string&
+ScriptExecuteCompleteEvent::GetError() const
+{
+    return m_error;
+}
+
 ProfilerStatusEvent::ProfilerStatusEvent(uint64_t                    operation_id,
                                          rocprofvis_profiler_state_t state,
                                          const std::string&          source_id)

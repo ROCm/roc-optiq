@@ -136,7 +136,7 @@ namespace DataModel
             }
 
 
-            if (kRocProfVisDmResultSuccess == result && m_merged_table.RowCount() > 0)
+            if (kRocProfVisDmResultSuccess == result && m_merged_table.RowCount() > 0 && !future->Interrupted())
             {
                 result = ProcessCompoundQuery(handle, commands, !same_queries);
                 m_tracks = tracks;
@@ -632,7 +632,7 @@ namespace DataModel
                         for (int i = 0; i < thread_count; ++i)
                             threads.emplace_back(task, rows_per_task * i, rows_per_task * (i + 1), std::ref(eptr));
                         if (leftover_rows_count > 0)
-                            threads.emplace_back(task, rows_per_task * thread_count, leftover_rows_count, std::ref(eptr));
+                            threads.emplace_back(task, rows_per_task * thread_count, m_merged_table.RowCount(), std::ref(eptr));
 
                         for (auto& t : threads)
                             t.join();

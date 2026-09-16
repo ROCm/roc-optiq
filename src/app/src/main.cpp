@@ -390,7 +390,7 @@ main(int argc, char** argv)
 #endif
 
     glfwSetErrorCallback(glfw_error_callback);
-#if defined(__linux__) && defined(ROCPROFVIS_MULTI_WINDOW)
+#ifdef __linux__
     // Force X11 on Linux for multi-viewport and window positioning support
     // Wayland does not support window positioning which is required for ImGui viewports
     glfwInitHint(GLFW_PLATFORM, GLFW_PLATFORM_X11);

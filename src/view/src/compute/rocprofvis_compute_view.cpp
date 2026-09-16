@@ -237,7 +237,6 @@ ComputeView::CreateTabContainer()
     const std::vector<const WorkloadInfo*>& workloads =
         m_data_provider.ComputeModel().GetWorkloadList();
     const bool database_has_metrics   = HasAvailableMetrics(workloads);
-    const bool database_has_isa_lines = HasIsaLines(workloads);
 
     m_tab_container = std::make_shared<TabContainer>();
     m_tab_container->AddTab(
@@ -253,10 +252,10 @@ ComputeView::CreateTabContainer()
     m_tab_container->AddTab(
         ComputeWorkloadView::CreateTabItem(m_data_provider, m_compute_selection));
 
+#ifdef ROCPROFVIS_DEVELOPER_MODE
+    const bool database_has_isa_lines = HasIsaLines(workloads);
     m_tab_container->AddTab(
         ComputeIsaView::CreateTabItem(m_data_provider, database_has_isa_lines));
-
-#ifdef ROCPROFVIS_DEVELOPER_MODE
     m_tab_container->AddTab(
         ComputeTester::CreateTabItem(m_data_provider, m_compute_selection));
 #endif

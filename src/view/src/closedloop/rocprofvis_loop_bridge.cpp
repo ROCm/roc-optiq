@@ -67,10 +67,15 @@ namespace View
 namespace
 {
 
-// One loopback round trip. Long enough for an extension host that is still
-// waking up, short enough that a dead socket does not stall the frame that
-// asked.
-constexpr int LOOP_QUICK_TIMEOUT_SECONDS = 10;
+// Opening the socket is loopback, so this only has to cover an extension host
+// that is still waking up. A dead port fails here, fast.
+constexpr int LOOP_CONNECT_TIMEOUT_SECONDS = 10;
+// Waiting for the answer is a different matter. A search runs through VS Code's
+// file index, and the first one after a window opens blocks until that index is
+// built - which over a Remote-SSH filesystem is tens of seconds on a real tree.
+// Timing that out looks exactly like "no editor there", so it is sized for the
+// cold case rather than the warm one.
+constexpr int LOOP_QUERY_TIMEOUT_SECONDS = 180;
 // Applying the edit is instant; the build behind it is not, and a cold build of
 // a real project is the case this has to survive.
 constexpr int LOOP_BUILD_TIMEOUT_SECONDS = 1800;
@@ -220,20 +225,29 @@ CallIde(const std::string& base_url, const std::string& token, const char* path,
         error_out = "The editor handshake named an address that cannot be reached.";
         return false;
     }
-    client.set_connection_timeout(LOOP_QUICK_TIMEOUT_SECONDS);
+    client.set_connection_timeout(LOOP_CONNECT_TIMEOUT_SECONDS);
     client.set_read_timeout(timeout_seconds);
     client.set_write_timeout(timeout_seconds);
 
     httplib::Headers headers;
     headers.emplace(LOOP_TOKEN_HEADER, token);
 
+    const std::chrono::steady_clock::time_point began = std::chrono::steady_clock::now();
     const httplib::Result response =
         client.Post(path, headers, body.toString(), LOOP_JSON_TYPE);
     if(!response)
     {
+        // The elapsed time is what tells a refused port from a request that was
+        // answered too slowly, and the two need opposite fixes.
+        const int64_t elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                                       std::chrono::steady_clock::now() - began)
+                                       .count();
+        spdlog::warn("Closed loop: POST {}{} failed after {} ms: {}", base_url, path,
+                     elapsed_ms, httplib::to_string(response.error()));
         error_out = "The editor did not answer (" +
-                    httplib::to_string(response.error()) +
-                    "). Check that the workspace is still open.";
+                    httplib::to_string(response.error()) + " after " +
+                    std::to_string(elapsed_ms / 1000) +
+                    "s). Check that the workspace is still open.";
         return false;
     }
 
@@ -745,7 +759,7 @@ LoopBridge::FindSource(const std::string& query)
 
     jt::Json    reply;
     std::string error;
-    if(!CallIde(url, token, "/find", body, LOOP_QUICK_TIMEOUT_SECONDS, reply, error))
+    if(!CallIde(url, token, "/find", body, LOOP_QUERY_TIMEOUT_SECONDS, reply, error))
     {
         // An editor window that reloaded or opened another folder comes back on
         // a different port, so the address we were given is routinely stale
@@ -796,7 +810,7 @@ LoopBridge::ReadSource(const std::string& file)
 
     jt::Json    reply;
     std::string error;
-    if(!CallIde(url, token, "/read", body, LOOP_QUICK_TIMEOUT_SECONDS, reply, error))
+    if(!CallIde(url, token, "/read", body, LOOP_QUERY_TIMEOUT_SECONDS, reply, error))
     {
         InvalidateRemote();
         return error + " Call loop_status again to find the editor at its "

@@ -63,9 +63,11 @@ ComputeTableView::ComputeTableView(DataProvider&                     data_provid
             if(m_fetch_pending)
                 FetchAllMetrics();
             if(evt->GetClientId() == m_client_id)
+            {
                 RebuildTableDataCache();
+                m_pinned_metric_table.RefillTable(m_pinned_metrics);
+            }
         }
-        m_pinned_metric_table.RefillTable(m_pinned_metrics);
     };
 
     m_metrics_fetched_token = EventManager::GetInstance()->Subscribe(

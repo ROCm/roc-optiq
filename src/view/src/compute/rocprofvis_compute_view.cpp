@@ -34,6 +34,33 @@ constexpr const char* INVALID_COMPUTE_DATABASE_MESSAGE =
     "database. Its schema may be invalid or unsupported, or required "
     "compute-profile data may be missing.";
 
+static bool
+HasAvailableMetrics(const std::vector<const WorkloadInfo*>& workloads)
+{
+    return std::any_of(
+        workloads.begin(), workloads.end(), [](const WorkloadInfo* workload) {
+            return workload &&
+                   std::any_of(workload->available_metrics.ordered_categories.begin(),
+                               workload->available_metrics.ordered_categories.end(),
+                               [](const AvailableMetrics::Category* category) {
+                                   return category && !category->ordered_tables.empty();
+                               });
+        });
+}
+
+static bool
+HasIsaLines(const std::vector<const WorkloadInfo*>& workloads)
+{
+    return std::any_of(
+        workloads.begin(), workloads.end(), [](const WorkloadInfo* workload) {
+            return workload &&
+                   std::any_of(workload->kernels.begin(), workload->kernels.end(),
+                               [](const auto& kernel) {
+                                   return kernel.second.has_isa_lines;
+                               });
+        });
+}
+
 ComputeView::ComputeView()
 : m_view_created(false)
 , m_error_dialog_state(ErrorDialogState::kNone)
@@ -168,6 +195,9 @@ ComputeView::CreateView()
         return;
     }
 
+    
+    const bool database_has_isa_lines = HasIsaLines(workloads);
+
     m_compute_selection = std::make_shared<ComputeSelection>(m_data_provider);
     m_compute_selection->SelectWorkload((*workload_with_kernels)->id);
     m_preset_browser = std::make_unique<PresetBrowser>();
@@ -181,23 +211,41 @@ ComputeView::CreateView()
                 std::make_shared<ComputeKernelDetailsView>(m_data_provider,
                                                            m_compute_selection),
                 false});
-    m_tab_container->AddTab(
-        TabItem{"Table View", ComputeTableView::TAB_ID,
-                std::make_shared<ComputeTableView>(m_data_provider, m_compute_selection),
-                false});
-    m_tab_container->AddTab(
-        TabItem{"Baseline Comparison", ComputeComparisonView::TAB_ID,
-                std::make_shared<ComputeComparisonView>(m_data_provider,
-                                                         m_compute_selection),
-                false});
+
+    TabItem table_view_tab{"Table View", ComputeTableView::TAB_ID, nullptr, false};
+    const bool database_has_metrics   = HasAvailableMetrics(workloads);
+    table_view_tab.m_enabled          = database_has_metrics;
+    table_view_tab.m_disabled_tooltip = ComputeTableView::DISABLED_TOOLTIP;
+    if(database_has_metrics)
+    {
+        table_view_tab.m_widget =
+            std::make_shared<ComputeTableView>(m_data_provider, m_compute_selection);
+    }
+    m_tab_container->AddTab(table_view_tab);
+
+    TabItem comparison_view_tab{"Baseline Comparison", ComputeComparisonView::TAB_ID,
+                                nullptr, false};
+    comparison_view_tab.m_enabled          = database_has_metrics;
+    comparison_view_tab.m_disabled_tooltip = ComputeComparisonView::DISABLED_TOOLTIP;
+    if(database_has_metrics)
+    {
+        comparison_view_tab.m_widget =
+            std::make_shared<ComputeComparisonView>(m_data_provider, m_compute_selection);
+    }
+    m_tab_container->AddTab(comparison_view_tab);
     m_tab_container->AddTab(
         TabItem{"Workload Details", ComputeWorkloadView::TAB_ID,
                 std::make_shared<ComputeWorkloadView>(m_data_provider, m_compute_selection),
                 false});
 
-    m_tab_container->AddTab(
-        TabItem{"ISA View", ComputeIsaView::TAB_ID,
-                std::make_shared<ComputeIsaView>(m_data_provider), false});
+    TabItem isa_view_tab{"ISA View", ComputeIsaView::TAB_ID, nullptr, false};
+    isa_view_tab.m_enabled          = database_has_isa_lines;
+    isa_view_tab.m_disabled_tooltip = ComputeIsaView::DISABLED_TOOLTIP;
+    if(database_has_isa_lines)
+    {
+        isa_view_tab.m_widget = std::make_shared<ComputeIsaView>(m_data_provider);
+    }
+    m_tab_container->AddTab(isa_view_tab);
 
 #ifdef ROCPROFVIS_DEVELOPER_MODE
     m_tab_container->AddTab(
@@ -206,43 +254,6 @@ ComputeView::CreateView()
                 false});
 #endif
     m_tab_container->SetAllowToolTips(false);
-    InitializeMetricTabStates(workloads);
-}
-
-void
-ComputeView::InitializeMetricTabStates(
-    const std::vector<const WorkloadInfo*>& workloads)
-{
-    if(!m_tab_container)
-    {
-        return;
-    }
-
-    const auto has_available_metrics = [](const WorkloadInfo* workload) {
-        return workload &&
-               std::any_of(workload->available_metrics.ordered_categories.begin(),
-                           workload->available_metrics.ordered_categories.end(),
-                           [](const AvailableMetrics::Category* category) {
-                               return category && !category->ordered_tables.empty();
-                           });
-    };
-    const bool database_has_metrics = std::any_of(
-        workloads.begin(), workloads.end(), has_available_metrics);
-    const auto has_isa_lines = [](const WorkloadInfo* workload) {
-        return workload &&
-               std::any_of(workload->kernels.begin(), workload->kernels.end(),
-                           [](const auto& kernel) { return kernel.second.has_isa_lines; });
-    };
-    const bool database_has_isa_lines =
-        std::any_of(workloads.begin(), workloads.end(), has_isa_lines);
-
-    m_tab_container->SetTabEnabled(ComputeTableView::TAB_ID, database_has_metrics,
-                                   ComputeTableView::DISABLED_TOOLTIP);
-    m_tab_container->SetTabEnabled(ComputeComparisonView::TAB_ID,
-                                   database_has_metrics,
-                                   ComputeComparisonView::DISABLED_TOOLTIP);
-    m_tab_container->SetTabEnabled(ComputeIsaView::TAB_ID, database_has_isa_lines,
-                                   ComputeIsaView::DISABLED_TOOLTIP);
 }
 
 void

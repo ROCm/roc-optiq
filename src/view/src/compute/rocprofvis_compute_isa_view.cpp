@@ -129,6 +129,12 @@ ComputeIsaView::LoadData(uint32_t kernel_id)
         ClearSelectionData();
         return;
     }
+    if(!kernel_info->has_isa_lines)
+    {
+        CancelInFlightFetches();
+        ClearSelectionData();
+        return;
+    }
 
     CancelInFlightFetches();
     // Start with the only data needed by the always-visible ISA pane. Optional

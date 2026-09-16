@@ -41,8 +41,6 @@ private:
     void RenderToolbar();
     void RenderWorkloadSelection();
     void RenderPresets();
-    void InitializeMetricTabStates(
-        const std::vector<const WorkloadInfo*>& workloads);
     void QueueDatabaseErrorDialog(const std::string& file_path,
                                   const std::string& message);
     void ShowPendingDatabaseErrorDialog();

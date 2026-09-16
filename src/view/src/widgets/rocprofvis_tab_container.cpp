@@ -82,7 +82,7 @@ TabContainer::Update()
     // Update logic for each tab
     for(auto& tab : m_tabs)
     {
-        if(tab.m_widget)
+        if(tab.m_enabled && tab.m_widget)
         {
             tab.m_widget->Update();
         }

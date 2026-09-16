@@ -99,11 +99,26 @@ constexpr int   LOOP_STAGE_PROFILE = 0;
 constexpr int   LOOP_STAGE_ANALYZE = 1;
 constexpr int   LOOP_STAGE_EDIT    = 2;
 
-// Reads the handshake the extension writes on the remote host. Honours
-// XDG_CONFIG_HOME the same way get_application_config_path does on Linux, which
-// is the platform a GPU box runs.
+/*
+ * Copies the handshake the extension wrote on the remote host somewhere with a
+ * fixed absolute path, so it can then be downloaded.
+ *
+ * Copy-then-download rather than reading the command's own output: stdout
+ * arrives in chunks that the session only drains one per frame, and a `cat` of
+ * a 200-byte file finishes long before a frame boundary - so the completion is
+ * seen with nothing collected. Download is the path traces already come back
+ * through, and it either produces the file or fails loudly.
+ *
+ * The command honours XDG_CONFIG_HOME the same way get_application_config_path
+ * does on Linux, which is the platform a GPU box runs.
+ */
+constexpr char LOOP_REMOTE_HANDSHAKE_PATH[] = "/tmp/optiq-ide-handshake.json";
+// Removes the previous copy first: without that, an editor that has since shut
+// down still leaves a file to download, and a dead port reads as an attach.
 constexpr char LOOP_REMOTE_HANDSHAKE_COMMAND[] =
-    "cat \"${XDG_CONFIG_HOME:-$HOME/.config}/rocm-optiq/optiq-ide.json\"";
+    "rm -f /tmp/optiq-ide-handshake.json; "
+    "cp \"${XDG_CONFIG_HOME:-$HOME/.config}/rocm-optiq/optiq-ide.json\" "
+    "/tmp/optiq-ide-handshake.json";
 
 constexpr char LOOP_NO_EDITOR[] =
     "No editor is attached. Call loop_status, which looks on this machine and "
@@ -612,7 +627,15 @@ LoopBridge::Attach()
     m_attach_uri = std::make_shared<RemoteUri>();
     m_attach_uri->SetConnection(*connection);
     m_attach_uri->GetRemoteCommandLine() = LOOP_REMOTE_HANDSHAKE_COMMAND;
-    // No download step: the handshake comes back as the command's own output.
+    // Setting a result path is what makes the orchestrator download after the
+    // command, which is how the handshake actually gets here.
+    m_attach_uri->SetRemoteResultPathString(LOOP_REMOTE_HANDSHAKE_PATH);
+    // And the local side of the same trap: the cache path is derived from the
+    // connection, so a failed download would otherwise leave last time's answer
+    // sitting there to be read as this time's.
+    std::error_code discard;
+    std::filesystem::remove(m_attach_uri->GetLocalResultPathString(), discard);
+
     m_attach = std::make_unique<RemoteTraceOrchestrator>(m_attach_uri, nullptr);
     if(!m_attach->Start())
     {
@@ -646,18 +669,23 @@ LoopBridge::PollAttach()
         return false;
     }
 
-    std::string  output;
-    SshSession*  session = m_attach->GetSession();
-    if(session != nullptr)
-    {
-        output = session->GetExecutionOutput()->Get().text;
-    }
     const std::string status = m_attach->GetStatusMessage();
+    const std::string local_copy =
+        m_attach_uri != nullptr ? m_attach_uri->GetLocalResultPathString() : std::string();
+
+    std::string   text;
+    std::ifstream in(local_copy);
+    if(in.is_open())
+    {
+        text.assign((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+    }
 
     IdeEndpoint endpoint;
     // A handshake from over there must carry the tunnelled URL: its own loopback
     // port means nothing on this machine.
-    const bool found = ParseHandshake(output, true, endpoint);
+    const bool found = ParseHandshake(text, true, endpoint);
+    spdlog::info("Closed loop: remote handshake {} bytes from {}, parsed={}",
+                 text.size(), local_copy, found);
     m_attach.reset();
     m_attach_uri.reset();
 

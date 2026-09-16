@@ -115,8 +115,9 @@ CMake options worth knowing:
 - `ROCPROFVIS_ENABLE_REMOTE` - enables SSH connection, browse, transfer,
   and remote-trace UI (default off). Remote profiling needs both remote
   and profiler support.
-- `ROCPROFVIS_ENABLE_TRACE_COMPARE` - enables the in-development trace
-  comparison UI (default off).
+- `ROCPROFVIS_ENABLE_TRACE_COMPARE` - enables the in-development systems
+  trace comparison UI (`File > Compare`, default off). Guarded with
+  `#ifdef ROCPROFVIS_ENABLE_TRACE_COMPARE` in code.
 - `ROCPROFVIS_MULTI_WINDOW` - enables the in-development multi-window
   support (default off).
 - `USE_NATIVE_FILE_DIALOG` - off disables `nativefiledialog-extended`.
@@ -302,7 +303,7 @@ The bridge between model and view. **Public** API in `inc/`:
 - `rocprofvis_controller.h` - the full C function set. Highlights:
   - `rocprofvis_controller_alloc(filename)` / `rocprofvis_controller_load_async`.
   - `rocprofvis_controller_alloc_compare(filenames, count)` for
-    multi-source compare projects.
+    multi-source compare projects (`#ifdef ROCPROFVIS_ENABLE_TRACE_COMPARE`).
   - `rocprofvis_controller_future_alloc/free` for async fences.
   - `rocprofvis_controller_array_alloc` and `_arguments_alloc` for batched
     calls.
@@ -416,7 +417,7 @@ AppWindow (singleton, RocWidget)
 |   |                 +-- (ComputeTester, dev mode only)
 |   +-- [2] status bar (RocCustomWidget calling AppWindow::RenderStatusBar)
 +-- WelcomePage              : empty-state landing page
-+-- CompareFilesDialog       : two-trace compare modal (File > Compare, dev mode)
++-- CompareFilesDialog       : two-trace compare modal (File > Compare, ROCPROFVIS_ENABLE_TRACE_COMPARE)
 +-- m_settings_panel        : SettingsPanel (modal, opened via menu)
 +-- m_confirmation_dialog   : ConfirmationDialog
 +-- m_message_dialog        : MessageDialog
@@ -441,12 +442,12 @@ File: `src/view/src/rocprofvis_appwindow.{h,cpp}`. Owns global UI state:
   project. Routes via `Project::Open()` and adds a tab. A duplicate
   open (`OpenResult::Duplicate`) focuses the existing tab and shows a
   "Trace Already Open" message rather than opening a second tab. While
-  the Compare dialog is open, dropped/opened files fill its slots
-  instead of opening standalone tabs.
+  the Compare dialog is open (`ROCPROFVIS_ENABLE_TRACE_COMPARE`),
+  dropped/opened files fill its slots instead of opening standalone tabs.
 - `void OpenCompare(base_path, target_path)` / `MakeCompareId(files)` -
   creates a synthetic compare project containing two trace sources. The
-  `File > Compare` entry point is currently gated behind
-  `ROCPROFVIS_DEVELOPER_MODE`, though the dialog object is always built.
+  `File > Compare` entry point, the dialog, and these methods are gated
+  behind `ROCPROFVIS_ENABLE_TRACE_COMPARE`.
 - `void ShowConfirmationDialog(title, message, on_confirm)` /
   `ShowMessageDialog` - centralized modal dialogs. Always go through
   these, do not create your own popups for ok/cancel flows.
@@ -512,6 +513,8 @@ trace file:
   trace project through
   `rocprofvis_controller_alloc_compare(file_ptrs.data(), count)`,
   then attaches compare-source metadata and the supplied synthetic ID.
+  Compiled only under `ROCPROFVIS_ENABLE_TRACE_COMPARE`; opening a
+  compare `.rpv` without that flag fails with a rebuild message.
 - `void Save()` / `void SaveAs(file_path)` - serializes registered
   `ProjectSetting`s into a `.rpv`.
 - `void RegisterSetting(ProjectSetting*)` - any per-project state that
@@ -564,8 +567,8 @@ from `RootView`, fill `GetToolbar`, `RenderEditMenuOptions`, and
   identifies the two drop targets; while the dialog `IsOpen()`,
   `AppWindow::OpenFile()` routes files into it via `AddDroppedFile()`,
   and `Validate()` rejects picking the same file twice. The
-  `File > Compare` menu item is currently behind
-  `ROCPROFVIS_DEVELOPER_MODE`.
+  `File > Compare` menu item, the dialog, and `OpenCompare` are behind
+  `ROCPROFVIS_ENABLE_TRACE_COMPARE`.
 
 ## 7. Widget Library Reference (`src/view/src/widgets/`)
 
@@ -2710,7 +2713,7 @@ adding **anything** new, check this list and reuse if at all possible.
 | Track selection state (system trace)          | `TimelineSelection` (call its setters, listen for the events it emits)                         |
 | Track selection state (compute)               | `ComputeSelection`                                                                             |
 | Measure between timeline points/events        | Shared `MeasurementController`                                                                 |
-| Open a two-trace compare project (dev mode)   | `CompareFilesDialog` -> `AppWindow::OpenCompare`                                               |
+| Open a two-trace compare project (`ROCPROFVIS_ENABLE_TRACE_COMPARE`) | `CompareFilesDialog` -> `AppWindow::OpenCompare`                                               |
 | Find / scroll to a track                      | `TimelineView::ScrollToTrack(track_id)` or emit `ScrollToTrackEvent`                           |
 | Move/zoom the timeline                        | `TimelineView::MoveToPosition(start, end, y, center)` or `SetViewableRangeNS`                  |
 | Navigate to and highlight an event            | `TimelineSelection::NavigateToEvent(track_id, event_uuid, start_ns, dur_ns)`                   |
@@ -2827,7 +2830,7 @@ For fast lookup. Each entry: class -> file -> one-line role.
   landing page.
 - `CompareFilesDialog` -> `rocprofvis_compare_files_dialog.h` ->
   Selects base/target traces for a compare project (`File > Compare`
-  entry point is dev-mode-only).
+  entry point is behind `ROCPROFVIS_ENABLE_TRACE_COMPARE`).
 - `AppMonitor`, `MonitorOperation`, `MonitorOperationType` ->
   `rocprofvis_appmonitor.h` -> Background controller-operation polling
   and deferred teardown.

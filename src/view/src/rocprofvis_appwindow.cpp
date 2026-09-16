@@ -68,7 +68,9 @@ const std::vector<std::string> ALL_EXTENSIONS     = { "db", "rpd", "yaml", "rpv"
 #else
 const std::vector<std::string> ALL_EXTENSIONS     = { "db", "rpd", "yaml", "rpv" };
 #endif
+#ifdef ROCPROFVIS_ENABLE_TRACE_COMPARE
 const std::vector<std::string> COMPARE_EXTENSIONS = { "db" };
+#endif
 
 constexpr const char* CLEANUP_MESSAGE = "Waiting for requests to finish cleanup...";
 constexpr const char* CLOSING_MESSAGE = "Closing...";
@@ -124,11 +126,13 @@ AppWindow::AppWindow()
 , m_confirmation_dialog(std::make_unique<ConfirmationDialog>(
       SettingsManager::GetInstance().GetUserSettings().dont_ask_before_exit))
 , m_message_dialog(std::make_unique<MessageDialog>())
+#ifdef ROCPROFVIS_ENABLE_TRACE_COMPARE
 , m_compare_files_dialog(std::make_unique<CompareFilesDialog>(
       [this](CompareFilesDialog::FileSlot slot) { HandleCompareFileBrowse(slot); },
       [this](const std::string& first, const std::string& second) {
           OpenCompare(first, second);
       }))
+#endif
 , m_tool_bar_index(0)
 , m_is_fullscreen(false)
 , m_file_dialog_preference(kRocProfVisViewFileDialog_Auto)
@@ -823,7 +827,9 @@ AppWindow::Render()
 #endif
     m_confirmation_dialog->Render();
     m_message_dialog->Render();
+#ifdef ROCPROFVIS_ENABLE_TRACE_COMPARE
     m_compare_files_dialog->Render();
+#endif
     m_settings_panel->Render();
 #ifdef ROCPROFVIS_ENABLE_PROFILER
     if (m_profiler_launcher_dialog)
@@ -966,6 +972,7 @@ AppWindow::GetTabContainer() const
 void
 AppWindow::OpenFile(std::string file_path)
 {
+#ifdef ROCPROFVIS_ENABLE_TRACE_COMPARE
     // While the Compare dialog is up, dropped/opened files fill its slots rather than
     // opening standalone trace tabs behind the modal.
     if(m_compare_files_dialog->IsOpen())
@@ -973,6 +980,7 @@ AppWindow::OpenFile(std::string file_path)
         m_compare_files_dialog->AddDroppedFile(file_path);
         return;
     }
+#endif
 
     spdlog::info("Opening file: {}", file_path);
 
@@ -1008,6 +1016,7 @@ AppWindow::OpenFile(std::string file_path)
     }
 }
 
+#ifdef ROCPROFVIS_ENABLE_TRACE_COMPARE
 std::string
 AppWindow::MakeCompareId(const std::vector<std::string>& files)
 {
@@ -1047,6 +1056,7 @@ AppWindow::OpenCompare(const std::string& first_file, const std::string& second_
         m_projects[project->GetID()] = std::move(project);
     }
 }
+#endif  // ROCPROFVIS_ENABLE_TRACE_COMPARE
 
 void
 AppWindow::RenderDisableScreen()
@@ -1095,7 +1105,8 @@ AppWindow::RenderFileMenu(Project* project)
         {
             HandleOpenFile();
         }
-#ifdef ROCPROFVIS_DEVELOPER_MODE
+#ifdef ROCPROFVIS_ENABLE_TRACE_COMPARE
+        // TEMPORARY (trace compare): remove guard when the feature graduates.
         if(ImGui::MenuItem("Compare", nullptr, false, !is_open_file_dialog_open))
         {
             HandleCompareFiles();
@@ -1356,6 +1367,7 @@ AppWindow::HandleOpenFile()
         [this](std::string file_path) -> void { this->OpenFile(file_path); });
 }
 
+#ifdef ROCPROFVIS_ENABLE_TRACE_COMPARE
 void
 AppWindow::HandleCompareFiles()
 {
@@ -1378,6 +1390,7 @@ AppWindow::HandleCompareFileBrowse(CompareFilesDialog::FileSlot slot)
             m_compare_files_dialog->SetFilePath(slot, file_path);
         });
 }
+#endif  // ROCPROFVIS_ENABLE_TRACE_COMPARE
 
 void
 AppWindow::HandleSaveAsFile()

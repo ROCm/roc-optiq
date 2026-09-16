@@ -220,6 +220,7 @@ rocprofvis_controller_t* rocprofvis_controller_alloc(char const* const filename,
     }    
     return controller;
 }
+#ifdef ROCPROFVIS_ENABLE_TRACE_COMPARE
 rocprofvis_controller_t* rocprofvis_controller_alloc_compare(char const* const* filenames, uint64_t count)
 {
     rocprofvis_controller_t* controller = nullptr;
@@ -263,6 +264,7 @@ rocprofvis_controller_t* rocprofvis_controller_alloc_compare(char const* const* 
     }
     return controller;
 }
+#endif  // ROCPROFVIS_ENABLE_TRACE_COMPARE
 rocprofvis_result_t rocprofvis_controller_load_async(rocprofvis_controller_t* controller, rocprofvis_controller_future_t* future)
 {
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;

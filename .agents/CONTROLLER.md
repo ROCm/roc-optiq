@@ -124,6 +124,11 @@ void                      rocprofvis_controller_free(rocprofvis_controller_t*);
 caller treats both the same way - everything dispatches through the
 opaque handle and the runtime object type tag.
 
+`rocprofvis_controller_alloc_compare(filenames, count)` is the
+systems-trace comparison entry point (`#ifdef ROCPROFVIS_ENABLE_TRACE_COMPARE`).
+It builds a `SystemTrace` from several rocprof SQLite files so each
+source's tracks carry a compare instance id.
+
 ### 2.3 Generic property accessors
 
 The single dispatch surface for every object:

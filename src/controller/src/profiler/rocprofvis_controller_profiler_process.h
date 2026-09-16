@@ -199,6 +199,8 @@ public:
 
     rocprofvis_profiler_state_t GetState() const;
 
+    // Returns the whole run's output so far, so a caller that only needs the
+    // pipe emptied should use PumpOutput instead of discarding a copy of it.
     std::string GetOutput();
 
     void ClearOutput();
@@ -263,6 +265,13 @@ private:
     rocprofvis_result_t StartStageLocked(uint32_t stage_index);
     void                FinishStageLocked(int exit_code);
     void                RelocateArtifactLocked(uint32_t stage_index);
+    /*
+     * Move whatever the child has written into m_output_text, without handing
+     * any of it back. The monitor job polls only to keep the pipe from filling
+     * and stalling the child, and GetOutput would copy the entire run's output
+     * under m_mutex on every tick just to have it dropped.
+     */
+    void                PumpOutput();
     void                DrainExecutorLocked();
     bool                ExecutorTeardownPending() const;
     // Maps a slot's scrape status onto the getter contract: Success with the

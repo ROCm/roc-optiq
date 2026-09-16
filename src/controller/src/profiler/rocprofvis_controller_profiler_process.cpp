@@ -1191,6 +1191,23 @@ rocprofvis_profiler_state_t ProfilerProcessController::GetState() const
     return m_state;
 }
 
+/*
+ * Two known costs here, both older than the pipeline and both left for a round
+ * of their own rather than folded into this one:
+ *
+ * ReadOutput empties the pipe rather than reading a fixed amount, so the time
+ * this holds m_mutex is set by how fast the child writes, not by anything here
+ * - every other getter, and Cancel's first critical section, wait behind it.
+ * Draining until empty is not optional: the caller ends the stage as soon as
+ * the process is gone, so anything left in the pipe at that point is never read
+ * at all. A per-call byte cap would need the last drain of a stage exempted
+ * from it, which is a bigger change than it first looks.
+ *
+ * m_output_text then keeps every byte for the life of the run with no
+ * high-water mark. The profiled application shares this stream, so a chatty
+ * workload grows it without limit; what to discard, and when, is a question
+ * the profiler console has not had to answer yet.
+ */
 void ProfilerProcessController::DrainExecutorLocked()
 {
     if (!m_executor)
@@ -1214,6 +1231,12 @@ bool ProfilerProcessController::ExecutorTeardownPending() const
 {
     std::lock_guard<std::mutex> lock(m_mutex);
     return m_executor && m_executor->HasPendingTeardown();
+}
+
+void ProfilerProcessController::PumpOutput()
+{
+    std::lock_guard<std::mutex> lock(m_mutex);
+    DrainExecutorLocked();
 }
 
 std::string ProfilerProcessController::GetOutput()
@@ -1582,7 +1605,7 @@ rocprofvis_result_t ProfilerProcessController::ExecuteJob(ProfilerProcessControl
             break;
         }
 
-        controller->GetOutput();
+        controller->PumpOutput();
         controller->UpdateState();
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
@@ -1595,11 +1618,11 @@ rocprofvis_result_t ProfilerProcessController::ExecuteJob(ProfilerProcessControl
     // m_executor is the last stage's by now, which is the one to observe.
     while (controller->ExecutorTeardownPending())
     {
-        controller->GetOutput();
+        controller->PumpOutput();
         std::this_thread::sleep_for(std::chrono::milliseconds(50));
     }
 
-    controller->GetOutput();
+    controller->PumpOutput();
     rocprofvis_profiler_state_t final_state = controller->m_state.load();
     spdlog::info("Profiler monitor job finished (state={})", static_cast<int>(final_state));
 

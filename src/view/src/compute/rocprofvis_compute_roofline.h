@@ -208,6 +208,7 @@ private:
     float                   m_hovered_item_distance;
     std::pair<Point, Point> m_bounding_box_ceiling;
     std::pair<Point, Point> m_bounding_box_intensity;
+    bool                    m_bounding_box_changed;
     float                   m_menus_rendered_height;
 
     DataProvider&    m_data_provider;

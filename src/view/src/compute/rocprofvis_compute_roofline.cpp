@@ -24,7 +24,7 @@ constexpr float       IMPLOT_MARKER_BASE              = 0.86602540f;  // implot_
 constexpr float       IMPLOT_MARKER_SCALE_FACTOR      = 1.15470054f;  // 2 / sqrt(3)
 constexpr double      MIN_X                           = 0.01;         // roofline_calc.py
 constexpr double      MAX_X                           = 1000.00;      // roofline_calc.py
-constexpr float       HOVER_THESHOLD                  = 8.0f;
+constexpr float       HOVER_THRESHOLD                 = 8.0f;
 constexpr float       HOVER_LINE_WEIGHT_BOOST         = 2.0f;
 constexpr float       LINE_THICKNESS_DEFAULT          = 1.0f;
 constexpr float       LINE_THICKNESS_MIN              = 1.0f;
@@ -123,6 +123,7 @@ Roofline::Roofline(DataProvider& data_provider, Mode mode)
 , m_hovered_item_distance(FLT_MAX)
 , m_bounding_box_ceiling({ { DBL_MAX, DBL_MAX }, { -DBL_MAX, -DBL_MAX } })
 , m_bounding_box_intensity({ { DBL_MAX, DBL_MAX }, { -DBL_MAX, -DBL_MAX } })
+, m_bounding_box_changed(false)
 , m_menus_rendered_height(0.0f)
 , m_data_provider(data_provider)
 , m_settings(SettingsManager::GetInstance())
@@ -446,7 +447,6 @@ Roofline::Render()
         ImPlot::PushStyleColor(ImPlotCol_Crosshairs,
                                ThemeColor(m_settings, Colors::kSelectionBorder, 0.72f));
         ImPlot::PushColormap(m_settings.GetFlameColormapName());
-        ImGui::PushID((*m_ceiling_source)->id);
         bool   menus_outside = (m_menus_placement == Outside) && m_show_menus;
         bool   plot_hovered  = false;
         ImVec2 plot_pos;
@@ -480,8 +480,14 @@ Roofline::Render()
                                  std::max(m_bounding_box_ceiling.second.y,
                                           m_bounding_box_intensity.second.y) *
                                      10.0);
-            ImPlot::SetupAxisLimits(ImAxis_X1, axis_min.x, axis_max.x);
-            ImPlot::SetupAxisLimits(ImAxis_Y1, axis_min.y, axis_max.y);
+            if(m_bounding_box_changed)
+            {
+                ImPlot::SetupAxisLimits(ImAxis_X1, axis_min.x, axis_max.x,
+                                        ImPlotCond_Always);
+                ImPlot::SetupAxisLimits(ImAxis_Y1, axis_min.y, axis_max.y,
+                                        ImPlotCond_Always);
+                m_bounding_box_changed = false;
+            }
             ImPlot::SetupAxisLimitsConstraints(ImAxis_X1, axis_min.x, axis_max.x);
             ImPlot::SetupAxisLimitsConstraints(ImAxis_Y1, axis_min.y, axis_max.y);
             ImPlot::PushStyleVar(ImPlotStyleVar_MarkerSize, 0.0f);
@@ -879,7 +885,6 @@ Roofline::Render()
             }
             ImPlot::EndPlot();
         }
-        ImGui::PopID();
         if(!m_plot_nav_enabled && plot_hovered)
         {
             ImVec2 hint_size = ImGui::CalcTextSize(HINT_FOCUS);
@@ -952,6 +957,7 @@ Roofline::UpdateCeilings(const WorkloadInfo* workload)
         filter.item_idx.clear();
     }
     m_bounding_box_ceiling = { { DBL_MAX, DBL_MAX }, { -DBL_MAX, -DBL_MAX } };
+    m_bounding_box_changed = true;
     ROCPROFVIS_ASSERT(__KRPVControllerRooflineCeilingComputeTypeLast +
                           __KRPVControllerRooflineCeilingBandwidthTypeLast <=
                       m_items.size());
@@ -1121,6 +1127,7 @@ Roofline::UpdateIntensities(const WorkloadInfo*                   workload,
                                                         intensity.second.position.x),
                                                std::max(m_bounding_box_intensity.second.y,
                                                         intensity.second.position.y) } };
+                m_bounding_box_changed   = true;
                 m_filters_intensity_bandwidth[filter_type].item_idx.insert(
                     m_items.size() - 1);
                 m_filters_intensity_bandwidth
@@ -1724,7 +1731,7 @@ Roofline::PlotHoverIdx()
                         break;
                     }
                 }
-                if(distance < HOVER_THESHOLD && distance < m_hovered_item_distance)
+                if(distance < HOVER_THRESHOLD && distance < m_hovered_item_distance)
                 {
                     m_hovered_item_idx      = i;
                     m_hovered_item_distance = distance;

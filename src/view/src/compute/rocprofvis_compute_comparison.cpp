@@ -314,7 +314,7 @@ ComputeComparisonView::RenderToolbar()
            m_settings.GetColor(m_view == ViewMetrics ? Colors::kTextOnAccent
                                                      : Colors::kTextMain),
            nullptr, ImGui::GetItemRectSize()) &&
-       !m_view == ViewMetrics)
+       m_view != ViewMetrics)
     {
         m_view = ViewMetrics;
     }

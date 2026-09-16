@@ -198,22 +198,44 @@ rocprofvis_dm_result_t rocprofvis_db_trim_save_async(
 The View / controller never hand-build SQL. They request a query string
 from the model layer:
 
+There are **three** builders, and the string-filter arguments belong to
+only one of them:
+
 ```c
 rocprofvis_dm_result_t rocprofvis_db_build_table_query(
     database, use_case, start, end, num_tracks, tracks,
     where, filter, group, group_cols,
     sort_column, sort_order,
-    num_string_table_filters, string_table_filters,
     max_count, offset, count_only,
+    char** out_query);   // caller frees
+
+rocprofvis_dm_result_t rocprofvis_db_build_event_search_query(
+    database, start, end, num, ops, where,
+    num_string_table_filters, string_table_filters,
+    bool include_substring, bool include_category, bool partial_matching,
+    sort_column, sort_order, max_count, offset, count_only,
     char** out_query);   // caller frees
 
 rocprofvis_dm_result_t rocprofvis_db_build_compute_query(
     database, compute_use_case, num_params, params, char** out_query);
 ```
 
+**`rocprofvis_db_build_table_query` takes no string-table filters.**
+Earlier revisions of this guide showed `num_string_table_filters`,
+`string_table_filters`, and `include_substring` on it; those three
+belong to `rocprofvis_db_build_event_search_query`, which is the name
+search path. Two further flags on that function decide matching
+semantics and are easy to get backwards:
+
+- `include_category` - also match against the event category, not just
+  the name.
+- `partial_matching` - true means a string matches if it matches **any**
+  filter; false means it must match **all** of them.
+
 `rocprofvis_dm_table_use_case_enum_t` covers the three system table
 shapes (`kRPVDMTableUseCaseEventTrackTable`, `kRPVDMTableUseCaseSampleTrackTable`,
-`kRPVDMTableUseCaseEventSearch`).
+`kRPVDMTableUseCaseEventSearch`), plus the `kRPVDMTableNumUsecases`
+sentinel - **three, not four**.
 `rocprofvis_db_compute_use_case_enum_t` covers all the compute query
 shapes (workload list, top kernels, kernels list, metric definitions,
 roofline ceilings, kernel intensities, metric values, kernel metric
@@ -223,12 +245,15 @@ matrix, and the schema-2.2 PC-sampling tables).
 
 ```c
 rocprofvis_dm_trace_t   rocprofvis_dm_create_trace(void);
-rocprofvis_dm_result_t  rocprofvis_dm_bind_trace_to_database(trace, database);
+rocprofvis_dm_result_t  rocprofvis_dm_bind_trace_to_database(trace, database, config_path);
 rocprofvis_dm_result_t  rocprofvis_dm_delete_trace(trace);
 ```
 
 `bind_trace_to_database` plugs the trace's binding callbacks (section 6)
 into the database so subsequent async DB calls can populate the trace.
+`config_path` is optional (`nullptr` in every in-tree C++ caller). It is
+stored on the bind struct and read by the Google / Perfetto path as an
+application config directory.
 
 ### 2.7 Trace deletion / GC helpers
 
@@ -326,14 +351,16 @@ query API can refer to "track X for operation Y" with one integer.
                  +-----------------+----------------+
                                    |
                                    v
-                 +----------------------------------+
-                 |  Database (abstract)             |
-                 |  +-- SqliteDatabase (abstract)   |
-                 |       +-- ProfileDatabase        |  rocpd / rocprof
-                 |       |    +-- RocpdDatabase     |  legacy schema
-                 |       |    +-- RocprofDatabase   |  modern + multinode
-                 |       +-- ComputeDatabase        |  rocprof-compute
-                 +-----------------+----------------+
+                 +------------------------------------+
+                 |  Database (abstract)               |
+                 |  +-- SqliteDatabase (abstract)     |
+                 |       +-- QueryManager             |  table/query engine
+                 |       |    +-- ProfileDatabase     |  rocpd / rocprof
+                 |       |    |    +-- RocpdDatabase  |  legacy schema
+                 |       |    |    +-- RocprofDatabase|  modern + multinode
+                 |       |    +-- GoogleTraceProcessor|  chrome / perfetto
+                 |       +-- ComputeDatabase          |  rocprof-compute
+                 +-----------------+------------------+
                                    | uses binding callbacks
                                    v
                  +----------------------------------+
@@ -464,7 +491,7 @@ Adds SQLite plumbing on top of `Database`. Key concepts:
 - **`Sqlite3Exec` / `ExecuteSQLQuery` overloads:** the canonical way
   to run SQL. The internal `Sqlite3Exec` mimics `sqlite3_exec` using
   `sqlite3_prepare_v2` so callbacks receive a real `sqlite3_stmt*`
-  and can use the typed `Sqlite3Column*` helpers. There are eight
+  and can use the typed `Sqlite3Column*` helpers. There are **eleven**
   `ExecuteSQLQuery` overloads covering: result-less queries,
   single-row scalars (string / uint64 / uint32), multi-row queries
   with handle context, multi-row queries with cache table name, and
@@ -490,25 +517,46 @@ Adds SQLite plumbing on top of `Database`. Key concepts:
   `DropSQLTable`, `DropSQLIndex`, `GetRocpdIndexes`, `DetectTable`.
   Use these instead of inline DDL.
 
-### 4.3 `ProfileDatabase` (`rocprofvis_db_profile.h`)
+### 4.2b `QueryManager` (`rocprofvis_db_query_manager.h`)
 
-Common base for `RocpdDatabase` and `RocprofDatabase`. Key
-responsibilities:
+**The layer between `SqliteDatabase` and everything that answers table
+queries.** It is easy to miss, because `ProfileDatabase` is what most
+call sites name - but `QueryManager` is where the table machinery
+actually lives, and a change to querying usually belongs here rather
+than one level down. Both `ProfileDatabase` and `GoogleTraceProcessor`
+derive from it.
 
 - Owns the global string table (`StringTable m_string_table`).
+- Owns the `TableProcessor` array: **three**, not four, one per
+  `rocprofvis_db_compound_table_type` -
+  `kRPVTableDataTypeEvent`, `kRPVTableDataTypeSample`,
+  `kRPVTableDataTypeSearch`, terminated by the `kRPVTableDataTypesNum`
+  sentinel. There is no `analysis` processor; earlier revisions of this
+  guide listed one.
+- Implements `BuildTableQuery`, `ReadTraceSlice`, `ExecuteQuery`, and
+  `ExportTableCSV`. Compute queries are explicitly stubbed out here
+  (`ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN("Systems database does not
+  build compute query")`).
+- Declares `rocprofvis_db_query_type_t`,
+  `rocprofvis_db_sqlite_query_type_t`, `rocprofvis_dm_track_search_id_t`,
+  and `rocprofvis_event_data_category_map_t`.
+- Carries `SINGLE_THREAD_RECORDS_COUNT_LIMIT` /
+  `NO_THREAD_RECORDS_COUNT_LIMIT` alongside the `SqliteDatabase` copies.
+
+### 4.3 `ProfileDatabase` (`rocprofvis_db_profile.h`)
+
+Common base for `RocpdDatabase` and `RocprofDatabase`, deriving from
+`QueryManager`. Key responsibilities:
+
 - Holds level-calculation cache:
   `m_event_levels[op]` (`unordered_map<guid, vector<rocprofvis_db_event_level_t>>`)
   and `m_event_levels_id_to_index[op]`.
-- Holds the four `TableProcessor`s, one per
-  `rocprofvis_db_compound_table_type` (event, sample, search,
-  analysis).
-- Exposes `Detect(filename, multinode_files)` to identify between
-  rocpd, rocprof, and rocprof-multinode SQLite formats.
-- Implements the shared `BuildTrackQuery` / `BuildSliceQuery` /
-  `BuildTableQuery`, `ReadTraceSlice`, `ExecuteQuery`,
-  `ExportTableCSV` flows. Compute queries are explicitly stubbed out
-  here (`ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN("Systems database does
-  not build compute query")`).
+- Exposes `Detect(filename, multinode_files)`, which identifies
+  **only** rocpd, rocprof, rocprof-multinode, and compute SQLite (or
+  `kAutodetect` on no match). Chrome/Perfetto detection is a different
+  function - see section 4.6b.
+- Implements `BuildTrackQuery` and `BuildSliceQueryMap`. The rest of
+  the query surface is on `QueryManager` above.
 - Houses every standard query callback used during metadata load:
   `CallBackAddTrack`, `CallBackLoadTrack`, `CallbackCacheTable`,
   `CallbackAddFlowTrace`, `CallbackAddStackTrace`,
@@ -553,10 +601,11 @@ The modern SQLite schema; supports **multinode**. Important traits:
   is captured into `m_memalloc_activity` (per-PID
   `vector<rocprofvis_db_memalloc_activity_t>`), then materialized
   into a `roc_optiq_memory_activity` SQL table during
-  `LoadMemoryActivityData`. The memory-allocation level enums and
-  type enums are part of the public model header
+  `LoadMemoryActivityData`. The memory-allocation level and type enums
   (`kRPVMemActivityAlloc`/`Free`/`Realloc`/`Reclaim`,
-  `kRPVMemLevelReal`/`Virtual`/`Scratch`).
+  `kRPVMemLevelReal`/`Virtual`/`Scratch`) are **internal** - they live
+  in `src/model/src/database/rocprofvis_db_rocprof.h`, not in any
+  `inc/` header, so they are not part of the public ABI.
 - String interning is keyed on `(string_id, guid_id, string_type)`
   (`rocprofvis_db_string_id_t`) because rocprof unifies strings and
   kernel symbol names into one array.
@@ -603,6 +652,32 @@ databases:
   the kernel x metric pivot table from a JSON plan (`jt::Json`).
 - `ComputeWorkloadTopKernelsMeanAndMedian(table)` post-processes top
   kernels to stamp mean / median into the table.
+
+### 4.6b `GoogleTraceProcessor` (`rocprofvis_db_trace_processor.h`)
+
+The Chrome / Perfetto adapter, and the fourth database flavour. It
+derives from `QueryManager` (a sibling of `ProfileDatabase`, not a
+child) and **the whole translation unit is behind
+`#ifdef ROCPROFVIS_PERFETTO_ENABLED`**, which is set only when Perfetto
+is available rather than by a user-facing option. `thirdparty/perfetto`
+is the dependency.
+
+- Serves `kChromeTrace`, `kPerfettoTrace`, and `kGoogleSqlite`.
+- **Detection does not go through `ProfileDatabase::Detect`.**
+  `GoogleTraceProcessor::Detect` is tried *first* in
+  `rocprofvis_c_interface.cpp`, and only on no match does the profile
+  detector run. If you are tracing why a file picked one adapter over
+  another, start here.
+- `TraceConverter::Convert(source_path, output_path, progress_callback)`
+  converts the source trace into a SQLite cache file before anything is
+  queried, which is what lets the rest of the stack stay SQLite-only.
+- `s_perfetto_categorized_data` is the third categorized-data map,
+  beside `s_rocpd_categorized_data` and `s_rocprof_categorized_data`.
+- **Trimming is unsupported**: `SaveTrimmedData` returns
+  `kRocProfVisDmResultNotSupported`.
+
+`rocprofvis_db_trace_processor_dll.cpp` is a Perfetto wrapper DLL and
+is deliberately excluded from the `datamodel` target.
 
 ### 4.7 Other database/ files
 
@@ -984,7 +1059,7 @@ typedef struct {
    constructor populates `m_binding_info` with the trace-side static
    methods.
 2. Caller opens a database: `rocprofvis_db_open_database(path, type)`.
-3. Caller binds: `rocprofvis_dm_bind_trace_to_database(trace, db)`.
+3. Caller binds: `rocprofvis_dm_bind_trace_to_database(trace, db, config_path)`.
    This calls `Trace::BindDatabase` which writes the database-side
    pointers into `m_binding_info` (`FuncFindCachedTableValue`,
    `FuncGetInfoTable*`) and hands the populated struct back to the
@@ -1012,9 +1087,15 @@ agnostic to which Database flavor is bound.
 
 ## 7. Trace File Formats & Adapters
 
-ROCm Optiq consumes four trace shapes, all SQLite-backed.
-`rocprofvis_db_identify_type(filename)` -> `ProfileDatabase::Detect`
-sniffs:
+All trace shapes are SQLite-backed by the time they are queried;
+Chrome/Perfetto inputs are converted first (section 4.6b).
+
+**Detection is two detectors, in order.**
+`rocprofvis_db_identify_type(filename)` tries
+`GoogleTraceProcessor::Detect` first, then falls back to
+`ProfileDatabase::Detect` - which recognizes only
+`kRocprofMultinodeSqlite`, `kRocprofSqlite`, `kRocpdSqlite`,
+`kComputeSqlite`, or `kAutodetect`. The formats:
 
 - **`kRocpdSqlite`** - legacy rocpd schema. One file. Decoded by
   `RocpdDatabase`. String table is per-GPU duplicated and is
@@ -1214,11 +1295,12 @@ of metric IDs.
 ### 8.4 `BuildTableQuery` flow
 
 The View / controller calls `rocprofvis_db_build_table_query(...)`
-(public ABI). The model dispatches via `Database::BuildTableQuery`
-to either `ProfileDatabase::BuildTableQuery` (the four system use
-cases) or `ComputeDatabase::BuildTableQuery` (asserts because compute
-does not produce per-track tables - those go through
-`BuildComputeQuery` instead).
+(public ABI). The model dispatches via `Database::BuildTableQuery` to
+either **`QueryManager::BuildTableQuery`** (the three system use cases -
+the override is on `QueryManager`, not `ProfileDatabase`) or
+`ComputeDatabase::BuildTableQuery` (asserts because compute does not
+produce per-track tables - those go through `BuildComputeQuery`
+instead).
 
 Args passed all the way through:
 
@@ -1226,17 +1308,22 @@ Args passed all the way through:
 - `num_tracks`, `tracks` - subset of track IDs to include.
 - `where`, `filter`, `group`, `group_cols` - SQL fragment overrides.
 - `sort_column`, `sort_order` - per-page sorting.
-- `num_string_table_filters`, `string_table_filters` - free-text
-  search; the database resolves these via `BuildTableStringIdFilter`
-  which finds matching string IDs and rewrites them into a
-  `WHERE IN (...)`.
-- `include_substring` - how those filters are matched against the
-  string table. `true` (the default) matches any string containing a
-  filter, `false` only strings equal to it; both are case insensitive.
-  Exact matching is only satisfiable with a single distinct filter,
-  since a string cannot equal two different values at once.
 - `max_count`, `offset` - paging.
 - `count_only` - return a `SELECT COUNT(*) ...` shape.
+
+**Free-text search is a different entry point.**
+`rocprofvis_db_build_event_search_query` is where
+`num_string_table_filters` / `string_table_filters` live, resolved via
+`BuildTableStringIdFilter` into a `WHERE IN (...)` over matching string
+IDs. Its three flags:
+
+- `include_substring` - `true` matches any string containing a filter,
+  `false` only strings equal to it; both case insensitive.
+- `include_category` - also match the event category, not just the name.
+- `partial_matching` - `true` means match **any** filter, `false` means
+  match **all** of them. This is why exact, all-of matching is only
+  satisfiable with a single distinct filter: a string cannot equal two
+  different values at once.
 
 The output is a `char* out_query` the caller is responsible for
 freeing.
@@ -1262,24 +1349,24 @@ public:
     void  AddRow();
     void  PlaceValue(col, double|uint64_t value);
 
-    Numeric GetMergeTableValue(uint8_t op, row, col, ProfileDatabase*) const;
+    Numeric GetMergeTableValue(uint8_t op, row, col, QueryManager*) const;
     uint8_t GetOperationValue(row) const;
 
     void  RemoveDuplicates();
     void  CreateSortOrderArray();
-    void  SortByColumn(db, column_name, ascending);
+    void  SortByColumn(QueryManager*, column_name, ascending);
 
     bool  SetupAggregation(agg_spec, num_threads);
     void  FinalizeAggregation();
     void  ClearAggregation();
-    void  AggregateRow(db, row_index, map_index);
-    void  SortAggregationByColumn(db, column, ascending);
+    void  AggregateRow(QueryManager*, row_index, map_index);
+    void  SortAggregationByColumn(QueryManager*, column, ascending);
 
     void  Merge(vector<unique_ptr<PackedTable>>&);
     void  ManageColumns(vector<unique_ptr<PackedTable>>&);
     void  RemoveRowsForSetOfTracks(selected, unselected, remove_all);
 
-    static const char* ConvertSqlStringReference(db, col, idx, node, &numeric_string);
+    static const char* ConvertSqlStringReference(QueryManager*, col, idx, node, &numeric_string);
     static uint8_t     ColumnTypeSize(ColumnType);
     void               ResetTrackIdetifiers();
 };
@@ -1328,10 +1415,33 @@ to round-trip through SQLite.
 ### 9.3 `TableProcessor` (`rocprofvis_db_table_processor.h`)
 
 The mediator between SQL execution and the in-memory `PackedTable`s.
-Per `ProfileDatabase` there are four `TableProcessor`s, one for each
-`rocprofvis_db_compound_table_type` (event / sample / search /
-analysis), so concurrent queries against different "kinds" of tables
-do not stomp on each other's caches.
+Per **`QueryManager`** (not `ProfileDatabase`) there are **three**
+`TableProcessor`s, one for each `rocprofvis_db_compound_table_type` -
+event, sample, search - so concurrent queries against different "kinds"
+of tables do not stomp on each other's caches. The fourth enumerator,
+`kRPVTableDataTypesNum`, is the array-size sentinel; there is no
+`analysis` processor.
+
+**The embedded command vocabulary** parsed out of the `-- CMD:` tag is
+`OFFSET`, `LIMIT`, `FILTER`, `GROUP`, `SORT`, and `COUNT`.
+
+`FILTER` does not remove rows. It fills `m_filter_lookup`, an
+`unordered_set<uint32_t>` of surviving row indices, and the row data
+stays put. The work fans out across
+`(RowCount() + 10000) / 10000` workers, capped at
+`hardware_concurrency() - 1`, with a final worker picking up the
+leftover rows when the count does not divide evenly - **that leftover
+worker's end index must be the merged-table row count, not the leftover
+count**, or the tail rows are silently dropped (fixed in 425a2292).
+The filter string is memoized in `m_last_filter_str` so an unchanged
+filter re-runs nothing, and adding or removing tracks goes through
+`set_difference` plus `RemoveRowsForSetOfTracks` rather than a rebuild.
+
+**Note the `GROUP` path does not carry FILTER's guards.** FILTER checks
+`thread_count == 0` and `leftover_rows_count > 0`; the GROUP fan-out
+about sixty lines below evaluates `i < thread_count - 1`, which
+underflows to a huge unsigned value when `thread_count` is 0. That is
+reachable on a single-core machine.
 
 Highlights:
 
@@ -1340,15 +1450,17 @@ Highlights:
   `-- CMD: <name> <param>` directives and the explicit
   multi-track / multi-guid format used by combined views.
 - **`ExecuteCompoundQuery(future, queries, tracks, commands,
-  handle, type, query_updated)`** drives a multi-stage pipeline:
-  run each per-node query in parallel into a `PackedTable`, merge
-  via `m_merged_table.Merge(...)`, apply filter / sort / group via
-  the embedded commands, then emit into the public `Table` (or to
-  CSV for export).
-- **`RestartableTimer m_timer`** clears the cached
-  `m_merged_table` and `m_tracks` after a configurable idle window
-  (default 1s) so the same table query coming back later can avoid
-  re-fetching, but a long pause does not pin memory.
+  handle, query_updated)`** - six parameters, no `type` - drives a
+  multi-stage pipeline: run each per-node query in parallel into a
+  `PackedTable`, merge via `m_merged_table.Merge(...)`, apply filter /
+  sort / group via the embedded commands, then emit into the public
+  `Table` (or to CSV for export).
+- **`RestartableTimer m_timer`** clears the cached `m_merged_table` and
+  `m_tracks` after an idle window so the same table query coming back
+  later can avoid re-fetching, but a long pause does not pin memory.
+  **The window is 60 seconds.** `m_delay{1000}` in the header looks like
+  a one-second default, but `restart()` always overwrites it and the
+  only call site passes `std::chrono::seconds(60)`.
 
 ### 9.4 `DatabaseCache`, `TableCache`, `StringTable`
 File: `rocprofvis_db_cache.h`.
@@ -1445,6 +1557,33 @@ Subclasses:
   with four tables (track info, kernel-dispatch level, region level,
   histogram) and a similar dependency mask.
 
+`roc_optiq_table_version_t` in full. Most tables share one value
+through aliases, which is deliberate: bumping
+`kRocOptiqTableVersionForLevelCalculation` invalidates every
+level-calculation table at once.
+
+| Constant | Value |
+|---|---|
+| `kRocOptiqTableVersionMemoryActivity` | `0x0002` |
+| `kRocOptiqTableVersionMemoryAllocate` | `0x0001` |
+| `kRocOptiqTableVersionForLevelCalculation` | `0x0002` |
+| `kRocOptiqTableVersionKernelDispatchLevel` | alias of the above |
+| `kRocOptiqTableVersionRegionLevel` | alias |
+| `kRocOptiqTableVersionRegionSampleLevel` | alias |
+| `kRocOptiqTableVersionMemoryAllocLevel` | alias |
+| `kRocOptiqTableVersionMemoryCopyLevel` | alias |
+| `kRocOptiqTableVersionHistogram` | `0x0001` - **dead, see below** |
+| `kRocOptiqTableVersionTrackInfo` | `0x0003` |
+
+**`kRocOptiqTableVersionHistogram` is never used.** Both
+`RocprofMetadataVersionControl` and `RocpdMetadataVersionControl`
+register `roc_optiq_histogram` with
+`kRocOptiqTableVersionMemoryCopyLevel` instead, so the histogram's
+effective version is `0x0002` and it is silently invalidated whenever
+the level-calculation version moves. That looks like a copy-paste slip
+rather than intent; if you touch this, either wire the constant up or
+delete it, and do not assume the named constant reflects what ships.
+
 When you add a new derived table:
 
 1. Append a value to the subclass's `roc_optiq_tables` enum.
@@ -1494,6 +1633,9 @@ Avoid conditional compilation and validate changes with
 `rocprofvis_c_interface.h` for direct C/C++ consumers.
 
 `src/model/python/rocprofvis_cffi_test.py` covers the Python side.
+That test still calls `rocprofvis_dm_bind_trace_to_database` with two
+arguments; the public ABI takes three (`config_path` last, pass
+`None` / `nullptr`).
 
 If you change a public ABI signature:
 - Update `rocprofvis_interface.h` (single C-overload only).
@@ -1710,10 +1852,18 @@ exploratory testing during development.
   `rocprofvis_db_string_id_t`.
 - `rocprofvis_db_sqlite.h` -> `SqliteDatabase`, `MAX_CONNECTIONS`,
   `RpvSqliteExecuteQueryCallback`, `rocprofvis_db_sqlite_db_node_t`,
-  `rocprofvis_db_sqlite_callback_parameters`, the seven
+  `rocprofvis_db_sqlite_callback_parameters`, the eleven
   `ExecuteSQLQuery` overloads, `Sqlite3Column*` helpers.
-- `rocprofvis_db_profile.h` -> `ProfileDatabase`, the four
-  `TableProcessor`s, `m_event_levels`, the long callback list
+- `rocprofvis_db_query_manager.h` -> `QueryManager`, the three
+  `TableProcessor`s, `m_string_table`, `BuildTableQuery`,
+  `rocprofvis_db_compound_table_type`, `rocprofvis_db_query_type_t`,
+  `rocprofvis_db_sqlite_query_type_t`,
+  `rocprofvis_dm_track_search_id_t`,
+  `rocprofvis_event_data_category_map_t`.
+- `rocprofvis_db_trace_processor.{h,cpp}` -> `GoogleTraceProcessor`,
+  `TraceConverter` (`ROCPROFVIS_PERFETTO_ENABLED`).
+- `rocprofvis_db_profile.h` -> `ProfileDatabase`,
+  `m_event_levels`, the long callback list
   (`CallBackAddTrack`, `CallbackAddFlowTrace`,
   `CallbackAddStackTrace`, `CallbackAddEssentialInfo`,
   `CallbackAddArgumentsInfo`, `CalculateEventLevels`,

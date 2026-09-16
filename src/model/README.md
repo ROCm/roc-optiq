@@ -1,3 +1,14 @@
+> **Parts of this file are out of date.** Several signatures below have
+> drifted from `src/model/inc/` - `bind_trace_to_database` now takes a
+> third config-path argument, `rocprofvis_db_type_t` has eight values
+> rather than the three listed, the event id is 52/8/4 bits rather than
+> 60/4, and more than a dozen public functions are missing entirely.
+> The PC-sampling section at the end is current.
+>
+> For the authoritative description of this layer, read
+> [`.agents/DATABASE.md`](../../.agents/DATABASE.md), and treat
+> `src/model/inc/` as the final word on any signature.
+
 The Data Model package include two components:<br />
     1. Data Model - layered data storage, with public interface to access data properties and possibility of freeing redundant objects. <br />
     2. Database - database query manager and processor, with public interface to add data model objects. Supports asynchronous database access.<br />
@@ -44,14 +55,14 @@ Database interface
 ---
 
   **Opens database of provided path and type**<br />
-    kAutodetect = 0,<br />
- 	kRocpdSqlite = 1, <br />
- 	kRocprofSqlite = 2 <br />
+  `rocprofvis_db_type_t` has eight values; see
+  `src/model/inc/rocprofvis_interface_types.h` for the current list,
+  which also covers multinode rocprof, rocprof-compute, and the
+  Chrome / Perfetto / Google SQLite shapes.<br />
   
   `param` filename path of the database file <br />
   `param` type  type enumeration, kAutodetect for automatic detection  <br />
   `return` handler to database object <br />
-  `note` Currently only old rocpd schema fully supported. Working on rocprof schema <br />
   
 ``` 
 rocprofvis_dm_database_t rocprofvis_db_open_database(
@@ -232,13 +243,15 @@ rocprofvis_dm_result_t  rocprofvis_dm_delete_trace(
  
   `param` trace trace object handle created with rocprofvis_dm_create_trace()<br />
   `param` database database object handle created with rocprofvis_db_open_database()<br />
+  `param` config_path optional application config directory; pass nullptr<br />
  
   `return` status of operation<br />
  
 ```  
 rocprofvis_dm_result_t  rocprofvis_dm_bind_trace_to_database( 
                                     rocprofvis_dm_trace_t,
-                                    rocprofvis_dm_database_t);                                      
+                                    rocprofvis_dm_database_t,
+                                    rocprofvis_dm_charptr_t);                                      
 ```  
 
 ---

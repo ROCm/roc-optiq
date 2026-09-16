@@ -34,9 +34,11 @@ It also pairs with sibling agent guides under `.agents/`:
   change touches `src/model/`. The brief model summary in section
   5 of this file is the high-level pass; `DATABASE.md` is the
   source of truth.
-- [`.agents/SCRIPTING.md`](./SCRIPTING.md) - planned in-app Python
-  analysis (editor sends source strings; controller owns execution).
-  Read this when adding script UI or Ask Optiq script tools.
+- [`.agents/SCRIPTING.md`](./SCRIPTING.md) - in-app Python analysis
+  (interpreter lib, controller ABI, phases). Partly shipped behind
+  `ROCPROFVIS_ENABLE_SCRIPTING`; the doc is a live roadmap, so check
+  a phase's status before trusting its tense. Read this when adding
+  script UI or Ask Optiq script tools.
 
 When humans and `CODING.md` disagree with this file, `CODING.md` wins.
 
@@ -105,21 +107,48 @@ Output executable:
 - Linux:         `build/<preset>/roc-optiq`
 - macOS:         `build/<preset>/roc-optiq`
 
-CMake options worth knowing:
+CMake options worth knowing. **Every `ROCPROFVIS_*` option defaults to
+OFF**, so a plain clone builds none of the gated features:
 
 - `ROCPROFVIS_ENABLE_INTERNAL_BANNER` - draws a watermark on internal builds.
-- `ROCPROFVIS_DEVELOPER_MODE` - enables extra menus, the Debug Window, and
-  `ComputeTester`. Guarded with `#ifdef ROCPROFVIS_DEVELOPER_MODE` in code.
-- `ROCPROFVIS_ENABLE_PROFILER` - enables the in-app profiler launcher
-  (default off).
-- `ROCPROFVIS_ENABLE_REMOTE` - enables SSH connection, browse, transfer,
-  and remote-trace UI (default off). Remote profiling needs both remote
-  and profiler support.
-- `ROCPROFVIS_ENABLE_TRACE_COMPARE` - enables the in-development trace
-  comparison UI (default off).
-- `ROCPROFVIS_MULTI_WINDOW` - enables the in-development multi-window
-  support (default off).
-- `USE_NATIVE_FILE_DIALOG` - off disables `nativefiledialog-extended`.
+- `ROCPROFVIS_DEVELOPER_MODE` - enables extra menus, the Debug Window,
+  `ComputeTester`, **and the `File > Compare` entry point**. Guarded
+  with `#ifdef ROCPROFVIS_DEVELOPER_MODE` in code.
+- `ROCPROFVIS_ENABLE_PROFILER` - the in-app profiler launcher.
+- `ROCPROFVIS_ENABLE_REMOTE` - SSH connection, browse, transfer, and
+  remote-trace UI. Remote profiling needs both remote and profiler
+  support.
+- `ROCPROFVIS_ENABLE_AGENTIC_PROFILING` - the Ask Optiq assistant.
+- `ROCPROFVIS_ENABLE_SCRIPTING` - embedded Python analysis, including
+  the details panel's Script tab.
+- `ROCPROFVIS_ENABLE_UI_TESTS` - the Dear ImGui UI tests.
+- `ROCPROFVIS_MULTI_WINDOW` - in-development multi-window support.
+  **This one does not reach `src/view/` at all**: all nine of its
+  `#ifdef` sites are in `src/app/src/main.cpp`, most of them further
+  narrowed to `__linux__`.
+- `USE_NATIVE_FILE_DIALOG` - **defaults ON**, unlike the list above.
+  Turning it off disables `nativefiledialog-extended`.
+
+Two macros the code tests are *not* options and cannot be set directly:
+
+- `ROCPROFVIS_HAVE_NATIVE_FILE_DIALOG` - derived from
+  `USE_NATIVE_FILE_DIALOG`. This is the name to grep for; all twelve
+  sites are in `rocprofvis_appwindow.{h,cpp}`.
+- `ROCPROFVIS_PERFETTO_ENABLED` - set only when Perfetto is available.
+  It changes which trace formats the welcome page and open dialog
+  advertise.
+- `ROCPROFVIS_HAVE_LIBSECRET` - target-scoped, selects the Linux
+  credential backend in `SecretStore`.
+
+**`ROCPROFVIS_ENABLE_TRACE_COMPARE` currently gates nothing.** The
+option exists and the `-D` is injected, but there is not one
+`#ifdef ROCPROFVIS_ENABLE_TRACE_COMPARE` anywhere in `src/`. Compare is
+gated by `ROCPROFVIS_DEVELOPER_MODE` instead, and only at the menu item
+- `CompareFilesDialog` itself is always compiled. Do not reach for this
+flag expecting it to do something.
+
+**There is no PC-sampling build flag.** PC sampling is gated at runtime
+on the trace's schema version, not at compile time.
 
 The CLI flag `--file-dialog={auto|imgui|native}` overrides dialog selection
 at runtime (see `src/app/src/rocprofvis_cli_parser.h`).
@@ -143,16 +172,21 @@ at runtime (see `src/app/src/rocprofvis_cli_parser.h`).
 |   |   +-- src/datamodel # In-memory dm_* types (events, tracks, samples)
 |   |   +-- src/test*/    # Unit tests (Catch2)
 |   +-- controller/       # Coordinates model + view, owns async futures/handles
-|   |   +-- inc/          # rocprofvis_controller.h + rocprofvis_profiler.h
+|   |   +-- inc/          # rocprofvis_controller.h, _script.h, rocprofvis_profiler.h
 |   |   +-- src/          # Generic controller plumbing
 |   |   +-- src/system/   # System-profile-specific (events, samples, tracks...)
 |   |   +-- src/compute/  # Compute-profile-specific (kernels, roofline...)
+|   |   +-- src/python/   # optiq Python bindings (optional)
 |   |   +-- src/remote/   # SSH bridge/client/known-host handling
 |   |   +-- src/profiler/ # Local/remote profiler process execution
-|   |   +-- tests/        # System & compute Catch2 tests
+|   |   +-- tests/        # Catch2 tests (note: NOT under src/)
+|   +-- python/           # roc-optiq-python: embedded CPython runtime (optional)
+|   |   +-- inc/          # rocprofvis_python.h, rocprofvis_python_runtime.h
+|   |   +-- src/
 |   \-- view/             # << This is the UI. Read sections 6-14. >>
 |       +-- inc/          # rocprofvis_view_module.h (entry: init/render/destroy)
 |       +-- src/          # All UI classes
+|       |   +-- agenticprofiling/ # Ask Optiq assistant (optional)
 |       |   +-- compute/  # Compute-only views
 |       |   +-- icons/    # Icon font glyph constants & ranges
 |       |   +-- model/    # UI-side data models (cached projections)
@@ -161,6 +195,7 @@ at runtime (see `src/app/src/rocprofvis_cli_parser.h`).
 |       |   +-- remote/   # SSH profiles, sessions, dialogs (optional)
 |       |   +-- welcome/  # WelcomePage empty state
 |       |   +-- widgets/  # Reusable widget library (use these first!)
+|       \-- test/         # rocprofvis_view_test_access.h (*TestPeer structs)
 +-- thirdparty/           # Vendored libs (imgui, glfw, sqlite3, spdlog, ...)
 +-- resources/            # Icons, fonts, AMD logo, embedded assets
 +-- sample/               # Sample traces (.db, .rpd, .rpv)
@@ -179,7 +214,8 @@ at runtime (see `src/app/src/rocprofvis_cli_parser.h`).
 \-- .agents/              # AI/agent architecture guides
     +-- UI.md             # This file: View-layer guide
     +-- CONTROLLER.md     # Controller-layer deep dive
-    \-- DATABASE.md       # Model/database-layer deep dive
+    +-- DATABASE.md       # Model/database-layer deep dive
+    \-- SCRIPTING.md      # Python analysis: runtime, ABI, phases
 ```
 
 ## 4. Architectural Pillars
@@ -340,14 +376,18 @@ Internal source layout under `src/controller/src/`:
   control, graphs, memory management, samples (and sample LOD),
   segments, summary (+metrics), tables, timeline, topology, traces,
   tracks, call stack.
-- `compute/` - per-domain modules covering kernel, metrics container,
-  plots (+compute, +series), roofline, table compute (+pivot), trace
-  compute, workload.
+- `compute/` - seven modules: kernel, metrics container, pc_sampling,
+  roofline, table compute pivot, trace compute, workload. There is no
+  controller-side plot layer; see `.agents/CONTROLLER.md` section 6.8.
+- `python/` - the `optiq` Python bindings for in-app analysis scripts
+  (`ROCPROFVIS_ENABLE_SCRIPTING`). See `.agents/SCRIPTING.md`.
 - `remote/` - SSH bridge/client/known-host implementation behind the
   controller C API; the View never links libssh2 directly.
 - `profiler/` - profiler command construction, process execution, and
   optional SSH executor.
-- `tests/` - Catch2 system + compute tests.
+
+Catch2 tests are in `src/controller/tests/`, one level up - **not**
+under `src/controller/src/`.
 
 ### `src/view/`
 
@@ -366,8 +406,21 @@ void rocprofvis_view_set_texture_backend(...);
 std::string rocprofvis_get_application_config_path();
 bool rocprofvis_view_is_remote_display_session();
 std::string rocprofvis_get_application_log_path();
+bool rocprofvis_view_get_drag_repair_enabled();
+void rocprofvis_view_set_drag_repair_enabled(bool enabled);
 bool rocprofvis_view_wants_continuous_render();
 ```
+
+The header also defines the three types `app/` needs to call them:
+`rocprofvis_view_render_options_t`
+(`kRocProfVisViewRenderOption_None`, `_RequestExit`),
+`rocprofvis_view_notification_t` (`_Exit_App`, `_Toggle_Fullscreen`),
+and `rocprofvis_view_file_dialog_preference_t` (`_Auto`, `_Native`,
+`_ImGui`).
+
+The drag-repair pair is the Linux/Wayland pointer-routing workaround
+behind `UserSettings::linux_drag_repair` and the `--drag-repair` CLI
+flag; it is a no-op elsewhere.
 
 These are the only symbols `app/` should call from `view/`. Internally
 they all forward to `RocProfVis::View::AppWindow`.
@@ -630,6 +683,15 @@ splitter dragging.
   with `SetEventSourceName(...)`. Toggle close/change events via
   `EnableSendCloseEvent` / `EnableSendChangeEvent`. Used in `AppWindow`
   for the project tabs and in `ComputeView` for sub-tabs.
+- `AddTab`, `RemoveTab(id|index)`, `SetActiveTab(id|index)`,
+  `SetTabLabel`, `GetActiveTab`, `GetTabs`, `SetAllowToolTips`.
+- **`FindTabByLabel(label)` is deliberately fuzzy**, and its rules
+  matter because this is how a tab gets selected by name rather than by
+  index: an exact match always wins; a substring match is accepted only
+  if the query is at least `MIN_SUBSTRING_LABEL_MATCH` (3) characters
+  *and* matches exactly one tab. It returns `nullptr` both when nothing
+  matched and when several did, so a caller cannot tell those apart -
+  treat either as "ask the user".
 
 ### 7.6 `rocprofvis_gui_helpers.{h,cpp}` - low-level UI helpers
 
@@ -676,8 +738,9 @@ Use these instead of inlining their logic anywhere new.
 - `enum Alignment { Left, Center, Right }` and `ElidedText(text,
   available_width, tooltip_width, alignment, align_to_frame)` -
   ellipsizes text and shows the full text in a tooltip on hover.
-- `ElideWithEllipsis(text, available_width)` - returns an elided
-  string for callers that draw text themselves.
+- `ElideWithEllipsis(text, max_width, max_chars)` - returns an elided
+  string for callers that draw text themselves. Note the third
+  parameter: it caps characters as well as pixels.
 - `CenterNextTextItem` / `CenterNextItem` - centers the next ImGui
   draw within the current row.
 - `XButton(id, tool_tip, settings)` - the small "x" close button
@@ -687,6 +750,26 @@ Use these instead of inlining their logic anywhere new.
 - `TableRowHeight()` - canonical row height; align tables to this.
 - `DrawInternalBuildBanner(text)` - watermark, gated by
   `ROCPROFVIS_ENABLE_INTERNAL_BANNER`.
+- `RenderLoadingIndicatorDots` / `MeasureLoadingIndicatorDots`, `PI`,
+  `PositionCell`, `CaptureCellRightClick`, `AddCopyRowCellMenuItems`.
+
+**The panel-card vocabulary is the app's design language, and this
+header is its single source of truth.** Prefer it over hand-rolled
+`BeginChild` / `PushStyleColor` sequences:
+
+- `BeginPanelCard` / `EndPanelCard` with
+  `enum class PanelCardTone { kFrame, kPanel, kMain }` and
+  `PANEL_CARD_ROUNDING` (10.0f).
+- `PanelFieldLabel`, `PanelIcon`.
+- `AccentButton` (the primary action) and `ColoredButton` (everything
+  else).
+- `RenderRemoteDownloadPopup`.
+
+The profiler launcher has a parallel set in
+`profiler/rocprofvis_launch_shared_tabs.h` (`BeginLaunchCard`, `Chip`,
+`StatusPill`, ...) - see section 13.2. Compare panes have a third,
+`BeginCompareCard`. Use whichever belongs to the surface you are in
+rather than mixing them.
 
 ### 7.7 `rocprofvis_image_helpers.{h,cpp}` - GPU textures
 
@@ -768,8 +851,9 @@ subclassing this; don't roll your own.**
 ### 7.13 `rocprofvis_debug_window.{h,cpp}` (developer mode only)
 
 - `class DebugWindow` - singleton. Aggregates spdlog output into a
-  scrollable panel. `AddDebugMessage`, `AddPersitentDebugMessage`
-  (sic), max-message limit, transient/persistent split panes.
+  scrollable panel. The public entry point is `AddDebugMessage`, and it
+  is the only one: earlier revisions of this guide also listed an
+  `AddPersitentDebugMessage`, which does not exist.
 
 ### 7.14 `rocprofvis_log_viewer.{h,cpp}` - production log viewer
 
@@ -1022,11 +1106,31 @@ Public surface:
 - `GetTracks()` exposes the shared track vector to the sidebar and
   project settings.
 
-Subscribed events: `kNewTrackData`, `kHandleUserGraphNavigationEvent`
-(carries `ScrollToTrackEvent`), `kSetViewRange`, `kFontSizeChanged`,
-`kGoToTimelineSpot` (carries `NavigationEvent`),
-`kTimelineTimeRangeChanged`. Always keep these tokens released in the
+Subscribed events - seven, not six: `kNewTrackData`,
+`kHandleUserGraphNavigationEvent` (carries `ScrollToTrackEvent`),
+`kSetViewRange`, `kFontSizeChanged`, `kGoToTimelineSpot` (carries
+`NavigationEvent`), `kTimelineTimeRangeChanged`, and
+`kTrackVisibilityChanged`. Always keep these tokens released in the
 destructor.
+
+**Track sorting lives here.** `enum class TrackSortMode { kTopology,
+kDefault, kCustom }` with `SortTracksBy`, `BuildTopologyOrder`,
+`HasCustomOrder`, `ApplyTrackOrder`, `RebuildTrackVectorFromMetadata`,
+`LoadSortSettings`, and `RenderTrackSortMenu`. The chosen order is
+persisted through `TimelineViewProjectSettings::HasSortSettings` /
+`SortMode` / `CustomOrder`, and pushed down to the provider with
+`DataProvider::SetTrackIndex`.
+
+**The measurement duration label is draggable**, which is what
+`MeasurementRulerDragTarget { kNone, kStart, kEnd }`,
+`MeasurementLabelRect`, `HandleMeasurementLabelInput`, and the
+session-only `m_measure_label_offset_y` are for. Right-click copy is
+`MeasurementCopyTarget { kNone, kStart, kEnd, kDuration }`, and
+`ZoomToMeasurement` frames the span.
+
+**The track-count strip** above the tracks is `TrackTypeCounts` plus
+`CalculateTrackCounts`, `BuildTrackCountLabels`, `RenderTrackInfo`, and
+`RenderTrackStats`.
 
 Note: there is no `kScrollToTrack` enum value. The `ScrollToTrackEvent`
 payload class is dispatched on `kHandleUserGraphNavigationEvent` and
@@ -1117,15 +1221,21 @@ with:
 
 ### `AnalysisView` (`rocprofvis_analysis_view.{h,cpp}`)
 
-The bottom-right tabbed panel. Hosts, in source order:
+The bottom-right tabbed panel. Hosts, in source order (the labels are
+what the user sees, and what `SelectTab` matches against):
 - `m_tab_container` (`TabContainer`) with sub-tabs:
-  - `MultiTrackTable` (event table) - cross-track event listing.
-  - `MultiTrackTable` (sample table) - cross-track sample listing.
-  - `EventsView` - per-event detail tab (basic info, ext data, flow,
+  - `"Event Table"` - `MultiTrackTable`, cross-track event listing.
+  - `"Sample Table"` - `MultiTrackTable`, cross-track sample listing.
+  - `"Event Details"` - `EventsView` (basic info, ext data, flow,
     callstack, args).
-  - `TrackDetails` - selected-track summary tab.
-  - `TopEventsView` - category-specific top event/sample tables.
-  - `AnnotationView` - sticky-note list.
+  - `"Track Details"` - `TrackDetails`, selected-track summary.
+  - `"Top Events"` - `TopEventsView`, category-specific tables.
+  - `"Annotations"` - `AnnotationView`, sticky-note list.
+  - `"Script"` - `ScriptEditor`, last and only under
+    `ROCPROFVIS_ENABLE_SCRIPTING`. See section 7.15.
+- `ListTabs()`, `SelectTab(name)`, and `ActiveTab()` are the accessors
+  the assistant drives this panel through; `GetScriptEditor()` is
+  scripting-gated.
 - Listens to track / range / event selection events to keep tabs in
   sync.
 - **Compare mode (two compare sources).** Every applicable tab splits
@@ -1498,11 +1608,13 @@ performing the scroll.
 
 ### Compute data plumbing
 
-- `ComputeDataProvider` (`rocprofvis_compute_data_provider.{h,cpp}`)
-  is a separate provider used by the **older** dedicated compute UI
-  flows. New code should use the unified `DataProvider` (which has
+- **There is one provider.** `ComputeView` owns a plain `DataProvider`
+  like every other `RootView`, and reaches compute data through
   `ComputeModel()`, `FetchMetrics`, `FetchMetricPivotTable`, and
-  `SetFetchMetricsCallback`).
+  `SetFetchMetricsCallback`. Earlier revisions of this guide described
+  a separate `ComputeDataProvider` in a
+  `compute/rocprofvis_compute_data_provider.{h,cpp}` for "older"
+  compute flows; **neither the class nor the file exists.**
 - `ComputeDataModel` (`model/compute/rocprofvis_compute_data_model.{h,cpp}`)
   holds `WorkloadInfo`, `KernelInfo`, `MetricValue` per
   `(store_id, kernel_id|workload_id)`.
@@ -1647,18 +1759,24 @@ EventManager::GetInstance()->AddEvent(
 
 ### `enum class RocEvents` - the canonical event IDs
 
-The full list is in `rocprofvis_events.h`. Examples used widely:
-`kNewTrackData`, `kNewTableData`, `kTabClosed`, `kTabSelected`,
-`kTimelineTrackSelectionChanged`, `kTimelineTimeRangeChanged`,
-`kTimelineEventSelectionChanged`, `kTimelineEventHighlightChanged`,
-`kHandleUserGraphNavigationEvent`, `kTrackMetadataChanged`,
-`kFontSizeChanged`, `kSetViewRange`,
-`kGoToTimelineSpot`, `kTimeFormatChanged`,
-`kRequestProgressUpdate`, `kProfilerStatusChanged`,
-`kRemoteStatusChanged`. Compute-only:
-`kComputeWorkloadSelectionChanged`,
+All 25, in declaration order - `kInvalidEvent` is the only explicitly
+valued one, and new values go at the end:
+
+`kInvalidEvent = -1`, `kNewTrackData`, `kNewTableData`, `kTabClosed`,
+`kTabSelected`, `kTimelineTrackSelectionChanged`,
+`kTimelineTimeRangeChanged`, `kTimelineEventSelectionChanged`,
+`kTimelineEventHighlightChanged`, `kHandleUserGraphNavigationEvent`,
+`kTrackMetadataChanged`, `kTrackVisibilityChanged`, `kFontSizeChanged`,
+`kSetViewRange`, `kGoToTimelineSpot`, `kTimeFormatChanged`,
+`kRequestProgressUpdate`, `kScriptExecuteComplete`,
+`kProfilerStatusChanged`, `kRemoteStatusChanged`,
+`kRevealTrackInTopology`, `kComputeWorkloadSelectionChanged`,
 `kComputeKernelSelectionChanged`, `kComputeMetricsFetched`,
 `kComputeShowMetricInKernelDetails`.
+
+The last four are compute-only. `kScriptExecuteComplete` carries
+`ScriptExecuteCompleteEvent` and exists only in spirit without
+`ROCPROFVIS_ENABLE_SCRIPTING`.
 
 When adding a new event:
 1. Add a new value at the end of `RocEvents` (don't reorder).
@@ -1701,8 +1819,16 @@ through this** - never hardcode `IM_COL32(...)` in feature code.
   `SettingsManager::CompactSidebar()` hides the topology sidebar's
   per-row icons in favor of the right-click menus (see `SideBar` in
   section 9).
-- `UserSettings::log_viewer` stores level mask, entry limit, search and
-  presentation preferences for `LogViewer`.
+- `UserSettings::log_viewer` (`LogViewerSettings`) holds exactly
+  `level_mask`, `auto_scroll`, `use_regex`, `relative_time`, and
+  `visible`. **The entry limit is not in it** - it is the sibling field
+  `UserSettings::log_viewer_max_entries`, bounded by
+  `LOG_VIEWER_MAX_ENTRIES_DEFAULT` (512), `_MIN` (64), `_MAX` (100000),
+  `_STEP` (64), and `_STEP_FAST` (512). The default mask is
+  `LOG_VIEWER_DEFAULT_LEVEL_MASK` (`0x3F`).
+- `UserSettings::linux_drag_repair` - the Linux/Wayland pointer-routing
+  repair described in section 5, set from `--drag-repair` and ignored
+  on other platforms.
 - `GetInternalSettings()` -> recent files (`MAX_RECENT_FILES = 5`).
   Use `AddRecentFile / RemoveRecentFile / ClearRecentFiles`.
 - `GetAppWindowSettings()` -> show/hide flags (`show_toolbar`,
@@ -1909,6 +2035,14 @@ Layered, transport at the bottom and the panel at the top:
   OpenAI chat-completions endpoint over cpp-httplib, plus the reply
   parser (including a "harmony" inline tool-call fallback). Knows
   nothing about traces.
+- `rocprofvis_ai_prompts.{h,cpp}` - `AssistantSystemPrompt()`, the
+  standing instructions sent before every round. A function rather
+  than a constant because it appends the scripting paragraph itself
+  (see below). It is its own file so the prompt can be read and
+  revised as prose, without scrolling past the turn machinery. Rebuilt
+  per call rather than cached: it is assembled once per HTTP round on
+  a worker thread, and the copy is dwarfed by the request it goes
+  into.
 - `rocprofvis_ai_tool_schema.{h,cpp}` - `BuildAssistantToolsJson`, the
   description of the tool set the model receives. Builds JSON out of
   string literals and touches no view state, which is what makes it
@@ -1923,14 +2057,21 @@ Layered, transport at the bottom and the panel at the top:
   string literals, and escaped `LIKE` wildcards paired with an explicit
   `ESCAPE` clause.
 - `rocprofvis_ai_tools.{h,cpp}` - the public executor surface plus
-  `StartAssistantTool`, which parses the arguments, refuses everything
-  but `offer_next_steps` when no trace is ready, then searches the UI
-  handler table and the data handler table in that order. Also defines
-  the handful of helpers both body files need. Reads go through
-  `DataProvider` and the view-side models only - never SQLite, never
-  `src/model/`.
+  `StartAssistantTool`, the dispatcher. It parses the arguments, then
+  applies three gates that every tool except `offer_next_steps` passes
+  through - no provider is refused outright, a compute trace is refused
+  with an explanation, and a provider that is not yet
+  `ProviderState::kReady` **parks** on `kTraceLoading` rather than
+  failing - and only then searches the UI, data, and script handler
+  tables in that order (UI first: they are the cheap ones, and none
+  shares a name with a query). An unmatched name comes back with
+  `AssistantToolNameList()` attached. Also defines the
+  handful of helpers the body files share (`DoneResult`, `JsonU64`,
+  `TrimAssistantText`, `CheckArrayLength`, `SelectedOrFullTimeRange`).
+  Reads go through `DataProvider` and the view-side models only - never
+  SQLite, never `src/model/`.
 - `rocprofvis_ai_tools_internal.h` - private wiring between the three
-  executor files: the shared helpers and the two handler-table
+  executor files: the shared helpers and the three handler-table
   accessors. Nothing outside `agenticprofiling/` includes it.
 - `rocprofvis_ai_ui_tools.cpp` - the tools that change Optiq rather
   than read it: `goto`, `show_panel`, `switch_tab`, `flow_arrows`,
@@ -1948,9 +2089,10 @@ Layered, transport at the bottom and the panel at the top:
   formatter they use, and `FinishAssistantFetch`. Most of these cannot
   answer in one call: they queue a fetch and hand the panel a set of
   `DataProvider` request ids to poll, then format the rows once they
-  land. Those request ids are shared with the normal UI, which is why
-  each body checks `IsRequestPending` before issuing its own query and
-  reports whether it actually started the fetch.
+  land. Most of those ids are the assistant's own (see the client-id
+  note below), but some are still shared with the normal UI, which is
+  why every body checks `IsRequestPending` before issuing its own query
+  and reports whether it actually started the fetch.
 - `rocprofvis_ai_script_tools.cpp` - `run_analysis_script`, which is
   neither of the above: the model writes Python, the interpreter
   computes the answer, and what comes back is a conclusion rather than
@@ -1960,10 +2102,12 @@ Layered, transport at the bottom and the panel at the top:
   fills the Script tab of the details panel and selects it, and the user
   presses Run or Reject, so the model cannot execute code unattended.
   That wait is on a person, so the tool sets its own `timeout_seconds`
-  instead of the 45s a fetch gets, and the panel asks
+  (`ASSISTANT_SCRIPT_APPROVAL_TIMEOUT_SECONDS`, 300s) rather than
+  taking the default fetch deadline, and the panel asks
   `AssistantScriptFetchPending` rather than polling a request id,
-  because an approval has no request behind it. **Compiled only when `ROCPROFVIS_ENABLE_SCRIPTING` is also
-  on**; with it off the handler table is empty, the schema never
+  because an approval has no request behind it. **Compiled only when
+  `ROCPROFVIS_ENABLE_SCRIPTING` is also on**; with it off the handler
+  table is empty, the schema never
   registers the tool, and the prompt never names it, so the model is
   not offered something that would always fail. It owns
   `AssistantFetchKind::kScript` and the `FinishAssistantScriptFetch`
@@ -1973,22 +2117,203 @@ Layered, transport at the bottom and the panel at the top:
   click, a drag, a menu item) including the event traffic the rest of
   the app listens for. **Add a capability here, as one method, rather
   than wiring widgets from inside a tool.**
-
-**Adding a tool is three edits, and none of them is the dispatcher:** a
-schema entry in `rocprofvis_ai_tool_schema.cpp`, a body in whichever of
-`rocprofvis_ai_ui_tools.cpp`, `rocprofvis_ai_data_tools.cpp`, or
-`rocprofvis_ai_script_tools.cpp` matches what it touches, and an entry
-in that same file's own handler table. A body without a schema entry is
-unreachable; a schema entry without a body comes back to the model as an
-unknown tool. The label list at the top of the schema file has to grow
-with it, since that is what `AssistantToolNameList` reports and what the
-panel shows as a status line.
+- `rocprofvis_ai_trace_view_actions.cpp` - **`TraceView` members whose
+  bodies live here instead of in `rocprofvis_trace_view.cpp`**, because
+  the assistant is their only caller and an agentic-off build should
+  not compile them at all. This is where `SetMinimapVisibility`,
+  `SetFlowArrowsVisible`, `SetFlowRenderChained`, `ListAnalysisTabs`,
+  `SelectAnalysisTab`, `ActiveAnalysisTab`, `ProposeScript`,
+  `ScriptProposalState`, `ClearScriptProposal`, `ResetView`,
+  `SetAnnotationsVisible`, `ListBookmarks`, `SaveBookmark`,
+  `GotoBookmark`, `RemoveBookmark`, `MeasureRange`, `ClearMeasurement`,
+  `ZoomToRange`, and `AddNote` are defined - so grepping
+  `rocprofvis_trace_view.cpp` for them finds nothing. The file states
+  its own eviction rule: a capability belongs here only while the
+  assistant is its sole caller, and moves back to
+  `rocprofvis_trace_view.cpp` the moment a toolbar or menu needs it.
 - `rocprofvis_ai_assistant.{h,cpp}` - `AssistantPanel`, a lazy
-  singleton like `LogViewer`. Owns the transcript, the docked column,
-  and the turn loop. The composer shows **Explain this view** on an
-  empty chat, then replaces it with up to three stacked next-step
-  buttons from `offer_next_steps`. Clicking a step sends that text as
-  the next user message.
+  singleton like `LogViewer`. Owns the transcript, the conversation
+  sent upstream, and the turn loop. **The turn machinery only** - it
+  emits no ImGui.
+- `rocprofvis_ai_assistant_render.cpp` - the panel's drawing half: the
+  dock and its splitter, the transcript cards, the composer, the
+  activity strip, and the toolbar button. Everything here reads panel
+  state and emits ImGui; the two halves meet only through
+  `AssistantPanel` members, so a change to how a turn advances and a
+  change to how it looks are rarely the same edit. The composer shows
+  **Explain this view** on an empty chat, then replaces it with up to
+  three stacked next-step buttons from `offer_next_steps`. Clicking a
+  step sends that text as the next user message.
+- `rocprofvis_ai_settings.cpp` - `SettingsPanel` and `SettingsManager`
+  members for the assistant settings page and the credential-store
+  access behind its API-key field. Same reasoning as the `TraceView`
+  actions file: they are members because the page edits the same
+  `UserSettings` copy and OK/Cancel state as every other page, but the
+  bodies live beside the assistant so the shared files carry none of
+  it. **The `Serialize`/`Deserialize` pair is the deliberate
+  exception** and stays in `rocprofvis_settings_manager.cpp` with every
+  other one, unguarded, so an assistant-off build round-trips a saved
+  configuration instead of erasing it.
+
+**The tool set, as the model sees it.** Twenty tools at schema indices
+0-19, plus `run_analysis_script` at index 20 when scripting is built
+in. The three handler tables are `k_data_tool_handlers`
+(`rocprofvis_ai_data_tools.cpp`), `k_ui_tool_handlers`
+(`rocprofvis_ai_ui_tools.cpp`), and `k_script_tool_handlers`
+(`rocprofvis_ai_script_tools.cpp`), searched in the order UI, data,
+script.
+
+| Tool | Kind | Notes |
+| --- | --- | --- |
+| `trace_overview` | data | Free - no query. The prompt requires it first. |
+| `get_summary` | data | Free. Shares `SUMMARY_REQUEST_ID` with the UI. |
+| `list_tracks` | data | |
+| `top_events` | data | Aggregate; carries no `__uuid`. |
+| `kernel_instances` | data | Returns individual events. |
+| `kernel_metrics` | data | Aggregate; carries no `__uuid`. |
+| `track_events` | data | Shares `ToolTrackRows` with `track_samples`. |
+| `track_samples` | data | Same body, split by `tool_name`. |
+| `event_details` | data | Point lookup; needs a `__uuid`. Issues three fetches. |
+| `track_statistics` | data | Aggregate; derived shared request id. |
+| `search_events` | data | Whole-trace name search. Returns events. |
+| `goto` | ui | Zoom, select, highlight. |
+| `show_panel` | ui | |
+| `switch_tab` | ui | |
+| `flow_arrows` | ui | |
+| `annotate` | ui | Outlives the conversation - saved with the project. |
+| `bookmark` | ui | |
+| `measure` | ui | |
+| `reset_view` | ui | |
+| `offer_next_steps` | ui | Fills the follow-up buttons. |
+| `run_analysis_script` | script | Only with `ROCPROFVIS_ENABLE_SCRIPTING`. |
+
+**`track_events` and `track_samples` are one body.** That is the only
+reason `AssistantToolHandler` is passed the name it was called by; no
+other handler reads it.
+
+**Adding a tool is four edits, and none of them is the dispatcher:**
+
+1. A schema entry in `rocprofvis_ai_tool_schema.cpp`, via `AddTool` with
+   the next contiguous index.
+2. A body in whichever of `rocprofvis_ai_ui_tools.cpp`,
+   `rocprofvis_ai_data_tools.cpp`, or `rocprofvis_ai_script_tools.cpp`
+   matches what it touches.
+3. An entry in that same file's own handler table, plus a row in
+   `ASSISTANT_TOOL_LABELS` at the top of the schema file.
+4. **The `Tools:` line in `ASSISTANT_SYSTEM_PROMPT`**, which names the
+   whole set in one line. This is the one that gets forgotten, and a
+   tool missing from it is one the model has no reason to call.
+
+A body without a schema entry is unreachable; a schema entry without a
+body comes back to the model as an unknown tool. `ASSISTANT_TOOL_LABELS`
+feeds two things: `AssistantToolNameList`, which is what the model is
+told when it invents a name, and `AssistantToolStatusLabel`, which is
+the line under the transcript while the tool runs. Its order is *not*
+the schema order, so do not use one to index the other. Each body file
+owns its table and hands it over through `GetAssistant*ToolHandlers()`,
+so the handlers keep internal linkage and no file has to know the others
+exist.
+
+**The turn machinery.** `AssistantPanel::Phase` is three states -
+`kIdle`, `kHttpWait`, `kToolWait` - and a turn walks them in a loop:
+`StartHttpRequest` posts and moves to `kHttpWait`; `HandleHttpResult`
+either queues tool calls (`BeginToolQueue` -> `RunNextTool`, `kToolWait`)
+or, when the model stops calling tools, spends one more round through
+`BeginFinalAnswer`. A tool that cannot answer immediately parks in
+`FetchWait` and `PollToolFetch` retries it each frame until the request
+ids clear, the deadline passes, or the trace changes underneath it.
+
+**Before the first question there is a briefing and a warm-up.**
+`BuildAssistantBriefing` puts topology and headline totals in front of
+the model so it is not asking blind, and `NeedsBriefing` /
+`m_briefed_project_id` re-send it only when the trace it describes is
+not the trace being asked about - a follow-up about the same trace does
+not repeat it. `TryStartSummaryWarmup` can park the whole question
+behind a summary preload; that wait is flagged `warmup` because it has
+no tool call to answer, so when it lands `BeginQueuedTurn` resumes the
+question instead of replying to a tool. The prompt still insists on at
+least one real tool call, because the briefing carries no kernel names,
+per-kernel times, or event rows - answering from it alone is guessing.
+
+**A turn is bounded four ways, and they measure different things.**
+`ASSISTANT_MAX_TOOL_ROUNDS` (20) caps how long an investigation may run.
+`ASSISTANT_MAX_TOOL_CALLS_PER_ROUND` (16, in the client) caps one
+reply's worth of calls. Then the history is bounded twice over:
+`ASSISTANT_MAX_CONVERSATION_MESSAGES` (60) and
+`ASSISTANT_MAX_CONVERSATION_CHARS` (120000). **Both are needed.** Every
+round re-sends the whole conversation, so cost grows with the square of
+its length; but a message count alone cannot bound a single
+investigation, because that is one user message followed by round after
+round of tool replies and so never reaches a second user message to cut
+at. `TrimConversation` compacts old tool replies to
+`ASSISTANT_COMPACTED_TOOL_REPLY`, which says plainly that the rows can
+be fetched again so a model that still needs them asks rather than
+invents - and it never touches the newest
+`ASSISTANT_RECENT_TOOL_REPLIES` (8), since those are what the answer is
+about to be written from.
+
+**Timeouts, and why they differ:**
+
+| Constant | Value | Applies to |
+| --- | --- | --- |
+| `ASSISTANT_CONNECT_TIMEOUT_SECONDS` | 15 | TCP connect |
+| `ASSISTANT_HTTP_TIMEOUT_SECONDS` | 120 | One read/write |
+| `ASSISTANT_FETCH_TIMEOUT_SECONDS` | 350 | Default parked fetch |
+| `ASSISTANT_SLOW_FETCH_NOTICE_SECONDS` | 5 | When the status starts counting up |
+| `ASSISTANT_SCRIPT_APPROVAL_TIMEOUT_SECONDS` | 300 | Waiting on the user to approve a script |
+| `ASSISTANT_TRACE_LOADING_TIMEOUT_SECONDS` | 600 | Waiting for a trace to finish opening |
+
+The fetch deadline is generous on purpose: cutting a live query off and
+telling the model it timed out is worse than making the user wait,
+because the model then answers around the gap instead of reporting it.
+Clear cancels at any point.
+
+**A tool called while the trace is still opening waits for it.**
+`AssistantFetchKind::kTraceLoading` parks the turn with no query issued
+at all, and the tool runs for real once the trace is ready. A large file
+on a slow disk is waited out rather than reported as a failure the model
+would answer around - and if the wait does run out, the reply says the
+trace is still opening rather than naming the tool, which never got as
+far as running. The full set of kinds is `kNone`, `kSummary`,
+`kTopEvents`, `kKernelInstances`, `kDataTable`, `kEventDetails`,
+`kTrackStatistics`, `kScript`, `kTraceLoading`; the kind is what decides
+how `FinishAssistantFetch` formats the rows.
+
+**The transcript can hold a chart, not just text.** `Speaker::kChart`
+is a line rendered from live model data rather than a stored snapshot:
+`AppendChart(track_id)` records only the id, and `RenderActivityChart`
+redraws it from `GetAssistantActivityBins` /
+`GetAssistantActivityRows` each frame. A tool asks for one by setting
+`chart` and `chart_track_id` on its result. The rows of a set share one
+scale, so their brightness is comparable to each other.
+
+**What `OptiqActions` can actually do**, since a tool should reach for
+an existing method before adding one: panels (`ShowPanel` over the
+`OptiqPanel` enum - `kMinimap`, `kHistogram`, `kTopology`, `kDetails`,
+`kSummary`, `kLogViewer`, `kToolbar`, `kAnnotations`), tabs (`ListTabs`,
+`ActiveTab`, `SelectTab`, and the details panel's inner
+`ListAnalysisTabs` / `ActiveAnalysisTab` / `SelectAnalysisTab`),
+timeline options (`SetFlowArrowsVisible`, `SetFlowRenderChained`,
+`ZoomToRange`), navigation (`SelectRange`, `ShowRange`,
+`ScrollToTrack`), events (`ClickEvent`, `HighlightEvent`,
+`ClearHighlights`, `NavigateToEvent`), what gets left behind (`AddNote`,
+`SaveBookmark`, `GotoBookmark`, `RemoveBookmark`, `ListBookmarks`,
+`MeasureRange`, `ClearMeasurement`, `ResetView`), and - under
+`ROCPROFVIS_ENABLE_SCRIPTING` - `ProposeScript`, `ScriptProposalState`,
+`ClearScriptProposal`. Every method returns false rather than doing half
+the work when the part of the app it needs is missing.
+
+**`PanelFromName` matches loosely, and that is load-bearing.** "navbar"
+and "tree" both resolve to topology; case, spacing, punctuation, and
+trailing filler like "view" or "panel" are ignored, so the prompt can
+tell the model to pass the user's own words straight through. Every
+alias is unique across panels, so a name never resolves two ways.
+
+**`ClickEvent` is the literal equivalent of a click, so do not help
+it.** It drops the previous selection and selects the event, and *that*
+is what makes `TraceView` load the details, flow arrows, and call stack.
+Pairing it with a manual `DataProvider::FetchEvent` collides on the
+shared request id and the duplicate is dropped.
 
 Integration points:
 
@@ -1999,7 +2324,13 @@ Integration points:
 - `TraceView` and `AnalysisView` expose the plain accessors
   `OptiqActions` needs (`ZoomToRange`, `SelectAnalysisTab`,
   `ListBookmarks`, and friends). Reuse those rather than reaching into
-  their members.
+  their members. They are declared in `rocprofvis_trace_view.h` but
+  **defined in `agenticprofiling/rocprofvis_ai_trace_view_actions.cpp`**,
+  so look there, not in `rocprofvis_trace_view.cpp`.
+- `DataProvider` carries the assistant's own client id and request ids,
+  and `rocprofvis_data_provider_script.cpp` carries the script fetch.
+  `TableType::kAssistant*` in `model/rocprofvis_tables_model.h` are its
+  private result slots.
 
 Rules that are easy to get wrong here:
 
@@ -2019,22 +2350,70 @@ Rules that are easy to get wrong here:
 - **`ASSISTANT_SCRIPT_PROMPT` is appended, not merged.** The base
   prompt names its tools in one line, so it must never name a tool the
   build might not have. The scripting paragraph is a second constant
-  concatenated in `StartHttpRequest` under the same `#ifdef` that
-  registers the tool, and it says only *when* to reach for a script -
-  what a script may call is in the tool's schema description, which is
-  the one place the model reads about an API. Say it once, in the place
-  that ships with the tool.
+  concatenated by `AssistantSystemPrompt()` itself, in
+  `rocprofvis_ai_prompts.cpp`, under the same `#ifdef` that registers
+  the tool - deliberately there and not at the call site, so that
+  everything the model is told lives in one file and the panel just
+  asks for a prompt. It says only *when* to reach for a script: what a
+  script may call is in the tool's schema description, which is the one
+  place the model reads about an API. Say it once, in the place that
+  ships with the tool.
 - **The diagnostic knowledge lives in `ASSISTANT_SYSTEM_PROMPT`, for
   now.** Its `WHAT TO LOOK FOR` list is the catalogue of things worth
-  checking (idle GPU, launch-bound, transfer cost, register spilling,
-  launch geometry, imbalance, and so on), each named alongside the tool
-  and columns that evidence it. Two consequences. Every entry must be
-  answerable with the tools and the column whitelist as they stand, or
-  the model will invent an argument that does not exist. And the list is
-  re-sent on every round of every turn, so it earns its tokens only
-  while it stays a one-line-per-check list - the moment thresholds need
-  arithmetic, move them into a C++ tool that returns findings, which is
-  both cheaper and testable.
+  checking, in worst-offenders-first order and currently eleven
+  numbered entries: GPU idle, launch-bound, one slow kernel, transfer
+  cost, no overlap, blocking synchronization, register spilling, launch
+  geometry, instability, imbalance, and allocation in the hot path.
+  Each is named alongside the tool and the columns that evidence it.
+  Two consequences. Every entry must be answerable with the tools and
+  the column whitelist as they stand, or the model will invent an
+  argument that does not exist. And the list is re-sent on every round
+  of every turn, so it earns its tokens only while it stays a
+  one-line-per-check list - the moment thresholds need arithmetic, move
+  them into a C++ tool that returns findings, which is both cheaper and
+  testable.
+- **The prompt's other sections, so an edit lands in the right one.**
+  In order: the opening role line, `VOICE`, `TWO PASSES, AND THE FIRST
+  ONE IS CHEAP`, `KNOW WHICH TOOLS RETURN AN EVENT`, `IT IS FINE IF
+  NOTHING IS WRONG`, an "always call at least one tool" rule, `THREE
+  LEVELS, EACH NARROWING THE NEXT`, `WHAT TO LOOK FOR`, `LIMITS`,
+  `AGREEING AND DISAGREEING`, a `Tools:` block that names the tool set
+  and carries the column whitelist, and `FINISHING`. The scripting
+  addendum appends `RUNNING A SCRIPT, WHICH IS LEVEL 4`.
+- **`THREE LEVELS` is the cost model, and the tool descriptions cannot
+  replace it.** Level 1 is free (`trace_overview`, `get_summary` -
+  already built, no query); level 2 is a query (`top_events`,
+  `kernel_instances`, `track_events`, `track_samples`, `search_events`),
+  costing whatever window and track count it is given; level 3 is a
+  point lookup (`event_details`), cheap but reachable only with a
+  `__uuid` from level 2. The scripting paragraph adds level 4. The point
+  is the funnel: each level's output narrows the next, and skipping one
+  is how the model ends up reading a whole trace to answer a question
+  about one kernel. Numbering them is also what lets the scripting
+  addendum place itself without editing the base prompt.
+- **`KNOW WHICH TOOLS RETURN AN EVENT` exists because aggregates carry
+  no `__uuid`.** `top_events`, `get_summary`, `kernel_metrics`, and
+  `track_statistics` group by name and hand back counts and totals;
+  only `kernel_instances`, `search_events`, and `track_events` return
+  individual events, and only they can supply the `__uuid` and
+  `__trackId` that `goto` needs to actually click something. An
+  aggregate row is a lead, not something clickable - so naming a kernel
+  and being able to show it are two different tool calls. Related: the
+  prompt requires every `__uuid` to come back **as a quoted string**,
+  digit for digit, because they run to 19 digits and a bare JSON number
+  loses the low bits and names a different event. The tools reject one
+  rather than answer about the wrong thing.
+- **The column whitelist is written out twice, and both must agree.**
+  `ASSISTANT_QUERY_COLUMNS` in `rocprofvis_ai_tool_query.cpp` is what
+  `IsAllowedQueryColumn` enforces, and the `Tools:` block of the prompt
+  spells the same list out so the model does not have to guess;
+  `AssistantAllowedQueryColumnList()` builds it from the array to report
+  back when a call names something else. Adding a queryable column means
+  editing both, or the model is either told about a column that will be
+  rejected or never told about one that would work. **Treat it as an
+  interface change**, not a tweak: the array is the boundary between
+  model input and SQL. `ASSISTANT_MAX_FILTERS` (8) caps how many
+  conditions one call may carry.
 - **`AGREEING AND DISAGREEING` is the anti-sycophancy rule.** A question
   with a claim inside it is a claim to check, not a premise to build on,
   and the model holds its position when pushed unless a *number* moves -
@@ -2075,11 +2454,19 @@ Rules that are easy to get wrong here:
   itself, a play-by-play of each tool call) plus the required closing
   `Checked:` line, which gives tool attribution in one line instead of
   narration throughout.
-- **The settings page is URL, model, and API key.** There is no
-  shipped endpoint URL. The default model is `ASSISTANT_DEFAULT_MODEL`
-  (`gpt-5.6-luna`). Nothing about the endpoint shape is persisted:
-  `AssistantProvider` holds only name, URL, and model, and the client
-  works the rest out from the URL.
+- **The settings page is a list of endpoints, one of them active.**
+  `AssistantSettings` holds `std::vector<AssistantProvider> providers`
+  plus an `active` index; `SettingsManager::GetActiveAssistantProvider`
+  resolves it and `SettingsPanel::RenderAssistantSettings` edits the
+  active one. Each `AssistantProvider` is name, URL, and model, and
+  nothing else - there is no shipped endpoint URL, the default model is
+  `ASSISTANT_DEFAULT_MODEL` (`gpt-5.6-luna`), and the default name is
+  `ASSISTANT_DEFAULT_PROVIDER_NAME` (`Default`). Nothing about the
+  endpoint *shape* is persisted: the client works that out from the
+  URL. A half-written settings file still runs, because
+  `ApplyAssistantEndpointDefaults` fills an empty name or model and the
+  panel re-seeds an empty list with
+  `MakeDefaultAssistantProvider()`.
 - **Two endpoint shapes, decided by `EndpointFlavour`.** Stock OpenAI
   gets `/chat/completions` appended, names the model in the body, sends
   `Authorization: Bearer`, and uses `max_completion_tokens`. Azure-style
@@ -2093,6 +2480,23 @@ Rules that are easy to get wrong here:
   `/openai/deployments/<Model>/chat/completions` with `apiVersion`.
   Everything that differs between the two keys off the flavour in one
   place, rather than being sniffed at each use.
+- **Three rules exist solely to keep the key off the wire and off other
+  hosts. Do not relax them for convenience.** The client sets
+  `set_follow_location(false)`: cpp-httplib does not strip headers when
+  a redirect crosses hosts, and the Azure subscription key is not one it
+  would drop, so following one could hand the key to whatever host the
+  redirect names. A chat endpoint has no reason to redirect, so a 3xx
+  comes back as `ASSISTANT_REDIRECT_ERROR` instead. `OriginMayCarryToken`
+  refuses to send a key over plain `http` unless the origin is loopback
+  (`ASSISTANT_INSECURE_URL_ERROR`) - note it refuses the *key*, not the
+  request, so an unauthenticated local endpoint still works. And
+  `StripDeploymentlessCompletions` repairs an Azure URL that already has
+  `/chat/completions` glued on without a deployment in between, because
+  Azure answers that with a 404 and a user who pasted the failing URL
+  back into settings would otherwise be stuck with it.
+- **A malformed reply cannot name unbounded tools.** The harmony
+  fallback parser stops at `ASSISTANT_MAX_HARMONY_CALLS` (4), and the
+  normal path at `ASSISTANT_MAX_TOOL_CALLS_PER_ROUND` (16).
 - **`temperature` and `reasoning_effort` are never sent.** Reasoning
   models reject a non-default temperature, and each model's own default
   effort is what we want. Keeping the body free of model-specific
@@ -2101,11 +2505,32 @@ Rules that are easy to get wrong here:
 - **Tools only ever run from `Update()`.** They toggle panel
   visibility and rebuild layout, so running them from `Render()` would
   mutate widgets halfway through the frame that draws them.
-- **A tool only formats rows from a fetch it started.** Several table
-  request IDs and result slots are shared with the normal UI. If a tool
-  finds one busy, it waits for that owner and retries its own query
-  against the original timeout deadline. It returns a timeout rather
-  than treating the other query's rows as its own.
+- **The assistant is its own `DataProvider` client, and that is what
+  keeps it out of the tabs' way.** `DataProvider::ASSISTANT_CLIENT_ID`
+  buys its table reads their own request ids, their own controller
+  tables, and their own model slots (`TableType::kAssistantEventTable`,
+  `kAssistantSampleTable`, `kAssistantSearchTable`,
+  `kAssistantSummaryKernelTable`, `kAssistantTopEventsTable`, reached
+  through `DataProvider::ASSISTANT_*_REQUEST_ID`). A background reader
+  on the shared ids would be refused whenever a tab happened to be
+  loading and, worse, would overwrite the rows that tab was showing
+  once it was not. **Anything else that reads tables without being a
+  tab wants the same treatment and a client id of its own** - that is
+  the rule the constant exists to state.
+- **Not every tool got a private slot, so the contention protocol
+  stays.** `get_summary` still rides `DataProvider::SUMMARY_REQUEST_ID`
+  and `TableType::kSummaryKernelTable`, `event_details` shares the
+  extended-data, flow, and call-stack ids, and `track_statistics`
+  derives a shared id through
+  `RequestIdBuilder::MakeTrackDataRequestId`. So every body still
+  checks `IsRequestPending` before issuing its own query and reports
+  `started_fetch`, and the panel keeps that flag: rows that land for a
+  fetch the tool did not start answer somebody else's query, so the
+  tool has to run again rather than format them. A tool that finds an
+  id busy waits for that owner and retries against the *original*
+  timeout deadline (`m_fetch_retries` is what keeps the clock from
+  restarting), and returns a timeout rather than treating the other
+  query's rows as its own.
 - **HTTP runs on a worker via `std::async`, and must stay cancellable.**
   `AssistantChatCall::Cancel()` closes the socket; `CancelPendingRequest()`
   is what lets the panel be destroyed without blocking on a
@@ -2115,8 +2540,21 @@ Rules that are easy to get wrong here:
   The flip side is that the trace in front can change mid-turn, which
   is what `m_turn_project_id` detects.
 - **The API key lives in `SecretStore`, never in settings JSON and
-  never in a log line.** `AssistantProvider` is the saved record in
-  `UserSettings::assistant`, and holds only name, URL, and model.
+  never in a log line.** `UserSettings::assistant` stores only the
+  provider records. **The key is scoped per endpoint**, under
+  `ASSISTANT_TOKEN_SECRET_KEY + "/" + provider.name` - which is why
+  `AssistantProvider::name` is a credential-store key rather than a
+  display label, and why renaming an endpoint orphans its token
+  (`ApplyAssistantTokenEdits` clears the orphan). Scoping is a security
+  property, not filing: a single shared key would let any endpoint
+  without one of its own inherit it, which is how a key for one
+  provider ends up posted to another's host.
+  `MigrateLegacyAssistantToken()` moves a key written before endpoints
+  were named onto the first endpoint, once at load, then erases the
+  unnamed entry - deliberately a one-shot migration rather than a live
+  fallback, for exactly that reason. The four
+  `{Has,Get,Set,Clear}AssistantToken` methods are the only users of
+  `SecretStore` outside remote, and take the provider name.
 
 ## 13. Remote / SSH and Profiler Launch UI
 
@@ -2150,10 +2588,22 @@ downloaded/generated trace is passed to `AppWindow::OpenFile()`:
 - `RenderSshAuthModal(session)` - renders keyboard-interactive and
   host-key requests. The owning dialog must call it every frame while
   the session exists; it is not rendered globally by `AppWindow`.
-- `SshSettingsDialog` - connection-profile CRUD modal.
-- `SshTestDialog` - remote trace opener/browser owned lazily by
-  `AppWindow`; its entry point requires both
-  `ROCPROFVIS_ENABLE_REMOTE` and `ROCPROFVIS_DEVELOPER_MODE`.
+- `SshSettingsDialog` (`rocprofvis_ssh_settings_dialog.{h,cpp}`) -
+  connection-profile CRUD modal.
+- `SshTestDialog` (`rocprofvis_ssh_test_dialog.{h,cpp}`) - remote trace
+  opener/browser owned lazily by `AppWindow`; its entry point requires
+  both `ROCPROFVIS_ENABLE_REMOTE` and `ROCPROFVIS_DEVELOPER_MODE`.
+- `RemoteFileBrowser` (`rocprofvis_remote_file_browser.{h,cpp}`) - the
+  shared remote file picker: `Open(seed_path, mode, ...)`, `Render()`,
+  `IsOpen()`, and a `PickMode` enum. Reuse it rather than building
+  another browse UI on top of `SshSession`'s `Browse` operation.
+- `SecretStore` (`rocprofvis_secret_store.{h,cpp}`) - four statics,
+  `IsAvailable` / `Set` / `Get` / `Erase`, over the OS credential
+  vault. **It lives under `remote/` but is not gated on remote alone**:
+  it compiles when `ROCPROFVIS_ENABLE_REMOTE` *or*
+  `ROCPROFVIS_ENABLE_AGENTIC_PROFILING` is on, because the assistant's
+  API keys use it too. On Linux the backend is selected by
+  `ROCPROFVIS_HAVE_LIBSECRET`.
 - `PromptRequest`, `HostKeyRequest`, `ExecutionOutput`, `FileStat`, and
   `RemoteDir` in `rocprofvis_ssh_fetch.*` are mutex-protected snapshots;
   consume updates without holding locks across ImGui calls.
@@ -2263,11 +2713,16 @@ express.
 
 **Shared form helpers (`rocprofvis_launch_shared_tabs.h`)** - reuse
 these instead of re-authoring launcher UI: `RenderTargetSection`,
-`RenderToolLocationSection`, `RenderRawEnvVarsTab`, `BuildCommandPreviewString`,
+`RenderToolLocationSection`, `BuildCommandPreviewString`,
 `RenderCommandPreview`, `RenderOutputConsole` (+ `ConsoleStatusLevel
 {kIdle, kRunning, kSuccess, kError}`), `RenderSavedProfileBar`. The
-connection-mode selector and SSH UI live in the dialog
-(`RenderRemoteSection`), not here.
+same header also exports the launcher's card and chip vocabulary:
+`BeginLaunchCard` / `EndLaunchCard`, `LaunchCardHeader`,
+`LaunchSubHeader`, `ToggleSwitch`, `Chip`, `RenderConfigChips`,
+`StatusPill`, and `enum class PillAction`. The connection-mode selector
+and SSH UI live in the dialog (`RenderRemoteSection`), not here.
+(There is no `RenderRawEnvVarsTab`, despite earlier revisions of this
+guide listing one.)
 
 **`ProfilerLauncherDialog`** owns `m_backends`, the
 `LaunchPresetManager`, the `ProfilerLaunchOrchestrator`, `m_config`, and
@@ -2435,8 +2890,10 @@ through `AppMonitor` instead of blocking:
   `rocprofvis_profiler_cancel`.
 
 To add a backend: implement `IProfilerBackend`, register it in
-`ProfilerLauncherDialog`, map its `rocprofvis_profiler_type_t` in
-`ResolveProfilerType`, and implement `ParseTraceOutputPath`.
+`ProfilerLauncherDialog`, and implement `ParseTraceOutputPath`. Earlier
+revisions named a third step, mapping `rocprofvis_profiler_type_t` in a
+`ResolveProfilerType`; **neither that function nor that type exists
+under `src/view/`**, so the recipe was unfollowable as written.
 
 ## 14. Data Flow: Requests, Remote Operations, and Profiler Runs
 
@@ -2954,14 +3411,19 @@ All under `agenticprofiling/`, compiled only with
 - `OptiqActions`, `OptiqPanel` ->
   `agenticprofiling/rocprofvis_ai_actions.h` -> The only code that
   mutates the UI on the assistant's behalf.
-- `AssistantToolContext`, `AssistantFetchState`,
-  `AssistantToolStartResult`, `StartAssistantTool`,
-  `FinishAssistantFetch`, `BuildAssistantBriefing` ->
+- `AssistantToolContext`, `AssistantFetchState`, `AssistantFetchKind`,
+  `AssistantToolStartResult`, `AssistantActivityRow`,
+  `StartAssistantTool`, `FinishAssistantFetch`,
+  `AssistantScriptFetchPending`, `BuildAssistantBriefing`,
+  `GetAssistantActivityBins`, `GetAssistantActivityRows` ->
   `agenticprofiling/rocprofvis_ai_tools.h`. The dispatcher lives in
   `rocprofvis_ai_tools.cpp`; the bodies are split by what they touch
   into `rocprofvis_ai_ui_tools.cpp`, `rocprofvis_ai_data_tools.cpp`,
   and `rocprofvis_ai_script_tools.cpp`, each owning its own handler
   table.
+- `AssistantSystemPrompt` -> `agenticprofiling/rocprofvis_ai_prompts.h`
+  -> The standing instructions, appended with the scripting paragraph
+  when that option is on. Product behaviour; edit as prose.
 - `AssistantToolEntry`, `AssistantToolTable`,
   `GetAssistantUiToolHandlers`, `GetAssistantDataToolHandlers`,
   `GetAssistantScriptToolHandlers`, `FinishAssistantScriptFetch` ->
@@ -2971,19 +3433,39 @@ All under `agenticprofiling/`, compiled only with
   -> Runs model-written Python through `DataProvider::ExecuteScript`.
   Needs `ROCPROFVIS_ENABLE_SCRIPTING` as well; the table is empty
   otherwise.
-- `BuildAssistantToolsJson`, `AssistantToolStatusLabel` ->
+- `BuildAssistantToolsJson`, `AssistantToolStatusLabel`,
+  `AssistantToolNameList` ->
   `agenticprofiling/rocprofvis_ai_tool_schema.h` -> Thread-safe, reads
-  no view state.
+  no view state. `ASSISTANT_TOOL_LABELS` in the `.cpp` is the name and
+  status-label table.
 - `BuildAssistantWhereClause`, `AssistantGroupByFromArgs`,
-  `ResolveAssistantSortColumn` ->
+  `ResolveAssistantSortColumn`, `ResolveAssistantSortColumnNamed`,
+  `AssistantSortOrderFromArgs`, `AssistantAllowedQueryColumnList` ->
   `agenticprofiling/rocprofvis_ai_tool_query.h` -> Model arguments to
-  SQL fragments, via whitelists.
+  SQL fragments, via whitelists. `ASSISTANT_QUERY_COLUMNS` in the
+  `.cpp` is the column whitelist.
 - `AssistantChatCall`, `AssistantChatRequest`, `AssistantChatResult`,
   `AssistantMessage`, `AssistantToolCall` ->
-  `agenticprofiling/rocprofvis_ai_client.h`.
-- `AssistantSettings`, `AssistantProvider` ->
-  `rocprofvis_settings_manager.h` -> Saved URL and model; the token
-  itself lives in `SecretStore`.
+  `agenticprofiling/rocprofvis_ai_client.h`. `EndpointFlavour` is
+  internal to the `.cpp`.
+- `AssistantSettings`, `AssistantProvider`,
+  `ASSISTANT_DEFAULT_MODEL`, `ASSISTANT_DEFAULT_PROVIDER_NAME`,
+  `ASSISTANT_TOKEN_SECRET_KEY` -> `rocprofvis_settings_manager.h` ->
+  A list of saved endpoints (name, URL, model) plus an active index;
+  each endpoint's token lives in `SecretStore` under its own key. The
+  page and the `{Has,Get,Set,Clear}AssistantToken` bodies are in
+  `agenticprofiling/rocprofvis_ai_settings.cpp`, but
+  serialization stays in `rocprofvis_settings_manager.cpp`, unguarded.
+
+Two files in the folder define no type of their own and are easy to
+miss when grepping:
+
+- `agenticprofiling/rocprofvis_ai_assistant_render.cpp` -> every
+  `AssistantPanel` method that emits ImGui.
+- `agenticprofiling/rocprofvis_ai_trace_view_actions.cpp` -> the
+  `TraceView` members that exist only for the assistant, declared in
+  `rocprofvis_trace_view.h` but **not** defined in
+  `rocprofvis_trace_view.cpp`.
 
 ### Events / pubsub
 
@@ -3052,11 +3534,15 @@ All under `agenticprofiling/`, compiled only with
   `compute/rocprofvis_compute_tester.h`.
 - `ComputeIsaView`, `BaseCodeWidget`, `SourceCodeWidget`, `IsaCodeWidget` ->
   `compute/rocprofvis_compute_isa_view.h`.
-- `ComputeDataProvider`, `ComputeTableModel`, `ComputeTableCellModel`,
-  `ComputePlotModel`, `ComputePlotAxisModel`, `ComputePlotSeriesModel`,
-  `ComputeMetricModel` -> `compute/rocprofvis_compute_data_provider.h`.
 - `ComputeDataModel`, `ComputeKernelSelectionTable` ->
-  `model/compute/rocprofvis_compute_data_model.h`.
+  `model/compute/rocprofvis_compute_data_model.h`. This is the whole
+  compute model layer. Earlier revisions of this index listed
+  `ComputeDataProvider`, `ComputeTableModel`, `ComputeTableCellModel`,
+  `ComputePlotModel`, `ComputePlotAxisModel`,
+  `ComputePlotSeriesModel`, and `ComputeMetricModel` in a
+  `compute/rocprofvis_compute_data_provider.h`; **none of those, nor
+  that file, exist.** Compute views read through the shared
+  `DataProvider` like everything else.
 - `AvailableMetrics`, `PcSampleState`, `InstructionSourceLine`,
   `InstructionLine`, `KernelSymbol`, `CodeObjectStore`, `SourceLine`,
   `SourceFile`, `PcSamplingData`, `KernelInfo`, `WorkloadInfo`,

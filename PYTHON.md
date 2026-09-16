@@ -12,7 +12,9 @@ filesystem APIs. Enable scripting at build time with
 ## How to run a script
 
 1. Open a system trace (`.rpd` or equivalent).
-2. Open the **Script** editor from the timeline or compute toolbar.
+2. Select the **Script** tab in the details panel at the bottom of the
+   trace view. Scripting is a system-trace feature: compute traces have
+   no details panel, so no Script tab.
 3. Write (or keep) a Python source string and click **Run**.
 
 The editor sends the source plus the current selection (tracks and time
@@ -39,7 +41,9 @@ it. `import optiq` is also allowed.
 | `optiq.table()` | `Table` | Allocates a **private** query table. Does not touch the UI Event Table or Sample Table. |
 | `optiq.result.text(s)` | function | Append a line of text to the script result. Call more than once; lines are joined with newlines. |
 
-`print` is not available. Use `optiq.result.text`.
+`print(...)` is available too, and appends to the same result as
+`optiq.result.text`. It accepts `sep`; `end` is ignored, because each
+call is one line.
 
 ### Constants
 

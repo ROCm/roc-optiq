@@ -4,15 +4,18 @@ The root file is the repo entry point. Layer-specific AI/agent guides
 live in `.agents/`:
 
 > - [`.agents/UI.md`](./.agents/UI.md) - View-layer architecture,
->   widgets, timelines, profiler launch, and remote UI
+>   widgets, timelines, profiler launch, remote UI, and the Ask Optiq
+>   agentic-profiling assistant
 > - [`.agents/CONTROLLER.md`](./.agents/CONTROLLER.md) - deep dive on
 >   `src/controller/` (C ABI, async fetch, memory manager, segment
 >   timeline)
 > - [`.agents/DATABASE.md`](./.agents/DATABASE.md) - deep dive on
 >   `src/model/` (SQLite adapters, query pipeline, packed table,
 >   data model, topology, metadata versioning)
-> - [`.agents/SCRIPTING.md`](./.agents/SCRIPTING.md) - planned in-app
->   Python analysis (interpreter lib, controller ABI, phases)
+> - [`.agents/SCRIPTING.md`](./.agents/SCRIPTING.md) - in-app Python
+>   analysis (interpreter lib, controller ABI, phases). Partly shipped
+>   behind `ROCPROFVIS_ENABLE_SCRIPTING`; the doc is a live roadmap, so
+>   check a phase's status before trusting its tense.
 
 **If you are an AI coding assistant** (Cursor, Codex, Claude Code,
 Copilot agent, etc.), read `.agents/UI.md` in full before making
@@ -21,8 +24,12 @@ If your change touches `src/controller/`, also read
 `.agents/CONTROLLER.md`. If it touches `src/model/` (the database /
 data-model layer), also read `.agents/DATABASE.md`. If it touches
 in-app Python scripting (`src/python/`, `rocprofvis_script_*`, or
-script UI), also read `.agents/SCRIPTING.md`. Together these
-guides are the single source of truth for:
+script UI), also read `.agents/SCRIPTING.md`. If it touches the Ask
+Optiq assistant (`src/view/src/agenticprofiling/`, `rocprofvis_ai_*`),
+read the **Ask Optiq assistant** section of `.agents/UI.md` in full:
+the tool set, the prompt, and the turn machinery are product behaviour,
+and the prompt text is not incidental. Together these guides are the
+single source of truth for:
 
 - Project identity, build, and repo layout
 - Module boundaries (`app` / `core` / `model` / `controller` / `view`)
@@ -31,6 +38,9 @@ guides are the single source of truth for:
 - UI models and cross-cutting services (events, settings, monitoring,
   logging, hotkeys, notifications)
 - Compare, measurement, profiler-launch, and remote/SSH workflows
+- The Ask Optiq assistant: tool set, prompt, and turn machinery
+- Which features are gated behind a `ROCPROFVIS_ENABLE_*` CMake option
+  (all of them default OFF)
 - Data flow (click -> request -> event -> pixels)
 - Coding conventions, comment style, and reuse catalog
 - Common pitfalls and a quick-reference index of every UI class

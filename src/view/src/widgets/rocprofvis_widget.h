@@ -16,12 +16,17 @@ namespace RocProfVis
 namespace View
 {
 
+struct TabItem;
+
 class RocWidget
 {
 public:
     virtual ~RocWidget();
     virtual void Render();
     virtual void Update() {}
+    static TabItem CreateTabItem(const std::string& label, const std::string& id,
+                                 std::shared_ptr<RocWidget> widget,
+                                 bool can_close = false);
     std::string  GenUniqueName(std::string name);
 
     const std::string& GetWidgetName() const;

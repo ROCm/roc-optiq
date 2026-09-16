@@ -24,6 +24,7 @@ namespace View
 class SourceCodeWidget;
 class IsaCodeWidget;
 class DataProvider;
+struct TabItem;
 enum class PcSamplingLayer : uint32_t;
 
 struct LineSelection
@@ -79,6 +80,9 @@ public:
     static constexpr const char* TAB_ID = "isa_view";
     static constexpr const char* DISABLED_TOOLTIP =
         "This database file has no ISA lines, so ISA View is inactive.";
+
+    static TabItem CreateTabItem(DataProvider& data_provider);
+    static TabItem CreateTabItem(DataProvider& data_provider, bool has_isa_lines);
 
     explicit ComputeIsaView(DataProvider& data_provider);
     ~ComputeIsaView();

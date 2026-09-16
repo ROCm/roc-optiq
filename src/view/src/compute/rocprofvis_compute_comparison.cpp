@@ -36,6 +36,34 @@ constexpr const char* JSON_KEY_PINNED_METRICS      = "pins";
 constexpr const char* JSON_KEY_PINNED_METRICS_ID   = "id";
 constexpr const char* JSON_KEY_PINNED_METRICS_NAME = "name";
 
+TabItem
+ComputeComparisonView::CreateTabItem(
+    DataProvider& data_provider,
+    const std::shared_ptr<ComputeSelection>& compute_selection)
+{
+    return RocWidget::CreateTabItem(
+        "Baseline Comparison", TAB_ID,
+        std::make_shared<ComputeComparisonView>(data_provider, compute_selection));
+}
+
+TabItem
+ComputeComparisonView::CreateTabItem(
+    DataProvider& data_provider,
+    const std::shared_ptr<ComputeSelection>& compute_selection,
+    bool has_available_metrics)
+{
+    if(has_available_metrics)
+    {
+        return CreateTabItem(data_provider, compute_selection);
+    }
+
+    TabItem tab =
+        RocWidget::CreateTabItem("Baseline Comparison", TAB_ID, nullptr);
+    tab.m_enabled          = false;
+    tab.m_disabled_tooltip = DISABLED_TOOLTIP;
+    return tab;
+}
+
 ComputeComparisonView::ComputeComparisonView(
     DataProvider& data_provider, std::shared_ptr<ComputeSelection> compute_selection)
 : RocWidget()

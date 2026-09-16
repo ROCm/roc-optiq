@@ -163,11 +163,26 @@ ComputeView::CreateView()
     m_preset_browser.reset();
     m_tab_container.reset();
 
+    const WorkloadInfo* initial_workload = ValidateDatabase();
+    if(!initial_workload)
+    {
+        return;
+    }
+
+    m_compute_selection = std::make_shared<ComputeSelection>(m_data_provider);
+    m_compute_selection->SelectWorkload(initial_workload->id);
+    m_preset_browser = std::make_unique<PresetBrowser>();
+    CreateTabContainer();
+}
+
+const WorkloadInfo*
+ComputeView::ValidateDatabase()
+{
     if(m_data_provider.GetState() == ProviderState::kError)
     {
         QueueDatabaseErrorDialog(m_data_provider.GetTraceFilePath(),
                                  INVALID_COMPUTE_DATABASE_MESSAGE);
-        return;
+        return nullptr;
     }
 
     const std::vector<const WorkloadInfo*>& workloads =
@@ -178,7 +193,7 @@ ComputeView::CreateView()
             m_data_provider.GetTraceFilePath(),
             "The file contains no compute workloads. A compute profile must contain "
             "at least one workload and one kernel before it can be displayed.");
-        return;
+        return nullptr;
     }
 
     const auto workload_with_kernels =
@@ -192,66 +207,40 @@ ComputeView::CreateView()
             "The file contains compute workloads, but none of them contains kernel "
             "data. A compute profile must contain at least one workload with a kernel "
             "before it can be displayed.");
-        return;
+        return nullptr;
     }
 
-    
+    return *workload_with_kernels;
+}
+
+void
+ComputeView::CreateTabContainer()
+{
+    const std::vector<const WorkloadInfo*>& workloads =
+        m_data_provider.ComputeModel().GetWorkloadList();
+    const bool database_has_metrics   = HasAvailableMetrics(workloads);
     const bool database_has_isa_lines = HasIsaLines(workloads);
 
-    m_compute_selection = std::make_shared<ComputeSelection>(m_data_provider);
-    m_compute_selection->SelectWorkload((*workload_with_kernels)->id);
-    m_preset_browser = std::make_unique<PresetBrowser>();
     m_tab_container = std::make_shared<TabContainer>();
     m_tab_container->AddTab(
-        TabItem{"Summary View", ComputeSummaryView::TAB_ID,
-                std::make_shared<ComputeSummaryView>(m_data_provider, m_compute_selection),
-                false});
+        ComputeSummaryView::CreateTabItem(m_data_provider, m_compute_selection));
     m_tab_container->AddTab(
-        TabItem{"Kernel Details", ComputeKernelDetailsView::TAB_ID,
-                std::make_shared<ComputeKernelDetailsView>(m_data_provider,
-                                                           m_compute_selection),
-                false});
+        ComputeKernelDetailsView::CreateTabItem(m_data_provider,
+                                                m_compute_selection));
 
-    TabItem table_view_tab{"Table View", ComputeTableView::TAB_ID, nullptr, false};
-    const bool database_has_metrics   = HasAvailableMetrics(workloads);
-    table_view_tab.m_enabled          = database_has_metrics;
-    table_view_tab.m_disabled_tooltip = ComputeTableView::DISABLED_TOOLTIP;
-    if(database_has_metrics)
-    {
-        table_view_tab.m_widget =
-            std::make_shared<ComputeTableView>(m_data_provider, m_compute_selection);
-    }
-    m_tab_container->AddTab(table_view_tab);
-
-    TabItem comparison_view_tab{"Baseline Comparison", ComputeComparisonView::TAB_ID,
-                                nullptr, false};
-    comparison_view_tab.m_enabled          = database_has_metrics;
-    comparison_view_tab.m_disabled_tooltip = ComputeComparisonView::DISABLED_TOOLTIP;
-    if(database_has_metrics)
-    {
-        comparison_view_tab.m_widget =
-            std::make_shared<ComputeComparisonView>(m_data_provider, m_compute_selection);
-    }
-    m_tab_container->AddTab(comparison_view_tab);
+    m_tab_container->AddTab(ComputeTableView::CreateTabItem(
+        m_data_provider, m_compute_selection, database_has_metrics));
+    m_tab_container->AddTab(ComputeComparisonView::CreateTabItem(
+        m_data_provider, m_compute_selection, database_has_metrics));
     m_tab_container->AddTab(
-        TabItem{"Workload Details", ComputeWorkloadView::TAB_ID,
-                std::make_shared<ComputeWorkloadView>(m_data_provider, m_compute_selection),
-                false});
+        ComputeWorkloadView::CreateTabItem(m_data_provider, m_compute_selection));
 
-    TabItem isa_view_tab{"ISA View", ComputeIsaView::TAB_ID, nullptr, false};
-    isa_view_tab.m_enabled          = database_has_isa_lines;
-    isa_view_tab.m_disabled_tooltip = ComputeIsaView::DISABLED_TOOLTIP;
-    if(database_has_isa_lines)
-    {
-        isa_view_tab.m_widget = std::make_shared<ComputeIsaView>(m_data_provider);
-    }
-    m_tab_container->AddTab(isa_view_tab);
+    m_tab_container->AddTab(
+        ComputeIsaView::CreateTabItem(m_data_provider, database_has_isa_lines));
 
 #ifdef ROCPROFVIS_DEVELOPER_MODE
     m_tab_container->AddTab(
-        TabItem{"Compute Tester", ComputeTester::TAB_ID,
-                std::make_shared<ComputeTester>(m_data_provider, m_compute_selection),
-                false});
+        ComputeTester::CreateTabItem(m_data_provider, m_compute_selection));
 #endif
     m_tab_container->SetAllowToolTips(false);
 }

@@ -14,6 +14,33 @@ namespace View
 constexpr const char* JSON_KEY_PINNED_METRICS    = "pins";
 constexpr const char* JSON_KEY_PINNED_METRICS_ID = "id";
 
+TabItem
+ComputeTableView::CreateTabItem(
+    DataProvider& data_provider,
+    const std::shared_ptr<ComputeSelection>& compute_selection)
+{
+    return RocWidget::CreateTabItem(
+        "Table View", TAB_ID,
+        std::make_shared<ComputeTableView>(data_provider, compute_selection));
+}
+
+TabItem
+ComputeTableView::CreateTabItem(
+    DataProvider& data_provider,
+    const std::shared_ptr<ComputeSelection>& compute_selection,
+    bool has_available_metrics)
+{
+    if(has_available_metrics)
+    {
+        return CreateTabItem(data_provider, compute_selection);
+    }
+
+    TabItem tab = RocWidget::CreateTabItem("Table View", TAB_ID, nullptr);
+    tab.m_enabled          = false;
+    tab.m_disabled_tooltip = DISABLED_TOOLTIP;
+    return tab;
+}
+
 ComputeTableView::ComputeTableView(DataProvider&                     data_provider,
                                    std::shared_ptr<ComputeSelection> compute_selection)
 : RocWidget()

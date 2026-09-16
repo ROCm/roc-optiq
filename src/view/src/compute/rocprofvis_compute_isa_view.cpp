@@ -7,6 +7,7 @@
 #include "rocprofvis_events.h"
 #include "rocprofvis_font_manager.h"
 #include "rocprofvis_requests.h"
+#include "widgets/rocprofvis_tab_container.h"
 #include "spdlog/spdlog.h"
 
 #include <algorithm>
@@ -21,6 +22,27 @@ namespace View
 
 constexpr uint64_t INVALID_SOURCE_LINE_NUMBER = 0;
 constexpr uint32_t NO_SCROLL_TARGET = 0;
+
+TabItem
+ComputeIsaView::CreateTabItem(DataProvider& data_provider)
+{
+    return RocWidget::CreateTabItem(
+        "ISA View", TAB_ID, std::make_shared<ComputeIsaView>(data_provider));
+}
+
+TabItem
+ComputeIsaView::CreateTabItem(DataProvider& data_provider, bool has_isa_lines)
+{
+    if(has_isa_lines)
+    {
+        return CreateTabItem(data_provider);
+    }
+
+    TabItem tab = RocWidget::CreateTabItem("ISA View", TAB_ID, nullptr);
+    tab.m_enabled          = false;
+    tab.m_disabled_tooltip = DISABLED_TOOLTIP;
+    return tab;
+}
 
 ComputeIsaView::ComputeIsaView(DataProvider& data_provider)
 : RocWidget()

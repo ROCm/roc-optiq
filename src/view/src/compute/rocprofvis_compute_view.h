@@ -15,6 +15,7 @@ namespace View
 
 class ComputeSelection;
 class PresetBrowser;
+struct WorkloadInfo;
 
 class ComputeView : public RootView
 {
@@ -38,6 +39,8 @@ public:
     friend struct ComputeViewTestPeer;
 
 private:
+    const WorkloadInfo* ValidateDatabase();
+    void CreateTabContainer();
     void RenderToolbar();
     void RenderWorkloadSelection();
     void RenderPresets();

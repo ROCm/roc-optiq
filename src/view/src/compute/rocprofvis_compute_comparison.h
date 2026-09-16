@@ -19,6 +19,7 @@ class DataProvider;
 class ComputeSelection;
 class TabContainer;
 class VFixedContainer;
+struct TabItem;
 
 class ComputeComparisonView : public RocWidget
 {
@@ -27,6 +28,14 @@ public:
     static constexpr const char* DISABLED_TOOLTIP =
         "This database file has no available metrics, so Baseline Comparison is "
         "inactive.";
+
+    static TabItem CreateTabItem(
+        DataProvider& data_provider,
+        const std::shared_ptr<ComputeSelection>& compute_selection);
+    static TabItem CreateTabItem(
+        DataProvider& data_provider,
+        const std::shared_ptr<ComputeSelection>& compute_selection,
+        bool has_available_metrics);
 
     ComputeComparisonView(DataProvider&                     data_provider,
                           std::shared_ptr<ComputeSelection> compute_selection);

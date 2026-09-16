@@ -19,6 +19,10 @@ class ComputeTester : public RocWidget
 public:
     static constexpr const char* TAB_ID = "compute_tester_view";
 
+    static TabItem CreateTabItem(
+        DataProvider& data_provider,
+        const std::shared_ptr<ComputeSelection>& compute_selection);
+
     ComputeTester(DataProvider& data_provider, std::shared_ptr<ComputeSelection> compute_selection);
     ~ComputeTester();
 

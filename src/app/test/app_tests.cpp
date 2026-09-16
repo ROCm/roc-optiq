@@ -505,7 +505,9 @@ void RegisterAppTests(ImGuiTestEngine* e)
         {
             ctx->LogWarning("SKIP: view did not zoom in, no headroom for a second distinct slot");
             TraceViewTestPeer{*tv}.ClearBookmarks();
-            ctx->Yield(2);
+            ctx->SetRef("Main Window");
+            ctx->ItemClick("**/Reset View");
+            ctx->Yield(3);
             return;
         }
 
@@ -542,7 +544,9 @@ void RegisterAppTests(ImGuiTestEngine* e)
         IM_CHECK(fabs(restored2.v_max_x - saved2.v_max_x) < tol2);
 
         TraceViewTestPeer{*tv}.ClearBookmarks();
-        ctx->Yield(2);
+        ctx->SetRef("Main Window");
+        ctx->ItemClick("**/Reset View");
+        ctx->Yield(3);
     };
 
     t = IM_REGISTER_TEST(e, "app", "sys_event_multi_select");
@@ -1507,6 +1511,8 @@ void RegisterAppTests(ImGuiTestEngine* e)
         if (EventSearchTestPeer{*es}.ResultCount() == 0)
         {
             ctx->LogWarning("SKIP: search returned no result row to click");
+            es->Clear();
+            ctx->Yield(2);
             return;
         }
 

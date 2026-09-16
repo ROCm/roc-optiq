@@ -576,13 +576,18 @@ MakeAssistantToolsJson()
     // nothing here happens without the user pressing Approve.
     jt::Json find_params = ObjectParams();
     AddParam(find_params, "query", "string",
-             "A file name, part of one, or a glob like **/*.cpp.");
+             "A symbol to search the source for - a kernel or function name "
+             "straight from the trace works best. Also matches file names, and "
+             "accepts a glob like **/*.cpp.");
     find_params["required"][0] = "query";
     AddTool(tools, next_tool++, "find_source",
-            "Find files in the editor's workspace by name. This is how you get a "
-            "path when the trace does not hand you one - GPU call stacks often "
-            "carry no source file at all. Never ask the user where something "
-            "lives: search for it, and read the likely candidate.",
+            "Search the editor's workspace, by file content and by file name. "
+            "This is how you get a path when the trace does not hand you one - "
+            "GPU call stacks often carry no source file at all.\n"
+            "Search for the name the trace gave you. A kernel like op_scale is a "
+            "symbol inside a file, not a file, so content matches come back as "
+            "path:line with the line itself - which is the call site you wanted. "
+            "Never ask the user where something lives.",
             find_params);
 
     jt::Json read_params = ObjectParams();

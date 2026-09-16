@@ -111,23 +111,66 @@ function resolveInWorkspace(file: string): vscode.Uri | undefined {
 // Enough candidates to recognise the right one, few enough that a vague query
 // does not come back as a directory listing.
 const MAX_FIND_RESULTS = 40;
+// How many files a content search will open. The extension host runs beside the
+// source, so these are local reads, but a monorepo still deserves a ceiling.
+const MAX_SCAN_FILES = 600;
+const MAX_CONTENT_HITS = 40;
+const EXCLUDE_GLOB = '**/{node_modules,.git,build,out,dist,target,.venv,__pycache__}/**';
+const SOURCE_GLOB = '**/*.{c,cc,cpp,cxx,h,hh,hpp,hip,cu,py,rs,go,java,ts,js,cmake,txt,sh}';
 
-// Locates a file by name or fragment. Without this the assistant can only read
-// a path it was already told, which a trace often cannot supply - GPU call
-// stacks frequently carry no source file at all.
+/**
+ * Finds where something lives, by file name and by content.
+ *
+ * Content search is the half that matters. What a trace hands the assistant is
+ * a kernel or function name - `op_scale` - and there is no file called that;
+ * it is a symbol inside one. Matching names alone answers "no such file" to a
+ * question that had a perfectly good answer, which reads as the source being
+ * missing rather than the search being wrong.
+ */
 async function findSource(query: string): Promise<object> {
     if (!query) {
         return { ok: false, error: 'find_source needs something to search for.' };
     }
-    const pattern = query.includes('*') ? query : `**/*${query}*`;
-    const uris = await vscode.workspace.findFiles(
-        pattern,
-        '**/{node_modules,.git,build,out,dist,target,.venv}/**',
+
+    const namePattern = query.includes('*') ? query : `**/*${query}*`;
+    const named = await vscode.workspace.findFiles(
+        namePattern,
+        EXCLUDE_GLOB,
         MAX_FIND_RESULTS
     );
+
+    const matches: { file: string; line: number; text: string }[] = [];
+    const candidates = await vscode.workspace.findFiles(
+        SOURCE_GLOB,
+        EXCLUDE_GLOB,
+        MAX_SCAN_FILES
+    );
+    for (const uri of candidates) {
+        if (matches.length >= MAX_CONTENT_HITS) {
+            break;
+        }
+        let text: string;
+        try {
+            text = Buffer.from(await vscode.workspace.fs.readFile(uri)).toString('utf8');
+        } catch {
+            continue;
+        }
+        if (!text.includes(query)) {
+            continue;
+        }
+        const relative = vscode.workspace.asRelativePath(uri, false);
+        const lines = text.split('\n');
+        for (let i = 0; i < lines.length && matches.length < MAX_CONTENT_HITS; i++) {
+            if (lines[i].includes(query)) {
+                matches.push({ file: relative, line: i + 1, text: lines[i].trim() });
+            }
+        }
+    }
+
     return {
         ok: true,
-        files: uris.map((uri) => vscode.workspace.asRelativePath(uri, false))
+        files: named.map((uri) => vscode.workspace.asRelativePath(uri, false)),
+        matches
     };
 }
 

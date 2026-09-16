@@ -775,17 +775,42 @@ LoopBridge::FindSource(const std::string& query)
     }
 
     const std::vector<std::string> files = JsonUtils::GetStringArray(reply, "files");
-    if(files.empty())
+
+    // The lines a symbol actually appears on, which is what a kernel name from
+    // the trace resolves to. Reported first: a file whose name happens to
+    // contain the query is a weaker lead than the call site itself.
+    std::ostringstream out;
+    jt::Json&          matches = reply["matches"];
+    size_t             shown   = 0;
+    if(matches.isArray())
     {
-        return "Nothing in the workspace matches \"" + query +
-               "\". Try a shorter fragment of the name.";
+        for(jt::Json& match : matches.getArray())
+        {
+            if(shown == 0)
+            {
+                out << "\"" << query << "\" appears at:\n";
+            }
+            out << "  " << JsonUtils::GetString(match, "file", "") << ":"
+                << JsonUtils::GetInt(match, "line", 0) << ": "
+                << JsonUtils::GetString(match, "text", "") << "\n";
+            ++shown;
+        }
     }
 
-    std::ostringstream out;
-    out << "Files matching \"" << query << "\":\n";
-    for(const std::string& file : files)
+    if(!files.empty())
     {
-        out << "  " << file << "\n";
+        out << "Files whose name matches \"" << query << "\":\n";
+        for(const std::string& file : files)
+        {
+            out << "  " << file << "\n";
+        }
+    }
+
+    if(shown == 0 && files.empty())
+    {
+        return "Nothing in the workspace matches \"" + query +
+               "\", by file name or in any source file. Try a shorter fragment, "
+               "or a different name from the trace.";
     }
     return out.str();
 }

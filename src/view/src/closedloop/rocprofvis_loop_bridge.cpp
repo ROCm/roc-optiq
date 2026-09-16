@@ -711,8 +711,22 @@ LoopBridge::PollAttach()
 #endif
 }
 
+void
+LoopBridge::InvalidateRemote()
+{
+    if(m_remote_attached)
+    {
+        spdlog::info("Closed loop: remote editor at {} stopped answering, dropping it",
+                     m_remote_url);
+    }
+    m_remote_attached = false;
+    m_remote_url.clear();
+    m_remote_token.clear();
+    m_remote_workspace.clear();
+}
+
 std::string
-LoopBridge::FindSource(const std::string& query) const
+LoopBridge::FindSource(const std::string& query)
 {
     if(query.empty())
     {
@@ -733,7 +747,12 @@ LoopBridge::FindSource(const std::string& query) const
     std::string error;
     if(!CallIde(url, token, "/find", body, LOOP_QUICK_TIMEOUT_SECONDS, reply, error))
     {
-        return error;
+        // An editor window that reloaded or opened another folder comes back on
+        // a different port, so the address we were given is routinely stale
+        // rather than exceptionally so.
+        InvalidateRemote();
+        return error + " Call loop_status again to find the editor at its "
+                       "current address before giving up.";
     }
     if(!JsonUtils::GetBool(reply, "ok", false))
     {
@@ -758,7 +777,7 @@ LoopBridge::FindSource(const std::string& query) const
 }
 
 std::string
-LoopBridge::ReadSource(const std::string& file) const
+LoopBridge::ReadSource(const std::string& file)
 {
     if(file.empty())
     {
@@ -779,7 +798,9 @@ LoopBridge::ReadSource(const std::string& file) const
     std::string error;
     if(!CallIde(url, token, "/read", body, LOOP_QUICK_TIMEOUT_SECONDS, reply, error))
     {
-        return error;
+        InvalidateRemote();
+        return error + " Call loop_status again to find the editor at its "
+                       "current address before giving up.";
     }
     if(!JsonUtils::GetBool(reply, "ok", false))
     {

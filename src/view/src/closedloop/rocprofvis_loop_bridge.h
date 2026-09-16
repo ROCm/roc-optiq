@@ -86,9 +86,11 @@ public:
     std::string TakeResult();
 
     // Read-only and answered in the same call: each is one loopback round trip
-    // rather than a query over the trace.
-    std::string FindSource(const std::string& query) const;
-    std::string ReadSource(const std::string& file) const;
+    // rather than a query over the trace. Not const: a call that cannot reach
+    // the editor drops the cached remote address, because the usual reason is
+    // that the editor restarted on a new port.
+    std::string FindSource(const std::string& query);
+    std::string ReadSource(const std::string& file);
     std::string Status() const;
 
     // True once an editor has been located, under whichever preference is set.
@@ -107,6 +109,13 @@ public:
         kRemote
     };
     void SetEditorChoice(EditorChoice choice);
+
+    // Forgets a remote editor, so the next Attach() goes and finds it again
+    // rather than reusing an address it has. Called both when a request fails
+    // and when the remote editor is asked for by name: that address is a tunnel
+    // port, and it changes whenever the editor window reloads or opens another
+    // folder, so a cached one goes stale as a matter of course.
+    void InvalidateRemote();
 
     // Goes looking for an editor running under VS Code Remote-SSH: reads its
     // handshake over the SSH profile already configured for profiling. Returns

@@ -130,7 +130,15 @@ ToolLoopStatus(const AssistantToolContext&, const jt::Json& args, const std::str
         bridge.SetEditorChoice(LoopBridge::EditorChoice::kLocal);
     }
 
-    if(bridge.Attached())
+    // Asking for the remote editor by name always goes and looks again. Its
+    // address is a tunnel port that changes whenever that window reloads or
+    // opens a different folder, so answering from the cached one is how you end
+    // up reporting a workspace the user moved away from ten minutes ago.
+    if(editor == "remote")
+    {
+        bridge.InvalidateRemote();
+    }
+    else if(bridge.Attached())
     {
         return DoneResult(bridge.Status(), "Checking the loop...");
     }

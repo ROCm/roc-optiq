@@ -183,7 +183,16 @@ async function readSource(file: string): Promise<object> {
     return { ok: true, text: document.getText() };
 }
 
-function runBuild(): Promise<{ ok: boolean; output: string }> {
+/**
+ * Runs the workspace's build command after an edit.
+ *
+ * The file that was just changed is exported to it, because a project with many
+ * independent targets cannot name one in a static command: a command hardwired
+ * to one target rebuilds that target, reports success, and leaves the binary
+ * that is about to be profiled untouched - which reads as "the fix did nothing"
+ * rather than "the fix was never compiled".
+ */
+function runBuild(changedFile: string): Promise<{ ok: boolean; output: string }> {
     const command = vscode.workspace
         .getConfiguration('optiq')
         .get<string>('buildCommand', '')
@@ -198,12 +207,24 @@ function runBuild(): Promise<{ ok: boolean; output: string }> {
                 'profiling again.'
         });
     }
+
+    const relative = changedFile.replace(/\\/g, '/');
+    const base = relative.slice(relative.lastIndexOf('/') + 1);
+    const dot = base.lastIndexOf('.');
+    const env = {
+        ...process.env,
+        OPTIQ_FILE: relative,
+        OPTIQ_STEM: dot > 0 ? base.slice(0, dot) : base,
+        OPTIQ_DIR: relative.includes('/') ? relative.slice(0, relative.lastIndexOf('/')) : '.'
+    };
+
     return new Promise((resolve) => {
         exec(
             command,
-            { cwd: folder.uri.fsPath, maxBuffer: MAX_BUILD_OUTPUT * 4 },
+            { cwd: folder.uri.fsPath, env, maxBuffer: MAX_BUILD_OUTPUT * 4 },
             (error, stdout, stderr) => {
-                const output = `$ ${command}\n${stdout}${stderr}`.slice(0, MAX_BUILD_OUTPUT);
+                const header = `$ ${command}\n  (OPTIQ_FILE=${env.OPTIQ_FILE} OPTIQ_STEM=${env.OPTIQ_STEM})\n`;
+                const output = `${header}${stdout}${stderr}`.slice(0, MAX_BUILD_OUTPUT);
                 resolve({ ok: error === null, output });
             }
         );
@@ -251,7 +272,7 @@ async function applyChange(request: {
     if (request.build !== true) {
         return { applied: true, built: true, output: 'No build was asked for.' };
     }
-    const build = await runBuild();
+    const build = await runBuild(vscode.workspace.asRelativePath(uri, false));
     return { applied: true, built: build.ok, output: build.output };
 }
 

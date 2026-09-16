@@ -22,7 +22,7 @@
         "optiq.buildCommand": {
           "type": "string",
           "default": "",
-          "markdownDescription": "Shell command that rebuilds this workspace, run from the first workspace folder. Optiq runs it after a change you approved and reads the output back, so a compile error becomes the assistant's next fix. Example: `cmake --build build`."
+          "markdownDescription": "Shell command that rebuilds this workspace, run from the first workspace folder. Optiq runs it after a change you approved and reads the output back, so a compile error becomes the assistant's next fix.\n\nThe file that was just edited is exported as `$OPTIQ_FILE` (workspace-relative), `$OPTIQ_STEM` (its name without extension) and `$OPTIQ_DIR`. Use them when the project builds many independent targets, or a command naming one target will happily rebuild the wrong thing.\n\nExamples: `cmake --build build`, or `hipcc -O3 generators/$OPTIQ_STEM.cpp -o build/$OPTIQ_STEM`."
         }
       }
     }

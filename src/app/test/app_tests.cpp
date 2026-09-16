@@ -1473,7 +1473,7 @@ void RegisterAppTests(ImGuiTestEngine* e)
         ctx->Yield(2);
     };
 
-    t = IM_REGISTER_TEST(e, "app", "sys_event_search_navigate_selects_event");
+    t = IM_REGISTER_TEST(e, "app", "sys_event_search_navigate_highlights_event");
     t->TestFunc = [](ImGuiTestContext* ctx)
     {
         TraceView* tv = GetTraceViewOrSkip(ctx);

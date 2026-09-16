@@ -34,6 +34,12 @@ TablesModel::GetTableHeader(TableType type) const
     return m_tables[static_cast<size_t>(type)].table_header;
 }
 
+const std::vector<rocprofvis_controller_primitive_type_t>&
+TablesModel::GetTableColumnTypes(TableType type) const
+{
+    return m_tables[static_cast<size_t>(type)].table_column_types;
+}
+
 const std::vector<std::vector<std::string>>&
 TablesModel::GetTableData(TableType type) const
 {
@@ -71,6 +77,13 @@ TablesModel::SetTableHeader(TableType type, std::vector<std::string>&& header)
 }
 
 void
+TablesModel::SetTableColumnTypes(
+    TableType type, std::vector<rocprofvis_controller_primitive_type_t>&& column_type)
+{
+    m_tables[static_cast<size_t>(type)].table_column_types = std::move(column_type);
+}
+
+void
 TablesModel::SetTableData(TableType type, std::vector<std::vector<std::string>>&& data)
 {
     m_tables[static_cast<size_t>(type)].table_data = std::move(data);
@@ -100,6 +113,7 @@ TablesModel::ClearTable(TableType type)
 {
     auto& table = m_tables[static_cast<size_t>(type)];
     table.table_header.clear();
+    table.table_column_types.clear();
     table.table_data.clear();
     table.total_row_count = 0;
     table.table_params.reset();

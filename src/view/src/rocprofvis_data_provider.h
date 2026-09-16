@@ -12,9 +12,11 @@
 
 
 #include <functional>
+#include <map>
 #include <memory>
 #include <optional>
 #include <string>
+#include <tuple>
 #include <unordered_map>
 #include <vector>
 
@@ -36,6 +38,9 @@ struct DataProviderCleanupWork
     std::string                           trace_file_path;
     std::unordered_map<int64_t, RequestInfo> requests;
     rocprofvis_controller_t*              controller = nullptr;
+    // Privately allocated tables travel with the controller they were read
+    // through, because they must be freed before it is.
+    std::vector<rocprofvis_handle_t*>     client_tables;
 };
 
 struct DataProviderCleanupResult
@@ -66,6 +71,25 @@ public:
     static const uint64_t ANALYSIS_TOP_LAUNCH_SAMPLED_TABLE_REQUEST_ID;
     static const uint64_t FETCH_COMPUTE_TRACE_REQUEST_ID;
     static const uint64_t METRIC_PIVOT_TABLE_REQUEST_ID;
+    static const uint64_t FETCH_PC_SAMPLING_ISA_REQUEST_ID;
+    static const uint64_t FETCH_PC_SAMPLING_SOURCE_REQUEST_ID;
+    static const uint64_t FETCH_PC_SAMPLING_STALLS_REQUEST_ID;
+
+    // Ask Optiq's table reads. A background reader sharing the ids above would
+    // be refused whenever a tab happened to be loading, and - worse - would
+    // overwrite the rows that tab is showing once it was not. Its own client id
+    // gives it its own request ids, its own controller tables, and its own
+    // model slots, so the two never meet. Anything else that reads tables
+    // without being a tab wants the same treatment and a client id of its own.
+    static constexpr uint64_t ASSISTANT_CLIENT_ID = 1;
+    static const uint64_t ASSISTANT_EVENT_TABLE_REQUEST_ID;
+    static const uint64_t ASSISTANT_SAMPLE_TABLE_REQUEST_ID;
+    static const uint64_t ASSISTANT_EVENT_SEARCH_REQUEST_ID;
+    static const uint64_t ASSISTANT_SUMMARY_KERNEL_INSTANCE_TABLE_REQUEST_ID;
+    static const uint64_t ASSISTANT_TOP_EVENTS_TABLE_REQUEST_ID;
+#ifdef ROCPROFVIS_ENABLE_SCRIPTING
+    static const uint64_t EXECUTE_SCRIPT_REQUEST_ID;
+#endif
 
     DataProvider();
     ~DataProvider();
@@ -187,6 +211,7 @@ public:
     bool FetchAnalysisTrackStatistics(const AnalysisTrackStatisticsRequestParams& params);
 
     bool IsRequestPending(uint64_t request_id) const;
+    bool IsTableRequestPending(rocprofvis_controller_table_type_t table_type) const;
 
     /* Cancels a pending request.
      * @param request_id: The id of the request to cancel.
@@ -231,6 +256,23 @@ public:
 
     bool SaveTrimmedTrace(const std::string& path, double start_ns, double end_ns);
 
+#ifdef ROCPROFVIS_ENABLE_SCRIPTING
+    // Runs source on the interpreter thread. track_ids empty means all
+    // tracks; start/end are the visible or selected time range.
+    bool ExecuteScript(const std::string& source, const std::vector<uint64_t>& track_ids,
+                       double start_ts, double end_ts);
+    // Asks the interpreter to stop. True means a completion event is still
+    // coming - the session future is not a JobSystem job and stays Pending
+    // until exec returns. False means there is no in-flight script.
+    bool CancelScript();
+
+    // What the last script produced, kept after its request is gone: a caller
+    // that polls the request id rather than listening for the completion event
+    // has nothing left to read by the time it notices the request finished.
+    // False when no script has run, or the script failed.
+    bool GetLastScriptResult(std::string& text_out, std::string& error_out) const;
+#endif
+
     bool CleanupDatabase(bool rebuild);
 
     void SetCleanupDatabaseCallback(const std::function<void(bool)>& callback);
@@ -247,37 +289,56 @@ public:
     void SetFetchMetricsCallback(
         const std::function<void(const std::string&, uint64_t, bool)>& callback);
     void SetFetchPcSamplingCallback(
-        const std::function<void(const std::string&, uint32_t, uint32_t, uint32_t, bool)>& callback);
+        const std::function<void(const std::string&, PcSamplingLayer, uint32_t,
+                                 uint64_t, uint32_t, uint64_t,
+                                 rocprofvis_result_t)>& callback);
 
 private:
-    struct ProcessChildCount
+    // A stream's processors/queues are resolved after every node is walked, so
+    // the controller handle is parked here until then.
+    struct PendingStreamLink
     {
-        size_t thread_count;
-        size_t stream_count;
-    };
-
-    struct ProcessorChildCount
-    {
-        size_t queue_count;
-        size_t counter_count;
+        StreamInfo*          stream;
+        rocprofvis_handle_t* handle;
     };
 
     bool FetchTrackTable(const TrackTableRequestParams& table_params);
     bool FetchEventSearch(const EventSearchRequestParams& table_params);
+
+    /*
+     * The request id, table handle and model slot a table fetch should use.
+     * For the UI (client 0) these are the shared ones; for any other client
+     * they are private, so the two can be in flight at once without either
+     * reading the other's rows.
+     */
+    uint64_t             ClientTableRequestId(const TableRequestParams& table_params) const;
+    rocprofvis_handle_t* ClientTableHandle(const TableRequestParams& table_params);
+    static TableType     ClientTableSlot(rocprofvis_controller_table_type_t table_type,
+                                         uint64_t                          client_id,
+                                         bool&                             is_analysis_model);
     /* Helper called by FetchEvent()*/
     bool FetchEventExtData(uint64_t event_id);
 
+    // Builds the topology tree by walking the controller's topology top-down.
     void HandleLoadSystemTopology();
-    bool ParseNodeData(rocprofvis_handle_t* node_handle, NodeInfo& node_info);
-    bool ParseDeviceData(rocprofvis_handle_t* processor_handle, DeviceInfo& device_info,
-                          DataProvider::ProcessorChildCount& processor_child_count);
-    bool ParseProcessData(rocprofvis_handle_t* process_handle, ProcessInfo& process_info,
-                          ProcessChildCount& process_child_count);
-    bool ParseQueueData(rocprofvis_handle_t* queue_handle, QueueInfo& queue_info);
-    bool ParseThreadData(rocprofvis_handle_t* thread_handle, ThreadInfo& thread_info,
-                         uint64_t& thread_type);
-    bool ParseCounterData(rocprofvis_handle_t* counter_handle, CounterInfo& counter_info);
-    bool ParseStreamData(rocprofvis_handle_t* stream_handle, StreamInfo& stream_info);
+    void LoadProcessors(rocprofvis_handle_t* node_handle, NodeInfo& node);
+    void LoadQueues(rocprofvis_handle_t* processor_handle, ProcessorInfo& processor);
+    void LoadCounters(rocprofvis_handle_t* processor_handle, ProcessorInfo& processor);
+    void LoadProcesses(rocprofvis_handle_t* node_handle, NodeInfo& node);
+    void LoadThreads(rocprofvis_handle_t* process_handle, ProcessInfo& process);
+    void LoadStreams(rocprofvis_handle_t* process_handle, ProcessInfo& process);
+    void LinkStreamTopology();
+    // Resolves the track a topology node draws as. False when it has none, which
+    // is how a non-drawable queue, stream, counter or thread stays out of the tree.
+    bool GetTopologyTrackId(rocprofvis_handle_t* topology_handle,
+                            rocprofvis_property_t track_property, uint64_t& track_id);
+
+    void ParseNodeData(rocprofvis_handle_t* node_handle, NodeInfo& node_info);
+    void ParseProcessorData(rocprofvis_handle_t* processor_handle,
+                            ProcessorInfo&       processor_info);
+    void ParseProcessData(rocprofvis_handle_t* process_handle, ProcessInfo& process_info);
+    void ParseThreadData(rocprofvis_handle_t* thread_handle, ThreadInfo& thread_info);
+    void ParseCounterData(rocprofvis_handle_t* counter_handle, CounterInfo& counter_info);
 
     void HandleLoadTrackMetaData();
     // Reorders the timeline so compared traces' counterpart tracks (A, B, ...) sit
@@ -296,6 +357,11 @@ private:
     void ProcessTableRequest(RequestInfo& req);
     void ProcessTableExportRequest(RequestInfo& req);
     void ProcessSaveTrimmedTraceRequest(RequestInfo& req);
+#ifdef ROCPROFVIS_ENABLE_SCRIPTING
+    void ProcessExecuteScriptRequest(RequestInfo& req);
+    rocprofvis_controller_arguments_t* BuildScriptContext(
+        const std::vector<uint64_t>& track_ids, double start_ts, double end_ts);
+#endif
     void ProcessCleanupDatabaseRequest(RequestInfo& req);
     void ProcessSummaryRequest(RequestInfo& req);
     void ProcessAnalysisTrackStatisticsRequest(RequestInfo& req);
@@ -325,6 +391,8 @@ private:
     TraceDataModel m_model;
 
     std::unordered_map<int64_t, RequestInfo> m_requests;
+    // Cleared at the end of every topology load; see LinkStreamTopology().
+    std::vector<PendingStreamLink> m_pending_stream_links;
     // Called when track metadata has changed
     std::function<void(const std::string&)> m_track_metadata_changed_callback;
     // Called when table data has changed
@@ -353,6 +421,18 @@ private:
     std::string m_progress_mesage;
     // Current loading status progress in percents
     uint64_t m_progress_percent;
+    // Tables allocated for a non-UI client, keyed by (client id, controller
+    // table type, operation). Built on first use and kept for the life of the
+    // controller, since a client asks the same few questions repeatedly and
+    // reallocating per fetch would throw away the row cache each time.
+    std::map<std::tuple<uint64_t, uint64_t, uint64_t>, rocprofvis_handle_t*>
+        m_client_tables;
+#ifdef ROCPROFVIS_ENABLE_SCRIPTING
+    // Outlives the request it came from. See GetLastScriptResult.
+    std::string m_script_result_text;
+    std::string m_script_result_error;
+    bool        m_script_result_ok = false;
+#endif
 
     void ProcessLoadComputeTrace(RequestInfo& req);
     inline void LoadWorkload(uint64_t workload_index);
@@ -367,21 +447,23 @@ private:
     inline void LoadKernels(WorkloadInfo&        workload,
                                rocprofvis_handle_t* workload_handle);
     inline void LoadPcSamplingCodeObjects(KernelInfo&          kernel,
-                                          rocprofvis_handle_t* pc_handle);
+                                           rocprofvis_handle_t* pc_handle);
+    inline void LoadPcSamplingKernelSymbol(KernelSymbol&        kernel_symbol,
+                                           rocprofvis_handle_t* pc_handle,
+                                           uint64_t             index);
     inline void LoadPcSamplingSourceFiles(KernelInfo&          kernel,
-                                          rocprofvis_handle_t* pc_handle);
-    inline void LoadPcSamplingIsaLine(IsaLine&             isa_line,
+                                          rocprofvis_handle_t* pc_handle,
+                                          uint64_t refreshed_source_file_uuid);
+    inline void LoadPcSamplingInstructionLine(InstructionLine&             instruction_line,
                                       rocprofvis_handle_t* pc_handle,
                                       uint64_t             index);
     inline void LoadPcSamplingSourceLine(SourceLine&          source_line,
                                          rocprofvis_handle_t* pc_handle,
                                          uint64_t             index);
-    inline void LoadPcSamplingJunctions(KernelInfo&          kernel,
-                                        rocprofvis_handle_t* pc_handle);
+    inline void LoadPcSamplingInstructionSourceLines(
+        KernelInfo& kernel, rocprofvis_handle_t* pc_handle);
     inline void LoadPcSamplingStates(KernelInfo&          kernel,
-                                           rocprofvis_handle_t* pc_handle);
-    inline void LoadPcSamplingStallReasonCounts(KernelInfo&          kernel,
-                                                rocprofvis_handle_t* pc_handle);
+                                     rocprofvis_handle_t* pc_handle);
     inline void LoadRoofLine(WorkloadInfo& workload, rocprofvis_handle_t* workload_handle);
 
     using compute_ridge_map = std::unordered_map<
@@ -416,12 +498,13 @@ private:
 
     ComputeDataModel m_compute_model;
 
-    // Code View permits one PC sampling request per trace. Completed data is
-    // accepted only when it belongs to the latest submitted selection.
-    uint32_t m_pc_sampling_generation = 0;
+    // Stores a pending replacement submission for a PC sampling layer whose
+    // in-flight request is being cancelled. Keyed by the per-layer request ID.
+    std::unordered_map<uint64_t, PcSamplingRequestParams> m_pc_sampling_replacements;
 
     std::function<void(const std::string&, uint64_t, bool)> m_metrics_fetch_callback;
-    std::function<void(const std::string&, uint32_t, uint32_t, uint32_t, bool)>
+    std::function<void(const std::string&, PcSamplingLayer, uint32_t, uint64_t,
+                       uint32_t, uint64_t, rocprofvis_result_t)>
         m_pc_sampling_fetch_callback;
 };
 

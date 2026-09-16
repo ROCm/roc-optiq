@@ -136,7 +136,7 @@ namespace DataModel
             }
 
 
-            if (kRocProfVisDmResultSuccess == result && m_merged_table.RowCount() > 0)
+            if (kRocProfVisDmResultSuccess == result && m_merged_table.RowCount() > 0 && !future->Interrupted())
             {
                 result = ProcessCompoundQuery(handle, commands, !same_queries);
                 m_tracks = tracks;
@@ -366,6 +366,8 @@ namespace DataModel
             else
             {
                 result = m_db->BindObject()->FuncAddTableColumn(table, column.m_name.c_str());
+                if (result == kRocProfVisDmResultSuccess)
+                    result = m_db->BindObject()->FuncAddTableColumnType(table, Builder::PublicColumnDataType(column.m_name));
                 column_index++;
                 if (result != kRocProfVisDmResultSuccess)
                     break;
@@ -393,7 +395,19 @@ namespace DataModel
             }
             else
             {
+                rocprofvis_db_data_type_t type = kRPVDataTypeDouble;
+                if (column.command == FilterExpression::SqlCommand::Count)
+                {
+                    type = kRPVDataTypeInt;
+                }
+                else
+                if (column.command == FilterExpression::SqlCommand::Column)
+                {
+                    type = Builder::PublicColumnDataType(column.column);
+                }
                 result = m_db->BindObject()->FuncAddTableColumn(table, column.public_name.c_str());
+                if (result == kRocProfVisDmResultSuccess)
+                    result = m_db->BindObject()->FuncAddTableColumnType(table, type);
                 column_index++;
                 if (result != kRocProfVisDmResultSuccess)
                     break;
@@ -516,6 +530,10 @@ namespace DataModel
             rocprofvis_dm_result_t result = m_db->BindObject()->FuncAddTableColumn(table, "NumRecords");
             if (kRocProfVisDmResultSuccess == result)
             {
+                result = m_db->BindObject()->FuncAddTableColumnType(table, kRPVDataTypeInt);
+            }
+            if (kRocProfVisDmResultSuccess == result)
+            {
                 result = m_db->BindObject()->FuncAddTableRowCell(row, std::to_string(num_rows).c_str());
             }
             return result;
@@ -592,7 +610,7 @@ namespace DataModel
                                 try {
                                     valid = lfilter.Evaluate(row_map);
                                 }
-                                catch (std::runtime_error err)
+                                catch (const std::runtime_error& err)
                                 {
                                     valid = false;
                                     eptr = std::current_exception();
@@ -614,7 +632,7 @@ namespace DataModel
                         for (int i = 0; i < thread_count; ++i)
                             threads.emplace_back(task, rows_per_task * i, rows_per_task * (i + 1), std::ref(eptr));
                         if (leftover_rows_count > 0)
-                            threads.emplace_back(task, rows_per_task * thread_count, leftover_rows_count, std::ref(eptr));
+                            threads.emplace_back(task, rows_per_task * thread_count, m_merged_table.RowCount(), std::ref(eptr));
 
                         for (auto& t : threads)
                             t.join();
@@ -622,11 +640,10 @@ namespace DataModel
                                 std::rethrow_exception(eptr);
                             }
                     }
-                    catch (std::runtime_error e)
+                    catch (const std::runtime_error& e)
                     {
                         spdlog::error("Error: {} ", e.what());
                         m_filter_lookup.clear();
-                        filtered = false;
                     }
 
                 }

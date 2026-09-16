@@ -1072,19 +1072,8 @@ KernelInstanceTable::KernelInstanceTable(
       [&dp]() -> const TablesModel& { return dp.DataModel().GetTables(); },
       [&dp]() -> TablesModel& { return dp.DataModel().GetTables(); }, timeline_selection)
 , m_fetched(false)
-, m_fetch_deferred(false)
 {
     m_widget_name = GenUniqueName("summary_top_kernel_instances");
-}
-
-void
-KernelInstanceTable::Update()
-{
-    if(m_fetch_deferred && !m_data_provider.IsRequestPending(m_request_id))
-    {
-        Fetch();
-    }
-    InfiniteScrollTable::Update();
 }
 
 void
@@ -1123,7 +1112,8 @@ KernelInstanceTable::ToggleSelectKernel(const std::string& kernel_name,
             m_where += " AND agentId = " + std::to_string(*device_id & TOPOLOGY_ID_MASK);
         }
     }
-    Fetch();
+    RequestFetch();
+    m_fetched = true;
 }
 
 void
@@ -1138,6 +1128,30 @@ float
 KernelInstanceTable::MinHeight() const
 {
     return 4.0f * ImGui::GetFrameHeightWithSpacing() + ImGui::GetStyle().ScrollbarSize;
+}
+
+void
+KernelInstanceTable::UpdateFetchParams(std::shared_ptr<TableRequestParams>& params) const
+{
+    if(!params)
+    {
+        params = std::make_shared<EventSearchRequestParams>();
+    }
+    InfiniteScrollTable::UpdateFetchParams(params);
+    if(params)
+    {
+        std::shared_ptr<EventSearchRequestParams> search_params =
+            std::static_pointer_cast<EventSearchRequestParams>(params);
+        const TimelineModel& timeline         = m_data_provider.DataModel().GetTimeline();
+        search_params->m_op_types             = { kRocProfVisDmOperationDispatch };
+        search_params->m_string_table_filters = { m_kernel_name };
+        search_params->m_include_substrings   = false;
+        search_params->m_include_category     = false;
+        search_params->m_partial_matching     = false;
+        params->m_start_ts                    = timeline.GetStartTime();
+        params->m_end_ts                      = timeline.GetEndTime();
+        params->m_where                       = m_where;
+    }
 }
 
 void
@@ -1188,18 +1202,6 @@ KernelInstanceTable::RowSelected(const ImGuiMouseButton mouse_button)
         InfiniteScrollTable::SelectedRowContextMenu();
     }
     InfiniteScrollTable::RowSelected(mouse_button);
-}
-
-void
-KernelInstanceTable::Fetch()
-{
-    m_data_provider.CancelRequest(m_request_id);
-    const TimelineModel& tlm = m_data_provider.DataModel().GetTimeline();
-    m_fetch_deferred         = !m_data_provider.FetchTable(EventSearchRequestParams(
-        m_request_table_type, { kRocProfVisDmOperationDispatch }, tlm.GetStartTime(),
-        tlm.GetEndTime(), m_where.c_str(), false, false, false, { m_kernel_name }, 0,
-        m_fetch_chunk_size, m_sort_column_index, m_sort_order));
-    m_fetched                = true;
 }
 
 }  // namespace View

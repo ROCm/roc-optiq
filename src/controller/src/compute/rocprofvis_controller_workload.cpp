@@ -114,6 +114,19 @@ rocprofvis_result_t Workload::GetUInt64(rocprofvis_property_t property, uint64_t
                 }
                 break;
             }
+            case kRPVControllerWorkloadAvailableMetricEntryIdIndexed:
+            {
+                if(index < m_available_metrics.size())
+                {
+                    *value = m_available_metrics[index].entry_id;
+                    result = kRocProfVisResultSuccess;
+                }
+                else
+                {
+                    result = kRocProfVisResultOutOfRange;
+                }
+                break;
+            }
             case kRPVControllerWorkloadNumMetricValueNames:
             {
                 *value = m_metric_value_names.size();
@@ -225,79 +238,49 @@ rocprofvis_result_t Workload::GetString(rocprofvis_property_t property, uint64_t
             case kRPVControllerWorkloadAvailableMetricCategoryNameIndexed:
             {
                 if(index < m_available_metrics.size())
-                {
-                    char const* str = StringTable::Get().GetString(m_available_metrics[index].category_name_idx);
-                    result = GetStringImpl(value, length, str, static_cast<uint32_t>(strlen(str)));
-                }
+                    result = GetStdStringImpl(value, length, StringTable::Get().GetString(m_available_metrics[index].category_name_idx));
                 else
-                {
                     result = kRocProfVisResultOutOfRange;
-                }
                 break;
             }
             case kRPVControllerWorkloadAvailableMetricTableNameIndexed:
             {
                 if(index < m_available_metrics.size())
-                {
-                    char const* str = StringTable::Get().GetString(m_available_metrics[index].table_name_idx);
-                    result = GetStringImpl(value, length, str, static_cast<uint32_t>(strlen(str)));
-                }
+                    result = GetStdStringImpl(value, length, StringTable::Get().GetString(m_available_metrics[index].table_name_idx));
                 else
-                {
                     result = kRocProfVisResultOutOfRange;
-                }
                 break;
             }
             case kRPVControllerWorkloadAvailableMetricNameIndexed:
             {
                 if(index < m_available_metrics.size())
-                {
-                    char const* str = StringTable::Get().GetString(m_available_metrics[index].name_idx);
-                    result = GetStringImpl(value, length, str, static_cast<uint32_t>(strlen(str)));
-                }
+                    result = GetStdStringImpl(value, length, StringTable::Get().GetString(m_available_metrics[index].name_idx));
                 else
-                {
                     result = kRocProfVisResultOutOfRange;
-                }
                 break;
             }
             case kRPVControllerWorkloadAvailableMetricDescriptionIndexed:
             {
                 if(index < m_available_metrics.size())
-                {
-                    char const* str = StringTable::Get().GetString(m_available_metrics[index].description_idx);
-                    result = GetStringImpl(value, length, str, static_cast<uint32_t>(strlen(str)));
-                }
+                    result = GetStdStringImpl(value, length, StringTable::Get().GetString(m_available_metrics[index].description_idx));
                 else
-                {
                     result = kRocProfVisResultOutOfRange;
-                }
                 break;
             }
             case kRPVControllerWorkloadAvailableMetricUnitIndexed:
             {
                 if(index < m_available_metrics.size())
-                {
-                    char const* str = StringTable::Get().GetString(m_available_metrics[index].unit_idx);
-                    result = GetStringImpl(value, length, str, static_cast<uint32_t>(strlen(str)));
-                }
+                    result = GetStdStringImpl(value, length, StringTable::Get().GetString(m_available_metrics[index].unit_idx));
                 else
-                {
                     result = kRocProfVisResultOutOfRange;
-                }
                 break;
             }
             case kRPVControllerWorkloadMetricValueNameStringIndexed:
             {
                 if(index < m_metric_value_names.size())
-                {
-                    char const* str = StringTable::Get().GetString(m_metric_value_names[index].value_name_idx);
-                    result = GetStringImpl(value, length, str, static_cast<uint32_t>(strlen(str)));
-                }
+                    result = GetStdStringImpl(value, length, StringTable::Get().GetString(m_metric_value_names[index].value_name_idx));
                 else
-                {
                     result = kRocProfVisResultOutOfRange;
-                }
                 break;
             }
             default:
@@ -411,6 +394,19 @@ rocprofvis_result_t Workload::SetUInt64(rocprofvis_property_t property, uint64_t
             if(index < m_available_metrics.size())
             {
                 m_available_metrics[index].table_id = (uint32_t)value;
+                result = kRocProfVisResultSuccess;
+            }
+            else
+            {
+                result = kRocProfVisResultOutOfRange;
+            }
+            break;
+        }
+        case kRPVControllerWorkloadAvailableMetricEntryIdIndexed:
+        {
+            if(index < m_available_metrics.size())
+            {
+                m_available_metrics[index].entry_id = (uint32_t)value;
                 result = kRocProfVisResultSuccess;
             }
             else
@@ -688,6 +684,12 @@ bool Workload::QueryToPropertyEnum(rocprofvis_db_compute_column_enum_t in, rocpr
         case kRPVComputeColumnSubTableId:
         {
             property = kRPVControllerWorkloadAvailableMetricTableIdIndexed;
+            type = kRPVControllerPrimitiveTypeUInt64;
+            break;
+        }
+        case kRPVComputeColumnEntryId:
+        {
+            property = kRPVControllerWorkloadAvailableMetricEntryIdIndexed;
             type = kRPVControllerPrimitiveTypeUInt64;
             break;
         }

@@ -3,6 +3,7 @@
 
 #include "rocprofvis_view_module.h"
 #include "rocprofvis_appwindow.h"
+#include "rocprofvis_settings_manager.h"
 #include "rocprofvis_utils.h"
 #include "widgets/rocprofvis_image_helpers.h"
 #include "spdlog/spdlog.h"
@@ -92,4 +93,24 @@ bool
 rocprofvis_view_wants_continuous_render()
 {
     return AppWindow::GetInstance()->WantsContinuousRender();
+}
+
+bool
+rocprofvis_view_get_drag_repair_enabled()
+{
+    return SettingsManager::GetInstance().GetUserSettings().linux_drag_repair;
+}
+
+void
+rocprofvis_view_set_drag_repair_enabled(bool enabled)
+{
+    SettingsManager& settings = SettingsManager::GetInstance();
+    UserSettings     previous = settings.GetUserSettings();
+    if(previous.linux_drag_repair == enabled)
+    {
+        return;
+    }
+
+    settings.GetUserSettings().linux_drag_repair = enabled;
+    settings.ApplyUserSettings(previous, true);
 }

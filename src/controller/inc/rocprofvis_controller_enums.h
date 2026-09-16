@@ -122,6 +122,8 @@ typedef enum rocprofvis_controller_object_type_t
     kRPVControllerObjectTypeRoofline = 29,
     //PcSampling
     kRPVControllerObjectTypePCSampling = 30,
+    // Result of a Python analysis script
+    kRPVControllerObjectTypeScriptResult = 31,
 #ifdef ROCPROFVIS_ENABLE_REMOTE
     // Remote connection object
     kRPVControllerObjectTypeRemoteConnection = 205,
@@ -598,6 +600,8 @@ typedef enum rocprofvis_controller_array_properties_t : uint32_t
     kRPVControllerArrayNumEntries = __kRPVControllerArrayPropertiesFirst,
     // Indexed entry.
     kRPVControllerArrayEntryIndexed,
+    // Primitive type of the indexed entry.
+    kRPVControllerArrayEntryTypeIndexed,
     __kRPVControllerArrayPropertiesLast
 } rocprofvis_controller_array_properties_t;
 /* JSON: RPVArray
@@ -997,6 +1001,7 @@ typedef enum rocprofvis_controller_workload_properties_t : uint32_t
     kRPVControllerWorkloadNumAvailableMetrics,
     kRPVControllerWorkloadAvailableMetricCategoryIdIndexed,
     kRPVControllerWorkloadAvailableMetricTableIdIndexed,
+    kRPVControllerWorkloadAvailableMetricEntryIdIndexed,
     kRPVControllerWorkloadAvailableMetricCategoryNameIndexed,
     kRPVControllerWorkloadAvailableMetricTableNameIndexed,
     kRPVControllerWorkloadAvailableMetricNameIndexed,
@@ -1034,49 +1039,82 @@ typedef enum rocprofvis_controller_kernel_properties_t : uint32_t
 /*
  * Pc Sampling data for kernels
  */
-typedef enum rocprofvis_controller_pc_sampling_data_properties_t : uint32_t
+typedef enum rocprofvis_controller_pc_sampling_data_properties_t
+: uint32_t
 {
-    __kRPVControllerPCSamplingPropertiesFirst,
-    kRPVControllerPCSamplingNumSourceFiles = __kRPVControllerPCSamplingPropertiesFirst,
-    kRPVControllerPCSamplingSourceFileId,
-    kRPVControllerPCSamplingFilePath,
-    kRPVControllerPCSamplingSourceFileChecksum,
+    kRPVPCSamplingSourceGroup = 0x10000000u,
+    kRPVPCSamplingIsaGroup    = 0x20000000u,
+    kRPVPCSamplingStallsGroup = 0x30000000u,
+
+    __kRPVControllerPCSamplingPropertiesFirst = kRPVPCSamplingSourceGroup,
+
+    // Source layer
+    kRPVControllerPCSamplingNumSourceFiles = kRPVPCSamplingSourceGroup,
+    kRPVControllerPCSamplingSourceFileUuid,
+    kRPVControllerPCSamplingSourceFileWorkloadId,
+    kRPVControllerPCSamplingSourceFilePath,
+    kRPVControllerPCSamplingSourceFileMd5Checksum,
     kRPVControllerPCSamplingNumSourceLines,
-    kRPVControllerPCSamplingSourceLineId,
-    kRPVControllerPCSamplingSourceLineSourceFileId,
+    kRPVControllerPCSamplingSourceLineUuid,
+    kRPVControllerPCSamplingSourceLineSourceFileUuid,
     kRPVControllerPCSamplingSourceLineNumber,
     kRPVControllerPCSamplingSourceLineContent,
-    kRPVControllerPCSamplingNumCodeObjects,
+    kRPVControllerPCSamplingNumInstructionSourceLines,
+    kRPVControllerPCSamplingInstructionSourceLineUuid,
+    kRPVControllerPCSamplingInstructionSourceLineInstructionUuid,
+    kRPVControllerPCSamplingInstructionSourceLineSourceLineUuid,
+    kRPVControllerPCSamplingInstructionSourceLineFrameIndex,
+    kRPVControllerPCSamplingInstructionSourceLineSourceFileUuid,
+
+    // ISA layer
+    kRPVControllerPCSamplingNumCodeObjects = kRPVPCSamplingIsaGroup,
+    kRPVControllerPCSamplingCodeObjectUuid,
+    kRPVControllerPCSamplingCodeObjectWorkloadId,
+    kRPVControllerPCSamplingCodeObjectPid,
     kRPVControllerPCSamplingCodeObjectId,
-    kRPVControllerPCSamplingCodeObjectUri,
-    kRPVControllerPCSamplingCodeObjectChecksum,
-    kRPVControllerPCSamplingNumIsaLines,
-    kRPVControllerPCSamplingIsaLineId,
-    kRPVControllerPCSamplingIsaLineCodeObjectId,
-    kRPVControllerPCSamplingIsaLineCodeObjectOffset,
-    kRPVControllerPCSamplingIsaLineInstructionTypeId,
-    kRPVControllerPCSamplingIsaLineInstruction,
-    kRPVControllerPCSamplingIsaLineComment,
-    kRPVControllerPCSamplingNumIsaToIsaDeps,
-    kRPVControllerPCSamplingIsaToIsaDependentIsaLineId,
-    kRPVControllerPCSamplingIsaToIsaDependencyIsaLineId,
-    kRPVControllerPCSamplingNumIsaToSourceDeps,
-    kRPVControllerPCSamplingIsaToSourceIsaLineId,
-    kRPVControllerPCSamplingIsaToSourceSourceLineId,
-    kRPVControllerPCSamplingIsaToSourceDepth,
-    kRPVControllerPCSamplingNumSamplingStates,
-    kRPVControllerPCSamplingStateId,
-    kRPVControllerPCSamplingStateIsaLineId,
-    kRPVControllerPCSamplingStateDispatchId,
-    kRPVControllerPCSamplingStateActiveThreadsPercent,
-    kRPVControllerPCSamplingStateWaveOccupancyPercent,
-    kRPVControllerPCSamplingStateIssuedCount,
-    kRPVControllerPCSamplingStateStalledCount,
-    kRPVControllerPCSamplingStateTotalCount,
-    kRPVControllerPCSamplingNumStallReasonCounts,
-    kRPVControllerPCSamplingStallReasonSamplingStateId,
-    kRPVControllerPCSamplingStallReasonId,
-    kRPVControllerPCSamplingStallReasonCount,
+    kRPVControllerPCSamplingCodeObjectLoadBase,
+    kRPVControllerPCSamplingNumKernelSymbols,
+    kRPVControllerPCSamplingKernelSymbolUuid,
+    kRPVControllerPCSamplingKernelSymbolCodeObjectUuid,
+    kRPVControllerPCSamplingKernelSymbolKernelUuid,
+    kRPVControllerPCSamplingKernelSymbolCodeObjectOffset,
+    kRPVControllerPCSamplingNumInstructionLines,
+    kRPVControllerPCSamplingInstructionLineUuid,
+    kRPVControllerPCSamplingInstructionLineKernelSymbolUuid,
+    kRPVControllerPCSamplingInstructionLineInstructionTypeUuid,
+    kRPVControllerPCSamplingInstructionLineCodeObjectOffset,
+    kRPVControllerPCSamplingInstructionLineInstruction,
+
+    // Stalls layer
+    kRPVControllerPCSamplingNumPcSampleStates = kRPVPCSamplingStallsGroup,
+    kRPVControllerPCSamplingPcSampleStateUuid,
+    kRPVControllerPCSamplingPcSampleStateInstructionUuid,
+    kRPVControllerPCSamplingPcSampleStateTotalCount,
+    kRPVControllerPCSamplingPcSampleStateIssueCount,
+    kRPVControllerPCSamplingPcSampleStateStallCount,
+    kRPVControllerPCSamplingPcSampleStateActiveThreadPercent,
+    kRPVControllerPCSamplingPcSampleStateWaveOccupancyPercent,
+    kRPVControllerPCSamplingPcSampleStateDispatchUuid,
+    kRPVControllerPCSamplingNumPcSampleStallReasons,
+    kRPVControllerPCSamplingPcSampleStallReasonUuid,
+    kRPVControllerPCSamplingPcSampleStallReasonStateUuid,
+    kRPVControllerPCSamplingPcSampleStallReasonLookupUuid,
+    kRPVControllerPCSamplingPcSampleStallReasonCount,
+    kRPVControllerPCSamplingNumPcSampleStallReasonLookups,
+    kRPVControllerPCSamplingPcSampleStallReasonLookupRecordUuid,
+    kRPVControllerPCSamplingPcSampleStallReasonLookupText,
+    kRPVControllerPCSamplingNumInstructionTypeLookups,
+    kRPVControllerPCSamplingInstructionTypeLookupUuid,
+    kRPVControllerPCSamplingInstructionTypeLookupText,
+    kRPVControllerPCSamplingNumInstructionSamples,
+    kRPVControllerPCSamplingInstructionSampleUuid,
+    kRPVControllerPCSamplingInstructionSampleStateUuid,
+    kRPVControllerPCSamplingInstructionSampleLookupUuid,
+    kRPVControllerPCSamplingInstructionSampleCount,
+    kRPVControllerPCSamplingNumInstructionSampleLookups,
+    kRPVControllerPCSamplingInstructionSampleLookupRecordUuid,
+    kRPVControllerPCSamplingInstructionSampleLookupText,
+
     __kRPVControllerPCSamplingPropertiesLast
 
 } rocprofvis_controller_pc_sampling_data_properties_t;
@@ -1102,7 +1140,7 @@ typedef enum rocprofvis_controller_pc_sampling_arguments_t : uint32_t
 {
     kRPVControllerPcSamplingArgsWorkloadId,
     kRPVControllerPcSamplingArgsKernelId,
-    kRPVControllerPcSamplingArgsSourceFileId,
+    kRPVControllerPcSamplingArgsSourceFileUuid,
 } rocprofvis_controller_pc_sampling_arguments_t;
 
 /*
@@ -1127,6 +1165,35 @@ typedef enum rocprofvis_controller_compute_pivot_table_arguments_t : uint32_t
     // Indexed filter expression string (e.g., "> 1000", "LIKE '%kernel%'")
     kRPVControllerCPTArgsFilterExpressionIndexed,
 } rocprofvis_controller_compute_pivot_table_arguments_t;
+
+/*
+ * Properties for a Python script result.
+ */
+typedef enum rocprofvis_controller_script_result_properties_t : uint32_t
+{
+    __kRPVControllerScriptResultPropertiesFirst = 0x14000000,
+    // Concatenated text from optiq.result.text calls
+    kRPVControllerScriptResultText = __kRPVControllerScriptResultPropertiesFirst,
+    // Traceback or runtime error message; empty on success
+    kRPVControllerScriptResultErrorMessage,
+    __kRPVControllerScriptResultPropertiesLast
+} rocprofvis_controller_script_result_properties_t;
+
+/*
+ * Script execute_async context: selected tracks and visible time
+ * range. Distinct from script-result (0x14000000) and table-args
+ * (0xE0000000). Missing fields mean "all tracks" / timeline min-max.
+ */
+typedef enum rocprofvis_controller_script_context_properties_t : uint32_t
+{
+    __kRPVControllerScriptContextPropertiesFirst = 0x15000000,
+    kRPVControllerScriptContextTimeRangeStart =
+        __kRPVControllerScriptContextPropertiesFirst,
+    kRPVControllerScriptContextTimeRangeEnd,
+    kRPVControllerScriptContextNumTracks,
+    kRPVControllerScriptContextTracksIndexed,
+    __kRPVControllerScriptContextPropertiesLast
+} rocprofvis_controller_script_context_properties_t;
 
 /*
  * Properties for a metrics container.

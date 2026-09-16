@@ -45,7 +45,7 @@ typedef Reference<rocprofvis_controller_connection_t, SshConnection, kRPVControl
 
 // Copies a std::string into the caller's buffer using the standard
 // "pass null buffer to query length" idiom shared by every string getter
-// in the controller C API (see Handle::GetStringImpl, which this matches):
+// in the controller C API (see Handle::GetStdStringImpl, which this matches):
 //   - If buffer is null or *length is 0: writes the string length, excluding
 //     any null terminator, into *length and returns success.
 //   - Otherwise copies up to *length bytes and returns success.

@@ -31,5 +31,11 @@ Trace::GetDMHandle() const
     return m_dm_handle;
 }
 
+void
+Trace::SetDMHandle(rocprofvis_dm_handle_t dm_handle)
+{
+    m_dm_handle = dm_handle;
+}
+
 }
 }

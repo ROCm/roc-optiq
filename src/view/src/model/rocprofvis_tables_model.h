@@ -17,6 +17,10 @@ enum class TableType
 {
     kSampleTable,
     kEventTable,
+    kCompareEventTableA,
+    kCompareEventTableB,
+    kCompareSampleTableA,
+    kCompareSampleTableB,
     kEventSearchTable,
     kSummaryKernelTable,
     kAnalysisTopInstrumentedEventsTable,
@@ -24,6 +28,22 @@ enum class TableType
     kAnalysisTopMemoryAllocationEventsTable,
     kAnalysisTopMemoryCopyEventsTable,
     kAnalysisTopSampledEventsTable,
+    // Source-B slots for compare mode; the types above serve as source A.
+    kAnalysisTopInstrumentedEventsTableB,
+    kAnalysisTopDispatchEventsTableB,
+    kAnalysisTopMemoryAllocationEventsTableB,
+    kAnalysisTopMemoryCopyEventsTableB,
+    kAnalysisTopSampledEventsTableB,
+    // Ask Optiq reads the same queries the tabs above do, but it must never
+    // write what a tab is rendering: the user would watch their rows, sort and
+    // row count change under them because the assistant asked something. These
+    // are its own slots, and it fetches through its own controller tables so
+    // the two cannot overlap. New types append here.
+    kAssistantEventTable,
+    kAssistantSampleTable,
+    kAssistantSearchTable,
+    kAssistantSummaryKernelTable,
+    kAssistantTopEventsTable,
     __kTableTypeCount
 };
 
@@ -44,6 +64,8 @@ public:
     TableInfo&       GetTable(TableType type);
 
     const std::vector<std::string>&              GetTableHeader(TableType type) const;
+    const std::vector<rocprofvis_controller_primitive_type_t>& GetTableColumnTypes(
+        TableType type) const;
     const std::vector<std::vector<std::string>>& GetTableData(TableType type) const;
     const std::vector<FormattedColumnInfo>& GetFormattedTableData(TableType type) const;
     std::vector<FormattedColumnInfo>&       GetMutableFormattedTableData(TableType type);
@@ -53,6 +75,9 @@ public:
 
     // Table modification
     void SetTableHeader(TableType type, std::vector<std::string>&& header);
+    void SetTableColumnTypes(
+        TableType                                             type,
+        std::vector<rocprofvis_controller_primitive_type_t>&& column_types);
     void SetTableData(TableType type, std::vector<std::vector<std::string>>&& data);
     void SetTableParams(TableType type, std::shared_ptr<TableRequestParams> params);
     void SetTableTotalRowCount(TableType type, uint64_t count);

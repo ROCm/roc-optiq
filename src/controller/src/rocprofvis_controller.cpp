@@ -20,6 +20,8 @@
 #include "system/rocprofvis_controller_track.h"
 #include "system/rocprofvis_controller_timeline.h"
 #include "system/rocprofvis_controller_trace_system.h"
+#include "system/rocprofvis_controller_table_system.h"
+#include "system/rocprofvis_controller_table_system_search.h"
 #include "system/rocprofvis_controller_graph.h"
 #include "system/rocprofvis_controller_summary.h"
 #include "system/rocprofvis_controller_summary_metrics.h"
@@ -302,6 +304,18 @@ rocprofvis_controller_arguments_t* rocprofvis_controller_arguments_alloc(void)
     rocprofvis_controller_arguments_t* args = (rocprofvis_controller_arguments_t*)new RocProfVis::Controller::Arguments();
     return args;
 }
+rocprofvis_controller_table_t* rocprofvis_controller_table_alloc(void)
+{
+    RocProfVis::Controller::SystemTable* table =
+        new RocProfVis::Controller::SystemTable(0);
+    return (rocprofvis_controller_table_t*)table;
+}
+rocprofvis_controller_table_t* rocprofvis_controller_search_table_alloc(void)
+{
+    RocProfVis::Controller::EventSearchTable* table =
+        new RocProfVis::Controller::EventSearchTable(0);
+    return (rocprofvis_controller_table_t*)table;
+}
 rocprofvis_controller_summary_metrics_t* rocprofvis_controller_summary_metrics_alloc(void)
 {
     rocprofvis_controller_summary_metrics_t* summary = (rocprofvis_controller_summary_metrics_t*)new RocProfVis::Controller::SummaryMetrics();
@@ -513,7 +527,7 @@ rocprofvis_result_t rocprofvis_controller_metric_fetch_async(
     return error;
 }
 
-rocprofvis_result_t rocprofvis_controller_pc_sampling_fetch_async(
+rocprofvis_result_t rocprofvis_controller_pc_sampling_fetch_isa_lines_async(
     rocprofvis_controller_t* controller, rocprofvis_controller_arguments_t* args,
     rocprofvis_controller_future_t* result, rocprofvis_handle_t* output)
 {
@@ -524,7 +538,39 @@ rocprofvis_result_t rocprofvis_controller_pc_sampling_fetch_async(
     RocProfVis::Controller::PcSamplingRef pc_sampling(output);
     if(trace.IsValid() && args_ref.IsValid() && future.IsValid() && pc_sampling.IsValid())
     {
-        error = trace->AsyncFetchPcSampling(*args_ref, *future, *pc_sampling);
+        error = trace->AsyncFetchPcSamplingIsaData(*args_ref, *future, *pc_sampling);
+    }
+    return error;
+}
+
+rocprofvis_result_t rocprofvis_controller_pc_sampling_fetch_source_async(
+    rocprofvis_controller_t* controller, rocprofvis_controller_arguments_t* args,
+    rocprofvis_controller_future_t* result, rocprofvis_handle_t* output)
+{
+    rocprofvis_result_t                     error = kRocProfVisResultInvalidArgument;
+    RocProfVis::Controller::ComputeTraceRef trace(controller);
+    RocProfVis::Controller::ArgumentsRef    args_ref(args);
+    RocProfVis::Controller::FutureRef       future(result);
+    RocProfVis::Controller::PcSamplingRef   pc_sampling(output);
+    if(trace.IsValid() && args_ref.IsValid() && future.IsValid() && pc_sampling.IsValid())
+    {
+        error = trace->AsyncFetchPcSamplingSource(*args_ref, *future, *pc_sampling);
+    }
+    return error;
+}
+
+rocprofvis_result_t rocprofvis_controller_pc_sampling_fetch_stalls_async(
+    rocprofvis_controller_t* controller, rocprofvis_controller_arguments_t* args,
+    rocprofvis_controller_future_t* result, rocprofvis_handle_t* output)
+{
+    rocprofvis_result_t                     error = kRocProfVisResultInvalidArgument;
+    RocProfVis::Controller::ComputeTraceRef trace(controller);
+    RocProfVis::Controller::ArgumentsRef    args_ref(args);
+    RocProfVis::Controller::FutureRef       future(result);
+    RocProfVis::Controller::PcSamplingRef   pc_sampling(output);
+    if(trace.IsValid() && args_ref.IsValid() && future.IsValid() && pc_sampling.IsValid())
+    {
+        error = trace->AsyncFetchPcSamplingStalls(*args_ref, *future, *pc_sampling);
     }
     return error;
 }
@@ -709,16 +755,28 @@ void rocprofvis_controller_arguments_free(rocprofvis_controller_arguments_t* arg
     }
 }
 
+void rocprofvis_controller_table_free(rocprofvis_controller_table_t* table)
+{
+    RocProfVis::Controller::TableRef table_ref(table);
+    if(table_ref.IsValid())
+    {
+        delete table_ref.Get();
+    }
+}
+
 void rocprofvis_controller_array_free(rocprofvis_controller_array_t* object)
 {
     RocProfVis::Controller::ArrayRef array(object);
     if (array.IsValid())
     {
-        if(array.Get()->GetContext() &&
-           ((RocProfVis::Controller::SystemTrace*) array.Get()->GetContext())->GetMemoryManager())
+        if(array.Get()->GetContext())
         {
-            ((RocProfVis::Controller::SystemTrace*)array.Get()->GetContext())->GetMemoryManager()->CancelArrayOwnership(&array.Get()->GetVector(),
-                                      RocProfVis::Controller::kRocProfVisOwnerTypeGraph);
+            RocProfVis::Controller::MemoryManager* mgr = ((RocProfVis::Controller::SystemTrace*) array.Get()->GetContext())->GetMemoryManager();
+            if(mgr)
+            {
+                mgr->CancelArrayOwnership(array.Get()->GetArrayId(), RocProfVis::Controller::kRocProfVisOwnerTypeTrack);
+                mgr->CancelArrayOwnership(array.Get()->GetArrayId(), RocProfVis::Controller::kRocProfVisOwnerTypeGraph);           
+            }
         }
         delete array.Get();
     }

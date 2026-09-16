@@ -418,7 +418,59 @@ class Builder
             {STREAM_TRACK_ID_PUBLIC_NAME,{STREAM_TRACK_ID_PUBLIC_NAME, TRACK_ID_TYPE,SCHEMA_INDEX_STREAM_TRACK_ID}},
         };
 
+        // Data types of public columns...
+        inline static std::unordered_map<std::string, rocprofvis_db_data_type_t> public_column_types = {
+            {OPERATION_SERVICE_NAME, kRPVDataTypeInt},
+            {DB_ID_PUBLIC_NAME, kRPVDataTypeInt},
+            {ID_PUBLIC_NAME, kRPVDataTypeInt},
+            {CATEGORY_PUBLIC_NAME, kRPVDataTypeString},
+            {NAME_PUBLIC_NAME, kRPVDataTypeString},
+            {ARGS_PUBLIC_NAME, kRPVDataTypeString},
+            {STREAM_PUBLIC_NAME, kRPVDataTypeString},
+            {QUEUE_PUBLIC_NAME, kRPVDataTypeString},
+            {NODE_PUBLIC_NAME, kRPVDataTypeInt},
+            {PROCESS_ID_PUBLIC_NAME, kRPVDataTypeInt},
+            {THREAD_ID_PUBLIC_NAME, kRPVDataTypeInt},
+            {AGENT_ABS_INDEX_PUBLIC_NAME, kRPVDataTypeInt},
+            {AGENT_TYPE_PUBLIC_NAME, kRPVDataTypeString},
+            {AGENT_TYPE_INDEX_PUBLIC_NAME, kRPVDataTypeInt},
+            {AGENT_NAME_PUBLIC_NAME, kRPVDataTypeString},
+            {START_PUBLIC_NAME, kRPVDataTypeInt},
+            {END_PUBLIC_NAME, kRPVDataTypeInt},
+            {DURATION_PUBLIC_NAME, kRPVDataTypeInt},
+            {GRID_SIZEX_PUBLIC_NAME, kRPVDataTypeInt},
+            {GRID_SIZEY_PUBLIC_NAME, kRPVDataTypeInt},
+            {GRID_SIZEZ_PUBLIC_NAME, kRPVDataTypeInt},
+            {WORKGROUP_SIZEX_PUBLIC_NAME, kRPVDataTypeInt},
+            {WORKGROUP_SIZEY_PUBLIC_NAME, kRPVDataTypeInt},
+            {WORKGROUP_SIZEZ_PUBLIC_NAME, kRPVDataTypeInt},
+            {LDS_SIZE_PUBLIC_NAME, kRPVDataTypeInt},
+            {SCRATCH_SIZE_PUBLIC_NAME, kRPVDataTypeInt},
+            {STATIC_LDS_SIZE_PUBLIC_NAME, kRPVDataTypeInt},
+            {STATIC_SCRATCH_SIZE_PUBLIC_NAME, kRPVDataTypeInt},
+            {SIZE_PUBLIC_NAME, kRPVDataTypeInt},
+            {ADDRESS_PUBLIC_NAME, kRPVDataTypeInt},
+            {LEVEL_REFERENCE, kRPVDataTypeString},
+            {AGENT_SRC_ABS_INDEX_PUBLIC_NAME, kRPVDataTypeInt},
+            {AGENT_SRC_TYPE_PUBLIC_NAME, kRPVDataTypeString},
+            {AGENT_SRC_TYPE_INDEX_PUBLIC_NAME, kRPVDataTypeInt},
+            {AGENT_SRC_NAME_PUBLIC_NAME, kRPVDataTypeString},
+            {SRC_ADDRESS_PUBLIC_NAME, kRPVDataTypeInt},
+            {COUNTER_ID_PUBLIC_NAME, kRPVDataTypeString},
+            {COUNTER_VALUE_PUBLIC_NAME, kRPVDataTypeDouble},
+            {TRACK_ID_PUBLIC_NAME, kRPVDataTypeInt},
+            {STREAM_TRACK_ID_PUBLIC_NAME, kRPVDataTypeInt},
+        };
 
+        static rocprofvis_db_data_type_t PublicColumnDataType(const std::string& name)
+        {
+            rocprofvis_db_data_type_t result = kRPVDataTypeString;
+            if (public_column_types.count(name) > 0)
+            {
+                result = public_column_types.at(name);
+            }
+            return result;
+        }
 
         static std::optional<std::string> FindColumnNameByIndex(const std::unordered_map<std::string, ColumnData>& m, const uint8_t& index) {
             for (const auto& [key, val] : m) {

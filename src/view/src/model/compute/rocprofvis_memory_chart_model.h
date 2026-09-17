@@ -43,6 +43,11 @@ struct MemChartContentItem
     std::string       title;
     std::string       category;
     std::string       unit;
+
+    // Render cache: resolved label/value strings, refreshed on layout load and
+    // on metric fetch (not recomputed per frame).
+    std::string cached_label;
+    std::string cached_value;
 };
 
 struct MemChartBlock
@@ -78,6 +83,11 @@ struct MemChartArrow
     MemChartMetricRef metric;
     std::string       title;     // Optional label override; else the metric name.
     std::string       category;  // read/write/atomic/... selects color; else inferred.
+
+    // Render cache: resolved label/value strings, refreshed on layout load and
+    // on metric fetch (not recomputed per frame).
+    std::string cached_label;
+    std::string cached_value;
 };
 
 // A titled box drawn around a container block's children. Populated during

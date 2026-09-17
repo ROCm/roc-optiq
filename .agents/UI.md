@@ -1384,7 +1384,7 @@ ImPlot-based roofline chart. Two modes:
 Data-driven block diagram of the GPU memory hierarchy, built from a
 **relational** layout ("nodes + edges") rather than hardcoded C++. The
 layout model and its parser live in
-`rocprofvis_memory_chart_model.{h,cpp}`:
+`model/compute/rocprofvis_memory_chart_model.{h,cpp}`:
 
 - `MemChartBlock` - one node: `id`, `column`, optional `order`, `title`,
   `content` (a list of `MemChartContentItem`, each a metric ref plus an
@@ -3078,7 +3078,7 @@ All under `agenticprofiling/`, compiled only with
 - `ComputeMemoryChartView` ->
   `compute/rocprofvis_compute_memory_chart.h`. Data-driven; relational
   layout model (`MemChartLayout`, `MemChartBlock`, `MemChartArrow`,
-  `MemChartMetricRef`) -> `compute/rocprofvis_memory_chart_model.h`;
+  `MemChartMetricRef`) -> `model/compute/rocprofvis_memory_chart_model.h`;
   per-arch layout JSON + schema -> `resources/memory_chart/`, embedded at
   build time into `rocprofvis_memory_chart_layouts_generated.h` via
   `cmake/embed_memory_chart_layouts.cmake`.

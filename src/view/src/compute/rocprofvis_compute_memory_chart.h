@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 #pragma once
-#include "rocprofvis_memory_chart_model.h"
+#include "model/compute/rocprofvis_memory_chart_model.h"
 
 #include <cstdint>
 #include <memory>
@@ -69,6 +69,16 @@ private:
     // Load the dev override file (<config-dir>/memory_chart.json) into m_layout.
     // Returns true if a valid override was found and applied.
     bool TryLoadOverrideFile();
+
+    // Called once whenever m_layout is (re)assigned (workload change): builds the
+    // id -> block index and primes the per-item/arrow render strings.
+    void OnLayoutLoaded();
+    // Recompute the cached label/value strings for every content item and arrow
+    // from the currently-resolved metrics (on layout load and on metric fetch).
+    void RefreshMetricStrings();
+    // O(1) block lookup by id (backed by m_block_by_id).
+    const MemChartBlock* Block(uint32_t id) const;
+
     void ComputeLayout(float available_width);
     void MeasureBlock(MemChartBlock& block) const;
     // Recursively assign geometry: `conn_left`/`conn_right` are the top-level
@@ -113,6 +123,10 @@ private:
     // Resolved after each fetch; keyed by the metric's full dotted id
     // ("category.table.entry", e.g. "3.1.0").
     std::unordered_map<std::string, const MetricValue*> m_ptr_by_metric_id;
+
+    // Block-by-id index into m_layout, rebuilt on layout load; avoids scanning
+    // the block tree on every arrow lookup each frame.
+    std::unordered_map<uint32_t, const MemChartBlock*> m_block_by_id;
 };
 
 }  // namespace View

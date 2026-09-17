@@ -459,37 +459,36 @@ void
 ComputeMemoryChartView::LoadLayout()
 {
     // Dev override wins if present; otherwise the embedded default layout.
-    if(TryLoadOverrideFile()) return;
-
-    std::string error;
-    if(!MemChartLayout::ParseFromString(DefaultEmbeddedLayout(), m_layout, &error))
+    if(!TryLoadOverrideFile())
     {
-        spdlog::error("Memory chart: failed to parse embedded default layout: {}", error);
+        std::string error;
+        if(!MemChartLayout::ParseFromString(DefaultEmbeddedLayout(), m_layout, &error))
+        {
+            spdlog::error("Memory chart: failed to parse embedded default layout: {}", error);
+        }
     }
+    OnLayoutLoaded();
 }
 
 void
 ComputeMemoryChartView::LoadWorkloadLayout(uint32_t workload_id)
 {
-    // Priority: dev override file -> per-workload DB blob -> architecture-specific
-    // embedded layout -> embedded default.
-    if(TryLoadOverrideFile()) return;
+    // Priority: dev override file -> per-workload DB layout (parsed once by the
+    // data provider) -> architecture-specific embedded layout -> embedded default.
+    if(TryLoadOverrideFile())
+    {
+        OnLayoutLoaded();
+        return;
+    }
 
     const WorkloadInfo* workload = m_data_provider.ComputeModel().GetWorkload(workload_id);
 
-    if(workload && !workload->memory_chart_layout.empty())
+    if(workload && !workload->memory_chart_layout.blocks.empty())
     {
-        MemChartLayout db_layout;
-        std::string    error;
-        if(MemChartLayout::ParseFromString(workload->memory_chart_layout, db_layout, &error))
-        {
-            m_layout = std::move(db_layout);
-            spdlog::info("Memory chart: using layout from workload {} database blob",
-                         workload_id);
-            return;
-        }
-        spdlog::warn("Memory chart: workload {} layout blob invalid ({}); using embedded layout",
-                     workload_id, error);
+        m_layout = workload->memory_chart_layout;
+        spdlog::info("Memory chart: using layout from workload {} database blob", workload_id);
+        OnLayoutLoaded();
+        return;
     }
 
     const std::string arch   = WorkloadArch(workload);
@@ -499,40 +498,104 @@ ComputeMemoryChartView::LoadWorkloadLayout(uint32_t workload_id)
     {
         spdlog::info("Memory chart: using embedded layout for arch '{}' (workload {})",
                      arch.empty() ? "default" : arch, workload_id);
-        return;
     }
-    spdlog::error("Memory chart: failed to parse embedded layout for arch '{}': {}", arch,
-                  error);
+    else
+    {
+        spdlog::error("Memory chart: failed to parse embedded layout for arch '{}': {}", arch,
+                      error);
+    }
+    OnLayoutLoaded();
 }
 
-// Category id (leading segment) of a dotted metric id "category.table.entry".
+void
+ComputeMemoryChartView::OnLayoutLoaded()
+{
+    // Rebuild the id -> block index (pointers into m_layout, valid until the next
+    // layout load). Top-level blocks keep a stable address; nested children are
+    // re-sorted per frame during layout, but arrows only reference top-level ids.
+    m_block_by_id.clear();
+    std::function<void(const std::vector<MemChartBlock>&)> index;
+    index = [this, &index](const std::vector<MemChartBlock>& blocks) {
+        for(const MemChartBlock& block : blocks)
+        {
+            m_block_by_id[block.id] = &block;
+            index(block.children);
+        }
+    };
+    index(m_layout.blocks);
+
+    RefreshMetricStrings();
+}
+
+void
+ComputeMemoryChartView::RefreshMetricStrings()
+{
+    std::function<void(std::vector<MemChartBlock>&)> visit;
+    visit = [this, &visit](std::vector<MemChartBlock>& blocks) {
+        for(MemChartBlock& block : blocks)
+        {
+            for(MemChartContentItem& item : block.content)
+            {
+                item.cached_label = MetricLabel(item.metric, item.title);
+                item.cached_value = MetricValueText(item.metric, true, item.unit);
+            }
+            visit(block.children);
+        }
+    };
+    visit(m_layout.blocks);
+
+    for(MemChartArrow& arrow : m_layout.arrows)
+    {
+        arrow.cached_label = arrow.title.empty() ? MetricLabel(arrow.metric, "") : arrow.title;
+        // Arrow labels omit the unit (kept compact; full value + unit is in the tooltip).
+        arrow.cached_value = MetricValueText(arrow.metric, false);
+    }
+}
+
+const MemChartBlock*
+ComputeMemoryChartView::Block(uint32_t id) const
+{
+    std::unordered_map<uint32_t, const MemChartBlock*>::const_iterator it =
+        m_block_by_id.find(id);
+    return it != m_block_by_id.end() ? it->second : nullptr;
+}
+
+// Category and table ids (leading segments) of a dotted metric id
+// "category.table.entry".
 static bool
-MetricCategory(const MemChartMetricRef& ref, uint32_t& category)
+MetricCategoryTable(const MemChartMetricRef& ref, uint32_t& category, uint32_t& table)
 {
     if(!ref.valid) return false;
-    size_t dot = ref.name.find('.');
-    if(dot == 0 || dot == std::string::npos) return false;
-    category = 0;
-    for(size_t i = 0; i < dot; ++i)
-    {
-        char c = ref.name[i];
-        if(c < '0' || c > '9') return false;
-        category = category * 10 + static_cast<uint32_t>(c - '0');
-    }
-    return true;
+    size_t d1 = ref.name.find('.');
+    if(d1 == 0 || d1 == std::string::npos) return false;
+    size_t d2 = ref.name.find('.', d1 + 1);
+    if(d2 == d1 + 1 || d2 == std::string::npos) return false;
+
+    auto parse = [](const std::string& s, size_t begin, size_t end, uint32_t& out) -> bool {
+        out = 0;
+        for(size_t i = begin; i < end; ++i)
+        {
+            char c = s[i];
+            if(c < '0' || c > '9') return false;
+            out = out * 10 + static_cast<uint32_t>(c - '0');
+        }
+        return end > begin;
+    };
+    return parse(ref.name, 0, d1, category) && parse(ref.name, d1 + 1, d2, table);
 }
 
 static void
-CollectCategories(const std::vector<MemChartBlock>& blocks, std::set<uint32_t>& out)
+CollectTables(const std::vector<MemChartBlock>&        blocks,
+              std::set<std::pair<uint32_t, uint32_t>>& out)
 {
     for(const MemChartBlock& block : blocks)
     {
-        uint32_t category = 0;
+        uint32_t category = 0, table = 0;
         for(const MemChartContentItem& item : block.content)
         {
-            if(MetricCategory(item.metric, category)) out.insert(category);
+            if(MetricCategoryTable(item.metric, category, table)) out.insert({category, table});
         }
-        CollectCategories(block.children, out);
+        CollectTables(block.children, out);
     }
 }
 
@@ -540,6 +603,7 @@ void
 ComputeMemoryChartView::FetchMemChartMetrics()
 {
     m_ptr_by_metric_id.clear();
+    RefreshMetricStrings();  // values -> N/A until the fetch completes
 
     m_data_provider.ComputeModel().ClearKernelMetricValues(m_client_id);
 
@@ -548,23 +612,22 @@ ComputeMemoryChartView::FetchMemChartMetrics()
     uint32_t workload_id = m_compute_selection->GetSelectedWorkload();
     uint32_t kernel_id   = m_compute_selection->GetSelectedKernel();
 
-    // Metrics may span multiple categories/tables (e.g. 3.1.x and 3.3.x). Fetch
-    // each category the layout references, whole (all sub-tables), so every
-    // referenced metric resolves.
-    std::set<uint32_t> categories;
-    CollectCategories(m_layout.blocks, categories);
+    // Fetch only the specific (category, table) pairs the layout references, not
+    // whole categories - these charts are sparse (a handful of metrics per table).
+    std::set<std::pair<uint32_t, uint32_t>> tables;
+    CollectTables(m_layout.blocks, tables);
     for(const MemChartArrow& arrow : m_layout.arrows)
     {
-        uint32_t category = 0;
-        if(MetricCategory(arrow.metric, category)) categories.insert(category);
+        uint32_t category = 0, table = 0;
+        if(MetricCategoryTable(arrow.metric, category, table)) tables.insert({category, table});
     }
-    if(categories.empty()) return;
+    if(tables.empty()) return;
 
     std::vector<uint32_t>                       kernel_ids = {kernel_id};
     std::vector<MetricsRequestParams::MetricID> metric_ids;
-    for(uint32_t category : categories)
+    for(const std::pair<uint32_t, uint32_t>& ct : tables)
     {
-        metric_ids.push_back({category, std::nullopt, std::nullopt});
+        metric_ids.push_back({ct.first, ct.second, std::nullopt});
     }
 
     m_data_provider.FetchMetrics(
@@ -576,25 +639,31 @@ ComputeMemoryChartView::UpdateMetrics()
 {
     m_ptr_by_metric_id.clear();
 
-    if(!m_compute_selection) return;
-
-    uint32_t kernel_id = m_compute_selection->GetSelectedKernel();
-    if(kernel_id == ComputeSelection::INVALID_SELECTION_ID) return;
-
-    const std::vector<std::shared_ptr<MetricValue>>* metrics =
-        m_data_provider.ComputeModel().GetKernelMetricsData(m_client_id, kernel_id);
-    if(!metrics) return;
-
-    for(const std::shared_ptr<MetricValue>& metric : *metrics)
+    if(m_compute_selection)
     {
-        if(!metric || !metric->entry) continue;
-        // Index every fetched metric by its full dotted id ("category.table.entry");
-        // a layout may reference metrics across categories/tables.
-        std::string full_id = std::to_string(metric->entry->category_id) + "." +
-                              std::to_string(metric->entry->table_id) + "." +
-                              std::to_string(metric->entry->id);
-        m_ptr_by_metric_id[full_id] = metric.get();
+        uint32_t kernel_id = m_compute_selection->GetSelectedKernel();
+        if(kernel_id != ComputeSelection::INVALID_SELECTION_ID)
+        {
+            const std::vector<std::shared_ptr<MetricValue>>* metrics =
+                m_data_provider.ComputeModel().GetKernelMetricsData(m_client_id, kernel_id);
+            if(metrics)
+            {
+                for(const std::shared_ptr<MetricValue>& metric : *metrics)
+                {
+                    if(!metric || !metric->entry) continue;
+                    // Index each fetched metric by its full dotted id.
+                    std::string full_id = std::to_string(metric->entry->category_id) + "." +
+                                          std::to_string(metric->entry->table_id) + "." +
+                                          std::to_string(metric->entry->id);
+                    m_ptr_by_metric_id[full_id] = metric.get();
+                }
+            }
+        }
     }
+
+    // Refresh the cached display strings once now that values are in, instead of
+    // recomputing them for every block/arrow on every frame.
+    RefreshMetricStrings();
 }
 
 const MetricValue*
@@ -666,10 +735,8 @@ ComputeMemoryChartView::MeasureBlock(MemChartBlock& block) const
     float width = ImGui::CalcTextSize(block.title.c_str()).x;
     for(const MemChartContentItem& item : block.content)
     {
-        std::string label = MetricLabel(item.metric, item.title);
-        std::string value = MetricValueText(item.metric, true, item.unit);
-        float       row_w = ImGui::CalcTextSize(label.c_str()).x + METRIC_VALUE_GAP +
-                      ImGui::CalcTextSize(value.c_str()).x;
+        float row_w = ImGui::CalcTextSize(item.cached_label.c_str()).x + METRIC_VALUE_GAP +
+                      ImGui::CalcTextSize(item.cached_value.c_str()).x;
         width = std::max(width, row_w);
     }
 
@@ -763,8 +830,8 @@ ComputeMemoryChartView::ComputeLayout(float available_width)
         std::map<uint32_t, int> exit_anchored;   // arrows leaving to the right
         for(const MemChartArrow& arrow : m_layout.arrows)
         {
-            const MemChartBlock* from = m_layout.FindBlock(arrow.from);
-            const MemChartBlock* to   = m_layout.FindBlock(arrow.to);
+            const MemChartBlock* from = Block(arrow.from);
+            const MemChartBlock* to   = Block(arrow.to);
             if(!from || !to) continue;
             int32_t dcol = to->column - from->column;
             if(dcol != 1 && dcol != -1) continue;  // only adjacent arrows fan here
@@ -995,9 +1062,9 @@ ComputeMemoryChartView::DrawLeaf(ImDrawList* draw_list, ImVec2 origin,
 
     for(const MemChartContentItem& item : block.content)
     {
-        std::string label = MetricLabel(item.metric, item.title);
-        std::string value = MetricValueText(item.metric, true, item.unit);
-        ImU32       accent = ColorForCategory(item.category, label);
+        const std::string& label = item.cached_label;
+        const std::string& value = item.cached_value;
+        ImU32              accent = ColorForCategory(item.category, label);
 
         ImVec2 row_min(block_x + ROW_INSET_X, cursor_y - ROW_HOVER_INSET);
         ImVec2 row_max(block_x + block.w - ROW_INSET_X, cursor_y + ROW_HEIGHT - ROW_HOVER_INSET);
@@ -1047,8 +1114,8 @@ ComputeMemoryChartView::BuildArrowRoutes(std::vector<ArrowRoute>& routes) const
     for(size_t i = 0; i < m_layout.arrows.size(); ++i)
     {
         const MemChartArrow& arrow = m_layout.arrows[i];
-        const MemChartBlock* from  = m_layout.FindBlock(arrow.from);
-        const MemChartBlock* to    = m_layout.FindBlock(arrow.to);
+        const MemChartBlock* from  = Block(arrow.from);
+        const MemChartBlock* to    = Block(arrow.to);
         if(!from || !to) continue;
 
         int32_t dcol = to->column - from->column;
@@ -1087,16 +1154,11 @@ ComputeMemoryChartView::BuildArrowRoutes(std::vector<ArrowRoute>& routes) const
         route.points = std::move(pts);
         route.metric = arrow.metric;
 
-        std::string label = arrow.title;
-        if(label.empty())
-        {
-            label = MetricLabel(arrow.metric, "");
-        }
-        // Arrow labels omit the unit to stay compact (units bloat the corridor
-        // and overflow onto the blocks); the full value + unit is in the tooltip.
-        std::string value = MetricValueText(arrow.metric, false);
-        route.label        = label.empty() ? value : (label + ": " + value);
-        route.color        = ColorForCategory(arrow.category, label.empty() ? value : label);
+        // Cached label/value (refreshed on load and on metric fetch, not per frame).
+        const std::string& label = arrow.cached_label;
+        const std::string& value = arrow.cached_value;
+        route.label = label.empty() ? value : (label + ": " + value);
+        route.color = ColorForCategory(arrow.category, label.empty() ? value : label);
 
         // Which endpoint(s) get a head: the destination of the flow.
         bool head_from = arrow.direction == MemChartArrowDir::kBoth ||
@@ -1128,8 +1190,8 @@ ComputeMemoryChartView::BuildArrowRoutes(std::vector<ArrowRoute>& routes) const
     for(size_t i : adjacent)
     {
         const MemChartArrow& arrow  = m_layout.arrows[i];
-        const MemChartBlock* from   = m_layout.FindBlock(arrow.from);
-        const MemChartBlock* to     = m_layout.FindBlock(arrow.to);
+        const MemChartBlock* from   = Block(arrow.from);
+        const MemChartBlock* to     = Block(arrow.to);
         if(!from || !to) continue;
         const MemChartBlock* left_b  = from->column < to->column ? from : to;
         const MemChartBlock* right_b = from->column < to->column ? to : from;
@@ -1143,7 +1205,7 @@ ComputeMemoryChartView::BuildArrowRoutes(std::vector<ArrowRoute>& routes) const
                             std::unordered_map<size_t, float>&      out) {
         for(std::pair<const uint32_t, std::vector<Port>>& kv : edge)
         {
-            const MemChartBlock* block = m_layout.FindBlock(kv.first);
+            const MemChartBlock* block = Block(kv.first);
             if(!block) continue;
             std::vector<Port>& ports = kv.second;
             std::stable_sort(ports.begin(), ports.end(),
@@ -1176,8 +1238,8 @@ ComputeMemoryChartView::BuildArrowRoutes(std::vector<ArrowRoute>& routes) const
     for(size_t i : adjacent)
     {
         const MemChartArrow& arrow  = m_layout.arrows[i];
-        const MemChartBlock* from   = m_layout.FindBlock(arrow.from);
-        const MemChartBlock* to     = m_layout.FindBlock(arrow.to);
+        const MemChartBlock* from   = Block(arrow.from);
+        const MemChartBlock* to     = Block(arrow.to);
         if(!from || !to) continue;
         const MemChartBlock* left_b  = from->column < to->column ? from : to;
         const MemChartBlock* right_b = from->column < to->column ? to : from;
@@ -1214,8 +1276,8 @@ ComputeMemoryChartView::BuildArrowRoutes(std::vector<ArrowRoute>& routes) const
     for(size_t index : same_column)
     {
         const MemChartArrow& arrow = m_layout.arrows[index];
-        const MemChartBlock* from  = m_layout.FindBlock(arrow.from);
-        const MemChartBlock* to    = m_layout.FindBlock(arrow.to);
+        const MemChartBlock* from  = Block(arrow.from);
+        const MemChartBlock* to    = Block(arrow.to);
         if(!from || !to) continue;
 
         float lane_x = std::max(from->conn_right, to->conn_right) + SAME_COL_LANE_BASE +
@@ -1246,8 +1308,8 @@ ComputeMemoryChartView::BuildArrowRoutes(std::vector<ArrowRoute>& routes) const
     for(size_t index : skipping)
     {
         const MemChartArrow& arrow = m_layout.arrows[index];
-        const MemChartBlock* from  = m_layout.FindBlock(arrow.from);
-        const MemChartBlock* to    = m_layout.FindBlock(arrow.to);
+        const MemChartBlock* from  = Block(arrow.from);
+        const MemChartBlock* to    = Block(arrow.to);
         if(!from || !to) continue;
         float a = from->MidX();
         float b = to->column < from->column ? margin_x : to->MidX();
@@ -1310,8 +1372,8 @@ ComputeMemoryChartView::BuildArrowRoutes(std::vector<ArrowRoute>& routes) const
     for(size_t index : skipping)
     {
         const MemChartArrow& arrow = m_layout.arrows[index];
-        const MemChartBlock* from  = m_layout.FindBlock(arrow.from);
-        const MemChartBlock* to    = m_layout.FindBlock(arrow.to);
+        const MemChartBlock* from  = Block(arrow.from);
+        const MemChartBlock* to    = Block(arrow.to);
         if(!from || !to) continue;
         bool right = to->column > from->column;
         int  span  = right ? to->column - from->column : from->column - to->column;
@@ -1325,7 +1387,7 @@ ComputeMemoryChartView::BuildArrowRoutes(std::vector<ArrowRoute>& routes) const
     std::unordered_map<size_t, float> to_port_x;
     for(std::pair<const uint32_t, std::vector<BottomPort>>& kv : block_ports)
     {
-        const MemChartBlock* block = m_layout.FindBlock(kv.first);
+        const MemChartBlock* block = Block(kv.first);
         if(!block) continue;
         std::vector<BottomPort>& ports = kv.second;
         std::stable_sort(ports.begin(), ports.end(), [](const BottomPort& a, const BottomPort& b) {
@@ -1346,8 +1408,8 @@ ComputeMemoryChartView::BuildArrowRoutes(std::vector<ArrowRoute>& routes) const
     for(size_t index : skipping)
     {
         const MemChartArrow& arrow = m_layout.arrows[index];
-        const MemChartBlock* from  = m_layout.FindBlock(arrow.from);
-        const MemChartBlock* to    = m_layout.FindBlock(arrow.to);
+        const MemChartBlock* from  = Block(arrow.from);
+        const MemChartBlock* to    = Block(arrow.to);
         if(!from || !to) continue;
 
         int   lane      = lane_of.count(index) ? lane_of[index] : 0;

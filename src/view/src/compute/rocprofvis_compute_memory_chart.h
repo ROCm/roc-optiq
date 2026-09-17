@@ -70,8 +70,9 @@ private:
     // Returns true if a valid override was found and applied.
     bool TryLoadOverrideFile();
 
-    // Called once whenever m_layout is (re)assigned (workload change): builds the
-    // id -> block index and primes the per-item/arrow render strings.
+    // Called once whenever m_layout is (re)assigned (workload change): sorts
+    // blocks by column/`order`, builds the id -> block index, and primes the
+    // per-item/arrow render strings.
     void OnLayoutLoaded();
     // Recompute the cached label/value strings for every content item and arrow
     // from the currently-resolved metrics (on layout load and on metric fetch).

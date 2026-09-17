@@ -144,7 +144,53 @@ static constexpr float BLOCK_CONTENT_EXTRA_W = 12.0f;   // Slack added to a leaf
 static constexpr float CANVAS_BOTTOM_PAD     = 6.0f;    // Padding below the lowest route/label.
 static constexpr float TOOLTIP_MAX_WIDTH     = 300.0f;  // Max width of a metric tooltip.
 
+// Missing `order` sorts after any explicit value; stable_sort keeps declaration
+// order among siblings that omit the field.
+static constexpr int32_t UNSET_ORDER_SORT_KEY = 0x7fffffff;
+
 static constexpr const char* UNAVAILABLE_METRIC_TEXT = "N/A";
+
+static int32_t
+BlockOrderKey(int32_t order)
+{
+    return order < 0 ? UNSET_ORDER_SORT_KEY : order;
+}
+
+static bool
+BlockOrderLess(const MemChartBlock& a, const MemChartBlock& b)
+{
+    return BlockOrderKey(a.order) < BlockOrderKey(b.order);
+}
+
+static bool
+TopLevelBlockLess(const MemChartBlock& a, const MemChartBlock& b)
+{
+    if(a.column != b.column)
+    {
+        return a.column < b.column;
+    }
+    return BlockOrderLess(a, b);
+}
+
+static void
+SortNestedChildrenByOrder(std::vector<MemChartBlock>& blocks)
+{
+    for(MemChartBlock& block : blocks)
+    {
+        std::stable_sort(block.children.begin(), block.children.end(), BlockOrderLess);
+        SortNestedChildrenByOrder(block.children);
+    }
+}
+
+// Sort top-level blocks by (column, order) and nested children by `order`.
+// Must run before the id -> block index is built: in-place sort moves the
+// objects. ComputeLayout then only buckets pointers; it does not re-sort.
+static void
+SortLayoutBlocks(std::vector<MemChartBlock>& blocks)
+{
+    std::stable_sort(blocks.begin(), blocks.end(), TopLevelBlockLess);
+    SortNestedChildrenByOrder(blocks);
+}
 
 struct ChartColors
 {
@@ -510,9 +556,12 @@ ComputeMemoryChartView::LoadWorkloadLayout(uint32_t workload_id)
 void
 ComputeMemoryChartView::OnLayoutLoaded()
 {
+    // Sort by column/order before indexing: ComputeLayout and PositionBlock must
+    // not move these objects, or m_block_by_id pointers would dangle.
+    SortLayoutBlocks(m_layout.blocks);
+
     // Rebuild the id -> block index (pointers into m_layout, valid until the next
-    // layout load). Top-level blocks keep a stable address; nested children are
-    // re-sorted per frame during layout, but arrows only reference top-level ids.
+    // layout load). Nested ids are first-class arrow endpoints.
     m_block_by_id.clear();
     std::function<void(const std::vector<MemChartBlock>&)> index;
     index = [this, &index](const std::vector<MemChartBlock>& blocks) {
@@ -772,13 +821,8 @@ ComputeMemoryChartView::PositionBlock(MemChartBlock& block, float x, float y, fl
     box.h     = h;
     m_group_boxes.push_back(box);
 
-    std::stable_sort(block.children.begin(), block.children.end(),
-                     [](const MemChartBlock& a, const MemChartBlock& b) {
-                         int32_t ka = a.order < 0 ? 0x7fffffff : a.order;
-                         int32_t kb = b.order < 0 ? 0x7fffffff : b.order;
-                         return ka < kb;
-                     });
-
+    // Children were sorted once in OnLayoutLoaded; do not reorder the vector
+    // here — m_block_by_id holds pointers into it.
     float inner_x       = x + GROUP_PAD;
     float inner_w       = w - GROUP_PAD * 2.0f;
     float inner_room    = std::max(h - GROUP_HEADER - GROUP_PAD * 2.0f, 1.0f);
@@ -859,8 +903,8 @@ ComputeMemoryChartView::ComputeLayout(float available_width)
         }
     }
 
-    // Group TOP-LEVEL blocks by column, sorted by order. Nested blocks are laid
-    // out recursively inside their parent.
+    // Group top-level blocks by column. Sibling order was fixed in
+    // OnLayoutLoaded, so push_back order is already the stack order.
     std::map<int32_t, std::vector<MemChartBlock*>> columns;
     for(MemChartBlock& block : m_layout.blocks)
     {
@@ -872,12 +916,6 @@ ComputeMemoryChartView::ComputeLayout(float available_width)
     for(std::pair<const int32_t, std::vector<MemChartBlock*>>& column : columns)
     {
         std::vector<MemChartBlock*>& blocks = column.second;
-        std::stable_sort(blocks.begin(), blocks.end(),
-                         [](const MemChartBlock* a, const MemChartBlock* b) {
-                             int32_t ka = a->order < 0 ? 0x7fffffff : a->order;
-                             int32_t kb = b->order < 0 ? 0x7fffffff : b->order;
-                             return ka < kb;
-                         });
         float col_width = 0.0f;
         for(const MemChartBlock* block : blocks)
         {

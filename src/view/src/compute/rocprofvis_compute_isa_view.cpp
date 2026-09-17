@@ -566,7 +566,7 @@ BaseCodeWidget::BaseCodeWidget(LineSelection& selection)
     m_line_num_color = ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled);
 
     m_table_flags = ImGuiTableFlags_Resizable | ImGuiTableFlags_NoPadOuterX |
-        ImGuiTableFlags_BordersInnerV;
+        ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_ScrollY;
 }
 
 void
@@ -680,7 +680,7 @@ SourceCodeWidget::Render()
     if(!ImGui::BeginTable("SourceCode", columns_count, m_table_flags))
         return;
 
-    ImGui::TableSetupScrollFreeze(0, 0);
+    ImGui::TableSetupScrollFreeze(0, 1);
 
     ImGui::TableSetupColumn(
         "#", ImGuiTableColumnFlags_NoResize | ImGuiTableColumnFlags_WidthFixed,
@@ -887,6 +887,8 @@ IsaCodeWidget::Render()
 
     if(!ImGui::BeginTable("IsaCode", columns_count, m_table_flags))
         return;
+
+    ImGui::TableSetupScrollFreeze(0, 1);
 
     ImGui::TableSetupColumn(
         "#", ImGuiTableColumnFlags_NoResize | ImGuiTableColumnFlags_WidthFixed,

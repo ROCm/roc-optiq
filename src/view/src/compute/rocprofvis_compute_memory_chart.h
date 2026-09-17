@@ -80,6 +80,11 @@ private:
     // O(1) block lookup by id (backed by m_block_by_id).
     const MemChartBlock* Block(uint32_t id) const;
 
+    // Precompute which inter-column gaps an arrow crosses (m_gap_has_arrow). Only
+    // depends on block columns and arrow endpoints, so it runs on layout load
+    // rather than every frame.
+    void RebuildColumnGaps();
+
     void ComputeLayout(float available_width);
     void MeasureBlock(MemChartBlock& block) const;
     // Recursively assign geometry: `conn_left`/`conn_right` are the top-level
@@ -128,6 +133,11 @@ private:
     // Block-by-id index into m_layout, rebuilt on layout load; avoids scanning
     // the block tree on every arrow lookup each frame.
     std::unordered_map<uint32_t, const MemChartBlock*> m_block_by_id;
+
+    // For each inter-column gap (between ascending distinct columns), whether an
+    // arrow crosses it. Precomputed on layout load so ComputeLayout avoids an
+    // arrow-by-gap scan every frame.
+    std::vector<bool> m_gap_has_arrow;
 };
 
 }  // namespace View

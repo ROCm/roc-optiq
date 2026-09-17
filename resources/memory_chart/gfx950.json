@@ -20,17 +20,22 @@
             { "metric": "3.1.56", "title": "Hit", "category": "hit", "unit": "%" }
         ]},
 
-        { "id": 30, "column": 3, "order": 0, "title": "HBM", "content": [
+        { "id": 30, "column": 3, "title": "Data Fabric", "content": [] },
+        { "id": 31, "column": 4, "title": "MALL", "content": [] },
+        { "id": 32, "column": 5, "title": "UMC", "content": [] },
+
+        { "id": 33, "column": 6, "title": "HBM", "content": [
             { "metric": "3.1.69", "title": "Read BW",   "category": "read" },
             { "metric": "3.1.70", "title": "Write BW",  "category": "write" },
             { "metric": "3.1.71", "title": "Atomic BW", "category": "atomic" }
         ]},
-        { "id": 31, "column": 3, "order": 1, "title": "xGMI", "content": [
+
+        { "id": 34, "column": 7, "order": 0, "title": "xGMI", "content": [
             { "metric": "3.1.72", "title": "Read BW",   "category": "read" },
             { "metric": "3.1.73", "title": "Write BW",  "category": "write" },
             { "metric": "3.1.74", "title": "Atomic BW", "category": "atomic" }
         ]},
-        { "id": 32, "column": 3, "order": 2, "title": "PCIe", "content": [
+        { "id": 35, "column": 7, "order": 1, "title": "PCIe", "content": [
             { "metric": "3.1.75", "title": "Read BW",   "category": "read" },
             { "metric": "3.1.76", "title": "Write BW",  "category": "write" },
             { "metric": "3.1.77", "title": "Atomic BW", "category": "atomic" }

@@ -20,7 +20,7 @@
             { "metric": "3.1.52", "title": "Hit", "category": "hit", "unit": "%" }
         ]},
 
-        { "id": 30, "column": 3, "order": 0, "title": "Data Fabric", "content": [
+        { "id": 30, "column": 3, "title": "Data Fabric", "content": [
             { "metric": "3.1.61", "title": "HBM Rd",                   "category": "read" },
             { "metric": "3.1.62", "title": "HBM Wr",                   "category": "write" },
             { "metric": "3.1.63", "title": "HBM Read Traffic",         "category": "read" },
@@ -28,8 +28,9 @@
             { "metric": "3.1.65", "title": "Remote Read Traffic",      "category": "read" },
             { "metric": "3.1.66", "title": "Remote Wr+Atomic Traffic", "category": "write" }
         ]},
-        { "id": 31, "column": 3, "order": 1, "title": "MALL", "content": [] },
-        { "id": 32, "column": 3, "order": 2, "title": "UMC", "content": [] }
+        { "id": 31, "column": 4, "title": "MALL", "content": [] },
+        { "id": 32, "column": 5, "title": "UMC", "content": [] },
+        { "id": 33, "column": 6, "title": "HBM", "content": [] }
     ],
     "arrows": [
         { "from": 1, "to": 10, "direction": "backward", "metric": "3.1.16", "title": "Flat Read",     "category": "read" },

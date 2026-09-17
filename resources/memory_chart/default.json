@@ -20,7 +20,6 @@
         ]},
         { "id": 11, "column": 2, "order": 1, "title": "Vector L1 Cache", "content": [
             { "metric": "3.1.24", "title": "Hit", "unit": "%" },
-            { "metric": "3.1.25", "title": "Latency", "unit": "cycles" },
             { "metric": "3.1.26", "title": "Coalescing", "unit": "%" },
             { "metric": "3.1.27", "title": "Stall", "unit": "cycles" }
         ]},
@@ -36,9 +35,7 @@
             { "metric": "3.1.41", "title": "Rd" },
             { "metric": "3.1.42", "title": "Wr" },
             { "metric": "3.1.43", "title": "Atomic" },
-            { "metric": "3.1.44", "title": "Hit", "unit": "%" },
-            { "metric": "3.1.45", "title": "Rd Latency", "unit": "cycles" },
-            { "metric": "3.1.46", "title": "Wr Latency", "unit": "cycles" }
+            { "metric": "3.1.44", "title": "Hit", "unit": "%" }
         ]},
         { "id": 30, "column": 4, "order": 0, "title": "xGMI / PCIe", "content": [] },
         { "id": 31, "column": 4, "order": 1, "title": "Fabric", "content": [

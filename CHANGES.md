@@ -32,16 +32,14 @@ Documentation for ROCm Optiq is available at [https://rocm.docs.amd.com/projects
 
 ### Resolved Issues
 
-- Fixed an incorrect table row count when a fetch was cancelled and then re-issued (the table-processor cache is now invalidated on cancel).
-- Fixed FILTER dropping leftover merged-table rows when the row count was not divisible by the worker count.
-- Fixed memory-chart values exceeding 100%: metric definitions are now bound to their real entry id instead of their row position.
+- Fixed incorrect table row count and missing rows under specific scenarios.
+- Fixed memory-chart values exceeding 100% (schema 2.0.0 or higher)
 - Memory manager: fixed intermittent crashes, permanent pool retention, and unbounded memory growth from stranded pooled objects.
 - Fixed the UI rendering at half size on HiDPI Linux (XWayland) displays.
 - Fixed the description-column resize panning the timeline.
 - Fixed timeline tracks flickering during fast vertical scroll.
 - Fixed a crash opening a compute `.db` when a roofline ceiling category is empty (uncaught `std::out_of_range`); the Roofline tab now shows "No data available."
 - Fixed a crash in Baseline Comparison when a kernel with a non-finite (Inf) metric is compared to itself.
-- Added a virtual destructor to `TrackOptions`.
 - Fixed the version number reported by the Windows installer.
 - Fixed topology node order inconsitent between target environments.
 - Fixed memory chart layout / metrics for gfx950 and gfx940 series.

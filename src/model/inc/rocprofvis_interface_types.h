@@ -503,6 +503,8 @@ typedef enum rocprofvis_db_compute_column_enum_t
     kRPVComputeColumnKernelDurationsMedian,
     kRPVComputeColumnKernelDurationsMin,
     kRPVComputeColumnKernelDurationsMax,
+    // kRPVComputeColumnKernelHasIsaLines is appended below to preserve the
+    // numeric values of this public enum.
 
     kRPVComputeColumnRooflineTotalFlops,
     kRPVComputeColumnRooflineL1CacheData,
@@ -576,6 +578,8 @@ typedef enum rocprofvis_db_compute_column_enum_t
     kRPVComputeColumnPcSamplingInstructionSampleLookupRecordUuid,
     kRPVComputeColumnPcSamplingInstructionSampleLookupText,
     kRPVComputeColumnPcSamplingInstructionSourceLineSourceFileUuid,
+
+    kRPVComputeColumnKernelHasIsaLines,
 } rocprofvis_db_compute_column_enum_t;
 
 // Compute database query use case enumerations

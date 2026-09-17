@@ -24,6 +24,7 @@ namespace View
 class SourceCodeWidget;
 class IsaCodeWidget;
 class DataProvider;
+struct TabItem;
 enum class PcSamplingLayer : uint32_t;
 
 struct LineSelection
@@ -34,6 +35,7 @@ struct LineSelection
     uint64_t source_scroll_line = UNSELECTED;
     uint64_t source_scroll_file = UNSELECTED;
     uint64_t isa_scroll_line    = UNSELECTED;
+    bool     hovered_this_frame = false;
 };
 
 struct FetchStateType
@@ -75,6 +77,13 @@ struct SourcePane : FetchStateType
 class ComputeIsaView : public RocWidget
 {
 public:
+    static constexpr const char* TAB_ID = "isa_view";
+    static constexpr const char* DISABLED_TOOLTIP =
+        "This database file has no ISA lines, so ISA View is inactive.";
+
+    static TabItem CreateTabItem(DataProvider& data_provider);
+    static TabItem CreateTabItem(DataProvider& data_provider, bool has_isa_lines);
+
     explicit ComputeIsaView(DataProvider& data_provider);
     ~ComputeIsaView();
 
@@ -150,9 +159,6 @@ protected:
 
     SettingsManager& m_settings;
     ImGuiTableFlags  m_table_flags;
-
-    ImU32  m_selected_colour;
-    ImU32  m_hovered_colour;
 
     ImVec4 m_line_num_color;
 };

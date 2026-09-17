@@ -18,6 +18,12 @@ struct WorkloadInfo;
 class ComputeWorkloadView : public RocWidget
 {
 public:
+    static constexpr const char* TAB_ID = "compute_workload_view";
+
+    static TabItem CreateTabItem(
+        DataProvider& data_provider,
+        const std::shared_ptr<ComputeSelection>& compute_selection);
+
     ComputeWorkloadView(DataProvider&                     data_provider,
                         std::shared_ptr<ComputeSelection> compute_selection);
     ~ComputeWorkloadView();

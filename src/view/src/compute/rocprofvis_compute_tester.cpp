@@ -13,6 +13,16 @@ namespace RocProfVis
 namespace View
 {
 
+TabItem
+ComputeTester::CreateTabItem(
+    DataProvider& data_provider,
+    const std::shared_ptr<ComputeSelection>& compute_selection)
+{
+    return RocWidget::CreateTabItem(
+        "Compute Tester", TAB_ID,
+        std::make_shared<ComputeTester>(data_provider, compute_selection));
+}
+
 ComputeTester::ComputeTester(DataProvider& data_provider, std::shared_ptr<ComputeSelection> compute_selection)
 : m_data_provider(data_provider)
 , m_compute_selection(compute_selection)

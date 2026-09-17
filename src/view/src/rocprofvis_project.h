@@ -36,6 +36,8 @@ public:
     Project();
     virtual ~Project();
 
+    friend struct ProjectTestPeer;
+
     /*
      * Returns the ID of the project.
      * (Internally this is the trace path)

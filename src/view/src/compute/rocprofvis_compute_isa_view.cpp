@@ -7,6 +7,7 @@
 #include "rocprofvis_events.h"
 #include "rocprofvis_font_manager.h"
 #include "rocprofvis_requests.h"
+#include "widgets/rocprofvis_tab_container.h"
 #include "spdlog/spdlog.h"
 
 #include <algorithm>
@@ -21,6 +22,27 @@ namespace View
 
 constexpr uint64_t INVALID_SOURCE_LINE_NUMBER = 0;
 constexpr uint32_t NO_SCROLL_TARGET = 0;
+
+TabItem
+ComputeIsaView::CreateTabItem(DataProvider& data_provider)
+{
+    return RocWidget::CreateTabItem(
+        "ISA View", TAB_ID, std::make_shared<ComputeIsaView>(data_provider));
+}
+
+TabItem
+ComputeIsaView::CreateTabItem(DataProvider& data_provider, bool has_isa_lines)
+{
+    if(has_isa_lines)
+    {
+        return CreateTabItem(data_provider);
+    }
+
+    TabItem tab = RocWidget::CreateTabItem("ISA View", TAB_ID, nullptr);
+    tab.m_enabled          = false;
+    tab.m_disabled_tooltip = DISABLED_TOOLTIP;
+    return tab;
+}
 
 ComputeIsaView::ComputeIsaView(DataProvider& data_provider)
 : RocWidget()
@@ -125,6 +147,12 @@ ComputeIsaView::LoadData(uint32_t kernel_id)
     if(!kernel_info)
     {
         m_current_workload_id = ComputeSelection::INVALID_SELECTION_ID;
+        CancelInFlightFetches();
+        ClearSelectionData();
+        return;
+    }
+    if(!kernel_info->has_isa_lines)
+    {
         CancelInFlightFetches();
         ClearSelectionData();
         return;
@@ -404,7 +432,10 @@ ComputeIsaView::Render()
 
     ImGui::PushFont(m_settings.GetFontManager().GetFont(FontType::kCode), 0.0f);
 
+    m_line_selection.hovered_this_frame = false;
     m_horizontal_split_container->Render();
+    if(!m_line_selection.hovered_this_frame)
+        m_line_selection.hovered_line = LineSelection::UNSELECTED;
 
     ImGui::PopFont();
 }
@@ -532,14 +563,10 @@ BaseCodeWidget::BaseCodeWidget(LineSelection& selection)
 : m_line_selection(selection)
 , m_settings(SettingsManager::GetInstance())
 {
-    m_selected_colour =
-        ImGui::GetColorU32(m_settings.GetColor(Colors::kSelection));
-    m_hovered_colour  =
-        ImGui::GetColorU32(m_settings.GetColor(Colors::kHighlightChart));
     m_line_num_color = ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled);
 
     m_table_flags = ImGuiTableFlags_Resizable | ImGuiTableFlags_NoPadOuterX |
-        ImGuiTableFlags_BordersInnerV;
+        ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_ScrollY;
 }
 
 void
@@ -559,11 +586,11 @@ BaseCodeWidget::PushStyles()
     ImGui::PushStyleVar(ImGuiStyleVar_CellPadding,
                         ImVec2(ImGui::GetStyle().CellPadding.x, 0.0f));
 
-    ImGui::PushStyleColor(ImGuiCol_Header, m_settings.GetColor(Colors::kSelection));
+    ImGui::PushStyleColor(ImGuiCol_Header, m_settings.GetColor(Colors::kTransparent));
     ImGui::PushStyleColor(ImGuiCol_HeaderHovered,
-                          m_settings.GetColor(Colors::kHighlightChart));
+                          m_settings.GetColor(Colors::kTransparent));
     ImGui::PushStyleColor(ImGuiCol_HeaderActive,
-                          m_settings.GetColor(Colors::kHighlightChart));
+                          m_settings.GetColor(Colors::kTransparent));
 }
 
 //----------------------------------------------------------------
@@ -653,7 +680,7 @@ SourceCodeWidget::Render()
     if(!ImGui::BeginTable("SourceCode", columns_count, m_table_flags))
         return;
 
-    ImGui::TableSetupScrollFreeze(0, 0);
+    ImGui::TableSetupScrollFreeze(0, 1);
 
     ImGui::TableSetupColumn(
         "#", ImGuiTableColumnFlags_NoResize | ImGuiTableColumnFlags_WidthFixed,
@@ -713,27 +740,37 @@ SourceCodeWidget::GetScrollTarget(ImGuiListClipper& clipper)
 void
 SourceCodeWidget::RenderLine(uint32_t index, uint32_t columns_count)
 {
-    const SourceRow& source_row = m_lines[index];
-    const uint64_t display_num = source_row.line_number;
+    const SourceRow& source_row  = m_lines[index];
+    const uint64_t   display_num = source_row.line_number;
+    const bool row_selected = source_row.id != 0 &&
+                              source_row.id == m_line_selection.selected_line;
+    const bool row_hovered = source_row.id != 0 &&
+                             source_row.id == m_line_selection.hovered_line;
 
     ImGui::TableNextRow();
 
     ImGui::TableSetColumnIndex(0);
     ImGui::PushID(static_cast<int>(source_row.id));
-    if(ImGui::Selectable("##row", source_row.id == m_line_selection.selected_line,
+    if(ImGui::Selectable("##row", row_selected,
                          ImGuiSelectableFlags_SpanAllColumns,
                          ImVec2(0.0f, ImGui::GetTextLineHeight())))
     {
         m_line_selection.selected_line = source_row.id;
         m_line_selection.isa_scroll_line = source_row.id;
     }
-    if(ImGui::IsItemHovered()) m_line_selection.hovered_line = source_row.id;
+    const bool item_hovered = ImGui::IsItemHovered();
+    if(item_hovered)
+    {
+        m_line_selection.hovered_line       = source_row.id;
+        m_line_selection.hovered_this_frame = true;
+    }
 
-    if(source_row.id == m_line_selection.selected_line)
-        ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0, m_selected_colour);
-    else if(source_row.id == m_line_selection.hovered_line &&
-            m_line_selection.hovered_line != 0)
-        ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0, m_hovered_colour);
+    if(row_selected)
+        ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0,
+                               m_settings.GetColor(Colors::kSelection));
+    else if(item_hovered || row_hovered)
+        ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0,
+                               m_settings.GetColor(Colors::kHighlightChart));
 
     ImGui::SameLine(0.0f, 0.0f);
     ImGui::PopID();
@@ -851,6 +888,8 @@ IsaCodeWidget::Render()
     if(!ImGui::BeginTable("IsaCode", columns_count, m_table_flags))
         return;
 
+    ImGui::TableSetupScrollFreeze(0, 1);
+
     ImGui::TableSetupColumn(
         "#", ImGuiTableColumnFlags_NoResize | ImGuiTableColumnFlags_WidthFixed,
         m_line_num_width);
@@ -921,11 +960,6 @@ IsaCodeWidget::RenderLine(uint32_t index, uint32_t columns_count)
 
     ImGui::TableNextRow();
 
-    if(row_selected)
-        ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0, m_selected_colour);
-    else if(row_hovered && m_line_selection.hovered_line != 0)
-        ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0, m_hovered_colour);
-
     int column = 0;
     ImGui::TableSetColumnIndex(column);
     ImGui::PushID(static_cast<int>(isa_row.id));
@@ -939,10 +973,19 @@ IsaCodeWidget::RenderLine(uint32_t index, uint32_t columns_count)
             m_line_selection.source_scroll_file = isa_row.source_file_id;
         }
     }
-    if(ImGui::IsItemHovered())
+    const bool item_hovered = ImGui::IsItemHovered();
+    if(item_hovered)
     {
-        m_line_selection.hovered_line = isa_row.source_line_id;
+        m_line_selection.hovered_line       = isa_row.source_line_id;
+        m_line_selection.hovered_this_frame = true;
     }
+
+    if(row_selected)
+        ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0,
+                               m_settings.GetColor(Colors::kSelection));
+    else if(item_hovered || row_hovered)
+        ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0,
+                               m_settings.GetColor(Colors::kHighlightChart));
 
     ImGui::SameLine(0.0f, 0.0f);
     ImGui::PopID();

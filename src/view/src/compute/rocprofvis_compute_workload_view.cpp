@@ -17,6 +17,16 @@ namespace RocProfVis
 namespace View
 {
 
+TabItem
+ComputeWorkloadView::CreateTabItem(
+    DataProvider& data_provider,
+    const std::shared_ptr<ComputeSelection>& compute_selection)
+{
+    return RocWidget::CreateTabItem(
+        "Workload Details", TAB_ID,
+        std::make_shared<ComputeWorkloadView>(data_provider, compute_selection));
+}
+
 ComputeWorkloadView::ComputeWorkloadView(
     DataProvider& data_provider, std::shared_ptr<ComputeSelection> compute_selection)
 : RocWidget()

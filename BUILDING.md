@@ -232,6 +232,16 @@ cmake --build build/macos-release --preset "macOS Release Build" --parallel 4
 
 ---
 
+## Systems trace comparison
+
+Systems-trace comparison (File > Compare, combined A/B timeline) is opt-in
+and **disabled by default** (the feature is in development). Enable it at
+configure time with `-DROCPROFVIS_ENABLE_TRACE_COMPARE=ON`. When the option
+is off, the Compare menu item and dialog are omitted, compare `.rpv`
+projects refuse to open, and `rocprofvis_controller_alloc_compare` is not
+in the controller ABI. Developer mode (`ROCPROFVIS_DEVELOPER_MODE`) does
+not enable this feature.
+
 ## Agentic profiling (Ask Optiq)
 
 The in-app assistant is opt-in and **disabled by default** (the feature set is

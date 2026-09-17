@@ -67,6 +67,7 @@ public:
      * duplicate's tab.
      */
     OpenResult Open(std::string& file_path);
+#ifdef ROCPROFVIS_ENABLE_TRACE_COMPARE
     /*
      * Opens two or more trace files as a single combined compare project. The traces
      * overlay on one timeline and each track is tagged with its source (A, B, ...).
@@ -76,6 +77,7 @@ public:
      */
     OpenResult OpenCompare(const std::string&              project_id,
                            const std::vector<std::string>& file_paths);
+#endif
     /*
      * Overwrites the project settings to the project file without further user input.
      */
@@ -128,9 +130,11 @@ private:
     std::string                m_name;
     std::string                m_project_file_path;
     std::string                m_trace_file_path;
+#ifdef ROCPROFVIS_ENABLE_TRACE_COMPARE
     // Source trace files when this is a compare project (empty otherwise). Persisted to
     // the .rpv so the compare can be reopened.
     std::vector<std::string>   m_compare_files;
+#endif
     TraceType                  m_trace_type;
     std::shared_ptr<RocWidget> m_view;
     std::list<ProjectSetting*> m_settings;

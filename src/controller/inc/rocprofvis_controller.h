@@ -20,6 +20,10 @@ extern "C"
 rocprofvis_controller_t* rocprofvis_controller_alloc(char const* const filename, char const* const config_path);
 
 /*
+* TEMPORARY (trace compare): remove this guard when the feature graduates.
+*/
+#ifdef ROCPROFVIS_ENABLE_TRACE_COMPARE
+/*
 * Create a system controller that loads several trace files as one combined trace.
 * Used by the Compare feature so two (or more) traces overlay on a single timeline; each
 * file's tracks are tagged with its source instance index (see kRPVControllerTrackInstanceId).
@@ -29,6 +33,7 @@ rocprofvis_controller_t* rocprofvis_controller_alloc(char const* const filename,
 */
 rocprofvis_controller_t* rocprofvis_controller_alloc_compare(char const* const* filenames,
                                                              uint64_t           count);
+#endif
 
 /*
 * Loads the file into the controller or returns an error.

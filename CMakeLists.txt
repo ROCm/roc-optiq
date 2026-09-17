@@ -111,8 +111,6 @@ find_package(Vulkan REQUIRED)
 set(VIEW_FILES
     src/view/src/rocprofvis_appwindow.cpp
     src/view/src/rocprofvis_appwindow.h
-    src/view/src/rocprofvis_compare_files_dialog.cpp
-    src/view/src/rocprofvis_compare_files_dialog.h
     src/view/src/rocprofvis_compare_panes.cpp
     src/view/src/rocprofvis_compare_panes.h
     src/view/src/welcome/rocprofvis_welcome_page.cpp
@@ -194,6 +192,16 @@ set(VIEW_FILES
     src/view/src/widgets/rocprofvis_compute_widget.cpp
     src/view/src/widgets/rocprofvis_query_builder.cpp
 )
+
+# TEMPORARY (trace compare): compare-files dialog. Remove this guard when the
+# feature graduates. Compare pane chrome stays in the always-built view because
+# it is woven into AnalysisView / EventsView / TrackDetails.
+if(ROCPROFVIS_ENABLE_TRACE_COMPARE)
+list(APPEND VIEW_FILES
+    src/view/src/rocprofvis_compare_files_dialog.cpp
+    src/view/src/rocprofvis_compare_files_dialog.h
+)
+endif(ROCPROFVIS_ENABLE_TRACE_COMPARE)
 
 # SecretStore is shared: SSH passwords need it, and so does the assistant's API
 # token, so it is compiled when either feature is on and left out otherwise.

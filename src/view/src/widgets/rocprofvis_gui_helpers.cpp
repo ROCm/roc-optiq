@@ -22,6 +22,18 @@ namespace View
 // 1:1; ImGui's DPI font scaling then scales them via ImGui::GetFontSize().
 constexpr float BASE_DESIGN_FONT_SIZE = 13.0f;
 
+// Label colors for text drawn directly on a data fill (event bars, chart
+// blocks). Deliberately not themed: legibility there is a property of the fill
+// underneath, not of light/dark mode, and the event palettes span a wide
+// luminance range in both themes.
+constexpr ImU32 ON_FILL_TEXT_LIGHT = IM_COL32(248, 249, 252, 255);
+constexpr ImU32 ON_FILL_TEXT_DARK  = IM_COL32(18, 20, 24, 255);
+// Rec. 709 luma weights, matching the timeline histogram's greyscale pass.
+constexpr float ON_FILL_LUMA_WEIGHT_R = 0.299f;
+constexpr float ON_FILL_LUMA_WEIGHT_G = 0.587f;
+constexpr float ON_FILL_LUMA_WEIGHT_B = 0.114f;
+constexpr float ON_FILL_LUMA_THRESHOLD = 0.55f;
+
 namespace
 {
 int
@@ -176,6 +188,15 @@ ApplyAlpha(ImU32 color, float alpha)
     ImVec4 rgba = ImGui::ColorConvertU32ToFloat4(color);
     rgba.w      = std::clamp(alpha, 0.0f, 1.0f);
     return ImGui::ColorConvertFloat4ToU32(rgba);
+}
+
+ImU32
+ContrastingTextColor(ImU32 fill)
+{
+    ImVec4      rgba = ImGui::ColorConvertU32ToFloat4(fill);
+    const float luma = ON_FILL_LUMA_WEIGHT_R * rgba.x + ON_FILL_LUMA_WEIGHT_G * rgba.y +
+                       ON_FILL_LUMA_WEIGHT_B * rgba.z;
+    return (luma > ON_FILL_LUMA_THRESHOLD) ? ON_FILL_TEXT_DARK : ON_FILL_TEXT_LIGHT;
 }
 
 ImVec4

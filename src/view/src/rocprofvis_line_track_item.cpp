@@ -20,7 +20,12 @@ namespace View
 {
 
 constexpr float DEFAULT_VERTICAL_PADDING = 2.0f;
-constexpr float DEFAULT_LINE_THICKNESS   = 1.0f;
+constexpr float DEFAULT_LINE_THICKNESS   = 1.5f;
+// The curve is stroked in the area fill's own color, which is translucent so
+// the fill does not bury the grid behind it. Forcing the stroke opaque is what
+// gives the plot a defined upper edge instead of a soft wash.
+constexpr float LINE_CHART_OUTLINE_ALPHA = 1.0f;
+constexpr float HOVER_LINE_THICKNESS     = 3.0f;
 
 constexpr float Y_AXIS_TICK_MARK_LENGTH     = 4.0f;
 constexpr float Y_AXIS_TICK_LABEL_GAP       = 8.0f;
@@ -165,7 +170,7 @@ LineTrackItem::BoxPlotRender(float graph_width)
     ImU32 base_fill_color   = m_settings.GetColor(Colors::kLineChartColor);
     ImU32 alt_fill_color    = m_settings.GetColor(Colors::kLineChartColorAlt);
     ImU32 transparent_color = m_settings.GetColor(Colors::kTransparent);
-    ImU32 outline_color     = alt_fill_color;
+    ImU32 outline_color = ApplyAlpha(alt_fill_color, LINE_CHART_OUTLINE_ALPHA);
     ImU32 accent            = m_settings.GetColor(Colors::kAccent);
 
     // Grid lines behind the data, matching the meta-area ticks.
@@ -270,8 +275,7 @@ LineTrackItem::BoxPlotRender(float graph_width)
         draw_list->AddCircle(start_point, 4.0f, accent, 12, 3);
 
         // Draw a line from start to end
-        draw_list->AddLine(start_point, end_point, accent,
-                           DEFAULT_LINE_THICKNESS * 3);
+        draw_list->AddLine(start_point, end_point, accent, HOVER_LINE_THICKNESS);
     }
 
     ImGui::EndChild();

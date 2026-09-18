@@ -617,11 +617,14 @@ FlameTrackItem::DrawBox(ImVec2 start_position, ChartItem& chart_item, float dura
                 : chart_item.event.m_name;
         const float text_y  = rectMin.y + m_text_vertical_offset;
         ImVec2      textPos = ImVec2(rectMin.x + m_text_padding.x, text_y);
+        // Derived from the bar rather than the theme: the highlight palette runs
+        // from deep blue to near-white yellow, so a single themed label color is
+        // unreadable on part of the range whichever end it is picked from.
+        const ImU32 label_color = ContrastingTextColor(rectColor);
 
         if(chart_item.event.m_child_count > 1)
         {
-            draw_list->AddText(textPos, m_settings.GetColor(Colors::kTextMain),
-                               label.c_str());
+            draw_list->AddText(textPos, label_color, label.c_str());
         }
         else
         {
@@ -632,14 +635,12 @@ FlameTrackItem::DrawBox(ImVec2 start_position, ChartItem& chart_item, float dura
                 // the text at the viewport edge to maintain readability.
                 textPos =
                     ImVec2(draw_list->GetClipRectMin().x + m_text_padding.x, text_y);
-                draw_list->AddText(textPos, m_settings.GetColor(Colors::kTextMain),
-                                   label.c_str());
+                draw_list->AddText(textPos, label_color, label.c_str());
             }
             else
             {
                 // The rectangle is fully inside the viewport, render text normally.
-                draw_list->AddText(textPos, m_settings.GetColor(Colors::kTextMain),
-                                   label.c_str());
+                draw_list->AddText(textPos, label_color, label.c_str());
             }
         }
         draw_list->PopClipRect();

@@ -56,6 +56,14 @@ RenderLoadingIndicator(ImU32 color, const char* window_id = nullptr,
 ImU32
 ApplyAlpha(ImU32 color, float alpha);
 
+/**
+ * Returns the label color that stays legible when drawn on top of an arbitrary
+ * fill. Use for text rendered over event bars or chart blocks, where the fill
+ * comes from a data palette and can be anywhere from near-black to near-white.
+ */
+ImU32
+ContrastingTextColor(ImU32 fill);
+
 ImVec4
 ThemeColor(SettingsManager& settings, Colors color, float alpha = 1.0f);
 

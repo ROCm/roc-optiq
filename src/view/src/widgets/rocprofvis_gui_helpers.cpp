@@ -35,6 +35,29 @@ StringResizeCallback(ImGuiInputTextCallbackData* data)
     }
     return 0;
 }
+
+// Byte length of the UTF-8 sequence at `begin` (from the lead byte), clamped to
+// `end`. Returns >= 1 when begin < end so callers always advance.
+size_t
+Utf8SequenceLength(const char* begin, const char* end)
+{
+    if(begin >= end)
+    {
+        return 0;
+    }
+    const unsigned char lead = static_cast<unsigned char>(*begin);
+    size_t              len  = 1;
+    if((lead & 0x80u) == 0x00u)  // 0xxxxxxx
+        len = 1;
+    else if((lead & 0xE0u) == 0xC0u)  // 110xxxxx
+        len = 2;
+    else if((lead & 0xF0u) == 0xE0u)  // 1110xxxx
+        len = 3;
+    else if((lead & 0xF8u) == 0xF0u)  // 11110xxx
+        len = 4;
+    // A continuation/invalid lead byte falls through as a single byte.
+    return std::min(len, static_cast<size_t>(end - begin));
+}
 }  // namespace
 
 bool
@@ -473,10 +496,10 @@ ElideWithEllipsis(const std::string& text, float max_width, size_t max_chars)
     {
         truncated = true;
     }
-    // Keep at least one character so a shortened value is not just the ellipsis.
+    // Keep at least one whole codepoint so a multibyte character is never split.
     if(remaining == begin && end > begin)
     {
-        remaining = begin + 1;
+        remaining = begin + Utf8SequenceLength(begin, end);
     }
 
     std::string out(begin, remaining);

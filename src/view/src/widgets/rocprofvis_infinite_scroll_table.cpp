@@ -103,6 +103,8 @@ InfiniteScrollTable::InfiniteScrollTable(
         (void) e;
         // Reformat time columns
         this->FormatData();
+        // Grow columns next render so longer timestamps are not left elided.
+        m_grow_pending = true;
     };
     m_format_changed_token = EventManager::GetInstance()->Subscribe(
         static_cast<int>(RocEvents::kTimeFormatChanged), format_changed_handler);
@@ -480,6 +482,22 @@ InfiniteScrollTable::Render()
                     ImGui::TableSetupColumn(column_names[i].c_str(), col_flags);
                 }
 
+                // Fit before TableGetSortSpecs()/TableHeadersRow() lock the layout
+                // so the capped width lands this frame instead of flashing ImGui's
+                // uncapped auto-fit. Detect resizes first so the fit skips them.
+                DetectUserColumnResizes();
+                if(m_refit_pending)
+                {
+                    FitColumnsToContent(false);  // fresh fit (may shrink)
+                    m_refit_pending = false;
+                    m_grow_pending  = false;
+                }
+                else if(m_grow_pending)
+                {
+                    FitColumnsToContent(true);  // scroll page-in: grow only
+                    m_grow_pending = false;
+                }
+
                 // Sorting is off while a request is in flight, and the specs of a
                 // table that cannot sort ignore this, so hold it until it can land.
                 if(m_pending_sort && (table_flags & ImGuiTableFlags_Sortable))
@@ -522,21 +540,6 @@ InfiniteScrollTable::Render()
                 }
 
                 ImGui::TableHeadersRow();
-
-                // Note manual resizes before re-fitting so it skips user-sized columns.
-                DetectUserColumnResizes();
-
-                if(m_refit_pending)
-                {
-                    FitColumnsToContent(false);  // fresh fit (may shrink)
-                    m_refit_pending = false;
-                    m_grow_pending  = false;
-                }
-                else if(m_grow_pending)
-                {
-                    FitColumnsToContent(true);  // scroll page-in: grow only
-                    m_grow_pending = false;
-                }
 
                 if(m_display_filter_row)
                 {
@@ -903,6 +906,12 @@ InfiniteScrollTable::FitColumnsToContent(bool grow_only)
                 value = &formatting->formatted_row_value[row];
             }
             content = std::max(content, ImGui::CalcTextSize(value->c_str()).x);
+            // Width is clamped to max_width; once we hit it no later row can widen
+            // the column, so stop (and skip CalcTextSize on long names).
+            if(content + padding >= max_width)
+            {
+                break;
+            }
         }
 
         const float width = std::min(std::max(content + padding, min_width), max_width);

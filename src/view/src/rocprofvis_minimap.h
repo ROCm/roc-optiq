@@ -64,6 +64,7 @@ private:
 
     EventManager::SubscriptionToken m_track_metadata_token;
     EventManager::SubscriptionToken m_track_visibility_token;
+    EventManager::SubscriptionToken m_theme_changed_token;
 };
 
 }  // namespace View

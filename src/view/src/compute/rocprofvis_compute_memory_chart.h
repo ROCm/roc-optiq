@@ -3,6 +3,7 @@
 
 #pragma once
 #include "model/compute/rocprofvis_memory_chart_model.h"
+#include "rocprofvis_event_manager.h"
 
 #include <cstdint>
 #include <memory>
@@ -77,6 +78,23 @@ private:
     // Recompute the cached label/value strings for every content item and arrow
     // from the currently-resolved metrics (on layout load and on metric fetch).
     void RefreshMetricStrings();
+    // Snapshot the memory-chart palette from SettingsManager. Called on
+    // construction and on kThemeChanged.
+    void RefreshPalette();
+    // Map each item/arrow's cached_color_kind through the current palette into
+    // cached_color. Called after RefreshMetricStrings and on theme change.
+    void RefreshCachedColors();
+    uint32_t ColorFromKind(MemChartColorKind kind) const;
+
+    void DrawBlockRect(ImDrawList* draw_list, ImVec2 top_left, ImVec2 bottom_right);
+    float DrawBlockHeader(ImDrawList* draw_list, const char* title, float block_x,
+                          float block_y, float block_w);
+    void DrawFloatingLabel(ImDrawList* draw_list, ImVec2 pos, const char* text,
+                           uint32_t accent_color);
+    void DrawGroupBox(ImDrawList* draw_list, ImVec2 top_left, float w, float h,
+                      const char* title);
+    void DrawLegend(ImDrawList* draw_list, ImVec2 origin, float y);
+
     // O(1) block lookup by id (backed by m_block_by_id).
     const MemChartBlock* Block(uint32_t id) const;
 
@@ -120,6 +138,28 @@ private:
     std::shared_ptr<ComputeSelection> m_compute_selection;
 
     uint64_t m_client_id;
+
+    struct ChartColors
+    {
+        uint32_t bg         = 0;
+        uint32_t panel      = 0;
+        uint32_t panel_alt  = 0;
+        uint32_t border     = 0;
+        uint32_t border_hot = 0;
+        uint32_t text_main  = 0;
+        uint32_t text_dim   = 0;
+        uint32_t read       = 0;
+        uint32_t write      = 0;
+        uint32_t atomic     = 0;
+        uint32_t util       = 0;
+        uint32_t hit        = 0;
+        uint32_t stall      = 0;
+        uint32_t shadow     = 0;
+    };
+    ChartColors m_colors;
+
+    EventManager::SubscriptionToken m_theme_changed_token =
+        EventManager::InvalidSubscriptionToken;
 
     MemChartLayout m_layout;
 

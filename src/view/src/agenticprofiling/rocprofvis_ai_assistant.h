@@ -160,6 +160,11 @@ private:
     // The trace the turn started on, which is what catches the user switching
     // tabs mid-investigation.
     std::string m_turn_project_id;
+    // Which kind of trace that was. Pinned rather than read per round, because
+    // the prompt and the tool schema both key off it: re-reading it would swap
+    // the model's whole tool set mid-turn, mid-conversation, with the transcript
+    // still full of calls to tools it no longer has.
+    bool        m_turn_is_compute;
     // The trace the briefing in the conversation describes. A follow-up about
     // the same trace does not repeat it; a different one does.
     std::string m_briefed_project_id;

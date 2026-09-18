@@ -59,9 +59,27 @@ AssistantToolTable GetAssistantUiToolHandlers();
 AssistantToolTable GetAssistantDataToolHandlers();
 AssistantToolTable GetAssistantScriptToolHandlers();
 
+// The compute reads, searched instead of the data table on a compute trace.
+// Nothing in here touches TraceDataModel, which is empty on such a trace.
+AssistantToolTable GetAssistantComputeToolHandlers();
+
+// The handful of UI tools that mean the same thing on either kind of trace, so
+// a compute turn is not left unable to answer "switch to my other trace". Kept
+// apart from the full UI table because most of that table drives a timeline.
+AssistantToolTable GetAssistantSharedUiToolHandlers();
+
 // Formats a finished script run, or the decision that stopped it. Reached
 // through FinishAssistantFetch like every other fetch kind.
 std::string FinishAssistantScriptFetch(const AssistantToolContext& context);
+
+// Formats the compute metric values that just landed in the assistant's store.
+// Reached through FinishAssistantFetch like every other fetch kind.
+std::string FinishAssistantComputeFetch(const AssistantToolContext& context,
+                                        const AssistantFetchState&  fetch);
+
+// The compute half of the briefing. Lives beside the compute tools so the
+// system data tools carry none of it.
+std::string BuildAssistantComputeBriefing(const AssistantToolContext& context);
 
 // --- Helpers both halves need, defined beside the dispatcher ---------------
 

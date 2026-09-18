@@ -16,6 +16,7 @@
 #include "imgui.h"
 #include "spdlog/spdlog.h"
 
+#include "compute/rocprofvis_compute_view.h"
 #include "icons/rocprovfis_icon_defines.h"
 #include "model/rocprofvis_summary_model.h"
 #include "rocprofvis_ai_prompts.h"
@@ -108,6 +109,7 @@ AssistantPanel::AssistantPanel()
 , m_tool_round(0)
 , m_force_final(false)
 , m_fetch_retries(0)
+, m_turn_is_compute(false)
 {
     m_widget_name = GenUniqueName("AssistantPanel");
 }
@@ -208,6 +210,17 @@ AssistantPanel::MakeToolContext() const
             context.timeline_selection = trace_view->GetTimelineSelection().get();
         }
     }
+    else if(project->GetTraceType() == Project::Compute)
+    {
+        // A compute trace has no timeline, so what stands in for "where the
+        // user is looking" is the workload and kernel the toolbar combos
+        // picked. The tools read it and never set it.
+        ComputeView* compute_view = dynamic_cast<ComputeView*>(project->GetView().get());
+        if(compute_view != nullptr)
+        {
+            context.compute_selection = compute_view->GetComputeSelection();
+        }
+    }
     return context;
 }
 
@@ -225,16 +238,26 @@ AssistantPanel::CurrentProjectId() const
 std::string
 AssistantPanel::BuildUserPrompt(const std::string& question, bool include_briefing) const
 {
+    const AssistantToolContext context = MakeToolContext();
+
     std::ostringstream out;
     if(include_briefing)
     {
         out << "Briefing for the current Optiq view:\n";
-        out << BuildAssistantBriefing(MakeToolContext());
+        out << BuildAssistantBriefing(context);
         out << "\n";
     }
     if(!question.empty())
     {
         out << "User question:\n" << question << "\n";
+    }
+    else if(context.is_compute)
+    {
+        // Names the free tools, so the button costs one cheap round rather than
+        // a metric query the user did not ask for.
+        out << "Explain this view. Call compute_overview and kernel_roofline so the "
+               "explanation uses real kernel names and numbers, stay on the tools "
+               "that need no query, and offer the deeper dives as next steps.\n";
     }
     else
     {
@@ -297,13 +320,14 @@ AssistantPanel::StartHttpRequest()
     request.endpoint_url = endpoint.endpoint_url;
     request.model        = endpoint.model;
     settings.GetAssistantToken(endpoint.name, request.api_token);
-    request.enable_tools = !m_force_final;
+    request.enable_tools  = !m_force_final;
+    request.compute_tools = m_turn_is_compute;
 
     TrimConversation();
 
     AssistantMessage system_message;
     system_message.role    = "system";
-    system_message.content = AssistantSystemPrompt();
+    system_message.content = AssistantSystemPrompt(m_turn_is_compute);
     request.messages.push_back(system_message);
     request.messages.insert(request.messages.end(), m_conversation.begin(),
                             m_conversation.end());
@@ -332,6 +356,10 @@ AssistantPanel::BeginQueuedTurn()
 
 // Preloads an empty summary so the briefing carries real numbers, not zeros.
 // False when there is nothing to preload.
+//
+// A compute trace needs no warmup at all: its kernel list and metric catalogue
+// are loaded with the file, so the compute briefing already has real counts to
+// report and compute_overview answers without a query.
 bool
 AssistantPanel::TryStartSummaryWarmup(const std::string& question)
 {
@@ -409,6 +437,7 @@ AssistantPanel::SendCurrentInput(bool explain_view)
     m_fetch_retries   = 0;
     m_fetch_wait      = FetchWait();
     m_turn_project_id = CurrentProjectId();
+    m_turn_is_compute = MakeToolContext().is_compute;
     if(TryStartSummaryWarmup(question))
     {
         return;

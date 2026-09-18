@@ -75,13 +75,21 @@ public:
     static const uint64_t FETCH_PC_SAMPLING_SOURCE_REQUEST_ID;
     static const uint64_t FETCH_PC_SAMPLING_STALLS_REQUEST_ID;
 
-    // Ask Optiq's table reads. A background reader sharing the ids above would
+    // Ask Optiq's reads. A background reader sharing the ids above would
     // be refused whenever a tab happened to be loading, and - worse - would
     // overwrite the rows that tab is showing once it was not. Its own client id
     // gives it its own request ids, its own controller tables, and its own
     // model slots, so the two never meet. Anything else that reads tables
     // without being a tab wants the same treatment and a client id of its own.
+    //
+    // On a compute trace the same id partitions FetchMetrics: the request id
+    // comes from MakeClientRequestId and the values land in their own
+    // ComputeDataModel store, which is what lets the assistant read metrics
+    // while a metric table is showing its own.
     static constexpr uint64_t ASSISTANT_CLIENT_ID = 1;
+    static_assert(ASSISTANT_CLIENT_ID < RequestIdBuilder::FIRST_DYNAMIC_CLIENT_ID,
+                  "The assistant's client id must stay inside the reserved band, or "
+                  "IdGenerator will eventually hand it to a widget.");
     static const uint64_t ASSISTANT_EVENT_TABLE_REQUEST_ID;
     static const uint64_t ASSISTANT_SAMPLE_TABLE_REQUEST_ID;
     static const uint64_t ASSISTANT_EVENT_SEARCH_REQUEST_ID;

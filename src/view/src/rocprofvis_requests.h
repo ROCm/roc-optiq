@@ -92,6 +92,24 @@ public:
         return (static_cast<uint64_t>(request_type) << REQUEST_TYPE_OFFSET_BITS) |
                (static_cast<uint64_t>(client_id) & ((1ULL << REQUEST_TYPE_OFFSET_BITS) - 1));
     }
+
+    /*
+     * Client ids below this are spoken for by name and must never be handed out
+     * dynamically. Two of them are already load-bearing: 0 means "the UI" to
+     * TableRequestParams, which routes to the shared request ids and the model
+     * slots the tabs render from, and DataProvider::ASSISTANT_CLIENT_ID is a
+     * compile-time constant because the assistant's request ids are derived
+     * from it at namespace scope.
+     *
+     * IdGenerator used to start at 0, so the first two widgets to be built took
+     * both of those. Nothing broke only because the assistant reads system
+     * tables and the widgets fetch metrics, which pack into different request
+     * ids - the moment one of them used the other's RequestType they would
+     * share a request slot and a ComputeDataModel store, and each would clear
+     * the other's values. Keep the band wide enough that naming another
+     * reserved client does not require touching the generator.
+     */
+    static constexpr uint64_t FIRST_DYNAMIC_CLIENT_ID = 16;
 };
 
 // Singleton class for creating unique IDs
@@ -104,21 +122,22 @@ public:
         return instance;
     }
 
+    // Hands out a client id no reserved caller answers to. Wraps back to the
+    // start of the dynamic range rather than to zero, so a long-running session
+    // cannot eventually issue a reserved id.
     uint64_t GenerateId()
     {
         uint64_t id = m_current_id;
         m_current_id++;
         if(m_current_id > (1ULL << RequestIdBuilder::REQUEST_TYPE_OFFSET_BITS) - 1)
         {
-            // Wrap around if we exceed the maximum client ID that can be encoded in the
-            // request ID
-            m_current_id = 0;
+            m_current_id = RequestIdBuilder::FIRST_DYNAMIC_CLIENT_ID;
         }
         return id;
     }
 
 private:
-    IdGenerator() : m_current_id(0) {}
+    IdGenerator() : m_current_id(RequestIdBuilder::FIRST_DYNAMIC_CLIENT_ID) {}
     uint64_t m_current_id;
 };
 

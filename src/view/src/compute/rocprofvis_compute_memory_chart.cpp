@@ -1127,8 +1127,7 @@ ComputeMemoryChartView::Render()
 
     ImGui::PushStyleColor(ImGuiCol_ChildBg, m_colors.bg);
     ImGui::BeginChild("MemoryChart", ImVec2(0, canvas_h), ImGuiChildFlags_None,
-                      ImGuiWindowFlags_HorizontalScrollbar |
-                          ImGuiWindowFlags_NoScrollWithMouse);
+                      ImGuiWindowFlags_HorizontalScrollbar);
     ImGui::PopStyleColor(1);
 
     ImDrawList* draw_list       = ImGui::GetWindowDrawList();

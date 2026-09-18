@@ -106,7 +106,7 @@ private:
     // Transient progress text, kept outside the transcript so it disappears
     // with the spinner when the turn ends.
     void SetStatus(const std::string& text);
-    // Renders the transcript as Markdown, shared by copy and export.
+    // Serializes the transcript to a Markdown string, shared by copy and export.
     std::string BuildTranscriptText() const;
     void        CopyTranscript();
     void        ExportTranscript();

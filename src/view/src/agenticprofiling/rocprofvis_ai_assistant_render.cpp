@@ -713,6 +713,15 @@ AssistantPanel::ExportTranscript()
                 return;
             }
             file.write(text.data(), static_cast<std::streamsize>(text.size()));
+            // Close explicitly and check: the write may be buffered, so a full
+            // disk or flush failure only surfaces here, not at is_open().
+            file.close();
+            if(file.fail())
+            {
+                NotificationManager::GetInstance().Show("Failed to write " + path,
+                                                        NotificationLevel::Error);
+                return;
+            }
             NotificationManager::GetInstance().Show("Conversation exported to " + path,
                                                     NotificationLevel::Success);
         });
@@ -772,7 +781,9 @@ AssistantPanel::RenderComposer()
     }
 
     ImGui::SameLine(0.0f, gap);
-    if(IconButton(ICON_ARROW_IN_BOX, settings.GetFontManager().GetFont(FontType::kIcon),
+    // ICON_ARROW_IN_BOX reads as "import" (it is the Import-from-Basic glyph), so
+    // a document icon is used here to mean "write the conversation out to a file".
+    if(IconButton(ICON_DOCUMENT, settings.GetFontManager().GetFont(FontType::kIcon),
                   ImVec2(icon_size, icon_size), "Export the conversation to a file", false,
                   ImVec2(0.0f, 0.0f), settings.GetColor(Colors::kButton),
                   settings.GetColor(Colors::kButtonHovered),

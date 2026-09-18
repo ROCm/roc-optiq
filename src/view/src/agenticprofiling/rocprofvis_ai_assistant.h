@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include "rocprofvis_ai_batch.h"
 #include "rocprofvis_ai_client.h"
 #include "rocprofvis_ai_tools.h"
 #include "rocprofvis_widget.h"
@@ -44,6 +45,12 @@ public:
 
     // Toolbar control shared by the system and compute toolbars.
     static void RenderToolbarButton();
+
+    // Drives one scripted question without the UI, then writes the answer to
+    // the requested file. Takes the same path the buttons take, so what a run
+    // measures is what a user would have got. Only one run at a time.
+    void                StartBatch(const AssistantBatchRequest& request);
+    AssistantBatchState BatchState() const;
 
 private:
     enum class Speaker
@@ -87,6 +94,27 @@ private:
         // Zero takes the default fetch deadline. A tool waiting on the user
         // rather than on a query sets its own, much longer.
         uint32_t              timeout_seconds = 0;
+    };
+
+    // One scripted run in progress. The stage is which of the two button
+    // presses is outstanding, so a run resumes from whatever the panel's own
+    // turn loop left behind rather than tracking the turn a second time.
+    struct BatchRun
+    {
+        enum class Stage
+        {
+            kWaitForTrace,
+            kExplain,
+            kExplainWait,
+            kQuestion,
+            kQuestionWait
+        };
+
+        AssistantBatchRequest                 request;
+        AssistantBatchState                   state = AssistantBatchState::kInactive;
+        Stage                                 stage = Stage::kWaitForTrace;
+        std::chrono::steady_clock::time_point started;
+        std::string                           error;
     };
 
     AssistantPanel();
@@ -133,6 +161,17 @@ private:
     void                 TrimConversation();
     bool                 Busy() const;
 
+    // The interactive half of Update(): one HTTP reply, or one step of the
+    // fetch a tool is parked on.
+    void UpdateTurn();
+    // The scripted half, run after it so a turn that ended this frame is
+    // already visible as idle.
+    void UpdateBatch();
+    void FinishBatch(AssistantBatchState state, const std::string& error);
+    bool WriteBatchOutput() const;
+    // The answer the run is about: the last thing the model said.
+    std::string LastAssistantText() const;
+
     static AssistantPanel* s_instance;
 
     bool  m_visible;
@@ -171,6 +210,7 @@ private:
     FetchWait   m_fetch_wait;
     // Clickable follow-ups from offer_next_steps. Cleared on a new turn.
     std::vector<std::string> m_next_steps;
+    BatchRun                 m_batch;
 
     std::shared_ptr<AssistantChatCall> m_call;
     std::future<AssistantChatResult>   m_pending;

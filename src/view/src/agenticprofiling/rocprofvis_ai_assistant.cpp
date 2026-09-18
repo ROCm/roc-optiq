@@ -964,7 +964,7 @@ AssistantPanel::PollToolFetch()
 // is waiting on. Tools run only from here, never Render(), so they cannot
 // reorder panels halfway through the frame that draws them.
 void
-AssistantPanel::Update()
+AssistantPanel::UpdateTurn()
 {
     if(m_pending.valid())
     {
@@ -980,6 +980,15 @@ AssistantPanel::Update()
     }
 
     PollToolFetch();
+}
+
+void
+AssistantPanel::Update()
+{
+    UpdateTurn();
+    // After, not before: a turn that ends this frame is then already idle, so a
+    // scripted run moves on without spending a frame noticing.
+    UpdateBatch();
 }
 
 }  // namespace View

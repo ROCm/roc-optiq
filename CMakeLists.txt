@@ -261,6 +261,8 @@ list(APPEND VIEW_FILES
     src/view/src/agenticprofiling/rocprofvis_ai_assistant.cpp
     src/view/src/agenticprofiling/rocprofvis_ai_assistant.h
     src/view/src/agenticprofiling/rocprofvis_ai_assistant_render.cpp
+    src/view/src/agenticprofiling/rocprofvis_ai_batch.cpp
+    src/view/src/agenticprofiling/rocprofvis_ai_batch.h
     src/view/src/agenticprofiling/rocprofvis_ai_client.cpp
     src/view/src/agenticprofiling/rocprofvis_ai_client.h
     src/view/src/agenticprofiling/rocprofvis_ai_compute_tools.cpp

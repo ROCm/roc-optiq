@@ -19,6 +19,7 @@
 #include <GLFW/glfw3.h>
 #include <algorithm>
 #include <cmath>
+#include <cstdlib>
 #include <filesystem>
 #include <iostream>
 #include <stdio.h>
@@ -277,6 +278,22 @@ parse_command_line_args(int argc, char** argv, RocProfVis::View::CLIParser& cli_
         "passed when changing it (default: off)",
         true);
 #endif
+    result &= cli_parser.AddOption(
+        "a", "ask",
+        "Ask Optiq this question about the file opened with --file, write the "
+        "answer as JSON, and exit. Requires --ask-out",
+        true);
+    result &= cli_parser.AddOption("o", "ask-out",
+        "Where --ask writes its JSON result", true);
+    result &= cli_parser.AddOption(
+        "e", "ask-explain",
+        "Run 'Explain this view' before the --ask question, so the question "
+        "lands as a follow-up the way it does in the panel",
+        false);
+    result &= cli_parser.AddOption(
+        "t", "ask-timeout",
+        "Seconds a --ask run may take before it is abandoned (default 900)",
+        true);
     result &= cli_parser.AddOption("h", "help",
         "Show this help message and exit", false);
     ROCPROFVIS_ASSERT(result);
@@ -334,6 +351,26 @@ main(int argc, char** argv)
     if(exit_app)
     {
         return app_result_code;
+    }
+
+    // A scripted assistant run needs a trace to read and somewhere to put the
+    // answer. Refuse here rather than opening a window that would never close.
+    const bool ask_requested = cli_parser.WasOptionFound("ask") &&
+                               !cli_parser.GetOptionValue("ask").empty();
+    if(ask_requested)
+    {
+        if(!cli_parser.WasOptionFound("file") ||
+           cli_parser.GetOptionValue("file").empty())
+        {
+            spdlog::error("--ask needs --file to say which trace to ask about");
+            return 1;
+        }
+        if(!cli_parser.WasOptionFound("ask-out") ||
+           cli_parser.GetOptionValue("ask-out").empty())
+        {
+            spdlog::error("--ask needs --ask-out to say where to write the answer");
+            return 1;
+        }
     }
 
     // Parse backend preference from command line
@@ -414,7 +451,12 @@ main(int argc, char** argv)
                                                                   APP_NAME,
                                                                   backend_pref))
         {
-            RocProfVis::View::CLIParser::DetachFromConsole();
+            // A scripted run is driven from a shell and reports back to it, so
+            // it keeps the console it was launched from.
+            if(!ask_requested)
+            {
+                RocProfVis::View::CLIParser::DetachFromConsole();
+            }
 
             if(rocprofvis_imgui_backend_complete_init_with_opengl_fallback(
                    &backend, &window, RocProfVis::View::DEFAULT_WINDOWED_WIDTH,
@@ -494,6 +536,23 @@ main(int argc, char** argv)
                 {
                     // If the user inputted a filepath open it here.
                     rocprofvis_view_open_files({ cli_parser.GetOptionValue("file") });
+                }
+
+                if(ask_requested)
+                {
+                    // Queued now and started once the trace is ready, so the
+                    // load and the question need no coordination here.
+                    uint32_t ask_timeout = 0;
+                    if(cli_parser.WasOptionFound("ask-timeout"))
+                    {
+                        ask_timeout = static_cast<uint32_t>(
+                            std::strtoul(cli_parser.GetOptionValue("ask-timeout").c_str(),
+                                         nullptr, 10));
+                    }
+                    rocprofvis_view_start_assistant_batch(
+                        cli_parser.GetOptionValue("ask"),
+                        cli_parser.GetOptionValue("ask-out"),
+                        cli_parser.WasOptionFound("ask-explain"), ask_timeout);
                 }
 
                 ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
@@ -606,6 +665,19 @@ main(int argc, char** argv)
                     rocprofvis_view_render(g_render_options);
                     g_render_options = rocprofvis_view_render_options_t::
                         kRocProfVisViewRenderOption_None;
+
+                    if(ask_requested)
+                    {
+                        const rocprofvis_view_assistant_batch_state_t ask_state =
+                            rocprofvis_view_assistant_batch_state();
+                        if(ask_state == kRocProfVisAssistantBatch_Done ||
+                           ask_state == kRocProfVisAssistantBatch_Failed)
+                        {
+                            app_result_code =
+                                (ask_state == kRocProfVisAssistantBatch_Done) ? 0 : 1;
+                            glfwSetWindowShouldClose(window, GLFW_TRUE);
+                        }
+                    }
 
                     ImGui::Render();
                     ImDrawData* draw_data    = ImGui::GetDrawData();

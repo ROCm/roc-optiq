@@ -318,19 +318,14 @@ InfiniteScrollTable::HandleNewTableData(std::shared_ptr<RocEvent> e)
 
         // A content change (select/filter) re-fits the columns fresh; any other
         // page-in of this table's data just lets columns grow to newly loaded values.
-        std::shared_ptr<TableDataEvent> table_event =
-            std::dynamic_pointer_cast<TableDataEvent>(e);
-        if(table_event && table_event->GetRequestID() == m_request_id)
+        if(m_refit_requested)
         {
-            if(m_refit_requested)
-            {
-                m_refit_pending   = true;
-                m_refit_requested = false;
-            }
-            else
-            {
-                m_grow_pending = true;
-            }
+            m_refit_pending   = true;
+            m_refit_requested = false;
+        }
+        else
+        {
+            m_grow_pending = true;
         }
     }
 }
@@ -653,18 +648,19 @@ InfiniteScrollTable::Render()
                                 place_hitbox = false;
                             }
 
-                            // Render actual cells after the row hit-box
-                            RenderCell(display_value, row_n, column);
-                            if(m_time_column_indices[kTimeEndNs] == column ||
-                               m_time_column_indices[kTimeStartNs] == column ||
-                               m_time_column_indices[kDurationNs] == column)
+                            // Time columns add their raw ns value to the cell tooltip.
+                            const bool is_time_column =
+                                m_time_column_indices[kTimeEndNs] == column ||
+                                m_time_column_indices[kTimeStartNs] == column ||
+                                m_time_column_indices[kDurationNs] == column;
+                            std::string time_tooltip;
+                            if(is_time_column)
                             {
-                                // show raw value as tooltip for time columns if hovered
-                                if(ImGui::IsItemHovered())
-                                {
-                                    SetTooltipStyled("%s ns", col.c_str());
-                                }
+                                time_tooltip = col + " ns";
                             }
+
+                            RenderCell(display_value, row_n, column,
+                                       is_time_column ? &time_tooltip : nullptr);
 
                             column++;
                         }
@@ -933,33 +929,31 @@ InfiniteScrollTable::DetectUserColumnResizes()
         return;
     }
 
+    // LastResizedColumn is only set by a resize-grip drag, so font-size or
+    // time-format width changes are never mistaken for a manual resize.
+    const int resized = table->LastResizedColumn;
+    if(resized < 0 || resized >= table->ColumnsCount)
+    {
+        return;
+    }
+
     const std::vector<std::string>& column_names =
         m_table_model().GetTableHeader(m_table_type);
-    const int count =
-        std::min(table->ColumnsCount, static_cast<int>(column_names.size()));
-    for(int c = 0; c < count; c++)
+    if(resized >= static_cast<int>(column_names.size()))
     {
-        const std::string& name = column_names[c];
-        if(name.empty() || m_user_sized_columns.count(name))
-        {
-            continue;
-        }
-        const auto it = m_column_fit_widths.find(name);
-        if(it == m_column_fit_widths.end())
-        {
-            continue;  // No auto-fit applied yet; nothing to compare against.
-        }
-        // WidthRequest only diverges from our applied value on a user drag.
-        const float delta = table->Columns[c].WidthRequest - it->second;
-        if(delta > 0.5f || delta < -0.5f)
-        {
-            m_user_sized_columns.insert(name);
-        }
+        return;
+    }
+
+    const std::string& name = column_names[resized];
+    if(!name.empty())
+    {
+        m_user_sized_columns.insert(name);
     }
 }
 
 void
-InfiniteScrollTable::RenderCell(const std::string* cell_text, int row, int column)
+InfiniteScrollTable::RenderCell(const std::string* cell_text, int row, int column,
+                                const std::string* tooltip_extra)
 {
     // Elide to the live column width (widths are set by FitColumnsToContent); the
     // full value stays in the tooltip and copy actions.
@@ -978,13 +972,22 @@ InfiniteScrollTable::RenderCell(const std::string* cell_text, int row, int colum
         RowSelected(ImGuiMouseButton_Left);
     }
 
-    if(is_elided && ImGui::IsItemHovered())
+    const bool has_extra = tooltip_extra && !tooltip_extra->empty();
+    if((is_elided || has_extra) && ImGui::IsItemHovered())
     {
+        // Full value and extra line share one tooltip so neither overrides the other.
         ImGui::SetNextWindowSizeConstraints(ImVec2(0, 0),
                                             ImVec2(TOOLTIP_MAX_WIDTH, FLT_MAX));
         BeginTooltipStyled();
         ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + TOOLTIP_MAX_WIDTH);
-        ImGui::TextUnformatted(cell_text->c_str());
+        if(is_elided)
+        {
+            ImGui::TextUnformatted(cell_text->c_str());
+        }
+        if(has_extra)
+        {
+            ImGui::TextUnformatted(tooltip_extra->c_str());
+        }
         ImGui::PopTextWrapPos();
         EndTooltipStyled();
     }

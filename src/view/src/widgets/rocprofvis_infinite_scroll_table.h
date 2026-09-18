@@ -178,7 +178,10 @@ private:
     };
 
     void FetchData();
-    void RenderCell(const std::string* cell_text, int row, int column);
+    // Draws a table cell, eliding to the column width. tooltip_extra (e.g. a time
+    // column's raw ns value) is appended to the same hover tooltip as elided text.
+    void RenderCell(const std::string* cell_text, int row, int column,
+                    const std::string* tooltip_extra = nullptr);
     void RenderContextMenu();
     void ProcessSortOrFilterRequest(uint64_t frame_count);
 

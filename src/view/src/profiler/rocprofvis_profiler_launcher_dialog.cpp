@@ -51,8 +51,9 @@ bool RenderDialogHeader(const char* icon, const char* title)
     const ImGuiStyle& style    = ImGui::GetStyle();
 
     // Frameless windows + io.ConfigWindowsMoveFromTitleBarOnly have no move grip,
-    // so reserve the title band (left of the close "x") as an invisible drag
-    // handle and draw the title over it.
+    // so the whole title band (left of the close "x") is the drag handle. Paint the
+    // icon + title with the draw list so they stay decorative; real items would
+    // steal the grab from the title (mirrors the LaunchCardHeader "(?)" pattern).
     const ImVec2 header_pos = ImGui::GetCursorScreenPos();
     const float  frame_h    = ImGui::GetFrameHeight();
     const float  drag_w =
@@ -65,24 +66,35 @@ bool RenderDialogHeader(const char* icon, const char* title)
         const ImVec2 delta   = ImGui::GetIO().MouseDelta;
         ImGui::SetWindowPos(ImVec2(win_pos.x + delta.x, win_pos.y + delta.y));
     }
+    const ImVec2 after_header = ImGui::GetCursorScreenPos();
 
-    ImGui::SetCursorScreenPos(header_pos);
-    ImGui::PushFont(fonts.GetFont(FontType::kIcon), ImGui::GetFontSize());
-    ImGui::PushStyleColor(ImGuiCol_Text, settings.GetColor(Colors::kAccent));
+    // Icon (accent) + title, vertically centered in the drag band.
+    ImDrawList* dl        = ImGui::GetWindowDrawList();
+    ImFont*     icon_font = fonts.GetFont(FontType::kIcon);
+    ImFont*     text_font = ImGui::GetFont();
+    const float font_size = ImGui::GetFontSize();
+    float       text_x    = header_pos.x;
+    if (icon && icon[0])
+    {
+        const ImVec2 icon_sz = icon_font->CalcTextSizeA(font_size, FLT_MAX, -1.0f, icon);
+        dl->AddText(icon_font, font_size,
+                    ImVec2(text_x, header_pos.y + (frame_h - icon_sz.y) * 0.5f),
+                    settings.GetColor(Colors::kAccent), icon);
+        text_x += icon_sz.x + style.ItemInnerSpacing.x;
+    }
+    const ImVec2 title_sz = text_font->CalcTextSizeA(font_size, FLT_MAX, -1.0f, title);
+    dl->AddText(text_font, font_size,
+                ImVec2(text_x, header_pos.y + (frame_h - title_sz.y) * 0.5f),
+                ImGui::GetColorU32(ImGuiCol_Text), title);
+
+    // Close "x": the only interactive item after the drag handle, at the far right.
+    ImGui::SetCursorScreenPos(
+        ImVec2(header_pos.x + drag_w + style.ItemSpacing.x, header_pos.y));
     ImGui::AlignTextToFramePadding();
-    ImGui::TextUnformatted(icon);
-    ImGui::PopStyleColor();
-    ImGui::PopFont();
-
-    ImGui::SameLine(0.0f, style.ItemInnerSpacing.x);
-    ImGui::AlignTextToFramePadding();
-    ImGui::TextUnformatted(title);
-
-    // Close "x", kept outside the drag hitbox.
-    ImGui::SameLine();
-    ImGui::SetCursorPosX(ImGui::GetWindowContentRegionMax().x - frame_h);
     bool close_clicked = XButton("##dialog_close", "Close", &settings);
 
+    // Resume below the band so the "x" row height does not pull the separator up.
+    ImGui::SetCursorScreenPos(after_header);
     ImGui::Separator();
     return close_clicked;
 }

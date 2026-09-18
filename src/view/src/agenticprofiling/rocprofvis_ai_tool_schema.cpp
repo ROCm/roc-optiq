@@ -62,6 +62,7 @@ const AssistantToolLabel ASSISTANT_COMPUTE_TOOL_LABELS[] = {
     { "kernel_summary", "Reading the kernel summary..." },
     { "list_metrics", "Listing available metrics..." },
     { "kernel_roofline", "Reading the roofline..." },
+    { "kernel_triage", "Reading the triage panel..." },
     { "get_metrics", "Reading metric values..." },
     { "switch_tab", "Switching tabs..." },
     { "offer_next_steps", "Offering next steps..." },
@@ -704,6 +705,25 @@ MakeAssistantComputeToolsJson()
             "query. Some traces record no roofline at all.",
             roofline_params);
 
+    jt::Json triage_params = ObjectParams();
+    AddComputeScopeParams(triage_params, true);
+    AddTool(tools, 5, "kernel_triage",
+            "The standard diagnostic panel for one kernel, in a single query. Call "
+            "it once on the kernel that owns the time, before any get_metrics.\n"
+            "It returns the launch geometry and resource allocation (grid and "
+            "workgroup size, VGPRs, SGPRs, LDS and scratch), the speed-of-light "
+            "summary (CU utilization, occupancy, per-pipe utilization, active "
+            "threads per wavefront, cache hit rates), the arithmetic rates split "
+            "by precision, the instruction mix, vL1D coalescing and the LDS bank "
+            "conflict rate.\n"
+            "This is one database query instead of the dozen searches and fetches "
+            "it would take to assemble the same picture, and it is the difference "
+            "between finding the defect that is there and confirming the one you "
+            "already suspected: scratch, coalescing and the precision split all "
+            "arrive whether or not you thought to ask for them. Follow up with "
+            "get_metrics only for what the panel leaves open.",
+            triage_params);
+
     jt::Json get_metrics_params = ObjectParams();
     AddComputeScopeParams(get_metrics_params, true);
     AddParam(get_metrics_params, "metrics", "array",
@@ -712,7 +732,7 @@ MakeAssistantComputeToolsJson()
              "listing its entries. Names are not accepted - pass the ids.");
     get_metrics_params["properties"]["metrics"]["items"]["type"] = "string";
     get_metrics_params["required"][0] = "metrics";
-    AddTool(tools, 5, "get_metrics",
+    AddTool(tools, 6, "get_metrics",
             "Read hardware metric values. This is the only compute tool that "
             "queries the database, so scope it: name the table you want rather "
             "than a category, and one kernel rather than the workload.\n"
@@ -729,7 +749,7 @@ MakeAssistantComputeToolsJson()
     AddParam(tab_params, "name", "string",
              "Tab to switch to. Part of the name is enough. Omit to list every "
              "tab that is available.");
-    AddTool(tools, 6, "switch_tab",
+    AddTool(tools, 7, "switch_tab",
             "Switch between the open traces. Only call this when the user asked "
             "you to change tabs. Call with no name to list what is open.",
             tab_params);
@@ -740,14 +760,24 @@ MakeAssistantComputeToolsJson()
              "Each is a complete thing they would type, under 80 characters.");
     next_params["properties"]["steps"]["items"]["type"] = "string";
     next_params["required"][0] = "steps";
-    AddTool(tools, 7, "offer_next_steps",
+    AddTool(tools, 8, "offer_next_steps",
             "Puts stacked buttons under the chat for what to look at next. Call it "
             "as the last tool of an investigation, then write your answer in the "
             "response after it. Do not list those same options in the prose.\n"
+            "Every step must be answerable from THIS profile with the tools you "
+            "have. You are looking at one workload and there is nothing to compare "
+            "it against: you cannot open a second trace, re-run the code, profile a "
+            "modified kernel, or read a system trace. So never offer to compare "
+            "against a fixed, tiled, padded, coalesced or otherwise improved "
+            "version, and never offer to measure what a change would do - clicking "
+            "it only produces an apology. Offer another metric table, another "
+            "kernel in this workload, or a different reading of what you already "
+            "have.\n"
             "The best follow-ups are the questions your answer raised but could "
             "not settle - which cache is missing, whether occupancy is the limit, "
-            "how a second kernel compares. A question you can already answer in "
-            "one call is a weak thing to offer.",
+            "how another kernel in this same workload compares, what the "
+            "instruction mix says. A question you can already answer in one call "
+            "is a weak thing to offer.",
             next_params);
 
     return tools;

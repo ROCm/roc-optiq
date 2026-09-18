@@ -51,6 +51,28 @@ constexpr size_t ASSISTANT_COMPUTE_MAX_METRIC_ROWS = 60;
 // than on what they resolve to.
 constexpr size_t ASSISTANT_COMPUTE_MAX_SELECTORS = 16;
 
+/*
+ * The tables a first look at any kernel needs, by name rather than by id.
+ *
+ * Between them they carry the launch geometry, the register and scratch
+ * allocation, the speed-of-light summary, the arithmetic split by precision,
+ * the instruction mix, and the two efficiency rates - coalescing and LDS bank
+ * conflicts - that name a memory problem instead of merely reporting that
+ * memory was slow. That is the standard triage set for this profiler, not a
+ * guess at what one workload will need.
+ *
+ * Matched against the catalogue's own table names because the dotted ids move
+ * with the accelerator and the profiling mode, while these names do not. A
+ * table this trace did not record simply contributes no selector.
+ */
+constexpr const char* ASSISTANT_TRIAGE_TABLE_NAMES[] = {
+    "System Speed-of-Light",           "Wavefront Launch Stats",
+    "Wavefront Runtime Stats",         "Roofline Performance Rates",
+    "Overall Instruction Mix",         "VALU Arithmetic Instruction Mix",
+    "VMEM Instruction Mix",            "vL1D Speed-of-Light",
+    "LDS Speed-of-Light",
+};
+
 // Display names for the roofline enums, kept in step with the ones the Roofline
 // widget draws so the model and the user name the same line.
 constexpr const char* ASSISTANT_CEILING_COMPUTE_NAMES[] = {
@@ -975,6 +997,122 @@ ToolKernelRoofline(const AssistantToolContext& context, const jt::Json& args,
     return DoneResult(TrimComputeResult(out.str()), "Read the roofline");
 }
 
+// Every triage table this workload actually recorded, as table-wide selectors.
+void
+CollectTriageSelectors(const WorkloadInfo&                          workload,
+                       std::vector<MetricsRequestParams::MetricID>& out)
+{
+    constexpr size_t TRIAGE_TABLE_COUNT =
+        sizeof(ASSISTANT_TRIAGE_TABLE_NAMES) / sizeof(ASSISTANT_TRIAGE_TABLE_NAMES[0]);
+
+    for(const AvailableMetrics::Category* category :
+        workload.available_metrics.ordered_categories)
+    {
+        if(category == nullptr)
+        {
+            continue;
+        }
+        for(const AvailableMetrics::Table* table : category->ordered_tables)
+        {
+            if(table == nullptr || out.size() >= ASSISTANT_COMPUTE_MAX_SELECTORS)
+            {
+                continue;
+            }
+            const std::string lowered = Core::String::to_lower_copy(table->name);
+            for(size_t i = 0; i < TRIAGE_TABLE_COUNT; ++i)
+            {
+                if(lowered !=
+                   Core::String::to_lower_copy(ASSISTANT_TRIAGE_TABLE_NAMES[i]))
+                {
+                    continue;
+                }
+                MetricsRequestParams::MetricID selector{};
+                selector.category_id = category->id;
+                selector.table_id    = table->id;
+                out.push_back(selector);
+                break;
+            }
+        }
+    }
+}
+
+/*
+ * One kernel's whole diagnostic panel, in a single query.
+ *
+ * The alternative - searching the catalogue a word at a time and fetching each
+ * table as the thought occurs - costs a round trip per idea and only ever finds
+ * the defect that was already suspected. Reading the standard set at once puts
+ * scratch beside coalescing beside the precision split, so the evidence for the
+ * defect that is actually present is there whether or not it was looked for.
+ */
+AssistantToolStartResult
+ToolKernelTriage(const AssistantToolContext& context, const jt::Json& args,
+                 const std::string&)
+{
+    const WorkloadInfo* workload = ResolveWorkload(context, args);
+    if(workload == nullptr)
+    {
+        return DoneResult("That workload id is not in this trace.", "Unknown workload");
+    }
+
+    bool              named = false;
+    std::string       error;
+    const KernelInfo* kernel = ResolveKernel(context, *workload, args, named, error);
+    if(kernel == nullptr)
+    {
+        return DoneResult(named ? error
+                                : "kernel_triage needs a kernel_id or kernel_name, and "
+                                  "no kernel is selected. Call list_kernels first.",
+                          "No kernel");
+    }
+
+    std::vector<MetricsRequestParams::MetricID> selectors;
+    CollectTriageSelectors(*workload, selectors);
+    if(selectors.empty())
+    {
+        return DoneResult("This workload recorded none of the standard triage tables, "
+                          "so there is no panel to read. Call list_metrics to see what "
+                          "it does carry.",
+                          "No triage tables");
+    }
+
+    const uint64_t request_id = ComputeMetricsRequestId();
+    if(context.data_provider->IsRequestPending(request_id))
+    {
+        AssistantToolStartResult waiting;
+        waiting.pending       = true;
+        waiting.started_fetch = false;
+        waiting.request_ids.push_back(request_id);
+        waiting.fetch.kind  = AssistantFetchKind::kComputeMetrics;
+        waiting.status_line = "Waiting for the previous metric fetch...";
+        return waiting;
+    }
+
+    ComputeDataModel&     model = Model(context);
+    std::vector<uint32_t> kernel_ids;
+    kernel_ids.push_back(kernel->id);
+    model.ClearKernelMetricValues(DataProvider::ASSISTANT_CLIENT_ID, kernel->id);
+
+    if(!context.data_provider->FetchMetrics(
+           MetricsRequestParams(workload->id, kernel_ids, selectors,
+                                DataProvider::ASSISTANT_CLIENT_ID)))
+    {
+        return DoneResult("The metric fetch was refused, so nothing was read. The "
+                          "trace may still be loading.",
+                          "Fetch refused");
+    }
+
+    AssistantToolStartResult result;
+    result.pending           = true;
+    result.started_fetch     = true;
+    result.request_ids.push_back(request_id);
+    result.fetch.kind        = AssistantFetchKind::kComputeMetrics;
+    result.fetch.workload_id = workload->id;
+    result.fetch.kernel_id   = kernel->id;
+    result.status_line       = "Reading the triage panel...";
+    return result;
+}
+
 AssistantToolStartResult
 ToolGetMetrics(const AssistantToolContext& context, const jt::Json& args,
                const std::string&)
@@ -1056,6 +1194,7 @@ const AssistantToolEntry k_compute_tool_handlers[] = {
     { "kernel_summary", ToolKernelSummary },
     { "list_metrics", ToolListMetrics },
     { "kernel_roofline", ToolKernelRoofline },
+    { "kernel_triage", ToolKernelTriage },
     { "get_metrics", ToolGetMetrics },
 };
 

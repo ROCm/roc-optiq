@@ -16,10 +16,10 @@ namespace View
 {
 
 class DataProvider;
+class ComparisonTable;
 class ComputeSelection;
+class Roofline;
 class TabContainer;
-class VFixedContainer;
-struct TabItem;
 
 class ComputeComparisonView : public RocWidget
 {
@@ -46,6 +46,49 @@ public:
 
     void SubscribeEvents();
     void UnsubscribeEvents();
+
+private:
+    enum View
+    {
+        ViewRoofline,
+        ViewMetrics,
+    };
+
+    void RenderToolbar();
+    void RenderContent();
+    void InputChanged();
+
+    std::unique_ptr<Roofline>        m_comparison_roofline;
+    std::unique_ptr<ComparisonTable> m_comparison_table;
+
+    DataProvider&                     m_data_provider;
+    SettingsManager&                  m_settings;
+    std::shared_ptr<ComputeSelection> m_compute_selection;
+
+    View     m_view;
+    uint32_t m_target_workload_id;
+    uint32_t m_target_kernel_id;
+
+    float m_toolbar_available_width;
+
+    EventManager::SubscriptionToken m_workload_selection_changed_token;
+    EventManager::SubscriptionToken m_kernel_selection_changed_token;
+
+    friend struct ComputeComparisonViewTestPeer;
+};
+
+class ComparisonTable : public RocWidget
+{
+public:
+    ComparisonTable(DataProvider&                     data_provider,
+                    std::shared_ptr<ComputeSelection> compute_selection);
+    ~ComparisonTable();
+
+    void Update() override;
+    void Render() override;
+
+    void InputChanged(uint32_t target_workload_id, uint32_t target_kernel_id);
+    void RenderToolbar();
 
 private:
     class Table : public RocWidget
@@ -145,7 +188,7 @@ private:
     private:
         struct Column
         {
-            // Column types: dynamic < 0, fixed >= 0 
+            // Column types: dynamic < 0, fixed >= 0
             enum Type
             {
                 Value     = -1,
@@ -189,7 +232,7 @@ private:
     class Preset : public PresetComponent
     {
     public:
-        Preset(ComputeComparisonView& widget);
+        Preset(ComparisonTable& widget);
 
         bool ToJson(jt::Json& json) override;
         bool FromJson(jt::Json& json) override;
@@ -197,7 +240,7 @@ private:
 
     private:
         std::list<AvailableMetrics::Entry> m_entries;
-        ComputeComparisonView&             m_widget;
+        ComparisonTable&                   m_widget;
     };
     struct CategoryModel
     {
@@ -236,7 +279,6 @@ private:
     void FetchMetrics();
     void UpdateMetrics();
 
-    void RenderToolbar();
     void RenderCategory(const size_t i);
     void RenderPinnedMetrics() const;
     void RenderTables() const;
@@ -253,6 +295,7 @@ private:
     uint32_t m_target_kernel_id;
     bool     m_filter_common_metrics;
     float    m_percentage_threshold;
+    bool     m_show_pins;
 
     // Internal state...
     bool                         m_inputs_changed;
@@ -270,13 +313,10 @@ private:
     std::vector<CategoryModel> m_categories;
     std::vector<PinnedModel>   m_pinned_metrics;
 
-    // Layout...
-    std::shared_ptr<VFixedContainer> m_layout;
-    std::unique_ptr<TabContainer>    m_tab_container;
-    std::unique_ptr<Table>           m_pinned_table;
-    LayoutItem*                      m_pinned_item;
-    float                            m_max_pinned_height;
-    float                            m_toolbar_available_width;
+    // Widgets...
+    std::unique_ptr<TabContainer> m_tab_container;
+    std::unique_ptr<Table>        m_pinned_table;
+    float                         m_max_pinned_height;
 
     // Requests...
     uint64_t                          m_client_id_baseline;
@@ -290,11 +330,9 @@ private:
     // Preset integration...
     std::unique_ptr<Preset> m_preset;
 
-    EventManager::SubscriptionToken m_workload_selection_changed_token;
-    EventManager::SubscriptionToken m_kernel_selection_changed_token;
     EventManager::SubscriptionToken m_metrics_fetched_token;
 
-    friend struct ComputeComparisonViewTestPeer;
+    friend struct ComputeComparisonTableTestPeer;
 };
 
 }  // namespace View

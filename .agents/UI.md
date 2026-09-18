@@ -1522,6 +1522,8 @@ display modes, several `KernelInfo::DispatchMetric`s
 Internal scratchpad UI for exercising the metric / roofline APIs.
 Behind `#ifdef ROCPROFVIS_DEVELOPER_MODE`. Not user-facing - keep
 production code from depending on it.
+Dynamic text uses `ImGui::TextUnformatted` so names, descriptions,
+and units containing percent signs are displayed literally.
 
 ### `ComputeIsaView` (`rocprofvis_compute_isa_view.{h,cpp}`)
 

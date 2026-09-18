@@ -50,6 +50,23 @@ bool RenderDialogHeader(const char* icon, const char* title)
     FontManager&      fonts    = settings.GetFontManager();
     const ImGuiStyle& style    = ImGui::GetStyle();
 
+    // Frameless windows + io.ConfigWindowsMoveFromTitleBarOnly have no move grip,
+    // so reserve the title band (left of the close "x") as an invisible drag
+    // handle and draw the title over it.
+    const ImVec2 header_pos = ImGui::GetCursorScreenPos();
+    const float  frame_h    = ImGui::GetFrameHeight();
+    const float  drag_w =
+        std::max(1.0f, ImGui::GetContentRegionAvail().x - frame_h - style.ItemSpacing.x);
+
+    ImGui::InvisibleButton("##dialog_drag", ImVec2(drag_w, frame_h));
+    if (ImGui::IsItemActive())
+    {
+        const ImVec2 win_pos = ImGui::GetWindowPos();
+        const ImVec2 delta   = ImGui::GetIO().MouseDelta;
+        ImGui::SetWindowPos(ImVec2(win_pos.x + delta.x, win_pos.y + delta.y));
+    }
+
+    ImGui::SetCursorScreenPos(header_pos);
     ImGui::PushFont(fonts.GetFont(FontType::kIcon), ImGui::GetFontSize());
     ImGui::PushStyleColor(ImGuiCol_Text, settings.GetColor(Colors::kAccent));
     ImGui::AlignTextToFramePadding();
@@ -61,8 +78,9 @@ bool RenderDialogHeader(const char* icon, const char* title)
     ImGui::AlignTextToFramePadding();
     ImGui::TextUnformatted(title);
 
+    // Close "x", kept outside the drag hitbox.
     ImGui::SameLine();
-    ImGui::SetCursorPosX(ImGui::GetWindowContentRegionMax().x - ImGui::GetFrameHeight());
+    ImGui::SetCursorPosX(ImGui::GetWindowContentRegionMax().x - frame_h);
     bool close_clicked = XButton("##dialog_close", "Close", &settings);
 
     ImGui::Separator();
@@ -623,7 +641,8 @@ void ProfilerLauncherDialog::RenderMainContent()
         // Indent to line up with the cards' inner content (inset by card padding).
         const float adv_indent = SettingsManager::Get().GetDefaultStyle().WindowPadding.x;
         ImGui::Indent(adv_indent);
-        if (ImGui::Button("Advanced Options...", ImVec2(180, 0)))
+        // Auto-size so the label is never clipped at high DPI.
+        if (ImGui::Button("Advanced Options...", ImVec2(0, 0)))
         {
             m_show_advanced_window = true;
         }
@@ -831,15 +850,16 @@ void ProfilerLauncherDialog::RenderArgsEnvPanel()
     LaunchSubHeader("COMMAND LINE ARGUMENTS",
                     "Passed to the profiler, one entry at a time (a flag, or a flag + value).");
 
-    bool add_arg = false;
-    ImGui::SetNextItemWidth(-(kLaunchActionButtonWidth + style.ItemSpacing.x));
+    bool        add_arg = false;
+    const float add_w   = LaunchActionButtonWidth("Add");
+    ImGui::SetNextItemWidth(-(add_w + style.ItemSpacing.x));
     if (InputTextStringWithHint("##ArgInput", "e.g.  --sampling-freq 500",
                                 m_arg_input, ImGuiInputTextFlags_EnterReturnsTrue))
     {
         add_arg = true;
     }
     ImGui::SameLine();
-    if (ImGui::Button("Add##Arg", ImVec2(kLaunchActionButtonWidth, 0.0f)))
+    if (ImGui::Button("Add##Arg", ImVec2(add_w, 0.0f)))
     {
         add_arg = true;
     }
@@ -898,21 +918,22 @@ void ProfilerLauncherDialog::RenderArgsEnvPanel()
     LaunchSubHeader("ENVIRONMENT VARIABLES",
                     "Extra environment variables set for the profiler process.");
 
-    bool add_env = false;
+    bool        add_env   = false;
+    const float add_env_w = LaunchActionButtonWidth("Add");
     ImGui::SetNextItemWidth(200.0f);
     InputTextStringWithHint("##EnvName", "NAME", m_env_name_input);
     ImGui::SameLine();
     ImGui::AlignTextToFramePadding();
     ImGui::TextUnformatted("=");
     ImGui::SameLine();
-    ImGui::SetNextItemWidth(-(kLaunchActionButtonWidth + style.ItemSpacing.x));
+    ImGui::SetNextItemWidth(-(add_env_w + style.ItemSpacing.x));
     if (InputTextStringWithHint("##EnvValue", "value", m_env_value_input,
                                 ImGuiInputTextFlags_EnterReturnsTrue))
     {
         add_env = true;
     }
     ImGui::SameLine();
-    if (ImGui::Button("Add##Env", ImVec2(kLaunchActionButtonWidth, 0.0f)))
+    if (ImGui::Button("Add##Env", ImVec2(add_env_w, 0.0f)))
     {
         add_env = true;
     }

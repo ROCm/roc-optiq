@@ -50,21 +50,25 @@ bool
 InputTextStringWithHint(const char* id, const char* hint, std::string& str,
                         ImGuiInputTextFlags flags)
 {
-    bool input_changed = InputTextString(id, str, flags);
-    if(str.empty() && hint && hint[0])
+    // Draw the hint inside the field (no extra layout item, so a following
+    // SameLine() widget isn't shifted; no overdraw of the caret).
+    str.reserve(std::max(str.size() + 1, static_cast<size_t>(256)));
+    bool input_changed = ImGui::InputTextWithHint(
+        id, hint ? hint : "", str.data(), str.capacity() + 1,
+        flags | ImGuiInputTextFlags_CallbackResize, StringResizeCallback,
+        static_cast<void*>(&str));
+
+    // The hint is clipped to the field; when it overflows, show the full text on
+    // hover (empty, un-focused fields only).
+    if(str.empty() && hint && hint[0] && !ImGui::IsItemActive())
     {
-        // Draw the placeholder as a decorative draw-list overlay (clipped,
-        // vertically centered). It must not add a layout item, or it would shift
-        // the caller's following SameLine() widget.
-        const ImVec2 mn  = ImGui::GetItemRectMin();
-        const ImVec2 mx  = ImGui::GetItemRectMax();
-        const float  pad = ImGui::GetStyle().FramePadding.x;
-        const float  th  = ImGui::GetTextLineHeight();
-        ImDrawList*  dl  = ImGui::GetWindowDrawList();
-        dl->PushClipRect(ImVec2(mn.x + pad, mn.y), ImVec2(mx.x - pad, mx.y), true);
-        dl->AddText(ImVec2(mn.x + pad, mn.y + ((mx.y - mn.y) - th) * 0.5f),
-                    ImGui::GetColorU32(ImGuiCol_TextDisabled), hint);
-        dl->PopClipRect();
+        const float pad   = ImGui::GetStyle().FramePadding.x;
+        const float avail = ImGui::GetItemRectSize().x - 2.0f * pad;
+        if(ImGui::CalcTextSize(hint).x > avail && BeginItemTooltipStyled())
+        {
+            ImGui::TextUnformatted(hint);
+            EndTooltipStyled();
+        }
     }
     return input_changed;
 }

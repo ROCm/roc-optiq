@@ -47,19 +47,25 @@ constexpr float kCardPadY = 5.0f;
 // Minimum height for the run-output console child.
 constexpr float kMinOutputConsoleHeight = 60.0f;
 
+// Wrapped tooltip shared by every launcher "(?)", attached to the last item.
+void LaunchHelpTooltip(const char* text)
+{
+    if (ImGui::BeginItemTooltip())
+    {
+        ImGui::PushTextWrapPos(ImGui::GetFontSize() * kLaunchTooltipWrapEm);
+        ImGui::TextUnformatted(text);
+        ImGui::PopTextWrapPos();
+        ImGui::EndTooltip();
+    }
+}
+
 // A dimmed "(?)" tooltip marker, frame-aligned to sit level with its field.
 void HelpTip(const char* tooltip)
 {
     ImGui::SameLine();
     ImGui::AlignTextToFramePadding();
     ImGui::TextDisabled("(?)");
-    if (ImGui::BeginItemTooltip())
-    {
-        ImGui::PushTextWrapPos(ImGui::GetFontSize() * kLaunchTooltipWrapEm);
-        ImGui::TextUnformatted(tooltip);
-        ImGui::PopTextWrapPos();
-        ImGui::EndTooltip();
-    }
+    LaunchHelpTooltip(tooltip);
 }
 
 // Linear blend between two packed colors (t in [0,1]).
@@ -89,6 +95,13 @@ void EndLaunchCard()
 {
     EndPanelCard();
     // Cards are separated by the surrounding item spacing only.
+}
+
+float LaunchActionButtonWidth(const char* label)
+{
+    const float text_w = ImGui::CalcTextSize(label, nullptr, true).x;
+    return std::max(kLaunchActionButtonWidth,
+                    text_w + ImGui::GetStyle().FramePadding.x * 2.0f);
 }
 
 void LaunchCardHeader(const char* icon, const char* title, const char* help)
@@ -127,24 +140,19 @@ void LaunchCardHeader(const char* icon, const char* title, const char* help)
 
     if (help && help[0])
     {
-        // Center the "(?)" on the larger title font (frame-padding alignment
-        // would leave it sitting low against the bigger header text).
+        // Center the "(?)" on the taller title font, and submit the hit-target
+        // through the item system (occlusion- and delay-aware) rather than a raw
+        // IsMouseHoveringRect.
         const float title_cy =
             (ImGui::GetItemRectMin().y + ImGui::GetItemRectMax().y) * 0.5f;
         ImGui::SameLine();
         const ImVec2 q_sz = ImGui::CalcTextSize("(?)");
         const ImVec2 q_at(ImGui::GetCursorScreenPos().x, title_cy - q_sz.y * 0.5f);
+        ImGui::SetCursorScreenPos(q_at);
+        ImGui::Dummy(q_sz);
         ImGui::GetWindowDrawList()->AddText(q_at, settings.GetColor(Colors::kTextDim),
                                             "(?)");
-        ImGui::Dummy(q_sz);
-        if (ImGui::IsMouseHoveringRect(q_at, ImVec2(q_at.x + q_sz.x, q_at.y + q_sz.y)))
-        {
-            ImGui::BeginTooltip();
-            ImGui::PushTextWrapPos(ImGui::GetFontSize() * kLaunchTooltipWrapEm);
-            ImGui::TextUnformatted(help);
-            ImGui::PopTextWrapPos();
-            ImGui::EndTooltip();
-        }
+        LaunchHelpTooltip(help);
     }
     ImGui::Unindent(kAccentBarWidth + kAccentBarGap);
 }
@@ -361,7 +369,7 @@ bool RenderTargetSection(TargetSpec& target, ConnectionType connection, AppWindo
     // Size the label column to the widest label so nothing clips at high DPI.
     const float label_w  = std::max(kLaunchLabelColumnMinWidth,
         ImGui::CalcTextSize("Output folder").x + ImGui::GetStyle().ItemSpacing.x * 2.0f);
-    const float browse_w = kLaunchActionButtonWidth;
+    const float browse_w = LaunchActionButtonWidth("Browse");
     const float spacing  = ImGui::GetStyle().ItemSpacing.x;
     const float arrow_w  = ImGui::GetFrameHeight();
 
@@ -514,7 +522,7 @@ bool RenderToolLocationSection(std::string& tool_directory, ConnectionType conne
     // Size the label column to fit its label (matches RenderTargetSection).
     const float label_w  = std::max(kLaunchLabelColumnMinWidth,
         ImGui::CalcTextSize("Tools folder").x + ImGui::GetStyle().ItemSpacing.x * 2.0f);
-    const float browse_w = kLaunchActionButtonWidth;
+    const float browse_w = LaunchActionButtonWidth("Browse");
     const float spacing  = ImGui::GetStyle().ItemSpacing.x;
 
     ImGui::AlignTextToFramePadding();

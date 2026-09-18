@@ -25,6 +25,10 @@ inline constexpr float kLaunchActionButtonWidth   = 84.0f;
 inline constexpr float kLaunchLabelColumnMinWidth = 105.0f;
 inline constexpr float kLaunchTooltipWrapEm       = 25.0f;
 
+// Width of a "Browse"/"Add" action button: fits the label, floored at the shared
+// minimum so buttons (and the inputs beside them) line up at any UI scale.
+float LaunchActionButtonWidth(const char* label);
+
 // =============================================================================
 // Modern launcher UI primitives
 //

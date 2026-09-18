@@ -25,6 +25,20 @@ enum class MemChartArrowDir : uint8_t
     kBoth,      // bidirectional
 };
 
+// Theme-independent color slot for a content row or arrow. Resolved from the
+// layout `category` (or inferred from the label). Mapped to an ImU32 via the
+// chart palette, which is rebuilt on theme change.
+enum class MemChartColorKind : uint8_t
+{
+    kNeutral = 0,
+    kRead,
+    kWrite,
+    kAtomic,
+    kUtil,
+    kHit,
+    kStall,
+};
+
 // A reference to a metric by its full dotted id ("category.table.entry", e.g.
 // "3.1.0"), held in `name` when `valid` is true.
 struct MemChartMetricRef
@@ -46,8 +60,10 @@ struct MemChartContentItem
 
     // Render cache: resolved label/value strings, refreshed on layout load and
     // on metric fetch (not recomputed per frame).
-    std::string cached_label;
-    std::string cached_value;
+    std::string       cached_label;
+    std::string       cached_value;
+    MemChartColorKind cached_color_kind = MemChartColorKind::kNeutral;
+    uint32_t          cached_color      = 0;  // Palette ImU32 for cached_color_kind.
 };
 
 struct MemChartBlock
@@ -86,8 +102,10 @@ struct MemChartArrow
 
     // Render cache: resolved label/value strings, refreshed on layout load and
     // on metric fetch (not recomputed per frame).
-    std::string cached_label;
-    std::string cached_value;
+    std::string       cached_label;
+    std::string       cached_value;
+    MemChartColorKind cached_color_kind = MemChartColorKind::kNeutral;
+    uint32_t          cached_color      = 0;  // Palette ImU32 for cached_color_kind.
 };
 
 // A titled box drawn around a container block's children. Populated during

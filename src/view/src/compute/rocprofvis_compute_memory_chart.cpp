@@ -7,6 +7,7 @@
 #include "rocprofvis_data_provider.h"
 #include "rocprofvis_memory_chart_layouts_generated.h"
 #include "rocprofvis_requests.h"
+#include "rocprofvis_event_manager.h"
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_utils.h"
 #include "model/compute/rocprofvis_compute_data_model.h"
@@ -19,7 +20,6 @@
 #include <cstdio>
 #include <cstring>
 #include <fstream>
-#include <functional>
 #include <map>
 #include <optional>
 #include <set>
@@ -193,37 +193,17 @@ SortLayoutBlocks(std::vector<MemChartBlock>& blocks)
     SortNestedChildrenByOrder(blocks);
 }
 
-struct ChartColors
+// Depth-first walk of a (possibly nested) block list. Layouts nest metric
+// leaves inside container boxes, so callers cannot just iterate m_layout.blocks.
+template <typename Blocks, typename Fn>
+static void
+ForEachBlock(Blocks& blocks, Fn&& fn)
 {
-    ImU32 bg;
-    ImU32 panel;
-    ImU32 panel_alt;
-    ImU32 border;
-    ImU32 border_hot;
-    ImU32 text_main;
-    ImU32 text_dim;
-    ImU32 read;
-    ImU32 write;
-    ImU32 atomic;
-    ImU32 util;
-    ImU32 hit;
-    ImU32 stall;
-    ImU32 shadow;
-};
-
-static ChartColors
-C()
-{
-    const SettingsManager& s = SettingsManager::GetInstance();
-    return ChartColors{
-        s.GetColor(Colors::kMemChartBg),        s.GetColor(Colors::kMemChartPanel),
-        s.GetColor(Colors::kMemChartPanelAlt),  s.GetColor(Colors::kMemChartBorder),
-        s.GetColor(Colors::kMemChartBorderHot), s.GetColor(Colors::kMemChartTextMain),
-        s.GetColor(Colors::kMemChartTextDim),   s.GetColor(Colors::kMemChartRead),
-        s.GetColor(Colors::kMemChartWrite),     s.GetColor(Colors::kMemChartAtomic),
-        s.GetColor(Colors::kMemChartUtil),      s.GetColor(Colors::kMemChartHit),
-        s.GetColor(Colors::kMemChartStall),     s.GetColor(Colors::kMemChartShadow),
-    };
+    for(auto& block : blocks)
+    {
+        fn(block);
+        ForEachBlock(block.children, fn);
+    }
 }
 
 static bool
@@ -232,32 +212,34 @@ StartsWith(const std::string& text, const char* prefix)
     return std::strncmp(text.c_str(), prefix, std::strlen(prefix)) == 0;
 }
 
-// Color picked from the label's leading word so read/write/atomic flows are
-// visually distinct regardless of which metric backs them.
-static ImU32
-ColorForLabel(const std::string& label)
+// Color slot from the label's leading word so unlabeled older layouts still
+// distinguish read/write/atomic. Unrecognized prefixes (including a blank
+// label) map to the chart's main text color.
+static MemChartColorKind
+ColorKindForLabel(const std::string& label)
 {
-    if(StartsWith(label, "Wr")) return C().write;
-    if(StartsWith(label, "Atomic")) return C().atomic;
-    if(StartsWith(label, "Util")) return C().util;
-    if(StartsWith(label, "Hit")) return C().hit;
-    if(StartsWith(label, "Stall")) return C().stall;
-    return C().read;
+    if(StartsWith(label, "Wr")) return MemChartColorKind::kWrite;
+    if(StartsWith(label, "Rd") || StartsWith(label, "Read")) return MemChartColorKind::kRead;
+    if(StartsWith(label, "Atomic")) return MemChartColorKind::kAtomic;
+    if(StartsWith(label, "Util")) return MemChartColorKind::kUtil;
+    if(StartsWith(label, "Hit")) return MemChartColorKind::kHit;
+    if(StartsWith(label, "Stall")) return MemChartColorKind::kStall;
+    return MemChartColorKind::kNeutral;
 }
 
-// Color from an explicit data-driven category. Falls back to the label
+// Slot from an explicit data-driven category. Falls back to the label
 // heuristic when no category is given, so older layouts keep working.
-static ImU32
-ColorForCategory(const std::string& category, const std::string& label)
+static MemChartColorKind
+ColorKindForCategory(const std::string& category, const std::string& label)
 {
-    if(category.empty()) return ColorForLabel(label);
-    if(category == "read") return C().read;
-    if(category == "write") return C().write;
-    if(category == "atomic") return C().atomic;
-    if(category == "util") return C().util;
-    if(category == "hit") return C().hit;
-    if(category == "stall") return C().stall;
-    return C().text_main;  // "misc" / anything else: neutral color.
+    if(category.empty()) return ColorKindForLabel(label);
+    if(category == "read") return MemChartColorKind::kRead;
+    if(category == "write") return MemChartColorKind::kWrite;
+    if(category == "atomic") return MemChartColorKind::kAtomic;
+    if(category == "util") return MemChartColorKind::kUtil;
+    if(category == "hit") return MemChartColorKind::kHit;
+    if(category == "stall") return MemChartColorKind::kStall;
+    return MemChartColorKind::kNeutral;  // "misc" / anything else.
 }
 
 static bool
@@ -282,34 +264,34 @@ FormatMetricValueRaw(double value)
     return std::string(buf);
 }
 
-static void
-DrawBlockRect(ImDrawList* draw_list, ImVec2 top_left, ImVec2 bottom_right)
+void
+ComputeMemoryChartView::DrawBlockRect(ImDrawList* draw_list, ImVec2 top_left, ImVec2 bottom_right)
 {
     draw_list->AddRectFilled({top_left.x + BLOCK_SHADOW_OFFSET_X, top_left.y + BLOCK_SHADOW_OFFSET_Y},
                              {bottom_right.x + BLOCK_SHADOW_OFFSET_X, bottom_right.y + BLOCK_SHADOW_OFFSET_Y},
-                             C().shadow, BLOCK_ROUNDING);
-    draw_list->AddRectFilled(top_left, bottom_right, C().panel, BLOCK_ROUNDING);
+                             m_colors.shadow, BLOCK_ROUNDING);
+    draw_list->AddRectFilled(top_left, bottom_right, m_colors.panel, BLOCK_ROUNDING);
     draw_list->AddRectFilled({top_left.x + BLOCK_HIGHLIGHT_INSET, top_left.y + BLOCK_HIGHLIGHT_INSET},
                              {bottom_right.x - BLOCK_HIGHLIGHT_INSET, top_left.y + BLOCK_HIGHLIGHT_BOTTOM},
-                             ApplyAlpha(C().border_hot, BLOCK_HIGHLIGHT_ALPHA), BLOCK_HIGHLIGHT_ROUNDING);
-    draw_list->AddRect(top_left, bottom_right, C().border, BLOCK_ROUNDING, 0, BLOCK_BORDER_THICKNESS);
+                             ApplyAlpha(m_colors.border_hot, BLOCK_HIGHLIGHT_ALPHA), BLOCK_HIGHLIGHT_ROUNDING);
+    draw_list->AddRect(top_left, bottom_right, m_colors.border, BLOCK_ROUNDING, 0, BLOCK_BORDER_THICKNESS);
 }
 
-static float
-DrawBlockHeader(ImDrawList* draw_list, const char* title, float block_x, float block_y,
-                float block_w)
+float
+ComputeMemoryChartView::DrawBlockHeader(ImDrawList* draw_list, const char* title, float block_x,
+                                        float block_y, float block_w)
 {
     float text_y = block_y + BLOCK_TEXT_PAD;
     float text_h = ImGui::CalcTextSize(title).y;
     draw_list->AddRectFilled({block_x + BLOCK_TEXT_PAD, text_y + HEADER_ACCENT_INSET},
                              {block_x + BLOCK_TEXT_PAD + HEADER_ACCENT_WIDTH, text_y + text_h - HEADER_ACCENT_INSET},
-                             C().read, HEADER_ACCENT_ROUNDING);
-    draw_list->AddText(ImVec2(block_x + BLOCK_TEXT_PAD + HEADER_TITLE_INDENT, text_y), C().text_main, title);
+                             m_colors.read, HEADER_ACCENT_ROUNDING);
+    draw_list->AddText(ImVec2(block_x + BLOCK_TEXT_PAD + HEADER_TITLE_INDENT, text_y), m_colors.text_main, title);
 
     float line_y = text_y + text_h + HEADER_TITLE_GAP;
     draw_list->AddLine(ImVec2(block_x + BLOCK_TEXT_PAD, line_y),
                        ImVec2(block_x + block_w - BLOCK_TEXT_PAD, line_y),
-                       ApplyAlpha(C().border, HEADER_SEP_ALPHA), HEADER_SEP_THICKNESS);
+                       ApplyAlpha(m_colors.border, HEADER_SEP_ALPHA), HEADER_SEP_THICKNESS);
     return line_y + HEADER_SEP_GAP;
 }
 
@@ -358,55 +340,57 @@ DrawArrowHead(ImDrawList* draw_list, ImVec2 tip, ImVec2 dir, ImU32 color)
     draw_list->AddTriangleFilled(tip, a, b, color);
 }
 
-static void
-DrawFloatingLabel(ImDrawList* draw_list, ImVec2 pos, const char* text, ImU32 accent_color)
+void
+ComputeMemoryChartView::DrawFloatingLabel(ImDrawList* draw_list, ImVec2 pos, const char* text,
+                                          uint32_t accent_color)
 {
     ImVec2 text_size = ImGui::CalcTextSize(text);
     ImVec2 pad(LABEL_PAD_X, LABEL_PAD_Y);
     ImVec2 min(pos.x - pad.x, pos.y - pad.y);
     ImVec2 max(pos.x + text_size.x + pad.x, pos.y + text_size.y + pad.y);
-    draw_list->AddRectFilled(min, max, C().bg, LABEL_ROUNDING);
+    draw_list->AddRectFilled(min, max, m_colors.bg, LABEL_ROUNDING);
     draw_list->AddRect(min, max, ApplyAlpha(accent_color, LABEL_BORDER_ALPHA), LABEL_ROUNDING, 0,
                        LABEL_BORDER_THICKNESS);
     draw_list->AddText(pos, accent_color, text);
 }
 
-static void
-DrawGroupBox(ImDrawList* draw_list, ImVec2 top_left, float w, float h, const char* title)
+void
+ComputeMemoryChartView::DrawGroupBox(ImDrawList* draw_list, ImVec2 top_left, float w, float h,
+                                     const char* title)
 {
     ImVec2 bottom_right(top_left.x + w, top_left.y + h);
-    draw_list->AddRectFilled(top_left, bottom_right, ApplyAlpha(C().panel_alt, GROUP_FILL_ALPHA),
+    draw_list->AddRectFilled(top_left, bottom_right, ApplyAlpha(m_colors.panel_alt, GROUP_FILL_ALPHA),
                              BLOCK_ROUNDING);
-    draw_list->AddRect(top_left, bottom_right, ApplyAlpha(C().border, GROUP_BORDER_ALPHA),
+    draw_list->AddRect(top_left, bottom_right, ApplyAlpha(m_colors.border, GROUP_BORDER_ALPHA),
                        BLOCK_ROUNDING, 0, GROUP_BORDER_THICKNESS);
     if(title && title[0] != '\0')
     {
-        draw_list->AddText({top_left.x + BLOCK_TEXT_PAD, top_left.y + GROUP_TITLE_TOP}, C().text_dim,
-                           title);
+        draw_list->AddText({top_left.x + BLOCK_TEXT_PAD, top_left.y + GROUP_TITLE_TOP},
+                           m_colors.text_dim, title);
     }
 }
 
-static void
-DrawLegend(ImDrawList* draw_list, ImVec2 origin, float y)
+void
+ComputeMemoryChartView::DrawLegend(ImDrawList* draw_list, ImVec2 origin, float y)
 {
     struct LegendItem
     {
         const char* text;
-        ImU32       color;
+        uint32_t    color;
     };
     const LegendItem legend[] = {
-        {"Read", C().read}, {"Write", C().write}, {"Atomic", C().atomic},
-        {"Util", C().util}, {"Hit", C().hit},     {"Stall", C().stall}};
+        {"Read", m_colors.read}, {"Write", m_colors.write}, {"Atomic", m_colors.atomic},
+        {"Util", m_colors.util}, {"Hit", m_colors.hit},     {"Stall", m_colors.stall}};
 
     ImVec2 pos(origin.x + CHART_PADDING, origin.y + y);
-    draw_list->AddText(pos, C().text_dim, "Legend:");
+    draw_list->AddText(pos, m_colors.text_dim, "Legend:");
     pos.x += ImGui::CalcTextSize("Legend:").x + LEGEND_LABEL_GAP;
     for(const LegendItem& item : legend)
     {
         draw_list->AddRectFilled({pos.x, pos.y + LEGEND_SWATCH_TOP},
                                  {pos.x + LEGEND_SWATCH_WIDTH, pos.y + LEGEND_SWATCH_BOTTOM},
                                  item.color, LEGEND_SWATCH_ROUNDING);
-        draw_list->AddText({pos.x + LEGEND_TEXT_GAP, pos.y}, C().text_dim, item.text);
+        draw_list->AddText({pos.x + LEGEND_TEXT_GAP, pos.y}, m_colors.text_dim, item.text);
         pos.x += LEGEND_TEXT_GAP + ImGui::CalcTextSize(item.text).x + LEGEND_ITEM_GAP;
     }
 }
@@ -417,10 +401,22 @@ ComputeMemoryChartView::ComputeMemoryChartView(
 , m_compute_selection(compute_selection)
 , m_client_id(IdGenerator::GetInstance().GenerateId())
 {
+    RefreshPalette();
+    m_theme_changed_token = EventManager::GetInstance()->Subscribe(
+        static_cast<int>(RocEvents::kThemeChanged),
+        [this](std::shared_ptr<RocEvent> e) {
+            (void) e;
+            RefreshPalette();
+            RefreshCachedColors();
+        });
     LoadLayout();
 }
 
-ComputeMemoryChartView::~ComputeMemoryChartView() {}
+ComputeMemoryChartView::~ComputeMemoryChartView()
+{
+    EventManager::GetInstance()->Unsubscribe(
+        static_cast<int>(RocEvents::kThemeChanged), m_theme_changed_token);
+}
 
 // Embedded layout by exact registry key ("default", "gfx950", ...).
 static const char*
@@ -564,15 +560,9 @@ ComputeMemoryChartView::OnLayoutLoaded()
     // Rebuild the id -> block index (pointers into m_layout, valid until the next
     // layout load). Nested ids are first-class arrow endpoints.
     m_block_by_id.clear();
-    std::function<void(const std::vector<MemChartBlock>&)> index;
-    index = [this, &index](const std::vector<MemChartBlock>& blocks) {
-        for(const MemChartBlock& block : blocks)
-        {
-            m_block_by_id[block.id] = &block;
-            index(block.children);
-        }
-    };
-    index(m_layout.blocks);
+    ForEachBlock(m_layout.blocks, [this](MemChartBlock& block) {
+        m_block_by_id[block.id] = &block;
+    });
 
     RebuildColumnGaps();
     RefreshMetricStrings();
@@ -619,25 +609,77 @@ ComputeMemoryChartView::RebuildColumnGaps()
 void
 ComputeMemoryChartView::RefreshMetricStrings()
 {
-    std::function<void(std::vector<MemChartBlock>&)> visit;
-    visit = [this, &visit](std::vector<MemChartBlock>& blocks) {
-        for(MemChartBlock& block : blocks)
+    ForEachBlock(m_layout.blocks, [this](MemChartBlock& block) {
+        for(MemChartContentItem& item : block.content)
         {
-            for(MemChartContentItem& item : block.content)
-            {
-                item.cached_label = MetricLabel(item.metric, item.title);
-                item.cached_value = MetricValueText(item.metric, true, item.unit);
-            }
-            visit(block.children);
+            item.cached_label = MetricLabel(item.metric, item.title);
+            item.cached_value = MetricValueText(item.metric, true, item.unit);
+            item.cached_color_kind =
+                ColorKindForCategory(item.category, item.cached_label);
         }
-    };
-    visit(m_layout.blocks);
+    });
 
     for(MemChartArrow& arrow : m_layout.arrows)
     {
         arrow.cached_label = arrow.title.empty() ? MetricLabel(arrow.metric, "") : arrow.title;
         // Arrow labels omit the unit (kept compact; full value + unit is in the tooltip).
         arrow.cached_value = MetricValueText(arrow.metric, false);
+        const std::string& color_key =
+            arrow.cached_label.empty() ? arrow.cached_value : arrow.cached_label;
+        arrow.cached_color_kind = ColorKindForCategory(arrow.category, color_key);
+    }
+    RefreshCachedColors();
+}
+
+void
+ComputeMemoryChartView::RefreshPalette()
+{
+    const SettingsManager& s = SettingsManager::GetInstance();
+    m_colors.bg         = s.GetColor(Colors::kMemChartBg);
+    m_colors.panel      = s.GetColor(Colors::kMemChartPanel);
+    m_colors.panel_alt  = s.GetColor(Colors::kMemChartPanelAlt);
+    m_colors.border     = s.GetColor(Colors::kMemChartBorder);
+    m_colors.border_hot = s.GetColor(Colors::kMemChartBorderHot);
+    m_colors.text_main  = s.GetColor(Colors::kMemChartTextMain);
+    m_colors.text_dim   = s.GetColor(Colors::kMemChartTextDim);
+    m_colors.read       = s.GetColor(Colors::kMemChartRead);
+    m_colors.write      = s.GetColor(Colors::kMemChartWrite);
+    m_colors.atomic     = s.GetColor(Colors::kMemChartAtomic);
+    m_colors.util       = s.GetColor(Colors::kMemChartUtil);
+    m_colors.hit        = s.GetColor(Colors::kMemChartHit);
+    m_colors.stall      = s.GetColor(Colors::kMemChartStall);
+    m_colors.shadow     = s.GetColor(Colors::kMemChartShadow);
+}
+
+void
+ComputeMemoryChartView::RefreshCachedColors()
+{
+    ForEachBlock(m_layout.blocks, [this](MemChartBlock& block) {
+        for(MemChartContentItem& item : block.content)
+        {
+            item.cached_color = ColorFromKind(item.cached_color_kind);
+        }
+    });
+
+    for(MemChartArrow& arrow : m_layout.arrows)
+    {
+        arrow.cached_color = ColorFromKind(arrow.cached_color_kind);
+    }
+}
+
+uint32_t
+ComputeMemoryChartView::ColorFromKind(MemChartColorKind kind) const
+{
+    switch(kind)
+    {
+    case MemChartColorKind::kRead:   return m_colors.read;
+    case MemChartColorKind::kWrite:  return m_colors.write;
+    case MemChartColorKind::kAtomic: return m_colors.atomic;
+    case MemChartColorKind::kUtil:   return m_colors.util;
+    case MemChartColorKind::kHit:    return m_colors.hit;
+    case MemChartColorKind::kStall:  return m_colors.stall;
+    case MemChartColorKind::kNeutral:
+    default:                        return m_colors.text_main;
     }
 }
 
@@ -900,15 +942,9 @@ ComputeMemoryChartView::ComputeLayout(float available_width)
     // needs to fit the busier side. Top-level blocks only (layouts are flat).
     {
         std::map<int32_t, int> column_counts;
-        std::function<void(const std::vector<MemChartBlock>&)> count_columns =
-            [&](const std::vector<MemChartBlock>& blocks) {
-                for(const MemChartBlock& block : blocks)
-                {
-                    column_counts[block.column]++;
-                    count_columns(block.children);
-                }
-            };
-        count_columns(m_layout.blocks);
+        ForEachBlock(m_layout.blocks, [&](const MemChartBlock& block) {
+            column_counts[block.column]++;
+        });
 
         std::map<uint32_t, int> entry_anchored;  // arrows entering from the left
         std::map<uint32_t, int> exit_anchored;   // arrows leaving to the right
@@ -1089,7 +1125,7 @@ ComputeMemoryChartView::Render()
     float canvas_w = max_right + CHART_PADDING;
     float canvas_h = max_bottom + CHART_PADDING * 2.0f + LEGEND_HEIGHT;
 
-    ImGui::PushStyleColor(ImGuiCol_ChildBg, C().bg);
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, m_colors.bg);
     ImGui::BeginChild("MemoryChart", ImVec2(0, canvas_h), ImGuiChildFlags_None,
                       ImGuiWindowFlags_HorizontalScrollbar |
                           ImGuiWindowFlags_NoScrollWithMouse);
@@ -1101,7 +1137,7 @@ ComputeMemoryChartView::Render()
         std::max(canvas_w, ImGui::GetContentRegionAvail().x + ImGui::GetScrollX());
     draw_list->AddRectFilled(window_position,
                              {window_position.x + backdrop_w, window_position.y + canvas_h},
-                             C().bg);
+                             m_colors.bg);
 
     // Arrows first, then group boxes (containers), then blocks on top.
     DrawArrowRoutes(draw_list, window_position, routes);
@@ -1156,7 +1192,7 @@ ComputeMemoryChartView::DrawLeaf(ImDrawList* draw_list, ImVec2 origin,
         ImVec2 text_size = ImGui::CalcTextSize(block.title.c_str());
         draw_list->AddText({block_x + (block.w - text_size.x) * 0.5f,
                             block_y + (block.h - text_size.y) * 0.5f},
-                           C().text_main, block.title.c_str());
+                           m_colors.text_main, block.title.c_str());
         return;
     }
 
@@ -1166,9 +1202,9 @@ ComputeMemoryChartView::DrawLeaf(ImDrawList* draw_list, ImVec2 origin,
 
     for(const MemChartContentItem& item : block.content)
     {
-        const std::string& label = item.cached_label;
-        const std::string& value = item.cached_value;
-        ImU32              accent = ColorForCategory(item.category, label);
+        const std::string& label  = item.cached_label;
+        const std::string& value  = item.cached_value;
+        ImU32              accent = item.cached_color;
 
         ImVec2 row_min(block_x + ROW_INSET_X, cursor_y - ROW_HOVER_INSET);
         ImVec2 row_max(block_x + block.w - ROW_INSET_X, cursor_y + ROW_HEIGHT - ROW_HOVER_INSET);
@@ -1176,7 +1212,7 @@ ComputeMemoryChartView::DrawLeaf(ImDrawList* draw_list, ImVec2 origin,
                                   ImGuiHoveredFlags_NoPopupHierarchy) &&
            ImGui::IsMouseHoveringRect(row_min, row_max))
         {
-            draw_list->AddRectFilled(row_min, row_max, ApplyAlpha(C().border_hot, ROW_HOVER_ALPHA),
+            draw_list->AddRectFilled(row_min, row_max, ApplyAlpha(m_colors.border_hot, ROW_HOVER_ALPHA),
                                      ROW_HOVER_ROUNDING);
         }
 
@@ -1186,12 +1222,12 @@ ComputeMemoryChartView::DrawLeaf(ImDrawList* draw_list, ImVec2 origin,
             ApplyAlpha(accent, ROW_ACCENT_ALPHA), ROW_ACCENT_ROUNDING);
         std::string label_text = label + ":";
         DrawTextWithTooltip(draw_list, {block_x + BLOCK_TEXT_PAD + ROW_LABEL_INDENT, cursor_y},
-                            C().text_dim, label_text.c_str(), item.metric, true, false);
+                            m_colors.text_dim, label_text.c_str(), item.metric, true, false);
 
         bool  available = IsAvailableMetricText(value);
         float value_w   = ImGui::CalcTextSize(value.c_str()).x;
         float value_x   = block_x + block.w - BLOCK_TEXT_PAD - value_w;
-        ImU32 value_col = available ? accent : C().text_dim;
+        ImU32 value_col = available ? accent : m_colors.text_dim;
         DrawTextWithTooltip(draw_list, {value_x, cursor_y}, value_col, value.c_str(),
                             item.metric, false, true);
 
@@ -1261,8 +1297,10 @@ ComputeMemoryChartView::BuildArrowRoutes(std::vector<ArrowRoute>& routes) const
         // Cached label/value (refreshed on load and on metric fetch, not per frame).
         const std::string& label = arrow.cached_label;
         const std::string& value = arrow.cached_value;
-        route.label = label.empty() ? value : (label + ": " + value);
-        route.color = ColorForCategory(arrow.category, label.empty() ? value : label);
+        // An unnamed arrow (no title and no resolvable metric) has nothing to
+        // caption, so it stays unlabelled instead of reading "N/A".
+        route.label = label.empty() ? std::string() : (label + ": " + value);
+        route.color = arrow.cached_color;
 
         // Which endpoint(s) get a head: the destination of the flow.
         bool head_from = arrow.direction == MemChartArrowDir::kBoth ||
@@ -1272,11 +1310,12 @@ ComputeMemoryChartView::BuildArrowRoutes(std::vector<ArrowRoute>& routes) const
         route.head_at_first = head_from;  // points[0] sits at `from`
         route.head_at_last  = head_to;    // points.back() sits at `to`
 
-        ImVec2 size        = ImGui::CalcTextSize(route.label.c_str());
-        route.label_w      = size.x;
-        route.label_h      = size.y;
-        route.label_x      = label_x - size.x * 0.5f;
-        route.label_y      = label_y - size.y - ARROW_LABEL_ABOVE;
+        ImVec2 size =
+            route.label.empty() ? ImVec2(0.0f, 0.0f) : ImGui::CalcTextSize(route.label.c_str());
+        route.label_w = size.x;
+        route.label_h = size.y;
+        route.label_x = label_x - size.x * 0.5f;
+        route.label_y = label_y - size.y - ARROW_LABEL_ABOVE;
         routes.push_back(std::move(route));
     };
 
@@ -1329,15 +1368,9 @@ ComputeMemoryChartView::BuildArrowRoutes(std::vector<ArrowRoute>& routes) const
     // How many blocks share each column (a "stacked" column has > 1), counting
     // nested blocks too (their column was propagated during layout).
     std::map<int32_t, int> column_counts;
-    std::function<void(const std::vector<MemChartBlock>&)> count_columns =
-        [&](const std::vector<MemChartBlock>& blocks) {
-            for(const MemChartBlock& block : blocks)
-            {
-                column_counts[block.column]++;
-                count_columns(block.children);
-            }
-        };
-    count_columns(m_layout.blocks);
+    ForEachBlock(m_layout.blocks, [&](const MemChartBlock& block) {
+        column_counts[block.column]++;
+    });
 
     for(size_t i : adjacent)
     {
@@ -1551,6 +1584,9 @@ ComputeMemoryChartView::ResolveLabelOverlaps(std::vector<ArrowRoute>& routes) co
 
     for(ArrowRoute& route : routes)
     {
+        // Unlabelled arrows neither move nor block anyone else.
+        if(route.label.empty()) continue;
+
         int pass = 0;
         bool moved = true;
         while(moved && pass++ < MAX_LABEL_PASSES)
@@ -1634,7 +1670,7 @@ ComputeMemoryChartView::DrawArrowRoutes(ImDrawList* draw_list, ImVec2 origin,
     // an earlier arrow's label.
     for(const ArrowRoute& route : routes)
     {
-        if(route.points.size() < 2) continue;
+        if(route.points.size() < 2 || route.label.empty()) continue;
         ImVec2 label_pos(origin.x + route.label_x, origin.y + route.label_y);
         DrawFloatingLabel(draw_list, label_pos, route.label.c_str(), route.color);
         ImVec2 label_size(route.label_w, route.label_h);

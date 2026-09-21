@@ -938,9 +938,10 @@ ComputeMemoryChartView::ComputeLayout(float available_width)
         MeasureBlock(block);
     }
 
-    // Grow each block so its fanned adjacent-arrow connectors and labels fit.
-    // Entry- and exit-side arrows sit in separate corridors, so a block only
-    // needs to fit the busier side. Top-level blocks only (layouts are flat).
+    // Grow each block so its fanned connectors and labels fit. Entry- and
+    // exit-side arrows sit in separate corridors, so a block only needs to fit
+    // the busier side. Counts must match the ports BuildArrowRoutes actually
+    // fans, or fan_y silently compresses them. Top-level blocks only.
     {
         std::map<int32_t, int> column_counts;
         ForEachBlock(m_layout.blocks, [&](const MemChartBlock& block) {
@@ -955,7 +956,15 @@ ComputeMemoryChartView::ComputeLayout(float available_width)
             const MemChartBlock* to   = Block(arrow.to);
             if(!from || !to) continue;
             int32_t dcol = to->column - from->column;
-            if(dcol != 1 && dcol != -1) continue;  // only adjacent arrows fan here
+            // Same column: the arrow leaves and re-enters the right edge, so
+            // both of its ends claim an exit port on their own block.
+            if(dcol == 0)
+            {
+                exit_anchored[from->id]++;
+                exit_anchored[to->id]++;
+                continue;
+            }
+            if(dcol != 1 && dcol != -1) continue;  // skip-column arrows use the highways
             const MemChartBlock* left  = from->column < to->column ? from : to;
             const MemChartBlock* right = from->column < to->column ? to : from;
             if(column_counts[right->column] > 1)

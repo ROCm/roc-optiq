@@ -201,6 +201,10 @@ private:
     uint32_t GetScrollTarget(ImGuiListClipper& clipper);
     void RenderLine(uint32_t index, uint32_t column_count);
 
+    static double SafePercent(uint64_t part, uint64_t total);
+    static ImU32  PercentColor(double percent);
+    void          RenderPercentBarCell(double percent);
+
     struct IsaRow
     {
         std::string instruction;

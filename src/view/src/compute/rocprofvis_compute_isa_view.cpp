@@ -23,6 +23,12 @@ namespace View
 constexpr uint64_t INVALID_SOURCE_LINE_NUMBER = 0;
 constexpr uint32_t NO_SCROLL_TARGET = 0;
 
+// Heatmap endpoints for percentage bars: low -> green, mid -> yellow, high -> red.
+// Alpha is kept low so the value text stays readable over the fill.
+constexpr ImVec4 kHeatmapLow {0.24f, 0.70f, 0.28f, 0.5f};
+constexpr ImVec4 kHeatmapMid {0.90f, 0.78f, 0.18f, 0.5f};
+constexpr ImVec4 kHeatmapHigh{0.82f, 0.24f, 0.24f, 0.5f};
+
 TabItem
 ComputeIsaView::CreateTabItem(DataProvider& data_provider)
 {
@@ -947,6 +953,53 @@ IsaCodeWidget::GetScrollTarget(ImGuiListClipper& clipper)
     return scroll_target;
 }
 
+double
+IsaCodeWidget::SafePercent(uint64_t part, uint64_t total)
+{
+    return total > 0 ? static_cast<double>(part) / static_cast<double>(total) * 100.0 : 0.0;
+}
+
+// Maps a percentage to a heatmap color: green (low) -> yellow (mid) -> red (high).
+ImU32
+IsaCodeWidget::PercentColor(double percent)
+{
+    const float fraction = std::clamp(static_cast<float>(percent) / 100.0f, 0.0f, 1.0f);
+
+    const auto lerp = [](const ImVec4& from, const ImVec4& to, float amount) {
+        return ImVec4(from.x + (to.x - from.x) * amount, from.y + (to.y - from.y) * amount,
+                      from.z + (to.z - from.z) * amount, from.w + (to.w - from.w) * amount);
+    };
+
+    constexpr float midpoint = 0.5f;
+    const ImVec4    color =
+        fraction < midpoint
+            ? lerp(kHeatmapLow, kHeatmapMid, fraction / midpoint)
+            : lerp(kHeatmapMid, kHeatmapHigh, (fraction - midpoint) / midpoint);
+    return ImGui::ColorConvertFloat4ToU32(color);
+}
+
+// Draws a proportional heatmap fill spanning `percent` of the current cell,
+// mirroring the kernel metric table bar style, then renders the value on top.
+// A zero percentage draws no bar.
+void
+IsaCodeWidget::RenderPercentBarCell(double percent)
+{
+    const float fraction = std::clamp(static_cast<float>(percent) / 100.0f, 0.0f, 1.0f);
+    if(fraction > 0.0f)
+    {
+        const ImVec2 pos = ImGui::GetCursorScreenPos();
+        const float  w   = ImGui::GetContentRegionAvail().x;
+        const float  h   = ImGui::GetTextLineHeightWithSpacing();
+
+        ImDrawList* draw_list = ImGui::GetWindowDrawList();
+        draw_list->PushClipRect(pos, ImVec2(pos.x + w, pos.y + h), true);
+        draw_list->AddRectFilled(pos, ImVec2(pos.x + w * fraction, pos.y + h),
+                                 PercentColor(percent));
+        draw_list->PopClipRect();
+    }
+    ImGui::TextDisabled("%.1f%%", percent);
+}
+
 void
 IsaCodeWidget::RenderLine(uint32_t index, uint32_t columns_count)
 {
@@ -995,16 +1048,10 @@ IsaCodeWidget::RenderLine(uint32_t index, uint32_t columns_count)
 
     if(IsStallShown())
     {
-        const double total = static_cast<double>(isa_row.total_count);
-        const double issue_pct =
-            total > 0.0 ? static_cast<double>(isa_row.issue_count) / total * 100.0 : 0.0;
-        const double stall_pct =
-            total > 0.0 ? static_cast<double>(isa_row.stall_count) / total * 100.0 : 0.0;
-
         ImGui::TableSetColumnIndex(++column);
-        ImGui::TextDisabled("%.1f%%", issue_pct);
+        RenderPercentBarCell(SafePercent(isa_row.issue_count, isa_row.total_count));
         ImGui::TableSetColumnIndex(++column);
-        ImGui::TextDisabled("%.1f%%", stall_pct);
+        RenderPercentBarCell(SafePercent(isa_row.stall_count, isa_row.total_count));
     }
 
 }

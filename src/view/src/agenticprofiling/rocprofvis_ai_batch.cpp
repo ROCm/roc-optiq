@@ -116,7 +116,7 @@ AssistantPanel::UpdateBatch()
                 // SendCurrentInput refuses before it starts anything when the
                 // endpoint is unconfigured, and says so in the transcript.
                 FinishBatch(AssistantBatchState::kFailed,
-                            "Explain this view did not start. " + LastAssistantText());
+                            "Explain this view did not start. " + LastStatusText());
                 return;
             }
             m_batch.stage = BatchRun::Stage::kExplainWait;
@@ -139,12 +139,13 @@ AssistantPanel::UpdateBatch()
             {
                 return;
             }
-            m_input = m_batch.request.question;
+            m_input                  = m_batch.request.question;
+            m_batch.answer_watermark = m_lines.size();
             SendCurrentInput(false);
             if(!Busy())
             {
                 FinishBatch(AssistantBatchState::kFailed,
-                            "The question did not start. " + LastAssistantText());
+                            "The question did not start. " + LastStatusText());
                 return;
             }
             m_batch.stage = BatchRun::Stage::kQuestionWait;
@@ -155,6 +156,16 @@ AssistantPanel::UpdateBatch()
         {
             if(Busy())
             {
+                return;
+            }
+            // A turn ending is not a turn answering. A request that fails
+            // mid-flight clears Busy() exactly like one that succeeded, so the
+            // run is only done once the model has actually said something.
+            if(LastAssistantText(m_batch.answer_watermark).empty())
+            {
+                const std::string reason = LastStatusText();
+                FinishBatch(AssistantBatchState::kFailed,
+                            reason.empty() ? "The turn ended without an answer." : reason);
                 return;
             }
             FinishBatch(AssistantBatchState::kDone, std::string());
@@ -185,12 +196,26 @@ AssistantPanel::FinishBatch(AssistantBatchState state, const std::string& error)
 }
 
 std::string
-AssistantPanel::LastAssistantText() const
+AssistantPanel::LastAssistantText(size_t first_line) const
+{
+    for(size_t i = m_lines.size(); i > first_line; --i)
+    {
+        const ChatLine& line = m_lines[i - 1];
+        if(line.speaker == Speaker::kAssistant && !line.text.empty())
+        {
+            return line.text;
+        }
+    }
+    return std::string();
+}
+
+std::string
+AssistantPanel::LastStatusText() const
 {
     for(size_t i = m_lines.size(); i > 0; --i)
     {
         const ChatLine& line = m_lines[i - 1];
-        if(line.speaker == Speaker::kAssistant && !line.text.empty())
+        if(line.speaker == Speaker::kStatus && !line.text.empty())
         {
             return line.text;
         }
@@ -219,7 +244,7 @@ AssistantPanel::WriteBatchOutput() const
     out["status"] =
         m_batch.state == AssistantBatchState::kDone ? std::string("ok") : std::string("error");
     out["error"]  = m_batch.error;
-    out["answer"] = LastAssistantText();
+    out["answer"] = LastAssistantText(m_batch.answer_watermark);
     out["duration_seconds"] = static_cast<long long>(
         std::chrono::duration_cast<std::chrono::seconds>(
             std::chrono::steady_clock::now() - m_batch.started)
@@ -234,6 +259,20 @@ AssistantPanel::WriteBatchOutput() const
         {
             out["tool_calls"][call_index]["name"]      = calls[j].name;
             out["tool_calls"][call_index]["arguments"] = calls[j].arguments;
+            // What the tool answered, which is what decides whether the model
+            // read its numbers or talked around them. Long-running turns
+            // compact their oldest replies, so this is what the model still had
+            // in front of it rather than what the tool first returned.
+            out["tool_calls"][call_index]["result"] = std::string();
+            for(size_t k = i + 1; k < m_conversation.size(); ++k)
+            {
+                if(m_conversation[k].role == "tool" &&
+                   m_conversation[k].tool_call_id == calls[j].id)
+                {
+                    out["tool_calls"][call_index]["result"] = m_conversation[k].content;
+                    break;
+                }
+            }
             ++call_index;
         }
     }

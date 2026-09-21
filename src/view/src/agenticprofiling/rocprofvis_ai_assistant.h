@@ -115,6 +115,10 @@ private:
         Stage                                 stage = Stage::kWaitForTrace;
         std::chrono::steady_clock::time_point started;
         std::string                           error;
+        // Where the transcript stood when the question was sent, so the answer
+        // is read from the turn the run asked for and not from an earlier
+        // Explain this view that happened to succeed.
+        size_t                                answer_watermark = 0;
     };
 
     AssistantPanel();
@@ -169,8 +173,12 @@ private:
     void UpdateBatch();
     void FinishBatch(AssistantBatchState state, const std::string& error);
     bool WriteBatchOutput() const;
-    // The answer the run is about: the last thing the model said.
-    std::string LastAssistantText() const;
+    // The answer the run is about: the last thing the model said at or after
+    // the given line.
+    std::string LastAssistantText(size_t first_line) const;
+    // Why a turn produced no answer. A refused request, an unconfigured
+    // endpoint and a transport error all leave their reason in a status line.
+    std::string LastStatusText() const;
 
     static AssistantPanel* s_instance;
 

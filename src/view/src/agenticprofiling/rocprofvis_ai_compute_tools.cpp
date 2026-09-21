@@ -71,6 +71,12 @@ constexpr const char* ASSISTANT_TRIAGE_TABLE_NAMES[] = {
     "Overall Instruction Mix",         "VALU Arithmetic Instruction Mix",
     "VMEM Instruction Mix",            "vL1D Speed-of-Light",
     "LDS Speed-of-Light",
+    // These three name a defect outright rather than describing a symptom:
+    // which resource capped residency, a reduction serialised on one LDS
+    // address, and scalar access that should have been vectorised.
+    "Workgroup Manager - Resource Allocation",
+    "LDS Statistics",
+    "Vector L1 data-return path or Texture Data (TD)",
 };
 
 // Display names for the roofline enums, kept in step with the ones the Roofline

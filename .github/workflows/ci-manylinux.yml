@@ -123,6 +123,7 @@ jobs:
   manylinux:
     name: ManyLinux • Optiq CI • GitHub Artifacts (${{ inputs.upload_to_github }}) • S3 Artifacts (${{ inputs.upload_to_s3 }})
     runs-on: ubuntu-latest
+    environment: ${{ inputs.s3_bucket_env }}
     defaults:
       run:
         shell: bash

@@ -25,7 +25,6 @@ on:
 jobs:
   release-manylinux:
     name: ManyLinux Release
-    environment: ${{ inputs.s3_bucket_env }} 
     uses: ./.github/workflows/ci-manylinux.yml
     secrets: inherit
     with:

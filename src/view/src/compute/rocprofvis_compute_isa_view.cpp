@@ -445,8 +445,8 @@ ComputeIsaView::RenderControlPanel()
 {
     constexpr const char* hide_source_code_str = "Hide Source Code";
     constexpr const char* show_source_code_str = "Show Source Code";
-    constexpr const char* show_stalls_str      = "Show Stalls";
-    constexpr const char* hide_stalls_str      = "Hide Stalls";
+    constexpr const char* show_stalls_str      = "Show Sampling Details";
+    constexpr const char* hide_stalls_str      = "Hide Sampling Details";
 
     const float fallbackHeight =
         ImGui::GetFrameHeight() + ImGui::GetStyle().WindowPadding.y * 2.0f;
@@ -882,7 +882,7 @@ IsaCodeWidget::Render()
         return;
     }
 
-    const int stall_columns = IsStallShown() ? 3 : 0;
+    const int stall_columns = IsStallShown() ? 2 : 0;
     const int columns_count = 2 + stall_columns;
 
     if(!ImGui::BeginTable("IsaCode", columns_count, m_table_flags))
@@ -898,12 +898,10 @@ IsaCodeWidget::Render()
 
     if(IsStallShown())
     {
-        const float num_col_width = ImGui::CalcTextSize("Total Count").x;
-        ImGui::TableSetupColumn("Total Count", ImGuiTableColumnFlags_WidthFixed,
+        const float num_col_width = ImGui::CalcTextSize("Issue %").x;
+        ImGui::TableSetupColumn("Issue %", ImGuiTableColumnFlags_WidthFixed,
                                 num_col_width);
-        ImGui::TableSetupColumn("Issue Count", ImGuiTableColumnFlags_WidthFixed,
-                                num_col_width);
-        ImGui::TableSetupColumn("Stall Count", ImGuiTableColumnFlags_WidthFixed,
+        ImGui::TableSetupColumn("Stall %", ImGuiTableColumnFlags_WidthFixed,
                                 num_col_width);
     }
 
@@ -997,12 +995,16 @@ IsaCodeWidget::RenderLine(uint32_t index, uint32_t columns_count)
 
     if(IsStallShown())
     {
+        const double total = static_cast<double>(isa_row.total_count);
+        const double issue_pct =
+            total > 0.0 ? static_cast<double>(isa_row.issue_count) / total * 100.0 : 0.0;
+        const double stall_pct =
+            total > 0.0 ? static_cast<double>(isa_row.stall_count) / total * 100.0 : 0.0;
+
         ImGui::TableSetColumnIndex(++column);
-        ImGui::TextDisabled("%llu", static_cast<unsigned long long>(isa_row.total_count));
+        ImGui::TextDisabled("%.1f%%", issue_pct);
         ImGui::TableSetColumnIndex(++column);
-        ImGui::TextDisabled("%llu", static_cast<unsigned long long>(isa_row.issue_count));
-        ImGui::TableSetColumnIndex(++column);
-        ImGui::TextDisabled("%llu", static_cast<unsigned long long>(isa_row.stall_count));
+        ImGui::TextDisabled("%.1f%%", stall_pct);
     }
 
 }

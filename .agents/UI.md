@@ -1560,9 +1560,18 @@ the completed layer. `ComputeIsaView` accepts the callback only when its layer,
 kernel, selection generation, request token, and (for source) selected file
 still match. Do not query the controller or model directly from this view.
 
-The ISA table is always present. `Show Stalls` adds Total Count, Issue Count,
-and Stall Count columns, aggregated by instruction UUID across returned sample
-states. The source table is optional; its Stalls column is
+The ISA table is always present. `Show Stalls` adds Samples, Issue %, and Stall %
+columns, aggregated by instruction UUID across returned sample states. Samples
+shows a right-aligned raw count over a heat bar normalized to the hottest
+displayed instruction. Its tooltip reports both kernel share and relative
+hotness. Counts below ten carry a low-confidence marker for the derived
+percentages while the exact count remains prominent. The Samples column starts
+at the wider of its header and largest formatted count. All ISA-table columns
+are user-resizable, and each heat bar uses the live cell width so it follows
+both manual resizing and data- or font-driven width changes. Hovering any ISA
+or source-table header shows a tooltip describing the displayed data; derived
+percentage headers include their aggregation formula.
+The source table is optional; its Stalls column is
 `100 * sum(stall_count) / sum(total_count)` for instructions mapped to the
 source line at `frame_index == 0`. Stall-reason text, instruction-sample
 metadata, active-thread percentage, wave-occupancy percentage, and dispatch

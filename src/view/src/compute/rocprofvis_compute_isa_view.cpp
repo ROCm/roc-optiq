@@ -7,6 +7,7 @@
 #include "rocprofvis_events.h"
 #include "rocprofvis_font_manager.h"
 #include "rocprofvis_requests.h"
+#include "widgets/rocprofvis_gui_helpers.h"
 #include "widgets/rocprofvis_tab_container.h"
 #include "spdlog/spdlog.h"
 
@@ -23,11 +24,25 @@ namespace View
 constexpr uint64_t INVALID_SOURCE_LINE_NUMBER = 0;
 constexpr uint32_t NO_SCROLL_TARGET = 0;
 
-// Heatmap endpoints for percentage bars: low -> green, mid -> yellow, high -> red.
-// Alpha is kept low so the value text stays readable over the fill.
-constexpr ImVec4 kHeatmapLow {0.24f, 0.70f, 0.28f, 0.5f};
-constexpr ImVec4 kHeatmapMid {0.90f, 0.78f, 0.18f, 0.5f};
-constexpr ImVec4 kHeatmapHigh{0.82f, 0.24f, 0.24f, 0.5f};
+constexpr uint64_t LOW_CONFIDENCE_SAMPLE_COUNT = 10;
+
+constexpr ImVec4 HEATMAP_LOW_COLOR {0.24f, 0.70f, 0.28f, 0.5f};
+constexpr ImVec4 HEATMAP_MID_COLOR {0.90f, 0.78f, 0.18f, 0.5f};
+constexpr ImVec4 HEATMAP_HIGH_COLOR{0.82f, 0.24f, 0.24f, 0.5f};
+
+namespace
+{
+void
+RenderTableHeaderWithTooltip(int column, const char* label, const char* tooltip)
+{
+    ImGui::TableSetColumnIndex(column);
+    ImGui::TableHeader(label);
+    if(ImGui::IsItemHovered(ImGuiHoveredFlags_ForTooltip))
+    {
+        SetTooltipStyled("%s", tooltip);
+    }
+}
+}  // namespace
 
 TabItem
 ComputeIsaView::CreateTabItem(DataProvider& data_provider)
@@ -165,8 +180,6 @@ ComputeIsaView::LoadData(uint32_t kernel_id)
     }
 
     CancelInFlightFetches();
-    // Start with the only data needed by the always-visible ISA pane. Optional
-    // source and stall data follows only when its corresponding UI is visible.
     ClearSelectionData();
     ++m_fetch_generation;
     QueuePcSamplingFetch(PcSamplingLayer::kIsa);
@@ -340,12 +353,12 @@ ComputeIsaView::OnPcSamplingReady(PcSamplingLayer layer, uint32_t kernel_id,
 void
 ComputeIsaView::LoadSourceFileList(const PcSamplingData& data)
 {
-    m_source.files.clear();
+    m_source.file_uuid_by_path.clear();
     for(auto& file : data.source_files)
-        m_source.files.emplace(file.file_path, file.source_file_uuid);
+        m_source.file_uuid_by_path.emplace(file.file_path, file.source_file_uuid);
 
     bool selection_valid = false;
-    for(const auto& [path, id] : m_source.files)
+    for(const auto& [path, id] : m_source.file_uuid_by_path)
     {
         if(id == m_source.selected_uuid)
         {
@@ -354,8 +367,9 @@ ComputeIsaView::LoadSourceFileList(const PcSamplingData& data)
         }
     }
     if(!selection_valid)
-        m_source.selected_uuid =
-            m_source.files.empty() ? 0 : m_source.files.begin()->second;
+        m_source.selected_uuid = m_source.file_uuid_by_path.empty()
+                                     ? 0
+                                     : m_source.file_uuid_by_path.begin()->second;
 }
 
 void
@@ -389,7 +403,7 @@ ComputeIsaView::SelectSourceFileForScroll()
 
     m_line_selection.source_scroll_file = LineSelection::UNSELECTED;
     const bool source_file_exists = std::any_of(
-        m_source.files.begin(), m_source.files.end(),
+        m_source.file_uuid_by_path.begin(), m_source.file_uuid_by_path.end(),
         [source_file_uuid](const auto& file) { return file.second == source_file_uuid; });
     if(!source_file_exists)
     {
@@ -527,19 +541,22 @@ void
 ComputeIsaView::RenderSourceFileDropdown()
 {
     constexpr const float DROPDOWN_SIZE = 300.0f;
-    if(!m_source_layout_item->m_visible || m_source.files.empty()) return;
+    if(!m_source_layout_item->m_visible || m_source.file_uuid_by_path.empty()) return;
 
     auto filename_of = [](const std::string& str) -> const char* {
         const auto pos = str.find_last_of("/\\");
         return pos == std::string::npos ? str.c_str() : str.c_str() + pos + 1;
     };
 
-    const auto selected_file_it = std::find_if(m_source.files.begin(), m_source.files.end(),
-        [this](const auto& pair) { return pair.second == m_source.selected_uuid; });
+    const auto selected_file_it =
+        std::find_if(m_source.file_uuid_by_path.begin(), m_source.file_uuid_by_path.end(),
+                     [this](const auto& pair) {
+                         return pair.second == m_source.selected_uuid;
+                     });
 
-    const char* preview = selected_file_it != m_source.files.end()
-                                    ? filename_of(selected_file_it->first)
-                                    : "<none>";
+    const char* preview = selected_file_it != m_source.file_uuid_by_path.end()
+                              ? filename_of(selected_file_it->first)
+                              : "<none>";
 
     ImGui::AlignTextToFramePadding();
     ImGui::TextUnformatted("Source file:");
@@ -548,7 +565,7 @@ ComputeIsaView::RenderSourceFileDropdown()
     ImGui::SetNextItemWidth(DROPDOWN_SIZE);
     if(ImGui::BeginCombo("##source_file", preview))
     {
-        for(const auto& [path, id] : m_source.files)
+        for(const auto& [path, id] : m_source.file_uuid_by_path)
         {
             const bool selected = (id == m_source.selected_uuid);
             if(ImGui::Selectable(filename_of(path), selected) && !selected)
@@ -562,8 +579,6 @@ ComputeIsaView::RenderSourceFileDropdown()
         ImGui::EndCombo();
     }
 }
-
-//----------------------------------------------------------------
 
 BaseCodeWidget::BaseCodeWidget(LineSelection& selection)
 : m_line_selection(selection)
@@ -598,8 +613,6 @@ BaseCodeWidget::PushStyles()
     ImGui::PushStyleColor(ImGuiCol_HeaderActive,
                           m_settings.GetColor(Colors::kTransparent));
 }
-
-//----------------------------------------------------------------
 
 SourceCodeWidget::SourceCodeWidget(LineSelection& selection)
 : BaseCodeWidget(selection)
@@ -661,7 +674,10 @@ SourceCodeWidget::Render()
 
     ImGui::TableSetupColumn("Source code", ImGuiTableColumnFlags_WidthStretch);
 
-    ImGui::TableHeadersRow();
+    ImGui::TableNextRow(ImGuiTableRowFlags_Headers);
+    RenderTableHeaderWithTooltip(0, "#", "Line number in the selected source file.");
+    RenderTableHeaderWithTooltip(
+        1, "Source code", "Source-code text loaded from the selected source file.");
     PushStyles();
 
     ImGuiListClipper clipper;
@@ -672,7 +688,7 @@ SourceCodeWidget::Render()
     {
         for(int i = clipper.DisplayStart; i < clipper.DisplayEnd; i++)
         {
-            RenderLine(i, columns_count);
+            RenderLine(static_cast<uint32_t>(i));
             if(scroll_target != NO_SCROLL_TARGET &&
                static_cast<uint32_t>(i) + 1 == scroll_target)
                 ImGui::SetScrollHereY(0.0f);
@@ -706,7 +722,7 @@ SourceCodeWidget::GetScrollTarget(ImGuiListClipper& clipper)
 }
 
 void
-SourceCodeWidget::RenderLine(uint32_t index, uint32_t columns_count)
+SourceCodeWidget::RenderLine(uint32_t index)
 {
     const SourceRow& source_row  = m_lines[index];
     const uint64_t   display_num = source_row.line_number;
@@ -750,8 +766,6 @@ SourceCodeWidget::RenderLine(uint32_t index, uint32_t columns_count)
     ImGui::TextUnformatted(source_row.content.c_str());
 }
 
-//----------------------------------------------------------------
-
 IsaCodeWidget::IsaCodeWidget(LineSelection& selection)
 : BaseCodeWidget(selection)
 {
@@ -761,6 +775,8 @@ void
 IsaCodeWidget::Load(const PcSamplingData& data, uint64_t code_object_uuid)
 {
     m_entries.clear();
+    m_kernel_total_samples        = 0;
+    m_hottest_instruction_samples = 0;
 
     const CodeObjectStore* code_object = nullptr;
     for(const auto& code_obj : data.code_objects)
@@ -802,6 +818,7 @@ IsaCodeWidget::Load(const PcSamplingData& data, uint64_t code_object_uuid)
         counts.total_count += state.total_count;
         counts.issue_count += state.issue_count;
         counts.stall_count += state.stall_count;
+        m_kernel_total_samples += state.total_count;
     }
 
     for(const KernelSymbol& kernel_symbol : code_object->kernel_symbols)
@@ -831,6 +848,12 @@ IsaCodeWidget::Load(const PcSamplingData& data, uint64_t code_object_uuid)
         }
     }
 
+    for(const IsaRow& row : m_entries)
+    {
+        m_hottest_instruction_samples =
+            std::max(m_hottest_instruction_samples, row.total_count);
+    }
+
     CalculateLineNumberWidth(m_entries.size());
 }
 
@@ -843,30 +866,74 @@ IsaCodeWidget::Render()
         return;
     }
 
-    const int stall_columns = IsStallShown() ? 2 : 0;
-    const int columns_count = 2 + stall_columns;
+    const int sampling_detail_columns = IsStallShown() ? 3 : 0;
+    const int columns_count            = 2 + sampling_detail_columns;
 
     if(!ImGui::BeginTable("IsaCode", columns_count, m_table_flags))
         return;
 
     ImGui::TableSetupScrollFreeze(0, 1);
 
-    ImGui::TableSetupColumn(
-        "#", ImGuiTableColumnFlags_NoResize | ImGuiTableColumnFlags_WidthFixed,
-        m_line_num_width);
+    ImGui::TableSetupColumn("#", ImGuiTableColumnFlags_WidthFixed, m_line_num_width);
+
+    if(IsStallShown())
+    {
+        std::string widest_sample_count_text =
+            FormatSampleCount(m_hottest_instruction_samples);
+        if(m_hottest_instruction_samples < LOW_CONFIDENCE_SAMPLE_COUNT)
+        {
+            widest_sample_count_text += "*";
+        }
+
+        const float samples_header_width = ImGui::CalcTextSize("Samples").x;
+        const float sample_count_width =
+            ImGui::CalcTextSize(widest_sample_count_text.c_str()).x;
+        const float samples_column_width =
+            std::max(samples_header_width, sample_count_width);
+        ImGui::TableSetupColumn("Samples", ImGuiTableColumnFlags_WidthFixed,
+                                samples_column_width);
+    }
 
     ImGui::TableSetupColumn("ISA", ImGuiTableColumnFlags_WidthStretch);
 
     if(IsStallShown())
     {
-        const float num_col_width = ImGui::CalcTextSize("Issue %").x;
+        const float percentage_column_width = ImGui::CalcTextSize("Issue %").x;
         ImGui::TableSetupColumn("Issue %", ImGuiTableColumnFlags_WidthFixed,
-                                num_col_width);
+                                percentage_column_width);
         ImGui::TableSetupColumn("Stall %", ImGuiTableColumnFlags_WidthFixed,
-                                num_col_width);
+                                percentage_column_width);
     }
 
-    ImGui::TableHeadersRow();
+    ImGui::TableNextRow(ImGuiTableRowFlags_Headers);
+    int header_column = 0;
+    RenderTableHeaderWithTooltip(
+        header_column++, "#",
+        "1-based row number in the displayed ISA listing.\n"
+        "This is not a PC address or database identifier.");
+    if(IsStallShown())
+    {
+        RenderTableHeaderWithTooltip(
+            header_column++, "Samples",
+            "Raw PC sample count attributed to this instruction.\n"
+            "Data: SUM(total_count), grouped by instruction UUID.\n"
+            "The bar is normalized to the hottest displayed instruction.\n"
+            "Samples are not elapsed time.");
+    }
+    RenderTableHeaderWithTooltip(
+        header_column++, "ISA",
+        "Disassembled GPU ISA instruction text associated with this instruction UUID.");
+    if(IsStallShown())
+    {
+        RenderTableHeaderWithTooltip(
+            header_column++, "Issue %",
+            "Percentage of this instruction's samples classified as issued.\n"
+            "Formula: 100 * SUM(issue_count) / SUM(total_count).");
+        RenderTableHeaderWithTooltip(
+            header_column, "Stall %",
+            "Percentage of this instruction's samples classified as stalled.\n"
+            "Formula: 100 * SUM(stall_count) / SUM(total_count).");
+    }
     PushStyles();
 
     ImGuiListClipper clipper;
@@ -874,10 +941,11 @@ IsaCodeWidget::Render()
     const uint32_t scroll_target = GetScrollTarget(clipper);
     while(clipper.Step())
     {
-        for(uint32_t i = clipper.DisplayStart; i < clipper.DisplayEnd; i++)
+        for(int i = clipper.DisplayStart; i < clipper.DisplayEnd; i++)
         {
-            RenderLine(i, columns_count);
-            if(scroll_target != NO_SCROLL_TARGET && i + 1 == scroll_target)
+            RenderLine(static_cast<uint32_t>(i));
+            if(scroll_target != NO_SCROLL_TARGET &&
+               static_cast<uint32_t>(i) + 1 == scroll_target)
                 ImGui::SetScrollHereY(0.0f);
         }
     }
@@ -909,54 +977,125 @@ IsaCodeWidget::GetScrollTarget(ImGuiListClipper& clipper)
 }
 
 double
-IsaCodeWidget::SafePercent(uint64_t part, uint64_t total)
+IsaCodeWidget::CalculatePercentage(uint64_t value, uint64_t total)
 {
-    return total > 0 ? static_cast<double>(part) / static_cast<double>(total) * 100.0 : 0.0;
+    return total > 0 ? static_cast<double>(value) / static_cast<double>(total) * 100.0
+                     : 0.0;
 }
 
-// Maps a percentage to a heatmap color: green (low) -> yellow (mid) -> red (high).
 ImU32
-IsaCodeWidget::PercentColor(double percent)
+IsaCodeWidget::HeatmapColor(double percent)
 {
     const float fraction = std::clamp(static_cast<float>(percent) / 100.0f, 0.0f, 1.0f);
 
-    const auto lerp = [](const ImVec4& from, const ImVec4& to, float amount) {
+    const auto interpolate_color = [](const ImVec4& from, const ImVec4& to, float amount) {
         return ImVec4(from.x + (to.x - from.x) * amount, from.y + (to.y - from.y) * amount,
                       from.z + (to.z - from.z) * amount, from.w + (to.w - from.w) * amount);
     };
 
-    constexpr float midpoint = 0.5f;
-    const ImVec4    color =
-        fraction < midpoint
-            ? lerp(kHeatmapLow, kHeatmapMid, fraction / midpoint)
-            : lerp(kHeatmapMid, kHeatmapHigh, (fraction - midpoint) / midpoint);
+    constexpr float COLOR_MIDPOINT = 0.5f;
+    const ImVec4 color =
+        fraction < COLOR_MIDPOINT
+            ? interpolate_color(HEATMAP_LOW_COLOR, HEATMAP_MID_COLOR,
+                                fraction / COLOR_MIDPOINT)
+            : interpolate_color(HEATMAP_MID_COLOR, HEATMAP_HIGH_COLOR,
+                                (fraction - COLOR_MIDPOINT) / COLOR_MIDPOINT);
     return ImGui::ColorConvertFloat4ToU32(color);
 }
 
-// Draws a proportional heatmap fill spanning `percent` of the current cell,
-// mirroring the kernel metric table bar style, then renders the value on top.
-// A zero percentage draws no bar.
+std::string
+IsaCodeWidget::FormatSampleCount(uint64_t value)
+{
+    const std::string digits = std::to_string(value);
+    std::string       formatted_count;
+    formatted_count.reserve(digits.size() + digits.size() / 3);
+
+    int digits_since_separator = 0;
+    for(auto it = digits.rbegin(); it != digits.rend(); ++it)
+    {
+        if(digits_since_separator == 3)
+        {
+            formatted_count.push_back(',');
+            digits_since_separator = 0;
+        }
+        formatted_count.push_back(*it);
+        ++digits_since_separator;
+    }
+    std::reverse(formatted_count.begin(), formatted_count.end());
+    return formatted_count;
+}
+
+void
+IsaCodeWidget::RenderSamplesCell(uint64_t sample_count)
+{
+    const double kernel_sample_share =
+        CalculatePercentage(sample_count, m_kernel_total_samples);
+    const double relative_hotness =
+        CalculatePercentage(sample_count, m_hottest_instruction_samples);
+    const float  fill_fraction =
+        std::clamp(static_cast<float>(relative_hotness) / 100.0f, 0.0f, 1.0f);
+    const ImVec2 cell_start = ImGui::GetCursorScreenPos();
+    const float  cell_width = std::max(0.0f, ImGui::GetContentRegionAvail().x);
+    const float  cell_height = ImGui::GetTextLineHeightWithSpacing();
+    const ImVec2 cell_end(cell_start.x + cell_width, cell_start.y + cell_height);
+    if(fill_fraction > 0.0f)
+    {
+        ImDrawList* draw_list = ImGui::GetWindowDrawList();
+        const ImVec2 bar_end(cell_start.x + cell_width * fill_fraction, cell_end.y);
+        draw_list->PushClipRect(cell_start, cell_end, true);
+        draw_list->AddRectFilled(cell_start, bar_end, HeatmapColor(relative_hotness));
+        draw_list->PopClipRect();
+    }
+
+    const std::string count_text = FormatSampleCount(sample_count);
+    const std::string display_text =
+        sample_count < LOW_CONFIDENCE_SAMPLE_COUNT ? count_text + "*" : count_text;
+    const float text_width = ImGui::CalcTextSize(display_text.c_str()).x;
+    ImGui::SetCursorPosX(ImGui::GetCursorPosX() + std::max(0.0f, cell_width - text_width));
+    ImGui::TextUnformatted(display_text.c_str());
+
+    if(ImGui::IsMouseHoveringRect(cell_start, cell_end))
+    {
+        if(sample_count < LOW_CONFIDENCE_SAMPLE_COUNT)
+        {
+            SetTooltipStyled("%s samples\n%.1f%% of kernel samples\n"
+                             "%.1f%% relative to the hottest instruction\n\n"
+                             "Low-confidence estimate: percentages based on fewer than %llu "
+                             "samples may be unstable.",
+                             count_text.c_str(), kernel_sample_share, relative_hotness,
+                             static_cast<unsigned long long>(LOW_CONFIDENCE_SAMPLE_COUNT));
+        }
+        else
+        {
+            SetTooltipStyled("%s samples\n%.1f%% of kernel samples\n"
+                             "%.1f%% relative to the hottest instruction",
+                             count_text.c_str(), kernel_sample_share, relative_hotness);
+        }
+    }
+}
+
 void
 IsaCodeWidget::RenderPercentBarCell(double percent)
 {
     const float fraction = std::clamp(static_cast<float>(percent) / 100.0f, 0.0f, 1.0f);
     if(fraction > 0.0f)
     {
-        const ImVec2 pos = ImGui::GetCursorScreenPos();
-        const float  w   = ImGui::GetContentRegionAvail().x;
-        const float  h   = ImGui::GetTextLineHeightWithSpacing();
+        const ImVec2 cell_start = ImGui::GetCursorScreenPos();
+        const float  cell_width = ImGui::GetContentRegionAvail().x;
+        const float  cell_height = ImGui::GetTextLineHeightWithSpacing();
+        const ImVec2 cell_end(cell_start.x + cell_width, cell_start.y + cell_height);
+        const ImVec2 bar_end(cell_start.x + cell_width * fraction, cell_end.y);
 
         ImDrawList* draw_list = ImGui::GetWindowDrawList();
-        draw_list->PushClipRect(pos, ImVec2(pos.x + w, pos.y + h), true);
-        draw_list->AddRectFilled(pos, ImVec2(pos.x + w * fraction, pos.y + h),
-                                 PercentColor(percent));
+        draw_list->PushClipRect(cell_start, cell_end, true);
+        draw_list->AddRectFilled(cell_start, bar_end, HeatmapColor(percent));
         draw_list->PopClipRect();
     }
     ImGui::TextDisabled("%.1f%%", percent);
 }
 
 void
-IsaCodeWidget::RenderLine(uint32_t index, uint32_t columns_count)
+IsaCodeWidget::RenderLine(uint32_t index)
 {
     const IsaRow& isa_row = m_entries[index];
     const bool    row_selected = isa_row.source_line_id != 0 &&
@@ -998,15 +1137,23 @@ IsaCodeWidget::RenderLine(uint32_t index, uint32_t columns_count)
 
     ImGui::TextColored(m_line_num_color, "%*u", static_cast<int>(m_line_num_digits), index + 1);
 
+    if(IsStallShown())
+    {
+        ImGui::TableSetColumnIndex(++column);
+        RenderSamplesCell(isa_row.total_count);
+    }
+
     ImGui::TableSetColumnIndex(++column);
     ImGui::TextUnformatted(isa_row.instruction.c_str());
 
     if(IsStallShown())
     {
         ImGui::TableSetColumnIndex(++column);
-        RenderPercentBarCell(SafePercent(isa_row.issue_count, isa_row.total_count));
+        RenderPercentBarCell(
+            CalculatePercentage(isa_row.issue_count, isa_row.total_count));
         ImGui::TableSetColumnIndex(++column);
-        RenderPercentBarCell(SafePercent(isa_row.stall_count, isa_row.total_count));
+        RenderPercentBarCell(
+            CalculatePercentage(isa_row.stall_count, isa_row.total_count));
     }
 
 }

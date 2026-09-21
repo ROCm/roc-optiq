@@ -40,10 +40,10 @@ struct LineSelection
 
 struct FetchStateType
 {
-    bool     queued        = false;  // waiting to submit to DataProvider
-    bool     in_flight     = false;  // submitted, awaiting callback
-    bool     loaded        = false;  // data received and applied to model
-    uint64_t request_token = 0;      // identifies the latest request for this layer
+    bool     queued        = false;
+    bool     in_flight     = false;
+    bool     loaded        = false;
+    uint64_t request_token = 0;
 };
 
 struct IsaPane : FetchStateType
@@ -60,16 +60,16 @@ struct IsaPane : FetchStateType
 
 struct SourcePane : FetchStateType
 {
-    uint64_t                                        selected_uuid = 0;
-    std::map<std::string /*path*/, uint64_t /*id*/> files;
-    std::set<uint64_t>                              loaded_uuids;
-    std::shared_ptr<SourceCodeWidget>               widget;
+    uint64_t                             selected_uuid = 0;
+    std::map<std::string, uint64_t>      file_uuid_by_path;
+    std::set<uint64_t>                   loaded_uuids;
+    std::shared_ptr<SourceCodeWidget>    widget;
 
     void ResetFetch()
     {
         static_cast<FetchStateType&>(*this) = {};
         selected_uuid = 0;
-        files.clear();
+        file_uuid_by_path.clear();
         loaded_uuids.clear();
     }
 };
@@ -176,7 +176,7 @@ public:
 
 private:
     uint32_t GetScrollTarget(ImGuiListClipper& clipper);
-    void RenderLine(uint32_t index, uint32_t column_count);
+    void RenderLine(uint32_t index);
 
     struct SourceRow
     {
@@ -198,11 +198,13 @@ public:
 
 private:
     uint32_t GetScrollTarget(ImGuiListClipper& clipper);
-    void RenderLine(uint32_t index, uint32_t column_count);
+    void RenderLine(uint32_t index);
 
-    static double SafePercent(uint64_t part, uint64_t total);
-    static ImU32  PercentColor(double percent);
-    void          RenderPercentBarCell(double percent);
+    static double      CalculatePercentage(uint64_t value, uint64_t total);
+    static ImU32       HeatmapColor(double percent);
+    static std::string FormatSampleCount(uint64_t value);
+    void               RenderPercentBarCell(double percent);
+    void               RenderSamplesCell(uint64_t sample_count);
 
     struct IsaRow
     {
@@ -216,6 +218,8 @@ private:
     };
 
     std::vector<IsaRow> m_entries;
+    uint64_t            m_kernel_total_samples        = 0;
+    uint64_t            m_hottest_instruction_samples = 0;
 };
 
 }  // namespace View

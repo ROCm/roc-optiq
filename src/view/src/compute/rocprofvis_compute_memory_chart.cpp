@@ -97,6 +97,7 @@ static constexpr float ARROW_HEAD_HALF_RATIO = 0.6f;   // Arrow-head half-width 
 // Arrow routing (BuildArrowRoutes).
 static constexpr float SAME_COL_LANE_BASE  = 12.0f;  // First same-column lane offset past the block edge.
 static constexpr float SAME_COL_LANE_STEP  = 14.0f;  // Horizontal pitch between stacked same-column lanes.
+static constexpr float SAME_COL_LANE_PAD   = 10.0f;  // Vertical clearance between spans sharing a same-column lane.
 static constexpr float SAME_COL_LABEL_GAP  = 6.0f;   // Label offset past a same-column lane.
 static constexpr float SKIP_MARGIN_RATIO   = 0.35f;  // Fraction of LEFT_MARGIN used by left-going skip routes.
 static constexpr float SKIP_LANE_PAD       = 24.0f;  // Clearance between spans sharing a highway lane.
@@ -1318,17 +1319,21 @@ ComputeMemoryChartView::BuildArrowRoutes(std::vector<ArrowRoute>& routes) const
         routes.push_back(std::move(route));
     };
 
-    // Adjacent columns: assign ordered connection ports on each block edge to
-    // minimize crossings. Every arrow leaving a block's right edge is sorted by
-    // its destination's vertical position (and vice-versa for the left edge), so
-    // lines fan out in a consistent top-to-bottom order instead of tangling.
+    // Assign ordered connection ports on each block edge to minimize crossings.
+    // Every arrow leaving a block's right edge is sorted by its destination's
+    // vertical position (and vice-versa for the left edge), so lines fan out in a
+    // consistent top-to-bottom order instead of tangling.
     struct Port
     {
         size_t arrow;
-        float  key;  // The other endpoint's mid-Y, used for ordering.
+        float  key;      // The other endpoint's mid-Y, used for ordering.
+        bool   at_from;  // Which end of `arrow` this port belongs to.
     };
-    std::map<uint32_t, std::vector<Port>> exit_ports;   // left-block id  -> right-edge ports
-    std::map<uint32_t, std::vector<Port>> entry_ports;  // right-block id -> left-edge ports
+    // Keyed by block id; a same-column arrow contributes a port at both of its
+    // ends, so ports are identified by (arrow, endpoint) rather than arrow alone.
+    using PortKey = std::pair<size_t, bool>;
+    std::map<uint32_t, std::vector<Port>> exit_ports;   // right-edge ports
+    std::map<uint32_t, std::vector<Port>> entry_ports;  // left-edge ports
     for(size_t i : adjacent)
     {
         const MemChartArrow& arrow  = m_layout.arrows[i];
@@ -1337,14 +1342,25 @@ ComputeMemoryChartView::BuildArrowRoutes(std::vector<ArrowRoute>& routes) const
         if(!from || !to) continue;
         const MemChartBlock* left_b  = from->column < to->column ? from : to;
         const MemChartBlock* right_b = from->column < to->column ? to : from;
-        exit_ports[left_b->id].push_back({i, right_b->MidY()});
-        entry_ports[right_b->id].push_back({i, left_b->MidY()});
+        exit_ports[left_b->id].push_back({i, right_b->MidY(), from == left_b});
+        entry_ports[right_b->id].push_back({i, left_b->MidY(), from == right_b});
+    }
+    // Same-column arrows leave and re-enter on the right edge, so both ends
+    // compete for right-edge ports alongside the adjacent-column arrows.
+    for(size_t i : same_column)
+    {
+        const MemChartArrow& arrow = m_layout.arrows[i];
+        const MemChartBlock* from  = Block(arrow.from);
+        const MemChartBlock* to    = Block(arrow.to);
+        if(!from || !to) continue;
+        exit_ports[from->id].push_back({i, to->MidY(), true});
+        exit_ports[to->id].push_back({i, from->MidY(), false});
     }
 
-    std::unordered_map<size_t, float> exit_y;
-    std::unordered_map<size_t, float> entry_y;
-    auto assign_ports = [&](std::map<uint32_t, std::vector<Port>>&  edge,
-                            std::unordered_map<size_t, float>&      out) {
+    std::map<PortKey, float> exit_y;
+    std::map<PortKey, float> entry_y;
+    auto assign_ports = [&](std::map<uint32_t, std::vector<Port>>& edge,
+                            std::map<PortKey, float>&              out) {
         for(std::pair<const uint32_t, std::vector<Port>>& kv : edge)
         {
             const MemChartBlock* block = Block(kv.first);
@@ -1357,12 +1373,18 @@ ComputeMemoryChartView::BuildArrowRoutes(std::vector<ArrowRoute>& routes) const
             {
                 float frac = n > 1 ? static_cast<float>(k) / static_cast<float>(n - 1)
                                    : 0.5f;
-                out[ports[k].arrow] = fan_y(*block, frac, n);
+                out[PortKey(ports[k].arrow, ports[k].at_from)] = fan_y(*block, frac, n);
             }
         }
     };
     assign_ports(exit_ports, exit_y);
     assign_ports(entry_ports, entry_y);
+
+    auto port_y = [](const std::map<PortKey, float>& ports, const PortKey& key,
+                     float fallback) -> float {
+        std::map<PortKey, float>::const_iterator it = ports.find(key);
+        return it != ports.end() ? it->second : fallback;
+    };
 
     // How many blocks share each column (a "stacked" column has > 1), counting
     // nested blocks too (their column was propagated during layout).
@@ -1385,9 +1407,10 @@ ComputeMemoryChartView::BuildArrowRoutes(std::vector<ArrowRoute>& routes) const
         // exact vertical position matters); the full-height neighbor accepts any
         // row. Horizontal lines in a corridor are parallel, so they never cross.
         bool  right_stacked = column_counts[right_b->column] > 1;
-        float arrow_y       = right_stacked
-                                  ? (entry_y.count(i) ? entry_y[i] : right_b->MidY())
-                                  : (exit_y.count(i) ? exit_y[i] : left_b->MidY());
+        float arrow_y =
+            right_stacked
+                ? port_y(entry_y, PortKey(i, from == right_b), right_b->MidY())
+                : port_y(exit_y, PortKey(i, from == left_b), left_b->MidY());
 
         // Attach at the connection edges (the group box edge for grouped blocks),
         // so arrows stop at the box rather than entering it.
@@ -1407,23 +1430,76 @@ ComputeMemoryChartView::BuildArrowRoutes(std::vector<ArrowRoute>& routes) const
         make_route(arrow, std::move(pts), (lx + rx) * 0.5f, arrow_y);
     }
 
-    // Same column: route through the right-hand gap in stacked lanes.
-    int same_lane = 0;
+    // Same column: route through the right-hand gutter in stacked lanes.
+    struct SameColRoute
+    {
+        size_t  index;
+        int32_t column;
+        float   base_x;
+        float   from_y;
+        float   to_y;
+        int     lane;
+    };
+    std::vector<SameColRoute> same_routes;
+    same_routes.reserve(same_column.size());
     for(size_t index : same_column)
     {
         const MemChartArrow& arrow = m_layout.arrows[index];
         const MemChartBlock* from  = Block(arrow.from);
         const MemChartBlock* to    = Block(arrow.to);
         if(!from || !to) continue;
+        same_routes.push_back({index, from->column,
+                               std::max(from->conn_right, to->conn_right),
+                               port_y(exit_y, PortKey(index, true), from->MidY()),
+                               port_y(exit_y, PortKey(index, false), to->MidY()), 0});
+    }
 
-        float lane_x = std::max(from->conn_right, to->conn_right) + SAME_COL_LANE_BASE +
-                       static_cast<float>(same_lane++) * SAME_COL_LANE_STEP;
-        std::vector<std::pair<float, float>> pts = {{from->conn_right, from->MidY()},
-                                                    {lane_x, from->MidY()},
-                                                    {lane_x, to->MidY()},
-                                                    {to->conn_right, to->MidY()}};
+    // First-fit packing per gutter: reuse the innermost lane whose occupants
+    // clear this arrow vertically, else open a new one. Arrows heading opposite
+    // ways out of the same block never overlap, so they share a lane and their
+    // verticals stay aligned instead of each claiming its own offset.
+    std::map<int32_t, std::vector<std::vector<const SameColRoute*>>> same_lanes;
+    for(SameColRoute& route : same_routes)
+    {
+        std::vector<std::vector<const SameColRoute*>>& lanes = same_lanes[route.column];
+        float lo   = std::min(route.from_y, route.to_y);
+        float hi   = std::max(route.from_y, route.to_y);
+        int   lane = 0;
+        for(; lane < static_cast<int>(lanes.size()); ++lane)
+        {
+            bool clear = true;
+            for(const SameColRoute* other : lanes[lane])
+            {
+                float other_lo = std::min(other->from_y, other->to_y);
+                float other_hi = std::max(other->from_y, other->to_y);
+                if(lo < other_hi + SAME_COL_LANE_PAD && other_lo < hi + SAME_COL_LANE_PAD)
+                {
+                    clear = false;
+                    break;
+                }
+            }
+            if(clear) break;
+        }
+        if(lane == static_cast<int>(lanes.size())) lanes.emplace_back();
+        route.lane = lane;
+        lanes[lane].push_back(&route);
+    }
+
+    for(const SameColRoute& route : same_routes)
+    {
+        const MemChartArrow& arrow = m_layout.arrows[route.index];
+        const MemChartBlock* from  = Block(arrow.from);
+        const MemChartBlock* to    = Block(arrow.to);
+        if(!from || !to) continue;
+
+        float lane_x = route.base_x + SAME_COL_LANE_BASE +
+                       static_cast<float>(route.lane) * SAME_COL_LANE_STEP;
+        std::vector<std::pair<float, float>> pts = {{from->conn_right, route.from_y},
+                                                    {lane_x, route.from_y},
+                                                    {lane_x, route.to_y},
+                                                    {to->conn_right, route.to_y}};
         make_route(arrow, std::move(pts), lane_x + SAME_COL_LABEL_GAP,
-                   (from->MidY() + to->MidY()) * 0.5f);
+                   (route.from_y + route.to_y) * 0.5f);
     }
 
     // Skipping columns: route along packed "highway" lanes below the blocks.

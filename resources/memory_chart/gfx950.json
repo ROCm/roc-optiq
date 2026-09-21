@@ -20,7 +20,18 @@
             { "metric": "3.1.56", "title": "Hit", "category": "hit", "unit": "%" }
         ]},
 
-        { "id": 30, "column": 3, "title": "Data Fabric", "content": [] },
+        { "id": 34, "column": 3, "order": 0, "title": "xGMI", "content": [
+            { "metric": "3.1.72", "title": "Read BW",   "category": "read" },
+            { "metric": "3.1.73", "title": "Write BW",  "category": "write" },
+            { "metric": "3.1.74", "title": "Atomic BW", "category": "atomic" }
+        ]},
+        { "id": 30, "column": 3, "order": 1, "title": "Data Fabric", "content": [] },
+        { "id": 35, "column": 3, "order": 2, "title": "PCIe", "content": [
+            { "metric": "3.1.75", "title": "Read BW",   "category": "read" },
+            { "metric": "3.1.76", "title": "Write BW",  "category": "write" },
+            { "metric": "3.1.77", "title": "Atomic BW", "category": "atomic" }
+        ]},
+
         { "id": 31, "column": 4, "title": "MALL", "content": [] },
         { "id": 32, "column": 5, "title": "UMC", "content": [] },
 
@@ -28,18 +39,8 @@
             { "metric": "3.1.69", "title": "Read BW",   "category": "read" },
             { "metric": "3.1.70", "title": "Write BW",  "category": "write" },
             { "metric": "3.1.71", "title": "Atomic BW", "category": "atomic" }
-        ]},
-
-        { "id": 34, "column": 7, "order": 0, "title": "xGMI", "content": [
-            { "metric": "3.1.72", "title": "Read BW",   "category": "read" },
-            { "metric": "3.1.73", "title": "Write BW",  "category": "write" },
-            { "metric": "3.1.74", "title": "Atomic BW", "category": "atomic" }
-        ]},
-        { "id": 35, "column": 7, "order": 1, "title": "PCIe", "content": [
-            { "metric": "3.1.75", "title": "Read BW",   "category": "read" },
-            { "metric": "3.1.76", "title": "Write BW",  "category": "write" },
-            { "metric": "3.1.77", "title": "Atomic BW", "category": "atomic" }
         ]}
+
     ],
     "arrows": [
         { "from": 1, "to": 10, "direction": "backward", "metric": "3.1.16", "title": "Flat Read",     "category": "read" },
@@ -64,6 +65,13 @@
         { "from": 13, "to": 20, "direction": "backward", "metric": "3.1.52", "title": "Rd",     "category": "read" },
 
         { "from": 20, "to": 30, "direction": "backward", "metric": "3.1.62", "title": "Rd",        "category": "read" },
-        { "from": 20, "to": 30, "direction": "forward",  "metric": "3.1.63", "title": "Wr+Atomic", "category": "write" }
+        { "from": 20, "to": 30, "direction": "forward",  "metric": "3.1.63", "title": "Wr+Atomic", "category": "write" },
+
+        { "from": 30, "to": 34, "direction": "both"},
+		{ "from": 30, "to": 35, "direction": "both"},
+		
+        { "from": 30, "to": 31, "direction": "both"},
+
+		{ "from": 31, "to": 32, "direction": "both"}
     ]
 }

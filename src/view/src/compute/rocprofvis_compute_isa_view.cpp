@@ -57,7 +57,7 @@ ComputeIsaView::ComputeIsaView(DataProvider& data_provider)
 , m_control_panel_height(0.0f)
 , m_current_kernel_id(ComputeSelection::INVALID_SELECTION_ID)
 , m_current_workload_id(ComputeSelection::INVALID_SELECTION_ID)
-, m_show_metadata_enabled(false)
+, m_show_metadata_enabled(true)
 {
     m_isa.widget    = std::make_shared<IsaCodeWidget>(m_line_selection);
     m_source.widget = std::make_shared<SourceCodeWidget>(m_line_selection);
@@ -623,32 +623,6 @@ SourceCodeWidget::Load(const PcSamplingData& data, uint64_t source_file_uuid)
     if(!source_file)
         return;
 
-    struct SampleCounts
-    {
-        uint64_t total = 0;
-        uint64_t stall = 0;
-    };
-    std::unordered_map<uint64_t, SampleCounts> counts_by_instruction;
-    for(const PcSampleState& state : data.pc_sample_states)
-    {
-        SampleCounts& counts = counts_by_instruction[state.instruction_uuid];
-        counts.total += state.total_count;
-        counts.stall += state.stall_count;
-    }
-
-    std::unordered_map<uint64_t, SampleCounts> counts_by_source_line;
-    for(const InstructionSourceLine& mapping : data.instruction_source_lines)
-    {
-        if(mapping.frame_index != 0)
-            continue;
-        const auto state_it = counts_by_instruction.find(mapping.instruction_uuid);
-        if(state_it == counts_by_instruction.end())
-            continue;
-        SampleCounts& counts = counts_by_source_line[mapping.source_line_uuid];
-        counts.total += state_it->second.total;
-        counts.stall += state_it->second.stall;
-    }
-
     uint64_t max_line_number = 0;
     for(const auto& source_line : source_file->source_lines)
     {
@@ -657,15 +631,8 @@ SourceCodeWidget::Load(const PcSamplingData& data, uint64_t source_file_uuid)
             continue;
         }
 
-        float stall_percent = 0.0f;
-        const auto counts_it = counts_by_source_line.find(source_line.source_line_uuid);
-        if(counts_it != counts_by_source_line.end() && counts_it->second.total != 0)
-        {
-            stall_percent = 100.0f * static_cast<float>(counts_it->second.stall) /
-                            static_cast<float>(counts_it->second.total);
-        }
         m_lines.push_back({ source_line.content, source_line.source_line_uuid,
-                            source_line.line_number, stall_percent });
+                            source_line.line_number });
         max_line_number = std::max(max_line_number, source_line.line_number);
     }
 
@@ -681,7 +648,7 @@ SourceCodeWidget::Render()
         return;
     }
 
-    const int columns_count = IsStallShown() ? 3 : 2;
+    const int columns_count = 2;
 
     if(!ImGui::BeginTable("SourceCode", columns_count, m_table_flags))
         return;
@@ -691,11 +658,6 @@ SourceCodeWidget::Render()
     ImGui::TableSetupColumn(
         "#", ImGuiTableColumnFlags_NoResize | ImGuiTableColumnFlags_WidthFixed,
         m_line_num_width);
-
-    if(IsStallShown())
-        ImGui::TableSetupColumn(
-            "Stalls", ImGuiTableColumnFlags_NoResize | ImGuiTableColumnFlags_WidthFixed,
-                                ImGui::CalcTextSize("100.0%").x);
 
     ImGui::TableSetupColumn("Source code", ImGuiTableColumnFlags_WidthStretch);
 
@@ -784,14 +746,7 @@ SourceCodeWidget::RenderLine(uint32_t index, uint32_t columns_count)
     ImGui::TextColored(m_line_num_color, "%*llu", static_cast<int>(m_line_num_digits),
                        static_cast<unsigned long long>(display_num));
 
-    int col = 1;
-    if(IsStallShown())
-    {
-        ImGui::TableSetColumnIndex(col++);
-        ImGui::TextDisabled("%.1f%%", source_row.summarised_stalls);
-    }
-
-    ImGui::TableSetColumnIndex(col);
+    ImGui::TableSetColumnIndex(1);
     ImGui::TextUnformatted(source_row.content.c_str());
 }
 

@@ -181,9 +181,8 @@ private:
     struct SourceRow
     {
         std::string content;
-        uint64_t    id                = 0;
-        uint64_t    line_number       = 0;
-        float       summarised_stalls = 0.0f;
+        uint64_t    id          = 0;
+        uint64_t    line_number = 0;
     };
 
     std::vector<SourceRow> m_lines;

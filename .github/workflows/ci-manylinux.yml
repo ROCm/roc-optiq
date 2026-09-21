@@ -50,6 +50,14 @@ on:
           - rc
           - stable-staging
           - legacy-nightly
+      s3_root_directory:
+        description: 'Override S3 root directory (used with legacy-nightly bucket env)'
+        type: string
+        default: ''
+      artifact_suffix:
+        description: 'Suffix to append to uploaded artifact names'
+        type: string
+        default: ''
   workflow_call:
     inputs:
       cmake_config_preset:
@@ -92,6 +100,14 @@ on:
         description: 'S3 bucket environment to upload artifacts to'
         type: string
         default: 'legacy-nightly'
+      s3_root_directory:
+        description: 'Override S3 root directory (used with legacy-nightly bucket env)'
+        type: string
+        default: ''
+      artifact_suffix:
+        description: 'Suffix to append to uploaded artifact names'
+        type: string
+        default: ''
 
 env:
   BUILD_DIR: "build"
@@ -156,7 +172,7 @@ jobs:
         if: steps.run_tests.outcome == 'failure'
         uses: actions/upload-artifact@v7
         with:
-          name: test-logs-manylinux
+          name: test-logs-manylinux${{ inputs.artifact_suffix }}
           path: |
             ${{ env.BUILD_DIR }}/ctest-results.xml
             ${{ env.BUILD_DIR }}/Testing/Temporary/**
@@ -174,7 +190,7 @@ jobs:
         if: ${{ inputs.upload_to_github }}
         uses: actions/upload-artifact@v7
         with:
-          name: roc-optiq-manylinux-release
+          name: roc-optiq-manylinux-release${{ inputs.artifact_suffix }}
           path: |
             ${{ env.DIST_DIR }}/
           retention-days: 2
@@ -202,7 +218,11 @@ jobs:
             legacy-nightly)
               echo "S3_BUCKET=${{ secrets.AWS_S3_BUCKET }}" >> "$GITHUB_ENV"
               echo "S3_ROLE_ARN=${{ secrets.AWS_ROLE_ARN }}" >> "$GITHUB_ENV"
-              echo "S3_ROOT_DIRECTORY=nightly/$(date +%Y_%m_%d)/manylinux" >> "$GITHUB_ENV"
+              S3_BASE="${{ inputs.s3_root_directory }}"
+              if [[ -z "${S3_BASE}" ]]; then
+                S3_BASE="nightly"
+              fi
+              echo "S3_ROOT_DIRECTORY=${S3_BASE}/$(date +%Y_%m_%d)/manylinux" >> "$GITHUB_ENV"
               ;;
             *)
               echo "Unknown s3_bucket_env: ${{ inputs.s3_bucket_env }}"

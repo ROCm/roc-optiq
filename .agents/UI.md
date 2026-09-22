@@ -80,9 +80,10 @@ When humans and `CODING.md` disagree with this file, `CODING.md` wins.
   `src/app/src/rocprofvis_imgui_backend.cpp`.
 - **Persistence / parsing:** SQLite (`thirdparty/sqlite3/`), jsoncpp, yaml-cpp.
 - **HTTPS (Ask Optiq):** cpp-httplib (`thirdparty/cpp-httplib/`, a submodule
-  pinned to v0.53.1) with vendored mbedTLS. Targets the OpenAI
-  chat-completions API. Built only under
-  `ROCPROFVIS_ENABLE_AGENTIC_PROFILING` (default OFF).
+  pinned to v0.53.1). TLS follows `CRYPTO_BACKEND`: vendored mbedTLS by
+  default, or a system OpenSSL when `-DCRYPTO_BACKEND=OpenSSL` (the same
+  choice as remote/SSH). Targets the OpenAI chat-completions API. Built
+  only under `ROCPROFVIS_ENABLE_AGENTIC_PROFILING` (default OFF).
 - **Logging:** spdlog (`thirdparty/spdlog/`). Use `spdlog::info/warn/error`,
   never `std::cout` / `printf` / `iostream`.
 - **File dialog:** Native via `nativefiledialog-extended` on most platforms,
@@ -1970,10 +1971,12 @@ does not offer the toolbar button.
 **Gated behind `ROCPROFVIS_ENABLE_AGENTIC_PROFILING`, default OFF**, the
 same way remote and profiler launch are gated. Everything in
 `src/view/src/agenticprofiling/` is left out of `VIEW_FILES` when the
-option is off, and so are `cpp-httplib`, mbedTLS, and `SecretStore`
-unless remote asks for them - which is why a default clone needs
-neither the `thirdparty/cpp-httplib` nor the `thirdparty/mbedtls`
-submodule. Every call site outside the folder is
+option is off, and so are `cpp-httplib`, its TLS backend, and
+`SecretStore` unless remote asks for them. The default backend is
+vendored mbedTLS; `-DCRYPTO_BACKEND=OpenSSL` links a system OpenSSL
+instead and does not build mbedTLS. A default clone needs neither the
+`thirdparty/cpp-httplib` nor the `thirdparty/mbedtls` submodule. Every
+call site outside the folder is
 wrapped in `#ifdef`, so adding a new one means adding a guard: they are
 in `AppWindow` (destroy, `Update()`, the docked-render branch, the
 View-menu item), the `TraceView` toolbar, and `SettingsPanel` (the

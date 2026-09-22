@@ -1568,9 +1568,11 @@ hotness. Counts below ten carry a low-confidence marker for the derived
 percentages while the exact count remains prominent. The Samples column starts
 at the wider of its header and largest formatted count. All ISA-table columns
 are user-resizable, and each heat bar uses the live cell width so it follows
-both manual resizing and data- or font-driven width changes. Hovering any ISA
-or source-table header shows a tooltip describing the displayed data; derived
-percentage headers include their aggregation formula.
+both manual resizing and data- or font-driven width changes. Hovering a data
+column header shows a user-facing explanation; the `#` line-number headers do
+not show tooltips. When `ROCPROFVIS_DEVELOPER_MODE` is enabled, each data-column
+tooltip also shows the database fields, grouping or filtering keys, and formulas
+used by the column.
 The source table is optional; its Stalls column is
 `100 * sum(stall_count) / sum(total_count)` for instructions mapped to the
 source line at `frame_index == 0`. Stall-reason text, instruction-sample

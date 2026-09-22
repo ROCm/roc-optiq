@@ -78,8 +78,6 @@ class ComputeIsaView : public RocWidget
 {
 public:
     static constexpr const char* TAB_ID = "isa_view";
-    static constexpr const char* DISABLED_TOOLTIP =
-        "This database file has no ISA lines, so ISA View is inactive.";
 
     static TabItem CreateTabItem(DataProvider& data_provider);
     static TabItem CreateTabItem(DataProvider& data_provider, bool has_isa_lines);

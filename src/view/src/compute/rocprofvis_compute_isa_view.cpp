@@ -30,17 +30,93 @@ constexpr ImVec4 HEATMAP_LOW_COLOR {0.24f, 0.70f, 0.28f, 0.5f};
 constexpr ImVec4 HEATMAP_MID_COLOR {0.90f, 0.78f, 0.18f, 0.5f};
 constexpr ImVec4 HEATMAP_HIGH_COLOR{0.82f, 0.24f, 0.24f, 0.5f};
 
+struct HeaderTooltipText
+{
+    const char* user_description;
+    const char* developer_information;
+};
+
+constexpr const char* ISA_VIEW_DISABLED_TOOLTIP =
+    "This database file has no ISA lines, so ISA View is inactive.";
+constexpr const char* DEVELOPER_INFORMATION_LABEL = "Developer information";
+
+constexpr HeaderTooltipText SOURCE_CODE_HEADER_TOOLTIP {
+    "Source text for this line from the selected source file.",
+    "DB field: compute_source_line.content\n"
+    "Row key: compute_source_line.source_line_uuid\n"
+    "Filter: source_file_uuid = selected source file"
+};
+
+constexpr HeaderTooltipText SAMPLES_HEADER_TOOLTIP {
+    "How often PC sampling observed the GPU at this instruction.\n"
+    "Larger values identify hotter instructions worth investigating.\n"
+    "The bar compares each row with the hottest displayed instruction.\n"
+    "Samples are observations, not elapsed time.",
+    "DB field: compute_pc_sample_state.total_count\n"
+    "Group key: compute_pc_sample_state.instruction_uuid\n"
+    "Value: SUM(total_count) per instruction_uuid\n"
+    "Bar: instruction samples / MAX(displayed instruction samples)\n"
+    "Kernel share: instruction samples / SUM(kernel total_count)"
+};
+
+constexpr HeaderTooltipText ISA_INSTRUCTION_HEADER_TOOLTIP {
+    "GPU machine instruction for this row.\n"
+    "It shows the operation and operands from the kernel disassembly.",
+    "DB field: compute_instruction_line.instruction\n"
+    "Row key: compute_instruction_line.instruction_uuid\n"
+    "DB filter: compute_kernel_symbol.kernel_uuid = selected kernel\n"
+    "View filter: selected code object UUID"
+};
+
+constexpr HeaderTooltipText ISSUE_PERCENT_HEADER_TOOLTIP {
+    "How often this instruction was issued for execution when sampled.\n"
+    "Higher values mean it was usually making progress instead of waiting.",
+    "DB fields: compute_pc_sample_state.issue_count, total_count\n"
+    "Group key: compute_pc_sample_state.instruction_uuid\n"
+    "Value: 100 * SUM(issue_count) / SUM(total_count)\n"
+    "If SUM(total_count) is zero, the displayed value is 0%."
+};
+
+constexpr HeaderTooltipText STALL_PERCENT_HEADER_TOOLTIP {
+    "How often this instruction was unable to issue and was waiting when sampled.\n"
+    "Higher values identify where to investigate, but not the cause of the wait.",
+    "DB fields: compute_pc_sample_state.stall_count, total_count\n"
+    "Group key: compute_pc_sample_state.instruction_uuid\n"
+    "Value: 100 * SUM(stall_count) / SUM(total_count)\n"
+    "If SUM(total_count) is zero, the displayed value is 0%."
+};
+
+constexpr const char* LOW_CONFIDENCE_SAMPLES_CELL_TOOLTIP_FORMAT =
+    "%s samples\n%.1f%% of kernel samples\n"
+    "%.1f%% relative to the hottest instruction\n\n"
+    "Low-confidence estimate: percentages based on fewer than %llu samples may be "
+    "unstable.";
+constexpr const char* SAMPLES_CELL_TOOLTIP_FORMAT =
+    "%s samples\n%.1f%% of kernel samples\n"
+    "%.1f%% relative to the hottest instruction";
+
 namespace
 {
 void
-RenderTableHeaderWithTooltip(int column, const char* label, const char* tooltip)
+RenderTableHeaderWithTooltip(int column, const char* label, const HeaderTooltipText& tooltip)
 {
     ImGui::TableSetColumnIndex(column);
     ImGui::TableHeader(label);
-    if(ImGui::IsItemHovered(ImGuiHoveredFlags_ForTooltip))
+    if(!ImGui::IsItemHovered(ImGuiHoveredFlags_ForTooltip))
     {
-        SetTooltipStyled("%s", tooltip);
+        return;
     }
+
+    BeginTooltipStyled();
+    ImGui::TextUnformatted(tooltip.user_description);
+//#ifdef ROCPROFVIS_DEVELOPER_MODE
+    ImGui::Spacing();
+    ImGui::Separator();
+    ImGui::Spacing();
+    ImGui::TextDisabled(DEVELOPER_INFORMATION_LABEL);
+    ImGui::TextUnformatted(tooltip.developer_information);
+//#endif
+    EndTooltipStyled();
 }
 }  // namespace
 
@@ -61,7 +137,7 @@ ComputeIsaView::CreateTabItem(DataProvider& data_provider, bool has_isa_lines)
 
     TabItem tab = RocWidget::CreateTabItem("ISA View", TAB_ID, nullptr);
     tab.m_enabled          = false;
-    tab.m_disabled_tooltip = DISABLED_TOOLTIP;
+    tab.m_disabled_tooltip = ISA_VIEW_DISABLED_TOOLTIP;
     return tab;
 }
 
@@ -675,9 +751,9 @@ SourceCodeWidget::Render()
     ImGui::TableSetupColumn("Source code", ImGuiTableColumnFlags_WidthStretch);
 
     ImGui::TableNextRow(ImGuiTableRowFlags_Headers);
-    RenderTableHeaderWithTooltip(0, "#", "Line number in the selected source file.");
-    RenderTableHeaderWithTooltip(
-        1, "Source code", "Source-code text loaded from the selected source file.");
+    ImGui::TableSetColumnIndex(0);
+    ImGui::TableHeader("#");
+    RenderTableHeaderWithTooltip(1, "Source code", SOURCE_CODE_HEADER_TOOLTIP);
     PushStyles();
 
     ImGuiListClipper clipper;
@@ -907,32 +983,19 @@ IsaCodeWidget::Render()
 
     ImGui::TableNextRow(ImGuiTableRowFlags_Headers);
     int header_column = 0;
-    RenderTableHeaderWithTooltip(
-        header_column++, "#",
-        "1-based row number in the displayed ISA listing.\n"
-        "This is not a PC address or database identifier.");
+    ImGui::TableSetColumnIndex(header_column++);
+    ImGui::TableHeader("#");
     if(IsStallShown())
     {
-        RenderTableHeaderWithTooltip(
-            header_column++, "Samples",
-            "Raw PC sample count attributed to this instruction.\n"
-            "Data: SUM(total_count), grouped by instruction UUID.\n"
-            "The bar is normalized to the hottest displayed instruction.\n"
-            "Samples are not elapsed time.");
+        RenderTableHeaderWithTooltip(header_column++, "Samples", SAMPLES_HEADER_TOOLTIP);
     }
-    RenderTableHeaderWithTooltip(
-        header_column++, "ISA",
-        "Disassembled GPU ISA instruction text associated with this instruction UUID.");
+    RenderTableHeaderWithTooltip(header_column++, "ISA", ISA_INSTRUCTION_HEADER_TOOLTIP);
     if(IsStallShown())
     {
-        RenderTableHeaderWithTooltip(
-            header_column++, "Issue %",
-            "Percentage of this instruction's samples classified as issued.\n"
-            "Formula: 100 * SUM(issue_count) / SUM(total_count).");
-        RenderTableHeaderWithTooltip(
-            header_column, "Stall %",
-            "Percentage of this instruction's samples classified as stalled.\n"
-            "Formula: 100 * SUM(stall_count) / SUM(total_count).");
+        RenderTableHeaderWithTooltip(header_column++, "Issue %",
+                                     ISSUE_PERCENT_HEADER_TOOLTIP);
+        RenderTableHeaderWithTooltip(header_column, "Stall %",
+                                     STALL_PERCENT_HEADER_TOOLTIP);
     }
     PushStyles();
 
@@ -1058,17 +1121,13 @@ IsaCodeWidget::RenderSamplesCell(uint64_t sample_count)
     {
         if(sample_count < LOW_CONFIDENCE_SAMPLE_COUNT)
         {
-            SetTooltipStyled("%s samples\n%.1f%% of kernel samples\n"
-                             "%.1f%% relative to the hottest instruction\n\n"
-                             "Low-confidence estimate: percentages based on fewer than %llu "
-                             "samples may be unstable.",
+            SetTooltipStyled(LOW_CONFIDENCE_SAMPLES_CELL_TOOLTIP_FORMAT,
                              count_text.c_str(), kernel_sample_share, relative_hotness,
                              static_cast<unsigned long long>(LOW_CONFIDENCE_SAMPLE_COUNT));
         }
         else
         {
-            SetTooltipStyled("%s samples\n%.1f%% of kernel samples\n"
-                             "%.1f%% relative to the hottest instruction",
+            SetTooltipStyled(SAMPLES_CELL_TOOLTIP_FORMAT,
                              count_text.c_str(), kernel_sample_share, relative_hotness);
         }
     }

@@ -7,7 +7,7 @@
 
 #include "rocprofvis_db_rocprof.h"
 
-#include "c_interface/profiler_hub.h"
+#include "c/profiler_hub.h"
 
 #include <memory>
 #include <mutex>

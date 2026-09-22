@@ -3,7 +3,7 @@
 
 #pragma once
 
-#include "c_interface/profiler_hub.h"
+#include "c/profiler_hub.h"
 
 #include <stdexcept>
 #include <string>

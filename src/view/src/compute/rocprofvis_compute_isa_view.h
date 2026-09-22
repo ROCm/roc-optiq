@@ -208,7 +208,6 @@ private:
         uint64_t                 code_object_offset         = 0;
         uint64_t                 source_line_id             = 0;
         uint64_t                 source_file_id             = 0;
-        uint64_t                 issue_count                = 0;
         uint64_t                 stall_count                = 0;
         uint64_t                 total_count                = 0;
         uint64_t                 stall_reason_sample_count  = 0;
@@ -225,7 +224,6 @@ private:
     struct SampleCounts
     {
         uint64_t total_count = 0;
-        uint64_t issue_count = 0;
         uint64_t stall_count = 0;
     };
 

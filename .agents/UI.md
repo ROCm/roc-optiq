@@ -1550,7 +1550,7 @@ independent layers:
 - `kStalls` runs when the user selects `Show Stalls`. The controller loads PC
   sample states, stall-reason rows and lookups, instruction types, and
   instruction-sample rows and lookups. The current view projection consumes
-  each state's UUID, instruction UUID, total, issue, and stall counts together
+  each state's UUID, instruction UUID, total, and stall counts together
   with the stall-reason rows and lookup text.
 
 `FetchPendingPcSampling()` submits all queued layers; ISA, source, and stalls
@@ -1565,9 +1565,9 @@ still match. Do not query the controller or model directly from this view.
 The ISA table is always present. Its Offset column shows each instruction's
 byte offset inside the selected code object as uppercase hexadecimal; it is not
 an absolute runtime address. Right-clicking an offset opens its copy context
-menu. `Show Stalls` adds Samples, Issue %, and Stall %
-columns, aggregated by instruction UUID across returned sample states. Samples
-shows a right-aligned raw count over a heat bar normalized to the hottest
+menu. `Show Stalls` adds Samples and Stall % columns, aggregated by instruction
+UUID across returned sample states. Samples shows a right-aligned raw count
+over a heat bar normalized to the hottest
 displayed instruction. Its tooltip reports both kernel share and relative
 hotness. Counts below ten carry a low-confidence marker for the derived
 percentages while the exact count remains prominent. The Samples column starts

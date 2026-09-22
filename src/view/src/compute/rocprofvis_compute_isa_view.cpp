@@ -81,15 +81,6 @@ constexpr HeaderTooltipText CODE_OBJECT_OFFSET_HEADER_TOOLTIP {
     "Missing DB values are returned as 0 by the instruction-line query."
 };
 
-constexpr HeaderTooltipText ISSUE_PERCENT_HEADER_TOOLTIP {
-    "How often this instruction was issued for execution when sampled.\n"
-    "Higher values mean it was usually making progress instead of waiting.",
-    "DB fields: compute_pc_sample_state.issue_count, total_count\n"
-    "Group key: compute_pc_sample_state.instruction_uuid\n"
-    "Value: 100 * SUM(issue_count) / SUM(total_count)\n"
-    "If SUM(total_count) is zero, the displayed value is 0%."
-};
-
 constexpr HeaderTooltipText STALL_PERCENT_HEADER_TOOLTIP {
     "How often this instruction was unable to issue and was waiting when sampled.\n"
     "Higher values identify where to investigate, but not the cause of the wait.\n"
@@ -131,6 +122,14 @@ constexpr ImGuiTableFlags STALL_REASON_TOOLTIP_TABLE_FLAGS =
 
 namespace
 {
+void
+RenderCenteredTableHeaderLabel(int column, const char* label)
+{
+    ImGui::TableSetColumnIndex(column);
+    CenterNextTextItem(label);
+    ImGui::TextUnformatted(label);
+}
+
 void
 RenderTableHeaderWithTooltip(int column, const char* label, const HeaderTooltipText& tooltip)
 {
@@ -785,8 +784,7 @@ SourceCodeWidget::Render()
     ImGui::TableSetupColumn("Source code", ImGuiTableColumnFlags_WidthStretch);
 
     ImGui::TableNextRow(ImGuiTableRowFlags_Headers);
-    ImGui::TableSetColumnIndex(0);
-    ImGui::TableHeader("#");
+    RenderCenteredTableHeaderLabel(0, "#");
     RenderTableHeaderWithTooltip(1, "Source code", SOURCE_CODE_HEADER_TOOLTIP);
     PushStyles();
 
@@ -920,7 +918,6 @@ IsaCodeWidget::AggregateSampleCounts(const PcSamplingData& data)
     {
         SampleCounts& counts = aggregation.counts_by_instruction[state.instruction_uuid];
         counts.total_count += state.total_count;
-        counts.issue_count += state.issue_count;
         counts.stall_count += state.stall_count;
         aggregation.kernel_total_samples += state.total_count;
         aggregation.instruction_by_sample_state.emplace(state.pc_sample_state_uuid,
@@ -1022,7 +1019,6 @@ IsaCodeWidget::BuildRow(
     if(const auto it = sample_aggregation.counts_by_instruction.find(instruction_uuid);
        it != sample_aggregation.counts_by_instruction.end())
     {
-        row.issue_count = it->second.issue_count;
         row.stall_count = it->second.stall_count;
         row.total_count = it->second.total_count;
     }
@@ -1081,7 +1077,7 @@ IsaCodeWidget::Render()
         return;
     }
 
-    const int sampling_detail_columns = IsStallShown() ? 3 : 0;
+    const int sampling_detail_columns = IsStallShown() ? 2 : 0;
     const int columns_count            = 3 + sampling_detail_columns;
 
     if(!ImGui::BeginTable("IsaCode", columns_count, m_table_flags))
@@ -1122,17 +1118,14 @@ IsaCodeWidget::Render()
 
     if(IsStallShown())
     {
-        const float percentage_column_width = ImGui::CalcTextSize("Issue %").x;
-        ImGui::TableSetupColumn("Issue %", ImGuiTableColumnFlags_WidthFixed,
-                                percentage_column_width);
+        const float stall_column_width = ImGui::CalcTextSize("Stall %").x;
         ImGui::TableSetupColumn("Stall %", ImGuiTableColumnFlags_WidthFixed,
-                                percentage_column_width);
+                                stall_column_width);
     }
 
     ImGui::TableNextRow(ImGuiTableRowFlags_Headers);
     int header_column = 0;
-    ImGui::TableSetColumnIndex(header_column++);
-    ImGui::TableHeader("#");
+    RenderCenteredTableHeaderLabel(header_column++, "#");
     if(IsStallShown())
     {
         RenderTableHeaderWithTooltip(header_column++, "Samples", SAMPLES_HEADER_TOOLTIP);
@@ -1142,8 +1135,6 @@ IsaCodeWidget::Render()
     RenderTableHeaderWithTooltip(header_column++, "ISA", ISA_INSTRUCTION_HEADER_TOOLTIP);
     if(IsStallShown())
     {
-        RenderTableHeaderWithTooltip(header_column++, "Issue %",
-                                     ISSUE_PERCENT_HEADER_TOOLTIP);
         RenderTableHeaderWithTooltip(header_column, "Stall %",
                                      STALL_PERCENT_HEADER_TOOLTIP);
     }
@@ -1426,9 +1417,6 @@ IsaCodeWidget::RenderLine(uint32_t index)
 
     if(IsStallShown())
     {
-        ImGui::TableSetColumnIndex(++column);
-        RenderPercentBarCell(
-            CalculatePercentage(isa_row.issue_count, isa_row.total_count));
         ImGui::TableSetColumnIndex(++column);
         if(RenderPercentBarCell(
                CalculatePercentage(isa_row.stall_count, isa_row.total_count)))

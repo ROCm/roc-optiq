@@ -5268,9 +5268,6 @@ DataProvider::LoadPcSamplingStates(KernelInfo& kernel, rocprofvis_handle_t* pc_h
             pc_handle, kRPVControllerPCSamplingPcSampleStateTotalCount, i,
             &state.total_count);
         rocprofvis_controller_get_uint64(
-            pc_handle, kRPVControllerPCSamplingPcSampleStateIssueCount, i,
-            &state.issue_count);
-        rocprofvis_controller_get_uint64(
             pc_handle, kRPVControllerPCSamplingPcSampleStateStallCount, i,
             &state.stall_count);
     }

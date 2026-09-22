@@ -176,6 +176,35 @@ jobs:
 
       - name: Build, Make, and Verify Installation
         run: |
+          # /opt/python/cp3xx on PATH is the static manylinux CPython. It has an
+          # interpreter and no libpython, so FindPython3 Development.Embed fails.
+          # TheRock also installs shared interpreters under /opt/python-shared
+          # for embedding. Prefer 3.12 to match the interpreter already on PATH.
+          PYTHON_CMAKE_ARGS=()
+          if [ "${{ env.ENABLE_SCRIPTING }}" = "ON" ]; then
+            SHARED_PY=""
+            for candidate in \
+                /opt/python-shared/cp312-cp312 \
+                /opt/python-shared/cp313-cp313 \
+                /opt/python-shared/cp311-cp311 \
+                /opt/python-shared/cp310-cp310
+            do
+              if [ -x "${candidate}/bin/python3" ]; then
+                SHARED_PY="${candidate}"
+                break
+              fi
+            done
+            if [ -z "${SHARED_PY}" ]; then
+              echo "Scripting needs an embeddable CPython with libpython."
+              echo "Looked under /opt/python-shared; the static /opt/python tree cannot be linked."
+              ls -la /opt/python /opt/python-shared 2>/dev/null || true
+              exit 1
+            fi
+            echo "Using embeddable Python at ${SHARED_PY}"
+            "${SHARED_PY}/bin/python3" --version
+            PYTHON_CMAKE_ARGS+=("-DPython3_ROOT_DIR=${SHARED_PY}")
+            echo "LD_LIBRARY_PATH=${SHARED_PY}/lib${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}" >> "${GITHUB_ENV}"
+          fi
           cmake -B ${{ env.BUILD_DIR }} \
             --preset ${{ inputs.cmake_config_preset }} \
             -DROCPROFVIS_ENABLE_INTERNAL_BANNER=${{ env.ENABLE_INTERNAL_BANNER }} \
@@ -188,7 +217,8 @@ jobs:
             -DGLFW_LINK_STATIC=ON \
             -DCRYPTO_BACKEND=${{ inputs.crypto_backend }} \
             -DCPACK_GENERATOR="TGZ;DEB;RPM" \
-            -DCMAKE_EXE_LINKER_FLAGS="-ldl"
+            -DCMAKE_EXE_LINKER_FLAGS="-ldl" \
+            "${PYTHON_CMAKE_ARGS[@]}"
           cmake --build ${{ env.BUILD_DIR }} --parallel 4 --target package
           if [ -e ${{ env.BUILD_DIR }}/${{ env.BUILD_FILE_NAME }} ]; then
             echo "✅ ${{ env.BUILD_FILE_NAME }} has been successfully built!"

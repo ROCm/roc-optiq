@@ -112,6 +112,7 @@ ParseBlock(jt::Json& node)
     MemChartBlock block;
     block.id     = ReadUint(node, "id", 0);
     block.column = ReadInt(node, "column", 0);
+    block.row    = ReadInt(node, "row", 0);
     block.order  = ReadInt(node, "order", -1);
     block.title  = ReadString(node, "title");
 

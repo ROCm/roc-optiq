@@ -39,6 +39,7 @@
             "properties": {
                 "id": { "type": "integer", "minimum": 1 },
                 "column": { "type": "integer" },
+                "row": { "type": "integer", "description": "Grid row band: 0 = main row, negative rows stack above it, positive rows below it. Columns align across all rows." },
                 "order": { "type": "integer" },
                 "title": { "type": "string" },
                 "content": { "type": "array", "items": { "$ref": "#/definitions/contentItem" } },

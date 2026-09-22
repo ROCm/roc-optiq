@@ -49,7 +49,10 @@ static constexpr float MIN_BLOCK_WIDTH   = 240.0f;
 static constexpr float MAX_BLOCK_WIDTH   = 400.0f;
 static constexpr float MIN_BLOCK_HEIGHT  = 96.0f;
 static constexpr float EMPTY_BODY_H      = 40.0f;
-static constexpr float MIN_TARGET_HEIGHT = 460.0f;  // Floor for the common column height.
+static constexpr float MIN_TARGET_HEIGHT = 460.0f;  // Floor for the common column height (row 0 only).
+static constexpr float INTER_ROW_GAP     = 140.0f;  // Vertical corridor between stacked row bands (for inter-row arrows/labels).
+static constexpr float ROW_VERT_STEP     = 16.0f;   // Horizontal pitch between fanned vertical inter-row connectors.
+static constexpr float ROW_ELBOW_STUB    = 18.0f;   // Vertical stub off a block before a cross-column inter-row elbow turns.
 static constexpr float GROUP_HEADER      = 26.0f;  // Title band of a group box.
 static constexpr float GROUP_PAD         = 9.0f;   // Inset of blocks inside a group box.
 static constexpr float GROUP_INNER_GAP   = 12.0f;  // Gap between blocks inside a group.
@@ -107,12 +110,14 @@ static constexpr float PORT_STEP           = 16.0f;  // Horizontal pitch between
 static constexpr float PORT_EDGE_PAD       = 14.0f;  // Keep bottom ports this far from the block edges.
 
 // Floating label (DrawFloatingLabel / ResolveLabelOverlaps).
-static constexpr float LABEL_PAD_X            = 5.0f;   // Horizontal padding inside a floating label.
-static constexpr float LABEL_PAD_Y            = 2.0f;   // Vertical padding inside a floating label.
+static constexpr float LABEL_PAD_X            = 6.0f;   // Horizontal padding inside a floating label.
+static constexpr float LABEL_PAD_Y            = 4.0f;   // Vertical padding inside a floating label.
 static constexpr float LABEL_ROUNDING         = 4.0f;   // Corner rounding of a floating label.
 static constexpr float LABEL_BORDER_ALPHA     = 0.7f;   // Alpha of a floating label's border.
 static constexpr float LABEL_BORDER_THICKNESS = 1.0f;   // Border thickness of a floating label.
-static constexpr float LABEL_OVERLAP_NUDGE    = 2.0f;   // Downward nudge when de-overlapping labels.
+static constexpr float LABEL_OVERLAP_NUDGE    = 7.0f;   // Vertical breathing room between stacked labels.
+static constexpr float LABEL_MARKER_SIZE      = 8.0f;   // Size of the flow-direction marker drawn in a label.
+static constexpr float LABEL_MARKER_GAP       = 5.0f;   // Gap between the direction marker and the label text.
 
 // Group box (DrawGroupBox).
 static constexpr float GROUP_FILL_ALPHA       = 0.35f;  // Alpha of a group box's fill.
@@ -343,16 +348,47 @@ DrawArrowHead(ImDrawList* draw_list, ImVec2 tip, ImVec2 dir, ImU32 color)
 
 void
 ComputeMemoryChartView::DrawFloatingLabel(ImDrawList* draw_list, ImVec2 pos, const char* text,
-                                          uint32_t accent_color)
+                                          uint32_t accent_color, float dir_x, float dir_y,
+                                          bool bidir)
 {
     ImVec2 text_size = ImGui::CalcTextSize(text);
     ImVec2 pad(LABEL_PAD_X, LABEL_PAD_Y);
+
+    bool   has_marker = (dir_x != 0.0f || dir_y != 0.0f);
+    float  marker_w   = has_marker ? (LABEL_MARKER_SIZE + LABEL_MARKER_GAP) : 0.0f;
+    ImVec2 text_pos(pos.x + marker_w, pos.y);
+
     ImVec2 min(pos.x - pad.x, pos.y - pad.y);
-    ImVec2 max(pos.x + text_size.x + pad.x, pos.y + text_size.y + pad.y);
+    ImVec2 max(text_pos.x + text_size.x + pad.x, pos.y + text_size.y + pad.y);
     draw_list->AddRectFilled(min, max, m_colors.bg, LABEL_ROUNDING);
     draw_list->AddRect(min, max, ApplyAlpha(accent_color, LABEL_BORDER_ALPHA), LABEL_ROUNDING, 0,
                        LABEL_BORDER_THICKNESS);
-    draw_list->AddText(pos, accent_color, text);
+
+    if(has_marker)
+    {
+        // Flow-direction glyph so same-color arrows pointing opposite ways differ.
+        // Bidirectional draws two half-length heads meeting tip-out at the centre.
+        ImVec2 center(pos.x + LABEL_MARKER_SIZE * 0.5f, pos.y + text_size.y * 0.5f);
+        float  half = LABEL_MARKER_SIZE * 0.5f;
+        auto   head = [&](float sx, float sy, float len) {
+            ImVec2 tip(center.x + sx * half, center.y + sy * half);
+            ImVec2 base(tip.x - sx * len, tip.y - sy * len);
+            ImVec2 perp(-sy * len * 0.5f, sx * len * 0.5f);
+            draw_list->AddTriangleFilled(tip, {base.x + perp.x, base.y + perp.y},
+                                         {base.x - perp.x, base.y - perp.y}, accent_color);
+        };
+        if(bidir)
+        {
+            head(dir_x, dir_y, half);
+            head(-dir_x, -dir_y, half);
+        }
+        else
+        {
+            head(dir_x, dir_y, LABEL_MARKER_SIZE);
+        }
+    }
+
+    draw_list->AddText(text_pos, accent_color, text);
 }
 
 void
@@ -567,6 +603,7 @@ ComputeMemoryChartView::OnLayoutLoaded()
 
     RebuildColumnGaps();
     RefreshMetricStrings();
+    m_layout_dirty = true;
 }
 
 void
@@ -591,6 +628,8 @@ ComputeMemoryChartView::RebuildColumnGaps()
         const MemChartBlock* from = Block(arrow.from);
         const MemChartBlock* to   = Block(arrow.to);
         if(!from || !to) continue;
+        // Inter-row arrows run vertically, not across a column gap.
+        if(from->row != to->row) continue;
         int32_t lo = std::min(from->column, to->column);
         int32_t hi = std::max(from->column, to->column);
         for(int g = 0; g < num_gaps; ++g)
@@ -666,6 +705,10 @@ ComputeMemoryChartView::RefreshCachedColors()
     {
         arrow.cached_color = ColorFromKind(arrow.cached_color_kind);
     }
+
+    // Cached routes hold copied colors, so they must be rebuilt. This also covers
+    // metric-string refreshes (which call here) and layout loads.
+    m_layout_dirty = true;
 }
 
 uint32_t
@@ -884,7 +927,8 @@ ComputeMemoryChartView::MeasureBlock(MemChartBlock& block) const
 
 void
 ComputeMemoryChartView::PositionBlock(MemChartBlock& block, float x, float y, float w,
-                                      float h, float conn_l, float conn_r, int32_t column)
+                                      float h, float conn_l, float conn_r, int32_t column,
+                                      int32_t row)
 {
     block.x          = x;
     block.y          = y;
@@ -892,7 +936,8 @@ ComputeMemoryChartView::PositionBlock(MemChartBlock& block, float x, float y, fl
     block.h          = h;
     block.conn_left  = conn_l;   // top-level ancestor box edges (passed unchanged)
     block.conn_right = conn_r;
-    block.column     = column;    // propagate so arrow routing sees nested blocks
+    block.column     = column;   // propagate row/column so arrow routing sees nested blocks
+    block.row        = row;
 
     if(!block.IsContainer()) return;
 
@@ -923,7 +968,7 @@ ComputeMemoryChartView::PositionBlock(MemChartBlock& block, float x, float y, fl
     for(MemChartBlock& child : block.children)
     {
         float ch = child.h * inner_scale;
-        PositionBlock(child, inner_x, cy, inner_w, ch, conn_l, conn_r, column);
+        PositionBlock(child, inner_x, cy, inner_w, ch, conn_l, conn_r, column, row);
         cy += ch + GROUP_INNER_GAP;
     }
 }
@@ -943,9 +988,10 @@ ComputeMemoryChartView::ComputeLayout(float available_width)
     // the busier side. Counts must match the ports BuildArrowRoutes actually
     // fans, or fan_y silently compresses them. Top-level blocks only.
     {
-        std::map<int32_t, int> column_counts;
+        // "Stacked" is judged within a row band, so count blocks per (row, column).
+        std::map<std::pair<int32_t, int32_t>, int> cell_counts;
         ForEachBlock(m_layout.blocks, [&](const MemChartBlock& block) {
-            column_counts[block.column]++;
+            cell_counts[{block.row, block.column}]++;
         });
 
         std::map<uint32_t, int> entry_anchored;  // arrows entering from the left
@@ -955,6 +1001,7 @@ ComputeMemoryChartView::ComputeLayout(float available_width)
             const MemChartBlock* from = Block(arrow.from);
             const MemChartBlock* to   = Block(arrow.to);
             if(!from || !to) continue;
+            if(from->row != to->row) continue;    // inter-row arrows fan vertically, not here
             int32_t dcol = to->column - from->column;
             // Same column: the arrow leaves and re-enters the right edge, so
             // both of its ends claim an exit port on their own block.
@@ -967,7 +1014,7 @@ ComputeMemoryChartView::ComputeLayout(float available_width)
             if(dcol != 1 && dcol != -1) continue;  // skip-column arrows use the highways
             const MemChartBlock* left  = from->column < to->column ? from : to;
             const MemChartBlock* right = from->column < to->column ? to : from;
-            if(column_counts[right->column] > 1)
+            if(cell_counts[{right->row, right->column}] > 1)
                 entry_anchored[right->id]++;
             else
                 exit_anchored[left->id]++;
@@ -989,14 +1036,19 @@ ComputeMemoryChartView::ComputeLayout(float available_width)
         }
     }
 
-    // Group top-level blocks by column. Sibling order was fixed in
-    // OnLayoutLoaded, so push_back order is already the stack order.
-    std::map<int32_t, std::vector<MemChartBlock*>> columns;
+    // Bucket by column (for the shared width) and by (row, column) cell (for
+    // stacking). Sibling order was fixed in OnLayoutLoaded, so push_back order
+    // is already the stack order.
+    std::map<int32_t, std::vector<MemChartBlock*>>                    columns;
+    std::map<int32_t, std::map<int32_t, std::vector<MemChartBlock*>>> cells;  // cells[row][column]
     for(MemChartBlock& block : m_layout.blocks)
     {
         columns[block.column].push_back(&block);
+        cells[block.row][block.column].push_back(&block);
     }
 
+    // Column width = widest block in the column across ALL rows, so the column
+    // keeps one x-span in every row (columns align even at different densities).
     std::vector<int32_t> col_keys;
     std::vector<float>   column_widths;
     for(std::pair<const int32_t, std::vector<MemChartBlock*>>& column : columns)
@@ -1055,47 +1107,89 @@ ComputeMemoryChartView::ComputeLayout(float available_width)
         }
     }
 
-    // Give every column the same height (tallest column's natural height) so
-    // columns line up top and bottom and use the vertical space.
-    float target_h = MIN_TARGET_HEIGHT;
-    for(int32_t key : col_keys)
+    // Left x + width per column id, shared by every row so columns stay aligned.
+    std::map<int32_t, float> col_x;
+    std::map<int32_t, float> col_w;
     {
-        std::vector<MemChartBlock*>& blocks = columns[key];
-        float sum_h = static_cast<float>(std::max<int>(blocks.size(), 1) - 1) * BLOCK_GAP;
-        for(const MemChartBlock* block : blocks)
+        float cursor_x = CHART_PADDING + LEFT_MARGIN;
+        for(size_t i = 0; i < col_keys.size(); ++i)
         {
-            sum_h += block->h;
+            col_x[col_keys[i]] = cursor_x;
+            col_w[col_keys[i]] = column_widths[i];
+            cursor_x += column_widths[i] + (i < col_gaps.size() ? col_gaps[i] : 0.0f);
         }
-        target_h = std::max(target_h, sum_h);
     }
-    // No upper clamp: the chart scrolls, so let it grow to the tallest column's
-    // need (clamping would re-compress columns and overlap the labels again).
 
-    // Position and stretch each column's top-level blocks to fill target height.
-    float  cursor_x = CHART_PADDING + LEFT_MARGIN;
-    size_t col_idx  = 0;
-    for(int32_t key : col_keys)
-    {
-        std::vector<MemChartBlock*>& blocks = columns[key];
-        float col_w = column_widths[col_idx];
-        float gaps  = static_cast<float>(std::max<int>(blocks.size(), 1) - 1) * BLOCK_GAP;
-        float natural_sum = 0.0f;
+    // Natural stacked height of one (row, column) cell.
+    auto cell_stack_height = [](const std::vector<MemChartBlock*>& blocks) -> float {
+        float sum = static_cast<float>(std::max<int>(blocks.size(), 1) - 1) * BLOCK_GAP;
         for(const MemChartBlock* block : blocks)
         {
-            natural_sum += block->h;
+            sum += block->h;
         }
-        float room  = std::max(target_h - gaps, 1.0f);
-        float scale = natural_sum > 0.0f ? room / natural_sum : 1.0f;
+        return sum;
+    };
 
-        float y = CHART_PADDING;
-        for(MemChartBlock* block : blocks)
+    // Row 0 is the tall main band (floored at MIN_TARGET_HEIGHT, later stretched
+    // to fill); other rows hug their natural content height.
+    std::map<int32_t, float> row_height;
+    for(std::pair<const int32_t, std::map<int32_t, std::vector<MemChartBlock*>>>& row : cells)
+    {
+        float natural = 0.0f;
+        for(std::pair<const int32_t, std::vector<MemChartBlock*>>& cell : row.second)
         {
-            float bh = block->h * scale;
-            PositionBlock(*block, cursor_x, y, col_w, bh, cursor_x, cursor_x + col_w, key);
-            y += bh + BLOCK_GAP;
+            natural = std::max(natural, cell_stack_height(cell.second));
         }
-        cursor_x += col_w + (col_idx < col_gaps.size() ? col_gaps[col_idx] : 0.0f);
-        ++col_idx;
+        row_height[row.first] = (row.first == 0) ? std::max(natural, MIN_TARGET_HEIGHT) : natural;
+    }
+
+    // Stack bands top-to-bottom (negative rows above row 0), INTER_ROW_GAP apart.
+    std::map<int32_t, float> row_y;
+    {
+        float cursor_y = CHART_PADDING;
+        for(std::pair<const int32_t, float>& row : row_height)
+        {
+            row_y[row.first] = cursor_y;
+            cursor_y += row.second + INTER_ROW_GAP;
+        }
+    }
+
+    // Row 0 stretches its stack to fill the band (so horizontal arrows stay
+    // level); other rows keep natural heights, anchored to the band top.
+    for(std::pair<const int32_t, std::map<int32_t, std::vector<MemChartBlock*>>>& row : cells)
+    {
+        int32_t r      = row.first;
+        float   band_y = row_y[r];
+        float   band_h = row_height[r];
+        for(std::pair<const int32_t, std::vector<MemChartBlock*>>& cell : row.second)
+        {
+            int32_t                      c      = cell.first;
+            std::vector<MemChartBlock*>& blocks = cell.second;
+            float                        cx     = col_x[c];
+            float                        cw     = col_w[c];
+
+            float gaps = static_cast<float>(std::max<int>(blocks.size(), 1) - 1) * BLOCK_GAP;
+            float natural_sum = 0.0f;
+            for(const MemChartBlock* block : blocks)
+            {
+                natural_sum += block->h;
+            }
+
+            float scale = 1.0f;
+            if(r == 0 && natural_sum > 0.0f)
+            {
+                float room = std::max(band_h - gaps, 1.0f);
+                scale      = room / natural_sum;
+            }
+
+            float y = band_y;
+            for(MemChartBlock* block : blocks)
+            {
+                float bh = block->h * scale;
+                PositionBlock(*block, cx, y, cw, bh, cx, cx + cw, c, r);
+                y += bh + BLOCK_GAP;
+            }
+        }
     }
 }
 
@@ -1103,37 +1197,48 @@ void
 ComputeMemoryChartView::Render()
 {
     float available_width = ImGui::GetContentRegionAvail().x;
-    ComputeLayout(available_width);
+    float font_size       = ImGui::GetFontSize();
 
-    float max_right  = 0.0f;
-    float max_bottom = 0.0f;
-    for(const MemChartBlock& block : m_layout.blocks)
+    // Recompute geometry only when an input to it changes; otherwise reuse the
+    // cached blocks/routes/canvas from the last frame and just redraw them.
+    if(m_layout_dirty || available_width != m_cached_layout_width ||
+       font_size != m_cached_font_size)
     {
-        max_right  = std::max(max_right, block.Right());
-        max_bottom = std::max(max_bottom, block.Bottom());
-    }
-    for(const MemChartGroupBox& box : m_group_boxes)
-    {
-        max_right  = std::max(max_right, box.x + box.w);
-        max_bottom = std::max(max_bottom, box.y + box.h);
-    }
+        ComputeLayout(available_width);
+        BuildArrowRoutes(m_routes);
+        ResolveLabelOverlaps(m_routes);
 
-    // Build the arrow routes now so skip-lanes (below the blocks) contribute to
-    // the canvas height.
-    std::vector<ArrowRoute> routes;
-    BuildArrowRoutes(routes);
-    ResolveLabelOverlaps(routes);
-    for(const ArrowRoute& route : routes)
-    {
-        for(const std::pair<float, float>& p : route.points)
+        float max_right  = 0.0f;
+        float max_bottom = 0.0f;
+        for(const MemChartBlock& block : m_layout.blocks)
         {
-            max_bottom = std::max(max_bottom, p.second + CANVAS_BOTTOM_PAD);
+            max_right  = std::max(max_right, block.Right());
+            max_bottom = std::max(max_bottom, block.Bottom());
         }
-        max_bottom = std::max(max_bottom, route.label_y + route.label_h + CANVAS_BOTTOM_PAD);
+        for(const MemChartGroupBox& box : m_group_boxes)
+        {
+            max_right  = std::max(max_right, box.x + box.w);
+            max_bottom = std::max(max_bottom, box.y + box.h);
+        }
+        // Skip-lanes and labels sit below the blocks, so fold them into the height.
+        for(const ArrowRoute& route : m_routes)
+        {
+            for(const std::pair<float, float>& p : route.points)
+            {
+                max_bottom = std::max(max_bottom, p.second + CANVAS_BOTTOM_PAD);
+            }
+            max_bottom = std::max(max_bottom, route.label_y + route.label_h + CANVAS_BOTTOM_PAD);
+        }
+
+        m_canvas_w            = max_right + CHART_PADDING;
+        m_canvas_h            = max_bottom + CHART_PADDING * 2.0f + LEGEND_HEIGHT;
+        m_cached_layout_width = available_width;
+        m_cached_font_size    = font_size;
+        m_layout_dirty        = false;
     }
 
-    float canvas_w = max_right + CHART_PADDING;
-    float canvas_h = max_bottom + CHART_PADDING * 2.0f + LEGEND_HEIGHT;
+    float canvas_w = m_canvas_w;
+    float canvas_h = m_canvas_h;
 
     ImGui::PushStyleColor(ImGuiCol_ChildBg, m_colors.bg);
     ImGui::BeginChild("MemoryChart", ImVec2(0, canvas_h), ImGuiChildFlags_None,
@@ -1149,7 +1254,7 @@ ComputeMemoryChartView::Render()
                              m_colors.bg);
 
     // Arrows first, then group boxes (containers), then blocks on top.
-    DrawArrowRoutes(draw_list, window_position, routes);
+    DrawArrowRoutes(draw_list, window_position, m_routes);
     for(const MemChartGroupBox& box : m_group_boxes)
     {
         DrawGroupBox(draw_list, {window_position.x + box.x, window_position.y + box.y},
@@ -1258,7 +1363,23 @@ ComputeMemoryChartView::BuildArrowRoutes(std::vector<ArrowRoute>& routes) const
 
     std::vector<size_t> adjacent;
     std::vector<size_t> same_column;
+    std::vector<size_t> inter_row;
     std::vector<size_t> skipping;
+
+    // True when another block sits in the same column between two inter-row
+    // endpoints, so a straight vertical would run through it.
+    auto blocked_between = [&](const MemChartBlock* a, const MemChartBlock* b) -> bool {
+        if(a->column != b->column) return false;
+        const MemChartBlock* up = a->y <= b->y ? a : b;
+        const MemChartBlock* lo = a->y <= b->y ? b : a;
+        for(const MemChartBlock& block : m_layout.blocks)
+        {
+            if(block.column != a->column || block.id == a->id || block.id == b->id) continue;
+            float mid = block.MidY();
+            if(mid > up->Bottom() && mid < lo->y) return true;
+        }
+        return false;
+    };
 
     for(size_t i = 0; i < m_layout.arrows.size(); ++i)
     {
@@ -1268,7 +1389,17 @@ ComputeMemoryChartView::BuildArrowRoutes(std::vector<ArrowRoute>& routes) const
         if(!from || !to) continue;
 
         int32_t dcol = to->column - from->column;
-        if(dcol == 1 || dcol == -1)
+        if(from->row != to->row)
+        {
+            // Different row bands: a clean vertical connector, unless another
+            // block sits between them in the column - then detour through the
+            // side gutter (same-column routing) so the line doesn't cross it.
+            if(blocked_between(from, to))
+                same_column.push_back(i);
+            else
+                inter_row.push_back(i);
+        }
+        else if(dcol == 1 || dcol == -1)
         {
             adjacent.push_back(i);
         }
@@ -1285,12 +1416,17 @@ ComputeMemoryChartView::BuildArrowRoutes(std::vector<ArrowRoute>& routes) const
     routes.reserve(m_layout.arrows.size());
 
     // Vertical position of the k-th of `count` ports inside a block's body.
-    auto fan_y = [](const MemChartBlock& b, float frac, int count) -> float {
-        float lo = b.y + HeaderHeight() + BLOCK_BODY_TOP;
+    auto fan_y = [](const MemChartBlock& b, float frac, int count,
+                    float pitch = ARROW_VERT_SPACE) -> float {
+        // A label-only block has no header/body split (its title is centred in the
+        // whole box), so span the full box; otherwise ports sit in the body below
+        // the header.
+        bool  label_only = b.content.empty() && !b.IsContainer();
+        float lo = b.y + (label_only ? BLOCK_TEXT_PAD : HeaderHeight() + BLOCK_BODY_TOP);
         float hi = b.Bottom() - BLOCK_TEXT_PAD;
         if(hi <= lo) return b.MidY();
         float avail   = hi - lo;
-        float desired = static_cast<float>(std::max(count - 1, 0)) * ARROW_VERT_SPACE;
+        float desired = static_cast<float>(std::max(count - 1, 0)) * pitch;
         float spread  = std::min(avail, desired);
         float center  = (lo + hi) * 0.5f;
         return center + (frac - 0.5f) * spread;
@@ -1319,11 +1455,37 @@ ComputeMemoryChartView::BuildArrowRoutes(std::vector<ArrowRoute>& routes) const
         route.head_at_first = head_from;  // points[0] sits at `from`
         route.head_at_last  = head_to;    // points.back() sits at `to`
 
+        // Label marker points along the flow, snapped to the dominant axis.
+        if(route.points.size() >= 2 && (head_from || head_to))
+        {
+            float dx = route.points.back().first - route.points.front().first;
+            float dy = route.points.back().second - route.points.front().second;
+            if(head_from && !head_to)  // reversed: head sits at points[0]
+            {
+                dx = -dx;
+                dy = -dy;
+            }
+            if(std::fabs(dx) >= std::fabs(dy))
+            {
+                route.label_dir_x = dx >= 0.0f ? 1.0f : -1.0f;
+                route.label_dir_y = 0.0f;
+            }
+            else
+            {
+                route.label_dir_x = 0.0f;
+                route.label_dir_y = dy >= 0.0f ? 1.0f : -1.0f;
+            }
+            route.label_bidir = head_from && head_to;
+        }
+
         ImVec2 size =
             route.label.empty() ? ImVec2(0.0f, 0.0f) : ImGui::CalcTextSize(route.label.c_str());
-        route.label_w = size.x;
+        bool  has_marker = !route.label.empty() &&
+                          (route.label_dir_x != 0.0f || route.label_dir_y != 0.0f);
+        float marker_w   = has_marker ? (LABEL_MARKER_SIZE + LABEL_MARKER_GAP) : 0.0f;
+        route.label_w = size.x + marker_w;
         route.label_h = size.y;
-        route.label_x = label_x - size.x * 0.5f;
+        route.label_x = label_x - route.label_w * 0.5f;
         route.label_y = label_y - size.y - ARROW_LABEL_ABOVE;
         routes.push_back(std::move(route));
     };
@@ -1395,11 +1557,11 @@ ComputeMemoryChartView::BuildArrowRoutes(std::vector<ArrowRoute>& routes) const
         return it != ports.end() ? it->second : fallback;
     };
 
-    // How many blocks share each column (a "stacked" column has > 1), counting
-    // nested blocks too (their column was propagated during layout).
-    std::map<int32_t, int> column_counts;
+    // How many blocks share each (row, column) cell (a "stacked" cell has > 1),
+    // counting nested blocks too (their row/column were propagated during layout).
+    std::map<std::pair<int32_t, int32_t>, int> cell_counts;
     ForEachBlock(m_layout.blocks, [&](const MemChartBlock& block) {
-        column_counts[block.column]++;
+        cell_counts[{block.row, block.column}]++;
     });
 
     for(size_t i : adjacent)
@@ -1415,7 +1577,7 @@ ComputeMemoryChartView::BuildArrowRoutes(std::vector<ArrowRoute>& routes) const
         // horizontal: anchor the row on the "stacked" endpoint (the block whose
         // exact vertical position matters); the full-height neighbor accepts any
         // row. Horizontal lines in a corridor are parallel, so they never cross.
-        bool  right_stacked = column_counts[right_b->column] > 1;
+        bool  right_stacked = cell_counts[{right_b->row, right_b->column}] > 1;
         float arrow_y =
             right_stacked
                 ? port_y(entry_y, PortKey(i, from == right_b), right_b->MidY())
@@ -1509,6 +1671,132 @@ ComputeMemoryChartView::BuildArrowRoutes(std::vector<ArrowRoute>& routes) const
                                                     {to->conn_right, route.to_y}};
         make_route(arrow, std::move(pts), lane_x + SAME_COL_LABEL_GAP,
                    (route.from_y + route.to_y) * 0.5f);
+    }
+
+    // Inter-row: connect blocks in different row bands. Every arrow gets a
+    // distinct port on its source edge, ordered by the target's x so bundles
+    // heading to different targets fan apart instead of stacking on one spot.
+    // Cross-column (elbow) arrows also get a fanned port on the target's side.
+    {
+        struct EdgePort
+        {
+            size_t index;
+            float  key;  // orders ports along the edge
+        };
+        std::map<std::pair<uint32_t, bool>, std::vector<EdgePort>> src_ports;   // (block, exits-bottom)
+        std::map<std::pair<uint32_t, bool>, std::vector<EdgePort>> side_ports;  // (target, enters-right)
+
+        for(size_t index : inter_row)
+        {
+            const MemChartArrow& arrow = m_layout.arrows[index];
+            const MemChartBlock* from  = Block(arrow.from);
+            const MemChartBlock* to    = Block(arrow.to);
+            if(!from || !to) continue;
+            bool exits_bottom = to->MidY() > from->MidY();
+            src_ports[{from->id, exits_bottom}].push_back({index, to->MidX()});
+            if(from->column != to->column)
+            {
+                bool enters_right = from->MidX() > to->MidX();
+                side_ports[{to->id, enters_right}].push_back({index, from->MidY()});
+            }
+        }
+
+        // Assign x positions along each source edge (fanned about the centre).
+        std::unordered_map<size_t, float> src_x_of;
+        for(std::pair<const std::pair<uint32_t, bool>, std::vector<EdgePort>>& kv : src_ports)
+        {
+            const MemChartBlock* block = Block(kv.first.first);
+            if(!block) continue;
+            std::vector<EdgePort>& ports = kv.second;
+            std::stable_sort(ports.begin(), ports.end(),
+                             [](const EdgePort& a, const EdgePort& b) { return a.key < b.key; });
+            int   n      = static_cast<int>(ports.size());
+            float usable = std::max(block->w - PORT_EDGE_PAD * 2.0f, 0.0f);
+            float step   = n > 1 ? std::min(PORT_STEP, usable / static_cast<float>(n - 1)) : 0.0f;
+            for(int k = 0; k < n; ++k)
+            {
+                src_x_of[ports[k].index] =
+                    block->MidX() +
+                    (static_cast<float>(k) - static_cast<float>(n - 1) * 0.5f) * step;
+            }
+        }
+
+        // Assign y positions on each target side edge, plus a per-target ordinal
+        // used to stagger the elbow turns so their horizontal runs don't overlap.
+        std::unordered_map<size_t, float> side_y_of;
+        std::unordered_map<size_t, int>   side_k_of;
+        std::unordered_map<size_t, int>   side_n_of;
+        for(std::pair<const std::pair<uint32_t, bool>, std::vector<EdgePort>>& kv : side_ports)
+        {
+            const MemChartBlock* block = Block(kv.first.first);
+            if(!block) continue;
+            std::vector<EdgePort>& ports = kv.second;
+            std::stable_sort(ports.begin(), ports.end(),
+                             [](const EdgePort& a, const EdgePort& b) { return a.key < b.key; });
+            int n = static_cast<int>(ports.size());
+            for(int k = 0; k < n; ++k)
+            {
+                float frac = n > 1 ? static_cast<float>(k) / static_cast<float>(n - 1) : 0.5f;
+                side_y_of[ports[k].index] = fan_y(*block, frac, n, ROW_VERT_STEP);
+                side_k_of[ports[k].index] = k;
+                side_n_of[ports[k].index] = n;
+            }
+        }
+
+        for(size_t index : inter_row)
+        {
+            const MemChartArrow& arrow = m_layout.arrows[index];
+            const MemChartBlock* from  = Block(arrow.from);
+            const MemChartBlock* to    = Block(arrow.to);
+            if(!from || !to) continue;
+
+            float src_x = src_x_of.count(index) ? src_x_of[index] : from->MidX();
+
+            if(from->column == to->column)
+            {
+                // Same column: a straight vertical at the source port (valid at
+                // the target too, since aligned columns share the x-span).
+                const MemChartBlock* upper = from->y <= to->y ? from : to;
+                const MemChartBlock* lower = from->y <= to->y ? to : from;
+                float upper_y = upper->Bottom();
+                float lower_y = lower->y;
+                std::pair<float, float> from_pt = (from == upper)
+                                                      ? std::make_pair(src_x, upper_y)
+                                                      : std::make_pair(src_x, lower_y);
+                std::pair<float, float> to_pt = (to == upper)
+                                                    ? std::make_pair(src_x, upper_y)
+                                                    : std::make_pair(src_x, lower_y);
+                make_route(arrow, {from_pt, to_pt}, src_x, (upper_y + lower_y) * 0.5f);
+                continue;
+            }
+
+            // Cross-column: a vertical-first elbow. Drop off the source port, turn
+            // in a lane in the gap between the columns (clearing anything stacked
+            // under the source), then jog horizontally into the target's side.
+            bool  down        = to->MidY() > from->MidY();
+            bool  target_left = to->MidX() < from->MidX();
+            int   j           = side_k_of.count(index) ? side_k_of[index] : 0;
+            int   m           = side_n_of.count(index) ? side_n_of[index] : 1;
+
+            float src_edge_y = down ? from->Bottom() : from->y;
+            float stub_len   = ROW_ELBOW_STUB + static_cast<float>(j) * ROW_VERT_STEP;
+            float stub_y     = src_edge_y + (down ? stub_len : -stub_len);
+
+            float from_near = target_left ? from->conn_left : from->conn_right;
+            float to_near   = target_left ? to->conn_right : to->conn_left;
+            float lane_x    = (from_near + to_near) * 0.5f +
+                           (static_cast<float>(j) - static_cast<float>(m - 1) * 0.5f) * ROW_VERT_STEP;
+
+            float to_edge_x = target_left ? to->conn_right : to->conn_left;
+            float to_y      = side_y_of.count(index) ? side_y_of[index] : to->MidY();
+
+            std::vector<std::pair<float, float>> pts = {{src_x, src_edge_y},
+                                                        {src_x, stub_y},
+                                                        {lane_x, stub_y},
+                                                        {lane_x, to_y},
+                                                        {to_edge_x, to_y}};
+            make_route(arrow, std::move(pts), lane_x, (stub_y + to_y) * 0.5f);
+        }
     }
 
     // Skipping columns: route along packed "highway" lanes below the blocks.
@@ -1756,7 +2044,8 @@ ComputeMemoryChartView::DrawArrowRoutes(ImDrawList* draw_list, ImVec2 origin,
     {
         if(route.points.size() < 2 || route.label.empty()) continue;
         ImVec2 label_pos(origin.x + route.label_x, origin.y + route.label_y);
-        DrawFloatingLabel(draw_list, label_pos, route.label.c_str(), route.color);
+        DrawFloatingLabel(draw_list, label_pos, route.label.c_str(), route.color,
+                          route.label_dir_x, route.label_dir_y, route.label_bidir);
         ImVec2 label_size(route.label_w, route.label_h);
         ShowMetricTooltip(label_pos, {label_pos.x + label_size.x, label_pos.y + label_size.y},
                           route.metric, true, true);

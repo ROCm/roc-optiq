@@ -5211,6 +5211,9 @@ DataProvider::LoadPcSamplingInstructionLine(InstructionLine&     instruction_lin
     rocprofvis_controller_get_uint64(pc_handle, kRPVControllerPCSamplingInstructionLineUuid, index,
                                      &instruction_uuid);
     instruction_line.instruction_uuid = instruction_uuid;
+    rocprofvis_controller_get_uint64(
+        pc_handle, kRPVControllerPCSamplingInstructionLineCodeObjectOffset, index,
+        &instruction_line.code_object_offset);
     instruction_line.instruction =
         GetString(pc_handle, kRPVControllerPCSamplingInstructionLineInstruction, index);
 }

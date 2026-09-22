@@ -12,6 +12,7 @@
 #include "spdlog/spdlog.h"
 
 #include <algorithm>
+#include <cstdio>
 #include <string>
 #include <unordered_map>
 #include <utility>
@@ -39,6 +40,8 @@ struct HeaderTooltipText
 constexpr const char* ISA_VIEW_DISABLED_TOOLTIP =
     "This database file has no ISA lines, so ISA View is inactive.";
 constexpr const char* DEVELOPER_INFORMATION_LABEL = "Developer information";
+constexpr const char* CODE_OBJECT_OFFSET_FORMAT = "0x%llX";
+constexpr size_t CODE_OBJECT_OFFSET_TEXT_CAPACITY = 19;
 
 constexpr HeaderTooltipText SOURCE_CODE_HEADER_TOOLTIP {
     "Source text for this line from the selected source file.",
@@ -66,6 +69,16 @@ constexpr HeaderTooltipText ISA_INSTRUCTION_HEADER_TOOLTIP {
     "Row key: compute_instruction_line.instruction_uuid\n"
     "DB filter: compute_kernel_symbol.kernel_uuid = selected kernel\n"
     "View filter: selected code object UUID"
+};
+
+constexpr HeaderTooltipText CODE_OBJECT_OFFSET_HEADER_TOOLTIP {
+    "Byte offset of this instruction inside the selected GPU code object.\n"
+    "Use it to match sampled instructions with disassembly or other PC data.\n"
+    "The value is hexadecimal and is not an absolute runtime address.",
+    "DB field: compute_instruction_line.code_object_offset\n"
+    "Row key: compute_instruction_line.instruction_uuid\n"
+    "Display: 0x followed by the uppercase hexadecimal offset\n"
+    "Missing DB values are returned as 0 by the instruction-line query."
 };
 
 constexpr HeaderTooltipText ISSUE_PERCENT_HEADER_TOOLTIP {
@@ -997,8 +1010,9 @@ IsaCodeWidget::BuildRow(
     const uint64_t instruction_uuid = instruction_line.instruction_uuid;
 
     IsaRow row;
-    row.instruction = instruction_line.instruction;
-    row.id          = instruction_uuid;
+    row.instruction        = instruction_line.instruction;
+    row.id                 = instruction_uuid;
+    row.code_object_offset = instruction_line.code_object_offset;
 
     if(const auto it = source_locations.find(instruction_uuid); it != source_locations.end())
     {
@@ -1027,6 +1041,7 @@ IsaCodeWidget::Load(const PcSamplingData& data, uint64_t code_object_uuid)
     m_entries.clear();
     m_kernel_total_samples        = 0;
     m_hottest_instruction_samples = 0;
+    m_largest_code_object_offset  = 0;
 
     const CodeObjectStore* code_object = FindCodeObject(data, code_object_uuid);
     if(!code_object)
@@ -1048,6 +1063,8 @@ IsaCodeWidget::Load(const PcSamplingData& data, uint64_t code_object_uuid)
                                   stall_reason_counts, stall_reason_text);
             m_hottest_instruction_samples =
                 std::max(m_hottest_instruction_samples, row.total_count);
+            m_largest_code_object_offset =
+                std::max(m_largest_code_object_offset, row.code_object_offset);
             m_entries.emplace_back(std::move(row));
         }
     }
@@ -1065,7 +1082,7 @@ IsaCodeWidget::Render()
     }
 
     const int sampling_detail_columns = IsStallShown() ? 3 : 0;
-    const int columns_count            = 2 + sampling_detail_columns;
+    const int columns_count            = 3 + sampling_detail_columns;
 
     if(!ImGui::BeginTable("IsaCode", columns_count, m_table_flags))
         return;
@@ -1092,6 +1109,15 @@ IsaCodeWidget::Render()
                                 samples_column_width);
     }
 
+    char largest_offset_text[CODE_OBJECT_OFFSET_TEXT_CAPACITY] = {};
+    std::snprintf(largest_offset_text, sizeof(largest_offset_text),
+                  CODE_OBJECT_OFFSET_FORMAT,
+                  static_cast<unsigned long long>(m_largest_code_object_offset));
+    const float offset_column_width =
+        std::max(ImGui::CalcTextSize("Offset").x,
+                 ImGui::CalcTextSize(largest_offset_text).x);
+    ImGui::TableSetupColumn("Offset", ImGuiTableColumnFlags_WidthFixed,
+                            offset_column_width);
     ImGui::TableSetupColumn("ISA", ImGuiTableColumnFlags_WidthStretch);
 
     if(IsStallShown())
@@ -1111,6 +1137,8 @@ IsaCodeWidget::Render()
     {
         RenderTableHeaderWithTooltip(header_column++, "Samples", SAMPLES_HEADER_TOOLTIP);
     }
+    RenderTableHeaderWithTooltip(header_column++, "Offset",
+                                 CODE_OBJECT_OFFSET_HEADER_TOOLTIP);
     RenderTableHeaderWithTooltip(header_column++, "ISA", ISA_INSTRUCTION_HEADER_TOOLTIP);
     if(IsStallShown())
     {
@@ -1384,6 +1412,14 @@ IsaCodeWidget::RenderLine(uint32_t index)
         ImGui::TableSetColumnIndex(++column);
         RenderSamplesCell(isa_row.total_count);
     }
+
+    ImGui::TableSetColumnIndex(++column);
+    char offset_text[CODE_OBJECT_OFFSET_TEXT_CAPACITY] = {};
+    std::snprintf(offset_text, sizeof(offset_text), CODE_OBJECT_OFFSET_FORMAT,
+                  static_cast<unsigned long long>(isa_row.code_object_offset));
+    ImGui::PushID(static_cast<int>(index));
+    CopyableTextUnformatted(offset_text, "", COPY_DATA_NOTIFICATION, false, true);
+    ImGui::PopID();
 
     ImGui::TableSetColumnIndex(++column);
     ImGui::TextUnformatted(isa_row.instruction.c_str());

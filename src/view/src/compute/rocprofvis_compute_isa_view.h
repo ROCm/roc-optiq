@@ -205,6 +205,7 @@ private:
     {
         std::string              instruction;
         uint64_t                 id                         = 0;
+        uint64_t                 code_object_offset         = 0;
         uint64_t                 source_line_id             = 0;
         uint64_t                 source_file_id             = 0;
         uint64_t                 issue_count                = 0;
@@ -275,6 +276,7 @@ private:
     std::vector<IsaRow> m_entries;
     uint64_t            m_kernel_total_samples        = 0;
     uint64_t            m_hottest_instruction_samples = 0;
+    uint64_t            m_largest_code_object_offset  = 0;
 };
 
 }  // namespace View

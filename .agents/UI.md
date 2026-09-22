@@ -1541,7 +1541,8 @@ Code` / `Show Stalls` controls. PC-sampling data is fetched through
 independent layers:
 
 - `kIsa` runs when the view opens or its kernel changes and loads only the
-  code-object, kernel-symbol, and ISA-line data needed by the primary pane.
+  code-object, kernel-symbol, ISA instruction, and code-object-offset data
+  needed by the primary pane.
 - `kSource` runs when the source pane is shown or a different source file is
   selected. It loads source-file metadata, ISA/source correlations, and the
   selected file's source lines. Source-file ID 0 asks the controller to choose
@@ -1561,7 +1562,10 @@ the completed layer. `ComputeIsaView` accepts the callback only when its layer,
 kernel, selection generation, request token, and (for source) selected file
 still match. Do not query the controller or model directly from this view.
 
-The ISA table is always present. `Show Stalls` adds Samples, Issue %, and Stall %
+The ISA table is always present. Its Offset column shows each instruction's
+byte offset inside the selected code object as uppercase hexadecimal; it is not
+an absolute runtime address. Right-clicking an offset opens its copy context
+menu. `Show Stalls` adds Samples, Issue %, and Stall %
 columns, aggregated by instruction UUID across returned sample states. Samples
 shows a right-aligned raw count over a heat bar normalized to the hottest
 displayed instruction. Its tooltip reports both kernel share and relative

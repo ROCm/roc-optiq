@@ -39,7 +39,7 @@ on:
       rocm_version:
         description: 'ROCm version number used in package naming (e.g. 10)'
         type: string
-        default: '10'
+        default: '10.1'
       s3_bucket_env:
         description: 'S3 bucket environment to upload artifacts to'
         type: choice

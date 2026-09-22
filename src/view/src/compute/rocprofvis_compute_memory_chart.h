@@ -6,6 +6,7 @@
 #include "rocprofvis_event_manager.h"
 
 #include <cstdint>
+#include <map>
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -63,7 +64,21 @@ private:
         float             label_y       = 0.0f;
         float             label_w       = 0.0f;
         float             label_h       = 0.0f;
+        // Flow direction (-1/0/+1 per axis) drawn as a label marker so same-color
+        // arrows are told apart by which way they point; bidir = double-headed.
+        float             label_dir_x   = 0.0f;
+        float             label_dir_y   = 0.0f;
+        bool              label_bidir   = false;
         MemChartMetricRef metric;
+    };
+
+    // Horizontal extent a skip-column arrow occupies along its row's highway.
+    struct SkipSpan
+    {
+        size_t index;  // into m_layout.arrows
+        float  lo;
+        float  hi;
+        int    lane;
     };
 
     void LoadLayout();
@@ -89,8 +104,11 @@ private:
     void DrawBlockRect(ImDrawList* draw_list, ImVec2 top_left, ImVec2 bottom_right);
     float DrawBlockHeader(ImDrawList* draw_list, const char* title, float block_x,
                           float block_y, float block_w);
+    // Draws a floating label. When (dir_x, dir_y) is non-zero, a small flow
+    // marker is drawn to the left of the text (double-headed when `bidir`).
     void DrawFloatingLabel(ImDrawList* draw_list, ImVec2 pos, const char* text,
-                           uint32_t accent_color);
+                           uint32_t accent_color, float dir_x = 0.0f, float dir_y = 0.0f,
+                           bool bidir = false);
     void DrawGroupBox(ImDrawList* draw_list, ImVec2 top_left, float w, float h,
                       const char* title);
     void DrawLegend(ImDrawList* draw_list, ImVec2 origin, float y);
@@ -107,13 +125,20 @@ private:
     void MeasureBlock(MemChartBlock& block) const;
     // Recursively assign geometry: `conn_left`/`conn_right` are the top-level
     // ancestor's box edges (passed unchanged into children) so arrows terminate
-    // at the outer box; `column` is propagated so routing sees nested blocks.
+    // at the outer box; `column`/`row` are propagated so routing sees nested blocks.
     void PositionBlock(MemChartBlock& block, float x, float y, float w, float h,
-                       float conn_l, float conn_r, int32_t column);
+                       float conn_l, float conn_r, int32_t column, int32_t row);
 
     // Recursively draw a block: container -> recurse into children; leaf -> card.
     void DrawBlock(ImDrawList* draw_list, ImVec2 origin, const MemChartBlock& block);
     void DrawLeaf(ImDrawList* draw_list, ImVec2 origin, const MemChartBlock& block);
+    // Group skip-column arrows by row band, spanning column centres (or the left
+    // margin for left-going arrows). Shared by ComputeLayout, which reserves the
+    // lanes' height under each band, and BuildArrowRoutes, which draws them.
+    void CollectSkipSpans(const std::map<int32_t, float>&           col_mid_x,
+                          std::map<int32_t, std::vector<SkipSpan>>& spans_by_row) const;
+    // First-fit lane packing (shortest spans innermost); returns the lane count.
+    static int PackSkipLanes(std::vector<SkipSpan>& spans);
     void BuildArrowRoutes(std::vector<ArrowRoute>& routes) const;
     void ResolveLabelOverlaps(std::vector<ArrowRoute>& routes) const;
     void DrawArrowRoutes(ImDrawList* draw_list, ImVec2 origin,
@@ -178,6 +203,17 @@ private:
     // arrow crosses it. Precomputed on layout load so ComputeLayout avoids an
     // arrow-by-gap scan every frame.
     std::vector<bool> m_gap_has_arrow;
+
+    // Cached geometry so the (fairly heavy) layout + arrow routing only runs when
+    // something that affects it changes - the panel width, the font, or the
+    // metric strings/colors (which flip m_layout_dirty). Drawing still happens
+    // every frame from these cached results.
+    std::vector<ArrowRoute> m_routes;
+    float                   m_cached_layout_width = -1.0f;
+    float                   m_cached_font_size    = -1.0f;
+    float                   m_canvas_w            = 0.0f;
+    float                   m_canvas_h            = 0.0f;
+    bool                    m_layout_dirty        = true;
 };
 
 }  // namespace View

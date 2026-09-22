@@ -70,6 +70,7 @@ struct MemChartBlock
 {
     uint32_t                         id     = 0;
     int32_t                          column = 0;   // Meaningful for top-level blocks; propagated to children at layout.
+    int32_t                          row    = 0;   // Grid row band: 0 = main row, <0 above it, >0 below it. Propagated to children at layout.
     int32_t                          order  = -1;  // Sort key within a column/parent; -1 = declaration order.
     std::string                      title;
     std::vector<MemChartContentItem> content;   // Leaf metric rows.

@@ -464,6 +464,10 @@ private:
         KernelInfo& kernel, rocprofvis_handle_t* pc_handle);
     inline void LoadPcSamplingStates(KernelInfo&          kernel,
                                      rocprofvis_handle_t* pc_handle);
+    inline void LoadPcSamplingStallReasons(KernelInfo&          kernel,
+                                           rocprofvis_handle_t* pc_handle);
+    inline void LoadPcSamplingStallReasonLookups(KernelInfo&          kernel,
+                                                 rocprofvis_handle_t* pc_handle);
     inline void LoadRoofLine(WorkloadInfo& workload, rocprofvis_handle_t* workload_handle);
 
     using compute_ridge_map = std::unordered_map<

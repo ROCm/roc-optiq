@@ -79,11 +79,18 @@ constexpr HeaderTooltipText ISSUE_PERCENT_HEADER_TOOLTIP {
 
 constexpr HeaderTooltipText STALL_PERCENT_HEADER_TOOLTIP {
     "How often this instruction was unable to issue and was waiting when sampled.\n"
-    "Higher values identify where to investigate, but not the cause of the wait.",
+    "Higher values identify where to investigate, but not the cause of the wait.\n"
+    "Hover a value to see every recorded stall reason, ordered by sample count.",
     "DB fields: compute_pc_sample_state.stall_count, total_count\n"
     "Group key: compute_pc_sample_state.instruction_uuid\n"
     "Value: 100 * SUM(stall_count) / SUM(total_count)\n"
-    "If SUM(total_count) is zero, the displayed value is 0%."
+    "If SUM(total_count) is zero, the displayed value is 0%.\n"
+    "Reason fields: compute_pc_sample_stall_reason.pc_sample_state_uuid, "
+    "pc_sample_stall_reason_lookup_uuid, count\n"
+    "Reason text: compute_pc_sample_stall_reason_lookup.text\n"
+    "Reason count: SUM(count) by instruction_uuid and reason lookup UUID\n"
+    "Reason share: 100 * reason count / SUM(reason counts for the instruction)\n"
+    "Order: reason count descending, then reason text ascending."
 };
 
 constexpr const char* LOW_CONFIDENCE_SAMPLES_CELL_TOOLTIP_FORMAT =
@@ -94,6 +101,20 @@ constexpr const char* LOW_CONFIDENCE_SAMPLES_CELL_TOOLTIP_FORMAT =
 constexpr const char* SAMPLES_CELL_TOOLTIP_FORMAT =
     "%s samples\n%.1f%% of kernel samples\n"
     "%.1f%% relative to the hottest instruction";
+
+constexpr const char* STALL_REASON_TOOLTIP_TITLE   = "Stall-reason distribution";
+constexpr const char* STALL_REASON_TOOLTIP_SUMMARY = "%s of %s samples were stalled (%.1f%%).";
+constexpr const char* STALL_REASON_TOOLTIP_NO_STALLS =
+    "No stalled samples were recorded for this instruction.";
+constexpr const char* STALL_REASON_TOOLTIP_UNAVAILABLE =
+    "No stall-reason details were recorded for this instruction.";
+constexpr const char* STALL_REASON_TOOLTIP_SHARE_DESCRIPTION =
+    "Share is calculated from all %s samples classified by the reason data.";
+constexpr const char* STALL_REASON_TOOLTIP_COUNT_MISMATCH =
+    "The reason-data total differs from the stalled-sample count.";
+constexpr const char* STALL_REASON_TOOLTIP_COLUMN_HEADERS[] = { "Reason", "Samples", "Share" };
+constexpr ImGuiTableFlags STALL_REASON_TOOLTIP_TABLE_FLAGS =
+    ImGuiTableFlags_SizingFixedFit | ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerV;
 
 namespace
 {
@@ -109,13 +130,13 @@ RenderTableHeaderWithTooltip(int column, const char* label, const HeaderTooltipT
 
     BeginTooltipStyled();
     ImGui::TextUnformatted(tooltip.user_description);
-//#ifdef ROCPROFVIS_DEVELOPER_MODE
+#ifdef ROCPROFVIS_DEVELOPER_MODE
     ImGui::Spacing();
     ImGui::Separator();
     ImGui::Spacing();
     ImGui::TextDisabled(DEVELOPER_INFORMATION_LABEL);
     ImGui::TextUnformatted(tooltip.developer_information);
-//#endif
+#endif
     EndTooltipStyled();
 }
 }  // namespace
@@ -847,6 +868,159 @@ IsaCodeWidget::IsaCodeWidget(LineSelection& selection)
 {
 }
 
+const CodeObjectStore*
+IsaCodeWidget::FindCodeObject(const PcSamplingData& data, uint64_t code_object_uuid)
+{
+    for(const CodeObjectStore& code_object : data.code_objects)
+    {
+        if(code_object.code_object_uuid == code_object_uuid)
+        {
+            return &code_object;
+        }
+    }
+    return nullptr;
+}
+
+std::unordered_map<uint64_t, IsaCodeWidget::SourceLocation>
+IsaCodeWidget::BuildSourceLocations(const PcSamplingData& data)
+{
+    std::unordered_map<uint64_t, SourceLocation> source_locations;
+    for(const InstructionSourceLine& dep : data.instruction_source_lines)
+    {
+        if(dep.frame_index == 0)
+        {
+            source_locations.emplace(
+                dep.instruction_uuid,
+                SourceLocation{ dep.source_line_uuid, dep.source_file_uuid });
+        }
+    }
+    return source_locations;
+}
+
+IsaCodeWidget::SampleAggregation
+IsaCodeWidget::AggregateSampleCounts(const PcSamplingData& data)
+{
+    SampleAggregation aggregation;
+    aggregation.counts_by_instruction.reserve(data.pc_sample_states.size());
+    aggregation.instruction_by_sample_state.reserve(data.pc_sample_states.size());
+    for(const PcSampleState& state : data.pc_sample_states)
+    {
+        SampleCounts& counts = aggregation.counts_by_instruction[state.instruction_uuid];
+        counts.total_count += state.total_count;
+        counts.issue_count += state.issue_count;
+        counts.stall_count += state.stall_count;
+        aggregation.kernel_total_samples += state.total_count;
+        aggregation.instruction_by_sample_state.emplace(state.pc_sample_state_uuid,
+                                                        state.instruction_uuid);
+    }
+    return aggregation;
+}
+
+std::unordered_map<uint64_t, std::string>
+IsaCodeWidget::BuildStallReasonText(const PcSamplingData& data)
+{
+    std::unordered_map<uint64_t, std::string> text_by_lookup;
+    text_by_lookup.reserve(data.pc_sample_stall_reason_lookups.size());
+    for(const PcSampleStallReasonLookup& lookup : data.pc_sample_stall_reason_lookups)
+    {
+        text_by_lookup.emplace(lookup.pc_sample_stall_reason_lookup_uuid, lookup.text);
+    }
+    return text_by_lookup;
+}
+
+std::unordered_map<uint64_t, std::unordered_map<uint64_t, uint64_t>>
+IsaCodeWidget::BuildStallReasonCounts(
+    const PcSamplingData&                         data,
+    const std::unordered_map<uint64_t, uint64_t>& instruction_by_sample_state)
+{
+    std::unordered_map<uint64_t, std::unordered_map<uint64_t, uint64_t>> counts_by_instruction;
+    for(const PcSampleStallReason& reason : data.pc_sample_stall_reasons)
+    {
+        const auto instruction_it =
+            instruction_by_sample_state.find(reason.pc_sample_state_uuid);
+        if(instruction_it == instruction_by_sample_state.end())
+        {
+            continue;
+        }
+        counts_by_instruction[instruction_it->second]
+                             [reason.pc_sample_stall_reason_lookup_uuid] += reason.count;
+    }
+    return counts_by_instruction;
+}
+
+std::string
+IsaCodeWidget::ResolveStallReasonText(
+    const std::unordered_map<uint64_t, std::string>& reason_text, uint64_t lookup_uuid)
+{
+    const auto text_it = reason_text.find(lookup_uuid);
+    if(text_it != reason_text.end() && !text_it->second.empty())
+    {
+        return text_it->second;
+    }
+    return "Unknown stall reason (lookup ID " + std::to_string(lookup_uuid) + ")";
+}
+
+std::vector<IsaCodeWidget::StallReason>
+IsaCodeWidget::BuildStallReasons(
+    const std::unordered_map<uint64_t, uint64_t>&    reason_counts,
+    const std::unordered_map<uint64_t, std::string>& reason_text,
+    uint64_t&                                        classified_sample_count)
+{
+    std::vector<StallReason> stall_reasons;
+    stall_reasons.reserve(reason_counts.size());
+    for(const auto& [lookup_uuid, reason_count] : reason_counts)
+    {
+        stall_reasons.push_back({ ResolveStallReasonText(reason_text, lookup_uuid),
+                                  reason_count });
+        classified_sample_count += reason_count;
+    }
+    std::sort(stall_reasons.begin(), stall_reasons.end(),
+              [](const StallReason& lhs, const StallReason& rhs) {
+                  if(lhs.count != rhs.count)
+                  {
+                      return lhs.count > rhs.count;
+                  }
+                  return lhs.text < rhs.text;
+              });
+    return stall_reasons;
+}
+
+IsaCodeWidget::IsaRow
+IsaCodeWidget::BuildRow(
+    const InstructionLine&                              instruction_line,
+    const std::unordered_map<uint64_t, SourceLocation>& source_locations,
+    const SampleAggregation&                            sample_aggregation,
+    const std::unordered_map<uint64_t, std::unordered_map<uint64_t, uint64_t>>&
+                                                     stall_reason_counts,
+    const std::unordered_map<uint64_t, std::string>& stall_reason_text)
+{
+    const uint64_t instruction_uuid = instruction_line.instruction_uuid;
+
+    IsaRow row;
+    row.instruction = instruction_line.instruction;
+    row.id          = instruction_uuid;
+
+    if(const auto it = source_locations.find(instruction_uuid); it != source_locations.end())
+    {
+        row.source_line_id = it->second.source_line_id;
+        row.source_file_id = it->second.source_file_id;
+    }
+    if(const auto it = sample_aggregation.counts_by_instruction.find(instruction_uuid);
+       it != sample_aggregation.counts_by_instruction.end())
+    {
+        row.issue_count = it->second.issue_count;
+        row.stall_count = it->second.stall_count;
+        row.total_count = it->second.total_count;
+    }
+    if(const auto it = stall_reason_counts.find(instruction_uuid);
+       it != stall_reason_counts.end())
+    {
+        row.stall_reasons =
+            BuildStallReasons(it->second, stall_reason_text, row.stall_reason_sample_count);
+    }
+    return row;
+}
+
 void
 IsaCodeWidget::Load(const PcSamplingData& data, uint64_t code_object_uuid)
 {
@@ -854,80 +1028,28 @@ IsaCodeWidget::Load(const PcSamplingData& data, uint64_t code_object_uuid)
     m_kernel_total_samples        = 0;
     m_hottest_instruction_samples = 0;
 
-    const CodeObjectStore* code_object = nullptr;
-    for(const auto& code_obj : data.code_objects)
-    {
-        if(code_obj.code_object_uuid == code_object_uuid)
-        {
-            code_object = &code_obj;
-            break;
-        }
-    }
+    const CodeObjectStore* code_object = FindCodeObject(data, code_object_uuid);
     if(!code_object)
         return;
 
-    struct SourceLocation
-    {
-        uint64_t source_line_id = 0;
-        uint64_t source_file_id = 0;
-    };
-    std::unordered_map<uint64_t, SourceLocation> source_by_isa;
-    for(const InstructionSourceLine& dep : data.instruction_source_lines)
-    {
-        if(dep.frame_index == 0)
-            source_by_isa.emplace(
-                dep.instruction_uuid,
-                SourceLocation{ dep.source_line_uuid, dep.source_file_uuid });
-    }
+    const auto source_locations    = BuildSourceLocations(data);
+    const auto sample_aggregation  = AggregateSampleCounts(data);
+    const auto stall_reason_text   = BuildStallReasonText(data);
+    const auto stall_reason_counts =
+        BuildStallReasonCounts(data, sample_aggregation.instruction_by_sample_state);
 
-    struct InstructionSampleCounts
-    {
-        uint64_t total_count = 0;
-        uint64_t issue_count = 0;
-        uint64_t stall_count = 0;
-    };
-    std::unordered_map<uint64_t, InstructionSampleCounts> counts_by_instruction;
-    counts_by_instruction.reserve(data.pc_sample_states.size());
-    for(const PcSampleState& state : data.pc_sample_states)
-    {
-        InstructionSampleCounts& counts = counts_by_instruction[state.instruction_uuid];
-        counts.total_count += state.total_count;
-        counts.issue_count += state.issue_count;
-        counts.stall_count += state.stall_count;
-        m_kernel_total_samples += state.total_count;
-    }
+    m_kernel_total_samples = sample_aggregation.kernel_total_samples;
 
     for(const KernelSymbol& kernel_symbol : code_object->kernel_symbols)
     {
         for(const InstructionLine& instruction_line : kernel_symbol.instruction_lines)
         {
-            uint64_t source_line_id = 0;
-            uint64_t source_file_id = 0;
-            if(const auto sit = source_by_isa.find(instruction_line.instruction_uuid);
-               sit != source_by_isa.end())
-            {
-                source_line_id = sit->second.source_line_id;
-                source_file_id = sit->second.source_file_id;
-            }
-
-            const InstructionSampleCounts* counts = nullptr;
-            if(const auto counts_it = counts_by_instruction.find(instruction_line.instruction_uuid);
-               counts_it != counts_by_instruction.end())
-                counts = &counts_it->second;
-
-            m_entries.push_back({ instruction_line.instruction,
-                                  instruction_line.instruction_uuid, source_line_id,
-                                  source_file_id,
-                                  counts ? counts->issue_count : 0,
-                                  counts ? counts->stall_count : 0,
-                                  counts ? counts->total_count : 0 });
+            IsaRow row = BuildRow(instruction_line, source_locations, sample_aggregation,
+                                  stall_reason_counts, stall_reason_text);
+            m_hottest_instruction_samples =
+                std::max(m_hottest_instruction_samples, row.total_count);
+            m_entries.emplace_back(std::move(row));
         }
-    }
-
-    for(const IsaRow& row : m_entries)
-    {
-        m_hottest_instruction_samples =
-            std::max(m_hottest_instruction_samples, row.total_count);
     }
 
     CalculateLineNumberWidth(m_entries.size());
@@ -1133,16 +1255,16 @@ IsaCodeWidget::RenderSamplesCell(uint64_t sample_count)
     }
 }
 
-void
+bool
 IsaCodeWidget::RenderPercentBarCell(double percent)
 {
+    const ImVec2 cell_start = ImGui::GetCursorScreenPos();
+    const float  cell_width = std::max(0.0f, ImGui::GetContentRegionAvail().x);
+    const float  cell_height = ImGui::GetTextLineHeightWithSpacing();
+    const ImVec2 cell_end(cell_start.x + cell_width, cell_start.y + cell_height);
     const float fraction = std::clamp(static_cast<float>(percent) / 100.0f, 0.0f, 1.0f);
     if(fraction > 0.0f)
     {
-        const ImVec2 cell_start = ImGui::GetCursorScreenPos();
-        const float  cell_width = ImGui::GetContentRegionAvail().x;
-        const float  cell_height = ImGui::GetTextLineHeightWithSpacing();
-        const ImVec2 cell_end(cell_start.x + cell_width, cell_start.y + cell_height);
         const ImVec2 bar_end(cell_start.x + cell_width * fraction, cell_end.y);
 
         ImDrawList* draw_list = ImGui::GetWindowDrawList();
@@ -1151,6 +1273,67 @@ IsaCodeWidget::RenderPercentBarCell(double percent)
         draw_list->PopClipRect();
     }
     ImGui::TextDisabled("%.1f%%", percent);
+    return ImGui::IsMouseHoveringRect(cell_start, cell_end);
+}
+
+void
+IsaCodeWidget::RenderStallReasonsTooltip(const IsaRow& row)
+{
+    const double      stall_percent = CalculatePercentage(row.stall_count, row.total_count);
+    const std::string stall_count   = FormatSampleCount(row.stall_count);
+    const std::string total_count   = FormatSampleCount(row.total_count);
+
+    BeginTooltipStyled();
+    ImGui::TextUnformatted(STALL_REASON_TOOLTIP_TITLE);
+    ImGui::Text(STALL_REASON_TOOLTIP_SUMMARY, stall_count.c_str(), total_count.c_str(),
+                stall_percent);
+
+    if(row.stall_reasons.empty())
+    {
+        ImGui::TextDisabled(row.stall_count == 0 ? STALL_REASON_TOOLTIP_NO_STALLS
+                                                 : STALL_REASON_TOOLTIP_UNAVAILABLE);
+    }
+    else
+    {
+        RenderStallReasonTable(row);
+    }
+    EndTooltipStyled();
+}
+
+void
+IsaCodeWidget::RenderStallReasonTable(const IsaRow& row)
+{
+    ImGui::Spacing();
+    if(ImGui::BeginTable("##StallReasonDistribution", 3, STALL_REASON_TOOLTIP_TABLE_FLAGS))
+    {
+        for(const char* header : STALL_REASON_TOOLTIP_COLUMN_HEADERS)
+        {
+            ImGui::TableSetupColumn(header);
+        }
+        ImGui::TableHeadersRow();
+
+        for(const StallReason& reason : row.stall_reasons)
+        {
+            const std::string reason_count = FormatSampleCount(reason.count);
+            const double      reason_share =
+                CalculatePercentage(reason.count, row.stall_reason_sample_count);
+            ImGui::TableNextRow();
+            ImGui::TableSetColumnIndex(0);
+            ImGui::TextUnformatted(reason.text.c_str());
+            ImGui::TableSetColumnIndex(1);
+            ImGui::TextUnformatted(reason_count.c_str());
+            ImGui::TableSetColumnIndex(2);
+            ImGui::Text("%.1f%%", reason_share);
+        }
+        ImGui::EndTable();
+    }
+
+    const std::string classified_count = FormatSampleCount(row.stall_reason_sample_count);
+    ImGui::TextDisabled(STALL_REASON_TOOLTIP_SHARE_DESCRIPTION, classified_count.c_str());
+    if(row.stall_reason_sample_count != row.stall_count)
+    {
+        ImGui::TextDisabled(STALL_REASON_TOOLTIP_COUNT_MISMATCH);
+    }
 }
 
 void
@@ -1211,8 +1394,11 @@ IsaCodeWidget::RenderLine(uint32_t index)
         RenderPercentBarCell(
             CalculatePercentage(isa_row.issue_count, isa_row.total_count));
         ImGui::TableSetColumnIndex(++column);
-        RenderPercentBarCell(
-            CalculatePercentage(isa_row.stall_count, isa_row.total_count));
+        if(RenderPercentBarCell(
+               CalculatePercentage(isa_row.stall_count, isa_row.total_count)))
+        {
+            RenderStallReasonsTooltip(isa_row);
+        }
     }
 
 }

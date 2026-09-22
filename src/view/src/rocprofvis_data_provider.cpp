@@ -5256,6 +5256,9 @@ DataProvider::LoadPcSamplingStates(KernelInfo& kernel, rocprofvis_handle_t* pc_h
     {
         PcSampleState& state = kernel.pc_sampling_data.pc_sample_states[i];
         rocprofvis_controller_get_uint64(
+            pc_handle, kRPVControllerPCSamplingPcSampleStateUuid, i,
+            &state.pc_sample_state_uuid);
+        rocprofvis_controller_get_uint64(
             pc_handle, kRPVControllerPCSamplingPcSampleStateInstructionUuid, i,
             &state.instruction_uuid);
         rocprofvis_controller_get_uint64(
@@ -5267,6 +5270,56 @@ DataProvider::LoadPcSamplingStates(KernelInfo& kernel, rocprofvis_handle_t* pc_h
         rocprofvis_controller_get_uint64(
             pc_handle, kRPVControllerPCSamplingPcSampleStateStallCount, i,
             &state.stall_count);
+    }
+}
+
+inline void
+DataProvider::LoadPcSamplingStallReasons(KernelInfo&          kernel,
+                                         rocprofvis_handle_t* pc_handle)
+{
+    uint64_t num_stall_reasons = 0;
+    rocprofvis_controller_get_uint64(
+        pc_handle, kRPVControllerPCSamplingNumPcSampleStallReasons, 0,
+        &num_stall_reasons);
+
+    kernel.pc_sampling_data.pc_sample_stall_reasons.resize(num_stall_reasons);
+    for(uint64_t i = 0; i < num_stall_reasons; i++)
+    {
+        PcSampleStallReason& reason =
+            kernel.pc_sampling_data.pc_sample_stall_reasons[i];
+        rocprofvis_controller_get_uint64(
+            pc_handle, kRPVControllerPCSamplingPcSampleStallReasonStateUuid, i,
+            &reason.pc_sample_state_uuid);
+        rocprofvis_controller_get_uint64(
+            pc_handle, kRPVControllerPCSamplingPcSampleStallReasonLookupUuid, i,
+            &reason.pc_sample_stall_reason_lookup_uuid);
+        rocprofvis_controller_get_uint64(
+            pc_handle, kRPVControllerPCSamplingPcSampleStallReasonCount, i,
+            &reason.count);
+    }
+}
+
+inline void
+DataProvider::LoadPcSamplingStallReasonLookups(KernelInfo&          kernel,
+                                               rocprofvis_handle_t* pc_handle)
+{
+    uint64_t num_stall_reason_lookups = 0;
+    rocprofvis_controller_get_uint64(
+        pc_handle, kRPVControllerPCSamplingNumPcSampleStallReasonLookups, 0,
+        &num_stall_reason_lookups);
+
+    kernel.pc_sampling_data.pc_sample_stall_reason_lookups.resize(
+        num_stall_reason_lookups);
+    for(uint64_t i = 0; i < num_stall_reason_lookups; i++)
+    {
+        PcSampleStallReasonLookup& lookup =
+            kernel.pc_sampling_data.pc_sample_stall_reason_lookups[i];
+        rocprofvis_controller_get_uint64(
+            pc_handle,
+            kRPVControllerPCSamplingPcSampleStallReasonLookupRecordUuid, i,
+            &lookup.pc_sample_stall_reason_lookup_uuid);
+        lookup.text = GetString(
+            pc_handle, kRPVControllerPCSamplingPcSampleStallReasonLookupText, i);
     }
 }
 
@@ -5852,6 +5905,8 @@ DataProvider::ProcessPcSamplingRequest(RequestInfo& req)
                     break;
                 case PcSamplingLayer::kStalls:
                     LoadPcSamplingStates(*kernel, pc_handle);
+                    LoadPcSamplingStallReasons(*kernel, pc_handle);
+                    LoadPcSamplingStallReasonLookups(*kernel, pc_handle);
                     break;
             }
         }

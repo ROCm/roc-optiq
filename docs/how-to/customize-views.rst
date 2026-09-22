@@ -202,6 +202,8 @@ Fan mode shows events in a fan-out style, highlighting parallelism and branching
 
   Chain mode and Fan mode are visualization modes for relations. They don't represent the actual kernel scheduling flow.
 
+.. _save-project:
+
 Save a project file
 -------------------
 

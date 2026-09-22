@@ -41,6 +41,8 @@ To generate profiling data in a compatible format, run the CLI analysis with the
 
 When you open a ROCm Compute Profiler analysis database file, you can view its data populated in :ref:`analysis-summary`, :ref:`kernel-details`, :ref:`analysis-table`, :ref:`analysis-workload`, and :ref:`baseline-comparison`.
 
+If the database has no metrics, **Table View** and **Baseline Comparison** are disabled. Hold the pointer over a disabled tab to see a tooltip that explains why the tab is unavailable.
+
 .. _analysis-summary:
 
 Summary View
@@ -133,7 +135,7 @@ Kernel Details
 **Kernel Details** focuses on one kernel at a time. It has these components:  
 
 - **Kernel Selection Table**: Helps you identify and choose a kernel of interest for further analysis.  
-- **Memory Chart**: Displays a visual diagram of the hardware with overlapping per-block metrics. 
+- **Memory Chart**: Displays an architecture-specific diagram of the memory hierarchy with overlapping per-block metrics. 
 - **System Speed-of-Light**: A table view of kernel metrics with their unit, average, peak, and percentage of peak values.  
 - **Roofline analysis**: Displays kernel performance relative to the system's capabilities for the selected kernel. 
 
@@ -165,12 +167,14 @@ The **Kernel Selection Table** displays kernel information, including names and 
 Kernel Details -- Memory Chart
 ------------------------------
 
-The **Memory Chart** displays memory transactions and throughput at each cache hierarchy level. Each cache level presents its associated counter values and derived metrics, helping you understand memory behavior across the hardware memory hierarchy.
+The **Memory Chart** displays memory transactions and throughput for the selected kernel. The diagram layout comes from the analysis database for that workload, so the blocks and connections match the GPU architecture that was profiled (for example, gfx940 and gfx950 series) instead of a single hardcoded hierarchy. If the database does not include a layout, ROCm Optiq uses a built-in default.
+
+Each cache or memory block presents its associated counter values and derived metrics, helping you understand memory behavior across the hardware memory hierarchy.
 
 .. image:: ../images/memory-chart.png
    :width: 800
    :align: center
-   :alt: Memory Chart diagram showing memory transaction throughput at each cache hierarchy level from L1 to HBM
+   :alt: Memory Chart diagram for a selected kernel, with architecture-specific blocks and metrics from the analysis database
 
 This visual diagram displays counter values and calculations to help you understand which cache level each memory transaction corresponds to and how they interact.  
 
@@ -200,7 +204,7 @@ The **Kernel Roofline Chart** displays a kernel-specific roofline analysis, whic
 Table View 
 ==========
 
-The **Table View** displays a complete list of available metrics for the selected kernel. 
+The **Table View** displays a complete list of available metrics for the selected kernel. If the loaded database has no metrics, this tab is disabled and a tooltip explains why. 
 
 .. image:: ../images/analysis-table-view.png
    :width: 800
@@ -257,7 +261,7 @@ Workload Details
 Baseline Comparison
 ===================
 
-The **Baseline Comparison** shows performance differences between two workload measurements (baseline and target) side-by-side. It's useful for scenarios such as: 
+The **Baseline Comparison** shows performance differences between two workload measurements (baseline and target) side-by-side. If the loaded database has no metrics, this tab is disabled and a tooltip explains why. It's useful for scenarios such as: 
 
 - Comparing results before and after optimization or tuning changes. 
 - Measuring the impact of code, algorithm, or kernel changes. 

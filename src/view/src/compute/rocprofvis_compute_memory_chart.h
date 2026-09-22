@@ -6,6 +6,7 @@
 #include "rocprofvis_event_manager.h"
 
 #include <cstdint>
+#include <map>
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -71,6 +72,15 @@ private:
         MemChartMetricRef metric;
     };
 
+    // Horizontal extent a skip-column arrow occupies along its row's highway.
+    struct SkipSpan
+    {
+        size_t index;  // into m_layout.arrows
+        float  lo;
+        float  hi;
+        int    lane;
+    };
+
     void LoadLayout();
     // Load the dev override file (<config-dir>/memory_chart.json) into m_layout.
     // Returns true if a valid override was found and applied.
@@ -122,6 +132,13 @@ private:
     // Recursively draw a block: container -> recurse into children; leaf -> card.
     void DrawBlock(ImDrawList* draw_list, ImVec2 origin, const MemChartBlock& block);
     void DrawLeaf(ImDrawList* draw_list, ImVec2 origin, const MemChartBlock& block);
+    // Group skip-column arrows by row band, spanning column centres (or the left
+    // margin for left-going arrows). Shared by ComputeLayout, which reserves the
+    // lanes' height under each band, and BuildArrowRoutes, which draws them.
+    void CollectSkipSpans(const std::map<int32_t, float>&           col_mid_x,
+                          std::map<int32_t, std::vector<SkipSpan>>& spans_by_row) const;
+    // First-fit lane packing (shortest spans innermost); returns the lane count.
+    static int PackSkipLanes(std::vector<SkipSpan>& spans);
     void BuildArrowRoutes(std::vector<ArrowRoute>& routes) const;
     void ResolveLabelOverlaps(std::vector<ArrowRoute>& routes) const;
     void DrawArrowRoutes(ImDrawList* draw_list, ImVec2 origin,

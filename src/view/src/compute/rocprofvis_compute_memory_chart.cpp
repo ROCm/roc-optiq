@@ -20,6 +20,7 @@
 #include <cstdio>
 #include <cstring>
 #include <fstream>
+#include <iterator>
 #include <map>
 #include <optional>
 #include <set>
@@ -43,6 +44,7 @@ static constexpr float BLOCK_GAP         = 18.0f;
 static constexpr float COLUMN_GAP        = 130.0f;  // Base gap between columns that arrows cross.
 static constexpr float COLUMN_GAP_NO_ARROW = 40.0f; // Tight gap between columns with no arrow crossing.
 static constexpr float MAX_COLUMN_GAP    = 200.0f;  // Cap when spreading to fill wide panels.
+static constexpr float GAP_LABEL_CLEARANCE = 12.0f; // Space kept between a gap's label box and each column edge.
 static constexpr float ROW_HEIGHT        = 26.0f;
 static constexpr float BLOCK_BODY_TOP    = 6.0f;
 static constexpr float MIN_BLOCK_WIDTH   = 240.0f;
@@ -601,6 +603,16 @@ ComputeMemoryChartView::OnLayoutLoaded()
         m_block_by_id[block.id] = &block;
     });
 
+    // Children inherit their top-level ancestor's column/row. PositionBlock does
+    // this too, but RebuildColumnGaps and the ComputeLayout pre-pass run first.
+    for(MemChartBlock& block : m_layout.blocks)
+    {
+        ForEachBlock(block.children, [&block](MemChartBlock& child) {
+            child.column = block.column;
+            child.row    = block.row;
+        });
+    }
+
     RebuildColumnGaps();
     RefreshMetricStrings();
     m_layout_dirty = true;
@@ -628,8 +640,17 @@ ComputeMemoryChartView::RebuildColumnGaps()
         const MemChartBlock* from = Block(arrow.from);
         const MemChartBlock* to   = Block(arrow.to);
         if(!from || !to) continue;
-        // Inter-row arrows run vertically, not across a column gap.
-        if(from->row != to->row) continue;
+        if(from->row != to->row)
+        {
+            // Inter-row arrows between columns run their vertical in the gap
+            // beside the target, on the source's side; same-column ones need none.
+            if(from->column == to->column) continue;
+            int t = static_cast<int>(std::lower_bound(col_keys.begin(), col_keys.end(), to->column) -
+                                     col_keys.begin());
+            int g = from->column < to->column ? t - 1 : t;
+            if(g >= 0 && g < num_gaps) m_gap_has_arrow[g] = true;
+            continue;
+        }
         int32_t lo = std::min(from->column, to->column);
         int32_t hi = std::max(from->column, to->column);
         for(int g = 0; g < num_gaps; ++g)
@@ -973,6 +994,93 @@ ComputeMemoryChartView::PositionBlock(MemChartBlock& block, float x, float y, fl
     }
 }
 
+// Caption for an arrow, from its cached label/value (refreshed on load and on
+// metric fetch, not per frame). An unnamed arrow (no title and no resolvable
+// metric) has nothing to caption, so it stays unlabelled instead of reading "N/A".
+static std::string
+ArrowLabelText(const MemChartArrow& arrow)
+{
+    return arrow.cached_label.empty() ? std::string()
+                                      : arrow.cached_label + ": " + arrow.cached_value;
+}
+
+// A highway label sits above its lane's line, so the pitch between lanes must
+// exceed the label height - otherwise a lane's label lands on the line above it.
+static float
+SkipLanePitch()
+{
+    return std::max(LANE_GAP,
+                    ImGui::GetTextLineHeight() + ARROW_LABEL_ABOVE + SKIP_LANE_LABEL_PAD);
+}
+
+// Vertical room `lanes` highway lanes occupy below their row band.
+static float
+SkipLanesReserve(int lanes)
+{
+    return lanes > 0 ? SKIP_HIGHWAY_DROP + static_cast<float>(lanes) * SkipLanePitch() : 0.0f;
+}
+
+void
+ComputeMemoryChartView::CollectSkipSpans(
+    const std::map<int32_t, float>& col_mid_x,
+    std::map<int32_t, std::vector<SkipSpan>>& spans_by_row) const
+{
+    const float margin_x = CHART_PADDING + LEFT_MARGIN * SKIP_MARGIN_RATIO;
+    auto mid_x = [&col_mid_x](int32_t column) -> float {
+        std::map<int32_t, float>::const_iterator it = col_mid_x.find(column);
+        return it != col_mid_x.end() ? it->second : 0.0f;
+    };
+
+    for(size_t i = 0; i < m_layout.arrows.size(); ++i)
+    {
+        const MemChartArrow& arrow = m_layout.arrows[i];
+        const MemChartBlock* from  = Block(arrow.from);
+        const MemChartBlock* to    = Block(arrow.to);
+        if(!from || !to || from->row != to->row) continue;
+        int32_t dcol = to->column - from->column;
+        if(dcol >= -1 && dcol <= 1) continue;
+        float a = mid_x(from->column);
+        float b = to->column < from->column ? margin_x : mid_x(to->column);
+        spans_by_row[from->row].push_back({i, std::min(a, b), std::max(a, b), 0});
+    }
+}
+
+int
+ComputeMemoryChartView::PackSkipLanes(std::vector<SkipSpan>& spans)
+{
+    // Shortest spans first so they take the inner lanes; ties left-to-right.
+    std::stable_sort(spans.begin(), spans.end(), [](const SkipSpan& a, const SkipSpan& b) {
+        float wa = a.hi - a.lo;
+        float wb = b.hi - b.lo;
+        if(wa != wb) return wa < wb;
+        return a.lo < b.lo;
+    });
+
+    // First-fit packing: reuse the lowest lane clear of this span, else open one.
+    std::vector<std::vector<const SkipSpan*>> lanes;
+    for(SkipSpan& span : spans)
+    {
+        int lane = 0;
+        for(; lane < static_cast<int>(lanes.size()); ++lane)
+        {
+            bool clear = true;
+            for(const SkipSpan* other : lanes[lane])
+            {
+                if(span.lo < other->hi + SKIP_LANE_PAD && other->lo < span.hi + SKIP_LANE_PAD)
+                {
+                    clear = false;
+                    break;
+                }
+            }
+            if(clear) break;
+        }
+        if(lane == static_cast<int>(lanes.size())) lanes.emplace_back();
+        span.lane = lane;
+        lanes[lane].push_back(&span);
+    }
+    return static_cast<int>(lanes.size());
+}
+
 void
 ComputeMemoryChartView::ComputeLayout(float available_width)
 {
@@ -1079,6 +1187,39 @@ ComputeMemoryChartView::ComputeLayout(float available_width)
         if(!gap_has_arrow(g)) col_gaps[g] = COLUMN_GAP_NO_ARROW;
     }
 
+    // Labels are centred in the gap their arrow runs through (adjacent-column
+    // arrows, and inter-row elbows beside their target), so a gap must fit its
+    // widest label box - which scales with the font - plus clearance for heads.
+    for(const MemChartArrow& arrow : m_layout.arrows)
+    {
+        const MemChartBlock* from = Block(arrow.from);
+        const MemChartBlock* to   = Block(arrow.to);
+        if(!from || !to || from->column == to->column) continue;
+        int32_t dcol = to->column - from->column;
+        if(from->row == to->row && dcol != 1 && dcol != -1) continue;  // highway label
+
+        int g = -1;
+        if(from->row == to->row)
+        {
+            g = static_cast<int>(std::lower_bound(col_keys.begin(), col_keys.end(),
+                                                  std::min(from->column, to->column)) -
+                                 col_keys.begin());
+        }
+        else
+        {
+            int t = static_cast<int>(std::lower_bound(col_keys.begin(), col_keys.end(), to->column) -
+                                     col_keys.begin());
+            g     = from->column < to->column ? t - 1 : t;
+        }
+        if(g < 0 || g >= num_gaps) continue;
+
+        std::string text = ArrowLabelText(arrow);
+        if(text.empty()) continue;
+        float box_w = ImGui::CalcTextSize(text.c_str()).x + LABEL_MARKER_SIZE + LABEL_MARKER_GAP +
+                      LABEL_PAD_X * 2.0f;
+        col_gaps[g] = std::max(col_gaps[g], box_w + GAP_LABEL_CLEARANCE * 2.0f);
+    }
+
     float blocks_w = 0.0f;
     for(float w : column_widths)
     {
@@ -1103,7 +1244,8 @@ ComputeMemoryChartView::ComputeLayout(float available_width)
         float extra = (available_width - natural_w) / static_cast<float>(arrow_gap_count);
         for(int g = 0; g < num_gaps; ++g)
         {
-            if(gap_has_arrow(g)) col_gaps[g] = std::min(col_gaps[g] + extra, MAX_COLUMN_GAP);
+            if(gap_has_arrow(g))
+                col_gaps[g] = std::max(col_gaps[g], std::min(col_gaps[g] + extra, MAX_COLUMN_GAP));
         }
     }
 
@@ -1143,14 +1285,32 @@ ComputeMemoryChartView::ComputeLayout(float available_width)
         row_height[row.first] = (row.first == 0) ? std::max(natural, MIN_TARGET_HEIGHT) : natural;
     }
 
-    // Stack bands top-to-bottom (negative rows above row 0), INTER_ROW_GAP apart.
+    // Skip-column highways run just below their own row band, so the corridor
+    // under a band must also hold that band's highway lanes.
+    std::map<int32_t, float> row_skip_reserve;
+    {
+        std::map<int32_t, float> col_mid_x;
+        for(const std::pair<const int32_t, float>& column : col_x)
+        {
+            col_mid_x[column.first] = column.second + col_w[column.first] * 0.5f;
+        }
+        std::map<int32_t, std::vector<SkipSpan>> spans_by_row;
+        CollectSkipSpans(col_mid_x, spans_by_row);
+        for(std::pair<const int32_t, std::vector<SkipSpan>>& row : spans_by_row)
+        {
+            row_skip_reserve[row.first] = SkipLanesReserve(PackSkipLanes(row.second));
+        }
+    }
+
+    // Stack bands top-to-bottom (negative rows above row 0): each band, then its
+    // highway lanes, then an INTER_ROW_GAP corridor before the next band.
     std::map<int32_t, float> row_y;
     {
         float cursor_y = CHART_PADDING;
         for(std::pair<const int32_t, float>& row : row_height)
         {
             row_y[row.first] = cursor_y;
-            cursor_y += row.second + INTER_ROW_GAP;
+            cursor_y += row.second + row_skip_reserve[row.first] + INTER_ROW_GAP;
         }
     }
 
@@ -1354,11 +1514,42 @@ ComputeMemoryChartView::BuildArrowRoutes(std::vector<ArrowRoute>& routes) const
 {
     routes.clear();
 
-    // Canvas bottom used to place skip "highway" lanes below every block.
-    float blocks_bottom = 0.0f;
+    // Row band extents (skip highways run below their band; inter-row elbows turn
+    // in the corridor beyond it) and column x-spans (shared by every row).
+    std::map<int32_t, float> row_top;
+    std::map<int32_t, float> row_bottom;
+    std::map<int32_t, float> col_left;
+    std::map<int32_t, float> col_right;
     for(const MemChartBlock& block : m_layout.blocks)
     {
-        blocks_bottom = std::max(blocks_bottom, block.Bottom());
+        std::map<int32_t, float>::iterator top = row_top.find(block.row);
+        row_top[block.row]    = top == row_top.end() ? block.y : std::min(top->second, block.y);
+        row_bottom[block.row] = std::max(row_bottom[block.row], block.Bottom());
+        std::map<int32_t, float>::iterator left = col_left.find(block.column);
+        col_left[block.column] =
+            left == col_left.end() ? block.x : std::min(left->second, block.x);
+        col_right[block.column] = std::max(col_right[block.column], block.Right());
+    }
+    std::map<int32_t, float> col_mid_x;
+    for(const std::pair<const int32_t, float>& column : col_left)
+    {
+        col_mid_x[column.first] = (column.second + col_right[column.first]) * 0.5f;
+    }
+
+    // Skip highway lanes, packed per row band exactly as ComputeLayout reserved them.
+    std::unordered_map<size_t, int> lane_of;
+    std::map<int32_t, float>        row_skip_reserve;
+    {
+        std::map<int32_t, std::vector<SkipSpan>> spans_by_row;
+        CollectSkipSpans(col_mid_x, spans_by_row);
+        for(std::pair<const int32_t, std::vector<SkipSpan>>& row : spans_by_row)
+        {
+            row_skip_reserve[row.first] = SkipLanesReserve(PackSkipLanes(row.second));
+            for(const SkipSpan& span : row.second)
+            {
+                lane_of[span.index] = span.lane;
+            }
+        }
     }
 
     std::vector<size_t> adjacent;
@@ -1439,12 +1630,7 @@ ComputeMemoryChartView::BuildArrowRoutes(std::vector<ArrowRoute>& routes) const
         route.points = std::move(pts);
         route.metric = arrow.metric;
 
-        // Cached label/value (refreshed on load and on metric fetch, not per frame).
-        const std::string& label = arrow.cached_label;
-        const std::string& value = arrow.cached_value;
-        // An unnamed arrow (no title and no resolvable metric) has nothing to
-        // caption, so it stays unlabelled instead of reading "N/A".
-        route.label = label.empty() ? std::string() : (label + ": " + value);
+        route.label = ArrowLabelText(arrow);
         route.color = arrow.cached_color;
 
         // Which endpoint(s) get a head: the destination of the flow.
@@ -1770,9 +1956,11 @@ ComputeMemoryChartView::BuildArrowRoutes(std::vector<ArrowRoute>& routes) const
                 continue;
             }
 
-            // Cross-column: a vertical-first elbow. Drop off the source port, turn
-            // in a lane in the gap between the columns (clearing anything stacked
-            // under the source), then jog horizontally into the target's side.
+            // Cross-column: a vertical-first elbow. Drop off the source port into
+            // the corridor beyond the source's band (below its highway lanes when
+            // heading down), run along it to the gap beside the target, then drop
+            // in that gap and jog into the target's side. The corridor and gaps
+            // hold no blocks, so the elbow clears intermediate columns.
             bool  down        = to->MidY() > from->MidY();
             bool  target_left = to->MidX() < from->MidX();
             int   j           = side_k_of.count(index) ? side_k_of[index] : 0;
@@ -1780,11 +1968,24 @@ ComputeMemoryChartView::BuildArrowRoutes(std::vector<ArrowRoute>& routes) const
 
             float src_edge_y = down ? from->Bottom() : from->y;
             float stub_len   = ROW_ELBOW_STUB + static_cast<float>(j) * ROW_VERT_STEP;
-            float stub_y     = src_edge_y + (down ? stub_len : -stub_len);
+            float stub_y     = down ? row_bottom[from->row] + row_skip_reserve[from->row] + stub_len
+                                    : row_top[from->row] - stub_len;
 
-            float from_near = target_left ? from->conn_left : from->conn_right;
-            float to_near   = target_left ? to->conn_right : to->conn_left;
-            float lane_x    = (from_near + to_near) * 0.5f +
+            // Gap on the source's side of the target: between the target column
+            // and its neighbour column in that direction.
+            float to_near = target_left ? to->conn_right : to->conn_left;
+            float gap_far = to_near;
+            if(target_left)
+            {
+                std::map<int32_t, float>::iterator next = col_left.upper_bound(to->column);
+                if(next != col_left.end()) gap_far = next->second;
+            }
+            else
+            {
+                std::map<int32_t, float>::iterator prev = col_right.lower_bound(to->column);
+                if(prev != col_right.begin()) gap_far = std::prev(prev)->second;
+            }
+            float lane_x = (to_near + gap_far) * 0.5f +
                            (static_cast<float>(j) - static_cast<float>(m - 1) * 0.5f) * ROW_VERT_STEP;
 
             float to_edge_x = target_left ? to->conn_right : to->conn_left;
@@ -1799,73 +2000,11 @@ ComputeMemoryChartView::BuildArrowRoutes(std::vector<ArrowRoute>& routes) const
         }
     }
 
-    // Skipping columns: route along packed "highway" lanes below the blocks.
-    // Disjoint arrows share a lane; a shorter span nests nearer the blocks than
-    // the span enclosing it. Left-going routes climb the reserved left margin.
-    const float margin_x = CHART_PADDING + LEFT_MARGIN * SKIP_MARGIN_RATIO;
-
-    // Horizontal extent each skipping arrow occupies along the highway.
-    struct SkipSpan
-    {
-        size_t index;
-        float  lo;
-        float  hi;
-        int    lane;
-    };
-    std::vector<SkipSpan> spans;
-    spans.reserve(skipping.size());
-    for(size_t index : skipping)
-    {
-        const MemChartArrow& arrow = m_layout.arrows[index];
-        const MemChartBlock* from  = Block(arrow.from);
-        const MemChartBlock* to    = Block(arrow.to);
-        if(!from || !to) continue;
-        float a = from->MidX();
-        float b = to->column < from->column ? margin_x : to->MidX();
-        spans.push_back({index, std::min(a, b), std::max(a, b), 0});
-    }
-
-    // Shortest spans first so they take the inner lanes; ties left-to-right.
-    std::stable_sort(spans.begin(), spans.end(), [](const SkipSpan& a, const SkipSpan& b) {
-        float wa = a.hi - a.lo;
-        float wb = b.hi - b.lo;
-        if(wa != wb) return wa < wb;
-        return a.lo < b.lo;
-    });
-
-    // First-fit packing: reuse the lowest lane clear of this span, else open one.
-    std::vector<std::vector<const SkipSpan*>> lanes;
-    for(SkipSpan& span : spans)
-    {
-        int lane = 0;
-        for(; lane < static_cast<int>(lanes.size()); ++lane)
-        {
-            bool clear = true;
-            for(const SkipSpan* other : lanes[lane])
-            {
-                if(span.lo < other->hi + SKIP_LANE_PAD && other->lo < span.hi + SKIP_LANE_PAD)
-                {
-                    clear = false;
-                    break;
-                }
-            }
-            if(clear) break;
-        }
-        if(lane == static_cast<int>(lanes.size())) lanes.emplace_back();
-        span.lane = lane;
-        lanes[lane].push_back(&span);
-    }
-
-    std::unordered_map<size_t, int> lane_of;
-    for(const SkipSpan& span : spans)
-    {
-        lane_of[span.index] = span.lane;
-    }
-
-    // A label sits above its lane's line, so the pitch between lanes must exceed
-    // the label height - otherwise a lane's label lands on the line above it.
-    const float lane_pitch =
-        std::max(LANE_GAP, ImGui::GetTextLineHeight() + ARROW_LABEL_ABOVE + SKIP_LANE_LABEL_PAD);
+    // Skipping columns: route along "highway" lanes just below the arrow's own
+    // row band (lanes packed above; disjoint arrows share a lane, and a shorter
+    // span nests nearer the blocks). Left-going routes climb the left margin.
+    const float margin_x   = CHART_PADDING + LEFT_MARGIN * SKIP_MARGIN_RATIO;
+    const float lane_pitch = SkipLanePitch();
 
     // Spread each block's bottom connectors symmetrically about the centre so
     // drops don't stack. Ordered left-headed by increasing span then right-headed
@@ -1922,7 +2061,8 @@ ComputeMemoryChartView::BuildArrowRoutes(std::vector<ArrowRoute>& routes) const
         if(!from || !to) continue;
 
         int   lane      = lane_of.count(index) ? lane_of[index] : 0;
-        float highway_y = blocks_bottom + SKIP_HIGHWAY_DROP + static_cast<float>(lane) * lane_pitch;
+        float highway_y = row_bottom[from->row] + SKIP_HIGHWAY_DROP +
+                          static_cast<float>(lane) * lane_pitch;
         float fx        = from_port_x.count(index) ? from_port_x[index] : from->MidX();
 
         if(to->column < from->column)

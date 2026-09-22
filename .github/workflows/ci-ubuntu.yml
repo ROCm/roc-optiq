@@ -54,6 +54,22 @@ on:
         description: 'Build with in-app profiler launch (ROCPROFVIS_ENABLE_PROFILER)'
         type: boolean
         default: false
+      enable_agentic_profiling:
+        description: 'Build with the Ask Optiq assistant (ROCPROFVIS_ENABLE_AGENTIC_PROFILING)'
+        type: boolean
+        default: false
+      enable_scripting:
+        description: 'Build with embedded Python analysis scripts (ROCPROFVIS_ENABLE_SCRIPTING)'
+        type: boolean
+        default: false
+      enable_trace_compare:
+        description: 'Build with trace comparison support (ROCPROFVIS_ENABLE_TRACE_COMPARE)'
+        type: boolean
+        default: false
+      enable_multi_window:
+        description: 'Build with multi-window / floating window support (ROCPROFVIS_MULTI_WINDOW)'
+        type: boolean
+        default: false
       enable_ui_tests:
         description: 'Build + run the Dear ImGui UI tests?'
         type: boolean
@@ -78,6 +94,22 @@ on:
         default: false
       enable_profiler:
         description: 'Build with in-app profiler launch (ROCPROFVIS_ENABLE_PROFILER)'
+        type: boolean
+        default: false
+      enable_agentic_profiling:
+        description: 'Build with the Ask Optiq assistant (ROCPROFVIS_ENABLE_AGENTIC_PROFILING)'
+        type: boolean
+        default: false
+      enable_scripting:
+        description: 'Build with embedded Python analysis scripts (ROCPROFVIS_ENABLE_SCRIPTING)'
+        type: boolean
+        default: false
+      enable_trace_compare:
+        description: 'Build with trace comparison support (ROCPROFVIS_ENABLE_TRACE_COMPARE)'
+        type: boolean
+        default: false
+      enable_multi_window:
+        description: 'Build with multi-window / floating window support (ROCPROFVIS_MULTI_WINDOW)'
         type: boolean
         default: false
       enable_ui_tests:
@@ -122,8 +154,12 @@ env:
   DIST_DIR: "dist"
   BUILD_FILE_NAME: "roc-optiq"
   ENABLE_INTERNAL_BANNER: ${{ inputs.enable_internal_banner && 'ON' || 'OFF' }}
-  ENABLE_REMOTE: ${{ inputs.enable_remote && 'ON' || 'OFF' }}
-  ENABLE_PROFILER: ${{ inputs.enable_profiler && 'ON' || 'OFF' }}
+  ENABLE_REMOTE: ${{ (inputs.enable_remote == true || inputs.enable_remote == 'true') && 'ON' || 'OFF' }}
+  ENABLE_PROFILER: ${{ (inputs.enable_profiler == true || inputs.enable_profiler == 'true') && 'ON' || 'OFF' }}
+  ENABLE_AGENTIC_PROFILING: ${{ (inputs.enable_agentic_profiling == true || inputs.enable_agentic_profiling == 'true') && 'ON' || 'OFF' }}
+  ENABLE_SCRIPTING: ${{ (inputs.enable_scripting == true || inputs.enable_scripting == 'true') && 'ON' || 'OFF' }}
+  ENABLE_TRACE_COMPARE: ${{ (inputs.enable_trace_compare == true || inputs.enable_trace_compare == 'true') && 'ON' || 'OFF' }}
+  ENABLE_MULTI_WINDOW: ${{ (inputs.enable_multi_window == true || inputs.enable_multi_window == 'true') && 'ON' || 'OFF' }}
   ENABLE_UI_TESTS: ${{ (inputs.enable_ui_tests == true || inputs.enable_ui_tests == 'true') && 'ON' || 'OFF' }}
   CTEST_PREFIX: ${{ (inputs.enable_ui_tests == true || inputs.enable_ui_tests == 'true') && 'xvfb-run -a' || '' }}
   BUILD_TARGETS: ${{ (inputs.enable_ui_tests == true || inputs.enable_ui_tests == 'true') && 'all package' || 'package' }}
@@ -162,7 +198,7 @@ jobs:
       - name: Build, Make, and Verify Installation
         run: |
           source /opt/vulkan/**/setup-env.sh
-          cmake -B ${{ env.BUILD_DIR }} --preset ${{ inputs.cmake_config_preset }} -DROCPROFVIS_ENABLE_INTERNAL_BANNER=${{ env.ENABLE_INTERNAL_BANNER }} -DROCPROFVIS_ENABLE_REMOTE=${{ env.ENABLE_REMOTE }} -DROCPROFVIS_ENABLE_PROFILER=${{ env.ENABLE_PROFILER }} -DROCPROFVIS_ENABLE_UI_TESTS=${{ env.ENABLE_UI_TESTS }} -DCRYPTO_BACKEND=${{ inputs.crypto_backend }}
+          cmake -B ${{ env.BUILD_DIR }} --preset ${{ inputs.cmake_config_preset }} -DROCPROFVIS_ENABLE_INTERNAL_BANNER=${{ env.ENABLE_INTERNAL_BANNER }} -DROCPROFVIS_ENABLE_REMOTE=${{ env.ENABLE_REMOTE }} -DROCPROFVIS_ENABLE_PROFILER=${{ env.ENABLE_PROFILER }} -DROCPROFVIS_ENABLE_AGENTIC_PROFILING=${{ env.ENABLE_AGENTIC_PROFILING }} -DROCPROFVIS_ENABLE_SCRIPTING=${{ env.ENABLE_SCRIPTING }} -DROCPROFVIS_ENABLE_TRACE_COMPARE=${{ env.ENABLE_TRACE_COMPARE }} -DROCPROFVIS_MULTI_WINDOW=${{ env.ENABLE_MULTI_WINDOW }} -DROCPROFVIS_ENABLE_UI_TESTS=${{ env.ENABLE_UI_TESTS }} -DCRYPTO_BACKEND=${{ inputs.crypto_backend }}
           cmake --build ${{ env.BUILD_DIR }} --parallel 4 --target ${{ env.BUILD_TARGETS }}
           if [ -e ${{ env.BUILD_DIR }}/${{ env.BUILD_FILE_NAME }} ]; then
             echo "✅ ${{ env.BUILD_FILE_NAME }} has been successfully built!"

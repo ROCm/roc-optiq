@@ -123,8 +123,13 @@ jobs:
       artifact_suffix: '-experimental'
       # EXPERIMENTAL FLAGS
       crypto_backend: 'OpenSSL'
+      enable_internal_banner: true
       enable_profiler: true
       enable_remote: true
+      enable_agentic_profiling: true
+      enable_scripting: true
+      enable_trace_compare: true
+      enable_multi_window: true
 
   ci-ubuntu:
     name: Ubuntu CI
@@ -154,8 +159,13 @@ jobs:
       artifact_suffix: '-experimental'
       # EXPERIMENTAL FLAGS
       crypto_backend: 'OpenSSL'
+      enable_internal_banner: true
       enable_profiler: true
       enable_remote: true
+      enable_agentic_profiling: true
+      enable_scripting: true
+      enable_trace_compare: true
+      enable_multi_window: true
 
   ci-windows:
     name: Windows CI
@@ -183,8 +193,13 @@ jobs:
       artifact_suffix: '-experimental'
       # EXPERIMENTAL FLAGS
       crypto_backend: 'OpenSSL'
+      enable_internal_banner: true
       enable_profiler: true
       enable_remote: true
+      enable_agentic_profiling: true
+      enable_scripting: true
+      enable_trace_compare: true
+      enable_multi_window: true
 
   ci-mac:
     name: macOS CI
@@ -212,8 +227,13 @@ jobs:
       artifact_suffix: '-experimental'
       # EXPERIMENTAL FLAGS
       crypto_backend: 'OpenSSL'
+      enable_internal_banner: true
       enable_profiler: true
       enable_remote: true
+      enable_agentic_profiling: true
+      enable_scripting: true
+      enable_trace_compare: true
+      enable_multi_window: true
 
   ci-asan:
     name: Ubuntu ASAN
@@ -250,5 +270,10 @@ jobs:
       artifact_suffix: '-experimental'
       # EXPERIMENTAL FLAGS
       crypto_backend: 'OpenSSL'
+      enable_internal_banner: true
       enable_profiler: true
       enable_remote: true
+      enable_agentic_profiling: true
+      enable_scripting: true
+      enable_trace_compare: true
+      enable_multi_window: true

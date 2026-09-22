@@ -4,7 +4,6 @@
 #pragma once
 
 #include "imgui.h"
-#include <cstdint>
 #include <functional>
 #include <string>
 #include <vector>
@@ -77,34 +76,3 @@ rocprofvis_view_set_drag_repair_enabled(bool enabled);
 
 bool
 rocprofvis_view_wants_continuous_render();
-
-// How far a scripted assistant run has got. kInactive when none was asked for,
-// so the app shell can poll unconditionally.
-typedef enum rocprofvis_view_assistant_batch_state_t
-{
-    kRocProfVisAssistantBatch_Inactive = 0,
-    kRocProfVisAssistantBatch_Running  = 1,
-    kRocProfVisAssistantBatch_Done     = 2,
-    kRocProfVisAssistantBatch_Failed   = 3,
-} rocprofvis_view_assistant_batch_state_t;
-
-/**
- * @brief Asks the assistant one question without the UI and writes the answer
- * to @p output_path as JSON.
- *
- * Drives the same path the panel's own buttons take: optionally Explain this
- * view, then the question as a follow-up in that conversation. The run starts
- * once the trace has finished opening, so this may be called immediately after
- * rocprofvis_view_open_files. Poll rocprofvis_view_assistant_batch_state for
- * completion; the caller owns the decision to exit.
- *
- * A timeout of zero takes the default. In a build without the assistant the
- * request is refused and the state reports failed, rather than never finishing.
- */
-void
-rocprofvis_view_start_assistant_batch(const std::string& question,
-                                      const std::string& output_path,
-                                      bool explain_first, uint32_t timeout_seconds);
-
-rocprofvis_view_assistant_batch_state_t
-rocprofvis_view_assistant_batch_state();

@@ -986,9 +986,6 @@ void
 AssistantPanel::Update()
 {
     UpdateTurn();
-    // After, not before: a turn that ends this frame is then already idle, so a
-    // scripted run moves on without spending a frame noticing.
-    UpdateBatch();
 }
 
 }  // namespace View

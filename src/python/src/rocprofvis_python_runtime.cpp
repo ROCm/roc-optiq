@@ -10,10 +10,12 @@
 #include <cstdint>
 #include <cstring>
 #include <exception>
+#include <filesystem>
 #include <functional>
 #include <mutex>
 #include <queue>
 #include <string>
+#include <system_error>
 #include <thread>
 #include <vector>
 
@@ -342,6 +344,30 @@ DecodePath(char const* path)
     return Py_DecodeLocale(path, nullptr);
 }
 
+// A directory that is not present is skipped, so a layout without that
+// folder still initializes.
+PyStatus
+append_module_dir(PyConfig& config, char const* dir)
+{
+    if(!dir || dir[0] == '\0')
+    {
+        return PyStatus_Ok();
+    }
+    std::error_code ec;
+    if(!std::filesystem::is_directory(dir, ec))
+    {
+        return PyStatus_Ok();
+    }
+    wchar_t* wide = DecodePath(dir);
+    if(!wide)
+    {
+        return PyStatus_Ok();
+    }
+    PyStatus status = PyWideStringList_Append(&config.module_search_paths, wide);
+    PyMem_RawFree(wide);
+    return status;
+}
+
 bool
 Runtime::InitializeInterpreter()
 {
@@ -399,6 +425,22 @@ Runtime::InitializeInterpreter()
                                                  w_stdarch);
                 PyMem_RawFree(w_stdarch);
             }
+        }
+        // Pinning module_search_paths skips the directories CPython would
+        // add for extension modules. _random (imported by statistics) is
+        // lib-dynload/_random*.so on Linux. On Windows those modules live
+        // in <prefix>/DLLs when that folder exists.
+        if(!PyStatus_Exception(status))
+        {
+            std::string dynload =
+                (std::filesystem::path(stdlib) / "lib-dynload").generic_string();
+            status = append_module_dir(config, dynload.c_str());
+        }
+        if(!PyStatus_Exception(status) && home && home[0] != '\0')
+        {
+            std::string dlls =
+                (std::filesystem::path(home) / "DLLs").generic_string();
+            status = append_module_dir(config, dlls.c_str());
         }
     }
 

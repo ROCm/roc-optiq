@@ -82,7 +82,10 @@ private:
 
     void OnLaunchClicked();
     void OnCancelClicked();
-    void OnCloseClicked();
+    // Hides the window without tearing down an in-flight or finished run, so
+    // "View Last Run" still works on reopen. The session is replaced only by a
+    // new Launch, or destroyed with the dialog.
+    void Hide();
     // Reacts to run-state edges reported by the orchestrator: appends the
     // completion/failure/cancel epilogue lines and sets m_error_message.
     void HandleStateTransition(rocprofvis_profiler_state_t new_state);
@@ -157,8 +160,9 @@ private:
     AppWindow* m_app_window;
 
     // Run engine: owns the local / remote sessions and the normalized run state.
-    // The dialog drives it (Launch/Cancel/Close/Update) and reads state back via
-    // its getters; it never touches the underlying sessions directly.
+    // The dialog drives it (Launch/Cancel/Update) and reads state back via its
+    // getters; it never touches the underlying sessions directly. Hide() does
+    // not Close() it, so a last run remains viewable after the window is closed.
     ProfilerLaunchOrchestrator m_orchestrator;
 
 #ifdef ROCPROFVIS_ENABLE_REMOTE
@@ -180,7 +184,9 @@ private:
     bool m_should_open;
     bool m_show_window;
     // Once a run is launched the dialog swaps to a focused output view; the
-    // user returns to configuration via "Back to Configuration". Reset on open.
+    // user returns to configuration via "Back to Configuration". Hide() and
+    // Show() put this back to the configure screen so "View Last Run" is
+    // visible; they do not discard the run.
     bool m_show_run_view;
     // Whether the separate "Advanced Options" window is open.
     bool m_show_advanced_window;

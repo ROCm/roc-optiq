@@ -2381,7 +2381,13 @@ connection-mode selector and SSH UI live in the dialog
 an `ExecutionCache` (lazy `FlattenToExecution` result + command
 preview, rebuilt on a dirty flag). `AppWindow::ShowProfilerLauncher()`
 lazily creates it; the only entry point is `File > Launch Profiler...`
-(`#ifdef ROCPROFVIS_ENABLE_PROFILER`).
+(`#ifdef ROCPROFVIS_ENABLE_PROFILER`). Closing the window **hides** it:
+the orchestrator and last-run console stay, `Update()` is still pumped
+every frame from `AppWindow`, and reopen lands on the configure screen
+so **View Last Run** / **View Run** still bind to that session. A new
+`Launch` replaces the session; destroying the dialog (app shutdown)
+tears it down. Remote download-progress popups still render while the
+launcher is hidden; SSH auth modals are already owned by `AppWindow`.
 
 There is deliberately **no** selected-tool index beside `m_config.tool` -
 the enum is the only copy. An earlier version kept an `m_tool_index` in

@@ -189,6 +189,18 @@ jobs:
           fi
           dnf install -y openssl-devel
 
+      - name: Install Python development files
+        if: inputs.enable_scripting == true || inputs.enable_scripting == 'true'
+        run: |
+          # Rocky 8's default python3 is 3.6, below the 3.8 FindPython3 requirement.
+          if [ "${{ matrix.os-version }}" = "8" ]; then
+            dnf install -y python39 python39-devel
+            python3.9 --version
+          else
+            dnf install -y python3 python3-devel
+            python3 --version
+          fi
+
       - name: Build, Make, and Verify Installation
         run: |
           source /opt/vulkan/**/setup-env.sh

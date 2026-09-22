@@ -282,6 +282,12 @@ jobs:
           echo "OPENSSL_ROOT_DIR=$(brew --prefix openssl@3)" >> "${GITHUB_ENV}"
           echo "✅ OpenSSL Installed!"
 
+      - name: Install Python
+        if: inputs.enable_scripting == true || inputs.enable_scripting == 'true'
+        run: |
+          brew install python3
+          python3 --version
+
       - name: Build, Make, and Verify Installation
         run: |
           mkdir -p ${{ env.BUILD_DIR }}/${{ inputs.cmake_config_preset }}

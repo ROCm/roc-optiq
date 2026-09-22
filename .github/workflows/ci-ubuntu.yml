@@ -195,6 +195,13 @@ jobs:
           apt-get update
           apt-get install -y libssl-dev
 
+      - name: Install Python development files
+        if: inputs.enable_scripting == true || inputs.enable_scripting == 'true'
+        run: |
+          apt-get update
+          apt-get install -y python3-dev
+          python3 --version
+
       - name: Build, Make, and Verify Installation
         run: |
           source /opt/vulkan/**/setup-env.sh

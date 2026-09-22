@@ -200,6 +200,12 @@ jobs:
           echo "PATH=$($vulkanRoot.FullName)\Bin;$env:PATH" | Out-File -FilePath $env:GITHUB_ENV -Append
           echo "LIB=$($vulkanRoot.FullName)\Lib;$env:LIB" | Out-File -FilePath $env:GITHUB_ENV -Append
 
+      - name: Install Python
+        if: inputs.enable_scripting == true || inputs.enable_scripting == 'true'
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
       - name: Install OpenSSL
         if: inputs.crypto_backend == 'OpenSSL'
         run: |

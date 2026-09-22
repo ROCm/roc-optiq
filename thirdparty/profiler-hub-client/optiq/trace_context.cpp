@@ -49,4 +49,4 @@ std::vector<ph_sample_t> TraceContext::GetTrackSamples(uint32_t track_id,
                                   samples.samples + samples.list_size);
 }
 
-} // namespace optiq
+}

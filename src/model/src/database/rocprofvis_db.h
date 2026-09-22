@@ -549,11 +549,6 @@ class Database
         friend class DatabaseCache;
         friend class TableProcessor;
         friend class TrackLookup;
-        // Needs access to the private worker methods (ReadTraceSlice, ReadFlowTraceInfo,
-        // etc.) on a `legacy_` Database instance it composes rather than inherits from -
-        // those methods are private to prevent bypassing the *Async entry points, but a
-        // decorator calling them directly (synchronously, from within its own already-async
-        // worker) is the intended escape hatch, not a violation of that rule.
         friend class ProfilerHubDatabase;
 };
 

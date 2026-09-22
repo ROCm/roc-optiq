@@ -20,13 +20,6 @@ namespace DataModel
 namespace
 {
 
-// Splits a mixed-style identifier into lowercase word tokens, breaking on
-// '_'/' ' and on lowercase->uppercase transitions (CamelCase). E.g.
-// "device_busy_gfx" -> {device, busy, gfx}; "GFX Busy" -> {gfx, busy};
-// "MemUsg" -> {mem, usg}. Lets legacy's abbreviated/reordered counter names
-// (e.g. "GFX Busy", "MemUsg") be compared against PH's canonical
-// snake_case names (e.g. "device_busy_gfx", "device_memory_usage")
-// regardless of word order.
 std::vector<std::string>
 Tokenize(const std::string& s)
 {
@@ -53,9 +46,6 @@ Tokenize(const std::string& s)
     return tokens;
 }
 
-// True if every character of `needle` appears in `haystack` in order
-// (not necessarily contiguous) - lets an abbreviated token like "usg"
-// match its unabbreviated form "usage".
 bool
 IsSubsequence(const std::string& needle, const std::string& haystack)
 {
@@ -69,11 +59,6 @@ IsSubsequence(const std::string& needle, const std::string& haystack)
     return true;
 }
 
-// Order-independent, abbreviation-tolerant name match: every word token in
-// `name_hint` (legacy's display name, e.g. "GFX Busy" or "MemUsg") must be
-// a subsequence of some word token in `candidate_name` (PH's canonical
-// name, e.g. "device_busy_gfx"). Used to disambiguate PH tracks that share
-// the same numeric key (e.g. several PMC counters on the same pid/agent).
 bool
 NameHintMatches(const std::string& candidate_name, const std::string& name_hint)
 {
@@ -96,9 +81,6 @@ NameHintMatches(const std::string& candidate_name, const std::string& name_hint)
     return true;
 }
 
-// Extracts the trailing run of digits from a string (e.g. "Thread 3930708"
-// -> 3930708, "Queue 1" -> 1). Legacy cached-table cells embed the real,
-// externally-meaningful id as a formatted display string; this recovers it.
 uint32_t
 ParseTrailingNumber(const std::string& s)
 {
@@ -110,7 +92,7 @@ ParseTrailingNumber(const std::string& s)
     return static_cast<uint32_t>(std::stoul(s.substr(begin, end - begin)));
 }
 
-}  // namespace
+}
 
 ProfilerHubDatabase::ProfilerHubDatabase(rocprofvis_db_filename_t path)
 : Database(path)
@@ -128,9 +110,6 @@ ProfilerHubDatabase::Open()
         ph_ctx_ = std::make_unique<optiq::TraceContext>(Path());
     } catch(const optiq::TraceOpenError&)
     {
-        // profiler-hub doesn't recognize this trace (yet) - fall back to
-        // legacy_ for everything, silently. legacy_'s Open() result above
-        // is what actually determines whether this trace can be read at all.
         ph_ctx_.reset();
     }
     return result;
@@ -208,36 +187,15 @@ ProfilerHubDatabase::SaveTrimmedData(rocprofvis_dm_timestamp_t start,
 
 namespace
 {
-// Carries the active ProfilerHubDatabase instance and the real FuncAddTrack
-// across InterceptedAddTrack's plain-function-pointer boundary. Valid only
-// between ReadTraceMetadata installing the interceptor and removing it.
-//
-// Deliberately NOT thread_local: legacy_'s own metadata scan runs its
-// per-category track discovery on a pool of internal worker threads (see
-// m_add_track_mutex in RocprofDatabase), each of which calls
-// BindObject()->FuncAddTrack directly - a thread_local here would be
-// nullptr on every one of those threads (only the thread that entered this
-// ReadTraceMetadata override would have it set), and InterceptedAddTrack
-// would then call through a null "original" pointer -> segfault (observed).
-// A plain static is safe here because it's set once before legacy_'s
-// worker threads are spawned and only cleared after they've all been
-// joined (ReadTraceMetadata is synchronous/blocking) - std::thread's
-// constructor and join() both establish the happens-before relationship
-// this relies on.
 ProfilerHubDatabase*           g_intercepting_instance = nullptr;
 rocprofvis_dm_add_track_func_t g_original_add_track    = nullptr;
-}  // namespace
+}
 
 rocprofvis_dm_result_t
 ProfilerHubDatabase::ReadTraceMetadata(Future* object)
 {
     if(ph_ctx_) BuildPhCandidateMaps();
 
-    // Intercept FuncAddTrack so each track can be matched/widened at the
-    // moment legacy_ creates it - see TryMapTrack's doc comment for why
-    // this can't be done as a separate pass after ReadTraceMetadata
-    // returns (Track's controller-side bounds are snapshotted immediately
-    // and can't be updated afterwards).
     rocprofvis_dm_add_track_func_t previous_add_track = nullptr;
     if(ph_ctx_)
     {
@@ -283,29 +241,6 @@ void
 ProfilerHubDatabase::WidenTrackTimeBounds(rocprofvis_dm_track_params_t* track,
                                           uint32_t                      node)
 {
-    // DISABLED: mutating a mapped track's min_ts/max_ts here - even to a
-    // "sane" value like TraceProperties()->db_inst_start/end_time[node],
-    // not just an extreme sentinel - reliably crashed legacy's OWN later
-    // ReadTraceMetadata passes with SIGFPE (observed inside
-    // ProfileDatabase::BuildHistogram / QueryManager::
-    // CalculateParallelProcessSplitCount's "(record_count * 10) /
-    // total_event_count" divide, though the exact causal path from a
-    // widened min_ts/max_ts to a zero divisor there was not fully traced -
-    // isolation testing (commenting out just these two call sites)
-    // reliably fixed it, confirmed via a 100s controller-test stress run
-    // with zero crashes vs. crashing within the first few seconds
-    // otherwise). track->min_ts/max_ts feed real arithmetic in legacy's
-    // own metadata-building passes (histogram bucketing, parallel-split
-    // sizing, etc.), not just the controller's out-of-bounds display
-    // check we were trying to satisfy - overwriting them is not safe.
-    //
-    // Net effect of leaving this disabled: PH-mapped tracks whose real
-    // profiler-hub event range extends beyond what legacy's own (narrower)
-    // per-track SQL scan found will have those extra events dropped by
-    // Track::SetObject's "out of range" check (rocprofvis_controller_track.cpp)
-    // - a logged warning, not a crash. Tracks are no longer empty (the
-    // bigger bug, fixed by AbsoluteTimeOffset in ReadTraceSliceViaPH/
-    // ReadTracePMCSliceViaPH), just potentially clipped at the edges.
     (void) track;
     (void) node;
 }
@@ -347,9 +282,6 @@ ProfilerHubDatabase::TryMapTrack(rocprofvis_dm_track_params_t* track)
 {
     if(!ph_ctx_ || legacy_->NumDbInstances() > 1)
     {
-        // Multi-node merge not supported yet - legacy node ids are 64-bit
-        // guid hashes, unrelated to profiler-hub's plain nid, so matching
-        // would be unreliable across more than one db instance.
         ++unmapped_count_;
         return false;
     }
@@ -357,11 +289,6 @@ ProfilerHubDatabase::TryMapTrack(rocprofvis_dm_track_params_t* track)
     rocprofvis_dm_track_identifiers_t& ids       = track->track_indentifiers;
     uint32_t                           legacy_id = ids.track_id;
 
-    // ids.id[TRACK_ID_*] are DB row keys (foreign keys into the
-    // Thread/Agent/Queue/Stream cached tables), not the raw external
-    // tid/agent/queue/stream numbers PH reports - resolve through the
-    // same cached-table lookups ProcessTrack itself uses to build display
-    // names, and recover the real number from that text.
     DbInstance* db_instance = static_cast<DbInstance*>(ids.db_instance);
     uint32_t    node        = db_instance ? db_instance->GuidIndex() : 0;
 
@@ -387,15 +314,11 @@ ProfilerHubDatabase::TryMapTrack(rocprofvis_dm_track_params_t* track)
         }
         case kRocProfVisDmPmcTrack:
         {
-            // Unlike TID, the Agent row-key coincides with PH's logical
-            // agent_id in every trace observed so far (both small,
-            // sequential, profiler-assigned indices) - use it directly, no
-            // CachedTables resolution.
             uint32_t real_agent = static_cast<uint32_t>(ids.id[TRACK_ID_AGENT]);
             if(auto it = by_agent_.find(real_agent); it != by_agent_.end())
                 candidates = &it->second;
             name_hint =
-                ids.name[TRACK_ID_QUEUE];  // PMC symbol, resolved by ProcessTrack already
+                ids.name[TRACK_ID_QUEUE];
             break;
         }
         case kRocProfVisDmKernelDispatchTrack:
@@ -433,8 +356,6 @@ ProfilerHubDatabase::TryMapTrack(rocprofvis_dm_track_params_t* track)
         ++mapped_count_;
         return true;
     }
-    // Multiple PH tracks share this key (e.g. several PMC counters on the
-    // same pid/agent) - disambiguate by counter name.
     for(const ph_track_t& candidate : *candidates)
     {
         if(NameHintMatches(candidate.track_name, name_hint))
@@ -457,13 +378,6 @@ ProfilerHubDatabase::ReadTraceSlice(rocprofvis_dm_timestamp_t            start,
                                     rocprofvis_db_track_selection_t      tracks,
                                     Future*                              object)
 {
-    // QueryManager::ReadTraceSlice never actually batches (asserts num==1) -
-    // only handle the single-track case via PH, forward everything else.
-    // Mirrors QueryManager::ReadTraceSlice's own behavior: callers may ask
-    // for a PMC track through this entry point too, and it internally
-    // redirects to the PMC path - do the same, or PMC tracks silently come
-    // back empty (ph_get_track_events on a PMC/sample track_id legitimately
-    // returns nothing; it's the wrong PH call for that category).
     if(num == 1 && ph_ctx_)
     {
         if(auto it = track_id_map_.find(*tracks); it != track_id_map_.end())
@@ -486,13 +400,6 @@ ProfilerHubDatabase::ReadTraceSlice(rocprofvis_dm_timestamp_t            start,
 uint64_t
 ProfilerHubDatabase::AbsoluteTimeOffset(rocprofvis_dm_track_id_t legacy_track_id)
 {
-    // Legacy normalizes timestamps to 0 at the trace's start (see
-    // rocprofvis_dm_track.cpp: min_ts/max_ts getters subtract
-    // db_inst_start_time), but the raw event timestamps in the trace file -
-    // and everything ph_get_track_events/ph_get_track_samples returns - are
-    // absolute. Any [start,end] window this class receives must be shifted
-    // by this offset before being handed to profiler-hub, or every query
-    // misses (the two clocks don't overlap at all).
     rocprofvis_dm_track_params_t* props = legacy_->TrackPropertiesAt(legacy_track_id);
     auto* db_instance = static_cast<DbInstance*>(props->track_indentifiers.db_instance);
     if(db_instance == nullptr) return 0;
@@ -515,10 +422,6 @@ ProfilerHubDatabase::ReadTraceSliceViaPH(rocprofvis_dm_timestamp_t            st
                  "{} events",
                  legacy_track_id, ph_track_id, start, end, events.size());
 
-    // Nesting depth via a simple interval stack - approximate (only sees
-    // this window's events, not ancestors that started earlier and are
-    // still open), acceptable for a first pass since legacy's own level
-    // values are advisory display depth, not used for correctness checks.
     std::sort(events.begin(), events.end(),
               [](const ph_event_t& a, const ph_event_t& b) { return a.start < b.start; });
     std::vector<uint64_t> open_ends;
@@ -586,9 +489,6 @@ ProfilerHubDatabase::ReadTracePMCSliceViaPH(rocprofvis_dm_timestamp_t           
                                             rocprofvis_dm_track_id_t legacy_track_id,
                                             uint32_t ph_track_id, Future* future)
 {
-    // Left/right-neighbor extension (continuity padding just outside
-    // [start,end], used by legacy for chart rendering) is not implemented
-    // yet - PH samples are fetched strictly within the requested window.
     uint64_t                 offset = AbsoluteTimeOffset(legacy_track_id);
     std::vector<ph_sample_t> samples =
         ph_ctx_->GetTrackSamples(ph_track_id, start + offset, end + offset);
@@ -653,7 +553,7 @@ ProfilerHubDatabase::ExportTableCSV(rocprofvis_dm_charptr_t query,
     return legacy_->ExportTableCSV(query, file_path, future);
 }
 
-}  // namespace DataModel
-}  // namespace RocProfVis
+}
+}
 
-#endif  // ROCPROFVIS_PROFILER_HUB_ENABLED
+#endif

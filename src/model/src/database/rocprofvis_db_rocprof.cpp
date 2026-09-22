@@ -13,9 +13,6 @@
 
 namespace
 {
-// Diagnostic-only: logs the track list profiler-hub discovers for this
-// trace, independent of and without affecting the SQL-based track pipeline
-// below. Failures are swallowed - this must never break trace loading.
 void LogProfilerHubTrackList(const char* file_path)
 {
     try
@@ -34,7 +31,7 @@ void LogProfilerHubTrackList(const char* file_path)
         spdlog::warn("[profiler-hub] {}", e.what());
     }
 }
-}  // namespace
+}
 #endif
 
 namespace RocProfVis

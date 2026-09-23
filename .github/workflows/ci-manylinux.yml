@@ -174,6 +174,14 @@ jobs:
           lfs: true
           submodules: true
 
+      - name: Install OpenSSL 3
+        if: inputs.crypto_backend == 'OpenSSL'
+        run: |
+          # The image OpenSSL is 1.1.1. Leave it for the OS and install 3.5
+          # under /opt/openssl-3. cpp-httplib requires >= 3.0.
+          bash .github/scripts/install-openssl3.sh
+          echo "LD_LIBRARY_PATH=/opt/openssl-3/lib${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}" >> "${GITHUB_ENV}"
+
       - name: Build, Make, and Verify Installation
         run: |
           # /opt/python/cp3xx on PATH is the static manylinux CPython. It has an
@@ -205,6 +213,17 @@ jobs:
             PYTHON_CMAKE_ARGS+=("-DPython3_ROOT_DIR=${SHARED_PY}")
             echo "LD_LIBRARY_PATH=${SHARED_PY}/lib${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}" >> "${GITHUB_ENV}"
           fi
+          # Point FindOpenSSL at the side-by-side 3.x prefix. Without these
+          # hints it selects the image's OpenSSL 1.1.1.
+          OPENSSL_CMAKE_ARGS=()
+          if [ "${{ inputs.crypto_backend }}" = "OpenSSL" ]; then
+            OPENSSL_CMAKE_ARGS+=(
+              "-DOPENSSL_ROOT_DIR=/opt/openssl-3"
+              "-DOPENSSL_INCLUDE_DIR=/opt/openssl-3/include"
+              "-DOPENSSL_SSL_LIBRARY=/opt/openssl-3/lib/libssl.so"
+              "-DOPENSSL_CRYPTO_LIBRARY=/opt/openssl-3/lib/libcrypto.so"
+            )
+          fi
           cmake -B ${{ env.BUILD_DIR }} \
             --preset ${{ inputs.cmake_config_preset }} \
             -DROCPROFVIS_ENABLE_INTERNAL_BANNER=${{ env.ENABLE_INTERNAL_BANNER }} \
@@ -216,6 +235,7 @@ jobs:
             -DROCPROFVIS_MULTI_WINDOW=${{ env.ENABLE_MULTI_WINDOW }} \
             -DGLFW_LINK_STATIC=ON \
             -DCRYPTO_BACKEND=${{ inputs.crypto_backend }} \
+            "${OPENSSL_CMAKE_ARGS[@]}" \
             -DCPACK_GENERATOR="TGZ;DEB;RPM" \
             -DCMAKE_EXE_LINKER_FLAGS="-ldl" \
             "${PYTHON_CMAKE_ARGS[@]}"

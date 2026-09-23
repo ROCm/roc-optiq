@@ -65,6 +65,7 @@
         { "from": 30, "to": 35, "direction": "forward",  "metric": "3.1.76", "title": "Write BW",  "category": "write" },
         { "from": 30, "to": 35, "direction": "both",     "metric": "3.1.77", "title": "Atomic BW", "category": "atomic" },
 
-        { "from": 31, "to": 32, "direction": "both" }
-    ]
+        { "from": 30, "to": 31, "direction": "both" },
+        { "from": 31, "to": 32, "direction": "both" },
+        { "from": 32, "to": 33, "direction": "both" }    ]
 }

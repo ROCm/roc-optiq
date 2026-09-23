@@ -20,7 +20,7 @@
             { "metric": "3.1.52", "title": "Hit", "category": "hit", "unit": "%" }
         ]},
 
-        { "id": 30, "column": 3, "title": "Data Fabric", "content": [
+        { "id": 30, "column": 3, "order": 1, "title": "Data Fabric", "content": [
             { "metric": "3.1.61", "title": "HBM Rd",                   "category": "read" },
             { "metric": "3.1.62", "title": "HBM Wr",                   "category": "write" },
             { "metric": "3.1.63", "title": "HBM Read Traffic",         "category": "read" },
@@ -28,12 +28,12 @@
             { "metric": "3.1.65", "title": "Remote Read Traffic",      "category": "read" },
             { "metric": "3.1.66", "title": "Remote Wr+Atomic Traffic", "category": "write" }
         ]},
+        { "id": 34, "column": 3, "order": 0, "title": "xGMI", "content": [] },
+        { "id": 35, "column": 3, "order": 2, "title": "PCIe", "content": [] },        
         { "id": 31, "column": 4, "title": "MALL", "content": [] },
         { "id": 32, "column": 5, "title": "UMC", "content": [] },
-        { "id": 33, "column": 6, "title": "HBM", "content": [] },
+        { "id": 33, "column": 6, "title": "HBM", "content": [] }
 
-        { "id": 34, "column": 3, "row": -1, "title": "xGMI", "content": [] },
-        { "id": 35, "column": 3, "row": 1, "title": "PCIe", "content": [] }
     ],
     "arrows": [
         { "from": 1, "to": 10, "direction": "backward", "metric": "3.1.16", "title": "Flat Read",     "category": "read" },
@@ -57,7 +57,9 @@
         { "from": 20, "to": 30, "direction": "backward", "metric": "3.1.56", "title": "Rd",        "category": "read" },
         { "from": 20, "to": 30, "direction": "forward",  "metric": "3.1.57", "title": "Wr+Atomic", "category": "write" },
 
+        { "from": 30, "to": 31, "direction": "both" },
         { "from": 31, "to": 32, "direction": "both" },
+        { "from": 32, "to": 33, "direction": "both" },
 
         { "from": 34, "to": 30, "direction": "both", "category": "misc" },
         { "from": 35, "to": 30, "direction": "both", "category": "misc" }

@@ -429,6 +429,12 @@ Search for events using the search box on the main **Toolbar**.
 - Clicking on a row in the search results will bring the selected event into view on the :ref:`timeline`. 
 - Clicking **X** clears the search results.
 - The search can match multiple substrings at once. Multiple search tokens must be surrounded by quotation marks without spaces (for example: ``“term1””term2”``).
+- **Advanced search**: Click **...** next to the search box to open **Advanced**:
+
+  - **Match Criteria**: **Contains** matches events whose names include a search term. **Equals** matches events whose names exactly match a search term.
+  - **Multiple Terms**: **AND** requires every quoted term to match. **OR** matches events that satisfy any quoted term.
+  - **Search Range**: **Whole Trace** searches all events. **Selected Time Range** limits the search to the active :ref:`time-range-filter` when one is set. If no time range is selected, the search uses the whole trace. When **Selected Time Range** is on and you change the time range, the search runs again.
+  - **Search Event Categories**: Also matches event category names, when categories are available, in addition to event names.
 
 Save trace selection (trim trace)
 =================================

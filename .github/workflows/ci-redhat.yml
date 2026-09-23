@@ -196,6 +196,11 @@ jobs:
           # 3.5 under /opt/openssl-3. cpp-httplib requires >= 3.0.
           source /opt/rh/gcc-toolset-11/enable
           bash .github/scripts/install-openssl3.sh
+          # FindOpenSSL reads OPENSSL_ROOT_DIR and the pkg-config path, so both
+          # point at the 3.x prefix. Without them it selects the system 1.1.1.
+          # Rocky 9 and 10 skip this step and use their system OpenSSL 3.
+          echo "OPENSSL_ROOT_DIR=/opt/openssl-3" >> "${GITHUB_ENV}"
+          echo "PKG_CONFIG_PATH=/opt/openssl-3/lib/pkgconfig${PKG_CONFIG_PATH:+:${PKG_CONFIG_PATH}}" >> "${GITHUB_ENV}"
           echo "LD_LIBRARY_PATH=/opt/openssl-3/lib${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}" >> "${GITHUB_ENV}"
 
       - name: Install Python development files
@@ -219,18 +224,19 @@ jobs:
           else
             EXTRA_LINK_FLAGS=""
           fi
-          # Rocky 8 must not pick up the system OpenSSL 1.1.1. Rocky 9 and 10
-          # already ship OpenSSL 3, so FindOpenSSL uses the system library.
-          OPENSSL_CMAKE_ARGS=()
-          if [ "${{ matrix.os-version }}" = "8" ] && [ "${{ inputs.crypto_backend }}" = "OpenSSL" ]; then
-            OPENSSL_CMAKE_ARGS+=(
-              "-DOPENSSL_ROOT_DIR=/opt/openssl-3"
-              "-DOPENSSL_INCLUDE_DIR=/opt/openssl-3/include"
-              "-DOPENSSL_SSL_LIBRARY=/opt/openssl-3/lib/libssl.so"
-              "-DOPENSSL_CRYPTO_LIBRARY=/opt/openssl-3/lib/libcrypto.so"
-            )
-          fi
-          cmake -B ${{ env.BUILD_DIR }} --preset ${{ inputs.cmake_config_preset }} -DROCPROFVIS_ENABLE_INTERNAL_BANNER=${{ env.ENABLE_INTERNAL_BANNER }} -DROCPROFVIS_ENABLE_REMOTE=${{ env.ENABLE_REMOTE }} -DROCPROFVIS_ENABLE_PROFILER=${{ env.ENABLE_PROFILER }} -DROCPROFVIS_ENABLE_AGENTIC_PROFILING=${{ env.ENABLE_AGENTIC_PROFILING }} -DROCPROFVIS_ENABLE_SCRIPTING=${{ env.ENABLE_SCRIPTING }} -DROCPROFVIS_ENABLE_TRACE_COMPARE=${{ env.ENABLE_TRACE_COMPARE }} -DROCPROFVIS_MULTI_WINDOW=${{ env.ENABLE_MULTI_WINDOW }} -DGLFW_LINK_STATIC=ON -DCRYPTO_BACKEND=${{ inputs.crypto_backend }} "${OPENSSL_CMAKE_ARGS[@]}" ${EXTRA_LINK_FLAGS:+-DCMAKE_EXE_LINKER_FLAGS="${EXTRA_LINK_FLAGS}"}
+          cmake -B ${{ env.BUILD_DIR }} \
+            --preset ${{ inputs.cmake_config_preset }} \
+            -DROCPROFVIS_ENABLE_INTERNAL_BANNER=${{ env.ENABLE_INTERNAL_BANNER }} \
+            -DROCPROFVIS_ENABLE_REMOTE=${{ env.ENABLE_REMOTE }} \
+            -DROCPROFVIS_ENABLE_PROFILER=${{ env.ENABLE_PROFILER }} \
+            -DROCPROFVIS_ENABLE_AGENTIC_PROFILING=${{ env.ENABLE_AGENTIC_PROFILING }} \
+            -DROCPROFVIS_ENABLE_SCRIPTING=${{ env.ENABLE_SCRIPTING }} \
+            -DROCPROFVIS_ENABLE_TRACE_COMPARE=${{ env.ENABLE_TRACE_COMPARE }} \
+            -DROCPROFVIS_MULTI_WINDOW=${{ env.ENABLE_MULTI_WINDOW }} \
+            -DGLFW_LINK_STATIC=ON \
+            -DCRYPTO_BACKEND=${{ inputs.crypto_backend }} \
+            ${OPENSSL_ROOT_DIR:+-DOPENSSL_ROOT_DIR="${OPENSSL_ROOT_DIR}"} \
+            ${EXTRA_LINK_FLAGS:+-DCMAKE_EXE_LINKER_FLAGS="${EXTRA_LINK_FLAGS}"}
           cmake --build ${{ env.BUILD_DIR }} --parallel 4 --target package
           if [ -e build/${{ env.BUILD_FILE_NAME }} ]; then
             echo "✅ ${{ env.BUILD_FILE_NAME }} has been successfully built!"

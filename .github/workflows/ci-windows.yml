@@ -264,7 +264,19 @@ jobs:
               )
             }
           }
-          cmake --preset "${{ inputs.cmake_config_preset }}" -DROCPROFVIS_ENABLE_INTERNAL_BANNER=${{ env.ENABLE_INTERNAL_BANNER }}  -DROCPROFVIS_ENABLE_UI_TESTS=${{ env.ENABLE_UI_TESTS }} -DROCPROFVIS_ENABLE_REMOTE=${{ env.ENABLE_REMOTE }} -DROCPROFVIS_ENABLE_PROFILER=${{ env.ENABLE_PROFILER }} -DROCPROFVIS_ENABLE_AGENTIC_PROFILING=${{ env.ENABLE_AGENTIC_PROFILING }} -DROCPROFVIS_ENABLE_SCRIPTING=${{ env.ENABLE_SCRIPTING }} -DROCPROFVIS_ENABLE_TRACE_COMPARE=${{ env.ENABLE_TRACE_COMPARE }} -DROCPROFVIS_MULTI_WINDOW=${{ env.ENABLE_MULTI_WINDOW }} -DCRYPTO_BACKEND=${{ inputs.crypto_backend }} @opensslArgs
+          $cmakeArgs = @(
+            "--preset", "${{ inputs.cmake_config_preset }}",
+            "-DROCPROFVIS_ENABLE_INTERNAL_BANNER=${{ env.ENABLE_INTERNAL_BANNER }}",
+            "-DROCPROFVIS_ENABLE_UI_TESTS=${{ env.ENABLE_UI_TESTS }}",
+            "-DROCPROFVIS_ENABLE_REMOTE=${{ env.ENABLE_REMOTE }}",
+            "-DROCPROFVIS_ENABLE_PROFILER=${{ env.ENABLE_PROFILER }}",
+            "-DROCPROFVIS_ENABLE_AGENTIC_PROFILING=${{ env.ENABLE_AGENTIC_PROFILING }}",
+            "-DROCPROFVIS_ENABLE_SCRIPTING=${{ env.ENABLE_SCRIPTING }}",
+            "-DROCPROFVIS_ENABLE_TRACE_COMPARE=${{ env.ENABLE_TRACE_COMPARE }}",
+            "-DROCPROFVIS_MULTI_WINDOW=${{ env.ENABLE_MULTI_WINDOW }}",
+            "-DCRYPTO_BACKEND=${{ inputs.crypto_backend }}"
+          ) + $opensslArgs
+          cmake @cmakeArgs
           cmake --build ${{ env.BUILD_DIR }}/${{ inputs.cmake_config_preset }} --preset "${{ inputs.cmake_build_preset }}" --parallel 4
           if (Test-Path "${{ env.BUILD_DIR }}/${{ inputs.cmake_config_preset }}/${{ env.BINARY_DIR }}/${env:BUILD_FILE_NAME}.exe") {
             Write-Host "✅ $env:BUILD_FILE_NAME has been successfully built!"

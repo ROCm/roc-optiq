@@ -291,7 +291,20 @@ jobs:
       - name: Build, Make, and Verify Installation
         run: |
           mkdir -p ${{ env.BUILD_DIR }}/${{ inputs.cmake_config_preset }}
-          cmake -B ${{ env.BUILD_DIR }}/${{ inputs.cmake_config_preset }} --preset "${{ inputs.cmake_config_preset }}" -DROCPROFVIS_ENABLE_INTERNAL_BANNER=${{ env.ENABLE_INTERNAL_BANNER }} -DROCPROFVIS_ENABLE_UI_TESTS=${{ env.ENABLE_UI_TESTS }} -DROCPROFVIS_ENABLE_REMOTE=${{ env.ENABLE_REMOTE }} -DROCPROFVIS_ENABLE_PROFILER=${{ env.ENABLE_PROFILER }} -DROCPROFVIS_ENABLE_AGENTIC_PROFILING=${{ env.ENABLE_AGENTIC_PROFILING }} -DROCPROFVIS_ENABLE_SCRIPTING=${{ env.ENABLE_SCRIPTING }} -DROCPROFVIS_ENABLE_TRACE_COMPARE=${{ env.ENABLE_TRACE_COMPARE }} -DROCPROFVIS_MULTI_WINDOW=${{ env.ENABLE_MULTI_WINDOW }} -DCRYPTO_BACKEND=${{ inputs.crypto_backend }} -DVulkan_INCLUDE_DIR="$Vulkan_INCLUDE_DIR" -DVulkan_LIBRARY="$Vulkan_LIBRARY" -DROCPROFVIS_MOLTENVK_LIBRARY="$MoltenVK_LIBRARY"
+          cmake -B ${{ env.BUILD_DIR }}/${{ inputs.cmake_config_preset }} \
+            --preset "${{ inputs.cmake_config_preset }}" \
+            -DROCPROFVIS_ENABLE_INTERNAL_BANNER=${{ env.ENABLE_INTERNAL_BANNER }} \
+            -DROCPROFVIS_ENABLE_UI_TESTS=${{ env.ENABLE_UI_TESTS }} \
+            -DROCPROFVIS_ENABLE_REMOTE=${{ env.ENABLE_REMOTE }} \
+            -DROCPROFVIS_ENABLE_PROFILER=${{ env.ENABLE_PROFILER }} \
+            -DROCPROFVIS_ENABLE_AGENTIC_PROFILING=${{ env.ENABLE_AGENTIC_PROFILING }} \
+            -DROCPROFVIS_ENABLE_SCRIPTING=${{ env.ENABLE_SCRIPTING }} \
+            -DROCPROFVIS_ENABLE_TRACE_COMPARE=${{ env.ENABLE_TRACE_COMPARE }} \
+            -DROCPROFVIS_MULTI_WINDOW=${{ env.ENABLE_MULTI_WINDOW }} \
+            -DCRYPTO_BACKEND=${{ inputs.crypto_backend }} \
+            -DVulkan_INCLUDE_DIR="$Vulkan_INCLUDE_DIR" \
+            -DVulkan_LIBRARY="$Vulkan_LIBRARY" \
+            -DROCPROFVIS_MOLTENVK_LIBRARY="$MoltenVK_LIBRARY"
           cmake --build ${{ env.BUILD_DIR }}/${{ inputs.cmake_config_preset }} --preset "${{ inputs.cmake_build_preset }}" --parallel 4 --target package
           ls -l ${{ env.BUILD_DIR }}/${{ inputs.cmake_config_preset }}
 

@@ -180,50 +180,44 @@ jobs:
           # The image OpenSSL is 1.1.1. Leave it for the OS and install 3.5
           # under /opt/openssl-3. cpp-httplib requires >= 3.0.
           bash .github/scripts/install-openssl3.sh
+          # FindOpenSSL reads OPENSSL_ROOT_DIR and the pkg-config path, so both
+          # point at the 3.x prefix. Without them it selects the image's 1.1.1.
+          echo "OPENSSL_ROOT_DIR=/opt/openssl-3" >> "${GITHUB_ENV}"
+          echo "PKG_CONFIG_PATH=/opt/openssl-3/lib/pkgconfig${PKG_CONFIG_PATH:+:${PKG_CONFIG_PATH}}" >> "${GITHUB_ENV}"
           echo "LD_LIBRARY_PATH=/opt/openssl-3/lib${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}" >> "${GITHUB_ENV}"
 
-      - name: Build, Make, and Verify Installation
+      - name: Select Embeddable Python
+        if: inputs.enable_scripting == true || inputs.enable_scripting == 'true'
         run: |
           # /opt/python/cp3xx on PATH is the static manylinux CPython. It has an
           # interpreter and no libpython, so FindPython3 Development.Embed fails.
           # TheRock also installs shared interpreters under /opt/python-shared
           # for embedding. Prefer 3.12 to match the interpreter already on PATH.
-          PYTHON_CMAKE_ARGS=()
-          if [ "${{ env.ENABLE_SCRIPTING }}" = "ON" ]; then
-            SHARED_PY=""
-            for candidate in \
-                /opt/python-shared/cp312-cp312 \
-                /opt/python-shared/cp313-cp313 \
-                /opt/python-shared/cp311-cp311 \
-                /opt/python-shared/cp310-cp310
-            do
-              if [ -x "${candidate}/bin/python3" ]; then
-                SHARED_PY="${candidate}"
-                break
-              fi
-            done
-            if [ -z "${SHARED_PY}" ]; then
-              echo "Scripting needs an embeddable CPython with libpython."
-              echo "Looked under /opt/python-shared; the static /opt/python tree cannot be linked."
-              ls -la /opt/python /opt/python-shared 2>/dev/null || true
-              exit 1
+          SHARED_PY=""
+          for candidate in \
+              /opt/python-shared/cp312-cp312 \
+              /opt/python-shared/cp313-cp313 \
+              /opt/python-shared/cp311-cp311 \
+              /opt/python-shared/cp310-cp310
+          do
+            if [ -x "${candidate}/bin/python3" ]; then
+              SHARED_PY="${candidate}"
+              break
             fi
-            echo "Using embeddable Python at ${SHARED_PY}"
-            "${SHARED_PY}/bin/python3" --version
-            PYTHON_CMAKE_ARGS+=("-DPython3_ROOT_DIR=${SHARED_PY}")
-            echo "LD_LIBRARY_PATH=${SHARED_PY}/lib${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}" >> "${GITHUB_ENV}"
+          done
+          if [ -z "${SHARED_PY}" ]; then
+            echo "Scripting needs an embeddable CPython with libpython."
+            echo "Looked under /opt/python-shared; the static /opt/python tree cannot be linked."
+            ls -la /opt/python /opt/python-shared 2>/dev/null || true
+            exit 1
           fi
-          # Point FindOpenSSL at the side-by-side 3.x prefix. Without these
-          # hints it selects the image's OpenSSL 1.1.1.
-          OPENSSL_CMAKE_ARGS=()
-          if [ "${{ inputs.crypto_backend }}" = "OpenSSL" ]; then
-            OPENSSL_CMAKE_ARGS+=(
-              "-DOPENSSL_ROOT_DIR=/opt/openssl-3"
-              "-DOPENSSL_INCLUDE_DIR=/opt/openssl-3/include"
-              "-DOPENSSL_SSL_LIBRARY=/opt/openssl-3/lib/libssl.so"
-              "-DOPENSSL_CRYPTO_LIBRARY=/opt/openssl-3/lib/libcrypto.so"
-            )
-          fi
+          echo "Using embeddable Python at ${SHARED_PY}"
+          "${SHARED_PY}/bin/python3" --version
+          echo "Python3_ROOT_DIR=${SHARED_PY}" >> "${GITHUB_ENV}"
+          echo "LD_LIBRARY_PATH=${SHARED_PY}/lib${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}" >> "${GITHUB_ENV}"
+
+      - name: Build, Make, and Verify Installation
+        run: |
           cmake -B ${{ env.BUILD_DIR }} \
             --preset ${{ inputs.cmake_config_preset }} \
             -DROCPROFVIS_ENABLE_INTERNAL_BANNER=${{ env.ENABLE_INTERNAL_BANNER }} \
@@ -235,10 +229,10 @@ jobs:
             -DROCPROFVIS_MULTI_WINDOW=${{ env.ENABLE_MULTI_WINDOW }} \
             -DGLFW_LINK_STATIC=ON \
             -DCRYPTO_BACKEND=${{ inputs.crypto_backend }} \
-            "${OPENSSL_CMAKE_ARGS[@]}" \
+            ${OPENSSL_ROOT_DIR:+-DOPENSSL_ROOT_DIR="${OPENSSL_ROOT_DIR}"} \
+            ${Python3_ROOT_DIR:+-DPython3_ROOT_DIR="${Python3_ROOT_DIR}"} \
             -DCPACK_GENERATOR="TGZ;DEB;RPM" \
-            -DCMAKE_EXE_LINKER_FLAGS="-ldl" \
-            "${PYTHON_CMAKE_ARGS[@]}"
+            -DCMAKE_EXE_LINKER_FLAGS="-ldl"
           cmake --build ${{ env.BUILD_DIR }} --parallel 4 --target package
           if [ -e ${{ env.BUILD_DIR }}/${{ env.BUILD_FILE_NAME }} ]; then
             echo "✅ ${{ env.BUILD_FILE_NAME }} has been successfully built!"

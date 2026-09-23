@@ -729,16 +729,36 @@ TEST_CASE("A missing working directory fails the run instead of running elsewher
     rocprofvis_profiler_config_set_working_directory(
         config, "/nonexistent-roc-optiq-working-directory");
 
-    rocprofvis_profiler_state_t state     = kRPVProfilerStateIdle;
-    int32_t                     exit_code = -1;
-    std::string output = run_to_completion(config, &state, &exit_code);
+    rocprofvis_profiler_t*          profiler = rocprofvis_profiler_alloc();
+    rocprofvis_controller_future_t* future   = rocprofvis_controller_future_alloc();
+    REQUIRE(profiler != nullptr);
+    REQUIRE(future != nullptr);
 
+    // The directory is checked before the process is created, so this is a
+    // launch error rather than a child that exited 126 after its chdir failed.
+    CHECK(rocprofvis_profiler_launch_async(profiler, config, future) ==
+          kRocProfVisResultInvalidArgument);
+
+    rocprofvis_profiler_state_t state = kRPVProfilerStateIdle;
+    rocprofvis_profiler_get_state(profiler, &state);
     CHECK(state == kRPVProfilerStateFailed);
-    CHECK(exit_code == 126);
+
+    uint32_t    length = 0;
+    std::string output;
+    rocprofvis_profiler_get_output(profiler, nullptr, &length);
+    if(length > 0)
+    {
+        std::vector<char> buffer(length + 1, '\0');
+        rocprofvis_profiler_get_output(profiler, buffer.data(), &length);
+        output.assign(buffer.data());
+    }
+
     CHECK(output.find("SHOULD NOT RUN") == std::string::npos);
     // The reason is reported to the console the user is looking at.
-    CHECK(output.find("chdir failed") != std::string::npos);
+    CHECK(output.find("working directory") != std::string::npos);
 
+    rocprofvis_controller_future_free(future);
+    rocprofvis_profiler_free(profiler);
     rocprofvis_profiler_config_free(config);
 }
 

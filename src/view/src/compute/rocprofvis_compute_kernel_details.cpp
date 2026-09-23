@@ -27,6 +27,16 @@ namespace RocProfVis
 namespace View
 {
 
+TabItem
+ComputeKernelDetailsView::CreateTabItem(
+    DataProvider& data_provider,
+    const std::shared_ptr<ComputeSelection>& compute_selection)
+{
+    return RocWidget::CreateTabItem(
+        "Kernel Details", TAB_ID,
+        std::make_shared<ComputeKernelDetailsView>(data_provider, compute_selection));
+}
+
 ComputeKernelDetailsView::ComputeKernelDetailsView(
     DataProvider& data_provider, std::shared_ptr<ComputeSelection> compute_selection)
 : RocWidget()
@@ -103,6 +113,7 @@ ComputeKernelDetailsView::SubscribeToEvents()
         auto evt = std::dynamic_pointer_cast<ComputeSelectionChangedEvent>(e);
         if(evt && evt->GetSourceId() == m_data_provider.GetTraceFilePath())
         {
+            m_memory_chart.LoadWorkloadLayout(evt->GetId());
             if(m_kernel_metric_table)
             {
                 m_data_provider.ComputeModel().GetKernelSelectionTable().Clear();

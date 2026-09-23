@@ -108,10 +108,10 @@ constexpr std::array DARK_THEME_COLORS = {
     IM_COL32(70, 70, 70, 200),     // Colors::kMeasurementLabelEdge
     IM_COL32(255, 255, 255, 255),  // Colors::kMeasurementLabelText
     IM_COL32(255, 255, 255, 120),  // Colors::kMeasurementNotch
-    IM_COL32(42, 82, 118, 255),    // Colors::kComparisonBase
-    IM_COL32(26, 116, 112, 255),   // Colors::kComparisonTarget
+    IM_COL32(60, 114, 165, 255),   // Colors::kComparisonBase
+    IM_COL32(30, 124, 118, 255),   // Colors::kComparisonTarget
     IM_COL32(205, 170, 82, 255),   // Colors::kComparisonLesser
-    IM_COL32(92, 62, 132, 255),    // Colors::kComparisonGreater
+    IM_COL32(190, 150, 235, 255),  // Colors::kComparisonGreater
 
     // Centralized from view widgets (kept in Colors enum order):
     IM_COL32(29, 30, 38, 255),     // Colors::kMemChartBg
@@ -162,7 +162,7 @@ constexpr std::array LIGHT_THEME_COLORS = {
     IM_COL32(140, 150, 170, 28),   // Colors::kGridColor
     IM_COL32(120, 162, 220, 255),  // Colors::kGridRed
     IM_COL32(54, 132, 214, 255),   // Colors::kSelectionBorder
-    IM_COL32(54, 132, 214, 34),    // Colors::kSelection
+    IM_COL32(54, 132, 214, 52),    // Colors::kSelection
     IM_COL32(140, 148, 168, 255),  // Colors::kBoundBox
     IM_COL32(247, 248, 250, 255),  // Colors::kFillerColor
     IM_COL32(190, 196, 208, 255),  // Colors::kScrollBarColor
@@ -231,10 +231,10 @@ constexpr std::array LIGHT_THEME_COLORS = {
     IM_COL32(180, 180, 180, 200),  // Colors::kMeasurementLabelEdge
     IM_COL32(20, 20, 20, 255),     // Colors::kMeasurementLabelText
     IM_COL32(80, 80, 80, 120),     // Colors::kMeasurementNotch
-    IM_COL32(203, 230, 252, 255),  // Colors::kComparisonBase
-    IM_COL32(194, 235, 230, 255),  // Colors::kComparisonTarget
-    IM_COL32(248, 224, 166, 255),  // Colors::kComparisonLesser
-    IM_COL32(224, 206, 244, 255),  // Colors::kComparisonGreater
+    IM_COL32(123, 179, 224, 255),  // Colors::kComparisonBase
+    IM_COL32(101, 184, 174, 255),  // Colors::kComparisonTarget
+    IM_COL32(204, 177, 112, 255),  // Colors::kComparisonLesser
+    IM_COL32(185, 133, 242, 255),  // Colors::kComparisonGreater
 
     // Centralized from view widgets (kept in Colors enum order):
     IM_COL32(248, 251, 255, 255),  // Colors::kMemChartBg

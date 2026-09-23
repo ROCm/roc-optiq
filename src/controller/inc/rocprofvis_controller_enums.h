@@ -42,6 +42,8 @@ typedef enum rocprofvis_result_t
     kRocProfVisResultFailedSshCommunication = 14,
     // A requested profiler tool could not be found on this system
     kRocProfVisResultToolNotFound = 15,
+    // A requested value could not be determined
+    kRocProfVisResultNotAvailable = 16,
 } rocprofvis_result_t;
 
 /*
@@ -135,6 +137,8 @@ typedef enum rocprofvis_controller_object_type_t
     kRPVProfilerConfig = 306,
     // Profiler session (owns ProfilerProcessController)
     kRPVProfiler = 307,
+    // Profiler pipeline stage (authoring handle; copied into the config)
+    kRPVProfilerStage = 308,
 #endif
 } rocprofvis_controller_object_type_t;
 
@@ -1015,6 +1019,7 @@ typedef enum rocprofvis_controller_workload_properties_t : uint32_t
     kRPVControllerWorkloadNumKernels,
     kRPVControllerWorkloadKernelIndexed,
     kRPVControllerWorkloadKernelById,
+    kRPVControllerWorkloadMemoryChartLayout,
     __kRPVControllerWorkloadPropertiesLast
 } rocprofvis_controller_workload_properties_t;
 
@@ -1033,6 +1038,7 @@ typedef enum rocprofvis_controller_kernel_properties_t : uint32_t
     kRPVControllerKernelDurationMedian,
     kRPVControllerKernelDurationMean,
     kRPVControllerKernelPcSampling,
+    kRPVControllerKernelHasIsaLines,
     __kRPVControllerKernelPropertiesLast
 } rocprofvis_controller_kernel_properties_t;
 
@@ -1292,10 +1298,12 @@ typedef enum rocprofvis_controller_roofline_ceiling_bandwidth_type_t : uint32_t
 */
 typedef enum rocprofvis_controller_roofline_kernel_intensity_type_t : uint32_t
 {
-    kRPVControllerRooflineKernelIntensityTypeHBM,
+    __kRPVControllerRooflineKernelIntensityTypeFirst,
+    kRPVControllerRooflineKernelIntensityTypeHBM = __kRPVControllerRooflineKernelIntensityTypeFirst,
     kRPVControllerRooflineKernelIntensityTypeL2,
     kRPVControllerRooflineKernelIntensityTypeL1,
     kRPVControllerRooflineKernelIntensityTypeLDS,
+    __kRPVControllerRooflineKernelIntensityTypeLast,
 } rocprofvis_controller_roofline_kernel_intensity_type_t;
 
 /*
@@ -1325,6 +1333,25 @@ typedef enum rocprofvis_profiler_tool_t : uint32_t
 } rocprofvis_profiler_tool_t;
 
 /*
+ * What a stage asks its tool to do.
+ *
+ * Together with the tool and its version this selects the scrape rules the
+ * controller applies to the stage's output. Most tools have a single mode and
+ * use kRPVProfilerOperationDefault; the enum exists because rocprof-compute is
+ * one binary with two modes that print entirely different things.
+ */
+typedef enum rocprofvis_profiler_operation_t : uint32_t
+{
+    // The tool's only mode, or its default rules.
+    kRPVProfilerOperationDefault = 0,
+    // Run the workload and write a workload directory (rocprof-compute profile).
+    kRPVProfilerOperationCapture = 1,
+    // Post-process a workload into a database (rocprof-compute analyze).
+    kRPVProfilerOperationAnalyze = 2,
+    __kRPVProfilerOperationLast
+} rocprofvis_profiler_operation_t;
+
+/*
  * Profiler execution state
  */
 typedef enum rocprofvis_profiler_state_t
@@ -1340,3 +1367,25 @@ typedef enum rocprofvis_profiler_state_t
     // Profiler was cancelled by user
     kRPVProfilerStateCancelled = 4,
 } rocprofvis_profiler_state_t;
+
+/*
+ * Status of a named value scraped from profiler stdout/stderr.
+ *
+ * The rules that produce these values are owned by the controller and keyed by
+ * tool, operation, and version, so there is no ABI type for a rule itself. A
+ * caller names a value by key and reads its status.
+ */
+typedef enum rocprofvis_profiler_scrape_status_t
+{
+    // The owning stage has not finished; a match may still arrive.
+    kRPVProfilerScrapePending = 0,
+    // Matched. The value is available.
+    kRPVProfilerScrapeResolved = 1,
+    // Owning stage finished and no line ever matched.
+    kRPVProfilerScrapeUnmatched = 2,
+    // The rule threw during matching and was disabled.
+    kRPVProfilerScrapeRuleFailed = 3,
+    // The owning stage never ran because an earlier stage failed or the
+    // pipeline was cancelled.
+    kRPVProfilerScrapeStageSkipped = 4,
+} rocprofvis_profiler_scrape_status_t;

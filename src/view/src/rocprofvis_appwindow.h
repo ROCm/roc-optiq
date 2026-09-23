@@ -4,7 +4,10 @@
 #pragma once
 
 #include "rocprofvis_controller.h"
+// TEMPORARY (trace compare): remove this guard when the feature graduates.
+#ifdef ROCPROFVIS_ENABLE_TRACE_COMPARE
 #include "rocprofvis_compare_files_dialog.h"
+#endif
 #include "rocprofvis_data_provider.h"
 #include "rocprofvis_event_manager.h"
 #include "rocprofvis_settings_panel.h"
@@ -66,7 +69,10 @@ public:
 
     void ShowConfirmationDialog(const std::string& title, const std::string& message,
                                 std::function<void()> on_confirm_callback) const;
-    void ShowMessageDialog(const std::string& title, const std::string& message) const;
+    void ShowMessageDialog(const std::string& title, const std::string& message,
+                           std::function<void()> on_close_callback = nullptr) const;
+
+    void CloseProjectTab(const std::string& project_id);
 
     void ShowSaveFileDialog(const std::string&               title,
                             const std::vector<FileFilter>&   file_filters,
@@ -96,12 +102,14 @@ public:
 
     void OpenFile(std::string file_path);
 
+#ifdef ROCPROFVIS_ENABLE_TRACE_COMPARE
     // Opens two trace files as a single compare project (combined timeline, A/B tags).
     void OpenCompare(const std::string& first_file, const std::string& second_file);
 
     // Stable, file-derived project id/key for a compare of the given source files.
     // Used as the tab id and the m_projects key for both fresh and reopened compares.
     static std::string MakeCompareId(const std::vector<std::string>& files);
+#endif
 
     void ShowCloseConfirm();
 #ifdef ROCPROFVIS_ENABLE_PROFILER
@@ -149,8 +157,10 @@ private:
     void HandleTabSelectionChanged(std::shared_ptr<RocEvent> e);
     void HandleFontChanged();
     void HandleOpenFile();
+#ifdef ROCPROFVIS_ENABLE_TRACE_COMPARE
     void HandleCompareFiles();
     void HandleCompareFileBrowse(CompareFilesDialog::FileSlot slot);
+#endif
     void HandleSaveAsFile();
     void ConfigureFileDialogBackend();
     void BeginAppShutdown();
@@ -229,7 +239,9 @@ private:
     std::function<void(std::string)>    m_file_dialog_callback;
     std::unique_ptr<ConfirmationDialog> m_confirmation_dialog;
     std::unique_ptr<MessageDialog>      m_message_dialog;
+#ifdef ROCPROFVIS_ENABLE_TRACE_COMPARE
     std::unique_ptr<CompareFilesDialog> m_compare_files_dialog;
+#endif
     std::unique_ptr<SettingsPanel>      m_settings_panel;
     std::unique_ptr<WelcomePage>        m_welcome_page;
 

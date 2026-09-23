@@ -4912,6 +4912,20 @@ DataProvider::LoadWorkload(uint64_t workload_index)
 
     LoadProfilingConfig(workload, workload_handle);
 
+    // Parse the memory-chart layout JSON once here so the view never re-parses it.
+    std::string memory_chart_json =
+        GetString(workload_handle, kRPVControllerWorkloadMemoryChartLayout, 0);
+    if(!memory_chart_json.empty())
+    {
+        std::string memory_chart_error;
+        if(!MemChartLayout::ParseFromString(memory_chart_json, workload.memory_chart_layout,
+                                            &memory_chart_error))
+        {
+            spdlog::warn("Workload {} memory-chart layout blob invalid: {}", workload.id,
+                         memory_chart_error);
+        }
+    }
+
     LoadMetricList(workload, workload_handle);
 
     LoadValueNames(workload, workload_handle);
@@ -5067,6 +5081,9 @@ DataProvider::LoadKernels(WorkloadInfo& workload, rocprofvis_handle_t* workload_
         kernel.id               = static_cast<uint32_t>(uint64_data);
         kernel.name             = GetString(kernel_handle, kRPVControllerKernelName, 0);
         kernel.dispatch_metrics = {};
+        result = rocprofvis_controller_get_uint64(
+            kernel_handle, kRPVControllerKernelHasIsaLines, 0, &uint64_data);
+        kernel.has_isa_lines = (result == kRocProfVisResultSuccess) && (uint64_data != 0);
         result                  = rocprofvis_controller_get_uint64(
             kernel_handle, kRPVControllerKernelInvocationCount, 0, &uint64_data);
         ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
@@ -5366,8 +5383,6 @@ DataProvider::LoadRoofLineCeilingsRidge(WorkloadInfo&        workload,
     rocprofvis_result_t result      = rocprofvis_controller_get_uint64(
         roofline_handle, kRPVControllerRooflineNumCeilingsRidge, 0, &num_entries);
     ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-    workload.roofline.max = { DBL_MIN, DBL_MIN };
-    workload.roofline.min = { DBL_MAX, DBL_MAX };
 
     for(uint64_t j = 0; j < num_entries; j++)
     {
@@ -5446,10 +5461,6 @@ DataProvider::LoadRoofLineCeilingsCompute(WorkloadInfo&        workload,
                     &double_data);
                 ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
                 ceiling.throughput = double_data;
-                workload.roofline.max.x =
-                    std::max(workload.roofline.max.x, ceiling.position.p2.x);
-                workload.roofline.max.y =
-                    std::max(workload.roofline.max.y, ceiling.position.p2.y);
                 workload.roofline
                     .ceiling_compute[ceiling.compute_type][ceiling.bandwidth_type] =
                     ceiling;
@@ -5510,10 +5521,6 @@ DataProvider::LoadRoofLineCeilingsBandwidth(WorkloadInfo&        workload,
                     &double_data);
                 ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
                 ceiling.throughput = double_data;
-                workload.roofline.min.x =
-                    std::min(workload.roofline.min.x, ceiling.position.p1.x);
-                workload.roofline.min.y =
-                    std::min(workload.roofline.min.y, ceiling.position.p1.y);
                 workload.roofline
                     .ceiling_bandwidth[ceiling.bandwidth_type][ceiling.compute_type] =
                     ceiling;
@@ -5565,10 +5572,6 @@ DataProvider::LoadRoofLineKernels(WorkloadInfo&        workload,
                 &double_data);
             ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
             intensity.position.y = double_data;
-            workload.roofline.max.y =
-                std::max(workload.roofline.max.y, intensity.position.y);
-            workload.roofline.min.y =
-                std::min(workload.roofline.min.y, intensity.position.y);
             workload.kernels[kernel_id].roofline.intensities[intensity.type] =
                 std::move(intensity);
         }

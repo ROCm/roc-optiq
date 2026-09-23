@@ -150,6 +150,7 @@ Project::OpenProject(std::string& file_path)
 
             if(general[JSON_KEY_GENERAL_COMPARE_FILES].isArray())
             {
+#ifdef ROCPROFVIS_ENABLE_TRACE_COMPARE
                 std::vector<std::string> files;
                 for(jt::Json& entry : general[JSON_KEY_GENERAL_COMPARE_FILES].getArray())
                 {
@@ -170,6 +171,12 @@ Project::OpenProject(std::string& file_path)
                 {
                     result = OpenCompare(compare_id, files);
                 }
+#else
+                m_open_error_message =
+                    "This project is a systems-trace comparison, which is not "
+                    "available in this build.\n\nRebuild with "
+                    "ROCPROFVIS_ENABLE_TRACE_COMPARE=ON to open it.";
+#endif
             }
             else
             {
@@ -277,6 +284,7 @@ Project::OpenTrace(std::string& file_path)
     return open_result;
 }
 
+#ifdef ROCPROFVIS_ENABLE_TRACE_COMPARE
 Project::OpenResult
 Project::OpenCompare(const std::string&              project_id,
                      const std::vector<std::string>& file_paths)
@@ -349,6 +357,7 @@ Project::OpenCompare(const std::string&              project_id,
     }
     return result;
 }
+#endif  // ROCPROFVIS_ENABLE_TRACE_COMPARE
 
 bool
 Project::JsonValidForLoad(jt::Json& json)
@@ -378,6 +387,7 @@ Project::SaveSetttingsJson()
     m_settings_json[JSON_KEY_GROUP_GENERAL][JSON_KEY_GENERAL_VERSION] = PROJECT_VERSION;
     std::filesystem::path project_dir =
         std::filesystem::path(m_project_file_path).parent_path();
+#ifdef ROCPROFVIS_ENABLE_TRACE_COMPARE
     if(!m_compare_files.empty())
     {
         // Compare project: persist the source files (relative to the .rpv) so it can be
@@ -391,6 +401,7 @@ Project::SaveSetttingsJson()
         }
     }
     else
+#endif
     {
         m_settings_json[JSON_KEY_GROUP_GENERAL][JSON_KEY_GENERAL_TRACE_PATH] =
             std::filesystem::proximate(m_trace_file_path, project_dir).generic_string();

@@ -13,6 +13,7 @@
 #    include "rocprofvis_compute_tester.h"
 #endif
 #include "icons/rocprovfis_icon_defines.h"
+#include "rocprofvis_appwindow.h"
 #include "rocprofvis_compute_workload_view.h"
 #include "rocprofvis_event_manager.h"
 #include "rocprofvis_settings_manager.h"
@@ -21,18 +22,53 @@
 #include "rocprofvis_compute_isa_view.h"
 
 #include "spdlog/spdlog.h"
+#include <algorithm>
 
 namespace RocProfVis
 {
 namespace View
 {
 
+constexpr const char* INVALID_COMPUTE_DATABASE_MESSAGE =
+    "The file could not be loaded as a compatible compute profiling "
+    "database. Its schema may be invalid or unsupported, or required "
+    "compute-profile data may be missing.";
+
+static bool
+HasAvailableMetrics(const std::vector<const WorkloadInfo*>& workloads)
+{
+    return std::any_of(
+        workloads.begin(), workloads.end(), [](const WorkloadInfo* workload) {
+            return workload &&
+                   std::any_of(workload->available_metrics.ordered_categories.begin(),
+                               workload->available_metrics.ordered_categories.end(),
+                               [](const AvailableMetrics::Category* category) {
+                                   return category && !category->ordered_tables.empty();
+                               });
+        });
+}
+
+static bool
+HasIsaLines(const std::vector<const WorkloadInfo*>& workloads)
+{
+    return std::any_of(
+        workloads.begin(), workloads.end(), [](const WorkloadInfo* workload) {
+            return workload &&
+                   std::any_of(workload->kernels.begin(), workload->kernels.end(),
+                               [](const auto& kernel) {
+                                   return kernel.second.has_isa_lines;
+                               });
+        });
+}
+
 ComputeView::ComputeView()
 : m_view_created(false)
+, m_error_dialog_state(ErrorDialogState::kNone)
 , m_toolbar_available_width(0.0f)
 , m_compute_selection(nullptr)
 , m_preset_browser(nullptr)
 , m_tab_container(nullptr)
+, m_popup_info({})
 {
     m_tool_bar = std::make_shared<RocCustomWidget>([this]() { this->RenderToolbar(); });
     m_widget_name = GenUniqueName("ComputeView");
@@ -42,25 +78,7 @@ ComputeView::ComputeView()
         if(response_code != kRocProfVisResultSuccess)
         {
             spdlog::error("Failed to load trace: {}", response_code);
-            NotificationManager::GetInstance().Show("Failed to load trace: " + trace_path,
-                                                    NotificationLevel::Error);
-        }
-        else
-        {
-            // select the first workload by default when a trace is loaded
-            const std::vector<const WorkloadInfo*>& workloads =
-                m_data_provider.ComputeModel().GetWorkloadList();
-            if(!workloads.empty())
-            {
-                if(m_compute_selection)
-                {
-                    m_compute_selection->SelectWorkload(workloads.front()->id);
-                }
-                else
-                {
-                    spdlog::warn("Selection manager not available, workload not selected");
-                }
-            }
+            QueueDatabaseErrorDialog(trace_path, INVALID_COMPUTE_DATABASE_MESSAGE);
         }
     });
 
@@ -132,13 +150,14 @@ ComputeView::Update()
 {
     m_data_provider.Update();
 
-    if(!m_view_created)
+    const ProviderState new_state = m_data_provider.GetState();
+
+    if(!m_view_created && m_error_dialog_state == ErrorDialogState::kNone &&
+       (new_state == ProviderState::kReady || new_state == ProviderState::kError))
     {
         CreateView();
-        m_view_created = true;
+        m_view_created = (m_tab_container != nullptr);
     }
-
-    auto new_state = m_data_provider.GetState();
 
     if(new_state == ProviderState::kReady)
     {
@@ -151,54 +170,94 @@ ComputeView::Update()
             m_tab_container->Update();
         }
     }
+
+    ShowPendingDatabaseErrorDialog();
 }
 
 void
 ComputeView::CreateView()
 {
+    m_compute_selection.reset();
+    m_preset_browser.reset();
+    m_tab_container.reset();
+
+    const WorkloadInfo* initial_workload = ValidateDatabase();
+    if(!initial_workload)
+    {
+        return;
+    }
+
     m_compute_selection = std::make_shared<ComputeSelection>(m_data_provider);
-    // Data provider may load before the UI is ready; pick first workload if so.
+    m_compute_selection->SelectWorkload(initial_workload->id);
+    m_preset_browser = std::make_unique<PresetBrowser>();
+    CreateTabContainer();
+}
+
+const WorkloadInfo*
+ComputeView::ValidateDatabase()
+{
+    if(m_data_provider.GetState() == ProviderState::kError)
+    {
+        QueueDatabaseErrorDialog(m_data_provider.GetTraceFilePath(),
+                                 INVALID_COMPUTE_DATABASE_MESSAGE);
+        return nullptr;
+    }
+
     const std::vector<const WorkloadInfo*>& workloads =
         m_data_provider.ComputeModel().GetWorkloadList();
-    if(!workloads.empty())
+    if(workloads.empty())
     {
-        m_compute_selection->SelectWorkload(workloads.front()->id);
+        QueueDatabaseErrorDialog(
+            m_data_provider.GetTraceFilePath(),
+            "The file contains no compute workloads. A compute profile must contain "
+            "at least one workload and one kernel before it can be displayed.");
+        return nullptr;
     }
-    m_preset_browser = std::make_unique<PresetBrowser>();
+
+    const auto workload_with_kernels =
+        std::find_if(workloads.begin(), workloads.end(), [](const WorkloadInfo* workload) {
+            return workload && !workload->kernels.empty();
+        });
+    if(workload_with_kernels == workloads.end())
+    {
+        QueueDatabaseErrorDialog(
+            m_data_provider.GetTraceFilePath(),
+            "The file contains compute workloads, but none of them contains kernel "
+            "data. A compute profile must contain at least one workload with a kernel "
+            "before it can be displayed.");
+        return nullptr;
+    }
+
+    return *workload_with_kernels;
+}
+
+void
+ComputeView::CreateTabContainer()
+{
+    const std::vector<const WorkloadInfo*>& workloads =
+        m_data_provider.ComputeModel().GetWorkloadList();
+    const bool database_has_metrics   = HasAvailableMetrics(workloads);
+
     m_tab_container = std::make_shared<TabContainer>();
     m_tab_container->AddTab(
-        TabItem{"Summary View", "compute_summary_view",
-                std::make_shared<ComputeSummaryView>(m_data_provider, m_compute_selection),
-                false});
+        ComputeSummaryView::CreateTabItem(m_data_provider, m_compute_selection));
     m_tab_container->AddTab(
-        TabItem{"Kernel Details", "compute_kernel_details_view",
-                std::make_shared<ComputeKernelDetailsView>(m_data_provider,
-                                                           m_compute_selection),
-                false});
-    m_tab_container->AddTab(
-        TabItem{"Table View", "compute_table_view",
-                std::make_shared<ComputeTableView>(m_data_provider, m_compute_selection),
-                false});
-    m_tab_container->AddTab(
-        TabItem{"Baseline Comparison", "compute_comparison_view",
-                std::make_shared<ComputeComparisonView>(m_data_provider,
-                                                        m_compute_selection),
-                false});
-    m_tab_container->AddTab(
-        TabItem{"Workload Details", "compute_workload_view",
-                std::make_shared<ComputeWorkloadView>(m_data_provider, m_compute_selection),
-                false});
+        ComputeKernelDetailsView::CreateTabItem(m_data_provider,
+                                                m_compute_selection));
 
-    m_isa_view = std::make_shared<ComputeIsaView>(m_data_provider);
+    m_tab_container->AddTab(ComputeTableView::CreateTabItem(
+        m_data_provider, m_compute_selection, database_has_metrics));
+    m_tab_container->AddTab(ComputeComparisonView::CreateTabItem(
+        m_data_provider, m_compute_selection, database_has_metrics));
     m_tab_container->AddTab(
-        TabItem{"ISA View", "isa_view", m_isa_view, false});
+        ComputeWorkloadView::CreateTabItem(m_data_provider, m_compute_selection));
 
 #ifdef ROCPROFVIS_DEVELOPER_MODE
-
+    const bool database_has_isa_lines = HasIsaLines(workloads);
     m_tab_container->AddTab(
-        TabItem{"Compute Tester", "compute_tester_view",
-                std::make_shared<ComputeTester>(m_data_provider, m_compute_selection),
-                false});
+        ComputeIsaView::CreateTabItem(m_data_provider, database_has_isa_lines));
+    m_tab_container->AddTab(
+        ComputeTester::CreateTabItem(m_data_provider, m_compute_selection));
 #endif
     m_tab_container->SetAllowToolTips(false);
 }
@@ -206,13 +265,20 @@ ComputeView::CreateView()
 void
 ComputeView::DestroyView()
 {
-    m_view_created = false;
-    m_isa_view     = nullptr;
+    m_view_created       = false;
+    m_error_dialog_state = ErrorDialogState::kNone;
+    m_popup_info         = {};
+    m_tab_container.reset();
+    m_compute_selection.reset();
+    m_preset_browser.reset();
 }
 
 bool
 ComputeView::LoadTrace(rocprofvis_controller_t* controller, const std::string& file_path)
 {
+    m_error_dialog_state = ErrorDialogState::kNone;
+    m_popup_info         = {};
+
     bool result = false;
     result      = m_data_provider.FetchTrace(controller, file_path);
     return result;
@@ -236,6 +302,40 @@ ComputeView::Render()
             m_tab_container->Render();
         }
     }
+}
+
+void
+ComputeView::QueueDatabaseErrorDialog(const std::string& file_path,
+                                      const std::string& message)
+{
+    if(m_error_dialog_state != ErrorDialogState::kNone)
+    {
+        return;
+    }
+
+    m_error_dialog_state = ErrorDialogState::kPending;
+    m_popup_info.title   = "Invalid Compute Database";
+    m_popup_info.message = message;
+    if(!file_path.empty())
+    {
+        m_popup_info.message += "\n\nFile: " + file_path;
+    }
+}
+
+void
+ComputeView::ShowPendingDatabaseErrorDialog()
+{
+    if(m_error_dialog_state != ErrorDialogState::kPending)
+    {
+        return;
+    }
+
+    m_error_dialog_state      = ErrorDialogState::kShown;
+    AppWindow*        app_window = AppWindow::GetInstance();
+    const std::string project_id = m_data_provider.GetTraceFilePath();
+    app_window->ShowMessageDialog(
+        m_popup_info.title, m_popup_info.message,
+        [app_window, project_id]() { app_window->CloseProjectTab(project_id); });
 }
 
 std::shared_ptr<RocWidget>
@@ -315,11 +415,15 @@ ComputeView::RenderWorkloadSelection()
 
         for(const WorkloadInfo* workload : workloads)
         {
-            if(ImGui::Selectable(workload->name.c_str(),
-                                 workload_id == workload->id))
+            ImGui::PushID(static_cast<int>(workload->id));
+            if(ImGui::Selectable("", workload_id == workload->id))
             {
                 m_compute_selection->SelectWorkload(workload->id);
             }
+            ImGui::SameLine(ImGui::GetCursorPosX());
+            ElidedText(workload->name.c_str(), ImGui::GetContentRegionAvail().x,
+                       ImGui::GetContentRegionAvail().x);
+            ImGui::PopID();
         }
         ImGui::EndCombo();
     }
@@ -342,10 +446,15 @@ ComputeView::RenderWorkloadSelection()
     {
         for(const KernelInfo* info : kernel_info_list)
         {
-            if(ImGui::Selectable(info->name.c_str(), kernel_id == info->id))
+            ImGui::PushID(static_cast<int>(info->id));
+            if(ImGui::Selectable("", kernel_id == info->id))
             {
                 m_compute_selection->SelectKernel(info->id);
             }
+            ImGui::SameLine(ImGui::GetCursorPosX());
+            ElidedText(info->name.c_str(), ImGui::GetContentRegionAvail().x,
+                       ImGui::GetContentRegionAvail().x);
+            ImGui::PopID();
         }
         ImGui::EndCombo();
     }

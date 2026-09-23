@@ -4,6 +4,7 @@
 #pragma once
 
 #include "rocprofvis_controller_enums.h"
+#include "rocprofvis_memory_chart_model.h"
 #include <cstdint>
 #include <memory>
 #include <string>
@@ -54,6 +55,10 @@ struct Point
 {
     double x;
     double y;
+    bool operator==(const Point& other) const
+    {
+        return x == other.x && y == other.y;
+    }
 };
 
 struct PcSampleState
@@ -138,6 +143,7 @@ struct KernelInfo
     };
     uint32_t                         id;
     std::string                      name;
+    bool                             has_isa_lines = false;
     std::array<uint64_t, NumMetrics> dispatch_metrics;
     Roofline                         roofline;
     PcSamplingData                   pc_sampling_data;
@@ -169,13 +175,12 @@ struct WorkloadInfo
             std::unordered_map<rocprofvis_controller_roofline_ceiling_bandwidth_type_t,
                                Ceiling>>
               ceiling_compute;
-        Point max;
-        Point min;
     };
     uint32_t                                 id;
     std::string                              name;
     std::vector<std::vector<std::string>>    system_info;
     std::vector<std::vector<std::string>>    profiling_config;
+    MemChartLayout                           memory_chart_layout;  // Parsed layout from the DB (empty blocks if absent).
     AvailableMetrics                         available_metrics;
     std::unordered_map<uint32_t, KernelInfo> kernels;
     std::vector<const KernelInfo*>           ordered_kernels;  // built from map values; never null

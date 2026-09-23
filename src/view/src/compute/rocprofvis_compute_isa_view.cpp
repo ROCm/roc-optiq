@@ -181,7 +181,7 @@ ComputeIsaView::ComputeIsaView(DataProvider& data_provider)
 , m_control_panel_height(0.0f)
 , m_current_kernel_id(ComputeSelection::INVALID_SELECTION_ID)
 , m_current_workload_id(ComputeSelection::INVALID_SELECTION_ID)
-, m_show_metadata_enabled(false)
+, m_show_metadata_enabled(true)
 {
     m_isa.widget    = std::make_shared<IsaCodeWidget>(m_line_selection);
     m_source.widget = std::make_shared<SourceCodeWidget>(m_line_selection);

@@ -181,7 +181,7 @@ ComputeIsaView::ComputeIsaView(DataProvider& data_provider)
 , m_control_panel_height(0.0f)
 , m_current_kernel_id(ComputeSelection::INVALID_SELECTION_ID)
 , m_current_workload_id(ComputeSelection::INVALID_SELECTION_ID)
-, m_show_metadata_enabled(true)
+, m_show_metadata_enabled(false)
 {
     m_isa.widget    = std::make_shared<IsaCodeWidget>(m_line_selection);
     m_source.widget = std::make_shared<SourceCodeWidget>(m_line_selection);
@@ -191,7 +191,7 @@ ComputeIsaView::ComputeIsaView(DataProvider& data_provider)
 
     m_source_layout_item                = LayoutItem::CreateFromWidget(m_source.widget);
     m_source_layout_item->m_child_flags = ImGuiChildFlags_None;
-    m_source_layout_item->m_visible     = false;
+    m_source_layout_item->m_visible     = true;
 
     m_horizontal_split_container =
         std::make_shared<HSplitContainer>(isa_item, m_source_layout_item);
@@ -438,10 +438,7 @@ ComputeIsaView::OnPcSamplingReady(PcSamplingLayer layer, uint32_t kernel_id,
         return;
 
     if(result != kRocProfVisResultSuccess)
-    {
-        if(layer == PcSamplingLayer::kStalls) m_show_metadata_enabled = false;
         return;
-    }
 
     const KernelInfo* kernel_info = m_data_provider.ComputeModel().GetKernelInfo(
         m_current_workload_id, m_current_kernel_id);
@@ -543,8 +540,10 @@ ComputeIsaView::RefreshCodeWidgets()
         m_source.widget->Load(data, m_source.selected_uuid);
 
     const bool show_stalls = m_show_metadata_enabled && m_stalls.loaded;
-    m_source.widget->ChangeStallVisibility(show_stalls);
-    m_isa.widget->ChangeStallVisibility(show_stalls);
+    m_source.widget->ChangeStallVisibility(
+        show_stalls && m_source_layout_item->m_visible &&
+        m_source.loaded_uuids.count(m_source.selected_uuid));
+    m_isa.widget->ChangeStallVisibility(show_stalls && m_isa.loaded);
 }
 
 void
@@ -900,6 +899,8 @@ IsaCodeWidget::BuildSourceLocations(const PcSamplingData& data)
     {
         if(dep.frame_index == 0)
         {
+            // Keep the first mapping per instruction_uuid; duplicates at frame_index==0
+            // are unexpected but harmless — the first entry in the data is authoritative.
             source_locations.emplace(
                 dep.instruction_uuid,
                 SourceLocation{ dep.source_line_uuid, dep.source_file_uuid });
@@ -1408,7 +1409,7 @@ IsaCodeWidget::RenderLine(uint32_t index)
     char offset_text[CODE_OBJECT_OFFSET_TEXT_CAPACITY] = {};
     std::snprintf(offset_text, sizeof(offset_text), CODE_OBJECT_OFFSET_FORMAT,
                   static_cast<unsigned long long>(isa_row.code_object_offset));
-    ImGui::PushID(static_cast<int>(index));
+    ImGui::PushID("offset");
     CopyableTextUnformatted(offset_text, "", COPY_DATA_NOTIFICATION, false, true);
     ImGui::PopID();
 

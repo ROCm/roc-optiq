@@ -1528,9 +1528,9 @@ production code from depending on it.
 Correlates source code and ISA through `SourceCodeWidget` and
 `IsaCodeWidget`, which both derive from `BaseCodeWidget` and share a
 `LineSelection` so selecting a source line highlights the correlated
-ISA (and vice versa). The ISA pane is the always-visible primary pane;
-the optional source-code pane is shown on the right through the
-`Show Source Code` / `Hide Source Code` control.
+ISA (and vice versa). The ISA pane is the always-visible primary pane. The
+source-code pane is visible on the right by default and can be hidden or shown
+through the `Hide Source Code` / `Show Source Code` control.
 After trace metadata loads, `ComputeView` disables the ISA View tab and
 shows a tooltip without constructing its widget when no kernel in the database
 has ISA lines. The availability flag is initialized once with the other

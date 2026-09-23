@@ -41,8 +41,6 @@ To generate profiling data in a compatible format, run the CLI analysis with the
 
 When you open a ROCm Compute Profiler analysis database file, you can view its data populated in :ref:`analysis-summary`, :ref:`kernel-details`, :ref:`analysis-table`, :ref:`analysis-workload`, and :ref:`baseline-comparison`.
 
-If the database has no metrics, **Table View** and **Baseline Comparison** are disabled. Hold the pointer over a disabled tab to see a tooltip that explains why the tab is unavailable.
-
 .. _analysis-summary:
 
 Summary View
@@ -167,7 +165,7 @@ The **Kernel Selection Table** displays kernel information, including names and 
 Kernel Details -- Memory Chart
 ------------------------------
 
-The **Memory Chart** displays memory transactions and throughput for the selected kernel. The diagram layout comes from the analysis database for that workload, so the blocks and connections match the GPU architecture that was profiled (for example, gfx940 and gfx950 series) instead of a single hardcoded hierarchy. If the database does not include a layout, ROCm Optiq uses a built-in default.
+The **Memory Chart** displays memory transactions and throughput for the selected kernel. The diagram layout comes from the analysis database for that workload, so the blocks and connections match the GPU architecture that was profiled (for example, gfx940 and gfx950 series).
 
 Each cache or memory block presents its associated counter values and derived metrics, helping you understand memory behavior across the hardware memory hierarchy.
 

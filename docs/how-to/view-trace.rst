@@ -188,18 +188,18 @@ When an event is selected, its event details are displayed in the **Event Detail
 
 .. _sort-tracks:
 
-Resize, reorder, or sort tracks
+Sort, resize, or reorder tracks
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Use the following actions to resize, reorder, or sort tracks.
+Use the following actions to sort, resize, or reorder tracks.
 
-- Resize tracks by dragging the separator lines between tracks.
-- Reorder tracks by clicking and dragging |grip| on the left side of the **Description** area. Drag-to-reorder switches the sort mode to **Custom**.
 - Sort tracks by right-clicking the track-list header, or by using the down-arrow at the bottom of the track list, and choosing **Sort Tracks**:
 
   - **Topology**: Matches the order of tracks in the System Topology View sidebar.
   - **Default**: Restores the order from when the trace was loaded (by track type).
   - **Custom**: Uses your remembered drag-to-reorder. The sort mode and custom order are saved with the project (``.rpv``) when you select **File** > **Save**. See :ref:`save-project`.
+- Resize tracks by dragging the separator lines between tracks.
+- Reorder tracks by clicking and dragging |grip| on the left side of the **Description** area. Drag-to-reorder switches the sort mode to **Custom**.
 
 Queue Utilization
 ^^^^^^^^^^^^^^^^^
@@ -214,8 +214,7 @@ For sample counter tracks, pills showing standard deviation and average display 
 Additionally, min and max value pills can also be shown/hidden.
  
 When a counter track is expanded to sufficient height, the Y-axis shows incremental scale tick labels between the minimum and maximum values, making intermediate values easier to read.
-Similar to queue utilization, the values in these pills react to reflect the values in the current view or active time-range filter. When a time-range filter is active, the pills tint blue.
-The Counter statistics are also visible in the **Track Details** tab for the selected track(s).
+Similar to queue utilization, these pills update to match the current view or the active time-range filter. Counter statistics are also visible in the **Track Details** tab for the selected track(s).
 
 .. image:: ../images/new-track-details-statistics.png
    :width: 800
@@ -303,15 +302,15 @@ Advanced Details
 The **Advanced Details** section provides an in-depth view of profiling data, enabling you to analyze performance metrics and event-specific information. 
 This section provides an interface for multiple data perspectives, offering granular insights through these components:
 
-- **Event Table**: Displays all events within the selected tracks. You can refine your analysis by applying a time-range selection or using the table filters.
+- **Event Table**: Displays all events within the selected tracks. You can refine your analysis by applying a time-range selection or using the table filters. The **Event Table** provides two filter modes:
+
+  - **Basic mode**: Provides simplified per-column controls. You can filter by category, name, or metric equation.
+  - **Advanced mode**: Provides advanced filters to narrow the table. Use the **Group by** drop-down to group **Event Table** results by a selected field (Category, Name, Stream, Queue, Node, PID, or TID). In **Filter**, enter SQL-like statements to narrow the results. For example, ``duration > 2000`` displays all events greater than 2000 ns. Time columns are compared in nanoseconds (ns); other time units do not filter correctly. Click **Submit** to apply an advanced filter.
 
   .. image:: ../images/advanced.png
     :width: 800
     :align: center
     :alt: Advanced Details section showing the Event Table with filter and aggregate controls
-
-  - **Aggregate**: A drop-down groups **Event Table** results by a selected field (Category, Name, Stream, Queue, Node, PID, or TID). Click **Submit** to group the results. To remove the grouping, choose —None— and click **Submit**. 
-  - **Filter**: Use the simplified per-column filter controls to narrow the table without writing a query. Open **Advanced** to enter SQL-like statements. For example, ``duration > 2000`` displays all events greater than 2000 ns. Click **Submit** to apply an Advanced filter. Time columns are compared in nanoseconds (ns); other time units do not filter correctly.
   
   .. tip::
 
@@ -319,7 +318,7 @@ This section provides an interface for multiple data perspectives, offering gran
      - Right-click on a table row and select **Go To Event** to navigate to the **Timeline View** to the highlighted event.
      - :ref:`time-range-filter` using the **Timeline View** to filter the rows to data contained within the selected time range.
 
-- **Sample Table**: Presents all performance counter data points associated with the selected tracks. Similar to the **Event Table**, it supports time-range selection, simplified per-column filters, and SQL-like queries in **Advanced** mode. It supports the **Aggregate** drop-down to group the results by the selected column.
+- **Sample Table**: Presents all performance counter data points associated with the selected tracks. Similar to the **Event Table**, it supports time-range selection, **Basic mode**, and **Advanced mode**. **Advanced mode** includes the **Group by** drop-down and SQL-like filter queries.
 - **Event Details**: Shows extended information about the event that is not shown in the timeline or the **Event Table**. It shows raw database information such as id, category, duration, associated queue/stream, correlation IDs and API method parameters. It also shows flow, call stack information, and function call arguments, if available.  
 
   - The **Flow Data** displays all events logically connected to the selected event in the execution sequence. You can navigate any of the connected events on the timeline, with vertical track centering and highlight feedback, by right clicking and selecting **Go To Event**. The navigation makes it easier to follow the execution flow across queues and tracks. 

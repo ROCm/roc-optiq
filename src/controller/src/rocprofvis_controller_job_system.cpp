@@ -29,30 +29,24 @@ Job::~Job()
 void Job::Execute()
 {
     rocprofvis_result_t result = m_function(m_future);
-    {
-        std::lock_guard<std::mutex> lock(m_mutex);
-        m_result = result;
-    }
+    std::lock_guard<std::mutex> lock(m_mutex);
+    m_result = result;
     m_condition_variable.notify_all();
 }
 
 void Job::Cancel()
 {
-    {
-        std::lock_guard<std::mutex> lock(m_mutex);
-        m_result = kRocProfVisResultCancelled;
-    }
+    std::lock_guard<std::mutex> lock(m_mutex);
+    m_result = kRocProfVisResultCancelled;
     m_condition_variable.notify_all();
 }
 
 void Job::Complete(rocprofvis_result_t result)
 {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    if(m_result == kRocProfVisResultPending)
     {
-        std::lock_guard<std::mutex> lock(m_mutex);
-        if(m_result == kRocProfVisResultPending)
-        {
-            m_result = result;
-        }
+        m_result = result;
     }
     m_condition_variable.notify_all();
 }

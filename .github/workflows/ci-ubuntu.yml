@@ -225,6 +225,25 @@ jobs:
             --no-tests=error \
             --output-junit ctest-results.xml
 
+      - name: Backtrace Compute UI Test (on failure)
+        if: steps.run_tests.outcome == 'failure' && env.ENABLE_UI_TESTS == 'ON'
+        continue-on-error: true
+        timeout-minutes: 10
+        run: |
+          # ctest reports an abort without a call stack. Re-run the compute UI
+          # test under gdb so the log shows where the process died.
+          apt-get update
+          apt-get install -y gdb
+          # Same working directory as the ctest registration.
+          xvfb-run -a gdb -batch \
+            -ex "set pagination off" \
+            -ex "handle SIGPIPE nostop noprint" \
+            -ex run \
+            -ex "thread apply all bt" \
+            --args "${GITHUB_WORKSPACE}/${{ env.BUILD_DIR }}/roc-optiq-tests" \
+              --run-tests -f "${GITHUB_WORKSPACE}/sample/rocprof_compute_23ed6f36.db" \
+            || true
+
       - name: Upload Test Logs (on failure)
         if: steps.run_tests.outcome == 'failure'
         uses: actions/upload-artifact@v7

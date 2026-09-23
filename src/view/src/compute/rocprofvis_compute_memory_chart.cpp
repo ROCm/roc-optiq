@@ -41,13 +41,15 @@ static constexpr const char* OVERRIDE_FILE_NAME = "memory_chart.json";
 static constexpr float CHART_PADDING     = 20.0f;
 static constexpr float LEFT_MARGIN       = 60.0f;   // Lane for arrows entering column 0 from the left.
 static constexpr float BLOCK_GAP         = 18.0f;
-static constexpr float COLUMN_GAP        = 130.0f;  // Base gap between columns that arrows cross.
+static constexpr float COLUMN_GAP        = 130.0f;  // Base gap between columns that labeled arrows cross.
+static constexpr float COLUMN_GAP_UNLABELED = 60.0f; // Gap crossed only by unlabeled arrows: heads + a short run.
 static constexpr float COLUMN_GAP_NO_ARROW = 40.0f; // Tight gap between columns with no arrow crossing.
 static constexpr float MAX_COLUMN_GAP    = 200.0f;  // Cap when spreading to fill wide panels.
 static constexpr float GAP_LABEL_CLEARANCE = 12.0f; // Space kept between a gap's label box and each column edge.
 static constexpr float ROW_HEIGHT        = 26.0f;
 static constexpr float BLOCK_BODY_TOP    = 6.0f;
 static constexpr float MIN_BLOCK_WIDTH   = 240.0f;
+static constexpr float MIN_TITLE_ONLY_WIDTH = 96.0f;  // Blocks with no metric rows only need to fit the title.
 static constexpr float MAX_BLOCK_WIDTH   = 400.0f;
 static constexpr float MIN_BLOCK_HEIGHT  = 96.0f;
 static constexpr float EMPTY_BODY_H      = 40.0f;
@@ -613,8 +615,10 @@ ComputeMemoryChartView::OnLayoutLoaded()
         });
     }
 
-    RebuildColumnGaps();
+    // Strings first: RebuildColumnGaps reads cached_label to tell labeled gaps
+    // from unlabeled ones.
     RefreshMetricStrings();
+    RebuildColumnGaps();
     m_layout_dirty = true;
 }
 
@@ -625,7 +629,7 @@ ComputeMemoryChartView::RebuildColumnGaps()
     // arrows are drawn across the gap; same-column arrows use the gutter just
     // right of their column. Runs on layout load only (columns and arrows are
     // static until the next load), so ComputeLayout can reuse the result.
-    m_gap_has_arrow.clear();
+    m_gap_kinds.clear();
 
     std::set<int32_t> column_set;
     for(const MemChartBlock& block : m_layout.blocks) column_set.insert(block.column);
@@ -633,13 +637,21 @@ ComputeMemoryChartView::RebuildColumnGaps()
 
     int num_gaps = static_cast<int>(col_keys.size()) - 1;
     if(num_gaps <= 0) return;
-    m_gap_has_arrow.assign(static_cast<size_t>(num_gaps), false);
+    m_gap_kinds.assign(static_cast<size_t>(num_gaps), GapKind::kEmpty);
 
     for(const MemChartArrow& arrow : m_layout.arrows)
     {
         const MemChartBlock* from = Block(arrow.from);
         const MemChartBlock* to   = Block(arrow.to);
         if(!from || !to) continue;
+
+        // A gap takes the roomiest kind of any arrow crossing it.
+        GapKind kind = arrow.cached_label.empty() ? GapKind::kUnlabeledArrow
+                                                  : GapKind::kLabeledArrow;
+        auto mark = [&](int g) {
+            if(g >= 0 && g < num_gaps && m_gap_kinds[g] < kind) m_gap_kinds[g] = kind;
+        };
+
         if(from->row != to->row)
         {
             // Inter-row arrows between columns run their vertical in the gap
@@ -647,8 +659,7 @@ ComputeMemoryChartView::RebuildColumnGaps()
             if(from->column == to->column) continue;
             int t = static_cast<int>(std::lower_bound(col_keys.begin(), col_keys.end(), to->column) -
                                      col_keys.begin());
-            int g = from->column < to->column ? t - 1 : t;
-            if(g >= 0 && g < num_gaps) m_gap_has_arrow[g] = true;
+            mark(from->column < to->column ? t - 1 : t);
             continue;
         }
         int32_t lo = std::min(from->column, to->column);
@@ -657,11 +668,11 @@ ComputeMemoryChartView::RebuildColumnGaps()
         {
             if(lo == hi)
             {
-                if(col_keys[g] == lo) m_gap_has_arrow[g] = true;
+                if(col_keys[g] == lo) mark(g);
             }
             else if(lo <= col_keys[g] && hi >= col_keys[g + 1])
             {
-                m_gap_has_arrow[g] = true;
+                mark(g);
             }
         }
     }
@@ -937,7 +948,11 @@ ComputeMemoryChartView::MeasureBlock(MemChartBlock& block) const
     }
 
     width += BLOCK_TEXT_PAD * 2.0f + BLOCK_CONTENT_EXTRA_W;
-    block.w = std::min(std::max(width, MIN_BLOCK_WIDTH), MAX_BLOCK_WIDTH);
+    // A title-only block has no label/value columns to line up with its
+    // neighbors, so hold it to the narrower minimum instead of padding it out
+    // to the metric-row width.
+    float min_width = block.content.empty() ? MIN_TITLE_ONLY_WIDTH : MIN_BLOCK_WIDTH;
+    block.w         = std::min(std::max(width, min_width), MAX_BLOCK_WIDTH);
 
     float body = block.content.empty()
                      ? EMPTY_BODY_H
@@ -1173,18 +1188,25 @@ ComputeMemoryChartView::ComputeLayout(float available_width)
 
     int num_gaps = static_cast<int>(col_keys.size()) - 1;
 
-    // Per-gap spacing: arrow-crossed gaps get the full width; arrow-free gaps stay
-    // tight so unconnected columns don't leave a large empty corridor. The
-    // crossing set is precomputed on layout load (m_gap_has_arrow), in the same
+    // Per-gap spacing: gaps with labeled arrows get the full width; gaps crossed
+    // only by unlabeled arrows just need room for the heads; arrow-free gaps stay
+    // tightest so unconnected columns don't leave a large empty corridor. The
+    // gap kinds are precomputed on layout load (m_gap_kinds), in the same
     // ascending column order rebuilt here.
-    auto gap_has_arrow = [&](int g) {
-        return g >= 0 && g < static_cast<int>(m_gap_has_arrow.size()) && m_gap_has_arrow[g];
+    auto gap_kind = [&](int g) {
+        return g >= 0 && g < static_cast<int>(m_gap_kinds.size()) ? m_gap_kinds[g]
+                                                                  : GapKind::kEmpty;
     };
 
-    std::vector<float> col_gaps(static_cast<size_t>(std::max(num_gaps, 0)), COLUMN_GAP);
+    std::vector<float> col_gaps(static_cast<size_t>(std::max(num_gaps, 0)), COLUMN_GAP_NO_ARROW);
     for(int g = 0; g < num_gaps; ++g)
     {
-        if(!gap_has_arrow(g)) col_gaps[g] = COLUMN_GAP_NO_ARROW;
+        switch(gap_kind(g))
+        {
+        case GapKind::kLabeledArrow:   col_gaps[g] = COLUMN_GAP; break;
+        case GapKind::kUnlabeledArrow: col_gaps[g] = COLUMN_GAP_UNLABELED; break;
+        case GapKind::kEmpty:          break;
+        }
     }
 
     // Labels are centred in the gap their arrow runs through (adjacent-column
@@ -1232,19 +1254,19 @@ ComputeMemoryChartView::ComputeLayout(float available_width)
     }
     float natural_w = CHART_PADDING + LEFT_MARGIN + blocks_w + base_gap_sum + CHART_PADDING;
 
-    // Spread leftover width only into arrow-bearing gaps (capped) so the chart
-    // fills wide panels without stretching the tight, arrow-free gaps back open.
-    int arrow_gap_count = 0;
+    // Spread leftover width only into labeled-arrow gaps (capped) so the chart
+    // fills wide panels without stretching the tight gaps back open.
+    int labeled_gap_count = 0;
     for(int g = 0; g < num_gaps; ++g)
     {
-        if(gap_has_arrow(g)) ++arrow_gap_count;
+        if(gap_kind(g) == GapKind::kLabeledArrow) ++labeled_gap_count;
     }
-    if(arrow_gap_count > 0 && available_width > natural_w)
+    if(labeled_gap_count > 0 && available_width > natural_w)
     {
-        float extra = (available_width - natural_w) / static_cast<float>(arrow_gap_count);
+        float extra = (available_width - natural_w) / static_cast<float>(labeled_gap_count);
         for(int g = 0; g < num_gaps; ++g)
         {
-            if(gap_has_arrow(g))
+            if(gap_kind(g) == GapKind::kLabeledArrow)
                 col_gaps[g] = std::max(col_gaps[g], std::min(col_gaps[g] + extra, MAX_COLUMN_GAP));
         }
     }

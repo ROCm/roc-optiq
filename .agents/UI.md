@@ -1737,7 +1737,7 @@ The full list is in `rocprofvis_events.h`. Examples used widely:
 `kHandleUserGraphNavigationEvent`, `kTrackMetadataChanged`,
 `kFontSizeChanged`, `kSetViewRange`,
 `kGoToTimelineSpot`, `kTimeFormatChanged`,
-`kRequestProgressUpdate`, `kProfilerStatusChanged`,
+`kThemeChanged`, `kRequestProgressUpdate`, `kProfilerStatusChanged`,
 `kRemoteStatusChanged`. Compute-only:
 `kComputeWorkloadSelectionChanged`,
 `kComputeKernelSelectionChanged`, `kComputeMetricsFetched`,
@@ -1776,6 +1776,9 @@ through this** - never hardcode `IM_COL32(...)` in feature code.
 
 - `GetUserSettings()` -> `UserSettings` (display, units, "don't ask"
   flags). `ApplyUserSettings(old, save_json)` writes JSON to disk.
+  A change of `use_dark_mode` emits `kThemeChanged` (no payload / no
+  source ID) so widgets that cache palette colors can rebuild. Live
+  `GetColor()` callers do not need to subscribe.
 - `DisplaySettings::show_node_colors` /
   `SettingsManager::ShowNodeColors()` enables node color-coding (only
   when the trace has more than one node). It tints the track's node

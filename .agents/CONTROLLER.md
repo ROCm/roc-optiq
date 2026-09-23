@@ -176,7 +176,7 @@ optional source and sampling-state data do not block the initial ISA display:
 ```c
 rocprofvis_controller_pc_sampling_fetch_isa_lines_async(...); // ISA dependencies + lines
 rocprofvis_controller_pc_sampling_fetch_source_async(...);    // source metadata/correlation/lines
-rocprofvis_controller_pc_sampling_fetch_stalls_async(...);    // states/reasons/instruction samples
+rocprofvis_controller_pc_sampling_fetch_stalls_async(...);    // states/reasons + optional instruction samples
 ```
 
 Two more async surface APIs sit on the controller handle directly,
@@ -923,12 +923,17 @@ source-file metadata, instruction/source mappings, and the requested source
 file's lines. Each instruction/source mapping includes the owning source-file
 UUID so ISA View can switch files for cross-pane navigation. Source file ID 0
 selects the first available source file. The stall fetch independently loads
-PC sample states, stall-reason counts, and
-instruction-sample metadata. Per-table flags on `PcSampling` prevent repeated
-queries while `m_source_line_cache` stores source lines separately by file UUID.
+PC sample states and stall-reason counts. It also loads instruction-sample
+metadata by default for compatibility, unless the caller sets
+`kRPVControllerPcSamplingArgsIncludeInstructionSamples` to zero. ISA View uses
+that opt-out because it does not consume the metadata. Per-table flags on
+`PcSampling` prevent repeated queries while `m_source_line_cache` stores source
+lines separately by file UUID.
 
 Only `kRPVControllerPcSamplingArgsKernelId` is required by the ISA and stall
-entry points. The source entry point additionally requires
+entry points. The stall entry point also accepts the optional
+`kRPVControllerPcSamplingArgsIncludeInstructionSamples` flag, which defaults to
+enabled when omitted. The source entry point additionally requires
 `kRPVControllerPcSamplingArgsSourceFileUuid`; zero selects the first source
 file. `kRPVControllerPcSamplingArgsWorkloadId` remains in the public enum but
 is not read by these controller methods. The View uses its workload ID before
@@ -1375,9 +1380,12 @@ Catch2 tests live in `src/controller/tests/`:
   table from Python, and confirm `table_alloc` is not the UI Event
   Table singleton. Accepts `--input_file`.
 
-The compute controller test currently does not exercise the PC-sampling ABI.
-Changes to the three PC-sampling fetchers or their property bank should add
-coverage for the matching schema-2.2 fixture.
+The compute controller test exercises the PC-sampling stall fetch when its input
+is a schema-2.2 database with ISA data. It verifies that callers can omit
+instruction-sample metadata and that omitting the new argument preserves the
+legacy inclusive behavior. The repository's legacy default fixture has no ISA
+tables, so this case skips unless `--input_file` selects a matching schema-2.2
+fixture.
 
 Both binaries accept `--input_file <path>` (parsed by Catch2 + Clara).
 Logs land in `Testing/Temporary/rocprofvis_controller_*_tests/`.

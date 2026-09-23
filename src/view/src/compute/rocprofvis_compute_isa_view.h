@@ -43,6 +43,7 @@ struct FetchStateType
     bool     queued        = false;
     bool     in_flight     = false;
     bool     loaded        = false;
+    bool     failed        = false;
     uint64_t request_token = 0;
 };
 

@@ -320,10 +320,11 @@ rocprofvis_result_t rocprofvis_controller_pc_sampling_fetch_source_async(
     rocprofvis_controller_future_t* result, rocprofvis_handle_t* output);
 
 /*
- * Fetch PC sample states, stall reasons, and instruction sample metadata for a
- * specific kernel asynchronously.
+ * Fetch PC sample states and stall reasons for a specific kernel asynchronously.
+ * Instruction sample metadata is also fetched unless the optional
+ * kRPVControllerPcSamplingArgsIncludeInstructionSamples argument is zero.
  * @param controller The controller
- * @param args Input arguments (kernel id)
+ * @param args Input arguments (kernel id and optional instruction-sample flag)
  * @param result The future to wait on
  * @param output The PC sampling handle to write to
  * @returns kRocProfVisResultSuccess or an error code.

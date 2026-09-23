@@ -4840,6 +4840,8 @@ DataProvider::FetchPcSampling(const PcSamplingRequestParams& params)
                 m_trace_controller, args, future, pc_handle);
             break;
         case PcSamplingLayer::kStalls:
+            rocprofvis_controller_set_uint64(
+                args, kRPVControllerPcSamplingArgsIncludeInstructionSamples, 0, 0);
             result = rocprofvis_controller_pc_sampling_fetch_stalls_async(
                 m_trace_controller, args, future, pc_handle);
             break;

@@ -115,7 +115,7 @@ constexpr const char* STALL_REASON_TOOLTIP_UNAVAILABLE =
 constexpr const char* STALL_REASON_TOOLTIP_SHARE_DESCRIPTION =
     "Share is calculated from all %s samples classified by the reason data.";
 constexpr const char* STALL_REASON_TOOLTIP_COUNT_MISMATCH =
-    "The reason-data total differs from the stalled-sample count.";
+    "The reason-data total differs from the instruction's total sample count.";
 constexpr const char* STALL_REASON_TOOLTIP_COLUMN_HEADERS[] = { "Reason", "Samples", "Share" };
 constexpr ImGuiTableFlags STALL_REASON_TOOLTIP_TABLE_FLAGS =
     ImGuiTableFlags_SizingFixedFit | ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerV;
@@ -336,6 +336,7 @@ ComputeIsaView::QueuePcSamplingFetch(PcSamplingLayer layer)
 {
     FetchStateType& state = FetchStateFor(layer);
     state.queued           = true;
+    state.failed           = false;
     state.request_token    = ++m_next_request_token;
 }
 
@@ -396,9 +397,13 @@ ComputeIsaView::SubmitPcSamplingFetch(PcSamplingLayer layer)
                                           m_current_kernel_id, source_file_uuid,
                                           m_fetch_generation, state.request_token);
     if(m_data_provider.FetchPcSampling(params))
+    {
         state.in_flight = true;
+    }
     else
-        QueuePcSamplingFetch(layer);
+    {
+        state.failed = true;
+    }
 }
 
 void
@@ -438,8 +443,12 @@ ComputeIsaView::OnPcSamplingReady(PcSamplingLayer layer, uint32_t kernel_id,
         return;
 
     if(result != kRocProfVisResultSuccess)
+    {
+        state.failed = true;
         return;
+    }
 
+    state.failed = false;
     const KernelInfo* kernel_info = m_data_provider.ComputeModel().GetKernelInfo(
         m_current_workload_id, m_current_kernel_id);
     if(!kernel_info)
@@ -571,10 +580,11 @@ ComputeIsaView::Render()
 void
 ComputeIsaView::RenderControlPanel()
 {
-    constexpr const char* hide_source_code_str = "Hide Source Code";
-    constexpr const char* show_source_code_str = "Show Source Code";
-    constexpr const char* show_stalls_str      = "Show Sampling Details";
-    constexpr const char* hide_stalls_str      = "Hide Sampling Details";
+    constexpr const char* hide_source_code_str       = "Hide Source Code";
+    constexpr const char* show_source_code_str       = "Show Source Code";
+    constexpr const char* show_sampling_details_str  = "Show Sampling Details";
+    constexpr const char* hide_sampling_details_str  = "Hide Sampling Details";
+    constexpr const char* retry_sampling_details_str = "Retry Sampling Details";
 
     const float fallbackHeight =
         ImGui::GetFrameHeight() + ImGui::GetStyle().WindowPadding.y * 2.0f;
@@ -594,10 +604,13 @@ ComputeIsaView::RenderControlPanel()
         std::max(ImGui::CalcTextSize(show_source_code_str).x,
                  ImGui::CalcTextSize(hide_source_code_str).x) +
         ImGui::GetStyle().FramePadding.x * 2.0f;
-    const float button_stall_width = std::max(ImGui::CalcTextSize(show_stalls_str).x,
-                                              ImGui::CalcTextSize(hide_stalls_str).x) +
-                                     ImGui::GetStyle().FramePadding.x * 2.0f;
-    const float buttons_width = button_source_code_width + button_stall_width +
+    const float button_sampling_details_width =
+        std::max({ ImGui::CalcTextSize(show_sampling_details_str).x,
+                   ImGui::CalcTextSize(hide_sampling_details_str).x,
+                   ImGui::CalcTextSize(retry_sampling_details_str).x }) +
+        ImGui::GetStyle().FramePadding.x * 2.0f;
+    const float buttons_width = button_source_code_width +
+                                button_sampling_details_width +
                                 ImGui::GetStyle().ItemSpacing.x;
 
     ImGui::SameLine(ImGui::GetContentRegionAvail().x + ImGui::GetCursorPosX() -
@@ -621,15 +634,33 @@ ComputeIsaView::RenderControlPanel()
     }
 
     ImGui::SameLine();
-    if(ImGui::Button(m_show_metadata_enabled ? hide_stalls_str : show_stalls_str))
+    const bool retry_sampling_details = m_show_metadata_enabled && m_stalls.failed;
+    const char* sampling_details_label =
+        retry_sampling_details
+            ? retry_sampling_details_str
+            : (m_show_metadata_enabled ? hide_sampling_details_str
+                                       : show_sampling_details_str);
+    if(ImGui::Button(sampling_details_label))
     {
-        m_show_metadata_enabled = !m_show_metadata_enabled;
-        if(m_show_metadata_enabled && !m_stalls.loaded)
+        if(retry_sampling_details)
+        {
             QueuePcSamplingFetch(PcSamplingLayer::kStalls);
+        }
         else
         {
-            if(!m_show_metadata_enabled) m_stalls.queued = false;
-            RefreshCodeWidgets();
+            m_show_metadata_enabled = !m_show_metadata_enabled;
+            if(m_show_metadata_enabled && !m_stalls.loaded)
+            {
+                QueuePcSamplingFetch(PcSamplingLayer::kStalls);
+            }
+            else
+            {
+                if(!m_show_metadata_enabled)
+                {
+                    m_stalls.queued = false;
+                }
+                RefreshCodeWidgets();
+            }
         }
     }
 
@@ -1350,7 +1381,7 @@ IsaCodeWidget::RenderStallReasonTable(const IsaRow& row)
 
     const std::string classified_count = FormatSampleCount(row.stall_reason_sample_count);
     ImGui::TextDisabled(STALL_REASON_TOOLTIP_SHARE_DESCRIPTION, classified_count.c_str());
-    if(row.stall_reason_sample_count != row.stall_count)
+    if(row.stall_reason_sample_count != row.total_count)
     {
         ImGui::TextDisabled(STALL_REASON_TOOLTIP_COUNT_MISMATCH);
     }
@@ -1409,7 +1440,7 @@ IsaCodeWidget::RenderLine(uint32_t index)
     char offset_text[CODE_OBJECT_OFFSET_TEXT_CAPACITY] = {};
     std::snprintf(offset_text, sizeof(offset_text), CODE_OBJECT_OFFSET_FORMAT,
                   static_cast<unsigned long long>(isa_row.code_object_offset));
-    ImGui::PushID("offset");
+    ImGui::PushID(static_cast<int>(index));
     CopyableTextUnformatted(offset_text, "", COPY_DATA_NOTIFICATION, false, true);
     ImGui::PopID();
 

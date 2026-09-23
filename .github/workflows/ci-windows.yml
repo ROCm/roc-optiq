@@ -317,7 +317,7 @@ jobs:
           Get-ChildItem "${{ env.DIST_DIR }}"
       
       - name: Upload GitHub Artifacts
-        if: ${{ inputs.upload_to_github }}
+        if: inputs.upload_to_github == true || inputs.upload_to_github == 'true'
         uses: actions/upload-artifact@v7
         with:
           name: roc-optiq-windows-${{ matrix.os-version }}-release${{ inputs.artifact_suffix }}
@@ -326,14 +326,14 @@ jobs:
           retention-days: 2
 
       - name: Configure AWS credentials
-        if: ${{ inputs.upload_to_s3 }}
+        if: inputs.upload_to_s3 == true || inputs.upload_to_s3 == 'true'
         uses: aws-actions/configure-aws-credentials@v6
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ secrets.AWS_REGION }}
 
       - name: Upload Build to S3
-        if: ${{ inputs.upload_to_s3 }}
+        if: inputs.upload_to_s3 == true || inputs.upload_to_s3 == 'true'
         run: |
           $timestamp = Get-Date -Format "yyyy_MM_dd"
           if (-not $env:RELEASE_VERSION) {

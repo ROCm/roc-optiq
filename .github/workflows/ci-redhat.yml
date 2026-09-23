@@ -145,7 +145,7 @@ env:
   BUILD_DIR: "build"
   DIST_DIR: "dist"
   BUILD_FILE_NAME: "roc-optiq"
-  ENABLE_INTERNAL_BANNER: ${{ inputs.enable_internal_banner && 'ON' || 'OFF' }}
+  ENABLE_INTERNAL_BANNER: ${{ (inputs.enable_internal_banner == true || inputs.enable_internal_banner == 'true') && 'ON' || 'OFF' }}
   ENABLE_REMOTE: ${{ (inputs.enable_remote == true || inputs.enable_remote == 'true') && 'ON' || 'OFF' }}
   ENABLE_PROFILER: ${{ (inputs.enable_profiler == true || inputs.enable_profiler == 'true') && 'ON' || 'OFF' }}
   ENABLE_AGENTIC_PROFILING: ${{ (inputs.enable_agentic_profiling == true || inputs.enable_agentic_profiling == 'true') && 'ON' || 'OFF' }}
@@ -274,7 +274,7 @@ jobs:
           ls -l ${{ env.DIST_DIR }}/
 
       - name: Upload GitHub Artifacts
-        if: ${{ inputs.upload_to_github }}
+        if: inputs.upload_to_github == true || inputs.upload_to_github == 'true'
         uses: actions/upload-artifact@v7
         with:
           name: roc-optiq-rhel-${{ matrix.os-version }}-release${{ inputs.artifact_suffix }}
@@ -283,20 +283,20 @@ jobs:
           retention-days: 2
       
       - name: Configure AWS credentials
-        if: ${{ inputs.upload_to_s3 }}
+        if: inputs.upload_to_s3 == true || inputs.upload_to_s3 == 'true'
         uses: aws-actions/configure-aws-credentials@v6
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ secrets.AWS_REGION }}
 
       - name: Generate Metadata for S3
-        if: ${{ inputs.upload_to_s3 }}
+        if: inputs.upload_to_s3 == true || inputs.upload_to_s3 == 'true'
         working-directory: ${{ env.DIST_DIR }}
         run: |
           createrepo .
 
       - name: Upload Build to S3
-        if: ${{ inputs.upload_to_s3 }}
+        if: inputs.upload_to_s3 == true || inputs.upload_to_s3 == 'true'
         run: |
           if [ -z "${{ env.RELEASE_VERSION }}" ]; then
             echo "No release version provided, defaulting to using TIMESTAMP as S3_SECONDARY_DIRECTORY"

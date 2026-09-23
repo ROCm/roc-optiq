@@ -353,7 +353,7 @@ jobs:
           ls -l ${{ env.DIST_DIR }}/
 
       - name: Upload GitHub Artifacts
-        if: ${{ inputs.upload_to_github }}
+        if: inputs.upload_to_github == true || inputs.upload_to_github == 'true'
         uses: actions/upload-artifact@v7
         with:
           name: roc-optiq-macos-${{ matrix.os-version }}-release${{ inputs.artifact_suffix }}
@@ -362,14 +362,14 @@ jobs:
           retention-days: 2
       
       - name: Configure AWS credentials
-        if: ${{ inputs.upload_to_s3 }}
+        if: inputs.upload_to_s3 == true || inputs.upload_to_s3 == 'true'
         uses: aws-actions/configure-aws-credentials@v6
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ secrets.AWS_REGION }}
 
       - name: Upload Build to S3
-        if: ${{ inputs.upload_to_s3 }}
+        if: inputs.upload_to_s3 == true || inputs.upload_to_s3 == 'true'
         run: |
           ditto -c -k --keepParent ${{ env.DIST_DIR }}/${{ env.BUILD_FILE_NAME }}.app ${{ env.DIST_DIR }}/${{ env.BUILD_FILE_NAME }}.app.zip
           if [ -z "${{ env.RELEASE_VERSION }}" ]; then

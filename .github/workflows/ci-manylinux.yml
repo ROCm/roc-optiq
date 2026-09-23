@@ -145,7 +145,7 @@ env:
   BUILD_DIR: "build"
   DIST_DIR: "dist"
   BUILD_FILE_NAME: "roc-optiq"
-  ENABLE_INTERNAL_BANNER: ${{ inputs.enable_internal_banner && 'ON' || 'OFF' }}
+  ENABLE_INTERNAL_BANNER: ${{ (inputs.enable_internal_banner == true || inputs.enable_internal_banner == 'true') && 'ON' || 'OFF' }}
   ENABLE_REMOTE: ${{ (inputs.enable_remote == true || inputs.enable_remote == 'true') && 'ON' || 'OFF' }}
   ENABLE_PROFILER: ${{ (inputs.enable_profiler == true || inputs.enable_profiler == 'true') && 'ON' || 'OFF' }}
   ENABLE_AGENTIC_PROFILING: ${{ (inputs.enable_agentic_profiling == true || inputs.enable_agentic_profiling == 'true') && 'ON' || 'OFF' }}
@@ -271,7 +271,7 @@ jobs:
           ls -l ${{ env.DIST_DIR }}/
 
       - name: Upload GitHub Artifacts
-        if: ${{ inputs.upload_to_github }}
+        if: inputs.upload_to_github == true || inputs.upload_to_github == 'true'
         uses: actions/upload-artifact@v7
         with:
           name: roc-optiq-manylinux-release${{ inputs.artifact_suffix }}
@@ -280,7 +280,7 @@ jobs:
           retention-days: 2
 
       - name: Resolve S3 secrets
-        if: ${{ inputs.upload_to_s3 }}
+        if: inputs.upload_to_s3 == true || inputs.upload_to_s3 == 'true'
         run: |
           case "${{ inputs.s3_bucket_env }}" in
             dev)
@@ -315,14 +315,14 @@ jobs:
           esac
 
       - name: Configure AWS credentials
-        if: ${{ inputs.upload_to_s3 }}
+        if: inputs.upload_to_s3 == true || inputs.upload_to_s3 == 'true'
         uses: aws-actions/configure-aws-credentials@v6
         with:
           role-to-assume: ${{ env.S3_ROLE_ARN }}
           aws-region: ${{ secrets.AWS_REGION }}
 
       - name: Upload DEB to S3
-        if: ${{ inputs.upload_to_s3 }}
+        if: inputs.upload_to_s3 == true || inputs.upload_to_s3 == 'true'
         run: |
           DEB_SRC=$(ls ${{ env.DIST_DIR }}/*.deb | head -1)
           DEB_NAME="amdrocm${ROCM_VERSION}-$(basename "${DEB_SRC}")"
@@ -333,7 +333,7 @@ jobs:
             --no-progress
 
       - name: Generate DEB Metadata for S3
-        if: ${{ inputs.upload_to_s3 }}
+        if: inputs.upload_to_s3 == true || inputs.upload_to_s3 == 'true'
         run: |
           DEB_SRC=$(ls ${{ env.DIST_DIR }}/*.deb | head -1)
           DEB_NAME="amdrocm${ROCM_VERSION}-$(basename "${DEB_SRC}")"
@@ -373,7 +373,7 @@ jobs:
             --no-progress
 
       - name: Upload RPM to S3
-        if: ${{ inputs.upload_to_s3 }}
+        if: inputs.upload_to_s3 == true || inputs.upload_to_s3 == 'true'
         run: |
           RPM_SRC=$(ls ${{ env.DIST_DIR }}/*.rpm | head -1)
           RPM_NAME="amdrocm${ROCM_VERSION}-$(basename "${RPM_SRC}" | sed 's/\.el[0-9]\+//')"
@@ -384,7 +384,7 @@ jobs:
             --no-progress
 
       - name: Generate RPM Metadata for S3
-        if: ${{ inputs.upload_to_s3 }}
+        if: inputs.upload_to_s3 == true || inputs.upload_to_s3 == 'true'
         run: |
           mkdir -p rpm-repo
           cp ${{ env.DIST_DIR }}/*.rpm rpm-repo/
@@ -394,7 +394,7 @@ jobs:
             --no-progress
 
       - name: Upload Tarball to S3
-        if: ${{ inputs.upload_to_s3 }}
+        if: inputs.upload_to_s3 == true || inputs.upload_to_s3 == 'true'
         run: |
           TGZ_SRC=$(ls ${{ env.DIST_DIR }}/*.tar.gz | head -1)
           TGZ_NAME="amdrocm${ROCM_VERSION}-$(basename "${TGZ_SRC}")"

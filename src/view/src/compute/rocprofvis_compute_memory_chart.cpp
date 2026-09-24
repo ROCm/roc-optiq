@@ -53,8 +53,10 @@ static constexpr float MIN_TITLE_ONLY_WIDTH = 96.0f;  // Blocks with no metric r
 static constexpr float MAX_BLOCK_WIDTH   = 400.0f;
 static constexpr float MIN_BLOCK_HEIGHT  = 96.0f;
 static constexpr float EMPTY_BODY_H      = 40.0f;
+static constexpr float LABEL_ONLY_PAD_Y  = 14.0f;   // Title padding of a label-only block outside row 0.
 static constexpr float MIN_TARGET_HEIGHT = 460.0f;  // Floor for the common column height (row 0 only).
-static constexpr float INTER_ROW_GAP     = 140.0f;  // Vertical corridor between stacked row bands (for inter-row arrows/labels).
+static constexpr float INTER_ROW_MIN_GAP = 40.0f;   // Corridor between row bands with no labels in it.
+static constexpr float INTER_ROW_LABEL_PAD = 12.0f; // Corridor space above/below its label stack.
 static constexpr float ROW_VERT_STEP     = 16.0f;   // Horizontal pitch between fanned vertical inter-row connectors.
 static constexpr float ROW_ELBOW_STUB    = 18.0f;   // Vertical stub off a block before a cross-column inter-row elbow turns.
 static constexpr float GROUP_HEADER      = 26.0f;  // Title band of a group box.
@@ -89,8 +91,7 @@ static constexpr float HEADER_SEP_THICKNESS   = 1.0f;   // Thickness of the head
 static constexpr float ARROW_THICKNESS   = 2.5f;
 static constexpr float ARROW_HEAD_SIZE   = 8.0f;
 static constexpr float ARROW_LABEL_ABOVE = 4.0f;
-static constexpr float ARROW_VERT_SPACE  = 32.0f;  // Vertical pitch between fanned arrows/labels.
-static constexpr float ARROW_LABEL_VPAD  = 6.0f;   // Extra per-label room when sizing block height.
+static constexpr float LABEL_STACK_GAP   = 4.0f;   // Gap between fanned/stacked label boxes.
 static constexpr float ARROW_DASH_LENGTH = 6.0f;
 static constexpr float ARROW_DASH_GAP    = 4.0f;
 static constexpr float LANE_GAP          = 20.0f;
@@ -954,6 +955,13 @@ ComputeMemoryChartView::MeasureBlock(MemChartBlock& block) const
     float min_width = block.content.empty() ? MIN_TITLE_ONLY_WIDTH : MIN_BLOCK_WIDTH;
     block.w         = std::min(std::max(width, min_width), MAX_BLOCK_WIDTH);
 
+    // Only row 0 stretches, so a label-only block elsewhere just fits its title.
+    if(block.content.empty() && block.row != 0)
+    {
+        block.h = ImGui::GetTextLineHeight() + LABEL_ONLY_PAD_Y * 2.0f;
+        return;
+    }
+
     float body = block.content.empty()
                      ? EMPTY_BODY_H
                      : static_cast<float>(block.content.size()) * ROW_HEIGHT;
@@ -1026,6 +1034,20 @@ SkipLanePitch()
 {
     return std::max(LANE_GAP,
                     ImGui::GetTextLineHeight() + ARROW_LABEL_ABOVE + SKIP_LANE_LABEL_PAD);
+}
+
+// Pitch between fanned arrows or stacked labels: one label box plus a gap.
+static float
+ArrowFanPitch()
+{
+    return ImGui::GetTextLineHeight() + LABEL_PAD_Y * 2.0f + LABEL_STACK_GAP;
+}
+
+// Order-independent key for the pair of blocks an arrow joins.
+static std::pair<uint32_t, uint32_t>
+BlockPairKey(const MemChartBlock& a, const MemChartBlock& b)
+{
+    return {std::min(a.id, b.id), std::max(a.id, b.id)};
 }
 
 // Vertical room `lanes` highway lanes occupy below their row band.
@@ -1143,12 +1165,11 @@ ComputeMemoryChartView::ComputeLayout(float available_width)
                 exit_anchored[left->id]++;
         }
 
-        // Height to stack n fanned arrows (slot = max of connector pitch, label).
-        auto required_arrow_height = [](int n) -> float {
+        // Height to fan n arrows, one label slot each.
+        const float fan_pitch = ArrowFanPitch();
+        auto required_arrow_height = [fan_pitch](int n) -> float {
             if(n < 2) return 0.0f;
-            float slot = std::max(ARROW_VERT_SPACE,
-                                  ImGui::GetTextLineHeight() + ARROW_LABEL_ABOVE + ARROW_LABEL_VPAD);
-            return HeaderHeight() + BLOCK_BODY_TOP + static_cast<float>(n) * slot +
+            return HeaderHeight() + BLOCK_BODY_TOP + static_cast<float>(n) * fan_pitch +
                    BLOCK_TEXT_PAD;
         };
 
@@ -1324,15 +1345,72 @@ ComputeMemoryChartView::ComputeLayout(float available_width)
         }
     }
 
+    // Corridor below each band: fits the label stack of same-column links to the
+    // next band and the turns of cross-column elbows leaving through it.
+    std::vector<int32_t> row_keys;  // ascending, one per band
+    for(const std::pair<const int32_t, float>& row : row_height)
+    {
+        row_keys.push_back(row.first);
+    }
+    std::vector<float> corridor_h(row_keys.size(), INTER_ROW_MIN_GAP);
+    {
+        auto band_of = [&row_keys](int32_t row) -> int {
+            return static_cast<int>(std::lower_bound(row_keys.begin(), row_keys.end(), row) -
+                                    row_keys.begin());
+        };
+
+        std::map<std::pair<uint32_t, uint32_t>, int> stack_counts;  // labelled links per block pair
+        std::map<std::pair<uint32_t, bool>, int>     side_counts;   // elbow ports per (target, enters-right)
+        for(const MemChartArrow& arrow : m_layout.arrows)
+        {
+            const MemChartBlock* from = Block(arrow.from);
+            const MemChartBlock* to   = Block(arrow.to);
+            if(!from || !to || from->row == to->row) continue;
+            if(from->column != to->column)
+            {
+                side_counts[{to->id, from->column > to->column}]++;
+            }
+            else if(!arrow.cached_label.empty())
+            {
+                stack_counts[BlockPairKey(*from, *to)]++;
+            }
+        }
+
+        const float fan_pitch = ArrowFanPitch();
+        for(const std::pair<const std::pair<uint32_t, uint32_t>, int>& stack : stack_counts)
+        {
+            int band_a = band_of(Block(stack.first.first)->row);
+            int band_b = band_of(Block(stack.first.second)->row);
+            int upper  = std::min(band_a, band_b);
+            if(std::max(band_a, band_b) != upper + 1) continue;  // label lands in a band, not a corridor
+            float stack_h = static_cast<float>(stack.second) * fan_pitch - LABEL_STACK_GAP;
+            corridor_h[upper] = std::max(corridor_h[upper], stack_h + INTER_ROW_LABEL_PAD * 2.0f);
+        }
+
+        // Elbow runs stub out one ROW_VERT_STEP further per port on their target.
+        for(const MemChartArrow& arrow : m_layout.arrows)
+        {
+            const MemChartBlock* from = Block(arrow.from);
+            const MemChartBlock* to   = Block(arrow.to);
+            if(!from || !to || from->row == to->row || from->column == to->column) continue;
+            int   ports    = side_counts[{to->id, from->column > to->column}];
+            int   src      = band_of(from->row);
+            int   corridor = to->row > from->row ? src : src - 1;
+            float run_h    = ROW_ELBOW_STUB * 2.0f + static_cast<float>(ports - 1) * ROW_VERT_STEP;
+            corridor_h[corridor] = std::max(corridor_h[corridor], run_h);
+        }
+    }
+
     // Stack bands top-to-bottom (negative rows above row 0): each band, then its
-    // highway lanes, then an INTER_ROW_GAP corridor before the next band.
+    // highway lanes, then its corridor.
     std::map<int32_t, float> row_y;
     {
         float cursor_y = CHART_PADDING;
-        for(std::pair<const int32_t, float>& row : row_height)
+        for(size_t band = 0; band < row_keys.size(); ++band)
         {
-            row_y[row.first] = cursor_y;
-            cursor_y += row.second + row_skip_reserve[row.first] + INTER_ROW_GAP;
+            int32_t row = row_keys[band];
+            row_y[row]  = cursor_y;
+            cursor_y += row_height[row] + row_skip_reserve[row] + corridor_h[band];
         }
     }
 
@@ -1629,8 +1707,8 @@ ComputeMemoryChartView::BuildArrowRoutes(std::vector<ArrowRoute>& routes) const
     routes.reserve(m_layout.arrows.size());
 
     // Vertical position of the k-th of `count` ports inside a block's body.
-    auto fan_y = [](const MemChartBlock& b, float frac, int count,
-                    float pitch = ARROW_VERT_SPACE) -> float {
+    const float fan_pitch = ArrowFanPitch();
+    auto fan_y = [](const MemChartBlock& b, float frac, int count, float pitch) -> float {
         // A label-only block has no header/body split (its title is centred in the
         // whole box), so span the full box; otherwise ports sit in the body below
         // the header.
@@ -1752,7 +1830,7 @@ ComputeMemoryChartView::BuildArrowRoutes(std::vector<ArrowRoute>& routes) const
             {
                 float frac = n > 1 ? static_cast<float>(k) / static_cast<float>(n - 1)
                                    : 0.5f;
-                out[PortKey(ports[k].arrow, ports[k].at_from)] = fan_y(*block, frac, n);
+                out[PortKey(ports[k].arrow, ports[k].at_from)] = fan_y(*block, frac, n, fan_pitch);
             }
         }
     };
@@ -1893,6 +1971,10 @@ ComputeMemoryChartView::BuildArrowRoutes(std::vector<ArrowRoute>& routes) const
         };
         std::map<std::pair<uint32_t, bool>, std::vector<EdgePort>> src_ports;   // (block, exits-bottom)
         std::map<std::pair<uint32_t, bool>, std::vector<EdgePort>> side_ports;  // (target, enters-right)
+        // Labelled same-column links between the same blocks share a midpoint, so
+        // their labels stack there: slot k of n per block pair.
+        std::unordered_map<size_t, int>              stack_k_of;
+        std::map<std::pair<uint32_t, uint32_t>, int> stack_n_of;
 
         for(size_t index : inter_row)
         {
@@ -1906,6 +1988,10 @@ ComputeMemoryChartView::BuildArrowRoutes(std::vector<ArrowRoute>& routes) const
             {
                 bool enters_right = from->MidX() > to->MidX();
                 side_ports[{to->id, enters_right}].push_back({index, from->MidY()});
+            }
+            else if(!arrow.cached_label.empty())
+            {
+                stack_k_of[index] = stack_n_of[BlockPairKey(*from, *to)]++;
             }
         }
 
@@ -1974,7 +2060,16 @@ ComputeMemoryChartView::BuildArrowRoutes(std::vector<ArrowRoute>& routes) const
                 std::pair<float, float> to_pt = (to == upper)
                                                     ? std::make_pair(src_x, upper_y)
                                                     : std::make_pair(src_x, lower_y);
-                make_route(arrow, {from_pt, to_pt}, src_x, (upper_y + lower_y) * 0.5f);
+                float mid_y = (upper_y + lower_y) * 0.5f;
+                make_route(arrow, {from_pt, to_pt}, src_x, mid_y);
+                std::unordered_map<size_t, int>::const_iterator k = stack_k_of.find(index);
+                if(k != stack_k_of.end())
+                {
+                    float       n     = static_cast<float>(stack_n_of[BlockPairKey(*from, *to)]);
+                    float       slot  = static_cast<float>(k->second) - (n - 1.0f) * 0.5f;
+                    ArrowRoute& route = routes.back();
+                    route.label_y     = mid_y + slot * fan_pitch - route.label_h * 0.5f;
+                }
                 continue;
             }
 

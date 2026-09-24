@@ -41,6 +41,15 @@ To generate profiling data in a compatible format, run the CLI analysis with the
 
 When you open a ROCm Compute Profiler analysis database file, you can view its data populated in :ref:`analysis-summary`, :ref:`kernel-details`, :ref:`analysis-table`, :ref:`analysis-workload`, and :ref:`baseline-comparison`.
 
+.. _select-workload-kernel:
+
+Select a workload and kernel
+============================
+
+Use the **Workload** and **Kernel** drop-downs at the top of the compute views to choose which workload and kernel the views use. Changing either drop-down updates **Summary View**, **Kernel Details** (including the Memory Chart, System Speed-of-Light, and Kernel Roofline Chart), **Table View**, and **Baseline Comparison**.
+
+You can also select a kernel from the **Kernel Selection Table**. That selection updates the same kernel-level views.
+
 .. _analysis-summary:
 
 Summary View
@@ -85,8 +94,6 @@ The bar chart displays per-kernel metrics including the number of invocations, a
    :align: center
    :alt: Summary View bar chart displaying per-kernel invocation count and duration metrics
 
-Selected kernels are highlighted in both charts.
-
 Summary View -- Roofline Chart
 ------------------------------
 
@@ -98,11 +105,15 @@ Showing where kernels are positioned relative to these rooflines helps determine
    :align: center
    :alt: Summary View roofline chart plotting kernel arithmetic intensity against performance relative to hardware memory and compute ceilings
 
-- The kernel performance at each cache level is displayed as individual dots in the roofline chart. The size of each dot represents the kernel's duration. 
+- The kernel performance at each cache level is displayed as individual dots in the roofline chart. When **Scale kernel marker size to duration** is enabled, the size of each dot represents the kernel's duration. 
 - Click |gear| in the menu to show or hide rooflines or arithmetic intensity points. 
 - Hold your cursor over a dot to view detailed information about the kernel it represents. The information includes the Kernel name, Invocation(s), Duration, Arithmetic Intensity, and Performance. 
-- Use presets to display information specific to a particular data type. 
-- Select a kernel, a memory-level line (L1, L2, high bandwidth memory (HBM), or local data share (LDS)), or a bandwidth peak from the dropdown menus to filter the chart to that selection.
+- Use the filter drop-downs to show or hide groups of chart elements together, instead of toggling them one by one in the custom section:
+
+  - **Compute Peak**: Enables ceilings of a specific precision.
+  - **Bandwidth Peak**: Enables ceilings of a specific cache or memory level.
+  - **Kernel**: Enables kernel markers for a specific kernel.
+  - **Kernel Bandwidth**: Enables kernel markers for a specific cache or memory level.
 - Use the Roofline **Legend/Menu position** control options to reposition the Roofline Legend/Menu. The options include: 
 
   - Inside, Top Left
@@ -119,7 +130,7 @@ Showing where kernels are positioned relative to these rooflines helps determine
 Summary View -- System Speed-of-Light
 -------------------------------------
 
-- Provides an aggregated, system-level summary of key performance and hardware utilization metrics across all kernels, highlighting utilization relative to architectural peak capabilities. 
+- Provides an aggregated, system-level summary of key performance and hardware utilization metrics across all kernels within the selected workload, highlighting utilization relative to architectural peak capabilities. 
 - The Summary View -- System Speed-of-Light table includes the following columns: **Metric ID**, **Metric Name**, **Average Value**, **Peak, Percent-of-Peak**, and **Unit**. 
 - Metrics are aggregated across kernels to reflect overall application behavior rather than per-kernel performance. 
 - Use the **Percent-of-Peak** column to quickly identify whether execution is limited. Execution could be limited by compute, memory, or other hardware subsystems. 
@@ -140,27 +151,29 @@ Kernel Details
 Kernel Details -- Kernel Selection Table
 ----------------------------------------
 
-The **Kernel Selection Table** displays kernel information, including names and GPU metrics.  
+The **Kernel Selection Table** displays kernel information, including names and GPU metrics.
 
 .. image:: ../images/kernel-selection-table.png
    :width: 800
    :align: center
-   :alt: Kernel Selection Table displaying kernel names and GPU metrics with per-column search boxes and bar chart visualizations
+   :alt: Kernel Selection Table displaying kernel names and GPU metrics with per-column text inputs and bar chart visualizations
 
-- Click **Add Metric** to select additional GPU metrics as columns. 
-- The search box below each column's header allows you to enter statements to filter the data, enabling targeted analysis. Click **Apply Filters** to execute. You can search for a kernel by name or metric equation.  
+- Click **Add Metric** to select additional GPU metrics as columns.
+- Enter a condition in the text input below each column header to filter the data. Click **Apply Filters** to run the filters.
 
-  - For the **Name** column, use this format: ``LIKE %text%``. 
-  - For all other metrics, use: ``>,<,=,>=,<=,!= number``. For example, ``metricA>threshold``. 
-  - You can combine multiple filters to narrow down the analysis. 
+  - For the **Name** column, use this format: ``LIKE %text%``.
+  - For all other columns, use ``>``, ``<``, ``=``, ``>=``, ``<=``, or ``!=`` followed by a number. For example, ``metricA>threshold``.
+  - Combine multiple filters to narrow the analysis.
 
-- The Duration column enables you to sort (ascending or descending).  
-- Selecting a kernel through the **Kernel Selection Table** or kernel selector drop-down updates the Memory Chart, System Speed-of-Light, Kernel-level Roofline Analysis, and Table View accordingly. 
-- You can hide this table by clicking |hideTable| to maximize space for charts.
-- To show or hide bar charts for metric values in the **Kernel Selection Table**, select **Show Bar Charts** or **Hide Bar Charts**.  
-- To show or hide bar charts for a specific metric, right-click the metric's column header and select **Show Bar Chart** or **Hide Bar Charts**. 
-- Hover over a clipped kernel name to view the full name in a tooltip. 
-- You can right-click a row or cell of **Kernel Selection Table** to **Copy Row Data** or **Copy Cell Data**. 
+- Click a column header to sort the table in ascending or descending order.
+- Select a kernel in the **Kernel Selection Table** or the **Kernel** drop-down to update the Memory Chart, System Speed-of-Light, Kernel Roofline Chart, and Table View.
+- Click |hideTable| to hide the table and maximize space for charts.
+- Select **Show Bar Charts** or **Hide Bar Charts** to show or hide bar charts for metric values.
+
+  - Right-click a metric column header and select **Show Bar Chart** or **Hide Bar Charts** to show or hide the bar chart for that metric.
+
+- Hover over a clipped kernel name to view the full name in a tooltip.
+- Right-click a row or cell to **Copy Row Data** or **Copy Cell Data**. 
 
 Kernel Details -- Memory Chart
 ------------------------------
@@ -176,7 +189,7 @@ Each cache or memory block presents its associated counter values and derived me
 
 This visual diagram displays counter values and calculations to help you understand which cache level each memory transaction corresponds to and how they interact.  
 
-Select a kernel in the **Kernel Selection Table** or the kernel selector drop-down to view the memory chart of the selected kernel. 
+Select a kernel in the **Kernel Selection Table** or the **Kernel** drop-down to view the memory chart of the selected kernel. See :ref:`select-workload-kernel`. 
 
 Kernel Details -- System Speed-of-Light 
 ---------------------------------------
@@ -276,7 +289,12 @@ You can also compare two kernels within the same workload.
    :align: center
    :alt: Baseline Comparison view showing a side-by-side metric table with baseline, target, delta, and percentage-change columns color-coded for quick identification
 
-Choose how metrics are displayed by selecting **Show Common Metrics** or **Show All Metrics**. You can also pin metrics for focused analysis. Pinned metrics can be persisted across sessions (See :ref:`presets` for more information).
+When you compare workloads from different GPU architectures, some metrics may exist on one architecture and not the other. Choose how those metrics are displayed:
+
+- **Show Common Metrics**: Shows only metrics that exist in both the baseline and the target. Hides unmatched metrics.
+- **Show All Metrics**: Shows all metrics, including unmatched ones.
+
+You can also pin metrics for focused analysis. Pinned metrics can be persisted across sessions (See :ref:`presets` for more information).
 
 For each metric, **Baseline Comparison** shows: 
 

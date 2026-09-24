@@ -304,8 +304,8 @@ This section provides an interface for multiple data perspectives, offering gran
 
 - **Event Table**: Displays all events within the selected tracks. You can refine your analysis by applying a time-range selection or using the table filters. The **Event Table** provides two filter modes:
 
-  - **Basic mode**: Provides simplified per-column controls. You can filter by category, name, or metric equation.
-  - **Advanced mode**: Provides advanced filters to narrow the table. Use the **Group by** drop-down to group **Event Table** results by a selected field (Category, Name, Stream, Queue, Node, PID, or TID). In **Filter**, enter SQL-like statements to narrow the results. For example, ``duration > 2000`` displays all events greater than 2000 ns. Time columns are compared in nanoseconds (ns); other time units do not filter correctly. Click **Submit** to apply an advanced filter.
+  - **Basic mode**: Provides a text input below each column header. Enter a condition to filter the data.
+  - **Advanced mode**: Provides advanced filters to narrow the table. Use the **Group by** drop-down to group **Event Table** results by an available field. The fields depend on the selected track type (for example, Category, Name, Stream, Queue, Node, PID, or TID). In **Filter**, enter SQL-like statements to narrow the results. For example, ``duration > 2000`` displays all events greater than 2000 ns. Time columns are compared in nanoseconds (ns); other time units do not filter correctly. Click **Submit** to apply an advanced filter.
 
   .. image:: ../images/advanced.png
     :width: 800
@@ -331,7 +331,7 @@ This section provides an interface for multiple data perspectives, offering gran
   - You can right-click a row or cell of **Track Details** to **Copy Row Data** or **Copy Cell Data**. 
 
 - **Annotations**: Displays user-created annotations, enabling easier navigation across critical points within large traces, enhancing collaboration and knowledge sharing. See :ref:`annotation` for more info.
-- **Top Events**: Provides analysis for the events of each operation type (Instrumented Thread, Sampled Thread, Dispatch, Memory Allocation, Memory Copy) from the selected tracks aggregated by event name. Available metrics are event count (invocations) and total/average/min/max duration. If you select tracks of different types, each type will be shown in a separate table. 
+- **Top Events**: Provides analysis for the events of each operation type (Instrumented Thread, Sampled Thread, Dispatch, Memory Allocation, Memory Copy) from the selected tracks aggregated by event name. Available metrics include event count (invocations) and duration statistics (for example, total, average, min, and max). If you select tracks of different types, each type will be shown in a separate table. 
 
   .. image:: ../images/top-events.png
      :width: 600

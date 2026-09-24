@@ -20,6 +20,7 @@
 #include <cstdio>
 #include <cstring>
 #include <fstream>
+#include <functional>
 #include <iterator>
 #include <map>
 #include <optional>
@@ -595,16 +596,28 @@ ComputeMemoryChartView::LoadWorkloadLayout(uint32_t workload_id)
 void
 ComputeMemoryChartView::OnLayoutLoaded()
 {
-    // Sort by column/order before indexing: ComputeLayout and PositionBlock must
-    // not move these objects, or m_block_by_id pointers would dangle.
+    // Sort by column/order before resolving: ComputeLayout and PositionBlock must
+    // not move these objects, or the arrows' endpoint pointers would dangle.
     SortLayoutBlocks(m_layout.blocks);
 
-    // Rebuild the id -> block index (pointers into m_layout, valid until the next
-    // layout load). Nested ids are first-class arrow endpoints.
-    m_block_by_id.clear();
-    ForEachBlock(m_layout.blocks, [this](MemChartBlock& block) {
-        m_block_by_id[block.id] = &block;
+    // Resolve each arrow's endpoint ids to blocks once (pointers into m_layout,
+    // valid until the next layout load), so layout and routing never look ids
+    // up. Nested ids are first-class arrow endpoints. The parser already
+    // rejected unknown ids; a miss here just leaves the pointer null.
+    std::unordered_map<std::string, const MemChartBlock*> block_by_id;
+    ForEachBlock(m_layout.blocks, [&block_by_id](MemChartBlock& block) {
+        block_by_id[block.id] = &block;
     });
+    auto find_block = [&block_by_id](const std::string& id) -> const MemChartBlock* {
+        std::unordered_map<std::string, const MemChartBlock*>::const_iterator it =
+            block_by_id.find(id);
+        return it != block_by_id.end() ? it->second : nullptr;
+    };
+    for(MemChartArrow& arrow : m_layout.arrows)
+    {
+        arrow.from_block = find_block(arrow.from);
+        arrow.to_block   = find_block(arrow.to);
+    }
 
     // Children inherit their top-level ancestor's column/row. PositionBlock does
     // this too, but RebuildColumnGaps and the ComputeLayout pre-pass run first.
@@ -642,8 +655,8 @@ ComputeMemoryChartView::RebuildColumnGaps()
 
     for(const MemChartArrow& arrow : m_layout.arrows)
     {
-        const MemChartBlock* from = Block(arrow.from);
-        const MemChartBlock* to   = Block(arrow.to);
+        const MemChartBlock* from = arrow.from_block;
+        const MemChartBlock* to   = arrow.to_block;
         if(!from || !to) continue;
 
         // A gap takes the roomiest kind of any arrow crossing it.
@@ -758,14 +771,6 @@ ComputeMemoryChartView::ColorFromKind(MemChartColorKind kind) const
     case MemChartColorKind::kNeutral:
     default:                        return m_colors.text_main;
     }
-}
-
-const MemChartBlock*
-ComputeMemoryChartView::Block(uint32_t id) const
-{
-    std::unordered_map<uint32_t, const MemChartBlock*>::const_iterator it =
-        m_block_by_id.find(id);
-    return it != m_block_by_id.end() ? it->second : nullptr;
 }
 
 // Category and table ids (leading segments) of a dotted metric id
@@ -994,7 +999,7 @@ ComputeMemoryChartView::PositionBlock(MemChartBlock& block, float x, float y, fl
     m_group_boxes.push_back(box);
 
     // Children were sorted once in OnLayoutLoaded; do not reorder the vector
-    // here — m_block_by_id holds pointers into it.
+    // here — the arrows' resolved endpoints point into it.
     float inner_x       = x + GROUP_PAD;
     float inner_w       = w - GROUP_PAD * 2.0f;
     float inner_room    = std::max(h - GROUP_HEADER - GROUP_PAD * 2.0f, 1.0f);
@@ -1043,11 +1048,14 @@ ArrowFanPitch()
     return ImGui::GetTextLineHeight() + LABEL_PAD_Y * 2.0f + LABEL_STACK_GAP;
 }
 
-// Order-independent key for the pair of blocks an arrow joins.
-static std::pair<uint32_t, uint32_t>
+using BlockPair = std::pair<const MemChartBlock*, const MemChartBlock*>;
+
+// Order-independent key for the pair of blocks an arrow joins. std::less gives
+// a total order even for blocks in different (nested) child vectors.
+static BlockPair
 BlockPairKey(const MemChartBlock& a, const MemChartBlock& b)
 {
-    return {std::min(a.id, b.id), std::max(a.id, b.id)};
+    return std::less<const MemChartBlock*>()(&a, &b) ? BlockPair(&a, &b) : BlockPair(&b, &a);
 }
 
 // Vertical room `lanes` highway lanes occupy below their row band.
@@ -1071,8 +1079,8 @@ ComputeMemoryChartView::CollectSkipSpans(
     for(size_t i = 0; i < m_layout.arrows.size(); ++i)
     {
         const MemChartArrow& arrow = m_layout.arrows[i];
-        const MemChartBlock* from  = Block(arrow.from);
-        const MemChartBlock* to    = Block(arrow.to);
+        const MemChartBlock* from  = arrow.from_block;
+        const MemChartBlock* to    = arrow.to_block;
         if(!from || !to || from->row != to->row) continue;
         int32_t dcol = to->column - from->column;
         if(dcol >= -1 && dcol <= 1) continue;
@@ -1139,12 +1147,12 @@ ComputeMemoryChartView::ComputeLayout(float available_width)
             cell_counts[{block.row, block.column}]++;
         });
 
-        std::map<uint32_t, int> entry_anchored;  // arrows entering from the left
-        std::map<uint32_t, int> exit_anchored;   // arrows leaving to the right
+        std::map<const MemChartBlock*, int> entry_anchored;  // arrows entering from the left
+        std::map<const MemChartBlock*, int> exit_anchored;   // arrows leaving to the right
         for(const MemChartArrow& arrow : m_layout.arrows)
         {
-            const MemChartBlock* from = Block(arrow.from);
-            const MemChartBlock* to   = Block(arrow.to);
+            const MemChartBlock* from = arrow.from_block;
+            const MemChartBlock* to   = arrow.to_block;
             if(!from || !to) continue;
             if(from->row != to->row) continue;    // inter-row arrows fan vertically, not here
             int32_t dcol = to->column - from->column;
@@ -1152,17 +1160,17 @@ ComputeMemoryChartView::ComputeLayout(float available_width)
             // both of its ends claim an exit port on their own block.
             if(dcol == 0)
             {
-                exit_anchored[from->id]++;
-                exit_anchored[to->id]++;
+                exit_anchored[from]++;
+                exit_anchored[to]++;
                 continue;
             }
             if(dcol != 1 && dcol != -1) continue;  // skip-column arrows use the highways
             const MemChartBlock* left  = from->column < to->column ? from : to;
             const MemChartBlock* right = from->column < to->column ? to : from;
             if(cell_counts[{right->row, right->column}] > 1)
-                entry_anchored[right->id]++;
+                entry_anchored[right]++;
             else
-                exit_anchored[left->id]++;
+                exit_anchored[left]++;
         }
 
         // Height to fan n arrows, one label slot each.
@@ -1175,7 +1183,7 @@ ComputeMemoryChartView::ComputeLayout(float available_width)
 
         for(MemChartBlock& block : m_layout.blocks)
         {
-            int n    = std::max(entry_anchored[block.id], exit_anchored[block.id]);
+            int n    = std::max(entry_anchored[&block], exit_anchored[&block]);
             block.h  = std::max(block.h, required_arrow_height(n));
         }
     }
@@ -1235,8 +1243,8 @@ ComputeMemoryChartView::ComputeLayout(float available_width)
     // widest label box - which scales with the font - plus clearance for heads.
     for(const MemChartArrow& arrow : m_layout.arrows)
     {
-        const MemChartBlock* from = Block(arrow.from);
-        const MemChartBlock* to   = Block(arrow.to);
+        const MemChartBlock* from = arrow.from_block;
+        const MemChartBlock* to   = arrow.to_block;
         if(!from || !to || from->column == to->column) continue;
         int32_t dcol = to->column - from->column;
         if(from->row == to->row && dcol != 1 && dcol != -1) continue;  // highway label
@@ -1359,16 +1367,16 @@ ComputeMemoryChartView::ComputeLayout(float available_width)
                                     row_keys.begin());
         };
 
-        std::map<std::pair<uint32_t, uint32_t>, int> stack_counts;  // labelled links per block pair
-        std::map<std::pair<uint32_t, bool>, int>     side_counts;   // elbow ports per (target, enters-right)
+        std::map<BlockPair, int>                             stack_counts;  // labelled links per block pair
+        std::map<std::pair<const MemChartBlock*, bool>, int> side_counts;   // elbow ports per (target, enters-right)
         for(const MemChartArrow& arrow : m_layout.arrows)
         {
-            const MemChartBlock* from = Block(arrow.from);
-            const MemChartBlock* to   = Block(arrow.to);
+            const MemChartBlock* from = arrow.from_block;
+            const MemChartBlock* to   = arrow.to_block;
             if(!from || !to || from->row == to->row) continue;
             if(from->column != to->column)
             {
-                side_counts[{to->id, from->column > to->column}]++;
+                side_counts[{to, from->column > to->column}]++;
             }
             else if(!arrow.cached_label.empty())
             {
@@ -1377,10 +1385,10 @@ ComputeMemoryChartView::ComputeLayout(float available_width)
         }
 
         const float fan_pitch = ArrowFanPitch();
-        for(const std::pair<const std::pair<uint32_t, uint32_t>, int>& stack : stack_counts)
+        for(const std::pair<const BlockPair, int>& stack : stack_counts)
         {
-            int band_a = band_of(Block(stack.first.first)->row);
-            int band_b = band_of(Block(stack.first.second)->row);
+            int band_a = band_of(stack.first.first->row);
+            int band_b = band_of(stack.first.second->row);
             int upper  = std::min(band_a, band_b);
             if(std::max(band_a, band_b) != upper + 1) continue;  // label lands in a band, not a corridor
             float stack_h = static_cast<float>(stack.second) * fan_pitch - LABEL_STACK_GAP;
@@ -1390,10 +1398,10 @@ ComputeMemoryChartView::ComputeLayout(float available_width)
         // Elbow runs stub out one ROW_VERT_STEP further per port on their target.
         for(const MemChartArrow& arrow : m_layout.arrows)
         {
-            const MemChartBlock* from = Block(arrow.from);
-            const MemChartBlock* to   = Block(arrow.to);
+            const MemChartBlock* from = arrow.from_block;
+            const MemChartBlock* to   = arrow.to_block;
             if(!from || !to || from->row == to->row || from->column == to->column) continue;
-            int   ports    = side_counts[{to->id, from->column > to->column}];
+            int   ports    = side_counts[{to, from->column > to->column}];
             int   src      = band_of(from->row);
             int   corridor = to->row > from->row ? src : src - 1;
             float run_h    = ROW_ELBOW_STUB * 2.0f + static_cast<float>(ports - 1) * ROW_VERT_STEP;
@@ -1665,7 +1673,7 @@ ComputeMemoryChartView::BuildArrowRoutes(std::vector<ArrowRoute>& routes) const
         const MemChartBlock* lo = a->y <= b->y ? b : a;
         for(const MemChartBlock& block : m_layout.blocks)
         {
-            if(block.column != a->column || block.id == a->id || block.id == b->id) continue;
+            if(block.column != a->column || &block == a || &block == b) continue;
             float mid = block.MidY();
             if(mid > up->Bottom() && mid < lo->y) return true;
         }
@@ -1675,8 +1683,8 @@ ComputeMemoryChartView::BuildArrowRoutes(std::vector<ArrowRoute>& routes) const
     for(size_t i = 0; i < m_layout.arrows.size(); ++i)
     {
         const MemChartArrow& arrow = m_layout.arrows[i];
-        const MemChartBlock* from  = Block(arrow.from);
-        const MemChartBlock* to    = Block(arrow.to);
+        const MemChartBlock* from  = arrow.from_block;
+        const MemChartBlock* to    = arrow.to_block;
         if(!from || !to) continue;
 
         int32_t dcol = to->column - from->column;
@@ -1786,42 +1794,41 @@ ComputeMemoryChartView::BuildArrowRoutes(std::vector<ArrowRoute>& routes) const
         float  key;      // The other endpoint's mid-Y, used for ordering.
         bool   at_from;  // Which end of `arrow` this port belongs to.
     };
-    // Keyed by block id; a same-column arrow contributes a port at both of its
+    // Keyed by block; a same-column arrow contributes a port at both of its
     // ends, so ports are identified by (arrow, endpoint) rather than arrow alone.
-    using PortKey = std::pair<size_t, bool>;
-    std::map<uint32_t, std::vector<Port>> exit_ports;   // right-edge ports
-    std::map<uint32_t, std::vector<Port>> entry_ports;  // left-edge ports
+    using PortKey   = std::pair<size_t, bool>;
+    using EdgePorts = std::map<const MemChartBlock*, std::vector<Port>>;
+    EdgePorts exit_ports;   // right-edge ports
+    EdgePorts entry_ports;  // left-edge ports
     for(size_t i : adjacent)
     {
         const MemChartArrow& arrow  = m_layout.arrows[i];
-        const MemChartBlock* from   = Block(arrow.from);
-        const MemChartBlock* to     = Block(arrow.to);
+        const MemChartBlock* from   = arrow.from_block;
+        const MemChartBlock* to     = arrow.to_block;
         if(!from || !to) continue;
         const MemChartBlock* left_b  = from->column < to->column ? from : to;
         const MemChartBlock* right_b = from->column < to->column ? to : from;
-        exit_ports[left_b->id].push_back({i, right_b->MidY(), from == left_b});
-        entry_ports[right_b->id].push_back({i, left_b->MidY(), from == right_b});
+        exit_ports[left_b].push_back({i, right_b->MidY(), from == left_b});
+        entry_ports[right_b].push_back({i, left_b->MidY(), from == right_b});
     }
     // Same-column arrows leave and re-enter on the right edge, so both ends
     // compete for right-edge ports alongside the adjacent-column arrows.
     for(size_t i : same_column)
     {
         const MemChartArrow& arrow = m_layout.arrows[i];
-        const MemChartBlock* from  = Block(arrow.from);
-        const MemChartBlock* to    = Block(arrow.to);
+        const MemChartBlock* from  = arrow.from_block;
+        const MemChartBlock* to    = arrow.to_block;
         if(!from || !to) continue;
-        exit_ports[from->id].push_back({i, to->MidY(), true});
-        exit_ports[to->id].push_back({i, from->MidY(), false});
+        exit_ports[from].push_back({i, to->MidY(), true});
+        exit_ports[to].push_back({i, from->MidY(), false});
     }
 
     std::map<PortKey, float> exit_y;
     std::map<PortKey, float> entry_y;
-    auto assign_ports = [&](std::map<uint32_t, std::vector<Port>>& edge,
-                            std::map<PortKey, float>&              out) {
-        for(std::pair<const uint32_t, std::vector<Port>>& kv : edge)
+    auto assign_ports = [&](EdgePorts& edge, std::map<PortKey, float>& out) {
+        for(std::pair<const MemChartBlock* const, std::vector<Port>>& kv : edge)
         {
-            const MemChartBlock* block = Block(kv.first);
-            if(!block) continue;
+            const MemChartBlock* block = kv.first;
             std::vector<Port>& ports = kv.second;
             std::stable_sort(ports.begin(), ports.end(),
                              [](const Port& a, const Port& b) { return a.key < b.key; });
@@ -1853,8 +1860,8 @@ ComputeMemoryChartView::BuildArrowRoutes(std::vector<ArrowRoute>& routes) const
     for(size_t i : adjacent)
     {
         const MemChartArrow& arrow  = m_layout.arrows[i];
-        const MemChartBlock* from   = Block(arrow.from);
-        const MemChartBlock* to     = Block(arrow.to);
+        const MemChartBlock* from   = arrow.from_block;
+        const MemChartBlock* to     = arrow.to_block;
         if(!from || !to) continue;
         const MemChartBlock* left_b  = from->column < to->column ? from : to;
         const MemChartBlock* right_b = from->column < to->column ? to : from;
@@ -1902,8 +1909,8 @@ ComputeMemoryChartView::BuildArrowRoutes(std::vector<ArrowRoute>& routes) const
     for(size_t index : same_column)
     {
         const MemChartArrow& arrow = m_layout.arrows[index];
-        const MemChartBlock* from  = Block(arrow.from);
-        const MemChartBlock* to    = Block(arrow.to);
+        const MemChartBlock* from  = arrow.from_block;
+        const MemChartBlock* to    = arrow.to_block;
         if(!from || !to) continue;
         same_routes.push_back({index, from->column,
                                std::max(from->conn_right, to->conn_right),
@@ -1945,8 +1952,8 @@ ComputeMemoryChartView::BuildArrowRoutes(std::vector<ArrowRoute>& routes) const
     for(const SameColRoute& route : same_routes)
     {
         const MemChartArrow& arrow = m_layout.arrows[route.index];
-        const MemChartBlock* from  = Block(arrow.from);
-        const MemChartBlock* to    = Block(arrow.to);
+        const MemChartBlock* from  = arrow.from_block;
+        const MemChartBlock* to    = arrow.to_block;
         if(!from || !to) continue;
 
         float lane_x = route.base_x + SAME_COL_LANE_BASE +
@@ -1969,25 +1976,26 @@ ComputeMemoryChartView::BuildArrowRoutes(std::vector<ArrowRoute>& routes) const
             size_t index;
             float  key;  // orders ports along the edge
         };
-        std::map<std::pair<uint32_t, bool>, std::vector<EdgePort>> src_ports;   // (block, exits-bottom)
-        std::map<std::pair<uint32_t, bool>, std::vector<EdgePort>> side_ports;  // (target, enters-right)
+        using SidePortKey = std::pair<const MemChartBlock*, bool>;
+        std::map<SidePortKey, std::vector<EdgePort>> src_ports;   // (block, exits-bottom)
+        std::map<SidePortKey, std::vector<EdgePort>> side_ports;  // (target, enters-right)
         // Labelled same-column links between the same blocks share a midpoint, so
         // their labels stack there: slot k of n per block pair.
-        std::unordered_map<size_t, int>              stack_k_of;
-        std::map<std::pair<uint32_t, uint32_t>, int> stack_n_of;
+        std::unordered_map<size_t, int> stack_k_of;
+        std::map<BlockPair, int>        stack_n_of;
 
         for(size_t index : inter_row)
         {
             const MemChartArrow& arrow = m_layout.arrows[index];
-            const MemChartBlock* from  = Block(arrow.from);
-            const MemChartBlock* to    = Block(arrow.to);
+            const MemChartBlock* from  = arrow.from_block;
+            const MemChartBlock* to    = arrow.to_block;
             if(!from || !to) continue;
             bool exits_bottom = to->MidY() > from->MidY();
-            src_ports[{from->id, exits_bottom}].push_back({index, to->MidX()});
+            src_ports[{from, exits_bottom}].push_back({index, to->MidX()});
             if(from->column != to->column)
             {
                 bool enters_right = from->MidX() > to->MidX();
-                side_ports[{to->id, enters_right}].push_back({index, from->MidY()});
+                side_ports[{to, enters_right}].push_back({index, from->MidY()});
             }
             else if(!arrow.cached_label.empty())
             {
@@ -1997,9 +2005,9 @@ ComputeMemoryChartView::BuildArrowRoutes(std::vector<ArrowRoute>& routes) const
 
         // Assign x positions along each source edge (fanned about the centre).
         std::unordered_map<size_t, float> src_x_of;
-        for(std::pair<const std::pair<uint32_t, bool>, std::vector<EdgePort>>& kv : src_ports)
+        for(std::pair<const SidePortKey, std::vector<EdgePort>>& kv : src_ports)
         {
-            const MemChartBlock* block = Block(kv.first.first);
+            const MemChartBlock* block = kv.first.first;
             if(!block) continue;
             std::vector<EdgePort>& ports = kv.second;
             std::stable_sort(ports.begin(), ports.end(),
@@ -2020,9 +2028,9 @@ ComputeMemoryChartView::BuildArrowRoutes(std::vector<ArrowRoute>& routes) const
         std::unordered_map<size_t, float> side_y_of;
         std::unordered_map<size_t, int>   side_k_of;
         std::unordered_map<size_t, int>   side_n_of;
-        for(std::pair<const std::pair<uint32_t, bool>, std::vector<EdgePort>>& kv : side_ports)
+        for(std::pair<const SidePortKey, std::vector<EdgePort>>& kv : side_ports)
         {
-            const MemChartBlock* block = Block(kv.first.first);
+            const MemChartBlock* block = kv.first.first;
             if(!block) continue;
             std::vector<EdgePort>& ports = kv.second;
             std::stable_sort(ports.begin(), ports.end(),
@@ -2040,8 +2048,8 @@ ComputeMemoryChartView::BuildArrowRoutes(std::vector<ArrowRoute>& routes) const
         for(size_t index : inter_row)
         {
             const MemChartArrow& arrow = m_layout.arrows[index];
-            const MemChartBlock* from  = Block(arrow.from);
-            const MemChartBlock* to    = Block(arrow.to);
+            const MemChartBlock* from  = arrow.from_block;
+            const MemChartBlock* to    = arrow.to_block;
             if(!from || !to) continue;
 
             float src_x = src_x_of.count(index) ? src_x_of[index] : from->MidX();
@@ -2133,27 +2141,26 @@ ComputeMemoryChartView::BuildArrowRoutes(std::vector<ArrowRoute>& routes) const
         int    side;     // -1 = heads left, +1 = heads right
         int    span;     // column distance
     };
-    std::map<uint32_t, std::vector<BottomPort>> block_ports;
+    std::map<const MemChartBlock*, std::vector<BottomPort>> block_ports;
     for(size_t index : skipping)
     {
         const MemChartArrow& arrow = m_layout.arrows[index];
-        const MemChartBlock* from  = Block(arrow.from);
-        const MemChartBlock* to    = Block(arrow.to);
+        const MemChartBlock* from  = arrow.from_block;
+        const MemChartBlock* to    = arrow.to_block;
         if(!from || !to) continue;
         bool right = to->column > from->column;
         int  span  = right ? to->column - from->column : from->column - to->column;
-        block_ports[from->id].push_back({index, true, right ? 1 : -1, span});
+        block_ports[from].push_back({index, true, right ? 1 : -1, span});
         // A left-going arrow enters its destination at the left edge, not the
         // bottom, so only right-going arrows add a to-rise port.
-        if(right) block_ports[to->id].push_back({index, false, -1, span});
+        if(right) block_ports[to].push_back({index, false, -1, span});
     }
 
     std::unordered_map<size_t, float> from_port_x;
     std::unordered_map<size_t, float> to_port_x;
-    for(std::pair<const uint32_t, std::vector<BottomPort>>& kv : block_ports)
+    for(std::pair<const MemChartBlock* const, std::vector<BottomPort>>& kv : block_ports)
     {
-        const MemChartBlock* block = Block(kv.first);
-        if(!block) continue;
+        const MemChartBlock* block = kv.first;
         std::vector<BottomPort>& ports = kv.second;
         std::stable_sort(ports.begin(), ports.end(), [](const BottomPort& a, const BottomPort& b) {
             if(a.side != b.side) return a.side < b.side;
@@ -2173,8 +2180,8 @@ ComputeMemoryChartView::BuildArrowRoutes(std::vector<ArrowRoute>& routes) const
     for(size_t index : skipping)
     {
         const MemChartArrow& arrow = m_layout.arrows[index];
-        const MemChartBlock* from  = Block(arrow.from);
-        const MemChartBlock* to    = Block(arrow.to);
+        const MemChartBlock* from  = arrow.from_block;
+        const MemChartBlock* to    = arrow.to_block;
         if(!from || !to) continue;
 
         int   lane      = lane_of.count(index) ? lane_of[index] : 0;

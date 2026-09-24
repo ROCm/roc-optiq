@@ -5,6 +5,8 @@
 
 #include "json.h"
 
+#include <unordered_set>
+
 namespace RocProfVis
 {
 namespace View
@@ -36,20 +38,6 @@ ReadInt(jt::Json& node, const char* key, int32_t fallback)
         if(value.isNumber())
         {
             return static_cast<int32_t>(value.getNumber());
-        }
-    }
-    return fallback;
-}
-
-uint32_t
-ReadUint(jt::Json& node, const char* key, uint32_t fallback)
-{
-    if(node.isObject() && node.contains(key))
-    {
-        jt::Json& value = node[key];
-        if(value.isNumber())
-        {
-            return static_cast<uint32_t>(value.getNumber());
         }
     }
     return fallback;
@@ -110,7 +98,7 @@ MemChartBlock
 ParseBlock(jt::Json& node)
 {
     MemChartBlock block;
-    block.id     = ReadUint(node, "id", 0);
+    block.id     = ReadString(node, "id");  // Non-string ids read as "" and are rejected.
     block.column = ReadInt(node, "column", 0);
     block.row    = ReadInt(node, "row", 0);
     block.order  = ReadInt(node, "order", -1);
@@ -147,13 +135,57 @@ MemChartArrow
 ParseArrow(jt::Json& node)
 {
     MemChartArrow arrow;
-    arrow.from      = ReadUint(node, "from", 0);
-    arrow.to        = ReadUint(node, "to", 0);
+    arrow.from      = ReadString(node, "from");
+    arrow.to        = ReadString(node, "to");
     arrow.direction = ParseDirection(ReadString(node, "direction", "forward"));
     arrow.metric    = ReadMetricRef(node, "metric");
     arrow.title     = ReadString(node, "title");
     arrow.category  = ReadString(node, "category");
     return arrow;
+}
+
+// Gather every block id in the tree (nested blocks are arrow endpoints too),
+// rejecting missing and duplicate ids.
+bool
+CollectBlockIds(const std::vector<MemChartBlock>& blocks, std::unordered_set<std::string>& ids,
+                std::string& error)
+{
+    for(const MemChartBlock& block : blocks)
+    {
+        if(block.id.empty())
+        {
+            error = "block '" + block.title + "' has a missing or non-string id";
+            return false;
+        }
+        if(!ids.insert(block.id).second)
+        {
+            error = "duplicate block id '" + block.id + "'";
+            return false;
+        }
+        if(!CollectBlockIds(block.children, ids, error))
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool
+ValidateArrowEndpoint(const std::unordered_set<std::string>& ids, const std::string& id,
+                      const char* key, size_t arrow_index, std::string& error)
+{
+    std::string where = "arrow " + std::to_string(arrow_index) + " '" + key + "'";
+    if(id.empty())
+    {
+        error = where + " is missing or not a string";
+        return false;
+    }
+    if(ids.count(id) == 0)
+    {
+        error = where + " references unknown block '" + id + "'";
+        return false;
+    }
+    return true;
 }
 
 }  // namespace
@@ -218,6 +250,26 @@ MemChartLayout::ParseFromString(const std::string& json_text, MemChartLayout& ou
         return false;
     }
 
+    // Reject rather than render: a bad id would otherwise leave arrows silently
+    // disconnected, and failing lets the caller fall back to the next layout.
+    std::unordered_set<std::string> ids;
+    std::string                     validation_error;
+    bool                            valid = CollectBlockIds(layout.blocks, ids, validation_error);
+    for(size_t i = 0; valid && i < layout.arrows.size(); ++i)
+    {
+        const MemChartArrow& arrow = layout.arrows[i];
+        valid = ValidateArrowEndpoint(ids, arrow.from, "from", i, validation_error) &&
+                ValidateArrowEndpoint(ids, arrow.to, "to", i, validation_error);
+    }
+    if(!valid)
+    {
+        if(error)
+        {
+            *error = validation_error;
+        }
+        return false;
+    }
+
     out = std::move(layout);
     return true;
 }
@@ -225,7 +277,7 @@ MemChartLayout::ParseFromString(const std::string& json_text, MemChartLayout& ou
 namespace
 {
 MemChartBlock*
-FindInBlocks(std::vector<MemChartBlock>& blocks, uint32_t id)
+FindInBlocks(std::vector<MemChartBlock>& blocks, const std::string& id)
 {
     for(MemChartBlock& block : blocks)
     {
@@ -244,13 +296,13 @@ FindInBlocks(std::vector<MemChartBlock>& blocks, uint32_t id)
 }  // namespace
 
 MemChartBlock*
-MemChartLayout::FindBlock(uint32_t id)
+MemChartLayout::FindBlock(const std::string& id)
 {
     return FindInBlocks(blocks, id);
 }
 
 const MemChartBlock*
-MemChartLayout::FindBlock(uint32_t id) const
+MemChartLayout::FindBlock(const std::string& id) const
 {
     return FindInBlocks(const_cast<std::vector<MemChartBlock>&>(blocks), id);
 }

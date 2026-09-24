@@ -11,6 +11,11 @@
         "arrows": { "type": "array", "items": { "$ref": "#/definitions/arrow" } }
     },
     "definitions": {
+        "blockId": {
+            "description": "Unique, readable block id that arrows use to name their endpoints (e.g. 'l2', 'data_fabric'). Must be a non-empty string; numeric ids are rejected. Ids are unique across the whole layout, including nested children.",
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]*$"
+        },
         "metricRef": {
             "description": "Full dotted metric id 'category.table.entry' (e.g. '3.1.24'). Resolved against the selected kernel's compute metrics; unresolved refs render as N/A.",
             "type": "string",
@@ -37,7 +42,7 @@
             "required": ["id"],
             "additionalProperties": false,
             "properties": {
-                "id": { "type": "integer", "minimum": 1 },
+                "id": { "$ref": "#/definitions/blockId" },
                 "column": { "type": "integer" },
                 "row": { "type": "integer", "description": "Grid row band: 0 = main row, negative rows stack above it, positive rows below it. Columns align across all rows." },
                 "order": { "type": "integer" },
@@ -52,8 +57,8 @@
             "required": ["from", "to"],
             "additionalProperties": false,
             "properties": {
-                "from": { "type": "integer", "minimum": 1 },
-                "to": { "type": "integer", "minimum": 1 },
+                "from": { "$ref": "#/definitions/blockId", "description": "Id of the block the arrow starts at." },
+                "to": { "$ref": "#/definitions/blockId", "description": "Id of the block the arrow ends at." },
                 "direction": { "type": "string", "enum": ["forward", "backward", "both"] },
                 "metric": { "$ref": "#/definitions/metricRef" },
                 "title": { "type": "string" },

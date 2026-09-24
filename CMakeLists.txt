@@ -428,6 +428,20 @@ if(ROCPROFVIS_ENABLE_AGENTIC_PROFILING)
     endif()
 endif(ROCPROFVIS_ENABLE_AGENTIC_PROFILING)
 
+if(BUILD_TESTING)
+    # Parser-only Memory Chart tests: need no GPU, database, or UI, so every
+    # embedded layout is validated on each test run rather than when someone
+    # first opens a trace for that architecture.
+    set(MEMCHART_TEST_NAME ${TARGET_NAME}-memory-chart-tests)
+    add_executable(${MEMCHART_TEST_NAME}
+        src/view/test/rocprofvis_memory_chart_layout_tests.cpp
+        src/view/src/model/compute/rocprofvis_memory_chart_model.cpp)
+    add_dependencies(${MEMCHART_TEST_NAME} generate_memory_chart_layouts)
+    target_include_directories(${MEMCHART_TEST_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/view/src)
+    target_link_libraries(${MEMCHART_TEST_NAME} PRIVATE json Catch2::Catch2WithMain)
+    add_test(NAME ${MEMCHART_TEST_NAME} COMMAND ${MEMCHART_TEST_NAME})
+endif()
+
 if(BUILD_TESTING AND ROCPROFVIS_ENABLE_UI_TESTS)
     # Fail at configure if imgui_te was dropped (e.g. BUILD_TESTING shadowed).
     if(NOT TARGET imgui_te)

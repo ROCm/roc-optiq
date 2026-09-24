@@ -5,6 +5,9 @@
 #include "rocprofvis_core_profile.h"
 #include "rocprofvis_db_rocpd.h"
 #include "rocprofvis_db_rocprof.h"
+#ifdef ROCPROFVIS_PROFILER_HUB_ENABLED
+#include "rocprofvis_db_profiler_hub.h"
+#endif
 #include "rocprofvis_dm_trace.h"
 #include "rocprofvis_db_compute.h"
 #include "rocprofvis_db_trace_processor.h"
@@ -106,7 +109,11 @@ rocprofvis_dm_database_t rocprofvis_db_open_database(
     if (db_type == rocprofvis_db_type_t::kRocprofSqlite)
     {
         try {
+#ifdef ROCPROFVIS_PROFILER_HUB_ENABLED
+            RocProfVis::DataModel::Database* db = new RocProfVis::DataModel::ProfilerHubDatabase(filename);
+#else
             RocProfVis::DataModel::Database* db = new RocProfVis::DataModel::RocprofDatabase(filename);
+#endif
             if (kRocProfVisDmResultSuccess == db->Open()) {
                 return db;
             }

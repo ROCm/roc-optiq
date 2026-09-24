@@ -7,10 +7,39 @@
 #include <string.h>
 #include <filesystem>
 
+#ifdef ROCPROFVIS_PROFILER_HUB_ENABLED
+#include "spdlog/spdlog.h"
+#include "trace_context.h"
+#endif
+
 namespace RocProfVis
 {
 namespace DataModel
 {
+
+#ifdef ROCPROFVIS_PROFILER_HUB_ENABLED
+namespace
+{
+void LogProfilerHubTrackList(const char* file_path)
+{
+    try
+    {
+        optiq::TraceContext ctx(file_path);
+        for (const ph_track_t& track : ctx.GetTrackList())
+        {
+            spdlog::info("[profiler-hub] track id={} name='{}' nid={} pid={} tid={} "
+                         "agent_id={} category={} event_count={}",
+                         track.id, track.track_name, track.nid, track.pid, track.tid,
+                         track.agent_id, static_cast<int>(track.category), track.event_count);
+        }
+    }
+    catch (const optiq::TraceOpenError& e)
+    {
+        spdlog::warn("[profiler-hub] {}", e.what());
+    }
+}
+}
+#endif
 
 rocprofvis_dm_result_t RocpdDatabase::RemapStringIds(rocprofvis_db_record_data_t & record)
 {
@@ -230,6 +259,9 @@ std::string RocpdDatabase::GetLevelSchemaHashStr()
 rocprofvis_dm_result_t  RocpdDatabase::ReadTraceMetadata(Future* future)
 {
     ROCPROFVIS_ASSERT_MSG_RETURN(future, ERROR_FUTURE_CANNOT_BE_NULL, kRocProfVisDmResultInvalidParameter);
+#ifdef ROCPROFVIS_PROFILER_HUB_ENABLED
+    LogProfilerHubTrackList(Path());
+#endif
     while (true)
     {
         ROCPROFVIS_ASSERT_MSG_BREAK(BindObject()->trace_properties, ERROR_TRACE_PROPERTIES_CANNOT_BE_NULL);

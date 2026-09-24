@@ -4,7 +4,23 @@
 find_package(Vulkan REQUIRED)
 set(VULKAN_LIB "Vulkan::Vulkan")
 
+option(PROFILER_HUB_BUILD_ROC_OPTIQ_IFACE_LIB "Build RocOptiq interface library" OFF)
+
 add_subdirectory(spdlog)
+
+if(PROFILER_HUB_BUILD_ROC_OPTIQ_IFACE_LIB)
+    message(
+        STATUS
+        "Build RocOptiq interface library"
+    )
+
+set(PROFILER_HUB_PREBUILT_DIR
+    "${CMAKE_CURRENT_SOURCE_DIR}/profiler-hub/profilers/profiler-hub/build" CACHE PATH
+    "Path to profiler-hub's own out-of-tree build directory")
+set(profiler-hub_DIR "${PROFILER_HUB_PREBUILT_DIR}")
+find_package(profiler-hub CONFIG REQUIRED)
+add_subdirectory(profiler-hub-client/optiq)
+endif()
 add_subdirectory(catch2)
 
 set(YAML_CPP_BUILD_TESTS OFF CACHE BOOL "Disable yaml-cpp tests")

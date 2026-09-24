@@ -113,9 +113,9 @@ class Database
         virtual rocprofvis_dm_size_t    GetMemoryFootprint(void); 
 
         // Bind database to trace
-        // @param binding_info - pointer to binding info structure 
+        // @param binding_info - pointer to binding info structure
         // @return status of operation
-        rocprofvis_dm_result_t          BindTrace(
+        virtual rocprofvis_dm_result_t  BindTrace(
                                                                 rocprofvis_dm_db_bind_struct * binding_info);
         // returns pointer to binding structure
         rocprofvis_dm_db_bind_struct *  BindObject() {return m_binding_info;}
@@ -486,7 +486,7 @@ class Database
         // returns pointer to trace properties, which contains shared trace information
         rocprofvis_dm_trace_params_t*   TraceProperties() { return m_binding_info->trace_properties; }
         // returns pointer to cached tables map array
-        DatabaseCache*                  CachedTables(uint32_t node_id) {return &m_cached_tables[node_id];}
+        virtual DatabaseCache*          CachedTables(uint32_t node_id) {return &m_cached_tables[node_id];}
 
         TrackLookup*                    TrackTracker() { return& m_track_lookup; }
         // return current number of tracks
@@ -549,6 +549,7 @@ class Database
         friend class DatabaseCache;
         friend class TableProcessor;
         friend class TrackLookup;
+        friend class ProfilerHubDatabase;
 };
 
 }  // namespace DataModel

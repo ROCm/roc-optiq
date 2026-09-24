@@ -255,7 +255,7 @@ jobs:
             "${S3_DEB_BASE}/pool/main/${DEB_NAME}" \
             --no-progress
 
-      - name: Generate DEB Metadata for S3
+      - name: Generate and Upload DEB Metadata to S3
         if: ${{ inputs.upload_to_s3 }}
         run: |
           DEB_SRC=$(ls ${{ env.DIST_DIR }}/*.deb | head -1)
@@ -300,7 +300,7 @@ jobs:
             "${S3_DEB_BASE}/dists/" \
             --no-progress
 
-      - name: Upload RPM to S3
+      - name: Generate RPM Metadata and Upload RPM to S3
         if: ${{ inputs.upload_to_s3 }}
         run: |
           RPM_SRC=$(ls ${{ env.DIST_DIR }}/*.rpm | head -1)
@@ -310,19 +310,18 @@ jobs:
             RPM_NAME="amdrocm${ROCM_VERSION}-$(basename "${RPM_SRC}" | sed 's/\.el[0-9]\+//')"
           fi
           S3_RPM_PREFIX="s3://${S3_BUCKET}/${{ env.S3_ROOT_DIRECTORY }}/packages/rpm/x86_64"
+
+          # Use the renamed file so repodata <location href> matches the S3 key
+          mkdir -p rpm-repo
+          cp "${RPM_SRC}" "rpm-repo/${RPM_NAME}"
+          createrepo_c rpm-repo/
+
           aws s3 cp \
-            "${RPM_SRC}" \
+            "rpm-repo/${RPM_NAME}" \
             "${S3_RPM_PREFIX}/${RPM_NAME}" \
             --no-progress
-
-      - name: Generate RPM Metadata for S3
-        if: ${{ inputs.upload_to_s3 }}
-        run: |
-          mkdir -p rpm-repo
-          cp ${{ env.DIST_DIR }}/*.rpm rpm-repo/
-          createrepo_c rpm-repo/
           aws s3 cp --recursive rpm-repo/repodata \
-            s3://${S3_BUCKET}/${{ env.S3_ROOT_DIRECTORY }}/packages/rpm/x86_64/repodata/ \
+            "${S3_RPM_PREFIX}/repodata/" \
             --no-progress
 
       - name: Upload Tarball to S3

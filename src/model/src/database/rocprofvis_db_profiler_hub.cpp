@@ -81,17 +81,6 @@ NameHintMatches(const std::string& candidate_name, const std::string& name_hint)
     return true;
 }
 
-uint32_t
-ParseTrailingNumber(const std::string& s)
-{
-    size_t end   = s.size();
-    size_t begin = end;
-    while(begin > 0 && std::isdigit(static_cast<unsigned char>(s[begin - 1])))
-        --begin;
-    if(begin == end) return 0;
-    return static_cast<uint32_t>(std::stoul(s.substr(begin, end - begin)));
-}
-
 }
 
 ProfilerHubDatabase::ProfilerHubDatabase(rocprofvis_db_filename_t path)
@@ -216,7 +205,12 @@ ProfilerHubDatabase::ReadTraceMetadata(Future* object)
         g_intercepting_instance    = nullptr;
         g_original_add_track       = nullptr;
 
-        if(unmapped_count_ > 0)
+        if(legacy_->NumDbInstances() > 1)
+            spdlog::warn("[profiler-hub] trace has {} DB instances (multi-file/multi-GUID "
+                         "merge) - PH track-id mapping only supports a single instance for "
+                         "now; all tracks fell back to legacy",
+                         legacy_->NumDbInstances());
+        else if(unmapped_count_ > 0)
             spdlog::info("[profiler-hub] track-id mapping: {} matched, {} unmapped",
                          mapped_count_, unmapped_count_);
         else
@@ -305,9 +299,7 @@ ProfilerHubDatabase::TryMapTrack(rocprofvis_dm_track_params_t* track)
         case kRocProfVisDmRegionMainTrack:
         case kRocProfVisDmRegionSampleTrack:
         {
-            uint32_t real_tid =
-                ParseTrailingNumber(legacy_->CachedTables(node)->GetTableCell(
-                    "Thread", ids.id[TRACK_ID_TID], "name"));
+            uint32_t real_tid = static_cast<uint32_t>(ids.id[TRACK_ID_TID]);
             if(auto it = by_tid_.find(real_tid); it != by_tid_.end())
                 candidates = &it->second;
             break;
@@ -334,9 +326,7 @@ ProfilerHubDatabase::TryMapTrack(rocprofvis_dm_track_params_t* track)
         }
         case kRocProfVisDmStreamTrack:
         {
-            uint32_t real_stream =
-                ParseTrailingNumber(legacy_->CachedTables(node)->GetTableCell(
-                    "Stream", ids.id[TRACK_ID_STREAM], "name"));
+            uint32_t real_stream = static_cast<uint32_t>(ids.id[TRACK_ID_STREAM]);
             if(auto it = by_stream_.find(real_stream); it != by_stream_.end())
                 candidates = &it->second;
             break;

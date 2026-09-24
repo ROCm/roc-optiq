@@ -27,7 +27,6 @@ std::vector<ph_track_t> TraceContext::GetTrackList() const {
 std::vector<ph_event_t> TraceContext::GetTrackEvents(uint32_t track_id,
                                                      uint64_t start_ts,
                                                      uint64_t end_ts) const {
-  printf("------> Get track event called. Track id %d\n", track_id);
   ph_event_list_t events{};
   if (ph_get_track_events(m_ctx, track_id, start_ts, end_ts, &events) !=
       PH_RESULT_SUCCESS)

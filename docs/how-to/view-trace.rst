@@ -19,6 +19,7 @@ View ROCm Systems Profiler trace data in ROCm Optiq
 .. |mini| image:: ../images/minimap-icon.png
 .. |make| image:: ../images/make-selection.png
 .. |remove| image:: ../images/remove-time.png
+.. |search-advanced| image:: ../images/search-advanced.png
 
 ROCm Optiq provides a detailed view of a *trace*: a complete record of profiling data captured during an application run, including all event tracks, sample counters, and metadata.
 
@@ -198,6 +199,11 @@ Use the following actions to sort, resize, or reorder tracks.
   - **Topology**: Matches the order of tracks in the System Topology View sidebar.
   - **Default**: Restores the order from when the trace was loaded (by track type).
   - **Custom**: Uses your remembered drag-to-reorder. The sort mode and custom order are saved with the project (``.rpv``) when you select **File** > **Save**. See :ref:`save-project`.
+  
+    .. image:: ../images/track-sort.png
+       :width: 300
+       :alt: Track sorting options
+   
 - Resize tracks by dragging the separator lines between tracks.
 - Reorder tracks by clicking and dragging |grip| on the left side of the **Description** area. Drag-to-reorder switches the sort mode to **Custom**.
 
@@ -304,8 +310,8 @@ This section provides an interface for multiple data perspectives, offering gran
 
 - **Event Table**: Displays all events within the selected tracks. You can refine your analysis by applying a time-range selection or using the table filters. The **Event Table** provides two filter modes:
 
-  - **Basic mode**: Provides a text input below each column header. Enter a condition to filter the data.
-  - **Advanced mode**: Provides advanced filters to narrow the table. Use the **Group by** drop-down to group **Event Table** results by an available field. The fields depend on the selected track type (for example, Category, Name, Stream, Queue, Node, PID, or TID). In **Filter**, enter SQL-like statements to narrow the results. For example, ``duration > 2000`` displays all events greater than 2000 ns. Time columns are compared in nanoseconds (ns); other time units do not filter correctly. Click **Submit** to apply an advanced filter.
+  - **Basic mode**: Provides a text input below each column header. Input a condition, then use the **Enter** key to filter the data.
+  - **Advanced mode**: Provides advanced filters to narrow the table. Use the **Group by** drop-down to group **Event Table** results by an available field. The fields depend on the selected track type (for example, Category, Name, Stream, Queue, Node, PID, or TID). In **Filter**, input SQL-like statements to narrow the results. For example, ``duration > 2000`` displays all events greater than 2000 ns. Time columns are compared in nanoseconds (ns); other time units do not filter correctly. Click **Submit** to apply an advanced filter.
 
   .. image:: ../images/advanced.png
     :width: 800
@@ -429,12 +435,19 @@ Search for events using the search box on the main **Toolbar**.
 - Clicking on a row in the search results will bring the selected event into view on the :ref:`timeline`. 
 - Clicking **X** clears the search results.
 - The search can match multiple substrings at once. Multiple search tokens must be surrounded by quotation marks without spaces (for example: ``“term1””term2”``).
-- **Advanced search**: Click **...** next to the search box to open **Advanced**:
+- **Advanced search**: Click |search-advanced| next to the search box to display/hide **Advanced** options:
 
   - **Match Criteria**: **Contains** matches events whose names include a search term. **Equals** matches events whose names exactly match a search term.
   - **Multiple Terms**: **AND** requires every quoted term to match. **OR** matches events that satisfy any quoted term.
   - **Search Range**: **Whole Trace** searches all events. **Selected Time Range** limits the search to the active :ref:`time-range-filter` when one is set. If no time range is selected, the search uses the whole trace. When **Selected Time Range** is on and you change the time range, the search runs again.
   - **Search Event Categories**: Also matches event category names, when categories are available, in addition to event names.
+  
+    .. image:: ../images/search-advanced-options.png
+	   :width: 800
+	   :alt: Search box on the main toolbar with advanced options
+	 
+  - |search-advanced| will glow to indicate  **Advanced** options are active.
+ 
 
 Save trace selection (trim trace)
 =================================

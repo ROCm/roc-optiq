@@ -48,6 +48,11 @@ Select a workload and kernel
 
 Use the **Workload** and **Kernel** drop-downs at the top of the compute views to choose which workload and kernel the views use. Changing either drop-down updates **Summary View**, **Kernel Details** (including the Memory Chart, System Speed-of-Light, and Kernel Roofline Chart), **Table View**, and **Baseline Comparison**.
 
+.. image:: ../images/workload-kernel-selection.png
+   :width: 800
+   :align: center
+   :alt: Workload and kernel selection controls
+
 You can also select a kernel from the **Kernel Selection Table**. That selection updates the same kernel-level views.
 
 .. _analysis-summary:

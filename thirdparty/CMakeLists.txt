@@ -220,6 +220,13 @@ add_library(ImGuiFileDialog STATIC
     ImGuiFileDialog/ImGuiFileDialog.cpp
 )
 target_compile_definitions(ImGuiFileDialog PUBLIC IMGUI_DEFINE_MATH_OPERATORS)
+# ImGuiFileDialog labels file sizes in French (o, Ko, Mo, Go) unless told otherwise.
+target_compile_definitions(ImGuiFileDialog PRIVATE
+    fileSizeBytes="B"
+    fileSizeKiloBytes="KB"
+    fileSizeMegaBytes="MB"
+    fileSizeGigaBytes="GB"
+)
 target_include_directories(ImGuiFileDialog PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/imgui)
 target_include_directories(ImGuiFileDialog PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/ImGuiFileDialog)
 

@@ -15,6 +15,8 @@
 #include "rocprofvis_cli_parser.h"
 #include "rocprofvis_version.h"
 #include "rocprofvis_view_module.h"
+#include "tutorial_chapters.h"
+#include "tutorial_recorder.h"
 #include "widgets/rocprofvis_image_helpers.h"
 #ifdef __APPLE__
 #include "rocprofvis_platform_helpers.h"
@@ -24,6 +26,7 @@
 #include <iostream>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string>
 
 const char* APP_NAME = "ROCm(TM) Optiq";
 
@@ -191,6 +194,24 @@ parse_command_line_args(int argc, char** argv, RocProfVis::View::CLIParser& cli_
     result &= cli_parser.AddOption(
         "t", "run-tests",
         "Run all registered UI tests headlessly, print results, and exit", false);
+    result &= cli_parser.AddOption(
+        "r", "record-tutorials",
+        "Record the tutorial video series into the given folder, then exit. Traces "
+        "are opened from the working directory",
+        true);
+    result &= cli_parser.AddOption(
+        "c", "chapters",
+        "With --record-tutorials, only record chapters matching this filter", true);
+    result &= cli_parser.AddOption(
+        "e", "ffmpeg",
+        "With --record-tutorials, the ffmpeg executable (default: found on PATH)", true);
+    result &= cli_parser.AddOption(
+        "u", "ui-scale", "With --record-tutorials, the UI scale of the footage", true);
+    result &= cli_parser.AddOption(
+        "n", "narration",
+        "With --record-tutorials, the folder of synthesized narration (lines.tsv) whose "
+        "line lengths pace the chapters",
+        true);
     ROCPROFVIS_ASSERT(result);
 
     cli_parser.Parse(argc, argv);
@@ -295,6 +316,43 @@ main(int argc, char** argv)
         }
     }
 
+    const bool record_tutorials = cli_parser.WasOptionFound("record-tutorials");
+    if(record_tutorials)
+    {
+        RocProfVis::Tutorial::RecorderConfig config;
+        config.output_dir =
+            std::filesystem::absolute(cli_parser.GetOptionValue("record-tutorials")).string();
+        config.samples_dir  = std::filesystem::current_path().string();
+        config.filter       = cli_parser.GetOptionValue("chapters");
+        if(cli_parser.WasOptionFound("narration"))
+        {
+            config.narration_dir =
+                std::filesystem::absolute(cli_parser.GetOptionValue("narration")).string();
+        }
+        config.encoder_path =
+            RocProfVis::Tutorial::ResolveEncoderPath(cli_parser.GetOptionValue("ffmpeg"));
+        if(cli_parser.WasOptionFound("ui-scale"))
+        {
+            const float ui_scale =
+                std::strtof(cli_parser.GetOptionValue("ui-scale").c_str(), nullptr);
+            if(ui_scale > 0.0f)
+            {
+                config.ui_scale = ui_scale;
+            }
+        }
+        if(config.encoder_path.empty())
+        {
+            spdlog::error("--record-tutorials needs ffmpeg: pass --ffmpeg <path> or add "
+                          "it to PATH");
+            return 1;
+        }
+        RocProfVis::Tutorial::SetConfig(config);
+        // The recording reads the OpenGL back buffer, and the built-in file dialog
+        // draws inside the captured window where a native one would not.
+        backend_pref = kRPVBackendForceOpenGL;
+        fd_pref      = kRocProfVisViewFileDialog_ImGui;
+    }
+
 #ifdef __APPLE__
     RocProfVis::Platform::configure_bundled_vulkan_icd();
 #endif
@@ -311,7 +369,9 @@ main(int argc, char** argv)
         // The backend setup will recreate the window if OpenGL is needed
         glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
 #if defined(GLFW_SCALE_TO_MONITOR)  // GLFW 3.3+
-        glfwWindowHint(GLFW_SCALE_TO_MONITOR, GLFW_TRUE);
+        // A recording keeps its window at the video size when it lands on a
+        // monitor with another scale, as when a laptop lid closes mid-run.
+        glfwWindowHint(GLFW_SCALE_TO_MONITOR, record_tutorials ? GLFW_FALSE : GLFW_TRUE);
 #endif
         GLFWwindow* window = glfwCreateWindow(RocProfVis::View::DEFAULT_WINDOWED_WIDTH,
                                               RocProfVis::View::DEFAULT_WINDOWED_HEIGHT,
@@ -337,6 +397,13 @@ main(int argc, char** argv)
 
                 RocProfVis::View::init_fullscreen_state(window, g_fullscreen_state);
                 glfwShowWindow(window);
+                if(record_tutorials)
+                {
+                    // Every captured frame must match the video size exactly.
+                    glfwSetWindowAttrib(window, GLFW_RESIZABLE, GLFW_FALSE);
+                    glfwSetWindowSize(window, RocProfVis::Tutorial::VIDEO_WIDTH,
+                                      RocProfVis::Tutorial::VIDEO_HEIGHT);
+                }
 
                 IMGUI_CHECKVERSION();
                 ImGui::CreateContext();
@@ -345,6 +412,12 @@ main(int argc, char** argv)
                 io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
                 io.ConfigDpiScaleFonts               = true;
                 io.ConfigWindowsMoveFromTitleBarOnly = true;
+                if(record_tutorials)
+                {
+                    // The footage uses its own UI scale, set each frame below,
+                    // rather than the recording machine's monitor DPI.
+                    io.ConfigDpiScaleFonts = false;
+                }
 
                 ImGui::StyleColorsLight();
 
@@ -370,10 +443,20 @@ main(int argc, char** argv)
                 }
 
                 ImGuiTestEngine_Start(engine, ImGui::GetCurrentContext());
-                RegisterAppTests(engine);
+                if(record_tutorials)
+                {
+                    RocProfVis::Tutorial::InstallCapture(engine);
+                    RocProfVis::Tutorial::RegisterChapters(engine);
+                }
+                else
+                {
+                    RegisterAppTests(engine);
+                }
 
                 const bool run_tests_headless =
-                    cli_parser.WasOptionFound("run-tests");
+                    cli_parser.WasOptionFound("run-tests") || record_tutorials;
+                const std::string queue_filter =
+                    record_tutorials ? RocProfVis::Tutorial::GetConfig().filter : std::string();
                 bool headless_tests_queued = false;
                 int headless_settle_frames = 0;
                 // Upper bound (~50s @60fps), not a tuned value: a view that never
@@ -427,7 +510,8 @@ main(int argc, char** argv)
                             }
                             // File load settled (or cap hit): queue every registered test.
                             ImGuiTestEngine_QueueTests(
-                                engine, ImGuiTestGroup_Tests, nullptr,
+                                engine, ImGuiTestGroup_Tests,
+                                queue_filter.empty() ? nullptr : queue_filter.c_str(),
                                 ImGuiTestRunFlags_RunFromCommandLine);
                             headless_tests_queued = true;
                         }
@@ -497,10 +581,28 @@ main(int argc, char** argv)
                         continue;
                     }
 
+                    if(record_tutorials)
+                    {
+                        ImGui::GetStyle().FontScaleDpi =
+                            RocProfVis::Tutorial::GetConfig().ui_scale;
+                        // Display changes can still resize or maximize the
+                        // window, and every captured frame must match the video.
+                        if(fb_width != RocProfVis::Tutorial::VIDEO_WIDTH ||
+                           fb_height != RocProfVis::Tutorial::VIDEO_HEIGHT)
+                        {
+                            if(glfwGetWindowAttrib(window, GLFW_MAXIMIZED) != 0)
+                            {
+                                glfwRestoreWindow(window);
+                            }
+                            glfwSetWindowSize(window, RocProfVis::Tutorial::VIDEO_WIDTH,
+                                              RocProfVis::Tutorial::VIDEO_HEIGHT);
+                        }
+                    }
+
                     backend.m_new_frame(&backend);
                     ImGui::NewFrame();
                     // Hide the panel during a run so it can't cover the UI under test.
-                    if(!ImGuiTestEngine_GetIO(engine).IsRunningTests)
+                    if(!ImGuiTestEngine_GetIO(engine).IsRunningTests && !record_tutorials)
                     {
                         ImGuiTestEngine_ShowTestEngineWindows(engine, nullptr);
                     }
@@ -518,6 +620,10 @@ main(int argc, char** argv)
                     rocprofvis_view_render(g_render_options);
                     g_render_options = rocprofvis_view_render_options_t::
                         kRocProfVisViewRenderOption_None;
+                    if(record_tutorials)
+                    {
+                        RocProfVis::Tutorial::RenderOverlay();
+                    }
 
                     ImGui::Render();
                     ImDrawData* draw_data    = ImGui::GetDrawData();
@@ -527,9 +633,14 @@ main(int argc, char** argv)
                     if(!is_minimized)
                     {
                         backend.m_render(&backend, draw_data, &clear_color);
+                    }
+                    // Screen captures read the back buffer, so they must run
+                    // before present leaves its contents undefined.
+                    ImGuiTestEngine_PostSwap(engine);
+                    if(!is_minimized)
+                    {
                         backend.m_present(&backend);
                     }
-                    ImGuiTestEngine_PostSwap(engine);
 
 #ifndef __APPLE__
                     // Applied after the frame so the window is never resized

@@ -7,6 +7,7 @@
 #pragma once
 
 #include "imgui.h"
+#include "imgui_internal.h"
 
 #include "rocprofvis_appwindow.h"
 #include "rocprofvis_analysis_view.h"
@@ -156,6 +157,8 @@ struct AppWindowTestPeer
 {
     AppWindow& v;
     TabContainer* TabContainerPtr() const { return v.m_tab_container.get(); }
+    // Closed traces still freeing their controllers in the background.
+    size_t ProviderCleanupJobCount() const { return v.m_provider_cleanup_jobs.size(); }
 };
 
 struct ComputeViewTestPeer
@@ -333,6 +336,15 @@ struct FlameTrackItemTestPeer
 
     size_t ChartItemCount() const { return v.m_chart_items.size(); }
 
+    // Copies of the cached events, for tests that pick a bar by event name.
+    std::vector<TraceEvent> Events() const
+    {
+        std::vector<TraceEvent> events;
+        events.reserve(v.m_chart_items.size());
+        for(const auto& chart_item : v.m_chart_items) events.push_back(chart_item.event);
+        return events;
+    }
+
     // Identity of the earliest event (smallest m_start_ts) in this track. Chart
     // item ordering is not guaranteed stable, so tests pick by timestamp rather
     // than index. Returns false when the track holds no events.
@@ -363,6 +375,13 @@ struct TimelineViewTestPeer
     // permutation of the current tracks or ApplyTrackOrder rejects it.
     std::vector<uint64_t> TopologyOrder() const { return v.BuildTopologyOrder(); }
     size_t                TrackCount() const { return v.m_tracks ? v.m_tracks->size() : 0; }
+
+    // Screen rect of the measurement duration label; empty until it is drawn.
+    ImRect MeasureDurationLabel() const
+    {
+        const auto& label = v.m_measure_label_duration;
+        return label.valid ? ImRect(label.min, label.max) : ImRect();
+    }
 
     // Sidebar width, resized by dragging the "##MovePositionLineVert" splitter.
     float SidebarSize() const { return v.m_sidebar_size; }
@@ -435,6 +454,12 @@ struct TraceViewTestPeer
     SummaryView*  SummaryViewPtr() const { return v.m_summary_view.get(); }
     size_t        BookmarkCount() const { return v.m_bookmarks.size(); }
     void          ClearBookmarks() { v.m_bookmarks.clear(); }
+    // Back to the split ratios TraceView::CreateView starts with.
+    void          ResetLayout()
+    {
+        if(v.m_vertical_split_container) v.m_vertical_split_container->SetSplit(0.75f);
+        if(v.m_horizontal_split_container) v.m_horizontal_split_container->SetSplit(0.2f);
+    }
     void          ClearEventSelection()
     {
         if(v.m_timeline_selection) v.m_timeline_selection->UnselectAllEvents();

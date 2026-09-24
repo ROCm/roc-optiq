@@ -451,6 +451,8 @@ if(BUILD_TESTING AND ROCPROFVIS_ENABLE_UI_TESTS)
     target_compile_definitions(imgui_test_engine PUBLIC
         IMGUI_ENABLE_TEST_ENGINE
         IMGUI_TEST_ENGINE_ENABLE_COROUTINE_STDTHREAD_IMPL=1
+        # Screenshot/video capture, used by --record-tutorials.
+        IMGUI_TEST_ENGINE_ENABLE_CAPTURE=1
     )
     target_include_directories(imgui_test_engine PUBLIC
         ${IMGUI_TEST_ENGINE_DIR}
@@ -463,7 +465,8 @@ if(BUILD_TESTING AND ROCPROFVIS_ENABLE_UI_TESTS)
     # against imgui_te (not the clean imgui). Uses test_main.cpp (the engine-wired copy of
     # main.cpp) so production main.cpp stays pristine and free of any test references.
     set(TEST_TARGET ${TARGET_NAME}-tests)
-    add_executable(${TEST_TARGET} ${APP_FILES} src/app/test/test_main.cpp ${VIEW_FILES} src/app/test/app_tests.cpp)
+    add_executable(${TEST_TARGET} ${APP_FILES} src/app/test/test_main.cpp ${VIEW_FILES} src/app/test/app_tests.cpp
+        src/app/test/tutorial_chapters.cpp src/app/test/tutorial_recorder.cpp)
     add_dependencies(${TEST_TARGET} generate_icon_header)
     add_dependencies(${TEST_TARGET} generate_memory_chart_layouts)
     target_compile_definitions(${TEST_TARGET} PRIVATE IMGUI_ENABLE_TEST_ENGINE)

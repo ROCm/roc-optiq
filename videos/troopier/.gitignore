@@ -1,0 +1,7 @@
+# Footage, voiced lines and renders the scripts here produce: too big for git.
+raw*/
+voice*/
+scripts/
+*.mkv
+*.mp4
+__pycache__/

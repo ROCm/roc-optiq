@@ -329,7 +329,12 @@ jobs:
         if: ${{ inputs.upload_to_s3 }}
         run: |
           TGZ_SRC=$(ls ${{ env.DIST_DIR }}/*.tar.gz | head -1)
-          TGZ_NAME="amdrocm${ROCM_VERSION}-$(basename "${TGZ_SRC}")"
+          TGZ_BASE=$(basename "${TGZ_SRC}")
+          if [[ -n "${BUILD_TIMESTAMP}" ]]; then
+            TGZ_NAME="amdrocm${ROCM_VERSION}-$(echo "${TGZ_BASE}" | sed 's/\.tar\.gz$/\.'"${BUILD_TIMESTAMP}"'\.tar\.gz/')"
+          else
+            TGZ_NAME="amdrocm${ROCM_VERSION}-${TGZ_BASE}"
+          fi
           S3_TGZ_PREFIX="s3://${S3_BUCKET}/${{ env.S3_ROOT_DIRECTORY }}/tarball"
           aws s3 cp \
             "${TGZ_SRC}" \

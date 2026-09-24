@@ -1380,12 +1380,9 @@ Catch2 tests live in `src/controller/tests/`:
   table from Python, and confirm `table_alloc` is not the UI Event
   Table singleton. Accepts `--input_file`.
 
-The compute controller test exercises the PC-sampling stall fetch when its input
-is a schema-2.2 database with ISA data. It verifies that callers can omit
-instruction-sample metadata and that omitting the new argument preserves the
-legacy inclusive behavior. The repository's legacy default fixture has no ISA
-tables, so this case skips unless `--input_file` selects a matching schema-2.2
-fixture.
+The compute controller test currently does not exercise the PC-sampling ABI.
+Changes to the three PC-sampling fetchers or their property bank should add
+coverage for the matching schema-2.2 fixture.
 
 Both binaries accept `--input_file <path>` (parsed by Catch2 + Clara).
 Logs land in `Testing/Temporary/rocprofvis_controller_*_tests/`.

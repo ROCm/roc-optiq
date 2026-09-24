@@ -14,6 +14,7 @@
 #endif
 #include "widgets/rocprofvis_widget.h"
 #include "widgets/rocprofvis_gui_helpers.h"
+#include "widgets/rocprofvis_notification_manager.h"
 #include "icons/rocprovfis_icon_defines.h"
 #include "imgui.h"
 #include <cfloat>
@@ -103,12 +104,11 @@ void ProfilerLauncherDialog::Show()
 {
     m_should_open = true;
     m_execution_cache_dirty = true;
-    // Always reopen on the configuration screen; a prior run (if any) was torn
-    // down on close.
-    if (!m_orchestrator.IsRunning())
-    {
-        m_show_run_view = false;
-    }
+    // Closing only hid the window; any prior run is still on the orchestrator.
+    // Reopen on the configuration screen so "View Last Run" (or "View Run") is
+    // on the button row. The run view is one click away and the capture is not
+    // cancelled.
+    m_show_run_view = false;
 }
 
 void ProfilerLauncherDialog::Render()
@@ -122,6 +122,11 @@ void ProfilerLauncherDialog::Render()
 
     if (!m_show_window)
     {
+#ifdef ROCPROFVIS_ENABLE_REMOTE
+        // Auth is rendered by AppWindow; the download-progress popup is ours
+        // and must still appear if the user hid the launcher mid-transfer.
+        RenderRemotePopups();
+#endif
         return;
     }
 
@@ -176,10 +181,7 @@ void ProfilerLauncherDialog::Render()
 
     if (!window_open)
     {
-        OnCloseClicked();
-        m_show_window          = false;
-        m_show_run_view        = false;
-        m_show_advanced_window = false;
+        Hide();
     }
 }
 
@@ -1107,9 +1109,7 @@ void ProfilerLauncherDialog::RenderButtonRow()
     ImGui::SameLine();
     if (ImGui::Button("Close", ImVec2(120, 0)))
     {
-        OnCloseClicked();
-        m_show_window   = false;
-        m_show_run_view = false;
+        Hide();
     }
 
     // Readiness feedback to the right of the buttons, so it is obvious why
@@ -1176,9 +1176,7 @@ void ProfilerLauncherDialog::RenderRunButtonRow()
     ImGui::SameLine();
     if (ImGui::Button("Close", ImVec2(120, 0)))
     {
-        OnCloseClicked();
-        m_show_window   = false;
-        m_show_run_view = false;
+        Hide();
     }
 }
 
@@ -1400,10 +1398,14 @@ void ProfilerLauncherDialog::OnCancelClicked()
     m_orchestrator.Cancel();
 }
 
-void ProfilerLauncherDialog::OnCloseClicked()
+void ProfilerLauncherDialog::Hide()
 {
-    m_orchestrator.Close();
-    m_last_seen_state = kRPVProfilerStateIdle;
+    // Do not Close() the orchestrator and do not reset m_last_seen_state: the
+    // run (and its console) must still be there when the window comes back, and
+    // resetting the seen state would replay the completion epilogue.
+    m_show_window          = false;
+    m_show_run_view        = false;
+    m_show_advanced_window = false;
 }
 
 void ProfilerLauncherDialog::HandleStateTransition(rocprofvis_profiler_state_t new_state)
@@ -1477,6 +1479,31 @@ void ProfilerLauncherDialog::HandleStateTransition(rocprofvis_profiler_state_t n
         m_output_epilogue += is_remote ? "\nRemote profiler cancelled by user.\n"
                                        : "\nProfiler cancelled by user.\n";
         RebuildComposedOutput();
+    }
+
+    // Closing the launcher only hid the window; the run kept going. Tell the
+    // user it settled, because they are not looking at the console.
+    if (!m_show_window)
+    {
+        if (new_state == kRPVProfilerStateCompleted)
+        {
+            std::string trace_path = m_orchestrator.GetTracePath();
+            NotificationManager::GetInstance().Show(
+                trace_path.empty() ? "Profiler finished"
+                                   : ("Profiler finished: " + trace_path),
+                NotificationLevel::Success);
+        }
+        else if (new_state == kRPVProfilerStateFailed)
+        {
+            NotificationManager::GetInstance().Show(
+                m_error_message.empty() ? "Profiler failed" : m_error_message,
+                NotificationLevel::Error);
+        }
+        else if (new_state == kRPVProfilerStateCancelled)
+        {
+            NotificationManager::GetInstance().Show("Profiler cancelled",
+                                                    NotificationLevel::Info);
+        }
     }
 }
 

@@ -641,7 +641,7 @@ std::vector<WarningMessage> RocprofSysBackend::GetWarnings(
     {
         warnings.push_back({WarningMessage::kWarning,
             "Built-in presets are ignored by rocprof-sys-instrument "
-            "(--preset is a run/sample flag). Choose Custom or switch tool"});
+            "(--preset is a run/sample flag). Select none or switch tool"});
     }
 
     // Tool routing: run + sampling
@@ -703,7 +703,7 @@ std::vector<std::string> RocprofSysBackend::GetSummaryTags(
     else
     {
         tags.push_back(m_settings.rocprof_preset.empty()
-                           ? std::string("Custom")
+                           ? std::string("none")
                            : m_settings.rocprof_preset);
     }
 
@@ -1236,12 +1236,12 @@ bool RocprofSysBackend::RenderBackendsTab()
     ImGui::SameLine(kPresetLabelW);
 
     const char* preset_label =
-        m_settings.rocprof_preset.empty() ? "Custom" : m_settings.rocprof_preset.c_str();
+        m_settings.rocprof_preset.empty() ? "none" : m_settings.rocprof_preset.c_str();
 
     ImGui::SetNextItemWidth(kPresetComboW);
     if (ImGui::BeginCombo("##RocprofPresetCombo", preset_label))
     {
-        if (ImGui::Selectable("Custom", m_settings.rocprof_preset.empty()))
+        if (ImGui::Selectable("none", m_settings.rocprof_preset.empty()))
         {
             m_settings.rocprof_preset.clear();
             changed = true;
@@ -1264,7 +1264,7 @@ bool RocprofSysBackend::RenderBackendsTab()
     HelpMarker("Profiling preset",
                "Pick a built-in rocprof-sys preset to configure collection defaults. "
                "When a preset is active, detailed settings are locked to preset values. "
-               "Choose Custom to unlock every control.");
+               "Select none to unlock every control.");
 
     bool has_preset = !m_settings.rocprof_preset.empty();
 
@@ -1312,7 +1312,7 @@ bool RocprofSysBackend::RenderBackendsTab()
     {
         ImGui::Spacing();
         ImGui::TextDisabled("Preset \"%s\" controls the locked options above. "
-                            "Choose Custom to edit them.",
+                            "Select none to edit them.",
                             m_settings.rocprof_preset.c_str());
     }
 

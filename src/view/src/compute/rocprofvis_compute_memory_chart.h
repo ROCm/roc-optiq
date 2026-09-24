@@ -72,6 +72,19 @@ private:
         MemChartMetricRef metric;
     };
 
+    // How BuildArrowRoutes draws an arrow. ComputeLayout and RebuildColumnGaps
+    // classify through the same function, so the room they reserve matches the
+    // route that is drawn.
+    enum class RouteKind : uint8_t
+    {
+        kNone,      // Unresolved endpoint; not drawn.
+        kAdjacent,  // Neighbouring columns in one row band: horizontal.
+        kSkip,      // Skips columns in one row band: highway lane below the band.
+        kElbow,     // Different column and row band: vertical-first elbow.
+        kVertical,  // Same column, nothing stacked between: straight vertical.
+        kGutter,    // Same column otherwise: through the gutter right of the column.
+    };
+
     // Horizontal extent a skip-column arrow occupies along its row's highway.
     struct SkipSpan
     {
@@ -118,6 +131,13 @@ private:
     // arrow endpoints and label presence, so it runs on layout load rather than
     // every frame.
     void RebuildColumnGaps();
+
+    RouteKind ClassifyArrow(const MemChartArrow& arrow) const;
+    // Index in m_layout.blocks of the top-level block that is, or contains, `block`.
+    size_t TopLevelIndex(const MemChartBlock& block) const;
+    // True when another top-level block is stacked in the column between the two
+    // blocks. Judged from row and stack order, so it holds before positions exist.
+    bool StackedBetween(const MemChartBlock& a, const MemChartBlock& b) const;
 
     void ComputeLayout(float available_width);
     void MeasureBlock(MemChartBlock& block) const;
@@ -192,6 +212,10 @@ private:
     // Resolved after each fetch; keyed by the metric's full dotted id
     // ("category.table.entry", e.g. "3.1.0").
     std::unordered_map<std::string, const MetricValue*> m_ptr_by_metric_id;
+
+    // Every block (nested ones included) -> index of its top-level block in
+    // m_layout.blocks. Rebuilt on layout load, after the blocks are sorted.
+    std::unordered_map<const MemChartBlock*, size_t> m_top_level_index;
 
     // What crosses each inter-column gap (between ascending distinct columns),
     // ordered by how much room the gap needs. Precomputed on layout load so

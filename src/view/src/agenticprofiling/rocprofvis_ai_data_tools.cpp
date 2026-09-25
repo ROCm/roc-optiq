@@ -1013,6 +1013,13 @@ BuildAssistantBriefing(const AssistantToolContext& context)
     {
         return "No trace is open. Open a .db / .rpd file first.";
     }
+    // A compute workload shares none of the vocabulary below - no topology, no
+    // timeline selection, no GPU summary - so it is described next to the tools
+    // that read it rather than here.
+    if(context.is_compute)
+    {
+        return BuildAssistantComputeBriefing(context);
+    }
 
     std::ostringstream out;
     out << "trace_name: " << context.trace_name << "\n";
@@ -1826,6 +1833,10 @@ FinishAssistantFetch(const AssistantToolContext& context,
     if(fetch.kind == AssistantFetchKind::kTrackStatistics)
     {
         return FormatTrackStatistics(context, fetch.track_id);
+    }
+    if(fetch.kind == AssistantFetchKind::kComputeMetrics)
+    {
+        return FinishAssistantComputeFetch(context, fetch);
     }
     if(fetch.kind == AssistantFetchKind::kScript)
     {

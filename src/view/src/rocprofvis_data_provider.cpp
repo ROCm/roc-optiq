@@ -4627,6 +4627,13 @@ DataProvider::FetchMetrics(const MetricsRequestParams& metrics_params)
 }
 
 bool
+DataProvider::LastMetricsFetchSucceeded(uint64_t client_id) const
+{
+    auto it = m_metrics_fetch_succeeded.find(client_id);
+    return it != m_metrics_fetch_succeeded.end() && it->second;
+}
+
+bool
 DataProvider::FetchMetricPivotTable(const ComputeTableRequestParams& params)
 {
     if (m_state != ProviderState::kReady)
@@ -5252,9 +5259,15 @@ DataProvider::LoadPcSamplingStates(KernelInfo& kernel, rocprofvis_handle_t* pc_h
         &num_sampling_states);
 
     kernel.pc_sampling_data.pc_sample_states.resize(num_sampling_states);
+    std::unordered_map<uint64_t, PcSampleState*> states_by_uuid;
+    states_by_uuid.reserve(num_sampling_states);
     for(uint64_t i = 0; i < num_sampling_states; i++)
     {
         PcSampleState& state = kernel.pc_sampling_data.pc_sample_states[i];
+        uint64_t       state_uuid = 0;
+        rocprofvis_controller_get_uint64(
+            pc_handle, kRPVControllerPCSamplingPcSampleStateUuid, i, &state_uuid);
+        states_by_uuid.emplace(state_uuid, &state);
         rocprofvis_controller_get_uint64(
             pc_handle, kRPVControllerPCSamplingPcSampleStateInstructionUuid, i,
             &state.instruction_uuid);
@@ -5267,6 +5280,51 @@ DataProvider::LoadPcSamplingStates(KernelInfo& kernel, rocprofvis_handle_t* pc_h
         rocprofvis_controller_get_uint64(
             pc_handle, kRPVControllerPCSamplingPcSampleStateStallCount, i,
             &state.stall_count);
+        state.reasons.clear();
+    }
+
+    // Reason rows name their reason through a lookup table of its own.
+    uint64_t num_reason_names = 0;
+    rocprofvis_controller_get_uint64(
+        pc_handle, kRPVControllerPCSamplingNumPcSampleStallReasonLookups, 0,
+        &num_reason_names);
+    std::unordered_map<uint64_t, std::string> reason_names;
+    reason_names.reserve(num_reason_names);
+    for(uint64_t i = 0; i < num_reason_names; i++)
+    {
+        uint64_t lookup_uuid = 0;
+        rocprofvis_controller_get_uint64(
+            pc_handle, kRPVControllerPCSamplingPcSampleStallReasonLookupRecordUuid, i,
+            &lookup_uuid);
+        reason_names.emplace(
+            lookup_uuid,
+            GetString(pc_handle, kRPVControllerPCSamplingPcSampleStallReasonLookupText,
+                      i));
+    }
+
+    uint64_t num_reasons = 0;
+    rocprofvis_controller_get_uint64(
+        pc_handle, kRPVControllerPCSamplingNumPcSampleStallReasons, 0, &num_reasons);
+    for(uint64_t i = 0; i < num_reasons; i++)
+    {
+        uint64_t state_uuid  = 0;
+        uint64_t lookup_uuid = 0;
+        uint64_t count       = 0;
+        rocprofvis_controller_get_uint64(
+            pc_handle, kRPVControllerPCSamplingPcSampleStallReasonStateUuid, i,
+            &state_uuid);
+        rocprofvis_controller_get_uint64(
+            pc_handle, kRPVControllerPCSamplingPcSampleStallReasonLookupUuid, i,
+            &lookup_uuid);
+        rocprofvis_controller_get_uint64(
+            pc_handle, kRPVControllerPCSamplingPcSampleStallReasonCount, i, &count);
+        auto state = states_by_uuid.find(state_uuid);
+        auto name  = reason_names.find(lookup_uuid);
+        if(state != states_by_uuid.end() && name != reason_names.end())
+        {
+            state->second->reasons.push_back(
+                PcSampleState::Reason{ name->second, count });
+        }
     }
 }
 
@@ -5593,6 +5651,12 @@ DataProvider::ProcessMetricsRequest(RequestInfo& req)
     }
     std::shared_ptr<MetricsRequestParams> request_params =
         std::dynamic_pointer_cast<MetricsRequestParams>(req.custom_params);
+    if(request_params)
+    {
+        m_metrics_fetch_succeeded[request_params->m_client_id] =
+            req.request_obj_handle != nullptr &&
+            req.response_code == kRocProfVisResultSuccess;
+    }
     if(req.request_obj_handle && request_params)
     {
         rocprofvis_controller_metrics_container_t* container = req.request_obj_handle;
@@ -5812,11 +5876,11 @@ DataProvider::ProcessPcSamplingRequest(RequestInfo& req)
     const bool           success   = (req.response_code == kRocProfVisResultSuccess);
     rocprofvis_handle_t* pc_handle = req.request_obj_handle;
     uint64_t             completed_source_file_uuid = params->m_source_file_uuid;
+    KernelInfo*          kernel =
+        m_compute_model.GetKernelInfoMutable(params->m_workload_id, params->m_kernel_id);
 
     if(success && pc_handle)
     {
-        KernelInfo* kernel = m_compute_model.GetKernelInfoMutable(
-            params->m_workload_id, params->m_kernel_id);
         if(kernel)
         {
             switch(params->m_layer)
@@ -5845,6 +5909,37 @@ DataProvider::ProcessPcSamplingRequest(RequestInfo& req)
     else if(!success)
     {
         spdlog::warn("PC sampling request failed with code {}", req.response_code);
+    }
+
+    // A cancelled read is left unmarked, so whoever still wants the layer reads
+    // it again. A source read that fails never takes back an index that landed.
+    if(kernel && req.response_code != kRocProfVisResultCancelled)
+    {
+        const PcSamplingLayerState outcome = success && pc_handle
+                                                 ? PcSamplingLayerState::kRead
+                                                 : PcSamplingLayerState::kFailed;
+        PcSamplingData&            data    = kernel->pc_sampling_data;
+        switch(params->m_layer)
+        {
+            case PcSamplingLayer::kIsa:
+                data.isa_state = outcome;
+                break;
+            case PcSamplingLayer::kSource:
+                if(data.source_state != PcSamplingLayerState::kRead)
+                {
+                    data.source_state = outcome;
+                }
+                if(completed_source_file_uuid != 0 &&
+                   std::find(data.source_files_read.begin(), data.source_files_read.end(),
+                             completed_source_file_uuid) == data.source_files_read.end())
+                {
+                    data.source_files_read.push_back(completed_source_file_uuid);
+                }
+                break;
+            case PcSamplingLayer::kStalls:
+                data.stalls_state = outcome;
+                break;
+        }
     }
 
     req.request_obj_handle = nullptr;

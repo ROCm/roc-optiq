@@ -88,6 +88,7 @@ namespace DataModel
 		{"instruction_line_instruction_type_uuid", kRPVComputeColumnPcSamplingInstructionLineInstructionTypeUuid},
 		{"instruction_line_code_object_offset", kRPVComputeColumnPcSamplingInstructionLineCodeObjectOffset},
 		{"instruction_line_instruction", kRPVComputeColumnPcSamplingInstructionLineInstruction},
+		{"instruction_line_instruction_type", kRPVComputeColumnPcSamplingInstructionLineInstructionType},
 		{"kernel_symbol_uuid", kRPVComputeColumnPcSamplingKernelSymbolUuid},
 		{"kernel_symbol_code_object_uuid", kRPVComputeColumnPcSamplingKernelSymbolCodeObjectUuid},
 		{"kernel_symbol_kernel_uuid", kRPVComputeColumnPcSamplingKernelSymbolKernelUuid},
@@ -473,9 +474,12 @@ namespace DataModel
 					"il.kernel_symbol_uuid AS instruction_line_kernel_symbol_uuid, "
 					"COALESCE(il.instruction_type_uuid, 0) AS instruction_line_instruction_type_uuid, "
 					"COALESCE(il.code_object_offset, 0) AS instruction_line_code_object_offset, "
-					"COALESCE(il.instruction, '') AS instruction_line_instruction "
+					"COALESCE(il.instruction, '') AS instruction_line_instruction, "
+					"COALESCE(it.text, '') AS instruction_line_instruction_type "
 					"FROM compute_instruction_line il "
 					"JOIN compute_kernel_symbol ks ON ks.kernel_symbol_uuid = il.kernel_symbol_uuid "
+					"LEFT JOIN compute_instruction_type_lookup it ON "
+					"it.instruction_type_lookup_uuid = il.instruction_type_uuid "
 					"WHERE ks.kernel_uuid = ";
 				query_out += params[0].param_str;
 				query_out += " ORDER BY il.kernel_symbol_uuid, il.code_object_offset, il.instruction_uuid";

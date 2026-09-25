@@ -148,6 +148,8 @@ private:
     void StorePcSamplingRows(PcSampling&           output,
                              rocprofvis_property_t count_property,
                              const QueryDataStore&  data_store);
+    void StoreInstructionTypeLookupMap(PcSampling&          output,
+                                       const QueryDataStore& data_store);
 
     static bool ParseUInt64(const char* value,
                             uint64_t&   result);

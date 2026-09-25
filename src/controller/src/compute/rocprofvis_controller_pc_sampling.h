@@ -136,7 +136,7 @@ private:
     std::vector<SourceLine>                m_source_lines;
     std::vector<CodeObjectStore>           m_code_object_store;
     std::vector<KernelSymbol>              m_kernel_symbols;
-    std::vector<InstructionLine>                   m_instruction_lines;
+    std::vector<InstructionLine>           m_instruction_lines;
     std::vector<InstructionSourceLine>     m_instruction_source_lines;
     std::vector<PcSampleState>             m_pc_sample_states;
     std::vector<PcSampleStallReason>       m_pc_sample_stall_reasons;
@@ -145,15 +145,25 @@ private:
     std::vector<InstructionSample>         m_instruction_samples;
     std::vector<InstructionSampleLookup>   m_instruction_sample_lookups;
 
+    std::unordered_map<uint64_t, std::string>             m_instruction_type_lookup_map;
     std::unordered_map<uint64_t, std::vector<SourceLine>> m_source_line_cache;
-    bool                                                  m_source_files_loaded = false;
-    bool m_code_object_store_loaded                                             = false;
-    bool m_kernel_symbols_loaded                                                = false;
-    bool m_instruction_lines_loaded                                             = false;
-    bool m_instruction_source_lines_loaded                                      = false;
-    bool m_pc_sample_states_loaded                                              = false;
-    bool m_stalls_loaded                                                        = false;
-    bool m_instruction_samples_loaded                                           = false;
+
+    enum LoadedFlag : uint8_t
+    {
+        kSourceFiles            = 1 << 0,
+        kCodeObjectStore        = 1 << 1,
+        kKernelSymbols          = 1 << 2,
+        kInstructionLines       = 1 << 3,
+        kInstructionSourceLines = 1 << 4,
+        kPcSampleStates         = 1 << 5,
+        kStalls                 = 1 << 6,
+        kInstructionSamples     = 1 << 7,
+    };
+
+    bool    IsLoaded(LoadedFlag f) const { return (m_loaded_flags & f) != 0; }
+    void SetLoaded(LoadedFlag f)         { m_loaded_flags |= f; }
+
+    uint8_t m_loaded_flags = 0;
 
     // Fetches populate independent data sets. Layer-owned locks allow consumers
     // to read a completed layer while unrelated layers are still loading.

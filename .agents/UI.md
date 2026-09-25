@@ -1542,8 +1542,10 @@ through `PcSamplingRequestParams` / `DataProvider::FetchPcSampling` in three
 independent layers:
 
 - `kIsa` runs when the view opens or its kernel changes and loads only the
-  code-object, kernel-symbol, ISA instruction, and code-object-offset data
-  needed by the primary pane.
+  code-object, kernel-symbol, ISA instruction, instruction-type, and
+  code-object-offset data needed by the primary pane. Instruction rows retain
+  the type UUID, while `PcSamplingData` stores one UUID-to-text lookup map
+  populated during the same instruction-line read.
 - `kSource` runs when the source pane is shown or a different source file is
   selected. It loads source-file metadata, ISA/source correlations, and the
   selected file's source lines. Source-file ID 0 asks the controller to choose

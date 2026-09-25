@@ -1034,7 +1034,9 @@ Property bank: `rocprofvis_controller_pc_sampling_data_properties_t`
 `__kRPVControllerPCSamplingPropertiesLast`). Its three groups have fixed high
 nibbles: source `0x10000000`, ISA `0x20000000`, and stalls `0x30000000`.
 Instruction/source correlation properties include both source-line and owning
-source-file UUIDs.
+source-file UUIDs. Each ISA instruction line stores its instruction-type UUID;
+the ISA load also builds a UUID-to-text map used to resolve the public
+instruction-type text property.
 
 ### 6.8 `ComputePlot`, `Plot`, `PlotSeries`
 Files: `rocprofvis_controller_plot.{h,cpp}`,

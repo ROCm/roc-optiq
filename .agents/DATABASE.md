@@ -1206,7 +1206,11 @@ instruction-to-symbol, symbol-to-kernel, symbol-to-code-object,
 state-to-instruction, and stall-reason-to-state joins.
 
 `GetComputeKernelInstructionLines` selects the fields needed for the
-initial ISA display (formerly "Code View").
+initial ISA display (formerly "Code View"), including the resolved instruction
+type text from `compute_instruction_type_lookup`. The lookup is left-joined so
+an instruction without type metadata remains in the result with an empty type.
+The controller normalizes this result into UUID-only instruction records and a
+separate UUID-to-text lookup map.
 
 `GetComputeWorkloadTopKernels` also returns `has_isa_lines`. For schema
 2.2 and newer it derives the value from kernel-symbol/instruction-line

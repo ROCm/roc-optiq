@@ -1043,6 +1043,23 @@ rocprofvis_result_t PcSampling::GetString(rocprofvis_property_t property, uint64
                 }
                 break;
             }
+            case kRPVControllerPCSamplingInstructionLineInstructionType:
+            {
+                if(index < m_instruction_lines.size())
+                {
+                    const uint64_t instruction_type_uuid =
+                        m_instruction_lines[index].instruction_type_uuid;
+                    const auto lookup =
+                        m_instruction_type_lookup_map.find(instruction_type_uuid);
+                    static const std::string empty;
+                    result = GetStdStringImpl(
+                        value, length,
+                        lookup != m_instruction_type_lookup_map.end()
+                            ? lookup->second
+                            : empty);
+                }
+                break;
+            }
             case kRPVControllerPCSamplingPcSampleStallReasonLookupText:
             {
                 if(index < m_pc_sample_stall_reason_lookups.size())
@@ -1118,6 +1135,18 @@ rocprofvis_result_t PcSampling::SetString(rocprofvis_property_t property, uint64
             if(index < m_instruction_lines.size())
             {
                 m_instruction_lines[index].instruction = value;
+                result = kRocProfVisResultSuccess;
+            }
+            break;
+        }
+        case kRPVControllerPCSamplingInstructionLineInstructionType:
+        {
+            if(index < m_instruction_lines.size())
+            {
+                const uint64_t instruction_type_uuid =
+                    m_instruction_lines[index].instruction_type_uuid;
+                m_instruction_type_lookup_map.insert_or_assign(
+                    instruction_type_uuid, value);
                 result = kRocProfVisResultSuccess;
             }
             break;

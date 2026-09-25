@@ -1530,28 +1530,33 @@ and units containing percent signs are displayed literally.
 Correlates source code and ISA through `SourceCodeWidget` and
 `IsaCodeWidget`, which both derive from `BaseCodeWidget` and share a
 `LineSelection` so selecting a source line highlights the correlated
-ISA (and vice versa). The ISA pane is the always-visible primary pane;
-the optional source-code pane is shown on the right through the
-`Show Source Code` / `Hide Source Code` control.
+ISA (and vice versa). The ISA pane is the always-visible primary pane. The
+source-code pane is visible on the right by default and can be hidden or shown
+through the `Hide Source Code` / `Show Source Code` control.
 After trace metadata loads, `ComputeView` disables the ISA View tab and
 shows a tooltip without constructing its widget when no kernel in the database
 has ISA lines. The availability flag is initialized once with the other
 data-dependent tab states.
-`RenderControlPanel()` hosts the source-file dropdown and the `Show Source
-Code` / `Show Stalls` controls. PC-sampling data is fetched through
-`PcSamplingRequestParams` / `DataProvider::FetchPcSampling` in three
+`RenderControlPanel()` hosts the source-file dropdown and the source-code and
+sampling-detail visibility controls. A failed sampling-detail request changes
+the latter control to `Retry Sampling Details`. PC-sampling data is fetched
+through `PcSamplingRequestParams` / `DataProvider::FetchPcSampling` in three
 independent layers:
 
 - `kIsa` runs when the view opens or its kernel changes and loads only the
-  code-object, kernel-symbol, and ISA-line data needed by the primary pane.
+  code-object, kernel-symbol, ISA instruction, and code-object-offset data
+  needed by the primary pane.
 - `kSource` runs when the source pane is shown or a different source file is
   selected. It loads source-file metadata, ISA/source correlations, and the
   selected file's source lines. Source-file ID 0 asks the controller to choose
   the first available file.
-- `kStalls` runs when the user selects `Show Stalls`. The controller loads PC
-  sample states, stall-reason rows and lookups, instruction types, and
-  instruction-sample rows and lookups. The current view projection consumes
-  only each state's instruction UUID and total, issue, and stall counts.
+- `kStalls` runs initially because sampling details are visible by default, and
+  runs again when the user selects `Show Sampling Details` or retries a failed
+  request. The View asks the controller for PC sample states plus stall-reason
+  rows and lookups, explicitly excluding instruction-sample metadata that this
+  view does not consume. The projection uses each state's UUID, instruction
+  UUID, total, and stall counts together with the stall-reason rows and lookup
+  text.
 
 `FetchPendingPcSampling()` submits all queued layers; ISA, source, and stalls
 use distinct `DataProvider` request IDs and may be in flight together. A newer
@@ -1562,17 +1567,35 @@ the completed layer. `ComputeIsaView` accepts the callback only when its layer,
 kernel, selection generation, request token, and (for source) selected file
 still match. Do not query the controller or model directly from this view.
 
-The ISA table is always present. `Show Stalls` adds Total Count, Issue Count,
-and Stall Count columns, aggregated by instruction UUID across returned sample
-states. The source table is optional; its Stalls column is
-`100 * sum(stall_count) / sum(total_count)` for instructions mapped to the
-source line at `frame_index == 0`. Stall-reason text, instruction-sample
-metadata, active-thread percentage, wave-occupancy percentage, and dispatch
-UUID are available on the controller handle but are not currently represented
-in `PcSamplingData` or rendered by `ComputeIsaView`.
+The ISA table is always present. Its Offset column shows each instruction's
+byte offset inside the selected code object as uppercase hexadecimal; it is not
+an absolute runtime address. Right-clicking an offset, ISA instruction, or
+source-code line opens its copy context menu. `Show Sampling Details` adds
+Samples and Stall % columns, aggregated by instruction UUID across returned
+sample states. Samples shows a right-aligned
+raw count over a heat bar normalized to the hottest displayed instruction. Its
+tooltip reports both kernel share and relative hotness. Counts from one through
+ten carry a low-confidence marker for the derived percentages, while zero-count
+lines remain unmarked and the exact count remains prominent. The Samples column starts
+at the wider of its header and largest formatted count. All ISA-table columns
+are user-resizable, and each heat bar uses the live cell width so it follows
+both manual resizing and data- or font-driven width changes. Hovering a data
+column header shows a user-facing explanation; the `#` line-number headers do
+not show tooltips. When `ROCPROFVIS_DEVELOPER_MODE` is enabled, each data-column
+tooltip also shows the database fields, grouping or filtering keys, and formulas
+used by the column. Hovering a `Stall %` cell shows every recorded stall reason
+for that instruction, aggregated across sample states and sorted by descending
+sample count. Each reason includes its raw count and its share of the
+instruction's samples classified by the reason data. The tooltip warns when the
+classified-reason total differs from the instruction's total sample count.
+The source table contains only the source line number and source text.
+Instruction-sample metadata, active-thread percentage, wave-occupancy
+percentage, and dispatch UUID are available on the controller handle but are
+not currently represented in `PcSamplingData` or rendered by `ComputeIsaView`.
 
 PC-sampling queries require compute schema 2.2 or newer. A failed source or
-stall request is isolated from an already-loaded ISA pane.
+sampling-detail request is isolated from an already-loaded ISA pane; failed
+sampling details can be retried from the control panel.
 Source records with unknown or zero line numbers are omitted. ISA instructions
 that lack a valid source line remain visible and mouse-hoverable but cannot be
 selected for source correlation; hovering them clears the source-line hover.

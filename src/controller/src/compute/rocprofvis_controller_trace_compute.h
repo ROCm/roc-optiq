@@ -143,6 +143,7 @@ private:
                                                      PcSampling& output);
     rocprofvis_dm_result_t FetchPcSamplingStallData(rocprofvis_dm_database_t db,
                                                     Future* future, uint64_t kernel_id,
+                                                    bool include_instruction_samples,
                                                     PcSampling& output);
     void StorePcSamplingRows(PcSampling&           output,
                              rocprofvis_property_t count_property,

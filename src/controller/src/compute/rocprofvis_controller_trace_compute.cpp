@@ -399,22 +399,26 @@ rocprofvis_result_t
 ComputeTrace::AsyncFetchPcSamplingStalls(Arguments& args, Future& future,
                                          PcSampling& output)
 {
-    uint64_t kernel_id = 0;
+    uint64_t kernel_id                   = 0;
+    uint64_t include_instruction_samples = 1;
     if(kRocProfVisResultSuccess !=
        args.GetUInt64(kRPVControllerPcSamplingArgsKernelId, 0, &kernel_id))
     {
         return kRocProfVisResultInvalidArgument;
     }
+    args.GetUInt64(kRPVControllerPcSamplingArgsIncludeInstructionSamples, 0,
+                   &include_instruction_samples);
 
     future.Set(JobSystem::Get().IssueJob(
-        [this, &output, kernel_id](Future* future) -> rocprofvis_result_t {
+        [this, &output, kernel_id,
+         include_instruction_samples](Future* future) -> rocprofvis_result_t {
             std::unique_lock<std::recursive_mutex> data_lock(
                 output.GetLayerMutex(PcSampling::DataLayer::kStalls));
             if(future->IsCancelled()) return kRocProfVisResultCancelled;
             rocprofvis_dm_database_t db = rocprofvis_dm_get_property_as_handle(
                 m_dm_handle, kRPVDMDatabaseHandle, 0);
-            const rocprofvis_dm_result_t dm_result =
-                FetchPcSamplingStallData(db, future, kernel_id, output);
+            const rocprofvis_dm_result_t dm_result = FetchPcSamplingStallData(
+                db, future, kernel_id, include_instruction_samples != 0, output);
             if(future->IsCancelled()) return kRocProfVisResultCancelled;
             return dm_result == kRocProfVisDmResultSuccess
                        ? kRocProfVisResultSuccess
@@ -481,7 +485,9 @@ ComputeTrace::FetchPcSamplingSourceData(rocprofvis_dm_database_t db, Future* fut
 
 rocprofvis_dm_result_t
 ComputeTrace::FetchPcSamplingStallData(rocprofvis_dm_database_t db, Future* future,
-                                       uint64_t kernel_id, PcSampling& output)
+                                       uint64_t    kernel_id,
+                                       bool        include_instruction_samples,
+                                       PcSampling& output)
 {
     rocprofvis_dm_result_t result = kRocProfVisDmResultSuccess;
     if(!output.m_pc_sample_states_loaded)
@@ -494,7 +500,8 @@ ComputeTrace::FetchPcSamplingStallData(rocprofvis_dm_database_t db, Future* futu
         result = FetchStalls(db, future, kernel_id, output);
         if(result == kRocProfVisDmResultSuccess) output.m_stalls_loaded = true;
     }
-    if(result == kRocProfVisDmResultSuccess && !output.m_instruction_samples_loaded)
+    if(result == kRocProfVisDmResultSuccess && include_instruction_samples &&
+       !output.m_instruction_samples_loaded)
     {
         result = FetchInstructionSamples(db, future, kernel_id, output);
         if(result == kRocProfVisDmResultSuccess)

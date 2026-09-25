@@ -63,10 +63,23 @@ struct Point
 
 struct PcSampleState
 {
-    uint64_t instruction_uuid = 0;
-    uint64_t total_count      = 0;
-    uint64_t issue_count      = 0;
-    uint64_t stall_count      = 0;
+    uint64_t pc_sample_state_uuid = 0;
+    uint64_t instruction_uuid     = 0;
+    uint64_t total_count          = 0;
+    uint64_t stall_count          = 0;
+};
+
+struct PcSampleStallReason
+{
+    uint64_t pc_sample_state_uuid               = 0;
+    uint64_t pc_sample_stall_reason_lookup_uuid = 0;
+    uint64_t count                              = 0;
+};
+
+struct PcSampleStallReasonLookup
+{
+    uint64_t    pc_sample_stall_reason_lookup_uuid = 0;
+    std::string text;
 };
 
 struct InstructionSourceLine
@@ -79,7 +92,8 @@ struct InstructionSourceLine
 
 struct InstructionLine
 {
-    uint64_t    instruction_uuid = 0;
+    uint64_t    instruction_uuid   = 0;
+    uint64_t    code_object_offset = 0;
     std::string instruction;
 };
 
@@ -112,10 +126,12 @@ struct SourceFile
 
 struct PcSamplingData
 {
-    std::vector<CodeObjectStore>       code_objects;
-    std::vector<SourceFile>            source_files;
-    std::vector<InstructionSourceLine> instruction_source_lines;
-    std::vector<PcSampleState>         pc_sample_states;
+    std::vector<CodeObjectStore>            code_objects;
+    std::vector<SourceFile>                 source_files;
+    std::vector<InstructionSourceLine>      instruction_source_lines;
+    std::vector<PcSampleState>              pc_sample_states;
+    std::vector<PcSampleStallReason>        pc_sample_stall_reasons;
+    std::vector<PcSampleStallReasonLookup>  pc_sample_stall_reason_lookups;
 };
 
 struct KernelInfo

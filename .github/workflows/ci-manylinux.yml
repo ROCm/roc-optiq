@@ -291,6 +291,7 @@ jobs:
             nightly)
               echo "S3_BUCKET=${{ secrets.AWS_NIGHTLY_EXTRAS_S3_BUCKET }}" >> "$GITHUB_ENV"
               echo "S3_ROLE_ARN=${{ secrets.AWS_NIGHTLY_EXTRAS_ROLE_ARN }}" >> "$GITHUB_ENV"
+              echo "BUILD_TIMESTAMP=$(date -u '+%Y%m%d')" >> "$GITHUB_ENV"
               ;;
             rc)
               echo "S3_BUCKET=${{ secrets.AWS_RC_EXTRAS_S3_BUCKET }}" >> "$GITHUB_ENV"
@@ -326,18 +327,28 @@ jobs:
         if: inputs.upload_to_s3 == true || inputs.upload_to_s3 == 'true'
         run: |
           DEB_SRC=$(ls ${{ env.DIST_DIR }}/*.deb | head -1)
-          DEB_NAME="amdrocm${ROCM_VERSION}-$(basename "${DEB_SRC}")"
+          DEB_BASE=$(basename "${DEB_SRC}")
+          if [[ -n "${BUILD_TIMESTAMP}" ]]; then
+            DEB_NAME="amdrocm${ROCM_VERSION}-$(echo "${DEB_BASE}" | sed 's/_\([^_]*\.deb\)$/+'"${BUILD_TIMESTAMP}"'_\1/')"
+          else
+            DEB_NAME="amdrocm${ROCM_VERSION}-${DEB_BASE}"
+          fi
           S3_DEB_BASE="s3://${S3_BUCKET}/${{ env.S3_ROOT_DIRECTORY }}/packages/deb"
           aws s3 cp \
             "${DEB_SRC}" \
             "${S3_DEB_BASE}/pool/main/${DEB_NAME}" \
             --no-progress
 
-      - name: Generate DEB Metadata for S3
+      - name: Generate and Upload DEB Metadata to S3
         if: inputs.upload_to_s3 == true || inputs.upload_to_s3 == 'true'
         run: |
           DEB_SRC=$(ls ${{ env.DIST_DIR }}/*.deb | head -1)
-          DEB_NAME="amdrocm${ROCM_VERSION}-$(basename "${DEB_SRC}")"
+          DEB_BASE=$(basename "${DEB_SRC}")
+          if [[ -n "${BUILD_TIMESTAMP}" ]]; then
+            DEB_NAME="amdrocm${ROCM_VERSION}-$(echo "${DEB_BASE}" | sed 's/_\([^_]*\.deb\)$/+'"${BUILD_TIMESTAMP}"'_\1/')"
+          else
+            DEB_NAME="amdrocm${ROCM_VERSION}-${DEB_BASE}"
+          fi
           SUITE="stable"
           mkdir -p deb-repo/pool/main deb-repo/dists/${SUITE}/main/binary-amd64
           cp "${DEB_SRC}" \
@@ -373,32 +384,40 @@ jobs:
             "${S3_DEB_BASE}/dists/" \
             --no-progress
 
-      - name: Upload RPM to S3
+      - name: Generate RPM Metadata and Upload RPM to S3
         if: inputs.upload_to_s3 == true || inputs.upload_to_s3 == 'true'
         run: |
           RPM_SRC=$(ls ${{ env.DIST_DIR }}/*.rpm | head -1)
-          RPM_NAME="amdrocm${ROCM_VERSION}-$(basename "${RPM_SRC}" | sed 's/\.el[0-9]\+//')"
+          if [[ -n "${BUILD_TIMESTAMP}" ]]; then
+            RPM_NAME="amdrocm${ROCM_VERSION}-$(basename "${RPM_SRC}" | sed 's/\.el[0-9]\+//' | sed 's/\.\([^.]*\.rpm\)$/\.'"${BUILD_TIMESTAMP}"'\.\1/')"
+          else
+            RPM_NAME="amdrocm${ROCM_VERSION}-$(basename "${RPM_SRC}" | sed 's/\.el[0-9]\+//')"
+          fi
           S3_RPM_PREFIX="s3://${S3_BUCKET}/${{ env.S3_ROOT_DIRECTORY }}/packages/rpm/x86_64"
+
+          # Use the renamed file so repodata <location href> matches the S3 key
+          mkdir -p rpm-repo
+          cp "${RPM_SRC}" "rpm-repo/${RPM_NAME}"
+          createrepo_c rpm-repo/
+
           aws s3 cp \
-            "${RPM_SRC}" \
+            "rpm-repo/${RPM_NAME}" \
             "${S3_RPM_PREFIX}/${RPM_NAME}" \
             --no-progress
-
-      - name: Generate RPM Metadata for S3
-        if: inputs.upload_to_s3 == true || inputs.upload_to_s3 == 'true'
-        run: |
-          mkdir -p rpm-repo
-          cp ${{ env.DIST_DIR }}/*.rpm rpm-repo/
-          createrepo_c rpm-repo/
           aws s3 cp --recursive rpm-repo/repodata \
-            s3://${S3_BUCKET}/${{ env.S3_ROOT_DIRECTORY }}/packages/rpm/x86_64/repodata/ \
+            "${S3_RPM_PREFIX}/repodata/" \
             --no-progress
 
       - name: Upload Tarball to S3
         if: inputs.upload_to_s3 == true || inputs.upload_to_s3 == 'true'
         run: |
           TGZ_SRC=$(ls ${{ env.DIST_DIR }}/*.tar.gz | head -1)
-          TGZ_NAME="amdrocm${ROCM_VERSION}-$(basename "${TGZ_SRC}")"
+          TGZ_BASE=$(basename "${TGZ_SRC}")
+          if [[ -n "${BUILD_TIMESTAMP}" ]]; then
+            TGZ_NAME="amdrocm${ROCM_VERSION}-$(echo "${TGZ_BASE}" | sed 's/\.tar\.gz$/\.'"${BUILD_TIMESTAMP}"'\.tar\.gz/')"
+          else
+            TGZ_NAME="amdrocm${ROCM_VERSION}-${TGZ_BASE}"
+          fi
           S3_TGZ_PREFIX="s3://${S3_BUCKET}/${{ env.S3_ROOT_DIRECTORY }}/tarball"
           aws s3 cp \
             "${TGZ_SRC}" \

@@ -21,7 +21,7 @@ Customize ROCm Optiq
 .. |overwrite| image:: ../images/overwrite.png
 .. |delete| image:: ../images/delete.png
 
-You can customize display settings, filters, bookmarks, and more in your ROCm Optiq projects.
+You can customize display settings, filters, bookmarks, and more in ROCm Optiq.
 
 .. _change-settings:
 
@@ -144,6 +144,7 @@ Customize timeline display options
 
 Customize display options for each track by right clicking the **Description** area to open the track's context menu. Select **Track Options** to customize the track's display options.
 
+- Use **Current Track**, **Selected Track(s)**, or the same-type control (labeled with the track type) to choose which tracks the **Track Options** changes apply to.
 - For event tracks, you can toggle between **Color by Name**, **Color by Time Level**, **No Color**, and **Compact mode**.
 
   - **Color by Name**: All events with the same name share a color. 
@@ -201,6 +202,8 @@ Fan mode shows events in a fan-out style, highlighting parallelism and branching
 .. note::
 
   Chain mode and Fan mode are visualization modes for relations. They don't represent the actual kernel scheduling flow.
+
+.. _save-project:
 
 Save a project file
 -------------------

@@ -19,15 +19,6 @@ Prerequisites
 The following are the prerequisites for using ROCm Optiq: 
 
 - **ROCm:** ROCm Optiq only visualizes profiler database files. The machine that runs ROCm Optiq doesn't need ROCm, ROCm Systems Profiler, or ROCm Compute Profiler installed. However, see :ref:`glance-data-sources` for the ROCm versions required for the profiling host that *generates* the ``.db`` file.
-
-  .. tip::
-
-     Use the following command on the profiling host to check which ROCm version is installed:
-
-     .. code-block:: shell
-
-        cat /opt/rocm/.info/version
-
 - **Memory**: At least 16 GB of RAM is recommended for working with large traces.
 - **Operating system**: See the supported operating systems and versions below.
 

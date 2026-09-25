@@ -19,6 +19,7 @@ View ROCm Systems Profiler trace data in ROCm Optiq
 .. |mini| image:: ../images/minimap-icon.png
 .. |make| image:: ../images/make-selection.png
 .. |remove| image:: ../images/remove-time.png
+.. |search-advanced| image:: ../images/search-advanced.png
 
 ROCm Optiq provides a detailed view of a *trace*: a complete record of profiling data captured during an application run, including all event tracks, sample counters, and metadata.
 
@@ -186,18 +187,30 @@ When an event is selected, its event details are displayed in the **Event Detail
 
    When you hover the mouse pointer over a region with high-density events, the application displays the total number of events in each category.
 
-Resize or reorder tracks
-^^^^^^^^^^^^^^^^^^^^^^^^
+.. _sort-tracks:
 
-Use the following actions to resize or reorder tracks.
+Sort, resize, or reorder tracks
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Use the following actions to sort, resize, or reorder tracks.
+
+- Sort tracks by right-clicking the track-list header, or by using the down-arrow at the bottom of the track list, and choosing **Sort Tracks**:
+
+  - **Topology**: Matches the order of tracks in the System Topology View sidebar.
+  - **Default**: Restores the order from when the trace was loaded (by track type).
+  - **Custom**: Uses your remembered drag-to-reorder. The sort mode and custom order are saved with the project (``.rpv``) when you select **File** > **Save**. See :ref:`save-project`.
+  
+    .. image:: ../images/track-sort.png
+       :width: 300
+       :alt: Track sorting options
+   
 - Resize tracks by dragging the separator lines between tracks.
-- Reorder tracks by clicking and dragging |grip| on the left side of the **Description** area.
+- Reorder tracks by clicking and dragging |grip| on the left side of the **Description** area. Drag-to-reorder switches the sort mode to **Custom**.
 
 Queue Utilization
 ^^^^^^^^^^^^^^^^^
 
-For queue tracks, a **Queue Utilization** pill displays next to the queue label. It shows the percentage of time the queue was active over the visible time range. When a time-range filter is active, utilization is calculated for the selected range only.  
+For queue tracks, a **Queue Utilization** pill displays next to the queue label. It shows the percentage of time the queue was active over the visible time range. When a time-range filter is active, utilization is calculated for the selected range only, and the pill tints blue to show that it is limited to that range.  
 **Queue Utilization** is also visible in the **Track Details** tab. 
 
 Sample counter track statistics 
@@ -207,8 +220,7 @@ For sample counter tracks, pills showing standard deviation and average display 
 Additionally, min and max value pills can also be shown/hidden.
  
 When a counter track is expanded to sufficient height, the Y-axis shows incremental scale tick labels between the minimum and maximum values, making intermediate values easier to read.
-Similar to queue utilization, the values in these pills react to reflect the values in the current view or active time-range filter. 
-The Counter statistics are also visible in the **Track Details** tab for the selected track(s).
+Similar to queue utilization, these pills update to match the current view or the active time-range filter. Counter statistics are also visible in the **Track Details** tab for the selected track(s).
 
 .. image:: ../images/new-track-details-statistics.png
    :width: 800
@@ -232,6 +244,7 @@ Measure
 - **Events** mode: Measure duration between two selected events on the timeline. You can snap Start/End Rulers to Event start or Event end. 
 - **Anywhere** mode: Measure duration between two timeline points. You can drag the rulers horizontally to fine-tune.  
 - ROCm Optiq draws two vertical rulers with timestamps and shows the duration (time delta) in a label between them.
+- Drag the duration label to reposition it. The connecting line and notches follow the label. The left ruler timestamp is shown at the top and the right timestamp at the bottom so the labels do not overlap.
 - Right-click a measurement label on the timeline to **Copy Start Timestamp**, **Copy End Timestamp**, or **Copy Measurement Duration**.
 - Right-click a measurement label and choose **Zoom to Measurement** to fit that span to the full timeline width, with the start markers landing on the left and right edges.
 - Use **Reset** or **Clear measurement** to remove the rulers and start a new measurement.
@@ -250,6 +263,8 @@ The **Histogram** provides event density that is normalized across all tracks vi
 
 When the **Timeline View** is zoomed in, the area currently in view is highlighted on the **Histogram**. 
 The highlighted area in the **Histogram** can be dragged to scroll the **Timeline View**.
+
+When a time-range filter is active, the **Histogram** greys bars outside the selected range, marks the selection start and end, and shows a duration bracket for the selection.
 
 
 .. _time-range-filter:
@@ -284,9 +299,6 @@ To clear the time range selection, press **Esc** or right-click and select **Rem
 
 |remove|
 
-.. note::
-
-   When a time-range filter is active, events inside the range stay at full brightness, and events outside the range are dimmed.
 
 .. _advanced:
 
@@ -296,15 +308,15 @@ Advanced Details
 The **Advanced Details** section provides an in-depth view of profiling data, enabling you to analyze performance metrics and event-specific information. 
 This section provides an interface for multiple data perspectives, offering granular insights through these components:
 
-- **Event Table**: Displays all events within the selected tracks. You can refine your analysis by applying a time-range selection or executing customized SQL-like queries, ensuring targeted event exploration.
+- **Event Table**: Displays all events within the selected tracks. You can refine your analysis by applying a time-range selection or using the table filters. The **Event Table** provides two filter modes:
+
+  - **Basic mode**: Provides a text input below each column header. Input a condition, then use the **Enter** key to filter the data.
+  - **Advanced mode**: Provides advanced filters to narrow the table. Use the **Group by** drop-down to group **Event Table** results by an available field. The fields depend on the selected track type (for example, Category, Name, Stream, Queue, Node, PID, or TID). In **Filter**, input SQL-like statements to narrow the results. For example, ``duration > 2000`` displays all events greater than 2000 ns. Time columns are compared in nanoseconds (ns); other time units do not filter correctly. Click **Submit** to apply an advanced filter.
 
   .. image:: ../images/advanced.png
     :width: 800
     :align: center
     :alt: Advanced Details section showing the Event Table with filter and aggregate controls
-
-  - **Aggregate**: A drop-down groups **Event Table** results by a selected field (Category, Name, Stream, Queue, Node, PID, or TID). Click **Submit** to group the results. To remove the grouping, choose —None— and click **Submit**. 
-  - **Filter**: Enter SQL-like statements to filter the data. For example, ``“duration > 2000”`` displays all events greater than 2000 ns. Click **Submit** to filter the data.
   
   .. tip::
 
@@ -312,7 +324,7 @@ This section provides an interface for multiple data perspectives, offering gran
      - Right-click on a table row and select **Go To Event** to navigate to the **Timeline View** to the highlighted event.
      - :ref:`time-range-filter` using the **Timeline View** to filter the rows to data contained within the selected time range.
 
-- **Sample Table**: Presents all performance counter data points associated with the selected tracks. Similar to the **Event Table**, it supports time-range selection and SQL-like query capabilities for detailed performance analysis. It supports the **Aggregate** drop-down to group the results by the selected column.
+- **Sample Table**: Presents all performance counter data points associated with the selected tracks. Similar to the **Event Table**, it supports time-range selection, **Basic mode**, and **Advanced mode**. **Advanced mode** includes the **Group by** drop-down and SQL-like filter queries.
 - **Event Details**: Shows extended information about the event that is not shown in the timeline or the **Event Table**. It shows raw database information such as id, category, duration, associated queue/stream, correlation IDs and API method parameters. It also shows flow, call stack information, and function call arguments, if available.  
 
   - The **Flow Data** displays all events logically connected to the selected event in the execution sequence. You can navigate any of the connected events on the timeline, with vertical track centering and highlight feedback, by right clicking and selecting **Go To Event**. The navigation makes it easier to follow the execution flow across queues and tracks. 
@@ -325,11 +337,15 @@ This section provides an interface for multiple data perspectives, offering gran
   - You can right-click a row or cell of **Track Details** to **Copy Row Data** or **Copy Cell Data**. 
 
 - **Annotations**: Displays user-created annotations, enabling easier navigation across critical points within large traces, enhancing collaboration and knowledge sharing. See :ref:`annotation` for more info.
-- **Top Events**: Provides analysis for the events of each operation type (Instrumented Thread, Sampled Thread, Dispatch, Memory Allocation, Memory Copy) from the selected tracks aggregated by event name. Available metrics are event count (invocations) and total/average/min/max duration. If you select tracks of different types, each type will be shown in a separate table. If you make a time-range selection, Top Events are limited to that selected time-range. 
+- **Top Events**: Provides analysis for the events of each operation type (Instrumented Thread, Sampled Thread, Dispatch, Memory Allocation, Memory Copy) from the selected tracks aggregated by event name. Available metrics include event count (invocations) and duration statistics (for example, total, average, min, and max). If you select tracks of different types, each type will be shown in a separate table. 
 
   .. image:: ../images/top-events.png
      :width: 600
      :alt: Top events tab in Advanced Details
+
+.. note::
+
+   When a time-range filter is active, events inside the range stay at full brightness, and events outside the range are dimmed. The **Event Table** and **Top Events** headers show **Limited to time-range selection** instead of **Full trace**.
 
 .. tip::
 
@@ -419,6 +435,19 @@ Search for events using the search box on the main **Toolbar**.
 - Clicking on a row in the search results will bring the selected event into view on the :ref:`timeline`. 
 - Clicking **X** clears the search results.
 - The search can match multiple substrings at once. Multiple search tokens must be surrounded by quotation marks without spaces (for example: ``“term1””term2”``).
+- **Advanced search**: Click |search-advanced| next to the search box to display/hide **Advanced** options:
+
+  - **Match Criteria**: **Contains** matches events whose names include a search term. **Equals** matches events whose names exactly match a search term.
+  - **Multiple Terms**: **AND** requires every quoted term to match. **OR** matches events that satisfy any quoted term.
+  - **Search Range**: **Whole Trace** searches all events. **Selected Time Range** limits the search to the active :ref:`time-range-filter` when one is set. If no time range is selected, the search uses the whole trace. When **Selected Time Range** is on and you change the time range, the search runs again.
+  - **Search Event Categories**: Also matches event category names, when categories are available, in addition to event names.
+  
+    .. image:: ../images/search-advanced-options.png
+	   :width: 800
+	   :alt: Search box on the main toolbar with advanced options
+	 
+  - |search-advanced| will glow to indicate  **Advanced** options are active.
+ 
 
 Save trace selection (trim trace)
 =================================

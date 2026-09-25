@@ -5137,6 +5137,7 @@ DataProvider::LoadPcSamplingCodeObjects(KernelInfo&          kernel,
 
     kernel.pc_sampling_data.code_objects.clear();
     kernel.pc_sampling_data.code_objects.resize(num_code_objects);
+    kernel.pc_sampling_data.instruction_type_lookup_map.clear();
     std::unordered_map<uint64_t, CodeObjectStore*> code_objects_by_uuid;
     code_objects_by_uuid.reserve(num_code_objects);
     for(uint64_t i = 0; i < num_code_objects; i++)
@@ -5186,7 +5187,9 @@ DataProvider::LoadPcSamplingCodeObjects(KernelInfo&          kernel,
             continue;
         }
         InstructionLine instruction_line;
-        LoadPcSamplingInstructionLine(instruction_line, pc_handle, ii);
+        LoadPcSamplingInstructionLine(
+            instruction_line, kernel.pc_sampling_data.instruction_type_lookup_map,
+            pc_handle, ii);
         kernel_symbol_it->second->instruction_lines.emplace_back(std::move(instruction_line));
     }
 }
@@ -5204,20 +5207,32 @@ DataProvider::LoadPcSamplingKernelSymbol(KernelSymbol&        kernel_symbol,
         &kernel_symbol.code_object_uuid);
 }
 
-inline void
-DataProvider::LoadPcSamplingInstructionLine(InstructionLine&     instruction_line,
-                                            rocprofvis_handle_t* pc_handle,
-                                            uint64_t             index)
+inline void DataProvider::LoadPcSamplingInstructionLine(
+    InstructionLine&                          instruction_line,
+    std::unordered_map<uint64_t, std::string>& instruction_type_lookup_map,
+    rocprofvis_handle_t*                       pc_handle,
+    uint64_t                                   index)
 {
     uint64_t instruction_uuid = 0;
     rocprofvis_controller_get_uint64(pc_handle, kRPVControllerPCSamplingInstructionLineUuid, index,
                                      &instruction_uuid);
     instruction_line.instruction_uuid = instruction_uuid;
     rocprofvis_controller_get_uint64(
+        pc_handle, kRPVControllerPCSamplingInstructionLineInstructionTypeUuid, index,
+        &instruction_line.instruction_type_uuid);
+    rocprofvis_controller_get_uint64(
         pc_handle, kRPVControllerPCSamplingInstructionLineCodeObjectOffset, index,
         &instruction_line.code_object_offset);
     instruction_line.instruction =
         GetString(pc_handle, kRPVControllerPCSamplingInstructionLineInstruction, index);
+
+    const auto [lookup_it, inserted] = instruction_type_lookup_map.try_emplace(
+        instruction_line.instruction_type_uuid);
+    if(inserted)
+    {
+        lookup_it->second = GetString(
+            pc_handle, kRPVControllerPCSamplingInstructionLineInstructionType, index);
+    }
 }
 
 inline void

@@ -1026,6 +1026,7 @@ typedef enum rocprofvis_controller_pc_sampling_data_properties_t
     kRPVControllerPCSamplingInstructionLineInstructionTypeUuid,
     kRPVControllerPCSamplingInstructionLineCodeObjectOffset,
     kRPVControllerPCSamplingInstructionLineInstruction,
+    kRPVControllerPCSamplingInstructionLineInstructionType,
 
     // Stalls layer
     kRPVControllerPCSamplingNumPcSampleStates = kRPVPCSamplingStallsGroup,

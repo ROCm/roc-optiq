@@ -80,9 +80,10 @@ When humans and `CODING.md` disagree with this file, `CODING.md` wins.
   `src/app/src/rocprofvis_imgui_backend.cpp`.
 - **Persistence / parsing:** SQLite (`thirdparty/sqlite3/`), jsoncpp, yaml-cpp.
 - **HTTPS (Ask Optiq):** cpp-httplib (`thirdparty/cpp-httplib/`, a submodule
-  pinned to v0.53.1) with vendored mbedTLS. Targets the OpenAI
-  chat-completions API. Built only under
-  `ROCPROFVIS_ENABLE_AGENTIC_PROFILING` (default OFF).
+  pinned to v0.53.1). TLS follows `CRYPTO_BACKEND`: vendored mbedTLS by
+  default, or a system OpenSSL when `-DCRYPTO_BACKEND=OpenSSL` (the same
+  choice as remote/SSH). Targets the OpenAI chat-completions API. Built
+  only under `ROCPROFVIS_ENABLE_AGENTIC_PROFILING` (default OFF).
 - **Logging:** spdlog (`thirdparty/spdlog/`). Use `spdlog::info/warn/error`,
   never `std::cout` / `printf` / `iostream`.
 - **File dialog:** Native via `nativefiledialog-extended` on most platforms,
@@ -1418,20 +1419,29 @@ Data-driven block diagram of the GPU memory hierarchy, built from a
 layout model and its parser live in
 `model/compute/rocprofvis_memory_chart_model.{h,cpp}`:
 
-- `MemChartBlock` - one node: `id`, `column`, optional `order`, `title`,
-  `content` (a list of `MemChartContentItem`, each a metric ref plus an
-  optional label override and semantic `category`), and optional
+- `MemChartBlock` - one node: a string `id`, `column`, optional `order`,
+  `title`, `content` (a list of `MemChartContentItem`, each a metric ref
+  plus an optional label override and semantic `category`), and optional
   `children` (nested blocks, making the block a container box).
 - `MemChartArrow` - one edge: `from`/`to` block ids, `direction`
   (`MemChartArrowDir::kForward|kBackward|kBoth`), a metric ref, an
   optional title override, and a semantic `category`.
+  `OnLayoutLoaded()` resolves `from`/`to` to `from_block`/`to_block`
+  pointers once, so layout and routing never look ids up.
+
+Block ids are readable strings (`"l2"`, `"data_fabric"`), unique across
+the whole layout including nested children, so an arrow reads as
+`{ "from": "l2", "to": "data_fabric" }`. `ParseFromString()` rejects a
+layout with a missing, numeric, or duplicate block id, or an arrow whose
+`from`/`to` names no block; the caller then falls back to the next layout
+source instead of drawing disconnected arrows.
 - `MemChartMetricRef` - references a metric by its full dotted id
   `category.table.entry` (e.g. "3.1.0").
 - `MemChartLayout` - the parsed set of blocks + arrows plus a `version`.
   No ImGui is pulled into the model file.
 
 This shape mirrors what the data team stores in the `compute_workload`
-table (block rows + arrow rows keyed by id). `LoadWorkloadLayout()`
+table (block rows + arrow rows keyed by block id). `LoadWorkloadLayout()`
 resolves a layout in priority order: an optional dev override at
 `<config-dir>/memory_chart.json` -> the per-workload JSON blob in
 `compute_workload.memory_chart_extdata` -> an **architecture-specific
@@ -1522,6 +1532,8 @@ display modes, several `KernelInfo::DispatchMetric`s
 Internal scratchpad UI for exercising the metric / roofline APIs.
 Behind `#ifdef ROCPROFVIS_DEVELOPER_MODE`. Not user-facing - keep
 production code from depending on it.
+Dynamic text uses `ImGui::TextUnformatted` so names, descriptions,
+and units containing percent signs are displayed literally.
 
 ### `ComputeIsaView` (`rocprofvis_compute_isa_view.{h,cpp}`)
 
@@ -1737,7 +1749,7 @@ The full list is in `rocprofvis_events.h`. Examples used widely:
 `kHandleUserGraphNavigationEvent`, `kTrackMetadataChanged`,
 `kFontSizeChanged`, `kSetViewRange`,
 `kGoToTimelineSpot`, `kTimeFormatChanged`,
-`kRequestProgressUpdate`, `kProfilerStatusChanged`,
+`kThemeChanged`, `kRequestProgressUpdate`, `kProfilerStatusChanged`,
 `kRemoteStatusChanged`. Compute-only:
 `kComputeWorkloadSelectionChanged`,
 `kComputeKernelSelectionChanged`, `kComputeMetricsFetched`,
@@ -1776,6 +1788,9 @@ through this** - never hardcode `IM_COL32(...)` in feature code.
 
 - `GetUserSettings()` -> `UserSettings` (display, units, "don't ask"
   flags). `ApplyUserSettings(old, save_json)` writes JSON to disk.
+  A change of `use_dark_mode` emits `kThemeChanged` (no payload / no
+  source ID) so widgets that cache palette colors can rebuild. Live
+  `GetColor()` callers do not need to subscribe.
 - `DisplaySettings::show_node_colors` /
   `SettingsManager::ShowNodeColors()` enables node color-coding (only
   when the trace has more than one node). It tints the track's node
@@ -1970,10 +1985,12 @@ does not offer the toolbar button.
 **Gated behind `ROCPROFVIS_ENABLE_AGENTIC_PROFILING`, default OFF**, the
 same way remote and profiler launch are gated. Everything in
 `src/view/src/agenticprofiling/` is left out of `VIEW_FILES` when the
-option is off, and so are `cpp-httplib`, mbedTLS, and `SecretStore`
-unless remote asks for them - which is why a default clone needs
-neither the `thirdparty/cpp-httplib` nor the `thirdparty/mbedtls`
-submodule. Every call site outside the folder is
+option is off, and so are `cpp-httplib`, its TLS backend, and
+`SecretStore` unless remote asks for them. The default backend is
+vendored mbedTLS; `-DCRYPTO_BACKEND=OpenSSL` links a system OpenSSL
+instead and does not build mbedTLS. A default clone needs neither the
+`thirdparty/cpp-httplib` nor the `thirdparty/mbedtls` submodule. Every
+call site outside the folder is
 wrapped in `#ifdef`, so adding a new one means adding a guard: they are
 in `AppWindow` (destroy, `Update()`, the docked-render branch, the
 View-menu item), the `TraceView` toolbar, and `SettingsPanel` (the

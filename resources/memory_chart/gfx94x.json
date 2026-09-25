@@ -1,26 +1,26 @@
 {
     "version": 1,
     "blocks": [
-        { "id": 1, "column": 0, "title": "Kernel", "content": [] },
+        { "id": "kernel", "column": 0, "title": "Kernel", "content": [] },
 
-        { "id": 10, "column": 1, "order": 0, "title": "VL1D", "content": [
+        { "id": "vl1d", "column": 1, "order": 0, "title": "VL1D", "content": [
             { "metric": "3.1.28", "title": "Hit", "category": "hit", "unit": "%" }
         ]},
-        { "id": 11, "column": 1, "order": 1, "title": "LDS", "content": [
+        { "id": "lds", "column": 1, "order": 1, "title": "LDS", "content": [
             { "metric": "3.1.23", "title": "Util", "category": "util", "unit": "%" }
         ]},
-        { "id": 12, "column": 1, "order": 2, "title": "sL1D", "content": [
+        { "id": "sl1d", "column": 1, "order": 2, "title": "sL1D", "content": [
             { "metric": "3.1.38", "title": "Hit", "category": "hit", "unit": "%" }
         ]},
-        { "id": 13, "column": 1, "order": 3, "title": "L1I", "content": [
+        { "id": "l1i", "column": 1, "order": 3, "title": "L1I", "content": [
             { "metric": "3.1.45", "title": "Hit", "category": "hit", "unit": "%" }
         ]},
 
-        { "id": 20, "column": 2, "title": "L2", "content": [
+        { "id": "l2", "column": 2, "title": "L2", "content": [
             { "metric": "3.1.52", "title": "Hit", "category": "hit", "unit": "%" }
         ]},
 
-        { "id": 30, "column": 3, "title": "Data Fabric", "content": [
+        { "id": "data_fabric", "column": 3, "order": 1, "title": "Data Fabric", "content": [
             { "metric": "3.1.61", "title": "HBM Rd",                   "category": "read" },
             { "metric": "3.1.62", "title": "HBM Wr",                   "category": "write" },
             { "metric": "3.1.63", "title": "HBM Read Traffic",         "category": "read" },
@@ -28,30 +28,39 @@
             { "metric": "3.1.65", "title": "Remote Read Traffic",      "category": "read" },
             { "metric": "3.1.66", "title": "Remote Wr+Atomic Traffic", "category": "write" }
         ]},
-        { "id": 31, "column": 4, "title": "MALL", "content": [] },
-        { "id": 32, "column": 5, "title": "UMC", "content": [] },
-        { "id": 33, "column": 6, "title": "HBM", "content": [] }
+        { "id": "xgmi", "column": 3, "order": 0, "title": "xGMI", "content": [] },
+        { "id": "pcie", "column": 3, "order": 2, "title": "PCIe", "content": [] },
+        { "id": "mall", "column": 4, "title": "MALL", "content": [] },
+        { "id": "umc",  "column": 5, "title": "UMC",  "content": [] },
+        { "id": "hbm",  "column": 6, "title": "HBM",  "content": [] }
     ],
     "arrows": [
-        { "from": 1, "to": 10, "direction": "backward", "metric": "3.1.16", "title": "Flat Read",     "category": "read" },
-        { "from": 1, "to": 10, "direction": "forward",  "metric": "3.1.17", "title": "Flat Write",    "category": "write" },
-        { "from": 1, "to": 10, "direction": "both",     "metric": "3.1.18", "title": "Flat Atomic",   "category": "atomic" },
-        { "from": 1, "to": 10, "direction": "backward", "metric": "3.1.19", "title": "Buffer Read",   "category": "read" },
-        { "from": 1, "to": 10, "direction": "forward",  "metric": "3.1.20", "title": "Buffer Write",  "category": "write" },
-        { "from": 1, "to": 10, "direction": "both",     "metric": "3.1.21", "title": "Buffer Atomic", "category": "atomic" },
+        { "from": "kernel", "to": "vl1d", "direction": "backward", "metric": "3.1.16", "title": "Flat Read",     "category": "read" },
+        { "from": "kernel", "to": "vl1d", "direction": "forward",  "metric": "3.1.17", "title": "Flat Write",    "category": "write" },
+        { "from": "kernel", "to": "vl1d", "direction": "both",     "metric": "3.1.18", "title": "Flat Atomic",   "category": "atomic" },
+        { "from": "kernel", "to": "vl1d", "direction": "backward", "metric": "3.1.19", "title": "Buffer Read",   "category": "read" },
+        { "from": "kernel", "to": "vl1d", "direction": "forward",  "metric": "3.1.20", "title": "Buffer Write",  "category": "write" },
+        { "from": "kernel", "to": "vl1d", "direction": "both",     "metric": "3.1.21", "title": "Buffer Atomic", "category": "atomic" },
 
-        { "from": 1, "to": 11, "direction": "backward", "metric": "3.1.22", "title": "Req", "category": "read" },
+        { "from": "kernel", "to": "lds", "direction": "backward", "metric": "3.1.22", "title": "Req", "category": "read" },
 
-        { "from": 1, "to": 12, "direction": "backward", "metric": "3.1.37", "title": "Rd",    "category": "read" },
-        { "from": 1, "to": 13, "direction": "backward", "metric": "3.1.44", "title": "Fetch", "category": "read" },
+        { "from": "kernel", "to": "sl1d", "direction": "backward", "metric": "3.1.37", "title": "Rd",    "category": "read" },
+        { "from": "kernel", "to": "l1i",  "direction": "backward", "metric": "3.1.44", "title": "Fetch", "category": "read" },
 
-        { "from": 10, "to": 20, "direction": "backward", "metric": "3.1.34", "title": "Rd",     "category": "read" },
-        { "from": 10, "to": 20, "direction": "forward",  "metric": "3.1.35", "title": "Wr",     "category": "write" },
-        { "from": 10, "to": 20, "direction": "both",     "metric": "3.1.36", "title": "Atomic", "category": "atomic" },
-        { "from": 12, "to": 20, "direction": "backward", "metric": "3.1.43", "title": "Rd",     "category": "read" },
-        { "from": 13, "to": 20, "direction": "backward", "metric": "3.1.48", "title": "Rd",     "category": "read" },
+        { "from": "vl1d", "to": "l2", "direction": "backward", "metric": "3.1.34", "title": "Rd",     "category": "read" },
+        { "from": "vl1d", "to": "l2", "direction": "forward",  "metric": "3.1.35", "title": "Wr",     "category": "write" },
+        { "from": "vl1d", "to": "l2", "direction": "both",     "metric": "3.1.36", "title": "Atomic", "category": "atomic" },
+        { "from": "sl1d", "to": "l2", "direction": "backward", "metric": "3.1.43", "title": "Rd",     "category": "read" },
+        { "from": "l1i",  "to": "l2", "direction": "backward", "metric": "3.1.48", "title": "Rd",     "category": "read" },
 
-        { "from": 20, "to": 30, "direction": "backward", "metric": "3.1.56", "title": "Rd",        "category": "read" },
-        { "from": 20, "to": 30, "direction": "forward",  "metric": "3.1.57", "title": "Wr+Atomic", "category": "write" }
+        { "from": "l2", "to": "data_fabric", "direction": "backward", "metric": "3.1.56", "title": "Rd",        "category": "read" },
+        { "from": "l2", "to": "data_fabric", "direction": "forward",  "metric": "3.1.57", "title": "Wr+Atomic", "category": "write" },
+
+        { "from": "data_fabric", "to": "mall", "direction": "both" },
+        { "from": "mall",        "to": "umc",  "direction": "both" },
+        { "from": "umc",         "to": "hbm",  "direction": "both" },
+
+        { "from": "xgmi", "to": "data_fabric", "direction": "both", "category": "misc" },
+        { "from": "pcie", "to": "data_fabric", "direction": "both", "category": "misc" }
     ]
 }

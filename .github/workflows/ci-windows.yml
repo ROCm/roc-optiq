@@ -58,6 +58,22 @@ on:
         description: 'Build with in-app profiler launch (ROCPROFVIS_ENABLE_PROFILER)'
         type: boolean
         default: false
+      enable_agentic_profiling:
+        description: 'Build with the Ask Optiq assistant (ROCPROFVIS_ENABLE_AGENTIC_PROFILING)'
+        type: boolean
+        default: false
+      enable_scripting:
+        description: 'Build with embedded Python analysis scripts (ROCPROFVIS_ENABLE_SCRIPTING)'
+        type: boolean
+        default: false
+      enable_trace_compare:
+        description: 'Build with trace comparison support (ROCPROFVIS_ENABLE_TRACE_COMPARE)'
+        type: boolean
+        default: false
+      enable_multi_window:
+        description: 'Build with multi-window / floating window support (ROCPROFVIS_MULTI_WINDOW)'
+        type: boolean
+        default: false
       artifact_suffix:
         description: 'Suffix to append to artifact names (e.g. -experimental)'
         type: string
@@ -78,6 +94,22 @@ on:
         default: false
       enable_profiler:
         description: 'Build with in-app profiler launch (ROCPROFVIS_ENABLE_PROFILER)'
+        type: boolean
+        default: false
+      enable_agentic_profiling:
+        description: 'Build with the Ask Optiq assistant (ROCPROFVIS_ENABLE_AGENTIC_PROFILING)'
+        type: boolean
+        default: false
+      enable_scripting:
+        description: 'Build with embedded Python analysis scripts (ROCPROFVIS_ENABLE_SCRIPTING)'
+        type: boolean
+        default: false
+      enable_trace_compare:
+        description: 'Build with trace comparison support (ROCPROFVIS_ENABLE_TRACE_COMPARE)'
+        type: boolean
+        default: false
+      enable_multi_window:
+        description: 'Build with multi-window / floating window support (ROCPROFVIS_MULTI_WINDOW)'
         type: boolean
         default: false
       cmake_config_preset:
@@ -122,10 +154,14 @@ env:
   DIST_DIR: "dist"
   BINARY_DIR: ${{ inputs.cmake_config_preset == 'x64-debug' && 'Debug' || inputs.cmake_config_preset == 'x64-release-symbols' && 'RelWithDebInfo' || 'Release' }}
   BUILD_FILE_NAME: "roc-optiq"
-  ENABLE_INTERNAL_BANNER: ${{ inputs.enable_internal_banner == 'true' && 'ON' || 'OFF' }}
+  ENABLE_INTERNAL_BANNER: ${{ (inputs.enable_internal_banner == true || inputs.enable_internal_banner == 'true') && 'ON' || 'OFF' }}
   ENABLE_UI_TESTS: ${{ (inputs.enable_ui_tests == true || inputs.enable_ui_tests == 'true') && 'ON' || 'OFF' }}
-  ENABLE_REMOTE: ${{ inputs.enable_remote && 'ON' || 'OFF' }}
-  ENABLE_PROFILER: ${{ inputs.enable_profiler && 'ON' || 'OFF' }}
+  ENABLE_REMOTE: ${{ (inputs.enable_remote == true || inputs.enable_remote == 'true') && 'ON' || 'OFF' }}
+  ENABLE_PROFILER: ${{ (inputs.enable_profiler == true || inputs.enable_profiler == 'true') && 'ON' || 'OFF' }}
+  ENABLE_AGENTIC_PROFILING: ${{ (inputs.enable_agentic_profiling == true || inputs.enable_agentic_profiling == 'true') && 'ON' || 'OFF' }}
+  ENABLE_SCRIPTING: ${{ (inputs.enable_scripting == true || inputs.enable_scripting == 'true') && 'ON' || 'OFF' }}
+  ENABLE_TRACE_COMPARE: ${{ (inputs.enable_trace_compare == true || inputs.enable_trace_compare == 'true') && 'ON' || 'OFF' }}
+  ENABLE_MULTI_WINDOW: ${{ (inputs.enable_multi_window == true || inputs.enable_multi_window == 'true') && 'ON' || 'OFF' }}
   S3_ROOT_DIRECTORY: ${{ inputs.s3_root_directory }}
   RELEASE_VERSION: ${{ inputs.release_version }}
 
@@ -163,6 +199,12 @@ jobs:
           echo "VULKAN_SDK=$($vulkanRoot.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Append
           echo "PATH=$($vulkanRoot.FullName)\Bin;$env:PATH" | Out-File -FilePath $env:GITHUB_ENV -Append
           echo "LIB=$($vulkanRoot.FullName)\Lib;$env:LIB" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - name: Install Python
+        if: inputs.enable_scripting == true || inputs.enable_scripting == 'true'
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
 
       - name: Install OpenSSL
         if: inputs.crypto_backend == 'OpenSSL'
@@ -222,7 +264,19 @@ jobs:
               )
             }
           }
-          cmake --preset "${{ inputs.cmake_config_preset }}" -DROCPROFVIS_ENABLE_INTERNAL_BANNER=${{ env.ENABLE_INTERNAL_BANNER }}  -DROCPROFVIS_ENABLE_UI_TESTS=${{ env.ENABLE_UI_TESTS }} -DROCPROFVIS_ENABLE_REMOTE=${{ env.ENABLE_REMOTE }} -DROCPROFVIS_ENABLE_PROFILER=${{ env.ENABLE_PROFILER }} -DCRYPTO_BACKEND=${{ inputs.crypto_backend }} @opensslArgs
+          $cmakeArgs = @(
+            "--preset", "${{ inputs.cmake_config_preset }}",
+            "-DROCPROFVIS_ENABLE_INTERNAL_BANNER=${{ env.ENABLE_INTERNAL_BANNER }}",
+            "-DROCPROFVIS_ENABLE_UI_TESTS=${{ env.ENABLE_UI_TESTS }}",
+            "-DROCPROFVIS_ENABLE_REMOTE=${{ env.ENABLE_REMOTE }}",
+            "-DROCPROFVIS_ENABLE_PROFILER=${{ env.ENABLE_PROFILER }}",
+            "-DROCPROFVIS_ENABLE_AGENTIC_PROFILING=${{ env.ENABLE_AGENTIC_PROFILING }}",
+            "-DROCPROFVIS_ENABLE_SCRIPTING=${{ env.ENABLE_SCRIPTING }}",
+            "-DROCPROFVIS_ENABLE_TRACE_COMPARE=${{ env.ENABLE_TRACE_COMPARE }}",
+            "-DROCPROFVIS_MULTI_WINDOW=${{ env.ENABLE_MULTI_WINDOW }}",
+            "-DCRYPTO_BACKEND=${{ inputs.crypto_backend }}"
+          ) + $opensslArgs
+          cmake @cmakeArgs
           cmake --build ${{ env.BUILD_DIR }}/${{ inputs.cmake_config_preset }} --preset "${{ inputs.cmake_build_preset }}" --parallel 4
           if (Test-Path "${{ env.BUILD_DIR }}/${{ inputs.cmake_config_preset }}/${{ env.BINARY_DIR }}/${env:BUILD_FILE_NAME}.exe") {
             Write-Host "✅ $env:BUILD_FILE_NAME has been successfully built!"
@@ -263,7 +317,7 @@ jobs:
           Get-ChildItem "${{ env.DIST_DIR }}"
       
       - name: Upload GitHub Artifacts
-        if: ${{ inputs.upload_to_github }}
+        if: inputs.upload_to_github == true || inputs.upload_to_github == 'true'
         uses: actions/upload-artifact@v7
         with:
           name: roc-optiq-windows-${{ matrix.os-version }}-release${{ inputs.artifact_suffix }}
@@ -272,14 +326,14 @@ jobs:
           retention-days: 2
 
       - name: Configure AWS credentials
-        if: ${{ inputs.upload_to_s3 }}
+        if: inputs.upload_to_s3 == true || inputs.upload_to_s3 == 'true'
         uses: aws-actions/configure-aws-credentials@v6
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ secrets.AWS_REGION }}
 
       - name: Upload Build to S3
-        if: ${{ inputs.upload_to_s3 }}
+        if: inputs.upload_to_s3 == true || inputs.upload_to_s3 == 'true'
         run: |
           $timestamp = Get-Date -Format "yyyy_MM_dd"
           if (-not $env:RELEASE_VERSION) {

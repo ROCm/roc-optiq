@@ -718,7 +718,7 @@ Auto-detected from the Vulkan SDK / Homebrew when empty.")
     # the executable's actual dependency paths at build time with otool, then
     # rewrite every OpenSSL reference to `@rpath/<versioned-name>`. The staged
     # files keep their versioned names so the load commands match.
-    if(ROCPROFVIS_ENABLE_REMOTE AND CRYPTO_BACKEND STREQUAL "OpenSSL")
+    if((ROCPROFVIS_ENABLE_REMOTE OR ROCPROFVIS_ENABLE_AGENTIC_PROFILING) AND CRYPTO_BACKEND STREQUAL "OpenSSL")
         get_target_property(ROCPROFVIS_OPENSSL_SSL_LIB OpenSSL::SSL IMPORTED_LOCATION)
         get_target_property(ROCPROFVIS_OPENSSL_CRYPTO_LIB OpenSSL::Crypto IMPORTED_LOCATION)
         if(NOT ROCPROFVIS_OPENSSL_SSL_LIB OR NOT ROCPROFVIS_OPENSSL_CRYPTO_LIB)
@@ -886,9 +886,10 @@ if(NOT GLFW_LINK_STATIC)
     list(APPEND DEB_DEPENDS_LIST "libglfw3")
 endif()
 # DEB depends are explicit (unlike RPM AUTOREQPROV), so declare the system
-# OpenSSL runtime only when the OpenSSL backend is built. The default mbedTLS
-# backend links statically and needs no extra runtime dependency.
-if(ROCPROFVIS_ENABLE_REMOTE AND CRYPTO_BACKEND STREQUAL "OpenSSL")
+# OpenSSL runtime only when remote or Ask Optiq is built against OpenSSL.
+# The default mbedTLS backend links statically and needs no extra runtime
+# dependency.
+if((ROCPROFVIS_ENABLE_REMOTE OR ROCPROFVIS_ENABLE_AGENTIC_PROFILING) AND CRYPTO_BACKEND STREQUAL "OpenSSL")
     list(APPEND DEB_DEPENDS_LIST "libssl3")
 endif()
 list(APPEND DEB_DEPENDS_LIST "libc6")
@@ -985,7 +986,7 @@ if(WIN32)
     # $<TARGET_RUNTIME_DLLS> only captures OpenSSL if find_package produced shared
     # imported targets with the .dll as IMPORTED_LOCATION (distribution-dependent),
     # so copy the resolved OpenSSL DLLs explicitly when that backend is enabled.
-    if(ROCPROFVIS_ENABLE_REMOTE AND CRYPTO_BACKEND STREQUAL "OpenSSL")
+    if((ROCPROFVIS_ENABLE_REMOTE OR ROCPROFVIS_ENABLE_AGENTIC_PROFILING) AND CRYPTO_BACKEND STREQUAL "OpenSSL")
         set(_ossl_dlls "")
         # 1) Preferred: the imported target's IMPORTED_LOCATION, when it is a DLL.
         foreach(_ossl_target OpenSSL::SSL OpenSSL::Crypto)

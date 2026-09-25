@@ -36,6 +36,22 @@ on:
         description: 'Build with in-app profiler launch (ROCPROFVIS_ENABLE_PROFILER)'
         type: boolean
         default: false
+      enable_agentic_profiling:
+        description: 'Build with the Ask Optiq assistant (ROCPROFVIS_ENABLE_AGENTIC_PROFILING)'
+        type: boolean
+        default: false
+      enable_scripting:
+        description: 'Build with embedded Python analysis scripts (ROCPROFVIS_ENABLE_SCRIPTING)'
+        type: boolean
+        default: false
+      enable_trace_compare:
+        description: 'Build with trace comparison support (ROCPROFVIS_ENABLE_TRACE_COMPARE)'
+        type: boolean
+        default: false
+      enable_multi_window:
+        description: 'Build with multi-window / floating window support (ROCPROFVIS_MULTI_WINDOW)'
+        type: boolean
+        default: false
       rocm_version:
         description: 'ROCm version number used in package naming (e.g. 10)'
         type: string
@@ -92,6 +108,22 @@ on:
         description: 'Build with in-app profiler launch (ROCPROFVIS_ENABLE_PROFILER)'
         type: boolean
         default: false
+      enable_agentic_profiling:
+        description: 'Build with the Ask Optiq assistant (ROCPROFVIS_ENABLE_AGENTIC_PROFILING)'
+        type: boolean
+        default: false
+      enable_scripting:
+        description: 'Build with embedded Python analysis scripts (ROCPROFVIS_ENABLE_SCRIPTING)'
+        type: boolean
+        default: false
+      enable_trace_compare:
+        description: 'Build with trace comparison support (ROCPROFVIS_ENABLE_TRACE_COMPARE)'
+        type: boolean
+        default: false
+      enable_multi_window:
+        description: 'Build with multi-window / floating window support (ROCPROFVIS_MULTI_WINDOW)'
+        type: boolean
+        default: false
       rocm_version:
         description: 'ROCm version number used in package naming (e.g. 10)'
         type: string
@@ -113,9 +145,13 @@ env:
   BUILD_DIR: "build"
   DIST_DIR: "dist"
   BUILD_FILE_NAME: "roc-optiq"
-  ENABLE_INTERNAL_BANNER: ${{ inputs.enable_internal_banner && 'ON' || 'OFF' }}
-  ENABLE_REMOTE: ${{ inputs.enable_remote && 'ON' || 'OFF' }}
-  ENABLE_PROFILER: ${{ inputs.enable_profiler && 'ON' || 'OFF' }}
+  ENABLE_INTERNAL_BANNER: ${{ (inputs.enable_internal_banner == true || inputs.enable_internal_banner == 'true') && 'ON' || 'OFF' }}
+  ENABLE_REMOTE: ${{ (inputs.enable_remote == true || inputs.enable_remote == 'true') && 'ON' || 'OFF' }}
+  ENABLE_PROFILER: ${{ (inputs.enable_profiler == true || inputs.enable_profiler == 'true') && 'ON' || 'OFF' }}
+  ENABLE_AGENTIC_PROFILING: ${{ (inputs.enable_agentic_profiling == true || inputs.enable_agentic_profiling == 'true') && 'ON' || 'OFF' }}
+  ENABLE_SCRIPTING: ${{ (inputs.enable_scripting == true || inputs.enable_scripting == 'true') && 'ON' || 'OFF' }}
+  ENABLE_TRACE_COMPARE: ${{ (inputs.enable_trace_compare == true || inputs.enable_trace_compare == 'true') && 'ON' || 'OFF' }}
+  ENABLE_MULTI_WINDOW: ${{ (inputs.enable_multi_window == true || inputs.enable_multi_window == 'true') && 'ON' || 'OFF' }}
   ROCM_VERSION: ${{ inputs.rocm_version }}
   S3_ROOT_DIRECTORY: 'v5/rocm/extras/rocoptiq'
 
@@ -139,6 +175,48 @@ jobs:
           lfs: true
           submodules: true
 
+      - name: Install OpenSSL 3
+        if: inputs.crypto_backend == 'OpenSSL'
+        run: |
+          # The image OpenSSL is 1.1.1. Leave it for the OS and install 3.5
+          # under /opt/openssl-3. cpp-httplib requires >= 3.0.
+          bash .github/scripts/install-openssl3.sh
+          # FindOpenSSL reads OPENSSL_ROOT_DIR and the pkg-config path, so both
+          # point at the 3.x prefix. Without them it selects the image's 1.1.1.
+          echo "OPENSSL_ROOT_DIR=/opt/openssl-3" >> "${GITHUB_ENV}"
+          echo "PKG_CONFIG_PATH=/opt/openssl-3/lib/pkgconfig${PKG_CONFIG_PATH:+:${PKG_CONFIG_PATH}}" >> "${GITHUB_ENV}"
+          echo "LD_LIBRARY_PATH=/opt/openssl-3/lib${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}" >> "${GITHUB_ENV}"
+
+      - name: Select Embeddable Python
+        if: inputs.enable_scripting == true || inputs.enable_scripting == 'true'
+        run: |
+          # /opt/python/cp3xx on PATH is the static manylinux CPython. It has an
+          # interpreter and no libpython, so FindPython3 Development.Embed fails.
+          # TheRock also installs shared interpreters under /opt/python-shared
+          # for embedding. Prefer 3.12 to match the interpreter already on PATH.
+          SHARED_PY=""
+          for candidate in \
+              /opt/python-shared/cp312-cp312 \
+              /opt/python-shared/cp313-cp313 \
+              /opt/python-shared/cp311-cp311 \
+              /opt/python-shared/cp310-cp310
+          do
+            if [ -x "${candidate}/bin/python3" ]; then
+              SHARED_PY="${candidate}"
+              break
+            fi
+          done
+          if [ -z "${SHARED_PY}" ]; then
+            echo "Scripting needs an embeddable CPython with libpython."
+            echo "Looked under /opt/python-shared; the static /opt/python tree cannot be linked."
+            ls -la /opt/python /opt/python-shared 2>/dev/null || true
+            exit 1
+          fi
+          echo "Using embeddable Python at ${SHARED_PY}"
+          "${SHARED_PY}/bin/python3" --version
+          echo "Python3_ROOT_DIR=${SHARED_PY}" >> "${GITHUB_ENV}"
+          echo "LD_LIBRARY_PATH=${SHARED_PY}/lib${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}" >> "${GITHUB_ENV}"
+
       - name: Build, Make, and Verify Installation
         run: |
           cmake -B ${{ env.BUILD_DIR }} \
@@ -146,8 +224,14 @@ jobs:
             -DROCPROFVIS_ENABLE_INTERNAL_BANNER=${{ env.ENABLE_INTERNAL_BANNER }} \
             -DROCPROFVIS_ENABLE_REMOTE=${{ env.ENABLE_REMOTE }} \
             -DROCPROFVIS_ENABLE_PROFILER=${{ env.ENABLE_PROFILER }} \
+            -DROCPROFVIS_ENABLE_AGENTIC_PROFILING=${{ env.ENABLE_AGENTIC_PROFILING }} \
+            -DROCPROFVIS_ENABLE_SCRIPTING=${{ env.ENABLE_SCRIPTING }} \
+            -DROCPROFVIS_ENABLE_TRACE_COMPARE=${{ env.ENABLE_TRACE_COMPARE }} \
+            -DROCPROFVIS_MULTI_WINDOW=${{ env.ENABLE_MULTI_WINDOW }} \
             -DGLFW_LINK_STATIC=ON \
             -DCRYPTO_BACKEND=${{ inputs.crypto_backend }} \
+            ${OPENSSL_ROOT_DIR:+-DOPENSSL_ROOT_DIR="${OPENSSL_ROOT_DIR}"} \
+            ${Python3_ROOT_DIR:+-DPython3_ROOT_DIR="${Python3_ROOT_DIR}"} \
             -DCPACK_GENERATOR="TGZ;DEB;RPM" \
             -DCMAKE_EXE_LINKER_FLAGS="-ldl"
           cmake --build ${{ env.BUILD_DIR }} --parallel 4 --target package
@@ -188,7 +272,7 @@ jobs:
           ls -l ${{ env.DIST_DIR }}/
 
       - name: Upload GitHub Artifacts
-        if: ${{ inputs.upload_to_github }}
+        if: inputs.upload_to_github == true || inputs.upload_to_github == 'true'
         uses: actions/upload-artifact@v7
         with:
           name: roc-optiq-manylinux-release${{ inputs.artifact_suffix }}
@@ -197,7 +281,7 @@ jobs:
           retention-days: 2
 
       - name: Resolve S3 secrets
-        if: ${{ inputs.upload_to_s3 }}
+        if: inputs.upload_to_s3 == true || inputs.upload_to_s3 == 'true'
         run: |
           case "${{ inputs.s3_bucket_env }}" in
             dev)
@@ -232,14 +316,14 @@ jobs:
           esac
 
       - name: Configure AWS credentials
-        if: ${{ inputs.upload_to_s3 }}
+        if: inputs.upload_to_s3 == true || inputs.upload_to_s3 == 'true'
         uses: aws-actions/configure-aws-credentials@v6
         with:
           role-to-assume: ${{ env.S3_ROLE_ARN }}
           aws-region: ${{ secrets.AWS_REGION }}
 
       - name: Upload DEB to S3
-        if: ${{ inputs.upload_to_s3 }}
+        if: inputs.upload_to_s3 == true || inputs.upload_to_s3 == 'true'
         run: |
           DEB_SRC=$(ls ${{ env.DIST_DIR }}/*.deb | head -1)
           DEB_NAME="amdrocm${ROCM_VERSION}-$(basename "${DEB_SRC}")"
@@ -250,7 +334,7 @@ jobs:
             --no-progress
 
       - name: Generate DEB Metadata for S3
-        if: ${{ inputs.upload_to_s3 }}
+        if: inputs.upload_to_s3 == true || inputs.upload_to_s3 == 'true'
         run: |
           DEB_SRC=$(ls ${{ env.DIST_DIR }}/*.deb | head -1)
           DEB_NAME="amdrocm${ROCM_VERSION}-$(basename "${DEB_SRC}")"
@@ -290,7 +374,7 @@ jobs:
             --no-progress
 
       - name: Upload RPM to S3
-        if: ${{ inputs.upload_to_s3 }}
+        if: inputs.upload_to_s3 == true || inputs.upload_to_s3 == 'true'
         run: |
           RPM_SRC=$(ls ${{ env.DIST_DIR }}/*.rpm | head -1)
           RPM_NAME="amdrocm${ROCM_VERSION}-$(basename "${RPM_SRC}" | sed 's/\.el[0-9]\+//')"
@@ -301,7 +385,7 @@ jobs:
             --no-progress
 
       - name: Generate RPM Metadata for S3
-        if: ${{ inputs.upload_to_s3 }}
+        if: inputs.upload_to_s3 == true || inputs.upload_to_s3 == 'true'
         run: |
           mkdir -p rpm-repo
           cp ${{ env.DIST_DIR }}/*.rpm rpm-repo/
@@ -311,7 +395,7 @@ jobs:
             --no-progress
 
       - name: Upload Tarball to S3
-        if: ${{ inputs.upload_to_s3 }}
+        if: inputs.upload_to_s3 == true || inputs.upload_to_s3 == 'true'
         run: |
           TGZ_SRC=$(ls ${{ env.DIST_DIR }}/*.tar.gz | head -1)
           TGZ_NAME="amdrocm${ROCM_VERSION}-$(basename "${TGZ_SRC}")"

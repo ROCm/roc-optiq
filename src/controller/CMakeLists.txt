@@ -186,9 +186,21 @@ if(BUILD_TESTING)
             --input_file "${CMAKE_SOURCE_DIR}/sample/trace_70b_1024_32.rpd")
         set_tests_properties(${SCRIPT_TEST_NAME} PROPERTIES RUN_SERIAL ON)
         set_tests_properties(${SCRIPT_TEST_NAME} PROPERTIES WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}")
-        if(WIN32 AND ROCPROFVIS_PYTHON3_RUNTIME_LIBRARY_DIRS)
-            set_tests_properties(${SCRIPT_TEST_NAME} PROPERTIES
-                ENVIRONMENT "PATH=${ROCPROFVIS_PYTHON3_RUNTIME_LIBRARY_DIRS};$ENV{PATH}")
+        # Windows loads python3xx.dll from the exe directory or PATH. CTest's
+        # ENVIRONMENT property is a CMake list split on ';', so a PATH= value
+        # cannot carry a Windows PATH. Stage every runtime DLL of this exe,
+        # including python3xx.dll, the same way the app stages
+        # $<TARGET_RUNTIME_DLLS>.
+        if(WIN32)
+            add_custom_command(
+                TARGET ${SCRIPT_TEST_NAME} POST_BUILD
+                COMMAND ${CMAKE_COMMAND} -E
+                    $<IF:$<BOOL:$<TARGET_RUNTIME_DLLS:${SCRIPT_TEST_NAME}>>,copy_if_different,true>
+                    $<TARGET_RUNTIME_DLLS:${SCRIPT_TEST_NAME}>
+                    $<$<BOOL:$<TARGET_RUNTIME_DLLS:${SCRIPT_TEST_NAME}>>:$<TARGET_FILE_DIR:${SCRIPT_TEST_NAME}>>
+                COMMAND_EXPAND_LISTS
+                COMMENT "Copying runtime DLLs next to the script tests"
+            )
         endif()
     endif()
 endif()

@@ -306,6 +306,8 @@ list(APPEND VIEW_FILES
 )
 endif()
 
+include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/capture_git_commit.cmake)
+
 configure_file(
     "${CMAKE_CURRENT_SOURCE_DIR}/resources/version.h.in"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/app/inc/rocprofvis_version.h"

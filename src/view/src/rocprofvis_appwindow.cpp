@@ -1535,6 +1535,7 @@ AppWindow::RenderAboutDialog()
            << "." << ROCPROFVIS_VERSION_PATCH;
         return ss.str();
     }();
+    static constexpr const char* COMMIT_LABEL = "Commit " ROCPROFVIS_GIT_COMMIT;
 
     PopUpStyle popup_style;
     popup_style.PushPopupStyles();
@@ -1564,6 +1565,13 @@ AppWindow::RenderAboutDialog()
             (ImGui::GetWindowSize().x - ImGui::CalcTextSize(VERSION_LABEL.c_str()).x) *
             0.5f);
         ImGui::TextUnformatted(VERSION_LABEL.c_str());
+
+        ImGui::PushFont(NULL, SettingsManager::GetInstance().GetFontManager().GetFontSize(
+                                  FontSize::kSmall));
+        ImGui::SetCursorPosX(
+            (ImGui::GetWindowSize().x - ImGui::CalcTextSize(COMMIT_LABEL).x) * 0.5f);
+        ImGui::TextDisabled("%s", COMMIT_LABEL);
+        ImGui::PopFont();
 
         ImGui::Spacing();
 

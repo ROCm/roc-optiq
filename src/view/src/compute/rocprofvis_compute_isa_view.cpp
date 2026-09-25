@@ -100,7 +100,7 @@ constexpr HeaderTooltipText STALL_PERCENT_HEADER_TOOLTIP {
 constexpr const char* LOW_CONFIDENCE_SAMPLES_CELL_TOOLTIP_FORMAT =
     "%s samples\n%.1f%% of kernel samples\n"
     "%.1f%% relative to the hottest instruction\n\n"
-    "Low-confidence estimate: percentages based on fewer than %llu samples may be "
+    "Low-confidence estimate: percentages based on %llu or fewer samples may be "
     "unstable.";
 constexpr const char* SAMPLES_CELL_TOOLTIP_FORMAT =
     "%s samples\n%.1f%% of kernel samples\n"
@@ -901,7 +901,10 @@ SourceCodeWidget::RenderLine(uint32_t index)
                        static_cast<unsigned long long>(display_num));
 
     ImGui::TableSetColumnIndex(1);
-    ImGui::TextUnformatted(source_row.content.c_str());
+    ImGui::PushID(static_cast<int>(index));
+    CopyableTextUnformatted(source_row.content.c_str(), "source", COPY_DATA_NOTIFICATION,
+                            false, true);
+    ImGui::PopID();
 }
 
 IsaCodeWidget::IsaCodeWidget(LineSelection& selection)
@@ -1123,7 +1126,8 @@ IsaCodeWidget::Render()
     {
         std::string widest_sample_count_text =
             FormatSampleCount(m_hottest_instruction_samples);
-        if(m_hottest_instruction_samples < LOW_CONFIDENCE_SAMPLE_COUNT)
+        if(m_hottest_instruction_samples > 0 &&
+           m_hottest_instruction_samples <= LOW_CONFIDENCE_SAMPLE_COUNT)
         {
             widest_sample_count_text += "*";
         }
@@ -1284,15 +1288,16 @@ IsaCodeWidget::RenderSamplesCell(uint64_t sample_count)
     }
 
     const std::string count_text = FormatSampleCount(sample_count);
-    const std::string display_text =
-        sample_count < LOW_CONFIDENCE_SAMPLE_COUNT ? count_text + "*" : count_text;
+    const bool is_low_confidence =
+        sample_count > 0 && sample_count <= LOW_CONFIDENCE_SAMPLE_COUNT;
+    const std::string display_text = is_low_confidence ? count_text + "*" : count_text;
     const float text_width = ImGui::CalcTextSize(display_text.c_str()).x;
     ImGui::SetCursorPosX(ImGui::GetCursorPosX() + std::max(0.0f, cell_width - text_width));
     ImGui::TextUnformatted(display_text.c_str());
 
     if(ImGui::IsMouseHoveringRect(cell_start, cell_end))
     {
-        if(sample_count < LOW_CONFIDENCE_SAMPLE_COUNT)
+        if(is_low_confidence)
         {
             SetTooltipStyled(LOW_CONFIDENCE_SAMPLES_CELL_TOOLTIP_FORMAT,
                              count_text.c_str(), kernel_sample_share, relative_hotness,
@@ -1441,11 +1446,14 @@ IsaCodeWidget::RenderLine(uint32_t index)
     std::snprintf(offset_text, sizeof(offset_text), CODE_OBJECT_OFFSET_FORMAT,
                   static_cast<unsigned long long>(isa_row.code_object_offset));
     ImGui::PushID(static_cast<int>(index));
-    CopyableTextUnformatted(offset_text, "", COPY_DATA_NOTIFICATION, false, true);
+    CopyableTextUnformatted(offset_text, "offset", COPY_DATA_NOTIFICATION, false, true);
     ImGui::PopID();
 
     ImGui::TableSetColumnIndex(++column);
-    ImGui::TextUnformatted(isa_row.instruction.c_str());
+    ImGui::PushID(static_cast<int>(index));
+    CopyableTextUnformatted(isa_row.instruction.c_str(), "instruction",
+                            COPY_DATA_NOTIFICATION, false, true);
+    ImGui::PopID();
 
     if(IsStallShown())
     {

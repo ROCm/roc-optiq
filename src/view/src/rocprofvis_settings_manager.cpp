@@ -558,7 +558,9 @@ SettingsManager::GetStandardConfigPath()
 void
 SettingsManager::ApplyUserDisplaySettings(const UserSettings& old_settings)
 {
-    (void) old_settings;  // currently unused
+    const bool theme_changed = old_settings.display_settings.use_dark_mode !=
+                               m_usersettings.display_settings.use_dark_mode;
+
     if(m_usersettings.display_settings.use_dark_mode)
     {
         m_color_store = &DARK_THEME_COLORS;
@@ -576,6 +578,14 @@ SettingsManager::ApplyUserDisplaySettings(const UserSettings& old_settings)
     m_usersettings.display_settings.font_size_index =
         GetFontManager().ClampFontSizeIndex(m_usersettings.display_settings.font_size_index);
     GetFontManager().SetFontSize(m_usersettings.display_settings.font_size_index);
+
+    // Notify views that cache palette colors (e.g. the memory chart). Deferred
+    // until DispatchEvents, after m_color_store already points at the new theme.
+    if(theme_changed)
+    {
+        EventManager::GetInstance()->AddEvent(
+            std::make_shared<RocEvent>(static_cast<int>(RocEvents::kThemeChanged)));
+    }
 }
 
 void

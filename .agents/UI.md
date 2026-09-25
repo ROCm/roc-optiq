@@ -1418,20 +1418,29 @@ Data-driven block diagram of the GPU memory hierarchy, built from a
 layout model and its parser live in
 `model/compute/rocprofvis_memory_chart_model.{h,cpp}`:
 
-- `MemChartBlock` - one node: `id`, `column`, optional `order`, `title`,
-  `content` (a list of `MemChartContentItem`, each a metric ref plus an
-  optional label override and semantic `category`), and optional
+- `MemChartBlock` - one node: a string `id`, `column`, optional `order`,
+  `title`, `content` (a list of `MemChartContentItem`, each a metric ref
+  plus an optional label override and semantic `category`), and optional
   `children` (nested blocks, making the block a container box).
 - `MemChartArrow` - one edge: `from`/`to` block ids, `direction`
   (`MemChartArrowDir::kForward|kBackward|kBoth`), a metric ref, an
   optional title override, and a semantic `category`.
+  `OnLayoutLoaded()` resolves `from`/`to` to `from_block`/`to_block`
+  pointers once, so layout and routing never look ids up.
+
+Block ids are readable strings (`"l2"`, `"data_fabric"`), unique across
+the whole layout including nested children, so an arrow reads as
+`{ "from": "l2", "to": "data_fabric" }`. `ParseFromString()` rejects a
+layout with a missing, numeric, or duplicate block id, or an arrow whose
+`from`/`to` names no block; the caller then falls back to the next layout
+source instead of drawing disconnected arrows.
 - `MemChartMetricRef` - references a metric by its full dotted id
   `category.table.entry` (e.g. "3.1.0").
 - `MemChartLayout` - the parsed set of blocks + arrows plus a `version`.
   No ImGui is pulled into the model file.
 
 This shape mirrors what the data team stores in the `compute_workload`
-table (block rows + arrow rows keyed by id). `LoadWorkloadLayout()`
+table (block rows + arrow rows keyed by block id). `LoadWorkloadLayout()`
 resolves a layout in priority order: an optional dev override at
 `<config-dir>/memory_chart.json` -> the per-workload JSON blob in
 `compute_workload.memory_chart_extdata` -> an **architecture-specific
@@ -1739,7 +1748,7 @@ The full list is in `rocprofvis_events.h`. Examples used widely:
 `kHandleUserGraphNavigationEvent`, `kTrackMetadataChanged`,
 `kFontSizeChanged`, `kSetViewRange`,
 `kGoToTimelineSpot`, `kTimeFormatChanged`,
-`kRequestProgressUpdate`, `kProfilerStatusChanged`,
+`kThemeChanged`, `kRequestProgressUpdate`, `kProfilerStatusChanged`,
 `kRemoteStatusChanged`. Compute-only:
 `kComputeWorkloadSelectionChanged`,
 `kComputeKernelSelectionChanged`, `kComputeMetricsFetched`,
@@ -1778,6 +1787,9 @@ through this** - never hardcode `IM_COL32(...)` in feature code.
 
 - `GetUserSettings()` -> `UserSettings` (display, units, "don't ask"
   flags). `ApplyUserSettings(old, save_json)` writes JSON to disk.
+  A change of `use_dark_mode` emits `kThemeChanged` (no payload / no
+  source ID) so widgets that cache palette colors can rebuild. Live
+  `GetColor()` callers do not need to subscribe.
 - `DisplaySettings::show_node_colors` /
   `SettingsManager::ShowNodeColors()` enables node color-coding (only
   when the trace has more than one node). It tints the track's node

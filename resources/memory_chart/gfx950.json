@@ -1,69 +1,72 @@
 {
     "version": 1,
     "blocks": [
-        { "id": 1, "column": 0, "title": "Kernel", "content": [] },
+        { "id": "kernel", "column": 0, "title": "Kernel", "content": [] },
 
-        { "id": 10, "column": 1, "order": 0, "title": "VL1D", "content": [
+        { "id": "vl1d", "column": 1, "order": 0, "title": "VL1D", "content": [
             { "metric": "3.1.31", "title": "Hit", "category": "hit", "unit": "%" }
         ]},
-        { "id": 11, "column": 1, "order": 1, "title": "LDS", "content": [
+        { "id": "lds", "column": 1, "order": 1, "title": "LDS", "content": [
             { "metric": "3.1.23", "title": "Util", "category": "util", "unit": "%" }
         ]},
-        { "id": 12, "column": 1, "order": 2, "title": "sL1D", "content": [
+        { "id": "sl1d", "column": 1, "order": 2, "title": "sL1D", "content": [
             { "metric": "3.1.42", "title": "Hit", "category": "hit", "unit": "%" }
         ]},
-        { "id": 13, "column": 1, "order": 3, "title": "L1I", "content": [
+        { "id": "l1i", "column": 1, "order": 3, "title": "L1I", "content": [
             { "metric": "3.1.49", "title": "Hit", "category": "hit", "unit": "%" }
         ]},
 
-        { "id": 20, "column": 2, "title": "L2", "content": [
+        { "id": "l2", "column": 2, "title": "L2", "content": [
             { "metric": "3.1.56", "title": "Hit", "category": "hit", "unit": "%" }
         ]},
 
-        { "id": 30, "column": 3, "title": "Data Fabric", "content": [] },
-        { "id": 31, "column": 4, "title": "MALL", "content": [] },
-        { "id": 32, "column": 5, "title": "UMC", "content": [] },
-
-        { "id": 33, "column": 6, "title": "HBM", "content": [
+        { "id": "data_fabric", "column": 3, "title": "Data Fabric", "content": [] },
+        { "id": "mall",        "column": 4, "title": "MALL",        "content": [] },
+        { "id": "umc",         "column": 5, "title": "UMC",         "content": [] },
+        { "id": "hbm",         "column": 6, "title": "HBM",         "content": [
             { "metric": "3.1.69", "title": "Read BW",   "category": "read" },
             { "metric": "3.1.70", "title": "Write BW",  "category": "write" },
             { "metric": "3.1.71", "title": "Atomic BW", "category": "atomic" }
         ]},
 
-        { "id": 34, "column": 7, "order": 0, "title": "xGMI", "content": [
-            { "metric": "3.1.72", "title": "Read BW",   "category": "read" },
-            { "metric": "3.1.73", "title": "Write BW",  "category": "write" },
-            { "metric": "3.1.74", "title": "Atomic BW", "category": "atomic" }
-        ]},
-        { "id": 35, "column": 7, "order": 1, "title": "PCIe", "content": [
-            { "metric": "3.1.75", "title": "Read BW",   "category": "read" },
-            { "metric": "3.1.76", "title": "Write BW",  "category": "write" },
-            { "metric": "3.1.77", "title": "Atomic BW", "category": "atomic" }
-        ]}
+        { "id": "xgmi", "column": 3, "row": -1, "title": "xGMI", "content": [] },
+        { "id": "pcie", "column": 3, "row": 1,  "title": "PCIe", "content": [] }
     ],
     "arrows": [
-        { "from": 1, "to": 10, "direction": "backward", "metric": "3.1.16", "title": "Flat Read",     "category": "read" },
-        { "from": 1, "to": 10, "direction": "forward",  "metric": "3.1.17", "title": "Flat Write",    "category": "write" },
-        { "from": 1, "to": 10, "direction": "both",     "metric": "3.1.18", "title": "Flat Atomic",   "category": "atomic" },
-        { "from": 1, "to": 10, "direction": "backward", "metric": "3.1.19", "title": "Buffer Read",   "category": "read" },
-        { "from": 1, "to": 10, "direction": "forward",  "metric": "3.1.20", "title": "Buffer Write",  "category": "write" },
-        { "from": 1, "to": 10, "direction": "both",     "metric": "3.1.21", "title": "Buffer Atomic", "category": "atomic" },
+        { "from": "kernel", "to": "vl1d", "direction": "backward", "metric": "3.1.16", "title": "Flat Read",     "category": "read" },
+        { "from": "kernel", "to": "vl1d", "direction": "forward",  "metric": "3.1.17", "title": "Flat Write",    "category": "write" },
+        { "from": "kernel", "to": "vl1d", "direction": "both",     "metric": "3.1.18", "title": "Flat Atomic",   "category": "atomic" },
+        { "from": "kernel", "to": "vl1d", "direction": "backward", "metric": "3.1.19", "title": "Buffer Read",   "category": "read" },
+        { "from": "kernel", "to": "vl1d", "direction": "forward",  "metric": "3.1.20", "title": "Buffer Write",  "category": "write" },
+        { "from": "kernel", "to": "vl1d", "direction": "both",     "metric": "3.1.21", "title": "Buffer Atomic", "category": "atomic" },
 
-        { "from": 1, "to": 11, "direction": "backward", "metric": "3.1.22", "title": "Req",        "category": "read" },
-        { "from": 1, "to": 11, "direction": "backward", "metric": "3.1.25", "title": "LDS Read",   "category": "read" },
-        { "from": 1, "to": 11, "direction": "forward",  "metric": "3.1.26", "title": "LDS Write",  "category": "write" },
-        { "from": 1, "to": 11, "direction": "both",     "metric": "3.1.27", "title": "LDS Atomic", "category": "atomic" },
+        { "from": "kernel", "to": "lds", "direction": "backward", "metric": "3.1.22", "title": "Req",        "category": "read" },
+        { "from": "kernel", "to": "lds", "direction": "backward", "metric": "3.1.25", "title": "LDS Read",   "category": "read" },
+        { "from": "kernel", "to": "lds", "direction": "forward",  "metric": "3.1.26", "title": "LDS Write",  "category": "write" },
+        { "from": "kernel", "to": "lds", "direction": "both",     "metric": "3.1.27", "title": "LDS Atomic", "category": "atomic" },
 
-        { "from": 1, "to": 12, "direction": "backward", "metric": "3.1.41", "title": "Rd",    "category": "read" },
-        { "from": 1, "to": 13, "direction": "backward", "metric": "3.1.48", "title": "Fetch", "category": "read" },
+        { "from": "kernel", "to": "sl1d", "direction": "backward", "metric": "3.1.41", "title": "Rd",    "category": "read" },
+        { "from": "kernel", "to": "l1i",  "direction": "backward", "metric": "3.1.48", "title": "Fetch", "category": "read" },
 
-        { "from": 10, "to": 20, "direction": "backward", "metric": "3.1.38", "title": "Rd",     "category": "read" },
-        { "from": 10, "to": 20, "direction": "forward",  "metric": "3.1.39", "title": "Wr",     "category": "write" },
-        { "from": 10, "to": 20, "direction": "both",     "metric": "3.1.40", "title": "Atomic", "category": "atomic" },
-        { "from": 12, "to": 20, "direction": "backward", "metric": "3.1.47", "title": "Rd",     "category": "read" },
-        { "from": 13, "to": 20, "direction": "backward", "metric": "3.1.52", "title": "Rd",     "category": "read" },
+        { "from": "vl1d", "to": "l2", "direction": "backward", "metric": "3.1.38", "title": "Rd",     "category": "read" },
+        { "from": "vl1d", "to": "l2", "direction": "forward",  "metric": "3.1.39", "title": "Wr",     "category": "write" },
+        { "from": "vl1d", "to": "l2", "direction": "both",     "metric": "3.1.40", "title": "Atomic", "category": "atomic" },
+        { "from": "sl1d", "to": "l2", "direction": "backward", "metric": "3.1.47", "title": "Rd",     "category": "read" },
+        { "from": "l1i",  "to": "l2", "direction": "backward", "metric": "3.1.52", "title": "Rd",     "category": "read" },
 
-        { "from": 20, "to": 30, "direction": "backward", "metric": "3.1.62", "title": "Rd",        "category": "read" },
-        { "from": 20, "to": 30, "direction": "forward",  "metric": "3.1.63", "title": "Wr+Atomic", "category": "write" }
+        { "from": "l2", "to": "data_fabric", "direction": "backward", "metric": "3.1.62", "title": "Rd",        "category": "read" },
+        { "from": "l2", "to": "data_fabric", "direction": "forward",  "metric": "3.1.63", "title": "Wr+Atomic", "category": "write" },
+
+        { "from": "data_fabric", "to": "xgmi", "direction": "backward", "metric": "3.1.72", "title": "Read BW",   "category": "read" },
+        { "from": "data_fabric", "to": "xgmi", "direction": "forward",  "metric": "3.1.73", "title": "Write BW",  "category": "write" },
+        { "from": "data_fabric", "to": "xgmi", "direction": "both",     "metric": "3.1.74", "title": "Atomic BW", "category": "atomic" },
+
+        { "from": "data_fabric", "to": "pcie", "direction": "backward", "metric": "3.1.75", "title": "Read BW",   "category": "read" },
+        { "from": "data_fabric", "to": "pcie", "direction": "forward",  "metric": "3.1.76", "title": "Write BW",  "category": "write" },
+        { "from": "data_fabric", "to": "pcie", "direction": "both",     "metric": "3.1.77", "title": "Atomic BW", "category": "atomic" },
+
+        { "from": "data_fabric", "to": "mall", "direction": "both" },
+        { "from": "mall",        "to": "umc",  "direction": "both" },
+        { "from": "umc",         "to": "hbm",  "direction": "both" }
     ]
 }

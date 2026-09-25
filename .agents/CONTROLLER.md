@@ -866,7 +866,18 @@ QueryArgumentStore          m_query_arguments;
 QueryDataStore              m_query_output;
 std::atomic<uint64_t>       m_async_fetch_counter;
 ComputePivotTable*          m_kernel_metric_table;
+std::string                 m_profiler_version;
+std::string                 m_profiler_git_version;
+std::string                 m_schema_version;
 ```
+
+`LoadRocpd` calls `FetchMetadata` (use case `kRPVComputeFetchMetadata`)
+before loading workloads and stores the single `compute_metadata` row.
+The strings are exposed through `GetString` as
+`kRPVControllerComputeProfilerVersion`,
+`kRPVControllerComputeProfilerGitVersion`, and
+`kRPVControllerComputeSchemaVersion`. A failed metadata read logs a
+warning and leaves the strings empty; it does not fail the load.
 
 Two `AsyncFetch` overloads:
 

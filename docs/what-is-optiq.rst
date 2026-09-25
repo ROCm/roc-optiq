@@ -48,7 +48,7 @@ Key features include:
 - :ref:`analysis-summary`: High-level overview of the captured compute profiling data. 
 - :ref:`kernel-details`: Focuses on individual kernels.  
 - :ref:`analysis-table`: Complete list of available metrics for the selected kernel. Metrics are grouped by category. 
-- :ref:`analysis-workload`: Contextual information about the profiled workload, including system information and profiling configuration. 
+- :ref:`analysis-workload`: Contextual information about the analysis database and the profiled workload, including the ROCm Compute Profiler version, system information, and profiling configuration. 
 - :ref:`baseline-comparison`: A side-by-side view that compares two workload measurements (baseline vs. target) to quickly identify and assess performance regressions or improvements. 
 
 .. _glance-data-sources:

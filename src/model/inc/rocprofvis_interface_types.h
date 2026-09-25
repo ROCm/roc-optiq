@@ -581,6 +581,10 @@ typedef enum rocprofvis_db_compute_column_enum_t
     kRPVComputeColumnPcSamplingInstructionSourceLineSourceFileUuid,
 
     kRPVComputeColumnKernelHasIsaLines,
+
+    kRPVComputeColumnMetadataComputeVersion,
+    kRPVComputeColumnMetadataGitVersion,
+    kRPVComputeColumnMetadataSchemaVersion,
 } rocprofvis_db_compute_column_enum_t;
 
 // Compute database query use case enumerations
@@ -610,6 +614,7 @@ typedef enum rocprofvis_db_compute_use_case_enum_t
     kRPVComputeFetchKernelInstructionTypeLookups,
     kRPVComputeFetchKernelInstructionSamples,
     kRPVComputeFetchKernelInstructionSampleLookups,
+    kRPVComputeFetchMetadata,
 } rocprofvis_db_compute_use_case_enum_t;
 
 // Compute database query parameter enumeration

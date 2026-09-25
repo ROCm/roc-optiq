@@ -4876,6 +4876,8 @@ DataProvider::ProcessLoadComputeTrace(RequestInfo& req)
         }
         return;
     }
+    LoadAnalysisInfo();
+
     uint64_t            num_workloads = 0;
     rocprofvis_result_t result        = rocprofvis_controller_get_uint64(
         m_trace_controller, kRPVControllerNumWorkloads, 0, &num_workloads);
@@ -4890,6 +4892,20 @@ DataProvider::ProcessLoadComputeTrace(RequestInfo& req)
     {
         m_trace_data_ready_callback(m_model.GetTraceFilePath(), kRocProfVisResultSuccess);
     }
+}
+
+inline void
+DataProvider::LoadAnalysisInfo()
+{
+    // Metadata is best-effort: a missing value leaves its field empty.
+    AnalysisInfo analysis_info;
+    GetString(m_trace_controller, kRPVControllerComputeProfilerVersion, 0,
+              analysis_info.profiler_version);
+    GetString(m_trace_controller, kRPVControllerComputeProfilerGitVersion, 0,
+              analysis_info.profiler_git_version);
+    GetString(m_trace_controller, kRPVControllerComputeSchemaVersion, 0,
+              analysis_info.schema_version);
+    m_compute_model.SetAnalysisInfo(analysis_info);
 }
 
 inline void

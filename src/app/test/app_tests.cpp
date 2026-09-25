@@ -685,9 +685,16 @@ void RegisterAppTests(ImGuiTestEngine* e)
         }
         if (wv == nullptr)
         {
-            ctx->LogWarning("SKIP: no Workload Details tab in this build");
+            ctx->LogWarning("SKIP: no Analysis Details tab in this build");
             return;
         }
+        IM_CHECK(wv_label == "Analysis Details");
+
+        // Trace-level metadata is loaded with the trace, independent of the workload.
+        const AnalysisInfo& analysis_info =
+            cv->GetDataProvider()->ComputeModel().GetAnalysisInfo();
+        IM_CHECK(!analysis_info.profiler_version.empty());
+        IM_CHECK(!analysis_info.schema_version.empty());
 
         // m_workload_info populates in Render(), so the tab must be active first.
         ctx->ItemClick(("//Main Window/**/" + wv_label).c_str());

@@ -2510,22 +2510,28 @@ ComputeMemoryChartView::ShowMetricTooltip(ImVec2 hover_min, ImVec2 hover_max,
                                ImGuiHoveredFlags_NoPopupHierarchy))
         return;
 
-    const MetricValue* metric = ResolveMetric(ref);
-    if(!metric || !metric->entry) return;
-
-    bool has_value = !metric->values.empty();
+    const MetricValue* metric    = ResolveMetric(ref);
+    bool               resolved  = metric && metric->entry;
+    bool               has_value = resolved && !metric->values.empty();
 
     if(show_description)
     {
-        bool has_desc = !metric->entry->description.empty();
+        bool has_desc = resolved && !metric->entry->description.empty();
         bool show_val = show_raw_value && has_value;
-        // Nothing to show (e.g. a metric with no description and no value): skip
-        // the tooltip entirely instead of drawing an empty box.
-        if(!has_desc && !show_val) return;
+        // Nothing to show (e.g. a title-only arrow with no metric): skip the
+        // tooltip entirely instead of drawing an empty box.
+        if(!ref.valid && !has_desc && !show_val) return;
 
         BeginTooltipStyled();
+        // The id is shown even when unresolved: that is when a layout author
+        // needs to know which metric a row showing N/A asked for.
+        if(ref.valid)
+        {
+            ImGui::TextDisabled("Metric %s%s", ref.name.c_str(), resolved ? "" : " (not found)");
+        }
         if(has_desc)
         {
+            if(ref.valid) ImGui::Spacing();
             // Wrap and auto-size; a window max-width below the wrap pos clips text.
             ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + TOOLTIP_MAX_WIDTH);
             ImGui::TextUnformatted(metric->entry->description.c_str());
@@ -2533,7 +2539,7 @@ ComputeMemoryChartView::ShowMetricTooltip(ImVec2 hover_min, ImVec2 hover_max,
         }
         if(show_val)
         {
-            if(has_desc) ImGui::Spacing();
+            if(ref.valid || has_desc) ImGui::Spacing();
             ImGui::Text("Value: %s",
                         FormatMetricValueRaw(metric->values.begin()->second).c_str());
         }

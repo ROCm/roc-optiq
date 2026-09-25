@@ -239,13 +239,16 @@ The following example shows the context menu for adding a metric to the Kernel S
 
 .. _analysis-workload:
 
-Workload Details 
+Analysis Details
 ================
 
-**Workload Details** provides contextual information about the workload, such as:
+**Analysis Details** provides contextual information about the analysis database and the selected workload:
 
-- **System information**: Hardware details of the system at the time the profiling data was collected. 
-- **Profiling configuration**: ROCm Compute Profiler parameters and settings used when the data was captured. 
+- **Analysis information**: The ROCm Compute Profiler version and Git revision that produced the analysis database, and the database schema version. This information applies to the whole database, regardless of the selected workload.
+- **Workload information**:
+
+  - **System information**: Hardware details of the system at the time the profiling data was collected.
+  - **Profiling configuration**: ROCm Compute Profiler parameters and settings used when the data was captured.
 
 .. image:: ../images/workload-details.png
    :width: 800

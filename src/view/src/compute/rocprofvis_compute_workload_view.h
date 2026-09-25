@@ -13,6 +13,7 @@ namespace View
 class DataProvider;
 class ComputeSelection;
 class HSplitContainer;
+struct AnalysisInfo;
 struct WorkloadInfo;
 
 class ComputeWorkloadView : public RocWidget
@@ -37,9 +38,11 @@ protected:
 
     void CreateLayout();
 
+    void RenderAnalysisInfo(const AnalysisInfo& analysis_info);
     void RenderProfilingConfig(const WorkloadInfo& workload_info);
     void RenderSystemInfo(const WorkloadInfo& workload_info);
 
+    void RenderInfoRow(int row_id, const char* name, const char* value);
     void RenderUnavailableMessage(const char* label);
 
     std::unique_ptr<HSplitContainer> m_content_container;

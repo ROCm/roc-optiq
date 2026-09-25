@@ -13,6 +13,7 @@
 #include "rocprofvis_core_assert.h"
 #include "rocprofvis_controller_table_compute_pivot.h"
 #include "json.h"
+#include "spdlog/spdlog.h"
 #include <algorithm>
 #include <charconv>
 #include <cstring>
@@ -180,6 +181,39 @@ rocprofvis_result_t ComputeTrace::GetObject(rocprofvis_property_t property, uint
             {
                 *value = (rocprofvis_handle_t*)m_kernel_metric_table;
                 result = kRocProfVisResultSuccess;
+                break;
+            }
+            default:
+            {
+                result = UnhandledProperty(property);
+                break;
+            }
+        }
+    }
+    return result;
+}
+
+rocprofvis_result_t ComputeTrace::GetString(rocprofvis_property_t property, uint64_t index, char* value, uint32_t* length)
+{
+    (void) index;
+    rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
+    if(length)
+    {
+        switch(property)
+        {
+            case kRPVControllerComputeProfilerVersion:
+            {
+                result = GetStdStringImpl(value, length, m_profiler_version);
+                break;
+            }
+            case kRPVControllerComputeProfilerGitVersion:
+            {
+                result = GetStdStringImpl(value, length, m_profiler_git_version);
+                break;
+            }
+            case kRPVControllerComputeSchemaVersion:
+            {
+                result = GetStdStringImpl(value, length, m_schema_version);
                 break;
             }
             default:
@@ -850,6 +884,11 @@ rocprofvis_result_t ComputeTrace::LoadRocpd(Future* future)
                     future->AddDependentFuture(object2wait);
                     if (kRocProfVisDmResultSuccess == rocprofvis_db_future_wait(object2wait, UINT64_MAX))
                     {
+                        future->ResetProgress();
+                        if(FetchMetadata(db, object2wait) != kRocProfVisDmResultSuccess)
+                        {
+                            spdlog::warn("Compute metadata unavailable for {}", m_trace_file);
+                        }
                         query_arguments.clear();
                         query_output = {
                             {
@@ -1181,6 +1220,30 @@ rocprofvis_result_t ComputeTrace::LoadRocpd(Future* future)
         }
     }
     return result;
+}
+
+rocprofvis_dm_result_t ComputeTrace::FetchMetadata(rocprofvis_dm_database_t db,
+                                                   rocprofvis_db_future_t   db_future)
+{
+    QueryArgumentStore query_args;
+    QueryDataStore     query_out = {
+        {
+            { kRPVComputeColumnMetadataComputeVersion, std::nullopt },
+            { kRPVComputeColumnMetadataGitVersion,     std::nullopt },
+            { kRPVComputeColumnMetadataSchemaVersion,  std::nullopt },
+        }, {}
+    };
+    return ExecuteQuery(
+        db, m_dm_handle, db_future, nullptr, kRPVComputeFetchMetadata, query_args, query_out,
+        [this](const QueryDataStore& data_store){
+            if(!data_store.rows.empty())
+            {
+                const std::vector<const char*>& row = data_store.rows.front();
+                m_profiler_version     = row[data_store.columns.at(kRPVComputeColumnMetadataComputeVersion).value()];
+                m_profiler_git_version = row[data_store.columns.at(kRPVComputeColumnMetadataGitVersion).value()];
+                m_schema_version       = row[data_store.columns.at(kRPVComputeColumnMetadataSchemaVersion).value()];
+            }
+        });
 }
 
 rocprofvis_dm_result_t ComputeTrace::ExecuteQuery(rocprofvis_dm_database_t              db,

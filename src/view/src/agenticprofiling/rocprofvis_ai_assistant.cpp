@@ -66,6 +66,10 @@ constexpr size_t   ASSISTANT_RECENT_TOOL_REPLIES = 8;
 constexpr const char* ASSISTANT_COMPACTED_TOOL_REPLY =
     "(earlier result omitted to save room - call this tool again if you still "
     "need these rows)";
+// Answers a queued call that never ran because the trace in front changed
+// before its turn came. The first call of that round carries the reason.
+constexpr const char* ASSISTANT_SKIPPED_TOOL_REPLY =
+    "Not run: the trace in front changed before this call.";
 // How long a tool waits for its rows. Sized for a query over a large trace
 // rather than a small one: cutting a live query off and telling the model it
 // timed out is worse than making the user wait, because the model answers
@@ -233,6 +237,38 @@ AssistantPanel::CurrentProjectId() const
         return std::string();
     }
     return app->GetCurrentProject()->GetID();
+}
+
+// The kind moves only here, together with the project, so the prompt and
+// schema a round goes out with always match the tools the dispatcher runs.
+bool
+AssistantPanel::PinTurnTrace()
+{
+    const bool was_compute = m_turn_is_compute;
+    m_turn_project_id      = CurrentProjectId();
+    m_turn_is_compute      = MakeToolContext().is_compute;
+    return m_turn_is_compute != was_compute;
+}
+
+// Where the model should start again on the trace now pinned. Names the kind
+// when it changed, because the tools it is about to be offered are not the ones
+// it was using.
+std::string
+AssistantPanel::RestartHint(bool kind_changed) const
+{
+    if(m_turn_project_id.empty())
+    {
+        return "No trace is open now, so tell the user to open one.";
+    }
+    const std::string overview =
+        m_turn_is_compute ? "compute_overview" : "trace_overview";
+    if(!kind_changed)
+    {
+        return "Call " + overview + " to start again on this one.";
+    }
+    return std::string(m_turn_is_compute ? "It is a compute workload"
+                                         : "It is a system trace") +
+           ", so your tools have changed to match it - start with " + overview + ".";
 }
 
 std::string
@@ -436,8 +472,7 @@ AssistantPanel::SendCurrentInput(bool explain_view)
     m_next_call_index = 0;
     m_fetch_retries   = 0;
     m_fetch_wait      = FetchWait();
-    m_turn_project_id = CurrentProjectId();
-    m_turn_is_compute = MakeToolContext().is_compute;
+    PinTurnTrace();
     if(TryStartSummaryWarmup(question))
     {
         return;
@@ -700,13 +735,11 @@ AssistantPanel::RunNextTool()
 
     // Tools read whichever trace is in front, so a tab change mid-queue would
     // silently mix two traces' numbers. Say so instead.
-    const std::string project_id = CurrentProjectId();
-    if(project_id != m_turn_project_id)
+    if(CurrentProjectId() != m_turn_project_id)
     {
-        m_turn_project_id = project_id;
-        FinishCurrentTool("The trace in front changed, so everything you gathered "
-                          "before this belongs to a different trace. Call "
-                          "trace_overview to start again on this one.");
+        AbandonBatchForNewTrace("The trace in front changed, so this call was not run "
+                                "and everything you gathered before it belongs to a "
+                                "different trace.");
         return;
     }
 
@@ -769,7 +802,50 @@ AssistantPanel::FinishCurrentTool(const std::string& content)
         return;
     }
 
-    const AssistantToolCall& call = m_pending_calls[m_next_call_index];
+    // switch_tab is the model changing traces on purpose, so re-pin here rather
+    // than reporting its own move back to it on the next call. A move to the
+    // other kind changes the tools the next round offers, which the model is
+    // told now rather than left to discover from an unknown-tool reply.
+    std::string reply = content;
+    if(CurrentProjectId() != m_turn_project_id)
+    {
+        if(PinTurnTrace())
+        {
+            reply += "\n" + RestartHint(true);
+        }
+    }
+    AppendToolReply(m_pending_calls[m_next_call_index], reply);
+
+    m_fetch_wait    = FetchWait();
+    m_fetch_retries = 0;
+    ++m_next_call_index;
+    RunNextTool();
+}
+
+/*
+ * None of the calls left in the round runs. Each was written from the trace
+ * that was in front - its track ids, time ranges and kernel ids, and on a trace
+ * of the other kind its very name - so running it against another trace
+ * answers a question nobody asked. The endpoint still needs a reply to every
+ * call, so the first carries the reason and where to start again, and the rest
+ * say they were skipped.
+ */
+void
+AssistantPanel::AbandonBatchForNewTrace(const std::string& reason)
+{
+    const bool        kind_changed = PinTurnTrace();
+    const std::string notice       = reason + " " + RestartHint(kind_changed);
+    for(size_t i = m_next_call_index; i < m_pending_calls.size(); ++i)
+    {
+        AppendToolReply(m_pending_calls[i],
+                        i == m_next_call_index ? notice : ASSISTANT_SKIPPED_TOOL_REPLY);
+    }
+    ContinueAfterTools();
+}
+
+void
+AssistantPanel::AppendToolReply(const AssistantToolCall& call, const std::string& content)
+{
     AssistantMessage tool_message;
     tool_message.role         = "tool";
     tool_message.name         = call.name;
@@ -786,14 +862,6 @@ AssistantPanel::FinishCurrentTool(const std::string& content)
     spdlog::debug("Assistant tool {} result:\n{}", call.name, tool_message.content);
 
     m_conversation.push_back(tool_message);
-
-    // switch_tab is the model changing traces on purpose, so re-pin here rather
-    // than reporting its own move back to it on the next call.
-    m_turn_project_id = CurrentProjectId();
-    m_fetch_wait      = FetchWait();
-    m_fetch_retries   = 0;
-    ++m_next_call_index;
-    RunNextTool();
 }
 
 void
@@ -859,9 +927,9 @@ AssistantPanel::PollToolFetch()
 
     if(!m_fetch_wait.warmup && CurrentProjectId() != m_turn_project_id)
     {
-        FinishCurrentTool("The trace in front changed, so this tool's pending "
-                          "data belongs to a different trace. Run it again on "
-                          "the current trace.");
+        AbandonBatchForNewTrace("The trace in front changed while this call waited on "
+                                "its data, so what it fetched belongs to a different "
+                                "trace and was dropped.");
         return;
     }
 
@@ -964,7 +1032,7 @@ AssistantPanel::PollToolFetch()
 // is waiting on. Tools run only from here, never Render(), so they cannot
 // reorder panels halfway through the frame that draws them.
 void
-AssistantPanel::UpdateTurn()
+AssistantPanel::Update()
 {
     if(m_pending.valid())
     {
@@ -980,12 +1048,6 @@ AssistantPanel::UpdateTurn()
     }
 
     PollToolFetch();
-}
-
-void
-AssistantPanel::Update()
-{
-    UpdateTurn();
 }
 
 }  // namespace View

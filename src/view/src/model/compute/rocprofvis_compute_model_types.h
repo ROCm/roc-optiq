@@ -58,10 +58,18 @@ struct Point
 
 struct PcSampleState
 {
-    uint64_t instruction_uuid = 0;
-    uint64_t total_count      = 0;
-    uint64_t issue_count      = 0;
-    uint64_t stall_count      = 0;
+    // One reason the profiler recorded against these samples, and how many of
+    // them it accounts for.
+    struct Reason
+    {
+        std::string name;
+        uint64_t    count = 0;
+    };
+    uint64_t            instruction_uuid = 0;
+    uint64_t            total_count      = 0;
+    uint64_t            issue_count      = 0;
+    uint64_t            stall_count      = 0;
+    std::vector<Reason> reasons;
 };
 
 struct InstructionSourceLine
@@ -105,12 +113,27 @@ struct SourceFile
     std::vector<SourceLine> source_lines;
 };
 
+// How far one layer of a kernel's PC samples has got. A layer can come back
+// empty, so emptiness alone cannot say whether it was ever read.
+enum class PcSamplingLayerState : uint32_t
+{
+    kNotRead,
+    kRead,
+    kFailed
+};
+
 struct PcSamplingData
 {
     std::vector<CodeObjectStore>       code_objects;
     std::vector<SourceFile>            source_files;
     std::vector<InstructionSourceLine> instruction_source_lines;
     std::vector<PcSampleState>         pc_sample_states;
+    PcSamplingLayerState               isa_state    = PcSamplingLayerState::kNotRead;
+    PcSamplingLayerState               source_state = PcSamplingLayerState::kNotRead;
+    PcSamplingLayerState               stalls_state = PcSamplingLayerState::kNotRead;
+    // Files whose line table a read has finished for, whether or not it worked.
+    // The source layer brings one file's lines per read.
+    std::vector<uint64_t> source_files_read;
 };
 
 struct KernelInfo

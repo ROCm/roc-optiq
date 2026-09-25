@@ -121,20 +121,25 @@ private:
     void BeginFetchWait(const AssistantToolStartResult& started,
                         const std::string& tool_name, bool warmup);
     void FinishCurrentTool(const std::string& content);
+    // Answers every call left in the round without running it, once the trace
+    // in front is no longer the one the round was written for.
+    void AbandonBatchForNewTrace(const std::string& reason);
+    void AppendToolReply(const AssistantToolCall& call, const std::string& content);
     void ContinueAfterTools();
     void BeginQueuedTurn();
     bool TryStartSummaryWarmup(const std::string& question);
     bool AnyFetchPending(const AssistantToolContext& context) const;
+    // Makes the trace in front the one this turn is about. True when it is the
+    // other kind from the one pinned before, which means another tool set.
+    bool                 PinTurnTrace();
     AssistantToolContext MakeToolContext() const;
     std::string          CurrentProjectId() const;
+    std::string          RestartHint(bool kind_changed) const;
     std::string          BuildUserPrompt(const std::string& question,
                                          bool               include_briefing) const;
     bool                 NeedsBriefing();
     void                 TrimConversation();
     bool                 Busy() const;
-
-    // One HTTP reply, or one step of the fetch a tool is parked on.
-    void UpdateTurn();
 
     static AssistantPanel* s_instance;
 
@@ -160,13 +165,14 @@ private:
     bool     m_force_final;
     // Keeps contention retries on the first wait's timeout deadline.
     uint32_t m_fetch_retries;
-    // The trace the turn started on, which is what catches the user switching
-    // tabs mid-investigation.
+    // The trace this turn is about, which is what catches the user switching
+    // tabs mid-investigation. Moves only through PinTurnTrace.
     std::string m_turn_project_id;
-    // Which kind of trace that was. Pinned rather than read per round, because
-    // the prompt and the tool schema both key off it: re-reading it would swap
-    // the model's whole tool set mid-turn, mid-conversation, with the transcript
-    // still full of calls to tools it no longer has.
+    // Which kind of trace that is, which picks the prompt body and the tool
+    // schema. Pinned with the project rather than read per round, so the tool
+    // set changes only at the point the model is told the trace changed, and
+    // the schema a round goes out with always matches the tools the dispatcher
+    // will run for it.
     bool        m_turn_is_compute;
     // The trace the briefing in the conversation describes. A follow-up about
     // the same trace does not repeat it; a different one does.

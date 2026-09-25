@@ -49,6 +49,9 @@ enum class AssistantFetchKind
     // Compute metric values, which land in the assistant's own store in
     // ComputeDataModel rather than in a TablesModel slot.
     kComputeMetrics,
+    // One layer of a kernel's PC samples. Never formatted here: the tool runs
+    // again once the layer lands and answers from memory when it has them all.
+    kPcSampling,
     // A Python analysis script, which answers with its own text rather than
     // rows to format.
     kScript,
@@ -70,12 +73,12 @@ enum class AssistantFetchKind
 // reports a trace with no tracks rather than failing.
 struct AssistantToolContext
 {
-    DataProvider*      data_provider      = nullptr;
-    TimelineSelection* timeline_selection = nullptr;
-    TraceView*         trace_view         = nullptr;
-    ComputeSelection*  compute_selection  = nullptr;
-    bool               is_compute         = false;
-    std::string        trace_name;
+    DataProvider*           data_provider      = nullptr;
+    TimelineSelection*      timeline_selection = nullptr;
+    TraceView*              trace_view         = nullptr;
+    const ComputeSelection* compute_selection  = nullptr;
+    bool                    is_compute         = false;
+    std::string             trace_name;
 };
 
 // Stands in for a kernel id when a compute metric fetch asked for the

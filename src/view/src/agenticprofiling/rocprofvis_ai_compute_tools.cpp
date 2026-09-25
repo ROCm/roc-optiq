@@ -6,20 +6,25 @@
 // one, but it is empty, so reading it would answer confidently that the trace
 // has no tracks and no events.
 //
-// Five of the six answer from memory. A compute trace loads its whole
+// Five of the eight answer from memory. A compute trace loads its whole
 // workload/kernel/metric-catalogue/roofline tree up front, so kernel names,
 // dispatch statistics, units and descriptions cost nothing to read and need no
-// request id. Only get_metrics queries, and it does so through the assistant's
-// own client id - FetchMetrics keys both the request slot and the
-// ComputeDataModel store off that, which is what lets the assistant read a
-// metric table while the user is looking at one.
+// request id. kernel_triage and get_metrics query through the assistant's own
+// client id - FetchMetrics keys both the request slot and the ComputeDataModel
+// store off that, which is what lets the assistant read a metric table while
+// the user is looking at one. kernel_pc_samples reads PC samples through the
+// ISA View's slots instead, and never while the view has one of its own in
+// flight.
 #include "rocprofvis_ai_tools_internal.h"
 
 #include <algorithm>
 #include <cstdint>
 #include <cstdio>
+#include <map>
 #include <sstream>
 #include <string>
+#include <unordered_map>
+#include <utility>
 #include <vector>
 
 #include "json.h"
@@ -50,6 +55,29 @@ constexpr size_t ASSISTANT_COMPUTE_MAX_METRIC_ROWS = 60;
 // its own can expand to hundreds of entries, so the cap is on selectors rather
 // than on what they resolve to.
 constexpr size_t ASSISTANT_COMPUTE_MAX_SELECTORS = 16;
+// A metric id is category.table.entry; a shorter one selects everything under
+// it.
+constexpr size_t ASSISTANT_METRIC_ID_PARTS = 3;
+
+// Instructions one kernel_pc_samples call lists, most-sampled first.
+constexpr size_t ASSISTANT_PC_DEFAULT_INSTRUCTIONS = 10;
+constexpr size_t ASSISTANT_PC_MAX_INSTRUCTIONS     = 30;
+// Source files whose line tables one call reads to put line numbers on the
+// instructions it lists. Each is a read of its own, and hot instructions rarely
+// span more than the kernel's file and a header or two.
+constexpr size_t ASSISTANT_PC_MAX_SOURCE_FILES = 4;
+// Reasons listed against one instruction, most common first.
+constexpr size_t ASSISTANT_PC_REASONS_PER_INSTRUCTION = 3;
+// Longest source line quoted beside an instruction.
+constexpr size_t ASSISTANT_PC_MAX_CODE_CHARS = 100;
+// Marks the assistant's PC-sampling reads for the ISA View, which drops any
+// completion whose generation is not its own. The view counts its generations
+// up from zero, one per kernel selection, so it never reaches this one.
+constexpr uint32_t    ASSISTANT_PC_SAMPLING_GENERATION = UINT32_MAX;
+constexpr const char* ASSISTANT_NO_PC_SAMPLES =
+    "No PC sampling data was found for that kernel. rocprof-compute records PC "
+    "samples in a capture of their own, apart from the hardware counters, so a "
+    "trace usually carries one or the other.";
 
 /*
  * The tables a first look at any kernel needs, by name rather than by id.
@@ -149,8 +177,8 @@ Model(const AssistantToolContext& context)
     return context.data_provider->ComputeModel();
 }
 
-// The request slot get_metrics owns. Derived from the assistant's client id, so
-// it can never be the one a metric table is waiting on.
+// The request slot kernel_triage and get_metrics share. Derived from the
+// assistant's client id, so it can never be the one a metric table is waiting on.
 uint64_t
 ComputeMetricsRequestId()
 {
@@ -158,22 +186,42 @@ ComputeMetricsRequestId()
                                                  DataProvider::ASSISTANT_CLIENT_ID);
 }
 
+// Whether the model passed an argument at all. A null counts as leaving it out,
+// since that is how some models spell an optional argument they are not using.
+bool
+HasArg(const jt::Json& args, const char* key)
+{
+    jt::Json& mutable_args = const_cast<jt::Json&>(args);
+    return mutable_args.contains(key) && !mutable_args[key].isNull();
+}
+
 /*
  * Which workload a tool is talking about.
  *
  * An explicit workload_id wins, then whichever one the toolbar has selected,
  * then the only one there is. Most traces carry a single workload, so falling
- * through to the first keeps every tool callable with no arguments at all.
+ * through to the first keeps every tool callable with no arguments at all. An
+ * id that was passed but names nothing is refused rather than replaced by the
+ * selection, which would answer about a workload nobody asked for.
  */
 const WorkloadInfo*
-ResolveWorkload(const AssistantToolContext& context, const jt::Json& args)
+ResolveWorkload(const AssistantToolContext& context, const jt::Json& args,
+                std::string& error_out)
 {
     ComputeDataModel& model = Model(context);
 
-    const uint64_t requested = JsonU64(args, "workload_id", UINT64_MAX);
-    if(requested != UINT64_MAX)
+    if(HasArg(args, "workload_id"))
     {
-        return model.GetWorkload(static_cast<uint32_t>(requested));
+        const uint64_t      requested = JsonU64(args, "workload_id", UINT64_MAX);
+        const WorkloadInfo* workload =
+            requested <= UINT32_MAX ? model.GetWorkload(static_cast<uint32_t>(requested))
+                                    : nullptr;
+        if(workload == nullptr)
+        {
+            error_out = "That workload_id is not in this trace. compute_overview lists "
+                        "the workloads it has.";
+        }
+        return workload;
     }
 
     if(context.compute_selection != nullptr)
@@ -190,7 +238,12 @@ ResolveWorkload(const AssistantToolContext& context, const jt::Json& args)
     }
 
     const std::vector<const WorkloadInfo*>& workloads = model.GetWorkloadList();
-    return workloads.empty() ? nullptr : workloads.front();
+    if(workloads.empty())
+    {
+        error_out = "This compute trace has no workloads in it.";
+        return nullptr;
+    }
+    return workloads.front();
 }
 
 // Finds a kernel by exact name first, then by unique substring. Names come back
@@ -229,10 +282,14 @@ KernelByName(const WorkloadInfo& workload, const std::string& name, bool& ambigu
 }
 
 /*
- * Which kernel a tool is talking about, and whether it was given one at all.
+ * Which kernel a tool is talking about: the one it names, else the one the
+ * toolbar has selected.
  *
- * found_out separates "no kernel was named, use workload scope" from "a kernel
- * was named and does not exist", which the caller has to report differently.
+ * named_out separates "no kernel was named and none is selected" from "a kernel
+ * was named and does not exist", which the caller has to report differently. A
+ * kernel_id that cannot be read - a name passed in the id field, say - counts as
+ * named: falling back to the selection would answer about a kernel the model
+ * did not ask for.
  */
 const KernelInfo*
 ResolveKernel(const AssistantToolContext& context, const WorkloadInfo& workload,
@@ -240,15 +297,21 @@ ResolveKernel(const AssistantToolContext& context, const WorkloadInfo& workload,
 {
     named_out = false;
 
-    const uint64_t requested_id = JsonU64(args, "kernel_id", UINT64_MAX);
-    if(requested_id != UINT64_MAX)
+    if(HasArg(args, "kernel_id"))
     {
-        named_out = true;
+        named_out                = true;
+        const uint64_t requested = JsonU64(args, "kernel_id", UINT64_MAX);
+        if(requested > UINT32_MAX)
+        {
+            error_out = "kernel_id must be a kernel's number from list_kernels. Pass a "
+                        "name as kernel_name instead.";
+            return nullptr;
+        }
         const KernelInfo* kernel =
-            Model(context).GetKernelInfo(workload.id, static_cast<uint32_t>(requested_id));
+            Model(context).GetKernelInfo(workload.id, static_cast<uint32_t>(requested));
         if(kernel == nullptr)
         {
-            error_out = "No kernel with id " + std::to_string(requested_id) +
+            error_out = "No kernel with id " + std::to_string(requested) +
                         " in this workload. Call list_kernels for the ids.";
         }
         return kernel;
@@ -369,21 +432,109 @@ FormatPercentOf(uint64_t part, uint64_t whole)
     return std::string(buffer);
 }
 
+// One part of a dotted id: digits only, and small enough for a uint32_t.
+bool
+ParseMetricIdPart(const std::string& text, size_t begin, size_t end, uint32_t& out)
+{
+    if(begin == end)
+    {
+        return false;
+    }
+    uint64_t value = 0;
+    for(size_t i = begin; i < end; ++i)
+    {
+        if(text[i] < '0' || text[i] > '9')
+        {
+            return false;
+        }
+        value = value * 10 + static_cast<uint64_t>(text[i] - '0');
+        if(value > UINT32_MAX)
+        {
+            return false;
+        }
+    }
+    out = static_cast<uint32_t>(value);
+    return true;
+}
+
+// Reads "2", "2.1" or "2.1.4". An empty part - "2..1", or a trailing dot - is
+// refused, and so is a fourth part.
+bool
+ParseDottedMetricId(const std::string& text, MetricsRequestParams::MetricID& out)
+{
+    uint32_t parts[ASSISTANT_METRIC_ID_PARTS] = {};
+    size_t   count                            = 0;
+    size_t   begin                            = 0;
+    bool     more                             = true;
+    while(more)
+    {
+        const size_t dot = text.find('.', begin);
+        const size_t end = dot == std::string::npos ? text.size() : dot;
+        if(count == ASSISTANT_METRIC_ID_PARTS ||
+           !ParseMetricIdPart(text, begin, end, parts[count]))
+        {
+            return false;
+        }
+        ++count;
+        more  = dot != std::string::npos;
+        begin = end + 1;
+    }
+
+    out             = MetricsRequestParams::MetricID{};
+    out.category_id = parts[0];
+    if(count > 1)
+    {
+        out.table_id = parts[1];
+    }
+    if(count > 2)
+    {
+        out.entry_id = parts[2];
+    }
+    return true;
+}
+
+// Whether a selector names something this workload's catalogue has. Checked
+// before fetching, so a wrong id is reported as wrong instead of coming back as
+// an empty result that reads like a metric the trace does not record.
+bool
+SelectorInCatalogue(const AvailableMetrics&               catalogue,
+                    const MetricsRequestParams::MetricID& selector)
+{
+    auto category = catalogue.tree.find(selector.category_id);
+    if(category == catalogue.tree.end())
+    {
+        return false;
+    }
+    if(!selector.table_id.has_value())
+    {
+        return true;
+    }
+    auto table = category->second.tables.find(selector.table_id.value());
+    if(table == category->second.tables.end())
+    {
+        return false;
+    }
+    return !selector.entry_id.has_value() ||
+           table->second.entries.count(selector.entry_id.value()) > 0;
+}
+
 /*
  * Reads a dotted-id argument into the selectors FetchMetrics takes.
  *
  * Each is an id from list_metrics: "2" is a whole category, "2.1" a table,
  * "2.1.4" one entry. A name is refused rather than guessed at - the catalogue
  * is per-workload and its names are free-form, so matching one loosely here
- * would fetch a metric the model did not ask for.
+ * would fetch a metric the model did not ask for - and so is an id this
+ * workload's catalogue does not have.
  *
  * Shared by get_metrics and by list_metrics' describe mode, so the two accept
  * exactly the same ids and a model that has learned one has learned both.
  */
 bool
 ParseMetricSelectors(const jt::Json& args, const char* key,
+                     const AvailableMetrics&                      catalogue,
                      std::vector<MetricsRequestParams::MetricID>& out,
-                     std::string& error_out)
+                     std::string&                                 error_out)
 {
     jt::Json& mutable_args = const_cast<jt::Json&>(args);
     if(!mutable_args.contains(key) || !mutable_args[key].isArray())
@@ -418,61 +569,21 @@ ParseMetricSelectors(const jt::Json& args, const char* key,
             return false;
         }
 
-        const std::string text     = Core::String::trim_copy(entry.getString());
-        uint32_t          parts[3] = { 0, 0, 0 };
-        size_t            count    = 0;
-        size_t            pos      = 0;
-        bool              ok       = !text.empty();
-
-        while(ok && pos < text.size() && count < 3)
-        {
-            size_t   digits = 0;
-            uint64_t value  = 0;
-            while(pos < text.size() && text[pos] >= '0' && text[pos] <= '9')
-            {
-                value = value * 10 + static_cast<uint64_t>(text[pos] - '0');
-                if(value > UINT32_MAX)
-                {
-                    ok = false;
-                    break;
-                }
-                ++pos;
-                ++digits;
-            }
-            if(!ok || digits == 0)
-            {
-                ok = false;
-                break;
-            }
-            parts[count++] = static_cast<uint32_t>(value);
-            if(pos < text.size())
-            {
-                if(text[pos] != '.')
-                {
-                    ok = false;
-                    break;
-                }
-                ++pos;
-            }
-        }
-
-        if(!ok || pos != text.size() || count == 0)
+        const std::string              text = Core::String::trim_copy(entry.getString());
+        MetricsRequestParams::MetricID selector{};
+        if(!ParseDottedMetricId(text, selector))
         {
             error_out = "\"" + text +
                         "\" is not a metric id. Use the dotted ids list_metrics "
                         "printed, such as \"2.1\" or \"2.1.4\".";
             return false;
         }
-
-        MetricsRequestParams::MetricID selector{};
-        selector.category_id = parts[0];
-        if(count > 1)
+        if(!SelectorInCatalogue(catalogue, selector))
         {
-            selector.table_id = parts[1];
-        }
-        if(count > 2)
-        {
-            selector.entry_id = parts[2];
+            error_out = "\"" + text +
+                        "\" is not in this workload's metric catalogue. Call "
+                        "list_metrics for the ids it does have.";
+            return false;
         }
         out.push_back(selector);
     }
@@ -507,26 +618,40 @@ EntryMatchesSelector(const AvailableMetrics::Entry&        entry,
     return true;
 }
 
+// One catalogue row as list_metrics prints it: id, name, and the unit when there
+// is one, then the description on its own line when that was asked for.
+void
+AppendCatalogueEntry(std::ostringstream& out, const AvailableMetrics::Entry& entry,
+                     bool with_description)
+{
+    out << "  " << entry.category_id << "." << entry.table_id << "." << entry.id << "  "
+        << entry.name;
+    if(!entry.unit.empty())
+    {
+        out << "  [" << entry.unit << "]";
+    }
+    out << "\n";
+    if(with_description && !entry.description.empty())
+    {
+        out << "    " << entry.description << "\n";
+    }
+}
+
 // --- Tools ---------------------------------------------------------------
 
 AssistantToolStartResult
 ToolComputeOverview(const AssistantToolContext& context, const jt::Json& args,
                     const std::string&)
 {
-    ComputeDataModel&                       model     = Model(context);
-    const std::vector<const WorkloadInfo*>& workloads = model.GetWorkloadList();
-    if(workloads.empty())
-    {
-        return DoneResult("This compute trace has no workloads in it.", "No workloads");
-    }
-
-    const WorkloadInfo* workload = ResolveWorkload(context, args);
+    std::string         error;
+    const WorkloadInfo* workload = ResolveWorkload(context, args, error);
     if(workload == nullptr)
     {
-        return DoneResult("That workload id is not in this trace.", "Unknown workload");
+        return DoneResult(error, "Unknown workload");
     }
 
-    std::ostringstream out;
+    const std::vector<const WorkloadInfo*>& workloads = Model(context).GetWorkloadList();
+    std::ostringstream                      out;
     out << "workload_count: " << workloads.size() << "\n";
     if(workloads.size() > 1)
     {
@@ -576,8 +701,18 @@ ToolComputeOverview(const AssistantToolContext& context, const jt::Json& args,
     }
     out << "note: these are aggregate dispatch statistics. A compute trace has no "
            "timeline, so there is no ordering or start time for an individual "
-           "dispatch. Hardware metrics are not here - call list_metrics then "
-           "get_metrics.\n";
+           "dispatch.";
+    if(workload->available_metrics.list.empty())
+    {
+        out << " This workload records no hardware counters, so list_metrics, "
+               "kernel_triage and get_metrics have nothing to read; kernel_pc_samples "
+               "reads its PC samples if it has any.\n";
+    }
+    else
+    {
+        out << " Hardware metrics are not here - kernel_triage reads the standard "
+               "panel for one kernel, and get_metrics whatever it leaves open.\n";
+    }
 
     return DoneResult(TrimComputeResult(out.str()), "Read the workload overview");
 }
@@ -586,10 +721,11 @@ AssistantToolStartResult
 ToolListKernels(const AssistantToolContext& context, const jt::Json& args,
                 const std::string&)
 {
-    const WorkloadInfo* workload = ResolveWorkload(context, args);
+    std::string         error;
+    const WorkloadInfo* workload = ResolveWorkload(context, args, error);
     if(workload == nullptr)
     {
-        return DoneResult("That workload id is not in this trace.", "Unknown workload");
+        return DoneResult(error, "Unknown workload");
     }
 
     std::vector<const KernelInfo*> kernels;
@@ -707,14 +843,14 @@ AssistantToolStartResult
 ToolKernelSummary(const AssistantToolContext& context, const jt::Json& args,
                   const std::string&)
 {
-    const WorkloadInfo* workload = ResolveWorkload(context, args);
+    std::string         error;
+    const WorkloadInfo* workload = ResolveWorkload(context, args, error);
     if(workload == nullptr)
     {
-        return DoneResult("That workload id is not in this trace.", "Unknown workload");
+        return DoneResult(error, "Unknown workload");
     }
 
-    bool        named = false;
-    std::string error;
+    bool              named  = false;
     const KernelInfo* kernel = ResolveKernel(context, *workload, args, named, error);
     if(kernel == nullptr)
     {
@@ -759,10 +895,11 @@ AssistantToolStartResult
 ToolListMetrics(const AssistantToolContext& context, const jt::Json& args,
                 const std::string&)
 {
-    const WorkloadInfo* workload = ResolveWorkload(context, args);
+    std::string         error;
+    const WorkloadInfo* workload = ResolveWorkload(context, args, error);
     if(workload == nullptr)
     {
-        return DoneResult("That workload id is not in this trace.", "Unknown workload");
+        return DoneResult(error, "Unknown workload");
     }
 
     const AvailableMetrics& metrics = workload->available_metrics;
@@ -784,13 +921,12 @@ ToolListMetrics(const AssistantToolContext& context, const jt::Json& args,
     if(mutable_args.contains("describe"))
     {
         std::vector<MetricsRequestParams::MetricID> selectors;
-        std::string                                 error;
-        if(!ParseMetricSelectors(args, "describe", selectors, error))
+        if(!ParseMetricSelectors(args, "describe", metrics, selectors, error))
         {
             return DoneResult(error, "Bad describe");
         }
 
-        size_t shown = 0;
+        size_t matched = 0;
         for(const AvailableMetrics::Entry& entry : metrics.list)
         {
             bool wanted = false;
@@ -802,26 +938,24 @@ ToolListMetrics(const AssistantToolContext& context, const jt::Json& args,
                     break;
                 }
             }
-            if(!wanted || shown >= ASSISTANT_COMPUTE_MAX_METRIC_ROWS)
+            if(!wanted)
             {
                 continue;
             }
-            ++shown;
-            out << "  " << entry.category_id << "." << entry.table_id << "." << entry.id
-                << "  " << entry.name;
-            if(!entry.unit.empty())
+            ++matched;
+            if(matched <= ASSISTANT_COMPUTE_MAX_METRIC_ROWS)
             {
-                out << "  [" << entry.unit << "]";
-            }
-            out << "\n";
-            if(!entry.description.empty())
-            {
-                out << "    " << entry.description << "\n";
+                AppendCatalogueEntry(out, entry, true);
             }
         }
-        if(shown == 0)
+        if(matched == 0)
         {
-            out << "  (no metric in this workload has any of those ids)\n";
+            out << "  (no metrics are listed under those ids)\n";
+        }
+        else if(matched > ASSISTANT_COMPUTE_MAX_METRIC_ROWS)
+        {
+            out << "note: " << (matched - ASSISTANT_COMPUTE_MAX_METRIC_ROWS)
+                << " more matched than are listed. Describe fewer ids at a time.\n";
         }
         return DoneResult(TrimComputeResult(out.str()), "Described metrics");
     }
@@ -849,13 +983,7 @@ ToolListMetrics(const AssistantToolContext& context, const jt::Json& args,
                 continue;
             }
             ++shown;
-            out << "  " << entry.category_id << "." << entry.table_id << "." << entry.id
-                << "  " << entry.name;
-            if(!entry.unit.empty())
-            {
-                out << "  [" << entry.unit << "]";
-            }
-            out << "\n";
+            AppendCatalogueEntry(out, entry, false);
         }
 
         if(matched == 0)
@@ -921,10 +1049,11 @@ AssistantToolStartResult
 ToolKernelRoofline(const AssistantToolContext& context, const jt::Json& args,
                    const std::string&)
 {
-    const WorkloadInfo* workload = ResolveWorkload(context, args);
+    std::string         error;
+    const WorkloadInfo* workload = ResolveWorkload(context, args, error);
     if(workload == nullptr)
     {
-        return DoneResult("That workload id is not in this trace.", "Unknown workload");
+        return DoneResult(error, "Unknown workload");
     }
 
     if(workload->roofline.ceiling_bandwidth.empty() &&
@@ -980,8 +1109,7 @@ ToolKernelRoofline(const AssistantToolContext& context, const jt::Json& args,
             << "\n";
     }
 
-    bool        named = false;
-    std::string error;
+    bool              named  = false;
     const KernelInfo* kernel = ResolveKernel(context, *workload, args, named, error);
     if(kernel == nullptr && named)
     {
@@ -1008,8 +1136,11 @@ void
 CollectTriageSelectors(const WorkloadInfo&                          workload,
                        std::vector<MetricsRequestParams::MetricID>& out)
 {
-    constexpr size_t TRIAGE_TABLE_COUNT =
-        sizeof(ASSISTANT_TRIAGE_TABLE_NAMES) / sizeof(ASSISTANT_TRIAGE_TABLE_NAMES[0]);
+    std::vector<std::string> wanted;
+    for(const char* name : ASSISTANT_TRIAGE_TABLE_NAMES)
+    {
+        wanted.push_back(Core::String::to_lower_copy(name));
+    }
 
     for(const AvailableMetrics::Category* category :
         workload.available_metrics.ordered_categories)
@@ -1020,26 +1151,72 @@ CollectTriageSelectors(const WorkloadInfo&                          workload,
         }
         for(const AvailableMetrics::Table* table : category->ordered_tables)
         {
-            if(table == nullptr || out.size() >= ASSISTANT_COMPUTE_MAX_SELECTORS)
+            if(table == nullptr || out.size() >= ASSISTANT_COMPUTE_MAX_SELECTORS ||
+               std::find(wanted.begin(), wanted.end(),
+                         Core::String::to_lower_copy(table->name)) == wanted.end())
             {
                 continue;
             }
-            const std::string lowered = Core::String::to_lower_copy(table->name);
-            for(size_t i = 0; i < TRIAGE_TABLE_COUNT; ++i)
-            {
-                if(lowered !=
-                   Core::String::to_lower_copy(ASSISTANT_TRIAGE_TABLE_NAMES[i]))
-                {
-                    continue;
-                }
-                MetricsRequestParams::MetricID selector{};
-                selector.category_id = category->id;
-                selector.table_id    = table->id;
-                out.push_back(selector);
-                break;
-            }
+            MetricsRequestParams::MetricID selector{};
+            selector.category_id = category->id;
+            selector.table_id    = table->id;
+            out.push_back(selector);
         }
     }
+}
+
+/*
+ * Starts a metric read into the assistant's own store, or parks behind the one
+ * already in flight there. A null kernel reads the workload's own values.
+ *
+ * The slot is the assistant's alone, so a pending request in it is an earlier
+ * call of ours rather than a widget's: wait that out and run again instead of
+ * formatting values that answer the earlier call. Clearing the scope first is
+ * what lets the formatter print everything in the store rather than carrying
+ * the selector list through the wait - whatever is there afterwards is what
+ * this call asked for.
+ */
+AssistantToolStartResult
+StartComputeMetricsFetch(const AssistantToolContext& context,
+                         const WorkloadInfo& workload, const KernelInfo* kernel,
+                         const std::vector<MetricsRequestParams::MetricID>& selectors,
+                         const char*                                        status_line)
+{
+    AssistantToolStartResult result;
+    result.pending    = true;
+    result.fetch.kind = AssistantFetchKind::kComputeMetrics;
+    result.request_ids.push_back(ComputeMetricsRequestId());
+    if(context.data_provider->IsRequestPending(result.request_ids.front()))
+    {
+        result.status_line = "Waiting for the previous metric fetch...";
+        return result;
+    }
+
+    ComputeDataModel&     model = Model(context);
+    std::vector<uint32_t> kernel_ids;
+    if(kernel != nullptr)
+    {
+        kernel_ids.push_back(kernel->id);
+        model.ClearKernelMetricValues(DataProvider::ASSISTANT_CLIENT_ID, kernel->id);
+    }
+    else
+    {
+        model.ClearWorkloadMetricValues(DataProvider::ASSISTANT_CLIENT_ID, workload.id);
+    }
+
+    if(!context.data_provider->FetchMetrics(MetricsRequestParams(
+           workload.id, kernel_ids, selectors, DataProvider::ASSISTANT_CLIENT_ID)))
+    {
+        return DoneResult("The metric fetch could not be started, so nothing was read.",
+                          "Fetch refused");
+    }
+
+    result.started_fetch     = true;
+    result.fetch.workload_id = workload.id;
+    result.fetch.kernel_id =
+        kernel != nullptr ? kernel->id : ASSISTANT_COMPUTE_WORKLOAD_SCOPE;
+    result.status_line = status_line;
+    return result;
 }
 
 /*
@@ -1055,14 +1232,14 @@ AssistantToolStartResult
 ToolKernelTriage(const AssistantToolContext& context, const jt::Json& args,
                  const std::string&)
 {
-    const WorkloadInfo* workload = ResolveWorkload(context, args);
+    std::string         error;
+    const WorkloadInfo* workload = ResolveWorkload(context, args, error);
     if(workload == nullptr)
     {
-        return DoneResult("That workload id is not in this trace.", "Unknown workload");
+        return DoneResult(error, "Unknown workload");
     }
 
-    bool              named = false;
-    std::string       error;
+    bool              named  = false;
     const KernelInfo* kernel = ResolveKernel(context, *workload, args, named, error);
     if(kernel == nullptr)
     {
@@ -1082,116 +1259,452 @@ ToolKernelTriage(const AssistantToolContext& context, const jt::Json& args,
                           "No triage tables");
     }
 
-    const uint64_t request_id = ComputeMetricsRequestId();
-    if(context.data_provider->IsRequestPending(request_id))
-    {
-        AssistantToolStartResult waiting;
-        waiting.pending       = true;
-        waiting.started_fetch = false;
-        waiting.request_ids.push_back(request_id);
-        waiting.fetch.kind  = AssistantFetchKind::kComputeMetrics;
-        waiting.status_line = "Waiting for the previous metric fetch...";
-        return waiting;
-    }
-
-    ComputeDataModel&     model = Model(context);
-    std::vector<uint32_t> kernel_ids;
-    kernel_ids.push_back(kernel->id);
-    model.ClearKernelMetricValues(DataProvider::ASSISTANT_CLIENT_ID, kernel->id);
-
-    if(!context.data_provider->FetchMetrics(
-           MetricsRequestParams(workload->id, kernel_ids, selectors,
-                                DataProvider::ASSISTANT_CLIENT_ID)))
-    {
-        return DoneResult("The metric fetch was refused, so nothing was read. The "
-                          "trace may still be loading.",
-                          "Fetch refused");
-    }
-
-    AssistantToolStartResult result;
-    result.pending           = true;
-    result.started_fetch     = true;
-    result.request_ids.push_back(request_id);
-    result.fetch.kind        = AssistantFetchKind::kComputeMetrics;
-    result.fetch.workload_id = workload->id;
-    result.fetch.kernel_id   = kernel->id;
-    result.status_line       = "Reading the triage panel...";
-    return result;
+    return StartComputeMetricsFetch(context, *workload, kernel, selectors,
+                                    "Reading the triage panel...");
 }
 
 AssistantToolStartResult
 ToolGetMetrics(const AssistantToolContext& context, const jt::Json& args,
                const std::string&)
 {
-    const WorkloadInfo* workload = ResolveWorkload(context, args);
+    std::string         error;
+    const WorkloadInfo* workload = ResolveWorkload(context, args, error);
     if(workload == nullptr)
     {
-        return DoneResult("That workload id is not in this trace.", "Unknown workload");
+        return DoneResult(error, "Unknown workload");
     }
 
     std::vector<MetricsRequestParams::MetricID> selectors;
-    std::string                                 error;
-    if(!ParseMetricSelectors(args, "metrics", selectors, error))
+    if(!ParseMetricSelectors(args, "metrics", workload->available_metrics, selectors,
+                             error))
     {
         return DoneResult(error, "Bad metrics");
     }
 
+    // Asked for by name rather than by leaving the kernel out: selecting a
+    // workload also selects its first kernel, so "no kernel given" would always
+    // land on the toolbar's kernel and the workload's own values would be out
+    // of reach.
+    const std::string scope =
+        Core::String::to_lower_copy(JsonUtils::GetString(args, "scope", "kernel"));
+    if(scope == "workload")
+    {
+        if(HasArg(args, "kernel_id") ||
+           !JsonUtils::GetString(args, "kernel_name", "").empty())
+        {
+            return DoneResult("scope=\"workload\" reads the workload's own values, so it "
+                              "takes no kernel_id or kernel_name. Drop them, or use "
+                              "scope=\"kernel\".",
+                              "Bad scope");
+        }
+        return StartComputeMetricsFetch(context, *workload, nullptr, selectors,
+                                        "Reading workload metric values...");
+    }
+    if(scope != "kernel")
+    {
+        return DoneResult("scope must be \"kernel\" or \"workload\".", "Bad scope");
+    }
+
     bool              named  = false;
     const KernelInfo* kernel = ResolveKernel(context, *workload, args, named, error);
-    if(kernel == nullptr && named)
+    if(kernel == nullptr)
     {
-        return DoneResult(error, "No kernel");
+        return DoneResult(named ? error
+                                : "get_metrics needs a kernel_id or kernel_name, and no "
+                                  "kernel is selected. Call list_kernels, or pass "
+                                  "scope=\"workload\" for the workload's own values.",
+                          "No kernel");
     }
+    return StartComputeMetricsFetch(context, *workload, kernel, selectors,
+                                    "Reading metric values...");
+}
 
-    // Our own slot, so a pending request here is a previous get_metrics rather
-    // than a widget's. Wait it out and run again instead of formatting values
-    // that answer the earlier call.
-    const uint64_t request_id = ComputeMetricsRequestId();
-    if(context.data_provider->IsRequestPending(request_id))
-    {
-        AssistantToolStartResult waiting;
-        waiting.pending       = true;
-        waiting.started_fetch = false;
-        waiting.request_ids.push_back(request_id);
-        waiting.fetch.kind  = AssistantFetchKind::kComputeMetrics;
-        waiting.status_line = "Waiting for the previous metric fetch...";
-        return waiting;
-    }
+// One sampled instruction, summed over every sample state that names it.
+struct PcInstructionSamples
+{
+    uint64_t                        instruction_uuid = 0;
+    uint64_t                        total            = 0;
+    uint64_t                        issued           = 0;
+    uint64_t                        stalled          = 0;
+    std::map<std::string, uint64_t> reasons;
+};
 
-    ComputeDataModel& model = Model(context);
-    std::vector<uint32_t> kernel_ids;
-    if(kernel != nullptr)
+// The slot each layer is read through, shared with the ISA View.
+uint64_t
+PcSamplingRequestId(PcSamplingLayer layer)
+{
+    switch(layer)
     {
-        kernel_ids.push_back(kernel->id);
-        // Clearing first is what lets the formatter print everything in the
-        // store rather than having to carry the selector list through the wait:
-        // whatever is there afterwards is what this call asked for.
-        model.ClearKernelMetricValues(DataProvider::ASSISTANT_CLIENT_ID, kernel->id);
+        case PcSamplingLayer::kSource:
+            return DataProvider::FETCH_PC_SAMPLING_SOURCE_REQUEST_ID;
+        case PcSamplingLayer::kStalls:
+            return DataProvider::FETCH_PC_SAMPLING_STALLS_REQUEST_ID;
+        case PcSamplingLayer::kIsa: break;
     }
-    else
-    {
-        model.ClearWorkloadMetricValues(DataProvider::ASSISTANT_CLIENT_ID, workload->id);
-    }
+    return DataProvider::FETCH_PC_SAMPLING_ISA_REQUEST_ID;
+}
 
-    if(!context.data_provider->FetchMetrics(
-           MetricsRequestParams(workload->id, kernel_ids, selectors,
-                                DataProvider::ASSISTANT_CLIENT_ID)))
-    {
-        return DoneResult("The metric fetch was refused, so nothing was read. The "
-                          "trace may still be loading.",
-                          "Fetch refused");
-    }
-
+/*
+ * Reads one layer of a kernel's PC samples, or waits for its slot to clear.
+ *
+ * The ISA View reads through the same slots, and starting a read while one of
+ * its own is in flight would cancel the view's and leave it waiting on a reply
+ * that never comes - so a busy slot is waited out, never taken. Either way the
+ * wait is parked as someone else's fetch, which has the panel run the tool
+ * again once the slot clears; that run picks up whatever landed and moves on to
+ * the next layer it still needs.
+ */
+AssistantToolStartResult
+ReadPcSamplingLayer(const AssistantToolContext& context, const WorkloadInfo& workload,
+                    const KernelInfo& kernel, PcSamplingLayer layer,
+                    uint64_t source_file_uuid)
+{
     AssistantToolStartResult result;
-    result.pending       = true;
-    result.started_fetch = true;
-    result.request_ids.push_back(request_id);
-    result.fetch.kind        = AssistantFetchKind::kComputeMetrics;
-    result.fetch.workload_id = workload->id;
-    result.fetch.kernel_id =
-        kernel != nullptr ? kernel->id : ASSISTANT_COMPUTE_WORKLOAD_SCOPE;
-    result.status_line = "Reading metric values...";
+    result.pending     = true;
+    result.fetch.kind  = AssistantFetchKind::kPcSampling;
+    result.status_line = "Reading PC samples...";
+    result.request_ids.push_back(PcSamplingRequestId(layer));
+    if(context.data_provider->IsRequestPending(result.request_ids.front()))
+    {
+        return result;
+    }
+    if(!context.data_provider->FetchPcSampling(
+           PcSamplingRequestParams(layer, workload.id, kernel.id, source_file_uuid,
+                                   ASSISTANT_PC_SAMPLING_GENERATION, 0)))
+    {
+        // The counts are read first, so a refusal there means the kernel has no
+        // PC sampling to read; later on it means the rest of it could not be.
+        return layer == PcSamplingLayer::kStalls
+                   ? DoneResult(ASSISTANT_NO_PC_SAMPLES, "No PC samples")
+                   : DoneResult("The PC samples for that kernel could not be read in "
+                                "full.",
+                                "PC samples unreadable");
+    }
     return result;
+}
+
+// Every sampled instruction, most-sampled first; ties keep the order the trace
+// lists them in, so the ranking is the same from one call to the next.
+std::vector<PcInstructionSamples>
+RankPcSamples(const PcSamplingData& data)
+{
+    std::vector<PcInstructionSamples>    ranked;
+    std::unordered_map<uint64_t, size_t> index_by_instruction;
+    for(const PcSampleState& state : data.pc_sample_states)
+    {
+        auto found = index_by_instruction.find(state.instruction_uuid);
+        if(found == index_by_instruction.end())
+        {
+            found =
+                index_by_instruction.emplace(state.instruction_uuid, ranked.size()).first;
+            ranked.emplace_back();
+            ranked.back().instruction_uuid = state.instruction_uuid;
+        }
+        PcInstructionSamples& entry = ranked[found->second];
+        entry.total += state.total_count;
+        entry.issued += state.issue_count;
+        entry.stalled += state.stall_count;
+        for(const PcSampleState::Reason& reason : state.reasons)
+        {
+            entry.reasons[reason.name] += reason.count;
+        }
+    }
+    std::stable_sort(ranked.begin(), ranked.end(),
+                     [](const PcInstructionSamples& a, const PcInstructionSamples& b) {
+                         return a.total > b.total;
+                     });
+    return ranked;
+}
+
+// Where each instruction came from, taking frame 0 as the ISA View does so the
+// line named here is the line the user sees there.
+std::unordered_map<uint64_t, const InstructionSourceLine*>
+SourceByInstruction(const PcSamplingData& data)
+{
+    std::unordered_map<uint64_t, const InstructionSourceLine*> located;
+    for(const InstructionSourceLine& mapping : data.instruction_source_lines)
+    {
+        if(mapping.frame_index == 0)
+        {
+            located.emplace(mapping.instruction_uuid, &mapping);
+        }
+    }
+    return located;
+}
+
+// The first file the listed instructions map to whose line table has not been
+// read yet, or zero once every one of them has.
+uint64_t
+NextSourceFileToRead(
+    const PcSamplingData& data, const std::vector<PcInstructionSamples>& ranked,
+    const std::unordered_map<uint64_t, const InstructionSourceLine*>& located,
+    size_t                                                            shown)
+{
+    std::vector<uint64_t> files;
+    for(size_t i = 0; i < shown && files.size() < ASSISTANT_PC_MAX_SOURCE_FILES; ++i)
+    {
+        auto found = located.find(ranked[i].instruction_uuid);
+        if(found == located.end() || found->second->source_file_uuid == 0 ||
+           std::find(files.begin(), files.end(), found->second->source_file_uuid) !=
+               files.end())
+        {
+            continue;
+        }
+        files.push_back(found->second->source_file_uuid);
+    }
+    for(uint64_t file : files)
+    {
+        if(std::find(data.source_files_read.begin(), data.source_files_read.end(),
+                     file) == data.source_files_read.end())
+        {
+            return file;
+        }
+    }
+    return 0;
+}
+
+// Reasons most common first, each against the samples it is a share of.
+std::vector<std::pair<std::string, uint64_t>>
+OrderedReasons(const std::map<std::string, uint64_t>& reasons)
+{
+    std::vector<std::pair<std::string, uint64_t>> ordered(reasons.begin(), reasons.end());
+    std::stable_sort(
+        ordered.begin(), ordered.end(),
+        [](const std::pair<std::string, uint64_t>& a,
+           const std::pair<std::string, uint64_t>& b) { return a.second > b.second; });
+    return ordered;
+}
+
+// A path's last component, which is how rows name their file; the full paths
+// are listed once underneath them.
+std::string
+FileName(const std::string& path)
+{
+    const size_t slash = path.find_last_of("/\\");
+    return slash == std::string::npos ? path : path.substr(slash + 1);
+}
+
+std::string
+FormatPcSamples(const WorkloadInfo& workload, const KernelInfo& kernel,
+                const std::vector<PcInstructionSamples>&                          ranked,
+                const std::unordered_map<uint64_t, const InstructionSourceLine*>& located,
+                size_t                                                            shown)
+{
+    const PcSamplingData& data = kernel.pc_sampling_data;
+
+    std::unordered_map<uint64_t, const std::string*> isa_by_instruction;
+    for(const CodeObjectStore& code_object : data.code_objects)
+    {
+        for(const KernelSymbol& symbol : code_object.kernel_symbols)
+        {
+            for(const InstructionLine& line : symbol.instruction_lines)
+            {
+                isa_by_instruction.emplace(line.instruction_uuid, &line.instruction);
+            }
+        }
+    }
+    std::unordered_map<uint64_t, const SourceFile*> files_by_uuid;
+    std::unordered_map<uint64_t, const SourceLine*> lines_by_uuid;
+    for(const SourceFile& file : data.source_files)
+    {
+        files_by_uuid.emplace(file.source_file_uuid, &file);
+        for(const SourceLine& line : file.source_lines)
+        {
+            lines_by_uuid.emplace(line.source_line_uuid, &line);
+        }
+    }
+
+    uint64_t                        total   = 0;
+    uint64_t                        issued  = 0;
+    uint64_t                        stalled = 0;
+    std::map<std::string, uint64_t> reasons;
+    for(const PcInstructionSamples& entry : ranked)
+    {
+        total += entry.total;
+        issued += entry.issued;
+        stalled += entry.stalled;
+        for(const std::pair<const std::string, uint64_t>& reason : entry.reasons)
+        {
+            reasons[reason.first] += reason.second;
+        }
+    }
+
+    std::ostringstream out;
+    out << "workload_id: " << workload.id << "\n";
+    out << "kernel_id: " << kernel.id << "\n";
+    out << "kernel_name: " << kernel.name << "\n";
+    out << "samples_total: " << total << "\n";
+    out << "samples_issued: " << issued << " (" << FormatPercentOf(issued, total)
+        << "%)\n";
+    out << "samples_stalled: " << stalled << " (" << FormatPercentOf(stalled, total)
+        << "%)\n";
+    out << "sampled_instructions: " << ranked.size() << "\n";
+    if(!reasons.empty())
+    {
+        out << "reasons_all_samples:\n";
+        for(const std::pair<std::string, uint64_t>& reason : OrderedReasons(reasons))
+        {
+            out << "  " << reason.first << ": " << reason.second << " ("
+                << FormatPercentOf(reason.second, total) << "%)\n";
+        }
+    }
+
+    std::vector<const SourceFile*> files_named;
+    uint64_t                       listed = 0;
+    out << "top_instructions:\n";
+    for(size_t i = 0; i < shown; ++i)
+    {
+        const PcInstructionSamples& entry = ranked[i];
+        listed += entry.total;
+
+        std::string at = "?";
+        std::string code;
+        auto        where = located.find(entry.instruction_uuid);
+        if(where != located.end())
+        {
+            auto       file     = files_by_uuid.find(where->second->source_file_uuid);
+            auto       line     = lines_by_uuid.find(where->second->source_line_uuid);
+            const bool has_file = file != files_by_uuid.end();
+            const bool has_line = line != lines_by_uuid.end();
+            const bool numbered = has_line && line->second->line_number != 0;
+            at =
+                (has_file ? FileName(file->second->file_path) : std::string("?")) + ":" +
+                (numbered ? std::to_string(line->second->line_number) : std::string("?"));
+            if(has_file && std::find(files_named.begin(), files_named.end(),
+                                     file->second) == files_named.end())
+            {
+                files_named.push_back(file->second);
+            }
+            if(has_line)
+            {
+                code = Core::String::trim_copy(line->second->content);
+                if(code.size() > ASSISTANT_PC_MAX_CODE_CHARS)
+                {
+                    code = code.substr(0, ASSISTANT_PC_MAX_CODE_CHARS) + "...";
+                }
+            }
+        }
+        auto isa = isa_by_instruction.find(entry.instruction_uuid);
+
+        out << "  " << (i + 1) << ". samples=" << entry.total << " ("
+            << FormatPercentOf(entry.total, total) << "%) issued=" << entry.issued
+            << " stalled=" << entry.stalled << " at=" << at << " isa=\""
+            << (isa != isa_by_instruction.end() ? *isa->second : std::string("?"))
+            << "\"";
+        const std::vector<std::pair<std::string, uint64_t>> own =
+            OrderedReasons(entry.reasons);
+        for(size_t r = 0; r < own.size() && r < ASSISTANT_PC_REASONS_PER_INSTRUCTION; ++r)
+        {
+            out << (r == 0 ? " reasons: " : " ") << own[r].first << "=" << own[r].second;
+        }
+        if(!code.empty())
+        {
+            out << " code=\"" << code << "\"";
+        }
+        out << "\n";
+    }
+    if(ranked.size() > shown)
+    {
+        out << "  ... " << (ranked.size() - shown) << " more sampled instructions hold "
+            << (total - listed) << " samples\n";
+    }
+    if(!files_named.empty())
+    {
+        out << "source_files:\n";
+        for(const SourceFile* file : files_named)
+        {
+            out << "  " << FileName(file->file_path) << " = " << file->file_path << "\n";
+        }
+    }
+    if(data.isa_state == PcSamplingLayerState::kFailed)
+    {
+        out << "note: the ISA text could not be read, so instructions show as ?.\n";
+    }
+    if(data.source_state == PcSamplingLayerState::kFailed)
+    {
+        out << "note: the source mapping could not be read, so no lines are named.\n";
+    }
+    out << "note: a sample is where one wave was when the profiler looked, so where "
+           "samples pile up is where the kernel spends its time. Stalled samples on an "
+           "s_waitcnt are waves waiting for memory operations issued before it; stalled "
+           "samples on a load or store itself mean the memory pipeline was not taking "
+           "new work. Samples say where the time went, not why memory was slow - "
+           "coalescing and cache behaviour need the hardware counter capture.\n";
+    return TrimComputeResult(out.str());
+}
+
+/*
+ * Where one kernel's waves were when the profiler sampled them. PC sampling is
+ * a capture of its own, so a trace either has it or it does not: this reads it
+ * when it is there and says plainly when it is not.
+ */
+AssistantToolStartResult
+ToolKernelPcSamples(const AssistantToolContext& context, const jt::Json& args,
+                    const std::string&)
+{
+    std::string         error;
+    const WorkloadInfo* workload = ResolveWorkload(context, args, error);
+    if(workload == nullptr)
+    {
+        return DoneResult(error, "Unknown workload");
+    }
+
+    bool              named  = false;
+    const KernelInfo* kernel = ResolveKernel(context, *workload, args, named, error);
+    if(kernel == nullptr)
+    {
+        return DoneResult(named
+                              ? error
+                              : "kernel_pc_samples needs a kernel_id or kernel_name, and "
+                                "no kernel is selected. Call list_kernels first.",
+                          "No kernel");
+    }
+
+    // The counts come first: they are what says whether there is anything to
+    // read at all, and a kernel without samples needs neither other layer.
+    const PcSamplingData& data = kernel->pc_sampling_data;
+    if(data.stalls_state == PcSamplingLayerState::kNotRead)
+    {
+        return ReadPcSamplingLayer(context, *workload, *kernel, PcSamplingLayer::kStalls,
+                                   0);
+    }
+    if(data.stalls_state == PcSamplingLayerState::kFailed ||
+       data.pc_sample_states.empty())
+    {
+        return DoneResult(ASSISTANT_NO_PC_SAMPLES, "No PC samples");
+    }
+    if(data.isa_state == PcSamplingLayerState::kNotRead)
+    {
+        return ReadPcSamplingLayer(context, *workload, *kernel, PcSamplingLayer::kIsa, 0);
+    }
+    if(data.source_state == PcSamplingLayerState::kNotRead)
+    {
+        return ReadPcSamplingLayer(context, *workload, *kernel, PcSamplingLayer::kSource,
+                                   0);
+    }
+
+    const int32_t requested = JsonUtils::GetInt(
+        args, "limit", static_cast<int32_t>(ASSISTANT_PC_DEFAULT_INSTRUCTIONS));
+    const size_t limit = requested <= 0 ? ASSISTANT_PC_DEFAULT_INSTRUCTIONS
+                                        : std::min(static_cast<size_t>(requested),
+                                                   ASSISTANT_PC_MAX_INSTRUCTIONS);
+
+    const std::vector<PcInstructionSamples> ranked = RankPcSamples(data);
+    const size_t                            shown  = std::min(ranked.size(), limit);
+    const std::unordered_map<uint64_t, const InstructionSourceLine*> located =
+        SourceByInstruction(data);
+    if(data.source_state == PcSamplingLayerState::kRead)
+    {
+        const uint64_t unread = NextSourceFileToRead(data, ranked, located, shown);
+        if(unread != 0)
+        {
+            return ReadPcSamplingLayer(context, *workload, *kernel,
+                                       PcSamplingLayer::kSource, unread);
+        }
+    }
+
+    return DoneResult(FormatPcSamples(*workload, *kernel, ranked, located, shown),
+                      "Read the PC samples");
 }
 
 const AssistantToolEntry k_compute_tool_handlers[] = {
@@ -1202,6 +1715,7 @@ const AssistantToolEntry k_compute_tool_handlers[] = {
     { "kernel_roofline", ToolKernelRoofline },
     { "kernel_triage", ToolKernelTriage },
     { "get_metrics", ToolGetMetrics },
+    { "kernel_pc_samples", ToolKernelPcSamples },
 };
 
 }  // namespace
@@ -1233,6 +1747,16 @@ FinishAssistantComputeFetch(const AssistantToolContext& context,
     if(workload == nullptr)
     {
         return "That workload is no longer loaded.";
+    }
+    // A failed read leaves the store as empty as a read of metrics the trace
+    // lacks, and the prompt tells the model to take an empty result as the
+    // latter, so the two have to be told apart here.
+    if(!context.data_provider->LastMetricsFetchSucceeded(
+           DataProvider::ASSISTANT_CLIENT_ID))
+    {
+        return "The metric query failed, so nothing was read. That is an error reading "
+               "the trace, not a sign it lacks these metrics - tell the user the read "
+               "failed rather than drawing anything from the gap.";
     }
 
     const bool     workload_scope = fetch.kernel_id == ASSISTANT_COMPUTE_WORKLOAD_SCOPE;
@@ -1336,10 +1860,10 @@ FinishAssistantComputeFetch(const AssistantToolContext& context,
     if(printed == 0)
     {
         return out.str() +
-               "No values came back for those metric ids. Either this workload does "
-               "not record them or the ids were wrong - call list_metrics to see what "
-               "it has. Workload-scope values also need a newer compute schema than "
-               "some traces carry.\n";
+               "No values came back for those metric ids. The catalogue lists them, but "
+               "this trace recorded no values for them at this scope - say so rather "
+               "than retrying. Workload-scope values also need a newer compute schema "
+               "than some traces carry.\n";
     }
 
     out << "metrics_returned: " << printed << "\n";
@@ -1356,27 +1880,19 @@ FinishAssistantComputeFetch(const AssistantToolContext& context,
 std::string
 BuildAssistantComputeBriefing(const AssistantToolContext& context)
 {
-    ComputeDataModel&                       model     = context.data_provider->ComputeModel();
-    const std::vector<const WorkloadInfo*>& workloads = model.GetWorkloadList();
+    ComputeDataModel& model = context.data_provider->ComputeModel();
 
     std::ostringstream out;
     out << "trace_name: " << context.trace_name << "\n";
     out << "kind: compute_trace\n";
-    out << "workload_count: " << workloads.size() << "\n";
+    out << "workload_count: " << model.GetWorkloadList().size() << "\n";
 
-    const WorkloadInfo* workload = nullptr;
-    if(context.compute_selection != nullptr)
-    {
-        const uint32_t selected = context.compute_selection->GetSelectedWorkload();
-        if(selected != ComputeSelection::INVALID_SELECTION_ID)
-        {
-            workload = model.GetWorkload(selected);
-        }
-    }
-    if(workload == nullptr && !workloads.empty())
-    {
-        workload = workloads.front();
-    }
+    // The same workload the tools fall back to with no workload_id, so the
+    // briefing and the first answer describe one workload.
+    jt::Json no_args;
+    no_args.setObject();
+    std::string         no_workload;
+    const WorkloadInfo* workload = ResolveWorkload(context, no_args, no_workload);
     if(workload == nullptr)
     {
         out << "note: no workload is loaded yet.\n";
@@ -1421,7 +1937,7 @@ BuildAssistantComputeBriefing(const AssistantToolContext& context)
     }
 
     out << "note: kernel names, dispatch statistics, and hardware metric values are "
-           "NOT in this briefing. Call compute_overview, list_kernels, list_metrics, "
+           "NOT in this briefing. Call compute_overview, list_kernels, kernel_triage, "
            "and get_metrics to see them.\n";
     return out.str();
 }

@@ -64,6 +64,7 @@ const AssistantToolLabel ASSISTANT_COMPUTE_TOOL_LABELS[] = {
     { "kernel_roofline", "Reading the roofline..." },
     { "kernel_triage", "Reading the triage panel..." },
     { "get_metrics", "Reading metric values..." },
+    { "kernel_pc_samples", "Reading PC samples..." },
     { "switch_tab", "Switching tabs..." },
     { "offer_next_steps", "Offering next steps..." },
 };
@@ -627,7 +628,7 @@ MakeAssistantComputeToolsJson()
             "the top kernels by total duration with their share of that time. "
             "Costs no database query.\n"
             "Hardware counters are NOT here. This tells you which kernel is worth "
-            "looking at; list_metrics then get_metrics tell you why it is slow.",
+            "looking at; kernel_triage then tells you why it is slow.",
             overview_params);
 
     jt::Json kernels_params = ObjectParams();
@@ -731,25 +732,49 @@ MakeAssistantComputeToolsJson()
              "\"2.1\" a whole table, \"2.1.4\" one entry. Prefer a table id over "
              "listing its entries. Names are not accepted - pass the ids.");
     get_metrics_params["properties"]["metrics"]["items"]["type"] = "string";
+    AddParam(get_metrics_params, "scope", "string",
+             "kernel (default) reads one kernel's values - the one named, else the "
+             "one the user has selected. workload reads the workload's own values "
+             "and takes no kernel_id or kernel_name.");
+    get_metrics_params["properties"]["scope"]["enum"] =
+        MakeStringEnum({ "kernel", "workload" });
     get_metrics_params["required"][0] = "metrics";
     AddTool(tools, 6, "get_metrics",
-            "Read hardware metric values. This is the only compute tool that "
-            "queries the database, so scope it: name the table you want rather "
-            "than a category, and one kernel rather than the workload.\n"
-            "Omit kernel_id and kernel_name to read the workload's own values "
-            "instead of one kernel's. Older compute traces do not carry "
-            "workload-scope values at all, and come back empty rather than failing "
-            "- that is a limitation of the trace, not an error to retry.\n"
+            "Read hardware metric values. Like kernel_triage, this queries the "
+            "database, so scope it: name the table you want rather than a "
+            "category, and one kernel rather than the workload.\n"
+            "Pass scope=\"workload\" to read the workload's own values instead of "
+            "one kernel's. Older compute traces do not carry workload-scope values "
+            "at all, and come back empty rather than failing - that is a limitation "
+            "of the trace, not an error to retry.\n"
             "Each value comes back under the value names its table defines, so a "
             "single metric may return an average and a peak. Report the one you "
             "actually mean.",
             get_metrics_params);
 
+    jt::Json pc_params = ObjectParams();
+    AddComputeScopeParams(pc_params, true);
+    AddParam(pc_params, "limit", "integer",
+             "Instructions to list, most-sampled first (default 10, max 30).");
+    AddTool(tools, 7, "kernel_pc_samples",
+            "Where one kernel's waves were when the profiler sampled them: the "
+            "instructions holding the most PC samples, how many of those samples "
+            "were issuing or stalled, the reasons the profiler recorded, and the "
+            "source line each instruction maps to.\n"
+            "PC sampling is a capture of its own - rocprof-compute cannot record it "
+            "in the same pass as the hardware counters - so a trace usually has one "
+            "or the other. When this trace has none the tool says so; that is the "
+            "trace, not a failure, and not worth retrying. Call it when the workload "
+            "records no metrics, or when the question is where inside a kernel the "
+            "time goes. The first call on a kernel reads the database; later ones do "
+            "not.",
+            pc_params);
+
     jt::Json tab_params = ObjectParams();
     AddParam(tab_params, "name", "string",
              "Tab to switch to. Part of the name is enough. Omit to list every "
              "tab that is available.");
-    AddTool(tools, 7, "switch_tab",
+    AddTool(tools, 8, "switch_tab",
             "Switch between the open traces. Only call this when the user asked "
             "you to change tabs. Call with no name to list what is open.",
             tab_params);
@@ -760,7 +785,7 @@ MakeAssistantComputeToolsJson()
              "Each is a complete thing they would type, under 80 characters.");
     next_params["properties"]["steps"]["items"]["type"] = "string";
     next_params["required"][0] = "steps";
-    AddTool(tools, 8, "offer_next_steps",
+    AddTool(tools, 9, "offer_next_steps",
             "Puts stacked buttons under the chat for what to look at next. Call it "
             "as the last tool of an investigation, then write your answer in the "
             "response after it. Do not list those same options in the prose.\n"

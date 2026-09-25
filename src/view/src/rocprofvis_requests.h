@@ -101,13 +101,11 @@ public:
      * compile-time constant because the assistant's request ids are derived
      * from it at namespace scope.
      *
-     * IdGenerator used to start at 0, so the first two widgets to be built took
-     * both of those. Nothing broke only because the assistant reads system
-     * tables and the widgets fetch metrics, which pack into different request
-     * ids - the moment one of them used the other's RequestType they would
-     * share a request slot and a ComputeDataModel store, and each would clear
-     * the other's values. Keep the band wide enough that naming another
-     * reserved client does not require touching the generator.
+     * A widget handed one of them would share that caller's request slot for
+     * every RequestType both use - and the assistant and the compute widgets
+     * both fetch metrics - plus, for metrics, its ComputeDataModel store, so
+     * each would clear the other's values. Keep the band wide enough that
+     * naming another reserved client does not require touching the generator.
      */
     static constexpr uint64_t FIRST_DYNAMIC_CLIENT_ID = 16;
 };

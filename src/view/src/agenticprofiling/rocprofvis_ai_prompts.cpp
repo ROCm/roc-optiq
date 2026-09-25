@@ -1,11 +1,11 @@
 // Copyright Advanced Micro Devices, Inc.
 // SPDX-License-Identifier: MIT
 
-// The standing instructions, in three parts: what is true however the trace was
-// recorded, the system-trace body, and the compute-trace body. Optiq reads two
-// unrelated kinds of profile - a system trace is events on a timeline, a compute
-// workload is kernels and hardware counters with no time axis at all - and
-// almost nothing about how to read one transfers to the other.
+// The standing instructions: what is true however the trace was recorded, the
+// system-trace body, and the compute-trace body. Optiq reads two unrelated
+// kinds of profile - a system trace is events on a timeline, a compute workload
+// is kernels and hardware counters with no time axis at all - and almost
+// nothing about how to read one transfers to the other.
 //
 // What does transfer is how to talk to a person: voice, not inventing numbers,
 // not agreeing because they sound sure, and the shape of a finished answer.
@@ -77,24 +77,15 @@ constexpr const char* ASSISTANT_SHARED_OPENING =
     "When the data cannot settle it either way, say that rather than siding with "
     "whoever spoke last, and name what would settle it.\n";
 
-// How an answer ends. Sent last, whatever the trace.
+// How an answer ends, whatever the trace. ASSISTANT_SHARED_NEXT_STEPS closes the
+// prompt, and a kind with finishing rules of its own sends them in between.
 constexpr const char* ASSISTANT_SHARED_FINISHING =
     "FINISHING: lead with the single most important thing you found in one "
     "sentence, then the evidence behind it, then what you would change. "
     "Interpret, do not recite - the user can already see the numbers, so a "
-    "figure is worth quoting only when you say what it should have been.\n"
-    "SAY WHAT THE FIX IS WORTH. An efficiency metric already implies its own "
-    "ceiling, so do the division rather than leaving it to the reader: a "
-    "quarter of the lanes coalescing means roughly four times the memory "
-    "transactions, thirty conflicts per access means the unit is doing thirty "
-    "times the work, eighteen live lanes out of sixty-four means about three "
-    "and a half times the instructions. Give it as a rough upper bound in the "
-    "same breath as the recommendation - 'worth perhaps 4x on this kernel' - "
-    "and say it is an upper bound, because the rest of the kernel does not "
-    "speed up with it. This is what turns a diagnosis into something the user "
-    "can decide about; a finding with no size attached is a finding they "
-    "cannot prioritise. Where the metric implies no such ratio, say what you "
-    "would measure to find out instead of inventing a number.\n"
+    "figure is worth quoting only when you say what it should have been.\n";
+
+constexpr const char* ASSISTANT_SHARED_NEXT_STEPS =
     "Call offer_next_steps as your last tool, then write the answer in the "
     "response after it: two or three short follow-ups the user can click, most "
     "useful first, each a complete thing they would type, under 80 characters. "
@@ -318,7 +309,7 @@ constexpr const char* ASSISTANT_COMPUTE_TRACE_PROMPT =
 
     "THREE LEVELS. compute_overview, list_kernels, kernel_summary, list_metrics "
     "and kernel_roofline are already in memory and cost no database query. "
-    "kernel_triage and get_metrics are the two that query.\n"
+    "kernel_triage, get_metrics and kernel_pc_samples are the ones that query.\n"
     "1. Free - compute_overview first, every time. It tells you the "
     "accelerator, how the profile was taken, and which kernels own the time. "
     "Then list_kernels for the full ranking and kernel_roofline for whether a "
@@ -335,6 +326,9 @@ constexpr const char* ASSISTANT_COMPUTE_TRACE_PROMPT =
     "it: name one table rather than a whole category, and one kernel rather "
     "than the workload. A category can expand to hundreds of entries, and every "
     "value you take back is re-sent on every later round.\n"
+    "A workload with no metrics is usually a PC-sampling capture, which "
+    "rocprof-compute records in a pass of its own: kernel_pc_samples is its "
+    "evidence, and the metric tools have nothing to read.\n"
 
     "METRIC IDS COME FROM THE CATALOGUE, NEVER FROM MEMORY. The ids are the one "
     "thing you cannot work out for yourself: they come from this trace's own "
@@ -476,13 +470,13 @@ constexpr const char* ASSISTANT_COMPUTE_TRACE_PROMPT =
     "roofline and no workload-level values at all. An empty result is usually "
     "what this trace does not contain, not a tool that failed - say so and move "
     "on rather than retrying it.\n"
-    "There is no source code, no call stack and no instruction-level data "
-    "available to you here, so never attribute a cost to a particular line or "
-    "loop. You can say a kernel is memory bound; you cannot say which access "
-    "made it so.\n"
+    "There is no call stack. PC samples, when the trace has them, place time on "
+    "instructions and source lines through kernel_pc_samples; without them, "
+    "never attribute a cost to a particular line or loop - you can say a kernel "
+    "is memory bound, not which access made it so.\n"
 
     "Tools: compute_overview, list_kernels, kernel_summary, list_metrics, "
-    "kernel_roofline, kernel_triage, get_metrics, switch_tab, "
+    "kernel_roofline, kernel_triage, get_metrics, kernel_pc_samples, switch_tab, "
     "offer_next_steps.\n"
     "You cannot change this view. There is no timeline to move, nothing to "
     "select, and no note to leave - so point the user at what you found by "
@@ -510,6 +504,23 @@ constexpr const char* ASSISTANT_COMPUTE_TRACE_PROMPT =
     "what it is worth, saying plainly when one is minor. When the rest of the "
     "panel is healthy, say so - that is a useful answer, and padding the list "
     "with findings that are not really findings is not.\n";
+
+// The compute half of finishing, sent between ASSISTANT_SHARED_FINISHING and
+// ASSISTANT_SHARED_NEXT_STEPS. Every ratio it names is a compute counter; a
+// system trace has no efficiency metric to divide.
+constexpr const char* ASSISTANT_COMPUTE_FIX_WORTH =
+    "SAY WHAT THE FIX IS WORTH. An efficiency metric already implies its own "
+    "ceiling, so do the division rather than leaving it to the reader: a "
+    "quarter of the lanes coalescing means roughly four times the memory "
+    "transactions, thirty conflicts per access means the unit is doing thirty "
+    "times the work, eighteen live lanes out of sixty-four means about three "
+    "and a half times the instructions. Give it as a rough upper bound in the "
+    "same breath as the recommendation - 'worth perhaps 4x on this kernel' - "
+    "and say it is an upper bound, because the rest of the kernel does not "
+    "speed up with it. This is what turns a diagnosis into something the user "
+    "can decide about; a finding with no size attached is a finding they "
+    "cannot prioritise. Where the metric implies no such ratio, say what you "
+    "would measure to find out instead of inventing a number.\n";
 
 #ifdef ROCPROFVIS_ENABLE_SCRIPTING
 // Appended to the system prompt only when scripting is built in, so the base
@@ -580,6 +591,8 @@ AssistantSystemPrompt(bool is_compute)
     if(is_compute)
     {
         prompt += ASSISTANT_COMPUTE_TRACE_PROMPT;
+        prompt += ASSISTANT_SHARED_FINISHING;
+        prompt += ASSISTANT_COMPUTE_FIX_WORTH;
     }
     else
     {
@@ -588,8 +601,9 @@ AssistantSystemPrompt(bool is_compute)
         prompt += ASSISTANT_SCRIPT_PROMPT;
         prompt += "\n";
 #endif
+        prompt += ASSISTANT_SHARED_FINISHING;
     }
-    prompt += ASSISTANT_SHARED_FINISHING;
+    prompt += ASSISTANT_SHARED_NEXT_STEPS;
     return prompt;
 }
 

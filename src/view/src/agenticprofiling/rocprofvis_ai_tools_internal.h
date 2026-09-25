@@ -4,14 +4,15 @@
 #pragma once
 
 /**
- * @brief Private wiring between the three parts of the executor. The public
- * surface is rocprofvis_ai_tools.h; nothing outside the agenticprofiling
- * directory should include this header.
+ * @brief Private wiring between the parts of the executor. The public surface
+ * is rocprofvis_ai_tools.h; nothing outside the agenticprofiling directory
+ * should include this header.
  *
  * Tool bodies are split by what they touch: rocprofvis_ai_ui_tools.cpp drives
  * Optiq through OptiqActions and answers in the same call,
- * rocprofvis_ai_data_tools.cpp reads the data model and usually parks a fetch
- * for the panel to poll, and rocprofvis_ai_script_tools.cpp has the model write
+ * rocprofvis_ai_data_tools.cpp reads a system trace's data model and usually
+ * parks a fetch for the panel to poll, rocprofvis_ai_compute_tools.cpp reads a
+ * compute workload, and rocprofvis_ai_script_tools.cpp has the model write
  * Python that computes the answer. Each body file owns its handler table and
  * hands it to the dispatcher, so the handlers keep internal linkage.
  */

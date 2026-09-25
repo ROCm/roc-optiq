@@ -1,12 +1,14 @@
 // Copyright Advanced Micro Devices, Inc.
 // SPDX-License-Identifier: MIT
 
-// The dispatcher, plus the few helpers both halves of the tool set need. The
-// bodies themselves live next door: rocprofvis_ai_ui_tools.cpp for the tools
-// that change Optiq, rocprofvis_ai_data_tools.cpp for the ones that read the
-// trace. Each of those owns its own handler table, so this file never has to be
-// edited to add a tool - only the table in the file the body went into, and the
-// matching schema entry in rocprofvis_ai_tool_schema.cpp.
+// The dispatcher, plus the few helpers every body file needs. The bodies
+// themselves live next door: rocprofvis_ai_ui_tools.cpp for the tools that
+// change Optiq, rocprofvis_ai_data_tools.cpp and rocprofvis_ai_compute_tools.cpp
+// for the ones that read a system trace and a compute workload, and
+// rocprofvis_ai_script_tools.cpp for analysis scripts. Each of those owns its
+// own handler table, so this file never has to be edited to add a tool - only
+// the table in the file the body went into, and the matching schema entry in
+// rocprofvis_ai_tool_schema.cpp.
 #include "rocprofvis_ai_tools_internal.h"
 
 #include <cctype>

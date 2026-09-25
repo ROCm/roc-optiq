@@ -1015,7 +1015,6 @@ typedef enum rocprofvis_controller_workload_properties_t : uint32_t
     kRPVControllerWorkloadNumKernels,
     kRPVControllerWorkloadKernelIndexed,
     kRPVControllerWorkloadKernelById,
-    kRPVControllerWorkloadMemoryChartLayout,
     __kRPVControllerWorkloadPropertiesLast
 } rocprofvis_controller_workload_properties_t;
 

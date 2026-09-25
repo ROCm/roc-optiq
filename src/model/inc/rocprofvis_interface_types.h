@@ -474,7 +474,6 @@ typedef enum rocprofvis_db_compute_column_enum_t
     kRPVComputeColumnWorkloadSubName,
     kRPVComputeColumnWorkloadSysInfo,
     kRPVComputeColumnWorkloadProfileConfig,
-    kRPVComputeColumnWorkloadMemoryChart,
 
     kRPVComputeColumnWorkloadRooflineBenchBlob,
     kRPVComputeColumnWorkloadRooflineBenchHBMBw,

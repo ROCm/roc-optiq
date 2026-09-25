@@ -113,7 +113,6 @@ ComputeKernelDetailsView::SubscribeToEvents()
         auto evt = std::dynamic_pointer_cast<ComputeSelectionChangedEvent>(e);
         if(evt && evt->GetSourceId() == m_data_provider.GetTraceFilePath())
         {
-            m_memory_chart.LoadWorkloadLayout(evt->GetId());
             if(m_kernel_metric_table)
             {
                 m_data_provider.ComputeModel().GetKernelSelectionTable().Clear();

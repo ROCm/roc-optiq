@@ -454,9 +454,11 @@ private:
     inline void LoadPcSamplingSourceFiles(KernelInfo&          kernel,
                                           rocprofvis_handle_t* pc_handle,
                                           uint64_t refreshed_source_file_uuid);
-    inline void LoadPcSamplingInstructionLine(InstructionLine&             instruction_line,
-                                      rocprofvis_handle_t* pc_handle,
-                                      uint64_t             index);
+    inline void LoadPcSamplingInstructionLine(
+        InstructionLine&                          instruction_line,
+        std::unordered_map<uint64_t, std::string>& instruction_type_lookup_map,
+        rocprofvis_handle_t*                       pc_handle,
+        uint64_t                                   index);
     inline void LoadPcSamplingSourceLine(SourceLine&          source_line,
                                          rocprofvis_handle_t* pc_handle,
                                          uint64_t             index);

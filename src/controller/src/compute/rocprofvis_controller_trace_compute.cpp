@@ -566,6 +566,7 @@ ComputeTrace::FetchInstructionLines(rocprofvis_dm_database_t db, Future* future,
             { kRPVComputeColumnPcSamplingInstructionLineInstructionTypeUuid, std::nullopt },
             { kRPVComputeColumnPcSamplingInstructionLineCodeObjectOffset,    std::nullopt },
             { kRPVComputeColumnPcSamplingInstructionLineInstruction,         std::nullopt },
+            { kRPVComputeColumnPcSamplingInstructionLineInstructionType,     std::nullopt },
         }, {}
     };
     rocprofvis_dm_result_t result = ExecuteQuery(
@@ -573,6 +574,7 @@ ComputeTrace::FetchInstructionLines(rocprofvis_dm_database_t db, Future* future,
         query_args, query_out,
         [this, &output](const QueryDataStore& data_store){
             StorePcSamplingRows(output, kRPVControllerPCSamplingNumInstructionLines, data_store);
+            StoreInstructionTypeLookupMap(output, data_store);
         });
     return result;
 }
@@ -834,6 +836,33 @@ ComputeTrace::StorePcSamplingRows(PcSampling& output,
                                   property, row,
                                   data_store.rows[row][column.second.value()], type);
             }
+        }
+    }
+}
+
+void
+ComputeTrace::StoreInstructionTypeLookupMap(PcSampling& output,
+                                            const QueryDataStore& data_store)
+{
+    output.m_instruction_type_lookup_map.clear();
+
+    const auto uuid_column = data_store.columns.find(
+        kRPVComputeColumnPcSamplingInstructionLineInstructionTypeUuid);
+    const auto text_column = data_store.columns.find(
+        kRPVComputeColumnPcSamplingInstructionLineInstructionType);
+    if(uuid_column == data_store.columns.end() || !uuid_column->second ||
+       text_column == data_store.columns.end() || !text_column->second)
+    {
+        return;
+    }
+
+    for(const std::vector<const char*>& row : data_store.rows)
+    {
+        uint64_t instruction_type_uuid = 0;
+        if(ParseUInt64(row[uuid_column->second.value()], instruction_type_uuid))
+        {
+            output.m_instruction_type_lookup_map.insert_or_assign(
+                instruction_type_uuid, row[text_column->second.value()]);
         }
     }
 }

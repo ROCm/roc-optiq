@@ -78,6 +78,10 @@ constexpr const char* ASSISTANT_NO_PC_SAMPLES =
     "No PC sampling data was found for that kernel. rocprof-compute records PC "
     "samples in a capture of their own, apart from the hardware counters, so a "
     "trace usually carries one or the other.";
+constexpr const char* ASSISTANT_PC_SAMPLES_UNSUPPORTED =
+    "This trace has no PC samples to read: it was written with a compute schema "
+    "older than 2.2, and Optiq reads PC samples only from 2.2 on. That is the "
+    "trace, not a failed read, so do not retry it.";
 
 /*
  * The tables a first look at any kernel needs, by name rather than by id.
@@ -1329,6 +1333,85 @@ struct PcInstructionSamples
     std::map<std::string, uint64_t> reasons;
 };
 
+/*
+ * Which layers this call has submitted a read for.
+ *
+ * The tool re-enters once per layer, and a layer that failed stays kFailed on
+ * the kernel, where the ISA View's reads land too. Retrying a failed layer at
+ * most once per call is what stops a lasting failure from being fetched again
+ * on every re-entry until the wait times out. The panel clears this whenever a
+ * call ends, through ResetAssistantPcRead, so the next call retries once more.
+ */
+struct PcReadAttempt
+{
+    const DataProvider* provider    = nullptr;
+    uint32_t            workload_id = 0;
+    uint32_t            kernel_id   = 0;
+    bool                open        = false;
+    bool                stalls      = false;
+    bool                isa         = false;
+    bool                source      = false;
+};
+
+PcReadAttempt g_pc_read_attempt;
+
+bool
+PcReadContinuing(const DataProvider* provider, uint32_t workload_id, uint32_t kernel_id)
+{
+    PcReadAttempt& attempt = g_pc_read_attempt;
+    if(attempt.open && attempt.provider == provider && attempt.workload_id == workload_id &&
+       attempt.kernel_id == kernel_id)
+    {
+        return true;
+    }
+    attempt             = PcReadAttempt{};
+    attempt.open        = true;
+    attempt.provider    = provider;
+    attempt.workload_id = workload_id;
+    attempt.kernel_id   = kernel_id;
+    return false;
+}
+
+bool
+PcLayerAlreadyTried(PcSamplingLayer layer)
+{
+    switch(layer)
+    {
+        case PcSamplingLayer::kStalls: return g_pc_read_attempt.stalls;
+        case PcSamplingLayer::kIsa: return g_pc_read_attempt.isa;
+        case PcSamplingLayer::kSource: return g_pc_read_attempt.source;
+    }
+    return false;
+}
+
+void
+MarkPcLayerTried(PcSamplingLayer layer)
+{
+    switch(layer)
+    {
+        case PcSamplingLayer::kStalls:
+            g_pc_read_attempt.stalls = true;
+            break;
+        case PcSamplingLayer::kIsa:
+            g_pc_read_attempt.isa = true;
+            break;
+        case PcSamplingLayer::kSource:
+            g_pc_read_attempt.source = true;
+            break;
+    }
+}
+
+// A layer still to read: never read, or failed and not yet retried by this call.
+bool
+PcLayerOutstanding(PcSamplingLayerState state, PcSamplingLayer layer)
+{
+    if(state == PcSamplingLayerState::kNotRead)
+    {
+        return true;
+    }
+    return state == PcSamplingLayerState::kFailed && !PcLayerAlreadyTried(layer);
+}
+
 // The slot each layer is read through, shared with the ISA View.
 uint64_t
 PcSamplingRequestId(PcSamplingLayer layer)
@@ -1352,7 +1435,9 @@ PcSamplingRequestId(PcSamplingLayer layer)
  * that never comes - so a busy slot is waited out, never taken. Either way the
  * wait is parked as someone else's fetch, which has the panel run the tool
  * again once the slot clears; that run picks up whatever landed and moves on to
- * the next layer it still needs.
+ * the next layer it still needs. Only a read this call actually submitted
+ * counts as its retry: a wait behind the view's read, which may be for another
+ * kernel, does not.
  */
 AssistantToolStartResult
 ReadPcSamplingLayer(const AssistantToolContext& context, const WorkloadInfo& workload,
@@ -1368,18 +1453,20 @@ ReadPcSamplingLayer(const AssistantToolContext& context, const WorkloadInfo& wor
     {
         return result;
     }
+    // Every kernel owns a PC-sampling object, so a refusal here is never "this
+    // trace has no samples": it is a submit that did not start.
     if(!context.data_provider->FetchPcSampling(
            PcSamplingRequestParams(layer, workload.id, kernel.id, source_file_uuid,
                                    ASSISTANT_PC_SAMPLING_GENERATION, 0)))
     {
-        // The counts are read first, so a refusal there means the kernel has no
-        // PC sampling to read; later on it means the rest of it could not be.
-        return layer == PcSamplingLayer::kStalls
-                   ? DoneResult(ASSISTANT_NO_PC_SAMPLES, "No PC samples")
-                   : DoneResult("The PC samples for that kernel could not be read in "
+        return DoneResult(layer == PcSamplingLayer::kStalls
+                              ? "The PC samples for that kernel could not be read. That "
+                                "is an error reading the trace, not a sign it has none."
+                              : "The PC samples for that kernel could not be read in "
                                 "full.",
-                                "PC samples unreadable");
+                          "PC samples unreadable");
     }
+    MarkPcLayerTried(layer);
     return result;
 }
 
@@ -1454,8 +1541,13 @@ NextSourceFileToRead(
     }
     for(uint64_t file : files)
     {
+        // A file that failed is settled for this call too, or the re-entry
+        // after the failure would fetch it again until the wait timed out.
+        // The next call clears source_files_failed and tries it once more.
         if(std::find(data.source_files_read.begin(), data.source_files_read.end(),
-                     file) == data.source_files_read.end())
+                     file) == data.source_files_read.end() &&
+           std::find(data.source_files_failed.begin(), data.source_files_failed.end(),
+                     file) == data.source_files_failed.end())
         {
             return file;
         }
@@ -1616,13 +1708,37 @@ FormatPcSamples(const WorkloadInfo& workload, const KernelInfo& kernel,
             out << "  " << FileName(file->file_path) << " = " << file->file_path << "\n";
         }
     }
-    if(data.isa_state == PcSamplingLayerState::kFailed)
+    if(data.isa_state != PcSamplingLayerState::kRead)
     {
         out << "note: the ISA text could not be read, so instructions show as ?.\n";
     }
-    if(data.source_state == PcSamplingLayerState::kFailed)
+    if(data.source_state != PcSamplingLayerState::kRead)
     {
         out << "note: the source mapping could not be read, so no lines are named.\n";
+    }
+    else
+    {
+        // Only the files a listed instruction sits in: a failure elsewhere,
+        // the ISA View's included, changes nothing in this answer.
+        std::vector<const SourceFile*> unread;
+        for(const SourceFile* file : files_named)
+        {
+            if(std::find(data.source_files_failed.begin(), data.source_files_failed.end(),
+                         file->source_file_uuid) != data.source_files_failed.end())
+            {
+                unread.push_back(file);
+            }
+        }
+        if(!unread.empty())
+        {
+            out << "note: the lines of";
+            for(size_t i = 0; i < unread.size(); ++i)
+            {
+                out << (i == 0 ? " " : ", ") << FileName(unread[i]->file_path);
+            }
+            out << " could not be read, so instructions there show a line of ?. Say "
+                   "so rather than guessing at the line.\n";
+        }
     }
     out << "note: a sample is where one wave was when the profiler looked, so where "
            "samples pile up is where the kernel spends its time. Stalled samples on an "
@@ -1662,22 +1778,46 @@ ToolKernelPcSamples(const AssistantToolContext& context, const jt::Json& args,
 
     // The counts come first: they are what says whether there is anything to
     // read at all, and a kernel without samples needs neither other layer.
-    const PcSamplingData& data = kernel->pc_sampling_data;
-    if(data.stalls_state == PcSamplingLayerState::kNotRead)
+    // A fresh call clears files a previous read failed on, so they are tried
+    // again; a re-entry keeps them, or the failure would be fetched in a loop.
+    KernelInfo* mutable_kernel =
+        Model(context).GetKernelInfoMutable(workload->id, kernel->id);
+    if(mutable_kernel == nullptr)
+    {
+        return DoneResult("That kernel is no longer loaded.", "No kernel");
+    }
+    PcSamplingData& data = mutable_kernel->pc_sampling_data;
+    if(!PcReadContinuing(context.data_provider, workload->id, kernel->id))
+    {
+        data.source_files_failed.clear();
+    }
+
+    if(PcLayerOutstanding(data.stalls_state, PcSamplingLayer::kStalls))
     {
         return ReadPcSamplingLayer(context, *workload, *kernel, PcSamplingLayer::kStalls,
                                    0);
     }
-    if(data.stalls_state == PcSamplingLayerState::kFailed ||
-       data.pc_sample_states.empty())
+    if(data.stalls_state == PcSamplingLayerState::kUnsupported)
+    {
+        return DoneResult(ASSISTANT_PC_SAMPLES_UNSUPPORTED, "No PC samples");
+    }
+    if(data.stalls_state == PcSamplingLayerState::kFailed)
+    {
+        return DoneResult(
+            "The PC samples for that kernel could not be read. That is an error "
+            "reading the trace, not a sign it has no samples - tell the user the "
+            "read failed rather than that the capture has none.",
+            "PC samples unreadable");
+    }
+    if(data.pc_sample_states.empty())
     {
         return DoneResult(ASSISTANT_NO_PC_SAMPLES, "No PC samples");
     }
-    if(data.isa_state == PcSamplingLayerState::kNotRead)
+    if(PcLayerOutstanding(data.isa_state, PcSamplingLayer::kIsa))
     {
         return ReadPcSamplingLayer(context, *workload, *kernel, PcSamplingLayer::kIsa, 0);
     }
-    if(data.source_state == PcSamplingLayerState::kNotRead)
+    if(PcLayerOutstanding(data.source_state, PcSamplingLayer::kSource))
     {
         return ReadPcSamplingLayer(context, *workload, *kernel, PcSamplingLayer::kSource,
                                    0);
@@ -1719,6 +1859,12 @@ const AssistantToolEntry k_compute_tool_handlers[] = {
 };
 
 }  // namespace
+
+void
+ResetAssistantPcRead()
+{
+    g_pc_read_attempt = PcReadAttempt{};
+}
 
 // The compute half of the tool set, for StartAssistantTool to search.
 AssistantToolTable

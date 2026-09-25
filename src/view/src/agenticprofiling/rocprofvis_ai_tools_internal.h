@@ -82,6 +82,12 @@ std::string FinishAssistantComputeFetch(const AssistantToolContext& context,
 // system data tools carry none of it.
 std::string BuildAssistantComputeBriefing(const AssistantToolContext& context);
 
+// Drops the layer-retry marks kernel_pc_samples keeps for the call in
+// progress. Every way a call can end has to call this - FinishCurrentTool,
+// AbandonBatchForNewTrace, and ResetTurn - or the next call on the same kernel
+// reads as a continuation and does not retry what this one could not read.
+void ResetAssistantPcRead();
+
 // --- Helpers both halves need, defined beside the dispatcher ---------------
 
 // Builds the result of a tool that finished without waiting on a fetch.

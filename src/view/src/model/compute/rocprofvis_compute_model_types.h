@@ -119,7 +119,10 @@ enum class PcSamplingLayerState : uint32_t
 {
     kNotRead,
     kRead,
-    kFailed
+    kFailed,
+    // The trace's compute schema predates PC sampling, so there is nothing to
+    // read and no point reading again.
+    kUnsupported
 };
 
 struct PcSamplingData
@@ -131,9 +134,14 @@ struct PcSamplingData
     PcSamplingLayerState               isa_state    = PcSamplingLayerState::kNotRead;
     PcSamplingLayerState               source_state = PcSamplingLayerState::kNotRead;
     PcSamplingLayerState               stalls_state = PcSamplingLayerState::kNotRead;
-    // Files whose line table a read has finished for, whether or not it worked.
-    // The source layer brings one file's lines per read.
+    // Files whose line text a read brought back. The source layer brings one
+    // file's lines per read. A failure is not recorded here: that would make a
+    // later call skip the file and then print its instructions with no line.
     std::vector<uint64_t> source_files_read;
+    // Files a source read tried and did not bring back. kernel_pc_samples
+    // clears this at the start of a call, so a failure is retried then rather
+    // than on every re-entry of the same call.
+    std::vector<uint64_t> source_files_failed;
 };
 
 struct KernelInfo

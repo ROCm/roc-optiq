@@ -151,6 +151,12 @@ private:
     static bool ParseUInt64(const char* value,
                             uint64_t&   result);
 
+    // A PC-sampling job's result. The model answers NotSupported when this
+    // compute schema is older than the one PC-sampling queries need, and that
+    // is passed through rather than folded into UnknownError, so a caller can
+    // tell a trace that cannot hold samples from a read that failed.
+    static rocprofvis_result_t PcSamplingJobResult(rocprofvis_dm_result_t dm_result);
+
     rocprofvis_result_t SetObjectProperty(rocprofvis_handle_t*                  object,
                                           rocprofvis_property_t                 property,
                                           uint64_t                              index,

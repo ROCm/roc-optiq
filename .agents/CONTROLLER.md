@@ -877,6 +877,11 @@ the kernel-owned `PcSampling` handle, and calls the corresponding synchronous
 stage helper. The helper creates model DB futures through `ExecuteQuery`, adds
 them as dependent controller futures, waits for their result on the worker,
 copies the temporary model table into `QueryDataStore`, and deletes that table.
+The job's result goes through `PcSamplingJobResult`: the model answers
+`kRocProfVisDmResultNotSupported` for a compute schema older than 2.2, and
+that comes back as `kRocProfVisResultNotSupported` rather than
+`kRocProfVisResultUnknownError`, so the View can tell a trace that cannot hold
+PC samples from a read that failed.
 
 Internal helper `ExecuteQuery(...)` runs a database query through the
 compute model layer and dispatches rows into a callback. The nested

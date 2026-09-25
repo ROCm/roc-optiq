@@ -1488,10 +1488,15 @@ controller handle but are not represented in `PcSamplingData`. Stall reasons
 are, but only Ask Optiq reads them; `ComputeIsaView` does not render them.
 
 `PcSamplingData` also records how far each layer has got -
-`PcSamplingLayerState` (`kNotRead`, `kRead`, `kFailed`) per layer, plus
-`source_files_read` for the per-file line tables - set in
-`ProcessPcSamplingRequest` for every completion that was not cancelled. A
-layer can come back empty, so emptiness cannot say whether it was ever read.
+`PcSamplingLayerState` (`kNotRead`, `kRead`, `kFailed`, and `kUnsupported`
+for a compute schema older than 2.2, which the controller reports as
+`kRocProfVisResultNotSupported`) per layer, plus
+`source_files_read` for files whose line text landed and
+`source_files_failed` for files a source read tried and did not bring
+back - set in `ProcessPcSamplingRequest` for every completion that was
+not cancelled. A successful read of a file removes it from the failed
+list and never takes back one that already landed. A layer can come
+back empty, so emptiness cannot say whether it was ever read.
 
 Ask Optiq's `kernel_pc_samples` reads through the same three request slots,
 under two rules. It never submits while a slot is pending: a same-layer
@@ -1917,9 +1922,10 @@ under a round, `AbandonBatchForNewTrace` answers every queued call
 without running it - its ids, ranges and even its tool name belong to
 the old trace - and the first reply says where to start on the new one
 (`RestartHint`, which names the other kind's tools when the kind
-changed). When the model crosses kinds itself with `switch_tab`,
-`FinishCurrentTool` re-pins and appends the same hint, so the new tool
-set arrives with an explanation instead of as an unknown-tool reply.
+changed). When the model changes traces itself with `switch_tab`,
+`FinishCurrentTool` re-pins, appends the same hint - including when the
+kind did not change - and skips the rest of that batch. Those calls
+were written against the trace it just left.
 
 **Compute support is read-only.** Five of its eight tools answer from
 memory - a compute trace loads its whole
@@ -2046,13 +2052,21 @@ Layered, transport at the bottom and the panel at the top:
   `kernel_pc_samples` reads one kernel's PC samples - instructions ranked
   by samples, issued against stalled, the profiler's reasons, and the
   `frame_index == 0` source line the ISA View would show - or says none
-  were found, which is what a counter capture gives. There is no flag for
-  it: PC sampling is a separate rocprof-compute capture, so a trace simply
-  has it or not. It reads a layer per run (counts, then ISA, then the
-  source index, then line tables for the files its listed instructions
-  map to, capped at `ASSISTANT_PC_MAX_SOURCE_FILES`), parking each read as
-  someone else's fetch so the panel runs it again once the slot clears;
-  see `ComputeIsaView` for the slot rules it keeps.
+  were found, which is what a counter capture gives. A trace whose compute
+  schema predates PC sampling (`kUnsupported`) is also reported as having
+  none. A read that failed, whether it was this tool's or the ISA View's,
+  or a submit that did not start, is reported as a failed read and not
+  as a capture without samples. A failed layer is retried at most once
+  per call, and only a read the call actually submitted counts as that
+  retry. There is no flag for it: PC sampling is a separate
+  rocprof-compute capture, so a trace simply has it or not. It reads a
+  layer per run (counts, then ISA, then the source index, then line
+  tables for the files its listed instructions map to, capped at
+  `ASSISTANT_PC_MAX_SOURCE_FILES`), parking each read as someone else's
+  fetch so the panel runs it again once the slot clears; see
+  `ComputeIsaView` for the slot rules it keeps. Every way a call ends -
+  `FinishCurrentTool`, `AbandonBatchForNewTrace`, `ResetTurn` - clears its
+  retry marks through `ResetAssistantPcRead`.
 - `rocprofvis_ai_script_tools.cpp` - `run_analysis_script`, which is
   neither of the above: the model writes Python, the interpreter
   computes the answer, and what comes back is a conclusion rather than

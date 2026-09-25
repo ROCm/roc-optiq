@@ -21,6 +21,7 @@
 #include "model/rocprofvis_summary_model.h"
 #include "rocprofvis_ai_prompts.h"
 #include "rocprofvis_ai_tool_schema.h"
+#include "rocprofvis_ai_tools_internal.h"
 #include "rocprofvis_appwindow.h"
 #include "rocprofvis_data_provider.h"
 #include "rocprofvis_project.h"
@@ -308,6 +309,7 @@ void
 AssistantPanel::ResetTurn()
 {
     CancelPendingRequest();
+    ResetAssistantPcRead();
     m_phase           = Phase::kIdle;
     m_pending_calls.clear();
     m_next_call_index = 0;
@@ -796,23 +798,32 @@ AssistantPanel::BeginFetchWait(const AssistantToolStartResult& started,
 void
 AssistantPanel::FinishCurrentTool(const std::string& content)
 {
+    // kernel_pc_samples re-enters through RunNextTool, never here, so this runs
+    // only once its call is over.
+    ResetAssistantPcRead();
+
     if(m_next_call_index >= m_pending_calls.size())
     {
         ContinueAfterTools();
         return;
     }
 
-    // switch_tab is the model changing traces on purpose, so re-pin here rather
-    // than reporting its own move back to it on the next call. A move to the
-    // other kind changes the tools the next round offers, which the model is
-    // told now rather than left to discover from an unknown-tool reply.
+    // switch_tab is the model changing traces on purpose. Keep its own reply,
+    // and do not run the rest of the batch: those calls were written against
+    // the trace it just left, ids and all. Same-kind or not, the hint says
+    // where to start on the one now in front.
     std::string reply = content;
     if(CurrentProjectId() != m_turn_project_id)
     {
-        if(PinTurnTrace())
+        const bool kind_changed = PinTurnTrace();
+        reply += "\n" + RestartHint(kind_changed);
+        AppendToolReply(m_pending_calls[m_next_call_index], reply);
+        for(size_t i = m_next_call_index + 1; i < m_pending_calls.size(); ++i)
         {
-            reply += "\n" + RestartHint(true);
+            AppendToolReply(m_pending_calls[i], ASSISTANT_SKIPPED_TOOL_REPLY);
         }
+        ContinueAfterTools();
+        return;
     }
     AppendToolReply(m_pending_calls[m_next_call_index], reply);
 
@@ -833,6 +844,7 @@ AssistantPanel::FinishCurrentTool(const std::string& content)
 void
 AssistantPanel::AbandonBatchForNewTrace(const std::string& reason)
 {
+    ResetAssistantPcRead();
     const bool        kind_changed = PinTurnTrace();
     const std::string notice       = reason + " " + RestartHint(kind_changed);
     for(size_t i = m_next_call_index; i < m_pending_calls.size(); ++i)

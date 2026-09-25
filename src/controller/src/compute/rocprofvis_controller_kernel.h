@@ -36,10 +36,10 @@ private:
     std::string m_name;
     uint32_t m_invocation_count;
     uint64_t m_duration_total;
-    uint32_t m_duration_min;
-    uint32_t m_duration_max;
-    uint32_t m_duration_median;
-    uint32_t m_duration_mean;
+    uint64_t m_duration_min;
+    uint64_t m_duration_max;
+    uint64_t m_duration_median;
+    uint64_t m_duration_mean;
     PcSampling m_pc_sampling_data;
 };
 

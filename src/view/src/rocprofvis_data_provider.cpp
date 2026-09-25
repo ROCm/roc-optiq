@@ -4912,20 +4912,6 @@ DataProvider::LoadWorkload(uint64_t workload_index)
 
     LoadProfilingConfig(workload, workload_handle);
 
-    // Parse the memory-chart layout JSON once here so the view never re-parses it.
-    std::string memory_chart_json =
-        GetString(workload_handle, kRPVControllerWorkloadMemoryChartLayout, 0);
-    if(!memory_chart_json.empty())
-    {
-        std::string memory_chart_error;
-        if(!MemChartLayout::ParseFromString(memory_chart_json, workload.memory_chart_layout,
-                                            &memory_chart_error))
-        {
-            spdlog::warn("Workload {} memory-chart layout blob invalid: {}", workload.id,
-                         memory_chart_error);
-        }
-    }
-
     LoadMetricList(workload, workload_handle);
 
     LoadValueNames(workload, workload_handle);

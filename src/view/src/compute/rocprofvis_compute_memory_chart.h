@@ -2,14 +2,11 @@
 // SPDX-License-Identifier: MIT
 
 #pragma once
-#include "model/compute/rocprofvis_memory_chart_model.h"
-
-#include <cstdint>
+#include <array>
 #include <memory>
 #include <string>
-#include <unordered_map>
-#include <utility>
 #include <vector>
+#include <cstdint>
 
 struct ImDrawList;
 struct ImVec2;
@@ -23,24 +20,91 @@ struct MetricValue;
 class DataProvider;
 class ComputeSelection;
 
-// Renders the compute kernel-details "Memory Chart" from a relational layout
-// (MemChartLayout): generic blocks arranged in columns, connected by arrows.
-// Metric ids/names referenced by the layout are resolved against the compute
-// metric table for the selected kernel.
+// Local-space chart block.
+struct ChartBlock
+{
+    float x = 0, y = 0, w = 0, h = 0;
+
+    float Right()  const { return x + w; }
+    float Bottom() const { return y + h; }
+    float MidX()   const { return x + w * 0.5f; }
+    float MidY()   const { return y + h * 0.5f; }
+};
+
+// Metric entry IDs in table 3.1
+enum MemChartMetric
+{
+    WAVEFRONT_OCCUPANCY = 0,
+    WAVE_LIFE,
+    SALU,
+    SMEM,
+    VALU,
+    MATRIX_OPS,
+    VMEM,
+    LDS,
+    GWS,
+    BR,
+    ACTIVE_CUS_DEPRECATED,
+    NUM_CUS,
+    VGPR,
+    SGPR,
+    LDS_ALLOCATION,
+    SCRATCH_ALLOCATION,
+    WAVEFRONTS,
+    WORKGROUPS,
+    LDS_REQ,
+    LDS_UTIL,
+    LDS_LATENCY,
+    VL1_RD,
+    VL1_WR,
+    VL1_ATOMIC,
+    VL1_HIT,
+    VL1_LAT,
+    VL1_COALESCE,
+    VL1_STALL,
+    VL1_L2_RD,
+    VL1_L2_WR,
+    VL1_L2_ATOMIC,
+    SL1D_RD,
+    SL1D_HIT,
+    SL1D_LAT,
+    SL1D_L2_RD,
+    SL1D_L2_WR,
+    SL1D_L2_ATOMIC,
+    IL1_FETCH,
+    IL1_HIT,
+    IL1_LAT,
+    IL1_L2_RD,
+    L2_RD,
+    L2_WR,
+    L2_ATOMIC,
+    L2_HIT,
+    L2_RD_LAT,
+    L2_WR_LAT,
+    FABRIC_L2_RD,
+    FABRIC_L2_WR,
+    FABRIC_L2_ATOMIC,
+    FABRIC_RD_LAT,
+    FABRIC_WR_LAT,
+    FABRIC_ATOMIC_LAT,
+    HBM_RD,
+    HBM_WR,
+
+    // Chart-only placeholder for rows that intentionally display N/A instead
+    // of looking up a metric value.
+    MEMCHART_METRIC_NA,
+    MEMCHART_METRIC_COUNT = MEMCHART_METRIC_NA  // sentinel: total number of chart slots
+};
+
 class ComputeMemoryChartView
 {
 public:
-    ComputeMemoryChartView(DataProvider&                     data_provider,
-                           std::shared_ptr<ComputeSelection> compute_selection);
+    ComputeMemoryChartView(DataProvider& data_provider, std::shared_ptr<ComputeSelection> compute_selection);
     ~ComputeMemoryChartView();
 
     void Render();
 
-    // Load the layout for a workload: prefer the JSON stored in the DB
-    // (WorkloadInfo::memory_chart_layout); fall back to the embedded default.
-    void LoadWorkloadLayout(uint32_t workload_id);
-
-    // Fetch every metric in the layout's source category for the selected kernel.
+    // Fetch all 3.1.x metrics for the selected workload and kernel.
     void FetchMemChartMetrics();
 
     void UpdateMetrics();
@@ -48,96 +112,58 @@ public:
     uint64_t GetClientId() const { return m_client_id; }
 
 private:
-    // A fully computed arrow, ready to draw. Produced by BuildArrowRoutes so
-    // labels can be de-overlapped before anything is drawn. Coordinates are in
-    // local canvas space.
-    struct ArrowRoute
-    {
-        std::vector<std::pair<float, float>> points;  // Polyline (x, y).
-        bool              head_at_first = false;
-        bool              head_at_last  = false;
-        uint32_t          color         = 0;
-        std::string       label;
-        float             label_x       = 0.0f;
-        float             label_y       = 0.0f;
-        float             label_w       = 0.0f;
-        float             label_h       = 0.0f;
-        MemChartMetricRef metric;
-    };
+    // Compute block positions for the current frame.
+    void ComputeLayout();
 
-    void LoadLayout();
-    // Load the dev override file (<config-dir>/memory_chart.json) into m_layout.
-    // Returns true if a valid override was found and applied.
-    bool TryLoadOverrideFile();
+    // Draw methods render directly through the current draw list.
+    void DrawInstrBuff(ImDrawList* draw_list, ImVec2 origin);
+    void DrawInstrDispatch(ImDrawList* draw_list, ImVec2 origin);
+    void DrawActiveCUs(ImDrawList* draw_list, ImVec2 origin);
 
-    // Called once whenever m_layout is (re)assigned (workload change): sorts
-    // blocks by column/`order`, builds the id -> block index, and primes the
-    // per-item/arrow render strings.
-    void OnLayoutLoaded();
-    // Recompute the cached label/value strings for every content item and arrow
-    // from the currently-resolved metrics (on layout load and on metric fetch).
-    void RefreshMetricStrings();
-    // O(1) block lookup by id (backed by m_block_by_id).
-    const MemChartBlock* Block(uint32_t id) const;
+    void DrawLDS(ImDrawList* draw_list, ImVec2 origin);
+    void DrawVectorL1(ImDrawList* draw_list, ImVec2 origin);
+    void DrawScalarL1D(ImDrawList* draw_list, ImVec2 origin);
+    void DrawInstrL1(ImDrawList* draw_list, ImVec2 origin);
 
-    // Precompute which inter-column gaps an arrow crosses (m_gap_has_arrow). Only
-    // depends on block columns and arrow endpoints, so it runs on layout load
-    // rather than every frame.
-    void RebuildColumnGaps();
+    void DrawL2(ImDrawList* draw_list, ImVec2 origin);
+    void DrawXGMIPCIe(ImDrawList* draw_list, ImVec2 origin);
+    void DrawFabric(ImDrawList* draw_list, ImVec2 origin);
+    void DrawGMI(ImDrawList* draw_list, ImVec2 origin);
+    void DrawHBM(ImDrawList* draw_list, ImVec2 origin);
 
-    void ComputeLayout(float available_width);
-    void MeasureBlock(MemChartBlock& block) const;
-    // Recursively assign geometry: `conn_left`/`conn_right` are the top-level
-    // ancestor's box edges (passed unchanged into children) so arrows terminate
-    // at the outer box; `column` is propagated so routing sees nested blocks.
-    void PositionBlock(MemChartBlock& block, float x, float y, float w, float h,
-                       float conn_l, float conn_r, int32_t column);
+    void DrawConnections(ImDrawList* draw_list, ImVec2 origin);
 
-    // Recursively draw a block: container -> recurse into children; leaf -> card.
-    void DrawBlock(ImDrawList* draw_list, ImVec2 origin, const MemChartBlock& block);
-    void DrawLeaf(ImDrawList* draw_list, ImVec2 origin, const MemChartBlock& block);
-    void BuildArrowRoutes(std::vector<ArrowRoute>& routes) const;
-    void ResolveLabelOverlaps(std::vector<ArrowRoute>& routes) const;
-    void DrawArrowRoutes(ImDrawList* draw_list, ImVec2 origin,
-                         const std::vector<ArrowRoute>& routes);
-
-    // Metric resolution (by id or name) against the fetched table.
-    const MetricValue* ResolveMetric(const MemChartMetricRef& ref) const;
-    std::string        MetricLabel(const MemChartMetricRef& ref,
-                                   const std::string&       title_override) const;
-    std::string        MetricValueText(const MemChartMetricRef& ref,
-                                       bool include_unit = true,
-                                       const std::string& unit_override = "") const;
+    float DrawMetricRow(ImDrawList* draw_list, float block_x, float cursor_y,
+                        float block_w, const char* label, MemChartMetric metric_id,
+                        const char* unit = "");
 
     void ShowMetricTooltip(ImVec2 hover_min, ImVec2 hover_max,
-                           const MemChartMetricRef& ref, bool show_description,
-                           bool show_raw_value);
+                           MemChartMetric metric_id,
+                           bool show_description, bool show_raw_value);
+
     void DrawTextWithTooltip(ImDrawList* draw_list, ImVec2 pos, uint32_t color,
-                             const char* text, const MemChartMetricRef& ref,
+                             const char* text, MemChartMetric metric_id,
                              bool show_description, bool show_raw_value);
 
-    DataProvider&                     m_data_provider;
+    // Get the display string for a metric.
+    const char* GetMetricText(MemChartMetric metric) const;
+
+    DataProvider& m_data_provider;
     std::shared_ptr<ComputeSelection> m_compute_selection;
+
+    std::array<std::string, MEMCHART_METRIC_COUNT> m_values;
 
     uint64_t m_client_id;
 
-    MemChartLayout m_layout;
+    // Cache metric pointers after each fetch.
+    std::vector<const MetricValue*> m_metric_ptrs;
 
-    // Group boxes (title + rect) computed during layout, drawn behind blocks.
-    std::vector<MemChartGroupBox> m_group_boxes;
-
-    // Resolved after each fetch; keyed by the metric's full dotted id
-    // ("category.table.entry", e.g. "3.1.0").
-    std::unordered_map<std::string, const MetricValue*> m_ptr_by_metric_id;
-
-    // Block-by-id index into m_layout, rebuilt on layout load; avoids scanning
-    // the block tree on every arrow lookup each frame.
-    std::unordered_map<uint32_t, const MemChartBlock*> m_block_by_id;
-
-    // For each inter-column gap (between ascending distinct columns), whether an
-    // arrow crosses it. Precomputed on layout load so ComputeLayout avoids an
-    // arrow-by-gap scan every frame.
-    std::vector<bool> m_gap_has_arrow;
+    // Block positions computed at the start of Render().
+    ChartBlock m_instr_buff_block, m_instr_dispatch_block, m_active_cus_block;
+    ChartBlock m_lds_block, m_vector_l1_block, m_scalar_l1d_block, m_instr_l1_block;
+    ChartBlock m_l2_block;
+    ChartBlock m_xgmi_pcie_block, m_fabric_block, m_gmi_block;
+    ChartBlock m_hbm_block;
 };
 
 }  // namespace View

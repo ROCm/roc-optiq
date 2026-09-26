@@ -259,8 +259,10 @@ Owns the OS-level shell. Specifically:
   `GuiTexture::SetBackend()` plugs into.
 - `rocprofvis_cli_parser.{h,cpp}` - generic short/long flag parser
   (`CLIParser::AddOption`). Flags currently registered in `main.cpp`:
-  `-v/--version`, `-f/--file <path>`, `-b/--backend {auto|vulkan|opengl}`,
-  `-d/--file-dialog {auto|native|imgui}`, `-h/--help`. Add new flags by
+  `-v/--version [hash]`, `-f/--file <path>`, `-b/--backend {auto|vulkan|opengl}`,
+  `-d/--file-dialog {auto|native|imgui}`, `-h/--help`. `-v` prints the
+  version. `-v hash` also prints the git commit captured at configure time
+  (`unknown` when git was unavailable). Add new flags by
   calling `AddOption` in `main.cpp::parse_command_line_args`.
 
 ### `src/core/`

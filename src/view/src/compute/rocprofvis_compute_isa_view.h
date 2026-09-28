@@ -12,6 +12,7 @@
 
 #include <map>
 #include <memory>
+#include <optional>
 #include <set>
 #include <string>
 #include <vector>
@@ -143,7 +144,7 @@ public:
 
     virtual void Render() override = 0;
 
-    bool IsStallShown() { return m_show_stall; };
+    bool IsStallShown() const { return m_show_stall; };
     void ChangeStallVisibility(bool show) { m_show_stall = show; };
 
 protected:
@@ -202,6 +203,13 @@ private:
         uint64_t    count = 0;
     };
 
+    struct SampleCounts
+    {
+        uint64_t                total_count = 0;
+        std::optional<uint64_t> issue_count = 0;
+        std::optional<uint64_t> stall_count = 0;
+    };
+
     struct IsaRow
     {
         std::string              instruction;
@@ -209,8 +217,7 @@ private:
         uint64_t                 code_object_offset         = 0;
         uint64_t                 source_line_id             = 0;
         uint64_t                 source_file_id             = 0;
-        uint64_t                 stall_count                = 0;
-        uint64_t                 total_count                = 0;
+        SampleCounts             sample_counts;
         uint64_t                 stall_reason_sample_count  = 0;
         std::vector<StallReason> stall_reasons;
     };
@@ -222,18 +229,17 @@ private:
         uint64_t source_file_id = 0;
     };
 
-    struct SampleCounts
-    {
-        uint64_t total_count = 0;
-        uint64_t stall_count = 0;
-    };
-
     struct SampleAggregation
     {
-        std::unordered_map<uint64_t, SampleCounts> counts_by_instruction;
-        std::unordered_map<uint64_t, uint64_t>     instruction_by_sample_state;
-        uint64_t                                   kernel_total_samples = 0;
+        std::unordered_map<uint64_t, SampleCounts>         counts_by_instruction;
+        std::unordered_map<uint64_t, const PcSampleState*> sample_state_by_uuid;
+        uint64_t                                           kernel_total_samples = 0;
+        bool                                               stall_data_available = false;
     };
+
+    using StallReasonCounts = std::unordered_map<uint64_t, uint64_t>;
+    using GroupedStallReasonCounts =
+        std::unordered_map<uint64_t, StallReasonCounts>;
 
     static const CodeObjectStore* FindCodeObject(const PcSamplingData& data,
                                                  uint64_t code_object_uuid);
@@ -242,21 +248,34 @@ private:
     static SampleAggregation AggregateSampleCounts(const PcSamplingData& data);
     static std::unordered_map<uint64_t, std::string>
         BuildStallReasonText(const PcSamplingData& data);
-    static std::unordered_map<uint64_t, std::unordered_map<uint64_t, uint64_t>>
-        BuildStallReasonCounts(
-            const PcSamplingData&                         data,
-            const std::unordered_map<uint64_t, uint64_t>& instruction_by_sample_state);
+    static GroupedStallReasonCounts
+        BuildStallReasonCounts(const PcSamplingData&            data,
+                               const SampleAggregation&         sample_aggregation,
+                               const std::unordered_map<uint64_t, std::string>&
+                                   reason_text);
+    static GroupedStallReasonCounts
+        GroupStallReasonCountsBySampleState(const PcSamplingData& data);
+    static std::optional<uint64_t>
+        FindOtherWaitLookupUuid(
+            const std::unordered_map<uint64_t, std::string>& reason_text);
+    static uint64_t SumStallReasonCounts(const StallReasonCounts& reason_counts);
+    static void RemoveIssuedSamplesFromOtherWait(
+        const PcSampleState& state, std::optional<uint64_t> other_wait_lookup_uuid,
+        StallReasonCounts& reason_counts);
+    static GroupedStallReasonCounts AggregateStallReasonCountsByInstruction(
+        GroupedStallReasonCounts counts_by_sample_state,
+        const SampleAggregation& sample_aggregation,
+        std::optional<uint64_t>   other_wait_lookup_uuid);
     static std::vector<StallReason>
-        BuildStallReasons(const std::unordered_map<uint64_t, uint64_t>&    reason_counts,
+        BuildStallReasons(const StallReasonCounts&                         reason_counts,
                           const std::unordered_map<uint64_t, std::string>& reason_text,
                           uint64_t&                                        classified_sample_count);
     static IsaRow
         BuildRow(const InstructionLine&                              instruction_line,
                  const std::unordered_map<uint64_t, SourceLocation>& source_locations,
                  const SampleAggregation&                            sample_aggregation,
-                 const std::unordered_map<
-                     uint64_t, std::unordered_map<uint64_t, uint64_t>>& stall_reason_counts,
-                 const std::unordered_map<uint64_t, std::string>&       stall_reason_text);
+                 const GroupedStallReasonCounts&                      stall_reason_counts,
+                 const std::unordered_map<uint64_t, std::string>&    stall_reason_text);
     static std::string
         ResolveStallReasonText(const std::unordered_map<uint64_t, std::string>& reason_text,
                                uint64_t                                         lookup_uuid);
@@ -271,11 +290,13 @@ private:
     void               RenderSamplesCell(uint64_t sample_count);
     void               RenderStallReasonsTooltip(const IsaRow& row);
     void               RenderStallReasonTable(const IsaRow& row);
+    bool               IsStallDataShown() const;
 
     std::vector<IsaRow> m_entries;
     uint64_t            m_kernel_total_samples        = 0;
     uint64_t            m_hottest_instruction_samples = 0;
     uint64_t            m_largest_code_object_offset  = 0;
+    bool                m_stall_data_available         = false;
 };
 
 }  // namespace View

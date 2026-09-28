@@ -1029,6 +1029,12 @@ locking to the right mutex for each property ID.
 type&)` is the internal helper `ComputeTrace` uses to map a DB column
 enum to the right `kRPVControllerPCSampling*` property ID.
 
+PC-sample-state `issue_count` and `stall_count` are optional because host-trap
+sampling does not measure progress state. Empty database cells leave the
+corresponding `std::optional` unset. Their UInt64 getters return
+`kRocProfVisResultNotLoaded` for an unset value, while a measured zero returns
+success with zero; `total_count` remains a required UInt64 value.
+
 Property bank: `rocprofvis_controller_pc_sampling_data_properties_t`
 (guarded by `__kRPVControllerPCSamplingPropertiesFirst` and
 `__kRPVControllerPCSamplingPropertiesLast`). Its three groups have fixed high

@@ -1553,8 +1553,10 @@ independent layers:
   request. The View asks the controller for PC sample states plus stall-reason
   rows and lookups, explicitly excluding instruction-sample metadata that this
   view does not consume. The projection uses each state's UUID, instruction
-  UUID, total, and stall counts together with the stall-reason rows and lookup
-  text.
+  UUID and total count, plus nullable issued and stall counts, together with
+  the stall-reason rows and lookup text. A controller getter returns
+  `kRocProfVisResultNotLoaded` for a nullable count that was not measured, and
+  `DataProvider` preserves that distinction with `std::optional`.
 
 `FetchPendingPcSampling()` submits all queued layers; ISA, source, and stalls
 use distinct `DataProvider` request IDs and may be in flight together. A newer
@@ -1569,8 +1571,11 @@ The ISA table is always present. Its Offset column shows each instruction's
 byte offset inside the selected code object as uppercase hexadecimal; it is not
 an absolute runtime address. Right-clicking an offset, ISA instruction, or
 source-code line opens its copy context menu. `Show Sampling Details` adds
-Samples and Stall % columns, aggregated by instruction UUID across returned
-sample states. Samples shows a right-aligned
+Samples, aggregated by instruction UUID across returned sample states. It also
+adds Stall % when every returned sample state has non-NULL issued and stall
+counts. Host-trap captures leave those progress counts NULL, so their ISA table
+shows Samples but omits Stall %. A stochastic capture's real zero counts remain
+available and are not confused with NULL. Samples shows a right-aligned
 raw count over a heat bar normalized to the hottest displayed instruction. Its
 tooltip reports both kernel share and relative hotness. Counts from one through
 ten carry a low-confidence marker for the derived percentages, while zero-count
@@ -1583,9 +1588,12 @@ not show tooltips. When `ROCPROFVIS_DEVELOPER_MODE` is enabled, each data-column
 tooltip also shows the database fields, grouping or filtering keys, and formulas
 used by the column. Hovering a `Stall %` cell shows every recorded stall reason
 for that instruction, aggregated across sample states and sorted by descending
-sample count. Each reason includes its raw count and its share of the
-instruction's samples classified by the reason data. The tooltip warns when the
-classified-reason total differs from the instruction's total sample count.
+sample count. Stochastic profiles encode the irrelevant stall-reason field of
+issued samples as `OTHER_WAIT`; the view removes that issued contribution per
+sample state when raw reason totals include all samples. Each remaining reason
+includes its count and share of the instruction's stalled samples. The tooltip
+shows issued samples separately and warns when the normalized reason total
+differs from the instruction's stalled-sample count.
 The source table contains only the source line number and source text.
 Instruction-sample metadata, active-thread percentage, wave-occupancy
 percentage, and dispatch UUID are available on the controller handle but are

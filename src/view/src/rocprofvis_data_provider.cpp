@@ -5269,9 +5269,21 @@ DataProvider::LoadPcSamplingStates(KernelInfo& kernel, rocprofvis_handle_t* pc_h
         rocprofvis_controller_get_uint64(
             pc_handle, kRPVControllerPCSamplingPcSampleStateTotalCount, i,
             &state.total_count);
-        rocprofvis_controller_get_uint64(
-            pc_handle, kRPVControllerPCSamplingPcSampleStateStallCount, i,
-            &state.stall_count);
+        state.issue_count.reset();
+        state.stall_count.reset();
+        uint64_t count = 0;
+        if(rocprofvis_controller_get_uint64(
+               pc_handle, kRPVControllerPCSamplingPcSampleStateIssueCount, i,
+               &count) == kRocProfVisResultSuccess)
+        {
+            state.issue_count = count;
+        }
+        if(rocprofvis_controller_get_uint64(
+               pc_handle, kRPVControllerPCSamplingPcSampleStateStallCount, i,
+               &count) == kRocProfVisResultSuccess)
+        {
+            state.stall_count = count;
+        }
     }
 }
 

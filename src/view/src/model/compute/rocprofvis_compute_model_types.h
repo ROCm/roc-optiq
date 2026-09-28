@@ -7,6 +7,7 @@
 #include "rocprofvis_memory_chart_model.h"
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -62,7 +63,8 @@ struct PcSampleState
     uint64_t pc_sample_state_uuid = 0;
     uint64_t instruction_uuid     = 0;
     uint64_t total_count          = 0;
-    uint64_t stall_count          = 0;
+    std::optional<uint64_t> issue_count;
+    std::optional<uint64_t> stall_count;
 };
 
 struct PcSampleStallReason

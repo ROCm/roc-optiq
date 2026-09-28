@@ -4,7 +4,6 @@
 #pragma once
 
 #include "rocprofvis_controller_enums.h"
-#include "rocprofvis_memory_chart_model.h"
 #include <cstdint>
 #include <memory>
 #include <string>
@@ -178,7 +177,6 @@ struct WorkloadInfo
     std::string                              name;
     std::vector<std::vector<std::string>>    system_info;
     std::vector<std::vector<std::string>>    profiling_config;
-    MemChartLayout                           memory_chart_layout;  // Parsed layout from the DB (empty blocks if absent).
     AvailableMetrics                         available_metrics;
     std::unordered_map<uint32_t, KernelInfo> kernels;
     std::vector<const KernelInfo*>           ordered_kernels;  // built from map values; never null

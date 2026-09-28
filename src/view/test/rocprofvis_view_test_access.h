@@ -172,6 +172,7 @@ struct ComputeKernelDetailsViewTestPeer
 {
     ComputeKernelDetailsView& v;
     KernelMetricTable* KernelMetricTablePtr() const { return v.m_kernel_metric_table.get(); }
+    ComputeTableView*  TableViewPtr() const { return v.m_table_view.get(); }
 };
 
 struct ComputeWorkloadViewTestPeer
@@ -234,8 +235,25 @@ struct ComputeComparisonViewTestPeer
 struct ComputeTableViewTestPeer
 {
     ComputeTableView& v;
+    bool   HasAvailableMetrics() const { return v.m_has_available_metrics; }
     bool   FetchPending() const { return v.m_fetch_pending; }
     size_t TableWidgetCount() const { return v.m_table_widgets.size(); }
+    bool   IsTableShown(uint64_t table_key) const
+    {
+        return v.m_enabled_tables.count(table_key) > 0;
+    }
+    // Same effect as ticking/unticking the table in the Tables picker.
+    void ShowTable(uint64_t table_key, bool shown)
+    {
+        if(shown)
+        {
+            v.m_enabled_tables.insert(table_key);
+        }
+        else
+        {
+            v.m_enabled_tables.erase(table_key);
+        }
+    }
     size_t PinnedCount() const { return v.m_pinned_metrics.size(); }
     bool   IsPinned(const MetricId& id) const { return v.m_pinned_metrics.count(id) > 0; }
     MetricId FirstPinned() const { return *v.m_pinned_metrics.begin(); }

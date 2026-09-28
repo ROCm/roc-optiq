@@ -230,15 +230,25 @@ KernelMetricTable::Render()
     const float      cell_padding = style.CellPadding.x * 2.0f;
     const float      char_width = ImGui::CalcTextSize("M").x;
 
-    ImGui::PushStyleColor(ImGuiCol_ChildBg, settings.GetColor(Colors::kBgPanel));
+    ImGui::PushStyleColor(ImGuiCol_ChildBg,
+                          settings.GetColor(m_chromeless ? Colors::kTransparent
+                                                         : Colors::kBgPanel));
     ImGui::PushStyleColor(ImGuiCol_Border, settings.GetColor(Colors::kBorderColor));
     ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding,
                         settings.GetDefaultStyle().ChildRounding);
-    ImGui::BeginChild("kernel_metric_table_card", ImVec2(0, 0),
-                      ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Borders |
-                          ImGuiChildFlags_AlwaysUseWindowPadding);
+    ImGuiChildFlags card_flags =
+        m_chromeless ? ImGuiChildFlags_None
+                     : ImGuiChildFlags_Borders | ImGuiChildFlags_AlwaysUseWindowPadding;
+    if(!m_fill_parent)
+    {
+        card_flags |= ImGuiChildFlags_AutoResizeY;
+    }
+    ImGui::BeginChild("kernel_metric_table_card", ImVec2(0, 0), card_flags);
 
-    SectionTitle("Kernel Selection Table");
+    if(!m_chromeless)
+    {
+        SectionTitle("Kernel Selection Table");
+    }
 
     ComputeKernelSelectionTable& table =
         m_data_provider.ComputeModel().GetKernelSelectionTable();
@@ -252,27 +262,34 @@ KernelMetricTable::Render()
                       ImGuiChildFlags_AutoResizeY);
 
     ImGui::AlignTextToFramePadding();
-    const char* icon = m_show_kernel_table ? ICON_CHEVRON_DOWN : ICON_CHEVRON_RIGHT;
-    
-    ImGui::PushFont(icon_font, 0.0f);
-    ImVec2 icon_size = ImGui::CalcTextSize(ICON_CHEVRON_DOWN); // use larger icon for consistent spacing
-    ImGui::PopFont();
-
-    if(IconButton(icon, icon_font,
-                  ImVec2(icon_size.x + style.FramePadding.x * 2.0f,
-                         icon_size.y + style.FramePadding.y * 2.0f),
-                  m_show_kernel_table ? "Hide Table" : "Show Table", false,
-                  style.FramePadding,
-                  SettingsManager::GetInstance().GetColor(Colors::kTransparent),
-                  SettingsManager::GetInstance().GetColor(Colors::kButtonHovered),
-                  SettingsManager::GetInstance().GetColor(Colors::kTransparent)))
+    if(m_fill_parent)
     {
-        m_show_kernel_table = !m_show_kernel_table;
+        m_show_kernel_table = true;
     }
+    else
+    {
+        const char* icon = m_show_kernel_table ? ICON_CHEVRON_DOWN : ICON_CHEVRON_RIGHT;
 
-    ImGui::SameLine(); //No spacing on purpose
-    ImGui::TextUnformatted("Table");
-    VerticalSeparator();
+        ImGui::PushFont(icon_font, 0.0f);
+        ImVec2 icon_size = ImGui::CalcTextSize(ICON_CHEVRON_DOWN); // use larger icon for consistent spacing
+        ImGui::PopFont();
+
+        if(IconButton(icon, icon_font,
+                      ImVec2(icon_size.x + style.FramePadding.x * 2.0f,
+                             icon_size.y + style.FramePadding.y * 2.0f),
+                      m_show_kernel_table ? "Hide Table" : "Show Table", false,
+                      style.FramePadding,
+                      SettingsManager::GetInstance().GetColor(Colors::kTransparent),
+                      SettingsManager::GetInstance().GetColor(Colors::kButtonHovered),
+                      SettingsManager::GetInstance().GetColor(Colors::kTransparent)))
+        {
+            m_show_kernel_table = !m_show_kernel_table;
+        }
+
+        ImGui::SameLine(); //No spacing on purpose
+        ImGui::TextUnformatted("Table");
+        VerticalSeparator();
+    }
 
     m_query_builder.SetWorkload(
         m_data_provider.ComputeModel().GetWorkload(m_workload_id));
@@ -357,8 +374,9 @@ KernelMetricTable::Render()
 
     if(m_show_kernel_table)
     {
-    // Set a fixed height for the table container
-    if(ImGui::BeginChild("kernel_metric_table_cont", ImVec2(0, total_table_height),
+    // Fixed height from the row count, or the rest of the pane in fill mode.
+    if(ImGui::BeginChild("kernel_metric_table_cont",
+                         ImVec2(0, m_fill_parent ? 0.0f : total_table_height),
                          ImGuiChildFlags_None, ImGuiWindowFlags_NoMove))
     {
         if(!header.empty() && !data.empty() && m_workload_id != ComputeSelection::INVALID_SELECTION_ID)
@@ -606,10 +624,21 @@ KernelMetricTable::Render()
                                     else
                                     {
                                         m_selected_row = row;
-                                        m_selected_kernel_id_local =
-                                            data[row][0].empty()
-                                                ? ComputeSelection::INVALID_SELECTION_ID
-                                                : std::stoul(data[row][0]);
+                                        // strtoul, not stoul: a non-numeric ID cell must
+                                        // not throw (project rule: no C++ exceptions).
+                                        uint32_t parsed_id =
+                                            ComputeSelection::INVALID_SELECTION_ID;
+                                        if(!data[row][0].empty())
+                                        {
+                                            char*         parse_end = nullptr;
+                                            unsigned long value     = std::strtoul(
+                                                data[row][0].c_str(), &parse_end, 10);
+                                            if(parse_end != data[row][0].c_str())
+                                            {
+                                                parsed_id = static_cast<uint32_t>(value);
+                                            }
+                                        }
+                                        m_selected_kernel_id_local = parsed_id;
 
                                         m_compute_selection->SelectKernel(
                                             m_selected_kernel_id_local);

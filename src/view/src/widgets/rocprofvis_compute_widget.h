@@ -41,6 +41,15 @@ public:
     void ChangePinState(const MetricId& metric_id);
     bool IsMetricPinned(MetricId metric_id);
     void SetPinMetricCallback(std::function<void(MetricId)> callback);
+    // Drop the card, title and inner scrolling, for a table listed under its
+    // container's own (collapsible) header; the container scrolls instead.
+    void SetEmbedded(bool embedded);
+    // Stretch the card and table to the parent's height (e.g. a resizable pane);
+    // rows scroll inside the table.
+    void SetFillParent(bool fill);
+    // Drop the card and title but keep the table's own scrolling, for a
+    // container that draws its own pane header.
+    void SetChromeless(bool chromeless);
 protected:
     virtual void ContextMenu(const char* value_to_copy, uint32_t column_index,
                              std::pair<const MetricId, Row>& row);
@@ -68,7 +77,10 @@ protected:
     ImGuiTableFlags           m_table_flags;
     uint32_t                  m_max_rows_in_table;
     // Suppress the outer card when an embedding container paints its own.
-    bool                      m_no_panel = false;
+    bool                      m_no_panel    = false;
+    bool                      m_hide_title  = false;
+    bool                      m_embedded    = false;
+    bool                      m_fill_parent = false;
 
     uint32_t m_freezed_columns = 0;
     uint32_t m_freezed_rows    = 0;
@@ -150,6 +162,8 @@ public:
     virtual void FetchMetrics();
     virtual void UpdateTable();
     void         Clear();
+    void         SetFillParent(bool fill) { m_table.SetFillParent(fill); }
+    void         SetChromeless(bool chromeless) { m_table.SetChromeless(chromeless); }
     uint64_t     GetClientId() const { return m_client_id; }
 
 protected:

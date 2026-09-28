@@ -392,14 +392,20 @@ void
 Roofline::Render()
 {
     // Fill the parent. AutoResizeY would collapse here since the plot uses (0,0).
-    ImGui::PushStyleColor(ImGuiCol_ChildBg, m_settings.GetColor(Colors::kBgPanel));
+    ImGui::PushStyleColor(ImGuiCol_ChildBg,
+                          m_settings.GetColor(m_chromeless ? Colors::kTransparent
+                                                           : Colors::kBgPanel));
     ImGui::PushStyleColor(ImGuiCol_Border, m_settings.GetColor(Colors::kBorderColor));
     ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding,
                         m_settings.GetDefaultStyle().ChildRounding);
     ImGui::BeginChild("roofline_card", ImVec2(0, 0),
-                      ImGuiChildFlags_Borders |
-                          ImGuiChildFlags_AlwaysUseWindowPadding);
-    SectionTitle("Roofline Analysis");
+                      m_chromeless ? ImGuiChildFlags_None
+                                   : ImGuiChildFlags_Borders |
+                                         ImGuiChildFlags_AlwaysUseWindowPadding);
+    if(!m_chromeless)
+    {
+        SectionTitle("Roofline Analysis");
+    }
     bool has_roofline =
         m_workload && !m_workload->roofline.ceiling_bandwidth.empty() &&
         !m_workload->roofline.ceiling_compute.empty() &&
@@ -1279,12 +1285,16 @@ Roofline::PlotHoverIdx()
                                 ImVec2(p2_pos.x - p1_pos.x, p2_pos.y - p1_pos.y);
                             ImVec2 point_to_mouse =
                                 ImVec2(mouse_pos.x - p1_pos.x, mouse_pos.y - p1_pos.y);
+                            float len_sq = line_direction.x * line_direction.x +
+                                           line_direction.y * line_direction.y;
+                            // Zero-length line: measure to p1 instead of dividing by 0.
                             float projection =
-                                std::clamp((point_to_mouse.x * line_direction.x +
-                                            point_to_mouse.y * line_direction.y) /
-                                               (line_direction.x * line_direction.x +
-                                                line_direction.y * line_direction.y),
-                                           0.0f, 1.0f);
+                                len_sq > 0.0f
+                                    ? std::clamp((point_to_mouse.x * line_direction.x +
+                                                  point_to_mouse.y * line_direction.y) /
+                                                     len_sq,
+                                                 0.0f, 1.0f)
+                                    : 0.0f;
                             ImVec2 closest_point =
                                 ImVec2(p1_pos.x + projection * line_direction.x,
                                        p1_pos.y + projection * line_direction.y);
@@ -1296,7 +1306,7 @@ Roofline::PlotHoverIdx()
                     }
                     case ItemModel::Type::Intensity:
                     {
-                        if(m_items[i].info.ceiling)
+                        if(m_items[i].info.intensity)
                         {
                             ImVec2 closest_point = ImPlot::PlotToPixels(
                                 ImPlotPoint(m_items[i].info.intensity->position.x,

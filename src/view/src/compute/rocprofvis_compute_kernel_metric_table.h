@@ -32,6 +32,11 @@ public:
     void HandleNewData();
     void SetQuery(const std::string& query);
     void SetExternalQuery(MetricId metric_id, const std::string& value_name);
+    // Stretch the card and table to the parent's height (a resizable pane). The
+    // pane's splitter then replaces the collapse toggle, which is hidden.
+    void SetFillParent(bool fill) { m_fill_parent = fill; }
+    // Skip the card and title, for a container that draws its own pane header.
+    void SetChromeless(bool chromeless) { m_chromeless = chromeless; }
 
     friend struct KernelMetricTableTestPeer;
 
@@ -98,6 +103,8 @@ private:
     bool                              m_allow_deselect;
     
     bool m_show_kernel_table;
+    bool m_fill_parent = false;
+    bool m_chromeless  = false;
 
     // Filter storage - vector aligned with column indices
     // Vector size = PERMANENT_COLUMN_COUNT + m_metrics_params.size()

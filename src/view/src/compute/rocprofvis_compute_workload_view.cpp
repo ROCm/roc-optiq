@@ -198,8 +198,9 @@ ComputeWorkloadView::RenderProfilingConfig(const WorkloadInfo& workload_info)
             const char* label = "Profiling Configuration Unavailable";
             RenderUnavailableMessage(label);
         }
-        ImGui::EndChild();
     }
+    // Must be called even when BeginChild returns false.
+    ImGui::EndChild();
 }
 
 }  // namespace View

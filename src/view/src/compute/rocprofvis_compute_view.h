@@ -14,6 +14,7 @@ namespace View
 {
 
 class ComputeSelection;
+class ComputeSummaryView;
 class PresetBrowser;
 struct WorkloadInfo;
 
@@ -44,6 +45,8 @@ private:
     void RenderToolbar();
     void RenderWorkloadSelection();
     void RenderPresets();
+    // Floating "Summary" window, toggled by View > Show Summary.
+    void RenderSummaryWindow();
     void QueueDatabaseErrorDialog(const std::string& file_path,
                                   const std::string& message);
     void ShowPendingDatabaseErrorDialog();
@@ -59,8 +62,9 @@ private:
     ErrorDialogState m_error_dialog_state;
     float            m_toolbar_available_width;
 
-    std::shared_ptr<ComputeSelection> m_compute_selection;
-    std::unique_ptr<PresetBrowser>    m_preset_browser;
+    std::shared_ptr<ComputeSelection>   m_compute_selection;
+    std::unique_ptr<PresetBrowser>      m_preset_browser;
+    std::shared_ptr<ComputeSummaryView> m_summary_view;
 
     std::shared_ptr<TabContainer> m_tab_container;
 

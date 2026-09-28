@@ -631,7 +631,9 @@ SettingsManager::SettingsManager()
         LogViewerSettings{ LOG_VIEWER_DEFAULT_LEVEL_MASK, true, false, false, false },
         AssistantSettings{}, false })
 , m_usersettings(m_usersettings_default)
-, m_appwindowsettings({ AppWindowSettings{ true, true, true, true, false } })
+, m_appwindowsettings({ AppWindowSettings{ true, true, true, true, false, true, true, true,
+                                           true, true, 0, { 0, 1, 2, 3 }, false, 0,
+                                           false } })
 , m_json_path(GetStandardConfigPath())
 {}
 
@@ -1183,6 +1185,27 @@ SettingsManager::SerializeAppWindowSettings(jt::Json& json)
     aw[JSON_KEY_SETTINGS_APP_WINDOW_SIDEBAR]   = m_appwindowsettings.show_sidebar;
     aw[JSON_KEY_SETTINGS_APP_WINDOW_HISTOGRAM] = m_appwindowsettings.show_histogram;
     aw[JSON_KEY_SETTINGS_APP_WINDOW_SUMMARY]   = m_appwindowsettings.show_summary;
+    aw[JSON_KEY_SETTINGS_APP_WINDOW_COMPUTE_KERNEL_LIST] =
+        m_appwindowsettings.show_compute_kernel_list;
+    aw[JSON_KEY_SETTINGS_APP_WINDOW_COMPUTE_LAYOUT_TEMPLATE] =
+        m_appwindowsettings.compute_layout_template;
+    for(int32_t i = 0; i < COMPUTE_LAYOUT_MAX_SLOTS; ++i)
+    {
+        aw[JSON_KEY_SETTINGS_APP_WINDOW_COMPUTE_LAYOUT_SLOTS][static_cast<size_t>(i)] =
+            m_appwindowsettings.compute_layout_slots[i];
+    }
+    aw[JSON_KEY_SETTINGS_APP_WINDOW_COMPUTE_MAXIMIZED] = m_appwindowsettings.compute_maximized;
+    aw[JSON_KEY_SETTINGS_APP_WINDOW_COMPUTE_MAXIMIZED_PANE] =
+        m_appwindowsettings.compute_maximized_pane;
+    aw[JSON_KEY_SETTINGS_APP_WINDOW_COMPUTE_KERNEL_LIST_TABLE] =
+        m_appwindowsettings.compute_kernel_list_table;
+    aw[JSON_KEY_SETTINGS_APP_WINDOW_COMPUTE_MEMORY_CHART] =
+        m_appwindowsettings.show_compute_memory_chart;
+    aw[JSON_KEY_SETTINGS_APP_WINDOW_COMPUTE_ROOFLINE] =
+        m_appwindowsettings.show_compute_roofline;
+    aw[JSON_KEY_SETTINGS_APP_WINDOW_COMPUTE_METRIC_TABLES] =
+        m_appwindowsettings.show_compute_metric_tables;
+    aw[JSON_KEY_SETTINGS_APP_WINDOW_COMPUTE_ISA] = m_appwindowsettings.show_compute_isa;
 }
 
 void
@@ -1204,6 +1227,48 @@ SettingsManager::DeserializeAppWindowSettings(jt::Json& json)
     m_appwindowsettings.show_summary =
         JsonUtils::GetBool(aw, JSON_KEY_SETTINGS_APP_WINDOW_SUMMARY,
                            m_appwindowsettings.show_summary);
+    m_appwindowsettings.show_compute_kernel_list =
+        JsonUtils::GetBool(aw, JSON_KEY_SETTINGS_APP_WINDOW_COMPUTE_KERNEL_LIST,
+                           m_appwindowsettings.show_compute_kernel_list);
+    m_appwindowsettings.compute_layout_template =
+        JsonUtils::GetInt(aw, JSON_KEY_SETTINGS_APP_WINDOW_COMPUTE_LAYOUT_TEMPLATE,
+                          m_appwindowsettings.compute_layout_template);
+    if(aw.contains(JSON_KEY_SETTINGS_APP_WINDOW_COMPUTE_LAYOUT_SLOTS) &&
+       aw[JSON_KEY_SETTINGS_APP_WINDOW_COMPUTE_LAYOUT_SLOTS].isArray())
+    {
+        std::vector<jt::Json>& slots =
+            aw[JSON_KEY_SETTINGS_APP_WINDOW_COMPUTE_LAYOUT_SLOTS].getArray();
+        for(size_t i = 0;
+            i < slots.size() && i < static_cast<size_t>(COMPUTE_LAYOUT_MAX_SLOTS); ++i)
+        {
+            if(slots[i].isLong())
+            {
+                m_appwindowsettings.compute_layout_slots[i] =
+                    static_cast<int32_t>(slots[i].getLong());
+            }
+        }
+    }
+    m_appwindowsettings.compute_maximized =
+        JsonUtils::GetBool(aw, JSON_KEY_SETTINGS_APP_WINDOW_COMPUTE_MAXIMIZED,
+                           m_appwindowsettings.compute_maximized);
+    m_appwindowsettings.compute_maximized_pane =
+        JsonUtils::GetInt(aw, JSON_KEY_SETTINGS_APP_WINDOW_COMPUTE_MAXIMIZED_PANE,
+                          m_appwindowsettings.compute_maximized_pane);
+    m_appwindowsettings.compute_kernel_list_table =
+        JsonUtils::GetBool(aw, JSON_KEY_SETTINGS_APP_WINDOW_COMPUTE_KERNEL_LIST_TABLE,
+                           m_appwindowsettings.compute_kernel_list_table);
+    m_appwindowsettings.show_compute_memory_chart =
+        JsonUtils::GetBool(aw, JSON_KEY_SETTINGS_APP_WINDOW_COMPUTE_MEMORY_CHART,
+                           m_appwindowsettings.show_compute_memory_chart);
+    m_appwindowsettings.show_compute_roofline =
+        JsonUtils::GetBool(aw, JSON_KEY_SETTINGS_APP_WINDOW_COMPUTE_ROOFLINE,
+                           m_appwindowsettings.show_compute_roofline);
+    m_appwindowsettings.show_compute_metric_tables =
+        JsonUtils::GetBool(aw, JSON_KEY_SETTINGS_APP_WINDOW_COMPUTE_METRIC_TABLES,
+                           m_appwindowsettings.show_compute_metric_tables);
+    m_appwindowsettings.show_compute_isa =
+        JsonUtils::GetBool(aw, JSON_KEY_SETTINGS_APP_WINDOW_COMPUTE_ISA,
+                           m_appwindowsettings.show_compute_isa);
 }
 
 }  // namespace View

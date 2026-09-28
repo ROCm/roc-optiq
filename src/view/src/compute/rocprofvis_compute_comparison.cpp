@@ -297,14 +297,17 @@ ComputeComparisonView::FetchMetrics()
                                                                 baseline_kernel_id))
         {
             m_data_provider.ComputeModel().ClearKernelMetricValues(m_client_id_baseline);
-            for(const AvailableMetrics::Category* category :
-                m_data_provider.ComputeModel()
-                    .GetWorkload(baseline_workload_id)
-                    ->available_metrics.ordered_categories)
+            const WorkloadInfo* baseline_workload =
+                m_data_provider.ComputeModel().GetWorkload(baseline_workload_id);
+            if(baseline_workload)
             {
-                for(const AvailableMetrics::Table* table : category->ordered_tables)
+                for(const AvailableMetrics::Category* category :
+                    baseline_workload->available_metrics.ordered_categories)
                 {
-                    metric_ids.push_back({ category->id, table->id, std::nullopt });
+                    for(const AvailableMetrics::Table* table : category->ordered_tables)
+                    {
+                        metric_ids.push_back({ category->id, table->id, std::nullopt });
+                    }
                 }
             }
             if(!metric_ids.empty())
@@ -330,14 +333,17 @@ ComputeComparisonView::FetchMetrics()
                                                                 m_target_kernel_id))
         {
             m_data_provider.ComputeModel().ClearKernelMetricValues(m_client_id_target);
-            for(const AvailableMetrics::Category* category :
-                m_data_provider.ComputeModel()
-                    .GetWorkload(m_target_workload_id)
-                    ->available_metrics.ordered_categories)
+            const WorkloadInfo* target_workload =
+                m_data_provider.ComputeModel().GetWorkload(m_target_workload_id);
+            if(target_workload)
             {
-                for(const AvailableMetrics::Table* table : category->ordered_tables)
+                for(const AvailableMetrics::Category* category :
+                    target_workload->available_metrics.ordered_categories)
                 {
-                    metric_ids.push_back({ category->id, table->id, std::nullopt });
+                    for(const AvailableMetrics::Table* table : category->ordered_tables)
+                    {
+                        metric_ids.push_back({ category->id, table->id, std::nullopt });
+                    }
                 }
             }
             if(!metric_ids.empty())
@@ -384,10 +390,14 @@ ComputeComparisonView::UpdateMetrics()
     {
         m_categories.clear();
         m_tab_container = std::make_unique<TabContainer>();
+        const WorkloadInfo* baseline_workload =
+            m_data_provider.ComputeModel().GetWorkload(workload_id);
+        if(!baseline_workload)
+        {
+            return;
+        }
         std::vector<const AvailableMetrics::Category*> baseline_categories =
-            m_data_provider.ComputeModel()
-                .GetWorkload(workload_id)
-                ->available_metrics.ordered_categories;
+            baseline_workload->available_metrics.ordered_categories;
         std::unordered_map<uint32_t, const AvailableMetrics::Entry*> row_entry;
         std::unordered_map<uint32_t, std::vector<Table::Value>>      row_value;
     // Go through our available metrics...

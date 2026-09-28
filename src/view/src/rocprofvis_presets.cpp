@@ -24,7 +24,7 @@ const constexpr char* PRESET_JSON_KEY_PRESETS    = "presets";
 const constexpr char* PRESET_JSON_KEY_COMPONENTS = "components";
 constexpr std::array<const char*, PresetManager::ComponentType::NumComponentTypes>
     PRESET_JSON_COMPONENT_TYPES = { "compute_comparison", "compute_tables",
-                                    "compute_pivot" };
+                                    "compute_pivot", "compute_layout" };
 
 PresetManager&
 PresetManager::GetInstance()

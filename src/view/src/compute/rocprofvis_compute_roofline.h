@@ -34,6 +34,8 @@ public:
 
     void SetWorkload(uint32_t id);
     void SetKernel(uint32_t id);
+    // Skip the card and title, for a container that draws its own pane header.
+    void SetChromeless(bool chromeless) { m_chromeless = chromeless; }
 
 private:
     enum MenusMode
@@ -119,6 +121,8 @@ private:
         m_available_intensities;
     std::vector<rocprofvis_controller_roofline_ceiling_bandwidth_type_t>
         m_available_bandwidths;
+
+    bool               m_chromeless = false;
 
     // User options...
     bool               m_show_menus;

@@ -25,6 +25,7 @@ public:
         ComputeComparison,
         ComputeTableView,
         ComputeKernelMetricTable,
+        ComputeKernelDetailsLayout,
         NumComponentTypes,
     };
 

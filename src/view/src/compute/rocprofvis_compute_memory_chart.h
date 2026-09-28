@@ -47,6 +47,17 @@ public:
 
     uint64_t GetClientId() const { return m_client_id; }
 
+    // Fit: scale the chart down (never above actual size) so all of it shows in
+    // the space it is given. Off: draw at actual size and scroll.
+    void SetFitToView(bool fit) { m_fit_to_view = fit; }
+    bool GetFitToView() const { return m_fit_to_view; }
+    // Auto-compact: when the space given would show too little of the chart at
+    // actual size, fit it (however small) as an overview instead. Overrides
+    // SetFitToView and never stretches.
+    void SetAutoCompact(bool enabled) { m_auto_compact = enabled; }
+    // Whether the last frame was drawn compact.
+    bool IsCompact() const { return m_is_compact; }
+
 private:
     // A fully computed arrow, ready to draw. Produced by BuildArrowRoutes so
     // labels can be de-overlapped before anything is drawn. Coordinates are in
@@ -85,7 +96,12 @@ private:
     // rather than every frame.
     void RebuildColumnGaps();
 
-    void ComputeLayout(float available_width);
+    // `extra_height` is added to the common column height, stretching every
+    // column (used to fill a pane taller than the chart's natural height).
+    void ComputeLayout(float available_width, float extra_height = 0.0f);
+    // Layout + arrow routing, returning the canvas size they cover.
+    void LayoutCanvas(float available_width, float extra_height,
+                      std::vector<ArrowRoute>& routes, float& canvas_w, float& canvas_h);
     void MeasureBlock(MemChartBlock& block) const;
     // Recursively assign geometry: `conn_left`/`conn_right` are the top-level
     // ancestor's box edges (passed unchanged into children) so arrows terminate
@@ -112,6 +128,10 @@ private:
     void ShowMetricTooltip(ImVec2 hover_min, ImVec2 hover_max,
                            const MemChartMetricRef& ref, bool show_description,
                            bool show_raw_value);
+    // Blocks and labels are laid out at actual size, then scaled into view about
+    // this frame's origin; hit tests map through the same transform.
+    ImVec2 ToScreen(ImVec2 unscaled) const;
+    bool   IsHoveringChartRect(ImVec2 unscaled_min, ImVec2 unscaled_max) const;
     void DrawTextWithTooltip(ImDrawList* draw_list, ImVec2 pos, uint32_t color,
                              const char* text, const MemChartMetricRef& ref,
                              bool show_description, bool show_raw_value);
@@ -120,6 +140,13 @@ private:
     std::shared_ptr<ComputeSelection> m_compute_selection;
 
     uint64_t m_client_id;
+
+    bool  m_fit_to_view   = false;
+    bool  m_auto_compact  = false;
+    bool  m_is_compact    = false;
+    float m_view_scale    = 1.0f;
+    float m_view_origin_x = 0.0f;
+    float m_view_origin_y = 0.0f;
 
     MemChartLayout m_layout;
 

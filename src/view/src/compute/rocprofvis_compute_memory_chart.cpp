@@ -36,6 +36,20 @@ namespace View
 // Filename of an optional runtime override dropped at <config-dir>/.
 static constexpr const char* OVERRIDE_FILE_NAME = "memory_chart.json";
 
+// Smallest scale fit-to-view shrinks to; below it text stops being legible, so
+// the chart scrolls instead.
+static constexpr float MIN_FIT_SCALE = 0.4f;
+// Compact (overview) mode fits however small the pane is; this only keeps the
+// scale positive.
+static constexpr float COMPACT_MIN_SCALE = 0.05f;
+// Auto-compact kicks in when actual size would show less than these shares of
+// the chart's width or height.
+static constexpr float AUTO_COMPACT_MIN_WIDTH_SHARE  = 0.6f;
+static constexpr float AUTO_COMPACT_MIN_HEIGHT_SHARE = 0.5f;
+// Kept free around a chart sized to its space (stretched or fitted), so float
+// rounding can never tip it or its parent into showing a scrollbar.
+static constexpr float FILL_HEIGHT_SLACK = 1.0f;
+
 // Layout constants.
 static constexpr float CHART_PADDING     = 20.0f;
 static constexpr float LEFT_MARGIN       = 60.0f;   // Lane for arrows entering column 0 from the left.
@@ -886,7 +900,7 @@ ComputeMemoryChartView::PositionBlock(MemChartBlock& block, float x, float y, fl
 }
 
 void
-ComputeMemoryChartView::ComputeLayout(float available_width)
+ComputeMemoryChartView::ComputeLayout(float available_width, float extra_height)
 {
     m_group_boxes.clear();
 
@@ -1022,6 +1036,7 @@ ComputeMemoryChartView::ComputeLayout(float available_width)
         }
         target_h = std::max(target_h, sum_h);
     }
+    target_h += std::max(extra_height, 0.0f);
     // No upper clamp: the chart scrolls, so let it grow to the tallest column's
     // need (clamping would re-compress columns and overlap the labels again).
 
@@ -1054,10 +1069,11 @@ ComputeMemoryChartView::ComputeLayout(float available_width)
 }
 
 void
-ComputeMemoryChartView::Render()
+ComputeMemoryChartView::LayoutCanvas(float available_width, float extra_height,
+                                     std::vector<ArrowRoute>& routes, float& canvas_w,
+                                     float& canvas_h)
 {
-    float available_width = ImGui::GetContentRegionAvail().x;
-    ComputeLayout(available_width);
+    ComputeLayout(available_width, extra_height);
 
     float max_right  = 0.0f;
     float max_bottom = 0.0f;
@@ -1074,7 +1090,6 @@ ComputeMemoryChartView::Render()
 
     // Build the arrow routes now so skip-lanes (below the blocks) contribute to
     // the canvas height.
-    std::vector<ArrowRoute> routes;
     BuildArrowRoutes(routes);
     ResolveLabelOverlaps(routes);
     for(const ArrowRoute& route : routes)
@@ -1086,11 +1101,52 @@ ComputeMemoryChartView::Render()
         max_bottom = std::max(max_bottom, route.label_y + route.label_h + CANVAS_BOTTOM_PAD);
     }
 
-    float canvas_w = max_right + CHART_PADDING;
-    float canvas_h = max_bottom + CHART_PADDING * 2.0f + LEGEND_HEIGHT;
+    canvas_w = max_right + CHART_PADDING;
+    canvas_h = max_bottom + CHART_PADDING * 2.0f + LEGEND_HEIGHT;
+}
+
+void
+ComputeMemoryChartView::Render()
+{
+    const ImVec2            avail = ImGui::GetContentRegionAvail();
+    std::vector<ArrowRoute> routes;
+    float                   canvas_w = 0.0f;
+    float                   canvas_h = 0.0f;
+    LayoutCanvas(avail.x, 0.0f, routes, canvas_w, canvas_h);
+
+    // Actual size: stretch the columns down to the space given instead of leaving
+    // it empty under the chart (a chart taller than that still scrolls). The
+    // extra height grows the canvas one-for-one, so one more pass fills it.
+    m_is_compact = m_auto_compact && canvas_w > 0.0f && canvas_h > 0.0f &&
+                   (avail.x < canvas_w * AUTO_COMPACT_MIN_WIDTH_SHARE ||
+                    avail.y < canvas_h * AUTO_COMPACT_MIN_HEIGHT_SHARE);
+    const bool  fit    = m_fit_to_view || m_is_compact;
+    const float fill_w = avail.x - FILL_HEIGHT_SLACK;
+    const float fill_h = avail.y - FILL_HEIGHT_SLACK;
+    if(!fit && fill_h > canvas_h)
+    {
+        LayoutCanvas(avail.x, fill_h - canvas_h, routes, canvas_w, canvas_h);
+    }
+
+    // Fit: shrink (never enlarge) so the whole chart shows in the space given,
+    // centred on whichever axis has room left over.
+    float scale = 1.0f;
+    if(fit && canvas_w > 0.0f && canvas_h > 0.0f && fill_w > 0.0f && fill_h > 0.0f)
+    {
+        scale = std::min(1.0f, std::min(fill_w / canvas_w, fill_h / canvas_h));
+        scale = std::max(scale, m_is_compact ? COMPACT_MIN_SCALE : MIN_FIT_SCALE);
+    }
+    const float view_w   = canvas_w * scale;
+    const float view_h   = canvas_h * scale;
+    const float offset_x = fit ? std::max(0.0f, (fill_w - view_w) * 0.5f) : 0.0f;
+    const float offset_y = fit ? std::max(0.0f, (fill_h - view_h) * 0.5f) : 0.0f;
+    if(offset_y > 0.0f)
+    {
+        ImGui::SetCursorPosY(ImGui::GetCursorPosY() + offset_y);
+    }
 
     ImGui::PushStyleColor(ImGuiCol_ChildBg, C().bg);
-    ImGui::BeginChild("MemoryChart", ImVec2(0, canvas_h), ImGuiChildFlags_None,
+    ImGui::BeginChild("MemoryChart", ImVec2(0, view_h), ImGuiChildFlags_None,
                       ImGuiWindowFlags_HorizontalScrollbar |
                           ImGuiWindowFlags_NoScrollWithMouse);
     ImGui::PopStyleColor(1);
@@ -1098,31 +1154,83 @@ ComputeMemoryChartView::Render()
     ImDrawList* draw_list       = ImGui::GetWindowDrawList();
     ImVec2      window_position = ImGui::GetCursorScreenPos();
     float       backdrop_w =
-        std::max(canvas_w, ImGui::GetContentRegionAvail().x + ImGui::GetScrollX());
+        std::max(offset_x + view_w, ImGui::GetContentRegionAvail().x + ImGui::GetScrollX());
     draw_list->AddRectFilled(window_position,
-                             {window_position.x + backdrop_w, window_position.y + canvas_h},
+                             {window_position.x + backdrop_w, window_position.y + view_h},
                              C().bg);
 
+    const ImVec2 origin(window_position.x + offset_x, window_position.y);
+    m_view_scale    = scale;
+    m_view_origin_x = origin.x;
+    m_view_origin_y = origin.y;
+
+    // Scaled: draw at actual size under a clip rect spanning the whole canvas (so
+    // text beyond the visible area is not culled before it is scaled into view),
+    // then scale the new vertices about the origin and restore the window clip.
+    const bool   scaled   = scale != 1.0f;
+    const ImVec2 clip_min = draw_list->GetClipRectMin();
+    const ImVec2 clip_max = draw_list->GetClipRectMax();
+    int          cmd_start = 0;
+    int          vtx_start = 0;
+    if(scaled)
+    {
+        draw_list->PushClipRect(origin, ImVec2(origin.x + canvas_w, origin.y + canvas_h),
+                                false);
+        cmd_start = draw_list->CmdBuffer.Size - 1;
+        vtx_start = draw_list->VtxBuffer.Size;
+    }
+
     // Arrows first, then group boxes (containers), then blocks on top.
-    DrawArrowRoutes(draw_list, window_position, routes);
+    DrawArrowRoutes(draw_list, origin, routes);
     for(const MemChartGroupBox& box : m_group_boxes)
     {
-        DrawGroupBox(draw_list, {window_position.x + box.x, window_position.y + box.y},
+        DrawGroupBox(draw_list, {origin.x + box.x, origin.y + box.y},
                      box.w, box.h, box.title.c_str());
     }
     for(const MemChartBlock& block : m_layout.blocks)
     {
-        DrawBlock(draw_list, window_position, block);
+        DrawBlock(draw_list, origin, block);
     }
 
-    DrawLegend(draw_list, window_position, canvas_h - CHART_PADDING - LEGEND_HEIGHT);
+    DrawLegend(draw_list, origin, canvas_h - CHART_PADDING - LEGEND_HEIGHT);
+
+    if(scaled)
+    {
+        for(int i = vtx_start; i < draw_list->VtxBuffer.Size; ++i)
+        {
+            ImDrawVert& vert = draw_list->VtxBuffer[i];
+            vert.pos         = ToScreen(vert.pos);
+        }
+        const ImVec4 window_clip(clip_min.x, clip_min.y, clip_max.x, clip_max.y);
+        for(int c = cmd_start; c < draw_list->CmdBuffer.Size; ++c)
+        {
+            draw_list->CmdBuffer[c].ClipRect = window_clip;
+        }
+        draw_list->PopClipRect();
+    }
 
     const float h_scrollbar_size =
         (ImGui::GetScrollMaxX() > 0.0f) ? ImGui::GetStyle().ScrollbarSize : 0.0f;
-    ImGui::SetCursorPos(ImVec2(canvas_w, canvas_h - 1.0f - h_scrollbar_size));
+    // Content extent: the 1x1 dummy ends exactly at the chart's right edge, so a
+    // chart that fits never gains a horizontal scrollbar.
+    ImGui::SetCursorPos(ImVec2(std::max(0.0f, offset_x + view_w - 1.0f),
+                               view_h - 1.0f - h_scrollbar_size));
     ImGui::Dummy(ImVec2(1, 1));
 
     ImGui::EndChild();
+}
+
+ImVec2
+ComputeMemoryChartView::ToScreen(ImVec2 unscaled) const
+{
+    return ImVec2(m_view_origin_x + (unscaled.x - m_view_origin_x) * m_view_scale,
+                  m_view_origin_y + (unscaled.y - m_view_origin_y) * m_view_scale);
+}
+
+bool
+ComputeMemoryChartView::IsHoveringChartRect(ImVec2 unscaled_min, ImVec2 unscaled_max) const
+{
+    return ImGui::IsMouseHoveringRect(ToScreen(unscaled_min), ToScreen(unscaled_max));
 }
 
 void
@@ -1174,7 +1282,7 @@ ComputeMemoryChartView::DrawLeaf(ImDrawList* draw_list, ImVec2 origin,
         ImVec2 row_max(block_x + block.w - ROW_INSET_X, cursor_y + ROW_HEIGHT - ROW_HOVER_INSET);
         if(ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows |
                                   ImGuiHoveredFlags_NoPopupHierarchy) &&
-           ImGui::IsMouseHoveringRect(row_min, row_max))
+           IsHoveringChartRect(row_min, row_max))
         {
             draw_list->AddRectFilled(row_min, row_max, ApplyAlpha(C().border_hot, ROW_HOVER_ALPHA),
                                      ROW_HOVER_ROUNDING);
@@ -1648,7 +1756,7 @@ ComputeMemoryChartView::ShowMetricTooltip(ImVec2 hover_min, ImVec2 hover_max,
                                           const MemChartMetricRef& ref,
                                           bool show_description, bool show_raw_value)
 {
-    if(!ImGui::IsMouseHoveringRect(hover_min, hover_max) ||
+    if(!IsHoveringChartRect(hover_min, hover_max) ||
        !ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows |
                                ImGuiHoveredFlags_NoPopupHierarchy))
         return;

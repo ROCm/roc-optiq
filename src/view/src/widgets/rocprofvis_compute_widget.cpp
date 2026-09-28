@@ -32,6 +32,27 @@ MetricTableBase::SetPinMetricCallback(std::function<void(MetricId)> callback)
 }
 
 void
+MetricTableBase::SetEmbedded(bool embedded)
+{
+    m_embedded   = embedded;
+    m_no_panel   = embedded;
+    m_hide_title = embedded;
+}
+
+void
+MetricTableBase::SetFillParent(bool fill)
+{
+    m_fill_parent = fill;
+}
+
+void
+MetricTableBase::SetChromeless(bool chromeless)
+{
+    m_no_panel   = chromeless;
+    m_hide_title = chromeless;
+}
+
+void
 MetricTableBase::Render()
 {
     SettingsManager& settings = SettingsManager::GetInstance();
@@ -45,9 +66,14 @@ MetricTableBase::Render()
         ImGui::PushStyleColor(ImGuiCol_Border, settings.GetColor(Colors::kBorderColor));
         ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, style.ChildRounding);
         const std::string panel_id = "##" + m_table_title + "_panel_";
+        ImGuiChildFlags panel_flags =
+            ImGuiChildFlags_Borders | ImGuiChildFlags_AlwaysUseWindowPadding;
+        if(!m_fill_parent)
+        {
+            panel_flags |= ImGuiChildFlags_AutoResizeY;
+        }
         ImGui::BeginChild(RocWidget::GenUniqueName(panel_id).c_str(), ImVec2(0, 0),
-                          ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Borders |
-                              ImGuiChildFlags_AlwaysUseWindowPadding);
+                          panel_flags);
     }
 
     auto pop_panel = [paint_panel]() {
@@ -59,7 +85,7 @@ MetricTableBase::Render()
         }
     };
 
-    if(!m_table_title.empty())
+    if(!m_table_title.empty() && !m_hide_title)
         SectionTitle(m_table_title.c_str());
 
     if(m_rows.empty())
@@ -85,10 +111,30 @@ MetricTableBase::Render()
     const float row_hover_height =
         ImGui::GetTextLineHeight() + style.CellPadding.y * 2.0f;
 
+    // Embedded: every row, no vertical scroll (the container scrolls). A table
+    // that keeps ScrollX is still a child window, where a height of 0 would fill
+    // the container, so it is sized to its rows plus the horizontal scrollbar.
+    // Fill: a height of 0 with ScrollY stretches the table to the remaining space.
+    ImGuiTableFlags table_flags = m_table_flags;
+    float           table_h     = GetTableHeight();
+    if(m_embedded)
+    {
+        table_flags &= ~ImGuiTableFlags_ScrollY;
+        table_h = 0.0f;
+        if(table_flags & ImGuiTableFlags_ScrollX)
+        {
+            table_h = style.ScrollbarSize +
+                      row_hover_height * static_cast<float>(m_rows.size() + 1);
+        }
+    }
+    else if(m_fill_parent)
+    {
+        table_h = 0.0f;
+    }
     const std::string table_id   = "##" + m_table_title + "_table";
-    const ImVec2      table_size = { 0, GetTableHeight() };
+    const ImVec2      table_size = { 0, table_h };
     if(ImGui::BeginTable(RocWidget::GenUniqueName(table_id).c_str(), num_columns,
-                         m_table_flags, table_size))
+                         table_flags, table_size))
     {
         ImGui::TableSetupScrollFreeze(m_freezed_columns, m_freezed_rows);
 

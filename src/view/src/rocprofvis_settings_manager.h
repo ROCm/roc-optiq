@@ -125,6 +125,9 @@ typedef struct ProfilerSettings
     std::string last_ssh_connection_id;
 } ProfilerSettings;
 
+// Most boxes a compute Kernel Details layout template has.
+constexpr int32_t COMPUTE_LAYOUT_MAX_SLOTS = 4;
+
 typedef struct AppWindowSettings
 {
     bool show_toolbar;
@@ -132,6 +135,19 @@ typedef struct AppWindowSettings
     bool show_sidebar;
     bool show_histogram;
     bool show_summary;
+    // Compute profiler "Kernel Details" layout. Template and pane values are
+    // ComputeLayoutTemplate / ComputePane (rocprofvis_compute_kernel_details.h);
+    // all-zero / in-order values are the default arrangement.
+    bool    show_compute_kernel_list;
+    bool    show_compute_memory_chart;   // Mirrors whether the pane is in a box.
+    bool    show_compute_roofline;
+    bool    show_compute_metric_tables;
+    bool    show_compute_isa;
+    int32_t compute_layout_template;
+    int32_t compute_layout_slots[COMPUTE_LAYOUT_MAX_SLOTS];  // Pane per box; -1 = empty.
+    bool    compute_maximized;           // compute_maximized_pane fills the tab.
+    int32_t compute_maximized_pane;
+    bool    compute_kernel_list_table;   // Kernel rail shows the full metric table.
 } AppWindowSettings;
 
 enum class Colors
@@ -315,6 +331,23 @@ constexpr const char* JSON_KEY_SETTINGS_APP_WINDOW_DETAILS_PANEL = "show_details
 constexpr const char* JSON_KEY_SETTINGS_APP_WINDOW_SIDEBAR       = "show_sidebar";
 constexpr const char* JSON_KEY_SETTINGS_APP_WINDOW_HISTOGRAM     = "show_histogram";
 constexpr const char* JSON_KEY_SETTINGS_APP_WINDOW_SUMMARY       = "show_summary";
+constexpr const char* JSON_KEY_SETTINGS_APP_WINDOW_COMPUTE_KERNEL_LIST =
+    "show_compute_kernel_list";
+constexpr const char* JSON_KEY_SETTINGS_APP_WINDOW_COMPUTE_LAYOUT_TEMPLATE =
+    "compute_layout_template";
+constexpr const char* JSON_KEY_SETTINGS_APP_WINDOW_COMPUTE_LAYOUT_SLOTS =
+    "compute_layout_slots";
+constexpr const char* JSON_KEY_SETTINGS_APP_WINDOW_COMPUTE_MAXIMIZED = "compute_maximized";
+constexpr const char* JSON_KEY_SETTINGS_APP_WINDOW_COMPUTE_MAXIMIZED_PANE =
+    "compute_maximized_pane";
+constexpr const char* JSON_KEY_SETTINGS_APP_WINDOW_COMPUTE_KERNEL_LIST_TABLE =
+    "compute_kernel_list_table";
+constexpr const char* JSON_KEY_SETTINGS_APP_WINDOW_COMPUTE_MEMORY_CHART =
+    "show_compute_memory_chart";
+constexpr const char* JSON_KEY_SETTINGS_APP_WINDOW_COMPUTE_ROOFLINE = "show_compute_roofline";
+constexpr const char* JSON_KEY_SETTINGS_APP_WINDOW_COMPUTE_METRIC_TABLES =
+    "show_compute_metric_tables";
+constexpr const char* JSON_KEY_SETTINGS_APP_WINDOW_COMPUTE_ISA = "show_compute_isa";
 
 constexpr const char* JSON_KEY_SETTINGS_CATEGORY_ASSISTANT = "assistant";
 constexpr const char* JSON_KEY_SETTINGS_ASSISTANT_ENDPOINT_URL = "endpoint_url";

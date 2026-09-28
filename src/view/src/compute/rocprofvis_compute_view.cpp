@@ -7,7 +7,6 @@
 #include "rocprofvis_compute_kernel_details.h"
 #include "rocprofvis_compute_selection.h"
 #include "rocprofvis_compute_summary.h"
-#include "rocprofvis_compute_table_view.h"
 #include "rocprofvis_presets.h"
 #ifdef ROCPROFVIS_DEVELOPER_MODE
 #    include "rocprofvis_compute_tester.h"
@@ -19,7 +18,6 @@
 #include "rocprofvis_settings_manager.h"
 #include "widgets/rocprofvis_gui_helpers.h"
 #include "widgets/rocprofvis_notification_manager.h"
-#include "rocprofvis_compute_isa_view.h"
 
 #include "spdlog/spdlog.h"
 #include <algorithm>
@@ -28,6 +26,11 @@ namespace RocProfVis
 {
 namespace View
 {
+
+// First-open placement of the Summary window, relative to the main viewport's
+// work area (matches the system-trace summary's defaults).
+constexpr ImVec2 SUMMARY_WINDOW_RELATIVE_POS  = ImVec2(0.1f, 0.2f);
+constexpr float  SUMMARY_WINDOW_RELATIVE_SIZE = 0.8f;
 
 constexpr const char* INVALID_COMPUTE_DATABASE_MESSAGE =
     "The file could not be loaded as a compatible compute profiling "
@@ -169,6 +172,10 @@ ComputeView::Update()
         {
             m_tab_container->Update();
         }
+        if(m_summary_view)
+        {
+            m_summary_view->Update();
+        }
     }
 
     ShowPendingDatabaseErrorDialog();
@@ -180,6 +187,7 @@ ComputeView::CreateView()
     m_compute_selection.reset();
     m_preset_browser.reset();
     m_tab_container.reset();
+    m_summary_view.reset();
 
     const WorkloadInfo* initial_workload = ValidateDatabase();
     if(!initial_workload)
@@ -190,6 +198,8 @@ ComputeView::CreateView()
     m_compute_selection = std::make_shared<ComputeSelection>(m_data_provider);
     m_compute_selection->SelectWorkload(initial_workload->id);
     m_preset_browser = std::make_unique<PresetBrowser>();
+    m_summary_view =
+        std::make_shared<ComputeSummaryView>(m_data_provider, m_compute_selection);
     CreateTabContainer();
 }
 
@@ -237,25 +247,19 @@ ComputeView::CreateTabContainer()
     const std::vector<const WorkloadInfo*>& workloads =
         m_data_provider.ComputeModel().GetWorkloadList();
     const bool database_has_metrics   = HasAvailableMetrics(workloads);
+    const bool database_has_isa_lines = HasIsaLines(workloads);
 
+    // Summary lives in its own window (RenderSummaryWindow); metric tables and
+    // ISA are panes of Kernel Details.
     m_tab_container = std::make_shared<TabContainer>();
-    m_tab_container->AddTab(
-        ComputeSummaryView::CreateTabItem(m_data_provider, m_compute_selection));
-    m_tab_container->AddTab(
-        ComputeKernelDetailsView::CreateTabItem(m_data_provider,
-                                                m_compute_selection));
-
-    m_tab_container->AddTab(ComputeTableView::CreateTabItem(
-        m_data_provider, m_compute_selection, database_has_metrics));
+    m_tab_container->AddTab(ComputeKernelDetailsView::CreateTabItem(
+        m_data_provider, m_compute_selection, database_has_metrics, database_has_isa_lines));
     m_tab_container->AddTab(ComputeComparisonView::CreateTabItem(
         m_data_provider, m_compute_selection, database_has_metrics));
     m_tab_container->AddTab(
         ComputeWorkloadView::CreateTabItem(m_data_provider, m_compute_selection));
 
 #ifdef ROCPROFVIS_DEVELOPER_MODE
-    const bool database_has_isa_lines = HasIsaLines(workloads);
-    m_tab_container->AddTab(
-        ComputeIsaView::CreateTabItem(m_data_provider, database_has_isa_lines));
     m_tab_container->AddTab(
         ComputeTester::CreateTabItem(m_data_provider, m_compute_selection));
 #endif
@@ -269,6 +273,7 @@ ComputeView::DestroyView()
     m_error_dialog_state = ErrorDialogState::kNone;
     m_popup_info         = {};
     m_tab_container.reset();
+    m_summary_view.reset();
     m_compute_selection.reset();
     m_preset_browser.reset();
 }
@@ -301,7 +306,35 @@ ComputeView::Render()
         {
             m_tab_container->Render();
         }
+        RenderSummaryWindow();
     }
+}
+
+void
+ComputeView::RenderSummaryWindow()
+{
+    AppWindowSettings& app_settings = m_settings_manager.GetAppWindowSettings();
+    if(!m_summary_view || !app_settings.show_summary)
+    {
+        return;
+    }
+
+    const ImGuiViewport* viewport = ImGui::GetMainViewport();
+    ImGui::SetNextWindowPos(viewport->WorkPos +
+                                viewport->WorkSize * SUMMARY_WINDOW_RELATIVE_POS,
+                            ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowSize(viewport->WorkSize * SUMMARY_WINDOW_RELATIVE_SIZE,
+                             ImGuiCond_FirstUseEver);
+    // Titled "Summary" like the system-trace one; the "###" id gives each compute
+    // project its own window placement.
+    const std::string title = "Summary###" + m_widget_name + "_summary";
+    if(ImGui::Begin(title.c_str(), &app_settings.show_summary,
+                    ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoSavedSettings |
+                        ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse))
+    {
+        m_summary_view->Render();
+    }
+    ImGui::End();
 }
 
 void

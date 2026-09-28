@@ -276,6 +276,32 @@ struct ShowSummaryGuard
     }
 };
 
+// Puts every Kernel Details panel in a box (2 x 2 grid, not maximized) and the
+// kernel rail in table mode for the test's lifetime, then restores the user's
+// layout. Panels outside a box are not rendered, so their widgets would never
+// submit the ImGui windows/items the compute tests look for.
+struct ComputePanelsGuard
+{
+    AppWindowSettings prev;
+    ComputePanelsGuard()
+        : prev(SettingsManager::GetInstance().GetAppWindowSettings())
+    {
+        AppWindowSettings& s        = SettingsManager::GetInstance().GetAppWindowSettings();
+        s.show_compute_kernel_list  = true;
+        s.compute_kernel_list_table = true;
+        s.compute_layout_template   = static_cast<int32_t>(ComputeLayoutTemplate::kGrid);
+        for(int32_t slot = 0; slot < COMPUTE_LAYOUT_MAX_SLOTS; ++slot)
+        {
+            s.compute_layout_slots[slot] = slot;
+        }
+        s.compute_maximized = false;
+    }
+    ~ComputePanelsGuard()
+    {
+        SettingsManager::GetInstance().GetAppWindowSettings() = prev;
+    }
+};
+
 // Restores the tab set and active tab that existed when constructed, so a test
 // that opens extra dbs (sys_shared_db_open_dedups_and_switches) doesn't leave
 // stray tabs and a changed current project for the next test. The kTabClosed
@@ -843,27 +869,28 @@ void RegisterAppTests(ImGuiTestEngine* e)
         IM_CHECK(tc != nullptr);
         if (tc == nullptr) return;
 
-        const std::vector<const TabItem*> tabs = tc->GetTabs();
-        const TabItem*    table_tab = nullptr;
-        ComputeTableView* tbl       = nullptr;
-        for (const TabItem* tab : tabs)
+        // Metric tables are a pane of the Kernel Details tab.
+        ComputeKernelDetailsView* kd = nullptr;
+        for (const TabItem* tab : tc->GetTabs())
         {
-            if (tab->m_id == ComputeTableView::TAB_ID)
+            if (tab && tab->m_id == ComputeKernelDetailsView::TAB_ID)
             {
-                table_tab = tab;
-                tbl       = dynamic_cast<ComputeTableView*>(tab->m_widget.get());
+                kd = dynamic_cast<ComputeKernelDetailsView*>(tab->m_widget.get());
                 break;
             }
         }
-        if (tbl == nullptr)
+        if (kd == nullptr)
         {
-            ctx->LogWarning("SKIP: no Table View tab in this build");
+            ctx->LogWarning("SKIP: no Kernel Details tab in this build");
             return;
         }
-        if (!table_tab->m_enabled)
+        ComputeTableView* tbl = ComputeKernelDetailsViewTestPeer{*kd}.TableViewPtr();
+        IM_CHECK(tbl != nullptr);
+        if (tbl == nullptr) return;
+        ComputeTableViewTestPeer peer{*tbl};
+        if (!peer.HasAvailableMetrics())
         {
-            ctx->LogWarning(
-                "SKIP: Table View tab is disabled because the database has no metrics");
+            ctx->LogWarning("SKIP: the database has no metric tables");
             return;
         }
 
@@ -883,28 +910,53 @@ void RegisterAppTests(ImGuiTestEngine* e)
             return;
         }
 
-        tc->SetActiveTab(ComputeTableView::TAB_ID);
+        // Tables are hidden until turned on; show the workload's first one so its
+        // rows (and pin checkboxes) render. The guards restore the shown-table and
+        // pane settings on every exit, since IM_CHECK returns early on failure.
+        const WorkloadInfo* info = cv->GetDataProvider()->ComputeModel().GetWorkload(workload);
+        IM_CHECK(info != nullptr);
+        if (info == nullptr) return;
+        if (info->available_metrics.ordered_categories.empty() ||
+            info->available_metrics.ordered_categories[0]->ordered_tables.empty())
+        {
+            ctx->LogWarning("SKIP: workload has no metric tables");
+            return;
+        }
+        const AvailableMetrics::Category* first_category =
+            info->available_metrics.ordered_categories[0];
+        const uint64_t table_key =
+            MetricId::GetTableKey(first_category->id, first_category->ordered_tables[0]->id);
+        struct ShownTableGuard
+        {
+            ComputeTableViewTestPeer& peer;
+            uint64_t                  key;
+            bool                      prev;
+            ~ShownTableGuard() { peer.ShowTable(key, prev); }
+        } shown_table_guard{ peer, table_key, peer.IsTableShown(table_key) };
+        ComputePanelsGuard panels_guard;
+        peer.ShowTable(table_key, true);
+
+        tc->SetActiveTab(ComputeKernelDetailsView::TAB_ID);
         ctx->Yield(3);
         const TabItem* active_tab = tc->GetActiveTab();
         IM_CHECK(active_tab != nullptr);
         if (active_tab == nullptr) return;
-        IM_CHECK(active_tab->m_id == ComputeTableView::TAB_ID);
-        if (active_tab->m_id != ComputeTableView::TAB_ID) return;
-        ComputeTableViewTestPeer peer{*tbl};
+        IM_CHECK(active_tab->m_id == ComputeKernelDetailsView::TAB_ID);
+        if (active_tab->m_id != ComputeKernelDetailsView::TAB_ID) return;
         for (int i = 0; i < 200 && (peer.FetchPending() || peer.TableWidgetCount() == 0); i++)
             ctx->Yield(2);
         IM_CHECK(peer.TableWidgetCount() > 0);
         if (peer.TableWidgetCount() == 0) return;
+        ctx->Yield(3);
 
-        // Metric tables sit in a nested child window the "//Main Window/**/"
-        // wildcard can't reach; grab the innermost "_table" one.
+        // Shown tables render embedded (no window of their own) inside the pane's
+        // "metric_tables_scroll" child, which "//Main Window/**/" can't reach.
         auto find_table_window = [&]() -> ImGuiWindow*
         {
             ImGuiWindow* found = nullptr;
             for (ImGuiWindow* w : ImGui::GetCurrentContext()->Windows)
-                if (w->WasActive && strstr(w->Name, "_table") &&
-                    strstr(w->Name, "TabContainer"))
-                    found = w;  // keep last = deepest
+                if (w->WasActive && strstr(w->Name, "metric_tables_scroll"))
+                    found = w;
             return found;
         };
         ImGuiWindow* table_win = find_table_window();
@@ -1636,6 +1688,7 @@ void RegisterAppTests(ImGuiTestEngine* e)
     {
         ComputeView* cv = GetComputeViewOrSkip(ctx);
         if (!cv) return;
+        ComputePanelsGuard panels_guard;
         TabContainer* tc = ComputeViewTestPeer{*cv}.TabContainerPtr();
         IM_CHECK(tc != nullptr);
         if (tc == nullptr) return;

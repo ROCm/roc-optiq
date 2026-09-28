@@ -54,8 +54,3 @@ if(MSVC AND Python3_LIBRARY_RELEASE)
     endif()
 endif()
 
-# Expose the Python prefix so tests can put python3xx.dll on PATH.
-set(ROCPROFVIS_PYTHON3_RUNTIME_LIBRARY_DIRS "${Python3_RUNTIME_LIBRARY_DIRS}"
-    CACHE INTERNAL "Python runtime dirs for scripting tests")
-set(ROCPROFVIS_PYTHON3_LIBRARIES "${Python3_LIBRARIES}"
-    CACHE INTERNAL "Python libraries for scripting tests")

@@ -832,7 +832,7 @@ DrawInternalBuildBanner(const char* text /*= "Internal Build"*/)
     }
 
     dl->AddConvexPolyFilled(quad, 4, col_fill);
-    dl->AddPolyline(quad, 4, col_border, true, 1.0f);
+    dl->AddPolyline(quad, 4, col_border, 1.0f, ImDrawFlags_Closed);
 
     // Add text at unrotated local position (centered), then rotate vertices
     ImVec2 text_local_pos(-ts.x * 0.5f, -ts.y * 0.5f);

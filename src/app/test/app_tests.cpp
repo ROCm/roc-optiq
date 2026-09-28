@@ -65,6 +65,16 @@ namespace
         return cv;
     }
 
+// SetRef(ImGuiWindow*) strcpy's the window's full path into the fixed
+// 256-byte ImGuiTestContext::RefStr. Nested child windows exceed that, and
+// glibc's fortified strcpy aborts the process. Referencing by ID resolves the
+// same window without copying its name.
+void SetRefWindow(ImGuiTestContext* ctx, ImGuiWindow* window)
+{
+    IM_CHECK(window != nullptr);
+    ctx->SetRef(ImGuiTestRef(window->ID));
+}
+
 // Flame-graph event bars are raw draw_list rects registered with the Test
 // Engine via IMGUI_TEST_ENGINE_ITEM_ADD under the track's "FV" child window.
 // These helpers gather that window's bars and pick reliably clickable targets
@@ -221,7 +231,7 @@ ImGuiWindow* OpenTrackGearMenu(ImGuiTestContext* ctx, unsigned int fv_id)
 // Returns false if no gathered item matches.
 bool ClickGearMenuItem(ImGuiTestContext* ctx, ImGuiWindow* menu, const char* label)
 {
-    ctx->SetRef(menu);
+    SetRefWindow(ctx, menu);
     ImGuiTestItemList items;
     ctx->GatherItems(&items, "");
     for(int i = 0; i < items.GetSize(); i++)
@@ -750,15 +760,21 @@ void RegisterAppTests(ImGuiTestEngine* e)
         }
 
         const std::vector<const TabItem*> tabs = tc->GetTabs();
-        ComputeComparisonView* comp = nullptr;
+        ComparisonTable* comp = nullptr;
         std::string            comp_label;
         for (const TabItem* tab : tabs)
         {
             if (tab->m_id == ComputeComparisonView::TAB_ID)
             {
-                comp       = dynamic_cast<ComputeComparisonView*>(tab->m_widget.get());
-                comp_label = tab->m_label;
-                break;
+                ComputeComparisonView* view =
+                    dynamic_cast<ComputeComparisonView*>(tab->m_widget.get());
+                if (view)
+                {
+                    ComputeComparisonViewTestPeer peer{*view};
+                    comp = peer.ComparisonTablePtr();
+                    comp_label = tab->m_label;
+                    break;
+                }               
             }
         }
         if (comp == nullptr)
@@ -778,7 +794,7 @@ void RegisterAppTests(ImGuiTestEngine* e)
         ctx->ItemClick(("//Main Window/**/" + comp_label).c_str());
         ctx->Yield(3);
 
-        ComputeComparisonViewTestPeer peer{*comp};
+        ComputeComparisonTableTestPeer peer{*comp};
 
         // The toolbar combos live in a nested child window the "//Main Window/**/"
         // wildcard can't reach. Find it by name fragment, click relative to it, and
@@ -789,14 +805,20 @@ void RegisterAppTests(ImGuiTestEngine* e)
             for (ImGuiWindow* w : g->Windows)
             {
                 if (w->WasActive && strstr(w->Name, "TabContainer") &&
-                    strstr(w->Name, "/toolbar_"))
+                    strstr(w->Name, "/compare_target_toolbar_"))
                 {
-                    ctx->SetRef(w);
+                    SetRefWindow(ctx, w);
                     return true;
                 }
             }
             return false;
         };
+
+        // The tab opens on the Roofline view; the metric tables sit behind the
+        // Metrics toggle.
+        IM_CHECK(set_ref_to_toolbar());
+        ctx->ItemClick("Metrics");
+        ctx->Yield(2);
 
         // Pick the target workload first; it enables the kernel combo.
         IM_CHECK(set_ref_to_toolbar());
@@ -811,8 +833,7 @@ void RegisterAppTests(ImGuiTestEngine* e)
         }
         ctx->Yield(2);
 
-        // Index into the target workload's kernels (not baseline's): that combo's
-        // order is the gathered-item order we click by index below.
+        // Choose a kernel from the target workload, not the baseline workload.
         const uint32_t target_workload = peer.TargetWorkloadId();
         std::vector<const KernelInfo*> kernels =
             cv->GetDataProvider()->ComputeModel().GetKernelInfoList(target_workload);
@@ -835,11 +856,15 @@ void RegisterAppTests(ImGuiTestEngine* e)
         ctx->ItemClick("##target_kernels");
         ctx->Yield(1);
         {
-            ImGuiTestItemList items;
-            ctx->GatherItems(&items, "//$FOCUSED");
-            IM_CHECK(target_idx < items.GetSize());
-            if (target_idx >= items.GetSize()) return;
-            ctx->ItemClick(items[target_idx]->ID);
+            ImGuiWindow* popup = ImGui::GetCurrentContext()->NavWindow;
+            IM_CHECK(popup != nullptr);
+            if (popup == nullptr) return;
+
+            // PushID(kernel_id) + Selectable("") uses this ID. GatherItems also
+            // includes decorative ElidedText children, so its index is not a kernel index.
+            const ImGuiID selectable_id =
+                popup->GetID(static_cast<int>(kernels[target_idx]->id));
+            ctx->ItemClick(selectable_id);
         }
         ctx->Yield(2);
         ctx->SetRef("//Main Window");
@@ -967,7 +992,7 @@ void RegisterAppTests(ImGuiTestEngine* e)
         // followed by the metric-id cell (label like "0.1.3:Duration"). So the pin
         // control is the empty-label item just before a cell whose label starts with
         // a digit and contains a dot.
-        ctx->SetRef(table_win);
+        SetRefWindow(ctx, table_win);
         ImGuiTestItemList items;
         ctx->GatherItems(&items, "");
         ImGuiID pin_checkbox = 0;
@@ -2503,7 +2528,7 @@ void RegisterAppTests(ImGuiTestEngine* e)
         ImGuiWindow* sidebar = FindSidebarWindow(ctx);
         if (sidebar == nullptr) restore();
         IM_CHECK(sidebar != nullptr);
-        ctx->SetRef(sidebar);
+        SetRefWindow(ctx, sidebar);
         ImGuiTestItemList sidebar_items;
         ctx->GatherItems(&sidebar_items, "");
 
@@ -2646,7 +2671,7 @@ void RegisterAppTests(ImGuiTestEngine* e)
         ImGuiWindow* sidebar = FindSidebarWindow(ctx);
         if (sidebar == nullptr) restore();
         IM_CHECK(sidebar != nullptr);
-        ctx->SetRef(sidebar);
+        SetRefWindow(ctx, sidebar);
         ImGuiTestItemList sidebar_items;
         ctx->GatherItems(&sidebar_items, "");
 

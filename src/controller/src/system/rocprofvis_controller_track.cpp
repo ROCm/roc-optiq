@@ -509,10 +509,12 @@ rocprofvis_result_t Track::FetchFromDataModel(double start, double end, Future* 
     const fetch_range_t fetch_range = CalculateFetchRange(start, end);
     constexpr uint32_t thread_max_events = 1000000;
     constexpr uint32_t max_threads_per_range = 2;
+    // Not gated on GetNumberOfEventsForTimeRange()==0: the per-bucket event-density
+    // histogram it reads (m_track_params->histogram) is only ever populated by
+    // BuildHistogram(), which is currently disabled, so the density is always 0 and
+    // this used to skip every fetch as if the range had no events.
     uint32_t num_events_per_range =
         GetNumberOfEventsForTimeRange(fetch_range.start, fetch_range.end);
-    if (num_events_per_range == 0 && kRocProfVisDmPmcTrack!=dm_track_type)
-        return kRocProfVisResultSuccess;
     int num_threads = (num_events_per_range + thread_max_events) / thread_max_events;
     if (num_threads > max_threads_per_range)
         num_threads = max_threads_per_range;

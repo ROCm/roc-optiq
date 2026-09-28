@@ -5,6 +5,14 @@
 
 #include "rocprofvis_db_profile.h"
 #include "rocprofvis_db_query_factory.h"
+#include <functional>
+
+#ifdef ROCPROFVIS_PROFILER_HUB_ENABLED
+namespace optiq
+{
+class TraceContext;
+}
+#endif
 
 namespace RocProfVis
 {
@@ -87,6 +95,23 @@ public:
 
     // class destructor, not really required, unless declared as virtual
     ~RocprofDatabase()override{};
+
+#ifdef ROCPROFVIS_PROFILER_HUB_ENABLED
+    // Non-owning; caller (ProfilerHubDatabase) owns the real ph_ctx_ and must
+    // reset this back to nullptr before it destroys the context.
+    void SetProfilerHubContext(optiq::TraceContext* ctx) { m_ph_ctx = ctx; }
+
+    // Lets ProfilerHubDatabase (the sibling decorator wrapping this instance)
+    // record a legacy_track_id -> ph_track_id mapping directly, for tracks
+    // built straight from PH data (bypassing SQL) - needed because
+    // FuncAddTrack's own interception (TryMapTrack-style matching) can't
+    // find these by tid/name, so it would otherwise leave them unmapped.
+    void SetPhTrackIdMapCallback(std::function<void(uint32_t, uint32_t)> cb)
+    {
+        m_ph_premap_track = std::move(cb);
+    }
+#endif
+
     // worker method to read trace metadata
     // @param object - future object providing asynchronous execution mechanism 
     // @return status of operation
@@ -142,6 +167,11 @@ protected:
     std::string GetLevelSchemaHashStr();
 
 private:
+
+#ifdef ROCPROFVIS_PROFILER_HUB_ENABLED
+    optiq::TraceContext* m_ph_ctx = nullptr;
+    std::function<void(uint32_t, uint32_t)> m_ph_premap_track;
+#endif
 
     // ------------------------------SQL query callbacks-----------------------------------
     // @param data - pointer to callback caller argument

@@ -12,7 +12,7 @@ target_include_directories(optiq_interface
         ${PROFILER_HUB_PREBUILT_DIR}/include/profiler-hub
 )
 
-target_link_libraries(optiq_interface PUBLIC profiler-hub::profiler-hub)
+target_link_libraries(optiq_interface PUBLIC profiler-hub::profiler-hub PRIVATE spdlog::spdlog)
 
 target_link_options(optiq_interface INTERFACE
     "-Wl,--disable-new-dtags,-rpath,${PROFILER_HUB_PREBUILT_DIR}/lib")

@@ -849,7 +849,6 @@ QueryManager::ExecuteQueryForAllTracksAsync(
 
         for (uint32_t j = 0; j < split_count; j++)
         {
-            futures.push_back((Future*)rocprofvis_db_future_alloc(nullptr));
             std::string async_query = func_prepare(TrackPropertiesAt(i), prefix);
             async_query += std::to_string(i);
             async_query += " AS _track_id_ ";
@@ -857,8 +856,12 @@ QueryManager::ExecuteQueryForAllTracksAsync(
             if (BuildTrackQuery(i, qtype, async_query, split_count, j) !=
                 kRocProfVisDmResultSuccess)
             {
+                // Do not allocate/enqueue a Future for a track whose query
+                // failed to build - it would never get a worker assigned,
+                // so the wait loop below would block on it forever.
                 continue;
             }
+            futures.push_back((Future*)rocprofvis_db_future_alloc(nullptr));
             async_query += suffix;
             futures.back()->SetAsyncQuery(async_query);
 

@@ -94,9 +94,7 @@ private:
 
     void BuildPhCandidateMaps();
 
-    bool TryMapTrack(rocprofvis_dm_track_params_t* track);
-
-    void WidenTrackTimeBounds(rocprofvis_dm_track_params_t* track, uint32_t node);
+    bool MapLegacyTrackToPhTrack(rocprofvis_dm_track_params_t* track);
 
     uint64_t AbsoluteTimeOffset(rocprofvis_dm_track_id_t legacy_track_id);
 
@@ -104,11 +102,10 @@ private:
                                                        rocprofvis_dm_track_params_t* params);
 
     std::unordered_map<uint32_t, std::vector<ph_track_t>> by_tid_;
+    std::unordered_map<uint32_t, std::vector<ph_track_t>> by_tid_sample_;
     std::unordered_map<uint32_t, std::vector<ph_track_t>> by_agent_;
     std::unordered_map<uint64_t, std::vector<ph_track_t>> by_agent_queue_;
     std::unordered_map<uint32_t, std::vector<ph_track_t>> by_stream_;
-    uint32_t                                              mapped_count_   = 0;
-    uint32_t                                              unmapped_count_ = 0;
 
     rocprofvis_dm_result_t ReadTraceSliceViaPH(rocprofvis_dm_timestamp_t start, rocprofvis_dm_timestamp_t end,
                                                 rocprofvis_dm_hashed_timestamp_tag_t tag,

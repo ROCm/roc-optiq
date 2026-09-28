@@ -228,6 +228,8 @@ TimelineModel::UpdateHistogram(const std::vector<TrackItem*>& tracks)
 void
 TimelineModel::NormalizeHistogram()
 {
+    if(m_histogram.empty()) return;
+
     // Normalize histogram to [0, 1]
     double max_value = *std::max_element(m_histogram.begin(), m_histogram.end());
     if(max_value > 0.0)

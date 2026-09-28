@@ -81,7 +81,18 @@ NameHintMatches(const std::string& candidate_name, const std::string& name_hint)
     return true;
 }
 
+uint32_t
+ParseTrailingNumber(const std::string& s)
+{
+    size_t end   = s.size();
+    size_t begin = end;
+    while(begin > 0 && std::isdigit(static_cast<unsigned char>(s[begin - 1])))
+        --begin;
+    if(begin == end) return 0;
+    return static_cast<uint32_t>(std::stoul(s.substr(begin, end - begin)));
 }
+
+}  // namespace
 
 ProfilerHubDatabase::ProfilerHubDatabase(rocprofvis_db_filename_t path)
 : Database(path)
@@ -97,6 +108,11 @@ ProfilerHubDatabase::Open()
     try
     {
         ph_ctx_ = std::make_unique<optiq::TraceContext>(Path());
+        auto* legacy = static_cast<RocprofDatabase*>(legacy_.get());
+        legacy->SetProfilerHubContext(ph_ctx_.get());
+        legacy->SetPhTrackIdMapCallback([this](uint32_t legacy_id, uint32_t ph_id) {
+            track_id_map_[legacy_id] = ph_id;
+        });
     } catch(const optiq::TraceOpenError&)
     {
         ph_ctx_.reset();
@@ -107,6 +123,7 @@ ProfilerHubDatabase::Open()
 rocprofvis_dm_result_t
 ProfilerHubDatabase::Close()
 {
+    static_cast<RocprofDatabase*>(legacy_.get())->SetProfilerHubContext(nullptr);
     ph_ctx_.reset();
     return legacy_->Close();
 }
@@ -178,7 +195,7 @@ namespace
 {
 ProfilerHubDatabase*           g_intercepting_instance = nullptr;
 rocprofvis_dm_add_track_func_t g_original_add_track    = nullptr;
-}
+}  // namespace
 
 rocprofvis_dm_result_t
 ProfilerHubDatabase::ReadTraceMetadata(Future* object)
@@ -188,8 +205,6 @@ ProfilerHubDatabase::ReadTraceMetadata(Future* object)
     rocprofvis_dm_add_track_func_t previous_add_track = nullptr;
     if(ph_ctx_)
     {
-        mapped_count_   = 0;
-        unmapped_count_ = 0;
         track_id_map_.clear();
         previous_add_track         = BindObject()->FuncAddTrack;
         g_original_add_track       = previous_add_track;
@@ -206,16 +221,14 @@ ProfilerHubDatabase::ReadTraceMetadata(Future* object)
         g_original_add_track       = nullptr;
 
         if(legacy_->NumDbInstances() > 1)
-            spdlog::warn("[profiler-hub] trace has {} DB instances (multi-file/multi-GUID "
-                         "merge) - PH track-id mapping only supports a single instance for "
-                         "now; all tracks fell back to legacy",
-                         legacy_->NumDbInstances());
-        else if(unmapped_count_ > 0)
-            spdlog::info("[profiler-hub] track-id mapping: {} matched, {} unmapped",
-                         mapped_count_, unmapped_count_);
+            spdlog::warn(
+                "[profiler-hub] trace has {} DB instances (multi-file/multi-GUID "
+                "merge) - PH track-id mapping only supports a single instance for "
+                "now; all tracks fell back to legacy",
+                legacy_->NumDbInstances());
         else
-            spdlog::info("[profiler-hub] track-id mapping: all {} legacy tracks matched",
-                         mapped_count_);
+            spdlog::info("[profiler-hub] track-id mapping: {}/{} legacy tracks matched",
+                         track_id_map_.size(), legacy_->NumTracks());
     }
 
     return result;
@@ -227,16 +240,8 @@ ProfilerHubDatabase::InterceptedAddTrack(const rocprofvis_dm_trace_t   object,
 {
     ProfilerHubDatabase*           instance = g_intercepting_instance;
     rocprofvis_dm_add_track_func_t original = g_original_add_track;
-    if(instance != nullptr) instance->TryMapTrack(params);
+    if(instance != nullptr) instance->MapLegacyTrackToPhTrack(params);
     return original(object, params);
-}
-
-void
-ProfilerHubDatabase::WidenTrackTimeBounds(rocprofvis_dm_track_params_t* track,
-                                          uint32_t                      node)
-{
-    (void) track;
-    (void) node;
 }
 
 void
@@ -256,6 +261,9 @@ ProfilerHubDatabase::BuildPhCandidateMaps()
         switch(track.category)
         {
             case PH_TRACK_CATEGORY_THREAD: by_tid_[track.tid].push_back(track); break;
+            case PH_TRACK_CATEGORY_THREAD_SAMPLE:
+                by_tid_sample_[track.tid].push_back(track);
+                break;
             case PH_TRACK_CATEGORY_PMC_AGENT:
                 by_agent_[track.agent_id].push_back(track);
                 break;
@@ -272,11 +280,10 @@ ProfilerHubDatabase::BuildPhCandidateMaps()
 }
 
 bool
-ProfilerHubDatabase::TryMapTrack(rocprofvis_dm_track_params_t* track)
+ProfilerHubDatabase::MapLegacyTrackToPhTrack(rocprofvis_dm_track_params_t* track)
 {
     if(!ph_ctx_ || legacy_->NumDbInstances() > 1)
     {
-        ++unmapped_count_;
         return false;
     }
 
@@ -299,8 +306,14 @@ ProfilerHubDatabase::TryMapTrack(rocprofvis_dm_track_params_t* track)
         case kRocProfVisDmRegionMainTrack:
         case kRocProfVisDmRegionSampleTrack:
         {
-            uint32_t real_tid = static_cast<uint32_t>(ids.id[TRACK_ID_TID]);
-            if(auto it = by_tid_.find(real_tid); it != by_tid_.end())
+            // ids.id[TRACK_ID_TID] is a row key into rocpd_info_thread (FK via
+            // rocpd_track/rocpd_region), not the real OS tid - resolve through
+            // the cached "Thread" info table, whose "name" column is "Thread <tid>".
+            uint32_t real_tid = ParseTrailingNumber(legacy_->CachedTables(node)->GetTableCell(
+                "Thread", ids.id[TRACK_ID_TID], "name"));
+            auto& tid_map = (ids.category == kRocProfVisDmRegionSampleTrack) ? by_tid_sample_
+                                                                             : by_tid_;
+            if(auto it = tid_map.find(real_tid); it != tid_map.end())
                 candidates = &it->second;
             break;
         }
@@ -309,8 +322,7 @@ ProfilerHubDatabase::TryMapTrack(rocprofvis_dm_track_params_t* track)
             uint32_t real_agent = static_cast<uint32_t>(ids.id[TRACK_ID_AGENT]);
             if(auto it = by_agent_.find(real_agent); it != by_agent_.end())
                 candidates = &it->second;
-            name_hint =
-                ids.name[TRACK_ID_QUEUE];
+            name_hint = ids.name[TRACK_ID_QUEUE];
             break;
         }
         case kRocProfVisDmKernelDispatchTrack:
@@ -336,14 +348,14 @@ ProfilerHubDatabase::TryMapTrack(rocprofvis_dm_track_params_t* track)
 
     if(!candidates || candidates->empty())
     {
-        ++unmapped_count_;
         return false;
     }
     if(candidates->size() == 1 || name_hint.empty())
     {
-        track_id_map_[legacy_id] = (*candidates)[0].id;
-        WidenTrackTimeBounds(track, node);
-        ++mapped_count_;
+        const ph_track_t& match  = (*candidates)[0];
+        track_id_map_[legacy_id] = match.id;
+        track->min_ts            = std::min(track->min_ts, match.start_ts);
+        track->max_ts            = std::max(track->max_ts, match.end_ts);
         return true;
     }
     for(const ph_track_t& candidate : *candidates)
@@ -351,12 +363,11 @@ ProfilerHubDatabase::TryMapTrack(rocprofvis_dm_track_params_t* track)
         if(NameHintMatches(candidate.track_name, name_hint))
         {
             track_id_map_[legacy_id] = candidate.id;
-            WidenTrackTimeBounds(track, node);
-            ++mapped_count_;
+            track->min_ts            = std::min(track->min_ts, candidate.start_ts);
+            track->max_ts            = std::max(track->max_ts, candidate.end_ts);
             return true;
         }
     }
-    ++unmapped_count_;
     return false;
 }
 
@@ -543,7 +554,7 @@ ProfilerHubDatabase::ExportTableCSV(rocprofvis_dm_charptr_t query,
     return legacy_->ExportTableCSV(query, file_path, future);
 }
 
-}
-}
+}  // namespace DataModel
+}  // namespace RocProfVis
 
 #endif

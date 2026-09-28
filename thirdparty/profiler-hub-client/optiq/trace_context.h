@@ -40,6 +40,8 @@ public:
     std::vector<ph_sample_t> GetTrackSamples(uint32_t track_id, uint64_t start_ts,
                                               uint64_t end_ts) const;
 
+    std::string GetSchemaVersion() const;
+
 private:
     ph_ctx_t m_ctx;
 };

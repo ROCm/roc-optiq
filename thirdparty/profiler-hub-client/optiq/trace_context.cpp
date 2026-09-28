@@ -3,6 +3,8 @@
 
 #include "trace_context.h"
 
+#include "spdlog/fmt/fmt.h"
+
 namespace optiq {
 
 TraceContext::TraceContext(const std::string &file_path) : m_ctx(nullptr) {
@@ -48,4 +50,10 @@ std::vector<ph_sample_t> TraceContext::GetTrackSamples(uint32_t track_id,
                                   samples.samples + samples.list_size);
 }
 
+std::string TraceContext::GetSchemaVersion() const {
+  ph_schema_version_t version{};
+  ph_get_schema_version(m_ctx, &version);
+  return fmt::format("{}.{}.{}", version.major, version.minor, version.patch);
 }
+
+} // namespace optiq

@@ -61,7 +61,7 @@
             "cacheVariables": {
                 "CMAKE_C_COMPILER": "gcc",
                 "CMAKE_CXX_COMPILER": "g++",
-                "CMAKE_INSTALL_PREFIX": "/opt/roc-optiq"
+                "CMAKE_INSTALL_PREFIX": "/opt/rocm/extras-10/rocm-optiq"
             },
             "condition": {
                 "type": "equals",

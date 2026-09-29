@@ -1394,7 +1394,7 @@ IsaCodeWidget::RenderSamplesCell(uint64_t sample_count)
         std::clamp(static_cast<float>(relative_hotness) / 100.0f, 0.0f, 1.0f);
     const ImVec2 cell_start = ImGui::GetCursorScreenPos();
     const float  cell_width = std::max(0.0f, ImGui::GetContentRegionAvail().x);
-    const float  cell_height = ImGui::GetTextLineHeightWithSpacing();
+    const float  cell_height = ImGui::GetTextLineHeight();
     const ImVec2 cell_end(cell_start.x + cell_width, cell_start.y + cell_height);
     if(fill_fraction > 0.0f)
     {
@@ -1434,7 +1434,7 @@ IsaCodeWidget::RenderPercentBarCell(double percent)
 {
     const ImVec2 cell_start = ImGui::GetCursorScreenPos();
     const float  cell_width = std::max(0.0f, ImGui::GetContentRegionAvail().x);
-    const float  cell_height = ImGui::GetTextLineHeightWithSpacing();
+    const float  cell_height = ImGui::GetTextLineHeight();
     const ImVec2 cell_end(cell_start.x + cell_width, cell_start.y + cell_height);
     const float fraction = std::clamp(static_cast<float>(percent) / 100.0f, 0.0f, 1.0f);
     if(fraction > 0.0f)

@@ -1021,6 +1021,8 @@ Cached query-group booleans (`m_code_object_store_loaded`,
 `m_instruction_source_lines_loaded`, `m_source_files_loaded`,
 `m_pc_sample_states_loaded`, `m_stalls_loaded`,
 `m_instruction_samples_loaded`) prevent repeated queries.
+Row-count setters clear their destination vectors before resizing so a failed
+fetch followed by a retry cannot preserve fields from an earlier result.
 
 `GetLayerMutex(DataLayer)` and `GetPropertyMutex(property)` route
 locking to the right mutex for each property ID.

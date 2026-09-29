@@ -661,11 +661,16 @@ Use these instead of inlining their logic anywhere new.
   canonical glyph button. Must use the icon font from `FontManager`.
 - `CopyableTextUnformatted(text, unique_id, ...)` - clickable copy-to-
   clipboard text with optional one-click copy, context menu, and custom
-  menu callback. Use this for values users may need to copy.
+  menu callback. It renders content literally through `TextUnformatted`,
+  including `##`, while a separate identified interaction target handles clicks
+  and popups. Its popup restores the themed selectable colors even when a parent
+  table makes row headers transparent. Use this for values users may need to copy.
 - `CellMenuTarget`, `PositionCell`, `RenderRowHitbox`,
   `CaptureCellRightClick`, `BeginCellContextMenu`,
   `EndCellContextMenu`, `AddCopyRowCellMenuItems` - shared table
-  right-click/copy scaffolding. Reuse it so cell and row hitboxes agree.
+  right-click/copy scaffolding. Shared cell popups restore themed selectable
+  colors even under parent style overrides. Reuse it so cell and row hitboxes
+  agree.
 - `IconMenuItem(icon, label, enabled)` / `IconBeginMenu(icon, label)` -
   menu entries with a leading icon-font glyph. Use inside
   `BeginPopup`/`BeginPopupContextItem` blocks instead of plain

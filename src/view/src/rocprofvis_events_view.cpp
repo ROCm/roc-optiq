@@ -348,7 +348,10 @@ EventsView::RenderEventExtData(const EventInfo* event_data)
     PushSectionHeaderStyle(m_settings);
 
     // --- Expandable full extended data ---
-    if(ImGui::CollapsingHeader("Event Extended Data", ImGuiTreeNodeFlags_None))
+    const bool extended_data_open =
+        ImGui::CollapsingHeader("Event Extended Data", ImGuiTreeNodeFlags_None);
+    ImGui::PopStyleColor(3);
+    if(extended_data_open)
     {
         if(event_data->ext_info.empty())
         {
@@ -425,7 +428,6 @@ EventsView::RenderEventExtData(const EventInfo* event_data)
         }
     }
 
-    ImGui::PopStyleColor(3);
     return true;
 }
 
@@ -439,7 +441,10 @@ EventsView::RenderEventFlowInfo(const EventInfo* event_data)
 
     PushSectionHeaderStyle(m_settings);
 
-    if(ImGui::CollapsingHeader("Flow Data", ImGuiTreeNodeFlags_DefaultOpen))
+    const bool flow_data_open =
+        ImGui::CollapsingHeader("Flow Data", ImGuiTreeNodeFlags_DefaultOpen);
+    ImGui::PopStyleColor(3);
+    if(flow_data_open)
     {
         if(event_data->flow_info.empty())
         {
@@ -585,7 +590,6 @@ EventsView::RenderEventFlowInfo(const EventInfo* event_data)
             }
         }
     }
-    ImGui::PopStyleColor(3);
     return true;
 }
 
@@ -599,7 +603,10 @@ EventsView::RenderCallStackData(const EventInfo* event_data)
 
     PushSectionHeaderStyle(m_settings);
 
-    if(ImGui::CollapsingHeader("Call Stack Data", ImGuiTreeNodeFlags_DefaultOpen))
+    const bool call_stack_open =
+        ImGui::CollapsingHeader("Call Stack Data", ImGuiTreeNodeFlags_DefaultOpen);
+    ImGui::PopStyleColor(3);
+    if(call_stack_open)
     {
         if(event_data->call_stack_info.empty())
         {
@@ -743,7 +750,6 @@ EventsView::RenderCallStackData(const EventInfo* event_data)
             }
         }
     }
-    ImGui::PopStyleColor(3);
     return true;
 }
 
@@ -757,7 +763,10 @@ EventsView::RenderArgumentData(const EventInfo* event_data)
 
     PushSectionHeaderStyle(m_settings);
 
-    if(ImGui::CollapsingHeader("Arguments", ImGuiTreeNodeFlags_DefaultOpen))
+    const bool arguments_open =
+        ImGui::CollapsingHeader("Arguments", ImGuiTreeNodeFlags_DefaultOpen);
+    ImGui::PopStyleColor(3);
+    if(arguments_open)
     {
         if(event_data->args.empty())
         {
@@ -831,7 +840,6 @@ EventsView::RenderArgumentData(const EventInfo* event_data)
             }
         }
     }
-    ImGui::PopStyleColor(3);
     return true;
 }
 

@@ -826,6 +826,7 @@ rocprofvis_result_t PcSampling::SetUInt64(rocprofvis_property_t property, uint64
         case kRPVControllerPCSamplingNumPcSampleStallReasons:
         {
             (void)index;
+            m_pc_sample_stall_reasons.clear();
             m_pc_sample_stall_reasons.resize(value);
             result = kRocProfVisResultSuccess;
             break;
@@ -869,6 +870,7 @@ rocprofvis_result_t PcSampling::SetUInt64(rocprofvis_property_t property, uint64
         case kRPVControllerPCSamplingNumPcSampleStallReasonLookups:
         {
             (void)index;
+            m_pc_sample_stall_reason_lookups.clear();
             m_pc_sample_stall_reason_lookups.resize(value);
             result = kRocProfVisResultSuccess;
             break;

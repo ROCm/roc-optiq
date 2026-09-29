@@ -166,7 +166,7 @@ struct AppWindowTestPeer
 struct ComputeViewTestPeer
 {
     ComputeView& v;
-    TabContainer*     TabContainerPtr() const { return v.m_tab_container.get(); }
+    ComputeKernelDetailsView* KernelDetailsPtr() const { return v.m_kernel_details.get(); }
     ComputeSelection* ComputeSelectionPtr() const { return v.m_compute_selection.get(); }
     bool PopupPending() const { return v.m_error_dialog_state == ComputeView::ErrorDialogState::kPending; }
     const std::string& PopupTitle() const { return v.m_popup_info.title; }
@@ -199,6 +199,14 @@ struct ComputeKernelDetailsViewTestPeer
     void ShowIsaSide(CompareSide side)
     {
         v.m_isa_side = side;
+        v.ApplyCompare(false);
+    }
+    ComputeWorkloadView* WorkloadViewPtr() const { return v.m_workload_view.get(); }
+    bool WorkloadShowsB() const { return v.m_workload_side == CompareSide::kB; }
+    // Same effect as the Workload Details pane's A / B header buttons.
+    void ShowWorkloadSide(CompareSide side)
+    {
+        v.m_workload_side = side;
         v.ApplyCompare(false);
     }
     // The rail List's kernels (workload, kernel), in order, before its search.
@@ -260,6 +268,7 @@ struct ComputeWorkloadViewTestPeer
 {
     const ComputeWorkloadView& v;
     const WorkloadInfo* WorkloadInfoPtr() const { return v.m_workload_info; }
+    bool                FollowsSelection() const { return v.m_follow_selection; }
     size_t SystemInfoCols() const
     {
         return v.m_workload_info ? v.m_workload_info->system_info.size() : 0;

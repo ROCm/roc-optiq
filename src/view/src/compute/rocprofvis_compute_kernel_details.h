@@ -25,6 +25,7 @@ class DataProvider;
 class ComputeSelection;
 class ComputeIsaView;
 class ComputeTableView;
+class ComputeWorkloadView;
 class Roofline;
 class KernelMetricTable;
 struct KernelInfo;
@@ -37,6 +38,7 @@ enum class ComputePane : int32_t
     kRoofline,
     kMetricTables,
     kIsa,
+    kWorkloadDetails,
     kCount
 };
 
@@ -76,17 +78,11 @@ enum class CompareSide : uint8_t
 //
 // Compare sets a second kernel (B, from any workload) against the selection
 // (A): the roofline plots both, metric tables add B and difference columns, and
-// the memory chart and ISA switch between A, B and (memory chart, same GPU
-// architecture only) B - A.
+// the memory chart, ISA and workload details switch between A, B and (memory
+// chart, same GPU architecture only) B - A.
 class ComputeKernelDetailsView : public RocWidget
 {
 public:
-    static constexpr const char* TAB_ID = "compute_kernel_details_view";
-
-    static TabItem CreateTabItem(DataProvider&                            data_provider,
-                                 const std::shared_ptr<ComputeSelection>& compute_selection,
-                                 bool has_available_metrics, bool has_isa_lines);
-
     ComputeKernelDetailsView(DataProvider&                     data_provider,
                              std::shared_ptr<ComputeSelection> compute_selection,
                              bool has_available_metrics, bool has_isa_lines);
@@ -192,6 +188,8 @@ private:
     void RenderSlot(int32_t slot);
     void RenderPane(ComputePane pane, int32_t slot);
     void RenderPaneBody(ComputePane pane, int32_t slot);
+    // Which side a panel shows while comparing; null for panels that show both.
+    CompareSide* PaneSide(ComputePane pane);
     void RenderEmptySlot(int32_t slot);
     void HandleSlotDrop(int32_t slot, const ImVec2& slot_min, const ImVec2& slot_max);
     void RenderKernelRail();
@@ -232,6 +230,7 @@ private:
     std::shared_ptr<KernelMetricTable> m_kernel_metric_table;
     std::shared_ptr<ComputeTableView>  m_table_view;
     std::shared_ptr<ComputeIsaView>    m_isa_view;  // Null when the database has no ISA lines.
+    std::shared_ptr<ComputeWorkloadView> m_workload_view;
 
     uint64_t m_client_id;
 
@@ -276,6 +275,7 @@ private:
     CompareState m_compare;
     CompareSide  m_memory_chart_side = CompareSide::kA;
     CompareSide  m_isa_side          = CompareSide::kA;
+    CompareSide  m_workload_side     = CompareSide::kA;
     // Workload whose layout m_memory_chart_b has loaded.
     uint32_t     m_memory_chart_b_workload;
 

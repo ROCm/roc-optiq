@@ -8,6 +8,7 @@
 #include "rocprofvis_compute_roofline.h"
 #include "rocprofvis_compute_selection.h"
 #include "rocprofvis_compute_table_view.h"
+#include "rocprofvis_compute_workload_view.h"
 #include "rocprofvis_data_provider.h"
 #include "rocprofvis_event_manager.h"
 #include "rocprofvis_settings_manager.h"
@@ -277,18 +278,6 @@ Badge(const char* text, Colors color, const char* tooltip)
     }
 }
 
-TabItem
-ComputeKernelDetailsView::CreateTabItem(
-    DataProvider&                            data_provider,
-    const std::shared_ptr<ComputeSelection>& compute_selection,
-    bool has_available_metrics, bool has_isa_lines)
-{
-    return RocWidget::CreateTabItem(
-        "Kernel Details", TAB_ID,
-        std::make_shared<ComputeKernelDetailsView>(data_provider, compute_selection,
-                                                   has_available_metrics, has_isa_lines));
-}
-
 ComputeKernelDetailsView::ComputeKernelDetailsView(
     DataProvider& data_provider, std::shared_ptr<ComputeSelection> compute_selection,
     bool has_available_metrics, bool has_isa_lines)
@@ -341,6 +330,7 @@ ComputeKernelDetailsView::ComputeKernelDetailsView(
     {
         m_isa_view = std::make_shared<ComputeIsaView>(data_provider);
     }
+    m_workload_view = std::make_shared<ComputeWorkloadView>(data_provider, compute_selection);
 
     CreatePanes();
     m_preset      = std::make_unique<Preset>(*this);
@@ -507,6 +497,7 @@ ComputeKernelDetailsView::Update()
     {
         m_isa_view->Update();
     }
+    m_workload_view->Update();
 }
 
 bool
@@ -524,6 +515,7 @@ ComputeKernelDetailsView::PaneVisibleSetting(ComputePane pane) const
         case ComputePane::kRoofline: return settings.show_compute_roofline;
         case ComputePane::kMetricTables: return settings.show_compute_metric_tables;
         case ComputePane::kIsa: return settings.show_compute_isa;
+        case ComputePane::kWorkloadDetails: return settings.show_compute_workload_details;
         case ComputePane::kMemoryChart:
         case ComputePane::kCount: break;
     }
@@ -538,6 +530,7 @@ ComputeKernelDetailsView::PaneTitle(ComputePane pane) const
         case ComputePane::kRoofline: return "Roofline";
         case ComputePane::kMetricTables: return "Metric Tables";
         case ComputePane::kIsa: return "ISA";
+        case ComputePane::kWorkloadDetails: return "Workload Details";
         case ComputePane::kMemoryChart:
         case ComputePane::kCount: break;
     }
@@ -1220,20 +1213,29 @@ ComputeKernelDetailsView::RenderPane(ComputePane pane, int32_t slot)
     HeaderButton buttons[MAX_PANE_HEADER_BUTTONS];
     HeaderAction actions[MAX_PANE_HEADER_BUTTONS];
     int          count = 0;
-    // While comparing, the memory chart and ISA show one side at a time.
-    const bool   sided = m_compare.enabled &&
-                       (pane == ComputePane::kMemoryChart || pane == ComputePane::kIsa);
-    const CompareSide side = pane == ComputePane::kIsa ? m_isa_side : m_memory_chart_side;
+    // While comparing, the memory chart, ISA and workload details show one side
+    // at a time.
+    const CompareSide* sided = m_compare.enabled ? PaneSide(pane) : nullptr;
     if(sided)
     {
-        buttons[count] = { nullptr, "A", "Show A (the selected kernel)", side == CompareSide::kA };
+        const CompareSide side      = *sided;
+        const bool        workload  = pane == ComputePane::kWorkloadDetails;
+        const char*       b_tooltip = "Show B (the compare target)";
+        if(workload)
+        {
+            b_tooltip = "Show B's workload (the compare target's)";
+        }
+        else if(pane == ComputePane::kMemoryChart && !DeltaAvailable())
+        {
+            b_tooltip = "Show B (the compare target). B - A needs A and B on the\n"
+                        "same GPU architecture.";
+        }
+        buttons[count] = { nullptr, "A",
+                           workload ? "Show A's workload (the selected kernel's)"
+                                    : "Show A (the selected kernel)",
+                           side == CompareSide::kA };
         actions[count++] = HeaderAction::kShowA;
-        buttons[count]   = { nullptr, "B",
-                             pane == ComputePane::kMemoryChart && !DeltaAvailable()
-                                 ? "Show B (the compare target). B - A needs A and B on the\n"
-                                   "same GPU architecture."
-                                 : "Show B (the compare target)",
-                             side == CompareSide::kB };
+        buttons[count]   = { nullptr, "B", b_tooltip, side == CompareSide::kB };
         actions[count++] = HeaderAction::kShowB;
         if(pane == ComputePane::kMemoryChart && DeltaAvailable())
         {
@@ -1306,15 +1308,12 @@ ComputeKernelDetailsView::RenderPane(ComputePane pane, int32_t slot)
             const CompareSide chosen = action == HeaderAction::kShowA   ? CompareSide::kA
                                        : action == HeaderAction::kShowB ? CompareSide::kB
                                                                         : CompareSide::kDelta;
-            if(pane == ComputePane::kIsa)
+            CompareSide* side = PaneSide(pane);
+            if(side)
             {
-                m_isa_side = chosen;
+                *side = chosen;
+                ApplyCompare(false);
             }
-            else
-            {
-                m_memory_chart_side = chosen;
-            }
-            ApplyCompare(false);
             break;
         }
         case HeaderAction::kFit:
@@ -1351,8 +1350,32 @@ ComputeKernelDetailsView::RenderPaneBody(ComputePane pane, int32_t slot)
                 m_isa_view->Render();
             }
             break;
+        case ComputePane::kWorkloadDetails:
+            // B of A's workload shows the same details, so say it is not stale.
+            if(m_compare.enabled && m_workload_side == CompareSide::kB &&
+               m_compare.workload_id == m_compute_selection->GetSelectedWorkload())
+            {
+                ImGui::TextDisabled("A and B are in the same workload.");
+            }
+            m_workload_view->Render();
+            break;
         case ComputePane::kCount: break;
     }
+}
+
+CompareSide*
+ComputeKernelDetailsView::PaneSide(ComputePane pane)
+{
+    switch(pane)
+    {
+        case ComputePane::kMemoryChart: return &m_memory_chart_side;
+        case ComputePane::kIsa: return &m_isa_side;
+        case ComputePane::kWorkloadDetails: return &m_workload_side;
+        case ComputePane::kRoofline:
+        case ComputePane::kMetricTables:
+        case ComputePane::kCount: break;
+    }
+    return nullptr;
 }
 
 void
@@ -1872,6 +1895,7 @@ ComputeKernelDetailsView::EnableCompare()
     // Open on the difference where there is one to show.
     m_memory_chart_side = DeltaAvailable() ? CompareSide::kDelta : CompareSide::kA;
     m_isa_side          = CompareSide::kA;
+    m_workload_side     = CompareSide::kA;
     ApplyCompare(true);
 }
 
@@ -1988,6 +2012,7 @@ ComputeKernelDetailsView::ApplyCompare(bool target_changed)
         {
             m_isa_view->FollowSelection();
         }
+        m_workload_view->FollowSelection();
         return;
     }
 
@@ -2023,6 +2048,14 @@ ComputeKernelDetailsView::ApplyCompare(bool target_changed)
         {
             m_isa_view->FollowSelection();
         }
+    }
+    if(m_workload_side == CompareSide::kB)
+    {
+        m_workload_view->ShowWorkload(workload_id);
+    }
+    else
+    {
+        m_workload_view->FollowSelection();
     }
 }
 

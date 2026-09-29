@@ -143,6 +143,7 @@ typedef struct AppWindowSettings
     bool    show_compute_roofline;
     bool    show_compute_metric_tables;
     bool    show_compute_isa;
+    bool    show_compute_workload_details;
     int32_t compute_layout_template;
     int32_t compute_layout_slots[COMPUTE_LAYOUT_MAX_SLOTS];  // Pane per box; -1 = empty.
     bool    compute_maximized;           // compute_maximized_pane fills the tab.
@@ -348,6 +349,8 @@ constexpr const char* JSON_KEY_SETTINGS_APP_WINDOW_COMPUTE_ROOFLINE = "show_comp
 constexpr const char* JSON_KEY_SETTINGS_APP_WINDOW_COMPUTE_METRIC_TABLES =
     "show_compute_metric_tables";
 constexpr const char* JSON_KEY_SETTINGS_APP_WINDOW_COMPUTE_ISA = "show_compute_isa";
+constexpr const char* JSON_KEY_SETTINGS_APP_WINDOW_COMPUTE_WORKLOAD_DETAILS =
+    "show_compute_workload_details";
 
 constexpr const char* JSON_KEY_SETTINGS_CATEGORY_ASSISTANT = "assistant";
 constexpr const char* JSON_KEY_SETTINGS_ASSISTANT_ENDPOINT_URL = "endpoint_url";

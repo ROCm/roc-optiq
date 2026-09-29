@@ -642,8 +642,8 @@ SettingsManager::SettingsManager()
         AssistantSettings{}, false })
 , m_usersettings(m_usersettings_default)
 , m_appwindowsettings({ AppWindowSettings{ true, true, true, true, false, true, true, true,
-                                           true, true, 0, { 0, 1, 2, 3 }, false, 0,
-                                           false } })
+                                           true, true, false, 0, { 0, 1, 2, 3 }, false,
+                                           0, false } })
 , m_json_path(GetStandardConfigPath())
 {}
 
@@ -1216,6 +1216,8 @@ SettingsManager::SerializeAppWindowSettings(jt::Json& json)
     aw[JSON_KEY_SETTINGS_APP_WINDOW_COMPUTE_METRIC_TABLES] =
         m_appwindowsettings.show_compute_metric_tables;
     aw[JSON_KEY_SETTINGS_APP_WINDOW_COMPUTE_ISA] = m_appwindowsettings.show_compute_isa;
+    aw[JSON_KEY_SETTINGS_APP_WINDOW_COMPUTE_WORKLOAD_DETAILS] =
+        m_appwindowsettings.show_compute_workload_details;
 }
 
 void
@@ -1279,6 +1281,9 @@ SettingsManager::DeserializeAppWindowSettings(jt::Json& json)
     m_appwindowsettings.show_compute_isa =
         JsonUtils::GetBool(aw, JSON_KEY_SETTINGS_APP_WINDOW_COMPUTE_ISA,
                            m_appwindowsettings.show_compute_isa);
+    m_appwindowsettings.show_compute_workload_details =
+        JsonUtils::GetBool(aw, JSON_KEY_SETTINGS_APP_WINDOW_COMPUTE_WORKLOAD_DETAILS,
+                           m_appwindowsettings.show_compute_workload_details);
 }
 
 }  // namespace View

@@ -409,11 +409,10 @@ AppWindow (singleton, RocWidget)
 |   |         \-- ComputeView : RootView                 (compute trace)
 |   |             +-- m_tool_bar       : RocCustomWidget (slotted into [0])
 |   |             +-- m_summary_view   : ComputeSummaryView (floating "Summary" window)
-|   |             +-- m_tab_container  : TabContainer with sub-tabs:
-|   |                 +-- ComputeKernelDetailsView (resizable panes, incl.
-|   |                 |     ComputeTableView and ComputeIsaView; compare A/B)
-|   |                 +-- ComputeWorkloadView
-|   |                 +-- (ComputeTester, dev mode only)
+|   |             +-- m_kernel_details : ComputeKernelDetailsView (the whole view, no
+|   |             |     tab bar: resizable panes incl. ComputeTableView,
+|   |             |     ComputeIsaView and ComputeWorkloadView; compare A/B)
+|   |             +-- (m_compute_tester : ComputeTester, dev mode only, floating window)
 |   +-- [2] status bar (RocCustomWidget calling AppWindow::RenderStatusBar)
 +-- WelcomePage              : empty-state landing page
 +-- CompareFilesDialog       : two-trace compare modal (File > Compare, ROCPROFVIS_ENABLE_TRACE_COMPARE)
@@ -1337,27 +1336,24 @@ The compute analogue of `TraceView`. Owns:
   `RenderSummaryWindow()` in a floating "Summary" window toggled by
   View > Show Summary (`AppWindowSettings::show_summary`, shared with the
   system-trace summary). Its `###` window id is per project.
-- `m_tab_container` - sub-tabs:
-  - `ComputeKernelDetailsView` - per-kernel workspace; also hosts the
-    metric tables (`ComputeTableView`) and ISA (`ComputeIsaView`) panes, and
-    comparing the selected kernel with a second one (there is no separate
-    comparison tab).
-  - `ComputeWorkloadView` - system info + profiling config tables.
-  - `ComputeTester` - dev-mode scratchpad
-    (`#ifdef ROCPROFVIS_DEVELOPER_MODE`).
+- `m_kernel_details` (`ComputeKernelDetailsView`) - the whole compute UI,
+  rendered directly (there is no compute tab bar). It hosts the metric tables
+  (`ComputeTableView`), ISA (`ComputeIsaView`) and workload details
+  (`ComputeWorkloadView`) panes, and comparing the selected kernel with a
+  second one.
+- `m_compute_tester` (`ComputeTester`) - dev-mode scratchpad
+  (`#ifdef ROCPROFVIS_DEVELOPER_MODE`), drawn by `RenderComputeTesterWindow()`
+  in a floating window per project while Developer Options > Show Compute
+  Tester (`ComputeTester::VisiblePtr()`, one toggle for all projects) is on.
 - `m_data_provider` - same `DataProvider` type as `TraceView`, but its
   `ComputeModel()` accessor exposes the compute data model.
 
-Each fixed compute sub-view owns its `TAB_ID` as a public static constant.
-Views that can be disabled also own their `DISABLED_TOOLTIP`; use these
-constants when adding, selecting, disabling, or testing their tabs.
-
 `Update()` waits until the provider reaches `kReady` or `kError` before
 creating the content. `CreateView()` validates the loaded model before it
-constructs any selection state or tabs. A provider load error, an empty
+constructs any selection state or views. A provider load error, an empty
 workload list, or a model in which no workload has a kernel queues the shared
 application message dialog, matching `TraceView` load-error handling, instead
-of creating the tab container. The dialog distinguishes the failed condition
+of creating Kernel Details. The dialog distinguishes the failed condition
 and includes the database path. Closing this dialog removes the failed
 project's tab through the normal `TabContainer` close-event path so provider
 cleanup still runs. Pending load-error dialogs are forwarded from `Update()`,
@@ -1378,9 +1374,13 @@ sentinel.
 
 ### `ComputeWorkloadView` (`rocprofvis_compute_workload_view.{h,cpp}`)
 
-Shows the two static tables for a workload:
-`RenderSystemInfo(WorkloadInfo)` and
-`RenderProfilingConfig(WorkloadInfo)`. Layout uses an `HSplitContainer`.
+The Workload Details pane of Kernel Details (no tab of its own): a line naming
+the workload, then its two static tables, `RenderSystemInfo(WorkloadInfo)`
+and `RenderProfilingConfig(WorkloadInfo)`, side by side in an
+`HSplitContainer`. It shows the selected kernel's workload
+(`ComputeSelection::GetSelectedWorkload()`), or while comparing on side B the
+compare target's (`ShowWorkload(id)` until `FollowSelection()`, mirroring
+`ComputeIsaView`).
 
 ### `ComputeKernelDetailsView` (`rocprofvis_compute_kernel_details.{h,cpp}`)
 
@@ -1400,6 +1400,7 @@ card and header itself):
 - `m_table_view` (`ComputeTableView`) - opt-in metric tables.
 - `m_isa_view` (`ComputeIsaView`) - created only when the database has
   ISA lines; otherwise there is no ISA pane.
+- `m_workload_view` (`ComputeWorkloadView`) - the Workload Details pane.
 
 Layout: `HSplit(kernel rail | workspace)`, all gutters `PANE_GUTTER` and
 draggable. The workspace is a box layout, `ComputeLayoutTemplate` (Single,
@@ -1408,8 +1409,8 @@ Columns, Main + Three Below, 2 x 2 Grid; append only - stored as ints), built
 by `BuildTemplate()` from nested splits over up to `COMPUTE_LAYOUT_MAX_SLOTS`
 box panes. `LAYOUT_TEMPLATES` holds each template's name, box count and unit
 rectangles (the Layout menu thumbnails). Each box shows one `ComputePane`
-(`kMemoryChart`, `kRoofline`, `kMetricTables`, `kIsa`; append only) or is
-empty; a panel lives in one box at most, so `AssignSlot` swaps when the
+(`kMemoryChart`, `kRoofline`, `kMetricTables`, `kIsa`, `kWorkloadDetails`;
+append only) or is empty; a panel lives in one box at most, so `AssignSlot` swaps when the
 panel is shown elsewhere. The kernel rail is the only place kernels are
 chosen (the compute toolbar has no workload / kernel combos): Table mode shows
 `m_kernel_metric_table`, which lists every workload's kernels, and List mode
@@ -1466,10 +1467,12 @@ of the list). Rules:
 - B - A in the memory chart needs the same layout, so `DeltaAvailable()` is
   "same workload or same `WorkloadArch`"; otherwise the chart header offers
   A and B only and the bar shows the architectures in warning colour.
-  `m_memory_chart_side` / `m_isa_side` pick what the chart and ISA show
-  (header buttons A / B / delta); delta sets `m_memory_chart.SetDeltaTarget(
+  `m_memory_chart_side` / `m_isa_side` / `m_workload_side` (`PaneSide()`)
+  pick what the chart, ISA and workload details show (header buttons A / B,
+  plus delta for the chart); delta sets `m_memory_chart.SetDeltaTarget(
   &m_memory_chart_b)`. The ISA pane is one view that `ShowKernel`s B, since
-  the data provider has a single PC-sampling callback.
+  the data provider has a single PC-sampling callback; Workload Details
+  likewise `ShowWorkload`s B's workload and notes when it is A's too.
 - `SetCompareTarget()` ignores A itself.
 
 Handles `kComputeWorkloadSelectionChanged`,
@@ -1648,7 +1651,8 @@ display modes, several `KernelInfo::DispatchMetric`s
 
 Internal scratchpad UI for exercising the metric / roofline APIs.
 Behind `#ifdef ROCPROFVIS_DEVELOPER_MODE`. Not user-facing - keep
-production code from depending on it.
+production code from depending on it. Shown in a floating window per compute
+project while Developer Options > Show Compute Tester is on.
 Dynamic text uses `ImGui::TextUnformatted` so names, descriptions,
 and units containing percent signs are displayed literally.
 

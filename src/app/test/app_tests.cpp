@@ -656,38 +656,18 @@ void RegisterAppTests(ImGuiTestEngine* e)
         ctx->Yield(2);
     };
 
-    t = IM_REGISTER_TEST(e, "app", "compute_view_tab_switch");
+    t = IM_REGISTER_TEST(e, "app", "compute_view_has_no_tab_bar");
     t->TestFunc = [](ImGuiTestContext* ctx)
     {
         ComputeView* cv = GetComputeViewOrSkip(ctx);
         if (!cv) return;
-        TabContainer* tc = ComputeViewTestPeer{*cv}.TabContainerPtr();
-        if (tc == nullptr)
-        {
-            ctx->LogWarning("SKIP: compute view has no tab container");
-            return;
-        }
+        IM_CHECK(ComputeViewTestPeer{*cv}.KernelDetailsPtr() != nullptr);
 
-        IM_CHECK(TabContainerTestPeer{*tc}.TabCount() >= 2);
-        if (TabContainerTestPeer{*tc}.TabCount() < 2) return;
-
+        // Kernel Details is the whole compute view: no tab items for it or for
+        // Workload Details, which is one of its panels.
         ctx->Yield(3);
-        const int start_idx = TabContainerTestPeer{*tc}.ActiveTabIndex();
-        IM_CHECK(start_idx >= 0);
-
-        // Each tab is submitted as BeginTabItem(label) under PushID(id), nested in
-        // unknown layout child-windows. The "**/" wildcard locates the tab header
-        // by its trailing label past those intermediates and the id seed.
-        const int target_idx = (start_idx == 0) ? 1 : 0;
-        const std::vector<const TabItem*> tabs = tc->GetTabs();
-        IM_CHECK(target_idx < static_cast<int>(tabs.size()));
-        if (target_idx >= static_cast<int>(tabs.size())) return;
-        const std::string target_label = tabs[target_idx]->m_label;
-
-        ctx->ItemClick(("//Main Window/**/" + target_label).c_str());
-        ctx->Yield(3);
-
-        IM_CHECK(TabContainerTestPeer{*tc}.ActiveTabIndex() == target_idx);
+        IM_CHECK(!ctx->ItemExists("//Main Window/**/Kernel Details"));
+        IM_CHECK(!ctx->ItemExists("//Main Window/**/Workload Details"));
     };
 
     t = IM_REGISTER_TEST(e, "app", "compute_view_empty_model_queues_error_dialog");
@@ -697,7 +677,7 @@ void RegisterAppTests(ImGuiTestEngine* e)
         empty_view.CreateView();
 
         ComputeViewTestPeer peer{empty_view};
-        IM_CHECK(peer.TabContainerPtr() == nullptr);
+        IM_CHECK(peer.KernelDetailsPtr() == nullptr);
         IM_CHECK(peer.ComputeSelectionPtr() == nullptr);
         IM_CHECK(peer.PopupPending());
         IM_CHECK(peer.PopupTitle() == "Invalid Compute Database");
@@ -715,7 +695,7 @@ void RegisterAppTests(ImGuiTestEngine* e)
         empty_view.CreateView();
 
         ComputeViewTestPeer peer{empty_view};
-        IM_CHECK(peer.TabContainerPtr() == nullptr);
+        IM_CHECK(peer.KernelDetailsPtr() == nullptr);
         IM_CHECK(peer.ComputeSelectionPtr() == nullptr);
         IM_CHECK(peer.PopupPending());
         IM_CHECK(peer.PopupTitle() == "Invalid Compute Database");
@@ -728,44 +708,62 @@ void RegisterAppTests(ImGuiTestEngine* e)
     {
         ComputeView* cv = GetComputeViewOrSkip(ctx);
         if (!cv) return;
-        TabContainer* tc = ComputeViewTestPeer{*cv}.TabContainerPtr();
-        if (tc == nullptr)
-        {
-            ctx->LogWarning("SKIP: compute view has no tab container");
-            return;
-        }
+        ComputeKernelDetailsView* kd = ComputeViewTestPeer{*cv}.KernelDetailsPtr();
+        IM_CHECK(kd != nullptr);
+        if (kd == nullptr) return;
+        ComputeWorkloadView* wv = ComputeKernelDetailsViewTestPeer{*kd}.WorkloadViewPtr();
+        IM_CHECK(wv != nullptr);
+        if (wv == nullptr) return;
+        ComputeSelection* sel = ComputeViewTestPeer{*cv}.ComputeSelectionPtr();
+        IM_CHECK(sel != nullptr);
+        if (sel == nullptr) return;
 
-        const std::vector<const TabItem*> tabs = tc->GetTabs();
-        ComputeWorkloadView* wv = nullptr;
-        std::string          wv_label;
-        for (const TabItem* tab : tabs)
-        {
-            if (tab->m_id == ComputeWorkloadView::TAB_ID)
-            {
-                wv       = dynamic_cast<ComputeWorkloadView*>(tab->m_widget.get());
-                wv_label = tab->m_label;
-                break;
-            }
-        }
-        if (wv == nullptr)
-        {
-            ctx->LogWarning("SKIP: no Workload Details tab in this build");
-            return;
-        }
-
-        // m_workload_info populates in Render(), so the tab must be active first.
-        ctx->ItemClick(("//Main Window/**/" + wv_label).c_str());
+        // m_workload_info fills when the panel renders, so give it the grid's
+        // fourth box.
+        ComputePanelsGuard panels_guard;
+        SettingsManager::GetInstance().GetAppWindowSettings().compute_layout_slots[3] =
+            static_cast<int32_t>(ComputePane::kWorkloadDetails);
         ctx->Yield(3);
 
         ComputeWorkloadViewTestPeer peer{*wv};
         IM_CHECK(peer.WorkloadInfoPtr() != nullptr);
         if (peer.WorkloadInfoPtr() == nullptr) return;
+        IM_CHECK(peer.WorkloadInfoPtr()->id == sel->GetSelectedWorkload());
 
         // Both panels fill only when the render gate passes: 2 cols, non-empty.
         IM_CHECK(peer.SystemInfoCols() == 2);
         IM_CHECK(peer.SystemInfoRows() > 0);
         IM_CHECK(peer.ProfilingConfigCols() == 2);
         IM_CHECK(peer.ProfilingConfigRows() > 0);
+
+        // Selecting a kernel of another workload shows that workload.
+        const ComputeDataModel& model = cv->GetDataProvider()->ComputeModel();
+        const WorkloadInfo*     other = nullptr;
+        for (const WorkloadInfo* w : model.GetWorkloadList())
+        {
+            if (w && w->id != sel->GetSelectedWorkload() && !w->ordered_kernels.empty())
+            {
+                other = w;
+                break;
+            }
+        }
+        if (other == nullptr)
+        {
+            ctx->LogWarning("SKIP (partial): the database has one workload with kernels");
+            return;
+        }
+        struct SelectionGuard
+        {
+            ComputeSelection& sel;
+            uint32_t          workload;
+            uint32_t          kernel;
+            ~SelectionGuard() { sel.Select(workload, kernel); }
+        } selection_guard{ *sel, sel->GetSelectedWorkload(), sel->GetSelectedKernel() };
+        sel->Select(other->id, other->ordered_kernels.front()->id);
+        ctx->Yield(3);
+        IM_CHECK(peer.WorkloadInfoPtr() != nullptr);
+        if (peer.WorkloadInfoPtr() == nullptr) return;
+        IM_CHECK(peer.WorkloadInfoPtr()->id == other->id);
     };
 
     t = IM_REGISTER_TEST(e, "app", "compute_workload_auto_selected");
@@ -790,25 +788,11 @@ void RegisterAppTests(ImGuiTestEngine* e)
     {
         ComputeView* cv = GetComputeViewOrSkip(ctx);
         if (!cv) return;
-        TabContainer* tc = ComputeViewTestPeer{*cv}.TabContainerPtr();
-        IM_CHECK(tc != nullptr);
-        if (tc == nullptr) return;
 
-        // Comparing is part of the Kernel Details tab.
-        ComputeKernelDetailsView* kd = nullptr;
-        for (const TabItem* tab : tc->GetTabs())
-        {
-            if (tab && tab->m_id == ComputeKernelDetailsView::TAB_ID)
-            {
-                kd = dynamic_cast<ComputeKernelDetailsView*>(tab->m_widget.get());
-                break;
-            }
-        }
-        if (kd == nullptr)
-        {
-            ctx->LogWarning("SKIP: no Kernel Details tab in this build");
-            return;
-        }
+        // Comparing is part of Kernel Details.
+        ComputeKernelDetailsView* kd = ComputeViewTestPeer{*cv}.KernelDetailsPtr();
+        IM_CHECK(kd != nullptr);
+        if (kd == nullptr) return;
         ComputeKernelDetailsViewTestPeer kd_peer{*kd};
         ComputeTableView* tbl = kd_peer.TableViewPtr();
         IM_CHECK(tbl != nullptr);
@@ -862,7 +846,6 @@ void RegisterAppTests(ImGuiTestEngine* e)
             ~CompareGuard() { peer.StopCompare(); }
         } compare_guard{ kd_peer };
         ComputePanelsGuard panels_guard;
-        tc->SetActiveTab(ComputeKernelDetailsView::TAB_ID);
         ctx->Yield(3);
 
         kd_peer.CompareWith(target_workload, target_kernel);
@@ -925,29 +908,14 @@ void RegisterAppTests(ImGuiTestEngine* e)
     {
         ComputeView* cv = GetComputeViewOrSkip(ctx);
         if (!cv) return;
-        TabContainer* tc = ComputeViewTestPeer{*cv}.TabContainerPtr();
-        IM_CHECK(tc != nullptr);
-        if (tc == nullptr) return;
-        ComputeKernelDetailsView* kd = nullptr;
-        for (const TabItem* tab : tc->GetTabs())
-        {
-            if (tab && tab->m_id == ComputeKernelDetailsView::TAB_ID)
-            {
-                kd = dynamic_cast<ComputeKernelDetailsView*>(tab->m_widget.get());
-                break;
-            }
-        }
-        if (kd == nullptr)
-        {
-            ctx->LogWarning("SKIP: no Kernel Details tab in this build");
-            return;
-        }
+        ComputeKernelDetailsView* kd = ComputeViewTestPeer{*cv}.KernelDetailsPtr();
+        IM_CHECK(kd != nullptr);
+        if (kd == nullptr) return;
         Roofline* roofline = ComputeKernelDetailsViewTestPeer{*kd}.RooflinePtr();
         IM_CHECK(roofline != nullptr);
         if (roofline == nullptr) return;
 
         ComputePanelsGuard panels_guard;  // every panel in a box, none maximized
-        tc->SetActiveTab(ComputeKernelDetailsView::TAB_ID);
         ctx->Yield(10);
 
         ImPlotContext* plots   = ImPlot::GetCurrentContext();
@@ -988,23 +956,9 @@ void RegisterAppTests(ImGuiTestEngine* e)
     {
         ComputeView* cv = GetComputeViewOrSkip(ctx);
         if (!cv) return;
-        TabContainer* tc = ComputeViewTestPeer{*cv}.TabContainerPtr();
-        IM_CHECK(tc != nullptr);
-        if (tc == nullptr) return;
-        ComputeKernelDetailsView* kd = nullptr;
-        for (const TabItem* tab : tc->GetTabs())
-        {
-            if (tab && tab->m_id == ComputeKernelDetailsView::TAB_ID)
-            {
-                kd = dynamic_cast<ComputeKernelDetailsView*>(tab->m_widget.get());
-                break;
-            }
-        }
-        if (kd == nullptr)
-        {
-            ctx->LogWarning("SKIP: no Kernel Details tab in this build");
-            return;
-        }
+        ComputeKernelDetailsView* kd = ComputeViewTestPeer{*cv}.KernelDetailsPtr();
+        IM_CHECK(kd != nullptr);
+        if (kd == nullptr) return;
         ComputeKernelDetailsViewTestPeer kd_peer{*kd};
         ComputeSelection* sel = ComputeViewTestPeer{*cv}.ComputeSelectionPtr();
         IM_CHECK(sel != nullptr);
@@ -1032,7 +986,6 @@ void RegisterAppTests(ImGuiTestEngine* e)
             ~CompareGuard() { peer.StopCompare(); }
         } compare_guard{ kd_peer };
         ComputePanelsGuard panels_guard;
-        tc->SetActiveTab(ComputeKernelDetailsView::TAB_ID);
         ctx->Yield(3);
 
         kd_peer.CompareWith(other->id, target_kernel);
@@ -1113,25 +1066,11 @@ void RegisterAppTests(ImGuiTestEngine* e)
     {
         ComputeView* cv = GetComputeViewOrSkip(ctx);
         if (!cv) return;
-        TabContainer* tc = ComputeViewTestPeer{*cv}.TabContainerPtr();
-        IM_CHECK(tc != nullptr);
-        if (tc == nullptr) return;
 
-        // Metric tables are a pane of the Kernel Details tab.
-        ComputeKernelDetailsView* kd = nullptr;
-        for (const TabItem* tab : tc->GetTabs())
-        {
-            if (tab && tab->m_id == ComputeKernelDetailsView::TAB_ID)
-            {
-                kd = dynamic_cast<ComputeKernelDetailsView*>(tab->m_widget.get());
-                break;
-            }
-        }
-        if (kd == nullptr)
-        {
-            ctx->LogWarning("SKIP: no Kernel Details tab in this build");
-            return;
-        }
+        // Metric tables are a pane of Kernel Details.
+        ComputeKernelDetailsView* kd = ComputeViewTestPeer{*cv}.KernelDetailsPtr();
+        IM_CHECK(kd != nullptr);
+        if (kd == nullptr) return;
         ComputeTableView* tbl = ComputeKernelDetailsViewTestPeer{*kd}.TableViewPtr();
         IM_CHECK(tbl != nullptr);
         if (tbl == nullptr) return;
@@ -1184,13 +1123,7 @@ void RegisterAppTests(ImGuiTestEngine* e)
         ComputePanelsGuard panels_guard;
         peer.ShowTable(table_key, true);
 
-        tc->SetActiveTab(ComputeKernelDetailsView::TAB_ID);
         ctx->Yield(3);
-        const TabItem* active_tab = tc->GetActiveTab();
-        IM_CHECK(active_tab != nullptr);
-        if (active_tab == nullptr) return;
-        IM_CHECK(active_tab->m_id == ComputeKernelDetailsView::TAB_ID);
-        if (active_tab->m_id != ComputeKernelDetailsView::TAB_ID) return;
         for (int i = 0; i < 200 && (peer.FetchPending() || peer.TableWidgetCount() == 0); i++)
             ctx->Yield(2);
         IM_CHECK(peer.TableWidgetCount() > 0);
@@ -1937,39 +1870,10 @@ void RegisterAppTests(ImGuiTestEngine* e)
         ComputeView* cv = GetComputeViewOrSkip(ctx);
         if (!cv) return;
         ComputePanelsGuard panels_guard;
-        TabContainer* tc = ComputeViewTestPeer{*cv}.TabContainerPtr();
-        IM_CHECK(tc != nullptr);
-        if (tc == nullptr) return;
-
-        // The kernel metric table renders only while the "Kernel Details" tab is
-        // active (TabContainer renders just the active tab's content).
-        const std::vector<const TabItem*> tabs = tc->GetTabs();
-        const auto kernel_details_it =
-            std::find_if(tabs.begin(), tabs.end(), [](const TabItem* tab) {
-                return tab && tab->m_id == ComputeKernelDetailsView::TAB_ID;
-            });
-        if (kernel_details_it == tabs.end())
-        {
-            ctx->LogWarning("SKIP: no Kernel Details tab in this build");
-            return;
-        }
-        if (!(*kernel_details_it)->m_enabled)
-        {
-            ctx->LogWarning("SKIP: Kernel Details tab is disabled");
-            return;
-        }
-
-        tc->SetActiveTab(ComputeKernelDetailsView::TAB_ID);
-        ctx->Yield(3);
-        const TabItem* tab = tc->GetActiveTab();
-        IM_CHECK(tab != nullptr);
-        if (tab == nullptr) return;
-        IM_CHECK(tab->m_id == ComputeKernelDetailsView::TAB_ID);
-        if (tab->m_id != ComputeKernelDetailsView::TAB_ID) return;
-        ComputeKernelDetailsView* kd =
-            dynamic_cast<ComputeKernelDetailsView*>(tab->m_widget.get());
+        ComputeKernelDetailsView* kd = ComputeViewTestPeer{*cv}.KernelDetailsPtr();
         IM_CHECK(kd != nullptr);
         if (kd == nullptr) return;
+        ctx->Yield(3);
         KernelMetricTable* kt = ComputeKernelDetailsViewTestPeer{*kd}.KernelMetricTablePtr();
         IM_CHECK(kt != nullptr);
         if (kt == nullptr) return;
@@ -2036,23 +1940,9 @@ void RegisterAppTests(ImGuiTestEngine* e)
         ComputeView* cv = GetComputeViewOrSkip(ctx);
         if (!cv) return;
         ComputePanelsGuard panels_guard;  // kernel rail in Table mode
-        TabContainer* tc = ComputeViewTestPeer{*cv}.TabContainerPtr();
-        IM_CHECK(tc != nullptr);
-        if (tc == nullptr) return;
-        ComputeKernelDetailsView* kd = nullptr;
-        for (const TabItem* tab : tc->GetTabs())
-        {
-            if (tab && tab->m_id == ComputeKernelDetailsView::TAB_ID)
-            {
-                kd = dynamic_cast<ComputeKernelDetailsView*>(tab->m_widget.get());
-                break;
-            }
-        }
-        if (kd == nullptr)
-        {
-            ctx->LogWarning("SKIP: no Kernel Details tab in this build");
-            return;
-        }
+        ComputeKernelDetailsView* kd = ComputeViewTestPeer{*cv}.KernelDetailsPtr();
+        IM_CHECK(kd != nullptr);
+        if (kd == nullptr) return;
         KernelMetricTable* kt = ComputeKernelDetailsViewTestPeer{*kd}.KernelMetricTablePtr();
         IM_CHECK(kt != nullptr);
         if (kt == nullptr) return;
@@ -2071,7 +1961,6 @@ void RegisterAppTests(ImGuiTestEngine* e)
             return;
         }
 
-        tc->SetActiveTab(ComputeKernelDetailsView::TAB_ID);
         kt->FetchData(sel->GetSelectedWorkload());
         for (int i = 0; i < 300 && (peer.Fetching() || peer.Rows().empty()); i++) ctx->Yield(2);
         IM_CHECK(!peer.Rows().empty());
@@ -2157,23 +2046,9 @@ void RegisterAppTests(ImGuiTestEngine* e)
         ComputeView* cv = GetComputeViewOrSkip(ctx);
         if (!cv) return;
         ComputePanelsGuard panels_guard;  // kernel rail in Table mode
-        TabContainer* tc = ComputeViewTestPeer{*cv}.TabContainerPtr();
-        IM_CHECK(tc != nullptr);
-        if (tc == nullptr) return;
-        ComputeKernelDetailsView* kd = nullptr;
-        for (const TabItem* tab : tc->GetTabs())
-        {
-            if (tab && tab->m_id == ComputeKernelDetailsView::TAB_ID)
-            {
-                kd = dynamic_cast<ComputeKernelDetailsView*>(tab->m_widget.get());
-                break;
-            }
-        }
-        if (kd == nullptr)
-        {
-            ctx->LogWarning("SKIP: no Kernel Details tab in this build");
-            return;
-        }
+        ComputeKernelDetailsView* kd = ComputeViewTestPeer{*cv}.KernelDetailsPtr();
+        IM_CHECK(kd != nullptr);
+        if (kd == nullptr) return;
         ComputeKernelDetailsViewTestPeer kd_peer{*kd};
         KernelMetricTable* kt = kd_peer.KernelMetricTablePtr();
         IM_CHECK(kt != nullptr);
@@ -2186,7 +2061,6 @@ void RegisterAppTests(ImGuiTestEngine* e)
         for (const WorkloadInfo* w : cv->GetDataProvider()->ComputeModel().GetWorkloadList())
             kernel_count += w ? w->kernels.size() : 0;
 
-        tc->SetActiveTab(ComputeKernelDetailsView::TAB_ID);
         kt->FetchData(sel->GetSelectedWorkload());
         for (int i = 0; i < 300 && (peer.Fetching() || peer.Rows().empty()); i++) ctx->Yield(2);
         IM_CHECK(!peer.Rows().empty());
@@ -2296,23 +2170,9 @@ void RegisterAppTests(ImGuiTestEngine* e)
         ComputeView* cv = GetComputeViewOrSkip(ctx);
         if (!cv) return;
         ComputePanelsGuard panels_guard;  // 2x2 grid: the ISA pane in the fourth box
-        TabContainer* tc = ComputeViewTestPeer{*cv}.TabContainerPtr();
-        IM_CHECK(tc != nullptr);
-        if (tc == nullptr) return;
-        ComputeKernelDetailsView* kd = nullptr;
-        for (const TabItem* tab : tc->GetTabs())
-        {
-            if (tab && tab->m_id == ComputeKernelDetailsView::TAB_ID)
-            {
-                kd = dynamic_cast<ComputeKernelDetailsView*>(tab->m_widget.get());
-                break;
-            }
-        }
-        if (kd == nullptr)
-        {
-            ctx->LogWarning("SKIP: no Kernel Details tab in this build");
-            return;
-        }
+        ComputeKernelDetailsView* kd = ComputeViewTestPeer{*cv}.KernelDetailsPtr();
+        IM_CHECK(kd != nullptr);
+        if (kd == nullptr) return;
         ComputeKernelDetailsViewTestPeer kd_peer{*kd};
         ComputeIsaView* isa = kd_peer.IsaViewPtr();
         if (isa == nullptr)
@@ -2324,7 +2184,6 @@ void RegisterAppTests(ImGuiTestEngine* e)
         ComputeSelection* sel = ComputeViewTestPeer{*cv}.ComputeSelectionPtr();
         IM_CHECK(sel != nullptr);
         if (sel == nullptr) return;
-        tc->SetActiveTab(ComputeKernelDetailsView::TAB_ID);
         ctx->Yield(3);
 
         const ComputeDataModel& model = cv->GetDataProvider()->ComputeModel();
@@ -2391,6 +2250,97 @@ void RegisterAppTests(ImGuiTestEngine* e)
         wait_isa(a_kernel);
         const bool stop_follows = isa_peer.FollowsSelection() &&
                                   isa_peer.CurrentKernelId() == a_kernel;
+
+        IM_CHECK(comparing);
+        IM_CHECK(opens_on_a);
+        IM_CHECK(shows_b);
+        IM_CHECK(shows_a);
+        IM_CHECK(stop_follows);
+    };
+
+    t = IM_REGISTER_TEST(e, "app", "compute_workload_details_compare_shows_a_or_b");
+    t->TestFunc = [](ImGuiTestContext* ctx)
+    {
+        ComputeView* cv = GetComputeViewOrSkip(ctx);
+        if (!cv) return;
+        ComputeKernelDetailsView* kd = ComputeViewTestPeer{*cv}.KernelDetailsPtr();
+        IM_CHECK(kd != nullptr);
+        if (kd == nullptr) return;
+        ComputeKernelDetailsViewTestPeer kd_peer{*kd};
+        ComputeWorkloadView* wv = kd_peer.WorkloadViewPtr();
+        IM_CHECK(wv != nullptr);
+        if (wv == nullptr) return;
+        ComputeWorkloadViewTestPeer wv_peer{*wv};
+        ComputeSelection* sel = ComputeViewTestPeer{*cv}.ComputeSelectionPtr();
+        IM_CHECK(sel != nullptr);
+        if (sel == nullptr) return;
+
+        // B: a kernel of another workload when there is one, else of A's.
+        const ComputeDataModel& model      = cv->GetDataProvider()->ComputeModel();
+        const uint32_t          a_workload = sel->GetSelectedWorkload();
+        const uint32_t          a_kernel   = sel->GetSelectedKernel();
+        uint32_t b_workload = ComputeSelection::INVALID_SELECTION_ID;
+        uint32_t b_kernel   = ComputeSelection::INVALID_SELECTION_ID;
+        for (const WorkloadInfo* w : model.GetWorkloadList())
+        {
+            for (const KernelInfo* k : w ? model.GetKernelInfoList(w->id)
+                                         : std::vector<const KernelInfo*>())
+            {
+                const bool other_workload = w->id != a_workload;
+                if (k && !(w->id == a_workload && k->id == a_kernel) &&
+                    (b_kernel == ComputeSelection::INVALID_SELECTION_ID ||
+                     (other_workload && b_workload == a_workload)))
+                {
+                    b_workload = w->id;
+                    b_kernel   = k->id;
+                }
+            }
+        }
+        if (b_kernel == ComputeSelection::INVALID_SELECTION_ID)
+        {
+            ctx->LogWarning("SKIP: the database has only one kernel");
+            return;
+        }
+
+        struct CompareGuard
+        {
+            ComputeKernelDetailsViewTestPeer& peer;
+            ~CompareGuard() { peer.StopCompare(); }
+        } compare_guard{ kd_peer };
+        ComputePanelsGuard panels_guard;
+        SettingsManager::GetInstance().GetAppWindowSettings().compute_layout_slots[3] =
+            static_cast<int32_t>(ComputePane::kWorkloadDetails);
+        ctx->Yield(3);
+        auto shown_workload = [&]() {
+            return wv_peer.WorkloadInfoPtr() ? wv_peer.WorkloadInfoPtr()->id
+                                             : ComputeSelection::INVALID_SELECTION_ID;
+        };
+
+        // Comparing opens the panel on A.
+        kd_peer.CompareWith(b_workload, b_kernel);
+        ctx->Yield(3);
+        const bool comparing  = kd_peer.IsComparing();
+        const bool opens_on_a = !kd_peer.WorkloadShowsB() && wv_peer.FollowsSelection() &&
+                                shown_workload() == a_workload;
+
+        // B shows the compare target's workload; the selection stays A.
+        kd_peer.ShowWorkloadSide(CompareSide::kB);
+        ctx->Yield(3);
+        const bool shows_b = shown_workload() == b_workload && !wv_peer.FollowsSelection() &&
+                             sel->GetSelectedKernel() == a_kernel;
+        CaptureForReview(ctx, "workload_compare_b");
+
+        // A goes back to the selection.
+        kd_peer.ShowWorkloadSide(CompareSide::kA);
+        ctx->Yield(3);
+        const bool shows_a = shown_workload() == a_workload && wv_peer.FollowsSelection();
+
+        // Stopping while on B returns to the selection.
+        kd_peer.ShowWorkloadSide(CompareSide::kB);
+        ctx->Yield(3);
+        kd_peer.StopCompare();
+        ctx->Yield(3);
+        const bool stop_follows = wv_peer.FollowsSelection() && shown_workload() == a_workload;
 
         IM_CHECK(comparing);
         IM_CHECK(opens_on_a);

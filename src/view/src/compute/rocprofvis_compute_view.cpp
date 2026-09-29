@@ -12,7 +12,6 @@
 #endif
 #include "icons/rocprovfis_icon_defines.h"
 #include "rocprofvis_appwindow.h"
-#include "rocprofvis_compute_workload_view.h"
 #include "rocprofvis_event_manager.h"
 #include "rocprofvis_settings_manager.h"
 #include "widgets/rocprofvis_gui_helpers.h"
@@ -30,6 +29,10 @@ namespace View
 // work area (matches the system-trace summary's defaults).
 constexpr ImVec2 SUMMARY_WINDOW_RELATIVE_POS  = ImVec2(0.1f, 0.2f);
 constexpr float  SUMMARY_WINDOW_RELATIVE_SIZE = 0.8f;
+#ifdef ROCPROFVIS_DEVELOPER_MODE
+constexpr ImVec2 TESTER_WINDOW_RELATIVE_POS  = ImVec2(0.15f, 0.15f);
+constexpr float  TESTER_WINDOW_RELATIVE_SIZE = 0.7f;
+#endif
 
 constexpr const char* INVALID_COMPUTE_DATABASE_MESSAGE =
     "The file could not be loaded as a compatible compute profiling "
@@ -69,7 +72,7 @@ ComputeView::ComputeView()
 , m_toolbar_available_width(0.0f)
 , m_compute_selection(nullptr)
 , m_preset_browser(nullptr)
-, m_tab_container(nullptr)
+, m_kernel_details(nullptr)
 , m_popup_info({})
 {
     m_tool_bar = std::make_shared<RocCustomWidget>([this]() { this->RenderToolbar(); });
@@ -158,7 +161,7 @@ ComputeView::Update()
        (new_state == ProviderState::kReady || new_state == ProviderState::kError))
     {
         CreateView();
-        m_view_created = (m_tab_container != nullptr);
+        m_view_created = (m_kernel_details != nullptr);
     }
 
     if(new_state == ProviderState::kReady)
@@ -167,14 +170,20 @@ ComputeView::Update()
         {
             m_preset_browser->Update();
         }
-        if(m_tab_container)
+        if(m_kernel_details)
         {
-            m_tab_container->Update();
+            m_kernel_details->Update();
         }
         if(m_summary_view)
         {
             m_summary_view->Update();
         }
+#ifdef ROCPROFVIS_DEVELOPER_MODE
+        if(m_compute_tester)
+        {
+            m_compute_tester->Update();
+        }
+#endif
     }
 
     ShowPendingDatabaseErrorDialog();
@@ -185,8 +194,11 @@ ComputeView::CreateView()
 {
     m_compute_selection.reset();
     m_preset_browser.reset();
-    m_tab_container.reset();
+    m_kernel_details.reset();
     m_summary_view.reset();
+#ifdef ROCPROFVIS_DEVELOPER_MODE
+    m_compute_tester.reset();
+#endif
 
     const WorkloadInfo* initial_workload = ValidateDatabase();
     if(!initial_workload)
@@ -199,7 +211,7 @@ ComputeView::CreateView()
     m_preset_browser = std::make_unique<PresetBrowser>();
     m_summary_view =
         std::make_shared<ComputeSummaryView>(m_data_provider, m_compute_selection);
-    CreateTabContainer();
+    CreateKernelDetails();
 }
 
 const WorkloadInfo*
@@ -241,26 +253,20 @@ ComputeView::ValidateDatabase()
 }
 
 void
-ComputeView::CreateTabContainer()
+ComputeView::CreateKernelDetails()
 {
     const std::vector<const WorkloadInfo*>& workloads =
         m_data_provider.ComputeModel().GetWorkloadList();
     const bool database_has_metrics   = HasAvailableMetrics(workloads);
     const bool database_has_isa_lines = HasIsaLines(workloads);
 
-    // Summary lives in its own window (RenderSummaryWindow); metric tables, ISA
-    // and comparing two kernels are part of Kernel Details.
-    m_tab_container = std::make_shared<TabContainer>();
-    m_tab_container->AddTab(ComputeKernelDetailsView::CreateTabItem(
-        m_data_provider, m_compute_selection, database_has_metrics, database_has_isa_lines));
-    m_tab_container->AddTab(
-        ComputeWorkloadView::CreateTabItem(m_data_provider, m_compute_selection));
-
+    // Summary lives in its own window (RenderSummaryWindow); metric tables, ISA,
+    // workload details and comparing two kernels are part of Kernel Details.
+    m_kernel_details = std::make_shared<ComputeKernelDetailsView>(
+        m_data_provider, m_compute_selection, database_has_metrics, database_has_isa_lines);
 #ifdef ROCPROFVIS_DEVELOPER_MODE
-    m_tab_container->AddTab(
-        ComputeTester::CreateTabItem(m_data_provider, m_compute_selection));
+    m_compute_tester = std::make_shared<ComputeTester>(m_data_provider, m_compute_selection);
 #endif
-    m_tab_container->SetAllowToolTips(false);
 }
 
 void
@@ -269,7 +275,10 @@ ComputeView::DestroyView()
     m_view_created       = false;
     m_error_dialog_state = ErrorDialogState::kNone;
     m_popup_info         = {};
-    m_tab_container.reset();
+    m_kernel_details.reset();
+#ifdef ROCPROFVIS_DEVELOPER_MODE
+    m_compute_tester.reset();
+#endif
     m_summary_view.reset();
     m_compute_selection.reset();
     m_preset_browser.reset();
@@ -299,11 +308,14 @@ ComputeView::Render()
         {
             m_preset_browser->Render();
         }
-        if(m_tab_container)
+        if(m_kernel_details)
         {
-            m_tab_container->Render();
+            m_kernel_details->Render();
         }
         RenderSummaryWindow();
+#ifdef ROCPROFVIS_DEVELOPER_MODE
+        RenderComputeTesterWindow();
+#endif
     }
 }
 
@@ -333,6 +345,33 @@ ComputeView::RenderSummaryWindow()
     }
     ImGui::End();
 }
+
+#ifdef ROCPROFVIS_DEVELOPER_MODE
+void
+ComputeView::RenderComputeTesterWindow()
+{
+    bool* visible = ComputeTester::VisiblePtr();
+    if(!m_compute_tester || !*visible)
+    {
+        return;
+    }
+
+    const ImGuiViewport* viewport = ImGui::GetMainViewport();
+    ImGui::SetNextWindowPos(viewport->WorkPos +
+                                viewport->WorkSize * TESTER_WINDOW_RELATIVE_POS,
+                            ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowSize(viewport->WorkSize * TESTER_WINDOW_RELATIVE_SIZE,
+                             ImGuiCond_FirstUseEver);
+    // One window per compute project, like Summary.
+    const std::string title = "Compute Tester###" + m_widget_name + "_tester";
+    if(ImGui::Begin(title.c_str(), visible,
+                    ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoSavedSettings))
+    {
+        m_compute_tester->Render();
+    }
+    ImGui::End();
+}
+#endif
 
 void
 ComputeView::QueueDatabaseErrorDialog(const std::string& file_path,

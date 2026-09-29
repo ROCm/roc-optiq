@@ -4,8 +4,8 @@
 #pragma once
 #include "rocprofvis_data_provider.h"
 #include "rocprofvis_root_view.h"
-#include "widgets/rocprofvis_tab_container.h"
 
+#include <memory>
 #include <string>
 
 namespace RocProfVis
@@ -13,8 +13,10 @@ namespace RocProfVis
 namespace View
 {
 
+class ComputeKernelDetailsView;
 class ComputeSelection;
 class ComputeSummaryView;
+class ComputeTester;
 class PresetBrowser;
 struct WorkloadInfo;
 
@@ -41,11 +43,15 @@ public:
 
 private:
     const WorkloadInfo* ValidateDatabase();
-    void CreateTabContainer();
+    void CreateKernelDetails();
     void RenderToolbar();
     void RenderPresets();
     // Floating "Summary" window, toggled by View > Show Summary.
     void RenderSummaryWindow();
+#ifdef ROCPROFVIS_DEVELOPER_MODE
+    // Floating "Compute Tester" window, toggled from Developer Options.
+    void RenderComputeTesterWindow();
+#endif
     void QueueDatabaseErrorDialog(const std::string& file_path,
                                   const std::string& message);
     void ShowPendingDatabaseErrorDialog();
@@ -65,7 +71,11 @@ private:
     std::unique_ptr<PresetBrowser>      m_preset_browser;
     std::shared_ptr<ComputeSummaryView> m_summary_view;
 
-    std::shared_ptr<TabContainer> m_tab_container;
+    // The whole compute UI: one workspace, so no tab bar.
+    std::shared_ptr<ComputeKernelDetailsView> m_kernel_details;
+#ifdef ROCPROFVIS_DEVELOPER_MODE
+    std::shared_ptr<ComputeTester> m_compute_tester;
+#endif
 
     struct popup_info_t
     {

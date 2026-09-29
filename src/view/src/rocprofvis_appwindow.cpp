@@ -24,6 +24,9 @@
 #include "rocprofvis_view_module.h"
 #include "widgets/rocprofvis_debug_window.h"
 #include "widgets/rocprofvis_log_viewer.h"
+#ifdef ROCPROFVIS_DEVELOPER_MODE
+#    include "compute/rocprofvis_compute_tester.h"
+#endif
 #ifdef ROCPROFVIS_ENABLE_AGENTIC_PROFILING
 #    include "agenticprofiling/rocprofvis_ai_assistant.h"
 #endif
@@ -1336,6 +1339,8 @@ AppWindow::RenderViewMenu(Project* project)
         ImGui::MenuItem("Show Roofline", nullptr, &settings.show_compute_roofline);
         ImGui::MenuItem("Show Metric Tables", nullptr, &settings.show_compute_metric_tables);
         ImGui::MenuItem("Show ISA", nullptr, &settings.show_compute_isa);
+        ImGui::MenuItem("Show Workload Details", nullptr,
+                        &settings.show_compute_workload_details);
 
         ImGui::Separator();
         ImGui::MenuItem("Show Log Viewer", nullptr,
@@ -1982,6 +1987,7 @@ AppWindow::RenderDeveloperMenu()
         {
             m_show_metrics = !m_show_metrics;
         }
+        ImGui::MenuItem("Show Compute Tester", nullptr, ComputeTester::VisiblePtr());
         // Toggle debug output window
         if(ImGui::MenuItem("Show Debug Output Window", nullptr, m_show_debug_window))
         {

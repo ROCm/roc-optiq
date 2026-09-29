@@ -85,7 +85,8 @@ constexpr HeaderTooltipText CODE_OBJECT_OFFSET_HEADER_TOOLTIP {
 constexpr HeaderTooltipText STALL_PERCENT_HEADER_TOOLTIP {
     "How often this instruction was unable to issue and was waiting when sampled.\n"
     "Higher values identify where to investigate, but not the cause of the wait.\n"
-    "Hover a value to see every recorded stall reason, ordered by sample count.",
+    "Hover a value to see every recorded stall reason, ordered by sample count.\n"
+    "If progress data was not recorded, the column is disabled and displays NULL.",
     "DB fields: compute_pc_sample_state.issue_count, stall_count, total_count\n"
     "Group key: compute_pc_sample_state.instruction_uuid\n"
     "Value: 100 * SUM(stall_count) / SUM(total_count)\n"
@@ -117,6 +118,11 @@ constexpr const char* STALL_REASON_TOOLTIP_NO_STALLS =
     "No stalled samples were recorded for this instruction.";
 constexpr const char* STALL_REASON_TOOLTIP_UNAVAILABLE =
     "No stall-reason details were recorded for this instruction.";
+constexpr const char* STALL_DATA_UNAVAILABLE_CELL_TEXT = "NULL";
+constexpr const char* STALL_DATA_UNAVAILABLE_CELL_TOOLTIP =
+    "Stall percentage is unavailable because this profile did not record whether "
+    "sampled waves issued or stalled.\n"
+    "This is expected for host-trap PC sampling.";
 constexpr const char* STALL_REASON_TOOLTIP_SHARE_DESCRIPTION =
     "Shares use all %s stalled samples as the denominator.";
 constexpr const char* STALL_REASON_TOOLTIP_COUNT_MISMATCH =
@@ -132,7 +138,7 @@ RenderCenteredTableHeaderLabel(int column, const char* label)
 {
     ImGui::TableSetColumnIndex(column);
     CenterNextTextItem(label);
-    ImGui::TextUnformatted(label);
+    ImGui::TableHeader(label);
 }
 
 void
@@ -730,8 +736,9 @@ BaseCodeWidget::BaseCodeWidget(LineSelection& selection)
 {
     m_line_num_color = ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled);
 
-    m_table_flags = ImGuiTableFlags_Resizable | ImGuiTableFlags_NoPadOuterX |
-        ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_ScrollY;
+    m_table_flags = ImGuiTableFlags_Resizable | ImGuiTableFlags_Hideable |
+        ImGuiTableFlags_NoPadOuterX | ImGuiTableFlags_BordersInnerV |
+        ImGuiTableFlags_ScrollY;
 }
 
 void
@@ -807,8 +814,13 @@ SourceCodeWidget::Render()
 
     const int columns_count = 2;
 
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
+                        m_settings.GetDefaultStyle().WindowPadding);
     if(!ImGui::BeginTable("SourceCode", columns_count, m_table_flags))
+    {
+        ImGui::PopStyleVar();
         return;
+    }
 
     ImGui::TableSetupScrollFreeze(0, 1);
 
@@ -842,6 +854,7 @@ SourceCodeWidget::Render()
     ImGui::PopStyleVar();
 
     ImGui::EndTable();
+    ImGui::PopStyleVar();
 }
 
 uint32_t
@@ -1228,13 +1241,16 @@ IsaCodeWidget::Render()
     }
 
     const bool show_sampling_details = IsStallShown();
-    const bool show_stall_data       = IsStallDataShown();
-    const int sampling_detail_columns = (show_sampling_details ? 1 : 0) +
-                                        (show_stall_data ? 1 : 0);
+    const int sampling_detail_columns = show_sampling_details ? 2 : 0;
     const int columns_count = 3 + sampling_detail_columns;
 
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
+                        m_settings.GetDefaultStyle().WindowPadding);
     if(!ImGui::BeginTable("IsaCode", columns_count, m_table_flags))
+    {
+        ImGui::PopStyleVar();
         return;
+    }
 
     ImGui::TableSetupScrollFreeze(0, 1);
 
@@ -1270,7 +1286,7 @@ IsaCodeWidget::Render()
                             offset_column_width);
     ImGui::TableSetupColumn("ISA", ImGuiTableColumnFlags_WidthStretch);
 
-    if(show_stall_data)
+    if(show_sampling_details)
     {
         const float stall_column_width = ImGui::CalcTextSize("Stall %").x;
         ImGui::TableSetupColumn("Stall %", ImGuiTableColumnFlags_WidthFixed,
@@ -1287,10 +1303,19 @@ IsaCodeWidget::Render()
     RenderTableHeaderWithTooltip(header_column++, "Offset",
                                  CODE_OBJECT_OFFSET_HEADER_TOOLTIP);
     RenderTableHeaderWithTooltip(header_column++, "ISA", ISA_INSTRUCTION_HEADER_TOOLTIP);
-    if(show_stall_data)
+    if(show_sampling_details)
     {
+        if(!m_stall_data_available)
+        {
+            ImGui::PushStyleColor(ImGuiCol_Text,
+                                  ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
+        }
         RenderTableHeaderWithTooltip(header_column, "Stall %",
                                      STALL_PERCENT_HEADER_TOOLTIP);
+        if(!m_stall_data_available)
+        {
+            ImGui::PopStyleColor();
+        }
     }
     PushStyles();
 
@@ -1312,6 +1337,7 @@ IsaCodeWidget::Render()
     ImGui::PopStyleVar();
 
     ImGui::EndTable();
+    ImGui::PopStyleVar();
 }
 
 uint32_t
@@ -1451,6 +1477,24 @@ IsaCodeWidget::RenderPercentBarCell(double percent)
 }
 
 void
+IsaCodeWidget::RenderUnavailableStallCell()
+{
+    const ImVec2 cell_start = ImGui::GetCursorScreenPos();
+    const float  cell_width = std::max(0.0f, ImGui::GetContentRegionAvail().x);
+    const float  cell_height = ImGui::GetTextLineHeight();
+    const ImVec2 cell_end(cell_start.x + cell_width, cell_start.y + cell_height);
+
+    ImGui::BeginDisabled();
+    ImGui::TextUnformatted(STALL_DATA_UNAVAILABLE_CELL_TEXT);
+    ImGui::EndDisabled();
+
+    if(ImGui::IsMouseHoveringRect(cell_start, cell_end))
+    {
+        SetTooltipStyled("%s", STALL_DATA_UNAVAILABLE_CELL_TOOLTIP);
+    }
+}
+
+void
 IsaCodeWidget::RenderStallReasonsTooltip(const IsaRow& row)
 {
     if(!row.sample_counts.issue_count || !row.sample_counts.stall_count)
@@ -1586,23 +1630,21 @@ IsaCodeWidget::RenderLine(uint32_t index)
                             COPY_DATA_NOTIFICATION, false, true);
     ImGui::PopID();
 
-    if(IsStallDataShown())
+    if(IsStallShown())
     {
         ImGui::TableSetColumnIndex(++column);
-        if(RenderPercentBarCell(
-               CalculatePercentage(isa_row.sample_counts.stall_count.value_or(0),
-                                   isa_row.sample_counts.total_count)))
+        if(!m_stall_data_available)
+        {
+            RenderUnavailableStallCell();
+        }
+        else if(RenderPercentBarCell(
+                    CalculatePercentage(isa_row.sample_counts.stall_count.value_or(0),
+                                        isa_row.sample_counts.total_count)))
         {
             RenderStallReasonsTooltip(isa_row);
         }
     }
 
-}
-
-bool
-IsaCodeWidget::IsStallDataShown() const
-{
-    return IsStallShown() && m_stall_data_available;
 }
 
 }  // namespace View

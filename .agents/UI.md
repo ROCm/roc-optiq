@@ -1576,22 +1576,28 @@ The ISA table is always present. Its Offset column shows each instruction's
 byte offset inside the selected code object as uppercase hexadecimal; it is not
 an absolute runtime address. Right-clicking an offset, ISA instruction, or
 source-code line opens its copy context menu. `Show Sampling Details` adds
-Samples, aggregated by instruction UUID across returned sample states. It also
-adds Stall % when every returned sample state has non-NULL issued and stall
-counts. Host-trap captures leave those progress counts NULL, so their ISA table
-shows Samples but omits Stall %. A stochastic capture's real zero counts remain
+Samples, aggregated by instruction UUID across returned sample states, and the
+Stall % column. When every returned sample state has non-NULL issued and stall
+counts, Stall % shows the measured percentage. Host-trap captures leave those
+progress counts NULL, so their Stall % column remains visible but disabled;
+each row displays `NULL` and its tooltip explains why the data is unavailable.
+The disabled header is dimmed but remains interactive so its right-click column
+visibility menu is available. A stochastic capture's real zero counts remain
 available and are not confused with NULL. Samples shows a right-aligned
 raw count over a heat bar normalized to the hottest displayed instruction. Its
 tooltip reports both kernel share and relative hotness. Counts from one through
 ten carry a low-confidence marker for the derived percentages, while zero-count
 lines remain unmarked and the exact count remains prominent. The Samples column starts
 at the wider of its header and largest formatted count. All ISA-table columns
-are user-resizable, and each heat bar uses the live cell width so it follows
-both manual resizing and data- or font-driven width changes. Hovering a data
-column header shows a user-facing explanation; the `#` line-number headers do
-not show tooltips. When `ROCPROFVIS_DEVELOPER_MODE` is enabled, each data-column
-tooltip also shows the database fields, grouping or filtering keys, and formulas
-used by the column. Hovering a `Stall %` cell shows every recorded stall reason
+are user-resizable and user-hideable through the ImGui header context menu;
+the source table supports the same per-column visibility menu. Both native
+column menus use the application's default window padding, matching the event
+table menus. Each heat bar uses the live cell width so it follows both manual
+resizing and data- or font-driven width changes. Hovering a data column header shows a user-facing
+explanation; the `#` line-number headers do not show tooltips. When
+`ROCPROFVIS_DEVELOPER_MODE` is enabled, each data-column tooltip also shows the
+database fields, grouping or filtering keys, and formulas used by the column.
+Hovering a `Stall %` cell shows every recorded stall reason
 for that instruction, aggregated across sample states and sorted by descending
 sample count. Stochastic profiles encode the irrelevant stall-reason field of
 issued samples as `OTHER_WAIT`; the view removes that issued contribution per

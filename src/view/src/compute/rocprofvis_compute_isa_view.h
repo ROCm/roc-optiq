@@ -288,9 +288,9 @@ private:
     static std::string FormatSampleCount(uint64_t value);
     bool               RenderPercentBarCell(double percent);
     void               RenderSamplesCell(uint64_t sample_count);
+    void               RenderUnavailableStallCell();
     void               RenderStallReasonsTooltip(const IsaRow& row);
     void               RenderStallReasonTable(const IsaRow& row);
-    bool               IsStallDataShown() const;
 
     std::vector<IsaRow> m_entries;
     uint64_t            m_kernel_total_samples        = 0;

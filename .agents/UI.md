@@ -268,6 +268,9 @@ to the View. Specifically:
   `RocProfVis::Platform`: `FullscreenState`, `toggle_fullscreen`,
   `sync_fullscreen_state`, `get_current_monitor`. Use these instead of
   touching GLFW directly.
+  `apply_window_class_hints` must run before every `glfwCreateWindow`
+  (and after any `glfwDefaultWindowHints`) so windows match the Linux
+  `roc-optiq.desktop` entry and show its icon.
 - `rocprofvis_platform_helpers.{h,cpp}` /
   `rocprofvis_platform_helpers_macos.mm` - per-OS workarounds such as the
   Linux content-scale fallback and floating-viewport fixes. Each is only

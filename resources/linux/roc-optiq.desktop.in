@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=ROCm™ Optiq
+GenericName=Profiler Visualizer
+Comment=@PKG_DESCRIPTION@
+Exec=@CPACK_PACKAGING_INSTALL_PREFIX@/@CMAKE_INSTALL_BINDIR@/roc-optiq --file %f
+Icon=roc-optiq
+Terminal=false
+Categories=Development;Profiling;
+Keywords=AMD;ROCm;Optiq;profiler;profiling;trace;GPU;rocprof;
+StartupWMClass=roc-optiq

@@ -18,6 +18,13 @@ constexpr int DEFAULT_WINDOWED_YPOS = 100;
 constexpr int DEFAULT_WINDOWED_WIDTH = 1280;
 constexpr int DEFAULT_WINDOWED_HEIGHT = 720;
 
+// Set the window class hints that tie our windows to the installed
+// roc-optiq.desktop entry, so Linux desktop shells show them under its launcher
+// icon. glfwDefaultWindowHints() clears them, so call this after it and before
+// glfwCreateWindow(). Windows created later without a reset, such as ImGui's
+// pop-out viewports, inherit them.
+void apply_window_class_hints();
+
 // Structure to track fullscreen state
 struct FullscreenState
 {

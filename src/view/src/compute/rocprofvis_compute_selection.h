@@ -20,6 +20,9 @@ public:
 
     void SelectKernel(uint32_t kernel_id);
     void SelectWorkload(uint32_t workload_id);
+    // A kernel of possibly another workload, announced once (SelectWorkload
+    // would first announce that workload's first kernel).
+    void Select(uint32_t workload_id, uint32_t kernel_id);
 
     uint32_t GetSelectedWorkload() const;
     uint32_t GetSelectedKernel() const;

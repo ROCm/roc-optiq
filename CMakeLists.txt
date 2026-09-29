@@ -186,7 +186,6 @@ set(VIEW_FILES
     src/view/src/compute/rocprofvis_compute_roofline.cpp
     src/view/src/compute/rocprofvis_compute_workload_view.cpp
     src/view/src/compute/rocprofvis_compute_kernel_metric_table.cpp
-    src/view/src/compute/rocprofvis_compute_comparison.cpp
     src/view/src/compute/rocprofvis_compute_isa_view.cpp
     src/view/src/compute/rocprofvis_compute_tester.cpp
     src/view/src/model/compute/rocprofvis_compute_data_model.cpp
@@ -465,6 +464,9 @@ if(BUILD_TESTING AND ROCPROFVIS_ENABLE_UI_TESTS)
     target_compile_definitions(imgui_test_engine PUBLIC
         IMGUI_ENABLE_TEST_ENGINE
         IMGUI_TEST_ENGINE_ENABLE_COROUTINE_STDTHREAD_IMPL=1
+        # Screenshots for visual review (ctx->CaptureScreenshot); the engine's
+        # imconfig template that would default this on is not included.
+        IMGUI_TEST_ENGINE_ENABLE_CAPTURE=1
     )
     target_include_directories(imgui_test_engine PUBLIC
         ${IMGUI_TEST_ENGINE_DIR}

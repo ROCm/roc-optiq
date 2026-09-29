@@ -411,8 +411,7 @@ AppWindow (singleton, RocWidget)
 |   |             +-- m_summary_view   : ComputeSummaryView (floating "Summary" window)
 |   |             +-- m_tab_container  : TabContainer with sub-tabs:
 |   |                 +-- ComputeKernelDetailsView (resizable panes, incl.
-|   |                 |     ComputeTableView and ComputeIsaView)
-|   |                 +-- ComputeComparisonView
+|   |                 |     ComputeTableView and ComputeIsaView; compare A/B)
 |   |                 +-- ComputeWorkloadView
 |   |                 +-- (ComputeTester, dev mode only)
 |   +-- [2] status bar (RocCustomWidget calling AppWindow::RenderStatusBar)
@@ -1340,8 +1339,9 @@ The compute analogue of `TraceView`. Owns:
   system-trace summary). Its `###` window id is per project.
 - `m_tab_container` - sub-tabs:
   - `ComputeKernelDetailsView` - per-kernel workspace; also hosts the
-    metric tables (`ComputeTableView`) and ISA (`ComputeIsaView`) panes.
-  - `ComputeComparisonView` - baseline vs target comparison.
+    metric tables (`ComputeTableView`) and ISA (`ComputeIsaView`) panes, and
+    comparing the selected kernel with a second one (there is no separate
+    comparison tab).
   - `ComputeWorkloadView` - system info + profiling config tables.
   - `ComputeTester` - dev-mode scratchpad
     (`#ifdef ROCPROFVIS_DEVELOPER_MODE`).
@@ -1394,7 +1394,9 @@ card and header itself):
   shrinks it to fit. In a box too small to read it (`SetAutoCompact`: under
   60% of its width or 50% of its height) it becomes a fitted, centred overview;
   maximized it is always actual size.
-- `m_roofline` (`Roofline`, single-kernel mode).
+- `m_memory_chart_b` - the compare target's chart (`SetSource`), with the
+  layout of B's own workload.
+- `m_roofline` (`Roofline`; `SetMode` switches `SingleKernel` / `Compare`).
 - `m_table_view` (`ComputeTableView`) - opt-in metric tables.
 - `m_isa_view` (`ComputeIsaView`) - created only when the database has
   ISA lines; otherwise there is no ISA pane.
@@ -1408,9 +1410,16 @@ box panes. `LAYOUT_TEMPLATES` holds each template's name, box count and unit
 rectangles (the Layout menu thumbnails). Each box shows one `ComputePane`
 (`kMemoryChart`, `kRoofline`, `kMetricTables`, `kIsa`; append only) or is
 empty; a panel lives in one box at most, so `AssignSlot` swaps when the
-panel is shown elsewhere. The kernel rail lists the workload's kernels as
-vertical tabs by total duration (List) or shows `m_kernel_metric_table`
-(Table).
+panel is shown elsewhere. The kernel rail is the only place kernels are
+chosen (the compute toolbar has no workload / kernel combos): Table mode shows
+`m_kernel_metric_table`, which lists every workload's kernels, and List mode
+shows the same rows as vertical tabs, in the table's sort and after its
+filters (`ListedKernels`; by total duration from `m_kernel_groups` until the
+table has rows). With several workloads the List puts a header over each
+workload while the order keeps its kernels together, and names the workload
+on each tab when a sort mixes them; a line under the search names a
+non-default sort and the active filters (with Clear). Clicking a kernel in
+another workload selects that workload too.
 
 State lives in `AppWindowSettings` (`compute_layout_template`,
 `compute_layout_slots` - boxes beyond the template's count keep their panels
@@ -1432,14 +1441,51 @@ comes from `MakeRenderPane()`: the pane itself carries zero item spacing (a
 `VSplitContainer` advances past each pane with the pane's spacing, which
 would widen the gutter) and its content is wrapped to get normal spacing.
 
+Compare (`CompareState m_compare`): A is always the selection, B any other
+kernel of any workload (two-way only). Both are picked in the kernel rail:
+clicking a tab makes it A; each tab's right-hand marker column shows the A / B
+badges and, on hover, a B button that makes that kernel B (clicking B's badge
+stops comparing); tab and kernel-table context menus offer "Compare with this
+kernel (B)" (`KernelMetricTable::SetCompareCallback`). While on,
+`RenderCompareCard()` sits above the list: A and B at full width (with their
+workloads when there are several), Follow A, Swap, the GPU architectures and
+Stop. There is no compare control elsewhere. Selecting in the rail uses
+`ComputeSelection::Select(workload, kernel)`, one notification even across
+workloads (`SelectWorkload` alone picks the workload's busiest kernel, the top
+of the list). Rules:
+- Comparing starts from `SetCompareTarget()` (the rail's B) and stops with
+  `DisableCompare()` (B's badge, the card's Stop, or a context menu).
+- `OnBaselineChanged()` (every kernel-selection event, deduplicated against
+  `baseline_*`): selecting B as A swaps them; otherwise with
+  `follow_by_name` (default on, saved in presets) and B in another workload,
+  B moves to A's namesake there. `SwapCompare()` presets `baseline_*` so its
+  own selection events do not re-run the follow rule.
+- `ApplyCompare(target_changed)` pushes the state to every panel: roofline
+  `SetMode(Compare)` + `SetCompareTarget`, `ComputeTableView::SetCompareTarget`,
+  `m_memory_chart_b` layout / source / fetch, and the A / B / delta sides.
+- B - A in the memory chart needs the same layout, so `DeltaAvailable()` is
+  "same workload or same `WorkloadArch`"; otherwise the chart header offers
+  A and B only and the bar shows the architectures in warning colour.
+  `m_memory_chart_side` / `m_isa_side` pick what the chart and ISA show
+  (header buttons A / B / delta); delta sets `m_memory_chart.SetDeltaTarget(
+  &m_memory_chart_b)`. The ISA pane is one view that `ShowKernel`s B, since
+  the data provider has a single PC-sampling callback.
+- `SetCompareTarget()` ignores A itself.
+
 Handles `kComputeWorkloadSelectionChanged`,
-`kComputeKernelSelectionChanged`, `kComputeMetricsFetched`,
-`kNewTableData`, `kComputeShowMetricInKernelDetails` events.
+`kComputeKernelSelectionChanged`, `kComputeMetricsFetched` (A's and B's
+charts), `kNewTableData`, `kComputeShowMetricInKernelDetails` events.
 
 ### `Roofline` (`rocprofvis_compute_roofline.{h,cpp}`)
 
-ImPlot-based roofline chart. Two modes:
-`SingleKernel | AllKernels`. Internal models:
+ImPlot-based roofline chart. Modes `SingleKernel | AllKernels | Compare`
+(Compare plots the primary kernel against `SetCompareTarget`'s, with delta
+markers and, across workloads, a choice of whose peaks to draw; when one of
+the two has no roofline data the other is still plotted, with a note);
+`SetMode` switches at runtime and keeps the plot's options. The ImPlot plot's
+id is seeded from the widget (`m_plot_id`, `PushOverrideID`), not the window
+drawing it, so zoom and pan survive moving the pane to another box or
+maximizing it. Internal models:
 - `ItemModel` - one ceiling or intensity entry; carries `Type`,
   `SubType` union, `Info` union, `ParentInfo` union, label, weight.
 - `PresetModel` - FP4/FP6/FP8/FP16/FP32/FP64 presets that toggle
@@ -1516,6 +1562,13 @@ Each frame `Render()`:
    scrolls) and the window clip rect is restored. Hover tests map canvas rects
    through the same transform (`IsHoveringChartRect`); add new hit tests the
    same way, not with raw `IsMouseHoveringRect`.
+5. Comparing: `SetSource(workload, kernel)` makes a chart show that kernel
+   instead of the selection (the compare target's chart). `SetDeltaTarget(
+   other)` makes every value read `other` - this (B - A, block rows adding
+   the change as a % of A), coloured by direction (`kComparisonGreater` /
+   `kComparisonLesser`), with A, B and B - A in the tooltips and a legend
+   note. It resolves `other`'s metrics by the same ids, so both charts must
+   share a layout (same `WorkloadArch`).
 
 To change the chart: edit the per-arch JSON under `resources/memory_chart/`
 (or the DB blob). C++ only needs to change for new routing behavior, not
@@ -1524,8 +1577,23 @@ new blocks.
 ### `KernelMetricTable` (`rocprofvis_compute_kernel_metric_table.{h,cpp}`)
 
 The interactive kernel list with sortable, filterable, optionally
-bar-chart columns. Public:
-- `FetchData(workload_id)`, `HandleNewData()`, `ClearData()`.
+bar-chart columns. It lists every workload's kernels: the pivot query takes one
+workload, so a fetch cycle (`StartFetchCycle` / `RequestWorkloadRows`) asks for
+each in turn with the same query, sort and filters, `HandleNewData(success)`
+collects each response (a failed one is skipped) and `FinishFetchCycle` merges
+and sorts them into `m_rows` / `m_row_workloads`, which it renders (the model's
+table holds only the last response). With several workloads the hidden id
+column shows each row's workload (sorted client side, no filter), frozen with
+the name; clicking a row calls `ComputeSelection::Select(workload, kernel)`.
+`GetShownKernels()` exposes the rows as (workload, kernel) ids for the rail's
+List, which mirrors the table's order and filters.
+The current sort column carries `DefaultSort` every frame and the table stays
+`Sortable` during fetches, so ImGui rebuilding its sort specs (columns added or
+removed) keeps the chosen sort; after a query or re-sort the selected row is
+scrolled back into view. `SetMarkedKernel` tints the compare target's row.
+Public:
+- `FetchData(workload_id)` (the selection's workload; fetches only when
+  empty), `HandleNewData(success)`, `ClearData()`.
 - `SetQuery(query_string)` and
   `SetExternalQuery(metric_id, value_name)` for the "Add Metric" flow
   (driven by `QueryBuilder`).
@@ -1552,27 +1620,22 @@ separates "Loading..." from "No data". Pinning is delegated to
 pinned. If a workload has no available metric tables, `FetchAllMetrics()`
 leaves the view empty without submitting an invalid zero-selector request;
 when the whole database has none, the pane shows `NO_METRICS_MESSAGE`.
-Persistent via nested `Preset` (pins, and shown tables under `"tables"`).
+Persistent via nested `Preset` (pins, shown tables under `"tables"`, and the
+compare options).
 
-### `ComputeComparisonView` (`rocprofvis_compute_comparison.{h,cpp}`)
-
-Cross-workload / cross-kernel diff view. Notable nested types:
-- `FetchMetrics()` skips baseline or target requests when the corresponding
-  workload has no available metric tables, avoiding invalid zero-selector
-  requests. After trace metadata loads, `ComputeView` disables the top-level
-  Baseline Comparison tab when no workload in the database has an available
-  metric table. This state is initialized once rather than recomputed per frame.
-- `Table` - bespoke comparison table (`Row { id, entry, values_map,
-  cells, display_props, tags, selected }`, `Column { Selection |
-  MetricID | MetricName | Unit | Value }`, freeze rows/columns,
-  filtering by tag bitset).
-- `CategoryModel`, `PinnedModel` - state for the tabbed layout and
-  the pinned-metrics table.
-- `DifferenceGroup` - holds value+pct value pair for threshold
-  highlighting. `UpdateDifferenceGroups` /
-  `UpdateDifferenceHighlight` apply the user's threshold to flag
-  cells red/green.
-- Persistent via nested `Preset`.
+Comparing (`SetCompareTarget` / `ClearCompareTarget`, driven by Kernel
+Details): B's metrics are fetched under `m_compare_client_id`
+(`FetchCompareMetrics`, every table like A). `ListedTables()` lists A's tables
+paired with B's of the same key, then tables only B's workload has; the picker
+and headers tag one-sided tables "A only" / "B only". Each table is built with
+`MetricTable::PopulateComparison` and the pins with
+`PinnedMetricTable::SetCompareSource`: per value the `MetricCompareOptions`
+columns (A, B, delta, delta % of A; default A, B, delta %), metrics paired by
+id then by name (ids can shift between architectures; unpaired ones dimmed,
+B-only rows unpinnable and keyed with `COMPARE_B_ONLY_ENTRY_BIT`, hidden with
+"Metrics only one side has" off) and delta cells shaded by direction with an
+alpha that grows with the change, from `highlight_pct` up. The Compare combo
+next to the Tables picker edits the options.
 
 ### `ComputeSummaryView` and `ComputeTopKernels` (`rocprofvis_compute_summary.{h,cpp}`)
 
@@ -1600,7 +1663,10 @@ the optional source-code pane is shown on the right through the
 It is a pane of `ComputeKernelDetailsView` (View > Compute Profiler
 Panels > Show ISA). `ComputeView` checks once, after trace metadata loads,
 whether any kernel has ISA lines; if none does, the view is never constructed
-and there is no ISA pane.
+and there is no ISA pane. It follows the selection unless `ShowKernel()` pins
+it to another kernel (the compare target) until `FollowSelection()`; there is
+one view per compute tab because the data provider has a single PC-sampling
+callback.
 `RenderControlPanel()` hosts the source-file dropdown and the `Show Source
 Code` / `Show Stalls` controls. PC-sampling data is fetched through
 `PcSamplingRequestParams` / `DataProvider::FetchPcSampling` in three
@@ -3235,9 +3301,6 @@ All under `agenticprofiling/`, compiled only with
   `ColumnFilter`) -> `compute/rocprofvis_compute_kernel_metric_table.h`.
 - `ComputeTableView` (+ nested `Preset`) ->
   `compute/rocprofvis_compute_table_view.h`.
-- `ComputeComparisonView` (+ nested `Table`, `Preset`,
-  `CategoryModel`, `PinnedModel`, `DifferenceGroup`) ->
-  `compute/rocprofvis_compute_comparison.h`.
 - `ComputeSummaryView`, `ComputeTopKernels` ->
   `compute/rocprofvis_compute_summary.h`.
 - `ComputeTester` (dev only) ->

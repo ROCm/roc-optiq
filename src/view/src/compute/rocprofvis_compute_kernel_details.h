@@ -13,6 +13,7 @@
 #include <array>
 #include <memory>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace RocProfVis
@@ -55,13 +56,28 @@ enum class ComputeLayoutTemplate : int32_t
     kCount
 };
 
-// Per-kernel workspace. A kernel rail on the left lists the workload's kernels
-// as vertical tabs (or the full kernel metric table); the rest is a box layout
+// What a panel shows while comparing: the selected kernel (A), the compare
+// target (B), or B - A.
+enum class CompareSide : uint8_t
+{
+    kA,
+    kB,
+    kDelta,
+};
+
+// Per-kernel workspace. A kernel rail on the left lists every workload's
+// kernels as vertical tabs (or the full kernel metric table) and is where A and
+// B are chosen; the rest is a box layout
 // picked from ComputeLayoutTemplate, each box showing one panel. Panels move by
 // dragging a box's title onto another box (the two swap) or by the box's panel
 // picker; any box can be maximized to fill the tab. Template, box contents and
 // maximize live in AppWindowSettings (so they persist and match View > Compute
 // Profiler Panels) and are saved with user presets.
+//
+// Compare sets a second kernel (B, from any workload) against the selection
+// (A): the roofline plots both, metric tables add B and difference columns, and
+// the memory chart and ISA switch between A, B and (memory chart, same GPU
+// architecture only) B - A.
 class ComputeKernelDetailsView : public RocWidget
 {
 public:
@@ -97,6 +113,20 @@ private:
         const char* label;
         const char* tooltip;
         bool        active;
+    };
+
+    // The compare target (B) and how it follows the selection (A).
+    struct CompareState
+    {
+        bool     enabled = false;
+        uint32_t workload_id;
+        uint32_t kernel_id;
+        // When A changes to another kernel, B moves to the kernel of the same
+        // name in B's workload (when B's workload is not A's).
+        bool     follow_by_name = true;
+        // A as last seen, so a repeated notification is not a change.
+        uint32_t baseline_workload_id;
+        uint32_t baseline_kernel_id;
     };
 
     // Saves the layout (template, boxes, maximize, kernel rail, chart fit) with
@@ -166,11 +196,36 @@ private:
     void HandleSlotDrop(int32_t slot, const ImVec2& slot_min, const ImVec2& slot_max);
     void RenderKernelRail();
     void RenderKernelList();
-    void RenderKernelTab(const KernelInfo& kernel, bool selected, float total_duration);
+    // The kernel table's sort and filters, when they reorder or narrow the list.
+    void RenderKernelListOrder();
+    // `workload_label` names the workload on the tab when headers cannot.
+    void RenderKernelTab(const KernelInfo& kernel, uint32_t workload_id, bool selected,
+                         float total_duration, const char* workload_label);
     void RefreshKernelList();
+
+    // Comparison.
+    bool CanCompare() const;
+    void EnableCompare();
+    void DisableCompare();
+    void SetCompareTarget(uint32_t workload_id, uint32_t kernel_id);
+    // B becomes the selection and the old selection becomes B.
+    void SwapCompare();
+    // Applies the compare rules to a selection change (see CompareState).
+    void OnBaselineChanged();
+    // Pushes the comparison to the panels; `target_changed` refetches B.
+    void ApplyCompare(bool target_changed);
+    bool DeltaAvailable() const;
+    const KernelInfo* FindKernelByName(uint32_t workload_id, const std::string& name) const;
+    std::vector<const KernelInfo*> KernelsByDuration(uint32_t workload_id) const;
+    ComputeMemoryChartView&        DisplayedMemoryChart();
+    // A and B, Follow A, Swap, the architectures and Stop, above the kernel list.
+    void RenderCompareCard();
 
     DataProvider&          m_data_provider;
     ComputeMemoryChartView m_memory_chart;
+    // The compare target's chart; its own layout, so B of another GPU
+    // architecture draws its own hierarchy.
+    ComputeMemoryChartView m_memory_chart_b;
 
     std::shared_ptr<ComputeSelection>  m_compute_selection;
     std::shared_ptr<Roofline>          m_roofline;
@@ -195,13 +250,34 @@ private:
     std::array<bool, static_cast<size_t>(ComputePane::kCount)> m_synced_toggles{};
     bool                                                      m_toggles_synced = false;
 
-    // Kernel rail: workload kernels by total duration, and the list's search text.
-    std::vector<const KernelInfo*> m_kernel_list;
-    uint32_t                       m_kernel_list_workload;
-    float                          m_kernel_list_total_duration;
-    std::string                    m_kernel_filter;
+    // Kernel rail, the one place kernels (A and B) are chosen: every workload's
+    // kernels by total duration, and the list's search text.
+    struct KernelGroup
+    {
+        const WorkloadInfo*            workload;
+        std::vector<const KernelInfo*> kernels;
+        float                          total_duration;
+    };
+    std::vector<KernelGroup> m_kernel_groups;
+    // The list shows the kernel table's rows, in its order and after its
+    // filters, so both modes list the same; until the table has rows, the groups.
+    struct ListedKernel
+    {
+        const WorkloadInfo* workload;
+        const KernelInfo*   kernel;
+        float               workload_duration;
+    };
+    std::vector<ListedKernel> ListedKernels() const;
+    std::string              m_kernel_filter;
     // Last selection the list showed; a change from elsewhere scrolls it into view.
-    uint32_t                       m_kernel_list_selection;
+    uint32_t                 m_kernel_list_selection;
+    uint32_t                 m_kernel_list_selection_workload;
+
+    CompareState m_compare;
+    CompareSide  m_memory_chart_side = CompareSide::kA;
+    CompareSide  m_isa_side          = CompareSide::kA;
+    // Workload whose layout m_memory_chart_b has loaded.
+    uint32_t     m_memory_chart_b_workload;
 
     std::unique_ptr<Preset> m_preset;
 

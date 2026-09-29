@@ -3,6 +3,7 @@
 
 #include "rocprofvis_compute_roofline.h"
 #include "icons/rocprovfis_icon_defines.h"
+#include "imgui_internal.h"
 #include "implot/implot.h"
 #include "rocprofvis_compute_selection.h"
 #include "rocprofvis_data_provider.h"
@@ -88,6 +89,8 @@ constexpr const char* HINT_EMPTY_PRIMARY_KERNEL =
 constexpr const char* HINT_EMPTY_SECONDARY_KERNEL =
     "No data available for target kernel.";
 constexpr const char* HINT_EMPTY_COMPARE_INIT = "Select a kernel for comparison.";
+constexpr const char* HINT_EMPTY_BOTH_KERNELS =
+    "No data available for the baseline or target kernel.";
 constexpr const char* DELTA                   = "\xCE\x94";
 
 Roofline::Roofline(DataProvider& data_provider, Mode mode)
@@ -129,6 +132,7 @@ Roofline::Roofline(DataProvider& data_provider, Mode mode)
 , m_settings(SettingsManager::GetInstance())
 {
     m_widget_name = GenUniqueName("roofline");
+    m_plot_id     = ImHashStr(m_widget_name.c_str());
     m_items.resize(static_cast<size_t>(__KRPVControllerRooflineCeilingComputeTypeLast +
                                        __KRPVControllerRooflineCeilingBandwidthTypeLast));
     ItemModel::Type    model_type = ItemModel::CeilingCompute;
@@ -361,8 +365,18 @@ Roofline::Render()
         m_mode == Compare
             ? !m_kernel_secondary || m_kernel_secondary->roofline.intensities.empty()
             : false;
+    const bool compare_target_set =
+        m_requested_secondary_workload_id != ComputeSelection::INVALID_SELECTION_ID &&
+        m_requested_kernel_secondary_id != ComputeSelection::INVALID_SELECTION_ID;
+    // Comparing, one kernel is still worth plotting when the other has no roofline
+    // data (e.g. it did no floating-point work); a note names the empty one.
+    const bool nothing_to_plot =
+        ceiling_empty ||
+        (m_mode == Compare ? !compare_target_set ||
+                                 (primary_kernel_empty && secondary_kernel_empty)
+                           : primary_kernel_empty);
     const ImGuiStyle& style = ImGui::GetStyle();
-    if(!(ceiling_empty || primary_kernel_empty || secondary_kernel_empty))
+    if(!nothing_to_plot)
     {
         float filter_width =
             (ImGui::GetContentRegionAvail().x -
@@ -387,7 +401,7 @@ Roofline::Render()
     ImGui::BeginChild("roofline");
     const ImVec2       region     = ImGui::GetContentRegionAvail();
     const ImPlotStyle& plot_style = ImPlot::GetStyle();
-    if(ceiling_empty || primary_kernel_empty || secondary_kernel_empty)
+    if(nothing_to_plot)
     {
         ImGui::GetWindowDrawList()->AddRect(
             ImGui::GetCursorScreenPos() +
@@ -399,22 +413,9 @@ Roofline::Render()
                            ImGui::GetFrameHeightWithSpacing()),
             ImGui::GetColorU32(style.Colors[ImGuiCol_TableBorderStrong]));
         const char* hint = HINT_EMPTY_GENERIC;
-        if(m_mode == Compare)
+        if(m_mode == Compare && !ceiling_empty)
         {
-            if(m_requested_secondary_workload_id ==
-                   ComputeSelection::INVALID_SELECTION_ID ||
-               m_requested_kernel_secondary_id == ComputeSelection::INVALID_SELECTION_ID)
-            {
-                hint = HINT_EMPTY_COMPARE_INIT;
-            }
-            else if(primary_kernel_empty)
-            {
-                hint = HINT_EMPTY_PRIMARY_KERNEL;
-            }
-            else if(secondary_kernel_empty)
-            {
-                hint = HINT_EMPTY_SECONDARY_KERNEL;
-            }
+            hint = compare_target_set ? HINT_EMPTY_BOTH_KERNELS : HINT_EMPTY_COMPARE_INIT;
         }
         ImGui::SetCursorPos((region - ImGui::CalcTextSize(hint)) * 0.5f);
         ImGui::TextDisabled("%s", hint);
@@ -459,6 +460,9 @@ Roofline::Render()
         ImVec2 plot_pos;
         ImVec2 plot_size;
 
+        // Whichever box (or the maximized view) shows the roofline draws it, so
+        // the plot's id is fixed: its zoom and pan follow it there.
+        ImGui::PushOverrideID(m_plot_id);
         if(ImPlot::BeginPlot("plot", ImVec2(menus_outside ? 0.75f * region.x : -1, -1),
                              ImPlotFlags_NoTitle | ImPlotFlags_NoFrame |
                                  ImPlotFlags_NoLegend | ImPlotFlags_NoMenus |
@@ -892,6 +896,15 @@ Roofline::Render()
             }
             ImPlot::EndPlot();
         }
+        ImGui::PopID();
+        if(m_mode == Compare && (primary_kernel_empty || secondary_kernel_empty))
+        {
+            ImGui::GetWindowDrawList()->AddText(
+                plot_pos + ImVec2(plot_style.PlotPadding.x, plot_style.PlotPadding.y),
+                ImGui::GetColorU32(style.Colors[ImGuiCol_TextDisabled]),
+                primary_kernel_empty ? HINT_EMPTY_PRIMARY_KERNEL
+                                     : HINT_EMPTY_SECONDARY_KERNEL);
+        }
         if(!m_plot_nav_enabled && plot_hovered)
         {
             ImVec2 hint_size = ImGui::CalcTextSize(HINT_FOCUS);
@@ -950,6 +963,24 @@ Roofline::SetCompareTarget(uint32_t workload_id, uint32_t kernel_id)
     m_requested_kernel_secondary_id   = kernel_id;
     m_workload_changed                = true;
     m_kernel_changed                  = true;
+}
+
+void
+Roofline::SetMode(Mode mode)
+{
+    if(mode == m_mode)
+    {
+        return;
+    }
+    m_mode = mode;
+    // Only Compare offers the target's peaks as the ceiling source.
+    if(m_mode != Compare)
+    {
+        m_alternate_ceiling_source = false;
+    }
+    m_workload_changed = true;
+    m_kernel_changed   = true;
+    m_options_changed  = true;
 }
 
 void

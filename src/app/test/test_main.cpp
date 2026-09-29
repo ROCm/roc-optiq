@@ -20,10 +20,15 @@
 #include "rocprofvis_platform_helpers.h"
 #endif
 #include <GLFW/glfw3.h>
+#ifdef __linux__
+#    include <GL/gl.h>
+#endif
+#include <algorithm>
 #include <filesystem>
 #include <iostream>
 #include <stdio.h>
 #include <stdlib.h>
+#include <vector>
 
 const char* APP_NAME = "ROCm(TM) Optiq";
 
@@ -48,6 +53,33 @@ static bool g_toggle_fullscreen_requested = false;
 static int       g_frames_to_render        = 1;
 constexpr int    RENDER_FRAMES_AFTER_INPUT = 4;
 constexpr double IDLE_WAIT_TIMEOUT_SECONDS = 1.0;
+
+#ifdef __linux__
+// Test-engine screen capture (ctx->CaptureScreenshot) for the OpenGL backend. It
+// reads the frame just drawn, so the loop runs the engine's post-swap step
+// before presenting while this is installed. Rows come back bottom-up and are
+// flipped to the top-down order the engine expects.
+static bool
+capture_framebuffer_gl(ImGuiID viewport_id, int x, int y, int w, int h,
+                       unsigned int* pixels, void* user_data)
+{
+    (void) viewport_id;
+    (void) user_data;
+    const int gl_y = static_cast<int>(ImGui::GetIO().DisplaySize.y) - (y + h);
+    glPixelStorei(GL_PACK_ALIGNMENT, 1);
+    glReadPixels(x, gl_y, w, h, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
+    std::vector<unsigned int> row(static_cast<size_t>(w));
+    for(int top = 0, bottom = h - 1; top < bottom; ++top, --bottom)
+    {
+        unsigned int* top_row    = pixels + static_cast<size_t>(top) * w;
+        unsigned int* bottom_row = pixels + static_cast<size_t>(bottom) * w;
+        std::copy(top_row, top_row + w, row.begin());
+        std::copy(bottom_row, bottom_row + w, top_row);
+        std::copy(row.begin(), row.end(), bottom_row);
+    }
+    return true;
+}
+#endif
 
 static void
 drop_callback(GLFWwindow* window, int count, const char* paths[])
@@ -369,6 +401,13 @@ main(int argc, char** argv)
                     rocprofvis_view_open_files({ cli_parser.GetOptionValue("file") });
                 }
 
+#ifdef __linux__
+                // Only the OpenGL backend has a current GL context to read from.
+                if(glfwGetCurrentContext() != nullptr)
+                {
+                    ImGuiTestEngine_GetIO(engine).ScreenCaptureFunc = capture_framebuffer_gl;
+                }
+#endif
                 ImGuiTestEngine_Start(engine, ImGui::GetCurrentContext());
                 RegisterAppTests(engine);
 
@@ -524,12 +563,23 @@ main(int argc, char** argv)
                     const bool  is_minimized = (draw_data->DisplaySize.x <= 0.0f ||
                                                draw_data->DisplaySize.y <= 0.0f);
                     ImGuiTestEngine_PreSwap(engine);
+                    // A GL capture reads the back buffer, which the swap leaves
+                    // undefined, so it runs between drawing and presenting.
+                    const bool capture_before_present =
+                        ImGuiTestEngine_GetIO(engine).ScreenCaptureFunc != nullptr;
                     if(!is_minimized)
                     {
                         backend.m_render(&backend, draw_data, &clear_color);
+                        if(capture_before_present)
+                        {
+                            ImGuiTestEngine_PostSwap(engine);
+                        }
                         backend.m_present(&backend);
                     }
-                    ImGuiTestEngine_PostSwap(engine);
+                    if(is_minimized || !capture_before_present)
+                    {
+                        ImGuiTestEngine_PostSwap(engine);
+                    }
 
 #ifndef __APPLE__
                     // Applied after the frame so the window is never resized

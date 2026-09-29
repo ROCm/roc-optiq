@@ -21,11 +21,16 @@ namespace View
 constexpr const char* JSON_KEY_PINNED_METRICS    = "pins";
 constexpr const char* JSON_KEY_PINNED_METRICS_ID = "id";
 constexpr const char* JSON_KEY_SHOWN_TABLES      = "tables";
+constexpr const char* JSON_KEY_COMPARE_COLUMNS   = "compare_columns";
+constexpr const char* JSON_KEY_COMPARE_UNMATCHED = "compare_unmatched";
+constexpr const char* JSON_KEY_COMPARE_HIGHLIGHT = "compare_highlight";
 
 // Width of the Tables picker, in frame heights (matches the toolbar combos).
 constexpr float TABLE_PICKER_WIDTH_FRAMES = 12.0f;
 // Tallest the picker popup grows, as a fraction of the main viewport height.
 constexpr float TABLE_PICKER_MAX_HEIGHT_RATIO = 0.6f;
+// Width of the Compare options combo, in frame heights.
+constexpr float COMPARE_OPTIONS_WIDTH_FRAMES = 6.0f;
 
 // Shown until the user picks otherwise: System Speed-of-Light, the headline
 // per-kernel table.
@@ -66,6 +71,9 @@ ComputeTableView::ComputeTableView(DataProvider&                     data_provid
 , m_client_id(IdGenerator::GetInstance().GenerateId())
 , m_has_available_metrics(has_available_metrics)
 , m_pinned_metric_table(data_provider, compute_selection, m_client_id)
+, m_compare_workload_id(ComputeSelection::INVALID_SELECTION_ID)
+, m_compare_kernel_id(ComputeSelection::INVALID_SELECTION_ID)
+, m_compare_client_id(IdGenerator::GetInstance().GenerateId())
 {
     m_enabled_tables.insert(DEFAULT_SHOWN_TABLE);
     m_pinned_metric_table.SetEmbedded(true);
@@ -107,11 +115,24 @@ ComputeTableView::ComputeTableView(DataProvider&                     data_provid
         auto evt = std::dynamic_pointer_cast<ComputeMetricsFetchedEvent>(e);
         if(evt && evt->GetSourceId() == m_data_provider.GetTraceFilePath())
         {
+            // A fetch refused while another ran is retried once one lands.
             if(m_fetch_pending)
+            {
                 FetchAllMetrics();
+            }
+            if(m_compare_fetch_pending)
+            {
+                FetchCompareMetrics();
+            }
             if(evt->GetClientId() == m_client_id)
             {
                 m_metrics_loading = false;
+                RebuildTableDataCache();
+                m_pinned_metric_table.RefillTable(m_pinned_metrics);
+            }
+            else if(m_compare_active && evt->GetClientId() == m_compare_client_id)
+            {
+                m_compare_loading = false;
                 RebuildTableDataCache();
                 m_pinned_metric_table.RefillTable(m_pinned_metrics);
             }
@@ -136,6 +157,140 @@ ComputeTableView::~ComputeTableView()
     EventManager::GetInstance()->Unsubscribe(
         static_cast<int>(RocEvents::kComputeMetricsFetched),
         m_metrics_fetched_token);
+}
+
+void
+ComputeTableView::SetCompareTarget(uint32_t workload_id, uint32_t kernel_id)
+{
+    if(m_compare_active && workload_id == m_compare_workload_id &&
+       kernel_id == m_compare_kernel_id)
+    {
+        return;
+    }
+    m_compare_active      = true;
+    m_compare_workload_id = workload_id;
+    m_compare_kernel_id   = kernel_id;
+    FetchCompareMetrics();
+    RebuildTableDataCache();
+    RefreshPins();
+}
+
+void
+ComputeTableView::ClearCompareTarget()
+{
+    if(!m_compare_active)
+    {
+        return;
+    }
+    m_compare_active        = false;
+    m_compare_fetch_pending = false;
+    m_compare_loading       = false;
+    m_data_provider.ComputeModel().ClearKernelMetricValues(m_compare_client_id);
+    RebuildTableDataCache();
+    RefreshPins();
+}
+
+void
+ComputeTableView::RefreshPins()
+{
+    if(m_compare_active)
+    {
+        m_pinned_metric_table.SetCompareSource(m_compare_client_id, m_compare_workload_id,
+                                               m_compare_kernel_id, m_compare_options);
+    }
+    else
+    {
+        m_pinned_metric_table.ClearCompareSource();
+    }
+    m_pinned_metric_table.RefillTable(m_pinned_metrics);
+}
+
+void
+ComputeTableView::FetchCompareMetrics()
+{
+    m_data_provider.ComputeModel().ClearKernelMetricValues(m_compare_client_id);
+    m_compare_fetch_pending = false;
+    m_compare_loading       = false;
+    const WorkloadInfo* workload =
+        m_data_provider.ComputeModel().GetWorkload(m_compare_workload_id);
+    if(!m_compare_active || !workload ||
+       m_compare_kernel_id == ComputeSelection::INVALID_SELECTION_ID)
+    {
+        return;
+    }
+
+    // Every table, as for A, so showing another needs no extra round trip.
+    std::vector<uint32_t>                       kernel_ids = { m_compare_kernel_id };
+    std::vector<MetricsRequestParams::MetricID> metric_ids;
+    for(const AvailableMetrics::Category* category :
+        workload->available_metrics.ordered_categories)
+    {
+        for(const AvailableMetrics::Table* table : category->ordered_tables)
+        {
+            metric_ids.push_back({ category->id, table->id, std::nullopt });
+        }
+    }
+    if(metric_ids.empty())
+    {
+        return;
+    }
+    m_compare_loading = true;
+    if(!m_data_provider.FetchMetrics(MetricsRequestParams(workload->id, kernel_ids,
+                                                          metric_ids, m_compare_client_id)))
+    {
+        m_compare_fetch_pending = true;
+    }
+}
+
+std::vector<ComputeTableView::ListedTable>
+ComputeTableView::ListedTables(const WorkloadInfo& workload) const
+{
+    const WorkloadInfo* b_workload =
+        m_compare_active ? m_data_provider.ComputeModel().GetWorkload(m_compare_workload_id)
+                         : nullptr;
+    auto find_table = [](const WorkloadInfo* source, uint32_t category_id,
+                         uint32_t table_id) -> const AvailableMetrics::Table* {
+        if(!source)
+        {
+            return nullptr;
+        }
+        std::unordered_map<uint32_t, AvailableMetrics::Category>::const_iterator category =
+            source->available_metrics.tree.find(category_id);
+        if(category == source->available_metrics.tree.end())
+        {
+            return nullptr;
+        }
+        std::unordered_map<uint32_t, AvailableMetrics::Table>::const_iterator table =
+            category->second.tables.find(table_id);
+        return table != category->second.tables.end() ? &table->second : nullptr;
+    };
+
+    std::vector<ListedTable> listed;
+    for(const AvailableMetrics::Category* category :
+        workload.available_metrics.ordered_categories)
+    {
+        for(const AvailableMetrics::Table* table : category->ordered_tables)
+        {
+            listed.push_back({ category->id, &category->name, table,
+                               find_table(b_workload, category->id, table->id) });
+        }
+    }
+    // Tables only B's workload has (e.g. another GPU architecture) come last.
+    if(b_workload && b_workload != &workload)
+    {
+        for(const AvailableMetrics::Category* category :
+            b_workload->available_metrics.ordered_categories)
+        {
+            for(const AvailableMetrics::Table* table : category->ordered_tables)
+            {
+                if(!find_table(&workload, category->id, table->id))
+                {
+                    listed.push_back({ category->id, &category->name, nullptr, table });
+                }
+            }
+        }
+    }
+    return listed;
 }
 
 void
@@ -256,6 +411,16 @@ ComputeTableView::RenderToolbar(const WorkloadInfo& workload)
     ImFont*           icon_font = settings.GetFontManager().GetFont(FontType::kIcon);
 
     RenderTablePicker(workload);
+    if(m_compare_active)
+    {
+        ImGui::SameLine();
+        RenderCompareOptions();
+        if(m_compare_loading)
+        {
+            ImGui::SameLine();
+            ImGui::TextDisabled("Loading B...");
+        }
+    }
 
     // Expand / collapse every shown table, right-aligned on the picker's row.
     ImGui::PushFont(icon_font, 0.0f);
@@ -292,22 +457,17 @@ ComputeTableView::RenderToolbar(const WorkloadInfo& workload)
 void
 ComputeTableView::RenderTablePicker(const WorkloadInfo& workload)
 {
-    size_t total = 0;
-    size_t shown = 0;
-    for(const AvailableMetrics::Category* category :
-        workload.available_metrics.ordered_categories)
+    const std::vector<ListedTable> listed = ListedTables(workload);
+    size_t                         shown  = 0;
+    for(const ListedTable& table : listed)
     {
-        for(const AvailableMetrics::Table* table : category->ordered_tables)
+        if(m_enabled_tables.count(table.Key()) > 0)
         {
-            total++;
-            if(m_enabled_tables.count(MetricId::GetTableKey(category->id, table->id)) > 0)
-            {
-                shown++;
-            }
+            shown++;
         }
     }
     const std::string preview =
-        std::to_string(shown) + " of " + std::to_string(total) + " shown";
+        std::to_string(shown) + " of " + std::to_string(listed.size()) + " shown";
 
     ImGui::AlignTextToFramePadding();
     ImGui::TextUnformatted("Tables:");
@@ -332,46 +492,48 @@ ComputeTableView::RenderTablePicker(const WorkloadInfo& workload)
         ImGui::SameLine();
         const bool hide_listed = ImGui::SmallButton("Hide all");
 
-        bool any_listed = false;
-        for(const AvailableMetrics::Category* category :
-            workload.available_metrics.ordered_categories)
+        bool               any_listed    = false;
+        const std::string* last_category = nullptr;
+        for(const ListedTable& table : listed)
         {
-            const bool category_matches = ContainsIgnoreCase(category->name, m_picker_filter);
-            bool       header_drawn     = false;
-            for(const AvailableMetrics::Table* table : category->ordered_tables)
+            const AvailableMetrics::Table& named = table.a ? *table.a : *table.b;
+            const std::string label = TableLabel(table.category_id, named);
+            if(!ContainsIgnoreCase(*table.category_name, m_picker_filter) &&
+               !ContainsIgnoreCase(label, m_picker_filter))
             {
-                const std::string label = TableLabel(category->id, *table);
-                if(!category_matches && !ContainsIgnoreCase(label, m_picker_filter))
-                {
-                    continue;
-                }
-                const uint64_t key = MetricId::GetTableKey(category->id, table->id);
-                if(show_listed)
+                continue;
+            }
+            const uint64_t key = table.Key();
+            if(show_listed)
+            {
+                m_enabled_tables.insert(key);
+            }
+            else if(hide_listed)
+            {
+                m_enabled_tables.erase(key);
+            }
+            if(last_category != table.category_name)
+            {
+                ImGui::SeparatorText(table.category_name->c_str());
+                last_category = table.category_name;
+            }
+            any_listed = true;
+            bool on    = m_enabled_tables.count(key) > 0;
+            if(ImGui::Checkbox(label.c_str(), &on))
+            {
+                if(on)
                 {
                     m_enabled_tables.insert(key);
                 }
-                else if(hide_listed)
+                else
                 {
                     m_enabled_tables.erase(key);
                 }
-                if(!header_drawn)
-                {
-                    ImGui::SeparatorText(category->name.c_str());
-                    header_drawn = true;
-                }
-                any_listed = true;
-                bool on    = m_enabled_tables.count(key) > 0;
-                if(ImGui::Checkbox(label.c_str(), &on))
-                {
-                    if(on)
-                    {
-                        m_enabled_tables.insert(key);
-                    }
-                    else
-                    {
-                        m_enabled_tables.erase(key);
-                    }
-                }
+            }
+            if(m_compare_active && (!table.a || !table.b))
+            {
+                ImGui::SameLine();
+                ImGui::TextDisabled("%s", table.a ? "A only" : "B only");
             }
         }
         if(!any_listed)
@@ -381,6 +543,64 @@ ComputeTableView::RenderTablePicker(const WorkloadInfo& workload)
         ImGui::EndCombo();
     }
     PopComboStyles();
+}
+
+void
+ComputeTableView::RenderCompareOptions()
+{
+    constexpr const char* COLUMN_LABELS[] = { "A (baseline)", "B (target)",
+                                              "\xCE\x94 (B - A)", "\xCE\x94% (of A)" };
+    static_assert(sizeof(COLUMN_LABELS) / sizeof(COLUMN_LABELS[0]) ==
+                      static_cast<size_t>(MetricCompareColumn::kCount),
+                  "one label per MetricCompareColumn");
+    constexpr float HIGHLIGHT_DRAG_SPEED = 0.5f;
+    constexpr float HIGHLIGHT_MAX_PCT    = 100.0f;
+
+    bool changed = false;
+    ImGui::SetNextItemWidth(ImGui::GetFrameHeight() * COMPARE_OPTIONS_WIDTH_FRAMES);
+    PushComboStyles();
+    if(ImGui::BeginCombo("##metric_compare_options", "Compare"))
+    {
+        ImGui::TextDisabled("Columns per value");
+        for(size_t column = 0; column < static_cast<size_t>(MetricCompareColumn::kCount);
+            ++column)
+        {
+            bool on = m_compare_options.columns.test(column);
+            // At least one column stays on.
+            ImGui::BeginDisabled(on && m_compare_options.columns.count() == 1);
+            if(ImGui::Checkbox(COLUMN_LABELS[column], &on))
+            {
+                m_compare_options.columns.set(column, on);
+                changed = true;
+            }
+            ImGui::EndDisabled();
+        }
+        ImGui::Separator();
+        changed |= ImGui::Checkbox("Metrics only one side has", &m_compare_options.show_unmatched);
+        if(ImGui::IsItemHovered())
+        {
+            SetTooltipStyled("Listed dimmed, e.g. architecture-specific metrics when A and B\n"
+                             "ran on different GPUs.");
+        }
+        ImGui::TextUnformatted("Shade changes of at least");
+        ImGui::SetNextItemWidth(-FLT_MIN);
+        ImGui::DragFloat("##compare_highlight", &m_compare_options.highlight_pct,
+                         HIGHLIGHT_DRAG_SPEED, 0.0f, HIGHLIGHT_MAX_PCT, "%.1f%%",
+                         ImGuiSliderFlags_AlwaysClamp);
+        // Every table is rebuilt, so apply once the drag or edit ends.
+        changed |= ImGui::IsItemDeactivatedAfterEdit();
+        ImGui::EndCombo();
+    }
+    PopComboStyles();
+    if(ImGui::IsItemHovered())
+    {
+        SetTooltipStyled("Columns and shading of the A / B comparison.");
+    }
+    if(changed)
+    {
+        RebuildTableDataCache();
+        RefreshPins();
+    }
 }
 
 void
@@ -408,43 +628,41 @@ ComputeTableView::RenderTables(const WorkloadInfo& workload)
         }
     }
 
-    for(const AvailableMetrics::Category* category :
-        workload.available_metrics.ordered_categories)
+    for(const ListedTable& table : ListedTables(workload))
     {
-        for(const AvailableMetrics::Table* table : category->ordered_tables)
+        const uint64_t key = table.Key();
+        if(m_enabled_tables.count(key) == 0)
         {
-            const uint64_t key = MetricId::GetTableKey(category->id, table->id);
-            if(m_enabled_tables.count(key) == 0)
-            {
-                continue;
-            }
-            listed = true;
+            continue;
+        }
+        listed = true;
 
-            // "###" keeps the header's open state keyed by table, not by label.
-            const std::string label =
-                TableLabel(category->id, *table) + "###table_" + std::to_string(key);
-            bool keep_shown = true;
-            ApplyHeaderRequest();
-            if(ImGui::CollapsingHeader(label.c_str(), &keep_shown,
-                                       ImGuiTreeNodeFlags_DefaultOpen))
+        // "###" keeps the header's open state keyed by table, not by label.
+        std::string label = TableLabel(table.category_id, table.a ? *table.a : *table.b);
+        if(m_compare_active && (!table.a || !table.b))
+        {
+            label += table.a ? "  (A only)" : "  (B only)";
+        }
+        label += "###table_" + std::to_string(key);
+        bool keep_shown = true;
+        ApplyHeaderRequest();
+        if(ImGui::CollapsingHeader(label.c_str(), &keep_shown, ImGuiTreeNodeFlags_DefaultOpen))
+        {
+            std::unordered_map<uint64_t, MetricTable>::iterator it = m_table_widgets.find(key);
+            if(it != m_table_widgets.end())
             {
-                std::unordered_map<uint64_t, MetricTable>::iterator it =
-                    m_table_widgets.find(key);
-                if(it != m_table_widgets.end())
-                {
-                    it->second.Render();
-                }
-                else
-                {
-                    ImGui::TextDisabled("%s", m_metrics_loading ? "Loading..."
-                                                                : "No data for this table.");
-                }
-                ImGui::Spacing();
+                it->second.Render();
             }
-            if(!keep_shown)
+            else
             {
-                m_enabled_tables.erase(key);
+                ImGui::TextDisabled("%s", m_metrics_loading ? "Loading..."
+                                                            : "No data for this table.");
             }
+            ImGui::Spacing();
+        }
+        if(!keep_shown)
+        {
+            m_enabled_tables.erase(key);
         }
     }
     m_header_request = HeaderRequest::kNone;
@@ -484,21 +702,18 @@ ComputeTableView::RebuildTableDataCache()
     if(!workload)
         return;
 
-    for(const auto* cat : workload->available_metrics.ordered_categories)
+    for(const ListedTable& table : ListedTables(*workload))
     {
-        for(const auto* tbl : cat->ordered_tables)
-        {
-            AddTable(cat->id, tbl);
-        }
+        AddTable(table);
     }
 
     RestoreMetricPining();
 }
 
 void
-ComputeTableView::AddTable(uint32_t category_id, const AvailableMetrics::Table* table)
+ComputeTableView::AddTable(const ListedTable& listed)
 {
-    uint64_t     key = MetricId::GetTableKey(category_id, table->id);
+    const uint64_t key = listed.Key();
     auto         [it, inserted]  =
         m_table_widgets.try_emplace(key, m_data_provider.GetTraceFilePath());
     MetricTable& widget          = it->second;
@@ -523,10 +738,24 @@ ComputeTableView::AddTable(uint32_t category_id, const AvailableMetrics::Table* 
         return;
     }
 
-    widget.Populate(*table, [&](uint32_t eid) {
-        return model.GetKernelMetricValue(m_client_id, kernel_id, category_id, table->id,
-                                          eid);
-    });
+    const uint32_t category_id = listed.category_id;
+    auto get_a = [&](uint32_t eid) {
+        return listed.a ? model.GetKernelMetricValue(m_client_id, kernel_id, category_id,
+                                                     listed.a->id, eid)
+                        : nullptr;
+    };
+    if(!m_compare_active)
+    {
+        widget.Populate(*listed.a, get_a);
+        return;
+    }
+    auto get_b = [&](uint32_t eid) {
+        return listed.b ? model.GetKernelMetricValue(m_compare_client_id, m_compare_kernel_id,
+                                                     category_id, listed.b->id, eid)
+                        : nullptr;
+    };
+    widget.PopulateComparison(category_id, listed.a, listed.b, get_a, get_b,
+                              m_compare_options);
 }
 
 void
@@ -574,6 +803,13 @@ ComputeTableView::Preset::ToJson(jt::Json& json)
             i++;
         }
     }
+    const MetricCompareOptions& compare = m_widget.m_compare_options;
+    for(size_t column = 0; column < compare.columns.size(); ++column)
+    {
+        json[JSON_KEY_COMPARE_COLUMNS][column] = compare.columns.test(column);
+    }
+    json[JSON_KEY_COMPARE_UNMATCHED] = compare.show_unmatched;
+    json[JSON_KEY_COMPARE_HIGHLIGHT] = static_cast<double>(compare.highlight_pct);
     return true;
 }
 
@@ -636,6 +872,39 @@ ComputeTableView::Preset::FromJson(jt::Json& json)
             }
         }
     }
+    if(result && json.isObject())
+    {
+        MetricCompareOptions compare = m_widget.m_compare_options;
+        if(json.contains(JSON_KEY_COMPARE_COLUMNS) && json[JSON_KEY_COMPARE_COLUMNS].isArray())
+        {
+            std::vector<jt::Json>& columns = json[JSON_KEY_COMPARE_COLUMNS].getArray();
+            for(size_t column = 0; column < columns.size() && column < compare.columns.size();
+                ++column)
+            {
+                if(columns[column].isBool())
+                {
+                    compare.columns.set(column, columns[column].getBool());
+                }
+            }
+        }
+        if(json.contains(JSON_KEY_COMPARE_UNMATCHED) && json[JSON_KEY_COMPARE_UNMATCHED].isBool())
+        {
+            compare.show_unmatched = json[JSON_KEY_COMPARE_UNMATCHED].getBool();
+        }
+        if(json.contains(JSON_KEY_COMPARE_HIGHLIGHT) &&
+           json[JSON_KEY_COMPARE_HIGHLIGHT].isNumber())
+        {
+            compare.highlight_pct =
+                static_cast<float>(json[JSON_KEY_COMPARE_HIGHLIGHT].getNumber());
+        }
+        // A table shows at least one comparison column.
+        if(compare.columns.any())
+        {
+            m_widget.m_compare_options = compare;
+            m_widget.RebuildTableDataCache();
+            m_widget.RefreshPins();
+        }
+    }
     return result;
 }
 
@@ -650,8 +919,10 @@ ComputeTableView::Preset::Reset()
         }
     }
     m_widget.m_pinned_metrics.clear();
-    m_widget.m_pinned_metric_table.RefillTable(m_widget.m_pinned_metrics);
-    m_widget.m_enabled_tables = { DEFAULT_SHOWN_TABLE };
+    m_widget.m_enabled_tables  = { DEFAULT_SHOWN_TABLE };
+    m_widget.m_compare_options = MetricCompareOptions();
+    m_widget.RebuildTableDataCache();
+    m_widget.RefreshPins();
 }
 
 }  // namespace View

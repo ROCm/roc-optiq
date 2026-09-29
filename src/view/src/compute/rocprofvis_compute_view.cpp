@@ -3,7 +3,6 @@
 
 #include "rocprofvis_compute_view.h"
 #include "model/compute/rocprofvis_compute_data_model.h"
-#include "rocprofvis_compute_comparison.h"
 #include "rocprofvis_compute_kernel_details.h"
 #include "rocprofvis_compute_selection.h"
 #include "rocprofvis_compute_summary.h"
@@ -249,13 +248,11 @@ ComputeView::CreateTabContainer()
     const bool database_has_metrics   = HasAvailableMetrics(workloads);
     const bool database_has_isa_lines = HasIsaLines(workloads);
 
-    // Summary lives in its own window (RenderSummaryWindow); metric tables and
-    // ISA are panes of Kernel Details.
+    // Summary lives in its own window (RenderSummaryWindow); metric tables, ISA
+    // and comparing two kernels are part of Kernel Details.
     m_tab_container = std::make_shared<TabContainer>();
     m_tab_container->AddTab(ComputeKernelDetailsView::CreateTabItem(
         m_data_provider, m_compute_selection, database_has_metrics, database_has_isa_lines));
-    m_tab_container->AddTab(ComputeComparisonView::CreateTabItem(
-        m_data_provider, m_compute_selection, database_has_metrics));
     m_tab_container->AddTab(
         ComputeWorkloadView::CreateTabItem(m_data_provider, m_compute_selection));
 
@@ -399,8 +396,7 @@ ComputeView::RenderToolbar()
     ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, style.FrameRounding);
     ImGui::AlignTextToFramePadding();
 
-    RenderWorkloadSelection();
-    VerticalSeparator(&m_settings_manager);
+    // Kernels (and so workloads) are chosen in Kernel Details' kernel list only.
     if(m_toolbar_available_width != 0.0)
     {
         ImGui::Dummy(
@@ -419,80 +415,6 @@ ComputeView::RenderToolbar()
     // pop child window style
     ImGui::PopStyleVar(2);
     ImGui::PopStyleColor(2);
-}
-
-void
-ComputeView::RenderWorkloadSelection()
-{
-    if(!m_compute_selection)
-    {
-        return;
-    }
-
-    const ImGuiStyle& style          = SettingsManager::GetInstance().GetDefaultStyle();
-
-    const std::vector<const WorkloadInfo*>& workloads =
-        m_data_provider.ComputeModel().GetWorkloadList();
-
-    uint32_t            workload_id       = m_compute_selection->GetSelectedWorkload();
-    const WorkloadInfo* selected_workload =
-        m_data_provider.ComputeModel().GetWorkload(workload_id);
-    ImGui::Text("Workload:");
-    ImGui::SameLine();
-    ImGui::SetNextItemWidth(ImGui::GetFrameHeight() * 10.0f);
-    ImGui::BeginDisabled(workloads.empty());
-    PushComboStyles();
-    if(ImGui::BeginCombo("##Workloads",
-                         selected_workload ? selected_workload->name.c_str() : "-"))
-    {
-
-        for(const WorkloadInfo* workload : workloads)
-        {
-            ImGui::PushID(static_cast<int>(workload->id));
-            if(ImGui::Selectable("", workload_id == workload->id))
-            {
-                m_compute_selection->SelectWorkload(workload->id);
-            }
-            ImGui::SameLine(ImGui::GetCursorPosX());
-            ElidedText(workload->name.c_str(), ImGui::GetContentRegionAvail().x,
-                       ImGui::GetContentRegionAvail().x);
-            ImGui::PopID();
-        }
-        ImGui::EndCombo();
-    }
-    PopComboStyles();
-    ImGui::EndDisabled();
-    ImGui::SameLine(0, style.ItemSpacing.x);
-    VerticalSeparator();
-    ImGui::SameLine(0, style.ItemSpacing.x);
-    ImGui::Text("Kernel:");
-    ImGui::SameLine();
-    uint32_t kernel_id = m_compute_selection->GetSelectedKernel();
-    const KernelInfo* kernel_info = m_data_provider.ComputeModel().GetKernelInfo(workload_id, kernel_id);
-
-    std::vector<const KernelInfo*> kernel_info_list =
-        m_data_provider.ComputeModel().GetKernelInfoList(workload_id);
-    ImGui::SetNextItemWidth(ImGui::GetFrameHeight() * 10.0f);
-    ImGui::BeginDisabled(kernel_info_list.empty());
-    PushComboStyles();
-    if(ImGui::BeginCombo("##Kernels", kernel_info ? kernel_info->name.c_str() : "-"))
-    {
-        for(const KernelInfo* info : kernel_info_list)
-        {
-            ImGui::PushID(static_cast<int>(info->id));
-            if(ImGui::Selectable("", kernel_id == info->id))
-            {
-                m_compute_selection->SelectKernel(info->id);
-            }
-            ImGui::SameLine(ImGui::GetCursorPosX());
-            ElidedText(info->name.c_str(), ImGui::GetContentRegionAvail().x,
-                       ImGui::GetContentRegionAvail().x);
-            ImGui::PopID();
-        }
-        ImGui::EndCombo();
-    }
-    PopComboStyles();
-    ImGui::EndDisabled();
 }
 
 void

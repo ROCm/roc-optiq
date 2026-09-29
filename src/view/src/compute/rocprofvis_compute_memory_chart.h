@@ -22,6 +22,7 @@ namespace View
 {
 
 struct MetricValue;
+struct WorkloadInfo;
 class DataProvider;
 class ComputeSelection;
 
@@ -59,6 +60,20 @@ public:
     void SetAutoCompact(bool enabled) { m_auto_compact = enabled; }
     // Whether the last frame was drawn compact.
     bool IsCompact() const { return m_is_compact; }
+
+    // Chart this kernel (e.g. a compare target) instead of the selected one;
+    // the caller loads its workload's layout and fetches.
+    void SetSource(uint32_t workload_id, uint32_t kernel_id);
+    // Delta mode: every value reads B - A, B being `target`'s metrics (a chart
+    // of the same layout, i.e. the same GPU architecture); nullptr shows this
+    // chart's own values.
+    void SetDeltaTarget(const ComputeMemoryChartView* target);
+    // Re-read the shown values, e.g. after the delta target's metrics arrive.
+    void RefreshValues();
+
+    // GPU architecture (e.g. "gfx950") from a workload's system info; empty
+    // when unknown.
+    static std::string WorkloadArch(const WorkloadInfo* workload);
 
 private:
     // A fully computed arrow, ready to draw. Produced by BuildArrowRoutes so
@@ -188,6 +203,11 @@ private:
     void ShowMetricTooltip(ImVec2 hover_min, ImVec2 hover_max,
                            const MemChartMetricRef& ref, bool show_description,
                            bool show_raw_value);
+    // A value and B value of a metric in delta mode; false unless both exist.
+    bool DeltaValues(const MemChartMetricRef& ref, double& a, double& b) const;
+    void ShowDeltaValues(const MemChartMetricRef& ref) const;
+    uint32_t SourceWorkload() const;
+    uint32_t SourceKernel() const;
     // Blocks and labels are laid out at actual size, then scaled into view about
     // this frame's origin; hit tests map through the same transform.
     ImVec2 ToScreen(ImVec2 unscaled) const;
@@ -200,6 +220,16 @@ private:
     std::shared_ptr<ComputeSelection> m_compute_selection;
 
     uint64_t m_client_id;
+
+    // Explicit source (SetSource) instead of the selection.
+    bool     m_follow_selection = true;
+    uint32_t m_source_workload_id;
+    uint32_t m_source_kernel_id;
+    // A fetch refused while this chart's previous one was in flight; retried
+    // when that one lands.
+    bool     m_fetch_pending = false;
+
+    const ComputeMemoryChartView* m_delta_target = nullptr;
 
     bool  m_fit_to_view   = false;
     bool  m_auto_compact  = false;
@@ -224,6 +254,8 @@ private:
         uint32_t hit        = 0;
         uint32_t stall      = 0;
         uint32_t shadow     = 0;
+        uint32_t delta_up   = 0;  // B above A.
+        uint32_t delta_down = 0;
     };
     ChartColors m_colors;
 

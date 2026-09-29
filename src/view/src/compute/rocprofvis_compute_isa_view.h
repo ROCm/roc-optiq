@@ -83,6 +83,15 @@ public:
 
     void Update() override;
     void Render() override;
+
+    // Show this kernel (e.g. a compare target) instead of the selected one until
+    // FollowSelection(). One view serves both: the data provider has a single
+    // PC-sampling callback.
+    void ShowKernel(uint32_t workload_id, uint32_t kernel_id);
+    void FollowSelection();
+
+    friend struct ComputeIsaViewTestPeer;
+
 private:
     void RenderControlPanel();
     void RenderSourceFileDropdown();
@@ -115,6 +124,10 @@ private:
 
     uint32_t                          m_current_kernel_id;
     uint32_t                          m_current_workload_id;
+    // The selection as last announced, shown whenever the view follows it.
+    uint32_t                          m_selected_kernel_id;
+    uint32_t                          m_selected_workload_id;
+    bool                              m_follow_selection = true;
     uint32_t                          m_fetch_generation = 0;
     uint64_t                          m_next_request_token = 0;
     IsaPane                           m_isa;

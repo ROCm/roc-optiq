@@ -4,6 +4,9 @@
 #include "imgui_te_engine.h"
 #include "imgui_te_context.h"
 #include "imgui.h"
+#include "imgui_internal.h"
+#include "implot/implot.h"
+#include "implot/implot_internal.h"
 #include "rocprofvis_appwindow.h"
 #include "rocprofvis_project.h"
 #include "rocprofvis_trace_view.h"
@@ -17,6 +20,9 @@
 #include "rocprofvis_event_search.h"
 #include "rocprofvis_summary_view.h"
 #include "icons/rocprovfis_icon_defines.h"
+#include <algorithm>
+#include <cstdio>
+#include <cstdlib>
 #include <string>
 #include <filesystem>
 #include <fstream>
@@ -73,6 +79,38 @@ void SetRefWindow(ImGuiTestContext* ctx, ImGuiWindow* window)
 {
     IM_CHECK(window != nullptr);
     ctx->SetRef(ImGuiTestRef(window->ID));
+}
+
+// With ROC_OPTIQ_TEST_CAPTURE_DIR set, saves the whole window as
+// <dir>/<name>.png for visual review; a no-op otherwise.
+void CaptureForReview(ImGuiTestContext* ctx, const char* name)
+{
+    const char* dir = std::getenv("ROC_OPTIQ_TEST_CAPTURE_DIR");
+    if (dir == nullptr || dir[0] == '\0') return;
+    if (ctx->EngineIO->ScreenCaptureFunc == nullptr)
+    {
+        std::fprintf(stderr, "capture skipped (%s): the graphics backend has no capture\n",
+                     name);
+        return;
+    }
+    // Saved test-engine settings may have turned captures off.
+    ctx->EngineIO->ConfigCaptureEnabled = true;
+    ctx->CaptureReset();
+    std::snprintf(ctx->CaptureArgs->InOutputFile, sizeof(ctx->CaptureArgs->InOutputFile),
+                  "%s/%s.png", dir, name);
+    // The whole window: with no rect or windows given the capture is empty.
+    const ImGuiViewport* viewport     = ImGui::GetMainViewport();
+    ctx->CaptureArgs->InCaptureRect   = ImRect(viewport->Pos,
+                                               ImVec2(viewport->Pos.x + viewport->Size.x,
+                                                      viewport->Pos.y + viewport->Size.y));
+    ctx->CaptureArgs->InPadding       = 0.0f;
+    const bool saved = ctx->CaptureScreenshot(ImGuiCaptureFlags_IncludeOtherWindows |
+                                              ImGuiCaptureFlags_HideMouseCursor);
+    std::fprintf(stderr, "capture %s (error=%d): %s (%dx%d)\n",
+                 saved ? "saved" : "failed", ctx->IsError() ? 1 : 0,
+                 ctx->CaptureArgs->InOutputFile,
+                 static_cast<int>(ctx->CaptureArgs->OutImageSize.x),
+                 static_cast<int>(ctx->CaptureArgs->OutImageSize.y));
 }
 
 // Flame-graph event bars are raw draw_list rects registered with the Test
@@ -747,142 +785,327 @@ void RegisterAppTests(ImGuiTestEngine* e)
         IM_CHECK(sel->GetSelectedKernel() != ComputeSelection::INVALID_SELECTION_ID);
     };
 
-    t = IM_REGISTER_TEST(e, "app", "compute_comparison_target_kernel_computes_delta");
+    t = IM_REGISTER_TEST(e, "app", "compute_inline_compare_computes_delta");
     t->TestFunc = [](ImGuiTestContext* ctx)
     {
         ComputeView* cv = GetComputeViewOrSkip(ctx);
         if (!cv) return;
         TabContainer* tc = ComputeViewTestPeer{*cv}.TabContainerPtr();
-        if (tc == nullptr)
-        {
-            ctx->LogWarning("SKIP: compute view has no tab container");
-            return;
-        }
+        IM_CHECK(tc != nullptr);
+        if (tc == nullptr) return;
 
-        const std::vector<const TabItem*> tabs = tc->GetTabs();
-        ComparisonTable* comp = nullptr;
-        std::string            comp_label;
-        for (const TabItem* tab : tabs)
+        // Comparing is part of the Kernel Details tab.
+        ComputeKernelDetailsView* kd = nullptr;
+        for (const TabItem* tab : tc->GetTabs())
         {
-            if (tab->m_id == ComputeComparisonView::TAB_ID)
+            if (tab && tab->m_id == ComputeKernelDetailsView::TAB_ID)
             {
-                ComputeComparisonView* view =
-                    dynamic_cast<ComputeComparisonView*>(tab->m_widget.get());
-                if (view)
-                {
-                    ComputeComparisonViewTestPeer peer{*view};
-                    comp = peer.ComparisonTablePtr();
-                    comp_label = tab->m_label;
-                    break;
-                }               
+                kd = dynamic_cast<ComputeKernelDetailsView*>(tab->m_widget.get());
+                break;
             }
         }
-        if (comp == nullptr)
+        if (kd == nullptr)
         {
-            ctx->LogWarning("SKIP: no Baseline Comparison tab in this build");
+            ctx->LogWarning("SKIP: no Kernel Details tab in this build");
+            return;
+        }
+        ComputeKernelDetailsViewTestPeer kd_peer{*kd};
+        ComputeTableView* tbl = kd_peer.TableViewPtr();
+        IM_CHECK(tbl != nullptr);
+        if (tbl == nullptr) return;
+        ComputeTableViewTestPeer table_peer{*tbl};
+        if (!table_peer.HasAvailableMetrics())
+        {
+            ctx->LogWarning("SKIP: the database has no metric tables");
             return;
         }
 
         ComputeSelection* sel = ComputeViewTestPeer{*cv}.ComputeSelectionPtr();
         IM_CHECK(sel != nullptr);
         if (sel == nullptr) return;
-        const uint32_t workload = sel->GetSelectedWorkload();
+        const uint32_t workload        = sel->GetSelectedWorkload();
         const uint32_t baseline_kernel = sel->GetSelectedKernel();
         IM_CHECK(workload != ComputeSelection::INVALID_SELECTION_ID);
         IM_CHECK(baseline_kernel != ComputeSelection::INVALID_SELECTION_ID);
 
-        ctx->ItemClick(("//Main Window/**/" + comp_label).c_str());
-        ctx->Yield(3);
-
-        ComputeComparisonTableTestPeer peer{*comp};
-
-        // The toolbar combos live in a nested child window the "//Main Window/**/"
-        // wildcard can't reach. Find it by name fragment, click relative to it, and
-        // re-find after each Yield (window pointers don't survive a rebuild).
-        auto set_ref_to_toolbar = [&]() -> bool
+        // B: any other kernel, preferring A's own workload.
+        uint32_t target_workload = ComputeSelection::INVALID_SELECTION_ID;
+        uint32_t target_kernel   = ComputeSelection::INVALID_SELECTION_ID;
+        std::vector<const WorkloadInfo*> workloads =
+            cv->GetDataProvider()->ComputeModel().GetWorkloadList();
+        std::stable_partition(workloads.begin(), workloads.end(),
+                              [workload](const WorkloadInfo* w) { return w && w->id == workload; });
+        for (const WorkloadInfo* w : workloads)
         {
-            ImGuiContext* g = ImGui::GetCurrentContext();
-            for (ImGuiWindow* w : g->Windows)
+            if (w == nullptr) continue;
+            for (const KernelInfo* k : cv->GetDataProvider()->ComputeModel().GetKernelInfoList(w->id))
             {
-                if (w->WasActive && strstr(w->Name, "TabContainer") &&
-                    strstr(w->Name, "/compare_target_toolbar_"))
+                if (k && !(w->id == workload && k->id == baseline_kernel))
                 {
-                    SetRefWindow(ctx, w);
-                    return true;
+                    target_workload = w->id;
+                    target_kernel   = k->id;
+                    break;
                 }
             }
-            return false;
-        };
-
-        // The tab opens on the Roofline view; the metric tables sit behind the
-        // Metrics toggle.
-        IM_CHECK(set_ref_to_toolbar());
-        ctx->ItemClick("Metrics");
-        ctx->Yield(2);
-
-        // Pick the target workload first; it enables the kernel combo.
-        IM_CHECK(set_ref_to_toolbar());
-        ctx->ItemClick("##TargetWorkloads");
-        ctx->Yield(1);
-        {
-            ImGuiTestItemList items;
-            ctx->GatherItems(&items, "//$FOCUSED");
-            IM_CHECK(items.GetSize() >= 1);
-            if (items.GetSize() < 1) return;
-            ctx->ItemClick(items[0]->ID);
+            if (target_kernel != ComputeSelection::INVALID_SELECTION_ID) break;
         }
-        ctx->Yield(2);
-
-        // Choose a kernel from the target workload, not the baseline workload.
-        const uint32_t target_workload = peer.TargetWorkloadId();
-        std::vector<const KernelInfo*> kernels =
-            cv->GetDataProvider()->ComputeModel().GetKernelInfoList(target_workload);
-        int target_idx = -1;
-        for (int i = 0; i < static_cast<int>(kernels.size()); i++)
+        if (target_kernel == ComputeSelection::INVALID_SELECTION_ID)
         {
-            if (kernels[i] != nullptr && kernels[i]->id != baseline_kernel)
-            {
-                target_idx = i;
-                break;
-            }
-        }
-        if (target_idx < 0)
-        {
-            ctx->LogWarning("SKIP: target workload has no kernel distinct from the baseline");
+            ctx->LogWarning("SKIP: the database has only one kernel");
             return;
         }
 
-        IM_CHECK(set_ref_to_toolbar());
-        ctx->ItemClick("##target_kernels");
-        ctx->Yield(1);
+        // Comparing stays off for the next test whatever the outcome.
+        struct CompareGuard
         {
-            ImGuiWindow* popup = ImGui::GetCurrentContext()->NavWindow;
-            IM_CHECK(popup != nullptr);
-            if (popup == nullptr) return;
+            ComputeKernelDetailsViewTestPeer& peer;
+            ~CompareGuard() { peer.StopCompare(); }
+        } compare_guard{ kd_peer };
+        ComputePanelsGuard panels_guard;
+        tc->SetActiveTab(ComputeKernelDetailsView::TAB_ID);
+        ctx->Yield(3);
 
-            // PushID(kernel_id) + Selectable("") uses this ID. GatherItems also
-            // includes decorative ElidedText children, so its index is not a kernel index.
-            const ImGuiID selectable_id =
-                popup->GetID(static_cast<int>(kernels[target_idx]->id));
-            ctx->ItemClick(selectable_id);
-        }
+        kd_peer.CompareWith(target_workload, target_kernel);
         ctx->Yield(2);
-        ctx->SetRef("//Main Window");
+        IM_CHECK(kd_peer.IsComparing());
+        IM_CHECK(kd_peer.CompareWorkloadId() == target_workload);
+        IM_CHECK(kd_peer.CompareKernelId() == target_kernel);
+        IM_CHECK(table_peer.IsComparing());
 
-        // Baseline and target fetch sequentially, so a "while pending" drain can
-        // slip through the gap between them. Poll the final end state instead.
-        const uint32_t want_kernel = kernels[target_idx]->id;
+        // A and B fetch separately, so poll the end state: both landed and the
+        // tables carry computed B - A percentages.
         for (int i = 0; i < 300; i++)
         {
-            if (peer.TargetKernelId() == want_kernel && !peer.RequestsPending() &&
-                peer.CategoryCount() > 0 && peer.HasDifferenceColumn())
+            if (!table_peer.CompareLoading() && !table_peer.FetchPending() &&
+                table_peer.DeltaPctCellCount() > 0)
                 break;
             ctx->Yield(2);
         }
+        IM_CHECK(table_peer.DeltaPctCellCount() > 0);
 
-        IM_CHECK(peer.TargetKernelId() == want_kernel);
-        IM_CHECK(peer.CategoryCount() > 0);
-        IM_CHECK(peer.HasDifferenceColumn());
+        // The roofline plots A and B from the first frames on.
+        Roofline* roofline = kd_peer.RooflinePtr();
+        IM_CHECK(roofline != nullptr);
+        if (roofline == nullptr) return;
+        RooflineTestPeer roof_peer{*roofline};
+        IM_CHECK(roof_peer.IsCompareMode());
+        IM_CHECK(roof_peer.HasSecondaryKernel());
+        const ComputeDataModel& model = cv->GetDataProvider()->ComputeModel();
+        const KernelInfo* a_info = model.GetKernelInfo(workload, baseline_kernel);
+        const KernelInfo* b_info = model.GetKernelInfo(target_workload, target_kernel);
+        if (a_info && !a_info->roofline.intensities.empty())
+            IM_CHECK(roof_peer.PlottedIntensities(false) > 0);
+        if (b_info && !b_info->roofline.intensities.empty())
+            IM_CHECK(roof_peer.PlottedIntensities(true) > 0);
+        ctx->Yield(5);
+        CaptureForReview(ctx, "compare_same_workload");
+
+        // Selecting B as A swaps them instead of comparing a kernel with itself.
+        if (target_workload == workload)
+        {
+            sel->SelectKernel(target_kernel);
+            ctx->Yield(3);
+            IM_CHECK(kd_peer.CompareKernelId() == baseline_kernel);
+            sel->SelectKernel(baseline_kernel);
+            ctx->Yield(3);
+            IM_CHECK(kd_peer.CompareKernelId() == target_kernel);
+        }
+
+        // Stopping drops B from every table and the roofline.
+        kd_peer.StopCompare();
+        ctx->Yield(2);
+        IM_CHECK(!kd_peer.IsComparing());
+        IM_CHECK(!table_peer.IsComparing());
+        IM_CHECK(table_peer.DeltaPctCellCount() == 0);
+        IM_CHECK(!roof_peer.IsCompareMode());
+    };
+
+    t = IM_REGISTER_TEST(e, "app", "compute_roofline_keeps_zoom_when_maximized");
+    t->TestFunc = [](ImGuiTestContext* ctx)
+    {
+        ComputeView* cv = GetComputeViewOrSkip(ctx);
+        if (!cv) return;
+        TabContainer* tc = ComputeViewTestPeer{*cv}.TabContainerPtr();
+        IM_CHECK(tc != nullptr);
+        if (tc == nullptr) return;
+        ComputeKernelDetailsView* kd = nullptr;
+        for (const TabItem* tab : tc->GetTabs())
+        {
+            if (tab && tab->m_id == ComputeKernelDetailsView::TAB_ID)
+            {
+                kd = dynamic_cast<ComputeKernelDetailsView*>(tab->m_widget.get());
+                break;
+            }
+        }
+        if (kd == nullptr)
+        {
+            ctx->LogWarning("SKIP: no Kernel Details tab in this build");
+            return;
+        }
+        Roofline* roofline = ComputeKernelDetailsViewTestPeer{*kd}.RooflinePtr();
+        IM_CHECK(roofline != nullptr);
+        if (roofline == nullptr) return;
+
+        ComputePanelsGuard panels_guard;  // every panel in a box, none maximized
+        tc->SetActiveTab(ComputeKernelDetailsView::TAB_ID);
+        ctx->Yield(10);
+
+        ImPlotContext* plots   = ImPlot::GetCurrentContext();
+        const ImGuiID  plot_id = ImHashStr("plot", 0, RooflineTestPeer{*roofline}.PlotIdSeed());
+        ImPlotPlot*    plot    = plots ? plots->Plots.GetByKey(plot_id) : nullptr;
+        if (plot == nullptr)
+        {
+            ctx->LogWarning("SKIP: the selected kernel has no roofline to plot");
+            return;
+        }
+        const ImPlotRange box_x = plot->Axes[ImAxis_X1].Range;
+        const ImPlotRange box_y = plot->Axes[ImAxis_Y1].Range;
+        const float       box_w = plot->FrameRect.GetWidth();
+        CaptureForReview(ctx, "roofline_in_box");
+
+        AppWindowSettings& s     = SettingsManager::GetInstance().GetAppWindowSettings();
+        s.compute_maximized_pane = static_cast<int32_t>(ComputePane::kRoofline);
+        s.compute_maximized      = true;
+        ctx->Yield(10);
+        CaptureForReview(ctx, "roofline_maximized");
+
+        // The same plot, drawn bigger, showing the same range.
+        plot = plots->Plots.GetByKey(plot_id);
+        IM_CHECK(plot != nullptr);
+        if (plot == nullptr) return;
+        auto same = [](double a, double b) {
+            return std::fabs(a - b) <= 1e-9 * std::max(1.0, std::fabs(a));
+        };
+        IM_CHECK(plot->FrameRect.GetWidth() > box_w);
+        IM_CHECK(same(plot->Axes[ImAxis_X1].Range.Min, box_x.Min));
+        IM_CHECK(same(plot->Axes[ImAxis_X1].Range.Max, box_x.Max));
+        IM_CHECK(same(plot->Axes[ImAxis_Y1].Range.Min, box_y.Min));
+        IM_CHECK(same(plot->Axes[ImAxis_Y1].Range.Max, box_y.Max));
+    };
+
+    t = IM_REGISTER_TEST(e, "app", "compute_inline_compare_across_workloads");
+    t->TestFunc = [](ImGuiTestContext* ctx)
+    {
+        ComputeView* cv = GetComputeViewOrSkip(ctx);
+        if (!cv) return;
+        TabContainer* tc = ComputeViewTestPeer{*cv}.TabContainerPtr();
+        IM_CHECK(tc != nullptr);
+        if (tc == nullptr) return;
+        ComputeKernelDetailsView* kd = nullptr;
+        for (const TabItem* tab : tc->GetTabs())
+        {
+            if (tab && tab->m_id == ComputeKernelDetailsView::TAB_ID)
+            {
+                kd = dynamic_cast<ComputeKernelDetailsView*>(tab->m_widget.get());
+                break;
+            }
+        }
+        if (kd == nullptr)
+        {
+            ctx->LogWarning("SKIP: no Kernel Details tab in this build");
+            return;
+        }
+        ComputeKernelDetailsViewTestPeer kd_peer{*kd};
+        ComputeSelection* sel = ComputeViewTestPeer{*cv}.ComputeSelectionPtr();
+        IM_CHECK(sel != nullptr);
+        if (sel == nullptr) return;
+        const ComputeDataModel& model = cv->GetDataProvider()->ComputeModel();
+        const uint32_t workload        = sel->GetSelectedWorkload();
+        const uint32_t baseline_kernel = sel->GetSelectedKernel();
+
+        // B: the busiest kernel of another workload.
+        const WorkloadInfo* other = nullptr;
+        for (const WorkloadInfo* w : model.GetWorkloadList())
+        {
+            if (w && w->id != workload && !w->kernels.empty()) { other = w; break; }
+        }
+        if (other == nullptr)
+        {
+            ctx->LogWarning("SKIP: the database has one workload with kernels");
+            return;
+        }
+        const uint32_t target_kernel = other->ordered_kernels.front()->id;
+
+        struct CompareGuard
+        {
+            ComputeKernelDetailsViewTestPeer& peer;
+            ~CompareGuard() { peer.StopCompare(); }
+        } compare_guard{ kd_peer };
+        ComputePanelsGuard panels_guard;
+        tc->SetActiveTab(ComputeKernelDetailsView::TAB_ID);
+        ctx->Yield(3);
+
+        kd_peer.CompareWith(other->id, target_kernel);
+        ctx->Yield(3);
+        IM_CHECK(kd_peer.IsComparing());
+        IM_CHECK(kd_peer.CompareWorkloadId() == other->id);
+        IM_CHECK(kd_peer.CompareKernelId() == target_kernel);
+
+        // B - A only between workloads of one GPU architecture.
+        const bool same_arch =
+            ComputeMemoryChartView::WorkloadArch(model.GetWorkload(workload)) ==
+            ComputeMemoryChartView::WorkloadArch(other);
+        IM_CHECK(kd_peer.DeltaAvailable() == same_arch);
+        if (!same_arch) IM_CHECK(!kd_peer.MemoryChartShowsDelta());
+
+        // The roofline plots B from the other workload.
+        Roofline* roofline = kd_peer.RooflinePtr();
+        IM_CHECK(roofline != nullptr);
+        if (roofline == nullptr) return;
+        RooflineTestPeer roof_peer{*roofline};
+        IM_CHECK(roof_peer.IsCompareMode());
+        IM_CHECK(roof_peer.HasSecondaryKernel());
+        const KernelInfo* b_info = model.GetKernelInfo(other->id, target_kernel);
+        if (b_info && !b_info->roofline.intensities.empty())
+            IM_CHECK(roof_peer.PlottedIntensities(true) > 0);
+
+        // Metric tables fetch B from its own workload.
+        ComputeTableView* tbl = kd_peer.TableViewPtr();
+        IM_CHECK(tbl != nullptr);
+        if (tbl == nullptr) return;
+        ComputeTableViewTestPeer table_peer{*tbl};
+        if (table_peer.HasAvailableMetrics())
+        {
+            for (int i = 0; i < 300; i++)
+            {
+                if (!table_peer.CompareLoading() && !table_peer.FetchPending() &&
+                    table_peer.DeltaPctCellCount() > 0)
+                    break;
+                ctx->Yield(2);
+            }
+            IM_CHECK(table_peer.DeltaPctCellCount() > 0);
+        }
+        ctx->Yield(5);
+        CaptureForReview(ctx, "compare_across_workloads");
+        // The kernel list, the rail's default, and B's own memory chart.
+        kd_peer.SetKernelRailTable(false);
+        kd_peer.ShowMemoryChartSide(CompareSide::kB);
+        for (int i = 0; i < 20; i++) ctx->Yield(2);
+        CaptureForReview(ctx, "compare_across_list_b_chart");
+        kd_peer.ShowMemoryChartSide(CompareSide::kA);
+        kd_peer.SetKernelRailTable(true);
+
+        // Another A of A's workload keeps B unless B's workload has a namesake.
+        uint32_t other_a = ComputeSelection::INVALID_SELECTION_ID;
+        for (const KernelInfo* k : model.GetKernelInfoList(workload))
+        {
+            if (k && k->id != baseline_kernel) { other_a = k->id; break; }
+        }
+        if (other_a != ComputeSelection::INVALID_SELECTION_ID)
+        {
+            const KernelInfo* a_next = model.GetKernelInfo(workload, other_a);
+            uint32_t expected = target_kernel;
+            for (const KernelInfo* k : model.GetKernelInfoList(other->id))
+            {
+                if (k && a_next && k->name == a_next->name) { expected = k->id; break; }
+            }
+            sel->SelectKernel(other_a);
+            ctx->Yield(3);
+            IM_CHECK(kd_peer.CompareWorkloadId() == other->id);
+            IM_CHECK(kd_peer.CompareKernelId() == expected);
+            sel->SelectKernel(baseline_kernel);
+            ctx->Yield(3);
+        }
     };
 
     t = IM_REGISTER_TEST(e, "app", "compute_table_view_pin_persists_across_kernel_switch");
@@ -1777,14 +2000,21 @@ void RegisterAppTests(ImGuiTestEngine* e)
         // On load the table sorts by the Duration column (index 2), descending
         // (KernelMetricTable ctor: DURATION_COLUMN_INDEX + kRPVControllerSortOrderDescending).
         KernelMetricTableTestPeer peer{*kt};
+        for (int i = 0; i < 300 && peer.Fetching(); i++) ctx->Yield(2);
         IM_CHECK(peer.SortColumnIndex() == 2);
 
+        // Every workload's kernels are listed, once each.
+        size_t kernel_count = 0;
+        for (const WorkloadInfo* w : cv->GetDataProvider()->ComputeModel().GetWorkloadList())
+            kernel_count += w ? w->kernels.size() : 0;
+        IM_CHECK(peer.Rows().size() == kernel_count);
+        IM_CHECK(peer.RowWorkloads().size() == peer.Rows().size());
+
         // Prove the rows actually loaded in that order rather than just trusting the
-        // ctor default (which would pass even on an empty/unsorted fetch): the model's
+        // ctor default (which would pass even on an empty/unsorted fetch): the
         // Duration cells are plain ns integers, so assert the column is monotonically
-        // non-increasing. Header col 2 is "Duration (ns)".
-        const std::vector<std::vector<std::string>>& rows =
-            cv->GetDataProvider()->ComputeModel().GetKernelSelectionTable().GetTableData();
+        // non-increasing across the merged workloads. Header col 2 is "Duration (ns)".
+        const std::vector<std::vector<std::string>>& rows = peer.Rows();
         if (rows.size() < 2)
         {
             ctx->LogWarning("SKIP: fewer than two kernel rows to verify sort order");
@@ -1798,6 +2028,375 @@ void RegisterAppTests(ImGuiTestEngine* e)
             const double cur  = std::strtod(rows[r][2].c_str(), nullptr);
             IM_CHECK(prev >= cur);
         }
+    };
+
+    t = IM_REGISTER_TEST(e, "app", "compute_kernel_table_keeps_sort_when_querying");
+    t->TestFunc = [](ImGuiTestContext* ctx)
+    {
+        ComputeView* cv = GetComputeViewOrSkip(ctx);
+        if (!cv) return;
+        ComputePanelsGuard panels_guard;  // kernel rail in Table mode
+        TabContainer* tc = ComputeViewTestPeer{*cv}.TabContainerPtr();
+        IM_CHECK(tc != nullptr);
+        if (tc == nullptr) return;
+        ComputeKernelDetailsView* kd = nullptr;
+        for (const TabItem* tab : tc->GetTabs())
+        {
+            if (tab && tab->m_id == ComputeKernelDetailsView::TAB_ID)
+            {
+                kd = dynamic_cast<ComputeKernelDetailsView*>(tab->m_widget.get());
+                break;
+            }
+        }
+        if (kd == nullptr)
+        {
+            ctx->LogWarning("SKIP: no Kernel Details tab in this build");
+            return;
+        }
+        KernelMetricTable* kt = ComputeKernelDetailsViewTestPeer{*kd}.KernelMetricTablePtr();
+        IM_CHECK(kt != nullptr);
+        if (kt == nullptr) return;
+        KernelMetricTableTestPeer peer{*kt};
+        ComputeSelection* sel = ComputeViewTestPeer{*cv}.ComputeSelectionPtr();
+        IM_CHECK(sel != nullptr);
+        if (sel == nullptr) return;
+        const WorkloadInfo* workload =
+            cv->GetDataProvider()->ComputeModel().GetWorkload(sel->GetSelectedWorkload());
+        if (workload == nullptr || workload->available_metrics.ordered_categories.empty() ||
+            workload->available_metrics.ordered_categories[0]->ordered_tables.empty() ||
+            workload->available_metrics.ordered_categories[0]->ordered_tables[0]
+                ->ordered_entries.empty())
+        {
+            ctx->LogWarning("SKIP: the workload has no metrics to add as a column");
+            return;
+        }
+
+        tc->SetActiveTab(ComputeKernelDetailsView::TAB_ID);
+        kt->FetchData(sel->GetSelectedWorkload());
+        for (int i = 0; i < 300 && (peer.Fetching() || peer.Rows().empty()); i++) ctx->Yield(2);
+        IM_CHECK(!peer.Rows().empty());
+        if (peer.Rows().empty()) return;
+        ctx->Yield(3);
+
+        auto find_table = []() -> ImGuiTable* {
+            ImGuiContext& g = *ImGui::GetCurrentContext();
+            for (int i = 0; i < g.Tables.GetMapSize(); i++)
+            {
+                ImGuiTable* table = g.Tables.TryGetMapData(i);
+                if (table && table->InnerWindow && table->LastFrameActive >= g.FrameCount - 2 &&
+                    strstr(table->InnerWindow->Name, "kernel_selection_table"))
+                    return table;
+            }
+            return nullptr;
+        };
+        auto wait_fetch = [&]() {
+            for (int i = 0; i < 300 && peer.Fetching(); i++) ctx->Yield(2);
+            ctx->Yield(3);
+        };
+        auto names_sorted = [&](int order) {
+            const std::vector<std::vector<std::string>>& rows = peer.Rows();
+            for (size_t r = 1; r < rows.size(); r++)
+            {
+                const bool ok = order == kRPVControllerSortOrderAscending
+                                    ? rows[r - 1][1] <= rows[r][1]
+                                    : rows[r - 1][1] >= rows[r][1];
+                if (!ok) return false;
+            }
+            return true;
+        };
+
+        // Re-sort by name from its header.
+        ImGuiTable* table = find_table();
+        IM_CHECK(table != nullptr);
+        if (table == nullptr) return;
+        ctx->TableClickHeader(table->ID, "Name");
+        wait_fetch();
+        IM_CHECK(peer.SortColumnIndex() == 1);
+        const int name_order = peer.SortOrder();
+        IM_CHECK(names_sorted(name_order));
+
+        // A query adding a metric column keeps that sort.
+        const AvailableMetrics::Table* metric_table =
+            workload->available_metrics.ordered_categories[0]->ordered_tables[0];
+        const AvailableMetrics::Entry* entry = metric_table->ordered_entries[0];
+        const size_t columns_before = peer.MetricColumnCount();
+        kt->SetExternalQuery(MetricId{ entry->category_id, entry->table_id, entry->id },
+                             metric_table->value_names.empty() ? std::string()
+                                                                : metric_table->value_names[0]);
+        wait_fetch();
+        const size_t columns_after   = peer.MetricColumnCount();
+        const int    sort_after      = peer.SortColumnIndex();
+        const int    order_after     = peer.SortOrder();
+        const bool   sorted_after    = names_sorted(name_order);
+        CaptureForReview(ctx, "kernel_table_sorted_with_metric");
+
+        // Restore: sort by duration again and drop the added column.
+        table = find_table();
+        if (table != nullptr)
+        {
+            for (int i = 0; i < 2 && !(peer.SortColumnIndex() == 2 &&
+                                       peer.SortOrder() == kRPVControllerSortOrderDescending);
+                 i++)
+            {
+                ctx->TableClickHeader(table->ID, "Duration (ns)");
+                wait_fetch();
+            }
+        }
+        kt->ClearData();
+        wait_fetch();
+
+        IM_CHECK(columns_after == columns_before + 1);
+        IM_CHECK(sort_after == 1);
+        IM_CHECK(order_after == name_order);
+        IM_CHECK(sorted_after);
+    };
+
+    t = IM_REGISTER_TEST(e, "app", "compute_kernel_list_follows_table");
+    t->TestFunc = [](ImGuiTestContext* ctx)
+    {
+        ComputeView* cv = GetComputeViewOrSkip(ctx);
+        if (!cv) return;
+        ComputePanelsGuard panels_guard;  // kernel rail in Table mode
+        TabContainer* tc = ComputeViewTestPeer{*cv}.TabContainerPtr();
+        IM_CHECK(tc != nullptr);
+        if (tc == nullptr) return;
+        ComputeKernelDetailsView* kd = nullptr;
+        for (const TabItem* tab : tc->GetTabs())
+        {
+            if (tab && tab->m_id == ComputeKernelDetailsView::TAB_ID)
+            {
+                kd = dynamic_cast<ComputeKernelDetailsView*>(tab->m_widget.get());
+                break;
+            }
+        }
+        if (kd == nullptr)
+        {
+            ctx->LogWarning("SKIP: no Kernel Details tab in this build");
+            return;
+        }
+        ComputeKernelDetailsViewTestPeer kd_peer{*kd};
+        KernelMetricTable* kt = kd_peer.KernelMetricTablePtr();
+        IM_CHECK(kt != nullptr);
+        if (kt == nullptr) return;
+        KernelMetricTableTestPeer peer{*kt};
+        ComputeSelection* sel = ComputeViewTestPeer{*cv}.ComputeSelectionPtr();
+        IM_CHECK(sel != nullptr);
+        if (sel == nullptr) return;
+        size_t kernel_count = 0;
+        for (const WorkloadInfo* w : cv->GetDataProvider()->ComputeModel().GetWorkloadList())
+            kernel_count += w ? w->kernels.size() : 0;
+
+        tc->SetActiveTab(ComputeKernelDetailsView::TAB_ID);
+        kt->FetchData(sel->GetSelectedWorkload());
+        for (int i = 0; i < 300 && (peer.Fetching() || peer.Rows().empty()); i++) ctx->Yield(2);
+        IM_CHECK(!peer.Rows().empty());
+        if (peer.Rows().empty()) return;
+        ctx->Yield(3);
+
+        auto find_table = []() -> ImGuiTable* {
+            ImGuiContext& g = *ImGui::GetCurrentContext();
+            for (int i = 0; i < g.Tables.GetMapSize(); i++)
+            {
+                ImGuiTable* table = g.Tables.TryGetMapData(i);
+                if (table && table->InnerWindow && table->LastFrameActive >= g.FrameCount - 2 &&
+                    strstr(table->InnerWindow->Name, "kernel_selection_table"))
+                    return table;
+            }
+            return nullptr;
+        };
+        auto wait_fetch = [&]() {
+            for (int i = 0; i < 300 && peer.Fetching(); i++) ctx->Yield(2);
+            ctx->Yield(3);
+        };
+        // The List shows the table's rows, in the table's order.
+        auto list_matches_table = [&]() {
+            const std::vector<std::pair<uint32_t, uint32_t>> listed = kd_peer.ListedKernels();
+            const std::vector<std::vector<std::string>>& rows = peer.Rows();
+            if (listed.size() != rows.size()) return false;
+            for (size_t r = 0; r < rows.size(); r++)
+            {
+                if (rows[r].empty() || listed[r].first != peer.RowWorkloads()[r] ||
+                    std::to_string(listed[r].second) != rows[r][0])
+                    return false;
+            }
+            return true;
+        };
+        const bool follows_default = list_matches_table();
+
+        // Re-sort the table by name.
+        ImGuiTable* table = find_table();
+        IM_CHECK(table != nullptr);
+        if (table == nullptr) return;
+        ctx->TableClickHeader(table->ID, "Name");
+        wait_fetch();
+        const bool sorted_by_name = peer.SortColumnIndex() == 1;
+        const bool follows_sort   = list_matches_table();
+
+        // Filter out the shortest kernels (Duration > the least duration).
+        const std::vector<std::vector<std::string>>& rows = peer.Rows();
+        size_t shortest = 0;
+        bool   distinct = false;
+        for (size_t r = 1; r < rows.size(); r++)
+        {
+            const double cur = std::strtod(rows[r][2].c_str(), nullptr);
+            const double min = std::strtod(rows[shortest][2].c_str(), nullptr);
+            distinct = distinct || cur != min;
+            if (cur < min) shortest = r;
+        }
+        size_t filtered_rows   = 0;
+        bool   follows_filter  = true;
+        if (distinct)
+        {
+            const std::string filter = "> " + rows[shortest][2];
+            peer.ApplyFilter(2, filter.c_str());
+            wait_fetch();
+            filtered_rows  = peer.Rows().size();
+            follows_filter = list_matches_table();
+            kd_peer.SetKernelRailTable(false);
+            ctx->Yield(5);
+            CaptureForReview(ctx, "kernel_list_follows_table");
+            kd_peer.SetKernelRailTable(true);
+            ctx->Yield(3);
+        }
+        else
+        {
+            ctx->LogWarning("SKIP filter check: every kernel has the same duration");
+        }
+
+        // Restore: no filters, sorted by duration again.
+        kt->ClearAllFilters();
+        wait_fetch();
+        table = find_table();
+        if (table != nullptr)
+        {
+            for (int i = 0; i < 2 && !(peer.SortColumnIndex() == 2 &&
+                                       peer.SortOrder() == kRPVControllerSortOrderDescending);
+                 i++)
+            {
+                ctx->TableClickHeader(table->ID, "Duration (ns)");
+                wait_fetch();
+            }
+        }
+
+        IM_CHECK(follows_default);
+        IM_CHECK(sorted_by_name);
+        IM_CHECK(follows_sort);
+        if (distinct)
+        {
+            IM_CHECK(filtered_rows > 0 && filtered_rows < kernel_count);
+            IM_CHECK(follows_filter);
+        }
+        IM_CHECK(peer.Rows().size() == kernel_count);
+        IM_CHECK(list_matches_table());
+    };
+
+    t = IM_REGISTER_TEST(e, "app", "compute_isa_compare_shows_a_or_b");
+    t->TestFunc = [](ImGuiTestContext* ctx)
+    {
+        ComputeView* cv = GetComputeViewOrSkip(ctx);
+        if (!cv) return;
+        ComputePanelsGuard panels_guard;  // 2x2 grid: the ISA pane in the fourth box
+        TabContainer* tc = ComputeViewTestPeer{*cv}.TabContainerPtr();
+        IM_CHECK(tc != nullptr);
+        if (tc == nullptr) return;
+        ComputeKernelDetailsView* kd = nullptr;
+        for (const TabItem* tab : tc->GetTabs())
+        {
+            if (tab && tab->m_id == ComputeKernelDetailsView::TAB_ID)
+            {
+                kd = dynamic_cast<ComputeKernelDetailsView*>(tab->m_widget.get());
+                break;
+            }
+        }
+        if (kd == nullptr)
+        {
+            ctx->LogWarning("SKIP: no Kernel Details tab in this build");
+            return;
+        }
+        ComputeKernelDetailsViewTestPeer kd_peer{*kd};
+        ComputeIsaView* isa = kd_peer.IsaViewPtr();
+        if (isa == nullptr)
+        {
+            ctx->LogWarning("SKIP: the database has no ISA lines");
+            return;
+        }
+        ComputeIsaViewTestPeer isa_peer{*isa};
+        ComputeSelection* sel = ComputeViewTestPeer{*cv}.ComputeSelectionPtr();
+        IM_CHECK(sel != nullptr);
+        if (sel == nullptr) return;
+        tc->SetActiveTab(ComputeKernelDetailsView::TAB_ID);
+        ctx->Yield(3);
+
+        const ComputeDataModel& model = cv->GetDataProvider()->ComputeModel();
+        const uint32_t a_workload = sel->GetSelectedWorkload();
+        const uint32_t a_kernel   = sel->GetSelectedKernel();
+        const KernelInfo* a_info  = model.GetKernelInfo(a_workload, a_kernel);
+        uint32_t b_workload = ComputeSelection::INVALID_SELECTION_ID;
+        uint32_t b_kernel   = ComputeSelection::INVALID_SELECTION_ID;
+        for (const WorkloadInfo* w : model.GetWorkloadList())
+        {
+            for (const KernelInfo* k : w ? model.GetKernelInfoList(w->id)
+                                         : std::vector<const KernelInfo*>())
+            {
+                if (k && k->has_isa_lines && !(w->id == a_workload && k->id == a_kernel) &&
+                    b_kernel == ComputeSelection::INVALID_SELECTION_ID)
+                {
+                    b_workload = w->id;
+                    b_kernel   = k->id;
+                }
+            }
+        }
+        if (a_info == nullptr || !a_info->has_isa_lines ||
+            b_kernel == ComputeSelection::INVALID_SELECTION_ID)
+        {
+            ctx->LogWarning("SKIP: needs two kernels with ISA lines");
+            return;
+        }
+        auto wait_isa = [&](uint32_t kernel) {
+            for (int i = 0; i < 300 && !(isa_peer.CurrentKernelId() == kernel &&
+                                         isa_peer.IsaLoaded());
+                 i++)
+                ctx->Yield(2);
+            ctx->Yield(3);
+        };
+        wait_isa(a_kernel);
+
+        // Comparing opens the ISA pane on A.
+        kd_peer.CompareWith(b_workload, b_kernel);
+        ctx->Yield(3);
+        const bool comparing  = kd_peer.IsComparing();
+        const bool opens_on_a = !kd_peer.IsaShowsB() && isa_peer.FollowsSelection() &&
+                                isa_peer.CurrentKernelId() == a_kernel;
+
+        // B shows the compare target's ISA; the selection stays A.
+        kd_peer.ShowIsaSide(CompareSide::kB);
+        wait_isa(b_kernel);
+        const bool shows_b = isa_peer.CurrentWorkloadId() == b_workload &&
+                             isa_peer.CurrentKernelId() == b_kernel && isa_peer.IsaLoaded() &&
+                             !isa_peer.FollowsSelection() &&
+                             sel->GetSelectedKernel() == a_kernel;
+        CaptureForReview(ctx, "isa_compare_b");
+
+        // A goes back to the selection.
+        kd_peer.ShowIsaSide(CompareSide::kA);
+        wait_isa(a_kernel);
+        const bool shows_a = isa_peer.CurrentKernelId() == a_kernel && isa_peer.IsaLoaded() &&
+                             isa_peer.FollowsSelection();
+        CaptureForReview(ctx, "isa_compare_a");
+
+        // Stopping while on B returns to the selection.
+        kd_peer.ShowIsaSide(CompareSide::kB);
+        wait_isa(b_kernel);
+        kd_peer.StopCompare();
+        wait_isa(a_kernel);
+        const bool stop_follows = isa_peer.FollowsSelection() &&
+                                  isa_peer.CurrentKernelId() == a_kernel;
+
+        IM_CHECK(comparing);
+        IM_CHECK(opens_on_a);
+        IM_CHECK(shows_b);
+        IM_CHECK(shows_a);
+        IM_CHECK(stop_follows);
     };
 
     t = IM_REGISTER_TEST(e, "app", "sys_timeline_select_named_track_event");

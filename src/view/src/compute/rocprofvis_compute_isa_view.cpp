@@ -30,6 +30,8 @@ ComputeIsaView::ComputeIsaView(DataProvider& data_provider)
 , m_control_panel_height(0.0f)
 , m_current_kernel_id(ComputeSelection::INVALID_SELECTION_ID)
 , m_current_workload_id(ComputeSelection::INVALID_SELECTION_ID)
+, m_selected_kernel_id(ComputeSelection::INVALID_SELECTION_ID)
+, m_selected_workload_id(ComputeSelection::INVALID_SELECTION_ID)
 , m_show_metadata_enabled(false)
 {
     m_isa.widget    = std::make_shared<IsaCodeWidget>(m_line_selection);
@@ -75,7 +77,13 @@ ComputeIsaView::SubscribeToEvents()
     auto workload_changed = [this](std::shared_ptr<RocEvent> e) {
         auto event = std::dynamic_pointer_cast<ComputeSelectionChangedEvent>(e);
         if(event && event->GetSourceId() == m_data_provider.GetTraceFilePath())
-            SelectWorkload(event->GetId());
+        {
+            m_selected_workload_id = event->GetId();
+            if(m_follow_selection)
+            {
+                SelectWorkload(event->GetId());
+            }
+        }
     };
     m_workload_selection_changed_token = EventManager::GetInstance()->Subscribe(
         static_cast<int>(RocEvents::kComputeWorkloadSelectionChanged), workload_changed);
@@ -83,10 +91,41 @@ ComputeIsaView::SubscribeToEvents()
     auto kernel_changed = [this](std::shared_ptr<RocEvent> e) {
         auto event = std::dynamic_pointer_cast<ComputeSelectionChangedEvent>(e);
         if(event && event->GetSourceId() == m_data_provider.GetTraceFilePath())
-            LoadData(event->GetId());
+        {
+            m_selected_kernel_id = event->GetId();
+            if(m_follow_selection)
+            {
+                LoadData(event->GetId());
+            }
+        }
     };
     m_kernel_selection_changed_token = EventManager::GetInstance()->Subscribe(
         static_cast<int>(RocEvents::kComputeKernelSelectionChanged), kernel_changed);
+}
+
+void
+ComputeIsaView::ShowKernel(uint32_t workload_id, uint32_t kernel_id)
+{
+    const bool showing = !m_follow_selection && workload_id == m_current_workload_id &&
+                         kernel_id == m_current_kernel_id;
+    m_follow_selection = false;
+    if(!showing)
+    {
+        SelectWorkload(workload_id);
+        LoadData(kernel_id);
+    }
+}
+
+void
+ComputeIsaView::FollowSelection()
+{
+    if(m_follow_selection)
+    {
+        return;
+    }
+    m_follow_selection = true;
+    SelectWorkload(m_selected_workload_id);
+    LoadData(m_selected_kernel_id);
 }
 
 void

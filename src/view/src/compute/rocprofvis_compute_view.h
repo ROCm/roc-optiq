@@ -43,7 +43,6 @@ private:
     const WorkloadInfo* ValidateDatabase();
     void CreateTabContainer();
     void RenderToolbar();
-    void RenderWorkloadSelection();
     void RenderPresets();
     // Floating "Summary" window, toggled by View > Show Summary.
     void RenderSummaryWindow();

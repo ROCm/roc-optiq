@@ -10,4 +10,5 @@
 
 | Version | Release date |
 | ------- | ------------ |
+| [1.1.0](https://rocm.docs.amd.com/projects/roc-optiq/en/docs-1.0.0/index.html) | October 5, 2026 |
 | [1.0.0](https://rocm.docs.amd.com/projects/roc-optiq/en/docs-1.0.0/index.html) | August 26, 2026 |

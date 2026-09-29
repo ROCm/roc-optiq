@@ -25,6 +25,7 @@
 #include <filesystem>
 #include <fstream>
 #include <string>
+#include <system_error>
 #include <vector>
 
 #ifndef _WIN32
@@ -653,7 +654,14 @@ TEST_CASE("The child runs in the configured working directory", "[profiler][proc
     std::string output = run_to_completion(config, &state, &exit_code);
 
     CHECK(state == kRPVProfilerStateCompleted);
-    CHECK(output == scratch.string());
+    // macOS getcwd resolves /var to /private/var after chdir. Same directory,
+    // different spelling, so compare identity rather than the path strings.
+    std::error_code ec;
+    bool const same_directory = std::filesystem::equivalent(output, scratch, ec);
+    INFO("child PWD: " << output);
+    INFO("configured: " << scratch.string());
+    CHECK(!ec);
+    CHECK(same_directory);
     // Only the child moved. Optiq's own working directory is global state shared
     // by every open trace and relative path in the process.
     CHECK(std::filesystem::current_path() == before);

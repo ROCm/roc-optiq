@@ -1225,6 +1225,10 @@ rocprofvis_result_t ComputeTrace::LoadRocpd(Future* future)
 rocprofvis_dm_result_t ComputeTrace::FetchMetadata(rocprofvis_dm_database_t db,
                                                    rocprofvis_db_future_t   db_future)
 {
+    m_profiler_version.clear();
+    m_profiler_git_version.clear();
+    m_schema_version.clear();
+
     QueryArgumentStore query_args;
     QueryDataStore     query_out = {
         {

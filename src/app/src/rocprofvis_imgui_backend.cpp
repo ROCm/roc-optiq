@@ -6,6 +6,7 @@
 #include "spdlog/spdlog.h"
 #include <GLFW/glfw3.h>
 #include <stdio.h>
+#include "glfw_util.h"
 
 // Forward declarations for backend-specific setup functions
 bool
@@ -37,6 +38,7 @@ setup_opengl_window_and_backend(rocprofvis_imgui_backend_t* backend, GLFWwindow*
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
 #endif
+    RocProfVis::View::apply_window_class_hints();
 
     *window = glfwCreateWindow(width, height, title, nullptr, nullptr);
     if(!*window)

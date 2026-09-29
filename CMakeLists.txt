@@ -871,6 +871,34 @@ else()
             COMPONENT ${RUNTIME_COMP_TYPE} )
 endif()
 
+# Linux desktop entry and hicolor icons, so desktop shells list the app in
+# search and show its icon. Shells only scan XDG_DATA_DIRS (/usr/share by
+# default), not the /opt prefix, hence the absolute destinations.
+# EXCLUDE_FROM_ALL keeps them to the per-component DEB/RPM installs: the TGZ
+# archive and a plain `cmake --install` cannot stage absolute paths and would
+# write to the build machine's /usr/share instead.
+if(UNIX AND NOT APPLE)
+    set(LINUX_DESKTOP_FILE "${CMAKE_CURRENT_BINARY_DIR}/roc-optiq.desktop")
+    configure_file(
+        "${CMAKE_CURRENT_SOURCE_DIR}/resources/linux/roc-optiq.desktop.in"
+        "${LINUX_DESKTOP_FILE}"
+        @ONLY)
+    install(FILES "${LINUX_DESKTOP_FILE}"
+            DESTINATION /usr/share/applications
+            COMPONENT ${RUNTIME_COMP_TYPE}
+            EXCLUDE_FROM_ALL)
+    install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/resources/linux/icons/hicolor"
+            DESTINATION /usr/share/icons
+            COMPONENT ${RUNTIME_COMP_TYPE}
+            EXCLUDE_FROM_ALL)
+
+    find_program(DESKTOP_FILE_VALIDATE desktop-file-validate)
+    if(BUILD_TESTING AND DESKTOP_FILE_VALIDATE)
+        add_test(NAME ${TARGET_NAME}-desktop-entry
+                 COMMAND ${DESKTOP_FILE_VALIDATE} "${LINUX_DESKTOP_FILE}")
+    endif()
+endif()
+
 # Debian package specific variables
 set(CPACK_COMPONENTS_ALL RV_RUNTIME)
 set(CPACK_DEB_COMPONENT_INSTALL ON)

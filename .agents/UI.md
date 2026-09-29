@@ -253,6 +253,9 @@ Owns the OS-level shell. Specifically:
   wake requires more frames.
 - `glfw_util.{h,cpp}` - `FullscreenState`, `toggle_fullscreen`,
   `sync_fullscreen_state`. Use these instead of touching GLFW directly.
+  `apply_window_class_hints` must run before every `glfwCreateWindow`
+  (and after any `glfwDefaultWindowHints`) so windows match the Linux
+  `roc-optiq.desktop` entry and show its icon.
 - `rocprofvis_imgui_backend.{h,cpp}` plus `rocprofvis_imgui_opengl.cpp` /
   `rocprofvis_imgui_vulkan.cpp` - selects renderer at runtime, sets up
   ImGui's backend, and exposes the texture-creation callback that

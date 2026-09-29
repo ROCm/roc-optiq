@@ -23,6 +23,17 @@ constexpr int WINDOWED_RESTORE_MAX_CORRECTIONS = 8;
 // GNOME/Xwayland was under 50 ms.
 constexpr double WINDOWED_RESTORE_WATCH_SECONDS = 0.5;
 
+// Must match the installed desktop entry's file name and its StartupWMClass.
+constexpr const char* DESKTOP_APP_ID = "roc-optiq";
+
+void
+apply_window_class_hints()
+{
+    glfwWindowHintString(GLFW_X11_CLASS_NAME, DESKTOP_APP_ID);
+    glfwWindowHintString(GLFW_X11_INSTANCE_NAME, DESKTOP_APP_ID);
+    glfwWindowHintString(GLFW_WAYLAND_APP_ID, DESKTOP_APP_ID);
+}
+
 void
 init_fullscreen_state(GLFWwindow* window, FullscreenState& state)
 {

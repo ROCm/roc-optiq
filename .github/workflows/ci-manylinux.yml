@@ -271,6 +271,21 @@ jobs:
           cp ${{ env.BUILD_DIR }}/*.rpm ${{ env.DIST_DIR }}/
           ls -l ${{ env.DIST_DIR }}/
 
+      - name: Verify Desktop Integration
+        run: |
+          # The launcher entry and icons are only staged by the DEB/RPM component
+          # installs, so a packaging change can drop them without failing the build.
+          DEB_FILES=$(dpkg-deb -c "$(ls ${{ env.DIST_DIR }}/*.deb | head -1)")
+          RPM_FILES=$(rpm -qpl "$(ls ${{ env.DIST_DIR }}/*.rpm | head -1)")
+          for f in usr/share/applications/roc-optiq.desktop \
+                   usr/share/icons/hicolor/48x48/apps/roc-optiq.png \
+                   usr/share/icons/hicolor/512x512/apps/roc-optiq.png
+          do
+            grep -qF "./${f}" <<< "${DEB_FILES}" || { echo "❌ DEB is missing /${f}"; exit 1; }
+            grep -qxF "/${f}" <<< "${RPM_FILES}" || { echo "❌ RPM is missing /${f}"; exit 1; }
+          done
+          echo "✅ DEB and RPM ship the desktop entry and icons"
+
       - name: Upload GitHub Artifacts
         if: inputs.upload_to_github == true || inputs.upload_to_github == 'true'
         uses: actions/upload-artifact@v7

@@ -985,6 +985,9 @@ typedef enum rocprofvis_controller_compute_properties_t : uint32_t
     kRPVControllerWorkloadIndexed,
     kRPVControllerWorkloadById,
     kRPVControllerKernelMetricTable,
+    kRPVControllerComputeProfilerVersion,
+    kRPVControllerComputeProfilerGitVersion,
+    kRPVControllerComputeSchemaVersion,
     __kRPVControllerComputePropertiesLast
 } rocprofvis_controller_compute_properties_t;
 

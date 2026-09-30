@@ -62,6 +62,18 @@ ComputeDataModel::GetWorkload(uint32_t workload_id) const
     return nullptr;
 }
 
+const AnalysisInfo&
+ComputeDataModel::GetAnalysisInfo() const
+{
+    return m_analysis_info;
+}
+
+void
+ComputeDataModel::SetAnalysisInfo(AnalysisInfo& analysis_info)
+{
+    m_analysis_info = std::move(analysis_info);
+}
+
 const std::vector<std::shared_ptr<MetricValue>>*
 ComputeDataModel::GetKernelMetricsData(uint64_t store_id, uint32_t kernel_id) const
 {
@@ -301,6 +313,7 @@ ComputeDataModel::Clear()
     ClearAllMetricValues();
     m_workloads.clear();
     m_ordered_workloads.clear();
+    m_analysis_info = AnalysisInfo();
     m_kernel_selection_table.Clear();
 }
 

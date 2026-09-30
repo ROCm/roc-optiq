@@ -6,13 +6,13 @@ Documentation for ROCm Optiq is available at [https://rocm.docs.amd.com/projects
 
 ### Added
 
-#### Features and Improvements
+#### Features and improvements
 
 ##### Timeline and navigation
 
-- Sortable timeline tracks: right-click the track-list header (or use the down-arrow at its bottom) to sort tracks by **Topology**, **Default** (track type), or a remembered **Custom** order. Drag-to-reorder becomes the Custom order, and the choice persists per project.
-- Draggable measurement duration label: the measurement duration label can now be dragged (its connecting line and notches follow it), and the ruler timestamps are split to top/left and bottom/right so they no longer overlap.
-- Time-range selection indicators across the timeline, tables, and overview: per-track analysis stat pills tint blue while a selection is active; the events and top-events tables show a "Limited to time-range selection" vs "Full trace" scope indicator; and the overview histogram greys bars outside the selection, marks the selection start/end, and draws a duration bracket.
+- Sortable timeline tracks: Right-click the track-list header (or use the down-arrow at its bottom) to sort tracks by **Topology**, **Default** (track type), or a remembered **Custom** order. Drag-to-reorder becomes the **Custom** order, and the choice persists per project.
+- Draggable measurement duration label: The label can now be dragged (its connecting line and notches follow it), and the ruler timestamps are split to top/left and bottom/right so they no longer overlap.
+- Time-range selection indicators across the timeline, tables, and overview: Per-track analysis statistics pills are tinted blue while a selection is active. The events and top-events tables show a "Limited to time-range selection" vs "Full trace" scope indicator, and the overview histogram greys out bars outside the selection, marks the selection start/end, and draws a duration bracket.
 
 ##### Search
 
@@ -20,39 +20,39 @@ Documentation for ROCm Optiq is available at [https://rocm.docs.amd.com/projects
 
 ##### Tables
 
-- New Simplified table filter UI. Original filter options available via advanced mode.
+- New Simplified table filter UI. Original filter options available via **Advanced mode**.
 
 ##### Platform: macOS
 
 - Clipped the macOS app icon to a squircle so it matches the Dock (kept white-on-red and fully opaque).
 
-##### Binaries / Build
+##### Binaries / build
 
 - CI: Linux targets now built as ManyLinux binaries.
 
-### Resolved Issues
+##### Experimental (not yet released)
+
+These features are in progress and available for preview only (build from src). Enable them at build time with the noted build flags. The described behavior and UI are subject to change.
+
+- **Ask Optiq**: An intelligent, natural-language trace-analysis assistant (OpenAI-compatible endpoints) that can navigate to events/kernels, summarize performance, and drive Optiq views through a controlled tool interface, plus an **embedded Python analysis runtime** (script editor with run/cancel/load/save, native trace bindings, and a sandboxed interpreter with an AST-based script-approval workflow). The assistant is additionally gated behind an explicit runtime settings toggle. Build flags: `ROCPROFVIS_ENABLE_AGENTIC_PROFILING`, `ROCPROFVIS_ENABLE_SCRIPTING`.
+- **Trace compare**: Side-by-side A/B comparison for system traces. Source-filtered A/B cards with a shared filter, group-by (union of A/B columns), and synchronized sort across the **Event**, **Sample**, **Top Events**, **Event Details**, and **Track Details** tabs. Build flag: `ROCPROFVIS_ENABLE_TRACE_COMPARE`.
+- **Multi-window**: ImGui docking and platform (multi-viewport) windows, with per-monitor DPI for detached windows. Build flag: `ROCPROFVIS_MULTI_WINDOW`.
+- **Profiler launch**: Improved the launch backend with argv-based command composition (quoted arguments preserved), tool selection by enum resolved to a validated absolute path, working-directory validation, and reduced command-preview rebuild/log spam from the launcher dialog. Build flags: `ROCPROFVIS_ENABLE_PROFILER` (plus `ROCPROFVIS_ENABLE_REMOTE` for the SSH remote-profiling workflow).
+- **ISA View** - Added an ISA View for PC-sampled kernels, with optional source correlation and on-demand total, issue, and stall counts.
+
+### Resolved issues
 
 - Fixed incorrect table row count and missing rows under specific scenarios.
-- Fixed memory-chart values exceeding 100% (schema 2.0.0 or higher)
-- Memory manager: fixed intermittent crashes, permanent pool retention, and unbounded memory growth from stranded pooled objects.
+- Fixed memory-chart values exceeding 100% (schema 2.0.0 or higher).
+- Memory manager: Fixed intermittent crashes, permanent pool retention, and unbounded memory growth from stranded pooled objects.
 - Fixed the UI rendering at half size on HiDPI Linux (XWayland) displays.
 - Fixed the description-column resize panning the timeline.
 - Fixed timeline tracks flickering during fast vertical scroll.
 - Fixed a crash opening a compute `.db` when a roofline ceiling category is empty (uncaught `std::out_of_range`); the Roofline tab now shows "No data available."
 - Fixed a crash in Baseline Comparison when a kernel with a non-finite (Inf) metric is compared to itself.
 - Fixed the version number reported by the Windows installer.
-- Fixed topology node order inconsitent between target environments.
-- Fixed memory chart layout / metrics for gfx950 and gfx940 series.
-
-### Experimental (behind build flags; excluded from release builds)
-
-These features are in development and are compiled out by default. Enable them at build time with the noted CMake option(s); behavior and UI are subject to change.
-
-- **Ask Optiq** - an intelligent, natural-language trace-analysis assistant (OpenAI-compatible endpoints) that can navigate to events/kernels, summarize performance, and drive Optiq views through a controlled tool interface, plus an **embedded Python analysis runtime** (script editor with run/cancel/load/save, native trace bindings, and a sandboxed interpreter with an AST-based script-approval workflow). The assistant is additionally gated behind an explicit runtime settings toggle. Build flags: `ROCPROFVIS_ENABLE_AGENTIC_PROFILING`, `ROCPROFVIS_ENABLE_SCRIPTING`.
-- **Trace compare** - side-by-side A/B comparison for system traces: source-filtered A/B cards with a shared filter, group-by (union of A/B columns), and synchronized sort across the Event, Sample, Top Events, and Event/Track Details tabs. Build flag: `ROCPROFVIS_ENABLE_TRACE_COMPARE`.
-- **Multi-window** - ImGui docking and platform (multi-viewport) windows, with per-monitor DPI for detached windows. Build flag: `ROCPROFVIS_MULTI_WINDOW`.
-- **Profiler launch** - hardened launch backend: argv-based command composition (quoted arguments preserved), tool selection by enum resolved to a validated absolute path, working-directory validation, and reduced command-preview rebuild/log spam from the launcher dialog. Build flags: `ROCPROFVIS_ENABLE_PROFILER` (plus `ROCPROFVIS_ENABLE_REMOTE` for the SSH remote-profiling workflow).
-- **ISA View** - Added an ISA View for PC-sampled kernels, with optional source correlation and on-demand total, issue, and stall counts.
+- Fixed topology node order inconsistent between target environments.
+- Fixed memory chart layout and metrics for gfx950 and gfx940 series.
 
 ## ROCm Optiq 1.0.0
 

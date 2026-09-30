@@ -319,7 +319,18 @@ InfiniteScrollTable::SetDrawBorder(bool draw)
 void
 InfiniteScrollTable::FormatData() const
 {
-    // default implementation does nothing
+    ResetFormattedData();
+    FormatTimeColumns();
+}
+
+std::vector<FormattedColumnInfo>&
+InfiniteScrollTable::ResetFormattedData() const
+{
+    std::vector<FormattedColumnInfo>& formatted_column_data =
+        m_table_model_mutable().GetMutableFormattedTableData(m_table_type);
+    formatted_column_data.clear();
+    formatted_column_data.resize(m_table_model().GetTableHeader(m_table_type).size());
+    return formatted_column_data;
 }
 
 void
@@ -1013,21 +1024,36 @@ InfiniteScrollTable::IndexColumns()
 {
     m_time_column_indices = { INVALID_UINT64_INDEX, INVALID_UINT64_INDEX,
                               INVALID_UINT64_INDEX };
+    m_important_column_idxs =
+        std::vector<size_t>(kNumImportantColumns, INVALID_UINT64_INDEX);
     const std::vector<std::string>& column_names =
         m_table_model().GetTableHeader(m_table_type);
-    for(int i = 0; i < column_names.size(); i++)
+    for(size_t i = 0; i < column_names.size(); i++)
     {
-        if(column_names[i] == START_TS_COLUMN_NAME)
+        const std::string& col = column_names[i];
+        if(col == START_TS_COLUMN_NAME)
         {
             m_time_column_indices[kTimeStartNs] = i;
         }
-        else if(column_names[i] == END_TS_COLUMN_NAME)
+        else if(col == END_TS_COLUMN_NAME)
         {
             m_time_column_indices[kTimeEndNs] = i;
         }
-        else if(column_names[i] == DURATION_COLUMN_NAME)
+        else if(col == DURATION_COLUMN_NAME)
         {
             m_time_column_indices[kDurationNs] = i;
+        }
+        else if(col == TRACK_ID_COLUMN_NAME)
+        {
+            m_important_column_idxs[kTrackId] = i;
+        }
+        else if(col == STREAM_ID_COLUMN_NAME)
+        {
+            m_important_column_idxs[kStreamId] = i;
+        }
+        else if(col == ID_COLUMN_NAME)
+        {
+            m_important_column_idxs[kUUId] = i;
         }
     }
 }
@@ -1035,6 +1061,10 @@ InfiniteScrollTable::IndexColumns()
 void
 InfiniteScrollTable::RowSelected(const ImGuiMouseButton mouse_button)
 {
+    if(mouse_button == ImGuiMouseButton_Right)
+    {
+        SelectedRowContextMenu();
+    }
     spdlog::debug(mouse_button == ImGuiMouseButton_Left ? "Row {} clicked"
                                                        : "Row {} right-clicked",
                  m_selected_row);

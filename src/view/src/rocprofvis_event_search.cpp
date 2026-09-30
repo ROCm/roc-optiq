@@ -15,10 +15,6 @@ namespace View
 {
 
 constexpr uint64_t    MAX_RESULTS_DISPLAYED           = 5;
-constexpr const char* TRACK_ID_COLUMN_NAME            = "__trackId";
-constexpr const char* STREAM_ID_COLUMN_NAME           = "__streamTrackId";
-constexpr const char* ID_COLUMN_NAME                  = "__uuid";
-constexpr const char* EVENT_ID_COLUMN_NAME            = "id";
 constexpr const char* NAME_COLUMN_NAME                = "name";
 constexpr const char* CATEGORY_COLUMN_NAME            = "category";
 constexpr bool        DEFAULT_INCLUDE_SUBSTRINGS      = true;
@@ -557,57 +553,16 @@ EventSearch::UpdateFetchParams(std::shared_ptr<TableRequestParams>& params) cons
 }
 
 void
-EventSearch::FormatData() const
-{
-    TablesModel& tm = m_table_model_mutable();
-
-    std::vector<FormattedColumnInfo>& formatted_column_data =
-        tm.GetMutableFormattedTableData(m_table_type);
-    formatted_column_data.clear();
-    formatted_column_data.resize(tm.GetTableHeader(m_table_type).size());
-    InfiniteScrollTable::FormatTimeColumns();
-}
-
-void
 EventSearch::IndexColumns()
 {
-    const std::vector<std::string>& column_names =
-        m_table_model().GetTableHeader(m_table_type);
-    m_important_column_idxs =
-        std::vector<size_t>(kNumImportantColumns, INVALID_UINT64_INDEX);
     m_hidden_column_indices.clear();
-    for(size_t i = 0; i < column_names.size(); i++)
-    {
-        const auto& col = column_names[i];
-        if(!col.empty())
-        {
-            if(col == TRACK_ID_COLUMN_NAME)
-            {
-                m_important_column_idxs[kTrackId] = i;
-            }
-            else if(col == STREAM_ID_COLUMN_NAME)
-            {
-                m_important_column_idxs[kStreamId] = i;
-            }
-            else if(col == ID_COLUMN_NAME)
-            {
-                m_important_column_idxs[kUUId] = i;
-            }
-            else if(col == EVENT_ID_COLUMN_NAME)
-            {
-                m_important_column_idxs[kDbEventId] = i;
-            }
-            else if(m_include_category && col == CATEGORY_COLUMN_NAME)
-            {
-                m_important_column_idxs[kCategory] = i;
-            }
-            else if(col == NAME_COLUMN_NAME)
-            {
-                m_important_column_idxs[kName] = i;
-            }
-        }
-    }
     InfiniteScrollTable::IndexColumns();
+    m_important_column_idxs[kDbEventId] = ColumnIndexOf(EVENT_ID_COLUMN_NAME);
+    m_important_column_idxs[kName]      = ColumnIndexOf(NAME_COLUMN_NAME);
+    if(m_include_category)
+    {
+        m_important_column_idxs[kCategory] = ColumnIndexOf(CATEGORY_COLUMN_NAME);
+    }
 }
 
 void
@@ -618,10 +573,6 @@ EventSearch::RowSelected(const ImGuiMouseButton mouse_button)
         SelectedRowNavigateEvent(m_important_column_idxs[kTrackId],
                                  m_important_column_idxs[kStreamId]);
         m_should_close = true;
-    }
-    else if(mouse_button == ImGuiMouseButton_Right)
-    {
-        SelectedRowContextMenu();
     }
     InfiniteScrollTable::RowSelected(mouse_button);
 }

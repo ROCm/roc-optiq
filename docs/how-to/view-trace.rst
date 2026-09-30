@@ -310,9 +310,10 @@ The **Advanced Details** section provides an in-depth view of profiling data, en
 This section provides an interface for multiple data perspectives, offering granular insights through these components:
 
 - **Event Table**: Displays all events within the selected tracks. You can refine your analysis by applying a time-range selection or using the table filters. The **Event Table** provides two filter modes, which you can choose from a dropdown by clicking the filter icon:
-
+   
   - **Basic mode**: In the text field below any column header, enter a filter condition and press **Enter** to apply the filter.
   - **Advanced mode**: Provides advanced filters to narrow the table.
+    
     - Use the **Group by** dropdown to group **Event Table** results by an available field. The field listed depends on the selected track type (for example, **category**, **name**, **stream**, **queue**, **node**, **PID**, or **TID**).
     - Enter in **Filter** a SQL-like statement to narrow the results. For example, ``duration > 2000`` displays all events greater than 2000 ns. Time columns are compared in nanoseconds (ns); other time units do not filter correctly. Click **Submit** to apply an advanced filter.
 

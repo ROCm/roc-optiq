@@ -86,19 +86,21 @@
 
     <!-- ═══════════════════════════════════════════════════════════════════
          Directory layout
-         Default: C:\Program Files\AMD\ROCm-Optiq\
+         Default: C:\Program Files\rocm\extras-10\rocm-optiq\
          ═══════════════════════════════════════════════════════════════════ -->
     <StandardDirectory Id="ProgramFiles64Folder">
-      <Directory Id="AMDFolder" Name="AMD">
-        <Directory Id="INSTALLDIR" Name="ROCm-Optiq">
+      <Directory Id="RocmFolder" Name="rocm">
+        <Directory Id="RocmExtrasFolder" Name="extras-10">
+          <Directory Id="INSTALLDIR" Name="rocm-optiq">
 
-            <Component Id="MainExecutable" Guid="*">
-              <File Id="RocOptiqExe"
-                    Name="roc-optiq.exe"
-                    Source="$(var.ExeFile)"
-                    KeyPath="yes" />
-            </Component>
+              <Component Id="MainExecutable" Guid="*">
+                <File Id="RocOptiqExe"
+                      Name="roc-optiq.exe"
+                      Source="$(var.ExeFile)"
+                      KeyPath="yes" />
+              </Component>
 
+          </Directory>
         </Directory>
       </Directory>
     </StandardDirectory>

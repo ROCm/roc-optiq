@@ -186,7 +186,15 @@ jobs:
           lfs: true
           submodules: true
 
+      - name: Cache Vulkan SDK
+        id: cache-vulkan
+        uses: actions/cache@v6.1.0
+        with:
+          path: ~/VulkanSDK/${{ env.VULKAN_SDK_VERSION }}
+          key: vulkan-sdk-mac-${{ env.VULKAN_SDK_VERSION }}-${{ matrix.os-version }}
+
       - name: Install Vulkan SDK
+        if: steps.cache-vulkan.outputs.cache-hit != 'true'
         run: |
           set -euo pipefail
           V="${{ env.VULKAN_SDK_VERSION }}"
@@ -226,6 +234,13 @@ jobs:
             echo "❌ SDK root not created: ${SDK_ROOT}"
             exit 1
           fi
+          echo "✅ Vulkan SDK installed at ${SDK_ROOT}"
+
+      - name: Configure Vulkan SDK Environment
+        run: |
+          set -euo pipefail
+          V="${{ env.VULKAN_SDK_VERSION }}"
+          SDK_ROOT="${HOME}/VulkanSDK/${V}"
 
           # LunarG macOS SDK places headers and libs under .../macOS/, not the versioned root.
           VULKAN_SDK_DIR="${SDK_ROOT}/macOS"
@@ -273,7 +288,7 @@ jobs:
           if [ -d "${VULKAN_SDK_DIR}/lib" ]; then
             echo "DYLD_LIBRARY_PATH=${VULKAN_SDK_DIR}/lib${DYLD_LIBRARY_PATH:+:${DYLD_LIBRARY_PATH}}" >> "${GITHUB_ENV}"
           fi
-          echo "✅ Vulkan SDK installed at ${SDK_ROOT} (VULKAN_SDK=${VULKAN_SDK_DIR}, Vulkan_LIBRARY=${VULKAN_LIB})"
+          echo "✅ Vulkan SDK environment configured (VULKAN_SDK=${VULKAN_SDK_DIR}, Vulkan_LIBRARY=${VULKAN_LIB})"
 
       - name: Install OpenSSL
         if: inputs.crypto_backend == 'OpenSSL'

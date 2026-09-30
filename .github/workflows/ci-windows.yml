@@ -154,6 +154,7 @@ env:
   DIST_DIR: "dist"
   BINARY_DIR: ${{ inputs.cmake_config_preset == 'x64-debug' && 'Debug' || inputs.cmake_config_preset == 'x64-release-symbols' && 'RelWithDebInfo' || 'Release' }}
   BUILD_FILE_NAME: "roc-optiq"
+  VULKAN_SDK_VERSION: "1.4.328.1"
   ENABLE_INTERNAL_BANNER: ${{ (inputs.enable_internal_banner == true || inputs.enable_internal_banner == 'true') && 'ON' || 'OFF' }}
   ENABLE_UI_TESTS: ${{ (inputs.enable_ui_tests == true || inputs.enable_ui_tests == 'true') && 'ON' || 'OFF' }}
   ENABLE_REMOTE: ${{ (inputs.enable_remote == true || inputs.enable_remote == 'true') && 'ON' || 'OFF' }}
@@ -187,9 +188,18 @@ jobs:
           lfs: true
           submodules: true
       
+      - name: Cache Vulkan SDK
+        id: cache-vulkan
+        uses: actions/cache@v6.1.0
+        with:
+          path: C:\VulkanSDK\${{ env.VULKAN_SDK_VERSION }}
+          key: vulkan-sdk-windows-${{ env.VULKAN_SDK_VERSION }}-${{ matrix.os-version }}
+
       - name: Install Vulkan SDK
+        if: steps.cache-vulkan.outputs.cache-hit != 'true'
         run: |
-          curl -O https://sdk.lunarg.com/sdk/download/latest/windows/vulkan_sdk.exe?Human=true
+          $V = "${{ env.VULKAN_SDK_VERSION }}"
+          curl -fsSL "https://sdk.lunarg.com/sdk/download/$V/windows/vulkan_sdk.exe?Human=true" -o vulkan_sdk.exe
           ./vulkan_sdk.exe --accept-licenses --default-answer --confirm-command install
 
       - name: Set Vulkan SDK environment variables

@@ -327,22 +327,20 @@ jobs:
         if: inputs.upload_to_s3 == true || inputs.upload_to_s3 == 'true'
         run: |
           DEB_SRC=$(ls ${{ env.DIST_DIR }}/*.deb | head -1)
-          DEB_NAME="amdrocm${ROCM_VERSION}-$(basename "${DEB_SRC}")"
           S3_DEB_BASE="s3://${S3_BUCKET}/${{ env.S3_ROOT_DIRECTORY }}/packages/deb"
           aws s3 cp \
             "${DEB_SRC}" \
-            "${S3_DEB_BASE}/pool/main/${DEB_NAME}" \
+            "${S3_DEB_BASE}/pool/main/$(basename "${DEB_SRC}")" \
             --no-progress
 
       - name: Generate DEB Metadata for S3
         if: inputs.upload_to_s3 == true || inputs.upload_to_s3 == 'true'
         run: |
           DEB_SRC=$(ls ${{ env.DIST_DIR }}/*.deb | head -1)
-          DEB_NAME="amdrocm${ROCM_VERSION}-$(basename "${DEB_SRC}")"
           SUITE="stable"
           mkdir -p deb-repo/pool/main deb-repo/dists/${SUITE}/main/binary-amd64
           cp "${DEB_SRC}" \
-            deb-repo/pool/main/${DEB_NAME}
+            deb-repo/pool/main/$(basename "${DEB_SRC}")
 
           # Generate Packages index
           cd deb-repo
@@ -378,7 +376,7 @@ jobs:
         if: inputs.upload_to_s3 == true || inputs.upload_to_s3 == 'true'
         run: |
           RPM_SRC=$(ls ${{ env.DIST_DIR }}/*.rpm | head -1)
-          RPM_NAME="amdrocm${ROCM_VERSION}-$(basename "${RPM_SRC}" | sed 's/\.el[0-9]\+//')"
+          RPM_NAME="$(basename "${RPM_SRC}" | sed 's/\.el[0-9]\+//')"
           S3_RPM_PREFIX="s3://${S3_BUCKET}/${{ env.S3_ROOT_DIRECTORY }}/packages/rpm/x86_64"
           aws s3 cp \
             "${RPM_SRC}" \

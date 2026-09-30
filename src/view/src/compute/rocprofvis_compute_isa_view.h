@@ -296,7 +296,7 @@ private:
     uint64_t            m_kernel_total_samples        = 0;
     uint64_t            m_hottest_instruction_samples = 0;
     uint64_t            m_largest_code_object_offset  = 0;
-    bool                m_stall_data_available         = false;
+    bool                m_stall_data_available        = false;
 };
 
 }  // namespace View

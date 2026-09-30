@@ -825,10 +825,13 @@ SourceCodeWidget::Render()
     ImGui::TableSetupScrollFreeze(0, 1);
 
     ImGui::TableSetupColumn(
-        "#", ImGuiTableColumnFlags_NoResize | ImGuiTableColumnFlags_WidthFixed,
+        "#", ImGuiTableColumnFlags_NoResize | ImGuiTableColumnFlags_NoHide |
+                 ImGuiTableColumnFlags_WidthFixed,
         m_line_num_width);
 
-    ImGui::TableSetupColumn("Source code", ImGuiTableColumnFlags_WidthStretch);
+    ImGui::TableSetupColumn(
+        "Source code",
+        ImGuiTableColumnFlags_NoHide | ImGuiTableColumnFlags_WidthStretch);
 
     ImGui::TableNextRow(ImGuiTableRowFlags_Headers);
     RenderCenteredTableHeaderLabel(0, "#");
@@ -892,13 +895,16 @@ SourceCodeWidget::RenderLine(uint32_t index)
     ImGui::TableSetColumnIndex(0);
     ImGui::PushID(static_cast<int>(source_row.id));
     if(ImGui::Selectable("##row", row_selected,
-                         ImGuiSelectableFlags_SpanAllColumns,
+                         ImGuiSelectableFlags_SpanAllColumns |
+                             ImGuiSelectableFlags_AllowOverlap,
                          ImVec2(0.0f, ImGui::GetTextLineHeight())))
     {
         m_line_selection.selected_line = source_row.id;
         m_line_selection.isa_scroll_line = source_row.id;
     }
-    const bool item_hovered = ImGui::IsItemHovered();
+    const bool item_hovered =
+        ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenBlockedByActiveItem |
+                             ImGuiHoveredFlags_AllowWhenOverlappedByItem);
     if(item_hovered)
     {
         m_line_selection.hovered_line       = source_row.id;
@@ -1254,7 +1260,9 @@ IsaCodeWidget::Render()
 
     ImGui::TableSetupScrollFreeze(0, 1);
 
-    ImGui::TableSetupColumn("#", ImGuiTableColumnFlags_WidthFixed, m_line_num_width);
+    ImGui::TableSetupColumn(
+        "#", ImGuiTableColumnFlags_NoHide | ImGuiTableColumnFlags_WidthFixed,
+        m_line_num_width);
 
     if(show_sampling_details)
     {
@@ -1284,7 +1292,8 @@ IsaCodeWidget::Render()
                  ImGui::CalcTextSize(largest_offset_text).x);
     ImGui::TableSetupColumn("Offset", ImGuiTableColumnFlags_WidthFixed,
                             offset_column_width);
-    ImGui::TableSetupColumn("ISA", ImGuiTableColumnFlags_WidthStretch);
+    ImGui::TableSetupColumn(
+        "ISA", ImGuiTableColumnFlags_NoHide | ImGuiTableColumnFlags_WidthStretch);
 
     if(show_sampling_details)
     {
@@ -1581,7 +1590,9 @@ IsaCodeWidget::RenderLine(uint32_t index)
     int column = 0;
     ImGui::TableSetColumnIndex(column);
     ImGui::PushID(static_cast<int>(isa_row.id));
-    if(ImGui::Selectable("##row", row_selected, ImGuiSelectableFlags_SpanAllColumns,
+    if(ImGui::Selectable("##row", row_selected,
+                         ImGuiSelectableFlags_SpanAllColumns |
+                             ImGuiSelectableFlags_AllowOverlap,
                          ImVec2(0.0f, ImGui::GetTextLineHeight())))
     {
         if(isa_row.source_line_id != LineSelection::UNSELECTED)
@@ -1591,7 +1602,9 @@ IsaCodeWidget::RenderLine(uint32_t index)
             m_line_selection.source_scroll_file = isa_row.source_file_id;
         }
     }
-    const bool item_hovered = ImGui::IsItemHovered();
+    const bool item_hovered =
+        ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenBlockedByActiveItem |
+                             ImGuiHoveredFlags_AllowWhenOverlappedByItem);
     if(item_hovered)
     {
         m_line_selection.hovered_line       = isa_row.source_line_id;

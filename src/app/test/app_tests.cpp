@@ -17,6 +17,7 @@
 #include "rocprofvis_event_search.h"
 #include "rocprofvis_summary_view.h"
 #include "icons/rocprovfis_icon_defines.h"
+#include <algorithm>
 #include <string>
 #include <filesystem>
 #include <fstream>

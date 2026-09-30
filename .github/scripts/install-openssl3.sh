@@ -42,7 +42,19 @@ echo "${SHA256}  ${TARBALL}" | sha256sum -c -
 
 tar -xzf "${TARBALL}"
 cd "openssl-${VERSION}"
-./config --prefix="${PREFIX}" --libdir=lib --openssldir="${PREFIX}/ssl" shared -fPIC
+# The openssl CLI and libssl are linked against libssl.so.3 / libcrypto.so.3 in
+# ${PREFIX}/lib, which is not on the default loader path. Without an rpath the
+# post-install "openssl version" check fails (exit 127) before the workflow can
+# export LD_LIBRARY_PATH. $(LIBRPATH) is the OpenSSL makefile variable for the
+# install libdir. Optiq itself is not given this rpath: Linux packages set
+# CMAKE_SKIP_RPATH and load libssl through the distro or LD_LIBRARY_PATH.
+./config \
+    --prefix="${PREFIX}" \
+    --libdir=lib \
+    --openssldir="${PREFIX}/ssl" \
+    shared \
+    -fPIC \
+    '-Wl,-rpath,$(LIBRPATH)'
 make -j"$(nproc)"
 make install_sw
 

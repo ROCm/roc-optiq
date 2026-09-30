@@ -57,12 +57,15 @@ jobs:
         if: env.CRYPTO_BACKEND == 'OpenSSL'
         shell: pwsh
         run: |
-          choco install openssl --no-progress -y
-          # CI-owned resolution order: prefer Chocolatey's Win64 layout over the
-          # runner image copy under "OpenSSL". First match must have headers + bin DLLs.
+          # GitHub-hosted Windows images already include a full Shining Light
+          # OpenSSL (headers + MSVC import libs) at "C:\Program Files\OpenSSL".
+          # Do not `choco install openssl`: that downloads the newest installer
+          # from slproweb.com, which stalls and hits Chocolatey's 2700s timeout
+          # (OpenSSL 4.0.3). OpenSSL-Win64 is only a fallback for a Chocolatey
+          # install. First match must have headers, bin DLLs, and VC import libs.
           $candidates = @(
-            "C:\Program Files\OpenSSL-Win64",
-            "C:\Program Files\OpenSSL"
+            "C:\Program Files\OpenSSL",
+            "C:\Program Files\OpenSSL-Win64"
           )
           $opensslRoot = $null
           foreach ($c in $candidates) {
@@ -79,18 +82,22 @@ jobs:
             Write-Host "CI: OpenSSL not found in managed paths (checked: $($candidates -join ', '))"
             exit 1
           }
-          Write-Host "CI OPENSSL_ROOT_DIR=$opensslRoot"
-          echo "OPENSSL_ROOT_DIR=$opensslRoot" | Out-File -FilePath $env:GITHUB_ENV -Append
-          echo "PATH=$opensslRoot\bin;$env:PATH" | Out-File -FilePath $env:GITHUB_ENV -Append
-          # Newer Shining Light / choco builds nest the MSVC import libs under
-          # lib\VC\x64\MD (dynamic CRT release). CMake's FindOpenSSL may not find
-          # them from OPENSSL_ROOT_DIR alone, so locate and export explicit hints.
+          # Shining Light nests the MSVC import libs under lib\VC\x64\MD
+          # (dynamic CRT release). CMake's FindOpenSSL may not find them from
+          # OPENSSL_ROOT_DIR alone, so locate and export explicit hints.
           $crypto = Get-ChildItem -Path $opensslRoot -Recurse -Filter "libcrypto.lib" -ErrorAction SilentlyContinue | Where-Object { $_.FullName -match "x64\\MD\\" -and $_.FullName -notmatch "static" } | Select-Object -First 1
           $ssl = Get-ChildItem -Path $opensslRoot -Recurse -Filter "libssl.lib" -ErrorAction SilentlyContinue | Where-Object { $_.FullName -match "x64\\MD\\" -and $_.FullName -notmatch "static" } | Select-Object -First 1
-          if ($crypto -and $ssl) {
-            echo "OPENSSL_LIB_EAY_RELEASE=$($crypto.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Append
-            echo "OPENSSL_SSL_EAY_RELEASE=$($ssl.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Append
+          if (-not ($crypto -and $ssl)) {
+            Write-Host "CI: OpenSSL import libraries (lib\VC\x64\MD, non-static) not found under $opensslRoot"
+            exit 1
           }
+          Write-Host "CI OPENSSL_ROOT_DIR=$opensslRoot"
+          Write-Host "CI LIB_EAY_RELEASE=$($crypto.FullName)"
+          Write-Host "CI SSL_EAY_RELEASE=$($ssl.FullName)"
+          echo "OPENSSL_ROOT_DIR=$opensslRoot" | Out-File -FilePath $env:GITHUB_ENV -Append
+          echo "PATH=$opensslRoot\bin;$env:PATH" | Out-File -FilePath $env:GITHUB_ENV -Append
+          echo "OPENSSL_LIB_EAY_RELEASE=$($crypto.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Append
+          echo "OPENSSL_SSL_EAY_RELEASE=$($ssl.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Append
 
       - name: Build, Make, and Verify Installation
         run: |

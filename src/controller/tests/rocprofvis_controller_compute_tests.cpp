@@ -69,7 +69,9 @@ struct RocProfVisControllerFixture
     };
     struct KernelInfo
     {
-        uint64_t id = 0;
+        uint64_t             id            = 0;
+        rocprofvis_handle_t* handle        = nullptr;
+        bool                 has_isa_lines = false;
     };
     struct WorkloadInfo
     {
@@ -557,10 +559,83 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture,
                 REQUIRE(result == kRocProfVisResultSuccess);
                 REQUIRE((has_isa_lines == 0 || has_isa_lines == 1));
 
-                workload.kernels.push_back(KernelInfo{ kernel_id });
+                workload.kernels.push_back(
+                    KernelInfo{ kernel_id, kernel_handle, has_isa_lines != 0 });
             }
 
             REQUIRE(!workload.kernels.empty());
+        }
+    }
+
+    // Fetches ISA lines for schema-2.2 kernels and verifies that the resolved
+    // instruction type is readable through each instruction-line property.
+    // Older compute fixtures have no ISA lines, so they do not enter this path.
+    // Fixture Reads: m_controller, m_workloads[].kernels
+    SECTION("Controller Load PC Sampling Instruction Types")
+    {
+        for(const WorkloadInfo& workload : m_workloads)
+        {
+            for(const KernelInfo& kernel : workload.kernels)
+            {
+                if(!kernel.has_isa_lines)
+                {
+                    continue;
+                }
+
+                rocprofvis_handle_t* pc_sampling_handle = nullptr;
+                rocprofvis_result_t  result = rocprofvis_controller_get_object(
+                    kernel.handle, kRPVControllerKernelPcSampling, 0,
+                    &pc_sampling_handle);
+                REQUIRE(result == kRocProfVisResultSuccess);
+                REQUIRE(pc_sampling_handle != nullptr);
+
+                rocprofvis_controller_arguments_t* args =
+                    rocprofvis_controller_arguments_alloc();
+                REQUIRE(args != nullptr);
+                result = rocprofvis_controller_set_uint64(
+                    args, kRPVControllerPcSamplingArgsKernelId, 0, kernel.id);
+                REQUIRE(result == kRocProfVisResultSuccess);
+
+                rocprofvis_controller_future_t* future =
+                    rocprofvis_controller_future_alloc();
+                REQUIRE(future != nullptr);
+                result = rocprofvis_controller_pc_sampling_fetch_isa_lines_async(
+                    m_controller, args, future, pc_sampling_handle);
+                REQUIRE(result == kRocProfVisResultSuccess);
+                result = rocprofvis_controller_future_wait(future, FLT_MAX);
+                REQUIRE(result == kRocProfVisResultSuccess);
+
+                uint64_t num_instruction_lines = 0;
+                result = rocprofvis_controller_get_uint64(
+                    pc_sampling_handle, kRPVControllerPCSamplingNumInstructionLines, 0,
+                    &num_instruction_lines);
+                REQUIRE(result == kRocProfVisResultSuccess);
+                REQUIRE(num_instruction_lines > 0);
+
+                bool found_instruction_type = false;
+                for(uint64_t i = 0; i < num_instruction_lines; i++)
+                {
+                    uint32_t length = 0;
+                    result          = rocprofvis_controller_get_string(
+                        pc_sampling_handle,
+                        kRPVControllerPCSamplingInstructionLineInstructionType, i,
+                        nullptr, &length);
+                    REQUIRE(result == kRocProfVisResultSuccess);
+
+                    std::string instruction_type(length, '\0');
+                    result = rocprofvis_controller_get_string(
+                        pc_sampling_handle,
+                        kRPVControllerPCSamplingInstructionLineInstructionType, i,
+                        instruction_type.data(), &length);
+                    REQUIRE(result == kRocProfVisResultSuccess);
+                    found_instruction_type =
+                        found_instruction_type || !instruction_type.empty();
+                }
+                REQUIRE(found_instruction_type);
+
+                rocprofvis_controller_future_free(future);
+                rocprofvis_controller_arguments_free(args);
+            }
         }
     }
 

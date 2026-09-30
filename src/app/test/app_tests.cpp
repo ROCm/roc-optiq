@@ -675,10 +675,10 @@ void RegisterAppTests(ImGuiTestEngine* e)
         }
         if (wv == nullptr)
         {
-            ctx->LogWarning("SKIP: no Analysis Details tab in this build");
+            ctx->LogWarning("SKIP: no Profile Details tab in this build");
             return;
         }
-        IM_CHECK(wv_label == "Analysis Details");
+        IM_CHECK(wv_label == "Profile Details");
 
         // Trace-level metadata is loaded with the trace, independent of the workload.
         const AnalysisInfo& analysis_info =

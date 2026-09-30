@@ -1338,7 +1338,7 @@ The compute analogue of `TraceView`. Owns:
     workload SOL, workload roofline).
   - `ComputeKernelDetailsView` - per-kernel deep-dive.
   - `ComputeTableView` - hierarchical metric tables.
-  - `ComputeWorkloadView` - "Analysis Details" tab: analysis metadata,
+  - `ComputeWorkloadView` - "Profile Details" tab: analysis metadata,
     system info, and profiling config tables.
   - `ComputeComparisonView` - baseline vs target comparison.
   - `ComputeIsaView` - source/ISA correlation and PC-sampling counts.
@@ -1377,7 +1377,7 @@ sentinel.
 
 ### `ComputeWorkloadView` (`rocprofvis_compute_workload_view.{h,cpp}`)
 
-Backs the **Analysis Details** tab (class and `TAB_ID` keep their older
+Backs the **Profile Details** tab (class and `TAB_ID` keep their older
 "workload" names). Two bordered panels, top to bottom:
 
 - **Analysis Information** - `RenderAnalysisInfo(AnalysisInfo)` renders the

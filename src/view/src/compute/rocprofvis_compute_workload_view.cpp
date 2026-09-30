@@ -20,7 +20,8 @@ namespace RocProfVis
 namespace View
 {
 
-static constexpr const char* UNAVAILABLE_VALUE_TEXT = "N/A";
+static constexpr const char* UNAVAILABLE_VALUE_TEXT   = "N/A";
+static constexpr const char* WORKLOAD_SECTION_TITLE   = "Workload Information";
 
 TabItem
 ComputeWorkloadView::CreateTabItem(
@@ -93,7 +94,11 @@ ComputeWorkloadView::Render()
                              ImGuiChildFlags_Borders |
                                  ImGuiChildFlags_AlwaysUseWindowPadding))
         {
-            SectionTitle("Workload Information");
+            const std::string title =
+                m_workload_info->name.empty()
+                    ? std::string(WORKLOAD_SECTION_TITLE)
+                    : std::string(WORKLOAD_SECTION_TITLE) + ": " + m_workload_info->name;
+            SectionTitle(title.c_str());
             if(m_content_container)
             {
                 m_content_container->Render();
@@ -103,7 +108,7 @@ ComputeWorkloadView::Render()
     }
     else
     {
-        SectionTitle("Workload Information");
+        SectionTitle(WORKLOAD_SECTION_TITLE);
         const char* label = "Workload Information Unavailable";
         RenderUnavailableMessage(label);
     }

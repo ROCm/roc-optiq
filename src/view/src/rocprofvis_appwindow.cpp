@@ -43,6 +43,7 @@
 #include <algorithm>
 #include <filesystem>
 #include <sstream>
+#include <string_view>
 #include <utility>
 
 namespace RocProfVis
@@ -1536,6 +1537,8 @@ AppWindow::RenderAboutDialog()
         return ss.str();
     }();
     static constexpr const char* COMMIT_LABEL = "Commit " ROCPROFVIS_GIT_COMMIT;
+    static constexpr bool        COMMIT_UNKNOWN =
+        std::string_view(ROCPROFVIS_GIT_COMMIT) == "unknown";
 
     PopUpStyle popup_style;
     popup_style.PushPopupStyles();
@@ -1571,6 +1574,13 @@ AppWindow::RenderAboutDialog()
         ImGui::SetCursorPosX(
             (ImGui::GetWindowSize().x - ImGui::CalcTextSize(COMMIT_LABEL).x) * 0.5f);
         ImGui::TextDisabled("%s", COMMIT_LABEL);
+        if(COMMIT_UNKNOWN)
+        {
+            ImGui::SetCursorPosX((ImGui::GetWindowSize().x -
+                                  ImGui::CalcTextSize(ROCPROFVIS_GIT_COMMIT_UNKNOWN_NOTE).x) *
+                                 0.5f);
+            ImGui::TextDisabled("%s", ROCPROFVIS_GIT_COMMIT_UNKNOWN_NOTE);
+        }
         ImGui::PopFont();
 
         ImGui::Spacing();

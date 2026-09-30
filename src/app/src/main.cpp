@@ -21,6 +21,7 @@
 #include <cmath>
 #include <filesystem>
 #include <iostream>
+#include <string_view>
 #include <stdio.h>
 #include <stdlib.h>
 #if defined(__linux__) && defined(ROCPROFVIS_MULTI_WINDOW)
@@ -251,6 +252,10 @@ print_version(bool include_commit)
     if(include_commit)
     {
         std::cout << " commit: " << ROCPROFVIS_GIT_COMMIT;
+        if(std::string_view(ROCPROFVIS_GIT_COMMIT) == "unknown")
+        {
+            std::cout << "\n" << ROCPROFVIS_GIT_COMMIT_UNKNOWN_NOTE;
+        }
     }
     std::cout << std::endl;
 }

@@ -261,8 +261,9 @@ Owns the OS-level shell. Specifically:
   (`CLIParser::AddOption`). Flags currently registered in `main.cpp`:
   `-v/--version [hash]`, `-f/--file <path>`, `-b/--backend {auto|vulkan|opengl}`,
   `-d/--file-dialog {auto|native|imgui}`, `-h/--help`. `-v` prints the
-  version. `-v hash` also prints the git commit captured at configure time
-  (`unknown` when git was unavailable). Add new flags by
+  version. `-v hash` also prints the git commit. Official builds print the
+  hash alone. An unofficial build prints `unknown` and a line that the
+  commit hash is not recorded. About shows the same text. Add new flags by
   calling `AddOption` in `main.cpp::parse_command_line_args`.
 
 ### `src/core/`

@@ -18,6 +18,10 @@ This document describes how to build ROCm Optiq (roc-optiq) on Windows, Linux, a
 
 > The build presets are named in [CMakePresets.json](CMakePresets.json) under `buildPresets`.
 
+### Git commit recorded in the binary
+
+About and `roc-optiq -v hash` show a git commit for official builds. An unofficial build shows `unknown` and a line that the commit hash is not recorded, including after a commit is pulled and the tree is edited without committing. GitHub Actions builds count as official because they set `GITHUB_ACTIONS`. A local build cannot opt into recording a hash.
+
 ---
 
 ## Windows (Visual Studio 2022)

@@ -509,14 +509,14 @@ TEST_CASE("The C ABI resolves a tool inside a configured directory", "[profiler]
 // Process launch
 // ==================================================================================
 //
-// These run a real child process, so they use POSIX system utilities and are
-// skipped on Windows. /usr/bin/printf repeats its format once per remaining
-// argument, which makes each argv entry individually visible in the output.
+// These run a real child process, so they use a POSIX shell and are skipped on
+// Windows.
 //
-// A ScratchToolDir installs the utility under the tool's own name, since naming a
+// A ScratchToolDir installs the shell under the tool's own name, since naming a
 // tool is the only way to select a binary and nothing here is a ROCm tool. The
-// utilities used do not inspect argv[0], so running under another name is
-// indistinguishable to them.
+// shell does not choose its behaviour from argv[0]. Coreutils binaries can:
+// Ubuntu 26.04 and BusyBox ship them as one multi-call program that rejects the
+// name rocprof-sys-run, so do not use them as stand-ins.
 
 #ifndef _WIN32
 
@@ -577,13 +577,19 @@ TEST_CASE("Arguments reach the child process unsplit and uninterpreted", "[profi
     rocprofvis_profiler_config_t* config = rocprofvis_profiler_config_alloc();
     REQUIRE(config != nullptr);
 
-    ScratchToolDir tool_dir("/usr/bin/printf");
+    ScratchToolDir tool_dir;
     use_tool_in(config, tool_dir);
-    rocprofvis_profiler_config_add_profiler_arg(config, "[%s]\n");
+    // Everything after "sh" becomes a positional parameter, which the shell
+    // never parses as code. Its builtin printf then shows each one on its own
+    // line.
+    rocprofvis_profiler_config_add_profiler_arg(config, "-c");
+    rocprofvis_profiler_config_add_profiler_arg(
+        config, "for a in \"$@\"; do printf '[%s]\\n' \"$a\"; done");
+    rocprofvis_profiler_config_add_profiler_arg(config, "sh");
     rocprofvis_profiler_config_add_profiler_arg(config, "--simple");
     rocprofvis_profiler_config_add_profiler_arg(config, "with spaces  and   runs");
     rocprofvis_profiler_config_add_profiler_arg(config, "quo\"te's");
-    // No shell is involved, so these are ordinary characters.
+    // Only the launcher could interpret these, and it must not.
     rocprofvis_profiler_config_add_profiler_arg(config, "meta;|&$(echo hi)*?");
     rocprofvis_profiler_config_add_profiler_arg(config, "/path/with space/trace.db");
 

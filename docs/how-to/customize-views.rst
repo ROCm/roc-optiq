@@ -33,7 +33,7 @@ You can adjust the settings in your ROCm Compute Profiler and ROCm Systems Profi
 Use the **Edit** > **Preferences** menu to open the **Settings** dialog. The following settings can be adjusted: 
 
 - The application theme (Light or Dark).
-- The multi-node decorators visibility. This controls whether to enable node colors in the:ref:`topology` view and node labels in the track descriptions.
+- The multi-node decorators visibility. This controls whether to enable node colors in the :ref:`topology` view and node labels in the track descriptions.
 - The topology sidebar icon button visibility. This controls whether the |eye| (show/hide track) and |scroll| (go to track) icon buttons display in the sidebar of the :ref:`topology`.
 - The font size.
 

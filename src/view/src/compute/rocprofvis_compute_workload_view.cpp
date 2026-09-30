@@ -28,7 +28,7 @@ ComputeWorkloadView::CreateTabItem(
     const std::shared_ptr<ComputeSelection>& compute_selection)
 {
     return RocWidget::CreateTabItem(
-        "Analysis Details", TAB_ID,
+        "Profile Details", TAB_ID,
         std::make_shared<ComputeWorkloadView>(data_provider, compute_selection));
 }
 
@@ -143,7 +143,7 @@ ComputeWorkloadView::RenderAnalysisInfo(const AnalysisInfo& analysis_info)
                          ImGuiChildFlags_Borders | ImGuiChildFlags_AutoResizeY |
                              ImGuiChildFlags_AlwaysUseWindowPadding))
     {
-        SectionTitle("Analysis Information");
+        SectionTitle("Analysis Tool");
 
         const std::pair<const char*, const std::string*> rows[] = {
             { "ROCm Compute Profiler Version", &analysis_info.profiler_version },
@@ -158,7 +158,7 @@ ComputeWorkloadView::RenderAnalysisInfo(const AnalysisInfo& analysis_info)
 
         if(!has_value)
         {
-            const char* label = "Analysis Information Unavailable";
+            const char* label = "Analysis Tool Information Unavailable";
             RenderUnavailableMessage(label);
         }
         else if(ImGui::BeginTable("analysis_info_table", 2,

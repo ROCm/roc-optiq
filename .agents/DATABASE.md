@@ -598,7 +598,10 @@ databases:
   resolved through `ColumnNameToEnum`, and the resulting model `Table` stores
   each column's `rocprofvis_db_compute_column_enum_t` plus raw string cells.
   The controller later converts that temporary table into typed `PcSampling`
-  vectors.
+  vectors. The PC-sample-state projection preserves SQL NULL for `issue_count`
+  and `stall_count`; the generic callback represents NULL as an empty cell, so
+  the controller can distinguish host-trap's unavailable progress data from a
+  stochastic sample's measured zero. `total_count` remains coalesced to zero.
 - Pivot construction: `BuildKernelMetricsMatrix(table, plan)` builds
   the kernel x metric pivot table from a JSON plan (`jt::Json`).
 - `ComputeWorkloadTopKernelsMeanAndMedian(table)` post-processes top

@@ -855,6 +855,28 @@ DrawInternalBuildBanner(const char* text /*= "Internal Build"*/)
 inline constexpr float MENU_ICON_COLUMN_EM = 1.0f;
 inline constexpr float MENU_ICON_GAP_EM    = 0.7f;
 
+static void
+PushContextMenuStyles()
+{
+    SettingsManager& settings = SettingsManager::GetInstance();
+    const auto&      style    = settings.GetDefaultStyle();
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, style.WindowPadding);
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, style.ItemSpacing);
+    ImGui::PushStyleColor(ImGuiCol_Header,
+                          settings.GetColor(Colors::kTabAccent));
+    ImGui::PushStyleColor(ImGuiCol_HeaderHovered,
+                          settings.GetColor(Colors::kTabAccentHover));
+    ImGui::PushStyleColor(ImGuiCol_HeaderActive,
+                          settings.GetColor(Colors::kAccent));
+}
+
+static void
+PopContextMenuStyles()
+{
+    ImGui::PopStyleColor(3);
+    ImGui::PopStyleVar(2);
+}
+
 static float
 MenuIconColumnWidth()
 {
@@ -928,14 +950,15 @@ CopyableTextUnformatted(
     if(!unique_id.empty())
         ImGui::PushID(unique_id.data());
 
-    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
-    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0, 0, 0, 0));
-    ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0, 0, 0, 0));
-    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(0, 0));
-
-    if(ImGui::Button(text, ImVec2(0, 0)))
+    // Keep interaction on an identified item, but render separately because button
+    // labels treat "##" as the start of a hidden identifier.
+    const ImVec2 text_position = ImGui::GetCursorScreenPos();
+    const ImVec2 text_size     = ImGui::CalcTextSize(text);
+    clicked = ImGui::InvisibleButton(
+        text, ImVec2(std::max(text_size.x, 1.0f),
+                     std::max(text_size.y, ImGui::GetTextLineHeight())));
+    if(clicked)
     {
-        clicked = true;
         if(one_click_copy)
         {
             ImGui::SetClipboardText(text);
@@ -949,9 +972,7 @@ CopyableTextUnformatted(
 
     if(context_menu)
     {
-        auto style = SettingsManager::GetInstance().GetDefaultStyle();
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, style.WindowPadding);
-        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, style.ItemSpacing);
+        PushContextMenuStyles();
         if(menu_func)
         {
             menu_func(text);
@@ -969,8 +990,11 @@ CopyableTextUnformatted(
             }
             ImGui::EndPopup();
         }
-        ImGui::PopStyleVar(2);
+        PopContextMenuStyles();
     }
+
+    ImGui::SetCursorScreenPos(text_position);
+    ImGui::TextUnformatted(text);
 
     if(one_click_copy)
     {
@@ -979,9 +1003,6 @@ CopyableTextUnformatted(
             ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
         }
     }
-
-    ImGui::PopStyleVar();
-    ImGui::PopStyleColor(3);
 
     if(!unique_id.empty())
     {
@@ -1039,12 +1060,10 @@ CaptureCellRightClick(int col, int row, CellMenuTarget& target, bool& open)
 bool
 BeginCellContextMenu(const char* popup_id)
 {
-    const ImGuiStyle& style = SettingsManager::GetInstance().GetDefaultStyle();
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, style.WindowPadding);
-    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, style.ItemSpacing);
+    PushContextMenuStyles();
     bool open = ImGui::BeginPopup(popup_id);
     if(!open)
-        ImGui::PopStyleVar(2);
+        PopContextMenuStyles();
     return open;
 }
 
@@ -1052,7 +1071,7 @@ void
 EndCellContextMenu()
 {
     ImGui::EndPopup();
-    ImGui::PopStyleVar(2);
+    PopContextMenuStyles();
 }
 
 void

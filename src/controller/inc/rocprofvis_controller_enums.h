@@ -1140,13 +1140,16 @@ typedef enum rocprofvis_controller_metric_arguments_t : uint32_t
 } rocprofvis_controller_metric_arguments_t;
 
 /*
- * Arguments for fetching PC sampling data for a specific source file.
+ * Arguments for fetching PC sampling data.
  */
 typedef enum rocprofvis_controller_pc_sampling_arguments_t : uint32_t
 {
     kRPVControllerPcSamplingArgsWorkloadId,
     kRPVControllerPcSamplingArgsKernelId,
     kRPVControllerPcSamplingArgsSourceFileUuid,
+    // Optional uint64: zero omits instruction-sample metadata; omitted or
+    // nonzero includes it.
+    kRPVControllerPcSamplingArgsIncludeInstructionSamples,
 } rocprofvis_controller_pc_sampling_arguments_t;
 
 /*

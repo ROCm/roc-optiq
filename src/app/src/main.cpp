@@ -21,6 +21,7 @@
 #include <cmath>
 #include <filesystem>
 #include <iostream>
+#include <string_view>
 #include <stdio.h>
 #include <stdlib.h>
 #if defined(__linux__) && defined(ROCPROFVIS_MULTI_WINDOW)
@@ -243,11 +244,20 @@ configure_drag_repair(RocProfVis::View::CLIParser& cli_parser)
 #endif
 
 static void
-print_version()
+print_version(bool include_commit)
 {
     std::cout << APP_NAME << " version: " << ROCPROFVIS_VERSION_MAJOR << "."
               << ROCPROFVIS_VERSION_MINOR << "." << ROCPROFVIS_VERSION_PATCH << "."
-              << ROCPROFVIS_VERSION_BUILD << std::endl;
+              << ROCPROFVIS_VERSION_BUILD;
+    if(include_commit)
+    {
+        std::cout << " commit: " << ROCPROFVIS_GIT_COMMIT;
+        if(std::string_view(ROCPROFVIS_GIT_COMMIT) == "unknown")
+        {
+            std::cout << "\n" << ROCPROFVIS_GIT_COMMIT_UNKNOWN_NOTE;
+        }
+    }
+    std::cout << std::endl;
 }
 
 static void
@@ -256,7 +266,10 @@ parse_command_line_args(int argc, char** argv, RocProfVis::View::CLIParser& cli_
 {
     cli_parser.SetAppDescription(APP_NAME, "A visualizer for profiling ROCm Data");
     bool result = true;
-    result &= cli_parser.AddOption("v", "version", "Print version and exit", false);
+    result &= cli_parser.AddOption(
+        "v", "version",
+        "Print version and exit. Pass 'hash' to also print the git commit",
+        false, "hash");
     result &= cli_parser.AddOption("f", "file", "Open a trace or project file", true);
     result &= cli_parser.AddOption(
         "b", "backend",
@@ -291,7 +304,7 @@ parse_command_line_args(int argc, char** argv, RocProfVis::View::CLIParser& cli_
 
     if(!exit_app && cli_parser.WasOptionFound("version"))
     {
-        print_version();
+        print_version(!cli_parser.GetOptionValue("version").empty());
 
         if(cli_parser.GetOptionCount() == 1)
         {

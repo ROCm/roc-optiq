@@ -18,6 +18,10 @@ This document describes how to build ROCm Optiq (roc-optiq) on Windows, Linux, a
 
 > The build presets are named in [CMakePresets.json](CMakePresets.json) under `buildPresets`.
 
+### Git commit recorded in the binary
+
+About and `roc-optiq -v hash` show a git commit for official builds. An unofficial build shows `unknown` and a line that the commit hash is not recorded, including after a commit is pulled and the tree is edited without committing. GitHub Actions builds count as official because they set `GITHUB_ACTIONS`. A local build cannot opt into recording a hash.
+
 ---
 
 ## Windows (Visual Studio 2022)
@@ -286,9 +290,9 @@ The SSH and remote-profiling features use `libssh2`, which needs a crypto backen
 | Linux (Ubuntu/Debian) | `sudo apt install -y libssl-dev` | |
 | Linux (RHEL/Rocky/Oracle) | `sudo dnf install -y openssl-devel` | |
 | macOS | `brew install openssl@3` | configure with `-DOPENSSL_ROOT_DIR=$(brew --prefix openssl@3)` |
-| Windows | `choco install openssl -y` (recommended; matches CI) | installs to `C:\Program Files\OpenSSL-Win64`; set `OPENSSL_ROOT_DIR` to the install root |
+| Windows | Shining Light Win64 OpenSSL. CI uses the copy preinstalled on GitHub-hosted runners at `C:\Program Files\OpenSSL`. Locally, `choco install openssl -y` installs to `C:\Program Files\OpenSSL-Win64`. | set `OPENSSL_ROOT_DIR` to the install root |
 
-On Windows, [Chocolatey](https://chocolatey.org/install) is the recommended way to install OpenSSL because it is exactly what the Windows CI workflow (`.github/workflows/ci-windows.yml`) uses, so a local build matches CI. From an elevated (Administrator) PowerShell:
+On Windows, CI uses the full Shining Light OpenSSL already installed on GitHub-hosted runners at `C:\Program Files\OpenSSL` (`.github/workflows/ci-windows.yml` does not download a newer package). For a local build, [Chocolatey](https://chocolatey.org/install) installs the same vendor's Win64 package. From an elevated (Administrator) PowerShell:
 
 ```powershell
 choco install openssl -y

@@ -259,8 +259,11 @@ Owns the OS-level shell. Specifically:
   `GuiTexture::SetBackend()` plugs into.
 - `rocprofvis_cli_parser.{h,cpp}` - generic short/long flag parser
   (`CLIParser::AddOption`). Flags currently registered in `main.cpp`:
-  `-v/--version`, `-f/--file <path>`, `-b/--backend {auto|vulkan|opengl}`,
-  `-d/--file-dialog {auto|native|imgui}`, `-h/--help`. Add new flags by
+  `-v/--version [hash]`, `-f/--file <path>`, `-b/--backend {auto|vulkan|opengl}`,
+  `-d/--file-dialog {auto|native|imgui}`, `-h/--help`. `-v` prints the
+  version. `-v hash` also prints the git commit. Official builds print the
+  hash alone. An unofficial build prints `unknown` and a line that the
+  commit hash is not recorded. About shows the same text. Add new flags by
   calling `AddOption` in `main.cpp::parse_command_line_args`.
 
 ### `src/core/`
@@ -1339,7 +1342,8 @@ The compute analogue of `TraceView`. Owns:
     workload SOL, workload roofline).
   - `ComputeKernelDetailsView` - per-kernel deep-dive.
   - `ComputeTableView` - hierarchical metric tables.
-  - `ComputeWorkloadView` - system info + profiling config tables.
+  - `ComputeWorkloadView` - "Profile Details" tab: analysis metadata,
+    system info, and profiling config tables.
   - `ComputeComparisonView` - baseline vs target comparison.
   - `ComputeIsaView` - source/ISA correlation and PC-sampling counts.
   - `ComputeTester` - dev-mode scratchpad
@@ -1377,9 +1381,19 @@ sentinel.
 
 ### `ComputeWorkloadView` (`rocprofvis_compute_workload_view.{h,cpp}`)
 
-Shows the two static tables for a workload:
-`RenderSystemInfo(WorkloadInfo)` and
-`RenderProfilingConfig(WorkloadInfo)`. Layout uses an `HSplitContainer`.
+Backs the **Profile Details** tab (class and `TAB_ID` keep their older
+"workload" names). Two bordered panels, top to bottom:
+
+- **Analysis Information** - `RenderAnalysisInfo(AnalysisInfo)` renders the
+  trace-level `compute_metadata` row (ROCm Compute Profiler version, Git
+  revision, database schema version) from
+  `ComputeDataModel::GetAnalysisInfo()`. It does not depend on the selected
+  workload, so it renders even when workload info is unavailable.
+- **Workload Information** - `RenderSystemInfo(WorkloadInfo)` and
+  `RenderProfilingConfig(WorkloadInfo)` side by side in an
+  `HSplitContainer`.
+
+All three tables draw rows through `RenderInfoRow` (two copyable cells).
 
 ### `ComputeKernelDetailsView` (`rocprofvis_compute_kernel_details.{h,cpp}`)
 
@@ -1600,10 +1614,11 @@ performing the scroll.
   `SetFetchMetricsCallback`).
 - `ComputeDataModel` (`model/compute/rocprofvis_compute_data_model.{h,cpp}`)
   holds `WorkloadInfo`, `KernelInfo`, `MetricValue` per
-  `(store_id, kernel_id|workload_id)`.
+  `(store_id, kernel_id|workload_id)`, plus the single trace-level
+  `AnalysisInfo` filled by `DataProvider::LoadAnalysisInfo()`.
 - `compute_model_types.h` is the core type vocabulary:
   `AvailableMetrics::Entry/Table/Category`, `KernelInfo`,
-  `WorkloadInfo`, `MetricValue`, `MetricId`, `MetricIdHash`,
+  `WorkloadInfo`, `AnalysisInfo`, `MetricValue`, `MetricId`, `MetricIdHash`,
   `ComputeTableInfo`, `Point`. Reuse these types whenever you handle
   metric IDs or roofline geometry - **do not reinvent metric
   identifiers**; use `MetricId::ToString()` etc.

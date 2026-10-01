@@ -233,6 +233,7 @@ jobs:
             ${OPENSSL_ROOT_DIR:+-DOPENSSL_ROOT_DIR="${OPENSSL_ROOT_DIR}"} \
             ${Python3_ROOT_DIR:+-DPython3_ROOT_DIR="${Python3_ROOT_DIR}"} \
             -DCPACK_GENERATOR="TGZ;DEB;RPM" \
+            -DROCM_PACKAGE_NAME="amdrocm${ROCM_VERSION}-roc-optiq" \
             -DCMAKE_EXE_LINKER_FLAGS="-ldl"
           cmake --build ${{ env.BUILD_DIR }} --parallel 4 --target package
           if [ -e ${{ env.BUILD_DIR }}/${{ env.BUILD_FILE_NAME }} ]; then
@@ -336,7 +337,7 @@ jobs:
           S3_DEB_BASE="s3://${S3_BUCKET}/${{ env.S3_ROOT_DIRECTORY }}/packages/deb"
           aws s3 cp \
             "${DEB_SRC}" \
-            "${S3_DEB_BASE}/pool/main/${DEB_NAME}" \
+            "${S3_DEB_BASE}/pool/main/$(basename "${DEB_SRC}")" \
             --no-progress
 
       - name: Generate and Upload DEB Metadata to S3
@@ -352,7 +353,7 @@ jobs:
           SUITE="stable"
           mkdir -p deb-repo/pool/main deb-repo/dists/${SUITE}/main/binary-amd64
           cp "${DEB_SRC}" \
-            deb-repo/pool/main/${DEB_NAME}
+            deb-repo/pool/main/$(basename "${DEB_SRC}")
 
           # Generate Packages index
           cd deb-repo

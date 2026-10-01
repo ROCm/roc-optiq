@@ -435,6 +435,7 @@ private:
 #endif
 
     void ProcessLoadComputeTrace(RequestInfo& req);
+    inline void LoadAnalysisInfo();
     inline void LoadWorkload(uint64_t workload_index);
     inline void LoadSystemInfo(WorkloadInfo&        workload,
                                rocprofvis_handle_t* workload_handle);

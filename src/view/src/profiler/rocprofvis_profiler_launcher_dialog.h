@@ -149,6 +149,8 @@ private:
     void SaveToSettings();
 #ifdef ROCPROFVIS_ENABLE_REMOTE
     void ApplySelectedConnection();  // TEMPORARY (remote/SSH)
+    // True when the bound connection has the host and user needed to connect.
+    bool HasRemoteConnection() const;
     // Lazily constructs m_remote_file_browser (bound to the shared RemoteUri).
     void EnsureRemoteFileBrowser();
 #endif

@@ -50,20 +50,22 @@ bool
 InputTextStringWithHint(const char* id, const char* hint, std::string& str,
                         ImGuiInputTextFlags flags)
 {
-    bool input_changed = InputTextString(id, str, flags);
-    if(str.empty())
+    // ImGui draws the hint inside the field, so the field stays the last item:
+    // SameLine() and tooltips after this call line up against the field itself
+    // rather than against a separate overlay.
+    str.reserve(std::max(str.size() + 1, static_cast<size_t>(256)));
+    bool input_changed = ImGui::InputTextWithHint(id, hint, str.data(), str.capacity() + 1,
+                                                  flags | ImGuiInputTextFlags_CallbackResize,
+                                                  StringResizeCallback, static_cast<void*>(&str));
+
+    // A hint wider than the field is clipped, so offer it whole on hover.
+    if(str.empty() &&
+       ImGui::CalcTextSize(hint).x >
+           ImGui::GetItemRectSize().x - 2.0f * ImGui::GetStyle().FramePadding.x &&
+       BeginItemTooltipStyled())
     {
-        const float& padding = ImGui::GetStyle().FramePadding.x;
-        ImGui::BeginDisabled();
-        ImGui::SetCursorScreenPos(
-            ImVec2(ImGui::GetItemRectMin().x + padding, ImGui::GetItemRectMin().y));
-        if(ElidedText(hint, ImGui::GetItemRectSize().x - 2.0f * padding, 0.0f,
-                   Alignment_Left, true) && BeginItemTooltipStyled())
-        {
-            ImGui::TextUnformatted(hint);
-            EndTooltipStyled();
-        }
-        ImGui::EndDisabled();
+        ImGui::TextUnformatted(hint);
+        EndTooltipStyled();
     }
     return input_changed;
 }
@@ -411,7 +413,8 @@ ElidedText(const char* text, float available_width, float tooltip_width,
                                                   ? ImGui::GetFrameHeight()
                                                   : ImGui::GetTextLineHeight()),
                       ImGuiChildFlags_None,
-                      ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoInputs);
+                      ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoInputs |
+                          ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
 
     if(imgui_AlignTextToFramePadding)
     {

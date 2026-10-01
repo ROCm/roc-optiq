@@ -373,6 +373,10 @@ bool RenderTargetSection(TargetSpec& target, ConnectionType connection, AppWindo
     if (exe_disabled)
     {
         ImGui::EndDisabled();
+        if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+        {
+            ImGui::SetTooltip("Choose an SSH connection first");
+        }
     }
 
     if (has_recent)
@@ -454,6 +458,10 @@ bool RenderTargetSection(TargetSpec& target, ConnectionType connection, AppWindo
     if (out_disabled)
     {
         ImGui::EndDisabled();
+        if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+        {
+            ImGui::SetTooltip("Choose an SSH connection first");
+        }
     }
 
     ImGui::Spacing();
@@ -520,6 +528,10 @@ bool RenderToolLocationSection(std::string& tool_directory, ConnectionType conne
     if (browse_disabled)
     {
         ImGui::EndDisabled();
+        if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+        {
+            ImGui::SetTooltip("Choose an SSH connection first");
+        }
     }
 
     if (!resolved_hint.empty())
@@ -692,8 +704,7 @@ std::string RenderSavedProfileBar(
 
     std::vector<PresetInfo> presets = preset_mgr.ListPresets(profiler_id);
 
-    ImGui::AlignTextToFramePadding();
-    ImGui::TextUnformatted("Saved Config");
+    PanelFieldLabel("Saved config");
     ImGui::SameLine();
 
     // Combo for selecting a saved configuration.

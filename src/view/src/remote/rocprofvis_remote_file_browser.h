@@ -38,6 +38,15 @@ public:
         kDirectory,  // choose a folder; files are inert, "Select Folder" commits
     };
 
+    // File-type filter presets, in the order of the type dropdown.
+    enum class TypeFilter
+    {
+        kAll,
+        kTraces,
+        kProjects,
+        kTracesAndProjects,
+    };
+
     explicit RemoteFileBrowser(std::shared_ptr<RemoteUri> uri);
     ~RemoteFileBrowser();
 
@@ -54,6 +63,19 @@ public:
     // popups that would otherwise fight the browser for the SSH session.
     bool IsOpen() const { return m_show_remote_filesystem_popup; }
 
+    // Hands over the browser's connected session so the caller can reuse it
+    // instead of reconnecting. Call from inside on_pick; null when there is no
+    // session.
+    std::unique_ptr<RemoteTraceOrchestrator> TakeSession();
+
+    // Turns the header's connection label into a button that closes the
+    // browser and runs `action` (e.g. switch or edit the connection). Unset, the
+    // label stays plain text.
+    void SetConnectionAction(std::function<void()> action);
+
+    // Selects the type filter; the user can still change it in the dropdown.
+    void SetTypeFilter(TypeFilter filter);
+
 private:
     // Lazily creates the orchestrator (bound to the directory callback) and
     // reuses it across navigation so the SSH session stays connected.
@@ -62,11 +84,14 @@ private:
     void NavigateBrowserTo(const std::string& path, bool record_history);
     void ActivateBrowserEntry(const RemoteDir::FileEntry& entry);
     void CommitPath(const std::string& path);
+    // Closes the browser and runs the owner's connection action.
+    void CloseForConnectionChange();
 
     std::shared_ptr<RemoteUri>               m_uri;
     std::unique_ptr<RemoteTraceOrchestrator> m_orchestrator;
     PickMode                                 m_mode;
     std::function<void(const std::string&)>  m_on_pick;
+    std::function<void()>                    m_connection_action;
 
     bool                     m_show_remote_filesystem_popup;
     bool                     m_should_open_browser_popup;   // defer OpenPopup to render scope

@@ -51,8 +51,21 @@ public:
     // call so each click does not tear down and re-auth the SSH session.
     bool BrowsePath();
 
+    // Downloads the m_uri result path and calls on_open_file with the local
+    // copy. Reuses the live authenticated session when there is one (e.g. right
+    // after browsing), so nothing reconnects or prompts again; otherwise runs
+    // the full Start() pipeline.
+    bool DownloadPath();
+
+    // Replaces the on_open_file callback, e.g. once a session has been taken
+    // over from the remote file browser.
+    void SetOnOpenFile(std::function<void(const std::string&)> on_open_file);
+
     // True while a phase is in flight or pending.
     bool IsRunning() const { return m_running; }
+
+    // True once the workflow has ended in failure; GetStatusMessage() says why.
+    bool HasFailed() const { return m_phase == Phase::Failed; }
 
     // Human-readable status for the open dialog.
     const std::string& GetStatusMessage() const { return m_status_message; }

@@ -3,7 +3,11 @@
 
 #include "rocprofvis_ssh_settings_dialog.h"
 #include "rocprofvis_font_manager.h"
+#include "rocprofvis_remote_trace_orchestrator.h"
+#include "rocprofvis_secret_store.h"
 #include "rocprofvis_settings_manager.h"
+#include "rocprofvis_ssh_auth_modal.h"
+#include "rocprofvis_ssh_uri.h"
 #include "icons/rocprovfis_icon_defines.h"
 #include "widgets/rocprofvis_widget.h"
 #include "widgets/rocprofvis_gui_helpers.h"
@@ -26,6 +30,11 @@ SshSettingsDialog::SshSettingsDialog(SshConnectionStore& store, const std::strin
 : m_store(store)
 , m_working()
 , m_on_commit(std::move(on_commit))
+, m_test_uri(std::make_shared<RemoteUri>())
+, m_test(nullptr)
+, m_test_result()
+, m_test_ok(false)
+, m_secrets_persist(SecretStore::IsAvailable())
 , m_show_password(false)
 , m_show_passphrase(false)
 , m_open(true)
@@ -64,9 +73,20 @@ SshSettingsDialog::SelectConnection(const std::string& id)
 void
 SshSettingsDialog::BeginNewConnection()
 {
-    m_working              = SshConnectionConfig();
-    m_working.id           = SshConnectionConfig::GenerateId();
-    m_working.display_name = "New Connection";
+    // Left unnamed so the profile is labelled by its endpoint (user@host:port).
+    m_working    = SshConnectionConfig();
+    m_working.id = SshConnectionConfig::GenerateId();
+}
+
+void
+SshSettingsDialog::StartConnectionTest()
+{
+    // With no command or result path on the URI, Start() stops after a
+    // successful authentication.
+    m_test_uri->SetConnection(m_working);
+    m_test_result.clear();
+    m_test = std::make_unique<RemoteTraceOrchestrator>(m_test_uri, nullptr);
+    m_test->Start();
 }
 
 bool
@@ -108,6 +128,14 @@ SshSettingsDialog::Render()
                                   ImGuiWindowFlags_NoScrollbar |
                                   ImGuiWindowFlags_NoTitleBar))
     {
+        // Keep only a finished test's verdict, so its connection is not left open.
+        if(m_test && !m_test->IsRunning())
+        {
+            m_test_ok     = !m_test->HasFailed();
+            m_test_result = m_test_ok ? "Connection succeeded." : m_test->GetStatusMessage();
+            m_test.reset();
+        }
+
         constexpr float CONTENT_PADDING_X = 14.0f;
         constexpr float CONTENT_PADDING_Y = 8.0f;
         constexpr float LABEL_WIDTH       = 104.0f;
@@ -193,16 +221,16 @@ SshSettingsDialog::Render()
                 ImGui::TableNextRow();
 
                 ImGui::TableSetColumnIndex(0);
-                PanelIcon(ICON_COMPASS, Colors::kAccent, &settings);
+                PanelIcon(ICON_CHAIN, Colors::kAccent, &settings);
                 ImGui::SameLine(0.0f, style.ItemInnerSpacing.x);
                 ImGui::BeginGroup();
                 ImGui::PushFont(nullptr,
                                 settings.GetFontManager().GetFontSize(FontSize::kMedLarge));
-                ImGui::TextUnformatted("Remote SSH Profile");
+                ImGui::TextUnformatted("SSH Connection");
                 ImGui::PopFont();
                 ImGui::PushStyleColor(ImGuiCol_Text, text_dim);
                 ImGui::TextWrapped(
-                    "Save the connection details used when opening profiler traces over SSH.");
+                    "Saved connections for opening traces and profiling on a remote machine.");
                 ImGui::PopStyleColor();
                 ImGui::EndGroup();
 
@@ -219,37 +247,34 @@ SshSettingsDialog::Render()
         BeginPanelCard("##ssh_settings_body", PanelCardTone::kMain, ImVec2(12.0f, 4.0f),
                        false, &settings);
         {
-            begin_card("##ssh_profile_card");
+            begin_card("##ssh_connection_card");
             {
-                section_title("Profile");
-                ImGui::Spacing();
-
-                if(ImGui::BeginTable("##ssh_profile_table", 3,
+                if(ImGui::BeginTable("##ssh_connection_table", 2,
                                       ImGuiTableFlags_SizingStretchProp))
                 {
                     ImGui::TableSetupColumn("Label", ImGuiTableColumnFlags_WidthFixed,
                                             LABEL_WIDTH);
-                    ImGui::TableSetupColumn("Profile", ImGuiTableColumnFlags_WidthStretch);
-                    ImGui::TableSetupColumn("Actions", ImGuiTableColumnFlags_WidthFixed,
-                                            PROFILE_BUTTON_W * 2.0f + style.ItemSpacing.x);
-                    ImGui::TableNextRow();
+                    ImGui::TableSetupColumn("Field", ImGuiTableColumnFlags_WidthStretch);
 
+                    ImGui::TableNextRow();
                     ImGui::TableSetColumnIndex(0);
                     label("Profile");
 
                     ImGui::TableSetColumnIndex(1);
-                    ImGui::SetNextItemWidth(-FLT_MIN);
+                    ImGui::SetNextItemWidth(-(PROFILE_BUTTON_W * 2.0f + style.ItemSpacing.x * 2.0f));
                     const std::vector<SshConnectionConfig>& connections = m_store.List();
-                    std::string combo_label =
-                        m_working.display_name.empty() ? "(unnamed)" : m_working.display_name;
+                    auto profile_label = [](const SshConnectionConfig& cfg) {
+                        std::string text = cfg.DisplayLabel();
+                        return text.empty() ? std::string("New connection") : text;
+                    };
+                    std::string combo_label = profile_label(m_working);
                     PushComboStyles();
                     if(ImGui::BeginCombo("##sshprofile", combo_label.c_str()))
                     {
                         for(const SshConnectionConfig& cfg : connections)
                         {
                             bool        selected = (cfg.id == m_working.id);
-                            std::string item =
-                                cfg.display_name.empty() ? "(unnamed)" : cfg.display_name;
+                            std::string item     = profile_label(cfg) + "##" + cfg.id;
                             if(ImGui::Selectable(item.c_str(), selected))
                             {
                                 SelectConnection(cfg.id);
@@ -263,7 +288,7 @@ SshSettingsDialog::Render()
                     }
                     PopComboStyles();
 
-                    ImGui::TableSetColumnIndex(2);
+                    ImGui::SameLine();
                     if(ImGui::Button("New", ImVec2(PROFILE_BUTTON_W, 0.0f)))
                     {
                         BeginNewConnection();
@@ -292,41 +317,25 @@ SshSettingsDialog::Render()
                         ImGui::EndDisabled();
                     }
 
-                    ImGui::EndTable();
-                }
-            }
-            end_card();
-
-            begin_card("##ssh_connection_card");
-            {
-                section_title("Connection");
-                ImGui::Spacing();
-
-                if(ImGui::BeginTable("##ssh_connection_table", 2,
-                                      ImGuiTableFlags_SizingStretchProp))
-                {
-                    ImGui::TableSetupColumn("Label", ImGuiTableColumnFlags_WidthFixed,
-                                            LABEL_WIDTH);
-                    ImGui::TableSetupColumn("Field", ImGuiTableColumnFlags_WidthStretch);
-
                     ImGui::TableNextRow();
                     ImGui::TableSetColumnIndex(0);
                     label("Name");
                     ImGui::TableSetColumnIndex(1);
                     ImGui::SetNextItemWidth(-FLT_MIN);
-                    InputTextString("##rname", m_working.display_name);
+                    InputTextStringWithHint("##rname", "Optional, e.g. Lab server",
+                                            m_working.display_name);
 
                     ImGui::TableNextRow();
                     ImGui::TableSetColumnIndex(0);
                     label("Host");
                     ImGui::TableSetColumnIndex(1);
-                    ImGui::SetNextItemWidth(-FLT_MIN);
-                    InputTextString("##rhost", m_working.host);
-
-                    ImGui::TableNextRow();
-                    ImGui::TableSetColumnIndex(0);
+                    const float port_w = ImGui::CalcTextSize("65535").x + style.FramePadding.x * 4.0f;
+                    ImGui::SetNextItemWidth(
+                        -(port_w + ImGui::CalcTextSize("Port").x + style.ItemSpacing.x * 2.0f));
+                    InputTextStringWithHint("##rhost", "Hostname or IP address", m_working.host);
+                    ImGui::SameLine();
                     label("Port");
-                    ImGui::TableSetColumnIndex(1);
+                    ImGui::SameLine();
                     ImGui::SetNextItemWidth(-FLT_MIN);
                     InputTextString("##rport", m_working.port);
 
@@ -335,7 +344,8 @@ SshSettingsDialog::Render()
                     label("User");
                     ImGui::TableSetColumnIndex(1);
                     ImGui::SetNextItemWidth(-FLT_MIN);
-                    InputTextString("##ruser", m_working.user);
+                    InputTextStringWithHint("##ruser", "Username on the remote machine",
+                                            m_working.user);
 
                     ImGui::EndTable();
                 }
@@ -345,6 +355,17 @@ SshSettingsDialog::Render()
             begin_card("##ssh_auth_card");
             {
                 section_title("Authentication");
+                ImGui::PushStyleColor(ImGuiCol_Text, text_dim);
+                ImGui::TextWrapped("%s",
+                                   m_secrets_persist
+                                       ? "All optional. Blank fields fall back to ssh-agent and "
+                                         "your ~/.ssh keys, and you are asked for a password if "
+                                         "needed. Saved passwords go to the system credential "
+                                         "store."
+                                       : "All optional. Blank fields fall back to ssh-agent and "
+                                         "your ~/.ssh keys, and you are asked for a password if "
+                                         "needed. Passwords can't be saved on this system.");
+                ImGui::PopStyleColor();
                 ImGui::Spacing();
 
                 if(ImGui::BeginTable("##ssh_auth_table", 2,
@@ -358,24 +379,24 @@ SshSettingsDialog::Render()
                     ImGui::TableSetColumnIndex(0);
                     label("Password");
                     ImGui::TableSetColumnIndex(1);
-                    reveal_toggle("##rpass", m_working.password, nullptr, m_show_password);
+                    reveal_toggle("##rpass", m_working.password,
+                                  "Leave blank to use keys or be asked when connecting",
+                                  m_show_password);
 
                     ImGui::TableNextRow();
                     ImGui::TableSetColumnIndex(0);
-                    label("SSH Key");
+                    label("SSH key");
                     ImGui::TableSetColumnIndex(1);
                     ImGui::SetNextItemWidth(-FLT_MIN);
-                    InputTextStringWithHint(
-                        "##rkey", "Optional private key path, e.g. ~/.ssh/id_ed25519",
-                        m_working.identity_file);
+                    InputTextStringWithHint("##rkey", "Private key path, e.g. ~/.ssh/id_ed25519",
+                                            m_working.identity_file);
 
                     ImGui::TableNextRow();
                     ImGui::TableSetColumnIndex(0);
                     label("Passphrase");
                     ImGui::TableSetColumnIndex(1);
                     reveal_toggle("##rkeypass", m_working.passphrase,
-                                  "Leave blank for unencrypted keys or ssh-agent",
-                                  m_show_passphrase);
+                                  "Only if the key is encrypted", m_show_passphrase);
 
                     ImGui::EndTable();
                 }
@@ -387,7 +408,9 @@ SshSettingsDialog::Render()
         BeginPanelCard("##ssh_settings_footer", PanelCardTone::kFrame, ImVec2(14.0f, 8.0f),
                        true, &settings);
         {
-            const float action_width = BUTTON_WIDTH * 2.0f + style.ItemSpacing.x;
+            const float test_width =
+                ImGui::CalcTextSize("Test connection").x + style.FramePadding.x * 4.0f;
+            const float action_width = test_width + BUTTON_WIDTH * 2.0f + style.ItemSpacing.x * 2.0f;
             if(ImGui::BeginTable("##ssh_settings_footer_table", 2,
                                   ImGuiTableFlags_SizingStretchProp))
             {
@@ -396,13 +419,47 @@ SshSettingsDialog::Render()
                                         action_width);
                 ImGui::TableNextRow();
 
+                const bool  testing  = m_test != nullptr;
+                ImU32       note_col = text_dim;
+                std::string note;
+                if(testing)
+                {
+                    note_col = settings.GetColor(Colors::kAccent);
+                    note     = m_test->GetStatusMessage();
+                }
+                else if(!m_test_result.empty())
+                {
+                    note_col = settings.GetColor(m_test_ok ? Colors::kTextSuccess
+                                                           : Colors::kTextError);
+                    note     = m_test_result;
+                }
                 ImGui::TableSetColumnIndex(0);
-                ImGui::PushStyleColor(ImGuiCol_Text, text_dim);
-                ElidedText("Profiles are saved locally and reused by remote trace open.",
-                           ImGui::GetContentRegionAvail().x, 360.0f, Alignment_Left, true);
-                ImGui::PopStyleColor();
+                if(!note.empty())
+                {
+                    ImGui::AlignTextToFramePadding();
+                    ImGui::PushStyleColor(ImGuiCol_Text, note_col);
+                    ElidedText(note.c_str(), ImGui::GetContentRegionAvail().x, 360.0f,
+                               Alignment_Left, true);
+                    ImGui::PopStyleColor();
+                }
 
                 ImGui::TableSetColumnIndex(1);
+                const bool can_test = !testing && !m_working.HostTrimmed().empty() &&
+                                      !m_working.UserTrimmed().empty();
+                if(!can_test)
+                {
+                    ImGui::BeginDisabled();
+                }
+                if(ImGui::Button(testing ? "Testing...##test" : "Test connection##test",
+                                 ImVec2(test_width, 0.0f)))
+                {
+                    StartConnectionTest();
+                }
+                if(!can_test)
+                {
+                    ImGui::EndDisabled();
+                }
+                ImGui::SameLine();
                 if(ImGui::Button("Cancel", ImVec2(BUTTON_WIDTH, 0.0f)))
                 {
                     close_popup = true;
@@ -417,6 +474,17 @@ SshSettingsDialog::Render()
             }
         }
         EndPanelCard();
+
+        // This dialog is itself a modal, so the test session's prompts are drawn
+        // nested inside it instead of by the centralized path.
+        if(m_test)
+        {
+            if(SshSession* session = m_test->GetSession())
+            {
+                session->SetAuthModalSelfManaged(true);
+                RenderSshAuthModal(session);
+            }
+        }
 
         if(accept)
         {

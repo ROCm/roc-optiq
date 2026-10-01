@@ -393,11 +393,25 @@ std::string ProfilerLauncherDialog::BuildRunSummary() const
 
 void ProfilerLauncherDialog::RenderToolbar()
 {
+    // Combos fit their widest entry, so a long profiler name is never cut off.
+    auto fit_combo_width = [](std::vector<std::string> const& labels) {
+        float widest = 0.0f;
+        for (auto const& label : labels)
+        {
+            widest = std::max(widest, ImGui::CalcTextSize(label.c_str()).x);
+        }
+        return widest + ImGui::GetFrameHeight() + ImGui::GetStyle().FramePadding.x * 2.0f;
+    };
+
     // Profiler selector
-    ImGui::AlignTextToFramePadding();
-    ImGui::Text("Profiler:");
+    std::vector<std::string> backend_names;
+    for (auto const& entry : m_backends)
+    {
+        backend_names.emplace_back(entry->DisplayName());
+    }
+    PanelFieldLabel("Profiler");
     ImGui::SameLine();
-    ImGui::PushItemWidth(140);
+    ImGui::PushItemWidth(fit_combo_width(backend_names));
     if (ImGui::BeginCombo("##ProfilerBackend",
                           m_backends[m_backend_index]->DisplayName()))
     {
@@ -425,9 +439,14 @@ void ProfilerLauncherDialog::RenderToolbar()
     // Tool selector
     IProfilerBackend const* backend = m_backends[m_backend_index].get();
     auto tools = backend->GetTools();
-    ImGui::Text("Tool:");
+    std::vector<std::string> tool_names;
+    for (auto const& option : tools)
+    {
+        tool_names.push_back(option.display_name);
+    }
+    PanelFieldLabel("Tool");
     ImGui::SameLine();
-    ImGui::PushItemWidth(120);
+    ImGui::PushItemWidth(fit_combo_width(tool_names));
     if (ImGui::BeginCombo("##ToolSelector", CurrentToolDisplayName().c_str()))
     {
         for (auto const& option : tools)
@@ -524,9 +543,11 @@ void ProfilerLauncherDialog::RenderMainContent()
     // In remote (SSH) mode the Target Browse buttons open the shared remote file
     // browser (same UI as the "Open Remote Trace" dialog). Local mode keeps the
     // OS file/path dialogs, so the callbacks are only wired when targeting SSH.
+    // The connection is chosen under "Where to run", never in the browser, so
+    // Browse stays disabled until one is set up.
     std::function<void()> on_browse_program;
     std::function<void()> on_browse_output;
-    if (IsSshMode())
+    if (IsSshMode() && HasRemoteConnection())
     {
         on_browse_program = [this]()
         {
@@ -639,6 +660,15 @@ void ProfilerLauncherDialog::RenderToolResolutionNotice()
         ImGui::PushStyleColor(ImGuiCol_Text, settings.GetColor(Colors::kTextError));
         ImGui::TextWrapped("%s", m_execution_cache.resolve_error.c_str());
         ImGui::PopStyleColor();
+#ifdef ROCPROFVIS_ENABLE_REMOTE
+        // The usual way out is a machine that has ROCm, so offer it in place.
+        if (ImGui::SmallButton("Run on a remote machine instead"))
+        {
+            m_config.connection     = ConnectionType::kSsh;
+            m_execution_cache_dirty = true;
+        }
+#endif
+        ImGui::Spacing();
         return;
     }
 
@@ -686,7 +716,7 @@ void ProfilerLauncherDialog::RenderAdvancedWindow()
         // any one backend, so it sits above the backend tabs.
         std::function<void()> on_browse_tool_dir;
 #ifdef ROCPROFVIS_ENABLE_REMOTE
-        if (IsSshMode())
+        if (IsSshMode() && HasRemoteConnection())
         {
             on_browse_tool_dir = [this]()
             {
@@ -1075,19 +1105,6 @@ void ProfilerLauncherDialog::RenderButtonRow()
     bool valid      = readiness.empty();
     bool can_launch = state_ready && valid;
 
-    if (!can_launch)
-    {
-        ImGui::BeginDisabled();
-    }
-    if (AccentButton("Launch Profiler", ImVec2(160, 0)))
-    {
-        OnLaunchClicked();
-    }
-    if (!can_launch)
-    {
-        ImGui::EndDisabled();
-    }
-
     // If a run is in flight or a previous run's output is available, let the
     // user jump straight to the focused run view.
     bool has_run_view = is_running ||
@@ -1095,40 +1112,60 @@ void ProfilerLauncherDialog::RenderButtonRow()
         state == kRPVProfilerStateCompleted ||
         state == kRPVProfilerStateFailed ||
         state == kRPVProfilerStateCancelled;
-    if (has_run_view && !m_output_text.empty())
+    const bool show_view_run = has_run_view && !m_output_text.empty();
+
+    // Readiness on the left; actions on the right with the primary last, the
+    // same arrangement as the app's other dialogs.
+    const ImGuiStyle& style     = ImGui::GetStyle();
+    constexpr float   LAUNCH_W  = 160.0f;
+    constexpr float   CLOSE_W   = 120.0f;
+    constexpr float   VIEW_W    = 130.0f;
+    const float       actions_w = LAUNCH_W + CLOSE_W + style.ItemSpacing.x +
+                            (show_view_run ? VIEW_W + style.ItemSpacing.x : 0.0f);
+    const float actions_x = ImGui::GetWindowContentRegionMax().x - actions_w;
+
+    if (!is_running)
     {
+        SettingsManager& settings = SettingsManager::Get();
+        ImGui::AlignTextToFramePadding();
+        ImGui::PushStyleColor(ImGuiCol_Text, settings.GetColor(valid ? Colors::kTextSuccess
+                                                                     : Colors::kTextWarning));
+        ElidedText(valid ? "Ready to launch" : readiness.c_str(),
+                   std::max(actions_x - ImGui::GetCursorPosX() - style.ItemSpacing.x, 80.0f),
+                   360.0f, Alignment_Left, true);
+        ImGui::PopStyleColor();
         ImGui::SameLine();
-        if (ImGui::Button(is_running ? "View Run" : "View Last Run", ImVec2(130, 0)))
+    }
+    ImGui::SetCursorPosX(std::max(ImGui::GetCursorPosX(), actions_x));
+
+    if (show_view_run)
+    {
+        if (ImGui::Button(is_running ? "View Run" : "View Last Run", ImVec2(VIEW_W, 0)))
         {
             m_show_run_view = true;
         }
+        ImGui::SameLine();
     }
 
-    ImGui::SameLine();
-    if (ImGui::Button("Close", ImVec2(120, 0)))
+    if (ImGui::Button("Close", ImVec2(CLOSE_W, 0)))
     {
         OnCloseClicked();
         m_show_window   = false;
         m_show_run_view = false;
     }
+    ImGui::SameLine();
 
-    // Readiness feedback to the right of the buttons, so it is obvious why
-    // Launch is (or isn't) available.
-    if (!is_running)
+    if (!can_launch)
     {
-        SettingsManager& settings = SettingsManager::Get();
-        ImGui::SameLine(0.0f, 16.0f);
-        ImGui::AlignTextToFramePadding();
-        if (valid)
-        {
-            ImVec4 ok = ImGui::ColorConvertU32ToFloat4(settings.GetColor(Colors::kTextSuccess));
-            ImGui::TextColored(ok, "Ready to launch");
-        }
-        else
-        {
-            ImVec4 warn = ImGui::ColorConvertU32ToFloat4(settings.GetColor(Colors::kTextWarning));
-            ImGui::TextColored(warn, "%s", readiness.c_str());
-        }
+        ImGui::BeginDisabled();
+    }
+    if (AccentButton("Launch Profiler", ImVec2(LAUNCH_W, 0)))
+    {
+        OnLaunchClicked();
+    }
+    if (!can_launch)
+    {
+        ImGui::EndDisabled();
     }
 }
 
@@ -1701,6 +1738,12 @@ void ProfilerLauncherDialog::ApplySelectedConnection()
     {
         m_remote_uri->SetConnection(SshConnectionConfig());
     }
+}
+
+bool ProfilerLauncherDialog::HasRemoteConnection() const
+{
+    return !m_remote_uri->GetRemoteHostString().empty() &&
+           !m_remote_uri->GetRemoteUserString().empty();
 }
 
 void ProfilerLauncherDialog::EnsureRemoteFileBrowser()

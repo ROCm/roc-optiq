@@ -146,6 +146,11 @@ namespace View
         rocprofvis_controller_future_t* future = rocprofvis_controller_future_alloc();
         ROCPROFVIS_ASSERT(future);
 
+        // The previous phase's terminal status stays latched on the connection
+        // until reset. Without this, the first poll of a reused connection can
+        // read that stale Completed before the worker has started the new job.
+        rocprofvis_controller_remote_reset(m_connection);
+
         rocprofvis_result_t result = start_fn(future);
         if (result != kRocProfVisResultSuccess)
         {

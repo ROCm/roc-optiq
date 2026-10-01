@@ -423,7 +423,7 @@ AppWindow (singleton, RocWidget)
 +-- m_confirmation_dialog   : ConfirmationDialog
 +-- m_message_dialog        : MessageDialog
 +-- ProfilerLauncherDialog   : optional profiler UI
-+-- SshTestDialog            : optional dev-only remote trace UI
++-- SshTestDialog            : remote trace opener (File > Open Remote..., ROCPROFVIS_ENABLE_REMOTE)
 +-- AppMonitor               : singleton; polls background controller operations
 +-- LogViewer                : singleton production log overlay
 +-- NotificationManager     : singleton, drawn last (toasts overlay)
@@ -2246,14 +2246,22 @@ downloaded/generated trace is passed to `AppWindow::OpenFile()`:
 - `RemoteTraceOrchestrator` - connect -> authenticate -> optional
   execute -> optional download state machine. It filters
   `kRemoteStatusChanged` by active operation ID and reuses an
-  authenticated session for browsing.
+  authenticated session for browsing (`BrowsePath`) and downloading
+  (`DownloadPath`).
 - `RenderSshAuthModal(session)` - renders keyboard-interactive and
-  host-key requests. The owning dialog must call it every frame while
-  the session exists; it is not rendered globally by `AppWindow`.
-- `SshSettingsDialog` - connection-profile CRUD modal.
-- `SshTestDialog` - remote trace opener/browser owned lazily by
-  `AppWindow`; its entry point requires both
-  `ROCPROFVIS_ENABLE_REMOTE` and `ROCPROFVIS_DEVELOPER_MODE`.
+  host-key requests. `AppWindow::RenderSshAuthModals()` draws it for
+  every live session each frame. An owner that is itself a modal
+  (`RemoteFileBrowser`, the `SshSettingsDialog` Test) marks its session
+  `SetAuthModalSelfManaged(true)` and renders it nested instead.
+- `SshSettingsDialog` - connection-profile CRUD modal; Test connects and
+  authenticates with the unsaved working copy.
+- `SshTestDialog` - the `File > Open Remote...` flow
+  (`ROCPROFVIS_ENABLE_REMOTE`), owned lazily by `AppWindow`, with no
+  window of its own: it opens `RemoteFileBrowser` (or `SshSettingsDialog`
+  first when no connection is saved), downloads the picked file over the
+  browser's session (`RemoteFileBrowser::TakeSession`), then calls
+  `AppWindow::OpenFile()`. The browser's connection chip reopens the
+  editor.
 - `PromptRequest`, `HostKeyRequest`, `ExecutionOutput`, `FileStat`, and
   `RemoteDir` in `rocprofvis_ssh_fetch.*` are mutex-protected snapshots;
   consume updates without holding locks across ImGui calls.
@@ -3214,8 +3222,7 @@ All under `agenticprofiling/`, compiled only with
 - `RenderSshAuthModal` -> `remote/rocprofvis_ssh_auth_modal.h` ->
   Keyboard-interactive and host-key UI.
 - `SshSettingsDialog`, `SshTestDialog` -> matching `remote/` headers ->
-  Profile editor and remote-trace window; `SshTestDialog` also requires
-  `ROCPROFVIS_DEVELOPER_MODE` at the `AppWindow` entry point.
+  Profile editor (with Test) and the `File > Open Remote...` flow.
 - `PromptRequest`, `HostKeyRequest`, `ExecutionOutput`, `FileStat`,
   `RemoteDir` -> `remote/rocprofvis_ssh_fetch.h` -> Thread-safe UI
   snapshots.

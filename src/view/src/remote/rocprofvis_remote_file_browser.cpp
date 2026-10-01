@@ -82,6 +82,12 @@ namespace
         return std::string(buf);
     }
 
+    bool is_trace_file(const std::string& name)
+    {
+        const std::string ext = Core::String::to_lower_copy(posix_file_extension(name));
+        return ext == "db" || ext == "rpd";
+    }
+
     // Human-readable "Type" column label.
     std::string type_label(const RemoteDir::FileEntry& entry)
     {
@@ -89,8 +95,16 @@ namespace
         {
             return "Folder";
         }
-        std::string ext = posix_file_extension(entry.name);
-        return ext.empty() ? std::string("File") : Core::String::to_lower_copy(ext) + " file";
+        if (is_trace_file(entry.name))
+        {
+            return "Trace database";
+        }
+        const std::string ext = posix_file_extension(entry.name);
+        if (Core::String::to_lower_copy(ext) == "rpv")
+        {
+            return "Optiq project";
+        }
+        return ext.empty() ? std::string("File") : Core::String::to_upper_copy(ext) + " file";
     }
 
     // Extension presets for the "type" filter dropdown. Directories are always
@@ -103,11 +117,12 @@ namespace
 
     const std::vector<TypeFilterPreset>& type_filter_presets()
     {
+        // Order must match RemoteFileBrowser::TypeFilter.
         static const std::vector<TypeFilterPreset> presets = {
             { "All files", {} },
-            { "Trace databases (*.db, *.rpd)", { "db", "rpd" } },
-            { "Project files (*.rpv)", { "rpv" } },
-            { "Traces & projects (*.db, *.rpd, *.rpv)", { "db", "rpd", "rpv" } },
+            { "Traces (.db, .rpd)", { "db", "rpd" } },
+            { "Projects (.rpv)", { "rpv" } },
+            { "Traces & projects", { "db", "rpd", "rpv" } },
         };
         return presets;
     }
@@ -118,6 +133,7 @@ RemoteFileBrowser::RemoteFileBrowser(std::shared_ptr<RemoteUri> uri)
 , m_orchestrator(nullptr)
 , m_mode(PickMode::kFile)
 , m_on_pick()
+, m_connection_action()
 , m_show_remote_filesystem_popup(false)
 , m_should_open_browser_popup(false)
 , m_should_close_browser_popup(false)
@@ -230,6 +246,40 @@ RemoteFileBrowser::CommitPath(const std::string& path)
     m_show_remote_filesystem_popup = false;
 }
 
+std::unique_ptr<RemoteTraceOrchestrator>
+RemoteFileBrowser::TakeSession()
+{
+    // Its prompts were drawn nested in this modal; the new owner relies on the
+    // centralized path again.
+    if (m_orchestrator && m_orchestrator->GetSession())
+    {
+        m_orchestrator->GetSession()->SetAuthModalSelfManaged(false);
+    }
+    return std::move(m_orchestrator);
+}
+
+void
+RemoteFileBrowser::SetConnectionAction(std::function<void()> action)
+{
+    m_connection_action = std::move(action);
+}
+
+void
+RemoteFileBrowser::CloseForConnectionChange()
+{
+    m_orchestrator.reset();
+    m_browser_busy                 = false;
+    m_should_close_browser_popup   = true;
+    m_show_remote_filesystem_popup = false;
+    m_connection_action();
+}
+
+void
+RemoteFileBrowser::SetTypeFilter(TypeFilter filter)
+{
+    m_type_filter = static_cast<int>(filter);
+}
+
 void
 RemoteFileBrowser::ActivateBrowserEntry(const RemoteDir::FileEntry& entry)
 {
@@ -288,6 +338,13 @@ void RemoteFileBrowser::Render()
             {
                 m_browser_error = status;
                 m_browser_busy  = false;
+                // The table still shows the last folder that listed; point the
+                // path bar back at it rather than at the one that failed.
+                if (!m_last_directory_state.path.empty())
+                {
+                    m_browser_dir  = m_last_directory_state.path;
+                    m_address_edit = m_browser_dir;
+                }
             }
         }
     }
@@ -371,6 +428,11 @@ void RemoteFileBrowser::Render()
             ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoTitleBar))
     {
         const bool busy     = m_browser_busy || (m_orchestrator && m_orchestrator->IsRunning());
+        // Open() clears the listing, so having one means this session connected.
+        // Until then everything but the connection controls is disabled.
+        const bool connected  = !m_last_directory_state.path.empty();
+        const bool connecting = !connected && busy;
+        const bool has_host   = !m_uri->GetRemoteHostString().empty();
         const bool can_back = !m_history_back.empty();
         const bool can_fwd  = !m_history_forward.empty();
         const bool can_up   = !is_posix_root_path(m_browser_dir);
@@ -396,14 +458,53 @@ void RemoteFileBrowser::Render()
             ImGui::SameLine();
             ImGui::TextUnformatted(dir_mode ? "Choose Remote Folder" : "Remote File System");
 
-            // Prefer the connection's user-chosen name; fall back to user@host:port.
-            const std::string host_chip = m_uri->GetConnection().DisplayLabel();
+            // Always shows the endpoint, so even a generically named connection
+            // reads as where you are connected rather than as an action.
+            const SshConnectionConfig& connection = m_uri->GetConnection();
+            std::string                host_chip;
+            if (!connection.HostTrimmed().empty())
+            {
+                host_chip = connection.UserTrimmed() + "@" + connection.HostTrimmed();
+                const std::string name = Core::String::trim_copy(connection.display_name);
+                if (!name.empty())
+                {
+                    host_chip = name + "  (" + host_chip + ")";
+                }
+            }
             ImGui::SameLine();
-            ImGui::SetCursorPosX(ImGui::GetWindowContentRegionMax().x -
-                                 ImGui::CalcTextSize(host_chip.c_str()).x - 4.0f);
-            ImGui::PushStyleColor(ImGuiCol_Text, text_dim);
-            ImGui::TextUnformatted(host_chip.c_str());
-            ImGui::PopStyleColor();
+            if (m_connection_action)
+            {
+                const std::string chip_label =
+                    host_chip.empty() ? std::string("Choose connection") : host_chip;
+                ImGui::SetCursorPosX(ImGui::GetWindowContentRegionMax().x -
+                                     ImGui::CalcTextSize(chip_label.c_str()).x -
+                                     style.FramePadding.x * 2.0f - 4.0f);
+                ImGui::PushStyleColor(ImGuiCol_Button, btn_col);
+                ImGui::PushStyleColor(ImGuiCol_ButtonHovered, btn_hover);
+                ImGui::PushStyleColor(ImGuiCol_ButtonActive, btn_active);
+                ImGui::PushStyleColor(ImGuiCol_Text, accent);
+                const bool change_connection =
+                    ImGui::SmallButton((chip_label + "##connection").c_str());
+                ImGui::PopStyleColor(4);
+                if (ImGui::IsItemHovered())
+                {
+                    ImGui::SetTooltip("Switch or edit the SSH connection");
+                }
+                if (change_connection)
+                {
+                    CloseForConnectionChange();
+                }
+            }
+            else
+            {
+                ImGui::SetCursorPosX(ImGui::GetWindowContentRegionMax().x -
+                                     ImGui::CalcTextSize(host_chip.c_str()).x - 4.0f);
+                ImGui::PushStyleColor(ImGuiCol_Text, text_dim);
+                ImGui::TextUnformatted(host_chip.c_str());
+                ImGui::PopStyleColor();
+            }
+
+            ImGui::BeginDisabled(!connected);
 
             // Navigation buttons and address bar.
             auto nav_button = [&](const char* glyph, const char* tip, bool enabled) -> bool {
@@ -507,17 +608,20 @@ void RemoteFileBrowser::Render()
                             ++seg;
                         }
                         std::string segment = m_browser_dir.substr(start, seg - start);
+
+                        // The root crumb already reads "/", so separators only go
+                        // between later segments and the bar reads like a path.
+                        ImGui::SameLine(0, 0);
+                        if (!accum.empty())
+                        {
+                            ImGui::PushStyleColor(ImGuiCol_Text, text_dim);
+                            ImGui::AlignTextToFramePadding();
+                            ImGui::TextUnformatted("/");
+                            ImGui::PopStyleColor();
+                            ImGui::SameLine(0, 0);
+                        }
                         accum += "/";
                         accum += segment;
-
-                        ImGui::SameLine(0, 2.0f);
-                        ImGui::PushFont(icon_font, ImGui::GetFontSize());
-                        ImGui::PushStyleColor(ImGuiCol_Text, text_dim);
-                        ImGui::AlignTextToFramePadding();
-                        ImGui::TextUnformatted(ICON_CHEVRON_RIGHT);
-                        ImGui::PopStyleColor();
-                        ImGui::PopFont();
-                        ImGui::SameLine(0, 2.0f);
 
                         std::string crumb = segment + "##crumb" + accum;
                         if (ImGui::Button(crumb.c_str()))
@@ -561,7 +665,13 @@ void RemoteFileBrowser::Render()
                 {
                     m_type_filter = 0;
                 }
-                ImGui::SetNextItemWidth(220.0f);
+                float combo_text_w = 0.0f;
+                for (const auto& preset : presets)
+                {
+                    combo_text_w = std::max(combo_text_w, ImGui::CalcTextSize(preset.label).x);
+                }
+                ImGui::SetNextItemWidth(combo_text_w + ImGui::GetFrameHeight() +
+                                        style.FramePadding.x * 2.0f);
                 PushComboStyles();
                 if (ImGui::BeginCombo("##remote_type_filter", presets[m_type_filter].label))
                 {
@@ -583,27 +693,19 @@ void RemoteFileBrowser::Render()
             }
 
             ImGui::SameLine();
-            ImGui::Checkbox("Show hidden", &m_show_hidden);
+            if (IconButton(m_show_hidden ? ICON_EYE : ICON_EYE_SLASH, icon_font, ImVec2(0, 0),
+                           m_show_hidden ? "Hide hidden files" : "Show hidden files", false,
+                           style.FramePadding, btn_col, btn_hover, btn_active,
+                           "##toggle_hidden"))
+            {
+                m_show_hidden = !m_show_hidden;
+            }
+
+            ImGui::EndDisabled();
         }
         ImGui::EndChild();
         ImGui::PopStyleVar(2);
         ImGui::PopStyleColor(2);
-
-        // Status line: busy or error.
-        if (busy)
-        {
-            ImGui::PushStyleColor(ImGuiCol_Text, accent);
-            ImGui::TextUnformatted("Loading...");
-            ImGui::PopStyleColor();
-        }
-        else if (!m_browser_error.empty())
-        {
-            ImGui::TextColored(ImVec4(1.0f, 0.45f, 0.35f, 1.0f), "%s", m_browser_error.c_str());
-        }
-        else
-        {
-            ImGui::NewLine();
-        }
 
         // File listing table.
         const float footer_card_height = 48.0f;
@@ -635,21 +737,103 @@ void RemoteFileBrowser::Render()
             visible.push_back(i);
         }
 
+        // NoSavedSettings so column widths always start from the text-sized
+        // defaults below instead of widths remembered from an earlier layout.
         const ImGuiTableFlags table_flags =
             ImGuiTableFlags_ScrollY | ImGuiTableFlags_RowBg |
             ImGuiTableFlags_BordersInnerH | ImGuiTableFlags_Resizable |
-            ImGuiTableFlags_Sortable;
+            ImGuiTableFlags_Sortable | ImGuiTableFlags_NoSavedSettings;
+
+        if (!connected)
+        {
+            const std::string endpoint =
+                m_uri->GetRemoteUserString() + "@" + m_uri->GetRemoteHostString();
+            std::string title;
+            std::string detail;
+            if (!has_host)
+            {
+                title  = "No SSH connection";
+                detail = "Set up a connection to browse the remote machine.";
+            }
+            else if (connecting)
+            {
+                title  = "Connecting to " + endpoint + "...";
+                detail = "Any password or host key prompt will appear on top of this window.";
+            }
+            else
+            {
+                title  = "Couldn't connect to " + endpoint;
+                detail = m_browser_error.empty() ? std::string("The connection failed.")
+                                                 : m_browser_error;
+            }
+
+            const bool  show_connect = !connecting && static_cast<bool>(m_connection_action);
+            const bool  show_retry   = !connecting && has_host;
+            const float button_w     = 140.0f;
+            const float buttons_w =
+                (show_connect ? button_w : 0.0f) + (show_retry ? button_w : 0.0f) +
+                ((show_connect && show_retry) ? style.ItemSpacing.x : 0.0f);
+            const float block_h = ImGui::GetTextLineHeightWithSpacing() * 3.0f +
+                                  ((show_connect || show_retry) ? ImGui::GetFrameHeight() : 0.0f);
+
+            ImGui::BeginChild("RemoteExplorerConnectionState", ImVec2(0.0f, -footer_reserve),
+                              ImGuiChildFlags_None,
+                              ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+            {
+                const ImVec2 avail = ImGui::GetContentRegionAvail();
+                auto centered_text = [&](const std::string& text, ImU32 color) {
+                    ImGui::SetCursorPosX(
+                        std::max(0.0f, (avail.x - ImGui::CalcTextSize(text.c_str()).x) * 0.5f));
+                    ImGui::PushStyleColor(ImGuiCol_Text, color);
+                    ImGui::TextUnformatted(text.c_str());
+                    ImGui::PopStyleColor();
+                };
+
+                ImGui::SetCursorPosY(std::max(0.0f, (avail.y - block_h) * 0.5f));
+                centered_text(title, text_main);
+                centered_text(detail, (has_host && !connecting && !m_browser_error.empty())
+                                          ? settings.GetColor(Colors::kTextError)
+                                          : text_dim);
+                ImGui::Spacing();
+
+                if (show_connect || show_retry)
+                {
+                    ImGui::SetCursorPosX(std::max(0.0f, (avail.x - buttons_w) * 0.5f));
+                    if (show_connect &&
+                        AccentButton("Connect...", ImVec2(button_w, 0.0f), &settings))
+                    {
+                        CloseForConnectionChange();
+                    }
+                    if (show_connect && show_retry)
+                    {
+                        ImGui::SameLine();
+                    }
+                    if (show_retry && ImGui::Button("Retry", ImVec2(button_w, 0.0f)))
+                    {
+                        NavigateBrowserTo(m_browser_dir.empty() ? std::string(".") : m_browser_dir,
+                                          false);
+                    }
+                }
+            }
+            ImGui::EndChild();
+        }
 
         ImGui::PushStyleVar(ImGuiStyleVar_CellPadding,
-                            ImVec2(style.CellPadding.x, style.CellPadding.y + 3.0f));
-        if (ImGui::BeginTable("RemoteFiles", 4, table_flags, ImVec2(0, -footer_reserve)))
+                            ImVec2(style.CellPadding.x, style.CellPadding.y + 1.0f));
+        if (connected &&
+            ImGui::BeginTable("RemoteFiles", 4, table_flags, ImVec2(0, -footer_reserve)))
         {
+            // Sized from sample text so nothing truncates at any font scale.
+            const float column_pad = style.CellPadding.x * 2.0f + style.ItemSpacing.x;
             ImGui::TableSetupScrollFreeze(0, 1);
             ImGui::TableSetupColumn("Name",
                 ImGuiTableColumnFlags_WidthStretch | ImGuiTableColumnFlags_DefaultSort);
-            ImGui::TableSetupColumn("Size", ImGuiTableColumnFlags_WidthFixed, 90.0f);
-            ImGui::TableSetupColumn("Type", ImGuiTableColumnFlags_WidthFixed, 96.0f);
-            ImGui::TableSetupColumn("Modified", ImGuiTableColumnFlags_WidthFixed, 150.0f);
+            ImGui::TableSetupColumn("Size", ImGuiTableColumnFlags_WidthFixed,
+                                    ImGui::CalcTextSize("1023.9 MiB").x + column_pad);
+            ImGui::TableSetupColumn("Type", ImGuiTableColumnFlags_WidthFixed,
+                                    ImGui::CalcTextSize("Trace database").x + column_pad);
+            ImGui::TableSetupColumn("Modified", ImGuiTableColumnFlags_WidthFixed,
+                                    ImGui::CalcTextSize("0000-00-00 00:00").x + column_pad);
             ImGui::TableHeadersRow();
 
             // Selected and hovered rows use the accent color.
@@ -745,15 +929,28 @@ void RemoteFileBrowser::Render()
                 ImGui::TableSetColumnIndex(3); ImGui::TextDisabled("-");
             }
 
-            if (visible.empty() && !busy)
+            if (visible.empty())
             {
                 ImGui::TableNextRow();
                 ImGui::TableSetColumnIndex(0);
-                ImGui::PushStyleColor(ImGuiCol_Text, text_dim);
-                ImGui::TextUnformatted(
-                    (!m_remote_file_filter.empty() || m_type_filter > 0)
-                        ? "No items match the current filter."
-                        : "This remote folder is empty.");
+                if (busy)
+                {
+                    ImGui::PushStyleColor(ImGuiCol_Text, accent);
+                    ImGui::TextUnformatted("Loading...");
+                }
+                else if (!m_browser_error.empty())
+                {
+                    ImGui::PushStyleColor(ImGuiCol_Text, settings.GetColor(Colors::kTextError));
+                    ImGui::TextUnformatted(m_browser_error.c_str());
+                }
+                else
+                {
+                    ImGui::PushStyleColor(ImGuiCol_Text, text_dim);
+                    ImGui::TextUnformatted(
+                        (!m_remote_file_filter.empty() || m_type_filter > 0)
+                            ? "No items match the current filter."
+                            : "This remote folder is empty.");
+                }
                 ImGui::PopStyleColor();
             }
 
@@ -811,9 +1008,11 @@ void RemoteFileBrowser::Render()
                 }
 
                 // Selected rows draw on the accent color; otherwise folders are
-                // accented and files use the default text with a dimmed icon.
+                // accented and files use the default text, with the icon accented
+                // for trace databases and dimmed for everything else.
+                const bool  trace      = !f.is_dir && is_trace_file(f.name);
                 const ImU32 icon_color =
-                    row_selected ? text_on_accent : (f.is_dir ? accent : text_dim);
+                    row_selected ? text_on_accent : ((f.is_dir || trace) ? accent : text_dim);
                 const ImU32 name_color =
                     row_selected ? text_on_accent : (f.is_dir ? accent : text_main);
                 ImGui::SameLine(0, 0);
@@ -919,31 +1118,57 @@ void RemoteFileBrowser::Render()
         ImGui::BeginChild("RemoteExplorerFooter", ImVec2(0.0f, footer_card_height), true,
                           ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
         {
-            ImGui::AlignTextToFramePadding();
-            ImGui::TextDisabled("%zu item%s", visible.size(), visible.size() == 1 ? "" : "s");
-
-            ImGui::SameLine(0, style.ItemSpacing.x * 2.0f);
-            ImGui::TextDisabled("Selected:");
-            ImGui::SameLine();
-            // In directory mode the effective selection is the folder being viewed
-            // when no folder row is highlighted.
-            std::string shown_selection = selection_label;
-            if (dir_mode && (selection_label.empty() || !selection_is_dir))
-            {
-                shown_selection = posix_base_name(m_browser_dir);
-                if (shown_selection.empty())
-                {
-                    shown_selection = m_browser_dir;
-                }
-            }
-            ImGui::PushStyleColor(ImGuiCol_Text, shown_selection.empty() ? text_dim : accent);
-            const float selected_width = ImGui::GetContentRegionAvail().x - 260.0f;
-            ElidedText(shown_selection.empty() ? "(none)" : shown_selection.c_str(),
-                       selected_width > 80.0f ? selected_width : 80.0f, 0.0f,
-                       Alignment_Left, true);
-            ImGui::PopStyleColor();
-
             const float button_width = 120.0f;
+            const float status_width = ImGui::GetContentRegionAvail().x -
+                                       (button_width * 2.0f + style.ItemSpacing.x * 2.0f);
+            ImGui::AlignTextToFramePadding();
+            if (!connected)
+            {
+                ImGui::PushStyleColor(ImGuiCol_Text, connecting ? accent : text_dim);
+                ImGui::TextUnformatted(connecting ? "Connecting..." : "Not connected");
+                ImGui::PopStyleColor();
+            }
+            else if (busy)
+            {
+                ImGui::PushStyleColor(ImGuiCol_Text, accent);
+                ImGui::TextUnformatted("Loading...");
+                ImGui::PopStyleColor();
+            }
+            else if (!m_browser_error.empty())
+            {
+                // A failed navigation leaves the last folder listed, so the table
+                // cannot carry the error; say it here.
+                ImGui::PushStyleColor(ImGuiCol_Text, settings.GetColor(Colors::kTextError));
+                ElidedText(m_browser_error.c_str(), std::max(status_width, 80.0f), 0.0f,
+                           Alignment_Left, true);
+                ImGui::PopStyleColor();
+            }
+            else
+            {
+                ImGui::TextDisabled("%zu item%s", visible.size(), visible.size() == 1 ? "" : "s");
+
+                ImGui::SameLine(0, style.ItemSpacing.x * 2.0f);
+                ImGui::TextDisabled("Selected:");
+                ImGui::SameLine();
+                // In directory mode the effective selection is the folder being
+                // viewed when no folder row is highlighted.
+                std::string shown_selection = selection_label;
+                if (dir_mode && (selection_label.empty() || !selection_is_dir))
+                {
+                    shown_selection = posix_base_name(m_browser_dir);
+                    if (shown_selection.empty())
+                    {
+                        shown_selection = m_browser_dir;
+                    }
+                }
+                ImGui::PushStyleColor(ImGuiCol_Text, shown_selection.empty() ? text_dim : accent);
+                const float selected_width = ImGui::GetContentRegionAvail().x - 260.0f;
+                ElidedText(shown_selection.empty() ? "(none)" : shown_selection.c_str(),
+                           selected_width > 80.0f ? selected_width : 80.0f, 0.0f,
+                           Alignment_Left, true);
+                ImGui::PopStyleColor();
+            }
+
             const float total_width  = button_width * 2.0f + style.ItemSpacing.x;
             ImGui::SameLine();
             ImGui::SetCursorPosX(ImGui::GetWindowContentRegionMax().x - total_width);
@@ -957,10 +1182,11 @@ void RemoteFileBrowser::Render()
             }
             ImGui::SameLine();
 
+            ImGui::BeginDisabled(!connected);
             if (dir_mode)
             {
-                // Choosing a folder is always possible (defaults to the current
-                // directory), so the primary button is never disabled.
+                // Once connected, choosing a folder is always possible (defaults
+                // to the current directory).
                 ImGui::PushStyleColor(ImGuiCol_Button, accent);
                 ImGui::PushStyleColor(ImGuiCol_ButtonHovered, accent_hover);
                 ImGui::PushStyleColor(ImGuiCol_ButtonActive, accent_active);
@@ -990,15 +1216,17 @@ void RemoteFileBrowser::Render()
                     ImGui::EndDisabled();
                 }
             }
+            ImGui::EndDisabled();
         }
         ImGui::EndChild();
         ImGui::PopStyleVar(2);
         ImGui::PopStyleColor(2);
 
         // Keyboard: arrows move the selection, Enter opens, Backspace goes up.
-        // Suppressed while a text field (address or filter) is being edited.
+        // Suppressed while a text field (address or filter) is being edited, and
+        // while there is no connection to navigate.
         const bool shortcuts_active =
-            ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows) &&
+            connected && ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows) &&
             !ImGui::GetIO().WantTextInput;
 
         if (shortcuts_active && !visible.empty())

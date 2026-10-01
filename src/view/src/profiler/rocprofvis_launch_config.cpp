@@ -245,14 +245,24 @@ std::string ResolveToolPath(rocprofvis_profiler_tool_t tool,
     switch (result)
     {
         case kRocProfVisResultToolNotFound:
+        {
             // Naming the configured directory matters: the reason this fails
             // rather than falling back is that the user asked for that directory
             // specifically, so the fix is to correct it or clear it.
-            out_error = !tool_directory.empty()
-                            ? (name + " was not found in " + tool_directory)
-                            : (name + " was not found. Check that ROCm is installed and that "
-                                      "$ROCM_PATH or $PATH points at it.");
+#ifdef _WIN32
+            // ROCm's profilers ship for Linux only, so "check your install" would
+            // send a Windows user looking for something that does not exist.
+            char const* not_found_hint =
+                " was not found on this machine. ROCm profilers currently run on Linux.";
+#else
+            char const* not_found_hint =
+                " was not found. Check that ROCm is installed and that $ROCM_PATH or $PATH "
+                "points at it.";
+#endif
+            out_error = !tool_directory.empty() ? (name + " was not found in " + tool_directory)
+                                                : (name + not_found_hint);
             break;
+        }
         case kRocProfVisResultInvalidArgument:
             out_error = tool_directory.empty()
                             ? std::string("No profiler tool selected")

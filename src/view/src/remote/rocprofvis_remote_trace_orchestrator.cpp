@@ -136,6 +136,31 @@ RemoteTraceOrchestrator::BrowsePath()
     return StartBrowsing();
 }
 
+bool
+RemoteTraceOrchestrator::DownloadPath()
+{
+    if(m_running)
+    {
+        return false;
+    }
+
+    if(m_session && m_authenticated && m_session->IsConnected())
+    {
+        m_running = true;
+        m_task    = Phase::Executing;
+        AdvanceAfterExecute();
+        return m_phase != Phase::Failed;
+    }
+
+    return Start();
+}
+
+void
+RemoteTraceOrchestrator::SetOnOpenFile(std::function<void(const std::string&)> on_open_file)
+{
+    m_on_open_file = std::move(on_open_file);
+}
+
 void
 RemoteTraceOrchestrator::OnRemoteStatus(uint64_t status, rocprofvis_result_t result)
 {

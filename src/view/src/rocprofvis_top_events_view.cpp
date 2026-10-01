@@ -47,6 +47,12 @@ TopEventsView::TopEventsView(DataProvider&                      data_provider,
             timeline_selection, kRocProfVisDmOperationMemoryCopy,
             "Top Memory Copy Events"),
         std::make_unique<TopEventsTable>(
+            data_provider, TableType::kAnalysisTopHipEventsTable,
+            kRPVControllerTableTypeHipEvents,
+            DataProvider::ANALYSIS_TOP_HIP_EVENTS_TABLE_REQUEST_ID,
+            timeline_selection, kRocProfVisDmOperationHipEvent,
+            "Top Hip Events"),
+        std::make_unique<TopEventsTable>(
             data_provider, TableType::kAnalysisTopSampledEventsTable,
             kRPVControllerTableTypeSampledEvents,
             DataProvider::ANALYSIS_TOP_LAUNCH_SAMPLED_TABLE_REQUEST_ID,

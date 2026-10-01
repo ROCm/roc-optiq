@@ -105,9 +105,11 @@ typedef enum rocprofvis_dm_track_category_t {
     kRocProfVisDmRegionMainTrack = 0x100,
     // Object is region sample track
     kRocProfVisDmRegionSampleTrack = 0x200,
+    // Object is HIP event track
+    kRocProfVisDmHipEventTrack = 0x400,
 
     kRocProfVisDmLaunchTrack = kRocProfVisDmRegionTrack | kRocProfVisDmRegionMainTrack | kRocProfVisDmRegionSampleTrack,
-    kRocProfVisDmDispatchTrack = kRocProfVisDmKernelDispatchTrack | kRocProfVisDmMemoryAllocationTrack | kRocProfVisDmMemoryCopyTrack,
+    kRocProfVisDmDispatchTrack = kRocProfVisDmKernelDispatchTrack | kRocProfVisDmMemoryAllocationTrack | kRocProfVisDmMemoryCopyTrack | kRocProfVisDmHipEventTrack,
     kRocProfVisDmEventTrack = kRocProfVisDmLaunchTrack | kRocProfVisDmDispatchTrack,
     kRocProfVisDmCounterTrack = kRocProfVisDmPmcTrack,
     kRocProfVisDmAgentTrack = kRocProfVisDmDispatchTrack | kRocProfVisDmCounterTrack,
@@ -126,10 +128,12 @@ typedef enum rocprofvis_dm_event_operation_t {
     kRocProfVisDmOperationMemoryAllocate = 3,
     // Memory copy event
     kRocProfVisDmOperationMemoryCopy = 4,
-    // Memory copy event
+    // Launch sample event
     kRocProfVisDmOperationLaunchSample = 5,
+    // Hip event
+    kRocProfVisDmOperationHipEvent = 6,
     // Number of operations
-    kRocProfVisDmNumOperation = kRocProfVisDmOperationLaunchSample + 1,
+    kRocProfVisDmNumOperation,
     kRocProfVisDmMultipleOperations,
 } rocprofvis_dm_event_operation_t;
 

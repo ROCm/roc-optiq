@@ -24,6 +24,7 @@ enum class TableType
     kAnalysisTopMemoryAllocationEventsTable,
     kAnalysisTopMemoryCopyEventsTable,
     kAnalysisTopSampledEventsTable,
+    kAnalysisTopHipEventsTable,
     __kTableTypeCount
 };
 

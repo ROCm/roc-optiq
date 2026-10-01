@@ -341,6 +341,15 @@ public:
     bool DoesThisNodeMatchIdentifiers(rocprofvis_dm_track_identifiers_t* track_identifiers) override;
 };
 
+class TopologyNodeHipEvent : public TopologyNodeQueue {
+public:
+    TopologyNodeHipEvent(rocprofvis_dm_track_identifiers_t* track_identifiers, TopologyNode* ctx) : TopologyNodeQueue(track_identifiers, ctx) {}
+    ~TopologyNodeHipEvent() {};
+    std::string GetNodeName() override;
+    bool DoesThisNodeMatchIdentifiers(rocprofvis_dm_track_identifiers_t* track_identifiers) override;
+    rocprofvis_dm_result_t  GetPropertyAsUint64(rocprofvis_dm_property_t property,  rocprofvis_dm_property_index_t index,  uint64_t* value) override;
+};
+
 class TopologyNodeStream : public TopologyNode, public TopologyTrackRefence {
 public:
 

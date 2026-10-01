@@ -248,7 +248,7 @@ namespace DataModel
                 {
                     if (to_file == false)
                     {
-                        if (op == kRocProfVisDmOperationDispatch || op == kRocProfVisDmOperationMemoryAllocate || op == kRocProfVisDmOperationMemoryCopy)
+                        if (op == kRocProfVisDmOperationDispatch || op == kRocProfVisDmOperationMemoryAllocate || op == kRocProfVisDmOperationMemoryCopy || op == kRocProfVisDmOperationHipEvent)
                         {
                             Numeric val = m_merged_table.GetMergeTableValue(op, row_index, column_index, m_db);
                             result = m_db->BindObject()->FuncAddTableRowCell(row, std::to_string(val.data.u64).c_str());

@@ -315,6 +315,7 @@ rocprofvis_result_t Track::FetchFromDataModel(double start, double end, Future* 
                         case kRocProfVisDmKernelDispatchTrack:
                         case kRocProfVisDmMemoryAllocationTrack:
                         case kRocProfVisDmMemoryCopyTrack:
+                        case kRocProfVisDmHipEventTrack:
                         case kRocProfVisDmStreamTrack:
                         {
                             uint64_t index = 0;

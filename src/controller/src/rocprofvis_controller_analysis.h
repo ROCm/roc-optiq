@@ -83,6 +83,14 @@ rocprofvis_result_t rocprofvis_analysis_get_memory_allocation_events_table(rocpr
 rocprofvis_result_t rocprofvis_analysis_get_memory_copy_events_table(rocprofvis_controller_t* controller, rocprofvis_handle_t** table);
 
 /*
+* Returns the hip events table.
+* @param controller The system trace controller instance.
+* @param table Out-param that receives the table handle.
+* @returns kRocProfVisResultSuccess or an error code.
+*/
+rocprofvis_result_t rocprofvis_analysis_get_hip_events_table(rocprofvis_controller_t* controller, rocprofvis_handle_t** table);
+
+/*
 * Returns the sampled events table.
 * @param controller The system trace controller instance.
 * @param table Out-param that receives the table handle.
@@ -153,6 +161,7 @@ public:
     rocprofvis_result_t GetMemoryAllocationEventsTable(SystemTrace* trace, rocprofvis_handle_t** table);
     rocprofvis_result_t GetMemoryCopyEventsTable(SystemTrace* trace, rocprofvis_handle_t** table);
     rocprofvis_result_t GetLaunchSampleEventsTable(SystemTrace* trace, rocprofvis_handle_t** table);
+    rocprofvis_result_t GetHipEventsTable(SystemTrace* trace, rocprofvis_handle_t** table);
 
     void FreeTraceData(Trace* trace);
 
@@ -181,6 +190,7 @@ private:
         EventsTable* dispatch_events_table;
         EventsTable* memory_allocation_events_table;
         EventsTable* memory_copy_events_table;
+        EventsTable* memory_hip_events_table;
         EventsTable* launch_sample_events_table;
     };
 

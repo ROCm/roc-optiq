@@ -68,7 +68,7 @@ private:
         bool                                    m_visible;
     };
 
-    std::array<std::unique_ptr<TopEventsTable>, 5> m_tables;
+    std::array<std::unique_ptr<TopEventsTable>, 6> m_tables;
 };
 
 }  // namespace View

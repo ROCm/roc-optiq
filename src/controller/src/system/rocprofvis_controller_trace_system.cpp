@@ -213,6 +213,7 @@ rocprofvis_result_t SystemTrace::LoadRocpd(Future* future) {
                                    dm_track_type == kRocProfVisDmKernelDispatchTrack ||
                                    dm_track_type == kRocProfVisDmMemoryAllocationTrack ||
                                    dm_track_type == kRocProfVisDmMemoryCopyTrack ||
+                                   dm_track_type == kRocProfVisDmHipEventTrack ||
                                    dm_track_type == kRocProfVisDmStreamTrack ||
                                    dm_track_type == kRocProfVisDmPmcTrack)
                                 {
@@ -419,6 +420,12 @@ rocprofvis_result_t SystemTrace::LoadRocpd(Future* future) {
                                             {
                                                 track->SetUInt64(kRPVControllerTrackNumberOfOperationTypes, 0, 1);
                                                 track->SetUInt64(kRPVControllerTrackOperationTypeIndexed, 0, kRocProfVisDmOperationMemoryCopy);
+                                                break;
+                                            }
+                                            case kRocProfVisDmHipEventTrack:
+                                            {
+                                                track->SetUInt64(kRPVControllerTrackNumberOfOperationTypes, 0, 1);
+                                                track->SetUInt64(kRPVControllerTrackOperationTypeIndexed, 0, kRocProfVisDmOperationHipEvent);
                                                 break;
                                             }
                                             case kRocProfVisDmStreamTrack:

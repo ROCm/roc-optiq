@@ -56,6 +56,9 @@ const uint64_t DataProvider::ANALYSIS_TOP_MEMORY_COPY_EVENTS_TABLE_REQUEST_ID =
 const uint64_t DataProvider::ANALYSIS_TOP_LAUNCH_SAMPLED_TABLE_REQUEST_ID =
     RequestIdBuilder::MakeRequestId(
         RequestType::kFetchAnalysisTopLaunchSampleEventsTable);
+const uint64_t DataProvider::ANALYSIS_TOP_HIP_EVENTS_TABLE_REQUEST_ID =
+RequestIdBuilder::MakeRequestId(
+    RequestType::kFetchAnalysisTopHipEventsTable);
 const uint64_t DataProvider::FETCH_COMPUTE_TRACE_REQUEST_ID =
     RequestIdBuilder::MakeRequestId(RequestType::kFetchComputeTrace);
 const uint64_t DataProvider::METRIC_PIVOT_TABLE_REQUEST_ID =
@@ -1717,6 +1720,11 @@ DataProvider::FetchTrackTable(const TrackTableRequestParams& table_params)
                 request_id = ANALYSIS_TOP_LAUNCH_SAMPLED_TABLE_REQUEST_ID;
                 break;
             }
+            case kRPVControllerTableTypeHipEvents:
+            {
+                request_id = ANALYSIS_TOP_HIP_EVENTS_TABLE_REQUEST_ID;
+                break;
+            }
             default:
             {
                 spdlog::error("Unsupported table type: {}",
@@ -1771,6 +1779,10 @@ DataProvider::FetchTrackTable(const TrackTableRequestParams& table_params)
                     result = rocprofvis_analysis_get_sampled_events_table(
                         m_trace_controller, &table_handle);
                     break;
+                case kRPVControllerTableTypeHipEvents:
+                    result = rocprofvis_analysis_get_hip_events_table(
+                        m_trace_controller, &table_handle);
+                    break;
                 default: break;
             }
             ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
@@ -1794,6 +1806,8 @@ DataProvider::FetchTrackTable(const TrackTableRequestParams& table_params)
                         kRPVControllerTableTypeMemoryAllocationEvents ||
                     table_params.m_table_type ==
                         kRPVControllerTableTypeMemoryCopyEvents ||
+                    table_params.m_table_type ==
+                        kRPVControllerTableTypeHipEvents ||
                     table_params.m_table_type == kRPVControllerTableTypeSampledEvents) &&
                    metadata->track_type != kRPVControllerTrackTypeEvents)
                 {
@@ -1861,6 +1875,7 @@ DataProvider::FetchTrackTable(const TrackTableRequestParams& table_params)
                table_params.m_table_type ==
                    kRPVControllerTableTypeMemoryAllocationEvents ||
                table_params.m_table_type == kRPVControllerTableTypeMemoryCopyEvents ||
+               table_params.m_table_type == kRPVControllerTableTypeHipEvents ||
                table_params.m_table_type == kRPVControllerTableTypeSampledEvents)
             {
                 result = rocprofvis_analysis_table_export_csv(
@@ -1947,6 +1962,12 @@ DataProvider::FetchTrackTable(const TrackTableRequestParams& table_params)
                         RequestType::kFetchAnalysisTopLaunchSampleEventsTable;
                     break;
                 }
+                case kRPVControllerTableTypeHipEvents:
+                {
+                    request_info.request_type =
+                        RequestType::kFetchAnalysisTopHipEventsTable;
+                    break;
+                }
             }
         }
 
@@ -1999,6 +2020,12 @@ DataProvider::FetchTrackTable(const TrackTableRequestParams& table_params)
                 {
                     spdlog::debug(
                         "Fetching analysis top launch sample events table data");
+                    break;
+                }
+                case kRPVControllerTableTypeHipEvents:
+                {
+                    spdlog::debug(
+                        "Fetching analysis top hip events table data");
                     break;
                 }
             }
@@ -2906,6 +2933,7 @@ DataProvider::ProcessRequest(RequestInfo& req)
         case RequestType::kFetchAnalysisTopMemoryAllocationEventsTable:
         case RequestType::kFetchAnalysisTopMemoryCopyEventsTable:
         case RequestType::kFetchAnalysisTopLaunchSampleEventsTable:
+        case RequestType::kFetchAnalysisTopHipEventsTable:
         {
             spdlog::debug("Processing table data {}", req.request_id);
             ProcessTableRequest(req);
@@ -3279,6 +3307,11 @@ DataProvider::ProcessTableRequest(RequestInfo& req)
                 table_type = kRPVControllerTableTypeSampledEvents;
                 break;
             }
+            case RequestType::kFetchAnalysisTopHipEventsTable:
+            {
+                table_type = kRPVControllerTableTypeHipEvents;
+                break;
+            }
             default:
             {
                 spdlog::error("Invalid table request type: {}",
@@ -3350,6 +3383,12 @@ DataProvider::ProcessTableRequest(RequestInfo& req)
             {
                 result = rocprofvis_analysis_get_sampled_events_table(m_trace_controller,
                                                                       &table_handle);
+                break;
+            }
+            case kRPVControllerTableTypeHipEvents:
+            {
+                result = rocprofvis_analysis_get_hip_events_table(
+                    m_trace_controller, &table_handle);
                 break;
             }
             default:
@@ -3516,6 +3555,12 @@ DataProvider::ProcessTableRequest(RequestInfo& req)
             case kRPVControllerTableTypeSampledEvents:
             {
                 table_type_enum = TableType::kAnalysisTopSampledEventsTable;
+                table_model     = &m_model.GetAnalysis().GetTables();
+                break;
+            }
+            case kRPVControllerTableTypeHipEvents:
+            {
+                table_type_enum = TableType::kAnalysisTopHipEventsTable;
                 table_model     = &m_model.GetAnalysis().GetTables();
                 break;
             }

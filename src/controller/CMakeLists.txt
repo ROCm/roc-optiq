@@ -9,8 +9,6 @@ project(${TARGET_NAME} VERSION 0.1.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 
-include_directories(inc)
-
 set(rocprofvis_controller_source_files)
 list(APPEND rocprofvis_controller_source_files
     src/rocprofvis_controller_arguments.cpp
@@ -130,7 +128,8 @@ target_link_libraries(${TARGET_NAME} PUBLIC datamodel)
 target_link_libraries(${TARGET_NAME} PUBLIC spdlog)
 target_include_directories(${TARGET_NAME} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/../model/inc)
 target_include_directories(${TARGET_NAME} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/../core/inc)
-target_include_directories(${TARGET_NAME} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
+target_include_directories(${TARGET_NAME} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/inc)
+target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
 
 if(ROCPROFVIS_ENABLE_SCRIPTING)
     target_link_libraries(${TARGET_NAME} PRIVATE roc-optiq-python)
@@ -141,6 +140,7 @@ if(BUILD_TESTING)
 	set(SYSTEM_TEST_NAME ${PROJECT_NAME}-system-tests)
 	set(COMPUTE_TEST_NAME ${PROJECT_NAME}-compute-tests)
     add_executable(${SYSTEM_TEST_NAME} tests/rocprofvis_controller_system_tests.cpp)
+    target_include_directories(${SYSTEM_TEST_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
     target_link_libraries(${SYSTEM_TEST_NAME} PRIVATE ${PROJECT_NAME})
     target_link_libraries(${SYSTEM_TEST_NAME} PRIVATE Catch2::Catch2WithMain)
     add_test(NAME ${SYSTEM_TEST_NAME}-RPD COMMAND ${SYSTEM_TEST_NAME} --input_file "${CMAKE_SOURCE_DIR}/sample/trace_70b_1024_32.rpd")
@@ -170,6 +170,7 @@ if(BUILD_TESTING)
             tests/rocprofvis_controller_profiler_tests.cpp
             tests/rocprofvis_controller_profiler_scrape_tests.cpp
             tests/rocprofvis_controller_profiler_pipeline_loop_tests.cpp)
+        target_include_directories(${PROFILER_TEST_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
         target_link_libraries(${PROFILER_TEST_NAME} PRIVATE ${PROJECT_NAME})
         target_link_libraries(${PROFILER_TEST_NAME} PRIVATE Catch2::Catch2WithMain)
         add_test(NAME ${PROFILER_TEST_NAME} COMMAND ${PROFILER_TEST_NAME})

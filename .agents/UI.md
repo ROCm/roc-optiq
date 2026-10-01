@@ -259,8 +259,11 @@ Owns the OS-level shell. Specifically:
   `GuiTexture::SetBackend()` plugs into.
 - `rocprofvis_cli_parser.{h,cpp}` - generic short/long flag parser
   (`CLIParser::AddOption`). Flags currently registered in `main.cpp`:
-  `-v/--version`, `-f/--file <path>`, `-b/--backend {auto|vulkan|opengl}`,
-  `-d/--file-dialog {auto|native|imgui}`, `-h/--help`. Add new flags by
+  `-v/--version [hash]`, `-f/--file <path>`, `-b/--backend {auto|vulkan|opengl}`,
+  `-d/--file-dialog {auto|native|imgui}`, `-h/--help`. `-v` prints the
+  version. `-v hash` also prints the git commit. Official builds print the
+  hash alone. An unofficial build prints `unknown` and a line that the
+  commit hash is not recorded. About shows the same text. Add new flags by
   calling `AddOption` in `main.cpp::parse_command_line_args`.
 
 ### `src/core/`
@@ -316,6 +319,12 @@ The bridge between model and view. **Public** API in `inc/`:
   (`rocprofvis_handle_t`, `rocprofvis_controller_t`, ...) and result codes.
 - `rocprofvis_profiler.h` - profiler config/session C API used by the
   optional launcher, including local and remote async launch.
+- `rocprofvis_controller_analysis.h` - `rocprofvis_analysis_*` C API
+  (queue utilization, counter statistics, top-events tables).
+
+Only `inc/` is exported to consumers; `src/` is a `PRIVATE` include
+directory of `roc-optiq-controller`, so a View include of a controller
+`src/` header fails to compile.
 
 Internal source layout under `src/controller/src/`:
 
@@ -336,7 +345,8 @@ Internal source layout under `src/controller/src/`:
 - `rocprofvis_controller_string_table.{h,cpp}` - intern-style table.
 - `rocprofvis_controller_table.{h,cpp}` - generic table support.
 - `rocprofvis_controller_trace.{h,cpp}` - trace-file lifecycle.
-- `rocprofvis_controller_analysis.{h,cpp}` - cross-cutting analytics
+- `rocprofvis_controller_analysis.cpp` /
+  `rocprofvis_controller_analysis_internal.h` - cross-cutting analytics
   (e.g. queue utilization).
 - `system/` - per-domain modules covering events, ext_data, flow
   control, graphs, memory management, samples (and sample LOD),
@@ -1339,7 +1349,8 @@ The compute analogue of `TraceView`. Owns:
     workload SOL, workload roofline).
   - `ComputeKernelDetailsView` - per-kernel deep-dive.
   - `ComputeTableView` - hierarchical metric tables.
-  - `ComputeWorkloadView` - system info + profiling config tables.
+  - `ComputeWorkloadView` - "Profile Details" tab: analysis metadata,
+    system info, and profiling config tables.
   - `ComputeComparisonView` - baseline vs target comparison.
   - `ComputeIsaView` - source/ISA correlation and PC-sampling counts.
   - `ComputeTester` - dev-mode scratchpad
@@ -1377,9 +1388,19 @@ sentinel.
 
 ### `ComputeWorkloadView` (`rocprofvis_compute_workload_view.{h,cpp}`)
 
-Shows the two static tables for a workload:
-`RenderSystemInfo(WorkloadInfo)` and
-`RenderProfilingConfig(WorkloadInfo)`. Layout uses an `HSplitContainer`.
+Backs the **Profile Details** tab (class and `TAB_ID` keep their older
+"workload" names). Two bordered panels, top to bottom:
+
+- **Analysis Information** - `RenderAnalysisInfo(AnalysisInfo)` renders the
+  trace-level `compute_metadata` row (ROCm Compute Profiler version, Git
+  revision, database schema version) from
+  `ComputeDataModel::GetAnalysisInfo()`. It does not depend on the selected
+  workload, so it renders even when workload info is unavailable.
+- **Workload Information** - `RenderSystemInfo(WorkloadInfo)` and
+  `RenderProfilingConfig(WorkloadInfo)` side by side in an
+  `HSplitContainer`.
+
+All three tables draw rows through `RenderInfoRow` (two copyable cells).
 
 ### `ComputeKernelDetailsView` (`rocprofvis_compute_kernel_details.{h,cpp}`)
 
@@ -1600,10 +1621,11 @@ performing the scroll.
   `SetFetchMetricsCallback`).
 - `ComputeDataModel` (`model/compute/rocprofvis_compute_data_model.{h,cpp}`)
   holds `WorkloadInfo`, `KernelInfo`, `MetricValue` per
-  `(store_id, kernel_id|workload_id)`.
+  `(store_id, kernel_id|workload_id)`, plus the single trace-level
+  `AnalysisInfo` filled by `DataProvider::LoadAnalysisInfo()`.
 - `compute_model_types.h` is the core type vocabulary:
   `AvailableMetrics::Entry/Table/Category`, `KernelInfo`,
-  `WorkloadInfo`, `MetricValue`, `MetricId`, `MetricIdHash`,
+  `WorkloadInfo`, `AnalysisInfo`, `MetricValue`, `MetricId`, `MetricIdHash`,
   `ComputeTableInfo`, `Point`. Reuse these types whenever you handle
   metric IDs or roofline geometry - **do not reinvent metric
   identifiers**; use `MetricId::ToString()` etc.
@@ -2406,7 +2428,13 @@ connection-mode selector and SSH UI live in the dialog
 an `ExecutionCache` (lazy `FlattenToExecution` result + command
 preview, rebuilt on a dirty flag). `AppWindow::ShowProfilerLauncher()`
 lazily creates it; the only entry point is `File > Launch Profiler...`
-(`#ifdef ROCPROFVIS_ENABLE_PROFILER`).
+(`#ifdef ROCPROFVIS_ENABLE_PROFILER`). Closing the window **hides** it:
+the orchestrator and last-run console stay, `Update()` is still pumped
+every frame from `AppWindow`, and reopen lands on the configure screen
+so **View Last Run** / **View Run** still bind to that session. A new
+`Launch` replaces the session; destroying the dialog (app shutdown)
+tears it down. Remote download-progress popups still render while the
+launcher is hidden; SSH auth modals are already owned by `AppWindow`.
 
 There is deliberately **no** selected-tool index beside `m_config.tool` -
 the enum is the only copy. An earlier version kept an `m_tool_index` in

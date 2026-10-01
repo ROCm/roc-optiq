@@ -123,6 +123,32 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisControllerFixture,
         rocprofvis_controller_future_free(future);
     }
 
+    // Reads the trace-level compute_metadata strings loaded with the trace.
+    // Fixture Reads: m_controller
+    SECTION("Controller Load Metadata")
+    {
+        const rocprofvis_property_t properties[] = {
+            kRPVControllerComputeProfilerVersion,
+            kRPVControllerComputeProfilerGitVersion,
+            kRPVControllerComputeSchemaVersion,
+        };
+        for(rocprofvis_property_t property : properties)
+        {
+            uint32_t            len    = 0;
+            rocprofvis_result_t result = rocprofvis_controller_get_string(
+                m_controller, property, 0, nullptr, &len);
+            REQUIRE(result == kRocProfVisResultSuccess);
+            REQUIRE(len > 0);
+
+            std::string value;
+            value.resize(len);
+            result = rocprofvis_controller_get_string(
+                m_controller, property, 0, const_cast<char*>(value.c_str()), &len);
+            REQUIRE(result == kRocProfVisResultSuccess);
+            spdlog::info("Metadata property {0}: {1}", property, value);
+        }
+    }
+
     // Discovers all workloads and reads their id, name, system info, and configuration.
     // Fixture Reads:  m_controller
     // Fixture Writes: m_workloads[].id, m_workloads[].handle

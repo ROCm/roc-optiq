@@ -306,6 +306,8 @@ list(APPEND VIEW_FILES
 )
 endif()
 
+include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/capture_git_commit.cmake)
+
 configure_file(
     "${CMAKE_CURRENT_SOURCE_DIR}/resources/version.h.in"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/app/inc/rocprofvis_version.h"
@@ -871,10 +873,13 @@ else()
             COMPONENT ${RUNTIME_COMP_TYPE} )
 endif()
 
+# Packaging install name — override with -DROCM_PACKAGE_NAME=amdrocm10-roc-optiq from CI
+set(ROCM_PACKAGE_NAME "${PROJECT_NAME}" CACHE STRING "Install package name used by DEB/RPM (e.g. amdrocm10-roc-optiq)")
+
 # Debian package specific variables
 set(CPACK_COMPONENTS_ALL RV_RUNTIME)
 set(CPACK_DEB_COMPONENT_INSTALL ON)
-set(CPACK_DEBIAN_RV_RUNTIME_PACKAGE_NAME "${PROJECT_NAME}")
+set(CPACK_DEBIAN_RV_RUNTIME_PACKAGE_NAME "${ROCM_PACKAGE_NAME}")
 # Set package version to 1 
 if(NOT DEFINED CPACK_DEBIAN_PACKAGE_RELEASE)
   set(CPACK_DEBIAN_PACKAGE_RELEASE "1")
@@ -904,7 +909,7 @@ if(NOT APPLE)
     set(CMAKE_SKIP_RPATH TRUE)
 endif()
 set(CPACK_RPM_COMPONENT_INSTALL ON)
-set(CPACK_RPM_RV_RUNTIME_PACKAGE_NAME "${PROJECT_NAME}")
+set(CPACK_RPM_RV_RUNTIME_PACKAGE_NAME "${ROCM_PACKAGE_NAME}")
 
 # Set package version to 1 
 if(NOT DEFINED CPACK_RPM_PACKAGE_RELEASE)

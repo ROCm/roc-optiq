@@ -33,7 +33,8 @@ namespace DataModel
 		{kRPVComputeFetchKernelSymbols, "Fetch all kernel symbols for a kernel"},
 		{kRPVComputeFetchKernelInstructionTypeLookups, "Fetch instruction types for a kernel"},
 		{kRPVComputeFetchKernelInstructionSamples, "Fetch instruction samples for a kernel"},
-		{kRPVComputeFetchKernelInstructionSampleLookups, "Fetch instruction sample types for a kernel"}
+		{kRPVComputeFetchKernelInstructionSampleLookups, "Fetch instruction sample types for a kernel"},
+		{kRPVComputeFetchMetadata, "Fetch compute profiler metadata"}
 	};
 
 	static const std::unordered_map<std::string, rocprofvis_db_compute_column_enum_t> ColumnNameToEnum {
@@ -119,6 +120,9 @@ namespace DataModel
 		{"pc_sample_stall_reason_uuid", kRPVComputeColumnPcSampleStallReasonUuid},
 		{"pc_sample_stall_reason_state_uuid", kRPVComputeColumnPcSampleStallReasonStateUuid},
 		{"pc_sample_stall_reason_count", kRPVComputeColumnPcSampleStallReasonCount},
+		{"compute_version", kRPVComputeColumnMetadataComputeVersion},
+		{"git_version", kRPVComputeColumnMetadataGitVersion},
+		{"schema_version", kRPVComputeColumnMetadataSchemaVersion},
 	};
 
 	static const std::unordered_map<std::string, rocprofvis_db_compute_column_enum_t> RooflineBenchParamToEnum{
@@ -661,6 +665,19 @@ namespace DataModel
 			}
 		}
 		return result;
+	}
+
+	rocprofvis_dm_result_t ComputeQueryFactory::GetComputeMetadata(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params, rocprofvis_dm_string_t& query_out) {
+		(void) num;
+		(void) params;
+		query_out =
+			"SELECT "
+			"COALESCE(compute_version, '') AS compute_version, "
+			"COALESCE(git_version, '') AS git_version, "
+			"COALESCE(schema_version, '') AS schema_version "
+			"FROM compute_metadata "
+			"LIMIT 1";
+		return kRocProfVisDmResultSuccess;
 	}
 
 	rocprofvis_dm_result_t ComputeQueryFactory::GetComputeKernelMetricCategoriesList(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params, rocprofvis_dm_string_t& query_out) {
@@ -1252,6 +1269,9 @@ void ComputeQueryFactory::ParseMetricParam(std::string metric_str, uint32_t work
 		case kRPVComputeFetchKernelInstructionSampleLookups:
 			result = m_query_factory.GetComputeKernelInstructionSampleLookups(num, params, query);
 			break;
+		case kRPVComputeFetchMetadata:
+			result = m_query_factory.GetComputeMetadata(num, params, query);
+			break;
 		case kRPVComputeFetchKernelInstructionLines:
 			result = m_query_factory.GetComputeKernelInstructionLines(num, params, query);
 			break;
@@ -1322,6 +1342,7 @@ void ComputeQueryFactory::ParseMetricParam(std::string metric_str, uint32_t work
 				case kRPVComputeFetchKernelPcSampleStates:
 				case kRPVComputeFetchKernelPcSampleStallReasons:
 				case kRPVComputeFetchKernelPcSampleStallReasonLookups:
+				case kRPVComputeFetchMetadata:
 					callback = CallbackGetComputeGeneric;
 					break;
 				case kRPVComputeFetchWorkloadRooflineCeiling:

@@ -144,8 +144,7 @@ Customize timeline display options
 
 Customize display options for each track by right clicking the **Description** area to open the track's context menu. Select **Track Options** to customize the track's display options.
 
-- Use **Current Track**, **Selected Track(s)**, or the track type label that reflects the current track's type (**Queue Tracks**, **Stream Tracks**, **Thread Tracks**, etc.) to choose which tracks the **Track Options** changes 
-  you choose below will be applied to.
+- Select which tracks **Track Options** apply to by selecting **Current Track**, **Selected Track(s)**, or the track type label (**Queue Tracks**, **Stream Tracks**, **Thread Tracks**).
 - For event tracks, you can toggle between **Color by Name**, **Color by Time Level**, **No Color**, and **Compact mode**.
 
   - **Color by Name**: All events with the same name share a color. 

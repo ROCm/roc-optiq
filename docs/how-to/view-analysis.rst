@@ -116,7 +116,7 @@ Showing where kernels are positioned relative to these rooflines helps determine
 - Click |gear| in the menu to adjust your view:
 
   - Under **Custom**, click on a roofline or an arithmetic intensity point to show or hide it.  
-  - Under **Options**, select **Scale kernel marker size to duration** to make the size of each kernel performance dot represents the kernel's duration. 
+  - Under **Options**, select **Scale kernel marker size to duration** to make the size of each kernel performance dot represent the kernel's duration. 
 - Hold your cursor over a dot to view detailed information about the kernel it represents. The information includes the Kernel name, Invocation(s), Duration, Arithmetic Intensity, and Performance. 
 - Use the filter dropdowns at the top of the **Roofline Analysis** pane to show or hide groups of chart elements together, instead of toggling them one by one in the **Custom** of the |gear| menu:
 

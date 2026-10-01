@@ -247,7 +247,7 @@ Measure
 - ROCm Optiq draws two vertical rulers with timestamps and shows the duration (time delta) in a label between them.
 - Drag the duration label to reposition it. The connecting line and notches follow the label. The left ruler timestamp is shown at the top and the right timestamp at the bottom, so that they do not overlap.
 - Right-click a measurement label on the timeline to **Copy Start Timestamp**, **Copy End Timestamp**, or **Copy Measurement Duration**.
-- Right-click a measurement label and choose **Zoom to Measurement** to fit that span to the full timeline width, with the start markers landing on the left and right edges.
+Right-click a measurement label and choose **Zoom to Measurement** to fit the measurement to the full timeline width, placing the start and end markers at the left and right edges, respectively.
 - Use **Reset** or **Clear measurement** to remove the rulers and start a new measurement.
 
 .. image:: ../images/new-measurement-timestamp.png

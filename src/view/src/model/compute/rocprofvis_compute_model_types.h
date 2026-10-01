@@ -4,6 +4,7 @@
 #pragma once
 
 #include "rocprofvis_controller_enums.h"
+#include "rocprofvis_memory_chart_model.h"
 #include <cstdint>
 #include <memory>
 #include <string>
@@ -54,83 +55,67 @@ struct Point
 {
     double x;
     double y;
+    bool operator==(const Point& other) const
+    {
+        return x == other.x && y == other.y;
+    }
 };
 
-struct PcStallReason
+struct PcSampleState
 {
-    int32_t     reason_id = 0;
-    int32_t     count   = 0;
+    uint64_t instruction_uuid = 0;
+    uint64_t total_count      = 0;
+    uint64_t issue_count      = 0;
+    uint64_t stall_count      = 0;
 };
 
-struct SamplingState
+struct InstructionSourceLine
 {
-    bool     loaded             = false;
-    uint64_t dispatch_id        = 0;
-    uint32_t id                 = 0;
-    uint32_t isa_line_id        = 0;
-    uint32_t issued_count       = 0;
-    uint32_t stalled_count      = 0;
-    uint32_t total_count        = 0;
-    float    active_threads_percent = 0.0f;
-    float    wave_occupancy_percent = 0.0f;
-
-    std::vector<PcStallReason> stall_reasons;
+    uint64_t instruction_uuid = 0;
+    uint64_t source_line_uuid = 0;
+    uint64_t source_file_uuid = 0;
+    uint64_t frame_index      = 0;
 };
 
-struct IsaToIsaDep
+struct InstructionLine
 {
-    uint32_t dependent_isa_line_id  = 0;
-    uint32_t dependency_isa_line_id = 0;
-};
-
-struct IsaToSourceDep
-{
-    uint32_t isa_line_id    = 0;
-    uint32_t source_line_id = 0;
-    uint32_t depth          = 0;
-};
-
-struct IsaLine
-{
-    uint64_t    code_object_offset  = 0;
+    uint64_t    instruction_uuid = 0;
     std::string instruction;
-    std::string comment;
-    SamplingState           sampling_state;
-    std::vector<uint32_t> source_line_ids;
-    uint32_t    id                  = 0;
-    uint32_t    instruction_type_id = 0;
 };
 
-struct CodeObject
+struct KernelSymbol
 {
-    std::string          uri;
-    std::string          content_checksum;
-    std::vector<IsaLine> isa_lines;
-    uint32_t             id = 0;
+    uint64_t                     kernel_symbol_uuid = 0;
+    uint64_t                     code_object_uuid   = 0;
+    std::vector<InstructionLine> instruction_lines;
+};
+
+struct CodeObjectStore
+{
+    uint64_t                  code_object_uuid = 0;
+    std::vector<KernelSymbol> kernel_symbols;
 };
 
 struct SourceLine
 {
-    std::string            content;
-    std::vector<uint32_t*> isa_line_ids;
-    uint32_t               id          = 0;
-    uint32_t               line_number = 0;
+    uint64_t    source_line_uuid = 0;
+    uint64_t    line_number      = 0;
+    std::string content;
 };
 
 struct SourceFile
 {
+    uint64_t                source_file_uuid = 0;
     std::string             file_path;
-    std::string             content_checksum;
     std::vector<SourceLine> source_lines;
-    uint32_t                id = 0;
 };
 
 struct PcSamplingData
 {
-    std::vector<CodeObject>     code_objects;
-    std::vector<SourceFile>     source_files;
-    std::vector<IsaToIsaDep>    isa_to_isa_deps;
-    std::vector<IsaToSourceDep> isa_to_source_deps;
+    std::vector<CodeObjectStore>       code_objects;
+    std::vector<SourceFile>            source_files;
+    std::vector<InstructionSourceLine> instruction_source_lines;
+    std::vector<PcSampleState>         pc_sample_states;
 };
 
 struct KernelInfo
@@ -158,6 +143,7 @@ struct KernelInfo
     };
     uint32_t                         id;
     std::string                      name;
+    bool                             has_isa_lines = false;
     std::array<uint64_t, NumMetrics> dispatch_metrics;
     Roofline                         roofline;
     PcSamplingData                   pc_sampling_data;
@@ -189,17 +175,24 @@ struct WorkloadInfo
             std::unordered_map<rocprofvis_controller_roofline_ceiling_bandwidth_type_t,
                                Ceiling>>
               ceiling_compute;
-        Point max;
-        Point min;
     };
     uint32_t                                 id;
     std::string                              name;
     std::vector<std::vector<std::string>>    system_info;
     std::vector<std::vector<std::string>>    profiling_config;
+    MemChartLayout                           memory_chart_layout;  // Parsed layout from the DB (empty blocks if absent).
     AvailableMetrics                         available_metrics;
     std::unordered_map<uint32_t, KernelInfo> kernels;
     std::vector<const KernelInfo*>           ordered_kernels;  // built from map values; never null
     Roofline                                 roofline;
+};
+
+// Trace-level compute_metadata describing the profiler that produced the database.
+struct AnalysisInfo
+{
+    std::string profiler_version;
+    std::string profiler_git_version;
+    std::string schema_version;
 };
 
 struct MetricValue

@@ -2,11 +2,16 @@
 // SPDX-License-Identifier: MIT
 
 #pragma once
-#include <array>
+#include "model/compute/rocprofvis_memory_chart_model.h"
+#include "rocprofvis_event_manager.h"
+
+#include <cstdint>
+#include <map>
 #include <memory>
 #include <string>
+#include <unordered_map>
+#include <utility>
 #include <vector>
-#include <cstdint>
 
 struct ImDrawList;
 struct ImVec2;
@@ -20,91 +25,24 @@ struct MetricValue;
 class DataProvider;
 class ComputeSelection;
 
-// Local-space chart block.
-struct ChartBlock
-{
-    float x = 0, y = 0, w = 0, h = 0;
-
-    float Right()  const { return x + w; }
-    float Bottom() const { return y + h; }
-    float MidX()   const { return x + w * 0.5f; }
-    float MidY()   const { return y + h * 0.5f; }
-};
-
-// Metric entry IDs in table 3.1
-enum MemChartMetric
-{
-    WAVEFRONT_OCCUPANCY = 0,
-    WAVE_LIFE,
-    SALU,
-    SMEM,
-    VALU,
-    MATRIX_OPS,
-    VMEM,
-    LDS,
-    GWS,
-    BR,
-    ACTIVE_CUS_DEPRECATED,
-    NUM_CUS,
-    VGPR,
-    SGPR,
-    LDS_ALLOCATION,
-    SCRATCH_ALLOCATION,
-    WAVEFRONTS,
-    WORKGROUPS,
-    LDS_REQ,
-    LDS_UTIL,
-    LDS_LATENCY,
-    VL1_RD,
-    VL1_WR,
-    VL1_ATOMIC,
-    VL1_HIT,
-    VL1_LAT,
-    VL1_COALESCE,
-    VL1_STALL,
-    VL1_L2_RD,
-    VL1_L2_WR,
-    VL1_L2_ATOMIC,
-    SL1D_RD,
-    SL1D_HIT,
-    SL1D_LAT,
-    SL1D_L2_RD,
-    SL1D_L2_WR,
-    SL1D_L2_ATOMIC,
-    IL1_FETCH,
-    IL1_HIT,
-    IL1_LAT,
-    IL1_L2_RD,
-    L2_RD,
-    L2_WR,
-    L2_ATOMIC,
-    L2_HIT,
-    L2_RD_LAT,
-    L2_WR_LAT,
-    FABRIC_L2_RD,
-    FABRIC_L2_WR,
-    FABRIC_L2_ATOMIC,
-    FABRIC_RD_LAT,
-    FABRIC_WR_LAT,
-    FABRIC_ATOMIC_LAT,
-    HBM_RD,
-    HBM_WR,
-
-    // Chart-only placeholder for rows that intentionally display N/A instead
-    // of looking up a metric value.
-    MEMCHART_METRIC_NA,
-    MEMCHART_METRIC_COUNT = MEMCHART_METRIC_NA  // sentinel: total number of chart slots
-};
-
+// Renders the compute kernel-details "Memory Chart" from a relational layout
+// (MemChartLayout): generic blocks arranged in columns, connected by arrows.
+// Metric ids/names referenced by the layout are resolved against the compute
+// metric table for the selected kernel.
 class ComputeMemoryChartView
 {
 public:
-    ComputeMemoryChartView(DataProvider& data_provider, std::shared_ptr<ComputeSelection> compute_selection);
+    ComputeMemoryChartView(DataProvider&                     data_provider,
+                           std::shared_ptr<ComputeSelection> compute_selection);
     ~ComputeMemoryChartView();
 
     void Render();
 
-    // Fetch all 3.1.x metrics for the selected workload and kernel.
+    // Load the layout for a workload: prefer the JSON stored in the DB
+    // (WorkloadInfo::memory_chart_layout); fall back to the embedded default.
+    void LoadWorkloadLayout(uint32_t workload_id);
+
+    // Fetch every metric in the layout's source category for the selected kernel.
     void FetchMemChartMetrics();
 
     void UpdateMetrics();
@@ -112,58 +50,194 @@ public:
     uint64_t GetClientId() const { return m_client_id; }
 
 private:
-    // Compute block positions for the current frame.
-    void ComputeLayout();
+    // A fully computed arrow, ready to draw. Produced by BuildArrowRoutes so
+    // labels can be de-overlapped before anything is drawn. Coordinates are in
+    // local canvas space.
+    struct ArrowRoute
+    {
+        std::vector<std::pair<float, float>> points;  // Polyline (x, y).
+        bool              head_at_first = false;
+        bool              head_at_last  = false;
+        uint32_t          color         = 0;
+        std::string       label;
+        float             label_x       = 0.0f;
+        float             label_y       = 0.0f;
+        float             label_w       = 0.0f;
+        float             label_h       = 0.0f;
+        // Flow direction (-1/0/+1 per axis) drawn as a label marker so same-color
+        // arrows are told apart by which way they point; bidir = double-headed.
+        float             label_dir_x   = 0.0f;
+        float             label_dir_y   = 0.0f;
+        bool              label_bidir   = false;
+        MemChartMetricRef metric;
+    };
 
-    // Draw methods render directly through the current draw list.
-    void DrawInstrBuff(ImDrawList* draw_list, ImVec2 origin);
-    void DrawInstrDispatch(ImDrawList* draw_list, ImVec2 origin);
-    void DrawActiveCUs(ImDrawList* draw_list, ImVec2 origin);
+    // How BuildArrowRoutes draws an arrow. ComputeLayout and RebuildColumnGaps
+    // classify through the same function, so the room they reserve matches the
+    // route that is drawn.
+    enum class RouteKind : uint8_t
+    {
+        kNone,      // Unresolved endpoint; not drawn.
+        kAdjacent,  // Neighbouring columns in one row band: horizontal.
+        kSkip,      // Skips columns in one row band: highway lane below the band.
+        kElbow,     // Different column and row band: vertical-first elbow.
+        kVertical,  // Same column, nothing stacked between: straight vertical.
+        kGutter,    // Same column otherwise: through the gutter right of the column.
+    };
 
-    void DrawLDS(ImDrawList* draw_list, ImVec2 origin);
-    void DrawVectorL1(ImDrawList* draw_list, ImVec2 origin);
-    void DrawScalarL1D(ImDrawList* draw_list, ImVec2 origin);
-    void DrawInstrL1(ImDrawList* draw_list, ImVec2 origin);
+    // Horizontal extent a skip-column arrow occupies along its row's highway.
+    struct SkipSpan
+    {
+        size_t index;  // into m_layout.arrows
+        float  lo;
+        float  hi;
+        int    lane;
+    };
 
-    void DrawL2(ImDrawList* draw_list, ImVec2 origin);
-    void DrawXGMIPCIe(ImDrawList* draw_list, ImVec2 origin);
-    void DrawFabric(ImDrawList* draw_list, ImVec2 origin);
-    void DrawGMI(ImDrawList* draw_list, ImVec2 origin);
-    void DrawHBM(ImDrawList* draw_list, ImVec2 origin);
+    void LoadLayout();
+    // Load the dev override file (<config-dir>/memory_chart.json) into m_layout.
+    // Returns true if a valid override was found and applied.
+    bool TryLoadOverrideFile();
 
-    void DrawConnections(ImDrawList* draw_list, ImVec2 origin);
+    // Called once whenever m_layout is (re)assigned (workload change): sorts
+    // blocks by column/`order`, resolves each arrow's endpoint ids to block
+    // pointers, and primes the per-item/arrow render strings.
+    void OnLayoutLoaded();
+    // Recompute the cached label/value strings for every content item and arrow
+    // from the currently-resolved metrics (on layout load and on metric fetch).
+    void RefreshMetricStrings();
+    // Snapshot the memory-chart palette from SettingsManager. Called on
+    // construction and on kThemeChanged.
+    void RefreshPalette();
+    // Map each item/arrow's cached_color_kind through the current palette into
+    // cached_color. Called after RefreshMetricStrings and on theme change.
+    void RefreshCachedColors();
+    uint32_t ColorFromKind(MemChartColorKind kind) const;
 
-    float DrawMetricRow(ImDrawList* draw_list, float block_x, float cursor_y,
-                        float block_w, const char* label, MemChartMetric metric_id,
-                        const char* unit = "");
+    void DrawBlockRect(ImDrawList* draw_list, ImVec2 top_left, ImVec2 bottom_right);
+    float DrawBlockHeader(ImDrawList* draw_list, const char* title, float block_x,
+                          float block_y, float block_w);
+    // Draws a floating label. When (dir_x, dir_y) is non-zero, a small flow
+    // marker is drawn to the left of the text (double-headed when `bidir`).
+    void DrawFloatingLabel(ImDrawList* draw_list, ImVec2 pos, const char* text,
+                           uint32_t accent_color, float dir_x = 0.0f, float dir_y = 0.0f,
+                           bool bidir = false);
+    void DrawGroupBox(ImDrawList* draw_list, ImVec2 top_left, float w, float h,
+                      const char* title);
+    void DrawLegend(ImDrawList* draw_list, ImVec2 origin, float y);
+
+    // Precompute which inter-column gaps an arrow crosses, and whether any of
+    // those arrows is labeled (m_gap_kinds). Only depends on block columns,
+    // arrow endpoints and label presence, so it runs on layout load rather than
+    // every frame.
+    void RebuildColumnGaps();
+
+    RouteKind ClassifyArrow(const MemChartArrow& arrow) const;
+    // Index in m_layout.blocks of the top-level block that is, or contains, `block`.
+    size_t TopLevelIndex(const MemChartBlock& block) const;
+    // True when another top-level block is stacked in the column between the two
+    // blocks. Judged from row and stack order, so it holds before positions exist.
+    bool StackedBetween(const MemChartBlock& a, const MemChartBlock& b) const;
+
+    void ComputeLayout(float available_width);
+    void MeasureBlock(MemChartBlock& block) const;
+    // Recursively assign geometry: `conn_left`/`conn_right` are the top-level
+    // ancestor's box edges (passed unchanged into children) so arrows terminate
+    // at the outer box; `column`/`row` are propagated so routing sees nested blocks.
+    void PositionBlock(MemChartBlock& block, float x, float y, float w, float h,
+                       float conn_l, float conn_r, int32_t column, int32_t row);
+
+    // Recursively draw a block: container -> recurse into children; leaf -> card.
+    void DrawBlock(ImDrawList* draw_list, ImVec2 origin, const MemChartBlock& block);
+    void DrawLeaf(ImDrawList* draw_list, ImVec2 origin, const MemChartBlock& block);
+    // Group skip-column arrows by row band, spanning column centres (or the left
+    // margin for left-going arrows). Shared by ComputeLayout, which reserves the
+    // lanes' height under each band, and BuildArrowRoutes, which draws them.
+    void CollectSkipSpans(const std::map<int32_t, float>&           col_mid_x,
+                          std::map<int32_t, std::vector<SkipSpan>>& spans_by_row) const;
+    // First-fit lane packing (shortest spans innermost); returns the lane count.
+    static int PackSkipLanes(std::vector<SkipSpan>& spans);
+    void BuildArrowRoutes(std::vector<ArrowRoute>& routes) const;
+    void ResolveLabelOverlaps(std::vector<ArrowRoute>& routes) const;
+    void DrawArrowRoutes(ImDrawList* draw_list, ImVec2 origin,
+                         const std::vector<ArrowRoute>& routes);
+
+    // Metric resolution (by id or name) against the fetched table.
+    const MetricValue* ResolveMetric(const MemChartMetricRef& ref) const;
+    std::string        MetricLabel(const MemChartMetricRef& ref,
+                                   const std::string&       title_override) const;
+    std::string        MetricValueText(const MemChartMetricRef& ref,
+                                       bool include_unit = true,
+                                       const std::string& unit_override = "") const;
 
     void ShowMetricTooltip(ImVec2 hover_min, ImVec2 hover_max,
-                           MemChartMetric metric_id,
-                           bool show_description, bool show_raw_value);
-
+                           const MemChartMetricRef& ref, bool show_description,
+                           bool show_raw_value);
     void DrawTextWithTooltip(ImDrawList* draw_list, ImVec2 pos, uint32_t color,
-                             const char* text, MemChartMetric metric_id,
+                             const char* text, const MemChartMetricRef& ref,
                              bool show_description, bool show_raw_value);
 
-    // Get the display string for a metric.
-    const char* GetMetricText(MemChartMetric metric) const;
-
-    DataProvider& m_data_provider;
+    DataProvider&                     m_data_provider;
     std::shared_ptr<ComputeSelection> m_compute_selection;
-
-    std::array<std::string, MEMCHART_METRIC_COUNT> m_values;
 
     uint64_t m_client_id;
 
-    // Cache metric pointers after each fetch.
-    std::vector<const MetricValue*> m_metric_ptrs;
+    struct ChartColors
+    {
+        uint32_t bg         = 0;
+        uint32_t panel      = 0;
+        uint32_t panel_alt  = 0;
+        uint32_t border     = 0;
+        uint32_t border_hot = 0;
+        uint32_t text_main  = 0;
+        uint32_t text_dim   = 0;
+        uint32_t read       = 0;
+        uint32_t write      = 0;
+        uint32_t atomic     = 0;
+        uint32_t util       = 0;
+        uint32_t hit        = 0;
+        uint32_t stall      = 0;
+        uint32_t shadow     = 0;
+    };
+    ChartColors m_colors;
 
-    // Block positions computed at the start of Render().
-    ChartBlock m_instr_buff_block, m_instr_dispatch_block, m_active_cus_block;
-    ChartBlock m_lds_block, m_vector_l1_block, m_scalar_l1d_block, m_instr_l1_block;
-    ChartBlock m_l2_block;
-    ChartBlock m_xgmi_pcie_block, m_fabric_block, m_gmi_block;
-    ChartBlock m_hbm_block;
+    EventManager::SubscriptionToken m_theme_changed_token =
+        EventManager::InvalidSubscriptionToken;
+
+    MemChartLayout m_layout;
+
+    // Group boxes (title + rect) computed during layout, drawn behind blocks.
+    std::vector<MemChartGroupBox> m_group_boxes;
+
+    // Resolved after each fetch; keyed by the metric's full dotted id
+    // ("category.table.entry", e.g. "3.1.0").
+    std::unordered_map<std::string, const MetricValue*> m_ptr_by_metric_id;
+
+    // Every block (nested ones included) -> index of its top-level block in
+    // m_layout.blocks. Rebuilt on layout load, after the blocks are sorted.
+    std::unordered_map<const MemChartBlock*, size_t> m_top_level_index;
+
+    // What crosses each inter-column gap (between ascending distinct columns),
+    // ordered by how much room the gap needs. Precomputed on layout load so
+    // ComputeLayout avoids an arrow-by-gap scan every frame.
+    enum class GapKind : uint8_t
+    {
+        kEmpty,
+        kUnlabeledArrow,
+        kLabeledArrow,
+    };
+    std::vector<GapKind> m_gap_kinds;
+
+    // Cached geometry so the (fairly heavy) layout + arrow routing only runs when
+    // something that affects it changes - the panel width, the font, or the
+    // metric strings/colors (which flip m_layout_dirty). Drawing still happens
+    // every frame from these cached results.
+    std::vector<ArrowRoute> m_routes;
+    float                   m_cached_layout_width = -1.0f;
+    float                   m_cached_font_size    = -1.0f;
+    float                   m_canvas_w            = 0.0f;
+    float                   m_canvas_h            = 0.0f;
+    bool                    m_layout_dirty        = true;
 };
 
 }  // namespace View

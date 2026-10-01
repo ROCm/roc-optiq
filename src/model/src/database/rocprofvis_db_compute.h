@@ -7,6 +7,8 @@
 #include "rocprofvis_shared_types.h"
 #include "json.h"
 
+#include <unordered_set>
+
 namespace RocProfVis
 {
 namespace DataModel
@@ -39,11 +41,16 @@ namespace DataModel
         rocprofvis_dm_result_t GetComputeKernelSourceFiles(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params, rocprofvis_dm_string_t& query_out);
         rocprofvis_dm_result_t GetComputeSourceFileSourceLines(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params, rocprofvis_dm_string_t& query_out);
         rocprofvis_dm_result_t GetComputeKernelCodeObjects(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params, rocprofvis_dm_string_t& query_out);
-        rocprofvis_dm_result_t GetComputeKernelIsaToIsaDeps(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params, rocprofvis_dm_string_t& query_out);
-        rocprofvis_dm_result_t GetComputeKernelIsaLines(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params, rocprofvis_dm_string_t& query_out);
-        rocprofvis_dm_result_t GetComputeKernelIsaToSourceDeps(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params, rocprofvis_dm_string_t& query_out);
-        rocprofvis_dm_result_t GetComputeKernelSamplingStates(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params, rocprofvis_dm_string_t& query_out);
-        rocprofvis_dm_result_t GetComputeKernelSamplingStateReasonCounts(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params, rocprofvis_dm_string_t& query_out);
+        rocprofvis_dm_result_t GetComputeKernelSymbols(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params, rocprofvis_dm_string_t& query_out);
+        rocprofvis_dm_result_t GetComputeKernelInstructionLines(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params, rocprofvis_dm_string_t& query_out);
+        rocprofvis_dm_result_t GetComputeKernelInstructionSourceLines(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params, rocprofvis_dm_string_t& query_out);
+        rocprofvis_dm_result_t GetComputeKernelPcSampleStates(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params, rocprofvis_dm_string_t& query_out);
+        rocprofvis_dm_result_t GetComputeKernelPcSampleStallReasons(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params, rocprofvis_dm_string_t& query_out);
+        rocprofvis_dm_result_t GetComputeKernelPcSampleStallReasonLookups(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params, rocprofvis_dm_string_t& query_out);
+        rocprofvis_dm_result_t GetComputeKernelInstructionTypeLookups(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params, rocprofvis_dm_string_t& query_out);
+        rocprofvis_dm_result_t GetComputeKernelInstructionSamples(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params, rocprofvis_dm_string_t& query_out);
+        rocprofvis_dm_result_t GetComputeKernelInstructionSampleLookups(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params, rocprofvis_dm_string_t& query_out);
+        rocprofvis_dm_result_t GetComputeMetadata(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params, rocprofvis_dm_string_t& query_out);
     private:
         MetricIdFormat ClassifyMetricIdFormat(const std::string& s);
         std::string SanitizeMetricValueName(const std::string& name);
@@ -58,6 +65,7 @@ namespace DataModel
         uint64_t max = 0;
         double mean = 0;
         double median = 0;
+        bool has_isa_lines = false;
         std::string name;
         std::vector<uint64_t> durations;
     };
@@ -206,20 +214,26 @@ namespace DataModel
 
         ComputeQueryFactory m_query_factory;
         std::string m_db_version;
+        // True when the compute_workload table has the optional
+        // memory_chart_extdata column (detected once at metadata load).
+        bool m_has_memory_chart_extdata = false;
         std::unordered_map<uint32_t, KernelStats> m_kernel_stats;
         std::vector<MetricRow> m_metric_rows;
         std::mutex m_mutex;
         std::map<uint32_t, std::map<uint32_t, std::string>> m_metric_id_lookup;
         std::map<uint32_t, std::vector<std::pair<std::string, uint32_t>>> m_metric_uuid_lookup;
         std::map<uint32_t, uint32_t> m_kernel_workload_lookup;
+        std::unordered_set<uint32_t> m_workload_id_set;
         uint32_t m_last_matrix_workload_id;
         std::string m_last_top_kernels_query;
 
         static int CallbackGetComputeGeneric(void* data, int argc, sqlite3_stmt* stmt, char** azColName);
         static int CallbackGetComputeKernelWorkloadLookupTable(void* data, int argc, sqlite3_stmt* stmt, char** azColName);
+        static int CallbackStoreWorkloadIdSet(void* data, int argc, sqlite3_stmt* stmt, char** azColName);
         static int CallbackGetComputeRooflineCeiling(void* data, int argc, sqlite3_stmt* stmt, char** azColName);
         static int CallbackGetComputeKernelMetricsMatrix(void* data, int argc, sqlite3_stmt* stmt, char** azColName);
         static int CallbackParseMetadata(void* data, int argc, sqlite3_stmt* stmt, char** azColName);
+        static int CallbackDetectMemoryChartColumn(void* data, int argc, sqlite3_stmt* stmt, char** azColName);
         static int CallbackGetComputeWorkloadTopKernels(void* data, int argc, sqlite3_stmt* stmt, char** azColName);
         static int CallbackGetComputeMetricsData(void* data, int argc, sqlite3_stmt* stmt, char** azColName);
         static int CallbackStoreMetricsLookupTable(void* data, int argc, sqlite3_stmt* stmt, char** azColName);

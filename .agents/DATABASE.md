@@ -126,13 +126,20 @@ typedef rocprofvis_dm_handle_t rocprofvis_db_instance_t;
 rocprofvis_db_type_t       rocprofvis_db_identify_type(const char* filename);
 rocprofvis_dm_database_t   rocprofvis_db_open_database(const char* filename,
                                                        rocprofvis_db_type_t);
+rocprofvis_dm_database_t   rocprofvis_db_open_database_multi(const char** filenames,
+                                                             size_t count);
 rocprofvis_dm_size_t       rocprofvis_db_get_memory_footprint(rocprofvis_dm_database_t);
 ```
 
 `rocprofvis_db_type_t` values: `kAutodetect`, `kRocpdSqlite`,
-`kRocprofSqlite`, `kRocprofMultinodeSqlite`, `kComputeSqlite`. The
-`Detect` helper on `ProfileDatabase` sniffs the file (and any sibling
-`.db`s for multinode) and returns the right type.
+`kRocprofSqlite`, `kRocprofMultinodeSqlite`, `kComputeSqlite`,
+`kChromeTrace`, `kPerfettoTrace`, `kGoogleSqlite`. The `Detect` helper
+on `ProfileDatabase` sniffs the file (and any sibling `.db`s for
+multinode) and returns the right type. Chrome and Perfetto trace formats
+are experimental (loaded via their respective adapters).
+
+`rocprofvis_db_open_database_multi` opens multiple trace files as one
+combined database; used by the Compare workflow.
 
 ### 2.3 Future / async API (separate from controller futures)
 
@@ -210,7 +217,7 @@ shapes (`kRPVDMTableUseCaseEventTrackTable`, `kRPVDMTableUseCaseSampleTrackTable
 `rocprofvis_db_compute_use_case_enum_t` covers all the compute query
 shapes (workload list, top kernels, kernels list, metric definitions,
 roofline ceilings, kernel intensities, metric values, kernel metric
-matrix, etc.).
+matrix, and the schema-2.2 PC-sampling tables).
 
 ### 2.6 Trace lifecycle (data model)
 
@@ -587,6 +594,16 @@ databases:
   `CallbackGetComputeWorkloadTopKernels`,
   `CallbackGetComputeMetricsData`,
   `CallbackStoreMetricsLookupTable`.
+- PC-sampling queries use `CallbackGetComputeGeneric`. SQL aliases are
+  resolved through `ColumnNameToEnum`, and the resulting model `Table` stores
+  each column's `rocprofvis_db_compute_column_enum_t` plus raw string cells.
+  The controller later converts that temporary table into typed `PcSampling`
+  vectors.
+- `CallbackParseMetadata` reads only `schema_version` from
+  `compute_metadata` to select the query dialect. The full row
+  (`compute_version`, `git_version`, `schema_version`) is served to the
+  controller by the `kRPVComputeFetchMetadata` use case through
+  `CallbackGetComputeGeneric`; it is valid for every schema version.
 - Pivot construction: `BuildKernelMetricsMatrix(table, plan)` builds
   the kernel x metric pivot table from a JSON plan (`jt::Json`).
 - `ComputeWorkloadTopKernelsMeanAndMedian(table)` post-processes top
@@ -889,6 +906,13 @@ right node (via `FindRelevantPropertyNode` /
 `FindRelevantTopologyNode`) and writes the value into
 `m_properties[property_id]`.
 
+For a topology leaf associated with a track,
+`kRPVControllerTopologyNodeTrack` is a uint64 property containing the
+model track ID. The controller mirror resolves that ID through its
+indexed track collection while constructing the topology tree, then
+wires the typed thread/queue/stream/counter reverse link on the
+controller `Track`.
+
 `TopologyReferenceNode` is used when a downstream node (e.g. a
 stream's processor) is logically a reference into another part of
 the tree; its `GetPropertyAs*` overrides forward to the referenced
@@ -1010,6 +1034,10 @@ sniffs:
 - **`kComputeSqlite`** - rocprof-compute schema. Decoded by
   `ComputeDatabase`. No timeline / event slices; instead, workload +
   kernel + metric matrices.
+- **`kChromeTrace` / `kPerfettoTrace` / `kGoogleSqlite`** -
+  experimental Chrome JSON and Perfetto trace formats. Loaded via their
+  respective database adapters. These are the "New trace formats"
+  experimental feature listed in CHANGES.md.
 
 The list of recognized extensions is exercised at the application
 layer (`AppWindow` and `Project`). Adding a new format means adding a
@@ -1116,11 +1144,15 @@ The compute-side counterpart. One method per
 - `GetComputeKernelSourceFiles`
 - `GetComputeSourceFileSourceLines`
 - `GetComputeKernelCodeObjects`
-- `GetComputeKernelIsaToIsaDeps`
-- `GetComputeKernelIsaLines`
-- `GetComputeKernelIsaToSourceDeps`
-- `GetComputeKernelSamplingStates`
-- `GetComputeKernelSamplingStateReasonCounts`
+- `GetComputeKernelSymbols`
+- `GetComputeKernelInstructionLines`
+- `GetComputeKernelInstructionSourceLines`
+- `GetComputeKernelPcSampleStates`
+- `GetComputeKernelPcSampleStallReasons`
+- `GetComputeKernelPcSampleStallReasonLookups`
+- `GetComputeKernelInstructionTypeLookups`
+- `GetComputeKernelInstructionSamples`
+- `GetComputeKernelInstructionSampleLookups`
 
 All of them share the signature
 `rocprofvis_dm_result_t GetComputeX(rocprofvis_db_num_of_params_t num, rocprofvis_db_compute_params_t params, rocprofvis_dm_string_t& query)`
@@ -1149,23 +1181,42 @@ The gate is `1.2.0` for every method except
 reads `compute_workload_metric_view` unconditionally and that view does
 not exist earlier.
 
-The source / ISA / PC-sampling block (`GetComputeKernelSourceFiles`
-through `GetComputeKernelSamplingStateReasonCounts`) is **not**
-version-gated beyond that `1.2.0` floor. PC sampling is an optional
-capture feature, so its tables can be absent from a `1.3.0`+ database
-and present in an earlier one — a schema version tells you nothing
-about them.
+Metric-value queries distinguish invalid requests from unavailable data. A
+request that supplies a valid workload/kernel and at least one metric selector,
+but whose selectors do not resolve in that workload, builds a successful
+zero-row query. Mixed requests return the metrics that resolve. Omitting metric
+selectors entirely remains an invalid parameter error.
 
-Their absence is **not** guarded at query-build time. The
-`CheckTableExists("pc_sampling_states_per_line", ...)` probe in
-`CreateIndexes` only decides whether the PC-sampling indexes are
-created; nothing consults it when a query is built. Against a database
-that lacks those tables these use cases still return
-`kRocProfVisDmResultSuccess` with a valid-looking query, and the
-failure surfaces later as a SQLite "no such table" error
-(`kRocProfVisDmResultDbAccessFailed`) rather than
-`kRocProfVisDmResultNotSupported`. Closing that gap needs a cached
-table-presence probe the factory can read, not a version gate.
+The PC-sampling block targets compute schema 2.2 and every method is
+version-gated at `2.2.0`. It reads twelve tables:
+
+| Query group | Tables |
+|-------------|--------|
+| ISA | `compute_code_object_store`, `compute_kernel_symbol`, `compute_instruction_line` |
+| Source | `compute_source_file`, `compute_source_line`, `compute_instruction_source_line` |
+| Sampling metadata | `compute_pc_sample_state`, `compute_pc_sample_stall_reason`, `compute_pc_sample_stall_reason_lookup`, `compute_instruction_type_lookup`, `compute_instruction_sample`, `compute_instruction_sample_lookup` |
+
+Every kernel-scoped query is restricted by `compute_kernel_symbol.kernel_uuid`,
+either directly or through joins. `GetComputeKernelSourceFiles` returns only
+files reached by an instruction/source correlation. Source-line and
+correlation queries omit rows
+whose source line number is NULL or zero. Correlation rows also return the
+owning source-file UUID so the UI can navigate mappings across files.
+`GetComputeSourceFileSourceLines` is the only query keyed by
+`kRPVComputeParamSourceFileUuid`; the others use
+`kRPVComputeParamKernelId`.
+
+`CreateIndexes` probes `compute_pc_sample_state` before adding indexes for
+instruction-to-symbol, symbol-to-kernel, symbol-to-code-object,
+state-to-instruction, and stall-reason-to-state joins.
+
+`GetComputeKernelInstructionLines` selects the fields needed for the
+initial ISA display (formerly "Code View").
+
+`GetComputeWorkloadTopKernels` also returns `has_isa_lines`. For schema
+2.2 and newer it derives the value from kernel-symbol/instruction-line
+relationships; older schemas return zero. This metadata supports one-time
+ISA tab initialization without loading the ISA rows eagerly.
 
 Inner `IsVersionGreaterOrEqual("1.3.0")` / `"1.4.0"` tests inside a
 method still select between schema variants and are separate from the
@@ -1174,7 +1225,10 @@ gate.
 Internal helpers: `ClassifyMetricIdFormat(s)` decides whether a
 metric ID is `XY`, `XYZ`, or `Other`; `ParseMetricParam(...)`
 splits the `"category.table.entry:value_name"` selector into a set
-of metric IDs.
+of metric IDs. Read-only metric lookup paths use `find()` so a
+workload without metrics does not acquire a synthetic empty lookup
+entry; `operator[]` is reserved for populating the lookup while
+metadata is loaded.
 
 ### 8.4 `BuildTableQuery` flow
 
@@ -1532,6 +1586,7 @@ These supplement `CODING.md`. When the two disagree, `CODING.md` wins.
 | Read flow / stack / ext data for an event                         | `rocprofvis_db_read_event_property_async(database, type, event_id, future)`               |
 | Build a system table query                                        | `rocprofvis_db_build_table_query(...)` (then `rocprofvis_db_execute_query_async`)         |
 | Build a compute query                                             | `rocprofvis_db_build_compute_query(...)` (then `rocprofvis_db_execute_compute_query_async`)|
+| Build a PC-sampling query                                         | Use the matching `kRPVComputeFetchKernel*` / `kRPVComputeFetchSourceFileSourceLines` use case; do not hand-build SQL |
 | Export a query as CSV                                             | `rocprofvis_db_export_table_csv_async(database, query, file_path, future)`                |
 | Save a trimmed trace                                              | `rocprofvis_db_trim_save_async(database, start, end, new_path, future)`                   |
 | Drop / rebuild stale aux tables                                   | `rocprofvis_db_cleanup_async(database, future, rebuild)`                                  |
@@ -1619,9 +1674,13 @@ Two Catch2 binaries live in `src/model/src/tests/` (built when
   read-event-property + table-query flow plus cleanup and trim.
 - **`datamodel-compute-tests`** -
   `src/model/src/tests/rocprofvis_dm_compute_tests.cpp`. Runs against
-  `sample/rocprof_compute_23ed6f36.db`. Validates workload list, top
-  kernels, kernel + metric matrix, roofline ceilings, metric values,
-  and the pivot table flow.
+  `sample/rocprof_compute_23ed6f36.db`. Validates workload list,
+  compute metadata, top kernels, kernel + metric matrix, roofline
+  ceilings, metric values, and the pivot table flow.
+
+The compute model test currently does not cover the schema-2.2 PC-sampling
+query use cases. Changes to those queries should add a matching fixture and
+exercise both query construction and generic-table results.
 
 Both accept `--input_file <path>` (Catch2 + Clara). When you add a
 new public ABI surface or a new database adapter, add a matching
@@ -1689,7 +1748,8 @@ exploratory testing during development.
   `s_mem_activity_schema_params`, `s_level_schema_params`.
 - `rocprofvis_db_compute.h` -> `ComputeDatabase`,
   `ComputeQueryFactory`, `MetricIdFormat`, `KernelStats`,
-  `MetricSelector`, `MetricRow`, `KernelMetricsRow`.
+  `MetricSelector`, `MetricRow`, `KernelMetricsRow`, and the schema-2.2
+  PC-sampling query builders.
 - `rocprofvis_db_query_builder.h` -> `Builder` (string DSL), all
   `*_format` query structs, `table_view_schema_index_t`,
   `table_view_schema`.

@@ -48,7 +48,6 @@ EventSearch::EventSearch(DataProvider&                      dp,
 , m_options_changed(false)
 , m_advanced_active(false)
 , m_width(1000.0f)
-, m_text_input("\0")
 , m_time_range_changed_token(EventManager::InvalidSubscriptionToken)
 {
     m_time_range_changed_token = EventManager::GetInstance()->Subscribe(
@@ -75,6 +74,7 @@ EventSearch::Update()
     if(m_is_open && m_search_deferred && !m_data_provider.IsRequestPending(m_request_id))
     {
         Search();
+        m_search_deferred = false;
     }
     if(m_options_changed)
     {
@@ -379,16 +379,16 @@ EventSearch::Show()
 void
 EventSearch::Search()
 {
-    size_t input_length = strlen(m_text_input);
+    size_t input_length = m_text_input.size();
     if(input_length > 0)
     {
-        bool                     valid = false;
-        std::vector<std::string> terms;
+        bool valid = false;
+        m_terms.clear();
         if(m_text_input[0] == '"')
         {
             std::string term;
             bool        open_quote = true;
-            for(int i = 1; i < input_length; i++)
+            for(size_t i = 1; i < input_length; i++)
             {
                 if(m_text_input[i] == '"')
                 {
@@ -396,7 +396,7 @@ EventSearch::Search()
                     {
                         if(!term.empty())
                         {
-                            terms.emplace_back(term);
+                            m_terms.emplace_back(term);
                             term = "";
                         }
                         open_quote = false;
@@ -411,35 +411,18 @@ EventSearch::Search()
                     term += m_text_input[i];
                 }
             }
-            valid = !terms.empty() && !open_quote;
+            valid = !m_terms.empty() && !open_quote;
         }
         else
         {
-            terms.emplace_back(m_text_input);
+            m_terms.emplace_back(m_text_input);
             valid = true;
         }
         if(valid)
         {
-            const TimelineModel& timeline = m_data_provider.DataModel().GetTimeline();
-            double               start_ts;
-            double               end_ts;
-            if(!(m_respect_range_selection && m_timeline_selection &&
-                 m_timeline_selection->GetSelectedTimeRange(start_ts, end_ts)))
-            {
-                start_ts = timeline.GetStartTime();
-                end_ts   = timeline.GetEndTime();
-            }
-            m_data_provider.CancelRequest(m_request_id);
-            m_search_deferred = !m_data_provider.FetchTable(EventSearchRequestParams(
-                m_request_table_type,
-                { kRocProfVisDmOperationLaunch, kRocProfVisDmOperationDispatch,
-                  kRocProfVisDmOperationMemoryCopy, kRocProfVisDmOperationMemoryAllocate,
-                  kRocProfVisDmOperationLaunchSample },
-                start_ts, end_ts, "", m_include_substrings, m_include_category,
-                m_partial_matching, { terms }, 0, m_fetch_chunk_size, m_sort_column_index,
-                m_sort_order));
-            m_searched        = true;
-            m_should_open     = true;
+            RequestFetch();
+            m_searched    = true;
+            m_should_open = true;
         }
         else
         {
@@ -454,8 +437,9 @@ EventSearch::Clear()
 {
     m_data_provider.CancelRequest(m_request_id);
     m_table_model_mutable().ClearTable(m_table_type);
-    m_text_input[0] = '\0';
-    m_searched      = false;
+    m_terms.clear();
+    m_text_input.clear();
+    m_searched = false;
     if(!m_show_options)
     {
         m_should_close = true;
@@ -486,16 +470,10 @@ EventSearch::SetWidth(float width)
     m_width = std::max(0.0f, width);
 }
 
-char*
+std::string&
 EventSearch::TextInput()
 {
     return m_text_input;
-}
-
-size_t
-EventSearch::TextInputLimit() const
-{
-    return IM_ARRAYSIZE(m_text_input);
 }
 
 bool
@@ -541,6 +519,41 @@ EventSearch::ResetOptions()
     m_include_category        = DEFAULT_INCLUDE_CATEGORY;
     m_partial_matching        = DEFAULT_PARTIAL_MATCHING;
     m_respect_range_selection = DEFAULT_RESPECT_RANGE_SELECTION;
+}
+
+void
+EventSearch::UpdateFetchParams(std::shared_ptr<TableRequestParams>& params) const
+{
+    if(!params)
+    {
+        params = std::make_shared<EventSearchRequestParams>();
+    }
+    InfiniteScrollTable::UpdateFetchParams(params);
+    if(params)
+    {
+        std::shared_ptr<EventSearchRequestParams> search_params =
+            std::static_pointer_cast<EventSearchRequestParams>(params);
+        const TimelineModel& timeline = m_data_provider.DataModel().GetTimeline();
+        double               start_ts;
+        double               end_ts;
+        if(!(m_respect_range_selection && m_timeline_selection &&
+             m_timeline_selection->GetSelectedTimeRange(start_ts, end_ts)))
+        {
+            start_ts = timeline.GetStartTime();
+            end_ts   = timeline.GetEndTime();
+        }
+        search_params->m_op_types             = { kRocProfVisDmOperationLaunch,
+                                                  kRocProfVisDmOperationDispatch,
+                                                  kRocProfVisDmOperationMemoryCopy,
+                                                  kRocProfVisDmOperationMemoryAllocate,
+                                                  kRocProfVisDmOperationLaunchSample };
+        search_params->m_string_table_filters = m_terms;
+        search_params->m_include_substrings   = m_include_substrings;
+        search_params->m_include_category     = m_include_category;
+        search_params->m_partial_matching     = m_partial_matching;
+        params->m_start_ts                    = start_ts;
+        params->m_end_ts                      = end_ts;
+    }
 }
 
 void

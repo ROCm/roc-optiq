@@ -163,16 +163,15 @@ ProfilerSessionBase::GetExitCode() const
     return exit_code;
 }
 
-bool
+rocprofvis_result_t
 ProfilerSessionBase::Cancel()
 {
     if(m_profiler == nullptr)
     {
-        return false;
+        return kRocProfVisResultNotSupported;
     }
 
-    rocprofvis_result_t result = rocprofvis_profiler_cancel(m_profiler);
-    return (result == kRocProfVisResultSuccess);
+    return rocprofvis_profiler_cancel(m_profiler);
 }
 
 void

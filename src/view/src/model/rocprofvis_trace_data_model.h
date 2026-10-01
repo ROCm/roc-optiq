@@ -33,8 +33,8 @@ public:
     ~TraceDataModel() = default;
 
     // Sub-model access
-    const TopologyDataModel& GetTopology() const { return m_topology; }
-    TopologyDataModel&       GetTopology() { return m_topology; }
+    const TopologyTree& GetTopology() const { return m_topology; }
+    TopologyTree&       GetTopology() { return m_topology; }
 
     const TimelineModel& GetTimeline() const { return m_timeline; }
     TimelineModel&       GetTimeline() { return m_timeline; }
@@ -68,8 +68,8 @@ public:
     void Clear();
 
 private:
-    TopologyDataModel m_topology;
-    TimelineModel     m_timeline;
+    TopologyTree  m_topology;
+    TimelineModel m_timeline;
     TablesModel       m_tables;
     SummaryModel      m_summary;
     EventModel        m_events;

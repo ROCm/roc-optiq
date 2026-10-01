@@ -46,6 +46,7 @@ Graph::Insert(uint32_t lod, double timestamp, uint8_t level, Handle* object)
     auto&               segments        = m_lods[lod];
     double              start_timestamp = 0;
     double              end_timestamp   = 0;
+    bool                stored_in_segment = false;
 
     result = GetDouble(kRPVControllerGraphStartTimestamp, 0, &start_timestamp);
     result = (result == kRocProfVisResultSuccess)
@@ -71,13 +72,12 @@ Graph::Insert(uint32_t lod, double timestamp, uint8_t level, Handle* object)
 
         if(segments.GetSegments().find(segment_start) == segments.GetSegments().end())
         {
-            uint64_t track_type = 0;
-            result = m_track->GetUInt64(kRPVControllerTrackType, 0, &track_type);
-            ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+            rocprofvis_controller_track_type_t track_type =
+                m_track->GetTrackType();
 
             double                   segment_end = segment_start + segment_duration;
             std::unique_ptr<Segment> segment     = std::make_unique<Segment>(
-                (rocprofvis_controller_track_type_t) track_type, &segments);
+                track_type, &segments);
             segment->SetStartEndTimestamps(segment_start, segment_end);
             segment->SetMinTimestamp(timestamp);
             double max_timestamp = timestamp;
@@ -112,12 +112,19 @@ Graph::Insert(uint32_t lod, double timestamp, uint8_t level, Handle* object)
                 object->GetDouble(kRPVControllerSampleEndTimestamp, 0, &max_timestamp);
             }
             segment->SetMaxTimestamp(std::max(segment->GetMaxTimestamp(), max_timestamp));
-            segment->Insert(timestamp, level, object);
+            stored_in_segment = segment->Insert(timestamp, level, object);
         }
     }
     else
     {
         result = kRocProfVisResultOutOfRange;
+    }
+
+    if(!stored_in_segment && m_ctx && m_ctx->GetMemoryManager() &&
+       !m_ctx->GetMemoryManager()->IsShuttingDown())
+    {
+        // No segment kept the object...
+        m_ctx->GetMemoryManager()->Delete(object, &segments);
     }
 }
 
@@ -273,20 +280,17 @@ Graph::GenerateLOD(uint32_t lod_to_generate, double start_ts, double end_ts,
                    std::vector<Data>& entries, Future* future)
 {
     (void) future;
-    rocprofvis_result_t result = kRocProfVisResultUnknownError;
-    double              scale  = 1.0;
+    double scale = 1.0;
     for(uint32_t i = 0; i < lod_to_generate; i++)
     {
         scale *= kGraphScaleFactor;
     }
 
-    uint64_t track_type = 0;
-    result              = m_track->GetUInt64(kRPVControllerTrackType, 0, &track_type);
-    ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+    const rocprofvis_controller_track_type_t track_type =
+        m_track->GetTrackType();
 
     if(track_type == kRPVControllerTrackTypeEvents)
     {
-
         double   min_ts = start_ts;
         double   max_ts = start_ts + scale;
         uint64_t level  = 0;
@@ -296,21 +300,25 @@ Graph::GenerateLOD(uint32_t lod_to_generate, double start_ts, double end_ts,
 
         for(auto& data : entries)
         {
-            //if(future->IsCancelled())
-            //{
-            //    break;
-            //}
             rocprofvis_handle_t* handle = nullptr;
-            result                      = data.GetObject(&handle);
+            rocprofvis_result_t result = data.GetObject(&handle);
             ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+            if(result != kRocProfVisResultSuccess)
+            {
+                return result;
+            }
             EventRef eventRef((rocprofvis_controller_event_t*) handle);
-            if((result == kRocProfVisResultSuccess) && eventRef.IsValid())
+            if(eventRef.IsValid())
             {
                 Event* event = eventRef.Get();
                 ROCPROFVIS_ASSERT(event);
                 uint64_t event_level = 0;
                 result = event->GetUInt64(kRPVControllerEventLevel, 0, &event_level);
                 ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+                if(result != kRocProfVisResultSuccess)
+                {
+                    return result;
+                }
                 if(event_level != level)
                 {
                     GenerateLODEvent(events,lod_to_generate,static_cast<uint32_t>(level),event_min,event_max);
@@ -333,46 +341,47 @@ Graph::GenerateLOD(uint32_t lod_to_generate, double start_ts, double end_ts,
                         : result;
 
                 ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-
-                if(result == kRocProfVisResultSuccess)
+                if(result != kRocProfVisResultSuccess)
                 {
-                    ROCPROFVIS_ASSERT(level == event_level || level == UINT64_MAX);
+                    return result;
+                }
 
-                    if (event_start < end_ts && event_end >= start_ts)
+                ROCPROFVIS_ASSERT(level == event_level || level == UINT64_MAX);
+
+                if(event_start < end_ts && event_end >= start_ts)
+                {
+                    if((event_start >= min_ts && event_start <= max_ts) &&
+                       (event_end >= min_ts && event_end <= max_ts))
                     {
-                        if((event_start >= min_ts && event_start <= max_ts) &&
-                            (event_end >= min_ts && event_end <= max_ts))
+                        // Merge into current event
+                        events.push_back(event);
+                        level = level == UINT64_MAX ? event_level : level;
+                        event_min = std::min(event_min, event_start);
+                        event_max = std::max(event_max, event_end);
+                    }
+                    else
+                    {
+                        // Start a new event
+
+                        double sample_start = event_start;
+
+                        // Generate the stub event for any populated events.
+                        GenerateLODEvent(events,lod_to_generate,static_cast<uint32_t>(level),event_min,event_max);
+
+                        // Create a new event & increment the search
+                        while(max_ts < sample_start && min_ts < end_ts)
                         {
-                            // Merge into current event
-                            events.push_back(event);
-                            level = level == UINT64_MAX ? event_level : level;
-                            event_min = std::min(event_min, event_start);
-                            event_max = std::max(event_max, event_end);
+                            min_ts = std::min(max_ts, end_ts);
+                            max_ts = std::min(max_ts + scale, end_ts);
                         }
-                        else
-                        {
-                            // Start a new event
 
-                            double sample_start = event_start;
+                        events.clear();
+                        events.push_back(event);
 
-                            // Generate the stub event for any populated events.
-                            GenerateLODEvent(events,lod_to_generate,static_cast<uint32_t>(level),event_min,event_max);
+                        event_min = event_start;
+                        event_max = event_end;
 
-                            // Create a new event & increment the search
-                            while(max_ts < sample_start && min_ts < end_ts)
-                            {
-                                min_ts = std::min(max_ts, end_ts);
-                                max_ts = std::min(max_ts + scale, end_ts);
-                            }
-
-                            events.clear();
-                            events.push_back(event);
-
-                            event_min = event_start;
-                            event_max = event_end;
-
-                            level = event_level;
-                        }                  
+                        level = event_level;
                     }
                 }
             }
@@ -390,15 +399,15 @@ Graph::GenerateLOD(uint32_t lod_to_generate, double start_ts, double end_ts,
 
         for(auto& data : entries)
         {
-            //if(future->IsCancelled())
-            //{
-            //    break;
-            //}
             rocprofvis_handle_t* handle = nullptr;
-            result                      = data.GetObject(&handle);
+            rocprofvis_result_t result = data.GetObject(&handle);
             ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
+            if(result != kRocProfVisResultSuccess)
+            {
+                return result;
+            }
             SampleRef sampleRef((rocprofvis_controller_sample_t*) handle);
-            if((result == kRocProfVisResultSuccess) && sampleRef.IsValid())
+            if(sampleRef.IsValid())
             {
                 Sample* sample = sampleRef.Get();
                 ROCPROFVIS_ASSERT(sample);
@@ -412,42 +421,43 @@ Graph::GenerateLOD(uint32_t lod_to_generate, double start_ts, double end_ts,
                     ? sample->GetDouble(kRPVControllerSampleEndTimestamp, 0, &sample_next)
                     : result;
                 ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-                if(result == kRocProfVisResultSuccess)
+                if(result != kRocProfVisResultSuccess)
                 {
-                    if (sample_start < end_ts && sample_next > start_ts)
+                    return result;
+                }
+                if(sample_start < end_ts && sample_next > start_ts)
+                {
+                    if(sample_start >= min_ts && sample_start <= max_ts)
                     {
-                        if (sample_start >= min_ts && sample_start <= max_ts) 
-                        {
-                            // Merge into the current sample
-                            samples.push_back(sample);
-                        }
-                        else
-                        {
-                            // Generate the stub event for any populated events.
-                            
-                            if ((samples.size() > 0) &&
-                                (samples.front()->GetUInt64(kRPVControllerSampleType, 0, &type) == kRocProfVisResultSuccess) &&
-                                (samples.front()->GetDouble(kRPVControllerSampleTimestamp, 0,&sample_insert_ts) == kRocProfVisResultSuccess) &&
-                                (samples.back()->GetDouble(kRPVControllerSampleEndTimestamp, 0,&sample_last_ts) == kRocProfVisResultSuccess))
-                            {
-                                SampleLOD* new_sample = m_ctx->GetMemoryManager()->NewSampleLOD(
-                                    (rocprofvis_controller_primitive_type_t)type, 0,
-                                    sample_insert_ts, samples, &m_lods[lod_to_generate]);
-                                new_sample->SetDouble(
-                                    kRPVControllerSampleEndTimestamp, 0, sample_last_ts);
-                                Insert(lod_to_generate, sample_insert_ts, 0, new_sample);
-                            }
+                        // Merge into the current sample
+                        samples.push_back(sample);
+                    }
+                    else
+                    {
+                        // Generate the stub event for any populated events.
 
-                            // Create a new event & increment the search
-                            while (max_ts < sample_start && min_ts < end_ts)
-                            {
-                                min_ts = std::min(max_ts, end_ts);
-                                max_ts = std::min(max_ts + scale, end_ts);
-                            }
-
-                            samples.clear();
-                            samples.push_back(sample);
+                        if((samples.size() > 0) &&
+                           (samples.front()->GetUInt64(kRPVControllerSampleType, 0, &type) == kRocProfVisResultSuccess) &&
+                           (samples.front()->GetDouble(kRPVControllerSampleTimestamp, 0,&sample_insert_ts) == kRocProfVisResultSuccess) &&
+                           (samples.back()->GetDouble(kRPVControllerSampleEndTimestamp, 0,&sample_last_ts) == kRocProfVisResultSuccess))
+                        {
+                            SampleLOD* new_sample = m_ctx->GetMemoryManager()->NewSampleLOD(
+                                (rocprofvis_controller_primitive_type_t)type, 0,
+                                sample_insert_ts, samples, &m_lods[lod_to_generate]);
+                            new_sample->SetDouble(
+                                kRPVControllerSampleEndTimestamp, 0, sample_last_ts);
+                            Insert(lod_to_generate, sample_insert_ts, 0, new_sample);
                         }
+
+                        // Create a new event & increment the search
+                        while(max_ts < sample_start && min_ts < end_ts)
+                        {
+                            min_ts = std::min(max_ts, end_ts);
+                            max_ts = std::min(max_ts + scale, end_ts);
+                        }
+
+                        samples.clear();
+                        samples.push_back(sample);
                     }
                 }
             }
@@ -467,8 +477,7 @@ Graph::GenerateLOD(uint32_t lod_to_generate, double start_ts, double end_ts,
             
         }
     }
-    ROCPROFVIS_ASSERT(result == kRocProfVisResultSuccess);
-    return result;
+    return kRocProfVisResultSuccess;
 }
 
 struct FetchTrackSegmentArgs
@@ -479,7 +488,8 @@ struct FetchTrackSegmentArgs
 };
 
 rocprofvis_result_t
-Graph::GenerateLOD(uint32_t lod_to_generate, double start, double end, Future* future)
+Graph::GenerateLOD(uint32_t lod_to_generate, double start, double end, Future* future,
+                   uint64_t array_id)
 {
     rocprofvis_result_t result = kRocProfVisResultOutOfRange;
     if(lod_to_generate > 0)
@@ -487,11 +497,10 @@ Graph::GenerateLOD(uint32_t lod_to_generate, double start, double end, Future* f
         double min_ts = start;
         double max_ts = end;
 
-        if((m_track->GetDouble(kRPVControllerTrackMinTimestamp, 0, &min_ts) ==
-            kRocProfVisResultSuccess) &&
-           (m_track->GetDouble(kRPVControllerTrackMaxTimestamp, 0, &max_ts) ==
-            kRocProfVisResultSuccess))
+        if(m_track)
         {
+            min_ts = m_track->GetStartTimestamp();
+            max_ts = m_track->GetEndTimestamp();
             double scale = 1.0;
             for(uint32_t i = 0; i < lod_to_generate; i++)
             {
@@ -500,18 +509,23 @@ Graph::GenerateLOD(uint32_t lod_to_generate, double start, double end, Future* f
             double segment_duration = std::min(std::min(kScalableSegmentDuration * scale, max_ts - min_ts),
                          kMaxSegmentDuration);
 
-            auto it = m_lods.find(lod_to_generate);
-            if(it == m_lods.end())
+            std::map<uint32_t, SegmentTimeline>::iterator it = m_lods.end();
             {
-                uint32_t num_segments = static_cast<uint32_t>(ceil((max_ts - min_ts) / segment_duration));
-                uint64_t         num_items    = 0;
-                m_track->GetUInt64(kRPVControllerTrackNumberOfEntries, 0, &num_items);
                 std::lock_guard lock(m_mutex);
-                SegmentTimeline& segments = m_lods[lod_to_generate];
-                segments.SetContext(this);
-                segments.Init(min_ts, segment_duration, num_segments, num_items);    
+
                 it = m_lods.find(lod_to_generate);
+                if(it == m_lods.end())
+                {
+                    uint32_t num_segments = static_cast<uint32_t>(ceil((max_ts - min_ts) / segment_duration));
+                    uint64_t num_items = m_track->GetNumberOfEntries();
+                    SegmentTimeline& segments = m_lods[lod_to_generate];
+                    segments.SetContext(this);
+                    segments.Init(min_ts, segment_duration, num_segments, num_items);
+                    it = m_lods.find(lod_to_generate);
+                }
             }
+
+            it->second.AddActiveArray(array_id);
 
             start = std::max(start, min_ts);
             end   = std::min(end, max_ts);
@@ -566,8 +580,9 @@ Graph::GenerateLOD(uint32_t lod_to_generate, double start, double end, Future* f
                         FetchTrackSegmentArgs args;
                         args.m_index       = 0;
                     	args.m_lru_params.m_ctx      = (SystemTrace*)m_track->GetContext();
-                    	args.m_lru_params.m_lod      = 0;
-                        m_ctx->GetMemoryManager()->EnterArrayOwnership(&args.m_entries, kRocProfVisOwnerTypeTrack);
+                        args.m_lru_params.m_array_id = array_id;
+
+                        m_track->GetSegments()->AddActiveArray(array_id);
 
                         result = m_track->FetchSegments(
                             fetch_start, fetch_end, &args, future,
@@ -601,7 +616,8 @@ Graph::GenerateLOD(uint32_t lod_to_generate, double start, double end, Future* f
                             
                         }
                         m_cv.notify_all();
-                        ((SystemTrace*)m_track->GetContext())->GetMemoryManager()->CancelArrayOwnership(&args.m_entries, kRocProfVisOwnerTypeTrack);
+
+                        m_track->GetSegments()->RemoveActiveArray(array_id);
                     }
                 }
                 else
@@ -623,6 +639,8 @@ Graph::GenerateLOD(uint32_t lod_to_generate, double start, double end, Future* f
                     });
                 }
             }
+
+            it->second.RemoveActiveArray(array_id);
         }
     }
     return result;
@@ -654,9 +672,12 @@ rocprofvis_result_t
 Graph::Fetch(uint32_t pixels, double start, double end, Array& array, uint64_t& index, Future* future)
 {
     rocprofvis_result_t result = kRocProfVisResultUnknownError;
+    MemoryManager* mgr = m_ctx ? m_ctx->GetMemoryManager() : nullptr;
+
     // Zero out the array - we don't know how many entries we will add and we don't want
     // to report a non-zero value to the caller.
     array.GetVector().clear();
+
     if(m_track)
     {
         uint32_t lod      = 0;
@@ -670,7 +691,14 @@ Graph::Fetch(uint32_t pixels, double start, double end, Array& array, uint64_t& 
         // calculate data for LOD 1 even LOD 0 is requested
         lod = std::max(lod, (uint32_t)1);
 
-        result = GenerateLOD(lod, start, end, future);
+        if(mgr)
+        {
+            mgr->EnterArrayOwnership(array.GetArrayId(), kRocProfVisOwnerTypeGraph);
+        }
+
+        array.SetContext(m_ctx);
+
+        result = GenerateLOD(lod, start, end, future, array.GetArrayId());
 
         auto it = m_lods.find(lod);
         if((it != m_lods.end()) && (result == kRocProfVisResultSuccess))
@@ -679,9 +707,7 @@ Graph::Fetch(uint32_t pixels, double start, double end, Array& array, uint64_t& 
             args.m_array = &array;
             args.m_index = &index;
             args.m_lru_params.m_ctx = m_ctx;
-            args.m_lru_params.m_lod   = lod;
-            m_ctx->GetMemoryManager()->EnterArrayOwnership(&args.m_array->GetVector(), kRocProfVisOwnerTypeGraph);
-            array.SetContext(m_ctx);
+            args.m_lru_params.m_array_id = array.GetArrayId();
 
             result = it->second.FetchSegments(
                 start, end, &args, future,
@@ -710,6 +736,7 @@ Graph::GetType(void)
 rocprofvis_result_t
 Graph::GetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t* value)
 {
+    (void) index;
     rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
     if(value)
     {
@@ -752,10 +779,16 @@ Graph::GetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t* value
             }
             case kRPVControllerGraphNumEntries:
             {
-                *value = 0;
-                result = m_track ? m_track->GetUInt64(kRPVControllerTrackNumberOfEntries,
-                                                      index, value)
-                                 : kRocProfVisResultUnknownError;
+                if(m_track)
+                {
+                    *value = m_track->GetNumberOfEntries();
+                    result = kRocProfVisResultSuccess;
+                }
+                else
+                {
+                    *value = 0;
+                    result = kRocProfVisResultUnknownError;
+                }
                 break;
             }
             default:
@@ -770,35 +803,28 @@ Graph::GetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t* value
 rocprofvis_result_t
 Graph::GetDouble(rocprofvis_property_t property, uint64_t index, double* value)
 {
-    rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
-    if(value)
+    if(!value)
+        return kRocProfVisResultInvalidArgument;
+    if(!m_track)
+        return kRocProfVisResultUnknownError;
+
+    switch(property)
     {
-        switch(property)
+        case kRPVControllerGraphStartTimestamp:
         {
-            case kRPVControllerGraphStartTimestamp:
-            {
-                *value = 0;
-                result = m_track ? m_track->GetDouble(kRPVControllerTrackMinTimestamp,
-                                                      index, value)
-                                 : kRocProfVisResultUnknownError;
-                break;
-            }
-            case kRPVControllerGraphEndTimestamp:
-            {
-                *value = 0;
-                result = m_track ? m_track->GetDouble(kRPVControllerTrackMaxTimestamp,
-                                                      index, value)
-                                 : kRocProfVisResultUnknownError;
-                break;
-            }
-            default:
-            {
-                result = UnhandledProperty(property);
-                break;
-            }
+            *value = m_track->GetStartTimestamp();
+            return kRocProfVisResultSuccess;
+        }
+        case kRPVControllerGraphEndTimestamp:
+        {
+            *value = m_track->GetEndTimestamp();
+            return kRocProfVisResultSuccess;
+        }
+        default:
+        {
+            return UnhandledProperty(property);
         }
     }
-    return result;
 }
 rocprofvis_result_t
 Graph::GetObject(rocprofvis_property_t property, uint64_t index,

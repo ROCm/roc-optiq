@@ -28,15 +28,15 @@ public:
     void SetWidth(float width);
 
     // Getters...
-    char*  TextInput();
-    size_t TextInputLimit() const;
-    bool   FocusTextInput();
-    bool   Searched() const;
-    bool   Advanced() const;
-    float  Width() const;
+    std::string& TextInput();
+    bool         FocusTextInput();
+    bool         Searched() const;
+    bool         Advanced() const;
+    float        Width() const;
 
 private:
     void ResetOptions();
+    void UpdateFetchParams(std::shared_ptr<TableRequestParams>& params) const override;
     void FormatData() const override;
     void IndexColumns() override;
     void RowSelected(const ImGuiMouseButton mouse_button) override;
@@ -58,7 +58,8 @@ private:
     bool  m_advanced_active;
     float m_width;
 
-    char m_text_input[256];
+    std::string              m_text_input;
+    std::vector<std::string> m_terms;
 
     EventManager::SubscriptionToken m_time_range_changed_token;
 };

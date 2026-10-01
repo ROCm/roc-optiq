@@ -12,6 +12,7 @@
 #include "widgets/rocprofvis_widget.h"
 
 #include <algorithm>
+#include <string>
 
 // Layout constants
 constexpr float kCategorywidth            = 150.0f;
@@ -55,6 +56,10 @@ SettingsPanel::Show()
     m_usersettings_initial    = m_usersettings;
     m_usersettings_previous   = m_usersettings;
     m_pending_font_size_index = m_usersettings.display_settings.font_size_index;
+#ifdef ROCPROFVIS_ENABLE_AGENTIC_PROFILING
+    DiscardAssistantTokenEdits();
+    m_assistant_show_token = false;
+#endif
 }
 
 void
@@ -92,6 +97,12 @@ SettingsPanel::Render()
             {
                 m_category = Other;
             }
+#ifdef ROCPROFVIS_ENABLE_AGENTIC_PROFILING
+            if(ImGui::Selectable("Assistant", m_category == Assistant))
+            {
+                m_category = Assistant;
+            }
+#endif
             if(ImGui::Selectable("Hotkeys", m_category == Hotkeys))
             {
                 m_category = Hotkeys;
@@ -119,6 +130,13 @@ SettingsPanel::Render()
                     RenderOtherSettings();
                     break;
                 }
+#ifdef ROCPROFVIS_ENABLE_AGENTIC_PROFILING
+                case Assistant:
+                {
+                    RenderAssistantSettings();
+                    break;
+                }
+#endif
                 case Hotkeys:
                 {
                     RenderHotkeySettings();
@@ -149,6 +167,14 @@ SettingsPanel::Render()
                         ResetUnitOptions();
                         break;
                     }
+                    case Other: break;
+#ifdef ROCPROFVIS_ENABLE_AGENTIC_PROFILING
+                    case Assistant:
+                    {
+                        ResetAssistantOptions();
+                        break;
+                    }
+#endif
                     case Hotkeys:
                     {
                         ResetHotkeySettings();
@@ -175,6 +201,9 @@ SettingsPanel::Render()
                     m_settings.SaveHotkeySettings();
                     m_hotkeys_changed = false;
                 }
+#ifdef ROCPROFVIS_ENABLE_AGENTIC_PROFILING
+                ApplyAssistantTokenEdits();
+#endif
                 ImGui::CloseCurrentPopup();
             }
             ImGui::SameLine();
@@ -190,6 +219,9 @@ SettingsPanel::Render()
                 }
                 m_settings_changed = true;
                 m_should_open      = false;
+#ifdef ROCPROFVIS_ENABLE_AGENTIC_PROFILING
+                DiscardAssistantTokenEdits();
+#endif
                 ImGui::CloseCurrentPopup();
             }
             ImGui::EndPopup();

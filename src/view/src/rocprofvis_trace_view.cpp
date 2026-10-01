@@ -4,10 +4,17 @@
 #include "rocprofvis_trace_view.h"
 #include "icons/rocprovfis_icon_defines.h"
 #include "imgui.h"
+#ifdef ROCPROFVIS_ENABLE_AGENTIC_PROFILING
+#    include "agenticprofiling/rocprofvis_ai_assistant.h"
+#endif
+#ifdef ROCPROFVIS_ENABLE_SCRIPTING
+#    include "widgets/rocprofvis_script_editor.h"
+#endif
 #include "rocprofvis_click_manager.h"
 #include "rocprofvis_analysis_view.h"
 #include "rocprofvis_annotations.h"
 #include "rocprofvis_appwindow.h"
+#include "rocprofvis_compare_panes.h"
 #include "rocprofvis_event_manager.h"
 #include "rocprofvis_event_search.h"
 #include "rocprofvis_hotkey_manager.h"
@@ -18,12 +25,13 @@
 #include "rocprofvis_summary_view.h"
 #include "rocprofvis_timeline_selection.h"
 #include "rocprofvis_timeline_view.h"
-#include "rocprofvis_track_topology.h"
 #include "rocprofvis_utils.h"
 #include "spdlog/spdlog.h"
 #include "widgets/rocprofvis_dialog.h"
 #include "widgets/rocprofvis_gui_helpers.h"
 #include "widgets/rocprofvis_notification_manager.h"
+
+#include <cmath>
 
 namespace RocProfVis
 {
@@ -40,7 +48,6 @@ TraceView::TraceView()
 , m_show_minimap_popup(false)
 , m_timeline_selection(nullptr)
 , m_measurement(std::make_shared<MeasurementController>())
-, m_track_topology(nullptr)
 , m_popup_info({ false, "", "" })
 , m_tabselected_event_token(EventManager::InvalidSubscriptionToken)
 , m_event_selection_changed_event_token(EventManager::InvalidSubscriptionToken)
@@ -110,9 +117,13 @@ TraceView::TraceView()
             if(response_code != kRocProfVisResultSuccess)
             {
                 spdlog::error("Failed to load trace: {}", response_code);
-                m_popup_info.show_popup = true;
-                m_popup_info.title      = "Error";
-                m_popup_info.message    = "Failed to load trace: " + trace_path;
+                AppWindow*        app_window = AppWindow::GetInstance();
+                const std::string project_id = trace_path;
+                app_window->ShowMessageDialog(
+                    "Error", "Failed to load trace: " + trace_path,
+                    [app_window, project_id]() {
+                        app_window->CloseProjectTab(project_id);
+                    });
             }
         });
 
@@ -196,6 +207,7 @@ TraceView::~TraceView()
     m_data_provider.SetTraceLoadedCallback(nullptr);
     m_data_provider.SetSaveTraceCallback(nullptr);
     m_data_provider.SetCleanupDatabaseCallback(nullptr);
+    m_data_provider.SetRequestProgressUpdateCallback(nullptr);
 
     EventManager::GetInstance()->Unsubscribe(static_cast<int>(RocEvents::kTabSelected),
                                              m_tabselected_event_token);
@@ -228,7 +240,7 @@ TraceView::Update()
     if(!m_view_created)
     {
         CreateView();
-        m_view_created = true;
+        m_view_created = (m_timeline_view != nullptr);
     }
 
     auto new_state = m_data_provider.GetState();
@@ -252,9 +264,9 @@ TraceView::Update()
     {
         m_timeline_view->Update();
     }
-    if(m_track_topology)
+    if(m_sidebar_item && m_sidebar_item->m_item)
     {
-        m_track_topology->Update();
+        m_sidebar_item->m_item->Update();
     }
     if(m_analysis_item->m_item)
     {
@@ -272,6 +284,13 @@ TraceView::Update()
     {
         m_minimap->Update();
     }
+
+    if(m_popup_info.show_popup)
+    {
+        m_popup_info.show_popup = false;
+        AppWindow::GetInstance()->ShowMessageDialog(m_popup_info.title,
+                                                    m_popup_info.message);
+    }
 }
 
 void
@@ -281,22 +300,24 @@ TraceView::CreateView()
         std::make_shared<AnnotationsManager>(m_data_provider.GetTraceFilePath());
     m_measurement          = std::make_shared<MeasurementController>();
     m_timeline_selection    = std::make_shared<TimelineSelection>(m_data_provider);
-    m_track_topology        = std::make_shared<TrackTopology>(m_data_provider);
     m_timeline_view         = std::make_shared<TimelineView>(m_data_provider,
                                                              m_timeline_selection,
                                                              m_measurement, m_annotations);
-    m_timeline_view->SetTopologyOrder(&m_track_topology->GetTrackIdsInTreeOrder());
-    m_summary_view = std::make_shared<SummaryView>(m_data_provider, m_timeline_selection);
+    if(!IsCompareTrace(m_data_provider.DataModel()))
+    {
+        m_summary_view =
+            std::make_shared<SummaryView>(m_data_provider, m_timeline_selection);
+    }
     m_event_search = std::make_shared<EventSearch>(m_data_provider, m_timeline_selection);
     m_minimap               = std::make_shared<Minimap>(m_data_provider, m_timeline_view.get());
     auto m_histogram_widget = std::make_shared<RocCustomWidget>(
         [this]() { m_timeline_view->RenderHeader(); });
 
-    auto sidebar =
-        std::make_shared<SideBar>(m_track_topology, m_timeline_selection,
-                                  m_timeline_view->GetTracks(), m_data_provider);
-    auto analysis = std::make_shared<AnalysisView>(m_data_provider, m_track_topology,
+    auto sidebar = std::make_shared<SideBar>(
+        m_timeline_selection, m_timeline_view->GetTracks(), m_data_provider);
+    auto analysis = std::make_shared<AnalysisView>(m_data_provider,
                                                    m_timeline_selection, m_annotations);
+    m_analysis_view = analysis;
 
     m_sidebar_item            = LayoutItem::CreateFromWidget(sidebar);
     m_sidebar_item->m_visible = m_settings_manager.GetAppWindowSettings().show_sidebar;
@@ -343,6 +364,9 @@ TraceView::DestroyView()
     m_sidebar_item->m_item       = nullptr;
     m_horizontal_split_container = nullptr;
     m_analysis_item->m_item      = nullptr;
+    // Dropped with the rest: the analysis-tab accessors below go through this
+    // pointer, and a detached view would answer them from a dead layout.
+    m_analysis_view              = nullptr;
     m_view_created               = false;
 }
 
@@ -389,8 +413,13 @@ TraceView::Render()
             popup_style.PushPopupStyles();
             popup_style.PushTitlebarColors();
 
+            // Size on appearance only. Under multi-viewport this window can be
+            // dragged out into its own OS window, while GetResponsiveWindowSize()
+            // always clamps to the main viewport, so re-applying the size every
+            // frame would hold a detached window to the wrong monitor's bounds.
             ImGui::SetNextWindowSize(
-                GetResponsiveWindowSize(MINIMAP_POPUP_SIZE, MINIMAP_POPUP_MIN_SIZE));
+                GetResponsiveWindowSize(MINIMAP_POPUP_SIZE, MINIMAP_POPUP_MIN_SIZE),
+                ImGuiCond_Appearing);
             if(ImGui::Begin("Minimap", &m_show_minimap_popup,
                             ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse))
             {
@@ -399,13 +428,6 @@ TraceView::Render()
             ImGui::End();
             popup_style.PopStyles();
         }
-    }
-
-    if(m_popup_info.show_popup)
-    {
-        m_popup_info.show_popup = false;
-        AppWindow::GetInstance()->ShowMessageDialog(m_popup_info.title,
-                                                    m_popup_info.message);
     }
 
     if(m_summary_view)
@@ -689,6 +711,12 @@ TraceView::SetHistogramVisibility(bool visibility)
     }
 }
 
+bool
+TraceView::SummarySupported() const
+{
+    return m_summary_view != nullptr;
+}
+
 void
 TraceView::RenderToolbar()
 {
@@ -748,6 +776,10 @@ TraceView::RenderToolbar()
         {
             SetTooltipStyled("Show Minimap");
         }
+#ifdef ROCPROFVIS_ENABLE_AGENTIC_PROFILING
+        VerticalSeparator(&m_settings_manager);
+        AssistantPanel::RenderToolbarButton();
+#endif
         VerticalSeparator(&m_settings_manager);
     }
 
@@ -1122,7 +1154,7 @@ TraceView::RenderEventSearch()
         float reserved = options_width >= m_event_search->Width() ? 0.0f : options_width;
         std::pair<bool, bool> search_bar = InputTextWithClear(
             "search_bar", "Search: hipLaunchKernel or \"hip\"\"kernel\"",
-            m_event_search->TextInput(), m_event_search->TextInputLimit(),
+            m_event_search->TextInput(),
             settings.GetFontManager().GetFont(FontType::kIcon),
             settings.GetColor(Colors::kBgMain), settings.GetDefaultStyle(),
             m_event_search->Width() - reserved);

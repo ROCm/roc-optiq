@@ -8,20 +8,28 @@
 
 #include "imgui.h"
 
+#include "rocprofvis_appwindow.h"
 #include "rocprofvis_analysis_view.h"
 #include "rocprofvis_event_search.h"
 #include "rocprofvis_events_view.h"
 #include "rocprofvis_flame_track_item.h"
 #include "rocprofvis_measurement_controller.h"
 #include "rocprofvis_minimap.h"
+#include "rocprofvis_project.h"
+#include "rocprofvis_sidebar.h"
 #include "rocprofvis_summary_view.h"
 #include "rocprofvis_timeline_track_options.h"
 #include "rocprofvis_timeline_view.h"
+#include "rocprofvis_track_details.h"
 #include "rocprofvis_trace_view.h"
 #include "compute/rocprofvis_compute_kernel_details.h"
 #include "compute/rocprofvis_compute_kernel_metric_table.h"
 #include "compute/rocprofvis_compute_view.h"
+#include "compute/rocprofvis_compute_workload_view.h"
+#include "compute/rocprofvis_compute_comparison.h"
+#include "compute/rocprofvis_compute_table_view.h"
 #include "compute/rocprofvis_compute_selection.h"
+#include "model/compute/rocprofvis_compute_model_types.h"
 #include "widgets/rocprofvis_infinite_scroll_table.h"
 #include "widgets/rocprofvis_tab_container.h"
 
@@ -30,16 +38,104 @@ namespace RocProfVis
 namespace View
 {
 
+struct ProjectTestPeer
+{
+    const Project& v;
+    std::string OpenErrorMessage() const { return v.m_open_error_message; }
+};
+
 struct EventsViewTestPeer
 {
     const EventsView& v;
     size_t EventItemCount() const { return v.m_event_items.size(); }
+
+    // Args live on each cached event's EventInfo (populated async by the
+    // controller); info is null until it arrives, so every reach is guarded.
+    size_t ArgCount(size_t item_idx) const
+    {
+        size_t i = 0;
+        for(const auto& item : v.m_event_items)
+        {
+            if(i++ == item_idx)
+                return item.info ? item.info->args.size() : 0;
+        }
+        return 0;
+    }
+    std::string ArgName(size_t item_idx, size_t arg_idx) const
+    {
+        size_t i = 0;
+        for(const auto& item : v.m_event_items)
+        {
+            if(i++ == item_idx)
+            {
+                if(!item.info || arg_idx >= item.info->args.size()) return std::string();
+                return item.info->args[arg_idx].name;
+            }
+        }
+        return std::string();
+    }
 };
 
 struct AnalysisViewTestPeer
 {
     const AnalysisView& v;
-    EventsView* EventsViewPtr() const { return v.m_events_view.get(); }
+    EventsView*   EventsViewPtr() const { return v.m_events_view.get(); }
+    TrackDetails* TrackDetailsPtr() const { return v.m_track_details.get(); }
+};
+
+// TrackDetails holds one DetailItem per selected track (emplace_front on select,
+// removed/cleared on deselect). Tests confirm the RIGHT track populated by id,
+// not merely a non-empty pane.
+struct TrackDetailsTestPeer
+{
+    const TrackDetails& v;
+    size_t DetailCount() const { return v.m_track_details.size(); }
+    bool   HasTrack(uint64_t track_id) const
+    {
+        for(const auto& item : v.m_track_details)
+            if(item.track_id == track_id) return true;
+        return false;
+    }
+};
+
+// SideBar projects the model's TopologyTree into the rows it renders. The tree
+// is rebuilt from Update(), so tests poll LeafCount() rather than assuming it is
+// populated on the first frame.
+struct SideBarTestPeer
+{
+    const SideBar& v;
+
+    bool   HasTree() const { return v.m_sidebar_tree.root != nullptr; }
+    size_t LeafCount() const { return CountLeaves(v.m_sidebar_tree.root.get()); }
+
+    // Track ids of every leaf, including the repeats (a queue appears under its
+    // processor and again under each stream that dispatched to it).
+    std::vector<uint64_t> LeafTrackIds() const
+    {
+        std::vector<uint64_t> ids;
+        CollectLeaves(v.m_sidebar_tree.root.get(), ids);
+        return ids;
+    }
+
+private:
+    // A leaf is not necessarily childless: a stream row carries its inline
+    // processor subtree, so both walks recurse through leaves as well.
+    static size_t CountLeaves(const TreeNode* node)
+    {
+        if(node == nullptr) return 0;
+        size_t count = node->IsLeaf() ? 1 : 0;
+        for(const auto& child : node->children) count += CountLeaves(child.get());
+        return count;
+    }
+    static void CollectLeaves(const TreeNode* node, std::vector<uint64_t>& ids)
+    {
+        if(node == nullptr) return;
+        if(node->IsLeaf())
+        {
+            ids.push_back(static_cast<const LeafNode*>(node)->track_id);
+        }
+        for(const auto& child : node->children) CollectLeaves(child.get(), ids);
+    }
 };
 
 struct MinimapTestPeer
@@ -56,17 +152,107 @@ struct TabContainerTestPeer
     int  TabCount() const { return static_cast<int>(v.m_tabs.size()); }
 };
 
+struct AppWindowTestPeer
+{
+    AppWindow& v;
+    TabContainer* TabContainerPtr() const { return v.m_tab_container.get(); }
+};
+
 struct ComputeViewTestPeer
 {
     ComputeView& v;
     TabContainer*     TabContainerPtr() const { return v.m_tab_container.get(); }
     ComputeSelection* ComputeSelectionPtr() const { return v.m_compute_selection.get(); }
+    bool PopupPending() const { return v.m_error_dialog_state == ComputeView::ErrorDialogState::kPending; }
+    const std::string& PopupTitle() const { return v.m_popup_info.title; }
+    const std::string& PopupMessage() const { return v.m_popup_info.message; }
 };
 
 struct ComputeKernelDetailsViewTestPeer
 {
     ComputeKernelDetailsView& v;
     KernelMetricTable* KernelMetricTablePtr() const { return v.m_kernel_metric_table.get(); }
+};
+
+struct ComputeWorkloadViewTestPeer
+{
+    const ComputeWorkloadView& v;
+    const WorkloadInfo* WorkloadInfoPtr() const { return v.m_workload_info; }
+    size_t SystemInfoCols() const
+    {
+        return v.m_workload_info ? v.m_workload_info->system_info.size() : 0;
+    }
+    size_t SystemInfoRows() const
+    {
+        return (v.m_workload_info && !v.m_workload_info->system_info.empty())
+                   ? v.m_workload_info->system_info[0].size()
+                   : 0;
+    }
+    size_t ProfilingConfigCols() const
+    {
+        return v.m_workload_info ? v.m_workload_info->profiling_config.size() : 0;
+    }
+    size_t ProfilingConfigRows() const
+    {
+        return (v.m_workload_info && !v.m_workload_info->profiling_config.empty())
+                   ? v.m_workload_info->profiling_config[0].size()
+                   : 0;
+    }
+};
+
+struct ComputeComparisonViewTestPeer
+{
+    ComputeComparisonView& v;
+    ComparisonTable* ComparisonTablePtr() const { return v.m_comparison_table.get(); }
+};
+
+struct ComputeComparisonTableTestPeer
+{
+    ComparisonTable& t;
+    uint32_t TargetWorkloadId() const { return t.m_target_workload_id; }
+    uint32_t TargetKernelId() const { return t.m_target_kernel_id; }
+    size_t   CategoryCount() const { return t.m_categories.size(); }
+    // True while either the baseline or target metrics fetch is still pending.
+    bool RequestsPending() const
+    {
+        return t.m_data_provider.IsRequestPending(t.m_baseline_request_id) ||
+               t.m_data_provider.IsRequestPending(t.m_target_request_id);
+    }
+    // True once a built table has a "\xCE\x94 ##" column, i.e. deltas were
+    // actually computed (not just tables allocated).
+    bool HasDifferenceColumn() const
+    {
+        for(const auto& category : t.m_categories)
+        {
+            for(const auto& table : category.tables)
+            {
+                if(!table) continue;
+                for(const std::string& name : table->OrderedValueNames())
+                {
+                    if(name.rfind("\xCE\x94 ##", 0) == 0) return true;
+                }
+            }
+        }
+        return false;
+    }
+};
+
+struct ComputeTableViewTestPeer
+{
+    ComputeTableView& v;
+    bool   FetchPending() const { return v.m_fetch_pending; }
+    size_t TableWidgetCount() const { return v.m_table_widgets.size(); }
+    size_t PinnedCount() const { return v.m_pinned_metrics.size(); }
+    bool   IsPinned(const MetricId& id) const { return v.m_pinned_metrics.count(id) > 0; }
+    MetricId FirstPinned() const { return *v.m_pinned_metrics.begin(); }
+    // Test-only unpin for state restore (no public unpin exists). Skips the pin
+    // callback's source-table ChangePinState; safe only because callers refetch
+    // after, rebuilding pin state from m_pinned_metrics.
+    void Unpin(const MetricId& id)
+    {
+        v.m_pinned_metrics.erase(id);
+        v.m_pinned_metric_table.RefillTable(v.m_pinned_metrics);
+    }
 };
 
 // The kernel metric table's sort column/order are updated each frame from the
@@ -179,6 +365,11 @@ struct TimelineViewTestPeer
 
     float MaxYScroll() const { return v.m_content_max_y_scroll; }
 
+    // Topology sort order, derived from the model's TopologyTree. Must be a full
+    // permutation of the current tracks or ApplyTrackOrder rejects it.
+    std::vector<uint64_t> TopologyOrder() const { return v.BuildTopologyOrder(); }
+    size_t                TrackCount() const { return v.m_tracks ? v.m_tracks->size() : 0; }
+
     // Sidebar width, resized by dragging the "##MovePositionLineVert" splitter.
     float SidebarSize() const { return v.m_sidebar_size; }
     void  SetSidebarSize(float size) const { const_cast<TimelineView&>(v).m_sidebar_size = size; }
@@ -239,6 +430,11 @@ struct TraceViewTestPeer
         return dynamic_cast<AnalysisView*>(v.m_analysis_item->m_item.get());
     }
     TimelineView* TimelineViewPtr() const { return v.m_timeline_view.get(); }
+    SideBar*      SideBarPtr() const
+    {
+        if(v.m_sidebar_item == nullptr) return nullptr;
+        return dynamic_cast<SideBar*>(v.m_sidebar_item->m_item.get());
+    }
     MeasurementController* MeasurementControllerPtr() const { return v.m_measurement.get(); }
     Minimap*      MinimapPtr() const { return v.m_minimap.get(); }
     EventSearch*  EventSearchPtr() const { return v.m_event_search.get(); }

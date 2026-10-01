@@ -4,7 +4,7 @@
 #pragma once
 
 #include "rocprofvis_controller.h"
-#include <cstring>
+#include <string_view>
 
 namespace RocProfVis
 {
@@ -20,7 +20,11 @@ public:
 
     virtual rocprofvis_controller_object_type_t GetType(void) = 0;
 
-    // Handlers for getters.
+    // Generic property accessors — these form the public C API surface and must stay public
+    // on Handle so the API dispatch (rocprofvis_controller.cpp) can reach them via the base
+    // pointer. Overrides in derived classes should be declared PRIVATE: they are implementation
+    // details of the API bridge, not intended for use by internal C++ code. To access object
+    // state from within the codebase, add a dedicated typed getter/setter to the derived class.
     virtual rocprofvis_result_t GetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t* value);
     virtual rocprofvis_result_t GetDouble(rocprofvis_property_t property, uint64_t index, double* value);
     virtual rocprofvis_result_t GetObject(rocprofvis_property_t property, uint64_t index, rocprofvis_handle_t** value);
@@ -36,7 +40,7 @@ public:
     virtual void    IncreaseRetainCounter() {};
 
 protected:
-    rocprofvis_result_t GetStringImpl(char* value, uint32_t* length, char const* data, uint32_t data_len);
+    rocprofvis_result_t GetStdStringImpl(char* value, uint32_t* length, std::string_view data);
     rocprofvis_result_t UnhandledProperty(rocprofvis_property_t property);
 
     uint32_t m_first_prop_index;
@@ -45,5 +49,3 @@ protected:
 
 }
 }
-
-#define GetStdStringImpl(value, length, data) GetStringImpl(value, length, data.c_str(), static_cast<uint32_t>(data.length()))

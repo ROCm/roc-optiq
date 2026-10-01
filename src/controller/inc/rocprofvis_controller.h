@@ -20,6 +20,10 @@ extern "C"
 rocprofvis_controller_t* rocprofvis_controller_alloc(char const* const filename, char const* const config_path);
 
 /*
+* TEMPORARY (trace compare): remove this guard when the feature graduates.
+*/
+#ifdef ROCPROFVIS_ENABLE_TRACE_COMPARE
+/*
 * Create a system controller that loads several trace files as one combined trace.
 * Used by the Compare feature so two (or more) traces overlay on a single timeline; each
 * file's tracks are tagged with its source instance index (see kRPVControllerTrackInstanceId).
@@ -29,6 +33,7 @@ rocprofvis_controller_t* rocprofvis_controller_alloc(char const* const filename,
 */
 rocprofvis_controller_t* rocprofvis_controller_alloc_compare(char const* const* filenames,
                                                              uint64_t           count);
+#endif
 
 /*
 * Loads the file into the controller or returns an error.
@@ -291,14 +296,41 @@ void rocprofvis_controller_metrics_container_free(rocprofvis_controller_metrics_
 rocprofvis_result_t rocprofvis_controller_metric_fetch_async(rocprofvis_controller_t* controller, rocprofvis_controller_arguments_t* args, rocprofvis_controller_future_t* result, rocprofvis_controller_metrics_container_t* output);
 
 /*
-* Fetch PC sampling data for a specific kernel and source file asynchronously.
-* @param controller The controller
-* @param args Input arguments (workload id, kernel id, source file id)
-* @param result The future to wait on
-* @param output The PC sampling handle to write to
-* @returns kRocProfVisResultSuccess or an error code.
-*/
-rocprofvis_result_t rocprofvis_controller_pc_sampling_fetch_async(rocprofvis_controller_t* controller, rocprofvis_controller_arguments_t* args, rocprofvis_controller_future_t* result, rocprofvis_handle_t* output);
+ * Fetch the PC sampling code objects, kernel symbols, and ISA lines needed to show
+ * the ISA pane for a specific kernel asynchronously.
+ * @param controller The controller
+ * @param args Input arguments (kernel id)
+ * @param result The future to wait on
+ * @param output The PC sampling handle to write to
+ * @returns kRocProfVisResultSuccess or an error code.
+ */
+rocprofvis_result_t rocprofvis_controller_pc_sampling_fetch_isa_lines_async(rocprofvis_controller_t* controller, rocprofvis_controller_arguments_t* args, rocprofvis_controller_future_t* result, rocprofvis_handle_t* output);
+
+/*
+ * Fetch PC sampling source-file metadata, instruction/source mappings, and source
+ * lines for a specific kernel and source file asynchronously.
+ * @param controller The controller
+ * @param args Input arguments (kernel id, source file id; 0 selects the first file)
+ * @param result The future to wait on
+ * @param output The PC sampling handle to write to
+ * @returns kRocProfVisResultSuccess or an error code.
+ */
+rocprofvis_result_t rocprofvis_controller_pc_sampling_fetch_source_async(
+    rocprofvis_controller_t* controller, rocprofvis_controller_arguments_t* args,
+    rocprofvis_controller_future_t* result, rocprofvis_handle_t* output);
+
+/*
+ * Fetch PC sample states, stall reasons, and instruction sample metadata for a
+ * specific kernel asynchronously.
+ * @param controller The controller
+ * @param args Input arguments (kernel id)
+ * @param result The future to wait on
+ * @param output The PC sampling handle to write to
+ * @returns kRocProfVisResultSuccess or an error code.
+ */
+rocprofvis_result_t rocprofvis_controller_pc_sampling_fetch_stalls_async(
+    rocprofvis_controller_t* controller, rocprofvis_controller_arguments_t* args,
+    rocprofvis_controller_future_t* result, rocprofvis_handle_t* output);
 
 /*
 * Get indexed properties from an object.
@@ -501,11 +533,21 @@ rocprofvis_controller_track_t* rocprofvis_controller_track_alloc(void);
 rocprofvis_controller_graph_t* rocprofvis_controller_graph_alloc(rocprofvis_controller_track_t* track);
 
 /*
-* Allocates a table
-* @param track The owning track or nullptr
+* Allocates a private query table (SystemTable) that is not the UI
+* Event Table / Sample Table singleton. Tracks belong in fetch args,
+* not on the alloc.
 * @returns The table or nullptr
 */
-rocprofvis_controller_table_t* rocprofvis_controller_table_alloc(rocprofvis_controller_track_t* track);
+rocprofvis_controller_table_t* rocprofvis_controller_table_alloc(void);
+
+/*
+* Allocates a private search-results table, the shape event search and the
+* summary kernel-instance table use. Like table_alloc, this is not the
+* controller's own singleton, so fetching through it does not overwrite what
+* another reader is showing.
+* @returns The table or nullptr
+*/
+rocprofvis_controller_table_t* rocprofvis_controller_search_table_alloc(void);
 
 /*
 * Allocates a sample

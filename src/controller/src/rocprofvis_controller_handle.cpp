@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: MIT
 
 #include "rocprofvis_controller_handle.h"
-#include <cstring>
 #include <algorithm>
+#include <cstring>
 
 namespace RocProfVis
 {
@@ -15,21 +15,21 @@ Handle::Handle(uint32_t first_prop_index, uint32_t last_prop_index)
 , m_last_prop_index(last_prop_index)
 {}
 
-rocprofvis_result_t Handle::GetStringImpl(char* value, uint32_t* length, char const* data, uint32_t data_len)
+rocprofvis_result_t Handle::GetStdStringImpl(char* value, uint32_t* length, std::string_view data)
 {
-    rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
-    if(length && (!value || *length == 0))
+    if (!length)
+        return kRocProfVisResultInvalidArgument;
+
+    const auto data_len = static_cast<uint32_t>(data.size());
+    if (!value || *length == 0)
     {
         *length = data_len;
-        result  = kRocProfVisResultSuccess;
+        return kRocProfVisResultSuccess;
     }
-    else if(value && length && *length > 0)
-    {
-        const size_t copy = std::min(static_cast<size_t>(data_len), static_cast<size_t>(*length));
-        if (copy > 0 && data) std::memcpy(value, data, copy);
-        result = kRocProfVisResultSuccess;
-    }
-    return result;
+
+    const size_t copy = std::min(static_cast<size_t>(data_len), static_cast<size_t>(*length));
+    if (copy > 0) std::memcpy(value, data.data(), copy);
+    return kRocProfVisResultSuccess;
 }
 
 rocprofvis_result_t Handle::UnhandledProperty(rocprofvis_property_t property)

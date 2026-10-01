@@ -30,11 +30,14 @@ namespace Controller
 {
 
 MemoryManager::MemoryManager(uint64_t id)
-: m_lru_storage_memory_used(0)
+: m_id(id)
 , m_lru_mgmt_shutdown(false)
+, m_lru_configured(false)
 , m_mem_mgmt_initialized(false)
+, m_lru_storage_memory_used(0)
 , m_mem_block_size(1024)
-, m_id(id)
+, m_lru_size_limit(0)
+, m_trace_size(0)
 , m_trace_weight(1.0)
 { 
     //for(int type = 0; type < kRocProfVisNumberOfObjectTypes; type++)
@@ -202,11 +205,11 @@ MemoryManager::Configure(double weight)
 //}
 
 rocprofvis_result_t
-MemoryManager::CancelArrayOwnership(void* array_ptr, rocprofvis_owner_type_t type)
+MemoryManager::CancelArrayOwnership(uint64_t array_id, rocprofvis_owner_type_t type)
 {
 
     std::unique_lock lock(m_lru_inuse_mutex[type]);
-    auto             it = m_lru_inuse_lookup[type].find(array_ptr);
+    auto             it = m_lru_inuse_lookup[type].find(array_id);
     if(it != m_lru_inuse_lookup[type].end())
     {
         m_lru_inuse_lookup[type].erase(it);
@@ -222,13 +225,13 @@ MemoryManager::CancelArrayOwnership(void* array_ptr, rocprofvis_owner_type_t typ
 }
 
 rocprofvis_result_t
-MemoryManager::EnterArrayOwnership(void* array_ptr, rocprofvis_owner_type_t type)
+MemoryManager::EnterArrayOwnership(uint64_t array_id, rocprofvis_owner_type_t type)
 {
     std::unique_lock lock(m_lru_inuse_mutex[type]);
-    auto             it = m_lru_inuse_lookup[type].find(array_ptr);
+    auto             it = m_lru_inuse_lookup[type].find(array_id);
     if(it == m_lru_inuse_lookup[type].end())
     {
-        m_lru_inuse_lookup[type].insert(array_ptr);
+        m_lru_inuse_lookup[type].insert(array_id);
     }
 
     return kRocProfVisResultSuccess;
@@ -240,9 +243,9 @@ MemoryManager::CheckInUse(LRUMember* lru)
     bool is_in_use = false;
     {
         std::unique_lock lock(m_lru_inuse_mutex[kRocProfVisOwnerTypeTrack]);
-        for(auto ptr : lru->m_array_ptr)
+        for(auto array_id : lru->m_array_ids)
         {
-            auto inuse = m_lru_inuse_lookup[kRocProfVisOwnerTypeTrack].find(ptr);
+            auto inuse = m_lru_inuse_lookup[kRocProfVisOwnerTypeTrack].find(array_id);
             if(inuse != m_lru_inuse_lookup[kRocProfVisOwnerTypeTrack].end())
             {
                 is_in_use = true;
@@ -253,9 +256,9 @@ MemoryManager::CheckInUse(LRUMember* lru)
     if (!is_in_use)
     {
         std::unique_lock lock(m_lru_inuse_mutex[kRocProfVisOwnerTypeGraph]);
-        for(auto ptr : lru->m_array_ptr)
+        for(auto array_id : lru->m_array_ids)
         {
-            auto inuse = m_lru_inuse_lookup[kRocProfVisOwnerTypeGraph].find(ptr);
+            auto inuse = m_lru_inuse_lookup[kRocProfVisOwnerTypeGraph].find(array_id);
             if(inuse != m_lru_inuse_lookup[kRocProfVisOwnerTypeGraph].end())
             {
                 is_in_use = true;
@@ -298,10 +301,8 @@ MemoryManager::CheckInUse(LRUMember* lru)
 //}
 
 void
-MemoryManager::AddLRUReference(SegmentTimeline* owner, Segment* reference, uint32_t lod,
-                               void* array_ptr)
+MemoryManager::AddLRUReference(SegmentTimeline* owner, Segment* reference, uint64_t array_id)
 {
-    (void) lod;
     std::unique_lock lock(m_lru_mutex);
     auto& member_ptr = m_lru_array[owner];
     if(!member_ptr)
@@ -319,7 +320,7 @@ MemoryManager::AddLRUReference(SegmentTimeline* owner, Segment* reference, uint3
         lru = std::make_unique<LRUMember>();
     }
 
-    lru->m_array_ptr.insert(array_ptr);
+    lru->m_array_ids.insert(array_id);
 
 }
 
@@ -327,9 +328,13 @@ void
 MemoryManager::LockTimelines(std::vector<SegmentTimeline*>& locked, std::vector<SegmentTimeline*>& failed_to_lock)
 {
     std::set<SegmentTimeline*> timelines;
-    for(auto& pair : m_lru_array)
     {
-        timelines.insert(pair.first);
+        std::unique_lock lock(m_lru_mutex);
+        for(std::pair<SegmentTimeline* const, std::unique_ptr<LRUOwnerMember>>& pair :
+            m_lru_array)
+        {
+            timelines.insert(pair.first);
+        }
     }
 
     for(auto* timeline : timelines)
@@ -387,12 +392,12 @@ MemoryManager::ManageLRU()
                     std::unique_lock lock(m_lru_mutex);
                     for(auto& [handle, member_ptr] : m_lru_array)
                         sorted_entries.emplace_back(handle, member_ptr.get());
-                }
 
-                std::sort(sorted_entries.begin(), sorted_entries.end(),
-                          [](const auto& a, const auto& b) {
-                              return a.second->m_timestamp < b.second->m_timestamp;
-                          });
+                    std::sort(sorted_entries.begin(), sorted_entries.end(),
+                              [](const auto& a, const auto& b) {
+                                  return a.second->m_timestamp < b.second->m_timestamp;
+                              });
+                }
 
                 uint64_t ts = std::chrono::time_point_cast<std::chrono::nanoseconds>(
                         std::chrono::system_clock::now())
@@ -400,9 +405,7 @@ MemoryManager::ManageLRU()
                         .count();
                 for(auto& [owner, member] : sorted_entries)
                 {
-                    if(couldnt_take_lock.size() > 0 &&
-                       std::find(couldnt_take_lock.begin(), couldnt_take_lock.end(),
-                                 owner) != couldnt_take_lock.end())
+                    if(std::find(locked.begin(), locked.end(), owner) == locked.end())
                     {
                         continue;
                     }
@@ -515,8 +518,6 @@ static_assert(std::is_base_of<Handle, SampleLOD>::value,
               "Pooled SampleLOD must derive from Handle");
 
 void MemoryManager::CleanUp() {
-    std::lock_guard<std::mutex> lock(m_pool_mutex);
-
     for(auto& [owner, member_ptr] : m_lru_array)
     {
         for(auto& [segment, lru] : member_ptr.get()->m_lru_segment_array)
@@ -524,6 +525,8 @@ void MemoryManager::CleanUp() {
             owner->Remove(segment);
         }
     }
+
+    std::lock_guard<std::mutex> lock(m_pool_mutex);
     
     for(auto it = m_object_pools.begin(); it != m_object_pools.end(); ++it)
     {
@@ -597,6 +600,8 @@ void
 MemoryManager::Delete(Handle* handle, SegmentTimeline* owner)
 {
     if(!handle->IsDeletable()) return;
+
+    std::lock_guard<std::mutex> lock(m_pool_mutex);
 
     uint64_t pool_idetifier = uint64_t(owner);
 

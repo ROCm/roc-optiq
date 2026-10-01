@@ -17,9 +17,11 @@
 #include "rocprofvis_event_search.h"
 #include "rocprofvis_summary_view.h"
 #include "icons/rocprovfis_icon_defines.h"
+#include <algorithm>
 #include <string>
 #include <filesystem>
 #include <fstream>
+#include <unordered_set>
 #include "rocprofvis_settings_manager.h"
 #include "rocprofvis_utils.h"
 #include "rocprofvis_data_provider.h"
@@ -63,6 +65,16 @@ namespace
         }
         return cv;
     }
+
+// SetRef(ImGuiWindow*) strcpy's the window's full path into the fixed
+// 256-byte ImGuiTestContext::RefStr. Nested child windows exceed that, and
+// glibc's fortified strcpy aborts the process. Referencing by ID resolves the
+// same window without copying its name.
+void SetRefWindow(ImGuiTestContext* ctx, ImGuiWindow* window)
+{
+    IM_CHECK(window != nullptr);
+    ctx->SetRef(ImGuiTestRef(window->ID));
+}
 
 // Flame-graph event bars are raw draw_list rects registered with the Test
 // Engine via IMGUI_TEST_ENGINE_ITEM_ADD under the track's "FV" child window.
@@ -161,6 +173,104 @@ bool TwoStackedEventScreenCenters(ImGuiTestContext* ctx, unsigned int flame_wind
     return false;
 }
 
+// Opens the "Track Options" gear menu for the flame track whose FV child window
+// is fv_id and returns the submenu window (nullptr on failure). Pass the fv_id
+// of the track the caller asserts on, so the menu and the assertion target the
+// same track. Menu entries are matched by DebugLabel substring: their labels
+// carry icon-padding spaces and their ids change every run. Caller must
+// PopupCloseAll().
+ImGuiWindow* OpenTrackGearMenu(ImGuiTestContext* ctx, unsigned int fv_id)
+{
+    if(fv_id == 0)
+    {
+        ctx->LogWarning("SKIP: no rendered flame track to open a gear menu on");
+        return nullptr;
+    }
+    ImGuiWindow* fv = ImGui::FindWindowByID(fv_id);
+    if(fv == nullptr || fv->ParentWindow == nullptr) return nullptr;
+
+    // A track's FV and MetaData Area windows are the two children of one
+    // per-track container, so the sibling of this FV is the right meta window.
+    ImGuiWindow* container = fv->ParentWindow;
+    ImGuiWindow* meta      = nullptr;
+    for(ImGuiWindow* w : ImGui::GetCurrentContext()->Windows)
+    {
+        if(w->WasActive && w->ParentWindow == container &&
+           strstr(w->Name, "MetaData Area"))
+        {
+            meta = w;
+            break;
+        }
+    }
+    if(meta == nullptr)
+    {
+        ctx->LogWarning("SKIP: flame track has no MetaData Area window");
+        return nullptr;
+    }
+
+    ctx->MouseMoveToPos(ImVec2(meta->Pos.x + meta->Size.x * 0.5f,
+                               meta->Pos.y + meta->Size.y * 0.5f));
+    ctx->MouseClick(ImGuiMouseButton_Right);
+    ctx->Yield(3);
+
+    ImGuiTestItemList items;
+    ctx->GatherItems(&items, "//$FOCUSED");
+    ImGuiID gear_id = 0;
+    for(int i = 0; i < items.GetSize(); i++)
+        if(strstr(items[i]->DebugLabel, "Track Options")) { gear_id = items[i]->ID; break; }
+    if(gear_id == 0) return nullptr;
+
+    ctx->ItemClick(gear_id);
+    ctx->Yield(3);
+
+    for(ImGuiWindow* w : ImGui::GetCurrentContext()->Windows)
+        if(w->WasActive && strstr(w->Name, "Track Options###Menu")) return w;
+    return nullptr;
+}
+
+// Clicks a control in an open gear submenu whose label contains `label`.
+// Returns false if no gathered item matches.
+bool ClickGearMenuItem(ImGuiTestContext* ctx, ImGuiWindow* menu, const char* label)
+{
+    SetRefWindow(ctx, menu);
+    ImGuiTestItemList items;
+    ctx->GatherItems(&items, "");
+    for(int i = 0; i < items.GetSize(); i++)
+        if(strstr(items[i]->DebugLabel, label))
+        {
+            ctx->ItemClick(items[i]->ID);
+            return true;
+        }
+    return false;
+}
+
+// The track sidebar renders into a child window whose name embeds the split
+// container's address, so there is no stable ref to it. Scan the active windows.
+// Other views build left/right splits too, so a match only counts once the
+// sidebar's own "Project" tree node is found inside it.
+ImGuiWindow* FindSidebarWindow(ImGuiTestContext* ctx)
+{
+    for(ImGuiWindow* w : ImGui::GetCurrentContext()->Windows)
+    {
+        if(!w->WasActive || strstr(w->Name, "LeftColumn") == nullptr) continue;
+        if(ctx->ItemExists(ImHashStr("Project", 0, w->ID))) return w;
+    }
+    return nullptr;
+}
+
+// Resolve a track's sidebar row button by id, not by DebugLabel. ImGui only
+// records a label for items that pass clipping, and the sidebar scrolls, so a row
+// below the fold gathers with an empty label. The button's id is the track name
+// hashed over the row's id scope, stable at any scroll position. ItemClick scrolls
+// the row into view on its own.
+ImGuiID TrackButtonId(ImGuiTestItemList& items, const std::string& name)
+{
+    for(int i = 0; i < items.GetSize(); i++)
+        if(items[i]->ID == ImHashStr(name.c_str(), 0, items[i]->ParentID))
+            return items[i]->ID;
+    return 0;
+}
+
 // Restores show_summary when it goes out of scope. The Summary tests set it
 // true to drive their load path; without this, that state would leak into
 // later tests and cover the timeline.
@@ -174,6 +284,42 @@ struct ShowSummaryGuard
     ~ShowSummaryGuard()
     {
         SettingsManager::GetInstance().GetAppWindowSettings().show_summary = prev;
+    }
+};
+
+// Restores the tab set and active tab that existed when constructed, so a test
+// that opens extra dbs (sys_shared_db_open_dedups_and_switches) doesn't leave
+// stray tabs and a changed current project for the next test. The kTabClosed
+// event that frees the project is queued, so the destructor yields to drain it.
+struct TabStateGuard
+{
+    ImGuiTestContext* ctx;
+    TabContainer*     tc;
+    std::vector<std::string> start_ids;
+    std::string              start_active_id;
+
+    TabStateGuard(ImGuiTestContext* c, TabContainer* t) : ctx(c), tc(t)
+    {
+        if(!tc) return;
+        for(const TabItem* tab : tc->GetTabs()) start_ids.push_back(tab->m_id);
+        const TabItem* active = tc->GetActiveTab();
+        if(active) start_active_id = active->m_id;
+    }
+
+    ~TabStateGuard()
+    {
+        if(!tc) return;
+        std::vector<std::string> to_close;
+        for(const TabItem* tab : tc->GetTabs())
+        {
+            bool was_present = false;
+            for(const std::string& id : start_ids)
+                if(id == tab->m_id) { was_present = true; break; }
+            if(!was_present) to_close.push_back(tab->m_id);
+        }
+        for(const std::string& id : to_close) tc->RemoveTab(id);
+        if(!start_active_id.empty()) tc->SetActiveTab(start_active_id);
+        if(ctx) ctx->Yield(3);
     }
 };
 }  // namespace
@@ -481,6 +627,91 @@ void RegisterAppTests(ImGuiTestEngine* e)
         IM_CHECK(TabContainerTestPeer{*tc}.ActiveTabIndex() == target_idx);
     };
 
+    t = IM_REGISTER_TEST(e, "app", "compute_view_empty_model_queues_error_dialog");
+    t->TestFunc = [](ImGuiTestContext*)
+    {
+        ComputeView empty_view;
+        empty_view.CreateView();
+
+        ComputeViewTestPeer peer{empty_view};
+        IM_CHECK(peer.TabContainerPtr() == nullptr);
+        IM_CHECK(peer.ComputeSelectionPtr() == nullptr);
+        IM_CHECK(peer.PopupPending());
+        IM_CHECK(peer.PopupTitle() == "Invalid Compute Database");
+        IM_CHECK(peer.PopupMessage().find("no compute workloads") != std::string::npos);
+    };
+
+    t = IM_REGISTER_TEST(e, "app", "compute_view_workload_without_kernel_queues_dialog");
+    t->TestFunc = [](ImGuiTestContext*)
+    {
+        ComputeView empty_view;
+        WorkloadInfo workload{};
+        workload.id   = 1;
+        workload.name = "Empty workload";
+        empty_view.GetDataProvider()->ComputeModel().AddWorkload(workload);
+        empty_view.CreateView();
+
+        ComputeViewTestPeer peer{empty_view};
+        IM_CHECK(peer.TabContainerPtr() == nullptr);
+        IM_CHECK(peer.ComputeSelectionPtr() == nullptr);
+        IM_CHECK(peer.PopupPending());
+        IM_CHECK(peer.PopupTitle() == "Invalid Compute Database");
+        IM_CHECK(peer.PopupMessage().find("none of them contains kernel data") !=
+                 std::string::npos);
+    };
+
+    t = IM_REGISTER_TEST(e, "app", "compute_workload_details_populates");
+    t->TestFunc = [](ImGuiTestContext* ctx)
+    {
+        ComputeView* cv = GetComputeViewOrSkip(ctx);
+        if (!cv) return;
+        TabContainer* tc = ComputeViewTestPeer{*cv}.TabContainerPtr();
+        if (tc == nullptr)
+        {
+            ctx->LogWarning("SKIP: compute view has no tab container");
+            return;
+        }
+
+        const std::vector<const TabItem*> tabs = tc->GetTabs();
+        ComputeWorkloadView* wv = nullptr;
+        std::string          wv_label;
+        for (const TabItem* tab : tabs)
+        {
+            if (tab->m_id == ComputeWorkloadView::TAB_ID)
+            {
+                wv       = dynamic_cast<ComputeWorkloadView*>(tab->m_widget.get());
+                wv_label = tab->m_label;
+                break;
+            }
+        }
+        if (wv == nullptr)
+        {
+            ctx->LogWarning("SKIP: no Profile Details tab in this build");
+            return;
+        }
+        IM_CHECK(wv_label == "Profile Details");
+
+        // Trace-level metadata is loaded with the trace, independent of the workload.
+        const AnalysisInfo& analysis_info =
+            cv->GetDataProvider()->ComputeModel().GetAnalysisInfo();
+        IM_CHECK(!analysis_info.profiler_version.empty());
+        IM_CHECK(!analysis_info.schema_version.empty());
+
+        // m_workload_info populates in Render(), so the tab must be active first.
+        ctx->ItemClick(("//Main Window/**/" + wv_label).c_str());
+        ctx->Yield(3);
+
+        ComputeWorkloadViewTestPeer peer{*wv};
+        IM_CHECK(peer.WorkloadInfoPtr() != nullptr);
+        if (peer.WorkloadInfoPtr() == nullptr) return;
+
+        // Both panels fill only when the render gate passes: 2 cols, non-empty.
+        IM_CHECK(peer.SystemInfoCols() == 2);
+        IM_CHECK(peer.SystemInfoRows() > 0);
+        IM_CHECK(peer.ProfilingConfigCols() == 2);
+        IM_CHECK(peer.ProfilingConfigRows() > 0);
+    };
+
     t = IM_REGISTER_TEST(e, "app", "compute_workload_auto_selected");
     t->TestFunc = [](ImGuiTestContext* ctx)
     {
@@ -496,6 +727,279 @@ void RegisterAppTests(ImGuiTestEngine* e)
         ctx->Yield(3);
         IM_CHECK(sel->GetSelectedWorkload() != ComputeSelection::INVALID_SELECTION_ID);
         IM_CHECK(sel->GetSelectedKernel() != ComputeSelection::INVALID_SELECTION_ID);
+    };
+
+    t = IM_REGISTER_TEST(e, "app", "compute_comparison_target_kernel_computes_delta");
+    t->TestFunc = [](ImGuiTestContext* ctx)
+    {
+        ComputeView* cv = GetComputeViewOrSkip(ctx);
+        if (!cv) return;
+        TabContainer* tc = ComputeViewTestPeer{*cv}.TabContainerPtr();
+        if (tc == nullptr)
+        {
+            ctx->LogWarning("SKIP: compute view has no tab container");
+            return;
+        }
+
+        const std::vector<const TabItem*> tabs = tc->GetTabs();
+        ComparisonTable* comp = nullptr;
+        std::string            comp_label;
+        for (const TabItem* tab : tabs)
+        {
+            if (tab->m_id == ComputeComparisonView::TAB_ID)
+            {
+                ComputeComparisonView* view =
+                    dynamic_cast<ComputeComparisonView*>(tab->m_widget.get());
+                if (view)
+                {
+                    ComputeComparisonViewTestPeer peer{*view};
+                    comp = peer.ComparisonTablePtr();
+                    comp_label = tab->m_label;
+                    break;
+                }               
+            }
+        }
+        if (comp == nullptr)
+        {
+            ctx->LogWarning("SKIP: no Baseline Comparison tab in this build");
+            return;
+        }
+
+        ComputeSelection* sel = ComputeViewTestPeer{*cv}.ComputeSelectionPtr();
+        IM_CHECK(sel != nullptr);
+        if (sel == nullptr) return;
+        const uint32_t workload = sel->GetSelectedWorkload();
+        const uint32_t baseline_kernel = sel->GetSelectedKernel();
+        IM_CHECK(workload != ComputeSelection::INVALID_SELECTION_ID);
+        IM_CHECK(baseline_kernel != ComputeSelection::INVALID_SELECTION_ID);
+
+        ctx->ItemClick(("//Main Window/**/" + comp_label).c_str());
+        ctx->Yield(3);
+
+        ComputeComparisonTableTestPeer peer{*comp};
+
+        // The toolbar combos live in a nested child window the "//Main Window/**/"
+        // wildcard can't reach. Find it by name fragment, click relative to it, and
+        // re-find after each Yield (window pointers don't survive a rebuild).
+        auto set_ref_to_toolbar = [&]() -> bool
+        {
+            ImGuiContext* g = ImGui::GetCurrentContext();
+            for (ImGuiWindow* w : g->Windows)
+            {
+                if (w->WasActive && strstr(w->Name, "TabContainer") &&
+                    strstr(w->Name, "/compare_target_toolbar_"))
+                {
+                    SetRefWindow(ctx, w);
+                    return true;
+                }
+            }
+            return false;
+        };
+
+        // The tab opens on the Roofline view; the metric tables sit behind the
+        // Metrics toggle.
+        IM_CHECK(set_ref_to_toolbar());
+        ctx->ItemClick("Metrics");
+        ctx->Yield(2);
+
+        // Pick the target workload first; it enables the kernel combo.
+        IM_CHECK(set_ref_to_toolbar());
+        ctx->ItemClick("##TargetWorkloads");
+        ctx->Yield(1);
+        {
+            ImGuiTestItemList items;
+            ctx->GatherItems(&items, "//$FOCUSED");
+            IM_CHECK(items.GetSize() >= 1);
+            if (items.GetSize() < 1) return;
+            ctx->ItemClick(items[0]->ID);
+        }
+        ctx->Yield(2);
+
+        // Choose a kernel from the target workload, not the baseline workload.
+        const uint32_t target_workload = peer.TargetWorkloadId();
+        std::vector<const KernelInfo*> kernels =
+            cv->GetDataProvider()->ComputeModel().GetKernelInfoList(target_workload);
+        int target_idx = -1;
+        for (int i = 0; i < static_cast<int>(kernels.size()); i++)
+        {
+            if (kernels[i] != nullptr && kernels[i]->id != baseline_kernel)
+            {
+                target_idx = i;
+                break;
+            }
+        }
+        if (target_idx < 0)
+        {
+            ctx->LogWarning("SKIP: target workload has no kernel distinct from the baseline");
+            return;
+        }
+
+        IM_CHECK(set_ref_to_toolbar());
+        ctx->ItemClick("##target_kernels");
+        ctx->Yield(1);
+        {
+            ImGuiWindow* popup = ImGui::GetCurrentContext()->NavWindow;
+            IM_CHECK(popup != nullptr);
+            if (popup == nullptr) return;
+
+            // PushID(kernel_id) + Selectable("") uses this ID. GatherItems also
+            // includes decorative ElidedText children, so its index is not a kernel index.
+            const ImGuiID selectable_id =
+                popup->GetID(static_cast<int>(kernels[target_idx]->id));
+            ctx->ItemClick(selectable_id);
+        }
+        ctx->Yield(2);
+        ctx->SetRef("//Main Window");
+
+        // Baseline and target fetch sequentially, so a "while pending" drain can
+        // slip through the gap between them. Poll the final end state instead.
+        const uint32_t want_kernel = kernels[target_idx]->id;
+        for (int i = 0; i < 300; i++)
+        {
+            if (peer.TargetKernelId() == want_kernel && !peer.RequestsPending() &&
+                peer.CategoryCount() > 0 && peer.HasDifferenceColumn())
+                break;
+            ctx->Yield(2);
+        }
+
+        IM_CHECK(peer.TargetKernelId() == want_kernel);
+        IM_CHECK(peer.CategoryCount() > 0);
+        IM_CHECK(peer.HasDifferenceColumn());
+    };
+
+    t = IM_REGISTER_TEST(e, "app", "compute_table_view_pin_persists_across_kernel_switch");
+    t->TestFunc = [](ImGuiTestContext* ctx)
+    {
+        ComputeView* cv = GetComputeViewOrSkip(ctx);
+        if (!cv) return;
+        TabContainer* tc = ComputeViewTestPeer{*cv}.TabContainerPtr();
+        IM_CHECK(tc != nullptr);
+        if (tc == nullptr) return;
+
+        const std::vector<const TabItem*> tabs = tc->GetTabs();
+        const TabItem*    table_tab = nullptr;
+        ComputeTableView* tbl       = nullptr;
+        for (const TabItem* tab : tabs)
+        {
+            if (tab->m_id == ComputeTableView::TAB_ID)
+            {
+                table_tab = tab;
+                tbl       = dynamic_cast<ComputeTableView*>(tab->m_widget.get());
+                break;
+            }
+        }
+        if (tbl == nullptr)
+        {
+            ctx->LogWarning("SKIP: no Table View tab in this build");
+            return;
+        }
+        if (!table_tab->m_enabled)
+        {
+            ctx->LogWarning(
+                "SKIP: Table View tab is disabled because the database has no metrics");
+            return;
+        }
+
+        ComputeSelection* sel = ComputeViewTestPeer{*cv}.ComputeSelectionPtr();
+        IM_CHECK(sel != nullptr);
+        if (sel == nullptr) return;
+        const uint32_t workload = sel->GetSelectedWorkload();
+        const uint32_t baseline_kernel = sel->GetSelectedKernel();
+        IM_CHECK(workload != ComputeSelection::INVALID_SELECTION_ID);
+        IM_CHECK(baseline_kernel != ComputeSelection::INVALID_SELECTION_ID);
+
+        std::vector<const KernelInfo*> kernels =
+            cv->GetDataProvider()->ComputeModel().GetKernelInfoList(workload);
+        if (kernels.size() < 2)
+        {
+            ctx->LogWarning("SKIP: workload has fewer than two kernels to switch between");
+            return;
+        }
+
+        tc->SetActiveTab(ComputeTableView::TAB_ID);
+        ctx->Yield(3);
+        const TabItem* active_tab = tc->GetActiveTab();
+        IM_CHECK(active_tab != nullptr);
+        if (active_tab == nullptr) return;
+        IM_CHECK(active_tab->m_id == ComputeTableView::TAB_ID);
+        if (active_tab->m_id != ComputeTableView::TAB_ID) return;
+        ComputeTableViewTestPeer peer{*tbl};
+        for (int i = 0; i < 200 && (peer.FetchPending() || peer.TableWidgetCount() == 0); i++)
+            ctx->Yield(2);
+        IM_CHECK(peer.TableWidgetCount() > 0);
+        if (peer.TableWidgetCount() == 0) return;
+
+        // Metric tables sit in a nested child window the "//Main Window/**/"
+        // wildcard can't reach; grab the innermost "_table" one.
+        auto find_table_window = [&]() -> ImGuiWindow*
+        {
+            ImGuiWindow* found = nullptr;
+            for (ImGuiWindow* w : ImGui::GetCurrentContext()->Windows)
+                if (w->WasActive && strstr(w->Name, "_table") &&
+                    strstr(w->Name, "TabContainer"))
+                    found = w;  // keep last = deepest
+            return found;
+        };
+        ImGuiWindow* table_win = find_table_window();
+        IM_CHECK(table_win != nullptr);
+        if (table_win == nullptr) return;
+
+        // Each metric row starts with an empty-label pin Checkbox("") in column 0,
+        // followed by the metric-id cell (label like "0.1.3:Duration"). So the pin
+        // control is the empty-label item just before a cell whose label starts with
+        // a digit and contains a dot.
+        SetRefWindow(ctx, table_win);
+        ImGuiTestItemList items;
+        ctx->GatherItems(&items, "");
+        ImGuiID pin_checkbox = 0;
+        for (int i = 1; i < items.GetSize(); i++)
+        {
+            const char* lbl = items[i]->DebugLabel;
+            const bool looks_like_id =
+                lbl[0] >= '0' && lbl[0] <= '9' && strchr(lbl, '.') != nullptr;
+            if (looks_like_id && items[i - 1]->DebugLabel[0] == '\0')
+            {
+                pin_checkbox = items[i - 1]->ID;
+                break;
+            }
+        }
+        IM_CHECK(pin_checkbox != 0);
+        if (pin_checkbox == 0) { ctx->SetRef("//Main Window"); return; }
+
+        IM_CHECK(peer.PinnedCount() == 0);
+        ctx->ItemClick(pin_checkbox);
+        ctx->Yield(3);
+        ctx->SetRef("//Main Window");
+
+        // Remember what got pinned so we can check it survives the kernel switch.
+        IM_CHECK(peer.PinnedCount() == 1);
+        if (peer.PinnedCount() != 1) return;
+        const MetricId pinned = peer.FirstPinned();
+
+        // Switch kernels: the table refetches, but pins should persist
+        // (ComputeTableView::RestoreMetricPining).
+        uint32_t other_kernel = ComputeSelection::INVALID_SELECTION_ID;
+        for (const KernelInfo* k : kernels)
+            if (k != nullptr && k->id != baseline_kernel) { other_kernel = k->id; break; }
+        IM_CHECK(other_kernel != ComputeSelection::INVALID_SELECTION_ID);
+
+        // Wait for the refetch to START before draining: SelectKernel's event fires
+        // a frame later, so an immediate drain would see no pending fetch and exit.
+        sel->SelectKernel(other_kernel);
+        for (int i = 0; i < 20 && !peer.FetchPending(); i++) ctx->Yield(1);
+        for (int i = 0; i < 300 && (peer.FetchPending() || peer.TableWidgetCount() == 0); i++)
+            ctx->Yield(2);
+
+        const bool still_pinned = peer.IsPinned(pinned);
+
+        // Restore before asserting: IM_CHECK aborts on failure, and pins + kernel
+        // selection are shared across compute tests.
+        sel->SelectKernel(baseline_kernel);
+        ctx->Yield(3);
+        for (int i = 0; i < 200 && peer.FetchPending(); i++) ctx->Yield(2);
+        if (peer.IsPinned(pinned)) peer.Unpin(pinned);
+
+        IM_CHECK(still_pinned);
     };
 
     t = IM_REGISTER_TEST(e, "app", "sys_timeline_pan_hotkey");
@@ -657,28 +1161,39 @@ void RegisterAppTests(ImGuiTestEngine* e)
         IM_CHECK(flame != nullptr);
         if (flame == nullptr) return;
 
-        // Compact Mode is a per-track gear option whose checkbox lives in a popup
-        // with no stable widget id, so drive it through the same side-effecting
-        // path the checkbox uses. Turning it on shrinks the per-event level
-        // height; assert both the flag and the height follow, then restore.
+        // Click the real "Compact Mode" checkbox so the test covers the menu
+        // wiring, not just the field. Turning it on shrinks the level height.
+        const unsigned int fv_id = FlameTrackItemTestPeer{*flame}.FlameWindowId();
         const bool  orig_compact = flame->IsCompactMode();
         const float orig_height  = FlameTrackItemTestPeer{*flame}.LevelHeight();
 
-        // Capture observations, restore, THEN assert: IM_CHECK early-returns on
-        // failure, so asserting before the restore would leak the flipped state
-        // (per-track flag, shared across the process) into later tests.
-        FlameTrackItemTestPeer{*flame}.SetCompactMode(!orig_compact);
+        ImGuiWindow* menu = OpenTrackGearMenu(ctx, fv_id);
+        if (menu == nullptr) return;  // logged skip inside the helper
+        const bool clicked_on = ClickGearMenuItem(ctx, menu, "Compact Mode");
+        ctx->PopupCloseAll();
         ctx->Yield(2);
+        IM_CHECK(clicked_on);
+        if (!clicked_on) return;
+
         const bool  on_compact = flame->IsCompactMode();
         const float on_height  = FlameTrackItemTestPeer{*flame}.LevelHeight();
 
-        FlameTrackItemTestPeer{*flame}.SetCompactMode(orig_compact);
+        // Toggle back through the checkbox to restore state for later tests. A
+        // peer restore backstops it in case the second click fails to register.
+        ImGuiWindow* menu2       = OpenTrackGearMenu(ctx, fv_id);
+        bool         clicked_off = false;
+        if (menu2 != nullptr) clicked_off = ClickGearMenuItem(ctx, menu2, "Compact Mode");
+        ctx->PopupCloseAll();
+        ctx->Yield(2);
+        if (flame->IsCompactMode() != orig_compact)
+            FlameTrackItemTestPeer{*flame}.SetCompactMode(orig_compact);
         ctx->Yield(2);
         const bool  back_compact = flame->IsCompactMode();
         const float back_height  = FlameTrackItemTestPeer{*flame}.LevelHeight();
 
         IM_CHECK(on_compact != orig_compact);
         IM_CHECK(on_height != orig_height);
+        IM_CHECK(clicked_off);
         IM_CHECK(back_compact == orig_compact);
         IM_CHECK(back_height == orig_height);
     };
@@ -748,31 +1263,56 @@ void RegisterAppTests(ImGuiTestEngine* e)
         IM_CHECK(flame != nullptr);
         if (flame == nullptr) return;
 
-        // "Color by Name / Time Level / No Color" are gear-menu radio buttons in
-        // a popup with no stable path; each sets the track's event color mode.
-        // Drive that field directly and assert it changes, then restore.
-        const EventTrackOptions::EventColorMode orig =
-            FlameTrackItemTestPeer{*flame}.GetEventColorMode();
-        const EventTrackOptions::EventColorMode other =
-            (orig == EventTrackOptions::EventColorMode::kByTimeLevel)
-                ? EventTrackOptions::EventColorMode::kByEventName
-                : EventTrackOptions::EventColorMode::kByTimeLevel;
+        using ColorMode = EventTrackOptions::EventColorMode;
+        auto label_for = [](ColorMode m) -> const char* {
+            switch (m)
+            {
+                case ColorMode::kByEventName: return "Color by Name";
+                case ColorMode::kByTimeLevel: return "Color by Time Level";
+                case ColorMode::kNone:        return "No Color";
+                default:                      return nullptr;  // kMixed has no radio
+            }
+        };
 
-        // Capture, restore, THEN assert: IM_CHECK early-returns on failure, so
-        // asserting before the restore would leak the changed color mode (shared
-        // per-track state) into later tests in the same process.
-        FlameTrackItemTestPeer{*flame}.SetEventColorMode(other);
-        ctx->Yield(2);
-        const EventTrackOptions::EventColorMode changed =
-            FlameTrackItemTestPeer{*flame}.GetEventColorMode();
+        // Click the real color-mode radio so the test covers the menu wiring,
+        // not just the field. Switch to a different mode, then restore the
+        // original by clicking its radio.
+        const ColorMode orig  = FlameTrackItemTestPeer{*flame}.GetEventColorMode();
+        const ColorMode other = (orig == ColorMode::kByTimeLevel)
+                                    ? ColorMode::kByEventName
+                                    : ColorMode::kByTimeLevel;
+        const char* orig_label = label_for(orig);
+        if (orig_label == nullptr)
+        {
+            ctx->LogWarning("SKIP: track color mode has no radio to restore to (kMixed)");
+            return;
+        }
+        const unsigned int fv_id = FlameTrackItemTestPeer{*flame}.FlameWindowId();
 
-        FlameTrackItemTestPeer{*flame}.SetEventColorMode(orig);
+        ImGuiWindow* menu = OpenTrackGearMenu(ctx, fv_id);
+        if (menu == nullptr) return;  // logged skip inside the helper
+        const bool clicked_other = ClickGearMenuItem(ctx, menu, label_for(other));
+        ctx->PopupCloseAll();
         ctx->Yield(2);
-        const EventTrackOptions::EventColorMode restored =
-            FlameTrackItemTestPeer{*flame}.GetEventColorMode();
+        IM_CHECK(clicked_other);
+        if (!clicked_other) return;
+        const ColorMode changed = FlameTrackItemTestPeer{*flame}.GetEventColorMode();
+
+        // Restore the original mode through its radio. A peer restore backstops
+        // it in case the click fails to register.
+        ImGuiWindow* menu2       = OpenTrackGearMenu(ctx, fv_id);
+        bool         clicked_orig = false;
+        if (menu2 != nullptr) clicked_orig = ClickGearMenuItem(ctx, menu2, orig_label);
+        ctx->PopupCloseAll();
+        ctx->Yield(2);
+        if (FlameTrackItemTestPeer{*flame}.GetEventColorMode() != orig)
+            FlameTrackItemTestPeer{*flame}.SetEventColorMode(orig);
+        ctx->Yield(2);
+        const ColorMode restored = FlameTrackItemTestPeer{*flame}.GetEventColorMode();
 
         IM_CHECK(changed == other);
         IM_CHECK(changed != orig);
+        IM_CHECK(clicked_orig);
         IM_CHECK(restored == orig);
     };
 
@@ -931,13 +1471,12 @@ void RegisterAppTests(ImGuiTestEngine* e)
         ctx->Yield(2);
         IM_CHECK(es->Searched() == false);
 
-        // hipLaunchKernel is a launch region present in the trace; write it into
-        // the production search buffer and run the search the same way the input
-        // field's submit does.
-        char* buf = es->TextInput();
-        IM_CHECK(buf != nullptr);
-        if (buf == nullptr) return;
-        snprintf(buf, es->TextInputLimit(), "%s", "hipLaunchKernel");
+        // The search term is coupled to the CI sample db (sample/rocpd-transpose.db):
+        // it must name an event that exists AND is a searchable op type
+        // (Launch/Dispatch/MemoryCopy/MemoryAllocate/LaunchSample -- see
+        // EventSearch::Search). If the sample db changes, update it to a term the
+        // new db contains.
+        es->TextInput() = "hipLaunchKernel";
         es->Search();
         ctx->Yield(2);
         IM_CHECK(es->Searched() == true);
@@ -950,6 +1489,47 @@ void RegisterAppTests(ImGuiTestEngine* e)
 
         es->Clear();
         ctx->Yield(2);
+    };
+
+    t = IM_REGISTER_TEST(e, "app", "sys_event_search_zero_result_and_clear");
+    t->TestFunc = [](ImGuiTestContext* ctx)
+    {
+        TraceView* tv = GetTraceViewOrSkip(ctx);
+        if (!tv) return;
+        EventSearch* es = TraceViewTestPeer{*tv}.EventSearchPtr();
+        IM_CHECK(es != nullptr);
+        if (es == nullptr) return;
+
+        // Clear so the searched flag starts from a known baseline (the harness
+        // reuses one process interactively).
+        es->Clear();
+        ctx->Yield(2);
+        IM_CHECK(es->Searched() == false);
+
+        // A nonsense token no event name can contain, so the empty-result path is
+        // exercised deterministically regardless of which db the harness was given.
+        // Type into the real search field. RenderEventSearch runs the search on the
+        // frame the focused field sees Enter, so Enter is what issues the query.
+        ctx->SetRef("Main Window");
+        ctx->ItemInput("**/search_bar/##input_text_with_clear");
+        ctx->KeyCharsReplaceEnter("zzq_no_such_event_zzq");
+        ctx->Yield(2);
+        IM_CHECK(es->Searched() == true);
+
+        // The fetch is deferred. Let it drain (Update re-runs Search when the
+        // request completes) before reading the result count.
+        for (int i = 0; i < 60 && EventSearchTestPeer{*es}.RequestPending(); i++) ctx->Yield(2);
+        ctx->Yield(5);
+        IM_CHECK(EventSearchTestPeer{*es}.ResultCount() == 0);
+
+        // The X button is the clear path. IconButton pushes the glyph as an id and
+        // draws it as the button, so the ref ends in the glyph twice.
+        const std::string clear_ref =
+            std::string("**/search_bar/") + ICON_X_CIRCLED + "/" + ICON_X_CIRCLED;
+        ctx->ItemClick(clear_ref.c_str());
+        ctx->Yield(2);
+        IM_CHECK(es->Searched() == false);
+        IM_CHECK(EventSearchTestPeer{*es}.ResultCount() == 0);
     };
 
     t = IM_REGISTER_TEST(e, "app", "sys_summary_pie_kernel_select");
@@ -1095,11 +1675,29 @@ void RegisterAppTests(ImGuiTestEngine* e)
 
         // The kernel metric table renders only while the "Kernel Details" tab is
         // active (TabContainer renders just the active tab's content).
-        tc->SetActiveTab("compute_kernel_details_view");
+        const std::vector<const TabItem*> tabs = tc->GetTabs();
+        const auto kernel_details_it =
+            std::find_if(tabs.begin(), tabs.end(), [](const TabItem* tab) {
+                return tab && tab->m_id == ComputeKernelDetailsView::TAB_ID;
+            });
+        if (kernel_details_it == tabs.end())
+        {
+            ctx->LogWarning("SKIP: no Kernel Details tab in this build");
+            return;
+        }
+        if (!(*kernel_details_it)->m_enabled)
+        {
+            ctx->LogWarning("SKIP: Kernel Details tab is disabled");
+            return;
+        }
+
+        tc->SetActiveTab(ComputeKernelDetailsView::TAB_ID);
         ctx->Yield(3);
         const TabItem* tab = tc->GetActiveTab();
         IM_CHECK(tab != nullptr);
         if (tab == nullptr) return;
+        IM_CHECK(tab->m_id == ComputeKernelDetailsView::TAB_ID);
+        if (tab->m_id != ComputeKernelDetailsView::TAB_ID) return;
         ComputeKernelDetailsView* kd =
             dynamic_cast<ComputeKernelDetailsView*>(tab->m_widget.get());
         IM_CHECK(kd != nullptr);
@@ -1223,6 +1821,149 @@ void RegisterAppTests(ImGuiTestEngine* e)
         // Leave a clean selection for following tests.
         sel->UnselectAllEvents();
         ctx->Yield(2);
+    };
+
+    t = IM_REGISTER_TEST(e, "app", "sys_track_details_populates_on_select");
+    t->TestFunc = [](ImGuiTestContext* ctx)
+    {
+        TraceView* tv = GetTraceViewOrSkip(ctx);
+        if (!tv) return;
+        AnalysisView* av = TraceViewTestPeer{*tv}.AnalysisViewPtr();
+        IM_CHECK(av != nullptr);
+        if (av == nullptr) return;
+        TrackDetails* td = AnalysisViewTestPeer{*av}.TrackDetailsPtr();
+        IM_CHECK(td != nullptr);
+        if (td == nullptr) return;
+        TimelineView* tlv = TraceViewTestPeer{*tv}.TimelineViewPtr();
+        IM_CHECK(tlv != nullptr);
+        if (tlv == nullptr) return;
+        std::shared_ptr<TimelineSelection> sel = tv->GetTimelineSelection();
+        IM_CHECK(sel != nullptr);
+        if (sel == nullptr) return;
+
+        // Tracks appear once the timeline's data fetch drains, so poll for a
+        // displayed flame track before reaching in for one to select.
+        FlameTrackItem* track = nullptr;
+        for (int i = 0; i < 60 && track == nullptr; i++)
+        {
+            std::vector<FlameTrackItem*> flames =
+                TimelineViewTestPeer{*tlv}.DisplayedFlameTracks();
+            if (!flames.empty()) { track = flames.front(); break; }
+            ctx->Yield(2);
+        }
+        if (track == nullptr)
+        {
+            ctx->LogWarning("SKIP: no displayed flame track to select");
+            return;
+        }
+        const uint64_t track_id = track->GetID();
+
+        // Selection dispatches async through EventManager, so poll after every drive.
+        // The reused process may carry a prior test's selection, so reset first.
+        sel->UnselectAllTracks();
+        for (int i = 0; i < 60 && TrackDetailsTestPeer{*td}.DetailCount() != 0; i++) ctx->Yield(2);
+        IM_CHECK(TrackDetailsTestPeer{*td}.DetailCount() == 0);
+
+        // Select that exact track by identity, the same call a track-header click makes.
+        sel->SelectTrack(*track);
+        for (int i = 0; i < 60 && TrackDetailsTestPeer{*td}.DetailCount() == 0; i++) ctx->Yield(2);
+        IM_CHECK(TrackDetailsTestPeer{*td}.DetailCount() == 1);
+        IM_CHECK(TrackDetailsTestPeer{*td}.HasTrack(track_id));
+
+        sel->UnselectTrack(*track);
+        for (int i = 0; i < 60 && TrackDetailsTestPeer{*td}.DetailCount() != 0; i++) ctx->Yield(2);
+        IM_CHECK(TrackDetailsTestPeer{*td}.DetailCount() == 0);
+
+        // Leave a clean selection for following tests.
+        sel->UnselectAllTracks();
+        ctx->Yield(2);
+    };
+
+    // The sidebar projects the model's topology tree into its rows, and the
+    // timeline derives "sort by topology" from that same tree. Both are built
+    // after the load drains, so poll rather than assuming the first frame.
+    t = IM_REGISTER_TEST(e, "app", "sys_sidebar_topology_tree_populates");
+    t->TestFunc = [](ImGuiTestContext* ctx)
+    {
+        TraceView* tv = GetTraceViewOrSkip(ctx);
+        if (!tv) return;
+        SideBar* sb = TraceViewTestPeer{*tv}.SideBarPtr();
+        IM_CHECK(sb != nullptr);
+        if (sb == nullptr) return;
+        TimelineView* tlv = TraceViewTestPeer{*tv}.TimelineViewPtr();
+        IM_CHECK(tlv != nullptr);
+        if (tlv == nullptr) return;
+
+        for (int i = 0; i < 60 && SideBarTestPeer{*sb}.LeafCount() == 0; i++) ctx->Yield(2);
+        IM_CHECK(SideBarTestPeer{*sb}.HasTree());
+
+        const size_t track_count = TimelineViewTestPeer{*tlv}.TrackCount();
+        IM_CHECK(track_count > 0);
+        if (track_count == 0) return;
+
+        // Every row must name a real track. A leaf carries a track id, so a stale
+        // or unbound one would silently render an empty row.
+        const std::vector<uint64_t> leaf_ids = SideBarTestPeer{*sb}.LeafTrackIds();
+        IM_CHECK(!leaf_ids.empty());
+        const TimelineModel& tlm = tv->GetDataProvider()->DataModel().GetTimeline();
+        for (uint64_t track_id : leaf_ids)
+        {
+            IM_CHECK(tlm.GetTrack(track_id) != nullptr);
+        }
+
+        // And the converse: every track needs a row. A typed track whose topology
+        // node is missing must still land under Uncategorized, not disappear.
+        std::vector<uint64_t> placed = leaf_ids;
+        std::sort(placed.begin(), placed.end());
+        placed.erase(std::unique(placed.begin(), placed.end()), placed.end());
+        for (const TrackInfo* track : tlm.GetTrackList())
+        {
+            IM_CHECK(track != nullptr);
+            if (track == nullptr) continue;
+            IM_CHECK(std::binary_search(placed.begin(), placed.end(), track->id));
+        }
+
+        // The topology sort is only applied if it is a full permutation of the
+        // current tracks, so a partial order would silently fall back to Default.
+        const std::vector<uint64_t> topology_order = TimelineViewTestPeer{*tlv}.TopologyOrder();
+        IM_CHECK_EQ(topology_order.size(), track_count);
+        {
+            std::vector<uint64_t> unique_order = topology_order;
+            std::sort(unique_order.begin(), unique_order.end());
+            unique_order.erase(std::unique(unique_order.begin(), unique_order.end()),
+                               unique_order.end());
+            IM_CHECK_EQ(unique_order.size(), topology_order.size());
+        }
+
+        // "Sort by topology" must reproduce the sidebar's row order: both walk the
+        // same tree, and both append what the tree does not cover (Uncategorized)
+        // in track-list order. Compared against the sidebar's rows reduced to
+        // first appearance, since a queue is drawn under its processor and again
+        // under each stream.
+        std::vector<uint64_t>        rows;
+        std::unordered_set<uint64_t> seen_rows;
+        rows.reserve(leaf_ids.size());
+        for (uint64_t track_id : leaf_ids)
+        {
+            if (seen_rows.insert(track_id).second) rows.push_back(track_id);
+        }
+        IM_CHECK_EQ(rows.size(), topology_order.size());
+        for (size_t i = 0; i < rows.size() && i < topology_order.size(); i++)
+        {
+            IM_CHECK_EQ(rows[i], topology_order[i]);
+        }
+
+        // Node rows ascend by id, and the rank behind the node labels and colors
+        // is that row position, so the two cannot drift apart.
+        const std::vector<TopologyNode*>& topo_nodes =
+            tv->GetDataProvider()->DataModel().GetTopology().GetNodes();
+        for (size_t i = 0; i < topo_nodes.size(); i++)
+        {
+            IM_CHECK(topo_nodes[i] != nullptr);
+            if (topo_nodes[i] == nullptr) continue;
+            if (i > 0) IM_CHECK(topo_nodes[i - 1]->GetId() < topo_nodes[i]->GetId());
+            IM_CHECK_EQ(static_cast<const NodeInfo*>(topo_nodes[i])->display_index, i + 1);
+        }
     };
 
     t = IM_REGISTER_TEST(e, "app", "sys_timeline_measure_tool");
@@ -1519,6 +2260,10 @@ void RegisterAppTests(ImGuiTestEngine* e)
         IM_CHECK(app != nullptr);
         if (app == nullptr) return;
 
+        // Construct before opening anything so the guard captures the startup
+        // tab set as the state to restore.
+        TabStateGuard tab_guard(ctx, AppWindowTestPeer{*app}.TabContainerPtr());
+
         // Sample dbs resolve relative to the working directory (the repo root).
         // Skip if either is missing.
         auto resolve_sample = [](const char* rel) -> std::string {
@@ -1584,10 +2329,622 @@ void RegisterAppTests(ImGuiTestEngine* e)
         IM_CHECK(app->GetProject(rpv_path.string()) == nullptr);
 
         // Remove the temp .rpv and dismiss the dedup popup so it can't cover
-        // later tests. The tabs stay open (no safe close hook).
+        // later tests. tab_guard restores the tab set on scope exit.
         std::error_code ec;
         fs::remove(rpv_path, ec);
         ctx->PopupCloseAll();
         ctx->Yield(2);
+    };
+
+    t = IM_REGISTER_TEST(e, "app", "sys_measurement_clear_button");
+    t->TestFunc = [](ImGuiTestContext* ctx)
+    {
+        TraceView* tv = GetTraceViewOrSkip(ctx);
+        if (!tv) return;
+        TimelineView* tlv = TraceViewTestPeer{*tv}.TimelineViewPtr();
+        IM_CHECK(tlv != nullptr);
+        if (tlv == nullptr) return;
+        MeasurementController* mc = TraceViewTestPeer{*tv}.MeasurementControllerPtr();
+        IM_CHECK(mc != nullptr);
+        if (mc == nullptr) return;
+
+        // Two distinct timestamps inside the visible range to form a measurement.
+        const ViewCoords coords = tlv->GetViewCoords();
+        const double     span   = coords.v_max_x - coords.v_min_x;
+        IM_CHECK(span > 0.0);
+        if (span <= 0.0) return;
+        const double t0 = coords.v_min_x + span * 0.25;
+        const double t1 = coords.v_min_x + span * 0.75;
+
+        // Baseline: measurement state persists on the TraceView across tests in the
+        // reused process. Reset to inactive with no points; this also guarantees the
+        // "Measure" entry button is the one rendered (Exit/Clear render only in mode).
+        mc->ExitMeasurementMode();
+        mc->ClearMeasurement();
+        ctx->Yield(2);
+        IM_CHECK(mc->IsMeasurementMode() == false);
+
+        ctx->SetRef("Main Window");
+
+        // Enter measurement mode with a real click on the toolbar "Measure" button
+        // (PushID("measure_start") + Button("Measure")).
+        ctx->ItemClick("**/measure_start/Measure");
+        ctx->Yield(2);
+        IM_CHECK(mc->IsMeasurementMode() == true);
+        if (mc->IsMeasurementMode() == false) return;
+
+        // Place two points via the same controller call the freehand click handler
+        // drives; headless bar clicks don't reach the flame track's deferred-click
+        // measurement path reliably. The button under test (Clear) is a real click.
+        mc->SetFreehandMeasurementPoint(t0);
+        mc->SetFreehandMeasurementPoint(t1);
+        ctx->Yield(2);
+        const MeasurementState placed_state = mc->GetMeasurementState();
+
+        // Clear with a real click on the toolbar "Clear" button (renders only once a
+        // point exists). ClearMeasurement keeps mode active but drops both points.
+        ctx->ItemClick("**/Clear");
+        ctx->Yield(2);
+
+        // Capture, restore, THEN assert: IM_CHECK early-returns on failure, so leaving
+        // measurement mode active would leak into later tests.
+        const MeasurementState cleared_state = mc->GetMeasurementState();
+        const bool no_points = !mc->GetPoint(0).valid && !mc->GetPoint(1).valid;
+
+        mc->ExitMeasurementMode();
+        mc->ClearMeasurement();
+        ctx->Yield(2);
+        const bool inactive_after = (mc->IsMeasurementMode() == false);
+
+        IM_CHECK(placed_state == MeasurementState::kComplete);
+        IM_CHECK(cleared_state == MeasurementState::kWaitingForFirst);
+        IM_CHECK(no_points);
+        IM_CHECK(inactive_after);
+    };
+
+    // AIPROFVIS-117: deselecting one of several selected tracks left the Event
+    // Table showing the old row set.
+    t = IM_REGISTER_TEST(e, "app", "sys_event_table_updates_on_track_deselect");
+    t->TestFunc = [](ImGuiTestContext* ctx)
+    {
+        TraceView* tv = GetTraceViewOrSkip(ctx);
+        if (!tv) return;
+        TimelineView* tlv = TraceViewTestPeer{*tv}.TimelineViewPtr();
+        IM_CHECK(tlv != nullptr);
+        if (tlv == nullptr) return;
+        std::shared_ptr<TimelineSelection> sel = tv->GetTimelineSelection();
+        IM_CHECK(sel != nullptr);
+        if (sel == nullptr) return;
+        DataProvider* dp = tv->GetDataProvider();
+        IM_CHECK(dp != nullptr);
+        if (dp == nullptr) return;
+
+        AppWindowSettings& settings = SettingsManager::GetInstance().GetAppWindowSettings();
+        const bool prev_details_panel = settings.show_details_panel;
+        settings.show_details_panel   = true;
+        tv->SetAnalysisViewVisibility(true);
+
+        // Selection is driven by clicking sidebar rows, so the panel has to stay up.
+        const bool prev_sidebar = settings.show_sidebar;
+        settings.show_sidebar   = true;
+        tv->SetSidebarViewVisibility(true);
+
+        // A prior test may have left a time range. The table fetch is bounded by it,
+        // so clear it for the measurement and put it back in restore().
+        double     prev_range_start = 0.0;
+        double     prev_range_end   = 0.0;
+        const bool had_range = sel->GetSelectedTimeRange(prev_range_start, prev_range_end);
+
+        // Track selection dispatches through EventManager on a later frame, and the
+        // table refetch it triggers is async, so every drive is followed by this.
+        auto drain = [&]() {
+            ctx->Yield(3);
+            for (int polls = 0; polls < 120 &&
+                 dp->IsRequestPending(DataProvider::EVENT_TABLE_REQUEST_ID); polls++)
+                ctx->Yield(2);
+            ctx->Yield(5);
+        };
+        auto row_count = [&]() -> uint64_t {
+            return dp->DataModel().GetTables().GetTableTotalRowCount(TableType::kEventTable);
+        };
+        auto restore = [&]() {
+            sel->UnselectAllTracks();
+            if (had_range) sel->SelectTimeRange(prev_range_start, prev_range_end);
+            else           sel->ClearTimeRange();
+            ctx->Yield(3);
+            settings.show_details_panel = prev_details_panel;
+            tv->SetAnalysisViewVisibility(prev_details_panel);
+            settings.show_sidebar = prev_sidebar;
+            tv->SetSidebarViewVisibility(prev_sidebar);
+            ctx->Yield(2);
+        };
+
+        // Tracks appear once the timeline's data fetch drains.
+        std::vector<FlameTrackItem*> flames;
+        for (int i = 0; i < 60 && flames.empty(); i++)
+        {
+            flames = TimelineViewTestPeer{*tlv}.DisplayedFlameTracks();
+            if (flames.empty()) ctx->Yield(2);
+        }
+        if (flames.empty())
+        {
+            restore();
+            ctx->LogWarning("SKIP: no displayed flame track to select");
+            return;
+        }
+
+        sel->UnselectAllTracks();
+        sel->ClearTimeRange();
+        drain();
+
+        // Every select and deselect below is a click on the track's sidebar row,
+        // whose button runs ToggleSelectTrack, so the same click selects an
+        // unselected track and deselects a selected one.
+        ImGuiWindow* sidebar = FindSidebarWindow(ctx);
+        if (sidebar == nullptr) restore();
+        IM_CHECK(sidebar != nullptr);
+        SetRefWindow(ctx, sidebar);
+        ImGuiTestItemList sidebar_items;
+        ctx->GatherItems(&sidebar_items, "");
+
+        // Resolve every candidate's row up front. If none resolves, the sidebar
+        // could not be driven at all, a broken click path rather than a thin trace,
+        // so fail here instead of falling through to the data-shortage SKIP below.
+        std::vector<ImGuiID> buttons(flames.size(), 0);
+        size_t               resolved = 0;
+        for (size_t i = 0; i < flames.size(); i++)
+        {
+            buttons[i] = TrackButtonId(sidebar_items, flames[i]->GetName());
+            if (buttons[i] != 0) resolved++;
+        }
+        if (resolved == 0) restore();
+        IM_CHECK(resolved > 0);
+
+        // Only tracks the Event Table actually draws rows from can produce a
+        // deselect delta. The table unions per-track row sets that are disjoint by
+        // construction, so dropping a track whose own contribution is non-empty must
+        // change the total. Measuring each candidate alone is what rules out a false
+        // pass from picking a B that contributes nothing (a non-event track, or an
+        // event track with no events in range), where count_A == count_AB and the
+        // assertion below would hold even with the bug present.
+        FlameTrackItem* track_a  = nullptr;
+        FlameTrackItem* track_b  = nullptr;
+        ImGuiID         button_a = 0;
+        ImGuiID         button_b = 0;
+        const size_t    kMaxCandidates = 12;
+        for (size_t i = 0; i < flames.size() && i < kMaxCandidates && track_b == nullptr; i++)
+        {
+            if (buttons[i] == 0) continue;
+            ctx->ItemClick(buttons[i]);
+            drain();
+            // Two same-named tracks resolve to one row, so a click lands on only one
+            // of them. The selection model says which, and only then is the count
+            // that track's own total.
+            const uint64_t rows = sel->IsTrackSelected(*flames[i]) ? row_count() : 0;
+            ctx->ItemClick(buttons[i]);  // same button toggles the track back off
+            drain();
+            if (rows == 0) continue;
+            if (track_a == nullptr) { track_a = flames[i]; button_a = buttons[i]; }
+            else                    { track_b = flames[i]; button_b = buttons[i]; }
+        }
+        if (track_b == nullptr)
+        {
+            restore();
+            ctx->LogWarning("SKIP: need two populated tracks to observe a deselect delta");
+            return;
+        }
+
+        sel->UnselectAllTracks();
+        drain();
+        ctx->ItemClick(button_a);
+        drain();
+        ctx->ItemClick(button_b);
+        drain();
+        const uint64_t count_ab = row_count();
+
+        ctx->ItemClick(button_b);  // toggles B back off, leaving only A selected
+        drain();
+        const uint64_t count_a = row_count();
+
+        // Capture, restore, THEN assert: IM_CHECK early-returns on failure, so a
+        // leaked selection or open panel would follow into later tests.
+        restore();
+
+        IM_CHECK(count_ab > 0);
+        IM_CHECK(count_a > 0);
+        IM_CHECK(count_a != count_ab);
+    };
+
+    // Advanced Details "Aggregate": picking a group-by column and clicking Submit
+    // re-runs the event-table query with a GROUP BY, collapsing raw rows into
+    // grouped ones, so the total row count changes.
+    t = IM_REGISTER_TEST(e, "app", "sys_event_table_aggregate_changes_rows");
+    t->TestFunc = [](ImGuiTestContext* ctx)
+    {
+        TraceView* tv = GetTraceViewOrSkip(ctx);
+        if (!tv) return;
+        TimelineView* tlv = TraceViewTestPeer{*tv}.TimelineViewPtr();
+        IM_CHECK(tlv != nullptr);
+        if (tlv == nullptr) return;
+        std::shared_ptr<TimelineSelection> sel = tv->GetTimelineSelection();
+        IM_CHECK(sel != nullptr);
+        if (sel == nullptr) return;
+        DataProvider* dp = tv->GetDataProvider();
+        IM_CHECK(dp != nullptr);
+        if (dp == nullptr) return;
+
+        // The Event Table and its Aggregate controls only register with the Test
+        // Engine while the Advanced Details panel renders, so force it open.
+        const bool details_visible =
+            SettingsManager::GetInstance().GetAppWindowSettings().show_details_panel;
+        tv->SetAnalysisViewVisibility(true);
+
+        // The table is filled by clicking sidebar rows, so that panel has to stay up.
+        const bool sidebar_visible =
+            SettingsManager::GetInstance().GetAppWindowSettings().show_sidebar;
+        tv->SetSidebarViewVisibility(true);
+        ctx->Yield(3);
+
+        // Every drive re-queries the table asynchronously. Wait for the request to
+        // be issued, drain it, then let the model settle before reading a count.
+        auto drain_event_table = [&]()
+        {
+            ctx->Yield(3);
+            for (int i = 0; i < 200 &&
+                 dp->IsRequestPending(DataProvider::EVENT_TABLE_REQUEST_ID); i++)
+                ctx->Yield(2);
+            ctx->Yield(5);
+        };
+        auto restore = [&]()
+        {
+            sel->UnselectAllTracks();
+            tv->SetAnalysisViewVisibility(details_visible);
+            tv->SetSidebarViewVisibility(sidebar_visible);
+            ctx->Yield(3);
+        };
+
+        // Only event ("flame") tracks feed the Event Table. Select them all so it
+        // holds raw rows to aggregate.
+        std::vector<FlameTrackItem*> flames;
+        for (int i = 0; i < 60; i++)
+        {
+            flames = TimelineViewTestPeer{*tlv}.DisplayedFlameTracks();
+            if (!flames.empty()) break;
+            ctx->Yield(2);
+        }
+        if (flames.empty())
+        {
+            ctx->LogWarning("SKIP: no displayed flame track to fill the event table");
+            restore();
+            return;
+        }
+        sel->UnselectAllTracks();
+        drain_event_table();
+
+        // A missing sidebar is a broken click path, not a thin trace, so fail rather
+        // than SKIP (the flame-track shortage above is the legitimate data SKIP).
+        ImGuiWindow* sidebar = FindSidebarWindow(ctx);
+        if (sidebar == nullptr) restore();
+        IM_CHECK(sidebar != nullptr);
+        SetRefWindow(ctx, sidebar);
+        ImGuiTestItemList sidebar_items;
+        ctx->GatherItems(&sidebar_items, "");
+
+        // Fill the table by clicking each flame track's sidebar row. Same-named rows
+        // share one button id and the button toggles, so click the distinct ids once
+        // each. A duplicate-named pair fills from one of the two, which still holds
+        // raw rows to aggregate.
+        std::vector<ImGuiID> track_buttons;
+        for (FlameTrackItem* flame : flames)
+        {
+            const ImGuiID id = TrackButtonId(sidebar_items, flame->GetName());
+            if (id == 0) continue;
+            bool queued = false;
+            for (ImGuiID q : track_buttons) queued = queued || (q == id);
+            if (!queued) track_buttons.push_back(id);
+        }
+        if (track_buttons.empty())
+        {
+            ctx->LogWarning("SKIP: no flame track row button found in the sidebar");
+            restore();
+            return;
+        }
+        for (ImGuiID id : track_buttons) ctx->ItemClick(id);
+        drain_event_table();
+
+        const TablesModel& tables = dp->DataModel().GetTables();
+        const uint64_t rows_before = tables.GetTableTotalRowCount(TableType::kEventTable);
+        if (rows_before == 0)
+        {
+            ctx->LogWarning("SKIP: event table is empty, nothing to aggregate");
+            restore();
+            return;
+        }
+
+        ctx->SetRef("Main Window");
+        // ImGui::Combo() never reports its label to the Test Engine, so the
+        // "**/##group_by" wildcard cannot resolve it. The combo and the Submit
+        // button are added under the same table id stack, so hash the combo's
+        // label over Submit's parent id to reach it.
+        const ImGuiTestItemInfo submit =
+            ctx->ItemInfo("**/Submit", ImGuiTestOpFlags_NoError);
+        const ImGuiID group_by_id = ImHashStr("##group_by", 0, submit.ParentID);
+        if (submit.ID == 0 || !ctx->ItemExists(group_by_id))
+        {
+            ctx->LogWarning("SKIP: Aggregate controls are not registered with the "
+                            "Test Engine");
+            restore();
+            return;
+        }
+
+        // The options are Selectables in the combo popup, which DO carry labels.
+        // "-- None --" is the ungrouped state we restore to; any other entry is a
+        // groupable column, so take the first one.
+        const char* none_label = "-- None --";
+        ctx->ItemClick(group_by_id);
+        ctx->Yield(3);
+        ImGuiTestItemList options;
+        ctx->GatherItems(&options, "//$FOCUSED");
+        ImGuiID none_id   = 0;
+        ImGuiID column_id = 0;
+        for (int i = 0; i < options.GetSize(); i++)
+        {
+            if (strcmp(options[i]->DebugLabel, none_label) == 0)
+                none_id = options[i]->ID;
+            else if (column_id == 0)
+                column_id = options[i]->ID;
+        }
+        if (none_id == 0 || column_id == 0)
+        {
+            ctx->LogWarning("SKIP: group-by combo popup offers no column to group on");
+            ctx->PopupCloseAll();
+            restore();
+            return;
+        }
+
+        ctx->ItemClick(column_id);
+        ctx->Yield(3);
+        ctx->ItemClick("**/Submit");
+        drain_event_table();
+
+        const uint64_t rows_after = tables.GetTableTotalRowCount(TableType::kEventTable);
+
+        // Restore BEFORE asserting: IM_CHECK early-returns on failure, and a live
+        // group-by would leak into every later event-table test.
+        ctx->ItemClick(group_by_id);
+        ctx->Yield(3);
+        ctx->ItemClick(none_id);
+        ctx->Yield(3);
+        ctx->ItemClick("**/Submit");
+        drain_event_table();
+        restore();
+
+        IM_CHECK(rows_after != rows_before);
+    };
+
+    t = IM_REGISTER_TEST(e, "app", "sys_event_search_multi_substring");
+    t->TestFunc = [](ImGuiTestContext* ctx)
+    {
+        TraceView* tv = GetTraceViewOrSkip(ctx);
+        if (!tv) return;
+        EventSearch* es = TraceViewTestPeer{*tv}.EventSearchPtr();
+        IM_CHECK(es != nullptr);
+        if (es == nullptr) return;
+
+        // Clear so the searched flag starts from a known baseline (the harness
+        // reuses one process interactively).
+        es->Clear();
+        ctx->Yield(2);
+        IM_CHECK(es->Searched() == false);
+
+        // Quote-delimited segments make EventSearch::Search split the input into
+        // several terms instead of one, which is the multi-term parse this test
+        // covers. "hip" and "Launch" are both substrings of hipLaunchKernel (proven
+        // searchable in this db by sys_event_search_finds_results), so the query is
+        // non-empty even though the default options AND-combine the terms
+        // (m_partial_matching defaults to false).
+        // Type into the real search field. RenderEventSearch runs the search on the
+        // frame the focused field sees Enter, so Enter is what issues the query.
+        ctx->SetRef("Main Window");
+        ctx->ItemInput("**/search_bar/##input_text_with_clear");
+        ctx->KeyCharsReplaceEnter("\"hip\"\"Launch\"");
+        ctx->Yield(2);
+        IM_CHECK(es->Searched() == true);
+
+        // The fetch is deferred. Let it drain (Update re-runs Search when the
+        // request completes) before reading the result count.
+        for (int i = 0; i < 60 && EventSearchTestPeer{*es}.RequestPending(); i++) ctx->Yield(2);
+        ctx->Yield(5);
+        IM_CHECK(EventSearchTestPeer{*es}.ResultCount() > 0);
+
+        // The X button is the clear path. IconButton pushes the glyph as an id and
+        // draws it as the button, so the ref ends in the glyph twice.
+        const std::string clear_ref =
+            std::string("**/search_bar/") + ICON_X_CIRCLED + "/" + ICON_X_CIRCLED;
+        ctx->ItemClick(clear_ref.c_str());
+        ctx->Yield(2);
+    };
+
+    // AIPROFVIS-297: opening a .rpv whose referenced trace is gone must fail with a
+    // message naming the missing trace, and must not create a file at that path.
+    // AppWindow::OpenFile discards the Project it built on a failed open, so the test
+    // owns the Project and calls Open() directly to read the error off it.
+    t = IM_REGISTER_TEST(e, "app", "sys_project_missing_source_db_error");
+    t->TestFunc = [](ImGuiTestContext* ctx)
+    {
+        namespace fs = std::filesystem;
+
+        // Open() reports the failure through the app's message dialog.
+        AppWindow* app = AppWindow::GetInstance();
+        IM_CHECK(app != nullptr);
+        if (app == nullptr) return;
+
+        std::error_code ec;
+        const fs::path missing_db = fs::temp_directory_path() / "rocprofvis_missing_source_zzq.db";
+        fs::remove(missing_db, ec);
+        IM_CHECK(!fs::exists(missing_db));
+
+        // Write a temp .rpv referencing the missing db by absolute path, escaped so
+        // the JSON stays valid.
+        const fs::path rpv_path = fs::temp_directory_path() / "rocprofvis_missing_source.rpv";
+        std::string escaped;
+        for (char c : missing_db.string())
+        {
+            if (c == '\\' || c == '"') escaped.push_back('\\');
+            escaped.push_back(c);
+        }
+        {
+            std::ofstream out(rpv_path);
+            IM_CHECK(out.is_open());
+            if (!out.is_open()) return;
+            out << "{\"general\": {\"version\": \"1.0\", \"trace_path\": \""
+                << escaped << "\"}}";
+        }
+
+        Project     proj;
+        std::string path   = rpv_path.string();
+        const Project::OpenResult result = proj.Open(path);
+        const std::string message = ProjectTestPeer{proj}.OpenErrorMessage();
+
+        // OpenProject resolves the trace through weakly_canonical, so match the
+        // message against the same form rather than the raw path.
+        const std::string expected_path = fs::weakly_canonical(missing_db).string();
+
+        // The guard that replaced the old open attempt: no empty db is left behind.
+        const bool still_missing = !fs::exists(missing_db) && !fs::exists(expected_path);
+
+        fs::remove(rpv_path, ec);
+
+        // The failed Open queued an error dialog, which does not actually open until
+        // the next Render. Yield so it opens, then close it, otherwise it leaks into
+        // later tests and blocks their input.
+        ctx->Yield(2);
+        ctx->PopupCloseAll();
+        ctx->Yield(2);
+
+        IM_CHECK(result == Project::OpenResult::Failed);
+        IM_CHECK(message.find(expected_path) != std::string::npos);
+        IM_CHECK(still_missing);
+    };
+
+    // AIPROFVIS-81: Event Details dropped the argument list for HIP API events.
+    // Presence/shape only -- the args come back asynchronously through the
+    // controller, with no single table to build a value oracle from.
+    t = IM_REGISTER_TEST(e, "app", "sys_event_details_shows_hip_args");
+    t->TestFunc = [](ImGuiTestContext* ctx)
+    {
+        TraceView* tv = GetTraceViewOrSkip(ctx);
+        if (!tv) return;
+        AnalysisView* av = TraceViewTestPeer{*tv}.AnalysisViewPtr();
+        IM_CHECK(av != nullptr);
+        if (av == nullptr) return;
+        EventsView* ev = AnalysisViewTestPeer{*av}.EventsViewPtr();
+        IM_CHECK(ev != nullptr);
+        if (ev == nullptr) return;
+        TimelineView* tlv = TraceViewTestPeer{*tv}.TimelineViewPtr();
+        IM_CHECK(tlv != nullptr);
+        if (tlv == nullptr) return;
+        std::shared_ptr<TimelineSelection> sel = tv->GetTimelineSelection();
+        IM_CHECK(sel != nullptr);
+        if (sel == nullptr) return;
+
+        // A stray modal swallows hover for the windows beneath it, which would make
+        // the canvas click a no-op. Close any open popup before clicking the timeline.
+        ctx->PopupCloseAll();
+        ctx->Yield(2);
+
+        // A prior test may have left an event selected. The clear is dispatched
+        // through EventManager, so yield before asserting the empty baseline.
+        TraceViewTestPeer{*tv}.ClearEventSelection();
+        ctx->Yield(3);
+        IM_CHECK(EventsViewTestPeer{*ev}.EventItemCount() == 0);
+
+        // Only HIP API events carry the call's argument list, so restrict the
+        // search to Launch-type tracks. Chart items populate after the track's
+        // data fetch drains, so poll for one that has events.
+        FlameTrackItem* flame = nullptr;
+        for (int i = 0; i < 60 && flame == nullptr; i++)
+        {
+            for (FlameTrackItem* candidate :
+                 TimelineViewTestPeer{*tlv}.DisplayedFlameTracks())
+            {
+                const TrackInfo* info = candidate->GetTrackInfo();
+                if (info == nullptr ||
+                    info->operation_types.count(kRocProfVisDmOperationLaunch) == 0)
+                    continue;
+                if (FlameTrackItemTestPeer{*candidate}.ChartItemCount() > 0)
+                {
+                    flame = candidate;
+                    break;
+                }
+            }
+            if (flame == nullptr) ctx->Yield(2);
+        }
+        if (flame == nullptr)
+        {
+            ctx->LogWarning("SKIP: no HIP-API event with args to inspect in this trace");
+            return;
+        }
+
+        // Gather bars from the HIP track's own FV window, not the first track's, so
+        // the clicked bar belongs to the Launch-type track asserted on above. The
+        // window id is 0 until that track has rendered, so poll for it.
+        ImVec2 event_center(0.0f, 0.0f);
+        bool   have_center = false;
+        for (int i = 0; i < 60 && !have_center; i++)
+        {
+            ctx->Yield(2);
+            have_center = FirstEventScreenCenter(
+                ctx, FlameTrackItemTestPeer{*flame}.FlameWindowId(), event_center);
+        }
+        IM_CHECK(have_center);
+        if (!have_center) return;
+
+        // Selection is deferred a frame, so move/release with the mouse parked.
+        ctx->MouseMoveToPos(event_center);
+        ctx->Yield(2);
+        ctx->MouseDown(0);
+        ctx->Yield(1);
+        ctx->MouseUp(0);
+        ctx->Yield(3);
+
+        // The click lands on the widest bar, so there is no pre-chosen event. Assert
+        // the selected event carries named args, not that a specific event was
+        // selected. The event details, and with them the args, arrive
+        // asynchronously. New items are emplace_front'ed, but scan every cached item
+        // rather than relying on that ordering.
+        size_t arg_item  = 0;
+        size_t arg_count = 0;
+        for (int i = 0; i < 60 && arg_count == 0; i++)
+        {
+            ctx->Yield(2);
+            EventsViewTestPeer peer{*ev};
+            for (size_t idx = 0; idx < peer.EventItemCount(); idx++)
+            {
+                if (peer.ArgCount(idx) > 0)
+                {
+                    arg_item  = idx;
+                    arg_count = peer.ArgCount(idx);
+                    break;
+                }
+            }
+        }
+        bool have_named_arg = false;
+        for (size_t a = 0; a < arg_count; a++)
+        {
+            if (!EventsViewTestPeer{*ev}.ArgName(arg_item, a).empty())
+            {
+                have_named_arg = true;
+                break;
+            }
+        }
+
+        // Restore before asserting: IM_CHECK early-returns on failure, which
+        // would otherwise leak a selected event into later tests.
+        TraceViewTestPeer{*tv}.ClearEventSelection();
+        ctx->Yield(2);
+
+        IM_CHECK(arg_count > 0);
+        IM_CHECK(have_named_arg);
     };
 }

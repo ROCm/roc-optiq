@@ -21,6 +21,13 @@ void
 RocWidget::Render()
 {}
 
+TabItem
+RocWidget::CreateTabItem(const std::string& label, const std::string& id,
+                         std::shared_ptr<RocWidget> widget, bool can_close)
+{
+    return TabItem{label, id, widget, can_close};
+}
+
 std::string
 RocWidget::GenUniqueName(std::string name)
 {

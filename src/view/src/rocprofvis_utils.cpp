@@ -845,3 +845,9 @@ RocProfVis::View::strip_ansi_for_display(std::string const& text)
     }
     return out;
 }
+
+bool
+RocProfVis::View::is_usable_time_range(double start_ns, double end_ns)
+{
+    return std::isfinite(start_ns) && std::isfinite(end_ns) && end_ns > start_ns;
+}

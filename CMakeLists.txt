@@ -8,9 +8,9 @@ project(${TARGET_NAME})
 
 # Define the version numbers
 set(PROJECT_VERSION_MAJOR 1)
-set(PROJECT_VERSION_MINOR 0)
+set(PROJECT_VERSION_MINOR 1)
 set(PROJECT_VERSION_PATCH 0)
-set(PROJECT_VERSION_BUILD 2)
+set(PROJECT_VERSION_BUILD 0)
 
 # Name and path of the icon font header
 set(ICON_HEADER ${CMAKE_SOURCE_DIR}/src/view/src/icons/rocprofvis_icon_data.h)
@@ -35,12 +35,21 @@ option(ROCPROFVIS_ENABLE_UI_TESTS "Build view-layer Dear ImGui UI tests" OFF)
 # graduate.
 option(ROCPROFVIS_ENABLE_PROFILER "Build with in-app profiler launch support (in development)" OFF)
 option(ROCPROFVIS_ENABLE_REMOTE "Build with remote/SSH support (in development)" OFF)
+option(ROCPROFVIS_ENABLE_AGENTIC_PROFILING "Build with the Ask Optiq assistant (in development)" OFF)
+option(ROCPROFVIS_ENABLE_SCRIPTING "Build with embedded Python analysis scripts (in development)" OFF)
 
 # The two flags are independent: profiler launch builds without remote (the
 # SSH connection UI inside the launcher is compiled out via
 # ROCPROFVIS_ENABLE_REMOTE guards), and remote can be enabled on its own. The
 # remote-profiling glue (RemoteProfilerSession / SshProfilerExecutor) is only
 # built when BOTH are enabled.
+
+# TEMPORARY: gate the in-development trace-compare and multi-window features
+# until they ship. Both default OFF so release builds exclude their UI and
+# dependent sources. Remove these options and unwrap their guards when the
+# features graduate.
+option(ROCPROFVIS_ENABLE_TRACE_COMPARE "Build with trace comparison support (in development)" OFF)
+option(ROCPROFVIS_MULTI_WINDOW "Build with multi-window support (in development)" OFF)
 
 if(ROCPROFVIS_DEVELOPER_MODE)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DROCPROFVIS_DEVELOPER_MODE")
@@ -51,9 +60,21 @@ endif(ROCPROFVIS_ENABLE_PROFILER)
 if(ROCPROFVIS_ENABLE_REMOTE)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DROCPROFVIS_ENABLE_REMOTE")
 endif(ROCPROFVIS_ENABLE_REMOTE)
+if(ROCPROFVIS_ENABLE_AGENTIC_PROFILING)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DROCPROFVIS_ENABLE_AGENTIC_PROFILING")
+endif(ROCPROFVIS_ENABLE_AGENTIC_PROFILING)
+if(ROCPROFVIS_ENABLE_SCRIPTING)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DROCPROFVIS_ENABLE_SCRIPTING")
+endif(ROCPROFVIS_ENABLE_SCRIPTING)
 if(ROCPROFVIS_ENABLE_INTERNAL_BANNER)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DROCPROFVIS_ENABLE_INTERNAL_BANNER")
 endif(ROCPROFVIS_ENABLE_INTERNAL_BANNER)
+if(ROCPROFVIS_ENABLE_TRACE_COMPARE)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DROCPROFVIS_ENABLE_TRACE_COMPARE")
+endif(ROCPROFVIS_ENABLE_TRACE_COMPARE)
+if(ROCPROFVIS_MULTI_WINDOW)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DROCPROFVIS_MULTI_WINDOW")
+endif(ROCPROFVIS_MULTI_WINDOW)
 
 # Set GLFW library type based on option
 if(GLFW_LINK_STATIC)
@@ -77,6 +98,9 @@ if(PERFETTO_AVAILABLE)
 endif()
 add_subdirectory(src/core)
 add_subdirectory(src/model)
+if(ROCPROFVIS_ENABLE_SCRIPTING)
+    add_subdirectory(src/python)
+endif()
 add_subdirectory(src/controller)
 
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src/model/inc)
@@ -87,8 +111,8 @@ find_package(Vulkan REQUIRED)
 set(VIEW_FILES
     src/view/src/rocprofvis_appwindow.cpp
     src/view/src/rocprofvis_appwindow.h
-    src/view/src/rocprofvis_compare_files_dialog.cpp
-    src/view/src/rocprofvis_compare_files_dialog.h
+    src/view/src/rocprofvis_compare_panes.cpp
+    src/view/src/rocprofvis_compare_panes.h
     src/view/src/welcome/rocprofvis_welcome_page.cpp
     src/view/src/welcome/rocprofvis_welcome_page.h
     src/view/src/rocprofvis_annotation_view.cpp
@@ -104,8 +128,8 @@ set(VIEW_FILES
     src/view/src/rocprofvis_stickynote.cpp
     src/view/src/rocprofvis_click_manager.cpp
     src/view/src/rocprofvis_measurement_controller.cpp
-    src/view/src/rocprofvis_analysis_view.cpp 
-    src/view/src/rocprofvis_trace_view.cpp 
+    src/view/src/rocprofvis_analysis_view.cpp
+    src/view/src/rocprofvis_trace_view.cpp
     src/view/src/rocprofvis_top_events_view.cpp
     src/view/src/rocprofvis_line_track_item.cpp 
     src/view/src/rocprofvis_timeline_view.cpp 
@@ -126,7 +150,6 @@ set(VIEW_FILES
     src/view/src/rocprofvis_utils.cpp
     src/view/src/rocprofvis_timeline_selection.cpp
     src/view/src/rocprofvis_timeline_track_options.cpp
-    src/view/src/rocprofvis_track_topology.cpp
     src/view/src/rocprofvis_track_details.cpp
     src/view/src/rocprofvis_project.cpp
     src/view/src/rocprofvis_multi_track_table.cpp
@@ -157,18 +180,38 @@ set(VIEW_FILES
     src/view/src/compute/rocprofvis_compute_table_view.cpp
     src/view/src/compute/rocprofvis_compute_kernel_details.cpp
     src/view/src/compute/rocprofvis_compute_memory_chart.cpp
+    src/view/src/model/compute/rocprofvis_memory_chart_model.cpp
     src/view/src/compute/rocprofvis_compute_selection.cpp
     src/view/src/compute/rocprofvis_compute_summary.cpp
     src/view/src/compute/rocprofvis_compute_roofline.cpp
     src/view/src/compute/rocprofvis_compute_workload_view.cpp
     src/view/src/compute/rocprofvis_compute_kernel_metric_table.cpp
     src/view/src/compute/rocprofvis_compute_comparison.cpp
-    src/view/src/compute/rocprofvis_compute_code_view.cpp
+    src/view/src/compute/rocprofvis_compute_isa_view.cpp
     src/view/src/compute/rocprofvis_compute_tester.cpp
     src/view/src/model/compute/rocprofvis_compute_data_model.cpp
     src/view/src/widgets/rocprofvis_compute_widget.cpp
     src/view/src/widgets/rocprofvis_query_builder.cpp
 )
+
+# TEMPORARY (trace compare): compare-files dialog. Remove this guard when the
+# feature graduates. Compare pane chrome stays in the always-built view because
+# it is woven into AnalysisView / EventsView / TrackDetails.
+if(ROCPROFVIS_ENABLE_TRACE_COMPARE)
+list(APPEND VIEW_FILES
+    src/view/src/rocprofvis_compare_files_dialog.cpp
+    src/view/src/rocprofvis_compare_files_dialog.h
+)
+endif(ROCPROFVIS_ENABLE_TRACE_COMPARE)
+
+# SecretStore is shared: SSH passwords need it, and so does the assistant's API
+# token, so it is compiled when either feature is on and left out otherwise.
+if(ROCPROFVIS_ENABLE_REMOTE OR ROCPROFVIS_ENABLE_AGENTIC_PROFILING)
+list(APPEND VIEW_FILES
+    src/view/src/remote/rocprofvis_secret_store.cpp
+    src/view/src/remote/rocprofvis_secret_store.h
+)
+endif()
 
 
 # TEMPORARY (profiler launch): profiler UI + backends + app monitor. Remove
@@ -200,8 +243,6 @@ endif(ROCPROFVIS_ENABLE_PROFILER)
 if(ROCPROFVIS_ENABLE_REMOTE)
 list(APPEND VIEW_FILES
     src/view/src/remote/rocprofvis_ssh_uri.cpp
-    src/view/src/remote/rocprofvis_secret_store.cpp
-    src/view/src/remote/rocprofvis_secret_store.h
     src/view/src/remote/rocprofvis_ssh_connection_config.cpp
     src/view/src/remote/rocprofvis_ssh_connection_config.h
     src/view/src/remote/rocprofvis_ssh_connection_store.cpp
@@ -220,6 +261,34 @@ list(APPEND VIEW_FILES
 )
 endif(ROCPROFVIS_ENABLE_REMOTE)
 
+# TEMPORARY (agentic profiling): the Ask Optiq assistant. Remove this guard
+# when the feature graduates.
+if(ROCPROFVIS_ENABLE_AGENTIC_PROFILING)
+list(APPEND VIEW_FILES
+    src/view/src/agenticprofiling/rocprofvis_ai_actions.cpp
+    src/view/src/agenticprofiling/rocprofvis_ai_actions.h
+    src/view/src/agenticprofiling/rocprofvis_ai_assistant.cpp
+    src/view/src/agenticprofiling/rocprofvis_ai_assistant.h
+    src/view/src/agenticprofiling/rocprofvis_ai_assistant_render.cpp
+    src/view/src/agenticprofiling/rocprofvis_ai_client.cpp
+    src/view/src/agenticprofiling/rocprofvis_ai_client.h
+    src/view/src/agenticprofiling/rocprofvis_ai_data_tools.cpp
+    src/view/src/agenticprofiling/rocprofvis_ai_prompts.cpp
+    src/view/src/agenticprofiling/rocprofvis_ai_prompts.h
+    src/view/src/agenticprofiling/rocprofvis_ai_script_tools.cpp
+    src/view/src/agenticprofiling/rocprofvis_ai_settings.cpp
+    src/view/src/agenticprofiling/rocprofvis_ai_tool_query.cpp
+    src/view/src/agenticprofiling/rocprofvis_ai_tool_query.h
+    src/view/src/agenticprofiling/rocprofvis_ai_tool_schema.cpp
+    src/view/src/agenticprofiling/rocprofvis_ai_tool_schema.h
+    src/view/src/agenticprofiling/rocprofvis_ai_tools.cpp
+    src/view/src/agenticprofiling/rocprofvis_ai_tools.h
+    src/view/src/agenticprofiling/rocprofvis_ai_tools_internal.h
+    src/view/src/agenticprofiling/rocprofvis_ai_trace_view_actions.cpp
+    src/view/src/agenticprofiling/rocprofvis_ai_ui_tools.cpp
+)
+endif(ROCPROFVIS_ENABLE_AGENTIC_PROFILING)
+
 # TEMPORARY (remote profiling): the remote profiler session bridges the
 # profiler and remote features, so it needs both flags.
 if(ROCPROFVIS_ENABLE_PROFILER AND ROCPROFVIS_ENABLE_REMOTE)
@@ -228,6 +297,16 @@ list(APPEND VIEW_FILES
     src/view/src/profiler/rocprofvis_remote_profiler_session.h
 )
 endif()
+
+if(ROCPROFVIS_ENABLE_SCRIPTING)
+list(APPEND VIEW_FILES
+    src/view/src/rocprofvis_data_provider_script.cpp
+    src/view/src/widgets/rocprofvis_script_editor.cpp
+    src/view/src/widgets/rocprofvis_script_editor.h
+)
+endif()
+
+include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/capture_git_commit.cmake)
 
 configure_file(
     "${CMAKE_CURRENT_SOURCE_DIR}/resources/version.h.in"
@@ -252,10 +331,29 @@ set(APP_FILES
     src/app/src/rocprofvis_imgui_vulkan.cpp
     src/app/src/rocprofvis_imgui_opengl.cpp
     src/app/src/glfw_util.cpp
-    src/app/src/rocprofvis_cli_parser.cpp)
+    src/app/src/rocprofvis_cli_parser.cpp
+    src/app/src/rocprofvis_platform_helpers.cpp)
 if(APPLE)
     list(APPEND APP_FILES src/app/src/rocprofvis_platform_helpers_macos.mm)
 endif()
+
+# Embed the per-architecture Memory Chart JSON layouts (resources/memory_chart/*.json)
+# into a generated header at build time, so they are compiled in rather than
+# shipped as runtime assets. Editing a layout JSON re-runs the generator.
+set(MEMCHART_LAYOUT_DIR ${CMAKE_SOURCE_DIR}/resources/memory_chart)
+set(MEMCHART_HEADER ${CMAKE_SOURCE_DIR}/src/view/src/compute/rocprofvis_memory_chart_layouts_generated.h)
+file(GLOB MEMCHART_LAYOUT_JSON CONFIGURE_DEPENDS ${MEMCHART_LAYOUT_DIR}/*.json)
+add_custom_command(
+    OUTPUT ${MEMCHART_HEADER}
+    COMMAND ${CMAKE_COMMAND}
+        -DMEMCHART_DIR=${MEMCHART_LAYOUT_DIR}
+        -DMEMCHART_OUT=${MEMCHART_HEADER}
+        -P ${CMAKE_SOURCE_DIR}/cmake/embed_memory_chart_layouts.cmake
+    DEPENDS ${MEMCHART_LAYOUT_JSON} ${CMAKE_SOURCE_DIR}/cmake/embed_memory_chart_layouts.cmake
+    COMMENT "Embedding memory-chart layouts -> ${MEMCHART_HEADER}"
+    VERBATIM
+)
+add_custom_target(generate_memory_chart_layouts DEPENDS ${MEMCHART_HEADER})
 
 if(APPLE)
     add_executable(${TARGET_NAME} MACOSX_BUNDLE ${APP_FILES} src/app/src/main.cpp ${VIEW_FILES})
@@ -264,6 +362,7 @@ else()
 endif()
 
 add_dependencies(${TARGET_NAME} generate_icon_header)
+add_dependencies(${TARGET_NAME} generate_memory_chart_layouts)
 
 if(WIN32)
     set_target_properties(${TARGET_NAME} PROPERTIES WIN32_EXECUTABLE TRUE)
@@ -320,6 +419,30 @@ target_link_libraries(${TARGET_NAME} PRIVATE ${TARGET_NAME}-core)
 target_link_libraries(${TARGET_NAME} PRIVATE spdlog)
 target_link_libraries(${TARGET_NAME} PRIVATE sqlite3)
 target_link_libraries(${TARGET_NAME} PRIVATE json)
+if(ROCPROFVIS_ENABLE_AGENTIC_PROFILING)
+    target_link_libraries(${TARGET_NAME} PRIVATE cpp-httplib)
+    # httplib.h is one 21k-line header, which overruns the default section limit.
+    if(MSVC)
+        set_source_files_properties(
+            src/view/src/agenticprofiling/rocprofvis_ai_client.cpp PROPERTIES
+            COMPILE_OPTIONS "/bigobj"
+        )
+    endif()
+endif(ROCPROFVIS_ENABLE_AGENTIC_PROFILING)
+
+if(BUILD_TESTING)
+    # Parser-only Memory Chart tests: need no GPU, database, or UI, so every
+    # embedded layout is validated on each test run rather than when someone
+    # first opens a trace for that architecture.
+    set(MEMCHART_TEST_NAME ${TARGET_NAME}-memory-chart-tests)
+    add_executable(${MEMCHART_TEST_NAME}
+        src/view/test/rocprofvis_memory_chart_layout_tests.cpp
+        src/view/src/model/compute/rocprofvis_memory_chart_model.cpp)
+    add_dependencies(${MEMCHART_TEST_NAME} generate_memory_chart_layouts)
+    target_include_directories(${MEMCHART_TEST_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/view/src)
+    target_link_libraries(${MEMCHART_TEST_NAME} PRIVATE json Catch2::Catch2WithMain)
+    add_test(NAME ${MEMCHART_TEST_NAME} COMMAND ${MEMCHART_TEST_NAME})
+endif()
 
 if(BUILD_TESTING AND ROCPROFVIS_ENABLE_UI_TESTS)
     # Fail at configure if imgui_te was dropped (e.g. BUILD_TESTING shadowed).
@@ -358,6 +481,7 @@ if(BUILD_TESTING AND ROCPROFVIS_ENABLE_UI_TESTS)
     set(TEST_TARGET ${TARGET_NAME}-tests)
     add_executable(${TEST_TARGET} ${APP_FILES} src/app/test/test_main.cpp ${VIEW_FILES} src/app/test/app_tests.cpp)
     add_dependencies(${TEST_TARGET} generate_icon_header)
+    add_dependencies(${TEST_TARGET} generate_memory_chart_layouts)
     target_compile_definitions(${TEST_TARGET} PRIVATE IMGUI_ENABLE_TEST_ENGINE)
     target_include_directories(${TEST_TARGET} PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/src/app/inc
@@ -395,6 +519,9 @@ if(BUILD_TESTING AND ROCPROFVIS_ENABLE_UI_TESTS)
         "${Vulkan_LIBRARIES}"
         OpenGL::GL
     )
+    if(ROCPROFVIS_ENABLE_AGENTIC_PROFILING)
+        target_link_libraries(${TEST_TARGET} PRIVATE cpp-httplib)
+    endif(ROCPROFVIS_ENABLE_AGENTIC_PROFILING)
     if(USE_NATIVE_FILE_DIALOG)
         target_link_libraries(${TEST_TARGET} PRIVATE nfd)
         target_compile_definitions(${TEST_TARGET} PRIVATE ROCPROFVIS_HAVE_NATIVE_FILE_DIALOG)
@@ -420,32 +547,45 @@ endif()
 if (CRYPTO_BACKEND STREQUAL "OpenSSL")
 target_link_libraries(${TARGET_NAME} PRIVATE libssh2_static OpenSSL::SSL OpenSSL::Crypto)
 endif()
+endif(ROCPROFVIS_ENABLE_REMOTE)
 
-# SecretStore backends: link the OS credential-vault APIs. On Linux libsecret
-# is optional; when absent, SecretStore compiles a stub that reports itself
-# unavailable and the app falls back to prompting for SSH secrets at connect
-# time (never persisting them in plaintext).
+# SecretStore backends: the OS credential-vault APIs, linked only when something
+# actually stores a secret - SSH passwords under remote, the API token under
+# agentic profiling. On Linux libsecret is optional; when absent, SecretStore
+# compiles a stub that reports itself unavailable and secrets stay in process
+# memory only.
+if(ROCPROFVIS_ENABLE_REMOTE OR ROCPROFVIS_ENABLE_AGENTIC_PROFILING)
+set(ROCPROFVIS_SECRET_STORE_TARGETS ${TARGET_NAME})
+if(TARGET ${TARGET_NAME}-tests)
+    list(APPEND ROCPROFVIS_SECRET_STORE_TARGETS ${TARGET_NAME}-tests)
+endif()
 if(WIN32)
-    target_link_libraries(${TARGET_NAME} PRIVATE Advapi32)
+    foreach(secret_target ${ROCPROFVIS_SECRET_STORE_TARGETS})
+        target_link_libraries(${secret_target} PRIVATE Advapi32)
+    endforeach()
 elseif(APPLE)
-    target_link_libraries(${TARGET_NAME} PRIVATE "-framework Security" "-framework CoreFoundation")
+    foreach(secret_target ${ROCPROFVIS_SECRET_STORE_TARGETS})
+        target_link_libraries(${secret_target} PRIVATE "-framework Security" "-framework CoreFoundation")
+    endforeach()
 else()
     find_package(PkgConfig QUIET)
     if(PkgConfig_FOUND)
         pkg_check_modules(LIBSECRET QUIET libsecret-1)
     endif()
     if(LIBSECRET_FOUND)
-        target_include_directories(${TARGET_NAME} PRIVATE ${LIBSECRET_INCLUDE_DIRS})
-        target_link_libraries(${TARGET_NAME} PRIVATE ${LIBSECRET_LIBRARIES})
-        target_compile_definitions(${TARGET_NAME} PRIVATE ROCPROFVIS_HAVE_LIBSECRET)
+        foreach(secret_target ${ROCPROFVIS_SECRET_STORE_TARGETS})
+            target_include_directories(${secret_target} PRIVATE ${LIBSECRET_INCLUDE_DIRS})
+            target_link_libraries(${secret_target} PRIVATE ${LIBSECRET_LIBRARIES})
+            target_compile_definitions(${secret_target} PRIVATE ROCPROFVIS_HAVE_LIBSECRET)
+        endforeach()
     else()
         message(WARNING
-            "libsecret-1 not found: SSH passwords will not be persisted on this "
-            "Linux build (users are prompted at connect time). Install "
-            "libsecret-1-dev / libsecret-devel to enable secure credential storage.")
+            "libsecret-1 not found: assistant tokens and SSH passwords will not "
+            "be persisted on this Linux build. Install libsecret-1-dev / "
+            "libsecret-devel to enable secure credential storage.")
     endif()
 endif()
-endif(ROCPROFVIS_ENABLE_REMOTE)
+endif()
 
 if(APPLE)
     # rocprofvis_platform_helpers_macos.mm uses AppKit (+[NSEvent modifierFlags]).
@@ -580,7 +720,7 @@ Auto-detected from the Vulkan SDK / Homebrew when empty.")
     # the executable's actual dependency paths at build time with otool, then
     # rewrite every OpenSSL reference to `@rpath/<versioned-name>`. The staged
     # files keep their versioned names so the load commands match.
-    if(ROCPROFVIS_ENABLE_REMOTE AND CRYPTO_BACKEND STREQUAL "OpenSSL")
+    if((ROCPROFVIS_ENABLE_REMOTE OR ROCPROFVIS_ENABLE_AGENTIC_PROFILING) AND CRYPTO_BACKEND STREQUAL "OpenSSL")
         get_target_property(ROCPROFVIS_OPENSSL_SSL_LIB OpenSSL::SSL IMPORTED_LOCATION)
         get_target_property(ROCPROFVIS_OPENSSL_CRYPTO_LIB OpenSSL::Crypto IMPORTED_LOCATION)
         if(NOT ROCPROFVIS_OPENSSL_SSL_LIB OR NOT ROCPROFVIS_OPENSSL_CRYPTO_LIB)
@@ -733,10 +873,13 @@ else()
             COMPONENT ${RUNTIME_COMP_TYPE} )
 endif()
 
+# Packaging install name — override with -DROCM_PACKAGE_NAME=amdrocm10-roc-optiq from CI
+set(ROCM_PACKAGE_NAME "${PROJECT_NAME}" CACHE STRING "Install package name used by DEB/RPM (e.g. amdrocm10-roc-optiq)")
+
 # Debian package specific variables
 set(CPACK_COMPONENTS_ALL RV_RUNTIME)
 set(CPACK_DEB_COMPONENT_INSTALL ON)
-set(CPACK_DEBIAN_RV_RUNTIME_PACKAGE_NAME "${PROJECT_NAME}")
+set(CPACK_DEBIAN_RV_RUNTIME_PACKAGE_NAME "${ROCM_PACKAGE_NAME}")
 # Set package version to 1 
 if(NOT DEFINED CPACK_DEBIAN_PACKAGE_RELEASE)
   set(CPACK_DEBIAN_PACKAGE_RELEASE "1")
@@ -748,9 +891,10 @@ if(NOT GLFW_LINK_STATIC)
     list(APPEND DEB_DEPENDS_LIST "libglfw3")
 endif()
 # DEB depends are explicit (unlike RPM AUTOREQPROV), so declare the system
-# OpenSSL runtime only when the OpenSSL backend is built. The default mbedTLS
-# backend links statically and needs no extra runtime dependency.
-if(ROCPROFVIS_ENABLE_REMOTE AND CRYPTO_BACKEND STREQUAL "OpenSSL")
+# OpenSSL runtime only when remote or Ask Optiq is built against OpenSSL.
+# The default mbedTLS backend links statically and needs no extra runtime
+# dependency.
+if((ROCPROFVIS_ENABLE_REMOTE OR ROCPROFVIS_ENABLE_AGENTIC_PROFILING) AND CRYPTO_BACKEND STREQUAL "OpenSSL")
     list(APPEND DEB_DEPENDS_LIST "libssl3")
 endif()
 list(APPEND DEB_DEPENDS_LIST "libc6")
@@ -765,7 +909,7 @@ if(NOT APPLE)
     set(CMAKE_SKIP_RPATH TRUE)
 endif()
 set(CPACK_RPM_COMPONENT_INSTALL ON)
-set(CPACK_RPM_RV_RUNTIME_PACKAGE_NAME "${PROJECT_NAME}")
+set(CPACK_RPM_RV_RUNTIME_PACKAGE_NAME "${ROCM_PACKAGE_NAME}")
 
 # Set package version to 1 
 if(NOT DEFINED CPACK_RPM_PACKAGE_RELEASE)
@@ -847,7 +991,7 @@ if(WIN32)
     # $<TARGET_RUNTIME_DLLS> only captures OpenSSL if find_package produced shared
     # imported targets with the .dll as IMPORTED_LOCATION (distribution-dependent),
     # so copy the resolved OpenSSL DLLs explicitly when that backend is enabled.
-    if(ROCPROFVIS_ENABLE_REMOTE AND CRYPTO_BACKEND STREQUAL "OpenSSL")
+    if((ROCPROFVIS_ENABLE_REMOTE OR ROCPROFVIS_ENABLE_AGENTIC_PROFILING) AND CRYPTO_BACKEND STREQUAL "OpenSSL")
         set(_ossl_dlls "")
         # 1) Preferred: the imported target's IMPORTED_LOCATION, when it is a DLL.
         foreach(_ossl_target OpenSSL::SSL OpenSSL::Crypto)

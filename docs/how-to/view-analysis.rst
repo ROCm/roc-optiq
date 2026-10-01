@@ -10,8 +10,9 @@ View ROCm Compute Profiler analysis data in ROCm Optiq
 
 .. |eye| image:: ../images/eye.png
 .. |gear| image:: ../images/gear.png
+.. |hideTable| image:: ../images/hideTable.png
 
-ROCm Optiq provides intuitive, interactive profiling analysis for compute workloads by moving from a high-level performance summary to detailed kernel- and metric-level analysis. 
+ROCm Optiq provides intuitive, interactive profiling analysis for compute workloads by moving from a high-level performance summary to detailed kernel-level analysis. 
 It enables rapid identification of performance hotspots and interactive exploration of kernel-level metrics for a profiled workload.
 
 .. note::
@@ -25,6 +26,8 @@ ROCm Optiq supports the ROCm Compute Profiler analysis database format (``.db``)
 
 Select **File** > **Open** to open a database file. 
 You can also open files by dragging them into the application window. 
+
+.. _view-analysis-troubleshooting:
 
 Troubleshooting
 ---------------
@@ -99,6 +102,7 @@ Showing where kernels are positioned relative to these rooflines helps determine
 - Click |gear| in the menu to show or hide rooflines or arithmetic intensity points. 
 - Hold your cursor over a dot to view detailed information about the kernel it represents. The information includes the Kernel name, Invocation(s), Duration, Arithmetic Intensity, and Performance. 
 - Use presets to display information specific to a particular data type. 
+- Select a kernel, a memory-level line (L1, L2, high bandwidth memory (HBM), or local data share (LDS)), or a bandwidth peak from the dropdown menus to filter the chart to that selection.
 - Use the Roofline **Legend/Menu position** control options to reposition the Roofline Legend/Menu. The options include: 
 
   - Inside, Top Left
@@ -110,8 +114,6 @@ Showing where kernels are positioned relative to these rooflines helps determine
   .. image:: ../images/Roofline-legend.png
      :width: 400
      :alt: Roofline chart legend and menu repositioned to the inside bottom-right of the chart area
-
-- Roofline chart now supports LDS (Local Data Share) Intensity points in addition to L1, L2, and HBM. Use the chart menu to show or hide LDS intensity markers. This requires ROCm Compute Profiler analysis database schema 1.4.0 with non-zero ``lds_cache_data`` (ROCm 7.14.0 or later). 
 
 
 Summary View -- System Speed-of-Light
@@ -154,7 +156,7 @@ The **Kernel Selection Table** displays kernel information, including names and 
 
 - The Duration column enables you to sort (ascending or descending).  
 - Selecting a kernel through the **Kernel Selection Table** or kernel selector drop-down updates the Memory Chart, System Speed-of-Light, Kernel-level Roofline Analysis, and Table View accordingly. 
-- You can hide this table by clicking |eye| to maximize space for charts.
+- You can hide this table by clicking |hideTable| to maximize space for charts.
 - To show or hide bar charts for metric values in the **Kernel Selection Table**, select **Show Bar Charts** or **Hide Bar Charts**.  
 - To show or hide bar charts for a specific metric, right-click the metric's column header and select **Show Bar Chart** or **Hide Bar Charts**. 
 - Hover over a clipped kernel name to view the full name in a tooltip. 

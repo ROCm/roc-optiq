@@ -23,7 +23,7 @@ constexpr std::array<std::tuple<const char*, const char*, size_t>,
                                 { "Mean", "Avg", 3 },
                                 { "Standard Deviation", "Std Dev", 8 } } };
 
-AnalysisModel::AnalysisModel(const TopologyDataModel& topology)
+AnalysisModel::AnalysisModel(const TopologyTree& topology)
 : m_analysis_range_start_ns(0.0)
 , m_analysis_range_end_ns(0.0)
 , m_topology(topology)

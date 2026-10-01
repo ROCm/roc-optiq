@@ -29,6 +29,9 @@ public:
 
     void Execute();
     void Cancel();
+    // Complete a job that is not run by JobSystem (e.g. the Python
+    // interpreter thread). No-op if the job already left Pending.
+    void Complete(rocprofvis_result_t result);
     rocprofvis_result_t GetResult() const;
     rocprofvis_result_t Wait(float timeout);
 

@@ -129,7 +129,7 @@ rocprofvis_result_t SystemTable::Fetch(rocprofvis_dm_trace_t dm_handle, uint64_t
                                                     ROCPROFVIS_ASSERT(value);
 
                                                     Data& row_value = row[j];
-                                                    row_value.SetType(m_columns[j].m_type);
+                                                    row_value.SetType(kRPVControllerPrimitiveTypeString);
                                                     row_value.SetString(value);
                                                 }
 
@@ -315,8 +315,12 @@ rocprofvis_result_t SystemTable::Setup(rocprofvis_dm_trace_t dm_handle, Argument
                                                         table,
                                                         kRPVDMExtTableColumnNameCharPtrIndexed,
                                                         i);
-                                                m_columns[i-1].m_type =
-                                                    kRPVControllerPrimitiveTypeString;
+                                                m_columns[i-1].m_type = PrimitiveType(
+                                                    (rocprofvis_db_data_type_t)
+                                                        rocprofvis_dm_get_property_as_uint64(
+                                                            table,
+                                                            kRPVDMExtTableColumnTypeUInt64Indexed,
+                                                            i));
                                             }
                                         }
                                     }
@@ -339,6 +343,30 @@ rocprofvis_result_t SystemTable::Setup(rocprofvis_dm_trace_t dm_handle, Argument
         Reset();
     }
     delete query_args;
+    return result;
+}
+
+rocprofvis_controller_primitive_type_t
+SystemTable::PrimitiveType(rocprofvis_db_data_type_t db_data_type) const
+{
+    rocprofvis_controller_primitive_type_t result = kRPVControllerPrimitiveTypeString;
+    switch(db_data_type)
+    {
+        case kRPVDataTypeInt:
+        {
+            result = kRPVControllerPrimitiveTypeUInt64;
+            break;
+        }
+        case kRPVDataTypeDouble:
+        {
+            result = kRPVControllerPrimitiveTypeDouble;
+            break;
+        }
+        default:
+        {
+            break;
+        }
+    }
     return result;
 }
 
@@ -380,75 +408,6 @@ rocprofvis_result_t SystemTable::ExportCSV(rocprofvis_dm_trace_t dm_handle, Argu
         }
     }
     delete query_args;
-    return result;
-}
-
-rocprofvis_result_t SystemTable::GetUInt64(rocprofvis_property_t property, uint64_t index, uint64_t* value)
-{
-    rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
-    if(value)
-    {
-        switch(property)
-        {
-            case kRPVControllerTableId:
-            {
-                *value = m_id;
-                result = kRocProfVisResultSuccess;
-                break;
-            }
-            case kRPVControllerTableNumColumns:
-            {
-                *value = m_columns.size();
-                result = kRocProfVisResultSuccess;
-                break;
-            }
-            case kRPVControllerTableNumRows:
-            {
-                *value = m_num_items;
-                result = kRocProfVisResultSuccess;
-                break;
-            }
-            case kRPVControllerTableColumnTypeIndexed:
-            {
-                if(index < m_columns.size())
-                {
-                    *value = m_columns[index].m_type;
-                    result = kRocProfVisResultSuccess;
-                }
-                break;
-            }
-            default:
-            {
-                result = UnhandledProperty(property);
-                break;
-            }
-        }
-    }
-    return result;
-}
-
-rocprofvis_result_t SystemTable::GetString(rocprofvis_property_t property, uint64_t index, char* value, uint32_t* length)
-{
-    rocprofvis_result_t result = kRocProfVisResultInvalidArgument;
-    if(length)
-    {
-        switch(property)
-        {
-            case kRPVControllerTableColumnHeaderIndexed:
-            {
-                if (index < m_columns.size())
-                {
-                    result = GetStdStringImpl(value, length, m_columns[index].m_name);
-                }
-                break;
-            }
-            default:
-            {
-                result = UnhandledProperty(property);
-                break;
-            }
-        }
-    }
     return result;
 }
 
@@ -528,17 +487,13 @@ SystemTable::UnpackArguments(Arguments& args, TableArguments*& out) const
                     result = args.GetObject(kRPVControllerTableArgsTracksIndexed, i, track_ref.GetHandleAddress());
                     if (track_ref.IsValid())
                     {
-                        uint64_t test_type = 0;
-                        result = track_ref->GetUInt64(kRPVControllerTrackType, 0, &test_type);
-                        if (test_type == track_type)
+                        rocprofvis_controller_track_type_t test_type =
+                            track_ref->GetTrackType();
+                        if(test_type == track_type)
                         {
-                            uint64_t track_id = 0;
-                            result = track_ref->GetUInt64(kRPVControllerTrackId, 0, &track_id);
-                            if(result == kRocProfVisResultSuccess)
-                            {
-                                ROCPROFVIS_ASSERT(track_id <= UINT32_MAX);
-                                tracks.push_back((uint32_t)track_id);
-                            }
+                            uint64_t track_id = track_ref->GetId();
+                            ROCPROFVIS_ASSERT(track_id <= UINT32_MAX);
+                            tracks.push_back((uint32_t) track_id);
                         }
                         else
                         {

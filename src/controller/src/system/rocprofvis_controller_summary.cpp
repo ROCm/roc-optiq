@@ -9,6 +9,7 @@
 #include "rocprofvis_controller_track.h"
 #include "rocprofvis_controller_arguments.h"
 #include <cstdlib>
+#include <cstring>
 
 namespace RocProfVis
 {
@@ -370,76 +371,68 @@ rocprofvis_result_t Summary::FetchCounterAverage(rocprofvis_dm_trace_t dm_handle
             Track* track = (Track*)track_handle;
             if(track_handle)
             {
-                uint64_t track_id = 0;
-                result = track->GetUInt64(kRPVControllerTrackId, 0, &track_id);
-                if(result == kRocProfVisResultSuccess)
+                uint64_t track_id = track->GetId();
+                rocprofvis_db_future_t object2wait = rocprofvis_db_future_alloc(nullptr);
+                if(object2wait)
                 {
-                    rocprofvis_db_future_t object2wait = rocprofvis_db_future_alloc(nullptr);
-                    if(object2wait)
+                    rocprofvis_dm_database_t db = rocprofvis_dm_get_property_as_handle(dm_handle, kRPVDMDatabaseHandle, 0);
+                    if(db)
                     {
-                        rocprofvis_dm_database_t db = rocprofvis_dm_get_property_as_handle(dm_handle, kRPVDMDatabaseHandle, 0);
-                        if(db)
+                        rocprofvis_dm_result_t dm_result = kRocProfVisDmResultUnknownError;
+                        rocprofvis_dm_table_id_t table_id = 0;
+                        char* query = nullptr;
+                        dm_result = rocprofvis_db_build_table_query(db, kRPVDMTableUseCaseSampleTrackTable,
+                                                                    static_cast<rocprofvis_dm_timestamp_t>(m_start_ts), static_cast<rocprofvis_dm_timestamp_t>(m_end_ts),
+                                                                    1, (rocprofvis_db_track_selection_t)&track_id,
+                                                                    nullptr, nullptr,
+                                                                    "counter, AVG(value) AS avg_value, MIN(value) AS min_value, MAX(value) AS max_value", "counter",
+                                                                    nullptr, kRPVDMSortOrderAsc,
+                                                                    0, 0, false, &query);
+                        if(dm_result == kRocProfVisDmResultSuccess)
                         {
-                            rocprofvis_dm_result_t dm_result = kRocProfVisDmResultUnknownError;
-                            rocprofvis_dm_table_id_t table_id = 0;
-                            char* query = nullptr;
-                            dm_result = rocprofvis_db_build_table_query(db, kRPVDMTableUseCaseSampleTrackTable, 
-                                                                        static_cast<rocprofvis_dm_timestamp_t>(m_start_ts), static_cast<rocprofvis_dm_timestamp_t>(m_end_ts), 
-                                                                        1, (rocprofvis_db_track_selection_t)&track_id, 
-                                                                        nullptr, nullptr, 
-                                                                        "counter, AVG(value) AS avg_value, MIN(value) AS min_value, MAX(value) AS max_value", "counter", 
-                                                                        nullptr, kRPVDMSortOrderAsc, 
-                                                                        0, 0, false, &query);
+                            dm_result = rocprofvis_db_execute_query_async(db, query, "Fetch counter summary", object2wait, &table_id);
                             if(dm_result == kRocProfVisDmResultSuccess)
                             {
-                                dm_result = rocprofvis_db_execute_query_async(db, query, "Fetch counter summary", object2wait, &table_id);
+                                future->AddDependentFuture(object2wait);
+                                dm_result = rocprofvis_db_future_wait(object2wait, UINT64_MAX);
                                 if(dm_result == kRocProfVisDmResultSuccess)
                                 {
-                                    future->AddDependentFuture(object2wait);
-                                    dm_result = rocprofvis_db_future_wait(object2wait, UINT64_MAX);
-                                    if(dm_result == kRocProfVisDmResultSuccess)
+                                    uint64_t num_tables = rocprofvis_dm_get_property_as_uint64(dm_handle, kRPVDMNumberOfTablesUInt64, 0);
+                                    if(num_tables > 0)
                                     {
-                                        uint64_t num_tables = rocprofvis_dm_get_property_as_uint64(dm_handle, kRPVDMNumberOfTablesUInt64, 0);
-                                        if(num_tables > 0)
+                                        rocprofvis_dm_table_t table = rocprofvis_dm_get_property_as_handle(dm_handle, kRPVDMTableHandleByID, table_id);
+                                        if(table)
                                         {
-                                            rocprofvis_dm_table_t table = rocprofvis_dm_get_property_as_handle(dm_handle, kRPVDMTableHandleByID, table_id);
-                                            if(table)
+                                            if(!future->IsCancelled())
                                             {
-                                                if(!future->IsCancelled())
-                                                {                    
-                                                    const char* table_query = rocprofvis_dm_get_property_as_charptr(table, kRPVDMExtTableQueryCharPtr, 0);
-                                                    uint64_t num_rows = rocprofvis_dm_get_property_as_uint64(table, kRPVDMNumberOfTableRowsUInt64, 0);
-                                                    uint64_t num_columns = rocprofvis_dm_get_property_as_uint64(table, kRPVDMNumberOfTableColumnsUInt64, 0);
-                                                    if(strcmp(table_query, query) == 0 && num_rows == 1)
+                                                const char* table_query = rocprofvis_dm_get_property_as_charptr(table, kRPVDMExtTableQueryCharPtr, 0);
+                                                uint64_t num_rows = rocprofvis_dm_get_property_as_uint64(table, kRPVDMNumberOfTableRowsUInt64, 0);
+                                                uint64_t num_columns = rocprofvis_dm_get_property_as_uint64(table, kRPVDMNumberOfTableColumnsUInt64, 0);
+                                                if(strcmp(table_query, query) == 0 && num_rows == 1)
+                                                {
+                                                    rocprofvis_dm_table_row_t table_row = rocprofvis_dm_get_property_as_handle(table, kRPVDMExtTableRowHandleIndexed, 0);
+                                                    if(table_row != nullptr)
                                                     {
-                                                        rocprofvis_dm_table_row_t table_row = rocprofvis_dm_get_property_as_handle(table, kRPVDMExtTableRowHandleIndexed, 0);
-                                                        if(table_row != nullptr)
+                                                        uint64_t num_cells = rocprofvis_dm_get_property_as_uint64(table_row, kRPVDMNumberOfTableRowCellsUInt64, 0);
+                                                        if(num_cells == num_columns)
                                                         {
-                                                            uint64_t num_cells = rocprofvis_dm_get_property_as_uint64(table_row, kRPVDMNumberOfTableRowCellsUInt64, 0);
-                                                            if(num_cells == num_columns)
+                                                            for(int i = 0; i < num_cells; i++)
                                                             {
-                                                                for(int i = 0; i < num_cells; i++)
+                                                                char const* col_name = rocprofvis_dm_get_property_as_charptr(table, kRPVDMExtTableColumnNameCharPtrIndexed, i);
+                                                                char const* value = rocprofvis_dm_get_property_as_charptr(table_row, kRPVDMExtTableRowCellValueCharPtrIndexed, i);
+                                                                if(strcmp(col_name, "avg_value") == 0)
                                                                 {
-                                                                    char const* col_name = rocprofvis_dm_get_property_as_charptr(table, kRPVDMExtTableColumnNameCharPtrIndexed, i);
-                                                                    char const* value = rocprofvis_dm_get_property_as_charptr(table_row, kRPVDMExtTableRowCellValueCharPtrIndexed, i);
-                                                                    if(strcmp(col_name, "avg_value") == 0)
+                                                                    if(value && strlen(value) > 0)
                                                                     {
-                                                                        if(value && strlen(value) > 0)
-                                                                        {
-                                                                            average = strtof(value, NULL);
-                                                                            result = kRocProfVisResultSuccess;
-                                                                        }
-                                                                        else
-                                                                        {
-                                                                            result = kRocProfVisResultUnknownError;
-                                                                        }
-                                                                        break;
+                                                                        average = strtof(value, NULL);
+                                                                        result = kRocProfVisResultSuccess;
                                                                     }
+                                                                    else
+                                                                    {
+                                                                        result = kRocProfVisResultUnknownError;
+                                                                    }
+                                                                    break;
                                                                 }
-                                                            }
-                                                            else
-                                                            {
-                                                                result = kRocProfVisResultUnknownError;
                                                             }
                                                         }
                                                         else
@@ -452,12 +445,12 @@ rocprofvis_result_t Summary::FetchCounterAverage(rocprofvis_dm_trace_t dm_handle
                                                         result = kRocProfVisResultUnknownError;
                                                     }
                                                 }
-                                                rocprofvis_dm_delete_table_at(dm_handle, table_id);
+                                                else
+                                                {
+                                                    result = kRocProfVisResultUnknownError;
+                                                }
                                             }
-                                            else
-                                            {
-                                                result = kRocProfVisResultUnknownError;
-                                            }
+                                            rocprofvis_dm_delete_table_at(dm_handle, table_id);
                                         }
                                         else
                                         {
@@ -467,7 +460,7 @@ rocprofvis_result_t Summary::FetchCounterAverage(rocprofvis_dm_trace_t dm_handle
                                     else
                                     {
                                         result = kRocProfVisResultUnknownError;
-                                    }                                    
+                                    }
                                 }
                                 else
                                 {
@@ -478,16 +471,21 @@ rocprofvis_result_t Summary::FetchCounterAverage(rocprofvis_dm_trace_t dm_handle
                             {
                                 result = kRocProfVisResultUnknownError;
                             }
-                            free(query);
                         }
                         else
                         {
                             result = kRocProfVisResultUnknownError;
                         }
-                        future->RemoveDependentFuture(object2wait);
-                        rocprofvis_db_future_free(object2wait);
+                        free(query);
                     }
+                    else
+                    {
+                        result = kRocProfVisResultUnknownError;
+                    }
+                    future->RemoveDependentFuture(object2wait);
+                    rocprofvis_db_future_free(object2wait);
                 }
+
             }
             else
             {

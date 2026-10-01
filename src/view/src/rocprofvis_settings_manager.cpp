@@ -5,9 +5,13 @@
 #include "rocprofvis_hotkey_manager.h"
 #include "imgui.h"
 #include "implot.h"
+#ifdef ROCPROFVIS_ENABLE_AGENTIC_PROFILING
+#    include "remote/rocprofvis_secret_store.h"
+#endif
 #include "rocprofvis_core.h"
 #include "rocprofvis_event_manager.h"
 #include "rocprofvis_font_manager.h"
+#include "rocprofvis_json_utils.h"
 #include "rocprofvis_settings_panel.h"
 #include "rocprofvis_utils.h"
 
@@ -15,6 +19,7 @@
 #include <cmath>
 #include <cstdlib>
 #include <fstream>
+#include <set>
 
 namespace RocProfVis
 {
@@ -103,10 +108,10 @@ constexpr std::array DARK_THEME_COLORS = {
     IM_COL32(70, 70, 70, 200),     // Colors::kMeasurementLabelEdge
     IM_COL32(255, 255, 255, 255),  // Colors::kMeasurementLabelText
     IM_COL32(255, 255, 255, 120),  // Colors::kMeasurementNotch
-    IM_COL32(42, 82, 118, 255),    // Colors::kComparisonBase
-    IM_COL32(26, 116, 112, 255),   // Colors::kComparisonTarget
+    IM_COL32(60, 114, 165, 255),   // Colors::kComparisonBase
+    IM_COL32(30, 124, 118, 255),   // Colors::kComparisonTarget
     IM_COL32(205, 170, 82, 255),   // Colors::kComparisonLesser
-    IM_COL32(92, 62, 132, 255),    // Colors::kComparisonGreater
+    IM_COL32(190, 150, 235, 255),  // Colors::kComparisonGreater
 
     // Centralized from view widgets (kept in Colors enum order):
     IM_COL32(29, 30, 38, 255),     // Colors::kMemChartBg
@@ -157,7 +162,7 @@ constexpr std::array LIGHT_THEME_COLORS = {
     IM_COL32(140, 150, 170, 28),   // Colors::kGridColor
     IM_COL32(120, 162, 220, 255),  // Colors::kGridRed
     IM_COL32(54, 132, 214, 255),   // Colors::kSelectionBorder
-    IM_COL32(54, 132, 214, 34),    // Colors::kSelection
+    IM_COL32(54, 132, 214, 52),    // Colors::kSelection
     IM_COL32(140, 148, 168, 255),  // Colors::kBoundBox
     IM_COL32(247, 248, 250, 255),  // Colors::kFillerColor
     IM_COL32(190, 196, 208, 255),  // Colors::kScrollBarColor
@@ -226,10 +231,10 @@ constexpr std::array LIGHT_THEME_COLORS = {
     IM_COL32(180, 180, 180, 200),  // Colors::kMeasurementLabelEdge
     IM_COL32(20, 20, 20, 255),     // Colors::kMeasurementLabelText
     IM_COL32(80, 80, 80, 120),     // Colors::kMeasurementNotch
-    IM_COL32(203, 230, 252, 255),  // Colors::kComparisonBase
-    IM_COL32(194, 235, 230, 255),  // Colors::kComparisonTarget
-    IM_COL32(248, 224, 166, 255),  // Colors::kComparisonLesser
-    IM_COL32(224, 206, 244, 255),  // Colors::kComparisonGreater
+    IM_COL32(123, 179, 224, 255),  // Colors::kComparisonBase
+    IM_COL32(101, 184, 174, 255),  // Colors::kComparisonTarget
+    IM_COL32(204, 177, 112, 255),  // Colors::kComparisonLesser
+    IM_COL32(185, 133, 242, 255),  // Colors::kComparisonGreater
 
     // Centralized from view widgets (kept in Colors enum order):
     IM_COL32(248, 251, 255, 255),  // Colors::kMemChartBg
@@ -499,6 +504,8 @@ SettingsManager::SaveSettingsJson()
     SerializeOtherSettings(settings_json);
     SerializeHotkeySettings(settings_json);
     SerializeProfilerSettings(settings_json);
+    SerializeAssistantSettings(settings_json);
+    SerializeAppWindowSettings(settings_json);
 
     std::ofstream out_file(m_json_path);
     if(out_file.is_open())
@@ -529,6 +536,11 @@ SettingsManager::LoadSettingsJson()
         DeserializeOtherSettings(result.second);
         DeserializeHotkeySettings(result.second);
         DeserializeProfilerSettings(result.second);
+        DeserializeAssistantSettings(result.second);
+        DeserializeAppWindowSettings(result.second);
+#ifdef ROCPROFVIS_ENABLE_AGENTIC_PROFILING
+        MigrateLegacyAssistantToken();
+#endif
     }
     else
     {
@@ -546,7 +558,9 @@ SettingsManager::GetStandardConfigPath()
 void
 SettingsManager::ApplyUserDisplaySettings(const UserSettings& old_settings)
 {
-    (void) old_settings;  // currently unused
+    const bool theme_changed = old_settings.display_settings.use_dark_mode !=
+                               m_usersettings.display_settings.use_dark_mode;
+
     if(m_usersettings.display_settings.use_dark_mode)
     {
         m_color_store = &DARK_THEME_COLORS;
@@ -564,6 +578,14 @@ SettingsManager::ApplyUserDisplaySettings(const UserSettings& old_settings)
     m_usersettings.display_settings.font_size_index =
         GetFontManager().ClampFontSizeIndex(m_usersettings.display_settings.font_size_index);
     GetFontManager().SetFontSize(m_usersettings.display_settings.font_size_index);
+
+    // Notify views that cache palette colors (e.g. the memory chart). Deferred
+    // until DispatchEvents, after m_color_store already points at the new theme.
+    if(theme_changed)
+    {
+        EventManager::GetInstance()->AddEvent(
+            std::make_shared<RocEvent>(static_cast<int>(RocEvents::kThemeChanged)));
+    }
 }
 
 void
@@ -616,7 +638,8 @@ SettingsManager::SettingsManager()
 , m_usersettings_default(
       { DisplaySettings{ false, 6, true, false }, UnitSettings{ TimeFormat::kTimecode },
         false, false, LOG_VIEWER_MAX_ENTRIES_DEFAULT,
-        LogViewerSettings{ LOG_VIEWER_DEFAULT_LEVEL_MASK, true, false, false, false } })
+        LogViewerSettings{ LOG_VIEWER_DEFAULT_LEVEL_MASK, true, false, false, false },
+        AssistantSettings{}, false })
 , m_usersettings(m_usersettings_default)
 , m_appwindowsettings({ AppWindowSettings{ true, true, true, true, false } })
 , m_json_path(GetStandardConfigPath())
@@ -799,6 +822,7 @@ SettingsManager::SerializeOtherSettings(jt::Json& json)
 
     os[JSON_KEY_SETTINGS_DONT_ASK_BEFORE_EXIT] = m_usersettings.dont_ask_before_exit;
     os[JSON_KEY_SETTINGS_DONT_ASK_BEFORE_TAB_CLOSE] = m_usersettings.dont_ask_before_tab_closing;
+    os[JSON_KEY_SETTINGS_LINUX_DRAG_REPAIR]         = m_usersettings.linux_drag_repair;
     os[JSON_KEY_SETTINGS_LOG_VIEWER_MAX_ENTRIES] = m_usersettings.log_viewer_max_entries;
 
     os[JSON_KEY_SETTINGS_LOG_VIEWER_LEVEL_MASK]    = m_usersettings.log_viewer.level_mask;
@@ -821,6 +845,11 @@ SettingsManager::DeserializeOtherSettings(jt::Json& json)
     {
         m_usersettings.dont_ask_before_tab_closing =
             static_cast<bool>(os[JSON_KEY_SETTINGS_DONT_ASK_BEFORE_TAB_CLOSE].getBool());
+    }
+    if(os[JSON_KEY_SETTINGS_LINUX_DRAG_REPAIR].isBool())
+    {
+        m_usersettings.linux_drag_repair =
+            static_cast<bool>(os[JSON_KEY_SETTINGS_LINUX_DRAG_REPAIR].getBool());
     }
     if(os[JSON_KEY_SETTINGS_LOG_VIEWER_MAX_ENTRIES].isLong())
     {
@@ -1019,6 +1048,172 @@ SettingsManager::DeserializeProfilerSettings(jt::Json& json)
             }
         }
     }
+}
+
+// The API keys are deliberately absent: those live in the credential store.
+void
+SettingsManager::SerializeAssistantSettings(jt::Json& json)
+{
+    jt::Json& as = json[JSON_KEY_GROUP_SETTINGS][JSON_KEY_SETTINGS_CATEGORY_ASSISTANT];
+    int32_t   i  = 0;
+    for(const AssistantProvider& provider : m_usersettings.assistant.providers)
+    {
+        jt::Json& entry = as[JSON_KEY_SETTINGS_ASSISTANT_PROVIDERS][i++];
+        entry[JSON_KEY_SETTINGS_ASSISTANT_NAME]         = provider.name;
+        entry[JSON_KEY_SETTINGS_ASSISTANT_ENDPOINT_URL] = provider.endpoint_url;
+        entry[JSON_KEY_SETTINGS_ASSISTANT_MODEL]        = provider.model;
+    }
+    as[JSON_KEY_SETTINGS_ASSISTANT_ACTIVE] =
+        static_cast<int>(m_usersettings.assistant.active);
+}
+
+// Also upgrades the pre-provider single-endpoint shape.
+/*
+ * Makes every endpoint name distinct, and gives an unnamed one a name.
+ *
+ * The name is the credential-store key, so two endpoints sharing one would
+ * share a key: the token entered for one host would be posted to the other's.
+ * Nothing in the UI creates a duplicate, but a hand-edited settings file can,
+ * and that is exactly the case where the mistake is invisible. Suffixing is
+ * better than dropping the endpoint, which would silently lose a configuration.
+ */
+void
+SettingsManager::MakeAssistantProviderNamesUnique()
+{
+    std::set<std::string> taken;
+    for(AssistantProvider& provider : m_usersettings.assistant.providers)
+    {
+        if(provider.name.empty())
+        {
+            provider.name = ASSISTANT_DEFAULT_PROVIDER_NAME;
+        }
+        if(taken.insert(provider.name).second)
+        {
+            continue;
+        }
+        const std::string base = provider.name;
+        for(size_t suffix = 2;; ++suffix)
+        {
+            const std::string candidate = base + " (" + std::to_string(suffix) + ")";
+            if(taken.insert(candidate).second)
+            {
+                spdlog::warn("Assistant endpoint \"{}\" was duplicated; renamed to \"{}\" "
+                             "so the two do not share one stored key",
+                             base, candidate);
+                provider.name = candidate;
+                break;
+            }
+        }
+    }
+}
+
+void
+SettingsManager::DeserializeAssistantSettings(jt::Json& json)
+{
+    jt::Json& as = json[JSON_KEY_GROUP_SETTINGS][JSON_KEY_SETTINGS_CATEGORY_ASSISTANT];
+
+    if(as[JSON_KEY_SETTINGS_ASSISTANT_PROVIDERS].isArray())
+    {
+        m_usersettings.assistant.providers.clear();
+        for(jt::Json& entry : as[JSON_KEY_SETTINGS_ASSISTANT_PROVIDERS].getArray())
+        {
+            if(!entry.isObject())
+            {
+                continue;
+            }
+            AssistantProvider provider;
+            if(entry[JSON_KEY_SETTINGS_ASSISTANT_NAME].isString())
+            {
+                provider.name = entry[JSON_KEY_SETTINGS_ASSISTANT_NAME].getString();
+            }
+            if(entry[JSON_KEY_SETTINGS_ASSISTANT_ENDPOINT_URL].isString())
+            {
+                provider.endpoint_url =
+                    entry[JSON_KEY_SETTINGS_ASSISTANT_ENDPOINT_URL].getString();
+            }
+            if(entry[JSON_KEY_SETTINGS_ASSISTANT_MODEL].isString())
+            {
+                provider.model = entry[JSON_KEY_SETTINGS_ASSISTANT_MODEL].getString();
+            }
+            m_usersettings.assistant.providers.push_back(provider);
+        }
+        for(AssistantProvider& provider : m_usersettings.assistant.providers)
+        {
+            ApplyAssistantEndpointDefaults(provider);
+        }
+        MakeAssistantProviderNamesUnique();
+    }
+    else if(as[JSON_KEY_SETTINGS_ASSISTANT_ENDPOINT_URL].isString())
+    {
+        // Written before routes were configurable: fold the single endpoint
+        // into the list under the default name, so the key already in the
+        // credential store keeps working.
+        AssistantProvider provider;
+        provider.name         = ASSISTANT_DEFAULT_PROVIDER_NAME;
+        provider.endpoint_url = as[JSON_KEY_SETTINGS_ASSISTANT_ENDPOINT_URL].getString();
+        if(as[JSON_KEY_SETTINGS_ASSISTANT_MODEL].isString())
+        {
+            provider.model = as[JSON_KEY_SETTINGS_ASSISTANT_MODEL].getString();
+        }
+        ApplyAssistantEndpointDefaults(provider);
+        m_usersettings.assistant.providers.clear();
+        m_usersettings.assistant.providers.push_back(provider);
+    }
+
+    m_usersettings.assistant.active = 0;
+    if(as[JSON_KEY_SETTINGS_ASSISTANT_ACTIVE].isLong())
+    {
+        const int64_t active = as[JSON_KEY_SETTINGS_ASSISTANT_ACTIVE].getLong();
+        if(active > 0 &&
+           static_cast<size_t>(active) < m_usersettings.assistant.providers.size())
+        {
+            m_usersettings.assistant.active = static_cast<size_t>(active);
+        }
+    }
+}
+
+const AssistantProvider*
+SettingsManager::GetActiveAssistantProvider() const
+{
+    const std::vector<AssistantProvider>& providers = m_usersettings.assistant.providers;
+    if(m_usersettings.assistant.active >= providers.size())
+    {
+        return nullptr;
+    }
+    return &providers[m_usersettings.assistant.active];
+}
+
+void
+SettingsManager::SerializeAppWindowSettings(jt::Json& json)
+{
+    jt::Json& aw = json[JSON_KEY_GROUP_SETTINGS][JSON_KEY_SETTINGS_CATEGORY_APP_WINDOW];
+    aw[JSON_KEY_SETTINGS_APP_WINDOW_TOOLBAR]       = m_appwindowsettings.show_toolbar;
+    aw[JSON_KEY_SETTINGS_APP_WINDOW_DETAILS_PANEL] =
+        m_appwindowsettings.show_details_panel;
+    aw[JSON_KEY_SETTINGS_APP_WINDOW_SIDEBAR]   = m_appwindowsettings.show_sidebar;
+    aw[JSON_KEY_SETTINGS_APP_WINDOW_HISTOGRAM] = m_appwindowsettings.show_histogram;
+    aw[JSON_KEY_SETTINGS_APP_WINDOW_SUMMARY]   = m_appwindowsettings.show_summary;
+}
+
+void
+SettingsManager::DeserializeAppWindowSettings(jt::Json& json)
+{
+    jt::Json& aw = json[JSON_KEY_GROUP_SETTINGS][JSON_KEY_SETTINGS_CATEGORY_APP_WINDOW];
+    m_appwindowsettings.show_toolbar =
+        JsonUtils::GetBool(aw, JSON_KEY_SETTINGS_APP_WINDOW_TOOLBAR,
+                           m_appwindowsettings.show_toolbar);
+    m_appwindowsettings.show_details_panel =
+        JsonUtils::GetBool(aw, JSON_KEY_SETTINGS_APP_WINDOW_DETAILS_PANEL,
+                           m_appwindowsettings.show_details_panel);
+    m_appwindowsettings.show_sidebar =
+        JsonUtils::GetBool(aw, JSON_KEY_SETTINGS_APP_WINDOW_SIDEBAR,
+                           m_appwindowsettings.show_sidebar);
+    m_appwindowsettings.show_histogram =
+        JsonUtils::GetBool(aw, JSON_KEY_SETTINGS_APP_WINDOW_HISTOGRAM,
+                           m_appwindowsettings.show_histogram);
+    m_appwindowsettings.show_summary =
+        JsonUtils::GetBool(aw, JSON_KEY_SETTINGS_APP_WINDOW_SUMMARY,
+                           m_appwindowsettings.show_summary);
 }
 
 }  // namespace View

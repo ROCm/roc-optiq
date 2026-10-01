@@ -21,6 +21,12 @@ class KernelMetricTable;
 class ComputeKernelDetailsView : public RocWidget
 {
 public:
+    static constexpr const char* TAB_ID = "compute_kernel_details_view";
+
+    static TabItem CreateTabItem(
+        DataProvider& data_provider,
+        const std::shared_ptr<ComputeSelection>& compute_selection);
+
     ComputeKernelDetailsView(DataProvider&                     data_provider,
                              std::shared_ptr<ComputeSelection> compute_selection);
     ~ComputeKernelDetailsView();

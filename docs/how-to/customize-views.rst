@@ -1,13 +1,15 @@
 .. meta::
-  :description: Learn how to customize ROCm Optiq projects: set time range filters, add bookmarks and annotations, adjust track display options, and save presets.
+  :description: Learn how to customize ROCm Optiq: add bookmarks and annotations, adjust track display options, and save presets.
   :keywords: Optiq, ROCm, customize, filter, bookmarks, annotations
 
 .. _customize:
 
-*********************************
-Customize your ROCm Optiq project
-*********************************
+********************
+Customize ROCm Optiq
+********************
 
+.. |scroll| image:: ../images/scroll-to.png
+.. |eye| image:: ../images/eye.png
 .. |book| image:: ../images/bookmarks.png
 .. |pen| image:: ../images/pencil.png
 .. |flow| image:: ../images/flow-change.png
@@ -28,10 +30,12 @@ Change settings
 
 You can adjust the settings in your ROCm Compute Profiler and ROCm Systems Profiler projects.
 
-Select **Edit** > **Preferences** to adjust these global settings for ROCm Optiq from the **Settings** menu: 
+Use the **Edit** > **Preferences** menu to open the **Settings** dialog. The following settings can be adjusted: 
 
-- The application theme display (Light or Dark mode).
-- The font scaling: automatic based on the display DPI, or customized using the font size control:
+- The application theme (Light or Dark).
+- The multi-node decorators visibility. This controls whether to enable node colors in the:ref:`topology` view and node labels in the track descriptions.
+- The topology sidebar icon button visibility. This controls whether the |eye| (show/hide track) and |scroll| (go to track) icon buttons display in the sidebar of the :ref:`topology`.
+- The font size.
 
   .. image:: ../images/settings.png
      :width: 600
@@ -61,56 +65,11 @@ Use the **View** menu to show and hide application panels.
 Customize projects for ROCm Systems Profiler traces
 ===================================================
 
-You can customize the data views of an open ROCm Systems Profiler trace file in ROCm Optiq, including timeline display settings, saved trace selections, added bookmarks/annotations, and more.
+You can customize the data views of an open ROCm Systems Profiler trace file in ROCm Optiq, including timeline display settings, bookmarks, annotations, and more.
 
 .. note::
 
    These settings only apply to ROCm Systems Profiler trace projects. They don't apply to ROCm Compute Profiler projects.
-
-.. _time-range-filter:
-
-Set a time range filter
------------------------
-
-Set a time range filter in the :ref:`timeline` to limit the data displayed to a specific period. 
-
-To set a time range filter, press and hold **Ctrl** while dragging your mouse in the **Timeline View** to select a range.
-
-.. image:: ../images/time-range-filter.gif
-   :width: 800
-   :alt: Timeline View with a time range selected, showing the shaded selection area with draggable boundary handles
-
-Once a time range is selected, the selection boundaries can be adjusted by dragging them. 
-The active time range filter applies to event and sample counter details in the :ref:`advanced` section.
-
-If one or more events are selected, the **Make Time Range Selection** option displays on the timeline context menu when you right-click:
-
-|make|
-
-Selecting this sets a time-range filter with boundaries at the event's start and end times, or at the first start time and last end time if multiple events are selected. 
-
-.. tip::
-
-   Press **M** for a shortcut to **Make Time Range Selection** when one or more events are selected.  
-
-To clear the time range selection, press **Esc** or right-click and select **Remove Selection**:
-
-|remove|
-
-.. note::
-
-   When a time-range filter is active, all events intersecting that time-range remain at full brightness; events outside the range are dimmed. 
-
-Save trace selections
-~~~~~~~~~~~~~~~~~~~~~
-
-When there's an active time range filter, select **Edit** > **Save Trace Selection** to trim the trace:
-
-.. image:: ../images/save-trace.png
-   :width: 200
-   :alt: Edit menu with the Save Trace Selection option highlighted
-
-This creates a new trace file containing only the events in the filter.
 
 .. _annotation:
 
@@ -148,14 +107,14 @@ To add an annotation:
    The **Annotations** tab in the **Advanced Details** section shows a list of annotations.  
    Each row shows the annotation title, the note, the track it is attached to, its start time, and a checkbox for visibility.
    Clicking a row brings the selected annotation into view on the timeline.
+   You can use **Lock Annotation** to lock an annotation to prevent accidental drag or rebind. You can choose **Go-to-Anchor** to bring the view back to the annotation's anchor point.
 
 
 .. tip::
 
-  - Edit or delete the annotation by clicking |pen|.
   - View the complete list of annotations in the **Annotations** tab of the :ref:`advanced` section.
   - Check the **Visibility** option in the **Annotations** tab to toggle the visibility of individual annotations.
-  - Clicking a row in the annotations list displays the selected annotation.
+  - Clicking a row in the annotations list brings the selected annotation into view on the timeline.
 
 Create bookmarks
 ----------------
@@ -177,8 +136,8 @@ Delete bookmarks
 
 Use the following actions to delete bookmarks or reset the view.
 
-- To delete a bookmark, click **X** to delete a bookmark from the |book| menu. 
-- Click **Reset View** to return the :ref:`timeline` to its original pan and zoom settings.
+- Select **X** to delete a bookmark from the |book| menu. 
+- Select **Reset View** to return the :ref:`timeline` to its original pan and zoom settings.
 
 Customize timeline display options
 ----------------------------------
@@ -218,6 +177,7 @@ Customize display options for each track by right clicking the **Description** a
 .. tip::
 
    The context menu when right-clicking a track's description in **Timeline View** also provides **Copy track name** and **Copy track ID**. 
+   You can select multiple tracks and apply a **Track Options** change to all selected tracks at once instead of repeating the change per track.
 
 Set the flow rendering display mode
 -----------------------------------
@@ -231,16 +191,16 @@ Chain mode displays events in a linked sequence, emphasizing dependencies and ex
 .. image:: ../images/chain-mode.png
    :width: 800
    :alt: Timeline View in Chain mode showing events linked in sequence to emphasize dependencies and execution order
-
-Render mode shows events in a fan-out style, highlighting parallelism and branching. This helps visualize concurrency and how multiple operations originate from a single source.
+   
+Fan mode shows events in a fan-out style, highlighting parallelism and branching. This helps visualize concurrency and how multiple operations originate from a single source.
 
 .. image:: ../images/fan-mode.png
    :width: 800
-   :alt: Timeline View in Render (fan) mode showing events fanning out from a single source to highlight parallelism
+   :alt: Timeline View in Fan mode showing events fanning out from a single source to highlight parallelism
 
 .. note::
 
-  Chain mode and Render mode are visualization modes for relations. They don't represent the actual kernel scheduling flow.
+  Chain mode and Fan mode are visualization modes for relations. They don't represent the actual kernel scheduling flow.
 
 Save a project file
 -------------------
@@ -259,7 +219,7 @@ You can remove metadata added by ROCm Optiq during processing trace data by sele
    :width: 300
    :alt: File menu open with Database submenu showing the Full Cleanup option for removing ROCm Optiq metadata
 
-Customize projects for ROCm Compute Profiler analysis data
+Customize views for ROCm Compute Profiler analysis data
 ==========================================================
 
 .. _presets:

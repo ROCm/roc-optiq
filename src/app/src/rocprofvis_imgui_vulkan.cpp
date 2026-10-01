@@ -46,8 +46,11 @@ typedef struct rocprofvis_imgui_vk_data_t
 } rocprofvis_imgui_vk_data_t;
 
 static constexpr uint32_t kRPVGuiTextureDescriptorPoolSize = 1024;
+// ImGui 1.92.7+ allocates user textures as VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE and reserves
+// IMGUI_IMPL_VULKAN_MINIMUM_SAMPLED_IMAGE_POOL_SIZE of them for its own font atlas, so
+// subtract that reserve to get the app's usable texture budget.
 static constexpr uint32_t kRPVMaxGuiTextures =
-    kRPVGuiTextureDescriptorPoolSize - IMGUI_IMPL_VULKAN_MINIMUM_IMAGE_SAMPLER_POOL_SIZE;
+    kRPVGuiTextureDescriptorPoolSize - IMGUI_IMPL_VULKAN_MINIMUM_SAMPLED_IMAGE_POOL_SIZE;
 
 static void
 rocprofvis_imgui_backend_vk_check_result(VkResult err)
@@ -384,19 +387,27 @@ rocprofvis_imgui_backend_vk_setup_vulkan(rocprofvis_imgui_vk_data_t* backend_dat
                                                  &backend_data->m_queue);
 
                                 // Create Descriptor Pool
-                                // ImGui 1.92+'s dynamic texture system creates many more
-                                // textures, so we need a larger descriptor pool.
+                                // ImGui 1.92.7+ allocates user textures as separate
+                                // SAMPLED_IMAGE + SAMPLER descriptors (previously a single
+                                // COMBINED_IMAGE_SAMPLER), so the pool must supply both
+                                // types or ImGui_ImplVulkan_AddTexture() fails at runtime
+                                // with VK_ERROR_OUT_OF_POOL_MEMORY. This mirrors the layout
+                                // the backend builds for its own auto-created pool.
                                 {
                                     VkDescriptorPoolSize pool_sizes[] = {
-                                        { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                                        { VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
                                           kRPVGuiTextureDescriptorPoolSize },
+                                        { VK_DESCRIPTOR_TYPE_SAMPLER,
+                                          IMGUI_IMPL_VULKAN_MINIMUM_SAMPLER_POOL_SIZE },
                                     };
                                     VkDescriptorPoolCreateInfo pool_info = {};
                                     pool_info.sType =
                                         VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
                                     pool_info.flags =
                                         VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
-                                    pool_info.maxSets = kRPVGuiTextureDescriptorPoolSize;
+                                    pool_info.maxSets =
+                                        kRPVGuiTextureDescriptorPoolSize +
+                                        IMGUI_IMPL_VULKAN_MINIMUM_SAMPLER_POOL_SIZE;
                                     pool_info.poolSizeCount =
                                         (uint32_t) IM_ARRAYSIZE(pool_sizes);
                                     pool_info.pPoolSizes = pool_sizes;

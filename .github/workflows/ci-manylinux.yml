@@ -337,7 +337,7 @@ jobs:
           S3_DEB_BASE="s3://${S3_BUCKET}/${{ env.S3_ROOT_DIRECTORY }}/packages/deb"
           aws s3 cp \
             "${DEB_SRC}" \
-            "${S3_DEB_BASE}/pool/main/$(basename "${DEB_SRC}")" \
+            "${S3_DEB_BASE}/pool/main/${DEB_NAME}" \
             --no-progress
 
       - name: Generate and Upload DEB Metadata to S3
@@ -353,7 +353,7 @@ jobs:
           SUITE="stable"
           mkdir -p deb-repo/pool/main deb-repo/dists/${SUITE}/main/binary-amd64
           cp "${DEB_SRC}" \
-            deb-repo/pool/main/$(basename "${DEB_SRC}")
+            deb-repo/pool/main/$(basename "${DEB_NAME}")
 
           # Generate Packages index
           cd deb-repo

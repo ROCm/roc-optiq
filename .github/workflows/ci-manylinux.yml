@@ -330,9 +330,9 @@ jobs:
           DEB_SRC=$(ls ${{ env.DIST_DIR }}/*.deb | head -1)
           DEB_BASE=$(basename "${DEB_SRC}")
           if [[ -n "${BUILD_TIMESTAMP}" ]]; then
-            DEB_NAME="amdrocm${ROCM_VERSION}-$(echo "${DEB_BASE}" | sed 's/_\([^_]*\.deb\)$/+'"${BUILD_TIMESTAMP}"'_\1/')"
+            DEB_NAME="$(echo "${DEB_BASE}" | sed 's/_\([^_]*\.deb\)$/+'"${BUILD_TIMESTAMP}"'_\1/')"
           else
-            DEB_NAME="amdrocm${ROCM_VERSION}-${DEB_BASE}"
+            DEB_NAME="${DEB_BASE}"
           fi
           S3_DEB_BASE="s3://${S3_BUCKET}/${{ env.S3_ROOT_DIRECTORY }}/packages/deb"
           aws s3 cp \
@@ -390,9 +390,9 @@ jobs:
         run: |
           RPM_SRC=$(ls ${{ env.DIST_DIR }}/*.rpm | head -1)
           if [[ -n "${BUILD_TIMESTAMP}" ]]; then
-            RPM_NAME="amdrocm${ROCM_VERSION}-$(basename "${RPM_SRC}" | sed 's/\.el[0-9]\+//' | sed 's/\.\([^.]*\.rpm\)$/\.'"${BUILD_TIMESTAMP}"'\.\1/')"
+            RPM_NAME="$(basename "${RPM_SRC}" | sed 's/\.el[0-9]\+//' | sed 's/\.\([^.]*\.rpm\)$/\.'"${BUILD_TIMESTAMP}"'\.\1/')"
           else
-            RPM_NAME="amdrocm${ROCM_VERSION}-$(basename "${RPM_SRC}" | sed 's/\.el[0-9]\+//')"
+            RPM_NAME="$(basename "${RPM_SRC}" | sed 's/\.el[0-9]\+//')"
           fi
           S3_RPM_PREFIX="s3://${S3_BUCKET}/${{ env.S3_ROOT_DIRECTORY }}/packages/rpm/x86_64"
 

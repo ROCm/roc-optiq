@@ -316,6 +316,12 @@ The bridge between model and view. **Public** API in `inc/`:
   (`rocprofvis_handle_t`, `rocprofvis_controller_t`, ...) and result codes.
 - `rocprofvis_profiler.h` - profiler config/session C API used by the
   optional launcher, including local and remote async launch.
+- `rocprofvis_controller_analysis.h` - `rocprofvis_analysis_*` C API
+  (queue utilization, counter statistics, top-events tables).
+
+Only `inc/` is exported to consumers; `src/` is a `PRIVATE` include
+directory of `roc-optiq-controller`, so a View include of a controller
+`src/` header fails to compile.
 
 Internal source layout under `src/controller/src/`:
 
@@ -336,7 +342,8 @@ Internal source layout under `src/controller/src/`:
 - `rocprofvis_controller_string_table.{h,cpp}` - intern-style table.
 - `rocprofvis_controller_table.{h,cpp}` - generic table support.
 - `rocprofvis_controller_trace.{h,cpp}` - trace-file lifecycle.
-- `rocprofvis_controller_analysis.{h,cpp}` - cross-cutting analytics
+- `rocprofvis_controller_analysis.cpp` /
+  `rocprofvis_controller_analysis_internal.h` - cross-cutting analytics
   (e.g. queue utilization).
 - `system/` - per-domain modules covering events, ext_data, flow
   control, graphs, memory management, samples (and sample LOD),

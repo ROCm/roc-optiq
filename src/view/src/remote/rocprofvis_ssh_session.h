@@ -3,7 +3,8 @@
 
 #pragma once
 
-#include "rocprofvis_controller_handle.h"
+#include "rocprofvis_controller_enums.h"
+#include "rocprofvis_controller_types.h"
 #include "rocprofvis_ssh_uri.h"
 #include "rocprofvis_ssh_fetch.h"
 #include "rocprofvis_appmonitor.h"

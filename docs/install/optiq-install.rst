@@ -386,7 +386,13 @@ Install
    :heading: Install using apt
    :heading-level: 3
 
-   1. Register the ROCm Optiq repository:
+   1. Install system dependencies:
+
+      .. code-block:: shell
+
+         sudo apt install libgl1 libopengl0 libdbus-1-3
+
+   2. Register the ROCm Optiq repository:
 
       .. code-block:: shell
 
@@ -405,14 +411,14 @@ Install
 
          sudo apt update
 
-   2. Install the ROCm Optiq package:
+   3. Install the ROCm Optiq package:
 
       .. code-block:: shell
 
          sudo apt install amdrocm10-roc-optiq
 
 
-   3. Complete the following post-installation steps:
+   4. Complete the following post-installation steps:
 
       Configure environment variables so that ROCm Optiq is added to the ``PATH`` variable. There are two choices:
 
@@ -444,7 +450,7 @@ Install
          sudo chmod +x /etc/profile.d/set-optiq-env.sh
          source /etc/profile.d/set-optiq-env.sh
 
-   4. Verify Your Installation:
+   5. Verify Your Installation:
 
       .. code-block:: shell
 
@@ -454,7 +460,12 @@ Install
    :heading: Install using apt
    :heading-level: 3
 
-   1. Register the ROCm Optiq repository:
+   1. Install system dependencies:
+
+      .. code-block:: shell
+
+         sudo apt install libgl1 libopengl0 libdbus-1-3
+   2. Register the ROCm Optiq repository:
 
       .. code-block:: shell
 
@@ -473,14 +484,14 @@ Install
 
          sudo apt update
 
-   2. Install the ROCm Optiq package:
+   3. Install the ROCm Optiq package:
 
       .. code-block:: shell
 
          sudo apt install amdrocm10-roc-optiq
 
 
-   3. Complete the following post-installation steps:
+   4. Complete the following post-installation steps:
 
       Configure environment variables so that ROCm Optiq is added to the ``PATH`` variable. There are two choices:
 
@@ -512,7 +523,7 @@ Install
          sudo chmod +x /etc/profile.d/set-optiq-env.sh
          source /etc/profile.d/set-optiq-env.sh
 
-   4. Verify Your Installation:
+   5. Verify Your Installation:
 
       .. code-block:: shell
 
@@ -522,7 +533,13 @@ Install
    :heading: Install using apt
    :heading-level: 3
 
-   1. Register the ROCm Optiq repository:
+   1. Install system dependencies:
+
+      .. code-block:: shell
+
+         sudo apt install libgl1 libopengl0 libdbus-1-3
+
+   2. Register the ROCm Optiq repository:
 
       .. code-block:: shell
 
@@ -541,14 +558,14 @@ Install
 
          sudo apt update
 
-   2. Install the ROCm Optiq package:
+   3. Install the ROCm Optiq package:
 
       .. code-block:: shell
 
          sudo apt install amdrocm10-roc-optiq
 
 
-   3. Complete the following post-installation steps:
+   4. Complete the following post-installation steps:
 
       Configure environment variables so that ROCm Optiq is added to the ``PATH`` variable. There are two choices:
 
@@ -580,7 +597,7 @@ Install
          sudo chmod +x /etc/profile.d/set-optiq-env.sh
          source /etc/profile.d/set-optiq-env.sh
 
-   4. Verify Your Installation:
+   5. Verify Your Installation:
 
       .. code-block:: shell
 

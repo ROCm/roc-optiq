@@ -241,13 +241,13 @@ Measure
    :width: 800
    :alt: Measurement mode UI
 
-- Enable **Measure** mode from the toolbar or the timeline right-click menu.  
+- Enable **Measure** mode from the toolbar at the top of the window, or the timeline right-click menu.  
 - **Events** mode: Measure duration between two selected events on the timeline. You can snap Start/End Rulers to Event start or Event end. 
 - **Anywhere** mode: Measure duration between two timeline points. You can drag the rulers horizontally to fine-tune.  
 - ROCm Optiq draws two vertical rulers with timestamps and shows the duration (time delta) in a label between them.
 - Drag the duration label to reposition it. The connecting line and notches follow the label. The left ruler timestamp is shown at the top and the right timestamp at the bottom, so that they do not overlap.
 - Right-click a measurement label on the timeline to **Copy Start Timestamp**, **Copy End Timestamp**, or **Copy Measurement Duration**.
-Right-click a measurement label and choose **Zoom to Measurement** to fit the measurement to the full timeline width, placing the start and end markers at the left and right edges, respectively.
+- Right-click a measurement label and choose **Zoom to Measurement** to fit the measurement to the full timeline width, placing the start and end markers at the left and right edges, respectively.
 - Use **Reset** or **Clear measurement** to remove the rulers and start a new measurement.
 
 .. image:: ../images/new-measurement-timestamp.png

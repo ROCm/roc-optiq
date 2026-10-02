@@ -2428,8 +2428,9 @@ express.
 **Shared form helpers (`rocprofvis_launch_shared_tabs.h`)** - reuse
 these instead of re-authoring launcher UI: `RenderTargetSection`,
 `RenderToolLocationSection`, `RenderRawEnvVarsTab`, `BuildCommandPreviewString`,
-`RenderCommandPreview`, `RenderOutputConsole` (+ `ConsoleStatusLevel
-{kIdle, kRunning, kSuccess, kError}`), `RenderSavedProfileBar`. The
+`RenderCommandPreview`, `RenderOutputConsole`, `RenderSavedProfileBar`. The
+run view's status pill uses `ConsoleStatusLevel {kIdle, kRunning,
+kSuccess, kError}`; the console itself does not repeat the status. The
 connection-mode selector and SSH UI live in the dialog
 (`RenderRemoteSection`), not here.
 
@@ -2503,9 +2504,9 @@ wrong machine's install and print a path that is not what executes.
 shared `RenderToolLocationSection`, placed above the backend tabs because
 it belongs to the profile rather than to any one backend; in local mode the
 field also shows the absolute path the selection currently resolves to. A
-set directory is repeated above the command preview by
-`RenderToolResolutionNotice`, so a profile imported from elsewhere cannot
-silently run a different build. If the tool is not in the configured
+set directory, or a tool that cannot be found locally, is shown under
+"Where to run" by `RenderToolResolutionNotice`, so a profile imported from
+elsewhere cannot silently run a different build. If the tool is not in the configured
 directory the launch fails rather than falling back to `$ROCM_PATH` or
 `$PATH`.
 

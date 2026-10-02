@@ -700,11 +700,9 @@ std::vector<std::string> RocprofSysBackend::GetSummaryTags(
     {
         tags.push_back("Runtime instrumentation");
     }
-    else
+    else if (!m_settings.rocprof_preset.empty())
     {
-        tags.push_back(m_settings.rocprof_preset.empty()
-                           ? std::string("none")
-                           : m_settings.rocprof_preset);
+        tags.push_back("Preset: " + m_settings.rocprof_preset);
     }
 
     return tags;

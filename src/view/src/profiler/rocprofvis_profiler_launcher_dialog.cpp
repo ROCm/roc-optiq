@@ -21,7 +21,6 @@
 #include <algorithm>
 #include <cstdio>
 #include <cstring>
-#include <sstream>
 #include <vector>
 
 namespace RocProfVis
@@ -38,6 +37,45 @@ constexpr float kSplitterWidth       = 6.0f;
 constexpr float kMinPreviewWidth     = 300.0f;
 constexpr float kMinFormWidth        = 320.0f;
 constexpr float kInitialPreviewRatio = 2.0f / 5.0f;
+
+constexpr ImVec2 LAUNCHER_WINDOW_PADDING = ImVec2(16.0f, 12.0f);
+
+// Separates the parts of the run summary line.
+constexpr const char* SUMMARY_SEPARATOR = "  \xC2\xB7  ";
+
+// The target fields that appear in the launched command.
+bool SameCommandTarget(TargetSpec const& a, TargetSpec const& b)
+{
+    return a.executable == b.executable && a.arguments == b.arguments &&
+           a.working_directory == b.working_directory &&
+           a.output_directory == b.output_directory;
+}
+
+// "5.3 s", "2 min 05 s", "1 h 02 min": a bare seconds count stops being
+// readable once a run takes minutes.
+std::string FormatElapsed(double seconds)
+{
+    constexpr int SECONDS_PER_MINUTE = 60;
+    constexpr int SECONDS_PER_HOUR   = 3600;
+
+    const int whole = static_cast<int>(seconds);
+    char      buf[32];
+    if (whole < SECONDS_PER_MINUTE)
+    {
+        std::snprintf(buf, sizeof(buf), "%.1f s", seconds);
+    }
+    else if (whole < SECONDS_PER_HOUR)
+    {
+        std::snprintf(buf, sizeof(buf), "%d min %02d s", whole / SECONDS_PER_MINUTE,
+                      whole % SECONDS_PER_MINUTE);
+    }
+    else
+    {
+        std::snprintf(buf, sizeof(buf), "%d h %02d min", whole / SECONDS_PER_HOUR,
+                      (whole % SECONDS_PER_HOUR) / SECONDS_PER_MINUTE);
+    }
+    return buf;
+}
 }  // namespace
 
 ProfilerLauncherDialog::ProfilerLauncherDialog(AppWindow* app_window)
@@ -131,9 +169,11 @@ void ProfilerLauncherDialog::Render()
     // AppWindow renders us inside its main-window scope, which zeroes
     // WindowPadding / ItemSpacing / WindowRounding for the flush main layout.
     // Restore the app's standard style so this dialog matches the rest of the
-    // app (WindowPadding must be set before Begin() to take effect).
+    // app (WindowPadding must be set before Begin() to take effect). The margin
+    // is wider than the app's 8 px default, which would leave framed buttons and
+    // panels sitting against the window edge.
     const ImGuiStyle& def = SettingsManager::Get().GetDefaultStyle();
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, def.WindowPadding);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, LAUNCHER_WINDOW_PADDING);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, def.WindowRounding);
 
     bool window_open = true;
@@ -308,7 +348,7 @@ void ProfilerLauncherDialog::RenderRunView()
         double elapsed = end - m_run_start_time;
         ImGui::SameLine(0.0f, 12.0f);
         ImGui::AlignTextToFramePadding();
-        ImGui::TextDisabled("Elapsed  %.1fs", elapsed);
+        ImGui::TextDisabled("Elapsed %s", FormatElapsed(elapsed).c_str());
     }
     if (!status_detail.empty())
     {
@@ -329,9 +369,7 @@ void ProfilerLauncherDialog::RenderRunView()
     // The console fills everything above the button row.
     float button_h = ImGui::GetFrameHeightWithSpacing() + 16.0f;
     ImGui::BeginChild("RunConsoleArea", ImVec2(0, -button_h), false);
-    if (RenderOutputConsole(m_output_text, m_error_message,
-                            status_label, status_level, status_detail,
-                            m_auto_scroll_output))
+    if (RenderOutputConsole(m_output_text, m_auto_scroll_output))
     {
         m_output_text.clear();
         m_output_preamble.clear();
@@ -347,44 +385,50 @@ void ProfilerLauncherDialog::RenderRunView()
 
 std::string ProfilerLauncherDialog::BuildRunSummary() const
 {
-    std::ostringstream ss;
+    // "<profiler> (<tool>)  ·  <target and arguments>  ·  <where it runs>"
+    std::vector<std::string> parts;
 
     if (m_backend_index >= 0 && m_backend_index < static_cast<int>(m_backends.size()))
     {
-        ss << m_backends[m_backend_index]->DisplayName();
+        std::string       profiler  = m_backends[m_backend_index]->DisplayName();
         std::string const tool_name = CurrentToolDisplayName();
         if (!tool_name.empty())
         {
-            ss << " (" << tool_name << ")";
+            profiler += " (" + tool_name + ")";
         }
+        parts.push_back(profiler);
     }
 
     if (!m_config.target.executable.empty())
     {
-        ss << "  ->  " << m_config.target.executable;
+        std::string target = m_config.target.executable;
         if (!m_config.target.arguments.empty())
         {
-            ss << " " << m_config.target.arguments;
+            target += " " + m_config.target.arguments;
         }
+        parts.push_back(target);
     }
 
+    std::string where = "This machine";
 #ifdef ROCPROFVIS_ENABLE_REMOTE
     if (IsSshMode())
     {
-        std::string host = m_remote_uri->GetRemoteHostString();
-        std::string user = m_remote_uri->GetRemoteUserString();
-        ss << "   [Remote: " << (user.empty() ? "?" : user.c_str()) << "@"
-           << (host.empty() ? "?" : host.c_str()) << "]";
+        constexpr int DEFAULT_SSH_PORT = 22;
+        where = m_remote_uri->GetRemoteUserString() + "@" + m_remote_uri->GetRemoteHostString();
+        if (m_remote_uri->GetRemotePortInt() != DEFAULT_SSH_PORT)
+        {
+            where += ":" + m_remote_uri->GetRemotePortString();
+        }
     }
-    else
-    {
-        ss << "   [Local]";
-    }
-#else
-    ss << "   [Local]";
 #endif
+    parts.push_back(where);
 
-    return ss.str();
+    std::string summary;
+    for (std::string const& part : parts)
+    {
+        summary += (summary.empty() ? "" : SUMMARY_SEPARATOR) + part;
+    }
+    return summary;
 }
 
 void ProfilerLauncherDialog::RenderToolbar()
@@ -525,11 +569,15 @@ void ProfilerLauncherDialog::RenderMainContent()
     // --- Left: the configuration form (scrolls if it overflows) ---
     ImGui::BeginChild("cfg_form", ImVec2(left_w, 0.0f), ImGuiChildFlags_None);
 #ifdef ROCPROFVIS_ENABLE_REMOTE
-    // Where to run first: pick the machine before the paths.
+    // Where to run first: pick the machine before the paths. A missing local
+    // profiler is reported here, next to the choice that resolves it.
     BeginLaunchCard("card_connection");
     LaunchCardHeader(ICON_CHAIN, "Where to run");
     RenderRemoteSection();
+    RenderToolResolutionNotice();
     EndLaunchCard();
+#else
+    RenderToolResolutionNotice();
 #endif
 
     BeginLaunchCard("card_target");
@@ -590,16 +638,10 @@ void ProfilerLauncherDialog::RenderMainContent()
             ImGui::EndTabBar();
         }
     }
-    EndLaunchCard();
-
-    BeginLaunchCard("card_inputs");
-    LaunchCardHeader(ICON_LIST, "Arguments & Environment");
-    RenderArgsEnvPanel();
-    EndLaunchCard();
-
     if (!advanced_tabs.empty())
     {
-        if (ImGui::Button("Advanced Options...", ImVec2(180, 0)))
+        ImGui::Spacing();
+        if (ImGui::Button("Advanced Options..."))
         {
             m_show_advanced_window = true;
         }
@@ -608,6 +650,14 @@ void ProfilerLauncherDialog::RenderMainContent()
             ImGui::SetTooltip("Sampling, ROCm domains, Perfetto, parallelism, logging");
         }
     }
+    EndLaunchCard();
+
+    // Named for the profiler so it is not mistaken for the program's own
+    // Arguments field in the Target card.
+    BeginLaunchCard("card_inputs");
+    LaunchCardHeader(ICON_LIST, "Profiler Arguments & Environment");
+    RenderArgsEnvPanel();
+    EndLaunchCard();
     ImGui::EndChild();
 
     // --- Draggable splitter to resize the preview panel ---
@@ -636,7 +686,6 @@ void ProfilerLauncherDialog::RenderMainContent()
     ImGui::PushStyleColor(ImGuiCol_Border, settings.GetColor(Colors::kPanelBorderSubtle));
     ImGui::BeginChild("cfg_preview", ImVec2(0.0f, 0.0f),
                       ImGuiChildFlags_Borders | ImGuiChildFlags_AlwaysUseWindowPadding);
-    RenderToolResolutionNotice();
     RenderCommandPreview(m_execution_cache.command_preview);
     ImGui::EndChild();
     ImGui::PopStyleColor(2);
@@ -651,20 +700,32 @@ void ProfilerLauncherDialog::RenderToolResolutionNotice()
     {
         // Said here rather than only on Launch, because "the profiler is not
         // installed" is not something the user should discover by pressing a
-        // button. The command preview below still shows the bare tool name, so
-        // this line is what explains why it has no path.
-        ImGui::PushStyleColor(ImGuiCol_Text, settings.GetColor(Colors::kTextError));
+        // button. The command preview still shows the bare tool name, so this
+        // notice is what explains why it has no path.
+        constexpr float NOTICE_ROUNDING     = 6.0f;
+        constexpr float NOTICE_FILL_ALPHA   = 0.10f;
+        constexpr float NOTICE_BORDER_ALPHA = 0.45f;
+        const ImU32     warning = settings.GetColor(Colors::kTextWarning);
+        ImGui::PushStyleColor(ImGuiCol_ChildBg, ApplyAlpha(warning, NOTICE_FILL_ALPHA));
+        ImGui::PushStyleColor(ImGuiCol_Border, ApplyAlpha(warning, NOTICE_BORDER_ALPHA));
+        ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, NOTICE_ROUNDING);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, settings.GetDefaultStyle().WindowPadding);
+        ImGui::BeginChild("tool_notice", ImVec2(0.0f, 0.0f),
+                          ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Borders |
+                              ImGuiChildFlags_AlwaysUseWindowPadding,
+                          ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
         ImGui::TextWrapped("%s", m_execution_cache.resolve_error.c_str());
-        ImGui::PopStyleColor();
 #ifdef ROCPROFVIS_ENABLE_REMOTE
         // The usual way out is a machine that has ROCm, so offer it in place.
-        if (ImGui::SmallButton("Run on a remote machine instead"))
+        if (AccentButton("Run on a remote machine", ImVec2(0.0f, 0.0f), &settings))
         {
             m_config.connection     = ConnectionType::kSsh;
             m_execution_cache_dirty = true;
         }
 #endif
-        ImGui::Spacing();
+        ImGui::EndChild();
+        ImGui::PopStyleVar(2);
+        ImGui::PopStyleColor(2);
         return;
     }
 
@@ -696,7 +757,7 @@ void ProfilerLauncherDialog::RenderAdvancedWindow()
     // Restore the app's standard style (AppWindow's scope zeroes window padding /
     // item spacing / rounding). WindowPadding must be set before Begin().
     const ImGuiStyle& def = SettingsManager::Get().GetDefaultStyle();
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, def.WindowPadding);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, LAUNCHER_WINDOW_PADDING);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, def.WindowRounding);
 
     bool open    = true;
@@ -792,7 +853,7 @@ void ProfilerLauncherDialog::RenderArgsEnvPanel()
     };
 
     // ===== Command line arguments (lead - they read as a one-liner) =====
-    LaunchSubHeader("COMMAND LINE ARGUMENTS",
+    LaunchSubHeader("ARGUMENTS",
                     "Passed to the profiler, one entry at a time (a flag, or a flag + value).");
 
     bool add_arg = false;
@@ -1218,10 +1279,12 @@ void ProfilerLauncherDialog::Update()
         // Rebuild the (allocation-heavy) execution cache / command preview only
         // when a control reported an actual change - every widget, including the
         // backend-owned settings tabs, ORs its ImGui return value into the dirty
-        // flag. 
-        if (m_execution_cache_dirty)
+        // flag. The target can also change outside a widget's frame (a Browse
+        // dialog's asynchronous pick), so it is compared with the previewed one.
+        if (m_execution_cache_dirty || !SameCommandTarget(m_config.target, m_previewed_target))
         {
             RefreshExecutionCache();
+            m_previewed_target      = m_config.target;
             m_execution_cache_dirty = false;
         }
     }
@@ -1396,14 +1459,9 @@ void ProfilerLauncherDialog::OnLaunchClicked()
     bool success = m_orchestrator.Launch(request);
     if (success)
     {
-        // Build the command-preview preamble for the console.
-        std::ostringstream preamble;
-        if (is_remote)
-        {
-            preamble << "[remote] ";
-        }
-        preamble << m_execution_cache.command_preview << "\n\n";
-        m_output_preamble = preamble.str();
+        // The console opens with the command being run; where it runs is on the
+        // summary line above.
+        m_output_preamble = m_execution_cache.command_preview + "\n\n";
         m_last_seen_state = kRPVProfilerStateRunning;
         RebuildComposedOutput();
 
@@ -1451,19 +1509,11 @@ void ProfilerLauncherDialog::HandleStateTransition(rocprofvis_profiler_state_t n
         m_run_end_time = ImGui::GetTime();
     }
 
+    // Each outcome closes the console with one line; a failure carries its
+    // reason, which the header shows too.
     if (new_state == kRPVProfilerStateCompleted)
     {
-        if (is_remote)
-        {
-            // Remote completion here means the remote profiler finished; the
-            // trace download/open is driven by the orchestrator's session.
-            m_output_epilogue += "\nRemote profiler completed.\n";
-        }
-        else
-        {
-            m_output_epilogue += "\nProfiler completed successfully.\n";
-        }
-
+        m_output_epilogue += "\nProfiling finished.\n";
         std::string trace_path = m_orchestrator.GetTracePath();
         if (!trace_path.empty())
         {
@@ -1475,40 +1525,27 @@ void ProfilerLauncherDialog::HandleStateTransition(rocprofvis_profiler_state_t n
     {
         if (is_remote)
         {
-            // Surface the specific remote failure reason (SSH connect/auth
-            // failure, "could not determine remote trace path", etc.) instead of
-            // a generic line with no cause.
+            // The specific remote failure reason (connect/auth failure, a
+            // missing trace path, an exit code) rather than a line with no cause.
             std::string remote_msg = m_orchestrator.GetRemoteStatusMessage();
-            m_output_epilogue += "\nRemote profiler failed.\n";
-            m_error_message = remote_msg.empty() ? std::string("Remote profiler failed.")
+            m_error_message = remote_msg.empty() ? std::string("The remote profiler failed.")
                                                  : remote_msg;
-            RebuildComposedOutput();
         }
         else
         {
-            int32_t exit_code = m_orchestrator.GetExitCode();
-            char exit_msg[128];
-            std::snprintf(exit_msg, sizeof(exit_msg),
-                          "\nProfiler failed (exit code %d).\n", exit_code);
-            m_output_epilogue += exit_msg;
-            RebuildComposedOutput();
-            if (exit_code == 127)
-            {
-                m_error_message =
-                    "Profiler executable not found or could not be started (exit code 127)";
-            }
-            else
-            {
-                std::snprintf(exit_msg, sizeof(exit_msg),
-                              "Profiler execution failed (exit code %d)", exit_code);
-                m_error_message = exit_msg;
-            }
+            constexpr int32_t COMMAND_NOT_FOUND_EXIT_CODE = 127;
+            int32_t           exit_code = m_orchestrator.GetExitCode();
+            m_error_message =
+                exit_code == COMMAND_NOT_FOUND_EXIT_CODE
+                    ? std::string("The profiler could not be started (exit code 127).")
+                    : "The profiler exited with code " + std::to_string(exit_code) + ".";
         }
+        m_output_epilogue += "\nProfiling failed: " + m_error_message + "\n";
+        RebuildComposedOutput();
     }
     else if (new_state == kRPVProfilerStateCancelled)
     {
-        m_output_epilogue += is_remote ? "\nRemote profiler cancelled by user.\n"
-                                       : "\nProfiler cancelled by user.\n";
+        m_output_epilogue += "\nProfiling cancelled.\n";
         RebuildComposedOutput();
     }
 
@@ -1572,8 +1609,9 @@ void ProfilerLauncherDialog::ComputeConsoleStatus(std::string&        out_label,
             out_level = ConsoleStatusLevel::kSuccess;
             break;
         case kRPVProfilerStateFailed:
-            out_label = "Failed";
-            out_level = ConsoleStatusLevel::kError;
+            out_label  = "Failed";
+            out_level  = ConsoleStatusLevel::kError;
+            out_detail = m_error_message;
             break;
         case kRPVProfilerStateCancelled:
             out_label = "Cancelled";

@@ -223,6 +223,9 @@ private:
     // only when a control reported an actual change, not every frame. Also set
     // on open / backend switch / preset load.
     bool m_execution_cache_dirty = true;
+    // The target m_execution_cache was built from, to catch target changes that
+    // no widget reported (asynchronous Browse picks).
+    TargetSpec m_previewed_target;
 
     // Presets
     LaunchPresetManager m_preset_manager;

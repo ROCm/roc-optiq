@@ -967,15 +967,13 @@ namespace
             char* exit_signal = nullptr;
             libssh2_channel_get_exit_signal(channel, &exit_signal, nullptr, nullptr, nullptr,
                                             nullptr, nullptr);
+            // A plain exit code is the caller's to report; a signal is not
+            // visible any other way, so it is noted in the output.
             if (exit_signal != nullptr)
             {
                 summary = "Remote command was terminated by signal " + std::string(exit_signal);
                 libssh2_free(session, exit_signal);
                 exit_code = -1;
-            }
-            else
-            {
-                summary = "Remote command exited with code " + std::to_string(exit_code);
             }
             if (exit_code_out != nullptr)
             {

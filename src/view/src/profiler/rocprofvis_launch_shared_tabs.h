@@ -136,20 +136,12 @@ enum class ConsoleStatusLevel
 };
 
 /**
- * Renders the Output Console panel with status badge, auto-scroll, copy, and clear buttons.
- * state_label is the badge text (e.g. "Running", "Downloading", "Completed");
- * state_level selects the badge color from the theme palette. detail is an
- * optional phase description shown next to the badge (e.g. the download path);
- * pass an empty string to omit it.
+ * Renders the Output Console panel: an "Output" title with Auto-scroll, Copy
+ * and Clear at the right, above the monospaced output. The run status belongs
+ * to the caller's header and is not repeated here.
  * Returns true if the user clicked "Clear".
  */
-bool RenderOutputConsole(
-    std::string const& output_text,
-    std::string const& error_message,
-    std::string const& state_label,
-    ConsoleStatusLevel state_level,
-    std::string const& detail,
-    bool&              auto_scroll);
+bool RenderOutputConsole(std::string const& output_text, bool& auto_scroll);
 
 /**
  * Renders the "Saved Profile" bar (Optiq JSON presets):

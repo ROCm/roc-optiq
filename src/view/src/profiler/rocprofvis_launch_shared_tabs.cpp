@@ -28,7 +28,6 @@ static char s_save_preset_name[128] = {};
 constexpr float kAccentBarWidth     = 4.0f;   // card-header leading accent bar
 constexpr float kAccentBarGap       = 8.0f;
 constexpr float kChipBgAlpha        = 0.16f;
-constexpr float kChipEdgeAlpha      = 0.55f;
 constexpr float kPillGap            = 7.0f;   // gap between pill label and close "x"
 constexpr float kPillCloseScale     = 0.75f;  // close glyph size, fraction of font
 constexpr float kPillBgAlpha        = 0.16f;
@@ -137,10 +136,10 @@ void Chip(const char* label, ImU32 accent_color)
     ImDrawList*  dl  = ImGui::GetWindowDrawList();
     float        rnd = size.y * 0.5f;
 
+    // Fill only, no outline: an outlined pill reads as a button, and chips are
+    // a read-only summary.
     dl->AddRectFilled(p, ImVec2(p.x + size.x, p.y + size.y),
                       ApplyAlpha(accent_color, kChipBgAlpha), rnd);
-    dl->AddRect(p, ImVec2(p.x + size.x, p.y + size.y),
-                ApplyAlpha(accent_color, kChipEdgeAlpha), rnd);
     dl->AddText(ImVec2(p.x + pad.x, p.y + pad.y), accent_color, label);
 
     ImGui::Dummy(size);
@@ -242,7 +241,9 @@ void LaunchSubHeader(const char* text, const char* help)
 {
     SettingsManager& settings = SettingsManager::Get();
     ImGui::Spacing();
-    ImGui::PushStyleColor(ImGuiCol_Text, settings.GetColor(Colors::kAccent));
+    // Dim rather than accent: the card headers carry the accent, and colored
+    // sub-headers under them compete for attention.
+    ImGui::PushStyleColor(ImGuiCol_Text, settings.GetColor(Colors::kTextDim));
     ImGui::TextUnformatted(text);
     ImGui::PopStyleColor();
     if (help && help[0])
@@ -562,11 +563,25 @@ std::string BuildCommandPreviewString(
     // argv is already the complete argument list (see
     // IProfilerBackend::FlattenToExecution), so the preview renders it as-is
     // rather than re-deriving any part of the command. Anything appended here
-    // would be shown but not run.
+    // would be shown but not run. Only line breaks are added: each flag starts
+    // a continuation line (its value stays beside it), and everything after
+    // "--" is the target's own command line.
+    constexpr const char* CONTINUATION = " \\\n    ";
     preview << tool_path;
-    for (auto const& arg : argv)
+    for (size_t i = 0; i < argv.size(); i++)
     {
-        preview << " " << arg;
+        std::string const& arg = argv[i];
+        if (arg == "--")
+        {
+            preview << CONTINUATION << arg;
+            for (size_t j = i + 1; j < argv.size(); j++)
+            {
+                preview << " " << argv[j];
+            }
+            break;
+        }
+        const bool is_flag = arg.size() > 1 && arg[0] == '-';
+        preview << (is_flag ? CONTINUATION : " ") << arg;
     }
 
     return preview.str();
@@ -600,82 +615,48 @@ void RenderCommandPreview(std::string const& preview_text)
     ImGui::PopStyleVar();
 }
 
-bool RenderOutputConsole(
-    std::string const& output_text,
-    std::string const& error_message,
-    std::string const& state_label,
-    ConsoleStatusLevel state_level,
-    std::string const& detail,
-    bool&              auto_scroll)
+bool RenderOutputConsole(std::string const& output_text, bool& auto_scroll)
 {
-    bool clear_requested = false;
+    SettingsManager&  settings        = SettingsManager::Get();
+    const ImGuiStyle& style           = ImGui::GetStyle();
+    bool              clear_requested = false;
+
     ImGui::AlignTextToFramePadding();
-    ImGui::Text("Output");
+    ImGui::TextUnformatted("Output");
 
-    // The badge color follows the semantic level, sourced from the theme so it
-    // stays consistent with the rest of the app (and tracks light/dark themes).
-    SettingsManager& settings = SettingsManager::Get();
-    Colors color_id = Colors::kTextMain;
-    switch (state_level)
+    // Auto-scroll, Copy and Clear sit together at the right edge.
+    auto button_w = [&style](const char* label)
+    { return ImGui::CalcTextSize(label).x + style.FramePadding.x * 2.0f; };
+    const float checkbox_w = ImGui::GetFrameHeight() + style.ItemInnerSpacing.x +
+                             ImGui::CalcTextSize("Auto-scroll").x;
+    const float actions_w =
+        checkbox_w + button_w("Copy") + button_w("Clear") + style.ItemSpacing.x * 2.0f;
+    ImGui::SameLine();
+    const float avail = ImGui::GetContentRegionAvail().x;
+    if (avail > actions_w)
     {
-        case ConsoleStatusLevel::kSuccess: color_id = Colors::kTextSuccess; break;
-        case ConsoleStatusLevel::kError:   color_id = Colors::kTextError;   break;
-        case ConsoleStatusLevel::kIdle:
-        case ConsoleStatusLevel::kRunning:
-        default:                           color_id = Colors::kTextMain;    break;
+        ImGui::SetCursorPosX(ImGui::GetCursorPosX() + avail - actions_w);
     }
-    ImVec4 state_color = ImGui::ColorConvertU32ToFloat4(settings.GetColor(color_id));
-
-    float spacing = 4.0f;
-    ImGui::SameLine(0.0f, spacing);
-    ImGui::TextColored(state_color, "[%s]", state_label.c_str());
-
-    // Optional phase detail (e.g. the remote download path) next to the badge.
-    if (!detail.empty())
-    {
-        ImGui::SameLine(0.0f, spacing);
-        ImGui::TextDisabled("%s", detail.c_str());
-    }
-
-    VerticalSeparator();
-
+    ImGui::Checkbox("Auto-scroll##Output", &auto_scroll);
+    ImGui::SameLine();
     if (ImGui::Button("Copy##OutputCopy"))
     {
-        std::string clip;
-        if (!error_message.empty())
-        {
-            clip = error_message + "\n\n";
-        }
-        clip += output_text;
-        ImGui::SetClipboardText(clip.c_str());
+        ImGui::SetClipboardText(output_text.c_str());
     }
-
     ImGui::SameLine();
     if (ImGui::Button("Clear##OutputClear"))
     {
         clear_requested = true;
     }
 
-    VerticalSeparator();
-    ImGui::Checkbox("Auto-scroll##Output", &auto_scroll);
-
-    FontManager&     fonts       = settings.GetFontManager();
+    FontManager&     fonts        = settings.GetFontManager();
     ImGuiWindowFlags output_flags = ImGuiWindowFlags_HorizontalScrollbar;
-    float output_height = std::max(ImGui::GetContentRegionAvail().y - 30.0f, 60.0f);
 
     // Terminal-style panel: darker background, soft corners, monospaced text.
     ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, settings.GetDefaultStyle().ChildRounding);
     ImGui::PushStyleColor(ImGuiCol_ChildBg, settings.GetColor(Colors::kBgMain));
-    ImGui::BeginChild("OutputText", ImVec2(0, output_height), ImGuiChildFlags_Borders,
-                      output_flags);
+    ImGui::BeginChild("OutputText", ImVec2(0.0f, 0.0f), ImGuiChildFlags_Borders, output_flags);
     ImGui::PushFont(fonts.GetFont(FontType::kCode), 0.0f);
-
-    if (!error_message.empty())
-    {
-        ImVec4 err = ImGui::ColorConvertU32ToFloat4(settings.GetColor(Colors::kTextError));
-        ImGui::TextColored(err, "%s", error_message.c_str());
-        ImGui::Separator();
-    }
 
     ImGui::TextUnformatted(output_text.c_str());
 

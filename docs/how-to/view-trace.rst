@@ -312,6 +312,11 @@ This section provides an interface for multiple data perspectives, offering gran
 - **Event Table**: Displays all events within the selected tracks. You can refine your analysis by applying a time-range selection or using the table filters. The **Event Table** provides two filter modes, which you can choose from a dropdown by clicking the filter icon:
    
   - **Basic mode**: In the text field below any column header, enter a filter condition and press **Enter** to apply the filter.
+  .. image:: ../images/basic-filter-mode.png
+    :width: 800
+    :align: center
+    :alt: Basic filter mode
+
   - **Advanced mode**: Provides advanced filters to narrow the table.
     
     - Use the **Group by** dropdown to group **Event Table** results by an available field. The field listed depends on the selected track type (for example, **category**, **name**, **stream**, **queue**, **node**, **PID**, or **TID**).
@@ -320,7 +325,7 @@ This section provides an interface for multiple data perspectives, offering gran
   .. image:: ../images/advanced.png
     :width: 800
     :align: center
-    :alt: Advanced Details section showing the Event Table with filter and aggregate controls
+    :alt: Advanced Filter mode
   
   .. tip::
 

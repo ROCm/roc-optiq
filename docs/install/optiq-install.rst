@@ -9,7 +9,7 @@
 Install ROCm Optiq
 ******************
 
-Install ROCm Optiq for Linux, Windows, or macOS using the installation files on the `release page <https://github.com/ROCm/roc-optiq/releases>`_ of the GitHub repository.
+This section describes how to install ROCm Optiq on your system.
 
 .. _requirements:
 
@@ -617,7 +617,7 @@ Install
 
          source ~/.bashrc
 
-      **System-Wide Setup:**
+      **System-wide setup:**
 
       .. code-block:: bash
 
@@ -679,7 +679,7 @@ Install
 
          source ~/.bashrc
 
-      **System-Wide Setup:**
+      **System-wide setup:**
 
       .. code-block:: bash
 
@@ -741,7 +741,7 @@ Install
 
          source ~/.bashrc
 
-      **System-Wide Setup:**
+      **System-wide setup:**
 
       .. code-block:: bash
 
@@ -803,7 +803,7 @@ Install
 
          source ~/.bashrc
 
-      **System-Wide Setup:**
+      **System-wide setup:**
 
       .. code-block:: bash
 
@@ -865,7 +865,7 @@ Install
 
          source ~/.bashrc
 
-      **System-Wide Setup:**
+      **System-wide setup:**
 
       .. code-block:: bash
 
@@ -927,7 +927,7 @@ Install
 
          source ~/.bashrc
 
-      **System-Wide Setup:**
+      **System-wide setup:**
 
       .. code-block:: bash
 
@@ -984,7 +984,7 @@ Install
 
       Configure environment variables so that ROCm Optiq is added to the ``PATH`` variable. There are two choices:
 
-      User-specific setup:
+      **User-specific setup:**
 
       .. code-block:: shell
 
@@ -998,7 +998,7 @@ Install
 
          source ~/.bashrc
 
-      System-Wide Setup:
+      **System-wide setup:**
 
       .. code-block:: shell
 
@@ -1054,7 +1054,7 @@ Install
 
       Configure environment variables so that ROCm Optiq is added to the ``PATH`` variable. There are two choices:
 
-      User-specific setup:
+      **User-specific setup:**
 
       .. code-block:: shell
 
@@ -1068,7 +1068,7 @@ Install
 
          source ~/.bashrc
 
-      System-Wide Setup:
+      **System-wide setup:**
 
       .. code-block:: shell
 
@@ -1124,7 +1124,7 @@ Install
 
       Configure environment variables so that ROCm Optiq is added to the ``PATH`` variable. There are two choices:
 
-      User-specific setup:
+      **User-specific setup:**
 
       .. code-block:: shell
 
@@ -1138,7 +1138,7 @@ Install
 
          source ~/.bashrc
 
-      System-Wide Setup:
+      **System-wide setup:**
 
       .. code-block:: shell
 
@@ -1196,7 +1196,7 @@ Uninstall
 
    3. Remove ROCm Optiq environment configuration:
 
-      **User-sepcfic setup:**
+      **User-specific setup:**
 
       If you opted for a user-specific setup during the installation process, remove the ROCm Optiq environment configuration block you added to your shell configuration file (``~/.bashrc``).
 
@@ -1294,7 +1294,7 @@ Uninstall
 
          rm -rf "$HOME/opt/roc-optiq"
 
-   Then remove ``$HOME/opt/roc-optiq/bin`` from your ``PATH`` variable.
+      Then remove ``$HOME/opt/roc-optiq/bin`` from your ``PATH`` variable.
 
    2. Remove ROCm Optiq environment configuration:
 

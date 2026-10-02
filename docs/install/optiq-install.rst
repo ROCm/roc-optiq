@@ -25,7 +25,7 @@ The following are the prerequisites for using ROCm Optiq:
 Supported operating systems
 ============================
 
-The following selector lists all the operating systems and installation methods for ROCm Optiq. Choose your operating system and installation method to see the supported versions and the installation instructions.
+From the following selector, choose your operating system, distribution, version, and installation method to see the instructions for installing and uninstalling ROCm Optiq.
 
 .. selector:: Operating system
    :key: os

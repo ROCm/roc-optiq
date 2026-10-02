@@ -10,7 +10,7 @@ Documentation for ROCm Optiq is available at [https://rocm.docs.amd.com/projects
 
 ##### Timeline and navigation
 
-- Sortable timeline tracks: Right-click the track-list header (or use the down-arrow at its bottom) to sort tracks by **Topology**, **Default** (track type), or a remembered **Custom** order. Drag-to-reorder becomes the **Custom** order, and the choice persists per project.
+- Sortable timeline tracks: Right-click the track-list header (or use the down-arrow at its bottom) to sort tracks by **Topology**, **Default** (track type), or a remembered **Custom** order. **Drag-to-reorder** becomes the **Custom** order, and the choice persists per project.
 - Draggable measurement duration label: The label can now be dragged (its connecting line and notches follow it), and the ruler timestamps are split to top/left and bottom/right so they no longer overlap.
 - Time-range selection indicators across the timeline, tables, and overview: Per-track analysis statistics pills are tinted blue while a selection is active. The events and top-events tables show a "Limited to time-range selection" vs "Full trace" scope indicator, and the overview histogram greys out bars outside the selection, marks the selection start/end, and draws a duration bracket.
 

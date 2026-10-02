@@ -356,7 +356,7 @@ Install
 
 .. selected-content:: os=windows
 
-   1. Download the ``.msi`` installer from the `ROCm Optiq GitHub Releases <https://github.com/ROCm/roc-optiq/releases/tag/v1.0.0-optiq>`__ page and follow the instructions in the install wizard.
+   1. Download the ``.msi`` installer from the `ROCm Optiq releases <https://stable.repo.amd.com/rocm/extras/rocoptiq/windows-installers/win11/>`__ page, run it, and follow the instructions in the install wizard.
 
       .. image:: ../images/wizard.png
          :width: 500
@@ -402,7 +402,7 @@ Install
 
    3. Complete the following post-installation steps:
 
-      Configure environment variables so that ROCm Optiq is added to the ``PATH`` variable:
+      Configure environment variables so that ROCm Optiq is added to the ``PATH`` variable. There are two choices:
 
       **User-specific setup:**
 
@@ -470,7 +470,7 @@ Install
 
    3. Complete the following post-installation steps:
 
-      Configure environment variables so that ROCm Optiq is added to the ``PATH`` variable:
+      Configure environment variables so that ROCm Optiq is added to the ``PATH`` variable. There are two choices:
 
       **User-specific setup:**
 
@@ -538,7 +538,7 @@ Install
 
    3. Complete the following post-installation steps:
 
-      Configure environment variables so that ROCm Optiq is added to the ``PATH`` variable:
+      Configure environment variables so that ROCm Optiq is added to the ``PATH`` variable. There are two choices:
 
       **User-specific setup:**
 
@@ -601,7 +601,7 @@ Install
 
    3. Complete the following post-installation steps:
 
-      Configure environment variables so that ROCm Optiq is added to the ``PATH`` variable.
+      Configure environment variables so that ROCm Optiq is added to the ``PATH`` variable. There are two choices.
 
       **User-specific setup:**
 
@@ -663,7 +663,7 @@ Install
 
    3. Complete the following post-installation steps:
 
-      Configure environment variables so that ROCm Optiq is added to the ``PATH`` variable.
+      Configure environment variables so that ROCm Optiq is added to the ``PATH`` variable. There are two choices.
 
       **User-specific setup:**
 
@@ -725,7 +725,7 @@ Install
 
    3. Complete the following post-installation steps:
 
-      Configure environment variables so that ROCm Optiq is added to the ``PATH`` variable.
+      Configure environment variables so that ROCm Optiq is added to the ``PATH`` variable. There are two choices.
 
       **User-specific setup:**
 
@@ -787,7 +787,7 @@ Install
 
    3. Complete the following post-installation steps:
 
-      Configure environment variables so that ROCm Optiq is added to the ``PATH`` variable.
+      Configure environment variables so that ROCm Optiq is added to the ``PATH`` variable. There are two choices.
 
       **User-specific setup:**
 
@@ -849,7 +849,7 @@ Install
 
    3. Complete the following post-installation steps:
 
-      Configure environment variables so that ROCm Optiq is added to the ``PATH`` variable.
+      Configure environment variables so that ROCm Optiq is added to the ``PATH`` variable. There are two choices.
 
       **User-specific setup:**
 
@@ -911,7 +911,7 @@ Install
 
    3. Complete the following post-installation steps:
 
-      Configure environment variables so that ROCm Optiq is added to the ``PATH`` variable.
+      Configure environment variables so that ROCm Optiq is added to the ``PATH`` variable. There are two choices.
 
       **User-specific setup:**
 
@@ -982,7 +982,7 @@ Install
 
    4. Complete the following post-installation steps:
 
-      Configure environment variables so that ROCm Optiq is added to the ``PATH`` variable:
+      Configure environment variables so that ROCm Optiq is added to the ``PATH`` variable. There are two choices:
 
       User-specific setup:
 
@@ -1052,7 +1052,7 @@ Install
 
    4. Complete the following post-installation steps:
 
-      Configure environment variables so that ROCm Optiq is added to the ``PATH`` variable:
+      Configure environment variables so that ROCm Optiq is added to the ``PATH`` variable. There are two choices:
 
       User-specific setup:
 
@@ -1122,7 +1122,7 @@ Install
 
    4. Complete the following post-installation steps:
 
-      Configure environment variables so that ROCm Optiq is added to the ``PATH`` variable:
+      Configure environment variables so that ROCm Optiq is added to the ``PATH`` variable. There are two choices:
 
       User-specific setup:
 
@@ -1159,7 +1159,7 @@ Install
 
 .. selected-content:: os=macos
 
-   1. Download the ``.zip`` from the `ROCm Optiq GitHub Releases <https://github.com/ROCm/roc-optiq/releases/tag/v1.0.0-optiq>`__ page.
+   1. Download the ``*-macos.zip`` of the latest ROCm Optiq release from the `ROCm Optiq GitHub Releases <https://github.com/ROCm/roc-optiq/releases>`__ page.
    2. Unzip it, then drag and drop ``roc-optiq.app`` from the extracted folder to the ``Applications`` folder.
    3. Launch ROCm Optiq from **Applications**.
 

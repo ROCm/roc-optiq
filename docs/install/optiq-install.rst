@@ -210,6 +210,18 @@ From the following selector, choose your operating system, distribution, version
 
    Windows 11 is supported.
 
+.. selected-content:: os=windows
+   :heading: Visual C++ runtime
+   :heading-level: 3
+
+   ROCm Optiq requires the Visual C++ v14 Redistributable (x64).
+
+   Download and install the `Visual C++ v14 Redistributable (x64) <https://aka.ms/vc14/vc_redist.x64.exe>`_.
+
+   .. note::
+
+      If ``roc-optiq.exe`` doesn't start after installation and Windows reports that ``MSVCP140.dll`` or ``MSVCP140_ATOMIC_WAIT.dll`` is missing, verify that the x64 redistributable is installed.
+
 .. selected-content:: os=macos
    :heading: Supported versions
    :heading-level: 3

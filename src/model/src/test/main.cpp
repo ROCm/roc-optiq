@@ -269,7 +269,7 @@ int main(int argc, char** argv)
                                             if (nullptr != slice)
                                             {
                                                 uint64_t num_records = rocprofvis_dm_get_property_as_uint64(slice, kRPVDMNumberOfRecordsUInt64, 0);                                                 
-                                                printf(ANSI_COLOR_BLUE "Time slice for time%lld - %lld for track %d [%s:%s:%s] has%lld records\n", start_time, end_time, tracks_selection[i], track_category_name, track_process_name, track_sub_process_name, num_records);
+                                                printf(ANSI_COLOR_BLUE "Time slice for time %lld - %lld for track %d [%s:%s:%s] has %lld records\n", start_time, end_time, tracks_selection[i], track_category_name, track_process_name, track_sub_process_name, num_records);
                                                 if (num_records == 0) continue;
                                                 int first_record = std::rand() % num_records;
                                                 for (int j = first_record; (j < num_records) && (j < first_record+ LIST_SIZE_LIMIT); j++)

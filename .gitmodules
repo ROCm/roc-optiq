@@ -41,3 +41,6 @@
 [submodule "thirdparty/cpp-httplib"]
 	path = thirdparty/cpp-httplib
 	url = https://github.com/yhirose/cpp-httplib.git
+[submodule "profiler-hub"]
+	path = thirdparty/profiler-hub
+	url = git@github.com:ROCm/rocm-systems.git

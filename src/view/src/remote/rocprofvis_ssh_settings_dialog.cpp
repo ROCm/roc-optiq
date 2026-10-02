@@ -86,7 +86,7 @@ SshSettingsDialog::StartConnectionTest()
     m_test_uri->SetConnection(m_working);
     m_test_result.clear();
     m_test = std::make_unique<RemoteTraceOrchestrator>(m_test_uri, nullptr);
-    m_test->Start();
+    m_test->Connect();
 }
 
 bool
@@ -107,7 +107,7 @@ SshSettingsDialog::Render()
     PopUpStyle popup_style;
     popup_style.PushPopupStyles();
     popup_style.PushTitlebarColors();
-    popup_style.CenterPopup();
+    popup_style.CenterPopup(ImGuiCond_Always);
 
     SettingsManager&  settings = SettingsManager::GetInstance();
     const ImGuiStyle& style    = ImGui::GetStyle();

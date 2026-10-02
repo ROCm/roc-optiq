@@ -4,6 +4,8 @@
 #include "rocprofvis_controller_ssh_bridge.h"
 #include "rocprofvis_core_assert.h"
 
+#include <algorithm>
+
 namespace RocProfVis
 {
 namespace Controller
@@ -247,12 +249,12 @@ rocprofvis_result_t SshBridge::GetString(
     {
         case kRPVControllerRemoteExecuteStdOut:
         {
-            std::string tmp = m_stdout;
-            auto result = GetStdStringImpl(value, length, tmp);
-
-            if (value != nullptr)
-                m_stdout.clear();
-
+            // Callers size their buffer with a first call, so output that arrives
+            // before the second call must stay queued: drop only what was copied.
+            const bool   fetch     = value != nullptr && length != nullptr && *length > 0;
+            const size_t requested = fetch ? *length : 0;
+            rocprofvis_result_t result = GetStdStringImpl(value, length, m_stdout);
+            m_stdout.erase(0, std::min(requested, m_stdout.size()));
             return result;
         }
 

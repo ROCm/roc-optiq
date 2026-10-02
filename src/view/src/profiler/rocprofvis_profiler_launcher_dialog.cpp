@@ -45,6 +45,7 @@ ProfilerLauncherDialog::ProfilerLauncherDialog(AppWindow* app_window)
     , m_orchestrator(app_window)
 #ifdef ROCPROFVIS_ENABLE_REMOTE
     , m_remote_uri(std::make_shared<RemoteUri>())
+    , m_connection_store(SshConnectionStore::GetInstance())
     , m_ssh_settings_dialog(nullptr)
     , m_remote_show_progress_popup(false)
     , m_remote_last_progress()
@@ -77,21 +78,11 @@ ProfilerLauncherDialog::ProfilerLauncherDialog(AppWindow* app_window)
     m_backends[0]->LoadSettings(jt::Json());
     m_config.backend_payload = m_backends[0]->SaveSettings();
 
-#ifdef ROCPROFVIS_ENABLE_REMOTE
-    // Before LoadFromSettings() so it can validate the saved profile's
-    // connection ref against the store.
-    m_connection_store.Load();
-#endif
-
     LoadFromSettings();
     RefreshExecutionCache();
 
 #ifdef ROCPROFVIS_ENABLE_REMOTE
-    if(m_connection_store.Get(m_selected_connection_id) == nullptr && !m_connection_store.Empty())
-    {
-        m_selected_connection_id = m_connection_store.List().front().id;
-    }
-    ApplySelectedConnection();
+    SyncSelectedConnection();
 #endif
 
     // Run orchestration (sessions, profiler-state events, teardown) is owned by
@@ -109,6 +100,9 @@ void ProfilerLauncherDialog::Show()
     // on the button row. The run view is one click away and the capture is not
     // cancelled.
     m_show_run_view = false;
+#ifdef ROCPROFVIS_ENABLE_REMOTE
+    SyncSelectedConnection();
+#endif
 }
 
 void ProfilerLauncherDialog::Render()
@@ -175,7 +169,7 @@ void ProfilerLauncherDialog::Render()
 
 #ifdef ROCPROFVIS_ENABLE_REMOTE
     // SSH settings dialog, auth prompts and download progress (rendered outside
-    // the main window scope, mirroring SshTestDialog).
+    // the main window scope, mirroring RemoteTraceOpener).
     RenderRemotePopups();
 #endif
 
@@ -1754,6 +1748,15 @@ void ProfilerLauncherDialog::SaveToSettings()
 }
 
 #ifdef ROCPROFVIS_ENABLE_REMOTE
+void ProfilerLauncherDialog::SyncSelectedConnection()
+{
+    if(m_connection_store.Get(m_selected_connection_id) == nullptr && !m_connection_store.Empty())
+    {
+        m_selected_connection_id = m_connection_store.List().front().id;
+    }
+    ApplySelectedConnection();
+}
+
 void ProfilerLauncherDialog::ApplySelectedConnection()
 {
     const SshConnectionConfig* cfg = m_connection_store.Get(m_selected_connection_id);

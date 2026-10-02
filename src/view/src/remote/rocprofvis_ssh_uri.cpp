@@ -89,11 +89,6 @@ namespace View
         return m_connection.PassphraseTrimmed();
     }
 
-    std::string RemoteUri::GetRemoteCommandLineString() const
-    {
-        return Core::String::trim_copy(m_remote_command_line);
-    }
-
     std::string RemoteUri::GetRemoteResultPathString() const
     {
         return Core::String::trim_copy(m_remote_result_path);
@@ -102,11 +97,6 @@ namespace View
     std::string RemoteUri::GetRemoteBrowsingPathString() const
     {
         return m_file_browser_buffer;
-    }
-
-    std::string& RemoteUri::GetRemoteCommandLine()
-    {
-        return m_remote_command_line;
     }
 
     std::string& RemoteUri::GetRemoteResultPath()

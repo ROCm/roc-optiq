@@ -93,6 +93,13 @@ namespace Controller
             KEY_DSA
         };
 
+        enum class PollResult
+        {
+            kReady,
+            kTimeout,
+            kError
+        };
+
         // kbdint trampoline. The libssh2 callback signature gives us only an
         // `abstract` void**, which we set to the SshBridge before kicking auth.
         struct KbdintCtx
@@ -131,10 +138,12 @@ namespace Controller
 
 
         // Executes `command` on the remote host, streaming stdout/stderr into
-        // the connection's bridge. If `exit_code` is non-null, the remote
-        // process's exit status (from libssh2_channel_get_exit_status) is written
-        // to it. The returned Result reflects the SSH transport outcome
-        // (Success/Cancelled/transport errors), NOT the remote process exit code.
+        // the connection's bridge until the command exits, however long it stays
+        // silent. If `exit_code` is non-null, the remote exit status is written to
+        // it on Success (-1 if a signal ended the command). The returned Result
+        // reflects the SSH transport outcome (Success/Cancelled/transport errors),
+        // NOT the remote process exit code. Cancelling sends SIGTERM to the
+        // remote process group (on servers that support the "signal" request).
         static Result ExecuteCommand(SshConnection* connection, const std::string& command, Future* future, int* exit_code = nullptr);
         static Result DownloadFile(SshConnection * connection, const std::string& remote_path, const std::string& local_path, Future* future);
         static Result BrowseRemoteDirectory(SshConnection * connection, const std::string& path, Future* future);
@@ -143,8 +152,12 @@ namespace Controller
         static bool IsCancelRequested(SshConnection * connection, Future* future);
         static void SetKeepAlive(SshConnection * connection, int interval_seconds);
 
-        // Waits (bounded) for the session socket to be ready in the direction
-        // libssh2 is blocked on. False on timeout or socket error.
+        // Waits up to `timeout_ms` for the session socket to be ready in the
+        // direction libssh2 is blocked on.
+        static PollResult PollSocket(SshConnection* connection, int timeout_ms);
+
+        // PollSocket() bounded by the transfer stall timeout. False on timeout
+        // or socket error.
         static bool WaitSocket(SshConnection* connection);
 
     private:
@@ -152,8 +165,8 @@ namespace Controller
         static bool MethodListed(const char* methods, const char* needle);
         static std::string ExpandTilde(const std::string& p);
         static bool TryPublicKey(SshConnection * connection, const std::string& user,
-            const std::string& priv_path_in, const std::string& passphrase, Future* future);
-        static bool TryAgent(SshConnection * connection, const std::string& user, Future* future);
+            const std::string& priv_path_in, const std::string& passphrase);
+        static bool TryAgent(SshConnection * connection, const std::string& user);
         static std::vector<std::string> DefaultKeyPaths();
         static void KbdIntCallback(
             const char* name, 
@@ -165,7 +178,6 @@ namespace Controller
             void** abstract);
         static KeyType DetectPubkeyType(const char* pubkey_path);
 
-        static bool Reconnect(SshConnection* connection, Future* future);
         static socket_t CreateTcpConnection(const std::string& host, int port);
 
         std::vector<std::unique_ptr<SshConnection>> m_connections;

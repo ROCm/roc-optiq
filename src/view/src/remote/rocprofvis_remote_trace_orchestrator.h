@@ -17,10 +17,9 @@ namespace View
 
 class RemoteUri;
 
-// Drives the "open remote trace" workflow as a non-blocking state machine:
+// Drives one remote task as a non-blocking state machine:
 //
-//   connect -> authenticate -> (execute if a command is set)
-//           -> (download if a result path is set) -> on_open_file(local_path)
+//   connect -> authenticate -> { stop | list a folder | download a file }
 //
 // The orchestrator owns one SshSession and subscribes to kRemoteStatusChanged.
 // Each phase is started via the session (which registers a MonitorOperation);
@@ -28,46 +27,41 @@ class RemoteUri;
 // to the next one. All work happens on the main thread inside event dispatch -
 // there is no worker thread.
 //
+// Once authenticated, later tasks reuse the live session, so browsing folder
+// to folder and then downloading never reconnects or prompts again.
+//
 // Prompt / host-key dialogs are unaffected: callers keep polling the session's
 // PromptRequest / HostKeyRequest (e.g. via RenderSshAuthModal).
 class RemoteTraceOrchestrator
 {
 public:
-    // on_open_file is invoked with the local path once a trace has been
-    // downloaded (or immediately if the workflow only executes a command).
-    RemoteTraceOrchestrator(std::shared_ptr<RemoteUri> uri, std::function<void(const std::string&)> on_open_file);
+    // on_result is invoked when a task succeeds: with the listed folder after
+    // BrowsePath(), the local copy after DownloadPath(), and not at all after
+    // Connect(). May be null.
+    RemoteTraceOrchestrator(std::shared_ptr<RemoteUri>               uri,
+                            std::function<void(const std::string&)> on_result);
     ~RemoteTraceOrchestrator();
 
-    // Begins the workflow (connect phase). Returns false if the session could
-    // not be created / connected.
-    bool Start();
-    bool StartBrowsing();
+    // Connects and authenticates, then stops (a connection test).
+    bool Connect();
 
-    // Browses the current m_uri browsing path. If this orchestrator already
-    // owns a connected + authenticated session (e.g. from a previous browse),
-    // it skips straight to the browse phase and reuses that session instead of
-    // reconnecting and re-authenticating. Otherwise it falls back to the full
-    // StartBrowsing() pipeline. This is what folder-to-folder navigation should
-    // call so each click does not tear down and re-auth the SSH session.
+    // Lists m_uri's browsing path.
     bool BrowsePath();
 
-    // Downloads the m_uri result path and calls on_open_file with the local
-    // copy. Reuses the live authenticated session when there is one (e.g. right
-    // after browsing), so nothing reconnects or prompts again; otherwise runs
-    // the full Start() pipeline.
+    // Downloads m_uri's result path into the local cache.
     bool DownloadPath();
 
-    // Replaces the on_open_file callback, e.g. once a session has been taken
-    // over from the remote file browser.
-    void SetOnOpenFile(std::function<void(const std::string&)> on_open_file);
+    // Replaces the on_result callback, e.g. once a session has been taken over
+    // from the remote file browser.
+    void SetOnResult(std::function<void(const std::string&)> on_result);
 
     // True while a phase is in flight or pending.
     bool IsRunning() const { return m_running; }
 
-    // True once the workflow has ended in failure; GetStatusMessage() says why.
+    // True once the last task ended in failure; GetStatusMessage() says why.
     bool HasFailed() const { return m_phase == Phase::Failed; }
 
-    // Human-readable status for the open dialog.
+    // Human-readable status of the current or last task.
     const std::string& GetStatusMessage() const { return m_status_message; }
 
     // Accessors used by the auth modal / progress dialogs.
@@ -79,32 +73,36 @@ private:
         Idle,
         Connecting,
         Authenticating,
-        Executing,
         Downloading,
         Browsing,
         Done,
         Failed,
     };
 
-    void OnRemoteStatus(uint64_t status, rocprofvis_result_t result);
-    void AdvanceAfterConnect();
-    void AdvanceAfterAuthenticate();
-    void AdvanceAfterExecute();
-    void AdvanceAfterDownload();
-    void AdvanceAfterBrowsing();
-    void Browse();
+    enum class Task
+    {
+        kConnect,
+        kBrowse,
+        kDownload,
+    };
+
+    // Starts `task` on the live authenticated session, or connects first.
+    bool Run(Task task);
+    // Starts the task's own phase once authenticated.
+    void RunTask();
+    void OnRemoteStatus(uint64_t status);
+    void Succeed(const std::string& result);
     void Fail(const std::string& message);
 
     std::shared_ptr<RemoteUri>               m_uri;
-    std::function<void(const std::string&)>  m_on_open_file;
+    std::function<void(const std::string&)>  m_on_result;
     std::unique_ptr<SshSession>              m_session;
     EventManager::SubscriptionToken          m_status_token;
     Phase                                    m_phase;
-    Phase                                    m_task;
+    Task                                     m_task;
     bool                                     m_running;
-    // True once the owned session has completed its authenticate phase, so a
-    // subsequent BrowsePath() can reuse the live connection without redoing
-    // connect + authenticate. Reset whenever a fresh session is started.
+    // True once the owned session has authenticated, so later tasks can reuse
+    // the live connection. Reset whenever a fresh session is started.
     bool                                     m_authenticated;
     std::string                              m_status_message;
 };

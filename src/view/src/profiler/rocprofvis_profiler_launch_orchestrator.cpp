@@ -401,7 +401,7 @@ bool ProfilerLaunchOrchestrator::GetRemotePhaseBadge(std::string&        out_lab
             out_level = ConsoleStatusLevel::kRunning;
             break;
         case RemoteProfilerSession::Phase::Authenticating:
-            out_label = "Authenticating";
+            out_label = "Signing in";
             out_level = ConsoleStatusLevel::kRunning;
             break;
         case RemoteProfilerSession::Phase::Profiling:

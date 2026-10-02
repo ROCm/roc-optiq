@@ -1,7 +1,7 @@
-// Copyright Advanced Micro Devices, Inc.
+﻿// Copyright Advanced Micro Devices, Inc.
 // SPDX-License-Identifier: MIT
 
-#include "rocprofvis_ssh_test_dialog.h"
+#include "rocprofvis_remote_trace_opener.h"
 #include "rocprofvis_appwindow.h"
 #include "widgets/rocprofvis_gui_helpers.h"
 #include "widgets/rocprofvis_notification_manager.h"
@@ -13,8 +13,9 @@ namespace RocProfVis
 namespace View
 {
 
-SshTestDialog::SshTestDialog(AppWindow* app_window)
+RemoteTraceOpener::RemoteTraceOpener(AppWindow* app_window)
 : m_app_window(app_window)
+, m_connection_store(SshConnectionStore::GetInstance())
 , m_uri(std::make_shared<RemoteUri>())
 , m_settings_dialog(nullptr)
 , m_orchestrator(nullptr)
@@ -25,18 +26,19 @@ SshTestDialog::SshTestDialog(AppWindow* app_window)
 {
     m_file_browser.SetConnectionAction([this]() { OpenConnectionSettings(); });
     m_file_browser.SetTypeFilter(RemoteFileBrowser::TypeFilter::kTraces);
+    m_file_browser.SetTitle("Open Remote Trace");
+    m_file_browser.SetAcceptLabel("Open");
 }
 
-SshTestDialog::~SshTestDialog()
+RemoteTraceOpener::~RemoteTraceOpener()
 {
     // Destroy the orchestrator (which owns the monitored SshSession) before the
-    // shared RemoteUri reference held here is released, mirroring the prior
-    // AppWindow teardown ordering.
+    // shared RemoteUri reference held here is released.
     m_orchestrator.reset();
 }
 
 void
-SshTestDialog::ApplySelectedConnection()
+RemoteTraceOpener::ApplySelectedConnection()
 {
     const SshConnectionConfig* cfg = m_connection_store.Get(m_selected_connection_id);
     if(cfg)
@@ -50,11 +52,8 @@ SshTestDialog::ApplySelectedConnection()
 }
 
 void
-SshTestDialog::Show()
+RemoteTraceOpener::Show()
 {
-    // Other dialogs keep their own store over the same saved profiles, so pick
-    // up anything they added or edited since this one last loaded.
-    m_connection_store.Load();
     if(m_connection_store.Get(m_selected_connection_id) == nullptr)
     {
         m_selected_connection_id =
@@ -78,7 +77,7 @@ SshTestDialog::Show()
 }
 
 void
-SshTestDialog::OpenBrowser()
+RemoteTraceOpener::OpenBrowser()
 {
     // Seeded with the last opened trace so the browser starts in its folder.
     m_file_browser.Open(m_uri->GetRemoteResultPathString(), RemoteFileBrowser::PickMode::kFile,
@@ -86,7 +85,7 @@ SshTestDialog::OpenBrowser()
 }
 
 void
-SshTestDialog::OpenConnectionSettings()
+RemoteTraceOpener::OpenConnectionSettings()
 {
     m_settings_dialog = std::make_unique<SshSettingsDialog>(
         m_connection_store, m_selected_connection_id,
@@ -94,7 +93,7 @@ SshTestDialog::OpenConnectionSettings()
 }
 
 void
-SshTestDialog::StartDownload(const std::string& remote_path)
+RemoteTraceOpener::StartDownload(const std::string& remote_path)
 {
     m_uri->SetRemoteResultPathString(remote_path.c_str());
     m_failure_reported    = false;
@@ -109,7 +108,7 @@ SshTestDialog::StartDownload(const std::string& remote_path)
     {
         m_orchestrator = std::make_unique<RemoteTraceOrchestrator>(m_uri, nullptr);
     }
-    m_orchestrator->SetOnOpenFile(
+    m_orchestrator->SetOnResult(
         [this](const std::string& local_path)
         {
             if(m_app_window)
@@ -121,7 +120,7 @@ SshTestDialog::StartDownload(const std::string& remote_path)
 }
 
 void
-SshTestDialog::Render()
+RemoteTraceOpener::Render()
 {
     m_file_browser.Render();
 
@@ -148,7 +147,7 @@ SshTestDialog::Render()
 }
 
 void
-SshTestDialog::RenderProgressPopup()
+RemoteTraceOpener::RenderProgressPopup()
 {
     SshSession* ssh_session = m_orchestrator ? m_orchestrator->GetSession() : nullptr;
     if(!ssh_session)

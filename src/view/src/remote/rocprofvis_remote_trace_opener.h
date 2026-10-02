@@ -29,11 +29,11 @@ class AppWindow;
 // The connection configuration is owned as a std::shared_ptr<RemoteUri> so it
 // can be shared with the browser and the RemoteTraceOrchestrator / SshSession,
 // which read it lazily across the whole non-blocking workflow.
-class SshTestDialog
+class RemoteTraceOpener
 {
 public:
-    explicit SshTestDialog(AppWindow* app_window);
-    ~SshTestDialog();
+    explicit RemoteTraceOpener(AppWindow* app_window);
+    ~RemoteTraceOpener();
 
     // Starts the open-remote flow (from the File menu).
     void Show();
@@ -52,7 +52,7 @@ private:
     void RenderProgressPopup();
 
     AppWindow*                               m_app_window;
-    SshConnectionStore                       m_connection_store;
+    SshConnectionStore&                      m_connection_store;
     std::string                              m_selected_connection_id;
     std::shared_ptr<RemoteUri>               m_uri;
     std::unique_ptr<SshSettingsDialog>       m_settings_dialog;

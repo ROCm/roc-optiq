@@ -96,8 +96,10 @@ public:
     // Push all popup style variables (RAII - automatically pops on destruction)
     void PushPopupStyles();
     
-    // Center the popup window (call before BeginPopupModal)
-    void CenterPopup();
+    // Center the popup window (call before BeginPopupModal). Auto-sized card
+    // stacks keep growing for a few frames after appearing, so unmovable ones
+    // pass ImGuiCond_Always to stay centered instead of hanging off the bottom.
+    void CenterPopup(ImGuiCond cond = ImGuiCond_Appearing);
     
     // Push titlebar colors using grey from settings
     void PushTitlebarColors();

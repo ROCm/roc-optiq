@@ -18,7 +18,7 @@
 #include "widgets/rocprofvis_tab_container.h"
 // TEMPORARY (remote/SSH): remove this guard when the remote feature graduates.
 #ifdef ROCPROFVIS_ENABLE_REMOTE
-#include "remote/rocprofvis_ssh_test_dialog.h"
+#include "remote/rocprofvis_remote_trace_opener.h"
 #endif
 
 #include <atomic>
@@ -255,7 +255,7 @@ private:
     std::vector<ProviderCleanupJob>  m_provider_cleanup_jobs;
     uint64_t                         m_next_provider_cleanup_id;
 #ifdef ROCPROFVIS_ENABLE_REMOTE
-    std::unique_ptr<SshTestDialog>   m_ssh_test_dialog;
+    std::unique_ptr<RemoteTraceOpener> m_remote_trace_opener;
 #endif
 
     std::string m_status_message;

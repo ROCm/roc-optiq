@@ -14,12 +14,13 @@ namespace View
 {
 
 RemoteTraceOrchestrator::RemoteTraceOrchestrator(
-    std::shared_ptr<RemoteUri> uri, std::function<void(const std::string&)> on_open_file)
+    std::shared_ptr<RemoteUri> uri, std::function<void(const std::string&)> on_result)
 : m_uri(std::move(uri))
-, m_on_open_file(std::move(on_open_file))
+, m_on_result(std::move(on_result))
 , m_session(nullptr)
 , m_status_token(EventManager::InvalidSubscriptionToken)
 , m_phase(Phase::Idle)
+, m_task(Task::kConnect)
 , m_running(false)
 , m_authenticated(false)
 , m_status_message()
@@ -40,7 +41,7 @@ RemoteTraceOrchestrator::RemoteTraceOrchestrator(
             if(m_session &&
                status_event->GetOperationId() == m_session->GetActiveOperationId())
             {
-                OnRemoteStatus(status_event->GetStatus(), status_event->GetResult());
+                OnRemoteStatus(status_event->GetStatus());
             }
         });
 }
@@ -55,257 +56,153 @@ RemoteTraceOrchestrator::~RemoteTraceOrchestrator()
 }
 
 bool
-RemoteTraceOrchestrator::Start()
+RemoteTraceOrchestrator::Connect()
 {
-    if(m_running)
-    {
-        return false;
-    }
-
-    m_session = std::make_unique<SshSession>(m_uri);
-    if(!m_session->IsConnected())
-    {
-        Fail("Failed to create SSH session.");
-        return false;
-    }
-
-    m_authenticated  = false;
-    m_status_message = "Connecting...";
-    m_phase          = Phase::Connecting;
-    m_running        = true;
-    m_task           = Phase::Executing;
-
-    if(m_session->StartConnect() == 0)
-    {
-        Fail("SSH connection could not be started.");
-        return false;
-    }
-    return true;
-}
-
-bool
-RemoteTraceOrchestrator::StartBrowsing()
-{
-    if(m_running)
-    {
-        return false;
-    }
-
-    m_session = std::make_unique<SshSession>(m_uri);
-    if(!m_session->IsConnected())
-    {
-        Fail("Failed to create SSH session.");
-        return false;
-    }
-
-    m_authenticated  = false;
-    m_status_message = "Connecting...";
-    m_phase          = Phase::Connecting;
-    m_running        = true;
-    m_task           = Phase::Browsing;
-
-    if(m_session->StartConnect() == 0)
-    {
-        Fail("SSH connection could not be started.");
-        return false;
-    }
-    return true;
+    return Run(Task::kConnect);
 }
 
 bool
 RemoteTraceOrchestrator::BrowsePath()
 {
-    if(m_running)
-    {
-        return false;
-    }
-
-    // Reuse an already connected + authenticated session: skip connect / auth
-    // and browse directly on the live connection. This is the fast path for
-    // folder-to-folder navigation.
-    if(m_session && m_authenticated && m_session->IsConnected())
-    {
-        m_running = true;
-        m_task    = Phase::Browsing;
-        Browse();
-        return m_phase != Phase::Failed;
-    }
-
-    // No live authenticated session yet (first browse, or the previous one was
-    // torn down): run the full connect -> authenticate -> browse pipeline.
-    return StartBrowsing();
+    return Run(Task::kBrowse);
 }
 
 bool
 RemoteTraceOrchestrator::DownloadPath()
 {
+    return Run(Task::kDownload);
+}
+
+void
+RemoteTraceOrchestrator::SetOnResult(std::function<void(const std::string&)> on_result)
+{
+    m_on_result = std::move(on_result);
+}
+
+bool
+RemoteTraceOrchestrator::Run(Task task)
+{
     if(m_running)
     {
         return false;
     }
+    m_task    = task;
+    m_running = true;
 
     if(m_session && m_authenticated && m_session->IsConnected())
     {
-        m_running = true;
-        m_task    = Phase::Executing;
-        AdvanceAfterExecute();
+        RunTask();
         return m_phase != Phase::Failed;
     }
 
-    return Start();
+    m_session       = std::make_unique<SshSession>(m_uri);
+    m_authenticated = false;
+    if(!m_session->IsConnected())
+    {
+        Fail("Could not create the SSH connection.");
+        return false;
+    }
+    m_status_message = "Connecting...";
+    m_phase          = Phase::Connecting;
+    if(m_session->StartConnect() == 0)
+    {
+        Fail("Could not start connecting.");
+        return false;
+    }
+    return true;
 }
 
 void
-RemoteTraceOrchestrator::SetOnOpenFile(std::function<void(const std::string&)> on_open_file)
+RemoteTraceOrchestrator::RunTask()
 {
-    m_on_open_file = std::move(on_open_file);
+    switch(m_task)
+    {
+        case Task::kBrowse:
+        {
+            const std::string path = m_uri ? m_uri->GetRemoteBrowsingPathString() : "";
+            m_status_message       = "Listing " + path;
+            m_phase                = Phase::Browsing;
+            if(path.empty() || m_session->StartBrowsing(path.c_str()) == 0)
+            {
+                Fail("Could not list the folder.");
+            }
+            break;
+        }
+        case Task::kDownload:
+        {
+            const std::string path = m_uri ? m_uri->GetRemoteResultPathString() : "";
+            m_status_message       = "Downloading " + path;
+            m_phase                = Phase::Downloading;
+            if(path.empty() || m_session->StartDownload() == 0)
+            {
+                Fail("Could not start the download.");
+            }
+            break;
+        }
+        case Task::kConnect:
+        default:
+            Succeed(std::string());
+            break;
+    }
 }
 
 void
-RemoteTraceOrchestrator::OnRemoteStatus(uint64_t status, rocprofvis_result_t result)
+RemoteTraceOrchestrator::OnRemoteStatus(uint64_t status)
 {
     if(status == kRPVControllerSshFailed)
     {
         switch(m_phase)
         {
-            case Phase::Connecting:    Fail("SSH connection failed."); break;
-            case Phase::Authenticating: Fail("SSH authentication failed."); break;
-            case Phase::Executing:
-                Fail("CLI execution failed. Check remote command syntax and try again.");
+            case Phase::Connecting:
+                Fail("Could not reach the server. Check the host, port, and network.");
                 break;
-            case Phase::Downloading:
-                Fail("Result database download failed. Check profiler result path and try again.");
+            case Phase::Authenticating:
+                Fail("Sign-in failed. Check the user name, password, or key.");
                 break;
-            case Phase::Browsing:
-                Fail("Remote filesystem browsing failed.");
-                break;
-            default: Fail("SSH operation failed."); break;
+            case Phase::Downloading: Fail("The download failed."); break;
+            case Phase::Browsing:    Fail("Could not list this folder."); break;
+            default:                 Fail("The SSH operation failed."); break;
         }
         return;
     }
 
+    // Intermediate statuses (auth prompts, progress) are read from the session
+    // by the UI directly.
     if(status != kRPVControllerSshCompleted)
     {
-        // Intermediate status (auth prompt, stdout, download progress). The
-        // prompt / progress UI consumes session snapshots directly; nothing to
-        // advance here.
         return;
     }
 
     switch(m_phase)
     {
-        case Phase::Connecting:    AdvanceAfterConnect(); break;
-        case Phase::Authenticating: AdvanceAfterAuthenticate(); break;
-        case Phase::Executing:     AdvanceAfterExecute(); break;
-        case Phase::Downloading:   AdvanceAfterDownload(); break;
-        case Phase::Browsing:   AdvanceAfterBrowsing(); break;
+        case Phase::Connecting:
+            m_status_message = "Signing in...";
+            m_phase          = Phase::Authenticating;
+            if(m_session->StartAuthenticate() == 0)
+            {
+                Fail("Could not start signing in.");
+            }
+            break;
+        case Phase::Authenticating:
+            m_authenticated = true;
+            RunTask();
+            break;
+        case Phase::Downloading: Succeed(m_uri->GetLocalResultPathString()); break;
+        case Phase::Browsing:    Succeed(m_uri->GetRemoteBrowsingPathString()); break;
         default: break;
     }
 }
 
 void
-RemoteTraceOrchestrator::AdvanceAfterConnect()
-{
-    m_status_message = "Authenticating...";
-    m_phase          = Phase::Authenticating;
-    if(m_session->StartAuthenticate() == 0)
-    {
-        Fail("SSH authentication could not be started.");
-    }
-}
-
-void
-RemoteTraceOrchestrator::AdvanceAfterAuthenticate()
-{
-    // Authentication succeeded; the session's connection is now live and can be
-    // reused by a subsequent BrowsePath() without reconnecting.
-    m_authenticated = true;
-
-    if (m_task == Phase::Executing)
-    { 
-        if(m_uri && !m_uri->GetRemoteCommandLineString().empty())
-        {
-            m_status_message =
-                std::string("Executing command (") + m_uri->GetRemoteCommandLineString() + ")";
-            m_phase = Phase::Executing;
-            if(m_session->StartExecute() == 0)
-            {
-                Fail("CLI execution could not be started.");
-            }
-            return;
-        }
-        AdvanceAfterExecute();
-    }
-    else if (m_task == Phase::Browsing)
-    {
-        Browse();
-    }
-}
-
-void
-RemoteTraceOrchestrator::AdvanceAfterExecute()
-{
-    if(m_uri && !m_uri->GetRemoteResultPathString().empty())
-    {
-        m_status_message =
-            std::string("Downloading (") + m_uri->GetRemoteResultPathString() + ")";
-        m_phase = Phase::Downloading;
-        if(m_session->StartDownload() == 0)
-        {
-            Fail("Result database download could not be started.");
-        }
-        return;
-    }
-    // Nothing to download; the workflow is complete.
-    m_phase          = Phase::Done;
-    m_running        = false;
-    m_status_message = "Done.";
-}
-
-void
-RemoteTraceOrchestrator::AdvanceAfterDownload()
+RemoteTraceOrchestrator::Succeed(const std::string& result)
 {
     m_phase          = Phase::Done;
     m_running        = false;
     m_status_message = "Done.";
-
-    if(m_uri && m_on_open_file)
+    if(m_on_result && m_task != Task::kConnect)
     {
-        m_on_open_file(m_uri->GetLocalResultPathString());
+        m_on_result(result);
     }
-}
-
-void
-RemoteTraceOrchestrator::AdvanceAfterBrowsing()
-{
-    m_phase          = Phase::Done;
-    m_running        = false;
-    m_status_message = "Done.";
-
-    if(m_uri && m_on_open_file)
-    {
-        m_on_open_file(m_uri->GetRemoteBrowsingPathString());
-    }
-}
-
-void
-RemoteTraceOrchestrator::Browse()
-{
-    if(m_uri && !m_uri->GetRemoteBrowsingPathString().empty())
-    {
-        m_status_message =
-            std::string("Browsing (") + m_uri->GetRemoteBrowsingPathString() + ")";
-        m_phase = Phase::Browsing;
-        if(m_session->StartBrowsing(m_uri->GetRemoteBrowsingPathString().c_str()) == 0)
-        {
-            Fail("Remote filesystem browsing cannot be started.");
-        }
-        return;
-    }
-    // Nothing to download; the workflow is complete.
-    m_phase          = Phase::Done;
-    m_running        = false;
-    m_status_message = "Done.";
 }
 
 void
@@ -316,8 +213,8 @@ RemoteTraceOrchestrator::Fail(const std::string& message)
     m_phase          = Phase::Failed;
     m_running        = false;
     // The live connection (if any) can no longer be trusted; force the next
-    // BrowsePath() to build a fresh session rather than reusing a dead one.
-    m_authenticated  = false;
+    // task to build a fresh session rather than reusing a dead one.
+    m_authenticated = false;
 }
 
 }  // namespace View

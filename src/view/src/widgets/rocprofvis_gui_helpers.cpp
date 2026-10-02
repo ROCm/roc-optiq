@@ -710,7 +710,7 @@ RenderRemoteDownloadPopup(const char* popup_id, const char* file_name,
     PopUpStyle popup_style;
     popup_style.PushPopupStyles();
     popup_style.PushTitlebarColors();
-    popup_style.CenterPopup();
+    popup_style.CenterPopup(ImGuiCond_Always);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
     ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 12.0f);
     ImGui::SetNextWindowSize(ImVec2(440.0f, 0.0f));
@@ -744,13 +744,11 @@ RenderRemoteDownloadPopup(const char* popup_id, const char* file_name,
             ImGui::Spacing();
             if(total > 0)
             {
-                float frac = static_cast<float>(downloaded) / static_cast<float>(total);
-                if(frac > 1.0f)
-                {
-                    frac = 1.0f;
-                }
-                std::string label = std::to_string(downloaded / 1024) + " / " +
-                                    std::to_string(total / 1024) + " KiB";
+                const float frac =
+                    std::min(1.0f, static_cast<float>(downloaded) / static_cast<float>(total));
+                const std::string label = format_byte_size(downloaded) + " of " +
+                                          format_byte_size(total) + "  (" +
+                                          std::to_string(static_cast<int>(frac * 100.0f)) + "%)";
                 ImGui::ProgressBar(frac, ImVec2(-FLT_MIN, 0.0f), label.c_str());
             }
             else

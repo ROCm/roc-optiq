@@ -151,6 +151,9 @@ private:
     void LoadFromSettings();
     void SaveToSettings();
 #ifdef ROCPROFVIS_ENABLE_REMOTE
+    // Keeps the selection valid (connections are shared with Open Remote, which
+    // may remove one) and binds the selected connection into m_remote_uri.
+    void SyncSelectedConnection();
     void ApplySelectedConnection();  // TEMPORARY (remote/SSH)
     // True when the bound connection has the host and user needed to connect.
     bool HasRemoteConnection() const;
@@ -168,12 +171,12 @@ private:
     ProfilerLaunchOrchestrator m_orchestrator;
 
 #ifdef ROCPROFVIS_ENABLE_REMOTE
-    // TEMPORARY (remote/SSH): SSH connection authoring. The connection config is
-    // owned here as a shared RemoteUri (edited via the on-demand
-    // SshSettingsDialog) and handed to the orchestrator at launch, mirroring the
-    // SshTestDialog pattern.
+    // TEMPORARY (remote/SSH): SSH connection authoring. The selected connection
+    // is bound into a shared RemoteUri (edited via the on-demand
+    // SshSettingsDialog) and handed to the orchestrator at launch, mirroring
+    // RemoteTraceOpener.
     std::shared_ptr<RemoteUri>             m_remote_uri;
-    SshConnectionStore                     m_connection_store;
+    SshConnectionStore&                    m_connection_store;
     std::string                            m_selected_connection_id;
     std::unique_ptr<SshSettingsDialog>     m_ssh_settings_dialog;
     // Shared remote file/directory picker for the Target section's Browse

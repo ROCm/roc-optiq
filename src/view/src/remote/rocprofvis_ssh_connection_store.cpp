@@ -77,8 +77,16 @@ void erase_secrets(const std::string& id)
 
 }  // namespace
 
+SshConnectionStore&
+SshConnectionStore::GetInstance()
+{
+    static SshConnectionStore instance;
+    return instance;
+}
+
 SshConnectionStore::SshConnectionStore()
 {
+    Load();
 }
 
 bool SshConnectionStore::Load()

@@ -10,6 +10,7 @@
 #include <functional>
 #include <memory>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace RocProfVis
@@ -76,6 +77,11 @@ public:
     // Selects the type filter; the user can still change it in the dropdown.
     void SetTypeFilter(TypeFilter filter);
 
+    // Replaces the mode's default window title and the "Select" label of the
+    // button that picks a file, for a browser with a single purpose.
+    void SetTitle(std::string title) { m_title = std::move(title); }
+    void SetAcceptLabel(std::string label) { m_accept_label = std::move(label); }
+
 private:
     // Lazily creates the orchestrator (bound to the directory callback) and
     // reuses it across navigation so the SSH session stays connected.
@@ -107,6 +113,8 @@ private:
     bool                     m_address_editing;             // breadcrumb vs. editable field
     bool                     m_show_hidden;
     int                      m_type_filter;                 // index into extension presets
+    std::string              m_title;                       // empty: the mode's default
+    std::string              m_accept_label;                // empty: "Select"
     // Selection: "" = none, ".." = the parent row, otherwise the entry's name.
     std::string              m_selected_name;
     bool                     m_scroll_to_selected;

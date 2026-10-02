@@ -567,11 +567,11 @@ std::string RocprofSysBackend::Validate(LaunchConfig const& config) const
 {
     if (config.target.executable.empty())
     {
-        return "Target executable is required";
+        return "Choose the program to profile";
     }
     if (config.target.output_directory.empty())
     {
-        return "Output directory is required";
+        return "Choose an output folder for the results";
     }
 
     // Hierarchical vs flat profile

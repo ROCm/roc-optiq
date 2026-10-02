@@ -123,45 +123,6 @@ namespace View
     };
 
 
-    class ExecutionOutput
-    {
-    public:
-        struct Snapshot
-        {
-            std::string text;
-            bool finished;
-        };
-
-        ExecutionOutput() = default;
-        ~ExecutionOutput() = default;
-
-        ExecutionOutput(const ExecutionOutput&) = delete;
-        ExecutionOutput& operator=(const ExecutionOutput&) = delete;
-
-        ExecutionOutput(ExecutionOutput&&) = default;
-        ExecutionOutput& operator=(ExecutionOutput&&) = default;
-
-    public:
-
-        void Append(std::string text);
-
-        std::optional<Snapshot> ConsumeIfUpdated();
-        void ClearUpdated();
-
-        Snapshot Get() const;
-
-        void Clear();
-
-        void Finish();
-
-    private:
-        mutable std::mutex m_mutex;
-        std::string m_text;
-        bool m_updated = false;
-        bool m_finished = false;
-    };
-
-
     class FileStat
     {
     public:

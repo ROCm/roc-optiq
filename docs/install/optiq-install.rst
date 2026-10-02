@@ -1318,3 +1318,4 @@ Uninstall
    .. code-block:: shell
 
       rm -rf "$HOME/Library/Application Support/ROCm-Optiq"
+ 

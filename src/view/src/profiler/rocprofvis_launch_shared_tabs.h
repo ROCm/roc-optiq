@@ -45,10 +45,6 @@ void LaunchSubHeader(const char* text, const char* help = nullptr);
 // Draws the label (and keeps it clickable) to the right of the switch.
 bool ToggleSwitch(const char* label, bool* value);
 
-// A small rounded "tag": tinted background + accent border + accent text.
-// Advances the cursor by the chip size (use SameLine to place several).
-void Chip(const char* label, ImU32 accent_color);
-
 // Result of interacting with an EditablePill.
 enum class PillAction
 {
@@ -61,10 +57,6 @@ enum class PillAction
 // Clicking the x returns kRemove; clicking the body returns kEdit. Used for the
 // command-line argument and environment-variable lists.
 PillAction EditablePill(const char* label, ImU32 accent_color);
-
-// Lays out a set of tags as wrapping accent chips, prefixed by a dim label.
-// Used for the live "this run will..." configuration summary.
-void RenderConfigChips(const char* lead_label, std::vector<std::string> const& tags);
 
 // A filled, rounded status badge with contrasting text - used for the run
 // status (Running / Completed / Failed).
@@ -118,9 +110,48 @@ std::string BuildCommandPreviewString(
     std::vector<std::string> const& argv);
 
 /**
- * Renders the Command Preview panel showing the composed env block + full argv.
+ * A code panel - the Command Preview, the run output: a card holding a header
+ * row (title or status at the left, actions at the right) above a monospaced
+ * box that fills the rest of it. `size` follows BeginChild: (0, 0) fills the
+ * remaining space, a negative height leaves that much room below. Always pair
+ * Begin/End.
+ */
+void BeginCodePanel(const char* id, ImVec2 size);
+void EndCodePanel();
+
+/**
+ * The monospaced, bordered box that fills the rest of a code panel. With
+ * `follow_tail` it stays on the newest line while the user is scrolled to the
+ * bottom.
+ */
+void RenderCodeBox(const char* id, std::string const& text, bool follow_tail);
+
+/**
+ * Continues the current line so that items totalling `width` end at its right
+ * edge - a header's trailing actions.
+ */
+void SameLineRightAligned(float width);
+
+/**
+ * Widths of a button and of a labelled checkbox at the current style, for
+ * laying out a row of them before drawing it.
+ */
+float ButtonWidth(const char* label);
+float CheckboxWidth(const char* label);
+
+/**
+ * Renders the Command Preview panel's contents - its title with Copy at the
+ * right, above the composed env block + full argv. Call inside a code panel.
  */
 void RenderCommandPreview(std::string const& preview_text);
+
+/**
+ * Slim, trackless scrollbars for the launcher's scrolling panels. Push before
+ * the BeginChild that scrolls and pop right after it: the scrollbar style is
+ * read when the child begins.
+ */
+void PushSlimScrollbarStyle();
+void PopSlimScrollbarStyle();
 
 /**
  * Semantic severity of the console status badge. This lets
@@ -134,14 +165,6 @@ enum class ConsoleStatusLevel
     kSuccess,  // completed
     kError,    // failed
 };
-
-/**
- * Renders the Output Console panel: an "Output" title with Auto-scroll, Copy
- * and Clear at the right, above the monospaced output. The run status belongs
- * to the caller's header and is not repeated here.
- * Returns true if the user clicked "Clear".
- */
-bool RenderOutputConsole(std::string const& output_text, bool& auto_scroll);
 
 /**
  * Renders the "Saved Profile" bar (Optiq JSON presets):

@@ -2350,10 +2350,11 @@ structs: `ToolOption`, `TabDescriptor`, `WarningMessage`.
 **`RocprofSysBackend`** is the only backend registered today (the
 `ProfilerLauncherDialog` ctor pushes one). `Id()` = `"rocprof-sys"`.
 Tools: `kRPVProfilerToolRocprofSysRun`, `…SysSample`, `…SysInstrument`.
-Tabs: General, Sampling, ROCm,
-Process Sampling, Parallelism, Advanced, plus Instrument (only when the
-tool is `instrument`); the dialog appends a shared "Raw Env Vars" tab.
-Perfetto options are nested inside Advanced, not a top-level tab.
+Tabs: General sits in the launcher form; Sampling, ROCm, Perfetto,
+Process, Parallelism, Logging, plus Instrument (only when the tool is
+`instrument`) are `advanced` and live in the separate Advanced Options
+window, where the dialog appends its own Overrides tab (`extra_argv` and
+`extra_env`).
 `RocprofSysSettings` holds the serializable backend state (backends,
 sampling, ROCm domains, Perfetto, process sampling, parallelism,
 advanced, instrument) plus 11 built-in rocprof-sys `--preset=` names.
@@ -2426,13 +2427,19 @@ express.
   controls while active.
 
 **Shared form helpers (`rocprofvis_launch_shared_tabs.h`)** - reuse
-these instead of re-authoring launcher UI: `RenderTargetSection`,
-`RenderToolLocationSection`, `RenderRawEnvVarsTab`, `BuildCommandPreviewString`,
-`RenderCommandPreview`, `RenderOutputConsole`, `RenderSavedProfileBar`. The
-run view's status pill uses `ConsoleStatusLevel {kIdle, kRunning,
-kSuccess, kError}`; the console itself does not repeat the status. The
-connection-mode selector and SSH UI live in the dialog
-(`RenderRemoteSection`), not here.
+these instead of re-authoring launcher UI: `BeginLaunchCard` /
+`LaunchCardHeader`, `RenderTargetSection`, `RenderToolLocationSection`,
+`BuildCommandPreviewString`, `RenderCommandPreview`, `RenderSavedProfileBar`,
+and the code-panel pieces `BeginCodePanel` / `RenderCodeBox` /
+`EndCodePanel` with `SameLineRightAligned`, `ButtonWidth` and
+`CheckboxWidth` for a header's right-aligned actions. The Command Preview
+and the run output are both code panels. Both views share one frame: a
+top line (the toolbar, or the run summary), cards filling the middle over
+the window backdrop, and the same footer, so Close and the primary action
+never move between views. The run output card's header carries the status
+pill (`ConsoleStatusLevel {kIdle, kRunning, kSuccess, kError}`) with
+Auto-scroll, Copy and Clear at the right. The connection-mode selector and
+SSH UI live in the dialog (`RenderRemoteSection`), not here.
 
 **`ProfilerLauncherDialog`** owns `m_backends`, the
 `LaunchPresetManager`, the `ProfilerLaunchOrchestrator`, `m_config`, and

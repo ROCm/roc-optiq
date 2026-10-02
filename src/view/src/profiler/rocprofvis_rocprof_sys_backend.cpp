@@ -240,7 +240,7 @@ void BeginPresetLockedSection(std::string const& preset)
     {
         ImGui::TextColored(kPresetLockColor,
                            "Preset \"%s\" controls these settings.", preset.c_str());
-        ImGui::TextDisabled("Clear the preset or use Raw Env Vars to override.");
+        ImGui::TextDisabled("Clear the preset, or set values in the Overrides tab.");
         ImGui::Spacing();
     }
     ImGui::BeginDisabled(has_preset);
@@ -532,15 +532,15 @@ std::vector<TabDescriptor> RocprofSysBackend::GetTabs(rocprofvis_profiler_tool_t
         return const_cast<RocprofSysBackend*>(this)->RenderBackendsTab();
     }, false});
 
-    // Advanced: power-user detail, grouped by domain and tucked under the
-    // collapsible "Advanced Options" section so the common case stays simple.
+    // Advanced: power-user detail, grouped by domain in the separate Advanced
+    // Options window so the common case stays simple.
     tabs.push_back({"sampling", "Sampling", [this]() {
         return const_cast<RocprofSysBackend*>(this)->RenderSamplingTab(); }, true});
     tabs.push_back({"rocm", "ROCm", [this]() {
         return const_cast<RocprofSysBackend*>(this)->RenderRocmTab(); }, true});
     tabs.push_back({"perfetto", "Perfetto", [this]() {
         return const_cast<RocprofSysBackend*>(this)->RenderPerfettoTab(); }, true});
-    tabs.push_back({"process_sampling", "Process Sampling", [this]() {
+    tabs.push_back({"process_sampling", "Process", [this]() {
         return const_cast<RocprofSysBackend*>(this)->RenderProcessSamplingTab(); },
         true});
     tabs.push_back({"parallelism", "Parallelism", [this]() {
@@ -553,7 +553,7 @@ std::vector<TabDescriptor> RocprofSysBackend::GetTabs(rocprofvis_profiler_tool_t
             true});
     }
 
-    tabs.push_back({"advanced", "Config & Logging", [this]() {
+    tabs.push_back({"advanced", "Logging", [this]() {
         return const_cast<RocprofSysBackend*>(this)->RenderAdvancedTab(); }, true});
 
     return tabs;
@@ -667,45 +667,6 @@ std::vector<WarningMessage> RocprofSysBackend::GetWarnings(
     }
 
     return warnings;
-}
-
-std::vector<std::string> RocprofSysBackend::GetSummaryTags(
-    LaunchConfig const& config) const
-{
-    std::vector<std::string> tags;
-
-    // Output format (what the run will produce).
-    std::string output;
-    if (m_settings.trace_backend && m_settings.use_rocpd)
-    {
-        output = "Perfetto + ROCpd";
-    }
-    else if (m_settings.trace_backend)
-    {
-        output = "Perfetto trace";
-    }
-    else if (m_settings.use_rocpd)
-    {
-        output = "ROCpd database";
-    }
-    else
-    {
-        output = "No trace output";
-    }
-    tags.push_back(output);
-
-    // Instrument does not accept --preset, so never label the run with a
-    // preset that FlattenToExecution will not emit.
-    if (config.tool == kRPVProfilerToolRocprofSysInstrument)
-    {
-        tags.push_back("Runtime instrumentation");
-    }
-    else if (!m_settings.rocprof_preset.empty())
-    {
-        tags.push_back("Preset: " + m_settings.rocprof_preset);
-    }
-
-    return tags;
 }
 
 // ==================================================================================

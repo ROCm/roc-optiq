@@ -130,17 +130,6 @@ public:
     }
 
     /**
-     * Short, human-readable tags describing what this run will collect (e.g.
-     * "Perfetto trace", "Sampling 300Hz", "AMD SMI"). Rendered as a live chip
-     * summary in the launcher. Empty by default.
-     */
-    virtual std::vector<std::string> GetSummaryTags(LaunchConfig const& config) const
-    {
-        (void)config;
-        return {};
-    }
-
-    /**
      * Deduce the produced trace file path from the profiler's captured stdout.
      * Each profiler reports its output location differently, so parsing rules
      * are backend-specific. Returns an empty string if the path cannot be

@@ -125,14 +125,18 @@ private:
     // Deeper, less-common backend settings, shown in a separate floating window
     // opened from the "Advanced Options..." button.
     void RenderAdvancedWindow();
-    // Combined "Arguments & Environment" panel: command-line args (one edit box,
-    // added as pills) lead, environment variables (name/value, added as pills)
-    // grow below. Clicking a pill pulls it back into the editor to edit/remove.
+    // The Advanced window's Overrides tab: command-line args (one edit box, added
+    // as pills) lead, environment variables (name/value, added as pills) grow
+    // below. Clicking a pill pulls it back into the editor to edit/remove.
     void RenderArgsEnvPanel();
     void RenderButtonRow();
-    // Buttons for the run view: Cancel while running; Run Again / Back to
-    // Configuration / Open Trace / Close once the run has finished.
+    // The run view's footer, laid out like the configure view's: Close and
+    // Cancel while running; Open Trace / Back to Configuration / Close / Run
+    // Again once the run has finished.
     void RenderRunButtonRow();
+    // The run output card's header: the status badge, elapsed time and any
+    // phase detail, kept within `max_width` so it never reaches the actions.
+    void RenderRunStatus(float max_width);
     // One-line "what is being run" summary shown atop the run view.
     std::string BuildRunSummary() const;
 #ifdef ROCPROFVIS_ENABLE_REMOTE

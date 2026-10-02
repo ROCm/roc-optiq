@@ -27,7 +27,6 @@ static char s_save_preset_name[128] = {};
 // rest of the application rather than inventing its own spacing rules.
 constexpr float kAccentBarWidth     = 4.0f;   // card-header leading accent bar
 constexpr float kAccentBarGap       = 8.0f;
-constexpr float kChipBgAlpha        = 0.16f;
 constexpr float kPillGap            = 7.0f;   // gap between pill label and close "x"
 constexpr float kPillCloseScale     = 0.75f;  // close glyph size, fraction of font
 constexpr float kPillBgAlpha        = 0.16f;
@@ -38,10 +37,11 @@ constexpr float kToggleWidthScale   = 1.75f;  // of toggle height
 constexpr float kToggleAnimSpeed    = 10.0f;
 constexpr float kToggleKnobInset    = 2.0f;   // knob padding inside the track
 
-// Card interior vertical padding (horizontal padding still follows the app
-// style). Tighter than the app default so the stacked cards read as one compact
-// form instead of a column of tall panels.
-constexpr float kCardPadY = 5.0f;
+// Card interior padding, and the gap between rows inside a card. The dialog's
+// own item spacing (larger) is what separates one card from the next.
+constexpr float  kCardPadX       = 12.0f;
+constexpr float  kCardPadY       = 8.0f;
+constexpr ImVec2 kCardRowSpacing = ImVec2(8.0f, 6.0f);
 
 // A dimmed "(?)" that shows a wrapped tooltip on hover.
 void HelpTip(const char* tooltip)
@@ -71,19 +71,15 @@ ImU32 LerpColor(ImU32 a, ImU32 b, float t)
 
 void BeginLaunchCard(const char* id)
 {
-    // Delegate to the shared design-language panel card so the launcher tracks
-    // the same rounded/bordered/tiered look as the remote dialogs. The tighter
-    // kCardPadY keeps the stacked launcher cards reading as one compact form.
-    SettingsManager&  settings = SettingsManager::Get();
-    const ImGuiStyle& def      = settings.GetDefaultStyle();
-    BeginPanelCard(id, PanelCardTone::kPanel, ImVec2(def.WindowPadding.x, kCardPadY), true,
-                   &settings);
+    SettingsManager& settings = SettingsManager::Get();
+    BeginPanelCard(id, PanelCardTone::kPanel, ImVec2(kCardPadX, kCardPadY), true, &settings);
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, kCardRowSpacing);
 }
 
 void EndLaunchCard()
 {
+    ImGui::PopStyleVar();  // ItemSpacing
     EndPanelCard();
-    // Cards are separated by the surrounding item spacing only.
 }
 
 void LaunchCardHeader(const char* icon, const char* title, const char* help)
@@ -91,23 +87,19 @@ void LaunchCardHeader(const char* icon, const char* title, const char* help)
     SettingsManager& settings = SettingsManager::Get();
     FontManager&     fonts    = settings.GetFontManager();
 
-    ImGui::PushFont(fonts.GetFont(FontType::kMainText),
-                    fonts.GetFontSize(FontSize::kMedLarge));
-
-    // Leading accent bar sized to the (larger) header text.
-    const float  bar_h = ImGui::GetFontSize();
-    ImVec2       p     = ImGui::GetCursorScreenPos();
-    ImDrawList*  dl    = ImGui::GetWindowDrawList();
-    dl->AddRectFilled(ImVec2(p.x, p.y), ImVec2(p.x + kAccentBarWidth, p.y + bar_h),
+    // A short accent bar, at the body's own text size, so a card title doesn't
+    // tower over the fields it introduces.
+    const float bar_h = ImGui::GetFontSize();
+    ImVec2      p     = ImGui::GetCursorScreenPos();
+    ImDrawList* dl    = ImGui::GetWindowDrawList();
+    dl->AddRectFilled(ImVec2(p.x, p.y + 1.0f), ImVec2(p.x + kAccentBarWidth, p.y + bar_h - 1.0f),
                       settings.GetColor(Colors::kAccent), 2.0f);
 
     ImGui::Indent(kAccentBarWidth + kAccentBarGap);
 
-    // Optional leading icon (drawn from the icon font, in the accent color).
     if (icon && icon[0])
     {
-        ImGui::PushFont(fonts.GetFont(FontType::kIcon),
-                        fonts.GetFontSize(FontSize::kMedLarge));
+        ImGui::PushFont(fonts.GetFont(FontType::kIcon), ImGui::GetFontSize());
         ImGui::PushStyleColor(ImGuiCol_Text, settings.GetColor(Colors::kAccent));
         ImGui::TextUnformatted(icon);
         ImGui::PopStyleColor();
@@ -115,34 +107,13 @@ void LaunchCardHeader(const char* icon, const char* title, const char* help)
         ImGui::SameLine(0.0f, kAccentBarGap);
     }
 
-    ImGui::PushStyleColor(ImGuiCol_Text, settings.GetColor(Colors::kTextMain));
     ImGui::TextUnformatted(title);
-    ImGui::PopStyleColor();
-    ImGui::PopFont();
 
     if (help && help[0])
     {
         HelpTip(help);
     }
     ImGui::Unindent(kAccentBarWidth + kAccentBarGap);
-}
-
-void Chip(const char* label, ImU32 accent_color)
-{
-    const ImVec2 pad       = ImGui::GetStyle().FramePadding;
-    ImVec2       text_size = ImGui::CalcTextSize(label);
-    ImVec2       p         = ImGui::GetCursorScreenPos();
-    ImVec2       size(text_size.x + pad.x * 2.0f, text_size.y + pad.y * 2.0f);
-    ImDrawList*  dl  = ImGui::GetWindowDrawList();
-    float        rnd = size.y * 0.5f;
-
-    // Fill only, no outline: an outlined pill reads as a button, and chips are
-    // a read-only summary.
-    dl->AddRectFilled(p, ImVec2(p.x + size.x, p.y + size.y),
-                      ApplyAlpha(accent_color, kChipBgAlpha), rnd);
-    dl->AddText(ImVec2(p.x + pad.x, p.y + pad.y), accent_color, label);
-
-    ImGui::Dummy(size);
 }
 
 PillAction EditablePill(const char* label, ImU32 accent_color)
@@ -182,45 +153,6 @@ PillAction EditablePill(const char* label, ImU32 accent_color)
     return PillAction::kNone;
 }
 
-void RenderConfigChips(const char* lead_label, std::vector<std::string> const& tags)
-{
-    SettingsManager& settings = SettingsManager::Get();
-
-    ImGui::AlignTextToFramePadding();
-    ImGui::TextDisabled("%s", lead_label);
-
-    if (tags.empty())
-    {
-        ImGui::SameLine();
-        ImGui::TextDisabled("nothing selected yet");
-        return;
-    }
-
-    const ImU32  accent    = settings.GetColor(Colors::kAccent);
-    ImGuiStyle&  style     = ImGui::GetStyle();
-    const float  window_x2 = ImGui::GetWindowPos().x + ImGui::GetWindowContentRegionMax().x;
-
-    // Chip width matches Chip(): text width plus its horizontal frame padding.
-    const float chip_pad_x = ImGui::GetStyle().FramePadding.x;
-    auto chip_width = [chip_pad_x](std::string const& s)
-    { return ImGui::CalcTextSize(s.c_str()).x + chip_pad_x * 2.0f; };
-
-    ImGui::SameLine();
-    for (size_t i = 0; i < tags.size(); i++)
-    {
-        Chip(tags[i].c_str(), accent);
-        if (i + 1 < tags.size())
-        {
-            float last_x2 = ImGui::GetItemRectMax().x;
-            float next_x2 = last_x2 + style.ItemSpacing.x + chip_width(tags[i + 1]);
-            if (next_x2 < window_x2)
-            {
-                ImGui::SameLine();
-            }
-        }
-    }
-}
-
 void StatusPill(const char* label, ImU32 bg_color)
 {
     const ImVec2 pad       = ImGui::GetStyle().FramePadding;
@@ -240,9 +172,6 @@ void StatusPill(const char* label, ImU32 bg_color)
 void LaunchSubHeader(const char* text, const char* help)
 {
     SettingsManager& settings = SettingsManager::Get();
-    ImGui::Spacing();
-    // Dim rather than accent: the card headers carry the accent, and colored
-    // sub-headers under them compete for attention.
     ImGui::PushStyleColor(ImGuiCol_Text, settings.GetColor(Colors::kTextDim));
     ImGui::TextUnformatted(text);
     ImGui::PopStyleColor();
@@ -587,90 +516,103 @@ std::string BuildCommandPreviewString(
     return preview.str();
 }
 
-void RenderCommandPreview(std::string const& preview_text)
+void PushSlimScrollbarStyle()
 {
-    SettingsManager& settings = SettingsManager::Get();
-    FontManager&     fonts    = settings.GetFontManager();
-
-    ImGui::AlignTextToFramePadding();
-    ImGui::TextUnformatted("Command Preview");
-    ImGui::SameLine();
-    if (ImGui::SmallButton("Copy##CmdPreview"))
-    {
-        ImGui::SetClipboardText(preview_text.c_str());
-    }
-
-    // Monospaced, softly-rounded panel so the command reads like a terminal.
-    // Fills the remaining height of its container (the launcher's preview panel).
-    ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding,
-                        settings.GetDefaultStyle().ChildRounding);
-    ImGui::PushStyleColor(ImGuiCol_ChildBg, settings.GetColor(Colors::kBgMain));
-    ImGuiWindowFlags flags = ImGuiWindowFlags_HorizontalScrollbar;
-    ImGui::BeginChild("CmdPreview", ImVec2(0.0f, 0.0f), ImGuiChildFlags_Borders, flags);
-    ImGui::PushFont(fonts.GetFont(FontType::kCode), 0.0f);
-    ImGui::TextUnformatted(preview_text.c_str());
-    ImGui::PopFont();
-    ImGui::EndChild();
-    ImGui::PopStyleColor();
-    ImGui::PopStyleVar();
+    constexpr float SLIM_SCROLLBAR_SIZE    = 10.0f;
+    constexpr float SLIM_SCROLLBAR_PADDING = 2.0f;
+    ImGui::PushStyleVar(ImGuiStyleVar_ScrollbarSize, SLIM_SCROLLBAR_SIZE);
+    ImGui::PushStyleVar(ImGuiStyleVar_ScrollbarPadding, SLIM_SCROLLBAR_PADDING);
+    ImGui::PushStyleColor(ImGuiCol_ScrollbarBg,
+                          SettingsManager::Get().GetColor(Colors::kTransparent));
 }
 
-bool RenderOutputConsole(std::string const& output_text, bool& auto_scroll)
+void PopSlimScrollbarStyle()
 {
-    SettingsManager&  settings        = SettingsManager::Get();
-    const ImGuiStyle& style           = ImGui::GetStyle();
-    bool              clear_requested = false;
+    ImGui::PopStyleColor();
+    ImGui::PopStyleVar(2);
+}
 
-    ImGui::AlignTextToFramePadding();
-    ImGui::TextUnformatted("Output");
+void BeginCodePanel(const char* id, ImVec2 size)
+{
+    // The launch cards' surface, at a size the caller chooses so the panel can
+    // fill a column or the run view. The style applies to this card only; the
+    // code box inside sets its own.
+    SettingsManager& settings = SettingsManager::Get();
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, settings.GetColor(Colors::kBgPanel));
+    ImGui::PushStyleColor(ImGuiCol_Border, settings.GetColor(Colors::kPanelBorderSubtle));
+    ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, PANEL_CARD_ROUNDING);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(kCardPadX, kCardPadY));
+    ImGui::BeginChild(id, size, ImGuiChildFlags_Borders,
+                      ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+    ImGui::PopStyleVar(2);
+    ImGui::PopStyleColor(2);
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, kCardRowSpacing);
+}
 
-    // Auto-scroll, Copy and Clear sit together at the right edge.
-    auto button_w = [&style](const char* label)
-    { return ImGui::CalcTextSize(label).x + style.FramePadding.x * 2.0f; };
-    const float checkbox_w = ImGui::GetFrameHeight() + style.ItemInnerSpacing.x +
-                             ImGui::CalcTextSize("Auto-scroll").x;
-    const float actions_w =
-        checkbox_w + button_w("Copy") + button_w("Clear") + style.ItemSpacing.x * 2.0f;
-    ImGui::SameLine();
-    const float avail = ImGui::GetContentRegionAvail().x;
-    if (avail > actions_w)
-    {
-        ImGui::SetCursorPosX(ImGui::GetCursorPosX() + avail - actions_w);
-    }
-    ImGui::Checkbox("Auto-scroll##Output", &auto_scroll);
-    ImGui::SameLine();
-    if (ImGui::Button("Copy##OutputCopy"))
-    {
-        ImGui::SetClipboardText(output_text.c_str());
-    }
-    ImGui::SameLine();
-    if (ImGui::Button("Clear##OutputClear"))
-    {
-        clear_requested = true;
-    }
+void EndCodePanel()
+{
+    ImGui::PopStyleVar();  // ItemSpacing
+    ImGui::EndChild();
+}
 
-    FontManager&     fonts        = settings.GetFontManager();
-    ImGuiWindowFlags output_flags = ImGuiWindowFlags_HorizontalScrollbar;
-
-    // Terminal-style panel: darker background, soft corners, monospaced text.
-    ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, settings.GetDefaultStyle().ChildRounding);
+void RenderCodeBox(const char* id, std::string const& text, bool follow_tail)
+{
+    // Rounded like an input field rather than like the card around it, so the
+    // nested corners stay concentric.
+    SettingsManager& settings = SettingsManager::Get();
     ImGui::PushStyleColor(ImGuiCol_ChildBg, settings.GetColor(Colors::kBgMain));
-    ImGui::BeginChild("OutputText", ImVec2(0.0f, 0.0f), ImGuiChildFlags_Borders, output_flags);
-    ImGui::PushFont(fonts.GetFont(FontType::kCode), 0.0f);
+    ImGui::PushStyleColor(ImGuiCol_Border, settings.GetColor(Colors::kPanelBorderSubtle));
+    ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, settings.GetDefaultStyle().FrameRounding);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(kCardPadX, kCardPadY));
+    PushSlimScrollbarStyle();
+    ImGui::BeginChild(id, ImVec2(0.0f, 0.0f), ImGuiChildFlags_Borders,
+                      ImGuiWindowFlags_HorizontalScrollbar);
+    PopSlimScrollbarStyle();
+    ImGui::PopStyleVar(2);
+    ImGui::PopStyleColor(2);
 
-    ImGui::TextUnformatted(output_text.c_str());
-
-    if (auto_scroll && ImGui::GetScrollY() >= ImGui::GetScrollMaxY())
+    ImGui::PushFont(settings.GetFontManager().GetFont(FontType::kCode), 0.0f);
+    ImGui::TextUnformatted(text.c_str());
+    ImGui::PopFont();
+    if (follow_tail && ImGui::GetScrollY() >= ImGui::GetScrollMaxY())
     {
         ImGui::SetScrollHereY(1.0f);
     }
-
-    ImGui::PopFont();
     ImGui::EndChild();
-    ImGui::PopStyleColor();
-    ImGui::PopStyleVar();
+}
 
-    return clear_requested;
+void SameLineRightAligned(float width)
+{
+    ImGui::SameLine();
+    const float avail = ImGui::GetContentRegionAvail().x;
+    if (avail > width)
+    {
+        ImGui::SetCursorPosX(ImGui::GetCursorPosX() + avail - width);
+    }
+}
+
+float ButtonWidth(const char* label)
+{
+    return ImGui::CalcTextSize(label, nullptr, true).x +
+           ImGui::GetStyle().FramePadding.x * 2.0f;
+}
+
+float CheckboxWidth(const char* label)
+{
+    return ImGui::GetFrameHeight() + ImGui::GetStyle().ItemInnerSpacing.x +
+           ImGui::CalcTextSize(label, nullptr, true).x;
+}
+
+void RenderCommandPreview(std::string const& preview_text)
+{
+    ImGui::AlignTextToFramePadding();
+    ImGui::TextUnformatted("Command Preview");
+    SameLineRightAligned(ButtonWidth("Copy"));
+    if (ImGui::Button("Copy##CmdPreview"))
+    {
+        ImGui::SetClipboardText(preview_text.c_str());
+    }
+    RenderCodeBox("CmdPreview", preview_text, false);
 }
 
 std::string RenderSavedProfileBar(
@@ -773,14 +715,30 @@ std::string RenderSavedProfileBar(
     }
 
     // Save-As popup
+    SettingsManager& settings = SettingsManager::Get();
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(14.0f, 12.0f));
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(8.0f, 8.0f));
     if (ImGui::BeginPopup("SavePresetPopup"))
     {
-        ImGui::TextUnformatted("Config name:");
-        ImGui::SetNextItemWidth(240.0f);
-        bool commit = ImGui::InputText("##SaveName", s_save_preset_name,
-                                       sizeof(s_save_preset_name),
-                                       ImGuiInputTextFlags_EnterReturnsTrue);
-        if ((ImGui::Button("Save##SavePreset") || commit) &&
+        ImGui::TextUnformatted("Save configuration");
+        ImGui::TextDisabled("Give these settings a name.");
+        ImGui::SetNextItemWidth(280.0f);
+        bool commit = ImGui::InputTextWithHint(
+            "##SaveName", "Configuration name", s_save_preset_name,
+            sizeof(s_save_preset_name), ImGuiInputTextFlags_EnterReturnsTrue);
+
+        constexpr float BUTTON_WIDTH = 90.0f;
+        const float     actions_w    = BUTTON_WIDTH * 2.0f + ImGui::GetStyle().ItemSpacing.x;
+        ImGui::SetCursorPosX(ImGui::GetCursorPosX() +
+                             std::max(0.0f, ImGui::GetContentRegionAvail().x - actions_w));
+        if (ImGui::Button("Cancel##SavePreset", ImVec2(BUTTON_WIDTH, 0.0f)))
+        {
+            s_save_preset_name[0] = '\0';
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::SameLine();
+        if ((AccentButton("Save##SavePreset", ImVec2(BUTTON_WIDTH, 0.0f), &settings) ||
+             commit) &&
             std::strlen(s_save_preset_name) > 0)
         {
             current_preset_name = s_save_preset_name;
@@ -788,13 +746,9 @@ std::string RenderSavedProfileBar(
             s_save_preset_name[0] = '\0';
             ImGui::CloseCurrentPopup();
         }
-        ImGui::SameLine();
-        if (ImGui::Button("Cancel##SavePreset"))
-        {
-            ImGui::CloseCurrentPopup();
-        }
         ImGui::EndPopup();
     }
+    ImGui::PopStyleVar(2);
 
     return load_name;
 }

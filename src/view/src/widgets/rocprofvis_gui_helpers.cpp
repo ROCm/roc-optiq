@@ -35,6 +35,29 @@ StringResizeCallback(ImGuiInputTextCallbackData* data)
     }
     return 0;
 }
+
+// Byte length of the UTF-8 sequence at `begin` (from the lead byte), clamped to
+// `end`. Returns >= 1 when begin < end so callers always advance.
+size_t
+Utf8SequenceLength(const char* begin, const char* end)
+{
+    if(begin >= end)
+    {
+        return 0;
+    }
+    const unsigned char lead = static_cast<unsigned char>(*begin);
+    size_t              len  = 1;
+    if((lead & 0x80u) == 0x00u)  // 0xxxxxxx
+        len = 1;
+    else if((lead & 0xE0u) == 0xC0u)  // 110xxxxx
+        len = 2;
+    else if((lead & 0xF0u) == 0xE0u)  // 1110xxxx
+        len = 3;
+    else if((lead & 0xF8u) == 0xF0u)  // 11110xxx
+        len = 4;
+    // A continuation/invalid lead byte falls through as a single byte.
+    return std::min(len, static_cast<size_t>(end - begin));
+}
 }  // namespace
 
 bool
@@ -466,16 +489,33 @@ ElidedText(const char* text, float available_width, float tooltip_width,
 std::string
 ElideWithEllipsis(const std::string& text, float max_width, size_t max_chars)
 {
-    std::string out       = text.substr(0, max_chars);
-    bool        truncated = text.size() > max_chars;
-    while(!out.empty() && ImGui::CalcTextSize((out + "...").c_str()).x > max_width)
+    // Optional hard character cap first.
+    const std::string capped =
+        (max_chars < text.size()) ? text.substr(0, max_chars) : text;
+    bool truncated = capped.size() < text.size();
+
+    // Trim to fit max_width in one pass (CalcTextSizeA reports where it stopped).
+    const char* begin      = capped.c_str();
+    const char* end        = begin + capped.size();
+    const float ellipsis_w = ImGui::CalcTextSize(TEXT_ELLIPSIS).x;
+    const char* remaining  = begin;
+    ImGui::GetFont()->CalcTextSizeA(ImGui::GetFontSize(),
+                                    std::max(max_width - ellipsis_w, 0.0f), 0.0f, begin,
+                                    end, &remaining);
+    if(remaining < end)
     {
-        out.pop_back();
         truncated = true;
     }
+    // Keep at least one whole codepoint so a multibyte character is never split.
+    if(remaining == begin && end > begin)
+    {
+        remaining = begin + Utf8SequenceLength(begin, end);
+    }
+
+    std::string out(begin, remaining);
     if(truncated)
     {
-        out += "...";
+        out += TEXT_ELLIPSIS;
     }
     return out;
 }

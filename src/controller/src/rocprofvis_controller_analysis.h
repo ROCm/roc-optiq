@@ -210,7 +210,7 @@ private:
         EventsTable* dispatch_events_table;
         EventsTable* memory_allocation_events_table;
         EventsTable* memory_copy_events_table;
-        EventsTable* memory_hip_events_table;
+        EventsTable* hip_events_table;
         EventsTable* launch_sample_events_table;
     };
 

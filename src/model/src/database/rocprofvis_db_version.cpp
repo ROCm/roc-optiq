@@ -84,7 +84,7 @@ namespace DataModel
             kRocOptiqTableDisposeWhenTrimmed,
             kRocOptiqTableDependentOnAllLevelTables, 
             kRocOptiqTableVersionHipEventLevel, 
-            std::hash<std::string>{}(db->m_query_factory.GetRocprofMemoryCopyLevelQuery()+db->GetLevelSchemaHashStr()),
+            std::hash<std::string>{}(db->m_query_factory.GetRocprofHipEventLevelQuery()+db->GetLevelSchemaHashStr()),
         };
         m_roc_optiq_table_properties[kRocOptiqTableHistogram] = {
             "roc_optiq_histogram",

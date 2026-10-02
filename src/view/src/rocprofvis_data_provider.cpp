@@ -1918,7 +1918,7 @@ DataProvider::ClientTableSlot(rocprofvis_controller_table_type_t table_type,
             return TableType::kAnalysisTopSampledEventsTable;
         case kRPVControllerTableTypeHipEvents:
             is_analysis_model = true;
-            return TableType::kAnalysisTopMemoryCopyEventsTable;
+            return TableType::kAnalysisTopHipEventsTable;
         default: return TableType::__kTableTypeCount;
     }
 }

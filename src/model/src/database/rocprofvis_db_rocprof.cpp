@@ -655,7 +655,7 @@ rocprofvis_dm_result_t RocprofDatabase::GenerateInterdependencyTables(Future* fu
         m_query_factory.GetRocprofMemoryAllocStreamFlowQuery() +
         Builder::Union() +
         m_query_factory.GetRocprofKernelDispatchStreamFlowQuery();
-    if (m_query_factory.IsVersionGreaterOrEqual("3.0.4"))
+    if (m_query_factory.IsVersionGreaterOrEqual("3.0.4") && !m_query_factory.IsVersionGreaterOrEqual("4.0.0"))
     {
         query += Builder::Union() +
             m_query_factory.GetRocprofHipEventStreamFlowQuery();
@@ -1090,7 +1090,7 @@ rocprofvis_dm_result_t  RocprofDatabase::ReadTraceMetadata(Future* future)
             load_id++;
         }
 
-        if (m_query_factory.IsVersionGreaterOrEqual("3.0.4"))
+        if (m_query_factory.IsVersionGreaterOrEqual("3.0.4") && !m_query_factory.IsVersionGreaterOrEqual("4.0.0"))
         {
 
             ShowProgress(5, "Adding HIP event tracks", kRPVDbBusy, future);

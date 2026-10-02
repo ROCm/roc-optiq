@@ -1929,6 +1929,29 @@ namespace DataModel
                 Builder::Union() +
                 Builder::Select(rocprofvis_db_sqlite_dataflow_query_format(
                     { {
+                            Builder::QParamOperation(kRocProfVisDmOperationHipEvent),
+                            Builder::QParam("E2.id", "id"),
+                            Builder::QParam("HE.id"),
+                            Builder::QParam("HE.nid", Builder::NODE_ID_SERVICE_NAME),
+                            Builder::QParam("HE.agent_id", Builder::AGENT_ID_SERVICE_NAME),
+                            Builder::QParam("HE.queue_id", Builder::QUEUE_ID_SERVICE_NAME),
+                            Builder::QParam("HE.start"),
+                            Builder::QParam("E2.category_id"),
+                            Builder::QParam("HE.name_id"),
+                            Builder::QParam("L.level"),
+                            Builder::QParam("HE.end"),
+
+                        },
+                    { Builder::From("rocpd_region", "R"),
+                    Builder::InnerJoin("rocpd_event", "E1", "R.event_id = E1.id AND E1.stack_id != 0"),
+                    Builder::InnerJoin("rocpd_event", "E2", "E1.stack_id = E2.stack_id AND E1.id != E2.id"),
+                    Builder::InnerJoin("rocpd_hip_event", "HE", "HE.event_id = E2.id "),
+                    Builder::InnerJoin(Builder::LevelTable("hip_event"), "L", "HE.id = L.eid") },
+                    { Builder::Where(
+                        "R.id", "==", std::to_string(event_id)) } })) +
+                Builder::Union() +
+                Builder::Select(rocprofvis_db_sqlite_dataflow_query_format(
+                    { {
                             Builder::QParamOperation(kRocProfVisDmOperationMemoryAllocate),
                             Builder::QParam("E2.id", "id"),
                             Builder::QParam("M.id"),

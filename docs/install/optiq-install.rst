@@ -1319,9 +1319,9 @@ Uninstall
 
       .. code-block:: shell
 
-         rm -rf "$HOME/opt/roc-optiq"
+         rm -rf "$HOME/roc-optiq"
 
-      Then remove ``$HOME/opt/roc-optiq/bin`` from your ``PATH`` variable.
+      Then remove ``$HOME/roc-optiq/bin`` from your ``PATH`` variable.
 
    2. Remove ROCm Optiq environment configuration:
 

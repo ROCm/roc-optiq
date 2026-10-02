@@ -214,9 +214,7 @@ From the following selector, choose your operating system, distribution, version
    :heading: Visual C++ runtime
    :heading-level: 3
 
-   ROCm Optiq requires the Visual C++ v14 Redistributable (x64).
-
-   Download and install the `Visual C++ v14 Redistributable (x64) <https://aka.ms/vc14/vc_redist.x64.exe>`_.
+      Download and install the `Visual C++ v14 Redistributable (x64) <https://aka.ms/vc14/vc_redist.x64.exe>`_, which is required to run ROCm Optiq.
 
    .. note::
 

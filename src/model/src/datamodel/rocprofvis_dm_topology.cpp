@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: MIT
 
 #include "rocprofvis_dm_topology.h"
-#include "rocprofvis_dm_topology.h"
 #include <sstream>
 
 namespace RocProfVis
@@ -885,7 +884,8 @@ rocprofvis_dm_result_t TopologyNodeDownStreamProcessor::AddNode(rocprofvis_dm_tr
 {
 	ROCPROFVIS_ASSERT_MSG_RETURN(track_identifiers, ERROR_REFERENCE_POINTER_CANNOT_BE_NULL, kRocProfVisDmResultInvalidParameter);
 	auto it = std::find_if(m_children.begin(), m_children.end(),
-		[track_identifiers, this](std::unique_ptr<TopologyNode>& node) {return node.get()->GetId() == track_identifiers->id[TRACK_ID_QUEUE]; });
+		[track_identifiers, this](std::unique_ptr<TopologyNode>& node) {return node.get()->GetId() == track_identifiers->id[TRACK_ID_QUEUE] 
+		&& ((TopologyNodeDownStreamQueue*)node.get())->GetTrackCategory() == track_identifiers->category; });
 	if (it == m_children.end())
 	{
 		m_children.push_back(std::make_unique<TopologyNodeDownStreamQueue>( track_identifiers,this));

@@ -1937,7 +1937,11 @@ rocprofvis_dm_string_t RocprofDatabase::GetEventOperationQuery(const rocprofvis_
         }
         case kRocProfVisDmOperationHipEvent:
         {
-            return m_query_factory.GetRocprofHipEventTableQuery();
+            if (m_query_factory.IsVersionGreaterOrEqual("3.0.4") && !m_query_factory.IsVersionGreaterOrEqual("4.0.0"))
+            {
+                return m_query_factory.GetRocprofHipEventTableQuery();
+            }
+            return "";
         }
         case kRocProfVisDmOperationLaunchSample:
         {

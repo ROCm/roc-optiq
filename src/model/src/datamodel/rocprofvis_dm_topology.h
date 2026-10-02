@@ -464,11 +464,15 @@ class TopologyNodeDownStreamQueue : public TopologyReferenceNode, public Topolog
 public:
     TopologyNodeDownStreamQueue(rocprofvis_dm_track_identifiers_t* track_identifiers, TopologyNode* ctx) 
         :TopologyReferenceNode(kRPVControllerTopologyNodeQueue, track_identifiers->id[TRACK_ID_QUEUE], track_identifiers, ctx),
-        TopologyTrackRefence(track_identifiers->track_id){}
+        TopologyTrackRefence(track_identifiers->track_id),
+        m_track_category(track_identifiers->category){}
     rocprofvis_dm_result_t GetTrackId(uint64_t& id) override { id = m_track_id; return kRocProfVisDmResultSuccess;}
+    rocprofvis_dm_track_category_t GetTrackCategory() { return m_track_category; }
 private:
     uint32_t GetLevelId() const override { return TRACK_ID_QUEUE; }
     const char* GetLevelTag() const override { return Builder::QUEUE_ID_SERVICE_NAME; }
+private:
+    rocprofvis_dm_track_category_t m_track_category;
 
 };
 

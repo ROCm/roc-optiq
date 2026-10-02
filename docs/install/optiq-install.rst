@@ -218,8 +218,6 @@ The following selector lists all the operating systems and installation methods 
 
    Download and install the `Microsoft Visual C++ Redistributable 2015–2022 (x64) <https://aka.ms/vc14/vc_redist.x64.exe>`_.
 
-   For ARM64, x86, and legacy packages, see `Latest supported Visual C++ Redistributable downloads <https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist>`_.
-
    .. note::
 
       If ``roc-optiq.exe`` doesn't start after installation and Windows reports that ``MSVCP140.dll`` or ``MSVCP140_ATOMIC_WAIT.dll`` is missing, verify that the x64 redistributable is installed.

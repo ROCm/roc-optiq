@@ -687,6 +687,7 @@ typedef enum rocprofvis_controller_table_type_t
     kRPVControllerTableTypeMemoryAllocationEvents    = 0xF0000006,
     kRPVControllerTableTypeMemoryCopyEvents          = 0xF0000007,
     kRPVControllerTableTypeSampledEvents             = 0xF0000008,
+    kRPVControllerTableTypeHipEvents                 = 0xF0000009,
 } rocprofvis_controller_table_type_t;
 
 
@@ -985,6 +986,9 @@ typedef enum rocprofvis_controller_compute_properties_t : uint32_t
     kRPVControllerWorkloadIndexed,
     kRPVControllerWorkloadById,
     kRPVControllerKernelMetricTable,
+    kRPVControllerComputeProfilerVersion,
+    kRPVControllerComputeProfilerGitVersion,
+    kRPVControllerComputeSchemaVersion,
     __kRPVControllerComputePropertiesLast
 } rocprofvis_controller_compute_properties_t;
 

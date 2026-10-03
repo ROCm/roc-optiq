@@ -18,6 +18,9 @@ struct CmdOption
     std::string long_flag;
     std::string description;
     bool        take_arg;
+    // When non-empty and take_arg is false, the following token is consumed
+    // only if it equals this value. Other tokens stay available to later flags.
+    std::string optional_value;
 };
 
 // Define the Result structure
@@ -34,7 +37,11 @@ public:
     ~CLIParser();
 
     void SetAppDescription(const std::string& name, const std::string& desc);
-    bool AddOption(const std::string& short_flag, const std::string& long_flag, const std::string& desc, bool take_arg);
+    bool AddOption(const std::string& short_flag,
+                   const std::string& long_flag,
+                   const std::string& desc,
+                   bool               take_arg,
+                   const std::string& optional_value = "");
     
     void Parse(int argc, char** argv);
     

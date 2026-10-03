@@ -306,6 +306,8 @@ list(APPEND VIEW_FILES
 )
 endif()
 
+include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/capture_git_commit.cmake)
+
 configure_file(
     "${CMAKE_CURRENT_SOURCE_DIR}/resources/version.h.in"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/app/inc/rocprofvis_version.h"
@@ -427,6 +429,20 @@ if(ROCPROFVIS_ENABLE_AGENTIC_PROFILING)
         )
     endif()
 endif(ROCPROFVIS_ENABLE_AGENTIC_PROFILING)
+
+if(BUILD_TESTING)
+    # Parser-only Memory Chart tests: need no GPU, database, or UI, so every
+    # embedded layout is validated on each test run rather than when someone
+    # first opens a trace for that architecture.
+    set(MEMCHART_TEST_NAME ${TARGET_NAME}-memory-chart-tests)
+    add_executable(${MEMCHART_TEST_NAME}
+        src/view/test/rocprofvis_memory_chart_layout_tests.cpp
+        src/view/src/model/compute/rocprofvis_memory_chart_model.cpp)
+    add_dependencies(${MEMCHART_TEST_NAME} generate_memory_chart_layouts)
+    target_include_directories(${MEMCHART_TEST_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/view/src)
+    target_link_libraries(${MEMCHART_TEST_NAME} PRIVATE json Catch2::Catch2WithMain)
+    add_test(NAME ${MEMCHART_TEST_NAME} COMMAND ${MEMCHART_TEST_NAME})
+endif()
 
 if(BUILD_TESTING AND ROCPROFVIS_ENABLE_UI_TESTS)
     # Fail at configure if imgui_te was dropped (e.g. BUILD_TESTING shadowed).
@@ -704,7 +720,7 @@ Auto-detected from the Vulkan SDK / Homebrew when empty.")
     # the executable's actual dependency paths at build time with otool, then
     # rewrite every OpenSSL reference to `@rpath/<versioned-name>`. The staged
     # files keep their versioned names so the load commands match.
-    if(ROCPROFVIS_ENABLE_REMOTE AND CRYPTO_BACKEND STREQUAL "OpenSSL")
+    if((ROCPROFVIS_ENABLE_REMOTE OR ROCPROFVIS_ENABLE_AGENTIC_PROFILING) AND CRYPTO_BACKEND STREQUAL "OpenSSL")
         get_target_property(ROCPROFVIS_OPENSSL_SSL_LIB OpenSSL::SSL IMPORTED_LOCATION)
         get_target_property(ROCPROFVIS_OPENSSL_CRYPTO_LIB OpenSSL::Crypto IMPORTED_LOCATION)
         if(NOT ROCPROFVIS_OPENSSL_SSL_LIB OR NOT ROCPROFVIS_OPENSSL_CRYPTO_LIB)
@@ -857,10 +873,13 @@ else()
             COMPONENT ${RUNTIME_COMP_TYPE} )
 endif()
 
+# Packaging install name — override with -DROCM_PACKAGE_NAME=amdrocm10-roc-optiq from CI
+set(ROCM_PACKAGE_NAME "${PROJECT_NAME}" CACHE STRING "Install package name used by DEB/RPM (e.g. amdrocm10-roc-optiq)")
+
 # Debian package specific variables
 set(CPACK_COMPONENTS_ALL RV_RUNTIME)
 set(CPACK_DEB_COMPONENT_INSTALL ON)
-set(CPACK_DEBIAN_RV_RUNTIME_PACKAGE_NAME "${PROJECT_NAME}")
+set(CPACK_DEBIAN_RV_RUNTIME_PACKAGE_NAME "${ROCM_PACKAGE_NAME}")
 # Set package version to 1 
 if(NOT DEFINED CPACK_DEBIAN_PACKAGE_RELEASE)
   set(CPACK_DEBIAN_PACKAGE_RELEASE "1")
@@ -872,9 +891,10 @@ if(NOT GLFW_LINK_STATIC)
     list(APPEND DEB_DEPENDS_LIST "libglfw3")
 endif()
 # DEB depends are explicit (unlike RPM AUTOREQPROV), so declare the system
-# OpenSSL runtime only when the OpenSSL backend is built. The default mbedTLS
-# backend links statically and needs no extra runtime dependency.
-if(ROCPROFVIS_ENABLE_REMOTE AND CRYPTO_BACKEND STREQUAL "OpenSSL")
+# OpenSSL runtime only when remote or Ask Optiq is built against OpenSSL.
+# The default mbedTLS backend links statically and needs no extra runtime
+# dependency.
+if((ROCPROFVIS_ENABLE_REMOTE OR ROCPROFVIS_ENABLE_AGENTIC_PROFILING) AND CRYPTO_BACKEND STREQUAL "OpenSSL")
     list(APPEND DEB_DEPENDS_LIST "libssl3")
 endif()
 list(APPEND DEB_DEPENDS_LIST "libc6")
@@ -889,7 +909,7 @@ if(NOT APPLE)
     set(CMAKE_SKIP_RPATH TRUE)
 endif()
 set(CPACK_RPM_COMPONENT_INSTALL ON)
-set(CPACK_RPM_RV_RUNTIME_PACKAGE_NAME "${PROJECT_NAME}")
+set(CPACK_RPM_RV_RUNTIME_PACKAGE_NAME "${ROCM_PACKAGE_NAME}")
 
 # Set package version to 1 
 if(NOT DEFINED CPACK_RPM_PACKAGE_RELEASE)
@@ -971,7 +991,7 @@ if(WIN32)
     # $<TARGET_RUNTIME_DLLS> only captures OpenSSL if find_package produced shared
     # imported targets with the .dll as IMPORTED_LOCATION (distribution-dependent),
     # so copy the resolved OpenSSL DLLs explicitly when that backend is enabled.
-    if(ROCPROFVIS_ENABLE_REMOTE AND CRYPTO_BACKEND STREQUAL "OpenSSL")
+    if((ROCPROFVIS_ENABLE_REMOTE OR ROCPROFVIS_ENABLE_AGENTIC_PROFILING) AND CRYPTO_BACKEND STREQUAL "OpenSSL")
         set(_ossl_dlls "")
         # 1) Preferred: the imported target's IMPORTED_LOCATION, when it is a DLL.
         foreach(_ossl_target OpenSSL::SSL OpenSSL::Crypto)

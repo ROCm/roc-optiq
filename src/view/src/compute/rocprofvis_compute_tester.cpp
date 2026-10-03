@@ -140,9 +140,9 @@ ComputeTester::Render()
                 {
                     ImGui::TableNextRow();
                     ImGui::TableNextColumn();
-                    ImGui::Text(workload.system_info[0][i].c_str());
+                    ImGui::TextUnformatted(workload.system_info[0][i].c_str());
                     ImGui::TableNextColumn();
-                    ImGui::Text(workload.system_info[1][i].c_str());
+                    ImGui::TextUnformatted(workload.system_info[1][i].c_str());
                 }
                 ImGui::EndTable();
             }
@@ -161,9 +161,9 @@ ComputeTester::Render()
                 {
                     ImGui::TableNextRow();
                     ImGui::TableNextColumn();
-                    ImGui::Text(workload.profiling_config[0][i].c_str());
+                    ImGui::TextUnformatted(workload.profiling_config[0][i].c_str());
                     ImGui::TableNextColumn();
-                    ImGui::Text(workload.profiling_config[1][i].c_str());
+                    ImGui::TextUnformatted(workload.profiling_config[1][i].c_str());
                 }
                 ImGui::EndTable();
             }
@@ -283,10 +283,10 @@ ComputeTester::Render()
                                     ImGui::PushTextWrapPos(500.0f);
                                     ImGui::Text("Description: ");
                                     ImGui::SameLine();
-                                    ImGui::Text(entry->description.c_str());
+                                    ImGui::TextUnformatted(entry->description.c_str());
                                     ImGui::Text("Unit: ");
                                     ImGui::SameLine();
-                                    ImGui::Text(entry->unit.c_str());
+                                    ImGui::TextUnformatted(entry->unit.c_str());
                                     ImGui::PopTextWrapPos();
                                     ImGui::EndTooltip();
                                 }
@@ -343,7 +343,7 @@ ComputeTester::Render()
                     }
                 }
                 ImGui::TableNextColumn();
-                ImGui::Text(kernel.second.name.c_str());
+                ImGui::TextUnformatted(kernel.second.name.c_str());
                 ImGui::TableNextColumn();
                 ImGui::Text("%llu", kernel.second.dispatch_metrics[KernelInfo::InvocationCount]);
                 ImGui::TableNextColumn();
@@ -435,7 +435,7 @@ ComputeTester::Render()
             {
                 ImGui::TableNextRow();
                 ImGui::TableNextColumn();
-                ImGui::Text(std::to_string(id).c_str());
+                ImGui::TextUnformatted(std::to_string(id).c_str());
             }
             ImGui::EndTable();
         }
@@ -570,11 +570,11 @@ ComputeTester::Render()
                                 ImGui::Text("%u.%u.%u", metric->entry->category_id,
                                             metric->entry->table_id, metric->entry->id);
                                 ImGui::TableNextColumn();
-                                ImGui::Text(metric->entry->name.c_str());
+                                ImGui::TextUnformatted(metric->entry->name.c_str());
                                 ImGui::TableNextColumn();
                                 ImGui::Text("%u", metric->kernel->id);
                                 ImGui::TableNextColumn();
-                                ImGui::Text(value.first.c_str());
+                                ImGui::TextUnformatted(value.first.c_str());
                                 ImGui::TableNextColumn();
                                 ImGui::Text("%f", value.second);
                             }
@@ -624,11 +624,11 @@ ComputeTester::Render()
                         ImGui::Text("%u.%u.%u", metric->entry->category_id,
                                     metric->entry->table_id, metric->entry->id);
                         ImGui::TableNextColumn();
-                        ImGui::Text(metric->entry->name.c_str());
+                        ImGui::TextUnformatted(metric->entry->name.c_str());
                         ImGui::TableNextColumn();
                         ImGui::Text("%u", metric->kernel->id);
                         ImGui::TableNextColumn();
-                        ImGui::Text(value.first.c_str());
+                        ImGui::TextUnformatted(value.first.c_str());
                         ImGui::TableNextColumn();
                         ImGui::Text("%f", value.second);
                     }

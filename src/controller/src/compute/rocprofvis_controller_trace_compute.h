@@ -10,6 +10,7 @@
 #include <atomic>
 #include <functional>
 #include <optional>
+#include <string>
 #include <unordered_map>
 #include <vector>
 
@@ -47,6 +48,10 @@ public:
     rocprofvis_result_t GetObject(rocprofvis_property_t property,
                                   uint64_t              index,
                                   rocprofvis_handle_t** value) final;
+    rocprofvis_result_t GetString(rocprofvis_property_t property,
+                                  uint64_t              index,
+                                  char*                 value,
+                                  uint32_t*             length) final;
 
     rocprofvis_result_t AsyncFetch(Arguments&        args,
                                    Future&           future,
@@ -89,6 +94,9 @@ private:
     typedef std::function<void(const QueryDataStore&)> QueryCallback;
 
     rocprofvis_result_t LoadRocpd(Future* future);
+
+    rocprofvis_dm_result_t FetchMetadata(rocprofvis_dm_database_t db,
+                                         rocprofvis_db_future_t   db_future);
 
     rocprofvis_dm_result_t FetchCodeObjects(rocprofvis_dm_database_t db,
                                             Future*                  future,
@@ -170,6 +178,10 @@ private:
     std::atomic<uint64_t> m_async_fetch_counter;
 
     ComputePivotTable* m_kernel_metric_table;
+
+    std::string m_profiler_version;
+    std::string m_profiler_git_version;
+    std::string m_schema_version;
 };
 
 }

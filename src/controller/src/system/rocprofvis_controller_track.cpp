@@ -657,6 +657,7 @@ Track::ProcessTraceReadRequest(rocprofvis_dm_trace_t trace,
             case kRocProfVisDmKernelDispatchTrack:
             case kRocProfVisDmMemoryAllocationTrack:
             case kRocProfVisDmMemoryCopyTrack:
+            case kRocProfVisDmHipEventTrack:
             case kRocProfVisDmStreamTrack:
             {
                 result = ProcessEventRecords(data, num_records, future);
@@ -1569,12 +1570,18 @@ Track::FillMetadata()
                 metadata.operation_types = { kRocProfVisDmOperationMemoryCopy };
                 break;
             }
+            case kRocProfVisDmHipEventTrack:
+            {
+                metadata.operation_types = { kRocProfVisDmOperationHipEvent };
+                break;
+            }
             case kRocProfVisDmStreamTrack:
             {
                 metadata.operation_types = { kRocProfVisDmOperationLaunch,
                                              kRocProfVisDmOperationDispatch,
                                              kRocProfVisDmOperationMemoryAllocate,
                                              kRocProfVisDmOperationMemoryCopy,
+                                             kRocProfVisDmOperationHipEvent,
                                              kRocProfVisDmOperationLaunchSample };
                 break;
             }

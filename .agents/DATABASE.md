@@ -599,6 +599,11 @@ databases:
   each column's `rocprofvis_db_compute_column_enum_t` plus raw string cells.
   The controller later converts that temporary table into typed `PcSampling`
   vectors.
+- `CallbackParseMetadata` reads only `schema_version` from
+  `compute_metadata` to select the query dialect. The full row
+  (`compute_version`, `git_version`, `schema_version`) is served to the
+  controller by the `kRPVComputeFetchMetadata` use case through
+  `CallbackGetComputeGeneric`; it is valid for every schema version.
 - Pivot construction: `BuildKernelMetricsMatrix(table, plan)` builds
   the kernel x metric pivot table from a JSON plan (`jt::Json`).
 - `ComputeWorkloadTopKernelsMeanAndMedian(table)` post-processes top
@@ -1669,9 +1674,9 @@ Two Catch2 binaries live in `src/model/src/tests/` (built when
   read-event-property + table-query flow plus cleanup and trim.
 - **`datamodel-compute-tests`** -
   `src/model/src/tests/rocprofvis_dm_compute_tests.cpp`. Runs against
-  `sample/rocprof_compute_23ed6f36.db`. Validates workload list, top
-  kernels, kernel + metric matrix, roofline ceilings, metric values,
-  and the pivot table flow.
+  `sample/rocprof_compute_23ed6f36.db`. Validates workload list,
+  compute metadata, top kernels, kernel + metric matrix, roofline
+  ceilings, metric values, and the pivot table flow.
 
 The compute model test currently does not cover the schema-2.2 PC-sampling
 query use cases. Changes to those queries should add a matching fixture and

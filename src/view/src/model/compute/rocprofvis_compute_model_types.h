@@ -187,6 +187,14 @@ struct WorkloadInfo
     Roofline                                 roofline;
 };
 
+// Trace-level compute_metadata describing the profiler that produced the database.
+struct AnalysisInfo
+{
+    std::string profiler_version;
+    std::string profiler_git_version;
+    std::string schema_version;
+};
+
 struct MetricValue
 {
     AvailableMetrics::Entry*                   entry;

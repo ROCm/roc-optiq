@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 #include "rocprofvis_controller_arguments.h"
-#include "rocprofvis_controller_analysis.h"
+#include "rocprofvis_controller_analysis_internal.h"
 #include "rocprofvis_controller_future.h"
 #include "rocprofvis_controller_array.h"
 #include "rocprofvis_controller_reference.h"
@@ -65,9 +65,10 @@ rocprofvis_result_t rocprofvis_analysis_get_instrumented_events_table(rocprofvis
     return error;
 }
 
-rocprofvis_result_t rocprofvis_analysis_events_table_alloc(rocprofvis_dm_event_operation_t op, rocprofvis_handle_t** table)
+rocprofvis_result_t rocprofvis_analysis_events_table_alloc(uint64_t op, rocprofvis_handle_t** table)
 {
-    return RocProfVis::Controller::Analysis::GetInstance().AllocEventsTable(op, table);
+    return RocProfVis::Controller::Analysis::GetInstance().AllocEventsTable(
+        static_cast<rocprofvis_dm_event_operation_t>(op), table);
 }
 
 rocprofvis_result_t rocprofvis_analysis_get_dispatch_events_table(rocprofvis_controller_t* controller, rocprofvis_handle_t** table)
@@ -99,6 +100,17 @@ rocprofvis_result_t rocprofvis_analysis_get_memory_copy_events_table(rocprofvis_
     if(trace.IsValid() && table)
     {
         error = RocProfVis::Controller::Analysis::GetInstance().GetMemoryCopyEventsTable(trace.Get(), table);
+    }
+    return error;
+}
+
+rocprofvis_result_t rocprofvis_analysis_get_hip_events_table(rocprofvis_controller_t* controller, rocprofvis_handle_t** table)
+{
+    rocprofvis_result_t error = kRocProfVisResultInvalidArgument;
+    RocProfVis::Controller::SystemTraceRef trace(controller);
+    if(trace.IsValid() && table)
+    {
+        error = RocProfVis::Controller::Analysis::GetInstance().GetHipEventsTable(trace.Get(), table);
     }
     return error;
 }
@@ -423,6 +435,12 @@ Analysis::GetMemoryCopyEventsTable(SystemTrace* trace, rocprofvis_handle_t** tab
 }
 
 rocprofvis_result_t
+Analysis::GetHipEventsTable(SystemTrace* trace, rocprofvis_handle_t** table)
+{
+    return GetOrAllocateEventsTable(m_data[trace].hip_events_table, kRocProfVisDmOperationHipEvent, table);
+}
+
+rocprofvis_result_t
 Analysis::GetLaunchSampleEventsTable(SystemTrace* trace, rocprofvis_handle_t** table)
 {
     return GetOrAllocateEventsTable(m_data[trace].launch_sample_events_table, kRocProfVisDmOperationLaunchSample, table);
@@ -438,6 +456,7 @@ void Analysis::FreeTraceData(Trace* trace)
         delete data.memory_allocation_events_table;
         delete data.memory_copy_events_table;
         delete data.launch_sample_events_table;
+        delete data.hip_events_table;
         m_data.erase(trace);
     }
 }

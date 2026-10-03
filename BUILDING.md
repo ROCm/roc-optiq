@@ -6,7 +6,7 @@ This document describes how to build ROCm Optiq (roc-optiq) on Windows, Linux, a
 
 1. Clone the repository with submodules:
    - `git clone --recursive <repo-url>`
-   - The `thirdparty/mbedtls` submodule is only needed when you enable remote/SSH or agentic profiling, and `thirdparty/cpp-httplib` only for agentic profiling (see the options below). If you already have a non-recursive clone, run `git submodule update --init --recursive`.
+   - The `thirdparty/mbedtls` submodule is only needed when remote/SSH or agentic profiling is enabled with the default `mbedTLS` backend, and `thirdparty/cpp-httplib` only for agentic profiling (see the options below). `-DCRYPTO_BACKEND=OpenSSL` uses a system OpenSSL instead of that submodule. If you already have a non-recursive clone, run `git submodule update --init --recursive`.
 2. Ensure CMake presets are available (see [CMakePresets.json](CMakePresets.json)).
 3. Use the appropriate configure and build presets for your platform.
 
@@ -17,6 +17,10 @@ This document describes how to build ROCm Optiq (roc-optiq) on Windows, Linux, a
 - **macOS**: `macos-release`, `macos-release-symbols`, `macos-debug`
 
 > The build presets are named in [CMakePresets.json](CMakePresets.json) under `buildPresets`.
+
+### Git commit recorded in the binary
+
+About and `roc-optiq -v hash` show a git commit for official builds. An unofficial build shows `unknown` and a line that the commit hash is not recorded, including after a commit is pulled and the tree is edited without committing. GitHub Actions builds count as official because they set `GITHUB_ACTIONS`. A local build cannot opt into recording a hash.
 
 ---
 
@@ -247,14 +251,16 @@ not enable this feature.
 The in-app assistant is opt-in and **disabled by default** (the feature set is
 in development). Enable it at configure time with
 `-DROCPROFVIS_ENABLE_AGENTIC_PROFILING=ON`. When enabled, the build pulls in
-`cpp-httplib` for in-process HTTPS, mbedTLS to back it, and the OS credential
-vault used to hold the API token; with the option off, none of the three is
-compiled and the panel, its toolbar buttons, its View-menu entry, and its
-settings page are all absent. Sources live under
-`src/view/src/agenticprofiling/`.
+`cpp-httplib` for in-process HTTPS, the TLS backend selected by
+`CRYPTO_BACKEND`, and the OS credential vault used to hold the API token; with
+the option off, none of the three is compiled and the panel, its toolbar
+buttons, its View-menu entry, and its settings page are all absent. Sources
+live under `src/view/src/agenticprofiling/`.
 
-`cpp-httplib` and mbedTLS are both submodules, so a non-recursive clone must
-initialize them before configuring with this option on:
+`cpp-httplib` is a submodule. The default backend also needs the `mbedtls`
+submodule; `-DCRYPTO_BACKEND=OpenSSL` uses a system OpenSSL and does not build
+mbedTLS. A non-recursive clone must initialize the ones it will use before
+configuring with this option on:
 `git submodule update --init thirdparty/cpp-httplib thirdparty/mbedtls`.
 Configure fails with an explicit message if `thirdparty/cpp-httplib` is still
 empty.
@@ -276,7 +282,7 @@ persist SSH secrets. Each of these has its own dependency notes below.
 
 The SSH and remote-profiling features use `libssh2`, which needs a crypto backend selected at configure time via `CRYPTO_BACKEND`.
 
-- **Default: `mbedTLS`** — vendored under `thirdparty/mbedtls` and linked statically. This is the default build and requires **no extra dependency to install** and **nothing extra to deploy**. While remote features are disabled by default this is what ships. mbedTLS is also built when `ROCPROFVIS_ENABLE_AGENTIC_PROFILING` is on, independently of `ROCPROFVIS_ENABLE_REMOTE`, because the Ask Optiq assistant links it through `cpp-httplib` for in-process HTTPS; with both options off it is not built at all.
+- **Default: `mbedTLS`** — vendored under `thirdparty/mbedtls` and linked statically. This is the default build and requires **no extra dependency to install** and **nothing extra to deploy**. While remote features are disabled by default this is what ships. The same choice backs Ask Optiq when `ROCPROFVIS_ENABLE_AGENTIC_PROFILING` is on. mbedTLS is built only when that backend is selected and at least one of those two options is on; with both options off it is not built at all.
 - **Opt-in: `OpenSSL`** — configure with `-DCRYPTO_BACKEND=OpenSSL`. OpenSSL is **not** vendored; it is resolved as an external dependency via `find_package(OpenSSL)`, the same way the Vulkan SDK is treated. Install a system OpenSSL first:
 
 | Platform | Install | Notes |
@@ -284,9 +290,9 @@ The SSH and remote-profiling features use `libssh2`, which needs a crypto backen
 | Linux (Ubuntu/Debian) | `sudo apt install -y libssl-dev` | |
 | Linux (RHEL/Rocky/Oracle) | `sudo dnf install -y openssl-devel` | |
 | macOS | `brew install openssl@3` | configure with `-DOPENSSL_ROOT_DIR=$(brew --prefix openssl@3)` |
-| Windows | `choco install openssl -y` (recommended; matches CI) | installs to `C:\Program Files\OpenSSL-Win64`; set `OPENSSL_ROOT_DIR` to the install root |
+| Windows | Shining Light Win64 OpenSSL. CI uses the copy preinstalled on GitHub-hosted runners at `C:\Program Files\OpenSSL`. Locally, `choco install openssl -y` installs to `C:\Program Files\OpenSSL-Win64`. | set `OPENSSL_ROOT_DIR` to the install root |
 
-On Windows, [Chocolatey](https://chocolatey.org/install) is the recommended way to install OpenSSL because it is exactly what the Windows CI workflow (`.github/workflows/ci-windows.yml`) uses, so a local build matches CI. From an elevated (Administrator) PowerShell:
+On Windows, CI uses the full Shining Light OpenSSL already installed on GitHub-hosted runners at `C:\Program Files\OpenSSL` (`.github/workflows/ci-windows.yml` does not download a newer package). For a local build, [Chocolatey](https://chocolatey.org/install) installs the same vendor's Win64 package. From an elevated (Administrator) PowerShell:
 
 ```powershell
 choco install openssl -y

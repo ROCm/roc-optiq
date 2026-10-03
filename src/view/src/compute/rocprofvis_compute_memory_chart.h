@@ -3,8 +3,10 @@
 
 #pragma once
 #include "model/compute/rocprofvis_memory_chart_model.h"
+#include "rocprofvis_event_manager.h"
 
 #include <cstdint>
+#include <map>
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -62,7 +64,34 @@ private:
         float             label_y       = 0.0f;
         float             label_w       = 0.0f;
         float             label_h       = 0.0f;
+        // Flow direction (-1/0/+1 per axis) drawn as a label marker so same-color
+        // arrows are told apart by which way they point; bidir = double-headed.
+        float             label_dir_x   = 0.0f;
+        float             label_dir_y   = 0.0f;
+        bool              label_bidir   = false;
         MemChartMetricRef metric;
+    };
+
+    // How BuildArrowRoutes draws an arrow. ComputeLayout and RebuildColumnGaps
+    // classify through the same function, so the room they reserve matches the
+    // route that is drawn.
+    enum class RouteKind : uint8_t
+    {
+        kNone,      // Unresolved endpoint; not drawn.
+        kAdjacent,  // Neighbouring columns in one row band: horizontal.
+        kSkip,      // Skips columns in one row band: highway lane below the band.
+        kElbow,     // Different column and row band: vertical-first elbow.
+        kVertical,  // Same column, nothing stacked between: straight vertical.
+        kGutter,    // Same column otherwise: through the gutter right of the column.
+    };
+
+    // Horizontal extent a skip-column arrow occupies along its row's highway.
+    struct SkipSpan
+    {
+        size_t index;  // into m_layout.arrows
+        float  lo;
+        float  hi;
+        int    lane;
     };
 
     void LoadLayout();
@@ -71,31 +100,63 @@ private:
     bool TryLoadOverrideFile();
 
     // Called once whenever m_layout is (re)assigned (workload change): sorts
-    // blocks by column/`order`, builds the id -> block index, and primes the
-    // per-item/arrow render strings.
+    // blocks by column/`order`, resolves each arrow's endpoint ids to block
+    // pointers, and primes the per-item/arrow render strings.
     void OnLayoutLoaded();
     // Recompute the cached label/value strings for every content item and arrow
     // from the currently-resolved metrics (on layout load and on metric fetch).
     void RefreshMetricStrings();
-    // O(1) block lookup by id (backed by m_block_by_id).
-    const MemChartBlock* Block(uint32_t id) const;
+    // Snapshot the memory-chart palette from SettingsManager. Called on
+    // construction and on kThemeChanged.
+    void RefreshPalette();
+    // Map each item/arrow's cached_color_kind through the current palette into
+    // cached_color. Called after RefreshMetricStrings and on theme change.
+    void RefreshCachedColors();
+    uint32_t ColorFromKind(MemChartColorKind kind) const;
 
-    // Precompute which inter-column gaps an arrow crosses (m_gap_has_arrow). Only
-    // depends on block columns and arrow endpoints, so it runs on layout load
-    // rather than every frame.
+    void DrawBlockRect(ImDrawList* draw_list, ImVec2 top_left, ImVec2 bottom_right);
+    float DrawBlockHeader(ImDrawList* draw_list, const char* title, float block_x,
+                          float block_y, float block_w);
+    // Draws a floating label. When (dir_x, dir_y) is non-zero, a small flow
+    // marker is drawn to the left of the text (double-headed when `bidir`).
+    void DrawFloatingLabel(ImDrawList* draw_list, ImVec2 pos, const char* text,
+                           uint32_t accent_color, float dir_x = 0.0f, float dir_y = 0.0f,
+                           bool bidir = false);
+    void DrawGroupBox(ImDrawList* draw_list, ImVec2 top_left, float w, float h,
+                      const char* title);
+    void DrawLegend(ImDrawList* draw_list, ImVec2 origin, float y);
+
+    // Precompute which inter-column gaps an arrow crosses, and whether any of
+    // those arrows is labeled (m_gap_kinds). Only depends on block columns,
+    // arrow endpoints and label presence, so it runs on layout load rather than
+    // every frame.
     void RebuildColumnGaps();
+
+    RouteKind ClassifyArrow(const MemChartArrow& arrow) const;
+    // Index in m_layout.blocks of the top-level block that is, or contains, `block`.
+    size_t TopLevelIndex(const MemChartBlock& block) const;
+    // True when another top-level block is stacked in the column between the two
+    // blocks. Judged from row and stack order, so it holds before positions exist.
+    bool StackedBetween(const MemChartBlock& a, const MemChartBlock& b) const;
 
     void ComputeLayout(float available_width);
     void MeasureBlock(MemChartBlock& block) const;
     // Recursively assign geometry: `conn_left`/`conn_right` are the top-level
     // ancestor's box edges (passed unchanged into children) so arrows terminate
-    // at the outer box; `column` is propagated so routing sees nested blocks.
+    // at the outer box; `column`/`row` are propagated so routing sees nested blocks.
     void PositionBlock(MemChartBlock& block, float x, float y, float w, float h,
-                       float conn_l, float conn_r, int32_t column);
+                       float conn_l, float conn_r, int32_t column, int32_t row);
 
     // Recursively draw a block: container -> recurse into children; leaf -> card.
     void DrawBlock(ImDrawList* draw_list, ImVec2 origin, const MemChartBlock& block);
     void DrawLeaf(ImDrawList* draw_list, ImVec2 origin, const MemChartBlock& block);
+    // Group skip-column arrows by row band, spanning column centres (or the left
+    // margin for left-going arrows). Shared by ComputeLayout, which reserves the
+    // lanes' height under each band, and BuildArrowRoutes, which draws them.
+    void CollectSkipSpans(const std::map<int32_t, float>&           col_mid_x,
+                          std::map<int32_t, std::vector<SkipSpan>>& spans_by_row) const;
+    // First-fit lane packing (shortest spans innermost); returns the lane count.
+    static int PackSkipLanes(std::vector<SkipSpan>& spans);
     void BuildArrowRoutes(std::vector<ArrowRoute>& routes) const;
     void ResolveLabelOverlaps(std::vector<ArrowRoute>& routes) const;
     void DrawArrowRoutes(ImDrawList* draw_list, ImVec2 origin,
@@ -121,6 +182,28 @@ private:
 
     uint64_t m_client_id;
 
+    struct ChartColors
+    {
+        uint32_t bg         = 0;
+        uint32_t panel      = 0;
+        uint32_t panel_alt  = 0;
+        uint32_t border     = 0;
+        uint32_t border_hot = 0;
+        uint32_t text_main  = 0;
+        uint32_t text_dim   = 0;
+        uint32_t read       = 0;
+        uint32_t write      = 0;
+        uint32_t atomic     = 0;
+        uint32_t util       = 0;
+        uint32_t hit        = 0;
+        uint32_t stall      = 0;
+        uint32_t shadow     = 0;
+    };
+    ChartColors m_colors;
+
+    EventManager::SubscriptionToken m_theme_changed_token =
+        EventManager::InvalidSubscriptionToken;
+
     MemChartLayout m_layout;
 
     // Group boxes (title + rect) computed during layout, drawn behind blocks.
@@ -130,14 +213,31 @@ private:
     // ("category.table.entry", e.g. "3.1.0").
     std::unordered_map<std::string, const MetricValue*> m_ptr_by_metric_id;
 
-    // Block-by-id index into m_layout, rebuilt on layout load; avoids scanning
-    // the block tree on every arrow lookup each frame.
-    std::unordered_map<uint32_t, const MemChartBlock*> m_block_by_id;
+    // Every block (nested ones included) -> index of its top-level block in
+    // m_layout.blocks. Rebuilt on layout load, after the blocks are sorted.
+    std::unordered_map<const MemChartBlock*, size_t> m_top_level_index;
 
-    // For each inter-column gap (between ascending distinct columns), whether an
-    // arrow crosses it. Precomputed on layout load so ComputeLayout avoids an
-    // arrow-by-gap scan every frame.
-    std::vector<bool> m_gap_has_arrow;
+    // What crosses each inter-column gap (between ascending distinct columns),
+    // ordered by how much room the gap needs. Precomputed on layout load so
+    // ComputeLayout avoids an arrow-by-gap scan every frame.
+    enum class GapKind : uint8_t
+    {
+        kEmpty,
+        kUnlabeledArrow,
+        kLabeledArrow,
+    };
+    std::vector<GapKind> m_gap_kinds;
+
+    // Cached geometry so the (fairly heavy) layout + arrow routing only runs when
+    // something that affects it changes - the panel width, the font, or the
+    // metric strings/colors (which flip m_layout_dirty). Drawing still happens
+    // every frame from these cached results.
+    std::vector<ArrowRoute> m_routes;
+    float                   m_cached_layout_width = -1.0f;
+    float                   m_cached_font_size    = -1.0f;
+    float                   m_canvas_w            = 0.0f;
+    float                   m_canvas_h            = 0.0f;
+    bool                    m_layout_dirty        = true;
 };
 
 }  // namespace View

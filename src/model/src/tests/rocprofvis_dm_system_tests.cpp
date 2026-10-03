@@ -677,7 +677,9 @@ TEST_CASE_PERSISTENT_FIXTURE(RocProfVisDMFixture, "System Trace Data-Model Tests
                            track_category == rocprofvis_dm_track_category_t::
                                                  kRocProfVisDmMemoryAllocationTrack ||
                            track_category == rocprofvis_dm_track_category_t::
-                                                 kRocProfVisDmMemoryCopyTrack)
+                                                 kRocProfVisDmMemoryCopyTrack ||
+                            track_category == rocprofvis_dm_track_category_t::
+                                                 kRocProfVisDmHipEventTrack)
 
                         {
                             int64_t duration = rocprofvis_dm_get_property_as_int64(

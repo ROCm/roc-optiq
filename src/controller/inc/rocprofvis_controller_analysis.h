@@ -78,6 +78,14 @@ rocprofvis_result_t rocprofvis_analysis_get_memory_allocation_events_table(rocpr
 rocprofvis_result_t rocprofvis_analysis_get_memory_copy_events_table(rocprofvis_controller_t* controller, rocprofvis_handle_t** table);
 
 /*
+* Returns the hip events table.
+* @param controller The system trace controller instance.
+* @param table Out-param that receives the table handle.
+* @returns kRocProfVisResultSuccess or an error code.
+*/
+rocprofvis_result_t rocprofvis_analysis_get_hip_events_table(rocprofvis_controller_t* controller, rocprofvis_handle_t** table);
+
+/*
 * Returns the sampled events table.
 * @param controller The system trace controller instance.
 * @param table Out-param that receives the table handle.

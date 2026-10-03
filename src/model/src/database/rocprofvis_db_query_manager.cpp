@@ -291,6 +291,7 @@ QueryManager::BuildCompoundQuery(
                 rocprofvis_dm_track_params_t* props = TrackPropertiesAt(track);
                 if(props->record_count < SINGLE_THREAD_RECORDS_COUNT_LIMIT ||
                     op == kRocProfVisDmOperationMemoryAllocate ||
+                    op == kRocProfVisDmOperationHipEvent ||   // not sure at this point how much data hip_event table may contain
                     op == kRocProfVisDmOperationMemoryCopy)
                     divider = 1;
             }

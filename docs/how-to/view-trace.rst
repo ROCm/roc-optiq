@@ -194,8 +194,8 @@ Sort, resize, or reorder tracks
 
 Use the following actions to sort, resize, or reorder tracks.
 
-- Sort tracks by right-clicking the track-list header or by using the down-arrow at the bottom of the track list, and then selecting an option 
-  under **Sort Tracks**:
+- Sort tracks by clicking the down-arrow at the bottom of the track list header, or by right-clicking a track's **Description** area and then 
+  selecting an option under **Sort Tracks**:
 
   - **Topology**: Matches the order of tracks in the System Topology View sidebar.
   - **Default**: Restores the order from when the trace was loaded (by track type).

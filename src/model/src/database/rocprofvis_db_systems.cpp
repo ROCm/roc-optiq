@@ -106,12 +106,13 @@ rocprofvis_dm_result_t   SystemDatabase::ReadEventPropertyAsync(
             case kRPVDMEventStackTrace:
                 return ReadStackTraceInfo(event_id,future);
             case kRPVDMEventExtData:
-                return ReadExtEventInfo(event_id,future);           
-            }  
-            ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN(ERROR_UNSUPPORTED_PROPERTY, kRocProfVisDmResultNotSupported); 
+                return ReadExtEventInfo(event_id,future); 
+            default:
+                ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN(ERROR_UNSUPPORTED_PROPERTY, kRocProfVisDmResultNotSupported);
+            }          
             })));
     }
-    catch (std::exception ex)
+    catch (std::exception& ex)
     {
         ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN(ex.what(), kRocProfVisDmResultUnknownError);
     }
@@ -139,7 +140,7 @@ rocprofvis_dm_result_t SystemDatabase::ExportTableCSVAsync(rocprofvis_dm_string_
                 kRocProfVisDmResultInvalidParameter);    
             return ExportTableCSV(query.c_str(), file_path.c_str(), future);
             })));
-    } catch(std::exception ex)
+    } catch(std::exception& ex)
     {
         ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN(ex.what(), kRocProfVisDmResultUnknownError);
     }
@@ -187,7 +188,7 @@ SystemDatabase::SaveTrimmedDataAsync(rocprofvis_dm_timestamp_t start,
 
             return SaveTrimmedData(start, end, new_db_path.c_str(), future);
             })));
-    } catch(std::exception ex)
+    } catch(std::exception& ex)
     {
         ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN(ex.what(), kRocProfVisDmResultUnknownError);
     }
@@ -214,7 +215,7 @@ rocprofvis_dm_result_t  SystemDatabase::ExecuteQueryAsync(
             return ExecuteQuery(query,description,future); 
             })));
     }
-    catch (std::exception ex)
+    catch (std::exception& ex)
     {
         ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN(ex.what(), kRocProfVisDmResultUnknownError);
     }

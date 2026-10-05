@@ -1293,7 +1293,7 @@ void ComputeQueryFactory::ParseMetricParam(std::string metric_str, uint32_t work
 				return ExecuteComputeQuery(use_case, query,future); 
 				})));
 		}
-		catch (std::exception ex)
+		catch (std::exception& ex)
 		{
 			ROCPROFVIS_ASSERT_ALWAYS_MSG_RETURN(ex.what(), kRocProfVisDmResultUnknownError);
 		}

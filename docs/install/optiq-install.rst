@@ -1218,7 +1218,7 @@ Uninstall
 
          # Clear the cache and clean the system
          sudo rm -rf /var/cache/apt/*
-         sudo apt clean all
+         sudo apt clean
          sudo apt update
 
    3. Remove ROCm Optiq environment configuration:

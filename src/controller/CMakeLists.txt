@@ -203,5 +203,10 @@ if(BUILD_TESTING)
                 COMMENT "Copying runtime DLLs next to the script tests"
             )
         endif()
+        # The tests find the standard library the way the app does, beside
+        # the executable.
+        if(ROCPROFVIS_VENDOR_PYTHON)
+            rocprofvis_python_vendor_deploy(${SCRIPT_TEST_NAME})
+        endif()
     endif()
 endif()

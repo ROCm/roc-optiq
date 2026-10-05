@@ -11,8 +11,8 @@ This is a planned feature. Enable with
 Phase 1 **read path** (query-table alloc, `optiq.trace` / `selection` /
 `table().fetch()` / `Track.events()`, Catch2 against a sample trace),
 and Phase 1b (DataProvider execute + floating script editor) are in
-tree. The `run_analysis_script` half of Phase 3 is also in tree; the
-vendored CPython half is not.
+tree. Phase 3's `run_analysis_script` and vendored CPython are in tree
+too; see §7 for the vendored layout.
 
 ---
 
@@ -508,18 +508,47 @@ length of the allowlist:
 Do not describe the allowlist as containment in user-facing text.
 [`PYTHON.md`](../PYTHON.md) says the same thing to script authors.
 
-**No system Python at runtime.** Vendor a known CPython (Windows
-embeddable zip; `libpython` + stdlib tree/zip on Linux/macOS). Build
-against those headers. Isolated `PyConfig`:
+**No system Python at runtime.** `ROCPROFVIS_VENDOR_PYTHON` (ON by
+default, and only available with `ROCPROFVIS_ENABLE_SCRIPTING`) has
+`cmake/rocprofvis_python_vendor.cmake` download a pinned
+python-build-standalone CPython 3.12 `install_only_stripped` archive
+with a SHA256 per platform (Windows x64, Linux x86_64/aarch64, macOS
+arm64/x86_64). The embed builds against its headers and `libpython`,
+and ships a trimmed copy of its stdlib: no `site-packages` (pip),
+`ensurepip`, `venv`, Tk/IDLE, `test`, or `_test*` extensions, and no
+`_dbm` (Berkeley DB, Sleepycat license) or `_crypt`. That leaves the
+POSIX stage with no extension modules at all, since every other one is
+built into `libpython`. The
+embed uses the full C API, not the stable ABI, so the headers,
+`libpython` and the stdlib must all come from that one archive.
+
+| Where | Interpreter | Standard library |
+|-------|-------------|------------------|
+| Build tree (all), Windows install | `python312.dll` beside the exe; Linux `python/lib/libpython3.12.so.1.0` via `$ORIGIN/python/lib` | `<exe dir>/python` |
+| Linux package | `$ORIGIN/../lib/roc-optiq/python/lib` | `<libdir>/roc-optiq/python` |
+| macOS bundle | `Contents/Frameworks/libpython3.12.dylib` | `Contents/Resources/python` |
+
+`resolve_layout` in `rocprofvis_python_runtime.cpp` finds the prefix
+from the executable's own path (`<exe dir>/python`, then
+`ROCPROFVIS_PYTHON_RELDIR`) and checks it with CPython's landmark,
+`lib/python3.12/os.py` or `Lib/os.py`. An explicit `runtime_root`
+passed to `rocprofvis_python_init` wins over both. Nothing about the
+path is compiled in. The script tests get the same copy beside their
+own executable, so they exercise this lookup.
+
+`ROCPROFVIS_VENDOR_PYTHON=OFF` links the build machine's Python
+through `find_package(Python3)` and bakes its stdlib paths in as the
+last fallback. That build only runs where it was built.
+`ROCPROFVIS_PYTHON_VENDOR_URL` / `_SHA256` point vendoring at a mirror
+or a local archive, and FetchContent's
+`FETCHCONTENT_SOURCE_DIR_ROCPROFVIS_PYTHON` at an already-extracted
+tree.
+
+Either way startup uses an isolated `PyConfig`:
 
 - `PyConfig_InitIsolatedConfig` (ignore env, user site)
-- `sys.path` = bundled stdlib + `optiq` only
+- `sys.path` = the stdlib, plus `lib-dynload` or `DLLs`, only
 - no `pip` / `ensurepip`
-
-Until the vendor package is wired (Phase 3), a **build-machine**
-Python is allowed to link the embed, but startup must still use
-isolated config and a pinned `sys.path` so a user's `PYTHONPATH`
-cannot inject modules.
 
 **Import allowlist** (deny-by-default), not a denylist. Phase 1 set:
 
@@ -664,7 +693,12 @@ and a release build does not require a system Python.
   unattended script safe to run and possible to fix.
 - ~~Editor shows the source before or as it runs.~~ In tree via
   `ShowGeneratedScript`.
-- Vendor embeddable CPython into the package; CI builds against it.
+- ~~Vendor embeddable CPython into the package; CI builds against it.~~
+  In tree as `ROCPROFVIS_VENDOR_PYTHON` (§7). The MSI does not carry
+  it yet. In CI the per-platform workflows take a `vendor_python`
+  input (default off); the controller's experimental jobs turn it on.
+  With scripting on and `vendor_python` off, each workflow installs
+  the build machine's Python development files instead.
 - Tighten restriction (optional RestrictedPython, scratch-dir `open`).
 - ~~Decide about raw `where` / `group`.~~ **Decided: they stay raw, and
   approval is why.** `Table.fetch` passes those strings to the table
@@ -774,12 +808,22 @@ reasoning moved to the section it belongs to.
 
 ### Build and shipping
 
-- **Not releasable yet.** `ROCPROFVIS_ENABLE_SCRIPTING=ON`
-  `find_package`s the *build machine's* Python and bakes
-  `ROCPROFVIS_PYTHON_HOME` and stdlib paths in at compile time. The
-  isolated `PyConfig` is right; the packaging is not. Phase 3's
-  vendored embeddable CPython is the prerequisite. Keep the flag OFF
-  in CI release jobs until it exists.
+- **The MSI does not ship the interpreter.** `wix/roc-optiq.wxs`
+  packages `roc-optiq.exe` only. A scripting build also needs
+  `python312.dll` and the `python/` directory beside it, which the
+  CPack archives already carry.
+- **macOS packaging is unverified.** The bundle copies are wired, and
+  configure fails if the stage holds any `.so` or `.dylib`, because
+  `codesign --deep` does not sign under `Resources` and notarization
+  rejects unsigned Mach-O. No one has signed or notarized a scripting
+  bundle yet.
+- **Third-party notices.** CPython's `LICENSE.txt` ships as
+  `Python-LICENSE.txt` in the install doc directory (Windows, Linux)
+  and `Contents/Resources/Licenses` (macOS). `libpython` also links
+  OpenSSL 3, mpdecimal, libffi, expat, liblzma, zlib, bzip2, libuuid,
+  libedit and ncurses statically, and their texts do not ship yet. The
+  `install_only` archive lacks them; python-build-standalone's matching
+  `full` archive has them under `python/licenses/`.
 - **Feature macros are set through `CMAKE_CXX_FLAGS`**, which leaks
   them into thirdparty targets. Prefer `target_compile_definitions` on
   the view, controller and python targets.

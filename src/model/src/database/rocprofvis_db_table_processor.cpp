@@ -175,6 +175,25 @@ namespace DataModel
             bool sample_query,
             rocprofvis_dm_string_t& query)
     {
+        // Build a complete semantic sub-query string for the selected table use-case.
+        //
+        // The generated text contains:
+        //   1) An internal command header (prefixed with "-- CMD:") that downstream
+        //      parsing code uses to recover query metadata.
+        //   2) A SELECT/FROM/WHERE/GROUP BY/ORDER BY/LIMIT/OFFSET SQL fragment based
+        //      on the caller-provided options.
+        //
+        // Parameter behavior summary:
+        // - use_case: selects the base table/view and default projection.
+        // - filter: optional expression appended to WHERE semantics.
+        // - group/group_cols: optional grouping mode and explicit grouped columns.
+        // - sort_column/sort_order: optional ordering for deterministic result order.
+        // - max_count/offset: pagination controls.
+        // - count_only: emits an aggregate count-oriented projection instead of rows.
+        // - sample_query: controls whether sampling-specific query shape is used.
+        //
+        // This method only assembles query text and does not execute it.
+        // ---- Phase 1: emit command metadata header ----
         query += "-- CMD: TYPE ";
         switch(use_case)
         {

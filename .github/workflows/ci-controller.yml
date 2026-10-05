@@ -254,7 +254,7 @@ jobs:
     with:
       upload_to_github: ${{ github.event_name == 'schedule' || github.event.inputs.upload_to_github == 'true' }}
       upload_to_s3: ${{ github.event_name == 'schedule' || github.event.inputs.upload_to_s3 == 'true' }}
-      s3_bucket_env: 'legacy-nightly'
+      s3_bucket_env: ${{ github.event_name == 'schedule' && 'nightly' || 'legacy-nightly' }}
 
   ci-manylinux-experimental:
     name: ManyLinux CI - Experimental

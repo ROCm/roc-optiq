@@ -962,13 +962,21 @@ namespace DataModel
         return kRocProfVisDmResultSuccess;
     }
 
+    // SQLite row callback used by compound queries.
+    // For each returned row, this method validates callback state, handles cancellation,
+    // performs one-time per-query initialization, appends a row to the destination table,
+    // and maps SQLite values into internal table cells.
+    // Return value follows SQLite callback semantics: non-zero aborts iteration.
     int TableProcessor::CallbackRunCompoundQuery(void* data, int argc, void* stmt, char** azColName) {
+        // Validate callback context and recover typed handles used throughout row processing.
         ROCPROFVIS_ASSERT_MSG_RETURN(data, ERROR_SQL_QUERY_PARAMETERS_CANNOT_BE_NULL, 1);
         rocprofvis_db_query_callback_parameters* callback_params = (rocprofvis_db_query_callback_parameters*)data;
         ROCPROFVIS_ASSERT_MSG_RETURN(callback_params->db_instance != nullptr, ERROR_NODE_KEY_CANNOT_BE_NULL, 1);
         SystemDatabase* db = (SystemDatabase*)callback_params->db;
         TableProcessor* table_processor = (TableProcessor*)callback_params->handle;
         void* func = (void*)&CallbackRunCompoundQuery;
+
+        // Stop early if the associated future has been interrupted by the caller.
         if (callback_params->future->Interrupted())
         {
             return 1;
@@ -976,6 +984,7 @@ namespace DataModel
 
         int column_index = 0;
 
+        // One-time initialization for the first processed row of this query execution.
         if (callback_params->future->GetProcessedRowsCount() == 0)
         {
             table_processor->m_tables[callback_params->track_id]->ResetTrackIdetifiers();
@@ -1001,6 +1010,7 @@ namespace DataModel
 
         }
 
+        // Fetch column metadata and append a destination row before filling cell values.
         auto columns = table_processor->m_tables[callback_params->track_id]->GetColumns();
         table_processor->m_tables[callback_params->track_id]->AddRow();
         column_index = 0;

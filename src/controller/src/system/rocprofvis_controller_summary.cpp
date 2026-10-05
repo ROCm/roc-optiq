@@ -509,16 +509,16 @@ rocprofvis_result_t Summary::FetchTopKernels(rocprofvis_dm_trace_t dm_handle, No
             uint32_t op[1] = { TABLE_QUERY_PACK_OP_TYPE(kRocProfVisDmOperationDispatch) };
             rocprofvis_dm_processor_descriptor_t processor_id;
             rocprofvis_dm_processor_descriptor_t* processor_id_ptr = nullptr;
+            uint64_t node_id  = 0;  
+            uint64_t agent_id = 0;
             if(node)
             {
-                uint64_t node_id = 0;
                 result = node->GetUInt64(kRPVControllerNodeId, 0, &node_id);
                 if(result == kRocProfVisResultSuccess)
                 {
                     processor_id.node_id = &node_id;
                     if(processor)
                     {
-                        uint64_t agent_id = 0;
                         result = processor->GetUInt64(kRPVControllerProcessorId, 0, &agent_id);
                         agent_id &= TOPOLOGY_ID_MASK;
                         if(result == kRocProfVisResultSuccess)

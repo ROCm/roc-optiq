@@ -68,6 +68,10 @@ Supported data sources
      - ``.db``
      - `ROCm Systems Profiler <https://rocm.docs.amd.com/projects/rocprofiler-systems/en/latest/index.html>`_
      - ROCm 7.1.0 or later
+   * - rocprofv3 database
+     - ``.db``
+     - `rocprofv3 <https://rocm.docs.amd.com/projects/rocprofiler-sdk/en/latest/>`_
+     - ROCm 7.1.0 or later
    * - ROCm Compute Profiler analysis database
      - ``.db``
      - `ROCm Compute Profiler <https://rocm.docs.amd.com/projects/rocprofiler-compute/en/latest/>`_

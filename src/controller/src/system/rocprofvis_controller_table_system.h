@@ -35,7 +35,7 @@ public:
 protected:
     struct SystemTableArguments : TableArguments
     {
-        std::string m_where;
+        rocprofvis_dm_processor_descriptor_ptr m_processor;
         std::string m_filter;
         std::string m_group;
         std::string m_group_cols;

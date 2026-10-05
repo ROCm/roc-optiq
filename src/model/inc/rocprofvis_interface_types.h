@@ -434,6 +434,12 @@ typedef enum rocprofvis_dm_sort_order_t {
     kRPVDMSortOrderDesc,
 } rocprofvis_dm_sort_order_t;
 
+typedef struct rocprofvis_dm_processor_descriptor_t
+{
+    uint64_t* node_id;
+    uint64_t* agent_id;
+} rocprofvis_dm_processor_decriptor_t,  * rocprofvis_dm_processor_descriptor_ptr;
+
 // Tags for hrocprofvis_dm_hashed_timestamp
 typedef enum rocprofvis_dm_hashed_timestamp_tag_t
 {

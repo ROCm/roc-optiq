@@ -168,7 +168,7 @@ typedef enum rocprofvis_controller_process_properties_t : uint32_t
 typedef enum rocprofvis_controller_topology_node_properties_t : uint32_t
 {
     __kRPVControllerTopologyNodePropertiesFirst = 0xF6000000,
-    kRPVControllerTopologyNodeTrackId = __kRPVControllerProcessPropertiesFirst,
+    kRPVControllerTopologyNodeTrackId = __kRPVControllerNodePropertiesFirst,
     kRPVControllerTopologyNodeType,
     kRPVControllerTopologyNodeName,
     kRPVControllerTopologyNodeTrack,
